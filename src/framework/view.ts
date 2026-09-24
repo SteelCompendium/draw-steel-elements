@@ -248,6 +248,10 @@ export abstract class ElementView<M> extends Component {
 	 */
 	protected persist(): Promise<boolean> {
 		if (!this.cx.host.canPersist) return Promise.resolve(false);
+		// SC-343 (spec SC-340 §6.5 item 5): let the host refresh its durable position while
+		// the section is still live — the write runs ~400 ms later, possibly after the note
+		// was navigated away, when only that remembered position can pick the right block.
+		this.cx.host.notePersistIntent?.();
 		if (!this.serialize) {
 			throw new Error(
 				'ElementView.persist(): no serializer configured. The pipeline must call ' +

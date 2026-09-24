@@ -137,6 +137,23 @@ function firstPanel(view: DseSidebarView): any {
 	return (view as any).panels[0];
 }
 
+/** SC-288 r2 — every mounted `ds-initiative` root currently in the sidebar leaf; used to
+ *  assert "exactly one, no duplicate/orphaned root" after a degrade/recover cycle. */
+function initRoots(view: DseSidebarView): NodeListOf<Element> {
+	return view.contentEl.querySelectorAll('[data-dse-element="initiative"]');
+}
+
+/** SC-288 r2 — clicks the malice stepper and waits out the debounced persist, so
+ *  `SidebarBlockHost.lastWritten` (the self-echo guard) is set to a real, known body
+ *  before a test drives a degrade/undo sequence against it (MEDIUM-1). */
+async function clickMalice(view: DseSidebarView): Promise<void> {
+	jest.useFakeTimers();
+	malicePlusBtn(view).click();
+	await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+	jest.useRealTimers();
+	await flushAsync();
+}
+
 describe('D8 Task 3: initiative-in-sidebar end-to-end (spec §1 canonical use)', () => {
 	test('sendToSidebar mounts the SAME, unmodified InitiativeView in a sidebar leaf', async () => {
 		const { app, services } = setup();
@@ -246,6 +263,199 @@ describe('D8 Task 3: initiative-in-sidebar end-to-end (spec §1 canonical use)',
 		expect(host.canPersist).toBe(false);
 		await expect(host.replaceSource('malice:\n  value: 99')).resolves.toBe(false);
 		expect(app.vault.getContent('Session.md')).toBe('the block is gone; only prose remains'); // untouched
+	});
+
+	// SC-288 — a degrade (handleAnchorLost, above) used to leave SidebarBlockHost's
+	// `mountedChild` pointing at the now-removed ElementView. The very next VALID external
+	// change then took handleExternalChange's in-place fast path against that stale,
+	// unloaded view (`previous instanceof ElementView` was still true) instead of falling
+	// through to the pipeline remount — so the degrade card and the `data-dse-sidebar-
+	// unavailable` attribute never cleared, permanently, even though the block was valid
+	// again. Fixed at the root: SidebarBlockHost now offers a way to forget its
+	// `mountedChild`, and SidebarPanel calls it everywhere it removes the mounted child.
+	test('SC-288: a degraded panel recovers via the pipeline (not the stale view\'s update()) on the next valid external change', async () => {
+		const { app, services, fireModify } = setup();
+		app.vault.setFile('Session.md', sessionNote());
+		await sendToSidebar(services, 'Session.md', 'ds-initiative');
+		await flushAsync();
+		const { view } = await openSidebarLeaf(app);
+
+		const panelEl = panelElOf(view);
+		expect(panelEl.querySelector('[data-dse-element="initiative"]')).not.toBeNull();
+		// Captured AFTER sendToSidebar's anchor stamp — restoring THIS is what a genuine
+		// "block reappeared" external edit looks like (an unanchored `sessionNote()` could
+		// never re-anchor, which would test the wrong thing).
+		const original = app.vault.getContent('Session.md')!;
+		const host = firstPanel(view).host;
+		const mountedBefore = host.lastMountedChild;
+		expect(mountedBefore).toBeInstanceOf(InitiativeView);
+		// The bug this guards against: the stale view's update() getting called on a
+		// degraded-then-recovered panel instead of a fresh pipeline mount.
+		const updateSpy = jest.spyOn(mountedBefore, 'update');
+
+		// Degrade: external deletion of the whole block (same trigger as the test above).
+		app.vault.setFile('Session.md', 'the block is gone; only prose remains');
+		fireModify(app.vault.getAbstractFileByPath('Session.md') as TFile);
+		await flushAsync();
+		expect(panelEl.getAttribute('data-dse-sidebar-unavailable')).toBe('true');
+
+		// Recovery: the block reappears, byte-identical to what sendToSidebar originally
+		// stamped (anchor included) — e.g. the user re-adding it elsewhere. (This panel
+		// never wrote through the sidebar itself, so `lastWritten` is still null here —
+		// the case where a PRIOR sidebar write's self-echo guard could swallow an undo's
+		// restore is the next test, below, SC-288 r2 MEDIUM-1.)
+		app.vault.setFile('Session.md', original);
+		fireModify(app.vault.getAbstractFileByPath('Session.md') as TFile);
+		await flushAsync();
+
+		// The panel must actually recover: attribute gone, degrade card gone, the element
+		// re-rendered with real content.
+		expect(panelEl.getAttribute('data-dse-sidebar-unavailable')).toBeNull();
+		expect(panelEl.querySelector('.dse-error-card')).toBeNull();
+		expect(panelEl.querySelector('[data-dse-element="initiative"]')).not.toBeNull();
+		expect(panelEl.querySelector('.dse-init__entry .dse-init__name')?.textContent).toBe('Frodo Baggins');
+		expect(malicePlusBtn(view)).not.toBeNull(); // interactive again, not a read-only card
+
+		// And the mechanism: a fresh pipeline mount, never a call to the removed view's
+		// own update().
+		expect(updateSpy).not.toHaveBeenCalled();
+		const mountedAfter = firstPanel(view).host.lastMountedChild;
+		expect(mountedAfter).toBeInstanceOf(InitiativeView);
+		expect(mountedAfter).not.toBe(mountedBefore);
+	});
+
+	// SC-288 r2 (MEDIUM-1, r1 review) — `notifyAnchorLost` never cleared
+	// `SidebarBlockHost.lastWritten` (the self-echo guard), so the single most common
+	// recovery action — an editor undo right after a sidebar write — restored the note to
+	// exactly the body the panel itself had just persisted. `applyFreshContent`'s
+	// self-echo check then swallowed that restore as our own write echoing through the
+	// vault, and the panel stayed on "Backing block not found" even though the block was
+	// valid again — recovering only on some LATER, DIFFERENT edit. Fixed by clearing
+	// `lastWritten` in `notifyAnchorLost`: once the block is lost, any content that
+	// reappears is an external event by definition, self-write bytes or not.
+	test('SC-288 r2 (MEDIUM-1): undo right after a panel write recovers the degraded panel (self-echo guard cleared on anchor loss)', async () => {
+		const { app, services, fireModify } = setup();
+		app.vault.setFile('Session.md', sessionNote());
+		await sendToSidebar(services, 'Session.md', 'ds-initiative');
+		await flushAsync();
+		const { view } = await openSidebarLeaf(app);
+
+		// A real sidebar write, so SidebarBlockHost.lastWritten is set to a known body —
+		// the exact precondition the r1 regression test (above) did NOT exercise.
+		await clickMalice(view);
+		const afterWrite = app.vault.getContent('Session.md')!;
+		expect(afterWrite).not.toBeNull();
+
+		const panelEl = panelElOf(view);
+		expect(panelEl.getAttribute('data-dse-sidebar-unavailable')).toBeNull();
+
+		// Degrade: external deletion of the whole block.
+		app.vault.setFile('Session.md', 'the block is gone; only prose remains');
+		fireModify(app.vault.getAbstractFileByPath('Session.md') as TFile);
+		await flushAsync();
+		expect(panelEl.getAttribute('data-dse-sidebar-unavailable')).toBe('true');
+
+		// Undo: the note goes back to EXACTLY what the panel itself wrote a moment ago —
+		// the self-echo guard's own recorded `lastWritten` bytes.
+		app.vault.setFile('Session.md', afterWrite);
+		fireModify(app.vault.getAbstractFileByPath('Session.md') as TFile);
+		await flushAsync();
+
+		expect(panelEl.getAttribute('data-dse-sidebar-unavailable')).toBeNull();
+		expect(panelEl.querySelector('.dse-error-card')).toBeNull();
+		expect(initRoots(view).length).toBe(1);
+		expect(panelEl.querySelector('.dse-init__entry .dse-init__name')?.textContent).toBe('Frodo Baggins');
+	});
+
+	// SC-288 r2 (LOW-1, r1 review) — the remount branch's own `forgetMountedChild()` call
+	// (SidebarPanel.handleExternalChange) had no covering test: deleting that one line
+	// left the full suite green. It fixes a second, real "stuck panel" shape the ticket
+	// didn't name: an external edit that fails to PARSE (the fast path's `prepareModel`
+	// throws, falling through to a full pipeline remount that renders an error card, no
+	// `addChild`) followed by a valid edit. Without the forget call, `lastMountedChild`
+	// still pointed at the earlier, already-removed view, so the next valid edit's fast
+	// path ran `.update()` on it instead of remounting — the error card never cleared.
+	test('SC-288 r2 (LOW-1): an edit that fails to parse (error card), followed by a valid edit, recovers the panel', async () => {
+		const { app, services, fireModify } = setup();
+		app.vault.setFile('Session.md', sessionNote());
+		await sendToSidebar(services, 'Session.md', 'ds-initiative');
+		await flushAsync();
+		const { view } = await openSidebarLeaf(app);
+		const good = app.vault.getContent('Session.md')!;
+		const { body } = splitOnBlock(good);
+		const bad = good.replace(body, `${body}\nmalice: [unterminated`);
+		expect(bad).not.toBe(good);
+
+		app.vault.setFile('Session.md', bad);
+		fireModify(app.vault.getAbstractFileByPath('Session.md') as TFile);
+		await flushAsync();
+
+		const panelEl = panelElOf(view);
+		expect(panelEl.querySelector('.dse-error-card')).not.toBeNull();
+		expect(panelEl.querySelector('.dse-init__entry')).toBeNull();
+		const host = firstPanel(view).host;
+		const mountedAfterError = host.lastMountedChild; // null on the fixed code; stale on the mutant
+
+		app.vault.setFile('Session.md', good);
+		fireModify(app.vault.getAbstractFileByPath('Session.md') as TFile);
+		await flushAsync();
+
+		expect(panelEl.querySelector('.dse-error-card')).toBeNull();
+		expect(panelEl.querySelector('.dse-init__entry .dse-init__name')?.textContent).toBe('Frodo Baggins');
+		expect(initRoots(view).length).toBe(1);
+		expect(host.lastMountedChild).toBeInstanceOf(InitiativeView);
+		expect(mountedAfterError).toBeNull();
+	});
+
+	// SC-288 r2 (LOW-2, r1 review) — a second anchor-loss landing WHILE a recovery
+	// remount's own `pipeline.run()` is still awaiting (e.g. mid ref-resolution)
+	// re-creates the exact stuck-panel state SC-288 fixes, through a narrower door than
+	// the one `forgetMountedChild` closes: `handleAnchorLost` sees nothing addChild'd yet
+	// (this remount hasn't reached that step), degrades correctly and empties `bodyEl` —
+	// but when the in-flight `pipeline.run()` then resumes and `addChild`'s its view,
+	// `host.lastMountedChild` becomes a live, loaded ElementView whose rootEl was never
+	// attached to the (already-emptied) DOM, while the panel shows the degrade card. Fixed
+	// by also gating the fast path on the panel NOT currently being flagged unavailable
+	// (`data-dse-sidebar-unavailable`), so this branch is skipped and the remount below
+	// always runs regardless of what `lastMountedChild` holds.
+	test('SC-288 r2 (LOW-2): an anchor loss mid-remount does not leave a detached stale view behind for the fast path', async () => {
+		const { app, services, fireModify } = setup();
+		app.vault.setFile('Session.md', sessionNote());
+		await sendToSidebar(services, 'Session.md', 'ds-initiative');
+		await flushAsync();
+		const { view } = await openSidebarLeaf(app);
+		const original = app.vault.getContent('Session.md')!;
+		const validBody = splitOnBlock(original).body;
+		const panel = firstPanel(view) as { handleExternalChange: (body: string) => Promise<void>; handleAnchorLost: () => void };
+		const panelEl = panelElOf(view);
+		const host = firstPanel(view).host;
+
+		// Degrade first, so the next external change takes the remount branch (its
+		// pipeline.run() is what we'll interleave a second anchor-loss into).
+		app.vault.setFile('Session.md', 'the block is gone; only prose remains');
+		fireModify(app.vault.getAbstractFileByPath('Session.md') as TFile);
+		await flushAsync();
+		expect(panelEl.getAttribute('data-dse-sidebar-unavailable')).toBe('true');
+
+		// Force the interleave directly (real timing would need two vault modifies to
+		// land inside one pipeline.run()'s microtask window, which a synthetic host can't
+		// reliably reproduce) — the same shape SC-288's r1 review used to find this.
+		const pending = panel.handleExternalChange(validBody); // remount branch, yields inside pipeline.run()
+		panel.handleAnchorLost(); // block "lost" again before the remount finished
+		await pending;
+		await flushAsync();
+
+		// The real assertion: a valid change afterwards must still fully recover the
+		// panel, not get swallowed by a fast path against whatever pipeline.run() mounted
+		// mid-race.
+		app.vault.setFile('Session.md', original);
+		fireModify(app.vault.getAbstractFileByPath('Session.md') as TFile);
+		await flushAsync();
+
+		expect(panelEl.getAttribute('data-dse-sidebar-unavailable')).toBeNull();
+		expect(panelEl.querySelector('.dse-error-card')).toBeNull();
+		expect(initRoots(view).length).toBe(1);
+		expect(host.lastMountedChild).toBeInstanceOf(InitiativeView);
 	});
 
 	test('an external edit to a hero\'s stamina refreshes the mounted view in place via onUpdate — no remount', async () => {

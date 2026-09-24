@@ -27,6 +27,21 @@ for what needs action.
   community-plugin review rejects; 7.0.0 also carries forward 6.0.2's three added
   Crafting/Lore skills (Carpentry, Cooking, Strategy). No user-facing behavior change beyond
   those skills.
+- [INTERNAL] A block's save now finds the block by its content when its position in the note has
+  moved, instead of trusting a possibly stale line range, so a save can no longer land in the wrong
+  place or cut a block short (SC-343). A click followed at once by switching notes now still saves
+  (SC-336). If a save cannot be placed because the block changed on disk first (sync or a hand edit
+  inside the save delay), it is dropped and a notice says so: "Draw Steel Elements: a change to a
+  block in <note> was not saved — the block changed on disk first."
+- [FIX] **A pinned sidebar panel that showed "Backing block not found" now recovers on its
+  own once the block reappears or is edited elsewhere** (SC-288). If the block behind a
+  pinned sidebar panel briefly became unaddressable — the note was edited out from under it
+  — the panel correctly showed the read-only "panel unavailable" notice, but the very next
+  valid edit to that block failed to bring it back: the notice and the disabled controls
+  stayed stuck even though the block was valid again, and the only way out was to unpin and
+  re-pin. A degraded panel now recovers on the next valid change — including an editor undo
+  right after a sidebar edit, and a panel stuck on a parse-error notice after a bad outside
+  edit — no re-pin needed.
 - [FIX] **Initiative tracker: an unsynced compendium creature no longer asks about
   duplicate files, and the console no longer logs a warning for every creature without a
   portrait** (SC-240). A statblock reference the encounter builder creates from the
