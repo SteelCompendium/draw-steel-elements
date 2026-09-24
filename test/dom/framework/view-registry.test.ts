@@ -1,6 +1,6 @@
 // SC-340 (spec §6.1, §6.4): the ViewRegistry owns reading-mode views; the CURRENT render
 // child's unload releases the view (flush, then unload).
-import { ViewRegistry } from '../../../src/framework/host/viewRegistry';
+import { ViewRegistry, CLAIM_WINDOW_MS } from '../../../src/framework/host/viewRegistry';
 import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlockHost';
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import { counterElement } from '../../../src/elements/counter/definition';
@@ -122,5 +122,54 @@ describe('SC-340 Task 2: ViewRegistry ownership and release', () => {
 	test('with adoption off, claim() always misses', async () => {
 		const { registry } = await mountCounter(false);
 		expect(registry.claim('fake-doc-Note.md', 'Note.md', COUNTER_BODY)).toBeNull();
+	});
+});
+
+describe('SC-340 Task 3: rebind and claim tickets', () => {
+	test('rebind re-points containerEl, docId and position; the OLD render child unload is then a no-op', async () => {
+		const { app, registry, host, renderChild } = await mountCounter();
+		const ctx2 = makeFakeContext(app, 'Note.md');
+		(ctx2 as any).docId = 'doc-2';
+		host.rebind(ctx2.el, ctx2 as any);
+		expect(host.containerEl).toBe(ctx2.el);
+		expect(host.docId).toBe('doc-2');
+		expect(ctx2.addedChildren).toHaveLength(1);
+
+		renderChild.unload(); // superseded
+		expect(registry.size).toBe(1);
+
+		const renderChild2 = ctx2.addedChildren[0];
+		renderChild2.load();
+		renderChild2.unload(); // current
+		expect(registry.size).toBe(0);
+	});
+
+	test('replaceSource records a claim ticket BEFORE Vault.process runs', async () => {
+		const { app, registry, host } = await mountCounter();
+		const [entry] = registry.liveEntries();
+		let ticketsSeenInsideProcess = -1;
+		const original = app.vault.process.bind(app.vault);
+		app.vault.process = (async (file: any, fn: any) => {
+			ticketsSeenInsideProcess = entry.tickets.length;
+			return original(file, fn);
+		}) as any;
+		await host.replaceSource('name: Health\ncurrent_value: 11\nmax_value: 20\nmin_value: 0');
+		expect(ticketsSeenInsideProcess).toBe(1);
+		expect(entry.tickets[0].body).toBe('name: Health\ncurrent_value: 11\nmax_value: 20\nmin_value: 0');
+	});
+
+	test('tickets older than CLAIM_WINDOW_MS are dropped on the next write', () => {
+		let now = 1_000;
+		const registry = new ViewRegistry({ enabled: true, now: () => now });
+		registry.load();
+		const { app, plugin } = makeEnv();
+		app.vault.setFile('Note.md', NOTE);
+		const ctx = makeFakeContext(app, 'Note.md');
+		const host = new ReadingModeBlockHost(plugin as any, ctx.el, ctx as any, 'ds-counter', null, registry);
+		const entry = registry.own(new Component() as any, host, document.createElement('div'));
+		registry.noteWrite(entry, 'a: 1');
+		now += CLAIM_WINDOW_MS;
+		registry.noteWrite(entry, 'a: 2');
+		expect(entry.tickets.map((t) => t.body)).toEqual(['a: 2']);
 	});
 });

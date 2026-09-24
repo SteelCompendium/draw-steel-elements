@@ -70,9 +70,12 @@ export interface BlockHost {
 	 * SC-340 (spec §7) amends this for reading mode: the ElementVIEW itself is no longer
 	 * tied here — the pipeline owns it through the plugin-scoped ViewRegistry instead
 	 * (see ReadingModeBlockHost.ts / viewRegistry.ts), so it can outlive this block's
-	 * section (adoption). addChild remains the right call for any AUXILIARY Component a
-	 * view registers that should still unload in lockstep with the section (e.g. a modal
-	 * or popover the view opens, not the view itself).
+	 * section (adoption). Per spec §6.1, anything an adopted view depends on that hangs
+	 * off the OLD render child is torn down ~50 ms after adoption — so in reading mode a
+	 * view adds its OWN auxiliary Components (e.g. a modal or popover it opens) through
+	 * `this.addChild`, never `host.addChild`. `host.addChild` remains the right call for
+	 * non-reading hosts, and on a reading host only for something meant to die with the
+	 * section that no view depends on.
 	 */
 	addChild<T extends Component>(child: T): T;
 	/** Position/identity of the block in its document, when addressable; else null. */

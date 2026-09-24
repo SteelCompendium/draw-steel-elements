@@ -9,7 +9,11 @@
 // pipeline hands the view to the plugin-scoped ViewRegistry (host.registry.own), never
 // to host.addChild, so the view can outlive its render child (adoption) — the render
 // child's unload only SIGNALS the registry (registry.release) rather than owning the
-// view directly. See viewRegistry.ts's file header.
+// view directly. See viewRegistry.ts's file header. Per spec §6.1, anything an adopted
+// view depends on that hangs off the OLD render child dies ~50 ms after adoption — so a
+// view adds its OWN auxiliary Components (a modal, a popover) through `this.addChild`,
+// never `host.addChild`; `host.addChild` here is for something meant to die with the
+// section that no view depends on.
 //
 // Correctness fixes over the legacy src/utils/CodeBlocks.ts (NOT modified by this
 // file — it stays live for unmigrated elements until D1):
@@ -179,9 +183,14 @@ export function locateByBody(
 
 export class ReadingModeBlockHost implements BlockHost {
 	readonly mode: RenderMode = 'reading';
-	readonly containerEl: HTMLElement;
+	private el: HTMLElement;
 
-	private readonly renderChild: MarkdownRenderChild;
+	/** SC-340: a getter — rebind() re-points the host at the adopting section. */
+	get containerEl(): HTMLElement {
+		return this.el;
+	}
+
+	private renderChild: MarkdownRenderChild;
 
 	// -- SC-343 durable identity --------------------------------------------------------
 	/** True once ctx.getSectionInfo(containerEl) has resolved at least once. */
@@ -199,10 +208,12 @@ export class ReadingModeBlockHost implements BlockHost {
 	 *  even before a view exists to release — see onRenderChildUnload / makeRenderChild. */
 	private _renderChildGone = false;
 
+	private ctx: MarkdownPostProcessorContext;
+
 	constructor(
 		private readonly plugin: Plugin,
 		el: HTMLElement,
-		private readonly ctx: MarkdownPostProcessorContext,
+		ctx: MarkdownPostProcessorContext,
 		/** Fallback label only — never used to reconstruct a fence (see file header). */
 		private readonly alias: string,
 		/** SC-198. Plugin-scoped, shared by every host; omitted (null) in unit tests and in
@@ -211,7 +222,8 @@ export class ReadingModeBlockHost implements BlockHost {
 		/** SC-340: the plugin-scoped owner of this host's view; null in unit tests / non-owned use. */
 		readonly registry: ViewRegistry | null = null,
 	) {
-		this.containerEl = el;
+		this.ctx = ctx;
+		this.el = el;
 		this.renderChild = this.makeRenderChild(el, ctx);
 		this.readSection();
 	}
@@ -256,6 +268,21 @@ export class ReadingModeBlockHost implements BlockHost {
 
 	get sourcePath(): string {
 		return this.ctx.sourcePath;
+	}
+
+	get docId(): string {
+		return this.ctx.docId;
+	}
+
+	/**
+	 * SC-340 §6.3: re-point this SAME host (so every closure holding cx.host stays valid) at a
+	 * new section. The previous render child is left to Obsidian; its unload is a no-op.
+	 */
+	rebind(el: HTMLElement, ctx: MarkdownPostProcessorContext): void {
+		this.el = el;
+		this.ctx = ctx;
+		this.renderChild = this.makeRenderChild(el, ctx);
+		this.readSection();
 	}
 
 	/** SC-343: every section read goes through here so the durable position stays fresh. */
@@ -336,6 +363,9 @@ export class ReadingModeBlockHost implements BlockHost {
 
 		let wrote = false;
 		let dropped = false;
+		// SC-340 §6.2: the claim ticket must exist before Vault.process — Obsidian fires
+		// `modify` inside it and runs the new section's processor right after.
+		if (this.entry && this.registry) this.registry.noteWrite(this.entry, newSource);
 		await this.plugin.app.vault.process(abstractFile, (content) => {
 			const target = this.resolveWriteTarget(content, section);
 			if (target === 'abort') return content;
