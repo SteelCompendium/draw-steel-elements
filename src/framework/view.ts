@@ -289,9 +289,25 @@ export abstract class ElementView<M> extends Component {
 		// persist() only ever sets persistScheduled after confirming this.serialize is
 		// set, so it is guaranteed defined here.
 		const yaml = this.serialize!(this.model);
-		void this.cx.host.replaceSource(yaml).then((ok) => {
-			for (const resolve of waiters) resolve(ok);
-		});
+		// SC-282 r2 (LOW-2) — replaceSource can REJECT, not just resolve false: a write
+		// already scheduled by the debounce timer above can still be in flight when its
+		// backing file is deleted out from under it (e.g. SidebarBlockHost's underlying
+		// vault.process throwing ENOENT on the now-missing path — confirmed in real
+		// Obsidian, and pre-existing at c524fd2 for the reading-mode host too; SC-282's
+		// delete-follows-note behavior just makes it easy to trigger via the sidebar's
+		// unload-triggered flush). Without this .catch, that rejection went unhandled and
+		// every `persist()` caller coalesced into this flush round never resolved at all.
+		// A resolved `false` here is exactly what replaceSource itself already returns for
+		// every OTHER "couldn't write" case (`!canPersist`, block not found) — this only
+		// makes the rejecting case behave the same way as those already-handled ones.
+		void this.cx.host
+			.replaceSource(yaml)
+			.then((ok) => {
+				for (const resolve of waiters) resolve(ok);
+			})
+			.catch(() => {
+				for (const resolve of waiters) resolve(false);
+			});
 	}
 
 	addChild<T extends Component>(child: T): T {

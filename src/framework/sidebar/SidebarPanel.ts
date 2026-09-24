@@ -122,10 +122,21 @@ export class SidebarPanel extends Component {
 		this.updateHeaderNoteLink();
 		if (!this.host) return; // never mounted a host (e.g. unknown-element degrade) — path-only update above is all there is to do
 		const file = this.deps.app.vault.getAbstractFileByPath(newFilePath);
-		// A miss here would mean the vault reports the rename but the destination isn't
-		// resolvable yet — not expected in practice (Obsidian fires "rename" after the
-		// move completes), but left alone rather than degrading: the host keeps its old
-		// (now-stale) backingFile, exactly the state it was already in.
+		// SC-282 r2 (LOW-3 fix) — a miss here is the NORMAL case for a folder rename, not a
+		// rare one: real Obsidian fires the folder's own "rename" event BEFORE re-keying
+		// any descendant file's vault entry/`.path` (confirmed in real Obsidian 1.14.2 —
+		// SC-282 r1 review, RN-2), so `newFilePath` (computed from the folder event alone,
+		// via `renamedPanelPath`'s prefix match) legitimately doesn't resolve yet at the
+		// moment THIS call runs. It is harmless every time: Obsidian keeps a TFile's
+		// identity stable across a rename and mutates its `.path` in place, so the very
+		// next per-child "rename" event updates the SAME `TFile` this host's `backingFile`
+		// already points at — `rebindPath` never actually needed to run for a folder
+		// rename to end up correct. It stays here as defense in depth (a direct FILE
+		// rename's `file` argument IS already the fresh TFile and always resolves; a vault
+		// implementation that does NOT preserve identity across a folder move — our own
+		// jest mock's `FakeVault.rename` included — needs this rebind to be correct at
+		// all), left alone on a miss rather than degrading: the host keeps its previous
+		// (still-valid-until-the-next-event) `backingFile`.
 		if (file instanceof TFile) this.host.rebindPath(file);
 	}
 

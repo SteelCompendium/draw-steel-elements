@@ -115,6 +115,19 @@ export class SidebarBlockHost implements BlockHost {
 	 *  every subsequent unrelated "modify" while the block stays gone. */
 	private anchorLostNotified = false;
 
+	/** SC-282 r2 (LOW-1) — `blockKey()`'s value, captured ONCE here at construction from
+	 *  the ORIGINAL `backingFile.path`, not read live off the (now-mutable, `rebindPath`-
+	 *  able) `backingFile` field. Several callers capture this key once and keep writing
+	 *  session-only state under it for the life of the mount (chrome collapse state,
+	 *  tab/collapsible selection, montage/negotiation/hero/initiative persist objects);
+	 *  others read it live on every access. Either way, a key that changed out from under
+	 *  a rename would either split that in-memory state across two keys (the capture-once
+	 *  callers) or silently lose it (the read-live callers) for a plugin-authored session
+	 *  identity a rename has no business disturbing — the anchor (or, for a strict-body
+	 *  block, the bound body) is already the durable identity; the path was never meant to
+	 *  be part of it, it just always happened to be stable before this ticket. */
+	private readonly sessionKey: string;
+
 	constructor(
 		private readonly plugin: Plugin,
 		/** SC-282 — not `readonly`: a vault rename/move (including via a parent-folder
@@ -140,6 +153,7 @@ export class SidebarBlockHost implements BlockHost {
 		 *  the pipeline knowing DseSidebarView exists. */
 		private readonly onRemoveRequested: () => void,
 	) {
+		this.sessionKey = `${backingFile.path}::${alias}::${anchorId}`;
 		// Deliberately does NOT register the vault listener here — see registerModifyListener,
 		// called from refresh() instead (review finding #5, MEDIUM: a listener live before the
 		// initial cachedContent priming read resolves can fire handleExternalModify -> the
@@ -342,7 +356,7 @@ export class SidebarBlockHost implements BlockHost {
 	}
 
 	blockKey(): string {
-		return `${this.backingFile.path}::${this.alias}::${this.anchorId}`;
+		return this.sessionKey;
 	}
 
 	/** SC-184 — BlockHost's optional removal seam; delegates straight to whatever

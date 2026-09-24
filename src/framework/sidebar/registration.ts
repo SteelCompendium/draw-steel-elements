@@ -3,9 +3,9 @@
 // command/ribbon polish + the real per-block "send to sidebar" context-menu action is
 // Task 10).
 import { Notice, TFile } from 'obsidian';
-import type { Editor, MarkdownFileInfo, MarkdownView, Plugin } from 'obsidian';
-import { DseSidebarView, VIEW_TYPE_DSE_SIDEBAR } from './DseSidebarView';
-import type { DseSidebarServices } from './DseSidebarView';
+import type { App, Editor, MarkdownFileInfo, MarkdownView, Plugin } from 'obsidian';
+import { DseSidebarView, VIEW_TYPE_DSE_SIDEBAR, isUnderDeletedPath, renamedPanelPath } from './DseSidebarView';
+import type { DseSidebarServices, DseSidebarState, SidebarPanelState } from './DseSidebarView';
 import { ensureAnchor, fenceAlias, findFenceAtLine, listFences, matchFenceLine, isFenceClose } from './anchor';
 
 /** Top-down scan (fences don't nest — same rationale as anchor.ts's scanner, whose exact
@@ -57,6 +57,27 @@ export function registerDseSidebar(plugin: Plugin, services: DseSidebarServices)
 	dseSidebarPinTarget = services;
 	plugin.registerView(VIEW_TYPE_DSE_SIDEBAR, (leaf) => new DseSidebarView(leaf, services));
 
+	// SC-282 r2 (MEDIUM-1 fold) — DseSidebarView.registerVaultListeners only covers a
+	// LOADED leaf's own panels; a deferred sidebar leaf (background/collapsed tab — the
+	// common case at startup, since Obsidian defers every non-selected/non-visible
+	// sidebar tab) has no DseSidebarView instance for a Component-scoped listener to run
+	// on. This plugin-scoped pair (D3's literal `plugin.registerEvent(app.vault.on(...))`
+	// shape) covers exactly that gap, so every sidebar leaf — loaded or deferred — follows
+	// a rename/delete, not just the ones currently visible.
+	plugin.registerEvent(
+		services.app.vault.on('rename', (file, oldPath) =>
+			patchDeferredSidebarLeaves(services.app, (panel) => {
+				const newPath = renamedPanelPath(panel.filePath, file, oldPath);
+				return newPath === null ? panel : { ...panel, filePath: newPath };
+			}),
+		),
+	);
+	plugin.registerEvent(
+		services.app.vault.on('delete', (file) =>
+			patchDeferredSidebarLeaves(services.app, (panel) => (isUnderDeletedPath(panel.filePath, file) ? null : panel)),
+		),
+	);
+
 	plugin.addRibbonIcon('swords', 'Open Draw Steel sidebar', () => {
 		void openSidebarView(services);
 	});
@@ -86,6 +107,51 @@ export function registerDseSidebar(plugin: Plugin, services: DseSidebarServices)
 			return true;
 		},
 	});
+}
+
+/**
+ * SC-282 r2 (MEDIUM-1) — rewrites (or drops) each panel a deferred sidebar leaf's
+ * persisted state carries, using `rewrite`, and requests a layout save if anything
+ * actually changed. `rewrite` returning the SAME object (by reference) means "no change
+ * for this panel" — `renamedPanelPath`/`isUnderDeletedPath` above are already written to
+ * make that cheap for callers (returning the input `panel` unchanged, or a brand new
+ * object only on a real match).
+ *
+ * Deliberately skips any leaf whose `view` IS a loaded `DseSidebarView`: that one already
+ * has its own `registerVaultListeners`-registered listener handling it, and re-patching
+ * its state here (bypassing the view's own in-memory `panels[]`/mounted hosts) would
+ * desync the view's live state from what this just wrote to its `getState()`.
+ *
+ * Why this is safe against a deferred leaf's `View` (real Obsidian's `DeferredView`,
+ * private/undocumented as a TYPE but not as a CONTRACT): `View.getState()`/`setState()`
+ * are PUBLIC obsidian.d.ts API, and real Obsidian 1.14.2's `DeferredView.setState` is
+ * verified (SC-282 r1 review, RN-4, a real-Obsidian scratch harness — see the ledger) to
+ * ONLY store the passed state; it does not load the real view or touch anything else.
+ * That is exactly the "rewrite state without force-loading" operation the SC-282 brief
+ * asked for and round 1 wrongly concluded didn't exist.
+ */
+function patchDeferredSidebarLeaves(app: App, rewrite: (panel: SidebarPanelState) => SidebarPanelState | null): void {
+	let anyChanged = false;
+	for (const leaf of app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)) {
+		if (leaf.view instanceof DseSidebarView) continue; // loaded: its own listener handles it
+		const state = (leaf.view.getState() ?? {}) as Partial<DseSidebarState>;
+		const before = state.panels ?? [];
+		const after: SidebarPanelState[] = [];
+		let leafChanged = false;
+		for (const panel of before) {
+			const next = rewrite(panel);
+			if (next === null) {
+				leafChanged = true; // dropped (delete)
+				continue;
+			}
+			if (next !== panel) leafChanged = true; // rewritten (rename)
+			after.push(next);
+		}
+		if (!leafChanged) continue;
+		void leaf.view.setState({ ...state, panels: after }, { history: false });
+		anyChanged = true;
+	}
+	if (anyChanged) app.workspace.requestSaveLayout();
 }
 
 /** Finds (or opens) the sidebar leaf and brings it to the foreground. Shared by the

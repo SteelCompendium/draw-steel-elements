@@ -116,10 +116,14 @@ export class DseSidebarView extends ItemView {
 	 * no shared dedupe state to get wrong.
 	 *
 	 * A DEFERRED leaf's view is never loaded (Obsidian's `WorkspaceLeaf.isDeferred`), so
-	 * `onOpen` — and this registration — never runs for it; a rename/delete landing while
-	 * the leaf is deferred leaves its persisted panel state stale until the leaf is next
-	 * loaded (reported as a follow-up, not fixed here — see the SC-282 ledger for why
-	 * force-loading a deferred leaf just to patch its state isn't the right trade).
+	 * `onOpen` — and this registration — never runs for it: without more, a rename/delete
+	 * landing while the leaf is deferred (common at startup — Obsidian defers every
+	 * non-selected/non-visible sidebar tab) would leave its persisted panel state stale.
+	 * SC-282 r2 (MEDIUM-1) closes that gap separately, at the PLUGIN level, in
+	 * `registration.ts`'s `patchDeferredSidebarLeaves` — a deferred leaf has no view
+	 * instance to scope a Component-level listener to, so this one can't cover it; see
+	 * that function's own doc for why a plugin-scoped `registerEvent` can patch a deferred
+	 * leaf's state without loading it.
 	 */
 	private registerVaultListeners(): void {
 		this.registerEvent(this.services.app.vault.on('rename', (file, oldPath) => this.handleVaultRename(file, oldPath)));
@@ -370,7 +374,7 @@ function samePanelTarget(a: SidebarPanelState, b: SidebarPanelState): boolean {
  * `startsWith(oldPath)`: folder "Foo/Bar" renaming must not touch a sibling file
  * "Foo/BarBaz.md" that merely shares the string prefix.
  */
-function renamedPanelPath(panelPath: string, file: TAbstractFile, oldPath: string): string | null {
+export function renamedPanelPath(panelPath: string, file: TAbstractFile, oldPath: string): string | null {
 	if (panelPath === oldPath) return file.path;
 	if (file instanceof TFolder && panelPath.startsWith(`${oldPath}/`)) {
 		return file.path + panelPath.slice(oldPath.length);
@@ -381,7 +385,7 @@ function renamedPanelPath(panelPath: string, file: TAbstractFile, oldPath: strin
 /** SC-282 — the delete-side twin of renamedPanelPath's match test (no rewrite needed —
  *  a deleted panel is simply removed). Same folder-prefix guard against a sibling with a
  *  shared string prefix. */
-function isUnderDeletedPath(panelPath: string, file: TAbstractFile): boolean {
+export function isUnderDeletedPath(panelPath: string, file: TAbstractFile): boolean {
 	if (panelPath === file.path) return true;
 	return file instanceof TFolder && panelPath.startsWith(`${file.path}/`);
 }

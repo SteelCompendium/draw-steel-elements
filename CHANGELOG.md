@@ -31,7 +31,10 @@ for what needs action.
   renamed or moved, instead of turning into a permanent "Note not found" card** (SC-282).
   Deleting the note (or a parent folder) now removes the panel automatically instead of
   leaving it behind. Renaming never disturbs the panel's own live content — an in-progress
-  encounter or initiative tracker keeps running exactly as it was.
+  encounter or initiative tracker keeps running exactly as it was. This covers a sidebar tab
+  that is currently in the background or a collapsed sidebar too (Obsidian defers loading
+  those until you click them — common right after a restart), not just the one you're
+  looking at.
 - [INTERNAL] A block's save now finds the block by its content when its position in the note has
   moved, instead of trusting a possibly stale line range, so a save can no longer land in the wrong
   place or cut a block short (SC-343). A click followed at once by switching notes now still saves
