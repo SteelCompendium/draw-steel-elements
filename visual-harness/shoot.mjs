@@ -5013,6 +5013,11 @@ try {
 		// see the report for why this one was found only once the sheet was actually
 		// reachable). Also self-gates on a local Obsidian asar.
 		await assertProseHostLeak(page);
+		// SC-230 r3, MEDIUM-1 — the modal text-scale anchoring runtime pin (see the
+		// function's own doc comment below). Needs its own navigation, same
+		// narrowed-run skip reasoning as the gates above, and must run before
+		// `browser.close()` in the `finally` block below.
+		await assertModalTextScaleAnchoring(page);
 	}
 } catch (e) {
 	// Anything that escapes snap()'s own try/catch (e.g. the manifest load itself
@@ -5319,6 +5324,73 @@ function assertPrintTwinDelta(enumeratedProps) {
 			`max vertical drift ${maxVerticalDrift.toFixed(2)}px (< 24px), every differing computed-style ` +
 			`property is one of the pinned sheet's own @media print properties: ` +
 			`${[...enumeratedProps].sort().join(', ')})`,
+	);
+}
+
+/**
+ * SC-230 r3, MEDIUM-1 — real-browser runtime pin for the text-scale/modal anchoring
+ * fix. jsdom (test/dom/theme/scaleRules.test.ts) can only pin the RULE TEXT — it can't
+ * compute calc()/var(), so it can't catch a shape where `.dse-modal` and its body/footer
+ * arm both carry the multiplier and compound to scale² whenever the host reset that
+ * happens to mask it is absent (the r1/r2 bug this round fixes). Builds a synthetic
+ * `.dse-modal`/`.dse-modal__body` pair directly in the page, once with a node that mimics
+ * real Obsidian's `.modal-content { font-size: <absolute> }` reset in between, once
+ * without it, and requires the scaled/base font-size ratio to be exactly 1.4 in BOTH —
+ * proving `.dse-modal` itself never carries the multiplier (only ever the print-anchor
+ * guard), so the scale applies exactly once regardless of whether a host reset exists.
+ */
+async function assertModalTextScaleAnchoring(page) {
+	await page.goto(pageUrl);
+	await page.waitForFunction(() => document.styleSheets.length > 0, null, { timeout: 15000 });
+	const result = await page.evaluate(() => {
+		function probe(withHostReset) {
+			const modal = document.createElement('div');
+			modal.className = 'dse-modal';
+			let parent = modal;
+			if (withHostReset) {
+				const modalContent = document.createElement('div');
+				// Mimics real Obsidian's `.modal-content { font-size: var(--font-ui-medium) }`
+				// — an ABSOLUTE reset, unrelated to --dse-text-scale, exactly like the real rule.
+				modalContent.style.fontSize = '15px';
+				modal.appendChild(modalContent);
+				parent = modalContent;
+			}
+			const body = document.createElement('div');
+			body.className = 'dse-modal__body';
+			parent.appendChild(body);
+			document.body.appendChild(modal);
+			modal.style.setProperty('--dse-text-scale', '1');
+			const base = parseFloat(getComputedStyle(body).fontSize);
+			modal.style.setProperty('--dse-text-scale', '1.4');
+			const scaled = parseFloat(getComputedStyle(body).fontSize);
+			document.body.removeChild(modal);
+			return { base, scaled, ratio: scaled / base };
+		}
+		return { withHostReset: probe(true), withoutHostReset: probe(false) };
+	});
+	const problems = [];
+	for (const [label, r] of Object.entries(result)) {
+		const ratio = Math.round(r.ratio * 1000) / 1000;
+		if (ratio !== 1.4) {
+			problems.push(`${label}: ratio ${ratio} (base ${r.base}px -> scaled ${r.scaled}px), expected exactly 1.4`);
+		}
+	}
+	if (problems.length) {
+		console.error(
+			`\nMODAL TEXT-SCALE ANCHORING VIOLATED (SC-230 r3 MEDIUM-1) — .dse-modal__body did ` +
+				`not scale by exactly x1.4 at textScale 1.4:\n` +
+				problems.map((p) => `  ${p}`).join('\n') +
+				`\nThis means the body/footer arm compounds with an ancestor's own font-size ` +
+				`scaling. .dse-modal must never carry the --dse-text-scale multiplier itself — only ` +
+				`act as the print-anchor guard for the body/footer/title arms (styles-source.css, ` +
+				`"SC-112 Task 7 — user size scales").`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		'\nmodal text-scale anchoring OK (.dse-modal__body scales exactly x1.4 at textScale ' +
+			'1.4, with AND without an intervening .modal-content-style absolute font-size reset ' +
+			'— no compounding)',
 	);
 }
 

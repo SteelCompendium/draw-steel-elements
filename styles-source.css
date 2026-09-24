@@ -7670,34 +7670,82 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    TEXT: a multiplier on the element root's font-size — everything inside is
    authored in em/rem-free kit units, so the whole element tracks it.
 
-   SC-230: widened to the modal's own DSE-owned wrappers too — modals track
-   text size exactly as rendered blocks in notes do (owner ruling). `.dse-modal`
+   SC-230: modals track text size exactly as rendered blocks in notes do
+   (owner ruling), via TWO SEPARATE rules (SC-230 r3 fix round, MEDIUM-1/-2)
+   rather than one `.dse-modal` arm plus a shared `:is(...)`:
+
+   `.dse-modal` itself is DELIBERATELY NOT in this font-size arm. `.dse-modal`
    already receives --dse-text-scale via DseModal.open()'s reflectCss() call
-   (seams/prefs.ts) and is listed here for the same reason the CARD rule below
-   lists it, but scaling `.dse-modal` ITSELF is not sufficient the way it is for
-   an element root: real Obsidian's own app.css sets `.modal-content` (DseModal's
-   `contentEl`, the parent of `.dse-modal__body`/`__footer`) and `.modal-title`
-   to an ABSOLUTE font-size (`var(--font-ui-medium)` / `var(--font-ui-large)`),
-   which breaks the em-based cascade between `.dse-modal` and its actual content
-   — a real reset the CARD rule never has to fight because `zoom` is not part of
-   the font-size cascade at all (it applies to a matched descendant regardless
-   of what an ancestor's font-size did). So the multiplier is RE-APPLIED at
-   `.dse-modal__body`/`.dse-modal__footer`, the two DSE-owned wrappers that sit
-   directly below that reset — confirmed live (SC-230 diagnosis): before this,
-   `.dse-modal` itself computed the scaled size but `.dse-modal__body` measured
-   back at Obsidian's flat `--font-ui-medium`, unscaled. `.dse-modal__title` is
-   deliberately NOT listed — it IS Obsidian's own `.modal-title` chrome (real
-   modal furniture, not "text inside Draw Steel elements"), the same exemption
-   this file's own --font-ui-* doc comment already draws. */
-:is([data-dse-element], .dse-modal, .dse-modal__body, .dse-modal__footer):not([data-dse-print="on"]) {
+   (seams/prefs.ts), and scaling it directly reads as the obvious fix (r1's
+   first attempt did exactly that) — but real Obsidian's own app.css sets
+   `.modal-content` (DseModal's `contentEl`, the parent of
+   `.dse-modal__body`/`__footer`) to an ABSOLUTE font-size
+   (`var(--font-ui-medium)`), which breaks the em-based cascade between
+   `.dse-modal` and its actual content. If `.dse-modal` ALSO carried the
+   multiplier, a theme/snippet that made `.modal-content` inherit instead (or
+   a future Obsidian that drops that reset) would compound the two arms —
+   scale² (140% -> 196%, measured live: 16px -> 31.36px with the reset
+   neutralized). So the multiplier lives ONLY on the second rule below,
+   anchored on `.dse-modal` as a pure ANCESTOR GUARD (never scaled itself):
+   the scale applies exactly once, with or without the host's own reset.
+   `.dse-modal` stays in the NESTED-ROOT reset below (a `[data-dse-element]`
+   nested inside a modal must still not compound) — this is the one place it
+   keeps a role of its own.
+
+   The FIRST rule is the bare pre-SC-230 element-root arm, unchanged text and
+   selector — kept a SEPARATE rule (not merged into one comma-joined selector
+   with the second) so each stays its own single-selector authoring site
+   (also keeps fontSizeContract.test.ts's ALLOWLIST keyed one arm per rule). */
+[data-dse-element]:not([data-dse-print="on"]) {
+	font-size: calc(1em * var(--dse-text-scale));
+}
+/* The MODAL arm: `.dse-modal` is the print-anchor GUARD ONLY — never itself
+   scaled (see above) — and `.dse-modal__body`/`.dse-modal__footer`, the two
+   DSE-owned wrappers that sit directly below Obsidian's `.modal-content`
+   reset, are the actual targets. Confirmed live (SC-230 diagnosis): before
+   this, `.dse-modal` itself computed the scaled size but `.dse-modal__body`
+   measured back at Obsidian's flat `--font-ui-medium`, unscaled; after, both
+   scale, exactly once, in real Obsidian with OR without the host reset
+   present (r3 runtime pin, scaleRules.test.ts). Anchoring the print guard on
+   `.dse-modal` itself (rather than on `.dse-modal__body`/`__footer`, which
+   nothing ever stamps) is also what makes this the owner-ruling-compliant
+   FOLLOWUPS #43 shape (MEDIUM-2): the exclusion is compounded onto the node
+   that would actually be stamped, not onto an always-unstamped descendant. */
+.dse-modal:not([data-dse-print="on"]) :is(.dse-modal__body, .dse-modal__footer) {
+	font-size: calc(1em * var(--dse-text-scale));
+}
+/* The TITLE arm (SC-230 r3, LOW-1 — owner default: scale it too, consistent
+   with "exactly as notes do"; note headings scale). `.dse-modal__title` IS
+   Obsidian's own `.modal-title` element and stays UNTOUCHED by any DSE rule —
+   Obsidian sets its font-size to an ABSOLUTE token that differs by version
+   (`--font-ui-large` in the pinned 1.13.7 harness sheet, `--font-ui-medium` in
+   installed 1.14.2 — real, observed drift), so hardcoding either var here
+   would desync from whatever the running Obsidian actually rendered and break
+   "100% must compute identically to base". Instead `setDseTitle()`
+   (kit/managedModal.ts) wraps the title text in a `.dse-modal__title-text`
+   SPAN, which inherits Obsidian's own absolute value normally (`1em` = the
+   parent `.modal-title`'s real computed size, whichever token produced it),
+   and this rule multiplies THAT inherited em — the identical "re-apply below
+   the reset via 1em" idiom the body/footer arm above uses, aimed at a real
+   DSE-owned child instead of the modal's own Obsidian-chrome title element.
+   At scale 1, `calc(1em * 1)` is `1em`, i.e. no visual change from base. */
+.dse-modal:not([data-dse-print="on"]) .dse-modal__title-text {
 	font-size: calc(1em * var(--dse-text-scale));
 }
 /* Nested element roots (by-SCC kit → its real nested ds-feature card, or a
    future modal that hosts one) would COMPOUND the multiplier — the inner
-   root's 1em is the outer root's/modal's ALREADY scaled size — so nested
-   roots reset to plain inheritance (font-size: 1em); the outermost scaled
-   ancestor applies the scale exactly once. Source-ordered after the scale
-   rule AND higher specificity (0,3,0 > 0,2,0): wins either way. */
+   root's 1em is the outer root's/`.dse-modal__body`'s/`__footer`'s ALREADY
+   scaled size — so nested roots reset to plain inheritance (font-size: 1em);
+   the outermost scaled ancestor applies the scale exactly once. `.dse-modal`
+   stays in THIS rule's ancestor group (SC-230 r3, reviewer-prescribed: "keep
+   `.dse-modal` in the nested reset only") even though the scale rules above
+   no longer put the multiplier on `.dse-modal` itself — no shipped modal ever
+   mounts a `[data-dse-element]` as a direct child of `.dse-modal` (every
+   DseModal subclass renders only into `this.body`/`this.footer()`, both
+   already-covered hosts; SC-230 r2 review, modal enumeration), so this arm is
+   inert on real content today and is kept only for defensive symmetry with
+   the pre-r3 shape. Source-ordered after the scale rules AND higher
+   specificity: wins either way. */
 :is([data-dse-element], .dse-modal, .dse-modal__body, .dse-modal__footer) [data-dse-element]:not([data-dse-print="on"]) {
 	font-size: var(--dse-fs-body);
 }

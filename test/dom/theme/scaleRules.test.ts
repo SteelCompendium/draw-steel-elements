@@ -7,14 +7,18 @@ import path from 'path';
  * steelTypography.test.ts / steelMaterial.test.ts — jsdom cannot cascade var()
  * or compute calc(), so this suite pins the RULE TEXT of styles-source.css):
  *
- *  - the TEXT rule (`font-size: calc(1em * var(--dse-text-scale))`) exists on the
- *    element-root/modal compound PLUS `.dse-modal__body`/`.dse-modal__footer`
- *    (SC-230: modals track text size like notes do — the extra two wrappers are
- *    load-bearing, not decoration: real Obsidian's `.modal-content`/`.modal-title`
- *    reset font-size to an ABSOLUTE token, breaking the em cascade from
- *    `.dse-modal`, so the multiplier is re-applied at the two DSE-owned wrappers
- *    that sit directly below that reset — confirmed live, see styles-source.css's
- *    own comment on this rule) and is print-excluded;
+ *  - the TEXT rule (`font-size: calc(1em * var(--dse-text-scale))`) exists as
+ *    THREE SEPARATE rules (SC-230 r3, MEDIUM-1/-2/LOW-1 — never one `.dse-modal`
+ *    arm plus a shared `:is(...)`, which let `.dse-modal` and the body/footer
+ *    arms compound to scale² whenever Obsidian's own `.modal-content` reset is
+ *    absent): the bare pre-SC-230 element-root rule; a modal rule anchored on
+ *    `.dse-modal` as a pure print-guard (never itself scaled) targeting
+ *    `.dse-modal__body`/`.dse-modal__footer`; and a modal-title rule anchored the
+ *    same way targeting `.dse-modal__title-text` (a span `setDseTitle()` wraps
+ *    the title text in, so Obsidian's own version-dependent `.modal-title`
+ *    absolute size is multiplied via inherited `1em`, never hardcoded) — all
+ *    three print-excluded, all three anchored on the actual node that would be
+ *    stamped, never a bare descendant `:not(...)` (FOLLOWUPS #43);
  *  - the CARD rule (`zoom: var(--dse-card-scale)`) exists on the card hosts
  *    (.dse-sb/.dse-card descendants + the feature/featureblock root-compound)
  *    and is print-excluded;
@@ -61,43 +65,116 @@ function only(predicate: (r: Rule) => boolean, what: string): Rule {
 	return hits[0];
 }
 
-const textRule = only(
-	(r) => r.body.includes('var(--dse-text-scale)'),
-	'rule consuming var(--dse-text-scale)',
+const TEXT_SCALE_BODY = 'font-size: calc(1em * var(--dse-text-scale))';
+const TEXT_SCALE_HOSTS = '[data-dse-element], .dse-modal, .dse-modal__body, .dse-modal__footer';
+
+/** The three rules that consume --dse-text-scale, found by EXACT selector text
+ *  (their bodies are all identical, so `only()`-by-body no longer disambiguates
+ *  them — SC-230 r3 split one `.dse-modal`-inclusive rule into three). */
+const elementRootRule = only(
+	(r) => norm(r.selector) === `[data-dse-element]${PRINT_GUARD}` && norm(r.body).includes(TEXT_SCALE_BODY),
+	'bare element-root text-scale rule',
+);
+const modalBodyFooterRule = only(
+	(r) =>
+		norm(r.selector) === `.dse-modal${PRINT_GUARD} :is(.dse-modal__body, .dse-modal__footer)` &&
+		norm(r.body).includes(TEXT_SCALE_BODY),
+	'modal body/footer text-scale rule',
+);
+const modalTitleRule = only(
+	(r) =>
+		norm(r.selector) === `.dse-modal${PRINT_GUARD} .dse-modal__title-text` &&
+		norm(r.body).includes(TEXT_SCALE_BODY),
+	'modal title text-scale rule',
 );
 const zoomRule = only(
 	(r) => r.body.includes('var(--dse-card-scale)'),
 	'rule consuming var(--dse-card-scale)',
 );
 
-describe('SC-112 Task 7: text-scale consumer', () => {
+describe('SC-112 Task 7 / SC-230 r3: text-scale consumer', () => {
 	// SC-230: modals track the text-size scale exactly as rendered blocks in notes
-	// do (owner ruling) — the anchored idiom (exclusion compounded onto the
-	// stamped node, never a bare descendant `:not(...)`, the Task 5 print-anchor
-	// footgun / FOLLOWUPS #43) widened to FOUR nodes: `.dse-modal` itself, plus
-	// `.dse-modal__body`/`.dse-modal__footer` — the two DSE-owned wrappers below
-	// real Obsidian's `.modal-content` absolute font-size reset that the em-based
-	// multiplier cannot cascade through (unlike the CARD rule's `zoom`, which
-	// isn't part of the font-size cascade at all).
-	const TEXT_SCALE_HOSTS = '[data-dse-element], .dse-modal, .dse-modal__body, .dse-modal__footer';
-	test('the element-root/modal/body/footer rule multiplies font-size by the token, print-excluded', () => {
-		expect(norm(textRule.selector)).toBe(`:is(${TEXT_SCALE_HOSTS})${PRINT_GUARD}`);
-		expect(norm(textRule.body)).toContain('font-size: calc(1em * var(--dse-text-scale))');
+	// do (owner ruling). r3 (MEDIUM-1/-2): `.dse-modal` is NEVER itself in a
+	// font-size arm — it is only ever the print-anchor GUARD (compounded via
+	// `:not(...)` on the SAME node a stamp would land on, the FOLLOWUPS #43 shape
+	// the owner ruling requires) — because scaling `.dse-modal` directly, on top
+	// of also scaling its body/footer, compounds to scale² whenever Obsidian's own
+	// `.modal-content` absolute-font-size reset is absent (a theme/snippet, or a
+	// future Obsidian).
+	test('the bare element-root rule is UNCHANGED from pre-SC-230 (never merged with the modal arm)', () => {
+		expect(norm(elementRootRule.selector)).toBe(`[data-dse-element]${PRINT_GUARD}`);
 	});
 
-	test('the nested-root reset exists (font-size: var(--dse-fs-body)), covers every host form, print-guarded, ordered AFTER', () => {
+	test('the modal body/footer rule anchors the print guard on .dse-modal, never scales .dse-modal itself', () => {
+		const sel = norm(modalBodyFooterRule.selector);
+		expect(sel).toBe(`.dse-modal${PRINT_GUARD} :is(.dse-modal__body, .dse-modal__footer)`);
+		// .dse-modal appears only as the ancestor/guard, never as a bare compound
+		// subject of its own (that shape is the r1 mistake this round fixes).
+		expect(sel).not.toMatch(/^:is\(.*\.dse-modal.*\)/);
+	});
+
+	test('the modal title rule anchors the same way, targets the wrapped title span, not .modal-title itself', () => {
+		expect(norm(modalTitleRule.selector)).toBe(`.dse-modal${PRINT_GUARD} .dse-modal__title-text`);
+	});
+
+	test('the nested-root reset exists (font-size: var(--dse-fs-body)), covers every host form, print-guarded, ordered AFTER every scale rule', () => {
 		const expectedSel = `:is(${TEXT_SCALE_HOSTS}) [data-dse-element]${PRINT_GUARD}`;
 		const reset = only(
 			(r) => norm(r.selector) === expectedSel && norm(r.body).includes('font-size: var(--dse-fs-body)'),
 			'nested element-root font-size reset',
 		);
-		const sel = norm(reset.selector);
-		// A nested element root under any of the four scaled hosts resets to plain
-		// inheritance — the outermost scaled host applies the multiplier exactly
-		// once (no 1.25 × 1.25 compounding when a modal ever hosts a nested
-		// element root).
-		expect(sel).toBe(`:is(${TEXT_SCALE_HOSTS}) [data-dse-element]${PRINT_GUARD}`);
-		expect(reset.at).toBeGreaterThan(textRule.at);
+		// A nested element root under any of the four hosts (.dse-modal kept here
+		// per the reviewer's prescribed shape, even though it no longer carries the
+		// multiplier itself above) resets to plain inheritance — no 1.4 × 1.4
+		// compounding when a modal ever hosts a nested element root.
+		expect(norm(reset.selector)).toBe(expectedSel);
+		expect(reset.at).toBeGreaterThan(elementRootRule.at);
+		expect(reset.at).toBeGreaterThan(modalBodyFooterRule.at);
+		expect(reset.at).toBeGreaterThan(modalTitleRule.at);
+	});
+
+	// SC-230 r3, MEDIUM-2: a DOM-level assertion (real selector matching via
+	// Element.matches — jsdom supports selector matching even though it can't
+	// compute calc()/var() VALUES) that a print-stamped `.dse-modal` actually
+	// excludes its body/footer/title arms, proving the guard is anchored on the
+	// node that would really be stamped, not on the always-unstamped descendants
+	// (the FOLLOWUPS #43 shape).
+	describe('the print guard is anchored on .dse-modal itself (MEDIUM-2), not on always-unstamped descendants', () => {
+		function buildModalDom(printStamped: boolean): { body: HTMLElement; footer: HTMLElement; titleText: HTMLElement } {
+			const modal = document.createElement('div');
+			modal.className = 'dse-modal';
+			if (printStamped) modal.setAttribute('data-dse-print', 'on');
+			const body = document.createElement('div');
+			body.className = 'dse-modal__body';
+			const footer = document.createElement('div');
+			footer.className = 'dse-modal__footer';
+			const title = document.createElement('div');
+			title.className = 'dse-modal__title';
+			const titleText = document.createElement('span');
+			titleText.className = 'dse-modal__title-text';
+			title.appendChild(titleText);
+			modal.append(body, footer, title);
+			document.body.appendChild(modal);
+			return { body, footer, titleText };
+		}
+
+		afterEach(() => {
+			document.body.innerHTML = '';
+		});
+
+		test('unstamped .dse-modal: body/footer/title all MATCH their scale-rule selectors', () => {
+			const { body, footer, titleText } = buildModalDom(false);
+			expect(body.matches(norm(modalBodyFooterRule.selector))).toBe(true);
+			expect(footer.matches(norm(modalBodyFooterRule.selector))).toBe(true);
+			expect(titleText.matches(norm(modalTitleRule.selector))).toBe(true);
+		});
+
+		test('print-stamped .dse-modal[data-dse-print="on"]: body/footer/title all STOP matching (the guard fires on the real stamped node)', () => {
+			const { body, footer, titleText } = buildModalDom(true);
+			expect(body.matches(norm(modalBodyFooterRule.selector))).toBe(false);
+			expect(footer.matches(norm(modalBodyFooterRule.selector))).toBe(false);
+			expect(titleText.matches(norm(modalTitleRule.selector))).toBe(false);
+		});
 	});
 });
 
