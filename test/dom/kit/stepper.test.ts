@@ -6,8 +6,13 @@
 import { stepper } from '../../../src/framework/kit/stepper';
 import { Component } from '../../mocks/obsidian';
 
+// SC-337: real Obsidian's owner Component is always loaded by its parent by the time it
+// mounts a stepper — a loaded fixture is the faithful default, since an unloaded
+// Component's unload() is now a guarded no-op (SC-340 fix-round-1).
 function fakeOwner(): any {
-	return new Component();
+	const owner = new Component();
+	owner.load();
+	return owner;
 }
 
 function keydown(el: HTMLElement, key: string): void {
@@ -431,11 +436,7 @@ describe('Plan 08 Task 2: kit/stepper (D2 §2.2)', () => {
 	test('lifecycle: owner.unload() detaches ALL stepper listeners (F1 §4.5)', () => {
 		const parent = document.createElement('div');
 		const onChange = jest.fn();
-		// SC-337: Component.unload is now a guarded no-op on a never-loaded component
-		// (matching Obsidian 1.14.2) — a real owner is always loaded by its parent by
-		// the time it mounts a stepper, so a loaded owner is the faithful fixture.
 		const owner = fakeOwner();
-		owner.load();
 		const handle = stepper(
 			parent,
 			{ value: 3, editable: true, label: 'x', onChange },

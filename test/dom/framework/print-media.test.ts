@@ -14,7 +14,17 @@ import { Component } from '../../mocks/obsidian';
 // Same convention as conditionIcons.test.ts / iconButton.test.ts: the mock Component's
 // runtime shape (register / registerDomEvent / unload) is what matters here, not
 // structural tsc satisfaction against the real obsidian.d.ts Component.
-const fakeOwner = (): any => new Component();
+//
+// SC-337: real Obsidian's owner Component is always loaded by its parent by the time it
+// watches print media — a loaded fixture is the faithful default, since an unloaded
+// Component's unload() is now a guarded no-op (SC-340 fix-round-1; this also fixes the
+// afterEach's `owner?.unload()` cleanup, previously a no-op that leaked window
+// beforeprint/afterprint listeners across every test but the one that called load()).
+const fakeOwner = (): any => {
+	const owner = new Component();
+	owner.load();
+	return owner;
+};
 
 type Listener = (e: { matches: boolean }) => void;
 
@@ -131,10 +141,6 @@ describe('SC-170 watchPrintMedia', () => {
 	test('unloading the owner detaches every listener (no stamping on a dead root)', () => {
 		mm = installMatchMedia(false);
 		owner = fakeOwner();
-		// SC-337: Component.unload is now a guarded no-op on a never-loaded component
-		// (matching Obsidian 1.14.2) — a real owner is always loaded by its parent by
-		// the time it watches print media, so a loaded owner is the faithful fixture.
-		owner.load();
 		const root = makeRoot();
 		watchPrintMedia(root, owner);
 		expect(mm.listenerCount()).toBe(1);

@@ -13,8 +13,13 @@ import { App, Component } from '../../mocks/obsidian';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// SC-337: real Obsidian's owner Component (a view/plugin) is always loaded by its parent
+// by the time it opens a managed modal — a loaded fixture is the faithful default, since
+// an unloaded Component's unload() is now a guarded no-op (SC-340 fix-round-1).
 function fakeOwner(): any {
-	return new Component();
+	const owner = new Component();
+	owner.load();
+	return owner;
 }
 
 function makeModal(app: any = new App() as any): DseModal {
@@ -244,11 +249,7 @@ describe('Plan 08 Task 3: kit/managedModal (D2 §2.6)', () => {
 		});
 
 		test('owner.unload() closes the modal (onClose fires, DOM removed)', () => {
-			// SC-337: Component.unload is now a guarded no-op on a never-loaded component
-			// (matching Obsidian 1.14.2) — a real owner is always loaded by its parent by
-			// the time it opens a modal, so a loaded owner is the faithful fixture.
 			const owner = fakeOwner();
-			owner.load();
 			const modal = openManagedModal(owner, () => makeModal());
 			const onClose = jest.spyOn(modal, 'onClose');
 

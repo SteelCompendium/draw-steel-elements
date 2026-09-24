@@ -74,9 +74,15 @@ function findSetting(modal: { body: HTMLElement }, name: string): Setting {
 /** The mock Component (private-field bearing, jest-free) is nominally incompatible with
  *  the real `obsidian.Component` type openFormEditor's `owner` param declares — same `as
  *  any` escape managedModal.test.ts / condition-select-modal.test.ts use for this exact
- *  mock-vs-real Component mismatch. */
+ *  mock-vs-real Component mismatch.
+ *
+ *  SC-337: real Obsidian's owner Component is always loaded by its parent by the time it
+ *  opens a form — a loaded fixture is the faithful default, since an unloaded Component's
+ *  unload() is now a guarded no-op (SC-340 fix-round-1). */
 function fakeOwner(): any {
-	return new Component();
+	const owner = new Component();
+	owner.load();
+	return owner;
 }
 
 test('opens seeded from the body and renders one control per visible field', () => {
@@ -140,11 +146,7 @@ test('Minor: a select field with no value yet writes its implicit default back t
 describe('Important 3: openFormEditor routes through openManagedModal (F1 §4.5)', () => {
 	test('owner unload closes the form', () => {
 		const validation = createValidationService();
-		// SC-337: Component.unload is now a guarded no-op on a never-loaded component
-		// (matching Obsidian 1.14.2) — a real owner is always loaded by its parent by
-		// the time it opens a form, so a loaded owner is the faithful fixture.
 		const owner = fakeOwner();
-		owner.load();
 		const modal = openFormEditor(owner, makeCx([]), schemaDef(), 'name: Goblin', validation);
 		expect(document.body.contains(modal.containerEl)).toBe(true);
 		owner.unload();

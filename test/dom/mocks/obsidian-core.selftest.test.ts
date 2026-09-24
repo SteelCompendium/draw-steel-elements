@@ -154,11 +154,21 @@ describe('SC-337: Component load/unload match Obsidian 1.14 (children LIFO, call
 	});
 
 	test('unload removes the children (a later load does not resurrect them)', () => {
+		let childOnloadCount = 0;
 		const parent = new Component();
-		const child = new Component();
+		const child = new (class extends Component {
+			onload(): void {
+				childOnloadCount++;
+			}
+		})();
 		parent.addChild(child);
 		parent.load();
+		expect(childOnloadCount).toBe(1);
 		parent.unload();
 		expect(parent._children).toHaveLength(0);
+
+		parent.load(); // a later load must not resurrect the removed child
+		expect(parent._children).toHaveLength(0);
+		expect(childOnloadCount).toBe(1); // child.onload() did NOT run again
 	});
 });

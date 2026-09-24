@@ -22,8 +22,14 @@ afterEach(() => {
 // Same convention as collapsible.test.ts / seams.test.ts: the mock Component's
 // self-referencing generics don't structurally satisfy the real `obsidian` Component
 // type under tsc; runtime shape (registerDomEvent/register/unload) is what matters.
+//
+// SC-337: real Obsidian's owner Component is always loaded by its parent by the time it
+// mounts a button — a loaded fixture is the faithful default, since an unloaded
+// Component's unload() is now a guarded no-op (SC-340 fix-round-1).
 function fakeOwner(): any {
-	return new Component();
+	const owner = new Component();
+	owner.load();
+	return owner;
 }
 
 describe('Plan 08 Task 2: kit/iconButton (D2 §2.1)', () => {
@@ -211,11 +217,7 @@ describe('Plan 08 Task 2: kit/iconButton (D2 §2.1)', () => {
 	test('lifecycle: owner.unload() detaches the click listener (F1 §4.5)', () => {
 		const parent = document.createElement('div');
 		const onClick = jest.fn();
-		// SC-337: Component.unload is now a guarded no-op on a never-loaded component
-		// (matching Obsidian 1.14.2) — a real owner is always loaded by its parent by
-		// the time it mounts a button, so a loaded owner is the faithful fixture.
 		const owner = fakeOwner();
-		owner.load();
 		const { buttonEl } = iconButton(parent, { label: 'x', onClick }, owner);
 
 		owner.unload();

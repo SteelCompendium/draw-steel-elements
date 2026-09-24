@@ -12,8 +12,13 @@ import { powerRollPanel, tierBadge } from '../../../src/framework/kit/powerRollP
 import { Component } from '../../mocks/obsidian';
 import * as obsidian from '../../mocks/obsidian';
 
+// SC-337: real Obsidian's owner Component is always loaded by its parent by the time it
+// mounts a panel — a loaded fixture is the faithful default, since an unloaded
+// Component's unload() is now a guarded no-op (SC-340 fix-round-1).
 function fakeOwner(): any {
-	return new Component();
+	const owner = new Component();
+	owner.load();
+	return owner;
 }
 
 function keydown(el: HTMLElement, key: string): boolean {
@@ -360,11 +365,7 @@ describe('Plan 08 Task 4: kit/powerRollPanel (D2 §2.8)', () => {
 	});
 
 	test('lifecycle: owner.unload() detaches click AND keyboard listeners (F1 §4.5)', () => {
-		// SC-337: Component.unload is now a guarded no-op on a never-loaded component
-		// (matching Obsidian 1.14.2) — a real owner is always loaded by its parent by
-		// the time it mounts a panel, so a loaded owner is the faithful fixture.
 		const owner = fakeOwner();
-		owner.load();
 		const { rowEls, onSelect } = mount({ selectable: true, selected: 'low' }, owner);
 
 		owner.unload();
