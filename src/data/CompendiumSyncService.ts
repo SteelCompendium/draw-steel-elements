@@ -269,6 +269,12 @@ export class CompendiumSyncService {
 	 *  separate `dir` flag the way JSZip exposed one. A zero-byte FILE entry (a key
 	 *  NOT ending in "/") is kept, matching JSZip's behavior. */
 	private async readZip(buffer: ArrayBuffer): Promise<Map<string, Uint8Array>> {
+		// SC-328 fix round 1 INFO-1: unzipSync is synchronous and, on the real asset,
+		// takes 94-167ms on desktop (slower on mobile) with no yield in between — long
+		// enough that the "reading archive…" Notice set right before this call may never
+		// actually paint. One macrotask yield gives the event loop a chance to render it
+		// before the main thread blocks on the unzip.
+		await new Promise((resolve) => setTimeout(resolve, 0));
 		let files: Record<string, Uint8Array>;
 		try {
 			files = unzipSync(new Uint8Array(buffer));
