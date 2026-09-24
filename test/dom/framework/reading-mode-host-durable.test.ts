@@ -4,8 +4,9 @@ import {
 	locateByBody,
 	normalizeBody,
 } from '../../../src/framework/host/ReadingModeBlockHost';
-import { App, Plugin, makeFakeContext } from '../../mocks/obsidian';
+import { App, Notice, Plugin, makeFakeContext } from '../../mocks/obsidian';
 import type { MarkdownPostProcessorContext } from '../../mocks/obsidian';
+import { droppedWriteMessage, resetDroppedWriteNotices } from '../../../src/framework/host/droppedWriteNotice';
 
 /** A ctx whose getSectionInfo returns whatever `section.current` holds (null = gone). */
 function switchableCtx(sourcePath: string, section: { current: { text: string; lineStart: number; lineEnd: number } | null }) {
@@ -100,5 +101,130 @@ describe('SC-343: durable identity and canPersist', () => {
 		app.vault.setFile('Note.md', ['shift 1', 'shift 2', 'shift 3', COUNTER].join('\n'));
 		host.notePersistIntent();
 		expect(host.lastKnownLineStart).toBe(3);
+	});
+});
+
+describe('SC-343: guarded replaceSource', () => {
+	let warn: jest.SpyInstance;
+	beforeEach(() => {
+		resetDroppedWriteNotices();
+		Notice.notices.length = 0;
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => warn.mockRestore());
+
+	function hostFor(app: App, sourcePath: string, section: { current: { text: string; lineStart: number; lineEnd: number } | null }, body: string | null) {
+		const host = new ReadingModeBlockHost(new Plugin(app) as any, document.createElement('div'), switchableCtx(sourcePath, section) as any, 'ds-counter');
+		if (body !== null) host.setMountedBody(body);
+		return host;
+	}
+
+	test('stale section range (a detached duplicate still reports old lines): never corrupts — relocates by body', async () => {
+		const app = new App();
+		// The block GREW since this host last saw it (lines 0..3); the stale range would cut it.
+		const live = ['```ds-counter', 'name: A', 'current_value: 1', 'extra: yes', '```', '', 'After'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const section = { current: { text: live, lineStart: 0, lineEnd: 3 } };
+		const host = hostFor(app, 'Note.md', section, 'name: A\ncurrent_value: 1\nextra: yes');
+
+		await expect(host.replaceSource('name: A\ncurrent_value: 2\nextra: yes')).resolves.toBe(true);
+		expect(app.vault.getContent('Note.md')).toBe(
+			['```ds-counter', 'name: A', 'current_value: 2', 'extra: yes', '```', '', 'After'].join('\n'),
+		);
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('stale model (body on disk is not what we last knew, block not found by body): dropped + ONE Notice, note unchanged', async () => {
+		const app = new App();
+		const live = ['```ds-counter', 'name: Vigor', 'current_value: 10', '```'].join('\n');
+		app.vault.setFile('Folder/Session 3.md', live);
+		const section = { current: { text: live, lineStart: 0, lineEnd: 3 } };
+		const host = hostFor(app, 'Folder/Session 3.md', section, 'name: Health\ncurrent_value: 10');
+
+		await expect(host.replaceSource('name: Health\ncurrent_value: 11')).resolves.toBe(false);
+		expect(app.vault.getContent('Folder/Session 3.md')).toBe(live);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Session 3')]);
+		expect(warn).toHaveBeenCalledTimes(1);
+	});
+
+	test('section gone (navigate-away flush): the write lands through the durable locate (SC-336)', async () => {
+		const app = new App();
+		const live = ['# N', '', '```ds-counter', 'name: A', 'current_value: 1', '```'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const section = { current: { text: live, lineStart: 2, lineEnd: 5 } as { text: string; lineStart: number; lineEnd: number } | null };
+		const host = hostFor(app, 'Note.md', section, 'name: A\ncurrent_value: 1');
+		section.current = null;
+
+		await expect(host.replaceSource('name: A\ncurrent_value: 2')).resolves.toBe(true);
+		expect(app.vault.getContent('Note.md')).toContain('current_value: 2');
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('identical twins, section gone after lines shifted: writes the twin nearest the refreshed position', async () => {
+		const app = new App();
+		const twin = ['```ds-counter', 'name: Twin', 'current_value: 5', '```'].join('\n');
+		const before = ['TOP', twin, 'MID', twin, 'BOTTOM'].join('\n'); // lower twin at line 6
+		app.vault.setFile('Note.md', before);
+		const section = { current: { text: before, lineStart: 6, lineEnd: 9 } as { text: string; lineStart: number; lineEnd: number } | null };
+		const host = hostFor(app, 'Note.md', section, 'name: Twin\ncurrent_value: 5');
+		// 16 lines inserted above both twins; the live section follows (Obsidian E2)...
+		const shifted = [...Array.from({ length: 16 }, (_, i) => `shift ${i}`), before].join('\n');
+		app.vault.setFile('Note.md', shifted);
+		section.current = { text: shifted, lineStart: 22, lineEnd: 25 };
+		host.notePersistIntent(); // ...and persist() refreshes the durable position
+		section.current = null; // then the note is navigated away before the flush
+
+		await expect(host.replaceSource('name: Twin\ncurrent_value: 6')).resolves.toBe(true);
+		const values = (app.vault.getContent('Note.md')!.match(/current_value: (\d+)/g) ?? []).map((s) => s.split(': ')[1]);
+		expect(values).toEqual(['5', '6']); // the LOWER twin, never the upper one
+	});
+
+	test('CRLF note: the section path still matches the body and writes (no Notice)', async () => {
+		const app = new App();
+		const live = ['```ds-counter', 'name: A', 'current_value: 1', '```', ''].join('\r\n');
+		app.vault.setFile('Note.md', live);
+		const section = { current: { text: live, lineStart: 0, lineEnd: 3 } };
+		const host = hostFor(app, 'Note.md', section, 'name: A\ncurrent_value: 1');
+
+		await expect(host.replaceSource('name: A\ncurrent_value: 2')).resolves.toBe(true);
+		expect(app.vault.getContent('Note.md')).toContain('current_value: 2');
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('fence not at column 0 (callout): no write and NO Notice (unchanged from today)', async () => {
+		const app = new App();
+		const live = ['> [!note]', '> ```ds-counter', '> name: A', '> ```'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const section = { current: { text: live, lineStart: 0, lineEnd: 3 } };
+		const host = hostFor(app, 'Note.md', section, 'name: A');
+
+		await expect(host.replaceSource('name: B')).resolves.toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(live);
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('unterminated fence at the end of the note: still writes and closes the fence (unchanged from today)', async () => {
+		const app = new App();
+		const live = ['Before', '', '```ds-counter', 'name: A', 'current_value: 1'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const section = { current: { text: live, lineStart: 2, lineEnd: 4 } };
+		const host = hostFor(app, 'Note.md', section, 'name: A\ncurrent_value: 1');
+
+		await expect(host.replaceSource('name: A\ncurrent_value: 2')).resolves.toBe(true);
+		expect(app.vault.getContent('Note.md')).toBe(['Before', '', '```ds-counter', 'name: A', 'current_value: 2', '```'].join('\n'));
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('a successful write becomes the new known body (a second write finds it)', async () => {
+		const app = new App();
+		const live = ['```ds-counter', 'name: A', 'current_value: 1', '```'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const section = { current: { text: live, lineStart: 0, lineEnd: 3 } as { text: string; lineStart: number; lineEnd: number } | null };
+		const host = hostFor(app, 'Note.md', section, 'name: A\ncurrent_value: 1');
+		await host.replaceSource('name: A\ncurrent_value: 2');
+		expect(host.lastKnownBody).toBe('name: A\ncurrent_value: 2');
+		section.current = null;
+		await expect(host.replaceSource('name: A\ncurrent_value: 3')).resolves.toBe(true);
+		expect(app.vault.getContent('Note.md')).toContain('current_value: 3');
 	});
 });

@@ -45,6 +45,7 @@ import type { Component, MarkdownPostProcessorContext, MarkdownSectionInformatio
 import type { BlockHost, BlockInfo, RenderMode } from './BlockHost';
 import type { PreviewScrollPin } from './previewScrollPin';
 import { listFences } from '../sidebar/anchor';
+import { notifyDroppedWrite } from './droppedWriteNotice';
 
 /** Matches a fence-open line, capturing the fence run and the language token. */
 const OPEN_FENCE = /^([`~]{3,})(\S*)/;
@@ -205,35 +206,67 @@ export class ReadingModeBlockHost implements BlockHost {
 		const abstractFile = this.plugin.app.vault.getAbstractFileByPath(this.ctx.sourcePath);
 		if (!(abstractFile instanceof TFile)) return false;
 
-		// Captured immediately before entering Vault.process, with nothing async in
-		// between — on the real vault this is still the freshest position we can know
-		// without racing; the process() callback below re-derives the fence text itself
-		// from the content IT receives, rather than trusting this snapshot, so a
-		// concurrent write that shifted lines is still handled correctly (see file header).
-		const section = this.ctx.getSectionInfo(this.containerEl);
-		if (!section) return false;
-		const { lineStart, lineEnd } = section;
+		// Captured immediately before entering Vault.process, with nothing async in between.
+		// SC-343: it is only a HINT now — resolveWriteTarget re-validates it against the live
+		// content inside the callback and falls back to the durable locate when it is stale.
+		const section = this.readSection();
 
 		// SC-198: hold the preview's height across the rebuild this write is about to
-		// provoke, so the browser never clamps scrollTop away. Synchronous and immediately
-		// before the write by design — the pin has to already be in place when Obsidian's
-		// file watcher fires. Never throws and never blocks the write.
-		this.scrollPin?.pin(this.containerEl);
+		// provoke (only meaningful while the block is on screen, i.e. its section resolves).
+		if (section) this.scrollPin?.pin(this.containerEl);
 
 		let wrote = false;
+		let dropped = false;
 		await this.plugin.app.vault.process(abstractFile, (content) => {
-			const openFence = parseOpenFence(content, lineStart);
-			if (!openFence) return content; // block moved/vanished under us: abort, don't corrupt
-
+			const target = this.resolveWriteTarget(content, section);
+			if (target === 'abort') return content;
+			if (target === 'miss') {
+				dropped = true;
+				return content;
+			}
 			const lines = content.split('\n');
-			const closeFence = parseCloseFence(lines[lineEnd]) ?? openFence.fence;
-
+			const openFence = parseOpenFence(content, target.lineStart);
+			if (!openFence) return content; // resolveWriteTarget guarantees one; defensive
+			const closeFence = parseCloseFence(lines[target.lineEnd]) ?? openFence.fence;
 			const newBlockLines = [`${openFence.fence}${openFence.language}`, ...newSource.split('\n'), closeFence];
-			lines.splice(lineStart, lineEnd - lineStart + 1, ...newBlockLines);
+			lines.splice(target.lineStart, target.lineEnd - target.lineStart + 1, ...newBlockLines);
 			wrote = true;
 			return lines.join('\n');
 		});
+		if (wrote) this.knownBody = newSource;
+		if (dropped) notifyDroppedWrite(this.ctx.sourcePath, abstractFile.basename);
 		return wrote;
+	}
+
+	/**
+	 * SC-343: where this write goes, decided from the LIVE content inside Vault.process.
+	 *  - the section range, when it still holds our block (opening fence, closing fence or
+	 *    an unterminated fence running to the last line, and the body we last knew);
+	 *  - else, with a durable identity, the block found by that body nearest the last line;
+	 *  - 'miss' when the identity exists but nothing matches (dropped + Notice);
+	 *  - 'abort' when there is no identity at all (today's silent no-write).
+	 */
+	private resolveWriteTarget(
+		content: string,
+		section: MarkdownSectionInformation | null,
+	): { lineStart: number; lineEnd: number } | 'abort' | 'miss' {
+		if (section) {
+			const lines = content.split('\n');
+			const { lineStart, lineEnd } = section;
+			const openOk = parseOpenFence(content, lineStart) !== null;
+			const closeOk = parseCloseFence(lines[lineEnd]) !== null;
+			const unterminatedAtEof = !closeOk && lineEnd === lines.length - 1;
+			const bodyEnd = unterminatedAtEof ? lineEnd + 1 : lineEnd;
+			const bodyOk =
+				this.knownBody === null ||
+				normalizeBody(lines.slice(lineStart + 1, bodyEnd).join('\n')) === normalizeBody(this.knownBody);
+			if (openOk && (closeOk || unterminatedAtEof) && bodyOk) return { lineStart, lineEnd };
+		}
+		if (!this.hasDurableIdentity) return 'abort';
+		const located = locateByBody(content, this.knownLanguage!, this.knownBody!, this.knownLineStart!);
+		if (!located) return 'miss';
+		this.knownLineStart = located.lineStart;
+		return located;
 	}
 
 	blockKey(): string {
