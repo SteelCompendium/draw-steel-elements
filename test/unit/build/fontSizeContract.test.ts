@@ -191,7 +191,10 @@ export const ALLOWLIST: readonly string[] = [
 	"[data-dse-element=\"values-row\"] .dse-statgrid >> .dse-statgrid__value :: calc(var(--dse-value-scale, 3) * 1em)",
 	"[data-dse-element=\"values-row\"] .dse-statgrid >> .dse-statgrid__label :: calc(var(--dse-label-scale, 1) * 1em)",
 	"[data-dse-element=\"skills\"] .dse-skills >> .dse-skills__tally :: 0.75em",
-	"[data-dse-element]:not([data-dse-print=\"on\"]) :: calc(1em * var(--dse-text-scale))",
+	// SC-230: widened to `.dse-modal` (anchored idiom, same as the card-scale
+	// rule) so modals track text size like notes do — key text moves with the
+	// selector, same debt entry.
+	":is([data-dse-element], .dse-modal):not([data-dse-print=\"on\"]) :: calc(1em * var(--dse-text-scale))",
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-sb__band .dse-collapse__title :: 1.25rem",
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-sb__sticky-name :: 1.28rem",
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-sb__sticky-role :: 1rem",

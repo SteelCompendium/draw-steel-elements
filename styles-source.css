@@ -7668,16 +7668,25 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    `zoom: 1` is the property's initial value.
 
    TEXT: a multiplier on the element root's font-size — everything inside is
-   authored in em/rem-free kit units, so the whole element tracks it. */
-[data-dse-element]:not([data-dse-print="on"]) {
+   authored in em/rem-free kit units, so the whole element tracks it.
+
+   SC-230: widened to `.dse-modal` too, same anchored idiom as the CARD rule
+   below (`:is([data-dse-element], .dse-modal)`) — modals are a first-class
+   Steel token-scope member (styles-source.css:3144) and already receive
+   --dse-text-scale via DseModal.open()'s reflectCss() call (seams/prefs.ts),
+   but this consumer rule never read it there, so a modal honored card zoom
+   and silently ignored text size. Modals track text size exactly as rendered
+   blocks in notes do. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) {
 	font-size: calc(1em * var(--dse-text-scale));
 }
-/* Nested element roots (by-SCC kit → its real nested ds-feature card) would
-   COMPOUND the multiplier — the inner root's 1em is the outer root's ALREADY
-   scaled size — so nested roots reset to plain inheritance (font-size: 1em);
-   the outermost root applies the scale exactly once. Source-ordered after the
-   scale rule AND higher specificity (0,3,0 > 0,2,0): wins either way. */
-[data-dse-element] [data-dse-element]:not([data-dse-print="on"]) {
+/* Nested element roots (by-SCC kit → its real nested ds-feature card, or a
+   future modal that hosts one) would COMPOUND the multiplier — the inner
+   root's 1em is the outer root's/modal's ALREADY scaled size — so nested
+   roots reset to plain inheritance (font-size: 1em); the outermost root/modal
+   applies the scale exactly once. Source-ordered after the scale rule AND
+   higher specificity (0,3,0 > 0,2,0): wins either way. */
+:is([data-dse-element], .dse-modal) [data-dse-element]:not([data-dse-print="on"]) {
 	font-size: var(--dse-fs-body);
 }
 /* CARD: the site zooms exactly ONE wrapper (v2 extra.css:61 —
