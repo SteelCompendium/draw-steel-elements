@@ -27,7 +27,9 @@ for what needs action.
   — the panel correctly showed the read-only "panel unavailable" notice, but the very next
   valid edit to that block failed to bring it back: the notice and the disabled controls
   stayed stuck even though the block was valid again, and the only way out was to unpin and
-  re-pin. A degraded panel now recovers on the next valid change, no re-pin needed.
+  re-pin. A degraded panel now recovers on the next valid change — including an editor undo
+  right after a sidebar edit, and a panel stuck on a parse-error notice after a bad outside
+  edit — no re-pin needed.
 - [FIX] **Initiative tracker: an unsynced compendium creature no longer asks about
   duplicate files, and the console no longer logs a warning for every creature without a
   portrait** (SC-240). A statblock reference the encounter builder creates from the
