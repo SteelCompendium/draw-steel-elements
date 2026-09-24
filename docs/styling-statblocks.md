@@ -85,7 +85,9 @@ Villain actions — and all the typography settings are deliberately global only
 
 Everything you pick carries into print and export. To check a handout without printing it,
 turn on **Settings → Appearance → Print preview**, which shows every element in its print
-layout on screen:
+layout on screen — its own white page with black text, so it shows what the PDF export
+produces, regardless of your Obsidian theme. In a dark vault, this means the previewed
+element sits as a white page on your dark note:
 
 ![A statblock in its print layout](Media/tutorial-print-preview.png)
 

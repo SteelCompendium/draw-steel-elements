@@ -31,7 +31,9 @@ Choosing a statblock look, with pictures:
 - **Reduce motion** — turn off transitions and animations inside Draw Steel elements. Your
   system's own reduced-motion preference is always honoured regardless of this setting.
 - **Print preview** — show every element in its print/export layout on screen, so you can
-  check a handout without printing it.
+  check a handout without printing it. The preview draws its own white page with black
+  text, matching what the PDF export produces — regardless of your Obsidian theme. In a
+  dark vault, elements with Print preview on sit as white pages on your dark note.
 - **Initiative portraits** — show creature portraits in the initiative tracker.
 
 ## Typography
