@@ -20,9 +20,9 @@
 // therefore the most plausible way plugin code would reintroduce the pattern) and
 // `createElementNS(<namespace>, "script")`.
 
-import { readFileSync } from "fs";
+import { readFileSync, realpathSync } from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -91,6 +91,13 @@ function main() {
 
 // Only run as a side effect when invoked directly (`node scripts/check-no-dynamic-
 // script.mjs [path]`), not when imported (esbuild.config.mjs, jest).
-if (import.meta.url === `file://${process.argv[1]}`) {
+//
+// SC-328 fix round 1 LOW-3: the naive `import.meta.url === \`file://${process.argv[1]}\``
+// compares a percent-encoded realpath URL against a raw argv path — a symlinked entry
+// point, or one with a space in its path, never matches, so `main()` silently never runs
+// and the CLI reports nothing and exits 0 even against a main.js full of hits. Resolving
+// both sides through the filesystem (realpathSync) and re-encoding the argv side as a
+// proper file URL (pathToFileURL) makes the comparison robust to both.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
 	main();
 }
