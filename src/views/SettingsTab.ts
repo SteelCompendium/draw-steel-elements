@@ -103,8 +103,9 @@ function slugify(label: string): string {
 /** A hand-written (non-descriptor) settings row. The label/help are BOTH the rendered
  *  name/desc and the row's search keys — one source, so they cannot drift apart the way
  *  a parallel search index would. Sentence-case lint can't inspect a variable passed to
- *  setName/setDesc; the literals live at the call sites below, where it can. */
-/** SC-243 fix round 1 (review L3): `build` is typed `void | (() => void)`, not bare
+ *  setName/setDesc; the literals live at the call sites below, where it can.
+ *
+ *  SC-243 fix round 1 (review L3): `build` is typed `void | (() => void)`, not bare
  *  `void` — the Sync compendium row (`mountCompendiumBusyButtons`) is the first `opRow`
  *  to return a live-mount cleanup, and a bare `=> void` return position would silently
  *  accept that returned function without ever saying obsidian keeps and calls it. Same
