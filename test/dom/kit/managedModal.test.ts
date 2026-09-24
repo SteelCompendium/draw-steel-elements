@@ -153,6 +153,28 @@ describe('Plan 08 Task 3: kit/managedModal (D2 §2.6)', () => {
 			b.setDseTitle('B');
 			expect(a.titleEl.id).not.toBe(b.titleEl.id);
 		});
+
+		// SC-230 r3 (LOW-1): the title text lives in its own span so styles-source.css's
+		// `.dse-modal__title-text` rule can multiply Obsidian's own (version-dependent)
+		// title font-size by --dse-text-scale without ever touching `.modal-title` itself.
+		test('the title text is wrapped in a single .dse-modal__title-text span, not written directly onto titleEl', () => {
+			const modal = makeModal();
+			modal.setDseTitle('Conditions');
+
+			const span = modal.titleEl.querySelector('.dse-modal__title-text');
+			expect(span).not.toBeNull();
+			expect(span?.textContent).toBe('Conditions');
+			expect(modal.titleEl.children.length).toBe(1);
+		});
+
+		test('re-titling replaces the span in place (no stray extra spans accumulate)', () => {
+			const modal = makeModal();
+			modal.setDseTitle('First');
+			modal.setDseTitle('Second');
+
+			expect(modal.titleEl.querySelectorAll('.dse-modal__title-text').length).toBe(1);
+			expect(modal.titleEl.querySelector('.dse-modal__title-text')?.textContent).toBe('Second');
+		});
 	});
 
 	describe('footer — Task-2 iconButtons: REAL <button>s with REAL disabled (CB-8)', () => {

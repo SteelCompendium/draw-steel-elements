@@ -289,7 +289,7 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		ui: {
 			group: 'Typography', label: 'Text size', control: 'slider',
 			min: TEXT_SCALE.min, max: TEXT_SCALE.max, step: TEXT_SCALE.step,
-			help: 'Scale the text inside Draw Steel elements (60%–140%). Applies to every Draw Steel element; print and export always use 100%.',
+			help: 'Scale the text inside Draw Steel elements and their dialogs (60%–140%). Applies to every Draw Steel element and dialog; print and export always use 100%.',
 		},
 	}),
 	d({

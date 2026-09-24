@@ -60,9 +60,20 @@ export class DseModal extends Modal {
 	/**
 	 * Sets the modal title and wires aria-labelledby → it (§4.3). Named setDseTitle
 	 * (not setTitle) so it never shadows Obsidian's own Modal.setTitle.
+	 *
+	 * SC-230 r3 (LOW-1): the text is wrapped in a `.dse-modal__title-text` span rather
+	 * than written directly onto `titleEl` (Obsidian's own `.modal-title`). `.modal-title`
+	 * keeps its real, version-dependent absolute font-size untouched (`--font-ui-large` in
+	 * the pinned 1.13.7 harness sheet, `--font-ui-medium` in installed 1.14.2 — a real,
+	 * observed drift), and styles-source.css's `.dse-modal__title-text` rule multiplies
+	 * whatever that inherited size turns out to be by --dse-text-scale — the title tracks
+	 * text size like the rest of a modal's content without hardcoding either Obsidian
+	 * token. `aria-labelledby` is unaffected: accessible-name computation walks all of
+	 * titleEl's descendant text nodes, nested or not.
 	 */
 	setDseTitle(text: string): this {
-		this.titleEl.setText(text);
+		this.titleEl.empty();
+		this.titleEl.createSpan({ cls: 'dse-modal__title-text', text });
 		if (!this.titleEl.id) this.titleEl.id = `dse-modal-title-${++titleCounter}`;
 		this.dialogEl().setAttribute('aria-labelledby', this.titleEl.id);
 		return this;

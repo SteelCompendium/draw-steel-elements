@@ -22,6 +22,13 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **The Text size preference now scales dialog content too, not just Draw Steel
+  elements in your notes** (SC-230). Conditions, stamina, montage and other Draw Steel
+  dialogs used to ignore the Text size slider entirely — only the Card size slider reached
+  them — so a reader who bumped Text size up for note content still got the dialog's
+  default size. Dialog body text, buttons, and the dialog's own title now scale with Text
+  size exactly like a Draw Steel element in a note does; the default 100% looks identical
+  to before.
 - [FIX] **The compendium download's zip library is now `fflate`, not JSZip** (SC-328). JSZip's
   legacy-browser polyfills contained dynamic `<script>` element creation, which Obsidian's
   community-plugin review rejects; 7.0.0 also carries forward 6.0.2's three added
