@@ -35,6 +35,14 @@ for what needs action.
   that is currently in the background or a collapsed sidebar too (Obsidian defers loading
   those until you click them — common right after a restart), not just the one you're
   looking at.
+- [FIX] **The Settings Sync and Check-for-updates buttons now show when a compendium
+  operation is running, instead of staying clickable through the whole run** (SC-243).
+  Previously a double-click, the command palette, or the migration modal's "sync anyway"/
+  "sync after migrating" choices could start a second sync underneath one already in
+  progress. Both buttons now disable the moment either one is clicked — Sync reads
+  "Syncing…", Check for updates reads "Checking…" — and re-enable live if the settings
+  window is left open through the run. A second request from any entry point while one is
+  already in flight is refused with a notice instead of starting.
 - [INTERNAL] A block's save now finds the block by its content when its position in the note has
   moved, instead of trusting a possibly stale line range, so a save can no longer land in the wrong
   place or cut a block short (SC-343). A click followed at once by switching notes now still saves
