@@ -15,6 +15,12 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Typing a negative number into the minion pool's Apply Damage box no longer heals
+  the squad** (SC-241). Applying damage from a minion's stamina-pool modal used to read
+  whatever you typed as a plain multiplier, so a negative damage amount (or a negative
+  number of minions hit) flipped the math and healed the pool instead of damaging it. Apply
+  Damage now treats a negative value in either box as zero, so it does nothing instead of
+  healing.
 - [FIX] **Minion squads in the initiative tracker share one rule-shaped action checklist**
   (SC-278). Minions act together and can take only a move action and a main action, a move
   action and a maneuver, or two move actions — so a squad's minions no longer each carry an
