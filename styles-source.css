@@ -14979,6 +14979,104 @@ body.theme-light
 	print-color-adjust: exact;
 }
 
+/* -- SC-127: the print PREVIEW draws its own PAPER --------------------------
+   `printPreview` (data-dse-print="on") exists to show on screen what the PDF export
+   produces. The neutral value block above turns every --dse-* ink black and every
+   --dse-* surface white, but nothing painted the element ROOT itself: the Steel card
+   plate (`background: var(--dse-card-bg)`) resolves to `none` in print, the statblock
+   root is `transparent`, and both the tracker family's plate and the root's
+   `color: var(--dse-fg)` are screen-only (`:not([data-dse-print="on"])`). So in a DARK
+   vault the black ink landed on Obsidian's dark page, and every node that takes its ink
+   by inheritance kept the host's pale `--text-normal` (`.markdown-preview-view`), which
+   reads pale-on-white wherever a --dse-surface panel does paint. Paper + ink on the root
+   fixes both at once, per element root (a per-block `prefs: { printPreview: on }`
+   override gets exactly its own sheet).
+   Real paper: `data-dse-print="on"` is also stamped during real print
+   (src/framework/printMedia.ts). The INK applies there too and is a no-op (Obsidian's
+   print sheet already inherits black: `.print .markdown-preview-view { color: initial }`).
+   The PAPER is `@media screen` only: the exported page is already white, and an opaque
+   root background under print media re-rasterises text antialiasing by 1/255 on ~91
+   realprint captures (measured, SC-127 r2) — paper that is invisible on paper is not
+   worth moving the real-print baseline for. That leaves the twin painting a root
+   background realprint does not, which `assertPrintTwinDelta` (visual-harness/shoot.mjs)
+   excuses on the element root only, and only for exactly white-vs-transparent.
+   Specificity (0,4,0), the print layer's padding convention: outranks the (0,3,0)
+   Steel card-plate arm and the statblock's (0,2,0) `transparent`. Spelled differently
+   from the neutral twin selector on purpose: theme-print.test.ts and
+   token-coverage.test.ts find that value block by its exact text. */
+[data-dse-element][data-dse-element][data-dse-print="on"][data-dse-print="on"] {
+	color: var(--dse-fg);
+}
+@media screen {
+	[data-dse-element][data-dse-element][data-dse-print="on"][data-dse-print="on"] {
+		background: var(--dse-page-bg);
+	}
+}
+/* -- SC-127: …and re-grounds Obsidian's OWN tokens on that paper, dark vault only --
+   Native controls inside an element (steppers and other inputs, `<button>` rows,
+   checkboxes, links, markdown tables) are deliberately painted by Obsidian's own
+   tokens (SC-202), which in a dark vault are dark-theme values: dark fields and pale
+   `--text-color` on the white sheet. Obsidian defines the palette on `.theme-dark` /
+   `.theme-light` and the semantic mappings (`--text-normal: var(--color-base-100)` …) on
+   `body`, so the mappings arrive here already resolved to dark values; re-pointing them
+   means restating the light palette AND re-declaring the mappings on the root so they
+   re-resolve against it. Values are the pinned Obsidian 1.13.7 `.theme-light` block
+   (visual-harness/obsidian-app-css.pin.mjs); a pin bump must re-copy them (nothing
+   checks them against the sheet automatically yet). The set
+   is the one the plugin's DOM was MEASURED to consume (SC-127 r2 census), not the whole
+   palette. Scoped under `.theme-dark` so a light vault — and real print, which Obsidian
+   always renders under a forced `theme-light` — never matches: they already carry these
+   exact values (or a custom light theme's own), and 0 realprint bytes move. */
+.theme-dark [data-dse-element][data-dse-print="on"][data-dse-print="on"] {
+	color-scheme: light;
+	--mono-0: white;
+	--mono-100: black;
+	--color-base-00: #ffffff;
+	--color-base-05: #fcfcfc;
+	--color-base-10: #fafafa;
+	--color-base-20: #f6f6f6;
+	--color-base-25: #efefef;
+	--color-base-30: #e4e4e4;
+	--color-base-35: #dadada;
+	--color-base-40: #bdbdbd;
+	--color-base-50: #ababab;
+	--color-base-60: #707070;
+	--color-base-70: #5c5c5c;
+	--color-base-100: #222222;
+	--color-accent-1: hsl(calc(var(--accent-h) - 1), calc(var(--accent-s) * 1.01), calc(var(--accent-l) * 1.075));
+	--color-accent-2: hsl(calc(var(--accent-h) - 3), calc(var(--accent-s) * 1.02), calc(var(--accent-l) * 1.15));
+	--input-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12), 0 1px 2px 0 rgba(0, 0, 0, 0.065), 0 0 0 0 transparent;
+	--input-shadow-hover: inset 0 0 0 1px rgba(0, 0, 0, 0.17), 0 1px 2px 0 rgba(0, 0, 0, 0.1), 0 0 0 0 transparent;
+	/* body-level mappings, re-resolved against the palette above */
+	--background-primary: var(--color-base-00);
+	--background-primary-alt: var(--color-base-10);
+	--background-secondary: var(--color-base-20);
+	--background-modifier-border: var(--color-base-30);
+	--background-modifier-form-field: var(--color-base-00);
+	--background-modifier-hover: color-mix(in oklch, var(--mono-100) 6.7%, transparent);
+	--text-normal: var(--color-base-100);
+	--text-muted: var(--color-base-70);
+	--text-faint: var(--color-base-50);
+	--text-accent: var(--color-accent);
+	--interactive-normal: var(--color-base-00);
+	--interactive-hover: var(--color-base-10);
+	--interactive-accent: var(--color-accent-1);
+	--interactive-accent-hover: var(--color-accent-2);
+	--link-color: var(--text-accent);
+	--link-external-color: var(--text-accent);
+	--checkbox-color: var(--interactive-accent);
+	--checkbox-color-hover: var(--interactive-accent-hover);
+	--checkbox-border-color: var(--text-faint);
+	--checkbox-border-color-hover: var(--text-muted);
+	--checkbox-marker-color: var(--background-primary);
+	--table-header-color: var(--text-normal);
+	--table-border-color: var(--background-modifier-border);
+	--code-normal: var(--text-normal);
+	--code-background: var(--background-primary-alt);
+	--icon-color: var(--text-muted);
+	--blockquote-border-color: var(--interactive-accent);
+}
+
 /* ================================================================== */
 /*   Sidebar-width layout adaptations (D8 Task 10)                    */
 /* ================================================================== */
