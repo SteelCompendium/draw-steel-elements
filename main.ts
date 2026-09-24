@@ -3,7 +3,7 @@ import type {Editor, MarkdownFileInfo, MarkdownView} from 'obsidian';
 import {DseSettingTab} from "@views/SettingsTab";
 import {LegacyCompendiumModal} from "@views/LegacyCompendiumModal";
 import {DSESettings, migrateSettings} from "@model/Settings";
-import {CompendiumSyncService, SyncOptions} from "@/data/CompendiumSyncService";
+import {CompendiumSyncService, SyncOptions, SYNC_BUSY_NOTICE} from "@/data/CompendiumSyncService";
 import {CompendiumMigrationService} from "@/data/CompendiumMigration";
 import type {MigrationPlan, MigrationReport} from "@/data/CompendiumMigration";
 import {MigrationStateStore} from "@/data/migrationState";
@@ -668,62 +668,88 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
      * offer the confirmed legacy-folder choice before touching anything; every other
      * call goes straight to `syncService.sync` (itself non-destructive by
      * construction — see CompendiumSyncService.applySync, Task 9).
+     *
+     * SC-243/O2/B1/B3: busy-locked for its WHOLE span, prelude included — the token is
+     * acquired here, before `reconcile`/manifest-load/migration-detection ever run, and
+     * released in `finally` on every exit path (success, a thrown error from the
+     * prelude or from `sync`, and hand-off to the migration/legacy-folder modal alike).
+     * A second call arriving while this one is in flight (double-click, either
+     * `addCommand`, a modal callback re-entering this method — it never does, but the
+     * guard is here regardless) gets `null` back from `beginOperation` and bails
+     * immediately with the ticket's exact-wording Notice, never touching the vault.
+     * The two direct `syncService.sync(...)` calls below hand this SAME token through
+     * (`heldToken`) so `sync()` never tries to acquire its own and refuse itself
+     * (B3's no-self-deadlock requirement) — see `CompendiumSyncService.beginOperation`'s
+     * doc for the full reasoning. The `LegacyCompendiumModal`/`offerMigration` callbacks
+     * further down call `syncService.sync` BARE (no token): by the time a user acts on
+     * that modal, this method has already returned and released the lock, so those are
+     * correctly their own, independently-guarded busy spans (O2's "later syncs from
+     * modal callbacks... are busy for their own duration").
      */
     async syncCompendium(): Promise<void> {
-        const options = this.syncOptions();
-        // SC-125: adopt anything a previous (possibly interrupted) migration moved
-        // BEFORE any sync reads the manifest — otherwise those files look like user
-        // content squatting on compendium paths and get skipped forever.
-        await this.migrationService.reconcile(options.root);
-        const manifest = await this.manifestStore.load();
-        // SC-125 (review H2): the offer is also owed when the user declined it or
-        // stopped a run part-way. After a partial run the manifest is no longer null,
-        // so the manifest-absence arm alone could never re-offer.
-        const migrationPending = await this.migrationService.isPending();
-        if (manifest === null || migrationPending) {
-            const root = this.app.vault.getAbstractFileByPath(normalizePath(options.root));
-            // SC-125 trigger, stated exactly. The offer appears when:
-            //   (a) no sync manifest exists (7.0.0+ has never synced here) OR the user
-            //       has an outstanding declined/incomplete migration; AND
-            //   (b) the configured root is a folder that already has children; AND
-            //   (c) at least LEGACY_DETECTION_THRESHOLD files under it sit at exact
-            //       pre-7.0.0 compendium paths — or, when (a) is an outstanding
-            //       migration, even ONE such file, since a partly-finished run can
-            //       leave fewer than the threshold behind.
-            // A fresh install fails (b) (no folder at all, or an empty one) and would
-            // fail (c) anyway. A vault that finished migrating and synced fails all three.
-            if (root instanceof TFolder && root.children.length > 0) {
-                const detection = this.migrationService.detect(options.root);
-                if (detection.isLegacyLayout || (migrationPending && detection.legacyPaths > 0)) {
-                    await this.offerMigration(options.root);
-                    return;
-                }
-                if (migrationPending) {
-                    // Nothing left to migrate — stop re-offering and carry on.
-                    await this.migrationService.markSettled(options.root);
-                }
-                if (manifest !== null) {
-                    await this.syncService.sync(options);
-                    return;
-                }
-                // LegacyCompendiumModal's onChoice callback is declared `(trashOldRoot:
-                // boolean) => void` (fire-and-forget from the modal's own click handler,
-                // never awaited there either) -- an `async` callback passed directly
-                // trips `no-misused-promises`. Wrap in a `void`-discarded async IIFE
-                // instead: identical fire-and-forget execution/ordering/error handling,
-                // just an explicit `void` where it was implicit before.
-                new LegacyCompendiumModal(this.app, options.root, (trashOldRoot) => {
-                    void (async () => {
-                        if (trashOldRoot) {
-                            await this.app.fileManager.trashFile(root);
-                        }
-                        await this.syncService.sync(this.syncOptions());
-                    })();
-                }).open();
-                return;
-            }
+        const token = this.syncService.beginOperation('sync');
+        if (token === null) {
+            new Notice(SYNC_BUSY_NOTICE);
+            return;
         }
-        await this.syncService.sync(options);
+        try {
+            const options = this.syncOptions();
+            // SC-125: adopt anything a previous (possibly interrupted) migration moved
+            // BEFORE any sync reads the manifest — otherwise those files look like user
+            // content squatting on compendium paths and get skipped forever.
+            await this.migrationService.reconcile(options.root);
+            const manifest = await this.manifestStore.load();
+            // SC-125 (review H2): the offer is also owed when the user declined it or
+            // stopped a run part-way. After a partial run the manifest is no longer null,
+            // so the manifest-absence arm alone could never re-offer.
+            const migrationPending = await this.migrationService.isPending();
+            if (manifest === null || migrationPending) {
+                const root = this.app.vault.getAbstractFileByPath(normalizePath(options.root));
+                // SC-125 trigger, stated exactly. The offer appears when:
+                //   (a) no sync manifest exists (7.0.0+ has never synced here) OR the user
+                //       has an outstanding declined/incomplete migration; AND
+                //   (b) the configured root is a folder that already has children; AND
+                //   (c) at least LEGACY_DETECTION_THRESHOLD files under it sit at exact
+                //       pre-7.0.0 compendium paths — or, when (a) is an outstanding
+                //       migration, even ONE such file, since a partly-finished run can
+                //       leave fewer than the threshold behind.
+                // A fresh install fails (b) (no folder at all, or an empty one) and would
+                // fail (c) anyway. A vault that finished migrating and synced fails all three.
+                if (root instanceof TFolder && root.children.length > 0) {
+                    const detection = this.migrationService.detect(options.root);
+                    if (detection.isLegacyLayout || (migrationPending && detection.legacyPaths > 0)) {
+                        await this.offerMigration(options.root);
+                        return;
+                    }
+                    if (migrationPending) {
+                        // Nothing left to migrate — stop re-offering and carry on.
+                        await this.migrationService.markSettled(options.root);
+                    }
+                    if (manifest !== null) {
+                        await this.syncService.sync(options, token);
+                        return;
+                    }
+                    // LegacyCompendiumModal's onChoice callback is declared `(trashOldRoot:
+                    // boolean) => void` (fire-and-forget from the modal's own click handler,
+                    // never awaited there either) -- an `async` callback passed directly
+                    // trips `no-misused-promises`. Wrap in a `void`-discarded async IIFE
+                    // instead: identical fire-and-forget execution/ordering/error handling,
+                    // just an explicit `void` where it was implicit before.
+                    new LegacyCompendiumModal(this.app, options.root, (trashOldRoot) => {
+                        void (async () => {
+                            if (trashOldRoot) {
+                                await this.app.fileManager.trashFile(root);
+                            }
+                            await this.syncService.sync(this.syncOptions());
+                        })();
+                    }).open();
+                    return;
+                }
+            }
+            await this.syncService.sync(options, token);
+        } finally {
+            this.syncService.endOperation(token);
+        }
     }
 
     /**

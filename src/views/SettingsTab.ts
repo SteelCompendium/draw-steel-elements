@@ -19,10 +19,11 @@
 // notifies subscribers synchronously (Task 1), so prefs.reflect() re-stamps every mounted
 // element root and CSS reflows behind the open settings window — no Apply button, no
 // re-render. Custom (`render`) rows call prefs.set() directly, same as before.
-import { App, Component, Notice, PluginSettingTab, Setting, type TextComponent } from 'obsidian';
+import { App, Component, Notice, PluginSettingTab, Setting, type ButtonComponent, type TextComponent } from 'obsidian';
 import type { SettingControl, SettingDefinitionItem } from 'obsidian';
 import DrawSteelAdmonitionPlugin from 'main';
 import type { CompendiumManifest } from '@/data/manifest';
+import type { CompendiumBusyKind } from '@/data/CompendiumSyncService';
 import type { PreferenceStore, PrefDescriptor, DsePrefs } from '@/framework/seams/prefs';
 import {
 	GROUP_ORDER,
@@ -578,20 +579,30 @@ export class DseSettingTab extends PluginSettingTab {
 					'Sync compendium',
 					'Download the selected release and update the files the plugin manages.',
 					(setting) => {
+						let syncButton!: ButtonComponent;
+						let checkButton!: ButtonComponent;
 						setting
-							.addButton((button) =>
-								button
+							.addButton((button) => {
+								syncButton = button;
+								return button
 									.setButtonText('Sync')
 									.setCta()
 									.onClick(() => {
 										void this.plugin.syncCompendium();
-									}),
-							)
-							.addButton((button) =>
-								button.setButtonText('Check for updates').onClick(() => {
+									});
+							})
+							.addButton((button) => {
+								checkButton = button;
+								return button.setButtonText('Check for updates').onClick(() => {
 									void this.checkForCompendiumUpdates();
-								}),
-							);
+								});
+							});
+						// SC-243: live busy state (both buttons disable, the in-flight one's
+						// label swaps) — same per-mount subscribe/cleanup contract as
+						// mountCompendiumStatus above (BLOCK BODY: obsidian keeps a render
+						// callback's return value as the row's cleanup and CALLS it on
+						// teardown).
+						return this.mountCompendiumBusyButtons(syncButton, checkButton);
 					},
 				),
 			],
@@ -632,6 +643,10 @@ export class DseSettingTab extends PluginSettingTab {
 	private async checkForCompendiumUpdates(): Promise<void> {
 		try {
 			const result = await this.plugin.syncService.checkForUpdates();
+			// SC-243: null means the service's own busy guard refused the request (a
+			// sync or another check already in flight) and already showed its own
+			// Notice — nothing further to report here.
+			if (result === null) return;
 			new Notice(
 				result.upToDate
 					? `Compendium is up to date (${result.latestTag}).`
@@ -641,6 +656,32 @@ export class DseSettingTab extends PluginSettingTab {
 			const message = error instanceof Error ? error.message : String(error);
 			new Notice(`Update check failed — ${message}`);
 		}
+	}
+
+	/**
+	 * SC-243 — the Sync/Check-for-updates buttons' live busy state. Copies
+	 * `mountCompendiumStatus`'s SC-140 pattern exactly: subscribe from the row's own
+	 * render (`CompendiumSyncService.onBusyChange`), apply the CURRENT state immediately
+	 * (the subscription alone only fires on future transitions — B5's "settings opened
+	 * mid-sync render disabled" needs the mount-time read too, same reason
+	 * `mountCompendiumStatus` also calls `manifestStore.load()` up front), and return the
+	 * unsubscribe as this mount's cleanup so the listener never outlives the row (B5's
+	 * "no listener remains after teardown").
+	 *
+	 * O4: BOTH buttons disable whenever ANYTHING is in flight; only the in-flight
+	 * button's own label swaps (Sync -> Syncing…, Check for updates -> Checking…) — the
+	 * other button stays disabled but keeps its resting label.
+	 */
+	private mountCompendiumBusyButtons(syncButton: ButtonComponent, checkButton: ButtonComponent): () => void {
+		const apply = (kind: CompendiumBusyKind | null): void => {
+			syncButton.setDisabled(kind !== null);
+			checkButton.setDisabled(kind !== null);
+			syncButton.setButtonText(kind === 'sync' ? 'Syncing…' : 'Sync');
+			checkButton.setButtonText(kind === 'check' ? 'Checking…' : 'Check for updates');
+		};
+		const unsubscribe = this.plugin.syncService.onBusyChange(apply);
+		apply(this.plugin.syncService.currentBusy());
+		return unsubscribe;
 	}
 
 	/**

@@ -55,7 +55,7 @@ describe("CompendiumSyncService.sync (release download path)", () => {
 		const fetchFake = githubFake(zip);
 		const store = new ManifestStore(app, "draw-steel-elements");
 		const service = new CompendiumSyncService(app, store, fetchFake);
-		const report = await service.sync(OPTIONS);
+		const report = (await service.sync(OPTIONS))!; // SC-243: sync() can return null only when refused (busy); this path never is
 		expect(report.releaseTag).toBe("v4.20260701T120000");
 		expect(report.created.sort()).toEqual(["class/shadow.md", "rule/combat/turn.md"]);
 		expect(vault.text("DS Compendium/class/shadow.md")).toBe("shadow!");
@@ -158,7 +158,7 @@ describe("CompendiumSyncService.sync (release download path)", () => {
 		Notice.notices.length = 0;
 		const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 		try {
-			const report = await service.sync(OPTIONS);
+			const report = (await service.sync(OPTIONS))!; // SC-243: sync() can return null only when refused (busy); this path never is
 			expect(report.rejectedPaths).toEqual(["/abs.md"]);
 			expect(report.created).toEqual(["safe.md"]);
 			// Folded into the SAME skip-count notice as skippedConflicts/keptModified —
@@ -184,7 +184,7 @@ describe("CompendiumSyncService.sync (release download path)", () => {
 		const fetchFake = githubFake(zip, "v4.raw-traversal");
 		const service = new CompendiumSyncService(
 			app, new ManifestStore(app, "draw-steel-elements"), fetchFake);
-		const report = await service.sync(OPTIONS);
+		const report = (await service.sync(OPTIONS))!; // SC-243: sync() can return null only when refused (busy); this path never is
 		expect(report.created).toEqual(["safe.md"]);
 		expect(report.rejectedPaths.sort()).toEqual(
 			["../evil.md", "a/../../evil.md", "a\\..\\..\\evil.md"].sort());
@@ -196,7 +196,7 @@ describe("CompendiumSyncService.sync (release download path)", () => {
 		const fetchFake = githubFake(zip, "v4.dir-and-empty");
 		const service = new CompendiumSyncService(
 			app, new ManifestStore(app, "draw-steel-elements"), fetchFake);
-		const report = await service.sync(OPTIONS);
+		const report = (await service.sync(OPTIONS))!; // SC-243: sync() can return null only when refused (busy); this path never is
 		// The directory entry itself never appears as a created file...
 		expect(report.created.sort()).toEqual(["dir/empty.md", "dir/real.md"]);
 		// ...but the zero-byte FILE entry is kept, same as JSZip kept it.
@@ -210,7 +210,7 @@ describe("CompendiumSyncService.sync (release download path)", () => {
 		const fetchFake = githubFake(zip, "v4.empty-name");
 		const service = new CompendiumSyncService(
 			app, new ManifestStore(app, "draw-steel-elements"), fetchFake);
-		const report = await service.sync(OPTIONS);
+		const report = (await service.sync(OPTIONS))!; // SC-243: sync() can return null only when refused (busy); this path never is
 		expect(report.created).toEqual(["safe.md"]);
 	});
 
@@ -228,7 +228,7 @@ describe("CompendiumSyncService.sync (release download path)", () => {
 		const fetchFake = githubFake(zip, "v4.fixtures");
 		const service = new CompendiumSyncService(
 			app, new ManifestStore(app, "draw-steel-elements"), fetchFake);
-		const report = await service.sync(OPTIONS);
+		const report = (await service.sync(OPTIONS))!; // SC-243: sync() can return null only when refused (busy); this path never is
 		expect(report.created.sort()).toEqual(Object.keys(fixtures).sort());
 		for (const [relativePath, content] of Object.entries(fixtures)) {
 			expect(vault.text(`DS Compendium/${relativePath}`)).toBe(content);

@@ -296,6 +296,40 @@ function fakeManifestStore(initial: CompendiumManifest | null = null) {
 	};
 }
 
+/**
+ * SC-243 — a stand-in for CompendiumSyncService carrying the busy-state seam the real
+ * one has (`currentBusy()` for a mount's initial read, `onBusyChange()` for every state
+ * after it — the same load-bearing split `fakeManifestStore`'s `load()`/`onChange()`
+ * has, and for the identical reason: obsidian caches the declarative definitions and
+ * replays them, so the row's own render only runs once) plus `checkForUpdates`. The
+ * `setBusy` helper plays the part of a busy transition landing (mirrors
+ * `fakeManifestStore.sync()`): it moves the stored kind AND notifies.
+ */
+function fakeSyncService(overrides: Record<string, unknown> = {}) {
+	const listeners = new Set<(kind: 'sync' | 'check' | null) => void>();
+	let current: 'sync' | 'check' | null = null;
+	return {
+		checkForUpdates: jest.fn(async () => (
+			{ installedTag: null, latestTag: 'v4.x', upToDate: false }
+		)),
+		isBusy: jest.fn(() => current !== null),
+		currentBusy: jest.fn(() => current),
+		onBusyChange: jest.fn((listener: (kind: 'sync' | 'check' | null) => void) => {
+			listeners.add(listener);
+			return () => {
+				listeners.delete(listener);
+			};
+		}),
+		/** A sync/check starting or finishing while the settings window is open. */
+		setBusy(kind: 'sync' | 'check' | null): void {
+			current = kind;
+			for (const listener of [...listeners]) listener(kind);
+		},
+		listenerCount: (): number => listeners.size,
+		...overrides,
+	};
+}
+
 function sampleManifest(overrides: Partial<CompendiumManifest> = {}): CompendiumManifest {
 	return {
 		schemaVersion: 1,
@@ -326,11 +360,7 @@ describe('F2 Task 11 — Compendium operational section', () => {
 			frameworkV2: undefined,
 			saveSettings: jest.fn(async () => {}),
 			syncCompendium: jest.fn(async () => {}),
-			syncService: {
-				checkForUpdates: jest.fn(async () => (
-					{ installedTag: null, latestTag: 'v4.x', upToDate: false }
-				)),
-			},
+			syncService: fakeSyncService(),
 			manifestStore: fakeManifestStore(),
 			...overrides,
 		};
@@ -398,11 +428,11 @@ describe('F2 Task 11 — Compendium operational section', () => {
 
 	test('Check for updates button reports up-to-date via Notice', async () => {
 		const { tab, plugin } = makeFakePlugin({
-			syncService: {
+			syncService: fakeSyncService({
 				checkForUpdates: jest.fn(async () => (
 					{ installedTag: 'v4.1', latestTag: 'v4.1', upToDate: true }
 				)),
-			},
+			}),
 		});
 		renderAll(tab);
 		rowByName('Sync compendium').buttons[1].click();
@@ -413,11 +443,11 @@ describe('F2 Task 11 — Compendium operational section', () => {
 
 	test('Check for updates button reports an available update via Notice', async () => {
 		const { tab } = makeFakePlugin({
-			syncService: {
+			syncService: fakeSyncService({
 				checkForUpdates: jest.fn(async () => (
 					{ installedTag: 'v4.0', latestTag: 'v4.1', upToDate: false }
 				)),
-			},
+			}),
 		});
 		renderAll(tab);
 		rowByName('Sync compendium').buttons[1].click();
@@ -427,9 +457,9 @@ describe('F2 Task 11 — Compendium operational section', () => {
 
 	test('Check for updates failure surfaces the error via Notice, not a thrown rejection', async () => {
 		const { tab } = makeFakePlugin({
-			syncService: {
+			syncService: fakeSyncService({
 				checkForUpdates: jest.fn(async () => { throw new Error('rate limited'); }),
-			},
+			}),
 		});
 		renderAll(tab);
 		rowByName('Sync compendium').buttons[1].click();
@@ -537,6 +567,131 @@ describe('F2 Task 11 — Compendium operational section', () => {
 			await flushAsync(2);
 			expect(tab.containerEl.textContent).toContain('v4.fresh');
 			expect(tab.containerEl.textContent).not.toContain('No compendium synced yet.');
+		});
+	});
+
+	// —— SC-243: the Sync/Check-for-updates buttons' live busy state ——
+	//
+	// The bug: both buttons stayed enabled while a sync was running, so a double-click
+	// started a second run. `CompendiumSyncService` now carries the busy signal (kind:
+	// 'sync' | 'check' | null); the row subscribes to `onBusyChange` from its own render
+	// (same SC-140 pattern `mountCompendiumStatus` established above) and returns the
+	// unsubscribe as this mount's cleanup.
+	describe('SC-243 — sync/check busy buttons', () => {
+		function buttons(): { sync: any; check: any } {
+			const row = rowByName('Sync compendium');
+			return { sync: row.buttons[0], check: row.buttons[1] };
+		}
+
+		test('B6: non-busy render is unchanged — both buttons enabled, resting labels', () => {
+			const { tab } = makeFakePlugin();
+			renderAll(tab);
+			const { sync, check } = buttons();
+			expect(sync.disabled).toBe(false);
+			expect(sync.text).toBe('Sync');
+			expect(check.disabled).toBe(false);
+			expect(check.text).toBe('Check for updates');
+		});
+
+		test('B1/O4: settings opened MID-SYNC render disabled — Sync reads "Syncing…", Check disabled but keeps its own label', () => {
+			const syncService = fakeSyncService();
+			syncService.setBusy('sync');
+			const { tab } = makeFakePlugin({ syncService });
+			renderAll(tab);
+			const { sync, check } = buttons();
+			expect(sync.disabled).toBe(true);
+			expect(sync.text).toBe('Syncing…');
+			expect(check.disabled).toBe(true);
+			expect(check.text).toBe('Check for updates');
+		});
+
+		test('B2/O4: settings opened MID-CHECK render disabled — Check reads "Checking…", Sync disabled but keeps its own label', () => {
+			const syncService = fakeSyncService();
+			syncService.setBusy('check');
+			const { tab } = makeFakePlugin({ syncService });
+			renderAll(tab);
+			const { sync, check } = buttons();
+			expect(check.disabled).toBe(true);
+			expect(check.text).toBe('Checking…');
+			expect(sync.disabled).toBe(true);
+			expect(sync.text).toBe('Sync');
+		});
+
+		test('B5: LIVE — a sync starting and finishing with the settings window open disables then re-enables both buttons, with no reopen', () => {
+			const syncService = fakeSyncService();
+			const { tab } = makeFakePlugin({ syncService });
+			renderAll(tab);
+			const { sync, check } = buttons();
+			expect(sync.disabled).toBe(false);
+
+			syncService.setBusy('sync');
+			expect(sync.disabled).toBe(true);
+			expect(sync.text).toBe('Syncing…');
+			expect(check.disabled).toBe(true);
+
+			syncService.setBusy(null);
+			expect(sync.disabled).toBe(false);
+			expect(sync.text).toBe('Sync');
+			expect(check.disabled).toBe(false);
+			expect(check.text).toBe('Check for updates');
+		});
+
+		test('B5: LIVE — a check starting and finishing re-enables and restores both labels', () => {
+			const syncService = fakeSyncService();
+			const { tab } = makeFakePlugin({ syncService });
+			renderAll(tab);
+			const { sync, check } = buttons();
+
+			syncService.setBusy('check');
+			expect(check.text).toBe('Checking…');
+			expect(sync.disabled).toBe(true);
+
+			syncService.setBusy(null);
+			expect(check.text).toBe('Check for updates');
+			expect(sync.disabled).toBe(false);
+		});
+
+		test('B5: the listener is removed on row teardown — no listener remains after closing the settings window', () => {
+			const syncService = fakeSyncService();
+			const { tab } = makeFakePlugin({ syncService });
+			renderAll(tab);
+			expect(syncService.listenerCount()).toBe(1);
+
+			(tab as any).closeTab();
+			expect(syncService.listenerCount()).toBe(0);
+
+			// A busy transition landing after teardown reaches no listener — no throw.
+			expect(() => syncService.setBusy('sync')).not.toThrow();
+		});
+
+		test('a disabled Sync button click does not start a second run (defense in depth alongside the service-level guard)', () => {
+			const syncService = fakeSyncService();
+			syncService.setBusy('sync');
+			const { tab, plugin } = makeFakePlugin({ syncService });
+			renderAll(tab);
+			buttons().sync.click();
+			expect(plugin.syncCompendium).not.toHaveBeenCalled();
+		});
+
+		test('a disabled Check for updates button click does not start a second check', () => {
+			const syncService = fakeSyncService();
+			syncService.setBusy('check');
+			const { tab } = makeFakePlugin({ syncService });
+			renderAll(tab);
+			buttons().check.click();
+			expect(syncService.checkForUpdates).not.toHaveBeenCalled();
+		});
+
+		test('SC-243: checkForCompendiumUpdates treats a guarded (null) result as already handled — no extra Notice', async () => {
+			const syncService = fakeSyncService({
+				checkForUpdates: jest.fn(async () => null),
+			});
+			const { tab } = makeFakePlugin({ syncService });
+			renderAll(tab);
+			Notice.notices.length = 0;
+			buttons().check.click();
+			await flushAsync(2);
+			expect(Notice.notices).toEqual([]);
 		});
 	});
 });

@@ -865,6 +865,9 @@ export class FakeButton {
 	text = '';
 	icon = '';
 	cta = false;
+	/** SC-243: mirrors real ButtonComponent.setDisabled/disabled — the settings tab's
+	 *  compendium busy-state row (mountCompendiumBusyButtons) drives this. */
+	disabled = false;
 	private clickCb: (() => any) | null = null;
 	setButtonText(text: string): this {
 		this.text = text;
@@ -878,6 +881,10 @@ export class FakeButton {
 		this.cta = true;
 		return this;
 	}
+	setDisabled(disabled: boolean): this {
+		this.disabled = disabled;
+		return this;
+	}
 	setTooltip(_tooltip: string): this {
 		return this;
 	}
@@ -885,7 +892,12 @@ export class FakeButton {
 		this.clickCb = cb;
 		return this;
 	}
+	/** SC-243: a real disabled `<button>` element never dispatches a click at all — the
+	 *  browser suppresses it. Mirrored here so a test can drive `.click()` the same way a
+	 *  user's mouse would and see the disabled button do nothing, not just assert the
+	 *  flag was set. */
 	click(): void {
+		if (this.disabled) return;
 		this.clickCb?.();
 	}
 }

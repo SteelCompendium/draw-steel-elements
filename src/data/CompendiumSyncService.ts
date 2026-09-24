@@ -51,6 +51,22 @@ interface GithubRelease {
 
 const BATCH_SIZE = 20; // keep the pre-7.0 batch/yield pattern (mobile-friendly)
 
+/** SC-243: the exact wording the ticket specifies for a refused SYNC request (B3) —
+ *  exported so `main.syncCompendium`'s own guard (below) and `sync()`'s bare-acquire
+ *  guard show byte-identical text regardless of which one catches the double-click. */
+export const SYNC_BUSY_NOTICE = "Draw Steel Elements: a compendium sync is already running.";
+
+/** SC-243: which compendium operation currently holds the busy lock — drives both the
+ *  disabled state (any non-null value) and which button's label swaps (O4). */
+export type CompendiumBusyKind = "sync" | "check";
+
+/** SC-243: opaque proof of holding the busy lock, returned by `beginOperation`. Passing
+ *  it into `sync()`'s `heldToken` param lets a caller that already holds it (the
+ *  `syncCompendium` prelude) run the sync work without re-acquiring — see `sync`'s doc. */
+export type BusyToken = symbol;
+
+export type BusyListener = (kind: CompendiumBusyKind | null) => void;
+
 /**
  * F2 §3.4 — non-destructive, manifest-driven compendium sync.
  * Design principles: never touch a file we didn't put there; never hard-delete
@@ -61,11 +77,80 @@ const BATCH_SIZE = 20; // keep the pre-7.0 batch/yield pattern (mobile-friendly)
  * `requestUrlFn` constructor param is forward-compat plumbing for that.
  */
 export class CompendiumSyncService {
+	// SC-243: the busy lock. One flag covers both operation kinds (O4: BOTH buttons
+	// disable while EITHER a sync or a check is in flight) — `busyKind` also carries
+	// which one, for the label swap. `busyToken` is the lock's ownership proof: only a
+	// release presenting the SAME token still held can clear it, so a stale/duplicate
+	// release (e.g. from a caller that lost the acquire race) is a harmless no-op.
+	private busyKind: CompendiumBusyKind | null = null;
+	private busyToken: BusyToken | null = null;
+	private busyListeners = new Set<BusyListener>();
+
 	constructor(
 		private app: App,
 		private store: ManifestStore,
 		private requestUrlFn: RequestUrlFn = requestUrl,
 	) {}
+
+	public isBusy(): boolean {
+		return this.busyKind !== null;
+	}
+
+	/** The in-flight operation's kind, or null when idle — the settings row's initial
+	 *  render reads this (B5: "settings opened mid-sync render disabled"), since
+	 *  `onBusyChange` below only notifies of FUTURE transitions, not current state. */
+	public currentBusy(): CompendiumBusyKind | null {
+		return this.busyKind;
+	}
+
+	/** SC-243/O1 — subscribe to busy-state transitions; returns the unsubscribe, same
+	 *  contract as `ManifestStore.onChange` (SC-140), which the settings row copies. */
+	public onBusyChange(listener: BusyListener): () => void {
+		this.busyListeners.add(listener);
+		return () => {
+			this.busyListeners.delete(listener);
+		};
+	}
+
+	private notifyBusy(): void {
+		for (const listener of [...this.busyListeners]) {
+			try {
+				listener(this.busyKind);
+			} catch (error) {
+				console.error("Draw Steel Elements: a compendium busy listener threw", error);
+			}
+		}
+	}
+
+	/**
+	 * SC-243/O3 — acquires the busy lock for `kind`, or returns null when ANY operation
+	 * (sync or check) is already in flight — the caller must then show its own Notice
+	 * and bail without starting work (never start a second run).
+	 *
+	 * This is the re-entrant seam that keeps `main.syncCompendium` from refusing itself
+	 * (B3's "no self-deadlock/self-refusal" requirement): `syncCompendium` calls this
+	 * directly, BEFORE its own reconcile/manifest-load/migration-detection prelude, and
+	 * holds the returned token across that whole prelude. When the prelude decides to
+	 * proceed, it hands that SAME token into `sync()`'s `heldToken` param instead of
+	 * letting `sync()` try (and fail) to acquire its own — so the lock is acquired
+	 * exactly once per user-initiated sync, not twice by two different pieces of code
+	 * racing their own acquisition.
+	 */
+	public beginOperation(kind: CompendiumBusyKind): BusyToken | null {
+		if (this.busyKind !== null) return null;
+		this.busyKind = kind;
+		this.busyToken = Symbol(kind);
+		this.notifyBusy();
+		return this.busyToken;
+	}
+
+	/** Releases the lock IFF `token` is still the one currently held. */
+	public endOperation(token: BusyToken): void {
+		if (this.busyToken !== token) return;
+		this.busyKind = null;
+		this.busyToken = null;
+		this.notifyBusy();
+	}
 
 	/**
 	 * Diff `incoming` (root-relative path → content) against the old manifest and
@@ -178,46 +263,83 @@ export class CompendiumSyncService {
 	 * progress; on failure the Notice is replaced with an error Notice and the error
 	 * rethrown (callers, e.g. main.ts's syncCompendium, don't need their own try/catch
 	 * for the common path).
+	 *
+	 * SC-243/B3/B4 — busy-locked. `heldToken`, when passed, must be a token THIS SAME
+	 * caller already holds (from its own `beginOperation('sync')`); `sync` then runs
+	 * entirely under that lock without acquiring or releasing it itself — see
+	 * `beginOperation`'s doc for why `main.syncCompendium`'s prelude needs exactly this.
+	 * Every other caller (a direct `syncService.sync(options)` — the modal callbacks in
+	 * `main.offerMigration`, which fire once the busy span they were offered from has
+	 * already cleared) omits `heldToken`; `sync` then acquires its own lock and releases
+	 * it in `finally` (success, thrown error, and refusal alike leave the lock clear).
+	 * Returns null, WITHOUT starting any work, when the lock could not be acquired (a
+	 * genuinely concurrent caller) — the exact-wording Notice B3 specifies is shown
+	 * either here (a bare call) or by `syncCompendium`'s own earlier guard, never both.
 	 */
-	public async sync(options: SyncOptions): Promise<SyncReport> {
-		const notice = new Notice("Draw Steel Elements: resolving compendium release…", 0);
+	public async sync(options: SyncOptions, heldToken?: BusyToken): Promise<SyncReport | null> {
+		const token = heldToken ?? this.beginOperation("sync");
+		if (token === null) {
+			new Notice(SYNC_BUSY_NOTICE);
+			return null;
+		}
 		try {
-			const { tag, assetUrl } = await this.resolveRelease(options);
-			notice.setMessage(`Draw Steel Elements: downloading ${tag}…`);
-			const zipBuffer = await this.downloadAsset(assetUrl);
-			notice.setMessage("Draw Steel Elements: reading archive…");
-			const incoming = await this.readZip(zipBuffer);
-			const oldManifest = await this.store.load();
-			const { report } = await this.applySync(
-				incoming, oldManifest, options, tag,
-				(done, total) => notice.setMessage(
-					`Draw Steel Elements: syncing compendium… ${done}/${total}`));
-			notice.hide();
-			this.showSummary(report);
-			return report;
-		} catch (error) {
-			notice.hide();
-			const message = error instanceof Error ? error.message : String(error);
-			console.error("Draw Steel Elements: compendium sync failed:", error);
-			new Notice(`Draw Steel Elements: compendium sync failed — ${message}`, 8000);
-			throw error;
+			const notice = new Notice("Draw Steel Elements: resolving compendium release…", 0);
+			try {
+				const { tag, assetUrl } = await this.resolveRelease(options);
+				notice.setMessage(`Draw Steel Elements: downloading ${tag}…`);
+				const zipBuffer = await this.downloadAsset(assetUrl);
+				notice.setMessage("Draw Steel Elements: reading archive…");
+				const incoming = await this.readZip(zipBuffer);
+				const oldManifest = await this.store.load();
+				const { report } = await this.applySync(
+					incoming, oldManifest, options, tag,
+					(done, total) => notice.setMessage(
+						`Draw Steel Elements: syncing compendium… ${done}/${total}`));
+				notice.hide();
+				this.showSummary(report);
+				return report;
+			} catch (error) {
+				notice.hide();
+				const message = error instanceof Error ? error.message : String(error);
+				console.error("Draw Steel Elements: compendium sync failed:", error);
+				new Notice(`Draw Steel Elements: compendium sync failed — ${message}`, 8000);
+				throw error;
+			}
+		} finally {
+			// Only release a lock WE acquired — a caller that handed us its own token
+			// (heldToken !== undefined) owns that token's release, same as it owns
+			// clearing busy on hand-off to a modal without ever calling sync() at all.
+			if (heldToken === undefined) this.endOperation(token);
 		}
 	}
 
 	/**
 	 * Metadata-only update check (one GitHub API request; unauthenticated rate limit
 	 * is 60/hr) — never downloads or extracts the asset.
+	 *
+	 * SC-243/O3 — busy-locked the same way as `sync`'s bare-call path: refuses (Notice +
+	 * null, no request made) while ANY compendium operation — sync or check — is already
+	 * in flight, and always releases its own lock in `finally`.
 	 */
 	public async checkForUpdates(): Promise<{
 		installedTag: string | null; latestTag: string; upToDate: boolean;
-	}> {
-		const { tag } = await this.resolveRelease({ root: "", locale: "en" });
-		const manifest = await this.store.load();
-		return {
-			installedTag: manifest?.releaseTag ?? null,
-			latestTag: tag,
-			upToDate: manifest?.releaseTag === tag,
-		};
+	} | null> {
+		const token = this.beginOperation("check");
+		if (token === null) {
+			new Notice("Draw Steel Elements: a compendium operation is already running.");
+			return null;
+		}
+		try {
+			const { tag } = await this.resolveRelease({ root: "", locale: "en" });
+			const manifest = await this.store.load();
+			return {
+				installedTag: manifest?.releaseTag ?? null,
+				latestTag: tag,
+				upToDate: manifest?.releaseTag === tag,
+			};
+		} finally {
+			this.endOperation(token);
+		}
 	}
 
 	/** Resolves the release (latest, or `options.releaseTag` pinned) and locates the
