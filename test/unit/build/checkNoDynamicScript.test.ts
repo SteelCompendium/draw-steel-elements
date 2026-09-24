@@ -46,9 +46,31 @@ describe('SC-328: scripts/check-no-dynamic-script.mjs detector', () => {
 			'x = CreateElement(`script`)',
 			'document.CREATEELEMENT  (  "SCRIPT"  )',
 			'document.createElement("div")', // must NOT match
-			'document.createElementNS("http://www.w3.org/2000/svg", "script")', // must NOT match
 		].join('\n');
 		expect(findHits(sample)).toHaveLength(4);
+	});
+
+	// SC-328 fix round 1 LOW-2: the reviewer compiled 16 evasion shapes through esbuild
+	// minify and found the original createElement(...)-only pattern missed Obsidian's own
+	// `createEl(...)` DOM helper (used throughout this plugin, so the most plausible way
+	// plugin code would reintroduce the pattern) and `createElementNS(...)`.
+	test('flags createEl("script") (Obsidian\'s DOM helper), case-insensitively — and createEl("div") does NOT match', () => {
+		const sample = [
+			'el.createEl("script")',
+			"container.createEl('script', { attr: { src: x } })",
+			'x.CREATEEL(`script`)',
+			'el.createEl("div")', // must NOT match
+		].join('\n');
+		expect(findHits(sample)).toHaveLength(3);
+	});
+
+	test('flags createElementNS(<namespace>, "script") — a plain createElementNS(..., "div") does NOT match', () => {
+		const sample = [
+			'document.createElementNS("http://www.w3.org/2000/svg", "script")',
+			'document.createElementNS(SVG_NS, \'script\')',
+			'document.createElementNS("http://www.w3.org/1999/xhtml", "div")', // must NOT match
+		].join('\n');
+		expect(findHits(sample)).toHaveLength(2);
 	});
 
 	test('reports the byte offset and ~80 chars of context for each hit', () => {

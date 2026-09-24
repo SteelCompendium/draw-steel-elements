@@ -11,8 +11,14 @@
 //
 // Deliberately a source-text scan of the built main.js, not an AST walk: the artifact
 // is a single minified bundle, and a literal, case-insensitive match on
-// `createElement(` + optional whitespace + a quoted "script" is exactly the shape the
+// `createElement(`/`createEl(` + optional whitespace + a quoted "script" (or
+// `createElementNS(` with "script" among its arguments) is exactly the shape the
 // polyfill emitted and is cheap enough to run on every build.
+//
+// SC-328 fix round 1 LOW-2: widened from `createElement(` alone to also catch
+// `createEl("script")` (Obsidian's own DOM helper, used throughout this plugin, and
+// therefore the most plausible way plugin code would reintroduce the pattern) and
+// `createElementNS(<namespace>, "script")`.
 
 import { readFileSync } from "fs";
 import path from "path";
@@ -20,8 +26,13 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// createElement( <ws>* "script" | 'script' | `script`  — case-insensitive.
-const DYNAMIC_SCRIPT_PATTERN = /createElement\s*\(\s*["'`]script["'`]/gi;
+// createElement(/createEl( <ws>* "script"|'script'|`script`, OR createElementNS(<up to
+// 80 chars>"script"|'script'|`script` — case-insensitive. The createElementNS branch is
+// separate (not folded into the optional-"ement" group) so it does not also require the
+// quoted arg to sit immediately after the paren — Obsidian's namespace argument comes
+// first.
+const DYNAMIC_SCRIPT_PATTERN =
+	/createEl(?:ement)?\s*\(\s*["'`]script["'`]|createElementNS\s*\([^)]{0,80}?["'`]script["'`]/gi;
 
 /**
  * Scans `source` for the dynamic-`<script>`-creation pattern and returns one record per
