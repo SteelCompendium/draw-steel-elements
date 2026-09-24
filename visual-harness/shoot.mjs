@@ -22,6 +22,7 @@ import {
 	extractReachingButtonRules,
 	partitionButtonRules,
 	iterRules,
+	splitSelectorList,
 	PINNED_OBSIDIAN,
 	PINNED_TOKENS,
 	normalizeTokenValue,
@@ -266,15 +267,26 @@ const printTwinDomSnapshots = new Map();
 // `printSheetEnumeratedProperties` below) and what a genuine un-re-grounded leak specific
 // to the print/realprint DOM chain could leak (backgrounds, borders, shadows, SVG paint —
 // the tier-badge/pill icons this file's crops care about most).
-// NOT sampled, and deliberately so — every one of these defaults to `currentColor` (SVG
-// `fill`/`stroke` included: the lucide icon set this plugin uses declares `stroke="currentColor"`
-// as a PRESENTATION ATTRIBUTE, so its computed `stroke` follows `color` the same way an
-// unset `border-color` does) on any node that never sets it explicitly — the vast
-// majority — so it trivially "differs" in lockstep with `color` itself on nearly every
-// node/icon, all noise, zero signal — measured live (proof this file's own can-fail
-// discipline demands): 1900+ such border/outline reports, then another 200+ `stroke`
-// reports once those were cut, none naming a REAL leak. Border WIDTH is still sampled — a
-// change there paints, regardless of what the (possibly invisible) colour is doing.
+// SVG `fill`/`stroke` are NOT sampled, and deliberately so — the lucide icon set this
+// plugin uses declares `stroke="currentColor"` as a PRESENTATION ATTRIBUTE, so its
+// computed `stroke` follows `color` on any node that never sets it explicitly — the vast
+// majority — so it trivially "differs" in lockstep with `color` itself, all noise, zero
+// signal — measured live (proof this file's own can-fail discipline demands): 200+ such
+// `stroke` reports once border/outline colour was cut (below), none naming a REAL leak.
+// Border/outline WIDTH is still sampled unconditionally — a change there paints, regardless
+// of what the (possibly invisible) colour is doing.
+//
+// SC-127 r5 LOW-1 — the four `border*Color` properties WERE also cut here (SC-202 r6c),
+// for the identical currentColor reason: an unset `border-color` also defaults to
+// `currentColor`, so it used to trivially "differ" in lockstep with `color` on nearly
+// every node — 1900+ noise reports, pre-SC-127, when `color` differed almost everywhere.
+// Now that option A converges `color` to 0 residual INSIDE an element root (SC-127 r3
+// tightening), that lockstep noise survives only on the SAME nodes `color` is still
+// excused on (outside an element root — the harness wrapper's own legitimately-differing
+// ink) — see the `insideElementRoot` exemption on these four properties below, mirroring
+// the `color` one exactly. Sampling them now catches a REAL leak the gate was blind to:
+// `--table-header-border-color` missing from the SC-127 host block left 37 `<th>` borders
+// dark-grey instead of light-grey, across 8 captures (r4 review LOW-1).
 const PRINT_DELTA_STYLE_PROPS = [
 	'color',
 	'backgroundColor',
@@ -287,6 +299,10 @@ const PRINT_DELTA_STYLE_PROPS = [
 	'borderRightStyle',
 	'borderBottomStyle',
 	'borderLeftStyle',
+	'borderTopColor',
+	'borderRightColor',
+	'borderBottomColor',
+	'borderLeftColor',
 	'boxShadow',
 	'textShadow',
 	'fontFamily',
@@ -297,6 +313,11 @@ const PRINT_DELTA_STYLE_PROPS = [
 	'display',
 	'webkitPrintColorAdjust',
 ];
+
+/** SC-127 r5 LOW-1 — the four border-colour longhands, for the `insideElementRoot`
+ *  currentColor exemption below (kept as its own Set, like `NATIVE_CONTROL_PAINT_PROPS`
+ *  used to be, so the loop's intent reads at the call site). */
+const BORDER_COLOR_PROPS = new Set(['borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor']);
 
 /** Runs inside the page; must be standalone/serialisable (no module-scope closure — same
  *  discipline `probeNestedCorners` above documents). One record per node in `#mount`'s
@@ -1384,6 +1405,147 @@ async function assertSc127HostBlockPinned(page, pinnedCss) {
 	console.log(
 		`\nSC-127 host block pin OK (${SC127_PALETTE_LITERALS.length} palette literals match the ` +
 			`pinned sheet's .theme-light, resolved)`,
+	);
+}
+
+// SC-127 r5 MED-1 / LOW-4 (owner's ruling) — guard (b) widens from the 18 hand-picked
+// literals above into a CENSUS: every host (non `--dse-*`) custom property that a rule —
+// in EITHER the pinned Obsidian sheet or this plugin's own sheet — actually CONSUMES via
+// `var(--…)` (fallback names included, since `var(--a, var(--b, literal))` matches both
+// levels), where that rule's selector reaches a node inside a `[data-dse-print="on"]` root
+// on the gallery. `:hover`/`:focus`/`:focus-visible`/`:focus-within`/`:active` count as
+// reaching — the state pseudo-class is stripped before the match test, same idea
+// `assertBtnHostLeak` uses for driving states, applied here to a static text match instead
+// of a live interaction (driving every candidate selector's real state across the whole
+// gallery would be the "principled" version and is not what this round ships). This is
+// what caught MED-1 (the hover/focus form-field tokens) and LOW-4 (the 31 re-declared
+// MAPPINGS were never independently checked before): both slipped past the 18-literal
+// pin because neither is one of its 18 names.
+//
+// `assertSc127HostBlockPinned` above STAYS. Most of the 18 literals are read only by the
+// MAPPING declarations this census finds (e.g. `--text-normal: var(--color-base-100)`),
+// not directly by a rule whose selector reaches a plugin node — so the census alone does
+// not re-prove them; the two guards check different halves of the same block.
+const STATE_PSEUDO_STRIP = /:focus-visible|:focus-within|:hover|:active|:focus/g;
+
+/** Every rule in `css` that references a host token, as one `{ selector, tokens }` entry
+ *  per state-stripped selector in its selector list. `@media print` rules are skipped —
+ *  real print always forces `theme-light`, so nothing there ever reaches the DARK preview
+ *  this census is about. `--dse-*` tokens are the plugin's own, not a host consumption. */
+function extractHostTokenConsumers(css) {
+	const out = [];
+	for (const rule of iterRules(css)) {
+		if (/@media print\b/.test(rule.ctx)) continue;
+		const tokens = [
+			...new Set([...rule.body.matchAll(/var\(\s*(--[a-zA-Z0-9-]+)/g)].map((m) => m[1])),
+		].filter((t) => !t.startsWith('--dse-'));
+		if (!tokens.length) continue;
+		for (const raw of splitSelectorList(rule.sel)) {
+			const stripped = raw.replace(STATE_PSEUDO_STRIP, '').trim();
+			if (!stripped) continue;
+			out.push({ selector: stripped, tokens });
+		}
+	}
+	return out;
+}
+
+async function assertSc127HostPaletteCensus(page, pinnedCss) {
+	let pluginCss;
+	try {
+		pluginCss = fs.readFileSync(path.join(dir, '..', 'styles-source.css'), 'utf8');
+	} catch (e) {
+		console.error(`\nSC-127 HOST PALETTE CENSUS FAILED — could not read styles-source.css: ${String(e)}`);
+		process.exit(1);
+	}
+	const candidates = [...extractHostTokenConsumers(pinnedCss), ...extractHostTokenConsumers(pluginCss)];
+	if (!candidates.length) {
+		console.error(
+			`\nSC-127 HOST PALETTE CENSUS FAILED — 0 candidate rules parsed out of either sheet; ` +
+				`the census is blind (a parser regression, not a real all-clear).`,
+		);
+		process.exit(1);
+	}
+
+	// The real gallery, dark vault, print preview ON, real pinned sheet — every fixture at
+	// once, so the candidate selectors get their best chance to reach a real plugin node.
+	const query = new URLSearchParams({ gallery: '1', theme: 'steel', bg: 'dark', print: '1', sheet: '1' });
+	await page.emulateMedia({ media: 'screen' });
+	await page.goto(`${pageUrl}?${query}`);
+	await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
+
+	const { consumedEntries, skipped, ours, rootFound } = await page.evaluate((candidates) => {
+		const consumed = new Map(); // token name -> one consuming selector, for the drift report
+		let skipped = 0;
+		for (const { selector, tokens } of candidates) {
+			let nodes;
+			try {
+				nodes = document.querySelectorAll(selector);
+			} catch {
+				// A pseudo-element (`::-webkit-scrollbar-thumb`) or a browser-unsupported
+				// pseudo-class survives the state-strip sometimes — not a census defect, just
+				// a selector `Element.matches`-family APIs were never going to accept. Skipped,
+				// not failed: it names no plugin DOM either way.
+				skipped += 1;
+				continue;
+			}
+			let reaches = false;
+			for (const n of nodes) {
+				if (n.closest && n.closest('[data-dse-print="on"]')) {
+					reaches = true;
+					break;
+				}
+			}
+			if (!reaches) continue;
+			for (const t of tokens) if (!consumed.has(t)) consumed.set(t, selector);
+		}
+		const root = document.querySelector('[data-dse-element][data-dse-print="on"]');
+		const ours = {};
+		if (root) {
+			const cs = getComputedStyle(root);
+			for (const [t] of consumed) ours[t] = cs.getPropertyValue(t);
+		}
+		return { consumedEntries: [...consumed.entries()], skipped, ours, rootFound: !!root };
+	}, candidates);
+
+	if (!rootFound) {
+		console.error(
+			`\nSC-127 HOST PALETTE CENSUS FAILED — no [data-dse-element][data-dse-print="on"] root ` +
+				`found on the gallery page; the census has nothing to resolve values against.`,
+		);
+		process.exit(1);
+	}
+
+	const tokenNames = consumedEntries.map(([t]) => t);
+	const bySelector = new Map(consumedEntries);
+	// Re-navigates `page` (readHostTokens goes to about:blank) — everything needed from the
+	// gallery page (`ours`, above) was already read before this call.
+	const pinned = await readHostTokens(page, pinnedCss, 'light', tokenNames);
+
+	const drifted = [];
+	for (const t of tokenNames) {
+		const a = normalizeTokenValue(ours[t]);
+		const b = normalizeTokenValue(pinned[t]);
+		if (a !== b)
+			drifted.push(
+				`${t}: dark preview resolves "${a}", the pinned sheet's .theme-light resolves it to ` +
+					`"${b}" (consumed by \`${bySelector.get(t)}\`)`,
+			);
+	}
+
+	if (drifted.length) {
+		console.error(
+			`\nSC-127 HOST PALETTE CENSUS DRIFTED — ${drifted.length} of ${tokenNames.length} consumed ` +
+				`host token(s) resolve differently on the dark preview root than the pinned sheet's ` +
+				`.theme-light:\n` +
+				drifted.map((d) => `  ${d}`).join('\n') +
+				`\nRe-declare the drifted token(s) (or the mapping that resolves them) in ` +
+				`styles-source.css's .theme-dark SC-127 host block.`,
+		);
+		process.exit(1);
+	}
+	const skipNote = skipped ? `; ${skipped} candidate selector(s) skipped (pseudo-elements etc., unparseable by querySelectorAll — not a leak either way, just not this API's shape)` : '';
+	console.log(
+		`\nSC-127 host palette census OK (${tokenNames.length} consumed tokens × dark preview == theme-light${skipNote})`,
 	);
 }
 
@@ -5271,7 +5433,13 @@ try {
 		{
 			const pinnedHost = loadLocalObsidianAppCss();
 			if (!pinnedHost) console.log('\nSC-127 host block pin SKIPPED (no resolved Obsidian app.css sheet)');
-			else await assertSc127HostBlockPinned(page, pinnedHost.css);
+			else {
+				await assertSc127HostBlockPinned(page, pinnedHost.css);
+				// SC-127 r5 MED-1/LOW-4 — the census, run right after: same self-gate, same
+				// pinned sheet, checks the mappings and the hover/focus/etc. token family the
+				// 18-literal pin above never covered.
+				await assertSc127HostPaletteCensus(page, pinnedHost.css);
+			}
 		}
 		// SC-203 — the same question asked of EVERY button in the plugin, not just the
 		// chrome panel's. Same shape again; same reason for the narrowed-run skip.
@@ -5455,26 +5623,57 @@ function selfTestPrintDeltaAllowedSet(enumeratedProps) {
 	);
 }
 
+// SC-127 — the preview's paper exemption, as ONE function (SC-127 r5 MED-2). Before this
+// round, `assertPrintTwinDelta`'s loop and `selfTestPrintPaperExemption` each spelled out
+// the same four-clause condition separately — a re-implementation, not a shared guard —
+// so widening the REAL one (e.g. dropping the white-check clause) left the self-test,
+// `--element=hero` and jest all green (r4 review MEDIUM-2, proven:
+// `sc127-r4-canfail-widenpaper.log` / `sc127-r4-canfail-jest-widenpaper.log`). Both callers
+// now go through this. `a`/`b` are the twin/realprint style-record shape
+// `captureMountSnapshotForPrintDelta` returns (`{ style, printPaperRoot, … }`); the
+// self-test constructs the same shape from synthetic values.
+function paperExemptionExcuses(p, a, b) {
+	return (
+		p === 'backgroundColor' &&
+		a.printPaperRoot &&
+		b.printPaperRoot &&
+		a.style[p] === 'rgb(255, 255, 255)' &&
+		(b.style[p] === 'rgba(0, 0, 0, 0)' || b.style[p] === 'rgb(255, 255, 255)')
+	);
+}
+
 // SC-127 r3 — the paper exemption's OWN can-fail pair, same in-process pattern as
-// `selfTestPrintDeltaAllowedSet` above (a synthetic node shape, the exact decision the
-// `backgroundColor`/`printPaperRoot` branch in `assertPrintTwinDelta`'s loop makes, no
-// navigation). Three checks: (1) the exemption's OWN positive case still fires — a paper
-// root painting white-vs-transparent is excused, so the fix stays usable; (2) a synthetic
-// ROOT with a NON-white background must be FLAGGED — the exemption is exactly
-// white-vs-(transparent-or-white), not "any root background difference"; (3) a synthetic
-// DESCENDANT (not itself a `[data-dse-element][data-dse-print="on"]` root) painting
-// white-vs-transparent must ALSO be FLAGGED — the exemption is root-scoped only, so a
-// Steel rule leaking that same paint one level deeper would still be caught.
+// `selfTestPrintDeltaAllowedSet` above (a synthetic node shape, the exact decision
+// `paperExemptionExcuses` makes, no navigation). Three checks: (1) the exemption's OWN
+// positive case still fires — a paper root painting white-vs-transparent is excused, so
+// the fix stays usable; (2) a synthetic ROOT with a NON-white background must be FLAGGED —
+// the exemption is exactly white-vs-(transparent-or-white), not "any root background
+// difference"; (3) a synthetic DESCENDANT (not itself a
+// `[data-dse-element][data-dse-print="on"]` root) painting white-vs-transparent must ALSO
+// be FLAGGED — the exemption is root-scoped only, so a Steel rule leaking that same paint
+// one level deeper would still be caught.
 function selfTestPrintPaperExemption() {
-	const isBgFlagged = (aVal, bVal, aPaperRoot, bPaperRoot) => {
-		if (aVal === bVal) return false;
-		if (aPaperRoot && bPaperRoot && aVal === 'rgb(255, 255, 255)' && (bVal === 'rgba(0, 0, 0, 0)' || bVal === 'rgb(255, 255, 255)'))
-			return false;
-		return true;
-	};
-	const rootWhiteVsTransparentExcused = !isBgFlagged('rgb(255, 255, 255)', 'rgba(0, 0, 0, 0)', true, true);
-	const rootNonWhiteFlagged = isBgFlagged('rgb(200, 200, 200)', 'rgba(0, 0, 0, 0)', true, true);
-	const descendantWhiteVsTransparentFlagged = isBgFlagged('rgb(255, 255, 255)', 'rgba(0, 0, 0, 0)', false, false);
+	// SC-127 r5 MED-2 — these three checks now call `paperExemptionExcuses` DIRECTLY (the
+	// same function the real loop calls below), not a re-implementation of its condition.
+	// r4's proof: dropping the white-check clause from a re-implementation left this
+	// self-test, `--element=hero` and jest all green — the self-test only proved it could
+	// print FAILED, not that it guarded the loop. Calling the shared function closes that.
+	const mk = (bg, paperRoot) => ({ style: { backgroundColor: bg }, printPaperRoot: paperRoot });
+	const rootWhiteVsTransparentExcused = paperExemptionExcuses(
+		'backgroundColor',
+		mk('rgb(255, 255, 255)', true),
+		mk('rgba(0, 0, 0, 0)', true),
+	);
+	const rootNonWhiteFlagged = !paperExemptionExcuses(
+		'backgroundColor',
+		mk('rgb(200, 200, 200)', true),
+		mk('rgba(0, 0, 0, 0)', true),
+	);
+	const descendantWhiteVsTransparentFlagged = !paperExemptionExcuses(
+		'backgroundColor',
+		mk('rgb(255, 255, 255)', false),
+		mk('rgba(0, 0, 0, 0)', false),
+	);
 	if (!rootWhiteVsTransparentExcused || !rootNonWhiteFlagged || !descendantWhiteVsTransparentFlagged) {
 		console.error(
 			`\nPRINT-TWIN PAPER-EXEMPTION SELF-TEST FAILED — root-white-vs-transparent ` +
@@ -5631,18 +5830,22 @@ function assertPrintTwinDelta(enumeratedProps) {
 					if (p !== 'color') continue;
 					if (!a.insideElementRoot && !b.insideElementRoot) continue;
 				}
+				// SC-127 r5 LOW-1 — border-colour longhands default to `currentColor`, so on a
+				// node that never sets its own they trivially follow `color` — the SAME
+				// currentColor-lockstep reasoning as the enumerated-property branch above,
+				// applied to the same nodes: excused outside an element root only. Inside a
+				// root a border-colour difference is real (this is what caught the `<th>`
+				// header borders LOW-1 found: --table-header-border-color was missing from the
+				// host block, so 37 header cells stayed dark-grey while --table-border-color
+				// correctly went light for the body rows).
+				if (BORDER_COLOR_PROPS.has(p) && !a.insideElementRoot && !b.insideElementRoot) continue;
 				// SC-127 — the preview's paper: the twin's element root paints `--dse-page-bg`
 				// (#fff) on screen only; real paper leaves it unpainted (the page is already
 				// white). Excused on the root node only and only for exactly that value pair —
 				// any other root background, or a background on any descendant, still fails.
-				if (
-					p === 'backgroundColor' &&
-					a.printPaperRoot &&
-					b.printPaperRoot &&
-					a.style[p] === 'rgb(255, 255, 255)' &&
-					(b.style[p] === 'rgba(0, 0, 0, 0)' || b.style[p] === 'rgb(255, 255, 255)')
-				)
-					continue;
+				// SC-127 r5 MED-2 — via the SHARED `paperExemptionExcuses`, not a copy of its
+				// condition (see that function's own comment for why this matters).
+				if (paperExemptionExcuses(p, a, b)) continue;
 				problems.push(
 					`${label}: ${p} differs — "${a.style[p]}" (twin) vs "${b.style[p]}" (realprint), and ${p} is ` +
 						`NOT one of the pinned sheet's own @media print properties`,
