@@ -45,6 +45,8 @@ allOf:
                   - alchemy
                   - architecture
                   - blacksmithing
+                  - carpentry
+                  - cooking
                   - fletching
                   - forgery
                   - jewelry
@@ -99,6 +101,7 @@ allOf:
                   - religion
                   - rumors
                   - society
+                  - strategy
                   - timescape
                 errorMessage: |
                     Invalid skill ${0}. 

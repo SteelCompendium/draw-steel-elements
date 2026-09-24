@@ -1,5 +1,12 @@
 # Changelog
 
+## 6.0.2
+
+- Replaces the bundled zip library (JSZip -> fflate) used by the compendium download. JSZip's
+  legacy-browser polyfills contained dynamic `<script>` element creation, which failed
+  Obsidian's community-plugin review. No behavior change.
+- Adds missing Crafting/Lore skills: Carpentry, Cooking, Strategy (#81)
+
 ## 6.0.1
 
 Identical to 5.1.1. This release exists to recover from `6.0.0-rc1`, a release
@@ -12,9 +19,14 @@ below ships as 7.0.0.
 
 ## 7.0.0 (unreleased; previously numbered 6.0.0)
 
-Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
+Upgrading from 5.x or 6.0.2? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **The compendium download's zip library is now `fflate`, not JSZip** (SC-328). JSZip's
+  legacy-browser polyfills contained dynamic `<script>` element creation, which Obsidian's
+  community-plugin review rejects; 7.0.0 also carries forward 6.0.2's three added
+  Crafting/Lore skills (Carpentry, Cooking, Strategy). No user-facing behavior change beyond
+  those skills.
 - [FIX] **Minion squads in the initiative tracker share one rule-shaped action checklist**
   (SC-278). Minions act together and can take only a move action and a main action, a move
   action and a maneuver, or two move actions — so a squad's minions no longer each carry an
@@ -1147,7 +1159,6 @@ for what needs action.
   `gh-pages` tip (`--depth=1`, explicit refspec) before either deploy step.
   Applies to the `main` → `latest` release deploy as much as the `develop` →
   `dev` one. No plugin runtime code changed.
-
 ## 5.1.1
 
 - Corrects issue where double-clicking on an Element in reading mode will open edit mode
