@@ -2,8 +2,9 @@
 
 > This guide was written for the release originally numbered **6.0.0**; that
 > number was retired after a release-candidate mishap (see the changelog's 6.0.1
-> entry) and the release ships as **7.0.0**. 6.0.1 is identical to 5.1.1, so
-> everything here applies to 6.0.1 installs too.
+> entry) and the release ships as **7.0.0**. 6.0.1 is identical to 5.1.1; 6.0.2
+> is 5.1.1 plus a zip-library swap (no behavior change) and three added skills,
+> so everything here applies to 6.0.x installs too.
 
 7.0.0 changes two things that need action, plus adds a large set of new
 features. **Everyone** should re-sync their compendium. Only people who
@@ -20,7 +21,7 @@ to 1.13.0.
 default, so most installs already qualify — check **Settings → General → Current
 version** if you want to be sure. If you are on an older Obsidian, your existing
 Draw Steel Elements install keeps working exactly as it is: `versions.json` pins
-pre-1.13 clients to **6.0.1**, the last build that runs there, so Obsidian will
+pre-1.13 clients to **6.0.2**, the last build that runs there, so Obsidian will
 not offer you 7.0.0 until you update the app. Nothing breaks; you simply stop
 receiving new plugin releases until then.
 

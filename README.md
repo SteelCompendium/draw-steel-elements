@@ -19,13 +19,13 @@ if you find them!
 
 **Requires Obsidian 1.13.0 or newer.** Obsidian updates itself by default, so most installs
 already qualify (**Settings → General → Current version** if you want to check). On an older
-Obsidian you keep the last compatible build, 6.0.1, until you update the app.
+Obsidian you keep the last compatible build, 6.0.2, until you update the app.
 
 1. **Settings → Community plugins → Browse**
 2. Search for **Draw Steel Elements**
 3. **Install**, then **Enable**
 
-**Upgrading from a 5.x or 6.0.1 install?** Read the
+**Upgrading from a 5.x or 6.0.2 install?** Read the
 [5.x → 7.0.0 migration guide](./docs/migrating-to-7.md) first — everyone should re-sync
 their compendium, and the first sync offers to move your old compendium files so your
 links keep working.
