@@ -141,6 +141,20 @@ export class ViewRegistry extends Component {
 		if (hits.length > 1) this.stats.ambiguous++;
 		hits.sort((a, b) => b.entry.tickets[b.index].at - a.entry.tickets[a.index].at);
 		const { entry, index } = hits[0];
+		// Spec §4 B4 / §6.2: two live views of the SAME block under ONE docId means docId no
+		// longer tells instances apart — refuse, so the view can never go to the wrong one.
+		for (const other of this.entries) {
+			if (other === entry || other.released) continue;
+			if (
+				other.host.docId === docId &&
+				other.host.sourcePath === sourcePath &&
+				other.host.lastKnownLineStart !== null &&
+				other.host.lastKnownLineStart === entry.host.lastKnownLineStart
+			) {
+				this.stats.collisions++;
+				return null;
+			}
+		}
 		entry.tickets.splice(0, index + 1);
 		entry.claiming = true;
 		this.stats.claims++;

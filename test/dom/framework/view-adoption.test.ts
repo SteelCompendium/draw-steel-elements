@@ -276,3 +276,36 @@ describe('SC-340 Task 4: claim and adopt', () => {
 		other.remove();
 	});
 });
+
+describe('SC-340 Task 5: docId collision guard', () => {
+	test('the same block rendered twice under ONE docId refuses to claim (fresh view instead)', async () => {
+		jest.useFakeTimers();
+		const { registry, render } = await setup(COUNTER_NOTE);
+		const a = await render('ds-counter', 0, 'doc-same');
+		const b = await render('ds-counter', 0, 'doc-same'); // collision: same docId, same block
+		(a.el.querySelector('button[aria-label^="Increase"]') as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const c = await render('ds-counter', 0, 'doc-same');
+		expect(c.el.firstElementChild).not.toBe(a.el.firstElementChild);
+		expect(c.el.firstElementChild).not.toBe(b.el.firstElementChild);
+		expect(registry.stats.collisions).toBe(1);
+		expect(registry.stats.claims).toBe(0);
+		jest.useRealTimers();
+	});
+
+	test('two DIFFERENT blocks in one document (same docId, different lines) still adopt normally', async () => {
+		jest.useFakeTimers();
+		const note = COUNTER_NOTE + '\nMID\n\n```ds-counter\nname: Other\ncurrent_value: 1\nmax_value: 20\nmin_value: 0\n```\n';
+		const { registry, render } = await setup(note);
+		const first = await render('ds-counter', 0, 'doc-one');
+		const firstRoot = first.el.firstElementChild as HTMLElement;
+		await render('ds-counter', 1, 'doc-one');
+		(first.el.querySelector('button[aria-label^="Increase"]') as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const again = await render('ds-counter', 0, 'doc-one');
+		expect(again.el.firstElementChild).toBe(firstRoot);
+		expect(registry.stats.claims).toBe(1);
+		expect(registry.stats.collisions).toBe(0);
+		jest.useRealTimers();
+	});
+});
