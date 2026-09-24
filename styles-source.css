@@ -14260,18 +14260,15 @@ body.theme-light
    under the 3:1 non-text contrast guideline. Joining this rule rather than declaring a
    second one, per this rule's own "one rule" contract. The host's box-shadow ring is
    neutralized for both states by the SC-203 host re-grounding block, which the chip now
-   also joins (~:15335) — this outline is never left to stack over a grey box-shadow. */
+   also joins (~:15335) — this outline is never left to stack over a grey box-shadow.
+   SC-338 r2 tried adding `.dse-swatch` (Conditions "Color" row) here too, on the same
+   reasoning — REVERTED (r3): the swatch's own `[aria-pressed='true']` rule already sets
+   `outline: 2px solid var(--dse-accent); outline-offset: 2px`, the kit ring's exact
+   geometry and (per theme) colour, so a focused UNPRESSED swatch became indistinguishable
+   from a PRESSED one and pressed+focused stayed visually identical to pressed+unfocused —
+   worse than the pre-fix state, caught on the r2 evidence grid. Swatch focus design is
+   SC-361 (Backlog); it needs an indicator that doesn't collide with the selection mark. */
 .dse-optchip:focus-visible,
-/* SC-338 r2 — `.dse-swatch` (the Conditions "Color" row) has the identical gap: a bare
-   `<button>`, host ring only. Its own `[aria-pressed='true']` selection mark (~:2145) also
-   sets `outline: 2px solid var(--dse-accent); outline-offset: 2px` — SAME property, SAME
-   (0,2,0) specificity as this rule, so on a chip that is both pressed AND focused the two
-   tie and source order decides: this rule sits later in the file, so it wins. That is
-   inert in practice — `--dse-accent` and `--dse-focus-ring` resolve to the SAME hex in
-   both Steel schemes (dark `#4db8c7`, light `#2a7b88`) — but it is a real cascade fact,
-   not an assumption; proven live (SC-338 r2 evidence). Unpressed swatches had no outline
-   rule of their own at all, so they get this ring exactly like the unpressed chip. */
-.dse-swatch:focus-visible,
 /* SC-202 r1 — the eight cousin inputs (initiative malice quick-add, montage skill/
    characteristic, party award, project roll/points/characteristic) never carried a
    focus ring at all — a gap the input-family sweep's :focus-visible pass caught
@@ -15601,18 +15598,20 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
       re-grounding philosophy exactly, and the chip's base rule never asked for a host
       plate — disclosed with rest-state before/after crops rather than narrowed to
       `:focus-visible` only.
-      SC-338 r2 adds `.dse-swatch` (Conditions "Color" row, ~:2131): identical shape and
-      identical reasoning, INCLUDING the rest/hover plate removal above. Its own
-      `[aria-pressed='true']` selection mark (~:2145) is an `outline`, not a `box-shadow`,
-      so this entry cannot touch it either way. -- */
+      SC-338 r2 tried adding `.dse-swatch` (Conditions "Color" row, ~:2131) here on the
+      same reasoning, and REVERTED it in r3 — not because this entry leaked (it did not;
+      `box-shadow` never touches the swatch's own `outline`-based selection mark), but
+      because the paired ring-rule addition (~:14033) made a focused unpressed swatch look
+      identical to a pressed one. Reverting the ring-rule half alone would have left this
+      box-shadow entry doing nothing for `.dse-swatch` (no other rule gives it a ring to
+      protect), so it comes out too. Swatch focus design is SC-361 (Backlog). -- */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"])
 	:where(
 		.dse-btn,
 		.dse-collapse__header,
 		.dse-pr__row,
 		.dse-tabs__tab:not([aria-selected='true']),
-		.dse-optchip,
-		.dse-swatch
+		.dse-optchip
 	) {
 	box-shadow: none;
 }
