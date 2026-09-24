@@ -96,22 +96,14 @@ describe('SC-328: scripts/check-no-dynamic-script.mjs detector', () => {
 	});
 });
 
-describe('SC-328: the real production main.js is clean', () => {
-	beforeAll(() => {
-		// Same command `npm run build`/`npm run build-no-check` both funnel into —
-		// exercises the wired-in gate for real, not just the pure detector above.
-		execFileSync('node', ['esbuild.config.mjs', 'production'], {
-			cwd: repoRoot,
-			stdio: 'inherit',
-		});
-	});
-
-	test('checkBuiltFile(main.js) finds zero dynamic createElement("script") calls', () => {
-		const mainJsPath = path.join(repoRoot, 'main.js');
-		const hits = runModuleScript(`
-			import { checkBuiltFile } from ${JSON.stringify(gateModule)};
-			console.log(JSON.stringify(checkBuiltFile(${JSON.stringify(mainJsPath)})));
-		`) as Hit[];
-		expect(hits).toHaveLength(0);
-	});
-});
+// SC-328 fix round 1 INFO-7: this file used to also rebuild the real production bundle
+// here (its own `node esbuild.config.mjs production` in a `beforeAll`) and assert
+// `checkBuiltFile(main.js)` came back clean. That was redundant AND a latent race:
+// `test/unit/build/cssNesting.test.ts` already rebuilds the SAME production bundle into
+// the SAME repo-root `main.js`/`styles.css` in its own `beforeAll`, and since
+// esbuild.config.mjs's production path calls this gate itself (see esbuild.config.mjs),
+// that build already exercises the wired-in gate for real — a second, concurrent build of
+// the same output file from a different jest worker added no coverage this repo doesn't
+// already have, only a theoretical write race (12/12 paired runs stayed green in review,
+// but "never reproduced" isn't "can't happen"). Removed; the detector unit tests above are
+// the coverage for this file's own logic, and cssNesting.test.ts is the real-build proof.
