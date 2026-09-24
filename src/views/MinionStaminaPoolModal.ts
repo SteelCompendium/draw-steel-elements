@@ -117,6 +117,9 @@ export class MinionStaminaPoolModal extends DseModal {
 		});
 		damageInput.value = '0';
 		damageInput.setAttribute('aria-label', 'Damage per minion');
+		// SC-241: the Apply box is a MAGNITUDE, not a signed delta — `min="0"` mirrors
+		// the exact idiom SC-133 RC-3 already uses for StaminaEditModal's Apply box.
+		damageInput.setAttribute('min', '0');
 		applyRow.createSpan({ text: 'damage to' });
 		const minionCountInput = applyRow.createEl('input', {
 			type: 'number',
@@ -139,7 +142,13 @@ export class MinionStaminaPoolModal extends DseModal {
 					const damage = parseInt(damageInput.value);
 					const minions = parseInt(minionCountInput.value);
 					if (!isNaN(damage) && !isNaN(minions)) {
-						const totalDamage = damage * minions;
+						// SC-241: clamp BOTH parsed values to a magnitude — the same class of
+						// bug SC-133 RC-3 fixed in StaminaEditModal's Apply box. Either box
+						// going negative (or both, which would otherwise cancel back out to a
+						// positive `totalDamage`) must never flip this into a heal.
+						const clampedDamage = Math.max(0, damage);
+						const clampedMinions = Math.max(0, minions);
+						const totalDamage = clampedDamage * clampedMinions;
 						this.pendingStaminaChange -= totalDamage;
 						this.refresh();
 					}
