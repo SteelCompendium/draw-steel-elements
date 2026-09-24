@@ -15021,12 +15021,21 @@ body.theme-light
    `body`, so the mappings arrive here already resolved to dark values; re-pointing them
    means restating the light palette AND re-declaring the mappings on the root so they
    re-resolve against it. Values are the pinned Obsidian 1.13.7 `.theme-light` block
-   (visual-harness/obsidian-app-css.pin.mjs); a pin bump must re-copy them (nothing
-   checks them against the sheet automatically yet). The set
-   is the one the plugin's DOM was MEASURED to consume (SC-127 r2 census), not the whole
-   palette. Scoped under `.theme-dark` so a light vault — and real print, which Obsidian
-   always renders under a forced `theme-light` — never matches: they already carry these
-   exact values (or a custom light theme's own), and 0 realprint bytes move. */
+   (visual-harness/obsidian-app-css.pin.mjs); a pin bump must re-copy them. Two in-run
+   `npm run shots` gates check this against the pinned sheet, not by memory:
+   `assertSc127HostBlockPinned` (visual-harness/shoot.mjs) pins the 18 hard-coded palette
+   LITERALS (the mono/color-base/color-accent/input-shadow values above)
+   to what the pinned sheet's own `.theme-light` resolves those same names to; below that,
+   `assertSc127HostPaletteCensus` walks every rule in BOTH the pinned sheet and this one
+   whose selector reaches a node inside a print-on root (SC-127 r5, MEDIUM-1/LOW-4 —
+   folds in the 31 re-declared MAPPINGS below, which the literal pin alone never covered),
+   and asserts each token it finds consumed resolves the same way here as it does under
+   `.theme-light`. The set below is the one the plugin's DOM was MEASURED to consume
+   (SC-127 r2 census, widened at r5 for the hover/focus/caret/scrollbar tokens MEDIUM-1/
+   LOW-1/LOW-2 found still dark), not the whole palette. Scoped under `.theme-dark` so a
+   light vault — and real print, which Obsidian always renders under a forced
+   `theme-light` — never matches: they already carry these exact values (or a custom
+   light theme's own), and 0 realprint bytes move. */
 .theme-dark [data-dse-element][data-dse-print="on"][data-dse-print="on"] {
 	color-scheme: light;
 	--mono-0: white;
@@ -15052,18 +15061,58 @@ body.theme-light
 	--background-primary-alt: var(--color-base-10);
 	--background-secondary: var(--color-base-20);
 	--background-modifier-border: var(--color-base-30);
+	/* SC-127 r5 — caught by the REAL print-twin delta gate (LOW-1's own border-colour
+	   sampling), not by the census: markdown's `<hr>` (`hr { border-color: var(--hr-color) }`)
+	   was still dark, #333, in `treasure-hr`. Same chain-must-be-restated-in-full lesson:
+	   `--hr-color: var(--background-modifier-border)` is a body-level mapping, so without
+	   restating it here it stayed inherited from body's own (dark) resolution regardless of
+	   this root's correct --background-modifier-border. Two independent gates now cover it
+	   (the census, and print-twin delta's border-colour sampling) — worth keeping both. */
+	--hr-color: var(--background-modifier-border);
+	/* SC-127 r5 MED-1 — the :hover/:focus siblings of --background-modifier-border and
+	   --background-modifier-form-field were missing, so a number field (Ferocity, Surges,
+	   party, project, initiative, counter) went charcoal `rgb(46,46,46)` with `rgb(34,34,34)`
+	   ink (~1.3:1) the instant it was hovered or focused, even though it sat correctly white
+	   at rest. Obsidian's own body mappings, copied verbatim: form-field-hover maps onto
+	   form-field itself (not a separate base step); the two border states are direct
+	   color-base steps, like every other border mapping here. */
+	--background-modifier-border-hover: var(--color-base-35);
+	--background-modifier-border-focus: var(--color-base-40);
 	--background-modifier-form-field: var(--color-base-00);
+	--background-modifier-form-field-hover: var(--background-modifier-form-field);
 	--background-modifier-hover: color-mix(in oklch, var(--mono-100) 6.7%, transparent);
 	--text-normal: var(--color-base-100);
 	--text-muted: var(--color-base-70);
 	--text-faint: var(--color-base-50);
 	--text-accent: var(--color-accent);
+	/* SC-127 r5 MED-1/LOW-4 census fold — --text-accent-hover was the ONE gap the census
+	   (below) found on the full sweep: `.theme-dark` itself redeclares --color-accent-2
+	   with dark-specific multipliers, and body's `--text-accent-hover: var(--color-accent-2)`
+	   mapping resolves AT BODY (inheriting body's OWN --color-accent-2, not whatever this
+	   root later declares) — so leaving this mapping unrestated let the already-dark-
+	   resolved value inherit straight through, ignoring this root's correctly light
+	   --color-accent-2 entirely. Same fix as every other mapping here: restate it so it
+	   re-resolves against THIS root's own palette. */
+	--text-accent-hover: var(--color-accent-2);
 	--interactive-normal: var(--color-base-00);
 	--interactive-hover: var(--color-base-10);
 	--interactive-accent: var(--color-accent-1);
 	--interactive-accent-hover: var(--color-accent-2);
 	--link-color: var(--text-accent);
 	--link-external-color: var(--text-accent);
+	/* SC-127 r5 census fold, second pass — --link-color(-external)-hover is what the
+	   CONSUMING rule (a:hover, `color: var(--link-color-hover)`) reads directly; a
+	   custom property's var() references are substituted using the DECLARING element's
+	   OWN environment (measured, not assumed: a synthetic probe showed a descendant's
+	   `--base: 2` never reaches an ancestor-declared `--foo: calc(var(--base) * 10)` —
+	   the ancestor's substitution is already baked in and simply inherits). --text-accent-
+	   hover above being correct is necessary but NOT sufficient: without THESE two also
+	   restated here, the `a`/`a.external-link` hover colour kept inheriting body's own
+	   (dark-formula) --link-color-hover, ignoring this root's --text-accent-hover
+	   entirely. Every mapping in this block must have its OWN dependency chain present
+	   in this SAME rule, all the way down — this is the general lesson, not a one-off. */
+	--link-color-hover: var(--text-accent-hover);
+	--link-external-color-hover: var(--text-accent-hover);
 	--checkbox-color: var(--interactive-accent);
 	--checkbox-color-hover: var(--interactive-accent-hover);
 	--checkbox-border-color: var(--text-faint);
@@ -15071,10 +15120,23 @@ body.theme-light
 	--checkbox-marker-color: var(--background-primary);
 	--table-header-color: var(--text-normal);
 	--table-border-color: var(--background-modifier-border);
+	/* SC-127 r5 LOW-1 — Obsidian maps this onto --table-border-color on body, not a
+	   separate base step; missing it left every <th> bordered in the dark-theme grey
+	   (37 header cells, 8 captures) while body rows correctly used the light border. */
+	--table-header-border-color: var(--table-border-color);
 	--code-normal: var(--text-normal);
 	--code-background: var(--background-primary-alt);
 	--icon-color: var(--text-muted);
 	--blockquote-border-color: var(--interactive-accent);
+	/* SC-127 r5 LOW-2 — caret and scrollbar colour are REAL (non-custom) properties
+	   Obsidian sets once on `body`, inherited from there; a mapping alone is not enough
+	   because nothing on the root would re-trigger inheritance, so both the custom
+	   property AND the real property are restated here, same formulas as body's own. */
+	--caret-color: var(--text-normal);
+	caret-color: var(--caret-color);
+	--scrollbar-thumb-bg: color-mix(in oklch, var(--mono-100) 10%, transparent);
+	--scrollbar-active-thumb-bg: color-mix(in oklch, var(--mono-100) 20%, transparent);
+	scrollbar-color: var(--scrollbar-thumb-bg) var(--scrollbar-bg);
 }
 
 /* ================================================================== */
