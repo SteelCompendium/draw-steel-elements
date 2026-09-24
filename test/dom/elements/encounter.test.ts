@@ -531,5 +531,11 @@ describe('SC-134: builder -> tracker round trip actually resolves through the SC
 		await new ElementPipeline(deps).run(initiativeElement, src, trackerHost);
 		const root = trackerHost.containerEl.firstElementChild as HTMLElement;
 		expect(root.textContent).toContain('is not available in this vault');
+		// SC-240: the legacy "multiple instances … full path" hint is nonsense for an SCC
+		// code (there is no "file" to have duplicates of) — it must be gone, while the
+		// "Failed to resolve … at index N (<ref>):" lead-in stays.
+		expect(root.textContent).toContain(`Failed to resolve creature statblock reference at index 0 (scc.v1:${GOBLIN_CODE}):`);
+		expect(root.textContent).not.toContain('multiple instances');
+		expect(root.textContent).not.toContain('full path');
 	});
 });

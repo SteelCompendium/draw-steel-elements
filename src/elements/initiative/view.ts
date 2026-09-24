@@ -1174,10 +1174,33 @@ export class InitiativeView extends ElementView<EncounterData> {
 				});
 			})
 			// SC-4 (unchanged trigger): BOTH the actor's own image and the vault's default
-			// token image are missing — warn once, then (SC-162) show the themed fallback
-			// instead of leaving the slot empty.
+			// token image are missing — then (SC-162) show the themed fallback instead of
+			// leaving the slot empty. SC-240: warn ONLY when an image WAS specified
+			// (non-empty imgSrcRaw) and still couldn't be resolved — every builder-created
+			// tracker otherwise logged one warning per creature purely because md-dse
+			// statblocks carry no `image` key, which is a handled, expected state (the
+			// fallback glyph renders exactly the same either way), not a warning-worthy one.
+			// Review round 1, INFO-1 (folded): a whitespace-only `image: "   "` is not a
+			// real value either — `.trim()` treats it the same as absent, consistent with
+			// the ruling's intent ("absence of an optional field is not a warning
+			// anywhere").
+			// Re-review, MEDIUM-1: `imgSrcRaw`'s declared type (`string | null`) is not
+			// enforced at runtime — Hero/Creature.image is parsed straight off unvalidated
+			// YAML (Hero/Creature.image is typed `string` in EncounterData.ts, but nothing
+			// checks the actual value; an unquoted wikilink like `image: [[Frodo.png]]`
+			// parses as a nested ARRAY, and a bare number/boolean/object is equally
+			// possible), so a bare `imgSrcRaw?.trim()` throws `TypeError: imgSrcRaw.trim is
+			// not a function` for any non-string value — the fallback glyph never mounts,
+			// a visible regression ruling 2 forbids. This guard is intentionally local to
+			// this call site rather than a refactor of the model's declared types (out of
+			// scope for this ticket): treat a non-string value as "specified" (warn, like
+			// any other unresolvable image) and only a genuinely empty/whitespace-only
+			// STRING as "not specified".
 			.catch(() => {
-				console.warn(`Draw Steel Elements: no portrait image found for "${name}" (and no default token image)`);
+				const wasSpecified = typeof imgSrcRaw === 'string' ? imgSrcRaw.trim() !== '' : imgSrcRaw != null;
+				if (wasSpecified) {
+					console.warn(`Draw Steel Elements: no portrait image found for "${name}" (and no default token image)`);
+				}
 				this.renderPortraitFallback(container, kind);
 			});
 	}
