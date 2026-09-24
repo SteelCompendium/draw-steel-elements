@@ -1177,6 +1177,7 @@ for what needs action.
   `gh-pages` tip (`--depth=1`, explicit refspec) before either deploy step.
   Applies to the `main` → `latest` release deploy as much as the `develop` →
   `dev` one. No plugin runtime code changed.
+
 ## 5.1.1
 
 - Corrects issue where double-clicking on an Element in reading mode will open edit mode
