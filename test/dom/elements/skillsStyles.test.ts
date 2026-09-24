@@ -176,8 +176,9 @@ describe('SC-182: the YAML style: enum selects the layout', () => {
 		const root = await mountSkills(`style: ledger\n${PICKS_YAML}`);
 		// exploration: climb + custom Falconry owned, 10 built-ins + 1 custom = 11.
 		expect(group(root, 'Exploration').querySelector('.dse-skills__tally')?.textContent).toBe('2/11');
-		// crafting owns zero of its 8.
-		expect(group(root, 'Crafting').querySelector('.dse-skills__tally')?.textContent).toBe('0/8');
+		// crafting owns zero of its 10 (SC-328: merging the 6.0.2 hotfix forward added
+		// carpentry + cooking, 8 -> 10).
+		expect(group(root, 'Crafting').querySelector('.dse-skills__tally')?.textContent).toBe('0/10');
 		// the Custom Skills bucket holds the groupless Sailing, owned.
 		expect(group(root, 'Custom Skills').querySelector('.dse-skills__tally')?.textContent).toBe('1/1');
 	});
@@ -218,7 +219,8 @@ describe('SC-182: hidden-unowned rendering per layout (only_show_selected seeds 
 		// legacy hidden form does.
 		const crafting = group(root, 'Crafting');
 		expect(crafting.querySelectorAll('.dse-skills__item')).toHaveLength(0);
-		expect(crafting.querySelector('.dse-skills__tally')?.textContent).toBe('0/8');
+		// SC-328: merging the 6.0.2 hotfix forward added carpentry + cooking, 8 -> 10.
+		expect(crafting.querySelector('.dse-skills__tally')?.textContent).toBe('0/10');
 	});
 
 	test('chips + only_show_selected renders only the owned chips', async () => {
