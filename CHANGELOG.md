@@ -21,6 +21,13 @@ for what needs action.
   (SC-336). If a save cannot be placed because the block changed on disk first (sync or a hand edit
   inside the save delay), it is dropped and a notice says so: "Draw Steel Elements: a change to a
   block in <note> was not saved — the block changed on disk first."
+- [FIX] **A pinned sidebar panel that showed "Backing block not found" now recovers on its
+  own once the block reappears or is edited elsewhere** (SC-288). If the block behind a
+  pinned sidebar panel briefly became unaddressable — the note was edited out from under it
+  — the panel correctly showed the read-only "panel unavailable" notice, but the very next
+  valid edit to that block failed to bring it back: the notice and the disabled controls
+  stayed stuck even though the block was valid again, and the only way out was to unpin and
+  re-pin. A degraded panel now recovers on the next valid change, no re-pin needed.
 - [FIX] **Initiative tracker: an unsynced compendium creature no longer asks about
   duplicate files, and the console no longer logs a warning for every creature without a
   portrait** (SC-240). A statblock reference the encounter builder creates from the
