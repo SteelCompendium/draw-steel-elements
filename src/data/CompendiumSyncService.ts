@@ -273,7 +273,11 @@ export class CompendiumSyncService {
 		// takes 94-167ms on desktop (slower on mobile) with no yield in between — long
 		// enough that the "reading archive…" Notice set right before this call may never
 		// actually paint. One macrotask yield gives the event loop a chance to render it
-		// before the main thread blocks on the unzip.
+		// before the main thread blocks on the unzip. Bare setTimeout, not
+		// window.setTimeout, matching the same yield above (applySync's batch loop):
+		// this service is unit-tested under the plain Node jest project (no DOM `window`
+		// global), and the yield here isn't popout-window-sensitive UI work either.
+		// eslint-disable-next-line obsidianmd/prefer-window-timers
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		let files: Record<string, Uint8Array>;
 		try {
