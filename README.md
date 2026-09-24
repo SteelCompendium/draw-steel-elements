@@ -25,7 +25,7 @@ Obsidian you keep the last compatible build, 6.0.2, until you update the app.
 2. Search for **Draw Steel Elements**
 3. **Install**, then **Enable**
 
-**Upgrading from a 5.x or 6.0.2 install?** Read the
+**Upgrading from a 5.x or 6.0.x install?** Read the
 [5.x → 7.0.0 migration guide](./docs/migrating-to-7.md) first — everyone should re-sync
 their compendium, and the first sync offers to move your old compendium files so your
 links keep working.

@@ -19,7 +19,7 @@ below ships as 7.0.0.
 
 ## 7.0.0 (unreleased; previously numbered 6.0.0)
 
-Upgrading from 5.x or 6.0.2? See the [migration guide](docs/migrating-to-7.md)
+Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
 - [FIX] **The compendium download's zip library is now `fflate`, not JSZip** (SC-328). JSZip's
