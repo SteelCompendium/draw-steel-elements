@@ -231,9 +231,18 @@ export class ReadingModeBlockHost implements BlockHost {
 			const newBlockLines = [`${openFence.fence}${openFence.language}`, ...newSource.split('\n'), closeFence];
 			lines.splice(target.lineStart, target.lineEnd - target.lineStart + 1, ...newBlockLines);
 			wrote = true;
+			// SC-343 fix round 1: set synchronously with the splice, inside the callback — not
+			// after the `await` resumes. Two overlapping replaceSource calls on one host (a
+			// timer flush racing the unload flush) each run their OWN Vault.process callback in
+			// turn; if knownBody were only set after the first call's `await` returns, the
+			// second call's callback (which can run before the first call's continuation) would
+			// still see the OLD knownBody and fail the section-path body check against the disk
+			// content the first call just wrote, sending the second write down the durable-
+			// locate path hunting for a body nobody has any more — a dropped write + a false
+			// Notice for two writes that both actually landed.
+			this.knownBody = newSource;
 			return lines.join('\n');
 		});
-		if (wrote) this.knownBody = newSource;
 		if (dropped) notifyDroppedWrite(this.ctx.sourcePath, abstractFile.basename);
 		return wrote;
 	}
@@ -255,7 +264,11 @@ export class ReadingModeBlockHost implements BlockHost {
 			const { lineStart, lineEnd } = section;
 			const openOk = parseOpenFence(content, lineStart) !== null;
 			const closeOk = parseCloseFence(lines[lineEnd]) !== null;
-			const unterminatedAtEof = !closeOk && lineEnd === lines.length - 1;
+			// SC-343 fix round 1: "at EOF" tolerates trailing blank lines after the section's
+			// reported lineEnd (a trailing '\n' or blank lines below an unterminated fence),
+			// not only an exact match to the last line — Obsidian's own section range can land
+			// short of the note's true last line when the note ends in blank lines.
+			const unterminatedAtEof = !closeOk && lines.slice(lineEnd + 1).every((l) => l.trim() === '');
 			const bodyEnd = unterminatedAtEof ? lineEnd + 1 : lineEnd;
 			const bodyOk =
 				this.knownBody === null ||

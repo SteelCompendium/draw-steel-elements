@@ -215,6 +215,48 @@ describe('SC-343: guarded replaceSource', () => {
 		expect(Notice.notices).toHaveLength(0);
 	});
 
+	test('unterminated fence at EOF, note ends with a trailing newline: still writes and closes the fence (no Notice)', async () => {
+		const app = new App();
+		const live = ['Before', '', '```ds-counter', 'name: A', 'current_value: 1'].join('\n') + '\n';
+		app.vault.setFile('Note.md', live);
+		const section = { current: { text: live, lineStart: 2, lineEnd: 4 } };
+		const host = hostFor(app, 'Note.md', section, 'name: A\ncurrent_value: 1');
+
+		await expect(host.replaceSource('name: A\ncurrent_value: 2')).resolves.toBe(true);
+		expect(app.vault.getContent('Note.md')).toBe(
+			['Before', '', '```ds-counter', 'name: A', 'current_value: 2', '```', ''].join('\n'),
+		);
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('unterminated fence at EOF, note ends with a trailing blank line: still writes and closes the fence (no Notice)', async () => {
+		const app = new App();
+		const live = ['Before', '', '```ds-counter', 'name: A', 'current_value: 1', '', ''].join('\n');
+		app.vault.setFile('Note.md', live);
+		const section = { current: { text: live, lineStart: 2, lineEnd: 4 } };
+		const host = hostFor(app, 'Note.md', section, 'name: A\ncurrent_value: 1');
+
+		await expect(host.replaceSource('name: A\ncurrent_value: 2')).resolves.toBe(true);
+		expect(app.vault.getContent('Note.md')).toBe(
+			['Before', '', '```ds-counter', 'name: A', 'current_value: 2', '```', '', ''].join('\n'),
+		);
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('overlapping writes on one host (a timer flush racing an unload flush): both land, no dropped write, no Notice', async () => {
+		const app = new App();
+		const live = ['```ds-counter', 'name: A', 'current_value: 1', '```'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const section = { current: { text: live, lineStart: 0, lineEnd: 3 } };
+		const host = hostFor(app, 'Note.md', section, 'name: A\ncurrent_value: 1');
+
+		const a = host.replaceSource('name: A\ncurrent_value: 2');
+		const b = host.replaceSource('name: A\ncurrent_value: 3');
+		await expect(Promise.all([a, b])).resolves.toEqual([true, true]);
+		expect(app.vault.getContent('Note.md')).toContain('current_value: 3');
+		expect(Notice.notices).toHaveLength(0);
+	});
+
 	test('a successful write becomes the new known body (a second write finds it)', async () => {
 		const app = new App();
 		const live = ['```ds-counter', 'name: A', 'current_value: 1', '```'].join('\n');
