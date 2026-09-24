@@ -27,6 +27,11 @@ for what needs action.
   community-plugin review rejects; 7.0.0 also carries forward 6.0.2's three added
   Crafting/Lore skills (Carpentry, Cooking, Strategy). No user-facing behavior change beyond
   those skills.
+- [FIX] **A pinned sidebar panel now follows its note when the note (or a parent folder) is
+  renamed or moved, instead of turning into a permanent "Note not found" card** (SC-282).
+  Deleting the note (or a parent folder) now removes the panel automatically instead of
+  leaving it behind. Renaming never disturbs the panel's own live content — an in-progress
+  encounter or initiative tracker keeps running exactly as it was.
 - [INTERNAL] A block's save now finds the block by its content when its position in the note has
   moved, instead of trusting a possibly stale line range, so a save can no longer land in the wrong
   place or cut a block short (SC-343). A click followed at once by switching notes now still saves

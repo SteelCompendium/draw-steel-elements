@@ -146,6 +146,24 @@ export class FakeVault {
 		return this.contents.get(path);
 	}
 
+	/** SC-282 test seeding helper (not part of the Obsidian API, mirroring FakeAdapter's
+	 *  own `rename` above): moves a tracked file's content to `newPath` and mutates the
+	 *  SAME `TFile` object in place (`setPath`) rather than replacing it — matching real
+	 *  Obsidian's identity-preserving rename, and letting a test's `getAbstractFileByPath
+	 *  (newPath)` resolve correctly right after, the same way SidebarPanel.handleFileRenamed
+	 *  re-resolves it in production. */
+	rename(oldPath: string, newPath: string): TFile {
+		const file = this.tfiles.get(oldPath);
+		if (!file) throw new Error(`rename: no such file ${oldPath}`);
+		const content = this.contents.get(oldPath) ?? '';
+		this.tfiles.delete(oldPath);
+		this.contents.delete(oldPath);
+		file.setPath(newPath);
+		this.tfiles.set(newPath, file);
+		this.contents.set(newPath, content);
+		return file;
+	}
+
 	getAbstractFileByPath(path: string): TAbstractFile | null {
 		return this.tfiles.get(path) ?? this.folders.get(path) ?? null;
 	}
