@@ -39,6 +39,11 @@ describe('SC-343: normalizeBody / locateByBody', () => {
 		expect(locateByBody(COUNTER, 'ds-counter', 'name: B', 0)).toBeNull();
 		expect(locateByBody(COUNTER, 'ds-stamina', 'name: A\ncurrent_value: 1', 0)).toBeNull();
 	});
+
+	test('locateByBody finds the block in a CRLF note (fence lines still parse)', () => {
+		const crlf = COUNTER.replace(/\n/g, '\r\n');
+		expect(locateByBody(crlf, 'ds-counter', 'name: A\ncurrent_value: 1', 0)).toEqual({ lineStart: 0, lineEnd: 3 });
+	});
 });
 
 describe('SC-343: durable identity and canPersist', () => {

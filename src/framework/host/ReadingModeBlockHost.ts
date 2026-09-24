@@ -80,11 +80,17 @@ export function locateByBody(
 	body: string,
 	nearLine: number,
 ): { lineStart: number; lineEnd: number } | null {
+	// SC-343 fix round 1: anchor.ts's FENCE_LINE is a plain `.` match, which never matches
+	// `\r` — a CRLF note's fence lines fail to parse and listFences sees zero fences. Strip
+	// just the `\r` immediately before each `\n` (never a lone `\r`, which would shift line
+	// indices against replaceSource's own `content.split('\n')`) so fence lines parse while
+	// every line NUMBER stays identical to the untouched content's.
+	const lf = content.replace(/\r(?=\n)/g, '');
 	const wanted = normalizeBody(body);
-	const lines = content.split('\n');
+	const lines = lf.split('\n');
 	let best: { lineStart: number; lineEnd: number } | null = null;
 	let bestDistance = Infinity;
-	for (const info of listFences(content, language)) {
+	for (const info of listFences(lf, language)) {
 		const candidate = normalizeBody(lines.slice(info.lineStart + 1, info.lineEnd).join('\n'));
 		if (candidate !== wanted) continue;
 		const distance = Math.abs(info.lineStart - nearLine);
