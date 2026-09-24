@@ -328,6 +328,25 @@ describe('T-7 (Plan 02): ElementView<M> (F1 §3.3)', () => {
 
 			expect(host.replaceSource).not.toHaveBeenCalled();
 		});
+
+		test('SC-343: persist() asks the host to refresh its position before scheduling (and not when read-only)', async () => {
+			const notePersistIntent = jest.fn();
+			const host = makeHost({ notePersistIntent } as Partial<BlockHost>);
+			const { cx } = makeContext(host);
+			const view = new TestView(cx);
+			await view.mount(document.createElement('div'), { value: 'x' });
+			view.injectSerializer((m) => `value: ${m.value}`);
+
+			void view.triggerPersist();
+			expect(notePersistIntent).toHaveBeenCalledTimes(1);
+
+			const readOnly = makeHost({ canPersist: false, notePersistIntent: jest.fn() } as Partial<BlockHost>);
+			const ro = new TestView(makeContext(readOnly).cx);
+			await ro.mount(document.createElement('div'), { value: 'x' });
+			ro.injectSerializer((m) => `value: ${m.value}`);
+			await ro.triggerPersist();
+			expect(readOnly.notePersistIntent).not.toHaveBeenCalled();
+		});
 	});
 });
 

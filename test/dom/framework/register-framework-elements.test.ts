@@ -134,4 +134,21 @@ describe('D1 Task 1: registerFrameworkElements (F1 §2.3 "incremental migration 
 		expect(() => registerFrameworkElements(plugin as any, { registry, pipeline })).not.toThrow();
 		expect(registry.all()).toHaveLength(1);
 	});
+
+	test('SC-343: the host handed to pipeline.run already knows the mount body', async () => {
+		const def = fakeDef({ id: 'c', aliases: ['ds-c'] });
+		const run = fakePipelineRun();
+		const pipeline = { run } as unknown as ElementPipeline;
+		const app = new App();
+		app.vault.setFile('Note.md', '```ds-c\nname: A\n```');
+		const plugin = new Plugin(app);
+		registerFrameworkElements(plugin as any, { registry: fakeRegistry([def]), pipeline });
+
+		const ctx = makeFakeContext(app, 'Note.md');
+		await plugin.registeredProcessors.get('ds-c')!('name: A', ctx.el, ctx as any);
+
+		const host = run.mock.calls[0][2] as ReadingModeBlockHost;
+		expect(host).toBeInstanceOf(ReadingModeBlockHost);
+		expect(host.lastKnownBody).toBe('name: A');
+	});
 });

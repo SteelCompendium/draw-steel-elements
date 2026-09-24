@@ -51,8 +51,12 @@ export function registerFrameworkElements(plugin: Plugin, framework: FrameworkEl
 		for (const alias of def.aliases) {
 			plugin.registerMarkdownCodeBlockProcessor(
 				alias,
-				(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) =>
-					framework.pipeline.run(def, source, new ReadingModeBlockHost(plugin, el, ctx, alias, scrollPin)),
+				(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+					const host = new ReadingModeBlockHost(plugin, el, ctx, alias, scrollPin);
+					// SC-343: the durable identity starts from the body this view is built from.
+					host.setMountedBody(source);
+					return framework.pipeline.run(def, source, host);
+				},
 			);
 		}
 	}
