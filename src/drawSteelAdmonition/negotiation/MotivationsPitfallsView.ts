@@ -41,11 +41,7 @@ export class MotivationsPitfallsView {
 			label.createSpan({ cls: 'dse-nt__details-reason', text: mot.reason });
 			// Read-only: no listener at all — there is no write path to reach (§4.4).
 			if (this.canPersist) {
-				// SC-340 §9.1 audit: the same adoption-blur guard as stepper.ts — a control
-				// inside a view root can fire a spurious change/blur while its section is
-				// mid-adoption (out of the document); ignore it rather than commit stale state.
 				this.owner.registerDomEvent(checkbox, 'change', () => {
-					if (!checkbox.isConnected) return;
 					this.data.setMotivationUsed(mot.name, checkbox.checked);
 					this.persist();
 				});

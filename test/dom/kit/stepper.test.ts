@@ -459,7 +459,14 @@ describe('Plan 08 Task 2: kit/stepper (D2 §2.2)', () => {
 });
 
 describe('SC-340 §9.1: the adoption blur does not commit a half-typed draft', () => {
-	test('blur while the input is out of the document is ignored; a real blur commits', () => {
+	// Fix round 1 (I-1): a real-Chromium probe (headless 149) showed a focused input moved
+	// by appendChild logs blur/change/focusout ALL with connected=true — Chromium fires
+	// them SYNCHRONOUSLY during the move, before the node is actually detached and
+	// reinserted, not after (jsdom's own — different — timing made the original
+	// `!el.isConnected`-only guard pass in jsdom while doing nothing in a real browser).
+	// adoptView marks an ancestor `data-dse-moving` for the exact duration of the move;
+	// this test drives that real order directly instead of jsdom's tautological one.
+	test('blur while an ancestor is marked "moving" (still connected) is ignored; a later real blur, after reinsertion, commits', () => {
 		const owner = fakeOwner();
 		const parent = document.body.createDiv();
 		const onChange = jest.fn();
@@ -467,10 +474,12 @@ describe('SC-340 §9.1: the adoption blur does not commit a half-typed draft', (
 		const input = parent.querySelector('input.dse-stepper__input') as HTMLInputElement;
 		input.value = '7';
 
-		parent.remove(); // the section left the document (adoption)
-		input.dispatchEvent(new FocusEvent('blur'));
+		parent.setAttribute('data-dse-moving', ''); // adoptView's marker, set for the move
+		input.dispatchEvent(new FocusEvent('blur')); // still connected — the real Chromium order
 		expect(onChange).not.toHaveBeenCalled();
+		parent.removeAttribute('data-dse-moving'); // the move finished
 
+		parent.remove(); // reinsertion dance — the reverse (jsdom-shaped) ordering still works
 		document.body.appendChild(parent);
 		input.dispatchEvent(new FocusEvent('blur'));
 		expect(onChange).toHaveBeenCalledWith(7);

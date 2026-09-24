@@ -278,6 +278,60 @@ describe('SC-340 Task 4: claim and adopt', () => {
 	});
 });
 
+describe('SC-340 fix round 1 (I-1): the adoption blur fires DURING the move (real Chromium order)', () => {
+	afterEach(() => jest.useRealTimers());
+
+	// A real-Chromium probe (headless 149) showed blur/change/focusout fire SYNCHRONOUSLY
+	// inside appendChild, while the moved node is STILL CONNECTED — jsdom does not
+	// replicate this on its own, so this test drives it directly: the mocked appendChild
+	// dispatches the blur itself, at the point adoptView's data-dse-moving marker is set.
+	test('a stepper half-typed draft is not committed by the in-move blur; a later real blur (after the section reconnects) commits it', async () => {
+		jest.useFakeTimers();
+		const { app, plugin, render } = await setup(COUNTER_NOTE);
+		const ctx1 = await render('ds-counter');
+		document.body.appendChild(ctx1.el); // a normally-connected reading-mode section
+		const root = ctx1.el.firstElementChild as HTMLElement;
+		(root.querySelector('button[aria-label^="Increase"]') as HTMLElement).click(); // an earlier write
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(app.vault.modifyCalls).toHaveLength(1);
+
+		// The user starts a NEW half-typed draft before the echo (adoption) arrives.
+		const input = root.querySelector('input.dse-stepper__input') as HTMLInputElement;
+		input.value = '15';
+
+		const ctx2 = makeFakeContext(app, 'Note.md');
+		const originalAppendChild = ctx2.el.appendChild.bind(ctx2.el);
+		jest.spyOn(ctx2.el, 'appendChild').mockImplementation(((node: Node) => {
+			// I-1: fire the blur exactly where Chromium does — DURING the move, while
+			// `root` (still in its OLD parent) already carries adoptView's marker.
+			input.dispatchEvent(new FocusEvent('blur'));
+			return originalAppendChild(node);
+		}) as typeof ctx2.el.appendChild);
+
+		await plugin.registeredProcessors.get('ds-counter')!(
+			bodyOf(app.vault.getContent('Note.md')!, 0),
+			ctx2.el,
+			ctx2 as any,
+		);
+		ctx2.addedChildren.forEach((c) => c.load());
+		document.body.appendChild(ctx2.el); // Obsidian eventually inserts the new section
+		ctx1.addedChildren[0].unload();
+
+		expect(ctx2.el.firstElementChild).toBe(root); // adopted
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(app.vault.modifyCalls).toHaveLength(1); // the draft was NOT committed by the in-move blur
+
+		// A later REAL blur — the marker is gone, the section is connected — commits it.
+		input.dispatchEvent(new FocusEvent('blur'));
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(app.vault.modifyCalls).toHaveLength(2);
+		expect(app.vault.getContent('Note.md')).toContain('current_value: 15');
+
+		ctx1.el.remove();
+		ctx2.el.remove();
+	});
+});
+
 describe('SC-340 Task 5: docId collision guard', () => {
 	afterEach(() => jest.useRealTimers());
 
@@ -362,22 +416,38 @@ describe('SC-340 Task 5: docId collision guard', () => {
 });
 
 describe('SC-340 §9.2: the form editor opens with the CURRENT body after adopted writes', () => {
-	test('pencil after a write passes the written body, not the mount-time source', async () => {
+	// Fix round 1 (M-2): TWO adopted writes before the pencil click — proves currentBody()
+	// tracks the LATEST body (host.lastKnownBody), not just "any body newer than mount",
+	// which a single-write test can't distinguish from a stale-but-not-mount-time body.
+	test('pencil after TWO adopted writes passes the LATEST written body, not the mount-time source nor the first adopted body', async () => {
 		jest.useFakeTimers();
 		const spy = jest.spyOn(FormModal, 'openFormEditor').mockImplementation(() => ({}) as any);
 		const { app, render } = await setup(COUNTER_NOTE, undefined, true, true);
 		const ctx1 = await render('ds-counter');
 		const root = ctx1.el.firstElementChild as HTMLElement;
-		(root.querySelector('button[aria-label^="Increase"]') as HTMLElement).click();
+
+		(root.querySelector('button[aria-label^="Increase"]') as HTMLElement).click(); // 10 -> 11
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-		const ctx2 = await render('ds-counter'); // adopted
+		const ctx2 = await render('ds-counter'); // adopted (write #1)
 		expect(ctx2.el.firstElementChild).toBe(root);
-		const pencil = root.querySelector<HTMLElement>('.dse-btn[aria-label^="Edit "]'); // the counter's chrome-panel pencil (authoringAnchor.test.ts)
+
+		(root.querySelector('button[aria-label^="Increase"]') as HTMLElement).click(); // 11 -> 12
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const ctx3 = await render('ds-counter'); // adopted again (write #2)
+		expect(ctx3.el.firstElementChild).toBe(root);
+
+		// The counter's chrome-panel pencil (authoringAnchor.test.ts) — counter declares
+		// `chrome`, so it renders through the panel entry point, not the trailing-pencil
+		// one (see the fix-round-1 report for why a second assertion on that other entry
+		// point isn't added here).
+		const pencil = root.querySelector<HTMLElement>('.dse-btn[aria-label^="Edit "]');
 		expect(pencil).not.toBeNull();
 		pencil!.click();
 		expect(spy).toHaveBeenCalledTimes(1);
 		expect(spy.mock.calls[0][3]).toBe(bodyOf(app.vault.getContent('Note.md')!));
-		expect(spy.mock.calls[0][3]).toContain('current_value: 11');
+		expect(spy.mock.calls[0][3]).toContain('current_value: 12');
+		expect(spy.mock.calls[0][3]).not.toContain('current_value: 11');
+		expect(spy.mock.calls[0][3]).not.toContain('current_value: 10');
 		spy.mockRestore();
 		jest.useRealTimers();
 	});

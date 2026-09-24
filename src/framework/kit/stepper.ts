@@ -13,6 +13,7 @@
 // updates the value node in place — callers never rebuild the triad.
 import type { Component } from 'obsidian';
 import { iconButton } from './iconButton';
+import { MOVING_ATTR } from '../host/adoptView';
 
 export interface StepperOptions {
 	value: number;
@@ -187,8 +188,15 @@ export function stepper(
 		// SC-340 §9.1: when the block is adopted after its own write, Obsidian takes the
 		// section out of the document and a focused input blurs (B11) — then focus comes back.
 		// That blur is not the user leaving the field: never commit a half-typed draft on it.
+		//
+		// Fix round 1 (I-1): a real-Chromium probe showed blur fires DURING the move itself,
+		// while the node is STILL connected (before it's actually detached/reinserted) — so
+		// `!el.isConnected` alone never catches it in a real browser (only in jsdom, whose
+		// timing differs). adoptView marks the moving root `data-dse-moving` for the exact
+		// duration of the move; `closest()` catches that case order-independently, and
+		// `!el.isConnected` stays as a second, redundant guard for the reverse ordering.
 		owner.registerDomEvent(el, 'blur', () => {
-			if (!el.isConnected) return;
+			if (!el.isConnected || el.closest(`[${MOVING_ATTR}]`)) return;
 			commitDraft();
 		});
 	}
