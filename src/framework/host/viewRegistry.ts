@@ -37,6 +37,16 @@ export interface ViewRegistryEntry {
 	releasedBy: string | null;
 }
 
+/** The index of the NEWEST ticket (scanning from the end — tickets are oldest-first) that is
+ *  still within CLAIM_WINDOW_MS of `at` and whose normalized body equals `wanted`. -1 if none.
+ *  (Array.prototype.findLastIndex needs an ES2023 lib the project doesn't target — ES6/ES7.) */
+function findLastMatchingTicketIndex(tickets: Array<{ body: string; at: number }>, at: number, wanted: string): number {
+	for (let i = tickets.length - 1; i >= 0; i--) {
+		if (at - tickets[i].at < CLAIM_WINDOW_MS && normalizeBody(tickets[i].body) === wanted) return i;
+	}
+	return -1;
+}
+
 export interface ViewRegistryStats {
 	claims: number;
 	misses: number;
@@ -117,7 +127,11 @@ export class ViewRegistry extends Component {
 			if (entry.released || entry.claiming) continue;
 			if (!(entry.view as unknown as { _loaded: boolean })._loaded) continue;
 			if (entry.host.docId !== docId || entry.host.sourcePath !== sourcePath) continue;
-			const index = entry.tickets.findIndex((t) => at - t.at < CLAIM_WINDOW_MS && normalizeBody(t.body) === wanted);
+			// Fix round 1 (M-2): spec §6.2 — "the entry with the newest ticket wins". Tickets
+			// are oldest-first, so the LAST matching index is the newest matching ticket — a
+			// coalesced rebuild for writes A, B, A must match the SECOND A, not the first
+			// (findIndex would pick the oldest and leave ['B','A'] stranded live).
+			const index = findLastMatchingTicketIndex(entry.tickets, at, wanted);
 			if (index >= 0) hits.push({ entry, index });
 		}
 		if (hits.length === 0) {

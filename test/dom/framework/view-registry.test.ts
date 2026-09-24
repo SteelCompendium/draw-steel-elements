@@ -191,6 +191,28 @@ describe('SC-340 Task 3: rebind and claim tickets', () => {
 		registry.noteWrite(entry, 'a: 2');
 		expect(entry.tickets.map((t) => t.body)).toEqual(['a: 2']);
 	});
+
+	// Fix round 1 (M-2): spec §6.2 says "the entry with the newest ticket wins". A coalesced
+	// rebuild for writes A, B, A (three edits landing before any rebuild fires) must claim
+	// against the NEWEST matching ticket (the second A) and consume it plus every OLDER
+	// ticket — leaving nothing live, not the stale ['B','A'] a findIndex-picks-oldest bug
+	// would leave behind.
+	test('a coalesced A, B, A rebuild claims on the NEWEST matching ticket and leaves no live ticket', () => {
+		const registry = new ViewRegistry({ enabled: true, now: () => 1_000 });
+		registry.load();
+		const { app, plugin } = makeEnv();
+		app.vault.setFile('Note.md', NOTE);
+		const ctx = makeFakeContext(app, 'Note.md');
+		const host = new ReadingModeBlockHost(plugin as any, ctx.el, ctx as any, 'ds-counter', null, registry);
+		const entry = registry.own(new Component() as any, host, document.createElement('div'));
+		registry.noteWrite(entry, 'a: 1'); // A
+		registry.noteWrite(entry, 'b: 1'); // B
+		registry.noteWrite(entry, 'a: 1'); // A again — the newest ticket
+		const claimed = registry.claim(host.docId, 'Note.md', 'a: 1');
+		expect(claimed).toBe(entry);
+		expect(registry.stats.claims).toBe(1);
+		expect(entry.tickets).toHaveLength(0);
+	});
 });
 
 describe('SC-340 Task 4 review (carried fix): no claim ticket for a write that changed nothing', () => {
@@ -207,5 +229,21 @@ describe('SC-340 Task 4 review (carried fix): no claim ticket for a write that c
 		const [entry] = registry.liveEntries();
 		await host.replaceSource('name: Health\ncurrent_value: 11\nmax_value: 20\nmin_value: 0');
 		expect(entry.tickets).toHaveLength(1);
+	});
+
+	// Fix round 1 (I-1): vault.process REJECTING (file deleted/renamed mid-write, I/O error,
+	// a throw inside the callback) must not leave the ticket live for CLAIM_WINDOW_MS — same
+	// hazard as a write that changed nothing, just via an exception instead of a normal
+	// return.
+	test('a write whose vault.process REJECTS leaves no live ticket (replaceSource still rejects)', async () => {
+		const { app, registry, host } = await mountCounter();
+		const [entry] = registry.liveEntries();
+		app.vault.process = jest.fn(async () => {
+			throw new Error('ENOENT: file deleted mid-write');
+		}) as any;
+		await expect(
+			host.replaceSource('name: Health\ncurrent_value: 11\nmax_value: 20\nmin_value: 0'),
+		).rejects.toThrow('ENOENT');
+		expect(entry.tickets).toHaveLength(0);
 	});
 });

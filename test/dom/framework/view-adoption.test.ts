@@ -7,6 +7,7 @@ import { createElementRegistry, type ElementDefinition } from '../../../src/fram
 import { counterElement } from '../../../src/elements/counter/definition';
 import { initiativeElement } from '../../../src/elements/initiative/definition';
 import { ViewRegistry, CLAIM_WINDOW_MS } from '../../../src/framework/host/viewRegistry';
+import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlockHost';
 import { captureFocus, restoreFocusWhenConnected } from '../../../src/framework/host/adoptView';
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
 import { makeFakeContext } from '../../mocks/obsidian';
@@ -68,13 +69,14 @@ describe('SC-340 Task 4: claim and adopt', () => {
 
 	test('another instance of the note (different docId) gets a FRESH view; the writer keeps its own', async () => {
 		jest.useFakeTimers();
-		const { registry, render } = await setup(COUNTER_NOTE);
+		const { app, registry, render } = await setup(COUNTER_NOTE);
 		const pane = await render('ds-counter', 0, 'doc-pane');
 		const embed = await render('ds-counter', 0, 'doc-embed');
 		const embedRoot = embed.el.firstElementChild as HTMLElement;
 		const paneRoot = pane.el.firstElementChild as HTMLElement;
 		(pane.el.querySelector('button[aria-label^="Increase"]') as HTMLElement).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(app.vault.modifyCalls).toHaveLength(1); // one write, from the one click
 
 		const embed2 = await render('ds-counter', 0, 'doc-embed'); // non-writer rebuilds FIRST (r1 E4)
 		expect(embed2.el.firstElementChild).not.toBe(embedRoot);
@@ -116,10 +118,74 @@ describe('SC-340 Task 4: claim and adopt', () => {
 		expect(registry.stats.claims).toBe(0);
 	});
 
+	// Fix round 1 (M-3): the §8 fallback ("never leave the block blank") had no jest pin.
+	test('§8 fallback: host.rebind throwing releases the claimed entry adopt-failed and renders a fresh view', async () => {
+		jest.useFakeTimers();
+		const { registry, render } = await setup(COUNTER_NOTE);
+		const ctx1 = await render('ds-counter');
+		const oldRoot = ctx1.el.firstElementChild as HTMLElement;
+		(ctx1.el.querySelector('button[aria-label^="Increase"]') as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const [oldEntry] = registry.liveEntries();
+
+		const rebindSpy = jest.spyOn(ReadingModeBlockHost.prototype, 'rebind').mockImplementationOnce(() => {
+			throw new Error('rebind boom');
+		});
+		const ctx2 = await render('ds-counter');
+		rebindSpy.mockRestore();
+
+		expect(ctx2.el.children).toHaveLength(1); // never left blank
+		expect(ctx2.el.firstElementChild).not.toBe(oldRoot); // a FRESH view, not the claimed one
+		expect(oldEntry.releasedBy).toBe('adopt-failed');
+		expect(oldEntry.claiming).toBe(false);
+
+		ctx1.addedChildren[0].unload();
+		ctx2.addedChildren[0].unload();
+		expect(registry.size).toBe(0);
+	});
+
+	test('§8 fallback: el.appendChild throwing releases the claimed entry adopt-failed and renders a fresh view', async () => {
+		jest.useFakeTimers();
+		const { app, plugin, registry, render } = await setup(COUNTER_NOTE);
+		const ctx1 = await render('ds-counter');
+		const oldRoot = ctx1.el.firstElementChild as HTMLElement;
+		(ctx1.el.querySelector('button[aria-label^="Increase"]') as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const [oldEntry] = registry.liveEntries();
+
+		const ctx2 = makeFakeContext(app, 'Note.md');
+		const originalAppendChild = ctx2.el.appendChild.bind(ctx2.el);
+		let calls = 0;
+		jest.spyOn(ctx2.el, 'appendChild').mockImplementation(((node: Node) => {
+			calls++;
+			if (calls === 1) throw new Error('appendChild boom'); // the ONE call adoptView makes
+			return originalAppendChild(node);
+		}) as typeof ctx2.el.appendChild);
+		await plugin.registeredProcessors.get('ds-counter')!(
+			bodyOf(app.vault.getContent('Note.md')!, 0),
+			ctx2.el,
+			ctx2 as any,
+		);
+		ctx2.addedChildren.forEach((c) => c.load());
+
+		expect(ctx2.el.children).toHaveLength(1); // never left blank
+		expect(ctx2.el.firstElementChild).not.toBe(oldRoot); // a FRESH view, not the claimed one
+		expect(oldEntry.releasedBy).toBe('adopt-failed');
+		expect(oldEntry.claiming).toBe(false);
+
+		ctx1.addedChildren[0].unload();
+		// rebind() ran (unlike the mocked-rebind test above) before appendChild threw, so it
+		// already added its own (now-orphaned, stale) render child to ctx2 — the FRESH host's
+		// render child is the one added AFTER it.
+		expect(ctx2.addedChildren).toHaveLength(2);
+		ctx2.addedChildren.forEach((c) => c.unload());
+		expect(registry.size).toBe(0);
+	});
+
 	test('SC-331 pin: the tracker ConditionsModal stays open across its own live write, and each change writes', async () => {
 		jest.useFakeTimers();
 		const note = '# E\n\n```ds-initiative\n' + quickStart.trimEnd() + '\n```\n';
-		const { app, render } = await setup(note);
+		const { app, registry, render } = await setup(note);
 		const ctx1 = await render('ds-initiative');
 		const root = ctx1.el.firstElementChild as HTMLElement;
 		(root.querySelector('.dse-init__group--heroes .dse-cond--add') as HTMLElement).click();
@@ -136,7 +202,26 @@ describe('SC-340 Task 4: claim and adopt', () => {
 		const ctx2 = await render('ds-initiative');
 		ctx1.addedChildren[0].unload();
 		expect(ctx2.el.firstElementChild).toBe(root);
+		expect(registry.stats.claims).toBe(1);
 		expect(document.body.contains(modalEl)).toBe(true); // the dialog survived its own save
+
+		// Fix round 1 (M-1): the title and spec §10.1 say EACH change writes — a single write
+		// was only half the pin. The combobox stays open (cleared + refocused) after a pick,
+		// so a second add needs no re-click of "Add condition".
+		input.value = 'Prone';
+		input.dispatchEvent(new Event('input'));
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(app.vault.modifyCalls).toHaveLength(2);
+		expect(app.vault.getContent('Note.md')).toContain('prone');
+
+		const ctx3 = await render('ds-initiative'); // the SECOND rebuild adopts again
+		ctx2.addedChildren[0].unload();
+		expect(ctx3.el.firstElementChild).toBe(root);
+		expect(registry.stats.claims).toBe(2);
+		expect(document.body.contains(modalEl)).toBe(true); // still open across both writes
+
+		modalEl.remove(); // M-1: don't leak the modal into document.body for later tests
 	});
 
 	test('focus: a focused input moved by the adoption is refocused with its caret once the section is inserted', async () => {
@@ -160,5 +245,34 @@ describe('SC-340 Task 4: claim and adopt', () => {
 		expect(input.selectionStart).toBe(4);
 		el.remove();
 		outer.remove();
+	});
+
+	// Fix round 1 (M-5): a real move measured ~41 ms between blur and reinsertion — long
+	// enough for the user to click something else. Adoption must not fight them for focus:
+	// only refocus when nothing else has claimed it (activeElement is body or null).
+	test('focus: if the user focuses something else before the section reconnects, adoption does not steal it back', async () => {
+		const outer = document.body.createDiv();
+		const root = outer.createDiv();
+		const input = root.createEl('input', { type: 'text' });
+		input.value = 'Feytouched';
+		input.focus();
+		input.setSelectionRange(4, 4);
+		const state = captureFocus(root)!;
+
+		const el = document.createElement('div'); // detached, like the processor's el
+		el.appendChild(root);
+		input.blur(); // Chromium blurs a focused node that leaves the document
+		restoreFocusWhenConnected(el, state);
+
+		const other = document.body.createEl('input', { type: 'text' });
+		other.focus(); // the user clicks elsewhere during the reinsertion gap
+
+		document.body.appendChild(el);
+		await Promise.resolve(); // MutationObserver delivery
+		await Promise.resolve();
+		expect(document.activeElement).toBe(other); // not stolen back
+		el.remove();
+		outer.remove();
+		other.remove();
 	});
 });

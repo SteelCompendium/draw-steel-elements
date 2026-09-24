@@ -2535,6 +2535,10 @@ malice:
 });
 
 describe('SC-340 (carried over from SC-331): no change, no write', () => {
+	// Fix round 1 (M-6): a FAILING assertion above would have skipped the inline
+	// jest.useRealTimers() call and left fake timers on for later tests — afterEach always runs.
+	afterEach(() => jest.useRealTimers());
+
 	test('opening and closing the ConditionsModal with NO change persists nothing', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(quickStart);
@@ -2543,6 +2547,5 @@ describe('SC-340 (carried over from SC-331): no change, no write', () => {
 		(modalEl.querySelector('.dse-modal__footer button[aria-label="Done"]') as HTMLElement).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
 		expect(host.replaceSource).not.toHaveBeenCalled();
-		jest.useRealTimers();
 	});
 });

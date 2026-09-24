@@ -364,6 +364,7 @@ export class ReadingModeBlockHost implements BlockHost {
 		let wrote = false;
 		let dropped = false;
 		let changedContent = false;
+		let settled = false;
 		// SC-340 §6.2: the claim ticket must exist before Vault.process — Obsidian fires
 		// `modify` inside it and runs the new section's processor right after. Task 4 review
 		// (carried fix): kept so it can be dropped below if this write changes nothing — a
@@ -371,39 +372,48 @@ export class ReadingModeBlockHost implements BlockHost {
 		// CLAIM_WINDOW_MS and could let claim() hand this view to an unrelated rebuild of an
 		// identical-body TWIN block.
 		const ticket = this.entry && this.registry ? this.registry.noteWrite(this.entry, newSource) : null;
-		await this.plugin.app.vault.process(abstractFile, (content) => {
-			const target = this.resolveWriteTarget(content, section);
-			if (target === 'abort') return content;
-			if (target === 'miss') {
-				dropped = true;
-				return content;
+		try {
+			await this.plugin.app.vault.process(abstractFile, (content) => {
+				const target = this.resolveWriteTarget(content, section);
+				if (target === 'abort') return content;
+				if (target === 'miss') {
+					dropped = true;
+					return content;
+				}
+				const lines = content.split('\n');
+				const openFence = parseOpenFence(content, target.lineStart);
+				if (!openFence) return content; // resolveWriteTarget guarantees one; defensive
+				const closeFence = parseCloseFence(lines[target.lineEnd]) ?? openFence.fence;
+				const newBlockLines = [`${openFence.fence}${openFence.language}`, ...newSource.split('\n'), closeFence];
+				lines.splice(target.lineStart, target.lineEnd - target.lineStart + 1, ...newBlockLines);
+				wrote = true;
+				// SC-343 fix round 1: set synchronously with the splice, inside the callback — not
+				// after the `await` resumes. Two overlapping replaceSource calls on one host (a
+				// timer flush racing the unload flush) each run their OWN Vault.process callback in
+				// turn; if knownBody were only set after the first call's `await` returns, the
+				// second call's callback (which can run before the first call's continuation) would
+				// still see the OLD knownBody and fail the section-path body check against the disk
+				// content the first call just wrote, sending the second write down the durable-
+				// locate path hunting for a body nobody has any more — a dropped write + a false
+				// Notice for two writes that both actually landed.
+				this.knownBody = newSource;
+				const next = lines.join('\n');
+				changedContent = next !== content;
+				return next;
+			});
+			settled = true;
+		} finally {
+			// Fix round 1 (I-1): a REJECTED vault.process (file deleted/renamed mid-write, I/O
+			// error, a throw in the callback) must not leave the ticket live for
+			// CLAIM_WINDOW_MS either — exactly the hazard carried fix 1 closed for a normal
+			// no-op return, just reached via an exception instead. `finally` runs on both the
+			// normal path and the rejection path; the rejection itself still propagates out of
+			// replaceSource unchanged (SC-350 owns making it not reject at all).
+			if (ticket && this.entry && this.registry && (!settled || !wrote || !changedContent)) {
+				this.registry.dropTicket(this.entry, ticket);
 			}
-			const lines = content.split('\n');
-			const openFence = parseOpenFence(content, target.lineStart);
-			if (!openFence) return content; // resolveWriteTarget guarantees one; defensive
-			const closeFence = parseCloseFence(lines[target.lineEnd]) ?? openFence.fence;
-			const newBlockLines = [`${openFence.fence}${openFence.language}`, ...newSource.split('\n'), closeFence];
-			lines.splice(target.lineStart, target.lineEnd - target.lineStart + 1, ...newBlockLines);
-			wrote = true;
-			// SC-343 fix round 1: set synchronously with the splice, inside the callback — not
-			// after the `await` resumes. Two overlapping replaceSource calls on one host (a
-			// timer flush racing the unload flush) each run their OWN Vault.process callback in
-			// turn; if knownBody were only set after the first call's `await` returns, the
-			// second call's callback (which can run before the first call's continuation) would
-			// still see the OLD knownBody and fail the section-path body check against the disk
-			// content the first call just wrote, sending the second write down the durable-
-			// locate path hunting for a body nobody has any more — a dropped write + a false
-			// Notice for two writes that both actually landed.
-			this.knownBody = newSource;
-			const next = lines.join('\n');
-			changedContent = next !== content;
-			return next;
-		});
-		if (dropped) notifyDroppedWrite(this.ctx.sourcePath, abstractFile.basename);
-		// Task 4 review (carried fix): no ticket for a write that changed nothing on disk.
-		if (ticket && this.entry && this.registry && (!wrote || !changedContent)) {
-			this.registry.dropTicket(this.entry, ticket);
 		}
+		if (dropped) notifyDroppedWrite(this.ctx.sourcePath, abstractFile.basename);
 		return wrote;
 	}
 
