@@ -14251,6 +14251,17 @@ body.theme-light
 .dse-collapse__header:focus-visible,
 .dse-tabs__tab:focus-visible,
 .dse-pr__row[aria-checked]:focus-visible,
+/* SC-338 — `.dse-optchip` (Result/Duration/Effect chips + the condition icon/preset
+   choices, montage form + Conditions modal) is a bare `<button>`, not a kit widget, so
+   it was never in this list. A PRESSED chip had no ring at all: its own
+   `[aria-pressed='true']` bevel box-shadow (~:2107, (0,4,0)) outranks Obsidian's host
+   `button:focus-visible` box-shadow ((0,1,1)) with nothing plugin-side standing in for
+   it. An UNPRESSED chip fell through to that host ring alone — ~1.7:1 against the chip,
+   under the 3:1 non-text contrast guideline. Joining this rule rather than declaring a
+   second one, per this rule's own "one rule" contract. The host's box-shadow ring is
+   neutralized for both states by the SC-203 host re-grounding block, which the chip now
+   also joins (~:15335) — this outline is never left to stack over a grey box-shadow. */
+.dse-optchip:focus-visible,
 /* SC-202 r1 — the eight cousin inputs (initiative malice quick-add, montage skill/
    characteristic, party award, project roll/points/characteristic) never carried a
    focus ring at all — a gap the input-family sweep's :focus-visible pass caught
@@ -15562,13 +15573,21 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 /* -- B. `box-shadow`. The kit never declares one for any of these, so `none` IS the
       plugin's own answer; the Steel control-sheen rule (0,8,0) still paints the bevel
       where it applies, and SC-189's chrome rules (0,4,0) still win. The selected tab is
-      excluded because its accent top bar IS a box-shadow — restated in D below. -- */
+      excluded because its accent top bar IS a box-shadow — restated in D below.
+      SC-338 adds `.dse-optchip` to this list: it is the ONE member here that DOES
+      declare its own box-shadow some of the time (the `[aria-pressed='true']` Steel
+      bevel, ~:2107, (0,4,0) — well above this block's (0,2,0), so the pressed bevel is
+      untouched). Unpressed, and on every state including `:focus-visible`, this removes
+      Obsidian's host `button:not(.clickable-icon)`/`button:focus-visible` box-shadow
+      ((0,1,1) either way) so the chip's own kit focus ring (~:14022) is never drawn over
+      a leftover grey ring. -- */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"])
 	:where(
 		.dse-btn,
 		.dse-collapse__header,
 		.dse-pr__row,
-		.dse-tabs__tab:not([aria-selected='true'])
+		.dse-tabs__tab:not([aria-selected='true']),
+		.dse-optchip
 	) {
 	box-shadow: none;
 }

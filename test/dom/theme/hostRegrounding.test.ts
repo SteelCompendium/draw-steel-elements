@@ -140,8 +140,12 @@ describe('SC-203 host re-grounding — the (0,2,0) state rules it must not beat'
 		const m = flat.match(new RegExp(escape(ANCHOR) + ' :where\\((.*?)\\) \\{ box-shadow: none; \\}'));
 		expect(m).not.toBeNull();
 		expect(m![1]).toContain(".dse-tabs__tab:not([aria-selected='true'])");
-		// …and that the reset does reach the other three families.
-		for (const f of ['.dse-btn', '.dse-collapse__header', '.dse-pr__row']) {
+		// …and that the reset does reach the other four families. SC-338: `.dse-optchip`
+		// joined this list so the host's `button:focus-visible` box-shadow ring never
+		// stacks under the chip's own kit outline (~:14022) — (0,2,0) here beats the
+		// host's (0,1,1) on both the rest AND focus-visible rules, and still loses
+		// cleanly to the chip's own `[aria-pressed='true']` bevel at (0,4,0).
+		for (const f of ['.dse-btn', '.dse-collapse__header', '.dse-pr__row', '.dse-optchip']) {
 			expect(m![1]).toContain(f);
 		}
 	});
