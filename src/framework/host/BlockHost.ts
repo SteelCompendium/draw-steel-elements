@@ -54,6 +54,10 @@ export interface BlockHost {
 	 * print/export and hover popovers are non-persistable because their own hosts
 	 * report `canPersist === false` (no addressable section info), not because they
 	 * hit that branch.
+	 *
+	 * SC-343: a reading-mode host whose section RESOLVED AT LEAST ONCE stays persistable
+	 * after the section goes (e.g. the flush after navigate-away) through its durable
+	 * identity; a host whose section never resolved stays read-only for life.
 	 */
 	readonly canPersist: boolean;
 	/**
@@ -73,6 +77,12 @@ export interface BlockHost {
 	replaceSource(newSource: string): Promise<boolean>;
 	/** Best-effort stable key for session state (F1 §4.3). Never used for document state. */
 	blockKey(): string;
+	/**
+	 * SC-343 (spec SC-340 §6.5 item 5) — optional. `ElementView.persist()` calls it just
+	 * before scheduling a write, so a host that caches the block's position can refresh it
+	 * while the section is still live (the write itself may run after the section is gone).
+	 */
+	notePersistIntent?(): void;
 	/**
 	 * SC-184 — optional: lets the standard element chrome menu (framework/pipeline.ts)
 	 * offer an "Unpin from sidebar" item without knowing anything about

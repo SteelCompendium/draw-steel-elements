@@ -32,10 +32,19 @@
 // `canPersist = false` / `replaceSource() -> false`, even in the rare case
 // `ctx.getSectionInfo` itself still resolves (a real quirk of canvas rendering the
 // legacy code relied on for its text-matching fallback) — never a console.log.
+//
+// SC-343 — durable identity + stale-position guard (spec SC-340 §6.5). The host remembers
+// the body it last knew is on disk (mount source, then every successful write), the line it
+// last saw the block at, and the fence language. Writes splice at getSectionInfo's range
+// only when the LIVE content there still holds that body; otherwise the block is found again
+// by its body, nearest the last known line (identical twins resolve by distance). A write
+// that cannot be placed is dropped with a Notice (droppedWriteNotice.ts). A host whose
+// section never resolved (hover, print, nested renders, canvas) never gets this identity.
 import { MarkdownRenderChild, TFile } from 'obsidian';
-import type { Component, MarkdownPostProcessorContext, Plugin } from 'obsidian';
+import type { Component, MarkdownPostProcessorContext, MarkdownSectionInformation, Plugin } from 'obsidian';
 import type { BlockHost, BlockInfo, RenderMode } from './BlockHost';
 import type { PreviewScrollPin } from './previewScrollPin';
+import { listFences } from '../sidebar/anchor';
 
 /** Matches a fence-open line, capturing the fence run and the language token. */
 const OPEN_FENCE = /^([`~]{3,})(\S*)/;
@@ -56,11 +65,52 @@ function parseCloseFence(line: string | undefined): string | null {
 	return match ? match[1] : null;
 }
 
+/** SC-343: bodies compare equal across CRLF/CR/LF and trailing whitespace. */
+export function normalizeBody(body: string): string {
+	return body.replace(/\r\n?/g, '\n').replace(/\s+$/, '');
+}
+
+/**
+ * SC-343: find the `language` block whose body equals `body` in `content`, nearest
+ * `nearLine` (ties go to the earlier block). Fence lines inclusive. Null when none matches.
+ */
+export function locateByBody(
+	content: string,
+	language: string,
+	body: string,
+	nearLine: number,
+): { lineStart: number; lineEnd: number } | null {
+	const wanted = normalizeBody(body);
+	const lines = content.split('\n');
+	let best: { lineStart: number; lineEnd: number } | null = null;
+	let bestDistance = Infinity;
+	for (const info of listFences(content, language)) {
+		const candidate = normalizeBody(lines.slice(info.lineStart + 1, info.lineEnd).join('\n'));
+		if (candidate !== wanted) continue;
+		const distance = Math.abs(info.lineStart - nearLine);
+		if (distance < bestDistance) {
+			best = { lineStart: info.lineStart, lineEnd: info.lineEnd };
+			bestDistance = distance;
+		}
+	}
+	return best;
+}
+
 export class ReadingModeBlockHost implements BlockHost {
 	readonly mode: RenderMode = 'reading';
 	readonly containerEl: HTMLElement;
 
 	private readonly renderChild: MarkdownRenderChild;
+
+	// -- SC-343 durable identity --------------------------------------------------------
+	/** True once ctx.getSectionInfo(containerEl) has resolved at least once. */
+	private sectionResolvedOnce = false;
+	/** The body we last knew is on disk: the mount source, then every successful write. */
+	private knownBody: string | null = null;
+	/** The fence line the block was last seen at (refreshed on every resolving read). */
+	private knownLineStart: number | null = null;
+	/** The fence language read from the document (null until an opening fence parses). */
+	private knownLanguage: string | null = null;
 
 	constructor(
 		private readonly plugin: Plugin,
@@ -75,15 +125,57 @@ export class ReadingModeBlockHost implements BlockHost {
 		this.containerEl = el;
 		this.renderChild = new MarkdownRenderChild(el);
 		this.ctx.addChild(this.renderChild);
+		this.readSection();
 	}
 
 	get sourcePath(): string {
 		return this.ctx.sourcePath;
 	}
 
+	/** SC-343: every section read goes through here so the durable position stays fresh. */
+	private readSection(): MarkdownSectionInformation | null {
+		if (this.ctx.sourcePath === '') return null; // canvas: quarantined, see file header
+		const section = this.ctx.getSectionInfo(this.containerEl);
+		if (!section) return null;
+		this.sectionResolvedOnce = true;
+		this.knownLineStart = section.lineStart;
+		const fence = parseOpenFence(section.text, section.lineStart);
+		if (fence) this.knownLanguage = fence.language;
+		return section;
+	}
+
+	/** SC-343: identity good enough to find the block again by its body. */
+	private get hasDurableIdentity(): boolean {
+		return (
+			this.sectionResolvedOnce &&
+			this.knownBody !== null &&
+			this.knownLineStart !== null &&
+			this.knownLanguage !== null
+		);
+	}
+
+	/** SC-343: registerFrameworkElements seeds the body the view is built from. */
+	setMountedBody(source: string): void {
+		this.knownBody = source;
+	}
+
+	/** SC-343 (BlockHost.notePersistIntent): refresh the durable position while live. */
+	notePersistIntent(): void {
+		this.readSection();
+	}
+
+	get lastKnownBody(): string | null {
+		return this.knownBody;
+	}
+
+	get lastKnownLineStart(): number | null {
+		return this.knownLineStart;
+	}
+
 	get canPersist(): boolean {
 		if (this.ctx.sourcePath === '') return false; // canvas: quarantined, see file header
-		return this.ctx.getSectionInfo(this.containerEl) !== null;
+		if (this.readSection() !== null) return true;
+		return this.hasDurableIdentity; // SC-343: section gone, but it resolved once
 	}
 
 	addChild<T extends Component>(child: T): T {
@@ -91,8 +183,7 @@ export class ReadingModeBlockHost implements BlockHost {
 	}
 
 	getBlockInfo(): BlockInfo | null {
-		if (this.ctx.sourcePath === '') return null; // canvas: quarantined, see file header
-		const section = this.ctx.getSectionInfo(this.containerEl);
+		const section = this.readSection();
 		if (!section) return null;
 		const fence = parseOpenFence(section.text, section.lineStart);
 		return {
