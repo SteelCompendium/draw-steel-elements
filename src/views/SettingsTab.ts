@@ -104,7 +104,13 @@ function slugify(label: string): string {
  *  name/desc and the row's search keys — one source, so they cannot drift apart the way
  *  a parallel search index would. Sentence-case lint can't inspect a variable passed to
  *  setName/setDesc; the literals live at the call sites below, where it can. */
-function opRow(label: string, help: string, build: (setting: Setting) => void): NavRow {
+/** SC-243 fix round 1 (review L3): `build` is typed `void | (() => void)`, not bare
+ *  `void` — the Sync compendium row (`mountCompendiumBusyButtons`) is the first `opRow`
+ *  to return a live-mount cleanup, and a bare `=> void` return position would silently
+ *  accept that returned function without ever saying obsidian keeps and calls it. Same
+ *  reasoning as `opChrome` just below, which this row's teardown depends on identically
+ *  (`toDefinition`'s `asCleanup` passes either helper's return through the same way). */
+function opRow(label: string, help: string, build: (setting: Setting) => void | (() => void)): NavRow {
 	// name/desc are set by obsidian from the definition's `name`/`desc`; `build` only adds
 	// the control. (Rows whose control IS expressible natively skip this helper entirely
 	// and carry a `control` instead — see the operational sections below.)
@@ -115,7 +121,9 @@ function opRow(label: string, help: string, build: (setting: Setting) => void): 
  *  never a search hit — it has no label to match on. May return a teardown for THIS mount
  *  (SC-140), on the same cleanup contract as `render`. Spelled out in the signature rather
  *  than left as `=> void`: a `void` return position silently accepts a returned value, and
- *  "did obsidian keep this?" is exactly the question that must not be implicit here. */
+ *  "did obsidian keep this?" is exactly the question that must not be implicit here —
+ *  `opRow` just above carries the identical contract for the same reason (SC-243's Sync
+ *  compendium row). */
 function opChrome(chrome: (container: HTMLElement) => void | (() => void)): NavRow {
 	return { chrome };
 }
