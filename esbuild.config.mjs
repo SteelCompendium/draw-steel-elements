@@ -3,6 +3,11 @@ import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
 import { promises as fs } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { checkBuiltFile } from "./scripts/check-no-dynamic-script.mjs";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const banner =
 `/*
@@ -123,6 +128,23 @@ const context = await esbuild.context({
 
 if (prod) {
   await context.rebuild();
+  // SC-328 build gate: the production main.js must never carry a dynamic
+  // createElement("script") call (JSZip's legacy-browser polyfills used to inject
+  // exactly this, which Obsidian's community-plugin review rejects). Runs after every
+  // production build — both `npm run build` and `npm run build-no-check` land here.
+  const mainJsPath = path.join(__dirname, "main.js");
+  const hits = checkBuiltFile(mainJsPath);
+  if (hits.length > 0) {
+    console.error(
+      `esbuild.config.mjs: FOUND ${hits.length} dynamic createElement("script") call(s) ` +
+      `in ${mainJsPath} — Obsidian's community-plugin review rejects these:`);
+    for (const hit of hits) {
+      console.error(`  byte offset ${hit.offset}: …${hit.context}…`);
+    }
+    process.exit(1);
+  }
+  console.log(
+    `esbuild.config.mjs: check-no-dynamic-script OK — 0 dynamic createElement("script") calls`);
   process.exit(0);
 } else {
   await context.watch();
