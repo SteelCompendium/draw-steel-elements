@@ -49,6 +49,7 @@ import type { BlockHost, BlockInfo, RenderMode } from './BlockHost';
 import type { PreviewScrollPin } from './previewScrollPin';
 import { listFences } from '../sidebar/anchor';
 import { notifyDroppedWrite } from './droppedWriteNotice';
+import type { ViewRegistry, ViewRegistryEntry } from './viewRegistry';
 
 /** Matches a fence-open line, capturing the fence run and the language token. */
 const OPEN_FENCE = /^([`~]{3,})(\S*)/;
@@ -188,6 +189,9 @@ export class ReadingModeBlockHost implements BlockHost {
 	/** The fence language read from the document (null until an opening fence parses). */
 	private knownLanguage: string | null = null;
 
+	/** SC-340: this host's registry entry (set by ViewRegistry.own). */
+	private entry: ViewRegistryEntry | null = null;
+
 	constructor(
 		private readonly plugin: Plugin,
 		el: HTMLElement,
@@ -197,11 +201,33 @@ export class ReadingModeBlockHost implements BlockHost {
 		/** SC-198. Plugin-scoped, shared by every host; omitted (null) in unit tests and in
 		 *  any caller that has no preview to protect. See previewScrollPin.ts. */
 		private readonly scrollPin: PreviewScrollPin | null = null,
+		/** SC-340: the plugin-scoped owner of this host's view; null in unit tests / non-owned use. */
+		readonly registry: ViewRegistry | null = null,
 	) {
 		this.containerEl = el;
-		this.renderChild = new MarkdownRenderChild(el);
-		this.ctx.addChild(this.renderChild);
+		this.renderChild = this.makeRenderChild(el, ctx);
 		this.readSection();
+	}
+
+	private makeRenderChild(el: HTMLElement, ctx: MarkdownPostProcessorContext): MarkdownRenderChild {
+		const renderChild = new MarkdownRenderChild(el);
+		renderChild.register(() => this.onRenderChildUnload(renderChild));
+		ctx.addChild(renderChild);
+		return renderChild;
+	}
+
+	/**
+	 * SC-340 §6.4: only the host's CURRENT render child releases the view. A render child the
+	 * host was rebound away from (Task 3) is superseded: its unload is a no-op.
+	 */
+	private onRenderChildUnload(renderChild: MarkdownRenderChild): void {
+		if (renderChild !== this.renderChild) return;
+		this.readSection(); // last chance to refresh the durable position while it may resolve
+		if (this.entry && this.registry) this.registry.release(this.entry, 'render-child-unload');
+	}
+
+	attachEntry(entry: ViewRegistryEntry): void {
+		this.entry = entry;
 	}
 
 	get sourcePath(): string {

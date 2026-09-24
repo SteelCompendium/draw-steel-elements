@@ -12,6 +12,7 @@ import type { ElementDefinition } from './registry';
 import { createRenderContext } from './context';
 import { registerAfterRender } from './view';
 import type { BlockHost } from './host/BlockHost';
+import { ReadingModeBlockHost } from './host/ReadingModeBlockHost';
 import type { ThemeService } from './seams/theme';
 import type { PreferenceStore } from './seams/prefs';
 import type { ReferenceService } from './seams/refs';
@@ -679,7 +680,13 @@ export class ElementPipeline {
 			// see framework/view.ts's AFTER_RENDER note for why (a `ds-scc`/`ds-statblock`
 			// body re-renders through a CHILD view mounted onto this same root).
 			registerAfterRender(root, () => mountPipelineChrome(view.currentModel()));
-			host.addChild(view);
+			if (host instanceof ReadingModeBlockHost && host.registry) {
+				// SC-340 §6.1: a reading-mode view is owned by the plugin-scoped ViewRegistry —
+				// never by the block's render child — so it can outlive its section (adoption).
+				host.registry.own(view, host, root);
+			} else {
+				host.addChild(view);
+			}
 			await runStageAsync('render', () => view.mount(root, model));
 			// The first render's leg. `update()` runs the hook itself from here on.
 			mountPipelineChrome(model);

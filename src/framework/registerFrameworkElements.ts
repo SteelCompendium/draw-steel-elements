@@ -22,6 +22,7 @@ import type { ElementRegistry } from './registry';
 import type { ElementPipeline } from './pipeline';
 import { ReadingModeBlockHost } from './host/ReadingModeBlockHost';
 import { PreviewScrollPin } from './host/previewScrollPin';
+import { ViewRegistry } from './host/viewRegistry';
 
 /**
  * The subset of `ElementFrameworkV2` (main.ts) this wiring loop needs. A narrow structural
@@ -41,18 +42,24 @@ export interface FrameworkElementsBundle {
  * NOT picked up retroactively; this is a one-shot wiring pass over `registry.all()` at the
  * time it is called, matching `main.ts onload`'s single call site.
  */
-export function registerFrameworkElements(plugin: Plugin, framework: FrameworkElementsBundle): void {
+export function registerFrameworkElements(
+	plugin: Plugin,
+	framework: FrameworkElementsBundle,
+	options: { viewAdoption?: boolean } = {},
+): ViewRegistry {
 	// SC-198: one pin per plugin, shared by every host so blocks sharing a scroller share
 	// its pin rather than fighting over it, and so unload can drop any pin still held.
 	const scrollPin = new PreviewScrollPin();
 	plugin.register(() => scrollPin.releaseAll());
+	// SC-340 §6.1: the plugin-scoped owner of every reading-mode view.
+	const registry = plugin.addChild(new ViewRegistry({ enabled: options.viewAdoption ?? false }));
 
 	for (const def of framework.registry.all()) {
 		for (const alias of def.aliases) {
 			plugin.registerMarkdownCodeBlockProcessor(
 				alias,
 				(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
-					const host = new ReadingModeBlockHost(plugin, el, ctx, alias, scrollPin);
+					const host = new ReadingModeBlockHost(plugin, el, ctx, alias, scrollPin, registry);
 					// SC-343: the durable identity starts from the body this view is built from.
 					host.setMountedBody(source);
 					return framework.pipeline.run(def, source, host);
@@ -60,4 +67,5 @@ export function registerFrameworkElements(plugin: Plugin, framework: FrameworkEl
 			);
 		}
 	}
+	return registry;
 }

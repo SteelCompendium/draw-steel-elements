@@ -41,6 +41,7 @@ import { createElementRegistry } from '@/framework/registry';
 import type { ElementRegistry } from '@/framework/registry';
 import { ElementPipeline } from '@/framework/pipeline';
 import { registerFrameworkElements } from '@/framework/registerFrameworkElements';
+import type { ViewRegistry } from '@/framework/host/viewRegistry';
 import { registerDseSidebar, sendToSidebar, unregisterDseSidebar } from '@/framework/sidebar/registration';
 import { listFences } from '@/framework/sidebar/anchor';
 import { registerInsertCommands } from '@/authoring/insert';
@@ -351,6 +352,9 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
      *  before `onload` runs and after `onunload` drops it. */
     frameworkV2?: ElementFrameworkV2;
 
+    /** SC-340: the owner of every reading-mode view (read by the real-Obsidian lifecycle gate). */
+    viewRegistry: ViewRegistry | null = null;
+
     /** F2 §4.4: the SCC (Steel Compendium Classification) resolver backing
      *  SccRefProvider — kept as its own plugin field (not just closed over) because
      *  Task 12's post-processor reuses it directly. */
@@ -479,7 +483,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         // legacy registerElements(this) call above still owns every not-yet-migrated
         // element.
         registerFrameworkElementDefinitions(frameworkV2.registry);
-        registerFrameworkElements(this, frameworkV2);
+        this.viewRegistry = registerFrameworkElements(this, frameworkV2, { viewAdoption: false });
 
         // D8 Task 2 (spec §1) — minimal wire proving the sidebar host/view registers
         // through production onload; full command/ribbon polish is Task 10.
