@@ -129,13 +129,18 @@ describe('SC-282: sidebar vault rename/delete listeners', () => {
 		const { app, fireRename } = setup();
 		app.vault.setFile('Note.md', counterBlock(ANCHOR_A));
 		const { view } = await openView(app);
-		view.addPanel({ filePath: 'Note.md', alias: 'ds-counter', anchorId: ANCHOR_A });
+		const panel = view.addPanel({ filePath: 'Note.md', alias: 'ds-counter', anchorId: ANCHOR_A });
 		await flushAsync();
 
 		const panelEl = view.contentEl.querySelector('.dse-sidebar__panel') as HTMLElement;
 		const rootBefore = panelEl.querySelector('[data-dse-element="counter"]');
 		expect(rootBefore).not.toBeNull();
 		const savesBefore = app.workspace.requestSaveLayoutCalls;
+		// SC-282 r3 (LOW-C) — the host's session key, captured once at construction (r2's
+		// stable-key fix), so session-only state keyed by it (chrome collapse, tab
+		// selection, montage/negotiation/hero/initiative persist objects) doesn't split
+		// across a rename.
+		const keyBefore = (panel as any).host.blockKey();
 
 		const renamed = app.vault.rename('Note.md', 'Renamed.md');
 		fireRename(renamed, 'Note.md');
@@ -154,6 +159,9 @@ describe('SC-282: sidebar vault rename/delete listeners', () => {
 		const rootAfter = panelEl.querySelector('[data-dse-element="counter"]');
 		expect(rootAfter).toBe(rootBefore);
 		expect(panelEl.getAttribute('data-dse-sidebar-unavailable')).not.toBe('true');
+		// LOW-C: the session key is UNCHANGED across the rename (not rebuilt from the live,
+		// now-rebound backingFile.path).
+		expect((panel as any).host.blockKey()).toBe(keyBefore);
 	});
 
 	test('renaming a parent folder updates every panel under it; a sibling with a shared string prefix is untouched', async () => {
@@ -435,6 +443,41 @@ describe('SC-282: sidebar vault rename/delete listeners', () => {
 
 		expect(stored.panels).toEqual([]);
 		expect(app.workspace.requestSaveLayoutCalls).toBeGreaterThan(savesBefore);
+	});
+
+	// SC-282 r3 re-review (LOW-A) — `patchDeferredSidebarLeaves`'s `if (leaf.view instanceof
+	// DseSidebarView) continue;` guard (registration.ts) has to skip a LOADED leaf: the
+	// plugin-level listener registers at plugin load, so it runs BEFORE the view's own
+	// `registerVaultListeners` listener has necessarily been reached in registration order
+	// for any given rename. Without the guard, the plugin listener would call
+	// `DseSidebarView.setState` on an already-loaded view — which tears down and remounts
+	// EVERY panel — right alongside the view's own in-place update, destroying exactly the
+	// live element state (an in-progress encounter, a pending debounce) the whole in-place
+	// design exists to protect. No committed test exercised `registerDseSidebar` together
+	// with a LOADED view until now — every other test in this file calls
+	// `plugin.registerView` directly, which never registers the plugin-level listeners.
+	test('LOW-A: a LOADED sidebar leaf (registered via registerDseSidebar) is skipped by the plugin-level listener — one save, root kept, no double-apply', async () => {
+		const { app, plugin, services, fireRename } = setup();
+		app.vault.setFile('Note.md', note(ANCHOR_A));
+		registerDseSidebar(plugin as any, services);
+		const { view } = await openView(app);
+		view.addPanel({ filePath: 'Note.md', alias: 'ds-counter', anchorId: ANCHOR_A });
+		await flushAsync();
+
+		const root = view.contentEl.querySelector('[data-dse-element="counter"]');
+		const savesBefore = app.workspace.requestSaveLayoutCalls;
+		const renamed = app.vault.rename('Note.md', 'R.md');
+		fireRename(renamed, 'Note.md');
+		await flushAsync();
+
+		expect((view.getState() as { panels: SidebarPanelState[] }).panels[0].filePath).toBe('R.md');
+		// Exactly one panel, exactly one save — the plugin listener did NOT also patch (and
+		// thereby duplicate work against) this already-loaded view's own panel.
+		expect(view.contentEl.querySelectorAll('.dse-sidebar__panel')).toHaveLength(1);
+		expect(app.workspace.requestSaveLayoutCalls - savesBefore).toBe(1);
+		// The mounted root is UNCHANGED — no double-apply re-render from a second (plugin-
+		// level) setState racing the view's own in-place update.
+		expect(view.contentEl.querySelector('[data-dse-element="counter"]')).toBe(root);
 	});
 
 	test('the rename/delete listeners are torn down when the leaf closes — a later rename/delete touches nothing', async () => {
