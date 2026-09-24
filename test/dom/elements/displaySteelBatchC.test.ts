@@ -269,7 +269,7 @@ describe('SC-120 Batch C: by-SCC hybrid mode still resolves each family (source 
 		expect(card.querySelector('.dse-card__body')!.textContent).toContain('lose');
 	});
 
-	test('ds-rule hybrid: eyebrow falls back to "Rule" (frontmatter type is always the bare "rule" in the real corpus), body from the resolved source', async () => {
+	test('ds-rule hybrid: eyebrow shows the scc:-derived group (SC-272), not the bare frontmatter "rule" — body from the resolved source', async () => {
 		const { vault, deps } = makeCompendiumDeps();
 		loadMdDseFixture(vault, RULE_REL);
 		const host = makeHost('ds-rule');
@@ -278,7 +278,11 @@ describe('SC-120 Batch C: by-SCC hybrid mode still resolves each family (source 
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 		const card = root.querySelector('.dse-card') as HTMLElement;
 		expect(card.querySelector('.dse-head__primary--left')!.textContent).toBe('Opportunity Attacks');
-		expect(card.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Rule');
+		// Frontmatter `type:` is still the bare "rule" (steel-etl never namespaces it), but
+		// SC-272's `genericNoteAdapter` (typeAdapters.ts) now derives the real group from the
+		// fixture's own `scc: mcdm.heroes.v1/rule.combat/opportunity-attack` code instead —
+		// same fixture and same bug this file's sibling ruleCard.test.ts pins.
+		expect(card.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Combat');
 		expect(card.querySelector('.dse-card__body')!.textContent).toContain('opportunity attack');
 	});
 });

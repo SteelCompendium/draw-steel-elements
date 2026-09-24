@@ -140,13 +140,20 @@ describe('D6 Task 8: ds-rule by-SCC reference (spec §1, §2.3, §3)', () => {
 		const head = codeRoot.querySelector(':scope > .dse-card > .dse-head') as HTMLElement;
 		expect(head).not.toBeNull();
 		expect(head.querySelector('.dse-head__primary--left')!.textContent).toBe('Opportunity Attacks');
-		// By-SCC: frontmatter `type: rule` (bare — the real corpus never namespaces the
-		// `type:` field, verified against every v2/docs/Browse/rule/**/*.md) -> titleCase's
-		// last-segment split on 'rule' is just 'rule' -> the eyebrow computes 'Rule' — this
-		// time it does NOT equal the title ('Opportunity Attacks'), so owner ruling 10's
-		// guard does not fire and the eyebrow renders (renderSteel() never calls
-		// `layout.badges` — the base branch's type pill is still gone regardless).
-		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Rule');
+		// By-SCC: frontmatter `type: rule` is bare (the real corpus never namespaces the
+		// `type:` field, verified against every v2/docs/Browse/rule/**/*.md), but SC-272
+		// derives the rule's GROUP from its own `scc:` code instead
+		// (`mcdm.heroes.v1/rule.combat/opportunity-attack` -> `rule.combat` -> last segment
+		// 'combat' -> humanized 'Combat', typeAdapters.ts's `genericNoteAdapter` +
+		// displayFamily.ts's `humanizeRuleGroup`) — matching the site's own rule-tile label
+		// for this same fixture (`ruleCard`/`dirToTitle`, cards.go/build.go: the file lives
+		// under `rule/combat/`). It does NOT equal the title ('Opportunity Attacks'), so
+		// owner ruling 10's duplicate-title guard does not fire and the eyebrow renders
+		// (renderSteel() never calls `layout.badges` — the base branch's type pill is still
+		// gone regardless). Pre-SC-272 this line read 'Rule' — GenericNote.type carried only
+		// the bare frontmatter value, so every rule's eyebrow was that same literal 'Rule'
+		// regardless of group; this assertion is what SC-272's fix flips.
+		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Combat');
 		expect(codeRoot.querySelector('.dse-card__badge')).toBeNull();
 		expect(codeRoot.querySelector('.dse-card__body')!.textContent).toContain('opportunity attack');
 
@@ -227,9 +234,12 @@ describe('D6 Task 8: ds-rule by-SCC reference (spec §1, §2.3, §3)', () => {
 // guard (genericLayout.steel.eyebrow, displayFamily.ts), exercised directly against the
 // closure rather than through the full pipeline: the two DOM-level tests above already
 // prove the suppressed (inline) and non-suppressed (by-SCC opportunity-attack) cases end
-// to end; these pin the GUARD ITSELF, including the case-insensitive compare and the
-// "type ever becomes namespaced" hypothetical the design doc's own rationale rests on
-// (unreachable through real data today — see the r2/r3 report's documented deviation).
+// to end; these pin the GUARD ITSELF, including the case-insensitive compare. The
+// "namespaced type" case below used to be a hypothetical, unreachable through real data —
+// SC-272 (typeAdapters.ts's `genericNoteAdapter`) made it the normal by-SCC shape, so it
+// is pinned directly against `humanizeRuleGroup` (not re-exported; exercised here only
+// through the eyebrow closure, same as every other case in this suite) rather than as a
+// synthetic what-if.
 describe('SC-120 Batch C round-3 review MED-1 / owner ruling 10: eyebrow suppressed when it would duplicate the title', () => {
 	test('inline mode shape: name "Rule" + type "" (humanizes to "Rule") -> suppressed (undefined)', () => {
 		const model: GenericNote = { name: 'Rule', type: '', body: 'x' };
@@ -241,8 +251,41 @@ describe('SC-120 Batch C round-3 review MED-1 / owner ruling 10: eyebrow suppres
 		expect(genericLayout.steel!.eyebrow(model, undefined)).toBeUndefined();
 	});
 
-	test('a hypothetical non-equal eyebrow still renders (synthetic namespaced type, distinct from the title) — proves the guard only suppresses the duplicate case, not the eyebrow generally', () => {
+	test('a non-equal eyebrow still renders (real by-SCC shape post-SC-272: derived group distinct from the title) — proves the guard only suppresses the duplicate case, not the eyebrow generally', () => {
 		const model: GenericNote = { name: 'Opportunity Attacks', type: 'rule.combat', body: 'x' };
 		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe('Combat');
+	});
+
+	// SC-272 — the derived group can ALSO duplicate the title now that it carries real
+	// information: a rule named exactly "Combat" filed under the "combat" group would
+	// otherwise print "◆ COMBAT / COMBAT". Same guard, a case the pre-fix code could never
+	// exercise because the derived group was always the literal "Rule".
+	test('SC-272: a real (non-"Rule") derived group that duplicates the title is ALSO suppressed', () => {
+		const model: GenericNote = { name: 'Combat', type: 'rule.combat', body: 'x' };
+		expect(genericLayout.steel!.eyebrow(model, undefined)).toBeUndefined();
+	});
+});
+
+// SC-272 — the eyebrow's group humanization must match the site's OWN humanization
+// (steel-etl cards.go's `ruleCard` / build.go's `dirToTitle`), not just plain title-casing:
+// `dirToTitle` checks a general `typeTitles` override map before falling back to
+// title-casing, and two of that map's entries collide with real rule-group segment names
+// in the corpus — `rule.monster` and `rule.treasure` render as the PLURAL "Monsters"/
+// "Treasures" on the site, not "Monster"/"Treasure". `humanizeRuleGroup`
+// (displayFamily.ts) mirrors that override for exactly those two groups.
+describe('SC-272: rule-group humanization matches the site\'s dirToTitle, including its plural overrides', () => {
+	test('"rule.monster" group -> "Monsters" (plural, site\'s typeTitles override), not "Monster"', () => {
+		const model: GenericNote = { name: 'Swarm', type: 'rule.monster', body: 'x' };
+		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe('Monsters');
+	});
+
+	test('"rule.treasure" group -> "Treasures" (plural, site\'s typeTitles override), not "Treasure"', () => {
+		const model: GenericNote = { name: 'Item Level', type: 'rule.treasure', body: 'x' };
+		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe('Treasures');
+	});
+
+	test('an ordinary (non-overridden) group is plain title-cased — "rule.negotiation" -> "Negotiation"', () => {
+		const model: GenericNote = { name: 'Motivation', type: 'rule.negotiation', body: 'x' };
+		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe('Negotiation');
 	});
 });

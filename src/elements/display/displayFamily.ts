@@ -107,6 +107,30 @@ export function displayFamily<M>(d: DisplayFamilyDescriptor<M>): ReferenceElemen
 // duplicate as its own `humanizeType` — consolidated round-3 review LOW-2, shared with
 // perk's eyebrow (layouts.ts).
 
+// SC-272 -- steel-etl's `dirToTitle()` (cards.go/build.go) is the site's general
+// directory->title humanizer for EVERY index section, not a rule-specific one, and it
+// checks a `typeTitles` override map before falling back to plain title-casing. Two of
+// that map's entries collide with real rule-group segment names in the corpus today
+// (`rule.monster`, `rule.treasure` -- verified against
+// data/data-unified/en/unified/md-dse/rule/*), so the site's rule tiles for those two
+// groups read the PLURAL "Monsters"/"Treasures", not "Monster"/"Treasure". Mirrored here
+// so the plugin's eyebrow matches byte-for-byte; extend only if a NEW rule-group segment
+// is verified (against the corpus, not this comment) to collide with another
+// `typeTitles` entry -- most of that map (ancestry, career, kit, …) can never collide
+// with a rule group, since rule groups are steel-etl's own fixed glossary vocabulary.
+const RULE_GROUP_TITLE_OVERRIDES: Record<string, string> = {
+	monster: 'Monsters',
+	treasure: 'Treasures',
+};
+
+/** Humanizes one rule-group segment (the `scc:` type's last dot-segment, or the bare
+ *  frontmatter `type:` in the fallback/inline cases) the way the site's `dirToTitle` does
+ *  for the matching `rule/<group>/` directory: the override map above, else plain
+ *  `titleCase`. */
+function humanizeRuleGroup(segment: string): string {
+	return RULE_GROUP_TITLE_OVERRIDES[segment] ?? titleCase(segment);
+}
+
 // Exported (SC-120 Batch C) so test/unit/kit/crestIconValidity.test.ts can enumerate this
 // composition's `crestIcon` alongside layouts.ts's — same reasoning as
 // `normalizeForDuplicateCheck`'s CardLayout.ts export: a shared check must see every real
@@ -127,21 +151,25 @@ export const genericLayout: CardLayout<GenericNote> = {
 	// (LIGHT): a GenericNote carries only {name, type, body} — nothing else to band. In
 	// INLINE mode `type` is `""` (no frontmatter to source it from), so the eyebrow falls
 	// back to the literal 'Rule' (same "degenerate RULE: Rule" case chrome.summary already
-	// guards); in by-SCC hybrid mode `type` is the resolved SCC type (e.g. "rule.combat"),
-	// and the site types its tile by the GROUP DIRECTORY (`ruleCard`, cards.go:594-599) —
-	// ported here as the type key's LAST dot-segment, humanized.
+	// guards); in by-SCC hybrid mode `type` is now the `scc:`-derived group (SC-272,
+	// typeAdapters.ts's `genericNoteAdapter` — e.g. "rule.combat"), or still the bare
+	// frontmatter `type:` when `scc:` is missing/malformed/itself bare, and the site types
+	// its tile by the GROUP DIRECTORY (`ruleCard`/`dirToTitle`, cards.go/build.go) — ported
+	// here as the type key's LAST dot-segment, humanized the site's way
+	// (`humanizeRuleGroup` above, incl. its `typeTitles` plural overrides).
 	//
-	// Round-3 review MED-1 / owner ruling 10: on the current data path (`GenericNote.type`
-	// is always the bare frontmatter `type:` value, verified corpus-wide — SC-272 tracks
-	// deriving a real group from `scc:` instead), the humanized last segment can only ever
-	// be 'Rule', so in inline mode (name also 'Rule') cardHead would print a verbatim
-	// duplicate — "◆ RULE" over "RULE". Suppress the eyebrow whenever it would restate the
-	// title (case-insensitive): `SteelCardComposition.eyebrow` may return `undefined`
-	// (`cardHead`'s `leftEyebrow` slot is optional, cardHead.ts:25), so the crest alone
-	// carries family identity in that case — never a mislabeled/duplicated line.
+	// Round-3 review MED-1 / owner ruling 10 — SC-272 closed the gap this comment used to
+	// flag (GenericNote.type was always the bare frontmatter value, so the humanized last
+	// segment could only ever be 'Rule'): now that by-SCC mode carries a real group, the
+	// guard's job is narrower but still real — a rule whose GROUP happens to equal its own
+	// NAME (or the inline/no-scc 'Rule'/'Rule' degenerate case) would otherwise print a
+	// verbatim duplicate, "◆ RULE" over "RULE". Suppress the eyebrow whenever it would
+	// restate the title (case-insensitive): `SteelCardComposition.eyebrow` may return
+	// `undefined` (`cardHead`'s `leftEyebrow` slot is optional, cardHead.ts:25), so the
+	// crest alone carries family identity in that case — never a mislabeled/duplicated line.
 	steel: {
 		eyebrow: (m) => {
-			const humanized = m.type ? titleCase(m.type.split('.').pop()!) : 'Rule';
+			const humanized = m.type ? humanizeRuleGroup(m.type.split('.').pop()!) : 'Rule';
 			return humanized.toLowerCase() === m.name.toLowerCase() ? undefined : humanized;
 		},
 		crestIcon: () => 'book-open',

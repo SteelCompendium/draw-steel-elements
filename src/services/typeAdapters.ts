@@ -161,12 +161,38 @@ function frontmatterAdapter(re: RegExp, adapter: (fm: unknown) => unknown, alias
 }
 
 /**
+ * SC-272 -- the real corpus's `rule.*` files all carry a bare `type: rule` in frontmatter
+ * (steel-etl never writes anything more specific there), so the only place a rule's actual
+ * GROUP (e.g. "combat", "dice") lives is the middle segment of the file's OWN `scc:` code
+ * (`<source>/<type>/<item>`, e.g. `mcdm.heroes.v1/rule.combat/gouge` -> `rule.combat`) --
+ * the site derives its rule-tile label from the matching directory (steel-etl
+ * cards.go/build.go's `dirToTitle(groupDir)`), and this is the by-SCC-file equivalent of
+ * that directory name. Returns the segment verbatim (e.g. `"rule.combat"`), or undefined
+ * when `scc:` is missing/not a string or carries no second `/`-segment (a malformed code) --
+ * both leave the caller to fall back to the bare frontmatter `type:`, same as before this
+ * ticket.
+ */
+function sccTypeSegment(fm: Record<string, unknown>): string | undefined {
+	if (typeof fm.scc !== "string") return undefined;
+	const segment = fm.scc.split("/")[1];
+	return segment ? segment : undefined;
+}
+
+/**
  * D6 Task 8 (spec §3) -- the model-less family (`rule.*`, …): no SDK model exists, so
  * `fromFile` builds a `GenericNote` straight from the resolved file's frontmatter (name)
  * + body (frontmatter-stripped markdown) instead of dispatching to an SDK reader. No
  * `fromData` -- `genericCard()`'s inline path builds its own `GenericNote` directly (the
  * raw block body itself IS the card body, OD-D6-7), so this adapter is by-SCC only,
  * exactly like the ds-block family above being fromFile-only for the opposite reason.
+ *
+ * SC-272 -- `type` prefers the `scc:` code's own type segment (`sccTypeSegment` above) over
+ * the bare frontmatter `type:` field, but ONLY when that frontmatter value is itself still
+ * bare (no `.` -- e.g. `rule`): a frontmatter `type:` that is ALREADY namespaced (e.g. a
+ * hand-authored `rule.combat`, not something steel-etl emits today) is left exactly alone,
+ * matching this adapter's pre-SC-272 behavior for that case. A missing/malformed `scc:`, or
+ * one whose type segment is itself bare (`rule`), falls through to the unchanged frontmatter
+ * value -- same "Rule" eyebrow the duplicate-title guard already covers (displayFamily.ts).
  */
 function genericNoteAdapter(re: RegExp, alias: string): TypeAdapter {
 	return {
@@ -178,7 +204,8 @@ function genericNoteAdapter(re: RegExp, alias: string): TypeAdapter {
 				typeof fm.item_name === "string" ? fm.item_name
 				: typeof fm.name === "string" ? fm.name
 				: file.basename;
-			const noteType = typeof fm.type === "string" ? fm.type : "";
+			const fmType = typeof fm.type === "string" ? fm.type : "";
+			const noteType = fmType.includes(".") ? fmType : (sccTypeSegment(fm) ?? fmType);
 			const content = await app.vault.read(file);
 			const body = content.replace(FRONTMATTER_RE, "");
 			const note: GenericNote = { name, type: noteType, body };
