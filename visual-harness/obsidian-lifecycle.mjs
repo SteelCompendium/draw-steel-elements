@@ -437,6 +437,17 @@ async function main() {
 	// any genuinely unexpected error, both unwind through here: cleanup() always runs, and
 	// the scratch temp dir is resolved (kept only when a FAIL screenshot justifies it).
 	try {
+		// SC-343 fix round 2 (promoted — a false green in a mandatory gate): `--only` naming
+		// nothing that exists (a typo'd id) used to run zero scenarios and print a cheerful
+		// `done: 0/0 ok, 0 failed`, exit 0 — indistinguishable from a real 0-scenario success.
+		// That is a usage error, not a passing run. Checked INSIDE the try (not before it) so
+		// the same finally deletes the `work` dir mkdtempSync already created at module load,
+		// instead of leaving an empty scratch dir behind.
+		if (ONLY.length && selected.length === 0) {
+			const validIds = new Set(SCENARIOS.map((s) => s.id));
+			const unknown = ONLY.filter((id) => !validIds.has(id));
+			envFail(`--only names unknown scenario id(s): ${(unknown.length ? unknown : ONLY).join(', ')}`);
+		}
 		for (const f of ['main.js', 'styles.css', 'manifest.json']) {
 			if (!fs.existsSync(path.join(bundleDir, f))) envFail(`missing built ${f} in ${bundleDir} — run \`npm run obsidian-lifecycle\` (it builds first)`);
 		}
@@ -512,6 +523,12 @@ async function main() {
 				ok++;
 				console.log(`OBSIDIAN-LIFECYCLE ${s.id} ok (${summary})`);
 			} catch (e) {
+				// SC-343 fix round 2 (Minor-6): a SIGINT/SIGTERM kills Obsidian, which closes
+				// the CDP socket and fails whatever scenario is mid-run — that's the signal
+				// doing its job, not a real scenario FAIL. Stop counting/logging and let the
+				// shared finally + the exit-code check below report this as an interrupted
+				// run (exit 2), not a batch of fake FAILs.
+				if (shuttingDownOnSignal) break;
 				failed++;
 				let shotPath = '';
 				try {
@@ -524,9 +541,12 @@ async function main() {
 		}
 	} finally {
 		await cleanup();
-		// SC-343 fix round 1 (promoted Minor-5): the scratch temp dir (vault + udd + the
-		// copied asar, ~30 MB/run) is only worth keeping when a FAIL screenshot lives in it.
-		if (failed > 0) {
+		// SC-343 fix round 1 (promoted Minor-5), narrowed in fix round 2 (New Minor): the
+		// scratch temp dir (vault + udd + the copied asar, ~30 MB/run) is only worth keeping
+		// when a FAIL screenshot actually landed in shotsDir — `failed > 0` alone over-kept:
+		// t.shot() fails quietly (best-effort) when the CDP socket is already down, e.g. on
+		// the same SIGINT/SIGTERM that produced the "failure" in the first place.
+		if (fs.existsSync(shotsDir)) {
 			console.log(`OBSIDIAN-LIFECYCLE temp dir kept (has FAIL screenshot(s)): ${work}`);
 		} else {
 			try {
@@ -537,7 +557,11 @@ async function main() {
 		}
 	}
 	console.log(`OBSIDIAN-LIFECYCLE done: ${ok}/${selected.length} ok, ${failed} failed`);
-	process.exit(failed === 0 ? 0 : 1);
+	// SC-343 fix round 2 (Minor-6): a SIGINT/SIGTERM already decided this run is exit 2
+	// (onSignal will call process.exit(2) itself once its own cleanup() finishes) — report
+	// the same code here rather than racing to exit 1 first off a `failed` count that's
+	// low only because the loop broke out early, not because those scenarios passed.
+	process.exit(shuttingDownOnSignal ? 2 : failed === 0 ? 0 : 1);
 }
 main().catch((e) => {
 	// envFail already printed its own "environment: …" line before throwing; only log here
