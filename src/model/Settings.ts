@@ -19,6 +19,10 @@ export interface DSESettings {
 	/** D4 §5.2 / OD-D4-4 — the SPARSE pref slice: only keys whose value differs
 	 *  from the descriptor default are ever written here. */
 	prefs: Partial<DsePrefs>;
+	/** SC-340 §6.6 — hidden kill switch for view adoption (not in the Settings UI, not in
+	 *  DEFAULT_SETTINGS). Absent = ON. `"viewAdoption": false` in data.json + reload turns
+	 *  adoption off: every rebuild builds a fresh view, exactly the pre-SC-340 behaviour. */
+	viewAdoption?: boolean;
 }
 
 export const DEFAULT_SETTINGS: DSESettings = {

@@ -483,7 +483,9 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         // legacy registerElements(this) call above still owns every not-yet-migrated
         // element.
         registerFrameworkElementDefinitions(frameworkV2.registry);
-        this.viewRegistry = registerFrameworkElements(this, frameworkV2, { viewAdoption: false });
+        this.viewRegistry = registerFrameworkElements(this, frameworkV2, {
+            viewAdoption: this.settings.viewAdoption !== false,
+        });
 
         // D8 Task 2 (spec §1) — minimal wire proving the sidebar host/view registers
         // through production onload; full command/ribbon polish is Task 10.

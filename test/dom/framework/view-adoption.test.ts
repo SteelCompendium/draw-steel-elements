@@ -14,6 +14,7 @@ import * as FormModal from '../../../src/authoring/FormModal';
 import { makeFakeContext } from '../../mocks/obsidian';
 import { makeEnv } from './_adoptionEnv';
 import quickStart from '../../fixtures/initiative/quick-start.yaml';
+import { migrateSettings } from '@model/Settings';
 
 function bodyOf(text: string, index = 0): string {
 	const blocks = [...text.matchAll(/^```(ds-[\w-]+)\n([\s\S]*?)\n```$/gm)];
@@ -450,5 +451,13 @@ describe('SC-340 §9.2: the form editor opens with the CURRENT body after adopte
 		expect(spy.mock.calls[0][3]).not.toContain('current_value: 10');
 		spy.mockRestore();
 		jest.useRealTimers();
+	});
+});
+
+describe('SC-340 §6.6: the hidden viewAdoption key', () => {
+	test('absent -> on; explicit false -> off; never added to the saved settings by default', () => {
+		expect(migrateSettings({}).viewAdoption !== false).toBe(true);
+		expect(migrateSettings({ viewAdoption: false }).viewAdoption !== false).toBe(false);
+		expect('viewAdoption' in migrateSettings({})).toBe(false);
 	});
 });
