@@ -8,7 +8,8 @@ import path from 'path';
  * or compute calc(), so this suite pins the RULE TEXT of styles-source.css):
  *
  *  - the TEXT rule (`font-size: calc(1em * var(--dse-text-scale))`) exists on the
- *    element-root compound and is print-excluded;
+ *    element-root/modal compound (SC-230: modals track text size like notes do,
+ *    same anchored idiom as the CARD rule below) and is print-excluded;
  *  - the CARD rule (`zoom: var(--dse-card-scale)`) exists on the card hosts
  *    (.dse-sb/.dse-card descendants + the feature/featureblock root-compound)
  *    and is print-excluded;
@@ -65,19 +66,28 @@ const zoomRule = only(
 );
 
 describe('SC-112 Task 7: text-scale consumer', () => {
-	test('the element-root rule multiplies font-size by the token, print-excluded', () => {
-		expect(norm(textRule.selector)).toBe(`[data-dse-element]${PRINT_GUARD}`);
+	// SC-230: modals track the text-size scale exactly as rendered blocks in notes
+	// do (owner ruling) — same anchored idiom as the card-scale rule below
+	// (`:is([data-dse-element], .dse-modal)`), never a bare descendant `:not(...)`
+	// (the Task 5 print-anchor footgun, FOLLOWUPS #43).
+	test('the element-root/modal rule multiplies font-size by the token, print-excluded', () => {
+		expect(norm(textRule.selector)).toBe(`:is([data-dse-element], .dse-modal)${PRINT_GUARD}`);
 		expect(norm(textRule.body)).toContain('font-size: calc(1em * var(--dse-text-scale))');
 	});
 
-	test('the nested-root reset exists (font-size: var(--dse-fs-body)), print-guarded, ordered AFTER', () => {
+	test('the nested-root reset exists (font-size: var(--dse-fs-body)), covers BOTH host forms, print-guarded, ordered AFTER', () => {
 		const reset = only(
 			(r) =>
-				/\[data-dse-element\]\s+\[data-dse-element\]/.test(r.selector) &&
+				/\[data-dse-element\]\s*(,\s*\.dse-modal\s*)?\)?\s+\[data-dse-element\]/.test(r.selector) &&
 				norm(r.body).includes('font-size: var(--dse-fs-body)'),
 			'nested element-root font-size reset',
 		);
-		expect(reset.selector).toContain(PRINT_GUARD);
+		const sel = norm(reset.selector);
+		// A nested element root under either an outer element root OR a modal
+		// resets to plain inheritance — the outermost scaled root applies the
+		// multiplier exactly once (no 1.25 × 1.25 compounding when a modal ever
+		// hosts a nested element root).
+		expect(sel).toBe(`:is([data-dse-element], .dse-modal) [data-dse-element]${PRINT_GUARD}`);
 		expect(reset.at).toBeGreaterThan(textRule.at);
 	});
 });

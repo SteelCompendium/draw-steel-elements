@@ -7,6 +7,7 @@
 import { DseModal, openManagedModal } from '../../../src/framework/kit/managedModal';
 import { createPreferenceStore, registerPrefsForApp } from '../../../src/framework/seams/prefs';
 import type { PrefDescriptor, PreferenceStore, PrefsStorage } from '../../../src/framework/seams/prefs';
+import { DSE_PREF_DESCRIPTORS } from '../../../src/prefs/catalog';
 import { createThemeService, registerThemeServiceForApp } from '../../../src/framework/seams/theme';
 import type { ThemeServiceInternal } from '../../../src/framework/seams/theme';
 import { App, Component } from '../../mocks/obsidian';
@@ -90,6 +91,17 @@ function makeRegisteredPrefs(app: any, descriptor: PrefDescriptor = fontTitleDes
 	wide.describe([descriptor]);
 	registerPrefsForApp(app, store);
 	return wide;
+}
+
+/** SC-230: the REAL shipped catalog (mirrors fontPrefs.smoke.test.ts's makeStore),
+ *  not a fake descriptor — proves the pref-stamping side of the text/card-scale
+ *  diagnosis works generically for the shipped textScale/cardScale descriptors,
+ *  same mechanism the fontTitle tests above already pin. */
+function makeRegisteredRealPrefs(app: any): PreferenceStore {
+	const store = createPreferenceStore(makeStorage());
+	store.describe(DSE_PREF_DESCRIPTORS);
+	registerPrefsForApp(app, store);
+	return store;
 }
 
 afterEach(() => {
@@ -349,6 +361,20 @@ describe('Plan 08 Task 3: kit/managedModal (D2 §2.6)', () => {
 			modal.open();
 
 			expect(modal.containerEl.style.getPropertyValue('--dse-font-title')).toBe('Georgia');
+			modal.close();
+		});
+
+		test('SC-230 diagnosis: open() stamps the REAL textScale/cardScale prefs on the dialog root (rules out "not stamped" — the miss was the CSS consumer scope, not this mechanism)', async () => {
+			const app = new App() as any;
+			const prefs = makeRegisteredRealPrefs(app);
+			await prefs.set('textScale', 1.4);
+			await prefs.set('cardScale', 1.2);
+			const modal = makeModal(app);
+
+			modal.open();
+
+			expect(modal.containerEl.style.getPropertyValue('--dse-text-scale')).toBe('1.4');
+			expect(modal.containerEl.style.getPropertyValue('--dse-card-scale')).toBe('1.2');
 			modal.close();
 		});
 
