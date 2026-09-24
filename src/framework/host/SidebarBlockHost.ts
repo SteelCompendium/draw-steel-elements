@@ -235,6 +235,22 @@ export class SidebarBlockHost implements BlockHost {
 		return this.mountedChild;
 	}
 
+	/**
+	 * SC-288 — the forget half of `lastMountedChild`: `addChild` records whatever the
+	 * pipeline last mounted, but nothing ever cleared that record when SidebarPanel tore
+	 * the mounted child down itself (`removeChild(previous)`, both in `handleAnchorLost`
+	 * and `handleExternalChange`'s remount branch). Left stale, `lastMountedChild` kept
+	 * pointing at an unloaded, detached ElementView — so the NEXT valid external change
+	 * saw `previous instanceof ElementView` still true and took the in-place `.update()`
+	 * fast path against that dead view instead of falling through to a pipeline remount,
+	 * and a degraded panel could never recover. SidebarPanel calls this at every site that
+	 * removes the mounted child, so `lastMountedChild` is null exactly when nothing is
+	 * currently mounted (matching this class's own field doc for `mountedChild`).
+	 */
+	forgetMountedChild(): void {
+		this.mountedChild = null;
+	}
+
 	async replaceSource(newSource: string): Promise<boolean> {
 		if (!this.canPersist) return false;
 

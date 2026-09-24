@@ -231,6 +231,11 @@ export class SidebarPanel extends Component {
 
 		const previous = this.host.lastMountedChild;
 		if (previous) this.removeChild(previous);
+		// SC-288 — forget it too, not just remove it: `lastMountedChild` is what the fast
+		// path above checks on the NEXT external change, and a stale reference there is
+		// exactly what let a degraded panel take that fast path against an already-removed
+		// view (see forgetMountedChild's own doc).
+		this.host.forgetMountedChild();
 		this.bodyEl.empty();
 		// SC-184 fix round (LOW-1) — this remount branch runs whether or not the panel was
 		// PREVIOUSLY showing a degrade card (e.g. handleAnchorLost fired earlier, then this
@@ -253,6 +258,11 @@ export class SidebarPanel extends Component {
 		if (!this.host || !this.bodyEl) return;
 		const previous = this.host.lastMountedChild;
 		if (previous) this.removeChild(previous);
+		// SC-288 — the root cause of the "degraded panel never recovers" bug: without this,
+		// `lastMountedChild` kept pointing at the just-removed view, so the next valid
+		// external change's fast path (handleExternalChange, above) would call `.update()`
+		// on it instead of remounting through the pipeline (see forgetMountedChild's doc).
+		this.host.forgetMountedChild();
 		this.renderUnavailable('Backing block not found — re-link this panel from the note.');
 	}
 

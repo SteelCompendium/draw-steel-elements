@@ -163,6 +163,30 @@ describe('D8 Task 2: SidebarBlockHost (spec §1.4)', () => {
 		expect(unloaded).toBe(true);
 	});
 
+	// SC-288 — the forget half of lastMountedChild: SidebarPanel calls this everywhere it
+	// removes the mounted child (handleAnchorLost, handleExternalChange's remount branch),
+	// so a stale reference can never survive to be mistaken for a still-live view by the
+	// in-place update() fast path.
+	test('forgetMountedChild nulls lastMountedChild without touching the addChild-owned Component', async () => {
+		const { file, app } = setup();
+		const { host, owner } = makeHost(app, file);
+		const child = new Component();
+		host.addChild(child);
+		expect(host.lastMountedChild).toBe(child);
+
+		host.forgetMountedChild();
+
+		expect(host.lastMountedChild).toBeNull();
+		// Forgetting is bookkeeping only — it does not itself unload/remove the child;
+		// callers (SidebarPanel) are responsible for removeChild before forgetting.
+		let unloaded = false;
+		child.onunload = () => {
+			unloaded = true;
+		};
+		owner.removeChild(child);
+		expect(unloaded).toBe(true);
+	});
+
 	// D8 Task 2 review fix round 1 (finding #1, HIGH) — the safety net: the self-echo guard
 	// means a self-write that drops the `_dse_anchor` line (the passthrough-field gap this
 	// file's header documents) would otherwise never tell anyone canPersist just flipped
