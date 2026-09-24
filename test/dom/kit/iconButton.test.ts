@@ -211,7 +211,11 @@ describe('Plan 08 Task 2: kit/iconButton (D2 §2.1)', () => {
 	test('lifecycle: owner.unload() detaches the click listener (F1 §4.5)', () => {
 		const parent = document.createElement('div');
 		const onClick = jest.fn();
+		// SC-337: Component.unload is now a guarded no-op on a never-loaded component
+		// (matching Obsidian 1.14.2) — a real owner is always loaded by its parent by
+		// the time it mounts a button, so a loaded owner is the faithful fixture.
 		const owner = fakeOwner();
+		owner.load();
 		const { buttonEl } = iconButton(parent, { label: 'x', onClick }, owner);
 
 		owner.unload();

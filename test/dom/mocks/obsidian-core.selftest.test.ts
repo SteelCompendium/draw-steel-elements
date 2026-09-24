@@ -79,6 +79,10 @@ describe('obsidian-core mock: ItemView/WorkspaceLeaf/workspace view APIs (D8 Tas
 		const leaf = app.workspace.getRightLeaf(false);
 		await leaf!.setViewState({ type: VIEW });
 		const view = leaf!.view as ProbeView;
+		// SC-337: Component.unload is now a guarded no-op on a never-loaded component
+		// (matching Obsidian 1.14.2) — real Obsidian's plugin manager loads a plugin when
+		// enabling it, so a loaded plugin is the faithful fixture here.
+		plugin.load();
 		plugin.unload();
 		expect(view.closed).toBe(1);
 	});
@@ -96,5 +100,65 @@ describe('obsidian-core mock: ItemView/WorkspaceLeaf/workspace view APIs (D8 Tas
 		expect(view.contentEl).toBeDefined();
 		expect(view.contentEl.classList.contains('view-content')).toBe(true);
 		expect(view.contentEl).toBe(view.containerEl.querySelector('.view-content'));
+	});
+});
+
+describe('SC-337: Component load/unload match Obsidian 1.14 (children LIFO, callbacks LIFO, onunload last)', () => {
+	test('unload order: children LIFO, then registered callbacks LIFO, then onunload', () => {
+		const order: string[] = [];
+		class Probe extends Component {
+			constructor(private readonly name: string) {
+				super();
+			}
+			onunload(): void {
+				order.push(`${this.name}.onunload`);
+			}
+		}
+		const parent = new Probe('parent');
+		parent.addChild(new Probe('childA'));
+		parent.addChild(new Probe('childB'));
+		parent.register(() => order.push('cb1'));
+		parent.register(() => order.push('cb2'));
+		parent.load();
+		parent.unload();
+		expect(order).toEqual(['childB.onunload', 'childA.onunload', 'cb2', 'cb1', 'parent.onunload']);
+	});
+
+	test('unload of a never-loaded component does nothing; unload is idempotent', () => {
+		const cb = jest.fn();
+		const c = new Component();
+		c.register(cb);
+		c.unload();
+		expect(cb).not.toHaveBeenCalled();
+		c.load();
+		c.unload();
+		c.unload();
+		expect(cb).toHaveBeenCalledTimes(1);
+	});
+
+	test('load is idempotent and loads children after onload', () => {
+		const order: string[] = [];
+		class Probe extends Component {
+			constructor(private readonly name: string) {
+				super();
+			}
+			onload(): void {
+				order.push(this.name);
+			}
+		}
+		const parent = new Probe('parent');
+		parent.addChild(new Probe('child'));
+		parent.load();
+		parent.load();
+		expect(order).toEqual(['parent', 'child']);
+	});
+
+	test('unload removes the children (a later load does not resurrect them)', () => {
+		const parent = new Component();
+		const child = new Component();
+		parent.addChild(child);
+		parent.load();
+		parent.unload();
+		expect(parent._children).toHaveLength(0);
 	});
 });

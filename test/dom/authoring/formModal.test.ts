@@ -140,7 +140,11 @@ test('Minor: a select field with no value yet writes its implicit default back t
 describe('Important 3: openFormEditor routes through openManagedModal (F1 §4.5)', () => {
 	test('owner unload closes the form', () => {
 		const validation = createValidationService();
+		// SC-337: Component.unload is now a guarded no-op on a never-loaded component
+		// (matching Obsidian 1.14.2) — a real owner is always loaded by its parent by
+		// the time it opens a form, so a loaded owner is the faithful fixture.
 		const owner = fakeOwner();
+		owner.load();
 		const modal = openFormEditor(owner, makeCx([]), schemaDef(), 'name: Goblin', validation);
 		expect(document.body.contains(modal.containerEl)).toBe(true);
 		owner.unload();

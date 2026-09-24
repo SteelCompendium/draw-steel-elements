@@ -143,6 +143,10 @@ describe('T-7 (Plan 02): ElementView<M> (F1 §3.3)', () => {
 				}
 			}
 			const view = new ListenerView(cx);
+			// SC-337: Component.unload is now a guarded no-op on a never-loaded component
+			// (matching Obsidian 1.14.2) — the real pipeline loads a view via
+			// host.addChild(view), so a loaded view is the faithful fixture here.
+			view.load();
 			const root = document.createElement('div');
 			await view.mount(root, { value: 'x' });
 			const button = root.querySelector('button')!;
@@ -201,6 +205,11 @@ describe('T-7 (Plan 02): ElementView<M> (F1 §3.3)', () => {
 				}
 			}
 			const view = new RebuildingView(cx);
+			// SC-337: Component.unload is now a guarded no-op on a never-loaded component
+			// (matching Obsidian 1.14.2) — the real pipeline loads a view via
+			// host.addChild(view), so a loaded view is the faithful fixture here (and is
+			// what lets `this.addChild(child)` inside onMount load `child` in turn).
+			view.load();
 			const root = document.createElement('div');
 			await view.mount(root, { value: 'a' });
 			expect(root.querySelector('.content')?.textContent).toBe('a');
@@ -298,6 +307,11 @@ describe('T-7 (Plan 02): ElementView<M> (F1 §3.3)', () => {
 			const host = makeHost();
 			const { cx } = makeContext(host);
 			const view = new TestView(cx);
+			// SC-337: Component.unload is now a guarded no-op on a never-loaded component
+			// (matching Obsidian 1.14.2) — the real pipeline loads a view via
+			// host.addChild(view), so a loaded view is the faithful fixture here (needed
+			// for unload's registered flushPersist() callback to actually run).
+			view.load();
 			const root = document.createElement('div');
 			await view.mount(root, { value: 'unsaved' });
 			view.injectSerializer((m) => `value: ${m.value}`);

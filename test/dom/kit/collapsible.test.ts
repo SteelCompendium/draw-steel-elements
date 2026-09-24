@@ -197,7 +197,11 @@ describe('Plan 08 Task 3: kit/collapsible (D2 §2.3)', () => {
 	test('lifecycle: owner.unload() detaches the header click listener (F1 §4.5)', () => {
 		const parent = document.createElement('div');
 		const onToggle = jest.fn();
+		// SC-337: Component.unload is now a guarded no-op on a never-loaded component
+		// (matching Obsidian 1.14.2) — a real owner is always loaded by its parent by
+		// the time it mounts a collapsible, so a loaded owner is the faithful fixture.
 		const owner = fakeOwner();
+		owner.load();
 		const handle = collapsible(parent, { title: 'x', open: false, onToggle }, owner);
 
 		owner.unload();

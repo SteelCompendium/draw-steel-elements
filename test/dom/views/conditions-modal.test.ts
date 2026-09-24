@@ -631,7 +631,11 @@ describe('SC-186: add — the real combobox (arrow keys + Enter, Escape, known +
 
 describe('SC-186: managed lifecycle + hygiene', () => {
 	test('openManagedModal: owner unload auto-closes the modal (F1 §4.5)', () => {
+		// SC-337: Component.unload is now a guarded no-op on a never-loaded component
+		// (matching Obsidian 1.14.2) — a real owner is always loaded by its parent by
+		// the time it opens a modal, so a loaded owner is the faithful fixture.
 		const owner = new Component();
+		owner.load();
 		const onChange = jest.fn();
 		const modal = openManagedModal(
 			owner as any,

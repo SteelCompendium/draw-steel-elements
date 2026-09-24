@@ -244,7 +244,11 @@ describe('Plan 08 Task 3: kit/managedModal (D2 §2.6)', () => {
 		});
 
 		test('owner.unload() closes the modal (onClose fires, DOM removed)', () => {
+			// SC-337: Component.unload is now a guarded no-op on a never-loaded component
+			// (matching Obsidian 1.14.2) — a real owner is always loaded by its parent by
+			// the time it opens a modal, so a loaded owner is the faithful fixture.
 			const owner = fakeOwner();
+			owner.load();
 			const modal = openManagedModal(owner, () => makeModal());
 			const onClose = jest.spyOn(modal, 'onClose');
 

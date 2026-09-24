@@ -360,7 +360,11 @@ describe('Plan 08 Task 4: kit/powerRollPanel (D2 §2.8)', () => {
 	});
 
 	test('lifecycle: owner.unload() detaches click AND keyboard listeners (F1 §4.5)', () => {
+		// SC-337: Component.unload is now a guarded no-op on a never-loaded component
+		// (matching Obsidian 1.14.2) — a real owner is always loaded by its parent by
+		// the time it mounts a panel, so a loaded owner is the faithful fixture.
 		const owner = fakeOwner();
+		owner.load();
 		const { rowEls, onSelect } = mount({ selectable: true, selected: 'low' }, owner);
 
 		owner.unload();

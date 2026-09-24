@@ -981,7 +981,12 @@ describe('T-9: modal lifecycle (F1 §4.5)', () => {
 	test('a modal opened by the view is closed on view unload', async () => {
 		const { deps } = makeEnv();
 		const pipeline = new ElementPipeline(deps);
-		const addChild = jest.fn((child: unknown) => child);
+		// SC-337: real Obsidian's BlockHost is itself a loaded Component, so its
+		// addChild loads the child — a loaded view is the faithful fixture here.
+		const addChild = jest.fn((child: unknown) => {
+			(child as obsidian.Component).load();
+			return child;
+		});
 		const host = makeHost({ addChild } as unknown as Partial<BlockHost>);
 
 		await pipeline.run(initiativeElement, quickStart, host);

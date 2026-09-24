@@ -39,7 +39,11 @@ function makeHost(
 	// `app` anyway to share the fake vault's real event delivery, so a minimal stub is
 	// both simpler and exactly as correct.
 	const plugin = { app } as unknown as Plugin;
+	// SC-337: Component.unload/addChild are now guarded by `_loaded` (matching Obsidian
+	// 1.14.2) — real Obsidian's sidebar view (this host's owner) is already loaded by the
+	// time it constructs a SidebarBlockHost, so a loaded owner is the faithful fixture.
 	const owner = new Component();
+	owner.load();
 	const containerEl = document.createElement('div');
 	// SC-158 added the strict-body identity slot (`boundBody`) after `anchorId`; an
 	// anchored host passes null — it addresses by id, exactly as before.

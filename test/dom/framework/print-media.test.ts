@@ -131,6 +131,10 @@ describe('SC-170 watchPrintMedia', () => {
 	test('unloading the owner detaches every listener (no stamping on a dead root)', () => {
 		mm = installMatchMedia(false);
 		owner = fakeOwner();
+		// SC-337: Component.unload is now a guarded no-op on a never-loaded component
+		// (matching Obsidian 1.14.2) — a real owner is always loaded by its parent by
+		// the time it watches print media, so a loaded owner is the faithful fixture.
+		owner.load();
 		const root = makeRoot();
 		watchPrintMedia(root, owner);
 		expect(mm.listenerCount()).toBe(1);

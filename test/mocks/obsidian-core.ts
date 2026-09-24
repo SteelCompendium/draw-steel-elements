@@ -385,18 +385,19 @@ export class Component {
 	_children: Component[] = [];
 	private _registeredCallbacks: (() => any)[] = [];
 
+	// SC-337: identical to Obsidian 1.14.2 app.js (Component.prototype.load / unload).
 	load(): void {
+		if (this._loaded) return;
 		this._loaded = true;
 		this.onload();
-		this._children.forEach((child) => child.load());
+		for (const child of this._children.slice()) child.load();
 	}
 	unload(): void {
+		if (!this._loaded) return;
 		this._loaded = false;
-		this._children.slice().forEach((child) => child.unload());
+		while (this._children.length > 0) this._children.pop()!.unload();
+		while (this._registeredCallbacks.length > 0) this._registeredCallbacks.pop()!();
 		this.onunload();
-		// Real Component.register(cb) semantics: cb runs once, on unload.
-		this._registeredCallbacks.slice().forEach((cb) => cb());
-		this._registeredCallbacks.length = 0;
 	}
 	onload(): void {}
 	onunload(): void {}

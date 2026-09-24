@@ -84,7 +84,12 @@ describe('Plan 05 Task 1 (carried onto D2/Task 3): stamina-bar modal-close does 
 	test('N open→close cycles + one left open: unload fires exactly ONE real close (F1 §4.5 still closes the open modal)', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
-		const addChild = jest.fn((child: unknown) => child);
+		// SC-337: real Obsidian's BlockHost is itself a loaded Component, so its
+		// addChild loads the child — a loaded view is the faithful fixture here.
+		const addChild = jest.fn((child: unknown) => {
+			(child as { load(): void }).load();
+			return child;
+		});
 		const hostWithSpy = { ...host, addChild };
 
 		await pipeline.run(staminaBarElement, BASIC_YAML, hostWithSpy as BlockHost);

@@ -324,6 +324,9 @@ async function renderStatblock(
 		containerEl,
 		canPersist: true,
 		addChild: (child: unknown) => {
+			// SC-337: real Obsidian's BlockHost is itself a loaded Component, so its
+			// addChild loads the child — a loaded view is the faithful fixture here.
+			(child as { load(): void }).load();
 			mountedViews.push(child as { unload(): void });
 			return child;
 		},

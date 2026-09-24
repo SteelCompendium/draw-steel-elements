@@ -220,6 +220,10 @@ describe('SC-198: registerFrameworkElements shares one pin and releases it on un
 		const app = new App();
 		app.vault.setFile('Note.md', NOTE);
 		const plugin = new Plugin(app);
+		// SC-337: Component.unload is now a guarded no-op on a never-loaded component
+		// (matching Obsidian 1.14.2) — real Obsidian's plugin manager loads a plugin
+		// when enabling it, so a loaded plugin is the faithful fixture.
+		plugin.load();
 		const hosts: BlockHost[] = [];
 		const pipeline = {
 			run: jest.fn(async (_d: ElementDefinition, _s: string, host: BlockHost) => {

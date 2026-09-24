@@ -482,7 +482,12 @@ describe('D2 §3.5: stamina-bar rendered through the REAL ElementPipeline', () =
 		test('a modal opened by the view is closed on view unload (F1 §4.5, via openManagedModal)', async () => {
 			const pipeline = new ElementPipeline(makeDeps());
 			const host = makeHost();
-			const addChild = jest.fn((child: unknown) => child);
+			// SC-337: real Obsidian's BlockHost is itself a loaded Component, so its
+			// addChild loads the child — a loaded view is the faithful fixture here.
+			const addChild = jest.fn((child: unknown) => {
+				(child as { load(): void }).load();
+				return child;
+			});
 			const hostWithSpy = { ...host, addChild };
 
 			await pipeline.run(staminaBarElement, BASIC_YAML, hostWithSpy as BlockHost);
