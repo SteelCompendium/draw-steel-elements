@@ -165,8 +165,8 @@ describe('D8 Task 2: SidebarBlockHost (spec §1.4)', () => {
 
 	// SC-288 — the forget half of lastMountedChild: SidebarPanel calls this everywhere it
 	// removes the mounted child (handleAnchorLost, handleExternalChange's remount branch),
-	// so a stale reference can never survive to be mistaken for a still-live view by the
-	// in-place update() fast path.
+	// so a stale reference does not survive a removal SidebarPanel performs itself, and so
+	// cannot be mistaken for a still-live view by the in-place update() fast path.
 	test('forgetMountedChild nulls lastMountedChild without touching the addChild-owned Component', async () => {
 		const { file, app } = setup();
 		const { host, owner } = makeHost(app, file);
