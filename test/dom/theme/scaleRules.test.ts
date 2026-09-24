@@ -8,8 +8,13 @@ import path from 'path';
  * or compute calc(), so this suite pins the RULE TEXT of styles-source.css):
  *
  *  - the TEXT rule (`font-size: calc(1em * var(--dse-text-scale))`) exists on the
- *    element-root/modal compound (SC-230: modals track text size like notes do,
- *    same anchored idiom as the CARD rule below) and is print-excluded;
+ *    element-root/modal compound PLUS `.dse-modal__body`/`.dse-modal__footer`
+ *    (SC-230: modals track text size like notes do — the extra two wrappers are
+ *    load-bearing, not decoration: real Obsidian's `.modal-content`/`.modal-title`
+ *    reset font-size to an ABSOLUTE token, breaking the em cascade from
+ *    `.dse-modal`, so the multiplier is re-applied at the two DSE-owned wrappers
+ *    that sit directly below that reset — confirmed live, see styles-source.css's
+ *    own comment on this rule) and is print-excluded;
  *  - the CARD rule (`zoom: var(--dse-card-scale)`) exists on the card hosts
  *    (.dse-sb/.dse-card descendants + the feature/featureblock root-compound)
  *    and is print-excluded;
@@ -67,27 +72,31 @@ const zoomRule = only(
 
 describe('SC-112 Task 7: text-scale consumer', () => {
 	// SC-230: modals track the text-size scale exactly as rendered blocks in notes
-	// do (owner ruling) — same anchored idiom as the card-scale rule below
-	// (`:is([data-dse-element], .dse-modal)`), never a bare descendant `:not(...)`
-	// (the Task 5 print-anchor footgun, FOLLOWUPS #43).
-	test('the element-root/modal rule multiplies font-size by the token, print-excluded', () => {
-		expect(norm(textRule.selector)).toBe(`:is([data-dse-element], .dse-modal)${PRINT_GUARD}`);
+	// do (owner ruling) — the anchored idiom (exclusion compounded onto the
+	// stamped node, never a bare descendant `:not(...)`, the Task 5 print-anchor
+	// footgun / FOLLOWUPS #43) widened to FOUR nodes: `.dse-modal` itself, plus
+	// `.dse-modal__body`/`.dse-modal__footer` — the two DSE-owned wrappers below
+	// real Obsidian's `.modal-content` absolute font-size reset that the em-based
+	// multiplier cannot cascade through (unlike the CARD rule's `zoom`, which
+	// isn't part of the font-size cascade at all).
+	const TEXT_SCALE_HOSTS = '[data-dse-element], .dse-modal, .dse-modal__body, .dse-modal__footer';
+	test('the element-root/modal/body/footer rule multiplies font-size by the token, print-excluded', () => {
+		expect(norm(textRule.selector)).toBe(`:is(${TEXT_SCALE_HOSTS})${PRINT_GUARD}`);
 		expect(norm(textRule.body)).toContain('font-size: calc(1em * var(--dse-text-scale))');
 	});
 
-	test('the nested-root reset exists (font-size: var(--dse-fs-body)), covers BOTH host forms, print-guarded, ordered AFTER', () => {
+	test('the nested-root reset exists (font-size: var(--dse-fs-body)), covers every host form, print-guarded, ordered AFTER', () => {
+		const expectedSel = `:is(${TEXT_SCALE_HOSTS}) [data-dse-element]${PRINT_GUARD}`;
 		const reset = only(
-			(r) =>
-				/\[data-dse-element\]\s*(,\s*\.dse-modal\s*)?\)?\s+\[data-dse-element\]/.test(r.selector) &&
-				norm(r.body).includes('font-size: var(--dse-fs-body)'),
+			(r) => norm(r.selector) === expectedSel && norm(r.body).includes('font-size: var(--dse-fs-body)'),
 			'nested element-root font-size reset',
 		);
 		const sel = norm(reset.selector);
-		// A nested element root under either an outer element root OR a modal
-		// resets to plain inheritance — the outermost scaled root applies the
-		// multiplier exactly once (no 1.25 × 1.25 compounding when a modal ever
-		// hosts a nested element root).
-		expect(sel).toBe(`:is([data-dse-element], .dse-modal) [data-dse-element]${PRINT_GUARD}`);
+		// A nested element root under any of the four scaled hosts resets to plain
+		// inheritance — the outermost scaled host applies the multiplier exactly
+		// once (no 1.25 × 1.25 compounding when a modal ever hosts a nested
+		// element root).
+		expect(sel).toBe(`:is(${TEXT_SCALE_HOSTS}) [data-dse-element]${PRINT_GUARD}`);
 		expect(reset.at).toBeGreaterThan(textRule.at);
 	});
 });

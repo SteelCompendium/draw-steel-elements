@@ -7670,23 +7670,35 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    TEXT: a multiplier on the element root's font-size — everything inside is
    authored in em/rem-free kit units, so the whole element tracks it.
 
-   SC-230: widened to `.dse-modal` too, same anchored idiom as the CARD rule
-   below (`:is([data-dse-element], .dse-modal)`) — modals are a first-class
-   Steel token-scope member (styles-source.css:3144) and already receive
-   --dse-text-scale via DseModal.open()'s reflectCss() call (seams/prefs.ts),
-   but this consumer rule never read it there, so a modal honored card zoom
-   and silently ignored text size. Modals track text size exactly as rendered
-   blocks in notes do. */
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) {
+   SC-230: widened to the modal's own DSE-owned wrappers too — modals track
+   text size exactly as rendered blocks in notes do (owner ruling). `.dse-modal`
+   already receives --dse-text-scale via DseModal.open()'s reflectCss() call
+   (seams/prefs.ts) and is listed here for the same reason the CARD rule below
+   lists it, but scaling `.dse-modal` ITSELF is not sufficient the way it is for
+   an element root: real Obsidian's own app.css sets `.modal-content` (DseModal's
+   `contentEl`, the parent of `.dse-modal__body`/`__footer`) and `.modal-title`
+   to an ABSOLUTE font-size (`var(--font-ui-medium)` / `var(--font-ui-large)`),
+   which breaks the em-based cascade between `.dse-modal` and its actual content
+   — a real reset the CARD rule never has to fight because `zoom` is not part of
+   the font-size cascade at all (it applies to a matched descendant regardless
+   of what an ancestor's font-size did). So the multiplier is RE-APPLIED at
+   `.dse-modal__body`/`.dse-modal__footer`, the two DSE-owned wrappers that sit
+   directly below that reset — confirmed live (SC-230 diagnosis): before this,
+   `.dse-modal` itself computed the scaled size but `.dse-modal__body` measured
+   back at Obsidian's flat `--font-ui-medium`, unscaled. `.dse-modal__title` is
+   deliberately NOT listed — it IS Obsidian's own `.modal-title` chrome (real
+   modal furniture, not "text inside Draw Steel elements"), the same exemption
+   this file's own --font-ui-* doc comment already draws. */
+:is([data-dse-element], .dse-modal, .dse-modal__body, .dse-modal__footer):not([data-dse-print="on"]) {
 	font-size: calc(1em * var(--dse-text-scale));
 }
 /* Nested element roots (by-SCC kit → its real nested ds-feature card, or a
    future modal that hosts one) would COMPOUND the multiplier — the inner
    root's 1em is the outer root's/modal's ALREADY scaled size — so nested
-   roots reset to plain inheritance (font-size: 1em); the outermost root/modal
-   applies the scale exactly once. Source-ordered after the scale rule AND
-   higher specificity (0,3,0 > 0,2,0): wins either way. */
-:is([data-dse-element], .dse-modal) [data-dse-element]:not([data-dse-print="on"]) {
+   roots reset to plain inheritance (font-size: 1em); the outermost scaled
+   ancestor applies the scale exactly once. Source-ordered after the scale
+   rule AND higher specificity (0,3,0 > 0,2,0): wins either way. */
+:is([data-dse-element], .dse-modal, .dse-modal__body, .dse-modal__footer) [data-dse-element]:not([data-dse-print="on"]) {
 	font-size: var(--dse-fs-body);
 }
 /* CARD: the site zooms exactly ONE wrapper (v2 extra.css:61 —
