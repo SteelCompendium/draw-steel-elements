@@ -11,7 +11,8 @@
 // Exit 0 = every scenario ok; 1 = a scenario failed; 2 = the environment is unusable.
 //
 // SC-343 scenarios: identical twin blocks (section path and durable path), the flush after
-// navigate-away (SC-336) and after leaf close, and the Notice on a dropped write.
+// navigate-away (SC-336) and after leaf close, an unterminated fence at EOF located again by
+// body (G-S6u), and the Notice on a dropped write.
 // SC-340 appends its view-adoption scenarios to FIXTURES/SCENARIOS.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
@@ -99,10 +100,16 @@ const fence = (lang, lines) => ['```' + lang, ...lines, '```'].join('\n');
 const COUNTER = (value = 10, name = 'Health') =>
 	fence('ds-counter', [`name: ${name}`, `current_value: ${value}`, 'max_value: 20', 'min_value: 0']);
 
+// SC-343 final review (Important-1, gate scenario G-S6u): an unterminated fence — no
+// closing ``` at all — whose last block runs to EOF, followed by a trailing newline.
+const UNTERMINATED_COUNTER = (value = 10, name = 'Health') =>
+	['```ds-counter', `name: ${name}`, `current_value: ${value}`, 'max_value: 20', 'min_value: 0'].join('\n');
+
 const FIXTURES = {
 	'Lifecycle/twins.md': `# twins\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nMID\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`,
 	'Lifecycle/counter.md': `# counter\n\nABOVE\n\n${COUNTER(10)}\n\nBELOW\n`,
 	'Lifecycle/other.md': '# other\n\nJust another note.\n',
+	'Lifecycle/unterminated.md': `# unterminated\n\nABOVE\n\n${UNTERMINATED_COUNTER(10)}\n`,
 };
 
 // ------------------------------------------------------------------ note integrity
@@ -369,6 +376,7 @@ const SCENARIOS = [
 			t.expect(t.counterValues(rel)[0] === 11, `expected 11, got ${t.counterValues(rel)[0]}`);
 			t.expect(t.integrity(rel).ok, 'note integrity');
 			t.expect(t.read('Lifecycle/other.md') === FIXTURES['Lifecycle/other.md'], 'other.md was written');
+			t.expect((await t.noticesSince(m)).length === 0, 'unexpected Notice');
 			t.expect((await t.errorsSince(m)).length === 0, `errors: ${JSON.stringify(await t.errorsSince(m))}`);
 			return 'current_value=11 after navigate-away';
 		},
@@ -389,8 +397,33 @@ const SCENARIOS = [
 			await t.sleep(1500);
 			t.expect(t.counterValues(rel)[0] === 11, `expected 11, got ${t.counterValues(rel)[0]}`);
 			t.expect(t.integrity(rel).ok, 'note integrity');
+			t.expect((await t.noticesSince(m)).length === 0, 'unexpected Notice');
 			t.expect((await t.errorsSince(m)).length === 0, 'errors');
 			return 'current_value=11 after leaf close';
+		},
+	},
+	{
+		// SC-343 final review (Important-1): an unterminated fence at EOF, located again by
+		// BODY on the durable path (navigate-away 30 ms later) — must still land and close
+		// the fence, never a false "not saved" Notice (base build: locateByBody couldn't see
+		// an unterminated fence at all, so this scenario FAILs there).
+		id: 'G-S6u',
+		async run(t) {
+			const rel = 'Lifecycle/unterminated.md';
+			await t.open(rel);
+			await t.reset(rel);
+			const m = await t.mark();
+			await t.clickIncrease(0);
+			await t.sleep(30);
+			await t.open('Lifecycle/other.md');
+			await t.sleep(1500);
+			t.expect(t.counterValues(rel)[0] === 11, `expected 11, got ${t.counterValues(rel)[0]}`);
+			t.expect(t.integrity(rel).ok, `note integrity: ${JSON.stringify(t.integrity(rel))}`);
+			t.expect(t.read(rel).trimEnd().endsWith('```'), 'fence was not closed');
+			t.expect(t.read('Lifecycle/other.md') === FIXTURES['Lifecycle/other.md'], 'other.md was written');
+			t.expect((await t.noticesSince(m)).length === 0, 'unexpected Notice');
+			t.expect((await t.errorsSince(m)).length === 0, `errors: ${JSON.stringify(await t.errorsSince(m))}`);
+			return 'current_value=11 after navigate-away, fence closed';
 		},
 	},
 	{
@@ -443,10 +476,13 @@ async function main() {
 		// That is a usage error, not a passing run. Checked INSIDE the try (not before it) so
 		// the same finally deletes the `work` dir mkdtempSync already created at module load,
 		// instead of leaving an empty scratch dir behind.
-		if (ONLY.length && selected.length === 0) {
+		// SC-343 final review: this must fire whenever ANY named id is unknown, not only when
+		// EVERY named id is — `--only=G-S7a,G-S5N` (one valid id plus a typo) used to silently
+		// skip the typo and exit 0 on `done: 1/1 ok`, hiding a usage error behind a real pass.
+		if (ONLY.length) {
 			const validIds = new Set(SCENARIOS.map((s) => s.id));
 			const unknown = ONLY.filter((id) => !validIds.has(id));
-			envFail(`--only names unknown scenario id(s): ${(unknown.length ? unknown : ONLY).join(', ')}`);
+			if (unknown.length) envFail(`--only names unknown scenario id(s): ${unknown.join(', ')}`);
 		}
 		for (const f of ['main.js', 'styles.css', 'manifest.json']) {
 			if (!fs.existsSync(path.join(bundleDir, f))) envFail(`missing built ${f} in ${bundleDir} — run \`npm run obsidian-lifecycle\` (it builds first)`);
