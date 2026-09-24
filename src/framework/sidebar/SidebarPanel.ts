@@ -201,9 +201,11 @@ export class SidebarPanel extends Component {
 	 * Falls back to the pipeline's full unload-and-remount (the original behavior) when
 	 * the fast path isn't available: refs/validation/prefs weren't all threaded in (D8
 	 * Task 2 callers/tests that don't care about live refresh), nothing is currently
-	 * mounted (e.g. the panel was previously degraded), or prepareModel() throws (schema
-	 * drift, a dangling ref, ...) — in which case the pipeline's own error card is the
-	 * correct outcome, not something to swallow silently here.
+	 * mounted (e.g. the panel was previously degraded), the panel is currently flagged
+	 * unavailable (SC-288 r2 LOW-2, below — closes a race this doc's own history didn't
+	 * originally cover), or prepareModel() throws (schema drift, a dangling ref, ...) —
+	 * in which case the pipeline's own error card is the correct outcome, not something
+	 * to swallow silently here.
 	 */
 	private async handleExternalChange(body: string): Promise<void> {
 		if (!this.host || !this.bodyEl) return;
@@ -211,7 +213,23 @@ export class SidebarPanel extends Component {
 		if (!def) return;
 
 		const { refs, validation, prefs } = this.deps;
-		if (refs && validation && prefs) {
+		// SC-288 r2 (LOW-2) — also require the panel not be currently flagged unavailable.
+		// forgetMountedChild (handleAnchorLost / the remount branch below) closes the
+		// common stale-reference window, but a rarer race survives it: a recovery remount
+		// can still be awaiting inside this.deps.pipeline.run() (below) when a SECOND
+		// anchor-loss lands mid-flight. handleAnchorLost sees nothing addChild'd yet (this
+		// remount hasn't reached that step), degrades correctly, and empties bodyEl — but
+		// when the in-flight pipeline.run() THEN resumes and addChild's its view,
+		// host.lastMountedChild becomes a live, loaded ElementView whose rootEl was never
+		// attached (bodyEl was emptied out from under it), while the panel shows the
+		// degrade card. Without this gate, the fast path would happily .update() that
+		// detached view on the next valid change and the degrade card would never clear —
+		// the same stuck panel, reached a different way (SC-288 r1 review, LOW-2).
+		// Gating on the attribute (rather than a fuller per-call generation token) is
+		// enough: whenever the panel is flagged unavailable, this whole block is skipped
+		// and the remount branch below always runs, which removeChild's + forgets
+		// whatever lastMountedChild is — detached or not — before mounting fresh.
+		if (refs && validation && prefs && !this.panelEl?.hasAttribute('data-dse-sidebar-unavailable')) {
 			const previous = this.host.lastMountedChild;
 			if (previous instanceof ElementView) {
 				try {

@@ -84,14 +84,22 @@ export class SidebarBlockHost implements BlockHost {
 
 	/** Self-echo guard (spec §1.6): the exact body this host itself last wrote. A
 	 *  vault "modify" that reads back this same body is our own write echoing through
-	 *  the vault event, not an external edit — suppressed so the sidebar doesn't loop. */
+	 *  the vault event, not an external edit — suppressed so the sidebar doesn't loop.
+	 *  SC-288 r2 (MEDIUM-1) — cleared by notifyAnchorLost: once the block is gone, this
+	 *  recorded body no longer reflects anything on screen, so a later reappearance of
+	 *  that exact text (e.g. an editor undo) must NOT be treated as our own echo. */
 	private lastWritten: string | null = null;
 
 	/** The Component pipeline.run() last handed to addChild (== the mounted
 	 *  ElementView, since the pipeline calls addChild exactly once per render). Not part
 	 *  of the BlockHost interface — SidebarPanel reads it to unload the previous view
 	 *  before remounting on an external change, since pipeline.run() has no other way to
-	 *  hand back what it mounted. */
+	 *  hand back what it mounted. SC-288 r2 (INFO-1) — SidebarPanel also calls
+	 *  forgetMountedChild() right after it removes this child (handleAnchorLost, and
+	 *  handleExternalChange's remount branch), so this does not stay pointed at a
+	 *  Component SidebarPanel has already torn down. That is not the same claim as "null
+	 *  whenever nothing is visibly mounted" — see forgetMountedChild's own doc for the
+	 *  narrower race that claim doesn't survive. */
 	private mountedChild: Component | null = null;
 
 	/** Guards registerModifyListener so it only ever runs once, even if refresh() were
@@ -244,8 +252,21 @@ export class SidebarBlockHost implements BlockHost {
 	 * saw `previous instanceof ElementView` still true and took the in-place `.update()`
 	 * fast path against that dead view instead of falling through to a pipeline remount,
 	 * and a degraded panel could never recover. SidebarPanel calls this at every site that
-	 * removes the mounted child, so `lastMountedChild` is null exactly when nothing is
-	 * currently mounted (matching this class's own field doc for `mountedChild`).
+	 * removes the mounted child, so `lastMountedChild` does not outlive a child
+	 * SidebarPanel has already removed.
+	 *
+	 * SC-288 r2 (INFO-1) — that is narrower than "null exactly when nothing is currently
+	 * mounted": review round 1's LOW-2 found a race this method alone does not close. A
+	 * remount's `pipeline.run()` can still be awaiting (e.g. mid ref-resolution) when a
+	 * SECOND anchor-loss lands and `handleAnchorLost` runs — at that moment nothing has
+	 * been `addChild`'d yet, so there is nothing here to forget, and the degrade card
+	 * renders (emptying `bodyEl`). When the in-flight `pipeline.run()` then resumes and
+	 * finally `addChild`'s its view, `lastMountedChild` becomes a live, loaded
+	 * ElementView whose rootEl was never attached to the (already-emptied) DOM, even
+	 * though the panel is showing the degrade card. Closing that window is
+	 * SidebarPanel.handleExternalChange's job (its fast-path condition also checks the
+	 * panel's `data-dse-sidebar-unavailable` attribute, not just this field), not this
+	 * method's.
 	 */
 	forgetMountedChild(): void {
 		this.mountedChild = null;
@@ -328,6 +349,17 @@ export class SidebarBlockHost implements BlockHost {
 	private notifyAnchorLost(): void {
 		if (this.anchorLostNotified) return;
 		this.anchorLostNotified = true;
+		// SC-288 r2 (MEDIUM-1) — `lastWritten` is now stale: it recorded this host's own
+		// persisted body, but once the block is gone nothing on screen reflects it any
+		// more. Left set, the single most common recovery action — an editor undo (Ctrl+Z)
+		// right after a panel write — restores the note to exactly `lastWritten`, and
+		// applyFreshContent's self-echo check below would then treat that restore as our
+		// own write echoing through the vault and swallow it silently: the panel stayed on
+		// "Backing block not found" even though the block was valid again, recovering only
+		// on some LATER, DIFFERENT edit. Once the block is lost, ANY content that
+		// reappears is an external event by definition — clearing this here is what makes
+		// the very next applyFreshContent("found") call treat it as one.
+		this.lastWritten = null;
 		this.onAnchorLost();
 	}
 
