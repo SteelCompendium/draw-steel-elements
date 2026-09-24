@@ -31,6 +31,30 @@ export interface ActorActions {
     triggered: boolean;
 }
 
+/** SC-278 — the checklist a minion SQUAD shares. The rules give a minion a narrower
+ *  turn than everyone else (Draw Steel Monsters, "Acting Together"): "each minion can
+ *  take only a move action and a main action, a move action and a maneuver, or two move
+ *  actions" — never main AND maneuver — and the squad acts in concert, so the tracker
+ *  keeps ONE checklist per squad (on the `minion` creature entry, not on its instances):
+ *  `move` + exactly one of `main` / `maneuver` / `second_move` (mutually exclusive, the
+ *  view enforces it on toggle) + `triggered` (minions CAN make opportunity attacks). Same
+ *  additive-optional contract as ActorActions: ABSENT until the first toggle. */
+export interface SquadActions {
+    move: boolean;
+    main: boolean;
+    maneuver: boolean;
+    second_move: boolean;
+    triggered: boolean;
+}
+
+export const EMPTY_SQUAD_ACTIONS = (): SquadActions => ({
+    move: false,
+    main: false,
+    maneuver: false,
+    second_move: false,
+    triggered: false,
+});
+
 export interface Hero {
     name: string;
     max_stamina: number;
@@ -82,6 +106,10 @@ export interface Creature {
      *                 exactly like an ordinary creature in every other respect. Old
      *                 encounter YAML never contains it. */
     squad_role?: "minion" | "captain" | "attached";
+    /** SC-278 — the squad's shared per-turn checklist. Only ever read or written for a
+     *  `minion` creature in a squad group; its instances' own `actions` are then ignored
+     *  (never rendered, never fabricated, left byte-for-byte if an old block has them). */
+    actions?: SquadActions;
     /** SC-183 r3 / GH #67 — WHICH squad this captain leads, by the minion creature's
      *  `name`. ABSENT (the only shape old YAML has) means "the group's first minion
      *  creature", which is what a one-squad group has always meant. Only written when a

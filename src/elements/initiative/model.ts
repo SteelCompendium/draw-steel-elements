@@ -45,6 +45,7 @@
 import { stringifyYaml } from 'obsidian';
 import type { Condition, EncounterData } from '@drawSteelAdmonition/EncounterData';
 import {
+	EMPTY_SQUAD_ACTIONS,
 	appendMaliceLogEntry,
 	initMinionPool,
 	minionPoolOf,
@@ -53,6 +54,7 @@ import {
 } from '@drawSteelAdmonition/EncounterData';
 
 export {
+	EMPTY_SQUAD_ACTIONS,
 	applyCaptainBonusTransition,
 	captainOfSquad,
 	captainStaminaBonus,
@@ -82,6 +84,7 @@ export type {
 	Hero,
 	Malice,
 	MaliceLogEntry,
+	SquadActions,
 } from '@drawSteelAdmonition/EncounterData';
 export { resetEncounter } from '@drawSteelAdmonition/EncounterData';
 
@@ -305,6 +308,10 @@ function clearTurnState(data: EncounterData): void {
 	data.enemy_groups.forEach((group) => {
 		group.has_taken_turn = false;
 		group.creatures.forEach((creature) => {
+			// SC-278 — the squad's shared checklist, same materialized-only rule.
+			if (creature.actions) {
+				creature.actions = EMPTY_SQUAD_ACTIONS();
+			}
 			creature.instances?.forEach((instance) => {
 				if (instance.actions) {
 					instance.actions = { main: false, maneuver: false, move: false, triggered: false };

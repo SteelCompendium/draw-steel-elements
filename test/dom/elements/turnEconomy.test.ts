@@ -420,6 +420,184 @@ describe('D8 T-9: "Reset turns (this round)" — turn-only correction, distinct 
 	});
 });
 
+// SC-278 — minions in a squad act together and have a narrower economy than everyone
+// else (Draw Steel Monsters, "Acting Together"): "each minion can take only a move action
+// and a main action, a move action and a maneuver, or two move actions" — never main AND
+// maneuver — while a captain "isn't limited in their action options as minions are". So
+// a minion SQUAD (one `minion` creature entry — a group can hold several, GH #67) shows
+// ONE shared checklist, [Move] [Main | Maneuver | Second move] [Triggered], with the
+// middle three mutually exclusive, bound to `creature.actions` rather than to any
+// instance; captain/attached rows keep the ordinary four toggles.
+describe('SC-278: a minion squad shares ONE rule-shaped checklist', () => {
+	const squadSource = [
+		'heroes:',
+		'  - name: "Frodo Baggins"',
+		'    max_stamina: 80',
+		'enemy_groups:',
+		'  - name: "W1 Group 3"',
+		'    is_squad: true',
+		'    creatures:',
+		'      - {name: Flow, max_stamina: 6, amount: 4, squad_role: minion}',
+		'      - {name: Downpour, max_stamina: 6, amount: 4, squad_role: minion}',
+		'      - {name: Essence, max_stamina: 90, amount: 1, squad_role: captain, captain_of: Flow}',
+		'      - {name: Wierd, max_stamina: 45, amount: 1, squad_role: attached}',
+		'malice:',
+		'  value: 5',
+	].join('\n');
+	const SQUAD_LABELS = ['Move', 'Main', 'Maneuver', 'Second move', 'Triggered'];
+	const selectCell = (root: HTMLElement, key: string): void =>
+		(root.querySelector(`.dse-init__cell[data-instance-key="${key}"]`) as HTMLElement).click();
+	const squadToggle = (root: HTMLElement, label: string, squad: string): HTMLElement =>
+		detailActions(root).querySelector(
+			`button[aria-label="Toggle ${label} action: ${squad} squad"]`,
+		) as HTMLElement;
+	const lastWritten = (host: { replaceSource: jest.Mock }): EncounterData => {
+		const written = host.replaceSource.mock.calls[host.replaceSource.mock.calls.length - 1][0];
+		return parse(parseYaml(written), written);
+	};
+
+	test('a minion instance detail row shows the SQUAD checklist: five toggles, squad-named, [data-squad]', async () => {
+		const { root } = await renderInit(squadSource);
+		expect(root.querySelector('.dse-init__detail .dse-init__name')!.textContent).toBe('Flow #1');
+
+		const actions = detailActions(root);
+		expect(actions.hasAttribute('data-squad')).toBe(true);
+		const toggles = actions.querySelectorAll('button.dse-init__action-toggle');
+		expect([...toggles].map((b) => b.querySelector('.dse-btn__text')!.textContent)).toEqual(SQUAD_LABELS);
+		expect(toggles[0].getAttribute('aria-label')).toBe('Toggle Move action: Flow squad');
+		expect([...toggles].map((b) => b.getAttribute('data-slot'))).toEqual([
+			'move',
+			'main',
+			'maneuver',
+			'second_move',
+			'triggered',
+		]);
+		toggles.forEach((t) => expect(t.getAttribute('aria-pressed')).toBe('false'));
+	});
+
+	test('the captain and an attached creature keep the ordinary four per-instance toggles', async () => {
+		const { root } = await renderInit(squadSource);
+		for (const [key, name] of [
+			['2-1', 'Essence #1'],
+			['3-1', 'Wierd #1'],
+		]) {
+			selectCell(root, key);
+			// `toContain`: the captain's name line also carries its "Captain" badge text.
+			expect(root.querySelector('.dse-init__detail .dse-init__name')!.textContent).toContain(name);
+			const actions = detailActions(root);
+			expect(actions.hasAttribute('data-squad')).toBe(false);
+			const toggles = actions.querySelectorAll('button.dse-init__action-toggle');
+			expect([...toggles].map((b) => b.querySelector('.dse-btn__text')!.textContent)).toEqual([
+				'Main',
+				'Maneuver',
+				'Move',
+				'Triggered',
+			]);
+			expect(toggles[0].getAttribute('aria-label')).toBe(`Toggle Main action: ${name}`);
+		}
+	});
+
+	test('every minion of the squad shows the SAME checklist; each squad in the group has its OWN', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(squadSource);
+
+		squadToggle(root, 'Move', 'Flow').click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		// Flow #3 reads the same squad state — pressed already.
+		selectCell(root, '0-3');
+		expect(root.querySelector('.dse-init__detail .dse-init__name')!.textContent).toBe('Flow #3');
+		expect(squadToggle(root, 'Move', 'Flow').getAttribute('aria-pressed')).toBe('true');
+
+		// Downpour is a different squad: its own checklist, untouched.
+		selectCell(root, '1-1');
+		expect(root.querySelector('.dse-init__detail .dse-init__name')!.textContent).toBe('Downpour #1');
+		expect(squadToggle(root, 'Move', 'Downpour').getAttribute('aria-pressed')).toBe('false');
+
+		const model = lastWritten(host);
+		const [flow, downpour] = model.enemy_groups[0].creatures;
+		expect(flow.actions).toEqual({
+			move: true,
+			main: false,
+			maneuver: false,
+			second_move: false,
+			triggered: false,
+		});
+		flow.instances!.forEach((i) => expect(i.actions).toBeUndefined());
+		expect(downpour.actions).toBeUndefined();
+	});
+
+	test('Main, Maneuver and Second move are mutually exclusive; Move and Triggered are independent', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(squadSource);
+		const pressedSet = (): string[] =>
+			[...detailActions(root).querySelectorAll('button[aria-pressed="true"]')].map(
+				(b) => b.getAttribute('data-slot')!,
+			);
+
+		squadToggle(root, 'Move', 'Flow').click();
+		squadToggle(root, 'Triggered', 'Flow').click();
+		squadToggle(root, 'Main', 'Flow').click();
+		expect(pressedSet()).toEqual(['move', 'main', 'triggered']);
+
+		squadToggle(root, 'Maneuver', 'Flow').click(); // releases Main
+		expect(pressedSet()).toEqual(['move', 'maneuver', 'triggered']);
+
+		squadToggle(root, 'Second move', 'Flow').click(); // releases Maneuver
+		expect(pressedSet()).toEqual(['move', 'second_move', 'triggered']);
+
+		squadToggle(root, 'Second move', 'Flow').click(); // plain toggle-off
+		expect(pressedSet()).toEqual(['move', 'triggered']);
+
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(lastWritten(host).enemy_groups[0].creatures[0].actions).toEqual({
+			move: true,
+			main: false,
+			maneuver: false,
+			second_move: false,
+			triggered: true,
+		});
+	});
+
+	test('Advance round resets a materialized squad checklist to all-false, never fabricates one', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(squadSource);
+		squadToggle(root, 'Main', 'Flow').click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		(root.querySelector('button[aria-label="Advance round"]') as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		expect(squadToggle(root, 'Main', 'Flow').getAttribute('aria-pressed')).toBe('false');
+		expect(host.replaceSource.mock.calls[1][0]).toBe(
+			bytesAfter(squadSource, (m) => {
+				m.enemy_groups[0].creatures[0].actions = {
+					move: false,
+					main: false,
+					maneuver: false,
+					second_move: false,
+					triggered: false,
+				};
+				m.round = 2;
+			}),
+		);
+	});
+
+	test('read-only: the squad checklist renders as five inert spans carrying pressed state', async () => {
+		const seeded = squadSource.replace(
+			'squad_role: minion}\n',
+			'squad_role: minion, actions: {move: true, main: false, maneuver: true, second_move: false, triggered: false}}\n',
+		);
+		const { root } = await renderInit(seeded, { canPersist: false });
+		const actions = detailActions(root);
+		expect(actions.hasAttribute('data-squad')).toBe(true);
+		expect(actions.querySelectorAll('button')).toHaveLength(0);
+		const spans = actions.querySelectorAll('span.dse-init__action-toggle');
+		expect([...spans].map((s) => s.textContent)).toEqual(SQUAD_LABELS);
+		expect([...spans].map((s) => s.hasAttribute('data-pressed'))).toEqual([true, false, true, false, false]);
+	});
+});
+
 describe('D8 T-9: read-only (canPersist=false, F1 §4.4)', () => {
 	test('the checklist renders as inert static state — labels + pressed state, no buttons', async () => {
 		const seededSource = [

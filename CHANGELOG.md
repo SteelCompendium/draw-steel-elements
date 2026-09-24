@@ -15,6 +15,13 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Minion squads in the initiative tracker share one rule-shaped action checklist**
+  (SC-278). Minions act together and can take only a move action and a main action, a move
+  action and a maneuver, or two move actions — so a squad's minions no longer each carry an
+  independent four-toggle checklist. Open any minion of the squad and you get the squad's
+  single [Move] [Main | Maneuver | Second move] [Triggered] checklist, with the middle three
+  mutually exclusive. Captains and attached creatures keep the ordinary checklist, and a
+  group holding several squads gets one per squad.
 - [FIX] **The light color scheme has its own, darker status colors, and three color-only
   signals now show a hover tooltip** (SC-196). Every color-coded state — Stamina healthy
   (green), winded (amber), dying (red), and temporary Stamina (purple); the critical-hit power-roll badge (gold); malice and victory points (gold); warnings

@@ -127,6 +127,7 @@ Each creature in the creatures list has the following fields:
 - `squad_role` (string, optional): If this Enemy Group is a squad, the creature's role in it — `minion` (a squad sharing one stamina pool), `captain` (attached to one squad), or `attached` (travelling with the squad, not currently its captain). Every creature in a squad group must declare one.
 - `captain_of` (string, optional): For a `captain` in a group holding **more than one** squad, the `name` of the minion creature they lead. Omit it in a one-squad group — a captain with no `captain_of` leads the group's first squad.
 - `minion_stamina_pool` (number, managed): A `minion` creature's own shared stamina pool, used when the group holds more than one squad. Managed by the tracker; a one-squad group keeps its pool on the enemy group instead, so existing encounters are unchanged.
+- `actions` (object, managed): A `minion` creature's shared squad action checklist (`move`, `main`, `maneuver`, `second_move`, `triggered`). Managed by the tracker; see [Action Checklist](#action-checklist).
 
 #### Creature Instance Fields
 
@@ -288,6 +289,17 @@ action during their turn. "Triggered" is per-round rather than per-turn (a creat
 at most one triggered action each round), so it clears on "Advance round" but not on
 "Reset turns (this round)". The checklist is purely a bookkeeping aid; nothing else in
 the tracker reads it.
+
+**Minion squads share one checklist.** Minions act together, and the rules give them a
+narrower turn than everyone else: "each minion can take only a move action and a main
+action, a move action and a maneuver, or two move actions" — never a main action *and* a
+maneuver. So a `minion` creature in a squad group shows one [Move] [Main | Maneuver |
+Second move] [Triggered] checklist for the whole squad (on whichever of its minions you
+have open), and Main, Maneuver and Second move are mutually exclusive — pressing one
+releases the other two. Triggered stays, because minions can still make opportunity
+attacks. A group holding several squads gets one checklist per squad. The captain (and
+any attached creature) keeps the ordinary four-toggle checklist — "a captain … isn't
+limited in their action options as minions are."
 
 ### The Command Bar (Round + Malice)
 

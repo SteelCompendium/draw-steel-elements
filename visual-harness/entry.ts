@@ -691,6 +691,12 @@ enemy_groups:
         image: "portraits/1.svg"
         squad_role: minion
         minion_stamina_pool: 15
+        actions:
+          move: true
+          main: false
+          maneuver: true
+          second_move: false
+          triggered: false
         instances:
           - id: 1
           - id: 2

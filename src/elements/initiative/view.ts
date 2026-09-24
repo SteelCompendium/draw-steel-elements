@@ -84,6 +84,7 @@ import {
 	advanceRound as advanceRoundModel,
 	applyCaptainBonusTransition,
 	captainOfSquad,
+	EMPTY_SQUAD_ACTIONS,
 	foldedCaptainStaminaBonus,
 	isCaptainDown,
 	minionCreatures,
@@ -96,7 +97,7 @@ import {
 	squadOfCaptain,
 	withCaptainStaminaN,
 } from './model';
-import type { ActorActions, MaliceLogEntry } from './model';
+import type { ActorActions, MaliceLogEntry, SquadActions } from './model';
 
 export class InitiativeView extends ElementView<EncounterData> {
 	/** Same construction site as the legacy processor's constructor (:31). */
@@ -681,6 +682,85 @@ export class InitiativeView extends ElementView<EncounterData> {
 				);
 				handle.buttonEl.addClass('dse-init__action-toggle');
 				decorate(handle.buttonEl);
+			} else {
+				const el = container.createSpan({ cls: 'dse-init__action-toggle', text: label });
+				el.toggleAttribute('data-pressed', pressed);
+				decorate(el);
+			}
+		});
+	}
+
+	/** SC-278 — the minion SQUAD's checklist, in the rules' own order: "a move action and
+	 *  a main action, a move action and a maneuver, or two move actions" (Draw Steel
+	 *  Monsters, "Acting Together"). [Move] then the exclusive trio [Main | Maneuver |
+	 *  Second move], then [Triggered] — minions can still make opportunity attacks. */
+	private static readonly SQUAD_ACTION_SLOTS: ReadonlyArray<{
+		key: keyof SquadActions;
+		label: string;
+		icon: string;
+	}> = [
+		{ key: 'move', label: 'Move', icon: 'footprints' },
+		{ key: 'main', label: 'Main', icon: 'swords' },
+		{ key: 'maneuver', label: 'Maneuver', icon: 'wrench' },
+		{ key: 'second_move', label: 'Second move', icon: 'chevrons-right' },
+		{ key: 'triggered', label: 'Triggered', icon: 'zap' },
+	];
+
+	/** The three slots a minion turn lets a squad pick ONE of. */
+	private static readonly SQUAD_EXCLUSIVE: ReadonlyArray<keyof SquadActions> = [
+		'main',
+		'maneuver',
+		'second_move',
+	];
+
+	/** SC-278 — ONE shared checklist for a minion squad, bound to `creature.actions` (the
+	 *  `minion` creature entry IS the squad — a group can hold several, GH #67), rendered
+	 *  on whichever of the squad's instances is open. Same materialize-on-first-toggle and
+	 *  read-only span split as `buildActionChecklist`; the one extra rule is the exclusive
+	 *  trio — pressing Main/Maneuver/Second move releases the other two, both in the model
+	 *  and on the sibling buttons, so the row can never show a turn the rules forbid.
+	 *  Captain/attached rows never come here: "a captain … isn't limited in their action
+	 *  options as minions are". */
+	private buildSquadActionChecklist(container: HTMLElement, creature: Creature, owner: Component): void {
+		container.setAttribute('data-squad', '');
+		const name = `${creature.name} squad`;
+		const handles = new Map<keyof SquadActions, IconButtonHandle>();
+		InitiativeView.SQUAD_ACTION_SLOTS.forEach(({ key, label, icon }) => {
+			const pressed = creature.actions?.[key] ?? false;
+			const decorate = (el: HTMLElement): void => {
+				el.setAttribute('data-slot', key);
+				const glyph = el.createSpan({ cls: 'dse-init__action-icon' });
+				glyph.setAttribute('aria-hidden', 'true');
+				setIcon(glyph, icon);
+			};
+			if (this.canWrite) {
+				const handle = iconButton(
+					container,
+					{
+						text: label,
+						label: `Toggle ${label} action: ${name}`,
+						pressed,
+						tooltip: `Toggle ${label} action`,
+						onClick: () => {
+							const actions = (creature.actions = creature.actions ?? EMPTY_SQUAD_ACTIONS());
+							const next = !actions[key];
+							if (next && InitiativeView.SQUAD_EXCLUSIVE.includes(key)) {
+								InitiativeView.SQUAD_EXCLUSIVE.forEach((other) => {
+									if (other === key) return;
+									actions[other] = false;
+									handles.get(other)?.setPressed(false);
+								});
+							}
+							actions[key] = next;
+							handle.setPressed(next);
+							void this.persist();
+						},
+					},
+					owner,
+				);
+				handle.buttonEl.addClass('dse-init__action-toggle');
+				decorate(handle.buttonEl);
+				handles.set(key, handle);
 			} else {
 				const el = container.createSpan({ cls: 'dse-init__action-toggle', text: label });
 				el.toggleAttribute('data-pressed', pressed);
@@ -1457,7 +1537,13 @@ export class InitiativeView extends ElementView<EncounterData> {
 		}
 		const conditionsEl = infoEl.createDiv({ cls: 'dse-init__conditions' });
 		this.buildConditionRow(conditionsEl, container, instance, owner, creature, group);
-		this.buildActionChecklist(infoEl.createDiv({ cls: 'dse-init__actions' }), instance, name, owner);
+		const isSquadMinion = !!group.is_squad && creature.squad_role === 'minion';
+		// SC-278 — a squad minion's row carries the SQUAD's shared checklist, not its own.
+		if (isSquadMinion) {
+			this.buildSquadActionChecklist(infoEl.createDiv({ cls: 'dse-init__actions' }), creature, owner);
+		} else {
+			this.buildActionChecklist(infoEl.createDiv({ cls: 'dse-init__actions' }), instance, name, owner);
+		}
 
 		// Right: Health Info
 		// SC-154 round 2 — wrapped in the same `.dse-init__right` column the hero row has
@@ -1468,7 +1554,6 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// while a hero's stayed right. Same markup now, same behaviour.
 		const rightEl = container.createDiv({ cls: 'dse-init__right' });
 		const healthEl = rightEl.createDiv({ cls: 'dse-init__health' });
-		const isSquadMinion = !!group.is_squad && creature.squad_role === 'minion';
 		// SC-183: one modal-open closure shared by the numeric control and the row bar
 		// (same move as buildCharacterRow) — pool modal for squad minions, the unified
 		// stamina modal for everything else.

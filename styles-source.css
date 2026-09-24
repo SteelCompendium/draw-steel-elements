@@ -12889,6 +12889,15 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	width: 0.85em;
 	height: 0.85em;
 }
+/* SC-278 — a minion SQUAD's checklist is [Move] [Main | Maneuver | Second move]
+   [Triggered]: the middle three are one choice (the rules give a minion "a move action
+   and a main action, a move action and a maneuver, or two move actions"), so a wider
+   gap on either side of the trio reads the exclusive group as a group. The exclusivity
+   itself is enforced by the view, not the sheet. Steel screen only — print keeps the
+   plain word chips. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__actions[data-squad] .dse-init__action-toggle:is([data-slot='main'], [data-slot='triggered']) {
+	margin-left: 0.4em;
+}
 /* Pressed = "spent": the pip fills, exactly as the word chip did. */
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__action-toggle:is([data-pressed], [aria-pressed='true']) {
 	background: var(--dse-accent);
