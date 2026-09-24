@@ -192,6 +192,39 @@ describe("SC-243 — CompendiumSyncService busy lock", () => {
 		expect(service.isBusy()).toBe(false);
 	});
 
+	// SC-243 fix round 1 (review L2, probe P10): `heldToken ?? beginOperation(...)` used
+	// to trust ANY defined token unconditionally — nullish coalescing only falls through
+	// on null/undefined, so even a stale (already-released) or outright foreign token
+	// skipped the guard entirely and ran a completely unguarded sync, including while a
+	// DIFFERENT operation genuinely held the lock. `sync` now checks `heldToken ===
+	// this.busyToken` before trusting it.
+	test("L2: a stale or foreign heldToken is refused, not trusted unconditionally — no unguarded run while a different operation holds the lock", async () => {
+		const { app, store } = setup();
+		const fetchFake = jest.fn(async () => ({
+			status: 200,
+			json: { tag_name: "v4.x", assets: [{ name: "md-dse-unified-en.zip", url: "https://api.github.com/assets/1" }] },
+			arrayBuffer: new ArrayBuffer(0), text: "",
+		} as any));
+		const service = new CompendiumSyncService(app, store, fetchFake);
+
+		const staleToken = service.beginOperation("sync");
+		expect(staleToken).not.toBeNull();
+		service.endOperation(staleToken!); // released — now stale, held by no one
+
+		// A genuinely different operation holds the lock.
+		const checkToken = service.beginOperation("check");
+		expect(checkToken).not.toBeNull();
+
+		Notice.notices.length = 0;
+		const result = await service.sync(OPTIONS, staleToken!);
+		expect(result).toBeNull(); // refused — NOT run unguarded
+		expect(Notice.notices).toContain(SYNC_BUSY_NOTICE);
+		expect(fetchFake).not.toHaveBeenCalled(); // never reached the network at all
+		expect(service.currentBusy()).toBe("check"); // the real holder is undisturbed
+
+		service.endOperation(checkToken!);
+	});
+
 	test("checkForUpdates: guarded the same way — refused (Notice, null, no request made) while a sync is in flight; releases its own lock on completion", async () => {
 		const { app, store } = setup();
 		const zip = await zipOf({ "a.md": "content" });

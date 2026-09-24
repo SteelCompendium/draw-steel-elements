@@ -275,8 +275,20 @@ export class CompendiumSyncService {
 	 * Returns null, WITHOUT starting any work, when the lock could not be acquired (a
 	 * genuinely concurrent caller) — the exact-wording Notice B3 specifies is shown
 	 * either here (a bare call) or by `syncCompendium`'s own earlier guard, never both.
+	 *
+	 * SC-243 fix round 1 (review L2): a `heldToken` is trusted only when it is the token
+	 * CURRENTLY held (`=== this.busyToken`) — a stale token (already released) or one
+	 * from a caller that never actually held the lock would otherwise run completely
+	 * unguarded, including while a genuinely different operation (e.g. a `check`) holds
+	 * it. Every real caller passes a token it just got from its own `beginOperation`, so
+	 * this never fires in practice; it exists so a future caller's bug degrades to a
+	 * refusal, not a silent double-run.
 	 */
 	public async sync(options: SyncOptions, heldToken?: BusyToken): Promise<SyncReport | null> {
+		if (heldToken !== undefined && heldToken !== this.busyToken) {
+			new Notice(SYNC_BUSY_NOTICE);
+			return null;
+		}
 		const token = heldToken ?? this.beginOperation("sync");
 		if (token === null) {
 			new Notice(SYNC_BUSY_NOTICE);
