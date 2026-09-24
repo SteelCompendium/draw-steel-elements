@@ -35,10 +35,64 @@ const udd = path.join(work, 'udd');
 const shotsDir = path.join(work, 'shots');
 const VAULT_ID = 'dselifecycle0001';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// SC-343 fix round 1 (Important-2/Minor-6): whichever of Xvfb/Obsidian has been spawned SO
+// FAR, tracked here the moment spawn() returns — not only once start-up is confirmed — so
+// cleanup() can always reach them, from an envFail thrown mid-startup, an unexpected crash,
+// or a SIGINT/SIGTERM. `EnvFailure` carries an environment problem through the single
+// try/finally in main() (which runs cleanup() unconditionally) instead of calling
+// process.exit() directly, which would skip that finally and orphan whatever was running.
+let liveXvfb = null;
+let liveObsidian = null;
+class EnvFailure extends Error {}
 const envFail = (msg) => {
 	console.log(`OBSIDIAN-LIFECYCLE environment: ${msg}`);
-	process.exit(2);
+	throw new EnvFailure(msg);
 };
+
+/** Best-effort SIGTERM, then SIGKILL if still alive after `killWaitMs`. Safe to call on an
+ *  already-exited child (Node reports that via exitCode/signalCode, not a throw). */
+async function killProc(child, killWaitMs = 1500) {
+	if (!child) return;
+	const dead = () => child.exitCode !== null || child.signalCode !== null;
+	if (dead()) return;
+	try {
+		child.kill('SIGTERM');
+	} catch {
+		/* already gone */
+	}
+	await sleep(killWaitMs);
+	if (!dead()) {
+		try {
+			child.kill('SIGKILL');
+		} catch {
+			/* already gone */
+		}
+	}
+}
+
+/** The one cleanup path every exit route funnels through: envFail (via the finally in
+ *  main()), an unexpected exception, and SIGINT/SIGTERM all call this, so Xvfb/Obsidian
+ *  never outlive a run regardless of where it stopped. */
+async function cleanup() {
+	await killProc(liveObsidian);
+	await killProc(liveXvfb, 500);
+}
+
+let shuttingDownOnSignal = false;
+async function onSignal(sig) {
+	if (shuttingDownOnSignal) return;
+	shuttingDownOnSignal = true;
+	console.log(`OBSIDIAN-LIFECYCLE environment: received ${sig}, cleaning up`);
+	await cleanup();
+	process.exit(2);
+}
+process.once('SIGINT', () => {
+	onSignal('SIGINT');
+});
+process.once('SIGTERM', () => {
+	onSignal('SIGTERM');
+});
 
 // ------------------------------------------------------------------------- fixtures
 const fence = (lang, lines) => ['```' + lang, ...lines, '```'].join('\n');
@@ -95,6 +149,7 @@ async function startXvfb() {
 	if (num < 0) envFail('no free X display in :160–:199');
 	const child = spawn(bin, [`:${num}`, '-screen', '0', '1600x1200x24', '-nolisten', 'tcp'], { stdio: 'ignore' });
 	child.on('error', () => {});
+	liveXvfb = child; // tracked now, not only once the display is confirmed (Important-2)
 	for (let i = 0; i < 40; i++) {
 		if (fs.existsSync(`/tmp/.X11-unix/X${num}`)) return { child, display: `:${num}` };
 		await sleep(250);
@@ -106,15 +161,33 @@ class Cdp {
 		this.ws = ws;
 		this.id = 0;
 		this.pending = new Map();
+		this.closed = false;
+		// SC-343 fix round 1 (Important-1): if the socket goes down (Obsidian crashes,
+		// the CDP connection drops), every pending call must settle instead of hanging
+		// forever — t.waitFor() retries on falsy results, not on a promise that never
+		// resolves, so a silently-stuck cdp.call() wedges the whole scenario loop and the
+		// finally that tears down Xvfb/Obsidian never runs.
+		const onDown = () => {
+			if (this.closed) return;
+			this.closed = true;
+			for (const p of this.pending.values()) {
+				clearTimeout(p.timer);
+				p.reject(new Error('CDP socket closed'));
+			}
+			this.pending.clear();
+		};
 		ws.onmessage = (e) => {
 			const m = JSON.parse(e.data);
 			if (m.id === undefined) return;
 			const p = this.pending.get(m.id);
 			if (!p) return;
 			this.pending.delete(m.id);
+			clearTimeout(p.timer);
 			if (m.error) p.reject(new Error(`${p.method}: ${m.error.message}`));
 			else p.resolve(m.result);
 		};
+		ws.onclose = onDown;
+		ws.onerror = onDown;
 	}
 	static async connect(url) {
 		// Node >= 22 has a native WebSocket client; fall back to the 'ws' package (as
@@ -127,10 +200,15 @@ class Cdp {
 		});
 		return new Cdp(ws);
 	}
-	call(method, params = {}) {
+	call(method, params = {}, timeoutMs = 30000) {
+		if (this.closed) return Promise.reject(new Error('CDP socket closed'));
 		const id = ++this.id;
 		return new Promise((resolve, reject) => {
-			this.pending.set(id, { resolve, reject, method });
+			const timer = setTimeout(() => {
+				this.pending.delete(id);
+				reject(new Error(`${method}: timed out after ${timeoutMs} ms`));
+			}, timeoutMs);
+			this.pending.set(id, { resolve, reject, method, timer });
 			this.ws.send(JSON.stringify({ id, method, params }));
 		});
 	}
@@ -142,6 +220,11 @@ const PAGE_HELPERS = `(() => {
   const lc = window.__lc = { mods: [], notices: [], errs: [], n: 0 };
   app.vault.on('modify', (f) => lc.mods.push({ n: ++lc.n, path: f.path }));
   const seenNotices = new WeakSet();
+  // Known Obsidian HOST CHROME, excluded rather than allowlisting DSE's own prefix — a
+  // prefix allowlist would also hide every other plugin-authored Notice (undoNotice's
+  // "Recoveries: …" / "Caught breath: …", "Copied …", "Montage progress …", …), which a
+  // future scenario asserting noticesSince(m).length === 0 needs to see.
+  const hostChromeDenylist = [/^Update Available/];
   new MutationObserver((records) => {
     for (const r of records) for (const node of r.addedNodes) {
       if (node.nodeType !== 1) continue;
@@ -150,10 +233,7 @@ const PAGE_HELPERS = `(() => {
         if (seenNotices.has(el)) continue; // Obsidian can re-parent a notice element while stacking
         seenNotices.add(el);
         const text = el.textContent;
-        // Host chrome (e.g. Obsidian's own "Update Available" banner) can fire on this
-        // machine's install independently of anything under test; only DSE's own Notices
-        // are within this gate's scope.
-        if (text.startsWith('Draw Steel Elements:')) lc.notices.push({ n: ++lc.n, text });
+        if (!hostChromeDenylist.some((re) => re.test(text))) lc.notices.push({ n: ++lc.n, text });
       }
     }
   }).observe(document.body, { childList: true, subtree: true });
@@ -348,46 +428,57 @@ async function main() {
 	// DSE_LIFECYCLE_BUNDLE: take the built plugin from another dir (used to prove the gate
 	// discriminates against an older build). Default: this repo's own fresh build.
 	const bundleDir = process.env.DSE_LIFECYCLE_BUNDLE ?? repo;
-	for (const f of ['main.js', 'styles.css', 'manifest.json']) {
-		if (!fs.existsSync(path.join(bundleDir, f))) envFail(`missing built ${f} in ${bundleDir} — run \`npm run obsidian-lifecycle\` (it builds first)`);
-	}
-	if (!fs.existsSync(BIN)) envFail(`no Obsidian binary at ${BIN}`);
-	try {
-		await fetch(`http://localhost:${PORT}/json/version`);
-		envFail(`port ${PORT} already serves CDP — another instance owns it`);
-	} catch {
-		/* free — expected */
-	}
-	const cfg = path.join(os.homedir(), '.config', 'obsidian');
-	const asars = fs.existsSync(cfg) ? fs.readdirSync(cfg).filter((f) => /^obsidian-.*\.asar$/.test(f)).sort() : [];
-	if (!asars.length) envFail('no obsidian-*.asar in ~/.config/obsidian — open Obsidian once so it self-updates');
-
-	// scratch vault = demo-vault copy (no plugins, no workspace) + fixtures + the fresh build
-	spawnSync('bash', ['-c', `mkdir -p "${vault}" && cd "${path.join(repo, 'demo-vault')}" && tar --exclude=./.obsidian/plugins --exclude=./.obsidian/workspace.json -cf - . | tar -xf - -C "${vault}"`], { stdio: 'inherit' });
-	const pdir = path.join(vault, '.obsidian', 'plugins', 'draw-steel-elements');
-	fs.mkdirSync(pdir, { recursive: true });
-	for (const f of ['main.js', 'styles.css', 'manifest.json']) fs.copyFileSync(path.join(bundleDir, f), path.join(pdir, f));
-	fs.writeFileSync(path.join(vault, '.obsidian', 'community-plugins.json'), JSON.stringify(['draw-steel-elements']));
-	for (const [rel, text] of Object.entries(FIXTURES)) {
-		fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
-		fs.writeFileSync(path.join(vault, rel), text);
-	}
-	fs.mkdirSync(udd, { recursive: true });
-	fs.writeFileSync(path.join(udd, 'obsidian.json'), JSON.stringify({ vaults: { [VAULT_ID]: { path: vault, ts: Date.now(), open: true } } }));
-	fs.writeFileSync(path.join(udd, `${VAULT_ID}.json`), JSON.stringify({ x: 0, y: 0, width: 1440, height: 1100, isMaximized: false, devTools: false, zoom: 0 }));
-	fs.copyFileSync(path.join(cfg, asars.at(-1)), path.join(udd, asars.at(-1)));
-
-	const x = await startXvfb();
-	const child = spawn(BIN, [`--user-data-dir=${udd}`, `--remote-debugging-port=${PORT}`, '--window-size=1440,1100'], {
-		env: { ...process.env, DISPLAY: x.display },
-		stdio: 'ignore',
-	});
-	let alive = true;
-	child.once('exit', () => (alive = false));
 	let ok = 0;
 	let failed = 0;
 	const selected = SCENARIOS.filter((s) => !ONLY.length || ONLY.includes(s.id));
+	// SC-343 fix round 1 (Important-2): ONE try/finally for the whole run. envFail now
+	// THROWS (it used to call process.exit(2) directly, which skips every finally — the
+	// reason envFail calls past this point used to leave Xvfb/Obsidian running) so it, and
+	// any genuinely unexpected error, both unwind through here: cleanup() always runs, and
+	// the scratch temp dir is resolved (kept only when a FAIL screenshot justifies it).
 	try {
+		for (const f of ['main.js', 'styles.css', 'manifest.json']) {
+			if (!fs.existsSync(path.join(bundleDir, f))) envFail(`missing built ${f} in ${bundleDir} — run \`npm run obsidian-lifecycle\` (it builds first)`);
+		}
+		if (!fs.existsSync(BIN)) envFail(`no Obsidian binary at ${BIN}`);
+		// Checked outside any try/catch that could swallow envFail's throw: a bare `catch
+		// {}` right after `envFail(...)` would otherwise treat "port busy" as "port free".
+		let portBusy = false;
+		try {
+			await fetch(`http://localhost:${PORT}/json/version`);
+			portBusy = true;
+		} catch {
+			/* free — expected: nothing answers */
+		}
+		if (portBusy) envFail(`port ${PORT} already serves CDP — another instance owns it`);
+		const cfg = path.join(os.homedir(), '.config', 'obsidian');
+		const asars = fs.existsSync(cfg) ? fs.readdirSync(cfg).filter((f) => /^obsidian-.*\.asar$/.test(f)).sort() : [];
+		if (!asars.length) envFail('no obsidian-*.asar in ~/.config/obsidian — open Obsidian once so it self-updates');
+
+		// scratch vault = demo-vault copy (no plugins, no workspace) + fixtures + the fresh build
+		spawnSync('bash', ['-c', `mkdir -p "${vault}" && cd "${path.join(repo, 'demo-vault')}" && tar --exclude=./.obsidian/plugins --exclude=./.obsidian/workspace.json -cf - . | tar -xf - -C "${vault}"`], { stdio: 'inherit' });
+		const pdir = path.join(vault, '.obsidian', 'plugins', 'draw-steel-elements');
+		fs.mkdirSync(pdir, { recursive: true });
+		for (const f of ['main.js', 'styles.css', 'manifest.json']) fs.copyFileSync(path.join(bundleDir, f), path.join(pdir, f));
+		fs.writeFileSync(path.join(vault, '.obsidian', 'community-plugins.json'), JSON.stringify(['draw-steel-elements']));
+		for (const [rel, text] of Object.entries(FIXTURES)) {
+			fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
+			fs.writeFileSync(path.join(vault, rel), text);
+		}
+		fs.mkdirSync(udd, { recursive: true });
+		fs.writeFileSync(path.join(udd, 'obsidian.json'), JSON.stringify({ vaults: { [VAULT_ID]: { path: vault, ts: Date.now(), open: true } } }));
+		fs.writeFileSync(path.join(udd, `${VAULT_ID}.json`), JSON.stringify({ x: 0, y: 0, width: 1440, height: 1100, isMaximized: false, devTools: false, zoom: 0 }));
+		fs.copyFileSync(path.join(cfg, asars.at(-1)), path.join(udd, asars.at(-1)));
+
+		const x = await startXvfb();
+		const child = spawn(BIN, [`--user-data-dir=${udd}`, `--remote-debugging-port=${PORT}`, '--window-size=1440,1100'], {
+			env: { ...process.env, DISPLAY: x.display },
+			stdio: 'ignore',
+		});
+		liveObsidian = child; // tracked now, not only if start-up completes (Important-2)
+		let alive = true;
+		child.once('exit', () => (alive = false));
+
 		let target;
 		const t0 = Date.now();
 		while (!target) {
@@ -432,15 +523,27 @@ async function main() {
 			}
 		}
 	} finally {
-		child.kill('SIGTERM');
-		await sleep(1500);
-		if (alive) child.kill('SIGKILL');
-		x.child.kill('SIGTERM');
+		await cleanup();
+		// SC-343 fix round 1 (promoted Minor-5): the scratch temp dir (vault + udd + the
+		// copied asar, ~30 MB/run) is only worth keeping when a FAIL screenshot lives in it.
+		if (failed > 0) {
+			console.log(`OBSIDIAN-LIFECYCLE temp dir kept (has FAIL screenshot(s)): ${work}`);
+		} else {
+			try {
+				fs.rmSync(work, { recursive: true, force: true });
+			} catch {
+				/* best effort */
+			}
+		}
 	}
 	console.log(`OBSIDIAN-LIFECYCLE done: ${ok}/${selected.length} ok, ${failed} failed`);
 	process.exit(failed === 0 ? 0 : 1);
 }
 main().catch((e) => {
-	console.log(`OBSIDIAN-LIFECYCLE environment: ${e instanceof Error ? e.stack : String(e)}`);
+	// envFail already printed its own "environment: …" line before throwing; only log here
+	// for a genuinely unexpected error (anything NOT an EnvFailure), same as before.
+	if (!(e instanceof EnvFailure)) {
+		console.log(`OBSIDIAN-LIFECYCLE environment: ${e instanceof Error ? e.stack : String(e)}`);
+	}
 	process.exit(2);
 });
