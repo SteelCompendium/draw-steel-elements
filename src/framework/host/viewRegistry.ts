@@ -143,14 +143,25 @@ export class ViewRegistry extends Component {
 		const { entry, index } = hits[0];
 		// Spec §4 B4 / §6.2: two live views of the SAME block under ONE docId means docId no
 		// longer tells instances apart — refuse, so the view can never go to the wrong one.
+		// Fix round 1 (I-1): compare LIVE positions (host.getBlockInfo(), which re-reads the
+		// section AND refreshes the host's cache), not the cached lastKnownLineStart alone —
+		// that cache only refreshes when a host happens to read its own section, and under B5
+		// an edit above the block re-renders neither instance, so two hosts at the SAME true
+		// block can carry different STALE cached lines and slip past a cache-only comparison.
+		const winnerLine = entry.host.getBlockInfo()?.lineStart ?? entry.host.lastKnownLineStart;
 		for (const other of this.entries) {
 			if (other === entry || other.released) continue;
-			if (
-				other.host.docId === docId &&
-				other.host.sourcePath === sourcePath &&
-				other.host.lastKnownLineStart !== null &&
-				other.host.lastKnownLineStart === entry.host.lastKnownLineStart
-			) {
+			if (other.host.docId !== docId || other.host.sourcePath !== sourcePath) continue;
+			// Fix round 1 (Minor-2): a leaked entry whose CURRENT render child never loaded is
+			// not a real second instance of anything on screen — without this, one leaked
+			// never-loaded entry at this docId+line would collide with EVERY later claim for
+			// that block, forever, silently disabling adoption for it.
+			if (!other.host.renderChildLoaded) continue;
+			const otherLine = other.host.getBlockInfo()?.lineStart ?? other.host.lastKnownLineStart;
+			// Fix round 1 (Minor-3): either side's line never having resolved (null, live read
+			// AND cache both) can't be proven to collide with anything — skipped, not matched.
+			if (winnerLine === null || otherLine === null) continue;
+			if (otherLine === winnerLine) {
 				this.stats.collisions++;
 				return null;
 			}

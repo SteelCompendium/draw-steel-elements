@@ -262,6 +262,14 @@ export class ReadingModeBlockHost implements BlockHost {
 		return this._renderChildGone;
 	}
 
+	/** SC-340 Task 5 fix round 1 (Minor-2): whether the CURRENT render child has been
+	 *  loaded (i.e. is really on screen) — a leaked entry whose render child was added but
+	 *  never loaded is not a real second instance of anything, so the collision guard must
+	 *  not count it. */
+	get renderChildLoaded(): boolean {
+		return (this.renderChild as unknown as { _loaded: boolean })._loaded;
+	}
+
 	attachEntry(entry: ViewRegistryEntry): void {
 		this.entry = entry;
 	}

@@ -278,6 +278,8 @@ describe('SC-340 Task 4: claim and adopt', () => {
 });
 
 describe('SC-340 Task 5: docId collision guard', () => {
+	afterEach(() => jest.useRealTimers());
+
 	test('the same block rendered twice under ONE docId refuses to claim (fresh view instead)', async () => {
 		jest.useFakeTimers();
 		const { registry, render } = await setup(COUNTER_NOTE);
@@ -290,7 +292,11 @@ describe('SC-340 Task 5: docId collision guard', () => {
 		expect(c.el.firstElementChild).not.toBe(b.el.firstElementChild);
 		expect(registry.stats.collisions).toBe(1);
 		expect(registry.stats.claims).toBe(0);
-		jest.useRealTimers();
+		// Fix round 1 (Minor-1): a refused claim consumes nothing — the writer's ticket
+		// survives and it is never marked mid-claim.
+		const entryA = registry.liveEntries().find((e) => e.root === a.el.firstElementChild)!;
+		expect(entryA.tickets).toHaveLength(1);
+		expect(entryA.claiming).toBe(false);
 	});
 
 	test('two DIFFERENT blocks in one document (same docId, different lines) still adopt normally', async () => {
@@ -306,6 +312,48 @@ describe('SC-340 Task 5: docId collision guard', () => {
 		expect(again.el.firstElementChild).toBe(firstRoot);
 		expect(registry.stats.claims).toBe(1);
 		expect(registry.stats.collisions).toBe(0);
-		jest.useRealTimers();
+	});
+
+	// Fix round 1 (I-1): the guard must compare LIVE positions, not each host's cached
+	// lastKnownLineStart — that cache only refreshes when a host reads its OWN section, and
+	// an edit above the block (B5) re-renders neither instance, so two truly-colliding hosts
+	// can carry different stale cached lines and slip past a cache-only comparison.
+	test('a line shift above the block does not defeat the collision guard (live positions, not stale cache)', async () => {
+		jest.useFakeTimers();
+		const { app, registry, render } = await setup(COUNTER_NOTE);
+		const a = await render('ds-counter', 0, 'doc-same');
+		const b = await render('ds-counter', 0, 'doc-same'); // two instances, same docId, same block
+		// An edit ABOVE the block: shifts its true line, but (B5) rerenders neither instance,
+		// so both hosts' cached lastKnownLineStart stay at the OLD (pre-edit) line for now.
+		app.vault.setFile('Note.md', '\n\n\n' + app.vault.getContent('Note.md'));
+		(a.el.querySelector('button[aria-label^="Increase"]') as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS); // refreshes ONLY a's cache
+		const c = await render('ds-counter', 0, 'doc-same'); // the rebuild the writer's click caused
+		expect(c.el.firstElementChild).not.toBe(a.el.firstElementChild); // NOT moved into b's spot
+		expect(c.el.firstElementChild).not.toBe(b.el.firstElementChild);
+		expect(registry.stats.collisions).toBe(1);
+		expect(registry.stats.claims).toBe(0);
+	});
+
+	// Fix round 1 (Minor-2): a leaked entry whose render child was added but never loaded
+	// (e.g. torn down before Obsidian finished mounting it) is not a real second instance of
+	// anything on screen. Without ignoring it, that ONE leaked entry at this docId+line would
+	// collide with EVERY later claim for the block, forever, silently disabling adoption.
+	test('a leaked entry whose render child never loaded does not block a real claim', async () => {
+		jest.useFakeTimers();
+		const { app, plugin, registry, render } = await setup(COUNTER_NOTE);
+		const leakCtx = makeFakeContext(app, 'Note.md', 0);
+		(leakCtx as any).docId = 'doc-same';
+		await plugin.registeredProcessors.get('ds-counter')!(bodyOf(app.vault.getContent('Note.md')!, 0), leakCtx.el, leakCtx as any);
+		// deliberately never call leakCtx.addedChildren[...].load() — its render child stays unloaded
+
+		const a = await render('ds-counter', 0, 'doc-same');
+		const aRoot = a.el.firstElementChild as HTMLElement; // captured before adoption moves it
+		(a.el.querySelector('button[aria-label^="Increase"]') as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const c = await render('ds-counter', 0, 'doc-same');
+		expect(c.el.firstElementChild).toBe(aRoot); // adopted normally
+		expect(registry.stats.claims).toBe(1);
+		expect(registry.stats.collisions).toBe(0);
 	});
 });
