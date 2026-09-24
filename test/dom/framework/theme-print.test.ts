@@ -418,3 +418,69 @@ describe('D3 Task 5: print composes over whichever theme is active (orthogonal a
 		).toBe(false);
 	});
 });
+
+// SC-127 r3 (new guard, per the round-2 design report §5(a)) — the print PREVIEW draws its
+// own PAPER. Spelled differently from NEUTRAL_TWIN_SELECTOR on purpose (repeats
+// `[data-dse-element]` instead of a fourth `[data-dse-print="on"]`), so it can never
+// collide with the value-block regexes above.
+describe('SC-127: the print preview draws its own paper', () => {
+	// Repeats `[data-dse-element]` — deliberately NOT the same text as NEUTRAL_TWIN_SELECTOR
+	// (which repeats `[data-dse-print="on"]` a third time), so `printNeutralBody()`'s regex
+	// above can never accidentally swallow this rule's body, or vice versa.
+	const PAPER_SELECTOR =
+		'[data-dse-element][data-dse-element][data-dse-print="on"][data-dse-print="on"]';
+
+	function paperInkBody(): string {
+		const m = sheet.match(new RegExp(`(?:^|\\n)${esc(PAPER_SELECTOR)}\\s*\\{([^}]*)\\}`));
+		if (!m) throw new Error('SC-127 paper ink rule not found in styles-source.css');
+		return m[1];
+	}
+
+	function paperBackgroundBody(): string {
+		const m = sheet.match(
+			new RegExp(`@media screen\\s*\\{\\s*${esc(PAPER_SELECTOR)}\\s*\\{([^}]*)\\}\\s*\\}`),
+		);
+		if (!m) throw new Error('SC-127 paper background rule not found under @media screen');
+		return m[1];
+	}
+
+	test('the paper selector is spelled differently from the neutral twin selector', () => {
+		expect(PAPER_SELECTOR).not.toBe(NEUTRAL_TWIN_SELECTOR);
+	});
+
+	test('the paper selector is (0,4,0) — four attribute selectors, no ids/classes', () => {
+		// Every unit in this selector is an attribute selector; (0,4,0) is the print layer's
+		// own padding convention (see the SC-170 specificity suite above) — it must outrank
+		// the (0,3,0) Steel card-plate arm and the statblock's (0,2,0) `transparent`.
+		const units = PAPER_SELECTOR.match(/\[[^\]]*\]/g) ?? [];
+		expect(units.length).toBe(4);
+		expect(PAPER_SELECTOR).not.toMatch(/[.#]/);
+	});
+
+	test('the ink rule declares color: var(--dse-fg), unconditionally (both screen and print)', () => {
+		const body = paperInkBody();
+		expect(body).toMatch(/color:\s*var\(--dse-fg\)\s*;/);
+		// The ink rule itself carries no media wrapper — it applies on screen (the preview)
+		// AND under real print (a no-op there: Obsidian's own print sheet already inherits
+		// black) — so it must NOT also paint a background; that half is screen-only, below.
+		expect(body).not.toMatch(/background/);
+	});
+
+	test('background: var(--dse-page-bg) exists exactly once, and only under @media screen', () => {
+		const body = paperBackgroundBody();
+		expect(body).toMatch(/background:\s*var\(--dse-page-bg\)\s*;/);
+		// Exactly one occurrence anywhere in the sheet — proves it is not ALSO declared a
+		// second time somewhere unguarded (e.g. duplicated into @media print by accident).
+		const occurrences = sheet.match(/background:\s*var\(--dse-page-bg\)\s*;/g) ?? [];
+		expect(occurrences.length).toBe(1);
+	});
+
+	test('the paper background never appears inside an @media print block', () => {
+		// Can-fail proof (manual, recorded in the SC-127 r3 report): moving the
+		// `background: var(--dse-page-bg)` declaration from its `@media screen` wrapper into
+		// the sheet's `@media print { … }` block turns this red — the realprint sanction (0
+		// realprint bytes moved) depends on the paper staying screen-only.
+		const printBlocks = sheet.match(/@media print\s*\{[\s\S]*?\}\s*\}/g)?.join('\n') ?? '';
+		expect(printBlocks).not.toMatch(/background:\s*var\(--dse-page-bg\)/);
+	});
+});

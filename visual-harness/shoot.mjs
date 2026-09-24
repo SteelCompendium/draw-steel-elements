@@ -318,12 +318,21 @@ function captureMountSnapshotForPrintDelta(props) {
 	// and up to the nearest `input`/`button` ancestor (covers `.dse-collapse__title` sitting
 	// INSIDE its own `<button>`).
 	const isControlTag = (el) => el.tagName === 'INPUT' || el.tagName === 'BUTTON';
+	// SC-127 — a descendant that ISN'T RENDERED (`getClientRects().length === 0`, e.g. the
+	// `.dse-chrome` panel's buttons, `display: none` under `[data-dse-print="on"]`) must not
+	// qualify its ancestor: nothing of it paints on either surface, so it excuses nothing.
+	// Before this check, 73 of 75 element×fixture roots qualified as control-adjacent purely
+	// because the hidden chrome buttons sit two levels down from almost every root — which
+	// excused the root's OWN backgroundColor/boxShadow twin-vs-realprint delta for free, a
+	// gate hole a Steel rule leaking root paint into only one print surface would have passed
+	// through silently (proven can-fail: SC-127 r2/r3, see the report).
+	const isRenderedControl = (el) => isControlTag(el) && el.getClientRects().length > 0;
 	const nativeControlAdjacent = (el) => {
 		if (isControlTag(el)) return true;
 		if (el.closest('input, button')) return true;
 		for (const c of el.children) {
-			if (isControlTag(c)) return true;
-			for (const g of c.children) if (isControlTag(g)) return true;
+			if (isRenderedControl(c)) return true;
+			for (const g of c.children) if (isRenderedControl(g)) return true;
 		}
 		return false;
 	};
@@ -365,6 +374,18 @@ function captureMountSnapshotForPrintDelta(props) {
 			// checked at full strictness everywhere, and non-control nodes keep the brief's
 			// own 0.5px/enumerated-properties-only budget unchanged.
 			nativeControlAdjacent: nativeControlAdjacent(n),
+			// SC-127 — is this node an element ROOT carrying the print attribute? The preview
+			// paints its own paper there (`@media screen` only — see styles-source.css "the
+			// print PREVIEW draws its own PAPER"); `assertPrintTwinDelta` excuses exactly that.
+			printPaperRoot: n.matches('[data-dse-element][data-dse-print="on"]'),
+			// SC-127 tightening — is this node itself an element root, or nested inside one?
+			// Under option A the root now paints ink AND paper, so `color` converges to 0
+			// inside a root (measured: 11110+130+2545 nodes -> 0, SC-127 r2/r3); `color`'s
+			// enumerated-property excuse narrows to nodes OUTSIDE any root — the harness
+			// wrapper (`#mount`, `.dse-harness-section`, the pipeline div) and nothing else,
+			// where inherited host ink legitimately still tracks theme-dark vs forced
+			// theme-light the same way it always has.
+			insideElementRoot: !!n.closest('[data-dse-element]'),
 		};
 	});
 }
@@ -1032,8 +1053,10 @@ async function injectHostCss(page) {
 	await page.evaluate((el) => document.head.prepend(el), handle);
 }
 
-/** Read the pinned tokens off <body> under one scheme with `css` as the only stylesheet. */
-async function readHostTokens(page, css, scheme) {
+/** Read the pinned tokens off <body> under one scheme with `css` as the only stylesheet.
+ *  `tokens` defaults to SC-205's own `PINNED_TOKENS`; SC-127's host-block pin (below)
+ *  passes its own palette-literal list. */
+async function readHostTokens(page, css, scheme, tokens = PINNED_TOKENS) {
 	await page.goto('about:blank');
 	await page.addStyleTag({ content: css });
 	return page.evaluate(
@@ -1044,7 +1067,7 @@ async function readHostTokens(page, css, scheme) {
 			for (const t of tokens) out[t] = cs.getPropertyValue(t);
 			return out;
 		},
-		{ tokens: PINNED_TOKENS, cls: scheme === 'dark' ? 'theme-dark' : 'theme-light' },
+		{ tokens, cls: scheme === 'dark' ? 'theme-dark' : 'theme-light' },
 	);
 }
 
@@ -1254,6 +1277,113 @@ async function assertHostCopyPinnedToObsidian(page) {
 			`× dark/light + the styles-source.css listing: the host model is verbatim Obsidian ` +
 			`${found.version}; ${excluded.length} further rules whose subject is a plain button were ` +
 			`excluded by documented ancestor scope, 0 unclassifiable — see EXCLUDED_ANCESTOR_SCOPES)`,
+	);
+}
+
+// SC-127 r3 — the palette LITERALS restated in styles-source.css's
+// `.theme-dark [data-dse-element][data-dse-print="on"][data-dse-print="on"]` host block
+// (see "…and re-grounds Obsidian's OWN tokens on that paper" there). They are a hand-copy of
+// the pinned Obsidian release's `.theme-light` palette (1.13.7 — see obsidian-app-css.pin.mjs),
+// and NOTHING re-checks that copy automatically when the pin bumps — this is that check.
+// Deliberately NOT the semantic
+// MAPPINGS re-declared in the same block (`--background-primary: var(--color-base-00)` etc.)
+// — those restate Obsidian's OWN mapping formula onto the palette above, not a second
+// independent literal, so drift there would show up as a palette drift here first.
+const SC127_PALETTE_LITERALS = [
+	'--mono-0',
+	'--mono-100',
+	'--color-base-00',
+	'--color-base-05',
+	'--color-base-10',
+	'--color-base-20',
+	'--color-base-25',
+	'--color-base-30',
+	'--color-base-35',
+	'--color-base-40',
+	'--color-base-50',
+	'--color-base-60',
+	'--color-base-70',
+	'--color-base-100',
+	'--color-accent-1',
+	'--color-accent-2',
+	'--input-shadow',
+	'--input-shadow-hover',
+];
+
+/** Pull the `.theme-dark [data-dse-element]…` host block's own body text out of
+ *  styles-source.css, the same "read the raw file, find the exact rule" convention
+ *  `theme-print.test.ts` uses. Returns `null` if the rule is gone entirely (its own loud
+ *  failure, not a silent 0-token comparison). */
+function extractSc127HostBlockBody() {
+	let sheet;
+	try {
+		sheet = fs.readFileSync(path.join(dir, '..', 'styles-source.css'), 'utf8');
+	} catch (e) {
+		return { error: `could not read styles-source.css: ${String(e)}` };
+	}
+	const m = sheet.match(
+		/\.theme-dark \[data-dse-element\]\[data-dse-print="on"\]\[data-dse-print="on"\]\s*\{([^}]*)\}/,
+	);
+	if (!m) return { error: 'the .theme-dark host-regrounding block is missing from styles-source.css entirely' };
+	return { body: m[1] };
+}
+
+/** SC-127 r3 — is the host-regrounding block's palette still exactly what the PINNED sheet
+ *  (`obsidian-app-css.pin.mjs`, resolved via `loadLocalObsidianAppCss`) resolves those SAME
+ *  custom-property names to under `.theme-light`? Two independent values must agree, not
+ *  one restating the other: OURS is resolved by injecting the pinned sheet FIRST (so
+ *  `--accent-h/s/l` etc. exist for the two `hsl(calc(...))` accent tokens to resolve
+ *  against) and then our own block's literal text on a probe element matching its selector
+ *  shape; the TARGET is the pinned sheet's own `.theme-light` on `<body>` — the same
+ *  `readHostTokens` machinery SC-205's button-token pin already uses, parameterised to this
+ *  round's own token list. jest cannot do this: the pinned sheet is fetched/cached
+ *  (`dist/obsidian-app.css`), not committed source jest can read statically, and the two
+ *  accent tokens need a real browser's `hsl(calc(...))` resolution, not string comparison. */
+async function assertSc127HostBlockPinned(page, pinnedCss) {
+	const { body, error } = extractSc127HostBlockBody();
+	if (error) {
+		console.error(`\nSC-127 HOST BLOCK PIN CHECK FAILED — ${error}`);
+		process.exit(1);
+	}
+
+	await page.goto('about:blank');
+	await page.addStyleTag({ content: pinnedCss });
+	await page.addStyleTag({ content: `.theme-dark #sc127-probe { ${body} }` });
+	const ours = await page.evaluate((tokens) => {
+		document.body.className = 'theme-dark';
+		const probe = document.createElement('div');
+		probe.id = 'sc127-probe';
+		document.body.appendChild(probe);
+		const cs = getComputedStyle(probe);
+		const out = {};
+		for (const t of tokens) out[t] = cs.getPropertyValue(t);
+		probe.remove();
+		return out;
+	}, SC127_PALETTE_LITERALS);
+
+	const pinned = await readHostTokens(page, pinnedCss, 'light', SC127_PALETTE_LITERALS);
+
+	const drifted = [];
+	for (const t of SC127_PALETTE_LITERALS) {
+		const a = normalizeTokenValue(ours[t]);
+		const b = normalizeTokenValue(pinned[t]);
+		if (a !== b) drifted.push(`${t}: styles-source.css says "${a}", the pinned sheet's .theme-light resolves it to "${b}"`);
+	}
+
+	if (drifted.length) {
+		console.error(
+			`\nSC-127 HOST BLOCK DRIFTED — the .theme-dark host-regrounding block's palette no ` +
+				`longer matches the pinned Obsidian sheet's .theme-light values (a pin bump copied ` +
+				`neither automatically):\n` +
+				drifted.map((d) => `  ${d}`).join('\n') +
+				`\nRe-copy the drifted literal(s) from the pinned sheet's own .theme-light block into ` +
+				`styles-source.css's SC-127 host block, in the same commit as any PINNED_OBSIDIAN bump.`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\nSC-127 host block pin OK (${SC127_PALETTE_LITERALS.length} palette literals match the ` +
+			`pinned sheet's .theme-light, resolved)`,
 	);
 }
 
@@ -5133,6 +5263,16 @@ try {
 		// still what Obsidian ships. It runs FIRST so a drifted copy reports as drift rather
 		// than as a mystery leak (or, worse, as a clean sweep of the wrong host).
 		await assertHostCopyPinnedToObsidian(page);
+		// SC-127 r3 — beside the host-copy pin on purpose: the SAME "a pin bump can silently
+		// leave a hand-copy stale" failure mode, for the print preview's dark-vault palette
+		// literals instead of the button rules. Needs only the PINNED sheet (cached by
+		// `ensurePinnedObsidianAppCss()` at startup), not a locally installed Obsidian, so it
+		// self-gates on that rather than on `findObsidianAsar()`.
+		{
+			const pinnedHost = loadLocalObsidianAppCss();
+			if (!pinnedHost) console.log('\nSC-127 host block pin SKIPPED (no resolved Obsidian app.css sheet)');
+			else await assertSc127HostBlockPinned(page, pinnedHost.css);
+		}
 		// SC-203 — the same question asked of EVERY button in the plugin, not just the
 		// chrome panel's. Same shape again; same reason for the narrowed-run skip.
 		await assertBtnHostLeak(page);
@@ -5278,25 +5418,76 @@ const MEASURED_REACHABLE_PRINT_PROPS = new Set(['color', 'fontFamily', 'webkitPr
 // narrowed `--element=` one.
 function selfTestPrintDeltaAllowedSet(enumeratedProps) {
 	const base = { tag: 'DIV', attrs: 'class=dse-card__band', x: 0, y: 0, width: 10, height: 10, nativeControlAdjacent: false };
-	const isFlagged = (prop, value) => {
-		const a = { ...base, style: { [prop]: 'rgb(0, 0, 0)' } };
-		const b = { ...base, style: { [prop]: value } };
-		return a.style[prop] !== b.style[prop] && !enumeratedProps.has(prop);
+	// SC-127 r3 — mirrors the ACTUAL branch shape in the style-diff loop below (not just
+	// `!enumeratedProps.has(prop)`): `color`'s excuse now narrows to nodes OUTSIDE an
+	// element root.
+	const isFlagged = (prop, value, insideElementRoot = false) => {
+		const a = { ...base, style: { [prop]: 'rgb(0, 0, 0)' }, insideElementRoot };
+		const b = { ...base, style: { [prop]: value }, insideElementRoot };
+		if (a.style[prop] === b.style[prop]) return false;
+		if (enumeratedProps.has(prop)) {
+			if (prop !== 'color') return false;
+			if (!a.insideElementRoot && !b.insideElementRoot) return false;
+		}
+		return true;
 	};
 	const holeCaught = isFlagged('backgroundColor', 'rgb(1, 2, 3)');
-	const realNotFlagged = !isFlagged('color', 'rgb(1, 2, 3)');
-	if (!holeCaught || !realNotFlagged) {
+	const realNotFlaggedOutsideRoot = !isFlagged('color', 'rgb(1, 2, 3)', false);
+	// SC-127 r3 — the tightening's own can-fail pair: a synthetic `color` divergence on a
+	// node INSIDE an element root must now be FLAGGED (before this round it was excused
+	// everywhere `enumeratedProps` admitted `color`, silently widening past what option A
+	// makes converge).
+	const realFlaggedInsideRoot = isFlagged('color', 'rgb(1, 2, 3)', true);
+	if (!holeCaught || !realNotFlaggedOutsideRoot || !realFlaggedInsideRoot) {
 		console.error(
 			`\nPRINT-TWIN DELTA SELF-TEST FAILED — the allowed set no longer matches the ` +
 				`reviewer's can-fail pair: backgroundColor-differs ${holeCaught ? 'correctly caught' : 'WRONGLY EXCUSED (regression — see sc202-r6crev-canfail-A-background.log)'}, ` +
-				`color-differs ${realNotFlagged ? 'correctly excused' : 'WRONGLY FLAGGED (a real, reachable property was narrowed away)'}.`,
+				`color-differs-outside-root ${realNotFlaggedOutsideRoot ? 'correctly excused' : 'WRONGLY FLAGGED (a real, reachable property was narrowed away)'}, ` +
+				`color-differs-inside-root ${realFlaggedInsideRoot ? 'correctly flagged' : 'WRONGLY EXCUSED (SC-127 tightening regression — a root color leak would pass silently)'}.`,
 		);
 		process.exit(1);
 	}
 	console.log(
 		`\nprint-twin delta self-test OK (the reviewer's can-fail pair: a synthetic ` +
 			`backgroundColor-only divergence on a non-control node is caught; a synthetic ` +
-			`color-only divergence is correctly excused)`,
+			`color-only divergence outside an element root is correctly excused, and the SAME ` +
+			`divergence inside an element root is correctly flagged — SC-127 r3)`,
+	);
+}
+
+// SC-127 r3 — the paper exemption's OWN can-fail pair, same in-process pattern as
+// `selfTestPrintDeltaAllowedSet` above (a synthetic node shape, the exact decision the
+// `backgroundColor`/`printPaperRoot` branch in `assertPrintTwinDelta`'s loop makes, no
+// navigation). Three checks: (1) the exemption's OWN positive case still fires — a paper
+// root painting white-vs-transparent is excused, so the fix stays usable; (2) a synthetic
+// ROOT with a NON-white background must be FLAGGED — the exemption is exactly
+// white-vs-(transparent-or-white), not "any root background difference"; (3) a synthetic
+// DESCENDANT (not itself a `[data-dse-element][data-dse-print="on"]` root) painting
+// white-vs-transparent must ALSO be FLAGGED — the exemption is root-scoped only, so a
+// Steel rule leaking that same paint one level deeper would still be caught.
+function selfTestPrintPaperExemption() {
+	const isBgFlagged = (aVal, bVal, aPaperRoot, bPaperRoot) => {
+		if (aVal === bVal) return false;
+		if (aPaperRoot && bPaperRoot && aVal === 'rgb(255, 255, 255)' && (bVal === 'rgba(0, 0, 0, 0)' || bVal === 'rgb(255, 255, 255)'))
+			return false;
+		return true;
+	};
+	const rootWhiteVsTransparentExcused = !isBgFlagged('rgb(255, 255, 255)', 'rgba(0, 0, 0, 0)', true, true);
+	const rootNonWhiteFlagged = isBgFlagged('rgb(200, 200, 200)', 'rgba(0, 0, 0, 0)', true, true);
+	const descendantWhiteVsTransparentFlagged = isBgFlagged('rgb(255, 255, 255)', 'rgba(0, 0, 0, 0)', false, false);
+	if (!rootWhiteVsTransparentExcused || !rootNonWhiteFlagged || !descendantWhiteVsTransparentFlagged) {
+		console.error(
+			`\nPRINT-TWIN PAPER-EXEMPTION SELF-TEST FAILED — root-white-vs-transparent ` +
+				`${rootWhiteVsTransparentExcused ? 'correctly excused' : 'WRONGLY FLAGGED (the SC-127 paper exemption itself broke)'}, ` +
+				`root-non-white-background ${rootNonWhiteFlagged ? 'correctly flagged' : 'WRONGLY EXCUSED (the exemption widened past exactly white-vs-transparent)'}, ` +
+				`descendant-white-vs-transparent ${descendantWhiteVsTransparentFlagged ? 'correctly flagged' : 'WRONGLY EXCUSED (the exemption leaked past the element root)'}.`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\nprint-twin paper-exemption self-test OK (a synthetic root white-vs-transparent ` +
+			`background is excused; a synthetic root NON-white background is flagged; a synthetic ` +
+			`DESCENDANT'S white-vs-transparent background is flagged — SC-127 r3)`,
 	);
 }
 
@@ -5416,22 +5607,42 @@ function assertPrintTwinDelta(enumeratedProps) {
 			// gets the full style diff below.
 			const invisibleInBoth = a.width === 0 && a.height === 0 && b.width === 0 && b.height === 0;
 			if (invisibleInBoth) continue;
-			// SC-202 r6c — the material half of `nativeControlAdjacent`'s own reasoning
-			// above: `<input>`/`<button>` paint (background, elevation shadow) is Obsidian's
-			// OWN theme material by design, outside the print value block's `--dse-*`-only
-			// neutral-surface system, so it legitimately tracks `theme-dark` (twin) vs the
-			// forced `theme-light` (realprint) the same way `color` does — measured live
-			// (`.dse-stepper__input`/`.dse-btn--icon` backgroundColor/boxShadow). Only these
-			// TWO properties are widened, only on a node that IS or WRAPS the control itself
-			// (not every descendant of a card that happens to contain one somewhere) —
-			// `nativeControlAdjacent` is per-node, computed in the page from that node's own
-			// tag/children, so a `.dse-card` that merely contains a stepper deep inside stays
-			// fully strict.
-			const NATIVE_CONTROL_PAINT_PROPS = new Set(['backgroundColor', 'boxShadow']);
+			// SC-202 r6c built a `NATIVE_CONTROL_PAINT_PROPS` widening here
+			// (backgroundColor/boxShadow on a control-adjacent node) for the same reason
+			// `color` used to be excused everywhere: Obsidian's own control material tracked
+			// theme-dark (twin) vs forced theme-light (realprint). SC-127 r3 deleted it —
+			// under option A the root now re-grounds Obsidian's OWN tokens to the light
+			// palette in a dark vault (see styles-source.css "…and re-grounds Obsidian's OWN
+			// tokens on that paper"), so a native control's background/shadow converges to
+			// the SAME value on both surfaces (measured: 316 -> 9 control-adjacent
+			// backgroundColor diffs full-sweep, and the remaining 9 are the root's OWN paper,
+			// already excused below by `printPaperRoot`; boxShadow 428 -> 0). Left in place:
+			// `nativeControlAdjacent`'s ROLE in the horizontal-drift budget a few lines above
+			// — that's glyph-metrics width, not paint, and Controls' font stays pinned to
+			// sans-in-print by design (SC-112 Task 3), so it still legitimately differs.
 			for (const p of PRINT_DELTA_STYLE_PROPS) {
 				if (a.style[p] === b.style[p]) continue;
-				if (enumeratedProps.has(p)) continue;
-				if ((a.nativeControlAdjacent || b.nativeControlAdjacent) && NATIVE_CONTROL_PAINT_PROPS.has(p)) continue;
+				if (enumeratedProps.has(p)) {
+					// SC-127 tightening — `color`'s excuse narrows to nodes OUTSIDE any
+					// element root (the harness wrapper's own inherited ink); INSIDE a root
+					// it must now match, because option A's paper+ink makes it converge.
+					// The other enumerated properties (fontFamily, webkitPrintColorAdjust,
+					// backgroundImage) still differ everywhere they always did — untouched.
+					if (p !== 'color') continue;
+					if (!a.insideElementRoot && !b.insideElementRoot) continue;
+				}
+				// SC-127 — the preview's paper: the twin's element root paints `--dse-page-bg`
+				// (#fff) on screen only; real paper leaves it unpainted (the page is already
+				// white). Excused on the root node only and only for exactly that value pair —
+				// any other root background, or a background on any descendant, still fails.
+				if (
+					p === 'backgroundColor' &&
+					a.printPaperRoot &&
+					b.printPaperRoot &&
+					a.style[p] === 'rgb(255, 255, 255)' &&
+					(b.style[p] === 'rgba(0, 0, 0, 0)' || b.style[p] === 'rgb(255, 255, 255)')
+				)
+					continue;
 				problems.push(
 					`${label}: ${p} differs — "${a.style[p]}" (twin) vs "${b.style[p]}" (realprint), and ${p} is ` +
 						`NOT one of the pinned sheet's own @media print properties`,
@@ -5555,6 +5766,7 @@ if (failures.length) {
 	else {
 		const enumeratedProps = printSheetEnumeratedProperties(host.css);
 		selfTestPrintDeltaAllowedSet(enumeratedProps);
+		selfTestPrintPaperExemption();
 		assertPrintTwinDelta(enumeratedProps);
 	}
 }
