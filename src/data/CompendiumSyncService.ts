@@ -284,7 +284,11 @@ export class CompendiumSyncService {
 		}
 		const incoming = new Map<string, Uint8Array>();
 		for (const [entryPath, data] of Object.entries(files)) {
-			if (entryPath.endsWith("/")) continue;
+			// SC-328 fix round 1 INFO-5: an entry named "" (only a malicious archive
+			// would carry one) normalizes to the root folder path — skip it same as any
+			// other directory-shaped entry, rather than letting it collide with the
+			// vault root on write.
+			if (entryPath === "" || entryPath.endsWith("/")) continue;
 			incoming.set(entryPath, data);
 		}
 		if (incoming.size === 0) throw new Error("Downloaded archive contains no files.");

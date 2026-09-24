@@ -204,6 +204,16 @@ describe("CompendiumSyncService.sync (release download path)", () => {
 		expect(vault.text("DS Compendium/dir/real.md")).toBe("content");
 	});
 
+	test("SC-328 fix round 1 INFO-5: an entry named \"\" (root-folder-shaped) is skipped, not written", async () => {
+		const { app } = makeFakeApp();
+		const zip = await zipOf({ "": "root-shaped-junk", "safe.md": "official" });
+		const fetchFake = githubFake(zip, "v4.empty-name");
+		const service = new CompendiumSyncService(
+			app, new ManifestStore(app, "draw-steel-elements"), fetchFake);
+		const report = await service.sync(OPTIONS);
+		expect(report.created).toEqual(["safe.md"]);
+	});
+
 	test("real fixture files round-trip through a real fflate archive (network-free integration check)", async () => {
 		const { app, vault } = makeFakeApp();
 		const fixtureRoot = path.join(__dirname, "../../fixtures/md-dse");
