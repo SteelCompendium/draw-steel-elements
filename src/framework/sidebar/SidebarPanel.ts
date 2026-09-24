@@ -40,6 +40,10 @@ export class SidebarPanel extends Component {
 	 *  containerEl. Separate from `panelEl` now that the panel also carries a header
 	 *  (renderHeader) outside the pipeline's own DOM. */
 	private bodyEl: HTMLElement | null = null;
+	/** SC-282 — the header's note-name link, captured so `handleFileRenamed` can refresh
+	 *  its text/title/aria-label after a rename without re-rendering the whole header
+	 *  (the element label doesn't change on a rename, only the note it points at). */
+	private noteLinkEl: HTMLAnchorElement | null = null;
 
 	constructor(
 		private readonly deps: SidebarPanelDeps,
@@ -94,6 +98,35 @@ export class SidebarPanel extends Component {
 			return true;
 		}
 		return this.host.getBlockInfo() !== null;
+	}
+
+	/**
+	 * SC-282 (D1) — this panel's note was renamed or moved (including via a parent-folder
+	 * rename); `DseSidebarView`'s vault "rename" listener calls this with the note's NEW
+	 * path once it has matched this panel by its OLD one. Rewrites the persisted
+	 * `filePath` (so a future re-pin of the same block — `DseSidebarView.addPanel`'s
+	 * `samePanelTarget` dedupe — still recognizes it, and so a restart's `setState`
+	 * resolves the right file instead of reproducing the "Note not found" card this
+	 * ticket exists to eliminate), refreshes the header's note link, and re-points the
+	 * host at a freshly resolved `TFile` for the new path.
+	 *
+	 * Deliberately does NOT touch `bodyEl` or re-run the pipeline: a rename does not
+	 * change the note's TEXT, so the mounted element (and any live state inside it — an
+	 * encounter's combat state, an initiative roster, ...) is left completely alone. This
+	 * is the cheapest correct fix and the one the brief's "no in-flight corruption"
+	 * requirement asks for: nothing about the rendered element has any business changing
+	 * just because the note it lives in moved.
+	 */
+	handleFileRenamed(newFilePath: string): void {
+		this.state.filePath = newFilePath;
+		this.updateHeaderNoteLink();
+		if (!this.host) return; // never mounted a host (e.g. unknown-element degrade) — path-only update above is all there is to do
+		const file = this.deps.app.vault.getAbstractFileByPath(newFilePath);
+		// A miss here would mean the vault reports the rename but the destination isn't
+		// resolvable yet — not expected in practice (Obsidian fires "rename" after the
+		// move completes), but left alone rather than degrading: the host keeps its old
+		// (now-stale) backingFile, exactly the state it was already in.
+		if (file instanceof TFile) this.host.rebindPath(file);
 	}
 
 	async mount(container: HTMLElement): Promise<void> {
@@ -166,8 +199,23 @@ export class SidebarPanel extends Component {
 		noteLink.setAttribute('aria-label', `Open ${this.state.filePath}`);
 		this.registerDomEvent(noteLink, 'click', (event) => {
 			event.preventDefault();
+			// Reads `this.state.filePath` live at click time (not a captured value), so this
+			// still opens the RIGHT note after a rename even if updateHeaderNoteLink's own
+			// display refresh were somehow skipped.
 			void this.deps.app.workspace.openLinkText(this.state.filePath, '', false);
 		});
+		this.noteLinkEl = noteLink;
+	}
+
+	/** SC-282 — re-stamps the header's note-name link after `handleFileRenamed` rewrites
+	 *  `state.filePath`. The click handler above already reads `state.filePath` live
+	 *  through its closure; only the static text/title/aria-label set at render time need
+	 *  updating here. */
+	private updateHeaderNoteLink(): void {
+		if (!this.noteLinkEl) return;
+		this.noteLinkEl.textContent = this.noteBasename();
+		this.noteLinkEl.setAttribute('title', this.state.filePath);
+		this.noteLinkEl.setAttribute('aria-label', `Open ${this.state.filePath}`);
 	}
 
 	/** The backing note's display name: the real TFile's basename when it still exists,

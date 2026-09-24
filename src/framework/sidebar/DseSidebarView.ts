@@ -3,8 +3,8 @@
 // makes a mounted DSE element (initiative tracker, hero sheet, ...) survive navigating
 // between notes — the same migrated F1 view mounts here with ZERO view-code changes
 // (mode-blind views, F1 §2.1 principle 2); SidebarBlockHost is the only new plumbing.
-import { ItemView } from 'obsidian';
-import type { App, Plugin, WorkspaceLeaf } from 'obsidian';
+import { ItemView, TFolder } from 'obsidian';
+import type { App, Plugin, TAbstractFile, WorkspaceLeaf } from 'obsidian';
 import type { ElementPipeline } from '../pipeline';
 import type { ElementRegistry } from '../registry';
 import type { ReferenceService } from '../seams/refs';
@@ -92,6 +92,75 @@ export class DseSidebarView extends ItemView {
 	protected async onOpen(): Promise<void> {
 		this.panelsEl = this.contentEl.createDiv({ cls: 'dse-sidebar' });
 		this.updateEmptyState();
+		this.registerVaultListeners();
+	}
+
+	/**
+	 * SC-282 (D1/D2/D3) — a panel's persisted `filePath` was a plain string snapshot of a
+	 * TFile's path at pin time, with nothing keeping it in sync with the vault: renaming a
+	 * pinned note left the panel pointed at a path that no longer resolved (a permanent
+	 * "Note not found" card, surviving even a restart, since the stale path is exactly
+	 * what gets persisted back via getState), and deleting one left permanent debris. D3
+	 * copies the vault-listener shape SccResolver.ts/CompendiumIndex.ts already use
+	 * (`plugin.registerEvent(app.vault.on(...))`) but scoped to THIS OPEN LEAF's own
+	 * Component lifecycle (`this.registerEvent`, torn down automatically by the Component
+	 * cascade on close/unload) rather than the plugin's — the same scoping choice
+	 * SidebarBlockHost's own "modify" listener already made for its owning SidebarPanel
+	 * (registered via `owner.registerEvent`, not `plugin.registerEvent`). Two reasons:
+	 * (1) every panel this listener needs to reach already lives on `this.panels`, so a
+	 * view-scoped listener needs no cross-view lookup; a plugin-scoped one would have to
+	 * enumerate every open sidebar leaf via `app.workspace.getLeavesOfType` on every vault
+	 * rename/delete for the plugin's entire lifetime, most of which have nothing to do
+	 * with the sidebar. (2) it naturally handles multiple open sidebar leaves — each one's
+	 * onOpen registers its own listener, so each independently updates its own panels with
+	 * no shared dedupe state to get wrong.
+	 *
+	 * A DEFERRED leaf's view is never loaded (Obsidian's `WorkspaceLeaf.isDeferred`), so
+	 * `onOpen` — and this registration — never runs for it; a rename/delete landing while
+	 * the leaf is deferred leaves its persisted panel state stale until the leaf is next
+	 * loaded (reported as a follow-up, not fixed here — see the SC-282 ledger for why
+	 * force-loading a deferred leaf just to patch its state isn't the right trade).
+	 */
+	private registerVaultListeners(): void {
+		this.registerEvent(this.services.app.vault.on('rename', (file, oldPath) => this.handleVaultRename(file, oldPath)));
+		this.registerEvent(this.services.app.vault.on('delete', (file) => this.handleVaultDelete(file)));
+	}
+
+	/**
+	 * SC-282 (D1) — matches every panel whose `filePath` is the renamed file itself, OR
+	 * (for a `TFolder` rename) sits under the renamed folder, and rewrites each one's
+	 * `filePath` via `SidebarPanel.handleFileRenamed`. Idempotent by construction, not by
+	 * a guard flag: each match rewrites `panel.state.filePath` to the new path BEFORE the
+	 * next candidate event is even considered, so if Obsidian fires both a folder-level
+	 * "rename" and a per-child one for the same move (spec'd as possible, order
+	 * unspecified — see the brief), whichever fires second compares against the
+	 * ALREADY-updated `filePath` and simply no longer matches its own (now stale) oldPath.
+	 */
+	private handleVaultRename(file: TAbstractFile, oldPath: string): void {
+		let changed = false;
+		for (const panel of this.panels) {
+			const newPath = renamedPanelPath(panel.state.filePath, file, oldPath);
+			if (newPath === null) continue;
+			panel.handleFileRenamed(newPath);
+			changed = true;
+		}
+		// SC-184 (item 4) precedent: one requestSaveLayout call represents the layout
+		// change, regardless of how many panels a single rename touched.
+		if (changed) this.services.app.workspace.requestSaveLayout();
+	}
+
+	/**
+	 * SC-282 (D2) — matches every panel whose `filePath` is the deleted file itself, OR
+	 * (for a `TFolder` delete) sits under the deleted folder, and removes each one via the
+	 * existing `removePanel` path (same removal SC-184's chrome "Unpin" and degrade-card
+	 * dismiss button already use — it already requests a layout save and is already safe
+	 * to call twice on the same panel, which covers a folder delete that also fires
+	 * per-child delete events for the same files).
+	 */
+	private handleVaultDelete(file: TAbstractFile): void {
+		for (const panel of [...this.panels]) {
+			if (isUnderDeletedPath(panel.state.filePath, file)) this.removePanel(panel);
+		}
 	}
 
 	protected async onClose(): Promise<void> {
@@ -292,6 +361,29 @@ function samePanelTarget(a: SidebarPanelState, b: SidebarPanelState): boolean {
 	if (a.filePath !== b.filePath || a.alias !== b.alias) return false;
 	if (a.anchorId !== null || b.anchorId !== null) return a.anchorId === b.anchorId;
 	return (a.body ?? '') === (b.body ?? '');
+}
+
+/**
+ * SC-282 — does `panelPath` name exactly the renamed file, or (only for a folder rename)
+ * live under the renamed folder? Returns the panel's NEW path, or null if this rename
+ * doesn't concern it. The prefix match is deliberately `oldPath + '/'`, not a bare
+ * `startsWith(oldPath)`: folder "Foo/Bar" renaming must not touch a sibling file
+ * "Foo/BarBaz.md" that merely shares the string prefix.
+ */
+function renamedPanelPath(panelPath: string, file: TAbstractFile, oldPath: string): string | null {
+	if (panelPath === oldPath) return file.path;
+	if (file instanceof TFolder && panelPath.startsWith(`${oldPath}/`)) {
+		return file.path + panelPath.slice(oldPath.length);
+	}
+	return null;
+}
+
+/** SC-282 — the delete-side twin of renamedPanelPath's match test (no rewrite needed —
+ *  a deleted panel is simply removed). Same folder-prefix guard against a sibling with a
+ *  shared string prefix. */
+function isUnderDeletedPath(panelPath: string, file: TAbstractFile): boolean {
+	if (panelPath === file.path) return true;
+	return file instanceof TFolder && panelPath.startsWith(`${file.path}/`);
 }
 
 /**

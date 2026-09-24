@@ -117,7 +117,13 @@ export class SidebarBlockHost implements BlockHost {
 
 	constructor(
 		private readonly plugin: Plugin,
-		private readonly backingFile: TFile,
+		/** SC-282 — not `readonly`: a vault rename/move (including via a parent-folder
+		 *  rename) re-points this at a fresh TFile via `rebindPath`, below. Deliberately
+		 *  never assumed to be the SAME object instance across a rename — real Obsidian
+		 *  happens to keep a TFile's identity stable and just mutates its `.path`, but
+		 *  relying on that would silently break against a test vault (or a future
+		 *  Obsidian) that doesn't. */
+		private backingFile: TFile,
 		private readonly alias: string,
 		private readonly anchorId: string | null,
 		/** SC-158 — the bound body, for a `strictBody` element whose block carries no
@@ -270,6 +276,21 @@ export class SidebarBlockHost implements BlockHost {
 	 */
 	forgetMountedChild(): void {
 		this.mountedChild = null;
+	}
+
+	/**
+	 * SC-282 (D1) — the note this host reads/writes was renamed or moved. `SidebarPanel`
+	 * calls this right after rewriting its own persisted `filePath`, handing back a FRESH
+	 * `TFile` for the new path (see the constructor param's own doc for why this never
+	 * assumes it's the same object the constructor received). A rename does not touch the
+	 * note's TEXT, so `cachedContent`/`lastWritten`/`anchorLostNotified` all stay exactly
+	 * as they were — nothing here re-reads the vault. The live `vault.on('modify', ...)`
+	 * listener registered by `registerModifyListener` reads `this.backingFile.path` fresh
+	 * on every event (not a value captured at registration time), so it starts matching
+	 * the NEW path the instant this assignment lands; no re-registration is needed.
+	 */
+	rebindPath(newFile: TFile): void {
+		this.backingFile = newFile;
 	}
 
 	async replaceSource(newSource: string): Promise<boolean> {
