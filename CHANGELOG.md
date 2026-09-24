@@ -15,6 +15,12 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [INTERNAL] A block's save now finds the block by its content when its position in the note has
+  moved, instead of trusting a possibly stale line range, so a save can no longer land in the wrong
+  place or cut a block short (SC-343). A click followed at once by switching notes now still saves
+  (SC-336). If a save cannot be placed because the block changed on disk first (sync or a hand edit
+  inside the save delay), it is dropped and a notice says so: "Draw Steel Elements: a change to a
+  block in <note> was not saved — the block changed on disk first."
 - [FIX] **Initiative tracker: an unsynced compendium creature no longer asks about
   duplicate files, and the console no longer logs a warning for every creature without a
   portrait** (SC-240). A statblock reference the encounter builder creates from the
