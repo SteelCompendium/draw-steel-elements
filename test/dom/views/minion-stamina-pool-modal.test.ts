@@ -430,3 +430,51 @@ describe('SC-195 fix round (HIGH-1) — the kill-ladder divisor must read the PE
 		expect(info.textContent).toContain('will kill 0 minion(s)'); // NOT 1 (the live-gate bug)
 	});
 });
+
+// SC-241: the Apply Damage row carries the same magnitude-input inversion SC-133 RC-3
+// fixed in StaminaEditModal -- `damageInput`/`minionCountInput` fed straight into
+// `parseInt` with no `Math.max(0, ...)` clamp, so a negative typed value (in EITHER
+// box) flips `totalDamage = damage * minions` in sign, and the Apply onClick's healing
+// branch "heals" a squad pool a plain Apply Damage press should only ever be able to
+// hurt. Both parsed values are clamped at the parse boundary (owner ruling, ledger
+// 2026-09-23): a negative minion count is the same inversion as a negative damage
+// value, and a double negative must read as a no-op, never as positive damage.
+describe('SC-241: negative Apply Damage input (damage or minion count) is clamped to a magnitude (0), never heals the pool', () => {
+	test('damage -3, minions 1: pool unchanged (no heal), and the "can\'t regain stamina" warning does NOT appear', async () => {
+		// pool 17: chosen so an (unfixed) +3 heal lands exactly on the full 20-point max
+		// (floor((20-17)/4)=0 dead-brackets, floor((20-20)/4)=0 -> minionsToKill 0), which
+		// keeps the Apply button REAL-enabled under the bug -- so a persisted-pool
+		// assertion (not just the pending delta) discriminates fixed from unfixed.
+		const { content, group } = await setup({ pool: 17 });
+		const warn = content.querySelector('.dse-sedit__warn') as HTMLElement;
+		applyDamage(content, -3, 1);
+		expect(warn.hidden).toBe(true); // no heal was queued, so the warning never shows
+		actionBtn(content).click(); // real-disabled when the pending change is 0 -> no-op either way
+		expect(group.minion_stamina_pool).toBe(17);
+	});
+
+	test('damage 3, minions -2: pool unchanged (the negative minion count is the same inversion)', async () => {
+		const { content, modal } = await setup({ pool: 14 });
+		applyDamage(content, 3, -2);
+		expect((modal as any).pendingStaminaChange).toBe(0); // unfixed: 3 * -2 inverts to +6 (a heal)
+	});
+
+	test('damage -3, minions -2: a double negative must read as a no-op, never as positive damage', async () => {
+		const { content, modal } = await setup({ pool: 20 });
+		applyDamage(content, -3, -2);
+		expect((modal as any).pendingStaminaChange).toBe(0);
+	});
+
+	test('damageInput carries min="0" (the same clamp-to-0 idiom as StaminaEditModal\'s Apply box)', async () => {
+		const { content } = await setup();
+		const damageInput = content.querySelectorAll<HTMLInputElement>('.dse-sedit__apply-input')[0];
+		expect(damageInput.getAttribute('min')).toBe('0');
+	});
+
+	test('a normal positive Apply Damage still subtracts from the pool (guard against a vacuous suite)', async () => {
+		const { content, group } = await setup(); // pool 20 (full)
+		applyDamage(content, 3, 1);
+		actionBtn(content).click();
+		expect(group.minion_stamina_pool).toBe(17);
+	});
+});
