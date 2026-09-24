@@ -1,7 +1,7 @@
 import {
 	App, Notice, TFile, normalizePath, requestUrl, RequestUrlParam, RequestUrlResponse,
 } from "obsidian";
-import * as JSZip from "jszip";
+import { unzipSync } from "fflate";
 import {
 	CompendiumManifest, ManifestStore, MANIFEST_SCHEMA_VERSION, sha256Hex,
 } from "./manifest";
@@ -262,13 +262,24 @@ export class CompendiumSyncService {
 	}
 
 	/** Zip root IS the incoming-set root (class/…, monster/… at top level — F2 §3.2),
-	 *  matching data-unified's real release layout (content at zip root). */
+	 *  matching data-unified's real release layout (content at zip root). fflate's
+	 *  `unzipSync` is synchronous (main thread, same as the 6.0.2 hotfix — its async
+	 *  `unzip` spins Web Workers, not wanted here) and returns a flat
+	 *  `Record<path, Uint8Array>`; directory entries are keys ending in "/" with no
+	 *  separate `dir` flag the way JSZip exposed one. A zero-byte FILE entry (a key
+	 *  NOT ending in "/") is kept, matching JSZip's behavior. */
 	private async readZip(buffer: ArrayBuffer): Promise<Map<string, Uint8Array>> {
-		const zip = await JSZip.loadAsync(buffer);
+		let files: Record<string, Uint8Array>;
+		try {
+			files = unzipSync(new Uint8Array(buffer));
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			throw new Error(`Downloaded archive is not a valid zip file (${message}).`);
+		}
 		const incoming = new Map<string, Uint8Array>();
-		for (const [entryPath, entry] of Object.entries(zip.files)) {
-			if (entry.dir) continue;
-			incoming.set(entryPath, await entry.async("uint8array"));
+		for (const [entryPath, data] of Object.entries(files)) {
+			if (entryPath.endsWith("/")) continue;
+			incoming.set(entryPath, data);
 		}
 		if (incoming.size === 0) throw new Error("Downloaded archive contains no files.");
 		return incoming;

@@ -629,7 +629,7 @@ Extracts zip contents into vault (batch of 20 files)
 | `obsidian` (dev) | Obsidian Plugin API types and runtime APIs |
 | `steel-compendium-sdk` (dev) | Draw Steel data model parsing (bundled at build time) |
 | `esbuild` (dev) | Fast bundler producing `main.js` |
-| `jszip` / `jszip-utils` (dev) | Zip extraction for compendium downloads (bundled) |
+| `fflate` (dev) | Zip extraction for compendium downloads (bundled; SC-328 — JSZip's legacy-browser polyfills injected a dynamic `<script>` element, rejected by Obsidian's community-plugin review) |
 | `jest` / `ts-jest` (dev) | Test framework: `unit` (node) and `dom` (jsdom) Jest projects, 308 tests as of D1 |
 
 Vue (`vue`, `@vue/compiler-sfc`, `unplugin-vue`, `vue-tsc`) was removed in D1 (2026-07) —

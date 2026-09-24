@@ -1,9 +1,9 @@
 // F2 Task 10 — the network half of CompendiumSyncService: release metadata fetch
-// (requestUrl, migrated off the legacy request()), asset download, JSZip extraction
+// (requestUrl, migrated off the legacy request()), asset download, fflate extraction
 // into the incoming-set map, and orchestration into applySync (Task 9). Unit-only
 // (node project): every network call flows through the injected `requestUrlFn`
 // (Task 9's forward-compat ctor param) — jest never touches a real network.
-import JSZip from "jszip";
+import { zipSync, strToU8 } from "fflate";
 import * as fs from "fs";
 import * as path from "path";
 // Notice.notices (mock-only static introspection field) isn't on the real obsidian
@@ -18,9 +18,10 @@ import { makeFakeApp } from "../../fakes/fakeObsidian";
 const OPTIONS: SyncOptions = { root: "DS Compendium", locale: "en" };
 
 async function zipOf(entries: Record<string, string>): Promise<ArrayBuffer> {
-	const zip = new JSZip();
-	for (const [p, content] of Object.entries(entries)) zip.file(p, content);
-	return await zip.generateAsync({ type: "arraybuffer" });
+	const files: Record<string, Uint8Array> = {};
+	for (const [p, content] of Object.entries(entries)) files[p] = strToU8(content);
+	const zipped = zipSync(files);
+	return zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength) as ArrayBuffer;
 }
 
 function githubFake(zipBuffer: ArrayBuffer, tag = "v4.20260701T120000") {
@@ -143,12 +144,12 @@ describe("CompendiumSyncService.sync (release download path)", () => {
 
 	test("F2 review MUST-FIX #2: rejectedPaths (path-traversal defense) are surfaced in the sync summary Notice + console.warn payload", async () => {
 		const { app } = makeFakeApp();
-		// Note: a ".." segment can't survive round-tripping through JSZip's OWN writer
-		// (zip.file('../evil.md', …) gets path-cleaned to 'evil.md' on write — verified
-		// against this repo's jszip; only a non-JSZip-authored archive would carry a raw
-		// ".." entry). A leading-slash entry survives the round-trip unchanged and is
-		// exactly as unsafe (isUnsafeRelativePath, CompendiumSyncService.ts:313-316),
-		// so it stands in here for "the zip carried an unsafe path".
+		// fflate's `unzipSync` hands entry names through raw — unlike JSZip's writer,
+		// which used to path-clean a ".." segment on write, fflate authors and
+		// round-trips one unchanged (see the raw-traversal-names test below). That makes
+		// `isUnsafeRelativePath` (CompendiumSyncService.ts:313-316) load-bearing for a
+		// literal ".." entry in a way it never had to be with JSZip. A leading-slash
+		// entry is exactly as unsafe and exercises the same defense here.
 		const zip = await zipOf({ "safe.md": "official", "/abs.md": "pwned" });
 		const fetchFake = githubFake(zip, "v4.rejected");
 		const service = new CompendiumSyncService(
@@ -171,7 +172,38 @@ describe("CompendiumSyncService.sync (release download path)", () => {
 		}
 	});
 
-	test("real fixture files round-trip through a real JSZip archive (network-free integration check)", async () => {
+	test("SC-328: raw traversal names fflate can author (unlike JSZip's writer) are rejected, not just leading-slash paths", async () => {
+		const { app } = makeFakeApp();
+		const zip = await zipOf({
+			"safe.md": "official",
+			"../evil.md": "pwned-parent",
+			"a/../../evil.md": "pwned-nested",
+			"a\\..\\..\\evil.md": "pwned-backslash",
+		});
+		const fetchFake = githubFake(zip, "v4.raw-traversal");
+		const service = new CompendiumSyncService(
+			app, new ManifestStore(app, "draw-steel-elements"), fetchFake);
+		const report = await service.sync(OPTIONS);
+		expect(report.created).toEqual(["safe.md"]);
+		expect(report.rejectedPaths.sort()).toEqual(
+			["../evil.md", "a/../../evil.md", "a\\..\\..\\evil.md"].sort());
+	});
+
+	test("SC-328: a directory entry (key ending in '/') is skipped, a zero-byte FILE entry is kept", async () => {
+		const { app, vault } = makeFakeApp();
+		const zip = await zipOf({ "dir/": "", "dir/empty.md": "", "dir/real.md": "content" });
+		const fetchFake = githubFake(zip, "v4.dir-and-empty");
+		const service = new CompendiumSyncService(
+			app, new ManifestStore(app, "draw-steel-elements"), fetchFake);
+		const report = await service.sync(OPTIONS);
+		// The directory entry itself never appears as a created file...
+		expect(report.created.sort()).toEqual(["dir/empty.md", "dir/real.md"]);
+		// ...but the zero-byte FILE entry is kept, same as JSZip kept it.
+		expect(vault.text("DS Compendium/dir/empty.md")).toBe("");
+		expect(vault.text("DS Compendium/dir/real.md")).toBe("content");
+	});
+
+	test("real fixture files round-trip through a real fflate archive (network-free integration check)", async () => {
 		const { app, vault } = makeFakeApp();
 		const fixtureRoot = path.join(__dirname, "../../fixtures/md-dse");
 		const fixtures: Record<string, string> = {
