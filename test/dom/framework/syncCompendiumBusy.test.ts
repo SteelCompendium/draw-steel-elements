@@ -158,7 +158,15 @@ describe('SC-243 fix round 1 (review L1) — legacy-flow callbacks are lock-firs
 		plugin.syncService.endOperation(token!);
 	});
 
-	test('LegacyCompendiumModal onChoice(true): idle — trashes the root THEN syncs, under its own lock', async () => {
+	// SC-243 fix round 2 (review fix1 F1): the round-1 idle test stubbed `sync` out
+	// entirely, so it could pass even if `onChoice` silently dropped the token before
+	// calling `sync()` — a real bug the reviewer reproduced by deleting the token
+	// argument at `main.ts:747`, which makes the callback refuse ITSELF every idle run
+	// (a busy Notice fires, no sync happens) while this suite stayed green. Three
+	// assertions close that hole: the token genuinely reaches `sync()` (not just "some
+	// second argument"), the lock reads `'sync'` WHILE the trash is happening (not just
+	// "eventually true"), and no busy Notice ever fires on this idle path.
+	test('LegacyCompendiumModal onChoice(true): idle — trashes the root THEN syncs, under its own lock, with the real token reaching sync() and no busy Notice', async () => {
 		const plugin = await makeLoadedPlugin();
 		await seedLegacyModalTrigger(plugin);
 		await plugin.syncCompendium();
@@ -168,13 +176,20 @@ describe('SC-243 fix round 1 (review L1) — legacy-flow callbacks are lock-firs
 		const trashFile = (plugin.app.fileManager as unknown as { trashFile: jest.Mock }).trashFile;
 		const syncSpy = jest.spyOn(plugin.syncService, 'sync').mockResolvedValue(null);
 		const callOrder: string[] = [];
-		trashFile.mockImplementation(async () => { callOrder.push('trash'); });
+		let busyDuringTrash: 'sync' | 'check' | null | undefined;
+		trashFile.mockImplementation(async () => {
+			callOrder.push('trash');
+			busyDuringTrash = plugin.syncService.currentBusy();
+		});
 		syncSpy.mockImplementation(async () => { callOrder.push('sync'); return null; });
 
 		onChoice(true);
 		await flushAsync(2);
 
 		expect(callOrder).toEqual(['trash', 'sync']);
+		expect(syncSpy).toHaveBeenCalledWith(expect.anything(), expect.any(Symbol));
+		expect(busyDuringTrash).toBe('sync'); // the lock was genuinely held while trashing
+		expect(Notice.notices).not.toContain(SYNC_BUSY_NOTICE);
 		expect(plugin.syncService.isBusy()).toBe(false); // released after its own run
 	});
 
@@ -203,5 +218,37 @@ describe('SC-243 fix round 1 (review L1) — legacy-flow callbacks are lock-firs
 		expect(Notice.notices).toContain(SYNC_BUSY_NOTICE);
 
 		plugin.syncService.endOperation(token!);
+	});
+
+	// SC-243 fix round 2 (review fix1 F1): the same idle-path proof as the
+	// LegacyCompendiumModal test above, for `syncAnyway` — the reviewer reproduced the
+	// same self-refusal bug by dropping the token at `main.ts:834`.
+	test("offerMigration's syncAnyway: idle — settles migration state THEN syncs, under its own lock, with the real token reaching sync() and no busy Notice", async () => {
+		const plugin = await makeLoadedPlugin();
+		const root = plugin.settings.compendiumDestinationDirectory;
+		stubMigrationPlan(plugin, root);
+
+		await plugin.migrateCompendium();
+		const callbacks = (CompendiumMigrationModal as unknown as jest.Mock).mock.calls[0][2] as
+			{ syncAnyway: () => void };
+
+		const markSettledSpy = jest.spyOn(plugin.migrationService, 'markSettled');
+		const syncSpy = jest.spyOn(plugin.syncService, 'sync').mockResolvedValue(null);
+		const callOrder: string[] = [];
+		let busyDuringSettle: 'sync' | 'check' | null | undefined;
+		markSettledSpy.mockImplementation(async () => {
+			callOrder.push('settle');
+			busyDuringSettle = plugin.syncService.currentBusy();
+		});
+		syncSpy.mockImplementation(async () => { callOrder.push('sync'); return null; });
+
+		callbacks.syncAnyway();
+		await flushAsync(2);
+
+		expect(callOrder).toEqual(['settle', 'sync']);
+		expect(syncSpy).toHaveBeenCalledWith(expect.anything(), expect.any(Symbol));
+		expect(busyDuringSettle).toBe('sync'); // the lock was genuinely held while settling
+		expect(Notice.notices).not.toContain(SYNC_BUSY_NOTICE);
+		expect(plugin.syncService.isBusy()).toBe(false); // released after its own run
 	});
 });
