@@ -39,7 +39,10 @@
 // only when the LIVE content there still holds that body; otherwise the block is found again
 // by its body, nearest the last known line (identical twins resolve by distance). A write
 // that cannot be placed is dropped with a Notice (droppedWriteNotice.ts). A host whose
-// section never resolved (hover, print, nested renders, canvas) never gets this identity.
+// section never resolved (print/export, canvas, blocks nested in another view's
+// MarkdownRenderer.render) never gets this identity. Hover popovers are NOT in that list —
+// measured on Obsidian 1.14.2 (base and head alike, 2026-09-24), a hover popover's section
+// RESOLVES and a click writes the correct block, same as any other reading-mode context.
 import { MarkdownRenderChild, TFile } from 'obsidian';
 import type { Component, MarkdownPostProcessorContext, MarkdownSectionInformation, Plugin } from 'obsidian';
 import type { BlockHost, BlockInfo, RenderMode } from './BlockHost';
@@ -72,8 +75,60 @@ export function normalizeBody(body: string): string {
 }
 
 /**
+ * SC-343 final review (Important-1): `listFences` (via anchor.ts's `iterateFences`) SKIPS
+ * a fence that never closes, so `locateByBody` alone could never find a block by body when
+ * its closing fence is missing at end-of-note — a perfectly good write then fell through
+ * to a FALSE "not saved" Notice on the durable path (e.g. a click then navigate-away 30 ms
+ * later, nothing on disk actually changed). Mirrors `iterateFences`' own open/close bracket
+ * matching locally — anchor.ts itself is out of scope (the sidebar depends on its current
+ * skip-unterminated behaviour) — to find the trailing fence-open of `language` that never
+ * finds a valid close before EOF: its body is everything from the line after it through
+ * the note's last line (normalizeBody trims the trailing blank lines away for comparison);
+ * its lineEnd is `lines.length - 1`.
+ */
+function locateUnterminatedTrailingFence(
+	lines: string[],
+	language: string,
+): { lineStart: number; lineEnd: number } | null {
+	let i = 0;
+	let candidate: { lineStart: number; lineEnd: number } | null = null;
+	while (i < lines.length) {
+		const open = lines[i].match(OPEN_FENCE);
+		if (!open) {
+			i++;
+			continue;
+		}
+		const fenceChar = open[1][0];
+		const fenceLen = open[1].length;
+		let j = i + 1;
+		let closed = false;
+		while (j < lines.length) {
+			const close = lines[j].match(CLOSE_FENCE);
+			if (close && close[1][0] === fenceChar && close[1].length >= fenceLen && lines[j].slice(close[1].length).trim() === '') {
+				closed = true;
+				break;
+			}
+			j++;
+		}
+		if (!closed) {
+			// Runs off the end of the note — the trailing-unterminated candidate for this
+			// open. Abandon it (same recovery as iterateFences: don't treat as opaque
+			// through to EOF) and keep scanning from the very next line, so a later,
+			// better-matching trailing open can still override.
+			if (open[2] === language) candidate = { lineStart: i, lineEnd: lines.length - 1 };
+			i++;
+			continue;
+		}
+		i = j + 1;
+	}
+	return candidate;
+}
+
+/**
  * SC-343: find the `language` block whose body equals `body` in `content`, nearest
  * `nearLine` (ties go to the earlier block). Fence lines inclusive. Null when none matches.
+ * Also considers a trailing fence of `language` that never closes (SC-343 final review
+ * Important-1) — its body is everything from the fence-open line through EOF.
  */
 export function locateByBody(
 	content: string,
@@ -98,6 +153,20 @@ export function locateByBody(
 		if (distance < bestDistance) {
 			best = { lineStart: info.lineStart, lineEnd: info.lineEnd };
 			bestDistance = distance;
+		}
+	}
+	// SC-343 final review (Important-1): listFences skips an unterminated fence entirely —
+	// also consider the note's own trailing fence-open of `language`, if any, that never
+	// closes (its body runs to EOF).
+	const unterminated = locateUnterminatedTrailingFence(lines, language);
+	if (unterminated) {
+		const candidate = normalizeBody(lines.slice(unterminated.lineStart + 1, unterminated.lineEnd + 1).join('\n'));
+		if (candidate === wanted) {
+			const distance = Math.abs(unterminated.lineStart - nearLine);
+			if (distance < bestDistance) {
+				best = unterminated;
+				bestDistance = distance;
+			}
 		}
 	}
 	return best;
@@ -262,13 +331,34 @@ export class ReadingModeBlockHost implements BlockHost {
 		if (section) {
 			const lines = content.split('\n');
 			const { lineStart, lineEnd } = section;
-			const openOk = parseOpenFence(content, lineStart) !== null;
+			const openFence = parseOpenFence(content, lineStart);
+			const openOk = openFence !== null;
 			const closeOk = parseCloseFence(lines[lineEnd]) !== null;
+			// SC-343 final review (close-fence hardening, data-loss note): "unterminated at
+			// EOF" must ALSO confirm there is no matching close fence anywhere inside the
+			// section's own range [lineStart+1, lineEnd] — not only at lineEnd itself. A stale/
+			// oversized range (e.g. a section snapshot that grew to include trailing blank
+			// lines past the block's REAL close) must never be treated as an open fence running
+			// to EOF: the splice below would then delete the real close fence — and everything
+			// between it and lineEnd — and write a second one, losing content. Reimplemented
+			// locally (mirrors anchor.ts's isFenceClose: same fence char, at least as long, no
+			// info string) — anchor.ts itself is out of scope (the sidebar depends on it).
+			const hasCloseInRange =
+				openOk &&
+				lines.slice(lineStart + 1, lineEnd + 1).some((l) => {
+					const close = l.match(CLOSE_FENCE);
+					return (
+						!!close &&
+						close[1][0] === openFence.fence[0] &&
+						close[1].length >= openFence.fence.length &&
+						l.slice(close[1].length).trim() === ''
+					);
+				});
 			// SC-343 fix round 1: "at EOF" tolerates trailing blank lines after the section's
 			// reported lineEnd (a trailing '\n' or blank lines below an unterminated fence),
 			// not only an exact match to the last line — Obsidian's own section range can land
 			// short of the note's true last line when the note ends in blank lines.
-			const unterminatedAtEof = !closeOk && lines.slice(lineEnd + 1).every((l) => l.trim() === '');
+			const unterminatedAtEof = !closeOk && !hasCloseInRange && lines.slice(lineEnd + 1).every((l) => l.trim() === '');
 			const bodyEnd = unterminatedAtEof ? lineEnd + 1 : lineEnd;
 			const bodyOk =
 				this.knownBody === null ||

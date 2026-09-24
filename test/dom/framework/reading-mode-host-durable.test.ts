@@ -91,6 +91,34 @@ describe('SC-343: durable identity and canPersist', () => {
 		expect(host.canPersist).toBe(false); // no language could be read -> no durable identity
 	});
 
+	test('a host whose section resolved once but setMountedBody was never called: canPersist false after the section goes', () => {
+		const app = new App();
+		app.vault.setFile('Note.md', COUNTER);
+		const section = { current: { text: COUNTER, lineStart: 0, lineEnd: 3 } as { text: string; lineStart: number; lineEnd: number } | null };
+		const host = new ReadingModeBlockHost(new Plugin(app) as any, document.createElement('div'), switchableCtx('Note.md', section) as any, 'ds-counter');
+		// setMountedBody deliberately never called.
+		expect(host.canPersist).toBe(true); // section resolves: unchanged from today
+
+		section.current = null;
+		expect(host.canPersist).toBe(false); // no known body -> no durable identity
+	});
+
+	test('a plain canPersist or getBlockInfo read (not just notePersistIntent) refreshes lastKnownLineStart', () => {
+		const app = new App();
+		app.vault.setFile('Note.md', COUNTER);
+		const ctx = makeFakeContext(app, 'Note.md');
+		const host = new ReadingModeBlockHost(new Plugin(app) as any, ctx.el, ctx as any, 'ds-counter');
+		expect(host.lastKnownLineStart).toBe(0);
+
+		app.vault.setFile('Note.md', ['shift 1', 'shift 2', 'shift 3', COUNTER].join('\n'));
+		expect(host.canPersist).toBe(true);
+		expect(host.lastKnownLineStart).toBe(3);
+
+		app.vault.setFile('Note.md', ['shift 1', 'shift 2', 'shift 3', 'shift 4', COUNTER].join('\n'));
+		expect(host.getBlockInfo()?.lineStart).toBe(4);
+		expect(host.lastKnownLineStart).toBe(4);
+	});
+
 	test('notePersistIntent refreshes the last known line from the live section', () => {
 		const app = new App();
 		app.vault.setFile('Note.md', COUNTER);
@@ -240,6 +268,50 @@ describe('SC-343: guarded replaceSource', () => {
 		expect(app.vault.getContent('Note.md')).toBe(
 			['Before', '', '```ds-counter', 'name: A', 'current_value: 2', '```', '', ''].join('\n'),
 		);
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('unterminated fence at EOF, section gone (navigate-away): the write lands, fence closes, no Notice — trailing newline', async () => {
+		const app = new App();
+		const live = ['Before', '', '```ds-counter', 'name: A', 'current_value: 1'].join('\n') + '\n';
+		app.vault.setFile('Note.md', live);
+		const section = { current: { text: live, lineStart: 2, lineEnd: 4 } as { text: string; lineStart: number; lineEnd: number } | null };
+		const host = hostFor(app, 'Note.md', section, 'name: A\ncurrent_value: 1');
+		section.current = null; // navigate away before the flush
+
+		await expect(host.replaceSource('name: A\ncurrent_value: 2')).resolves.toBe(true);
+		expect(app.vault.getContent('Note.md')).toBe(
+			['Before', '', '```ds-counter', 'name: A', 'current_value: 2', '```'].join('\n'),
+		);
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('unterminated fence at EOF, section gone (navigate-away): the write lands, fence closes, no Notice — trailing blank lines', async () => {
+		const app = new App();
+		const live = ['Before', '', '```ds-counter', 'name: A', 'current_value: 1'].join('\n') + '\n\n\n';
+		app.vault.setFile('Note.md', live);
+		const section = { current: { text: live, lineStart: 2, lineEnd: 4 } as { text: string; lineStart: number; lineEnd: number } | null };
+		const host = hostFor(app, 'Note.md', section, 'name: A\ncurrent_value: 1');
+		section.current = null; // navigate away before the flush
+
+		await expect(host.replaceSource('name: A\ncurrent_value: 2')).resolves.toBe(true);
+		expect(app.vault.getContent('Note.md')).toBe(
+			['Before', '', '```ds-counter', 'name: A', 'current_value: 2', '```'].join('\n'),
+		);
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('close-fence hardening: a stale range running into trailing blank lines past a real close is never treated as unterminated (no data loss)', async () => {
+		const app = new App();
+		const live = ['```ds-counter', 'name: A', '```', 'After', '', ''].join('\n');
+		app.vault.setFile('Note.md', live);
+		// Stale range: reports lineEnd 4 (into the trailing blanks), but the block actually
+		// closed at line 2 — "After" and the blanks are note content, not the block's body.
+		const section = { current: { text: live, lineStart: 0, lineEnd: 4 } };
+		const host = hostFor(app, 'Note.md', section, null); // no durable identity (knownBody null)
+
+		await expect(host.replaceSource('name: B')).resolves.toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(live);
 		expect(Notice.notices).toHaveLength(0);
 	});
 

@@ -42,18 +42,22 @@ export interface BlockHost {
 	/** Container the pipeline mounts the element root into. */
 	readonly containerEl: HTMLElement;
 	/**
-	 * Whether replaceSource can possibly succeed here (false: print/export, hover
-	 * popovers, canvas, or any other non-addressable context — F1 §4.4). Views must
-	 * render read-only (visible but inert) when false, instead of attempting a write.
+	 * Whether replaceSource can possibly succeed here (false: print/export, canvas, a
+	 * block nested inside another view's own MarkdownRenderer.render, or any other
+	 * non-addressable context — F1 §4.4). Views must render read-only (visible but
+	 * inert) when false, instead of attempting a write.
 	 * NOT embeds (SC-184 fix round, embed-comment tangent) — an `![[embed]]` re-renders
 	 * through Obsidian's own MarkdownRenderer with a real, non-empty sourcePath and a
 	 * working getSectionInfo, so it resolves `canPersist === true` and writes through the
 	 * same real file every other reading-mode host does (verified live; see SC-184's
-	 * decisions ledger). Of the cases above, only canvas has a dedicated quarantine
-	 * branch in code (`sourcePath === ''`, ReadingModeBlockHost's `canPersist` getter);
-	 * print/export and hover popovers are non-persistable because their own hosts
-	 * report `canPersist === false` (no addressable section info), not because they
-	 * hit that branch.
+	 * decisions ledger). NOT hover popovers either (SC-343 final review — corrected; this
+	 * doc previously listed them as non-persistable): measured on Obsidian 1.14.2 (base
+	 * and head alike, 2026-09-24), a hover popover's section RESOLVES and a click writes
+	 * the correct block, same as any other reading-mode context. Of the cases above, only
+	 * canvas has a dedicated quarantine branch in code (`sourcePath === ''`,
+	 * ReadingModeBlockHost's `canPersist` getter); print/export and a nested render are
+	 * non-persistable because their own hosts report `canPersist === false` (no
+	 * addressable section info), not because they hit that branch.
 	 *
 	 * SC-343: a reading-mode host whose section RESOLVED AT LEAST ONCE stays persistable
 	 * after the section goes (e.g. the flush after navigate-away) through its durable
