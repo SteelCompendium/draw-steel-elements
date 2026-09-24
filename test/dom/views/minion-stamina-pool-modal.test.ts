@@ -478,3 +478,12 @@ describe('SC-241: negative Apply Damage input (damage or minion count) is clampe
 		expect(group.minion_stamina_pool).toBe(17);
 	});
 });
+
+describe('SC-340 (carried over from SC-331): pool modal, no change, no write', () => {
+	test('closing with no condition edit at all persists nothing', async () => {
+		const { modal, updateCallback } = await setup({ condition: true, persist: true });
+		modal.close();
+		await flushAsync();
+		expect(updateCallback).not.toHaveBeenCalled();
+	});
+});

@@ -2533,3 +2533,16 @@ malice:
 		expect(serialize(reparsed)).toBe(s1);
 	});
 });
+
+describe('SC-340 (carried over from SC-331): no change, no write', () => {
+	test('opening and closing the ConditionsModal with NO change persists nothing', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(quickStart);
+		(root.querySelector('.dse-init__group--heroes .dse-cond--add') as HTMLElement).click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		(modalEl.querySelector('.dse-modal__footer button[aria-label="Done"]') as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
+		expect(host.replaceSource).not.toHaveBeenCalled();
+		jest.useRealTimers();
+	});
+});

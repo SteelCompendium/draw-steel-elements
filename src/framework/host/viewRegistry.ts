@@ -13,6 +13,7 @@
 // claim(docId, sourcePath, source) whether a live view wrote exactly this body.
 import { Component } from 'obsidian';
 import type { ReadingModeBlockHost } from './ReadingModeBlockHost';
+import { normalizeBody } from './ReadingModeBlockHost';
 
 /** A write's claim ticket is valid this long (spec §6.2; the rebuild arrives ~5 ms after modify). */
 export const CLAIM_WINDOW_MS = 3000;
@@ -81,11 +82,33 @@ export class ViewRegistry extends Component {
 		entry.tickets.push({ body, at });
 	}
 
-	/** Task 4 implements adoption; until then every rebuild gets a fresh view. */
-	claim(_docId: string, _sourcePath: string, _body: string): ViewRegistryEntry | null {
+	/**
+	 * SC-340 §6.2: the ONE live, unclaimed view in this rendered document (docId) and file
+	 * whose recent own write produced exactly `body`. Consumes that ticket and older ones.
+	 */
+	claim(docId: string, sourcePath: string, body: string): ViewRegistryEntry | null {
 		if (!this.enabled) return null;
-		this.stats.misses++;
-		return null;
+		const at = this.now();
+		const wanted = normalizeBody(body);
+		const hits: Array<{ entry: ViewRegistryEntry; index: number }> = [];
+		for (const entry of this.entries) {
+			if (entry.released || entry.claiming) continue;
+			if (!(entry.view as unknown as { _loaded: boolean })._loaded) continue;
+			if (entry.host.docId !== docId || entry.host.sourcePath !== sourcePath) continue;
+			const index = entry.tickets.findIndex((t) => at - t.at < CLAIM_WINDOW_MS && normalizeBody(t.body) === wanted);
+			if (index >= 0) hits.push({ entry, index });
+		}
+		if (hits.length === 0) {
+			this.stats.misses++;
+			return null;
+		}
+		if (hits.length > 1) this.stats.ambiguous++;
+		hits.sort((a, b) => b.entry.tickets[b.index].at - a.entry.tickets[a.index].at);
+		const { entry, index } = hits[0];
+		entry.tickets.splice(0, index + 1);
+		entry.claiming = true;
+		this.stats.claims++;
+		return entry;
 	}
 
 	finishClaim(entry: ViewRegistryEntry): void {

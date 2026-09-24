@@ -23,6 +23,7 @@ import type { ElementPipeline } from './pipeline';
 import { ReadingModeBlockHost } from './host/ReadingModeBlockHost';
 import { PreviewScrollPin } from './host/previewScrollPin';
 import { ViewRegistry } from './host/viewRegistry';
+import { adoptView } from './host/adoptView';
 
 /**
  * The subset of `ElementFrameworkV2` (main.ts) this wiring loop needs. A narrow structural
@@ -59,6 +60,19 @@ export function registerFrameworkElements(
 			plugin.registerMarkdownCodeBlockProcessor(
 				alias,
 				(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+					// SC-340 §6.2: a rebuild caused by one of OUR writes adopts the live view.
+					const claimed = registry.claim(ctx.docId, ctx.sourcePath, source);
+					if (claimed) {
+						try {
+							adoptView(registry, claimed, el, ctx);
+							return Promise.resolve();
+						} catch (error) {
+							// §8: never leave the block blank — release and render fresh.
+							console.error('Draw Steel Elements: view adoption failed; rendering a fresh view.', error);
+							if (claimed.root.parentElement === el) claimed.root.remove();
+							registry.release(claimed, 'adopt-failed');
+						}
+					}
 					const host = new ReadingModeBlockHost(plugin, el, ctx, alias, scrollPin, registry);
 					// SC-343: the durable identity starts from the body this view is built from.
 					host.setMountedBody(source);
