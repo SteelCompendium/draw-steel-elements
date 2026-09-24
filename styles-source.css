@@ -14262,6 +14262,16 @@ body.theme-light
    neutralized for both states by the SC-203 host re-grounding block, which the chip now
    also joins (~:15335) — this outline is never left to stack over a grey box-shadow. */
 .dse-optchip:focus-visible,
+/* SC-338 r2 — `.dse-swatch` (the Conditions "Color" row) has the identical gap: a bare
+   `<button>`, host ring only. Its own `[aria-pressed='true']` selection mark (~:2145) also
+   sets `outline: 2px solid var(--dse-accent); outline-offset: 2px` — SAME property, SAME
+   (0,2,0) specificity as this rule, so on a chip that is both pressed AND focused the two
+   tie and source order decides: this rule sits later in the file, so it wins. That is
+   inert in practice — `--dse-accent` and `--dse-focus-ring` resolve to the SAME hex in
+   both Steel schemes (dark `#4db8c7`, light `#2a7b88`) — but it is a real cascade fact,
+   not an assumption; proven live (SC-338 r2 evidence). Unpressed swatches had no outline
+   rule of their own at all, so they get this ring exactly like the unpressed chip. */
+.dse-swatch:focus-visible,
 /* SC-202 r1 — the eight cousin inputs (initiative malice quick-add, montage skill/
    characteristic, party award, project roll/points/characteristic) never carried a
    focus ring at all — a gap the input-family sweep's :focus-visible pass caught
@@ -15580,14 +15590,29 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
       untouched). Unpressed, and on every state including `:focus-visible`, this removes
       Obsidian's host `button:not(.clickable-icon)`/`button:focus-visible` box-shadow
       ((0,1,1) either way) so the chip's own kit focus ring (~:14022) is never drawn over
-      a leftover grey ring. -- */
+      a leftover grey ring.
+      SC-338 r1 REVIEW (MEDIUM-1) — stated plainly because it is easy to read this as a
+      focus-only fix and it is not: `box-shadow: none` here applies at REST and on HOVER
+      too, not only `:focus-visible` — the block carries no state qualifier. An unpressed
+      chip therefore also loses Obsidian's `--input-shadow`/`--input-shadow-hover` plate
+      (dark: a soft drop shadow; light: a 12%-black inset ring, i.e. a second border) at
+      rest and on hover, same as every other member of this list already does and always
+      has. Kept deliberately (owner ruling, r1 review): matches SC-203/SC-205's own
+      re-grounding philosophy exactly, and the chip's base rule never asked for a host
+      plate — disclosed with rest-state before/after crops rather than narrowed to
+      `:focus-visible` only.
+      SC-338 r2 adds `.dse-swatch` (Conditions "Color" row, ~:2131): identical shape and
+      identical reasoning, INCLUDING the rest/hover plate removal above. Its own
+      `[aria-pressed='true']` selection mark (~:2145) is an `outline`, not a `box-shadow`,
+      so this entry cannot touch it either way. -- */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"])
 	:where(
 		.dse-btn,
 		.dse-collapse__header,
 		.dse-pr__row,
 		.dse-tabs__tab:not([aria-selected='true']),
-		.dse-optchip
+		.dse-optchip,
+		.dse-swatch
 	) {
 	box-shadow: none;
 }
