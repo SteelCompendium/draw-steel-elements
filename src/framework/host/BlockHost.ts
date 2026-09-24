@@ -67,6 +67,12 @@ export interface BlockHost {
 	/**
 	 * Tie a Component's lifecycle to this rendered block (reading mode: the
 	 * MarkdownRenderChild; Live Preview later: the widget's own lifecycle).
+	 * SC-340 (spec §7) amends this for reading mode: the ElementVIEW itself is no longer
+	 * tied here — the pipeline owns it through the plugin-scoped ViewRegistry instead
+	 * (see ReadingModeBlockHost.ts / viewRegistry.ts), so it can outlive this block's
+	 * section (adoption). addChild remains the right call for any AUXILIARY Component a
+	 * view registers that should still unload in lockstep with the section (e.g. a modal
+	 * or popover the view opens, not the view itself).
 	 */
 	addChild<T extends Component>(child: T): T;
 	/** Position/identity of the block in its document, when addressable; else null. */

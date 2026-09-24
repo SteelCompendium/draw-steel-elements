@@ -48,6 +48,24 @@ describe('SC-340 Task 2: ViewRegistry ownership and release', () => {
 		expect((entry.view as any)._loaded).toBe(false);
 	});
 
+	test('a render child that unloads WHILE pipeline.run is still pending is released, not leaked (fix round 1, Important-1)', async () => {
+		const { deps, app, plugin } = makeEnv();
+		app.vault.setFile('Note.md', NOTE);
+		const registry = new ViewRegistry({ enabled: false });
+		registry.load();
+		const ctx = makeFakeContext(app, 'Note.md');
+		const host = new ReadingModeBlockHost(plugin as any, ctx.el, ctx as any, 'ds-counter', null, registry);
+		host.setMountedBody(COUNTER_BODY);
+		const renderChild = ctx.addedChildren[0];
+		renderChild.load();
+		const pending = new ElementPipeline(deps).run(counterElement, COUNTER_BODY, host);
+		renderChild.unload(); // section torn down while prepareModel (async) is still pending
+		await pending;
+		expect(registry.size).toBe(0);
+		expect(registry.stats.releases).toBe(1);
+		expect(registry.liveEntries()).toHaveLength(0);
+	});
+
 	test('release flushes the pending write: a click then an unload within the debounce still writes', async () => {
 		jest.useFakeTimers();
 		const { app, renderChild, root } = await mountCounter();

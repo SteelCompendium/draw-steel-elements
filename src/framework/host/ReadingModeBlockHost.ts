@@ -4,8 +4,12 @@
 // Construction (pipeline-internal, per §3.4): `new ReadingModeBlockHost(plugin, el,
 // ctx, alias)` wraps a MarkdownPostProcessorContext, creates one
 // MarkdownRenderChild(el) and `ctx.addChild`s it; `addChild` proxies to that render
-// child so anything an ElementView registers unloads in lockstep with the block's
-// section being torn down/re-rendered.
+// child, tying an AUXILIARY Component's lifecycle to the block's section being torn
+// down/re-rendered. SC-340 (spec §7) amends this for the ElementVIEW itself: the
+// pipeline hands the view to the plugin-scoped ViewRegistry (host.registry.own), never
+// to host.addChild, so the view can outlive its render child (adoption) — the render
+// child's unload only SIGNALS the registry (registry.release) rather than owning the
+// view directly. See viewRegistry.ts's file header.
 //
 // Correctness fixes over the legacy src/utils/CodeBlocks.ts (NOT modified by this
 // file — it stays live for unmigrated elements until D1):
@@ -191,6 +195,9 @@ export class ReadingModeBlockHost implements BlockHost {
 
 	/** SC-340: this host's registry entry (set by ViewRegistry.own). */
 	private entry: ViewRegistryEntry | null = null;
+	/** SC-340 fix round 1 (Important-1): true once the CURRENT render child has unloaded,
+	 *  even before a view exists to release — see onRenderChildUnload / makeRenderChild. */
+	private _renderChildGone = false;
 
 	constructor(
 		private readonly plugin: Plugin,
@@ -211,6 +218,11 @@ export class ReadingModeBlockHost implements BlockHost {
 
 	private makeRenderChild(el: HTMLElement, ctx: MarkdownPostProcessorContext): MarkdownRenderChild {
 		const renderChild = new MarkdownRenderChild(el);
+		// SC-340 fix round 1: a freshly made render child describes the CURRENT binding —
+		// reset the flag here (not just at field-init) so Task 3's rebind, which calls this
+		// factory again for a new render child, never inherits a stale `true` from the one
+		// it superseded.
+		this._renderChildGone = false;
 		renderChild.register(() => this.onRenderChildUnload(renderChild));
 		ctx.addChild(renderChild);
 		return renderChild;
@@ -222,8 +234,20 @@ export class ReadingModeBlockHost implements BlockHost {
 	 */
 	private onRenderChildUnload(renderChild: MarkdownRenderChild): void {
 		if (renderChild !== this.renderChild) return;
+		// SC-340 fix round 1 (Important-1): recorded whether or not an entry exists yet — the
+		// pipeline can still be awaiting prepareModel (refs) when the section is torn down, so
+		// ViewRegistry.own() would otherwise hand the view to a host whose render child has
+		// already gone, leaking it until the plugin unloads. See the `renderChildGone` getter.
+		this._renderChildGone = true;
 		this.readSection(); // last chance to refresh the durable position while it may resolve
 		if (this.entry && this.registry) this.registry.release(this.entry, 'render-child-unload');
+	}
+
+	/** SC-340 fix round 1: true once the CURRENT render child has unloaded — checked by
+	 *  ViewRegistry.own() so a view mounted after the section is already gone is released
+	 *  immediately instead of leaking until the plugin unloads. */
+	get renderChildGone(): boolean {
+		return this._renderChildGone;
 	}
 
 	attachEntry(entry: ViewRegistryEntry): void {

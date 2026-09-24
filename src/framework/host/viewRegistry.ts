@@ -65,6 +65,11 @@ export class ViewRegistry extends Component {
 		this.entries.add(entry);
 		host.attachEntry(entry);
 		this.addChild(view);
+		// SC-340 fix round 1 (Important-1): the host's render child can have unloaded WHILE
+		// this view was still being built (prepareModel's refs/validation await outlives the
+		// section it started under) — own() runs after that race is already lost, so check the
+		// host's own record of it rather than relying on a release() that already happened.
+		if (host.renderChildGone) this.release(entry, 'render-child-gone-before-own');
 		return entry;
 	}
 

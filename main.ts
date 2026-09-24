@@ -623,12 +623,18 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         // the plugin unloads"). The rest (ValidationService/ThemeService/
         // PreferenceStore/ReferenceService/ElementRegistry/ElementPipeline) carry no
         // module-global state — they're constructed fresh in onload — so dropping the
-        // reference is enough; no view is ever stored on the plugin (F1 §2.4 step 6).
+        // reference is enough. SC-340: every reading-mode view IS now stored on the
+        // plugin, via `viewRegistry` (a `plugin.addChild`) — its own `unload()`
+        // (Component cascade) unloads every owned view before this method runs.
         this.frameworkV2?.services.session.clear();
         // D4: don't lose a pref change made in the last 250 ms before unload.
         this.prefsStorage?.flush();
         this.prefsStorage = undefined;
         this.frameworkV2 = undefined;
+        // SC-340 fix round 1: drop the reference now that the registry (a plugin child)
+        // has already unloaded — a stale plugin instance (reload/disable/re-enable) must
+        // never read a torn-down registry as if it were still live.
+        this.viewRegistry = null;
 
         // D8 Task 10 (Task 4 review carry-forward): drop the encounter hand-off closure
         // over this instance's dseSidebarServices — a stale plugin instance (reload/
