@@ -15,6 +15,18 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Initiative tracker: an unsynced compendium creature no longer asks about
+  duplicate files, and the console no longer logs a warning for every creature without a
+  portrait** (SC-240). A statblock reference the encounter builder creates from the
+  compendium (`scc.v1:…`) that fails to resolve used to wrap the real reason ("…is not
+  available in this vault. Sync the compendium…") in a stock "Are there multiple instances
+  of the '<ref>' file in your vault?" hint left over from plain-filename references — nonsense
+  for an SCC code, since there is no vault file to have duplicates of. That hint is gone for
+  SCC-shaped references; ordinary filename references are unaffected. Separately, every
+  builder-created tracker used to log a `console.warn` for each creature with no portrait,
+  purely because compendium statblocks carry no `image` field — an already-handled state
+  (the themed fallback glyph still renders). The warning now fires only when a portrait image
+  WAS specified and still couldn't be resolved.
 - [FIX] **Typing a negative number into the minion pool's Apply Damage box no longer heals
   the squad** (SC-241). Applying damage from a minion's stamina-pool modal used to read
   whatever you typed as a plain multiplier, so a negative damage amount (or a negative

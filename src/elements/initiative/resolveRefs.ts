@@ -14,11 +14,15 @@
 //      / image / with_captain (SC-195, additive) ONLY-IF-UNSET. The `statblock` string
 //      STAYS on the model — legacy kept it
 //      after merging, so it serializes back into the block byte-identically. Resolution
-//      errors — file not found, no ds-* block, malformed block YAML — re-throw the legacy
-//      multi-line "Failed to resolve … multiple instances …" hint verbatim
-//      (EncounterData.ts:119-127). A block that parses to NULL is the one non-throwing
-//      miss (resolveBarePath → null): legacy truth-tested the parsed data and silently
-//      skipped the merge, so phase 2 reports any genuinely missing field instead.
+//      errors on a BARE-PATH ref — file not found, no ds-* block, malformed block YAML —
+//      re-throw the legacy multi-line "Failed to resolve … multiple instances …" hint
+//      verbatim (EncounterData.ts:119-127). SC-240: a `scc:`/`scc.vN:`-shaped ref (routed
+//      through refs.resolve(), see resolveStatblockRef below) drops that hint — it names a
+//      "file in your vault", which is nonsense for an SCC code — and keeps only the
+//      lead-in + the failing provider's own message. A block that parses to NULL is the
+//      one non-throwing miss (resolveBarePath → null): legacy truth-tested the parsed data
+//      and silently skipped the merge, so phase 2 reports any genuinely missing field
+//      instead.
 //   2. VALIDATE — the four checks Task 1 deferred because legacy ran them only after the
 //      merge, byte-identical messages, legacy per-entry order (name before max_stamina),
 //      for ALL entries: a ref-FREE hero missing max_stamina must still fail here.
@@ -81,9 +85,16 @@ const SCC_PREFIX_RE = /^scc(\.v\d+)?:/;
  * would report the generic "no provider could resolve this" message instead of the
  * shape-aware SCC one for a padded ref in a provider-less context.
  */
+/** SC-240: the SAME scc:/scc.vN: shape predicate resolveStatblockRef dispatches on,
+ *  reused (not re-implemented) by the hero/creature failure-message branches below so
+ *  the error-text decision can never drift out of sync with the resolution routing. */
+function isSccShapedRef(raw: string): boolean {
+	return SCC_PREFIX_RE.test(raw.trim());
+}
+
 async function resolveStatblockRef(refs: ReferenceService, raw: string): Promise<ResolvedRef | null> {
 	const trimmed = raw.trim();
-	if (SCC_PREFIX_RE.test(trimmed)) {
+	if (isSccShapedRef(raw)) {
 		const resolved = await refs.resolve(trimmed, '');
 		return resolved.data == null ? null : resolved;
 	}
@@ -114,8 +125,17 @@ export async function resolveInitiativeRefs(
 				}
 			} catch (e) {
 				// Legacy hint VERBATIM (EncounterData.ts:120-125), incl. the leading/trailing
-				// newlines and the 4-space indent before the inner message.
-				const message = `
+				// newlines and the 4-space indent before the inner message — BARE-PATH refs
+				// only. SC-240: a `scc:`/`scc.vN:`-shaped ref drops the "multiple instances"
+				// hint (nonsense for an SCC code — there is no "file" to have duplicates of)
+				// and keeps only the lead-in + the failing provider's own message (e.g.
+				// SccRefProvider's "…is not available in this vault. Sync the compendium…").
+				const message = isSccShapedRef(hero.statblock)
+					? `
+Failed to resolve hero statblock reference at index ${index} (${hero.statblock}):
+    ${(e as Error).message}
+`
+					: `
 Failed to resolve hero statblock reference at index ${index} (${hero.statblock}):
     ${(e as Error).message}
 
@@ -140,7 +160,14 @@ Are there multiple instances of the '${hero.statblock}' file in your vault? If s
 						if (!creature.with_captain && data.with_captain) creature.with_captain = data.with_captain as string;
 					}
 				} catch (e) {
-					const message = `
+					// SC-240: see the hero loop's catch above — same predicate, same hint
+					// suppression for scc:/scc.vN:-shaped refs.
+					const message = isSccShapedRef(creature.statblock)
+						? `
+Failed to resolve creature statblock reference at index ${creatureIndex} (${creature.statblock}):
+    ${(e as Error).message}
+`
+						: `
 Failed to resolve creature statblock reference at index ${creatureIndex} (${creature.statblock}):
     ${(e as Error).message}
 

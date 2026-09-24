@@ -1174,10 +1174,16 @@ export class InitiativeView extends ElementView<EncounterData> {
 				});
 			})
 			// SC-4 (unchanged trigger): BOTH the actor's own image and the vault's default
-			// token image are missing — warn once, then (SC-162) show the themed fallback
-			// instead of leaving the slot empty.
+			// token image are missing — then (SC-162) show the themed fallback instead of
+			// leaving the slot empty. SC-240: warn ONLY when an image WAS specified
+			// (non-empty imgSrcRaw) and still couldn't be resolved — every builder-created
+			// tracker otherwise logged one warning per creature purely because md-dse
+			// statblocks carry no `image` key, which is a handled, expected state (the
+			// fallback glyph renders exactly the same either way), not a warning-worthy one.
 			.catch(() => {
-				console.warn(`Draw Steel Elements: no portrait image found for "${name}" (and no default token image)`);
+				if (imgSrcRaw) {
+					console.warn(`Draw Steel Elements: no portrait image found for "${name}" (and no default token image)`);
+				}
 				this.renderPortraitFallback(container, kind);
 			});
 	}

@@ -25,6 +25,13 @@
 // resolvePath message, which the merge wraps in the "multiple instances" hint — byte-equal
 // to legacy. The ONE non-throwing miss is a ds-* block that parses to null: legacy
 // truth-tested the parsed data and silently skipped the merge, preserved here.
+//
+// SC-240 (deliberate contract update, BARE-PATH ONLY): the "multiple instances" hint is a
+// legacy-filesystem wart — nonsense for an `scc:`/`scc.vN:`-shaped ref, which names no
+// vault file at all. Every bare-path assertion above/below stays byte-identical to the
+// legacy oracle, UNCHANGED by this ticket. New assertions below (see the "SC-240" describe
+// block) pin that an SCC-shaped ref's failure message drops that hint while keeping the
+// "Failed to resolve … at index N (<ref>):" lead-in and the failing provider's own message.
 import { parseYaml, App } from '../../mocks/obsidian';
 import { parseEncounterData } from '@drawSteelAdmonition/EncounterData';
 import type { EncounterData } from '@drawSteelAdmonition/EncounterData';
@@ -33,6 +40,8 @@ import { createReferenceService } from '../../../src/framework/seams/refs';
 import type { ReferenceService } from '../../../src/framework/seams/refs';
 import { parse, serialize, minionPoolOf } from '../../../src/elements/initiative/model';
 import { resolveInitiativeRefs } from '../../../src/elements/initiative/resolveRefs';
+import { SccResolver } from '../../../src/refs/SccResolver';
+import { SccRefProvider } from '../../../src/refs/SccRefProvider';
 import quickStart from '../../fixtures/initiative/quick-start.yaml';
 import squad from '../../fixtures/initiative/squad.yaml';
 import statblockRefs from '../../fixtures/initiative/statblock-refs.yaml';
@@ -40,6 +49,18 @@ import statblockRefs from '../../fixtures/initiative/statblock-refs.yaml';
 function makeEnv(): { app: App; refs: ReferenceService } {
 	const app = new App();
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
+	return { app, refs };
+}
+
+/** SC-240: same as makeEnv, but with a REAL SccRefProvider registered (matching
+ *  production wiring — see test/dom/elements/_refHarness.ts's makeCompendiumDeps),
+ *  so an scc:/scc.vN: ref for an unsynced code fails with SccRefProvider's own
+ *  message rather than the generic reserved-provider "Unresolvable reference" text. */
+function makeSccEnv(): { app: App; refs: ReferenceService } {
+	const app = new App();
+	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
+	const resolver = new SccResolver(app as any, DEFAULT_SETTINGS);
+	refs.register(new SccRefProvider(app as any, resolver));
 	return { app, refs };
 }
 
@@ -349,6 +370,60 @@ describe('T-2: resolution errors re-throw the legacy multi-line hint', () => {
 		expect(message).toBe(await errorMessageOf(legacyMaterialize(src, app)));
 		expect(message).toBe("Hero at index 0 is missing the 'name' field.");
 		expect(message).not.toContain('Failed to resolve');
+	});
+});
+
+// SC-240: an scc:/scc.vN:-shaped ref that fails to resolve must NOT carry the legacy
+// "multiple instances … full path" hint — nonsense for an SCC code, there is no "file"
+// to have duplicates of. The lead-in and the failing provider's own message are kept.
+// Uses makeSccEnv (a REAL SccRefProvider registered, matching production wiring) so the
+// message is SccRefProvider's own "…is not available in this vault. Sync the
+// compendium…" text, not the generic reserved-provider fallback. The end-to-end proof
+// (builder -> tracker round trip) lives in test/dom/elements/encounter.test.ts's SC-134
+// negative-control test, extended by this same ticket to assert the hint is gone.
+describe('T-2 / SC-240: SCC-shaped ref failures drop the "multiple instances" hint', () => {
+	test('hero: unsynced scc.v1: code -> SccRefProvider message, lead-in kept, hint dropped', async () => {
+		const { refs } = makeSccEnv(); // code deliberately not synced into the vault
+		const src = [
+			'heroes:',
+			'  - statblock: "scc.v1:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker"',
+			'enemy_groups: []',
+		].join('\n');
+		const message = await errorMessageOf(resolveLikePipeline(src, refs));
+		expect(message).toContain(
+			'Failed to resolve hero statblock reference at index 0 (scc.v1:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker):',
+		);
+		expect(message).toContain('is not available in this vault. Sync the compendium');
+		expect(message).not.toContain('multiple instances');
+		expect(message).not.toContain('full path');
+	});
+
+	test('creature: unsynced scc: code -> SccRefProvider message, lead-in kept, hint dropped', async () => {
+		const { refs } = makeSccEnv();
+		const src = [
+			'heroes: []',
+			'enemy_groups:',
+			'  - name: G',
+			'    creatures:',
+			'      - statblock: "scc:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker"',
+			'        amount: 1',
+		].join('\n');
+		const message = await errorMessageOf(resolveLikePipeline(src, refs));
+		expect(message).toContain(
+			'Failed to resolve creature statblock reference at index 0 (scc:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker):',
+		);
+		expect(message).toContain('is not available in this vault. Sync the compendium');
+		expect(message).not.toContain('multiple instances');
+		expect(message).not.toContain('full path');
+	});
+
+	test('bare-path failures are UNCHANGED: the hint is still present (contract boundary check)', async () => {
+		const { refs } = makeSccEnv();
+		const src = 'heroes:\n  - statblock: "Nope"\nenemy_groups: []';
+		const message = await errorMessageOf(resolveLikePipeline(src, refs));
+		expect(message).toContain(
+			"Are there multiple instances of the 'Nope' file in your vault? If so, please specify the full path.",
+		);
 	});
 });
 
