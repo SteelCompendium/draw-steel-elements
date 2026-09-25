@@ -528,18 +528,24 @@ keywords:
 		expect(card.querySelector('.dse-crest__glyph')!.getAttribute('data-icon')).toBe('skull');
 	});
 
-	// THE ADVERSARIAL CASE — src/elements/feature/example.yaml (the D9 single-sourced
-	// authoring example, whose legacy shots are FROZEN) is a FALSE villain: it carries
-	// `ability_type: Villain Action 1` alongside a REAL `usage: Main action`. Precedence
-	// is unchanged by the dash fix — a real usage still wins — so it must stay `main`.
-	// If this flips, feature--legacy-{dark,light}.png move for the wrong reason.
-	test('[data-dse-act]: SC-102 — the false villain (real usage + villain ability_type) still maps to "main", NOT villain', async () => {
+	// SC-236 round 2: src/elements/feature/example.yaml (the D9 single-sourced authoring
+	// example) used to be a permanent FALSE villain — `ability_type: Villain Action 1`
+	// alongside a REAL `usage: Main action`, rendering correctly as `main` while a header
+	// chip claimed "VILLAIN ACTION 1". SC-236 deleted that `ability_type` line, so the
+	// example now has no villain descriptor at all and matches the corpus shape of a
+	// real Malice-cost main action (see renderFeature.ts's actionTypeOf doc comment).
+	// This pin now asserts the NEW truth — no `ability_type` line — and stays adversarial:
+	// it fails if that line (or any `ability_type` line) is ever re-added. The precedence
+	// rule this test used to be the sole demonstration of (a real usage beats a villain
+	// `ability_type`) is pinned independently below with inline config, since this fixture
+	// can no longer exercise that path itself.
+	test('[data-dse-act]: SC-236 — example.yaml has NO ability_type line and renders "main" (sword crest)', async () => {
 		const exampleYaml = fs.readFileSync(
 			path.join(__dirname, '../../../src/elements/feature/example.yaml'),
 			'utf8',
 		);
 		// Pin the fixture's own shape so this test cannot silently stop being adversarial.
-		expect(exampleYaml).toMatch(/^ability_type: Villain Action 1$/m);
+		expect(exampleYaml).not.toMatch(/^ability_type:/m);
 		expect(exampleYaml).toMatch(/^usage: Main action$/m);
 
 		const { root } = await renderBlock(exampleYaml);
@@ -547,6 +553,24 @@ keywords:
 		expect(card.getAttribute('data-dse-act')).toBe('main');
 		expect(card.style.getPropertyValue('--dse-act')).toBe('var(--dse-act-main)');
 		expect(card.querySelector('.dse-crest__glyph')!.getAttribute('data-icon')).toBe('sword');
+	});
+
+	// SC-236 round 2: with example.yaml no longer carrying an ability_type line, this is
+	// now the ONLY test pinning the SC-102 precedence rule for the ability_type rung
+	// specifically (a real usage line beats a villain-shaped `ability_type`) — inline
+	// config, not a file read, so it survives independent of example.yaml's own shape.
+	test('[data-dse-act]: SC-102/SC-236 — precedence unchanged: a REAL usage still wins over a villain ability_type', async () => {
+		const source = [
+			'type: feature',
+			'feature_type: ability',
+			'name: X',
+			'ability_type: Villain Action 1',
+			'usage: Main action',
+		].join('\n');
+		const { root } = await renderBlock(source);
+		const card = root.querySelector('.dse-feature') as HTMLElement;
+		expect(card.getAttribute('data-dse-act')).toBe('main');
+		expect(card.style.getPropertyValue('--dse-act')).toBe('var(--dse-act-main)');
 	});
 
 	test('[data-dse-act]: SC-102 — a lone dash with NO ability_type still maps to nothing (the fall-through has no target)', async () => {
