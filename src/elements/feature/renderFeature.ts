@@ -75,13 +75,18 @@ function isDashPlaceholder(value: string): boolean {
  * ledger for both failed attempts.
  *
  * A real markdown renderer wraps even one line in a block element (Obsidian's
- * own renderer, and the visual harness's `marked` shim, both do this); this
- * splits THAT element's children and promotes the resulting chip/separator
- * spans to be `el`'s own direct children (the wrapper itself already rendered
- * as pure inline pass-through — `.dse-md-inline > p` a few hundred lines down —
- * so dropping it changes nothing visually). The jest mock (test/mocks/
- * obsidian-core.ts) appends a bare text node with no wrapper at all; that text
- * node is split the same way.
+ * own renderer, and the visual harness's `marked` shim, both do this) PLUS a
+ * trailing whitespace-only text-node sibling after it (`marked.parse('Attack,
+ * Weapon')` -> `"<p>Attack, Weapon</p>\n"`, and that "\n" survives as `el`'s
+ * own second child) — the wrapper is `el`'s only ELEMENT child, tolerating any
+ * number of whitespace-only text siblings around it, not literally `el`'s only
+ * child of any kind. This splits the wrapper's OWN children and promotes the
+ * resulting chip/separator spans to be `el`'s direct children (dropping the
+ * wrapper and any whitespace sibling both — the wrapper rendered as pure
+ * inline pass-through, `.dse-md-inline > p` a few hundred lines down, so losing
+ * it changes nothing visually). The jest mock (test/mocks/obsidian-core.ts)
+ * appends a bare text node with no wrapper at all; that text node is split the
+ * same way.
  *
  * A comma INSIDE an element is never a split point — only a top-level TEXT node
  * is — so a keyword that is itself a markdown link (its raw href/label text
@@ -91,7 +96,11 @@ function isDashPlaceholder(value: string): boolean {
  */
 function chipifyKeywords(el: HTMLElement): void {
 	const doc = el.ownerDocument;
-	const wrapper = el.childNodes.length === 1 && el.firstChild instanceof Element ? el.firstChild : null;
+	const elementChildren = Array.from(el.children);
+	const onlyWhitespaceSiblings = Array.from(el.childNodes).every(
+		(n) => n.nodeType === Node.ELEMENT_NODE || !(n.textContent ?? '').trim(),
+	);
+	const wrapper = elementChildren.length === 1 && onlyWhitespaceSiblings ? elementChildren[0] : null;
 	const source = Array.from(wrapper ? wrapper.childNodes : el.childNodes);
 
 	const groups: ChildNode[][] = [[]];
