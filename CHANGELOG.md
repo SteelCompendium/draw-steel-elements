@@ -42,14 +42,15 @@ for what needs action.
   default size. Dialog body text, buttons, and the dialog's own title now scale with Text
   size exactly like a Draw Steel element in a note does; the default 100% looks identical
   to before.
-- **The skills element's own "Skills" disclosure header is gone** (SC-255). It was a
-  second, independent whole-element collapse stacked underneath the standard element menu's
+- [FIX] **The skills element's own "Skill List" disclosure header is gone** (SC-255). It was
+  a second, independent whole-element collapse stacked underneath the standard element menu's
   collapse control — the `ds-stamina` double affordance SC-169 round 2 already removed,
   applied here too. Existing blocks are unaffected: `collapse_default: true` still starts
   the element collapsed and `collapsible: false` still removes the collapse control (both
-  keys were already read by the menu before this change, so neither behavior moves) — only
-  the redundant second header is gone. Per-group collapse (Crafting, Exploration, ...) is
-  untouched.
+  keys were already read by the menu before this change, so neither behavior moves) — but a
+  block that starts collapsed now opens with one click on the element menu instead of two,
+  since the redundant second header no longer hides the list behind its own closed state.
+  Per-group collapse (Crafting, Exploration, ...) is untouched.
 - [FIX] **The compendium download's zip library is now `fflate`, not JSZip** (SC-328). JSZip's
   legacy-browser polyfills contained dynamic `<script>` element creation, which Obsidian's
   community-plugin review rejects; 7.0.0 also carries forward 6.0.2's three added

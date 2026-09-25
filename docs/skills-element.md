@@ -35,12 +35,13 @@ The Skills Element supports all three
 `collapse_default`), which fold the whole block from its standard
 [element menu](common-element-fields.md#the-menu) to one line (`SKILLS (12 selected)`).
 
-> **Changed in 7.0.0.** The element used to also carry its own "Skills" disclosure header
+> **Changed in 7.0.0.** The element used to also carry its own "Skill List" disclosure header
 > inside the card — a second, independent way to fold the same content, stacked underneath
 > the menu's own collapse. That header is gone; the menu is the only whole-element collapse
 > now, the same as every other card element. Existing blocks are unaffected —
 > `collapse_default: true` still starts the element collapsed and `collapsible: false` still
-> removes the collapse control (though the menu itself still shows, since Skills always
+> removes the collapse control — but a block that starts collapsed now opens with one click
+> on the menu instead of two (the menu itself still shows either way, since Skills always
 > contributes its own [unowned-skills toggle](#showinghiding-unowned-skills) to it).
 
 Below is a detailed description of each field used in the skills element, including their types, default values, and whether they are required.
