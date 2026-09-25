@@ -1,5 +1,5 @@
 // D1 Task 2 (Plan 03) / F1 §6 step "Skills" — the second element migrated onto Framework
-// v2 and the first *interactive* one (F1 §1.3): collapse state (whole-element wrapper +
+// v2 and the first *interactive* one (F1 §1.3): collapse state (whole-element chrome +
 // per-group) lives in SessionStore, never written back to the note — Skills has no
 // `serialize`, matching the legacy Vue element's "no writeback" contract exactly.
 import type { ElementDefinition } from '@/framework/registry';

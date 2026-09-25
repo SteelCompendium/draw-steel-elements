@@ -457,10 +457,12 @@ describe('SC-169 R2 §3 — `collapsed:`, `collapsible:`, `collapse_default:`', 
 	});
 
 	it('ROUND 3 — `ds-skills` opts in and keeps ownership of the legacy pair', async () => {
-		// The rollout's one new `collapseKeysOwnedByModel` element. Two things must hold at
-		// once: the framework reads `collapsible:`/`collapse_default:` for the PANEL, and the
-		// model still parses them for its own ComponentWrapper wrapper — which is only true
-		// while the pipeline leaves them in the body.
+		// The rollout's one new `collapseKeysOwnedByModel` element. The framework reads
+		// `collapsible:`/`collapse_default:` for the PANEL, and the keys stay un-popped
+		// (left in the body) because popping them would let ComponentWrapper substitute
+		// its own defaults when it parses the model (SC-255 removed the model's own
+		// wrapper consumer, but the model fields — and this reason to leave the keys in
+		// place — remain).
 		const { skillsElement } = await import('@/elements/skills/definition');
 		expect(skillsElement.chrome).toBeDefined();
 		expect(skillsElement.collapseKeysOwnedByModel).toBe(true);
@@ -470,8 +472,8 @@ describe('SC-169 R2 §3 — `collapsed:`, `collapsible:`, `collapse_default:`', 
 		expect(keys).toMatchObject({ collapsible: false, collapseDefault: true });
 		expect(data).toEqual({ collapsible: false, collapse_default: true, skills: ['climb'] });
 
-		// `collapsible: false` removes the collapse control and the inner wrapper — but
-		// since SC-182 the skills VIEW contributes its own menu item (the show/hide-
+		// `collapsible: false` removes the collapse control — but since SC-182 the skills
+		// VIEW contributes its own menu item (the show/hide-
 		// unowned eye, ElementView.chromeItems), so the panel now SURVIVES carrying
 		// exactly that one item. This is mountChrome's designed "no panel only if that
 		// leaves it empty" semantics (SC-169 ruling 2) finally meeting a surviving item:

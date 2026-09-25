@@ -1,8 +1,9 @@
-// Plan 09 Task 2 (D2 §3.4) — Skills on the D2 kit: the whole-element wrapper AND each
-// skill group are kit `collapsible` regions (real <button aria-expanded> headers,
-// hidden-attr regions, open-state round-tripped through SessionStore via the
-// SessionPersist accessor — F1 §4.3, never written back to the note; Skills has no
-// `serialize`). Items are `.dse-skills__item` with a `.dse-skills__mark[data-on]`
+// Plan 09 Task 2 (D2 §3.4) — Skills on the D2 kit: each skill group is a kit
+// `collapsible` region (real <button aria-expanded> headers, hidden-attr regions,
+// open-state round-tripped through SessionStore via the SessionPersist accessor — F1
+// §4.3, never written back to the note; Skills has no `serialize`). The whole-element
+// collapse is the framework chrome panel (SC-255), also SessionPersist-backed but its
+// own slot. Items are `.dse-skills__item` with a `.dse-skills__mark[data-on]`
 // whose enabled/disabled state is conveyed by shape + aria-label, not color alone
 // (D2 §4). Replaces the D1 golden tests that pinned the OLD
 // mountComponentWrapper/mountCollapsibleHeading DOM (Plan 09 global: golden DOM tests
@@ -71,10 +72,10 @@ function makeDeps(session: SessionStore = createSessionStore()): ElementPipeline
 	const plugin = new Plugin(app);
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
-	// D4 (Plan 13 Task 5): SkillsView now resolves collapsible/collapse_default
-	// through resolveCollapsePrefs(model, cx.prefs), which calls prefs.get() for the
-	// collapsibleDefault/collapseDefault descriptors — they must be registered, same
-	// convention as statblock.test.ts's makeDeps().
+	// The framework chrome layer (not SkillsView) reads the collapsibleDefault/
+	// collapseDefault descriptors via prefs.get() when resolving the whole-element
+	// collapse (SC-255 removed SkillsView's own resolveCollapsePrefs call) — they must
+	// be registered, same convention as statblock.test.ts's makeDeps().
 	prefs.describe(DSE_PREF_DESCRIPTORS);
 	const theme = createThemeService(prefs, plugin as any);
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
@@ -180,10 +181,12 @@ describe('Plan 09 Task 2: skills rendered through the REAL ElementPipeline (kit 
 		// SC-255 (Scott's SC-169 ruling 3, "Remove the old. Replace with the consistent
 		// option that all card elements use."): this element used to ALSO mount its OWN
 		// kit collapsible — a "Skill List" disclosure header above the groups, seeded
-		// from collapse_default, with no SessionPersist — stacked on top of the framework
-		// chrome panel definition.ts already carries (`chrome: skillsChrome`). That second
-		// header is gone; the groups mount straight onto root and the chrome panel is the
-		// ONLY whole-element collapse, the same `ds-stamina` shape SC-169 round 2 landed.
+		// from collapse_default and persisted per block in SessionStore slot `open` —
+		// stacked on top of the framework chrome panel definition.ts already carries
+		// (`chrome: skillsChrome`), which already persisted its own `chrome.collapsed`
+		// slot. That second header is gone; the groups mount straight onto root and the
+		// chrome panel is the ONLY whole-element collapse, the same `ds-stamina` shape
+		// SC-169 round 2 landed.
 		// Per-group collapse (its own describe block below) is untouched — Scott's ruling:
 		// "Per-GROUP collapsibles ... stay. Only the whole-element wrapper is the double
 		// affordance."
@@ -242,10 +245,11 @@ describe('Plan 09 Task 2: skills rendered through the REAL ElementPipeline (kit 
 			expect(groupHeader(root, 'Exploration').getAttribute('aria-expanded')).toBe('true');
 		});
 
-		test('IS session-tracked now: a remount with the same blockKey remembers the user toggle', async () => {
-			// The old wrapper passed no SessionPersist, so every reading-mode echo-rebuild
-			// threw the reader's collapse away and re-read the YAML. Chrome persists per
-			// (blockKey, slot) like every other element, and still never writes the note.
+		test('the chrome collapse persists across a remount (same blockKey)', async () => {
+			// Both mechanisms persisted before this change: the old wrapper at
+			// SessionStore slot `open`, and chrome at its own `chrome.collapsed` slot.
+			// Chrome is now the only one, and it still persists per (blockKey, slot) like
+			// every other element, and still never writes the note.
 			const deps = makeDeps();
 
 			const hostA = makeHost();

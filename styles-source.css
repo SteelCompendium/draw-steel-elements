@@ -3392,9 +3392,9 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 /* ==================== */
 /* Scoped under [data-dse-element="skills"] (F1 §3.5). Legacy-faithful port of the old
    pre-D2 skills block onto the .dse-skills__* grammar: same 1em rounded-box marks, same
-   lowercase-with-capital titles and names. Group headers (and the whole-element wrapper)
-   are the kit collapsible — the shared .dse-collapse* chrome owns the button/chevron/
-   region; only the skills-specific looks live here (incl. sizing the kit __title to
+   lowercase-with-capital titles and names. Group headers are the kit collapsible — the
+   shared .dse-collapse* chrome owns the button/chevron/region; only the skills-specific
+   looks live here (incl. sizing the kit __title to
    match the old h3 group title). The mark's on-state is shape (solid vs hollow box via
    [data-on]) + an aria-label set by the view (§4) — never color alone. Tokens only:
    --dse-accent (marked; Legacy = today's --interactive-accent), --dse-fg-muted (box

@@ -8,10 +8,11 @@
 // SC-255 (Scott's SC-169 ruling 3, applied here): "Remove the old. Replace with the
 // consistent option that all card elements use." This view used to ALSO wrap itself in
 // its own kit `collapsible()` — a "Skill List" disclosure header above the groups, seeded
-// from `collapse_default`/`collapsible`, with no SessionPersist. That header was a SECOND
-// whole-element collapse mechanism stacked on top of the framework chrome panel
-// (definition.ts's `chrome: skillsChrome`) that already wraps every `ds-skills` block —
-// exactly the `ds-stamina` double affordance SC-169 round 2 removed. It is gone; the
+// from `collapse_default`/`collapsible` and persisted per block in SessionStore slot
+// `open`. That header was a SECOND whole-element collapse mechanism stacked on top of the
+// framework chrome panel (definition.ts's `chrome: skillsChrome`) that already wraps every
+// `ds-skills` block and already persisted its own `chrome.collapsed` slot — exactly the
+// `ds-stamina` double affordance SC-169 round 2 removed. It is gone; the
 // groups mount straight onto root. The `collapsible:`/`collapse_default:` YAML keys did
 // NOT go away — they are still ComponentWrapper MODEL fields (`collapseKeysOwnedByModel:
 // true` in definition.ts) and are now read ONLY by the framework as the authored
