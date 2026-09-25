@@ -467,16 +467,21 @@ export function renderFeature(
 			if (chipify) mdThenChipify(value, valueEl, true);
 			else md(value, valueEl, true);
 		};
-		if (feature.keywords) {
-			const kwEmpty = feature.keywords.length === 0 || feature.keywords.every(isEmptyValue);
-			cell(
-				'keywords',
-				'Keywords',
-				feature.keywords.length > 0 ? feature.keywords.join(', ') : '',
-				'chips',
-				kwEmpty,
-				!kwEmpty,
-			);
+		// `feature.keywords` is typed `string[]`, but this element has no schema (the
+		// SDK reader is the validator — see definition.ts's `parse` comment), so a
+		// hand-typed `ds-feature` fence with no YAML list syntax (`keywords: Attack,
+		// Weapon`) parses to a bare STRING at runtime — `.join`/`.length`/`.every`
+		// below would throw on it. Wrapping it as a one-entry array costs nothing:
+		// `chipifyKeywords` already splits on a literal comma at the rendered-DOM
+		// level, so the single raw string still ends up as clean discrete chips.
+		const keywords = Array.isArray(feature.keywords)
+			? feature.keywords
+			: typeof feature.keywords === 'string'
+				? [feature.keywords]
+				: feature.keywords;
+		if (keywords) {
+			const kwEmpty = keywords.length === 0 || keywords.every(isEmptyValue);
+			cell('keywords', 'Keywords', keywords.length > 0 ? keywords.join(', ') : '', 'chips', kwEmpty, !kwEmpty);
 		}
 		if (feature.usage) cell('type', 'Type', feature.usage, 'chips', isEmptyValue(feature.usage));
 		if (feature.distance) cell('distance', 'Distance', feature.distance, 'rail');

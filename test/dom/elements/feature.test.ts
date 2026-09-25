@@ -29,8 +29,9 @@ import { createSessionStore } from '../../../src/framework/session';
 import { createElementRegistry } from '../../../src/framework/registry';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { FeatureConfig } from '@model/FeatureConfig';
-import { App, Plugin, MarkdownRenderer, makeFakeContext } from '../../mocks/obsidian';
+import { App, Plugin, Component, MarkdownRenderer, makeFakeContext, flushAsync } from '../../mocks/obsidian';
 import { featureElement } from '../../../src/elements/feature/definition';
+import { renderFeature } from '../../../src/elements/feature/renderFeature';
 import { FeatureElementView } from '../../../src/elements/feature/view';
 import { RefUnwrapView } from '../../../src/elements/shared/RefUnwrapView';
 import { styleGuardFindings } from '../kit/styleGuard';
@@ -470,6 +471,61 @@ keywords:
 `);
 			const chips = kwSpans(root);
 			expect(chips.map((c) => c.textContent)).toEqual(['Attack', 'Weapon', 'Magic']);
+		});
+
+		// SC-231 fix round (MEDIUM-1, review r1): the jest MarkdownRenderer mock
+		// (test/mocks/obsidian-core.ts) appends a bare text node — it never produces
+		// the shape a REAL renderer does (Obsidian's own, or the visual harness's
+		// `marked` shim): a block wrapper PLUS a trailing whitespace-only text-node
+		// sibling. That gap let 05e26ea's bug (the whole <p> treated as one un-split
+		// "keyword") ship with every other test in this file green. This test drives
+		// renderFeature() directly with a renderMd stub that reproduces that exact
+		// shape, `<p>Attack, <a href="x">Weapon</a></p>\n`, bypassing the mock —
+		// proven non-vacuous by re-running it against renderFeature.ts checked out at
+		// 5bdef15 (the pre-fix commit), where it fails.
+		test('a real renderer\'s <p>…</p> + trailing-whitespace shape still splits correctly, and the link node is reused, not cloned', async () => {
+			const config = FeatureConfig.readYaml(`type: feature
+feature_type: ability
+name: Real Renderer Shape
+keywords:
+  - Attack
+  - Weapon
+`);
+			const owner: any = new Component();
+			owner.load();
+			let linkNode: HTMLElement | undefined;
+			const renderMd = async (_markdown: string, el: HTMLElement): Promise<void> => {
+				el.innerHTML = '<p>Attack, <a href="x">Weapon</a></p>\n';
+				linkNode = el.querySelector('a')!;
+			};
+			const root = document.createElement('div');
+			renderFeature(root, config, owner, renderMd);
+			await flushAsync(3);
+
+			const valueEl = root.querySelector<HTMLElement>(
+				'.dse-feature__meta-cell--keywords .dse-feature__meta-value',
+			)!;
+			expect(valueEl.querySelector('p')).toBeNull(); // the wrapper is gone, not nested
+			const chips = [...valueEl.querySelectorAll<HTMLElement>('.dse-feature__kw')];
+			expect(chips).toHaveLength(2);
+			expect(chips[0].textContent).toBe('Attack');
+			expect(chips[1].querySelector('a')).toBe(linkNode); // same node moved, never cloned
+			expect(valueEl.querySelectorAll('a')).toHaveLength(1); // exactly one link in the whole value
+			expect(valueEl.textContent).toBe('Attack, Weapon');
+		});
+
+		// Implementer follow-up (FOLD, decisions.md 2026-09-25): this element has no
+		// schema (the SDK reader is the validator), so a hand-typed `ds-feature`
+		// fence with no YAML list syntax — `keywords: Attack, Weapon`, a bare scalar
+		// — parses `feature.keywords` to a raw STRING at runtime despite its `string[]`
+		// type. Before this fix, `.join`/`.length`/`.every` on that string threw.
+		test('keywords authored as a bare scalar (no YAML list syntax) render as clean discrete chips instead of throwing', async () => {
+			const { root } = await renderBlock(`type: feature
+feature_type: ability
+name: Scalar Keywords
+keywords: Attack, Weapon
+`);
+			expect(kwSpans(root).map((c) => c.textContent)).toEqual(['Attack', 'Weapon']);
 		});
 	});
 
