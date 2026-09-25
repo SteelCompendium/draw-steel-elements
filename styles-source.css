@@ -17304,17 +17304,24 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    positioned `::before`, "v4" in the round-1 review) turned out to carry its OWN, more
    severe defect, found by implementer verification against this plugin's REAL `perk/links`
    fixture (two links sharing one paragraph, the first one wrapping across two lines) rather
-   than the review's own isolated single-link probes: an absolutely positioned pseudo whose
-   containing block is a MULTI-LINE (fragmented) `position: relative` inline uses the UNION
-   of all that inline's line fragments as its containing block, not the last fragment alone
-   — so `inset-inline-end: 0` resolved against the union's right edge (line 1's, the widest
-   fragment) while `bottom` resolved against the union's bottom edge (line 2's) and the
-   glyph landed on top of UNRELATED text in the second link's own line, not attached to
-   "entry" at all. Measured and reproduced (`getClientRects()`/`getBoundingClientRect()` on
-   the live fixture): this is a genuine rendering defect on completely ordinary content,
-   not a synthetic edge case — the round-1 review's own orphan sweep never caught it because
-   every probe mounted exactly one isolated link per paragraph, never two links sharing a
-   wrapping paragraph the way this plugin's own fixture (and plenty of real prose) does.
+   than the review's own isolated single-link probes. Mechanism, measured and reproduced two
+   further ways in the round-1 re-review (`getClientRects()`/pixel-located paint origin, not
+   assumed): the containing block of a split (fragmented) `position: relative` inline runs
+   from its FIRST fragment's start to its LAST fragment's end — not, as this comment
+   originally claimed, the union of every fragment's own box. When the anchor's last line
+   ends to the LEFT of where its first line began (exactly what happens when "the Steel
+   Compendium's own" / "entry" wraps), that span's width comes out negative, and
+   `inset-inline-end: 0` pins the glyph to the FIRST fragment's own start column — on the
+   LAST line, since `bottom` still resolves from the last fragment. The glyph landed on top
+   of UNRELATED text in the second link's own line (measured: glyph painted at x 525-536,
+   while the first anchor's own text ended at x 111, a 900px viewport) — this is a genuine
+   rendering defect on completely ordinary content, not a synthetic edge case. The round-1
+   review's own orphan sweep never caught it for two reasons: every probe mounted exactly
+   one isolated link per paragraph, never two links sharing a wrapping paragraph the way
+   this plugin's own fixture (and plenty of real prose) does; and that sweep measured the
+   ANCHOR's own client rects (the padding box) to detect an orphan, never where the glyph
+   itself was actually painted, so a glyph silently relocated onto other text read as
+   "no orphan" rather than as the real defect it was.
 
    This rule reverts to the round-1 review's OWN rejected "v1" candidate instead — an
    INLINE (not inline-block, not absolutely positioned) `::after` carrying a zero-width
