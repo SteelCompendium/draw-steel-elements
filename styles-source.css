@@ -173,6 +173,18 @@
 .dse-feature__meta-key::after {
 	content: ': ';
 }
+/* SC-231: a Steel-screen-crest-only DUPLICATE of the Keywords `.dse-feature__meta
+   -value` — one `.dse-feature__meta-kw` chip per discrete keyword, instead of the
+   single joined-and-rendered string `.dse-feature__meta-value` always carries (see
+   renderFeature.ts's `cell()`). Base-hidden UNCONDITIONALLY, in every theme — this
+   is the LEGACY-FREEZE belt-and-suspenders half: `.dse-feature__meta-value`'s own
+   render call and DOM shape are completely untouched by this feature, so there is
+   nothing here for Legacy or print to ever pick up, even if a future Steel
+   selector's scoping regresses. Only the crest-mode arm below (~4442) reveals it
+   (and hides `.dse-feature__meta-value` in its place). */
+.dse-feature__meta-kwlist {
+	display: none;
+}
 
 /* -- .dse-section: the titled Effect/Trigger/Special panels -- */
 .dse-section {
@@ -8515,29 +8527,29 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-featur
 	background: rgba(0, 0, 0, 0.02);
 }
 /* SC-231 — ONE CHIP PER KEYWORD (site parity: steel-ability-cards.css's
-   `.sc-ability__chip`, one per `data.keywords` entry — steel-ability-cards.js:94-96 —
+   `.sc-ability__chip`, one per `data.keywords` entry — steel-ability-cards.js:94-96,
+   joined with NO separator, `.join("")`, spaced only by `.sc-ability__kw`'s `gap` —
    vs the single box the cell used to be). CREST (the kwUsage default) is the ONLY
-   mode where the site boxes the chips and hides the comma behind `gap` —
-   `steel-statblock.css`'s own kwUsage arms (330-389) keep the SAME N
-   `.sc-ability__chip` elements in every mode, but text/grid/ledger explicitly strip
-   the chip's border/background/padding and restore a visible comma via a `::after`
-   pseudo on every chip but the last (`.sc-ability__chip:not(:last-child)::after {
-   content: ",\00a0" }`), because without either a box or a comma the words run
-   together. The plugin already carries a real ", " `.dse-feature__meta-kw-sep` node
-   between spans (renderFeature.ts, kept for LEGACY-FREEZE); un-hiding it is exactly
-   the plugin's version of that `::after` — cheaper, and it needs no `:not(:last-
-   child)` special case since a separator is never emitted before the first chip.
-   The three rules below therefore need to fire ONLY at the kwUsage default — but
-   naming that default value directly as a `data-dse-kwusage` attribute selector is
-   exactly the pattern pref-reflection.test.ts's "defaults are CSS no-ops"/M-2 pins
-   forbid (every other default in this file is the ABSENCE of a selector, never a
-   named one), so — same idiom as `sb-charline`'s `:not([data-dse-sb-charline='two'])`
-   arm above — this negates the three NAMED non-default values instead. Un-scoping any of the three
-   would flex-wrap/box/hide-comma the value in text/grid/ledger too, silently
-   breaking "keywords: chips in crest mode, plain comma text otherwise" for the one
-   grammar family (feature/featureblock/statblock ability cards) this preference was
-   built to cover. */
+   mode where the site boxes the chips this way — `steel-statblock.css`'s own
+   kwUsage arms (330-389) keep the SAME N `.sc-ability__chip` elements in every
+   mode, but text/grid/ledger explicitly strip the chip's border/background/padding
+   and restore a visible comma via a `::after` pseudo instead — so these rules swap
+   `.dse-feature__meta-value` (the single joined string every OTHER mode, Legacy and
+   print keep showing — untouched by this feature at all, see ~176) for
+   `.dse-feature__meta-kwlist` (the per-chip duplicate, base-hidden above) ONLY at
+   the kwUsage default. Naming that default value directly as a `data-dse-kwusage`
+   attribute selector is exactly the pattern pref-reflection.test.ts's "defaults are
+   CSS no-ops"/M-2 pins forbid (every other default in this file is the ABSENCE of a
+   selector, never a named one), so — same idiom as `sb-charline`'s
+   `:not([data-dse-sb-charline='two'])` arm above — this negates the three NAMED
+   non-default values instead. Un-scoping any of the four would swap in the chip
+   list for text/grid/ledger too, silently breaking "keywords: chips in crest mode,
+   plain comma text otherwise" for the one grammar family (feature/featureblock/
+   statblock ability cards) this preference was built to cover. */
 [data-dse-theme='steel']:not([data-dse-print="on"]):not([data-dse-kwusage='text']):not([data-dse-kwusage='grid']):not([data-dse-kwusage='ledger']) .dse-feature__meta-cell--keywords .dse-feature__meta-value {
+	display: none;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]):not([data-dse-kwusage='text']):not([data-dse-kwusage='grid']):not([data-dse-kwusage='ledger']) .dse-feature__meta-kwlist {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -8560,9 +8572,6 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-featur
 }
 body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]):not([data-dse-kwusage='text']):not([data-dse-kwusage='grid']):not([data-dse-kwusage='ledger']) .dse-feature__meta-kw {
 	background: rgba(0, 0, 0, 0.02);
-}
-[data-dse-theme='steel']:not([data-dse-print="on"]):not([data-dse-kwusage='text']):not([data-dse-kwusage='grid']):not([data-dse-kwusage='ledger']) .dse-feature__meta-kw-sep {
-	display: none;
 }
 /* SC-117 fix wave L2 — the review's one surviving instance of the ticket's own defect
    (audit open item #4, upgraded from "unknown" to "defect awaiting a value"): the base

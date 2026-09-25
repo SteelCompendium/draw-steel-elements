@@ -281,6 +281,32 @@ export function renderFeature(
 		void renderMd(dashFix && raw === '-' ? '--' : raw, el);
 	};
 
+	/**
+	 * SC-231: like `md()`, but for a value rendered into its OWN one-word(ish) chip
+	 * (one `.dse-feature__meta-kw` keyword span). A real markdown renderer wraps even
+	 * a single bare word in a block element plus a trailing newline text node
+	 * (Obsidian's own renderer, and the visual harness's `marked` shim, both do
+	 * this) — invisible on `md()`'s ordinary callers (a value that fills its whole
+	 * container, nothing after it to push against), but a boxed chip renders that
+	 * trailing whitespace INSIDE its own border/padding, widening the box by a
+	 * sliver on the right. Trimmed once the async render settles; `renderMd` is
+	 * `ElementView.renderMarkdown`, always a Promise, but the type is `void |
+	 * Promise<void>` (kit callers may pass a sync stub). */
+	const mdChip = (raw: string, el: HTMLElement, dashFix = false): void => {
+		el.addClass('dse-md-inline');
+		const result = renderMd(dashFix && raw === '-' ? '--' : raw, el);
+		if (result && typeof result.then === 'function') {
+			void result.then(() => {
+				while (el.firstChild?.nodeType === Node.TEXT_NODE && !el.firstChild.textContent?.trim()) {
+					el.firstChild.remove();
+				}
+				while (el.lastChild?.nodeType === Node.TEXT_NODE && !el.lastChild.textContent?.trim()) {
+					el.lastChild.remove();
+				}
+			});
+		}
+	};
+
 	/** A titled .dse-section panel (Effect / Trigger / Special / …). The title carries
 	 *  NO baked-in colon — Legacy paints today's "Title: body" via CSS ::after. */
 	const section = (
@@ -365,20 +391,24 @@ export function renderFeature(
 		// Legacy has no rule keying off it so its existing unlabeled dash text is
 		// pixel-unchanged (LEGACY-FREEZE).
 		const isEmptyValue = isDashPlaceholder;
-		// SC-231: `parts`, when given, renders the value as one child span per
-		// discrete keyword — each individually markdown-rendered (so a keyword that
-		// is itself a markdown link still resolves) — with the literal ", "
-		// separator kept as its own `.dse-feature__meta-kw-sep` span between them
-		// (not a bare text node) so Steel can `display: none` exactly the
-		// separators and nothing else — a bare text node would still generate an
-		// anonymous flex item once the value span turns into a flex row, doubling
-		// the visual gap between every pair of chips. Either shape keeps the
-		// cell's `textContent` byte-identical to the old single joined-and-
-		// rendered node (LEGACY-FREEZE: Legacy/print never reveal the per-keyword
-		// `.dse-feature__meta-kw`/`-kw-sep` spans or the `dse-md-inline` `<p>` a
-		// chip wraps as anything but inline running text — see styles-source.css
-		// ~4335), while Steel-screen CSS boxes each `.dse-feature__meta-kw` as
-		// its own chip and packs them with the flex row's own gap.
+		// SC-231: `parts`, when given, ADDS a second, sibling `.dse-feature__meta-
+		// kwlist` element after the ordinary `.dse-feature__meta-value` — it does
+		// NOT replace it. `.dse-feature__meta-value` keeps rendering the exact same
+		// single joined-and-markdown-rendered string it always has (byte-identical
+		// render call, same node shape); `.dse-feature__meta-kwlist` is a THEME-
+		// AGNOSTIC but base-`display:none` extra, one `.dse-feature__meta-kw` span
+		// per discrete keyword (each individually markdown-rendered, so a keyword
+		// that is itself a markdown link still resolves), with NO separator between
+		// them — same as the site's own `.sc-ability__chip` markup (steel-ability-
+		// cards.js:94-96 `.join("")`), spaced only by the Steel flex row's `gap`.
+		// This is belt-and-suspenders LEGACY-FREEZE: Legacy/print's rendered DOM for
+		// `.dse-feature__meta-value` is UNTOUCHED by this whole feature — nothing
+		// about it changed, so there is no cross-span kerning/rendering delta for a
+		// byte-freeze gate to catch — and the base-unscoped `display:none` on
+		// `.dse-feature__meta-kwlist` (styles-source.css, the theme-agnostic meta
+		// grid block) means the extra element is inert even if a Steel selector's
+		// scoping is ever wrong. Only Steel's crest-mode CSS swaps which of the two
+		// is visible.
 		const cell = (
 			modifier: string,
 			label: string,
@@ -393,14 +423,12 @@ export function renderFeature(
 					(isEmpty ? ' dse-feature__meta-cell--empty' : ''),
 			});
 			cellEl.createSpan({ cls: 'dse-feature__meta-key', text: label });
-			const valueEl = cellEl.createSpan({ cls: 'dse-feature__meta-value' });
+			md(value, cellEl.createSpan({ cls: 'dse-feature__meta-value' }), true);
 			if (parts && parts.length > 0) {
-				parts.forEach((part, i) => {
-					if (i > 0) valueEl.createSpan({ cls: 'dse-feature__meta-kw-sep', text: ', ' });
-					md(part, valueEl.createSpan({ cls: 'dse-feature__meta-kw' }), true);
-				});
-			} else {
-				md(value, valueEl, true);
+				const listEl = cellEl.createSpan({ cls: 'dse-feature__meta-kwlist' });
+				for (const part of parts) {
+					mdChip(part, listEl.createSpan({ cls: 'dse-feature__meta-kw' }), true);
+				}
 			}
 		};
 		if (feature.keywords) {
