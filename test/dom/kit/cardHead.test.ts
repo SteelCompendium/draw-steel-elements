@@ -200,6 +200,24 @@ describe('Plan 08 Task 4: kit/cardHead (D2 §2.7)', () => {
 			// whole point is that the SC-191 mocks had to do that by hand.
 			expect(body).not.toMatch(/display:\s*none/);
 		});
+
+		// SC-284 review round 2, MEDIUM-1: the featureblock sub-feature Steel remap
+		// (~:7889/:7901 — cost rides the PRIMARY lane, ability_type rides the DECK lane,
+		// specificity (0,4,1)) outranks the single-class narrow arms above, so it must
+		// get its OWN matching-specificity arm inside the SAME @container block — a
+		// plain text match on the single-class selectors (the test above) cannot see a
+		// specificity loss, only a missing rule, so this asserts the full selector.
+		test('the featureblock sub-feature Steel remap gets a matching-specificity narrow arm', () => {
+			const match = sheet.match(/@container dse-head \(max-width: \d+px\) \{([\s\S]*?)\n\}/);
+			expect(match).not.toBeNull();
+			const body = match![1];
+			expect(body).toMatch(
+				/\[data-dse-theme='steel'\] \.dse-fb \.dse-feature > \.dse-head > \.dse-head__eyebrow--right\s*\{\s*grid-area:\s*5\s*\/\s*2;/,
+			);
+			expect(body).toMatch(
+				/\[data-dse-theme='steel'\] \.dse-fb \.dse-feature > \.dse-head > \.dse-head__primary--right\s*\{\s*grid-area:\s*6\s*\/\s*2;/,
+			);
+		});
 	});
 });
 

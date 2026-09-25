@@ -13868,6 +13868,22 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	.dse-head__primary--right {
 		margin-top: 0.18em;
 	}
+
+	/* SC-284 review MEDIUM-1: featureblock sub-feature heads (renderFeature.ts's Steel
+	   remap at ~:7889/:7901 — cost into the eyebrow slot but the PRIMARY lane, row 2/3;
+	   ability_type into the primary slot but the DECK lane, row 3/3) have specificity
+	   (0,4,1), which outranks the single-class arms above (0,1,0) — so at narrow width
+	   they kept pinning column 3, starving it right back open even though nothing else
+	   sits there. Matching-specificity arms, scoped to the SAME lane mapping those rules
+	   already use (eyebrow-right rides the primary row, primary-right rides the deck
+	   row): equal specificity + later source position wins the cascade only where this
+	   query matches; the unconditional rules above are untouched at wide width. */
+	[data-dse-theme='steel'] .dse-fb .dse-feature > .dse-head > .dse-head__eyebrow--right {
+		grid-area: 5 / 2;
+	}
+	[data-dse-theme='steel'] .dse-fb .dse-feature > .dse-head > .dse-head__primary--right {
+		grid-area: 6 / 2;
+	}
 }
 
 /* -- powerRollPanel + tierBadge (§2.8): the shared roll grammar -- */
