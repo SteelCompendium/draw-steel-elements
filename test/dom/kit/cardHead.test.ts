@@ -170,6 +170,36 @@ describe('Plan 08 Task 4: kit/cardHead (D2 §2.7)', () => {
 				expect(sheet).toMatch(new RegExp(`\\.dse-head__${slot}[^{]*\\{[^}]*grid-area:`));
 			}
 		});
+
+		// SC-284: the narrow (stacked) form. The trigger must be the CARD's own width
+		// (a sidebar leaf can be ~300px inside a wide window, where a viewport
+		// `@media` query never fires), so `.dse-head` becomes a named size container
+		// and its right-rail CHILDREN re-place themselves against it.
+		test('.dse-head is a named inline-size query container', () => {
+			const block = sheet.match(/^\.dse-head\s*\{([^}]*)\}/m);
+			expect(block).not.toBeNull();
+			expect(block![1]).toMatch(/container-type:\s*inline-size/);
+			expect(block![1]).toMatch(/container-name:\s*dse-head/);
+		});
+
+		test('a `@container dse-head` rule re-places the right rail into column 2, left-aligned', () => {
+			const match = sheet.match(/@container dse-head \(max-width: \d+px\) \{([\s\S]*?)\n\}/);
+			expect(match).not.toBeNull();
+			const body = match![1];
+			// The right slots move to rows 4/5/6 of column 2 — the third (right-rail)
+			// track is never redeclared (a container can't requery itself), it just
+			// collapses to 0 width once nothing is placed in it.
+			expect(body).toMatch(/\.dse-head__eyebrow--right\s*\{\s*grid-area:\s*4\s*\/\s*2;/);
+			expect(body).toMatch(/\.dse-head__primary--right\s*\{\s*grid-area:\s*5\s*\/\s*2;/);
+			expect(body).toMatch(/\.dse-head__deck--right\s*\{\s*grid-area:\s*6\s*\/\s*2;/);
+			// Left-aligned, not right-aligned as they are at full width.
+			expect(body).toMatch(/justify-self:\s*start/);
+			expect(body).toMatch(/text-align:\s*left/);
+			expect(body).toMatch(/margin-left:\s*0/);
+			// The crest is NOT hidden and neither right chip is hidden — the ticket's
+			// whole point is that the SC-191 mocks had to do that by hand.
+			expect(body).not.toMatch(/display:\s*none/);
+		});
 	});
 });
 
