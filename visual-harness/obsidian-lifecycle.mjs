@@ -10,10 +10,18 @@
 // line per scenario and a final done line.
 // Exit 0 = every scenario ok; 1 = a scenario failed; 2 = the environment is unusable.
 //
-// SC-343 scenarios: identical twin blocks (section path and durable path), the flush after
-// navigate-away (SC-336) and after leaf close, an unterminated fence at EOF located again by
-// body (G-S6u), and the Notice on a dropped write.
-// SC-340 appends its view-adoption scenarios to FIXTURES/SCENARIOS.
+// SC-343 scenarios (6): identical twin blocks (section path and durable path), the flush
+// after navigate-away (SC-336) and after leaf close, an unterminated fence at EOF located
+// again by body (G-S6u), and the Notice on a dropped write.
+// SC-340 (Task 8) appends 13 view-adoption scenarios to FIXTURES/SCENARIOS — 19 total:
+// G-S1 (ConditionsModal open across 5 writes + pool modal), G-S2 (stamina modal survives
+// selection write), G-S3 (fast typing + a half-typed editable-stepper draft survive the
+// adoption blur), G-S4 (pane+embed / two panes — writer-only adoption, leaked copy refused),
+// G-S5 (external edit / revert rebuilds fresh), G-S6c (Reading<->Live Preview/Source with a
+// pending write), G-S6d (previewMode.rerender), G-S6e (plugin disable/enable), G-S6f (embed
+// leaf detach), G-S6g (hover popovers ARE writable in Obsidian 1.14.2), G-S6h (nested
+// read-only ds-counter survives its parent's adoption), G-S6i (fast navigation, no leaks),
+// G-S8 (scrollTop pin across a tracker's own write).
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -111,6 +119,30 @@ const FIXTURES = {
 	'Lifecycle/other.md': '# other\n\nJust another note.\n',
 	'Lifecycle/unterminated.md': `# unterminated\n\nABOVE\n\n${UNTERMINATED_COUNTER(10)}\n`,
 };
+
+// SC-340 (Task 8) fixtures: the adoption scenarios (G-S1..G-S8) below.
+const HERO = (name) => [`  - name: "${name}"`, '    max_stamina: 30'];
+const INIT = (name) => fence('ds-initiative', ['heroes:', ...HERO(name), 'enemy_groups: []', 'malice:', '  value: 1']);
+Object.assign(FIXTURES, {
+	'Lifecycle/tracker.md': `# tracker\n\nABOVE\n\n${fence('ds-initiative', [
+		'heroes:', ...HERO('Alice Alpha'), ...HERO('Bob Beta'),
+		'enemy_groups:', '  - name: "Goblin Squad"', '    is_squad: true', '    creatures:',
+		'      - name: "Goblin"', '        max_stamina: 4', '        amount: 3', '        squad_role: minion',
+		'        instances:', '          - id: 1', '            conditions: [bleeding, dazed, slowed]',
+		'          - id: 2', '            conditions: [frightened, grabbed]', '          - id: 3', '            conditions: []',
+		'      - name: "Goblin Captain"', '        max_stamina: 40', '        amount: 1', '        squad_role: captain',
+		'malice:', '  value: 3',
+	])}\n\nBELOW\n`,
+	'Lifecycle/ogres.md': `# ogres\n\nABOVE\n\n${fence('ds-initiative', [
+		'heroes:', ...HERO('Alice Alpha'), 'enemy_groups:', '  - name: "Ogres"', '    creatures:',
+		'      - name: "Ogre"', '        max_stamina: 60', '        amount: 3', 'malice:', '  value: 3',
+	])}\n\nBELOW\n`,
+	'Lifecycle/B.md': `# B\n\nB-TOP\n\n${INIT('Embed Eve')}\n\nB-BOTTOM\n`,
+	'Lifecycle/A.md': '# A\n\nA-TOP\n\n![[B]]\n\nA-BOTTOM\n',
+	'Lifecycle/tall.md': `# tall\n\n${Array.from({ length: 30 }, (_, i) => `PRE filler ${i}.`).join('\n\n')}\n\n${fence('ds-initiative', ['heroes:', ...Array.from({ length: 25 }, (_, i) => HERO(`Hero ${String(i + 1).padStart(2, '0')}`)).flat(), 'enemy_groups: []', 'malice:', '  value: 1'])}\n\n${Array.from({ length: 30 }, (_, i) => `POST filler ${i}.`).join('\n\n')}\n`,
+	'Lifecycle/party.md': `# party\n\n${fence('ds-party', ['members:', '  - name: Kira', '    level: 3', '    hero_ref: "```ds-counter\\nname: Nested\\ncurrent_value: 1\\nmax_value: 5\\nmin_value: 0\\n```"', 'party:', '  hero_tokens: 2'])}\n`,
+	'Lifecycle/hoverhost.md': '# hover host\n\nSee [[counter]] here.\n',
+});
 
 // ------------------------------------------------------------------ note integrity
 /** Every fence closed, the block count unchanged, no stray text outside fences. */
@@ -309,6 +341,37 @@ function makeHarness(cdp) {
 			const ok = await t.ev(`(() => { const roots = Array.from((${leafExpr}).view.containerEl.querySelectorAll('[data-dse-element="counter"]')).filter((r) => r.isConnected); const b = roots[${index}]?.querySelector('button[aria-label^="Increase"]'); if (!b) return false; b.click(); return true; })()`);
 			t.expect(ok, `no Increase button on counter #${index}`);
 		},
+		// SC-340 (Task 8) helpers: the ViewRegistry itself, and tag/sameRoot for proving a
+		// given root (not a fresh rebuild) survived a write.
+		reg: `app.plugins.plugins['draw-steel-elements'].viewRegistry`,
+		/** Live registry entries, optionally for one note: { path, docId, connected, loaded, el }. */
+		async entries(rel) {
+			return t.ev(`${t.reg}.liveEntries().filter((e) => ${JSON.stringify(rel ?? null)} === null || e.host.sourcePath === ${JSON.stringify(rel ?? null)}).map((e) => ({ path: e.host.sourcePath, docId: e.host.docId, connected: e.root.isConnected, loaded: !!e.view._loaded, el: e.root.getAttribute('data-dse-element') }))`);
+		},
+		/** Top-level DSE roots actually in the document. */
+		rendered: () => t.ev(`Array.from(document.querySelectorAll('[data-dse-element]')).filter((r) => !r.parentElement.closest('[data-dse-element]')).length`),
+		stats: () => t.ev(`Object.assign({}, ${t.reg}.stats)`),
+		/** Tag the first connected root of `sel` in the given leaf; later `sameRoot` checks it. */
+		async tag(sel, tagName, leafExpr = 'app.workspace.getMostRecentLeaf()') {
+			const ok = await t.ev(`(() => { const r = Array.from((${leafExpr}).view.containerEl.querySelectorAll('${sel}')).find((x) => x.isConnected); if (!r) return false; r.__lcTag = '${tagName}'; return true; })()`);
+			t.expect(ok, `no ${sel} to tag`);
+		},
+		sameRoot: (sel, tagName, leafExpr = 'app.workspace.getMostRecentLeaf()') =>
+			t.ev(`Array.from((${leafExpr}).view.containerEl.querySelectorAll('${sel}')).some((x) => x.isConnected && x.__lcTag === '${tagName}')`),
+		root: (sel, leafExpr = 'app.workspace.getMostRecentLeaf()') =>
+			`Array.from((${leafExpr}).view.containerEl.querySelectorAll('${sel}')).find((x) => x.isConnected)`,
+		/** ConditionsModal: pick the first menu condition not already on the list. */
+		async pickCondition() {
+			if (!(await t.ev(`!!document.querySelector('.dse-condal-modal .dse-condal__menu-item')`))) {
+				await t.ev(`document.querySelector('.dse-condal-modal .dse-condal__add').click()`);
+				await t.waitFor(`!!document.querySelector('.dse-condal-modal .dse-condal__menu-item')`, 'condition menu');
+			}
+			return t.ev(`(() => { const have = new Set(Array.from(document.querySelectorAll('.dse-condal-modal .dse-condal__row .dse-condal__name')).map((n) => n.textContent)); const it = Array.from(document.querySelectorAll('.dse-condal-modal .dse-condal__menu-item')).find((i) => !have.has(i.querySelector('.dse-condal__menu-name')?.textContent)); const name = it.querySelector('.dse-condal__menu-name')?.textContent; it.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 })); return name; })()`);
+		},
+		async key(k, code, vk) {
+			await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: k, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
+			await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
+		},
 	};
 	return t;
 }
@@ -316,6 +379,10 @@ function makeHarness(cdp) {
 // ------------------------------------------------------------------------ scenarios
 const NOTICE_TEXT = (note) =>
 	`Draw Steel Elements: a change to a block in ${note} was not saved — the block changed on disk first.`;
+
+// SC-340 (Task 8) scenario helpers.
+const TRACKER = '[data-dse-element="initiative"]';
+const conditionsModalOpen = (t) => t.ev(`!!document.querySelector('.dse-condal-modal')`);
 
 const SCENARIOS = [
 	{
@@ -452,6 +519,479 @@ const SCENARIOS = [
 			t.expect(notices.length === 1, `rate limit: expected 1 Notice in 5 s, got ${notices.length}`);
 			t.expect(t.integrity(rel).ok, 'note integrity');
 			return 'external edit kept; 1 Notice for 2 dropped writes';
+		},
+	},
+	{
+		// Spec G-S1 (SC-331): the ConditionsModal stays open across 5 live writes; row follows.
+		id: 'G-S1',
+		async run(t) {
+			const rel = 'Lifecycle/tracker.md';
+			await t.open(rel);
+			await t.reset(rel);
+			// The FIRST modal ever opened in a fresh headless Obsidian session can miss its
+			// triggering click (probed: a `waitFor` timeout with no modal ever appearing —
+			// no error, no exception — a plain `.click()` retried several times over still
+			// missed it, but a REAL keyboard activation, Enter on the focused button, landed
+			// on its first try) — one keyboard warm-up open+close before the real, timed
+			// (click-based, which is reliable once warm) run below.
+			await t.ev(`${t.root(TRACKER)}.querySelectorAll('.dse-cond--add')[0].focus()`);
+			await t.sleep(300);
+			await t.key('Enter', 'Enter', 13);
+			await t.sleep(1500);
+			if (await conditionsModalOpen(t)) {
+				await t.key('Escape', 'Escape', 27);
+				await t.sleep(500);
+			}
+			await t.reset(rel);
+			await t.tag(TRACKER, 's1');
+			const m = await t.mark();
+			await t.ev(`${t.root(TRACKER)}.querySelectorAll('.dse-cond--add')[0].click()`);
+			await t.waitFor(`!!document.querySelector('.dse-condal-modal')`, 'conditions modal');
+			const steps = [];
+			const probe = async (label, expectIcons) => {
+				await t.sleep(900);
+				const open = await conditionsModalOpen(t);
+				const same = await t.sameRoot(TRACKER, 's1');
+				const icons = await t.ev(`${t.root(TRACKER)}.querySelectorAll('.dse-init__conditions')[0].querySelectorAll('.dse-cond:not(.dse-cond--add)').length`);
+				t.expect(open && same && icons === expectIcons, `${label}: modalOpen=${open} sameRoot=${same} icons=${icons} (want ${expectIcons})`);
+				steps.push(label);
+			};
+			for (let i = 1; i <= 3; i++) {
+				await t.pickCondition();
+				await probe(`add#${i}`, i);
+			}
+			await t.ev(`document.querySelectorAll('.dse-condal-modal .dse-condal__row')[0].querySelector('.dse-condal__act:not(.dse-condal__act--delete)').click()`);
+			await t.waitFor(`!!document.querySelector('.dse-condal-modal .dse-condal__editor')`, 'customize editor');
+			await t.ev(`document.querySelector('.dse-condal-modal .dse-cond-icons__choice[aria-label="Icon: skull"]').click()`);
+			await probe('icon=skull', 3);
+			await t.ev(`document.querySelectorAll('.dse-condal-modal .dse-condal__row')[2].querySelector('.dse-condal__act--delete').click()`);
+			await probe('delete#3', 2);
+			const writes = await t.modsSince(m, rel);
+			t.expect(writes === 5, `expected 5 writes, got ${writes}`);
+			await t.ev(`document.querySelector('.dse-condal-modal .dse-modal__footer button').click()`);
+			await t.sleep(600);
+			t.expect(!(await conditionsModalOpen(t)), 'Done did not close the modal');
+			t.expect(t.integrity(rel).ok, 'note integrity');
+			// Done, then open the next combatant's modal 30..600 ms later (SC-331 MED-1)
+			for (const gap of [30, 150, 300, 420, 600]) {
+				await t.reset(rel);
+				await t.ev(`${t.root(TRACKER)}.querySelectorAll('.dse-cond--add')[0].click()`);
+				await t.waitFor(`!!document.querySelector('.dse-condal-modal')`, 'modal');
+				await t.pickCondition();
+				await t.sleep(150);
+				await t.ev(`document.querySelector('.dse-condal-modal .dse-modal__footer button').click()`);
+				await t.sleep(gap);
+				await t.ev(`${t.root(TRACKER)}.querySelectorAll('.dse-cond--add')[1].click()`);
+				await t.sleep(1300);
+				t.expect(await conditionsModalOpen(t), `second modal closed at gap ${gap} ms`);
+				await t.key('Escape', 'Escape', 27);
+				await t.sleep(400);
+			}
+			// pool modal condition removal, grid and detail call sites
+			for (const site of ['grid', 'detail']) {
+				await t.reset(rel);
+				await t.tag(TRACKER, `pool-${site}`);
+				if (site === 'grid') await t.ev(`${t.root(TRACKER)}.querySelector('.dse-init__group--enemies .dse-init__cell').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
+				else await t.ev(`${t.root(TRACKER)}.querySelector('.dse-init__group--enemies .dse-init__detail .dse-init__stamina').click()`);
+				await t.waitFor(`!!document.querySelector('.modal-container .dse-sedit__minions')`, 'pool modal');
+				for (let i = 0; i < 2; i++) {
+					await t.ev(`document.querySelector('.modal-container .dse-minion__conditions .condition-icon').click()`);
+					await t.sleep(1100);
+					t.expect(await t.ev(`!!document.querySelector('.modal-container .dse-sedit__minions')`), `pool modal (${site}) closed after removal ${i + 1}`);
+				}
+				t.expect(await t.sameRoot(TRACKER, `pool-${site}`), `pool (${site}): tracker root replaced`);
+				await t.key('Escape', 'Escape', 27);
+				await t.sleep(500);
+			}
+			// SC-340 Task 8 addendum §3: no wrong-instance adoption anywhere above.
+			const stats1 = await t.stats();
+			t.expect(stats1.collisions === 0 && stats1.ambiguous === 0, `collisions=${stats1.collisions} ambiguous=${stats1.ambiguous}`);
+			await t.reset(rel);
+			return `modal open across 5 writes; Done→reopen 5/5; pool 2 sites × 2 removals; collisions=0 ambiguous=0`;
+		},
+	},
+	{
+		// Spec G-S2 (SC-339): select a creature, open its stamina modal 150/380 ms later.
+		id: 'G-S2',
+		async run(t) {
+			const rel = 'Lifecycle/ogres.md';
+			await t.open(rel);
+			// A freshly-opened pane's very first click is unreliable in this headless setup
+			// (window/leaf focus not yet settled) — one warm-up click on the SAME stamina
+			// control absorbs it so the timed clicks below land on the FIRST real try,
+			// matching how a real (already-focused) pane behaves. Its own modal (if any)
+			// is dismissed before the timed runs.
+			await t.sleep(1200);
+			await t.ev(`${t.root(TRACKER)}.querySelector('.dse-init__group--enemies .dse-init__detail .dse-init__stamina').click()`);
+			await t.sleep(500);
+			await t.key('Escape', 'Escape', 27);
+			await t.sleep(500);
+			for (const gap of [150, 380]) {
+				await t.reset(rel);
+				await t.ev(`${t.root(TRACKER)}.querySelectorAll('.dse-init__group--enemies .dse-init__cell')[1].click()`);
+				await t.sleep(gap);
+				await t.ev(`${t.root(TRACKER)}.querySelector('.dse-init__group--enemies .dse-init__detail .dse-init__stamina').click()`);
+				await t.sleep(1500);
+				t.expect(await t.ev(`!!document.querySelector('.modal-container .dse-modal')`), `stamina modal closed (gap ${gap})`);
+				t.expect(/selectedInstanceKey: 0-2/.test(t.read(rel)), `selection write did not land (gap ${gap})`);
+				await t.key('Escape', 'Escape', 27);
+				await t.sleep(400);
+			}
+			const stats2 = await t.stats();
+			t.expect(stats2.collisions === 0 && stats2.ambiguous === 0, `collisions=${stats2.collisions} ambiguous=${stats2.ambiguous}`);
+			await t.reset(rel);
+			return 'stamina modal survives the selection write at 150 and 380 ms; collisions=0 ambiguous=0';
+		},
+	},
+	{
+		// Spec G-S3: type fast into the Malice label while an earlier click's write lands;
+		// phase 2 (Task 8 addendum §3, Task 6 fix): a half-typed EDITABLE stepper draft is
+		// not committed by the adoption blur, and a real blur (Tab) afterwards commits it.
+		id: 'G-S3',
+		async run(t) {
+			const rel = 'Lifecycle/ogres.md';
+			await t.open(rel);
+			await t.reset(rel);
+			await t.tag(TRACKER, 's3');
+			const text = 'abcdefghijklmnopqrstuvwxyz0123456789';
+			await t.ev(`${t.root(TRACKER)}.querySelector('button.dse-init__portrait-toggle').click()`);
+			await t.sleep(250);
+			await t.ev(`${t.root(TRACKER)}.querySelector('input.dse-init__malice-quickadd-label').focus()`);
+			for (const ch of text) {
+				await t.cdp.call('Input.insertText', { text: ch });
+				await t.sleep(6);
+			}
+			await t.sleep(400);
+			// SC-340 Task 8 addendum §3: if this fails because Obsidian's re-render leaves
+			// activeElement on something other than the input/body/null, report the observed
+			// activeElement (tag/class) rather than changing adoptView's rule.
+			const st = await t.ev(`(() => { const i = ${t.root(TRACKER)}.querySelector('input.dse-init__malice-quickadd-label'); const ae = document.activeElement; return { value: i.value, active: ae === i, caret: i.selectionStart, activeTag: ae ? ae.tagName : null, activeClass: ae ? ae.className : null }; })()`);
+			t.expect(await t.sameRoot(TRACKER, 's3'), 'tracker root replaced (not adopted)');
+			t.expect(st.value === text, `typed text lost: "${st.value}"`);
+			t.expect(st.active && st.caret === text.length, `focus/caret lost: ${JSON.stringify(st)}`);
+			t.expect(/has_taken_turn: true/.test(t.read(rel)), 'the earlier click did not write');
+			const stats3a = await t.stats();
+			t.expect(stats3a.collisions === 0 && stats3a.ambiguous === 0, `collisions=${stats3a.collisions} ambiguous=${stats3a.ambiguous}`);
+			await t.reset(rel);
+
+			// Phase 2: click the counter's own Increase (schedules a write, 400 ms debounce),
+			// then within ~100 ms select the stepper input's shown value and start a NEW
+			// half-typed draft. The click's write must land and adopt the view — the draft
+			// must NOT commit during that adoption blur, but a later real blur (Tab) must.
+			const rel2 = 'Lifecycle/counter.md';
+			const COUNTER_SEL = '[data-dse-element="counter"]';
+			await t.open(rel2);
+			await t.reset(rel2);
+			await t.tag(COUNTER_SEL, 's3b');
+			const m2 = await t.mark();
+			await t.clickIncrease(0);
+			await t.sleep(90);
+			await t.ev(`(() => { const i = ${t.root(COUNTER_SEL)}.querySelector('input.dse-stepper__input'); i.focus(); i.select(); })()`);
+			// "14" — within [min_value 0, max_value 20], so the assertions below isolate
+			// "was the draft committed" from clamping (a literal "42" would clamp to 20).
+			await t.cdp.call('Input.insertText', { text: '1' });
+			await t.sleep(20);
+			await t.cdp.call('Input.insertText', { text: '4' });
+			await t.sleep(1500);
+			t.expect(await t.sameRoot(COUNTER_SEL, 's3b'), 'counter root replaced (not adopted)');
+			const writes2 = await t.modsSince(m2, rel2);
+			t.expect(writes2 === 1, `expected exactly 1 write before the Tab blur, got ${writes2}`);
+			t.expect(t.counterValues(rel2)[0] === 11, `the half-typed draft committed during the adoption: current_value=${t.counterValues(rel2)[0]}`);
+			const st2 = await t.ev(`(() => { const i = ${t.root(COUNTER_SEL)}.querySelector('input.dse-stepper__input'); return { value: i.value, active: document.activeElement === i }; })()`);
+			t.expect(st2.active, `focus lost after adoption: ${JSON.stringify(st2)}`);
+			t.expect(st2.value === '14', `typed draft lost: "${st2.value}"`);
+			await t.key('Tab', 'Tab', 9);
+			await t.sleep(700);
+			t.expect(t.counterValues(rel2)[0] === 14, `Tab blur did not commit the typed draft: current_value=${t.counterValues(rel2)[0]}`);
+			t.expect(t.integrity(rel2).ok, 'note integrity');
+			await t.reset(rel2);
+			return `0/${text.length} keystrokes lost; focus/caret kept; half-typed stepper draft not committed by adoption, committed by Tab; collisions=0 ambiguous=0`;
+		},
+	},
+	{
+		// Spec G-S4: pane + embed, then two panes — writer-only adoption; leaked copy refused.
+		id: 'G-S4',
+		async run(t) {
+			const B = 'Lifecycle/B.md';
+			await t.open('Lifecycle/A.md');
+			await t.reset(B);
+			await t.ev(`(async () => { const leaf = app.workspace.getLeaf('split', 'vertical'); window.__lcB = leaf; await leaf.setViewState({ type: 'markdown', state: { file: '${B}', mode: 'preview' }, active: true }); })()`);
+			await t.sleep(1500);
+			const leaked = (await t.entries(B)).filter((e) => !e.connected).length;
+			const leafA = `app.workspace.getLeavesOfType('markdown').find((l) => l.view.file?.path === 'Lifecycle/A.md')`;
+			const leafB = 'window.__lcB';
+			for (const [writer, other] of [[leafB, leafA], [leafA, leafB], [leafB, leafA], [leafA, leafB]]) {
+				await t.tag(TRACKER, 'w', writer);
+				await t.tag(TRACKER, 'o', other);
+				const m = await t.mark();
+				await t.ev(`${t.root(TRACKER, writer)}.querySelector('button[aria-label="Advance round"]').click()`);
+				await t.sleep(2500);
+				t.expect(await t.sameRoot(TRACKER, 'w', writer), 'writer lost its view');
+				t.expect(!(await t.sameRoot(TRACKER, 'o', other)), 'the other instance kept a stale view');
+				t.expect((await t.modsSince(m, B)) === 1, 'not exactly one write');
+				const round = (t.read(B).match(/round: (\d+)/) ?? [null, '1'])[1];
+				const shown = await t.ev(`Array.from(document.querySelectorAll('${TRACKER} .dse-init__round-value')).filter((x) => x.isConnected).map((x) => x.textContent)`);
+				t.expect(shown.every((s) => s === `Round ${round}`), `instances disagree: ${JSON.stringify(shown)} vs round ${round}`);
+			}
+			t.expect((await t.entries(B)).filter((e) => !e.connected).length === leaked, 'a leaked copy was adopted');
+			// a leaked copy (if Obsidian left one) writing its stale model is refused, note unchanged
+			if (leaked > 0) {
+				const before = t.read(B);
+				await t.ev(`(() => { const e = ${t.reg}.liveEntries().find((x) => x.host.sourcePath === '${B}' && !x.root.isConnected); e.view.advanceRound(); })()`);
+				await t.sleep(1500);
+				t.expect(t.read(B) === before, 'the leaked copy overwrote the note');
+			}
+			t.expect(t.integrity(B).ok, 'note integrity');
+			const stats4 = await t.stats();
+			t.expect(stats4.collisions === 0 && stats4.ambiguous === 0, `collisions=${stats4.collisions} ambiguous=${stats4.ambiguous}`);
+			await t.ev(`${leafB}.detach()`);
+			await t.open(B);
+			await t.reset(B);
+			return `4 alternating writes: writer-only adoption, 1 write each; leaked copies=${leaked}, never claimed; collisions=0 ambiguous=0`;
+		},
+	},
+	{
+		// Spec G-S5: external edit and undo-like revert -> fresh view, old released.
+		id: 'G-S5',
+		async run(t) {
+			const rel = 'Lifecycle/counter.md';
+			await t.open(rel);
+			await t.reset(rel);
+			await t.tag('[data-dse-element="counter"]', 'c1');
+			await t.edit(rel, `c.replace('current_value: 10', 'current_value: 12')`);
+			await t.sleep(1500);
+			t.expect(!(await t.sameRoot('[data-dse-element="counter"]', 'c1')), 'external edit was adopted');
+			t.expect((await t.entries(rel)).length === 1, 'old view not released');
+			const before = t.read(rel);
+			await t.tag('[data-dse-element="counter"]', 'c2');
+			await t.clickIncrease(0);
+			await t.sleep(1500);
+			t.expect(await t.sameRoot('[data-dse-element="counter"]', 'c2'), 'own write was not adopted');
+			await t.ev(`(async () => { await app.vault.modify(app.vault.getAbstractFileByPath('${rel}'), ${JSON.stringify(before)}); })()`);
+			await t.sleep(1500);
+			t.expect(!(await t.sameRoot('[data-dse-element="counter"]', 'c2')), 'revert was adopted');
+			t.expect((await t.entries(rel)).length === 1, 'old view not released after revert');
+			await t.reset(rel);
+			return 'external edit and revert rebuilt fresh; 1 live view';
+		},
+	},
+	{
+		// G-S6c: Reading -> Source -> Reading, with a pending write. Task 8 addendum §3: run
+		// the toggle to BOTH Live Preview (source:false) and raw Source (source:true) — each
+		// in its OWN fresh split leaf, detached afterward (methodology note below).
+		//
+		// Measured correction (this task, real Obsidian 1.14.2): switching mode WITHOUT
+		// leaving the leaf does not unload our render child at all — Obsidian keeps the
+		// Reading pane's DOM mounted (hidden) so mode-switching stays instant, and Live
+		// Preview separately renders the block again as its own widget for an unfocused
+		// line (same code-block processor, a second live-and-connected registry entry
+		// coexisting with the first — confirmed harmless: neither is a claim/adoption,
+		// `stats.claims` never moves). So "exactly one live view" does not hold right after
+		// a same-leaf mode round-trip; it holds once the block is ACTUALLY no longer
+		// rendered — proven here by navigating away afterwards and requiring 0 left.
+		//
+		// Methodology note: a Live Preview excursion, immediately followed (same leaf, no
+		// navigate-away in between) by a SECOND excursion into raw Source, reproducibly left
+		// an extra transient render behind that the registry itself never reported as live
+		// (probed: `entries(rel)` genuinely read 0 in between) — Obsidian's own leaf-level
+		// view cache, not a registry leak. A dedicated fresh leaf per variant (below) is the
+		// realistic shape of "Reading -> Source -> Reading" (SC-343's own G-S6b pattern) and
+		// avoids that unrelated same-leaf chaining artifact entirely.
+		id: 'G-S6c',
+		async run(t) {
+			const rel = 'Lifecycle/counter.md';
+			// A prior scenario may have left the DEFAULT leaf open on `rel` (e.g. G-S5 ends
+			// there) — the "0 left" check at the end of each round below counts every
+			// registry entry for `rel`, not just this scenario's own split leaf, so start
+			// from a leaf that has genuinely never rendered it.
+			await t.open('Lifecycle/other.md');
+			await t.sleep(500);
+			for (const [label, sourceFlag] of [['Live Preview', false], ['raw Source', true]]) {
+				await t.ev(`(async () => { const leaf = app.workspace.getLeaf('split', 'vertical'); window.__lcS6c = leaf; await leaf.setViewState({ type: 'markdown', state: { file: '${rel}', mode: 'preview' }, active: true }); })()`);
+				await t.sleep(1200);
+				const leafExpr = 'window.__lcS6c';
+				await t.reset(rel);
+				const m = await t.mark();
+				const claimsBefore = (await t.stats()).claims;
+				await t.clickIncrease(0, leafExpr);
+				await t.sleep(30);
+				await t.ev(`(async () => { await (${leafExpr}).setViewState({ type: 'markdown', state: { file: '${rel}', mode: 'source', source: ${sourceFlag} } }); })()`);
+				await t.sleep(1500);
+				t.expect(t.counterValues(rel)[0] === 11, `pending write lost on Reading->${label}`);
+				const writes = await t.modsSince(m, rel);
+				t.expect(writes === 1, `expected 1 write in ${label}, got ${writes}`);
+				// The discriminating signal that nothing was WRONGLY adopted into the
+				// editor's own render of the block: `stats.claims` never moves — a claim
+				// would mean the hidden Reading-mode root, not a fresh view, got adopted.
+				const claimsAfter = (await t.stats()).claims;
+				t.expect(claimsAfter === claimsBefore, `a claim happened during the ${label} toggle (${claimsBefore} -> ${claimsAfter})`);
+				await t.ev(`(async () => { await (${leafExpr}).setViewState({ type: 'markdown', state: { file: '${rel}', mode: 'preview' } }); })()`);
+				await t.sleep(1500);
+				t.expect(t.counterValues(rel)[0] === 11, `value regressed after returning to Reading (${label})`);
+				await t.ev(`${leafExpr}.detach()`);
+				await t.sleep(1500);
+				t.expect((await t.entries(rel)).length === 0, `${label}: registry still holds a view for a block no longer rendered: ${JSON.stringify(await t.entries(rel))}`);
+			}
+			await t.reset(rel);
+			return 'write landed once per toggle, survived the round-trip; no adoption into the editor; 0 left after leaf close';
+		},
+	},
+	{
+		// G-S6d: previewMode.rerender(true) -> fresh views, old ones released.
+		id: 'G-S6d',
+		async run(t) {
+			const rel = 'Lifecycle/counter.md';
+			await t.open(rel);
+			await t.tag('[data-dse-element="counter"]', 'rr');
+			await t.ev(`app.workspace.getMostRecentLeaf().view.previewMode.rerender(true)`);
+			await t.sleep(1500);
+			t.expect(!(await t.sameRoot('[data-dse-element="counter"]', 'rr')), 'rerender adopted');
+			t.expect((await t.entries(rel)).length === 1, 'old view not released');
+			return 'fresh view, 1 live';
+		},
+	},
+	{
+		// G-S6e: plugin disable with a pending write, then enable.
+		id: 'G-S6e',
+		async run(t) {
+			const rel = 'Lifecycle/counter.md';
+			await t.open(rel);
+			await t.reset(rel);
+			await t.clickIncrease(0);
+			await t.sleep(30);
+			await t.ev(`(async () => { await app.plugins.disablePlugin('draw-steel-elements'); })()`);
+			await t.sleep(1500);
+			t.expect(t.counterValues(rel)[0] === 11, 'pending write lost on plugin disable');
+			await t.ev(`(async () => { await app.plugins.enablePlugin('draw-steel-elements'); })()`);
+			await t.sleep(2500);
+			await t.ev(PAGE_HELPERS);
+			const live = (await t.entries()).filter((e) => e.connected).length;
+			const rendered = await t.rendered();
+			t.expect(live === rendered, `after re-enable: live views ${live} != rendered ${rendered}`);
+			await t.reset(rel);
+			return `write landed; re-enable live=${live}=rendered`;
+		},
+	},
+	{
+		// G-S6f: pending write in an embed, then the embedding leaf is detached.
+		id: 'G-S6f',
+		async run(t) {
+			const B = 'Lifecycle/B.md';
+			await t.reset(B);
+			await t.ev(`(async () => { const leaf = app.workspace.getLeaf('split', 'vertical'); window.__lcA = leaf; await leaf.setViewState({ type: 'markdown', state: { file: 'Lifecycle/A.md', mode: 'preview' }, active: true }); })()`);
+			await t.sleep(1800);
+			await t.ev(`${t.root(TRACKER, 'window.__lcA')}.querySelector('button.dse-init__portrait-toggle').click()`);
+			await t.sleep(30);
+			await t.ev('window.__lcA.detach()');
+			await t.sleep(1500);
+			t.expect(/has_taken_turn: true/.test(t.read(B)), 'embed write lost on leaf detach');
+			t.expect(t.integrity(B).ok, 'note integrity');
+			await t.reset(B);
+			return 'write landed in B';
+		},
+	},
+	{
+		// G-S6g (rewritten by the SC-340 Task 8 addendum §2): hover popovers ARE writable in
+		// Obsidian 1.14.2 (measured on base and head alike) — a click in the popover writes
+		// the right note/block, and no connected registry entry survives its removal.
+		id: 'G-S6g',
+		async run(t) {
+			const rel = 'Lifecycle/counter.md';
+			await t.reset(rel);
+			await t.open('Lifecycle/hoverhost.md');
+			const m = await t.mark();
+			await t.ev(`(() => { const a = app.workspace.getMostRecentLeaf().view.containerEl.querySelector('a.internal-link'); app.workspace.trigger('hover-link', { event: new MouseEvent('mouseover', { clientX: 400, clientY: 300 }), source: 'preview', hoverParent: app.workspace.getMostRecentLeaf().view, targetEl: a, linktext: 'counter', sourcePath: 'Lifecycle/hoverhost.md' }); })()`);
+			await t.waitFor(`!!document.querySelector('.hover-popover [data-dse-element="counter"]')`, 'hover popover counter', 8000);
+			const ro = await t.ev(`document.querySelector('.hover-popover [data-dse-element="counter"]').getAttribute('data-dse-readonly')`);
+			t.expect(ro !== 'true', `hover counter is read-only (data-dse-readonly=${ro})`);
+			await t.ev(`document.querySelector('.hover-popover [data-dse-element="counter"] button[aria-label^="Increase"]').click()`);
+			await t.sleep(1500);
+			t.expect(t.counterValues(rel)[0] === 11, `hover click did not write the right block: current_value=${t.counterValues(rel)[0]}`);
+			// A real write re-serializes the whole block (field order, defaulted fields like
+			// value_height/name_height) — not byte-identical to the fixture by design, so
+			// "the rest of the note byte-identical" is checked at the text-outside-the-fence
+			// level (note integrity) plus the surviving name, not a raw string diff.
+			t.expect(t.read(rel).includes('name: Health'), 'the block lost its name field');
+			t.expect(t.integrity(rel).ok, 'note integrity');
+			t.expect((await t.noticesSince(m)).length === 0, 'unexpected Notice');
+			t.expect((await t.errorsSince(m)).length === 0, `errors: ${JSON.stringify(await t.errorsSince(m))}`);
+			await t.ev(`document.querySelectorAll('.hover-popover').forEach((p) => p.remove())`);
+			await t.sleep(500);
+			const connected = (await t.entries()).filter((e) => e.connected).length;
+			const rendered = await t.rendered();
+			t.expect(connected === rendered, `after popover removal: live connected ${connected} != rendered ${rendered}`);
+			await t.reset(rel);
+			return 'hover popover counter is writable; click wrote the right block; no leaked connected entry after removal';
+		},
+	},
+	{
+		// G-S6h: a nested ds-counter (party hero_ref) survives the party's adoption, read-only.
+		id: 'G-S6h',
+		async run(t) {
+			const rel = 'Lifecycle/party.md';
+			await t.open(rel);
+			await t.reset(rel);
+			const nested = '[data-dse-element="party"] [data-dse-element="counter"]';
+			t.expect(await t.ev(`!!${t.root(nested)}`), 'nested counter did not render');
+			await t.tag('[data-dse-element="party"]', 'party');
+			await t.tag(nested, 'nested');
+			await t.ev(`${t.root('[data-dse-element="party"]')}.querySelector('button[aria-label="Increase Hero tokens"]').click()`);
+			await t.sleep(1500);
+			t.expect(/hero_tokens: 3/.test(t.read(rel)), 'party write did not land');
+			t.expect(await t.sameRoot('[data-dse-element="party"]', 'party'), 'party not adopted');
+			t.expect(await t.sameRoot(nested, 'nested'), 'nested counter was torn down by the adoption');
+			t.expect((await t.ev(`${t.root(nested)}.getAttribute('data-dse-readonly')`)) === 'true', 'nested counter writable');
+			await t.reset(rel);
+			return 'nested card kept and read-only';
+		},
+	},
+	{
+		// G-S6i: fast navigation across several fixture notes (Task 8 addendum §3), then
+		// other.md alone -> no connected live view remains; report the registry accounting.
+		id: 'G-S6i',
+		async run(t) {
+			for (const rel of ['Lifecycle/tracker.md', 'Lifecycle/party.md', 'Lifecycle/counter.md', 'Lifecycle/twins.md']) {
+				await t.ev(`(async () => { await app.workspace.getMostRecentLeaf().setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'preview' }, active: true }); })()`);
+				await t.sleep(150);
+			}
+			await t.open('Lifecycle/other.md');
+			await t.sleep(1000);
+			// Obsidian's own first-run "Do you trust the author of this vault?" dialog can
+			// appear at an arbitrary delay after start-up (unrelated to DSE) and would
+			// otherwise false-positive this scenario's own "no ORPHANED (DSE) modal" check —
+			// dismiss any such host-chrome modal defensively before counting.
+			await t.ev(`(() => { const trust = Array.from(document.querySelectorAll('.modal-container button')).find((b) => b.textContent.includes('Trust author')); if (trust) trust.click(); else document.querySelector('.modal-container .modal-close-button')?.click(); })()`);
+			await t.sleep(300);
+			const connected = (await t.entries()).filter((e) => e.connected).length;
+			const rendered = await t.rendered();
+			t.expect(connected === rendered, `live connected views ${connected} != rendered ${rendered}`);
+			t.expect((await t.ev('document.querySelectorAll(".modal-container").length')) === 0, 'orphaned modal');
+			const all = await t.entries();
+			const disconnected = all.filter((e) => !e.connected);
+			// Lifecycle/B.md is an embed of an already-leaked-copy-prone note (out of scope:
+			// "fixing Obsidian's leaked embed copies" per the constraints) — any OTHER
+			// disconnected, unreleased entry is worth flagging for the report, not failing on.
+			const nonEmbedLeaks = disconnected.filter((e) => e.path !== 'Lifecycle/B.md');
+			if (nonEmbedLeaks.length) console.log(`OBSIDIAN-LIFECYCLE G-S6i note: unreleased non-embed disconnected entries: ${JSON.stringify(nonEmbedLeaks)}`);
+			return `live=${connected}=rendered; registry=${all.length} (disconnected=${disconnected.length}, non-embed=${nonEmbedLeaks.length}); 0 modals`;
+		},
+	},
+	{
+		// Spec G-S8: tall scrolled tracker keeps scrollTop across its own write (pin on).
+		id: 'G-S8',
+		async run(t) {
+			const rel = 'Lifecycle/tall.md';
+			await t.open(rel);
+			await t.reset(rel);
+			await t.ev(`(() => { const s = app.workspace.getMostRecentLeaf().view.containerEl.querySelector('.markdown-preview-view'); const r = ${t.root(TRACKER)}; s.scrollTop = r.getBoundingClientRect().top - s.getBoundingClientRect().top + s.scrollTop + 1500; })()`);
+			await t.sleep(900);
+			const samples = await t.ev(`new Promise((resolve) => { const s = app.workspace.getMostRecentLeaf().view.containerEl.querySelector('.markdown-preview-view'); const sr = s.getBoundingClientRect(); const b = Array.from(${t.root(TRACKER)}.querySelectorAll('button.dse-init__portrait-toggle')).find((x) => { const r = x.getBoundingClientRect(); return r.top > sr.top + 100 && r.bottom < sr.bottom - 100; }); const out = []; const t0 = performance.now(); const tick = () => { out.push(s.scrollTop); if (performance.now() - t0 < 2200) requestAnimationFrame(tick); else resolve(out); }; requestAnimationFrame(tick); b.click(); })`);
+			const min = Math.min(...samples);
+			const max = Math.max(...samples);
+			t.expect(min === samples[0] && max === samples[0], `scrollTop moved: start ${samples[0]} min ${min} max ${max}`);
+			t.expect(/has_taken_turn: true/.test(t.read(rel)), 'write did not land');
+			await t.reset(rel);
+			return `scrollTop held at ${samples[0]} over ${samples.length} frames`;
 		},
 	},
 ];
