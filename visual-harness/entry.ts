@@ -1228,6 +1228,18 @@ export const NARROW_SHOTS: { id: string; element: string; fixture: string; width
 	// live board (past/current cells, a note mark, the outcome band's brink alert) is what
 	// narrows rather than the empty `default` grid.
 	{ id: 'montage-narrow', element: 'montage', fixture: 'mid', width: 300 },
+	// SC-284 — `.dse-head`'s new narrow (stacked) form (§2.7 `@container dse-head`
+	// regression coverage, beyond montage above): the DEFAULT statblock fixture fills
+	// all three right-rail slots (Level/org-role/EV — statblockHeaderParts), the
+	// consumer the ticket's "wraps one word per line" symptom was reported against
+	// (SC-191's mocks had to hide the crest + both count chips by hand to compensate).
+	{ id: 'statblock-narrow', element: 'statblock', fixture: 'default', width: 300 },
+	// The `stats` featureblock fixture fills two right-rail slots (Level/EV) — a
+	// SECOND, independent consumer whose head sits as a plain block child (not
+	// montage/negotiation's flex-row `.dse-head` embedding), so the two entries
+	// together cover both the `.dse-head`-is-a-block-child and
+	// `.dse-head`-is-a-flex-item shapes at the narrow width.
+	{ id: 'featureblock-narrow', element: 'featureblock', fixture: 'stats', width: 300 },
 ];
 
 /**
