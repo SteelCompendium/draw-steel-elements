@@ -235,22 +235,24 @@ i0: "Thinks you're after the ring; becomes hostile"
 // renderFeature.ts's `isSpend` gate only fires when an effect's RAW `cost` field starts
 // with "Spend" (Draw Steel's "Spend Heroic Resource"/"Spend a Recovery" grammar, RR §—),
 // and no fixture anywhere uses that wording. SC-236: DERIVED from featureDefault (same
-// convention as featureCollapsed below) rather than hand-copied — a hand-copy silently
-// drifted out of sync with example.yaml once (this fixture kept `ability_type: Villain
-// Action 1` after SC-236 round 2 deleted that line from the real file). The Special
-// effect's cost is the only field that differs from the single-sourced default (D9-
-// elsewhere: the authoring example, which stays byte-identical and freeze-pinned); the
-// guard throws at harness load if example.yaml's shape ever stops containing the line
-// this replaces, so a future edit can't silently leave featureSpend stale again.
-const FEATURE_SPEND_FROM = '    cost: 2 Malice\n';
-const FEATURE_SPEND_TO = '    cost: Spend Heroic Resource\n';
+// convention as featureCollapsed below) rather than hand-copied — a hand-copy would have
+// silently kept the `ability_type: Villain Action 1` line SC-236 round 2 deleted from the
+// real file. The Special effect's cost is the only field that differs from the
+// single-sourced default (D9-elsewhere: the authoring example, which stays byte-identical
+// and freeze-pinned); the guard throws at harness load if example.yaml's shape ever stops
+// containing the line this replaces, so a future edit can't silently leave featureSpend
+// stale.
+// Line-ending agnostic (the lookahead matches an optional trailing \r before the line's
+// own end, so it never consumes/replaces the line terminator itself) — a CRLF checkout
+// (`.gitattributes` normalizes on commit, but a local working tree can still be CRLF)
+// must not make this guard throw on an otherwise-unchanged file.
+const FEATURE_SPEND_FROM = /^ {4}cost: 2 Malice(?=\r?$)/m;
+const FEATURE_SPEND_TO = '    cost: Spend Heroic Resource';
 const featureSpend = (() => {
 	const derived = featureDefault.replace(FEATURE_SPEND_FROM, FEATURE_SPEND_TO);
 	if (derived === featureDefault) {
 		throw new Error(
-			`featureSpend: expected featureDefault (example.yaml) to contain ${JSON.stringify(
-				FEATURE_SPEND_FROM,
-			)} to replace with ${JSON.stringify(
+			`featureSpend: expected featureDefault (example.yaml) to contain a line matching ${FEATURE_SPEND_FROM} to replace with ${JSON.stringify(
 				FEATURE_SPEND_TO,
 			)} — example.yaml's shape changed; update this derivation.`,
 		);
@@ -264,17 +266,19 @@ const featureSpend = (() => {
 // carried `ability_type: Villain Action 1` alongside `usage: Main action`, and a real
 // usage line always wins, so it rendered — correctly — as a main-action card while still
 // claiming (via the chip) to be a villain action. SC-236 round 2 deleted that
-// `ability_type` line from the D9 example, so it no longer carries any villain
-// descriptor at all — but no fixture anywhere else exercises `actionTypeOf`'s
-// `ability_type` ladder rung (real corpus villain actions signal via `cost`, not
-// `ability_type` — see `feature-villain`'s own shape below), so this harness-local
-// literal (SC-108's pattern, `featureblockAdvancement` above) stays as the only way to
-// golden-shot that fallback path: the same shape MINUS `usage`, so `actionTypeOf` falls
-// through to the real `ability_type` ladder and resolves 'villain' — the standalone
-// villain card (spine-less crest + eyebrow tint, no bar, per D3), independent of D9's
-// single-sourced example. New shot names (`feature-villain--*`) cannot collide with a
-// frozen name (`sha256sum -c` only checks names the baseline lists), so this fixture is
-// invisible to the freeze check by construction.
+// `ability_type` line from the D9 example. This harness-local literal (SC-108's pattern,
+// `featureblockAdvancement` above) is the same shape MINUS `usage`, so `actionTypeOf`
+// falls through to the real `ability_type` ladder and resolves 'villain' — it stays
+// because it is the only STANDALONE villain feature card (spine-less crest + eyebrow
+// tint, no bar, per D3). Other fixtures also carry a villain-shaped `ability_type` and
+// exercise this same rung (`src/elements/statblock/example.yaml`,
+// `test/fixtures/statblock/human-bandit-chief.yaml`, `SettingsPreview.ts`), but only
+// nested inside a statblock, never as a standalone feature card — this fixture is what
+// that shape looks like on its own. Real corpus villain actions signal via `cost`, not
+// `ability_type` — see `statblockVillainCorpus` above for that shape. New shot names
+// (`feature-villain--*`) cannot collide with a frozen name (`sha256sum -c` only checks
+// names the baseline lists), so this fixture is invisible to the freeze check by
+// construction.
 const featureVillain = `type: feature
 feature_type: ability
 name: Rally the Line
@@ -291,8 +295,8 @@ effects:
 // SC-107: the sheet's `.dse-hero__grid` had no dedicated fixture exercising a SPARSE
 // region next to a fuller one — `default` (heroDefault, src/elements/hero/example.yaml)
 // is a level-3 hero with a condition already on it, so its Conditions region is never the
-// short one. This harness-local variant (same convention as featureSpend/featureVillain
-// above, not an edit to the frozen D9 example) drops to a single skill and zero active
+// short one. This harness-local variant (same convention as featureVillain above, not an
+// edit to the frozen D9 example) drops to a single skill and zero active
 // conditions — a level-1 hero fresh out of session zero — so the Conditions region renders
 // only its header + an empty-state line while Skills renders one chip: the shortest
 // possible content next to another short-but-not-identical region, in the same grid row.
@@ -776,8 +780,8 @@ malice:
 // anywhere rendered before this round, so the review's own HIGH-1 finding (this block's own
 // re-grounding anchor used to silently restore a 1em margin `.dse-md-inline > ul`'s
 // deliberate `margin-block: 0` design zeroed out) had nothing to be shot against. Harness-
-// local literal (same convention as `featureSpend`/`featureVillain` above), not an edit to
-// the frozen D9 example.
+// local literal (same convention as `featureVillain` above), not an edit to the frozen D9
+// example.
 const featureEffectList = `type: feature
 feature_type: ability
 name: Coverage Strike
