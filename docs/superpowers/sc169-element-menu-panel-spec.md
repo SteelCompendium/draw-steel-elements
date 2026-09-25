@@ -540,10 +540,13 @@ untouched by construction. A widening is optional and is a landing decision.
    fail to parse otherwise. Both shapes can now be authored collapsed, no mapping form and no
    info-string syntax needed, and every mapping body is untouched. User docs:
    `docs/common-element-fields.md` → "Blocks that aren't a list of fields".
-2. **`ds-skills` still has two collapse mechanisms.** Its own "Skills" disclosure header plus
-   the element menu — the double affordance Scott's ruling 3 retired on `ds-stamina`. Not taken
-   in round 3 because removing it moves 2 more frozen print lines, outside the sanction given.
-   Filed as workspace `FOLLOWUPS.md` #76; §10 has the detail.
+2. ~~**`ds-skills` still has two collapse mechanisms.**~~ **RESOLVED by SC-255.** Its own
+   "Skill List" disclosure header plus the element menu — the double affordance Scott's
+   ruling 3 retired on `ds-stamina`. Not taken in round 3 because removing it moves 2 more
+   frozen print lines, outside the sanction given at the time (was filed as workspace
+   `FOLLOWUPS.md` #76; §10 has the round-3 detail). SC-255 took it: the header is gone, the
+   element menu is the only whole-element collapse, and the freeze delta (all 20 frozen
+   Skills print lines, not 2) was sanctioned separately.
 3. **`collapsible: false` on `ds-stamina` is a behaviour change.** The flag used to be ignored
    (§4.2a). Any existing note that set it will now lose its collapse control. Believed rare
    and believed correct; say if you would rather keep the quirk.
@@ -597,10 +600,12 @@ number where it is unambiguous ("Surges (3)"), a fraction for a track ("Stamina 
 
 `ds-skills` is the one wave-2 element that also sets `collapseKeysOwnedByModel` (with
 `ds-stamina`): `collapsible:`/`collapse_default:` are real ComponentWrapper model fields there,
-so the framework reads them but must not pop them. It also still carries its own "Skills"
-disclosure header — the double affordance ruling 3 retired on `ds-stamina`. Removing it moves
-2 more frozen print lines, outside the sanction given, so it is filed as workspace
-`FOLLOWUPS.md` #76 rather than taken here.
+so the framework reads them but must not pop them. At the time of this rollout it still
+carried its own "Skill List" disclosure header — the double affordance ruling 3 retired on
+`ds-stamina`. Removing it moved 2 more frozen print lines than the round-3 sanction covered
+(filed as workspace `FOLLOWUPS.md` #76), so it was left for a later round. **RESOLVED by
+SC-255:** the header is gone; the element menu is the only whole-element collapse, the same
+as `ds-stamina`. The `collapseKeysOwnedByModel` shape above is unchanged.
 
 **Never, and still never:** `horizontal-rule` (no body, no name, nothing to fold) and `roll`
 (an inline dice affordance, not a card).
