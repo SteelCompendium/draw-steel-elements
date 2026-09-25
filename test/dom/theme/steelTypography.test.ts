@@ -201,7 +201,17 @@ describe('Steel typography & spacing contract', () => {
 		// was 24px (1.5). Task 2 wrote `line-height: 1.7` on the plate roots (1.7 × 16px = 27.2px).
 		// Contract floor is >= 1.6 — the "open" body rhythm, well clear of the 1.5 it replaced.
 		it('opens the Steel card body line-height to >= 1.6 (Task 2 wrote 1.7)', () => {
-			const blocks = steelBlocksFor(CARD_HOST);
+			// SC-232 added the ability card's own NAME-slot rule
+			// (`[data-dse-element='feature'] > .dse-feature > .dse-head > .dse-head__primary--left`),
+			// which contains CARD_HOST verbatim (same reason blocksFor(CARD_HOST) above already
+			// picks up the Card-body rule) but is a TIGHT HEAD rule, exactly the kind the Task 2
+			// comment says keeps its own explicit line-height rather than joining the open body
+			// rhythm. Every such rule routes through `.dse-head`, which no plate-root body-rhythm
+			// selector ever does, so excluding it keeps this `.every(...)` check aimed at the
+			// plate roots it was written for.
+			const blocks = rules
+				.filter((r) => r.selector.includes(CARD_HOST) && STEEL_SCOPE.test(r.selector) && !r.selector.includes('.dse-head'))
+				.map((r) => r.body);
 			expect(blocks.length).toBeGreaterThan(0);
 			const found = blocks
 				.map((b) => b.match(/line-height:\s*([\d.]+)\s*;/))

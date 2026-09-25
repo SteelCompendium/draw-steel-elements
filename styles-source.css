@@ -7266,6 +7266,107 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 }
 
 /* ================================================================== */
+/*   SC-232 — card-head NAME type scale, per family (site parity)      */
+/* ================================================================== */
+/* Before this block every card-head name shared ONE unscoped rule
+   (~:13636-13643, `font-size: var(--dse-fs-heading)` = 20px, `line-height: 1.15`)
+   regardless of family — a kit head, a standalone ability card, a statblock band
+   and a featureblock band all read at the same size, where the site gives each
+   family its OWN scale (steel-cardhead.css / steel-ability-cards.css /
+   steel-statblock.css / steel-featureblock.css). SC-232's round-1 survey
+   measured the site at its real rem base (20px root × --md-large-header-scale
+   0.90, NOT the ticket's assumed 24px) and found: generic 27px/28.08 line-box,
+   standalone ability card 33.3/33.3, statblock band 41.4/39.33, featureblock
+   band 37.8/37.04 — a project convention of comparing raw computed px, not a
+   0.8 ratio (parity README rule 4; the SAME convention SC-235's section-title
+   pair uses). This block reproduces those four numbers exactly, each as
+   `calc(var(--dse-fs-heading) * k)` so the token stays the single source of
+   truth (Large-text / --dse-text-scale keep working) and the font-size
+   contract's on-scale form is unchanged (fontSizeContract.test.ts, same shape
+   as the existing deck-chip rule at ~:7724). Deliberately does NOT touch
+   :13636-13643 or --dse-fs-heading itself (:6279) — either would reach print
+   (the unscoped rule is UNSCOPED, the token is print-invariant by its own
+   contract above) and move all 260 frozen print bytes; every selector below is
+   `:not([data-dse-print="on"])`, screen-only, so print stays byte-identical.
+   Selectors verified against the live DOM (dom-chain.mjs): the ability-card and
+   statblock/featureblock selectors require the name's DIRECT parent chain, so a
+   NESTED sub-feature's head (`.dse-sb > .dse-feature__nested > .dse-feature >
+   .dse-head`, `.dse-fb > .dse-feature__nested > .dse-feature > .dse-head`, or a
+   nested feature inside the standalone Feature element,
+   `[data-dse-element='feature'] > .dse-feature > .dse-section >
+   .dse-feature__nested > .dse-feature > .dse-head`) never matches the specific
+   rules and correctly falls through to the generic 27px rule below — matching
+   the site, where every nested sub-feature reads at the SAME generic size as a
+   kit/trait head, never at its parent card's larger size. Right-rail minis
+   (~:7724 deck chip, ~:7827/~:7927 card-head/fb-option minis) read
+   --dse-fs-heading directly, not this rule's output, so they are unaffected —
+   see the updated derivation comments at those sites. */
+/* generic: kit/trait/ancestry/class/rule heads, EVERY nested sub-feature
+   (statblock, featureblock, and the standalone Feature element alike), and GM
+   tracker heads (encounter/negotiation/montage/project/party/roll) — none of
+   which is claimed by a more specific selector below. Site:
+   steel-cardhead.css:99-101, 1.5rem × 0.9 = 27px / line-height 1.04. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-head__primary--left {
+	font-size: calc(var(--dse-fs-heading) * 1.35);
+	line-height: 1.04;
+	letter-spacing: 0;
+}
+/* standalone ability card: the Feature element's OWN head, a direct child of
+   its `.dse-feature`, never a nested sub-feature (see the DOM-chain note
+   above). Site: `.sc-ability > .sc-head .sc-head__left-primary`
+   (steel-ability-cards.css:107-110), 1.85rem × 0.9 = 33.3px / line-height 1. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='feature'] > .dse-feature > .dse-head > .dse-head__primary--left {
+	font-size: calc(var(--dse-fs-heading) * 1.665);
+	line-height: 1;
+}
+/* statblock band. Site: `.sb__head .sc-head__left-primary`
+   (steel-statblock.css:141-143), 2.3rem × 0.9 = 41.4px / line-height .95. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb > .dse-head > .dse-head__primary--left {
+	font-size: calc(var(--dse-fs-heading) * 2.07);
+	line-height: 0.95;
+}
+/* featureblock band. Site: `.fb__head .sc-head__left-primary`
+   (steel-featureblock.css:85-87), 2.1rem × 0.9 = 37.8px / line-height .98. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb > .dse-head > .dse-head__primary--left {
+	font-size: calc(var(--dse-fs-heading) * 1.89);
+	line-height: 0.98;
+}
+
+/* Narrow-width guard (owner ruling): the statblock band is the one family whose
+   narrow behaviour the site itself steps down — `.sb__head .sc-head__left-primary`
+   drops from 2.3rem to 1.85rem (41.4 -> 33.3px, the SAME multiplier as the
+   standalone ability card above) below a 34em viewport
+   (steel-statblock.css:625-628). The site's matching rules for featureblock
+   (`.fb__name`, steel-featureblock.css:227) and ability (`.sc-ability__name`,
+   steel-ability-cards.css:206) are DEAD — both target a pre-cardhead class no
+   live node carries any more (the real name node re-attached to
+   `.fb__head .sc-head__left-primary` / `.sc-ability > .sc-head
+   .sc-head__left-primary`, same as their base rules), so only statblock has a
+   live narrow step-down to mirror. Ported as a CONTAINER query, the same
+   mechanism the plugin's own narrow captures already use elsewhere for a card
+   that must react to the space IT has rather than the viewport (`.dse-mt` /
+   `.dse-sb__sticky` / `.dse-stamina-host`/`-rec` / `.dse-init-bar`/`-host`) —
+   a media query would answer the wrong question in a sidebar leaf, same
+   reasoning as the `.dse-sb__sticky` comment above. `34rem` mirrors the site's
+   own `34em` at each side's own root size and is the SAME literal the sticky
+   header's own step 1 already uses (~:10224) — not a new number. Own
+   container-name (`sc232-sb-head`), not `dse-head`: SC-284 (unlanded) is
+   expected to add its own `container-type`/`container-name` inside the base
+   `.dse-head` block (~:13582-13589) for narrow STACKING, a different container
+   for a different purpose — this block deliberately does not touch that block
+   or its two hunks (~13588, ~13671), so the two containers coexist rather than
+   collide. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
+	container-type: inline-size;
+	container-name: sc232-sb-head;
+}
+@container sc232-sb-head (max-width: 34rem) {
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb > .dse-head > .dse-head__primary--left {
+		font-size: calc(var(--dse-fs-heading) * 1.665);
+	}
+}
+
+/* ================================================================== */
 /*   Plan 21 Task 3 — body IDENTITY: serif face, cooler ink, open      */
 /*   tracking (match steelcompendium.io/v2)                            */
 /* ================================================================== */
