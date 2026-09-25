@@ -3493,6 +3493,14 @@ const LINK_REST_PROPS = ['fontWeight', 'textDecorationLine', 'textDecorationThic
 const LINK_HOVER_PROPS = ['color', 'textDecorationLine'];
 /** `.external-link`'s own unique icon material — GROUP 7. */
 const EXTERNAL_LINK_PROPS = ['backgroundImage', 'backgroundPositionX', 'backgroundPositionY', 'backgroundRepeat', 'backgroundSize', 'paddingInlineEnd', 'filter'];
+/** SC-317 — the plugin's OWN `::after` icon (GROUP 7 companion), sampled SEPARATELY from
+ *  the rest-state anchor props above: this reads `getComputedStyle(n, '::after')`, not
+ *  `getComputedStyle(n)`. Obsidian's real app.css never sets anything on a `.external-
+ *  link`'s `::after` (its own icon is a `background-image` on the anchor itself, not a
+ *  pseudo-element — see the styles-source.css GROUP 7 comment), so this exists to catch a
+ *  FUTURE host rule reaching the pseudo, not a known one today: mask/size/margin/colour,
+ *  the exact surface the ticket asked this sweep to widen to cover. */
+const EXTERNAL_LINK_AFTER_PROPS = ['maskImage', 'webkitMaskImage', 'maskSize', 'webkitMaskSize', 'maskRepeat', 'webkitMaskRepeat', 'backgroundColor', 'width', 'height', 'marginInlineStart', 'display'];
 const INLINE_PROPS_BY_KIND = {
 	h1: HEADING_PROPS,
 	h2: HEADING_PROPS,
@@ -3542,9 +3550,12 @@ function tagInline() {
  *  here, not closed over from `EXTERNAL_LINK_PROPS` — same `page.evaluate` serialization
  *  reason `propsByKind` is a PARAMETER: only this function's own source text crosses into
  *  the page, so a free reference to ANY module-level const throws `ReferenceError` inside
- *  it, not just the obvious ones). */
+ *  it, not just the obvious ones), AND — SC-317 — that same anchor's `::after` pseudo,
+ *  the plugin's own icon, prefixed `after_` so it can never collide with a rest-state key
+ *  of the same short name (e.g. both `width` and `display` exist on plain elements too). */
 function readTaggedInline(propsByKind) {
 	const externalLinkProps = ['backgroundImage', 'backgroundPositionX', 'backgroundPositionY', 'backgroundRepeat', 'backgroundSize', 'paddingInlineEnd', 'filter'];
+	const externalLinkAfterProps = ['maskImage', 'webkitMaskImage', 'maskSize', 'webkitMaskSize', 'maskRepeat', 'webkitMaskRepeat', 'backgroundColor', 'width', 'height', 'marginInlineStart', 'display'];
 	const out = [];
 	for (const n of document.querySelectorAll('[data-dse-inlineleak]')) {
 		const kind = n.getAttribute('data-dse-inlineleak-kind');
@@ -3559,7 +3570,11 @@ function readTaggedInline(propsByKind) {
 			isInternal: kind === 'a' && n.classList.contains('internal-link'),
 		};
 		for (const p of propsByKind[kind] ?? []) rec[p] = cs[p];
-		if (rec.isExternal) for (const p of externalLinkProps) rec[p] = cs[p];
+		if (rec.isExternal) {
+			for (const p of externalLinkProps) rec[p] = cs[p];
+			const afterCs = getComputedStyle(n, '::after');
+			for (const p of externalLinkAfterProps) rec['after_' + p] = afterCs[p];
+		}
 		out.push(rec);
 	}
 	return out;
@@ -3705,6 +3720,7 @@ async function assertInlineHostLeak(page) {
 	const problems = [];
 	let restComparisons = 0;
 	let externalComparisons = 0;
+	let afterComparisons = 0;
 	let hoverComparisons = 0;
 	let focusComparisons = 0;
 	let synthComparisons = 0;
@@ -3764,6 +3780,16 @@ async function assertInlineHostLeak(page) {
 					kindCounts.external += 1;
 					for (const p of EXTERNAL_LINK_PROPS) {
 						if (b[p] !== h[p]) problems.push(`${bg}|${visit.label}|external-link|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+					}
+					// SC-317 — the plugin's OWN `::after` icon: mask/size/margin/colour must be
+					// IDENTICAL with and without Obsidian's real app.css present, same contract
+					// as the rest-state props above. Obsidian sets nothing on this pseudo today
+					// (see EXTERNAL_LINK_AFTER_PROPS' own comment) — this is what catches it the
+					// day that stops being true.
+					afterComparisons += 1;
+					for (const p of EXTERNAL_LINK_AFTER_PROPS) {
+						const key = 'after_' + p;
+						if (b[key] !== h[key]) problems.push(`${bg}|${visit.label}|external-link::after|${b.key}: Obsidian's real app.css changes ${p} — "${b[key]}" without the host, "${h[key]}" with it`);
 					}
 				}
 			}
@@ -3829,12 +3855,13 @@ async function assertInlineHostLeak(page) {
 		);
 		process.exit(1);
 	}
-	const comparisons = restComparisons + externalComparisons + hoverComparisons + focusComparisons + synthComparisons;
+	const comparisons = restComparisons + externalComparisons + afterComparisons + hoverComparisons + focusComparisons + synthComparisons;
 	console.log(
 		`\ninline host-leak OK (${kindCounts.h1}h1+${kindCounts.h2}h2+${kindCounts.h3}h3+${kindCounts.h4}h4+` +
 			`${kindCounts.h5}h5+${kindCounts.h6}h6+${kindCounts.strong}strong+${kindCounts.em}em+${kindCounts.b}b+` +
 			`${kindCounts.i}i+${kindCounts.a}a rest ` +
-			`[${restComparisons}] + ${kindCounts.external} external-link icon [${externalComparisons}] + a:hover ` +
+			`[${restComparisons}] + ${kindCounts.external} external-link icon [${externalComparisons}] + ` +
+			`${kindCounts.external} external-link ::after icon (SC-317) [${afterComparisons}] + a:hover ` +
 			`[${hoverComparisons}] + a:focus-visible [${focusComparisons}] + 4 synthetic (h1/h5/mark/code) ` +
 			`[${synthComparisons}] × dark/light = ${comparisons} comparisons against the real Obsidian app.css ` +
 			`under a real .markdown-preview-view.markdown-rendered ancestor: every sampled heading/strong/em/b/i/` +
