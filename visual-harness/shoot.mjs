@@ -3684,12 +3684,17 @@ function focusLinkTagged(key) {
  *  boundary as a bare module-level const — this function must be the thing `page.evaluate`
  *  is given directly.
  *
- *  FIX ROUND 1 (LOW-1) — when the tagged node is `.external-link`, this ALSO reads its
+ *  FIX ROUND 1 (LOW-1) — when the tagged node is `.external-link`, this ALSO READS its
  *  `::after` glyph (prefixed `glyph_`, same literal list as `readTaggedInline`'s own
- *  `externalLinkGlyphProps`, hardcoded here for the same serialization reason). The round-1
- *  review's finding was specifically that the sweep never sampled the pseudo under a
- *  FORCED `:hover` state — this function is called from both the `:hover` and
- *  `:focus-visible` passes, so doing it here closes both at once. */
+ *  `externalLinkGlyphProps`, hardcoded here for the same serialization reason). This
+ *  function is called from both the `:hover` and `:focus-visible` passes, so the READ
+ *  happens in both — but READING here is not the same as COMPARING: each caller
+ *  (`assertInlineHostLeak`'s own `:hover`/`:focus-visible` blocks) owns its OWN comparison
+ *  loop over the `glyph_*` keys. FIX ROUND 2 (N2) — until this round only the `:hover`
+ *  block actually had one; a host rule scoped to `.external-link:focus-visible::after`
+ *  passed the sweep green (round-1 re-review's own live-hole proof) even though this
+ *  function was already reading the data that would have caught it. Both blocks compare
+ *  it now. */
 function readOneLinkTagged({ key, pseudo }) {
 	const linkRestProps = ['fontWeight', 'textDecorationLine', 'textDecorationThickness', 'cursor', 'outlineStyle', 'outlineWidth', 'color'];
 	const linkHoverProps = ['color', 'textDecorationLine'];
@@ -3793,6 +3798,7 @@ async function assertInlineHostLeak(page) {
 	let externalComparisons = 0;
 	let glyphComparisons = 0;
 	let glyphHoverComparisons = 0;
+	let glyphFocusComparisons = 0;
 	let hoverComparisons = 0;
 	let focusComparisons = 0;
 	let synthComparisons = 0;
@@ -3906,6 +3912,20 @@ async function assertInlineHostLeak(page) {
 				for (const p of LINK_REST_PROPS) {
 					if (b[p] !== h[p]) problems.push(`${bg}|${visit.label}|a:focus-visible|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
 				}
+				// FIX ROUND 2 (N2) — `readOneLinkTagged` reads the `::after` glyph in BOTH the
+				// hover and focus-visible passes (it is the same function), but until this loop
+				// only the hover pass actually COMPARED the `glyph_*` keys — a host rule scoped
+				// to `.external-link:focus-visible::after` stayed green here (re-review's own
+				// live-hole proof). Same shape as the `:hover` block above, so a
+				// `:focus-visible`-only leak is now caught too, not just a `:hover`-only or
+				// rest-state one.
+				if (b.glyph_content !== undefined) {
+					glyphFocusComparisons += 1;
+					for (const p of EXTERNAL_LINK_GLYPH_PROPS) {
+						const key = 'glyph_' + p;
+						if (b[key] !== h[key]) problems.push(`${bg}|${visit.label}|a:focus-visible|external-link::after|${b.key}: Obsidian's real app.css changes ${p} — "${b[key]}" without the host, "${h[key]}" with it`);
+					}
+				}
 			}
 
 			if (visit.synth && bareSynth) {
@@ -3940,14 +3960,22 @@ async function assertInlineHostLeak(page) {
 		process.exit(1);
 	}
 	const comparisons =
-		restComparisons + externalComparisons + glyphComparisons + glyphHoverComparisons + hoverComparisons + focusComparisons + synthComparisons;
+		restComparisons +
+		externalComparisons +
+		glyphComparisons +
+		glyphHoverComparisons +
+		glyphFocusComparisons +
+		hoverComparisons +
+		focusComparisons +
+		synthComparisons;
 	console.log(
 		`\ninline host-leak OK (${kindCounts.h1}h1+${kindCounts.h2}h2+${kindCounts.h3}h3+${kindCounts.h4}h4+` +
 			`${kindCounts.h5}h5+${kindCounts.h6}h6+${kindCounts.strong}strong+${kindCounts.em}em+${kindCounts.b}b+` +
 			`${kindCounts.i}i+${kindCounts.a}a rest ` +
 			`[${restComparisons}] + ${kindCounts.external} external-link icon [${externalComparisons}] + ` +
 			`${kindCounts.external} external-link ::after glyph (SC-317, FIX ROUND 1) [${glyphComparisons}] + ` +
-			`${kindCounts.external} external-link ::after glyph under :hover (SC-317 LOW-1) [${glyphHoverComparisons}] + a:hover ` +
+			`${kindCounts.external} external-link ::after glyph under :hover (SC-317 LOW-1) [${glyphHoverComparisons}] + ` +
+			`${kindCounts.external} external-link ::after glyph under :focus-visible (SC-317 FIX ROUND 2, N2) [${glyphFocusComparisons}] + a:hover ` +
 			`[${hoverComparisons}] + a:focus-visible [${focusComparisons}] + 4 synthetic (h1/h5/mark/code) ` +
 			`[${synthComparisons}] × dark/light = ${comparisons} comparisons against the real Obsidian app.css ` +
 			`under a real .markdown-preview-view.markdown-rendered ancestor: every sampled heading/strong/em/b/i/` +
