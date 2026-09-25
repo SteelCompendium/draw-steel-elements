@@ -158,42 +158,92 @@ describe('SC-202 r4 — GROUP 6/7: .internal-link / .external-link companions', 
 	});
 });
 
-describe('SC-317 — GROUP 7 companion: the plugin\'s own external-link icon (::after)', () => {
-	const m = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(a\\)\\.external-link::after \\{([^}]*)\\}'));
+describe('SC-317 — GROUP 7 companion: the plugin\'s own external-link icon (v4, fix round 1 — MED-1)', () => {
+	// The companion's own gutter rule uses the IDENTICAL selector text as GROUP 7's own
+	// base rule (`:where(a).external-link {`) — by design, so the cascade falls through to
+	// source order (see the block's own comment). A plain `flat.match` would silently
+	// return GROUP 7's match every time, never the companion's, so this collects BOTH
+	// occurrences and indexes them explicitly.
+	const baseOccurrences = [...flat.matchAll(new RegExp(escape(ANCHOR) + ' :where\\(a\\)\\.external-link \\{([^}]*)\\}', 'g'))];
+	const group7 = baseOccurrences[0];
+	const gutter = baseOccurrences[1];
+	const glyph = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(a\\)\\.external-link::before \\{([^}]*)\\}'));
+	const rtl = flat.match(
+		new RegExp('@supports selector\\(:dir\\(rtl\\)\\) \\{ ' + escape(ANCHOR) + ' :where\\(a\\)\\.external-link:dir\\(rtl\\)::before \\{([^}]*)\\}'),
+	);
 
-	test('the icon rule exists, right after the GROUP 7 re-grounding it accompanies', () => {
-		expect(m).not.toBeNull();
+	test('there are exactly two `:where(a).external-link {}` rules: GROUP 7\'s own re-grounding, then this companion\'s gutter', () => {
+		expect(baseOccurrences).toHaveLength(2);
 	});
 
-	test('it is inside the same print-excluded scope as every rule in this block', () => {
-		// `ANCHOR` itself carries `:not([data-dse-print="on"])` — the match above only
-		// succeeds if the selector this rule is scoped under is exactly that anchor, so a
-		// non-null match already proves the scope; this test names the property this
-		// contract exists to guarantee (D4: screen-only, print keeps no icon).
-		expect(m).not.toBeNull();
-		expect(ANCHOR).toContain(':not([data-dse-print="on"])');
+	test('the gutter rule (padding-inline-end + position) exists, and comes AFTER GROUP 7 in source order', () => {
+		expect(gutter).not.toBeUndefined();
+		expect(gutter![1]).toContain('padding-inline-end: 0.95em;');
+		expect(gutter![1]).toContain('position: relative;');
+		// The cascade contract this whole companion depends on: same selector, same
+		// specificity, same origin — "last declared wins" is the ENTIRE reason the gutter's
+		// 0.95em beats GROUP 7's 0 rather than losing to it. `index` on a matchAll result is
+		// each match's offset into `flat`, so this is a direct position comparison, not an
+		// inference from array order.
+		expect(group7!.index).toBeLessThan(gutter!.index!);
+	});
+
+	test('the glyph rule (::before) exists and is inside the same print-excluded scope as every rule in this block', () => {
+		// FIX ROUND 1 (INFO-3) — the r1 version of this test asserted `ANCHOR` (a constant
+		// defined at the top of this file) contains the print-exclusion clause, which is
+		// tautological: it is true no matter what the SHEET says. This asserts it against
+		// `glyph![0]`, the ACTUAL matched rule text pulled out of `flat` (the real,
+		// currently-live CSS) — so a future edit that moved this rule out from under
+		// `ANCHOR` (e.g. a copy-paste into a differently-scoped block) would show up here as
+		// a real failure, not just as "the match came back null" (already covered above).
+		expect(glyph).not.toBeNull();
+		expect(glyph![0]).toContain(':not([data-dse-print="on"])');
 	});
 
 	test('it draws via mask-image + currentColor, never filter (D2)', () => {
-		expect(m![1]).toContain('background-color: currentColor;');
-		expect(m![1]).toMatch(/(?:^|\s)mask-image: url\(/);
-		expect(m![1]).toMatch(/-webkit-mask-image: url\(/);
-		expect(m![1]).not.toMatch(/[^-]filter:/);
+		expect(glyph![1]).toContain('background-color: currentColor;');
+		expect(glyph![1]).toMatch(/(?:^|\s)mask-image: url\(/);
+		expect(glyph![1]).toMatch(/-webkit-mask-image: url\(/);
+		expect(glyph![1]).not.toMatch(/[^-]filter:/);
 	});
 
-	test('it is not selectable text and does not wrap onto its own line by design (D3)', () => {
-		expect(m![1]).toContain("content: '';");
-		expect(m![1]).toContain('display: inline-block;');
-		expect(m![1]).toContain('user-select: none;');
-		expect(m![1]).toContain('-webkit-user-select: none;');
+	test('it is not selectable text', () => {
+		expect(glyph![1]).toContain("content: '';");
+		expect(glyph![1]).toContain('user-select: none;');
+		expect(glyph![1]).toContain('-webkit-user-select: none;');
+	});
+
+	// FIX ROUND 1 (MED-1) — orphan regression guard. The r1 shape (`display: inline-block`
+	// glued after the text) measurably orphaned the glyph onto its own line at 16-46 of 401
+	// sampled widths (independent review). v4's fix is exactly "take the glyph out of
+	// normal flow, and reserve its space as the ANCHOR's own padding instead" — so a future
+	// edit that reintroduces `display: inline-block` (even if every other property still
+	// matches) is the one-line regression this ticket's whole fix round exists to prevent.
+	// Asserting `position: absolute` on the glyph AND that the anchor rule (not the glyph)
+	// carries the padding gutter is a direct, cheap proxy for "still airtight," without
+	// needing to re-run the reviewer's own 401-width sweep in CI.
+	test('orphan regression guard: the glyph is absolutely positioned, never inline-block, and the gutter lives in anchor padding, not the pseudo', () => {
+		expect(glyph![1]).toContain('position: absolute;');
+		expect(glyph![1]).not.toContain('display: inline-block;');
+		expect(glyph![1]).not.toContain('display:');
+		expect(gutter![1]).toContain('padding-inline-end: 0.95em;');
+		expect(glyph![1]).not.toContain('padding-inline-end:');
+		expect(glyph![1]).not.toContain('margin-inline-start:');
 	});
 
 	test('the glyph sizes to D3\'s 0.75-0.85em target', () => {
-		const width = /width: ([\d.]+)em;/.exec(m![1]);
+		const width = /width: ([\d.]+)em;/.exec(glyph![1]);
 		expect(width).not.toBeNull();
 		const em = Number(width![1]);
 		expect(em).toBeGreaterThanOrEqual(0.75);
 		expect(em).toBeLessThanOrEqual(0.85);
+	});
+
+	// INFO-1 (round-1 review) — RTL mirror, one rule, guarded by the same
+	// `@supports selector(:dir(rtl))` feature test Obsidian's own sheet uses.
+	test('the glyph is mirrored under :dir(rtl), guarded by @supports selector(:dir(rtl))', () => {
+		expect(rtl).not.toBeNull();
+		expect(rtl![1]).toContain('transform: scaleX(-1);');
 	});
 });
 

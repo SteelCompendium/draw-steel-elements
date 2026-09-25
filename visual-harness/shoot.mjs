@@ -3491,16 +3491,62 @@ const LINK_REST_PROPS = ['fontWeight', 'textDecorationLine', 'textDecorationThic
  *  colour is protected by the pre-existing `.dse-card a:hover` twin, and this proves that
  *  pre-existing protection rather than assuming it). */
 const LINK_HOVER_PROPS = ['color', 'textDecorationLine'];
-/** `.external-link`'s own unique icon material — GROUP 7. */
-const EXTERNAL_LINK_PROPS = ['backgroundImage', 'backgroundPositionX', 'backgroundPositionY', 'backgroundRepeat', 'backgroundSize', 'paddingInlineEnd', 'filter'];
-/** SC-317 — the plugin's OWN `::after` icon (GROUP 7 companion), sampled SEPARATELY from
- *  the rest-state anchor props above: this reads `getComputedStyle(n, '::after')`, not
- *  `getComputedStyle(n)`. Obsidian's real app.css never sets anything on a `.external-
- *  link`'s `::after` (its own icon is a `background-image` on the anchor itself, not a
- *  pseudo-element — see the styles-source.css GROUP 7 comment), so this exists to catch a
- *  FUTURE host rule reaching the pseudo, not a known one today: mask/size/margin/colour,
- *  the exact surface the ticket asked this sweep to widen to cover. */
-const EXTERNAL_LINK_AFTER_PROPS = ['maskImage', 'webkitMaskImage', 'maskSize', 'webkitMaskSize', 'maskRepeat', 'webkitMaskRepeat', 'backgroundColor', 'width', 'height', 'marginInlineStart', 'display'];
+/** `.external-link`'s own unique icon material — GROUP 7. `position` (FIX ROUND 1) joins
+ *  this list because v4 (MED-1) sets `position: relative` on the ANCHOR itself, as the
+ *  glyph pseudo's containing block — this is the anchor-level half of that contract, not
+ *  the glyph's own (see EXTERNAL_LINK_GLYPH_PROPS below for the glyph's `position:
+ *  absolute`). `paddingInlineEnd` was already here before FIX ROUND 1 — it used to prove
+ *  Obsidian's OWN icon gutter stays reset to 0; it now ALSO proves the plugin's own
+ *  `0.95em` gutter (v4's replacement for the old margin-based gap) survives the host
+ *  sheet unchanged, same array, no new entry needed. */
+const EXTERNAL_LINK_PROPS = ['backgroundImage', 'backgroundPositionX', 'backgroundPositionY', 'backgroundRepeat', 'backgroundSize', 'paddingInlineEnd', 'filter', 'position'];
+/** SC-317 — the plugin's OWN icon glyph (GROUP 7 companion), sampled SEPARATELY from the
+ *  rest-state anchor props above: this reads `getComputedStyle(n, '::before')`, not
+ *  `getComputedStyle(n)`. FIX ROUND 1 (MED-1) moved the glyph from an in-flow `::after`
+ *  to an absolutely positioned `::before` (Obsidian's own geometry — see the
+ *  styles-source.css GROUP 7 companion comment) — this list moved with it, and widened
+ *  (round-1 review, LOW-1: the r1 list was narrow enough that `opacity: 0`,
+ *  `background-image: <red>` and a `transform` all passed the sweep green under an
+ *  injected host-shaped rule, a live hole proven and re-proven closed — see the round-1
+ *  review report's LOW-1 finding). Obsidian's real app.css never sets anything on a
+ *  `.external-link`'s `::before` (its own icon is a `background-image` on the anchor
+ *  itself, not a pseudo-element — see the styles-source.css GROUP 7 comment; a scan of
+ *  the pinned 1.13.7 sheet's 131 `::after`/`::before` selectors found none reaching an
+ *  anchor), so this exists to catch a FUTURE host rule reaching the pseudo, not a known
+ *  one today — but it must catch every SHAPE of leak the pseudo can carry, not just the
+ *  mask/size/margin/colour subset r1 shipped: visibility (`opacity`/`visibility`), repaint
+ *  (`backgroundImage`, `maskImage`/`webkitMaskImage`, `maskPosition`/
+ *  `webkitMaskPosition`), geometry (`position`, `insetInlineEnd`, `bottom`, `width`,
+ *  `height`, `display`, `verticalAlign`, `marginInlineEnd`, `paddingInlineStart`,
+ *  `paddingInlineEnd`), and paint effects (`filter`, `transform`) — the exact four shapes
+ *  the review's live-hole probes exercised. */
+const EXTERNAL_LINK_GLYPH_PROPS = [
+	'content',
+	'position',
+	'insetInlineEnd',
+	'bottom',
+	'width',
+	'height',
+	'display',
+	'verticalAlign',
+	'backgroundColor',
+	'backgroundImage',
+	'maskImage',
+	'webkitMaskImage',
+	'maskSize',
+	'webkitMaskSize',
+	'maskRepeat',
+	'webkitMaskRepeat',
+	'maskPosition',
+	'webkitMaskPosition',
+	'opacity',
+	'visibility',
+	'filter',
+	'transform',
+	'marginInlineEnd',
+	'paddingInlineStart',
+	'paddingInlineEnd',
+];
 const INLINE_PROPS_BY_KIND = {
 	h1: HEADING_PROPS,
 	h2: HEADING_PROPS,
@@ -3550,12 +3596,19 @@ function tagInline() {
  *  here, not closed over from `EXTERNAL_LINK_PROPS` — same `page.evaluate` serialization
  *  reason `propsByKind` is a PARAMETER: only this function's own source text crosses into
  *  the page, so a free reference to ANY module-level const throws `ReferenceError` inside
- *  it, not just the obvious ones), AND — SC-317 — that same anchor's `::after` pseudo,
- *  the plugin's own icon, prefixed `after_` so it can never collide with a rest-state key
- *  of the same short name (e.g. both `width` and `display` exist on plain elements too). */
+ *  it, not just the obvious ones), AND — SC-317, FIX ROUND 1 (MED-1 moved the glyph to
+ *  `::before`; LOW-1 widened this list) — that same anchor's `::before` pseudo, the
+ *  plugin's own icon glyph, prefixed `glyph_` so it can never collide with a rest-state
+ *  key of the same short name (e.g. both `width` and `display` exist on plain elements
+ *  too). */
 function readTaggedInline(propsByKind) {
-	const externalLinkProps = ['backgroundImage', 'backgroundPositionX', 'backgroundPositionY', 'backgroundRepeat', 'backgroundSize', 'paddingInlineEnd', 'filter'];
-	const externalLinkAfterProps = ['maskImage', 'webkitMaskImage', 'maskSize', 'webkitMaskSize', 'maskRepeat', 'webkitMaskRepeat', 'backgroundColor', 'width', 'height', 'marginInlineStart', 'display'];
+	const externalLinkProps = ['backgroundImage', 'backgroundPositionX', 'backgroundPositionY', 'backgroundRepeat', 'backgroundSize', 'paddingInlineEnd', 'filter', 'position'];
+	const externalLinkGlyphProps = [
+		'content', 'position', 'insetInlineEnd', 'bottom', 'width', 'height', 'display', 'verticalAlign',
+		'backgroundColor', 'backgroundImage', 'maskImage', 'webkitMaskImage', 'maskSize', 'webkitMaskSize',
+		'maskRepeat', 'webkitMaskRepeat', 'maskPosition', 'webkitMaskPosition', 'opacity', 'visibility',
+		'filter', 'transform', 'marginInlineEnd', 'paddingInlineStart', 'paddingInlineEnd',
+	];
 	const out = [];
 	for (const n of document.querySelectorAll('[data-dse-inlineleak]')) {
 		const kind = n.getAttribute('data-dse-inlineleak-kind');
@@ -3572,8 +3625,8 @@ function readTaggedInline(propsByKind) {
 		for (const p of propsByKind[kind] ?? []) rec[p] = cs[p];
 		if (rec.isExternal) {
 			for (const p of externalLinkProps) rec[p] = cs[p];
-			const afterCs = getComputedStyle(n, '::after');
-			for (const p of externalLinkAfterProps) rec['after_' + p] = afterCs[p];
+			const glyphCs = getComputedStyle(n, '::before');
+			for (const p of externalLinkGlyphProps) rec['glyph_' + p] = glyphCs[p];
 		}
 		out.push(rec);
 	}
@@ -3628,16 +3681,33 @@ function focusLinkTagged(key) {
  *  `page.evaluate` is serialized on its OWN, and a call inside it to a same-file sibling
  *  function (`readOneLinkTagged`) is just as much a free reference across the Node/page
  *  boundary as a bare module-level const — this function must be the thing `page.evaluate`
- *  is given directly. */
+ *  is given directly.
+ *
+ *  FIX ROUND 1 (LOW-1) — when the tagged node is `.external-link`, this ALSO reads its
+ *  `::before` glyph (prefixed `glyph_`, same literal list as `readTaggedInline`'s own
+ *  `externalLinkGlyphProps`, hardcoded here for the same serialization reason). The round-1
+ *  review's finding was specifically that the sweep never sampled the pseudo under a
+ *  FORCED `:hover` state — this function is called from both the `:hover` and
+ *  `:focus-visible` passes, so doing it here closes both at once. */
 function readOneLinkTagged({ key, pseudo }) {
 	const linkRestProps = ['fontWeight', 'textDecorationLine', 'textDecorationThickness', 'cursor', 'outlineStyle', 'outlineWidth', 'color'];
 	const linkHoverProps = ['color', 'textDecorationLine'];
+	const externalLinkGlyphProps = [
+		'content', 'position', 'insetInlineEnd', 'bottom', 'width', 'height', 'display', 'verticalAlign',
+		'backgroundColor', 'backgroundImage', 'maskImage', 'webkitMaskImage', 'maskSize', 'webkitMaskSize',
+		'maskRepeat', 'webkitMaskRepeat', 'maskPosition', 'webkitMaskPosition', 'opacity', 'visibility',
+		'filter', 'transform', 'marginInlineEnd', 'paddingInlineStart', 'paddingInlineEnd',
+	];
 	const n = document.querySelector(`[data-dse-inlineleak="${key}"]`);
 	if (!n) return null;
 	const cs = getComputedStyle(n);
 	const rec = { key, active: pseudo ? n.matches(pseudo) : true };
 	for (const p of linkRestProps) rec[p] = cs[p];
 	for (const p of linkHoverProps) rec['hover_' + p] = cs[p];
+	if (n.classList.contains('external-link')) {
+		const glyphCs = getComputedStyle(n, '::before');
+		for (const p of externalLinkGlyphProps) rec['glyph_' + p] = glyphCs[p];
+	}
 	return rec;
 }
 
@@ -3720,7 +3790,8 @@ async function assertInlineHostLeak(page) {
 	const problems = [];
 	let restComparisons = 0;
 	let externalComparisons = 0;
-	let afterComparisons = 0;
+	let glyphComparisons = 0;
+	let glyphHoverComparisons = 0;
 	let hoverComparisons = 0;
 	let focusComparisons = 0;
 	let synthComparisons = 0;
@@ -3781,15 +3852,17 @@ async function assertInlineHostLeak(page) {
 					for (const p of EXTERNAL_LINK_PROPS) {
 						if (b[p] !== h[p]) problems.push(`${bg}|${visit.label}|external-link|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
 					}
-					// SC-317 — the plugin's OWN `::after` icon: mask/size/margin/colour must be
-					// IDENTICAL with and without Obsidian's real app.css present, same contract
-					// as the rest-state props above. Obsidian sets nothing on this pseudo today
-					// (see EXTERNAL_LINK_AFTER_PROPS' own comment) — this is what catches it the
-					// day that stops being true.
-					afterComparisons += 1;
-					for (const p of EXTERNAL_LINK_AFTER_PROPS) {
-						const key = 'after_' + p;
-						if (b[key] !== h[key]) problems.push(`${bg}|${visit.label}|external-link::after|${b.key}: Obsidian's real app.css changes ${p} — "${b[key]}" without the host, "${h[key]}" with it`);
+					// SC-317, FIX ROUND 1 (MED-1: ::before; LOW-1: widened) — the plugin's OWN
+					// icon glyph: visibility/repaint/geometry/paint-effect props (the full
+					// EXTERNAL_LINK_GLYPH_PROPS list) must be IDENTICAL with and without
+					// Obsidian's real app.css present, same contract as the rest-state props
+					// above. Obsidian sets nothing on this pseudo today (see
+					// EXTERNAL_LINK_GLYPH_PROPS' own comment) — this is what catches it the day
+					// that stops being true.
+					glyphComparisons += 1;
+					for (const p of EXTERNAL_LINK_GLYPH_PROPS) {
+						const key = 'glyph_' + p;
+						if (b[key] !== h[key]) problems.push(`${bg}|${visit.label}|external-link::before|${b.key}: Obsidian's real app.css changes ${p} — "${b[key]}" without the host, "${h[key]}" with it`);
 					}
 				}
 			}
@@ -3806,6 +3879,16 @@ async function assertInlineHostLeak(page) {
 				hoverComparisons += 1;
 				for (const p of LINK_HOVER_PROPS) {
 					if (b['hover_' + p] !== h['hover_' + p]) problems.push(`${bg}|${visit.label}|a:hover|${b.key}: Obsidian's real app.css changes ${p} — "${b['hover_' + p]}" without the host, "${h['hover_' + p]}" with it`);
+				}
+				// FIX ROUND 1 (LOW-1) — `readOneLinkTagged` also reads the `::before` glyph
+				// when the tagged node is `.external-link`, so this same `:hover` pass proves
+				// the glyph stays put under a FORCED `:hover` state too, not just at rest.
+				if (b.glyph_content !== undefined) {
+					glyphHoverComparisons += 1;
+					for (const p of EXTERNAL_LINK_GLYPH_PROPS) {
+						const key = 'glyph_' + p;
+						if (b[key] !== h[key]) problems.push(`${bg}|${visit.label}|a:hover|external-link::before|${b.key}: Obsidian's real app.css changes ${p} — "${b[key]}" without the host, "${h[key]}" with it`);
+					}
 				}
 			}
 
@@ -3855,13 +3938,15 @@ async function assertInlineHostLeak(page) {
 		);
 		process.exit(1);
 	}
-	const comparisons = restComparisons + externalComparisons + afterComparisons + hoverComparisons + focusComparisons + synthComparisons;
+	const comparisons =
+		restComparisons + externalComparisons + glyphComparisons + glyphHoverComparisons + hoverComparisons + focusComparisons + synthComparisons;
 	console.log(
 		`\ninline host-leak OK (${kindCounts.h1}h1+${kindCounts.h2}h2+${kindCounts.h3}h3+${kindCounts.h4}h4+` +
 			`${kindCounts.h5}h5+${kindCounts.h6}h6+${kindCounts.strong}strong+${kindCounts.em}em+${kindCounts.b}b+` +
 			`${kindCounts.i}i+${kindCounts.a}a rest ` +
 			`[${restComparisons}] + ${kindCounts.external} external-link icon [${externalComparisons}] + ` +
-			`${kindCounts.external} external-link ::after icon (SC-317) [${afterComparisons}] + a:hover ` +
+			`${kindCounts.external} external-link ::before glyph (SC-317 v4) [${glyphComparisons}] + ` +
+			`${kindCounts.external} external-link ::before glyph under :hover (SC-317 LOW-1) [${glyphHoverComparisons}] + a:hover ` +
 			`[${hoverComparisons}] + a:focus-visible [${focusComparisons}] + 4 synthetic (h1/h5/mark/code) ` +
 			`[${synthComparisons}] × dark/light = ${comparisons} comparisons against the real Obsidian app.css ` +
 			`under a real .markdown-preview-view.markdown-rendered ancestor: every sampled heading/strong/em/b/i/` +

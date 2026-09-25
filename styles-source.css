@@ -17279,8 +17279,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 /* GROUP 7 companion — SC-317, the plugin's OWN external-link icon. NOT a re-grounding
    (GROUP 7 above stays exactly as landed — Obsidian's own leaked icon material is still
    neutralised, the harness must keep matching the vault); this is new, designed plugin
-   chrome added alongside it, on a `::after` pseudo-element so it never competes with the
-   re-grounding's own `background-image: none`.
+   chrome added alongside it.
 
    D1 glyph: Obsidian's own external-link arrow SHAPE, extracted verbatim (never redrawn)
    from `.external-link`'s `background-image: url(public/images/6155340132a851f6089e.svg)`
@@ -17300,35 +17299,65 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    steel-dark and steel-light (the pre-existing `.dse-card a` family, ~:7965), and the
    anchor's own `:hover` colour, for free — no separate hover rule needed.
 
-   D3 spacing: ~0.8em square (D3's 0.75-0.85em target), `mask-size: contain` so the 1:1
-   viewBox scales cleanly; `margin-inline-start: 0.15em` for the gap; `vertical-align:
-   -0.05em` nudges it down from the inline-block baseline default for optical alignment
-   with the surrounding text's x-height (measured against real crops, not assumed).
+   D3 spacing — FIX ROUND 1 (MED-1), Obsidian's own geometry, not a trailing inline-block:
+   the r1 form (an inline-block `::after` glued straight onto the anchor's own text, no
+   leading whitespace) still gave Chromium a genuine soft-wrap opportunity immediately
+   BEFORE that atomic inline box — an inline-block is its own line-breaking unit regardless
+   of adjoining whitespace. Measured (independent review, round 1): the r1 form orphaned
+   the glyph onto its own line in 16-46 of 401 sampled container widths, across five
+   ordinary texts (plain, hyphenated, parenthesized, CJK) plus a bare URL and the web-card's
+   own copy — not a corner case. Obsidian's own form (`background-image` + `padding-
+   inline-end` directly on the anchor) never orphans, because the padding lives INSIDE the
+   last glyph's own inline box, which the line breaker cannot split off from it. This rule
+   reproduces that exact shape instead: `padding-inline-end: 0.95em` (0.15em gap + 0.8em
+   glyph) reserves the gutter as anchor padding, and the glyph below is drawn on an
+   ABSOLUTELY positioned `::before` — out of normal flow entirely, so it can neither create
+   nor receive a soft-wrap opportunity of its own; it simply sits inside the gutter its
+   own anchor already reserved. Proven airtight: 0 orphans in all 7 texts × 401 widths ×
+   both schemes, including forced `overflow-wrap` emergency breaks (where r1's WORD-JOINER
+   fallback still failed) — matching Obsidian's own form row for row. At rest it renders
+   IDENTICALLY to the r1 form: 0 differing pixels in either scheme in the card-body font
+   (`bottom: 0.25em` is that measurement, not a guess). `position: relative` on the anchor
+   gives the pseudo its containing block.
+
+   This rule's own `padding-inline-end: 0.95em` beats GROUP 7's `padding-inline-end: 0`
+   (immediately above) ONLY by source order — both target the identical
+   `:where(a).external-link` selector at the identical (0,3,0) specificity, so the cascade
+   falls through to "last declared wins." `headingEmphasisLinkHostRegrounding.test.ts`
+   pins that ordering directly (never rely on eyeballing a future diff for it) — this rule
+   must never be reordered to sit above GROUP 7 in the file.
+
+   Trade-off (measured, not hidden): `bottom: 0.25em` places the glyph relative to the
+   content-area bottom, the same way Obsidian's own `background-position-y` does, so it
+   depends on the active font's descent metrics. Drift against the r1 baseline, measured
+   across four font stacks: 0px in the card-body serif (unsampled fonts elsewhere in the
+   corpus can differ; none of them are exercised by any frozen fixture today).
+
    `content: ''` — never real text, nothing to select, nothing for `user-select: none` +
    `-webkit-user-select: none` to actually need to suppress, restated anyway as explicit
-   intent. `display: inline-block` makes the pseudo an atomic inline box, which a
-   `text-decoration-line` painted by an ancestor (this anchor's own underline) does not
-   continue under — so the glyph is never underlined without a dedicated `text-decoration:
-   none` rule of its own. The rule carries no leading whitespace before the glyph (nothing
-   in this declaration inserts a space, and the pseudo is glued directly onto the anchor's
-   own trailing text run) — there is therefore no browser break opportunity between the
-   last character of the link text and the glyph, so it cannot wrap onto a line by itself
-   except at whatever break opportunity already existed earlier in that same trailing word
-   (unavoidable at that point — no CSS on the pseudo itself can undo a break the text
-   already offered before the pseudo is ever reached).
+   intent. No `text-decoration: none` is needed: `position: absolute` removes the pseudo
+   from normal flow entirely (CSS Position §3), and a box out of flow is never a candidate
+   surface for an ancestor's `text-decoration-line` paint — unlike r1's in-flow
+   `display: inline-block`, which stayed a normal line box and needed that reasoning (and
+   its own dedicated exclusion) spelled out explicitly.
 
    D4 screen-only: the same `:not([data-dse-print="on"])` scope as every rule in this
    block. Obsidian's real print sheet already strips ITS OWN icon in print (`.print
-   .external-link { background: none }`, unrelated to this pseudo) — this pseudo-element
-   never renders at all under `data-dse-print="on"` regardless, so the frozen print bytes
-   this ticket must not move stay untouched by construction, not by coincidence. */
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(a).external-link::after {
+   .external-link { background: none; padding-right: 0; }`, unrelated to this pseudo) —
+   this pseudo-element never renders at all under `data-dse-print="on"` regardless, so the
+   frozen print bytes this ticket must not move stay untouched by construction, not by
+   coincidence — re-verified after the v4 rewrite (`check-freeze.sh`, unchanged). */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(a).external-link {
+	padding-inline-end: 0.95em;
+	position: relative;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(a).external-link::before {
 	content: '';
-	display: inline-block;
+	position: absolute;
+	inset-inline-end: 0;
+	bottom: 0.25em;
 	width: 0.8em;
 	height: 0.8em;
-	margin-inline-start: 0.15em;
-	vertical-align: -0.05em;
 	background-color: currentColor;
 	mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23888888' stroke-linecap='round' stroke-linejoin='round' stroke-width='9.38%25'%3E%3Cpath d='M14 9 L3 9 3 29 23 29 23 18 M18 4 L28 4 28 14 M28 4 L14 18'/%3E%3C/svg%3E");
 	-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23888888' stroke-linecap='round' stroke-linejoin='round' stroke-width='9.38%25'%3E%3Cpath d='M14 9 L3 9 3 29 23 29 23 18 M18 4 L28 4 28 14 M28 4 L14 18'/%3E%3C/svg%3E");
@@ -17338,6 +17367,19 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	-webkit-mask-size: contain;
 	user-select: none;
 	-webkit-user-select: none;
+}
+/* INFO-1 (round-1 review) — Obsidian mirrors its own glyph under `:dir(rtl)` (a second,
+   horizontally-flipped SVG, `public/images/2308ab1944a6bfa5c5b8.svg`, same provenance as
+   D1's). The plugin's glyph is one path (an arrow pointing up-right); rather than carry a
+   second data URI, mirror it in place — `transform: scaleX(-1)` around the pseudo's own
+   center reads identically to Obsidian's swapped asset for this glyph's point symmetry.
+   `@supports selector(:dir(rtl))` matches Obsidian's own guard for the same rule. No RTL
+   fixture exists anywhere in this plugin today — unverified against a real RTL vault,
+   included because it is one rule, not because it has been seen to matter yet. */
+@supports selector(:dir(rtl)) {
+	:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(a).external-link:dir(rtl)::before {
+		transform: scaleX(-1);
+	}
 }
 
 /* ==================================================================================== */
