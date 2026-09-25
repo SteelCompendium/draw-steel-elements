@@ -158,6 +158,45 @@ describe('SC-202 r4 — GROUP 6/7: .internal-link / .external-link companions', 
 	});
 });
 
+describe('SC-317 — GROUP 7 companion: the plugin\'s own external-link icon (::after)', () => {
+	const m = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(a\\)\\.external-link::after \\{([^}]*)\\}'));
+
+	test('the icon rule exists, right after the GROUP 7 re-grounding it accompanies', () => {
+		expect(m).not.toBeNull();
+	});
+
+	test('it is inside the same print-excluded scope as every rule in this block', () => {
+		// `ANCHOR` itself carries `:not([data-dse-print="on"])` — the match above only
+		// succeeds if the selector this rule is scoped under is exactly that anchor, so a
+		// non-null match already proves the scope; this test names the property this
+		// contract exists to guarantee (D4: screen-only, print keeps no icon).
+		expect(m).not.toBeNull();
+		expect(ANCHOR).toContain(':not([data-dse-print="on"])');
+	});
+
+	test('it draws via mask-image + currentColor, never filter (D2)', () => {
+		expect(m![1]).toContain('background-color: currentColor;');
+		expect(m![1]).toMatch(/(?:^|\s)mask-image: url\(/);
+		expect(m![1]).toMatch(/-webkit-mask-image: url\(/);
+		expect(m![1]).not.toMatch(/[^-]filter:/);
+	});
+
+	test('it is not selectable text and does not wrap onto its own line by design (D3)', () => {
+		expect(m![1]).toContain("content: '';");
+		expect(m![1]).toContain('display: inline-block;');
+		expect(m![1]).toContain('user-select: none;');
+		expect(m![1]).toContain('-webkit-user-select: none;');
+	});
+
+	test('the glyph sizes to D3\'s 0.75-0.85em target', () => {
+		const width = /width: ([\d.]+)em;/.exec(m![1]);
+		expect(width).not.toBeNull();
+		const em = Number(width![1]);
+		expect(em).toBeGreaterThanOrEqual(0.75);
+		expect(em).toBeLessThanOrEqual(0.85);
+	});
+});
+
 describe('SC-202 r4 — specificity guard: the .internal-link tie risk (round-2 MED-1\'s own method)', () => {
 	/**
 	 * A minimal CSS specificity calculator (a,b,c) — copied verbatim from

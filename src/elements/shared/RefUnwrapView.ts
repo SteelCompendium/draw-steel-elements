@@ -358,7 +358,13 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 	private webCard(root: HTMLElement, code: string, url: string): void {
 		const card = root.createDiv({ cls: 'dse-ref-notice dse-ref-web-card', attr: { 'data-scc': code } });
 		card.createDiv({ cls: 'dse-ref-notice__msg dse-ref-web-card__msg', text: 'Not installed locally.' });
-		const a = card.createEl('a', { cls: 'dse-ref-web-card__link', text: 'View on steelcompendium.io', href: url });
+		// SC-317 — this link leaves the vault (steelcompendium.io) and reads as prose, not
+		// chrome (a plain "View on steelcompendium.io" text link, no button styling), so it
+		// gets the same `external-link` class Obsidian's own MarkdownRenderer stamps on a
+		// markdown-authored external link — the plugin-drawn icon (styles-source.css GROUP 7
+		// companion) keys off this class, and it was never present here because this anchor
+		// is plugin-built DOM, not rendered markdown.
+		const a = card.createEl('a', { cls: 'dse-ref-web-card__link external-link', text: 'View on steelcompendium.io', href: url });
 		a.setAttribute('target', '_blank');
 		a.setAttribute('rel', 'noopener');
 		card.createDiv({

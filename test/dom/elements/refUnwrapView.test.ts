@@ -246,6 +246,10 @@ describe('RefUnwrapView (spec §1.5 degrade ladder)', () => {
 		expect(link.getAttribute('href')).toBe(`https://steelcompendium.io/scc/${CODE}/`);
 		expect(link.textContent).toBe('View on steelcompendium.io');
 		expect(link.getAttribute('target')).toBe('_blank');
+		// SC-317 — leaves the vault, so it carries `external-link` (the plugin-drawn icon's
+		// hook), the same class Obsidian's own MarkdownRenderer stamps on a markdown-authored
+		// external link.
+		expect(link.classList.contains('external-link')).toBe(true);
 	});
 
 	test('resolved code classifies as unresolved: "unknown SCC code" card naming the code', async () => {

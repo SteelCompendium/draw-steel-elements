@@ -17276,6 +17276,70 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	filter: none;
 }
 
+/* GROUP 7 companion — SC-317, the plugin's OWN external-link icon. NOT a re-grounding
+   (GROUP 7 above stays exactly as landed — Obsidian's own leaked icon material is still
+   neutralised, the harness must keep matching the vault); this is new, designed plugin
+   chrome added alongside it, on a `::after` pseudo-element so it never competes with the
+   re-grounding's own `background-image: none`.
+
+   D1 glyph: Obsidian's own external-link arrow SHAPE, extracted verbatim (never redrawn)
+   from `.external-link`'s `background-image: url(public/images/6155340132a851f6089e.svg)`
+   target in Obsidian 1.14.2's real `app.css` — read straight out of
+   `~/.config/obsidian/obsidian-1.14.2.asar` (the newest installed asar at the time of this
+   change; same `readAsarFile` reader `obsidian-host-pin.mjs` already uses, not the `npx
+   asar` CLI). Extracted SVG sha256: `a7c6a118d17f6a296037b519e9891e08951de59c289fe41ec2596a
+   63c3b28516`. The only edits from the extracted file: the XML prolog and the `class='i-
+   external'`/explicit `width`/`height` attributes are dropped (an Obsidian-internal JS
+   hook and redundant sizing this rule's own `mask-size` replaces) — `viewBox`, every
+   `stroke-*` attribute and the `<path>` geometry are byte-identical to the source.
+
+   D2 colour: `mask-image` + `-webkit-mask-image` (never `filter`) with `background-color:
+   currentColor` — the mask only reads the glyph's ALPHA channel (the stroke is fully
+   opaque; its own `#888888` colour is irrelevant to the mask), so the drawn glyph takes
+   the anchor's own computed colour: this plugin's teal-cyan `--dse-accent` in both
+   steel-dark and steel-light (the pre-existing `.dse-card a` family, ~:7965), and the
+   anchor's own `:hover` colour, for free — no separate hover rule needed.
+
+   D3 spacing: ~0.8em square (D3's 0.75-0.85em target), `mask-size: contain` so the 1:1
+   viewBox scales cleanly; `margin-inline-start: 0.15em` for the gap; `vertical-align:
+   -0.05em` nudges it down from the inline-block baseline default for optical alignment
+   with the surrounding text's x-height (measured against real crops, not assumed).
+   `content: ''` — never real text, nothing to select, nothing for `user-select: none` +
+   `-webkit-user-select: none` to actually need to suppress, restated anyway as explicit
+   intent. `display: inline-block` makes the pseudo an atomic inline box, which a
+   `text-decoration-line` painted by an ancestor (this anchor's own underline) does not
+   continue under — so the glyph is never underlined without a dedicated `text-decoration:
+   none` rule of its own. The rule carries no leading whitespace before the glyph (nothing
+   in this declaration inserts a space, and the pseudo is glued directly onto the anchor's
+   own trailing text run) — there is therefore no browser break opportunity between the
+   last character of the link text and the glyph, so it cannot wrap onto a line by itself
+   except at whatever break opportunity already existed earlier in that same trailing word
+   (unavoidable at that point — no CSS on the pseudo itself can undo a break the text
+   already offered before the pseudo is ever reached).
+
+   D4 screen-only: the same `:not([data-dse-print="on"])` scope as every rule in this
+   block. Obsidian's real print sheet already strips ITS OWN icon in print (`.print
+   .external-link { background: none }`, unrelated to this pseudo) — this pseudo-element
+   never renders at all under `data-dse-print="on"` regardless, so the frozen print bytes
+   this ticket must not move stay untouched by construction, not by coincidence. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(a).external-link::after {
+	content: '';
+	display: inline-block;
+	width: 0.8em;
+	height: 0.8em;
+	margin-inline-start: 0.15em;
+	vertical-align: -0.05em;
+	background-color: currentColor;
+	mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23888888' stroke-linecap='round' stroke-linejoin='round' stroke-width='9.38%25'%3E%3Cpath d='M14 9 L3 9 3 29 23 29 23 18 M18 4 L28 4 28 14 M28 4 L14 18'/%3E%3C/svg%3E");
+	-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23888888' stroke-linecap='round' stroke-linejoin='round' stroke-width='9.38%25'%3E%3Cpath d='M14 9 L3 9 3 29 23 29 23 18 M18 4 L28 4 28 14 M28 4 L14 18'/%3E%3C/svg%3E");
+	mask-repeat: no-repeat;
+	-webkit-mask-repeat: no-repeat;
+	mask-size: contain;
+	-webkit-mask-size: contain;
+	user-select: none;
+	-webkit-user-select: none;
+}
+
 /* ==================================================================================== */
 /*   SC-202 r5 — CHECKBOX + TASK-LIST HOST RE-GROUNDING (leak family 5, the LAST one)   */
 /* ==================================================================================== */
