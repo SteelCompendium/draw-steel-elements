@@ -2,7 +2,6 @@ type: feature
 feature_type: ability
 name: Coverage Strike
 cost: 5 Malice
-ability_type: Villain Action 1
 flavor: A sweeping flourish of steel.
 keywords:
   - Attack

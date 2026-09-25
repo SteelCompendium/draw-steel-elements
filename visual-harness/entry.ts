@@ -234,57 +234,44 @@ i0: "Thinks you're after the ring; becomes hostile"
 // SC-117 Batch 6 (catalog D9): `.dse-section--spend` never renders in the sweep —
 // renderFeature.ts's `isSpend` gate only fires when an effect's RAW `cost` field starts
 // with "Spend" (Draw Steel's "Spend Heroic Resource"/"Spend a Recovery" grammar, RR §—),
-// and no fixture anywhere uses that wording. Verbatim copy of feature/example.yaml with
-// the "Special" effect's cost changed from "2 Malice" to "Spend Heroic Resource" — the
-// single-sourced default (D9-elsewhere: the authoring example) stays byte-identical and
-// freeze-pinned; this is a harness-only variant, same convention as featureblockAdvancement
-// above.
-const featureSpend = `type: feature
-feature_type: ability
-name: Coverage Strike
-cost: 5 Malice
-ability_type: Villain Action 1
-flavor: A sweeping flourish of steel.
-keywords:
-  - Attack
-  - Weapon
-usage: Main action
-distance: Melee 1
-target: One creature
-trigger: A creature ends its turn adjacent to the target.
-effects:
-  - name: Effect
-    effect: The primary effect text.
-  - roll: Power Roll + Might
-    tier1: Tier one outcome.
-    tier2: Tier two outcome.
-    tier3: Tier three outcome.
-    crit: Crit outcome.
-  - name: Special
-    cost: Spend Heroic Resource
-    effect: Special clause text.
-  - name: Aftermath
-    effect: Wrapper text.
-    features:
-      - type: feature
-        feature_type: trait
-        name: Inner Feature
-        effects:
-          - name: Inner Effect
-            effect: Inner effect text.
-`;
+// and no fixture anywhere uses that wording. SC-236: DERIVED from featureDefault (same
+// convention as featureCollapsed below) rather than hand-copied — a hand-copy silently
+// drifted out of sync with example.yaml once (this fixture kept `ability_type: Villain
+// Action 1` after SC-236 round 2 deleted that line from the real file). The Special
+// effect's cost is the only field that differs from the single-sourced default (D9-
+// elsewhere: the authoring example, which stays byte-identical and freeze-pinned); the
+// guard throws at harness load if example.yaml's shape ever stops containing the line
+// this replaces, so a future edit can't silently leave featureSpend stale again.
+const FEATURE_SPEND_FROM = '    cost: 2 Malice\n';
+const FEATURE_SPEND_TO = '    cost: Spend Heroic Resource\n';
+const featureSpend = (() => {
+	const derived = featureDefault.replace(FEATURE_SPEND_FROM, FEATURE_SPEND_TO);
+	if (derived === featureDefault) {
+		throw new Error(
+			`featureSpend: expected featureDefault (example.yaml) to contain ${JSON.stringify(
+				FEATURE_SPEND_FROM,
+			)} to replace with ${JSON.stringify(
+				FEATURE_SPEND_TO,
+			)} — example.yaml's shape changed; update this derivation.`,
+		);
+	}
+	return derived;
+})();
 
-// SC-102 part 2 (Task 4, S-5 = (a), the recommended option): a REAL standalone villain
-// card. `src/elements/feature/example.yaml` (the `feature` element's D9 single-sourced
-// authoring example) is a permanent FALSE villain (D5): it carries `ability_type:
-// Villain Action 1` alongside `usage: Main action`, and a real usage line always wins,
-// so it renders — correctly — as a main-action card and cannot be "fixed" without either
-// editing the D9 example (which would move its frozen `feature--steel-print` shot) or
-// breaking the precedence rule the false-villain case exists to pin (task-3 review H-1).
-// This harness-local literal (SC-108's pattern, `featureblockAdvancement` above) is the
-// same shape MINUS `usage`, so `actionTypeOf` falls through to the real `ability_type`
-// ladder and actually resolves 'villain' — the only way to golden-shot the standalone
-// villain card (spine-less crest + eyebrow tint, no bar, per D3) without touching D9's
+// SC-102 part 2 (Task 4, S-5 = (a), the recommended option), reworded by SC-236: a REAL
+// standalone villain card. `src/elements/feature/example.yaml` (the `feature` element's
+// D9 single-sourced authoring example) used to be a permanent FALSE villain (D5): it
+// carried `ability_type: Villain Action 1` alongside `usage: Main action`, and a real
+// usage line always wins, so it rendered — correctly — as a main-action card while still
+// claiming (via the chip) to be a villain action. SC-236 round 2 deleted that
+// `ability_type` line from the D9 example, so it no longer carries any villain
+// descriptor at all — but no fixture anywhere else exercises `actionTypeOf`'s
+// `ability_type` ladder rung (real corpus villain actions signal via `cost`, not
+// `ability_type` — see `feature-villain`'s own shape below), so this harness-local
+// literal (SC-108's pattern, `featureblockAdvancement` above) stays as the only way to
+// golden-shot that fallback path: the same shape MINUS `usage`, so `actionTypeOf` falls
+// through to the real `ability_type` ladder and resolves 'villain' — the standalone
+// villain card (spine-less crest + eyebrow tint, no bar, per D3), independent of D9's
 // single-sourced example. New shot names (`feature-villain--*`) cannot collide with a
 // frozen name (`sha256sum -c` only checks names the baseline lists), so this fixture is
 // invisible to the freeze check by construction.

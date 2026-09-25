@@ -123,11 +123,15 @@ export interface RenderFeatureOptions {
  * crest. A dash-only usage is the book's "no usage line", so it must fall THROUGH.
  *
  * SC-102 fix round (H-1): what it falls through TO is `cost` first (the shipped
- * steel-etl shape — see isVillainCost above), then `ability_type` (hand-authored notes,
- * e.g. this element's own example.yaml). Precedence is otherwise untouched: a REAL
- * usage still wins over both, which is why `feature/example.yaml` (`ability_type:
- * Villain Action 1` + `usage: Main action`) deliberately stays `main` and its frozen
- * shots never move.
+ * steel-etl shape — see isVillainCost above), then `ability_type` (hand-authored notes —
+ * no real corpus ability carries `ability_type` at all, so this rung only ever fires for
+ * fixtures/hand-authored blocks; see visual-harness's `feature-villain` fixture and
+ * src/elements/hero/view.ts's `abilityActionLabel`). Precedence is otherwise untouched: a
+ * REAL usage still wins over both — pinned by test/dom/elements/feature.test.ts's inline-
+ * config `SC-102/SC-236` precedence test (SC-236 round 2 deleted the stray
+ * `ability_type: Villain Action 1` line that used to make `feature/example.yaml` itself
+ * demonstrate this precedence; that file is now a plain main-action example with no
+ * ability_type field, and its frozen shots move only when its DOM actually changes).
  */
 export function actionTypeOf(config: FeatureConfig): ActionType | undefined {
 	if (config.feature.isTrait()) return 'trait';
