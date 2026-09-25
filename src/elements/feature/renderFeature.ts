@@ -58,28 +58,82 @@ function isDashPlaceholder(value: string): boolean {
 }
 
 /**
- * SC-231: normalizes a Keywords array into its discrete keyword strings — the site
- * (`steel-ability-cards.css` `.sc-ability__chip`) renders one chip per keyword; the
- * plugin used to join the whole array into ONE comma-separated string and
+ * SC-231 (owner ruling, decisions.md 2026-09-25): the site
+ * (`steel-ability-cards.css` `.sc-ability__chip`) renders one chip per keyword;
+ * the plugin used to join the whole array into ONE comma-separated string and
  * markdown-render it as a single node, so Steel could only ever draw one chip no
- * matter how many keywords the feature had.
+ * matter how many keywords the feature had. This does NOT render twice and does
+ * NOT duplicate any element — it splits the SINGLE markdown render `el` already
+ * holds into one `.dse-feature__kw` span per comma-separated keyword, with each
+ * ", " kept as its own `.dse-feature__kw-sep` span between them. `el`'s total
+ * textContent is unchanged (the exact same characters, just re-grouped into
+ * spans no unscoped rule styles) — that is what keeps Legacy and print reading
+ * the identical inline run byte-for-byte; an EARLIER shape that called the
+ * markdown renderer once PER keyword instead moved frozen print bytes two
+ * different ways (a real renderer's per-call trailing whitespace, and
+ * cross-boundary glyph kerning from a genuinely re-rendered text run) — see the
+ * ledger for both failed attempts.
  *
- * `feature.keywords` is already `string[]` (one entry per keyword — see
- * `src/elements/feature/example.yaml`, the common/intended shape), so most of the
- * time this is a no-op reshape. But a hand-typed `ds-feature` fence can put more
- * than one keyword's text in a single list entry (a comma pasted straight into one
- * item, or a stray trailing comma left on a block-list scalar — `yaml`'s flow-list
- * parser trims/dedupes commas for `[A, B,]`, but a block list's plain scalar keeps
- * a literal trailing "," verbatim), so every entry is ALSO split on a literal ',',
- * trimmed, and empty results dropped. A keyword is never expected to contain a
- * literal comma of its own (SCC codes/markdown-link URLs don't use one), so this
- * never has to special-case markdown.
+ * A real markdown renderer wraps even one line in a block element (Obsidian's
+ * own renderer, and the visual harness's `marked` shim, both do this); this
+ * splits THAT element's children and promotes the resulting chip/separator
+ * spans to be `el`'s own direct children (the wrapper itself already rendered
+ * as pure inline pass-through — `.dse-md-inline > p` a few hundred lines down —
+ * so dropping it changes nothing visually). The jest mock (test/mocks/
+ * obsidian-core.ts) appends a bare text node with no wrapper at all; that text
+ * node is split the same way.
+ *
+ * A comma INSIDE an element is never a split point — only a top-level TEXT node
+ * is — so a keyword that is itself a markdown link (its raw href/label text
+ * never contains a literal comma — SCC codes/URLs don't use one) is moved
+ * whole, as one atomic unit, into its own chip: every link ends up rendered
+ * EXACTLY ONCE, never cloned into a hidden duplicate.
  */
-function splitKeywords(keywords: string[]): string[] {
-	return keywords
-		.flatMap((entry) => entry.split(','))
-		.map((entry) => entry.trim())
-		.filter((entry) => entry.length > 0);
+function chipifyKeywords(el: HTMLElement): void {
+	const doc = el.ownerDocument;
+	const wrapper = el.childNodes.length === 1 && el.firstChild instanceof Element ? el.firstChild : null;
+	const source = Array.from(wrapper ? wrapper.childNodes : el.childNodes);
+
+	const groups: ChildNode[][] = [[]];
+	for (const node of source) {
+		if (node.nodeType === Node.TEXT_NODE) {
+			const pieces = (node.textContent ?? '').split(',');
+			pieces.forEach((piece, i) => {
+				if (i > 0) groups.push([]);
+				if (piece.length > 0) groups[groups.length - 1].push(doc.createTextNode(piece));
+			});
+		} else {
+			groups[groups.length - 1].push(node);
+		}
+	}
+
+	// Trim a leading/trailing whitespace-only sliver off each group's edge text
+	// node (the space after a joining ", " lands at the START of the NEXT
+	// group) and drop any group left empty (a trailing comma, or the dash-
+	// placeholder's own single "-"/"--" entry never reaches this function at
+	// all — see the call site's kwEmpty guard).
+	const chips = groups
+		.map((group) => {
+			const g = [...group];
+			if (g[0]?.nodeType === Node.TEXT_NODE) {
+				g[0].textContent = (g[0].textContent ?? '').replace(/^\s+/, '');
+				if (!g[0].textContent) g.shift();
+			}
+			const last = g[g.length - 1];
+			if (last?.nodeType === Node.TEXT_NODE) {
+				last.textContent = (last.textContent ?? '').replace(/\s+$/, '');
+				if (!last.textContent) g.pop();
+			}
+			return g;
+		})
+		.filter((group) => group.length > 0);
+
+	el.replaceChildren();
+	chips.forEach((group, i) => {
+		if (i > 0) el.createSpan({ cls: 'dse-feature__kw-sep', text: ', ' });
+		const chip = el.createSpan({ cls: 'dse-feature__kw' });
+		for (const node of group) chip.appendChild(node);
+	});
 }
 
 /** Markdown link → its display text ("[Villain Action](scc.v1:…)" → "Villain Action").
@@ -281,29 +335,19 @@ export function renderFeature(
 		void renderMd(dashFix && raw === '-' ? '--' : raw, el);
 	};
 
-	/**
-	 * SC-231: like `md()`, but for a value rendered into its OWN one-word(ish) chip
-	 * (one `.dse-feature__meta-kw` keyword span). A real markdown renderer wraps even
-	 * a single bare word in a block element plus a trailing newline text node
-	 * (Obsidian's own renderer, and the visual harness's `marked` shim, both do
-	 * this) — invisible on `md()`'s ordinary callers (a value that fills its whole
-	 * container, nothing after it to push against), but a boxed chip renders that
-	 * trailing whitespace INSIDE its own border/padding, widening the box by a
-	 * sliver on the right. Trimmed once the async render settles; `renderMd` is
-	 * `ElementView.renderMarkdown`, always a Promise, but the type is `void |
-	 * Promise<void>` (kit callers may pass a sync stub). */
-	const mdChip = (raw: string, el: HTMLElement, dashFix = false): void => {
+	/** SC-231: like `md()`, but ALSO splits the rendered result into one
+	 *  `.dse-feature__kw` chip span per comma-separated keyword once the async
+	 *  render settles (`chipifyKeywords` — a single render, never a duplicate;
+	 *  see its own doc comment). `renderMd` is `ElementView.renderMarkdown`,
+	 *  always a Promise, but the type is `void | Promise<void>` (kit callers may
+	 *  pass a sync stub) — chipify immediately in that fallback case. */
+	const mdThenChipify = (raw: string, el: HTMLElement, dashFix = false): void => {
 		el.addClass('dse-md-inline');
 		const result = renderMd(dashFix && raw === '-' ? '--' : raw, el);
 		if (result && typeof result.then === 'function') {
-			void result.then(() => {
-				while (el.firstChild?.nodeType === Node.TEXT_NODE && !el.firstChild.textContent?.trim()) {
-					el.firstChild.remove();
-				}
-				while (el.lastChild?.nodeType === Node.TEXT_NODE && !el.lastChild.textContent?.trim()) {
-					el.lastChild.remove();
-				}
-			});
+			void result.then(() => chipifyKeywords(el));
+		} else {
+			chipifyKeywords(el);
 		}
 	};
 
@@ -391,31 +435,18 @@ export function renderFeature(
 		// Legacy has no rule keying off it so its existing unlabeled dash text is
 		// pixel-unchanged (LEGACY-FREEZE).
 		const isEmptyValue = isDashPlaceholder;
-		// SC-231: `parts`, when given, ADDS a second, sibling `.dse-feature__meta-
-		// kwlist` element after the ordinary `.dse-feature__meta-value` — it does
-		// NOT replace it. `.dse-feature__meta-value` keeps rendering the exact same
-		// single joined-and-markdown-rendered string it always has (byte-identical
-		// render call, same node shape); `.dse-feature__meta-kwlist` is a THEME-
-		// AGNOSTIC but base-`display:none` extra, one `.dse-feature__meta-kw` span
-		// per discrete keyword (each individually markdown-rendered, so a keyword
-		// that is itself a markdown link still resolves), with NO separator between
-		// them — same as the site's own `.sc-ability__chip` markup (steel-ability-
-		// cards.js:94-96 `.join("")`), spaced only by the Steel flex row's `gap`.
-		// This is belt-and-suspenders LEGACY-FREEZE: Legacy/print's rendered DOM for
-		// `.dse-feature__meta-value` is UNTOUCHED by this whole feature — nothing
-		// about it changed, so there is no cross-span kerning/rendering delta for a
-		// byte-freeze gate to catch — and the base-unscoped `display:none` on
-		// `.dse-feature__meta-kwlist` (styles-source.css, the theme-agnostic meta
-		// grid block) means the extra element is inert even if a Steel selector's
-		// scoping is ever wrong. Only Steel's crest-mode CSS swaps which of the two
-		// is visible.
+		// SC-231: `chipify`, when true, renders the value through `mdThenChipify`
+		// instead of the ordinary `md()` — the SAME single render call (never a
+		// second one, never a duplicate element), split into per-keyword chip
+		// spans once it settles. See `chipifyKeywords`'s own doc comment for why
+		// this is what keeps Legacy/print byte-identical.
 		const cell = (
 			modifier: string,
 			label: string,
 			value: string,
 			which: 'chips' | 'rail',
 			isEmpty = false,
-			parts?: string[],
+			chipify = false,
 		): void => {
 			const cellEl = band(which).createSpan({
 				cls:
@@ -423,13 +454,9 @@ export function renderFeature(
 					(isEmpty ? ' dse-feature__meta-cell--empty' : ''),
 			});
 			cellEl.createSpan({ cls: 'dse-feature__meta-key', text: label });
-			md(value, cellEl.createSpan({ cls: 'dse-feature__meta-value' }), true);
-			if (parts && parts.length > 0) {
-				const listEl = cellEl.createSpan({ cls: 'dse-feature__meta-kwlist' });
-				for (const part of parts) {
-					mdChip(part, listEl.createSpan({ cls: 'dse-feature__meta-kw' }), true);
-				}
-			}
+			const valueEl = cellEl.createSpan({ cls: 'dse-feature__meta-value' });
+			if (chipify) mdThenChipify(value, valueEl, true);
+			else md(value, valueEl, true);
 		};
 		if (feature.keywords) {
 			const kwEmpty = feature.keywords.length === 0 || feature.keywords.every(isEmptyValue);
@@ -439,7 +466,7 @@ export function renderFeature(
 				feature.keywords.length > 0 ? feature.keywords.join(', ') : '',
 				'chips',
 				kwEmpty,
-				kwEmpty ? undefined : splitKeywords(feature.keywords),
+				!kwEmpty,
 			);
 		}
 		if (feature.usage) cell('type', 'Type', feature.usage, 'chips', isEmptyValue(feature.usage));

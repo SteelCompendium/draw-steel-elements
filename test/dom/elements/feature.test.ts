@@ -360,33 +360,46 @@ keywords:
 		expect(hasEmpty('type')).toBe(false);
 	});
 
-	// SC-231: the Keywords cell used to markdown-render feature.keywords.join(', ')
-	// into .dse-feature__meta-value as ONE node, so Steel could only ever draw one
-	// chip. renderFeature.ts's cell() now ALSO renders a second, sibling
-	// .dse-feature__meta-kwlist — one .dse-feature__meta-kw span per discrete
-	// keyword (splitKeywords), matching the site's one-chip-per-keyword
-	// .sc-ability__chip grammar — while .dse-feature__meta-value keeps rendering
-	// the exact same joined string it always has, completely untouched (LEGACY-
-	// FREEZE: Legacy/print show .dse-feature__meta-value, unaware .dse-feature__meta
-	// -kwlist even exists; only Steel-crest CSS swaps which of the two is visible).
-	describe('SC-231: Keywords split into one .dse-feature__meta-kw chip per keyword', () => {
-		const kwSpans = (root: HTMLElement) =>
-			[...root.querySelectorAll<HTMLElement>('.dse-feature__meta-kwlist .dse-feature__meta-kw')];
+	// SC-231 (owner ruling, decisions.md 2026-09-25): the Keywords cell used to
+	// markdown-render feature.keywords.join(', ') into .dse-feature__meta-value as
+	// ONE node, so Steel could only ever draw one chip. renderFeature.ts's
+	// chipifyKeywords() now POST-PROCESSES that SAME single render — never a
+	// second render, never a duplicate element — splitting it into one
+	// .dse-feature__kw span per keyword, direct children of .dse-feature__meta
+	// -value, with each ", " kept as its own .dse-feature__kw-sep span between
+	// them. Every link therefore exists exactly once; textContent is unchanged
+	// (LEGACY-FREEZE — Legacy/print read the identical inline run, just re-grouped
+	// into spans no unscoped rule styles).
+	describe('SC-231: Keywords split into one .dse-feature__kw chip per keyword', () => {
 		const kwValue = (root: HTMLElement) =>
-			root.querySelector('.dse-feature__meta-cell--keywords .dse-feature__meta-value')!;
+			root.querySelector<HTMLElement>('.dse-feature__meta-cell--keywords .dse-feature__meta-value')!;
+		const kwSpans = (root: HTMLElement) => [...kwValue(root).querySelectorAll<HTMLElement>('.dse-feature__kw')];
+		const kwSeps = (root: HTMLElement) => [...kwValue(root).querySelectorAll<HTMLElement>('.dse-feature__kw-sep')];
 
-		test('a multi-keyword feature gets one chip span per keyword, in order, AND the ordinary .dse-feature__meta-value keeps the old comma-joined string, untouched (LEGACY-FREEZE)', async () => {
+		test('a multi-keyword feature gets one chip span per keyword, in order, one separator between each pair, and the value textContent stays the old comma-joined string (LEGACY-FREEZE)', async () => {
 			const { root } = await renderBlock(magmaTitan); // keywords: Earth, Fire, Magic, Ranged, Void
 
 			const chips = kwSpans(root);
 			expect(chips.map((c) => c.textContent)).toEqual(['Earth', 'Fire', 'Magic', 'Ranged', 'Void']);
-			// .dse-feature__meta-value is a SEPARATE element from the chip list (not the
-			// same node re-shaped) — this is the pre-SC-231 assertion, unchanged, proving
-			// that render path never moved.
+			expect(kwSeps(root)).toHaveLength(4);
+			expect(kwSeps(root).map((s) => s.textContent)).toEqual([', ', ', ', ', ', ', ']);
+			// Chips + separators are .dse-feature__meta-value's ONLY children, in order —
+			// so their concatenated text is byte-identical to the pre-SC-231 single node.
 			expect(kwValue(root).textContent).toBe('Earth, Fire, Magic, Ranged, Void');
+			expect([...kwValue(root).children].map((c) => c.className)).toEqual([
+				'dse-feature__kw',
+				'dse-feature__kw-sep',
+				'dse-feature__kw',
+				'dse-feature__kw-sep',
+				'dse-feature__kw',
+				'dse-feature__kw-sep',
+				'dse-feature__kw',
+				'dse-feature__kw-sep',
+				'dse-feature__kw',
+			]);
 		});
 
-		test('a single keyword renders exactly one chip, with no separator of any kind (site parity: chips are joined with no separator, spaced only by gap)', async () => {
+		test('a single keyword renders exactly one chip and no separator span (site parity: chips are joined with no separator, spaced only by gap)', async () => {
 			const { root } = await renderBlock(`type: feature
 feature_type: ability
 name: Solo Keyword
@@ -396,9 +409,7 @@ keywords:
 			const chips = kwSpans(root);
 			expect(chips).toHaveLength(1);
 			expect(chips[0].textContent).toBe('Magic');
-			// The chip list holds exactly the chip spans — no separator elements at all.
-			const list = root.querySelector('.dse-feature__meta-kwlist')!;
-			expect(list.children).toHaveLength(1);
+			expect(kwSeps(root)).toHaveLength(0);
 		});
 
 		test('empty keywords ([]) render no chip spans (no empty chips)', async () => {
@@ -420,11 +431,12 @@ keywords:
 usage: Main action
 `);
 			expect(kwSpans(root)).toHaveLength(0);
+			expect(kwValue(root).textContent).toBe('--'); // dashFix, unchanged from pre-SC-231
 			const cell = root.querySelector('.dse-feature__meta-cell--keywords')!;
 			expect(cell.classList.contains('dse-feature__meta-cell--empty')).toBe(true);
 		});
 
-		test('a keyword that is itself a markdown link still resolves inside its own chip', async () => {
+		test('a keyword that is itself a markdown link still resolves inside its own chip, and the link node itself is reused (not cloned)', async () => {
 			const { root } = await renderBlock(`type: feature
 feature_type: ability
 name: Linked Keyword
@@ -439,6 +451,9 @@ keywords:
 			// it rendered as an <a>; real-Obsidian resolution is the visual-harness's job.
 			expect(chips[0].textContent).toBe('[Magic](scc.v1:mcdm.heroes.v1/some-code)');
 			expect(chips[1].textContent).toBe('Ranged');
+			// Exactly one .dse-feature__kw-sep between them — the link's own raw text has
+			// no comma in it, so it was never split apart.
+			expect(kwSeps(root)).toHaveLength(1);
 		});
 
 		test('whitespace around a comma and a trailing comma inside one list entry both normalize to clean discrete chips', async () => {
