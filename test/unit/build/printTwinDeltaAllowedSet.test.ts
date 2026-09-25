@@ -250,47 +250,108 @@ describe('SC-127 r7 — styles-source.css carries the GENERATED light-island blo
 		expect(island).toMatch(/[^-]caret-color:\s*var\(--caret-color\)\s*;/);
 		expect(island).toMatch(/scrollbar-color:\s*var\(--scrollbar-thumb-bg\)\s*var\(--scrollbar-bg\)\s*;/);
 	});
+
+	// SC-127 r9 MEDIUM-B (scoped re-review regression) — accent-derived tokens must stay
+	// FORMULAS over var(--accent-h/s/l), never a baked default (258/88%/66%). Regression
+	// floor: a handful of the 34 the reviewer measured, checked by name; the full
+	// completeness+value proof is the manifest-comparison describe block below.
+	it('accent-derived tokens are var(--accent-h/s/l) formulas, never the baked default 258/88%/66%', () => {
+		const island = currentIsland()!;
+		for (const t of ['--color-accent-1', '--checkbox-color', '--text-accent', '--interactive-accent']) {
+			const m = island.match(new RegExp(`\\t${t.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}:\\s*([^;]+);`));
+			expect(m).not.toBeNull();
+			const value = m![1];
+			expect(value).toMatch(/var\(--accent-(h|s|l)\)/);
+			expect(value).not.toContain('258');
+			expect(value).not.toContain('88%');
+			expect(value).not.toContain('66%');
+		}
+	});
 });
 
-// SC-127 r7 amendment point 3 — "a jest test that the generated block in the sheet equals
-// the generator's output for the pinned sheet … skip gracefully if the pinned sheet is
-// absent". Jest's `dom` project uses jsdom, which does not implement real CSS cascade /
-// custom-property resolution (`color-mix()`, `hsl(calc(...))` chains through `body`/
-// `.theme-*` mappings) — replicating `generateLightIsland`'s own browser-based resolution
-// here would not be trustworthy even if jsdom let us try. What CAN be checked without a
-// browser, purely textually: EVERY `--*` token name the pinned sheet declares anywhere
-// must be either (a) present in the committed block, or (b) declared with the textually
-// IDENTICAL value inside both the sheet's OWN `.theme-dark { … }` and `.theme-light { … }`
-// blocks — i.e., provably non-differing without needing to resolve anything. A token that
-// differs only through a multi-step mapping chain (declared once at `body` level, with the
-// difference coming from something IT depends on) cannot be proven non-differing this way
-// — those pass through as "assumed differing, must be present" — so this check can have
-// FALSE POSITIVES (flagging a token present anyway) but not false negatives on the tokens
-// it CAN classify; the real, authoritative check is `shoot.mjs`'s own
-// `assertSc127LightIslandPinned`, which runs a real browser on every `npm run shots`.
-describe('SC-127 r7 amendment (3) — the committed block vs the pinned sheet, textually', () => {
+// SC-127 r9 LOW-C (scoped re-review) — the r7 "amendment point 3" test was weaker than
+// its own comment claimed: mapping-only tokens (declared once at body level, no per-theme
+// override) hit `undefined === undefined` and were skipped as "provably identical" even
+// when they genuinely differ through a dependency chain (deleting `--text-normal` stayed
+// green, 21/21); values were never compared at all (editing a value stayed green); and
+// because `visual-harness/dist/obsidian-app.css` is gitignored and CI runs jest before any
+// harness fetch, the test always skipped in CI. Fixed by comparing against
+// `obsidian-light-island.manifest.json` — a COMMITTED (not gitignored) JSON file the
+// generator writes alongside the CSS block, name -> the exact value it wrote. This is not
+// a re-implementation of CSS cascade resolution (LOW-C's other option, "compare the full
+// generated text… or the parsed declaration map, names AND values, mapping-only tokens
+// included") — it is the SAME generator's own trusted output, so there is nothing here
+// that could disagree with the real browser-based resolution the way a hand-rolled
+// resolver could. This test never skips (the manifest is always present, tracked); a
+// SEPARATE, narrower test below still checks the manifest itself against a locally cached
+// pinned sheet when one exists, purely as an extra local sanity check.
+describe('SC-127 r9 LOW-C — the committed block matches the committed manifest (names AND values, always runs)', () => {
+	const manifest: Record<string, string> = JSON.parse(
+		fs.readFileSync(path.join(__dirname, '../../../visual-harness/obsidian-light-island.manifest.json'), 'utf8'),
+	);
+
+	function islandDeclMap(): Record<string, string> {
+		const bi = stylesSourceCss.indexOf(BEGIN_MARKER);
+		const ei = stylesSourceCss.indexOf(END_MARKER);
+		expect(bi).toBeGreaterThan(-1);
+		expect(ei).toBeGreaterThan(bi);
+		const island = stylesSourceCss.slice(bi, ei);
+		const out: Record<string, string> = {};
+		for (const m of island.matchAll(/\t(--[a-zA-Z0-9-]+):\s*([^;]+);/g)) out[m[1]] = m[2].trim();
+		return out;
+	}
+
+	it('the manifest is non-empty and has the expected shape (guard against a vacuous pass)', () => {
+		const keys = Object.keys(manifest);
+		expect(keys.length).toBeGreaterThan(200);
+		expect(keys.every((k) => k.startsWith('--'))).toBe(true);
+	});
+
+	it('every manifest token is present in the committed block with the EXACT SAME value', () => {
+		const island = islandDeclMap();
+		const wrong: string[] = [];
+		const missing: string[] = [];
+		for (const [token, value] of Object.entries(manifest)) {
+			if (!(token in island)) {
+				missing.push(token);
+				continue;
+			}
+			if (island[token] !== value) wrong.push(`${token}: manifest says "${value}", block says "${island[token]}"`);
+		}
+		expect(missing).toEqual([]);
+		expect(wrong).toEqual([]);
+	});
+
+	it('the committed block declares no MORE custom-property tokens than the manifest (nothing hand-added)', () => {
+		const island = islandDeclMap();
+		const extra = Object.keys(island).filter((t) => !(t in manifest));
+		expect(extra).toEqual([]);
+	});
+});
+
+// SC-127 r9 LOW-C, second half — an EXTRA local sanity check (not the enforced one — see
+// above): where a cached pinned sheet happens to be present, also confirm the COMMITTED
+// MANIFEST itself is not stale against it, using the same textual approximation r7's
+// amendment (3) test used (jsdom cannot do real CSS cascade resolution, so this remains
+// best-effort: it can prove a token is STALE via a directly-redeclared-per-theme mismatch,
+// but not through a multi-step mapping chain — matching what it could always prove).
+// Skips cleanly, and SAYS SO, when the pinned sheet is not cached locally (true in CI).
+describe('SC-127 r9 LOW-C (extra, local-only) — the manifest vs a locally cached pinned sheet, textually', () => {
 	const PINNED_SHEET_PATH = path.join(__dirname, '../../../visual-harness/dist/obsidian-app.css');
 	const hasPinnedSheet = fs.existsSync(PINNED_SHEET_PATH);
+	const manifest: Record<string, string> = JSON.parse(
+		fs.readFileSync(path.join(__dirname, '../../../visual-harness/obsidian-light-island.manifest.json'), 'utf8'),
+	);
 
 	if (!hasPinnedSheet) {
-		it.skip('SKIPPED — no cached visual-harness/dist/obsidian-app.css on this machine (run `npm run host-css` first)', () => {});
+		it.skip('SKIPPED (this is expected in CI) — no cached visual-harness/dist/obsidian-app.css on this machine (run `npm run host-css` first)', () => {});
 	} else {
-		it('every pinned-sheet token not provably identical dark vs light is present in the committed block', () => {
+		it('every manifest token not provably identical dark vs light, directly, is at least present (best-effort — see the describe block above for the enforced, exact check)', () => {
 			const pinnedCss = fs.readFileSync(PINNED_SHEET_PATH, 'utf8');
-			const bi = stylesSourceCss.indexOf(BEGIN_MARKER);
-			const ei = stylesSourceCss.indexOf(END_MARKER);
-			expect(bi).toBeGreaterThan(-1);
-			expect(ei).toBeGreaterThan(bi);
-			const island = stylesSourceCss.slice(bi, ei);
 
-			// Comment-stripped brace-depth extraction of the sheet's OWN `.theme-dark { … }` and
-			// `.theme-light { … }` rule bodies — the same technique the generator itself uses via
-			// `iterRules`, reimplemented inline (jest cannot import the `.mjs`, see this file's
-			// header).
 			function ruleBody(css: string, selector: string): string {
 				const stripped = css.replace(/\/\*[\s\S]*?\*\//g, '');
-				const idx = stripped.indexOf(`
-${selector} {`);
+				const idx = stripped.indexOf(`\n${selector} {`);
 				if (idx === -1) return '';
 				const open = stripped.indexOf('{', idx);
 				let depth = 1;
@@ -310,33 +371,13 @@ ${selector} {`);
 			const darkDecls = declMap(ruleBody(pinnedCss, '.theme-dark'));
 			const lightDecls = declMap(ruleBody(pinnedCss, '.theme-light'));
 
-			const allNames = new Set<string>();
-			for (const m of pinnedCss.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(?:^|[\s{;])(--[a-zA-Z0-9-]+)\s*:/g)) {
-				allNames.add(m[1]);
-			}
-
-			// The ONE known false positive this textual approximation cannot see through:
-			// `--interactive-accent-hover` is declared TEXTUALLY differently per theme
-			// (`.theme-dark` points it at `--color-accent-1`; `.theme-light` doesn't override
-			// it, so it inherits body's `var(--color-accent-2)`) — but `.theme-dark`'s own
-			// `--color-accent-1` formula (`-3/1.02/1.15`) is numerically IDENTICAL to
-			// `.theme-light`'s `--color-accent-2` formula, and `--accent-h/s/l` are
-			// theme-invariant, so the two sides resolve to the exact same string. Confirmed
-			// with the real generator (browser-resolved): it is correctly ABSENT from the
-			// committed block. A textual diff cannot see through a formula-level coincidence
-			// like this one — real correctness is `shoot.mjs`'s own browser-based guard.
 			const KNOWN_TEXTUAL_FALSE_POSITIVES = new Set(['--interactive-accent-hover']);
-
 			const missing: string[] = [];
-			for (const t of allNames) {
+			for (const t of Object.keys(manifest)) {
 				if (KNOWN_TEXTUAL_FALSE_POSITIVES.has(t)) continue;
-				// Equal whether both sides redeclare the token with the same text, or NEITHER
-				// side redeclares it at all (theme-invariant by absence — `undefined ===
-				// undefined`) — only a token where exactly ONE theme scope redeclares it, or
-				// both redeclare it DIFFERENTLY, needs to be present in the committed block.
 				const provablyIdentical = darkDecls[t] === lightDecls[t];
 				if (provablyIdentical) continue;
-				if (!island.includes(`${t}:`)) missing.push(t);
+				if (!(t in manifest)) missing.push(t);
 			}
 			expect(missing).toEqual([]);
 		});
