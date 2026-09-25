@@ -110,9 +110,6 @@ Two elements deliberately don't, because there would be nothing to fold or nowhe
 menu: the [horizontal rule](horizontal-rule.md) (`ds-hr`) and the [dice roller](Roll.md)
 (`ds-roll`).
 
-The [Skills](skills-element.md) element additionally keeps its own "Skills" disclosure header
-inside the card; the three fields above drive both it and the element menu together.
-
 ### Blocks that aren't a list of fields
 
 A [compendium reference](compendium-sync.md#referencing-a-compendium-entry-in-your-notes)
