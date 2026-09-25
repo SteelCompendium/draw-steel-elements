@@ -8545,9 +8545,29 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-featur
    non-default values instead. Un-scoping any of the four would swap in the chip
    list for text/grid/ledger too, silently breaking "keywords: chips in crest mode,
    plain comma text otherwise" for the one grammar family (feature/featureblock/
-   statblock ability cards) this preference was built to cover. */
+   statblock ability cards) this preference was built to cover.
+
+   The old value does NOT get `display: none` — visually-hidden instead (the exact
+   `.dse-feature__meta-key` recipe two rules up), because a keyword can itself be a
+   markdown LINK (e.g. a rules-glossary reference): `display: none` removes its
+   anchor from layout entirely, and the visual-harness host-leak probe (which tags
+   every real anchor under `[data-dse-element]` up front, then calls `.focus()` on
+   each — `shoot.mjs`'s `assertInlineHostLeak`) caught exactly that on a kit fixture
+   nesting such a feature, `kit|a#152`/`#153`: `.focus()` cannot move focus into a
+   `display: none` subtree, so those two real, still-`href`-bearing anchors could
+   never match `:focus-visible`. Clipping to 1×1px instead keeps the old value (and
+   every link in it) laid out and genuinely focusable — same as the label pattern —
+   while it reads as empty to a sighted user. */
 [data-dse-theme='steel']:not([data-dse-print="on"]):not([data-dse-kwusage='text']):not([data-dse-kwusage='grid']):not([data-dse-kwusage='ledger']) .dse-feature__meta-cell--keywords .dse-feature__meta-value {
-	display: none;
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]):not([data-dse-kwusage='text']):not([data-dse-kwusage='grid']):not([data-dse-kwusage='ledger']) .dse-feature__meta-kwlist {
 	display: flex;
