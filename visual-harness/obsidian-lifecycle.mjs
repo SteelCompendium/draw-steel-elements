@@ -296,24 +296,30 @@ const PAGE_HELPERS = `(() => {
  * before it can ever steal a keystroke or focus. This is the ONE centralized mechanism the
  * review asked for; every scattered per-scenario poll this task tried first is gone.
  *
- * Clicks the dialog's own header "X" (`.modal-header-button` — this dialog is NOT a standard
- * Modal and has no `.modal-close-button`, confirmed by dumping its real `outerHTML`) — safe
- * here (unlike a per-scenario dismissal at a point that asserts modal ABSENCE, e.g. G-S6i's
- * orphaned-modal count, which this never touches) because the observer only ever matches a
- * modal whose own text contains "trust the author", never a DSE modal. Clicking the dialog's
- * OTHER button, "Trust author and enable plugins" (matched by text, since it carries no
- * distinguishing class), was tried first and measurably WORSE: it reproducibly starved
- * `G-S5n`'s dropped-write Notice — plausibly because that action is Obsidian's real "leave
- * Restricted Mode" trigger and may disturb plugin-scoped state the header "X" does not touch.
+ * Clicks the dialog's own header "X" (`.modal-header-button` inside its `.mod-trust-folder`
+ * `.modal` — this dialog is NOT a standard Modal and has no `.modal-close-button`, confirmed
+ * by dumping its real `outerHTML`) — safe here (unlike a per-scenario dismissal at a point
+ * that asserts modal ABSENCE, e.g. G-S6i's orphaned-modal count, which this never touches)
+ * because it is keyed on that class, never on text content a DSE modal could coincidentally
+ * also show (Task 8 review round 2, "Trust selector"). Clicking the dialog's OTHER button,
+ * "Trust author and enable plugins" (matched by text, since it carries no distinguishing
+ * class), was tried first and measurably WORSE: it reproducibly starved `G-S5n`'s
+ * dropped-write Notice — plausibly because that action is Obsidian's real "leave Restricted
+ * Mode" trigger and may disturb plugin-scoped state the header "X" does not touch.
  */
 const AUTO_DISMISS_TRUST_DIALOG = `(() => {
   if (window.__lcTrustObserver) return true;
   const dismiss = (modal) => {
-    if (!/trust the author/i.test(modal.textContent)) return;
     // Probed (Task 8 review I-1 follow-up, real DOM dump): this dialog is NOT a standard
-    // Modal (no .modal-close-button) -- it is mod-confirmation.mod-trust-folder, whose own
-    // header "X" is .modal-header-button.
-    modal.querySelector('.modal-header-button')?.click();
+    // Modal (no .modal-close-button) -- it is mod-confirmation, with an INNER .modal
+    // carrying .mod-trust-folder, whose own header "X" is .modal-header-button. Task 8
+    // review round 2 (Trust selector): key on that class, not text -- a DSE modal that
+    // happens to show note content containing "trust the author" would otherwise match
+    // the old /trust the author/i text test. Text match kept only as a fallback, for a
+    // future Obsidian build that renames/drops the class.
+    const byClass = modal.querySelector('.mod-trust-folder .modal-header-button');
+    if (byClass) { byClass.click(); return; }
+    if (/trust the author/i.test(modal.textContent)) modal.querySelector('.modal-header-button')?.click();
   };
   window.__lcTrustObserver = new MutationObserver(() => {
     // Re-scan every mutation batch, not only when a .modal-container node itself is freshly
@@ -682,16 +688,7 @@ const SCENARIOS = [
 			const text = 'abcdefghijklmnopqrstuvwxyz0123456789';
 			await t.ev(`${t.root(TRACKER)}.querySelector('button.dse-init__portrait-toggle').click()`);
 			await t.sleep(250);
-			// SC-340 Task 8 review (I-1 follow-up): AUTO_DISMISS_TRUST_DIALOG (installed once
-			// at start-up) keeps Obsidian's own trust dialog from ever stealing focus here, but
-			// a `focus` LISTENER on the input (attached before typing) is kept anyway as a
-			// second, independent safeguard: it latches once the input is (re)focused at any
-			// point — including by `restoreFocusWhenConnected` across the adoption blur — so
-			// even a LATER, wholly unrelated theft of `document.activeElement` cannot flip a
-			// real adoption success into a reported failure.
-			await t.ev(
-				`(() => { const i = ${t.root(TRACKER)}.querySelector('input.dse-init__malice-quickadd-label'); i.focus(); window.__lcRefocused = false; i.addEventListener('focus', () => { window.__lcRefocused = true; }); })()`,
-			);
+			await t.ev(`${t.root(TRACKER)}.querySelector('input.dse-init__malice-quickadd-label').focus()`);
 			for (const ch of text) {
 				await t.cdp.call('Input.insertText', { text: ch });
 				await t.sleep(6);
@@ -701,11 +698,11 @@ const SCENARIOS = [
 			// activeElement on something other than the input/body/null, report the observed
 			// activeElement (tag/class) rather than changing adoptView's rule.
 			const st = await t.ev(
-				`(() => { const i = ${t.root(TRACKER)}.querySelector('input.dse-init__malice-quickadd-label'); const ae = document.activeElement; return { value: i.value, active: ae === i, refocused: window.__lcRefocused, caret: i.selectionStart, activeTag: ae ? ae.tagName : null, activeClass: ae ? ae.className : null }; })()`,
+				`(() => { const i = ${t.root(TRACKER)}.querySelector('input.dse-init__malice-quickadd-label'); const ae = document.activeElement; return { value: i.value, active: ae === i, caret: i.selectionStart, activeTag: ae ? ae.tagName : null, activeClass: ae ? ae.className : null }; })()`,
 			);
 			t.expect(await t.sameRoot(TRACKER, 's3'), 'tracker root replaced (not adopted)');
 			t.expect(st.value === text, `typed text lost: "${st.value}"`);
-			t.expect(st.refocused && st.caret === text.length, `focus/caret lost: ${JSON.stringify(st)}`);
+			t.expect(st.active && st.caret === text.length, `focus/caret lost: ${JSON.stringify(st)}`);
 			t.expect(/has_taken_turn: true/.test(t.read(rel)), 'the earlier click did not write');
 			const stats3a = await t.stats();
 			t.expect(stats3a.collisions === 0 && stats3a.ambiguous === 0, `collisions=${stats3a.collisions} ambiguous=${stats3a.ambiguous}`);
@@ -968,6 +965,16 @@ const SCENARIOS = [
 			t.expect(t.integrity(rel).ok, 'note integrity');
 			t.expect((await t.noticesSince(m)).length === 0, 'unexpected Notice');
 			t.expect((await t.errorsSince(m)).length === 0, `errors: ${JSON.stringify(await t.errorsSince(m))}`);
+			// SC-340 Task 8 review (New-2): the release check below only proves something once
+			// there IS something tagged and live to release — if the popover's own write had
+			// instead produced a FRESH view (a miss, not an adoption), the tagged root would
+			// already be the released OLD one and a new, untagged view could leak unseen past
+			// the isConnected/liveEntries checks after hide(). Assert the tagged root is still
+			// the live, connected registered entry BEFORE closing it.
+			t.expect(
+				await t.ev(`${t.reg}.liveEntries().some((e) => e.root.__lcTag === true && e.root.isConnected)`),
+				'popover write was not adopted (tagged root not live before close)',
+			);
 			// SC-340 Task 8 review (I-2): close through Obsidian's own popover API, not by
 			// deleting the DOM out from under a still-registered, still-"connected" view — a
 			// removed-but-never-unloaded view can't fail the assertions below either way.
