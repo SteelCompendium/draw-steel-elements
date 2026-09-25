@@ -55,8 +55,10 @@ for what needs action.
   website, instead of one chip holding the whole comma-separated list** (SC-231). Affects
   every ability-card surface — standalone `ds-feature` cards, and the ability cards embedded
   in statblocks and featureblocks — at the default "Chips" keyword display setting. The
-  "Inline text"/"Grid"/"Ledger" keyword display settings, the Legacy text run and printed
-  output are unchanged.
+  "Inline text"/"Grid"/"Ledger" keyword display settings look the same as before. Printed
+  output moves by a sub-pixel amount at the Keywords line (glyph shaping shifts slightly
+  wherever the text is now split into one chip per keyword) — everything you can read is
+  unchanged; nothing shifts by a visible amount.
 - [FIX] **The compendium download's zip library is now `fflate`, not JSZip** (SC-328). JSZip's
   legacy-browser polyfills contained dynamic `<script>` element creation, which Obsidian's
   community-plugin review rejects; 7.0.0 also carries forward 6.0.2's three added

@@ -8482,10 +8482,13 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-key {
 	display: inline;
 }
-/* SC-231: `--keywords` dropped out of this group — the cell itself is no longer
-   the chip (see the crest-mode block below, ~4442, for the per-keyword chip that
-   replaces it). `--type` is unaffected: it is still exactly one value, so the box
-   stays on the cell. */
+/* SC-231 fix round (HIGH-1): `--keywords` stays in this group — text/grid/ledger
+   kwUsage modes (~8641 on) rely on IT for the chip band's small-caps voice
+   (review L-6, ~8814) and, in grid, its own explicit wash rule (~8747) already
+   lists `--keywords` alongside `--type`. Only CREST (the block below, ~8448)
+   turns the cell's OWN box off and moves it onto each `.dse-feature__kw` chip
+   instead — scoped there, not here, so the other three modes are untouched. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--keywords,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--type {
 	display: inline-flex;
 	align-items: baseline;
@@ -8511,6 +8514,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 	color: var(--dse-fg-muted);
 	text-align: left;
 }
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--keywords,
 body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--type {
 	background: rgba(0, 0, 0, 0.02);
 }
@@ -8541,6 +8545,18 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-featur
    never a named one), so — same idiom as `sb-charline`'s
    `:not([data-dse-sb-charline='two'])` arm above — this negates the three NAMED
    non-default values instead. */
+[data-dse-theme='steel']:not([data-dse-print="on"]):not([data-dse-kwusage='text']):not([data-dse-kwusage='grid']):not([data-dse-kwusage='ledger']) .dse-feature__meta-cell--keywords {
+	/* the cell's own box (restored above, shared with Type) moves onto each
+	   `.dse-feature__kw` chip instead — crest is the one mode where the CHIPS are
+	   the boxes, not the cell around them. Typography (font-size/variant/
+	   transform/letter-spacing/color) stays put and simply INHERITS down into
+	   the chips below — leaving it here is what keeps text/grid/ledger's shared
+	   voice (review L-6) untouched. */
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	background: none;
+}
 [data-dse-theme='steel']:not([data-dse-print="on"]):not([data-dse-kwusage='text']):not([data-dse-kwusage='grid']):not([data-dse-kwusage='ledger']) .dse-feature__meta-cell--keywords .dse-feature__meta-value {
 	display: flex;
 	flex-wrap: wrap;
@@ -8556,19 +8572,33 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-featur
 	/* same SC-117 B4 white-wash reasoning as the Type chip above — this IS that
 	   same chip recipe, just moved from the cell onto each keyword span. */
 	background: rgba(255, 255, 255, 0.02);
-	font-size: var(--dse-fs-subheading);
-	font-variant: small-caps;
-	text-transform: lowercase;
-	letter-spacing: 0.04em;
-	color: var(--dse-fg-muted);
+	/* SC-231 fix round (HIGH-1): the cell above still carries `--dse-fs-subheading`
+	   (restored to the shared group) — `inherit` here, not the token again, or the
+	   size compounds (an `em`-flavoured token read twice, once per nesting level).
+	   font-variant/text-transform/letter-spacing/color are all likewise inherited
+	   from the cell now and don't need restating. */
+	font-size: inherit;
 }
 body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]):not([data-dse-kwusage='text']):not([data-dse-kwusage='grid']):not([data-dse-kwusage='ledger']) .dse-feature__kw {
 	background: rgba(0, 0, 0, 0.02);
 }
-/* the separator carries no link, ever (chipifyKeywords never puts one there) —
-   hiding it is inert for focus/AT, purely a visual gap-only-spacing choice. */
+/* SC-231 fix round (LOW-1, owner ruling): the separator carries no link, ever
+   (chipifyKeywords never puts one there), but `display: none` also drops it from
+   the accessibility tree and from a copy/paste selection — a screen reader reads
+   the chips as an unpunctuated list, and copying the value loses every comma.
+   Visually-hidden instead (the exact `.dse-feature__meta-key` recipe above) reads
+   "attack, weapon" for both while the chip row still shows no visible comma glyph
+   — the 1x1px box is inert for focus (nothing here is ever focusable). */
 [data-dse-theme='steel']:not([data-dse-print="on"]):not([data-dse-kwusage='text']):not([data-dse-kwusage='grid']):not([data-dse-kwusage='ledger']) .dse-feature__kw-sep {
-	display: none;
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
 }
 /* SC-117 fix wave L2 — the review's one surviving instance of the ticket's own defect
    (audit open item #4, upgraded from "unknown" to "defect awaiting a value"): the base
