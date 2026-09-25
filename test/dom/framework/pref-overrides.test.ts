@@ -366,24 +366,30 @@ presence: 0
 });
 
 describe('behavioral collapse-default prefs (D4 §1.3, AMENDED — declared-ness side channel)', () => {
-	test('skills: collapsibleDefault=false global renders the list bare when the block omits collapsible:; the block key beats the pref', async () => {
+	// SC-255: ds-skills no longer mounts its own kit collapsible (Scott's SC-169 ruling 3,
+	// applied to skills) — the framework chrome panel answers the same two keys and the same
+	// pref ladder, and "renders bare" now means "the panel has no collapse control" rather
+	// than "no .dse-collapse wrapper". The LADDER under test is unchanged. (ds-skills always
+	// contributes its own SC-182 eye-toggle chrome item, so the panel itself never goes fully
+	// empty the way ds-stamina's does — this test only asserts the collapse CONTROL.)
+	test('skills: collapsibleDefault=false global removes the panel\'s collapse control when the block omits collapsible:; the block key beats the pref', async () => {
 		const deps = makeDeps();
 		await deps.prefs.set('collapsibleDefault', false);
 		const pipeline = new ElementPipeline(deps);
 
 		// Omits collapsible: entirely — undeclared, falls through to the (now false)
-		// global pref, so the list renders bare (no whole-element wrapper).
+		// global pref, so the panel has no collapse/expand control.
 		const bareHost = makeHost('ds-skills');
 		await pipeline.run(skillsElement, 'skills:\n  - climb\n', bareHost);
 		const bareRoot = bareHost.containerEl.firstElementChild as HTMLElement;
-		expect(bareRoot.querySelector(':scope > .dse-collapse')).toBeNull();
+		expect(bareRoot.querySelector('[data-dse-chrome-item="collapse"]')).toBeNull();
 		expect(bareRoot.querySelector(':scope > .dse-skills')).not.toBeNull();
 
 		// Declares collapsible: true explicitly — the block key wins over the pref.
 		const declaredHost = makeHost('ds-skills');
 		await pipeline.run(skillsElement, 'collapsible: true\nskills:\n  - climb\n', declaredHost);
 		const declaredRoot = declaredHost.containerEl.firstElementChild as HTMLElement;
-		expect(declaredRoot.querySelector(':scope > .dse-collapse')).not.toBeNull();
+		expect(declaredRoot.querySelector('[data-dse-chrome-item="collapse"]')).not.toBeNull();
 	});
 
 	// SC-169 round 2: `ds-stamina` no longer mounts its own kit collapsible (Scott's ruling

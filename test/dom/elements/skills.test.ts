@@ -176,28 +176,55 @@ describe('Plan 09 Task 2: skills rendered through the REAL ElementPipeline (kit 
 		expect(root.querySelector('.dse-skills')).not.toBeNull();
 	});
 
-	describe('whole-element wrapper = kit collapsible (collapsible/collapse_default YAML contract, F1 §1.4)', () => {
-		test('default (collapsible, expanded): root wraps the list in ONE collapsible titled "Skill List" with a real <button aria-expanded="true">', async () => {
+	describe('whole-element collapse = FRAMEWORK CHROME (SC-255 removed the extra kit collapsible)', () => {
+		// SC-255 (Scott's SC-169 ruling 3, "Remove the old. Replace with the consistent
+		// option that all card elements use."): this element used to ALSO mount its OWN
+		// kit collapsible — a "Skill List" disclosure header above the groups, seeded
+		// from collapse_default, with no SessionPersist — stacked on top of the framework
+		// chrome panel definition.ts already carries (`chrome: skillsChrome`). That second
+		// header is gone; the groups mount straight onto root and the chrome panel is the
+		// ONLY whole-element collapse, the same `ds-stamina` shape SC-169 round 2 landed.
+		// Per-group collapse (its own describe block below) is untouched — Scott's ruling:
+		// "Per-GROUP collapsibles ... stay. Only the whole-element wrapper is the double
+		// affordance."
+		test('mounts the groups straight onto root — no .dse-collapse, no "Skill List" header', async () => {
 			const pipeline = new ElementPipeline(makeDeps());
 			const host = makeHost();
 
 			await pipeline.run(skillsElement, BASE_SKILLS_YAML, host);
 
 			const root = host.containerEl.firstElementChild as HTMLElement;
-			const wrapper = root.querySelector(':scope > .dse-collapse') as HTMLElement;
-			expect(wrapper).not.toBeNull();
-			const header = wrapper.querySelector(':scope > .dse-collapse__header') as HTMLButtonElement;
-			expect(header.tagName).toBe('BUTTON');
-			expect(header.getAttribute('aria-expanded')).toBe('true');
-			expect(header.querySelector('.dse-collapse__title')?.textContent).toBe('Skill List');
-			// aria-controls wires the header to the region that holds the list.
-			const region = wrapper.querySelector(':scope > .dse-collapse__region') as HTMLElement;
-			expect(header.getAttribute('aria-controls')).toBe(region.id);
-			expect(region.hidden).toBe(false);
-			expect(region.querySelector('.dse-skills')).not.toBeNull();
+			expect(root.querySelector(':scope > .dse-collapse')).toBeNull();
+			expect(root.textContent).not.toContain('Skill List');
+			expect(root.querySelector(':scope > .dse-skills')).not.toBeNull();
+			expect(root.hasAttribute('data-dse-collapsed')).toBe(false);
+			// The chrome panel is what replaced it.
+			expect(root.querySelector('.dse-chrome [data-dse-chrome-item="collapse"]')).not.toBeNull();
+			// The per-group collapsibles are untouched by the whole-element mechanism.
+			expect(groupHeader(root, 'Exploration').getAttribute('aria-expanded')).toBe('true');
 		});
 
-		test('collapsible: false renders the list bare — NO whole-element collapsible (groups keep theirs)', async () => {
+		test('collapse_default: true still starts the element collapsed — now via the panel (content stays in the DOM)', async () => {
+			const pipeline = new ElementPipeline(makeDeps());
+			const host = makeHost();
+			const yaml = ['collapse_default: true', 'skills:', '  - climb'].join('\n');
+
+			await pipeline.run(skillsElement, yaml, host);
+
+			const root = host.containerEl.firstElementChild as HTMLElement;
+			expect(root.getAttribute('data-dse-collapsed')).toBe('on');
+			expect(root.querySelector('.dse-chrome-summary__label')?.textContent).toBe('Skills');
+			// The panel hides content by CSS, not by skipping the render — the list is in the DOM.
+			expect(root.querySelector('.dse-skills')).not.toBeNull();
+		});
+
+		test('collapsible: false removes the collapse control from the panel — the panel itself still mounts because the unowned-skills eye toggle is its own chrome item', async () => {
+			// Unlike ds-stamina (which contributes no chromeItems of its own and so loses
+			// the whole panel when collapsible: false leaves it empty — see mountChrome's
+			// "collapsible: false AND items.length === 0" rule), ds-skills ALWAYS
+			// contributes the SC-182 eye toggle (chromeItems below), so the panel never
+			// goes fully empty here. What collapsible: false removes is just the
+			// collapse/expand control.
 			const pipeline = new ElementPipeline(makeDeps());
 			const host = makeHost();
 			const yaml = ['collapsible: false', 'skills:', '  - climb'].join('\n');
@@ -207,61 +234,32 @@ describe('Plan 09 Task 2: skills rendered through the REAL ElementPipeline (kit 
 			const root = host.containerEl.firstElementChild as HTMLElement;
 			expect(root.querySelector(':scope > .dse-collapse')).toBeNull();
 			expect(root.querySelector(':scope > .dse-skills')).not.toBeNull();
+			expect(root.hasAttribute('data-dse-collapsed')).toBe(false);
+			expect(root.querySelector('[data-dse-chrome-item="collapse"]')).toBeNull();
+			// The eye toggle is still there — the panel is not suppressed.
+			expect(root.querySelector('[data-dse-chrome-item="skills-unowned"]')).not.toBeNull();
 			// The per-group collapsibles are untouched by the whole-element key.
 			expect(groupHeader(root, 'Exploration').getAttribute('aria-expanded')).toBe('true');
 		});
 
-		test('collapse_default: true starts the whole element collapsed (aria-expanded="false", region hidden — content stays in the DOM)', async () => {
-			const pipeline = new ElementPipeline(makeDeps());
-			const host = makeHost();
-			const yaml = ['collapse_default: true', 'skills:', '  - climb'].join('\n');
-
-			await pipeline.run(skillsElement, yaml, host);
-
-			const root = host.containerEl.firstElementChild as HTMLElement;
-			const header = root.querySelector(':scope > .dse-collapse > .dse-collapse__header') as HTMLButtonElement;
-			const region = root.querySelector(':scope > .dse-collapse > .dse-collapse__region') as HTMLElement;
-			expect(header.getAttribute('aria-expanded')).toBe('false');
-			expect(region.hidden).toBe(true);
-			// collapsible hides via the hidden ATTRIBUTE — the list is rendered, not destroyed.
-			expect(region.querySelector('.dse-skills')).not.toBeNull();
-		});
-
-		test('toggling the whole-element header writes SessionStore (slot "open") and never touches the vault', async () => {
-			const session = createSessionStore();
-			const pipeline = new ElementPipeline(makeDeps(session));
-			const host = makeHost();
-
-			await pipeline.run(skillsElement, BASE_SKILLS_YAML, host);
-			const root = host.containerEl.firstElementChild as HTMLElement;
-			const header = root.querySelector(':scope > .dse-collapse > .dse-collapse__header') as HTMLButtonElement;
-			const region = root.querySelector(':scope > .dse-collapse > .dse-collapse__region') as HTMLElement;
-
-			header.click();
-
-			expect(header.getAttribute('aria-expanded')).toBe('false');
-			expect(region.hidden).toBe(true);
-			expect(session.get<boolean>(host.blockKey(), 'open')).toBe(false);
-			expect(host.replaceSource).not.toHaveBeenCalled();
-		});
-
-		test('the whole-element collapse PERSISTS ACROSS A REMOUNT via SessionPersist (same blockKey, fresh host)', async () => {
-			const session = createSessionStore();
-			const pipeline = new ElementPipeline(makeDeps(session));
+		test('IS session-tracked now: a remount with the same blockKey remembers the user toggle', async () => {
+			// The old wrapper passed no SessionPersist, so every reading-mode echo-rebuild
+			// threw the reader's collapse away and re-read the YAML. Chrome persists per
+			// (blockKey, slot) like every other element, and still never writes the note.
+			const deps = makeDeps();
 
 			const hostA = makeHost();
-			await pipeline.run(skillsElement, BASE_SKILLS_YAML, hostA);
+			await new ElementPipeline(deps).run(skillsElement, BASE_SKILLS_YAML, hostA);
 			const rootA = hostA.containerEl.firstElementChild as HTMLElement;
-			(rootA.querySelector(':scope > .dse-collapse > .dse-collapse__header') as HTMLButtonElement).click();
+			const toggleA = rootA.querySelector('[data-dse-chrome-item="collapse"]') as HTMLButtonElement;
+			toggleA.click();
+			expect(rootA.getAttribute('data-dse-collapsed')).toBe('on');
+			expect(hostA.replaceSource).not.toHaveBeenCalled();
 
 			const hostB = makeHost();
-			await pipeline.run(skillsElement, BASE_SKILLS_YAML, hostB);
+			await new ElementPipeline(deps).run(skillsElement, BASE_SKILLS_YAML, hostB);
 			const rootB = hostB.containerEl.firstElementChild as HTMLElement;
-			const headerB = rootB.querySelector(':scope > .dse-collapse > .dse-collapse__header') as HTMLButtonElement;
-			expect(headerB.getAttribute('aria-expanded')).toBe('false');
-			expect(
-				(rootB.querySelector(':scope > .dse-collapse > .dse-collapse__region') as HTMLElement).hidden,
-			).toBe(true);
+			expect(rootB.getAttribute('data-dse-collapsed')).toBe('on');
 		});
 	});
 
