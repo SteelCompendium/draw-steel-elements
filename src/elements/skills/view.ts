@@ -1,10 +1,24 @@
-// Plan 09 Task 2 (D2 §3.4) — SkillsView on the D2 kit: both the whole-element wrapper
-// (the preserved `collapsible`/`collapse_default` YAML contract, F1 §1.4) and each skill
-// group are kit `collapsible` regions. Open-state round-trips through SessionStore via
-// the SessionPersist accessor (F1 §4.3) — keyed by `cx.host.blockKey()`, never written
-// back to the note (Skills has no `serialize`). Replaces the D1 rendering on the old
-// kit componentWrapper/collapsibleHeading helpers (deleted in the Plan 09 Task 10
-// cleanup once no consumer remained).
+// Plan 09 Task 2 (D2 §3.4) — SkillsView on the D2 kit: each skill group is a kit
+// `collapsible` region. Open-state round-trips through SessionStore via the
+// SessionPersist accessor (F1 §4.3) — keyed by `cx.host.blockKey()`, never written back
+// to the note (Skills has no `serialize`). Replaces the D1 rendering on the old kit
+// componentWrapper/collapsibleHeading helpers (deleted in the Plan 09 Task 10 cleanup
+// once no consumer remained).
+//
+// SC-255 (Scott's SC-169 ruling 3, applied here): "Remove the old. Replace with the
+// consistent option that all card elements use." This view used to ALSO wrap itself in
+// its own kit `collapsible()` — a "Skill List" disclosure header above the groups, seeded
+// from `collapse_default`/`collapsible`, with no SessionPersist. That header was a SECOND
+// whole-element collapse mechanism stacked on top of the framework chrome panel
+// (definition.ts's `chrome: skillsChrome`) that already wraps every `ds-skills` block —
+// exactly the `ds-stamina` double affordance SC-169 round 2 removed. It is gone; the
+// groups mount straight onto root. The `collapsible:`/`collapse_default:` YAML keys did
+// NOT go away — they are still ComponentWrapper MODEL fields (`collapseKeysOwnedByModel:
+// true` in definition.ts) and are now read ONLY by the framework as the authored
+// whole-element collapse contract (framework/chrome/collapsedKey.ts), the same shape
+// `ds-stamina` landed. Per-group collapse (below) is untouched — Scott's ruling: "Per-GROUP
+// collapsibles (Crafting / Exploration / ... group headers) stay. Only the whole-element
+// wrapper is the double affordance."
 //
 // collapsible collapses by HIDING its region (`hidden` attribute) rather than
 // re-rendering content per expand cycle, so the old per-cycle contentOwner machinery is
@@ -51,21 +65,11 @@ import type { ChromeMenuItem } from '@/framework/chrome/types';
 import { Skills, CustomSkill, type SkillsStyle } from '@model/Skills';
 import { SKILL_DATA, SkillInfo } from '@utils/SkillsData';
 import { toProperCase } from '@utils/common';
-import { resolveCollapsePrefs } from '@/prefs/catalog';
-
-/** SessionStore slot for the whole-element collapsible open-state (F1 §4.3). Stores the
- *  kit's OPEN boolean (true = expanded) — the inverse sense of the old ComponentWrapper
- *  'collapsed' slot it replaces (session-only state; nothing outlives a plugin reload). */
-const WRAPPER_OPEN_SLOT = 'open';
 
 /** SC-182: SessionStore slot for the menu-panel unowned-visibility toggle. Stores the
  *  HIDDEN boolean (true = unowned skills hidden); absent = follow the block's own
  *  `only_show_selected:` key. Session-only, per block, never written to the note. */
 const UNOWNED_HIDDEN_SLOT = 'unowned-hidden';
-
-/** Title shown in the whole-element collapsible header (the old ComponentWrapper
- *  componentName, previously visible only in the collapsed rail). */
-const WRAPPER_TITLE = 'Skill List';
 
 /** Internal-only bucket key for custom skills with no (or no matching) skill_group — never
  *  displayed; see groupDisplayName below for the user-facing label. */
@@ -122,29 +126,10 @@ export class SkillsView extends ElementView<Skills> {
 	protected onMount(root: HTMLElement, model: Skills): void {
 		this.blockKey = this.cx.host.blockKey();
 
-		// Whole-element wrapper (F1 §1.4 contract): `collapsible: false` opts out of the
-		// collapse affordance entirely — the list renders bare (collapse_default only
-		// applies to a collapsible element). Otherwise ONE collapsible wraps the list;
-		// a session value (SessionPersist) beats the collapse_default seed, exactly as
-		// the old SessionStore-then-model fallback read.
-		//
-		// D4 §1.3 (Plan 13, amended): block key > global pref > default — the existing
-		// collapsible:/collapse_default: YAML keys ARE the per-block override.
-		const { collapsible: isCollapsible, collapseDefault } = resolveCollapsePrefs(model, this.cx.prefs);
-		if (!isCollapsible) {
-			this.renderGroups(root, model);
-			return;
-		}
-		const wrapper = collapsible(
-			root,
-			{
-				title: WRAPPER_TITLE,
-				open: !collapseDefault,
-				persist: { session: this.cx.session, blockKey: this.blockKey, slot: WRAPPER_OPEN_SLOT },
-			},
-			this,
-		);
-		this.renderGroups(wrapper.contentEl, model);
+		// SC-255: whole-element collapse is framework chrome's job now (definition.ts's
+		// `chrome: skillsChrome`, mounted by the pipeline) — the same shape `ds-stamina`
+		// uses. The groups mount straight onto root.
+		this.renderGroups(root, model);
 	}
 
 	/** SC-182: is the unowned half of the catalog currently hidden? Session (the menu

@@ -37,10 +37,12 @@ export const skillsElement: ElementDefinition<Skills> = {
 	// SC-169 ROLLOUT — the SECOND definition to set this (with `ds-stamina`), for exactly the
 	// reason registry.ts's field doc predicted: `collapsible:` / `collapse_default:` are
 	// ComponentWrapper MODEL fields here (SkillsSchema.yaml `$ref`s component-wrapper-1.0.0,
-	// `Skills extends ComponentWrapper`, and `SkillsView` reads them for its own wrapper). The
-	// framework READS them as the authored collapse contract for the panel, but popping them
-	// off the body would hide them from `def.parse` and let ComponentWrapper substitute its own
-	// `?? true` / `?? false`.
+	// `Skills extends ComponentWrapper`). The framework READS them as the authored collapse
+	// contract for the panel, but popping them off the body would hide them from `def.parse`
+	// and let ComponentWrapper substitute its own `?? true` / `?? false`.
+	// SC-255: `SkillsView` no longer reads these itself (its own whole-element `collapsible()`
+	// wrapper — the "Skill List" header — is gone, `ds-stamina`'s shape); the panel is now the
+	// ONLY consumer, same as every other chrome-bearing element.
 	collapseKeysOwnedByModel: true,
 	authoring: { example: skillsExample },
 };
