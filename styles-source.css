@@ -13744,10 +13744,24 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	row-gap: 0.12em;
 	color: var(--dse-fg);
 	/* SC-284: a sidebar leaf can be ~300px wide inside a wide Obsidian window, where the
-	   third (right-rail) column starves its `auto` track down toward min-content — text
-	   wraps one word per line instead of the column just narrowing. A viewport `@media`
-	   query never fires there (the WINDOW is wide; only this card is narrow), so the
-	   trigger has to be the card's own width: make `.dse-head` itself a query container. */
+	   name column (`minmax(0, 1fr)`) starves down toward its min-content width while the
+	   right rail keeps its own max-content width — the NAME wraps a word (often a
+	   letter) per line, not the right rail. A viewport `@media` query never fires there
+	   (the WINDOW is wide; only this card is narrow), so the trigger has to be the
+	   card's own width: make `.dse-head` itself a query container.
+	   `container-type: inline-size` is not free (see the stamina-host precedent at
+	   ~:11631): on Obsidian's shipped runtime (Electron 21.4.1 / Chromium 106 — the asar
+	   self-updates, Electron does not) it establishes layout, style AND inline-size
+	   containment on `.dse-head`, not inline-size alone (current Chromium, incl. the
+	   harness's own Playwright build, has since narrowed this to inline-size-only, which
+	   is why a harness-only check would miss it). Checked for every consequence: no head
+	   relies on baseline export (nothing outside a head aligns on one of its children's
+	   baseline); every abspos/fixed descendant of a head already anchors at or inside the
+	   head itself (`.dse-sb[data-dse-role] > .dse-head`, `.dse-fb > .dse-head`,
+	   `.dse-crest`), so `.dse-head` becoming their containing block changes nothing; no
+	   head child is shrink-to-fit sized off its own content (every consumer parents
+	   `.dse-head` as a plain block child or the sole `flex-grow` item in its row — see
+	   the round-1 report's per-consumer table), so nothing collapses. */
 	container-type: inline-size;
 	container-name: dse-head;
 }
