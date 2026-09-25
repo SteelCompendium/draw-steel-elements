@@ -57,6 +57,31 @@ function isDashPlaceholder(value: string): boolean {
 	return /^[-–—]+$/.test(value.trim());
 }
 
+/**
+ * SC-231: normalizes a Keywords array into its discrete keyword strings — the site
+ * (`steel-ability-cards.css` `.sc-ability__chip`) renders one chip per keyword; the
+ * plugin used to join the whole array into ONE comma-separated string and
+ * markdown-render it as a single node, so Steel could only ever draw one chip no
+ * matter how many keywords the feature had.
+ *
+ * `feature.keywords` is already `string[]` (one entry per keyword — see
+ * `src/elements/feature/example.yaml`, the common/intended shape), so most of the
+ * time this is a no-op reshape. But a hand-typed `ds-feature` fence can put more
+ * than one keyword's text in a single list entry (a comma pasted straight into one
+ * item, or a stray trailing comma left on a block-list scalar — `yaml`'s flow-list
+ * parser trims/dedupes commas for `[A, B,]`, but a block list's plain scalar keeps
+ * a literal trailing "," verbatim), so every entry is ALSO split on a literal ',',
+ * trimmed, and empty results dropped. A keyword is never expected to contain a
+ * literal comma of its own (SCC codes/markdown-link URLs don't use one), so this
+ * never has to special-case markdown.
+ */
+function splitKeywords(keywords: string[]): string[] {
+	return keywords
+		.flatMap((entry) => entry.split(','))
+		.map((entry) => entry.trim())
+		.filter((entry) => entry.length > 0);
+}
+
 /** Markdown link → its display text ("[Villain Action](scc.v1:…)" → "Villain Action").
  *  Mirrors steel-etl's `mdLinkRe` / `linkText` (ability_cards.go) verbatim. */
 const MD_LINK_RE = /\[([^\]]*)\]\(([^)]*)\)/g;
@@ -340,12 +365,23 @@ export function renderFeature(
 		// Legacy has no rule keying off it so its existing unlabeled dash text is
 		// pixel-unchanged (LEGACY-FREEZE).
 		const isEmptyValue = isDashPlaceholder;
+		// SC-231: `parts`, when given, renders the value as one child span per
+		// discrete keyword — each individually markdown-rendered (so a keyword that
+		// is itself a markdown link still resolves) — with the literal ", "
+		// separator kept as a plain TEXT NODE between them. That keeps the cell's
+		// `textContent` byte-identical to the old single joined-and-rendered node
+		// (LEGACY-FREEZE: Legacy/print never reveal the per-keyword `.dse-feature
+		// __meta-kw` span or the `dse-md-inline` `<p>` it wraps as anything but
+		// inline running text — see styles-source.css ~4335), while Steel-screen
+		// CSS can box each `.dse-feature__meta-kw` as its own chip and hide the
+		// separators behind the flex row's own gap.
 		const cell = (
 			modifier: string,
 			label: string,
 			value: string,
 			which: 'chips' | 'rail',
 			isEmpty = false,
+			parts?: string[],
 		): void => {
 			const cellEl = band(which).createSpan({
 				cls:
@@ -353,7 +389,15 @@ export function renderFeature(
 					(isEmpty ? ' dse-feature__meta-cell--empty' : ''),
 			});
 			cellEl.createSpan({ cls: 'dse-feature__meta-key', text: label });
-			md(value, cellEl.createSpan({ cls: 'dse-feature__meta-value' }), true);
+			const valueEl = cellEl.createSpan({ cls: 'dse-feature__meta-value' });
+			if (parts && parts.length > 0) {
+				parts.forEach((part, i) => {
+					if (i > 0) valueEl.appendText(', ');
+					md(part, valueEl.createSpan({ cls: 'dse-feature__meta-kw' }), true);
+				});
+			} else {
+				md(value, valueEl, true);
+			}
 		};
 		if (feature.keywords) {
 			const kwEmpty = feature.keywords.length === 0 || feature.keywords.every(isEmptyValue);
@@ -363,6 +407,7 @@ export function renderFeature(
 				feature.keywords.length > 0 ? feature.keywords.join(', ') : '',
 				'chips',
 				kwEmpty,
+				kwEmpty ? undefined : splitKeywords(feature.keywords),
 			);
 		}
 		if (feature.usage) cell('type', 'Type', feature.usage, 'chips', isEmptyValue(feature.usage));
