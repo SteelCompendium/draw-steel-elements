@@ -656,6 +656,13 @@ const SCENARIOS = [
 			const text = 'abcdefghijklmnopqrstuvwxyz0123456789';
 			await t.ev(`${t.root(TRACKER)}.querySelector('button.dse-init__portrait-toggle').click()`);
 			await t.sleep(250);
+			// Obsidian's own first-run "Do you trust the author of this vault?" dialog can
+			// appear at an arbitrary delay after start-up (unrelated to DSE) and, unlike every
+			// other scenario's plain `.click()` (which bypasses hit-testing/overlays), it
+			// STEALS KEYBOARD FOCUS from the CDP-typed keystrokes below — dismiss it
+			// defensively before typing.
+			await t.ev(`(() => { const trust = Array.from(document.querySelectorAll('.modal-container button')).find((b) => b.textContent.includes('Trust author')); if (trust) trust.click(); else document.querySelector('.modal-container .modal-close-button')?.click(); })()`);
+			await t.sleep(300);
 			await t.ev(`${t.root(TRACKER)}.querySelector('input.dse-init__malice-quickadd-label').focus()`);
 			for (const ch of text) {
 				await t.cdp.call('Input.insertText', { text: ch });
