@@ -4,8 +4,9 @@
 // Why ownership lives here from the start: Obsidian's Component.removeChild always unloads
 // (B8), so a view that was ever a child of the block's MarkdownRenderChild could never be
 // rescued. The render child now only SIGNALS: when the host's CURRENT render child unloads,
-// the host calls release(), which unloads the view (its registered flush-on-unload writes
-// any pending body first — LIFO: it was registered first, so it runs last).
+// the host calls release(), which unloads the view — Components unload their own registered
+// callbacks LIFO, so the flush-on-unload (registered first, at mount) runs AFTER callbacks
+// registered later (e.g. a modal's close).
 //
 // Adoption (Task 4) adds claim tickets: host.replaceSource records the body it is about to
 // write (noteWrite) BEFORE Vault.process, because Obsidian fires `modify` and runs the new

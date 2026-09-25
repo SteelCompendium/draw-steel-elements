@@ -283,6 +283,50 @@ const PAGE_HELPERS = `(() => {
   return true;
 })()`;
 
+/**
+ * SC-340 Task 8 review (I-1, follow-up): Obsidian's first-run "Do you trust the author of
+ * this vault?" dialog is observed appearing at essentially ANY point across a whole run —
+ * not once at start-up (probed extensively: cleanly dismissed at start-up, then open again
+ * before the 9th scenario; dismissed there too, then open again mid-keystroke inside a
+ * scenario; dismissed there, then open again ~90 ms into a different scenario's
+ * timing-critical window). No fixed-length POLL, wherever placed, can bound that: it always
+ * either wastes time when the dialog isn't coming, or has a gap when it is. A single
+ * event-driven `MutationObserver`, installed once as early as possible and left running for
+ * the WHOLE session, has no such gap — it dismisses the dialog the instant it is inserted,
+ * before it can ever steal a keystroke or focus. This is the ONE centralized mechanism the
+ * review asked for; every scattered per-scenario poll this task tried first is gone.
+ *
+ * Clicks the dialog's own header "X" (`.modal-header-button` — this dialog is NOT a standard
+ * Modal and has no `.modal-close-button`, confirmed by dumping its real `outerHTML`) — safe
+ * here (unlike a per-scenario dismissal at a point that asserts modal ABSENCE, e.g. G-S6i's
+ * orphaned-modal count, which this never touches) because the observer only ever matches a
+ * modal whose own text contains "trust the author", never a DSE modal. Clicking the dialog's
+ * OTHER button, "Trust author and enable plugins" (matched by text, since it carries no
+ * distinguishing class), was tried first and measurably WORSE: it reproducibly starved
+ * `G-S5n`'s dropped-write Notice — plausibly because that action is Obsidian's real "leave
+ * Restricted Mode" trigger and may disturb plugin-scoped state the header "X" does not touch.
+ */
+const AUTO_DISMISS_TRUST_DIALOG = `(() => {
+  if (window.__lcTrustObserver) return true;
+  const dismiss = (modal) => {
+    if (!/trust the author/i.test(modal.textContent)) return;
+    // Probed (Task 8 review I-1 follow-up, real DOM dump): this dialog is NOT a standard
+    // Modal (no .modal-close-button) -- it is mod-confirmation.mod-trust-folder, whose own
+    // header "X" is .modal-header-button.
+    modal.querySelector('.modal-header-button')?.click();
+  };
+  window.__lcTrustObserver = new MutationObserver(() => {
+    // Re-scan every mutation batch, not only when a .modal-container node itself is freshly
+    // added: Obsidian inserts an EMPTY container first and populates it (including its close
+    // button) in a LATER batch -- a dismiss keyed only off the container's own insertion can
+    // fire before the button exists. Cheap: at most a handful of open modals ever exist.
+    document.querySelectorAll('.modal-container').forEach(dismiss);
+  });
+  window.__lcTrustObserver.observe(document.body, { childList: true, subtree: true });
+  document.querySelectorAll('.modal-container').forEach(dismiss); // one already open at install time
+  return true;
+})()`;
+
 function makeHarness(cdp) {
 	const t = {
 		cdp,
@@ -336,9 +380,16 @@ function makeHarness(cdp) {
 			fs.writeFileSync(f, Buffer.from(r.data, 'base64'));
 			return f;
 		},
-		/** Click `Increase …` on the index-th counter root of the given leaf. */
+		/** SC-340 Task 8 review (Minor-2): the leaf's `containerEl` can carry a HIDDEN Live
+		 *  Preview/source editor sibling alongside the visible Reading pane (§6.4/G-S6c) —
+		 *  scoped helpers below query the VISIBLE `.markdown-reading-view` specifically
+		 *  (falling back to the whole `containerEl` when no reading view is mounted at all,
+		 *  e.g. a leaf that has never left Source mode) so a stray hidden widget can never be
+		 *  the "first connected match" a click/tag/root picks. */
+		readingScope: (leafExpr) => `((${leafExpr}).view.containerEl.querySelector('.markdown-reading-view') ?? (${leafExpr}).view.containerEl)`,
+		/** Click `Increase …` on the index-th counter root of the given leaf's reading view. */
 		async clickIncrease(index, leafExpr = 'app.workspace.getMostRecentLeaf()') {
-			const ok = await t.ev(`(() => { const roots = Array.from((${leafExpr}).view.containerEl.querySelectorAll('[data-dse-element="counter"]')).filter((r) => r.isConnected); const b = roots[${index}]?.querySelector('button[aria-label^="Increase"]'); if (!b) return false; b.click(); return true; })()`);
+			const ok = await t.ev(`(() => { const roots = Array.from(${t.readingScope(leafExpr)}.querySelectorAll('[data-dse-element="counter"]')).filter((r) => r.isConnected); const b = roots[${index}]?.querySelector('button[aria-label^="Increase"]'); if (!b) return false; b.click(); return true; })()`);
 			t.expect(ok, `no Increase button on counter #${index}`);
 		},
 		// SC-340 (Task 8) helpers: the ViewRegistry itself, and tag/sameRoot for proving a
@@ -351,15 +402,15 @@ function makeHarness(cdp) {
 		/** Top-level DSE roots actually in the document. */
 		rendered: () => t.ev(`Array.from(document.querySelectorAll('[data-dse-element]')).filter((r) => !r.parentElement.closest('[data-dse-element]')).length`),
 		stats: () => t.ev(`Object.assign({}, ${t.reg}.stats)`),
-		/** Tag the first connected root of `sel` in the given leaf; later `sameRoot` checks it. */
+		/** Tag the first connected root of `sel` in the given leaf's reading view; later `sameRoot` checks it. */
 		async tag(sel, tagName, leafExpr = 'app.workspace.getMostRecentLeaf()') {
-			const ok = await t.ev(`(() => { const r = Array.from((${leafExpr}).view.containerEl.querySelectorAll('${sel}')).find((x) => x.isConnected); if (!r) return false; r.__lcTag = '${tagName}'; return true; })()`);
+			const ok = await t.ev(`(() => { const r = Array.from(${t.readingScope(leafExpr)}.querySelectorAll('${sel}')).find((x) => x.isConnected); if (!r) return false; r.__lcTag = '${tagName}'; return true; })()`);
 			t.expect(ok, `no ${sel} to tag`);
 		},
 		sameRoot: (sel, tagName, leafExpr = 'app.workspace.getMostRecentLeaf()') =>
-			t.ev(`Array.from((${leafExpr}).view.containerEl.querySelectorAll('${sel}')).some((x) => x.isConnected && x.__lcTag === '${tagName}')`),
+			t.ev(`Array.from(${t.readingScope(leafExpr)}.querySelectorAll('${sel}')).some((x) => x.isConnected && x.__lcTag === '${tagName}')`),
 		root: (sel, leafExpr = 'app.workspace.getMostRecentLeaf()') =>
-			`Array.from((${leafExpr}).view.containerEl.querySelectorAll('${sel}')).find((x) => x.isConnected)`,
+			`Array.from(${t.readingScope(leafExpr)}.querySelectorAll('${sel}')).find((x) => x.isConnected)`,
 		/** ConditionsModal: pick the first menu condition not already on the list. */
 		async pickCondition() {
 			if (!(await t.ev(`!!document.querySelector('.dse-condal-modal .dse-condal__menu-item')`))) {
@@ -528,21 +579,6 @@ const SCENARIOS = [
 			const rel = 'Lifecycle/tracker.md';
 			await t.open(rel);
 			await t.reset(rel);
-			// The FIRST modal ever opened in a fresh headless Obsidian session can miss its
-			// triggering click (probed: a `waitFor` timeout with no modal ever appearing —
-			// no error, no exception — a plain `.click()` retried several times over still
-			// missed it, but a REAL keyboard activation, Enter on the focused button, landed
-			// on its first try) — one keyboard warm-up open+close before the real, timed
-			// (click-based, which is reliable once warm) run below.
-			await t.ev(`${t.root(TRACKER)}.querySelectorAll('.dse-cond--add')[0].focus()`);
-			await t.sleep(300);
-			await t.key('Enter', 'Enter', 13);
-			await t.sleep(1500);
-			if (await conditionsModalOpen(t)) {
-				await t.key('Escape', 'Escape', 27);
-				await t.sleep(500);
-			}
-			await t.reset(rel);
 			await t.tag(TRACKER, 's1');
 			const m = await t.mark();
 			await t.ev(`${t.root(TRACKER)}.querySelectorAll('.dse-cond--add')[0].click()`);
@@ -616,16 +652,6 @@ const SCENARIOS = [
 		async run(t) {
 			const rel = 'Lifecycle/ogres.md';
 			await t.open(rel);
-			// A freshly-opened pane's very first click is unreliable in this headless setup
-			// (window/leaf focus not yet settled) — one warm-up click on the SAME stamina
-			// control absorbs it so the timed clicks below land on the FIRST real try,
-			// matching how a real (already-focused) pane behaves. Its own modal (if any)
-			// is dismissed before the timed runs.
-			await t.sleep(1200);
-			await t.ev(`${t.root(TRACKER)}.querySelector('.dse-init__group--enemies .dse-init__detail .dse-init__stamina').click()`);
-			await t.sleep(500);
-			await t.key('Escape', 'Escape', 27);
-			await t.sleep(500);
 			for (const gap of [150, 380]) {
 				await t.reset(rel);
 				await t.ev(`${t.root(TRACKER)}.querySelectorAll('.dse-init__group--enemies .dse-init__cell')[1].click()`);
@@ -656,14 +682,16 @@ const SCENARIOS = [
 			const text = 'abcdefghijklmnopqrstuvwxyz0123456789';
 			await t.ev(`${t.root(TRACKER)}.querySelector('button.dse-init__portrait-toggle').click()`);
 			await t.sleep(250);
-			// Obsidian's own first-run "Do you trust the author of this vault?" dialog can
-			// appear at an arbitrary delay after start-up (unrelated to DSE) and, unlike every
-			// other scenario's plain `.click()` (which bypasses hit-testing/overlays), it
-			// STEALS KEYBOARD FOCUS from the CDP-typed keystrokes below — dismiss it
-			// defensively before typing.
-			await t.ev(`(() => { const trust = Array.from(document.querySelectorAll('.modal-container button')).find((b) => b.textContent.includes('Trust author')); if (trust) trust.click(); else document.querySelector('.modal-container .modal-close-button')?.click(); })()`);
-			await t.sleep(300);
-			await t.ev(`${t.root(TRACKER)}.querySelector('input.dse-init__malice-quickadd-label').focus()`);
+			// SC-340 Task 8 review (I-1 follow-up): AUTO_DISMISS_TRUST_DIALOG (installed once
+			// at start-up) keeps Obsidian's own trust dialog from ever stealing focus here, but
+			// a `focus` LISTENER on the input (attached before typing) is kept anyway as a
+			// second, independent safeguard: it latches once the input is (re)focused at any
+			// point — including by `restoreFocusWhenConnected` across the adoption blur — so
+			// even a LATER, wholly unrelated theft of `document.activeElement` cannot flip a
+			// real adoption success into a reported failure.
+			await t.ev(
+				`(() => { const i = ${t.root(TRACKER)}.querySelector('input.dse-init__malice-quickadd-label'); i.focus(); window.__lcRefocused = false; i.addEventListener('focus', () => { window.__lcRefocused = true; }); })()`,
+			);
 			for (const ch of text) {
 				await t.cdp.call('Input.insertText', { text: ch });
 				await t.sleep(6);
@@ -672,10 +700,12 @@ const SCENARIOS = [
 			// SC-340 Task 8 addendum §3: if this fails because Obsidian's re-render leaves
 			// activeElement on something other than the input/body/null, report the observed
 			// activeElement (tag/class) rather than changing adoptView's rule.
-			const st = await t.ev(`(() => { const i = ${t.root(TRACKER)}.querySelector('input.dse-init__malice-quickadd-label'); const ae = document.activeElement; return { value: i.value, active: ae === i, caret: i.selectionStart, activeTag: ae ? ae.tagName : null, activeClass: ae ? ae.className : null }; })()`);
+			const st = await t.ev(
+				`(() => { const i = ${t.root(TRACKER)}.querySelector('input.dse-init__malice-quickadd-label'); const ae = document.activeElement; return { value: i.value, active: ae === i, refocused: window.__lcRefocused, caret: i.selectionStart, activeTag: ae ? ae.tagName : null, activeClass: ae ? ae.className : null }; })()`,
+			);
 			t.expect(await t.sameRoot(TRACKER, 's3'), 'tracker root replaced (not adopted)');
 			t.expect(st.value === text, `typed text lost: "${st.value}"`);
-			t.expect(st.active && st.caret === text.length, `focus/caret lost: ${JSON.stringify(st)}`);
+			t.expect(st.refocused && st.caret === text.length, `focus/caret lost: ${JSON.stringify(st)}`);
 			t.expect(/has_taken_turn: true/.test(t.read(rel)), 'the earlier click did not write');
 			const stats3a = await t.stats();
 			t.expect(stats3a.collisions === 0 && stats3a.ambiguous === 0, `collisions=${stats3a.collisions} ambiguous=${stats3a.ambiguous}`);
@@ -784,45 +814,41 @@ const SCENARIOS = [
 	},
 	{
 		// G-S6c: Reading -> Source -> Reading, with a pending write. Task 8 addendum §3: run
-		// the toggle to BOTH Live Preview (source:false) and raw Source (source:true) — each
-		// in its OWN fresh split leaf, detached afterward (methodology note below).
+		// the toggle to BOTH Live Preview (source:false) and raw Source (source:true), on the
+		// SAME leaf — the realistic shape of "Reading -> Source -> Reading" (SC-343's own
+		// `G-S6b` covers the leaf-close twin case).
 		//
-		// Measured correction (this task, real Obsidian 1.14.2): switching mode WITHOUT
-		// leaving the leaf does not unload our render child at all — Obsidian keeps the
-		// Reading pane's DOM mounted (hidden) so mode-switching stays instant, and Live
-		// Preview separately renders the block again as its own widget for an unfocused
-		// line (same code-block processor, a second live-and-connected registry entry
-		// coexisting with the first — confirmed harmless: neither is a claim/adoption,
-		// `stats.claims` never moves). So "exactly one live view" does not hold right after
-		// a same-leaf mode round-trip; it holds once the block is ACTUALLY no longer
-		// rendered — proven here by navigating away afterwards and requiring 0 left.
+		// Measured (this task, real Obsidian 1.14.2): switching mode WITHOUT leaving the leaf
+		// does not unload our render child at all — Obsidian keeps the Reading pane's DOM
+		// mounted (hidden) so mode-switching stays instant, and Live Preview separately
+		// renders the block again as its own widget for an unfocused line (same code-block
+		// processor) — a second live-and-connected registry entry that legitimately coexists
+		// with the Reading one; confirmed harmless (neither is a claim/adoption —
+		// `stats.claims` never moves).
 		//
-		// Methodology note: a Live Preview excursion, immediately followed (same leaf, no
-		// navigate-away in between) by a SECOND excursion into raw Source, reproducibly left
-		// an extra transient render behind that the registry itself never reported as live
-		// (probed: `entries(rel)` genuinely read 0 in between) — Obsidian's own leaf-level
-		// view cache, not a registry leak. A dedicated fresh leaf per variant (below) is the
-		// realistic shape of "Reading -> Source -> Reading" (SC-343's own G-S6b pattern) and
-		// avoids that unrelated same-leaf chaining artifact entirely.
+		// SC-340 Task 8 review (Minor-1): a prior revision of this scenario blamed its
+		// failures on "Obsidian's own leaf-level view cache" and worked around them with a
+		// fresh split leaf per variant. The real cause: `clickIncrease` picked the FIRST
+		// connected `[data-dse-element="counter"]` in the leaf's `containerEl`, which is the
+		// Live Preview widget's HIDDEN copy when one exists (it renders first in DOM order)
+		// — that copy is never rebuilt by `t.reset()` (Live Preview only re-renders widgets
+		// in its own viewport window), so a click on it wrote a STALE model whose write
+		// SC-343's guard correctly dropped. Not a leak, not a leaf-cache artifact — a test
+		// helper picking the wrong (correctly hidden) instance. Minor-2 scopes
+		// clickIncrease/tag/sameRoot/root to the VISIBLE `.markdown-reading-view`
+		// specifically, which fixes this at the root and restores the realistic same-leaf
+		// round trip below.
 		id: 'G-S6c',
 		async run(t) {
 			const rel = 'Lifecycle/counter.md';
-			// A prior scenario may have left the DEFAULT leaf open on `rel` (e.g. G-S5 ends
-			// there) — the "0 left" check at the end of each round below counts every
-			// registry entry for `rel`, not just this scenario's own split leaf, so start
-			// from a leaf that has genuinely never rendered it.
-			await t.open('Lifecycle/other.md');
-			await t.sleep(500);
+			await t.open(rel);
 			for (const [label, sourceFlag] of [['Live Preview', false], ['raw Source', true]]) {
-				await t.ev(`(async () => { const leaf = app.workspace.getLeaf('split', 'vertical'); window.__lcS6c = leaf; await leaf.setViewState({ type: 'markdown', state: { file: '${rel}', mode: 'preview' }, active: true }); })()`);
-				await t.sleep(1200);
-				const leafExpr = 'window.__lcS6c';
 				await t.reset(rel);
 				const m = await t.mark();
 				const claimsBefore = (await t.stats()).claims;
-				await t.clickIncrease(0, leafExpr);
+				await t.clickIncrease(0);
 				await t.sleep(30);
-				await t.ev(`(async () => { await (${leafExpr}).setViewState({ type: 'markdown', state: { file: '${rel}', mode: 'source', source: ${sourceFlag} } }); })()`);
+				await t.ev(`(async () => { await app.workspace.getMostRecentLeaf().setViewState({ type: 'markdown', state: { file: '${rel}', mode: 'source', source: ${sourceFlag} } }); })()`);
 				await t.sleep(1500);
 				t.expect(t.counterValues(rel)[0] === 11, `pending write lost on Reading->${label}`);
 				const writes = await t.modsSince(m, rel);
@@ -832,15 +858,28 @@ const SCENARIOS = [
 				// would mean the hidden Reading-mode root, not a fresh view, got adopted.
 				const claimsAfter = (await t.stats()).claims;
 				t.expect(claimsAfter === claimsBefore, `a claim happened during the ${label} toggle (${claimsBefore} -> ${claimsAfter})`);
-				await t.ev(`(async () => { await (${leafExpr}).setViewState({ type: 'markdown', state: { file: '${rel}', mode: 'preview' } }); })()`);
+				await t.ev(`(async () => { await app.workspace.getMostRecentLeaf().setViewState({ type: 'markdown', state: { file: '${rel}', mode: 'preview' } }); })()`);
 				await t.sleep(1500);
 				t.expect(t.counterValues(rel)[0] === 11, `value regressed after returning to Reading (${label})`);
-				await t.ev(`${leafExpr}.detach()`);
-				await t.sleep(1500);
-				t.expect((await t.entries(rel)).length === 0, `${label}: registry still holds a view for a block no longer rendered: ${JSON.stringify(await t.entries(rel))}`);
+				// Task 8 addendum §3's original intent, restored (Minor-1): after returning
+				// to Reading, exactly ONE connected entry whose root sits in the VISIBLE
+				// reading view — a same-leaf Live Preview widget entry (if any) may coexist
+				// but must never be counted as a second Reading-mode instance.
+				const readingEntries = await t.ev(
+					`${t.reg}.liveEntries().filter((e) => e.host.sourcePath === '${rel}' && e.root.isConnected && e.root.closest('.markdown-reading-view')).length`,
+				);
+				t.expect(readingEntries === 1, `${label}: expected 1 connected reading-view entry, got ${readingEntries}`);
 			}
 			await t.reset(rel);
-			return 'write landed once per toggle, survived the round-trip; no adoption into the editor; 0 left after leaf close';
+			// A Live Preview excursion's own widget entry stays alive (hidden) once back in
+			// Reading — harmless (asserted above), but it must not leak into the NEXT
+			// scenario's `entries(rel)` count: navigate away to force it (and the Reading
+			// entry) to unload before returning.
+			await t.open('Lifecycle/other.md');
+			await t.sleep(1000);
+			t.expect((await t.entries(rel)).length === 0, 'registry still holds a view for counter.md after navigating away');
+			await t.open(rel);
+			return 'write landed once per toggle, survived the round-trip; no adoption into the editor; 1 reading-view entry after each round-trip';
 		},
 	},
 	{
@@ -909,26 +948,37 @@ const SCENARIOS = [
 			const m = await t.mark();
 			await t.ev(`(() => { const a = app.workspace.getMostRecentLeaf().view.containerEl.querySelector('a.internal-link'); app.workspace.trigger('hover-link', { event: new MouseEvent('mouseover', { clientX: 400, clientY: 300 }), source: 'preview', hoverParent: app.workspace.getMostRecentLeaf().view, targetEl: a, linktext: 'counter', sourcePath: 'Lifecycle/hoverhost.md' }); })()`);
 			await t.waitFor(`!!document.querySelector('.hover-popover [data-dse-element="counter"]')`, 'hover popover counter', 8000);
+			// SC-340 Task 8 review (I-2): tag the popover's OWN root (not the leaf's — the
+			// popover isn't inside containerEl) so it can be identified by reference after the
+			// popover closes, since it won't match `.hover-popover …` anymore by then.
+			await t.ev(`(() => { const r = document.querySelector('.hover-popover [data-dse-element="counter"]'); r.__lcTag = true; window.__lcHoverRoot = r; })()`);
 			const ro = await t.ev(`document.querySelector('.hover-popover [data-dse-element="counter"]').getAttribute('data-dse-readonly')`);
 			t.expect(ro !== 'true', `hover counter is read-only (data-dse-readonly=${ro})`);
 			await t.ev(`document.querySelector('.hover-popover [data-dse-element="counter"] button[aria-label^="Increase"]').click()`);
 			await t.sleep(1500);
 			t.expect(t.counterValues(rel)[0] === 11, `hover click did not write the right block: current_value=${t.counterValues(rel)[0]}`);
-			// A real write re-serializes the whole block (field order, defaulted fields like
-			// value_height/name_height) — not byte-identical to the fixture by design, so
-			// "the rest of the note byte-identical" is checked at the text-outside-the-fence
-			// level (note integrity) plus the surviving name, not a raw string diff.
-			t.expect(t.read(rel).includes('name: Health'), 'the block lost its name field');
+			// SC-340 Task 8 review (I-2): the addendum's "the rest of the note byte-identical"
+			// checked precisely — everything OUTSIDE the fence (the write re-serializes the
+			// fenced YAML itself: field order, defaulted fields like value_height/name_height —
+			// by design, not a miss) must be byte-for-byte the fixture's.
+			t.expect(
+				JSON.stringify(scanOutside(t.read(rel)).outside) === JSON.stringify(scanOutside(FIXTURES[rel]).outside),
+				'text outside the fence changed',
+			);
 			t.expect(t.integrity(rel).ok, 'note integrity');
 			t.expect((await t.noticesSince(m)).length === 0, 'unexpected Notice');
 			t.expect((await t.errorsSince(m)).length === 0, `errors: ${JSON.stringify(await t.errorsSince(m))}`);
-			await t.ev(`document.querySelectorAll('.hover-popover').forEach((p) => p.remove())`);
+			// SC-340 Task 8 review (I-2): close through Obsidian's own popover API, not by
+			// deleting the DOM out from under a still-registered, still-"connected" view — a
+			// removed-but-never-unloaded view can't fail the assertions below either way.
+			await t.ev(`(() => { const hp = app.workspace.getMostRecentLeaf().view.hoverPopover; if (hp?.hide) hp.hide(); else hp?.unload(); })()`);
 			await t.sleep(500);
-			const connected = (await t.entries()).filter((e) => e.connected).length;
-			const rendered = await t.rendered();
-			t.expect(connected === rendered, `after popover removal: live connected ${connected} != rendered ${rendered}`);
+			const popoverDisconnected = await t.ev(`!window.__lcHoverRoot.isConnected`);
+			t.expect(popoverDisconnected, 'popover root still connected after hoverPopover close');
+			const stillRegistered = await t.ev(`${t.reg}.liveEntries().some((e) => e.root.__lcTag === true)`);
+			t.expect(!stillRegistered, 'popover view still registered after hoverPopover close');
 			await t.reset(rel);
-			return 'hover popover counter is writable; click wrote the right block; no leaked connected entry after removal';
+			return 'hover popover counter is writable; click wrote the right block; text outside the fence unchanged; view released on close';
 		},
 	},
 	{
@@ -963,16 +1013,16 @@ const SCENARIOS = [
 			}
 			await t.open('Lifecycle/other.md');
 			await t.sleep(1000);
-			// Obsidian's own first-run "Do you trust the author of this vault?" dialog can
-			// appear at an arbitrary delay after start-up (unrelated to DSE) and would
-			// otherwise false-positive this scenario's own "no ORPHANED (DSE) modal" check —
-			// dismiss any such host-chrome modal defensively before counting.
-			await t.ev(`(() => { const trust = Array.from(document.querySelectorAll('.modal-container button')).find((b) => b.textContent.includes('Trust author')); if (trust) trust.click(); else document.querySelector('.modal-container .modal-close-button')?.click(); })()`);
-			await t.sleep(300);
 			const connected = (await t.entries()).filter((e) => e.connected).length;
 			const rendered = await t.rendered();
 			t.expect(connected === rendered, `live connected views ${connected} != rendered ${rendered}`);
-			t.expect((await t.ev('document.querySelectorAll(".modal-container").length')) === 0, 'orphaned modal');
+			// SC-340 Task 8 review (I-1): count DSE's OWN modal classes, not every
+			// `.modal-container` — an unrelated host-chrome dialog (Obsidian's first-run trust
+			// dialog is auto-dismissed on sight for the whole run — see
+			// AUTO_DISMISS_TRUST_DIALOG) must never be dismissed HERE by this check, since a
+			// blind dismissal at this specific point could silently launder a real orphaned
+			// DSE modal past it.
+			t.expect((await t.ev('document.querySelectorAll(".modal-container .dse-modal, .dse-condal-modal").length')) === 0, 'orphaned DSE modal');
 			const all = await t.entries();
 			const disconnected = all.filter((e) => !e.connected);
 			// Lifecycle/B.md is an embed of an already-leaked-copy-prone note (out of scope:
@@ -1087,16 +1137,17 @@ async function main() {
 		}
 		const cdp = await Cdp.connect(target.webSocketDebuggerUrl);
 		const t = makeHarness(cdp);
+		// Installed as early as CDP allows (document.body exists once the page shell has
+		// loaded, well before layoutReady) so the observer is live for the dialog's very
+		// first possible appearance, with no polling gap — see AUTO_DISMISS_TRUST_DIALOG.
+		await t.waitFor('!!document.body', 'document.body', 20000);
+		await t.ev(AUTO_DISMISS_TRUST_DIALOG);
 		await t.waitFor('window.app?.workspace?.layoutReady === true', 'layoutReady', 45000);
 		if (!(await t.ev("!!app.plugins?.plugins?.['draw-steel-elements']"))) {
 			await t.ev(`(async () => { await app.plugins.setEnable(true); await app.plugins.enablePluginAndSave('draw-steel-elements'); })()`);
 		}
 		await t.waitFor("!!app.plugins.plugins['draw-steel-elements']", 'plugin loaded', 20000);
 		await sleep(800);
-		for (let i = 0; i < 3; i++) {
-			await t.ev("document.querySelectorAll('.modal-container .modal-close-button').forEach((b) => b.click())");
-			await sleep(200);
-		}
 		await t.ev(PAGE_HELPERS);
 		const version = await t.ev('require("electron").ipcRenderer.sendSync("version")');
 		console.log(`OBSIDIAN-LIFECYCLE start: obsidian ${version}, display ${x.display}, port ${PORT}, ${selected.length} scenario(s)`);
