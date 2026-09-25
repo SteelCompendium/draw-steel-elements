@@ -13743,6 +13743,13 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	align-items: center;
 	row-gap: 0.12em;
 	color: var(--dse-fg);
+	/* SC-284: a sidebar leaf can be ~300px wide inside a wide Obsidian window, where the
+	   third (right-rail) column starves its `auto` track down toward min-content — text
+	   wraps one word per line instead of the column just narrowing. A viewport `@media`
+	   query never fires there (the WINDOW is wide; only this card is narrow), so the
+	   trigger has to be the card's own width: make `.dse-head` itself a query container. */
+	container-type: inline-size;
+	container-name: dse-head;
 }
 /* crest → the leading column, spanning every lane, centered beside the text (§2.9). */
 .dse-head > .dse-crest {
@@ -13824,6 +13831,43 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 }
 .dse-head__primary--chip {
 	background: var(--dse-surface-raised);
+}
+
+/* SC-284: the narrow (stacked) form — ports v2's `@media (max-width: 30em)` stacking
+   (steel-cardhead.css) as a container query instead, since the trigger here is the
+   CARD's own width, not the viewport (see the `container-type` comment above). v2's
+   `30em` is 480px at ITS default 16px root, but `em` inside an `@container` condition
+   resolves against the CONTAINER's own font-size (here, whatever `.dse-head` inherits,
+   which is not pinned to 16px across every consumer) — so this states the threshold in
+   `px` to land at the same ~480px point everywhere rather than drifting with it.
+   We cannot rewrite `.dse-head`'s own `grid-template-columns` from inside its own query
+   — a query container can never match a size query against itself, only its
+   descendants (SC-121 Batch 4's `.dse-hero__grid` lesson, ~:5912) — but we don't need
+   to: the third track is `auto`, so once nothing is placed in it, it collapses to 0
+   width on its own. Re-place the right rail's three CHILDREN into column 2, rows 4/5/6,
+   below the left stack, left-aligned; the crest (`grid-row: 1 / -1` above) keeps
+   spanning every lane in column 1 unchanged. Do not hide the crest or either chip —
+   the point of SC-284 is that the SC-191 mocks had to do that by hand. */
+@container dse-head (max-width: 480px) {
+	.dse-head__eyebrow--right {
+		grid-area: 4 / 2;
+	}
+	.dse-head__primary--right {
+		grid-area: 5 / 2;
+	}
+	.dse-head__deck--right {
+		grid-area: 6 / 2;
+	}
+	.dse-head__eyebrow--right,
+	.dse-head__primary--right,
+	.dse-head__deck--right {
+		justify-self: start;
+		text-align: left;
+		margin-left: 0;
+	}
+	.dse-head__primary--right {
+		margin-top: 0.18em;
+	}
 }
 
 /* -- powerRollPanel + tierBadge (§2.8): the shared roll grammar -- */
