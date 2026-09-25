@@ -221,6 +221,38 @@ describe('Plan 09 Task 2: skills rendered through the REAL ElementPipeline (kit 
 			expect(root.querySelector('.dse-skills')).not.toBeNull();
 		});
 
+		// SC-255 r3 LOW-6: pins the actual user-visible fix (r2 review probes P1/P6-h3).
+		// Before this change, expanding the panel revealed the list still hidden behind
+		// the wrapper's own closed "Skill List" header — a second click was needed. These
+		// fail against base view.ts (restored + run, then reverted) and pass here.
+		test('collapse_default: true -> ONE click on the chrome control shows the list (no second hidden layer)', async () => {
+			const pipeline = new ElementPipeline(makeDeps());
+			const host = makeHost();
+			const yaml = ['collapse_default: true', 'skills:', '  - climb'].join('\n');
+
+			await pipeline.run(skillsElement, yaml, host);
+
+			const root = host.containerEl.firstElementChild as HTMLElement;
+			expect(root.getAttribute('data-dse-collapsed')).toBe('on');
+			const toggle = root.querySelector('[data-dse-chrome-item="collapse"]') as HTMLButtonElement;
+			toggle.click();
+
+			expect(root.hasAttribute('data-dse-collapsed')).toBe(false);
+			expect(root.querySelector('.dse-skills')?.closest('[hidden]')).toBeNull();
+		});
+
+		test('collapsed: false + collapse_default: true -> not collapsed and the list is visible (declared collapsed: false beats the model default)', async () => {
+			const pipeline = new ElementPipeline(makeDeps());
+			const host = makeHost();
+			const yaml = ['collapsed: false', 'collapse_default: true', 'skills:', '  - climb'].join('\n');
+
+			await pipeline.run(skillsElement, yaml, host);
+
+			const root = host.containerEl.firstElementChild as HTMLElement;
+			expect(root.hasAttribute('data-dse-collapsed')).toBe(false);
+			expect(root.querySelector('.dse-skills')?.closest('[hidden]')).toBeNull();
+		});
+
 		test('collapsible: false removes the collapse control from the panel — the panel itself still mounts because the unowned-skills eye toggle is its own chrome item', async () => {
 			// Unlike ds-stamina (which contributes no chromeItems of its own and so loses
 			// the whole panel when collapsible: false leaves it empty — see mountChrome's
