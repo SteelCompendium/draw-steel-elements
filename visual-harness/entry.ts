@@ -1475,6 +1475,16 @@ export const PREF_SHOTS: {
  * `scroll: 560` is the visible window; `scrollTo: 320` clears the statblock's head band
  * (~150px) with room to spare, so the bar is fully revealed and there is card body
  * beneath it to prove the bar is painting OVER content rather than sitting in flow.
+ *
+ * `scrollToPrint` (optional): print/realprint use this distance instead of `scrollTo`,
+ * defaulting to `scrollTo` when unset (every entry but one today). It exists because the
+ * scroll distance a screen combo needs to clear the head band is a SCREEN fact — a
+ * Steel-only, `:not([data-dse-print="on"])` name-size rule (SC-232) can grow the band on
+ * screen without moving it in print at all, and `settleScroll` applies to every combo
+ * uniformly. Without a print-specific override, growing `scrollTo` to satisfy the screen
+ * combos scrolls the PRINT combos further than the frozen `*--steel-print.png`/
+ * `-realprint.png` bytes were captured at — a scoping leak into print, caught by
+ * check-freeze.sh, not a legitimate rebaseline (nothing about print's own layout moved).
  */
 export const SCROLL_SHOTS: {
 	id: string;
@@ -1482,6 +1492,8 @@ export const SCROLL_SHOTS: {
 	fixture: string;
 	scroll: number;
 	scrollTo: number;
+	/** print/realprint scroll distance, if it must differ from `scrollTo` (screen). */
+	scrollToPrint?: number;
 	width?: number;
 	prefs?: Record<string, string>;
 }[] = [
@@ -1513,12 +1525,24 @@ export const SCROLL_SHOTS: {
 	},
 	// Sidebar-leaf width (the same 300px NARROW_SHOTS uses): the container-query compact
 	// treatment — no second row, no stat pills, just the truncating name + role.
+	// scrollTo 450 on SCREEN only (scrollToPrint keeps the sibling entries' 320): SC-232's
+	// card-head NAME type scale grew the main head band's name at this width on screen (a
+	// narrow container query steps it down to the ability-card size, still bigger than
+	// before — the name column is crowded by the crest/right-rail at 300px, so "Human
+	// Bandit Chief" wraps several lines even after the step-down). The band's measured
+	// bottom edge is ~366px at this fixture/width on screen; 450 clears it with a margin
+	// in the same spirit as the sibling entries' own "room to spare" (proven empirically:
+	// settleScroll's own `--stuck` wait passes at every candidate from 420 up, chosen with
+	// headroom rather than the tightest value that works). Print/realprint never see
+	// SC-232's screen-only name rule, so the band there is UNCHANGED — scrollToPrint keeps
+	// them at the original 320 so `*--steel-print.png`/`-realprint.png` stay frozen.
 	{
 		id: 'statblock-sticky-narrow',
 		element: 'statblock',
 		fixture: 'with-captain',
 		scroll: 560,
-		scrollTo: 320,
+		scrollTo: 450,
+		scrollToPrint: 320,
 		width: 300,
 	},
 ];
@@ -2201,6 +2225,7 @@ declare global {
 				fixture: string;
 				scroll: number;
 				scrollTo: number;
+				scrollToPrint?: number;
 				width?: number;
 				prefs?: Record<string, string>;
 			}[];

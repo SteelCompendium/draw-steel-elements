@@ -5066,11 +5066,16 @@ try {
 	for (const n of scrollShots) {
 		if (args.element && args.element !== n.element && args.element !== n.id) continue;
 		for (const c of combos) {
+			// SC-232: print/realprint can need a DIFFERENT scroll distance than screen (a
+			// screen-only name-size rule can grow the head band on screen without moving it
+			// in print at all) — `scrollToPrint` (entry.ts SCROLL_SHOTS), falling back to
+			// `scrollTo` for every entry that doesn't set it (unchanged behavior).
+			const scrollTo = c.print || c.realprint ? (n.scrollToPrint ?? n.scrollTo) : n.scrollTo;
 			const params = {
 				element: n.element,
 				fixture: n.fixture,
 				scroll: String(n.scroll),
-				scrollTo: String(n.scrollTo),
+				scrollTo: String(scrollTo),
 			};
 			if (n.width) params.width = String(n.width);
 			if (n.prefs) {
