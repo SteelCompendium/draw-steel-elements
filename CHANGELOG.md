@@ -61,9 +61,9 @@ for what needs action.
   unchanged; nothing shifts by a visible amount.
 - [FIX] **Card headers (ability, statblock, featureblock, montage, and every other card with
   a right-rail chip) now have a narrow form** (SC-284). At a sidebar-leaf width (~300px) the
-  header's right-rail text used to wrap one word per line instead of the column narrowing
-  normally. The header now stacks below the name at narrow widths — matching the site — with
-  nothing hidden.
+  header's NAME used to wrap a word (often a letter) per line while the right-rail chips kept
+  their own width and squeezed it — not the other way around. The right rail now stacks below
+  the name at narrow widths instead — matching the site — with nothing hidden.
 - [FIX] **The compendium download's zip library is now `fflate`, not JSZip** (SC-328). JSZip's
   legacy-browser polyfills contained dynamic `<script>` element creation, which Obsidian's
   community-plugin review rejects; 7.0.0 also carries forward 6.0.2's three added
