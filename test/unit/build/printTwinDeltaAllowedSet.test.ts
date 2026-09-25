@@ -24,6 +24,10 @@ const shootMjs = fs.readFileSync(
 	path.join(__dirname, '../../../visual-harness/shoot.mjs'),
 	'utf8',
 );
+const stylesSourceCss = fs.readFileSync(
+	path.join(__dirname, '../../../styles-source.css'),
+	'utf8',
+);
 
 describe('SC-202 r6c fix round — MEASURED_REACHABLE_PRINT_PROPS stays the measured floor', () => {
 	it('parses the declaration (guard against a vacuous pass)', () => {
@@ -128,9 +132,18 @@ describe('SC-127 r5 MED-2 — the paper exemption is ONE function, not two copie
 // element root once SC-127 r3 converged `color`), so `--table-header-border-color` going
 // missing from the host block (37 <th> borders, 8 captures) was invisible to it.
 describe('SC-127 r5 LOW-1 — border-colour longhands are sampled, excused only outside a root', () => {
-	it('all four border*Color properties are in PRINT_DELTA_STYLE_PROPS', () => {
+	// SC-127 r7 LOW-A (scoped re-review) — the original version of this test matched
+	// `'borderTopColor'` etc. ANYWHERE in shoot.mjs, which the neighbouring
+	// `BORDER_COLOR_PROPS` Set literal ALSO contains — so deleting the four entries from
+	// `PRINT_DELTA_STYLE_PROPS` still left the test green, 17/17 (proven, r6 review). Now
+	// scoped to the array's OWN declaration body, the same "extract, then assert on the
+	// extracted body" convention `MEASURED_REACHABLE_PRINT_PROPS`'s own test above uses.
+	it('all four border*Color properties are inside the PRINT_DELTA_STYLE_PROPS array body', () => {
+		const decl = shootMjs.match(/const PRINT_DELTA_STYLE_PROPS = \[([^\]]*)\];/);
+		expect(decl).not.toBeNull();
+		const body = decl![1];
 		for (const p of ['borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor']) {
-			expect(shootMjs).toMatch(new RegExp(`'${p}'`));
+			expect(body).toMatch(new RegExp(`'${p}'`));
 		}
 	});
 
@@ -144,29 +157,188 @@ describe('SC-127 r5 LOW-1 — border-colour longhands are sampled, excused only 
 	});
 });
 
-// SC-127 r5 MEDIUM-1 / LOW-4 (independent review, owner's ruling) — guard (b) widens from
-// the 18 hand-picked palette literals into a census over every host token a rule (either
-// sheet) actually CONSUMES where its selector reaches a node inside a print-on root.
-describe('SC-127 r5 MED-1/LOW-4 — guard (b) is census-based, not just the 18 literals', () => {
-	it('assertSc127HostBlockPinned (the 18-literal pin) is kept, not deleted', () => {
-		expect(shootMjs).toMatch(/async function assertSc127HostBlockPinned\(page, pinnedCss\)/);
-	});
+// SC-127 r7 (owner ruling, "light island" generator — see the Amendment in
+// sc127-brief-r7-fix.md) — two earlier designs for guard (b) each had a MEASURED blind
+// spot: an 18-literal hand-picked pin (r3/r5) and, after that, two different reachability
+// filters (r5's live-gallery DOM walk, missed 10 tokens; r7's first attempt, a textual
+// ancestor-scope classifier, fired on 222 of 278 theme-differing tokens). The owner
+// retired reachability filtering entirely: `visual-harness/obsidian-light-island.mjs`
+// generates the `.theme-dark [data-dse-element][data-dse-print="on"]…` host block from
+// EVERY `--*` token the pinned Obsidian sheet resolves differently under `.theme-dark` vs
+// `.theme-light`, judging nothing about whether the plugin actually consumes it.
+const islandMjs = fs.readFileSync(
+	path.join(__dirname, '../../../visual-harness/obsidian-light-island.mjs'),
+	'utf8',
+);
 
-	it('assertSc127HostPaletteCensus is defined and called alongside it', () => {
-		expect(shootMjs).toMatch(/async function assertSc127HostPaletteCensus\(page, pinnedCss\)/);
-		expect(shootMjs).toMatch(/await assertSc127HostPaletteCensus\(page, pinnedHost\.css\);/);
-	});
+function extractIslandConst(name: string): string {
+	const m = islandMjs.match(new RegExp(`export const ${name} =\\s*'([^']*)'`));
+	if (!m) throw new Error(`could not find ${name} in obsidian-light-island.mjs`);
+	return m[1];
+}
 
-	it('the census walks BOTH sheets and strips state pseudo-classes before matching', () => {
-		expect(shootMjs).toMatch(
-			/extractHostTokenConsumers\(pinnedCss\), \.\.\.extractHostTokenConsumers\(pluginCss\)/,
+const BEGIN_MARKER = extractIslandConst('BEGIN_MARKER');
+const END_MARKER = extractIslandConst('END_MARKER');
+const HOST_SELECTOR = extractIslandConst('HOST_SELECTOR');
+
+describe('SC-127 r7 — obsidian-light-island.mjs exists with the expected shape', () => {
+	it('exports the generator core, the marker constants and the host selector', () => {
+		expect(islandMjs).toMatch(/export function allDeclaredTokenNames\(css\)/);
+		expect(islandMjs).toMatch(/export async function generateLightIsland\(page, pinnedCss\)/);
+		expect(islandMjs).toMatch(/export function extractCurrentIsland\(sheet\)/);
+		expect(BEGIN_MARKER).toContain('GENERATED');
+		expect(BEGIN_MARKER).toContain('BEGIN');
+		expect(END_MARKER).toContain('END');
+		expect(HOST_SELECTOR).toBe(
+			'.theme-dark [data-dse-element][data-dse-print="on"][data-dse-print="on"]',
 		);
-		expect(shootMjs).toMatch(
-			/const STATE_PSEUDO_STRIP = \/:focus-visible\|:focus-within\|:hover\|:active\|:focus\/g;/,
-		);
 	});
 
-	it('--dse-* tokens are excluded — a host census, not a plugin-token census', () => {
-		expect(shootMjs).toMatch(/\.filter\(\(t\) => !t\.startsWith\('--dse-'\)\)/);
+	it('restates EVERY differing token — no reachability filter (querySelectorAll, ancestor scope) anywhere in the generator', () => {
+		expect(islandMjs).not.toMatch(/querySelectorAll/);
+		expect(islandMjs).not.toMatch(/exclusionFor|EXCLUDED_ANCESTOR_SCOPES|splitSubject/);
 	});
+
+	it('package.json has the gen-light-island script', () => {
+		const pkg = fs.readFileSync(path.join(__dirname, '../../../package.json'), 'utf8');
+		expect(pkg).toMatch(/"gen-light-island":\s*"node visual-harness\/obsidian-light-island\.mjs"/);
+	});
+});
+
+describe('SC-127 r7 — styles-source.css carries the GENERATED light-island block', () => {
+	function currentIsland(): string | null {
+		const bi = stylesSourceCss.indexOf(BEGIN_MARKER);
+		const ei = stylesSourceCss.indexOf(END_MARKER);
+		if (bi === -1 || ei === -1 || ei < bi) return null;
+		return stylesSourceCss.slice(bi, ei + END_MARKER.length);
+	}
+
+	it('the BEGIN/END markers exist, exactly once each, in the right order', () => {
+		expect(stylesSourceCss.split(BEGIN_MARKER).length - 1).toBe(1);
+		expect(stylesSourceCss.split(END_MARKER).length - 1).toBe(1);
+		expect(stylesSourceCss.indexOf(BEGIN_MARKER)).toBeLessThan(stylesSourceCss.indexOf(END_MARKER));
+	});
+
+	it('the block declares the host selector and a generous floor of tokens (295 measured at r7)', () => {
+		const island = currentIsland();
+		expect(island).not.toBeNull();
+		expect(island).toContain(HOST_SELECTOR);
+		const declCount = (island!.match(/--[a-zA-Z0-9-]+:\s*[^;]+;/g) ?? []).length;
+		expect(declCount).toBeGreaterThan(200);
+	});
+
+	it('specific tokens this ticket hand-diagnosed across r5/r7 are present (regression floor — not a completeness proof, see the describe block below for that)', () => {
+		const island = currentIsland()!;
+		for (const t of [
+			'--hr-color',
+			'--link-color-hover',
+			'--link-external-color-hover',
+			'--table-header-border-color',
+			'--background-modifier-border-hover',
+			'--background-modifier-border-focus',
+			'--background-modifier-form-field-hover',
+			'--caret-color',
+			'--input-placeholder-color',
+			'--list-marker-color',
+		]) {
+			expect(island).toContain(`${t}:`);
+		}
+	});
+
+	it('the real (non-custom) caret-color and scrollbar-color properties are restated (SC-127 r5 LOW-2 — a mapping alone cannot re-trigger inheritance)', () => {
+		const island = currentIsland()!;
+		expect(island).toMatch(/[^-]caret-color:\s*var\(--caret-color\)\s*;/);
+		expect(island).toMatch(/scrollbar-color:\s*var\(--scrollbar-thumb-bg\)\s*var\(--scrollbar-bg\)\s*;/);
+	});
+});
+
+// SC-127 r7 amendment point 3 — "a jest test that the generated block in the sheet equals
+// the generator's output for the pinned sheet … skip gracefully if the pinned sheet is
+// absent". Jest's `dom` project uses jsdom, which does not implement real CSS cascade /
+// custom-property resolution (`color-mix()`, `hsl(calc(...))` chains through `body`/
+// `.theme-*` mappings) — replicating `generateLightIsland`'s own browser-based resolution
+// here would not be trustworthy even if jsdom let us try. What CAN be checked without a
+// browser, purely textually: EVERY `--*` token name the pinned sheet declares anywhere
+// must be either (a) present in the committed block, or (b) declared with the textually
+// IDENTICAL value inside both the sheet's OWN `.theme-dark { … }` and `.theme-light { … }`
+// blocks — i.e., provably non-differing without needing to resolve anything. A token that
+// differs only through a multi-step mapping chain (declared once at `body` level, with the
+// difference coming from something IT depends on) cannot be proven non-differing this way
+// — those pass through as "assumed differing, must be present" — so this check can have
+// FALSE POSITIVES (flagging a token present anyway) but not false negatives on the tokens
+// it CAN classify; the real, authoritative check is `shoot.mjs`'s own
+// `assertSc127LightIslandPinned`, which runs a real browser on every `npm run shots`.
+describe('SC-127 r7 amendment (3) — the committed block vs the pinned sheet, textually', () => {
+	const PINNED_SHEET_PATH = path.join(__dirname, '../../../visual-harness/dist/obsidian-app.css');
+	const hasPinnedSheet = fs.existsSync(PINNED_SHEET_PATH);
+
+	if (!hasPinnedSheet) {
+		it.skip('SKIPPED — no cached visual-harness/dist/obsidian-app.css on this machine (run `npm run host-css` first)', () => {});
+	} else {
+		it('every pinned-sheet token not provably identical dark vs light is present in the committed block', () => {
+			const pinnedCss = fs.readFileSync(PINNED_SHEET_PATH, 'utf8');
+			const bi = stylesSourceCss.indexOf(BEGIN_MARKER);
+			const ei = stylesSourceCss.indexOf(END_MARKER);
+			expect(bi).toBeGreaterThan(-1);
+			expect(ei).toBeGreaterThan(bi);
+			const island = stylesSourceCss.slice(bi, ei);
+
+			// Comment-stripped brace-depth extraction of the sheet's OWN `.theme-dark { … }` and
+			// `.theme-light { … }` rule bodies — the same technique the generator itself uses via
+			// `iterRules`, reimplemented inline (jest cannot import the `.mjs`, see this file's
+			// header).
+			function ruleBody(css: string, selector: string): string {
+				const stripped = css.replace(/\/\*[\s\S]*?\*\//g, '');
+				const idx = stripped.indexOf(`
+${selector} {`);
+				if (idx === -1) return '';
+				const open = stripped.indexOf('{', idx);
+				let depth = 1;
+				let i = open + 1;
+				while (i < stripped.length && depth > 0) {
+					if (stripped[i] === '{') depth += 1;
+					else if (stripped[i] === '}') depth -= 1;
+					i += 1;
+				}
+				return stripped.slice(open + 1, i - 1);
+			}
+			function declMap(body: string): Record<string, string> {
+				const out: Record<string, string> = {};
+				for (const m of body.matchAll(/(--[a-zA-Z0-9-]+)\s*:\s*([^;]+);/g)) out[m[1]] = m[2].trim();
+				return out;
+			}
+			const darkDecls = declMap(ruleBody(pinnedCss, '.theme-dark'));
+			const lightDecls = declMap(ruleBody(pinnedCss, '.theme-light'));
+
+			const allNames = new Set<string>();
+			for (const m of pinnedCss.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(?:^|[\s{;])(--[a-zA-Z0-9-]+)\s*:/g)) {
+				allNames.add(m[1]);
+			}
+
+			// The ONE known false positive this textual approximation cannot see through:
+			// `--interactive-accent-hover` is declared TEXTUALLY differently per theme
+			// (`.theme-dark` points it at `--color-accent-1`; `.theme-light` doesn't override
+			// it, so it inherits body's `var(--color-accent-2)`) — but `.theme-dark`'s own
+			// `--color-accent-1` formula (`-3/1.02/1.15`) is numerically IDENTICAL to
+			// `.theme-light`'s `--color-accent-2` formula, and `--accent-h/s/l` are
+			// theme-invariant, so the two sides resolve to the exact same string. Confirmed
+			// with the real generator (browser-resolved): it is correctly ABSENT from the
+			// committed block. A textual diff cannot see through a formula-level coincidence
+			// like this one — real correctness is `shoot.mjs`'s own browser-based guard.
+			const KNOWN_TEXTUAL_FALSE_POSITIVES = new Set(['--interactive-accent-hover']);
+
+			const missing: string[] = [];
+			for (const t of allNames) {
+				if (KNOWN_TEXTUAL_FALSE_POSITIVES.has(t)) continue;
+				// Equal whether both sides redeclare the token with the same text, or NEITHER
+				// side redeclares it at all (theme-invariant by absence — `undefined ===
+				// undefined`) — only a token where exactly ONE theme scope redeclares it, or
+				// both redeclare it DIFFERENTLY, needs to be present in the committed block.
+				const provablyIdentical = darkDecls[t] === lightDecls[t];
+				if (provablyIdentical) continue;
+				if (!island.includes(`${t}:`)) missing.push(t);
+			}
+			expect(missing).toEqual([]);
+		});
+	}
 });
