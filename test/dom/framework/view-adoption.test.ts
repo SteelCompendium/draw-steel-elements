@@ -279,6 +279,42 @@ describe('SC-340 Task 4: claim and adopt', () => {
 	});
 });
 
+// Final review fix (missing spec §10.1/§10.2 coverage): unlike the SC-331 pin above (the
+// view's OWN write rebuilds and adopts, so the modal survives), this is the case where the
+// block's CURRENT render child unloads for a reason that is NOT a self-rebuild — navigated
+// away, leaf closed, mode toggled — WHILE a write is still only debounce-pending. §4.5's
+// mandatory flush-on-unload must still land it, and the ConditionsModal (registered as
+// `this.activeModal`, closed by a callback registered in the view's own constructor —
+// AFTER the base view's flush registration, so per Component unload's LIFO order the modal
+// closes first and the flush still runs and lands) must not linger in document.body.
+describe('SC-340 §10.1/§10.2: release flushes a pending ConditionsModal write and closes the modal', () => {
+	afterEach(() => jest.useRealTimers());
+
+	test('unloading the CURRENT render child before the persist debounce still flushes the pending condition and closes the modal', async () => {
+		jest.useFakeTimers();
+		const note = '# E\n\n```ds-initiative\n' + quickStart.trimEnd() + '\n```\n';
+		const { app, render } = await setup(note);
+		const ctx1 = await render('ds-initiative');
+		const root = ctx1.el.firstElementChild as HTMLElement;
+		(root.querySelector('.dse-init__group--heroes .dse-cond--add') as HTMLElement).click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		(modalEl.querySelector('button[aria-label="Add condition"]') as HTMLElement).click();
+		const input = modalEl.querySelector('.dse-condal__input') as HTMLInputElement;
+		input.value = 'Bleeding';
+		input.dispatchEvent(new Event('input'));
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+		expect(app.vault.modifyCalls).toHaveLength(0); // still only debounce-pending, PERSIST_DEBOUNCE_MS hasn't elapsed
+
+		// The block goes away for a reason that is NOT a self-triggered rebuild — no new
+		// section ever adopts this view, so it is really gone, not claimed.
+		ctx1.addedChildren[0].unload();
+
+		expect(document.body.contains(modalEl)).toBe(false); // the modal is closed
+		expect(app.vault.modifyCalls).toHaveLength(1); // the mandatory flush landed the write anyway
+		expect(app.vault.getContent('Note.md')).toContain('bleeding');
+	});
+});
+
 describe('SC-340 fix round 1 (I-1): the adoption blur fires DURING the move (real Chromium order)', () => {
 	afterEach(() => jest.useRealTimers());
 

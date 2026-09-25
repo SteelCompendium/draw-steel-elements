@@ -128,6 +128,16 @@ export class ViewRegistry extends Component {
 			if (entry.released || entry.claiming) continue;
 			if (!(entry.view as unknown as { _loaded: boolean })._loaded) continue;
 			if (entry.host.docId !== docId || entry.host.sourcePath !== sourcePath) continue;
+			// Final review fix: a matching ticket is not enough on its own. A view writes X then
+			// Y; Y's rebuild never comes (preview hidden in Source mode); an external revert/undo
+			// then puts the disk back to exactly X within CLAIM_WINDOW_MS. That rebuild's ticket
+			// search still finds the (unconsumed) X ticket and would hand the view back — but the
+			// view's own model/knownBody has already moved on to Y, so the view no longer matches
+			// the document it would be claiming against. Require the CANDIDATE'S CURRENT known
+			// body to also equal what the rebuild wants, not just one of its past tickets. A normal
+			// adoption (including a coalesced A, B, A) always satisfies this — the ticket that
+			// matches is always the one that produced the view's current knownBody.
+			if (normalizeBody(entry.host.lastKnownBody ?? '') !== wanted) continue;
 			// Fix round 1 (M-2): spec §6.2 — "the entry with the newest ticket wins". Tickets
 			// are oldest-first, so the LAST matching index is the newest matching ticket — a
 			// coalesced rebuild for writes A, B, A must match the SECOND A, not the first

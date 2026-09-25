@@ -313,12 +313,16 @@ const AUTO_DISMISS_TRUST_DIALOG = `(() => {
     // Probed (Task 8 review I-1 follow-up, real DOM dump): this dialog is NOT a standard
     // Modal (no .modal-close-button) -- it is mod-confirmation, with an INNER .modal
     // carrying .mod-trust-folder, whose own header "X" is .modal-header-button. Task 8
-    // review round 2 (Trust selector): key on that class, not text -- a DSE modal that
-    // happens to show note content containing "trust the author" would otherwise match
-    // the old /trust the author/i text test. Text match kept only as a fallback, for a
-    // future Obsidian build that renames/drops the class.
+    // review round 2 (Trust selector): keyed on that class first -- but a future Obsidian
+    // build could rename/drop it, so a /trust the author/i TEXT fallback still runs below
+    // for whatever didn't match by class. Final review fix: that fallback explicitly skips
+    // any container holding a DSE modal ('.dse-modal'/'.dse-condal-modal') -- without this,
+    // a real DSE modal that happens to show note/statblock content containing "trust the
+    // author" would match the text test and get its own header button clicked (dismissed)
+    // by this trust-dialog dismisser, not by anything the test itself did.
     const byClass = modal.querySelector('.mod-trust-folder .modal-header-button');
     if (byClass) { byClass.click(); return; }
+    if (modal.querySelector('.dse-modal, .dse-condal-modal')) return;
     if (/trust the author/i.test(modal.textContent)) modal.querySelector('.modal-header-button')?.click();
   };
   window.__lcTrustObserver = new MutationObserver(() => {

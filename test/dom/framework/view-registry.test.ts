@@ -205,6 +205,7 @@ describe('SC-340 Task 3: rebind and claim tickets', () => {
 		const ctx = makeFakeContext(app, 'Note.md');
 		const host = new ReadingModeBlockHost(plugin as any, ctx.el, ctx as any, 'ds-counter', null, registry);
 		const entry = registry.own(new Component() as any, host, document.createElement('div'));
+		host.setMountedBody('a: 1'); // final review fix: claim() also requires the CURRENT known body to match
 		registry.noteWrite(entry, 'a: 1'); // A
 		registry.noteWrite(entry, 'b: 1'); // B
 		registry.noteWrite(entry, 'a: 1'); // A again — the newest ticket
@@ -212,6 +213,31 @@ describe('SC-340 Task 3: rebind and claim tickets', () => {
 		expect(claimed).toBe(entry);
 		expect(registry.stats.claims).toBe(1);
 		expect(entry.tickets).toHaveLength(0);
+	});
+
+	// Final review fix: a candidate ticket matching the wanted body is not enough on its own.
+	// The view writes X then Y; Y's rebuild never arrives (e.g. the preview is hidden in Source
+	// mode for over CLAIM_WINDOW_MS). An external revert/undo then puts the disk back to exactly
+	// X within the window. Without also checking the CANDIDATE'S CURRENT known body, claim()
+	// would still find X's (unconsumed) ticket and hand the view back — but the view's own
+	// model/knownBody has already moved on to Y, so the view no longer matches the document it
+	// would be claiming against.
+	test("a claim for an earlier write (X) is refused once the view's own model has moved on to a later write (Y)", () => {
+		const registry = new ViewRegistry({ enabled: true, now: () => 1_000 });
+		registry.load();
+		const { app, plugin } = makeEnv();
+		app.vault.setFile('Note.md', NOTE);
+		const ctx = makeFakeContext(app, 'Note.md');
+		const host = new ReadingModeBlockHost(plugin as any, ctx.el, ctx as any, 'ds-counter', null, registry);
+		const entry = registry.own(new Component() as any, host, document.createElement('div'));
+		registry.noteWrite(entry, 'a: 1'); // X
+		host.setMountedBody('a: 1'); // X's own rebuild adopted normally and updated the view's model
+		registry.noteWrite(entry, 'a: 2'); // Y — its rebuild never comes
+		host.setMountedBody('a: 2'); // replaceSource sets knownBody synchronously with the write, not the rebuild
+		// External revert/undo: disk is back to exactly X, within CLAIM_WINDOW_MS.
+		const claimed = registry.claim(host.docId, 'Note.md', 'a: 1');
+		expect(claimed).toBeNull();
+		expect(registry.stats.claims).toBe(0);
 	});
 });
 

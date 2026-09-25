@@ -42,7 +42,9 @@ for what needs action.
   inside the save delay), it is dropped and a notice says so: "Draw Steel Elements: a change to a
   block in <note> was not saved — the block changed on disk first." Reading-mode blocks now keep
   their live view across their own saves (SC-340): open dialogs, focus and typed text survive a
-  write.
+  write. A hidden kill switch restores the pre-SC-340 behavior if needed: setting
+  `"viewAdoption": false` in the plugin's `data.json` and reloading Obsidian turns view
+  adoption off again (not exposed in the Settings UI).
 - [FIX] **A pinned sidebar panel that showed "Backing block not found" now recovers on its
   own once the block reappears or is edited elsewhere** (SC-288). If the block behind a
   pinned sidebar panel briefly became unaddressable — the note was edited out from under it
