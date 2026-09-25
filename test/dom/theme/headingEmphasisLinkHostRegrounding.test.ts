@@ -164,13 +164,24 @@ describe('SC-317 — GROUP 7 companion: the plugin\'s own external-link icon (fi
 		new RegExp('@supports selector\\(:dir\\(rtl\\)\\) \\{ ' + escape(ANCHOR) + ' :where\\(a\\)\\.external-link:dir\\(rtl\\)::after \\{([^}]*)\\}'),
 	);
 
-	test('the glyph rule exists and is inside the same print-excluded scope as every rule in this block', () => {
-		// FIX ROUND 1 (INFO-3) — asserted against `glyph![0]`, the ACTUAL matched rule text
-		// pulled out of `flat` (the real, currently-live CSS), not against the `ANCHOR`
-		// constant alone — a future edit that moved this rule out from under `ANCHOR` would
-		// show up here as a real failure, not just as "the match came back null".
+	test('the glyph rule exists, and there is no unscoped duplicate anywhere that could leak into print', () => {
+		// FIX ROUND 1 (INFO-3), CORRECTED IN FIX ROUND 2 (N2's own re-review, N3) — the r1
+		// version of this test additionally asserted `glyph![0]` (the match's own full text)
+		// `.toContain(':not([data-dse-print="on"]'))`, which the re-review correctly flagged
+		// as REDUNDANT: the regex that produced `glyph` already REQUIRES that literal text to
+		// appear (it is baked into `ANCHOR`, which the pattern is built from), so a non-null
+		// match already logically implies it — the assertion could never fail on its own.
+		// Replaced with a genuinely INDEPENDENT check instead of dropping the coverage: this
+		// searches the WHOLE raw sheet (not the bounded/flat slice the rest of this file
+		// works from) for every occurrence of the bare selector fragment. If a second,
+		// unscoped copy of this rule existed anywhere else in the file — the actual shape a
+		// real print leak would take — it would show up here as more than one match, which
+		// the ANCHOR-scoped regex alone could never detect (it only ever looks inside its
+		// own bounded slice).
 		expect(glyph).not.toBeNull();
-		expect(glyph![0]).toContain(':not([data-dse-print="on"])');
+		const wholeSheetFlat = rawCss.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ');
+		const occurrences = wholeSheetFlat.match(/:where\(a\)\.external-link::after \{/g) ?? [];
+		expect(occurrences).toHaveLength(1);
 	});
 
 	test('it draws via mask-image + currentColor, never filter (D2)', () => {
