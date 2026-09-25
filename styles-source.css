@@ -8028,10 +8028,15 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    sub-feature heads. Specificity (0,5,0) > the flat block's (0,3,0).
 
    Font-size: the site's 1.35rem is 0.9× its name slot (1.5rem,
-   steel-cardhead.css:100-102); the plugin's name slot is 1.25em
-   (.dse-head__primary--left, ~4292), so the same ratio is 1.125em. Kept in em
-   for the plugin's rhythm — the same deviation Task 3 already took on the head
-   strips' padding. font-weight has no --mini counterpart on the site, so the
+   steel-cardhead.css:100-102); at the time this ratio was struck the plugin's
+   name slot was ALSO one shared 1.25em rule (.dse-head__primary--left,
+   ~4292), so 0.9× it landed on the same 1.125em below. SC-232 has since split
+   the name into a per-family scale (generic/ability/statblock/featureblock
+   all read at different sizes) — this mini deliberately did NOT follow: it
+   stays pinned to the 1.25em TOKEN (--dse-fs-heading), not to whichever
+   family's rendered name sits beside it, so the literal "0.9× the name" is
+   true again only for the generic family (1.35× the token) and no longer for
+   the other three. font-weight has no --mini counterpart on the site, so the
    base 600 (.dse-head__primary--right) is left alone. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-sb, .dse-fb) > .dse-head > .dse-head__primary--chip {
 	background: none;
@@ -8127,11 +8132,22 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    §A the site's rem base is 20px and the plugin's is 16px, so the site's 1.35rem
    is matched by RATIO against the name slot it sits beside, not by transcribing
    the number (the same method the card-head --mini block used to land on
-   1.125em). Site sub-feature head: name .fb__feat-name 1.25rem = 25px, mini
-   1.35rem = 27px → 1.08×. Plugin sub-feature head: name .dse-head__primary--left
-   1.25em = 20px → 21.6px, which is 1.35em against the head's own 16px base.
-   font-variant/letter-spacing are reset because the Steel flat-chip block sets
-   small-caps + 0.04em tracking on every --chip slot; the mini is neither. */
+   1.125em). The site node this ratio was originally struck against,
+   `.fb__feat-name` 1.25rem = 25px, is DEAD — it matches 0 live nodes; the site's
+   real sub-feature name re-attached to `.sc-head__left-primary` (the same
+   generic cardhead name SC-232's card-head-name-scale survey measured
+   directly) when the head moved to the shared 6-slot grid. At the time this
+   ratio was struck the plugin's name slot was ALSO one shared 1.25em rule
+   (.dse-head__primary--left), giving 21.6px → 1.35em against the head's own
+   16px base, 1.08× the name. SC-232 has since split the name into a
+   per-family scale — this mini deliberately did NOT follow: it stays pinned
+   to the 1.25em TOKEN (--dse-fs-heading), not to whichever family's rendered
+   name sits beside it, so "1.08× the name" no longer holds for every family
+   (exactly the sibling card-head --mini block's situation above). Re-deriving
+   this ratio against the site's CURRENT mini/name figures is deferred —
+   SC-367. font-variant/letter-spacing are reset because the Steel flat-chip
+   block sets small-caps + 0.04em tracking on every --chip slot; the mini is
+   neither. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb .dse-feature > .dse-head > .dse-head__eyebrow--right {
 	/* font-family: NOT declared here — the Title slot's consumers must be
 	   theme-agnostic (SC-112 Task 5's Legacy font-slot gate), so this selector is an
