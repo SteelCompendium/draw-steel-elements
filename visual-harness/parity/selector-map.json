@@ -37,6 +37,54 @@
       "pair": "featureblock-wrap",
       "rule": "margin-bottom",
       "why": "FOLLOWUPS #39 -- same finding as featureblock-wrap:margin-top (site 34px, plugin 8px); listed separately only because the gate reports per rule."
+    },
+    {
+      "pair": "name-generic",
+      "rule": "ink",
+      "scheme": "dark",
+      "why": "SC-367 -- newly VISIBLE now that a name pair exists at all (no pair mapped .dse-head__primary--left before SC-232), not introduced by SC-232's font-size/line-height rule (color was never touched). The site's generic name (kit/trait/ancestry/class/rule heads) paints at the page's default body ink (rgba(220,226,230,.88)); the plugin paints every family's name at one shared --dse-heading accent (rgba(220,226,230,.95)) -- alpha only, off by 0.07 (tol 0.03). Out of SC-232's scope (a color decision, not the type-scale this ticket's table asks for); SC-367 already covers the sibling crest/eyebrow/right-rail divergences this same 'plugin uses one accent everywhere' pattern produces, so it is filed there pending the owner's call on whether to fold it in or split it out."
+    },
+    {
+      "pair": "name-ability",
+      "rule": "ink",
+      "scheme": "dark",
+      "why": "SC-367 -- same finding as name-generic:ink[dark], the family-scoped case: the site paints the ability/statblock/featureblock name at a dimmer --sc-steel-lighter accent (rgb(205,209,212), opaque) than the plugin's --dse-heading (rgba(220,226,230,.95)) -- both channel (18) and alpha (0.05) exceed tolerance. Not introduced by SC-232 (color untouched); newly visible because no pair mapped the name node before this ticket."
+    },
+    {
+      "pair": "name-statblock",
+      "rule": "ink",
+      "scheme": "dark",
+      "why": "SC-367 -- same finding as name-ability:ink[dark] (statblock band, site rgb(205,209,212) vs plugin rgba(220,226,230,.95))."
+    },
+    {
+      "pair": "name-featureblock",
+      "rule": "ink",
+      "scheme": "dark",
+      "why": "SC-367 -- same finding as name-ability:ink[dark] (featureblock band, site rgb(205,209,212) vs plugin rgba(220,226,230,.95))."
+    },
+    {
+      "pair": "name-generic",
+      "rule": "ink",
+      "scheme": "light",
+      "why": "SC-367 -- the light-scheme twin of name-generic:ink[dark]: site rgb(44,46,48) (page default body ink) vs plugin rgb(26,29,32) (the shared --dse-heading accent, channel delta 18 > tol 2)."
+    },
+    {
+      "pair": "name-ability",
+      "rule": "ink",
+      "scheme": "light",
+      "why": "SC-367 -- the light-scheme twin of name-ability:ink[dark]: site rgb(95,104,109) (--sc-steel-lighter) vs plugin rgb(26,29,32) (channel delta 77 > tol 2)."
+    },
+    {
+      "pair": "name-statblock",
+      "rule": "ink",
+      "scheme": "light",
+      "why": "SC-367 -- same finding as name-ability:ink[light] (statblock band, site rgb(95,104,109) vs plugin rgb(26,29,32))."
+    },
+    {
+      "pair": "name-featureblock",
+      "rule": "ink",
+      "scheme": "light",
+      "why": "SC-367 -- same finding as name-ability:ink[light] (featureblock band, site rgb(95,104,109) vs plugin rgb(26,29,32))."
     }
   ],
   "pairs": [
@@ -76,6 +124,15 @@
       "why": "BLOCK RHYTHM only (FOLLOWUPS #39). The site's featureblock separates from its neighbours on .fb-wrap (margin: 1.7rem auto, steel-featureblock.css:41). The plugin has no wrap node — the host is both — so the margin rules aim here while every other rule stays on the `featureblock` plate pair." },
 
     { "id": "featureblock-band","site": ".fb__head",                "plugin": ".dse-fb > .dse-head",               "why": "role/malice-gradient header band (steel-featureblock.css:57)" },
-    { "id": "card-ref",         "site": ".md-typeset .sc-card",     "plugin": ".dse-card",                         "why": "reference-card plate (kit/condition/ancestry/treasure/... via CardLayout). The site node is the .sc-card tile (steel-redesign.css:159-166: --fx-card-bg + --fx-bevel + lift shadow + hairline); its field grammar (__head/__name/__type/__flavor/__stats/__body) is the same one DisplayCardView emits as __title/__subtitle/__badges/__flavor/__rows/__body. Verified against the live pages: the detail pages are NOT the counterpart — a kit detail page is one .sc-kit page-plate and condition/ancestry/treasure detail pages carry no sc- card node at all — so urls.json gained the kit index (tiles) + the perk index (the .sc-card--wide variant, which only re-lays-out the same plate)." }
+    { "id": "card-ref",         "site": ".md-typeset .sc-card",     "plugin": ".dse-card",                         "why": "reference-card plate (kit/condition/ancestry/treasure/... via CardLayout). The site node is the .sc-card tile (steel-redesign.css:159-166: --fx-card-bg + --fx-bevel + lift shadow + hairline); its field grammar (__head/__name/__type/__flavor/__stats/__body) is the same one DisplayCardView emits as __title/__subtitle/__badges/__flavor/__rows/__body. Verified against the live pages: the detail pages are NOT the counterpart — a kit detail page is one .sc-kit page-plate and condition/ancestry/treasure detail pages carry no sc- card node at all — so urls.json gained the kit index (tiles) + the perk index (the .sc-card--wide variant, which only re-lays-out the same plate)." },
+
+    { "id": "name-generic",     "site": ".sc-kit__head .sc-head__left-primary", "plugin": "[data-dse-element='kit'] > .dse-card > .dse-head > .dse-head__primary--left",
+      "why": "SC-232 (card-head NAME type scale) — the generic family: kit/trait/ancestry/class/rule heads and every nested sub-feature, none of which the `head` pair's wrapper-level comparison (.sc-head <-> .dse-head) can see. The kit page's OWN head (steel-cardhead.css:99-101, unscoped by any family override) is the representative generic node on both sides; its plugin counterpart is the direct-child chain that keeps the kit's own head out of its nested signature-ability card (Devastating Rush, a DIFFERENT family at a DIFFERENT size on the same page)." },
+    { "id": "name-ability",     "site": ".sc-ability > .sc-head .sc-head__left-primary", "plugin": "[data-dse-element='feature'] > .dse-feature > .dse-head > .dse-head__primary--left",
+      "why": "SC-232 — the standalone ability card family (steel-ability-cards.css:107-110). Both selectors require the DIRECT child chain from the card root, which is what keeps a NESTED sub-feature (a different family, generic-sized) from matching either side." },
+    { "id": "name-statblock",   "site": ".sb__head .sc-head__left-primary", "plugin": ".dse-sb > .dse-head > .dse-head__primary--left",
+      "why": "SC-232 — the statblock band family (steel-statblock.css:141-143). Same direct-child scoping reasoning as `name-ability`; a nested sub-feature's head is not a direct child of `.dse-sb`." },
+    { "id": "name-featureblock","site": ".fb__head .sc-head__left-primary", "plugin": ".dse-fb > .dse-head > .dse-head__primary--left",
+      "why": "SC-232 — the featureblock band family (steel-featureblock.css:85-87). Same direct-child scoping reasoning as `name-ability`." }
   ]
 }

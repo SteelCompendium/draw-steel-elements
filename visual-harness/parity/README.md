@@ -8,7 +8,7 @@ plugin's "Steel" theme (`styles-source.css`, `[data-dse-theme='steel']`).
 
 | When you… | Run | Notes |
 |---|---|---|
-| Change any Steel CSS in `styles-source.css` | `npm run parity` | Must end **0 GAPs and 0 undeclared WARNs, exit 0** — that biconditional *is* the gate (SC-110). The only escape is an explicit entry in `selector-map.json`'s `declaredDeferrals` (7 today, and **never** for a material rule — see "Declared deferrals"). Close a GAP by fixing the CSS — never by deleting or weakening the pair that reports it, never by loosening a tolerance, and never by declaring something CSS can fix. |
+| Change any Steel CSS in `styles-source.css` | `npm run parity` | Must end **0 GAPs and 0 undeclared WARNs, exit 0** — that biconditional *is* the gate (SC-110). The only escape is an explicit entry in `selector-map.json`'s `declaredDeferrals` (15 today, and **never** for a material rule — see "Declared deferrals"). Close a GAP by fixing the CSS — never by deleting or weakening the pair that reports it, never by loosening a tolerance, and never by declaring something CSS can fix. |
 | Change any Steel CSS | `npx jest test/dom/theme/steelMaterial.test.ts` | The material contract (see below). Runs as part of `npx jest`, so the normal full-suite gate covers it. |
 | Know the **live site itself** changed | `npm run parity:site` | **Only then.** Regenerating the baseline for any other reason re-points the reference of record at whatever the plugin happens to look like. |
 | Open a PR that touched either | — | **Review the JSON diff** of `baseline/site-inventory.json` in the PR. A baseline diff must be explained by a real site change; if it isn't, a page failed to load/render and the capture is garbage. |
@@ -515,13 +515,16 @@ calls that belong to Scott, not to whoever is holding the gate.
 
 Deliberately conservative. Relaxing it is a one-line change to `NON_DECLARABLE_CLASSES`.
 
-**Currently declared: 7 entries / 14 rows** (both schemes each), in three findings:
+**Currently declared: 15 entries / 22 rows** (the first three findings are scoped to both
+schemes each; the fourth `name-*` finding below is one scheme-scoped entry per row), in four
+findings:
 
 | Finding | Rows | Site | Plugin | Status |
 |---|---|---|---|---|
 | `pr-chars:ink` (SC-226, was FOLLOWUPS #40) | 2 | `.chars` `rgb(205,209,212)` / `rgb(95,104,109)` | `rgba(220,226,230,.95)` / `rgb(26,29,32)` | **deliberate** — the plugin's one-node caption is heading-emphasised where the site splits `.pre`/`.chars` |
 | `section-tag:font-size` / `:line-height` (SC-235 round 6, option B) | 4 | 18px / 30.6px | 15px / 25.5px | **deliberate** — the plugin's computed font-size now targets the site's RENDERED letter height (both synthesized-cap and real-smcp glyphs land at 8px of ink), not its computed value; see the paragraph below |
 | `statblock-wrap` + `featureblock-wrap` `:margin-top`/`:margin-bottom` (SC-225, was FOLLOWUPS #39) | 8 | 34px (`1.7rem` on `.sb-wrap`/`.fb-wrap`) | 8px (`0.5em` unscoped base on the host) | **pixel decision** — Plan 21 Task 2 set the precedent (24px onto the feature host) but 26px of new air per block is Scott's call |
+| `name-generic`/`name-ability`/`name-statblock`/`name-featureblock` `:ink` (SC-232, filed SC-367) | 8 | generic: page default body ink; ability/statblock/featureblock: `--sc-steel-lighter` (dimmer accent) | one shared `--dse-heading` accent for all four | **out of SC-232's scope** — that ticket's rule table only sets font-size/line-height/letter-spacing; this ink split was invisible before SC-232 added these pairs (no pair mapped the name node at all) and is filed under SC-367, the sibling crest/eyebrow/right-rail-sizes follow-up, pending the owner's call on whether to fold it in or split it out |
 
 **HEALED and deleted — the anti-rot check working end to end (2026-08-07, SC-117 R1).**
 `statblock-wrap:line-height` (FOLLOWUPS #52) was the fourth finding here: site `.sb-wrap`

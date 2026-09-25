@@ -815,14 +815,15 @@ describe('the SHIPPED contract is itself valid', () => {
 	// one-selector fix (the statblock host joined the Plan 21 line-height group) closed the
 	// divergence, `diff.mjs`'s anti-rot check reported the declaration as DEAD, and it was
 	// deleted. That is the mechanism working end to end, not a re-baseline.
-	// 2026-09-28 (SC-235, Scott's option-B ruling, comment 00d1a795): 8 -> 7.
-	// `section-tag:font-size`/`:line-height`/`:letter-spacing` (was FOLLOWUPS #51) was site
-	// `.tag` at 18px/30.6px/1.8px against the plugin's then-ambient 16px/27.2px/1.12px. This
-	// rule compares computed style values only -- it cannot see the font face or whether
-	// small caps are real glyphs or a browser synthesis. The site's Petrona has no smcp, so
-	// the browser synthesizes small caps by shrinking capitals to 70%; the plugin's Source
-	// Serif 4 Bold has real smcp glyphs, which render taller per unit font-size -- matching
-	// the site's COMPUTED 18px would render the plugin's letters ~25% taller than the site's
+	// 2026-09-28 (SC-235, Scott's option-B ruling, comment 00d1a795, landed on develop ahead
+	// of SC-232 — this branch rebased onto it): 8 -> 7. `section-tag:font-size`/
+	// `:line-height`/`:letter-spacing` (was FOLLOWUPS #51) was site `.tag` at
+	// 18px/30.6px/1.8px against the plugin's then-ambient 16px/27.2px/1.12px. This rule
+	// compares computed style values only -- it cannot see the font face or whether small
+	// caps are real glyphs or a browser synthesis. The site's Petrona has no smcp, so the
+	// browser synthesizes small caps by shrinking capitals to 70%; the plugin's Source Serif
+	// 4 Bold has real smcp glyphs, which render taller per unit font-size -- matching the
+	// site's COMPUTED 18px would render the plugin's letters ~25% taller than the site's
 	// despite equal computed values. Scott chose option B instead: font-size
 	// `calc(var(--dse-fs-body) * 0.9375)` (15px) and letter-spacing `0.12em` (1.8px),
 	// styles-source.css's Task-2 boxed-header rule ~8163 -- 15px of real smcp matches the
@@ -831,8 +832,24 @@ describe('the SHIPPED contract is itself valid', () => {
 	// 0.1em-at-18px 1.8px) and is not declared; `:font-size` and `:line-height` are declared
 	// again, citing SC-235 and this rendered-height reasoning rather than FOLLOWUPS #51.
 	// Net: 8 entries/16 rows -> 7 entries/14 rows.
-	test('the declared set is exactly the documented 7 entries', () => {
-		expect(map.declaredDeferrals.map((d: { pair: string; rule: string }) => `${d.pair}:${d.rule}`)).toEqual([
+	// 2026-09-25 (SC-232, rebased onto the SC-235 base above): 7 -> 15. SC-232 added four new
+	// name-* pairs so the gate can see the card-head NAME's font-size/line-height for the
+	// first time (no pair mapped .dse-head__primary--left before this ticket) — those two
+	// rules pass cleanly with 0 new GAPs (against SC-235's now-7-entry base, not the old
+	// FOLLOWUPS #51 8-entry one). Mapping the node also surfaces a real, PRE-EXISTING `ink`
+	// divergence SC-232 never touches (color was never part of this ticket's rule table): the
+	// site paints the generic name at the page's default body ink and the
+	// ability/statblock/featureblock names at a dimmer accent, while the plugin paints all
+	// four at one shared --dse-heading accent. 8 new scheme-scoped declarations (4 pairs x 2
+	// schemes), filed under SC-367 (already open for the sibling crest/eyebrow/right-rail
+	// divergences this same "plugin uses one accent everywhere" pattern produces).
+	test('the declared set is exactly the documented 15 entries', () => {
+		expect(
+			map.declaredDeferrals.map(
+				(d: { pair: string; rule: string; scheme?: string }) =>
+					`${d.pair}:${d.rule}${d.scheme ? `[${d.scheme}]` : ''}`,
+			),
+		).toEqual([
 			'pr-chars:ink',
 			'section-tag:font-size',
 			'section-tag:line-height',
@@ -840,6 +857,14 @@ describe('the SHIPPED contract is itself valid', () => {
 			'statblock-wrap:margin-bottom',
 			'featureblock-wrap:margin-top',
 			'featureblock-wrap:margin-bottom',
+			'name-generic:ink[dark]',
+			'name-ability:ink[dark]',
+			'name-statblock:ink[dark]',
+			'name-featureblock:ink[dark]',
+			'name-generic:ink[light]',
+			'name-ability:ink[light]',
+			'name-statblock:ink[light]',
+			'name-featureblock:ink[light]',
 		]);
 	});
 });
