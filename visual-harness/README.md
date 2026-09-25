@@ -204,6 +204,18 @@ the real sheet is actually turned on in the harness — SC-202 round 6b onward):
    expect frozen/shot bytes to move and follow the freeze-delta sanction flow (dse-verify
    skill → "Freeze semantics"); while the sheet is off (r6a/r6b's own scope), a pin bump
    should move zero shot/frozen bytes.
+5. **SC-127 (added r7): regenerate the print preview's "light island."** The `.theme-dark
+   [data-dse-element][data-dse-print="on"]…` host block in `styles-source.css` (between its
+   own `/* SC-127 LIGHT ISLAND — GENERATED … BEGIN/END */` markers) is a MACHINE-GENERATED
+   copy of every `--*` token this pin's sheet resolves differently under `.theme-dark` vs
+   `.theme-light` — bumping the pin without regenerating leaves it stale, and
+   `visual-harness/shoot.mjs`'s own `assertSc127LightIslandPinned` in-run guard (`npm run
+   shots`) will fail loudly (`SC-127 LIGHT ISLAND DRIFTED`) if you forget. Run `npm run
+   gen-light-island` (`visual-harness/obsidian-light-island.mjs` — its own header has the
+   full design rationale) right after step 3 above and commit the regenerated block in the
+   SAME commit as the pin bump. This necessarily moves twin bytes (every capture with a
+   print-on root) — expected, not a leak; sanction and rebaseline it like any other
+   Steel-visible change.
 
 ## Obsidian camera (ground truth)
 
