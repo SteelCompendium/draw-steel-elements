@@ -360,6 +360,96 @@ keywords:
 		expect(hasEmpty('type')).toBe(false);
 	});
 
+	// SC-231: the Keywords cell used to markdown-render feature.keywords.join(', ')
+	// as ONE node, so Steel could only ever draw one chip; now each keyword is its
+	// own .dse-feature__meta-kw span (renderFeature.ts's splitKeywords/cell parts
+	// path), matching the site's one-chip-per-keyword .sc-ability__chip grammar.
+	describe('SC-231: Keywords split into one .dse-feature__meta-kw chip per keyword', () => {
+		const kwSpans = (root: HTMLElement) =>
+			[...root.querySelectorAll<HTMLElement>('.dse-feature__meta-cell--keywords .dse-feature__meta-kw')];
+		const kwValue = (root: HTMLElement) =>
+			root.querySelector('.dse-feature__meta-cell--keywords .dse-feature__meta-value')!;
+
+		test('a multi-keyword feature gets one chip span per keyword, in order, and the cell value textContent stays the old comma-joined string (LEGACY-FREEZE)', async () => {
+			const { root } = await renderBlock(magmaTitan); // keywords: Earth, Fire, Magic, Ranged, Void
+
+			const chips = kwSpans(root);
+			expect(chips.map((c) => c.textContent)).toEqual(['Earth', 'Fire', 'Magic', 'Ranged', 'Void']);
+			// Unchanged from the pre-SC-231 assertion above: splitting into chips must not
+			// move a single byte of the cell's rendered text (the print/Legacy contract).
+			expect(kwValue(root).textContent).toBe('Earth, Fire, Magic, Ranged, Void');
+		});
+
+		test('a single keyword renders exactly one chip and no separator span', async () => {
+			const { root } = await renderBlock(`type: feature
+feature_type: ability
+name: Solo Keyword
+keywords:
+  - Magic
+`);
+			const chips = kwSpans(root);
+			expect(chips).toHaveLength(1);
+			expect(chips[0].textContent).toBe('Magic');
+			expect(kwValue(root).querySelector('.dse-feature__meta-kw-sep')).toBeNull();
+		});
+
+		test('empty keywords ([]) render no chip spans (no empty chips)', async () => {
+			const { root } = await renderBlock(`type: feature
+feature_type: ability
+name: No Keywords
+keywords: []
+usage: Main action
+`);
+			expect(kwSpans(root)).toHaveLength(0);
+		});
+
+		test('the lone-dash "none" placeholder renders no chip spans either (still --empty, unchanged from the pre-SC-231 behavior)', async () => {
+			const { root } = await renderBlock(`type: feature
+feature_type: ability
+name: Dash Keywords
+keywords:
+  - "-"
+usage: Main action
+`);
+			expect(kwSpans(root)).toHaveLength(0);
+			const cell = root.querySelector('.dse-feature__meta-cell--keywords')!;
+			expect(cell.classList.contains('dse-feature__meta-cell--empty')).toBe(true);
+		});
+
+		test('a keyword that is itself a markdown link still resolves inside its own chip', async () => {
+			const { root } = await renderBlock(`type: feature
+feature_type: ability
+name: Linked Keyword
+keywords:
+  - "[Magic](scc.v1:mcdm.heroes.v1/some-code)"
+  - Ranged
+`);
+			const chips = kwSpans(root);
+			expect(chips).toHaveLength(2);
+			// The test MarkdownRenderer mock appends the raw markdown verbatim (F3 §4.2) —
+			// this only proves the link's raw text reached its OWN chip untouched, not that
+			// it rendered as an <a>; real-Obsidian resolution is the visual-harness's job.
+			expect(chips[0].textContent).toBe('[Magic](scc.v1:mcdm.heroes.v1/some-code)');
+			expect(chips[1].textContent).toBe('Ranged');
+		});
+
+		test('whitespace around a comma and a trailing comma inside one list entry both normalize to clean discrete chips', async () => {
+			// A hand-typed ds-feature fence can put more than one keyword's text in a
+			// single YAML list entry — a comma pasted straight into one item (unlike a
+			// flow-sequence `[A, B,]`, which `yaml` already trims/dedupes for us, a
+			// block-list plain scalar keeps a literal trailing "," verbatim).
+			const { root } = await renderBlock(`type: feature
+feature_type: ability
+name: Messy Keywords
+keywords:
+  - "Attack ,  Weapon,"
+  - Magic
+`);
+			const chips = kwSpans(root);
+			expect(chips.map((c) => c.textContent)).toEqual(['Attack', 'Weapon', 'Magic']);
+		});
+	});
+
 	test('.dse-feature__flavor renders the italic flavor text', async () => {
 		const { root } = await renderBlock(magmaTitan);
 		expect(root.querySelector('.dse-feature__flavor')!.textContent).toContain(
