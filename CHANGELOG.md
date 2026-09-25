@@ -22,6 +22,12 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **The example inserted for a new `ds-feature` block no longer claims to be a villain
+  action while rendering as a main action** (SC-236). The Draw Steel Elements authoring example
+  for a new feature block carried a stray `ability_type: Villain Action 1` line alongside
+  `usage: Main action`; a real usage line always wins, so the card correctly rendered as a main
+  action, but its header still showed a "VILLAIN ACTION 1" chip that contradicted it. That line
+  is now removed — the example matches the shape of a real Malice-cost main action.
 - [FIX] **Rule cards referenced from the compendium now show their rule group above the
   name, instead of always "Rule"** (SC-272). A `ds-rule` reference resolved by compendium
   code (or a `ds-scc` reference that resolves to one) used to print the literal "Rule" as
