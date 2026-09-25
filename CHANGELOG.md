@@ -51,6 +51,12 @@ for what needs action.
   block that starts collapsed now opens with one click on the element menu instead of two,
   since the redundant second header no longer hides the list behind its own closed state.
   Per-group collapse (Crafting, Exploration, ...) is untouched.
+- [FIX] **An ability card's Keywords now draw as one chip per keyword, matching the
+  website, instead of one chip holding the whole comma-separated list** (SC-231). Affects
+  every ability-card surface — standalone `ds-feature` cards, and the ability cards embedded
+  in statblocks and featureblocks — at the default "Chips" keyword display setting. The
+  "Inline text"/"Grid"/"Ledger" keyword display settings, the Legacy text run and printed
+  output are unchanged.
 - [FIX] **The compendium download's zip library is now `fflate`, not JSZip** (SC-328). JSZip's
   legacy-browser polyfills contained dynamic `<script>` element creation, which Obsidian's
   community-plugin review rejects; 7.0.0 also carries forward 6.0.2's three added
