@@ -158,44 +158,17 @@ describe('SC-202 r4 — GROUP 6/7: .internal-link / .external-link companions', 
 	});
 });
 
-describe('SC-317 — GROUP 7 companion: the plugin\'s own external-link icon (v4, fix round 1 — MED-1)', () => {
-	// The companion's own gutter rule uses the IDENTICAL selector text as GROUP 7's own
-	// base rule (`:where(a).external-link {`) — by design, so the cascade falls through to
-	// source order (see the block's own comment). A plain `flat.match` would silently
-	// return GROUP 7's match every time, never the companion's, so this collects BOTH
-	// occurrences and indexes them explicitly.
-	const baseOccurrences = [...flat.matchAll(new RegExp(escape(ANCHOR) + ' :where\\(a\\)\\.external-link \\{([^}]*)\\}', 'g'))];
-	const group7 = baseOccurrences[0];
-	const gutter = baseOccurrences[1];
-	const glyph = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(a\\)\\.external-link::before \\{([^}]*)\\}'));
+describe('SC-317 — GROUP 7 companion: the plugin\'s own external-link icon (fix round 1, MED-1 second pass — inline WORD-JOINER ::after)', () => {
+	const glyph = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(a\\)\\.external-link::after \\{([^}]*)\\}'));
 	const rtl = flat.match(
-		new RegExp('@supports selector\\(:dir\\(rtl\\)\\) \\{ ' + escape(ANCHOR) + ' :where\\(a\\)\\.external-link:dir\\(rtl\\)::before \\{([^}]*)\\}'),
+		new RegExp('@supports selector\\(:dir\\(rtl\\)\\) \\{ ' + escape(ANCHOR) + ' :where\\(a\\)\\.external-link:dir\\(rtl\\)::after \\{([^}]*)\\}'),
 	);
 
-	test('there are exactly two `:where(a).external-link {}` rules: GROUP 7\'s own re-grounding, then this companion\'s gutter', () => {
-		expect(baseOccurrences).toHaveLength(2);
-	});
-
-	test('the gutter rule (padding-inline-end + position) exists, and comes AFTER GROUP 7 in source order', () => {
-		expect(gutter).not.toBeUndefined();
-		expect(gutter![1]).toContain('padding-inline-end: 0.95em;');
-		expect(gutter![1]).toContain('position: relative;');
-		// The cascade contract this whole companion depends on: same selector, same
-		// specificity, same origin — "last declared wins" is the ENTIRE reason the gutter's
-		// 0.95em beats GROUP 7's 0 rather than losing to it. `index` on a matchAll result is
-		// each match's offset into `flat`, so this is a direct position comparison, not an
-		// inference from array order.
-		expect(group7!.index).toBeLessThan(gutter!.index!);
-	});
-
-	test('the glyph rule (::before) exists and is inside the same print-excluded scope as every rule in this block', () => {
-		// FIX ROUND 1 (INFO-3) — the r1 version of this test asserted `ANCHOR` (a constant
-		// defined at the top of this file) contains the print-exclusion clause, which is
-		// tautological: it is true no matter what the SHEET says. This asserts it against
-		// `glyph![0]`, the ACTUAL matched rule text pulled out of `flat` (the real,
-		// currently-live CSS) — so a future edit that moved this rule out from under
-		// `ANCHOR` (e.g. a copy-paste into a differently-scoped block) would show up here as
-		// a real failure, not just as "the match came back null" (already covered above).
+	test('the glyph rule exists and is inside the same print-excluded scope as every rule in this block', () => {
+		// FIX ROUND 1 (INFO-3) — asserted against `glyph![0]`, the ACTUAL matched rule text
+		// pulled out of `flat` (the real, currently-live CSS), not against the `ANCHOR`
+		// constant alone — a future edit that moved this rule out from under `ANCHOR` would
+		// show up here as a real failure, not just as "the match came back null".
 		expect(glyph).not.toBeNull();
 		expect(glyph![0]).toContain(':not([data-dse-print="on"])');
 	});
@@ -207,43 +180,61 @@ describe('SC-317 — GROUP 7 companion: the plugin\'s own external-link icon (v4
 		expect(glyph![1]).not.toMatch(/[^-]filter:/);
 	});
 
-	test('it is not selectable text', () => {
-		expect(glyph![1]).toContain("content: '';");
+	test('it opts out of the ancestor\'s underline and is marked unselectable', () => {
+		// Unlike an atomic (inline-block/absolute) box, a plain `display: inline` pseudo IS a
+		// candidate surface for the ancestor anchor's own `text-decoration-line` paint, so
+		// this rule must say so explicitly — the D3 comment's own point.
+		expect(glyph![1]).toContain('text-decoration: none;');
 		expect(glyph![1]).toContain('user-select: none;');
 		expect(glyph![1]).toContain('-webkit-user-select: none;');
 	});
 
-	// FIX ROUND 1 (MED-1) — orphan regression guard. The r1 shape (`display: inline-block`
-	// glued after the text) measurably orphaned the glyph onto its own line at 16-46 of 401
-	// sampled widths (independent review). v4's fix is exactly "take the glyph out of
-	// normal flow, and reserve its space as the ANCHOR's own padding instead" — so a future
-	// edit that reintroduces `display: inline-block` (even if every other property still
-	// matches) is the one-line regression this ticket's whole fix round exists to prevent.
-	// Asserting `position: absolute` on the glyph AND that the anchor rule (not the glyph)
-	// carries the padding gutter is a direct, cheap proxy for "still airtight," without
-	// needing to re-run the reviewer's own 401-width sweep in CI.
-	test('orphan regression guard: the glyph is absolutely positioned, never inline-block, and the gutter lives in anchor padding, not the pseudo', () => {
-		expect(glyph![1]).toContain('position: absolute;');
+	// FIX ROUND 1 (MED-1, SECOND PASS) — orphan + containing-block regression guard. Two
+	// prior shapes each broke a different way and must never come back:
+	//   - r1 (`display: inline-block`, `content: ''`): an ATOMIC inline box glued after the
+	//     text still gave the browser a genuine soft-wrap opportunity before it — orphaned
+	//     in 16-46 of 401 widths (independent review, round 1).
+	//   - the fix round's FIRST pass ("v4": anchor `padding-inline-end` + an absolutely
+	//     positioned `::before`) fixed that, but an absolutely positioned pseudo whose
+	//     containing block is a MULTI-LINE `position: relative` inline uses the union of all
+	//     that inline's line fragments — verified BROKEN on this plugin's own real
+	//     `perk/links` fixture (two links sharing one wrapping paragraph): the glyph landed
+	//     on top of unrelated text in a later line, not attached to its own anchor's last
+	//     fragment at all (see the CSS comment for the full reproduction).
+	// The shipped shape avoids both failure modes by staying a NORMAL, non-atomic, in-flow
+	// inline pseudo (`display: inline`, never `inline-block`; no `position: absolute`), with
+	// a non-empty zero-width `content` (the WORD JOINER) rather than r1's empty string, and
+	// its own padding (not the anchor's, and not a `margin` on the pseudo) as the reserved
+	// gutter.
+	test('orphan + containing-block regression guard: inline, in-flow, WORD-JOINER content, own padding gutter', () => {
+		expect(glyph![1]).toContain("content: '\\2060';");
+		expect(glyph![1]).toContain('display: inline;');
 		expect(glyph![1]).not.toContain('display: inline-block;');
-		expect(glyph![1]).not.toContain('display:');
-		expect(gutter![1]).toContain('padding-inline-end: 0.95em;');
-		expect(glyph![1]).not.toContain('padding-inline-end:');
-		expect(glyph![1]).not.toContain('margin-inline-start:');
+		// `position:` alone would false-positive on `mask-position`/`-webkit-mask-position`,
+		// both legitimately present — anchor the check to the specific declaration.
+		expect(glyph![1]).not.toMatch(/(?:^|\s)position:/);
+		expect(glyph![1]).toContain('padding-inline-end: 0.8em;');
+		expect(glyph![1]).not.toContain('inset-inline-end:');
 	});
 
 	test('the glyph sizes to D3\'s 0.75-0.85em target', () => {
-		const width = /width: ([\d.]+)em;/.exec(glyph![1]);
-		expect(width).not.toBeNull();
-		const em = Number(width![1]);
+		const size = /mask-size: ([\d.]+)em [\d.]+em;/.exec(glyph![1]);
+		expect(size).not.toBeNull();
+		const em = Number(size![1]);
 		expect(em).toBeGreaterThanOrEqual(0.75);
 		expect(em).toBeLessThanOrEqual(0.85);
 	});
 
-	// INFO-1 (round-1 review) — RTL mirror, one rule, guarded by the same
-	// `@supports selector(:dir(rtl))` feature test Obsidian's own sheet uses.
-	test('the glyph is mirrored under :dir(rtl), guarded by @supports selector(:dir(rtl))', () => {
+	// INFO-1 (round-1 review) — RTL mirror. `transform` has no effect on a non-atomic
+	// `display: inline` box (CSS Transforms only applies to block-level/atomic-inline
+	// "transformable" elements) — which is exactly why D3's fix chose `display: inline` in
+	// the first place — so the mirror swaps the whole mask-image for Obsidian's own
+	// second, pre-mirrored SVG instead of transforming the shared one.
+	test('the glyph is mirrored under :dir(rtl) via a swapped mask-image, guarded by @supports selector(:dir(rtl))', () => {
 		expect(rtl).not.toBeNull();
-		expect(rtl![1]).toContain('transform: scaleX(-1);');
+		expect(rtl![1]).toMatch(/(?:^|\s)mask-image: url\(/);
+		expect(rtl![1]).toMatch(/-webkit-mask-image: url\(/);
+		expect(rtl![1]).not.toContain('transform:');
 	});
 });
 

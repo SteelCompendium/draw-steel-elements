@@ -17299,86 +17299,103 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    steel-dark and steel-light (the pre-existing `.dse-card a` family, ~:7965), and the
    anchor's own `:hover` colour, for free — no separate hover rule needed.
 
-   D3 spacing — FIX ROUND 1 (MED-1), Obsidian's own geometry, not a trailing inline-block:
-   the r1 form (an inline-block `::after` glued straight onto the anchor's own text, no
-   leading whitespace) still gave Chromium a genuine soft-wrap opportunity immediately
-   BEFORE that atomic inline box — an inline-block is its own line-breaking unit regardless
-   of adjoining whitespace. Measured (independent review, round 1): the r1 form orphaned
-   the glyph onto its own line in 16-46 of 401 sampled container widths, across five
-   ordinary texts (plain, hyphenated, parenthesized, CJK) plus a bare URL and the web-card's
-   own copy — not a corner case. Obsidian's own form (`background-image` + `padding-
-   inline-end` directly on the anchor) never orphans, because the padding lives INSIDE the
-   last glyph's own inline box, which the line breaker cannot split off from it. This rule
-   reproduces that exact shape instead: `padding-inline-end: 0.95em` (0.15em gap + 0.8em
-   glyph) reserves the gutter as anchor padding, and the glyph below is drawn on an
-   ABSOLUTELY positioned `::before` — out of normal flow entirely, so it can neither create
-   nor receive a soft-wrap opportunity of its own; it simply sits inside the gutter its
-   own anchor already reserved. Proven airtight: 0 orphans in all 7 texts × 401 widths ×
-   both schemes, including forced `overflow-wrap` emergency breaks (where r1's WORD-JOINER
-   fallback still failed) — matching Obsidian's own form row for row. At rest it renders
-   IDENTICALLY to the r1 form: 0 differing pixels in either scheme in the card-body font
-   (`bottom: 0.25em` is that measurement, not a guess). `position: relative` on the anchor
-   gives the pseudo its containing block.
+   D3 spacing — FIX ROUND 1 (MED-1), corrected in a SECOND pass this same fix round after
+   the first pass (Obsidian's own geometry: anchor `padding-inline-end` + an absolutely
+   positioned `::before`, "v4" in the round-1 review) turned out to carry its OWN, more
+   severe defect, found by implementer verification against this plugin's REAL `perk/links`
+   fixture (two links sharing one paragraph, the first one wrapping across two lines) rather
+   than the review's own isolated single-link probes: an absolutely positioned pseudo whose
+   containing block is a MULTI-LINE (fragmented) `position: relative` inline uses the UNION
+   of all that inline's line fragments as its containing block, not the last fragment alone
+   — so `inset-inline-end: 0` resolved against the union's right edge (line 1's, the widest
+   fragment) while `bottom` resolved against the union's bottom edge (line 2's) and the
+   glyph landed on top of UNRELATED text in the second link's own line, not attached to
+   "entry" at all. Measured and reproduced (`getClientRects()`/`getBoundingClientRect()` on
+   the live fixture): this is a genuine rendering defect on completely ordinary content,
+   not a synthetic edge case — the round-1 review's own orphan sweep never caught it because
+   every probe mounted exactly one isolated link per paragraph, never two links sharing a
+   wrapping paragraph the way this plugin's own fixture (and plenty of real prose) does.
 
-   This rule's own `padding-inline-end: 0.95em` beats GROUP 7's `padding-inline-end: 0`
-   (immediately above) ONLY by source order — both target the identical
-   `:where(a).external-link` selector at the identical (0,3,0) specificity, so the cascade
-   falls through to "last declared wins." `headingEmphasisLinkHostRegrounding.test.ts`
-   pins that ordering directly (never rely on eyeballing a future diff for it) — this rule
-   must never be reordered to sit above GROUP 7 in the file.
+   This rule reverts to the round-1 review's OWN rejected "v1" candidate instead — an
+   INLINE (not inline-block, not absolutely positioned) `::after` carrying a zero-width
+   `content: '\2060'` (U+2060 WORD JOINER), sized and positioned purely by `padding-
+   inline-end`/`mask-position`, never taken out of normal flow. Because it stays a genuine
+   part of the anchor's own inline content — the same flow model plain underlined text
+   uses — it has no containing-block ambiguity of any kind: it renders exactly where normal
+   inline layout puts it, correctly attached to whichever fragment its content actually
+   ends on, single-line or wrapped, verified directly against the same two-link fixture
+   that broke v4. It is airtight against the ORIGINAL r1 defect (independent review's own
+   401-width × 7-text sweep against this exact CSS, reproduced by the implementer:
+   0 orphans in every ordinary text, matching the review's own v1 figures) because a
+   zero-width joiner glued after real text with no intervening whitespace gives the browser
+   no MEANINGFUL break point to insert before the glyph the way an atomic inline-block does.
 
-   Trade-off (measured, not hidden): `bottom: 0.25em` places the glyph relative to the
-   content-area bottom, the same way Obsidian's own `background-position-y` does, so it
-   depends on the active font's descent metrics. Drift against the r1 baseline, measured
-   across four font stacks: 0px in the card-body serif (unsampled fonts elsewhere in the
-   corpus can differ; none of them are exercised by any frozen fixture today).
+   Residual, accepted trade-off (the review's own finding, not hidden): under a forced
+   `overflow-wrap` EMERGENCY break — an unbreakable run (e.g. a bare URL) wider than the
+   whole line, with no ordinary word-break available anywhere — Chromium may still break
+   before the WORD JOINER, orphaning the glyph in roughly 4-6% of narrow widths for that
+   shape of text only (the review's own count: 25 of 401 widths for a bare URL, 16 of 401
+   for the web-card's own copy). This is judged the lesser defect: it needs an extreme,
+   narrow, unbreakable-run condition this plugin's real content rarely produces, and even
+   when it fires the glyph merely starts a new line — it never lands on top of unrelated
+   text the way v4's containing-block bug did. Not yet fixed; a future round could revisit
+   Obsidian's own real mechanism (background-image directly on the anchor, sidestepping
+   pseudo-elements and their containing-block/transformability rules entirely) if this
+   residual ever needs closing.
 
-   `content: ''` — never real text, nothing to select, nothing for `user-select: none` +
-   `-webkit-user-select: none` to actually need to suppress, restated anyway as explicit
-   intent. No `text-decoration: none` is needed: `position: absolute` removes the pseudo
-   from normal flow entirely (CSS Position §3), and a box out of flow is never a candidate
-   surface for an ancestor's `text-decoration-line` paint — unlike r1's in-flow
-   `display: inline-block`, which stayed a normal line box and needed that reasoning (and
-   its own dedicated exclusion) spelled out explicitly.
+   `display: inline` (not `inline-block`) is why `text-decoration: none` is needed here,
+   unlike an atomic box: a normal inline pseudo stays a candidate surface for the
+   ancestor's own `text-decoration-line` paint, so it must opt out explicitly.
+   `vertical-align: baseline` keeps it inline with the surrounding text's own baseline —
+   simpler than r1's tuned offset, since the glyph is no longer sized as its own visible
+   box (the WORD JOINER itself is zero-width; only the mask painted over the reserved
+   padding is visible). `mask-position: 100% 50%` centers the glyph vertically within that
+   padding box and pins it to the trailing edge, mirroring `mask-size: 0.8em 0.8em` against
+   D3's 0.75-0.85em target. `content: '\2060'` is a real (if invisible) character, unlike
+   r1's `content: ''` — `user-select: none` + `-webkit-user-select: none` therefore do
+   actual work here (nothing copies if the surrounding text is selected), not merely
+   restated intent.
 
    D4 screen-only: the same `:not([data-dse-print="on"])` scope as every rule in this
    block. Obsidian's real print sheet already strips ITS OWN icon in print (`.print
-   .external-link { background: none; padding-right: 0; }`, unrelated to this pseudo) —
-   this pseudo-element never renders at all under `data-dse-print="on"` regardless, so the
-   frozen print bytes this ticket must not move stay untouched by construction, not by
-   coincidence — re-verified after the v4 rewrite (`check-freeze.sh`, unchanged). */
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(a).external-link {
-	padding-inline-end: 0.95em;
-	position: relative;
-}
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(a).external-link::before {
-	content: '';
-	position: absolute;
-	inset-inline-end: 0;
-	bottom: 0.25em;
-	width: 0.8em;
-	height: 0.8em;
+   .external-link { background: none }`, unrelated to this pseudo) — this pseudo-element
+   never renders at all under `data-dse-print="on"` regardless, so the frozen print bytes
+   this ticket must not move stay untouched by construction, not by coincidence —
+   re-verified after this rewrite (`check-freeze.sh`, unchanged). */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(a).external-link::after {
+	content: '\2060';
+	display: inline;
+	vertical-align: baseline;
+	text-decoration: none;
+	margin-inline-start: 0.15em;
+	padding-inline-end: 0.8em;
 	background-color: currentColor;
 	mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23888888' stroke-linecap='round' stroke-linejoin='round' stroke-width='9.38%25'%3E%3Cpath d='M14 9 L3 9 3 29 23 29 23 18 M18 4 L28 4 28 14 M28 4 L14 18'/%3E%3C/svg%3E");
 	-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23888888' stroke-linecap='round' stroke-linejoin='round' stroke-width='9.38%25'%3E%3Cpath d='M14 9 L3 9 3 29 23 29 23 18 M18 4 L28 4 28 14 M28 4 L14 18'/%3E%3C/svg%3E");
 	mask-repeat: no-repeat;
 	-webkit-mask-repeat: no-repeat;
-	mask-size: contain;
-	-webkit-mask-size: contain;
+	mask-size: 0.8em 0.8em;
+	-webkit-mask-size: 0.8em 0.8em;
+	mask-position: 100% 50%;
+	-webkit-mask-position: 100% 50%;
 	user-select: none;
 	-webkit-user-select: none;
 }
 /* INFO-1 (round-1 review) — Obsidian mirrors its own glyph under `:dir(rtl)` (a second,
-   horizontally-flipped SVG, `public/images/2308ab1944a6bfa5c5b8.svg`, same provenance as
-   D1's). The plugin's glyph is one path (an arrow pointing up-right); rather than carry a
-   second data URI, mirror it in place — `transform: scaleX(-1)` around the pseudo's own
-   center reads identically to Obsidian's swapped asset for this glyph's point symmetry.
+   horizontally-flipped SVG, extracted the same way as D1's from the SAME Obsidian
+   1.14.2 asar: `public/images/2308ab1944a6bfa5c5b8.svg`, sha256
+   a44ac4cbf79c6765f4bdc3a0dc3fb51b56ed5eb4679177f0a40f04b63b3e3a3c). A `transform` would
+   have been simpler than a second data URI, but CSS Transforms only applies to
+   "transformable" elements (block-level or ATOMIC inline-level boxes) — this pseudo is a
+   plain, non-atomic `display: inline` box (the whole point of D3's fix above), so
+   `transform` would silently no-op on it. The mask-image is swapped wholesale instead.
    `@supports selector(:dir(rtl))` matches Obsidian's own guard for the same rule. No RTL
    fixture exists anywhere in this plugin today — unverified against a real RTL vault,
    included because it is one rule, not because it has been seen to matter yet. */
 @supports selector(:dir(rtl)) {
-	:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(a).external-link:dir(rtl)::before {
-		transform: scaleX(-1);
+	:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(a).external-link:dir(rtl)::after {
+		mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23888' stroke-linecap='round' stroke-linejoin='round' stroke-width='9.38%25'%3E%3Cpath transform='translate(32)%2C scale(-1%2C 1)' d='m14 9h-11v20h20v-11m-5-14h10v10m0-10-14 14'/%3E%3C/svg%3E");
+		-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23888' stroke-linecap='round' stroke-linejoin='round' stroke-width='9.38%25'%3E%3Cpath transform='translate(32)%2C scale(-1%2C 1)' d='m14 9h-11v20h20v-11m-5-14h10v10m0-10-14 14'/%3E%3C/svg%3E");
 	}
 }
 
