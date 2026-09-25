@@ -40,7 +40,9 @@ for what needs action.
   place or cut a block short (SC-343). A click followed at once by switching notes now still saves
   (SC-336). If a save cannot be placed because the block changed on disk first (sync or a hand edit
   inside the save delay), it is dropped and a notice says so: "Draw Steel Elements: a change to a
-  block in <note> was not saved — the block changed on disk first."
+  block in <note> was not saved — the block changed on disk first." Reading-mode blocks now keep
+  their live view across their own saves (SC-340): open dialogs, focus and typed text survive a
+  write.
 - [FIX] **A pinned sidebar panel that showed "Backing block not found" now recovers on its
   own once the block reappears or is edited elsewhere** (SC-288). If the block behind a
   pinned sidebar panel briefly became unaddressable — the note was edited out from under it

@@ -191,7 +191,8 @@ it survives navigating between notes.
   `SidebarBlockHost` records the body it just wrote (`lastWritten`) and a vault `modify`
   event that matches it is treated as **self-echo** and dropped (`host/SidebarBlockHost.ts`
   — "self-echo: our own write, not an external edit") — only a body that differs fires
-  `onUpdate`.
+  `onUpdate`. Reading mode now adopts its own echo too (SC-340): the rebuild caused by a
+  block's own write keeps the live view.
 - **D7 consumer contract (spec §1.9):** any caller — a future hero-sheet element, not
   just the D8 trackers — pins a block the same way: ensure `_dse_anchor` (`ensureAnchor`),
   then `view.addPanel({ filePath, alias, anchorId })`. `sendToSidebar(services, filePath,
