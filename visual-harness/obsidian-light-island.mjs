@@ -161,7 +161,16 @@ export function rewriteAccentSentinelToVar(text) {
  *  colour, never baked to the pinned default — SC-127 r9 MEDIUM-B), and the ready-to-write
  *  block text (including the markers). Exported so both the CLI below and `shoot.mjs`'s
  *  in-run guard call the SAME logic — a guard that re-implements its own generator is
- *  exactly the MEDIUM-2 shape this ticket already fixed once. */
+ *  exactly the MEDIUM-2 shape this ticket already fixed once.
+ *
+ *  Returns BOTH `light` (the formula-preserving text written into the block — what an
+ *  accent-derived token's own var() reference resolves to varies by definition, so this is
+ *  not a single concrete colour) and `lightDefault` (the pinned sheet's `.theme-light`
+ *  resolved at ITS OWN default accent, no override — a concrete value, and the correct
+ *  comparison target for a correctness pass that does not itself override the accent:
+ *  comparing a committed `var(--accent-h)` formula's resolution against the FORMULA text
+ *  `light[t]` would never match, which is a bug this file had for one internal revision —
+ *  SC-127 r9, caught by its own can-fail sweep before commit). */
 export async function generateLightIsland(page, pinnedCss) {
 	const tokenNames = allDeclaredTokenNames(pinnedCss);
 	const dark = await resolveAll(page, pinnedCss, 'theme-dark', tokenNames, ACCENT_SENTINEL_A);
@@ -169,6 +178,8 @@ export async function generateLightIsland(page, pinnedCss) {
 	const lightB = await resolveAll(page, pinnedCss, 'theme-light', tokenNames, ACCENT_SENTINEL_B);
 	const differing = tokenNames.filter((t) => dark[t] !== lightA[t]);
 	const accentDerived = differing.filter((t) => lightA[t] !== lightB[t]);
+	const lightDefaultAll = await resolveAll(page, pinnedCss, 'theme-light', differing);
+	const lightDefault = Object.fromEntries(differing.map((t) => [t, lightDefaultAll[t]]));
 	// The value every differing token is set to in the generated block: sentinel A's
 	// resolution, with the sentinel's own literals rewritten back to var(--accent-h/s/l) —
 	// a no-op for the (differing minus accentDerived) tokens, since the sentinel literals
@@ -185,7 +196,7 @@ export async function generateLightIsland(page, pinnedCss) {
 		'\tscrollbar-color: var(--scrollbar-thumb-bg) var(--scrollbar-bg);',
 	];
 	const text = `${BEGIN_MARKER}\n${HOST_SELECTOR} {\n${lines.join('\n')}\n}\n${END_MARKER}`;
-	return { tokenNames, differing, accentDerived, light, text };
+	return { tokenNames, differing, accentDerived, light, lightDefault, text };
 }
 
 /** Pull the current GENERATED block's text (markers included) out of `sheet`, or `null`
@@ -195,6 +206,45 @@ export function extractCurrentIsland(sheet) {
 	const ei = sheet.indexOf(END_MARKER);
 	if (bi === -1 || ei === -1 || ei < bi) return null;
 	return sheet.slice(bi, ei + END_MARKER.length);
+}
+
+/** Pure comparison helpers for the in-run guard (`shoot.mjs`'s
+ *  `assertSc127LightIslandPinned`) — extracted so they can be jest-tested directly, with no
+ *  browser/page, on deliberately wrong-shaped inputs. SC-127 r9: the guard's first revision
+ *  passed a `light` (formula-text) map where a `lightDefault` (concrete-value) map belonged,
+ *  and a later revision computed `lightDefault` but never returned it from
+ *  `generateLightIsland` at all — so the guard's `targetMap` argument was `undefined` and
+ *  every lookup threw deep inside a 10-minute sweep. Both shapes are exactly what
+ *  `findDriftedTokens` below is jest-tested against, so that failure mode is caught in
+ *  milliseconds, not a sweep. */
+
+/** Tokens in `tokens` that have no `<name>:` declaration anywhere in `blockText`. */
+export function findMissingTokens(tokens, blockText) {
+	return tokens.filter(
+		(t) => !new RegExp(`(?:^|[\\s{;])${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:`).test(blockText),
+	);
+}
+
+/** Tokens in `tokens` whose normalized value in `oursMap` does not equal their normalized
+ *  value in `targetMap`. Throws (does not silently pass) if either map is missing or lacks a
+ *  token entirely — a wrong-shaped/undefined comparison target is a bug in the CALLER, never
+ *  a legitimate "nothing drifted" result. */
+export function findDriftedTokens(tokens, oursMap, targetMap, normalizeFn) {
+	if (!oursMap || !targetMap) {
+		throw new TypeError(
+			`findDriftedTokens: oursMap and targetMap must both be objects (got ${typeof oursMap} and ${typeof targetMap})`,
+		);
+	}
+	const drifted = [];
+	for (const t of tokens) {
+		if (!(t in oursMap) || !(t in targetMap)) {
+			throw new TypeError(`findDriftedTokens: "${t}" is missing from ${!(t in oursMap) ? 'oursMap' : 'targetMap'}`);
+		}
+		const a = normalizeFn(oursMap[t]);
+		const b = normalizeFn(targetMap[t]);
+		if (a !== b) drifted.push({ token: t, ours: a, target: b });
+	}
+	return drifted;
 }
 
 /** The manifest object for a `generateLightIsland` result — sorted keys, so the committed
