@@ -8482,7 +8482,10 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-key {
 	display: inline;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--keywords,
+/* SC-231: `--keywords` dropped out of this group — the cell itself is no longer
+   the chip (see the crest-mode block below, ~4442, for the per-keyword chip that
+   replaces it). `--type` is unaffected: it is still exactly one value, so the box
+   stays on the cell. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--type {
 	display: inline-flex;
 	align-items: baseline;
@@ -8508,9 +8511,55 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 	color: var(--dse-fg-muted);
 	text-align: left;
 }
-body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--keywords,
 body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--type {
 	background: rgba(0, 0, 0, 0.02);
+}
+/* SC-231 — ONE CHIP PER KEYWORD (site parity: steel-ability-cards.css's
+   `.sc-ability__chip`, one per `data.keywords` entry — steel-ability-cards.js:94-96 —
+   vs the single box the cell used to be). Scoped to `[data-dse-kwusage='crest']`
+   deliberately, unlike every other crest-default rule in this file, which is left
+   unguarded and simply overridden by whatever the text/grid/ledger arms below (~4700)
+   reset: for Keywords specifically the site draws a REAL fork, not just a left-over
+   property. `steel-statblock.css`'s own kwUsage arms (330-389) keep the SAME N
+   `.sc-ability__chip` elements in every mode, but crest is the only one that boxes
+   them and hides the separator behind `gap` — text/grid/ledger explicitly strip the
+   chip's border/background/padding AND restore a visible comma via a `::after`
+   pseudo on every chip but the last (`.sc-ability__chip:not(:last-child)::after {
+   content: ",\00a0" }`), because without either a box or a comma the words run
+   together. The plugin already carries a real ", " `.dse-feature__meta-kw-sep` node
+   between spans (renderFeature.ts, kept for LEGACY-FREEZE); un-hiding it is exactly
+   the plugin's version of that `::after` — cheaper, and it needs no `:not(:last-
+   child)` special case since a separator is never emitted before the first chip.
+   Un-scoping any of the three rules below would flex-wrap/box/hide-comma the value
+   in text/grid/ledger too, silently breaking "keywords: chips in crest mode, plain
+   comma text otherwise" for the one grammar family (feature/featureblock/statblock
+   ability cards) this preference was built to cover. */
+[data-dse-theme='steel'][data-dse-kwusage='crest']:not([data-dse-print="on"]) .dse-feature__meta-cell--keywords .dse-feature__meta-value {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+}
+[data-dse-theme='steel'][data-dse-kwusage='crest']:not([data-dse-print="on"]) .dse-feature__meta-kw {
+	display: inline-flex;
+	align-items: baseline;
+	padding: 0.1em 0.75rem;
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: var(--dse-radius);
+	/* same SC-117 B4 white-wash reasoning as the Type chip above — this IS that
+	   same chip recipe, just moved from the cell onto each keyword span. */
+	background: rgba(255, 255, 255, 0.02);
+	font-size: var(--dse-fs-subheading);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.04em;
+	color: var(--dse-fg-muted);
+}
+body.theme-light [data-dse-theme='steel'][data-dse-kwusage='crest']:not([data-dse-print="on"]) .dse-feature__meta-kw {
+	background: rgba(0, 0, 0, 0.02);
+}
+[data-dse-theme='steel'][data-dse-kwusage='crest']:not([data-dse-print="on"]) .dse-feature__meta-kw-sep {
+	display: none;
 }
 /* SC-117 fix wave L2 — the review's one surviving instance of the ticket's own defect
    (audit open item #4, upgraded from "unknown" to "defect awaiting a value"): the base

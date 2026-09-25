@@ -368,13 +368,17 @@ export function renderFeature(
 		// SC-231: `parts`, when given, renders the value as one child span per
 		// discrete keyword — each individually markdown-rendered (so a keyword that
 		// is itself a markdown link still resolves) — with the literal ", "
-		// separator kept as a plain TEXT NODE between them. That keeps the cell's
-		// `textContent` byte-identical to the old single joined-and-rendered node
-		// (LEGACY-FREEZE: Legacy/print never reveal the per-keyword `.dse-feature
-		// __meta-kw` span or the `dse-md-inline` `<p>` it wraps as anything but
-		// inline running text — see styles-source.css ~4335), while Steel-screen
-		// CSS can box each `.dse-feature__meta-kw` as its own chip and hide the
-		// separators behind the flex row's own gap.
+		// separator kept as its own `.dse-feature__meta-kw-sep` span between them
+		// (not a bare text node) so Steel can `display: none` exactly the
+		// separators and nothing else — a bare text node would still generate an
+		// anonymous flex item once the value span turns into a flex row, doubling
+		// the visual gap between every pair of chips. Either shape keeps the
+		// cell's `textContent` byte-identical to the old single joined-and-
+		// rendered node (LEGACY-FREEZE: Legacy/print never reveal the per-keyword
+		// `.dse-feature__meta-kw`/`-kw-sep` spans or the `dse-md-inline` `<p>` a
+		// chip wraps as anything but inline running text — see styles-source.css
+		// ~4335), while Steel-screen CSS boxes each `.dse-feature__meta-kw` as
+		// its own chip and packs them with the flex row's own gap.
 		const cell = (
 			modifier: string,
 			label: string,
@@ -392,7 +396,7 @@ export function renderFeature(
 			const valueEl = cellEl.createSpan({ cls: 'dse-feature__meta-value' });
 			if (parts && parts.length > 0) {
 				parts.forEach((part, i) => {
-					if (i > 0) valueEl.appendText(', ');
+					if (i > 0) valueEl.createSpan({ cls: 'dse-feature__meta-kw-sep', text: ', ' });
 					md(part, valueEl.createSpan({ cls: 'dse-feature__meta-kw' }), true);
 				});
 			} else {
