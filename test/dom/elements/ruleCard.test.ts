@@ -266,47 +266,42 @@ describe('SC-120 Batch C round-3 review MED-1 / owner ruling 10: eyebrow suppres
 	});
 });
 
-// SC-272 fix round 2 (review HIGH-1) — the eyebrow's group humanization must match the
-// site's OWN humanization (steel-etl cards.go's `ruleCard` / build.go's `dirToTitle`), not
-// just plain title-casing: `dirToTitle` checks a general `typeTitles` override map
-// (`build.go:1412`) before falling back to title-casing. Round 1 mirrored only the two
-// entries that collided with the corpus at the time (`monster`/`treasure`) and missed a
-// THIRD real collision — `negotiation` -> "Negotiations" (7 corpus files) — which this
-// suite used to pin as the WRONG value ("Negotiation", singular) under the "non-overridden
-// control" label. `humanizeRuleGroup` (displayFamily.ts) now mirrors the site's map in
-// full (21 of its 22 entries — `rule` itself is deliberately excluded, see that file's
-// comment), so this suite uses `rule.dice` (a group with no `typeTitles` entry at all) as
-// the actual non-overridden control instead.
-describe('SC-272: rule-group humanization matches the site\'s dirToTitle, including its plural overrides', () => {
-	test('"rule.monster" group -> "Monsters" (plural, site\'s typeTitles override), not "Monster"', () => {
+// SC-272 fix round 3 (Scott's ruling, decisions.md 2026-09-25) — the plugin's rule-group
+// eyebrow is now plain SINGULAR title-casing for every group, deliberately NOT the site's
+// `typeTitles` plural overrides that rounds 1-2 chased (`monster`->"Monsters",
+// `treasure`->"Treasures", `negotiation`->"Negotiations"): Scott ruled the plugin should
+// show the singular group name and asked for a steel-etl ticket to reconsider the site's
+// own rule-tile pluralization instead — filed as SC-369 (out of scope here). No override
+// map exists any more (`humanizeRuleGroup`, displayFamily.ts, is now a thin alias for
+// `titleCase`); this suite pins the singulars round 1/2 could not (they were chasing a
+// site behavior Scott has since overridden).
+describe('SC-272: rule-group humanization is plain singular title-casing (Scott\'s ruling, round 3 — steel-etl SC-369 tracks the site\'s own plural)', () => {
+	test('"rule.monster" group -> "Monster" (singular — NOT the site\'s plural "Monsters")', () => {
 		const model: GenericNote = { name: 'Swarm', type: 'rule.monster', body: 'x' };
-		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe('Monsters');
+		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe('Monster');
 	});
 
-	test('"rule.treasure" group -> "Treasures" (plural, site\'s typeTitles override), not "Treasure"', () => {
+	test('"rule.treasure" group -> "Treasure" (singular — NOT the site\'s plural "Treasures")', () => {
 		const model: GenericNote = { name: 'Item Level', type: 'rule.treasure', body: 'x' };
-		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe('Treasures');
+		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe('Treasure');
 	});
 
-	// SC-272 fix round 2 (review HIGH-1) — the collision round 1 missed: steel-etl's site
-	// prints "Negotiations" (plural) on all 7 real `rule.negotiation` corpus tiles
-	// (v2/docs/Browse/rule/negotiation/index.md), not "Negotiation".
-	test('"rule.negotiation" group -> "Negotiations" (plural, site\'s typeTitles override), not "Negotiation"', () => {
+	test('"rule.negotiation" group -> "Negotiation" (singular — NOT the site\'s plural "Negotiations")', () => {
 		const model: GenericNote = { name: 'Motivation', type: 'rule.negotiation', body: 'x' };
-		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe('Negotiations');
+		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe('Negotiation');
 	});
 
-	test('an ordinary (non-overridden) group is plain title-cased — "rule.dice" -> "Dice"', () => {
+	test('an ordinary group (no plural either way) is plain title-cased — "rule.dice" -> "Dice"', () => {
 		const model: GenericNote = { name: 'Power Roll', type: 'rule.dice', body: 'x' };
 		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe('Dice');
 	});
 
-	// SC-272 fix round 2 (review HIGH-1, "add a table test pinning all 16 corpus groups") —
-	// every distinct `rule.<group>` scc segment in the real corpus
-	// (data/data-unified/en/unified/md-dse/rule/*, 163 files, verified 2026-09-24) against
-	// the site's own label for that group's tile (steel-etl's generated
-	// v2/docs/Browse/rule/<group>/index.md card headings). Guards the whole map at once,
-	// not just the two/three entries that happened to be caught by hand so far.
+	// Every distinct `rule.<group>` scc segment in the real corpus
+	// (data/data-unified/en/unified/md-dse/rule/*, 163 files, verified 2026-09-24), pinned
+	// to its plain singular title-cased label — round 2's table pinned these against the
+	// SITE's plural labels for monster/treasure/negotiation; round 3 flips exactly those
+	// three to Scott's singular ruling, the other 13 rows are unchanged (they were never
+	// plural on either side).
 	test.each<[string, string]>([
 		['character', 'Character'],
 		['combat', 'Combat'],
@@ -316,16 +311,16 @@ describe('SC-272: rule-group humanization matches the site\'s dirToTitle, includ
 		['general', 'General'],
 		['health', 'Health'],
 		['keyword', 'Keyword'],
-		['monster', 'Monsters'],
-		['negotiation', 'Negotiations'],
+		['monster', 'Monster'],
+		['negotiation', 'Negotiation'],
 		['organization', 'Organization'],
 		['resource', 'Resource'],
 		['role', 'Role'],
 		['test', 'Test'],
-		['treasure', 'Treasures'],
+		['treasure', 'Treasure'],
 		['world', 'World'],
-	])('corpus group "rule.%s" -> site label %j', (group, siteLabel) => {
-		const model: GenericNote = { name: `${siteLabel} Example`, type: `rule.${group}`, body: 'x' };
-		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe(siteLabel);
+	])('corpus group "rule.%s" -> plugin label %j (singular)', (group, label) => {
+		const model: GenericNote = { name: `${label} Example`, type: `rule.${group}`, body: 'x' };
+		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe(label);
 	});
 });

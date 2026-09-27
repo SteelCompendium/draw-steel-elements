@@ -107,57 +107,30 @@ export function displayFamily<M>(d: DisplayFamilyDescriptor<M>): ReferenceElemen
 // duplicate as its own `humanizeType` — consolidated round-3 review LOW-2, shared with
 // perk's eyebrow (layouts.ts).
 
-// SC-272 fix round 2 (review HIGH-1) -- steel-etl's `dirToTitle()` (cards.go/build.go) is
-// the site's general directory->title humanizer for EVERY index section, not a rule-
-// specific one, and it checks a `typeTitles` override map (`build.go:1412`) before falling
-// back to plain title-casing. round 1 mirrored only the two entries that collided with the
-// real rule-group corpus at the time (`monster`/`treasure`) -- the review caught a THIRD,
-// real-corpus collision this subset missed (`negotiation` -> "Negotiations", 7 files) and
-// pointed out that any FUTURE rule-group segment could collide with any of the map's other
-// entries too. Mirrored here in FULL (verbatim values, `build.go:1412-1435`) so this can
-// never drift again the same way, with exactly one deliberate omission:
+// SC-272 fix round 3 (Scott's ruling, decisions.md 2026-09-25: "I think it should be
+// singular. Go ahead and make that change and file the ticket for steel-etl") -- rounds 1
+// and 2 chased matching the site's rule-tile label byte-for-byte, including its
+// `typeTitles` override map (`build.go:1412`), which pluralizes three of the real corpus's
+// 16 rule groups (`monster`->"Monsters", `treasure`->"Treasures",
+// `negotiation`->"Negotiations") because the site's rule tile reuses the landing-page
+// title map rather than having its own. Scott ruled the PLUGIN should show the singular
+// group name instead (`monster`->"Monster", etc.) and asked for a steel-etl ticket to
+// consider making the SITE's rule tile singular too -- filed as **SC-369** (steel-etl,
+// out of scope here; do not touch steel-etl from this worktree).
 //
-// `typeTitles["rule"]` = "Rules" is itself excluded. It exists on the site for the TOP-
-// LEVEL "Rules" index page's own nav title (`dirToTitle("rule")`, the `rule/` directory
-// itself) -- never for a per-tile GROUP label, because "rule" is the parent directory, not
-// a leaf group; no real rule-group segment can ever literally equal "rule". But
-// `humanizeRuleGroup` below is also what the FALLBACK paths route through (no `scc:`, a
-// malformed code, a bare `rule` scc segment -- typeAdapters.ts's `sccTypeSegment`), and
-// every one of those hands this function the literal string `"rule"` on purpose, expecting
-// the singular "Rule" eyebrow the ticket's brief pins. Including this entry verbatim would
-// silently turn every one of those fallbacks into the plural "Rules" -- so it stays out,
-// on purpose, and `titleCase("rule")` (the map-miss path) supplies the correct singular.
-const RULE_GROUP_TITLE_OVERRIDES: Record<string, string> = {
-	ancestry: 'Ancestries',
-	career: 'Careers',
-	chapter: 'Chapters',
-	class: 'Classes',
-	complication: 'Complications',
-	condition: 'Conditions',
-	culture: 'Cultures',
-	feature: 'Features',
-	kit: 'Kits',
-	perk: 'Perks',
-	skill: 'Skills',
-	title: 'Titles',
-	treasure: 'Treasures',
-	ability: 'Abilities',
-	trait: 'Traits',
-	// "rule": "Rules" deliberately omitted -- see the comment above.
-	monster: 'Monsters',
-	negotiation: 'Negotiations',
-	religion: 'Gods & Religion',
-	god: 'Gods',
-	saint: 'Saints',
-	project: 'Downtime Projects',
-};
-
-/** Humanizes one rule-group segment (the `scc:` type's last dot-segment, or the bare
- *  frontmatter `type:` in the fallback/inline cases) the way the site's `dirToTitle` does
- *  for the matching `rule/<group>/` directory: the override map above, else plain
- *  `titleCase`. */
+// The plugin therefore no longer mirrors ANY part of `typeTitles`: every one of the real
+// corpus's 16 rule-group segments (character, combat, damage, dice, downtime, general,
+// health, keyword, monster, negotiation, organization, resource, role, test, treasure,
+// world -- verified against data/data-unified/en/unified/md-dse/rule/*, all single words,
+// no hyphens) is already correctly singular under plain `titleCase`, so no override map is
+// needed at all -- `humanizeRuleGroup` below is now a thin, self-documenting alias for
+// `titleCase`, kept as a named function (rather than calling `titleCase` directly from the
+// eyebrow) so this history stays attached to the one call site that needs it. `titleCase`
+// also still supplies the correct singular "Rule" for every fallback path (no `scc:`, a
+// malformed code, a bare `rule` scc segment -- typeAdapters.ts's `sccTypeSegment`), which
+// hands this function the literal string `"rule"` on purpose.
 function humanizeRuleGroup(segment: string): string {
-	return RULE_GROUP_TITLE_OVERRIDES[segment] ?? titleCase(segment);
+	return titleCase(segment);
 }
 
 // Exported (SC-120 Batch C) so test/unit/kit/crestIconValidity.test.ts can enumerate this
@@ -184,8 +157,9 @@ export const genericLayout: CardLayout<GenericNote> = {
 	// typeAdapters.ts's `genericNoteAdapter` — e.g. "rule.combat"), or still the bare
 	// frontmatter `type:` when `scc:` is missing/malformed/itself bare, and the site types
 	// its tile by the GROUP DIRECTORY (`ruleCard`/`dirToTitle`, cards.go/build.go) — ported
-	// here as the type key's LAST dot-segment, humanized the site's way
-	// (`humanizeRuleGroup` above, incl. its `typeTitles` plural overrides).
+	// here as the type key's LAST dot-segment, humanized (`humanizeRuleGroup` above). Round
+	// 3 (Scott's ruling): plain singular title-casing, NOT the site's `typeTitles` plural
+	// overrides — the site's own pluralization is tracked separately, steel-etl SC-369.
 	//
 	// Round-3 review MED-1 / owner ruling 10 — SC-272 closed the gap this comment used to
 	// flag (GenericNote.type was always the bare frontmatter value, so the humanized last
