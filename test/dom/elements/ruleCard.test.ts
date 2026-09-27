@@ -147,7 +147,12 @@ describe('D6 Task 8: ds-rule by-SCC reference (spec §1, §2.3, §3)', () => {
 		// 'combat' -> humanized 'Combat', typeAdapters.ts's `genericNoteAdapter` +
 		// displayFamily.ts's `humanizeRuleGroup`) — matching the site's own rule-tile label
 		// for this same fixture (`ruleCard`/`dirToTitle`, cards.go/build.go: the file lives
-		// under `rule/combat/`). It does NOT equal the title ('Opportunity Attacks'), so
+		// under `rule/combat/`) — true for "combat" specifically, NOT a general claim: the
+		// site pluralizes three groups (monster/treasure/negotiation) via its `typeTitles`
+		// map, and round 3 (Scott's ruling) deliberately keeps the plugin singular for those
+		// three instead of matching the site — see SC-369 (steel-etl, tracks the site's own
+		// pluralization) and the SC-272 round-3 `describe` block below. It does NOT equal
+		// the title ('Opportunity Attacks'), so
 		// owner ruling 10's duplicate-title guard does not fire and the eyebrow renders
 		// (renderSteel() never calls `layout.badges` — the base branch's type pill is still
 		// gone regardless). Pre-SC-272 this line read 'Rule' — GenericNote.type carried only
