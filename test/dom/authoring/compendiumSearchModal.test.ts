@@ -487,16 +487,27 @@ describe('compendiumInsert action functions (spec §4.3)', () => {
 //
 // It was not. The SDK DTOs carry a `metadata` slot that steel-etl fills with provenance
 // (`scc`/`source`) and, for a feature, a MIRROR of the whole entry — name, effects, flavor,
-// target, action type. Nothing on the render path reads it, so a user who edited a value
+// target, action type. Nothing on the render path read it, so a user who edited a value
 // under `metadata:` saw the card not change: a silent-edit trap in the one feature whose
 // purpose is "take it and edit it".
 //
+// SC-232 W1/W8 (round 8a) narrowed that claim: `renderFeature.ts`'s `leftDeckOf`/
+// `kindNounOf` now read six `metadata` subkeys (`ancestry`/`class`/`kit`/`subclass`/
+// `feature_source`/`type`) for the cardHead left-deck provenance line and the "Feature"
+// kind-noun — so for the FEATURE family only, `compendiumInsert.ts`'s `trimSnapshotDTO`
+// now keeps a metadata sub-object holding exactly those six keys, dropping the rest (the
+// bulk name/effects/flavor/… mirror is still dead weight and still dropped). Statblock and
+// featureblock are unaffected — neither element ever reads `.metadata` — and still carry
+// no `metadata:` block at all.
+//
 // Driven over the real corpus bytes for all three snapshottable families, and deliberately
 // asserting the contract in both directions:
-//   1. `metadata` is gone (and the fixture really had one, so the assertion can't go
-//      vacuous when a fixture is refreshed);
-//   2. putting it BACK renders byte-identical DOM — the proof that what was removed is
-//      render-inert rather than merely unwanted;
+//   1. `metadata` is gone for statblock/featureblock, and NARROWED (not gone) for feature
+//      (and the fixture really had a full one, so the assertion can't go vacuous when a
+//      fixture is refreshed);
+//   2. putting the FULL metadata back renders byte-identical DOM — the proof that what
+//      was trimmed away (beyond the six kept keys) is render-inert rather than merely
+//      unwanted;
 //   3. removing any OTHER surviving top-level key DOES change the DOM — the proof that
 //      nothing render-live was removed, and that no new inert field can slip in later.
 describe('SC-165 — the snapshot body is trimmed to the fields the renderer reads', () => {
@@ -561,16 +572,37 @@ describe('SC-165 — the snapshot body is trimmed to the fields the renderer rea
 		return root.innerHTML.replace(/dse-pr-\d+-head/g, 'dse-pr-N-head');
 	}
 
+	// SC-232 W1/W8: `metadata` is no longer a clean drop for the FEATURE family — see the
+	// describe-block comment above. `FEATURE_METADATA_RENDER_KEYS` below is a literal copy
+	// of `compendiumInsert.ts`'s own list, same convention as `SNAPSHOT_CASES`'
+	// `['type', 'feature_type']` constants above (this suite pins the CONTRACT, not an
+	// import of the implementation's private const).
+	const FEATURE_METADATA_RENDER_KEYS = ['ancestry', 'class', 'kit', 'subclass', 'feature_source', 'type'];
+
 	test.each(SNAPSHOT_CASES)(
-		'%s: the snapshot carries no metadata: block, though the synced entry does',
-		async (_family, _element, code, rel) => {
+		'%s: the snapshot carries no metadata: block (feature: a NARROWED one, six render-relevant keys only), though the synced entry\'s is the full mirror',
+		async (family, _element, code, rel) => {
 			const { body, parsed, content } = await snapshot(code, rel);
-			expect(parsed.metadata).toBeUndefined();
-			expect(body).not.toMatch(/^metadata:/m);
-			// Can't-go-vacuous guard: the SOURCE really does ship one, so this suite is
-			// asserting a trim, not the absence of a field that was never there.
 			const source = parseYaml(extractDsBlockText(content)) as Record<string, unknown>;
+			// Can't-go-vacuous guard: the SOURCE really does ship a (full) metadata block,
+			// for every family — this suite asserts a trim, not the absence of a field that
+			// was never there.
 			expect(source.metadata).toBeDefined();
+
+			if (family === 'feature') {
+				const metadata = parsed.metadata as Record<string, unknown> | undefined;
+				expect(metadata).toBeDefined();
+				expect(body).toMatch(/^metadata:/m);
+				// Narrowed, not the full mirror: every surviving key is one of the six, and
+				// none of the bulk dead-copy fields (name/effects/flavor/…) survived.
+				for (const key of Object.keys(metadata!)) {
+					expect(FEATURE_METADATA_RENDER_KEYS).toContain(key);
+				}
+				expect(Object.keys(metadata!).length).toBeLessThan(Object.keys(source.metadata as object).length);
+			} else {
+				expect(parsed.metadata).toBeUndefined();
+				expect(body).not.toMatch(/^metadata:/m);
+			}
 		},
 	);
 
