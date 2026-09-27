@@ -16,6 +16,7 @@ import {
 	levelOf,
 	normalizeSignatureWording,
 	rightPrimaryOf,
+	usageLabelOf,
 } from '../../../src/elements/feature/renderFeature';
 import { FeatureConfig } from '@model/FeatureConfig';
 
@@ -355,5 +356,48 @@ feature_type: ability
 name: Bare Ability
 `);
 		expect(rightPrimaryOf(config)).toBeUndefined();
+	});
+});
+
+describe('SC-232 round 10 fix (r9 review LOW-2): usageLabelOf — the site\'s action/usage label mapping', () => {
+	test('"free" + "trigger" (both) -> "Free Triggered Action" (checked before "trigger" alone)', () => {
+		expect(usageLabelOf('Free triggered')).toBe('Free Triggered Action');
+		expect(usageLabelOf('free trigger')).toBe('Free Triggered Action');
+	});
+
+	test('"trigger" alone -> "Triggered Action"', () => {
+		expect(usageLabelOf('Triggered')).toBe('Triggered Action');
+	});
+
+	test('"maneuver" -> "Maneuver"', () => {
+		expect(usageLabelOf('Maneuver')).toBe('Maneuver');
+		expect(usageLabelOf('Free maneuver')).toBe('Maneuver');
+	});
+
+	test('"move" -> "Move Action"', () => {
+		expect(usageLabelOf('Move')).toBe('Move Action');
+	});
+
+	test('"main" -> "Main Action"', () => {
+		expect(usageLabelOf('Main action')).toBe('Main Action');
+	});
+
+	test('"free" (without "trigger") or "no action" -> "No Action"', () => {
+		expect(usageLabelOf('Free')).toBe('No Action');
+		expect(usageLabelOf('No action')).toBe('No Action');
+	});
+
+	test('a markdown-linked raw value still matches by substring on the link TEXT, and the result is plain text — never a link', () => {
+		const raw = '[Maneuver](scc.v1:mcdm.heroes.v1/rule.combat/turn)';
+		expect(usageLabelOf(raw)).toBe('Maneuver');
+	});
+
+	test('an unrecognized non-empty value falls back to plain-text title-case (markdown stripped)', () => {
+		expect(usageLabelOf('[Something Else](scc.v1:some/path)')).toBe('Something Else');
+	});
+
+	test('empty falls back to "Main Action" (matching the site\'s own default branch — unreachable in practice, since callers only invoke this when usage is truthy)', () => {
+		expect(usageLabelOf('')).toBe('Main Action');
+		expect(usageLabelOf('   ')).toBe('Main Action');
 	});
 });

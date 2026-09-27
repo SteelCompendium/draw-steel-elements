@@ -41,6 +41,7 @@ import type { Effect } from 'steel-compendium-sdk';
 import { cardHead, powerRollPanel } from '@/framework/kit';
 import type { PowerRollRow, RenderMdCallback } from '@/framework/kit';
 import { FeatureConfig } from '@model/FeatureConfig';
+import { stripInlineMarkdown } from '@/elements/shared/CardLayout';
 import { attachRollControls } from './rollController';
 import type { FeatureRollHooks } from './rollController';
 
@@ -203,6 +204,27 @@ export interface RenderFeatureOptions {
 	 *  which already carries `metadata.kit` and needs no fallback — SC-232 W1 handles
 	 *  that path already). Only `layouts.ts`'s `kitLayout` sets this. */
 	leftDeckFallback?: string;
+	/**
+	 * SC-232 round 10 fix (r9 review HIGH-1): opt-in for `usage` to render in the
+	 * cardHead right-deck chip (round 8b W7) instead of the meta band's "Type" cell.
+	 * Round 8b gated this on `!opts.featBlockIcon`, which wrongly swept in every
+	 * STATBLOCK sub-feature too (`statblock/view.ts` never sets `featBlockIcon` —
+	 * that flag is featureblock-only) — the site deliberately keeps usage OUT of a
+	 * statblock ability's head (`statblock_card.go:134-138`: "The action TYPE
+	 * (usage) is deliberately NOT in the head; it reads in the keyword/action block
+	 * below"), so every statblock ability grew an extra chip no site page has.
+	 *
+	 * Explicit opt-in, set only by the two callers the survey/brief actually meant:
+	 * the standalone Feature element (`feature/view.ts`, which also covers a by-SCC
+	 * kit signature ability's nested `ds-feature` fence — Obsidian's own markdown
+	 * renderer mounts that fence through this SAME standalone view) and
+	 * `layouts.ts`'s inline kit-signature render. Every `renderFeatureList` caller
+	 * that does NOT set it (statblock sub-features, featureblock options) keeps
+	 * today's meta "Type" cell and mounts no right-deck usage chip — restoring the
+	 * pre-round-8b statblock behavior exactly, while keeping W7 for the two
+	 * families it was actually measured against.
+	 */
+	usageInHead?: boolean;
 }
 
 /**
@@ -435,6 +457,33 @@ export function normalizeSignatureWording(value: string): string {
 }
 
 /**
+ * SC-232 round 10 fix (r9 review LOW-2): the site's own action/usage label mapping,
+ * ported from steel-etl's `actionInfo` (`ability_cards.go:88-110`). Matched by
+ * case-insensitive SUBSTRING, not exact equality — the site's own `Contains` checks
+ * on a lowercased value, which is why a markdown-linked raw usage
+ * ("[Maneuver](scc.v1:mcdm.heroes.v1/rule.combat/turn)", ~485 of ~620 real corpus
+ * values per the review's corpus scan) still matches "maneuver" as a substring of
+ * the link TEXT, unmodified — the chip only ever needs stripping for the untranslated
+ * fallback branch, so the result is ALWAYS plain text, never a link (matching the
+ * site's own chip, which paints a literal label, never the raw field).
+ *
+ * Branch order matters and is copied verbatim: "free" + "trigger" (both) before
+ * "trigger" alone, so "Free Triggered" doesn't fall into the plain "Triggered"
+ * branch.
+ */
+export function usageLabelOf(rawUsage: string): string {
+	const a = rawUsage.trim().toLowerCase();
+	if (a.includes('free') && a.includes('trigger')) return 'Free Triggered Action';
+	if (a.includes('trigger')) return 'Triggered Action';
+	if (a.includes('maneuver')) return 'Maneuver';
+	if (a.includes('move')) return 'Move Action';
+	if (a.includes('main')) return 'Main Action';
+	if (a.includes('free') || a.includes('no action')) return 'No Action';
+	if (a) return titleCaseSlug(stripInlineMarkdown(rawUsage.trim()));
+	return 'Main Action';
+}
+
+/**
  * SC-232 round 8b item 1 (W3, r7 survey d1/d3/b10): the cardHead right-primary value —
  * ONE slot, a priority chain, matching the site's own single-slot placement
  * (`ability_cards.go`'s cost mini, `statblock_page.go`'s sub-feature parenthetical
@@ -558,18 +607,28 @@ export function renderFeature(
 	// `.dse-feature .dse-head__deck--left` rule at the top of styles-source.css) and
 	// Steel reveals + styles it (SC-232 rule group).
 	//
-	// SC-232 round 8b: rightEyebrow = `levelOf` (item 2, W2 — "Level N", metadata-driven);
+	// SC-232 round 8b: rightEyebrow = `levelOf` (item 2, W2 — "Level N", metadata-driven),
+	// falling back to a cost-displaced `ability_type` (round 10 fix, LOW-3, below);
 	// rightPrimary = `rightPrimaryOf` (item 1, W3 — cost / signature-fallback /
 	// ability_type, ONE slot, a priority chain, item 6's wording normalization folded in);
-	// rightDeck = `usage` (item 3, W7), EXCEPT inside a featureblock, which keeps its own
-	// cost/ability_type display (unaffected by items 1-3 at the JS level; only its CSS
-	// re-lane simplifies — see styles-source.css) and today's meta "Type" chip instead of
-	// a head rightDeck slot. Neither slot invents wording the SDK data doesn't already
-	// imply.
-	const rightEyebrowText = levelOf(config);
+	// rightDeck = the site's own usage LABEL (`usageLabelOf`, round 10 fix LOW-2), only
+	// when `opts.usageInHead` (round 10 fix HIGH-1 — see that option's own doc comment:
+	// the standalone Feature element and a synced kit signature ability opt in; a
+	// statblock sub-feature or a featureblock option does not, and keeps today's meta
+	// "Type" chip instead of a head rightDeck slot). Neither slot invents wording the SDK
+	// data doesn't already imply.
 	const rightPrimaryText = rightPrimaryOf(config);
+	// LOW-3: `ability_type` "vanishes" only in the one case where `cost` beat it to the
+	// right-primary slot — every other case already shows it (rightPrimaryOf's own
+	// fallback, or it never existed). The site never lets a villain/signature descriptor
+	// disappear just because a cost is ALSO present.
+	const displacedAbilityTypeText =
+		feature.cost && feature.ability_type ? normalizeSignatureWording(feature.ability_type.trim()) : undefined;
+	const rightEyebrowText = levelOf(config) ?? displacedAbilityTypeText;
 	const rightDeckText =
-		!opts.featBlockIcon && feature.usage && !isDashPlaceholder(feature.usage) ? feature.usage.trim() : undefined;
+		opts.usageInHead && feature.usage && !isDashPlaceholder(feature.usage)
+			? usageLabelOf(feature.usage)
+			: undefined;
 	if (feature.name || rightEyebrowText || rightPrimaryText || rightDeckText) {
 		// SC-10 Task 5: inside a featureblock, the SDK's own icon glyph (if any)
 		// REPLACES the act-based crest entirely (site parity — see the option
@@ -610,13 +669,14 @@ export function renderFeature(
 	// §3.6 target shows them); the Legacy base HIDES the key spans so today's
 	// label-less look is unchanged until D3's Steel layer reveals them.
 	//
-	// SC-232 round 8b item 3 (W7): `usage` no longer feeds the "Type" meta chip for a
-	// standalone feature or kit signature — it moved to the cardHead right-deck slot
-	// above (the duplicated meta chip the survey's b3/b9 flagged). A featureblock
-	// option KEEPS its "Type" meta chip unchanged ("featureblock options keep today's
-	// lanes" — the brief's own words); `!opts.featBlockIcon` is the same flag the head
-	// block above already gates `rightDeckText` on.
-	if (feature.keywords || (opts.featBlockIcon && feature.usage) || feature.distance || feature.target) {
+	// SC-232 round 8b item 3 (W7), corrected round 10 (r9 review HIGH-1): `usage` only
+	// leaves the "Type" meta chip for the cardHead right-deck slot above when
+	// `opts.usageInHead` opts in (the standalone Feature element and a synced kit
+	// signature ability — see that option's own doc comment). A statblock sub-feature
+	// or a featureblock option KEEPS its "Type" meta chip unchanged — round 8b wrongly
+	// swept every statblock ability into the head-usage treatment by gating on
+	// `!opts.featBlockIcon`, a featureblock-only flag statblock never sets.
+	if (feature.keywords || (!opts.usageInHead && feature.usage) || feature.distance || feature.target) {
 		const metaEl = rootEl.createDiv({ cls: 'dse-feature__meta' });
 		// SC-121 B-1: the meta region is TWO bands, matching the site's ability card
 		// (steel-ability-cards.css): a wrapping chip row (.sc-ability__kw — Keywords,
@@ -680,7 +740,7 @@ export function renderFeature(
 			const kwEmpty = keywords.length === 0 || keywords.every(isEmptyValue);
 			cell('keywords', 'Keywords', keywords.length > 0 ? keywords.join(', ') : '', 'chips', kwEmpty, !kwEmpty);
 		}
-		if (opts.featBlockIcon && feature.usage) cell('type', 'Type', feature.usage, 'chips', isEmptyValue(feature.usage));
+		if (!opts.usageInHead && feature.usage) cell('type', 'Type', feature.usage, 'chips', isEmptyValue(feature.usage));
 		if (feature.distance) cell('distance', 'Distance', feature.distance, 'rail');
 		if (feature.target) cell('target', 'Target', feature.target, 'rail');
 	}

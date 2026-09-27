@@ -354,6 +354,11 @@ export const kitLayout: CardLayout<Kit> = {
 						// signature-ability card shows the kit name here, ability_cards.go:322-327).
 						renderFeatureList(container, FeatureConfig.allFrom([m.signature_ability!]), owner, renderMarkdown, {
 							leftDeckFallback: m.name,
+							// SC-232 round 10 fix (r9 review HIGH-1): the inline kit signature is the
+							// other of the two callers the site's usage-in-head placement was
+							// measured against (ability_cards.go's own kit-signature card shows
+							// usage in the head, same as a standalone ability).
+							usageInHead: true,
 						});
 						return undefined;
 					},

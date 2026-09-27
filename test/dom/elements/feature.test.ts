@@ -230,17 +230,19 @@ describe('Plan 09 Task 5: feature re-cast onto the D2 kit card grammar (§3.6)',
 		expect(name.getAttribute('aria-level')).toBe('3');
 		expect(name.textContent).toBe('Whip Strike');
 
-		// cost ("Signature") wins the ONE right-primary slot; ability_type ("Villain
-		// Action 1") does not render at all — HEADER's cost happens to already read
-		// "Signature" verbatim, a coincidence with item 6's own normalized wording,
-		// not that normalization firing (ability_type never reaches rightPrimaryOf
-		// here since cost is present).
+		// cost ("Signature") wins the ONE right-primary slot; HEADER's cost happens to
+		// already read "Signature" verbatim, a coincidence with item 6's own normalized
+		// wording, not that normalization firing (ability_type never reaches
+		// rightPrimaryOf here since cost is present).
 		expect(head.querySelector('.dse-head__primary--right')!.textContent).toBe('Signature');
-		// The old right-eyebrow cost chip is gone; right-eyebrow is now W2's Level
-		// chip, absent here (HEADER carries no metadata) — a GAP, not an element.
-		expect(head.querySelector('.dse-head__eyebrow--right')).toBeNull();
-		// usage -> right-deck (W7).
-		expect(head.querySelector('.dse-head__deck--right')!.textContent).toBe('Main action');
+		// SC-232 round 10 fix (r9 review LOW-3): ability_type ("Villain Action 1") does
+		// NOT vanish just because cost won the right-primary slot — it's displaced into
+		// the right-eyebrow, which is otherwise free (HEADER carries no metadata, so no
+		// Level chip competes for it).
+		expect(head.querySelector('.dse-head__eyebrow--right')!.textContent).toBe('Villain Action 1');
+		// usage -> right-deck (W7), the site's own label (round 10 fix LOW-2 —
+		// "Main action" -> "Main Action").
+		expect(head.querySelector('.dse-head__deck--right')!.textContent).toBe('Main Action');
 	});
 
 	test('SC-10 Task 2: cardHead left-eyebrow is the "Ability" kind-noun + a crest keyed to the main-action glyph (THEME-AGNOSTIC DOM — present regardless of theme)', async () => {
@@ -349,7 +351,7 @@ metadata:
 		expect(head.querySelector('.dse-head__primary--left')!.textContent).toBe('Magma Titan');
 		expect(head.querySelector('.dse-head__primary--right')!.textContent).toBe('9 Essence');
 		expect(head.querySelector('.dse-head__eyebrow--right')).toBeNull();
-		expect(head.querySelector('.dse-head__deck--right')!.textContent).toBe('Main action');
+		expect(head.querySelector('.dse-head__deck--right')!.textContent).toBe('Main Action');
 	});
 
 	test('.dse-feature__meta: keyword/distance/target grid, labels as key spans, values verbatim (no Type cell for a standalone feature — SC-232 round 8b W7 moved usage to the cardHead right-deck instead)', async () => {
@@ -370,7 +372,7 @@ metadata:
 		expect(cellText('target', 'value')).toBe('One creature or object');
 
 		const head = root.querySelector('.dse-feature > .dse-head') as HTMLElement;
-		expect(head.querySelector('.dse-head__deck--right')!.textContent).toBe('Main action');
+		expect(head.querySelector('.dse-head__deck--right')!.textContent).toBe('Main Action');
 	});
 
 	// SC-10 Task 8 polish: villain-action-style features carry a lone-dash "none"
@@ -955,17 +957,19 @@ keywords: Attack, Weapon
 
 		// SC-232 round 8b W3: cost and ability_type now share ONE cardHead right-primary
 		// slot (a priority chain, matching the site's own single-slot placement) — cost
-		// wins, so FULL's `ability_type: Villain Action 1` (present ALONGSIDE a cost,
-		// an unusual combination this pin fixture deliberately exercises) no longer
-		// renders anywhere. This is the intended behavior, not a content-loss
-		// regression: rightPrimaryOf's own doc comment states the priority explicitly,
-		// and the site never shows both at once either.
+		// wins the PRIMARY slot, so FULL's `ability_type: Villain Action 1` (present
+		// ALONGSIDE a cost, an unusual combination this pin fixture deliberately
+		// exercises) does not render there. SC-232 round 10 fix (r9 review LOW-3):
+		// it does NOT vanish, though — it's displaced into the right-eyebrow (free here,
+		// no metadata.level), so "Villain Action 1" still appears, just in a different
+		// slot than the legacy renderer used.
 		for (const expected of [
 			'Coverage Strike', // name
 			'5 Malice', // cost
+			'Villain Action 1', // ability_type, displaced into the right-eyebrow (LOW-3)
 			'A sweeping flourish of steel.', // flavor
 			'Attack, Weapon', // keywords
-			'Main action', // usage
+			'Main Action', // usage, the site's own label (LOW-2)
 			'Melee 1', // distance
 			'One creature', // target
 			'A creature ends its turn adjacent to the target.', // trigger

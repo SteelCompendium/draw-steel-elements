@@ -259,13 +259,14 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		const { root } = await renderStatblock(NO_FEATURES);
 
 		const head = root.querySelector('.dse-sb > .dse-head') as HTMLElement;
-		// F2 golden update: the legacy 'Unknown Ancestry' fallback has no 3.x analog —
-		// a keywordless statblock's left-DECK slot renders empty (still mounted, never
-		// a gap; see statblockHeaderParts in src/elements/statblock/view.ts). SC-232
-		// round 8b W4: left-eyebrow is now the kind-noun, which ALWAYS has a value
-		// ("Monster" fallback with no metadata.scc) — never empty.
+		// F2 golden update: the legacy 'Unknown Ancestry' fallback has no 3.x analog.
+		// SC-232 round 8b W4: left-eyebrow is now the kind-noun, which ALWAYS has a
+		// value ("Monster" fallback with no metadata.scc) — never empty. SC-232 round
+		// 10 fix (r9 review, INFO 3): a keywordless statblock's left-DECK slot is now a
+		// true GAP — no element at all — not an empty-string span (see
+		// statblockHeaderParts in src/elements/statblock/view.ts).
 		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Monster');
-		expect(head.querySelector('.dse-head__deck--left')!.textContent).toBe('');
+		expect(head.querySelector('.dse-head__deck--left')).toBeNull();
 		expect(head.querySelector('.dse-head__primary--left')!.textContent).toBe('Bare Creature');
 		expect(head.querySelector('.dse-head__eyebrow--right')!.textContent).toBe('Level N/A');
 		expect(head.querySelector('.dse-head__primary--right')!.textContent).toBe('No Role');
@@ -685,6 +686,31 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 	// view tree's output as VERBATIM strings ("Might +2"), which only the merged cell
 	// produces — the default split spells the same words as "M+2Might". The default
 	// shape's own no-loss claim is asserted per-part in the characteristics tests above.
+	// SC-232 round 10 fix (r9 review HIGH-1): round 8b's W7 (usage -> cardHead
+	// right-deck) was wrongly applied to every statblock ability — the site
+	// deliberately keeps usage OUT of a statblock sub-feature's head
+	// (`statblock_card.go:134-138`). `humanBanditChief`'s own sub-features carry
+	// `usage: Main action` / `Maneuver` / `Triggered action`, so this is a REAL
+	// exercise of the fix, not a vacuous pass on a usage-less fixture.
+	test('SC-232 round 10 fix, HIGH-1: no statblock sub-feature carries a right-deck usage chip; the meta "Type" cell is restored', async () => {
+		const { root } = await renderStatblock(humanBanditChief);
+
+		const subFeatures = root.querySelectorAll('.dse-sb > .dse-feature__nested > .dse-feature');
+		expect(subFeatures.length).toBeGreaterThan(0);
+		for (const card of Array.from(subFeatures)) {
+			expect(card.querySelector('.dse-head__deck--right')).toBeNull();
+		}
+
+		// "Whip and Magic Longsword" carries `usage: Main action` — its Type meta cell
+		// must show it (restored), not a head chip.
+		const whipCard = Array.from(subFeatures).find(
+			(c) => c.querySelector('.dse-head__primary--left')!.textContent === 'Whip and Magic Longsword',
+		)!;
+		const typeCell = whipCard.querySelector('.dse-feature__meta-cell--type');
+		expect(typeCell).not.toBeNull();
+		expect(typeCell!.querySelector('.dse-feature__meta-value')!.textContent).toBe('Main action');
+	});
+
 	test('NO content loss: every field the legacy HeaderView/StatsView/FeaturesView tree rendered appears verbatim (bandit chief)', async () => {
 		const { root } = await renderStatblock(humanBanditChief, {}, { sbCharLine: 'one' });
 		const text = root.textContent!;

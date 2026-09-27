@@ -48,6 +48,12 @@ export class FeatureElementView extends ElementView<FeatureConfig> {
 	protected onMount(root: HTMLElement, model: FeatureConfig): void {
 		renderFeature(root, model, this, (md, el) => this.renderMarkdown(md, el), {
 			roll: featureRollHooks(this.cx, this.provider),
+			// SC-232 round 10 fix (r9 review HIGH-1): the standalone Feature element is
+			// one of the two callers the site's own usage-in-head placement was measured
+			// against — a by-SCC kit signature ability's nested `ds-feature` fence also
+			// mounts through this same view (Obsidian's real markdown renderer recurses
+			// the fence into a real standalone card), so it's covered too.
+			usageInHead: true,
 		});
 	}
 }
