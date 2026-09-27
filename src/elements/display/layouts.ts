@@ -330,6 +330,15 @@ export const kitLayout: CardLayout<Kit> = {
 			// body instead (Equipment/Kit Bonuses sections stripped, fence kept — see
 			// stripKitBodySections above) so the nested ```ds-feature fence can recurse
 			// into a real card via renderMarkdown, exactly as it always has.
+			//
+			// KNOWN GAP (r9 review MEDIUM-2, round 10 fix): unlike the inline branch below,
+			// this hybrid path has no `leftDeckFallback` — the nested fence recurses through
+			// Obsidian's real markdown renderer into an independently-mounted Feature
+			// element, with no DOM handle back to this closure to hand a kit name to. The
+			// real fix belongs in steel-etl (emit `kit:` into the nested fence's own
+			// `metadata`, matching the standalone ability page's fence, which already does).
+			// Filed as a follow-up rather than worked around with a plugin-side markdown-text
+			// rewrite of a fence about to be recursively re-parsed by the same renderer.
 			// SC-120 Batch C §8 (Scott's ledger comment 1) — the empty-band-head guard: the
 			// hybrid-mode emptiness test is hoisted OUT of render() and INTO the push
 			// condition below, so a hand-authored note whose stripped body carries no

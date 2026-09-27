@@ -546,7 +546,13 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 				{ value: 'grid', label: 'Grid' },
 				{ value: 'ledger', label: 'Ledger' },
 			],
-			help: 'Layout of the keyword + action-type band on ability cards. "Chips" — the default — keeps today\'s look: boxed keyword chips with the action type at the far right. Applies to every ability card — standalone, and inside statblocks and featureblocks. Part of the statblock preset, so changing it re-derives that preset to "Custom".',
+			// SC-232 round 10 fix (r9 review LOW-4): the action-type HALF of this band
+			// moved to the cardHead right-deck for a standalone ability card and a kit
+			// signature ability (round 8b W7, corrected round 10 HIGH-1) — this band's
+			// Keywords chips still reach every family, but its action-type cell now only
+			// ever renders for a statblock or featureblock sub-feature (the two families
+			// HIGH-1 restored it for).
+			help: 'Layout of the keyword band on ability cards. "Chips" — the default — keeps today\'s look: boxed keyword chips. The band\'s action-type cell reaches only statblock and featureblock abilities (a standalone card and a kit signature ability show their action type as its own chip beside the name instead). Part of the statblock preset, so changing it re-derives that preset to "Custom".',
 		},
 	}),
 	d({

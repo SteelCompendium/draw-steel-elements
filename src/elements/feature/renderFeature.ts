@@ -200,9 +200,22 @@ export interface RenderFeatureOptions {
 	featBlockIcon?: boolean;
 	/** SC-232 round 8b item 5 (W1b): the kit's own display name, used as leftDeckOf's
 	 *  fallback for an INLINE kit signature ability — its Kit-model `signature_ability`
-	 *  field carries no `metadata` at all (unlike a by-SCC nested `ds-feature` fence,
-	 *  which already carries `metadata.kit` and needs no fallback — SC-232 W1 handles
-	 *  that path already). Only `layouts.ts`'s `kitLayout` sets this. */
+	 *  field carries no `metadata` at all. Only `layouts.ts`'s `kitLayout` sets this, for
+	 *  the inline path specifically.
+	 *
+	 *  **Known gap (r9 review MEDIUM-2, round 10): a by-SCC (hybrid) kit's nested
+	 *  `ds-feature` fence has NO fallback and still renders no left-deck.** An earlier
+	 *  version of this comment claimed that fence "already carries `metadata.kit`" —
+	 *  false: measured against the real corpus (`md-dse/kit/panther.md`), the nested
+	 *  fence's `metadata` has no `kit` key at all (only the STANDALONE ability page's
+	 *  OWN fence does — a different file, which is what the survey's b8 measurement
+	 *  actually used). That path recurses through `renderMarkdown` into a real,
+	 *  independently-mounted Feature element (`layouts.ts`'s hybrid render, below) with
+	 *  no DOM handle back to this caller to patch after the fact, so this option can't
+	 *  reach it. Filed for a steel-etl fix (emit `kit:` into the nested fence's own
+	 *  `metadata`, mirroring the standalone page) rather than a plugin-side markdown-text
+	 *  rewrite of a fence about to be recursively re-parsed by the SAME renderer — see
+	 *  the round 10 fix report for the full reasoning. */
 	leftDeckFallback?: string;
 	/**
 	 * SC-232 round 10 fix (r9 review HIGH-1): opt-in for `usage` to render in the
