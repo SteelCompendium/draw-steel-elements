@@ -35,7 +35,7 @@
 // Static + SDK-backed: no persistence, no interactive controls. All markdown renders
 // through this.renderMarkdown (owner-parented, ML-1) passed to the kit/renderer as the
 // renderMd callback.
-import type { Feature } from 'steel-compendium-sdk';
+import type { Feature, Featureblock } from 'steel-compendium-sdk';
 import { ElementView } from '@/framework/view';
 import type { RenderContext } from '@/framework/context';
 import { cardHead, divider } from '@/framework/kit';
@@ -52,6 +52,35 @@ function featureLevelOf(feature: Feature): number {
 	const raw = (feature as Feature & { level?: unknown }).level;
 	const n = typeof raw === 'number' ? raw : Number(raw);
 	return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
+/**
+ * SC-232 W5 (r7 survey b12): the by-SCC family's kind-noun vocabulary, ported from
+ * steel-etl's `fbKindNoun` (`featureblock_page.go:184-199`).
+ */
+const FB_KIND_NOUNS: Record<string, string> = {
+	'dynamic-terrain': 'Dynamic Terrain',
+	fixture: 'Fixture',
+	malice: 'Malice',
+	advancement: 'Advancement',
+};
+
+/** `fbKindNoun`: an unrecognized (or, by the caller's own gate, absent) kind falls back
+ *  to the site's own "Featureblock" default — never invented wording. */
+function fbKindNoun(kind: string): string {
+	return FB_KIND_NOUNS[kind] ?? 'Featureblock';
+}
+
+/**
+ * SC-232 W5: the untyped top-level `kind` field the SDK reader preserves on the
+ * Featureblock object (`dynamic-terrain` / `fixture` / `malice` / `advancement` — the
+ * by-SCC sync's own field, undeclared on the SDK's `Featureblock` model but carried
+ * through verbatim by its DTO's `Object.assign(this, source)`, the same pattern
+ * `featureLevelOf` above already relies on for `Feature.level`).
+ */
+function featureblockKindOf(fb: Featureblock): string | undefined {
+	const raw = (fb as Featureblock & { kind?: unknown }).kind;
+	return typeof raw === 'string' && raw.trim() ? raw.trim() : undefined;
 }
 
 export class FeatureblockElementView extends ElementView<FeatureblockConfig> {
@@ -80,12 +109,20 @@ export class FeatureblockElementView extends ElementView<FeatureblockConfig> {
 
 		const typeText = fb.featureblock_type?.trim() || undefined;
 		const role = applyRoleTint(card, typeText);
+		// SC-232 W5: `kind`, when the by-SCC sync carries it, ALWAYS wins the
+		// left-eyebrow (site parity — the site's kind-noun and type+role mini-title are
+		// two INDEPENDENT fields, `kind` vs `featureblock_type`, never a fallback pair
+		// the way the plugin's single-field `role ? undefined : typeText` treats them).
+		// Falling back to today's `role ? undefined : typeText` when `kind` is absent
+		// keeps every frozen fixture (none of which carries `kind`) byte-unchanged.
+		const kind = featureblockKindOf(fb);
+		const leftEyebrow = kind ? fbKindNoun(kind) : role ? undefined : typeText;
 
 		// -- cardHead (§3.7 fill; legacy header wording preserved verbatim) --
 		cardHead(
 			card,
 			{
-				leftEyebrow: role ? undefined : typeText,
+				leftEyebrow,
 				name: fb.name ?? '',
 				rightEyebrow: fb.level !== undefined ? `Level ${fb.level}` : undefined,
 				rightPrimary: role ? typeText : undefined,

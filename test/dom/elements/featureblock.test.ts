@@ -276,6 +276,71 @@ describe('Plan 09 Task 6a: featureblock re-cast onto the D2 kit card grammar (§
 		expect(head.querySelector('.dse-head__eyebrow--right')!.textContent).toBe('Level 2');
 	});
 
+	// SC-232 round 8a, W5 (r7 survey b12) — the by-SCC sync's own `kind` field
+	// (`dynamic-terrain`/`fixture`/`malice`/`advancement`), an untyped field the SDK
+	// reader preserves on the Featureblock object (same pattern as the Feature object's
+	// `level`, featureLevelOf above) but never read by the head before this ticket — the
+	// synced fence carries no `featureblock_type`, so the left-eyebrow rendered "–"
+	// (survey: "renders –"). `kind`, when present, ALWAYS wins the left-eyebrow — site
+	// parity: the site's kind-noun and role mini-title are two INDEPENDENT fields, never
+	// a fallback pair.
+	test('SC-232 W5: kind: malice -> "Malice" in the left-eyebrow (site\'s fbKindNoun), even with no featureblock_type at all', async () => {
+		const { root } = await renderFeatureblock(`type: featureblock
+kind: malice
+name: Devil Malice
+features:
+  - type: feature
+    feature_type: trait
+    name: Bureaucratic Tape
+    effects:
+      - effect: One devil acting this turn uses a signature ability.
+`);
+
+		const head = root.querySelector('.dse-fb > .dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Malice');
+	});
+
+	test('SC-232 W5: kind wins the left-eyebrow even when featureblock_type ALSO carries a role (both slots fill independently — kind-noun left, role right)', async () => {
+		const { root } = await renderFeatureblock(`type: featureblock
+kind: fixture
+featureblock_type: Hazard Hexer
+name: Corrosive Pit
+features:
+  - type: feature
+    feature_type: trait
+    name: Dissolve
+    effects:
+      - effect: Acid sprays each adjacent creature.
+`);
+
+		const head = root.querySelector('.dse-fb > .dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Fixture');
+		expect(head.querySelector('.dse-head__primary--right')!.textContent).toBe('Hazard Hexer');
+	});
+
+	test('SC-232 W5: an unrecognized kind falls back to the site\'s own "Featureblock" default (fbKindNoun\'s own fallback, never invented wording)', async () => {
+		const { root } = await renderFeatureblock(`type: featureblock
+kind: something-unmapped
+name: Some Block
+features:
+  - type: feature
+    feature_type: trait
+    name: Some Feature
+    effects:
+      - effect: Text.
+`);
+
+		const head = root.querySelector('.dse-fb > .dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Featureblock');
+	});
+
+	test('SC-232 W5: no kind field falls back to today\'s featureblock_type behavior unchanged (0 frozen fixtures carry kind)', async () => {
+		const { root } = await renderFeatureblock(angulotlMalice);
+
+		const head = root.querySelector('.dse-fb > .dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Malice Features');
+	});
+
 	test('[data-dse-role]: the role word in featureblock_type sets the attribute + the --dse-role element-set alias', async () => {
 		const { root } = await renderFeatureblock(WITH_ROLE);
 
