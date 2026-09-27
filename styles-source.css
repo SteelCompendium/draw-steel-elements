@@ -3408,13 +3408,6 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 	.dse-collapse__title,
 	.dse-skills__group-title {
 		font-size: var(--dse-fs-subheading);
-		/* SC-318 round 3 fix (LOW-1): restates the ambient `inherit` this h3 always
-		   had before GROUP 1 grew a per-level `line-height: 1.3` (~:17151) that
-		   otherwise now reaches it too (same `:where(h3)` match) — the ruling kept
-		   this pin's SIZE, not a line-height change nobody asked for. `inherit` is
-		   the keyword restatement, not a re-transcribed px figure, matching how
-		   the font-size pin above is a token, not a literal. */
-		line-height: inherit;
 		text-transform: lowercase;
 
 		&:first-letter {
@@ -3482,6 +3475,22 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 		color: var(--dse-fg-muted);
 		font-variant-numeric: tabular-nums;
 	}
+}
+
+/* SC-318 round 4 fix (round-5 re-review MED-1): `.dse-skills__group-title`'s line-height
+   pin (round 3's LOW-1 fix) MUST be screen-only — GROUP 1's h3 rule it restates `inherit`
+   against is itself screen-scoped (`:not([data-dse-print="on"])`), but the shared rule the
+   pin used to sit in (above, `[data-dse-element="skills"] .dse-skills { .dse-collapse__
+   title, .dse-skills__group-title { … } }`) carries NO print exclusion, so `inherit`
+   reached PRINT too — print's own `h3 { line-height: var(--h3-line-height) }` (1.3) lost
+   to this rule's higher (0,3,0) specificity, moving a real Ctrl-P/export render (23.92px
+   -> 27.6px at default; freeze cannot see this — no frozen capture renders the
+   `only_show_selected` bare-h3 skills mode). Restated here alone, on its own print-
+   excluded selector — `.dse-collapse__title` (unaffected either way; not this rule's
+   subject) keeps the shared rule's plain `inherit` with no scope issue, since nothing
+   overrides its line-height in print. */
+[data-dse-element="skills"]:not([data-dse-print="on"]) .dse-skills .dse-skills__group-title {
+	line-height: inherit;
 }
 
 /* SC-182 round 3 — PRINT IS STYLE-INDEPENDENT, deliberately and in bytes. Paper always

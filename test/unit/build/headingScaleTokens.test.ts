@@ -93,6 +93,30 @@ describe('SC-318: .dse-hero__name (h2) is pinned, not moved onto the h2 token', 
 	});
 });
 
+describe('SC-318 round 4 fix (round-5 re-review MED-1): the .dse-skills__group-title line-height pin sits under a PRINT-EXCLUDED selector', () => {
+	// Round 3's LOW-1 fix first put `line-height: inherit` in the shared
+	// `[data-dse-element="skills"] .dse-skills { .dse-collapse__title, .dse-skills__
+	// group-title { … } }` rule — no print exclusion, no screen scope — so it also
+	// overrode print's OWN `h3 { line-height: var(--h3-line-height) }` (specificity
+	// (0,3,0) beats print's (0,0,1)), moving a real Ctrl-P/export render 23.92px ->
+	// 27.6px that no frozen capture renders (freeze stayed 260/260 throughout). This
+	// suite pins the fix: the pin's `line-height` must live on its OWN selector, and
+	// that selector must carry `:not([data-dse-print="on"])`.
+	it('the pin exists, sets line-height: inherit, and its own selector is print-excluded', () => {
+		const m = flat.match(
+			/\[data-dse-element="skills"\]:not\(\[data-dse-print="on"\]\) \.dse-skills \.dse-skills__group-title \{([^}]*)\}/,
+		);
+		expect(m).not.toBeNull();
+		expect(m![1]).toContain('line-height: inherit;');
+	});
+
+	it('the shared .dse-collapse__title / .dse-skills__group-title rule no longer carries line-height (it moved out, not duplicated)', () => {
+		const m = flat.match(/\.dse-collapse__title,\s*\.dse-skills__group-title \{([^}]*)\}/);
+		expect(m).not.toBeNull();
+		expect(m![1]).not.toContain('line-height');
+	});
+});
+
 /** Escapes regex metacharacters in a literal selector string. */
 function escape(s: string): string {
 	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
