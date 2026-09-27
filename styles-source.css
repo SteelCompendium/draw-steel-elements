@@ -7378,42 +7378,28 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 }
 
 /* Narrow-width guard (round-4 owner ruling, superseding round-3's LOW-2 "reuse
-   an existing container or stop"): make `.dse-head` ITSELF the query
-   container, exactly as the unlanded SC-284 branch does
-   (`sc284-cardhead-narrow`, `33b58c3`, `styles-source.css` base `.dse-head`
-   block) — same property NAMES, same VALUES (`container-type: inline-size;
-   container-name: dse-head;`), so the two branches can land in either order
-   and whichever lands second may drop the redundant copy. SC-284's own
-   comment there (read, not edited, per the owner's instruction) is the
-   containment analysis this copy inherits without re-deriving: on Obsidian's
-   shipped runtime (Electron 21.4.1 / Chromium 106) `container-type:
-   inline-size` establishes layout, style AND inline-size containment, not
-   inline-size alone — checked there for every consequence (no head relies on
-   baseline export; every abspos/fixed descendant of a head already anchors
-   at or inside the head itself; no head child is shrink-to-fit sized off its
-   own content) and found safe. `.dse-sb`/`.dse-fb`/any card root stays
-   FORBIDDEN from carrying `container-type` (round-3 LOW-2's `.dse-sb` finding
-   — a `width: fit-content` ancestor collapses a size-contained box with no
-   explicit width to near-zero — still holds). `.dse-head` is not immune to a
-   third-party ancestor sizing the card narrower — the final review measured
-   a real case (a `negotiation` card under a shrink-to-fit ancestor) where
-   the card itself narrows 760 → 561px and `.dse-head` narrows WITH it,
-   662 → 464px — but it does not COLLAPSE the way `.dse-sb` did: `.dse-head`
-   is a plain block child that tracks whatever width its own parent (the
-   card, sized by that other ancestor) hands it, never a size-contained box
-   asked for ITS OWN shrink-to-fit preferred width the way `.dse-sb` was, so
-   the near-zero failure mode specifically does not apply to it — narrower,
-   yes; collapsed, no.
-
-   The ONE difference from SC-284's copy: this one is Steel **screen-only**
-   (`[data-dse-theme='steel']:not([data-dse-print="on"])`), matching every
-   other SC-232 rule's contract, where SC-284's lives in the base `.dse-head`
-   block (unscoped, reaches print — a narrow STACKING change is structural,
-   S-1(a), so it is meant to). Both branches declaring the same
-   `container-name` on the same element is harmless either landing order:
-   whichever CSS text runs first in the cascade wins the property (identical
-   values either way), and a later-landing branch's `container-type`/`-name`
-   pair is then a no-op duplicate, safe to delete as its own tidy-up.
+   an existing container or stop"): read the query container SC-284 landed on
+   the base `.dse-head` block (`container-type: inline-size; container-name:
+   dse-head;`, unscoped — see that block's own comment for the containment
+   analysis: on Obsidian's shipped runtime, Electron 21.4.1 / Chromium 106,
+   `container-type: inline-size` establishes layout, style AND inline-size
+   containment, not inline-size alone; checked for every consequence and
+   found safe). SC-232 originally carried a Steel-screen-only duplicate of
+   that same declaration (dropped on rebase, round 8a — the two branches
+   land in either order and the second dropped its copy, per both branches'
+   own comments; SC-284 landed first here). `.dse-sb`/`.dse-fb`/any card root
+   stays FORBIDDEN from carrying `container-type` (round-3 LOW-2's `.dse-sb`
+   finding — a `width: fit-content` ancestor collapses a size-contained box
+   with no explicit width to near-zero — still holds). `.dse-head` is not
+   immune to a third-party ancestor sizing the card narrower — the final
+   review measured a real case (a `negotiation` card under a shrink-to-fit
+   ancestor) where the card itself narrows 760 → 561px and `.dse-head`
+   narrows WITH it, 662 → 464px — but it does not COLLAPSE the way `.dse-sb`
+   did: `.dse-head` is a plain block child that tracks whatever width its own
+   parent (the card, sized by that other ancestor) hands it, never a
+   size-contained box asked for ITS OWN shrink-to-fit preferred width the way
+   `.dse-sb` was, so the near-zero failure mode specifically does not apply
+   to it — narrower, yes; collapsed, no.
 
    Round-3's own finding stands: 33.3px (the ability-card multiplier) is
    STILL too big for the ~73-90px name column left over once the crest +
@@ -7443,10 +7429,6 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    `.dse-head` measured — a nested sub-feature head, already indented, still
    657px — sits well clear above it. A wide, unambiguous margin on both
    sides; no capture in the harness sits between 298 and 657. */
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-head {
-	container-type: inline-size;
-	container-name: dse-head;
-}
 @container dse-head (max-width: 480px) {
 	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-head__primary--left,
 	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='feature'] > .dse-feature:not([data-dse-act='trait']) > .dse-head > .dse-head__primary--left,
