@@ -584,7 +584,8 @@ describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 	// ambient card font (`.dse-card`, no font-size override) IS `1em`, not `0.8em`. The
 	// stray `0.8em` rendered the band heads at 12.8px, visibly smaller than every
 	// neighboring label (verified live: `.dse-tiles__value` 16px, the nested ability
-	// card's own `.dse-section__title` 1em/16px).
+	// card's own `.dse-section__title`, then 1em/16px — SC-235 since moved it to
+	// 1.125em/18px, site parity, but the comparison at SC-143's own time still holds).
 	describe('kit band-head font-size (SC-143)', () => {
 		it('.dse-card__band-head is var(--dse-fs-body) (1em, 16px against the ambient card font), not the old 0.8em (12.8px)', () => {
 			// SC-185 round 2 adopted the literal `1em` onto the role scale's --dse-fs-body
@@ -610,6 +611,42 @@ describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 		it('letter-spacing stays 0.07em — rescales with the font-size fix, no separate edit needed', () => {
 			const blocks = steelBlocksFor('.dse-card__band-head');
 			expect(blocks.some((b) => /letter-spacing:\s*0\.07em\s*;/.test(b))).toBe(true);
+		});
+	});
+
+	// SC-235 — the boxed "Effect"/"Trigger"/"Special" section title (ability/feature cards,
+	// statblock's nested features, featureblock, kit's signature ability) rendered at the
+	// plugin's ambient 16px / 27.2px line-height / 0.07em (1.12px) tracking, against the
+	// site's `.sc-ability__section-head .tag` at 18px / 30.6px / 0.1em (1.8px) — parity's
+	// `section-tag` declared deferral (was FOLLOWUPS #51). Site-parity fix: font-size joins
+	// the role scale as a DERIVATION (`.repo-docs/font-sizes.md`: "deriving from a role is
+	// fine and normal") — `calc(var(--dse-fs-body) * 1.125)` is a pure x1.125 of whatever the
+	// title inherited before, so it keeps tracking the Obsidian text-size setting and
+	// SC-230's --dse-text-scale exactly as before; letter-spacing moves to the site's 0.1em.
+	// line-height needs no separate declaration — the plate root's own unitless
+	// `line-height: 1.7` (steelTypography's own §A group above) recomputes against the
+	// title's new font-size for free. Honest limit (same as every sibling test in this file):
+	// jsdom cannot resolve `calc()`/`em` out of a stubbed stylesheet, so this is a
+	// source-text assertion; the real 16px->18px / 1.12px->1.8px move (both schemes) and the
+	// x1.125 ratio at non-default text sizes are independently verified by a live-browser
+	// getComputedStyle probe — see the SC-235 round-1 report.
+	describe('section title type scale (SC-235)', () => {
+		it('.dse-section__title font-size is the role-scale derivation calc(var(--dse-fs-body) * 1.125), not the old ambient (no font-size at all)', () => {
+			const blocks = steelBlocksFor('.dse-section__title');
+			expect(blocks.length).toBeGreaterThan(0);
+			expect(
+				blocks.some((b) => /font-size:\s*calc\(\s*var\(--dse-fs-body\)\s*\*\s*1\.125\s*\)\s*;/.test(b)),
+			).toBe(true);
+		});
+
+		it('.dse-section__title letter-spacing is 0.1em (site parity), not the old under-tracked 0.07em', () => {
+			const blocks = steelBlocksFor('.dse-section__title');
+			const withLetterSpacing = blocks.filter((b) => /letter-spacing:/.test(b));
+			expect(withLetterSpacing.length).toBeGreaterThan(0);
+			for (const b of withLetterSpacing) {
+				expect(b).toMatch(/letter-spacing:\s*0\.1em\s*;/);
+				expect(b).not.toMatch(/letter-spacing:\s*0\.07em\s*;/);
+			}
 		});
 	});
 });
