@@ -3487,8 +3487,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
    -> 27.6px at default; freeze cannot see this — no frozen capture renders the
    `only_show_selected` bare-h3 skills mode). Restated here alone, on its own print-
    excluded selector — `.dse-collapse__title` (unaffected either way; not this rule's
-   subject) keeps the shared rule's plain `inherit` with no scope issue, since nothing
-   overrides its line-height in print. */
+   subject, and not this fix's problem to solve) declares no line-height of its own
+   anywhere any more and simply inherits, exactly as it did on develop. */
 [data-dse-element="skills"]:not([data-dse-print="on"]) .dse-skills .dse-skills__group-title {
 	line-height: inherit;
 }
