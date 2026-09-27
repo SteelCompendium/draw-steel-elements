@@ -137,6 +137,7 @@ function crestIconForRole(role: DseRole | undefined): string | undefined {
 export function statblockHeaderParts(statblock: Statblock): {
 	name: string;
 	leftEyebrow: string;
+	leftDeck: string;
 	rightEyebrow: string;
 	rightPrimary: string;
 	rightDeck: string;
@@ -147,12 +148,42 @@ export function statblockHeaderParts(statblock: Statblock): {
 		.join(' ');
 	return {
 		name: statblock.name ?? 'Unnamed Creature',
-		leftEyebrow: statblock.keywords?.join(', ') ?? '',
+		// SC-232 round 8b item 4 (W4, r7 survey b11/d2): the left-eyebrow is now the
+		// KIND-NOUN (`statblockKindNoun`, below — ported from the site), not the
+		// keywords line; keywords move to the left-deck (same slot feature/ability
+		// heads use for provenance, SC-232 W1). "No word/number changes to the
+		// surviving FALLBACK strings" (this file's own header comment) is unaffected —
+		// neither "Monster" nor the keywords join is one of those four named strings,
+		// and this is a deliberate slot relocation, not a fallback-wording edit.
+		leftEyebrow: statblockKindNoun(statblock.metadata),
+		leftDeck: statblock.keywords?.join(', ') ?? '',
 		rightEyebrow: statblock.level !== undefined ? `Level ${statblock.level}` : 'Level N/A',
 		rightPrimary: orgRole.length > 0 ? orgRole : 'No Role',
 		rightDeck: statblock.ev !== undefined ? `EV ${statblock.ev}` : 'EV N/A',
 		role: statblock.role || statblock.organization,
 	};
+}
+
+/**
+ * SC-232 round 8b item 4 (W4): the statblock family's kind-noun, ported from
+ * steel-etl's `statblockKindNoun` (`statblock_page.go:245-261`) — reads the by-SCC
+ * sync's own `metadata.scc` (e.g. `mcdm.monsters.v1/monster.human.statblock/…`),
+ * cuts at the first `/` then takes the segment up to the next `/` (the SCC "type
+ * path", e.g. `monster.human.statblock`), and buckets it by substring: `companion` ->
+ * "Companion", `retainer` -> "Retainer", `summoner`/`rival` -> "Summon", everything
+ * else (incl. no `metadata.scc` at all, e.g. a hand-authored fixture) -> "Monster" —
+ * the site's own default, matching every real monster statblock.
+ */
+function statblockKindNoun(metadata: Record<string, unknown> | undefined): string {
+	const scc = metadata?.scc;
+	if (typeof scc !== 'string' || !scc.trim()) return 'Monster';
+	const afterFirstSlash = scc.trim().split('/').slice(1).join('/');
+	if (!afterFirstSlash) return 'Monster';
+	const typePath = afterFirstSlash.split('/')[0];
+	if (typePath.includes('companion')) return 'Companion';
+	if (typePath.includes('retainer')) return 'Retainer';
+	if (typePath.includes('summoner') || typePath.includes('rival')) return 'Summon';
+	return 'Monster';
 }
 
 /** One `.dse-sb__kv` cell of the secondary-stats grid: its `--<modifier>` suffix plus the
@@ -301,6 +332,7 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 			{
 				leftEyebrow: header.leftEyebrow,
 				name: header.name,
+				leftDeck: header.leftDeck,
 				rightEyebrow: header.rightEyebrow,
 				rightPrimary: header.rightPrimary,
 				rightDeck: header.rightDeck,

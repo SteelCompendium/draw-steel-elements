@@ -228,13 +228,17 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		expect(root.querySelector('.ds-feature-container')).toBeNull();
 	});
 
-	test('cardHead (§3.8 fill): keywords → left eyebrow; name = the heading (aria-level 2); Level → right eyebrow; organization+role → right primary; EV → right deck (F2 §2.1 B1: SDK 3.x fields)', async () => {
+	test('cardHead (§3.8 fill): metadata.scc kind-noun → left eyebrow; keywords → left deck (SC-232 round 8b W4); name = the heading (aria-level 2); Level → right eyebrow; organization+role → right primary; EV → right deck (F2 §2.1 B1: SDK 3.x fields)', async () => {
 		const { root } = await renderStatblock(humanBanditChief);
 
 		const head = root.querySelector('.dse-sb > .dse-head') as HTMLElement;
 		expect(head).not.toBeNull();
 
-		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Human, Humanoid');
+		// This fixture carries no metadata.scc, so the kind-noun falls back to the
+		// site's own default, "Monster" — correct for this entity either way (a real
+		// human bandit chief IS a monster statblock).
+		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Monster');
+		expect(head.querySelector('.dse-head__deck--left')!.textContent).toBe('Human, Humanoid');
 
 		const name = head.querySelector('.dse-head__primary--left') as HTMLElement;
 		expect(name.getAttribute('role')).toBe('heading');
@@ -256,9 +260,12 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 
 		const head = root.querySelector('.dse-sb > .dse-head') as HTMLElement;
 		// F2 golden update: the legacy 'Unknown Ancestry' fallback has no 3.x analog —
-		// a keywordless statblock's left-eyebrow slot renders empty (still mounted,
-		// never a gap; see statblockHeaderParts in src/elements/statblock/view.ts).
-		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('');
+		// a keywordless statblock's left-DECK slot renders empty (still mounted, never
+		// a gap; see statblockHeaderParts in src/elements/statblock/view.ts). SC-232
+		// round 8b W4: left-eyebrow is now the kind-noun, which ALWAYS has a value
+		// ("Monster" fallback with no metadata.scc) — never empty.
+		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Monster');
+		expect(head.querySelector('.dse-head__deck--left')!.textContent).toBe('');
 		expect(head.querySelector('.dse-head__primary--left')!.textContent).toBe('Bare Creature');
 		expect(head.querySelector('.dse-head__eyebrow--right')!.textContent).toBe('Level N/A');
 		expect(head.querySelector('.dse-head__primary--right')!.textContent).toBe('No Role');
@@ -718,7 +725,11 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 			'Form Up!',
 			'Lead From the Front',
 			// features: types / costs / meta
-			'Signature Ability',
+			// SC-232 round 8b item 6: "Signature Ability" -> "Signature" (the site's own
+			// wording normalization, statblock_page.go:404-415) — the literal phrase no
+			// longer appears verbatim; this is the intended normalization, not a
+			// content-loss regression.
+			'Signature',
 			'Villain Action 1',
 			'Villain Action 2',
 			'Villain Action 3',
