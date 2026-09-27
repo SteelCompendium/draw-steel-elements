@@ -175,6 +175,20 @@ describe('Plan 24 / SC-100 Task 3: kit Steel composition — inline mode (Panthe
 		expect(card.textContent).not.toContain('```ds-feature');
 	});
 
+	// SC-232 round 8b item 5 (W1b): the INLINE signature ability's own `metadata` field
+	// carries no `class`/`ancestry`/`kit` at all (it's the Kit model's own
+	// frontmatter-adjacent field, not a by-SCC nested fence — unlike the standalone
+	// "Devastating Rush" page, whose fence DOES carry `metadata.kit: panther` and needs
+	// no fallback, SC-232 W1). `layouts.ts`'s `kitLayout` passes the parent kit's own
+	// name as `leftDeckFallback`, so the inline card still shows "Panther" — matching
+	// the site's inline signature-ability card (ability_cards.go:322-327).
+	test("Signature Ability band: left-deck falls back to the parent kit's own name (W1b) — the inline signature_ability carries no metadata.kit to read", async () => {
+		const card = await renderPantherInline();
+		const band = bandHead(card, 'Signature Ability');
+		const featureCard = band!.querySelector('.dse-feature') as HTMLElement;
+		expect(featureCard.querySelector('.dse-head__deck--left')!.textContent).toBe('Panther');
+	});
+
 	test('flavor renders (inline mode never suppresses it — kitLayout.body is undefined whenever a signature ability is present, so the dedup guard never fires)', async () => {
 		const card = await renderPantherInline();
 		// Nested TWO levels deep (`.dse-card > .dse-card__band > .dse-card__flavor`) —

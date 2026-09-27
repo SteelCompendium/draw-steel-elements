@@ -347,7 +347,14 @@ export const kitLayout: CardLayout<Kit> = {
 						if (hybrid) {
 							return renderMarkdown(hybridSig!, container.createDiv({ cls: 'dse-card__body' }));
 						}
-						renderFeatureList(container, FeatureConfig.allFrom([m.signature_ability!]), owner, renderMarkdown);
+						// SC-232 round 8b item 5 (W1b): the inline `signature_ability` carries no
+						// `metadata` at all (it's the Kit model's own frontmatter-adjacent field,
+						// not a by-SCC nested fence), so `leftDeckOf` alone renders no left-deck —
+						// pass the parent kit's own name as the fallback (the site's inline
+						// signature-ability card shows the kit name here, ability_cards.go:322-327).
+						renderFeatureList(container, FeatureConfig.allFrom([m.signature_ability!]), owner, renderMarkdown, {
+							leftDeckFallback: m.name,
+						});
 						return undefined;
 					},
 				});
