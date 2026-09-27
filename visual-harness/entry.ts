@@ -878,6 +878,35 @@ scc: mcdm.heroes.v1/perk/envoys-charge
 type: perk
 `;
 
+// SC-318 r1 survey side finding LOW (folded): no fixture anywhere renders h1-h6 in one card
+// body, or the blockquote-h6 ability-header shape 20 shipped complication/title/treasure
+// files use (r1 survey Q1/Q2). `perk`'s `content: |-` literal-block-scalar key is the same
+// safe vehicle `perkLinks` above uses — a bare top-level YAML scalar would treat a leading
+// `#` as a COMMENT (see that fixture's own comment) — so this is a new `perk` fixture, not
+// an edit to the frozen D9 example. The h1 leads with a paragraph before it (exercises
+// GROUP 1's adjacency margin-top bump, SC-318 round 2); h2-h6 follow directly on each
+// other's heels (exercises the UNconditional 1-body-em base case instead). The blockquote
+// h6 restates the real shipped shape (`> ###### <name>`, e.g.
+// title/arena-fighter's/treasure/scorpion-tails' ability headers).
+const perkHeadings = `content: |-
+    A ladder of every heading level, in one card body, for SC-318's own fixture coverage.
+
+    # Heading One
+
+    ## Heading Two
+    ### Heading Three
+    #### Heading Four
+    ##### Heading Five
+    ###### Heading Six
+
+    > ###### Ability Header
+    > A blockquote-h6 ability header, the shape complication/title/treasure ship.
+flavor: An h1-h6 ladder in one card body, plus a blockquote-h6 ability header.
+name: Heading Ladder
+scc: mcdm.heroes.v1/perk/heading-ladder
+type: perk
+`;
+
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
 	career: { default: careerDefault },
@@ -934,7 +963,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	},
 	negotiation: { default: negotiationDefault, checked: negotiationChecked },
 	party: { default: partyDefault },
-	perk: { default: perkDefault, links: perkLinks },
+	perk: { default: perkDefault, links: perkLinks, headings: perkHeadings },
 	project: { default: projectDefault },
 	roll: { default: rollDefault },
 	rule: { default: ruleDefault },
