@@ -7377,39 +7377,65 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 	line-height: 1.02;
 }
 
-/* Narrow-width guard (owner ruling): the statblock band is the one family whose
-   narrow behaviour the site itself steps down — `.sb__head .sc-head__left-primary`
-   drops from 2.3rem to 1.85rem (41.4 -> 33.3px, the SAME multiplier as the
-   standalone ability card above) below a 34em viewport
-   (steel-statblock.css:625-628). The site's matching rules for featureblock
-   (`.fb__name`, steel-featureblock.css:227) and ability (`.sc-ability__name`,
-   steel-ability-cards.css:206) are DEAD — both target a pre-cardhead class no
-   live node carries any more (the real name node re-attached to
-   `.fb__head .sc-head__left-primary` / `.sc-ability > .sc-head
-   .sc-head__left-primary`, same as their base rules), so only statblock has a
-   live narrow step-down to mirror. Ported as a CONTAINER query, the same
-   mechanism the plugin's own narrow captures already use elsewhere for a card
-   that must react to the space IT has rather than the viewport (`.dse-mt` /
-   `.dse-sb__sticky` / `.dse-stamina-host`/`-rec` / `.dse-init-bar`/`-host`) —
-   a media query would answer the wrong question in a sidebar leaf, same
-   reasoning as the `.dse-sb__sticky` comment above. `34rem` mirrors the site's
-   own `34em` at each side's own root size and is the SAME literal the sticky
-   header's own step 1 already uses (~:10224) — not a new number. Own
-   container-name (`sc232-sb-head`), not `dse-head`: SC-284 (unlanded) is
-   expected to add its own `container-type`/`container-name` inside the base
-   `.dse-head` block (~:13582-13589) for narrow STACKING, a different container
-   for a different purpose — this block deliberately does not touch that block
-   or its two hunks (~13588, ~13671), so the two containers coexist rather than
-   collide. */
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
-	container-type: inline-size;
-	container-name: sc232-sb-head;
-}
-@container sc232-sb-head (max-width: 34rem) {
-	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb > .dse-head > .dse-head__primary--left {
-		font-size: calc(var(--dse-fs-heading) * 1.665);
-	}
-}
+/* Narrow-width guard — REMOVED pending an owner decision (round-3 review
+   HIGH-1 + LOW-2, both blocking).
+
+   Round 2 shipped a statblock-only `container-type: inline-size` on `.dse-sb`
+   with an `@container … (max-width: 34rem)` step-down to the ability-card
+   multiplier (1.665x). Round-3 review found two problems:
+
+   HIGH-1: 33.3px is STILL too big for the ~73-90px name column left over
+   once the crest + right rail take their share at a real narrow width
+   (300px) — the statblock name went from base's 5 lines/2 mid-word breaks to
+   7 lines/4 mid-word breaks, and the UNGUARDED featureblock band and generic
+   sub-feature names ("Bloodstones") gained NEW mid-word breaks the base
+   never had. The owner's ruling: at the narrow threshold the band names
+   (statblock, featureblock) and any generic/sub-feature name that gains a
+   mid-word break must fall back to TODAY's shared size (not a smaller
+   family-specific size, TODAY's — 20px / var(--dse-fs-heading) — the exact
+   value the unscoped base rule at :13636 already produces), so narrow
+   captures are never worse than base `619c4bd`: 0 new mid-word breaks, line
+   counts <= base. Fixing this needs an element-width signal for MULTIPLE
+   selectors (the statblock band, the featureblock band, and potentially the
+   generic/nested-sub-feature rule too) — not just `.dse-sb`.
+
+   LOW-2 (upgraded by the owner to a hard constraint): the `container-type`
+   above is real containment, not free — measured, a `width: fit-content`
+   ancestor collapses `.dse-sb` to 2px wide / 36758px tall (`scripts/
+   shrink.mjs` in `r3-evidence/`), because inline-size containment makes the
+   contained box's own auto-width resolve as if it had no content once a
+   PARENT asks for its shrink-to-fit preferred width. No shipped context
+   triggers this today, but it is real and undocumented. The owner's ruling:
+   do NOT add a NEW `container-type` anywhere for this — reuse an ancestor
+   that ALREADY carries one in `develop`, or stop and ask.
+
+   Checked exhaustively (every `container-type`/`container-name` declaration
+   in this sheet, grep'd, each one's DOM scope traced): `dse-init-bar`
+   (:953, the initiative round-controls bar), `dse-mt` (:3663, the montage
+   board), the `.dse-hero__grid` one (:5926), `dse-sb-sticky` (:10190, the
+   STICKY MINI-HEADER — a sibling of `.dse-head`, not an ancestor, so a
+   `@container` on it cannot style the head name at all), `dse-stamina-rec`
+   (:11561), `dse-stamina-host` (:11803), `dse-init-host` (:12832). NONE of
+   these wrap `.dse-sb`, `.dse-fb`, `[data-dse-element='feature']`, `.dse-card`
+   or `.dse-head` generically — every one is a purpose-built container on its
+   own component's root, added by whichever ticket needed it. A `@media`
+   breakpoint would sidestep the containment risk but answers the WRONG
+   question for a real Obsidian sidebar leaf (the window doesn't shrink, only
+   the pane does — the exact reasoning `.dse-sb__sticky`, `.dse-mt` and every
+   other container above already document) and would be a silent regression
+   the harness's own width-override mechanism cannot catch (it happens to
+   shrink the whole page, which a media query WOULD see, masking the gap a
+   real narrow pane would hit).
+
+   Per the owner's own contingency instruction ("if none reaches these
+   heads, stop with NEEDS_CONTEXT"): this round stops here. Every OTHER
+   round-3 fix (MEDIUM-1, LOW-1, LOW-3, LOW-4, evidence) is complete; the
+   report asks the specific question (which ancestor to use, or whether to
+   add one deliberately, or whether a `@media` fallback's real-app gap is
+   acceptable) rather than guessing. Until answered, the four family rules
+   above apply UNGUARDED at every width — narrow behaviour on this commit is
+   therefore WORSE than round 2's (rejected) 33.3px guard, matching the
+   round-1 survey's "raw Option A" numbers (statblock 8 lines at 300px). */
 
 /* ================================================================== */
 /*   Plan 21 Task 3 — body IDENTITY: serif face, cooler ink, open      */
