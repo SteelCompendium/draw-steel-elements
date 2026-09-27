@@ -6298,6 +6298,27 @@ Shared globals
 	--dse-fs-label: calc(0.85em * var(--dse-fs-small-scale));
 	--dse-fs-caption: calc(0.8em * var(--dse-fs-small-scale));
 	--dse-fs-micro: calc(0.7em * var(--dse-fs-small-scale));
+	/* -- SC-318: THE HEADING SCALE (h1-h6 inside plugin cards) --
+	   Kept separate from the nine ROLES above, on purpose: a role answers "what
+	   does the plugin's OWN hierarchy call this text" (SC-185); these six answer
+	   "what does Obsidian's OWN h1-h6 scale look like", restated as tokens so
+	   GROUP 1 (~:17110, screen-only) can share them instead of hardcoding the
+	   six UA literals `fontSizeContract.test.ts` used to carry as
+	   `UA_RESTATEMENTS` (now empty — these tokens replace it). Same
+	   `--dse-fs-large-scale` multiplier as `--dse-fs-heading`/`--dse-fs-subheading`
+	   above, so the same user knob (Obsidian's Large text-size slider, SC-230
+	   modal scaling) reaches these too; at its default of 1 each resolves to
+	   exactly the ratio transcribed from Obsidian's own `--h*-size` tokens
+	   (1.618/1.462/1.318/1.188/1.076/1, `r1-survey/obsidian-installed-app.css`).
+	   Print needs no token override: print is GROUP 1's print-excluded scope, so
+	   a real vault/print page keeps rendering Obsidian's own scale unchanged —
+	   these tokens exist to make the SCREEN preview match it, not the reverse. */
+	--dse-fs-h1: calc(1.618em * var(--dse-fs-large-scale));
+	--dse-fs-h2: calc(1.462em * var(--dse-fs-large-scale));
+	--dse-fs-h3: calc(1.318em * var(--dse-fs-large-scale));
+	--dse-fs-h4: calc(1.188em * var(--dse-fs-large-scale));
+	--dse-fs-h5: calc(1.076em * var(--dse-fs-large-scale));
+	--dse-fs-h6: calc(1em * var(--dse-fs-large-scale));
 }
 
 /* -- Mono slot: the reachable re-home (SC-121 batch 3 / workspace FOLLOWUPS #45) --
@@ -17116,86 +17137,142 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    edits the existing frozen 224).
 */
 
-/* GROUP 1 — `h1`-`h6` base typography. Split per tag (unlike GROUP 1's list-family
-   cousin, ALL SIX properties here differ by level, not just one) — `font-size`/`margin-
-   block-start`/`-end` restate the browser's OWN em-based UA defaults, literally (`2em`/
-   `0.67em` for h1 … `0.67em`/`2.33em` for h6 — verified against the harness's own bare
-   rendering, not memorized), which is why they are expressed in `em` (relative to the
-   heading's OWN resolved font-size, exactly how the UA sheet computes them) rather than a
-   frozen px number: robust to any ambient font-size context, not just the one this round
-   measured in. `line-height: inherit` — CAUGHT BY THE FULL-SWEEP SHOT-BYTE DIFF, not
-   assumed: the first draft wrote `line-height: normal` (Chrome's own UA-INITIAL value,
-   reasoning "no unstyled tag has an explicit heading line-height"), which is true but
-   irrelevant — `line-height` is an INHERITED property, and this sheet's own body-text
-   rule sets `line-height: 1.5` ambiently (~2285/4134/8103/…), which every unstyled
-   heading was ALREADY inheriting (a bare h2 at 24px computing 36px = 1.5 × 24, measured
-   on `.dse-hero__name`). `normal` is the CSS-INITIAL value, not the inherited one — an
-   explicit author declaration of `normal` beats inheritance regardless of specificity,
-   so it was silently shrinking every heading's line-box from 1.5× to Chrome's own
-   ~normal ratio (moved 500+ screen-only shot bytes across every real heading in the
-   gallery before this fix). `inherit` reproduces the SAME value inheritance already
-   produced with no declaration at all — genuinely 0 pixel change, verified against a
-   full pre/post shot-byte diff after the correction — while still being an explicit
-   author declaration that beats Obsidian's own (0,0,1)/(0,1,1) `line-height` rule.
-   `font-weight: bold` is the one value shared by every level. The shared subject-only
-   properties (colour/style/variant/letter-spacing/family) move to their own tag-agnostic
-   rule below since a single value covers all six levels. */
-/* SC-202 r4-resume fix (fontSizeContract) — these six `font-size` literals are
-   in `fontSizeContract.test.ts`'s sibling `UA_RESTATEMENTS` const (fix round,
-   independent review LOW-1 — NOT `ALLOWLIST`, whose own docstring calls its
-   contents adoption debt that "only ever shrinks"; these six are not debt and
-   will never be adopted), not the nine-role `--dse-fs-*` scale either: they
-   answer "what does a bare, unstyled heading already look like with ZERO
-   plugin opinion" (the literal Chromium UA ratios this round's own census
-   verified), not "how prominent is this text in the plugin's OWN hierarchy"
-   — the question the nine roles answer. A `--dse-fs-h3` next to
-   `--dse-fs-subheading` would misstate that these are the same kind of
-   decision, and a REAL new token would need registering in `DSE_TOKEN_NAMES`
-   + the workspace `D3-token-map.md` (a DIFFERENT repo, outside this worktree
-   — `test/dom/kit/tokens.test.ts`'s "no stray --dse-* definition in :root"
-   guard catches exactly this if attempted locally instead, can-fail proven).
-   GROUP 4's `code { font-size: inherit }` below needs no entry in either
-   list — `inherit` hardcodes nothing, so `isOnScale()` was widened one line
-   instead (see that function's own comment). See font-sizes.md's own "UA
-   literals" note. */
+/* GROUP 1 — `h1`-`h6` base typography (SC-318 round 2: Obsidian's OWN scale, minted as
+   the `--dse-fs-h1`..`--dse-fs-h6` tokens above, replacing SC-202 r4's bare UA-literal
+   restatement below). SC-202 r4 re-grounded a plugin card's markdown headings to the
+   browser's UNSTYLED `h1`-`h6` ratios (`2em`/`1.17em`/`0.67em`, "zero plugin opinion"),
+   which is what a real Obsidian vault shows for ANY note whose OWN CSS the plugin cannot
+   see — but that re-grounding pointed at the wrong target: this sheet's SCREEN scope is
+   the only place `h1`-`h6` render unstyled at all. PRINT (`[data-dse-print="on"]`, both
+   the in-app twin and a real Ctrl-P/export) is scoped OUT of this whole block, so it was
+   showing Obsidian's OWN `.markdown-rendered`/bare `h1`-`h6` scale (`--h1-size`..`--h6-size`,
+   1.618/1.462/1.318/1.188/1.076/1em, weights 700..600, `margin-block: var(--p-spacing)`
+   bumped to `var(--heading-spacing)` after a block) all along — measured against the
+   pinned Obsidian sheet, `r1-survey/obsidian-installed-app.css`, and against a real vault
+   note pre-SC-202 (SC-202 r4 §5b/§6). SCREEN was therefore the one place a card's own
+   headings ever disagreed with a real vault. This round mints that same Obsidian scale as
+   tokens (screen-only consumer, same as before — PRINT is untouched, already correct, and
+   stays print-excluded here) so screen == print == a real vault note. Split per tag,
+   because — unlike GROUP 1's list-family cousin — EVERY property here differs by level:
+   `font-size` from the token, `line-height`/`font-weight`/`letter-spacing`/`margin-block`
+   all restate Obsidian's own per-level literals (`r1-survey/obsidian-installed-app.css`,
+   the `--h1-weight`.."--h6-weight"/`--h1-line-height`.."--h6-line-height"/
+   `--h1-letter-spacing`.."--h6-letter-spacing" block) — none of the six can share a rule
+   with its siblings any more, which is why `line-height`/`font-weight`/`letter-spacing`
+   move OUT of the shared subject-only rule below (they used to be the one value every
+   level agreed on: `line-height: inherit`, `font-weight: bold`, `letter-spacing: normal`
+   — SC-202 r4's own reasoning for `line-height: inherit` no longer applies once
+   `line-height` has six different literal values instead of one inherited one).
+   `margin-block` restates Obsidian's OWN unconditional `h1`-`h6` rule (`margin-block-start`/
+   `-end: var(--p-spacing)`, 1rem = 1 body-em at the DEFAULT text size) — written as
+   `calc(1em / <ratio>)` in the HEADING'S OWN `em` unit (exactly how the UA literals above
+   were already expressed) so it lands on 1 BODY em regardless of ambient font-size, not a
+   frozen 16px. The adjacency rule below restates Obsidian's OTHER margin rule — a heading
+   directly after `p`/`pre`/`table`/`ul`/`ol` gets `margin-top: var(--heading-spacing)`
+   (2.5rem = 2.5 body-em) instead of the unconditional 1 — scoped, like Obsidian's own,
+   to only fire when such a sibling exists (a markdown body's headings after prose; the
+   plugin's own bare h3/h4 tags have no such sibling, so they keep the unconditional 1). */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(h1, h2, h3, h4, h5, h6) {
 	color: inherit;
 	font-style: normal;
 	font-variant: normal;
 	font-family: inherit;
-	letter-spacing: normal;
-	line-height: inherit;
-	font-weight: bold;
 }
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(h1) {
-	font-size: 2em;
-	margin-block-start: 0.67em;
-	margin-block-end: 0.67em;
+	font-size: var(--dse-fs-h1);
+	line-height: 1.2;
+	font-weight: 700;
+	letter-spacing: -0.015em;
+	margin-block: calc(1em / 1.618);
 }
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(h2) {
-	font-size: 1.5em;
-	margin-block-start: 0.83em;
-	margin-block-end: 0.83em;
+	font-size: var(--dse-fs-h2);
+	line-height: 1.2;
+	font-weight: 680;
+	letter-spacing: -0.011em;
+	margin-block: calc(1em / 1.462);
 }
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(h3) {
-	font-size: 1.17em;
-	margin-block-start: 1em;
-	margin-block-end: 1em;
+	font-size: var(--dse-fs-h3);
+	line-height: 1.3;
+	font-weight: 660;
+	letter-spacing: -0.008em;
+	margin-block: calc(1em / 1.318);
 }
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(h4) {
-	font-size: 1em;
-	margin-block-start: 1.33em;
-	margin-block-end: 1.33em;
+	font-size: var(--dse-fs-h4);
+	line-height: 1.4;
+	font-weight: 640;
+	letter-spacing: -0.005em;
+	margin-block: calc(1em / 1.188);
 }
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(h5) {
-	font-size: 0.83em;
-	margin-block-start: 1.67em;
-	margin-block-end: 1.67em;
+	font-size: var(--dse-fs-h5);
+	line-height: 1.5;
+	font-weight: 620;
+	letter-spacing: -0.002em;
+	margin-block: calc(1em / 1.076);
 }
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(h6) {
-	font-size: 0.67em;
-	margin-block-start: 2.33em;
-	margin-block-end: 2.33em;
+	font-size: var(--dse-fs-h6);
+	line-height: 1.5;
+	font-weight: 600;
+	letter-spacing: 0em;
+	margin-block: 1em;
+}
+/* GROUP 1b — the adjacency margin-top bump, mirroring Obsidian's own
+   `.markdown-rendered :is(p,pre,table,ul,ol) + :is(h1..h6) { margin-top:
+   var(--heading-spacing) }`. The extra `:is(p, pre, table, ul, ol)` compound
+   gives this rule one more type-selector's worth of specificity than the base
+   per-level block above (0,2,1 vs 0,2,0), so it wins on `margin-block-start`
+   alone — `margin-block-end` (the base rule's `margin-block` shorthand) is
+   untouched. Unlike Obsidian's own version, this is not scoped to `.markdown-
+   rendered`: a plugin card body has no such wrapper, and scoping to it would
+   silently disable the bump for every shipped rule/class/ancestry body this
+   round exists to restore (Q1/Q2 of the r1 survey). */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :is(p, pre, table, ul, ol) + :where(h1) {
+	margin-block-start: calc(2.5em / 1.618);
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :is(p, pre, table, ul, ol) + :where(h2) {
+	margin-block-start: calc(2.5em / 1.462);
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :is(p, pre, table, ul, ol) + :where(h3) {
+	margin-block-start: calc(2.5em / 1.318);
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :is(p, pre, table, ul, ol) + :where(h4) {
+	margin-block-start: calc(2.5em / 1.188);
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :is(p, pre, table, ul, ol) + :where(h5) {
+	margin-block-start: calc(2.5em / 1.076);
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :is(p, pre, table, ul, ol) + :where(h6) {
+	margin-block-start: 2.5em;
+}
+/* GROUP 1c — the three plugin TAGS that render a real h3/h4 outside markdown share the
+   h3/h4 tokens: the roster heading and the hero region title (CHARACTERISTICS) are
+   CLASSED h3 tags with no font-size of their own today (Q1 survey), so they already
+   inherited GROUP 1's cascade — this restates it EXPLICITLY so the size is plugin-owned,
+   not an accident of the `:where()` cascade (Q5 Option A). The initiative bare h3/h4
+   ("Heroes"/"Enemy groups"/a group name) carry no class at all, so GROUP 1's own
+   `:where(h3)`/`:where(h4)` rule already reaches them with no restatement needed.
+   `.dse-hero__name` (h2) is DELIBERATELY EXCLUDED — see its own pin, immediately below —
+   it is the hero card's NAME, SC-232's territory, not a markdown/section heading. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-enc__roster-heading,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-hero__region-title {
+	font-size: var(--dse-fs-h3);
+}
+/* GROUP 1d — `.dse-hero__name` (h2) does NOT move to the new h2 token: it is the hero
+   card's own NAME (SC-232's territory — that ticket's card-NAME sizes, not this one's
+   heading scale), so it is pinned EXPLICITLY to exactly what it rendered before this
+   round (SC-202 r4's UA h2 restatement, `2em`/1.2 shared multiplier -> the literal
+   1.5em/inherit computed pair this rule states directly) rather than left to fall
+   through to GROUP 1's now-different h2 rule above. `font-weight`/`letter-spacing`
+   need no restatement here — the pre-existing Steel `.dse-hero__name` rule (~:10498,
+   `font-weight: 700; letter-spacing: 0.01em`) already outranks GROUP 1 on both
+   ((0,3,0) vs (0,2,0)) and is unchanged by this round. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-hero__name {
+	font-size: 1.5em;
+	line-height: inherit;
 }
 
 /* GROUP 2 — `strong`/`em`, joined by `b`/`i` (fix round, independent review MED-2). Both
