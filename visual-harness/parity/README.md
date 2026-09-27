@@ -8,7 +8,7 @@ plugin's "Steel" theme (`styles-source.css`, `[data-dse-theme='steel']`).
 
 | When you… | Run | Notes |
 |---|---|---|
-| Change any Steel CSS in `styles-source.css` | `npm run parity` | Must end **0 GAPs and 0 undeclared WARNs, exit 0** — that biconditional *is* the gate (SC-110). The only escape is an explicit entry in `selector-map.json`'s `declaredDeferrals` (8 today, and **never** for a material rule — see "Declared deferrals"). Close a GAP by fixing the CSS — never by deleting or weakening the pair that reports it, never by loosening a tolerance, and never by declaring something CSS can fix. |
+| Change any Steel CSS in `styles-source.css` | `npm run parity` | Must end **0 GAPs and 0 undeclared WARNs, exit 0** — that biconditional *is* the gate (SC-110). The only escape is an explicit entry in `selector-map.json`'s `declaredDeferrals` (5 today, and **never** for a material rule — see "Declared deferrals"). Close a GAP by fixing the CSS — never by deleting or weakening the pair that reports it, never by loosening a tolerance, and never by declaring something CSS can fix. |
 | Change any Steel CSS | `npx jest test/dom/theme/steelMaterial.test.ts` | The material contract (see below). Runs as part of `npx jest`, so the normal full-suite gate covers it. |
 | Know the **live site itself** changed | `npm run parity:site` | **Only then.** Regenerating the baseline for any other reason re-points the reference of record at whatever the plugin happens to look like. |
 | Open a PR that touched either | — | **Review the JSON diff** of `baseline/site-inventory.json` in the PR. A baseline diff must be explained by a real site change; if it isn't, a page failed to load/render and the capture is garbage. |
@@ -515,12 +515,11 @@ calls that belong to Scott, not to whoever is holding the gate.
 
 Deliberately conservative. Relaxing it is a one-line change to `NON_DECLARABLE_CLASSES`.
 
-**Currently declared: 8 entries / 16 rows** (both schemes each), in three findings:
+**Currently declared: 5 entries / 10 rows** (both schemes each), in two findings:
 
 | Finding | Rows | Site | Plugin | Status |
 |---|---|---|---|---|
 | `pr-chars:ink` (SC-226, was FOLLOWUPS #40) | 2 | `.chars` `rgb(205,209,212)` / `rgb(95,104,109)` | `rgba(220,226,230,.95)` / `rgb(26,29,32)` | **deliberate** — the plugin's one-node caption is heading-emphasised where the site splits `.pre`/`.chars` |
-| `section-tag:font-size` / `:line-height` / `:letter-spacing` (SC-235, was FOLLOWUPS #51) | 6 | 18px / 30.6px / 1.8px (`.9rem`, `.1em`) | 16px / 27.2px / 1.12px (`.07em`) | **pixel decision** — one type-scale call; line-height is a pure consequence of font-size |
 | `statblock-wrap` + `featureblock-wrap` `:margin-top`/`:margin-bottom` (SC-225, was FOLLOWUPS #39) | 8 | 34px (`1.7rem` on `.sb-wrap`/`.fb-wrap`) | 8px (`0.5em` unscoped base on the host) | **pixel decision** — Plan 21 Task 2 set the precedent (24px onto the feature host) but 26px of new air per block is Scott's call |
 
 **HEALED and deleted — the anti-rot check working end to end (2026-08-07, SC-117 R1).**
@@ -532,6 +531,16 @@ the Plan 21 Task 2 `line-height: 1.7` group — one selector — and the next `n
 it is the required response (rule 6 above), and it is what took the set from 9/18 to 8/16.
 That is the intended lifecycle of every entry in this table: declared, fixed, reported dead,
 deleted.
+
+**HEALED and deleted (2026-09-27, SC-235).** `section-tag:font-size` / `:line-height` /
+`:letter-spacing` (was FOLLOWUPS #51) was the third finding in this table: site `.tag` at
+18px / 30.6px / 1.8px (`.9rem`, `.1em`) against the plugin's then-ambient 16px / 27.2px /
+1.12px (`.07em`). SC-235 moved `.dse-section__title`'s font-size onto the role scale
+(`calc(var(--dse-fs-body) * 1.125)`, styles-source.css ~8163) and its letter-spacing to
+`0.1em`; line-height needed no separate edit — the plate root's unitless `line-height: 1.7`
+recomputes against the title's new font-size for free (18 x 1.7 = 30.6px). All three rows
+now match, both schemes, and the declarations were deleted in the same commit as the CSS
+fix — the set moved from 8/16 to 5/10.
 
 **Deliberately NOT declared**, for contrast, so the bar is legible:
 `statblock-band` / `featureblock-band` `margin-top` (site `0px` vs plugin `-8px`) stay

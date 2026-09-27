@@ -815,12 +815,15 @@ describe('the SHIPPED contract is itself valid', () => {
 	// one-selector fix (the statblock host joined the Plan 21 line-height group) closed the
 	// divergence, `diff.mjs`'s anti-rot check reported the declaration as DEAD, and it was
 	// deleted. That is the mechanism working end to end, not a re-baseline.
-	test('the declared set is exactly the documented 8 entries', () => {
+	// 2026-09-27 (SC-235): 8 -> 5. `section-tag:font-size`/`:line-height`/`:letter-spacing`
+	// HEALED -- the section title's type scale moved to site parity (18px / 30.6px / .1em,
+	// styles-source.css's Task-2 boxed-header rule, ~8163), so all three rows now match and
+	// the declarations were deleted in the same commit as the CSS fix (the mechanism this
+	// comment already describes for FOLLOWUPS #52, repeating here rather than being amended
+	// in place — this file is a dated log of the set's own history).
+	test('the declared set is exactly the documented 5 entries', () => {
 		expect(map.declaredDeferrals.map((d: { pair: string; rule: string }) => `${d.pair}:${d.rule}`)).toEqual([
 			'pr-chars:ink',
-			'section-tag:font-size',
-			'section-tag:line-height',
-			'section-tag:letter-spacing',
 			'statblock-wrap:margin-top',
 			'statblock-wrap:margin-bottom',
 			'featureblock-wrap:margin-top',

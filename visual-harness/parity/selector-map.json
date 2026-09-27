@@ -9,21 +9,6 @@
       "why": "FOLLOWUPS #40 / SC-110 -- DELIBERATE divergence, not a measurement artifact. The site splits its power-roll caption into .pre (dim metal, 'Power Roll +') and .chars (the bright roll readout); the plugin's .dse-pr__head is ONE node carrying the whole caption, painted at var(--dse-heading) so the line reads as a heading. That is brighter than the site's .chars in dark (220,226,230 @.95 vs 205,209,212) and darker in light (26,29,32 vs 95,104,109) -- more emphasis, both schemes, by design. Matching .chars exactly would de-emphasise the plugin's only power-roll heading. Changing it is a PIXEL decision for Scott, not a CSS catch-up."
     },
     {
-      "pair": "section-tag",
-      "rule": "font-size",
-      "why": "FOLLOWUPS #51 -- the section title's TYPE SCALE, now honestly measured for the first time (SC-110 retargeted this rule off the site's text-less wrapper onto its real .tag). Site .tag is .9rem = 18px at the site's 20px rem base; the plugin authors 16px. One coherent decision with :line-height and :letter-spacing below -- a visible 12.5% enlargement of every Steel section title, i.e. a PIXEL decision for Scott, not an exact-value catch-up a gate ticket may make unilaterally."
-    },
-    {
-      "pair": "section-tag",
-      "rule": "line-height",
-      "why": "FOLLOWUPS #51 -- a pure CONSEQUENCE of the :font-size entry above, not an independent miss. Both sides run the same 1.7 ratio (site 1.7 x 18px = 30.6px; plugin 1.7 x 16px = 27.2px, inherited from the Plan 21 card-root rule). Fixing font-size closes this row automatically; it is listed separately only because the gate reports per rule."
-    },
-    {
-      "pair": "section-tag",
-      "rule": "letter-spacing",
-      "why": "FOLLOWUPS #51 (descends from #40) -- the plugin tracks its small-caps section title at 0.07em (1.12px); the site's .tag tracks .1em (1.8px). #40 deferred this against the WRAPPER's `normal`, arguing that matching it would strip a deliberate small-caps treatment -- retargeting onto the real .tag vindicates that reasoning and inverts the direction: the plugin under-tracks rather than over-tracks. The residual is part of the same type-scale decision as :font-size."
-    },
-    {
       "pair": "statblock-wrap",
       "rule": "margin-top",
       "why": "FOLLOWUPS #39 -- the site's statblock block rhythm is 34px (.sb-wrap margin: 1.7rem auto at the 20px rem base); the plugin's host carries the unscoped base's 0.5em = 8px. SC-110 fixed the half of #39 the gate owned (this pair did not exist, so the site's block margin was invisible to the contract); the residual 34-vs-8 is the real miss #39 recorded and it is a PIXEL decision. Plan 21 Task 2 set the precedent for closing it (it ported the site's 24px .sc-ability margin onto the feature host, Steel-scoped and screen-only, styles-source.css ~3497), but 26px of new air around every statblock and featureblock in an Obsidian note is Scott's call, not a gate ticket's."
