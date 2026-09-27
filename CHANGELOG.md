@@ -28,6 +28,17 @@ for what needs action.
   nested features, featureblock and a kit's signature ability was 16px with 1.12px
   letter-spacing. The title's line-height and the Text size preference still scale it the
   same way as before.
+- [FIX] **Headings (`#` through `######`) inside a card's markdown body — and the roster
+  heading, hero region title, and initiative group headers — are back to Obsidian's own
+  heading sizes, instead of the plain browser default** (SC-318). SC-202 had re-grounded a
+  card's own `h1`-`h6` tags to the raw, unstyled browser default so a real vault note and
+  the preview harness would agree — but that also meant a `######` heading rendered SMALLER
+  than body text (10.7px), the hero's CHARACTERISTICS region title shrank (21.1px to
+  18.7px), and a `###` heading lost most of its top spacing (40px to 19px) after a
+  paragraph. Screen now restates Obsidian's own scale instead of the browser's, matching
+  what print/export and a real Obsidian note already showed the whole time — every one of
+  those three changes is reversed. Print/export is unaffected either way — it already
+  looked like this.
 - [FIX] **The example inserted for a new `ds-feature` block no longer claims to be a villain
   action while rendering as a main action** (SC-236). The Draw Steel Elements authoring example
   for a new feature block carried a stray `ability_type: Villain Action 1` line alongside
