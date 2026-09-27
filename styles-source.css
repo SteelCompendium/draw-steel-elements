@@ -14260,7 +14260,7 @@ body.theme-light
    under the 3:1 non-text contrast guideline. Joining this rule rather than declaring a
    second one, per this rule's own "one rule" contract. The host's box-shadow ring is
    neutralized for both states by the SC-203 host re-grounding block, which the chip now
-   also joins (~:15360) — this outline is never left to stack over a grey box-shadow.
+   also joins (~:15591) — this outline is never left to stack over a grey box-shadow.
    `.dse-swatch` is deliberately NOT here: its pressed mark already uses this exact
    outline, so a shared ring would make focus look like selection — see SC-361. */
 .dse-optchip:focus-visible,
@@ -15581,7 +15581,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
       bevel, ~:2107, (0,4,0) — well above this block's (0,2,0), so the pressed bevel is
       untouched). Unpressed, and on every state including `:focus-visible`, this removes
       Obsidian's host `button:not(.clickable-icon)`/`button:focus-visible` box-shadow
-      ((0,1,1) either way) so the chip's own kit focus ring (~:14035) is never drawn over
+      ((0,1,1) either way) so the chip's own kit focus ring (~:14266) is never drawn over
       a leftover grey ring. This `box-shadow: none` applies at REST and on HOVER too, not
       only `:focus-visible` — the block carries no state qualifier — so an unpressed chip
       also loses Obsidian's `--input-shadow`/`--input-shadow-hover` plate (dark: a soft
