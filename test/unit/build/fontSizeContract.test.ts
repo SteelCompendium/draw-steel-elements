@@ -223,42 +223,33 @@ export const ALLOWLIST: readonly string[] = [
 ];
 
 /**
- * UA RESTATEMENTS — SC-202 r4-resume, split out (fix round, independent review LOW-1)
- * from `ALLOWLIST` above, where they were first added: right in substance, wrong list.
- * `ALLOWLIST`'s own docstring calls it adoption DEBT ("still owing an adoption") and its
- * own counter test ("records how much of the sweep is left") treats `ALLOWLIST.length` as
- * that debt's size — six permanent residents that will never be adopted would make both
- * claims false forever, the same shape of drift this file exists to prevent elsewhere.
+ * UA RESTATEMENTS — MOSTLY RETIRED (SC-318 round 2). SC-202 r4-resume split these six out
+ * (fix round, independent review LOW-1) from `ALLOWLIST` above as the six bare `h1`-`h6`
+ * UA literals (`2em`…`0.67em`) GROUP 1 restated, on the reasoning that they answered
+ * "what does a bare, unstyled heading look like with ZERO plugin opinion", not a
+ * role-scale question, and that minting a real `--dse-fs-h*` token had been tried and
+ * reverted (the workspace `D3-token-map.md` cross-repo cost).
  *
- * These six are not debt. They are the six `h1`-`h6` UA literals (styles-source.css,
- * "SC-202 r4 — HEADING + EMPHASIS + LINK HOST RE-GROUNDING", GROUP 1) — deliberate,
- * documented, literal-bearing ON PURPOSE, like `ALLOWLIST`'s own fourth family, but for
- * the opposite reason: they answer "what does a bare, unstyled heading already look like
- * with ZERO plugin opinion" (Chromium's own UA ratios, *derived* rather than chosen,
- * can-fail verified against the harness's bare rendering), never "how prominent is this
- * text in the plugin's OWN hierarchy" — the nine roles' question — so they are not a
- * role-scale candidate at all, and never will be. They stay `em`-relative (so they still
- * track the reader's font size, unlike the ALLOWLIST's own absolute `rem`/`px` family).
+ * SC-318 round 2 did exactly that follow-up: GROUP 1's six `font-size` declarations are
+ * now `var(--dse-fs-h1)`…`var(--dse-fs-h6)` (styles-source.css, the `:root` "SC-318: THE
+ * HEADING SCALE" block, and GROUP 1 itself), not bare em literals — carrying Obsidian's
+ * OWN `h1`-`h6` ratios (1.618/1.462/…/1em) instead of the browser UA's, so a real vault
+ * note's heading (which Obsidian styles, not the browser UA) and the harness now agree.
+ * `isOnScale()` above already accepts any `var(--dse-fs-*)`, so five of the original six
+ * sites no longer appear in `offScale` at all.
  *
- * The prescribed remedy ("if no role fits, a new/retuned --dse-fs-* token") was tried and
- * reverted: `test/dom/kit/tokens.test.ts`'s "no stray --dse-* definition in :root" guard
- * requires every `--dse-*` custom property in `DSE_TOKEN_NAMES`, which
- * `token-coverage.test.ts` in turn requires a matching row for in the WORKSPACE repo's own
- * `docs/superpowers/dse-overhaul/D3-token-map.md` — a different git repository this
- * plugin's worktree cannot commit to. A token would also be worse than this: it would be
- * *retunable*, and retuning it would silently break the re-grounding this round's own jest
- * guard pins to these exact literals. font-sizes.md carries the same reasoning under "What
- * the scale does NOT replace". Follow-up, not required for this round: the small cross-repo
- * change minting real `--dse-fs-h1`…`--dse-fs-h6` tokens + the matching D3-token-map.md
- * rows, if the design team wants these six formally on the token map instead.
+ * ONE survivor: `.dse-hero__name` (h2) is the hero card's own NAME — SC-232's territory
+ * (card-NAME sizes), not this scale — so SC-318 round 2 explicitly did NOT move it onto
+ * `--dse-fs-h2`; it is pinned to exactly what it rendered before this round (GROUP 1d,
+ * `font-size: 1.5em; line-height: inherit;`). That is precisely this list's own shape: a
+ * deliberate, documented, permanent literal that answers "what did this already render",
+ * not a role-scale candidate and not adoption debt owed to `ALLOWLIST` (which is why it
+ * stays here rather than moving there — see that list's own "do NOT add to make a red
+ * run green" rule). `line-height: inherit` needs no entry — this file only walks
+ * `font-size`.
  */
 export const UA_RESTATEMENTS: readonly string[] = [
-	":is([data-dse-element], .dse-modal):not([data-dse-print=\"on\"]) :where(h1) :: 2em",
-	":is([data-dse-element], .dse-modal):not([data-dse-print=\"on\"]) :where(h2) :: 1.5em",
-	":is([data-dse-element], .dse-modal):not([data-dse-print=\"on\"]) :where(h3) :: 1.17em",
-	":is([data-dse-element], .dse-modal):not([data-dse-print=\"on\"]) :where(h4) :: 1em",
-	":is([data-dse-element], .dse-modal):not([data-dse-print=\"on\"]) :where(h5) :: 0.83em",
-	":is([data-dse-element], .dse-modal):not([data-dse-print=\"on\"]) :where(h6) :: 0.67em",
+	":is([data-dse-element], .dse-modal):not([data-dse-print=\"on\"]) .dse-hero__name :: 1.5em",
 ];
 
 describe('SC-185: font sizes come from the --dse-fs-* role scale', () => {

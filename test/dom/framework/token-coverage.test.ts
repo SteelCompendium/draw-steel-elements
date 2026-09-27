@@ -163,10 +163,15 @@ const printSteel = blockBody(
 // two scales above — they are ROLE RATIOS and USER knobs, not theme values. A
 // caption reads at the same ratio to its body text under any theme; only the size
 // that ratio resolves against changes, and that comes from the host, not from us.
+// SC-318: the six --dse-fs-h1..h6 heading-scale tokens join too, for the identical
+// reason — Obsidian's OWN h1-h6 ratios, not a theme value; no theme block overrides
+// them (GROUP 1, styles-source.css, is screen-only but theme-agnostic — it applies
+// under any [data-dse-theme]).
 const FS_TOKENS = [
 	'fs-small-scale', 'fs-large-scale', 'fs-control-scale',
 	'fs-heading', 'fs-subheading', 'fs-numeral', 'fs-body', 'fs-control',
 	'fs-secondary', 'fs-label', 'fs-caption', 'fs-micro',
+	'fs-h1', 'fs-h2', 'fs-h3', 'fs-h4', 'fs-h5', 'fs-h6',
 ];
 const STEEL_INVARIANT = new Set([
 	'page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade', 'badge-fg',
@@ -314,6 +319,15 @@ const BASE_MAP: Record<string, string> = {
 	'fs-label': 'calc(0.85em * var(--dse-fs-small-scale))',
 	'fs-caption': 'calc(0.8em * var(--dse-fs-small-scale))',
 	'fs-micro': 'calc(0.7em * var(--dse-fs-small-scale))',
+	// SC-318: THE HEADING SCALE — Obsidian's OWN h1-h6 ratios, minted as tokens
+	// so GROUP 1 (styles-source.css, screen-only) can share them instead of
+	// hardcoding the six UA literals it used to restate.
+	'fs-h1': 'calc(1.618em * var(--dse-fs-large-scale))',
+	'fs-h2': 'calc(1.462em * var(--dse-fs-large-scale))',
+	'fs-h3': 'calc(1.318em * var(--dse-fs-large-scale))',
+	'fs-h4': 'calc(1.188em * var(--dse-fs-large-scale))',
+	'fs-h5': 'calc(1.076em * var(--dse-fs-large-scale))',
+	'fs-h6': 'calc(1em * var(--dse-fs-large-scale))',
 };
 
 describe('D3 Task 6: build guard — every token covered by base + Steel + Print (§7.3)', () => {
@@ -339,8 +353,11 @@ describe('D3 Task 6: build guard — every token covered by base + Steel + Print
 		// SC-102: +1 overridden (act-villain, union 75 → 76) = 67 → 68.
 		// SC-185: +12 invariant (the --dse-fs-* type-role scale — role ratios and
 		// user knobs, never theme-overridden) = 8 → 20; overridden stays 68.
+		// SC-318: +6 invariant (the --dse-fs-h1..h6 heading scale — Obsidian's own
+		// ratios, no theme block overrides them, union 88 → 94) = 20 → 26;
+		// overridden stays 68.
 		expect(overridden.length).toBe(68);
-		expect(STEEL_INVARIANT.size).toBe(20);
+		expect(STEEL_INVARIANT.size).toBe(26);
 	});
 
 	test('EVERY union token is overridden in a Print block OR map-marked print-invariant', () => {
@@ -359,7 +376,10 @@ describe('D3 Task 6: build guard — every token covered by base + Steel + Print
 		// print-excluded, so no print block ever overrides the tokens) = 20 → 22.
 		// SC-185: +12 (the --dse-fs-* type-role scale — print-invariant BY DESIGN;
 		// see the set's own comment) = 22 → 34.
-		expect(PRINT_INVARIANT.size).toBe(34);
+		// SC-318: +6 (the --dse-fs-h1..h6 heading scale — print-invariant BY
+		// DESIGN too: GROUP 1's consumer rule is print-excluded, so print already
+		// shows Obsidian's real scale without these tokens; union 88 → 94) = 34 → 40.
+		expect(PRINT_INVARIANT.size).toBe(40);
 		expect(overridden.length + PRINT_INVARIANT.size).toBe(DSE_TOKEN_NAMES.length);
 	});
 

@@ -81,7 +81,8 @@ describe('Plan 08 Task 1: --dse-* token vocabulary + its unscoped base defaults 
 		// + SC-112 Task 7's two user-scale tokens (text-scale, card-scale) = 75
 		// + SC-102's act-villain (the seventh action type) = 76.
 		// + SC-185's twelve --dse-fs-* type-role tokens (9 roles + 3 user knobs) = 88.
-		expect(DSE_TOKEN_NAMES.length).toBe(88);
+		// + SC-318's six --dse-fs-h1..h6 heading-scale tokens = 94.
+		expect(DSE_TOKEN_NAMES.length).toBe(94);
 		// One representative per §6 group, so a whole group can't silently vanish.
 		for (const key of [
 			'surface', // structure / surface

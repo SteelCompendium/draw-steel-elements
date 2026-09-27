@@ -39,36 +39,72 @@ test('the SC-202 r4 block is still in the sheet', () => {
 	expect(blockStart).toBeGreaterThan(0);
 });
 
-describe('SC-202 r4 — GROUP 1: h1-h6 base typography', () => {
-	test('the shared subject-agnostic properties (colour/style/variant/family/letter-spacing/line-height/weight) are restated once for all six levels', () => {
+describe('SC-202 r4 / SC-318 r2 — GROUP 1: h1-h6 base typography', () => {
+	test('the shared subject-agnostic properties (colour/style/variant/family) are restated once for all six levels', () => {
 		const m = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(h1, h2, h3, h4, h5, h6\\) \\{([^}]*)\\}'));
 		expect(m).not.toBeNull();
-		for (const decl of [
-			'color: inherit;',
-			'font-style: normal;',
-			'font-variant: normal;',
-			'font-family: inherit;',
-			'letter-spacing: normal;',
-			'line-height: inherit;',
-			'font-weight: bold;',
-		]) {
+		for (const decl of ['color: inherit;', 'font-style: normal;', 'font-variant: normal;', 'font-family: inherit;']) {
 			expect(m![1]).toContain(decl);
+		}
+		// SC-318 r2: letter-spacing/line-height/font-weight moved OUT of the shared rule —
+		// they now differ by level (Obsidian's own per-level literals), so they can no
+		// longer be one value shared by all six.
+		for (const decl of ['letter-spacing:', 'line-height:', 'font-weight:']) {
+			expect(m![1]).not.toContain(decl);
 		}
 	});
 
+	// SC-318 r2: font-size is now the minted --dse-fs-h1..h6 token (Obsidian's OWN h1-h6
+	// ratios), not the bare browser-UA literal SC-202 r4 restated. line-height/font-weight/
+	// letter-spacing are Obsidian's own per-level literals (r1-survey/obsidian-installed-
+	// app.css); margin-block-start/-end are BOTH `calc(1em / <ratio>)` — 1 BODY em in the
+	// heading's own em unit, restating Obsidian's unconditional `h1..h6 { margin-block:
+	// var(--p-spacing) }` rather than the old bare UA em ratio.
 	test.each([
-		['h1', '2em', '0.67em'],
-		['h2', '1.5em', '0.83em'],
-		['h3', '1.17em', '1em'],
-		['h4', '1em', '1.33em'],
-		['h5', '0.83em', '1.67em'],
-		['h6', '0.67em', '2.33em'],
-	])('%s restates its own UA font-size (%s) and margin-block-start/end (%s)', (tag, fontSize, margin) => {
+		['h1', 'var(--dse-fs-h1)', '1.2', '700', '-0.015em', 'calc(1em / 1.618)'],
+		['h2', 'var(--dse-fs-h2)', '1.2', '680', '-0.011em', 'calc(1em / 1.462)'],
+		['h3', 'var(--dse-fs-h3)', '1.3', '660', '-0.008em', 'calc(1em / 1.318)'],
+		['h4', 'var(--dse-fs-h4)', '1.4', '640', '-0.005em', 'calc(1em / 1.188)'],
+		['h5', 'var(--dse-fs-h5)', '1.5', '620', '-0.002em', 'calc(1em / 1.076)'],
+		['h6', 'var(--dse-fs-h6)', '1.5', '600', '0em', '1em'],
+	])('%s restates its own font-size (%s), line-height (%s), font-weight (%s), letter-spacing (%s) and margin-block (%s)', (tag, fontSize, lineHeight, weight, letterSpacing, margin) => {
 		const m = flat.match(new RegExp(escape(`${ANCHOR} :where(${tag})`) + ' \\{([^}]*)\\}'));
 		expect(m).not.toBeNull();
 		expect(m![1]).toContain(`font-size: ${fontSize};`);
+		expect(m![1]).toContain(`line-height: ${lineHeight};`);
+		expect(m![1]).toContain(`font-weight: ${weight};`);
+		expect(m![1]).toContain(`letter-spacing: ${letterSpacing};`);
+		expect(m![1]).toContain(`margin-block: ${margin};`);
+	});
+
+	// SC-318 r2: the adjacency margin-top bump (Obsidian's OWN `:is(p,pre,table,ul,ol) +
+	// heading { margin-top: var(--heading-spacing) }`, 2.5 body-em instead of 1) is
+	// restated per level as `margin-block-start` alone, so it overrides only the top side.
+	test.each([
+		['h1', 'calc(2.5em / 1.618)'],
+		['h2', 'calc(2.5em / 1.462)'],
+		['h3', 'calc(2.5em / 1.318)'],
+		['h4', 'calc(2.5em / 1.188)'],
+		['h5', 'calc(2.5em / 1.076)'],
+		['h6', '2.5em'],
+	])('%s bumps margin-block-start to %s after a p/pre/table/ul/ol sibling', (tag, margin) => {
+		const m = flat.match(new RegExp(escape(`${ANCHOR} :is(p, pre, table, ul, ol) + :where(${tag})`) + ' \\{([^}]*)\\}'));
+		expect(m).not.toBeNull();
 		expect(m![1]).toContain(`margin-block-start: ${margin};`);
-		expect(m![1]).toContain(`margin-block-end: ${margin};`);
+	});
+
+	test('the roster heading and hero region title (classed h3 tags) share --dse-fs-h3 explicitly', () => {
+		const m = flat.match(new RegExp(escape(ANCHOR) + ' \\.dse-enc__roster-heading, ' + escape(ANCHOR) + ' \\.dse-hero__region-title \\{([^}]*)\\}'));
+		expect(m).not.toBeNull();
+		expect(m![1]).toContain('font-size: var(--dse-fs-h3);');
+	});
+
+	test('.dse-hero__name (h2) is pinned to its pre-SC-318 rendered value, not the h2 token', () => {
+		const m = flat.match(new RegExp(escape(`${ANCHOR} .dse-hero__name`) + ' \\{([^}]*)\\}'));
+		expect(m).not.toBeNull();
+		expect(m![1]).toContain('font-size: 1.5em;');
+		expect(m![1]).toContain('line-height: inherit;');
+		expect(m![1]).not.toContain('--dse-fs-h2');
 	});
 });
 

@@ -88,6 +88,9 @@ const THEME_INVARIANT = [
 	'fs-small-scale', 'fs-large-scale', 'fs-control-scale',
 	'fs-heading', 'fs-subheading', 'fs-numeral', 'fs-body', 'fs-control',
 	'fs-secondary', 'fs-label', 'fs-caption', 'fs-micro',
+	// SC-318: the --dse-fs-h1..h6 heading-scale tokens join for the same reason
+	// as the nine roles above — Obsidian's own ratios, not a theme value.
+	'fs-h1', 'fs-h2', 'fs-h3', 'fs-h4', 'fs-h5', 'fs-h6',
 ] as const;
 
 /**
@@ -265,8 +268,10 @@ describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => 
 		// SC-102: +1 overridden (act-villain, union 75 → 76) — 67 → 68.
 		// SC-185: +12 invariant (the --dse-fs-* type-role scale, union 76 → 88) —
 		// 68 overridden / 8 → 20 invariant.
+		// SC-318: +6 invariant (the --dse-fs-h1..h6 heading scale, union 88 → 94) —
+		// 68 overridden / 20 → 26 invariant.
 		expect(overridden.length).toBe(68);
-		expect(THEME_INVARIANT.length).toBe(20);
+		expect(THEME_INVARIANT.length).toBe(26);
 		expect(overridden.length + THEME_INVARIANT.length).toBe(DSE_TOKEN_NAMES.length);
 	});
 

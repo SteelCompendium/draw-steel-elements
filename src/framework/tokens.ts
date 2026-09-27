@@ -136,6 +136,19 @@ export const DSE_TOKEN_NAMES = [
 	'fs-label',
 	'fs-caption',
 	'fs-micro',
+	// -- SC-318: THE HEADING SCALE. Six tokens carrying Obsidian's OWN h1-h6
+	//    ratios (not a tenth+ ROLE — see the :root block's own comment), so
+	//    GROUP 1's screen-only h1-h6 restatement shares them instead of the
+	//    bare UA literals it used to hardcode. Theme- and print-invariant for
+	//    the same reason the roles above are: print already shows Obsidian's
+	//    real scale (GROUP 1 is print-excluded), and no theme block overrides
+	//    them. Same --dse-fs-large-scale multiplier as fs-heading/fs-subheading. --
+	'fs-h1',
+	'fs-h2',
+	'fs-h3',
+	'fs-h4',
+	'fs-h5',
+	'fs-h6',
 ] as const;
 
 /** The narrowed token-name union (D2 §6 / F1 §3.5). `cssVar(name)` → `var(--dse-<name>)`. */
