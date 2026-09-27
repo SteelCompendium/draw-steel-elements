@@ -7297,7 +7297,15 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    .dse-feature__nested > .dse-feature > .dse-head`) never matches the specific
    rules and correctly falls through to the generic 27px rule below — matching
    the site, where every nested sub-feature reads at the SAME generic size as a
-   kit/trait head, never at its parent card's larger size. Right-rail minis
+   kit/trait head, never at its parent card's larger size. ONE nested shape is
+   the deliberate exception: the kit's own inline signature ability
+   (`.dse-card__band > .dse-feature__nested > .dse-feature > .dse-head`) is the
+   site's ability-card family wearing the sub-feature DOM shape, not a plain
+   sub-feature — round-3 review MEDIUM-1 gave it its own arm on the ability
+   rule below rather than leaving it to fall through. A standalone TRAIT
+   (`data-dse-act='trait'`) is excluded from that same ability rule for the
+   opposite reason — the site puts it on the generic scale, not the ability
+   one — so it still falls through here. Right-rail minis
    (~:7724 deck chip, ~:7827/~:7927 card-head/fb-option minis) read
    --dse-fs-heading directly, not this rule's output, so they are unaffected —
    see the updated derivation comments at those sites. */
@@ -7314,8 +7322,34 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 /* standalone ability card: the Feature element's OWN head, a direct child of
    its `.dse-feature`, never a nested sub-feature (see the DOM-chain note
    above). Site: `.sc-ability > .sc-head .sc-head__left-primary`
-   (steel-ability-cards.css:107-110), 1.85rem × 0.9 = 33.3px / line-height 1. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='feature'] > .dse-feature > .dse-head > .dse-head__primary--left {
+   (steel-ability-cards.css:107-110), 1.85rem × 0.9 = 33.3px / line-height 1.
+   `:not([data-dse-act='trait'])` (round-3 review MEDIUM-1): a standalone TRAIT
+   (`renderFeature.ts:actionTypeOf` returns 'trait' for `feature.isTrait()`,
+   stamped as `data-dse-act="trait"` on the same `.dse-feature` this selector
+   already scopes to, `renderFeature.ts:241`) is a `sc-trait` card on the
+   site, not a `sc-ability` one — it reads at the GENERIC 27px there
+   (`sc-trait.sc-trait--crest`, live `Browse/feature/trait/human/
+   determination/`), not the ability card's 33.3px. Without the exclusion
+   every standalone trait over-sized to 33.3px; excluding it here lets the
+   generic rule above claim it instead, matching the site.
+   The kit's own inline signature-ability band gets its OWN arm below —
+   `.dse-card__band > .dse-feature__nested > .dse-feature` is a DIFFERENT
+   selector shape (nested, not this rule's direct-child-of-the-root form), so
+   it was never reachable through this rule and needed one of its own. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='feature'] > .dse-feature:not([data-dse-act='trait']) > .dse-head > .dse-head__primary--left,
+/* kit signature ability (round-3 review MEDIUM-1): the site's inline kit
+   signature ability card renders at the ability card's 33.3px (live
+   `Browse/kit/panther/`; the branch's own `site-inventory.json` `kit--dark`
+   entry for `.sc-ability > .sc-head .sc-head__left-primary` = 33.3px, cited
+   verbatim in `name-kit-signature`'s parity pair below). The plugin's inline
+   kit band nests it as `.dse-card__band > .dse-feature__nested > .dse-feature
+   > .dse-head` (kit/view.ts) — a shape the generic fallthrough's "every
+   nested sub-feature is generic" comment above did not anticipate, because
+   this one nested feature IS the site's ability-card family, not a plain
+   sub-feature. A by-SCC (hybrid) kit's signature ability instead mounts its
+   OWN `[data-dse-element='feature']` root (`display/layouts.ts`) and already
+   matches the arm above — this second arm is only for the INLINE shape. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card__band > .dse-feature__nested > .dse-feature:not([data-dse-act='trait']) > .dse-head > .dse-head__primary--left {
 	font-size: calc(var(--dse-fs-heading) * 1.665);
 	line-height: 1;
 }
@@ -7330,6 +7364,17 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb > .dse-head > .dse-head__primary--left {
 	font-size: calc(var(--dse-fs-heading) * 1.89);
 	line-height: 0.98;
+}
+/* project head (round-3 review LOW-3): the GM project tracker's own live rule,
+   `.pj__head .sc-head__left-primary` (steel-project.css:32-34), is not the
+   generic base — it carries its own family multiplier like the three bands
+   above. Site: 1.6rem × 0.9 = 28.8px / line-height 1.02. Without this arm the
+   project head fell through to the generic 27px rule (94% of the site's
+   project size, a residual the round-2 report never noticed because no
+   pair mapped this node). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-prj__head > .dse-head > .dse-head__primary--left {
+	font-size: calc(var(--dse-fs-heading) * 1.44);
+	line-height: 1.02;
 }
 
 /* Narrow-width guard (owner ruling): the statblock band is the one family whose

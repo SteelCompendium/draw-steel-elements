@@ -841,9 +841,15 @@ describe('the SHIPPED contract is itself valid', () => {
 	// site paints the generic name at the page's default body ink and the
 	// ability/statblock/featureblock names at a dimmer accent, while the plugin paints all
 	// four at one shared --dse-heading accent. 8 new scheme-scoped declarations (4 pairs x 2
-	// schemes), filed under SC-367 (already open for the sibling crest/eyebrow/right-rail
-	// divergences this same "plugin uses one accent everywhere" pattern produces).
-	test('the declared set is exactly the documented 15 entries', () => {
+	// schemes), filed under SC-368 (owner ruling, round 2 — SC-367 is sizes only,
+	// crest/eyebrow/right-rail; this ink finding is a separate ticket).
+	// 2026-09-25 (SC-232 round-3 fix, MEDIUM-1): 15 -> 17. Added `name-kit-signature`, the
+	// kit's own inline signature ability (the ability-card family wearing the plugin's
+	// nested sub-feature DOM shape, previously unmapped and silently falling through to
+	// the generic rule at 27px instead of the site's 33.3px). font-size/line-height pass
+	// with 0 new GAPs; the same SC-368 ink finding recurs on this node too (2 more
+	// scheme-scoped rows).
+	test('the declared set is exactly the documented 17 entries', () => {
 		expect(
 			map.declaredDeferrals.map(
 				(d: { pair: string; rule: string; scheme?: string }) =>
@@ -865,6 +871,8 @@ describe('the SHIPPED contract is itself valid', () => {
 			'name-ability:ink[light]',
 			'name-statblock:ink[light]',
 			'name-featureblock:ink[light]',
+			'name-kit-signature:ink[dark]',
+			'name-kit-signature:ink[light]',
 		]);
 	});
 });
