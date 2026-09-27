@@ -146,6 +146,29 @@ describe('Plan 08 Task 4: kit/cardHead (D2 §2.7)', () => {
 	describe('grid CSS contract (styles-source.css)', () => {
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 
+		/**
+		 * SC-284's narrow (stacked) form and SC-232's Steel screen-only name-size
+		 * fallback both declare a rule under the SAME condition,
+		 * `@container dse-head (max-width: 480px)` — two independent, legitimately
+		 * coexisting blocks (SC-284's restacks the right rail; SC-232's reverts the
+		 * name's font-size), not a duplicate to merge. A plain first-match regex over
+		 * the whole sheet would silently grab whichever one happens to come first in
+		 * source order — SC-232's rule group sits earlier in the file than SC-284's own
+		 * `.dse-head` block — so this collects EVERY `@container dse-head` block and
+		 * returns the one that actually carries the right-rail re-placement this
+		 * describe block's tests are about (identified by its unique
+		 * `.dse-head__eyebrow--right` re-placement rule, which SC-232's fallback block
+		 * never contains).
+		 */
+		function sc284NarrowBlock(): string {
+			const re = /@container dse-head \(max-width: \d+px\) \{([\s\S]*?)\n\}/g;
+			let match: RegExpExecArray | null;
+			while ((match = re.exec(sheet))) {
+				if (/\.dse-head__eyebrow--right\s*\{/.test(match[1])) return match[1];
+			}
+			throw new Error('no @container dse-head block carries .dse-head__eyebrow--right');
+		}
+
 		test('.dse-head is a 3-column grid with three explicit lane rows', () => {
 			// Anchor to the base rule at a line start: a grouped selector line
 			// (".dse-x,\n.dse-head { … }") or a compound (".dse-head__x { … }",
@@ -183,9 +206,7 @@ describe('Plan 08 Task 4: kit/cardHead (D2 §2.7)', () => {
 		});
 
 		test('a `@container dse-head` rule re-places the right rail into column 2, left-aligned', () => {
-			const match = sheet.match(/@container dse-head \(max-width: \d+px\) \{([\s\S]*?)\n\}/);
-			expect(match).not.toBeNull();
-			const body = match![1];
+			const body = sc284NarrowBlock();
 			// The right slots move to rows 4/5/6 of column 2 — the third (right-rail)
 			// track is never redeclared (a container can't requery itself), it just
 			// collapses to 0 width once nothing is placed in it.
@@ -208,9 +229,7 @@ describe('Plan 08 Task 4: kit/cardHead (D2 §2.7)', () => {
 		// plain text match on the single-class selectors (the test above) cannot see a
 		// specificity loss, only a missing rule, so this asserts the full selector.
 		test('the featureblock sub-feature Steel remap gets a matching-specificity narrow arm', () => {
-			const match = sheet.match(/@container dse-head \(max-width: \d+px\) \{([\s\S]*?)\n\}/);
-			expect(match).not.toBeNull();
-			const body = match![1];
+			const body = sc284NarrowBlock();
 			expect(body).toMatch(
 				/\[data-dse-theme='steel'\] \.dse-fb \.dse-feature > \.dse-head > \.dse-head__eyebrow--right\s*\{\s*grid-area:\s*5\s*\/\s*2;/,
 			);
