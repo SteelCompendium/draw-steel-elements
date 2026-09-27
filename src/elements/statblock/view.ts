@@ -137,7 +137,7 @@ function crestIconForRole(role: DseRole | undefined): string | undefined {
 export function statblockHeaderParts(statblock: Statblock): {
 	name: string;
 	leftEyebrow: string;
-	leftDeck: string;
+	leftDeck: string | undefined;
 	rightEyebrow: string;
 	rightPrimary: string;
 	rightDeck: string;
@@ -156,7 +156,14 @@ export function statblockHeaderParts(statblock: Statblock): {
 		// neither "Monster" nor the keywords join is one of those four named strings,
 		// and this is a deliberate slot relocation, not a fallback-wording edit.
 		leftEyebrow: statblockKindNoun(statblock.metadata),
-		leftDeck: statblock.keywords?.join(', ') ?? '',
+		// SC-232 round 10 fix (r9 review, INFO 3): a keyword-less statblock (0 in the
+		// real corpus, but the harness's own NO_FEATURES fixture is one) now omits the
+		// left-deck slot ENTIRELY — a true cardHead GAP, matching every other family's
+		// leftDeck (feature/ability, SC-232 W1) — rather than mounting an empty span the
+		// way the pre-round-8b left-EYEBROW used to (that was a deliberate legacy-
+		// fallback carryover for a slot that always had SOME word in the legacy header;
+		// left-deck is brand new this ticket and has no such legacy precedent to honor).
+		leftDeck: statblock.keywords && statblock.keywords.length > 0 ? statblock.keywords.join(', ') : undefined,
 		rightEyebrow: statblock.level !== undefined ? `Level ${statblock.level}` : 'Level N/A',
 		rightPrimary: orgRole.length > 0 ? orgRole : 'No Role',
 		rightDeck: statblock.ev !== undefined ? `EV ${statblock.ev}` : 'EV N/A',

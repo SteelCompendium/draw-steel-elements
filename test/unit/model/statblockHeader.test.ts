@@ -51,7 +51,10 @@ describe('SDK 3.x statblock fields (F2 §2.1 B1)', () => {
 		expect(parts.rightEyebrow).toBe('Level N/A');
 		expect(parts.rightPrimary).toBe('No Role');
 		expect(parts.leftEyebrow).toBe('Monster');
-		expect(parts.leftDeck).toBe('');
+		// SC-232 round 10 fix (r9 review, INFO 3): a keyword-less statblock's left-deck
+		// is now a true GAP (undefined), not an empty-string span — matching every
+		// other family's leftDeck contract (feature/ability, SC-232 W1).
+		expect(parts.leftDeck).toBeUndefined();
 		expect(parts.rightDeck).toBe('EV N/A');
 		expect(parts.role).toBeUndefined();
 	});
