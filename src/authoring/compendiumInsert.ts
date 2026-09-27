@@ -64,6 +64,22 @@ function extractDTO(model: unknown): unknown {
 }
 
 /**
+ * SC-232 round 10 fix (r9 review MEDIUM-1): the same one-property-level-down unwrap
+ * `extractDTO` does (the ds-block family's `entity.model()` returns a thin `*Config`
+ * wrapper, not the SDK model itself) — needed here so `trimSnapshotDTO` can read a
+ * featureblock's undeclared `kind` field off the REAL model, not the wrapper.
+ */
+function unwrapModel(model: unknown): unknown {
+	if (model == null || typeof model !== 'object') return undefined;
+	if (typeof (model as { toDTO?: () => unknown }).toDTO === 'function') return model;
+	for (const key of ['statblock', 'feature', 'featureblock'] as const) {
+		const wrapped = (model as Record<string, unknown>)[key];
+		if (wrapped != null && typeof wrapped === 'object') return wrapped;
+	}
+	return undefined;
+}
+
+/**
  * SC-165 — the DTO keys a SNAPSHOT must not paste into a user's note.
  *
  * `metadata` is the SDK DTOs' transport/provenance slot (steel-etl fills it: `scc`,
@@ -77,23 +93,31 @@ function extractDTO(model: unknown): unknown {
  * because the view reads the TOP-LEVEL `name`. A silent-edit trap in the one feature whose
  * whole purpose is "take it and edit it" (spec §4.3, "the homebrew starting point").
  *
- * **SC-232 W1/W8/W2/W3 correction: a NINE-KEY exception, feature family only.**
+ * **SC-232 correction: metadata is a narrowed keep, not a clean drop, for ALL THREE
+ * snapshottable families (round 8a/8b features; round 10 fix statblock/featureblock).**
  * `renderFeature.ts`'s `leftDeckOf`/`kindNounOf` (round 8a) read
  * `metadata.{ancestry,class,kit,subclass,feature_source,type}` for the cardHead left-deck
  * provenance line and the "Feature" kind-noun — the exact fields Scott's own report named
  * (a synced trait's card is missing the "Human" line). Round 8b's `levelOf`/
  * `rightPrimaryOf` add three more: `level` (+ `scc`, only as its `level-N` fallback) for
  * the "Level N" right-eyebrow chip, and `subtype` for the "Signature" right-primary
- * fallback. None of these nine keys is inert any more: dropping `metadata` wholesale
- * from a FEATURE snapshot would silently regress a pasted trait/ability back to no
- * left-deck, a possibly-wrong kind-noun, no level chip, and no "Signature" fallback,
- * relative to the live synced original it was copied from — the exact silent-gap
- * failure mode this whole function exists to prevent, just pointed the other way (an
- * OMITTED field changing the render, not an edited one failing to). `trimSnapshotDTO`
- * below keeps a metadata SUB-OBJECT holding only those nine keys for a feature DTO,
- * dropping the rest (name, effects, flavor, cost, … — still dead weight); statblock and
- * featureblock snapshots are unaffected — neither element ever reads `.metadata` — and
- * keep the full drop.
+ * fallback. `statblock/view.ts`'s `statblockKindNoun` (round 8b W4) reads `metadata.scc`
+ * for the Monster/Companion/Retainer/Summon left-eyebrow — a claim this comment got wrong
+ * from round 8b through round 9 ("statblock and featureblock snapshots are unaffected —
+ * neither element ever reads `.metadata`"), caught by the r9 independent review (MEDIUM-1):
+ * a pasted retainer or summon snapshot silently read "Monster". `featureblock/view.ts`'s
+ * `kind` (round 8b W5) isn't even a `metadata` key — it's a separate undeclared top-level
+ * field the SDK's `toDTO()` never serializes at all, so the featureblock branch below adds
+ * it back from the ORIGINAL model rather than narrowing anything.
+ *
+ * None of these keys is inert any more: dropping `metadata` wholesale from a snapshot
+ * would silently regress a pasted card back to a missing/wrong slot relative to the live
+ * synced original it was copied from — the exact silent-gap failure mode this whole
+ * function exists to prevent, just pointed the other way (an OMITTED field changing the
+ * render, not an edited one failing to). `trimSnapshotDTO` below keeps a metadata
+ * SUB-OBJECT holding only the render-relevant keys per family, dropping the rest (name,
+ * effects, flavor, cost, … — still dead weight for feature; the whole object for
+ * statblock/featureblock, since only `scc`/`kind` are render-relevant there).
  *
  * Deliberately a DENY list of one key (further narrowed by the exception above), not an
  * allow-list of live keys: the three `partialFromModel`s (StatblockDTO/FeatureDTO/
@@ -147,34 +171,78 @@ const FEATURE_METADATA_RENDER_KEYS = [
 ] as const;
 
 /**
- * Drops `RENDER_INERT_SNAPSHOT_KEYS` from a serialized-to-YAML-bound DTO — for a feature
- * DTO (`dto.type === 'feature'`, `Feature.FEATURE_TYPE`), narrows `metadata` to
- * `FEATURE_METADATA_RENDER_KEYS` instead of dropping it outright (see the exception
- * paragraph above); an empty result (no render-relevant key present) drops the key
- * entirely, same as the deny-list path. TOP LEVEL ONLY, on purpose: the corpus never
- * nests `metadata:` inside a `features:` entry (checked across all of data-unified's
- * md-dse output — zero indented `metadata:` lines), so a deep walk would buy nothing
- * while gaining the ability to reach into nested YAML that a user's own homebrew might
- * legitimately own. Non-objects pass through untouched so the `dto === undefined`
- * raw-body fallback below still fires.
+ * SC-232 round 10 fix (r9 review MEDIUM-1): `statblock/view.ts`'s `statblockKindNoun`
+ * (SC-232 round 8b W4) reads `metadata.scc` to pick "Monster"/"Companion"/"Retainer"/
+ * "Summon" — a statblock snapshot that drops `metadata` wholesale silently pastes every
+ * retainer or summon as "Monster". Keeps a metadata sub-object holding only `scc`.
  */
-function trimSnapshotDTO(dto: unknown): unknown {
+const STATBLOCK_METADATA_RENDER_KEYS = ['scc'] as const;
+
+/**
+ * Drops `RENDER_INERT_SNAPSHOT_KEYS` from a serialized-to-YAML-bound DTO. `model` is the
+ * ORIGINAL resolved entity (not the DTO) — needed because a featureblock's `kind` field
+ * (SC-232 round 8b W5) is undeclared on the SDK's `Featureblock` model and never survives
+ * `toDTO()` at all (`FeatureblockDTO.partialFromModel` only emits its own declared field
+ * list), so there is no DTO key to "keep" — it has to be read off the model and added
+ * back. For a feature DTO (`dto.type === 'feature'`, `Feature.FEATURE_TYPE`), narrows
+ * `metadata` to `FEATURE_METADATA_RENDER_KEYS`; for a statblock DTO, narrows `metadata` to
+ * `STATBLOCK_METADATA_RENDER_KEYS` (round 10 fix MEDIUM-1); for a featureblock DTO, drops
+ * `metadata` (nothing in it is render-relevant) and adds back a bare `kind` read off the
+ * model (round 10 fix MEDIUM-1). An empty narrowed-metadata result (no render-relevant key
+ * present) drops the key entirely, same as the deny-list path. TOP LEVEL ONLY, on purpose:
+ * the corpus never nests `metadata:` inside a `features:` entry (checked across all of
+ * data-unified's md-dse output — zero indented `metadata:` lines), so a deep walk would
+ * buy nothing while gaining the ability to reach into nested YAML that a user's own
+ * homebrew might legitimately own. Non-objects pass through untouched so the
+ * `dto === undefined` raw-body fallback below still fires.
+ */
+function trimSnapshotDTO(dto: unknown, model: unknown): unknown {
 	if (dto == null || typeof dto !== 'object' || Array.isArray(dto)) return dto;
 	const trimmed = { ...(dto as Record<string, unknown>) };
 	const metadata = trimmed.metadata;
-	if (trimmed.type === 'feature' && metadata != null && typeof metadata === 'object' && !Array.isArray(metadata)) {
-		const kept: Record<string, unknown> = {};
-		for (const key of FEATURE_METADATA_RENDER_KEYS) {
-			if (key in (metadata as Record<string, unknown>)) kept[key] = (metadata as Record<string, unknown>)[key];
+	const hasMetadataObject = metadata != null && typeof metadata === 'object' && !Array.isArray(metadata);
+
+	if (trimmed.type === 'feature' && hasMetadataObject) {
+		return narrowMetadata(trimmed, metadata as Record<string, unknown>, FEATURE_METADATA_RENDER_KEYS);
+	}
+	if (trimmed.type === 'statblock') {
+		// The DTO's own `metadata` is already the full mirror (unaffected by the
+		// feature-only narrowing above); narrow it the same way regardless of whether
+		// `hasMetadataObject` — a statblock DTO always carries `metadata` when the model
+		// does (StatblockDTO.partialFromModel), so this mirrors the feature branch.
+		if (hasMetadataObject) {
+			return narrowMetadata(trimmed, metadata as Record<string, unknown>, STATBLOCK_METADATA_RENDER_KEYS);
 		}
-		if (Object.keys(kept).length > 0) {
-			trimmed.metadata = kept;
-		} else {
-			delete trimmed.metadata;
-		}
+		delete trimmed.metadata;
+		return trimmed;
+	}
+	if (trimmed.type === 'featureblock') {
+		delete trimmed.metadata; // nothing in it is render-relevant for featureblock
+		const realModel = unwrapModel(model);
+		const rawKind = (realModel as { kind?: unknown } | undefined)?.kind;
+		if (typeof rawKind === 'string' && rawKind.trim()) trimmed.kind = rawKind.trim();
 		return trimmed;
 	}
 	for (const key of RENDER_INERT_SNAPSHOT_KEYS) delete trimmed[key];
+	return trimmed;
+}
+
+/** Shared narrowing step for the feature/statblock branches above: keep only `keys` out
+ *  of `metadata`, dropping the `metadata` key entirely when nothing survives. */
+function narrowMetadata(
+	trimmed: Record<string, unknown>,
+	metadata: Record<string, unknown>,
+	keys: readonly string[],
+): Record<string, unknown> {
+	const kept: Record<string, unknown> = {};
+	for (const key of keys) {
+		if (key in metadata) kept[key] = metadata[key];
+	}
+	if (Object.keys(kept).length > 0) {
+		trimmed.metadata = kept;
+	} else {
+		delete trimmed.metadata;
+	}
 	return trimmed;
 }
 
@@ -201,7 +269,7 @@ export async function insertFullBlock(editor: Editor, entity: CompendiumEntity):
 		return false;
 	}
 	const model = await entity.model();
-	const dto = trimSnapshotDTO(extractDTO(model));
+	const dto = trimSnapshotDTO(extractDTO(model), model);
 	const body = dto === undefined ? (await entity.body()).trim() : stringifyYaml(dto).trimEnd();
 	editor.replaceSelection(wrapFence(alias, body) + '\n');
 	return true;

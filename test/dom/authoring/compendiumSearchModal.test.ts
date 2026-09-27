@@ -44,6 +44,10 @@ import type { CompendiumSyncService } from '@/data/CompendiumSyncService';
 const KIT = 'mcdm.heroes.v1/kit/panther';
 const COND = 'mcdm.heroes.v1/condition/bleeding';
 const GOBLIN = 'mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker';
+// SC-232 round 10 fix (r9 review MEDIUM-1): a retainer statblock and a malice
+// featureblock — the two shapes whose snapshot silently lost its kind-noun/eyebrow.
+const GNOLL_RETAINER = 'mcdm.heroes.v1/monster.retainer.warrior/gnoll-gnasher';
+const DEVIL_MALICE = 'mcdm.monsters.v1/monster.devil/devil-malice';
 
 function setup(empty = false): { index: CompendiumIndex; app: App } {
 	const app = new App();
@@ -519,11 +523,18 @@ describe('SC-165 — the snapshot body is trimmed to the fields the renderer rea
 			statblockElement,
 			GOBLIN,
 			'monster/goblin/statblock/goblin-stinker.md',
-			// `type` is the one surviving constant: every DTO stamps it from the model's own
-			// `modelType()` and the DTO constructor overwrites whatever a user types, so it
-			// cannot change a render. It stays because it is part of the documented block
-			// format — every element's `example.yaml` opens with it and the docs describe it.
-			['type'],
+			// `type` is the one surviving DOCUMENTED constant: every DTO stamps it from the
+			// model's own `modelType()` and the DTO constructor overwrites whatever a user
+			// types, so it cannot change a render. It stays because it is part of the
+			// documented block format — every element's `example.yaml` opens with it and the
+			// docs describe it. `metadata` is ALSO inert for this ONE fixture, but only by
+			// coincidence: goblin-stinker's own `metadata.scc`
+			// (`monster.goblin.statblock`) buckets to `statblockKindNoun`'s "Monster"
+			// DEFAULT — the exact same value the no-metadata fallback produces — so removing
+			// it changes nothing HERE. The gnoll-retainer and devil-malice cases below prove
+			// `metadata`/`kind` are genuinely live in general (their kind-noun/eyebrow
+			// changes when the field is removed).
+			['type', 'metadata'],
 		],
 		[
 			'feature',
@@ -545,6 +556,24 @@ describe('SC-165 — the snapshot body is trimmed to the fields the renderer rea
 			featureblockElement,
 			'mcdm.monsters.v1/dynamic-terrain.mechanisms/pillar',
 			'dynamic-terrain/mechanisms/pillar.md',
+			['type'],
+		],
+		// SC-232 round 10 fix (r9 review MEDIUM-1): a retainer statblock and a malice
+		// featureblock — `kind`/`metadata.scc` are now LIVE keys for these two (they
+		// weren't in the pillar/goblin cases above, which carry neither `kind` nor a
+		// non-"Monster" `metadata.scc`), so neither appears in the inert-keys list.
+		[
+			'statblock',
+			statblockElement,
+			GNOLL_RETAINER,
+			'monster/retainer/gnoll-gnasher.md',
+			['type'],
+		],
+		[
+			'featureblock',
+			featureblockElement,
+			DEVIL_MALICE,
+			'monster/devil/devil-malice.md',
 			['type'],
 		],
 	];
@@ -605,18 +634,41 @@ describe('SC-165 — the snapshot body is trimmed to the fields the renderer rea
 				const metadata = parsed.metadata as Record<string, unknown> | undefined;
 				expect(metadata).toBeDefined();
 				expect(body).toMatch(/^metadata:/m);
-				// Narrowed, not the full mirror: every surviving key is one of the six, and
+				// Narrowed, not the full mirror: every surviving key is one of the nine, and
 				// none of the bulk dead-copy fields (name/effects/flavor/…) survived.
 				for (const key of Object.keys(metadata!)) {
 					expect(FEATURE_METADATA_RENDER_KEYS).toContain(key);
 				}
 				expect(Object.keys(metadata!).length).toBeLessThan(Object.keys(source.metadata as object).length);
+			} else if (family === 'statblock') {
+				// SC-232 round 10 fix (r9 review MEDIUM-1): narrowed to `{scc}` only — not
+				// gone (the pre-fix behavior that silently pasted every retainer/summon as
+				// "Monster") and not the full mirror either.
+				const metadata = parsed.metadata as Record<string, unknown> | undefined;
+				expect(metadata).toBeDefined();
+				expect(body).toMatch(/^metadata:/m);
+				expect(Object.keys(metadata!)).toEqual(['scc']);
+				expect(Object.keys(metadata!).length).toBeLessThan(Object.keys(source.metadata as object).length);
 			} else {
+				// featureblock: `metadata` itself carries nothing render-relevant (round 10
+				// fix MEDIUM-1 restores `kind` as a separate top-level field instead — see
+				// the dedicated featureblock `kind` test below).
 				expect(parsed.metadata).toBeUndefined();
 				expect(body).not.toMatch(/^metadata:/m);
 			}
 		},
 	);
+
+	// SC-232 round 10 fix (r9 review MEDIUM-1): `kind` is undeclared on the SDK's
+	// `Featureblock` model, so it never survives `toDTO()` at all — there is no DTO key
+	// for `trimSnapshotDTO` to "keep"; it has to be read off the ORIGINAL model and added
+	// back. This is a featureblock-only assertion, not a `SNAPSHOT_CASES` generic one,
+	// because no OTHER family has an undeclared-field-added-back shape.
+	test('featureblock: `kind` survives the snapshot as a bare top-level field (read off the model, not the DTO — it never reaches toDTO() at all)', async () => {
+		const { body, parsed } = await snapshot(DEVIL_MALICE, 'monster/devil/devil-malice.md');
+		expect(parsed.kind).toBe('malice');
+		expect(body).toMatch(/^kind: malice$/m);
+	});
 
 	test.each(SNAPSHOT_CASES)(
 		'%s: putting metadata back renders identical DOM — what was trimmed is render-inert',
