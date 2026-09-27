@@ -639,13 +639,41 @@ describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 			).toBe(true);
 		});
 
-		it('.dse-section__title letter-spacing is 0.1em (site parity), not the old under-tracked 0.07em', () => {
-			const blocks = steelBlocksFor('.dse-section__title');
-			const withLetterSpacing = blocks.filter((b) => /letter-spacing:/.test(b));
+		// Excludes the `.dse-section--spend .dse-section__title` chip rule (round-3 MED-1
+		// pins IT to the old 0.07em on purpose, below) — this assertion is about the BASE
+		// boxed-header rule only, so it filters the selector directly rather than reusing
+		// steelBlocksFor (which would also catch the spend chip's own letter-spacing block).
+		it('.dse-section__title (base rule) letter-spacing is 0.1em (site parity), not the old under-tracked 0.07em', () => {
+			const baseBlocks = rules
+				.filter(
+					(r) =>
+						r.selector.includes('.dse-section__title') &&
+						!r.selector.includes('--spend') &&
+						STEEL_SCOPE.test(r.selector),
+				)
+				.map((r) => r.body);
+			const withLetterSpacing = baseBlocks.filter((b) => /letter-spacing:/.test(b));
 			expect(withLetterSpacing.length).toBeGreaterThan(0);
 			for (const b of withLetterSpacing) {
 				expect(b).toMatch(/letter-spacing:\s*0\.1em\s*;/);
 				expect(b).not.toMatch(/letter-spacing:\s*0\.07em\s*;/);
+			}
+		});
+
+		// SC-235 round-3 (MED-1): the spend-clause chip (`.dse-section--spend
+		// .dse-section__title`, styles-source.css ~9346) is a DIFFERENT site element
+		// (`.sc-ability__enh .cost`), out of this ticket's scope — it must NOT inherit the
+		// base rule's new 18px/0.1em by cascade. Pinned explicitly to today's values, in the
+		// same `--dse-fs-body`-derived x1 form the base rule uses for its own multiplier.
+		it('the spend-chip title (.dse-section--spend .dse-section__title) is PINNED to var(--dse-fs-body) / 0.07em, not the base rule\'s new 18px/0.1em', () => {
+			const spendBlocks = steelBlocksFor('.dse-section--spend .dse-section__title');
+			const ownRule = spendBlocks.filter((b) => /font-size:|letter-spacing:/.test(b));
+			expect(ownRule.length).toBeGreaterThan(0);
+			for (const b of ownRule) {
+				expect(b).toMatch(/font-size:\s*var\(--dse-fs-body\)\s*;/);
+				expect(b).toMatch(/letter-spacing:\s*0\.07em\s*;/);
+				expect(b).not.toMatch(/calc\(\s*var\(--dse-fs-body\)\s*\*\s*1\.125\s*\)/);
+				expect(b).not.toMatch(/letter-spacing:\s*0\.1em\s*;/);
 			}
 		});
 	});

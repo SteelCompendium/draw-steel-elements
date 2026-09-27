@@ -539,8 +539,13 @@ deleted.
 (`calc(var(--dse-fs-body) * 1.125)`, styles-source.css ~8163) and its letter-spacing to
 `0.1em`; line-height needed no separate edit — the plate root's unitless `line-height: 1.7`
 recomputes against the title's new font-size for free (18 x 1.7 = 30.6px). All three rows
-now match, both schemes, and the declarations were deleted in the same commit as the CSS
-fix — the set moved from 8/16 to 5/10.
+now compute equal, both schemes, and the declarations were deleted in the same commit as
+the CSS fix — the set moved from 8/16 to 5/10. **This rule compares computed style values
+only — it cannot see the font FACE or whether small caps are real glyphs or a browser
+synthesis.** SC-235's own round-2 review found the site's small caps are synthesized
+(its face has no `smcp`) while the plugin's are real, so the rendered "EFFECT" glyphs are
+about 25% taller on the plugin despite the equal computed font-size/letter-spacing above —
+a green `section-tag` row asserts numeric parity, not that the two look the same size.
 
 **Deliberately NOT declared**, for contrast, so the bar is legible:
 `statblock-band` / `featureblock-band` `margin-top` (site `0px` vs plugin `-8px`) stay

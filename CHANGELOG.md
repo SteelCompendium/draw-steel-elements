@@ -22,12 +22,14 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
-- [FIX] **Steel section titles ("Effect"/"Trigger"/"Special"/…) now match the site's size**
-  (SC-235). The boxed panel header on ability/feature cards, a statblock's nested features,
-  featureblock and a kit's signature ability rendered at 16px with 1.12px letter-spacing —
-  noticeably smaller and less tracked than the site's 18px / 1.8px on the same surface. Both
-  now match exactly; the title's line-height and the Text size preference still scale it the
-  same way as before.
+- [FIX] **Steel section titles ("Effect"/"Trigger"/"Special"/…) now compute the site's
+  font-size and letter-spacing** (SC-235). The boxed panel header on ability/feature cards,
+  a statblock's nested features, featureblock and a kit's signature ability computed 16px
+  with 1.12px letter-spacing against the site's 18px / 1.8px on the same surface; both now
+  compute 18px / 1.8px. The rendered letters still read taller than the site's, though — the
+  site fakes its small caps (its font has no real small-caps glyphs), the plugin's are real,
+  so real capitals read bigger at the same computed size. The title's line-height and the
+  Text size preference still scale it the same way as before.
 - [FIX] **The example inserted for a new `ds-feature` block no longer claims to be a villain
   action while rendering as a main action** (SC-236). The Draw Steel Elements authoring example
   for a new feature block carried a stray `ability_type: Villain Action 1` line alongside

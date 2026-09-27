@@ -817,10 +817,12 @@ describe('the SHIPPED contract is itself valid', () => {
 	// deleted. That is the mechanism working end to end, not a re-baseline.
 	// 2026-09-27 (SC-235): 8 -> 5. `section-tag:font-size`/`:line-height`/`:letter-spacing`
 	// HEALED -- the section title's type scale moved to site parity (18px / 30.6px / .1em,
-	// styles-source.css's Task-2 boxed-header rule, ~8163), so all three rows now match and
-	// the declarations were deleted in the same commit as the CSS fix (the mechanism this
-	// comment already describes for FOLLOWUPS #52, repeating here rather than being amended
-	// in place — this file is a dated log of the set's own history).
+	// styles-source.css's Task-2 boxed-header rule, ~8163), so all three rows now COMPUTE
+	// equal (this rule cannot see the font face or synthesized-vs-real small caps -- round 2's
+	// glyph probe found the rendered glyphs still read ~25% taller than the site's) and the
+	// declarations were deleted in the same commit as the CSS fix (the mechanism this comment
+	// already describes for FOLLOWUPS #52, repeating here rather than being amended in place —
+	// this file is a dated log of the set's own history).
 	test('the declared set is exactly the documented 5 entries', () => {
 		expect(map.declaredDeferrals.map((d: { pair: string; rule: string }) => `${d.pair}:${d.rule}`)).toEqual([
 			'pr-chars:ink',
