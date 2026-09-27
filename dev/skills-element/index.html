@@ -1285,11 +1285,18 @@ custom_skills:
 <h2 id="field-definitions">Field Definitions<a class="headerlink" href="#field-definitions" title="Permanent link">&para;</a></h2>
 <p>The Skills Element supports all three
 <a href="../common-element-fields/">common element fields</a> (<code>collapsible</code>, <code>collapsed</code> and
-<code>collapse_default</code>). As of 7.0.0 it also carries the standard
-<a href="../common-element-fields/#the-menu">element menu</a>, so it has two ways to fold: the "Skills"
-disclosure header inside the card, which hides the skill list, and the menu's collapse
-control, which folds the whole block to one line (<code>SKILLS (12 selected)</code>). The three fields
-drive both.</p>
+<code>collapse_default</code>), which fold the whole block from its standard
+<a href="../common-element-fields/#the-menu">element menu</a> to one line (<code>SKILLS (12 selected)</code>).</p>
+<blockquote>
+<p><strong>Changed in 7.0.0.</strong> The element used to also carry its own "Skill List" disclosure header
+inside the card — a second, independent way to fold the same content, stacked underneath
+the menu's own collapse. That header is gone; the menu is the only whole-element collapse
+now, the same as every other card element. Existing blocks are unaffected —
+<code>collapse_default: true</code> still starts the element collapsed and <code>collapsible: false</code> still
+removes the collapse control — but a block that starts collapsed now opens with one click
+on the menu instead of two (the menu itself still shows either way, since Skills always
+contributes its own <a href="#showinghiding-unowned-skills">unowned-skills toggle</a> to it).</p>
+</blockquote>
 <p>Below is a detailed description of each field used in the skills element, including their types, default values, and whether they are required.</p>
 <table>
 <thead>
