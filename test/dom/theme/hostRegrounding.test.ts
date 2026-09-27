@@ -94,7 +94,32 @@ describe('SC-203 host re-grounding — the block exists and re-grounds what Obsi
 			x[1].trim(),
 		);
 		expect(anchored.length).toBeGreaterThanOrEqual(10);
+		// SC-318 round 2 adds TWO MORE deliberate exception shapes (GROUP 1b/1d, the
+		// "SC-202 r4 — HEADING + EMPHASIS + LINK HOST RE-GROUNDING" block's own foot),
+		// same reasoning as the two documented above — each climbs specificity for a
+		// real, needed reason, not by accident:
+		//   3. `.dse-hero__name` (GROUP 1d) must OUTRANK the same-anchor `:where(h2)`
+		//      GROUP 1 rule that precedes it in the file — at this invariant's own flat
+		//      (0,2,0) the two would be a same-specificity TIE decided only by source
+		//      order, exactly the fragile shape this test's own docstring warns against.
+		//      The bare class selector lifts it to (0,3,0): unambiguous, order-independent.
+		//   4. `:is(p, pre, table, ul, ol) + :where(hN)` ×6 (GROUP 1b, the adjacency
+		//      margin-top bump — Obsidian's own "heading right after a block element"
+		//      rule) must OUTRANK GROUP 1's own base per-level `margin-block` rule on
+		//      `margin-block-start` alone, for the SAME reason: a flat (0,2,0) `:where()`
+		//      wrap would tie the base rule instead of beating it. The extra
+		//      `:is(p, pre, table, ul, ol)` compound (a real type-selector list, left
+		//      OUTSIDE `:where()`) lifts it to (0,2,1).
+		// Asserted explicitly (not merely excluded from the loop below) so both stay
+		// proven exceptions, not a silent scope narrowing.
+		const EXPECTED_EXCEPTIONS = new Set([
+			'.dse-hero__name',
+			...['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].map((h) => `:is(p, pre, table, ul, ol) + :where(${h})`),
+		]);
+		const foundExceptions = new Set(anchored.filter((sel) => EXPECTED_EXCEPTIONS.has(sel)));
+		expect([...foundExceptions].sort()).toEqual([...EXPECTED_EXCEPTIONS].sort());
 		for (const sel of anchored) {
+			if (EXPECTED_EXCEPTIONS.has(sel)) continue;
 			expect(sel.startsWith(':where(')).toBe(true);
 		}
 	});

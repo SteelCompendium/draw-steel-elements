@@ -17256,9 +17256,11 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    ("Heroes"/"Enemy groups"/a group name) carry no class at all, so GROUP 1's own
    `:where(h3)`/`:where(h4)` rule already reaches them with no restatement needed.
    `.dse-hero__name` (h2) is DELIBERATELY EXCLUDED — see its own pin, immediately below —
-   it is the hero card's NAME, SC-232's territory, not a markdown/section heading. */
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-enc__roster-heading,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-hero__region-title {
+   it is the hero card's NAME, SC-232's territory, not a markdown/section heading. Wrapped
+   in `:where()`, same as every other GROUP 1 subject (SC-203's own "stay at (0,2,0)"
+   invariant, `hostRegrounding.test.ts`) — nothing else declares `font-size` for either
+   class, so the flat (0,2,0) specificity wins outright; no extra specificity is needed. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-enc__roster-heading, .dse-hero__region-title) {
 	font-size: var(--dse-fs-h3);
 }
 /* GROUP 1d — `.dse-hero__name` (h2) does NOT move to the new h2 token: it is the hero
@@ -17269,7 +17271,17 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    through to GROUP 1's now-different h2 rule above. `font-weight`/`letter-spacing`
    need no restatement here — the pre-existing Steel `.dse-hero__name` rule (~:10498,
    `font-weight: 700; letter-spacing: 0.01em`) already outranks GROUP 1 on both
-   ((0,3,0) vs (0,2,0)) and is unchanged by this round. */
+   ((0,3,0) vs (0,2,0)) and is unchanged by this round.
+   DELIBERATELY NOT wrapped in `:where()`, unlike every other GROUP 1 subject: this rule
+   must OUTRANK GROUP 1's own `:where(h2)` block above, which shares this same ANCHOR and
+   sits earlier in the file — at the SC-203 invariant's flat (0,2,0), the two would be a
+   same-specificity tie, decided only by source order (this rule IS later, so the tie would
+   still resolve correctly today, but a tie is exactly the fragile shape the SC-203 block's
+   own docstring warns against: "source order would hand those ties to the new block", of
+   two EARLIER kit rules). The bare class selector lifts this rule to (0,3,0), an
+   unambiguous, order-independent win — `hostRegrounding.test.ts`'s own "every subject is
+   :where()" test carries an explicit, documented exception for this selector, the same way
+   it already documents two SC-202 r3 exceptions. */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-hero__name {
 	font-size: 1.5em;
 	line-height: inherit;

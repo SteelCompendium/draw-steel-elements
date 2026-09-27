@@ -94,7 +94,7 @@ describe('SC-202 r4 / SC-318 r2 — GROUP 1: h1-h6 base typography', () => {
 	});
 
 	test('the roster heading and hero region title (classed h3 tags) share --dse-fs-h3 explicitly', () => {
-		const m = flat.match(new RegExp(escape(ANCHOR) + ' \\.dse-enc__roster-heading, ' + escape(ANCHOR) + ' \\.dse-hero__region-title \\{([^}]*)\\}'));
+		const m = flat.match(new RegExp(escape(`${ANCHOR} :where(.dse-enc__roster-heading, .dse-hero__region-title)`) + ' \\{([^}]*)\\}'));
 		expect(m).not.toBeNull();
 		expect(m![1]).toContain('font-size: var(--dse-fs-h3);');
 	});
