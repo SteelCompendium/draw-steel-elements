@@ -7394,9 +7394,16 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    own content) and found safe. `.dse-sb`/`.dse-fb`/any card root stays
    FORBIDDEN from carrying `container-type` (round-3 LOW-2's `.dse-sb` finding
    — a `width: fit-content` ancestor collapses a size-contained box with no
-   explicit width to near-zero — still holds; `.dse-head` never has an `auto`
-   inline-size of its own to collapse, it is the grid the card's real content
-   sizes against, so the same failure mode does not apply to it).
+   explicit width to near-zero — still holds). `.dse-head` is not immune to a
+   third-party ancestor sizing the card narrower — the final review measured
+   a real case (a `negotiation` card under a shrink-to-fit ancestor) where
+   the card itself narrows 760 → 561px and `.dse-head` narrows WITH it,
+   662 → 464px — but it does not COLLAPSE the way `.dse-sb` did: `.dse-head`
+   is a plain block child that tracks whatever width its own parent (the
+   card, sized by that other ancestor) hands it, never a size-contained box
+   asked for ITS OWN shrink-to-fit preferred width the way `.dse-sb` was, so
+   the near-zero failure mode specifically does not apply to it — narrower,
+   yes; collapsed, no.
 
    The ONE difference from SC-284's copy: this one is Steel **screen-only**
    (`[data-dse-theme='steel']:not([data-dse-print="on"])`), matching every
