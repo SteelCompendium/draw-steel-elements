@@ -7377,65 +7377,81 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 	line-height: 1.02;
 }
 
-/* Narrow-width guard — REMOVED pending an owner decision (round-3 review
-   HIGH-1 + LOW-2, both blocking).
+/* Narrow-width guard (round-4 owner ruling, superseding round-3's LOW-2 "reuse
+   an existing container or stop"): make `.dse-head` ITSELF the query
+   container, exactly as the unlanded SC-284 branch does
+   (`sc284-cardhead-narrow`, `33b58c3`, `styles-source.css` base `.dse-head`
+   block) — same property NAMES, same VALUES (`container-type: inline-size;
+   container-name: dse-head;`), so the two branches can land in either order
+   and whichever lands second may drop the redundant copy. SC-284's own
+   comment there (read, not edited, per the owner's instruction) is the
+   containment analysis this copy inherits without re-deriving: on Obsidian's
+   shipped runtime (Electron 21.4.1 / Chromium 106) `container-type:
+   inline-size` establishes layout, style AND inline-size containment, not
+   inline-size alone — checked there for every consequence (no head relies on
+   baseline export; every abspos/fixed descendant of a head already anchors
+   at or inside the head itself; no head child is shrink-to-fit sized off its
+   own content) and found safe. `.dse-sb`/`.dse-fb`/any card root stays
+   FORBIDDEN from carrying `container-type` (round-3 LOW-2's `.dse-sb` finding
+   — a `width: fit-content` ancestor collapses a size-contained box with no
+   explicit width to near-zero — still holds; `.dse-head` never has an `auto`
+   inline-size of its own to collapse, it is the grid the card's real content
+   sizes against, so the same failure mode does not apply to it).
 
-   Round 2 shipped a statblock-only `container-type: inline-size` on `.dse-sb`
-   with an `@container … (max-width: 34rem)` step-down to the ability-card
-   multiplier (1.665x). Round-3 review found two problems:
+   The ONE difference from SC-284's copy: this one is Steel **screen-only**
+   (`[data-dse-theme='steel']:not([data-dse-print="on"])`), matching every
+   other SC-232 rule's contract, where SC-284's lives in the base `.dse-head`
+   block (unscoped, reaches print — a narrow STACKING change is structural,
+   S-1(a), so it is meant to). Both branches declaring the same
+   `container-name` on the same element is harmless either landing order:
+   whichever CSS text runs first in the cascade wins the property (identical
+   values either way), and a later-landing branch's `container-type`/`-name`
+   pair is then a no-op duplicate, safe to delete as its own tidy-up.
 
-   HIGH-1: 33.3px is STILL too big for the ~73-90px name column left over
-   once the crest + right rail take their share at a real narrow width
-   (300px) — the statblock name went from base's 5 lines/2 mid-word breaks to
-   7 lines/4 mid-word breaks, and the UNGUARDED featureblock band and generic
-   sub-feature names ("Bloodstones") gained NEW mid-word breaks the base
-   never had. The owner's ruling: at the narrow threshold the band names
-   (statblock, featureblock) and any generic/sub-feature name that gains a
-   mid-word break must fall back to TODAY's shared size (not a smaller
-   family-specific size, TODAY's — 20px / var(--dse-fs-heading) — the exact
-   value the unscoped base rule at :13636 already produces), so narrow
-   captures are never worse than base `619c4bd`: 0 new mid-word breaks, line
-   counts <= base. Fixing this needs an element-width signal for MULTIPLE
-   selectors (the statblock band, the featureblock band, and potentially the
-   generic/nested-sub-feature rule too) — not just `.dse-sb`.
+   Round-3's own finding stands: 33.3px (the ability-card multiplier) is
+   STILL too big for the ~73-90px name column left over once the crest +
+   right rail take their share at 300px — round 3 measured the statblock name
+   going from base's 5 lines/2 mid-word breaks to 7/4 even with that smaller
+   step-down. The owner's ruling this round: fall back to TODAY's shared size
+   (var(--dse-fs-heading) / line-height 1.15 / letter-spacing 0.01em — the
+   exact values the pre-SC-232 unscoped rule at :13909 still produces, now
+   restated here rather than left to fall through, since every family
+   selector below has higher specificity than that unscoped rule and would
+   otherwise keep winning even inside the container query), for EVERY family
+   — generic, ability, statblock, featureblock, project — not only the two
+   band families HIGH-1 named. CSS cannot conditionally target "only the
+   names that would gain a mid-word break": the uniform revert is the only
+   selector-expressible rule that GUARANTEES the acceptance bar (0 new
+   mid-word breaks, line counts <= base) for every family in every capture,
+   because it reproduces base's own narrow-width computed style exactly,
+   family by family.
 
-   LOW-2 (upgraded by the owner to a hard constraint): the `container-type`
-   above is real containment, not free — measured, a `width: fit-content`
-   ancestor collapses `.dse-sb` to 2px wide / 36758px tall (`scripts/
-   shrink.mjs` in `r3-evidence/`), because inline-size containment makes the
-   contained box's own auto-width resolve as if it had no content once a
-   PARENT asks for its shrink-to-fit preferred width. No shipped context
-   triggers this today, but it is real and undocumented. The owner's ruling:
-   do NOT add a NEW `container-type` anywhere for this — reuse an ancestor
-   that ALREADY carries one in `develop`, or stop and ask.
-
-   Checked exhaustively (every `container-type`/`container-name` declaration
-   in this sheet, grep'd, each one's DOM scope traced): `dse-init-bar`
-   (:953, the initiative round-controls bar), `dse-mt` (:3663, the montage
-   board), the `.dse-hero__grid` one (:5926), `dse-sb-sticky` (:10190, the
-   STICKY MINI-HEADER — a sibling of `.dse-head`, not an ancestor, so a
-   `@container` on it cannot style the head name at all), `dse-stamina-rec`
-   (:11561), `dse-stamina-host` (:11803), `dse-init-host` (:12832). NONE of
-   these wrap `.dse-sb`, `.dse-fb`, `[data-dse-element='feature']`, `.dse-card`
-   or `.dse-head` generically — every one is a purpose-built container on its
-   own component's root, added by whichever ticket needed it. A `@media`
-   breakpoint would sidestep the containment risk but answers the WRONG
-   question for a real Obsidian sidebar leaf (the window doesn't shrink, only
-   the pane does — the exact reasoning `.dse-sb__sticky`, `.dse-mt` and every
-   other container above already document) and would be a silent regression
-   the harness's own width-override mechanism cannot catch (it happens to
-   shrink the whole page, which a media query WOULD see, masking the gap a
-   real narrow pane would hit).
-
-   Per the owner's own contingency instruction ("if none reaches these
-   heads, stop with NEEDS_CONTEXT"): this round stops here. Every OTHER
-   round-3 fix (MEDIUM-1, LOW-1, LOW-3, LOW-4, evidence) is complete; the
-   report asks the specific question (which ancestor to use, or whether to
-   add one deliberately, or whether a `@media` fallback's real-app gap is
-   acceptable) rather than guessing. Until answered, the four family rules
-   above apply UNGUARDED at every width — narrow behaviour on this commit is
-   therefore WORSE than round 2's (rejected) 33.3px guard, matching the
-   round-1 survey's "raw Option A" numbers (statblock 8 lines at 300px). */
+   Threshold 480px: SC-284's own literal (`@container dse-head (max-width:
+   480px)`, its cardHead hunk) — reused, not re-derived, for the same
+   "same name and type, land in either order" reasoning above. Verified by
+   direct measurement (`.dse-head`'s own content-box width, every affected
+   capture): at every *-narrow capture's real 300px page width, EVERY
+   `.dse-head` on the page (top-level 298px, nested/indented down to 197px)
+   sits under 480px; at every full-width (900px) capture, the NARROWEST
+   `.dse-head` measured — a nested sub-feature head, already indented, still
+   657px — sits well clear above it. A wide, unambiguous margin on both
+   sides; no capture in the harness sits between 298 and 657. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-head {
+	container-type: inline-size;
+	container-name: dse-head;
+}
+@container dse-head (max-width: 480px) {
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-head__primary--left,
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='feature'] > .dse-feature:not([data-dse-act='trait']) > .dse-head > .dse-head__primary--left,
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card__band > .dse-feature__nested > .dse-feature:not([data-dse-act='trait']) > .dse-head > .dse-head__primary--left,
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb > .dse-head > .dse-head__primary--left,
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb > .dse-head > .dse-head__primary--left,
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-prj__head > .dse-head > .dse-head__primary--left {
+		font-size: var(--dse-fs-heading);
+		line-height: 1.15;
+		letter-spacing: 0.01em;
+	}
+}
 
 /* ================================================================== */
 /*   Plan 21 Task 3 — body IDENTITY: serif face, cooler ink, open      */
