@@ -22,6 +22,13 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Rule cards referenced from the compendium now show their rule group above the
+  name, instead of always "Rule"** (SC-272). A `ds-rule` reference resolved by compendium
+  code (or a `ds-scc` reference that resolves to one) used to print the literal "Rule" as
+  its eyebrow for every single rule, because the group — Combat, Dice, Monster, and so on —
+  only ever lived in the entry's own compendium code, not in anything the card previously
+  read. The eyebrow now shows that real group instead. A rule referenced inline, with no
+  resolvable compendium code, still reads "Rule", as before.
 - [FIX] **The Text size preference now scales dialog content too, not just Draw Steel
   elements in your notes** (SC-230). Conditions, stamina, montage and other Draw Steel
   dialogs used to ignore the Text size slider entirely — only the Card size slider reached
@@ -1219,13 +1226,6 @@ for what needs action.
   `gh-pages` tip (`--depth=1`, explicit refspec) before either deploy step.
   Applies to the `main` → `latest` release deploy as much as the `develop` →
   `dev` one. No plugin runtime code changed.
-- [FIX] **Rule cards referenced from the compendium now show their rule group above the
-  name, instead of always "Rule"** (SC-272). A `ds-rule` reference resolved by compendium
-  code (or a `ds-scc` reference that resolves to one) used to print the literal "Rule" as
-  its eyebrow for every single rule, because the group — Combat, Dice, Monster, and so on —
-  only ever lived in the entry's own compendium code, not in anything the card previously
-  read. The eyebrow now shows that real group instead. A rule referenced inline, with no
-  resolvable compendium code, still reads "Rule", as before.
 
 ## 5.1.1
 
