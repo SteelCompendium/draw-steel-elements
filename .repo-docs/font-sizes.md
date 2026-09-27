@@ -103,26 +103,35 @@ violations:
 - **Obsidian's own font-FAMILY slots** (`--dse-font-title/body/card-body/label/controls/mono`)
   — the parallel vocabulary for *which face*, with its own six settings pickers. The size
   scale mirrors its shape on purpose, including the shared "controls" concept.
-- **The six `h1`-`h6` UA literals** (SC-202 r4-resume, `2em`/`1.5em`/`1.17em`/`1em`/
-  `0.83em`/`0.67em`) — the exact literal em ratios Chromium's own UA sheet gives a bare,
-  unstyled heading, restated so a real Obsidian vault's own `.markdown-rendered` heading
-  rule cannot leak into plugin-rendered markdown (`styles-source.css`, "SC-202 r4 —
-  HEADING + EMPHASIS + LINK HOST RE-GROUNDING"). These answer "what does an unstyled
-  heading already look like with ZERO plugin opinion", not "how prominent is this text in
-  the plugin's own hierarchy" — the question the nine roles above answer — so a tenth
-  `--dse-fs-h*` row would misstate them as the same kind of decision. A real token was
-  tried first and reverted: `test/dom/kit/tokens.test.ts`'s "no stray --dse-* definition
-  in :root" guard requires every `--dse-*` custom property to be registered in
-  `DSE_TOKEN_NAMES`, which in turn (`token-coverage.test.ts`) requires a matching row in
-  the WORKSPACE repo's `docs/superpowers/dse-overhaul/D3-token-map.md` — a different git
-  repository this plugin's own worktree cannot commit to. The six literals live in
-  `fontSizeContract.test.ts`'s own sibling `UA_RESTATEMENTS` const (fix round,
-  independent review LOW-1) — NOT in `ALLOWLIST`, whose own docstring calls its contents
-  adoption debt ("the list only ever shrinks"); these six are not debt and never will be
-  adopted, so they get a separate list with the reasoning above at its own site, checked
-  by the same assertions. `code`'s `font-size: inherit` in the same block needs no entry
-  at all — `isOnScale()` was widened one line to also accept bare `inherit`, which
-  hardcodes nothing and so can never be a new hardcoded size.
+- **The six `--dse-fs-h1`-`--dse-fs-h6` heading-scale tokens** (SC-318 round 2) — a
+  SEPARATE six-token scale, not a tenth-fifteenth ROLE among the nine above: a role
+  answers "how prominent is this text in the plugin's OWN hierarchy"; these six answer
+  "what does Obsidian's OWN `h1`-`h6` scale look like" (1.618/1.462/1.318/1.188/1.076/1em,
+  transcribed from `--h1-size`…`--h6-size` in Obsidian's real sheet, not the browser UA's).
+  GROUP 1 (`styles-source.css`, "SC-202 r4 — HEADING + EMPHASIS + LINK HOST
+  RE-GROUNDING", screen-only) uses them for a plugin card's `h1`-`h6` — SC-202 r4 had
+  restated the browser UA's own bare-heading ratios there instead (`2em`/`1.5em`/`1.17em`/
+  `1em`/`0.83em`/`0.67em`, "zero plugin opinion"), reasoning that a real Obsidian vault's
+  own `.markdown-rendered` heading rule must not leak into plugin-rendered markdown — true,
+  but that block is SCREEN-only; PRINT (GROUP 1 is print-excluded) was already showing
+  Obsidian's REAL `h1`-`h6` scale the whole time, so SCREEN was the one place a card's own
+  heading disagreed with a real vault note (SC-318's own finding). These tokens replace
+  the UA literals so SCREEN == PRINT == a real vault, at the SAME `--dse-fs-large-scale`
+  knob `--dse-fs-heading`/`--dse-fs-subheading` already use. A real token had been tried
+  once before and reverted (the cross-repo `D3-token-map.md` cost, at the time judged not
+  worth it for a "zero plugin opinion" restatement) — SC-318 did it anyway, once the target
+  values stopped being "zero opinion" UA literals and became Obsidian's real scale, because
+  that scale needed sharing between GROUP 1 and three plugin-owned tags (the roster
+  heading, the hero region title, and — bare, so no restatement needed — the initiative
+  h3/h4). `DSE_TOKEN_NAMES` + `docs/superpowers/dse-overhaul/D3-token-map.md` (the
+  WORKSPACE superproject) both carry the six rows now.
+  `fontSizeContract.test.ts`'s `UA_RESTATEMENTS` const keeps exactly ONE entry post-SC-318:
+  `.dse-hero__name` (the hero card's NAME, SC-232's territory), pinned to its pre-SC-318
+  rendered value rather than moved onto `--dse-fs-h2` — that one literal is still "not debt,
+  never adopted", the reasoning the const originally existed for. `code`'s
+  `font-size: inherit` in the same GROUP 1 block needs no entry at all — `isOnScale()` was
+  widened one line to also accept bare `inherit`, which hardcodes nothing and so can never
+  be a new hardcoded size.
 
 ## Print and export
 
