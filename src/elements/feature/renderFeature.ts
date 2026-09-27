@@ -294,6 +294,77 @@ export function kindNounOf(config: FeatureConfig): 'Ability' | 'Trait' {
 }
 
 /**
+ * Title-cases a metadata slug ("black-ash" -> "Black Ash"), matching steel-etl's
+ * `titleCase` (`build.go:1681`, always fed a `strings.ReplaceAll(v, "-", " ")`
+ * value by every caller this ports) — capitalizes the first letter of each
+ * space/hyphen-separated word, lowercasing nothing else.
+ */
+function titleCaseSlug(value: string): string {
+	return value
+		.split(/[\s-]+/)
+		.filter(Boolean)
+		.map((word) => word[0].toUpperCase() + word.slice(1))
+		.join(' ');
+}
+
+/** A non-empty, trimmed string metadata field, or undefined (absent/blank/non-string). */
+function metaStr(metadata: Record<string, unknown>, key: string): string | undefined {
+	const v = metadata[key];
+	return typeof v === 'string' && v.trim() ? v.trim() : undefined;
+}
+
+/**
+ * SC-232 W1 (r7 survey b1, b4, b5, b8): the cardHead left-deck provenance line,
+ * ported from steel-etl's `abilityOrigin` (`ability_cards.go:135-145`, class ·
+ * subclass) and `traitSource`/`traitOrigin` (`trait_cards.go:563-591`, class /
+ * ancestry / kit (+ a `feature_source` qualifier, "summoner" excluded) · subclass
+ * — same priority order as the Go source, `class` first). Reads ONLY
+ * `feature.metadata` (the by-SCC sync's own field, already on the model but never
+ * read by any head composer before this ticket — SC-165's "Dead slot" note):
+ * metadata-driven only this round, so a fixture without `metadata` renders no
+ * left-deck at all, and 0 frozen print lines move (no frozen fixture carries
+ * `metadata`).
+ *
+ * An ability's source is `class`, falling back to `kit` (survey b8, the
+ * kit-signature ability's `metadata.kit` — the site reaches the same "Panther"
+ * text via a DIFFERENT code path, an inline `originOverride` its kit page passes
+ * around `abilityOrigin` entirely, but the by-SCC fence this reads carries no
+ * `class` for a signature ability, so `kit` is an unambiguous fallback, never a
+ * second source competing with `class`). A trait or plain feature's source
+ * follows the site's own three-field priority.
+ */
+export function leftDeckOf(config: FeatureConfig): string | undefined {
+	const metadata = config.feature.metadata;
+	if (!metadata || typeof metadata !== 'object') return undefined;
+
+	const isAbility = kindNounOf(config) === 'Ability';
+	let source: string | undefined;
+	if (isAbility) {
+		source = metaStr(metadata, 'class') ?? metaStr(metadata, 'kit');
+		if (source) source = titleCaseSlug(source);
+	} else {
+		for (const key of ['class', 'ancestry', 'kit']) {
+			const v = metaStr(metadata, key);
+			if (v) {
+				source = titleCaseSlug(v);
+				break;
+			}
+		}
+		const featureSource = metaStr(metadata, 'feature_source');
+		if (featureSource && featureSource !== 'summoner' && source) {
+			source = `${source} ${titleCaseSlug(featureSource)}`;
+		}
+	}
+
+	const subclass = metaStr(metadata, 'subclass');
+	if (subclass) {
+		const titledSubclass = titleCaseSlug(subclass);
+		return source ? `${source} · ${titledSubclass}` : titledSubclass;
+	}
+	return source;
+}
+
+/**
  * Renders a list of features into a `.dse-feature__nested` container (the legacy
  * FeaturesView equivalent). Exported for Task 6's statblock/featureblock feature lists.
  */
@@ -382,19 +453,25 @@ export function renderFeature(
 	//
 	// SC-10 Task 2 (theme-agnostic DOM — both the crest <span> and the filled
 	// left-eyebrow mount in EVERY theme; the unscoped base neutralizes both via CSS, see
-	// styles-source.css): leftEyebrow = the "Ability"/"Trait" kind-noun (site's
-	// "◆ ABILITY" eyebrow); crest = a Lucide glyph keyed to the SAME act spine
-	// below. Neither slot invents wording the SDK data doesn't already imply.
+	// styles-source.css): leftEyebrow = the "Ability"/"Trait"/"Feature" kind-noun
+	// (site's "◆ ABILITY" eyebrow, SC-232 W8); crest = a Lucide glyph keyed to the
+	// SAME act spine below. SC-232 W1: leftDeck = the provenance line (class/
+	// ancestry/kit (+subclass), `leftDeckOf` above), metadata-driven and THEME-AGNOSTIC
+	// DOM like the eyebrow — Legacy hides it (see the `.dse-feature .dse-head__deck--left`
+	// rule at the top of styles-source.css) and Steel reveals + styles it (SC-232 rule
+	// group). Neither slot invents wording the SDK data doesn't already imply.
 	if (feature.name || feature.cost || feature.ability_type) {
 		// SC-10 Task 5: inside a featureblock, the SDK's own icon glyph (if any)
 		// REPLACES the act-based crest entirely (site parity — see the option
 		// doc comment above); every other caller keeps today's crestIconFor(act).
 		const featIcon = opts.featBlockIcon ? feature.icon?.trim() || undefined : undefined;
+		const leftDeckText = leftDeckOf(config);
 		const head = cardHead(
 			rootEl,
 			{
 				leftEyebrow: kindNounOf(config),
 				name: '',
+				leftDeck: leftDeckText ? '' : undefined,
 				rightEyebrow: feature.cost ? '' : undefined,
 				rightPrimary: feature.ability_type ? '' : undefined,
 				crest: opts.featBlockIcon ? undefined : { icon: crestIconFor(act), size: 'lg' },
@@ -407,6 +484,7 @@ export function renderFeature(
 			head.rootEl.prepend(iconEl);
 		}
 		if (feature.name) md(feature.name, head.nameEl, true);
+		if (leftDeckText) md(leftDeckText, head.slots.leftDeck!, true);
 		if (feature.cost) md(String(feature.cost).trim(), head.slots.rightEyebrow!, true);
 		if (feature.ability_type) md(feature.ability_type.trim(), head.slots.rightPrimary!, true);
 	}

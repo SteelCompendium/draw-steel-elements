@@ -73,6 +73,18 @@
 .dse-feature .dse-head__eyebrow--left {
 	display: none;
 }
+/* SC-232 W1: the cardHead left-deck now carries a real provenance line
+   (renderFeature.ts leftDeckOf — class/ancestry/kit (+subclass), metadata-driven)
+   on feature/ability/trait heads — THEME-AGNOSTIC DOM, mounted in every theme
+   whenever the synced fence carries `metadata`. Feature cards showed no left-deck
+   before this ticket; unconditionally hiding it here keeps Legacy's today's-look
+   unchanged, same contract as the eyebrow rule above. Steel re-reveals + styles it
+   below (the SC-232 rule group, screen-only). Montage's own leftDeck
+   (HeadView.ts) is a DIFFERENT consumer, unscoped by this `.dse-feature`-scoped
+   selector, and keeps rendering in every theme exactly as before. */
+.dse-feature .dse-head__deck--left {
+	display: none;
+}
 /* Action-type spine: --dse-act is the ELEMENT-SET alias
    (--dse-act: var(--dse-act-<type>), set beside [data-dse-act]). Keyed as a
    background (not a border-color) so Legacy's `none` value is a valid no-op. */
@@ -8269,6 +8281,27 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 	   deliberately NOT re-coloured to metal-bright. */
 	background: var(--dse-metal);
 	flex: none;
+}
+
+/* SC-232 W1: the feature-head left-deck (provenance line, renderFeature.ts
+   leftDeckOf) — site parity for `.sc-head__left-deck.sc-head__slot--line`
+   (steel-cardhead.css:92-95: small-caps, `.05rem` letter-spacing, `1.1` line-height,
+   muted color; NO text-transform, unlike the eyebrow above, so a mixed-case
+   provenance word like "Human" keeps its leading capital under small-caps). The base
+   unscoped `.dse-head__eyebrow, .dse-head__deck` rule already supplies the site's
+   font-size/color (`var(--dse-fs-label)` / `var(--dse-fg-muted)`, ~:13847); this
+   layers only the site's small-caps + the two site-measured deltas (letter-spacing,
+   line-height) on top, scoped to feature heads the way the Legacy hide rule above is.
+   `display: block` merely overrides `display: none` (a grid item's own `display` is
+   blockified regardless — SC-284's `.dse-head` grid already places it by `grid-area`).
+   SCREEN-ONLY, like every other reveal here: :not([data-dse-print="on"]) keeps print
+   frozen — moot today since no frozen fixture carries `metadata` (SC-232 r7 survey),
+   but load-bearing the moment a print capture DOES gain metadata. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature .dse-head__deck--left {
+	display: block;
+	font-variant: small-caps;
+	letter-spacing: 0.05em;
+	line-height: 1.1;
 }
 
 /* Crest show-override (SC-10 Task 2): kit/crest.ts's .dse-crest shield ships

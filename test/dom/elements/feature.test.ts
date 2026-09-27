@@ -259,6 +259,60 @@ describe('Plan 09 Task 5: feature re-cast onto the D2 kit card grammar (§3.6)',
 		);
 	});
 
+	// SC-232 round 8a, W1 (r7 survey b4) — Scott's own reported gap ("the 'Determination'
+	// trait is missing the lower-left 'human' part"). `metadata.ancestry` is the by-SCC
+	// sync's own field (verbatim from the real synced entity, see visual-harness/entry.ts's
+	// `featureTraitProvenance`); renderFeature.ts's leftDeckOf reads it — THEME-AGNOSTIC DOM,
+	// like the eyebrow above, present regardless of theme (Legacy hides it via CSS, Steel
+	// reveals + styles it — styles-source.css, not jsdom-testable here).
+	test('SC-232 W1: a trait\'s left-deck renders its metadata.ancestry, title-cased ("Human")', async () => {
+		const { root } = await renderBlock(`type: feature
+feature_type: trait
+name: Determination
+cost: 2 Points
+metadata:
+  ancestry: human
+  type: trait
+`);
+
+		const head = root.querySelector('.dse-feature > .dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__deck--left')!.textContent).toBe('Human');
+	});
+
+	test('SC-232 W1: an ability\'s left-deck renders its metadata.class, title-cased ("Tactician")', async () => {
+		const { root } = await renderBlock(`type: feature
+feature_type: ability
+name: Mark
+metadata:
+  class: tactician
+  type: ability
+`);
+
+		const head = root.querySelector('.dse-feature > .dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__deck--left')!.textContent).toBe('Tactician');
+	});
+
+	test('SC-232 W1: a kit-signature ability (no metadata.class) falls back to metadata.kit ("Panther", survey b8)', async () => {
+		const { root } = await renderBlock(`type: feature
+feature_type: ability
+name: Devastating Rush
+metadata:
+  kit: panther
+  subtype: signature
+  type: ability
+`);
+
+		const head = root.querySelector('.dse-feature > .dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__deck--left')!.textContent).toBe('Panther');
+	});
+
+	test('SC-232 W1: no metadata -> the left-deck slot is a GAP, no element at all (same "omitted slot" contract as the right-primary GAP test below — 0 frozen fixtures carry metadata, so every existing capture is unaffected)', async () => {
+		const { root } = await renderBlock(HEADER); // no metadata block
+
+		const head = root.querySelector('.dse-feature > .dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__deck--left')).toBeNull();
+	});
+
 	test('cardHead: omitted slots are GAPS — no ability_type means no right-primary element at all', async () => {
 		const { root } = await renderBlock(magmaTitan);
 

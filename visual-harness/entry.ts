@@ -292,6 +292,51 @@ effects:
   - effect: Each affected ally can shift 2 squares as a free action.
 `;
 
+// SC-232 r7 survey a1/a2 / round 8a W1 — the harness had NO fixture carrying
+// `metadata` (the by-SCC sync's own field): every existing `feature` fixture is either
+// hand-authored with no `metadata` block or an ability, so the left-deck provenance
+// line (`renderFeature.ts` `leftDeckOf`) had never rendered in a single shot before this
+// ticket, and Scott's own example ("Determination" trait missing its lower-left
+// "Human") was invisible to the harness. These two are TRIMMED, not hand-invented —
+// `metadata` is copied verbatim from the real synced entity
+// (`.superpowers/sdd/sc232-cardname-scale/r7-survey/md-dse/determination.md` /
+// `feature_ability_tactician_level-1_mark.md`, fetched from `data-unified` 2026-09-27),
+// same convention as `featureVillain` above (harness-local literal, not an edit to the
+// frozen D9 example). New capture ids (`feature-trait-provenance--*`,
+// `feature-ability-provenance--*`) — a freeze WIDENING, not a move of any existing id.
+const featureTraitProvenance = `type: feature
+feature_type: trait
+name: Determination
+cost: 2 Points
+metadata:
+  ancestry: human
+  cost: 2 Points
+  name: Determination
+  scc: mcdm.heroes.v1/feature.trait.human/determination
+  type: trait
+effects:
+  - effect: A tolerance for pain and distress allows you to push through difficult situations. If you are frightened, slowed, or weakened, you can use a maneuver to immediately end one of those conditions.
+`;
+
+const featureAbilityProvenance = `type: feature
+feature_type: ability
+name: Mark
+flavor: You draw your allies' attention to a specific foe—with devastating effect.
+keywords:
+  - Ranged
+usage: Maneuver
+distance: Ranged 10
+target: One creature
+metadata:
+  class: tactician
+  level: "1"
+  name: Mark
+  scc: mcdm.heroes.v1/feature.ability.tactician.level-1/mark
+  type: ability
+effects:
+  - effect: The target is marked by you until the end of the encounter, until you are dying, or until you use this ability again.
+`;
+
 // SC-107: the sheet's `.dse-hero__grid` had no dedicated fixture exercising a SPARSE
 // region next to a fuller one — `default` (heroDefault, src/elements/hero/example.yaml)
 // is a level-3 hero with a condition already on it, so its Conditions region is never the
@@ -924,6 +969,8 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 		villain: featureVillain,
 		collapsed: featureCollapsed,
 		list: featureEffectList,
+		'trait-provenance': featureTraitProvenance,
+		'ability-provenance': featureAbilityProvenance,
 	},
 	featureblock: {
 		default: featureblockDefault,
