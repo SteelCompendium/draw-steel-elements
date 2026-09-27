@@ -190,7 +190,10 @@ describe('Steel material contract', () => {
 		// ability COST corner (`.sc-ability__cost`) is the forged one. Asserting a sheen on
 		// the rail chip would be asserting a divergence from the site.
 		it('the forged cost chip carries the sheen and the chip bevel under Steel', () => {
-			const blocks = steelBlocksFor('.dse-feature .dse-head__eyebrow--chip');
+			// SC-232 round 8b W3: cost / the "Signature" fallback / ability_type now
+			// share ONE right-PRIMARY slot (not the old right-eyebrow) — the forged
+			// treatment moved with it.
+			const blocks = steelBlocksFor('.dse-feature .dse-head__primary--chip');
 			expect(blocks.length).toBeGreaterThan(0);
 			expect(blocks.some((b) => /background-image:\s*var\(--dse-sheen\)/.test(b))).toBe(true);
 			expect(blocks.some((b) => /box-shadow:\s*var\(--dse-chip-bevel\)/.test(b))).toBe(true);
@@ -1091,43 +1094,38 @@ describe('Steel material contract', () => {
 			}
 		});
 
-		it("a featureblock option's cost moves to the name's row and loses the chip box", () => {
+		// SC-232 round 8b W3 simplified this whole block: cost / the "Signature"
+		// fallback / ability_type now share ONE right-PRIMARY slot at the JS level
+		// (renderFeature.ts's rightPrimaryOf) for EVERY family, including a
+		// featureblock option — so there is no more grid-area RE-LANE (no second slot
+		// to swap with), only the featureblock-specific DISPLAY override: un-box the
+		// forged pill (this family renders bare text) and apply the site's mini
+		// typography, both now targeting `.dse-head__primary--chip` directly.
+		it("a featureblock option's cost loses the chip box (un-boxed, the site's own display text)", () => {
 			const cost = rules.find(
 				(r) =>
 					STEEL_SCOPE.test(r.selector) &&
-					r.selector.includes(
-						".dse-fb .dse-feature > .dse-head > .dse-head__eyebrow--right",
-					) &&
-					/grid-area:/.test(r.body),
+					r.selector.includes(".dse-fb .dse-feature > .dse-head > .dse-head__primary--chip") &&
+					/background:\s*none/.test(r.body),
 			);
 			expect(cost).toBeDefined();
-			expect(cost!.body).toMatch(/grid-area:\s*2 \/ 3/); // primary lane, right column
+			// No more grid-area re-lane — the JS already writes it into the right slot.
+			expect(cost!.body).not.toMatch(/grid-area:/);
 			// un-boxed: every piece of the base --chip chrome is cancelled
 			expect(cost!.body).toMatch(/background:\s*none/);
 			expect(cost!.body).toMatch(/border:\s*none/);
 			expect(cost!.body).toMatch(/box-shadow:\s*none/);
 			expect(cost!.body).toMatch(/padding:\s*0\s*;/);
-			// Structure tier — the re-placement and the un-boxing reach print together;
-			// a lane-moved cost still wearing a box is a half-state the site has no version of.
+			// Structure tier — the un-boxing reaches print; a cost still wearing a box
+			// is a half-state the site has no version of.
 			expect(cost!.selector).not.toMatch(/:not\(\[data-dse-print="on"\]\)/);
-
-			// …and the descriptor it displaced drops to the deck lane.
-			const descriptor = rules.find(
-				(r) =>
-					STEEL_SCOPE.test(r.selector) &&
-					r.selector.includes(".dse-fb .dse-feature > .dse-head > .dse-head__primary--right"),
-			);
-			expect(descriptor).toBeDefined();
-			expect(descriptor!.body).toMatch(/grid-area:\s*3 \/ 3/);
 		});
 
 		it("renders that cost as the site's --mini display text (uppercase title face, role-tinted)", () => {
 			const mini = rules.find(
 				(r) =>
 					STEEL_SCOPE.test(r.selector) &&
-					r.selector.includes(
-						".dse-fb .dse-feature > .dse-head > .dse-head__eyebrow--right",
-					) &&
+					r.selector.includes(".dse-fb .dse-feature > .dse-head > .dse-head__primary--chip") &&
 					/text-transform:/.test(r.body),
 			);
 			expect(mini).toBeDefined();
@@ -1140,7 +1138,7 @@ describe('Steel material contract', () => {
 				(r) =>
 					/font-family:\s*var\(--dse-font-title\)\s*;/.test(r.body) &&
 					r.selector.includes(
-						'.dse-fb .dse-feature > .dse-head > .dse-head__eyebrow--right',
+						'.dse-fb .dse-feature > .dse-head > .dse-head__primary--chip',
 					),
 			);
 			expect(titleRouting).toBeDefined();
@@ -1164,20 +1162,25 @@ describe('Steel material contract', () => {
 
 		it('leaves the STATBLOCK and standalone cost on the site\'s forged pill', () => {
 			// The site splits this per family in its generator (statblock_card.go hChip vs
-			// featureblock_page.go hMini), so the cost-as-text rules must name .dse-fb ONLY…
+			// featureblock_page.go hMini), so the cost-as-text (un-boxed) rules must name
+			// .dse-fb ONLY…
 			const costRules = rules.filter(
-				(r) => STEEL_SCOPE.test(r.selector) && r.selector.includes('.dse-head__eyebrow--right'),
+				(r) =>
+					STEEL_SCOPE.test(r.selector) &&
+					r.selector.includes('.dse-fb .dse-feature > .dse-head > .dse-head__primary--chip') &&
+					/background:\s*none/.test(r.body),
 			);
 			expect(costRules.length).toBeGreaterThan(0);
 			for (const r of costRules) {
 				expect(r.selector).toContain('.dse-fb ');
 				expect(r.selector).not.toContain('.dse-sb');
 			}
-			// …and the forged pill itself must survive untouched for everyone else.
+			// …and the forged pill itself must survive untouched for everyone else —
+			// now scoped to .dse-head__primary--chip (moved from --eyebrow--chip, W3).
 			const pill = rules.find(
 				(r) =>
 					r.selector.trim() ===
-					'[data-dse-theme=\'steel\']:not([data-dse-print="on"]) .dse-feature .dse-head__eyebrow--chip',
+					'[data-dse-theme=\'steel\']:not([data-dse-print="on"]) .dse-feature .dse-head__primary--chip',
 			);
 			expect(pill).toBeDefined();
 			expect(pill!.body).toMatch(/background-image:\s*var\(--dse-sheen\)/);

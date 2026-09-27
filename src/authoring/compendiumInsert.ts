@@ -77,20 +77,23 @@ function extractDTO(model: unknown): unknown {
  * because the view reads the TOP-LEVEL `name`. A silent-edit trap in the one feature whose
  * whole purpose is "take it and edit it" (spec §4.3, "the homebrew starting point").
  *
- * **SC-232 W1/W8 correction: a SIX-KEY exception, feature family only.**
- * `renderFeature.ts`'s `leftDeckOf`/`kindNounOf` now read
+ * **SC-232 W1/W8/W2/W3 correction: a NINE-KEY exception, feature family only.**
+ * `renderFeature.ts`'s `leftDeckOf`/`kindNounOf` (round 8a) read
  * `metadata.{ancestry,class,kit,subclass,feature_source,type}` for the cardHead left-deck
  * provenance line and the "Feature" kind-noun — the exact fields Scott's own report named
- * (a synced trait's card is missing the "Human" line). Those six keys are no longer inert:
- * dropping `metadata` wholesale from a FEATURE snapshot would silently regress a pasted
- * trait/ability back to no left-deck and a possibly-wrong kind-noun, relative to the live
- * synced original it was copied from — the exact silent-gap failure mode this whole
- * function exists to prevent, just pointed the other way (an OMITTED field changing the
- * render, not an edited one failing to). `trimSnapshotDTO` below keeps a metadata
- * SUB-OBJECT holding only those six keys for a feature DTO, dropping the rest (name,
- * effects, flavor, cost, scc, … — still dead weight); statblock and featureblock
- * snapshots are unaffected — neither element ever reads `.metadata` — and keep the full
- * drop.
+ * (a synced trait's card is missing the "Human" line). Round 8b's `levelOf`/
+ * `rightPrimaryOf` add three more: `level` (+ `scc`, only as its `level-N` fallback) for
+ * the "Level N" right-eyebrow chip, and `subtype` for the "Signature" right-primary
+ * fallback. None of these nine keys is inert any more: dropping `metadata` wholesale
+ * from a FEATURE snapshot would silently regress a pasted trait/ability back to no
+ * left-deck, a possibly-wrong kind-noun, no level chip, and no "Signature" fallback,
+ * relative to the live synced original it was copied from — the exact silent-gap
+ * failure mode this whole function exists to prevent, just pointed the other way (an
+ * OMITTED field changing the render, not an edited one failing to). `trimSnapshotDTO`
+ * below keeps a metadata SUB-OBJECT holding only those nine keys for a feature DTO,
+ * dropping the rest (name, effects, flavor, cost, … — still dead weight); statblock and
+ * featureblock snapshots are unaffected — neither element ever reads `.metadata` — and
+ * keep the full drop.
  *
  * Deliberately a DENY list of one key (further narrowed by the exception above), not an
  * allow-list of live keys: the three `partialFromModel`s (StatblockDTO/FeatureDTO/
@@ -125,10 +128,23 @@ function extractDTO(model: unknown): unknown {
  */
 const RENDER_INERT_SNAPSHOT_KEYS = ['metadata'] as const;
 
-/** SC-232 W1/W8: the `metadata` subkeys `renderFeature.ts`'s `leftDeckOf`/`kindNounOf`
- *  actually read — see the exception paragraph above. A feature snapshot keeps exactly
- *  these, dropping the rest of `metadata`. */
-const FEATURE_METADATA_RENDER_KEYS = ['ancestry', 'class', 'kit', 'subclass', 'feature_source', 'type'] as const;
+/** SC-232 W1/W8 (round 8a) + W2/W3 (round 8b): the `metadata` subkeys
+ *  `renderFeature.ts`'s `leftDeckOf`/`kindNounOf`/`levelOf`/`rightPrimaryOf` actually
+ *  read — see the exception paragraph above. `level` and `scc` feed `levelOf`'s
+ *  "Level N" chip (`scc` only as the `level-N` fallback when `level` itself is
+ *  absent); `subtype` feeds `rightPrimaryOf`'s "Signature" fallback. A feature
+ *  snapshot keeps exactly these nine keys, dropping the rest of `metadata`. */
+const FEATURE_METADATA_RENDER_KEYS = [
+	'ancestry',
+	'class',
+	'kit',
+	'subclass',
+	'feature_source',
+	'type',
+	'level',
+	'scc',
+	'subtype',
+] as const;
 
 /**
  * Drops `RENDER_INERT_SNAPSHOT_KEYS` from a serialized-to-YAML-bound DTO — for a feature

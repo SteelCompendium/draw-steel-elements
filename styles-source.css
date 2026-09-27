@@ -7771,7 +7771,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    large-header face, same as every other Title-slot consumer) and the move is required by
    the SC-112 contract this rule already cites — but it IS a Legacy-visible behavior change
    under that one non-default preference, not a pure no-op in every configuration. */
-:is([data-dse-element], .dse-modal) .dse-fb .dse-feature > .dse-head > .dse-head__eyebrow--right,
+:is([data-dse-element], .dse-modal) .dse-fb .dse-feature > .dse-head > .dse-head__primary--chip,
 :is([data-dse-element], .dse-modal) .dse-card__title,
 :is([data-dse-element], .dse-modal) .dse-hero__name,
 :is(
@@ -8144,12 +8144,16 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 /* The SECOND chip surface: the ability COST corner chip, `.sc-ability__cost`
    (steel-ability-cards.css:113-119) — the one place the site actually forges a
    chip (sheen gradient + inset bevel + metal-line hairline + 7px radius +
-   metal-bright text). In the plugin that content is written into the feature
-   card's right EYEBROW slot (elements/feature/renderFeature.ts:215,227), so
-   the forged treatment is scoped to `.dse-feature` and does NOT leak to every
-   head chip. The light-scheme background swap rides on --dse-sheen (site
-   …:119), so no separate light rule is needed here. */
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature .dse-head__eyebrow--chip {
+   metal-bright text). SC-232 round 8b item 1 (W3): the plugin now writes cost /
+   the "Signature" fallback / ability_type into ONE shared right-PRIMARY slot
+   (elements/feature/renderFeature.ts's `rightPrimaryOf`) instead of the old split
+   (cost -> right-eyebrow, ability_type -> right-primary, independently) — this rule
+   moved from `.dse-head__eyebrow--chip` to `.dse-head__primary--chip` to follow it.
+   Scoped to `.dse-feature` so the forged treatment does not leak to every head chip
+   (in particular the right-EYEBROW "Level N" chip, W2, which stays a plain chip).
+   The light-scheme background swap rides on --dse-sheen (site …:119), so no
+   separate light rule is needed here. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature .dse-head__primary--chip {
 	background-image: var(--dse-sheen);
 	border: 1px solid var(--dse-metal-line);
 	border-radius: 7px;
@@ -8157,47 +8161,44 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 	color: var(--dse-metal-bright);
 }
 
-/* ── SC-101: a FEATUREBLOCK option's cost is DISPLAY TEXT, not a chip ─────────
+/* ── SC-101 (simplified, SC-232 round 8b item 1): a FEATUREBLOCK option's cost is
+   DISPLAY TEXT, not a chip ─────────
    Which surface a cost takes is a per-FAMILY decision on the site, and the site
    makes it in the generator, not the CSS:
      statblock feature   RightPrimary: hChip(richSb(f.Cost))   (statblock_card.go:120)
      featureblock option RightPrimary: hMini(…f.Cost)          (featureblock_page.go:389)
      standalone ability  RightPrimary: hMini(…cost)            (ability_cards.go:306)
    i.e. the forged pill above is the STATBLOCK treatment; the featureblock renders
-   the cost big, uppercase and unboxed on the same line as the name, with the
-   usage/type descriptor demoted to the deck lane below it. Site reference:
+   the cost big, uppercase and unboxed on the same line as the name. Site reference:
    evidence-task1/site-refs/featureblock-malice--dark.png ("3 MALICE").
 
-   The plugin's DOM already carries everything needed (D2 — no TS in this task):
-   renderFeature.ts:288,300 writes the cost into the right EYEBROW slot and
-   ability_type into the right PRIMARY slot, so this is a CSS re-placement of two
-   grid areas plus a surface swap:
-     cost         eyebrow lane (1/3) → primary lane (2/3), beside the name
-     ability_type primary lane (2/3) → deck    lane (3/3)
-   No collision is possible on the deck lane: renderFeature.ts never mounts a
-   rightDeck slot (cardHead.ts:97-99 only creates the slots a caller provides).
+   ORIGINALLY (pre-8b) this rule RE-PLACED two grid areas (cost eyebrow->primary lane,
+   ability_type primary->deck lane) because the JS wrote them to two separate slots.
+   SC-232 round 8b item 1 unified that at the JS level — `rightPrimaryOf` now writes
+   the ONE value (cost, else "Signature", else ability_type) straight into the
+   right-PRIMARY slot for every family, including a featureblock option — so no
+   grid-area re-lane is needed here any more, only the DISPLAY override: un-box the
+   forged-pill rule above (this family renders bare text, not a chip) and apply the
+   site's own mini-title typography.
 
-   SCOPE — `.dse-fb … .dse-feature > .dse-head >` — is deliberately three things
-   at once: (a) featureblock only, so statblock sub-features and the standalone
-   Feature element keep the forged pill directly above; (b) the OPTION head only,
-   never the featureblock's own card head (whose right eyebrow is the "Level N"
-   chip, view.ts:86 — its parent is .dse-fb, not a .dse-feature); (c) still true
-   for an fb embedded in a statblock, which the site frames identically.
-   Specificity (0,5,0) clears every competing rule: the base slot placement
-   (0,1,0), the base chip chrome (0,1,0), the Steel flat-chip block (0,3,0), the
-   Steel label font-family routing (0,3,0) and the forged pill above (0,4,0).
-   VERIFIED by live getComputedStyle in the harness, not by reading specificity —
-   the Task-4 lesson (a no-op selector produces byte-identical shots, so freeze
-   silence proves nothing).
+   SCOPE — `.dse-fb … .dse-feature > .dse-head >` — is deliberately three things at
+   once: (a) featureblock only, so statblock sub-features and the standalone Feature
+   element keep the forged pill directly above; (b) the OPTION head only, never the
+   featureblock's own card head (whose right eyebrow is the "Level N" chip, view.ts —
+   its parent is .dse-fb, not a .dse-feature); (c) still true for an fb embedded in a
+   statblock, which the site frames identically. Specificity (0,5,0) clears every
+   competing rule: the base slot placement (0,1,0), the base chip chrome (0,1,0), the
+   Steel flat-chip block (0,3,0), the Steel label font-family routing (0,3,0) and the
+   forged pill above (0,4,0). VERIFIED by live getComputedStyle in the harness, not by
+   reading specificity — the Task-4 lesson (a no-op selector produces byte-identical
+   shots, so freeze silence proves nothing).
 
-   TIERS. The re-placement AND the un-boxing are structure (S-1(a): they reach
-   print — a cost that has moved lane but kept a chip box would be a half-state
-   the site has no version of). The display TYPOGRAPHY is the material/display
-   tier, screen-only, exactly like the sibling card-head --mini block (~:4155)
-   and the primary title's own uppercase treatment (~:3720). */
-[data-dse-theme='steel'] .dse-fb .dse-feature > .dse-head > .dse-head__eyebrow--right {
-	grid-area: 2 / 3;
-	align-self: center;
+   TIERS. The un-boxing is structure (S-1(a): it reaches print — a cost that kept a
+   chip box would be a half-state the site has no version of). The display
+   TYPOGRAPHY is the material/display tier, screen-only, exactly like the sibling
+   card-head --mini block (~:4155) and the primary title's own uppercase treatment
+   (~:3720). */
+[data-dse-theme='steel'] .dse-fb .dse-feature > .dse-head > .dse-head__primary--chip {
 	/* un-box: the base --chip chrome (~:6329) is a pill; the site's mini is bare
 	   text. `display: block` because the site's slot is a <div>; the slot is
 	   already justify-self:end + text-align:right from the shared right-rail rule. */
@@ -8206,9 +8207,6 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 	background: none;
 	border: none;
 	box-shadow: none;
-}
-[data-dse-theme='steel'] .dse-fb .dse-feature > .dse-head > .dse-head__primary--right {
-	grid-area: 3 / 3;
 }
 /* Display tier — the site's `.sc-head__slot--mini` (steel-cardhead.css:111-114):
        font-family: var(--md-large-header-font);  → --dse-font-title
@@ -8236,7 +8234,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    SC-367. font-variant/letter-spacing are reset because the Steel flat-chip
    block sets small-caps + 0.04em tracking on every --chip slot; the mini is
    neither. */
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb .dse-feature > .dse-head > .dse-head__eyebrow--right {
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb .dse-feature > .dse-head > .dse-head__primary--chip {
 	/* font-family: NOT declared here — the Title slot's consumers must be
 	   theme-agnostic (SC-112 Task 5's Legacy font-slot gate), so this selector is an
 	   arm of the consolidated font-family block instead (~:3996). Same treatment the

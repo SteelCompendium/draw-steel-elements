@@ -10,7 +10,13 @@
 //
 // Both read ONLY `feature.metadata` (the by-SCC sync's own field); every case below
 // mirrors a real synced fence field shape (r7-survey/md-dse/), not an invented one.
-import { kindNounOf, leftDeckOf } from '../../../src/elements/feature/renderFeature';
+import {
+	kindNounOf,
+	leftDeckOf,
+	levelOf,
+	normalizeSignatureWording,
+	rightPrimaryOf,
+} from '../../../src/elements/feature/renderFeature';
 import { FeatureConfig } from '@model/FeatureConfig';
 
 describe('SC-232 W8: kindNounOf — the "Ability"/"Trait"/"Feature" left-eyebrow noun', () => {
@@ -212,5 +218,142 @@ metadata:
   type: ability
 `);
 		expect(leftDeckOf(config)).toBe('College Of Black Ash');
+	});
+});
+
+describe('SC-232 round 8b item 2 (W2): levelOf — the cardHead right-eyebrow "Level N"', () => {
+	test('metadata.level (string) -> "Level N"', () => {
+		const config = FeatureConfig.readYaml(`type: feature
+feature_type: ability
+name: Mark
+metadata:
+  level: "1"
+`);
+		expect(levelOf(config)).toBe('Level 1');
+	});
+
+	test('metadata.level (number) -> "Level N"', () => {
+		const config = FeatureConfig.readYaml(`type: feature
+feature_type: ability
+name: Mark
+metadata:
+  level: 1
+`);
+		expect(levelOf(config)).toBe('Level 1');
+	});
+
+	test('no metadata.level falls back to the level-N segment of metadata.scc', () => {
+		const config = FeatureConfig.readYaml(`type: feature
+feature_type: ability
+name: Mark
+metadata:
+  scc: mcdm.heroes.v1/feature.ability.tactician.level-1/mark
+`);
+		expect(levelOf(config)).toBe('Level 1');
+	});
+
+	test('metadata.level wins over metadata.scc when both are present', () => {
+		const config = FeatureConfig.readYaml(`type: feature
+feature_type: ability
+name: Mark
+metadata:
+  level: "3"
+  scc: mcdm.heroes.v1/feature.ability.tactician.level-1/mark
+`);
+		expect(levelOf(config)).toBe('Level 3');
+	});
+
+	test('no metadata.level and no level-N in metadata.scc -> undefined', () => {
+		const config = FeatureConfig.readYaml(`type: feature
+feature_type: ability
+name: Mark
+metadata:
+  scc: mcdm.heroes.v1/feature.ability.tactician/mark
+`);
+		expect(levelOf(config)).toBeUndefined();
+	});
+
+	test('no metadata at all -> undefined', () => {
+		const config = FeatureConfig.readYaml(`type: feature
+feature_type: ability
+name: Mark
+`);
+		expect(levelOf(config)).toBeUndefined();
+	});
+});
+
+describe('SC-232 round 8b item 6: normalizeSignatureWording — "Signature Ability" -> "Signature"', () => {
+	test('exact match, case-insensitive', () => {
+		expect(normalizeSignatureWording('Signature Ability')).toBe('Signature');
+		expect(normalizeSignatureWording('signature ability')).toBe('Signature');
+		expect(normalizeSignatureWording('SIGNATURE ABILITY')).toBe('Signature');
+	});
+
+	test('trims surrounding whitespace before matching', () => {
+		expect(normalizeSignatureWording('  Signature Ability  ')).toBe('Signature');
+	});
+
+	test('every other value passes through unchanged', () => {
+		expect(normalizeSignatureWording('Villain Action 1')).toBe('Villain Action 1');
+		expect(normalizeSignatureWording('Signature')).toBe('Signature');
+	});
+});
+
+describe('SC-232 round 8b item 1 (W3): rightPrimaryOf — the cardHead right-primary priority chain', () => {
+	test('cost wins when present', () => {
+		const config = FeatureConfig.readYaml(`type: feature
+feature_type: ability
+name: Mark
+cost: 5 Ferocity
+ability_type: Villain Action 1
+`);
+		expect(rightPrimaryOf(config)).toBe('5 Ferocity');
+	});
+
+	test('no cost, metadata.subtype: signature -> "Signature" fallback', () => {
+		const config = FeatureConfig.readYaml(`type: feature
+feature_type: ability
+name: Devastating Rush
+metadata:
+  subtype: signature
+`);
+		expect(rightPrimaryOf(config)).toBe('Signature');
+	});
+
+	test('no cost, no signature subtype, ability_type present -> ability_type (normalized, item 6)', () => {
+		const config = FeatureConfig.readYaml(`type: feature
+feature_type: ability
+name: Some Sub-Feature
+ability_type: Signature Ability
+`);
+		expect(rightPrimaryOf(config)).toBe('Signature');
+	});
+
+	test('no cost, no signature subtype, ability_type present and NOT the signature phrase -> passes through verbatim', () => {
+		const config = FeatureConfig.readYaml(`type: feature
+feature_type: ability
+name: Some Villain Feature
+ability_type: Villain Action 2
+`);
+		expect(rightPrimaryOf(config)).toBe('Villain Action 2');
+	});
+
+	test('cost wins over metadata.subtype: signature (cost is first in the chain)', () => {
+		const config = FeatureConfig.readYaml(`type: feature
+feature_type: ability
+name: Devastating Rush
+cost: 2 Malice
+metadata:
+  subtype: signature
+`);
+		expect(rightPrimaryOf(config)).toBe('2 Malice');
+	});
+
+	test('nothing present -> undefined (a true GAP, no cardHead right-primary element)', () => {
+		const config = FeatureConfig.readYaml(`type: feature
+feature_type: ability
+name: Bare Ability
+`);
+		expect(rightPrimaryOf(config)).toBeUndefined();
 	});
 });

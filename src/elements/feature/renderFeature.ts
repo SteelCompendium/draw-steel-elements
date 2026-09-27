@@ -197,6 +197,12 @@ export interface RenderFeatureOptions {
 	 *  Only featureblock/view.ts sets this; every other renderFeatureList caller
 	 *  keeps the pre-existing act-based crest untouched. */
 	featBlockIcon?: boolean;
+	/** SC-232 round 8b item 5 (W1b): the kit's own display name, used as leftDeckOf's
+	 *  fallback for an INLINE kit signature ability — its Kit-model `signature_ability`
+	 *  field carries no `metadata` at all (unlike a by-SCC nested `ds-feature` fence,
+	 *  which already carries `metadata.kit` and needs no fallback — SC-232 W1 handles
+	 *  that path already). Only `layouts.ts`'s `kitLayout` sets this. */
+	leftDeckFallback?: string;
 }
 
 /**
@@ -300,13 +306,24 @@ export function crestIconFor(act: ActionType | undefined): string | undefined {
  * `isTrait()` binary, so every frozen fixture (none of which carries
  * `metadata`) renders exactly as before — 0 frozen print lines move (the
  * left-eyebrow is print-hidden regardless, per the SC-232 rule group below).
+ *
+ * SC-232 round 8b drive-by: matched by SUBSTRING, not exact equality. The kit
+ * element's own `example.yaml` (frozen, `kit--steel-print.png`) carries
+ * `signature_ability.metadata.type: "feature/ability/common"` — a legacy
+ * slash-path shape, not the by-SCC sync's clean single-word value — which an
+ * exact match sent to the "Feature" catch-all, showing "Feature" in the kit
+ * screenshot's nested signature-ability head where "Ability" is correct (found
+ * while shooting round 8b's W1b evidence). Screen-only either way (print-hidden,
+ * per the comment above), so this moves no frozen byte; substring matching is
+ * strictly more permissive than exact matching, so every by-SCC clean value
+ * (`"ability"`, `"trait"`) still matches exactly as before.
  */
 export function kindNounOf(config: FeatureConfig): 'Ability' | 'Trait' | 'Feature' {
 	const raw: unknown = config.feature.metadata?.type;
 	if (typeof raw === 'string' && raw.trim()) {
 		const rawType = raw.trim().toLowerCase();
-		if (rawType === 'ability') return 'Ability';
-		if (rawType === 'trait') return 'Trait';
+		if (rawType.includes('trait')) return 'Trait';
+		if (rawType.includes('ability')) return 'Ability';
 		return 'Feature';
 	}
 	return config.feature.isTrait() ? 'Trait' : 'Ability';
@@ -381,6 +398,67 @@ export function leftDeckOf(config: FeatureConfig): string | undefined {
 		return source ? `${source} · ${titledSubclass}` : titledSubclass;
 	}
 	return source;
+}
+
+/**
+ * SC-232 round 8b item 2 (W2, r7 survey b2/b6): the cardHead right-eyebrow "Level N",
+ * ported from the site's level display. Reads `metadata.level` first (the by-SCC
+ * sync's own field); when absent, falls back to the `level-N` segment of
+ * `metadata.scc` (every by-SCC leveled ability/trait's own SCC code carries this
+ * segment, e.g. `feature.ability.tactician.level-1`). Needs no fallback for a
+ * hand-authored fixture with no metadata — it simply renders no level, same as
+ * today.
+ */
+export function levelOf(config: FeatureConfig): string | undefined {
+	const metadata = config.feature.metadata;
+	if (!metadata || typeof metadata !== 'object') return undefined;
+	const raw: unknown = (metadata as Record<string, unknown>).level;
+	if (typeof raw === 'string' && raw.trim()) return `Level ${raw.trim()}`;
+	if (typeof raw === 'number' && Number.isFinite(raw)) return `Level ${raw}`;
+	const scc: unknown = (metadata as Record<string, unknown>).scc;
+	if (typeof scc === 'string') {
+		const m = /level-(\d+)/.exec(scc);
+		if (m) return `Level ${m[1]}`;
+	}
+	return undefined;
+}
+
+/**
+ * SC-232 round 8b item 6: the site's own "Signature Ability" -> "Signature" wording
+ * normalization (steel-etl `statblock_page.go:404-415`,
+ * `strings.EqualFold(linkText(inner), "Signature Ability")` — case-insensitive).
+ * Ported as a case-insensitive exact match; every real corpus value in this shape is
+ * plain text (no markdown link), so no link-text extraction is needed here.
+ */
+export function normalizeSignatureWording(value: string): string {
+	return value.trim().toLowerCase() === 'signature ability' ? 'Signature' : value;
+}
+
+/**
+ * SC-232 round 8b item 1 (W3, r7 survey d1/d3/b10): the cardHead right-primary value —
+ * ONE slot, a priority chain, matching the site's own single-slot placement
+ * (`ability_cards.go`'s cost mini, `statblock_page.go`'s sub-feature parenthetical
+ * chip): `cost` first; else `"Signature"` when `metadata.subtype` is `signature` (a
+ * standalone kit-signature ability with no explicit cost); else `ability_type`
+ * (normalized — item 6). Replaces the pre-8b split (`cost` -> right-eyebrow,
+ * `ability_type` -> right-primary, both independently) for EVERY feature family,
+ * including a featureblock option (SC-101's own two-slot CSS re-lane is simplified to
+ * match — see the styles-source.css comment at its old location).
+ */
+export function rightPrimaryOf(config: FeatureConfig): string | undefined {
+	const feature = config.feature;
+	if (feature.cost) return String(feature.cost).trim();
+	const metadata = feature.metadata;
+	if (
+		metadata &&
+		typeof metadata === 'object' &&
+		typeof (metadata as Record<string, unknown>).subtype === 'string' &&
+		((metadata as Record<string, unknown>).subtype as string).trim().toLowerCase() === 'signature'
+	) {
+		return 'Signature';
+	}
+	if (feature.ability_type) return normalizeSignatureWording(feature.ability_type.trim());
+	return undefined;
 }
 
 /**
@@ -466,33 +544,47 @@ export function renderFeature(
 		return sectionEl;
 	};
 
-	// -- cardHead (§3.6 slot mapping): name = the heading; cost -> right eyebrow chip;
-	// ability_type -> right primary chip. Slots mount empty and fill via renderMd so
-	// SDK text renders exactly as the legacy markdown path did.
+	// -- cardHead (§3.6 slot mapping): name = the heading. Slots mount empty and fill
+	// via renderMd so SDK text renders exactly as the legacy markdown path did.
 	//
 	// SC-10 Task 2 (theme-agnostic DOM — both the crest <span> and the filled
 	// left-eyebrow mount in EVERY theme; the unscoped base neutralizes both via CSS, see
 	// styles-source.css): leftEyebrow = the "Ability"/"Trait"/"Feature" kind-noun
 	// (site's "◆ ABILITY" eyebrow, SC-232 W8); crest = a Lucide glyph keyed to the
 	// SAME act spine below. SC-232 W1: leftDeck = the provenance line (class/
-	// ancestry/kit (+subclass), `leftDeckOf` above), metadata-driven and THEME-AGNOSTIC
-	// DOM like the eyebrow — Legacy hides it (see the `.dse-feature .dse-head__deck--left`
-	// rule at the top of styles-source.css) and Steel reveals + styles it (SC-232 rule
-	// group). Neither slot invents wording the SDK data doesn't already imply.
-	if (feature.name || feature.cost || feature.ability_type) {
+	// ancestry/kit (+subclass), `leftDeckOf` above, falling back to `opts.leftDeckFallback`
+	// — round 8b item 5, W1b, an inline kit signature ability's own parent kit name),
+	// metadata-driven and THEME-AGNOSTIC DOM like the eyebrow — Legacy hides it (see the
+	// `.dse-feature .dse-head__deck--left` rule at the top of styles-source.css) and
+	// Steel reveals + styles it (SC-232 rule group).
+	//
+	// SC-232 round 8b: rightEyebrow = `levelOf` (item 2, W2 — "Level N", metadata-driven);
+	// rightPrimary = `rightPrimaryOf` (item 1, W3 — cost / signature-fallback /
+	// ability_type, ONE slot, a priority chain, item 6's wording normalization folded in);
+	// rightDeck = `usage` (item 3, W7), EXCEPT inside a featureblock, which keeps its own
+	// cost/ability_type display (unaffected by items 1-3 at the JS level; only its CSS
+	// re-lane simplifies — see styles-source.css) and today's meta "Type" chip instead of
+	// a head rightDeck slot. Neither slot invents wording the SDK data doesn't already
+	// imply.
+	const rightEyebrowText = levelOf(config);
+	const rightPrimaryText = rightPrimaryOf(config);
+	const rightDeckText =
+		!opts.featBlockIcon && feature.usage && !isDashPlaceholder(feature.usage) ? feature.usage.trim() : undefined;
+	if (feature.name || rightEyebrowText || rightPrimaryText || rightDeckText) {
 		// SC-10 Task 5: inside a featureblock, the SDK's own icon glyph (if any)
 		// REPLACES the act-based crest entirely (site parity — see the option
 		// doc comment above); every other caller keeps today's crestIconFor(act).
 		const featIcon = opts.featBlockIcon ? feature.icon?.trim() || undefined : undefined;
-		const leftDeckText = leftDeckOf(config);
+		const leftDeckText = leftDeckOf(config) ?? opts.leftDeckFallback;
 		const head = cardHead(
 			rootEl,
 			{
 				leftEyebrow: kindNounOf(config),
 				name: '',
 				leftDeck: leftDeckText ? '' : undefined,
-				rightEyebrow: feature.cost ? '' : undefined,
-				rightPrimary: feature.ability_type ? '' : undefined,
+				rightEyebrow: rightEyebrowText ? '' : undefined,
+				rightPrimary: rightPrimaryText ? '' : undefined,
+				rightDeck: rightDeckText ? '' : undefined,
 				crest: opts.featBlockIcon ? undefined : { icon: crestIconFor(act), size: 'lg' },
 				level,
 			},
@@ -504,8 +596,9 @@ export function renderFeature(
 		}
 		if (feature.name) md(feature.name, head.nameEl, true);
 		if (leftDeckText) md(leftDeckText, head.slots.leftDeck!, true);
-		if (feature.cost) md(String(feature.cost).trim(), head.slots.rightEyebrow!, true);
-		if (feature.ability_type) md(feature.ability_type.trim(), head.slots.rightPrimary!, true);
+		if (rightEyebrowText) md(rightEyebrowText, head.slots.rightEyebrow!, true);
+		if (rightPrimaryText) md(rightPrimaryText, head.slots.rightPrimary!, true);
+		if (rightDeckText) md(rightDeckText, head.slots.rightDeck!, true);
 	}
 
 	// -- flavor --
@@ -516,7 +609,14 @@ export function renderFeature(
 	// -- meta grid: Keywords / Type / Distance / Target. Labels ship in the DOM (the
 	// §3.6 target shows them); the Legacy base HIDES the key spans so today's
 	// label-less look is unchanged until D3's Steel layer reveals them.
-	if (feature.keywords || feature.usage || feature.distance || feature.target) {
+	//
+	// SC-232 round 8b item 3 (W7): `usage` no longer feeds the "Type" meta chip for a
+	// standalone feature or kit signature — it moved to the cardHead right-deck slot
+	// above (the duplicated meta chip the survey's b3/b9 flagged). A featureblock
+	// option KEEPS its "Type" meta chip unchanged ("featureblock options keep today's
+	// lanes" — the brief's own words); `!opts.featBlockIcon` is the same flag the head
+	// block above already gates `rightDeckText` on.
+	if (feature.keywords || (opts.featBlockIcon && feature.usage) || feature.distance || feature.target) {
 		const metaEl = rootEl.createDiv({ cls: 'dse-feature__meta' });
 		// SC-121 B-1: the meta region is TWO bands, matching the site's ability card
 		// (steel-ability-cards.css): a wrapping chip row (.sc-ability__kw — Keywords,
@@ -580,7 +680,7 @@ export function renderFeature(
 			const kwEmpty = keywords.length === 0 || keywords.every(isEmptyValue);
 			cell('keywords', 'Keywords', keywords.length > 0 ? keywords.join(', ') : '', 'chips', kwEmpty, !kwEmpty);
 		}
-		if (feature.usage) cell('type', 'Type', feature.usage, 'chips', isEmptyValue(feature.usage));
+		if (opts.featBlockIcon && feature.usage) cell('type', 'Type', feature.usage, 'chips', isEmptyValue(feature.usage));
 		if (feature.distance) cell('distance', 'Distance', feature.distance, 'rail');
 		if (feature.target) cell('target', 'Target', feature.target, 'rail');
 	}

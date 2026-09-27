@@ -359,6 +359,30 @@ features:
 		expect(card.style.getPropertyValue('--dse-role')).toBe('');
 	});
 
+	// SC-232 round 8b item 3 (W7): "Featureblock options keep today's lanes" — the
+	// brief's own words. usage stays in the meta "Type" chip for a featureblock
+	// option; it does NOT move to the cardHead right-deck the way a standalone
+	// feature's or a kit signature ability's usage now does.
+	test('SC-232 W7: a featureblock option keeps its usage in the meta "Type" chip, not the cardHead right-deck', async () => {
+		const { root } = await renderFeatureblock(`type: featureblock
+featureblock_type: Fixture
+name: Some Fixture
+features:
+  - type: feature
+    feature_type: trait
+    name: Some Option
+    usage: Main action
+    effects:
+      - effect: Text.
+`);
+
+		const optionCard = root.querySelector('.dse-fb > .dse-feature__nested > .dse-feature') as HTMLElement;
+		expect(optionCard.querySelector('.dse-head__deck--right')).toBeNull();
+		const typeCell = optionCard.querySelector('.dse-feature__meta-cell--type');
+		expect(typeCell).not.toBeNull();
+		expect(typeCell!.querySelector('.dse-feature__meta-value')!.textContent).toBe('Main action');
+	});
+
 	test('.dse-fb__flavor renders the flavor markdown', async () => {
 		const { root } = await renderFeatureblock(angulotlMalice);
 		expect(root.querySelector('.dse-fb > .dse-fb__flavor')!.textContent).toContain(
@@ -402,12 +426,15 @@ features:
 		const cards = list.querySelectorAll(':scope > .dse-feature');
 		expect(cards).toHaveLength(3);
 
-		// The shared feature grammar: kit cardHead name + cost chip, kit .dse-pr tiers.
+		// The shared feature grammar: kit cardHead name + cost, kit .dse-pr tiers.
+		// SC-232 round 8b W3: cost now lands in the right-PRIMARY slot (the site's
+		// own unboxed-mini treatment for a featureblock option; see the SC-101
+		// simplification in styles-source.css), not the right-eyebrow chip.
 		const names = Array.from(cards).map(
 			(c) => c.querySelector('.dse-head__primary--left')!.textContent,
 		);
 		expect(names).toEqual(['Leapfrog', 'Resonating Croak', 'Rainfall']);
-		expect(cards[0].querySelector('.dse-head__eyebrow--right')!.textContent).toBe('3 Malice');
+		expect(cards[0].querySelector('.dse-head__primary--right')!.textContent).toBe('3 Malice');
 		expect(cards[1].querySelectorAll('.dse-pr .dse-pr__row')).toHaveLength(3);
 		// Nested feature headings sit one level under the block heading (aria-level 3).
 		expect(cards[0].querySelector('.dse-head__primary--left')!.getAttribute('aria-level')).toBe('3');

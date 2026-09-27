@@ -219,7 +219,7 @@ describe('feature ElementDefinition (contract unchanged by the D2 redesign)', ()
 });
 
 describe('Plan 09 Task 5: feature re-cast onto the D2 kit card grammar (§3.6)', () => {
-	test('cardHead: name is the heading (role="heading", aria-level 3); cost -> right eyebrow chip; ability_type -> right primary chip', async () => {
+	test('cardHead: name is the heading (role="heading", aria-level 3); cost wins the right-primary slot over ability_type (SC-232 round 8b W3 — cost / "Signature" fallback / ability_type share ONE slot, cost first); usage -> right-deck (W7)', async () => {
 		const { root } = await renderBlock(HEADER);
 
 		const head = root.querySelector('.dse-feature > .dse-head') as HTMLElement;
@@ -230,8 +230,17 @@ describe('Plan 09 Task 5: feature re-cast onto the D2 kit card grammar (§3.6)',
 		expect(name.getAttribute('aria-level')).toBe('3');
 		expect(name.textContent).toBe('Whip Strike');
 
-		expect(head.querySelector('.dse-head__eyebrow--right')!.textContent).toBe('Signature');
-		expect(head.querySelector('.dse-head__primary--right')!.textContent).toBe('Villain Action 1');
+		// cost ("Signature") wins the ONE right-primary slot; ability_type ("Villain
+		// Action 1") does not render at all — HEADER's cost happens to already read
+		// "Signature" verbatim, a coincidence with item 6's own normalized wording,
+		// not that normalization firing (ability_type never reaches rightPrimaryOf
+		// here since cost is present).
+		expect(head.querySelector('.dse-head__primary--right')!.textContent).toBe('Signature');
+		// The old right-eyebrow cost chip is gone; right-eyebrow is now W2's Level
+		// chip, absent here (HEADER carries no metadata) — a GAP, not an element.
+		expect(head.querySelector('.dse-head__eyebrow--right')).toBeNull();
+		// usage -> right-deck (W7).
+		expect(head.querySelector('.dse-head__deck--right')!.textContent).toBe('Main action');
 	});
 
 	test('SC-10 Task 2: cardHead left-eyebrow is the "Ability" kind-noun + a crest keyed to the main-action glyph (THEME-AGNOSTIC DOM — present regardless of theme)', async () => {
@@ -333,16 +342,17 @@ metadata:
 		expect(head.querySelector('.dse-head__deck--left')!.textContent).toBe('Fury');
 	});
 
-	test('cardHead: omitted slots are GAPS — no ability_type means no right-primary element at all', async () => {
+	test('cardHead: omitted slots are GAPS — cost fills right-primary (SC-232 round 8b W3), no metadata.level means no right-eyebrow element at all, usage fills right-deck (W7)', async () => {
 		const { root } = await renderBlock(magmaTitan);
 
 		const head = root.querySelector('.dse-feature > .dse-head') as HTMLElement;
 		expect(head.querySelector('.dse-head__primary--left')!.textContent).toBe('Magma Titan');
-		expect(head.querySelector('.dse-head__eyebrow--right')!.textContent).toBe('9 Essence');
-		expect(head.querySelector('.dse-head__primary--right')).toBeNull();
+		expect(head.querySelector('.dse-head__primary--right')!.textContent).toBe('9 Essence');
+		expect(head.querySelector('.dse-head__eyebrow--right')).toBeNull();
+		expect(head.querySelector('.dse-head__deck--right')!.textContent).toBe('Main action');
 	});
 
-	test('.dse-feature__meta: keyword/type/distance/target grid, labels as key spans, values verbatim', async () => {
+	test('.dse-feature__meta: keyword/distance/target grid, labels as key spans, values verbatim (no Type cell for a standalone feature — SC-232 round 8b W7 moved usage to the cardHead right-deck instead)', async () => {
 		const { root } = await renderBlock(magmaTitan);
 
 		const meta = root.querySelector('.dse-feature__meta') as HTMLElement;
@@ -353,20 +363,22 @@ metadata:
 
 		expect(cellText('keywords', 'key')).toBe('Keywords');
 		expect(cellText('keywords', 'value')).toBe('Earth, Fire, Magic, Ranged, Void');
-		expect(cellText('type', 'key')).toBe('Type');
-		expect(cellText('type', 'value')).toBe('Main action');
+		expect(meta.querySelector('.dse-feature__meta-cell--type')).toBeNull();
 		expect(cellText('distance', 'key')).toBe('Distance');
 		expect(cellText('distance', 'value')).toBe('Ranged 10');
 		expect(cellText('target', 'key')).toBe('Target');
 		expect(cellText('target', 'value')).toBe('One creature or object');
+
+		const head = root.querySelector('.dse-feature > .dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__deck--right')!.textContent).toBe('Main action');
 	});
 
 	// SC-10 Task 8 polish: villain-action-style features carry a lone-dash "none"
-	// placeholder for an unset Keywords/Type (steel-etl's own book convention —
+	// placeholder for an unset Keywords (steel-etl's own book convention —
 	// statblock_page.go `usage != "-"`, keyword_filter.go). The cell still mounts
 	// (theme-agnostic DOM, Legacy's existing unlabeled dash text untouched) but
 	// gets the --empty modifier so Steel's CSS can drop the chip.
-	test('.dse-feature__meta: a lone-dash Keywords/Type value is flagged --empty (chip dropped in Steel only)', async () => {
+	test('.dse-feature__meta: a lone-dash Keywords value is flagged --empty (chip dropped in Steel only); a lone-dash usage is a cardHead right-deck GAP (SC-232 round 8b W7), not an --empty chip', async () => {
 		const { root } = await renderBlock(`type: feature
 feature_type: ability
 name: Lead From the Front
@@ -381,17 +393,19 @@ target: Self
 		const hasEmpty = (mod: string) =>
 			meta.querySelector(`.dse-feature__meta-cell--${mod}`)!.classList.contains('dse-feature__meta-cell--empty');
 		expect(hasEmpty('keywords')).toBe(true);
-		expect(hasEmpty('type')).toBe(true);
 		// Distance/Target are real values — never flagged empty.
 		expect(hasEmpty('distance')).toBe(false);
 		expect(hasEmpty('target')).toBe(false);
+
+		const head = root.querySelector('.dse-feature > .dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__deck--right')).toBeNull();
 	});
 
 	// SC-121 B-1: the meta region is two BANDS (site grammar: .sc-ability__kw chip row
 	// over the .sc-ability__rail spec pair). The bands are theme-agnostic DOM and are
 	// `display: contents` in the Legacy base — the mechanism that lets Steel recompose
 	// the layout while Legacy's grid placement (and its frozen pixels) stay untouched.
-	test('.dse-feature__meta: Keywords/Type mount in the chips band, Distance/Target in the rail band', async () => {
+	test('.dse-feature__meta: Keywords mounts in the chips band, Distance/Target in the rail band (no Type cell for a standalone feature — SC-232 round 8b W7)', async () => {
 		const { root } = await renderBlock(magmaTitan);
 
 		const meta = root.querySelector('.dse-feature__meta') as HTMLElement;
@@ -409,7 +423,7 @@ target: Self
 						.find((cl) => cl.startsWith('dse-feature__meta-cell--'))!
 						.replace('dse-feature__meta-cell--', ''),
 			);
-		expect(mods(chips)).toEqual(['keywords', 'type']);
+		expect(mods(chips)).toEqual(['keywords']);
 		expect(mods(rail)).toEqual(['distance', 'target']);
 	});
 
@@ -425,14 +439,13 @@ keywords:
 		expect(meta.querySelector('.dse-feature__meta-rail')).toBeNull();
 	});
 
-	test('.dse-feature__meta: a real Keywords/Type value is never flagged --empty', async () => {
+	test('.dse-feature__meta: a real Keywords value is never flagged --empty', async () => {
 		const { root } = await renderBlock(magmaTitan);
 
 		const meta = root.querySelector('.dse-feature__meta') as HTMLElement;
 		const hasEmpty = (mod: string) =>
 			meta.querySelector(`.dse-feature__meta-cell--${mod}`)!.classList.contains('dse-feature__meta-cell--empty');
 		expect(hasEmpty('keywords')).toBe(false);
-		expect(hasEmpty('type')).toBe(false);
 	});
 
 	// SC-231 (owner ruling, decisions.md 2026-09-25): the Keywords cell used to
@@ -940,10 +953,16 @@ keywords: Attack, Weapon
 		const { root } = await renderBlock(FULL);
 		const text = root.textContent!;
 
+		// SC-232 round 8b W3: cost and ability_type now share ONE cardHead right-primary
+		// slot (a priority chain, matching the site's own single-slot placement) — cost
+		// wins, so FULL's `ability_type: Villain Action 1` (present ALONGSIDE a cost,
+		// an unusual combination this pin fixture deliberately exercises) no longer
+		// renders anywhere. This is the intended behavior, not a content-loss
+		// regression: rightPrimaryOf's own doc comment states the priority explicitly,
+		// and the site never shows both at once either.
 		for (const expected of [
 			'Coverage Strike', // name
 			'5 Malice', // cost
-			'Villain Action 1', // ability_type
 			'A sweeping flourish of steel.', // flavor
 			'Attack, Weapon', // keywords
 			'Main action', // usage

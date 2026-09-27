@@ -491,14 +491,15 @@ describe('compendiumInsert action functions (spec §4.3)', () => {
 // under `metadata:` saw the card not change: a silent-edit trap in the one feature whose
 // purpose is "take it and edit it".
 //
-// SC-232 W1/W8 (round 8a) narrowed that claim: `renderFeature.ts`'s `leftDeckOf`/
-// `kindNounOf` now read six `metadata` subkeys (`ancestry`/`class`/`kit`/`subclass`/
-// `feature_source`/`type`) for the cardHead left-deck provenance line and the "Feature"
-// kind-noun — so for the FEATURE family only, `compendiumInsert.ts`'s `trimSnapshotDTO`
-// now keeps a metadata sub-object holding exactly those six keys, dropping the rest (the
-// bulk name/effects/flavor/… mirror is still dead weight and still dropped). Statblock and
-// featureblock are unaffected — neither element ever reads `.metadata` — and still carry
-// no `metadata:` block at all.
+// SC-232 W1/W8 (round 8a) narrowed that claim, and W2/W3 (round 8b) narrowed it further:
+// `renderFeature.ts`'s `leftDeckOf`/`kindNounOf`/`levelOf`/`rightPrimaryOf` now read nine
+// `metadata` subkeys (`ancestry`/`class`/`kit`/`subclass`/`feature_source`/`type`/`level`/
+// `scc`/`subtype`) for the cardHead left-deck provenance line, the "Feature" kind-noun,
+// the "Level N" chip and the "Signature" fallback — so for the FEATURE family only,
+// `compendiumInsert.ts`'s `trimSnapshotDTO` now keeps a metadata sub-object holding
+// exactly those nine keys, dropping the rest (the bulk name/effects/flavor/… mirror is
+// still dead weight and still dropped). Statblock and featureblock are unaffected —
+// neither element ever reads `.metadata` — and still carry no `metadata:` block at all.
 //
 // Driven over the real corpus bytes for all three snapshottable families, and deliberately
 // asserting the contract in both directions:
@@ -572,12 +573,23 @@ describe('SC-165 — the snapshot body is trimmed to the fields the renderer rea
 		return root.innerHTML.replace(/dse-pr-\d+-head/g, 'dse-pr-N-head');
 	}
 
-	// SC-232 W1/W8: `metadata` is no longer a clean drop for the FEATURE family — see the
-	// describe-block comment above. `FEATURE_METADATA_RENDER_KEYS` below is a literal copy
-	// of `compendiumInsert.ts`'s own list, same convention as `SNAPSHOT_CASES`'
-	// `['type', 'feature_type']` constants above (this suite pins the CONTRACT, not an
-	// import of the implementation's private const).
-	const FEATURE_METADATA_RENDER_KEYS = ['ancestry', 'class', 'kit', 'subclass', 'feature_source', 'type'];
+	// SC-232 W1/W8 (round 8a) + W2/W3 (round 8b): `metadata` is no longer a clean drop
+	// for the FEATURE family — see the describe-block comment above.
+	// `FEATURE_METADATA_RENDER_KEYS` below is a literal copy of `compendiumInsert.ts`'s
+	// own list, same convention as `SNAPSHOT_CASES`' `['type', 'feature_type']`
+	// constants above (this suite pins the CONTRACT, not an import of the
+	// implementation's private const).
+	const FEATURE_METADATA_RENDER_KEYS = [
+		'ancestry',
+		'class',
+		'kit',
+		'subclass',
+		'feature_source',
+		'type',
+		'level',
+		'scc',
+		'subtype',
+	];
 
 	test.each(SNAPSHOT_CASES)(
 		'%s: the snapshot carries no metadata: block (feature: a NARROWED one, six render-relevant keys only), though the synced entry\'s is the full mirror',
