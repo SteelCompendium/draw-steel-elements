@@ -27,9 +27,10 @@ for what needs action.
   a statblock's nested features, featureblock and a kit's signature ability computed 16px
   with 1.12px letter-spacing against the site's 18px / 1.8px on the same surface; both now
   compute 18px / 1.8px. The rendered letters still read taller than the site's, though — the
-  site fakes its small caps (its font has no real small-caps glyphs), the plugin's are real,
-  so real capitals read bigger at the same computed size. The title's line-height and the
-  Text size preference still scale it the same way as before.
+  site fakes its small caps (the browser shrinks capitals to 70%), while the plugin's are
+  real small-cap letters, so they render about 2px (roughly 25%) taller at the same computed
+  size. The title's line-height and the Text size preference still scale it the same way as
+  before.
 - [FIX] **The example inserted for a new `ds-feature` block no longer claims to be a villain
   action while rendering as a main action** (SC-236). The Draw Steel Elements authoring example
   for a new feature block carried a stray `ability_type: Villain Action 1` line alongside

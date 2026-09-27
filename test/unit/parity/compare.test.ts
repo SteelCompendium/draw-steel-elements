@@ -816,7 +816,7 @@ describe('the SHIPPED contract is itself valid', () => {
 	// divergence, `diff.mjs`'s anti-rot check reported the declaration as DEAD, and it was
 	// deleted. That is the mechanism working end to end, not a re-baseline.
 	// 2026-09-27 (SC-235): 8 -> 5. `section-tag:font-size`/`:line-height`/`:letter-spacing`
-	// HEALED -- the section title's type scale moved to site parity (18px / 30.6px / .1em,
+	// HEALED -- the section title's type scale moved to computed site parity (18px / 30.6px / .1em,
 	// styles-source.css's Task-2 boxed-header rule, ~8163), so all three rows now COMPUTE
 	// equal (this rule cannot see the font face or synthesized-vs-real small caps -- round 2's
 	// glyph probe found the rendered glyphs still read ~25% taller than the site's) and the

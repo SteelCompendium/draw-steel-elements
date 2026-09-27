@@ -585,7 +585,7 @@ describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 	// stray `0.8em` rendered the band heads at 12.8px, visibly smaller than every
 	// neighboring label (verified live: `.dse-tiles__value` 16px, the nested ability
 	// card's own `.dse-section__title`, then 1em/16px — SC-235 since moved it to
-	// 1.125em/18px, site parity, but the comparison at SC-143's own time still holds).
+	// 1.125em/18px, computed site parity, but the comparison at SC-143's own time still holds).
 	describe('kit band-head font-size (SC-143)', () => {
 		it('.dse-card__band-head is var(--dse-fs-body) (1em, 16px against the ambient card font), not the old 0.8em (12.8px)', () => {
 			// SC-185 round 2 adopted the literal `1em` onto the role scale's --dse-fs-body
@@ -643,7 +643,7 @@ describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 		// pins IT to the old 0.07em on purpose, below) — this assertion is about the BASE
 		// boxed-header rule only, so it filters the selector directly rather than reusing
 		// steelBlocksFor (which would also catch the spend chip's own letter-spacing block).
-		it('.dse-section__title (base rule) letter-spacing is 0.1em (site parity), not the old under-tracked 0.07em', () => {
+		it('.dse-section__title (base rule) letter-spacing is 0.1em (computed site parity), not the old under-tracked 0.07em', () => {
 			const baseBlocks = rules
 				.filter(
 					(r) =>
