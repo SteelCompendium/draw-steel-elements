@@ -313,6 +313,26 @@ metadata:
 		expect(head.querySelector('.dse-head__deck--left')).toBeNull();
 	});
 
+	// SC-232 round 8a, W8 (r7 survey b7) — a plain class feature (`feature_type: feature`,
+	// e.g. the real "Growing Ferocity") must read "Feature" in the left-eyebrow, not
+	// "Trait": the SDK model COLLAPSES the raw `feature_type: feature` to Trait via
+	// `isTrait()` before kindNounOf ever runs (no keywords/usage/distance/target), which is
+	// exactly the bug the survey found — so this only passes when kindNounOf reads
+	// `metadata.type` first.
+	test('SC-232 W8: a plain class feature (feature_type: feature, metadata.type: feature) gets the "Feature" kind-noun, not "Trait"', async () => {
+		const { root } = await renderBlock(`type: feature
+feature_type: feature
+name: Growing Ferocity
+metadata:
+  class: fury
+  type: feature
+`);
+
+		const head = root.querySelector('.dse-feature > .dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Feature');
+		expect(head.querySelector('.dse-head__deck--left')!.textContent).toBe('Fury');
+	});
+
 	test('cardHead: omitted slots are GAPS — no ability_type means no right-primary element at all', async () => {
 		const { root } = await renderBlock(magmaTitan);
 

@@ -280,16 +280,35 @@ export function crestIconFor(act: ActionType | undefined): string | undefined {
 }
 
 /**
- * SC-10 Task 2: the cardHead left-eyebrow kind-noun (DESIGN.md "Card header
- * system" fill guideline — "…is a ___"). The SDK's Feature model carries no
- * generic third "Feature" bucket (`feature_type` is Ability/Trait/Subtrait, and
- * `isTrait()` is itself the "no combat rigor" heuristic `actionTypeOf` already
- * keys its own 'trait' act-type off) — so this binary mirrors that existing
- * split rather than gating on the `ability_type` STRING field, which is often
- * absent on genuine abilities (e.g. a Main-action power-roll ability with no
- * villain-action/echelon descriptor still IS an Ability).
+ * SC-10 Task 2 / SC-232 W8 (r7 survey b7): the cardHead left-eyebrow kind-noun
+ * (DESIGN.md "Card header system" fill guideline — "…is a ___"), the site's
+ * `featureNoun` (steel-etl `trait_cards.go:553-558`) ported: "Trait" only for a
+ * real `type: trait` page, "Feature" for a plain class feature (`type: feature`),
+ * "Ability" otherwise.
+ *
+ * The SDK's `Feature` MODEL cannot answer this on its own: `feature_type` is
+ * typed Ability/Trait/Subtrait only, and `Feature.fromDTO` COLLAPSES any other
+ * raw value (e.g. the fence's own `feature_type: feature`) through the
+ * `isTrait()` heuristic (no keywords/usage/distance/target) before this
+ * function ever sees it — so a plain class feature with no combat rigor
+ * (e.g. "Growing Ferocity") silently became `Trait` at the model boundary,
+ * which is exactly the survey's b7 finding ("kindNounOf maps every non-ability
+ * to 'Trait'"). `feature.metadata.type` (the by-SCC sync's own field, a
+ * VERBATIM copy of the fence's frontmatter `type:`) survives that collapse
+ * intact and is read here first; only when it's absent (e.g. a hand-authored
+ * fixture with no `metadata` block) does this fall back to the old
+ * `isTrait()` binary, so every frozen fixture (none of which carries
+ * `metadata`) renders exactly as before — 0 frozen print lines move (the
+ * left-eyebrow is print-hidden regardless, per the SC-232 rule group below).
  */
-export function kindNounOf(config: FeatureConfig): 'Ability' | 'Trait' {
+export function kindNounOf(config: FeatureConfig): 'Ability' | 'Trait' | 'Feature' {
+	const raw: unknown = config.feature.metadata?.type;
+	if (typeof raw === 'string' && raw.trim()) {
+		const rawType = raw.trim().toLowerCase();
+		if (rawType === 'ability') return 'Ability';
+		if (rawType === 'trait') return 'Trait';
+		return 'Feature';
+	}
 	return config.feature.isTrait() ? 'Trait' : 'Ability';
 }
 
