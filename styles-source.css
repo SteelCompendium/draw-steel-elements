@@ -8163,43 +8163,45 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest:
    rendering) with the body as its own block below, matching
    `02-ability-card--site-dark.png`'s "◆ EFFECT" band. SCREEN-ONLY, print
    frozen (SC-4).
-   SC-235: TYPE SCALE closed to computed site parity (was FOLLOWUPS #51, parity's
-   `section-tag` declared deferral — now deleted, see selector-map.json). The
-   site's .tag is `.9rem` = 18px at its 20px rem base; the plugin was 16px
-   (ambient, no font-size rule at all). font-size is stated as a role-scale
-   DERIVATION per .repo-docs/font-sizes.md ("deriving from a role is fine and
-   normal") — `--dse-fs-body` is the identity role (1em, "the element's own
-   reading size"), so `calc(var(--dse-fs-body) * 1.125)` is a pure x1.125 of
+   SC-235: TYPE SCALE, option B (Scott's ruling, comment 00d1a795, 2026-09-28:
+   "Recommended approach is good") — matches the site's RENDERED letter height,
+   not its computed font-size. Round 2's glyph probe found the site's Petrona
+   has no small-caps glyphs at all, so the browser SYNTHESIZES small caps by
+   shrinking capitals to 70% (18px -> 12.6px caps, 8px of rendered ink); the
+   plugin's Source Serif 4 Bold has REAL smcp glyphs, which render taller per
+   unit font-size. Option A (18px, the site's computed value) put REAL smcp
+   glyphs at a size chosen for FAKE ones, so the plugin's letters rendered
+   about 25% taller than the site's despite matching its computed font-size.
+   15px of real smcp renders the same 8px of ink the site's synthesized 18px
+   does — this rule targets the rendered match, not the computed one, and
+   accepts that its own computed font-size (15px) no longer equals the site's
+   (18px) as a result. font-size is a role-scale DERIVATION per
+   .repo-docs/font-sizes.md ("deriving from a role is fine and normal") —
+   `--dse-fs-body` is the identity role (1em, "the element's own reading
+   size"), so `calc(var(--dse-fs-body) * 0.9375)` is a pure x0.9375 of
    whatever the title inherited before (the Obsidian text-size slider and
    SC-230's --dse-text-scale both still reach it, since both flow through the
-   SAME inherited ambient font-size this multiplies). NOT `--dse-fs-subheading`
-   (1.15em, also "a band/group/section title" per font-sizes.md's own table):
-   that would tie the title to the Large-text-size knob, which the owner's
-   unit rule forbids (a pure x1.125 of TODAY's behavior, not a new knob
-   dependency) — 1.125 is a look-driven multiplier on the identity role, not a
-   role pick, and font-sizes.md's own text sanctions deriving a fraction/
-   multiple of a role this way. line-height needs no separate rule: the plate
-   root's unitless `line-height: 1.7` (~7170) recomputes against the title's
-   own new font-size for free — 18 x 1.7 = 30.6px, computing to the site's
-   line-height. letter-spacing moves from 0.07em (1.12px at 16px) to the
-   site's 0.1em, computing to 1.8px at the new 18px.
-   COMPUTED VALUES ONLY — round-2 review's glyph probe: the site's small caps
-   are browser-SYNTHESIZED (Petrona, as served, has no smcp — Chrome fakes
-   uppercase at 70% size), the plugin's are REAL smcp glyphs (Source Serif 4
-   Bold). So despite the equal 18px/1.8px computed values above, the RENDERED
-   ink is site 8px / this rule 10px tall — about 25% taller, not equal. Do not
-   claim this rule visually "matches the site"; it matches the site's
-   COMPUTED font-size/letter-spacing only. See the SC-235 round-2 review
-   report's glyph probe (§5) and the round-3 evidence's glyph zoom for the
-   measured numbers. */
+   SAME inherited ambient font-size this multiplies) — not
+   `--dse-fs-subheading` (1.15em), which would tie the title to the
+   Large-text-size knob the owner's unit rule forbids. line-height needs no
+   separate rule: the plate root's unitless `line-height: 1.7` (~7170)
+   recomputes against the title's own new font-size for free — 15 x 1.7 =
+   25.5px. letter-spacing widens from 0.07em (1.12px at 16px) to 0.12em
+   (1.8px at 15px) — the site's own 0.1em/18px also computes to 1.8px, so this
+   is a coincidental computed match on tracking alone, not a target in itself.
+   Parity's `section-tag` pair now re-declares whichever rows actually GAP
+   under these values (selector-map.json) — see its own `why` text for which
+   rows fire and this reasoning restated for that audience. See the SC-235
+   round-2 review's glyph probe (§5), the round-3/4 evidence, and the round-6
+   evidence composite for the measured numbers. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__title {
 	display: flex;
 	align-items: center;
 	gap: 0.32em;
 	font-variant: small-caps;
 	text-transform: lowercase;
-	font-size: calc(var(--dse-fs-body) * 1.125);
-	letter-spacing: 0.1em;
+	font-size: calc(var(--dse-fs-body) * 0.9375);
+	letter-spacing: 0.12em;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__title::after {
 	content: "";
@@ -8319,9 +8321,9 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest:
    1em, not 0.8em. The stray `0.8em` therefore rendered the three band heads
    (Equipment/Kit Bonuses/Signature Ability) at 12.8px, visibly smaller than every
    neighboring label (the .dse-tiles__value stat, the nested ability card's own
-   `.dse-section__title`, then 1em/16px — SC-235 since moved it to 1.125em/18px,
-   site parity, but the comparison at SC-143's own time still holds — Scott's
-   "super small" (SC-143). Letter-
+   `.dse-section__title`, then 1em/16px — SC-235 since moved it to 0.9375em/15px
+   (option B, matching the site's rendered letter height), but the comparison
+   at SC-143's own time still holds — Scott's "super small" (SC-143). Letter-
    spacing/margins are already em-relative to this rule's own font-size, so they
    rescale correctly with no separate edit. Shared rule (CardLayout's generic
    SteelBand machinery, not a kit-only selector) — any future `bands()` consumer
@@ -9356,10 +9358,12 @@ body.theme-light
 	background: var(--dse-metal-faint);
 	color: var(--dse-fg);
 	font-weight: 700;
-	/* SC-235 round-3 (MED-1): PIN, not inherit. Without its own font-size/
-	   letter-spacing this chip would pick up the SC-235 rule's new 18px/0.1em by
-	   cascade (higher specificity than the base .dse-section__title rule, same
-	   selector chain) — but this chip is the site's SEPARATE `.sc-ability__enh
+	/* SC-235 round-3 (MED-1), unchanged by round 6's move to option B: PIN, not
+	   inherit. Without its own font-size/letter-spacing this chip would pick up
+	   the SC-235 rule's font-size/letter-spacing by cascade (higher specificity
+	   than the base .dse-section__title rule, same selector chain, whatever
+	   that rule's current values are — 18px/0.1em under option A, 15px/0.12em
+	   under option B) — but this chip is the site's SEPARATE `.sc-ability__enh
 	   .cost` element (steel-ability-cards.css:198-200, .86rem/.04em), out of
 	   this ticket's scope, so it keeps TODAY's values explicitly: the same
 	   `--dse-fs-body`-derived x1 form the section-title rule uses. */

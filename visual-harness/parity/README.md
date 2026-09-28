@@ -8,7 +8,7 @@ plugin's "Steel" theme (`styles-source.css`, `[data-dse-theme='steel']`).
 
 | When you… | Run | Notes |
 |---|---|---|
-| Change any Steel CSS in `styles-source.css` | `npm run parity` | Must end **0 GAPs and 0 undeclared WARNs, exit 0** — that biconditional *is* the gate (SC-110). The only escape is an explicit entry in `selector-map.json`'s `declaredDeferrals` (5 today, and **never** for a material rule — see "Declared deferrals"). Close a GAP by fixing the CSS — never by deleting or weakening the pair that reports it, never by loosening a tolerance, and never by declaring something CSS can fix. |
+| Change any Steel CSS in `styles-source.css` | `npm run parity` | Must end **0 GAPs and 0 undeclared WARNs, exit 0** — that biconditional *is* the gate (SC-110). The only escape is an explicit entry in `selector-map.json`'s `declaredDeferrals` (7 today, and **never** for a material rule — see "Declared deferrals"). Close a GAP by fixing the CSS — never by deleting or weakening the pair that reports it, never by loosening a tolerance, and never by declaring something CSS can fix. |
 | Change any Steel CSS | `npx jest test/dom/theme/steelMaterial.test.ts` | The material contract (see below). Runs as part of `npx jest`, so the normal full-suite gate covers it. |
 | Know the **live site itself** changed | `npm run parity:site` | **Only then.** Regenerating the baseline for any other reason re-points the reference of record at whatever the plugin happens to look like. |
 | Open a PR that touched either | — | **Review the JSON diff** of `baseline/site-inventory.json` in the PR. A baseline diff must be explained by a real site change; if it isn't, a page failed to load/render and the capture is garbage. |
@@ -515,11 +515,12 @@ calls that belong to Scott, not to whoever is holding the gate.
 
 Deliberately conservative. Relaxing it is a one-line change to `NON_DECLARABLE_CLASSES`.
 
-**Currently declared: 5 entries / 10 rows** (both schemes each), in two findings:
+**Currently declared: 7 entries / 14 rows** (both schemes each), in three findings:
 
 | Finding | Rows | Site | Plugin | Status |
 |---|---|---|---|---|
 | `pr-chars:ink` (SC-226, was FOLLOWUPS #40) | 2 | `.chars` `rgb(205,209,212)` / `rgb(95,104,109)` | `rgba(220,226,230,.95)` / `rgb(26,29,32)` | **deliberate** — the plugin's one-node caption is heading-emphasised where the site splits `.pre`/`.chars` |
+| `section-tag:font-size` / `:line-height` (SC-235 round 6, option B) | 4 | 18px / 30.6px | 15px / 25.5px | **deliberate** — the plugin's computed font-size now targets the site's RENDERED letter height (both synthesized-cap and real-smcp glyphs land at 8px of ink), not its computed value; see the paragraph below |
 | `statblock-wrap` + `featureblock-wrap` `:margin-top`/`:margin-bottom` (SC-225, was FOLLOWUPS #39) | 8 | 34px (`1.7rem` on `.sb-wrap`/`.fb-wrap`) | 8px (`0.5em` unscoped base on the host) | **pixel decision** — Plan 21 Task 2 set the precedent (24px onto the feature host) but 26px of new air per block is Scott's call |
 
 **HEALED and deleted — the anti-rot check working end to end (2026-08-07, SC-117 R1).**
@@ -546,6 +547,20 @@ synthesis.** SC-235's own round-2 review found the site's small caps are synthes
 (its face has no `smcp`) while the plugin's are real, so the rendered "EFFECT" glyphs are
 about 25% taller on the plugin despite the equal computed font-size/letter-spacing above —
 a green `section-tag` row asserts numeric parity, not that the two look the same size.
+
+**RE-DECLARED, deliberately, on purpose (2026-09-28, SC-235 round 6, Scott's option-B
+ruling).** The line above is exactly why: option A's computed parity produced a visible size
+mismatch (real smcp glyphs read ~25% taller than the site's synthesized ones at the same
+18px), so Scott chose option B — 15px with wider tracking (`0.12em`), which targets the
+site's RENDERED letter height (8px of ink, both sides) instead of its computed font-size.
+`section-tag:font-size` and `:line-height` are declared again for that reason (15px vs 18px,
+25.5px vs 30.6px, both schemes — 4 rows), citing SC-235 and Scott's 2026-09-28 ruling, not
+FOLLOWUPS #51 again. `:letter-spacing` is NOT re-declared: 0.12em at 15px computes to 1.8px,
+which happens to equal the site's 0.1em-at-18px 1.8px, so that row stays green on its own —
+the set moved from 5/10 to 7/14. This is the SAME anti-rot mechanism as every other entry in
+this table (a declaration only survives while it matches a real, current divergence), just
+running in the direction of MORE declared rows instead of fewer — a CSS change can heal a
+finding or reopen one, and the gate treats both identically.
 
 **Deliberately NOT declared**, for contrast, so the bar is legible:
 `statblock-band` / `featureblock-band` `margin-top` (site `0px` vs plugin `-8px`) stay

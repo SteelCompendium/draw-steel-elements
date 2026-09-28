@@ -823,9 +823,18 @@ describe('the SHIPPED contract is itself valid', () => {
 	// declarations were deleted in the same commit as the CSS fix (the mechanism this comment
 	// already describes for FOLLOWUPS #52, repeating here rather than being amended in place —
 	// this file is a dated log of the set's own history).
-	test('the declared set is exactly the documented 5 entries', () => {
+	// 2026-09-28 (SC-235 round 6, Scott's option-B ruling): 5 -> 7. `section-tag:font-size` and
+	// `:line-height` are declared again, but for a DIFFERENT reason than round 1's healed pair --
+	// the section title moved from 18px (matching the site's COMPUTED value) to 15px (matching
+	// the site's RENDERED letter height, since the site's small caps are a browser synthesis and
+	// the plugin's are real smcp glyphs that render taller per unit size). `:letter-spacing` is
+	// NOT re-declared -- 0.12em at 15px computes to 1.8px, which still equals the site's
+	// 0.1em-at-18px 1.8px, so that row stays green on its own.
+	test('the declared set is exactly the documented 7 entries', () => {
 		expect(map.declaredDeferrals.map((d: { pair: string; rule: string }) => `${d.pair}:${d.rule}`)).toEqual([
 			'pr-chars:ink',
+			'section-tag:font-size',
+			'section-tag:line-height',
 			'statblock-wrap:margin-top',
 			'statblock-wrap:margin-bottom',
 			'featureblock-wrap:margin-top',

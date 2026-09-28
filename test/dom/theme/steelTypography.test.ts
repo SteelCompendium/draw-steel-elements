@@ -585,7 +585,8 @@ describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 	// stray `0.8em` rendered the band heads at 12.8px, visibly smaller than every
 	// neighboring label (verified live: `.dse-tiles__value` 16px, the nested ability
 	// card's own `.dse-section__title`, then 1em/16px — SC-235 since moved it to
-	// 1.125em/18px, computed site parity, but the comparison at SC-143's own time still holds).
+	// 0.9375em/15px (option B, matching the site's RENDERED letter height), but the
+	// comparison at SC-143's own time still holds).
 	describe('kit band-head font-size (SC-143)', () => {
 		it('.dse-card__band-head is var(--dse-fs-body) (1em, 16px against the ambient card font), not the old 0.8em (12.8px)', () => {
 			// SC-185 round 2 adopted the literal `1em` onto the role scale's --dse-fs-body
@@ -615,35 +616,46 @@ describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 	});
 
 	// SC-235 — the boxed "Effect"/"Trigger"/"Special" section title (ability/feature cards,
-	// statblock's nested features, featureblock, kit's signature ability) rendered at the
-	// plugin's ambient 16px / 27.2px line-height / 0.07em (1.12px) tracking, against the
-	// site's `.sc-ability__section-head .tag` at 18px / 30.6px / 0.1em (1.8px) — parity's
-	// `section-tag` declared deferral (was FOLLOWUPS #51). Site-parity fix: font-size joins
-	// the role scale as a DERIVATION (`.repo-docs/font-sizes.md`: "deriving from a role is
-	// fine and normal") — `calc(var(--dse-fs-body) * 1.125)` is a pure x1.125 of whatever the
-	// title inherited before, so it keeps tracking the Obsidian text-size setting and
-	// SC-230's --dse-text-scale exactly as before; letter-spacing moves to the site's 0.1em.
-	// line-height needs no separate declaration — the plate root's own unitless
-	// `line-height: 1.7` (steelTypography's own §A group above) recomputes against the
-	// title's new font-size for free. Honest limit (same as every sibling test in this file):
-	// jsdom cannot resolve `calc()`/`em` out of a stubbed stylesheet, so this is a
-	// source-text assertion; the real 16px->18px / 1.12px->1.8px move (both schemes) and the
-	// x1.125 ratio at non-default text sizes are independently verified by a live-browser
-	// getComputedStyle probe — see the SC-235 round-1 report.
+	// statblock's nested features, featureblock, kit's signature ability). Option B (Scott's
+	// ruling, comment 00d1a795, 2026-09-28): the site's Petrona has no small-caps glyphs, so
+	// the browser SYNTHESIZES them by shrinking capitals to 70%; the plugin's Source Serif 4
+	// Bold has REAL smcp glyphs, which render taller per unit font-size than a synthesized
+	// cap does. Option A (18px, matching the site's COMPUTED value) rendered ~25% taller than
+	// the site as a result. Option B targets the site's RENDERED letter height instead: 15px
+	// of real smcp renders the same 8px of ink the site's synthesized 18px does. font-size
+	// joins the role scale as a DERIVATION (`.repo-docs/font-sizes.md`: "deriving from a role
+	// is fine and normal") — `calc(var(--dse-fs-body) * 0.9375)` is a pure x0.9375 of whatever
+	// the title inherited before, so it keeps tracking the Obsidian text-size setting and
+	// SC-230's --dse-text-scale exactly as before; letter-spacing widens to 0.12em (which
+	// happens to compute to the same 1.8px as the site's own 0.1em-at-18px). line-height needs
+	// no separate declaration — the plate root's own unitless `line-height: 1.7`
+	// (steelTypography's own §A group above) recomputes against the title's new font-size for
+	// free. Honest limit (same as every sibling test in this file): jsdom cannot resolve
+	// `calc()`/`em` out of a stubbed stylesheet, so this is a source-text assertion; the real
+	// rendered-letter-height match (both sides land at 8px of ink) and the x0.9375 ratio at
+	// non-default text sizes are independently verified by a live-browser getComputedStyle
+	// probe — see the SC-235 round-6 report.
 	describe('section title type scale (SC-235)', () => {
-		it('.dse-section__title font-size is the role-scale derivation calc(var(--dse-fs-body) * 1.125), not the old ambient (no font-size at all)', () => {
+		it('.dse-section__title font-size is the role-scale derivation calc(var(--dse-fs-body) * 0.9375) (option B, 15px), not option A\'s 1.125 or the old ambient', () => {
 			const blocks = steelBlocksFor('.dse-section__title');
 			expect(blocks.length).toBeGreaterThan(0);
 			expect(
-				blocks.some((b) => /font-size:\s*calc\(\s*var\(--dse-fs-body\)\s*\*\s*1\.125\s*\)\s*;/.test(b)),
+				blocks.some((b) => /font-size:\s*calc\(\s*var\(--dse-fs-body\)\s*\*\s*0\.9375\s*\)\s*;/.test(b)),
 			).toBe(true);
+			// The old option-A multiplier must not linger as a font-size declaration (a
+			// substring check for "1.125" alone would false-positive on the unrelated
+			// `padding: 0.625rem 1.125rem` head-strip rule below, which also selects
+			// `.dse-section__title` and legitimately keeps its own rem-based 1.125rem).
+			expect(blocks.some((b) => /font-size:\s*calc\(\s*var\(--dse-fs-body\)\s*\*\s*1\.125\s*\)/.test(b))).toBe(
+				false,
+			);
 		});
 
 		// Excludes the `.dse-section--spend .dse-section__title` chip rule (round-3 MED-1
 		// pins IT to the old 0.07em on purpose, below) — this assertion is about the BASE
 		// boxed-header rule only, so it filters the selector directly rather than reusing
 		// steelBlocksFor (which would also catch the spend chip's own letter-spacing block).
-		it('.dse-section__title (base rule) letter-spacing is 0.1em (computed site parity), not the old under-tracked 0.07em', () => {
+		it('.dse-section__title (base rule) letter-spacing is 0.12em (option B), not option A\'s 0.1em or the old under-tracked 0.07em', () => {
 			const baseBlocks = rules
 				.filter(
 					(r) =>
@@ -655,25 +667,27 @@ describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 			const withLetterSpacing = baseBlocks.filter((b) => /letter-spacing:/.test(b));
 			expect(withLetterSpacing.length).toBeGreaterThan(0);
 			for (const b of withLetterSpacing) {
-				expect(b).toMatch(/letter-spacing:\s*0\.1em\s*;/);
+				expect(b).toMatch(/letter-spacing:\s*0\.12em\s*;/);
+				expect(b).not.toMatch(/letter-spacing:\s*0\.1em\s*;/);
 				expect(b).not.toMatch(/letter-spacing:\s*0\.07em\s*;/);
 			}
 		});
 
-		// SC-235 round-3 (MED-1): the spend-clause chip (`.dse-section--spend
-		// .dse-section__title`, styles-source.css ~9346) is a DIFFERENT site element
-		// (`.sc-ability__enh .cost`), out of this ticket's scope — it must NOT inherit the
-		// base rule's new 18px/0.1em by cascade. Pinned explicitly to today's values, in the
-		// same `--dse-fs-body`-derived x1 form the base rule uses for its own multiplier.
-		it('the spend-chip title (.dse-section--spend .dse-section__title) is PINNED to var(--dse-fs-body) / 0.07em, not the base rule\'s new 18px/0.1em', () => {
+		// SC-235 round-3 (MED-1), unchanged by round 6: the spend-clause chip
+		// (`.dse-section--spend .dse-section__title`, styles-source.css ~9346) is a DIFFERENT
+		// site element (`.sc-ability__enh .cost`), out of this ticket's scope — it must NOT
+		// inherit the base rule's font-size/letter-spacing by cascade, under either option A
+		// or B. Pinned explicitly to today's values, in the same `--dse-fs-body`-derived x1
+		// form the base rule uses for its own multiplier.
+		it('the spend-chip title (.dse-section--spend .dse-section__title) is PINNED to var(--dse-fs-body) / 0.07em, not the base rule\'s option-B 15px/0.12em', () => {
 			const spendBlocks = steelBlocksFor('.dse-section--spend .dse-section__title');
 			const ownRule = spendBlocks.filter((b) => /font-size:|letter-spacing:/.test(b));
 			expect(ownRule.length).toBeGreaterThan(0);
 			for (const b of ownRule) {
 				expect(b).toMatch(/font-size:\s*var\(--dse-fs-body\)\s*;/);
 				expect(b).toMatch(/letter-spacing:\s*0\.07em\s*;/);
-				expect(b).not.toMatch(/calc\(\s*var\(--dse-fs-body\)\s*\*\s*1\.125\s*\)/);
-				expect(b).not.toMatch(/letter-spacing:\s*0\.1em\s*;/);
+				expect(b).not.toMatch(/calc\(\s*var\(--dse-fs-body\)\s*\*\s*0\.9375\s*\)/);
+				expect(b).not.toMatch(/letter-spacing:\s*0\.12em\s*;/);
 			}
 		});
 	});
