@@ -815,21 +815,22 @@ describe('the SHIPPED contract is itself valid', () => {
 	// one-selector fix (the statblock host joined the Plan 21 line-height group) closed the
 	// divergence, `diff.mjs`'s anti-rot check reported the declaration as DEAD, and it was
 	// deleted. That is the mechanism working end to end, not a re-baseline.
-	// 2026-09-27 (SC-235): 8 -> 5. `section-tag:font-size`/`:line-height`/`:letter-spacing`
-	// HEALED -- the section title's type scale moved to computed site parity (18px / 30.6px / .1em,
-	// styles-source.css's Task-2 boxed-header rule, ~8163), so all three rows now COMPUTE
-	// equal (this rule cannot see the font face or synthesized-vs-real small caps -- round 2's
-	// glyph probe found the rendered glyphs still read ~25% taller than the site's) and the
-	// declarations were deleted in the same commit as the CSS fix (the mechanism this comment
-	// already describes for FOLLOWUPS #52, repeating here rather than being amended in place —
-	// this file is a dated log of the set's own history).
-	// 2026-09-28 (SC-235 round 6, Scott's option-B ruling): 5 -> 7. `section-tag:font-size` and
-	// `:line-height` are declared again, but for a DIFFERENT reason than round 1's healed pair --
-	// the section title moved from 18px (matching the site's COMPUTED value) to 15px (matching
-	// the site's RENDERED letter height, since the site's small caps are a browser synthesis and
-	// the plugin's are real smcp glyphs that render taller per unit size). `:letter-spacing` is
-	// NOT re-declared -- 0.12em at 15px computes to 1.8px, which still equals the site's
-	// 0.1em-at-18px 1.8px, so that row stays green on its own.
+	// 2026-09-28 (SC-235, Scott's option-B ruling, comment 00d1a795): 8 -> 7.
+	// `section-tag:font-size`/`:line-height`/`:letter-spacing` (was FOLLOWUPS #51) was site
+	// `.tag` at 18px/30.6px/1.8px against the plugin's then-ambient 16px/27.2px/1.12px. This
+	// rule compares computed style values only -- it cannot see the font face or whether
+	// small caps are real glyphs or a browser synthesis. The site's Petrona has no smcp, so
+	// the browser synthesizes small caps by shrinking capitals to 70%; the plugin's Source
+	// Serif 4 Bold has real smcp glyphs, which render taller per unit font-size -- matching
+	// the site's COMPUTED 18px would render the plugin's letters ~25% taller than the site's
+	// despite equal computed values. Scott chose option B instead: font-size
+	// `calc(var(--dse-fs-body) * 0.9375)` (15px) and letter-spacing `0.12em` (1.8px),
+	// styles-source.css's Task-2 boxed-header rule ~8163 -- 15px of real smcp matches the
+	// site's RENDERED letter height (8px of ink, both sides), a deliberate choice, not a
+	// miss to close. `:letter-spacing` HEALS (0.12em at 15px computes to the site's own
+	// 0.1em-at-18px 1.8px) and is not declared; `:font-size` and `:line-height` are declared
+	// again, citing SC-235 and this rendered-height reasoning rather than FOLLOWUPS #51.
+	// Net: 8 entries/16 rows -> 7 entries/14 rows.
 	test('the declared set is exactly the documented 7 entries', () => {
 		expect(map.declaredDeferrals.map((d: { pair: string; rule: string }) => `${d.pair}:${d.rule}`)).toEqual([
 			'pr-chars:ink',

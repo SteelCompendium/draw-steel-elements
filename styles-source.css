@@ -7341,11 +7341,12 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    gives .dse-feature 0.03em (:41), inherited by every card-body node the harness
    samples (section / pr-head / tier-row / head → parity plugin 0.48px vs site
    normal). Reset to normal under Steel only — the base rule is untouched so
-   Legacy is unchanged. The section title's own small-caps tracking (0.1em as
-   of SC-235, computed site parity — was 0.07em) and the chip's 0.04em (:3448) are
-   deliberate small-caps treatments and keep their rules (the chip's pair is
-   still handled as a per-rule deferral, not stripped; the section title's own
-   `section-tag:letter-spacing` deferral is CLOSED by SC-235, not stripped
+   Legacy is unchanged. The section title's own small-caps tracking (0.12em as
+   of SC-235 option B, which computes to 1.8px at 15px, the same computed
+   1.8px as the site's .1em at 18px; was 0.07em) and the chip's 0.04em (:3448)
+   are deliberate small-caps treatments and keep their rules (the chip's pair
+   is still handled as a per-rule deferral, not stripped; the section title's
+   own `section-tag:letter-spacing` deferral is CLOSED by SC-235, not stripped
    for the same reason — the values now agree). */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature {
 	letter-spacing: normal;
@@ -8191,9 +8192,11 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest:
    is a coincidental computed match on tracking alone, not a target in itself.
    Parity's `section-tag` pair now re-declares whichever rows actually GAP
    under these values (selector-map.json) — see its own `why` text for which
-   rows fire and this reasoning restated for that audience. See the SC-235
-   round-2 review's glyph probe (§5), the round-3/4 evidence, and the round-6
-   evidence composite for the measured numbers. */
+   rows fire and this reasoning restated for that audience. The rendered
+   letter-height match (both sides land at 8px of ink) and the synthesized-
+   vs-real smcp finding behind this whole rule were measured with a
+   pixel-scan probe against the live site; the measured numbers are not
+   reproduced here. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__title {
 	display: flex;
 	align-items: center;
