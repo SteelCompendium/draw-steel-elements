@@ -60,7 +60,7 @@ const SUMMARIES: [id: string, fixture: string, line: string][] = [
 	['montage', 'default', 'Montage: Cross the Ashfall Wastes (round 1 · 0/5)'],
 	['project', 'default', 'Project: Craft Teleportation Platform (340/1500)'],
 	['party', 'default', 'Party (2 heroes)'],
-	['initiative', 'default', 'Initiative (round 1 · 2v1)'],
+	['initiative', 'default', 'Initiative: The Ford of Bruinen (round 1 · 2v1)'], // SC-377: the example now carries a name
 	['counter', 'default', 'Counter: Health (10/20)'],
 	['characteristics', 'default', 'Characteristics (2/1/0/-1/3)'],
 	['values-row', 'default', 'Values (3 values)'],
