@@ -896,6 +896,17 @@ code.dsa {
         gap: 4px;
     }
 
+    /* SC-377 - the quick-add's rejection reason ("Label required", "Whole numbers only", ...). It is
+       a row of its own under the inputs, and takes no space (and prints nothing) unless it holds
+       text; only a rejected submit ever fills it. */
+    .dse-init__malice-quickadd-hint {
+        display: none;
+        flex: 0 0 100%;
+        text-align: right;
+        font-size: var(--dse-fs-caption);
+        color: var(--dse-fg-muted);
+    }
+
     /* SC-154 — was `width: 4.5em` with no declared padding of its own, so the box
        relied entirely on the browser's bare default <input> padding. Measured: the
        "Amount" placeholder (6 characters at this row's 0.85em font) clipped inside
@@ -17279,6 +17290,9 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 }
 /* SC-377 — a rejected quick-add. Not hue alone: the edge doubles (an inset ring on top of
    the border) and the placeholder swaps to the reason ("Label required" / "Not zero"). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__malice-quickadd > .dse-init__malice-quickadd-hint:not(:empty) {
+	display: block;
+}
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__malice-quickadd > input[aria-invalid="true"] {
 	border-color: var(--dse-danger);
 	box-shadow: inset 0 0 0 1px var(--dse-danger);

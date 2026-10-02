@@ -526,27 +526,44 @@ export class InitiativeView extends ElementView<EncounterData> {
 			labelInput.setAttribute('aria-label', 'Quick-add malice label');
 			// SC-377: ONE submit path for the Add button and Enter in either field. A rejected
 			// submit is never silent: the offending field takes focus, gets aria-invalid (the
-			// stylesheet draws a heavier edge) and swaps its placeholder for a short reason, so
-			// the cue is shape + words, not just a colour. The first keystroke clears it.
+			// stylesheet draws a heavier edge), swaps its placeholder for a short reason when it is
+			// empty, and the same reason is written to a hint line under the row (role=alert) -
+			// which is the only place the words can appear when the field already holds text, such
+			// as "1.5". Shape + words, never just a colour. The first keystroke clears it all.
 			const labelPlaceholder = labelInput.getAttribute('placeholder') ?? '';
 			const amountPlaceholder = amountInput.getAttribute('placeholder') ?? '';
-			const flag = (input: HTMLInputElement, placeholder: string): void => {
+			// Created now, appended after the Add button below so it wraps onto its own line.
+			const hint = quickAdd.createSpan({ cls: 'dse-init__malice-quickadd-hint' });
+			hint.setAttribute('role', 'alert');
+			const flag = (input: HTMLInputElement, reason: string): void => {
 				input.setAttribute('aria-invalid', 'true');
-				input.setAttribute('placeholder', placeholder);
+				input.setAttribute('placeholder', reason);
+				hint.setText(reason);
 				input.focus();
 			};
 			const clearFlag = (input: HTMLInputElement, placeholder: string): void => {
 				input.removeAttribute('aria-invalid');
 				input.setAttribute('placeholder', placeholder);
+				hint.empty();
 			};
 			owner.registerDomEvent(amountInput, 'input', () => clearFlag(amountInput, amountPlaceholder));
 			owner.registerDomEvent(labelInput, 'input', () => clearFlag(labelInput, labelPlaceholder));
 			const submit = (): void => {
-				const amount = Number(amountInput.value);
+				const rawAmount = amountInput.value.trim();
 				const label = labelInput.value.trim();
 				// Amount is checked first: it is the leftmost field, and a missing label is
-				// reported on its own once the amount is good.
-				if (amountInput.value.trim() === '' || !Number.isFinite(amount) || amount === 0) {
+				// reported on its own once the amount is good. Whole numbers only (Malice is a
+				// count): "1.5" and "1e2" are rejected, not silently turned into 8.5 / +100.
+				if (rawAmount === '') {
+					flag(amountInput, 'Amount required');
+					return;
+				}
+				if (!/^-?\d+$/.test(rawAmount)) {
+					flag(amountInput, 'Whole numbers only');
+					return;
+				}
+				const amount = Number(rawAmount);
+				if (amount === 0) {
 					flag(amountInput, 'Not zero');
 					return;
 				}
@@ -577,6 +594,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				},
 				owner,
 			).buttonEl.addClass('dse-init__malice-quickadd-btn');
+			quickAdd.appendChild(hint); // last child: wraps onto its own line under the row
 		}
 	}
 

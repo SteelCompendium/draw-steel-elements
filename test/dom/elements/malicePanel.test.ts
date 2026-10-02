@@ -390,24 +390,73 @@ describe('SC-377: quick-add row — Enter submits, a rejected submit is visible'
 		}
 	});
 
-	test('a missing or zero amount flags the Amount field instead (and the Add button does the same)', async () => {
+	test('a missing or zero amount flags the Amount field instead (and the Add button does the same); an EMPTY amount says "Amount required", a literal 0 says "Not zero"', async () => {
 		const { root } = await renderInit(baseSource);
 		document.body.appendChild(root);
 		try {
 			const f = fields(root);
+			const hint = root.querySelector('.dse-init__malice-quickadd-hint') as HTMLElement;
 			f.label.value = 'Something';
 			(root.querySelector('button[aria-label="Add Malice log entry"]') as HTMLElement).click();
 			expect(f.amount.getAttribute('aria-invalid')).toBe('true');
-			expect(f.amount.getAttribute('placeholder')).toBe('Not zero');
+			expect(f.amount.getAttribute('placeholder')).toBe('Amount required');
+			expect(hint.textContent).toBe('Amount required');
 			expect(document.activeElement).toBe(f.amount);
 
 			f.amount.value = '0';
+			f.amount.dispatchEvent(new Event('input'));
+			expect(hint.textContent).toBe(''); // typing clears the reason
 			press(f.amount, 'Enter');
 			expect(f.amount.getAttribute('aria-invalid')).toBe('true');
+			expect(hint.textContent).toBe('Not zero');
 			expect(root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 5');
 		} finally {
 			root.remove();
 		}
+	});
+});
+
+describe('SC-377 R1F: quick-add takes whole numbers only (review INFO-2)', () => {
+	const press = (el: HTMLElement, key: string) =>
+		el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+
+	test.each(['1.5', '1e2', '2.0e1', '-0.5'])('"%s" is rejected with visible, worded feedback and changes nothing', async (typed) => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(baseSource);
+		document.body.appendChild(root);
+		try {
+			const amount = root.querySelector('.dse-init__malice-quickadd-amount') as HTMLInputElement;
+			const label = root.querySelector('.dse-init__malice-quickadd-label') as HTMLInputElement;
+			const hint = root.querySelector('.dse-init__malice-quickadd-hint') as HTMLElement;
+			amount.value = typed;
+			label.value = 'Feytouched';
+			press(amount, 'Enter');
+			expect(amount.getAttribute('aria-invalid')).toBe('true');
+			expect(hint.textContent).toBe('Whole numbers only'); // the field holds text, so the reason lives in the hint line
+			expect(document.activeElement).toBe(amount);
+			expect(amount.value).toBe(typed); // what was typed is kept
+			expect(root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 5');
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
+			expect(host.replaceSource).not.toHaveBeenCalled();
+		} finally {
+			root.remove();
+		}
+	});
+
+	test('whole numbers, positive and negative, still submit', async () => {
+		jest.useFakeTimers();
+		const { root } = await renderInit(baseSource);
+		const amount = root.querySelector('.dse-init__malice-quickadd-amount') as HTMLInputElement;
+		const label = root.querySelector('.dse-init__malice-quickadd-label') as HTMLInputElement;
+		amount.value = '-2';
+		label.value = 'Spent';
+		press(label, 'Enter');
+		expect(root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 3');
+	});
+
+	test('the reason line is empty (and so takes no space and prints nothing) until a submit is rejected', async () => {
+		const { root } = await renderInit(baseSource);
+		expect((root.querySelector('.dse-init__malice-quickadd-hint') as HTMLElement).textContent).toBe('');
 	});
 });
 
