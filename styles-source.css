@@ -803,6 +803,18 @@ code.dsa {
        plain inline text, so print reads "Malice: 7" exactly as before; the Steel screen layer
        (further down) restyles them into a caption over a numeral. */
 
+    /* SC-377 — the encounter title (view.ts buildTitle). Printed as a plain heading when the
+       encounter is named. An UNNAMED writable tracker still builds the node, marked
+       `data-empty`, only so the screen layer can show a prompt in it; here in the base layer
+       (and so in print) it is display:none and contributes no box. */
+    .dse-init__title {
+        margin: 0 0 0.4em;
+    }
+
+    .dse-init__title[data-empty] {
+        display: none;
+    }
+
     /* SC-377 — the Heroes heading line: the heading, then the round label + Advance round
        left-aligned after it (the chrome panel sits OUTSIDE the card's top edge, so nothing
        here ever competes with it). Baseline-aligned so "Round 3" and the button text sit on
@@ -15234,6 +15246,8 @@ body.theme-light
    rather than declaring a second one, per the comment above. */
 .dse-init__malice-quickadd-amount:focus-visible,
 .dse-init__malice-quickadd-label:focus-visible,
+.dse-init__title-text:focus-visible,
+.dse-init__title-input:focus-visible,
 .dse-mt__sheet-input:focus-visible,
 .dse-party__award-input:focus-visible,
 .dse-prj__roll-input:focus-visible,
@@ -17286,6 +17300,46 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	font-weight: bold;
 	color: var(--dse-malice);
 	font-variant-numeric: tabular-nums;
+}
+/* SC-377 (owner ruling O6) — THE ENCOUNTER TITLE, Steel screen only. The title is an <h2>, so it
+   already wears the tracker headings' display face (rule 4) and the h2 size token; here it gets
+   the edit affordance. Click / Enter / Space on the text swaps in the input. An untitled one
+   shows a muted italic "Untitled encounter" prompt (the base layer hides the empty node, so
+   print never shows it). The affordance is not hue: a dashed underline appears on hover and
+   focus, and the prompt is words. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__title[data-empty] {
+	display: block;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__title-text {
+	display: inline-block;
+	max-width: 100%;
+	padding: 0 0.25em;
+	margin-left: -0.25em;
+	border-radius: var(--dse-radius);
+	cursor: text;
+	overflow-wrap: anywhere;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__title-text:is(:hover, :focus-visible) {
+	background: var(--dse-hover);
+	text-decoration: underline dashed;
+	text-underline-offset: 0.2em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__title[data-empty] .dse-init__title-text::before {
+	content: 'Untitled encounter';
+	color: var(--dse-fg-muted);
+	font-style: italic;
+	font-weight: normal;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__title-input {
+	box-sizing: border-box;
+	width: 100%;
+	padding: 0.1em 0.35em;
+	font: inherit;
+	color: var(--dse-fg);
+	background: var(--dse-surface-sunken);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	caret-color: var(--dse-fg);
 }
 /* GROUP 2 — `.dse-sedit__apply-input` (HIGH-3): the same plain-field look as the six
    ancestor-scoped siblings — it had NO material declared anywhere before this (only

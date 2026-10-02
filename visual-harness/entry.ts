@@ -640,6 +640,10 @@ malice:
   value: 7
 `;
 
+// SC-377 — a NAMED encounter: the mid-fight `fight` fixture under an authored `name:`. Long
+// enough to wrap in a 300px sidebar leaf (see the `initiative-named-narrow` NARROW_SHOTS entry).
+const initiativeNamed = `name: "Ambush at the Ford of Bruinen, Crossing Guard Edition"\n` + initiativeFight;
+
 // SC-183 round 3 — a FULL ROSTER, which is the only scale the turn indicator can
 // honestly be judged at. Scott's stated goal for it is "to quickly and easily see who
 // has taken their turn within a round at a glance"; a two-hero fixture cannot show
@@ -997,6 +1001,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 		'no-images': initiativeNoImages,
 		controls: initiativeControls,
 		fight: initiativeFight,
+		named: initiativeNamed,
 		roster: initiativeRoster,
 		squads: initiativeSquads,
 		'captain-bonus': initiativeCaptainBonus,
@@ -1289,6 +1294,8 @@ export const NARROW_SHOTS: { id: string; element: string; fixture: string; width
 	// full-width plate is covered by the element sweep's `initiative-fight--*`.
 	{ id: 'initiative-fight-500', element: 'initiative', fixture: 'fight', width: 500 },
 	{ id: 'initiative-fight-narrow', element: 'initiative', fixture: 'fight', width: 300 },
+	// SC-377 — the encounter title at sidebar width (a long name wraps; never overflows).
+	{ id: 'initiative-named-narrow', element: 'initiative', fixture: 'named', width: 300 },
 	// SC-183 round 3 — the LAYOUT REBALANCE evidence (Scott: "the hero portrait is too
 	// small and the stamina bar is lower than it needs to be"), at the three widths the
 	// tracker really renders at. `roster` is five heroes, so the rebalanced row rhythm is
@@ -1666,6 +1673,14 @@ export const CHROME_SHOTS: {
 		id: 'chrome-skills-menu',
 		stack: [{ element: 'skills', fixture: 'ledger' }],
 		hover: '[data-dse-element="skills"]',
+		pad: 56,
+	},
+	// (2c) SC-377 — the tracker's panel: the two reset items (icon-only, distinct glyphs)
+	// left of the collapse toggle, on the mid-fight fixture they are used with.
+	{
+		id: 'chrome-initiative-menu',
+		stack: [{ element: 'initiative', fixture: 'fight' }],
+		hover: '[data-dse-element="initiative"]',
 		pad: 56,
 	},
 	// (3) OWNERSHIP — the shot the design decision hangs on. Two elements vertically

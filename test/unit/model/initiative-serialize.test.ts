@@ -22,7 +22,7 @@ import { parseYaml, stringifyYaml, App } from '../../mocks/obsidian';
 import { parseEncounterData } from '@drawSteelAdmonition/EncounterData';
 import type { EncounterData } from '@drawSteelAdmonition/EncounterData';
 import { DEFAULT_SETTINGS } from '@model/Settings';
-import { parse, serialize } from '../../../src/elements/initiative/model';
+import { parse, serialize, resetEncounter } from '../../../src/elements/initiative/model';
 import quickStart from '../../fixtures/initiative/quick-start.yaml';
 import squad from '../../fixtures/initiative/squad.yaml';
 
@@ -428,4 +428,38 @@ test('SC-277: hero, regular creature and minion icon overrides survive both init
 			}
 		}
 	}
+});
+
+describe('SC-377: the optional encounter title (`name`)', () => {
+	const base = 'heroes:\n  - name: A\n    max_stamina: 10\nenemy_groups: []\nmalice:\n  value: 1\n';
+
+	test('an authored name survives parse -> serialize, written FIRST, and re-parses to the same model', () => {
+		const model = parseLikePipeline(`${base}name: "Ambush at the Ford"\n`);
+		expect(model.name).toBe('Ambush at the Ford');
+		const out = serialize(model);
+		expect(out.startsWith('name: Ambush at the Ford\nheroes:')).toBe(true);
+		expect(parseLikePipeline(out)).toEqual(model);
+	});
+
+	test('a title set after parse (the in-card editor) is also written first; clearing it restores the exact untitled bytes', () => {
+		const untitled = serialize(parseLikePipeline(base));
+		const model = parseLikePipeline(base);
+		model.name = 'Late Title';
+		expect(serialize(model).startsWith('name: Late Title\nheroes:')).toBe(true);
+		delete model.name;
+		expect(serialize(model)).toBe(untitled);
+	});
+
+	test('a bare `name:` (null) is "no title"; a non-string name is rejected from parse', () => {
+		const nullName = parseLikePipeline(`name:\n${base}`);
+		expect('name' in nullName).toBe(false);
+		expect(() => parseLikePipeline(`name: 42\n${base}`)).toThrow("Invalid data: 'name' must be a string.");
+		expect(() => parseLikePipeline(`name: [a]\n${base}`)).toThrow("Invalid data: 'name' must be a string.");
+	});
+
+	test('Reset Encounter State leaves the title alone (authored text, not runtime state)', () => {
+		const model = parseLikePipeline(`${base}name: Keep Me\n`);
+		resetEncounter(model);
+		expect(model.name).toBe('Keep Me');
+	});
 });

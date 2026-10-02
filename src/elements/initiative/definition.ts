@@ -20,6 +20,9 @@ import initiativeExample from './example.yaml';
 const initiativeChrome: ElementChrome<EncounterData> = {
 	summary: ({ model }) => ({
 		label: 'Initiative',
+		// SC-377: the encounter's title, when it has one, reads as the name ("Initiative:
+		// Ambush at the Ford (round 3 · 4v3)").
+		name: model.name?.trim() || undefined,
 		detail: `round ${model.round ?? 1} \u00b7 ${model.heroes.length}v${model.enemy_groups.length}`,
 	}),
 };

@@ -109,10 +109,11 @@ At the table:
 
 ### Two buttons that are not the same
 
-- **Reset turns (this round)** clears the turn markers and action chips without moving the
-  round on. Use it when you mis-clicked.
-- **Advance round** is the real round boundary: it clears those *and* bumps the round
-  counter *and* grants the Malice you configured.
+- **Reset turns (this round)** — in the tracker's menu (hover it; the icon panel above the
+  top-right corner) — clears the turn markers and action chips without moving the round on.
+  Use it when you mis-clicked.
+- **Advance round** — the button beside the "Heroes" heading — is the real round boundary:
+  it clears those *and* bumps the round counter *and* grants the Malice you configured.
 
 ## Keep it visible while you play
 

@@ -69,11 +69,27 @@ malice:
 
 ## Encounter Data Format
 
-The encounter data consists of three main sections:
+The encounter data consists of three main sections, plus an optional title:
 
+0. **Name** (optional): a title for the encounter, shown above the Heroes.
 1. **Heroes**: Player characters participating in the encounter.
 2. **Enemy Groups**: Groups of enemies, each containing one or more types of creatures.
 3. **Malice**: The current villain power level.
+
+### Name
+
+- `name` (string, optional): the encounter's title, e.g. `name: "Ambush at the Ford"`. It
+	is shown as a heading at the top of the tracker, and as part of the one-line form when the
+	tracker is collapsed. Leave it out for an untitled encounter. You can also set it from the
+	tracker itself: see [Naming the encounter](#naming-the-encounter). Resetting the
+	encounter's state never clears it.
+
+```yaml
+name: "Ambush at the Ford"
+heroes:
+  - name: "Aragorn"
+    max_stamina: 120
+```
 
 ### Heroes
 
@@ -252,12 +268,26 @@ malice:
 
 Once your encounter is defined, the Initiative Tracker provides an interactive UI in your note.
 
+### Naming the encounter
+
+The title sits at the top of the tracker. Click it (or Tab to it and press Enter) to edit:
+type a name and press **Enter** or click away to save, or press **Escape** to leave it as it
+was. Clearing the field removes the title. An untitled tracker shows a muted "Untitled
+encounter" prompt in that spot (on screen only — it never prints). In a read-only view
+(canvas, for example) the title is plain text, or absent if the encounter has none.
+
+### The turn mark
+
+Heroes and enemy groups share one turn mark, in three states: an **empty engraved ring**
+(has not acted), a **struck steel seal** bearing a diamond (has acted), and a **ghosted seal**
+while you hover to toggle it. The shapes differ, so the state never depends on colour alone.
+
 ### Heroes
 
 - **Turn Indicator**: Click a hero's **portrait** to mark whether they have taken their
-	turn — a struck steel seal presses into the portrait's lower-right corner once they
-	have. (With portraits turned off there is no picture to click, so the circle
-	checkbox next to the name takes over as the control instead.)
+	turn — the ring in the portrait's lower-right corner becomes a struck steel seal once they
+	have. (With portraits turned off there is no picture to click, so the same ring/seal
+	next to the name takes over as the control instead.)
 - **Stamina Management**: Click on the hero's stamina display to open a modal where you can:
 	- Apply damage or healing.
 	- Adjust temporary stamina points.
@@ -265,8 +295,8 @@ Once your encounter is defined, the Initiative Tracker provides an interactive U
 
 ### Enemy Groups
 
-- **Turn Indicator**: An enemy group has no portrait to click, so it keeps the circle
-	checkbox next to its name as its turn control.
+- **Turn Indicator**: An enemy group has no portrait to click, so its turn control is the
+	ring/seal button next to its name (the same mark the heroes use).
 - **Creature Grid**:
 	- **Selection**: Click on a creature instance to view its details.
 	- **Health Management**:
@@ -301,43 +331,53 @@ attacks. A group holding several squads gets one checklist per squad. The captai
 any attached creature) keeps the ordinary four-toggle checklist — "a captain … isn't
 limited in their action options as minions are."
 
-### The Command Bar (Round + Malice)
+### The Command Bar (Malice)
 
-All round and Malice controls sit in a single full-width bar between the Heroes and the
-Enemy Groups: the round counter and its two controls at the left edge, the Malice pool
-and quick-add at the right, and the Malice log folded into a disclosure that opens a
-full-width drawer beneath the bar. In a narrow pane (a split view or the sidebar) the
-bar stacks into a single column.
+The Malice controls sit in a single full-width bar between the Heroes and the Enemy
+Groups: the pool stepper and the log disclosure on the left, the quick-add on the right,
+and the log's drawer opening full-width beneath the bar. In a narrow pane (a split view or
+the sidebar) the bar stacks into a single column. The round counter and *Advance round*
+live on the Heroes heading line instead (see below).
 
-**Adjusting the pool**: Use the up and down arrows next to the villain power display to
-increase or decrease the value.
+**Adjusting the pool**: the pool is a stepper — a **−** and a **+** button always shown on
+either side of the current Malice value.
 
 **Malice log**: Click "Malice log · N entries" to open a small read-only list of every
 gain/spend (`R<round>: +/-<amount> — <label>`), most recent additions preserved, oldest
 entries dropped once the log exceeds 50 entries. Printed handouts always show the log
 open.
 
-**Quick-add**: Enter an amount and a label (e.g. "3" / "Feytouched") and click "Add" to
-log a manual, trigger-based Malice gain (or spend, using a negative amount) without
-waiting for a round to advance.
+**Quick-add**: Enter an amount and a label (e.g. "3" / "Feytouched") and click "Add" — or
+press **Enter** in either field — to log a manual, trigger-based Malice gain (or spend,
+using a negative amount) without waiting for a round to advance. If the amount is missing or
+zero, or the label is empty, nothing is added: the offending field is focused, gets a heavier
+edge and says what it needs ("Not zero" / "Label required") until you start typing.
 
 ### Round / Turn Controls
 
-Next to the round counter, the tracker offers two distinct controls — they are **not**
-interchangeable:
+The round counter and the **Advance round** button sit on the same line as the "Heroes"
+heading (they wrap onto the next line in a narrow pane). The other round control lives in the
+tracker's **menu** — hover the tracker and look at the small icon panel above its top-right
+corner. The two are **not** interchangeable:
 
-- **"Reset turns (this round)"**: Clears every turn indicator and per-actor action
-	checklist (Main/Maneuver/Move/Triggered) back to unmarked, **without** advancing the
-	round counter or granting any configured Malice round gain. Use this for a mid-round
-	correction — e.g. undoing a misclick, or re-running the current round from the top.
-- **"Advance round"**: The full round-boundary transition — increments the round counter,
-	clears every turn indicator and action checklist (same as "Reset turns"), and (if a
-	Malice round gain is configured) adds it to the villain power pool and logs it. Use
-	this when the round has actually ended.
+- **"Reset turns (this round)"** (menu, circular-arrow icon): Clears every turn indicator and
+	per-actor action checklist (Main/Maneuver/Move/Triggered) back to unmarked, **without**
+	advancing the round counter or granting any configured Malice round gain. No confirmation —
+	a brief notice says it happened. Use this for a mid-round correction — e.g. undoing a
+	misclick, or re-running the current round from the top.
+- **"Advance round"** (button by the Heroes heading): The full round-boundary transition —
+	increments the round counter, clears every turn indicator and action checklist (same as
+	"Reset turns"), and (if a Malice round gain is configured) adds it to the villain power
+	pool and logs it. Use this when the round has actually ended.
 
 ### Reset Encounter State
 
-Click the "Reset Encounter State" button to clear all "state" data from the tracker. All state will be lost including current stamina, conditions, turn tracker, and villain power. **Warning: this is a destructive operation**
+Choose **"Reset encounter state"** (menu, eraser icon) to clear all "state" data from the
+tracker after a confirmation. All state will be lost including current stamina, conditions,
+turn tracker, and villain power; the encounter's `name` is kept. **Warning: this is a
+destructive operation**
+
+(Both menu items are omitted in read-only views.)
 
 ### Stamina Management
 

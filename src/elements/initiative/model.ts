@@ -132,6 +132,14 @@ export function parse(input: unknown, _raw: string): EncounterData {
 	}
 	const data = input as EncounterData;
 
+	// SC-377: the optional encounter title. A bare `name:` (YAML null) is "no title"; anything
+	// else must be a string. Whitespace-only is left as authored here — the view treats it as
+	// untitled and the first rename normalizes it.
+	if (data.name === null) delete data.name;
+	if (data.name !== undefined && typeof data.name !== 'string') {
+		throw new Error("Invalid data: 'name' must be a string.");
+	}
+
 	if (!data.heroes || !Array.isArray(data.heroes)) {
 		throw new Error("Invalid data: 'heroes' field is missing or is not a list.");
 	}
@@ -287,6 +295,12 @@ export function parse(input: unknown, _raw: string): EncounterData {
 }
 
 export function serialize(model: EncounterData): string {
+	// SC-377: a title added by the in-card editor lands LAST in key-insertion order; write it
+	// first, where an author puts it. No title = the exact legacy expression, byte for byte.
+	if (model.name !== undefined) {
+		const { name, ...rest } = model;
+		return stringifyYaml({ name, ...rest }).trim();
+	}
 	return stringifyYaml(model).trim();
 }
 

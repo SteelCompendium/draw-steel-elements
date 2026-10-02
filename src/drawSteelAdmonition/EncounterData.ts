@@ -600,6 +600,12 @@ export interface ConditionHolder {
 }
 
 export interface EncounterData {
+    /** SC-377 — the encounter's own title (e.g. "Ambush at the Ford"), rendered as an
+     *  inline-editable heading above the Heroes. Optional and additive: absent = untitled
+     *  (a writable tracker shows an on-screen-only "Untitled encounter" prompt; print and a
+     *  read-only host show nothing). Authored text, so `resetEncounter` leaves it alone.
+     *  `serialize()` writes it first when present. */
+    name?: string;
     heroes: Hero[];
     enemy_groups: EnemyGroup[];
     // REVIEW: should we make this into a number since Malice is only {value: number}?

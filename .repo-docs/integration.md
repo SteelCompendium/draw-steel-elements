@@ -220,8 +220,11 @@ it survives navigating between notes.
 ### Turn/round economy + Malice panel (D8)
 
 `EncounterData` (shared by `ds-initiative` and the encounter hand-off above) gained
-three ADDITIVE-OPTIONAL fields (never emitted unless set, never materialized by `parse`):
+four ADDITIVE-OPTIONAL fields (never emitted unless set, never materialized by `parse`):
 
+- **`name`** (SC-377) — the optional encounter title, an inline-editable heading at the top of
+  the `ds-initiative` card (written first in the YAML; untouched by `resetEncounter`; shown
+  as the chrome summary's name).
 - **`round`** — the encounter's round counter. `advanceRound(data)` (initiative model)
   is the round-boundary transition: increments `round`, clears every `has_taken_turn` +
   materialized per-actor `actions`, and (if `malice.round_gain` is configured) applies +
@@ -234,7 +237,8 @@ three ADDITIVE-OPTIONAL fields (never emitted unless set, never materialized by 
   (per-round, spec §7.1), not on a per-turn clear.
 - **`malice.round_gain`** / **`malice.log`** — the Malice panel (an `ds-initiative`
   sub-view, OD-6: no standalone `ds-malice` element) adds a keyboard-accessible pool
-  stepper, the round display + its two controls above, a read-only spend/gain log
+  stepper, the round display + its two controls above (since SC-377: the round label and
+  Advance round sit on the Heroes heading line; Reset turns is a chrome-panel item), a read-only spend/gain log
   (`{ round, amount, label }`, oldest-first), and a labeled quick-add for manual
   trigger-based gains (spec §3.3). `round_gain` absent means no configured auto-gain
   (OD-3 — never a fabricated Director's-guide default). **The log is capped** at

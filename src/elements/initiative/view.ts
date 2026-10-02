@@ -53,6 +53,7 @@
 import { Component, Notice, setIcon } from 'obsidian';
 import type { Modal } from 'obsidian';
 import { ElementView } from '@/framework/view';
+import { MOVING_ATTR } from '@/framework/host/adoptView';
 import type { RenderContext } from '@/framework/context';
 import type { ChromeMenuItem } from '@/framework/chrome/types';
 import {
@@ -230,6 +231,8 @@ export class InitiativeView extends ElementView<EncounterData> {
 	// ------------------------------------------------------------------------- build
 
 	private buildUI(container: HTMLElement, owner: Component, data: EncounterData): void {
+		this.buildTitle(container, data, owner);
+
 		// Heroes.
 		const heroesGroup = container.createDiv({ cls: 'dse-init__group dse-init__group--heroes' });
 		// SC-377 (owner ruling O2): the heading line also carries the round label and the
@@ -263,6 +266,99 @@ export class InitiativeView extends ElementView<EncounterData> {
 
 		data.enemy_groups.forEach((group) => {
 			this.buildEnemyGroupRow(enemiesGroup.createDiv({ cls: 'dse-init__entry' }), group, owner);
+		});
+	}
+
+	// ------------------------------------------------------------- encounter title
+
+	/** SC-377 (owner ruling O6) — the encounter's editable title, the first thing in the card.
+	 *
+	 *  Writable host: an <h2> holding a focusable text span. Click (or Enter/Space on it) swaps
+	 *  in an <input>; Enter or blur commits (trimmed; empty clears the title), Escape reverts.
+	 *  This is the kit stepper's editable path, including the SC-340 adoption-blur guard: when
+	 *  the block is adopted after its own write, Obsidian moves the section and a focused input
+	 *  blurs (B11) — that blur is not the user leaving the field, so a half-typed draft is
+	 *  never committed on it (`data-dse-moving` / `!isConnected`; a later real blur commits).
+	 *  An untitled writable tracker keeps the <h2> but marks it `data-empty`: the stylesheet
+	 *  shows an "Untitled encounter" prompt on screen only (the base layer hides the node, so
+	 *  print shows nothing).
+	 *
+	 *  Read-only host (F1 §4.4): no input, no focusable span - static text when titled,
+	 *  nothing at all when not. */
+	private buildTitle(container: HTMLElement, data: EncounterData, owner: Component): void {
+		const titled = (): string => (typeof data.name === 'string' ? data.name.trim() : '');
+		if (!this.canWrite) {
+			if (titled() !== '') container.createEl('h2', { cls: 'dse-init__title', text: titled() });
+			return;
+		}
+		const heading = container.createEl('h2', { cls: 'dse-init__title' });
+		const textEl = heading.createSpan({ cls: 'dse-init__title-text' });
+		textEl.setAttribute('role', 'button');
+		textEl.setAttribute('tabindex', '0');
+		const paint = (): void => {
+			const name = titled();
+			heading.toggleAttribute('data-empty', name === '');
+			textEl.setText(name);
+			textEl.setAttribute('aria-label', name === '' ? 'Name this encounter' : `Rename encounter: ${name}`);
+		};
+		paint();
+
+		let input: HTMLInputElement | null = null;
+		const finish = (focusBack: boolean): void => {
+			const el = input;
+			if (!el) return;
+			input = null; // before remove(): removing a focused input can fire blur re-entrantly
+			el.remove();
+			textEl.hidden = false;
+			paint();
+			if (focusBack) textEl.focus();
+		};
+		const commit = (focusBack: boolean): void => {
+			if (!input) return;
+			const next = input.value.trim();
+			if (next !== titled()) {
+				if (next === '') delete data.name;
+				else data.name = next;
+				void this.persist();
+			}
+			finish(focusBack);
+		};
+		const startEdit = (): void => {
+			if (input) return;
+			const el = heading.createEl('input', {
+				cls: 'dse-init__title-input',
+				type: 'text',
+				attr: { placeholder: 'Untitled encounter' },
+			});
+			el.setAttribute('aria-label', 'Encounter name');
+			el.value = titled();
+			input = el;
+			textEl.hidden = true;
+			owner.registerDomEvent(el, 'keydown', (evt: KeyboardEvent) => {
+				if (evt.key === 'Enter' && !evt.isComposing) {
+					evt.preventDefault();
+					commit(true);
+				} else if (evt.key === 'Escape') {
+					// Swallow it so a containing modal/pane does not also act on this press.
+					evt.preventDefault();
+					evt.stopPropagation();
+					finish(true);
+				}
+			});
+			owner.registerDomEvent(el, 'blur', () => {
+				if (input !== el) return;
+				if (!el.isConnected || el.closest(`[${MOVING_ATTR}]`)) return;
+				commit(false);
+			});
+			el.focus();
+			el.select();
+		};
+		owner.registerDomEvent(textEl, 'click', startEdit);
+		owner.registerDomEvent(textEl, 'keydown', (evt: KeyboardEvent) => {
+			if (evt.key === 'Enter' || evt.key === ' ') {
+				evt.preventDefault();
+				startEdit();
+			}
 		});
 	}
 
@@ -529,6 +625,11 @@ export class InitiativeView extends ElementView<EncounterData> {
 	   treatment that marks a spent portrait is a struck STEEL SEAL (styles-source §12b) —
 	   Scott's promotion-round pick (2026-08-23: "Seal option looks good. I like that."),
 	   unconditional now that the round-3 `initPortrait` review switch is deleted.
+
+   SC-377 made the seal the ONE turn mark on both sides: the portrait carries an empty
+   engraved ring until the turn is taken and the struck seal after, and the enemy group
+   header's button wears the same ring/seal (styles-source §12e) instead of the old green
+   check box. Print is untouched.
 
 	   The checkbox BOX itself stays in the DOM and stays visible in PRINT, where it is
 	   `display: none`'d on the Steel screen. Two reasons, both load-bearing:

@@ -1928,6 +1928,145 @@ describe('SC-183 round 3: the portrait is the turn control', () => {
 	});
 });
 
+describe('SC-377: the editable encounter title (owner ruling O6)', () => {
+	const named = quickStart + '\nname: "Ambush at the Ford"\n';
+	const titleOf = (root: HTMLElement) => root.querySelector('.dse-init__title') as HTMLElement | null;
+	const textOf = (root: HTMLElement) => root.querySelector('.dse-init__title-text') as HTMLElement;
+	const inputOf = (root: HTMLElement) => root.querySelector('.dse-init__title-input') as HTMLInputElement | null;
+	const key = (el: HTMLElement, k: string) =>
+		el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+
+	test('named: an <h2> as the first thing in the card, text = the name, a focusable button-role span', async () => {
+		const { root } = await renderInit(named);
+		const h = titleOf(root)!;
+		expect(h.tagName).toBe('H2');
+		expect(root.querySelector('.dse-init')!.firstElementChild).toBe(h);
+		expect(textOf(root).textContent).toBe('Ambush at the Ford');
+		expect(textOf(root).getAttribute('role')).toBe('button');
+		expect(textOf(root).getAttribute('aria-label')).toBe('Rename encounter: Ambush at the Ford');
+		expect(h.hasAttribute('data-empty')).toBe(false);
+	});
+
+	test('unnamed + writable: the node exists but is data-empty (the screen layer shows the prompt; the base layer hides it)', async () => {
+		const { root } = await renderInit(quickStart);
+		expect(titleOf(root)!.hasAttribute('data-empty')).toBe(true);
+		expect(textOf(root).textContent).toBe('');
+		expect(textOf(root).getAttribute('aria-label')).toBe('Name this encounter');
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+		expect(sheet).toMatch(/\.dse-init__title\[data-empty\]\s*\{\s*display: none;/);
+	});
+
+	test('read-only: titled = static text, no input, no button role; untitled = no node at all', async () => {
+		const ro = await renderInit(named, { canPersist: false });
+		expect(titleOf(ro.root)!.textContent).toBe('Ambush at the Ford');
+		expect(ro.root.querySelector('.dse-init__title-text')).toBeNull();
+		expect(titleOf(ro.root)!.querySelector('[role], [tabindex], input')).toBeNull();
+		const bare = await renderInit(quickStart, { canPersist: false });
+		expect(titleOf(bare.root)).toBeNull();
+	});
+
+	test('click opens an input seeded with the name; Enter commits the trimmed text and persists name FIRST in the YAML', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(quickStart);
+		textOf(root).click();
+		const input = inputOf(root)!;
+		expect(input).not.toBeNull();
+		expect(input.value).toBe('');
+		expect(textOf(root).hidden).toBe(true);
+
+		input.value = '  The Bridge  ';
+		key(input, 'Enter');
+		expect(inputOf(root)).toBeNull();
+		expect(textOf(root).hidden).toBe(false);
+		expect(textOf(root).textContent).toBe('The Bridge');
+		expect(titleOf(root)!.hasAttribute('data-empty')).toBe(false);
+
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect((host.replaceSource as jest.Mock).mock.calls[0][0] as string).toMatch(/^name: The Bridge\nheroes:/);
+	});
+
+	test('Space/Enter on the focused text also opens the editor (keyboard path)', async () => {
+		const { root } = await renderInit(named);
+		key(textOf(root), 'Enter');
+		expect(inputOf(root)!.value).toBe('Ambush at the Ford');
+	});
+
+	test('Escape reverts: nothing written, old text kept, focus back on the text', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(named);
+		document.body.appendChild(root);
+		try {
+			textOf(root).click();
+			const input = inputOf(root)!;
+			input.value = 'Something else';
+			key(input, 'Escape');
+			expect(inputOf(root)).toBeNull();
+			expect(textOf(root).textContent).toBe('Ambush at the Ford');
+			expect(document.activeElement).toBe(textOf(root));
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
+			expect(host.replaceSource).not.toHaveBeenCalled();
+		} finally {
+			root.remove();
+		}
+	});
+
+	test('a real blur commits; an unchanged blur writes nothing; clearing the field removes the title', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(named);
+		document.body.appendChild(root); // the guard ignores a blur on a DETACHED input
+		textOf(root).click();
+		inputOf(root)!.dispatchEvent(new FocusEvent('blur'));
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
+		expect(host.replaceSource).not.toHaveBeenCalled(); // unchanged
+
+		textOf(root).click();
+		inputOf(root)!.value = '   ';
+		inputOf(root)!.dispatchEvent(new FocusEvent('blur'));
+		expect(titleOf(root)!.hasAttribute('data-empty')).toBe(true);
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect((host.replaceSource as jest.Mock).mock.calls[0][0] as string).not.toContain('name: Ambush');
+		expect((host.replaceSource as jest.Mock).mock.calls[0][0] as string).toMatch(/^heroes:/);
+		root.remove();
+	});
+
+	test('SC-340 adoption-blur guard: a blur while the root is marked data-dse-moving (or the input is detached) never commits the draft', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(named);
+		document.body.appendChild(root);
+		textOf(root).click();
+		const input = inputOf(root)!;
+		input.value = 'Half-typed draft';
+		root.setAttribute('data-dse-moving', '');
+		input.dispatchEvent(new FocusEvent('blur'));
+		root.removeAttribute('data-dse-moving');
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
+		expect(host.replaceSource).not.toHaveBeenCalled();
+		expect(inputOf(root)).toBe(input); // still editing, draft intact
+		expect(input.value).toBe('Half-typed draft');
+
+		input.dispatchEvent(new FocusEvent('blur')); // a later REAL blur commits
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect((host.replaceSource as jest.Mock).mock.calls[0][0] as string).toContain('name: Half-typed draft');
+		root.remove();
+	});
+
+	test('the collapsed summary carries the title as its name; untitled keeps the old one-liner', () => {
+		const withName = initiativeElement.chrome!.summary({
+			model: { name: ' Ambush ', heroes: [{}], enemy_groups: [], malice: { value: 0 } } as never,
+			def: initiativeElement as never,
+		});
+		expect(withName).toEqual({ label: 'Initiative', name: 'Ambush', detail: 'round 1 \u00b7 1v0' });
+		const bare = initiativeElement.chrome!.summary({
+			model: { heroes: [], enemy_groups: [], malice: { value: 0 } } as never,
+			def: initiativeElement as never,
+		});
+		expect(bare.name).toBeUndefined();
+	});
+});
+
 describe('SC-377: the Malice stepper and the one turn mark (owner rulings O4, O5)', () => {
 	const sheetNoComments = (): string =>
 		fs
