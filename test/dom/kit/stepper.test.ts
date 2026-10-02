@@ -60,6 +60,37 @@ describe('Plan 08 Task 2: kit/stepper (D2 §2.2)', () => {
 		});
 	});
 
+	describe('renderValue (SC-377)', () => {
+		test('builds the value node content itself, on every render, and the node/aria-live/in-place contract is unchanged', () => {
+			const parent = document.createElement('div');
+			const handle = stepper(
+				parent,
+				{
+					value: 3,
+					label: 'Malice',
+					format: () => 'ignored',
+					renderValue: (el, v) => {
+						el.createSpan({ cls: 'cap', text: 'Malice' });
+						el.createSpan({ text: ': ' });
+						el.createSpan({ cls: 'num', text: String(v) });
+					},
+					onChange: () => {},
+				},
+				fakeOwner(),
+			);
+			const valueEl = handle.rootEl.querySelector('.dse-stepper__value')!;
+			const [, plusEl] = Array.from(handle.rootEl.querySelectorAll<HTMLButtonElement>('.dse-stepper__btn'));
+			expect(valueEl.textContent).toBe('Malice: 3');
+			expect(valueEl.getAttribute('aria-live')).toBe('polite');
+
+			plusEl.click();
+			// Re-rendered in place: the same node, emptied first (no accumulated spans).
+			expect(handle.rootEl.querySelector('.dse-stepper__value')).toBe(valueEl);
+			expect(valueEl.textContent).toBe('Malice: 4');
+			expect(valueEl.querySelectorAll('.num')).toHaveLength(1);
+		});
+	});
+
 	describe('increment / decrement', () => {
 		test('plus/minus commit value ± step (default 1) and fire onChange with the new value', () => {
 			const parent = document.createElement('div');

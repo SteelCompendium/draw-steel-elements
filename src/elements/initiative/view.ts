@@ -268,9 +268,21 @@ export class InitiativeView extends ElementView<EncounterData> {
 
 	// -------------------------------------------------------------- Malice controls
 
+	/** The Malice value node's content. One text run's worth of words ("Malice: 7" — what
+	 *  print and a screen reader read) split into three spans so the Steel screen can set the
+	 *  caption small over a large numeral in the malice colour (SC-377, owner ruling O4); the
+	 *  ": " separator is the span the screen layer drops. */
+	private renderMaliceValue(el: HTMLElement, value: number): void {
+		el.createSpan({ cls: 'dse-init__malice-cap', text: 'Malice' });
+		el.createSpan({ cls: 'dse-init__malice-sep', text: ': ' });
+		el.createSpan({ cls: 'dse-init__malice-num', text: String(value) });
+	}
+
 	/** Pool: the kit stepper (write) or a static value (read-only). CB-7 is fixed
 	 *  by construction — stepper.render() sets ONLY its value node, so the ± buttons
-	 *  survive every press (legacy's container.setText destroyed the chevrons). */
+	 *  survive every press (legacy's container.setText destroyed the chevrons).
+	 *  SC-377: the stepper is the standard always-visible Steel kit stepper (bevelled ± framing
+	 *  a sunken well), not the hover-revealed bare glyph pair it used to be. */
 	private buildMaliceTotal(
 		container: HTMLElement,
 		data: EncounterData,
@@ -284,7 +296,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 					value: data.malice.value,
 					integer: true,
 					label: 'Malice',
-					format: (v) => 'Malice: ' + v,
+					renderValue: (el, v) => this.renderMaliceValue(el, v),
 					onChange: (v) => {
 						data.malice.value = v;
 						void this.persist();
@@ -296,7 +308,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				.querySelector<HTMLElement>('.dse-stepper__value')
 				?.addClass('dse-init__malice-value');
 		} else {
-			malice.createDiv({ cls: 'dse-init__malice-value', text: 'Malice: ' + data.malice.value });
+			this.renderMaliceValue(malice.createDiv({ cls: 'dse-init__malice-value' }), data.malice.value);
 		}
 		return malice;
 	}

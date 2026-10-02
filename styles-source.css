@@ -629,8 +629,7 @@ code.dsa {
     .dse-init__turn,
     .dse-cond,
     .dse-cond--add,
-    .dse-init__stamina,
-    .dse-init__malice .dse-stepper__btn {
+    .dse-init__stamina {
         position: relative;
         min-width: 0;
         min-height: 0;
@@ -643,8 +642,7 @@ code.dsa {
 
     /* §4.6: the ≥44px hit target as a click-catching overlay on the small glyphs. */
     button.dse-init__turn::after,
-    button.dse-init__stamina::after,
-    .dse-init__malice .dse-stepper__btn::after {
+    button.dse-init__stamina::after {
         content: '';
         position: absolute;
         left: 50%;
@@ -792,27 +790,6 @@ code.dsa {
         align-items: center;
     }
 
-    /* The ± reveal on hover AND focus (a11y — legacy was hover-only). */
-    .dse-init__malice .dse-stepper__btn {
-        visibility: hidden;
-        height: 24px;
-    }
-
-    .dse-init__malice:hover .dse-stepper__btn,
-    .dse-init__malice:focus-within .dse-stepper__btn {
-        visibility: visible;
-    }
-
-    .dse-init__malice .dse-stepper__btn:hover {
-        background-color: var(--dse-surface);
-    }
-
-    /* Legacy glyph size: the 24px chevron box (kit icons default smaller). */
-    .dse-init__malice .dse-stepper__btn svg {
-        height: 24px;
-        width: 24px;
-    }
-
     /* The kit value node paints --dse-fg by default; the malice line is red. */
     .dse-init__malice .dse-stepper__value {
         color: inherit;
@@ -821,6 +798,10 @@ code.dsa {
     .dse-init__malice-value {
         user-select: none;
     }
+
+    /* SC-377 — the value's three spans (renderMaliceValue). In the base/print layer they are
+       plain inline text, so print reads "Malice: 7" exactly as before; the Steel screen layer
+       (further down) restyles them into a caption over a numeral. */
 
     /* SC-377 — the Heroes heading line: the heading, then the round label + Advance round
        left-aligned after it (the chrome panel sits OUTSIDE the card's top edge, so nothing
@@ -13815,13 +13796,6 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	border-radius: var(--dse-radius);
 	transition: background 0.15s ease;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle:hover:not([data-taken]) .dse-init__pt-mark {
-	opacity: 0.45;
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__pt-mark svg {
-	width: 1.6em;
-	height: 1.6em;
-}
 
 /* -- 12b. `seal` — a struck steel seal in the corner (THE mark, unconditional) ---- */
 /* Addition, not subtraction: the picture stays fully lit and legible — the answer to
@@ -13833,41 +13807,15 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle[data-taken] {
 	box-shadow: inset 0 0 0 2px var(--dse-metal), inset 0 0 12px rgba(0, 0, 0, 0.55);
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark {
-	opacity: 1;
-	position: absolute;
-	right: 3px;
-	bottom: 3px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 2.1em;
-	height: 2.1em;
-	border-radius: 50%;
-	background: radial-gradient(circle at 32% 28%, #e9eef1, #939ea4 58%, #4c555a);
-	border: 1px solid rgba(0, 0, 0, 0.55);
-	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.65);
-	color: #23282b;
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark svg {
-	display: none;
-}
-/* The ◆ is the brand's own connective mark (DESIGN.md, "The ◆ diamond motif"), struck
-   into the disc rather than drawn on it: a rotated square with an inset shadow. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark::before {
-	content: '';
-	width: 0.78em;
-	height: 0.78em;
-	transform: rotate(45deg);
-	background: rgba(0, 0, 0, 0.55);
-	box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.45);
-}
+/* The disc itself (struck / empty ring / ghost) is shared with the enemy-group header: see
+   12e, below, where one set of rules paints the same mark on both sides (SC-377). */
 
 /* -- 12c. The checkbox stands down (and comes back when portraits are off) ------ */
 /* On the Steel screen the hero row's checkbox is gone: the portrait is the control. The
-   GROUP header keeps its checkbox, deliberately — a group has no portrait to click, and
-   inventing one would mean inventing an identity the encounter data does not have.
-   (A spent group is still obvious: §11a quiets its whole body.) */
+   enemy GROUP header keeps its button (a group has no portrait to click, and inventing one
+   would mean inventing an identity the encounter data does not have) but, since SC-377, it
+   is painted as the same seal socket the portrait carries (12e). (A spent group is still
+   obvious: §11a quiets its whole body.) */
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row > .dse-init__turnbox {
 	display: none;
 }
@@ -13913,6 +13861,117 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row > .dse-init__info > .dse-init__name {
 		padding-right: 0;
 	}
+}
+
+/* -- 12e. ONE TURN MARK on both sides (SC-377, owner ruling O5) ------------------ */
+/* The hero portrait carried a struck steel seal; the enemy group header carried a green
+   checkbox. They shared no channel. Now both sides read the same three states:
+     not acted  an EMPTY ENGRAVED RING (a recessed socket, no glyph)
+     acted      the STRUCK SEAL: milled steel disc bearing the brand's engraved diamond
+     hover      a GHOST of the struck seal (the promise of what a click does)
+   The hero seal sits in the portrait's lower-right corner (12a/12b); the group's sits where
+   its checkbox did, left of the name. The portraits-off checkbox fallback (12c) wears the same
+   socket. Ring vs seal is a SHAPE difference (empty vs a struck disc with a diamond) and the
+   button still carries `aria-pressed`, so no state rides on hue alone. Green
+   (`--dse-turn-done`) leaves the screen; print keeps its checkboxes untouched, because every
+   rule here is screen-scoped and the button's own svg glyph stays in the DOM. */
+
+/* The socket geometry for the group / portraits-off boxes (the hero mark is the portrait's
+   own child and positions itself below). */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__grouphead > .dse-init__turnbox,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox {
+	box-sizing: border-box;
+	position: relative;
+	display: block;
+	flex: 0 0 auto;
+	width: 2.1em;
+	height: 2.1em;
+	font-size: var(--dse-fs-control);
+	border-radius: 50%;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__grouphead > .dse-init__turnbox .dse-init__turn,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox .dse-init__turn {
+	position: absolute;
+	inset: 0;
+	width: auto;
+	height: auto;
+	border-radius: 50%;
+}
+/* The glyph (dot / check) is print's; the seal replaces it on screen. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__grouphead > .dse-init__turnbox .dse-init__turn svg,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox .dse-init__turn svg {
+	display: none;
+}
+
+/* Hero mark: the portrait's lower-right corner. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle:not([data-taken]) .dse-init__pt-mark,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle:is(:hover, :focus-visible):not([data-taken]) .dse-init__pt-mark,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark {
+	position: absolute;
+	right: 3px;
+	bottom: 3px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.1em;
+	height: 2.1em;
+	border-radius: 50%;
+	opacity: 1;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle:not([data-taken]) .dse-init__pt-mark svg,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle:is(:hover, :focus-visible):not([data-taken]) .dse-init__pt-mark svg,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark svg {
+	display: none;
+}
+
+/* NOT ACTED: the empty engraved ring. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle:not([data-taken]) .dse-init__pt-mark,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__grouphead > .dse-init__turnbox,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox {
+	/* The ring is an inset shadow, not a border: the group box's button fills it flush, and a
+	   bordered round parent would force the button to a radius the nested-corner check can only
+	   express in px (parent radius minus border). No border = the same 50% on both. */
+	border: 0;
+	background: rgba(0, 0, 0, 0.3);
+	box-shadow: inset 0 0 0 2px var(--dse-metal-faint), inset 0 3px 5px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* ACTED: the struck seal. Hover: the same disc, ghosted. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__grouphead > .dse-init__turnbox:has(.dse-init__turn[data-taken]),
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox:has(.dse-init__turn[data-taken]),
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle:is(:hover, :focus-visible):not([data-taken]) .dse-init__pt-mark,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__grouphead > .dse-init__turnbox:has(.dse-init__turn:is(:hover, :focus-visible):not([data-taken])),
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox:has(.dse-init__turn:is(:hover, :focus-visible):not([data-taken])) {
+	border: 0;
+	background: radial-gradient(circle at 32% 28%, #e9eef1, #939ea4 58%, #4c555a);
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+	color: #23282b;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle:is(:hover, :focus-visible):not([data-taken]) .dse-init__pt-mark,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__grouphead > .dse-init__turnbox:has(.dse-init__turn:is(:hover, :focus-visible):not([data-taken])),
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox:has(.dse-init__turn:is(:hover, :focus-visible):not([data-taken])) {
+	opacity: 0.5;
+}
+/* The diamond is struck into the disc rather than drawn on it: a rotated square with an
+   inset shadow. Centred by `inset: 0; margin: auto` so it needs no flex parent (the group
+   box is block, the hero mark is flex; both centre it). */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark::before,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__grouphead > .dse-init__turnbox:has(.dse-init__turn[data-taken])::before,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox:has(.dse-init__turn[data-taken])::before,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle:is(:hover, :focus-visible):not([data-taken]) .dse-init__pt-mark::before,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__grouphead > .dse-init__turnbox:has(.dse-init__turn:is(:hover, :focus-visible):not([data-taken]))::before,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox:has(.dse-init__turn:is(:hover, :focus-visible):not([data-taken]))::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	margin: auto;
+	width: 0.78em;
+	height: 0.78em;
+	transform: rotate(45deg);
+	background: rgba(0, 0, 0, 0.55);
+	box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.45);
+	pointer-events: none;
 }
 
 /* END SC-183 tracker stamina */
@@ -17191,6 +17250,42 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__malice-quickadd > input[aria-invalid="true"] {
 	border-color: var(--dse-danger);
 	box-shadow: inset 0 0 0 1px var(--dse-danger);
+}
+/* SC-377 (owner ruling O4) — THE MALICE STEPPER, Steel screen only. The standard always-visible
+   kit stepper (bevelled .dse-btn ± framing a sunken well, as ds-surges / ds-counter ship it),
+   not the hover-revealed bare glyph pair it replaced. The well stacks a small-caps "Malice"
+   caption over the numeral, which alone carries the malice colour; the ": " separator the
+   print text needs is dropped on screen. The value is text, so no state rides on hue. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__malice .dse-stepper {
+	gap: 0.4em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__malice-value {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-width: 5.5em;
+	padding: 0.2em 0.7em;
+	line-height: 1.15;
+	background: var(--dse-surface-sunken);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__malice-cap {
+	font-variant: small-caps;
+	letter-spacing: 0.06em;
+	font-weight: normal;
+	font-size: var(--dse-fs-caption);
+	color: var(--dse-fg-muted);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__malice-sep {
+	display: none;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__malice-num {
+	font-size: var(--dse-fs-subheading);
+	font-weight: bold;
+	color: var(--dse-malice);
+	font-variant-numeric: tabular-nums;
 }
 /* GROUP 2 — `.dse-sedit__apply-input` (HIGH-3): the same plain-field look as the six
    ancestor-scoped siblings — it had NO material declared anywhere before this (only

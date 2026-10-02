@@ -1928,6 +1928,74 @@ describe('SC-183 round 3: the portrait is the turn control', () => {
 	});
 });
 
+describe('SC-377: the Malice stepper and the one turn mark (owner rulings O4, O5)', () => {
+	const sheetNoComments = (): string =>
+		fs
+			.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8')
+			.replace(/\/\*[\s\S]*?\*\//g, '');
+	const SCREEN = `[data-dse-theme='steel']:not([data-dse-print="on"])`;
+
+	test('Malice reads "Malice: N" as text (print / AT) built from caption, separator and numeral spans; the ± are always-present real buttons', async () => {
+		const { root } = await renderInit(quickStart);
+		const value = root.querySelector('.dse-init__malice-value')!;
+		expect(value.textContent).toBe('Malice: 5');
+		expect([...value.children].map((c) => c.className)).toEqual([
+			'dse-init__malice-cap',
+			'dse-init__malice-sep',
+			'dse-init__malice-num',
+		]);
+		expect(value.querySelector('.dse-init__malice-num')!.textContent).toBe('5');
+		expect(root.querySelectorAll('.dse-init__malice button.dse-stepper__btn')).toHaveLength(2);
+	});
+
+	test('read-only Malice keeps the same three-span value (no stepper)', async () => {
+		const { root } = await renderInit(quickStart, { canPersist: false });
+		const value = root.querySelector('.dse-init__malice-value')!;
+		expect(value.textContent).toBe('Malice: 5');
+		expect(value.querySelectorAll('.dse-init__malice-num')).toHaveLength(1);
+		expect(root.querySelector('.dse-init__malice .dse-stepper')).toBeNull();
+	});
+
+	test('CSS contract: the hover/focus reveal is gone (the ± never go visibility:hidden) and the screen restyle is print-guarded', () => {
+		const sheet = sheetNoComments();
+		expect(sheet).not.toMatch(/\.dse-init__malice[^{]*\.dse-stepper__btn[^{]*\{[^}]*visibility:\s*hidden/);
+		for (const cls of ['dse-init__malice-cap', 'dse-init__malice-sep', 'dse-init__malice-num']) {
+			const lines = sheet.split('\n').filter((l) => l.includes(`.${cls}`) && l.includes('{'));
+			expect(lines.length).toBeGreaterThan(0);
+			lines.forEach((l) => expect(l).toContain(SCREEN));
+		}
+	});
+
+	test('CSS contract: ONE seal disc paints both sides — hero portrait, enemy-group header and the portraits-off checkbox share the struck/ghost rule; ring for rest', () => {
+		const sheet = sheetNoComments();
+		const struck = sheet.match(/([^}]*)\{\s*border: 0;\s*background: radial-gradient\([^}]*\}/);
+		expect(struck).not.toBeNull();
+		const selectors = struck![1];
+		expect(selectors).toContain('.dse-init__portrait-toggle[data-taken] .dse-init__pt-mark');
+		expect(selectors).toContain('.dse-init__grouphead > .dse-init__turnbox:has(.dse-init__turn[data-taken])');
+		expect(selectors).toContain(`[data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox:has(.dse-init__turn[data-taken])`);
+		// Rest = an empty ring on all three (no glyph: the svg is display:none inside the sockets).
+		const ring = sheet.match(/([^}]*)\{\s*\/\*[^}]*?border: 0;\s*background: rgba\(0, 0, 0, 0\.3\);[^}]*\}/) ?? sheet.match(/([^}]*)\{\s*border: 0;\s*background: rgba\(0, 0, 0, 0\.3\);[^}]*\}/);
+		expect(ring).not.toBeNull();
+		expect(ring![1]).toContain('.dse-init__portrait-toggle:not([data-taken]) .dse-init__pt-mark');
+		expect(ring![1]).toContain('.dse-init__grouphead > .dse-init__turnbox');
+		// Every selector of the shared block is screen-scoped (print keeps its checkboxes) …
+		[struck![1], ring![1]].forEach((group) =>
+			group.split(',\n').map((x) => x.trim()).filter(Boolean).forEach((sel) => expect(sel).toContain(SCREEN)),
+		);
+	});
+
+	test('the enemy-group turn control is still a real aria-pressed button (the seal is paint, not a new control), and flips with a click', async () => {
+		jest.useFakeTimers();
+		const { root } = await renderInit(quickStart);
+		const btn = root.querySelector('.dse-init__grouphead button.dse-init__turn') as HTMLButtonElement;
+		expect(btn.getAttribute('aria-pressed')).toBe('false');
+		btn.click();
+		expect(btn.getAttribute('aria-pressed')).toBe('true');
+		expect(btn.hasAttribute('data-taken')).toBe(true);
+	});
+});
+
 describe('SC-183 round 3: the dim never impedes interaction', () => {
 	const sheetNoComments = (): string =>
 		fs

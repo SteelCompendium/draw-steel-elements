@@ -52,6 +52,14 @@ export interface StepperOptions {
 	label: string;
 	/** Display formatting for the read-only value (ignored when `editable`). */
 	format?: (value: number) => string;
+	/**
+	 * SC-377 — build the read-only value node's CONTENT yourself (ignored when `editable`;
+	 * takes precedence over `format`). For a value that needs structure `format`'s plain string
+	 * cannot carry, e.g. a caption span beside a numeral span. Called on every render with the
+	 * (already emptied) value node and must write only into it; the node itself, its
+	 * aria-live and the CB-7 update-in-place contract are unchanged.
+	 */
+	renderValue?: (valueEl: HTMLElement, value: number) => void;
 	/** Fired once per user-driven value CHANGE — never by setValue(). */
 	onChange: (value: number) => void;
 }
@@ -132,7 +140,12 @@ export function stepper(
 	/** Reflects `current` onto the DOM in place + auto-disables at the bounds (real property). */
 	function render(): void {
 		if (inputEl) inputEl.value = String(current);
-		if (valueEl) valueEl.setText(format(current));
+		if (valueEl) {
+			if (opts.renderValue) {
+				valueEl.empty();
+				opts.renderValue(valueEl, current);
+			} else valueEl.setText(format(current));
+		}
 		minusBtn.setDisabled(opts.min !== undefined && current <= opts.min);
 		plusBtn.setDisabled(opts.max !== undefined && current >= opts.max);
 	}
