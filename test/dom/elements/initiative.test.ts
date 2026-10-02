@@ -2131,6 +2131,27 @@ describe('SC-377: the Malice stepper and the one turn mark (owner rulings O4, O5
 		);
 	});
 
+	test('CSS contract (R1F): the spent-row dim lands on the portrait PICTURE, never on the wrapper that holds the seal, so the hero seal is as bright as the group one', () => {
+		const sheet = sheetNoComments();
+		const dim = sheet.match(/([^}]*)\{\s*opacity: 0\.55;\s*filter: saturate\(0\.5\);/);
+		expect(dim).not.toBeNull();
+		expect(dim![1]).toContain('.dse-init__portrait > :not(.dse-init__portrait-toggle)');
+		expect(dim![1]).not.toMatch(/\.dse-init__portrait,/);
+	});
+
+	test('CSS contract (R1F): the kit button inside the group / portraits-off socket paints nothing in any state, and the ring edge is --dse-metal with a dark outer line', () => {
+		const sheet = sheetNoComments();
+		const reset = sheet.match(/([^}]*\.dse-init__grouphead > \.dse-init__turnbox \.dse-init__turn:is\(:hover[^{]*)\{([^}]*)\}/);
+		expect(reset).not.toBeNull();
+		expect(reset![2]).toMatch(/background: none;/);
+		expect(reset![2]).toMatch(/box-shadow: none;/);
+		expect(reset![1]).toContain(`[data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox .dse-init__turn`);
+		const ring = sheet.match(/\{\s*border: 0;\s*background: rgba\(0, 0, 0, 0\.3\);\s*box-shadow: ([^;]*);/);
+		expect(ring).not.toBeNull();
+		expect(ring![1]).toContain('inset 0 0 0 2px var(--dse-metal)');
+		expect(ring![1]).toMatch(/0 0 0 1px rgba\(0, 0, 0, 0\.7\)/);
+	});
+
 	test('the enemy-group turn control is still a real aria-pressed button (the seal is paint, not a new control), and flips with a click', async () => {
 		jest.useFakeTimers();
 		const { root } = await renderInit(quickStart);

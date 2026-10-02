@@ -13605,11 +13605,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 		linear-gradient(104deg, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.075)),
 		var(--dse-card-bg);
 }
-/* The identity — and ONLY the identity — takes the alpha. Listing the two members
+/* The identity — and ONLY the identity — takes the alpha. Listing the members
    explicitly (rather than dimming the row and exempting the rest) is the whole point:
    `opacity` on an ancestor cannot be undone by a descendant, so there is no way to
-   write the exemption if the alpha ever moves up a level. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row:has(.dse-init__turn[data-taken]) > .dse-init__portrait,
+   write the exemption if the alpha ever moves up a level. SC-377: that is exactly why the
+   portrait's dim lands on its PICTURE (`> :not(.dse-init__portrait-toggle)`), not on the
+   portrait wrapper - the struck seal lives inside the wrapper's toggle, and a dimmed seal
+   would not match the enemy group's full-strength one (review OWNER-1). */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row:has(.dse-init__turn[data-taken]) > .dse-init__portrait > :not(.dse-init__portrait-toggle),
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row:has(.dse-init__turn[data-taken]) > .dse-init__info > .dse-init__name,
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__groupbody:has(> .dse-init__grouphead .dse-init__turn[data-taken]) > .dse-init__grouphead > h4 {
 	opacity: 0.55;
@@ -13633,7 +13636,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 /* A row being USED is not a spent row. Hover or keyboard focus anywhere inside it brings
    the identity back to full — the direct answer to "the Director/GM will still need to
    interact with the containers … even when its not their turn". */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row:has(.dse-init__turn[data-taken]):is(:hover, :focus-within) > .dse-init__portrait,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row:has(.dse-init__turn[data-taken]):is(:hover, :focus-within) > .dse-init__portrait > :not(.dse-init__portrait-toggle),
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row:has(.dse-init__turn[data-taken]):is(:hover, :focus-within) > .dse-init__info > .dse-init__name,
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__groupbody:has(> .dse-init__grouphead .dse-init__turn[data-taken]):is(:hover, :focus-within) > .dse-init__grouphead > h4 {
 	opacity: 1;
@@ -13909,6 +13912,18 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	height: auto;
 	border-radius: 50%;
 }
+/* The socket's own paint is the box's; the kit button inside it must add NOTHING. Its bevel
+   gradient (near-invisible in dark, a 0.9-alpha white wash in light) was painting the group /
+   portraits-off not-acted mark as a raised light ball in steel-light while the hero's was a
+   sunken well (review MEDIUM-2). Every state, so hover cannot bring a bevel back. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__grouphead > .dse-init__turnbox .dse-init__turn,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__grouphead > .dse-init__turnbox .dse-init__turn:is(:hover, :active, :focus-visible),
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox .dse-init__turn,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox .dse-init__turn:is(:hover, :active, :focus-visible) {
+	background: none;
+	box-shadow: none;
+	border: 0;
+}
 /* The glyph (dot / check) is print's; the seal replaces it on screen. */
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__grouphead > .dse-init__turnbox .dse-init__turn svg,
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox .dse-init__turn svg {
@@ -13945,7 +13960,10 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	   express in px (parent radius minus border). No border = the same 50% on both. */
 	border: 0;
 	background: rgba(0, 0, 0, 0.3);
-	box-shadow: inset 0 0 0 2px var(--dse-metal-faint), inset 0 3px 5px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.12);
+	/* The edge is --dse-metal (>= 3:1 against the card ground in both schemes - measured, see
+	   the R1F report) plus a thin dark outer line, so it also holds on a portrait picture of any
+	   brightness. Same paint on both sides and in both schemes. */
+	box-shadow: inset 0 0 0 2px var(--dse-metal), 0 0 0 1px rgba(0, 0, 0, 0.7), inset 0 3px 5px rgba(0, 0, 0, 0.45);
 }
 
 /* ACTED: the struck seal. Hover: the same disc, ghosted. */
