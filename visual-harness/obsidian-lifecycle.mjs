@@ -22,9 +22,9 @@
 // leaf detach), G-S6g (hover popovers ARE writable in Obsidian 1.14.2), G-S6h (nested
 // read-only ds-counter survives its parent's adoption), G-S6i (fast navigation, no leaks),
 // G-S8 (scrollTop pin across a tracker's own write).
-// SC-377 appends 3 click-shield scenarios + 1 title scenario — 23 total: G-S9a (initiative
+// SC-377 appends 3 click-shield scenarios + a title scenario + a click-away scenario — 24 total: G-S9a (initiative
 // Amount/Label), G-S9b (ds-counter's editable stepper input), G-S9c (ds-party's award input),
-// G-S9d (the inline encounter title). Each drives a REAL
+// G-S9d (the inline encounter title), G-S9e (click away from an in-card input saves). Each drives a REAL
 // mouse press (CDP Input.dispatchMouseEvent, never .focus()) in BOTH Reading view and Live
 // Preview and asserts the click focuses the field, typed text lands, and the block is NOT
 // opened for source editing (editor cursor never jumps into the fence).
@@ -464,6 +464,33 @@ const NOTICE_TEXT = (note) =>
 const TRACKER = '[data-dse-element="initiative"]';
 const conditionsModalOpen = (t) => t.ev(`!!document.querySelector('.dse-condal-modal')`);
 
+// SC-377 R1F: the two display modes every click-shield scenario must hold in.
+const LC_LEAF = 'app.workspace.getMostRecentLeaf()';
+const LC_MODES = [
+	['Reading view', { mode: 'preview' }, (leaf) => `((${leaf}).view.containerEl.querySelector('.markdown-reading-view'))`],
+	['Live Preview', { mode: 'source', source: false }, (leaf) => `((${leaf}).view.containerEl.querySelector('.markdown-source-view'))`],
+];
+/** Open `rel` fresh in the given mode (Live Preview: cursor parked on line 0, above every fence). */
+async function enterMode(t, rel, [label, state, scopeOf], rootSel) {
+	await t.open(rel);
+	await t.reset(rel);
+	await t.ev(`(async () => { await (${LC_LEAF}).setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, ...${JSON.stringify(state)} }, active: true }); })()`);
+	await t.sleep(1500);
+	const scope = scopeOf(LC_LEAF);
+	const rootEl = `Array.from(${scope}.querySelectorAll('${rootSel}')).find((x) => x.isConnected)`;
+	await t.waitFor(`!!(${rootEl})`, `${label}: ${rootSel} rendered`);
+	if (state.mode === 'source') await t.ev(`(${LC_LEAF}).view.editor.setCursor({ line: 0, ch: 0 })`);
+	return { scope, rootEl };
+}
+/** Window-capture recorder of each press's FINAL defaultPrevented (read after dispatch, since the root's
+ *  own capture handler runs after a window-level one). */
+const installPressRecorder = (t) =>
+	t.ev(`(() => { if (!window.__lcPress) { window.__lcPress = []; for (const ty of ['pointerdown', 'mousedown']) window.addEventListener(ty, (e) => setTimeout(() => window.__lcPress.push({ ty, prevented: e.defaultPrevented }), 0), true); } window.__lcPress.length = 0; return true; })()`);
+const activeDesc = (t) => t.ev(`(() => { const a = document.activeElement; return a ? a.tagName + '.' + String(a.className).slice(0, 50) : null; })()`);
+/** The first leaf element with visible text that is not a control - "a non-editable part of the card". */
+const plainTextExpr = (rootEl) =>
+	`(() => { const root = ${rootEl}; const bad = 'button,input,textarea,select,.dse-chrome,.dse-chrome-summary,[contenteditable]'; return Array.from(root.querySelectorAll('h1,h2,h3,h4,div,span,label')).find((el) => { const m = el.closest(bad); return !(m && root.contains(m)) && !el.querySelector('*') && el.textContent.trim() && el.getBoundingClientRect().width > 0; }); })()`;
+
 // SC-377 click-shield scenario body, shared by G-S9a/b/c. For each mode (Reading view, then
 // Live Preview) and each input: a REAL click must make the input document.activeElement, typed
 // text must land in it, and the block must not have been opened for source editing — the
@@ -489,6 +516,19 @@ async function clickShieldScenario(t, { rel, root, inputs }) {
 		}
 		const m = await t.mark();
 		await t.ev(`(${rootEl}).__lcTag = 's9'`);
+		// Review MEDIUM-1: a press on a NON-editable part of the card is still prevented in BOTH
+		// modes (in Live Preview an unbounded editable test climbed to CodeMirror's contenteditable
+		// and prevented nothing): no native text selection, and focus does not move into the widget.
+		{
+			await installPressRecorder(t);
+			const aeBefore = await activeDesc(t);
+			await t.realClick(plainTextExpr(rootEl));
+			await t.sleep(250);
+			const presses = await t.ev('window.__lcPress.slice()');
+			t.expect(presses.length > 0 && presses.every((p) => p.prevented), `${label}: a press on non-editable card text was not default-prevented: ${JSON.stringify(presses)}`);
+			t.expect((await activeDesc(t)) === aeBefore, `${label}: a click on card text moved focus ${aeBefore} -> ${await activeDesc(t)}`);
+			t.expect((await t.ev('String(getSelection())')) === '', `${label}: a click on card text started a native text selection`);
+		}
 		for (const input of inputs) {
 			const inputEl = `(${rootEl}).querySelector('${input.sel}')`;
 			await t.waitFor(`!!(${inputEl})`, `${label}: ${input.sel} rendered`);
@@ -1168,38 +1208,96 @@ const SCENARIOS = [
 		// SC-377 (owner ruling O6): the encounter title edits inline. A REAL click on the title
 		// text swaps in the input (the shield stops mousedown from reaching Obsidian), typed text
 		// lands, Enter commits and the write puts `name:` FIRST in the note without touching the
-		// rest of the block; clearing the field removes it again.
+		// rest of the block; clearing the field removes it again. Reading view AND Live Preview
+		// (R1F INFO-3); in Live Preview the editor cursor must stay on line 0 throughout.
 		id: 'G-S9d',
 		async run(t) {
 			const rel = 'Lifecycle/ogres.md';
-			await t.open(rel);
+			for (const mode of LC_MODES) {
+				const label = mode[0];
+				const { rootEl } = await enterMode(t, rel, mode, '[data-dse-element="initiative"]');
+				await t.ev(`(${rootEl}).__lcTag = 's9d'`);
+				const text = `(${rootEl}).querySelector('.dse-init__title-text')`;
+				const input = `(${rootEl}).querySelector('input.dse-init__title-input')`;
+				await t.realClick(text);
+				await t.sleep(250);
+				t.expect(await t.ev(`document.activeElement === (${input})`), `${label}: a real click on the title did not open a focused input`);
+				await t.cdp.call('Input.insertText', { text: 'Ford of Bruinen' });
+				await t.sleep(150);
+				await t.key('Enter', 'Enter', 13);
+				await t.sleep(1500);
+				t.expect(await t.ev(`!(${input})`), `${label}: Enter did not leave edit mode`);
+				t.expect(/^```ds-initiative\nname: Ford of Bruinen\nheroes:/m.test(t.read(rel)), `${label}: name was not written first: ${t.read(rel).slice(0, 160)}`);
+				t.expect(t.integrity(rel).ok, `${label}: note integrity`);
+				if (mode[1].mode === 'preview') t.expect(await t.ev(`(${rootEl}).__lcTag === 's9d'`), `${label}: the tracker was rebuilt by the rename`);
+				// Clear it again: click, select-all, delete, Enter.
+				await t.realClick(text);
+				await t.sleep(250);
+				t.expect(await t.ev(`document.activeElement === (${input})`), `${label}: the second click did not open the input`);
+				// Select-all + delete through the editing command (a bare CDP Backspace keyDown does not
+				// edit a text field without a `commands` hint), then commit with a real Enter.
+				await t.ev(`(() => { const i = ${input}; i.select(); return document.execCommand('delete'); })()`);
+				await t.key('Enter', 'Enter', 13);
+				await t.sleep(1500);
+				t.expect(/^```ds-initiative\nheroes:/m.test(t.read(rel)), `${label}: clearing the title did not remove the top-level name: ${t.read(rel).slice(0, 160)}`);
+				if (mode[1].mode === 'source') t.expect((await t.ev(`(${LC_LEAF}).view.editor.getCursor().line`)) === 0, `${label}: editing the title moved the editor cursor`);
+			}
 			await t.reset(rel);
-			await t.tag(TRACKER, 's9d');
-			const text = `${t.root(TRACKER)}.querySelector('.dse-init__title-text')`;
-			const input = `${t.root(TRACKER)}.querySelector('input.dse-init__title-input')`;
-			await t.realClick(text);
-			await t.sleep(250);
-			t.expect(await t.ev(`document.activeElement === (${input})`), 'a real click on the title did not open a focused input');
-			await t.cdp.call('Input.insertText', { text: 'Ford of Bruinen' });
-			await t.sleep(150);
-			await t.key('Enter', 'Enter', 13);
-			await t.sleep(1500);
-			t.expect(await t.ev(`!(${input})`), 'Enter did not leave edit mode');
-			t.expect(/^```ds-initiative\nname: Ford of Bruinen\nheroes:/m.test(t.read(rel)), `name was not written first: ${t.read(rel).slice(0, 160)}`);
-			t.expect(t.integrity(rel).ok, 'note integrity');
-			t.expect(await t.sameRoot(TRACKER, 's9d'), 'the tracker was rebuilt by the rename');
-			// Clear it again: click, select-all, delete, Enter.
-			await t.realClick(text);
-			await t.sleep(250);
-			t.expect(await t.ev(`document.activeElement === (${input})`), 'the second click did not open the input');
-			// Select-all + delete through the editing command (a bare CDP Backspace keyDown does not
-			// edit a text field without a `commands` hint), then commit with a real Enter.
-			await t.ev(`(() => { const i = ${input}; i.select(); return document.execCommand('delete'); })()`);
-			await t.key('Enter', 'Enter', 13);
-			await t.sleep(1500);
-			t.expect(/^```ds-initiative\nheroes:/m.test(t.read(rel)), `clearing the title did not remove the top-level name: ${t.read(rel).slice(0, 160)}`);
-			await t.reset(rel);
-			return 'real click opened a focused input, text landed, Enter wrote name: first; clearing removed it; root adopted, not rebuilt';
+			return 'real click opened a focused input, text landed, Enter wrote name: first; clearing removed it; Reading view + Live Preview, cursor stayed on line 0';
+		},
+	},
+	{
+		// SC-377 R1F LOW-1: "click away saves". The shield prevents a press on non-editable card
+		// content, which also stopped focus leaving an in-card input, so its blur-commit never ran.
+		// A REAL click on plain card text must now blur the focused in-card input, in both modes:
+		// the title commits and persists, a half-typed ds-counter value commits, Amount keeps its
+		// draft but loses focus, ds-party's award input loses focus.
+		id: 'G-S9e',
+		async run(t) {
+			const clickAway = async (rootEl) => {
+				await t.realClick(plainTextExpr(rootEl));
+				await t.sleep(250);
+			};
+			for (const mode of LC_MODES) {
+				const label = mode[0];
+				const isLP = mode[1].mode === 'source';
+				// the title commits and persists on a click elsewhere in the same card
+				let { rootEl } = await enterMode(t, 'Lifecycle/ogres.md', mode, '[data-dse-element="initiative"]');
+				await t.realClick(`(${rootEl}).querySelector('.dse-init__title-text')`);
+				await t.sleep(250);
+				await t.cdp.call('Input.insertText', { text: 'Away Title' });
+				await clickAway(rootEl);
+				await t.sleep(1500);
+				t.expect(await t.ev(`!(${rootEl}).querySelector('input.dse-init__title-input')`), `${label}: clicking elsewhere in the card left the title input open`);
+				t.expect(/^```ds-initiative\nname: Away Title\nheroes:/m.test(t.read('Lifecycle/ogres.md')), `${label}: the title was not saved on click-away: ${t.read('Lifecycle/ogres.md').slice(0, 120)}`);
+				// Amount: focus is released, the draft stays
+				await t.realClick(`(${rootEl}).querySelector('input.dse-init__malice-quickadd-amount')`);
+				await t.sleep(200);
+				await t.cdp.call('Input.insertText', { text: '6' });
+				await clickAway(rootEl);
+				const amt = await t.ev(`(() => { const i = (${rootEl}).querySelector('input.dse-init__malice-quickadd-amount'); return { focused: document.activeElement === i, value: i.value }; })()`);
+				t.expect(!amt.focused && amt.value === '6', `${label}: Amount after click-away ${JSON.stringify(amt)}`);
+				// ds-counter: a half-typed value commits on click-away
+				({ rootEl } = await enterMode(t, 'Lifecycle/counter.md', mode, '[data-dse-element="counter"]'));
+				await t.realClick(`(${rootEl}).querySelector('input.dse-stepper__input')`);
+				await t.sleep(200);
+				await t.ev(`(${rootEl}).querySelector('input.dse-stepper__input').select()`);
+				await t.cdp.call('Input.insertText', { text: '7' });
+				t.expect(t.counterValues('Lifecycle/counter.md')[0] === 10, `${label}: the counter committed before the click-away`);
+				await clickAway(rootEl);
+				await t.sleep(1500);
+				t.expect(t.counterValues('Lifecycle/counter.md')[0] === 7, `${label}: the half-typed counter value was not committed on click-away (current_value=${t.counterValues('Lifecycle/counter.md')[0]})`);
+				// ds-party award input: focus is released
+				({ rootEl } = await enterMode(t, 'Lifecycle/party.md', mode, '[data-dse-element="party"]'));
+				await t.realClick(`(${rootEl}).querySelector('input.dse-party__award-input')`);
+				await t.sleep(200);
+				t.expect(await t.ev(`document.activeElement === (${rootEl}).querySelector('input.dse-party__award-input')`), `${label}: the award input did not focus`);
+				await clickAway(rootEl);
+				t.expect(await t.ev(`document.activeElement !== (${rootEl}).querySelector('input.dse-party__award-input')`), `${label}: the award input kept focus after a click elsewhere in the card`);
+				if (isLP) t.expect((await t.ev(`(${LC_LEAF}).view.editor.getCursor().line`)) === 0, `${label}: the click-away moved the editor cursor`);
+			}
+			for (const rel of ['Lifecycle/ogres.md', 'Lifecycle/counter.md', 'Lifecycle/party.md']) await t.reset(rel);
+			return 'click on plain card text blurred the focused in-card input in Reading view + Live Preview: title and half-typed counter value saved, Amount/award lost focus';
 		},
 	},
 	{

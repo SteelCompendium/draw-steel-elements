@@ -442,9 +442,92 @@ describe('T-9 (Plan 02): ElementPipeline.run (F1 §2.4)', () => {
 			});
 
 			test('isEditableControlTarget: null and non-element targets are not editable', () => {
-				expect(isEditableControlTarget(null)).toBe(false);
-				expect(isEditableControlTarget(document)).toBe(false);
-				expect(isEditableControlTarget(document.createTextNode('x'))).toBe(false);
+				const root = document.createElement('div');
+				expect(isEditableControlTarget(null, root)).toBe(false);
+				expect(isEditableControlTarget(document, root)).toBe(false);
+				expect(isEditableControlTarget(document.createTextNode('x'), root)).toBe(false);
+			});
+
+			// Review MEDIUM-1: in Live Preview every element root sits inside CodeMirror's
+			// contenteditable="true" content div (with the widget wrapper contenteditable="false"
+			// in between). An unbounded closest() climbed past the root and matched, so nothing
+			// was ever prevented. The match must lie INSIDE the root.
+			describe('a contenteditable ANCESTOR outside the root (the Live Preview shape)', () => {
+				async function mountUnderEditor(): Promise<{ root: HTMLElement; cleanup: () => void }> {
+					const { deps } = makeDeps();
+					const pipeline = new ElementPipeline(deps);
+					const host = makeHost();
+					const cm = document.body.createDiv({ attr: { contenteditable: 'true' } });
+					const widget = cm.createDiv({ attr: { contenteditable: 'false' } });
+					widget.appendChild(host.containerEl);
+					await pipeline.run(labelDef(), 'label: x', host);
+					const root = host.containerEl.firstElementChild as HTMLElement;
+					const content = root.querySelector('.label-content') as HTMLElement;
+					content.createEl('input', { cls: 'probe-input', attr: { type: 'number' } });
+					content.createEl('button', { cls: 'probe-button' });
+					return { root, cleanup: () => cm.remove() };
+				}
+
+				test.each(['mousedown', 'pointerdown'] as const)('%s on a button / plain content is still prevented; an in-root input still keeps its default', async (type) => {
+					const { root, cleanup } = await mountUnderEditor();
+					try {
+						expect(down(root, '.probe-button', type)).toEqual({ prevented: true, bubbled: 0 });
+						expect(down(root, '.label-content', type)).toEqual({ prevented: true, bubbled: 0 });
+						expect(down(root, '.probe-input', type)).toEqual({ prevented: false, bubbled: 0 });
+					} finally {
+						cleanup();
+					}
+				});
+
+				test('isEditableControlTarget bounds the match to the root', () => {
+					const outer = document.createElement('div');
+					outer.setAttribute('contenteditable', 'true');
+					const root = document.createElement('div');
+					const plain = document.createElement('span');
+					const input = document.createElement('input');
+					root.append(plain, input);
+					outer.appendChild(root);
+					expect(isEditableControlTarget(plain, root)).toBe(false);
+					expect(isEditableControlTarget(input, root)).toBe(true);
+					// the same span with the editable ancestor INSIDE the root does count
+					root.setAttribute('contenteditable', 'true');
+					expect(isEditableControlTarget(plain, outer)).toBe(true);
+				});
+			});
+
+			// Review LOW-1: a prevented press cannot move focus, so a focused in-card input would
+			// stay focused (and never blur-commit) when the user clicks elsewhere in the same card.
+			describe('click-away blurs a focused in-root editable control', () => {
+				test.each(['mousedown', 'pointerdown'] as const)('%s on non-editable content blurs the focused in-root input; a press ON an input, or with focus outside the root, blurs nothing', async (type) => {
+					const { root, cleanup } = await mountWithControls();
+					const outside = document.body.createEl('input');
+					try {
+						const input = root.querySelector('.probe-input') as HTMLInputElement;
+						const other = root.querySelector('.probe-textarea') as HTMLTextAreaElement;
+						const blurs: string[] = [];
+						input.addEventListener('blur', () => blurs.push('input'));
+
+						input.focus();
+						expect(document.activeElement).toBe(input);
+						down(root, '.label-content', type);
+						expect(document.activeElement).not.toBe(input);
+						expect(blurs).toEqual(['input']);
+
+						// a press that lands on an editable control is the browser's to handle
+						input.focus();
+						down(root, '.probe-textarea', type);
+						expect(document.activeElement).toBe(input);
+
+						// focus outside the root: untouched
+						outside.focus();
+						down(root, '.label-content', type);
+						expect(document.activeElement).toBe(outside);
+						void other;
+					} finally {
+						outside.remove();
+						cleanup();
+					}
+				});
 			});
 		});
 

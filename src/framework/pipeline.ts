@@ -171,13 +171,19 @@ const EDITABLE_CONTROL = 'input, textarea, select, [contenteditable]:not([conten
 
 /**
  * SC-377 — true when a mousedown/pointerdown target is (or sits inside) a control the
- * user types into. Duck-typed on `closest` rather than `instanceof Element`: an element
- * rendered into a popout window belongs to that window's realm, where the main window's
- * `Element` constructor does not match.
+ * user types into, WITHIN `root`. The bound matters: in Live Preview every element root sits
+ * inside CodeMirror's `div.cm-content[contenteditable=true]`, and an unbounded `closest()`
+ * climbs past the root to it, so EVERY target looked editable and the shield never prevented
+ * anything (native text selection and focus moving into the widget, review MEDIUM-1). A match
+ * only counts when `root` itself contains it. Duck-typed on `closest` rather than
+ * `instanceof Element`: an element rendered into a popout window belongs to that window's
+ * realm, where the main window's `Element` constructor does not match.
  */
-export function isEditableControlTarget(target: EventTarget | null): boolean {
+export function isEditableControlTarget(target: EventTarget | null, root: HTMLElement): boolean {
 	const el = target as { closest?: (selector: string) => Element | null } | null;
-	return typeof el?.closest === 'function' && el.closest(EDITABLE_CONTROL) !== null;
+	if (typeof el?.closest !== 'function') return false;
+	const match = el.closest(EDITABLE_CONTROL);
+	return match !== null && root.contains(match);
 }
 
 /**
@@ -191,15 +197,27 @@ export function isEditableControlTarget(target: EventTarget | null): boolean {
  * root element itself on re-render/teardown, same as today.
  *
  * SC-377: `stopPropagation()` is what keeps Obsidian from opening the block, and it runs
- * for every target. `preventDefault()` is skipped when the target is an editable control:
- * the default action of a mousedown IS "focus the field and place the caret", so
- * cancelling it left every in-card input (initiative's Amount/Label, ds-counter's stepper
- * input, ds-party's award input) unreachable by mouse. The listener sits on the capture
- * phase at the root, so the event never reaches the input itself — the skip has to be here.
+ * for every target. `preventDefault()` is skipped when the target is an editable control
+ * inside the root: the default action of a mousedown IS "focus the field and place the
+ * caret", so cancelling it left every in-card input (initiative's Amount/Label, ds-counter's
+ * stepper input, ds-party's award input) unreachable by mouse. The listener sits on the
+ * capture phase at the root, so the event never reaches the input itself — the skip has to
+ * be here.
+ *
+ * The flip side (review LOW-1): a prevented press also cannot move focus, so a click on a
+ * NON-editable part of the same card would leave a focused in-card input focused and its
+ * blur-commit ("click away saves": the title, a half-typed counter value) would never run.
+ * So when the press is prevented and the focused element is an editable control inside this
+ * root, the shield blurs it — the same real blur a user click outside the card produces
+ * (which is why this is NOT the SC-340 adoption blur: `data-dse-moving` is not set).
  */
 function armClickShield(root: HTMLElement): void {
 	const stop = (event: Event): void => {
-		if (!isEditableControlTarget(event.target)) event.preventDefault();
+		if (!isEditableControlTarget(event.target, root)) {
+			event.preventDefault();
+			const active = root.ownerDocument.activeElement as HTMLElement | null;
+			if (active && active !== root && root.contains(active) && active.matches(EDITABLE_CONTROL)) active.blur();
+		}
 		event.stopPropagation();
 	};
 	root.addEventListener('mousedown', stop, { capture: true });
