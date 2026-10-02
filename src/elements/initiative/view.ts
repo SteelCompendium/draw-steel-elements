@@ -416,22 +416,56 @@ export class InitiativeView extends ElementView<EncounterData> {
 				attr: { placeholder: 'E.g. Feytouched' },
 			});
 			labelInput.setAttribute('aria-label', 'Quick-add malice label');
+			// SC-377: ONE submit path for the Add button and Enter in either field. A rejected
+			// submit is never silent: the offending field takes focus, gets aria-invalid (the
+			// stylesheet draws a heavier edge) and swaps its placeholder for a short reason, so
+			// the cue is shape + words, not just a colour. The first keystroke clears it.
+			const labelPlaceholder = labelInput.getAttribute('placeholder') ?? '';
+			const amountPlaceholder = amountInput.getAttribute('placeholder') ?? '';
+			const flag = (input: HTMLInputElement, placeholder: string): void => {
+				input.setAttribute('aria-invalid', 'true');
+				input.setAttribute('placeholder', placeholder);
+				input.focus();
+			};
+			const clearFlag = (input: HTMLInputElement, placeholder: string): void => {
+				input.removeAttribute('aria-invalid');
+				input.setAttribute('placeholder', placeholder);
+			};
+			owner.registerDomEvent(amountInput, 'input', () => clearFlag(amountInput, amountPlaceholder));
+			owner.registerDomEvent(labelInput, 'input', () => clearFlag(labelInput, labelPlaceholder));
+			const submit = (): void => {
+				const amount = Number(amountInput.value);
+				const label = labelInput.value.trim();
+				// Amount is checked first: it is the leftmost field, and a missing label is
+				// reported on its own once the amount is good.
+				if (amountInput.value.trim() === '' || !Number.isFinite(amount) || amount === 0) {
+					flag(amountInput, 'Not zero');
+					return;
+				}
+				if (label.length === 0) {
+					flag(labelInput, 'Label required');
+					return;
+				}
+				data.malice.value = Math.max(0, data.malice.value + amount);
+				appendMaliceLogEntry(data.malice, { round: data.round ?? 1, amount, label });
+				amountInput.value = '';
+				labelInput.value = '';
+				void this.rebuildAndPersist();
+			};
+			for (const input of [amountInput, labelInput]) {
+				owner.registerDomEvent(input, 'keydown', (evt: KeyboardEvent) => {
+					if (evt.key !== 'Enter' || evt.isComposing) return;
+					evt.preventDefault();
+					submit();
+				});
+			}
 			iconButton(
 				quickAdd,
 				{
 					icon: 'plus-circle',
 					text: 'Add',
 					label: 'Add Malice log entry',
-					onClick: () => {
-						const amount = Number(amountInput.value);
-						const label = labelInput.value.trim();
-						if (!Number.isFinite(amount) || amount === 0 || label.length === 0) return;
-						data.malice.value = Math.max(0, data.malice.value + amount);
-						appendMaliceLogEntry(data.malice, { round: data.round ?? 1, amount, label });
-						amountInput.value = '';
-						labelInput.value = '';
-						void this.rebuildAndPersist();
-					},
+					onClick: submit,
 				},
 				owner,
 			).buttonEl.addClass('dse-init__malice-quickadd-btn');

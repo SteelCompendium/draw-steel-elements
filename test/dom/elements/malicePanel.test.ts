@@ -334,6 +334,83 @@ describe('D8 T-5: Malice panel — quick-add (spec §3.3)', () => {
 	});
 });
 
+describe('SC-377: quick-add row — Enter submits, a rejected submit is visible', () => {
+	const press = (el: HTMLElement, key: string) =>
+		el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+	function fields(root: HTMLElement) {
+		return {
+			amount: root.querySelector('.dse-init__malice-quickadd-amount') as HTMLInputElement,
+			label: root.querySelector('.dse-init__malice-quickadd-label') as HTMLInputElement,
+		};
+	}
+
+	test.each(['amount', 'label'] as const)('Enter in the %s field submits exactly like Add', async (which) => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(baseSource);
+		const f = fields(root);
+		f.amount.value = '3';
+		f.label.value = 'Feytouched';
+
+		press(f[which], 'Enter');
+
+		expect(root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 8');
+		expect(
+			[...root.querySelectorAll('.dse-init__malice-log-entry')].map((e) => e.textContent),
+		).toEqual(['R1: +3 — Feytouched']);
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+	});
+
+	test('an empty label blocks the add AND says so: label focused, aria-invalid, "Label required" placeholder, cleared by typing', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(baseSource);
+		document.body.appendChild(root);
+		try {
+			const f = fields(root);
+			const original = f.label.getAttribute('placeholder');
+			f.amount.value = '4';
+
+			press(f.label, 'Enter');
+
+			expect(f.label.getAttribute('aria-invalid')).toBe('true');
+			expect(f.label.getAttribute('placeholder')).toBe('Label required');
+			expect(document.activeElement).toBe(f.label);
+			expect(f.amount.hasAttribute('aria-invalid')).toBe(false);
+			expect(root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 5');
+
+			f.label.value = 'F';
+			f.label.dispatchEvent(new Event('input'));
+			expect(f.label.hasAttribute('aria-invalid')).toBe(false);
+			expect(f.label.getAttribute('placeholder')).toBe(original);
+
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
+			expect(host.replaceSource).not.toHaveBeenCalled();
+		} finally {
+			root.remove();
+		}
+	});
+
+	test('a missing or zero amount flags the Amount field instead (and the Add button does the same)', async () => {
+		const { root } = await renderInit(baseSource);
+		document.body.appendChild(root);
+		try {
+			const f = fields(root);
+			f.label.value = 'Something';
+			(root.querySelector('button[aria-label="Add Malice log entry"]') as HTMLElement).click();
+			expect(f.amount.getAttribute('aria-invalid')).toBe('true');
+			expect(f.amount.getAttribute('placeholder')).toBe('Not zero');
+			expect(document.activeElement).toBe(f.amount);
+
+			f.amount.value = '0';
+			press(f.amount, 'Enter');
+			expect(f.amount.getAttribute('aria-invalid')).toBe('true');
+			expect(root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 5');
+		} finally {
+			root.remove();
+		}
+	});
+});
+
 describe('D8 T-5: Malice panel — read-only (canPersist=false, F1 §4.4)', () => {
 	test('every control is inert: static pool value, no stepper buttons, no Advance-round button, no quick-add inputs — round/log still displayed', async () => {
 		jest.useFakeTimers();

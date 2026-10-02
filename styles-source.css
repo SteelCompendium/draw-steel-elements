@@ -17171,10 +17171,26 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	:where(.dse-init__malice-quickadd-amount, .dse-init__malice-quickadd-label) {
 	padding: 0.25em 0.4em;
 	color: var(--dse-fg);
-	background: var(--dse-surface);
+	/* SC-377: the sunken well, like the kit stepper's input (it was the flat card surface). */
+	background: var(--dse-surface-sunken);
 	border: 1px solid var(--dse-border);
 	border-radius: var(--dse-radius);
 	caret-color: var(--dse-fg);
+}
+/* SC-377 — the quick-add row's three controls share ONE height. Before, the inputs measured
+   27.8px and the Add button 25.1px (26.8px in real Obsidian), so the row never aligned.
+   border-box + an explicit em height (every control here is --dse-fs-control, so em is the
+   same px for all three), beating the (0,2,0) `height: auto; content-box` GROUP above. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__malice-quickadd > :is(.dse-init__malice-quickadd-amount, .dse-init__malice-quickadd-label, .dse-init__malice-quickadd-btn) {
+	box-sizing: border-box;
+	height: 2.1em;
+	min-height: 0;
+}
+/* SC-377 — a rejected quick-add. Not hue alone: the edge doubles (an inset ring on top of
+   the border) and the placeholder swaps to the reason ("Label required" / "Not zero"). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__malice-quickadd > input[aria-invalid="true"] {
+	border-color: var(--dse-danger);
+	box-shadow: inset 0 0 0 1px var(--dse-danger);
 }
 /* GROUP 2 — `.dse-sedit__apply-input` (HIGH-3): the same plain-field look as the six
    ancestor-scoped siblings — it had NO material declared anywhere before this (only

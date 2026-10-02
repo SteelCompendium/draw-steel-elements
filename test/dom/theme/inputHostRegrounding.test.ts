@@ -102,7 +102,7 @@ describe('SC-202 r1 — GROUP 2: the material Obsidian was winning on', () => {
 		}
 	});
 
-	test('the malice quick-add pair gets the same plain-field material every sibling input has', () => {
+	test('the malice quick-add pair gets the kit stepper input\'s sunken field material (SC-377: was the flat card surface)', () => {
 		const g = flat.match(
 			new RegExp(
 				escape(ANCHOR) +
@@ -113,7 +113,7 @@ describe('SC-202 r1 — GROUP 2: the material Obsidian was winning on', () => {
 		for (const decl of [
 			'padding: 0.25em 0.4em;',
 			'color: var(--dse-fg);',
-			'background: var(--dse-surface);',
+			'background: var(--dse-surface-sunken);',
 			'border: 1px solid var(--dse-border);',
 			'border-radius: var(--dse-radius);',
 		]) {
