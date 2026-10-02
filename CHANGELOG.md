@@ -29,8 +29,9 @@ for what needs action.
   space above and below each outcome's text. This was a regression in the 7.0.0 cycle,
   never in a release. Print/export was never affected.
 - [FEATURE] **You can now name an initiative tracker** (SC-377). Set `name:` in the block or
-  click the title at the top of the tracker to type one (Enter, or a click anywhere else,
-  saves; Escape cancels). It shows above the Heroes and as the name in the collapsed one-line
+  click the title at the top of the tracker to type one (Enter saves, and so does clicking
+  anywhere else: elsewhere in the tracker, on another Draw Steel card, on the same tracker in
+  another pane, or on the note itself; Escape cancels). It shows above the Heroes and as the name in the collapsed one-line
   form; an untitled tracker shows a small "Untitled encounter" prompt on screen only, and a
   read-only view shows the title as plain text. A name YAML reads as a number or a true/false
   (`name: 1984`) is kept as text rather than breaking the tracker.
@@ -39,8 +40,9 @@ for what needs action.
   that also stopped the browser from focusing the field, so the initiative tracker's quick-add
   Amount and Label, the counter's number box and the party's award box could only be reached
   with Tab. A click on a field now focuses it (the block still does not open for editing), and
-  a click on anything else in the same card now leaves the field the way a click outside the
-  card does, so a half-typed counter value or tracker title is saved.
+  a click on anything else - the rest of the card, another Draw Steel card, or the same block in
+  another pane - now leaves the field the way a click outside the card does, so a half-typed
+  counter value or tracker title is saved.
 - [STEEL] **Initiative tracker layout pass** (SC-377). *Reset turns (this round)* and *Reset
   encounter state* moved from buttons inside the card to icon items in the tracker's menu
   panel (hover the tracker). The round label and *Advance round* now sit on the "Heroes"

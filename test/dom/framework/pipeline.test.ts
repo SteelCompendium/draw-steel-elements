@@ -529,6 +529,55 @@ describe('T-9 (Plan 02): ElementPipeline.run (F1 §2.4)', () => {
 					}
 				});
 			});
+
+			// R1F2 NEW-LOW-B: "click away saves" must hold across element boundaries too - another
+			// element's card in the same note, or the same block open in a second pane. Each root has its
+			// own shield, and a press on root B used to look only at focus inside root B.
+			describe('click-away across DSE roots', () => {
+				async function mountTwo(): Promise<{ a: HTMLElement; b: HTMLElement; cleanup: () => void }> {
+					const roots: HTMLElement[] = [];
+					const cleanups: (() => void)[] = [];
+					for (let i = 0; i < 2; i++) {
+						const { deps } = makeDeps();
+						const pipeline = new ElementPipeline(deps);
+						const host = makeHost();
+						document.body.appendChild(host.containerEl);
+						await pipeline.run(labelDef(), 'label: x', host);
+						const root = host.containerEl.firstElementChild as HTMLElement;
+						(root.querySelector('.label-content') as HTMLElement).createEl('input', { cls: 'probe-input' });
+						roots.push(root);
+						cleanups.push(() => host.containerEl.remove());
+					}
+					return { a: roots[0], b: roots[1], cleanup: () => cleanups.forEach((c) => c()) };
+				}
+
+				test.each(['mousedown', 'pointerdown'] as const)('%s on non-editable content in root B blurs a focused input in root A', async (type) => {
+					const { a, b, cleanup } = await mountTwo();
+					try {
+						const input = a.querySelector('.probe-input') as HTMLInputElement;
+						input.focus();
+						expect(document.activeElement).toBe(input);
+						down(b, '.label-content', type);
+						expect(document.activeElement).not.toBe(input);
+					} finally {
+						cleanup();
+					}
+				});
+
+				test('a focused control that is NOT inside a DSE root (CodeMirror-like contenteditable, a plain input) is never blurred', async () => {
+					const { b, cleanup } = await mountTwo();
+					const cm = document.body.createDiv({ attr: { contenteditable: 'true', tabindex: '0' } });
+					try {
+						cm.focus();
+						expect(document.activeElement).toBe(cm);
+						down(b, '.label-content', 'pointerdown');
+						expect(document.activeElement).toBe(cm);
+					} finally {
+						cm.remove();
+						cleanup();
+					}
+				});
+			});
 		});
 
 		test('def.noClickShield === true: mousedown bubbles normally (shield not armed)', async () => {

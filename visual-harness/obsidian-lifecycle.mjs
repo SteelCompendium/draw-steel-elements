@@ -22,9 +22,9 @@
 // leaf detach), G-S6g (hover popovers ARE writable in Obsidian 1.14.2), G-S6h (nested
 // read-only ds-counter survives its parent's adoption), G-S6i (fast navigation, no leaks),
 // G-S8 (scrollTop pin across a tracker's own write).
-// SC-377 appends 3 click-shield scenarios + a title scenario + a click-away scenario — 24 total: G-S9a (initiative
+// SC-377 appends 3 click-shield scenarios + a title scenario + two click-away scenarios — 25 total: G-S9a (initiative
 // Amount/Label), G-S9b (ds-counter's editable stepper input), G-S9c (ds-party's award input),
-// G-S9d (the inline encounter title), G-S9e (click away from an in-card input saves). Each drives a REAL
+// G-S9d (the inline encounter title), G-S9e (click away from an in-card input saves), G-S9f (click away onto another element / pane saves). Each drives a REAL
 // mouse press (CDP Input.dispatchMouseEvent, never .focus()) in BOTH Reading view and Live
 // Preview and asserts the click focuses the field, typed text lands, and the block is NOT
 // opened for source editing (editor cursor never jumps into the fence).
@@ -143,6 +143,10 @@ Object.assign(FIXTURES, {
 		'heroes:', ...HERO('Alice Alpha'), 'enemy_groups:', '  - name: "Ogres"', '    creatures:',
 		'      - name: "Ogre"', '        max_stamina: 60', '        amount: 3', 'malice:', '  value: 3',
 	])}\n\nBELOW\n`,
+	// SC-377 R1F2: a tracker AND another element in one note (click-away across elements).
+	'Lifecycle/multi.md': `# multi\n\nABOVE\n\n${fence('ds-initiative', [
+		'heroes:', ...HERO('Alice Alpha'), 'enemy_groups: []', 'malice:', '  value: 1',
+	])}\n\nMIDDLE\n\n${COUNTER(10, 'Health')}\n\nBELOW\n`,
 	'Lifecycle/B.md': `# B\n\nB-TOP\n\n${INIT('Embed Eve')}\n\nB-BOTTOM\n`,
 	'Lifecycle/A.md': '# A\n\nA-TOP\n\n![[B]]\n\nA-BOTTOM\n',
 	'Lifecycle/tall.md': `# tall\n\n${Array.from({ length: 30 }, (_, i) => `PRE filler ${i}.`).join('\n\n')}\n\n${fence('ds-initiative', ['heroes:', ...Array.from({ length: 25 }, (_, i) => HERO(`Hero ${String(i + 1).padStart(2, '0')}`)).flat(), 'enemy_groups: []', 'malice:', '  value: 1'])}\n\n${Array.from({ length: 30 }, (_, i) => `POST filler ${i}.`).join('\n\n')}\n`,
@@ -1298,6 +1302,51 @@ const SCENARIOS = [
 			}
 			for (const rel of ['Lifecycle/ogres.md', 'Lifecycle/counter.md', 'Lifecycle/party.md']) await t.reset(rel);
 			return 'click on plain card text blurred the focused in-card input in Reading view + Live Preview: title and half-typed counter value saved, Amount/award lost focus';
+		},
+	},
+	{
+		// SC-377 R1F2 (NEW-LOW-B): "click away saves" across ELEMENT boundaries. Each DSE root has its own
+		// shield; a press on root B used to look only at focus inside root B, so a title being edited in
+		// tracker A stayed open and unsaved when the user clicked another element's card, or the same
+		// tracker in a second pane. Real clicks, Reading view + Live Preview for the cross-element case,
+		// Reading view for the second pane.
+		id: 'G-S9f',
+		async run(t) {
+			const rel = 'Lifecycle/multi.md';
+			for (const mode of LC_MODES) {
+				const label = mode[0];
+				const { scope, rootEl } = await enterMode(t, rel, mode, '[data-dse-element="initiative"]');
+				const counterRoot = `Array.from(${scope}.querySelectorAll('[data-dse-element="counter"]')).find((x) => x.isConnected)`;
+				await t.waitFor(`!!(${counterRoot})`, `${label}: counter rendered`);
+				await t.realClick(`(${rootEl}).querySelector('.dse-init__title-text')`);
+				await t.sleep(250);
+				await t.cdp.call('Input.insertText', { text: 'Across Elements' });
+				await t.realClick(plainTextExpr(counterRoot)); // a DIFFERENT element's card
+				await t.sleep(1500);
+				t.expect(await t.ev(`!(${rootEl}).querySelector('input.dse-init__title-input')`), `${label}: a click on another element's card left the title input open`);
+				t.expect(/^```ds-initiative\nname: Across Elements\nheroes:/m.test(t.read(rel)), `${label}: the title was not saved on a click in another element: ${t.read(rel).slice(0, 120)}`);
+				if (mode[1].mode === 'source') t.expect((await t.ev(`(${LC_LEAF}).view.editor.getCursor().line`)) === 0, `${label}: the click moved the editor cursor`);
+			}
+			// the same tracker in a second pane (Reading view)
+			await t.open(rel);
+			await t.reset(rel);
+			await t.ev(`(window.__lcP1 = ${LC_LEAF}, true)`);
+			await t.ev(`(async () => { const leaf = app.workspace.getLeaf('split', 'vertical'); window.__lcP2 = leaf; await leaf.setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'preview' }, active: true }); })()`);
+			await t.sleep(1500);
+			const inPane = (leaf, sel) => `Array.from((${leaf}).view.containerEl.querySelectorAll('.markdown-reading-view ${sel}')).find((x) => x.isConnected)`;
+			const p1 = inPane('window.__lcP1', '[data-dse-element="initiative"]');
+			const p2 = inPane('window.__lcP2', '[data-dse-element="initiative"]');
+			await t.waitFor(`!!(${p1}) && !!(${p2})`, 'both panes render the tracker');
+			await t.realClick(`(${p1}).querySelector('.dse-init__title-text')`);
+			await t.sleep(250);
+			await t.cdp.call('Input.insertText', { text: 'Two Panes' });
+			await t.realClick(plainTextExpr(p2)); // the same tracker, other pane
+			await t.sleep(1500);
+			t.expect(/^```ds-initiative\nname: Two Panes\nheroes:/m.test(t.read(rel)), `a click on the same tracker in another pane did not save the title: ${t.read(rel).slice(0, 120)}`);
+			await t.ev(`(window.__lcP2.detach(), true)`);
+			await t.sleep(500);
+			await t.reset(rel);
+			return 'a title being edited saved on a real click on another element\'s card (Reading view + Live Preview) and on the same tracker in a second pane';
 		},
 	},
 	{

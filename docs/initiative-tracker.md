@@ -272,7 +272,8 @@ Once your encounter is defined, the Initiative Tracker provides an interactive U
 
 The title sits at the top of the tracker. Click it (or Tab to it and press Enter) to edit:
 type a name and press **Enter** or click away to save, or press **Escape** to leave it as it
-was. "Click away" means a click anywhere else in the tracker too, not only outside it.
+was. "Click away" means a click anywhere else: on another part of the tracker, on another
+Draw Steel card in the same note, on the same tracker in a second pane, or on the note itself.
 Clearing the field removes the title. An untitled tracker shows a small, quiet "Untitled
 encounter" prompt in that spot (on screen only — it never prints). If you write the name by
 hand, `name: 1984` or `name: true` is kept as the text "1984" / "true". In a read-only view

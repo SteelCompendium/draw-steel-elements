@@ -205,18 +205,30 @@ export function isEditableControlTarget(target: EventTarget | null, root: HTMLEl
  * be here.
  *
  * The flip side (review LOW-1): a prevented press also cannot move focus, so a click on a
- * NON-editable part of the same card would leave a focused in-card input focused and its
+ * NON-editable part of the page would leave a focused in-card input focused and its
  * blur-commit ("click away saves": the title, a half-typed counter value) would never run.
- * So when the press is prevented and the focused element is an editable control inside this
- * root, the shield blurs it — the same real blur a user click outside the card produces
- * (which is why this is NOT the SC-340 adoption blur: `data-dse-moving` is not set).
+ * So when the press is prevented and the focused element is an editable control inside ANY
+ * DSE element root - this one, another element's card in the same note, or the same block in
+ * a second pane (R1F2, NEW-LOW-B: every one of them has its own shield, and only the clicked
+ * root's used to look) - the shield blurs it: the same real blur a user click outside the card
+ * produces (which is why this is NOT the SC-340 adoption blur: `data-dse-moving` is not set).
+ * "Inside a DSE root" keeps it off CodeMirror's own contenteditable and every other control
+ * on the page, which are outside every root and never ours to blur.
  */
 function armClickShield(root: HTMLElement): void {
 	const stop = (event: Event): void => {
 		if (!isEditableControlTarget(event.target, root)) {
 			event.preventDefault();
 			const active = root.ownerDocument.activeElement as HTMLElement | null;
-			if (active && active !== root && root.contains(active) && active.matches(EDITABLE_CONTROL)) active.blur();
+			const target = event.target as Node | null;
+			if (
+				active &&
+				active.matches(EDITABLE_CONTROL) &&
+				active.closest('[data-dse-element]') !== null &&
+				!(target && active.contains(target))
+			) {
+				active.blur();
+			}
 		}
 		event.stopPropagation();
 	};
