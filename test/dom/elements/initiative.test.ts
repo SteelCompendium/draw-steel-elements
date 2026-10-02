@@ -1955,7 +1955,7 @@ describe('SC-377: the editable encounter title (owner ruling O6)', () => {
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 		expect(sheet).toMatch(/\.dse-init__title\[data-empty\]\s*\{\s*display: none;/);
 		// R1F LOW-2: the on-screen prompt is a quiet caption (label size, small caps), not an h2.
-		const prompt = sheet.match(/\.dse-init__title\[data-empty\]\s*\{([^}]*font-variant[^}]*)\}/);
+		const prompt = sheet.match(/\.dse-init__title\[data-empty\][^{]*\{([^}]*font-variant[^}]*)\}/);
 		expect(prompt).not.toBeNull();
 		expect(prompt![1]).toContain('font-size: var(--dse-fs-label);');
 		expect(prompt![1]).toContain('font-variant: small-caps;');
@@ -1996,6 +1996,16 @@ describe('SC-377: the editable encounter title (owner ruling O6)', () => {
 		expect(sheet).toMatch(
 			/\[data-dse-theme='steel'\]:not\(\[data-dse-print="on"\]\) \.dse-init__title-text\[hidden\]\s*\{\s*display: none;/,
 		);
+	});
+
+	test('CSS contract (R1F2): the caption-size treatment of an untitled heading does not apply while an input is open in it', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+		const m = sheet.match(/\.dse-init__title\[data-empty\]:not\(:has\(\.dse-init__title-input\)\)\s*\{([^}]*)\}/);
+		expect(m).not.toBeNull();
+		expect(m![1]).toContain('font-size: var(--dse-fs-label);');
+		expect(m![1]).toContain('font-variant: small-caps;');
+		// ... and no OTHER rule gives an empty heading the caption size unconditionally
+		expect(sheet.match(/\.dse-init__title\[data-empty\]\s*\{[^}]*font-size/g)).toBeNull();
 	});
 
 	test('Space/Enter on the focused text also opens the editor (keyboard path)', async () => {

@@ -17385,7 +17385,10 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 /* The prompt is a caption, not a title (review LOW-2): at h2 size it was the largest text in the
    card and read as the encounter's actual name. Caption size, small caps, muted; only a real
    name gets the heading size. */
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__title[data-empty] {
+/* Only while it is NOT being edited (R1F2, NEW-INFO-C): an untitled tracker's heading used to hand its
+   caption size to the input inside it, so naming the tracker typed small and jumped to heading size on
+   commit. With an input open the heading is the ordinary h2, and the draft is title-size throughout. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__title[data-empty]:not(:has(.dse-init__title-input)) {
 	font-size: var(--dse-fs-label);
 	font-weight: normal;
 	font-variant: small-caps;
@@ -17404,6 +17407,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	/* explicit, so Obsidian's own heading font stack (which the h2 would hand down) cannot differ
 	   between a bare page and a real vault */
 	font-family: var(--dse-font-title, inherit);
+	letter-spacing: inherit;
 	color: var(--dse-fg);
 	background: var(--dse-surface-sunken);
 	border: 1px solid var(--dse-border);
