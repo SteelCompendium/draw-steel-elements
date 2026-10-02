@@ -113,7 +113,6 @@ describe('SC-154: the round/Malice command bar', () => {
 		for (const sel of [
 			'.dse-init__round',
 			'.dse-init__round-value',
-			'.dse-init__round-reset',
 			'.dse-init__round-advance',
 			'.dse-init__malice',
 			'.dse-init__malice-log',

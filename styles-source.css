@@ -667,11 +667,6 @@ code.dsa {
         transform: translateY(-50%);
     }
 
-    /* -- top action bar (the kit buttonRow supplies the flex row) -- */
-    .dse-init__actionbar {
-        margin-bottom: 10px;
-    }
-
     /* -- turn indicator: iconButton (aria-pressed) in the bordered box --
        SC-154 round 2 — this box is now the row / group-header's own FIRST CHILD
        (view.ts: buildCharacterRow / buildEnemyGroupRow), not a sibling floating
@@ -847,7 +842,6 @@ code.dsa {
         color: var(--dse-fg-muted);
     }
 
-    .dse-init__round-reset,
     .dse-init__round-advance {
         min-width: 0;
         min-height: 0;

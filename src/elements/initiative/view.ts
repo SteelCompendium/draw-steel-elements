@@ -2,7 +2,7 @@
 // Plan 06 port (which transcribed the legacy InitiativeProcessor's nine build/update
 // methods) rebuilt so every legacy click-<div> is a REAL, labelled, focus-visible kit
 // control, with every color riding the --dse-* tokens (D2 §5 — zero inline color):
-//  - the top action bar -> kit buttonRow (real <button>s, labelled);
+//  - the two reset actions -> the element's chrome panel (SC-377, `chromeItems()`);
 //  - the turn indicator -> kit iconButton: aria-pressed + [data-taken] (check/dot glyph
 //    swap — color is never the sole signal, §4.7);
 //  - Malice ± -> the kit stepper (CB-7 FIX at the root: the stepper's render() updates
@@ -21,11 +21,11 @@
 //  - D8 Task 9 (spec §7.2): each hero row / enemy detail row gains a per-turn action
 //    checklist -> four kit iconButton toggles ([Main][Maneuver][Move][Triggered]) bound to
 //    `actor.actions.<slot>`, materialized on the actor only on first toggle (additive-
-//    optional). The round display + both round-state controls — "Reset turns (this
-//    round)" (turn-only correction) and "Advance round" (full round-boundary transition)
-//    — live in the Malice panel (Task 5) and drive this checklist's reset via
-//    `resetRound()` / `advanceRound()` in `./model` (task-9-review.md HIGH finding:
-//    "Reset Round" must stay as its own control, distinct from "Advance round").
+//    optional). The round display + "Advance round" (full round-boundary transition) sit
+//    on the Heroes heading line, and "Reset turns (this round)" (turn-only correction) is
+//    a chrome-panel item (SC-377); both drive this checklist's reset via `resetRound()` /
+//    `advanceRound()` in `./model` (task-9-review.md HIGH finding: "Reset Round" must stay
+//    its own control, distinct from "Advance round").
 // The portraits preference (D4 owns the descriptor) arrives on the element root as
 // data-dse-portraits via the pipeline's prefs.reflect(); the stylesheet hides
 // .dse-init__portrait/.dse-init__cell-portrait when it is "off" — nothing to wire here.
@@ -47,15 +47,15 @@
 //
 // READ-ONLY (F1 §4.4 — cx.host.canPersist === false, e.g. canvas): the tracker renders
 // inert. No write-triggering handler is wired and no dead-end write affordance is built
-// — the action bar, malice stepper, add-condition and remove-condition buttons are
+// — the chrome reset items, malice stepper, add-condition and remove-condition buttons are
 // omitted, and turn indicators / cells / stamina render as static state displays (spans,
 // not buttons). The pipeline stamps data-dse-readonly + the CSS badge shows "Read-only".
-import { Component, setIcon } from 'obsidian';
+import { Component, Notice, setIcon } from 'obsidian';
 import type { Modal } from 'obsidian';
 import { ElementView } from '@/framework/view';
 import type { RenderContext } from '@/framework/context';
+import type { ChromeMenuItem } from '@/framework/chrome/types';
 import {
-	buttonRow,
 	collapsible,
 	iconButton,
 	renderStaminaBar,
@@ -190,38 +190,46 @@ export class InitiativeView extends ElementView<EncounterData> {
 		void this.rebuildAndPersist();
 	}
 
+	/** SC-377 (owner ruling O1) — the two reset actions live in the element's chrome panel
+	 *  (SC-169), the framework's only per-element affordance surface, instead of a bar of
+	 *  their own inside the card. Montage's "Reset progress" is the precedent. Icon-only;
+	 *  the label is the tooltip and the aria-label, and the two glyphs differ on purpose —
+	 *  one corrects the current round, the other wipes the whole encounter.
+	 *   - Reset turns (this round): mid-round correction, no confirm (a Notice reports it,
+	 *     as montage's reset does) — the same `resetRound()` the old in-bar button ran.
+	 *   - Reset encounter state: keeps the `ResetEncounterModal` confirm.
+	 *  Omitted entirely on a read-only host (F1 §4.4), like montage's. */
+	chromeItems(): ChromeMenuItem[] {
+		if (!this.model || !this.canWrite) return [];
+		return [
+			{
+				id: 'initiative-reset-turns',
+				icon: 'rotate-ccw',
+				label: 'Reset turns (this round)',
+				onClick: () => {
+					new Notice('Turns reset for this round');
+					this.resetRound();
+				},
+			},
+			{
+				id: 'initiative-reset-encounter',
+				icon: 'eraser',
+				label: 'Reset encounter state',
+				onClick: () => {
+					this.openModal(
+						new ResetEncounterModal(this.cx.app, () => {
+							resetEncounter(this.model);
+							void this.rebuildAndPersist();
+						}),
+					);
+				},
+			},
+		];
+	}
+
 	// ------------------------------------------------------------------------- build
 
 	private buildUI(container: HTMLElement, owner: Component, data: EncounterData): void {
-		// Top action bar: both children are write actions — gated off entirely when
-		// read-only (F1 §4.4: no dead-end write affordances).
-		if (this.canWrite) {
-			// D8 Task 9: "Reset Round" moved out of this bar and lives alongside "Advance
-			// round" in the Malice panel's round row (spec §7.2 — both are round-state
-			// controls, so they belong next to the round counter they act on), so the
-			// action bar keeps only the destructive whole-encounter reset.
-			const bar = buttonRow(
-				container,
-				[
-					{
-						icon: 'refresh-cw',
-						text: 'Reset Encounter State',
-						label: 'Reset Encounter State',
-						onClick: () => {
-							this.openModal(
-								new ResetEncounterModal(this.cx.app, () => {
-									resetEncounter(this.model);
-									void this.rebuildAndPersist();
-								}),
-							);
-						},
-					},
-				],
-				owner,
-			);
-			bar.rowEl.addClass('dse-init__actionbar');
-		}
-
 		// Heroes.
 		const heroesGroup = container.createDiv({ cls: 'dse-init__group dse-init__group--heroes' });
 		heroesGroup.createEl('h3', { text: 'Heroes' });
@@ -309,18 +317,6 @@ export class InitiativeView extends ElementView<EncounterData> {
 		});
 		roundValueEl.setAttribute('aria-live', 'polite');
 		if (this.canWrite) {
-			iconButton(
-				roundRow,
-				{
-					icon: 'rotate-ccw',
-					text: 'Reset turns (this round)',
-					label: 'Reset turns (this round)',
-					tooltip: 'Reset turns (this round)',
-					onClick: () => this.resetRound(),
-				},
-				owner,
-			).buttonEl.addClass('dse-init__round-reset');
-
 			const gain = data.malice.round_gain;
 			iconButton(
 				roundRow,

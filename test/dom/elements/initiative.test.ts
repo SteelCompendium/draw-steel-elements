@@ -220,28 +220,20 @@ describe('T-9: kit DOM through the REAL ElementPipeline (quick-start fixture)', 
 		expect(root.getAttribute('data-dse-element')).toBe('initiative');
 		expect(root.querySelector('.dse-init')).not.toBeNull();
 
-		// Action bar (writable host): a kit buttonRow of REAL labelled buttons. D8 Task 9:
-		// "Reset Round" lives in the Malice panel's round row (alongside "Advance round"),
-		// not this action bar, which carries only the destructive whole-encounter reset
-		// (see turnEconomy.test.ts / the "reset flows" describe block below for Reset
-		// Round's and Advance round's own coverage).
-		const actionbar = root.querySelector('.dse-init__actionbar') as HTMLElement;
-		expect(actionbar).not.toBeNull();
-		expect(actionbar.classList.contains('dse-btn-row')).toBe(true);
-		expect(actionbar.querySelector('button[aria-label="Reset Round"]')).toBeNull();
-		const resetEnc = actionbar.querySelector('button[aria-label="Reset Encounter State"]') as HTMLButtonElement;
-		expect(resetEnc).not.toBeNull();
-		expect(resetEnc.getAttribute('type')).toBe('button');
-		expect(resetEnc.querySelector('.dse-btn__text')!.textContent).toBe('Reset Encounter State');
-
-		// Round row (Malice panel): both round-state controls are present and distinct.
-		const resetRoundBtn = root.querySelector(
-			'button[aria-label="Reset turns (this round)"]',
-		) as HTMLButtonElement;
-		const advanceRoundBtn = root.querySelector('button[aria-label="Advance round"]') as HTMLButtonElement;
-		expect(resetRoundBtn).not.toBeNull();
+		// SC-377 (owner ruling O1): the top action bar is GONE. Both resets are items in the
+		// element's chrome panel (real labelled <button>s, icon-only), and "Advance round" is the
+		// only round-state control left in the card body.
+		expect(root.querySelector('.dse-init__actionbar')).toBeNull();
+		expect(root.querySelector('.dse-init [aria-label^="Reset"]')).toBeNull(); // no reset control inside the card
+		const resetTurnsItem = chromeItem(root, 'initiative-reset-turns')!;
+		const resetEncItem = chromeItem(root, 'initiative-reset-encounter')!;
+		expect(resetTurnsItem.tagName).toBe('BUTTON');
+		expect(resetEncItem.tagName).toBe('BUTTON');
+		expect(resetTurnsItem.getAttribute('aria-label')).toBe('Reset turns (this round)');
+		expect(resetEncItem.getAttribute('aria-label')).toBe('Reset encounter state');
+		expect(resetTurnsItem.closest('.dse-init')).toBeNull(); // chrome, not card content
+		const advanceRoundBtn = root.querySelector('.dse-init button[aria-label="Advance round"]') as HTMLButtonElement;
 		expect(advanceRoundBtn).not.toBeNull();
-		expect(resetRoundBtn).not.toBe(advanceRoundBtn);
 
 		// Heroes.
 		expect(root.querySelectorAll('.dse-init__group--heroes .dse-init__entry')).toHaveLength(2);
@@ -908,6 +900,10 @@ describe('T-9: minion stamina pool — the Task-3 decoupled modal through the vi
 	});
 });
 
+/** The chrome-panel item for `id` (real DOM in jsdom regardless of the panel's hover-reveal CSS). */
+const chromeItem = (root: HTMLElement, id: string) =>
+	root.querySelector(`.dse-chrome [data-dse-chrome-item="${id}"]`) as HTMLButtonElement | null;
+
 describe('T-9: reset flows — model mutation -> framework update() rebuild -> persist', () => {
 	// D8 Task 9 (task-9-review.md HIGH finding): "Reset Round" (clear-has_taken_turn +
 	// materialized-actions-only) is restored here as its own control, distinct from
@@ -925,7 +921,7 @@ describe('T-9: reset flows — model mutation -> framework update() rebuild -> p
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect(host.replaceSource).toHaveBeenCalledTimes(1);
 
-		(root.querySelector('button[aria-label="Reset turns (this round)"]') as HTMLElement).click();
+		chromeItem(root, 'initiative-reset-turns')!.click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		// Rebuilt DOM: no indicator marked anymore.
@@ -939,11 +935,23 @@ describe('T-9: reset flows — model mutation -> framework update() rebuild -> p
 		expect(host.replaceSource.mock.calls[1][0]).toBe(legacyBytes(quickStart));
 	});
 
+	test('SC-377: Reset turns (chrome item) reports itself with a Notice and needs no confirm — no modal opens', async () => {
+		jest.useFakeTimers();
+		const { root } = await renderInit(quickStart);
+		obsidian.Notice.notices.length = 0;
+		const modalsBefore = document.querySelectorAll('.modal').length;
+
+		chromeItem(root, 'initiative-reset-turns')!.click();
+
+		expect(obsidian.Notice.notices).toContain('Turns reset for this round');
+		expect(document.querySelectorAll('.modal')).toHaveLength(modalsBefore);
+	});
+
 	test('Reset Encounter: confirm modal -> resetEncounter -> rebuild -> one write with the RESET bytes (not re-materialized)', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(quickStart);
 
-		(root.querySelector('button[aria-label="Reset Encounter State"]') as HTMLElement).click();
+		chromeItem(root, 'initiative-reset-encounter')!.click();
 		const modalEl = lastModal();
 		expect(modalEl.textContent).toContain('Confirm Encounter Reset');
 		// Task 8: the confirm is a kit managedModal — a labelled danger footer button.
@@ -966,7 +974,7 @@ describe('T-9: reset flows — model mutation -> framework update() rebuild -> p
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(quickStart);
 
-		(root.querySelector('button[aria-label="Reset Encounter State"]') as HTMLElement).click();
+		chromeItem(root, 'initiative-reset-encounter')!.click();
 		const modalEl = lastModal();
 		// Task 8: the confirm is a kit managedModal — a labelled Cancel footer button.
 		(modalEl.querySelector('button[aria-label="Cancel"]') as HTMLElement).click();
@@ -1037,6 +1045,9 @@ describe('T-9: canPersist=false — inert tracker, zero writes (F1 §4.4)', () =
 		]);
 		expect(root.querySelectorAll('.dse-chrome [data-dse-chrome-item="edit"]')).toHaveLength(0);
 		expect(root.querySelector('.dse-init__actionbar')).toBeNull();
+		// SC-377: the two reset items are write affordances in the chrome panel — absent here.
+		expect(chromeItem(root, 'initiative-reset-turns')).toBeNull();
+		expect(chromeItem(root, 'initiative-reset-encounter')).toBeNull();
 		expect(root.querySelectorAll('.dse-init__malice .dse-stepper__btn')).toHaveLength(0);
 		expect(root.querySelectorAll('.dse-cond--add')).toHaveLength(0);
 
