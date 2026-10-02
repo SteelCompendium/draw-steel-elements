@@ -2721,6 +2721,16 @@ async function assertInputHostLeak(page) {
 		await page.goto(`${pageUrl}?${query}`);
 		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
 		await setHostSheetEnabled(page, false);
+		// SC-377 R1F: the initiative tracker's title input exists only while the title is being
+		// EDITED, so a resting gallery never contains it. Open the editor the way a user does
+		// (click the title text) so the sweep sees - and holds - the input.
+		const titleOpened = await page.evaluate(() => {
+			const t = document.querySelector('[data-dse-element="initiative"] .dse-init__title-text');
+			if (!(t instanceof HTMLElement)) return false;
+			t.click();
+			return !!document.querySelector('[data-dse-element="initiative"] input.dse-init__title-input');
+		});
+		if (!titleOpened) problems.push(`${bg}: the initiative title editor could not be opened for the sweep`);
 		const keys = await page.evaluate(tagInputs);
 		if (keys.length < 5) {
 			problems.push(`${bg}: only ${keys.length} inputs found in the gallery — the sweep is blind`);

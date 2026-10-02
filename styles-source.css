@@ -17392,13 +17392,21 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__title-input {
 	box-sizing: border-box;
 	width: 100%;
+	height: auto;
 	padding: 0.1em 0.35em;
 	font: inherit;
+	/* explicit, so Obsidian's own heading font stack (which the h2 would hand down) cannot differ
+	   between a bare page and a real vault */
+	font-family: var(--dse-font-title, inherit);
 	color: var(--dse-fg);
 	background: var(--dse-surface-sunken);
 	border: 1px solid var(--dse-border);
 	border-radius: var(--dse-radius);
 	caret-color: var(--dse-fg);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__title-input:hover:not(:disabled) {
+	background: var(--dse-surface-sunken);
+	border-color: var(--dse-border);
 }
 /* GROUP 2 — `.dse-sedit__apply-input` (HIGH-3): the same plain-field look as the six
    ancestor-scoped siblings — it had NO material declared anywhere before this (only
@@ -17507,7 +17515,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 		.dse-prj__char-input,
 		.dse-sedit__apply-input,
 		.dse-form__raw,
-		.dse-cond-icons__search
+		.dse-cond-icons__search,
+		.dse-init__title-input
 	):focus-visible {
 	border-color: var(--dse-border);
 	box-shadow: none;
@@ -17571,7 +17580,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 		.dse-sedit__apply-input,
 		.dse-condal__input,
 		.dse-form__raw,
-		.dse-cond-icons__search
+		.dse-cond-icons__search,
+		.dse-init__title-input
 	):disabled {
 	opacity: 1;
 	cursor: default;
@@ -17592,7 +17602,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 		.dse-sedit__apply-input,
 		.dse-condal__input,
 		.dse-form__raw,
-		.dse-cond-icons__search
+		.dse-cond-icons__search,
+		.dse-init__title-input
 	)::placeholder {
 	color: var(--dse-fg-muted);
 }
