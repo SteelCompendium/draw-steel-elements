@@ -31,7 +31,6 @@ import { DEFAULT_SETTINGS } from '@model/Settings';
 import { DseSidebarView, VIEW_TYPE_DSE_SIDEBAR } from '@/framework/sidebar/DseSidebarView';
 import type { DseSidebarServices, SidebarPanelState } from '@/framework/sidebar/DseSidebarView';
 import { sendToSidebar } from '@/framework/sidebar/registration';
-import { PERSIST_DEBOUNCE_MS } from '@/framework/view';
 import { InitiativeView } from '@/elements/initiative/view';
 import initiativeExampleBody from '@/elements/initiative/example.yaml';
 
@@ -143,14 +142,26 @@ function initRoots(view: DseSidebarView): NodeListOf<Element> {
 	return view.contentEl.querySelectorAll('[data-dse-element="initiative"]');
 }
 
-/** SC-288 r2 — clicks the malice stepper and waits out the debounced persist, so
- *  `SidebarBlockHost.lastWritten` (the self-echo guard) is set to a real, known body
- *  before a test drives a degrade/undo sequence against it (MEDIUM-1). */
-async function clickMalice(view: DseSidebarView): Promise<void> {
-	jest.useFakeTimers();
-	malicePlusBtn(view).click();
-	await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-	jest.useRealTimers();
+/** Real-time poll. Used instead of racing a fixed wait against `PERSIST_DEBOUNCE_MS`
+ *  (SC-377 R1F, review INFO-1): the debounced write is a real 400ms timer, and a hand-counted
+ *  400ms wait against it is a dead heat that a loaded machine loses; mixing fake and real timers
+ *  around it was no better. Wait for the OBSERVABLE (the note changing), with a generous cap. */
+async function waitUntil(cond: () => boolean, what: string, capMs = 5000): Promise<void> {
+	const t0 = Date.now();
+	while (!cond()) {
+		if (Date.now() - t0 > capMs) throw new Error(`timed out after ${capMs}ms waiting for ${what}`);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+	}
+}
+
+/** Clicks the malice stepper and waits (real timers throughout) until the debounced persist has
+ *  actually changed the note, then lets the write's own continuations settle - so
+ *  `SidebarBlockHost.lastWritten` (the self-echo guard) is set to a real, known body before a
+ *  test drives a degrade/undo sequence against it (SC-288 r2, MEDIUM-1). */
+async function clickMalice(app: App, view: DseSidebarView): Promise<void> {
+	const before = app.vault.getContent('Session.md');
+	malicePlusBtn(view).click(); // mutates the model + schedules the debounced persist()
+	await waitUntil(() => app.vault.getContent('Session.md') !== before, 'the debounced persist to write the note');
 	await flushAsync();
 }
 
@@ -183,10 +194,7 @@ describe('D8 Task 3: initiative-in-sidebar end-to-end (spec §1 canonical use)',
 		await flushAsync();
 		const { view } = await openSidebarLeaf(app);
 
-		jest.useFakeTimers();
-		malicePlusBtn(view).click(); // mutates the model + schedules the debounced persist()
-		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-		jest.useRealTimers();
+		await clickMalice(app, view); // mutates the model + schedules the debounced persist()
 
 		const updated = app.vault.getContent('Session.md')!;
 		const before = splitOnBlock(original);
@@ -226,10 +234,7 @@ describe('D8 Task 3: initiative-in-sidebar end-to-end (spec §1 canonical use)',
 		expect(app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)).toContain(sidebarLeaf);
 		expect(panelElOf(view).querySelector('[data-dse-element="initiative"]')).not.toBeNull();
 
-		jest.useFakeTimers();
-		malicePlusBtn(view).click();
-		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-		jest.useRealTimers();
+		await clickMalice(app, view);
 
 		const parsed = parseYaml(splitOnBlock(app.vault.getContent('Session.md')!).body);
 		expect(parsed.malice.value).toBe(6); // incremented once, in THIS test
@@ -342,7 +347,7 @@ describe('D8 Task 3: initiative-in-sidebar end-to-end (spec §1 canonical use)',
 
 		// A real sidebar write, so SidebarBlockHost.lastWritten is set to a known body —
 		// the exact precondition the r1 regression test (above) did NOT exercise.
-		await clickMalice(view);
+		await clickMalice(app, view);
 		const afterWrite = app.vault.getContent('Session.md')!;
 		expect(afterWrite).not.toBeNull();
 
@@ -532,10 +537,7 @@ describe('D8 Task 3: initiative-in-sidebar end-to-end (spec §1 canonical use)',
 		// A self-write (malice stepper) forces persist() -> serialize(this.model) against
 		// the REFRESHED model. Byte-stable contract: the model must never have picked up
 		// the injected `prefs` key, so it cannot appear in what gets written back out.
-		jest.useFakeTimers();
-		malicePlusBtn(view).click();
-		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-		jest.useRealTimers();
+		await clickMalice(app, view);
 
 		const persisted = app.vault.getContent('Session.md')!;
 		const parsed = parseYaml(splitOnBlock(persisted).body);

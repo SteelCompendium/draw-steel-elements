@@ -408,8 +408,14 @@ describe('SC-153: "Open in sidebar" is idempotent', () => {
 
 		button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 		await flushAsync();
-		// persist() is debounced, so let its timer run.
-		await new Promise((resolve) => setTimeout(resolve, 400));
+		// persist() is debounced (a real PERSIST_DEBOUNCE_MS timer). Wait for the write to LAND rather
+		// than racing a hand-counted wait against that same constant (a dead heat a loaded machine
+		// loses - SC-377 R1F, review INFO-1).
+		const t0 = Date.now();
+		while (!writes.some((w) => /_dse_anchor:/.test(w))) {
+			if (Date.now() - t0 > 5000) throw new Error('timed out waiting for the minted anchor to be persisted');
+			await new Promise((resolve) => setTimeout(resolve, 10));
+		}
 
 		const from = /_dse_from:\s*([A-Za-z0-9_-]+)/.exec(app.vault.getContent('Session.md')!)?.[1];
 		expect(from).toBeDefined();
