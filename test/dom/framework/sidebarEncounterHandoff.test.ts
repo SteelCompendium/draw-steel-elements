@@ -419,7 +419,11 @@ describe('SC-153: "Open in sidebar" is idempotent', () => {
 
 		const from = /_dse_from:\s*([A-Za-z0-9_-]+)/.exec(app.vault.getContent('Session.md')!)?.[1];
 		expect(from).toBeDefined();
-		expect(writes.some((w) => w.includes(`_dse_anchor: ${from}`))).toBe(true);
+		// The id is random hex, so about one in ten look numeric to YAML ("123456", "12e456"), and the
+		// serializer then writes them QUOTED (`_dse_anchor: "123456"`). A plain substring test failed
+		// for exactly those ids - the real cause of this test's intermittent red (SC-377 R1F, review
+		// INFO-1: it was never load alone). The anchor reader accepts either form, so the test does.
+		expect(writes.some((w) => new RegExp(`_dse_anchor:\\s*["']?${from}["']?\\s*$`, 'm').test(w))).toBe(true);
 		plugin.onunload();
 	});
 });
