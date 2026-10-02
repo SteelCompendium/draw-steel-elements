@@ -22,8 +22,9 @@
 // leaf detach), G-S6g (hover popovers ARE writable in Obsidian 1.14.2), G-S6h (nested
 // read-only ds-counter survives its parent's adoption), G-S6i (fast navigation, no leaks),
 // G-S8 (scrollTop pin across a tracker's own write).
-// SC-377 appends 3 click-shield scenarios — 22 total: G-S9a (initiative Amount/Label), G-S9b
-// (ds-counter's editable stepper input), G-S9c (ds-party's award input). Each drives a REAL
+// SC-377 appends 3 click-shield scenarios + 1 title scenario — 23 total: G-S9a (initiative
+// Amount/Label), G-S9b (ds-counter's editable stepper input), G-S9c (ds-party's award input),
+// G-S9d (the inline encounter title). Each drives a REAL
 // mouse press (CDP Input.dispatchMouseEvent, never .focus()) in BOTH Reading view and Live
 // Preview and asserts the click focuses the field, typed text lands, and the block is NOT
 // opened for source editing (editor cursor never jumps into the fence).
@@ -1161,6 +1162,44 @@ const SCENARIOS = [
 				// character that includes the typed one, not a position.
 				inputs: [{ sel: 'input.dse-stepper__input', typed: '5', expectValue: (v) => v.length === 3 && v.includes('5') }],
 			});
+		},
+	},
+	{
+		// SC-377 (owner ruling O6): the encounter title edits inline. A REAL click on the title
+		// text swaps in the input (the shield stops mousedown from reaching Obsidian), typed text
+		// lands, Enter commits and the write puts `name:` FIRST in the note without touching the
+		// rest of the block; clearing the field removes it again.
+		id: 'G-S9d',
+		async run(t) {
+			const rel = 'Lifecycle/ogres.md';
+			await t.open(rel);
+			await t.reset(rel);
+			await t.tag(TRACKER, 's9d');
+			const text = `${t.root(TRACKER)}.querySelector('.dse-init__title-text')`;
+			const input = `${t.root(TRACKER)}.querySelector('input.dse-init__title-input')`;
+			await t.realClick(text);
+			await t.sleep(250);
+			t.expect(await t.ev(`document.activeElement === (${input})`), 'a real click on the title did not open a focused input');
+			await t.cdp.call('Input.insertText', { text: 'Ford of Bruinen' });
+			await t.sleep(150);
+			await t.key('Enter', 'Enter', 13);
+			await t.sleep(1500);
+			t.expect(await t.ev(`!(${input})`), 'Enter did not leave edit mode');
+			t.expect(/^```ds-initiative\nname: Ford of Bruinen\nheroes:/m.test(t.read(rel)), `name was not written first: ${t.read(rel).slice(0, 160)}`);
+			t.expect(t.integrity(rel).ok, 'note integrity');
+			t.expect(await t.sameRoot(TRACKER, 's9d'), 'the tracker was rebuilt by the rename');
+			// Clear it again: click, select-all, delete, Enter.
+			await t.realClick(text);
+			await t.sleep(250);
+			t.expect(await t.ev(`document.activeElement === (${input})`), 'the second click did not open the input');
+			// Select-all + delete through the editing command (a bare CDP Backspace keyDown does not
+			// edit a text field without a `commands` hint), then commit with a real Enter.
+			await t.ev(`(() => { const i = ${input}; i.select(); return document.execCommand('delete'); })()`);
+			await t.key('Enter', 'Enter', 13);
+			await t.sleep(1500);
+			t.expect(/^```ds-initiative\nheroes:/m.test(t.read(rel)), `clearing the title did not remove the top-level name: ${t.read(rel).slice(0, 160)}`);
+			await t.reset(rel);
+			return 'real click opened a focused input, text landed, Enter wrote name: first; clearing removed it; root adopted, not rebuilt';
 		},
 	},
 	{
