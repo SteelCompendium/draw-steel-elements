@@ -1986,6 +1986,13 @@ describe('SC-377: the editable encounter title (owner ruling O6)', () => {
 		expect((host.replaceSource as jest.Mock).mock.calls[0][0] as string).toMatch(/^name: The Bridge\nheroes:/);
 	});
 
+	test('CSS contract: the screen layer\'s inline-block text span still honours [hidden] (the editor hides it with that attribute)', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+		expect(sheet).toMatch(
+			/\[data-dse-theme='steel'\]:not\(\[data-dse-print="on"\]\) \.dse-init__title-text\[hidden\]\s*\{\s*display: none;/,
+		);
+	});
+
 	test('Space/Enter on the focused text also opens the editor (keyboard path)', async () => {
 		const { root } = await renderInit(named);
 		key(textOf(root), 'Enter');

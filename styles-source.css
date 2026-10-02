@@ -17319,6 +17319,11 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	cursor: text;
 	overflow-wrap: anywhere;
 }
+/* `display: inline-block` above out-ranks the UA's `[hidden] { display: none }`, so the editor
+   (which hides the text with the `hidden` attribute while its input is open) needs this back. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__title-text[hidden] {
+	display: none;
+}
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__title-text:is(:hover, :focus-visible) {
 	background: var(--dse-hover);
 	text-decoration: underline dashed;
