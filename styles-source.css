@@ -14359,7 +14359,15 @@ body.theme-light
 	flex: 1 1 auto;
 	min-width: 0;
 }
-.dse-pr__text p {
+/* SC-378 — anchored at (0,2,1). The bare `.dse-pr__text p` (0,1,1) lost to the SC-202 r6b
+   prose re-grounding block's `:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+   :where(p)` (0,2,0), which restates the UA's `1em` margin on every bare <p>. Every outcome
+   is a callback-rendered <p>, so every power-roll row (feature, featureblock, kit,
+   negotiation, roll, statblock) grew 2em taller on screen from 2026-09-08 — 82px rows
+   around one 27px line. Same cure as `.dse-md-inline > p` above (SC-202 r6b HIGH-2): out-
+   specify the re-grounding with its own anchor, so source order can never flip it. Print
+   is untouched — the re-grounding excludes print, so this rule already won there. */
+:is([data-dse-element], .dse-modal) .dse-pr__text p {
 	margin-block: 0;
 }
 /* The tier badge: the outcome-range key box. The polygon clip-paths below were

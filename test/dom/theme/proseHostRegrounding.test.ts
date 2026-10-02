@@ -59,6 +59,13 @@ describe('bare <p> — margin restated to the UA default', () => {
 		// class count and lose the specificity race this fix depends on.
 		expect(rawCss).not.toMatch(/[^\]] \.dse-md-inline > p \{/);
 	});
+
+	test('SC-378: .dse-pr__text p carries the same anchor, so the power-roll outcome <p> keeps its zero margin', () => {
+		// The bare (0,1,1) form lost to the (0,2,0) rule above and gave every tier row a
+		// 1em top + bottom margin on screen (82px rows around one 27px line).
+		expect(rawCss).toContain(':is([data-dse-element], .dse-modal) .dse-pr__text p {');
+		expect(rawCss).not.toMatch(/^\.dse-pr__text p \{/m);
+	});
 });
 
 describe('<img> — box/paint restated to the UA default', () => {
