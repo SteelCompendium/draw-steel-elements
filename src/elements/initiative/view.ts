@@ -232,22 +232,26 @@ export class InitiativeView extends ElementView<EncounterData> {
 	private buildUI(container: HTMLElement, owner: Component, data: EncounterData): void {
 		// Heroes.
 		const heroesGroup = container.createDiv({ cls: 'dse-init__group dse-init__group--heroes' });
-		heroesGroup.createEl('h3', { text: 'Heroes' });
+		// SC-377 (owner ruling O2): the heading line also carries the round label and the
+		// Advance round button, left-aligned after the heading (the right side belongs to
+		// the chrome panel's neighbourhood). They used to open the command bar below.
+		const heroesHead = heroesGroup.createDiv({ cls: 'dse-init__group-head' });
+		heroesHead.createEl('h3', { text: 'Heroes' });
+		this.buildRoundControls(heroesHead, data, owner);
 		data.heroes.forEach((hero) => {
 			this.buildCharacterRow(heroesGroup.createDiv({ cls: 'dse-init__entry' }), hero, owner);
 		});
 
-		// SC-154 round 3 (Scott picked this layout, 2026-08-20) — the whole control
-		// cluster (round + turn controls, Malice pool, quick-add, log) sits in its own
-		// full-width command bar BETWEEN the two groups, which is the point: the old
-		// layout hung it off the right of the "Enemy groups" heading, leaving the left
+		// SC-154 round 3 (Scott picked this layout, 2026-08-20) — the Malice cluster sits in
+		// its own full-width command bar BETWEEN the two groups, which is the point: the
+		// old layout hung it off the right of the "Enemy groups" heading, leaving the left
 		// half of that band empty (Scott, 2026-08-18: "They are all on the right side
 		// while leaving the left empty"). Built here, before the enemies group, so it
 		// reads as a divider between the heroes and the enemies rather than as
-		// decoration on one heading. The controls themselves are D8 spec §3 (pool
-		// stepper + round/advance + spend-gain log + quick-add); Deliverable 2
-		// (spendable monster malice features) is gated on F2 OD-1 + D6 and not built
-		// here (OD-6/plan header).
+		// decoration on one heading. SC-377: the round label + Advance round moved up onto
+		// the Heroes heading line, so the bar is Malice-only now (pool stepper + spend-gain
+		// log + quick-add; D8 spec §3). Deliverable 2 (spendable monster malice features)
+		// is gated on F2 OD-1 + D6 and not built here (OD-6/plan header).
 		this.buildControlsBar(container, data, owner);
 
 		// Enemies. (The `.dse-init__enemies-head` wrapper died with the old stacked
@@ -302,14 +306,11 @@ export class InitiativeView extends ElementView<EncounterData> {
 		data: EncounterData,
 		owner: Component,
 	): HTMLElement {
-		// Round counter (always shown — a state display) + two distinct write controls
-		// (task-9-review.md HIGH finding — these are NOT interchangeable):
-		//  - "Reset turns (this round)": mid-round correction — clears has_taken_turn +
-		//    materialized per-actor actions only, via the SAME resetRound() the model
-		//    exposes, so this surface can't diverge from the model's contract.
-		//  - "Advance round": the full round-boundary transition (round++, turn/action
-		//    clear, Malice round_gain) — calls the SAME advanceRound() the round control
-		//    elsewhere would call, so the two surfaces can't diverge, per the brief.
+		// Round counter (always shown — a state display) + "Advance round", the full
+		// round-boundary transition (round++, turn/action clear, Malice round_gain) — calls
+		// the SAME advanceRound() the model exposes. Its sibling, "Reset turns (this round)"
+		// (the mid-round correction — task-9-review.md HIGH finding: NOT interchangeable
+		// with Advance), is a chrome-panel item since SC-377 (`chromeItems()`).
 		const roundRow = container.createDiv({ cls: 'dse-init__round' });
 		const roundValueEl = roundRow.createSpan({
 			cls: 'dse-init__round-value',
@@ -440,18 +441,17 @@ export class InitiativeView extends ElementView<EncounterData> {
 	// ------------------------------------------------------- SC-154: the command bar
 
 	/** The command bar (SC-154 round 3's Option 1 — Scott's pick, 2026-08-20). One flat
-	 *  rule-bounded strip, laid out as a two-column grid: round state and its two
-	 *  controls at the LEFT edge (the half Scott's screenshot showed empty), the Malice
-	 *  pool and its quick-add held against the right, the log folded into a disclosure
-	 *  that opens a full-width drawer beneath. Nothing is a card — the strip reads as
-	 *  chrome between the two rosters rather than as a third roster.
+	 *  rule-bounded strip, laid out as a two-column grid. SC-377 made it Malice-only (the
+	 *  round label and Advance round moved to the Heroes heading line): the pool stepper and
+	 *  the log disclosure fill the LEFT column, the quick-add holds the right, and the log's
+	 *  drawer opens full-width beneath. Nothing is a card — the strip reads as chrome between
+	 *  the two rosters rather than as a third roster.
 	 *
-	 *  The four pieces are SIBLINGS (not two side wrappers) because the grid places
-	 *  each one itself; that is what lets the whole thing collapse to a single left-
-	 *  aligned column at sidebar width with no wrapper left over holding a stale
-	 *  `margin-left: auto`. The four shared piece-builders (buildRoundControls /
-	 *  buildMaliceTotal / buildMaliceQuickAdd / buildMaliceLog) are the D8 spec §3
-	 *  controls, unchanged in behaviour. */
+	 *  The pieces are SIBLINGS (not side wrappers) because the grid places each one itself;
+	 *  that is what lets the whole thing collapse to a single left-aligned column at sidebar
+	 *  width with no wrapper left over holding a stale `margin-left: auto`. The shared
+	 *  piece-builders (buildMaliceTotal / buildMaliceQuickAdd / buildMaliceLog) are the D8
+	 *  spec §3 controls, unchanged in behaviour. */
 	private buildControlsBar(
 		container: HTMLElement,
 		data: EncounterData,
@@ -461,7 +461,6 @@ export class InitiativeView extends ElementView<EncounterData> {
 			cls: 'dse-init__controls dse-init__controls--bar',
 		});
 		const grid = band.createDiv({ cls: 'dse-init__bar-grid' });
-		this.buildRoundControls(grid, data, owner);
 		this.buildMaliceTotal(grid, data, owner);
 		this.buildMaliceQuickAdd(grid, data, owner);
 		this.buildMaliceLog(grid, data, owner);

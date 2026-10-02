@@ -9,6 +9,8 @@
 //      Scott picked — and the stacked layout's containers are gone, not merely emptied.
 //   2. No control was lost or duplicated in the promotion: exactly one round row, one
 //      pool, one quick-add and one log, with the log's entries intact.
+//   2b. SC-377: the round label + Advance round live on the Heroes heading line, not in the
+//      bar, which is Malice-only.
 //   3. The log is a kit collapsible (closed at rest, count in the header) — the shape the
 //      print layer force-opens (styles-source.css print Rule 3), which is what makes a
 //      printed handout show the log. The native-<details> form round 3 shipped could not
@@ -106,6 +108,51 @@ describe('SC-154: the round/Malice command bar', () => {
 		expect(root.querySelector('.dse-init__malice-panel')).toBeNull();
 		expect(root.querySelector('.dse-init__enemies-head')).toBeNull();
 		expect(root.hasAttribute('data-dse-init-controls')).toBe(false);
+	});
+
+	test('SC-377: the round label + Advance round sit on the Heroes heading line, after the heading; the bar is Malice-only', async () => {
+		const root = await render();
+		const head = root.querySelector<HTMLElement>('.dse-init__group--heroes > .dse-init__group-head')!;
+		expect(head).not.toBeNull();
+		// Heading first, then the round cluster — left-to-right reading order on the line.
+		expect([...head.children].map((c) => c.tagName + '.' + c.className)).toEqual([
+			'H3.',
+			'DIV.dse-init__round',
+		]);
+		expect(head.querySelector('h3')!.textContent).toBe('Heroes');
+		expect(head.querySelector('.dse-init__round-value')!.textContent).toBe('Round 3');
+		expect(head.querySelector('button[aria-label="Advance round"]')).not.toBeNull();
+		// … and none of it is left in the bar.
+		const bar = root.querySelector('.dse-init__controls')!;
+		expect(bar.querySelector('.dse-init__round, .dse-init__round-value, .dse-init__round-advance')).toBeNull();
+		expect(bar.querySelector('.dse-init__malice')).not.toBeNull();
+		expect(bar.querySelector('.dse-init__malice-quickadd')).not.toBeNull();
+		expect(bar.querySelector('.dse-init__malice-log')).not.toBeNull();
+	});
+
+	test('SC-377: a read-only host keeps the round label on the heading line but builds no Advance round button', async () => {
+		const app = new App();
+		const plugin = new Plugin(app);
+		const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
+		const prefs = createPreferenceStore(storage);
+		prefs.describe(DSE_PREF_DESCRIPTORS);
+		const deps: ElementPipelineDeps = {
+			app: app as never,
+			plugin: plugin as never,
+			settings: DEFAULT_SETTINGS,
+			theme: createThemeService(prefs, plugin as never),
+			prefs,
+			refs: createReferenceService(app as never, DEFAULT_SETTINGS),
+			validation: createValidationService(),
+			session: createSessionStore(),
+			roll: createRollService(prefs),
+		};
+		const host = makeHost();
+		(host as { canPersist: boolean }).canPersist = false;
+		await new ElementPipeline(deps).run(initiativeElement, SOURCE, host);
+		const head = host.containerEl.querySelector('.dse-init__group--heroes > .dse-init__group-head')!;
+		expect(head.querySelector('.dse-init__round-value')!.textContent).toBe('Round 3');
+		expect(head.querySelector('button')).toBeNull();
 	});
 
 	test('exactly one of every control — nothing dropped, nothing duplicated in the promotion', async () => {

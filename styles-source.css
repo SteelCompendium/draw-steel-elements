@@ -822,9 +822,21 @@ code.dsa {
         user-select: none;
     }
 
-    /* D8 §7.2/§3.1: round counter + the two round-state controls, "Reset turns (this
-       round)" (turn-only correction) and "Advance round" (full round-boundary
-       transition) — task-9-review.md HIGH finding: distinct, non-interchangeable controls. */
+    /* SC-377 — the Heroes heading line: the heading, then the round label + Advance round
+       left-aligned after it (the chrome panel sits OUTSIDE the card's top edge, so nothing
+       here ever competes with it). Baseline-aligned so "Round 3" and the button text sit on
+       the heading's own baseline; `flex-wrap` sends the round cluster to a second line as one
+       unit when the heading line cannot hold both (a 300px sidebar). */
+    .dse-init__group-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        column-gap: 16px;
+    }
+
+    /* D8 §7.2: the round counter + "Advance round" (the full round-boundary transition).
+       "Reset turns (this round)", its turn-only-correction sibling (task-9-review.md HIGH
+       finding: distinct, non-interchangeable controls), is a chrome-panel item since SC-377. */
     /* SC-154 — `flex-wrap: wrap` (previously only added under the .dse-sidebar
        narrow override below) so a width that can't hold "Round N" + both buttons
        on one line wraps them as WHOLE UNITS onto their own line, never mid-phrase.
@@ -838,6 +850,10 @@ code.dsa {
         flex-wrap: wrap;
         align-items: center;
         gap: 6px;
+        /* SC-377: when the cluster wraps under the heading (a 300px pane) it would
+           otherwise sit hard against the first hero card. Inside the heading line this is
+           absorbed by the heading's own bottom margin. */
+        margin-block-end: 6px;
         font-size: var(--dse-fs-label);
         color: var(--dse-fg-muted);
     }
@@ -979,20 +995,19 @@ code.dsa {
         display: contents;
     }
 
-    .dse-init__bar-grid .dse-init__round {
+    /* SC-377 — Malice-only bar. Left column: the pool stepper over the log chip. Right
+       column: the quick-add, spanning both rows and centred against them, so neither half
+       of the strip stands empty. */
+    .dse-init__bar-grid .dse-init__malice {
         grid-column: 1;
         grid-row: 1;
-    }
-
-    .dse-init__bar-grid .dse-init__malice {
-        grid-column: 2;
-        grid-row: 1;
-        justify-self: end;
+        justify-self: start;
     }
 
     .dse-init__bar-grid .dse-init__malice-quickadd {
         grid-column: 2;
-        grid-row: 2;
+        grid-row: 1 / span 2;
+        align-self: center;
         justify-self: end;
     }
 
@@ -1035,13 +1050,13 @@ code.dsa {
             grid-template-columns: minmax(0, 1fr);
         }
 
-        .dse-init__bar-grid .dse-init__round,
         .dse-init__bar-grid .dse-init__malice,
         .dse-init__bar-grid .dse-init__malice-quickadd,
         .dse-init__bar-grid .dse-init__malice-log-heading,
         .dse-init__bar-grid .dse-init__malice-log > .dse-collapse__region {
             grid-column: 1;
             grid-row: auto;
+            align-self: auto;
             justify-self: start;
         }
     }
