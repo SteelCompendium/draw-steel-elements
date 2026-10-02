@@ -450,11 +450,22 @@ describe('SC-377: the optional encounter title (`name`)', () => {
 		expect(serialize(model)).toBe(untitled);
 	});
 
-	test('a bare `name:` (null) is "no title"; a non-string name is rejected from parse', () => {
+	test('a bare `name:` (null) is "no title"; a list or mapping name is rejected from parse', () => {
 		const nullName = parseLikePipeline(`name:\n${base}`);
 		expect('name' in nullName).toBe(false);
-		expect(() => parseLikePipeline(`name: 42\n${base}`)).toThrow("Invalid data: 'name' must be a string.");
-		expect(() => parseLikePipeline(`name: [a]\n${base}`)).toThrow("Invalid data: 'name' must be a string.");
+		expect(() => parseLikePipeline(`name: [a]\n${base}`)).toThrow("Invalid data: 'name' must be text.");
+		expect(() => parseLikePipeline(`name: {a: 1}\n${base}`)).toThrow("Invalid data: 'name' must be text.");
+	});
+
+	test.each([
+		['1984', '1984'],
+		['true', 'true'],
+		['3.5', '3.5'],
+	])('a hand-authored scalar `name: %s` is coerced to the text "%s" instead of breaking the tracker', (written, expected) => {
+		const model = parseLikePipeline(`name: ${written}\n${base}`);
+		expect(model.name).toBe(expected);
+		// and it round-trips as text (the serializer quotes what YAML would otherwise re-read as a number)
+		expect(parseLikePipeline(serialize(model)).name).toBe(expected);
 	});
 
 	test('Reset Encounter State leaves the title alone (authored text, not runtime state)', () => {

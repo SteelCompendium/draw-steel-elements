@@ -132,12 +132,15 @@ export function parse(input: unknown, _raw: string): EncounterData {
 	}
 	const data = input as EncounterData;
 
-	// SC-377: the optional encounter title. A bare `name:` (YAML null) is "no title"; anything
-	// else must be a string. Whitespace-only is left as authored here — the view treats it as
-	// untitled and the first rename normalizes it.
+	// SC-377: the optional encounter title. A bare `name:` (YAML null) is "no title". An author
+	// writing `name: 1984` or `name: true` gets a number/boolean from YAML, but means the text, so
+	// scalars are coerced to String (review LOW-3); only a list or mapping is rejected.
+	// Whitespace-only is left as authored here - the view treats it as untitled and the first
+	// rename normalizes it.
 	if (data.name === null) delete data.name;
+	else if (typeof data.name === 'number' || typeof data.name === 'boolean') data.name = String(data.name);
 	if (data.name !== undefined && typeof data.name !== 'string') {
-		throw new Error("Invalid data: 'name' must be a string.");
+		throw new Error("Invalid data: 'name' must be text.");
 	}
 
 	if (!data.heroes || !Array.isArray(data.heroes)) {
