@@ -2153,13 +2153,13 @@ describe('SC-377: the Malice stepper and the one turn mark (owner rulings O4, O5
 		expect(dim![1]).not.toMatch(/\.dse-init__portrait,/);
 	});
 
-	test('CSS contract (R1F): the kit button inside the group / portraits-off socket paints nothing in any state, and the ring edge is --dse-metal with a dark outer line', () => {
+	// NOTE (R1F2): the kit-button-inside-the-socket reset is NOT asserted here. The previous version of this
+	// test text-matched the reset rule and passed while the browser's cascade (the kit's (0,8,0) sheen rule
+	// beating the (0,6,0) reset) still painted a raised light ball in steel-light. jsdom cannot resolve that
+	// cascade either, so the check lives where a real browser is: `assertTurnMarkParity` in
+	// visual-harness/shoot.mjs, run by `npm run shots`, comparing COMPUTED styles in both schemes.
+	test('CSS contract (R1F): the ring edge is --dse-metal with a dark outer line', () => {
 		const sheet = sheetNoComments();
-		const reset = sheet.match(/([^}]*\.dse-init__grouphead > \.dse-init__turnbox \.dse-init__turn:is\(:hover[^{]*)\{([^}]*)\}/);
-		expect(reset).not.toBeNull();
-		expect(reset![2]).toMatch(/background: none;/);
-		expect(reset![2]).toMatch(/box-shadow: none;/);
-		expect(reset![1]).toContain(`[data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox .dse-init__turn`);
 		const ring = sheet.match(/\{\s*border: 0;\s*background: rgba\(0, 0, 0, 0\.3\);\s*box-shadow: ([^;]*);/);
 		expect(ring).not.toBeNull();
 		expect(ring![1]).toContain('inset 0 0 0 2px var(--dse-metal)');

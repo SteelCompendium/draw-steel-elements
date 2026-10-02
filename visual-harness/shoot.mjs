@@ -2693,6 +2693,110 @@ async function probeInputsInState(page, cdp, docRootNodeId, state, count, props)
 	return { records, problems };
 }
 
+// ======================================================================================
+// SC-377 R1F2 - THE ONE TURN MARK, checked on the COMPUTED cascade.
+//
+// The enemy-group header's turn mark (and the portraits-off hero fallback) is a kit <button> laid over a
+// painted socket. The kit's own button sheen (specificity 0,8,0) painted over the socket in every NOT-acted
+// state, turning the sunken ring into a raised light ball in steel-light, while the hero portrait's mark (no
+// button on top of it) stayed a sunken well. A jest test that text-matched the stylesheet passed throughout,
+// because the bug was in the cascade, not in the text. So: measure what the browser resolves, in both
+// schemes and both states, and require that
+//   1. the kit button inside every socket paints nothing (no background image, no shadow, no border), and
+//   2. the socket box paints exactly what the hero portrait's mark paints (same fill, same shadows, same
+//      border), for the group header AND for the portraits-off fallback.
+/** Runs in the page. `off` = the portraits-off preference is active. Reads each state from a FRESHLY
+ *  RENDERED element - never by clicking one into the other: the kit button carries `data-pressed` from
+ *  its build and a click only flips `data-taken`/`aria-pressed`, so a toggled button is not what a
+ *  fresh render of that state looks like (the kit's sheen rule keys on `[data-pressed]`). */
+function measureTurnMarks(off) {
+	const paint = (el) => {
+		const c = getComputedStyle(el);
+		return {
+			backgroundColor: c.backgroundColor,
+			backgroundImage: c.backgroundImage,
+			boxShadow: c.boxShadow,
+			borderTopWidth: c.borderTopWidth,
+		};
+	};
+	const heroBtns = Array.from(
+		document.querySelectorAll(
+			off
+				? '.dse-init__group--heroes .dse-init__row > .dse-init__turnbox .dse-init__turn'
+				: '.dse-init__group--heroes button.dse-init__portrait-toggle',
+		),
+	);
+	const groupBtns = Array.from(document.querySelectorAll('.dse-init__grouphead > .dse-init__turnbox .dse-init__turn'));
+	const out = {};
+	for (const state of ['not-acted', 'acted']) {
+		const want = state === 'acted';
+		const heroBtn = heroBtns.find((b) => b.hasAttribute('data-taken') === want);
+		const groupBtn = groupBtns.find((b) => b.hasAttribute('data-taken') === want);
+		if (!heroBtn || !groupBtn) {
+			out[state] = { missing: `${!heroBtn ? 'a hero ' : ''}${!groupBtn ? 'a group ' : ''}in the ${state} state` };
+			continue;
+		}
+		const heroSocket = off ? heroBtn.closest('.dse-init__turnbox') : heroBtn.querySelector('.dse-init__pt-mark');
+		const groupSocket = groupBtn.closest('.dse-init__turnbox');
+		out[state] = {
+			hero: paint(heroSocket),
+			group: paint(groupSocket),
+			groupButton: paint(groupBtn),
+			heroButton: off ? paint(heroBtn) : null,
+		};
+	}
+	return out;
+}
+
+async function assertTurnMarkParity(page) {
+	const problems = [];
+	let compared = 0;
+	for (const bg of ['dark', 'light']) {
+		for (const off of [false, true]) {
+			// `fight`: one hero and one enemy group in EACH turn state, rendered fresh.
+			const query = new URLSearchParams({ element: 'initiative', fixture: 'fight', theme: 'steel', bg, sheet: '1' });
+			if (off) query.set('prefs', 'portraits:off');
+			await page.emulateMedia({ media: 'screen' });
+			await page.goto(`${pageUrl}?${query}`);
+			await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
+			const m = await page.evaluate(measureTurnMarks, off);
+			for (const state of ['not-acted', 'acted']) {
+				const at = `${bg}|${off ? 'portraits-off' : 'portraits-on'}|${state}`;
+				const r = m[state];
+				if (r.missing) {
+					problems.push(`${at}: fixture has no ${r.missing} - the check would be blind`);
+					continue;
+				}
+				for (const [which, p] of [['group button', r.groupButton], ['hero fallback button', r.heroButton]]) {
+					if (!p) continue;
+					compared += 1;
+					if (p.backgroundImage !== 'none') problems.push(`${at}: ${which} still paints a background image (${p.backgroundImage.slice(0, 70)})`);
+					if (p.boxShadow !== 'none') problems.push(`${at}: ${which} still paints a box-shadow (${p.boxShadow.slice(0, 70)})`);
+					if (p.borderTopWidth !== '0px') problems.push(`${at}: ${which} still has a ${p.borderTopWidth} border`);
+				}
+				compared += 1;
+				for (const k of ['backgroundColor', 'backgroundImage', 'boxShadow', 'borderTopWidth']) {
+					if (r.hero[k] !== r.group[k]) {
+						problems.push(`${at}: the group mark's ${k} is "${r.group[k]}" but the hero mark's is "${r.hero[k]}"`);
+					}
+				}
+			}
+		}
+	}
+	if (problems.length) {
+		console.error(
+			`\nTURN MARK PARITY VIOLATED - the heroes' and enemy groups' turn marks do not paint the same thing:\n` +
+				problems.map((p) => `  ${p}`).join('\n') +
+				`\nSee styles-source.css -> "12e. ONE TURN MARK" and the socket reset's specificity note.`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\nturn mark parity OK (hero vs enemy-group mark: ${compared} comparisons across ` +
+			`dark/light x portraits-on/off x not-acted/acted on the computed cascade; no kit button paint inside any socket)`,
+	);
+}
+
 async function assertInputHostLeak(page) {
 	const host = loadLocalObsidianAppCss();
 	if (!host) {
@@ -5338,6 +5442,8 @@ try {
 		// `chrome-border-winded`. Skipped on a narrowed run for the same reason the gallery
 		// is: it needs its own navigations and proves a cross-element invariant.
 		await assertChromePlacement(page);
+		// SC-377 R1F2 - the one turn mark, on the computed cascade (see the block above).
+		await assertTurnMarkParity(page);
 		// SC-191 fix-round-1 M-5 — the equal-width-track gate (see the block above). Same
 		// "own navigation, captures nothing" shape, skipped on a narrowed run for the same
 		// reason.

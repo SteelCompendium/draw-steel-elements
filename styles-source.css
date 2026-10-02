@@ -13926,11 +13926,17 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 /* The socket's own paint is the box's; the kit button inside it must add NOTHING. Its bevel
    gradient (near-invisible in dark, a 0.9-alpha white wash in light) was painting the group /
    portraits-off not-acted mark as a raised light ball in steel-light while the hero's was a
-   sunken well (review MEDIUM-2). Every state, so hover cannot bring a bevel back. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__grouphead > .dse-init__turnbox .dse-init__turn,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__grouphead > .dse-init__turnbox .dse-init__turn:is(:hover, :active, :focus-visible),
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox .dse-init__turn,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox .dse-init__turn:is(:hover, :active, :focus-visible) {
+   sunken well (review MEDIUM-2). Every state, so hover cannot bring a bevel back.
+   SPECIFICITY IS THE WHOLE POINT (R1F2, NEW-MEDIUM-A): the kit's sheen rule is
+   `[theme]:not([print]) :is(.dse-btn, ...):not(.dse-btn--accent):not(.dse-btn--ghost):not(.dse-btn--danger)
+   :not([data-pressed]):not([aria-selected="true"])` = (0,8,0), which beats a plain
+   `[theme]:not([print])[element] .grouphead > .turnbox .turn` (0,6,0) in every NOT-acted state (the acted
+   state is spared only because `[data-pressed]` excludes the sheen rule). This selector is (0,10,0):
+   the `:is()` takes its widest argument (2), `.dse-btn` + three `:not(.dse-btn--*)` mirror the kit's own
+   chain, and the state variant below adds one more. `assertTurnMarkParity` (shoot.mjs) now checks the
+   COMPUTED result in both schemes, because a text match on this sheet passed while the render was wrong. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] :is(.dse-init__grouphead > .dse-init__turnbox, .dse-init__row > .dse-init__turnbox) .dse-init__turn.dse-btn:not(.dse-btn--accent):not(.dse-btn--ghost):not(.dse-btn--danger),
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] :is(.dse-init__grouphead > .dse-init__turnbox, .dse-init__row > .dse-init__turnbox) .dse-init__turn.dse-btn:not(.dse-btn--accent):not(.dse-btn--ghost):not(.dse-btn--danger):is(:hover, :active, :focus-visible) {
 	background: none;
 	box-shadow: none;
 	border: 0;
