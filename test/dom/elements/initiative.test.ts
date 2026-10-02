@@ -1954,6 +1954,11 @@ describe('SC-377: the editable encounter title (owner ruling O6)', () => {
 		expect(textOf(root).getAttribute('aria-label')).toBe('Name this encounter');
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 		expect(sheet).toMatch(/\.dse-init__title\[data-empty\]\s*\{\s*display: none;/);
+		// R1F LOW-2: the on-screen prompt is a quiet caption (label size, small caps), not an h2.
+		const prompt = sheet.match(/\.dse-init__title\[data-empty\]\s*\{([^}]*font-variant[^}]*)\}/);
+		expect(prompt).not.toBeNull();
+		expect(prompt![1]).toContain('font-size: var(--dse-fs-label);');
+		expect(prompt![1]).toContain('font-variant: small-caps;');
 	});
 
 	test('read-only: titled = static text, no input, no button role; untitled = no node at all', async () => {

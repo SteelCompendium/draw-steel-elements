@@ -17322,7 +17322,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 /* SC-377 (owner ruling O6) — THE ENCOUNTER TITLE, Steel screen only. The title is an <h2>, so it
    already wears the tracker headings' display face (rule 4) and the h2 size token; here it gets
    the edit affordance. Click / Enter / Space on the text swaps in the input. An untitled one
-   shows a muted italic "Untitled encounter" prompt (the base layer hides the empty node, so
+   shows a quiet caption-size "Untitled encounter" prompt (the base layer hides the empty node, so
    print never shows it). The affordance is not hue: a dashed underline appears on hover and
    focus, and the prompt is words. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__title[data-empty] {
@@ -17347,11 +17347,18 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	text-decoration: underline dashed;
 	text-underline-offset: 0.2em;
 }
+/* The prompt is a caption, not a title (review LOW-2): at h2 size it was the largest text in the
+   card and read as the encounter's actual name. Caption size, small caps, muted; only a real
+   name gets the heading size. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__title[data-empty] {
+	font-size: var(--dse-fs-label);
+	font-weight: normal;
+	font-variant: small-caps;
+	letter-spacing: 0.06em;
+	color: var(--dse-fg-muted);
+}
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__title[data-empty] .dse-init__title-text::before {
 	content: 'Untitled encounter';
-	color: var(--dse-fg-muted);
-	font-style: italic;
-	font-weight: normal;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__title-input {
 	box-sizing: border-box;
