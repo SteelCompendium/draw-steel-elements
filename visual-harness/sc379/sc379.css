@@ -1,0 +1,1050 @@
+/* SC-379 round 1 — negotiation tracker DESIGN CANDIDATES (prototype sheet, never shipped).
+ *
+ * Loaded AFTER the compiled plugin sheet (../dist/harness.css), so it composes the real
+ * --dse-* material + type tokens and the real kit grammars (.dse-head/.dse-crest,
+ * .dse-tabs, .dse-pr, .dse-btn, .dse-optchip, .dse-collapse). Rules of the sheet:
+ *   - sizes are --dse-fs-* role tokens only (or a calc() derived from one);
+ *   - colours are --dse-* tokens only — the two header-band washes are the montage
+ *     board's own shipped literals (styles-source.css `.dse-mt__board-rhead`), quoted;
+ *   - no state is carried by hue alone: every "current", "chosen", "spent", "ended"
+ *     state pairs its colour with a fill, a word, a ring or a shape.
+ * Everything is scoped under [data-n3] (the mock root) so no shipped selector moves.
+ */
+
+/* ------------------------------------------------------------------ */
+/*  Shared                                                              */
+/* ------------------------------------------------------------------ */
+/* The shipped root carries a 0.03em tracking on EVERY glyph and a pre-plate corner
+   hairline pair; both retire in all three candidates (the Steel plate already frames
+   the card). */
+[data-dse-element][data-n3] {
+	letter-spacing: normal;
+}
+[data-dse-element][data-n3]::before,
+[data-dse-element][data-n3]::after {
+	display: none;
+}
+
+[data-n3] .n3 {
+	container: n3 / inline-size;
+	padding: var(--dse-pad);
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	color: var(--dse-fg);
+}
+[data-n3] .n3-headrow {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.5em;
+}
+[data-n3] .n3-headrow > .dse-head {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+[data-n3] .n3-menu {
+	flex: 0 0 auto;
+}
+[data-n3] .n3-ico,
+[data-n3] .n3-chip__icon,
+[data-n3] .n3-chip__check {
+	display: inline-flex;
+	align-items: center;
+	flex: none;
+}
+[data-n3] .n3-ico svg,
+[data-n3] .n3-chip__icon svg,
+[data-n3] .n3-chip__check svg {
+	width: 1em;
+	height: 1em;
+}
+[data-n3] .n3-label {
+	font-size: var(--dse-fs-label);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.11em;
+	font-weight: 700;
+	line-height: 1.2;
+	color: var(--dse-metal-bright);
+}
+
+/* Bare <button>s the candidates add (rungs, pips, notches, board cells): flatten the
+   host's button chrome — same move the kit makes for button.dse-pr__row. */
+[data-n3] :is(.n3a-pip, .n3a-rung, .n3b-notch, .n3c-int, .n3c-pat) {
+	appearance: none;
+	-webkit-appearance: none;
+	box-shadow: none;
+	height: auto;
+	margin: 0;
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+	text-align: left;
+	letter-spacing: normal;
+	white-space: normal;
+}
+[data-n3] :is(.n3a-pip, .n3a-rung, .n3b-notch, .n3c-int, .n3c-pat):focus-visible {
+	outline: 2px solid var(--dse-focus-ring);
+	outline-offset: 2px;
+}
+
+/* the motivation / pitfall SHAPE pair — colour only reinforces */
+[data-n3] .n3-glyph--mot {
+	color: var(--dse-metal-bright);
+}
+[data-n3] .n3-glyph--pit {
+	color: var(--dse-warn);
+}
+
+/* -- chips: the shipped .dse-optchip pressed grammar, at control size -- */
+[data-n3] .n3-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4em;
+	font-size: var(--dse-fs-control);
+	padding: 0.28em 0.75em;
+	white-space: normal;
+	text-align: left;
+	color: var(--dse-fg);
+	min-height: 2em;
+	height: auto;
+}
+[data-n3] .n3-chip[aria-pressed='true'] {
+	color: var(--dse-heading);
+	font-weight: 700;
+}
+[data-n3] .n3-chip__check {
+	color: var(--dse-accent);
+}
+[data-n3] .n3-chip__glyph {
+	color: var(--dse-metal-bright);
+}
+[data-n3] .n3-chip--pit .n3-chip__icon {
+	color: var(--dse-warn);
+}
+[data-n3] .n3-chip.is-spent .n3-chip__text {
+	text-decoration: line-through;
+	text-decoration-thickness: 1px;
+}
+[data-n3] .n3-chip__note {
+	font-size: var(--dse-fs-micro);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.1em;
+	color: var(--dse-fg-muted);
+	font-weight: 400;
+}
+/* the "spent" toggle in the dossier: a quiet dashed chip until it is set */
+[data-n3] .n3-chip--spent[aria-pressed='false'] {
+	border-style: dashed;
+	color: var(--dse-fg-muted);
+	font-weight: 400;
+}
+[data-n3] .n3-chip--spent,
+[data-n3] .n3-chip--appeal,
+[data-n3] .n3-chip--mention {
+	font-size: var(--dse-fs-caption);
+	min-height: 0;
+	padding: 0.2em 0.6em;
+}
+
+[data-n3] .n3-chiprow {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4em;
+}
+
+/* -- the argument area -- */
+[data-n3] .n3-tabs .dse-tabs__panel {
+	padding: 0.9rem;
+}
+[data-n3] .n3-arg {
+	display: flex;
+	flex-direction: column;
+	gap: 0.9rem;
+}
+[data-n3] .n3-appeals {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(13em, 100%), 1fr));
+	gap: 0.75rem 1.5rem;
+}
+[data-n3] .n3-appeals__head {
+	display: flex;
+	align-items: center;
+	gap: 0.45em;
+	margin-bottom: 0.4rem;
+}
+[data-n3] .n3-mods {
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+}
+[data-n3] .n3-mods > .n3-label {
+	margin-bottom: 0.1rem;
+}
+[data-n3] .n3-check {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	column-gap: 0.1em;
+	font-size: var(--dse-fs-secondary);
+	line-height: 1.45;
+	cursor: pointer;
+}
+[data-n3] .n3-check input {
+	align-self: flex-start;
+	margin-top: 0.28em;
+}
+[data-n3] .n3-check > span:not(.n3-check__why) {
+	flex: 1 1 0;
+	min-width: 0;
+}
+[data-n3] .n3-check.is-disabled {
+	color: var(--dse-fg-faint);
+	cursor: not-allowed;
+}
+[data-n3] .n3-check__why {
+	flex-basis: 100%;
+	padding-left: 1.5em;
+	font-size: var(--dse-fs-caption);
+	font-style: italic;
+	color: var(--dse-fg-faint);
+}
+
+/* the selectable roll: the chosen row is a teal RING all round + a check + the word
+   "chosen" (the shipped aria-checked state is a near-invisible sunken wash) */
+[data-n3] .n3-roll .dse-pr__row {
+	padding-top: 0.5rem;
+	padding-bottom: 0.5rem;
+}
+[data-n3] .n3-roll .dse-pr__text {
+	flex: 1 1 0;
+}
+[data-n3] .n3-roll button.dse-pr__row[aria-checked='true'] {
+	background-color: var(--dse-surface-raised);
+	box-shadow: inset 0 0 0 2px var(--dse-accent);
+	border-radius: 0;
+}
+[data-n3] .n3-chosen {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3em;
+	margin-left: auto;
+	flex: none;
+	font-size: var(--dse-fs-micro);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.12em;
+	font-weight: 700;
+	color: var(--dse-accent);
+}
+[data-n3] .n3-chosen .n3-ico svg {
+	width: 1.3em;
+	height: 1.3em;
+}
+
+[data-n3] .n3-complete {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	gap: 0.5em 0.9em;
+}
+[data-n3] .n3-complete__hint {
+	font-size: var(--dse-fs-caption);
+	font-style: italic;
+	color: var(--dse-fg-faint);
+}
+
+[data-n3] .n3-learn {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+}
+[data-n3] .n3-learn__intro {
+	margin: 0;
+	font-size: var(--dse-fs-secondary);
+	line-height: 1.55;
+	color: var(--dse-fg-muted);
+}
+
+/* -- the end band: gold rule + flag glyph + the words (never the gold alone) -- */
+[data-n3] .n3-end {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.7em;
+	padding: 0.65rem 0.85rem;
+	background: var(--dse-surface-sunken);
+	border: 1px solid var(--dse-metal-line);
+	border-top: 2px solid var(--dse-vp);
+	border-radius: var(--dse-radius);
+}
+[data-n3] .n3-end__flag {
+	color: var(--dse-vp);
+	padding-top: 0.15em;
+}
+[data-n3] .n3-end__label {
+	font-size: var(--dse-fs-label);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.14em;
+	font-weight: 700;
+	color: var(--dse-vp);
+}
+[data-n3] .n3-end__text {
+	font-size: var(--dse-fs-secondary);
+	line-height: 1.5;
+	color: var(--dse-fg);
+}
+[data-n3] .n3-end__text strong {
+	color: var(--dse-heading);
+}
+
+/* -- the dossier: Motivations ◆ / Pitfalls ▲, two labelled columns -- */
+[data-n3] .n3-dossier {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(15em, 100%), 1fr));
+	gap: 0.75rem;
+}
+[data-n3] .n3-dossier__col {
+	background: var(--dse-surface-sunken);
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: var(--dse-radius);
+	padding: 0.55rem 0.75rem 0.4rem;
+	min-width: 0;
+}
+[data-n3] .n3-dossier__head {
+	display: flex;
+	align-items: center;
+	gap: 0.45em;
+	padding-bottom: 0.4rem;
+	border-bottom: 1px solid var(--dse-metal-faint);
+}
+[data-n3] .n3-dossier__count {
+	margin-left: auto;
+	font-size: var(--dse-fs-caption);
+	color: var(--dse-fg-faint);
+}
+[data-n3] .n3-dos {
+	display: flex;
+	align-items: flex-start;
+	flex-wrap: wrap;
+	gap: 0.3em 0.6em;
+	padding: 0.5rem 0;
+	border-bottom: 1px solid var(--dse-metal-faint);
+}
+[data-n3] .n3-dos:last-child {
+	border-bottom: none;
+}
+[data-n3] .n3-dos__glyph {
+	flex: none;
+	width: 1em;
+	line-height: 1.5;
+	text-align: center;
+}
+[data-n3] .n3-dos__glyph.n3-ico {
+	padding-top: 0.25em;
+}
+[data-n3] .n3-dos__text {
+	flex: 1 1 10em;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	line-height: 1.4;
+}
+[data-n3] .n3-dos__name {
+	font-weight: 700;
+	color: var(--dse-heading);
+}
+[data-n3] .n3-dos__reason {
+	font-size: var(--dse-fs-secondary);
+	color: var(--dse-fg-muted);
+}
+[data-n3] .n3-dos.is-spent .n3-dos__name {
+	text-decoration: line-through;
+	text-decoration-thickness: 1px;
+	color: var(--dse-fg-muted);
+}
+[data-n3] .n3-dos__acts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.35em;
+	flex: 0 1 auto;
+	min-width: 0;
+	margin-left: auto;
+	align-self: center;
+}
+
+/* -- collapsible header with a right-side hint, montage's strip-hint recipe -- */
+[data-n3] .n3-collapse > .dse-collapse__header {
+	padding: 0.4em 0.35em;
+}
+[data-n3] .n3-collapse__hint {
+	margin-left: auto;
+	font-size: var(--dse-fs-micro);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.11em;
+	font-weight: 400;
+	color: var(--dse-fg-faint);
+}
+[data-n3] .n3-collapse > .dse-collapse__region {
+	padding-top: 0.5rem;
+}
+
+/* ------------------------------------------------------------------ */
+/*  A — OFFER LADDER                                                    */
+/* ------------------------------------------------------------------ */
+[data-n3] .n3a-pat {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.6em 0.9em;
+	padding: 0.55rem 0.8rem;
+	background: var(--dse-surface-sunken);
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: var(--dse-radius);
+}
+[data-n3] .n3a-pat__label {
+	display: flex;
+	align-items: center;
+	gap: 0.4em;
+	color: var(--dse-metal);
+	min-width: 6.5em;
+}
+[data-n3] .n3a-pips {
+	display: flex;
+	align-items: center;
+	gap: 0.3em;
+	flex: 1 1 12em;
+}
+[data-n3] .n3a-pip {
+	flex: 1 1 0;
+	min-width: 0;
+	height: 1.55em;
+	padding: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px dashed var(--dse-border-strong);
+	border-radius: 3px;
+	background: transparent;
+	color: var(--dse-fg-faint);
+	font-family: var(--dse-font-mono);
+	font-size: var(--dse-fs-micro);
+	font-weight: 700;
+}
+[data-n3] .n3a-pip[data-filled='on'] {
+	border: 1px solid var(--dse-metal-line);
+	background: var(--dse-metal-grad);
+	color: var(--dse-surface);
+	box-shadow: var(--dse-chip-bevel);
+}
+[data-n3] .n3a-pip--floor {
+	flex: 0 0 1.75em;
+	border-style: solid;
+	border-color: var(--dse-metal-line);
+	border-radius: 50%;
+	height: 1.75em;
+	color: var(--dse-fg-muted);
+}
+[data-n3] .n3a-pip[aria-checked='true'] {
+	outline: 2px solid var(--dse-accent);
+	outline-offset: 2px;
+}
+[data-n3] .n3a-pat__readout {
+	display: flex;
+	align-items: baseline;
+	gap: 0.3em;
+	flex: none;
+	font-family: var(--dse-font-mono);
+	font-variant-numeric: tabular-nums;
+}
+[data-n3] .n3a-pat__value {
+	font-size: var(--dse-fs-subheading);
+	font-weight: 700;
+	color: var(--dse-heading);
+	text-shadow: var(--dse-emboss);
+}
+[data-n3] .n3a-pat__of {
+	font-size: var(--dse-fs-caption);
+	color: var(--dse-fg-faint);
+}
+
+[data-n3] .n3a-ladder {
+	border: 1px solid var(--dse-metal-line);
+	border-radius: var(--dse-radius);
+	overflow: hidden;
+}
+[data-n3] :is(.n3a-ladder__head, .n3c-th) {
+	background: linear-gradient(180deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.26));
+	border-bottom: 1px solid var(--dse-metal-line);
+}
+body.theme-light [data-n3] :is(.n3a-ladder__head, .n3c-th) {
+	background: linear-gradient(180deg, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.05));
+}
+[data-n3] .n3a-ladder__head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 0.2em 1em;
+	padding: 0.45rem 0.8rem;
+}
+[data-n3] .n3a-ladder__hint {
+	font-size: var(--dse-fs-caption);
+	font-style: italic;
+	color: var(--dse-fg-faint);
+}
+[data-n3] .n3a-rungs {
+	display: flex;
+	flex-direction: column;
+}
+[data-n3] .n3a-rung {
+	display: flex;
+	align-items: center;
+	gap: 0.75em;
+	width: 100%;
+	padding: 0.38rem 0.8rem;
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--dse-metal-faint);
+	border-radius: 0;
+	color: var(--dse-fg-muted);
+	line-height: 1.4;
+}
+[data-n3] .n3a-rung:last-child {
+	border-bottom: none;
+}
+[data-n3] .n3a-rung:hover {
+	background: var(--dse-hover);
+}
+[data-n3] .n3a-seal {
+	flex: none;
+	width: 1.85em;
+	height: 1.85em;
+	display: grid;
+	place-items: center;
+	border-radius: 50%;
+	border: 1px solid var(--dse-metal-line);
+	background: var(--dse-surface-sunken);
+	font-family: var(--dse-font-mono);
+	font-size: var(--dse-fs-secondary);
+	font-weight: 700;
+	color: var(--dse-metal-bright);
+}
+[data-n3] .n3a-rung__text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+[data-n3] .n3a-rung[aria-checked='true'] {
+	background: var(--dse-surface-raised);
+	box-shadow: inset 0 0 0 2px var(--dse-accent);
+	color: var(--dse-heading);
+	font-weight: 700;
+	padding-top: 0.55rem;
+	padding-bottom: 0.55rem;
+}
+[data-n3] .n3a-rung[aria-checked='true'] .n3a-seal {
+	background: var(--dse-accent);
+	border-color: var(--dse-accent);
+	color: var(--dse-accent-fg);
+}
+[data-n3] :is(.n3a-now, .n3c-tag) {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3em;
+	padding: 0.1em 0.55em;
+	border: 1px solid var(--dse-accent);
+	border-radius: var(--dse-radius);
+	font-size: var(--dse-fs-micro);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.12em;
+	font-weight: 700;
+	color: var(--dse-accent);
+	white-space: nowrap;
+}
+[data-n3] :is(.n3a-now, .n3c-tag) .n3-ico {
+	color: var(--dse-vp);
+}
+
+/* ------------------------------------------------------------------ */
+/*  B — CONSOLE                                                         */
+/* ------------------------------------------------------------------ */
+[data-n3] .n3b-panes {
+	display: grid;
+	grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+	gap: 1rem;
+	align-items: start;
+}
+@container n3 (max-width: 560px) {
+	[data-n3] .n3b-panes {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+[data-n3] .n3b-pane--standing {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+	padding: 0.7rem 0.8rem 0.8rem;
+	background: var(--dse-surface-sunken);
+	border: 1px solid var(--dse-metal-line);
+	border-radius: var(--dse-radius);
+}
+[data-n3] .n3b-pane__title {
+	color: var(--dse-metal);
+	padding-bottom: 0.4rem;
+	border-bottom: 1px solid var(--dse-metal-faint);
+}
+[data-n3] .n3b-gauge {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+}
+[data-n3] .n3b-gauge__top {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+}
+[data-n3] .n3b-gauge__label {
+	display: flex;
+	align-items: center;
+	gap: 0.4em;
+	color: var(--dse-metal);
+}
+[data-n3] .n3b-gauge__value {
+	display: flex;
+	align-items: baseline;
+	gap: 0.25em;
+	font-family: var(--dse-font-mono);
+	font-variant-numeric: tabular-nums;
+}
+[data-n3] .n3b-gauge__n {
+	font-size: var(--dse-fs-numeral);
+	font-weight: 700;
+	line-height: 1;
+	color: var(--dse-heading);
+	text-shadow: var(--dse-emboss);
+}
+[data-n3] .n3b-gauge__of {
+	font-size: var(--dse-fs-caption);
+	color: var(--dse-fg-faint);
+}
+[data-n3] .n3b-track {
+	display: grid;
+	grid-template-columns: repeat(6, minmax(0, 1fr));
+	gap: 3px;
+}
+[data-n3] .n3b-notch {
+	height: 1.9em;
+	padding: 0;
+	display: grid;
+	place-items: center;
+	border: 1px dashed var(--dse-border-strong);
+	border-radius: 3px;
+	background: transparent;
+	color: var(--dse-fg-faint);
+	font-family: var(--dse-font-mono);
+	font-size: var(--dse-fs-caption);
+	font-weight: 700;
+	text-align: center;
+}
+[data-n3] .n3b-notch[data-filled='on'] {
+	border: 1px solid var(--dse-metal-line);
+	background: var(--dse-metal-grad);
+	color: var(--dse-surface);
+	box-shadow: var(--dse-chip-bevel);
+}
+/* the 0 notch is the floor: always solid, never filled — the value it marks is "none left" */
+[data-n3] .n3b-notch[data-end='floor'] {
+	border-style: solid;
+	border-color: var(--dse-metal-line);
+	background: transparent;
+	color: var(--dse-fg-muted);
+	box-shadow: none;
+}
+[data-n3] .n3b-notch[aria-checked='true'] {
+	outline: 2px solid var(--dse-accent);
+	outline-offset: 2px;
+	position: relative;
+	z-index: 1;
+}
+[data-n3] .n3b-offer {
+	padding: 0.5rem 0.65rem;
+	border: 1px solid var(--dse-accent);
+	border-radius: var(--dse-radius);
+	background: var(--dse-surface-raised);
+}
+[data-n3] .n3b-offer.is-ended {
+	border-color: var(--dse-metal-line);
+	border-top: 2px solid var(--dse-vp);
+}
+[data-n3] .n3b-offer__head {
+	display: flex;
+	align-items: center;
+	gap: 0.4em;
+}
+[data-n3] .n3b-offer.is-ended .n3b-offer__head {
+	color: var(--dse-vp);
+}
+[data-n3] .n3b-offer.is-ended .n3b-offer__head .n3-label {
+	color: var(--dse-vp);
+}
+[data-n3] .n3b-offer__n {
+	margin-left: auto;
+	white-space: nowrap;
+	font-family: var(--dse-font-mono);
+	font-size: var(--dse-fs-caption);
+	color: var(--dse-fg-muted);
+}
+[data-n3] .n3b-offer__text {
+	margin-top: 0.2rem;
+	font-weight: 700;
+	line-height: 1.4;
+	color: var(--dse-heading);
+}
+[data-n3] .n3b-pane--standing .n3-collapse > .dse-collapse__header {
+	font-size: var(--dse-fs-secondary);
+	padding: 0.15em 0.2em;
+	color: var(--dse-fg-muted);
+}
+[data-n3] .n3b-outcomes {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+}
+[data-n3] .n3b-outcome {
+	display: flex;
+	align-items: baseline;
+	gap: 0.55em;
+	font-size: var(--dse-fs-secondary);
+	line-height: 1.4;
+	color: var(--dse-fg-muted);
+}
+[data-n3] .n3b-outcome__n {
+	flex: none;
+	width: 1.2em;
+	font-family: var(--dse-font-mono);
+	font-weight: 700;
+	color: var(--dse-metal);
+	text-align: right;
+}
+[data-n3] .n3b-outcome.is-current {
+	color: var(--dse-heading);
+	font-weight: 700;
+}
+[data-n3] .n3b-outcome__tag {
+	margin-left: auto;
+	flex: none;
+	font-size: var(--dse-fs-micro);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.12em;
+	color: var(--dse-accent);
+}
+[data-n3] .n3b-proj {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.3em;
+	flex: none;
+	margin-left: auto;
+	padding: 0.05em 0.45em;
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: var(--dse-radius);
+	font-family: var(--dse-font-mono);
+	font-size: var(--dse-fs-caption);
+	color: var(--dse-fg-muted);
+	white-space: nowrap;
+}
+[data-n3] .n3b-proj__arrow,
+[data-n3] .n3b-proj__sep {
+	color: var(--dse-fg-faint);
+}
+[data-n3] .n3b-roll .n3-chosen {
+	margin-left: 0.4em;
+}
+[data-n3] .n3b-roll .n3-chosen > span:not(.n3-ico) {
+	display: none;
+}
+[data-n3] .n3b-roll .dse-pr__row {
+	padding-left: 0.75rem;
+	padding-right: 0.75rem;
+	gap: 0.6em;
+}
+
+/* ------------------------------------------------------------------ */
+/*  C — STANDING BOARD                                                  */
+/* ------------------------------------------------------------------ */
+[data-n3] .n3c-board {
+	display: grid;
+	grid-template-columns: 2.4em minmax(0, 1fr) 7em;
+	border: 1px solid var(--dse-metal-line);
+	border-radius: var(--dse-radius);
+	overflow: hidden;
+}
+[data-n3] .n3c-th {
+	display: flex;
+	align-items: center;
+	gap: 0.4em;
+	padding: 0.45rem 0.7rem;
+	color: var(--dse-metal);
+	min-width: 0;
+}
+[data-n3] .n3c-th--pat {
+	flex-direction: column;
+	justify-content: center;
+	gap: 0.15em;
+	border-left: 1px solid var(--dse-metal-line);
+	padding-left: 0.3rem;
+	padding-right: 0.3rem;
+}
+[data-n3] .n3c-th__line {
+	display: flex;
+	align-items: center;
+	gap: 0.35em;
+}
+[data-n3] .n3c-th__v {
+	margin-left: auto;
+	font-family: var(--dse-font-mono);
+	font-variant-numeric: tabular-nums;
+	font-size: var(--dse-fs-subheading);
+	font-weight: 700;
+	line-height: 1;
+	color: var(--dse-heading);
+	text-shadow: var(--dse-emboss);
+}
+[data-n3] .n3c-th--pat .n3c-th__v {
+	margin-left: 0;
+}
+[data-n3] .n3c-key {
+	display: grid;
+	place-items: center;
+	font-family: var(--dse-font-mono);
+	font-size: var(--dse-fs-secondary);
+	font-weight: 700;
+	color: var(--dse-metal-bright);
+	background: linear-gradient(180deg, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.14));
+	border-bottom: 1px solid var(--dse-metal-faint);
+	border-right: 1px solid var(--dse-metal-faint);
+}
+body.theme-light [data-n3] .n3c-key {
+	background: rgba(0, 0, 0, 0.04);
+}
+[data-n3] .n3c-int {
+	display: flex;
+	align-items: center;
+	gap: 0.6em;
+	min-width: 0;
+	padding: 0.42rem 0.7rem;
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--dse-metal-faint);
+	border-radius: 0;
+	color: var(--dse-fg-muted);
+	line-height: 1.4;
+}
+[data-n3] .n3c-int:hover,
+[data-n3] .n3c-pat:hover {
+	background: var(--dse-hover);
+}
+[data-n3] .n3c-int__text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+[data-n3] .n3c-int[aria-checked='true'] {
+	background: var(--dse-surface-raised);
+	box-shadow: inset 0 0 0 2px var(--dse-accent);
+	color: var(--dse-heading);
+	font-weight: 700;
+}
+[data-n3] .n3c-pat {
+	display: flex;
+	align-items: stretch;
+	justify-content: center;
+	padding: 0.3rem 0;
+	background: transparent;
+	border: none;
+	border-left: 1px solid var(--dse-metal-line);
+	border-bottom: 1px solid var(--dse-metal-faint);
+	border-radius: 0;
+}
+[data-n3] :is(.n3c-key, .n3c-int, .n3c-pat)[data-last='on'] {
+	border-bottom: none;
+}
+/* Patience column = a THERMOMETER read bottom-up: a round floor bulb at 0, then a
+   continuous metal bar rising to the current value, a hollow dashed channel above it.
+   The current value also wears the teal ring — on top of the fill change, never
+   instead of it. */
+[data-n3] .n3c-pat__cell {
+	width: 0.95em;
+	align-self: stretch;
+	border-left: 1px dashed var(--dse-border-strong);
+	border-right: 1px dashed var(--dse-border-strong);
+}
+[data-n3] .n3c-pat[data-filled='on'] .n3c-pat__cell {
+	border: 1px solid var(--dse-metal-line);
+	border-top: none;
+	border-bottom: none;
+	background: var(--dse-metal-grad);
+	background-size: 100% 300%;
+	background-position: center;
+}
+[data-n3] .n3c-pat[aria-checked='true'][data-filled='on'] .n3c-pat__cell {
+	border-top: 1px solid var(--dse-metal-line);
+	border-radius: 0.5em 0.5em 0 0;
+}
+[data-n3] .n3c-pat[data-floor='on'] .n3c-pat__cell {
+	width: 1.5em;
+	height: 1.5em;
+	align-self: center;
+	border: 1px solid var(--dse-metal-line);
+	border-radius: 50%;
+	background: var(--dse-metal-grad);
+}
+[data-n3] .n3c-pat[aria-checked='true'] .n3c-pat__cell {
+	outline: 2px solid var(--dse-accent);
+	outline-offset: 3px;
+}
+/* the floor bulb only reads "filled" while patience remains; at 0 it is hollow */
+[data-n3] .n3c-board[data-patience='0'] .n3c-pat[data-floor='on'] .n3c-pat__cell {
+	background: transparent;
+}
+/* the bar runs edge to edge through the cell, so the row hairline must not cut it */
+[data-n3] .n3c-pat {
+	padding: 0;
+}
+
+[data-n3] .n3c-argument {
+	display: flex;
+	flex-direction: column;
+	gap: 0.9rem;
+	padding: 0.85rem 0.9rem 0.9rem;
+	background: var(--dse-surface-raised);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+}
+[data-n3] .n3c-sec-head {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+	padding-bottom: 0.45rem;
+	border-bottom: 1px solid var(--dse-metal-faint);
+}
+[data-n3] .n3c-sec-title {
+	font-family: var(--dse-font-label, inherit);
+	font-size: var(--dse-fs-subheading);
+	font-weight: 700;
+	color: var(--dse-heading);
+}
+[data-n3] .n3c-dossier .n3-dossier__col {
+	background: var(--dse-surface-sunken);
+}
+[data-n3] .n3c-dossier .n3-dossier__count {
+	display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Narrow (sidebar, ~300px): container-query, like the shipped montage */
+/* ------------------------------------------------------------------ */
+@container n3 (max-width: 420px) {
+	[data-n3] .n3 {
+		gap: 0.8rem;
+	}
+	[data-n3] .n3a-pat {
+		padding: 0.5rem 0.6rem;
+	}
+	[data-n3] .n3a-pat__label {
+		min-width: 0;
+		flex: 1 1 auto;
+	}
+	[data-n3] .n3a-pips {
+		order: 3;
+		flex-basis: 100%;
+	}
+	[data-n3] .n3a-rung,
+	[data-n3] .n3c-int {
+		padding-left: 0.55rem;
+		padding-right: 0.55rem;
+		gap: 0.5em;
+		font-size: var(--dse-fs-secondary);
+	}
+	/* the crest column starves the name track at sidebar width (DESIGN.md's
+	   container-width column-drop note) — the shipped montage drops it the same way */
+	[data-n3] .n3 .n3-headrow .dse-head > .dse-crest {
+		display: none;
+	}
+	[data-n3] .n3-collapse__hint {
+		display: none;
+	}
+	[data-n3] :is(.n3a-rung, .n3c-int)[aria-checked='true'] {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.3em;
+	}
+	[data-n3] .n3a-rung[aria-checked='true'] {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		column-gap: 0.5em;
+		align-items: center;
+	}
+	[data-n3] .n3a-rung[aria-checked='true'] .n3a-now {
+		grid-column: 2;
+		justify-self: start;
+	}
+	[data-n3] .n3b-roll .dse-pr__row {
+		flex-wrap: wrap;
+		row-gap: 0.3em;
+	}
+	[data-n3] .n3b-roll .dse-pr__text {
+		flex: 1 1 7em;
+	}
+	[data-n3] .dse-tabs__icon {
+		display: none;
+	}
+	[data-n3] .n3-tabs .dse-tabs__panel {
+		padding: 0.7rem 0.6rem;
+	}
+	[data-n3] .n3-tabs .dse-tabs__tab {
+		font-size: var(--dse-fs-secondary);
+		padding: 0.45em 0.3em;
+	}
+	[data-n3] .n3-roll .dse-pr__row {
+		padding-left: 0.6rem;
+		padding-right: 0.6rem;
+		gap: 0.5em;
+	}
+	[data-n3] .n3-chosen > span:not(.n3-ico) {
+		display: none;
+	}
+	[data-n3] .n3-dos__acts {
+		margin-left: 1.6em;
+	}
+	[data-n3] .n3c-board {
+		grid-template-columns: 1.9em minmax(0, 1fr) 3.4em;
+	}
+	[data-n3] .n3c-th {
+		padding: 0.4rem 0.45rem;
+	}
+	[data-n3] .n3c-th--pat .n3-ico,
+	[data-n3] .n3c-th--int .n3-ico {
+		display: none;
+	}
+	[data-n3] .n3c-th--pat .n3-label {
+		font-size: var(--dse-fs-micro);
+		letter-spacing: 0.06em;
+	}
+	[data-n3] .n3c-pat__cell {
+		width: 1.6em;
+	}
+	[data-n3] .n3c-argument {
+		padding: 0.7rem 0.6rem;
+	}
+	[data-n3] .n3b-pane--standing {
+		padding: 0.6rem;
+	}
+}

@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SC-379 negotiation tracker design candidates</title>
+<!-- SC-379 round 1 — DESIGN ROUND, not production code.
+     The REAL plugin environment, in the same cascade order as visual-harness/index.html:
+     Obsidian's vendored theme vars, the pinned real Obsidian app.css (dist/, produced by
+     `npm run shots` / `npm run host-css`), then the compiled styles-source.css
+     (dist/harness.css, produced by `npm run harness:build`). sc379.css is the only new
+     sheet and is NOT part of the shipped plugin, so nothing here can move a frozen shot.
+     The candidates mount under the same `data-dse-element="negotiation"` /
+     `data-dse-theme="steel"` root ElementPipeline stamps, so every --dse-* token, the
+     Steel card plate, .dse-head/.dse-crest, the kit tabs/buttons/chips, the power-roll
+     grammar and the --dse-fs-* role scale resolve exactly as they do in the plugin. -->
+<link rel="stylesheet" href="../vars.css">
+<link rel="stylesheet" href="../dist/obsidian-app.css">
+<link rel="stylesheet" href="../dist/harness.css">
+<link rel="stylesheet" href="sc379.css">
+<style>
+	/* deterministic shots — same convention as visual-harness/index.html */
+	*, *::before, *::after { transition: none !important; animation: none !important; }
+	body { margin: 0; padding: 24px; }
+	#mount { margin: 0 auto; }
+</style>
+</head>
+<body class="theme-dark">
+<div class="markdown-preview-view markdown-rendered"><div id="mount"></div></div>
+<script src="icons.js"></script>
+<script src="mock.js"></script>
+</body>
+</html>
