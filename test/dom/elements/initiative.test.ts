@@ -2099,6 +2099,15 @@ describe('SC-377: the Malice stepper and the one turn mark (owner rulings O4, O5
 		expect(root.querySelectorAll('.dse-init__malice button.dse-stepper__btn')).toHaveLength(2);
 	});
 
+	test('CSS contract (R1F LOW-4): the Malice +/- keep the >=44px hit-target overlay on screen', () => {
+		const sheet = sheetNoComments();
+		const m = sheet.match(/\.dse-init__malice \.dse-stepper__btn::after\s*\{([^}]*)\}/);
+		expect(m).not.toBeNull();
+		expect(m![1]).toContain('width: max(100%, var(--dse-touch-min));');
+		expect(m![1]).toContain('height: max(100%, var(--dse-touch-min));');
+		expect(sheet).toMatch(/\[data-dse-print="on"\]\) \.dse-init__malice \.dse-stepper__btn\s*\{\s*position: relative;/);
+	});
+
 	test('read-only Malice keeps the same three-span value (no stepper)', async () => {
 		const { root } = await renderInit(quickStart, { canPersist: false });
 		const value = root.querySelector('.dse-init__malice-value')!;

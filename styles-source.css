@@ -17291,6 +17291,21 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__malice .dse-stepper {
 	gap: 0.4em;
 }
+/* The +/- keep the plugin's 4.6 hit-target rule: a >=44px click-catching overlay on the small
+   visible button (the old bare glyphs had it; the Steel kit button measured 23.8px without it -
+   review LOW-4). The overlay is transparent and out of flow. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__malice .dse-stepper__btn {
+	position: relative;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__malice .dse-stepper__btn::after {
+	content: '';
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: max(100%, var(--dse-touch-min));
+	height: max(100%, var(--dse-touch-min));
+	transform: translate(-50%, -50%);
+}
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__malice-value {
 	display: inline-flex;
 	flex-direction: column;
