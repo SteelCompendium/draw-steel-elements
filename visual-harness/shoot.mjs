@@ -2728,6 +2728,12 @@ async function assertInputHostLeak(page) {
 			const t = document.querySelector('[data-dse-element="initiative"] .dse-init__title-text');
 			if (!(t instanceof HTMLElement)) return false;
 			t.click();
+			// The sweep moves focus across every input it samples; the title editor commits and
+			// closes on blur (by design), which would delete the node mid-sweep. Swallow blur on it
+			// at the window's capture phase so it stays open for the whole sweep.
+			window.addEventListener('blur', (e) => {
+				if (e.target instanceof HTMLElement && e.target.classList.contains('dse-init__title-input')) e.stopImmediatePropagation();
+			}, true);
 			return !!document.querySelector('[data-dse-element="initiative"] input.dse-init__title-input');
 		});
 		if (!titleOpened) problems.push(`${bg}: the initiative title editor could not be opened for the sweep`);
