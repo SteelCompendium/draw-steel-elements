@@ -22,6 +22,11 @@
 // leaf detach), G-S6g (hover popovers ARE writable in Obsidian 1.14.2), G-S6h (nested
 // read-only ds-counter survives its parent's adoption), G-S6i (fast navigation, no leaks),
 // G-S8 (scrollTop pin across a tracker's own write).
+// SC-377 appends 3 click-shield scenarios — 22 total: G-S9a (initiative Amount/Label), G-S9b
+// (ds-counter's editable stepper input), G-S9c (ds-party's award input). Each drives a REAL
+// mouse press (CDP Input.dispatchMouseEvent, never .focus()) in BOTH Reading view and Live
+// Preview and asserts the click focuses the field, typed text lands, and the block is NOT
+// opened for source editing (editor cursor never jumps into the fence).
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -429,6 +434,19 @@ function makeHarness(cdp) {
 			}
 			return t.ev(`(() => { const have = new Set(Array.from(document.querySelectorAll('.dse-condal-modal .dse-condal__row .dse-condal__name')).map((n) => n.textContent)); const it = Array.from(document.querySelectorAll('.dse-condal-modal .dse-condal__menu-item')).find((i) => !have.has(i.querySelector('.dse-condal__menu-name')?.textContent)); const name = it.querySelector('.dse-condal__menu-name')?.textContent; it.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 })); return name; })()`);
 		},
+		/** SC-377: a REAL mouse click (CDP Input.dispatchMouseEvent: move, press, release at the
+		 *  element's centre) — never `.focus()`, which bypasses the very default action
+		 *  (focus-on-mousedown) the click shield used to cancel. `elExpr` evaluates to the element. */
+		async realClick(elExpr) {
+			const pt = await t.ev(`(() => { const el = ${elExpr}; if (!el) return null; el.scrollIntoView({ block: 'center', inline: 'center' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height }; })()`);
+			t.expect(pt && pt.w > 0 && pt.h > 0, `no visible element to click: ${elExpr}`);
+			await sleep(150); // scrollIntoView settles
+			const at = await t.ev(`(() => { const r = (${elExpr}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+			const base = { x: at.x, y: at.y, button: 'left', clickCount: 1 };
+			await cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x, y: at.y });
+			await cdp.call('Input.dispatchMouseEvent', { type: 'mousePressed', buttons: 1, ...base });
+			await cdp.call('Input.dispatchMouseEvent', { type: 'mouseReleased', buttons: 0, ...base });
+		},
 		async key(k, code, vk) {
 			await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: k, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
 			await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
@@ -444,6 +462,59 @@ const NOTICE_TEXT = (note) =>
 // SC-340 (Task 8) scenario helpers.
 const TRACKER = '[data-dse-element="initiative"]';
 const conditionsModalOpen = (t) => t.ev(`!!document.querySelector('.dse-condal-modal')`);
+
+// SC-377 click-shield scenario body, shared by G-S9a/b/c. For each mode (Reading view, then
+// Live Preview) and each input: a REAL click must make the input document.activeElement, typed
+// text must land in it, and the block must not have been opened for source editing — the
+// editor cursor (parked on line 0, above every fixture's fence) must not have moved, and the
+// same root (not a rebuilt one) must still hold the focused input.
+async function clickShieldScenario(t, { rel, root, inputs }) {
+	const modes = [
+		['Reading view', { mode: 'preview' }, (leaf) => `((${leaf}).view.containerEl.querySelector('.markdown-reading-view'))`],
+		['Live Preview', { mode: 'source', source: false }, (leaf) => `((${leaf}).view.containerEl.querySelector('.markdown-source-view'))`],
+	];
+	const leaf = 'app.workspace.getMostRecentLeaf()';
+	const notes = [];
+	for (const [label, state, scopeOf] of modes) {
+		await t.open(rel);
+		await t.reset(rel);
+		await t.ev(`(async () => { await (${leaf}).setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, ...${JSON.stringify(state)} }, active: true }); })()`);
+		await t.sleep(1500);
+		const scope = scopeOf(leaf);
+		const rootEl = `Array.from(${scope}.querySelectorAll('${root}')).find((x) => x.isConnected)`;
+		await t.waitFor(`!!(${rootEl})`, `${label}: ${root} rendered`);
+		if (state.mode === 'source') {
+			await t.ev(`(${leaf}).view.editor.setCursor({ line: 0, ch: 0 })`);
+		}
+		const m = await t.mark();
+		await t.ev(`(${rootEl}).__lcTag = 's9'`);
+		for (const input of inputs) {
+			const inputEl = `(${rootEl}).querySelector('${input.sel}')`;
+			await t.waitFor(`!!(${inputEl})`, `${label}: ${input.sel} rendered`);
+			await t.realClick(inputEl);
+			await t.sleep(250);
+			const focused = await t.ev(`(() => { const i = ${inputEl}; const ae = document.activeElement; return { active: ae === i, activeTag: ae ? ae.tagName + '.' + String(ae.className).slice(0, 60) : null }; })()`);
+			t.expect(focused.active, `${label}: a real click on ${input.sel} did not focus it (activeElement ${focused.activeTag})`);
+			await t.cdp.call('Input.insertText', { text: input.typed });
+			await t.sleep(250);
+			const value = await t.ev(`${inputEl}.value`);
+			const good = typeof input.expectValue === 'function' ? input.expectValue(value) : value === input.expectValue;
+			t.expect(good, `${label}: typed "${input.typed}" into ${input.sel} but it holds "${value}"`);
+			t.expect(await t.ev(`document.activeElement === ${inputEl}`), `${label}: focus left ${input.sel} after typing`);
+		}
+		if (state.mode === 'source') {
+			const cur = await t.ev(`(${leaf}).view.editor.getCursor().line`);
+			t.expect(cur === 0, `${label}: the click moved the editor cursor to line ${cur} — the block was opened for source editing`);
+		}
+		t.expect(await t.ev(`(${leaf}).view.getMode() === ${JSON.stringify(state.mode)}`), `${label}: the view changed mode`);
+		t.expect(await t.ev(`Array.from(${scope}.querySelectorAll('${root}')).some((x) => x.isConnected && x.__lcTag === 's9')`), `${label}: the block was rebuilt`);
+		t.expect((await t.errorsSince(m)).length === 0, `${label}: page errors ${JSON.stringify(await t.errorsSince(m))}`);
+		notes.push(label);
+	}
+	await t.reset(rel);
+	await t.open(rel);
+	return `real click focused ${inputs.map((i) => i.sel.split('.').pop()).join(' + ')} and typed text landed in ${notes.join(' + ')}; no source edit opened`;
+}
 
 const SCENARIOS = [
 	{
@@ -1060,6 +1131,46 @@ const SCENARIOS = [
 			t.expect(/has_taken_turn: true/.test(t.read(rel)), 'write did not land');
 			await t.reset(rel);
 			return `scrollTop held at ${samples[0]} over ${samples.length} frames`;
+		},
+	},
+	{
+		// SC-377: the click shield used to preventDefault() every capture-phase mousedown in a
+		// block, so the browser never focused an in-card <input> on a click (jsdom has no
+		// focus-on-mousedown default, and the scenarios above all call .focus()). Real mouse
+		// clicks, Reading view AND Live Preview, on initiative's Amount and Label fields.
+		id: 'G-S9a',
+		async run(t) {
+			return clickShieldScenario(t, {
+				rel: 'Lifecycle/ogres.md',
+				root: '[data-dse-element="initiative"]',
+				inputs: [
+					{ sel: 'input.dse-init__malice-quickadd-amount', typed: '7', expectValue: '7' },
+					{ sel: 'input.dse-init__malice-quickadd-label', typed: 'Feytouched', expectValue: 'Feytouched' },
+				],
+			});
+		},
+	},
+	{
+		id: 'G-S9b',
+		async run(t) {
+			return clickShieldScenario(t, {
+				rel: 'Lifecycle/counter.md',
+				root: '[data-dse-element="counter"]',
+				// The editable stepper input shows the current value ("10") and the click places the
+				// caret where it landed, so the digit lands somewhere inside it: assert one more
+				// character that includes the typed one, not a position.
+				inputs: [{ sel: 'input.dse-stepper__input', typed: '5', expectValue: (v) => v.length === 3 && v.includes('5') }],
+			});
+		},
+	},
+	{
+		id: 'G-S9c',
+		async run(t) {
+			return clickShieldScenario(t, {
+				rel: 'Lifecycle/party.md',
+				root: '[data-dse-element="party"]',
+				inputs: [{ sel: 'input.dse-party__award-input', typed: '4', expectValue: (v) => v.length === 2 && v.includes('4') }],
+			});
 		},
 	},
 ];

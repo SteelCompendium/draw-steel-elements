@@ -164,6 +164,23 @@ function isValidationResult(error: unknown): error is ValidationResult {
 }
 
 /**
+ * What counts as an editable control for the click shield. `contenteditable="false"` is
+ * explicitly NOT editable (the attribute's presence alone would match it).
+ */
+const EDITABLE_CONTROL = 'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
+
+/**
+ * SC-377 — true when a mousedown/pointerdown target is (or sits inside) a control the
+ * user types into. Duck-typed on `closest` rather than `instanceof Element`: an element
+ * rendered into a popout window belongs to that window's realm, where the main window's
+ * `Element` constructor does not match.
+ */
+export function isEditableControlTarget(target: EventTarget | null): boolean {
+	const el = target as { closest?: (selector: string) => Element | null } | null;
+	return typeof el?.closest === 'function' && el.closest(EDITABLE_CONTROL) !== null;
+}
+
+/**
  * F1 §2.4 step 4 / §1.2 — capture-phase mousedown/pointerdown stop so a reading-mode
  * click inside an element never bubbles to Obsidian's "open this block for editing"
  * handling. Content-independent (armed on the bare root, before parse/validate/render
@@ -172,10 +189,17 @@ function isValidationResult(error: unknown): error is ValidationResult {
  * Component (there is no owning Component yet when this runs) — matches the legacy
  * plain addEventListener with no explicit removal; the listener is discarded with the
  * root element itself on re-render/teardown, same as today.
+ *
+ * SC-377: `stopPropagation()` is what keeps Obsidian from opening the block, and it runs
+ * for every target. `preventDefault()` is skipped when the target is an editable control:
+ * the default action of a mousedown IS "focus the field and place the caret", so
+ * cancelling it left every in-card input (initiative's Amount/Label, ds-counter's stepper
+ * input, ds-party's award input) unreachable by mouse. The listener sits on the capture
+ * phase at the root, so the event never reaches the input itself — the skip has to be here.
  */
 function armClickShield(root: HTMLElement): void {
 	const stop = (event: Event): void => {
-		event.preventDefault();
+		if (!isEditableControlTarget(event.target)) event.preventDefault();
 		event.stopPropagation();
 	};
 	root.addEventListener('mousedown', stop, { capture: true });

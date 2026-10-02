@@ -14,7 +14,7 @@
 // resolveRefs and autoResolveRefs skips reference resolution entirely. All three
 // branches (resolveRefs, autoResolveRefs:true, the default skip) are exercised below,
 // plus the explicit autoResolveRefs:false skip.
-import { ElementPipeline, renderErrorCard, ElementStageError } from '../../../src/framework/pipeline';
+import { ElementPipeline, renderErrorCard, ElementStageError, isEditableControlTarget } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { ElementDefinition } from '../../../src/framework/registry';
 import { ElementView, PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
@@ -384,6 +384,68 @@ describe('T-9 (Plan 02): ElementPipeline.run (F1 §2.4)', () => {
 			} finally {
 				document.body.removeChild(host.containerEl);
 			}
+		});
+
+		// SC-377: the shield keeps stopPropagation (Obsidian must not open the block) but must
+		// leave preventDefault alone on an editable control, or the browser never focuses it.
+		describe('SC-377 editable controls keep their focus-on-click default', () => {
+			async function mountWithControls(): Promise<{ root: HTMLElement; cleanup: () => void }> {
+				const { deps } = makeDeps();
+				const pipeline = new ElementPipeline(deps);
+				const host = makeHost();
+				document.body.appendChild(host.containerEl);
+				await pipeline.run(labelDef(), 'label: x', host);
+				const root = host.containerEl.firstElementChild as HTMLElement;
+				const content = root.querySelector('.label-content') as HTMLElement;
+				content.createEl('input', { cls: 'probe-input', attr: { type: 'number' } });
+				content.createEl('textarea', { cls: 'probe-textarea' });
+				content.createEl('select', { cls: 'probe-select' });
+				content.createEl('div', { cls: 'probe-editable', attr: { contenteditable: 'true' } }).createEl('span', { cls: 'probe-inner' });
+				content.createEl('div', { cls: 'probe-not-editable', attr: { contenteditable: 'false' } });
+				content.createEl('button', { cls: 'probe-button' });
+				return { root, cleanup: () => document.body.removeChild(host.containerEl) };
+			}
+
+			function down(root: HTMLElement, selector: string, type: 'mousedown' | 'pointerdown'): { prevented: boolean; bubbled: number } {
+				let bubbled = 0;
+				const onDoc = () => bubbled++;
+				document.addEventListener(type, onDoc);
+				try {
+					const ev = new MouseEvent(type, { bubbles: true, cancelable: true });
+					(root.querySelector(selector) as HTMLElement).dispatchEvent(ev);
+					return { prevented: ev.defaultPrevented, bubbled };
+				} finally {
+					document.removeEventListener(type, onDoc);
+				}
+			}
+
+			test.each(['mousedown', 'pointerdown'] as const)('%s on input/textarea/select/contenteditable: default kept, still never bubbles', async (type) => {
+				const { root, cleanup } = await mountWithControls();
+				try {
+					for (const sel of ['.probe-input', '.probe-textarea', '.probe-select', '.probe-editable', '.probe-inner']) {
+						expect(down(root, sel, type)).toEqual({ prevented: false, bubbled: 0 });
+					}
+				} finally {
+					cleanup();
+				}
+			});
+
+			test.each(['mousedown', 'pointerdown'] as const)('%s on a button, contenteditable="false" and plain content: default still prevented, never bubbles', async (type) => {
+				const { root, cleanup } = await mountWithControls();
+				try {
+					for (const sel of ['.probe-button', '.probe-not-editable', '.label-content']) {
+						expect(down(root, sel, type)).toEqual({ prevented: true, bubbled: 0 });
+					}
+				} finally {
+					cleanup();
+				}
+			});
+
+			test('isEditableControlTarget: null and non-element targets are not editable', () => {
+				expect(isEditableControlTarget(null)).toBe(false);
+				expect(isEditableControlTarget(document)).toBe(false);
+				expect(isEditableControlTarget(document.createTextNode('x'))).toBe(false);
+			});
 		});
 
 		test('def.noClickShield === true: mousedown bubbles normally (shield not armed)', async () => {
