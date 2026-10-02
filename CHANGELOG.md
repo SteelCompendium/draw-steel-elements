@@ -22,6 +22,12 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Power-roll tier rows are compact again: about 50px for a one-line outcome, the
+  same as the site** (SC-378). Every tier row (ability/feature cards, statblock abilities,
+  featureblock, a kit's signature ability, negotiation arguments, `ds-roll`) had grown to
+  about 82px, because SC-202's paragraph-spacing reset was also adding a full line of
+  space above and below each outcome's text. This was a regression in the 7.0.0 cycle,
+  never in a release. Print/export was never affected.
 - [FIX] **Steel section titles ("Effect"/"Trigger"/"Special"/…) are now 15px with 1.8px
   letter spacing, so their letters match the site's height** (SC-235), because the site
   fakes its small caps. The boxed panel header on ability/feature cards, a statblock's
