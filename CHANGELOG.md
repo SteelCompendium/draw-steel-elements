@@ -29,25 +29,31 @@ for what needs action.
   space above and below each outcome's text. This was a regression in the 7.0.0 cycle,
   never in a release. Print/export was never affected.
 - [FEATURE] **You can now name an initiative tracker** (SC-377). Set `name:` in the block or
-  click the title at the top of the tracker to type one (Enter or click away saves, Escape
-  cancels). It shows above the Heroes and as the name in the collapsed one-line form; an
-  untitled tracker shows an "Untitled encounter" prompt on screen only, and a read-only view
-  shows the title as plain text.
+  click the title at the top of the tracker to type one (Enter, or a click anywhere else,
+  saves; Escape cancels). It shows above the Heroes and as the name in the collapsed one-line
+  form; an untitled tracker shows a small "Untitled encounter" prompt on screen only, and a
+  read-only view shows the title as plain text. A name YAML reads as a number or a true/false
+  (`name: 1984`) is kept as text rather than breaking the tracker.
 - [FIX] **Typing into a field inside a Draw Steel card now works with the mouse** (SC-377). A
   click inside any card was swallowed so Obsidian would not open the block for editing, and
   that also stopped the browser from focusing the field, so the initiative tracker's quick-add
   Amount and Label, the counter's number box and the party's award box could only be reached
-  with Tab. A click on a field now focuses it (the block still does not open for editing).
+  with Tab. A click on a field now focuses it (the block still does not open for editing), and
+  a click on anything else in the same card now leaves the field the way a click outside the
+  card does, so a half-typed counter value or tracker title is saved.
 - [STEEL] **Initiative tracker layout pass** (SC-377). *Reset turns (this round)* and *Reset
   encounter state* moved from buttons inside the card to icon items in the tracker's menu
   panel (hover the tracker). The round label and *Advance round* now sit on the "Heroes"
   heading line. The Malice pool is a standard always-visible stepper (− and + beside a
   "Malice" caption over the number) instead of hover-only arrows. The Malice quick-add
-  submits on Enter, tells you which field is missing instead of silently doing nothing, and
-  its fields are recessed with one shared height. Heroes and enemy groups now share one turn
-  mark: an empty ring, a struck steel seal once they have acted, and a ghosted seal on hover;
-  the green check on enemy groups is gone. Printing is unchanged apart from the round label's
-  new place and the title.
+  submits on Enter, says which field is wrong instead of silently doing nothing ("Amount
+  required", "Whole numbers only", "Not zero", "Label required"), and its fields are recessed
+  with one shared height. Heroes and enemy groups now share one turn mark in both light and
+  dark: an empty ring, a struck steel seal once they have acted (the same brightness on both
+  sides), and a ghosted seal on hover; the green check on enemy groups is gone. In print, the
+  round label now sits on the "Heroes" line, the "Malice: N" line moves from the right to the
+  left of the quick-add row (the quick-add inputs re-centre across two rows), and a named
+  tracker prints its title; nothing else about printing changes.
 
 - [FIX] **Steel section titles ("Effect"/"Trigger"/"Special"/…) are now 15px with 1.8px
   letter spacing, so their letters match the site's height** (SC-235), because the site

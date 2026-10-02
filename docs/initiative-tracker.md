@@ -272,8 +272,10 @@ Once your encounter is defined, the Initiative Tracker provides an interactive U
 
 The title sits at the top of the tracker. Click it (or Tab to it and press Enter) to edit:
 type a name and press **Enter** or click away to save, or press **Escape** to leave it as it
-was. Clearing the field removes the title. An untitled tracker shows a muted "Untitled
-encounter" prompt in that spot (on screen only — it never prints). In a read-only view
+was. "Click away" means a click anywhere else in the tracker too, not only outside it.
+Clearing the field removes the title. An untitled tracker shows a small, quiet "Untitled
+encounter" prompt in that spot (on screen only — it never prints). If you write the name by
+hand, `name: 1984` or `name: true` is kept as the text "1984" / "true". In a read-only view
 (canvas, for example) the title is plain text, or absent if the encounter has none.
 
 ### The turn mark
@@ -349,9 +351,11 @@ open.
 
 **Quick-add**: Enter an amount and a label (e.g. "3" / "Feytouched") and click "Add" — or
 press **Enter** in either field — to log a manual, trigger-based Malice gain (or spend,
-using a negative amount) without waiting for a round to advance. If the amount is missing or
-zero, or the label is empty, nothing is added: the offending field is focused, gets a heavier
-edge and says what it needs ("Not zero" / "Label required") until you start typing.
+using a negative amount) without waiting for a round to advance. Amounts are whole numbers.
+If the amount is missing ("Amount required"), is not a whole number such as `1.5` or `1e2`
+("Whole numbers only"), is zero ("Not zero"), or the label is empty ("Label required"),
+nothing is added: the offending field is focused, gets a heavier edge, and the reason shows
+in the field and on a line under the row until you start typing.
 
 ### Round / Turn Controls
 
