@@ -24,8 +24,11 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const MOCK = 'file://' + path.join(here, 'mock.html');
 const HARNESS = 'file://' + path.join(here, '..', 'index.html');
 const outDir = process.argv[2];
-if (!outDir) {
-	console.error('usage: node visual-harness/sc379/shoot-sc379.mjs <outDir>');
+// ROUND 2 (`--round=2`): the three two-axis variants of A (A1/A2/A3), four shots each,
+// named sc379-r2-<variant>-<state>-<bg>[-narrow].png. No before — round 1 holds it.
+const ROUND = process.argv.includes('--round=2') ? 2 : 1;
+if (!outDir || outDir.startsWith('--')) {
+	console.error('usage: node visual-harness/sc379/shoot-sc379.mjs <outDir> [--round=2]');
 	process.exit(2);
 }
 fs.mkdirSync(outDir, { recursive: true });
@@ -42,19 +45,32 @@ const MATRIX = [
 	['default', 'dark', true],
 ];
 
+const MATRIX_R2 = [
+	['default', 'dark', false],
+	['ended', 'dark', false],
+	['default', 'light', false],
+	['default', 'dark', true],
+];
+
 const shots = [];
-for (const cand of ['A', 'B', 'C']) {
-	for (const [state, bg, narrow] of MATRIX) {
-		shots.push({ kind: 'mock', cand, state, bg, narrow });
+if (ROUND === 2) {
+	for (const cand of ['A1', 'A2', 'A3']) {
+		for (const [state, bg, narrow] of MATRIX_R2) shots.push({ kind: 'mock', cand, state, bg, narrow });
 	}
+} else {
+	for (const cand of ['A', 'B', 'C']) {
+		for (const [state, bg, narrow] of MATRIX) {
+			shots.push({ kind: 'mock', cand, state, bg, narrow });
+		}
+	}
+	shots.push({ kind: 'before', state: 'default', bg: 'dark', narrow: false });
+	shots.push({ kind: 'before', state: 'default', bg: 'light', narrow: false });
+	shots.push({ kind: 'before', state: 'default', bg: 'dark', narrow: true });
 }
-shots.push({ kind: 'before', state: 'default', bg: 'dark', narrow: false });
-shots.push({ kind: 'before', state: 'default', bg: 'light', narrow: false });
-shots.push({ kind: 'before', state: 'default', bg: 'dark', narrow: true });
 
 function outName(s) {
 	const who = s.kind === 'before' ? 'before' : s.cand;
-	return `sc379-r1-${who}-${s.state}-${s.bg}${s.narrow ? '-narrow' : ''}.png`;
+	return `sc379-r${ROUND}-${who}-${s.state}-${s.bg}${s.narrow ? '-narrow' : ''}.png`;
 }
 
 const browser = await chromium.launch();
@@ -96,4 +112,4 @@ if (failures.length) {
 	for (const f of failures) console.error(`FAIL ${f}`);
 	process.exit(1);
 }
-console.log(`sc379 round-1 shots written to ${outDir}`);
+console.log(`sc379 round-${ROUND} shots written to ${outDir}`);

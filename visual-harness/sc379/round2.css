@@ -1,0 +1,490 @@
+/* SC-379 ROUND 2 — three two-axis variants of A (prototype sheet, never shipped).
+ * Layers on sc379.css (round 1). Same rules: --dse-fs-* role sizes only, --dse-* tokens
+ * only, no hue-only state, everything scoped under [data-n3].
+ * Hard rule for A1/A2/A3: Patience is drawn HORIZONTALLY, Interest VERTICALLY.
+ */
+
+/* ------------------------------------------------------------------ */
+/*  The shared SEAL (A1 Patience + A1/A2 Interest rungs)                */
+/* ------------------------------------------------------------------ */
+/* One round numeral disc for every value slot on both axes.
+     plain  — an Interest rung / Patience's 0 floor: hollow steel ring
+     on     — patience still remaining: filled steel (silver in dark, gunmetal in light)
+     spent  — patience already spent: dashed hollow
+     current (either axis) — solid teal disc + teal ring  */
+[data-n3] .n3s-seal {
+	appearance: none;
+	-webkit-appearance: none;
+	position: relative;
+	z-index: 1;
+	flex: none;
+	width: 1.9em;
+	height: 1.9em;
+	padding: 0;
+	margin: 0;
+	display: grid;
+	place-items: center;
+	border-radius: 50%;
+	border: 1px solid var(--dse-metal-line);
+	/* opaque, so the axis rail behind it never shows through */
+	background: linear-gradient(var(--dse-surface-sunken), var(--dse-surface-sunken)), var(--dse-surface);
+	box-shadow: none;
+	color: var(--dse-metal-bright);
+	font: inherit;
+	cursor: pointer;
+}
+[data-n3] .n3s-seal__n {
+	font-family: var(--dse-font-mono);
+	font-size: var(--dse-fs-secondary);
+	font-weight: 700;
+	line-height: 1;
+}
+[data-n3] .n3s-seal[data-fill='on'] {
+	background: var(--dse-metal-grad);
+	color: var(--dse-surface);
+	box-shadow: var(--dse-chip-bevel);
+}
+[data-n3] .n3s-seal[data-fill='spent'] {
+	border: 1px dashed var(--dse-border-strong);
+	color: var(--dse-fg-faint);
+}
+[data-n3] .n3s-seal:is([aria-checked='true'], [data-current='on']) {
+	background: var(--dse-accent);
+	border: 1px solid var(--dse-accent);
+	color: var(--dse-accent-fg);
+	outline: 2px solid var(--dse-accent);
+	outline-offset: 2px;
+	box-shadow: none;
+}
+[data-n3] button.n3s-seal:focus-visible {
+	outline: 2px solid var(--dse-focus-ring);
+	outline-offset: 4px;
+}
+
+/* the Interest rung for A1/A2: the row is the radio; the seal sits on a vertical rail */
+[data-n3] .n3a1-rung {
+	appearance: none;
+	-webkit-appearance: none;
+	display: flex;
+	align-items: center;
+	gap: 0.8em;
+	width: 100%;
+	height: auto;
+	margin: 0;
+	padding: 0.4rem 0.8rem;
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--dse-metal-faint);
+	border-radius: 0;
+	box-shadow: none;
+	font: inherit;
+	color: var(--dse-fg-muted);
+	line-height: 1.4;
+	text-align: left;
+	white-space: normal;
+	cursor: pointer;
+}
+[data-n3] .n3a1-rung:last-child {
+	border-bottom: none;
+}
+[data-n3] .n3a1-rung:hover {
+	background: var(--dse-hover);
+}
+[data-n3] .n3a1-rung:focus-visible {
+	outline: 2px solid var(--dse-focus-ring);
+	outline-offset: -2px;
+}
+[data-n3] .n3a1-rung[aria-checked='true'] {
+	background: var(--dse-surface-raised);
+	box-shadow: inset 0 0 0 2px var(--dse-accent);
+	color: var(--dse-heading);
+	font-weight: 700;
+	padding-top: 0.55rem;
+	padding-bottom: 0.55rem;
+}
+/* the y-axis rail: one vertical steel line through every seal centre */
+[data-n3] .n3a1-yrail {
+	position: relative;
+}
+[data-n3] .n3a1-yrail::before {
+	content: '';
+	position: absolute;
+	z-index: 0;
+	left: calc(0.8rem + 0.95em - 1px);
+	top: 1.4em;
+	bottom: 1.4em;
+	width: 2px;
+	background: var(--dse-metal-line);
+}
+
+/* ------------------------------------------------------------------ */
+/*  A1 — A, tightened                                                   */
+/* ------------------------------------------------------------------ */
+[data-n3] .n3a1-pat {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	grid-template-areas: 'label rail readout';
+	align-items: center;
+	gap: 0.6em 1.1em;
+	padding: 0.6rem 0.9rem;
+	background: var(--dse-surface-sunken);
+	border: 1px solid var(--dse-metal-line);
+	border-radius: var(--dse-radius);
+}
+[data-n3] .n3a1-pat__label {
+	grid-area: label;
+	display: flex;
+	align-items: center;
+	gap: 0.4em;
+	color: var(--dse-metal);
+}
+[data-n3] .n3a1-pat .n3a-pat__readout {
+	grid-area: readout;
+}
+/* the x-axis rail: dashed where patience is spent, a solid steel bar where it remains */
+[data-n3] .n3a1-xrail {
+	grid-area: rail;
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	min-width: 0;
+}
+[data-n3] .n3a1-xrail::before,
+[data-n3] .n3a1-xrail::after {
+	content: '';
+	position: absolute;
+	z-index: 0;
+	left: 0.95em;
+	top: 50%;
+}
+[data-n3] .n3a1-xrail::before {
+	right: 0.95em;
+	border-top: 2px dashed var(--dse-border-strong);
+	transform: translateY(-1px);
+}
+[data-n3] .n3a1-xrail::after {
+	width: calc((100% - 1.9em) * var(--fill, 0));
+	height: 4px;
+	transform: translateY(-2px);
+	background: var(--dse-metal);
+	border-radius: 2px;
+}
+
+/* A1's read-only "this argument" line (the controls moved to the dossier rows) */
+[data-n3] .n3r-summary {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.35em 0.9em;
+	padding: 0.5rem 0.75rem;
+	background: var(--dse-surface-sunken);
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: var(--dse-radius);
+}
+[data-n3] .n3r-summary__items {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.3em 0.9em;
+}
+[data-n3] .n3r-summary__item {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4em;
+	font-size: var(--dse-fs-secondary);
+	font-weight: 700;
+	color: var(--dse-heading);
+}
+[data-n3] .n3r-summary__none {
+	font-size: var(--dse-fs-secondary);
+	font-style: italic;
+	color: var(--dse-fg-muted);
+}
+[data-n3] .n3r-summary__hint {
+	flex-basis: 100%;
+	font-size: var(--dse-fs-caption);
+	font-style: italic;
+	color: var(--dse-fg-faint);
+}
+
+/* ------------------------------------------------------------------ */
+/*  A2 — one framed standing board, two axes                            */
+/* ------------------------------------------------------------------ */
+[data-n3] .n3a2-board {
+	border: 1px solid var(--dse-metal-line);
+	border-radius: var(--dse-radius);
+	overflow: hidden;
+}
+/* X-AXIS: the frame's top edge */
+[data-n3] .n3a2-x {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	grid-template-areas: 'label ruler readout';
+	align-items: center;
+	gap: 0.3em 1.2em;
+	padding: 0.5rem 0.9rem 0.35rem;
+	background: linear-gradient(180deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.26));
+	border-bottom: 1px solid var(--dse-metal-line);
+}
+body.theme-light [data-n3] .n3a2-x {
+	background: linear-gradient(180deg, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.05));
+}
+[data-n3] .n3a2-x__label {
+	grid-area: label;
+	display: flex;
+	align-items: center;
+	gap: 0.4em;
+	color: var(--dse-metal);
+}
+[data-n3] .n3a2-x__readout {
+	grid-area: readout;
+}
+[data-n3] .n3a2-axis-arrow {
+	color: var(--dse-fg-faint);
+}
+[data-n3] .n3a2-ruler {
+	grid-area: ruler;
+	position: relative;
+	height: 3em;
+	margin: 0 0.9em;
+}
+[data-n3] .n3a2-ruler__track,
+[data-n3] .n3a2-ruler__fill {
+	position: absolute;
+	left: 0;
+	top: calc(1em - 2px);
+	height: 4px;
+	border-radius: 2px;
+}
+[data-n3] .n3a2-ruler__track {
+	right: 0;
+	border-top: 2px dashed var(--dse-border-strong);
+	height: 0;
+	top: calc(1em - 1px);
+}
+[data-n3] .n3a2-ruler__fill {
+	width: calc(100% * var(--fill, 0));
+	background: var(--dse-metal);
+}
+[data-n3] .n3a2-stop {
+	appearance: none;
+	-webkit-appearance: none;
+	position: absolute;
+	top: 0;
+	left: calc(100% * var(--at));
+	transform: translateX(-50%);
+	display: grid;
+	grid-template-rows: 2em auto;
+	justify-items: center;
+	align-items: center;
+	width: 2em;
+	height: auto;
+	margin: 0;
+	padding: 0;
+	background: none;
+	border: none;
+	box-shadow: none;
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+}
+[data-n3] .n3a2-stop:focus-visible {
+	outline: 2px solid var(--dse-focus-ring);
+	outline-offset: 1px;
+	border-radius: var(--dse-radius);
+}
+[data-n3] .n3a2-stop__dot {
+	position: relative;
+	z-index: 1;
+	width: 0.95em;
+	height: 0.95em;
+	border-radius: 50%;
+	border: 1px solid var(--dse-metal-line);
+	background: var(--dse-surface);
+}
+[data-n3] .n3a2-stop[data-fill='on'] .n3a2-stop__dot {
+	background: var(--dse-metal-grad);
+	box-shadow: var(--dse-chip-bevel);
+}
+[data-n3] .n3a2-stop[data-fill='spent'] .n3a2-stop__dot {
+	border: 1px dashed var(--dse-border-strong);
+}
+[data-n3] .n3a2-stop[aria-checked='true'] .n3a2-stop__dot {
+	width: 1.3em;
+	height: 1.3em;
+	background: var(--dse-accent);
+	border: 1px solid var(--dse-accent);
+	outline: 2px solid var(--dse-accent);
+	outline-offset: 2px;
+	box-shadow: none;
+}
+[data-n3] .n3a2-stop__n {
+	font-family: var(--dse-font-mono);
+	font-size: var(--dse-fs-caption);
+	font-weight: 700;
+	line-height: 1.2;
+	color: var(--dse-fg-muted);
+}
+[data-n3] .n3a2-stop[data-fill='spent'] .n3a2-stop__n {
+	color: var(--dse-fg-faint);
+}
+[data-n3] .n3a2-stop[aria-checked='true'] .n3a2-stop__n {
+	color: var(--dse-heading);
+}
+/* Y-AXIS: down the frame's left edge */
+[data-n3] .n3a2-y {
+	display: grid;
+	grid-template-columns: 2.1em minmax(0, 1fr);
+}
+[data-n3] .n3a2-y__label {
+	writing-mode: vertical-rl;
+	transform: rotate(180deg);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5em;
+	color: var(--dse-metal);
+	background: linear-gradient(90deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.42));
+	border-left: 1px solid var(--dse-metal-line);
+}
+body.theme-light [data-n3] .n3a2-y__label {
+	background: linear-gradient(90deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.1));
+}
+[data-n3] .n3a2-y__label .n3-label {
+	letter-spacing: 0.16em;
+}
+[data-n3] .n3a2-rungs {
+	min-width: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/*  A3 — Interest under the head; Patience fused to the argument tabs   */
+/* ------------------------------------------------------------------ */
+[data-n3] .n3a3-act {
+	display: flex;
+	flex-direction: column;
+}
+[data-n3] .n3a3-clock {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	grid-template-areas: 'label pips readout' 'hint pips readout';
+	align-items: center;
+	gap: 0.15em 1.1em;
+	padding: 0.65rem 0.9rem;
+	background: var(--dse-surface-sunken);
+	border: 1px solid var(--dse-metal-line);
+	border-bottom: none;
+	border-radius: var(--dse-radius) var(--dse-radius) 0 0;
+}
+[data-n3] .n3a3-clock__label {
+	grid-area: label;
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+	color: var(--dse-metal);
+}
+[data-n3] .n3a3-clock__hint {
+	grid-area: hint;
+	font-size: var(--dse-fs-caption);
+	font-style: italic;
+	color: var(--dse-fg-faint);
+	white-space: nowrap;
+}
+[data-n3] .n3a3-pips {
+	grid-area: pips;
+	min-width: 0;
+}
+[data-n3] .n3a3-pip {
+	height: 1.9em;
+}
+[data-n3] .n3a3-clock__readout {
+	grid-area: readout;
+	display: flex;
+	align-items: baseline;
+	gap: 0.3em;
+	font-family: var(--dse-font-mono);
+	font-variant-numeric: tabular-nums;
+}
+[data-n3] .n3a3-clock__left {
+	font-size: var(--dse-fs-caption);
+	color: var(--dse-fg-faint);
+	white-space: nowrap;
+}
+/* the tabs hang straight off the clock strip — one unit */
+[data-n3] .n3a3-act .n3-tabs .dse-tabs__tab {
+	border-top-left-radius: 0;
+	border-top-right-radius: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/*  300px                                                               */
+/* ------------------------------------------------------------------ */
+@container n3 (max-width: 420px) {
+	[data-n3] .n3a1-pat,
+	[data-n3] .n3a2-x,
+	[data-n3] .n3a3-clock {
+		grid-template-columns: minmax(0, 1fr) auto;
+		padding-left: 0.65rem;
+		padding-right: 0.65rem;
+	}
+	[data-n3] .n3a1-pat {
+		grid-template-areas: 'label readout' 'rail rail';
+	}
+	[data-n3] .n3a2-x {
+		grid-template-areas: 'label readout' 'ruler ruler';
+	}
+	[data-n3] .n3a3-clock {
+		grid-template-areas: 'label readout' 'hint hint' 'pips pips';
+		row-gap: 0.3em;
+	}
+	[data-n3] .n3a3-pips {
+		margin-top: 0.3em;
+	}
+	[data-n3] .n3a1-xrail .n3s-seal {
+		width: 1.6em;
+		height: 1.6em;
+	}
+	[data-n3] .n3a1-xrail .n3s-seal__n {
+		font-size: var(--dse-fs-caption);
+	}
+	[data-n3] .n3a1-xrail::before,
+	[data-n3] .n3a1-xrail::after {
+		left: 0.8em;
+	}
+	[data-n3] .n3a1-xrail::before {
+		right: 0.8em;
+	}
+	[data-n3] .n3a1-xrail::after {
+		width: calc((100% - 1.6em) * var(--fill, 0));
+	}
+	[data-n3] .n3a1-yrail {
+		font-size: var(--dse-fs-secondary);
+	}
+	[data-n3] .n3a1-rung {
+		padding-left: 0.55rem;
+		padding-right: 0.55rem;
+		gap: 0.55em;
+	}
+	[data-n3] .n3a1-yrail::before {
+		left: calc(0.55rem + 0.95em - 1px);
+	}
+	[data-n3] .n3a1-rung[aria-checked='true'] {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		column-gap: 0.55em;
+		row-gap: 0.3em;
+	}
+	[data-n3] .n3a1-rung[aria-checked='true'] .n3a-now {
+		grid-column: 2;
+		justify-self: start;
+	}
+	[data-n3] .n3a2-y {
+		grid-template-columns: 1.75em minmax(0, 1fr);
+	}
+	[data-n3] .n3a2-ruler {
+		margin: 0 0.75em;
+	}
+	[data-n3] .n3a3-clock__hint {
+		white-space: normal;
+	}
+}

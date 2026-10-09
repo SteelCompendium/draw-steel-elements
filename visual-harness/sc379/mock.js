@@ -2,7 +2,11 @@
  * production code: nothing here is imported by main.ts, nothing touches entry.ts's
  * manifest, so no capture id, fixture or frozen print byte can move.
  *
- * Query: ?cand=A|B|C  &state=default|learn|ended  &bg=dark|light  &width=<px>
+ * Query: ?cand=A|B|C|A1|A2|A3  &state=default|learn|ended  &bg=dark|light  &width=<px>
+ *
+ * ROUND 2 (after Scott ruled C out — "having patience and interest on different axis is
+ * too strong to ignore"): A1/A2/A3 are three two-axis variants of A, built at the foot of
+ * this file. Round-1 A/B/C stay as the record.
  *
  *   A  "Offer Ladder"    — one column; the Interest ladder is the spine of the card,
  *                          Patience is a pip meter in the head band; kit tabs below;
@@ -607,6 +611,236 @@
 		learnPanel(lr);
 	}
 
+	/* ================================================================== */
+	/*  ROUND 2 — three two-axis variants of A (Scott, 2026-10-02: "having */
+	/*  patience and interest on different axis is too strong to ignore"). */
+	/*  Hard rule for all three: Patience runs HORIZONTALLY, Interest runs  */
+	/*  VERTICALLY, never on one scale. The ended band stays (approved).    */
+	/* ================================================================== */
+
+	/* The argument tabs, as A had them. `merged` (A1) drops the in-tab appeal/mention
+	   chips — those controls live on the dossier rows instead — and shows a read-only
+	   summary of what the current argument uses, so the roll's inputs stay visible. */
+	function argumentTabs(c, m, opts) {
+		opts = opts || {};
+		const panels = tabs(
+			c,
+			[
+				{ id: 'argument', label: 'Make an Argument', icon: 'message-circle' },
+				{ id: 'learn', label: 'Learn Motivation/Pitfall', icon: 'help-circle' },
+			],
+			m.tab,
+		);
+		const arg = el(panels.argument, 'div', 'n3-arg');
+		if (opts.merged) argSummary(arg, m);
+		else appealChips(arg, m);
+		modifiers(arg, m);
+		powerRoll(arg, { rows: roll(m), selectable: true, selected: m.selected, cls: 'n3-roll' });
+		completeFooter(arg, m);
+		learnPanel(panels.learn);
+		return panels;
+	}
+	function argSummary(parent, m) {
+		const s = el(parent, 'div', 'n3r-summary');
+		label(s, 'This argument');
+		const items = el(s, 'div', 'n3r-summary__items');
+		const mots = m.arg.motivationsUsed;
+		const pits = m.arg.pitfallsUsed;
+		if (!mots.length && !pits.length) el(items, 'span', 'n3r-summary__none', 'no Motivation or Pitfall');
+		for (const n of mots) {
+			const it = el(items, 'span', 'n3r-summary__item');
+			el(it, 'span', 'n3-glyph--mot', MOT);
+			el(it, 'span', null, 'appeals to ' + n);
+		}
+		for (const n of pits) {
+			const it = el(items, 'span', 'n3r-summary__item');
+			icon(it, 'triangle-alert', 'n3-ico n3-glyph--pit');
+			el(it, 'span', null, 'mentions ' + n);
+		}
+		el(s, 'span', 'n3r-summary__hint', 'set on the Motivations and Pitfalls cards below');
+	}
+
+	/* The shared SEAL vocabulary (A1, A2): one round numeral disc for every value slot
+	   on BOTH axes. Interest seal: plain unless current. Patience seal: steel-filled
+	   while that patience remains, dashed hollow once spent. Current value on either
+	   axis: solid teal seal + teal ring. Same mark, different axis. */
+	function seal(parent, o) {
+		const b = attrs(el(parent, 'button', 'n3s-seal' + (o.cls ? ' ' + o.cls : '')), {
+			type: 'button',
+			role: 'radio',
+			'aria-checked': String(!!o.current),
+			'aria-label': o.label,
+			tabindex: o.current ? 0 : -1,
+			'data-fill': o.fill || 'plain',
+		});
+		el(b, 'span', 'n3s-seal__n', o.n);
+		return b;
+	}
+	function patienceFill(i, p) {
+		if (i === 0) return 'floor';
+		return i <= p ? 'on' : 'spent';
+	}
+
+	/* -- A1 — A, tightened ------------------------------------------------- */
+	function buildA1(root, m) {
+		const c = el(root, 'div', 'n3 n3a n3a1');
+		headRow(c);
+		const end = ending(m);
+
+		// Patience — the x-axis: six seals on a horizontal rail, read left to right.
+		const pat = el(c, 'div', 'n3a1-pat');
+		const pl = el(pat, 'div', 'n3a1-pat__label');
+		icon(pl, 'hourglass');
+		label(pl, 'Patience');
+		const ro = el(pat, 'div', 'n3a-pat__readout');
+		el(ro, 'span', 'n3a-pat__value', m.patience);
+		el(ro, 'span', 'n3a-pat__of', '/ 5');
+		const rail = attrs(el(pat, 'div', 'n3a1-xrail'), { role: 'radiogroup', 'aria-label': 'Patience' });
+		rail.style.setProperty('--fill', String(m.patience / 5));
+		for (let i = 0; i <= 5; i++) {
+			seal(rail, { n: i, current: i === m.patience, fill: patienceFill(i, m.patience), label: 'Patience ' + i });
+		}
+
+		// Interest — the y-axis: the same seals on a vertical rail, read top to bottom.
+		const lad = el(c, 'div', 'n3a-ladder n3a1-ladder');
+		const lh = el(lad, 'div', 'n3a-ladder__head');
+		label(lh, 'Interest');
+		el(lh, 'span', 'n3a-ladder__hint', 'what the NPC will agree to');
+		const rungs = attrs(el(lad, 'div', 'n3a-rungs n3a1-yrail'), { role: 'radiogroup', 'aria-label': 'Interest' });
+		for (let i = 5; i >= 0; i--) {
+			const cur = i === m.interest;
+			const r = attrs(el(rungs, 'button', 'n3a1-rung'), { type: 'button', role: 'radio', 'aria-checked': String(cur), 'aria-label': 'Interest ' + i, tabindex: cur ? 0 : -1 });
+			// the rung row is the radio; its seal is the same mark Patience uses, as a span
+			const s = attrs(el(r, 'span', 'n3s-seal n3a1-rung__seal'), { 'data-fill': 'plain', 'data-current': cur ? 'on' : 'off' });
+			el(s, 'span', 'n3s-seal__n', i);
+			el(r, 'span', 'n3a-rung__text', m.offers[i]);
+			if (cur) {
+				const tag = el(r, 'span', 'n3a-now');
+				if (end) icon(tag, 'flag');
+				el(tag, 'span', null, end ? (end.kind === 'final' ? 'final offer' : 'outcome') : 'now');
+			}
+		}
+
+		endBand(c, m);
+		argumentTabs(c, m, { merged: true });
+		dossier(c, m, { appeal: true, cls: 'n3a1-dossier' });
+	}
+
+	/* -- A2 — one framed "standing" board, two axes ------------------------ */
+	function buildA2(root, m) {
+		const c = el(root, 'div', 'n3 n3a n3a2');
+		headRow(c);
+		const end = ending(m);
+
+		const board = el(c, 'div', 'n3a2-board');
+
+		// X-AXIS — the frame's top edge: Patience as a ruler, 0 → 5 left to right.
+		const x = el(board, 'div', 'n3a2-x');
+		const xl = el(x, 'div', 'n3a2-x__label');
+		icon(xl, 'hourglass');
+		label(xl, 'Patience');
+		icon(xl, 'arrow-right', 'n3-ico n3a2-axis-arrow');
+		const xr = el(x, 'div', 'n3a-pat__readout n3a2-x__readout');
+		el(xr, 'span', 'n3a-pat__value', m.patience);
+		el(xr, 'span', 'n3a-pat__of', '/ 5');
+		const ruler = attrs(el(x, 'div', 'n3a2-ruler'), { role: 'radiogroup', 'aria-label': 'Patience' });
+		ruler.style.setProperty('--fill', String(m.patience / 5));
+		el(ruler, 'span', 'n3a2-ruler__track');
+		el(ruler, 'span', 'n3a2-ruler__fill');
+		for (let i = 0; i <= 5; i++) {
+			const st = attrs(el(ruler, 'button', 'n3a2-stop'), {
+				type: 'button',
+				role: 'radio',
+				'aria-checked': String(i === m.patience),
+				'aria-label': 'Patience ' + i,
+				tabindex: i === m.patience ? 0 : -1,
+				'data-fill': patienceFill(i, m.patience),
+			});
+			st.style.setProperty('--at', String(i / 5));
+			el(st, 'span', 'n3a2-stop__dot');
+			el(st, 'span', 'n3a2-stop__n', i);
+		}
+
+		// Y-AXIS — down the frame's left edge: Interest, 5 at the top.
+		const y = el(board, 'div', 'n3a2-y');
+		// vertical-rl turned 180° so it reads bottom-to-top like a chart's y-axis title;
+		// the turn flips the glyph too, so an arrow-DOWN icon renders pointing UP.
+		const yl = attrs(el(y, 'div', 'n3a2-y__label'), { 'aria-hidden': 'true' });
+		label(yl, 'Interest');
+		icon(yl, 'arrow-down', 'n3-ico n3a2-axis-arrow');
+		const rungs = attrs(el(y, 'div', 'n3a-rungs n3a1-yrail n3a2-rungs'), { role: 'radiogroup', 'aria-label': 'Interest' });
+		for (let i = 5; i >= 0; i--) {
+			const cur = i === m.interest;
+			const r = attrs(el(rungs, 'button', 'n3a1-rung'), { type: 'button', role: 'radio', 'aria-checked': String(cur), 'aria-label': 'Interest ' + i, tabindex: cur ? 0 : -1 });
+			// the rung row is the radio; its seal is the same mark Patience uses, as a span
+			const s = attrs(el(r, 'span', 'n3s-seal n3a1-rung__seal'), { 'data-fill': 'plain', 'data-current': cur ? 'on' : 'off' });
+			el(s, 'span', 'n3s-seal__n', i);
+			el(r, 'span', 'n3a-rung__text', m.offers[i]);
+			if (cur) {
+				const tag = el(r, 'span', 'n3a-now');
+				if (end) icon(tag, 'flag');
+				el(tag, 'span', null, end ? (end.kind === 'final' ? 'final offer' : 'outcome') : 'now');
+			}
+		}
+
+		endBand(c, m);
+		argumentTabs(c, m);
+		dossier(c, m);
+	}
+
+	/* -- A3 — each value beside the thing that changes it ------------------ */
+	function buildA3(root, m) {
+		const c = el(root, 'div', 'n3 n3a n3a3');
+		headRow(c);
+		const end = ending(m);
+
+		// Interest alone under the head — the y-axis, A's ladder verbatim.
+		const lad = el(c, 'div', 'n3a-ladder');
+		const lh = el(lad, 'div', 'n3a-ladder__head');
+		label(lh, 'Interest');
+		el(lh, 'span', 'n3a-ladder__hint', 'what the NPC will agree to');
+		const rungs = attrs(el(lad, 'div', 'n3a-rungs'), { role: 'radiogroup', 'aria-label': 'Interest' });
+		for (let i = 5; i >= 0; i--) {
+			const cur = i === m.interest;
+			const r = attrs(el(rungs, 'button', 'n3a-rung'), { type: 'button', role: 'radio', 'aria-checked': String(cur), tabindex: cur ? 0 : -1 });
+			el(r, 'span', 'n3a-seal', i);
+			el(r, 'span', 'n3a-rung__text', m.offers[i]);
+			if (cur) {
+				const tag = el(r, 'span', 'n3a-now');
+				if (end) icon(tag, 'flag');
+				el(tag, 'span', null, end ? (end.kind === 'final' ? 'final offer' : 'outcome') : 'now');
+			}
+		}
+		endBand(c, m);
+
+		// Patience — the "argument clock": a horizontal strip fused to the top of the
+		// argument tabs, because arguments are what spend it.
+		const act = el(c, 'div', 'n3a3-act');
+		const clock = el(act, 'div', 'n3a3-clock');
+		const cl = el(clock, 'div', 'n3a3-clock__label');
+		icon(cl, 'hourglass');
+		label(cl, 'Patience');
+		el(clock, 'span', 'n3a3-clock__hint', 'arguments before the final offer');
+		const ro = el(clock, 'div', 'n3a3-clock__readout');
+		el(ro, 'span', 'n3a-pat__value', m.patience);
+		el(ro, 'span', 'n3a3-clock__left', '/ 5 left');
+		const pips = attrs(el(clock, 'div', 'n3a-pips n3a3-pips'), { role: 'radiogroup', 'aria-label': 'Patience' });
+		for (let i = 0; i <= 5; i++) {
+			const p = attrs(el(pips, 'button', 'n3a-pip n3a3-pip' + (i === 0 ? ' n3a-pip--floor' : '')), {
+				type: 'button',
+				role: 'radio',
+				'aria-checked': String(i === m.patience),
+				'aria-label': 'Patience ' + i,
+				tabindex: i === m.patience ? 0 : -1,
+				'data-filled': i > 0 && i <= m.patience ? 'on' : 'off',
+			});
+			el(p, 'span', 'n3a-pip__n', i);
+		}
+		argumentTabs(act, m);
+
+		dossier(c, m);
+	}
+
 	const root = attrs(el(mount, 'div', 'dse-chrome-anchor'), {
 		'data-dse-element': 'negotiation',
 		'data-dse-theme': 'steel',
@@ -614,6 +848,6 @@
 		'data-dse-reduce-motion': 'false',
 		'data-n3': CAND,
 	});
-	({ A: buildA, B: buildB, C: buildC }[CAND] || buildA)(root, M);
+	({ A: buildA, B: buildB, C: buildC, A1: buildA1, A2: buildA2, A3: buildA3 }[CAND] || buildA)(root, M);
 	window.__n3Done = true;
 })();
