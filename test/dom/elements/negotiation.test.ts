@@ -959,27 +959,56 @@ describe('SC-379: Complete Argument keeps Interest and Patience inside 0..5', ()
 		expect(written.current_patience).toBe(0);
 	});
 
-	test('a +1 never carries Interest past 5 and a pitfall never carries it below 0 (the clamp on both ends of the scale)', async () => {
+	test('the clamp does the work at BOTH ends (each would write an out-of-range number with the clamp deleted): authored 4.5 + crit is 5, not 5.5; authored 0.5 + a pitfall tier is 0, not -0.5', async () => {
 		jest.useFakeTimers();
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
-		await pipeline.run(negotiationElement, frodoAt(4, 3), host);
+		await pipeline.run(negotiationElement, frodoAt(4.5, 3), host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
-		tierRadios(root)[3].click(); // crit: +1 Interest -> 5 (a deal), never 6
+		tierRadios(root)[3].click(); // crit: +1 Interest -> 5.5 unclamped
 		completeBtn(root)!.click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect((parseYaml(lastWritten(host)) as any).current_interest).toBe(5);
 
 		const host2 = makeHost();
-		await pipeline.run(negotiationElement, frodoAt(1, 3), host2);
+		await pipeline.run(negotiationElement, frodoAt(0.5, 0.5), host2);
 		const root2 = host2.containerEl.firstElementChild as HTMLElement;
-		tierRadios(root2)[0].click(); // -1 Interest, -1 Patience: 1 -> 0
+		tierRadios(root2)[0].click(); // -1 Interest, -1 Patience: -0.5 unclamped on both
 		completeBtn(root2)!.click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		const w = parseYaml(lastWritten(host2)) as any;
 		expect(w.current_interest).toBe(0);
-		expect(w.current_patience).toBe(2);
+		expect(w.current_patience).toBe(0);
+	});
+
+	test('a QUOTED authored number is a number: "3" + 1 is 4 (not "31" -> 5) and "2" - 1 is 1 (not .nan); the written values are numbers', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		await pipeline.run(negotiationElement, `current_interest: "3"\ncurrent_patience: "2"\n${frodoYaml}`, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(checkedInterest(root)).toEqual([3]); // the track already reads it as 3
+
+		tierRadios(root)[2].click(); // tier 3: +1 Interest, -1 Patience
+		completeBtn(root)!.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		const w = parseYaml(lastWritten(host)) as any;
+		expect(w.current_interest).toBe(4);
+		expect(w.current_patience).toBe(1);
+		expect(lastWritten(host)).not.toMatch(/\.nan/i);
+	});
+
+	test('junk (non-numeric) authored standing is never turned into NaN: clampStanding is finite and Complete leaves the junk as authored', async () => {
+		expect(NegotiationData.clampStanding('lots' as any)).toBe(0);
+		expect(NegotiationData.clampStanding('4' as any)).toBe(4);
+		expect(NegotiationData.clampStanding(-Infinity)).toBe(0);
+		expect(NegotiationData.clampStanding(Infinity)).toBe(5);
+		expect(NegotiationData.advanceStanding('lots', 1)).toBe('lots');
+		expect(NegotiationData.advanceStanding('2', -1)).toBe(1);
+		expect(parseNegotiationData(`current_interest: "5"\n${frodoYaml}`).ending()).toBe('deal');
+		expect(parseNegotiationData(`current_interest: lots\n${frodoYaml}`).ending()).toBeNull();
 	});
 });
 

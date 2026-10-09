@@ -94,15 +94,32 @@ export class NegotiationData {
      * final offer. `null` while the negotiation is live.
      */
     ending(): 'deal' | 'hostile' | 'final' | null {
-        if (this.current_interest >= 5) return 'deal';
-        if (this.current_interest <= 0) return 'hostile';
-        if (this.current_patience <= 0) return 'final';
+        // Number() so a quoted "5" in hand-edited YAML ends it like a 5; junk (NaN) ends nothing.
+        const interest = Number(this.current_interest);
+        const patience = Number(this.current_patience);
+        if (interest >= 5) return 'deal';
+        if (interest <= 0) return 'hostile';
+        if (patience <= 0) return 'final';
         return null;
     }
 
-    /** SC-379 — Interest and Patience live on a 0..5 scale; Complete Argument clamps to it. */
+    /**
+     * SC-379 — Interest and Patience live on a 0..5 scale; Complete Argument clamps to it.
+     * Hand-edited YAML can carry a quoted number ("3") or junk, so the input is coerced with
+     * Number() first and the result is always finite (junk -> 0), never NaN.
+     */
     static clampStanding(n: number): number {
-        return Math.max(0, Math.min(5, n));
+        const v = Number(n);
+        return Number.isNaN(v) ? 0 : Math.max(0, Math.min(5, v));
+    }
+
+    /**
+     * SC-379 — `current` moved by `delta` and kept on the scale. A quoted number ("3" + 1) is
+     * 4, not "31". A current value that is not a number at all is left exactly as authored
+     * (never NaN, never invented): Complete cannot make sense of it, so it does not touch it.
+     */
+    static advanceStanding<T>(current: T, delta: number): T | number {
+        return Number.isFinite(Number(current)) ? NegotiationData.clampStanding(Number(current) + delta) : current;
     }
 
     /** SC-379 — the authored outcome text for Interest `n` (clamped + rounded onto 0..5). */

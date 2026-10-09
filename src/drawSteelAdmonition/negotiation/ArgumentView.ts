@@ -312,13 +312,16 @@ export class ArgumentView {
 		}
 
 		if (this.selectedTier) {
-			// SC-379: the 0..5 scale is a rule, not a display nicety — never write past it.
-			this.data.current_interest = NegotiationData.clampStanding(
-				this.data.current_interest + this.selectedTier.interest,
-			);
-			this.data.current_patience = NegotiationData.clampStanding(
-				this.data.current_patience + this.selectedTier.patience,
-			);
+			// SC-379: the 0..5 scale is a rule, not a display nicety — never write past it, and
+			// do the sum on NUMBERS (a quoted "3" + 1 is 4, not "31"; see advanceStanding).
+			this.data.current_interest = NegotiationData.advanceStanding(
+				this.data.current_interest,
+				this.selectedTier.interest,
+			) as number;
+			this.data.current_patience = NegotiationData.advanceStanding(
+				this.data.current_patience,
+				this.selectedTier.patience,
+			) as number;
 		}
 
 		this.selectedTier = null;
