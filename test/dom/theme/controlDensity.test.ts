@@ -230,6 +230,9 @@ describe('D-2: the Patience seal hit box follows the shared control size (SC-379
 			expect(r.body).toMatch(new RegExp(`${side}:\\s*min\\(0px,\\s*calc\\([^;]*--dse-track-mark[^;]*--dse-control-min`));
 		}
 		expect(r.body).toMatch(/position:\s*absolute/);
+		// an `::after` with no `content` is never generated: without this the whole hit box
+		// silently vanishes while every inset above still reads fine
+		expect(r.body).toMatch(/content:\s*(''|"")/);
 	});
 
 	test('--dse-control-min really is the 44px touch-min under a coarse pointer at the same scope the hit box uses', () => {
