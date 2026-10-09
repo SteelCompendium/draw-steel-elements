@@ -208,15 +208,34 @@ describe('A-2: Steel control density — one knob, pointer-aware', () => {
 });
 
 // ---------------------------------------------------------------------------
-// D-2: negotiation Interest ladder pitch — SC-379 retired the bubble ladder this block tuned
-// (its --dse-control-min diameter, connector calcs and 0.2em rung margin) for the kit track().
-// What D-2 protected survives as the same contract on the new seals: the rail is derived from
-// the seal size (never a px figure), so both pointer modes and the narrow 1.6em seal stay aligned.
+// D-2: negotiation touch targets — SC-379 retired the bubble ladder this block tuned for the kit
+// track(). The contract D-2 protected is unchanged: a Patience seal is operable at the shared
+// control size (--dse-control-min: 1.75em fine pointer, the 44px touch-min under
+// `pointer: coarse`), whatever its drawn size. The seal is 1.9em / 1.6em narrow, so the HIT box
+// is a transparent ::after on the slot that reads --dse-control-min on all four sides.
 // ---------------------------------------------------------------------------
-describe('D-2: the Interest rows re-derive from the seal size (SC-379 kit track)', () => {
+describe('D-2: the Patience seal hit box follows the shared control size (SC-379 kit track)', () => {
+	const HIT = `${STEEL_PRINT_SCOPE} .dse-track--horizontal .dse-track__slot::after`;
+
 	test('the legacy bubble/ladder rules are gone', () => {
 		expect(css).not.toMatch(/\.dse-nt__bubble/);
 		expect(css).not.toMatch(/\.dse-nt__interest-(ladder|row)/);
+	});
+
+	test('the hit box reads --dse-control-min on every side (so `pointer: coarse` reaches it) and never shrinks the seal', () => {
+		const r = exact(HIT);
+		for (const side of ['top', 'right', 'bottom', 'left']) {
+			// the growth is `min(0px, (mark - control-min) / 2)`: control-min bigger than the seal
+			// pushes the edge OUT; a fine pointer (seal already bigger) clamps to 0, never inward.
+			expect(r.body).toMatch(new RegExp(`${side}:\\s*min\\(0px,\\s*calc\\([^;]*--dse-track-mark[^;]*--dse-control-min`));
+		}
+		expect(r.body).toMatch(/position:\s*absolute/);
+	});
+
+	test('--dse-control-min really is the 44px touch-min under a coarse pointer at the same scope the hit box uses', () => {
+		const coarse = rulesFor(STEEL_PRINT_SCOPE, '@media (pointer: coarse)').find((r) => r.body.includes('--dse-control-min'));
+		expect(coarse).toBeDefined();
+		expect(coarse!.body).toMatch(/--dse-control-min:\s*var\(--dse-touch-min\)/);
 	});
 
 	test('the vertical rail is placed against --dse-track-mark and the row padding, not a literal', () => {

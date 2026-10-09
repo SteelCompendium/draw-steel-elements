@@ -14574,6 +14574,21 @@ body.theme-light
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-track--vertical .dse-track__slot:disabled:hover {
 	background-color: transparent;
 }
+/* TOUCH TARGET (D-2 / SC-121 density). The horizontal seal is 1.9em (1.6em in a sidebar leaf)
+   and the layout, rail insets and ring are all keyed to that. The HIT box is separate: a
+   transparent ::after on the slot grows the click area out to `--dse-control-min` (1.75em on a
+   fine pointer, the 44px `--dse-touch-min` under `pointer: coarse`) on every side, centred on the
+   seal. `min(0px, …)` means a fine pointer, where the seal already exceeds the box, never SHRINKS
+   it. Nothing paints, so print and layout are untouched. The vertical rows are full-width and
+   already tall enough. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-track--horizontal .dse-track__slot::after {
+	content: '';
+	position: absolute;
+	top: min(0px, calc((var(--dse-track-mark) - var(--dse-control-min, var(--dse-track-mark))) / 2));
+	right: min(0px, calc((var(--dse-track-mark) - var(--dse-control-min, var(--dse-track-mark))) / 2));
+	bottom: min(0px, calc((var(--dse-track-mark) - var(--dse-control-min, var(--dse-track-mark))) / 2));
+	left: min(0px, calc((var(--dse-track-mark) - var(--dse-control-min, var(--dse-track-mark))) / 2));
+}
 /* the seal: OPAQUE (sunken layered over surface, two layers, no literal), so the rail
    behind it never shows through */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-track__mark {
