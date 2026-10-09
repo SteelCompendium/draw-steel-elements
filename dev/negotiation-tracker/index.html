@@ -918,6 +918,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#when-the-negotiation-ends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When the negotiation ends
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#actions-tab" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1475,6 +1486,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#when-the-negotiation-ends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When the negotiation ends
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#actions-tab" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1670,7 +1692,7 @@ pitfalls of the parties involved.</p>
 <p>The Negotiation Tracker uses YAML-defined data to represent the state of a negotiation, including motivations, pitfalls,
 and current levels of patience and interest. The YAML code block is where the initial negotiation data is configured and
 where the state is persisted.</p>
-<p><img alt="negotiation" src="../Media/negotiation.gif" /></p>
+<p><img alt="negotiation" src="../Media/negotiation.png" /></p>
 <h2 id="quick-start-example">Quick Start Example<a class="headerlink" href="#quick-start-example" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>~~~ds-negotiation
 name: "Convincing Frodo to remember the taste of strawberries"
@@ -1775,11 +1797,12 @@ motivations:
 <h2 id="interacting-with-the-tracker">Interacting with the Tracker<a class="headerlink" href="#interacting-with-the-tracker" title="Permanent link">&para;</a></h2>
 <p>Once your negotiation is defined, the Negotiation Tracker provides an interactive UI in your note.</p>
 <h3 id="negotiation-name-and-menu">Negotiation Name and Menu<a class="headerlink" href="#negotiation-name-and-menu" title="Permanent link">&para;</a></h3>
-<p>At the top of the tracker, the negotiation's name is displayed. Next to it, there's a menu icon (<strong>⋮</strong>) which provides
-additional options:</p>
+<p>At the top of the tracker, the negotiation's name is displayed beside a small shield crest. Next to it, there's a menu
+icon (<strong>⋮</strong>) which provides additional options:</p>
 <ul>
 <li><strong>Reset Negotiation</strong>: Resets all negotiation data to its initial state. This clears any changes made during the
-  negotiation, such as used motivations or adjusted interest and patience levels.</li>
+  negotiation, such as used motivations or adjusted interest and patience levels. It also clears the "negotiation
+  over" banner (see <a href="#when-the-negotiation-ends">When the negotiation ends</a>).</li>
 </ul>
 <h3 id="patience-and-interest-tracker">Patience and Interest Tracker<a class="headerlink" href="#patience-and-interest-tracker" title="Permanent link">&para;</a></h3>
 <p>The tracker displays the current <strong>patience</strong> and <strong>interest</strong> levels of the NPC:</p>
@@ -1787,12 +1810,36 @@ additional options:</p>
 <li><strong>Patience</strong>: Indicates how willing the NPC is to continue the negotiation (0-5).</li>
 <li><strong>Interest</strong>: Reflects the NPC's inclination towards the desired outcome (0-5).</li>
 </ul>
+<p>Both levels are drawn with the same round numbered seal.</p>
+<ul>
+<li><strong>Patience</strong> runs <strong>across</strong>, left to right, from 0 to 5. A filled steel seal is patience the NPC still has; a dashed,
+  hollow seal is patience that has been spent. A "3 / 5" readout sits beside the label.</li>
+<li><strong>Interest</strong> runs <strong>down</strong> the list of outcomes, from 5 at the top to 0 at the bottom. Each row shows the outcome the
+  NPC will agree to at that level. The row for the current level carries a <strong>now</strong> tag.</li>
+<li>On both, the <strong>current value is the solid teal seal</strong>, ringed in teal. The state is never colour alone: the seal fill,
+  the dashed outline, the ring and the "now" tag all say it too.</li>
+</ul>
 <h4 id="adjusting-levels">Adjusting Levels<a class="headerlink" href="#adjusting-levels" title="Permanent link">&para;</a></h4>
 <ul>
-<li><strong>Patience</strong>: Click on the patience bubbles to set the current patience level. Selected bubbles are highlighted.</li>
-<li><strong>Interest</strong>: Click on the interest levels to set the current interest level. The selected level and all higher levels
-  are highlighted.</li>
+<li><strong>Click</strong> a seal to set that level. Clicking the level that is already set does nothing.</li>
+<li><strong>Keyboard</strong>: Tab to a track once (each track is a single Tab stop), then use the <strong>arrow keys</strong> to move along it
+  (left/up goes to the previous seal in the list, right/down to the next, wrapping at the ends). <strong>Home</strong> and <strong>End</strong> jump
+  to the first and last seal. Each move sets the level.</li>
+<li>Interest 5 is the first row. <strong>Down</strong> therefore means a <em>lower</em> interest.</li>
 </ul>
+<h3 id="when-the-negotiation-ends">When the negotiation ends<a class="headerlink" href="#when-the-negotiation-ends" title="Permanent link">&para;</a></h3>
+<p>The negotiation is over when any of these is true, checked in this order:</p>
+<ol>
+<li><strong>Interest reaches 5</strong>: a <strong>deal</strong>. The NPC agrees to the Interest 5 outcome.</li>
+<li><strong>Interest falls to 0</strong>: <strong>hostile</strong>. The NPC ends the negotiation with the Interest 0 outcome.</li>
+<li><strong>Patience reaches 0</strong>: a <strong>final offer</strong> at the current Interest.</li>
+</ol>
+<p>When this happens a banner appears under the Interest list (a flag, then "Negotiation over" or "Final offer", then the
+outcome in words), the current Interest row's tag changes to read <strong>final offer</strong> or <strong>outcome</strong>, the power roll turns
+into plain, unselectable rows, and <strong>Complete Argument</strong> is switched off with a note telling you why. The banner shows
+in read-only views too.</p>
+<p>Nothing is locked: if you set a level wrong, move the seal back and the banner disappears and Complete Argument comes
+back. <strong>⋮ → Reset Negotiation</strong> starts the negotiation again.</p>
 <h3 id="actions-tab">Actions Tab<a class="headerlink" href="#actions-tab" title="Permanent link">&para;</a></h3>
 <p>The tracker includes two main actions accessible via tabs:</p>
 <h4 id="make-an-argument">Make an Argument<a class="headerlink" href="#make-an-argument" title="Permanent link">&para;</a></h4>
@@ -1800,18 +1847,18 @@ additional options:</p>
 <h4 id="learn-motivationpitfall">Learn Motivation/Pitfall<a class="headerlink" href="#learn-motivationpitfall" title="Permanent link">&para;</a></h4>
 <p>Enables you to attempt to discover one of the NPC's motivations or pitfalls through a Power Roll.</p>
 <h3 id="motivations-and-pitfalls-view">Motivations and Pitfalls View<a class="headerlink" href="#motivations-and-pitfalls-view" title="Permanent link">&para;</a></h3>
-<p>Displays a list of the NPC's motivations and pitfalls:</p>
+<p>Two cards at the bottom show the NPC's motivations (◆) and pitfalls (a warning triangle), each with its reason:</p>
 <ul>
-<li><strong>Motivations</strong>: Positive aspects you can appeal to during negotiation.<ul>
-<li>Check off motivations that have been appealed to.</li>
-</ul>
-</li>
-<li><strong>Pitfalls</strong>: Negative aspects that can hinder the negotiation if mentioned.</li>
+<li><strong>Motivations</strong>: Positive aspects you can appeal to during negotiation. The header counts how many are still open
+  ("1 of 2 open").</li>
+<li><strong>Pitfalls</strong>: Negative aspects that can hinder the negotiation if mentioned. They are for reference only.</li>
 </ul>
 <h4 id="managing-motivations">Managing Motivations<a class="headerlink" href="#managing-motivations" title="Permanent link">&para;</a></h4>
 <ul>
-<li><strong>Appealed To</strong>: Use the checkbox next to a motivation to indicate it has been appealed to.</li>
-<li><strong>Tooltips</strong>: Hover over motivations for additional information.</li>
+<li><strong>Mark spent / ✓ Spent</strong>: Each motivation has one button. Press <strong>Mark spent</strong> to record that it has already been
+  appealed to; the diamond becomes hollow (◇) and the name is struck through. Press it again to clear it.</li>
+<li>This is where you correct what a past argument used. (Completing an argument marks its motivations spent for you.)</li>
+<li>The cards have no appeal or mention controls. Those live in the <strong>Make an Argument</strong> tab.</li>
 </ul>
 <h4 id="pitfalls">Pitfalls<a class="headerlink" href="#pitfalls" title="Permanent link">&para;</a></h4>
 <ul>
@@ -1822,8 +1869,9 @@ additional options:</p>
 <h3 id="argument-modifiers">Argument Modifiers<a class="headerlink" href="#argument-modifiers" title="Permanent link">&para;</a></h3>
 <p>In the <strong>Make an Argument</strong> tab, you can select modifiers that affect the negotiation:</p>
 <ul>
-<li><strong>Appeals to Motivation</strong>: Check if your argument appeals to one or more of the NPC's motivations.</li>
-<li><strong>Mentions Pitfall</strong>: Check if your argument inadvertently mentions a pitfall.</li>
+<li><strong>Appeals to Motivation</strong>: One button per motivation. Press the ones your argument appeals to. A pressed button shows a
+  check. A motivation that was used in an earlier argument is marked <strong>spent</strong> (hollow diamond, struck through).</li>
+<li><strong>Mentions Pitfall</strong>: Press a pitfall's button if your argument inadvertently mentions it.</li>
 <li><strong>Reuses Motivation</strong>: Indicates if you're reusing a motivation already appealed to.<ul>
 <li>Automatically enabled if you select a motivation that has been appealed to before.</li>
 </ul>
@@ -1834,26 +1882,35 @@ additional options:</p>
 </ul>
 </li>
 </ul>
+<p>A greyed-out modifier says why, in small italics under it ("only when a spent Motivation is appealed to", "not while a
+Motivation is appealed to"). With a Motivation appealed to (and no Pitfall), the Argument Test is a <strong>medium</strong> test, as
+in the Heroes book.</p>
 <h4 id="example_1">Example<a class="headerlink" href="#example_1" title="Permanent link">&para;</a></h4>
 <p>Suppose you select the "Greed" motivation, which hasn't been appealed to yet. The "Reuses Motivation" checkbox remains
 unchecked. If you select a motivation that has already been appealed to, the "Reuses Motivation" checkbox is
 automatically enabled.</p>
 <h3 id="power-roll">Power Roll<a class="headerlink" href="#power-roll" title="Permanent link">&para;</a></h3>
-<p>After setting your modifiers, the tracker calculates the Power Roll difficulty. After the Hero rolls for the Argument,
-you can click the power roll result tier corresponding to the roll to select it. Then you can complete the Argument
-(see below)</p>
+<p>After setting your modifiers, the tracker calculates the Power Roll. <strong>The tier results update the moment you press a
+button or tick a box</strong>, so what you see is always what Complete Argument will apply. After the Hero rolls for the
+Argument, click the power roll result tier corresponding to the roll to select it. The chosen row is ringed and marked
+<strong>✓ chosen</strong> (at sidebar width the word drops out and the ring and check remain), and a tier you have chosen stays chosen
+when you change a modifier. Then you can complete the Argument (see below).</p>
 <h3 id="completing-an-argument">Completing an Argument<a class="headerlink" href="#completing-an-argument" title="Permanent link">&para;</a></h3>
 <p>Once you've selected the outcome tier, click the <strong>Complete Argument</strong> button to apply the results:</p>
 <ul>
-<li><strong>Interest</strong>: Adjusted based on the outcome.</li>
-<li><strong>Patience</strong>: Adjusted based on the outcome.</li>
+<li><strong>Interest</strong>: Adjusted based on the outcome, and always kept between 0 and 5.</li>
+<li><strong>Patience</strong>: Adjusted based on the outcome, and always kept between 0 and 5.</li>
 <li><strong>Argument</strong>: Modifiers are reset for the next argument.</li>
 <li><strong>Motivations</strong>: Any motivations used are marked as appealed to.</li>
 </ul>
 <p><strong>Note:</strong></p>
 <ul>
-<li>The <strong>Complete Argument</strong> button is enabled only after selecting an outcome tier.</li>
+<li>The <strong>Complete Argument</strong> button is enabled (and turns accent-coloured) only after selecting an outcome tier.</li>
 <li>The selected outcome tier determines the impact on interest and patience.</li>
+<li>Complete Argument is unavailable once the negotiation is over (see
+  <a href="#when-the-negotiation-ends">When the negotiation ends</a>).</li>
+<li>After completing, the tab starts fresh: buttons and boxes cleared, no tier chosen, the motivations you used shown as spent
+  on the cards.</li>
 </ul>
 <h2 id="learning-motivations-or-pitfalls">Learning Motivations or Pitfalls<a class="headerlink" href="#learning-motivations-or-pitfalls" title="Permanent link">&para;</a></h2>
 <p>The <strong>Learn Motivation/Pitfall</strong> tab has a brief summary of the rules for Heroes attempting to discover one of the NPC's
