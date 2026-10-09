@@ -123,11 +123,12 @@ Once your negotiation is defined, the Negotiation Tracker provides an interactiv
 
 ### Negotiation Name and Menu
 
-At the top of the tracker, the negotiation's name is displayed. Next to it, there's a menu icon (**⋮**) which provides
-additional options:
+At the top of the tracker, the negotiation's name is displayed beside a small shield crest. Next to it, there's a menu
+icon (**⋮**) which provides additional options:
 
 - **Reset Negotiation**: Resets all negotiation data to its initial state. This clears any changes made during the
-  negotiation, such as used motivations or adjusted interest and patience levels.
+  negotiation, such as used motivations or adjusted interest and patience levels. It also clears the "negotiation
+  over" banner (see [When the negotiation ends](#when-the-negotiation-ends)).
 
 ### Patience and Interest Tracker
 
@@ -136,11 +137,38 @@ The tracker displays the current **patience** and **interest** levels of the NPC
 - **Patience**: Indicates how willing the NPC is to continue the negotiation (0-5).
 - **Interest**: Reflects the NPC's inclination towards the desired outcome (0-5).
 
+Both levels are drawn with the same round numbered seal.
+
+- **Patience** runs **across**, left to right, from 0 to 5. A filled steel seal is patience the NPC still has; a dashed,
+  hollow seal is patience that has been spent. A "3 / 5" readout sits beside the label.
+- **Interest** runs **down** the list of outcomes, from 5 at the top to 0 at the bottom. Each row shows the outcome the
+  NPC will agree to at that level. The row for the current level carries a **now** tag.
+- On both, the **current value is the solid teal seal**, ringed in teal. The state is never colour alone: the seal fill,
+  the dashed outline, the ring and the "now" tag all say it too.
+
 #### Adjusting Levels
 
-- **Patience**: Click on the patience bubbles to set the current patience level. Selected bubbles are highlighted.
-- **Interest**: Click on the interest levels to set the current interest level. The selected level and all higher levels
-  are highlighted.
+- **Click** a seal to set that level. Clicking the level that is already set does nothing.
+- **Keyboard**: Tab to a track once (each track is a single Tab stop), then use the **arrow keys** to move along it
+  (left/up goes to the previous seal in the list, right/down to the next, wrapping at the ends). **Home** and **End** jump
+  to the first and last seal. Each move sets the level.
+- Interest 5 is the first row. **Down** therefore means a *lower* interest.
+
+### When the negotiation ends
+
+The negotiation is over when any of these is true, checked in this order:
+
+1. **Interest reaches 5**: a **deal**. The NPC agrees to the Interest 5 outcome.
+2. **Interest falls to 0**: **hostile**. The NPC ends the negotiation with the Interest 0 outcome.
+3. **Patience reaches 0**: a **final offer** at the current Interest.
+
+When this happens a banner appears under the Interest list (a flag, then "Negotiation over" or "Final offer", then the
+outcome in words), the current Interest row's tag changes to read **final offer** or **outcome**, the power roll turns
+into plain, unselectable rows, and **Complete Argument** is switched off with a note telling you why. The banner shows
+in read-only views too.
+
+Nothing is locked: if you set a level wrong, move the seal back and the banner disappears and Complete Argument comes
+back. **⋮ → Reset Negotiation** starts the negotiation again.
 
 ### Actions Tab
 
@@ -156,16 +184,18 @@ Enables you to attempt to discover one of the NPC's motivations or pitfalls thro
 
 ### Motivations and Pitfalls View
 
-Displays a list of the NPC's motivations and pitfalls:
+Two cards at the bottom show the NPC's motivations (◆) and pitfalls (a warning triangle), each with its reason:
 
-- **Motivations**: Positive aspects you can appeal to during negotiation.
-    - Check off motivations that have been appealed to.
-- **Pitfalls**: Negative aspects that can hinder the negotiation if mentioned.
+- **Motivations**: Positive aspects you can appeal to during negotiation. The header counts how many are still open
+  ("1 of 2 open").
+- **Pitfalls**: Negative aspects that can hinder the negotiation if mentioned. They are for reference only.
 
 #### Managing Motivations
 
-- **Appealed To**: Use the checkbox next to a motivation to indicate it has been appealed to.
-- **Tooltips**: Hover over motivations for additional information.
+- **Mark spent / ✓ Spent**: Each motivation has one button. Press **Mark spent** to record that it has already been
+  appealed to; the diamond becomes hollow (◇) and the name is struck through. Press it again to clear it.
+- This is where you correct what a past argument used. (Completing an argument marks its motivations spent for you.)
+- The cards have no appeal or mention controls. Those live in the **Make an Argument** tab.
 
 #### Pitfalls
 
@@ -179,13 +209,18 @@ When making an argument, you can apply various modifiers to influence the outcom
 
 In the **Make an Argument** tab, you can select modifiers that affect the negotiation:
 
-- **Appeals to Motivation**: Check if your argument appeals to one or more of the NPC's motivations.
-- **Mentions Pitfall**: Check if your argument inadvertently mentions a pitfall.
+- **Appeals to Motivation**: One button per motivation. Press the ones your argument appeals to. A pressed button shows a
+  check. A motivation that was used in an earlier argument is marked **spent** (hollow diamond, struck through).
+- **Mentions Pitfall**: Press a pitfall's button if your argument inadvertently mentions it.
 - **Reuses Motivation**: Indicates if you're reusing a motivation already appealed to.
     - Automatically enabled if you select a motivation that has been appealed to before.
 - **NPC Caught a Lie**: Check if the NPC catches a lie during the negotiation.
 - **Same Argument Used**: Indicates if you're repeating an argument without appealing to a motivation.
     - Disabled if you're appealing to a motivation.
+
+A greyed-out modifier says why, in small italics under it ("only when a spent Motivation is appealed to", "not while a
+Motivation is appealed to"). With a Motivation appealed to (and no Pitfall), the Argument Test is a **medium** test, as
+in the Heroes book.
 
 #### Example
 
@@ -195,23 +230,29 @@ automatically enabled.
 
 ### Power Roll
 
-After setting your modifiers, the tracker calculates the Power Roll difficulty. After the Hero rolls for the Argument,
-you can click the power roll result tier corresponding to the roll to select it. Then you can complete the Argument
-(see below)
+After setting your modifiers, the tracker calculates the Power Roll. **The tier results update the moment you press a
+button or tick a box**, so what you see is always what Complete Argument will apply. After the Hero rolls for the
+Argument, click the power roll result tier corresponding to the roll to select it. The chosen row is ringed and marked
+**✓ chosen** (at sidebar width the word drops out and the ring and check remain), and a tier you have chosen stays chosen
+when you change a modifier. Then you can complete the Argument (see below).
 
 ### Completing an Argument
 
 Once you've selected the outcome tier, click the **Complete Argument** button to apply the results:
 
-- **Interest**: Adjusted based on the outcome.
-- **Patience**: Adjusted based on the outcome.
+- **Interest**: Adjusted based on the outcome, and always kept between 0 and 5.
+- **Patience**: Adjusted based on the outcome, and always kept between 0 and 5.
 - **Argument**: Modifiers are reset for the next argument.
 - **Motivations**: Any motivations used are marked as appealed to.
 
 **Note:**
 
-- The **Complete Argument** button is enabled only after selecting an outcome tier.
+- The **Complete Argument** button is enabled (and turns accent-coloured) only after selecting an outcome tier.
 - The selected outcome tier determines the impact on interest and patience.
+- Complete Argument is unavailable once the negotiation is over (see
+  [When the negotiation ends](#when-the-negotiation-ends)).
+- After completing, the tab starts fresh: buttons and boxes cleared, no tier chosen, the motivations you used shown as spent
+  on the cards.
 
 ## Learning Motivations or Pitfalls
 
