@@ -27,6 +27,8 @@ import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
 import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlockHost';
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
+import { registerFrameworkElements } from '../../../src/framework/registerFrameworkElements';
+import { makeEnv } from '../framework/_adoptionEnv';
 import { createThemeService } from '../../../src/framework/seams/theme';
 import { createPreferenceStore } from '../../../src/framework/seams/prefs';
 import { createRollService } from '../../../src/framework/roll/service';
@@ -1570,5 +1572,88 @@ describe('SC-379: the tab is never stale after a live Complete Argument (M3)', (
 		expect(motivationChip(root, 'Higher Authority').getAttribute('aria-pressed')).toBe('true');
 		tierRadios(root)[1].click();
 		expect(completeBtn(root)!.disabled).toBe(false);
+	});
+});
+
+describe('SC-379: the tab stays correct under REAL view adoption (SC-340) — not just on a host that never re-renders', () => {
+	afterEach(() => {
+		jest.useRealTimers();
+		document.body.innerHTML = '';
+	});
+
+	const bodyAt = (text: string): string => text.match(/^```ds-nt\n([\s\S]*?)\n```$/m)![1];
+
+	/** The real wiring: registerFrameworkElements with viewAdoption on, a real vault, and a
+	 *  render that mirrors Obsidian re-running the processor after our own write. */
+	async function adoptionSetup(note: string) {
+		const { deps, app, plugin } = makeEnv();
+		app.vault.setFile('Note.md', note);
+		(plugin as any).load();
+		const elements = createElementRegistry();
+		elements.register(negotiationElement);
+		const registry = registerFrameworkElements(
+			plugin as any,
+			{ registry: elements, pipeline: new ElementPipeline(deps) },
+			{ viewAdoption: true },
+		);
+		const render = async () => {
+			const ctx = makeFakeContext(app as any, 'Note.md', 0);
+			document.body.appendChild(ctx.el);
+			await (plugin as any).registeredProcessors.get('ds-nt')!(bodyAt(app.vault.getContent('Note.md')!), ctx.el, ctx as any);
+			ctx.addedChildren.forEach((c: any) => c.load());
+			return ctx;
+		};
+		return { app, registry, render };
+	}
+
+	test('live Complete -> our own write -> Obsidian re-renders and ADOPTS the same root; the tab equals the written model; the next argument computes from the clean model', async () => {
+		jest.useFakeTimers();
+		const { app, registry, render } = await adoptionSetup('# N\n\nAbove.\n\n```ds-nt\n' + frodoYaml.trimEnd() + '\n```\n\nBelow.\n');
+		const root = (await render()).el.firstElementChild as HTMLElement;
+
+		motivationChip(root, 'Higher Authority').click();
+		pitfallChip(root, 'Power').click();
+		const lie = modBox(root, 'NPC caught');
+		lie.checked = true;
+		lie.dispatchEvent(new Event('change'));
+		tierRadios(root)[2].click();
+		completeBtn(root)!.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		// Obsidian re-runs the processor for the block our write changed: the writer ADOPTS its
+		// own view (no rebuild), so nothing but our in-place sync can have cleared the tab.
+		const ctx2 = await render();
+		expect(ctx2.el.firstElementChild).toBe(root);
+		expect(registry.stats.claims).toBeGreaterThan(0);
+
+		const model = parseYaml(bodyAt(app.vault.getContent('Note.md')!)) as any;
+		expect(model.currentArgument).toEqual({
+			motivationsUsed: [],
+			pitfallsUsed: [],
+			lieUsed: false,
+			sameArgumentUsed: false,
+			reusedMotivation: false,
+		});
+		for (const chip of root.querySelectorAll('.dse-nt__argument .dse-nt__chip')) {
+			expect(chip.getAttribute('aria-pressed')).toBe('false');
+		}
+		expect(modBox(root, 'NPC caught').checked).toBe(false);
+		expect(modBox(root, 'Reuses').checked).toBe(false);
+		expect(modBox(root, 'Argument has already').checked).toBe(false);
+		expect(tierRadios(root).filter((r) => r.getAttribute('aria-checked') === 'true')).toHaveLength(0);
+		expect(completeBtn(root)!.disabled).toBe(true);
+		expect(spentChip(root, 'Higher Authority').getAttribute('aria-pressed')).toBe('true');
+
+		// a second argument works from the clean slate: Peace (unspent) + crit = +1 Interest, no Patience cost
+		motivationChip(root, 'Peace').click();
+		tierRadios(root)[3].click();
+		completeBtn(root)!.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const after = parseYaml(bodyAt(app.vault.getContent('Note.md')!)) as any;
+		expect([after.current_patience, after.current_interest]).toEqual([
+			model.current_patience,
+			Math.min(5, model.current_interest + 1),
+		]);
+		expect(app.vault.getContent('Note.md')!.endsWith('\n```\n\nBelow.\n')).toBe(true);
 	});
 });
