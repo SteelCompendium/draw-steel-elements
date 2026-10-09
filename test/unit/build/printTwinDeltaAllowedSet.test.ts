@@ -199,6 +199,23 @@ describe('SC-127 r7 — obsidian-light-island.mjs exists with the expected shape
 		expect(islandMjs).not.toMatch(/exclusionFor|EXCLUDED_ANCESTOR_SCOPES|splitSubject/);
 	});
 
+	// SC-127 r11 (round-10 re-review L2): r9's own bug 2 was exactly this — `lightDefault`
+	// was computed inside generateLightIsland but never included in its `return { ... }`
+	// object literal, so the guard's destructured `lightDefault` was `undefined` and every
+	// lookup into it threw deep inside a 10-minute sweep (r9's own `sweepA2.log`). Nothing
+	// in the 33 tests that existed at the time caught it — only a full sweep did, through
+	// L1's (then-generic) exception path. This pins the return statement's exact key set so
+	// dropping any one of them (lightDefault included) is red in milliseconds, not a sweep.
+	it('generateLightIsland returns every key the guard (shoot.mjs) and the CLI depend on, including lightDefault', () => {
+		const m = islandMjs.match(/export async function generateLightIsland\(page, pinnedCss\) \{[\s\S]*?\n\treturn \{([^}]*)\};\n\}/);
+		if (!m) throw new Error('could not find generateLightIsland\'s return statement');
+		const keys = m[1]
+			.split(',')
+			.map((k) => k.trim())
+			.filter(Boolean);
+		expect(keys).toEqual(['tokenNames', 'differing', 'accentDerived', 'light', 'lightDefault', 'text']);
+	});
+
 	it('package.json has the gen-light-island script', () => {
 		const pkg = fs.readFileSync(path.join(__dirname, '../../../package.json'), 'utf8');
 		expect(pkg).toMatch(/"gen-light-island":\s*"node visual-harness\/obsidian-light-island\.mjs"/);
@@ -336,6 +353,16 @@ describe('SC-127 r9 LOW-C — the committed block matches the committed manifest
 // best-effort: it can prove a token is STALE via a directly-redeclared-per-theme mismatch,
 // but not through a multi-step mapping chain — matching what it could always prove).
 // Skips cleanly, and SAYS SO, when the pinned sheet is not cached locally (true in CI).
+//
+// SC-127 r11 (round-10 re-review L3): this test used to loop over `Object.keys(manifest)`
+// and check `t in manifest` — always true by construction, since `t` came FROM that same
+// object's own keys. The test was a tautology: deleting a token from BOTH the committed
+// block and the manifest (e.g. `--color-base-30`) left it green, because the thing it
+// iterated over shrank along with the thing it checked against. Fixed to iterate the
+// SHEET-DERIVED set instead (tokens directly redeclared with a different literal value
+// under `.theme-dark` vs `.theme-light`) and check THAT set is a subset of the manifest's
+// keys — now an independently-derived expectation, so a token missing from the manifest
+// (dropped, or never added) is caught regardless of what the manifest itself still lists.
 describe('SC-127 r9 LOW-C (extra, local-only) — the manifest vs a locally cached pinned sheet, textually', () => {
 	const PINNED_SHEET_PATH = path.join(__dirname, '../../../visual-harness/dist/obsidian-app.css');
 	const hasPinnedSheet = fs.existsSync(PINNED_SHEET_PATH);
@@ -346,7 +373,7 @@ describe('SC-127 r9 LOW-C (extra, local-only) — the manifest vs a locally cach
 	if (!hasPinnedSheet) {
 		it.skip('SKIPPED (this is expected in CI) — no cached visual-harness/dist/obsidian-app.css on this machine (run `npm run host-css` first)', () => {});
 	} else {
-		it('every manifest token not provably identical dark vs light, directly, is at least present (best-effort — see the describe block above for the enforced, exact check)', () => {
+		it('every sheet-derived differing token (directly redeclared, dark vs light, with a different literal) is present in the manifest (best-effort — see the describe block above for the enforced, exact check)', () => {
 			const pinnedCss = fs.readFileSync(PINNED_SHEET_PATH, 'utf8');
 
 			function ruleBody(css: string, selector: string): string {
@@ -371,14 +398,16 @@ describe('SC-127 r9 LOW-C (extra, local-only) — the manifest vs a locally cach
 			const darkDecls = declMap(ruleBody(pinnedCss, '.theme-dark'));
 			const lightDecls = declMap(ruleBody(pinnedCss, '.theme-light'));
 
-			const KNOWN_TEXTUAL_FALSE_POSITIVES = new Set(['--interactive-accent-hover']);
-			const missing: string[] = [];
-			for (const t of Object.keys(manifest)) {
-				if (KNOWN_TEXTUAL_FALSE_POSITIVES.has(t)) continue;
-				const provablyIdentical = darkDecls[t] === lightDecls[t];
-				if (provablyIdentical) continue;
-				if (!(t in manifest)) missing.push(t);
-			}
+			// The SHEET's own set, independent of the manifest entirely: every token directly
+			// redeclared under BOTH selectors with a textually different literal. This is a
+			// strict subset of the generator's real (cascade-resolved) differing set — it
+			// cannot see a multi-step mapping chain, matching what a textual check could ever
+			// prove — but every name in it is unambiguous: this is what makes the check
+			// non-tautological, since it no longer depends on the manifest's own key list.
+			const sheetDiffering = Object.keys(darkDecls).filter((t) => t in lightDecls && darkDecls[t] !== lightDecls[t]);
+			expect(sheetDiffering.length).toBeGreaterThan(20); // guard against a vacuous pass (e.g. a selector-match regression above)
+
+			const missing = sheetDiffering.filter((t) => !(t in manifest));
 			expect(missing).toEqual([]);
 		});
 	}
