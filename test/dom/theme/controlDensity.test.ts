@@ -208,27 +208,25 @@ describe('A-2: Steel control density — one knob, pointer-aware', () => {
 });
 
 // ---------------------------------------------------------------------------
-// D-2: negotiation Interest ladder pitch
+// D-2: negotiation Interest ladder pitch — SC-379 retired the bubble ladder this block tuned
+// (its --dse-control-min diameter, connector calcs and 0.2em rung margin) for the kit track().
+// What D-2 protected survives as the same contract on the new seals: the rail is derived from
+// the seal size (never a px figure), so both pointer modes and the narrow 1.6em seal stay aligned.
 // ---------------------------------------------------------------------------
-describe('D-2: the Interest ladder re-derives from the shared control size', () => {
-	const NT_SCOPE = "[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print=\"on\"])";
-
-	test('the bubble diameter follows --dse-control-min, not the raw touch-min', () => {
-		const r = one(`${NT_SCOPE} .dse-nt__bubble`);
-		expect(r.body).toMatch(/width:\s*var\(--dse-control-min/);
+describe('D-2: the Interest rows re-derive from the seal size (SC-379 kit track)', () => {
+	test('the legacy bubble/ladder rules are gone', () => {
+		expect(css).not.toMatch(/\.dse-nt__bubble/);
+		expect(css).not.toMatch(/\.dse-nt__interest-(ladder|row)/);
 	});
 
-	test('the rung block margin drops to 0.2em (the inline 0.5em the connector is keyed to stays)', () => {
-		const r = one('.dse-nt__interest-row .dse-nt__bubble', '');
-		expect(r.selector).toBe(`${NT_SCOPE} .dse-nt__interest-row .dse-nt__bubble`);
-		expect(r.body).toMatch(/margin:\s*0\.2em\s+0\.5em/);
+	test('the vertical rail is placed against --dse-track-mark and the row padding, not a literal', () => {
+		const r = exact('.dse-track--vertical .dse-track__slot::before');
+		expect(r.body).toMatch(/left:\s*calc\([^;]*--dse-track-pad-x[^;]*--dse-track-mark/);
 	});
 
-	test('the connector line re-derives from the same knob, so both pointer modes stay aligned', () => {
-		const r = one(`${NT_SCOPE} .dse-nt__interest-ladder::before`);
-		for (const prop of ['height', 'top', 'left']) {
-			expect(r.body).toMatch(new RegExp(`${prop}:\\s*calc\\([^;]*--dse-control-min`));
-		}
+	test('the first/last rows stop the rail at the seal centre, so it never overshoots', () => {
+		expect(exact(".dse-track--vertical .dse-track__slot[data-edge='first']::before").body).toMatch(/top:\s*50%/);
+		expect(exact(".dse-track--vertical .dse-track__slot[data-edge='last']::before").body).toMatch(/bottom:\s*50%/);
 	});
 });
 
