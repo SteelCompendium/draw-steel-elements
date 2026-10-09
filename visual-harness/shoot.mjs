@@ -5345,7 +5345,23 @@ try {
 		{
 			const pinnedHost = loadLocalObsidianAppCss();
 			if (!pinnedHost) console.log('\nSC-127 light island check SKIPPED (no resolved Obsidian app.css sheet)');
-			else await assertSc127LightIslandPinned(page, pinnedHost.css);
+			else {
+				// SC-127 r11 (round-10 re-review L1): an exception thrown INSIDE the guard
+				// (e.g. a comparison map the generator forgot to return — r9's own bug 2) used
+				// to escape all the way to the sweep's single outer try/catch below, which
+				// reports it as a generic `FAIL sweep (exception)` indistinguishable from any
+				// other failure in this whole function, AND aborts every gate still queued
+				// after this block for the rest of the run. Its own try/catch names the guard
+				// explicitly and exits immediately, so the failure is unambiguous the moment
+				// it happens instead of being diagnosed from a stack trace ten minutes into a
+				// sweep (SC-127 r9's own `sweepA2.log` was exactly this).
+				try {
+					await assertSc127LightIslandPinned(page, pinnedHost.css);
+				} catch (e) {
+					console.error(`\nSC-127 LIGHT ISLAND GUARD FAILED (exception inside assertSc127LightIslandPinned): ${String(e)}`);
+					process.exit(1);
+				}
+			}
 		}
 		// SC-203 — the same question asked of EVERY button in the plugin, not just the
 		// chrome panel's. Same shape again; same reason for the narrowed-run skip.
