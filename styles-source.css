@@ -2739,6 +2739,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 	.dse-nt__chip {
 		display: inline-flex;
 		align-items: center;
+		justify-content: flex-start; /* Obsidian's button centres; the chip content reads from the left */
 		gap: 0.4em;
 		height: auto;
 		min-height: 2em;
