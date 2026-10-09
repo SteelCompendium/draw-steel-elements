@@ -1363,6 +1363,17 @@ export const INTERACTION_SHOTS: {
 			fixture: 'default',
 			click: "button.dse-pr__row[data-tier='mid']",
 		},
+		// SC-379 — appealing to the FIRST motivation chip (Higher Authority) proves the tier
+		// rows recompute on the spot: the tiers must show the motivation table (0/+1/+1/+1
+		// Interest) with no write echo, the chip pressed + checked, and the same-argument
+		// modifier greyed with its "not while a Motivation is appealed to" why-hint. The
+		// `button.` + `:first-of-type` pair picks the first chip of the Appeals row only.
+		{
+			id: 'negotiation-appeal',
+			element: 'negotiation',
+			fixture: 'default',
+			click: "button.dse-nt__chip[data-kind='motivation']:first-of-type",
+		},
 		// SC-154 — the command bar's Malice-log drawer OPEN: the state that proves the
 		// list drops onto its own full-width line UNDER the strip instead of displacing
 		// the Malice column. Only reachable by a real toggle of the collapsible's
