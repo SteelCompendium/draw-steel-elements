@@ -36,8 +36,8 @@ export class EndBandView {
 		}
 
 		if (!this.bandEl) {
-			const band = document.createElement('div');
-			band.classList.add('dse-nt__end');
+			// Created off the anchor (the popout-safe document), then seated after it.
+			const band = this.anchorEl.createDiv({ cls: 'dse-nt__end' });
 			band.setAttribute('role', 'status');
 			const flag = band.createSpan({ cls: 'dse-nt__icon dse-nt__end-flag' });
 			flag.setAttribute('aria-hidden', 'true');

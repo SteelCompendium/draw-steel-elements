@@ -133,8 +133,8 @@ export class PatienceInterestView {
 			},
 			this.owner,
 		);
-		this.nowEl = document.createElement('span');
-		this.nowEl.classList.add('dse-nt__now');
+		// Mounted here, then moved onto the checked row by refresh() (build() calls it next).
+		this.nowEl = section.createSpan({ cls: 'dse-nt__now' });
 	}
 
 	/** User mutation: update data, repaint in place, persist (render never writes). */
