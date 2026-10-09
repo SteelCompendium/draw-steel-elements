@@ -8,7 +8,7 @@ The Negotiation Tracker uses YAML-defined data to represent the state of a negot
 and current levels of patience and interest. The YAML code block is where the initial negotiation data is configured and
 where the state is persisted.
 
-![negotiation](Media/negotiation.gif)
+![negotiation](Media/negotiation.png)
 
 ## Quick Start Example
 
