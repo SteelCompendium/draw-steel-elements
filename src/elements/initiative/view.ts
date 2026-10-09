@@ -340,7 +340,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 			if (input) return;
 			const el = heading.createEl('textarea', {
 				cls: 'dse-init__title-input',
-				attr: { placeholder: 'Untitled encounter', rows: '1' },
+				attr: { placeholder: 'Untitled encounter', rows: '1', spellcheck: 'false' }, // proper nouns: no red squiggle
 			});
 			el.setAttribute('aria-label', 'Encounter name');
 			el.value = titled();

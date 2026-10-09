@@ -2021,6 +2021,7 @@ describe('SC-377: the editable encounter title (owner ruling O6)', () => {
 		const ta = inputOf(root)!;
 		expect(ta.tagName).toBe('TEXTAREA');
 		expect(ta.getAttribute('rows')).toBe('1');
+		expect(ta.getAttribute('spellcheck')).toBe('false'); // encounter names are proper nouns
 		ta.value = 'Line one\r\nline two\n\n three';
 		ta.dispatchEvent(new Event('input', { bubbles: true }));
 		expect(ta.value).toBe('Line one line two three'); // breaks (and the blanks around them) collapse to ONE space
