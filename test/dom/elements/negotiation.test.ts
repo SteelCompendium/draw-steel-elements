@@ -112,13 +112,25 @@ const checkedInterest = (root: HTMLElement): number[] =>
 	[0, 1, 2, 3, 4, 5].filter((i) => interestSlot(root, i).getAttribute('aria-checked') === 'true');
 const interestOffer = (root: HTMLElement, i: number) =>
 	interestSlot(root, i).querySelector('.dse-track__text') as HTMLElement;
+const motivationChip = (root: HTMLElement, name: string) =>
+	Array.from(root.querySelectorAll('.dse-nt__argument .dse-nt__chip[data-kind="motivation"]')).find((c) =>
+		c.textContent!.includes(name),
+	) as HTMLButtonElement;
+const pitfallChip = (root: HTMLElement, name: string) =>
+	Array.from(root.querySelectorAll('.dse-nt__argument .dse-nt__chip[data-kind="pitfall"]')).find((c) =>
+		c.textContent!.includes(name),
+	) as HTMLButtonElement;
+const spentChip = (root: HTMLElement, name: string) =>
+	Array.from(root.querySelectorAll('.dse-nt__dossier-col[data-kind="motivation"] .dse-nt__dos')).find((r) =>
+		r.querySelector('.dse-nt__dos-name')!.textContent === name,
+	)!.querySelector('.dse-nt__chip') as HTMLButtonElement;
 const bandEl = (root: HTMLElement) => root.querySelector('.dse-nt__end') as HTMLElement | null;
 const tabEls = (root: HTMLElement) =>
 	Array.from(root.querySelectorAll('[role="tab"]')) as HTMLButtonElement[];
 const tierRadios = (root: HTMLElement) =>
 	Array.from(root.querySelectorAll('.dse-nt__argument .dse-pr__row')) as HTMLButtonElement[];
 const completeBtn = (root: HTMLElement) =>
-	root.querySelector('.dse-nt__argument-footer .dse-btn') as HTMLButtonElement | null;
+	root.querySelector('.dse-nt__complete .dse-btn') as HTMLButtonElement | null;
 const menuBtn = (root: HTMLElement) =>
 	root.querySelector('.dse-nt__menu') as HTMLButtonElement | null;
 
@@ -335,19 +347,47 @@ describe('T-7: negotiation rendered through the REAL ElementPipeline (D2 §3.10 
 		expect(rows[0].tagName).not.toBe('BUTTON');
 	});
 
-	test('details: motivations (checkboxes) and pitfalls from the fixture under .dse-nt__motivations', async () => {
+	test('dossier cards: a motivation row has exactly ONE control (the Spent chip); a pitfall row has none; the open count is "1 of 2 open" after one is spent', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
-
 		const root = await renderFrodo(pipeline, host);
 
-		const details = root.querySelector('.dse-nt__motivations') as HTMLElement;
-		const motivationNames = Array.from(details.querySelectorAll('.dse-nt__details-name')).map(
-			(el) => el.textContent,
-		);
-		expect(motivationNames).toEqual(['Higher Authority: ', 'Peace: ', 'Power: ']);
-		expect(details.querySelectorAll('input[type="checkbox"]')).toHaveLength(2); // pitfalls have none
-		expect(details.textContent).toContain('The ring is too powerful to ignore');
+		const dossier = root.querySelector('.dse-nt__dossier') as HTMLElement;
+		const names = Array.from(dossier.querySelectorAll('.dse-nt__dos-name')).map((el) => el.textContent);
+		expect(names).toEqual(['Higher Authority', 'Peace', 'Power']);
+		for (const row of dossier.querySelectorAll('.dse-nt__dossier-col[data-kind="motivation"] .dse-nt__dos')) {
+			expect(row.querySelectorAll('button, input')).toHaveLength(1);
+			const chip = row.querySelector('button') as HTMLButtonElement;
+			expect(chip.getAttribute('data-kind')).toBe('spent');
+			expect(chip.getAttribute('aria-pressed')).toBe('false');
+			expect(chip.textContent).toBe('Mark spent');
+		}
+		for (const row of dossier.querySelectorAll('.dse-nt__dossier-col[data-kind="pitfall"] .dse-nt__dos')) {
+			expect(row.querySelector('button, input')).toBeNull();
+		}
+		expect(dossier.textContent).toContain('The ring is too powerful to ignore');
+		expect(dossier.querySelector('.dse-nt__dossier-col[data-kind="motivation"] .dse-nt__dossier-count')!.textContent).toBe('2 of 2 open');
+		expect(dossier.querySelector('.dse-nt__dossier-col[data-kind="pitfall"] .dse-nt__dossier-count')!.textContent).toBe('1 known');
+		// no checkbox anywhere on the cards (the legacy checkbox is gone)
+		expect(dossier.querySelector('input[type="checkbox"]')).toBeNull();
+	});
+
+	test('chips live ONLY inside the argument tabpanel: every appeal/mention chip is there, and the cards hold none', async () => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+
+		const panel = root.querySelector('[role="tabpanel"]') as HTMLElement;
+		const appeal = Array.from(root.querySelectorAll('.dse-nt__chip[data-kind="motivation"], .dse-nt__chip[data-kind="pitfall"]'));
+		expect(appeal).toHaveLength(3); // Higher Authority, Peace, Power
+		for (const chip of appeal) {
+			expect(chip.tagName).toBe('BUTTON');
+			expect(panel.contains(chip)).toBe(true);
+			expect(chip.classList.contains('dse-optchip')).toBe(true);
+			expect(chip.getAttribute('aria-pressed')).toBe('false');
+		}
+		expect(root.querySelector('.dse-nt__dossier .dse-nt__chip:not([data-kind="spent"])')).toBeNull();
+		expect(root.querySelectorAll('.dse-nt__dossier .dse-nt__chip')).toHaveLength(2); // the two Spent chips only
 	});
 
 	test('rendering performs ZERO writes (legacy wrote the file on every render — deliberately dropped)', async () => {
@@ -543,44 +583,71 @@ describe('T-7: persisted mutations — exactly ONE debounced replaceSource, byte
 		);
 	});
 
-	test('details motivation checkbox -> setMotivationUsed -> one write with legacy bytes', async () => {
+	test('argument-tab appeal chip -> aria-pressed + currentArgument.motivationsUsed -> one write with legacy bytes', async () => {
 		jest.useFakeTimers();
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 		const root = await renderFrodo(pipeline, host);
 
-		const checkbox = root.querySelector(
-			'.dse-nt__motivations input[type="checkbox"]',
-		) as HTMLInputElement;
-		checkbox.checked = true;
-		checkbox.dispatchEvent(new Event('change'));
+		motivationChip(root, 'Higher Authority').click();
 
-		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-
-		expect(host.replaceSource).toHaveBeenCalledTimes(1);
-		expect(host.replaceSource.mock.calls[0][0]).toBe(
-			legacyBytes(frodoYaml, (m) => m.setMotivationUsed('Higher Authority', true)),
-		);
-	});
-
-	test('argument-tab motivation checkbox -> currentArgument.motivationsUsed -> one write with legacy bytes', async () => {
-		jest.useFakeTimers();
-		const pipeline = new ElementPipeline(makeDeps());
-		const host = makeHost();
-		const root = await renderFrodo(pipeline, host);
-
-		const checkbox = root.querySelector(
-			'.dse-nt__argument-motivations input[type="checkbox"]',
-		) as HTMLInputElement;
-		checkbox.checked = true;
-		checkbox.dispatchEvent(new Event('change'));
-
+		expect(motivationChip(root, 'Higher Authority').getAttribute('aria-pressed')).toBe('true');
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		expect(host.replaceSource).toHaveBeenCalledTimes(1);
 		expect(host.replaceSource.mock.calls[0][0]).toBe(
 			legacyBytes(frodoYaml, (m) => m.currentArgument.motivationsUsed.push('Higher Authority')),
 		);
+	});
+
+	test('a pitfall chip writes pitfallsUsed (legacy bytes) and toggles back off', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+
+		pitfallChip(root, 'Power').click();
+		expect(pitfallChip(root, 'Power').getAttribute('aria-pressed')).toBe('true');
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource.mock.calls[0][0]).toBe(
+			legacyBytes(frodoYaml, (m) => m.currentArgument.pitfallsUsed.push('Power')),
+		);
+
+		pitfallChip(root, 'Power').click();
+		expect(pitfallChip(root, 'Power').getAttribute('aria-pressed')).toBe('false');
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource.mock.calls[1][0]).toBe(legacyBytes(frodoYaml));
+	});
+
+	test('dossier Spent chip -> setMotivationUsed -> one write with legacy bytes; the row, chip and count repaint in place', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+		const chip = spentChip(root, 'Higher Authority');
+
+		chip.click();
+
+		expect(spentChip(root, 'Higher Authority')).toBe(chip); // same node, no rebuild
+		expect(chip.getAttribute('aria-pressed')).toBe('true');
+		expect(chip.textContent).toBe('Spent');
+		expect(chip.querySelector('.dse-nt__chip-check')).not.toBeNull();
+		expect(chip.closest('.dse-nt__dos')!.classList.contains('is-spent')).toBe(true);
+		expect(chip.closest('.dse-nt__dos')!.querySelector('.dse-nt__dos-glyph')!.textContent).toBe('◇');
+		expect(root.querySelector('.dse-nt__dossier-col[data-kind="motivation"] .dse-nt__dossier-count')!.textContent).toBe('1 of 2 open');
+		// the argument tab follows: the appeal chip now reads spent
+		expect(motivationChip(root, 'Higher Authority').classList.contains('is-spent')).toBe(true);
+		expect(motivationChip(root, 'Higher Authority').querySelector('.dse-nt__chip-note')!.textContent).toBe('spent');
+
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect(host.replaceSource.mock.calls[0][0]).toBe(
+			legacyBytes(frodoYaml, (m) => m.setMotivationUsed('Higher Authority', true)),
+		);
+
+		chip.click(); // and back: unspent
+		expect(chip.getAttribute('aria-pressed')).toBe('false');
+		expect(motivationChip(root, 'Higher Authority').classList.contains('is-spent')).toBe(false);
 	});
 
 	test('tier radiogroup: click checks EXACTLY ONE radio (roving tabindex) and enables Complete — selection alone never writes', async () => {
@@ -640,11 +707,7 @@ describe('T-7: persisted mutations — exactly ONE debounced replaceSource, byte
 		const host = makeHost();
 		const root = await renderFrodo(pipeline, host);
 
-		const checkbox = root.querySelector(
-			'.dse-nt__argument-motivations input[type="checkbox"]',
-		) as HTMLInputElement;
-		checkbox.checked = true;
-		checkbox.dispatchEvent(new Event('change')); // schedules a persist…
+		motivationChip(root, 'Higher Authority').click(); // schedules a persist…
 		tierRadios(root)[3].click(); // crit: +1 Interest
 		completeBtn(root)!.click(); // …which COALESCES with the complete's persist
 
@@ -760,15 +823,19 @@ describe('T-7: canPersist=false — read-only renders WITHOUT write affordances,
 		root.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
 			expect((cb as HTMLInputElement).disabled).toBe(true);
 		});
+		// every chip — the three appeal/mention chips AND the two Spent chips — is REAL-disabled
+		const chips = Array.from(root.querySelectorAll('.dse-nt__chip')) as HTMLButtonElement[];
+		expect(chips).toHaveLength(5);
+		for (const chip of chips) expect(chip.disabled).toBe(true);
 		// the two standing tracks are radiogroups; the TIER panel is not (static rows)
 		expect(root.querySelector('.dse-nt__argument [role="radiogroup"]')).toBeNull();
 		expect(root.querySelector('.dse-nt__argument .dse-pr')).not.toBeNull();
 
 		patienceSlot(root, 1).click();
 		expect(checkedPatience(root)).toEqual([3]); // unchanged
-		const checkbox = root.querySelector('.dse-nt__motivations input[type="checkbox"]') as HTMLInputElement;
-		checkbox.checked = true;
-		checkbox.dispatchEvent(new Event('change'));
+		spentChip(root, 'Higher Authority').click();
+		motivationChip(root, 'Higher Authority').click();
+		expect(motivationChip(root, 'Higher Authority').getAttribute('aria-pressed')).toBe('false');
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
 
 		expect(host.replaceSource).not.toHaveBeenCalled();
@@ -873,6 +940,7 @@ function frodoAt(interest: number, patience: number): string {
 	return `current_interest: ${interest}\ncurrent_patience: ${patience}\n${frodoYaml}`;
 }
 
+const PICK_HINT = 'Choose the test result to complete the argument';
 const OVER_HINT = 'The negotiation is over — use ⋮ → Reset negotiation to start again.';
 const hintEl = (root: HTMLElement) => root.querySelector('.dse-nt__complete-hint') as HTMLElement;
 const nt = (root: HTMLElement) => root.querySelector('.dse-nt') as HTMLElement;
@@ -1072,19 +1140,19 @@ describe('SC-379: the "negotiation over" band (final / deal / hostile)', () => {
 		expect(tierRadios(root)[0].tagName).not.toBe('BUTTON');
 	});
 
-	test('a live negotiation has NO data-ended, NO band and an empty hint', async () => {
+	test('a live negotiation has NO data-ended, NO band and the choose-a-result hint', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 		const root = await renderFrodo(pipeline, host);
 
 		expect(nt(root).hasAttribute('data-ended')).toBe(false);
 		expect(bandEl(root)).toBeNull();
-		expect(hintEl(root).textContent).toBe('');
+		expect(hintEl(root).textContent).toBe(PICK_HINT);
 		expect(root.querySelector('.dse-nt__now')!.textContent).toBe('now');
 		expect(root.querySelector('.dse-nt__now-flag')).toBeNull();
 	});
 
-	test('the tracks stay operable: moving Patience back to 1 removes data-ended, the band, the over-hint and the static roll IN PLACE (same nodes)', async () => {
+	test('the tracks stay operable: moving Patience back to 1 removes data-ended, the band, the over-hint (back to the choose-a-result hint) and the static roll IN PLACE (same nodes)', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 		await pipeline.run(negotiationElement, frodoAt(3, 0), host);
@@ -1099,7 +1167,7 @@ describe('SC-379: the "negotiation over" band (final / deal / hostile)', () => {
 		expect(root.querySelector('.dse-nt__patience .dse-track')).toBe(trackBefore);
 		expect(nt(root).hasAttribute('data-ended')).toBe(false);
 		expect(bandEl(root)).toBeNull();
-		expect(hintEl(root).textContent).toBe('');
+		expect(hintEl(root).textContent).toBe(PICK_HINT);
 		expect(root.querySelector('.dse-nt__now')!.textContent).toBe('now');
 		// the roll is re-armed: a live radiogroup again, Complete disabled until a pick
 		expect(root.querySelector('.dse-nt__argument [role="radiogroup"]')).not.toBeNull();
@@ -1222,9 +1290,7 @@ describe('SC-379: NO YAML shape change — the model gains methods only', () => 
 		await flush();
 		expect(keysOfLastWrite()).toEqual(LEGACY_KEYS);
 
-		const cb = root.querySelector('.dse-nt__argument-motivations input[type="checkbox"]') as HTMLInputElement;
-		cb.checked = true;
-		cb.dispatchEvent(new Event('change'));
+		motivationChip(root, 'Higher Authority').click();
 		tierRadios(root)[3].click();
 		completeBtn(root)!.click();
 		await flush();
@@ -1249,5 +1315,260 @@ describe('SC-379: NO YAML shape change — the model gains methods only', () => 
 		expect(checkedInterest(root)).toEqual([3]);
 		expect(bandEl(root)).toBeNull();
 		expect(interestOffer(root, 4).textContent).toBe('Remembers the taste of strawberries');
+	});
+});
+
+// ---------------------------------------------------------------------------------------
+// SC-379 slice 2 — the argument tab: chips, modifiers + why-hints, the tiers recomputed on the
+// spot, the chosen mark, Complete's arming, and a tab that never goes stale after Complete.
+// ---------------------------------------------------------------------------------------
+
+const ARMED_HINT = 'Applies the chosen tier to Interest and Patience';
+/** frodoYaml with "Higher Authority" already spent (a previous argument used it). */
+const frodoHaSpent = frodoYaml.replace(
+	`reason: "It's Frodo's duty to destroy the ring"`,
+	`reason: "It's Frodo's duty to destroy the ring"\n    hasBeenAppealedTo: true`,
+);
+const modLine = (root: HTMLElement, startsWith: string) =>
+	Array.from(root.querySelectorAll('.dse-nt__mods .dse-nt__check')).find((l) =>
+		l.querySelector('span')!.textContent!.startsWith(startsWith),
+	) as HTMLElement;
+const modBox = (root: HTMLElement, startsWith: string) => modLine(root, startsWith).querySelector('input') as HTMLInputElement;
+const tierTexts = (root: HTMLElement) => tierRadios(root).map((r) => r.querySelector('.dse-pr__text')!.textContent);
+
+describe('SC-379: the argument tab — chips, modifiers, recompute-in-place', () => {
+	afterEach(() => {
+		jest.useRealTimers();
+		document.body.innerHTML = '';
+	});
+
+	test('the tooltip says Medium (the Heroes book), never Easy', async () => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const root = await renderFrodo(pipeline, makeHost());
+
+		const heads = Array.from(root.querySelectorAll('.dse-nt__appeals-head')) as HTMLElement[];
+		expect(heads[0].getAttribute('aria-label')).toContain('Difficulty of the Argument Test is Medium.');
+		expect(root.innerHTML).not.toContain('is Easy');
+	});
+
+	test('chip grammar: a motivation chip is ◆ (◇ + a struck "spent" note once used before), a pressed chip carries a check, the pitfall chip carries the warning triangle', async () => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		await pipeline.run(negotiationElement, frodoHaSpent, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+
+		const ha = motivationChip(root, 'Higher Authority');
+		const peace = motivationChip(root, 'Peace');
+		expect(ha.querySelector('.dse-nt__chip-glyph')!.textContent).toBe('◇');
+		expect(ha.classList.contains('is-spent')).toBe(true);
+		expect(ha.querySelector('.dse-nt__chip-note')!.textContent).toBe('spent');
+		expect(peace.querySelector('.dse-nt__chip-glyph')!.textContent).toBe('◆');
+		expect(peace.querySelector('.dse-nt__chip-note')).toBeNull();
+		expect(pitfallChip(root, 'Power').querySelector('.dse-nt__chip-icon')!.getAttribute('data-icon')).toBe('triangle-alert');
+
+		expect(peace.querySelector('.dse-nt__chip-check')).toBeNull();
+		peace.click();
+		expect(peace.getAttribute('aria-pressed')).toBe('true');
+		expect(peace.querySelector('.dse-nt__chip-check')!.getAttribute('data-icon')).toBe('check');
+	});
+
+	test('toggling the Higher Authority chip recomputes the tiers to the motivation table BEFORE any write echo, in the same panel slot', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+		expect(tierTexts(root)[0]).toContain('-1 Interest, -1 Patience'); // the plain-argument table
+
+		motivationChip(root, 'Higher Authority').click();
+
+		// motivation table: tier 1 = no Interest, -1 Patience; tier 2 = +1 Interest, -1 Patience; tier 3/crit = +1 Interest
+		expect(tierTexts(root)).toEqual(['-1 Patience', '+1 Interest, -1 Patience', '+1 Interest', '+1 Interest']);
+		expect(host.replaceSource).not.toHaveBeenCalled(); // nothing echoed yet
+		expect(root.querySelectorAll('.dse-nt__roll-slot .dse-pr')).toHaveLength(1);
+
+		motivationChip(root, 'Higher Authority').click(); // and back
+		expect(tierTexts(root)[0]).toContain('-1 Interest, -1 Patience');
+		pitfallChip(root, 'Power').click(); // a pitfall: every tier is -1/-1
+		expect(new Set(tierTexts(root))).toEqual(new Set(['-1 Interest, -1 Patience']));
+	});
+
+	test('keyboard focus stays on the chip across the recompute (chips and boxes are updated, never recreated)', async () => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+		document.body.appendChild(host.containerEl);
+		const chip = motivationChip(root, 'Higher Authority');
+		chip.focus();
+		expect(document.activeElement).toBe(chip);
+
+		chip.click();
+
+		expect(motivationChip(root, 'Higher Authority')).toBe(chip);
+		expect(document.activeElement).toBe(chip);
+
+		const lie = modBox(root, 'NPC caught a lie');
+		lie.focus();
+		lie.checked = true;
+		lie.dispatchEvent(new Event('change'));
+		expect(modBox(root, 'NPC caught a lie')).toBe(lie);
+		expect(document.activeElement).toBe(lie);
+		expect(tierTexts(root)[1]).toContain('Interest'); // recomputed too
+	});
+
+	test('a previously CHOSEN tier stays chosen across a chip/modifier change (its result recomputed from the new table)', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+
+		tierRadios(root)[2].click(); // tier 3 (17+): +1 Interest, -1 Patience on the plain table
+		motivationChip(root, 'Higher Authority').click(); // tier 3 is now +1 Interest only
+
+		expect(tierRadios(root).map((r) => r.getAttribute('aria-checked'))).toEqual(['false', 'false', 'true', 'false']);
+		expect(completeBtn(root)!.disabled).toBe(false);
+		completeBtn(root)!.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		// the NEW table's tier 3 was applied: Interest +1, Patience unchanged
+		const w = parseYaml(lastWritten(host)) as any;
+		expect(w.current_interest).toBe(4);
+		expect(w.current_patience).toBe(3);
+	});
+
+	test('why-hints: shown ONLY while a modifier is greyed out, and the lines enable/disable in place with the chips', async () => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		await pipeline.run(negotiationElement, frodoHaSpent, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		const whys = () => Array.from(root.querySelectorAll('.dse-nt__why')).map((w) => w.textContent);
+
+		// no motivation appealed: "reuse" is greyed (no spent one appealed), "same argument" is live
+		expect(modBox(root, 'Reuses').disabled).toBe(true);
+		expect(modLine(root, 'Reuses').classList.contains('is-disabled')).toBe(true);
+		expect(modBox(root, 'Argument has already').disabled).toBe(false);
+		expect(modBox(root, 'NPC caught').disabled).toBe(false);
+		expect(whys()).toEqual(['only when a spent Motivation is appealed to']);
+
+		motivationChip(root, 'Higher Authority').click(); // appeal the SPENT motivation
+		expect(modBox(root, 'Reuses').disabled).toBe(false);
+		expect(modBox(root, 'Reuses').checked).toBe(true); // reuse is known, flagged for the Director
+		expect(modBox(root, 'Argument has already').disabled).toBe(true);
+		expect(whys()).toEqual(['not while a Motivation is appealed to']);
+
+		motivationChip(root, 'Higher Authority').click(); // off again
+		expect(modBox(root, 'Reuses').disabled).toBe(true);
+		expect(modBox(root, 'Reuses').checked).toBe(false);
+		expect(whys()).toEqual(['only when a spent Motivation is appealed to']);
+	});
+
+	test('the chosen tier row carries the "chosen" mark (check + word); only that row; Complete arms with the accent variant and says what it will do', async () => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const root = await renderFrodo(pipeline, makeHost());
+		expect(root.querySelector('.dse-nt__chosen')).toBeNull();
+		expect(completeBtn(root)!.classList.contains('dse-btn--accent')).toBe(false);
+		expect(hintEl(root).textContent).toBe(PICK_HINT);
+
+		tierRadios(root)[1].click();
+
+		const marks = root.querySelectorAll('.dse-nt__roll-slot .dse-nt__chosen');
+		expect(marks).toHaveLength(1);
+		expect(marks[0].parentElement).toBe(tierRadios(root)[1]);
+		expect(marks[0].textContent).toBe('chosen');
+		expect(marks[0].querySelector('[data-icon="check"]')).not.toBeNull();
+		expect(completeBtn(root)!.classList.contains('dse-btn--accent')).toBe(true);
+		expect(hintEl(root).textContent).toBe(ARMED_HINT);
+
+		tierRadios(root)[3].click(); // the mark MOVES with the selection
+		expect(root.querySelectorAll('.dse-nt__chosen')).toHaveLength(1);
+		expect(root.querySelector('.dse-nt__chosen')!.parentElement).toBe(tierRadios(root)[3]);
+	});
+
+	test('modifier checkboxes write the legacy fields (legacy bytes) and recompute', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+
+		const lie = modBox(root, 'NPC caught');
+		lie.checked = true;
+		lie.dispatchEvent(new Event('change'));
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect(host.replaceSource.mock.calls[0][0]).toBe(legacyBytes(frodoYaml, (m) => (m.currentArgument.lieUsed = true)));
+		expect(tierTexts(root)[0]).toContain('-2 Interest');
+	});
+
+	test('chips and modifiers stay operable once the negotiation is over (the next Reset clears them)', async () => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		await pipeline.run(negotiationElement, frodoAt(3, 0), host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+
+		expect(motivationChip(root, 'Peace').disabled).toBe(false);
+		motivationChip(root, 'Peace').click();
+		expect(motivationChip(root, 'Peace').getAttribute('aria-pressed')).toBe('true');
+		expect(root.querySelector('.dse-nt__argument [role="radiogroup"]')).toBeNull(); // still static
+		expect(completeBtn(root)!.disabled).toBe(true);
+	});
+});
+
+describe('SC-379: the tab is never stale after a live Complete Argument (M3)', () => {
+	afterEach(() => {
+		jest.useRealTimers();
+	});
+
+	test('after Complete (negotiation still live): chips unpressed, modifiers cleared and re-evaluated, NO tier checked, no chosen mark, Complete disarmed — the tab matches the reset model', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+
+		motivationChip(root, 'Higher Authority').click();
+		pitfallChip(root, 'Power').click();
+		const lie = modBox(root, 'NPC caught');
+		lie.checked = true;
+		lie.dispatchEvent(new Event('change'));
+		tierRadios(root)[1].click();
+		expect(completeBtn(root)!.disabled).toBe(false);
+
+		completeBtn(root)!.click();
+
+		// the view was NOT rebuilt (SC-340 adoption keeps it across our own write) …
+		expect(host.containerEl.firstElementChild).toBe(root);
+		// … yet the tab already matches the model's reset currentArgument
+		for (const chip of root.querySelectorAll('.dse-nt__argument .dse-nt__chip')) {
+			expect(chip.getAttribute('aria-pressed')).toBe('false');
+		}
+		expect(modBox(root, 'NPC caught').checked).toBe(false);
+		expect(modBox(root, 'Reuses').checked).toBe(false);
+		expect(modBox(root, 'Argument has already').disabled).toBe(false);
+		expect(root.querySelector('.dse-nt__why')?.textContent).toBe('only when a spent Motivation is appealed to');
+		expect(tierRadios(root).map((r) => r.getAttribute('aria-checked'))).toEqual(['false', 'false', 'false', 'false']);
+		expect(root.querySelector('.dse-nt__chosen')).toBeNull();
+		expect(tierTexts(root)[0]).toContain('-1 Interest, -1 Patience'); // the plain table again
+		expect(completeBtn(root)!.disabled).toBe(true);
+		expect(completeBtn(root)!.classList.contains('dse-btn--accent')).toBe(false);
+		expect(hintEl(root).textContent).toBe(PICK_HINT);
+		// the cards followed: Higher Authority is now spent, and its appeal chip says so
+		expect(spentChip(root, 'Higher Authority').getAttribute('aria-pressed')).toBe('true');
+		expect(motivationChip(root, 'Higher Authority').classList.contains('is-spent')).toBe(true);
+		expect(root.querySelector('.dse-nt__dossier-count')!.textContent).toBe('1 of 2 open');
+
+		// and the model really was reset: the written YAML carries an empty current argument
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const w = parseYaml(lastWritten(host)) as any;
+		expect(w.currentArgument).toEqual({
+			motivationsUsed: [],
+			pitfallsUsed: [],
+			lieUsed: false,
+			sameArgumentUsed: false,
+			reusedMotivation: false,
+		});
+
+		// the next argument works from a clean slate: re-ticking the chip adds it again
+		motivationChip(root, 'Higher Authority').click();
+		expect(motivationChip(root, 'Higher Authority').getAttribute('aria-pressed')).toBe('true');
+		tierRadios(root)[1].click();
+		expect(completeBtn(root)!.disabled).toBe(false);
 	});
 });

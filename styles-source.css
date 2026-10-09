@@ -2707,86 +2707,244 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 		margin: 0; /* the .dse-nt flex gap owns the vertical rhythm (SC-379) */
 	}
 
-	/* -- Make an Argument -- */
-	.dse-nt__argument-modifiers {
+	/* -- Make an Argument (SC-379): the chips, the modifiers, the roll, the Complete footer -- */
+	.dse-tabs__panel {
+		padding: 0.9rem;
+	}
+	.dse-nt__argument {
 		display: flex;
-
-        > div {
-            width: 50%;
-        }
+		flex-direction: column;
+		gap: 0.9rem;
 	}
-
-	.dse-nt__argument-header {
-		font-weight: bold;
+	.dse-nt__appeals {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(13em, 100%), 1fr));
+		gap: 0.75rem 1.5rem;
 	}
-
-	.dse-nt__argument-item {
-		display: block;
-		margin-left: 2em;
-	}
-
-	.dse-nt__argument-other {
-		margin-top: 0.3em;
-
-        .dse-nt__argument-item {
-            margin-left: 0;
-        }
-	}
-
-	/* previously-appealed motivations strike through (legacy parity) */
-	.dse-nt__argument-item--used {
-		text-decoration: line-through;
-	}
-
-	/* disabled modifier lines fade (legacy parity, on the token) */
-	.dse-nt__argument label:has(input:disabled) {
-		color: var(--dse-fg-faint);
-	}
-
-	.dse-nt__argument .dse-pr {
-		margin-top: 0.5em;
-	}
-
-	.dse-nt__argument-footer {
+	.dse-nt__appeals-head {
 		display: flex;
 		align-items: center;
-		justify-content: flex-end;
-		gap: 0.75em;
-		margin-top: 0.5em;
+		gap: 0.45em;
+		margin-bottom: 0.4rem;
+	}
+	.dse-nt__chiprow {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4em;
 	}
 
-	/* SC-379: why Complete Argument is greyed out once the negotiation is over (empty
-	   while live, so it takes no room). */
-	.dse-nt__complete-hint {
-		flex: 1 1 auto;
+	/* the chip: the shipped .dse-optchip pressed grammar at control size. It is a bare <button>,
+	   so it restates every property Obsidian's own `button` rules set (display, height, colour,
+	   fill, white-space) and wins on specificity — see the SC-203 block. */
+	.dse-nt__chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4em;
+		height: auto;
+		min-height: 2em;
+		padding: 0.28em 0.75em;
+		white-space: normal;
+		text-align: left;
+		color: var(--dse-fg);
+		background-color: var(--dse-surface);
+	}
+	.dse-nt__chip:hover {
+		background-color: var(--dse-hover);
+	}
+	.dse-nt__chip:disabled {
+		opacity: 1;
+		cursor: default;
+	}
+	.dse-nt__chip[aria-pressed='true'] {
+		color: var(--dse-heading);
+		font-weight: 700;
+	}
+	.dse-nt__chip.is-spent .dse-nt__chip-text {
+		text-decoration: line-through;
+		text-decoration-thickness: 1px;
+	}
+	.dse-nt__chip-note {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.1em;
+		font-weight: 400;
+	}
+	/* the "Spent" toggle on the cards: a quiet dashed chip until it is set, smaller than an appeal chip */
+	.dse-nt__chip[data-kind='spent'] {
+		font-size: var(--dse-fs-caption);
+		min-height: 0;
+		padding: 0.2em 0.6em;
+	}
+	.dse-nt__chip[data-kind='spent'][aria-pressed='false'] {
+		border-style: dashed;
+		font-weight: 400;
+	}
+
+	.dse-nt__mods {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+	}
+	.dse-nt__check {
+		display: flex;
+		align-items: baseline;
+		flex-wrap: wrap;
+		column-gap: 0.1em;
+		font-size: var(--dse-fs-secondary);
+		line-height: 1.45;
+		cursor: pointer;
+	}
+	.dse-nt__check input {
+		align-self: flex-start;
+		margin-top: 0.28em;
+	}
+	.dse-nt__check > span:not(.dse-nt__why) {
+		flex: 1 1 0;
 		min-width: 0;
-		text-align: right;
+	}
+	.dse-nt__check.is-disabled {
+		cursor: not-allowed;
+	}
+	.dse-nt__why {
+		flex-basis: 100%;
+		padding-left: 1.5em;
 		font-size: var(--dse-fs-caption);
 		font-style: italic;
 	}
-	.dse-nt__complete-hint:empty {
-		display: none;
+
+	/* the selectable roll: the chosen row is ringed all round + a check + the word "chosen" (the
+	   kit's aria-checked wash is nearly invisible). Scoped to negotiation — the kit base
+	   `.dse-pr__row[aria-checked]` is untouched. */
+	.dse-nt__roll-slot .dse-pr__row {
+		padding-top: 0.5rem;
+		padding-bottom: 0.5rem;
+	}
+	.dse-nt__roll-slot .dse-pr__text {
+		flex: 1 1 0;
+	}
+	.dse-nt__roll-slot button.dse-pr__row[aria-checked='true'] {
+		border-radius: 0;
+	}
+	.dse-nt__chosen {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3em;
+		margin-left: auto;
+		flex: none;
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.12em;
+		font-weight: 700;
+	}
+	.dse-nt__chosen .dse-nt__icon svg {
+		width: 1.3em;
+		height: 1.3em;
 	}
 
-	/* -- details: the Motivations / Pitfalls lists -- */
-	.dse-nt__details-header {
-		font-weight: bold;
-		margin-top: 1em;
-		margin-bottom: 1em;
+	.dse-nt__complete {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		flex-wrap: wrap;
+		gap: 0.5em 0.9em;
+	}
+	.dse-nt__complete-hint {
+		font-size: var(--dse-fs-caption);
+		font-style: italic;
+		text-align: right;
 	}
 
-	.dse-nt__details-item {
-		display: block;
-		margin-left: 2em;
+	/* -- the dossier cards: Motivations ◆ / Pitfalls ▲ (SC-379) -- */
+	.dse-nt__dossier {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(15em, 100%), 1fr));
+		gap: 0.75rem;
 	}
-
-	.dse-nt__details-name {
-		font-weight: bold;
+	.dse-nt__dossier-col {
+		border: 1px solid var(--dse-border);
+		border-radius: var(--dse-radius);
+		padding: 0.55rem 0.75rem 0.4rem;
+		min-width: 0;
 	}
-
-	/* already-appealed motivations strike through (legacy parity) */
-	.dse-nt__motivations label:has(input:checked) {
+	.dse-nt__dossier-head {
+		display: flex;
+		align-items: center;
+		gap: 0.45em;
+		padding-bottom: 0.4rem;
+		border-bottom: 1px solid var(--dse-border);
+	}
+	.dse-nt__dossier-count {
+		margin-left: auto;
+		font-size: var(--dse-fs-caption);
+	}
+	.dse-nt__dos {
+		display: flex;
+		align-items: flex-start;
+		flex-wrap: wrap;
+		gap: 0.3em 0.6em;
+		padding: 0.5rem 0;
+		border-bottom: 1px solid var(--dse-border);
+	}
+	.dse-nt__dos:last-child {
+		border-bottom: none;
+	}
+	.dse-nt__dos-glyph {
+		flex: none;
+		width: 1em;
+		line-height: 1.5;
+		text-align: center;
+	}
+	.dse-nt__dos-text {
+		flex: 1 1 10em;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		line-height: 1.4;
+	}
+	.dse-nt__dos-name {
+		font-weight: 700;
+	}
+	.dse-nt__dos-reason {
+		font-size: var(--dse-fs-secondary);
+	}
+	.dse-nt__dos.is-spent .dse-nt__dos-name {
 		text-decoration: line-through;
+		text-decoration-thickness: 1px;
+	}
+	.dse-nt__dos > .dse-nt__chip {
+		margin-left: auto;
+		align-self: center;
+	}
+	.dse-nt__dossier-col .dse-nt__icon {
+		display: inline-flex;
+	}
+
+	/* the narrow tab strip + panel (sidebar leaf): icons drop out so the labels fit one line */
+	@container dse-nt (max-width: 420px) {
+		.dse-tabs__icon {
+			display: none;
+		}
+		.dse-tabs__panel {
+			padding: 0.7rem 0.6rem;
+		}
+		.dse-tabs__tab {
+			font-size: var(--dse-fs-secondary);
+			padding: 0.45em 0.3em;
+		}
+		.dse-nt__roll-slot .dse-pr__row {
+			padding-left: 0.6rem;
+			padding-right: 0.6rem;
+			gap: 0.5em;
+		}
+		/* the word goes; the ring and the check keep the state */
+		.dse-nt__chosen > span:not(.dse-nt__icon) {
+			display: none;
+		}
+		.dse-nt__dos > .dse-nt__chip {
+			margin-left: 1.6em;
+		}
 	}
 }
 
@@ -11374,6 +11532,67 @@ body.theme-light
 }
 [data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__complete-hint {
 	color: var(--dse-fg-faint);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__chip:not([data-kind='spent']) {
+	/* control size (a role token). Declared here, not in the structure block: the SC-202
+	   input-family guard reads the FIRST `font-size: var(--dse-fs-control)` in the sheet. */
+	font-size: var(--dse-fs-control);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__glyph--mot {
+	color: var(--dse-metal-bright);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__glyph--pit {
+	color: var(--dse-warn);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__chip-glyph {
+	color: var(--dse-metal-bright);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__chip-check {
+	color: var(--dse-accent);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__chip[data-kind='pitfall'] .dse-nt__chip-icon {
+	color: var(--dse-warn);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__chip-note {
+	color: var(--dse-fg-muted);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__chip[data-kind='spent'][aria-pressed='false'] {
+	color: var(--dse-fg-muted);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__check.is-disabled {
+	color: var(--dse-fg-faint);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__why {
+	color: var(--dse-fg-faint);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__chosen {
+	color: var(--dse-accent);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__roll-slot button.dse-pr__row[aria-checked='true'] {
+	background-color: var(--dse-surface-raised);
+	box-shadow: inset 0 0 0 2px var(--dse-accent);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__dossier-col {
+	background: linear-gradient(var(--dse-surface-sunken), var(--dse-surface-sunken)), var(--dse-surface);
+	border-color: var(--dse-metal-faint);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__dossier-head {
+	border-bottom-color: var(--dse-metal-faint);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__dossier-count {
+	color: var(--dse-fg-faint);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__dos {
+	border-bottom-color: var(--dse-metal-faint);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__dos-name {
+	color: var(--dse-heading);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__dos-reason {
+	color: var(--dse-fg-muted);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__dos.is-spent .dse-nt__dos-name {
+	color: var(--dse-fg-muted);
 }
 
 /* -- 7. Themed checkbox (SC-121 Batch 1 / catalog D-3) --------------------

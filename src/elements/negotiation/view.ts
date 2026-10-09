@@ -81,9 +81,23 @@ export class NegotiationView extends ElementView<NegotiationData> {
 		standing = new PatienceInterestView(model, persist, refreshStanding, cycleOwner, canPersist);
 		band = new EndBandView(model, standing.build(container));
 
-		argument = this.buildActions(container, cycleOwner, model, persist, refreshStanding, renderMd, canPersist);
-
-		new MotivationsPitfallsView(model, persist, cycleOwner, canPersist).build(container);
+		// The two card-side hooks: Complete Argument spends motivations (cards repaint), and a
+		// Spent toggle on a card changes the argument tab's chips + reuse modifier (tab re-syncs).
+		let cards: MotivationsPitfallsView | undefined;
+		const refreshCards = (): void => cards?.refresh();
+		argument = this.buildActions(
+			container,
+			cycleOwner,
+			model,
+			persist,
+			refreshStanding,
+			refreshCards,
+			renderMd,
+			canPersist,
+		);
+		const tabArgument = argument;
+		cards = new MotivationsPitfallsView(model, persist, () => tabArgument.sync(), cycleOwner, canPersist);
+		cards.build(container);
 
 		refreshStanding(); // first paint: data-ended + the band for an already-ended standing
 	}
@@ -160,6 +174,7 @@ export class NegotiationView extends ElementView<NegotiationData> {
 		model: NegotiationData,
 		persist: () => void,
 		refreshStanding: () => void,
+		refreshCards: () => void,
 		renderMd: RenderMdCallback,
 		canPersist: boolean,
 	): ArgumentView {
@@ -179,7 +194,7 @@ export class NegotiationView extends ElementView<NegotiationData> {
 		);
 		handle.rootEl.addClass('dse-nt__actions');
 
-		const argument = new ArgumentView(model, persist, refreshStanding, owner, renderMd, canPersist);
+		const argument = new ArgumentView(model, persist, refreshStanding, refreshCards, owner, renderMd, canPersist);
 		argument.build(handle.panels['argument']);
 		new LearnMoreView(owner, renderMd).build(handle.panels['learn-more']);
 		return argument;
