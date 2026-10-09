@@ -87,6 +87,30 @@ export class NegotiationData {
         });
     }
 
+    /**
+     * SC-379 — the book's three stop conditions, derived from the live standing (a method:
+     * prototype methods are never own keys, so nothing here can reach serialize()).
+     * Precedence: Interest 5 is a deal, Interest 0 is hostile, otherwise spent Patience is a
+     * final offer. `null` while the negotiation is live.
+     */
+    ending(): 'deal' | 'hostile' | 'final' | null {
+        if (this.current_interest >= 5) return 'deal';
+        if (this.current_interest <= 0) return 'hostile';
+        if (this.current_patience <= 0) return 'final';
+        return null;
+    }
+
+    /** SC-379 — Interest and Patience live on a 0..5 scale; Complete Argument clamps to it. */
+    static clampStanding(n: number): number {
+        return Math.max(0, Math.min(5, n));
+    }
+
+    /** SC-379 — the authored outcome text for Interest `n` (clamped + rounded onto 0..5). */
+    offerFor(n: number): string {
+        const offers = [this.i0, this.i1, this.i2, this.i3, this.i4, this.i5];
+        return offers[Math.round(NegotiationData.clampStanding(n))];
+    }
+
     resetData() {
         this.current_patience = this.initial_patience ?? NegotiationData.default_patience;
         this.current_interest = this.initial_interest ?? NegotiationData.default_interest;

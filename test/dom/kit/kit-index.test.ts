@@ -26,6 +26,7 @@ import type {
 	CardHeadHandle,
 	PowerRollPanelHandle,
 	CrestHandle,
+	TrackHandle,
 	SessionPersist,
 	RollBarHandle,
 	RollResultCardHandle,
@@ -162,6 +163,7 @@ describe('Plan 08 Task 5: kit barrel (@/framework/kit)', () => {
 		expect(typeof kit.powerRollPanel).toBe('function');
 		expect(typeof kit.tierBadge).toBe('function');
 		expect(typeof kit.crest).toBe('function');
+		expect(typeof kit.track).toBe('function'); // SC-379
 		// …the D5 rolling widgets (Plan 14 Task 3)…
 		expect(typeof kit.rollBar).toBe('function');
 		expect(typeof kit.rollResultCard).toBe('function');
@@ -188,6 +190,8 @@ describe('Plan 08 Task 5: kit barrel (@/framework/kit)', () => {
 			// SessionPersist stays a barrel export after its move to framework/session
 			// (Plan 09 Task 0 — neutral home; it survived the Task 10 widget rename).
 			l?: SessionPersist;
+			// SC-379: the numbered-seal track.
+			k?: TrackHandle;
 			// The D5 rolling widget handles (Plan 14 Task 3).
 			m?: RollBarHandle; n?: RollResultCardHandle;
 			// The D7 Task 1 hero-panel contract + extracted render core option/value types.
@@ -212,6 +216,8 @@ describe('Plan 08 Task 5: framework-default :focus-visible (D2 §4.5)', () => {
 		'.dse-collapse__header:focus-visible',
 		'.dse-tabs__tab:focus-visible',
 		'.dse-pr__row[aria-checked]:focus-visible',
+		// SC-379: the kit track's seals (negotiation's Patience + Interest radiogroups).
+		'.dse-track__slot:focus-visible',
 		// SC-338: the option chip (Result/Duration/Effect + condition icon/preset
 		// choices, montage form + Conditions modal) — a bare <button>, not a kit widget.
 		'.dse-optchip:focus-visible',

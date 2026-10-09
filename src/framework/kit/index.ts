@@ -45,6 +45,9 @@ export type {
 } from './powerRollPanel';
 export { crest } from './crest';
 export type { CrestSize, CrestOptions, CrestHandle } from './crest';
+// SC-379: the numbered-seal radiogroup (negotiation's Patience + Interest tracks).
+export { track } from './track';
+export type { TrackOptions, TrackHandle } from './track';
 export { statTiles } from './statTiles';
 export type { StatTile } from './statTiles';
 
