@@ -7,27 +7,46 @@
 // controls already); their listeners are owner-bound (F1 §4.5), and their titles moved
 // onto the kit tooltip (§4.2).
 //
-// Tier values are computed ONCE at mount from the current argument state (legacy
-// parity): a modifier change persists, and the echo-rebuild re-renders the panel with
-// the recomputed tiers. Completing an argument likewise leaves the checked radio for
-// the echo-rebuild to clear (legacy left its .active class the same way).
+// Tier values are computed at mount from the current argument state (legacy parity): a
+// modifier change persists, and the echo-rebuild re-renders the panel with the recomputed
+// tiers (SC-379 slice 2 recomputes them on the spot). Completing an argument likewise
+// leaves the checked radio for the echo-rebuild to clear (legacy left its .active class
+// the same way).
+//
+// SC-379 (slice 1): the tier panel lives in `.dse-nt__roll-slot`, under its OWN child
+// Component, so it can be rebuilt in place. Today that happens for one reason: the
+// negotiation ENDED (NegotiationData.ending() !== null — the band in view.ts). An ended
+// negotiation has no argument left to make, so the panel renders STATIC (no radios leading
+// nowhere) and Complete Argument is disabled with an explanatory hint; moving the standing
+// back off an ending condition re-arms the slot. Complete's results are clamped to 0..5
+// (NegotiationData.clampStanding) so a crit at Interest 5 or a -1 at Patience 0 can never
+// write an out-of-range standing.
 //
 // Read-only hosts (F1 §4.4): the panel renders STATIC (no radios), checkboxes are
 // REAL-disabled with no listeners, and the Complete footer is omitted entirely — no
 // dead-end write affordances.
-import type { Component } from 'obsidian';
+import { Component } from 'obsidian';
 import { iconButton, powerRollPanel, tooltip } from '@/framework/kit';
 import type { IconButtonHandle, PowerRollTier, RenderMdCallback } from '@/framework/kit';
 import { NegotiationData } from '@model/NegotiationData';
 import { ArgumentPowerRoll, ArgumentResult } from '@model/ArgumentPowerRolls';
 
+/** The footer hint shown while the negotiation is over (SC-379 §3). */
+const OVER_HINT = 'The negotiation is over — use ⋮ → Reset negotiation to start again.';
+
 export class ArgumentView {
 	private selectedTier: ArgumentResult | null = null;
 	private completeButton?: IconButtonHandle;
+	private hintEl?: HTMLElement;
+	/** The roll slot + the child Component its panel's listeners are bound to. */
+	private rollSlot?: HTMLElement;
+	private rollOwner?: Component;
+	private ended = false;
 
 	constructor(
 		private readonly data: NegotiationData,
 		private readonly persist: () => void,
+		private readonly refreshStanding: () => void,
 		private readonly owner: Component,
 		private readonly renderMd: RenderMdCallback,
 		private readonly canPersist: boolean,
@@ -40,10 +59,22 @@ export class ArgumentView {
 		this.buildMotivations(modifiers);
 		this.buildPitfalls(modifiers);
 		this.buildOtherMods(body);
-		this.buildPowerRoll(body);
+		this.rollSlot = body.createDiv({ cls: 'dse-nt__roll-slot' });
+		this.ended = this.data.ending() !== null;
+		this.mountRoll();
 
 		// The Complete footer is a write action — omitted on read-only hosts (F1 §4.4).
 		if (this.canPersist) this.buildFooter(body);
+	}
+
+	/** The negotiation ended / was re-opened (view.ts refreshStanding). Re-seats the roll
+	 *  (static while ended) and the Complete footer; a no-op while the state is unchanged. */
+	public setEnded(ended: boolean): void {
+		if (ended === this.ended) return;
+		this.ended = ended;
+		this.selectedTier = null; // a pick belongs to a live roll; the rebuild clears it
+		this.mountRoll();
+		this.syncFooter();
 	}
 
 	/** A modifier line: <label> wrapping a native checkbox + its text (a real control). */
@@ -200,7 +231,15 @@ export class ArgumentView {
 		);
 	}
 
-	private buildPowerRoll(parent: HTMLElement): void {
+	/** (Re)mounts the tier panel into the roll slot under a fresh child Component, so the
+	 *  previous panel's listeners are released with it. */
+	private mountRoll(): void {
+		const slot = this.rollSlot;
+		if (!slot) return;
+		if (this.rollOwner) this.owner.removeChild(this.rollOwner);
+		slot.empty();
+		this.rollOwner = this.owner.addChild(new Component());
+
 		const roll = ArgumentPowerRoll.build(
 			this.data.currentArgument.usesMotivation(),
 			this.data.currentArgument.usesPitfall(),
@@ -216,7 +255,7 @@ export class ArgumentView {
 		};
 
 		powerRollPanel(
-			parent,
+			slot,
 			{
 				chars: 'Reason, Intuition, or Presence',
 				rows: [
@@ -225,20 +264,23 @@ export class ArgumentView {
 					{ tier: 'high', md: roll.t3.toString() },
 					{ tier: 'crit', md: roll.crit.toString() },
 				],
-				// Read-only hosts get the STATIC grammar — no radios to nowhere (§4.4).
-				selectable: this.canPersist,
+				// Read-only hosts get the STATIC grammar — no radios to nowhere (§4.4) — and
+				// so does an ended negotiation: Complete cannot fire, so nothing is selectable.
+				selectable: this.canPersist && !this.ended,
 				onSelect: (tier) => {
 					this.selectedTier = byTier[tier];
 					this.completeButton?.setDisabled(false);
 				},
 				renderMd: this.renderMd,
 			},
-			this.owner,
+			this.rollOwner,
 		);
 	}
 
 	private buildFooter(parent: HTMLElement): void {
 		const footer = parent.createDiv({ cls: 'dse-nt__argument-footer' });
+		// The over-hint sits left of the button; empty (and hidden by CSS) while live.
+		this.hintEl = footer.createSpan({ cls: 'dse-nt__complete-hint' });
 		this.completeButton = iconButton(
 			footer,
 			{
@@ -252,6 +294,13 @@ export class ArgumentView {
 			},
 			this.owner,
 		);
+		this.syncFooter();
+	}
+
+	/** Complete is armed only by a tier pick, and never once the negotiation is over. */
+	private syncFooter(): void {
+		this.hintEl?.setText(this.ended ? OVER_HINT : '');
+		this.completeButton?.setDisabled(true);
 	}
 
 	/** Resolve the argument: mark used motivations appealed-to, apply the selected
@@ -263,14 +312,21 @@ export class ArgumentView {
 		}
 
 		if (this.selectedTier) {
-			this.data.current_interest += this.selectedTier.interest;
-			this.data.current_patience += this.selectedTier.patience;
+			// SC-379: the 0..5 scale is a rule, not a display nicety — never write past it.
+			this.data.current_interest = NegotiationData.clampStanding(
+				this.data.current_interest + this.selectedTier.interest,
+			);
+			this.data.current_patience = NegotiationData.clampStanding(
+				this.data.current_patience + this.selectedTier.patience,
+			);
 		}
 
 		this.selectedTier = null;
 		this.completeButton?.setDisabled(true);
 		this.data.currentArgument.resetData();
 
+		// Repaint the standing region (and the ended band / static roll) in place, then write.
+		this.refreshStanding();
 		this.persist();
 	}
 }

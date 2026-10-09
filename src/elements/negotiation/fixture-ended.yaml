@@ -1,0 +1,26 @@
+# SC-379: the ENDED state for the harness (capture id `negotiation-ended`) — Patience has run
+# out after two arguments, so the "negotiation over" band reads "Final offer" at Interest 3,
+# both motivations are spent, and Complete Argument is disabled. example.yaml's name, offers
+# and motivations; only the standing and the spent flags differ. camelCase `hasBeenAppealedTo`
+# is the persisted key (NegotiationData serializes the class instance verbatim).
+name: "Convincing Frodo to remember the taste of strawberries"
+initial_interest: 3
+initial_patience: 3
+current_interest: 3
+current_patience: 0
+motivations:
+  - name: "Higher Authority"
+    reason: "It's Frodo's duty to destroy the ring"
+    hasBeenAppealedTo: true
+  - name: "Peace"
+    reason: "The Shire is life"
+    hasBeenAppealedTo: true
+pitfalls:
+  - name: "Power"
+    reason: "The ring is too powerful to ignore"
+i5: "Remembers the taste of strawberries and cream!"
+i4: "Remembers the taste of strawberries"
+i3: "Remembers the taste of unripe strawberries"
+i2: "Remembers the smell of strawberries"
+i1: "Doesn't remember the taste of strawberries"
+i0: "Thinks you're after the ring; becomes hostile"

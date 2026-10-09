@@ -1,9 +1,10 @@
 // Plan 09 Task 7 (D2 §3.10) — Negotiation Tracker redesigned onto the D2 kit: cardHead
 // (CB-16: the name slot, never a dangling "Negotiation: " prefix), kit tabs (a REAL
 // tablist; active tab in cx.session, OD-7), powerRollPanel(selectable) (the Task-0
-// radiogroup — role="radio" + aria-checked, exactly one tier), and iconButton bubbles
-// (aria-pressed) for the Patience track + Interest ladder. Every legacy click-<div>
-// becomes a real, keyboard-operable control. CB-4 (the legacy singleton-processor reset
+// radiogroup — role="radio" + aria-checked, exactly one tier). SC-379 replaced the
+// iconButton bubbles with two kit track() radiogroups of numbered seals (Patience across,
+// Interest down) plus the "negotiation over" band. Every legacy click-<div> becomes a
+// real, keyboard-operable control. CB-4 (the legacy singleton-processor reset
 // that clobbered the last-rendered tracker) is pinned per-instance here.
 //
 // Same harness as counter/stamina-bar: the element drives through the REAL
@@ -36,7 +37,7 @@ import { createSessionStore } from '../../../src/framework/session';
 import { createElementRegistry } from '../../../src/framework/registry';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { NegotiationData, parseNegotiationData } from '@model/NegotiationData';
-import { App, Plugin, Menu, Notice, stringifyYaml, makeFakeContext } from '../../mocks/obsidian';
+import { App, Plugin, Menu, Notice, parseYaml, stringifyYaml, makeFakeContext } from '../../mocks/obsidian';
 import { negotiationElement } from '../../../src/elements/negotiation/definition';
 import { NegotiationView } from '../../../src/elements/negotiation/view';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
@@ -100,19 +101,18 @@ async function renderFrodo(pipeline: ElementPipeline, host: BlockHost): Promise<
 	return host.containerEl.firstElementChild as HTMLElement;
 }
 
-// -- kit-DOM accessors (D2 §3.10 grammar) --
-const patienceBubble = (root: HTMLElement, i: number) =>
-	root.querySelector(`.dse-nt__patience .dse-nt__bubble[data-value="${i}"]`) as HTMLButtonElement;
-const pressedPatience = (root: HTMLElement): number[] =>
-	[0, 1, 2, 3, 4, 5].filter((i) => patienceBubble(root, i).getAttribute('aria-pressed') === 'true');
-const interestRow = (root: HTMLElement, i: number) =>
-	root.querySelector(`.dse-nt__interest-row[data-interest="${i}"]`) as HTMLElement;
-const interestBubble = (root: HTMLElement, i: number) =>
-	interestRow(root, i).querySelector('.dse-nt__bubble') as HTMLButtonElement;
-const pressedInterest = (root: HTMLElement): number[] =>
-	[0, 1, 2, 3, 4, 5].filter((i) => interestBubble(root, i).getAttribute('aria-pressed') === 'true');
+// -- kit-DOM accessors (D2 §3.10 grammar; SC-379 track() seals) --
+const patienceSlot = (root: HTMLElement, i: number) =>
+	root.querySelector(`.dse-nt__patience .dse-track__slot[data-value="${i}"]`) as HTMLButtonElement;
+const checkedPatience = (root: HTMLElement): number[] =>
+	[0, 1, 2, 3, 4, 5].filter((i) => patienceSlot(root, i).getAttribute('aria-checked') === 'true');
+const interestSlot = (root: HTMLElement, i: number) =>
+	root.querySelector(`.dse-nt__interest .dse-track__slot[data-value="${i}"]`) as HTMLButtonElement;
+const checkedInterest = (root: HTMLElement): number[] =>
+	[0, 1, 2, 3, 4, 5].filter((i) => interestSlot(root, i).getAttribute('aria-checked') === 'true');
 const interestOffer = (root: HTMLElement, i: number) =>
-	interestRow(root, i).querySelector('.dse-nt__interest-offer') as HTMLElement;
+	interestSlot(root, i).querySelector('.dse-track__text') as HTMLElement;
+const bandEl = (root: HTMLElement) => root.querySelector('.dse-nt__end') as HTMLElement | null;
 const tabEls = (root: HTMLElement) =>
 	Array.from(root.querySelectorAll('[role="tab"]')) as HTMLButtonElement[];
 const tierRadios = (root: HTMLElement) =>
@@ -202,46 +202,67 @@ describe('T-7: negotiation rendered through the REAL ElementPipeline (D2 §3.10 
 		expect(root.textContent).not.toContain('Negotiation:');
 	});
 
-	test('patience: 6 REAL <button aria-pressed> bubbles (labelled, type=button), 0..3 pressed from initial_patience: 3', async () => {
+	test('patience: a horizontal track of 6 REAL <button role="radio"> seals — aria-checked only on 3, data-fill on/spent/floor, ONE Tab stop, "3 / 5" readout', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 
 		const root = await renderFrodo(pipeline, host);
 
-		const bubbles = root.querySelectorAll('.dse-nt__patience .dse-nt__bubble');
-		expect(bubbles).toHaveLength(6);
+		const group = root.querySelector('.dse-nt__patience .dse-track') as HTMLElement;
+		expect(group.classList.contains('dse-track--horizontal')).toBe(true);
+		expect(group.getAttribute('role')).toBe('radiogroup');
+		expect(group.getAttribute('aria-label')).toBe('Patience');
+		expect(root.querySelectorAll('.dse-nt__patience .dse-track__slot')).toHaveLength(6);
 		for (let i = 0; i <= 5; i++) {
-			const bubble = patienceBubble(root, i);
-			expect(bubble.tagName).toBe('BUTTON');
-			expect(bubble.getAttribute('type')).toBe('button');
-			expect(bubble.getAttribute('aria-label')).toBe(`Set patience to ${i}`);
-			expect(bubble.textContent).toBe(String(i));
+			const slot = patienceSlot(root, i);
+			expect(slot.tagName).toBe('BUTTON');
+			expect(slot.getAttribute('type')).toBe('button');
+			expect(slot.getAttribute('role')).toBe('radio');
+			expect(slot.getAttribute('aria-label')).toBe(`Patience ${i}`);
+			expect(slot.textContent).toBe(String(i));
 		}
-		expect(pressedPatience(root)).toEqual([0, 1, 2, 3]);
+		// initial_patience: 3 — only seal 3 is checked; 1..3 remain (on), 4..5 spent, 0 the floor.
+		expect(checkedPatience(root)).toEqual([3]);
+		expect([0, 1, 2, 3, 4, 5].map((i) => patienceSlot(root, i).getAttribute('data-fill'))).toEqual([
+			'floor', 'on', 'on', 'on', 'spent', 'spent',
+		]);
+		expect(patienceSlot(root, 3).hasAttribute('data-current')).toBe(true);
+		expect([0, 1, 2, 3, 4, 5].map((i) => patienceSlot(root, i).getAttribute('tabindex'))).toEqual([
+			'-1', '-1', '-1', '0', '-1', '-1',
+		]);
+		expect(root.querySelector('.dse-nt__readout')!.getAttribute('aria-hidden')).toBe('true');
+		expect(root.querySelector('.dse-nt__readout')!.textContent).toBe('3/ 5');
 	});
 
-	test('interest: ladder rows 5..0 (fixture offers), REAL bubble buttons; current row [data-current]; passed rungs [data-reached]', async () => {
+	test('interest: a vertical track, rows 5..0 in DOM order carrying the fixture offers; the checked row holds the "now" tag; NO legacy data-reached anywhere', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 
 		const root = await renderFrodo(pipeline, host);
 
-		const rows = Array.from(root.querySelectorAll('.dse-nt__interest-row'));
-		expect(rows.map((r) => r.getAttribute('data-interest'))).toEqual(['5', '4', '3', '2', '1', '0']);
+		const group = root.querySelector('.dse-nt__interest .dse-track') as HTMLElement;
+		expect(group.classList.contains('dse-track--vertical')).toBe(true);
+		expect(group.getAttribute('role')).toBe('radiogroup');
+		expect(group.getAttribute('aria-label')).toBe('Interest');
+		const rows = Array.from(root.querySelectorAll('.dse-nt__interest .dse-track__slot'));
+		expect(rows.map((r) => r.getAttribute('data-value'))).toEqual(['5', '4', '3', '2', '1', '0']);
 		expect(interestOffer(root, 5).textContent).toBe('Remembers the taste of strawberries and cream!');
 		expect(interestOffer(root, 0).textContent).toBe("Thinks you're after the ring; becomes hostile");
 		for (let i = 0; i <= 5; i++) {
-			expect(interestBubble(root, i).tagName).toBe('BUTTON');
-			expect(interestBubble(root, i).getAttribute('aria-label')).toBe(`Set interest to ${i}`);
+			expect(interestSlot(root, i).tagName).toBe('BUTTON');
+			expect(interestSlot(root, i).getAttribute('role')).toBe('radio');
+			// the row's name carries the offer, so AT does not hear a bare number
+			expect(interestSlot(root, i).getAttribute('aria-label')).toContain(`Interest ${i}: `);
+			// every Interest seal is plain — the track paints no "remaining" fill
+			expect(interestSlot(root, i).getAttribute('data-fill')).toBe('plain');
 		}
-		// initial_interest: 3 — bubbles 0..3 pressed, row 3 is the accent-glow current…
-		expect(pressedInterest(root)).toEqual([0, 1, 2, 3]);
-		expect(interestRow(root, 3).hasAttribute('data-current')).toBe(true);
-		expect(interestRow(root, 4).hasAttribute('data-current')).toBe(false);
-		// …and only the PASSED rungs (below current) fade via [data-reached].
-		expect([0, 1, 2, 3, 4, 5].filter((i) => interestOffer(root, i).hasAttribute('data-reached'))).toEqual([
-			0, 1, 2,
-		]);
+		expect(checkedInterest(root)).toEqual([3]);
+		// the "now" tag sits on row 3 only; the legacy reached/passed-rung fade is gone
+		const tags = root.querySelectorAll('.dse-nt__now');
+		expect(tags).toHaveLength(1);
+		expect(tags[0].parentElement).toBe(interestSlot(root, 3));
+		expect(tags[0].textContent).toBe('now');
+		expect(root.querySelector('[data-reached]')).toBeNull();
 	});
 
 	test('tabs: a REAL tablist (aria-selected + roving tabindex); argument selected by default; panels are tabpanels hidden via the hidden ATTRIBUTE; both bodies mounted up front', async () => {
@@ -344,6 +365,8 @@ describe('T-7: negotiation rendered through the REAL ElementPipeline (D2 §3.10 
 		const files = [
 			'../../../src/elements/negotiation/view.ts',
 			'../../../src/drawSteelAdmonition/negotiation/PatienceInterestView.ts',
+			'../../../src/drawSteelAdmonition/negotiation/EndBandView.ts',
+			'../../../src/framework/kit/track.ts',
 			'../../../src/drawSteelAdmonition/negotiation/ArgumentView.ts',
 			'../../../src/drawSteelAdmonition/negotiation/LearnMoreView.ts',
 			'../../../src/drawSteelAdmonition/negotiation/MotivationsPitfallsView.ts',
@@ -354,18 +377,41 @@ describe('T-7: negotiation rendered through the REAL ElementPipeline (D2 §3.10 
 		}
 	});
 
-	test('CSS contract: .dse-nt scoped under [data-dse-element="negotiation"], on the §3.10 tokens — and the legacy .ds-nt-* block is GONE', () => {
+	test('CSS contract: .dse-nt scoped under [data-dse-element="negotiation"], on tokens; the kit .dse-track rules exist; the legacy bubble/ladder + root hairline rules are GONE; every Steel rule is print-excluded', () => {
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
-
-		const block = sheet.match(/\[data-dse-element="negotiation"\]\s+\.dse-nt\s*\{[\s\S]*?\n\}/);
-		expect(block).not.toBeNull();
-		expect(block![0]).toMatch(/var\(--dse-accent\)/); // the current-interest glow
-		expect(block![0]).toMatch(/var\(--dse-fg-faint\)/); // faded/reached rungs
-		expect(block![0]).toMatch(/var\(--dse-border\)/); // track/ladder connectors
-
-		// The whole legacy class block is evicted (comments may still cite the old names).
 		const noComments = sheet.replace(/\/\*[\s\S]*?\*\//g, '');
+
+		// The structure block: a container-queried flex column on the --dse-pad plate.
+		const block = noComments.match(/\[data-dse-element="negotiation"\]\s+\.dse-nt\s*\{[\s\S]*?\n\}/);
+		expect(block).not.toBeNull();
+		expect(block![0]).toMatch(/container-name:\s*dse-nt/);
+		expect(block![0]).toMatch(/@container dse-nt \(max-width: 420px\)/);
+		expect(block![0]).toMatch(/var\(--dse-border\)/); // base-tier hairlines (print keeps them)
+		// …and carries NO colour/ring/gradient of its own — that is the Steel tier's job.
+		expect(block![0]).not.toMatch(/var\(--dse-(accent|metal|vp|surface-sunken)\b/);
+
+		// The kit track rules live in the sheet, beside .dse-pr.
+		for (const sel of ['.dse-track', '.dse-track__slot', '.dse-track__mark', '.dse-track--vertical .dse-track__slot::before']) {
+			expect(noComments).toContain(sel);
+		}
+
+		// The legacy bubble/ladder/connector rules and the root hairline pair are evicted.
 		expect(noComments).not.toMatch(/\.ds-nt-/);
+		expect(noComments).not.toMatch(/\.dse-nt__bubble/);
+		expect(noComments).not.toMatch(/\.dse-nt__interest-(ladder|row|offer|header)/);
+		expect(noComments).not.toMatch(/\.dse-nt__patience-track/);
+		expect(noComments).not.toMatch(/\[data-reached\]/);
+		const root = noComments.match(/\[data-dse-element="negotiation"\]:not\(\[data-dse-error-stage\]\)\s*\{[^}]*\}/);
+		expect(root![0]).not.toMatch(/letter-spacing/);
+		expect(noComments).not.toMatch(/\[data-dse-element="negotiation"\]:not\(\[data-dse-error-stage\]\)::(before|after)/);
+
+		// Every Steel-material rule for the card AND the track opens print-excluded.
+		const steelRules = [...noComments.matchAll(/([^{}]*\.(?:dse-nt__(?:patience|readout|interest|now|end|label|complete-hint)[\w-]*|dse-track[\w-]*)[^{}]*)\{([^{}]*)\}/g)]
+			.filter((m) => /\[data-dse-theme='steel'\]/.test(m[1]));
+		expect(steelRules.length).toBeGreaterThan(15);
+		for (const m of steelRules) {
+			expect(m[1]).toContain(`:not([data-dse-print="on"])`);
+		}
 	});
 });
 
@@ -428,16 +474,22 @@ describe('T-7: persisted mutations — exactly ONE debounced replaceSource, byte
 		jest.useRealTimers();
 	});
 
-	test('clicking patience bubble 1 repaints aria-pressed IN PLACE, then persists exactly once with legacy bytes', async () => {
+	test('clicking Patience seal 1 repaints the track IN PLACE (checked + fill + readout), then persists exactly once with legacy bytes', async () => {
 		jest.useFakeTimers();
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 		const root = await renderFrodo(pipeline, host);
+		const sealBefore = patienceSlot(root, 1);
 
-		patienceBubble(root, 1).click();
+		patienceSlot(root, 1).click();
 
 		// Sub-view updated its own DOM in place (no rebuild) — still inside the debounce.
-		expect(pressedPatience(root)).toEqual([0, 1]);
+		expect(patienceSlot(root, 1)).toBe(sealBefore);
+		expect(checkedPatience(root)).toEqual([1]);
+		expect([0, 1, 2, 3, 4, 5].map((i) => patienceSlot(root, i).getAttribute('data-fill'))).toEqual([
+			'floor', 'on', 'spent', 'spent', 'spent', 'spent',
+		]);
+		expect(root.querySelector('.dse-nt__readout-value')!.textContent).toBe('1');
 		expect(host.replaceSource).not.toHaveBeenCalled();
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
@@ -446,20 +498,19 @@ describe('T-7: persisted mutations — exactly ONE debounced replaceSource, byte
 		expect(host.replaceSource.mock.calls[0][0]).toBe(legacyBytes(frodoYaml, (m) => (m.current_patience = 1)));
 	});
 
-	test('clicking interest bubble 2 repaints the ladder (pressed/current/reached) in place + one write with legacy bytes', async () => {
+	test('clicking Interest row 2 repaints the track in place (checked + [data-current] + the now-tag moves) + one write with legacy bytes', async () => {
 		jest.useFakeTimers();
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 		const root = await renderFrodo(pipeline, host);
 
-		interestBubble(root, 2).click();
+		interestSlot(root, 2).click();
 
-		expect(pressedInterest(root)).toEqual([0, 1, 2]);
-		expect(interestRow(root, 2).hasAttribute('data-current')).toBe(true);
-		expect(interestRow(root, 3).hasAttribute('data-current')).toBe(false);
-		expect([0, 1, 2, 3, 4, 5].filter((i) => interestOffer(root, i).hasAttribute('data-reached'))).toEqual([
-			0, 1,
-		]);
+		expect(checkedInterest(root)).toEqual([2]);
+		expect(interestSlot(root, 2).hasAttribute('data-current')).toBe(true);
+		expect(interestSlot(root, 3).hasAttribute('data-current')).toBe(false);
+		expect(root.querySelectorAll('.dse-nt__now')).toHaveLength(1);
+		expect(root.querySelector('.dse-nt__now')!.parentElement).toBe(interestSlot(root, 2));
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
@@ -473,8 +524,8 @@ describe('T-7: persisted mutations — exactly ONE debounced replaceSource, byte
 		const host = makeHost();
 		const root = await renderFrodo(pipeline, host);
 
-		patienceBubble(root, 1).click();
-		interestBubble(root, 2).click();
+		patienceSlot(root, 1).click();
+		interestSlot(root, 2).click();
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
@@ -620,10 +671,10 @@ describe('T-7: reset menu — per-instance (CB-4), resetData + rebuild + persist
 		let root = await renderFrodo(pipeline, host);
 
 		// Mutate first so the reset is observable: patience 3 -> 1 (flushed write #1).
-		patienceBubble(root, 1).click();
+		patienceSlot(root, 1).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect(host.replaceSource).toHaveBeenCalledTimes(1);
-		expect(pressedPatience(root)).toEqual([0, 1]);
+		expect(checkedPatience(root)).toEqual([1]);
 
 		const button = menuBtn(root)!;
 		expect(button.tagName).toBe('BUTTON');
@@ -640,7 +691,7 @@ describe('T-7: reset menu — per-instance (CB-4), resetData + rebuild + persist
 		expect(Notice.notices).toContain('Negotiation reset to initial state');
 		// The DOM was rebuilt from the reset model (framework default update()).
 		root = host.containerEl.firstElementChild as HTMLElement;
-		expect(pressedPatience(root)).toEqual([0, 1, 2, 3]);
+		expect(checkedPatience(root)).toEqual([3]);
 		// Write #2 is the reset state — byte-identical to a fresh parse of the fixture.
 		expect(host.replaceSource).toHaveBeenCalledTimes(2);
 		expect(host.replaceSource.mock.calls[1][0]).toBe(legacyBytes(frodoYaml));
@@ -658,8 +709,8 @@ describe('T-7: reset menu — per-instance (CB-4), resetData + rebuild + persist
 		const rootB = await renderFrodo(pipeline, hostB); // B renders LAST (the CB-4 trap)
 
 		// Mutate both: A -> patience 2, B -> patience 1 (each flushes its own write #1).
-		patienceBubble(rootA, 2).click();
-		patienceBubble(rootB, 1).click();
+		patienceSlot(rootA, 2).click();
+		patienceSlot(rootB, 1).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect(hostA.replaceSource).toHaveBeenCalledTimes(1);
 		expect(hostB.replaceSource).toHaveBeenCalledTimes(1);
@@ -672,10 +723,10 @@ describe('T-7: reset menu — per-instance (CB-4), resetData + rebuild + persist
 		// A got the reset write and rebuilt to the fixture-initial state…
 		expect(hostA.replaceSource).toHaveBeenCalledTimes(2);
 		expect(hostA.replaceSource.mock.calls[1][0]).toBe(legacyBytes(frodoYaml));
-		expect(pressedPatience(hostA.containerEl.firstElementChild as HTMLElement)).toEqual([0, 1, 2, 3]);
+		expect(checkedPatience(hostA.containerEl.firstElementChild as HTMLElement)).toEqual([3]);
 		// …and B is untouched: no extra write, DOM still shows ITS mutation.
 		expect(hostB.replaceSource).toHaveBeenCalledTimes(1);
-		expect(pressedPatience(rootB)).toEqual([0, 1]);
+		expect(checkedPatience(rootB)).toEqual([1]);
 	});
 });
 
@@ -684,7 +735,7 @@ describe('T-7: canPersist=false — read-only renders WITHOUT write affordances,
 		jest.useRealTimers();
 	});
 
-	test('readonly badge attr; no menu/Complete buttons; bubbles + checkboxes REAL-disabled; tiers render STATIC; interacting never writes', async () => {
+	test('readonly badge attr; no menu/Complete buttons; seals + checkboxes REAL-disabled; tiers render STATIC; interacting never writes', async () => {
 		jest.useFakeTimers();
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost({ canPersist: false });
@@ -698,17 +749,18 @@ describe('T-7: canPersist=false — read-only renders WITHOUT write affordances,
 		// …state displays stay visible but inert: REAL disabled (CB-8 — the kit guard
 		// also swallows synthetic clicks), and the tier panel is plain static rows.
 		for (let i = 0; i <= 5; i++) {
-			expect(patienceBubble(root, i).disabled).toBe(true);
-			expect(interestBubble(root, i).disabled).toBe(true);
+			expect(patienceSlot(root, i).disabled).toBe(true);
+			expect(interestSlot(root, i).disabled).toBe(true);
 		}
 		root.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
 			expect((cb as HTMLInputElement).disabled).toBe(true);
 		});
-		expect(root.querySelector('[role="radiogroup"]')).toBeNull();
+		// the two standing tracks are radiogroups; the TIER panel is not (static rows)
+		expect(root.querySelector('.dse-nt__argument [role="radiogroup"]')).toBeNull();
 		expect(root.querySelector('.dse-nt__argument .dse-pr')).not.toBeNull();
 
-		patienceBubble(root, 1).click();
-		expect(pressedPatience(root)).toEqual([0, 1, 2, 3]); // unchanged
+		patienceSlot(root, 1).click();
+		expect(checkedPatience(root)).toEqual([3]); // unchanged
 		const checkbox = root.querySelector('.dse-nt__motivations input[type="checkbox"]') as HTMLInputElement;
 		checkbox.checked = true;
 		checkbox.dispatchEvent(new Event('change'));
@@ -749,7 +801,7 @@ describe('T-7: persisted write path through a REAL ReadingModeBlockHost + FakeVa
 		await pipeline.run(negotiationElement, frodoYaml, host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		patienceBubble(root, 1).click();
+		patienceSlot(root, 1).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		expect(app.vault.modifyCalls).toHaveLength(1);
@@ -802,6 +854,366 @@ describe('T-7: registered EXACTLY ONCE — framework registry owns ds-nt*, Regis
 		const root = ctx.el.firstElementChild as HTMLElement;
 		expect(root.getAttribute('data-dse-element')).toBe('negotiation');
 		expect(root.querySelector('.dse-nt')).not.toBeNull();
-		expect(root.querySelectorAll('.dse-nt__patience .dse-nt__bubble')).toHaveLength(6);
+		expect(root.querySelectorAll('.dse-nt__patience .dse-track__slot')).toHaveLength(6);
+	});
+});
+
+// ---------------------------------------------------------------------------------------
+// SC-379 slice 1 — the standing region's keyboard, the 0..5 clamp, the ended band, and the
+// "no YAML shape change" guarantee.
+// ---------------------------------------------------------------------------------------
+
+/** frodoYaml with a different live standing (the model reads current_* ahead of initial_*). */
+function frodoAt(interest: number, patience: number): string {
+	return `current_interest: ${interest}\ncurrent_patience: ${patience}\n${frodoYaml}`;
+}
+
+const OVER_HINT = 'The negotiation is over — use ⋮ → Reset negotiation to start again.';
+const hintEl = (root: HTMLElement) => root.querySelector('.dse-nt__complete-hint') as HTMLElement;
+const nt = (root: HTMLElement) => root.querySelector('.dse-nt') as HTMLElement;
+/** The bytes of the most recent write. */
+const lastWritten = (host: { replaceSource: jest.Mock }) =>
+	host.replaceSource.mock.calls[host.replaceSource.mock.calls.length - 1][0] as string;
+
+describe('SC-379: the standing tracks are keyboard-operable (selection follows focus, one debounced write)', () => {
+	afterEach(() => {
+		jest.useRealTimers();
+	});
+
+	test('ArrowRight on Patience 3 -> 4: the track repaints in place and ONE debounced write carries current_patience 4', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+
+		pressKey(patienceSlot(root, 3), 'ArrowRight');
+
+		expect(checkedPatience(root)).toEqual([4]);
+		expect(host.replaceSource).not.toHaveBeenCalled();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect(host.replaceSource.mock.calls[0][0]).toBe(legacyBytes(frodoYaml, (m) => (m.current_patience = 4)));
+	});
+
+	test('ArrowDown on Interest 3 -> 2 (the descending list: down is a LOWER interest) with one write', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+
+		pressKey(interestSlot(root, 3), 'ArrowDown');
+
+		expect(checkedInterest(root)).toEqual([2]);
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect(host.replaceSource.mock.calls[0][0]).toBe(legacyBytes(frodoYaml, (m) => (m.current_interest = 2)));
+	});
+
+	test('clicking the already-checked seal writes nothing', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+
+		patienceSlot(root, 3).click();
+		interestSlot(root, 3).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
+
+		expect(host.replaceSource).not.toHaveBeenCalled();
+	});
+});
+
+describe('SC-379: Complete Argument keeps Interest and Patience inside 0..5', () => {
+	afterEach(() => {
+		jest.useRealTimers();
+	});
+
+	test('NegotiationData.clampStanding pins the scale: below 0 -> 0, above 5 -> 5, in range untouched', () => {
+		expect(NegotiationData.clampStanding(-2)).toBe(0);
+		expect(NegotiationData.clampStanding(0)).toBe(0);
+		expect(NegotiationData.clampStanding(3)).toBe(3);
+		expect(NegotiationData.clampStanding(5)).toBe(5);
+		expect(NegotiationData.clampStanding(6)).toBe(5);
+	});
+
+	test('a lie at Interest 1 + the failing tier would write Interest -1: the written bytes are 0 (and Patience 0), in range', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		// "NPC caught a lie": a failing tier costs an extra Interest (-2), -1 Patience.
+		await pipeline.run(negotiationElement, `currentArgument:\n  lieUsed: true\n${frodoAt(1, 1)}`, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+
+		tierRadios(root)[0].click();
+		expect(tierRadios(root)[0].textContent).toContain('-2 Interest');
+		completeBtn(root)!.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		const written = parseYaml(lastWritten(host)) as { current_interest: number; current_patience: number };
+		expect(written.current_interest).toBe(0);
+		expect(written.current_patience).toBe(0);
+	});
+
+	test('a +1 never carries Interest past 5 and a pitfall never carries it below 0 (the clamp on both ends of the scale)', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		await pipeline.run(negotiationElement, frodoAt(4, 3), host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+
+		tierRadios(root)[3].click(); // crit: +1 Interest -> 5 (a deal), never 6
+		completeBtn(root)!.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect((parseYaml(lastWritten(host)) as any).current_interest).toBe(5);
+
+		const host2 = makeHost();
+		await pipeline.run(negotiationElement, frodoAt(1, 3), host2);
+		const root2 = host2.containerEl.firstElementChild as HTMLElement;
+		tierRadios(root2)[0].click(); // -1 Interest, -1 Patience: 1 -> 0
+		completeBtn(root2)!.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const w = parseYaml(lastWritten(host2)) as any;
+		expect(w.current_interest).toBe(0);
+		expect(w.current_patience).toBe(2);
+	});
+});
+
+describe('SC-379: the "negotiation over" band (final / deal / hostile)', () => {
+	afterEach(() => {
+		jest.useRealTimers();
+		Menu.lastMenu = null;
+	});
+
+	const CASES = [
+		{
+			kind: 'final',
+			yaml: frodoAt(3, 0),
+			label: 'Final offer',
+			text: 'Patience is spent — the NPC makes a final offer at Interest 3: Remembers the taste of unripe strawberries',
+			tag: 'final offer',
+		},
+		{
+			kind: 'deal',
+			yaml: frodoAt(5, 2),
+			label: 'Negotiation over',
+			text: 'Interest reached 5 — the NPC agrees: Remembers the taste of strawberries and cream!',
+			tag: 'outcome',
+		},
+		{
+			kind: 'hostile',
+			yaml: frodoAt(0, 2),
+			label: 'Negotiation over',
+			text: "Interest fell to 0 — the NPC ends it: Thinks you're after the ring; becomes hostile",
+			tag: 'outcome',
+		},
+	] as const;
+
+	test.each(CASES)('$kind: data-ended, the band (flag + label + words), the now-tag, Complete disabled with the over-hint, the roll static', async ({ kind, yaml, label, text, tag }) => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		await pipeline.run(negotiationElement, yaml, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+
+		expect(nt(root).getAttribute('data-ended')).toBe(kind);
+		const band = bandEl(root)!;
+		expect(band).not.toBeNull();
+		expect(band.getAttribute('data-kind')).toBe(kind);
+		expect(band.querySelector('.dse-nt__end-flag')!.getAttribute('data-icon')).toBe('flag');
+		expect(band.querySelector('.dse-nt__end-label')!.textContent).toBe(label);
+		expect(band.querySelector('.dse-nt__end-text')!.textContent).toBe(text);
+		expect(band.querySelector('.dse-nt__end-text strong')).not.toBeNull();
+		// seated between the Interest board and the tabs
+		expect(band.previousElementSibling).toBe(root.querySelector('.dse-nt__interest'));
+		expect(band.nextElementSibling).toBe(root.querySelector('.dse-nt__actions'));
+		// the now-tag, with the flag glyph once the negotiation is over
+		const now = root.querySelector('.dse-nt__now')!;
+		expect(now.textContent).toBe(tag);
+		expect(now.querySelector('.dse-nt__now-flag')).not.toBeNull();
+		// Complete: REAL disabled, with the over-hint beside it
+		expect(completeBtn(root)!.disabled).toBe(true);
+		expect(hintEl(root).textContent).toBe(OVER_HINT);
+		// the tier panel is static: no radios leading nowhere
+		expect(root.querySelector('.dse-nt__argument [role="radiogroup"]')).toBeNull();
+		expect(tierRadios(root)).toHaveLength(4);
+		expect(tierRadios(root)[0].tagName).not.toBe('BUTTON');
+	});
+
+	test('a live negotiation has NO data-ended, NO band and an empty hint', async () => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+
+		expect(nt(root).hasAttribute('data-ended')).toBe(false);
+		expect(bandEl(root)).toBeNull();
+		expect(hintEl(root).textContent).toBe('');
+		expect(root.querySelector('.dse-nt__now')!.textContent).toBe('now');
+		expect(root.querySelector('.dse-nt__now-flag')).toBeNull();
+	});
+
+	test('the tracks stay operable: moving Patience back to 1 removes data-ended, the band, the over-hint and the static roll IN PLACE (same nodes)', async () => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		await pipeline.run(negotiationElement, frodoAt(3, 0), host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		const sealBefore = patienceSlot(root, 1);
+		const trackBefore = root.querySelector('.dse-nt__patience .dse-track');
+
+		patienceSlot(root, 1).click();
+
+		expect(host.containerEl.firstElementChild).toBe(root);
+		expect(patienceSlot(root, 1)).toBe(sealBefore);
+		expect(root.querySelector('.dse-nt__patience .dse-track')).toBe(trackBefore);
+		expect(nt(root).hasAttribute('data-ended')).toBe(false);
+		expect(bandEl(root)).toBeNull();
+		expect(hintEl(root).textContent).toBe('');
+		expect(root.querySelector('.dse-nt__now')!.textContent).toBe('now');
+		// the roll is re-armed: a live radiogroup again, Complete disabled until a pick
+		expect(root.querySelector('.dse-nt__argument [role="radiogroup"]')).not.toBeNull();
+		expect(tierRadios(root)[0].tagName).toBe('BUTTON');
+		expect(completeBtn(root)!.disabled).toBe(true);
+		tierRadios(root)[2].click();
+		expect(completeBtn(root)!.disabled).toBe(false);
+	});
+
+	test('the band follows the standing live: Complete Argument that spends the last Patience raises it in place, then Interest 5 flips it to a deal', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		await pipeline.run(negotiationElement, frodoAt(3, 1), host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(bandEl(root)).toBeNull();
+
+		tierRadios(root)[1].click(); // tier 2: no Interest change, -1 Patience -> 0
+		completeBtn(root)!.click();
+
+		expect(host.containerEl.firstElementChild).toBe(root);
+		expect(nt(root).getAttribute('data-ended')).toBe('final');
+		expect(bandEl(root)!.querySelector('.dse-nt__end-label')!.textContent).toBe('Final offer');
+		expect(completeBtn(root)!.disabled).toBe(true);
+		expect(hintEl(root).textContent).toBe(OVER_HINT);
+		expect(root.querySelector('.dse-nt__argument [role="radiogroup"]')).toBeNull();
+		expect(checkedPatience(root)).toEqual([0]);
+
+		// the Director corrects the board: Interest 5 outranks spent Patience -> a deal
+		interestSlot(root, 5).click();
+		expect(nt(root).getAttribute('data-ended')).toBe('deal');
+		expect(bandEl(root)!.querySelector('.dse-nt__end-label')!.textContent).toBe('Negotiation over');
+		expect(root.querySelector('.dse-nt__now')!.textContent).toBe('outcome');
+
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect(host.replaceSource.mock.calls[0][0]).toBe(
+			legacyBytes(frodoAt(3, 1), (m) => {
+				m.current_patience = 0;
+				m.current_interest = 5;
+			}),
+		);
+	});
+
+	test('Reset negotiation clears the band (the rebuilt view is live again) and writes the initial bytes', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		await pipeline.run(negotiationElement, frodoAt(3, 0), host);
+		let root = host.containerEl.firstElementChild as HTMLElement;
+		expect(bandEl(root)).not.toBeNull();
+
+		menuBtn(root)!.click();
+		Menu.lastMenu!.items[0].onClickCallback!();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		root = host.containerEl.firstElementChild as HTMLElement;
+		expect(bandEl(root)).toBeNull();
+		expect(nt(root).hasAttribute('data-ended')).toBe(false);
+		expect(checkedPatience(root)).toEqual([3]);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect(host.replaceSource.mock.calls[0][0]).toBe(legacyBytes(frodoAt(3, 0), (m) => m.resetData()));
+	});
+
+	test('read-only hosts still show the band (information, not a control) — with disabled seals, no Complete', async () => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost({ canPersist: false });
+		await pipeline.run(negotiationElement, frodoAt(3, 0), host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+
+		expect(bandEl(root)).not.toBeNull();
+		expect(nt(root).getAttribute('data-ended')).toBe('final');
+		expect(completeBtn(root)).toBeNull();
+		expect(patienceSlot(root, 0).disabled).toBe(true);
+		expect(root.querySelector('.dse-nt__argument [role="radiogroup"]')).toBeNull();
+	});
+});
+
+describe('SC-379: NO YAML shape change — the model gains methods only', () => {
+	afterEach(() => {
+		jest.useRealTimers();
+		Menu.lastMenu = null;
+	});
+
+	const LEGACY_KEYS = [
+		'name', 'initial_patience', 'current_patience', 'initial_interest', 'current_interest',
+		'motivations', 'pitfalls', 'currentArgument', 'i5', 'i4', 'i3', 'i2', 'i1', 'i0',
+	];
+
+	test('ending/clampStanding/offerFor are prototype methods, never own keys, and the ending precedence is deal > hostile > final', () => {
+		const m = parseNegotiationData(frodoYaml);
+
+		for (const key of ['ending', 'clampStanding', 'offerFor']) {
+			expect(Object.prototype.hasOwnProperty.call(m, key)).toBe(false);
+		}
+		// (`_dse_anchor` is the pre-existing sidebar passthrough: an own key, but undefined here,
+		// and a YAML dump skips undefined — so it is not part of the serialized key set.)
+		expect(Object.keys(m).filter((k) => (m as any)[k] !== undefined)).toEqual(LEGACY_KEYS);
+		expect(m.ending()).toBeNull();
+		m.current_patience = 0;
+		expect(m.ending()).toBe('final');
+		m.current_interest = 5;
+		expect(m.ending()).toBe('deal'); // Interest 5 outranks spent Patience
+		m.current_interest = 0;
+		expect(m.ending()).toBe('hostile');
+		expect(m.offerFor(9)).toBe(m.i5); // clamped onto the scale
+		expect(m.offerFor(-1)).toBe(m.i0);
+	});
+
+	test('after a full UI session (seals, appeal, choose, complete, reset) every write has exactly the legacy key set, in the legacy order', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		let root = await renderFrodo(pipeline, host);
+		const keysOfLastWrite = () => Object.keys(parseYaml(lastWritten(host)) as object);
+		const flush = () => jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		patienceSlot(root, 4).click();
+		interestSlot(root, 2).click();
+		await flush();
+		expect(keysOfLastWrite()).toEqual(LEGACY_KEYS);
+
+		const cb = root.querySelector('.dse-nt__argument-motivations input[type="checkbox"]') as HTMLInputElement;
+		cb.checked = true;
+		cb.dispatchEvent(new Event('change'));
+		tierRadios(root)[3].click();
+		completeBtn(root)!.click();
+		await flush();
+		expect(keysOfLastWrite()).toEqual(LEGACY_KEYS);
+
+		menuBtn(root)!.click();
+		Menu.lastMenu!.items[0].onClickCallback!();
+		await flush();
+		root = host.containerEl.firstElementChild as HTMLElement;
+		expect(keysOfLastWrite()).toEqual(LEGACY_KEYS);
+		expect(lastWritten(host)).toBe(legacyBytes(frodoYaml));
+	});
+
+	test('the shipped example.yaml parses and renders exactly as before (both standing tracks, the 5..0 offers)', async () => {
+		const example = fs.readFileSync(path.join(__dirname, '../../../src/elements/negotiation/example.yaml'), 'utf8');
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		await pipeline.run(negotiationElement, example, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+
+		expect(checkedPatience(root)).toEqual([3]);
+		expect(checkedInterest(root)).toEqual([3]);
+		expect(bandEl(root)).toBeNull();
+		expect(interestOffer(root, 4).textContent).toBe('Remembers the taste of strawberries');
 	});
 });

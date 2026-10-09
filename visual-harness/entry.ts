@@ -36,6 +36,7 @@ import featureblockDefault from '../src/elements/featureblock/example.yaml';
 import horizontalRuleDefault from '../src/elements/horizontal-rule/example.yaml';
 import initiativeDefault from '../src/elements/initiative/example.yaml';
 import negotiationDefault from '../src/elements/negotiation/example.yaml';
+import negotiationEnded from '../src/elements/negotiation/fixture-ended.yaml';
 import rollDefault from '../src/elements/roll/example.yaml';
 import skillsDefault from '../src/elements/skills/example.yaml';
 import staminaBarDefault from '../src/elements/stamina-bar/example.yaml';
@@ -1008,7 +1009,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 		failed: montageFailed,
 		'old-shape': montageOldShape,
 	},
-	negotiation: { default: negotiationDefault, checked: negotiationChecked },
+	negotiation: { default: negotiationDefault, checked: negotiationChecked, ended: negotiationEnded },
 	party: { default: partyDefault },
 	perk: { default: perkDefault, links: perkLinks, headings: perkHeadings },
 	project: { default: projectDefault },
@@ -1304,6 +1305,14 @@ export const NARROW_SHOTS: { id: string; element: string; fixture: string; width
 	// live board (past/current cells, a note mark, the outcome band's brink alert) is what
 	// narrows rather than the empty `default` grid.
 	{ id: 'montage-narrow', element: 'montage', fixture: 'mid', width: 300 },
+	// SC-379 — the negotiation card at sidebar width: the Patience strip re-lays to label +
+	// readout over a full-width rail of seals, the Interest rows tighten and the current row
+	// stacks its "now" tag under the offer (`.dse-nt`'s own `@container dse-nt (max-width:
+	// 420px)`). The `checked` fixture so the argument area shows pressed state too. NOTE the
+	// sweep's 900x1200 viewport (shoot.mjs) crops element shots taller than 1200 CSS px — the
+	// same truncation `montage-narrow` already has (SC-349 owns the harness fix) — so this
+	// capture pins the standing region and the top of the argument area.
+	{ id: 'negotiation-narrow', element: 'negotiation', fixture: 'checked', width: 300 },
 	// SC-284 — `.dse-head`'s new narrow (stacked) form (§2.7 `@container dse-head`
 	// regression coverage, beyond montage above): the DEFAULT statblock fixture fills
 	// all three right-rail slots (Level/org-role/EV — statblockHeaderParts), the

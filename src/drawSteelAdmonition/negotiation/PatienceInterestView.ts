@@ -1,132 +1,146 @@
-// Plan 09 Task 7 (D2 §3.10) — the Patience track + Interest ladder on the kit
-// iconButton: every clickable bubble is a REAL <button aria-pressed> (click-to-set),
-// keyboard-operable by construction, replacing the legacy click-<div>s. Selection
-// repaints IN PLACE through the kit handles (aria-pressed/[data-pressed]) plus the
-// [data-current]/[data-reached] attributes the CSS keys to --dse-accent (current-rung
-// glow) and --dse-fg-faint (passed rungs) — no querySelector class sweeps, no rebuild.
+// SC-379 — the standing region: Patience on a HORIZONTAL rail, Interest on a VERTICAL rail,
+// both made of the same round numbered seal (kit track()). Round 2's locked "A1" direction.
 //
-// Persistence contract unchanged (Plan 05 Task 5): the owning NegotiationView injects
-// `persist` (framework debounced write-behind); a user mutation mutates the model then
-// persists — rendering NEVER writes. Read-only hosts (F1 §4.4): the bubbles render as
-// visible state but REAL-disabled (CB-8 — the kit guard also swallows synthetic
-// clicks), and no persist path can fire.
+//  - Patience: six seals 0..5 across a rail. Filled steel = patience still left, dashed
+//    hollow = spent, the current value is the solid teal ringed seal. A "n / 5" readout sits
+//    beside the label (aria-hidden: the track already carries the value to AT).
+//  - Interest: six rows 5..0, each the seal plus the authored outcome text. The current row
+//    is ringed and carries a "now" tag (swapped for "final offer" / "outcome" once the
+//    negotiation is over).
+//
+// Both tracks are real radiogroups (<button role="radio">, roving tabindex, arrow keys —
+// see kit/track.ts). A selection mutates the model, repaints the whole standing region
+// through the injected `refreshStanding` (both tracks, readouts, now-tag, the end band and
+// data-ended, all in place — no rebuild) and THEN persists; rendering never writes. Read-only
+// hosts (F1 §4.4) get REAL-disabled seals: visible state, no listeners, no write path.
+//
+// The YAML is untouched: nothing here adds a field, and an out-of-range authored value is
+// only CLAMPED FOR DISPLAY (the file is not rewritten on render).
+import { setIcon } from 'obsidian';
 import type { Component } from 'obsidian';
-import { iconButton } from '@/framework/kit';
-import type { IconButtonHandle } from '@/framework/kit';
+import { track } from '@/framework/kit';
+import type { TrackHandle } from '@/framework/kit';
 import { NegotiationData } from '@model/NegotiationData';
 
 export class PatienceInterestView {
-	private readonly patienceBubbles: IconButtonHandle[] = [];
-	private readonly interestBubbles: IconButtonHandle[] = [];
-	private readonly interestRows: HTMLElement[] = [];
-	private readonly interestOffers: HTMLElement[] = [];
+	private patienceTrack!: TrackHandle;
+	private interestTrack!: TrackHandle;
+	private readoutValueEl!: HTMLElement;
+	private nowEl!: HTMLElement;
+	private interestEl!: HTMLElement;
 
 	constructor(
 		private readonly data: NegotiationData,
 		private readonly persist: () => void,
+		private readonly refreshStanding: () => void,
 		private readonly owner: Component,
 		private readonly canPersist: boolean,
 	) {}
 
-	public build(parent: HTMLElement): void {
+	/** Mounts the Patience strip then the Interest board; returns the board so the owning
+	 *  view can seat the end band directly after it. */
+	public build(parent: HTMLElement): HTMLElement {
 		this.addPatience(parent);
 		this.addInterest(parent);
+		this.refresh();
+		return this.interestEl;
 	}
 
-	/** A track bubble: round kit iconButton, aria-pressed = "filled up to here". */
-	private bubble(
-		parent: HTMLElement,
-		value: number,
-		label: string,
-		onClick: () => void,
-	): IconButtonHandle {
-		const handle = iconButton(
-			parent,
+	/** Repaints both tracks, the readout and the now-tag in place from the model. */
+	public refresh(): void {
+		const patience = NegotiationData.clampStanding(this.data.current_patience);
+		const interest = NegotiationData.clampStanding(this.data.current_interest);
+		this.patienceTrack.setValue(patience);
+		this.interestTrack.setValue(interest);
+		this.readoutValueEl.setText(String(this.patienceTrack.getValue()));
+
+		// The now-tag rides the checked Interest row; its words/flag follow the ending.
+		const ending = this.data.ending();
+		this.interestTrack.slotEls[this.interestTrack.getValue()].appendChild(this.nowEl);
+		this.nowEl.empty();
+		if (ending !== null) {
+			const flag = this.nowEl.createSpan({ cls: 'dse-nt__icon dse-nt__now-flag' });
+			setIcon(flag, 'flag');
+		}
+		this.nowEl.createSpan({
+			text: ending === null ? 'now' : ending === 'final' ? 'final offer' : 'outcome',
+		});
+	}
+
+	// -- Patience: label + readout + the horizontal rail ------------------------------
+
+	private addPatience(parent: HTMLElement): void {
+		const section = parent.createEl('section', { cls: 'dse-nt__patience' });
+
+		const label = section.createDiv({ cls: 'dse-nt__patience-label' });
+		const icon = label.createSpan({ cls: 'dse-nt__icon' });
+		icon.setAttribute('aria-hidden', 'true');
+		setIcon(icon, 'hourglass');
+		label.createSpan({ cls: 'dse-nt__label', text: 'Patience' });
+
+		const readout = section.createDiv({ cls: 'dse-nt__readout' });
+		readout.setAttribute('aria-hidden', 'true');
+		this.readoutValueEl = readout.createSpan({ cls: 'dse-nt__readout-value' });
+		readout.createSpan({ cls: 'dse-nt__readout-of', text: '/ 5' });
+
+		this.patienceTrack = track(
+			section,
 			{
-				text: String(value),
-				label,
-				pressed: false, // painted by the render pass below
+				orientation: 'horizontal',
+				max: 5,
+				value: NegotiationData.clampStanding(this.data.current_patience),
+				label: 'Patience',
+				fill: 'remaining',
 				disabled: !this.canPersist,
-				onClick,
+				onChange: (n) => this.setPatience(n),
 			},
 			this.owner,
 		);
-		handle.buttonEl.addClass('dse-nt__bubble');
-		handle.buttonEl.setAttribute('data-value', String(value));
-		return handle;
-	}
-
-	// -- Patience: label + 6 bubbles over a connector line ---------------------------
-
-	private addPatience(parent: HTMLElement): void {
-		const container = parent.createDiv({ cls: 'dse-nt__patience' });
-		container.createDiv({ cls: 'dse-nt__patience-label', text: 'Patience' });
-		const track = container.createDiv({ cls: 'dse-nt__patience-track' });
-		for (let i = 0; i <= 5; i++) {
-			this.patienceBubbles.push(
-				this.bubble(track, i, `Set patience to ${i}`, () => this.setPatience(i)),
-			);
-		}
-		this.renderPatience();
 	}
 
 	/** User mutation: update data, repaint in place, persist (render never writes). */
 	private setPatience(value: number): void {
 		this.data.current_patience = value;
-		this.renderPatience();
+		this.refreshStanding();
 		this.persist();
 	}
 
-	private renderPatience(): void {
-		this.patienceBubbles.forEach((bubble, i) => bubble.setPressed(i <= this.data.current_patience));
-	}
-
-	// -- Interest: the 5..0 offer ladder ----------------------------------------------
+	// -- Interest: the 5..0 outcome board ----------------------------------------------
 
 	private addInterest(parent: HTMLElement): void {
-		const container = parent.createDiv({ cls: 'dse-nt__interest' });
-		container.createDiv({ cls: 'dse-nt__interest-header', text: 'Interest' });
-		const ladder = container.createDiv({ cls: 'dse-nt__interest-ladder' });
+		const section = parent.createEl('section', { cls: 'dse-nt__interest' });
+		this.interestEl = section;
 
-		// NegotiationData's i0..i5 are individually declared string fields (not
-		// index-signature-accessible) — an explicit map instead of `this.data[`i${i}`]`.
-		const offers: Record<number, string> = {
-			0: this.data.i0,
-			1: this.data.i1,
-			2: this.data.i2,
-			3: this.data.i3,
-			4: this.data.i4,
-			5: this.data.i5,
-		};
+		const head = section.createDiv({ cls: 'dse-nt__interest-head' });
+		head.createSpan({ cls: 'dse-nt__label', text: 'Interest' });
+		head.createSpan({ cls: 'dse-nt__interest-hint', text: 'what the NPC will agree to' });
 
-		for (let i = 5; i >= 0; i--) {
-			const row = ladder.createDiv({ cls: 'dse-nt__interest-row' });
-			row.setAttribute('data-interest', String(i));
-			this.interestBubbles[i] = this.bubble(row, i, `Set interest to ${i}`, () =>
-				this.setInterest(i),
-			);
-			this.interestRows[i] = row;
-			this.interestOffers[i] = row.createDiv({ cls: 'dse-nt__interest-offer', text: offers[i] });
-		}
-		this.renderInterest();
+		this.interestTrack = track(
+			section,
+			{
+				orientation: 'vertical',
+				order: 'descending',
+				max: 5,
+				value: NegotiationData.clampStanding(this.data.current_interest),
+				label: 'Interest',
+				fill: 'none',
+				slotText: (n) => this.data.offerFor(n),
+				// The row's visible text is the outcome; naming the radio by it too keeps AT
+				// from hearing only "Interest 3" for a row that is really an offer.
+				slotLabel: (n) => `Interest ${n}: ${this.data.offerFor(n)}`,
+				disabled: !this.canPersist,
+				onChange: (n) => this.setInterest(n),
+			},
+			this.owner,
+		);
+		this.nowEl = document.createElement('span');
+		this.nowEl.classList.add('dse-nt__now');
 	}
 
 	/** User mutation: update data, repaint in place, persist (render never writes). */
 	private setInterest(value: number): void {
 		this.data.current_interest = value;
-		this.renderInterest();
+		this.refreshStanding();
 		this.persist();
-	}
-
-	private renderInterest(): void {
-		const current = this.data.current_interest;
-		for (let i = 0; i <= 5; i++) {
-			// Bubbles fill up to the current rung (legacy ds-nt-interest-selected)…
-			this.interestBubbles[i].setPressed(i <= current);
-			// …the current rung glows (--dse-accent, via CSS)…
-			this.interestRows[i].toggleAttribute('data-current', i === current);
-			// …and PASSED rungs below it fade (--dse-fg-faint, via CSS).
-			this.interestOffers[i].toggleAttribute('data-reached', i < current);
-		}
 	}
 }

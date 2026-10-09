@@ -14,8 +14,13 @@
 //    tabindex, arrow keys); the active tab persists to cx.session through the kit's
 //    SessionPersist accessor at the same (blockKey, 'tab') slot as before (F1 §4.3 /
 //    OD-7 — session UI state, never written to the note);
-//  - bubbles/tier rows -> kit iconButton / powerRollPanel(selectable) inside the
-//    sub-views.
+//  - tier rows -> kit powerRollPanel(selectable) inside the argument sub-view;
+//  - SC-379: the Patience/Interest standing region is two kit track() radiogroups of
+//    numbered seals (PatienceInterestView), and an "ended" band (EndBandView) states the
+//    book's three stop conditions. ONE callback, `refreshStanding()`, repaints all of it in
+//    place — both tracks, both readouts, the now-tag, the band, `data-ended` on .dse-nt and
+//    the argument area's static-roll/Complete state — whenever the standing changes (a seal
+//    click, a keyboard move, Complete Argument). Reset rebuilds the whole view as before.
 //
 // PERSISTENCE IS UNTOUCHED (byte-compat bar): the NegotiationData model + serialize
 // path are exactly the Plan 05 wrappers; sub-views mutate this.model then call the
@@ -30,6 +35,7 @@ import { cardHead, iconButton, tabs } from '@/framework/kit';
 import type { RenderMdCallback } from '@/framework/kit';
 import { NegotiationData } from '@model/NegotiationData';
 import { PatienceInterestView } from '@drawSteelAdmonition/negotiation/PatienceInterestView';
+import { EndBandView } from '@drawSteelAdmonition/negotiation/EndBandView';
 import { MotivationsPitfallsView } from '@drawSteelAdmonition/negotiation/MotivationsPitfallsView';
 import { ArgumentView } from '@drawSteelAdmonition/negotiation/ArgumentView';
 import { LearnMoreView } from '@drawSteelAdmonition/negotiation/LearnMoreView';
@@ -56,13 +62,30 @@ export class NegotiationView extends ElementView<NegotiationData> {
 
 		const container = root.createDiv({ cls: 'dse-nt' });
 
+		// The one standing-repaint callback (see the header). The sub-views and the band are
+		// assigned below, before any user action can reach it.
+		let standing: PatienceInterestView | undefined;
+		let band: EndBandView | undefined;
+		let argument: ArgumentView | undefined;
+		const refreshStanding = (): void => {
+			const ending = model.ending();
+			if (ending === null) container.removeAttribute('data-ended');
+			else container.setAttribute('data-ended', ending);
+			standing?.refresh();
+			band?.refresh();
+			argument?.setEnded(ending !== null);
+		};
+
 		this.buildHead(container, cycleOwner, model);
 
-		new PatienceInterestView(model, persist, cycleOwner, canPersist).build(container);
+		standing = new PatienceInterestView(model, persist, refreshStanding, cycleOwner, canPersist);
+		band = new EndBandView(model, standing.build(container));
 
-		this.buildActions(container, cycleOwner, model, persist, renderMd, canPersist);
+		argument = this.buildActions(container, cycleOwner, model, persist, refreshStanding, renderMd, canPersist);
 
 		new MotivationsPitfallsView(model, persist, cycleOwner, canPersist).build(container);
+
+		refreshStanding(); // first paint: data-ended + the band for an already-ended standing
 	}
 
 	/** kit cardHead (CB-16) + the Reset options button (write action — canPersist only). */
@@ -78,6 +101,9 @@ export class NegotiationView extends ElementView<NegotiationData> {
 			{
 				leftEyebrow: name ? 'Negotiation' : undefined,
 				name: name || 'Negotiation',
+				// SC-379: the heraldic crest, as on the montage head. Steel-only and decorative
+				// (crest.ts: aria-hidden); the narrow container query drops it at sidebar width.
+				crest: { icon: 'handshake', size: 'lg' },
 				level: 2,
 			},
 			owner,
@@ -133,9 +159,10 @@ export class NegotiationView extends ElementView<NegotiationData> {
 		owner: Component,
 		model: NegotiationData,
 		persist: () => void,
+		refreshStanding: () => void,
 		renderMd: RenderMdCallback,
 		canPersist: boolean,
-	): void {
+	): ArgumentView {
 		const handle = tabs(
 			container,
 			{
@@ -152,7 +179,9 @@ export class NegotiationView extends ElementView<NegotiationData> {
 		);
 		handle.rootEl.addClass('dse-nt__actions');
 
-		new ArgumentView(model, persist, owner, renderMd, canPersist).build(handle.panels['argument']);
+		const argument = new ArgumentView(model, persist, refreshStanding, owner, renderMd, canPersist);
+		argument.build(handle.panels['argument']);
 		new LearnMoreView(owner, renderMd).build(handle.panels['learn-more']);
+		return argument;
 	}
 }

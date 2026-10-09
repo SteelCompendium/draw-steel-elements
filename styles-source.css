@@ -2485,44 +2485,39 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 /* ==================== */
 /* Negotiation Tracker  */
 /* ==================== */
-/* D2 §3.10 (Plan 09 Task 7): the tracker on the D2 kit — cardHead (CB-16), iconButton
-   bubbles (aria-pressed), kit tabs (Make/Learn), selectable powerRollPanel radiogroup.
-   The whole legacy .ds-nt-* class block is EVICTED (the view no longer renders those
-   classes). Panel chrome (surface + the .ds-container hairline pair) sits on the
-   pipeline root, same pattern as the feature element; the grammar below is scoped
-   under [data-dse-element="negotiation"]. Tokens only (D2 §5) — no color literals. */
+/* D2 §3.10 (Plan 09 Task 7): the tracker on the D2 kit — cardHead (CB-16), kit tabs
+   (Make/Learn), selectable powerRollPanel radiogroup. The whole legacy .ds-nt-* class block
+   is EVICTED (the view no longer renders those classes). Panel chrome (the Steel card plate)
+   sits on the pipeline root via the shared tracker rule (~:7084); the grammar below is
+   scoped under [data-dse-element="negotiation"]. Tokens only (D2 §5) — no color literals.
+
+   SC-379: the STANDING REGION is rebuilt on the kit's numbered-seal track() (Patience
+   across, Interest down) with an "ended" band. This block carries STRUCTURE only (layout,
+   geometry, a 1px border, bold-current); every colour, gradient, ring and shadow lives in
+   the Steel-scoped block further down (`[data-dse-theme='steel'][data-dse-element=
+   'negotiation']:not([data-dse-print="on"]) .dse-nt …`, ~:11235), so nothing here can
+   reach another element's print. Sizes are --dse-fs-* role tokens only. The seals
+   themselves are the kit's (`.dse-track*`, beside `.dse-pr`). The root used to carry a
+   0.03em tracking on every glyph and a corner-hairline ::before/::after pair; both are gone
+   (the Steel plate already frames the card). Narrow (sidebar) behaviour is a container
+   query on `.dse-nt` itself — never a viewport @media. */
 [data-dse-element="negotiation"]:not([data-dse-error-stage]) {
 	position: relative;
 	display: block;
 	background: var(--dse-surface);
 	margin-top: 0.5em;
 	margin-bottom: 0.5em;
-	letter-spacing: 0.03em;
-}
-[data-dse-element="negotiation"]:not([data-dse-error-stage])::before {
-	content: '';
-	position: absolute;
-	top: 0;
-	left: 0;
-	height: 1px;
-	width: 12em;
-	background: var(--dse-hairline-fade);
-}
-[data-dse-element="negotiation"]:not([data-dse-error-stage])::after {
-	content: '';
-	position: absolute;
-	top: 0;
-	left: 0;
-	width: 1px;
-	height: 100%;
-	max-height: 12em;
-	background: linear-gradient(to bottom, var(--dse-rule), var(--dse-rule-fade));
 }
 
 [data-dse-element="negotiation"] .dse-nt {
+	container-type: inline-size;
+	container-name: dse-nt;
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
 	padding: var(--dse-pad);
 
-	/* -- head row: kit cardHead + the options-menu button -- */
+	/* -- head row: kit cardHead (+ crest) and the options-menu button -- */
 	.dse-nt__head {
 		display: flex;
 		align-items: flex-start;
@@ -2541,105 +2536,175 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
         }
 	}
 
-	/* -- the shared bubble control: a round kit iconButton (aria-pressed) -- */
-	/* The kit's --dse-touch-min min-size IS the bubble diameter (§4.6); the pressed
-	   fill comes from the kit's .dse-btn[data-pressed] accent rule.
-	   Under Steel this `width` is overridden (deliberately, without :where() — see
-	   ~:5111) to --dse-control-min; background/border/z-index above stay untouched. */
-	.dse-nt__bubble {
-		width: var(--dse-touch-min);
-		padding: 0;
-		border-radius: 50%;
-		background: var(--dse-surface);
-		border: 1px solid var(--dse-border-strong);
-		z-index: 1;
+	/* -- shared bits: a Lucide glyph, the small-caps label -- */
+	.dse-nt__icon {
+		display: inline-flex;
+		align-items: center;
+		flex: none;
+	}
+	.dse-nt__icon svg {
+		width: 1em;
+		height: 1em;
+	}
+	.dse-nt__label {
+		font-size: var(--dse-fs-label);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.11em;
+		font-weight: 700;
+		line-height: 1.2;
 	}
 
-	/* -- Patience: label + 6 bubbles over a connector line -- */
+	/* -- Patience: a sunken strip — label · rail of seals · "n / 5" readout -- */
 	.dse-nt__patience {
-		display: flex;
-		margin-top: 0.5em;
-		margin-bottom: 0.5em;
-	}
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		grid-template-areas: 'label track readout';
+		align-items: center;
+		gap: 0.6em 1.1em;
+		padding: 0.6rem 0.9rem;
+		border: 1px solid var(--dse-border);
+		border-radius: var(--dse-radius);
 
+		> .dse-track {
+			grid-area: track;
+		}
+	}
 	.dse-nt__patience-label {
-		font-weight: bold;
+		grid-area: label;
 		display: flex;
 		align-items: center;
+		gap: 0.4em;
+	}
+	.dse-nt__readout {
+		grid-area: readout;
+		display: flex;
+		align-items: baseline;
+		gap: 0.3em;
+		font-family: var(--dse-font-mono);
+		font-variant-numeric: tabular-nums;
+	}
+	.dse-nt__readout-value {
+		font-size: var(--dse-fs-subheading);
+		font-weight: 700;
+	}
+	.dse-nt__readout-of {
+		font-size: var(--dse-fs-caption);
 	}
 
-	.dse-nt__patience-track {
+	/* -- Interest: a framed board — head strip over the 5..0 outcome rows -- */
+	.dse-nt__interest {
+		border: 1px solid var(--dse-border);
+		border-radius: var(--dse-radius);
+		overflow: hidden;
+	}
+	.dse-nt__interest-head {
 		display: flex;
+		align-items: baseline;
 		justify-content: space-between;
-		width: 100%;
-		position: relative;
-		margin-left: 1em;
-		margin-right: 1em;
-
-        &:before {
-            content: "";
-            position: absolute;
-            width: 100%;
-            transform: translateY(-50%);
-            height: 5px;
-            background-color: var(--dse-border);
-            top: 50%;
-        }
+		flex-wrap: wrap;
+		gap: 0.2em 1em;
+		padding: 0.45rem 0.8rem;
+		border-bottom: 1px solid var(--dse-border);
 	}
-
-	/* -- Interest: the 5..0 offer ladder over a vertical connector -- */
-	.dse-nt__interest-header {
-		font-weight: bold;
+	.dse-nt__interest-hint {
+		font-size: var(--dse-fs-caption);
+		font-style: italic;
 	}
-
-	.dse-nt__interest-ladder {
-		position: relative;
-
-		/* Under Steel, height/top/left below are overridden to re-derive from
-		   --dse-control-min (~:5117); width/transform/background/position here
-		   are NOT touched by that override and stay owned by this rule. */
-        &:before {
-            content: "";
-            position: absolute;
-            height: calc(100% - var(--dse-touch-min));
-            top: calc(var(--dse-touch-min) / 2);
-            transform: translateX(-50%);
-            width: 5px;
-            background-color: var(--dse-border);
-            left: calc(0.5em + var(--dse-touch-min) / 2);
-        }
-	}
-
-	.dse-nt__interest-row {
-		display: flex;
+	/* the "now" tag on the current row (a flag + "final offer"/"outcome" once the
+	   negotiation is over). It is a span INSIDE the seal's <button role="radio">. */
+	.dse-nt__now {
+		flex: none;
+		display: inline-flex;
 		align-items: center;
-		position: relative;
-		z-index: 1;
-
-        .dse-nt__bubble {
-            margin: 0.5em;
-        }
-
-        /* the current rung: the accent glow (D2 §3.10) */
-        &[data-current] .dse-nt__bubble {
-            box-shadow: 0 0 20px var(--dse-accent);
-        }
+		gap: 0.3em;
+		padding: 0.1em 0.55em;
+		border: 1px solid currentColor;
+		border-radius: var(--dse-radius);
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.12em;
+		font-weight: 700;
+		white-space: nowrap;
 	}
 
-	.dse-nt__interest-offer {
+	/* -- the "negotiation over" band (SC-379): only mounted while the negotiation is over -- */
+	.dse-nt__end {
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
+		gap: 0.7em;
+		padding: 0.65rem 0.85rem;
+		border: 1px solid var(--dse-border);
+		border-top-width: 2px;
+		border-radius: var(--dse-radius);
+	}
+	.dse-nt__end-flag {
+		padding-top: 0.15em;
+	}
+	.dse-nt__end-body {
+		min-width: 0;
+	}
+	.dse-nt__end-label {
+		font-size: var(--dse-fs-label);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.14em;
+		font-weight: 700;
+	}
+	.dse-nt__end-text {
+		font-size: var(--dse-fs-secondary);
+		line-height: 1.5;
+	}
 
-        /* passed/reached rungs fade (D2 §3.10) */
-        &[data-reached] {
-            color: var(--dse-fg-faint);
-        }
+	/* -- narrow (sidebar leaf ~300px): the container is `.dse-nt` itself -- */
+	@container dse-nt (max-width: 420px) {
+		/* the crest costs ~2.8em of head width (montage drops it the same way) */
+		.dse-nt__head .dse-crest {
+			display: none;
+		}
+		/* Patience: label + readout on one row, the rail of seals on its own full row */
+		.dse-nt__patience {
+			grid-template-columns: minmax(0, 1fr) auto;
+			grid-template-areas: 'label readout' 'track track';
+			padding-left: 0.65rem;
+			padding-right: 0.65rem;
+		}
+		.dse-nt__patience .dse-track {
+			--dse-track-mark: 1.6em;
+		}
+		.dse-nt__patience .dse-track__n {
+			font-size: var(--dse-fs-caption);
+		}
+		/* Interest: tighter rows; the current row stacks its tag under the offer text */
+		.dse-nt__interest .dse-track {
+			--dse-track-pad-x: 0.55rem;
+			font-size: var(--dse-fs-secondary);
+		}
+		.dse-nt__interest .dse-track__slot {
+			gap: 0.55em;
+		}
+		.dse-nt__interest .dse-track__slot[data-current] {
+			display: grid;
+			grid-template-columns: auto minmax(0, 1fr);
+			column-gap: 0.55em;
+			row-gap: 0.3em;
+			align-items: center;
+		}
+		/* the seal spans both grid rows, so it stays at the row's centre and the rail
+		   segments (drawn per row, kit/track) still meet mark centre to mark centre */
+		.dse-nt__interest .dse-track__slot[data-current] .dse-track__mark {
+			grid-row: 1 / span 2;
+		}
+		.dse-nt__interest .dse-track__slot[data-current] .dse-nt__now {
+			grid-column: 2;
+			justify-self: start;
+		}
 	}
 
 	/* -- the two-tab actions area (the kit .dse-tabs owns the tab/panel chrome) -- */
 	.dse-nt__actions {
-		margin-top: 1em;
-		margin-bottom: 1em;
+		margin: 0; /* the .dse-nt flex gap owns the vertical rhythm (SC-379) */
 	}
 
 	/* -- Make an Argument -- */
@@ -2686,7 +2751,21 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 		display: flex;
 		align-items: center;
 		justify-content: flex-end;
+		gap: 0.75em;
 		margin-top: 0.5em;
+	}
+
+	/* SC-379: why Complete Argument is greyed out once the negotiation is over (empty
+	   while live, so it takes no room). */
+	.dse-nt__complete-hint {
+		flex: 1 1 auto;
+		min-width: 0;
+		text-align: right;
+		font-size: var(--dse-fs-caption);
+		font-style: italic;
+	}
+	.dse-nt__complete-hint:empty {
+		display: none;
 	}
 
 	/* -- details: the Motivations / Pitfalls lists -- */
@@ -11232,37 +11311,69 @@ body.theme-light
 	gap: 0;
 }
 
-/* D-2 — the negotiation Interest ladder inherits (a): its rungs are .dse-btn
-   bubbles whose diameter WAS pinned to the touch-min (~:1588/1642), and each rung
-   carried a 0.5em block margin on top of that, giving a ~60px row pitch for one
-   ~19px line of text. Diameter now follows the shared control size and the block
-   margin drops to 0.2em (the inline 0.5em is kept — it is what the ladder's
-   connector line is positioned against). Pitch 60px -> ~34px, and the connector
-   calcs re-derive from the same knob so both pointer modes stay aligned.
-
-   NOT :where()-wrapped, unlike §6's shared rules above — deliberately. The
-   original `.dse-nt__bubble { width: var(--dse-touch-min) }` is nested under
-   `[data-dse-element="negotiation"] .dse-nt` (~:1590), which flattens to
-   (0,3,0). This rule must WIN, so it is written at bare
-   `[data-dse-theme='steel'][data-dse-element='negotiation']:not(…) .dse-nt__bubble`
-   = (0,4,0). Wrapping the class in :where() would drop it to (0,2,0), lose to
-   the (0,3,0) original, and the bubble would render as a 44px-wide x 28px-tall
-   ELLIPSE instead of a circle. Do not "harmonize" this with §6's :where() usage.
-
-   The ::before rule below only overrides height/top/left; width, background,
-   transform and position stay on the original nested rule at ~:1642 (see the
-   pointer comment there) — the connector's ownership is split across this
-   ~3,500-line gap by design, not oversight. */
-[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__bubble {
-	width: var(--dse-control-min, var(--dse-touch-min));
+/* SC-379 — the negotiation card's Steel MATERIAL (the structure lives with the nested
+   `[data-dse-element="negotiation"] .dse-nt` block, ~:2485; the seals themselves are the
+   kit's `.dse-track*`, which carries its own Steel tier beside `.dse-pr`). This replaces the
+   D-2 block that re-derived the old bubble ladder's diameter from --dse-control-min: the
+   bubbles, the connector ::before and every number they were tuned against are gone.
+   Every rule opens with `[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"])`
+   (the Steel scoping rule), so nothing here reaches print or another element. Colours are
+   --dse-* tokens only: the sunken grounds are `--dse-surface-sunken` layered OVER
+   `--dse-surface` (two background layers, no rgba literal), so a ground is opaque and
+   never lets a rail or a neighbour show through. Hue is never the only channel: the gold
+   band carries a flag glyph and its words; the current Interest row carries a ring AND the
+   "now" tag AND a heavier weight. */
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__label {
+	color: var(--dse-metal-bright);
 }
-[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__interest-row .dse-nt__bubble {
-	margin: 0.2em 0.5em;
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__patience {
+	background: linear-gradient(var(--dse-surface-sunken), var(--dse-surface-sunken)), var(--dse-surface);
+	border-color: var(--dse-metal-line);
 }
-[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__interest-ladder::before {
-	height: calc(100% - var(--dse-control-min, var(--dse-touch-min)) - 0.4em);
-	top: calc(0.2em + var(--dse-control-min, var(--dse-touch-min)) / 2);
-	left: calc(0.5em + var(--dse-control-min, var(--dse-touch-min)) / 2);
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__patience-label {
+	color: var(--dse-metal);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__readout-value {
+	color: var(--dse-heading);
+	text-shadow: var(--dse-emboss);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__readout-of {
+	color: var(--dse-fg-faint);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__interest {
+	border-color: var(--dse-metal-line);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__interest-head {
+	background: linear-gradient(var(--dse-surface-sunken), var(--dse-surface-sunken)), var(--dse-surface);
+	border-bottom-color: var(--dse-metal-line);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__interest-hint {
+	color: var(--dse-fg-faint);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__now {
+	border-color: var(--dse-accent);
+	color: var(--dse-accent);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__now-flag {
+	color: var(--dse-vp);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__end {
+	background: linear-gradient(var(--dse-surface-sunken), var(--dse-surface-sunken)), var(--dse-surface);
+	border-color: var(--dse-metal-line);
+	border-top-color: var(--dse-vp);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__end-flag,
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__end-label {
+	color: var(--dse-vp);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__end-text {
+	color: var(--dse-fg);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__end-text strong {
+	color: var(--dse-heading);
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__complete-hint {
+	color: var(--dse-fg-faint);
 }
 
 /* -- 7. Themed checkbox (SC-121 Batch 1 / catalog D-3) --------------------
@@ -14279,6 +14390,221 @@ body.theme-light
 	color: var(--dse-accent-fg);
 }
 
+/* -- SC-379 kit/track: a 0..N radiogroup of numbered round SEALS on a horizontal or a
+   vertical rail (negotiation's Patience + Interest). Every slot is a real
+   <button role="radio">; the state hooks are ATTRIBUTES set by track.ts —
+   [data-fill=on|spent|plain|floor], [data-current], [data-edge=first|last] — and the one
+   TS->CSS seam is --dse-track-fill (value/max).
+   BASE tier (this block, unscoped, also what PRINT sees) is STRUCTURE only: layout, mark
+   geometry, a 1px border (dashed once spent), a bold numeral + 2px solid border on the
+   current slot. The Steel tier below (`[data-dse-theme='steel']:not([data-dse-print="on"])`)
+   owns every colour, gradient, ring and shadow, so a screen-intended rule can never leak
+   into the frozen print captures.
+   HOST RE-GROUNDING: the slot is a bare <button>, so Obsidian's own `button` rules
+   ((0,0,1) / (0,1,1)) reach it. Every slot rule is therefore written at (0,2,0)+ and
+   restates each property those rules set (display, height, padding, border, radius,
+   colour, fill, box-shadow, font, white-space, cursor) — see the SC-203 block (~:15740). -- */
+.dse-track {
+	--dse-track-mark: 1.9em; /* the seal diameter; the narrow container shrinks it */
+	position: relative;
+	min-width: 0;
+}
+.dse-track--horizontal {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+.dse-track--vertical {
+	--dse-track-pad-x: 0.8rem; /* the row's side padding; the rail is placed against it */
+	display: flex;
+	flex-direction: column;
+}
+/* the horizontal rail: a dashed base from first to last seal centre, and a solid segment
+   as long as the fraction of the rail that is "filled" (width from --dse-track-fill) */
+.dse-track__rail,
+.dse-track__rail-fill {
+	position: absolute;
+	z-index: 0;
+	top: 50%;
+	left: calc(var(--dse-track-mark) / 2);
+	pointer-events: none;
+}
+.dse-track__rail {
+	right: calc(var(--dse-track-mark) / 2);
+	border-top: 2px dashed var(--dse-border);
+	transform: translateY(-1px);
+}
+.dse-track__rail-fill {
+	width: calc((100% - var(--dse-track-mark)) * var(--dse-track-fill, 0));
+	height: 4px;
+	transform: translateY(-2px);
+	border-radius: 2px;
+}
+.dse-track .dse-track__slot {
+	appearance: none;
+	-webkit-appearance: none;
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	height: auto;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background-color: transparent;
+	box-shadow: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	white-space: normal;
+	cursor: pointer;
+}
+/* read-only hosts: REAL disabled seals show state without dimming or a not-allowed cursor */
+.dse-track .dse-track__slot:disabled {
+	opacity: 1;
+	cursor: default;
+}
+.dse-track--horizontal .dse-track__slot {
+	flex: none;
+	z-index: 1;
+	width: var(--dse-track-mark);
+	height: var(--dse-track-mark);
+	border-radius: 50%;
+}
+.dse-track__mark {
+	position: relative;
+	z-index: 1;
+	flex: none;
+	box-sizing: border-box;
+	display: grid;
+	place-items: center;
+	width: var(--dse-track-mark);
+	height: var(--dse-track-mark);
+	border: 1px solid currentColor;
+	border-radius: 50%;
+}
+.dse-track__n {
+	font-family: var(--dse-font-mono);
+	font-size: var(--dse-fs-secondary);
+	line-height: 1;
+}
+.dse-track__slot[data-fill='spent'] .dse-track__mark {
+	border-style: dashed;
+}
+.dse-track__slot[data-current] .dse-track__mark {
+	border-width: 2px;
+	border-style: solid;
+}
+.dse-track__slot[data-current] .dse-track__n {
+	font-weight: 700;
+}
+/* vertical: the whole ROW is the radio, the seal sits inside it beside the row text */
+.dse-track--vertical .dse-track__slot {
+	justify-content: flex-start;
+	gap: 0.8em;
+	width: 100%;
+	padding: 0.4rem var(--dse-track-pad-x);
+	border-bottom: 1px solid var(--dse-border);
+	line-height: 1.4;
+}
+.dse-track--vertical .dse-track__slot[data-edge='last'] {
+	border-bottom-width: 0;
+}
+.dse-track--vertical .dse-track__slot[data-current] {
+	padding-top: 0.55rem;
+	padding-bottom: 0.55rem;
+	font-weight: 700;
+}
+.dse-track__text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+/* the vertical rail is drawn ONE ROW AT A TIME: each row paints the segment through its own
+   seal centre (the seal is vertically centred in the row), the first row from its centre
+   down and the last from the top to its centre — so the rail runs seal centre to seal centre
+   and can never overshoot, however many lines an outcome wraps to at 300px. */
+.dse-track--vertical .dse-track__slot::before {
+	content: '';
+	position: absolute;
+	z-index: 0;
+	top: 0;
+	bottom: -1px; /* over the row's own 1px divider, so the rail is unbroken */
+	left: calc(var(--dse-track-pad-x) + var(--dse-track-mark) / 2 - 1px);
+	width: 2px;
+	background: var(--dse-border);
+	pointer-events: none;
+}
+.dse-track--vertical .dse-track__slot[data-edge='first']::before {
+	top: 50%;
+}
+.dse-track--vertical .dse-track__slot[data-edge='last']::before {
+	bottom: 50%;
+}
+/* the shared ring (below) would sit exactly on the current seal's own accent ring, so the
+   keyboard ring is held clear of it: outside the round seal, inside the vertical row */
+.dse-track--horizontal .dse-track__slot:focus-visible {
+	outline-offset: 5px;
+}
+.dse-track--vertical .dse-track__slot:focus-visible {
+	outline-offset: -5px;
+}
+/* -- SC-379 kit/track: the Steel tier (screen only; print keeps the structure above) -- */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-track__rail {
+	border-top-color: var(--dse-border-strong);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-track__rail-fill {
+	background: var(--dse-metal);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-track--vertical .dse-track__slot {
+	border-bottom-color: var(--dse-metal-faint);
+	color: var(--dse-fg-muted);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-track--vertical .dse-track__slot::before {
+	background: var(--dse-metal-line);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-track--vertical .dse-track__slot:hover {
+	background-color: var(--dse-hover);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-track--vertical .dse-track__slot:disabled:hover {
+	background-color: transparent;
+}
+/* the seal: OPAQUE (sunken layered over surface, two layers, no literal), so the rail
+   behind it never shows through */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-track__mark {
+	background: linear-gradient(var(--dse-surface-sunken), var(--dse-surface-sunken)), var(--dse-surface);
+	border-color: var(--dse-metal-line);
+	color: var(--dse-metal-bright);
+	font-weight: 700;
+}
+/* on: patience still left — filled steel (silver in dark, gunmetal in light) */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-track__slot[data-fill='on'] .dse-track__mark {
+	background: var(--dse-metal-grad);
+	color: var(--dse-surface);
+	box-shadow: var(--dse-chip-bevel);
+}
+/* spent: hollow and dashed, the numeral faint */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-track__slot[data-fill='spent'] .dse-track__mark {
+	border-color: var(--dse-border-strong);
+	color: var(--dse-fg-faint);
+}
+/* current (either axis): solid teal seal + a teal ring held 2px off it */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-track__slot[data-current] .dse-track__mark {
+	background: var(--dse-accent);
+	border-color: var(--dse-accent);
+	color: var(--dse-accent-fg);
+	outline: 2px solid var(--dse-accent);
+	outline-offset: 2px;
+	box-shadow: none;
+}
+/* the current vertical row: raised, ringed in teal, the offer text in the heading ink */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-track--vertical .dse-track__slot[data-current] {
+	background-color: var(--dse-surface-raised);
+	box-shadow: inset 0 0 0 2px var(--dse-accent);
+	color: var(--dse-heading);
+}
+
 /* -- D5 roll bar + result card (kit widgets; token-composed) -- */
 [data-dse-element] .dse-rollbar {
 	display: flex;
@@ -14576,6 +14902,10 @@ body.theme-light
 .dse-collapse__header:focus-visible,
 .dse-tabs__tab:focus-visible,
 .dse-pr__row[aria-checked]:focus-visible,
+/* SC-379 — the kit track's seals (negotiation's Patience + Interest radiogroups): real
+   <button role="radio">s, one Tab stop per track. Their ring offset is re-set per
+   orientation (beside the track rules above) so it clears the current seal's own ring. */
+.dse-track__slot:focus-visible,
 /* SC-338 — `.dse-optchip` (Result/Duration/Effect chips + the condition icon/preset
    choices, montage form + Conditions modal) is a bare `<button>`, not a kit widget, so
    it was never in this list. A PRESSED chip had no ring at all: its own
