@@ -2797,6 +2797,66 @@ async function assertTurnMarkParity(page) {
 	);
 }
 
+// ======================================================================================
+// SC-377 R2 - THE TITLE LINE DOES NOT MOVE WHEN IT IS EDITED OR SAVED.
+//
+// Scott, 2026-10-09: "I want the shift evened out when saving a title." The input was 34.7px tall and the
+// heading it replaced 28.06px (and an untitled tracker's quiet prompt line was 16.3px), so opening and
+// closing the editor slid everything under the title up and down. Measure what the browser lays out - the
+// heading's own height and the Heroes line's top - at rest, while editing and after the commit, named and
+// unnamed, both schemes, and require that none of them moves.
+/** Runs in the page. */
+function measureTitleLine() {
+	const rect = () => {
+		const t = document.querySelector('.dse-init__title').getBoundingClientRect();
+		const h = document.querySelector('.dse-init__group--heroes h3').getBoundingClientRect();
+		return { titleHeight: t.height, titleTop: t.top, heroesTop: h.top };
+	};
+	const rest = rect();
+	document.querySelector('.dse-init__title-text').click();
+	const input = document.querySelector('.dse-init__title-input');
+	const editing = rect();
+	input.value = input.value + 'x';
+	input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	return { rest, editing, committed: rect(), closed: !document.querySelector('.dse-init__title-input') };
+}
+
+async function assertTitleLineStable(page) {
+	const problems = [];
+	let compared = 0;
+	for (const bg of ['dark', 'light']) {
+		for (const [label, fixture] of [['named', 'named'], ['unnamed', 'controls']]) {
+			const query = new URLSearchParams({ element: 'initiative', fixture, theme: 'steel', bg, sheet: '1' });
+			await page.emulateMedia({ media: 'screen' });
+			await page.goto(`${pageUrl}?${query}`);
+			await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
+			const m = await page.evaluate(measureTitleLine);
+			if (!m.closed) problems.push(`${bg}|${label}: Enter did not close the editor`);
+			for (const phase of ['editing', 'committed']) {
+				compared += 1;
+				for (const k of ['titleHeight', 'titleTop', 'heroesTop']) {
+					const d = m[phase][k] - m.rest[k];
+					if (Math.abs(d) > 0.001) {
+						problems.push(`${bg}|${label}|${phase}: ${k} moved ${d.toFixed(3)}px (${m.rest[k].toFixed(3)} -> ${m[phase][k].toFixed(3)})`);
+					}
+				}
+			}
+		}
+	}
+	if (problems.length) {
+		console.error(
+			`\nTITLE LINE SHIFT - opening or saving the encounter title moves the content under it:\n` +
+				problems.map((p) => `  ${p}`).join('\n') +
+				`\nSee styles-source.css -> "THE ENCOUNTER TITLE" (the editor's input is exactly the heading's line box).`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\ntitle line stable OK (heading height, heading top and Heroes line top identical at rest / editing / ` +
+			`committed: ${compared} comparisons across named/unnamed x dark/light)`,
+	);
+}
+
 async function assertInputHostLeak(page) {
 	const host = loadLocalObsidianAppCss();
 	if (!host) {
@@ -5444,6 +5504,8 @@ try {
 		await assertChromePlacement(page);
 		// SC-377 R1F2 - the one turn mark, on the computed cascade (see the block above).
 		await assertTurnMarkParity(page);
+		// SC-377 R2 - the title line does not move when edited or saved (see the block above).
+		await assertTitleLineStable(page);
 		// SC-191 fix-round-1 M-5 — the equal-width-track gate (see the block above). Same
 		// "own navigation, captures nothing" shape, skipped on a narrowed run for the same
 		// reason.
