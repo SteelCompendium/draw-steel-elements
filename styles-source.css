@@ -14484,6 +14484,10 @@ body.theme-light
 	height: var(--dse-track-mark);
 	border: 1px solid currentColor;
 	border-radius: 50%;
+	/* OPAQUE in every tier: the rails run through the seal centres, so a transparent seal (print
+	   never reaches the Steel tier below) would show them striking through the numeral. The
+	   same token the card plate grounds itself on in the base tier. */
+	background-color: var(--dse-surface);
 }
 .dse-track__n {
 	font-family: var(--dse-font-mono);

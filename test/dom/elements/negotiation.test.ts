@@ -395,6 +395,11 @@ describe('T-7: negotiation rendered through the REAL ElementPipeline (D2 §3.10 
 			expect(noComments).toContain(sel);
 		}
 
+		// The seal is opaque in the BASE tier too (print never reaches the Steel tier), or the
+		// rails strike through the numerals on paper.
+		const baseMark = noComments.match(/\n\.dse-track__mark\s*\{([^}]*)\}/);
+		expect(baseMark![1]).toMatch(/background-color:\s*var\(--dse-surface\)/);
+
 		// The legacy bubble/ladder/connector rules and the root hairline pair are evicted.
 		expect(noComments).not.toMatch(/\.ds-nt-/);
 		expect(noComments).not.toMatch(/\.dse-nt__bubble/);
