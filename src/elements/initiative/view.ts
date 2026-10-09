@@ -274,7 +274,8 @@ export class InitiativeView extends ElementView<EncounterData> {
 	/** SC-377 (owner ruling O6) — the encounter's editable title, the first thing in the card.
 	 *
 	 *  Writable host: an <h2> holding a focusable text span. Click (or Enter/Space on it) swaps
-	 *  in an <input>; Enter or blur commits (trimmed; empty clears the title), Escape reverts.
+	 *  in an auto-height <textarea> (R2F) that wraps like the heading; Enter or blur commits
+	 *  (trimmed; empty clears the title), Escape reverts.
 	 *  This is the kit stepper's editable path, including the SC-340 adoption-blur guard: when
 	 *  the block is adopted after its own write, Obsidian moves the section and a focused input
 	 *  blurs (B11) — that blur is not the user leaving the field, so a half-typed draft is
@@ -303,7 +304,19 @@ export class InitiativeView extends ElementView<EncounterData> {
 		};
 		paint();
 
-		let input: HTMLInputElement | null = null;
+		// Titles are one logical line: a pasted value's line breaks become single spaces.
+		const flatten = (v: string): string => v.replace(/\s*[\r\n]+\s*/g, ' ');
+		// R2F: the editor is a <textarea> that wraps exactly like the heading text it replaces, sized
+		// to its own wrapped line count through `rows` (an attribute - no inline style), so its box is
+		// the heading's own line box at every width and a wrapped title does not jump 28px per line
+		// when the editor opens or saves. Vertical padding and border are 0 in the stylesheet, which
+		// is what makes `rows x line-height` the whole box; `scrollHeight / line-height` is the line count.
+		const fit = (el: HTMLTextAreaElement): void => {
+			el.rows = 1;
+			const lineHeight = parseFloat((el.ownerDocument.defaultView ?? window).getComputedStyle(el).lineHeight);
+			el.rows = lineHeight > 0 && el.scrollHeight > 0 ? Math.max(1, Math.round(el.scrollHeight / lineHeight)) : 1;
+		};
+		let input: HTMLTextAreaElement | null = null;
 		const finish = (focusBack: boolean): void => {
 			const el = input;
 			if (!el) return;
@@ -315,7 +328,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		};
 		const commit = (focusBack: boolean): void => {
 			if (!input) return;
-			const next = input.value.trim();
+			const next = flatten(input.value).trim();
 			if (next !== titled()) {
 				if (next === '') delete data.name;
 				else data.name = next;
@@ -325,16 +338,23 @@ export class InitiativeView extends ElementView<EncounterData> {
 		};
 		const startEdit = (): void => {
 			if (input) return;
-			const el = heading.createEl('input', {
+			const el = heading.createEl('textarea', {
 				cls: 'dse-init__title-input',
-				type: 'text',
-				attr: { placeholder: 'Untitled encounter' },
+				attr: { placeholder: 'Untitled encounter', rows: '1' },
 			});
 			el.setAttribute('aria-label', 'Encounter name');
 			el.value = titled();
 			input = el;
 			textEl.hidden = true;
+			owner.registerDomEvent(el, 'input', () => {
+				if (/[\r\n]/.test(el.value)) {
+					el.value = flatten(el.value);
+					el.setSelectionRange(el.value.length, el.value.length);
+				}
+				fit(el);
+			});
 			owner.registerDomEvent(el, 'keydown', (evt: KeyboardEvent) => {
+				// Enter and Shift+Enter both commit: a title is one logical line, never a newline.
 				if (evt.key === 'Enter' && !evt.isComposing) {
 					evt.preventDefault();
 					commit(true);
@@ -350,6 +370,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				if (!el.isConnected || el.closest(`[${MOVING_ATTR}]`)) return;
 				commit(false);
 			});
+			fit(el);
 			el.focus();
 			el.select();
 		};

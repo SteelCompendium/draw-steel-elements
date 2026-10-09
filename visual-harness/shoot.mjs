@@ -2476,7 +2476,7 @@ const INPUT_STATES = ['rest', 'hover', 'disabled', 'focus-visible'];
 function tagInputs() {
 	const keys = [];
 	const seen = new Set();
-	for (const n of document.querySelectorAll("input[type='number'], input[type='text']")) {
+	for (const n of document.querySelectorAll("input[type='number'], input[type='text'], textarea.dse-init__title-input")) {
 		const root = n.closest('[data-dse-element]');
 		const key =
 			(root ? root.getAttribute('data-dse-element') : '(none)') +
@@ -2798,62 +2798,115 @@ async function assertTurnMarkParity(page) {
 }
 
 // ======================================================================================
-// SC-377 R2 - THE TITLE LINE DOES NOT MOVE WHEN IT IS EDITED OR SAVED.
+// SC-377 R2 / R2F - THE TITLE LINE DOES NOT MOVE WHEN IT IS EDITED OR SAVED.
 //
-// Scott, 2026-10-09: "I want the shift evened out when saving a title." The input was 34.7px tall and the
-// heading it replaced 28.06px (and an untitled tracker's quiet prompt line was 16.3px), so opening and
-// closing the editor slid everything under the title up and down. Measure what the browser lays out - the
-// heading's own height and the Heroes line's top - at rest, while editing and after the commit, named and
-// unnamed, both schemes, and require that none of them moves.
-/** Runs in the page. */
-function measureTitleLine() {
+// Scott, 2026-10-09: "I want the shift evened out when saving a title." The editor used to be a one-line
+// input 34.7px tall against a 28.06px heading (and an untitled tracker's quiet prompt line was 16.3px), and
+// a heading that WRAPS (any 19+ character name at sidebar width) collapsed to one line while editing, so
+// opening and saving slid everything under the title up and down by 28px per wrapped line. Measure what
+// the browser lays out - the heading's own height and top, and the Heroes line's top - at rest, while
+// editing and after the commit, for short and wrapping names, unnamed, at main-pane / 500px / 300px
+// width, in both schemes, and require that none of them moves.
+//
+// The prompt's size is checked too (R2F, INFO-R2b): it is a caption set on the ::before through an em
+// ratio of the h2 scale; a future change of that scale would shrink or grow it silently, so it must
+// measure exactly the label size (read off `.dse-init__round`, which uses the same token on a plain line).
+/** Runs in the page. `setup` = a name to save FIRST (null: leave the fixture's own title); `commitText` =
+ *  what the measured commit saves (null: the unchanged text). */
+function measureTitleLine({ setup, commitText }) {
 	const rect = () => {
 		const t = document.querySelector('.dse-init__title').getBoundingClientRect();
 		const h = document.querySelector('.dse-init__group--heroes h3').getBoundingClientRect();
 		return { titleHeight: t.height, titleTop: t.top, heroesTop: h.top };
 	};
+	const enter = (el) => el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	const open = () => {
+		document.querySelector('.dse-init__title-text').click();
+		return document.querySelector('.dse-init__title-input');
+	};
+	const type = (el, text) => {
+		el.value = text;
+		el.dispatchEvent(new Event('input', { bubbles: true }));
+	};
+	if (setup !== null) {
+		const el = open();
+		type(el, setup);
+		enter(el);
+	}
+	const promptSize = document.querySelector('.dse-init__title[data-empty]')
+		? getComputedStyle(document.querySelector('.dse-init__title-text'), '::before').fontSize
+		: null;
+	const labelSize = getComputedStyle(document.querySelector('.dse-init__round')).fontSize;
 	const rest = rect();
-	document.querySelector('.dse-init__title-text').click();
-	const input = document.querySelector('.dse-init__title-input');
+	const el = open();
+	const tag = el.tagName;
+	const lines = el.rows;
 	const editing = rect();
-	input.value = input.value + 'x';
-	input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-	return { rest, editing, committed: rect(), closed: !document.querySelector('.dse-init__title-input') };
+	if (commitText !== null) type(el, commitText);
+	enter(el);
+	return { rest, editing, committed: rect(), closed: !document.querySelector('.dse-init__title-input'), tag, lines, promptSize, labelSize };
 }
+
+const TITLE_LINE_CASES = [
+	// [label, fixture, width (null = main pane), name to save first, text the measured commit saves]
+	['named short', 'named', null, 'Goblin Ambush', null],
+	['named 19ch', 'named', null, 'The Ford of Bruinen', null],
+	['named long', 'named', null, null, null],
+	['unnamed', 'controls', null, null, 'x'],
+	['named short @500', 'named', 500, 'Goblin Ambush', null],
+	['named 19ch @500', 'named', 500, 'The Ford of Bruinen', null],
+	['named long @500', 'named', 500, null, null],
+	['unnamed @500', 'controls', 500, null, 'x'],
+	['named short @300', 'named', 300, 'Goblin Ambush', null],
+	['named 19ch @300 (wraps)', 'named', 300, 'The Ford of Bruinen', null],
+	['named 31ch @300 (wraps)', 'named', 300, 'The Siege of Capital, Night Two', null],
+	['named long @300 (4 lines)', 'named', 300, null, null],
+	['unnamed @300', 'controls', 300, null, 'x'],
+];
 
 async function assertTitleLineStable(page) {
 	const problems = [];
 	let compared = 0;
+	let wrappedCases = 0;
 	for (const bg of ['dark', 'light']) {
-		for (const [label, fixture] of [['named', 'named'], ['unnamed', 'controls']]) {
+		for (const [label, fixture, width, setup, commitText] of TITLE_LINE_CASES) {
 			const query = new URLSearchParams({ element: 'initiative', fixture, theme: 'steel', bg, sheet: '1' });
+			if (width) query.set('width', String(width));
 			await page.emulateMedia({ media: 'screen' });
 			await page.goto(`${pageUrl}?${query}`);
 			await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
-			const m = await page.evaluate(measureTitleLine);
-			if (!m.closed) problems.push(`${bg}|${label}: Enter did not close the editor`);
+			const m = await page.evaluate(measureTitleLine, { setup, commitText });
+			const at = `${bg}|${label}`;
+			if (!m.closed) problems.push(`${at}: Enter did not close the editor`);
+			if (m.tag !== 'TEXTAREA') problems.push(`${at}: the editor is a <${m.tag.toLowerCase()}>, not the auto-height textarea`);
+			if (m.lines > 1) wrappedCases += 1;
 			for (const phase of ['editing', 'committed']) {
 				compared += 1;
 				for (const k of ['titleHeight', 'titleTop', 'heroesTop']) {
 					const d = m[phase][k] - m.rest[k];
 					if (Math.abs(d) > 0.001) {
-						problems.push(`${bg}|${label}|${phase}: ${k} moved ${d.toFixed(3)}px (${m.rest[k].toFixed(3)} -> ${m[phase][k].toFixed(3)})`);
+						problems.push(`${at}|${phase}: ${k} moved ${d.toFixed(3)}px (${m.rest[k].toFixed(3)} -> ${m[phase][k].toFixed(3)}; ${m.lines} wrapped line(s))`);
 					}
 				}
 			}
+			if (m.promptSize !== null && m.promptSize !== m.labelSize) {
+				problems.push(`${at}: the "Untitled encounter" prompt measures ${m.promptSize}, not the label size ${m.labelSize}`);
+			}
 		}
 	}
+	if (wrappedCases < 6) problems.push(`only ${wrappedCases} cases wrapped to 2+ lines - the gate would not see a wrap-related shift`);
 	if (problems.length) {
 		console.error(
 			`\nTITLE LINE SHIFT - opening or saving the encounter title moves the content under it:\n` +
 				problems.map((p) => `  ${p}`).join('\n') +
-				`\nSee styles-source.css -> "THE ENCOUNTER TITLE" (the editor's input is exactly the heading's line box).`,
+				`\nSee styles-source.css -> "THE EDITOR (R2F)" (the textarea is exactly the heading's line box).`,
 		);
 		process.exit(1);
 	}
 	console.log(
 		`\ntitle line stable OK (heading height, heading top and Heroes line top identical at rest / editing / ` +
-			`committed: ${compared} comparisons across named/unnamed x dark/light)`,
+			`committed: ${compared} comparisons over ${TITLE_LINE_CASES.length} cases x dark/light, ${wrappedCases} of them wrapped to 2+ lines; ` +
+			`the "Untitled encounter" prompt measures the label size)`,
 	);
 }
 
@@ -2898,7 +2951,7 @@ async function assertInputHostLeak(page) {
 			window.addEventListener('blur', (e) => {
 				if (e.target instanceof HTMLElement && e.target.classList.contains('dse-init__title-input')) e.stopImmediatePropagation();
 			}, true);
-			return !!document.querySelector('[data-dse-element="initiative"] input.dse-init__title-input');
+			return !!document.querySelector('[data-dse-element="initiative"] .dse-init__title-input');
 		});
 		if (!titleOpened) problems.push(`${bg}: the initiative title editor could not be opened for the sweep`);
 		const keys = await page.evaluate(tagInputs);

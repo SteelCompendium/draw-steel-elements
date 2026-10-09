@@ -17399,28 +17399,46 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	letter-spacing: 0.06em;
 	color: var(--dse-fg-muted);
 }
+/* THE EDITOR (R2F): an auto-height <textarea> that is the heading's text, editable. Everything that
+   decides where a line breaks or how tall a line is matches the heading text span it replaces: the
+   same font (inherited from the h2), size, weight, letter-spacing, line-height 1.2, overflow-wrap and
+   text width. The span is an inline-block with 0.25em padding each side and a -0.25em left margin; its
+   border box measures exactly the heading's width (234px in a 300px pane), so its text wraps at
+   heading-width minus its own 0.5em of padding. This box is `100%` border-box with the same 0.25em
+   padding and the same -0.25em margin: the same text width to the pixel. (Boxes 0.25em and 0.5em
+   wider were tried: they fit "The Ford of Bruinen" on one line where the heading wraps it onto two.)
+   Vertical padding and border are 0, and the visible edge is an inset shadow, so
+   the box is `rows x line-height` and nothing else: the heading's own line box at every width. The
+   view sets `rows` to the wrapped line count (view.ts `fit`), so it grows and shrinks with the
+   draft, no scrollbar. Opening or saving the title therefore moves nothing, wrapped or not. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__title-input {
+	display: block;
 	box-sizing: border-box;
 	width: 100%;
-	/* Exactly the h2's line box (line-height 1.2, same size as the text it replaces), so opening and
-	   closing the editor moves nothing below it (R2). Border-box: the 1px border is inside it. */
-	display: block;
-	height: 1.2em;
-	padding: 0 0.35em;
+	height: auto;
+	min-height: 0;
+	margin: 0 0 0 -0.25em;
+	padding: 0 0.25em;
+	border: 0;
+	resize: none;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+	text-indent: 0;
 	font: inherit;
 	/* explicit, so Obsidian's own heading font stack (which the h2 would hand down) cannot differ
 	   between a bare page and a real vault */
 	font-family: var(--dse-font-title, inherit);
+	line-height: 1.2;
 	letter-spacing: inherit;
 	color: var(--dse-fg);
 	background: var(--dse-surface-sunken);
-	border: 1px solid var(--dse-border);
+	box-shadow: inset 0 0 0 1px var(--dse-border);
 	border-radius: var(--dse-radius);
 	caret-color: var(--dse-fg);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-init__title-input:hover:not(:disabled) {
 	background: var(--dse-surface-sunken);
-	border-color: var(--dse-border);
+	box-shadow: inset 0 0 0 1px var(--dse-border);
 }
 /* GROUP 2 — `.dse-sedit__apply-input` (HIGH-3): the same plain-field look as the six
    ancestor-scoped siblings — it had NO material declared anywhere before this (only

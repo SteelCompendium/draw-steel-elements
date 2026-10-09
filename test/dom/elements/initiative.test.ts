@@ -1932,7 +1932,7 @@ describe('SC-377: the editable encounter title (owner ruling O6)', () => {
 	const named = quickStart + '\nname: "Ambush at the Ford"\n';
 	const titleOf = (root: HTMLElement) => root.querySelector('.dse-init__title') as HTMLElement | null;
 	const textOf = (root: HTMLElement) => root.querySelector('.dse-init__title-text') as HTMLElement;
-	const inputOf = (root: HTMLElement) => root.querySelector('.dse-init__title-input') as HTMLInputElement | null;
+	const inputOf = (root: HTMLElement) => root.querySelector('.dse-init__title-input') as HTMLTextAreaElement | null;
 	const key = (el: HTMLElement, k: string) =>
 		el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
 
@@ -1999,18 +1999,67 @@ describe('SC-377: the editable encounter title (owner ruling O6)', () => {
 		);
 	});
 
-	test('CSS contract (R2): no rule shrinks the heading itself, and the editor input is exactly the heading line box (display:block, 1.2em)', () => {
+	test('CSS contract (R2/R2F): no rule sizes the empty heading itself, and the editor box is the heading text box (block, 100% wide, same padding/margin, no vertical padding or border)', () => {
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 		// The caption size is on the prompt text only. Any rule that sizes the [data-empty] heading itself
 		// brings back the 16px-vs-28px layout shift when naming an unnamed tracker.
 		expect(sheet.match(/\.dse-init__title\[data-empty\][^{,]*\{[^}]*font-size/g)?.filter((r) => !r.includes('::before')) ?? []).toEqual([]);
-		const input = sheet.match(/\.dse-init__title-input\s*\{([^}]*)\}/);
-		expect(input).not.toBeNull();
-		expect(input![1]).toContain('display: block;');
-		expect(input![1]).toContain('height: 1.2em;');
-		expect(input![1]).not.toMatch(/height: auto/);
+		const box = sheet.match(/\.dse-init__title-input\s*\{([^}]*)\}/);
+		expect(box).not.toBeNull();
+		for (const decl of ['display: block;', 'width: 100%;', 'height: auto;', 'margin: 0 0 0 -0.25em;', 'padding: 0 0.25em;', 'border: 0;', 'line-height: 1.2;', 'overflow-wrap: anywhere;', 'resize: none;']) {
+			expect(box![1]).toContain(decl);
+		}
 		// The measured, computed proof (heading height + Heroes line top identical at rest / editing /
-		// committed) is `assertTitleLineStable` in visual-harness/shoot.mjs - jsdom lays nothing out.
+		// committed, wrapped and not, at three widths) is `assertTitleLineStable` in
+		// visual-harness/shoot.mjs - jsdom lays nothing out.
+	});
+
+	test('R2F: the editor is a <textarea> (so it wraps like the heading); Enter AND Shift+Enter commit and never insert a newline; pasted line breaks become spaces', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(named);
+		textOf(root).click();
+		const ta = inputOf(root)!;
+		expect(ta.tagName).toBe('TEXTAREA');
+		expect(ta.getAttribute('rows')).toBe('1');
+		ta.value = 'Line one\r\nline two\n\n three';
+		ta.dispatchEvent(new Event('input', { bubbles: true }));
+		expect(ta.value).toBe('Line one line two three'); // breaks (and the blanks around them) collapse to ONE space
+		const shift = new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true });
+		ta.dispatchEvent(shift);
+		expect(shift.defaultPrevented).toBe(true); // no newline inserted
+		expect(inputOf(root)).toBeNull();
+		expect(textOf(root).textContent).toBe('Line one line two three');
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect((host.replaceSource as jest.Mock).mock.calls[0][0] as string).toContain('name: Line one line two three');
+	});
+
+	test('R2F: the commit flattens a value whose line breaks never fired an input event (a programmatic paste)', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(named);
+		textOf(root).click();
+		inputOf(root)!.value = 'a\nb';
+		inputOf(root)!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect((host.replaceSource as jest.Mock).mock.calls[0][0] as string).toContain('name: a b');
+	});
+
+	test('R2F: `rows` follows the wrapped line count (scrollHeight / line-height) as the draft grows and shrinks', async () => {
+		const { root } = await renderInit(named);
+		document.body.appendChild(root); // computed style needs an attached node
+		textOf(root).click();
+		const ta = inputOf(root)!;
+		ta.style.lineHeight = '20px'; // jsdom lays nothing out; give it a line height and a content height
+		let content = 60;
+		Object.defineProperty(ta, 'scrollHeight', { configurable: true, get: () => content });
+		ta.dispatchEvent(new Event('input', { bubbles: true }));
+		expect(ta.rows).toBe(3);
+		content = 20;
+		ta.dispatchEvent(new Event('input', { bubbles: true }));
+		expect(ta.rows).toBe(1);
+		content = 0; // an unmeasurable (detached / not laid out) box falls back to one row, never 0 or NaN
+		ta.dispatchEvent(new Event('input', { bubbles: true }));
+		expect(ta.rows).toBe(1);
+		root.remove();
 	});
 
 	test('Space/Enter on the focused text also opens the editor (keyboard path)', async () => {

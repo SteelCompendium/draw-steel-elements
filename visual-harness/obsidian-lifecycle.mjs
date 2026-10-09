@@ -1222,12 +1222,17 @@ const SCENARIOS = [
 				const { rootEl } = await enterMode(t, rel, mode, '[data-dse-element="initiative"]');
 				await t.ev(`(${rootEl}).__lcTag = 's9d'`);
 				const text = `(${rootEl}).querySelector('.dse-init__title-text')`;
-				const input = `(${rootEl}).querySelector('input.dse-init__title-input')`;
+				const input = `(${rootEl}).querySelector('textarea.dse-init__title-input')`;
 				await t.realClick(text);
 				await t.sleep(250);
 				t.expect(await t.ev(`document.activeElement === (${input})`), `${label}: a real click on the title did not open a focused input`);
 				await t.cdp.call('Input.insertText', { text: 'Ford of Bruinen' });
 				await t.sleep(150);
+				// R2F: a real click ON the open editor (now a <textarea>) is the browser's to handle - the shield
+				// must leave it focused and open, and the draft intact.
+				await t.realClick(input);
+				await t.sleep(200);
+				t.expect(await t.ev(`document.activeElement === (${input}) && (${input}).value === 'Ford of Bruinen'`), `${label}: a real click on the open title editor closed it, blurred it or lost the draft`);
 				await t.key('Enter', 'Enter', 13);
 				await t.sleep(1500);
 				t.expect(await t.ev(`!(${input})`), `${label}: Enter did not leave edit mode`);
@@ -1272,7 +1277,7 @@ const SCENARIOS = [
 				await t.cdp.call('Input.insertText', { text: 'Away Title' });
 				await clickAway(rootEl);
 				await t.sleep(1500);
-				t.expect(await t.ev(`!(${rootEl}).querySelector('input.dse-init__title-input')`), `${label}: clicking elsewhere in the card left the title input open`);
+				t.expect(await t.ev(`!(${rootEl}).querySelector('textarea.dse-init__title-input')`), `${label}: clicking elsewhere in the card left the title input open`);
 				t.expect(/^```ds-initiative\nname: Away Title\nheroes:/m.test(t.read('Lifecycle/ogres.md')), `${label}: the title was not saved on click-away: ${t.read('Lifecycle/ogres.md').slice(0, 120)}`);
 				// Amount: focus is released, the draft stays
 				await t.realClick(`(${rootEl}).querySelector('input.dse-init__malice-quickadd-amount')`);
@@ -1323,7 +1328,7 @@ const SCENARIOS = [
 				await t.cdp.call('Input.insertText', { text: 'Across Elements' });
 				await t.realClick(plainTextExpr(counterRoot)); // a DIFFERENT element's card
 				await t.sleep(1500);
-				t.expect(await t.ev(`!(${rootEl}).querySelector('input.dse-init__title-input')`), `${label}: a click on another element's card left the title input open`);
+				t.expect(await t.ev(`!(${rootEl}).querySelector('textarea.dse-init__title-input')`), `${label}: a click on another element's card left the title input open`);
 				t.expect(/^```ds-initiative\nname: Across Elements\nheroes:/m.test(t.read(rel)), `${label}: the title was not saved on a click in another element: ${t.read(rel).slice(0, 120)}`);
 				if (mode[1].mode === 'source') t.expect((await t.ev(`(${LC_LEAF}).view.editor.getCursor().line`)) === 0, `${label}: the click moved the editor cursor`);
 			}
