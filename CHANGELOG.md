@@ -185,6 +185,21 @@ for what needs action.
   Control text size (screen only). Text nested inside other text, such as the power-roll tier
   badges, follows its setting too. They work inside dialogs too, and Small and Large apply in
   print and export as the setting says. Nothing changes at the default 100%.
+- [FIX] **The roll controls on ability cards are labelled and start closed** (SC-279). With
+  **Enable rolling** on, the dice icon in a power roll's header used to open one row of
+  unlabelled steppers, toggles and a bare reset icon. It still rolls on the first click, and
+  now opens a **Roll** button plus a **Modifiers** section that is closed by default and says
+  in words what the next roll will use ("Reason 0, skill +2, 1 edge"). Open it to find a
+  caption over each stepper (the characteristic, **Edges**, **Banes**), a line spelling out
+  the net effect, **Skill applies (+2)** and **Main action - natural 19-20 is a critical hit**
+  as checkboxes, and **Reset modifiers**, which is greyed out when nothing differs. Whether
+  Modifiers is open is remembered for the session only, never in your note. The roll
+  controls are left out of print and PDF export (they used to print as an unlabelled box of
+  numbers).
+- [FIX] **Abilities in a statblock or featureblock no longer share roll settings** (SC-279).
+  With rolling on, an edge or bane set on one ability of a statblock or featureblock was used
+  for the next ability you rolled, and its Modifiers section opened already expanded. Each
+  ability now keeps its own.
 - [FIX] **Power-roll tier rows are compact again: about 50px for a one-line outcome, the
   same as the site** (SC-378). Every tier row (ability/feature cards, statblock abilities,
   featureblock, a kit's signature ability, negotiation arguments) had grown to

@@ -155,7 +155,11 @@ its Advanced list — they were always ability-card settings, so this is where t
 
 ## Rolling
 
-- **Enable rolling** (off by default) — adds a dice roller to rendered ability cards.
+- **Enable rolling** (off by default) — adds a dice roller to rendered ability cards. The
+  dice icon in a power roll's header rolls at once and opens a compact strip under the
+  tiers: a **Roll** button and a collapsed **Modifiers** section that spells out the
+  current modifiers in words (open it to set the characteristic, edges, banes, skill and
+  main action, or to **Reset modifiers**).
 - **Roller** — roll natively, or hand the raw dice to the community
   [Dice Roller](https://github.com/javalent/dice-roller) plugin when it's installed. Draw
   Steel's tier/edge/bane maths always stays native, and the plugin falls back to its own
