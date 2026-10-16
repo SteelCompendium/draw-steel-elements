@@ -1539,7 +1539,8 @@ describe('Steel material contract', () => {
 		it('stamina-bar, roll and hero are deliberately NOT plated at the root', () => {
 			// stamina-bar renders its SC-132 interior inside its own collapsible region
 			// frame — a root plate would DOUBLE-frame it. roll is already plated: it
-			// renders an inner `.dse-card`, which the plate rule already matches. hero is
+			// renders an inner `.dse-roll` card that carries its own frame
+			// (`[data-dse-element='roll'] .dse-roll`). hero is
 			// the same case as roll one node down: its `.dse-hero` wrapper carries the full
 			// plate (see the next test), and SC-152's first round put the ROOT in the list
 			// too, which shipped two concentric frames on the flagship sheet (the review's

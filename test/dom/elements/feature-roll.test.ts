@@ -133,6 +133,45 @@ describe('attachRollControls — the per-effect roller', () => {
 		expect(second.panel.rowEls.mid!.getAttribute('data-dse-roll-result')).toBe('active');
 	});
 
+	test('SC-279: the strip a first click reveals is COLLAPSED (Roll + a worded summary)', async () => {
+		const { hostEl, launch } = mountController({ faces: [5, 6] });
+		launch.click();
+		await flushAsync(1);
+		const header = hostEl.querySelector<HTMLButtonElement>('.dse-rollbar__mods > .dse-collapse__header')!;
+		expect(header.getAttribute('aria-expanded')).toBe('false');
+		expect(hostEl.querySelector<HTMLElement>('.dse-rollbar__panel')!.hidden).toBe(true);
+		expect(hostEl.querySelector('.dse-rollbar__summary')!.textContent).toBe('Might 0');
+	});
+
+	test('SC-279: expansion persists per effect in roll.modsOpen.<n> (session only) and restores on rebuild', async () => {
+		const session = createSessionStore();
+		const first = mountController({ faces: [5, 6], session, blockKey: 'open' });
+		first.launch.click();
+		await flushAsync(1);
+		first.hostEl.querySelector<HTMLButtonElement>('.dse-rollbar__mods > .dse-collapse__header')!.click();
+		expect(session.get('open', 'roll.modsOpen.0')).toBe(true);
+		const second = mountController({ faces: [5, 6], session, blockKey: 'open' });
+		second.launch.click();
+		await flushAsync(1);
+		expect(
+			second.hostEl.querySelector('.dse-rollbar__mods > .dse-collapse__header')!.getAttribute('aria-expanded'),
+		).toBe('true');
+	});
+
+	test('SC-279: Reset on a card returns to 0 / 0 / off and the INFERRED main-action default', async () => {
+		const { hostEl, launch } = mountController({ faces: [5, 6], mainActionDefault: true });
+		launch.click();
+		await flushAsync(1);
+		const reset = hostEl.querySelector<HTMLButtonElement>('button[aria-label="Reset modifiers"]')!;
+		expect(reset.disabled).toBe(true); // the strip starts at its defaults
+		hostEl.querySelector<HTMLButtonElement>('button[aria-label="Increase Edges"]')!.click();
+		hostEl.querySelector<HTMLInputElement>('.dse-rollbar__check--main input')!.click(); // inferred ON → off
+		expect(reset.disabled).toBe(false);
+		reset.click();
+		expect(hostEl.querySelector('.dse-rollbar__summary')!.textContent).toBe('Might 0');
+		expect(hostEl.querySelector<HTMLInputElement>('.dse-rollbar__check--main input')!.checked).toBe(true);
+	});
+
 	test('click-to-roll: row click rolls when enabled, does nothing when disabled', async () => {
 		const on = mountController({ faces: [5, 6], clickToRoll: true });
 		on.panel.rowEls.mid!.dispatchEvent(new MouseEvent('click', { bubbles: true }));

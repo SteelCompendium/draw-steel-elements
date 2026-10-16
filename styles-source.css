@@ -15155,6 +15155,70 @@ body.theme-light
 	border-radius: var(--dse-radius);
 	padding: 0.1rem 0.4rem;
 }
+/* SC-279 — THE ROLL STRIP. [Roll] first, then a kit collapsible "Modifiers" whose header carries a
+   worded summary; the labelled controls live in its region. The collapsible's root dissolves
+   (display: contents) so its header and region are flex items of `.dse-rollbar`: the header
+   shares the Roll button's row, the region takes a full row of its own underneath.
+   Every rule here is scoped under `.dse-rollbar*` — the shared `.dse-collapse*` / `.dse-btn` /
+   `.dse-stepper` rules are untouched (editing those would move dozens of frozen lines). */
+[data-dse-element] .dse-rollbar__mods {
+	display: contents;
+}
+[data-dse-element] .dse-rollbar__mods > .dse-collapse__header {
+	flex: 1 1 10rem;
+	width: auto;
+	min-width: 0;
+}
+[data-dse-element] .dse-rollbar__summary {
+	min-width: 0;
+	font-size: var(--dse-fs-caption);
+	font-weight: normal;
+	color: var(--dse-fg-muted);
+	overflow-wrap: anywhere;
+}
+[data-dse-element] .dse-rollbar__summary::before {
+	content: '· ';
+}
+/* The `:not([hidden])` guard is load-bearing: `.dse-collapse__region[hidden] { display: none }`
+   is (0,2,0) and sits EARLIER in this sheet, so an unguarded `display: flex` here (same
+   specificity, later) would paint the panel open while the header says collapsed. */
+[data-dse-element] .dse-rollbar__panel:not([hidden]) {
+	flex: 1 1 100%;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 0.6rem 1.25rem;
+	padding: 0.25rem 0.35rem 0.1rem;
+}
+[data-dse-element] .dse-rollbar__field {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.15rem;
+}
+/* The caption over a stepper: the Malice-well / stat-tile small-caps recipe. */
+[data-dse-element] .dse-rollbar__label {
+	font-variant: small-caps;
+	letter-spacing: 0.06em;
+	font-size: var(--dse-fs-caption);
+	color: var(--dse-fg-muted);
+}
+/* Edges + Banes never split across a wrap: they read as one "edges vs banes" decision. */
+[data-dse-element] .dse-rollbar__pair {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: 1rem;
+}
+[data-dse-element] .dse-rollbar__panel .dse-rollbar__net,
+[data-dse-element] .dse-rollbar__check {
+	flex: 1 1 100%;
+}
+[data-dse-element] .dse-rollbar__check {
+	display: flex;
+	align-items: center;
+	min-height: var(--dse-control-min, var(--dse-touch-min));
+	cursor: pointer;
+}
 [data-dse-element] .dse-rollcard {
 	margin-top: 0.35rem;
 	padding: 0.5rem 0.65rem;
@@ -15760,6 +15824,14 @@ body.theme-light
 	.dse-chrome-summary {
 		display: none;
 	}
+	/* SC-279 — the roll strip is interactive-only: on paper it would print a box reading
+	   "0 1 0 Edge +2" (unlabeled steppers). The WHOLE `.dse-rollbar` is removed, not just its
+	   `.dse-btn`s, because Rule 3 above force-opens `.dse-collapse__region[hidden]` and would
+	   otherwise print the collapsed Modifiers panel. Specificity matches the base
+	   `[data-dse-element] .dse-rollbar { display: flex }` (0,2,0) and comes later, so it wins. */
+	[data-dse-element] .dse-rollbar {
+		display: none;
+	}
 	/* Rule 5 — page-break hygiene: never split a statblock / ability / power-roll
 	   / characteristics row across a page. */
 	[data-dse-element],
@@ -15807,6 +15879,11 @@ body.theme-light
 [data-dse-print="on"] [data-dse-theme='steel'] .dse-sb,
 [data-dse-theme='steel'][data-dse-print="on"] .dse-sb {
 	box-shadow: none;
+}
+/* SC-279 — the roll strip is hidden whole in the preview twin too (see the @media print
+   copy of this rule above for why the BAR, not just its buttons: Rule 3's force-open). */
+[data-dse-print="on"] .dse-rollbar {
+	display: none;
 }
 [data-dse-print="on"] .dse-collapse__chevron,
 [data-dse-print="on"] .dse-btn,

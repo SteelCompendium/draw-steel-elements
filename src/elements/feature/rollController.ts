@@ -5,7 +5,8 @@
 // identical to today.
 //
 // Flow (§3.2/§3.4): a Roll button (die icon) — first activation reveals the
-// resolver bar AND rolls; the bar stays for adjust-and-reroll. Results highlight
+// roll strip AND rolls; the strip stays for adjust-and-reroll (SC-279: its
+// Modifiers disclosure starts collapsed — the strip is Roll + a worded summary). Results highlight
 // the resolved tier row via the panel's data-dse-roll-result channel (crit adds
 // the crit row), render a result card (aria-live), and land in SessionStore
 // (roll.lastInput.<n> / roll.history.<n>, cap 10 — OD-8). Rolling NEVER writes
@@ -69,6 +70,7 @@ export function attachRollControls(opts: AttachRollControlsOptions): void {
 	const parsed = parseRollExpression(opts.rollExpr ?? '');
 	const lastSlot = `roll.lastInput.${opts.effectIndex}`;
 	const historySlot = `roll.history.${opts.effectIndex}`;
+	const modsOpenSlot = `roll.modsOpen.${opts.effectIndex}`;
 	const fixed =
 		parsed.characteristic !== undefined
 			? opts.hooks.provider?.get(parsed.characteristic)
@@ -116,6 +118,9 @@ export function attachRollControls(opts: AttachRollControlsOptions): void {
 				initial: last,
 				showMainAction: true,
 				mainAction: opts.mainActionDefault,
+				// SC-279 — the Modifiers disclosure starts collapsed; a viewer's expansion lives in
+				// the session only (per effect), never the note. Reset returns to 0/0/off/inferred.
+				persist: { session: opts.hooks.session, blockKey: opts.hooks.blockKey, slot: modsOpenSlot },
 				onRoll: (state) => void doRoll(state),
 			},
 			opts.owner,

@@ -49,7 +49,7 @@ test('an EMPTY block is a bare 2d10 power roll: bar + Roll, no panel, no error',
 
 test('roll string keyword labels the characteristic stepper', async () => {
 	const { containerEl } = await mountRoll('roll: "Power Roll + Reason"');
-	// Stepper labels are accessible names (kit convention: aria-label, no visible text).
+	// The stepper's aria-label is its accessible name (and equals the visible caption, SC-279).
 	expect(containerEl.querySelector('.dse-rollbar .dse-stepper[aria-label="Reason"]')).not.toBeNull();
 	expect(containerEl.querySelectorAll('.dse-stepper')).toHaveLength(3);
 });
@@ -127,4 +127,57 @@ test('OD-5 pin: rollingEnabled EXPLICITLY false never gates ds-roll — bar rend
 	containerEl.querySelector<HTMLButtonElement>('button[aria-label="Roll"]')!.click();
 	await flushAsync(1);
 	expect(containerEl.querySelector('.dse-rollcard')).not.toBeNull();
+});
+
+// ---- SC-279 — the roll strip on ds-roll: collapsed by default, session-only expansion ----
+const modsHeader = (el: HTMLElement) =>
+	el.querySelector<HTMLButtonElement>('.dse-rollbar__mods > .dse-collapse__header')!;
+
+test('SC-279: the strip mounts COLLAPSED; the summary words the authored seeds', async () => {
+	const { containerEl } = await mountRoll('roll: "Power Roll + Reason"\nskill: true\nedges: 1');
+	expect(modsHeader(containerEl).getAttribute('aria-expanded')).toBe('false');
+	expect(containerEl.querySelector<HTMLElement>('.dse-rollbar__panel')!.hidden).toBe(true);
+	expect(containerEl.querySelector('.dse-rollbar__summary')!.textContent).toBe('Reason 0, skill +2, 1 edge');
+	// Roll sits first in the strip, ahead of the disclosure.
+	expect(containerEl.querySelector('.dse-rollbar')!.firstElementChild!.getAttribute('aria-label')).toBe('Roll');
+});
+
+test('SC-279: Reset returns to the AUTHORED seeds (edges: 1), not zero', async () => {
+	const { containerEl, session } = await mountRoll('edges: 1', [5, 6], 'seeded');
+	const bump = (label: string) =>
+		containerEl.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!.click();
+	bump('Increase Edges');
+	bump('Increase Banes');
+	const reset = containerEl.querySelector<HTMLButtonElement>('button[aria-label="Reset modifiers"]')!;
+	expect(reset.disabled).toBe(false);
+	reset.click();
+	expect(reset.disabled).toBe(true);
+	bump('Roll');
+	await flushAsync(1);
+	expect(session.get<{ edges: number; banes: number }>('seeded', 'roll.lastInput.0')).toMatchObject({ edges: 1, banes: 0 });
+});
+
+test('SC-279: expanding persists ONLY to the session slot roll.modsOpen.0 — the note is never written', async () => {
+	const { deps } = makeDeps();
+	deps.roll = stubService([5, 6]);
+	const owner = new Component();
+	owner.load();
+	const containerEl = document.createElement('div');
+	document.body.appendChild(containerEl);
+	const host = makeHost(containerEl, owner, 'mods-open');
+	const spy = jest.spyOn(host, 'replaceSource');
+	await new ElementPipeline(deps).run(rollElement, 'edges: 1', host);
+	await flushAsync(2);
+	modsHeader(containerEl).click();
+	expect(modsHeader(containerEl).getAttribute('aria-expanded')).toBe('true');
+	expect(deps.session.get('mods-open', 'roll.modsOpen.0')).toBe(true);
+	modsHeader(containerEl).click();
+	expect(deps.session.get('mods-open', 'roll.modsOpen.0')).toBe(false);
+	expect(spy).not.toHaveBeenCalled();
+});
+
+test('SC-279: flat mode drops Edges / Banes from the strip', async () => {
+	const { containerEl } = await mountRoll('mode: flat\ndice: "1d6+2"');
+	expect(containerEl.querySelector('.dse-stepper')).toBeNull();
+	expect(containerEl.querySelector('.dse-rollbar__net')).toBeNull();
 });

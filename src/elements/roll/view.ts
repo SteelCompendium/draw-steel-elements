@@ -1,7 +1,8 @@
 // Plan 14 Task 5 (D5 §5.3) — RollView: the ds-roll card. Head (optional name) ·
 // expression/difficulty caption · optional tier panel (t1/t2/t3/crit, highlights
-// like the feature roller) · the ALWAYS-VISIBLE roll bar (authoring the block is
-// the opt-in; rollingEnabled does not gate this element) · the result card.
+// like the feature roller) · the ALWAYS-VISIBLE roll strip (Roll + a collapsed
+// Modifiers disclosure, SC-279; authoring the block is the opt-in, rollingEnabled
+// does not gate this element) · the result card.
 // Results are session-ephemeral (OD-4): history/last-input in SessionStore, no
 // container.empty() rebuild on roll — the result card is a targeted DOM update
 // (F1 §2.1 principle 4). auto_roll rolls once on mount.
@@ -13,6 +14,7 @@ import type { RollModel } from './model';
 
 const LAST_SLOT = 'roll.lastInput.0';
 const HISTORY_SLOT = 'roll.history.0';
+const MODS_OPEN_SLOT = 'roll.modsOpen.0';
 const TIER_TO_ROW: readonly PowerRollTier[] = ['low', 'mid', 'high'];
 
 export class RollView extends ElementView<RollModel> {
@@ -60,17 +62,18 @@ export class RollView extends ElementView<RollModel> {
 		}
 
 		const last = this.cx.session.get<Partial<RollBarState>>(this.blockKey(), LAST_SLOT);
+		const seeds = { skillBonus: model.skill ? 2 : 0, edges: model.edges, banes: model.banes } as const;
 		this.bar = rollBar(
 			this.areaEl,
 			{
 				mode: model.mode,
 				characteristicLabel: model.characteristicLabel,
 				characteristicFixed: model.characteristicValue,
-				initial: last ?? {
-					skillBonus: model.skill ? 2 : 0,
-					edges: model.edges,
-					banes: model.banes,
-				},
+				initial: last ?? seeds,
+				// SC-279 — Reset returns to what the block AUTHORED, not to a bare zero; the
+				// Modifiers disclosure starts collapsed and remembers its state in the session only.
+				defaults: { ...seeds, mainAction: model.mainAction },
+				persist: { session: this.cx.session, blockKey: this.blockKey(), slot: MODS_OPEN_SLOT },
 				showMainAction: true,
 				mainAction: model.mainAction,
 				onRoll: (state) => void this.doRoll(state),
