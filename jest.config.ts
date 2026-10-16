@@ -57,6 +57,8 @@ const config: Config = {
 			moduleNameMapper: aliases,
 			transform: transform as any,
 			setupFiles: ['<rootDir>/test/setup/polyfills.ts'],
+			// SC-406: the experimental release gate is ON for every suite; see the file.
+			setupFilesAfterEnv: ['<rootDir>/test/setup/experimental-on.ts'],
 		},
 		{
 			displayName: 'dom',
@@ -69,6 +71,7 @@ const config: Config = {
 				'<rootDir>/test/setup/text-encoding-polyfill.ts',
 				'<rootDir>/test/setup/dom-setup.ts',
 			],
+			setupFilesAfterEnv: ['<rootDir>/test/setup/experimental-on.ts'],
 		},
 	],
 };

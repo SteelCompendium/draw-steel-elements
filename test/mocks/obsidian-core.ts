@@ -559,8 +559,12 @@ export class Plugin extends Component {
 		}
 		return el;
 	}
+	/** SC-406: the mock vault's data.json carries `experimental: true` — the 7.0.0 release gate
+	 *  (src/framework/experimental.ts) defaults OFF, and a test of the REAL `onload()` expects
+	 *  the full plugin (sidebar, deferred elements, authoring/print prefs). A test of the OFF
+	 *  state overrides this: `plugin.loadData = async () => ({})`. */
 	async loadData(): Promise<any> {
-		return {};
+		return { experimental: true };
 	}
 	async saveData(_data: any): Promise<void> {}
 	readonly commands: any[] = [];

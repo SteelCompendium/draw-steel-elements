@@ -8,6 +8,7 @@ import type { RenderContext } from './context';
 import type { ElementView } from './view';
 import type { ReferenceService } from './seams/refs';
 import type { ElementChrome } from './chrome/types';
+import { isExperimental } from './experimental';
 
 /** Strongest behavioral requirement an element makes — drives pipeline wiring (F1 §1.3). */
 export type ElementShape = 'static' | 'interactive' | 'persisted';
@@ -188,6 +189,27 @@ export interface ElementDefinition<M = unknown> {
 	 * (Scott's ruling, SC-190) — the code stays, the advertising doesn't. Revisit in 7.1+.
 	 */
 	hidden?: boolean;
+	/**
+	 * SC-406 — deferred out of the 7.0.0 release (Scott, 2026-10-16): the element's code stays,
+	 * but unless the undocumented `experimental` switch is on (`framework/experimental.ts`) it
+	 *   1. counts as `hidden` for every discovery surface (`isDefinitionHidden`), and
+	 *   2. renders an inert "not available in this release" card in place of the element
+	 *      (`ElementPipeline.run`) — before parse, validate or create-view, so the block's
+	 *      source is never read, mounted, written or anchored.
+	 * Still REGISTERED either way (the card needs the code-block processor). With the switch
+	 * on, the flag does nothing at all.
+	 */
+	deferred?: boolean;
+}
+
+/**
+ * SC-406 — is `def` withheld from the discovery surfaces (`/ds`, the Insert commands)? Its
+ * own `hidden` flag, or `deferred` while the experimental switch is off. Evaluated at call
+ * time; both consumers read it once, at registration / per keystroke, after `onload` has set
+ * the switch.
+ */
+export function isDefinitionHidden(def: Pick<ElementDefinition, 'hidden' | 'deferred'>): boolean {
+	return def.hidden === true || (def.deferred === true && !isExperimental());
 }
 
 /**

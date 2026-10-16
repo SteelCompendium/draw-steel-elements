@@ -13,6 +13,7 @@ export const rollElement: ElementDefinition<RollModel> = {
 	id: 'roll',
 	name: 'Roll',
 	aliases: ['ds-roll', 'ds-r', 'ds-power-roll'],
+	deferred: true, // SC-406: not in 7.0.0 — inert card unless `experimental` is on
 	shape: 'interactive',
 	schema: rollSchemaYaml,
 	parse: (data) => parseRollModel(data),

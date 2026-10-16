@@ -46,6 +46,7 @@ export const heroElement: ElementDefinition<HeroModel> = {
 	// it's just absent from the command palette, `/ds`, and the docs. Revisit in 7.1+
 	// (flip this back to false/omit it once the follow-up ships).
 	hidden: true,
+	deferred: true, // SC-406: not in 7.0.0 — inert card unless `experimental` is on
 	authoring: {
 		example: heroExample,
 		// task-7-review.md's flagged footgun: `state` is a root-level schema sibling of

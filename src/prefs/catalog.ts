@@ -22,6 +22,7 @@
 import type { PreferenceStore, PrefDescriptor, DsePrefs } from '../framework/seams/prefs';
 import { declaredCollapsePrefs } from '@model/ComponentWrapper';
 import { CURATED_FONTS, DEFAULT_FONT_OPTION, fontCss } from './fontStacks';
+import { isExperimental } from '../framework/experimental';
 import { CARD_SCALE, TEXT_SCALE, TYPE_SCALE, snap } from './scale';
 
 declare module '../framework/seams/prefs' {
@@ -652,6 +653,23 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		},
 	}),
 ];
+
+/**
+ * SC-406 — the descriptors a deferred-out-of-7.0.0 feature owns. While the experimental
+ * switch is off they are NOT described to the store: the Authoring page and the Appearance
+ * page's Print preview row (both rendered FROM the descriptors) disappear, and a per-block
+ * `prefs:` naming either hits `extractPrefOverrides`'s existing "unknown per-block pref"
+ * console warning. `@media print` layout itself is not a pref and is not touched.
+ */
+export const EXPERIMENTAL_PREF_KEYS: readonly (keyof DsePrefs)[] = ['authoringControls', 'printPreview'];
+
+/** The catalog to `describe()` at load: everything, or — switch off — everything except
+ *  `EXPERIMENTAL_PREF_KEYS`. `DSE_PREF_DESCRIPTORS` itself stays the full list (tests and
+ *  the visual harness read it directly, i.e. with the switch on). */
+export function activePrefDescriptors(): readonly PrefDescriptor[] {
+	if (isExperimental()) return DSE_PREF_DESCRIPTORS;
+	return DSE_PREF_DESCRIPTORS.filter((descriptor) => !EXPERIMENTAL_PREF_KEYS.includes(descriptor.key));
+}
 
 // —— §3.2 statblock presets: NOT a stored pref — the label is DERIVED from the
 // members, re-deriving 'custom' when any single member diverges (site parity).

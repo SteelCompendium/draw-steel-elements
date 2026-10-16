@@ -1417,6 +1417,9 @@ async function main() {
 		const pdir = path.join(vault, '.obsidian', 'plugins', 'draw-steel-elements');
 		fs.mkdirSync(pdir, { recursive: true });
 		for (const f of ['main.js', 'styles.css', 'manifest.json']) fs.copyFileSync(path.join(bundleDir, f), path.join(pdir, f));
+		// SC-406: the 7.0.0 release gate defaults OFF (no sidebar, no pin/unpin items). The
+		// sidebar scenarios below need them, so the scratch vault's data.json turns it ON.
+		fs.writeFileSync(path.join(pdir, 'data.json'), JSON.stringify({ experimental: true }));
 		fs.writeFileSync(path.join(vault, '.obsidian', 'community-plugins.json'), JSON.stringify(['draw-steel-elements']));
 		for (const [rel, text] of Object.entries(FIXTURES)) {
 			fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });

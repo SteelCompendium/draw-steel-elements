@@ -2,6 +2,7 @@
 // scaffold at the cursor. INSERT ONLY (replaceSelection) — never a range-replace over
 // existing content (editor-mutation safety, Global Constraints / OD-D9-12).
 import type { Editor, Plugin } from 'obsidian';
+import { isDefinitionHidden } from '@/framework/registry';
 import type { ElementDefinition, ElementRegistry } from '@/framework/registry';
 import { advancePosition, buildScaffold } from './scaffold';
 
@@ -22,11 +23,12 @@ export function insertScaffold(editor: Editor, def: ElementDefinition): void {
 /**
  * Register `insert-<id>` for every ADVERTISED element in the registry (loop, no
  * per-element code). SC-190: a `hidden` def (e.g. `ds-hero`) stays fully registered — it
- * just gets no command-palette entry, so it isn't a thing a user stumbles onto.
+ * just gets no command-palette entry, so it isn't a thing a user stumbles onto. SC-406: a
+ * `deferred` def is hidden the same way while the experimental switch is off.
  */
 export function registerInsertCommands(plugin: Plugin, registry: ElementRegistry): void {
 	for (const def of registry.all()) {
-		if (def.hidden) continue;
+		if (isDefinitionHidden(def)) continue;
 		plugin.addCommand({
 			id: `insert-${def.id}`,
 			name: `Insert Draw Steel: ${def.name}`,

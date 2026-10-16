@@ -263,7 +263,9 @@ describe('D4 §4 — DseSettingTab', () => {
 			ids.push(cmd.id);
 		}) as never);
 		await plugin2.onload();
-		expect(ids).toContain('download-data-md-dse');
+		// SC-406: the legacy alias was removed outright (Scott, 2026-10-16) — not gated.
+		expect(ids).toContain('sync-compendium');
+		expect(ids).not.toContain('download-data-md-dse');
 		expect(ids).not.toContain('dse-cycle-theme');
 		expect(ids).not.toContain('dse-toggle-print-preview');
 		addCommand.mockRestore();

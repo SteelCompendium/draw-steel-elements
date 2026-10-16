@@ -23,6 +23,7 @@ export const tokensElement: ElementDefinition<TokenPoolModel> = {
 	id: 'hero-tokens',
 	name: 'Hero Tokens',
 	aliases: ['ds-tokens'],
+	deferred: true, // SC-406: not in 7.0.0 — inert card unless `experimental` is on
 	shape: 'persisted',
 	schema: tokensSchemaYaml,
 	autoResolveRefs: false, // self-contained pool: label/tokens are plain values, no refs

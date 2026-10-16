@@ -25,6 +25,7 @@ export const conditionsElement: ElementDefinition<ConditionsModel> = {
 	id: 'conditions',
 	name: 'Conditions',
 	aliases: ['ds-conditions', 'ds-cond'],
+	deferred: true, // SC-406: not in 7.0.0 — inert card unless `experimental` is on
 	shape: 'persisted',
 	schema: conditionsSchemaYaml,
 	autoResolveRefs: false, // condition keys/colors/effects are opaque strings, not refs

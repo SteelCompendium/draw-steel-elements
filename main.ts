@@ -32,7 +32,8 @@ import { createThemeService, registerThemeServiceForApp } from '@/framework/seam
 import type { ThemeService } from '@/framework/seams/theme';
 import { createPreferenceStore, registerPrefsForApp } from '@/framework/seams/prefs';
 import type { PreferenceStore, PrefsStorage } from '@/framework/seams/prefs';
-import { DSE_PREF_DESCRIPTORS } from '@/prefs/catalog';
+import { activePrefDescriptors } from '@/prefs/catalog';
+import { isExperimental, readExperimentalSetting, setExperimental } from '@/framework/experimental';
 import { createReferenceService } from '@/framework/seams/refs';
 import type { ReferenceService } from '@/framework/seams/refs';
 import { createRollService } from '@/framework/roll/service';
@@ -205,7 +206,10 @@ export function initializeElementFrameworkV2(
 	// D4 (Plan 13 Task 2): the full preference catalog — every bundle (plugin,
 	// tests, visual harness) gets the same descriptor set. describe() is
 	// idempotent-safe for late persisted loads (persistedSnapshot re-apply).
-	prefs.describe(DSE_PREF_DESCRIPTORS);
+	// SC-406: with the experimental switch off the catalog omits `authoringControls` and
+	// `printPreview` (activePrefDescriptors) — so the Authoring page / Print preview row do
+	// not render and a per-block `prefs:` naming either is rejected as unknown.
+	prefs.describe(activePrefDescriptors());
 	// SC-112 (Plan 23 Task 2) — mirrors the ThemeService registration immediately
 	// below: register the live PreferenceStore against `app` so DseModal.open()
 	// can look it up and stamp css-bearing prefs (font/scale custom properties) on
@@ -393,6 +397,11 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         this.initializeSchemas();
 
         await this.loadSettings();
+        // SC-406: the 7.0.0 release gate — `"experimental": true` in data.json (absent =
+        // off), read ONCE here and queried everywhere else through framework/experimental.ts.
+        // Must be set before anything below consults it (the pref catalog, the registry's
+        // discovery surfaces, the sidebar registration).
+        setExperimental(readExperimentalSetting(this.settings));
         // SC-131: kept as a field because the settings tab is DECLARATIVE now. Obsidian
         // calls getSettingDefinitions() once at registration to build the settings search
         // index, and that happens here — before initializeElementFrameworkV2 below, so
@@ -487,64 +496,70 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
             viewAdoption: this.settings.viewAdoption !== false,
         });
 
-        // D8 Task 2 (spec §1) — minimal wire proving the sidebar host/view registers
-        // through production onload; full command/ribbon polish is Task 10.
-        // D8 Task 3: refs/validation threaded in too, so SidebarPanel's in-place
-        // onUpdate refresh (spec §1.6) is live in production, not just in a harness that
-        // opts in — see DseSidebarServices's field doc.
-        const dseSidebarServices = {
-            app: this.app,
-            plugin: this,
-            pipeline: frameworkV2.pipeline,
-            registry: frameworkV2.registry,
-            refs: frameworkV2.services.refs,
-            validation: frameworkV2.services.validation,
-            prefs: frameworkV2.services.prefs,
-        };
-        registerDseSidebar(this, dseSidebarServices);
+        // SC-406: the sidebar (leaf, ribbon icon, its three commands, the encounter hand-off,
+        // and — in pipeline.ts — the Pin/Unpin menu items) exists only with the experimental
+        // switch on; deferred to 7.1.0. Off ⇒ nothing here runs, so `registerView` is never
+        // called and there is no `ItemView` for a stale workspace leaf to bind to.
+        if (isExperimental()) {
+            // D8 Task 2 (spec §1) — minimal wire proving the sidebar host/view registers
+            // through production onload; full command/ribbon polish is Task 10.
+            // D8 Task 3: refs/validation threaded in too, so SidebarPanel's in-place
+            // onUpdate refresh (spec §1.6) is live in production, not just in a harness that
+            // opts in — see DseSidebarServices's field doc.
+            const dseSidebarServices = {
+                app: this.app,
+                plugin: this,
+                pipeline: frameworkV2.pipeline,
+                registry: frameworkV2.registry,
+                refs: frameworkV2.services.refs,
+                validation: frameworkV2.services.validation,
+                prefs: frameworkV2.services.prefs,
+            };
+            registerDseSidebar(this, dseSidebarServices);
 
-        // D8 Task 10 (spec §2.4/OD-5) — wires the encounter builder's "Open in sidebar"
-        // hand-off (encounter/view.ts's setEncounterSidebarHandoff seam, left null by
-        // Task 4 so the button degrades to a Notice instead of a silent no-op before this
-        // wiring existed) to the SAME sendToSidebar/dseSidebarServices bundle every other
-        // sidebar entry point uses — one production wiring, not a second bespoke path.
-        // Cleared in onunload (below) so a stale plugin-instance closure can never survive
-        // a reload/disable and fire against a torn-down services bundle.
-        setEncounterSidebarHandoff((filePath, alias, cursorLine) =>
-            sendToSidebar(dseSidebarServices, filePath, alias, cursorLine),
-        );
+            // D8 Task 10 (spec §2.4/OD-5) — wires the encounter builder's "Open in sidebar"
+            // hand-off (encounter/view.ts's setEncounterSidebarHandoff seam, left null by
+            // Task 4 so the button degrades to a Notice instead of a silent no-op before this
+            // wiring existed) to the SAME sendToSidebar/dseSidebarServices bundle every other
+            // sidebar entry point uses — one production wiring, not a second bespoke path.
+            // Cleared in onunload (below) so a stale plugin-instance closure can never survive
+            // a reload/disable and fire against a torn-down services bundle.
+            setEncounterSidebarHandoff((filePath, alias, cursorLine) =>
+                sendToSidebar(dseSidebarServices, filePath, alias, cursorLine),
+            );
 
-        // D8 Task 3 (spec §1's canonical use) — a thin, initiative-specific "send to
-        // sidebar" affordance proving sendToSidebar(services, path, alias) end to end
-        // through production wiring: the generic "Send block to sidebar" command
-        // (registerDseSidebar, above) requires the cursor to sit inside the block, but the
-        // running-session tracker is meant to be grabbed from anywhere in the note — so
-        // this one only needs an active file, not a cursor position. Scans for whichever
-        // of initiative's FOUR aliases (ds-it/ds-init/ds-initiative/ds-initiative-tracker)
-        // actually appears in the note — hardcoding the canonical "ds-initiative" would
-        // silently no-op on a note written with a different alias (e.g. the visual-harness
-        // fixture uses ds-it); listFences' emptiness IS the signal, no extra plumbing
-        // needed. Falls back to the canonical alias so sendToSidebar's own
-        // "no matching block" no-op still applies when the note has none of them at all.
-        // The full per-block context-menu sweep for every element is Task 10's job.
-        this.addCommand({
-            id: 'send-initiative-to-sidebar',
-            name: 'Send initiative tracker to sidebar',
-            editorCheckCallback: (checking: boolean, editor: Editor, ctx: MarkdownView | MarkdownFileInfo) => {
-                const file = ctx.file;
-                if (!file) return false;
-                if (!checking) {
-                    void (async () => {
-                        const content = await this.app.vault.cachedRead(file);
-                        const alias =
-                            initiativeElement.aliases.find((a) => listFences(content, a).length > 0) ??
-                            initiativeElement.aliases[0];
-                        await sendToSidebar(dseSidebarServices, file.path, alias, editor.getCursor().line);
-                    })();
-                }
-                return true;
-            },
-        });
+            // D8 Task 3 (spec §1's canonical use) — a thin, initiative-specific "send to
+            // sidebar" affordance proving sendToSidebar(services, path, alias) end to end
+            // through production wiring: the generic "Send block to sidebar" command
+            // (registerDseSidebar, above) requires the cursor to sit inside the block, but the
+            // running-session tracker is meant to be grabbed from anywhere in the note — so
+            // this one only needs an active file, not a cursor position. Scans for whichever
+            // of initiative's FOUR aliases (ds-it/ds-init/ds-initiative/ds-initiative-tracker)
+            // actually appears in the note — hardcoding the canonical "ds-initiative" would
+            // silently no-op on a note written with a different alias (e.g. the visual-harness
+            // fixture uses ds-it); listFences' emptiness IS the signal, no extra plumbing
+            // needed. Falls back to the canonical alias so sendToSidebar's own
+            // "no matching block" no-op still applies when the note has none of them at all.
+            // The full per-block context-menu sweep for every element is Task 10's job.
+            this.addCommand({
+                id: 'send-initiative-to-sidebar',
+                name: 'Send initiative tracker to sidebar',
+                editorCheckCallback: (checking: boolean, editor: Editor, ctx: MarkdownView | MarkdownFileInfo) => {
+                    const file = ctx.file;
+                    if (!file) return false;
+                    if (!checking) {
+                        void (async () => {
+                            const content = await this.app.vault.cachedRead(file);
+                            const alias =
+                                initiativeElement.aliases.find((a) => listFences(content, a).length > 0) ??
+                                initiativeElement.aliases[0];
+                            await sendToSidebar(dseSidebarServices, file.path, alias, editor.getCursor().line);
+                        })();
+                    }
+                    return true;
+                },
+            });
+        }
 
         // D9 (Plan 15 Task 3): authoring scaffolders — one Insert command per element and a
         // /ds EditorSuggest, both pure loops over the registry (no per-element code). Editor
@@ -571,13 +586,9 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
             name: 'Sync compendium',
             callback: () => this.syncCompendium(),
         });
-        // Legacy alias: removing a command id silently drops any hotkey a user bound
-        // to it. Keep for the 6.x cycle; remove in 7.0.0 (F2 §3.4).
-        this.addCommand({
-            id: 'download-data-md-dse',
-            name: 'Sync compendium (legacy alias)',
-            callback: () => this.syncCompendium(),
-        });
+        // SC-406 (Scott, 2026-10-16): the legacy `download-data-md-dse` alias ("Sync compendium
+        // (legacy alias)") is gone — removed outright, not gated. A hotkey bound to it goes
+        // silent; two sync entries in the palette was the worse trade. See migrating-to-7.md.
         // SC-125: the manual door into the same migration the first 7.0.0 sync offers.
         // Always available — a user who declined the prompt, stopped a run half-way, or
         // restored an old compendium folder from a backup can run it whenever. Idempotent

@@ -25,6 +25,7 @@ export const encounterElement: ElementDefinition<EncounterModel> = {
 	id: 'encounter',
 	name: 'Encounter builder',
 	aliases: ['ds-encounter'],
+	deferred: true, // SC-406: not in 7.0.0 — inert card unless `experimental` is on
 	shape: 'persisted',
 	// Deliberately NO schema (matches initiative/counter/negotiation's convention — parse
 	// does its own imperative validation). autoResolveRefs stays OFF: `monsters[].code`

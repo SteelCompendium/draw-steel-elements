@@ -23,6 +23,7 @@ import { createValidationService } from '../src/framework/validation';
 import { createSessionStore } from '../src/framework/session';
 import { setChromeMobileOverride } from '../src/framework/chrome/platform';
 import { DEFAULT_SETTINGS } from '../src/model/Settings';
+import { setExperimental } from '../src/framework/experimental';
 import { registerFrameworkElementDefinitions, FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from '../main';
 import { INTERNAL_DISPLAY_ELEMENTS } from '../src/elements/display';
 import { App, Plugin } from '../test/mocks/obsidian-core';
@@ -96,6 +97,10 @@ import statblockVillainCorpus from '../test/fixtures/statblock/villain-corpus.ya
 // data-unified: the 4 summoner Champions + Noncombatant), so the fixture is trimmed from a
 // real one rather than invented. Single-sourced with statblock.test.ts's roleless catcher.
 import statblockRolelessCorpus from '../test/fixtures/statblock/roleless-corpus.yaml';
+
+// SC-406: the harness renders every element and the sidebar/pin chrome, so the 7.0.0 release gate
+// (src/framework/experimental.ts, default OFF) is switched ON — no fixture or shot moves.
+setExperimental(true);
 
 // SC-108 / FOLLOWUPS #37 (design recon 2026-08-02): a second, harness-local fixture for
 // featureblock's advancement-band gate (view.ts's `run.level > 0` branch), which had never

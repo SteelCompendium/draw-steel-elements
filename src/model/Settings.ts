@@ -23,6 +23,13 @@ export interface DSESettings {
 	 *  DEFAULT_SETTINGS). Absent = ON. `"viewAdoption": false` in data.json + reload turns
 	 *  adoption off: every rebuild builds a fresh view, exactly the pre-SC-340 behaviour. */
 	viewAdoption?: boolean;
+	/** SC-406 — the 7.0.0 release gate (not in the Settings UI, not in DEFAULT_SETTINGS).
+	 *  Absent = OFF: deferred elements render a "not available in this release" card, the
+	 *  sidebar is not registered, and the `authoringControls`/`printPreview` prefs do not
+	 *  exist. `"experimental": true` in data.json + reload turns it all back on. Read once
+	 *  at load (`src/framework/experimental.ts`); `migrateSettings` and every save carry the
+	 *  key through untouched. */
+	experimental?: boolean;
 }
 
 export const DEFAULT_SETTINGS: DSESettings = {

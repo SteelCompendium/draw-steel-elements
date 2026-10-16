@@ -38,6 +38,7 @@ import { iconButton } from './kit/iconButton';
 import { openFormEditor } from '@/authoring/FormModal';
 import { ANCHOR_KEY } from './sidebar/anchor';
 import { requestPinToSidebar } from './sidebar/registration';
+import { isExperimental } from './experimental';
 
 /** The four failure stages renderErrorCard can report (F1 §3.8). */
 export type ErrorStage = 'parse' | 'schema' | 'reference' | 'render';
@@ -271,6 +272,34 @@ export function renderErrorCard(root: HTMLElement, def: Pick<ElementDefinition, 
 	card.createEl('div', { cls: 'dse-error-card-message', text: message });
 }
 
+/**
+ * SC-406 — the inert stand-in for a `deferred` element while the experimental switch is
+ * off: one small card naming the block and saying it is not in this release. Nothing else.
+ *
+ * Deliberately NOT a pipeline run: it is built from the element's definition alone (id,
+ * canonical alias) and never touches the block's source — no parse, no validation, no
+ * `createView`, no session slot, no `ViewRegistry` ownership, no anchor, no write. The
+ * note's bytes are exactly what they were; the fenced source stays in the file for the day
+ * the element ships. No buttons, no links, no state.
+ *
+ * The root is stamped `data-dse-element="deferred"` (the element's real id rides on
+ * `data-dse-deferred`), NOT the element's own id: the element-scoped CSS rules for
+ * encounter/party/hero/… hang off `[data-dse-element="<id>"]` and must not reach a card
+ * that has none of that DOM. Styled with neutral Obsidian tokens only (`.dse-deferred-card`)
+ * — no accent hue, so nothing about it depends on telling two colours apart.
+ */
+export function renderDeferredCard(containerEl: HTMLElement, def: Pick<ElementDefinition, 'id' | 'aliases'>): HTMLElement {
+	const root = containerEl.createDiv();
+	root.setAttribute('data-dse-element', 'deferred');
+	root.setAttribute('data-dse-deferred', def.id);
+	armClickShield(root);
+	root.createDiv({
+		cls: 'dse-deferred-card',
+		text: `${def.aliases[0]} is not available in this release.`,
+	});
+	return root;
+}
+
 /** The dependencies `prepareModel` needs from the pipeline's service bundle — a narrow
  *  slice (not the full `ElementPipelineDeps`/`RenderContext`), so a caller that only has
  *  these four things (SidebarPanel.handleExternalChange, D8 Task 3 spec §1.6) doesn't
@@ -480,6 +509,13 @@ export class ElementPipeline {
 	constructor(private readonly deps: ElementPipelineDeps) {}
 
 	async run<M>(def: ElementDefinition<M>, source: string, host: BlockHost): Promise<void> {
+		// SC-406: a deferred element, switch off ⇒ the inert card and nothing else — before the
+		// RenderContext, the host's view registry or the block's source are touched at all.
+		if (def.deferred === true && !isExperimental()) {
+			renderDeferredCard(host.containerEl, def);
+			return;
+		}
+
 		const { app, plugin, settings, theme, prefs, refs, validation, session, roll, sccAnchors, compendium } =
 			this.deps;
 
@@ -688,7 +724,8 @@ export class ElementPipeline {
 								// it never appears in Reading mode — the only mode elements render in.
 								// Mirrored by "Unpin from sidebar" once the block IS in the sidebar,
 								// closing the "a panel can never be removed" defect.
-								...(cx.mode === 'reading' && cx.host.canPersist
+								// SC-406: no sidebar registered (switch off) ⇒ no pin/unpin items.
+								...(isExperimental() && cx.mode === 'reading' && cx.host.canPersist
 									? [
 											{
 												id: 'pin',
@@ -702,7 +739,7 @@ export class ElementPipeline {
 											} satisfies ChromeMenuItem,
 										]
 									: []),
-								...(cx.mode === 'sidebar' && cx.host.requestRemoval
+								...(isExperimental() && cx.mode === 'sidebar' && cx.host.requestRemoval
 									? [
 											{
 												id: 'unpin',

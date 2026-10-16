@@ -4,6 +4,7 @@
 // API; works in source mode + Live-Preview editing (independent of the LP render deferral).
 import { EditorSuggest } from 'obsidian';
 import type { App, Editor, EditorPosition, EditorSuggestContext, EditorSuggestTriggerInfo, TFile } from 'obsidian';
+import { isDefinitionHidden } from '@/framework/registry';
 import type { ElementDefinition, ElementRegistry } from '@/framework/registry';
 import { advancePosition, buildScaffold } from './scaffold';
 import { scanFenceState } from './fenceScan';
@@ -47,7 +48,7 @@ export class DsElementSuggest extends EditorSuggest<ElementDefinition> {
 		const q = context.query;
 		// SC-190: `hidden` defs (e.g. `ds-hero`) stay registered but never appear in `/ds` —
 		// this is a discovery surface, and the whole point is that nobody stumbles onto it.
-		const advertised = this.registry.all().filter((d) => !d.hidden);
+		const advertised = this.registry.all().filter((d) => !isDefinitionHidden(d));
 		if (q === '') return advertised;
 		return advertised.filter((d) => d.name.toLowerCase().includes(q) || d.aliases.some((a) => a.includes(q)));
 	}

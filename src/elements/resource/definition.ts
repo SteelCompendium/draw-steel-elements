@@ -30,6 +30,7 @@ export const resourceElement: ElementDefinition<ResourceModel> = {
 	id: 'heroic-resource',
 	name: 'Heroic resource',
 	aliases: ['ds-resource'],
+	deferred: true, // SC-406: not in 7.0.0 — inert card unless `experimental` is on
 	shape: 'persisted',
 	schema: resourceSchemaYaml,
 	parse,

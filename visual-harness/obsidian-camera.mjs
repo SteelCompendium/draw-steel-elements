@@ -553,6 +553,20 @@ function seedUdd() {
 		path.join(udd, `${VAULT_ID}.json`),
 		JSON.stringify({ x: 0, y: 0, width: 1440, height: 1100, isMaximized: false, devTools: false, zoom: 0 }),
 	);
+	// SC-406: the 7.0.0 release gate (`experimental`, absent = off) hides the deferred
+	// elements and the sidebar. The camera photographs all of them, so switch it ON in the
+	// plugin's data.json (demo-vault's plugin dir IS the repo root; git-ignored). Merged,
+	// never overwritten: any prefs a previous run or session left there are kept.
+	const dataJson = path.join(repo, 'data.json');
+	let saved = {};
+	try {
+		saved = JSON.parse(fs.readFileSync(dataJson, 'utf8'));
+	} catch {
+		/* no data.json yet, or unreadable — start from nothing */
+	}
+	if (saved.experimental !== true) {
+		fs.writeFileSync(dataJson, JSON.stringify({ ...saved, experimental: true }));
+	}
 	// Deterministic layout: drop any leftover workspace.json (untracked; Obsidian rewrites
 	// it every run) so the note pane geometry doesn't depend on prior manual sessions.
 	fs.rmSync(path.join(vaultPath, '.obsidian', 'workspace.json'), { force: true });

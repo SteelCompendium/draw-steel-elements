@@ -483,6 +483,21 @@ code.dsa {
 	border-left-color: var(--color-blue);
 }
 
+/* SC-406 — the inert stand-in for an element deferred out of 7.0.0 (renderDeferredCard,
+   src/framework/pipeline.ts), shown only while the undocumented `experimental` switch is
+   off. A quiet muted panel: no accent bar, no hue that carries meaning on its own (the text
+   is the whole message), no controls. Obsidian vars only. The `[data-dse-element]` root is
+   stamped "deferred", so no element-scoped rule reaches it. */
+
+.dse-deferred-card {
+	background-color: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	padding: var(--size-4-2) var(--size-4-3);
+	margin: var(--size-4-2) 0;
+	color: var(--text-muted);
+}
+
 /* SC-149 — the compendium-reference NOTICE card (`renderRefNotice`,
    src/elements/shared/RefUnwrapView.ts; `.dse-ref-web-card` carries the same classes).
    Deliberately NOT the .dse-error-card grammar above: `ds-scc` is the one public element

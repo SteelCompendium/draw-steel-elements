@@ -28,6 +28,7 @@ export const partyElement: ElementDefinition<PartyModel> = {
 	id: 'party',
 	name: 'Party tracker',
 	aliases: ['ds-party'],
+	deferred: true, // SC-406: not in 7.0.0 — inert card unless `experimental` is on
 	shape: 'persisted',
 	autoResolveRefs: false, // self-contained tracker; hero_ref is opaque, rendered not resolved
 	parse,

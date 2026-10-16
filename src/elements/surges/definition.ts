@@ -22,6 +22,7 @@ export const surgesElement: ElementDefinition<SurgeModel> = {
 	id: 'surges',
 	name: 'Surges',
 	aliases: ['ds-surges'],
+	deferred: true, // SC-406: not in 7.0.0 — inert card unless `experimental` is on
 	shape: 'persisted',
 	schema: surgesSchemaYaml,
 	autoResolveRefs: false, // surge count / highest-characteristic are plain numbers, no refs

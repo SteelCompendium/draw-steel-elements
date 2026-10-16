@@ -28,6 +28,7 @@ export const projectElement: ElementDefinition<ProjectModel> = {
 	id: 'project',
 	name: 'Project / Downtime tracker',
 	aliases: ['ds-project'],
+	deferred: true, // SC-406: not in 7.0.0 — inert card unless `experimental` is on
 	shape: 'persisted',
 	autoResolveRefs: false, // self-contained tracker; goal_code is resolved live by the view
 	parse,
