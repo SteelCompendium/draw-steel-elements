@@ -780,6 +780,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#heroes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -958,6 +969,28 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#naming-the-encounter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Naming the encounter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-turn-mark" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The turn mark
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#heroes_1" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1002,10 +1035,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#the-command-bar-round-malice" class="md-nav__link">
+  <a href="#the-command-bar-malice" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The Command Bar (Round + Malice)
+        The Command Bar (Malice)
       
     </span>
   </a>
@@ -1489,6 +1522,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#heroes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1667,6 +1711,28 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#naming-the-encounter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Naming the encounter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-turn-mark" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The turn mark
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#heroes_1" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1711,10 +1777,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#the-command-bar-round-malice" class="md-nav__link">
+  <a href="#the-command-bar-malice" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The Command Bar (Round + Malice)
+        The Command Bar (Malice)
       
     </span>
   </a>
@@ -1913,12 +1979,26 @@ malice:
 ~~~
 </code></pre></div>
 <h2 id="encounter-data-format">Encounter Data Format<a class="headerlink" href="#encounter-data-format" title="Permanent link">&para;</a></h2>
-<p>The encounter data consists of three main sections:</p>
+<p>The encounter data consists of three main sections, plus an optional title:</p>
 <ol>
+<li><strong>Name</strong> (optional): a title for the encounter, shown above the Heroes.</li>
 <li><strong>Heroes</strong>: Player characters participating in the encounter.</li>
 <li><strong>Enemy Groups</strong>: Groups of enemies, each containing one or more types of creatures.</li>
 <li><strong>Malice</strong>: The current villain power level.</li>
 </ol>
+<h3 id="name">Name<a class="headerlink" href="#name" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>name</code> (string, optional): the encounter's title, e.g. <code>name: "Ambush at the Ford"</code>. It
+    is shown as a heading at the top of the tracker, and as part of the one-line form when the
+    tracker is collapsed. Leave it out for an untitled encounter. You can also set it from the
+    tracker itself: see <a href="#naming-the-encounter">Naming the encounter</a>. Resetting the
+    encounter's state never clears it.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">"Ambush</span><span class="nv"> </span><span class="s">at</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">Ford"</span>
+<span class="nt">heroes</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">"Aragorn"</span>
+<span class="w">    </span><span class="nt">max_stamina</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">120</span>
+</code></pre></div>
 <h3 id="heroes">Heroes<a class="headerlink" href="#heroes" title="Permanent link">&para;</a></h3>
 <h4 id="hero-fields">Hero Fields<a class="headerlink" href="#hero-fields" title="Permanent link">&para;</a></h4>
 <ul>
@@ -2064,12 +2144,25 @@ malice:
 </code></pre></div>
 <h2 id="interacting-with-the-tracker">Interacting with the Tracker<a class="headerlink" href="#interacting-with-the-tracker" title="Permanent link">&para;</a></h2>
 <p>Once your encounter is defined, the Initiative Tracker provides an interactive UI in your note.</p>
+<h3 id="naming-the-encounter">Naming the encounter<a class="headerlink" href="#naming-the-encounter" title="Permanent link">&para;</a></h3>
+<p>The title sits at the top of the tracker. Click it (or Tab to it and press Enter) to edit:
+type a name and press <strong>Enter</strong> or click away to save, or press <strong>Escape</strong> to leave it as it
+was. "Click away" means a click anywhere else: on another part of the tracker, on another
+Draw Steel card in the same note, on the same tracker in a second pane, or on the note itself.
+Clearing the field removes the title. An untitled tracker shows a small, quiet "Untitled
+encounter" prompt in that spot (on screen only — it never prints). If you write the name by
+hand, <code>name: 1984</code> or <code>name: true</code> is kept as the text "1984" / "true". In a read-only view
+(canvas, for example) the title is plain text, or absent if the encounter has none.</p>
+<h3 id="the-turn-mark">The turn mark<a class="headerlink" href="#the-turn-mark" title="Permanent link">&para;</a></h3>
+<p>Heroes and enemy groups share one turn mark, in three states: an <strong>empty engraved ring</strong>
+(has not acted), a <strong>struck steel seal</strong> bearing a diamond (has acted), and a <strong>ghosted seal</strong>
+while you hover to toggle it. The shapes differ, so the state never depends on colour alone.</p>
 <h3 id="heroes_1">Heroes<a class="headerlink" href="#heroes_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Turn Indicator</strong>: Click a hero's <strong>portrait</strong> to mark whether they have taken their
-    turn — a struck steel seal presses into the portrait's lower-right corner once they
-    have. (With portraits turned off there is no picture to click, so the circle
-    checkbox next to the name takes over as the control instead.)</li>
+    turn — the ring in the portrait's lower-right corner becomes a struck steel seal once they
+    have. (With portraits turned off there is no picture to click, so the same ring/seal
+    next to the name takes over as the control instead.)</li>
 <li><strong>Stamina Management</strong>: Click on the hero's stamina display to open a modal where you can:<ul>
 <li>Apply damage or healing.</li>
 <li>Adjust temporary stamina points.</li>
@@ -2079,8 +2172,8 @@ malice:
 </ul>
 <h3 id="enemy-groups_1">Enemy Groups<a class="headerlink" href="#enemy-groups_1" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Turn Indicator</strong>: An enemy group has no portrait to click, so it keeps the circle
-    checkbox next to its name as its turn control.</li>
+<li><strong>Turn Indicator</strong>: An enemy group has no portrait to click, so its turn control is the
+    ring/seal button next to its name (the same mark the heroes use).</li>
 <li><strong>Creature Grid</strong>:<ul>
 <li><strong>Selection</strong>: Click on a creature instance to view its details.</li>
 <li><strong>Health Management</strong>:<ul>
@@ -2112,36 +2205,47 @@ releases the other two. Triggered stays, because minions can still make opportun
 attacks. A group holding several squads gets one checklist per squad. The captain (and
 any attached creature) keeps the ordinary four-toggle checklist — "a captain … isn't
 limited in their action options as minions are."</p>
-<h3 id="the-command-bar-round-malice">The Command Bar (Round + Malice)<a class="headerlink" href="#the-command-bar-round-malice" title="Permanent link">&para;</a></h3>
-<p>All round and Malice controls sit in a single full-width bar between the Heroes and the
-Enemy Groups: the round counter and its two controls at the left edge, the Malice pool
-and quick-add at the right, and the Malice log folded into a disclosure that opens a
-full-width drawer beneath the bar. In a narrow pane (a split view or the sidebar) the
-bar stacks into a single column.</p>
-<p><strong>Adjusting the pool</strong>: Use the up and down arrows next to the villain power display to
-increase or decrease the value.</p>
+<h3 id="the-command-bar-malice">The Command Bar (Malice)<a class="headerlink" href="#the-command-bar-malice" title="Permanent link">&para;</a></h3>
+<p>The Malice controls sit in a single full-width bar between the Heroes and the Enemy
+Groups: the pool stepper and the log disclosure on the left, the quick-add on the right,
+and the log's drawer opening full-width beneath the bar. In a narrow pane (a split view or
+the sidebar) the bar stacks into a single column. The round counter and <em>Advance round</em>
+live on the Heroes heading line instead (see below).</p>
+<p><strong>Adjusting the pool</strong>: the pool is a stepper — a <strong>−</strong> and a <strong>+</strong> button always shown on
+either side of the current Malice value.</p>
 <p><strong>Malice log</strong>: Click "Malice log · N entries" to open a small read-only list of every
 gain/spend (<code>R&lt;round&gt;: +/-&lt;amount&gt; — &lt;label&gt;</code>), most recent additions preserved, oldest
 entries dropped once the log exceeds 50 entries. Printed handouts always show the log
 open.</p>
-<p><strong>Quick-add</strong>: Enter an amount and a label (e.g. "3" / "Feytouched") and click "Add" to
-log a manual, trigger-based Malice gain (or spend, using a negative amount) without
-waiting for a round to advance.</p>
+<p><strong>Quick-add</strong>: Enter an amount and a label (e.g. "3" / "Feytouched") and click "Add" — or
+press <strong>Enter</strong> in either field — to log a manual, trigger-based Malice gain (or spend,
+using a negative amount) without waiting for a round to advance. Amounts are whole numbers.
+If the amount is missing ("Amount required"), is not a whole number such as <code>1.5</code> or <code>1e2</code>
+("Whole numbers only"), is zero ("Not zero"), or the label is empty ("Label required"),
+nothing is added: the offending field is focused, gets a heavier edge, and the reason shows
+in the field and on a line under the row until you start typing.</p>
 <h3 id="round-turn-controls">Round / Turn Controls<a class="headerlink" href="#round-turn-controls" title="Permanent link">&para;</a></h3>
-<p>Next to the round counter, the tracker offers two distinct controls — they are <strong>not</strong>
-interchangeable:</p>
+<p>The round counter and the <strong>Advance round</strong> button sit on the same line as the "Heroes"
+heading (they wrap onto the next line in a narrow pane). The other round control lives in the
+tracker's <strong>menu</strong> — hover the tracker and look at the small icon panel above its top-right
+corner. The two are <strong>not</strong> interchangeable:</p>
 <ul>
-<li><strong>"Reset turns (this round)"</strong>: Clears every turn indicator and per-actor action
-    checklist (Main/Maneuver/Move/Triggered) back to unmarked, <strong>without</strong> advancing the
-    round counter or granting any configured Malice round gain. Use this for a mid-round
-    correction — e.g. undoing a misclick, or re-running the current round from the top.</li>
-<li><strong>"Advance round"</strong>: The full round-boundary transition — increments the round counter,
-    clears every turn indicator and action checklist (same as "Reset turns"), and (if a
-    Malice round gain is configured) adds it to the villain power pool and logs it. Use
-    this when the round has actually ended.</li>
+<li><strong>"Reset turns (this round)"</strong> (menu, circular-arrow icon): Clears every turn indicator and
+    per-actor action checklist (Main/Maneuver/Move/Triggered) back to unmarked, <strong>without</strong>
+    advancing the round counter or granting any configured Malice round gain. No confirmation —
+    a brief notice says it happened. Use this for a mid-round correction — e.g. undoing a
+    misclick, or re-running the current round from the top.</li>
+<li><strong>"Advance round"</strong> (button by the Heroes heading): The full round-boundary transition —
+    increments the round counter, clears every turn indicator and action checklist (same as
+    "Reset turns"), and (if a Malice round gain is configured) adds it to the villain power
+    pool and logs it. Use this when the round has actually ended.</li>
 </ul>
 <h3 id="reset-encounter-state">Reset Encounter State<a class="headerlink" href="#reset-encounter-state" title="Permanent link">&para;</a></h3>
-<p>Click the "Reset Encounter State" button to clear all "state" data from the tracker. All state will be lost including current stamina, conditions, turn tracker, and villain power. <strong>Warning: this is a destructive operation</strong></p>
+<p>Choose <strong>"Reset encounter state"</strong> (menu, eraser icon) to clear all "state" data from the
+tracker after a confirmation. All state will be lost including current stamina, conditions,
+turn tracker, and villain power; the encounter's <code>name</code> is kept. <strong>Warning: this is a
+destructive operation</strong></p>
+<p>(Both menu items are omitted in read-only views.)</p>
 <h3 id="stamina-management">Stamina Management<a class="headerlink" href="#stamina-management" title="Permanent link">&para;</a></h3>
 <p><img alt="initiative-tracker-stamina-modal.png" src="../Media/initiative-tracker-stamina-modal.png" /></p>
 <h4 id="adjusting-stamina-incrementally">Adjusting Stamina Incrementally<a class="headerlink" href="#adjusting-stamina-incrementally" title="Permanent link">&para;</a></h4>
