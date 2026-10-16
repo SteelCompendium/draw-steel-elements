@@ -546,8 +546,13 @@ async function snap(page, combo, params, captureId, opts = {}) {
 		// the production affordance after mount settles but before the shot, so a
 		// state that's only reachable by user action (e.g. a radiogroup selection) gets
 		// captured. `opts.click` is a CSS selector, always inside #mount.
+		// SC-279: `fixedDice` pins Math.random AFTER load (each page.goto starts clean, so it can
+		// never leak into another shot) so a shot that rolls is byte-stable.
+		if (opts.fixedDice) await page.evaluate(() => { Math.random = () => 0.5; });
 		if (opts.click) {
 			await page.locator(opts.click).click();
+			// SC-279: multi-step interactions (launch → expand → adjust), in order.
+			for (const next of opts.thenClicks ?? []) await page.locator(next).click();
 			// SC-117 fix wave M1: park the pointer off the clicked row before the shot, or
 			// the capture pins `:hover` (--dse-hover) over the row's resting fill instead of
 			// the checked-at-rest state the interaction shot exists to prove.
@@ -6662,9 +6667,24 @@ try {
 		// does not exist under print media. dark/light only, the same combo restriction
 		// the gallery shot above already uses for the identical reason (its own click-free
 		// full-page capture never needed print either).
-		const shotCombos = n.fullPage ? combos.filter((c) => !c.print && !c.realprint) : combos;
+		// SC-279: `screenOnly` is the same restriction for a click target that is print-hidden
+		// (the roll strip): Playwright's click throws "Element is not visible" under print media.
+		const shotCombos = n.fullPage || n.screenOnly ? combos.filter((c) => !c.print && !c.realprint) : combos;
+		// SC-279: optional `prefs` / `width`, routed exactly like prefShots / narrowShots.
+		const params = { element: n.element, fixture: n.fixture };
+		if (n.prefs) {
+			params.prefs = Object.entries(n.prefs)
+				.map(([k, v]) => `${k}:${v}`)
+				.join(',');
+		}
+		if (n.width) params.width = String(n.width);
 		for (const c of shotCombos) {
-			await snap(page, c, { element: n.element, fixture: n.fixture }, n.id, { click: n.click, fullPage: n.fullPage });
+			await snap(page, c, params, n.id, {
+				click: n.click,
+				thenClicks: n.thenClicks,
+				fullPage: n.fullPage,
+				fixedDice: n.fixedDice,
+			});
 		}
 	}
 	// SC-123: preference-variant shots, declared by the page (manifest.prefShots —

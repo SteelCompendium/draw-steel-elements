@@ -1404,6 +1404,21 @@ export const INTERACTION_SHOTS: {
 	 *  true})` instead (shoot.mjs), the same branch `gallery` shots already use, so the
 	 *  modal's own DOM is included. */
 	fullPage?: boolean;
+	/** SC-279 — further clicks fired in order AFTER `click` (a multi-step interaction: launch →
+	 *  expand → adjust). Each is a Playwright selector; use `>> nth=0` where several match. */
+	thenClicks?: string[];
+	/** SC-279 — preferences applied to the harness PreferenceStore before mount (the PREF_SHOTS
+	 *  wire format), for a state that exists only under a pref (e.g. `rollingEnabled`). */
+	prefs?: Record<string, string>;
+	/** SC-279 — narrow-axis width, routed exactly like NARROW_SHOTS' (e.g. the 300px sidebar leaf). */
+	width?: number;
+	/** SC-279 — pin `Math.random` (0.5 → each d10 is a 6) before the clicks, so a shot that ROLLS
+	 *  is byte-stable run to run. Applied after load, so it never reaches a shot without the flag. */
+	fixedDice?: boolean;
+	/** SC-279 — screen combos only (dark/light). A click target that is `.dse-btn` (or lives in a
+	 *  print-hidden strip) does not exist under print media, and Playwright's click throws
+	 *  "Element is not visible" there. `fullPage` implies this already. */
+	screenOnly?: boolean;
 }[] = [
 		// Selects the mid tier (12-16, data-tier="mid") — feature/statblock/featureblock/
 		// kit's power-roll panels are all static (`selectable` defaults false), so
@@ -1483,6 +1498,81 @@ export const INTERACTION_SHOTS: {
 			fixture: 'mid',
 			click: '.dse-mt__actionrow button[aria-label="Log an action…"]',
 			fullPage: true,
+		},
+		// SC-279 — THE ROLL STRIP. The resting `roll` shot shows the collapsed row; these are the
+		// states only a click reaches. All screen-only + fixed dice (the strip is print-hidden, and
+		// a result card would otherwise differ run to run). Selectors are scoped to the strip's own
+		// disclosure header (a ds-roll block has no other collapsible; a card has many).
+		// ds-roll with "Modifiers" expanded: captions over each stepper, the worded net line, the
+		// two labelled checkboxes, "Reset modifiers" (disabled — the authored seeds are in place).
+		{
+			id: 'roll-expanded',
+			element: 'roll',
+			fixture: 'default',
+			click: '.dse-rollbar__mods > .dse-collapse__header',
+			screenOnly: true,
+			fixedDice: true,
+		},
+		// …and at the sidebar leaf width: fields flow one per line, Edges + Banes stay paired.
+		{
+			id: 'roll-expanded-narrow',
+			element: 'roll',
+			fixture: 'default',
+			width: 300,
+			click: '.dse-rollbar__mods > .dse-collapse__header',
+			screenOnly: true,
+			fixedDice: true,
+		},
+		// An ability card with rolling ON, after the FIRST click on the head dice icon: it rolls at
+		// once and reveals the strip COLLAPSED beneath the result card.
+		{
+			id: 'feature-rolled',
+			element: 'feature',
+			fixture: 'default',
+			prefs: { rollingEnabled: 'true' },
+			click: '.dse-roll-btn >> nth=0',
+			screenOnly: true,
+			fixedDice: true,
+		},
+		// …then the Modifiers disclosure expanded.
+		{
+			id: 'feature-rolled-expanded',
+			element: 'feature',
+			fixture: 'default',
+			prefs: { rollingEnabled: 'true' },
+			click: '.dse-roll-btn >> nth=0',
+			thenClicks: ['.dse-rollbar__mods > .dse-collapse__header >> nth=0'],
+			screenOnly: true,
+			fixedDice: true,
+		},
+		// …at the sidebar leaf width.
+		{
+			id: 'feature-rolled-expanded-narrow',
+			element: 'feature',
+			fixture: 'default',
+			prefs: { rollingEnabled: 'true' },
+			width: 300,
+			click: '.dse-roll-btn >> nth=0',
+			thenClicks: ['.dse-rollbar__mods > .dse-collapse__header >> nth=0'],
+			screenOnly: true,
+			fixedDice: true,
+		},
+		// …and with a modifier set: 1 edge + Skill checked, then rolled again with them. The
+		// summary on the header and the net line both say it in words.
+		{
+			id: 'feature-rolled-modified',
+			element: 'feature',
+			fixture: 'default',
+			prefs: { rollingEnabled: 'true' },
+			click: '.dse-roll-btn >> nth=0',
+			thenClicks: [
+				'.dse-rollbar__mods > .dse-collapse__header >> nth=0',
+				'.dse-rollbar button[aria-label="Increase Edges"] >> nth=0',
+				'.dse-rollbar__check--skill >> nth=0',
+				'.dse-rollbar button[aria-label="Roll"] >> nth=0',
+			],
+			screenOnly: true,
+			fixedDice: true,
 		},
 	];
 
