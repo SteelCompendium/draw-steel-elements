@@ -38,6 +38,7 @@ import { parse, serialize, resetEncounter } from '../../../src/elements/initiati
 import type { Condition, EncounterData } from '../../../src/elements/initiative/model';
 import { resolveInitiativeRefs } from '../../../src/elements/initiative/resolveRefs';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
+import { setExperimental } from '../../../src/framework/experimental';
 import { styleGuardFindings } from '../kit/styleGuard';
 import quickStart from '../../fixtures/initiative/quick-start.yaml';
 import squad from '../../fixtures/initiative/squad.yaml';
@@ -2872,5 +2873,29 @@ describe('SC-340 (carried over from SC-331): no change, no write', () => {
 		(modalEl.querySelector('.dse-modal__footer button[aria-label="Done"]') as HTMLElement).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
 		expect(host.replaceSource).not.toHaveBeenCalled();
+	});
+});
+
+describe('SC-406: deferring ds-conditions does not touch the initiative tracker\'s Conditions manager', () => {
+	test('with the experimental switch OFF the tracker\'s ConditionsModal still opens, adds and closes', async () => {
+		jest.useFakeTimers();
+		try {
+			setExperimental(false);
+			const { root, host } = await renderInit(quickStart);
+			(root.querySelector('.dse-init__group--heroes .dse-cond--add') as HTMLElement).click();
+			const modalEl = lastModal();
+			expect(modalEl.querySelector('button[aria-label="Add condition"]')).not.toBeNull();
+			(modalEl.querySelector('button[aria-label="Add condition"]') as HTMLElement).click();
+			const input = modalEl.querySelector('.dse-condal__input') as HTMLInputElement;
+			input.value = 'Bleeding';
+			input.dispatchEvent(new Event('input'));
+			input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+			(modalEl.querySelector('.dse-modal__footer button[aria-label="Done"]') as HTMLElement).click();
+			expect(root.querySelectorAll('.dse-init__group--heroes .dse-cond')).toHaveLength(1);
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+			expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		} finally {
+			jest.useRealTimers();
+		}
 	});
 });

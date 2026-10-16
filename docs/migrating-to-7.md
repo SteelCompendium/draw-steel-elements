@@ -39,6 +39,9 @@ against the new one.
 **What to do:** open **Settings → Draw Steel Elements → Compendium**, then click
 **Sync** (the command palette's **Sync compendium** does the same thing).
 
+The old **Sync compendium (legacy alias)** command is gone in 7.0.0. If you had bound a
+hotkey to it, that hotkey no longer does anything: bind it to **Sync compendium** instead.
+
 ### Your links to compendium notes keep working
 
 The new source also reorganises the whole tree. `Rules/Careers/Disciple.md`

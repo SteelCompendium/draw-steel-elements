@@ -22,6 +22,10 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [BREAKING] **The "Sync compendium (legacy alias)" command is removed** (SC-406). It was
+  kept through 6.x so a hotkey bound to it would keep working; a hotkey still bound to it
+  now does nothing — bind it to **Sync compendium** instead (see the
+  [migration guide](docs/migrating-to-7.md#1-re-sync-your-compendium)).
 - [FIX] **Power-roll tier rows are compact again: about 50px for a one-line outcome, the
   same as the site** (SC-378). Every tier row (ability/feature cards, statblock abilities,
   featureblock, a kit's signature ability, negotiation arguments, `ds-roll`) had grown to

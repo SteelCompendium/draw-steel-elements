@@ -1357,3 +1357,34 @@ describe('SC-160 — dependent rows (dependsOn)', () => {
 		expect(rows[1].control.disabled()).toBe(true);
 	});
 });
+
+// SC-406 — with the experimental switch OFF (the shipped state) the catalog lacks the
+// `authoringControls` and `printPreview` descriptors, and the pages are rendered FROM the
+// catalog: the Authoring page and the Appearance page's Print preview row are simply absent.
+describe('SC-406 — settings pages with the experimental switch off', () => {
+	async function loadedTab(data: Record<string, unknown>): Promise<DseSettingTab> {
+		const app = new App();
+		const plugin = new DrawSteelAdmonitionPlugin(app as never, { id: 'draw-steel-elements', version: 'test' } as never);
+		plugin.loadData = async () => data;
+		await plugin.onload();
+		return new DseSettingTab(plugin.app as never, plugin);
+	}
+
+	test('off: no Authoring page, and the Appearance page has no Print preview row', async () => {
+		const tab = await loadedTab({});
+		expect(pageNames(tab)).toEqual([
+			'Appearance', 'Typography', 'Statblock display', 'Featureblock display',
+			'Feature display', 'Element defaults', 'Rolling',
+			'Compendium', 'Links', 'Initiative tracker',
+		]);
+		const appearance = rowDefs(pageNamed(tab, 'Appearance').items).map((d) => d.name);
+		expect(appearance).toContain('Reduce motion');
+		expect(appearance).not.toContain('Print preview');
+	});
+
+	test('on: both are back (the page list is the pre-gating one)', async () => {
+		const tab = await loadedTab({ experimental: true });
+		expect(pageNames(tab)).toContain('Authoring');
+		expect(rowDefs(pageNamed(tab, 'Appearance').items).map((d) => d.name)).toContain('Print preview');
+	});
+});

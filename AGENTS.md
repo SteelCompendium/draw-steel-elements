@@ -137,6 +137,13 @@ moves. Run it before a release; details in `visual-harness/README.md`.
   a size; `test/unit/build/fontSizeContract.test.ts` gates it (allowlist of pre-scale
   sites; it only shrinks).
 - **Reading mode only** -- no Live Preview support
+- **7.0.0 release gate (SC-406)**: an undocumented `"experimental": true` in `data.json`
+  (absent = off; read once in `onload`, queried via `src/framework/experimental.ts`) is what
+  keeps the deferred features out of the release. OFF: the nine `deferred` elements render
+  an inert "not available in this release" card, the sidebar is not registered, and the
+  `authoringControls` / `printPreview` prefs do not exist. Tests, the visual harness and
+  the lifecycle/camera scratch vaults run with it ON; a test of the off state opts out
+  explicitly. See `.repo-docs/architecture.md` → `experimental.ts`.
 - Output must be CJS format for Obsidian
 - Target ES2018
 - `obsidian`, `electron`, and CodeMirror packages are external (host-provided)
