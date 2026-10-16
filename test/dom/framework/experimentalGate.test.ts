@@ -14,6 +14,7 @@ import { registerInsertCommands } from '@/authoring/insert';
 import { isExperimental, setExperimental } from '@/framework/experimental';
 import { VIEW_TYPE_DSE_SIDEBAR } from '@/framework/sidebar/DseSidebarView';
 import { createElementRegistry } from '@/framework/registry';
+import type { ElementDefinition } from '@/framework/registry';
 import { extractPrefOverrides } from '@/framework/prefOverrides';
 import { counterElement } from '@/elements/counter/definition';
 import { encounterElement } from '@/elements/encounter/definition';
@@ -30,7 +31,8 @@ import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from '
 import { App, Plugin, makeFakeContext, flushAsync } from '../../mocks/obsidian';
 import { makeCompendiumDeps } from '../elements/_refHarness';
 
-const DEFERRED = [
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const DEFERRED: ElementDefinition<any>[] = [
 	encounterElement, projectElement, partyElement, conditionsElement, resourceElement,
 	surgesElement, tokensElement, rollElement, heroElement,
 ];
