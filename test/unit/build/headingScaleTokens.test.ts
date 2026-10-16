@@ -27,9 +27,14 @@ const css = rawCss.replace(/\/\*[\s\S]*?\*\//g, '');
 const flat = css.replace(/\s+/g, ' ');
 const ANCHOR = ':is([data-dse-element], .dse-modal):not([data-dse-print="on"])';
 
+/** Top-level `:root { … }` blocks, including SC-372's shared `:root, :is([data-dse-element], .dse-modal) { … }`
+ *  (the scale-dependent type tokens, re-declared on every stamped root). Line-anchored so a comment that
+ *  merely mentions ":root," cannot start a match. */
+const ROOT_BLOCK = /^:root\s*(?:,[^{}]*)?\{([^}]*)\}/gm;
+
 /** The declared value of `--dse-<name>` in the FIRST `:root { … }` block that defines it. */
 function rootValue(name: string): string | undefined {
-	for (const block of css.matchAll(/:root\s*\{([^}]*)\}/g)) {
+	for (const block of css.matchAll(ROOT_BLOCK)) {
 		const m = block[1].match(new RegExp(`(?:^|[\\s{;])--dse-${name}\\s*:\\s*([^;]+);`));
 		if (m) return m[1].trim();
 	}

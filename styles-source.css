@@ -6555,11 +6555,26 @@ Shared globals
 
 	   THE THREE *-scale MULTIPLIERS ARE THE USER KNOBS
 	   (smallTextScale / largeTextScale / controlTextScale in prefs/catalog.ts).
-	   Each stamps a snap()-normalized non-1 value INLINE per element root and
-	   REMOVES it at 1 (site remove-on-default semantics), so these :root
-	   declarations are what every root resolves at defaults — and every role
-	   below then computes to exactly the literal it was transcribed from, which
-	   is what makes adopting a token a zero-pixel rename.
+	   Each stamps a snap()-normalized non-1 value INLINE per element root (and
+	   per modal dialog root) and REMOVES it at 1 (site remove-on-default
+	   semantics), so these :root declarations are what every root resolves at
+	   defaults — and every role then computes to exactly the literal it was
+	   transcribed from, which is what makes adopting a token a zero-pixel rename.
+
+	   THE SCALE-DEPENDENT ROLE TOKENS ARE NOT DECLARED IN THIS BLOCK (SC-372).
+	   heading/subheading/numeral/h1-h6 (large), control, and
+	   secondary/label/caption/micro (small) are `calc(<r>em * var(--dse-fs-*-scale))`,
+	   and a var() inside a custom property substitutes at computed-value time on
+	   the element the property is DECLARED on. Declared only here on :root, the
+	   multiplier resolved at <html> — where it is always the default 1 — and every
+	   descendant inherited the already-flattened `calc(<r>em * 1)`, so the inline
+	   stamp on an element root / modal never reached any role: all three knobs
+	   were inert (measured before the fix: card name 20px at 0.8, 1.0 and 1.2).
+	   They live in the next rule instead, whose selector list is `:root` PLUS
+	   every root the prefs seam stamps (an element root, a DseModal dialog), so
+	   the multiplier resolves where it is stamped. Stamping <html> would also
+	   have "worked" but is the wrong fix: reflect()/reflectCss() are per root on
+	   purpose (popout windows, modals, embeds each own their scale).
 
 	   Theme- and print-INVARIANT: no theme or print block overrides any of these.
 	   A caption is still a caption on paper, and the size prefs are documented to
@@ -6571,15 +6586,33 @@ Shared globals
 	--dse-fs-small-scale: 1;
 	--dse-fs-large-scale: 1;
 	--dse-fs-control-scale: 1;
+	/* Body — the element's own reading size, i.e. the host note's. Also the
+	   explicit "stop inheriting a smaller/larger context" reset. */
+	--dse-fs-body: 1em;
+}
+
+/* -- SC-372: THE SCALE-DEPENDENT TYPE-SIZE TOKENS, resolved per stamped root --
+   Split out of the :root block above so the `var(--dse-fs-*-scale)` inside each
+   `calc()` substitutes ON the root that carries the user's stamped multiplier
+   (see "THE SCALE-DEPENDENT ROLE TOKENS ARE NOT DECLARED IN THIS BLOCK" in
+   the SC-185 comment above). ONE rule, ONE source of truth: the selector list is
+   `:root` (unstamped contexts — a bare harness page, an error card, the sidebar
+   panel header — keep resolving the default 1, exactly as before) plus
+   `:is([data-dse-element], .dse-modal)`, the same two scope members the mono slot
+   below uses and the only two kinds of root prefs.reflect()/reflectCss() ever
+   stamp (pipeline.ts element roots, which also covers sidebar panels, the
+   settings preview and the form-editor preview; DseModal.open()'s dialog).
+   Specificity (0,1,0) and no other rule declares these names, so nothing is
+   shadowed; at default prefs the stamp is absent, the multiplier inherits `1`
+   from :root, and every role computes to the same value it always did. */
+:root,
+:is([data-dse-element], .dse-modal) {
 	/* Above body — headline text inside a card. heading = the thing the card is
 	   named after (a statblock/ability name); subheading = a band or group title
 	   under it; numeral = a display stat VALUE meant to be read across a table. */
 	--dse-fs-heading: calc(1.25em * var(--dse-fs-large-scale));
 	--dse-fs-subheading: calc(1.15em * var(--dse-fs-large-scale));
 	--dse-fs-numeral: calc(1.75em * var(--dse-fs-large-scale));
-	/* Body — the element's own reading size, i.e. the host note's. Also the
-	   explicit "stop inheriting a smaller/larger context" reset. */
-	--dse-fs-body: 1em;
 	/* Interactive control text: buttons, steppers, tabs, collapse headers, inputs.
 	   Its own knob because a control's text answers to the user's tolerance for
 	   chrome, not to the reading size (SC-185: "reset button font is too large").

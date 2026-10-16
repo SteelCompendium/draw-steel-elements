@@ -18,11 +18,16 @@ import { DSE_TOKEN_NAMES } from '../../../src/framework/tokens';
 
 const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 
+/** Top-level `:root { … }` blocks, including SC-372's shared `:root, :is([data-dse-element], .dse-modal) { … }`
+ *  (the scale-dependent type tokens, re-declared on every stamped root). Line-anchored so a comment that
+ *  merely mentions ":root," cannot start a match. */
+const ROOT_BLOCK = /^:root\s*(?:,[^{}]*)?\{([^}]*)\}/gm;
+
 /** Declared value of --dse-<name> in the unscoped :root unscoped base (or undefined). */
 function baseValue(name: string): string | undefined {
 	// FOOTGUN: `[^}]*` stops at the FIRST brace, so a CSS COMMENT containing `{` or `}`
 	// inside any token block silently truncates that block's body (values → undefined).
-	for (const block of sheet.matchAll(/:root\s*\{([^}]*)\}/g)) {
+	for (const block of sheet.matchAll(ROOT_BLOCK)) {
 		const m = block[1].match(new RegExp(`(?:^|[\\s{;])--dse-${name}\\s*:\\s*([^;]+);`));
 		if (m) return m[1].trim();
 	}

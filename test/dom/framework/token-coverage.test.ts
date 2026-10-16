@@ -116,12 +116,17 @@ function blockBody(re: RegExp, label: string): string {
 	return m[1];
 }
 
+/** Top-level `:root { … }` blocks, including SC-372's shared `:root, :is([data-dse-element], .dse-modal) { … }`
+ *  (the scale-dependent type tokens, re-declared on every stamped root). Line-anchored so a comment that
+ *  merely mentions ":root," cannot start a match. */
+const ROOT_BLOCK = /^:root\s*(?:,[^{}]*)?\{([^}]*)\}/gm;
+
 // The four value blocks D3 owns (the unscoped base is the unscoped :root).
 const unscopedBase = (() => {
 	// The last :root block holds the --dse-* base vocabulary (an earlier :root
 	// only aliases the legacy --stamina-bar-* names); concatenate all to be safe.
 	let all = '';
-	for (const b of styleSheet.matchAll(/:root\s*\{([^}]*)\}/g)) all += b[1] + '\n';
+	for (const b of styleSheet.matchAll(ROOT_BLOCK)) all += b[1] + '\n';
 	return all;
 })();
 // SC-104 / FOLLOWUPS #31: the Steel dark/light/print value gates widened from the
