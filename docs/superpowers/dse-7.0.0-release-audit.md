@@ -387,7 +387,7 @@ the form-editor/pencil bullets SC-121 raw-YAML box (l.1227) and SC-145 pencil pl
 and the "New: Draw Steel sidebar", "New: Encounter Builder", "New: Hero suite" bullets (l.945-980).
 Re-worded (shipped part kept): SC-378, SC-377, SC-318, SC-284, SC-240, SC-191 (link), SC-198, SC-189,
 SC-186, SC-183, SC-169, SC-160, SC-170, SC-154, SC-152, SC-142, SC-132, SC-141, SC-131, the project/party
-"New" bullet, the typography bullet (SC-101 area), the modal-theme bullet, the harness-fixtures bullet,
+"New" bullet, the Steel-theme body-typography bullet, the modal-theme bullet, the harness-fixtures bullet,
 SC-121 buttons/tables/Electron bullets. Drive-by: the "New commands" bullet no longer claims the
 legacy sync alias survives (it was removed in SC-406).
 
