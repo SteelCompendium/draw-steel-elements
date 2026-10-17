@@ -45,6 +45,8 @@ function deferredElementIds(repo) {
 function assertNoDeferredBrowserShots(shots, repo) {
 	const deferred = new Set(deferredElementIds(repo));
 	const bad = [];
+	let deferredHit = false; // some entry names a deferred element (the "un-defer" advice applies)
+	let noElement = false; // some gif entry names no element (the "add element" advice applies)
 	// The reason differs by where the entry is captured; the message names only the ones that apply.
 	const reasons = new Set();
 	const BROWSER = 'the browser half renders with the experimental switch ON, so a browser entry for a deferred element would publish an unfinished feature';
@@ -55,8 +57,10 @@ function assertNoDeferredBrowserShots(shots, repo) {
 			if (typeof shot.element !== 'string' || shot.element === '') {
 				bad.push(`${shot.out} -> gif entry without an element (required, so this guard can check it)`);
 				reasons.add(NO_ELEMENT);
+				noElement = true;
 			} else if (deferred.has(shot.element)) {
 				bad.push(`${shot.out} -> ${shot.element} (gif, ${shot.source})`);
+				deferredHit = true;
 				reasons.add(shot.source === 'obsidian' ? OBSIDIAN_GIF : BROWSER);
 			}
 			continue;
@@ -65,12 +69,14 @@ function assertNoDeferredBrowserShots(shots, repo) {
 		// `gallery: true` (docs-shots.mjs) mounts EVERY fixture, deferred ones included.
 		if (shot.gallery && !Array.isArray(shot.gallery)) {
 			bad.push(`${shot.out} -> gallery: ${String(shot.gallery)} (every element)`);
+			deferredHit = true;
 			reasons.add(BROWSER);
 		}
 		const ids = [shot.element, ...(Array.isArray(shot.gallery) ? shot.gallery : [])].filter(Boolean);
 		for (const id of ids) {
 			if (deferred.has(id)) {
 				bad.push(`${shot.out} -> ${id}`);
+				deferredHit = true;
 				reasons.add(BROWSER);
 			}
 		}
@@ -79,7 +85,12 @@ function assertNoDeferredBrowserShots(shots, repo) {
 		throw new Error(
 			`docs-manifest.mjs has entr${bad.length === 1 ? 'y' : 'ies'} for deferred (7.0.0-gated) elements, or gif entries that cannot be checked: ${bad.join(', ')}. ` +
 				`Why: ${[...reasons].join('; ')}. ` +
-				'Remove the entry (docs depict the shipping product) or un-defer the element first.',
+				[
+					deferredHit ? 'Remove the entry (docs depict the shipping product) or un-defer the element first.' : '',
+					noElement ? 'Give each gif entry its `element`.' : '',
+				]
+					.filter(Boolean)
+					.join(' '),
 		);
 	}
 }

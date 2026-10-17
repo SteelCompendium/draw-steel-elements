@@ -62,4 +62,27 @@ describe('SC-407 docs-shots deferred-element guard', () => {
 		expect(obsidian).not.toMatch(/switch ON/);
 		expect(msg([gif({ element: undefined })])).toMatch(/must name its `element`/);
 	});
+
+	// SC-411 r6: the closing advice is emitted only when it applies, so a gif entry refused for having no
+	// `element` is not told to "un-defer the element".
+	test('the closing advice matches what was refused: un-defer for a deferred element, add `element` for a missing one, both for a mix', () => {
+		const msg = (shots: unknown[]) => {
+			try {
+				assertNoDeferredBrowserShots(shots, repo);
+			} catch (e) {
+				return (e as Error).message;
+			}
+			return '';
+		};
+		const deferredGif = { out: 'd.gif', kind: 'gif', source: 'browser', element: 'surges', steps: [{}] };
+		const bareGif = { out: 'n.gif', kind: 'gif', source: 'browser', steps: [{}] };
+		const deferredOnly = msg([deferredGif]);
+		expect(deferredOnly).toMatch(/un-defer the element first/);
+		expect(deferredOnly).not.toMatch(/Give each gif entry/);
+		const missingOnly = msg([bareGif]);
+		expect(missingOnly).toMatch(/Give each gif entry its `element`/);
+		expect(missingOnly).not.toMatch(/un-defer/);
+		const both = msg([deferredGif, bareGif]);
+		expect(both).toMatch(/un-defer the element first\. Give each gif entry its `element`\./);
+	});
 });

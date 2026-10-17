@@ -443,6 +443,6 @@ All are runner-side; none touches product code. Rates are measured (SC-411 r1 sp
 Obsidian self-updates its app asar on warm-up, so GIF bytes can move *across Obsidian releases*
 (the PNGs already do); stability is defined per environment. In one environment the GIFs and the
 element PNGs regenerate byte-identically; the Obsidian *leaf* shots can differ by sub-visible
-raster noise (`tutorial-source-mode.png` is not byte-stable even in a lone run, on the base
-branch too: SC-424, a pre-existing bug), so a full `npm run docs-shots` can leave that one PNG
-changed. Restore it with `git checkout -- docs/Media/tutorial-source-mode.png`; never commit it.
+raster noise (`tutorial-source-mode.png`: lone runs match each other but can differ from the
+committed file, and full runs vary from run to run — on the base branch too: SC-424, a
+pre-existing bug), so a full `npm run docs-shots` can leave that one PNG changed. Restore it with `git checkout -- docs/Media/tutorial-source-mode.png`; never commit it.
