@@ -1,16 +1,15 @@
-// SC-141 fix round (M2) — FeatureblockConfig's `feature_type` normalization.
+// SC-141 / SC-155 — corpus featureblocks parse.
 //
-// `Featureblock.fromDTO` maps `dto.features` through `Feature.fromDTO`, but the DTO leaves
-// those entries as the plain objects YAML produced. `Feature.fromDTO` only tolerates that
-// when the entry declares its own `feature_type`; otherwise it calls `dto.isTrait()` — a
-// FeatureDTO METHOD a plain object does not have — and throws.
-//
-// Every authored fixture in this repo sets `feature_type`; steel-etl emits none. So the
-// plugin's whole test surface sailed past a throw that hits 100% of real content (measured
-// 2026-08-10: 117/117 `type: featureblock` + 35/35 `dynamic-terrain` corpus files).
-import { FeatureblockConfig, applyFeatureTypeDefaults } from '@model/FeatureblockConfig';
+// steel-etl's featureblock entries never carry `feature_type` (the schema's `richFeature`
+// shape has no such property), while every authored fixture in this repo sets it. So the
+// plugin's whole test surface sailed past `TypeError: dto.isTrait is not a function`, a
+// throw that hit 100% of real content (measured 2026-08-10: 117/117 `type: featureblock` +
+// 35/35 `dynamic-terrain` corpus files). The plugin shipped a shim until SC-155 fixed
+// `Feature.fromDTO` upstream (steel-compendium-sdk 3.0.1); these tests now pin that the
+// SDK handles the corpus shape on its own.
+import { FeatureblockConfig } from '@model/FeatureblockConfig';
 
-/** The corpus shape: no `feature_type` anywhere, one ability-ish and one trait-ish entry. */
+/** The corpus shape: no `feature_type` anywhere, one trait-ish and one ability-ish entry. */
 const CORPUS_SHAPE = `name: Toppling Pillar Mechanism
 features:
     - name: Deactivate
@@ -32,39 +31,24 @@ features:
         - effect: The angulotl can breathe underwater.
 `;
 
-describe('SC-141 (M2): corpus featureblocks parse', () => {
-	test('a features[] entry with no `feature_type` no longer throws `dto.isTrait is not a function`', () => {
+describe('SC-155: corpus featureblocks parse without a plugin shim', () => {
+	test('a features[] entry with no `feature_type` does not throw `dto.isTrait is not a function`', () => {
 		const config = FeatureblockConfig.readYaml(CORPUS_SHAPE);
 		expect(config.featureblock.features).toHaveLength(2);
 		expect(config.featureblock.features.map((f) => f.name))
 			.toEqual(['Deactivate', 'Toppling Pillar']);
 	});
 
-	test('the derived type is the SDK\'s OWN decision (Feature.isTrait), not a reimplementation', () => {
+	test('the SDK derives the missing `feature_type` from shape', () => {
 		// isTrait ⟺ no keywords AND no usage AND no distance AND no target.
-		const out = applyFeatureTypeDefaults({
-			features: [
-				{ name: 'Deactivate', body: 'x' },
-				{ name: 'Toppling Pillar', usage: 'Free triggered action', target: 'Each creature' },
-			],
-		}) as { features: { feature_type: string }[] };
-		expect(out.features.map((f) => f.feature_type)).toEqual(['trait', 'ability']);
+		const config = FeatureblockConfig.readYaml(CORPUS_SHAPE);
+		expect(config.featureblock.features.map((f) => f.feature_type))
+			.toEqual(['trait', 'ability']);
 	});
 
-	test('an entry that already declares `feature_type` is returned UNTOUCHED (same object)', () => {
-		// The identity gate matters: when nothing needs defaulting, readYaml hands the SDK the
-		// ORIGINAL text, so no parseYaml/stringifyYaml round-trip can perturb quoting or block
-		// scalars on the path every frozen shot renders.
-		const input = { features: [{ name: 'Amphibious', feature_type: 'trait' }] };
-		expect(applyFeatureTypeDefaults(input)).toBe(input);
-		expect(FeatureblockConfig.readYaml(AUTHORED_SHAPE).featureblock.features[0].name)
-			.toBe('Amphibious');
-	});
-
-	test('non-featureblock shapes pass through unchanged', () => {
-		const noFeatures = { name: 'x' };
-		expect(applyFeatureTypeDefaults(noFeatures)).toBe(noFeatures);
-		expect(applyFeatureTypeDefaults(null)).toBeNull();
-		expect(applyFeatureTypeDefaults('nope')).toBe('nope');
+	test('an entry that already declares `feature_type` keeps it', () => {
+		const config = FeatureblockConfig.readYaml(AUTHORED_SHAPE);
+		expect(config.featureblock.features[0].name).toBe('Amphibious');
+		expect(config.featureblock.features[0].feature_type).toBe('trait');
 	});
 });

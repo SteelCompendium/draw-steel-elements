@@ -141,8 +141,7 @@ function unwrapModel(model: unknown): unknown {
  *   `config.feature.isTrait()`, which recomputes from shape (no keywords/usage/distance/
  *   target), and `kindNounOf` reads `metadata.type`, never this top-level field. So it
  *   moves no pixel today. It stays because it is line 2 of the documented `ds-feature`
- *   format, `FeatureblockConfig` normalizes nested entries on it, and `docs/Features.md`
- *   lists it as required.
+ *   format and `docs/Features.md` lists it as required.
  *
  * A documented key the current renderer happens to ignore is not the same thing as
  * transport — per the brief, when unsure, keep the field.
