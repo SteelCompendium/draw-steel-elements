@@ -18,7 +18,7 @@ running a fight, assuming no YAML or markdown knowledge.
 ### Guides
 
 - **[Getting started](getting-started.md)** — install, sync, your first element, your first fight
-- **[Run an encounter](running-an-encounter.md)** — build it, then run it
+- **[Run an encounter](running-an-encounter.md)** — set up the fight, then run it
 - **[Track your hero](hero-suite.md)** — the Stamina bar
 - **[Customize a monster](customizing-a-monster.md)** — the homebrew loop
 - **[Style your statblocks](styling-statblocks.md)** — presets and the display settings

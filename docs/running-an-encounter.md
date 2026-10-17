@@ -6,8 +6,10 @@ Malice for you.
 
 New to the plugin? Start with [Getting started](getting-started.md).
 
-You'll want the compendium synced for this one if you'd rather reference monsters than type
-their stats out (**Settings → Draw Steel Elements → Compendium → Sync**).
+The example below references its monsters by compendium code, so it needs the compendium
+synced first (**Settings → Draw Steel Elements → Compendium → Sync**). Without a sync those
+creatures show a "not available in this vault" card; you can always type a creature out
+instead, with a `name` and `max_stamina`.
 
 ## 1. Set up the fight
 
@@ -26,7 +28,7 @@ enemy_groups:
   - name: Goblin ambushers
     is_squad: true
     creatures:
-      - statblock: scc.v1:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker
+      - statblock: scc.v1:mcdm.monsters.v1/monster.goblin.statblock/goblin-runner
         amount: 6
         squad_role: minion
   - name: The dragon
