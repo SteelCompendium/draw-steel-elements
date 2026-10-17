@@ -331,6 +331,73 @@ the `CHANGELOG.md` 7.0.0 FEATURE bullets for deferred items. Then `npm run docs-
 (SC-388 negotiation.gif is hand-recorded), `just release <version>`, mike docs deploy.
 Gates: `dse-verify` battery.
 
+### 11a. SC-407 restore map (what was removed, where to get it back)
+
+SC-407 removed the docs footprint of every deferred item. Base is `05a6ff3` (dse
+`develop` after SC-406); everything below is recoverable with
+`git -C draw-steel-elements show 05a6ff3:<path>` (or `git checkout 05a6ff3 -- <path>` for a
+whole file). Paths are relative to the `draw-steel-elements` repo root. When a deferred
+item returns, restore its entries, then re-add its `docs-manifest.mjs` entry and run
+`npm run docs-shots` (the images regenerate; do not restore the PNGs).
+
+**Pages deleted**
+
+| Removed | Restore from | Returns with |
+|---|---|---|
+| `docs/Roll.md` (whole page) | `05a6ff3:docs/Roll.md` | SC-402 |
+
+**Pages cut down** (restore the whole page, or lift the named sections)
+
+| Page | What was removed at `05a6ff3:<page>` | Returns with |
+|---|---|---|
+| `docs/gm-trackers.md` | `## Encounter builder (ds-encounter)`, `## Project tracker (ds-project)`, `## Party tracker (ds-party)` sections, and the opening paragraph (four-blocks intro, sidebar / `_dse_anchor` prose). The page is now montage-only, retitled `# Montage Test Tracker (ds-montage)` | SC-395 / SC-396 / SC-397; sidebar prose with SC-403 |
+| `docs/hero-suite.md` | `## Conditions (ds-conditions)`, `## Heroic resource (ds-resource)`, `## Surges (ds-surges)`, `## Hero Tokens (ds-tokens)` sections and the "Four small blocks" intro (title was `# Hero Trackers`); the page is now a Stamina pointer | SC-398 / SC-399 / SC-400 / SC-401 |
+| `docs/running-an-encounter.md` | `## 1. Build the fight` (encounter builder), `## 2. Hand it to the tracker` incl. "The tracker is a snapshot" subsection, `## Keep it visible while you play` (sidebar), `## Afterwards` (party tracker), the Director's-trackers See-also line | SC-395 / SC-397 / SC-403 |
+| `docs/writing-blocks.md` | `## Edit a rendered block with a form` (pencil / Authoring), `## Pinning a block to the sidebar` incl. `### One note instead?`; the autocomplete example linked `[roll block](Roll.md)` (`mode:`) | SC-404 / SC-403 / SC-402 |
+| `docs/advanced-usage.md` | `## The sidebar` section (incl. the narrow-pane paragraph, kept as `## Narrow panes`), the `printPreview` row of the per-block override table, the **Print preview** bullet under `## Print and PDF export`, the `ds-roll` bullet under `## Rolling`, the form-editor paragraph under `## Writing YAML by hand`, "or pin them to the sidebar" in `## Canvas` | SC-403 / SC-405 / SC-402 / SC-404 |
+| `docs/initiative-tracker.md` | `### Pinning to the Sidebar` (last section), the "build the fight in an encounter builder block and press Create tracker block" shortcut, "This is what the encounter builder writes" on compendium-code references | SC-403 / SC-395 |
+| `docs/common-element-fields.md` | the **Edit** (pencil) bullet in `## The menu`; hero-suite / GM-tracker / dice-roller wording in `## Which elements have this`; `ENCOUNTER: Ambush at the Ford (EV 42)` collapsed example | SC-404 / SC-395 |
+| `docs/settings.md` | the Appearance **Print preview** bullet; the `## Authoring` section ("Show edit button on rendered blocks"); the "standalone Roll element always rolls" sentence under Rolling | SC-405 / SC-404 / SC-402 |
+| `docs/index.md` | catalog entries: `Roll`, `Encounter builder`, `Project / downtime tracker`, `Party tracker`, `Conditions`, `Heroic resource`, `Surges`, `Hero tokens`; the `### Hero trackers` heading (now `### Hero tracker`); the sidebar / edit-button phrases in the Guides and Reference lists | per element ticket |
+| `README.md` | the same catalog rows (Roll, Encounter builder, Project, Party, Conditions, Heroic resource, Surges, Hero tokens), the "persistent sidebar panel" paragraph, `Authoring` in the Settings page list | per element ticket |
+| `docs/getting-started.md` | `/dsroll` autocomplete example; "Where to go next" wording for the encounter builder and hero suite | SC-395 / SC-402 |
+| `docs/migrating-to-7.md` | "What's new in 7.0.0, at a glance": the **Hero trackers**, **Director's trackers** (encounter builder / project / party), **Draw Steel sidebar** bullets; the edit-pencil clause of the menu-panel bullet; added the one "block for an element that isn't in this release" note (keep it while any element is gated) | per ticket |
+| `docs/canvas-character-sheet.md` | the trailing `**[Hero trackers](hero-suite.md)**` section; "or pin them to the sidebar"; "stepping a resource" | SC-399 / SC-403 |
+| `docs/customizing-a-monster.md` | the "Prefer not to edit text at all? ... Authoring ... pencil" paragraph; "the form editor" in See-also | SC-404 |
+| `docs/styling-statblocks.md` | the Print preview paragraph + `tutorial-print-preview.png` in `## Printing and PDFs` | SC-405 |
+| `docs/Features.md` | the "[Roll element](Roll.md) is the standalone version" sentence in `## Rolling on ability cards` | SC-402 |
+
+**Images deleted from `docs/Media`** (restore the manifest entry instead; the PNG regenerates)
+
+| Image | Manifest entry at `05a6ff3:visual-harness/docs-manifest.mjs` |
+|---|---|
+| `roll.png` | `{ out: 'roll.png', source: 'browser', element: 'roll' }` |
+| `conditions.png`, `heroic-resource.png`, `surges.png`, `hero-tokens.png` | the four browser entries under `// docs/hero-suite.md` |
+| `encounter.png` | browser entry under `// docs/gm-trackers.md` |
+| `project.png`, `party.png` | browser entries after `montage.png` |
+| `sidebar.png` | the `kind: 'sidebar'` entry (`panels: counter + surges`) under "Pinning a block to the sidebar" |
+| `tutorial-print-preview.png` | the entry at the end of `DOCS_SHOTS` (`pref: ['printPreview', 'on']`) |
+
+**CHANGELOG `## 7.0.0` bullets pulled** (restore from `05a6ff3:CHANGELOG.md`; line numbers there): the
+sidebar fixes SC-282 (l.128), SC-288 (l.154), SC-184 (l.255), SC-153 "Open in sidebar" (l.486),
+SC-158 `ds-scc` pin (l.608); the hero sheet bullets SC-190 held-back (l.332), SC-132 hero Stamina (l.715),
+SC-156 starter (l.734), SC-107 grid (l.789), SC-121 stamina pill (l.1162) and sidebar fold (l.1221);
+SC-152 "Heroic resource and Surges get the padding" (l.563); the encounter-builder fix SC-134 (l.880);
+the form-editor/pencil bullets SC-121 raw-YAML box (l.1227) and SC-145 pencil placement (l.1284);
+and the "New: Draw Steel sidebar", "New: Encounter Builder", "New: Hero suite" bullets (l.945-980).
+Re-worded (shipped part kept): SC-378, SC-377, SC-318, SC-284, SC-240, SC-191 (link), SC-198, SC-189,
+SC-186, SC-183, SC-169, SC-160, SC-170, SC-154, SC-152, SC-142, SC-132, SC-141, SC-131, the project/party
+"New" bullet, the typography bullet (SC-101 area), the modal-theme bullet, the harness-fixtures bullet,
+SC-121 buttons/tables/Electron bullets. Drive-by: the "New commands" bullet no longer claims the
+legacy sync alias survives (it was removed in SC-406).
+
+**Developer docs** (`AGENTS.md`, `.repo-docs/integration.md`): "ALL 22 registered elements" now says
+13 ship / 9 gated; `AGENTS.md`'s release-gate bullet gained the SC-407 note.
+
+**Harness:** `visual-harness/camera-data-json.cjs` `seedExperimental(file, on = true)` and
+`visual-harness/obsidian-camera.mjs` (`!DOCS_MODE`) — `npm run docs-shots` captures with the switch OFF;
+`obsidian-shots` and every gate keep it ON. When the switch is retired, drop the `on` parameter.
+
 ---
 
 ## 12. Linear map
