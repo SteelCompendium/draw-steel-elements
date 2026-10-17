@@ -103,6 +103,28 @@ malice:
 `,
 );
 
+// SC-411 — the conditions GIF's own tracker: the same heroes and malice, one small enemy group.
+// INITIATIVE_WITH_SQUAD is ~1 100 CSS px tall; at 2x that GIF busted the 1 MB budget (1.09 MB) and
+// fell back to 1x, and nothing in the conditions flow needs the minion squad.
+const INITIATIVE_COMPACT = fence(
+	'ds-initiative',
+	`
+heroes:
+  - name: "Frodo Baggins"
+    max_stamina: 80
+  - name: "Samwise Gamgee"
+    max_stamina: 90
+enemy_groups:
+  - name: "Mordor Forces"
+    creatures:
+      - name: "Orc"
+        max_stamina: 40
+        amount: 2
+malice:
+  value: 5
+`,
+);
+
 // SC-191 slice 4 — the montage's own "Log an action…" sheet: the browser harness's
 // Modal shim has no positioning/backdrop CSS (obsidian-core.ts's mock just appends a bare
 // div), so `montage-sheet-log`'s browser-harness capture (visual-harness/entry.ts) proves
@@ -142,6 +164,16 @@ entries:
 current_round: 3
 `,
 );
+
+// SC-411 — the montage GIF's own body: MONTAGE_MID, but with the running totals low enough that
+// one logged success and one logged failure do not reach a limit. MONTAGE_MID sits one success
+// from the success limit (6) and one failure from the failure limit (3), so the script's first
+// quick-log would complete the test, replace the board with the final-result panel and hide the
+// very controls the GIF is about to click.
+// It also allows five rounds, so "End round 3" opens round 4 instead of closing the montage.
+const MONTAGE_GIF = MONTAGE_MID.replace('successes: 5', 'successes: 2')
+	.replace('failures: 2', 'failures: 1')
+	.replace('rounds: 3\n', 'rounds: 5\n');
 
 // docs/canvas-character-sheet.md's subject: several small elements laid out as a sheet.
 // Canvas text nodes render read-only by design (sourcePath '' -> canPersist false), which
@@ -531,6 +563,69 @@ export const DOCS_SHOTS = [
 		],
 	},
 
+	// Real-Obsidian camera: anything with a modal or the block write lifecycle. Each capture
+	// starts from a fresh scratch note (the tracker writes into the note it lives in); `write:
+	// true` waits for that note's text to change.
+	// docs/stamina-bar.md: the bar opens the stamina editor; apply damage; catch a breath.
+	{
+		out: 'stamina-bar.gif',
+		kind: 'gif',
+		source: 'obsidian',
+		element: 'stamina-bar',
+		// A small window: the modal opens centred in it, so the one fixed clip (element + modal) is
+		// not mostly empty note background.
+		viewport: { width: 980, height: 620 },
+		body: fence(
+			'ds-stamina-bar',
+			'max_stamina: 48\ncurrent_stamina: 31\ntemp_stamina: 0\nrecoveries: 6\nrecoveries_max: 10',
+		),
+		steps: [
+			{ hold: 1500, what: 'resting' },
+			{ click: '.dse-stamina--clickable', hold: 400, what: 'bar clicked' },
+			{ waitFor: 'modal:.dse-modal__body', hold: 1000, what: 'stamina editor open' },
+			{ type: '7', into: 'modal:input[aria-label="Amount to apply"]', select: true, hold: 600, what: 'amount typed' },
+			{ click: 'modal:button[aria-label="Damage"]', hold: 1200, what: 'Damage chosen: preview bar' },
+			{ click: 'modal:button.dse-btn--accent', write: true, hold: 1400, what: 'applied' },
+			{ click: 'button[aria-label="Catch Breath"]', write: true, hold: 1800, what: 'Catch Breath' },
+		],
+	},
+	// docs/gm-trackers.md "Montage Test tracker": quick-log, the "Log an action…" sheet, end the round.
+	{
+		out: 'montage.gif',
+		kind: 'gif',
+		source: 'obsidian',
+		element: 'montage',
+		body: MONTAGE_GIF,
+		steps: [
+			{ hold: 1500, what: 'resting (round 3 open)' },
+			{ click: 'button.dse-mt__quick[aria-label="Log a success for Kira in round 3"]', write: true, hold: 1200, what: 'Kira: success logged' },
+			{ click: '.dse-mt__actionrow button[aria-label="Log an action…"]', hold: 400, what: 'sheet opens' },
+			{ waitFor: 'modal:.dse-modal__body', hold: 1000, what: 'Log an action sheet' },
+			{ click: 'modal:button[aria-label="Failure"]', hold: 600, what: 'Failure chosen' },
+			{ type: 'Climb', into: 'modal:input[aria-label="Skill used"]', every: 2, hold: 160, what: 'typing the skill' },
+			{ click: 'modal:button[aria-label="Log"]', write: true, hold: 1400, what: 'logged' },
+			{ click: 'button[aria-label="End round 3"]', write: true, hold: 2000, what: 'round ended' },
+		],
+	},
+	// docs/initiative-tracker.md + running-an-encounter.md: the conditions manager.
+	{
+		out: 'initiative-tracker-conditions.gif',
+		kind: 'gif',
+		source: 'obsidian',
+		element: 'initiative',
+		viewport: { width: 1100, height: 1000 },
+		body: INITIATIVE_COMPACT,
+		steps: [
+			{ hold: 1500, what: 'resting' },
+			{ click: '.dse-init__entry:has(button[aria-label="Toggle turn taken: Frodo Baggins"]) .dse-cond--add', hold: 400, what: 'Add Condition clicked on Frodo' },
+			{ waitFor: 'modal:.dse-condal__list', hold: 1000, what: 'conditions manager open' },
+			{ click: 'modal:button[aria-label="Add condition"]', hold: 800, what: 'combobox opens' },
+			{ type: 'Ble', into: 'modal:input.dse-condal__input', every: 2, hold: 300, what: 'typing to filter' },
+			{ press: 'Enter', write: true, hold: 1200, what: 'Bleeding added' },
+			{ click: 'modal:button[aria-label="Done"]', hold: 900, what: 'combobox closed, Bleeding listed' },
+			{ click: 'modal:button[aria-label="Done"]', hold: 2000, what: 'modal closed: the condition icon sits on Frodo\'s row' },
+		],
+	},
 ];
 
 /** Images that are NOT regenerable by this pipeline, with the reason — reported by the
