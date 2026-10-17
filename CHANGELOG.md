@@ -37,7 +37,7 @@ for what needs action.
 - [FIX] **A statblock with an empty EV no longer prints a dangling "EV"** (SC-390).
   Companions and the summoner champions have no EV; their cards used to show "EV" with
   nothing after it. The label is now left out. A statblock that omits `ev` entirely still
-  reads "EV N/A". This changes the print output of statblocks with an empty EV.
+  reads "EV N/A".
 - [FIX] **Power-roll tier rows are compact again: about 50px for a one-line outcome, the
   same as the site** (SC-378). Every tier row (ability/feature cards, statblock abilities,
   featureblock, a kit's signature ability, negotiation arguments) had grown to
