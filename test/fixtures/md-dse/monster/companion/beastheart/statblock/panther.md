@@ -46,24 +46,8 @@ features:
         - Melee
         - Weapon
       metadata:
-        ability_type: Signature
-        action_type: Maneuver
-        class: beastheart
-        content: "*The panther bunches up, then uncoils into a deadly leap.*\n\n| **Companion, Melee, Weapon** |     **Maneuver** |\n|------------------------------|-----------------:|\n| **\U0001F4CF Melee 1**               | **\U0001F3AF One enemy** |\n\n**Effect:** The target takes damage equal to 3 + the panther's Might score, and if they have M < AVERAGE, they are knocked [prone](scc.v1:mcdm.heroes.v1/condition/prone).\n\n**Spend 1 Ferocity:** The panther can jump up to a number of squares equal to their speed before using this ability. If they jump at least 1 square in this way, a target who has M < STRONG is knocked [prone](scc.v1:mcdm.heroes.v1/condition/prone)."
-        distance: Melee 1
-        feature_type: ability
-        flavor: The panther bunches up, then uncoils into a deadly leap.
-        item_id: pounce
-        item_name: Pounce
-        keywords:
-            - Companion
-            - Melee
-            - Weapon
-        level: 1
         scc:
             - mcdm.beastheart.v1/feature.ability.companion.beastheart.panther.level-1/pounce
-        target: One enemy
-        type: feature/ability/companion/beastheart/panther/level-1
       name: Pounce
       target: One enemy
       type: feature
@@ -72,15 +56,8 @@ features:
         - effect: Whenever the panther takes the Advance move action or the Charge action, they can [jump](scc.v1:mcdm.heroes.v1/movement/jump) up to a number of squares equal to their speed in any direction, including vertically, as part of this movement.
       feature_type: feature
       metadata:
-        action_type: feature
-        class: beastheart
-        feature_type: feature
-        item_id: mighty-spring
-        item_name: Mighty Spring
-        level: 1
         scc:
             - mcdm.beastheart.v1/feature.companion.beastheart.panther.level-1/mighty-spring
-        type: feature/companion/beastheart/panther/level-1
       name: Mighty Spring
       type: feature
 free_strike: 1 + M
