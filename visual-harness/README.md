@@ -364,10 +364,10 @@ what the manifest was built to end for stills; this extends the same rule to mot
 | `{ hold }` | capture the current state (the resting first frame, the last frame) |
 | `{ click: sel }` | move the synthetic cursor to `sel`, then a **real** pointer click (Playwright `locator.click()`; Obsidian CDP `Input.dispatchMouseEvent` move/press/release) — not `el.click()`, which fires no pointer, hover or focus events |
 | `{ hover: sel }` | move both cursors only (hover-revealed UI); the real pointer is *not* parked for this frame |
-| `{ type: text, into?: sel, select?: true, every?: n }` | focus `into` (or use the focused element), select-all first when `select`, send real key events; `every: n` captures one frame per `n` characters (a typing animation) |
-| `{ press: key }` | a real key event: `Enter`, `Escape`, `Tab`, `Backspace`, the arrows, `Control+A` |
+| `{ type: text, into?: sel, select?: true, every?: n }` | focus `into` (or use the focused element), select-all first when `select`, send real key events; `every: n` captures one frame per `n` characters (a typing animation). The synthetic cursor then steps off the field (its tip goes to the field's bottom-right corner), so it never covers the typed value |
+| `{ press: key }` | a real key event: `Enter`, `Escape`, `Tab`, `Backspace`, the arrows, `Control+A`; same cursor rule when a text field is focused |
 | `{ waitFor: sel }` | wait until `sel` exists (e.g. a modal's body after a click) |
-| `write: true` | modifier on `click` / `type` / `press`: **wait for the block write** before capturing. No write within 5 s fails the entry — the script is wrong or the product is |
+| `write: true` | modifier on `click` / `type` / `press`: **wait for the block write** before capturing, then for quiet (no further write for 450 ms, just over the 400 ms persist debounce, so a straggler cannot satisfy the next step's wait). No write within 5 s fails the entry — the script is wrong or the product is |
 | `hold: ms` | how long the frame stays on screen (default 500); consecutive identical frames are merged and their holds added |
 | `capture: false`, `what: '…'` | act without capturing; a label for logs and `frames.json` |
 
@@ -379,15 +379,19 @@ until the note's text changes, then waits ~500 ms for the section re-render and 
 **Selectors** resolve **inside the element root** (`#mount` in the browser, the active leaf's
 `[data-dse-element]` in Obsidian), so they can never hit a second copy, and must match
 **exactly one node** (an ambiguous selector fails loudly instead of clicking the first of
-four). The prefix `modal:` resolves inside `.dse-modal`, which Obsidian appends to `<body>`.
+four), and are waited for at most 5 s in both drivers (a stale selector fails in 5 s, not Playwright's 30). The prefix `modal:` resolves inside `.dse-modal`, which Obsidian appends to `<body>`.
 Use DSE classes and `aria-label`s (what the tests and the lifecycle gate already treat as
 contract); avoid positional `:nth-child` for content — `:has()` on a stable child
 (`.dse-init__entry:has(button[aria-label="Toggle turn taken: Frodo Baggins"]) …`) names a row
 by what it holds.
 
-**Validation is at load.** `docs-gif.mjs` rejects an unknown step or entry key, `write` on a
-step that cannot write (`hover`, `waitFor`, a capture-only step), a malformed selector prefix, a
-missing `element`, and a script that captures nothing — before anything launches. The deferred
+**Validation is at load.** `docs-gif.mjs` rejects an unknown step or entry key — and an entry
+key the entry's own camera does not read (browser reads `fixture` / `width` / `bg`, Obsidian
+`note` / `body`; both read `prefs`, `seed`, `dpr`, `cursor`, `viewport`), so nothing is accepted
+and silently ignored — `write` on a step that cannot write (`hover`, `waitFor`, a capture-only
+step), a malformed selector prefix, a missing `element`, and a script that captures nothing —
+before anything launches. Selector *syntax* is not parsed at load (that needs a CSS parser); a
+bad selector fails at its step, in 5 s. The deferred
 guard (`docs-deferred-guard.cjs`) refuses a gif entry for a deferred element from either
 source.
 
@@ -415,7 +419,7 @@ Captures the entry **twice** (a fresh Chromium, or a fresh scratch note in the s
 asserts the same frame count and byte-identical frames (compared inside the GIF's crop, so the
 Obsidian window title — the scratch note's name — cannot fail it), and checks the encoder
 produced the same GIF. On a mismatch it prints the frame indices, the differing pixel count and
-the max channel delta, keeps the second run's frames next to the first's (`<out>.run2/`), and
+the max channel delta, keeps the second run's frames next to the first's (`<out>.run2/`, removed by the next run of that entry), and
 exits 1. Nothing is written to `docs/Media`. A GIF that fails it is not a regeneration target.
 
 #### The determinism knobs, and why each exists
@@ -437,5 +441,8 @@ All are runner-side; none touches product code. Rates are measured (SC-411 r1 sp
 | deferred chrome | browser GIFs mount with `experimental=0` (harness param): the "Pin to sidebar" item that hover reveals does not exist in any frame | chrome strip with a deferred item |
 
 Obsidian self-updates its app asar on warm-up, so GIF bytes can move *across Obsidian releases*
-(the PNGs already do); stability is defined per environment, and a full `npm run docs-shots` in
-one environment leaves `git status` clean when nothing changed.
+(the PNGs already do); stability is defined per environment. In one environment the GIFs and the
+element PNGs regenerate byte-identically; the Obsidian *leaf* shots can differ by sub-visible
+raster noise (`tutorial-source-mode.png` is not byte-stable even in a lone run, on the base
+branch too: SC-424, a pre-existing bug), so a full `npm run docs-shots` can leave that one PNG
+changed. Restore it with `git checkout -- docs/Media/tutorial-source-mode.png`; never commit it.
