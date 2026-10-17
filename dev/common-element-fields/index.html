@@ -291,33 +291,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../Roll/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Roll Element
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../advanced-usage/" class="md-nav__link">
         
   
@@ -748,7 +721,7 @@
   <span class="md-ellipsis">
     
   
-    Director's Trackers
+    Montage Test Tracker (ds-montage)
   
 
     
@@ -775,7 +748,7 @@
   <span class="md-ellipsis">
     
   
-    Hero Trackers
+    Track Your Hero
   
 
     
@@ -1262,20 +1235,17 @@
 
 
 <h1 id="the-element-menu-and-collapsing-a-block">The element menu, and collapsing a block<a class="headerlink" href="#the-element-menu-and-collapsing-a-block" title="Permanent link">&para;</a></h1>
-<p>Almost every element the plugin draws — statblocks, ability cards, the hero trackers, the
-GM trackers — carries the same small menu, and the same way of folding itself down to one line.
+<p>Almost every element the plugin draws — statblocks, ability cards, the
+trackers — carries the same small menu, and the same way of folding itself down to one line.
 This page explains both.</p>
 <h2 id="the-menu">The menu<a class="headerlink" href="#the-menu" title="Permanent link">&para;</a></h2>
 <p>Move your mouse over an element and a small panel of icon buttons appears at its <strong>top right
 corner</strong>, sitting just above the card's edge:</p>
 <ul>
 <li><strong>Collapse</strong> (a chevron) is always there, and is always the rightmost button.</li>
-<li><strong>Edit</strong> (a pencil) appears only if you have turned on <em>Show edit button on rendered blocks</em>
-  in <a href="../settings/#authoring">Settings</a>. It opens the same
-  <a href="../writing-blocks/#edit-a-rendered-block-with-a-form">form editor</a> the insert commands use.</li>
 </ul>
-<p>More buttons will be added here over time; new ones appear to the <em>left</em>, so the collapse
-chevron never moves.</p>
+<p>Some elements add buttons of their own — the montage tracker's menu, for one; they sit to
+the <em>left</em>, so the collapse chevron never moves.</p>
 <p>The panel is invisible until you point at the element, so it stays out of your way while
 you're reading. Two exceptions, both deliberate:</p>
 <ul>
@@ -1288,11 +1258,11 @@ you're reading. Two exceptions, both deliberate:</p>
 name, and an expand button on the right:</p>
 <div class="highlight"><pre><span></span><code>STATBLOCK: Human Bandit Chief                                    ⌄
 STAMINA (15/20)                                                  ⌄
-ENCOUNTER: Ambush at the Ford (EV 42)                            ⌄
+MONTAGE: Cross the Ashfall Wastes (round 2 · 3/6)               ⌄
 SKILLS (12 selected)                                             ⌄
 </code></pre></div>
-<p>Elements that have a name show it. Elements that don't — a standalone Stamina bar, a
-conditions strip — show the number that matters instead. Some show both.</p>
+<p>Elements that have a name show it. Elements that don't — a standalone Stamina bar, for
+example — show the number that matters instead. Some show both.</p>
 <p>While an element is collapsed the hover menu is hidden: the expand button on the line is the
 only control, so there is never a second, differently-placed way to open it back up.</p>
 <p><strong>Nothing is lost when you collapse.</strong> The element is still there, just hidden, so expanding
@@ -1366,12 +1336,10 @@ element renders exactly as it would have before this feature existed.</p>
 and <strong>Start collapsed</strong>. A field written in a block always beats the setting.</p>
 <h2 id="which-elements-have-this">Which elements have this<a class="headerlink" href="#which-elements-have-this" title="Permanent link">&para;</a></h2>
 <p>Every element that draws a card: statblocks, ability cards and featureblocks, the compendium
-reference block, every hero-suite element (stamina bar, conditions, heroic resource, surges,
-hero tokens, skills, characteristics, values row, counter) and every GM tracker (initiative,
-negotiation, encounter builder, montage, project, party).</p>
-<p>Two elements deliberately don't, because there would be nothing to fold or nowhere to put the
-menu: the <a href="../horizontal-rule/">horizontal rule</a> (<code>ds-hr</code>) and the <a href="../Roll/">dice roller</a>
-(<code>ds-roll</code>).</p>
+reference block, the stamina bar, skills, characteristics, values row, counter, and every
+tracker (initiative, negotiation, montage).</p>
+<p>One element deliberately doesn't, because there would be nothing to fold or nowhere to put
+the menu: the <a href="../horizontal-rule/">horizontal rule</a> (<code>ds-hr</code>).</p>
 <h3 id="blocks-that-arent-a-list-of-fields">Blocks that aren't a list of fields<a class="headerlink" href="#blocks-that-arent-a-list-of-fields" title="Permanent link">&para;</a></h3>
 <p>A <a href="../compendium-sync/#referencing-a-compendium-entry-in-your-notes">compendium reference</a>
 block has no list of <code>field: value</code> lines to add one more to — its body is only the entry's

@@ -41,7 +41,7 @@
     
     
       
-        <title>Hero Trackers - Steel Compendium: Draw Steel Elements Obsidian Plugin</title>
+        <title>Track Your Hero - Steel Compendium: Draw Steel Elements Obsidian Plugin</title>
       
     
     
@@ -92,7 +92,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#hero-trackers" class="md-skip">
+        <a href="#track-your-hero" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +142,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Hero Trackers
+              Track Your Hero
             
           </span>
         </div>
@@ -272,33 +272,6 @@
     
   
     Feature Element
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../Roll/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Roll Element
   
 
     
@@ -595,7 +568,7 @@
   <span class="md-ellipsis">
     
   
-    Director's Trackers
+    Montage Test Tracker (ds-montage)
   
 
     
@@ -624,24 +597,6 @@
         
       
       
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Hero Trackers
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -649,7 +604,7 @@
   <span class="md-ellipsis">
     
   
-    Hero Trackers
+    Track Your Hero
   
 
     
@@ -658,80 +613,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#conditions-ds-conditions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Conditions (ds-conditions)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#heroic-resource-ds-resource" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Heroic resource (ds-resource)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#surges-ds-surges" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Surges (ds-surges)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#hero-tokens-ds-tokens" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Hero Tokens (ds-tokens)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#stamina" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Stamina
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
       
     </li>
   
@@ -1081,69 +962,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#conditions-ds-conditions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Conditions (ds-conditions)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#heroic-resource-ds-resource" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Heroic resource (ds-resource)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#surges-ds-surges" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Surges (ds-surges)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#hero-tokens-ds-tokens" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Hero Tokens (ds-tokens)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#stamina" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Stamina
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -1159,95 +977,15 @@
 
 
 
-<h1 id="hero-trackers">Hero Trackers<a class="headerlink" href="#hero-trackers" title="Permanent link">&para;</a></h1>
-<p>Four small blocks, each tracking one thing about a hero — useful on a
-<a href="../canvas-character-sheet/">Canvas character sheet</a>, in a session note, or pinned to the
-<a href="../writing-blocks/#pinning-a-block-to-the-sidebar">sidebar</a>.</p>
-<p>All of these blocks <strong>write their state back into the note</strong> as you play: spend a Recovery
-or a surge and the YAML in the block updates itself. You never have to edit those numbers
-by hand.</p>
-<h2 id="conditions-ds-conditions">Conditions (<code>ds-conditions</code>)<a class="headerlink" href="#conditions-ds-conditions" title="Permanent link">&para;</a></h2>
-<p>A conditions strip for one hero or creature, using the same Conditions manager as the
+<h1 id="track-your-hero">Track Your Hero<a class="headerlink" href="#track-your-hero" title="Permanent link">&para;</a></h1>
+<p>The <strong>Stamina bar</strong> (<code>ds-stamina-bar</code>) tracks a hero's Stamina — current, maximum and
+temporary — plus Recoveries, Catch Breath, and the Winded and Dying states. It is useful on
+a <a href="../canvas-character-sheet/">Canvas character sheet</a> or in a session note, and it
+<strong>writes its state back into the note</strong> as you play: spend a Recovery and the YAML in the
+block updates itself. You never have to edit those numbers by hand.</p>
+<p>Everything about it lives on its own page: <a href="../stamina-bar/">Stamina Bar</a>.</p>
+<p>Conditions on a hero or creature in a fight are managed from the
 <a href="../initiative-tracker/#conditions">initiative tracker</a>.</p>
-<div class="highlight"><pre><span></span><code>~~~ds-conditions
-conditions:
-<span class="w">  </span><span class="k">-</span><span class="w"> </span>key: bleeding
-    duration: save-ends
-<span class="w">  </span><span class="k">-</span><span class="w"> </span>key: slowed
-    duration: eot
-<span class="w">  </span><span class="k">-</span><span class="w"> </span>restrained
-~~~
-</code></pre></div>
-<p><img alt="A conditions strip" src="../Media/conditions.png" /></p>
-<p>Each entry is either a bare condition name or an object with a <code>key</code> plus an optional
-<code>icon</code> (an Obsidian icon name), <code>duration</code> (<code>eot</code>, <code>save-ends</code>, or <code>eoe</code>), <code>color</code>, and
-<code>effect</code> (an animation such as <code>glow</code>). Legacy duration text in <code>effect</code> still works.
-Click <strong>+</strong> to open the Conditions manager and use a row’s cog to choose its icon,
-color, duration, and effect. Search icons by name or choose <strong>Default</strong> to restore
-the standard icon. Custom conditions support the same controls. Changes are saved
-with the note; click a condition in the strip to remove it.</p>
-<h2 id="heroic-resource-ds-resource">Heroic resource (<code>ds-resource</code>)<a class="headerlink" href="#heroic-resource-ds-resource" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code>~~~ds-resource
-class: fury
-current: 4
-~~~
-</code></pre></div>
-<p><img alt="A heroic resource tracker" src="../Media/heroic-resource.png" /></p>
-<p>Name the <code>class</code> and the block labels itself with that class's resource (Ferocity, Focus,
-Piety, Clarity, …), applies its floor, and shows a short reminder of how the resource is
-gained. Unknown or missing classes get a generic "Resource" label.</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Required</th>
-<th>What it is</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>current</code></td>
-<td>Yes</td>
-<td>The current amount. Can be negative (Clarity).</td>
-</tr>
-<tr>
-<td><code>class</code></td>
-<td>No</td>
-<td>Class name, e.g. <code>fury</code>.</td>
-</tr>
-<tr>
-<td><code>type</code></td>
-<td>No</td>
-<td>Override the resource's name — for homebrew, or a class not in the list.</td>
-</tr>
-<tr>
-<td><code>min</code> / <code>max</code></td>
-<td>No</td>
-<td>Override the floor; add a ceiling. Without <code>max</code> the stepper is unbounded.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="surges-ds-surges">Surges (<code>ds-surges</code>)<a class="headerlink" href="#surges-ds-surges" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code>~~~ds-surges
-surges: 2
-highest_characteristic: 3
-~~~
-</code></pre></div>
-<p><img alt="A surge counter" src="../Media/surges.png" /></p>
-<p>A surge counter. <code>highest_characteristic</code> is optional; when present the panel shows what
-each surge is worth ("each = +3 damage").</p>
-<h2 id="hero-tokens-ds-tokens">Hero Tokens (<code>ds-tokens</code>)<a class="headerlink" href="#hero-tokens-ds-tokens" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code>~~~ds-tokens
-label: Session 12 party pool
-tokens: 3
-~~~
-</code></pre></div>
-<p><img alt="The party's hero token pool" src="../Media/hero-tokens.png" /></p>
-<p>The party's shared Hero Token pool. Keep <strong>one</strong> of these — in your session note or the
-sidebar — and everyone reads the same number. <code>label</code> is optional; <code>tokens</code> is the count.</p>
-<h2 id="stamina">Stamina<a class="headerlink" href="#stamina" title="Permanent link">&para;</a></h2>
-<p>The Stamina bar has its own page: <a href="../stamina-bar/">Stamina Bar</a> (<code>ds-stamina-bar</code>),
-including Recoveries, Catch Breath, and the Winded and Dying states.</p>
 
 
 

@@ -291,33 +291,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../Roll/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Roll Element
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../advanced-usage/" class="md-nav__link">
         
   
@@ -595,7 +568,7 @@
   <span class="md-ellipsis">
     
   
-    Director's Trackers
+    Montage Test Tracker (ds-montage)
   
 
     
@@ -622,7 +595,7 @@
   <span class="md-ellipsis">
     
   
-    Hero Trackers
+    Track Your Hero
   
 
     
@@ -1414,28 +1387,19 @@ has both an old and a new key for the same value, the new key always wins.</p>
 </code></pre></div>
 <h2 id="whats-new-in-700-at-a-glance">What's new in 7.0.0, at a glance<a class="headerlink" href="#whats-new-in-700-at-a-glance" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><a href="../hero-suite/">Hero trackers</a></strong> — new standalone blocks for heroic resource, surges,
-  conditions, and a shared party-wide hero token pool.</li>
 <li><strong>One block renders any compendium entry</strong> — sync the compendium and a
   <a href="../compendium-sync/#referencing-a-compendium-entry-in-your-notes"><code>ds-scc</code> block</a>
   whose body is an entry's code renders that entry, whatever it is: a kit, a
   condition, a rule, a statblock. A search-and-insert command finds any entry
   and writes the block for you without leaving the editor.</li>
-<li><strong><a href="../gm-trackers/">Director's trackers</a></strong> — an Encounter Builder that computes
-  live EV/budget from your synced compendium, plus trackers for montages,
-  downtime projects, and party-level victories/renown/wealth.</li>
 <li><strong>The Montage Test tracker is a working board, not just a scoreboard</strong> — a grid of one
   row per hero and one column per round, a click on any cell to log or correct that hero's
   round in a small form (success/failure/assist, an optional skill and note), and a
-  <strong>Log an action…</strong> button that opens the same form for the next hero to act. A collapsible cheat-sheet shows the test
-  tiers by difficulty; a collapsible guide at the foot covers running the montage end to
-  end. See <a href="../gm-trackers/">GM Trackers</a> → "Montage Test tracker".</li>
+  <strong>Log an action…</strong> button that opens the same form for the next hero to act. A collapsible
+  cheat-sheet shows the test tiers by difficulty; a collapsible guide at the foot covers running the montage end to
+  end. See <a href="../gm-trackers/">Montage Test Tracker</a>.</li>
 <li><strong>Malice panel and per-turn action checklist</strong> in the initiative tracker —
   see <a href="../initiative-tracker/">Initiative Tracker</a>.</li>
-<li><strong>Draw Steel sidebar</strong> — pin any tracker to a persistent panel in
-  Obsidian's right sidebar so it survives navigating between notes; see
-  <a href="../initiative-tracker/#pinning-to-the-sidebar">Pinning to the Sidebar</a> for
-  the "send to sidebar" commands.</li>
 <li><strong><code>scc.v1:</code> links now resolve everywhere</strong> — in compendium notes, inside
   element text, and as references — checking your local compendium first,
   with an optional fallback to steelcompendium.io.</li>
@@ -1445,10 +1409,8 @@ has both an old and a new key for the same value, the new key always wins.</p>
   See <a href="../stamina-bar/">Stamina Bar</a>.</li>
 <li><strong>A standard menu panel on card elements</strong> — hover a statblock, featureblock or
   stamina bar and a small icon panel appears at its top-right, carrying
-  collapse/expand and (when <strong>Show edit button</strong> is on) the edit pencil, which
-  moved there from the card's corner. Collapsed, an element is one line: type,
-  name, expand. Block keys: <code>collapsed:</code>, <code>collapse_default:</code> and
-  <code>collapsible:</code> — see
+  collapse/expand. Collapsed, an element is one line: type, name, expand. Block keys:
+  <code>collapsed:</code>, <code>collapse_default:</code> and <code>collapsible:</code> — see
   <a href="../common-element-fields/">Common Element Fields</a>.
   <strong>One thing to know:</strong> the Stamina Bar's own "Stamina Bar" disclosure header
   is gone, replaced by that panel. Your blocks need no change —
@@ -1459,6 +1421,10 @@ has both an old and a new key for the same value, the new key always wins.</p>
   card you're changing and seven more of the website's statblock layout
   options.</li>
 </ul>
+<p><strong>A block for an element that isn't in this release.</strong> If one of your notes has a block for
+an element this release doesn't include (a beta build may have let you write one), it shows
+a small card reading "<code>ds-…</code> is not available in this release" instead of the element. The
+block's text in your note is left exactly as you wrote it.</p>
 <p>See the <a href="../CHANGELOG.md">changelog</a> for the full list of 7.0.0 changes.</p>
 
 

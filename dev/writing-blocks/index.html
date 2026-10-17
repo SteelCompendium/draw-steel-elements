@@ -289,33 +289,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../Roll/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Roll Element
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../advanced-usage/" class="md-nav__link">
         
   
@@ -593,7 +566,7 @@
   <span class="md-ellipsis">
     
   
-    Director's Trackers
+    Montage Test Tracker (ds-montage)
   
 
     
@@ -620,7 +593,7 @@
   <span class="md-ellipsis">
     
   
-    Hero Trackers
+    Track Your Hero
   
 
     
@@ -1047,17 +1020,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#edit-a-rendered-block-with-a-form" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Edit a rendered block with a form
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#insert-content-from-the-compendium" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1085,34 +1047,6 @@
     <span class="md-ellipsis">
       
         Insert Draw Steel: compendium block (snapshot)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pinning-a-block-to-the-sidebar" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pinning a block to the sidebar
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Pinning a block to the sidebar">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#one-note-instead" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        One note instead?
       
     </span>
   </a>
@@ -1220,17 +1154,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#edit-a-rendered-block-with-a-form" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Edit a rendered block with a form
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#insert-content-from-the-compendium" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1258,34 +1181,6 @@
     <span class="md-ellipsis">
       
         Insert Draw Steel: compendium block (snapshot)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pinning-a-block-to-the-sidebar" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pinning a block to the sidebar
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Pinning a block to the sidebar">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#one-note-instead" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        One note instead?
       
     </span>
   </a>
@@ -1334,7 +1229,7 @@ screenshots; this page is the reference.</p>
 <h2 id="insert-a-block">Insert a block<a class="headerlink" href="#insert-a-block" title="Permanent link">&para;</a></h2>
 <h3 id="type-ds">Type <code>/ds</code><a class="headerlink" href="#type-ds" title="Permanent link">&para;</a></h3>
 <p>In the editor, type <strong><code>/ds</code></strong> on an empty line. A list of every element appears; keep
-typing to filter it (<code>/dsstat</code>, <code>/dsroll</code>, …). Pick one and the trigger is replaced with a
+typing to filter it (<code>/dsstat</code>, <code>/dsinit</code>, …). Pick one and the trigger is replaced with a
 complete, filled-in example block you can edit.</p>
 <h3 id="or-use-the-command-palette">Or use the command palette<a class="headerlink" href="#or-use-the-command-palette" title="Permanent link">&para;</a></h3>
 <p>Every element also has its own command: open the
@@ -1345,19 +1240,9 @@ Initiative tracker</em>, <em>Insert Draw Steel: Featureblock</em>. The block is 
 <h2 id="autocomplete-inside-a-block">Autocomplete inside a block<a class="headerlink" href="#autocomplete-inside-a-block" title="Permanent link">&para;</a></h2>
 <p>With your cursor inside a <code>ds-</code> block, start typing a field name and Obsidian suggests the
 fields that element accepts. After a field that only allows certain values (for example
-<code>mode:</code> in a <a href="../Roll/">roll block</a>), the suggestions become that field's allowed values.</p>
+<code>style:</code> in a <a href="../skills-element/#layouts-style">skills block</a>), the suggestions become that field's allowed values.</p>
 <p>Field-name suggestions are offered for top-level fields; deeper, indented fields are not
 suggested yet.</p>
-<h2 id="edit-a-rendered-block-with-a-form">Edit a rendered block with a form<a class="headerlink" href="#edit-a-rendered-block-with-a-form" title="Permanent link">&para;</a></h2>
-<p>Turn on <strong>Settings → Draw Steel Elements → Authoring → "Show edit button on rendered
-blocks"</strong> and every rendered block gains a small pencil — in the
-<a href="../common-element-fields/#the-menu">element menu</a> at the block's top-right corner for the
-elements that have one, and in the card's own corner for the few that don't. Clicking it
-opens a form with one
-control per field, a live preview of the card as you change it, and a Save button that
-stays disabled while the block is invalid. Saving writes the block back into your note
-through the same path the trackers use, so nothing else in the note is touched.</p>
-<p>The setting is off by default; the insert commands and <code>/ds</code> work either way.</p>
 <h2 id="insert-content-from-the-compendium">Insert content from the compendium<a class="headerlink" href="#insert-content-from-the-compendium" title="Permanent link">&para;</a></h2>
 <p>Once you have <a href="../compendium-sync/">synced the compendium</a> there are two commands, and the
 difference between them matters.</p>
@@ -1384,38 +1269,6 @@ changed nothing. Leaving it out keeps that trap out of your note. A snapshot del
 overwrote them would defeat it. If you want content that keeps updating, use <strong>Insert
 compendium reference</strong> instead.</p>
 <p>Snapshots are offered for statblocks, features and featureblocks only.</p>
-<h2 id="pinning-a-block-to-the-sidebar">Pinning a block to the sidebar<a class="headerlink" href="#pinning-a-block-to-the-sidebar" title="Permanent link">&para;</a></h2>
-<p>The Draw Steel sidebar is a <strong>GM dashboard assembled from blocks that live in different
-notes</strong> — the initiative tracker from your session note, the party tracker from your
-campaign note, a hero sheet from someone's character note, all running at once in one
-panel. That's the one thing it does that a pinned note tab can't: if everything you track
-already lives in a single note, pin <em>that note's tab</em> in the right sidebar instead (see
-"One note instead?" below) — it's simpler and needs nothing from this page.</p>
-<p><strong>To pin a block:</strong> open its note in Reading view, hover the block (any element that shows a
-<strong>⋯</strong> menu), open that menu, and choose <strong>Pin to sidebar</strong>. The block moves into a
-persistent panel in Obsidian's right sidebar, stays interactive there, and stays in sync
-with the note. Pin blocks from as many different notes as you like — they stack in the same
-panel, each with its own header naming the element and the note it came from.</p>
-<p><img alt="Two blocks pinned to the Draw Steel sidebar, each with its own header" src="../Media/sidebar.png" /></p>
-<p>To remove one, open its <strong>⋯</strong> menu in the sidebar and choose <strong>Unpin from sidebar</strong> — that
-panel closes; the others stay. Open (or re-focus) the panel any time with the crossed-swords
-ribbon icon, or the <strong>Open Draw Steel sidebar</strong> command; an empty panel explains itself and
-how to fill it.</p>
-<p>Two older paths still work, for a cursor-driven workflow: put your cursor inside a block and
-run <strong>Send block to sidebar</strong>, or — for the initiative tracker specifically, from anywhere
-in its note — <strong>Send initiative tracker to sidebar</strong>.</p>
-<p>Pinning a tracker adds a hidden <code>_dse_anchor:</code> line to it — that's the plugin's bookmark
-for finding the block again after you edit the note around it. Leave it alone. A <code>ds-scc</code>
-block, whose content is exactly one compendium code, is never written to: pinning one
-leaves the note unchanged and the sidebar finds it by its code.</p>
-<h3 id="one-note-instead">One note instead?<a class="headerlink" href="#one-note-instead" title="Permanent link">&para;</a></h3>
-<p>If everything you're tracking for a session already lives in one note, you don't need the
-sidebar at all: open that note in the right sidebar the normal Obsidian way (drag its tab
-over, or open it and use "Move to right sidebar") and pin the tab. You get the same
-persistent panel, plus things the Draw Steel sidebar doesn't have — a close button and
-drag-to-reorder for free, room for ordinary prose alongside your blocks, and no rebuild
-flash while you edit. Use the Draw Steel sidebar when your trackers live in different notes;
-use a pinned note tab when they don't.</p>
 <h2 id="per-block-appearance-overrides-advanced">Per-block appearance overrides (advanced)<a class="headerlink" href="#per-block-appearance-overrides-advanced" title="Permanent link">&para;</a></h2>
 <p>Most appearance settings are global (see <a href="../settings/">Settings</a>), but a single block can
 pin its own look with a reserved <code>prefs:</code> key:</p>

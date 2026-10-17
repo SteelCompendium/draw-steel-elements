@@ -27,7 +27,7 @@
         <link rel="canonical" href="https://steelCompendium.io/dev/advanced-usage/">
       
       
-        <link rel="prev" href="../Roll/">
+        <link rel="prev" href="../Features/">
       
       
         <link rel="next" href="../canvas-character-sheet/">
@@ -288,33 +288,6 @@
       
   
   
-  
-  
-    <li class="md-nav__item">
-      <a href="../Roll/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Roll Element
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
     
   
   
@@ -400,10 +373,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-sidebar" class="md-nav__link">
+  <a href="#narrow-panes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The sidebar
+        Narrow panes
       
     </span>
   </a>
@@ -730,7 +703,7 @@
   <span class="md-ellipsis">
     
   
-    Director's Trackers
+    Montage Test Tracker (ds-montage)
   
 
     
@@ -757,7 +730,7 @@
   <span class="md-ellipsis">
     
   
-    Hero Trackers
+    Track Your Hero
   
 
     
@@ -1143,10 +1116,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-sidebar" class="md-nav__link">
+  <a href="#narrow-panes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The sidebar
+        Narrow panes
       
     </span>
   </a>
@@ -1318,10 +1291,6 @@ tracker.</p>
 <td><code>true</code>, <code>false</code></td>
 </tr>
 <tr>
-<td><code>printPreview</code></td>
-<td><code>on</code>, <code>off</code></td>
-</tr>
-<tr>
 <td><code>portraits</code></td>
 <td><code>on</code>, <code>off</code></td>
 </tr>
@@ -1335,55 +1304,27 @@ structure with another's styling and render something corrupt. The typography se
 (fonts and the size scales) are global for a different reason: they are applied as page-level
 styling, not per-card. Naming any of them in a block's <code>prefs:</code> logs a warning to Obsidian's
 developer console and the block renders normally.</p>
-<h2 id="the-sidebar">The sidebar<a class="headerlink" href="#the-sidebar" title="Permanent link">&para;</a></h2>
-<p>A GM dashboard assembled from blocks that live in <strong>different</strong> notes: hover a block in
-Reading view, open its <strong>⋯</strong> menu, and choose <strong>Pin to sidebar</strong>. It stays interactive in a
-persistent panel in Obsidian's right sidebar while you navigate between notes, and edits made
-in either place stay in sync. Full walkthrough, including how to unpin one and the older
-cursor-driven commands: <a href="../writing-blocks/#pinning-a-block-to-the-sidebar">Pinning a block to the sidebar</a>.</p>
-<p><img alt="Two blocks pinned to the Draw Steel sidebar, each with its own header" src="../Media/sidebar.png" /></p>
-<p>Worth knowing:</p>
-<ul>
-<li>The panel is bound to that specific block, in that specific note. The plugin adds a small
-  <code>_dse_anchor</code> marker to the block so it can find it again — that's what that line is.</li>
-<li>One sidebar can hold several panels at once; they stack, each with its own header naming
-  the element and its note.</li>
-<li>Trackers are what this is for — initiative, montage, project, party, a heroic resource or
-  surge counter. Pin the ones you're using this session, from whichever notes they live in.</li>
-<li>Open or focus the panel any time with the crossed-swords ribbon icon, or <strong>Open Draw
-  Steel sidebar</strong>.</li>
-<li><strong>If everything you track lives in one note already</strong>, skip the sidebar: open that note in
-  the right sidebar and pin its tab instead — you get a close button and reordering for
-  free, and no rebuild flash while you edit. The Draw Steel sidebar earns its keep only when
-  your trackers are scattered across notes.</li>
-</ul>
-<p>Narrow panes are a real layout: elements reflow at sidebar width (the stamina cluster
-collapses to a two-line rail, for instance) rather than being squeezed. A statblock's
-<a href="../settings/#statblock-display">sticky mini-header</a> reflows the same way: at sidebar width
-it drops the stat pills and the secondary-stats line and keeps just the creature's name and
-role, which is the question a pinned header is there to answer.</p>
+<h2 id="narrow-panes">Narrow panes<a class="headerlink" href="#narrow-panes" title="Permanent link">&para;</a></h2>
+<p>Narrow panes are a real layout: elements reflow in a narrow pane (a split view, say) rather
+than being squeezed — the stamina cluster collapses to a two-line rail, for instance. A
+statblock's <a href="../settings/#statblock-display">sticky mini-header</a> reflows the same way: in a
+narrow pane it drops the stat pills and the secondary-stats line and keeps just the
+creature's name and role, which is the question a pinned header is there to answer.</p>
 <h2 id="canvas">Canvas<a class="headerlink" href="#canvas" title="Permanent link">&para;</a></h2>
 <p>Elements render inside <a href="../canvas-character-sheet/">Obsidian Canvas</a> text nodes, which makes
 a canvas a good way to lay out a character sheet or a session dashboard.</p>
 <p><img alt="Draw Steel elements on a canvas" src="../Media/canvas-character-sheet.png" /></p>
 <p><strong>Canvas elements are read-only, and they say so.</strong> A canvas text node gives the plugin no
 file to write back to, so anything interactive — spending a Recovery, marking a turn,
-stepping a resource — is deliberately disabled rather than silently discarded, and each card
+stepping a counter — is deliberately disabled rather than silently discarded, and each card
 carries a small "Read-only" badge. Use canvas for a <strong>layout you look at</strong>; keep the blocks
-you actually click in ordinary notes (or pin them to the sidebar).</p>
+you actually click in ordinary notes.</p>
 <p>A canvas node is a fixed-size card you drag, not a scroll surface, so the statblock
 <a href="../settings/#statblock-display">sticky mini-header</a> is inert there whatever the setting says.</p>
 <h2 id="print-and-pdf-export">Print and PDF export<a class="headerlink" href="#print-and-pdf-export" title="Permanent link">&para;</a></h2>
 <p>Everything renders in a print layout when you print or export to PDF, and the layout you
 picked in Settings carries over.</p>
 <ul>
-<li><strong>Print preview</strong> (Settings → Appearance) shows that layout on screen so you can check a
-  handout without printing it. What it shows is what Obsidian's <strong>Export to PDF</strong> produces:
-  both go through the same print layout, so the preview is a real proof, not an
-  approximation. (Before 7.0.0 the two could disagree — a PDF kept the on-screen card
-  plate, gradient and drop shadow that the preview correctly stripped.) The preview draws
-  its own white page with black text regardless of your Obsidian theme, so in a dark vault
-  a previewed element sits as a white page on your dark note.</li>
 <li><strong>Text size and Card size always print at 100%</strong>, whatever you set on screen — a scale
   that helps you read a screen ruins a page.</li>
 <li><strong>Villain actions are always open in print</strong>, even with the collapsible band selected.</li>
@@ -1396,8 +1337,6 @@ Then:</p>
 <ul>
 <li>Clicking a power-roll tier row on an ability card rolls it (2d10 + modifiers, tiers,
   edges and banes, crits on a natural 19–20 for main-action power rolls).</li>
-<li>The standalone <a href="../Roll/"><code>ds-roll</code> block</a> always rolls, whatever the setting says —
-  writing the block is the opt-in.</li>
 <li>If you use the community <strong>Dice Roller</strong> plugin, the <strong>Roller</strong> setting hands it the raw
   dice; Draw Steel's tier/edge/bane maths always stays native, and the plugin falls back to
   its own roller automatically if that plugin is missing.</li>
@@ -1414,13 +1353,10 @@ Then:</p>
 </ul>
 <p>Plus the trackers, which are documented field by field:
 <a href="../initiative-tracker/">initiative</a>, <a href="../negotiation-tracker/">negotiation</a>,
-<a href="../gm-trackers/">Director's trackers</a>, <a href="../hero-suite/">hero trackers</a>.</p>
-<p>Two authoring aids worth turning on while you write: <strong>autocomplete inside a block</strong> (start
-typing a field name and Obsidian suggests the ones that element accepts — always on), and
-the <strong>form editor</strong> (Settings → Authoring), which gives every rendered block a pencil (in its
-<a href="../common-element-fields/#the-menu">element menu</a>) that
-opens a validating form with a live preview. Both are described in
-<a href="../writing-blocks/">Writing and editing blocks</a>.</p>
+<a href="../gm-trackers/">montage</a> and the <a href="../stamina-bar/">Stamina bar</a>.</p>
+<p>One authoring aid worth knowing while you write: <strong>autocomplete inside a block</strong> (start
+typing a field name and Obsidian suggests the ones that element accepts — always on). It is
+described in <a href="../writing-blocks/">Writing and editing blocks</a>.</p>
 <p>Every element also accepts several aliases (<code>ds-sb</code> for <code>ds-statblock</code>, <code>ds-it</code> for
 <code>ds-initiative</code>, and so on) — the full list is in the <a href="../#elements">catalog</a>.</p>
 <h2 id="things-that-are-deliberately-not-documented">Things that are deliberately not documented<a class="headerlink" href="#things-that-are-deliberately-not-documented" title="Permanent link">&para;</a></h2>
