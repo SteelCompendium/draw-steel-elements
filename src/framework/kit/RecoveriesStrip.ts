@@ -138,6 +138,7 @@ export function renderRecoveriesStrip(
 		// The row's slider role already reports the value to AT; twelve marker labels
 		// would say the same thing twelve more times.
 		pip.setAttribute('aria-hidden', 'true');
+		stampControl(pip, 'recov.marker'); // the click target the row's handler resolves
 	}
 
 	const catchBreath: IconButtonHandle = iconButton(

@@ -1,70 +1,218 @@
 // SC-408 pilot: the StaminaEditModal opened from a standalone ds-stamina-bar, in real Obsidian
-// (experimental OFF, the shipped product). P1 proof scenarios; P2 grows this to the full set.
-// Ids in the titles (`[STAM-xx]`) match the S1 inventory and drive `--only=`.
+// (experimental OFF, the shipped product). This file: opening, Apply box / Damage / Healing,
+// the quick actions, the temporary-Stamina stepper and the footer. The stamina stepper, Escape /
+// close semantics and the needs-real-Obsidian scenarios are in stamina-modal-stepper.e2e.ts.
+//
+// Ids in titles (`[STAM-xx]`) are unique and drive `--only=`; the xNN in S1's inventory
+// (sc408-s1-stamina-inventory.md) is noted per test. basic.md = 15/20 Stamina, 5 temp, hero rules
+// (a standalone ds-stamina bar always opens as a hero: floor -10).
+import { expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
+import { applyAmount, applyAndWrite, expectApplyLabel, openBarModal } from '../../driver/stamina';
 
-const NOTE = 'Stamina/basic.md'; // max 20, current 15, temp 5
+const NOTE = 'Stamina/basic.md';
 const BAR = 'ds-stamina-bar';
 
-async function openStaminaModal() {
-	await dse.click(dse.block(BAR).control({ css: '.dse-stamina__cluster' }));
-	return dse.modal('stamina-edit');
-}
-
-describe('stamina-edit-modal (from ds-stamina-bar)', () => {
-	beforeEach(async () => {
-		await dse.openNote(NOTE);
+describe('stamina-edit-modal from ds-stamina-bar: open, Apply box, Damage, Healing', () => {
+	it('[STAM-E01] clicking the bar opens the modal: titled, Apply box focused, Apply disabled, nothing written', async () => {
+		const modal = await openBarModal(NOTE);
+		await expect(modal.control({ css: '.dse-modal__title-text' })).toHaveText('Stamina', { ignoreCase: true }); // CSS upper-cases it
+		expect(await dse.focusedControl()).toBe('sedit.apply-amount'); // M02
+		await expect(modal.control('sedit.apply')).toBeDisabled(); // M07
+		await expectApplyLabel(modal, 'No Stamina Change');
+		await dse.expectNoWrite(NOTE, () => dse.click(modal.control('modal.close')));
+		await expect(modal.root).not.toBeExisting();
 	});
 
 	it('[STAM-D01] Damage less than temp: temp absorbs it, Stamina unchanged, exactly one write', async () => {
-		const modal = await openStaminaModal();
-		await dse.type(modal.control({ css: '.dse-sedit__apply-input' }), '3', { replace: true });
-		await dse.click(modal.control({ name: 'Damage' }));
-		await expect(modal.control({ css: '.dse-modal__footer .dse-btn--accent' })).toHaveText(expect.stringContaining('3 Temp Stamina'));
-		const w = await dse.waitForWrite(NOTE, () => dse.click(modal.control({ css: '.dse-modal__footer .dse-btn--accent' })));
-		expect(w.count).toBe(1);
-		await expect(modal.root).not.toBeExisting();
+		const modal = await openBarModal(NOTE);
+		await applyAmount(modal, '3', 'sedit.damage');
+		await expectApplyLabel(modal, 'Lose 3 Temp Stamina');
+		expect(await applyAndWrite(modal, NOTE)).toBe(1);
 		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ max_stamina: 20, current_stamina: 15, temp_stamina: 2 });
 	});
 
-	it('[STAM-K01] Escape closes the modal without writing', async () => {
-		const modal = await openStaminaModal();
-		await dse.type(modal.control({ css: '.dse-sedit__apply-input' }), '5', { replace: true });
-		await dse.click(modal.control({ name: 'Damage' }));
-		await dse.expectNoWrite(NOTE, () => dse.press('Escape'));
-		await expect(modal.root).not.toBeExisting();
-		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 15, temp_stamina: 5 });
+	it('[STAM-D02] Damage more than temp: temp is spent first, the rest comes off Stamina', async () => {
+		const modal = await openBarModal(NOTE);
+		await applyAmount(modal, '8', 'sedit.damage');
+		await expectApplyLabel(modal, 'Lose 3 Stamina and Lose 5 Temp Stamina');
+		expect(await applyAndWrite(modal, NOTE)).toBe(1);
+		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 12, temp_stamina: 0 });
 	});
 
-	// S1 B7, confirmed in real Obsidian (app 1.14.4 on both Chrome 150 and Chrome 106): typing a new
-	// Stamina value leaves Apply disabled until the input's blur commits it. A press on the label
-	// text works (the click target is the label span, which Chrome still dispatches), but a press
-	// on the button's OWN surface - its padding - lands on the still-disabled button: the blur
-	// enables it afterwards and the click is swallowed. Correct behaviour: the first click applies.
-	// (Not B7: the control case, a press on the label, is the next test and passes.)
+	it('[STAM-D03] Damage accumulates: three presses of 3 spend the 5 temp, then 4 Stamina', async () => {
+		const modal = await openBarModal(NOTE);
+		await dse.type(modal.control('sedit.apply-amount'), '3', { replace: true });
+		for (let i = 0; i < 3; i++) await dse.click(modal.control('sedit.damage'));
+		await expectApplyLabel(modal, 'Lose 4 Stamina and Lose 5 Temp Stamina'); // A05
+		expect(await applyAndWrite(modal, NOTE)).toBe(1);
+		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 11, temp_stamina: 0 });
+	});
+
+	it('[STAM-D07] Damage with an empty Apply box is a silent no-op', async () => {
+		const modal = await openBarModal(NOTE);
+		await dse.type(modal.control('sedit.apply-amount'), '5', { replace: true });
+		await dse.press('Backspace');
+		await dse.click(modal.control('sedit.damage')); // A07
+		await expectApplyLabel(modal, 'No Stamina Change');
+		await dse.expectNoWrite(NOTE, () => dse.click(modal.control('modal.close')));
+	});
+
+	it('[STAM-D08] a decimal amount is truncated: 2.9 damage is 2', async () => {
+		const modal = await openBarModal(NOTE);
+		await applyAmount(modal, '2.9', 'sedit.damage'); // A08
+		await expectApplyLabel(modal, 'Lose 2 Temp Stamina');
+		await dse.expectNoWrite(NOTE, () => dse.click(modal.control('modal.close')));
+	});
+
+	// A09 / S1 B9 (SC-427): the Apply box takes "1e3" (a valid number-input value) but the modal
+	// reads it with parseInt, so it applies 1. Correct behaviour: 1000, capped at the death floor.
 	knownBug(
-		'B7-pending-ticket',
-		'[STAM-S13] type a new Stamina value, then click the edge of Apply: the first click applies',
+		'SC-427',
+		'[STAM-D09] an exponent amount is read as a number: 1e3 damage is capped at the death floor',
 		async () => {
-			const modal = await openStaminaModal();
-			await dse.type(modal.control({ css: 'input[aria-label="Stamina"]' }), '12', { replace: true });
-			const apply = modal.control({ css: '.dse-modal__footer .dse-btn--accent' });
-			const w = await dse.waitForWrite(NOTE, async () => {
-				await dse.click(apply, { inset: 3 });
-				await expect(modal.root).not.toBeExisting({ wait: 1500, message: 'the first click on Apply should apply and close the modal' });
-			});
-			expect(w.count).toBe(1);
-			await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 12 });
+			const modal = await openBarModal(NOTE);
+			await applyAmount(modal, '1e3', 'sedit.damage');
+			await expectApplyLabel(modal, 'Lose 25 Stamina and Lose 5 Temp Stamina', 1500);
 		},
-		{ failsWith: /first click on Apply should apply/ },
+		{ failsWith: /Lose 25 Stamina/ },
 	);
 
-	it('[STAM-S13b] type a new Stamina value, then click the label of Apply: the first click applies', async () => {
-		const modal = await openStaminaModal();
-		await dse.type(modal.control({ css: 'input[aria-label="Stamina"]' }), '12', { replace: true });
-		const apply = modal.control({ css: '.dse-modal__footer .dse-btn--accent' });
-		const w = await dse.waitForWrite(NOTE, () => dse.click(apply));
-		expect(w.count).toBe(1);
-		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 12 });
+	it('[STAM-H01] Healing is capped at max Stamina and leaves temp alone', async () => {
+		const modal = await openBarModal(NOTE);
+		await applyAmount(modal, '9', 'sedit.healing'); // A11, A12
+		await expectApplyLabel(modal, 'Gain 5 Stamina');
+		expect(await applyAndWrite(modal, NOTE)).toBe(1);
+		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 20, temp_stamina: 5 });
 	});
+
+	it('[STAM-A16] Enter in the Apply box applies nothing (current behaviour, not a bug ruling)', async () => {
+		const modal = await openBarModal(NOTE);
+		await dse.type(modal.control('sedit.apply-amount'), '5', { replace: true });
+		await dse.expectNoWrite(NOTE, () => dse.press('Enter', modal.control('sedit.apply-amount')));
+		await expectApplyLabel(modal, 'No Stamina Change');
+		await expect(modal.root).toBeExisting();
+		await dse.click(modal.control('modal.close'));
+	});
+
+	it('[STAM-A18] ArrowUp / ArrowDown step the Apply box and it never goes below 0', async () => {
+		const modal = await openBarModal(NOTE);
+		const box = modal.control('sedit.apply-amount');
+		for (let i = 0; i < 3; i++) await dse.press('ArrowUp', box);
+		await expect(box).toHaveValue('3');
+		for (let i = 0; i < 5; i++) await dse.press('ArrowDown', box);
+		await expect(box).toHaveValue('0');
+		await dse.click(modal.control('modal.close'));
+	});
+});
+
+describe('stamina-edit-modal from ds-stamina-bar: quick actions and temporary Stamina', () => {
+	it('[STAM-Q01] Kill drops a hero to the death floor and clears temp', async () => {
+		const modal = await openBarModal(NOTE);
+		await dse.click(modal.control('sedit.kill')); // hero floor ceil(-20/2) = -10
+		await expectApplyLabel(modal, 'Lose 25 Stamina and Lose 5 Temp Stamina');
+		expect(await applyAndWrite(modal, NOTE)).toBe(1);
+		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: -10, temp_stamina: 0 });
+	});
+
+	it('[STAM-Q04] Full Heal restores max Stamina and discards temp (current behaviour)', async () => {
+		const modal = await openBarModal(NOTE);
+		await dse.click(modal.control('sedit.full-heal'));
+		await expectApplyLabel(modal, 'Gain 5 Stamina and Lose 5 Temp Stamina');
+		expect(await applyAndWrite(modal, NOTE)).toBe(1);
+		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 20, temp_stamina: 0 });
+	});
+
+	it('[STAM-T01] the temp "+" grants 1 temp Stamina', async () => {
+		const modal = await openBarModal(NOTE);
+		await dse.click(modal.control('sedit.temp.inc'));
+		await expectApplyLabel(modal, 'Gain 1 Temp Stamina');
+		expect(await applyAndWrite(modal, NOTE)).toBe(1);
+		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 15, temp_stamina: 6 });
+	});
+
+	it('[STAM-T02] a typed temp value higher than the current is granted once the field blurs', async () => {
+		const modal = await openBarModal(NOTE);
+		await dse.type(modal.control('sedit.temp.input'), '8', { replace: true });
+		await dse.blur(modal.control('sedit.temp.input'));
+		await expectApplyLabel(modal, 'Gain 3 Temp Stamina');
+		expect(await applyAndWrite(modal, NOTE)).toBe(1);
+		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ temp_stamina: 8 });
+	});
+
+	it('[STAM-T03] a typed temp value lower than the current changes nothing (RAW: take the higher)', async () => {
+		const modal = await openBarModal(NOTE);
+		await dse.type(modal.control('sedit.temp.input'), '3', { replace: true });
+		await dse.blur(modal.control('sedit.temp.input'));
+		await expectApplyLabel(modal, 'No Stamina Change');
+		await expect(modal.control('sedit.temp.input')).toHaveValue('5');
+		await dse.click(modal.control('modal.close'));
+	});
+
+	it('[STAM-T04] the temp "-" at temp 5 does nothing, enabled but a no-op [current behaviour — ruling pending SC-408]', async () => {
+		const modal = await openBarModal(NOTE);
+		await expect(modal.control('sedit.temp.dec')).toBeEnabled();
+		await dse.click(modal.control('sedit.temp.dec')); // S1 B6
+		await expectApplyLabel(modal, 'No Stamina Change');
+		await expect(modal.control('sedit.temp.input')).toHaveValue('5');
+		await dse.click(modal.control('modal.close'));
+	});
+
+	it('[STAM-T05] the temp "-" is really disabled at 0 temp and a click does nothing', async () => {
+		const modal = await openBarModal('Stamina/recoveries.md'); // temp 0
+		await expect(modal.control('sedit.temp.dec')).toBeDisabled();
+		await dse.click(modal.control('sedit.temp.dec'));
+		await expectApplyLabel(modal, 'No Stamina Change');
+		await dse.click(modal.control('modal.close'));
+	});
+
+	it('[STAM-T09] a decimal temp value is truncated: 7.5 grants up to 7', async () => {
+		const modal = await openBarModal(NOTE);
+		await dse.type(modal.control('sedit.temp.input'), '7.5', { replace: true });
+		await dse.blur(modal.control('sedit.temp.input'));
+		await expectApplyLabel(modal, 'Gain 2 Temp Stamina');
+		await dse.click(modal.control('modal.close'));
+	});
+
+	it('[STAM-T10] a negative temp value clamps to 0 and so changes nothing', async () => {
+		const modal = await openBarModal(NOTE);
+		await dse.type(modal.control('sedit.temp.input'), '-3', { replace: true });
+		await dse.blur(modal.control('sedit.temp.input'));
+		await expectApplyLabel(modal, 'No Stamina Change');
+		await dse.click(modal.control('modal.close'));
+	});
+});
+
+describe('stamina-edit-modal from ds-stamina-bar: footer', () => {
+	it('[STAM-F03] clicking the disabled Apply does nothing: no write, modal stays open', async () => {
+		const modal = await openBarModal(NOTE);
+		await dse.expectNoWrite(NOTE, () => dse.click(modal.control('sedit.apply')));
+		await expect(modal.root).toBeExisting();
+		await dse.click(modal.control('modal.close'));
+	});
+
+	it('[STAM-F05] Reset clears every pending change and disables Apply again', async () => {
+		const modal = await openBarModal(NOTE);
+		await applyAmount(modal, '8', 'sedit.damage');
+		await dse.click(modal.control('sedit.temp.inc'));
+		await dse.click(modal.control('sedit.reset'));
+		await expectApplyLabel(modal, 'No Stamina Change');
+		await expect(modal.control('sedit.apply')).toBeDisabled();
+		await dse.expectNoWrite(NOTE, () => dse.click(modal.control('modal.close')));
+	});
+
+	// F06 / S1 B10 (SC-427): the pool modal's Reset also clears its inputs; this one leaves the
+	// typed amount in the Apply box.
+	knownBug(
+		'SC-427',
+		'[STAM-F06] Reset also clears the Apply box',
+		async () => {
+			const modal = await openBarModal(NOTE);
+			await applyAmount(modal, '7', 'sedit.damage');
+			await dse.click(modal.control('sedit.reset'));
+			const value = await modal.control('sedit.apply-amount').getValue();
+			if (value !== '0' && value !== '') throw new Error(`the Apply box should be cleared by Reset (it still holds "${value}")`);
+		},
+		{ failsWith: /Apply box should be cleared/ },
+	);
 });

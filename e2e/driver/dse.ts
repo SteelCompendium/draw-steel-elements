@@ -24,38 +24,61 @@ export { knownBug } from './knownBug';
 type El = ChainablePromiseElement;
 
 /**
- * How a spec names a control. A bare string is a stable `data-dse-control` id (P2 stamps these
- * on the kit factories; ids never depend on copy). Until a control carries one, name it by
- * CSS or by accessible name. Switching a call site from `{ name: 'Damage' }` to
- * `'sedit.damage'` is the whole migration.
+ * How a spec names a control. A bare string is a stable `data-dse-control` id (stamped on the
+ * kit factories; ids never depend on copy or classes) - the form every driven control uses,
+ * because the exercised-set gate keys on ids. `{ css }` / `{ name }` remain for READING
+ * incidental nodes (a label's text, a status badge); driving one is flagged by the gate.
  */
 export type ControlRef = string | { css: string } | { name: string };
+
+export interface ControlOptions {
+	/** The n-th (0-based) match, for ids stamped on repeated nodes (`recov.marker`). */
+	nth?: number;
+}
 
 export interface Scope {
 	/** The scope's root element (block root, or the modal's dialog). */
 	readonly root: El;
 	/** A control inside this scope. Coverage is recorded when it is driven (click/type/press). */
-	control(ref: ControlRef): El;
+	control(ref: ControlRef, opts?: ControlOptions): El;
 }
+
+/**
+ * Obsidian's own chrome has no `data-dse-control`; the manifest still names these host controls
+ * by id and the driver resolves them from Obsidian's selectors. (`.modal-header-button` is the
+ * 1.14 close X, `.modal-close-button` the older one.) The backdrop is a sibling of the dialog,
+ * so host ids always resolve page-wide.
+ */
+const HOST_CONTROLS: Record<string, string> = {
+	'modal.close': '.modal-container .modal-close-button, .modal-container .modal-header-button',
+	'modal.backdrop': '.modal-container .modal-bg',
+};
 
 const READING = '.workspace-leaf.mod-active .markdown-reading-view';
 const controlLabels = new WeakMap<object, string>();
 
 export function selectorOf(ref: ControlRef): string {
-	if (typeof ref === 'string') return `[data-dse-control="${ref}"]`;
+	if (typeof ref === 'string') return HOST_CONTROLS[ref] ?? `[data-dse-control="${ref}"]`;
 	if ('css' in ref) return ref.css;
 	return `[aria-label="${ref.name}"]`;
 }
 const labelOfRef = (ref: ControlRef): string =>
 	typeof ref === 'string' ? ref : 'css' in ref ? `css:${ref.css}` : `name:${ref.name}`;
 
+function pick(from: { $(sel: string): El; $$(sel: string): unknown }, ref: ControlRef, opts?: ControlOptions): El {
+	const sel = selectorOf(ref);
+	const el = opts?.nth !== undefined ? ((from.$$(sel) as unknown as El[])[opts.nth] as El) : from.$(sel);
+	controlLabels.set(el as object, labelOfRef(ref));
+	return el;
+}
+
 function scopeOf(root: El): Scope {
 	return {
 		root,
-		control(ref) {
-			const el = root.$(selectorOf(ref));
-			controlLabels.set(el as object, labelOfRef(ref));
-			return el;
+		control(ref, opts) {
+			// Host ids (Obsidian's own X / backdrop) live outside the dialog element.
+			if (typeof ref === 'string' && HOST_CONTROLS[ref]) return pick({ $: (sel) => $(sel) as unknown as El, $$: (sel) => $$(sel) }, ref, opts);
+			return pick(root as unknown as { $(sel: string): El; $$(sel: string): unknown }, ref, opts);
 		},
 	};
 }
@@ -159,10 +182,8 @@ async function modal(kind: keyof typeof MODAL_KINDS | string): Promise<Scope> {
 }
 
 /** Resolve a control reference outside any scope (page-wide). */
-function control(ref: ControlRef): El {
-	const el = $(selectorOf(ref));
-	controlLabels.set(el as object, labelOfRef(ref));
-	return el as unknown as El;
+function control(ref: ControlRef, opts?: ControlOptions): El {
+	return pick({ $: (sel) => $(sel) as unknown as El, $$: (sel) => $$(sel) }, ref, opts);
 }
 
 // ------------------------------------------------------------------------------ input
@@ -241,6 +262,26 @@ async function type(el: El, text: string, opts: { replace?: boolean } = {}): Pro
 	await browser.keys(text.split(''));
 }
 
+/** Real double-click (two press/release pairs, so the browser fires `dblclick`). */
+async function dblclick(el: El): Promise<void> {
+	await el.waitForDisplayed({ timeout: 8000 });
+	await beforeAction(el);
+	recordDrive(labelOf(el), 'dblclick');
+	await el.doubleClick();
+}
+
+/**
+ * Move focus off `el` the way a user does: a real click on neutral modal chrome (the title).
+ * This is the "click away" half of the blur-commit scenarios (S1 S03/S14). Recorded as kind
+ * `blur` on the control being left.
+ */
+async function blur(el: El): Promise<void> {
+	recordDrive(labelOf(el), 'blur');
+	const away = $('.modal-container .dse-modal__title');
+	await away.waitForDisplayed({ timeout: 8000 });
+	await away.click();
+}
+
 /** A key or chord ("Escape", "Enter", "Control+a") to whatever has focus. `target` is only
  *  the coverage label: which control the keystroke was aimed at. */
 async function press(key: string, target?: El): Promise<void> {
@@ -250,6 +291,48 @@ async function press(key: string, target?: El): Promise<void> {
 }
 
 // -------------------------------------------------------------------------- write checks
+
+/** Wait until the plugin is write-idle (no debounced or in-flight persist). */
+const settle = (): Promise<void> => waitWriteIdle();
+
+/** Page-side escape hatch for assertions the helpers do not cover (focus, hit-testing, counts). */
+const page = <T = unknown>(expr: string): Promise<T> => ev<T>(expr);
+
+/** The `data-dse-control` id of the focused element (or of its nearest ancestor that has one). */
+const focusedControl = (): Promise<string | null> =>
+	ev<string | null>(`document.activeElement?.closest('[data-dse-control]')?.getAttribute('data-dse-control') ?? null`);
+
+/**
+ * Edit a note from OUTSIDE the plugin (another process / sync tool / the user in another pane):
+ * a plain vault.process, no DSE write path involved. `fnBody` is a page-side expression of `c`
+ * (the note text), e.g. `c.replace('current_stamina: 15', 'current_stamina: 3')`.
+ */
+async function externalEdit(rel: string, fnBody: string): Promise<void> {
+	await ev(`(async () => { await app.vault.process(app.vault.getAbstractFileByPath(${JSON.stringify(rel)}), (c) => ${fnBody}); })()`);
+}
+
+/** Current text of a note (through the vault). */
+const noteText = (rel: string): Promise<string> =>
+	ev<string>(`app.vault.read(app.vault.getAbstractFileByPath(${JSON.stringify(rel)}))`);
+
+/**
+ * Put DSE preference overrides in force (`{}` = the shipped defaults). Prefs are read from
+ * data.json at plugin load, so this writes them there and reloads the plugin. Pair it with an
+ * `after(() => dse.setPrefs({}))` in the spec so a failure cannot leak the override; reopen
+ * notes (`openNote`) after calling it.
+ */
+async function setPrefs(prefs: Record<string, unknown>): Promise<void> {
+	await closeEverything();
+	await ev(`(async () => {
+		const id = 'draw-steel-elements';
+		const p = app.plugins.plugins[id];
+		await p.saveData(${JSON.stringify(Object.keys(prefs).length ? { prefs } : {})});
+		await app.plugins.disablePlugin(id);
+		await app.plugins.enablePlugin(id);
+		while (!(app.plugins.plugins[id] && app.plugins.plugins[id].viewRegistry)) await new Promise((r) => setTimeout(r, 25));
+		return true;
+	})()`);
+}
 
 const modsFor = (rel: string, since: number): Promise<number> =>
 	ev<number>(`__dse.mods.filter((m) => m.n > ${since} && m.path === ${JSON.stringify(rel)}).length`);
@@ -326,7 +409,16 @@ export const dse = {
 	control,
 	click,
 	type,
+	dblclick,
+	blur,
 	press,
+	settle,
+	page,
+	waitFor,
+	focusedControl,
+	externalEdit,
+	noteText,
+	setPrefs,
 	waitForWrite,
 	expectNoWrite,
 	expectNoteBlock,
