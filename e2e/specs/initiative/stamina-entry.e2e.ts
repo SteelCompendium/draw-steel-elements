@@ -146,8 +146,11 @@ describe('initiative: creatures', () => {
 				enemy_groups: [{ creatures: [{ instances: [{ id: 1, current_stamina: 50 }, { id: 2, current_stamina: 60 }, { id: 3, current_stamina: 60 }] }] }],
 			});
 			await expect(root.control({ css: '.dse-init__cell[data-instance-key="0-1"] .dse-init__cell-stamina' })).toHaveText('50/60');
-			await expect(root.control('init.detail.stamina')).toHaveText('50/60', { wait: 1500 });
+			await expect(root.control('init.detail.stamina')).toHaveText('50/60', {
+				wait: 1500,
+				message: 'the detail row should show the edited instance\'s new Stamina (50/60)',
+			});
 		},
-		{ failsWith: /50\/60/ },
+		{ failsWith: /the detail row should show the edited instance's new Stamina/ },
 	);
 });

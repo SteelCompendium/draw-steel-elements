@@ -73,9 +73,12 @@ describe('stamina-edit-modal from ds-stamina-bar: open, Apply box, Damage, Heali
 		async () => {
 			const modal = await openBarModal(NOTE);
 			await applyAmount(modal, '1e3', 'sedit.damage');
-			await expectApplyLabel(modal, 'Lose 25 Stamina and Lose 5 Temp Stamina', 1500);
+			await expectApplyLabel(modal, 'Lose 25 Stamina and Lose 5 Temp Stamina', {
+				wait: 1500,
+				message: 'an exponent amount (1e3) should be read as 1000 and capped at the death floor',
+			});
 		},
-		{ failsWith: /Lose 25 Stamina/ },
+		{ failsWith: /an exponent amount \(1e3\) should be read as 1000/ },
 	);
 
 	it('[STAM-H01] Healing is capped at max Stamina and leaves temp alone', async () => {
@@ -103,6 +106,21 @@ describe('stamina-edit-modal from ds-stamina-bar: open, Apply box, Damage, Heali
 		for (let i = 0; i < 5; i++) await dse.press('ArrowDown', box);
 		await expect(box).toHaveValue('0');
 		await dse.click(modal.control('modal.close'));
+	});
+});
+
+describe('stamina-edit-modal: two blocks in one note', () => {
+	it('[STAM-W10] editing the second of two ds-stamina bars writes only that block; the first stays byte-identical', async () => {
+		const note = 'Stamina/two-blocks.md'; // 20/20 +5 temp, then 8/10
+		await dse.openNote(note);
+		await dse.click(dse.block(BAR, 1).control('stamina.bar'));
+		const modal = await dse.modal('stamina-edit');
+		await applyAmount(modal, '3', 'sedit.damage');
+		await expectApplyLabel(modal, 'Lose 3 Stamina');
+		expect(await applyAndWrite(modal, note)).toBe(1);
+		await dse.expectNoteBlock(note, BAR, 1).toMatchObject({ max_stamina: 10, current_stamina: 5 });
+		// (the invariant after every test also requires every fence this test did not declare to be byte-equal)
+		await dse.expectNoteBlock(note, BAR, 0).toEqual({ max_stamina: 20, current_stamina: 15, temp_stamina: 5 });
 	});
 });
 

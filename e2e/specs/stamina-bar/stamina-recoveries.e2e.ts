@@ -48,18 +48,24 @@ describe('ds-stamina-bar: Catch Breath', () => {
 		'[RECOV-R03] Catch Breath at full Stamina is disabled instead of spending a Recovery for nothing',
 		async () => {
 			const bar = await openRec('Stamina/recoveries-full.md');
-			await expect(bar.control('recov.catch-breath')).toBeDisabled({ wait: 1500 });
+			await expect(bar.control('recov.catch-breath')).toBeDisabled({ wait: 1500, message: 'Catch Breath at full Stamina should be disabled' });
 		},
-		{ failsWith: /disabled/i },
+		{ failsWith: /Catch Breath at full Stamina should be disabled/ },
 	);
 
 	it('[RECOV-R06] the undo toast restores Stamina and the Recovery, once', async () => {
 		const bar = await openRec(REC);
-		await dse.click(bar.control('recov.catch-breath'));
-		await dse.waitFor(`!!document.querySelector('.notice .dse-undo-notice__action')`, 'the undo toast');
-		await dse.click(dse.control('undo.action'));
-		await dse.waitFor(`!document.querySelector('.notice .dse-undo-notice__action')`, 'the toast to dismiss itself');
-		await dse.settle();
+		const first = await dse.waitForWrite(REC, () => dse.click(bar.control('recov.catch-breath')));
+		expect(first.count).toBe(1);
+		await dse.expectNoteBlock(REC, BAR).toMatchObject({ current_stamina: 22, recoveries: 2 });
+		// The toast the Catch Breath just posted (the newest one, once it has stopped sliding in).
+		await dse.waitFor(`!!document.querySelector('.notice-container .notice:last-child .dse-undo-notice__action')`, 'the undo toast');
+		const undo = await dse.waitForWrite(REC, async () => {
+			await dse.click(dse.toast().control('undo.action'), { stable: true });
+			// Clicking Undo dismisses the toast within a moment; it must not be left to expire on its own (8 s).
+			await expect(dse.toast().root).not.toBeExisting({ wait: 1000, message: 'the Undo toast should dismiss itself when Undo is clicked' });
+		});
+		expect(undo.count).toBe(1);
 		await dse.expectNoteBlock(REC, BAR).toMatchObject({ current_stamina: 12, recoveries: 3 });
 		expect(await filledPips()).toBe(3);
 	});
@@ -156,6 +162,19 @@ describe('modal Spend Recovery', () => {
 		await dse.click(modal.control('modal.close'));
 	});
 
+	it('[STAM-R1X] Reset also returns a pending Spend Recovery: nothing is spent when only a later edit is applied', async () => {
+		const modal = await openBarModal(REC); // 12/30, 3 Recoveries
+		await dse.click(modal.control('sedit.spend-recovery'));
+		await expectApplyLabel(modal, 'Gain 10 Stamina');
+		await dse.click(modal.control('sedit.reset')); // F05: the pending Recovery goes back too
+		await expectApplyLabel(modal, 'No Stamina Change');
+		await expect(modal.control('sedit.spend-recovery')).toBeEnabled();
+		await applyAmount(modal, '5', 'sedit.healing');
+		await expectApplyLabel(modal, 'Gain 5 Stamina');
+		expect(await applyAndWrite(modal, REC)).toBe(1);
+		await dse.expectNoteBlock(REC, BAR).toMatchObject({ current_stamina: 17, recoveries: 3 });
+	});
+
 	it('[STAM-Q13] Spend Recovery on a bar that does not track Recoveries heals for free, with no limit [current behaviour — ruling pending SC-408]', async () => {
 		const note = 'Stamina/legacy-low.md'; // 2/30, no recoveries fields; recovery value 10
 		const modal = await openBarModal(note);
@@ -210,8 +229,8 @@ describe('ds-stamina-bar: the optional Recoveries popover editor (preference on)
 		async () => {
 			const bar = await openRec('Stamina/recoveries-zero.md');
 			await dse.click(bar.control('recov.marker', { nth: 0 }));
-			await expect(bar.control('recov.pop.catch-breath')).toBeDisabled({ wait: 1500 });
+			await expect(bar.control('recov.pop.catch-breath')).toBeDisabled({ wait: 1500, message: 'the popover Catch breath should be disabled with no Recoveries left' });
 		},
-		{ failsWith: /disabled/i },
+		{ failsWith: /the popover Catch breath should be disabled with no Recoveries left/ },
 	);
 });

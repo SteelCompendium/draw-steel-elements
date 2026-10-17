@@ -15,6 +15,13 @@ export const state = {
 	mark: 0,
 	/** Notes this test opened; invariants check their integrity against the fixture. */
 	touched: new Set<string>(),
+	/** The note `openNote` opened last (the one `block()` refers to). */
+	currentNote: '' as string,
+	/** Per note: the fence indexes the test says it is editing (`dse.block` declares them). Every OTHER
+	 *  fence of that note must come out byte-identical to the fixture (review R1, L-3). */
+	targets: new Map<string, Set<number>>(),
+	/** Notes the test itself edited from outside the plugin (`dse.externalEdit`): fences exempt. */
+	exempt: new Set<string>(),
 	testTitle: '',
 	testId: '',
 	drove: [] as Drive[],
@@ -38,6 +45,9 @@ export function testIdOf(title: string): string {
 export function resetTestState(title: string): void {
 	state.mark = 0;
 	state.touched.clear();
+	state.currentNote = '';
+	state.targets.clear();
+	state.exempt.clear();
 	state.testTitle = title;
 	state.testId = testIdOf(title);
 	state.drove = [];

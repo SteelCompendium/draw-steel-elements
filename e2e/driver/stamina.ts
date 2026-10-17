@@ -17,8 +17,8 @@ type Modal = Awaited<ReturnType<typeof dse.modal>>;
 export const applyLabel = (modal: Modal) => modal.control('sedit.apply').getText();
 
 /** Assert the Apply button's label (the user-visible description of the pending edit). */
-export async function expectApplyLabel(modal: Modal, text: string, waitMs?: number): Promise<void> {
-	await expect(modal.control('sedit.apply')).toHaveText(text, waitMs ? { wait: waitMs } : undefined);
+export async function expectApplyLabel(modal: Modal, text: string, opts?: { wait?: number; message?: string }): Promise<void> {
+	await expect(modal.control('sedit.apply')).toHaveText(text, opts);
 }
 
 /** Type a magnitude into the Apply box (replacing its content) and press Damage or Healing. */

@@ -16,7 +16,8 @@ import { closeEverything, closeModals, waitWriteIdle } from './cleanup';
 import { E2E } from './env';
 import { ev, REGISTRY, waitFor } from './page';
 import { eventsSince, mark } from './recorders';
-import { recordDrive, state } from './state';
+import { fencesOf } from './invariants';
+import { readFixture, recordDrive, state } from './state';
 import './session';
 
 export { knownBug } from './knownBug';
@@ -140,6 +141,7 @@ async function openNote(rel: string): Promise<void> {
 	await closeEverything();
 	await resetFixtures();
 	state.touched.add(rel);
+	state.currentNote = rel;
 	state.mark = await mark();
 	await ev(`(async () => {
 		const leaf = app.workspace.getLeaf('tab');
@@ -159,8 +161,24 @@ async function openNote(rel: string): Promise<void> {
 	await waitWriteIdle();
 }
 
+/** `block()` is how a test names the block it edits: record that fence of the open note as the target. */
+function declareTarget(elementId: string, n: number): void {
+	const rel = state.currentNote;
+	if (!rel) return;
+	let seen = -1;
+	fencesOf(readFixture(rel)).forEach((f, i) => {
+		if (elementIdOf(f.lang) !== elementId) return;
+		seen++;
+		if (seen === n) {
+			if (!state.targets.has(rel)) state.targets.set(rel, new Set());
+			state.targets.get(rel)!.add(i);
+		}
+	});
+}
+
 /** The n-th (0-based) block of `lang` in the visible Reading view. */
 function block(lang: string, n = 0): Scope {
+	declareTarget(elementIdOf(lang), n);
 	return scopeOf($$(`${READING} [data-dse-element="${elementIdOf(lang)}"]`)[n] as unknown as El);
 }
 
@@ -179,6 +197,12 @@ async function modal(kind: keyof typeof MODAL_KINDS | string): Promise<Scope> {
 	const root = $(css);
 	if (!(await root.$(must).isExisting())) throw new Error(`the open .dse-modal is not a "${kind}" modal (no ${must})`);
 	return scopeOf(root as unknown as El);
+}
+
+/** The newest Notice (toast) on screen, as a scope: an older one still fading out can never be
+ *  the match. Click controls inside it with `{ stable: true }` - toasts slide in. */
+function toast(): Scope {
+	return scopeOf($('.notice-container .notice:last-child') as unknown as El);
 }
 
 /** Resolve a control reference outside any scope (page-wide). */
@@ -209,6 +233,27 @@ async function beforeAction(el: El): Promise<void> {
 export interface ClickOptions {
 	cdp?: boolean;
 	inset?: number;
+	/** Wait until the element's rect has stopped moving (toasts slide in) before pressing. */
+	stable?: boolean;
+}
+
+/** Wait until `el`'s bounding rect is identical on three consecutive reads (about 100 ms). */
+async function waitStable(el: El): Promise<void> {
+	const e = await el;
+	let last = '';
+	let same = 0;
+	await browser.waitUntil(
+		async () => {
+			const now = (await browser.execute(
+				'const r = arguments[0].getBoundingClientRect(); return [r.x, r.y, r.width, r.height].map((n) => Math.round(n * 10)).join(",");',
+				e,
+			)) as string;
+			same = now === last ? same + 1 : 0;
+			last = now;
+			return same >= 2;
+		},
+		{ timeout: 3000, interval: 50, timeoutMsg: 'the control never stopped moving' },
+	);
 }
 
 /** Click through the CDP mouse path (pseudo-elements, odd hit areas). */
@@ -234,18 +279,22 @@ async function click(el: El, opts: ClickOptions = {}): Promise<void> {
 	await el.waitForDisplayed({ timeout: 8000 });
 	const enabled = await el.isEnabled();
 	await beforeAction(el);
-	recordDrive(labelOf(el), enabled ? 'click' : 'click-disabled');
-	if (opts.cdp) return cdpClick(el, opts);
-	try {
-		if (opts.inset !== undefined) {
-			const size = await el.getSize();
-			await el.click({ x: Math.round(opts.inset - size.width / 2), y: 0 });
-		} else await el.click();
-	} catch (e) {
-		const msg = e instanceof Error ? e.message : String(e);
-		if (/intercepted/i.test(msg) || !/not interactable|out of bounds/i.test(msg)) throw e;
-		await cdpClick(el, opts);
+	if (opts.stable) await waitStable(el);
+	if (opts.cdp) await cdpClick(el, opts);
+	else {
+		try {
+			if (opts.inset !== undefined) {
+				const size = await el.getSize();
+				await el.click({ x: Math.round(opts.inset - size.width / 2), y: 0 });
+			} else await el.click();
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			if (/intercepted/i.test(msg) || !/not interactable|out of bounds/i.test(msg)) throw e;
+			await cdpClick(el, opts);
+		}
 	}
+	// Recorded only once the click really happened: a click that throws drives nothing.
+	recordDrive(labelOf(el), enabled ? 'click' : 'click-disabled');
 }
 
 /**
@@ -256,18 +305,18 @@ async function click(el: El, opts: ClickOptions = {}): Promise<void> {
 async function type(el: El, text: string, opts: { replace?: boolean } = {}): Promise<void> {
 	await el.waitForDisplayed({ timeout: 8000 });
 	await beforeAction(el);
-	recordDrive(labelOf(el), 'type');
 	await el.click();
 	await browser.keys(opts.replace ? ['Control', 'a'] : ['End']);
 	await browser.keys(text.split(''));
+	recordDrive(labelOf(el), 'type');
 }
 
 /** Real double-click (two press/release pairs, so the browser fires `dblclick`). */
 async function dblclick(el: El): Promise<void> {
 	await el.waitForDisplayed({ timeout: 8000 });
 	await beforeAction(el);
-	recordDrive(labelOf(el), 'dblclick');
 	await el.doubleClick();
+	recordDrive(labelOf(el), 'dblclick');
 }
 
 /**
@@ -276,10 +325,17 @@ async function dblclick(el: El): Promise<void> {
  * `blur` on the control being left.
  */
 async function blur(el: El): Promise<void> {
-	recordDrive(labelOf(el), 'blur');
+	// "Blur" of a control that was never focused would record a pair nothing exercised.
+	if (!(await hasFocusWithin(el))) throw new Error(`blur(${labelOf(el)}): the control does not have focus, so there is nothing to blur`);
 	const away = $('.modal-container .dse-modal__title');
 	await away.waitForDisplayed({ timeout: 8000 });
 	await away.click();
+	recordDrive(labelOf(el), 'blur');
+}
+
+/** Is `document.activeElement` the element or inside it? */
+async function hasFocusWithin(el: El): Promise<boolean> {
+	return Boolean(await browser.execute('return arguments[0].contains(document.activeElement);', await el));
 }
 
 /**
@@ -298,12 +354,40 @@ async function tabTo(el: El, max = 10): Promise<void> {
 	}
 }
 
-/** A key or chord ("Escape", "Enter", "Control+a") to whatever has focus. `target` is only
- *  the coverage label: which control the keystroke was aimed at. */
-async function press(key: string, target?: El): Promise<void> {
-	if (target) await beforeAction(target);
-	recordDrive(target ? labelOf(target) : '(page)', `press:${key}`);
+/**
+ * A host control the key is "aimed at" without it holding focus: Obsidian's own X / backdrop
+ * (`modal.close`), which Escape reaches through the modal's Scope while focus is in a field.
+ * Explicit, so a DSE control id can never be credited for a key that went somewhere else.
+ */
+export interface AimedAt {
+	readonly aimedAt: string;
+}
+const AIMED = new WeakSet<object>(); // brand: `in` on a wdio element proxy is not trustworthy
+const aimedAt = (hostId: keyof typeof HOST_CONTROLS | string): AimedAt => {
+	if (!HOST_CONTROLS[hostId]) throw new Error(`aimedAt("${hostId}"): only host ids (${Object.keys(HOST_CONTROLS).join(', ')}) can be aimed at without focus`);
+	const pseudo: AimedAt = { aimedAt: hostId };
+	AIMED.add(pseudo);
+	return pseudo;
+};
+
+/**
+ * A key or chord ("Escape", "Enter", "Control+a") to whatever has focus. `target` is the control
+ * the keystroke is for: a DSE control must actually hold focus (the press is refused otherwise,
+ * so `press:Enter` on a control is only ever credited when that control was the key's recipient);
+ * a host control needs an explicit `dse.aimedAt('modal.close')`. No target = the page.
+ */
+async function press(key: string, target?: El | AimedAt): Promise<void> {
+	let label = '(page)';
+	if (target && AIMED.has(target as object)) label = (target as AimedAt).aimedAt;
+	else if (target) {
+		const el = target as El;
+		label = labelOf(el);
+		if (HOST_CONTROLS[label]) throw new Error(`press(${key}, ${label}): host controls never hold focus; use dse.aimedAt('${label}')`);
+		if (!(await hasFocusWithin(el))) throw new Error(`press(${key}, ${label}): the control does not have focus (focus is on ${await focusedControl()})`);
+		await beforeAction(el);
+	}
 	await browser.keys(key.includes('+') && key.length > 1 ? key.split('+') : key);
+	recordDrive(label, `press:${key}`);
 }
 
 // -------------------------------------------------------------------------- write checks
@@ -324,6 +408,7 @@ const focusedControl = (): Promise<string | null> =>
  * (the note text), e.g. `c.replace('current_stamina: 15', 'current_stamina: 3')`.
  */
 async function externalEdit(rel: string, fnBody: string): Promise<void> {
+	state.exempt.add(rel); // the test edits this note itself, so its fences may legitimately differ
 	await ev(`(async () => { await app.vault.process(app.vault.getAbstractFileByPath(${JSON.stringify(rel)}), (c) => ${fnBody}); })()`);
 }
 
@@ -422,12 +507,14 @@ export const dse = {
 	openNote,
 	block,
 	modal,
+	toast,
 	control,
 	click,
 	type,
 	dblclick,
 	blur,
 	press,
+	aimedAt,
 	tabTo,
 	settle,
 	page,

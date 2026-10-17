@@ -66,9 +66,12 @@ describe('stamina-edit-modal: Stamina stepper', () => {
 			const modal = await openBarModal(NOTE);
 			await dse.type(modal.control('sedit.stamina.input'), '30', { replace: true });
 			await dse.press('Enter', modal.control('sedit.stamina.input'));
-			await expectApplyLabel(modal, 'Gain 5 Stamina', 1500); // 15 -> max 20
+			await expectApplyLabel(modal, 'Gain 5 Stamina', {
+				wait: 1500, // 15 -> max 20
+				message: 'the Apply label should state the applied change (Gain 5), not the typed overshoot',
+			});
 		},
-		{ failsWith: /Gain 5 Stamina/ },
+		{ failsWith: /Apply label should state the applied change/ },
 	);
 
 	// S14: Chromium order is mousedown -> blur (commit) -> click, so Damage lands on top of the
@@ -111,15 +114,27 @@ describe('stamina-edit-modal: Stamina stepper', () => {
 });
 
 describe('stamina-edit-modal: closing without Apply never writes', () => {
-	it('[STAM-S06] Escape on a dirty Stamina draft closes the whole modal and discards it (current behaviour)', async () => {
-		// The stepper swallows Escape on a dirty draft so "a containing modal doesn't close on the
-		// SAME press" (stepper.ts), and jsdom pins that. Real Obsidian closes the modal anyway.
-		const modal = await openBarModal(NOTE);
-		await dse.type(modal.control('sedit.stamina.input'), '12', { replace: true });
-		await dse.expectNoWrite(NOTE, () => dse.press('Escape', modal.control('sedit.stamina.input')));
-		await expect(modal.root).not.toBeExisting();
-		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 15 });
-	});
+	// S06 / SC-431 (found by P2a): the stepper swallows Escape on a dirty draft "so a containing
+	// modal doesn't close on the SAME press" (stepper.ts) and jsdom pins that, but real Obsidian's
+	// modal Scope closes the whole modal anyway, losing every pending edit. Intended behaviour (the
+	// ticket): the first Escape reverts only the half-typed draft and the modal stays open with the
+	// Damage still pending; a second Escape closes it, with no write.
+	knownBug(
+		'SC-431',
+		'[STAM-S06] Escape on a half-typed Stamina draft reverts only the draft; the modal stays open with the Damage still pending',
+		async () => {
+			const modal = await openBarModal(NOTE);
+			await applyAmount(modal, '4', 'sedit.damage');
+			await dse.type(modal.control('sedit.stamina.input'), '12', { replace: true });
+			await dse.press('Escape', modal.control('sedit.stamina.input'));
+			await expect(modal.root).toBeExisting({ wait: 1500, message: 'the first Escape should revert only the half-typed draft and keep the modal open' });
+			await expect(modal.control('sedit.stamina.input')).toHaveValue('15');
+			await expectApplyLabel(modal, 'Lose 4 Temp Stamina'); // the Damage is still pending
+			await dse.expectNoWrite(NOTE, () => dse.press('Escape', modal.control('sedit.stamina.input')));
+			await expect(modal.root).not.toBeExisting();
+		},
+		{ failsWith: /the first Escape should revert only the half-typed draft/ },
+	);
 
 	it('[STAM-S07] Escape with a clean draft closes the modal without writing', async () => {
 		const modal = await openBarModal(NOTE);
@@ -131,7 +146,7 @@ describe('stamina-edit-modal: closing without Apply never writes', () => {
 	it('[STAM-F07a] Escape with a pending Damage edit discards it', async () => {
 		const modal = await openBarModal(NOTE);
 		await applyAmount(modal, '4', 'sedit.damage');
-		await dse.expectNoWrite(NOTE, () => dse.press('Escape', modal.control('modal.close')));
+		await dse.expectNoWrite(NOTE, () => dse.press('Escape', dse.aimedAt('modal.close')));
 		await expect(modal.root).not.toBeExisting();
 		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 15, temp_stamina: 5 });
 	});
@@ -171,9 +186,9 @@ describe('stamina-edit-modal: what only a real Obsidian can answer', () => {
 		await dse.page(`document.querySelector('.markdown-reading-view .dse-stamina--clickable').click()`);
 		const count = `document.querySelectorAll('.modal-container .dse-modal').length`;
 		await dse.waitFor(`${count} === 2`, 'a second stamina modal');
-		await dse.press('Escape', modal.control('modal.close'));
+		await dse.press('Escape', dse.aimedAt('modal.close'));
 		await dse.waitFor(`${count} === 1`, 'Escape to close exactly the top modal');
-		await dse.expectNoWrite(NOTE, () => dse.press('Escape', modal.control('modal.close')));
+		await dse.expectNoWrite(NOTE, () => dse.press('Escape', dse.aimedAt('modal.close')));
 		expect(await dse.page<number>(`document.querySelectorAll('.modal-container').length`)).toBe(0);
 	});
 });
