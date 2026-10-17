@@ -300,6 +300,10 @@ if (args.element) {
 // run-flag is forced off and the note list emptied, so the loops below no-op naturally —
 // no re-indentation of any capture that already works.
 const DOCS_MODE = !!args.docs;
+// SC-411 (O8): `npm run docs-shots` must never write visual-harness/shots/ (the shots / freeze /
+// parity gates own that directory). A failed docs entry's evidence — and the "plugin not
+// loadable" window shot — go to the git-ignored dist/docs-errors/ instead.
+const errorsDir = DOCS_MODE ? path.join(dir, 'dist', 'docs-errors') : shotsDir;
 const docsShots = DOCS_SHOTS.filter(
 	(s) => s.source === 'obsidian' && (!args.only || s.out === args.only),
 );
@@ -612,7 +616,8 @@ async function warmUpUpdate() {
 }
 
 async function main() {
-	fs.mkdirSync(shotsDir, { recursive: true });
+	fs.mkdirSync(errorsDir, { recursive: true });
+	if (!DOCS_MODE) fs.mkdirSync(shotsDir, { recursive: true });
 
 	// -- step 1: seed scratch user-data-dir + spawn --------------------------------------
 	if (await jsonList()) {
@@ -699,7 +704,7 @@ async function main() {
 			loaded &&
 			(await evaluate(cdp, "!!window.app.plugins.plugins['draw-steel-elements'].frameworkV2"));
 		if (!hasFramework) {
-			const blocked = path.join(shotsDir, 'CAMERA-BLOCKED.png');
+			const blocked = path.join(errorsDir, 'CAMERA-BLOCKED.png');
 			await screenshot(cdp, blocked);
 			const modalText = await evaluate(
 				cdp,
@@ -752,7 +757,7 @@ async function main() {
 		const errorShot = async (outName) => {
 			// Best-effort full-window shot so a failed combo leaves visual evidence.
 			try {
-				await screenshot(cdp, path.join(shotsDir, `${outName}--ERROR.png`));
+				await screenshot(cdp, path.join(errorsDir, `${outName}--ERROR.png`));
 			} catch {
 				/* the window may be gone entirely — the failures list still records it */
 			}
@@ -2034,7 +2039,7 @@ async function main() {
 					}
 				} catch (e) {
 					failures.push({ outName: entry.out, errors: [String(e)] });
-					await errorShot(`docs-${entry.out.replace(/\.png$/, '')}`);
+					await errorShot(`docs-${entry.out.replace(/\.(png|gif)$/, '')}`);
 					console.log(`FAIL ${entry.out}: ${String(e)}`);
 					await closeModals().catch(() => {});
 				}
