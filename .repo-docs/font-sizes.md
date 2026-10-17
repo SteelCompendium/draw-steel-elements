@@ -51,8 +51,16 @@ on every root the prefs seam stamps — one rule, selector list `:root, :is([dat
 .dse-modal)` — so the multiplier resolves where it is stamped. Declaring them on `:root`
 alone (the pre-SC-372 shape) flattened them to `* 1` and made all three knobs inert. A new
 scale-dependent token goes in that rule; `test/unit/build/scaleTokenScope.test.ts` fails
-otherwise. Because every role is an `em` ratio, a role nested inside another consumer of the
-same knob compounds the multiplier (value squared) — keep a role's consumers un-nested.
+otherwise. Because every role is an `em` ratio and `em` is the PARENT's size, a role nested
+inside another consumer of the same knob would apply the multiplier twice (value squared). The
+"SC-372: EACH TEXT-SIZE KNOB APPLIES ONCE" registry in `styles-source.css` prevents that: inside
+a registered outer consumer, its children, `::before`/`::after` and nested element roots
+re-declare that knob's roles as plain `em` ratios. **Register an outer consumer** whenever it can
+contain text that is itself a consumer of the same knob, or rendered markdown (which can embed
+an element): copy the consumer rule's own selector (scope, theme and print anchors included) into
+the knob's `:where(...)` list. `scaleTokenScope.test.ts` pins every registry ratio to the token
+rule's coefficient, and the `text scale once OK` sweep in `npm run shots` fails, naming the
+chain, on any element that scales by a knob twice.
 
 ## How to pick one
 

@@ -51,7 +51,8 @@ for what needs action.
   headings now follow Large text size; labels, captions, hints and tallies follow Small text size;
   buttons, steppers, tabs and collapse headers follow Control text size (screen only). They work
   inside dialogs too, and Small and Large apply in print and export as the setting says. Nothing
-  changes at the default 100%.
+  changes at the default 100%. Text nested inside other small text (power-roll tier badges, the
+  malice log heading, montage round headers) scales once, not twice.
 - [FIX] **Power-roll tier rows are compact again: about 50px for a one-line outcome, the
   same as the site** (SC-378). Every tier row (ability/feature cards, statblock abilities,
   featureblock, a kit's signature ability, negotiation arguments) had grown to
