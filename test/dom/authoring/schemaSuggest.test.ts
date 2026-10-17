@@ -16,6 +16,9 @@ import { rollElement } from '../../../src/elements/roll/definition';
 // `new Editor(...)` and the `file: null` context stubs below only type-check against the
 // concrete jest-free mock (established pattern — see test/dom/authoring/suggest.test.ts).
 import { Editor, App } from '../../mocks/obsidian';
+import { setExperimental } from '../../../src/framework/experimental';
+import { surgesElement } from '../../../src/elements/surges/definition';
+import { heroElement } from '../../../src/elements/hero/definition';
 
 const SCHEMA = `
 type: object
@@ -151,4 +154,35 @@ test('indented enum context → no suggestions (same conservatism as key context
 	const editor = new Editor('```ds-x\n  style: ');
 	const info = s.onTrigger({ line: 1, ch: 9 }, editor as never, null);
 	expect(info).toBeNull();
+});
+
+// SC-406 — a deferred element gets no in-fence autocomplete while the switch is off (its block
+// renders an inert card), but ds-hero — `hidden` since SC-190, deferred since SC-406 — keeps
+// every key it offered before with the switch ON.
+describe('SC-406 — deferred elements and key autocomplete', () => {
+	function deferredSuggest() {
+		const registry = createElementRegistry();
+		registry.register(surgesElement as unknown as ElementDefinition);
+		registry.register(heroElement as unknown as ElementDefinition);
+		return new DsSchemaSuggest(new App() as any, registry);
+	}
+	const keysIn = (s: DsSchemaSuggest, lang: string): string[] | null => {
+		const editor = new Editor('```' + lang + '\n');
+		const info = s.onTrigger({ line: 1, ch: 0 }, editor as never, null);
+		return info === null ? null : (s.getSuggestions({ ...info, editor: editor as never, file: null as never }) as string[]);
+	};
+
+	test('off: no trigger inside a ds-surges or ds-hero fence', () => {
+		setExperimental(false);
+		const s = deferredSuggest();
+		expect(keysIn(s, 'ds-surges')).toBeNull();
+		expect(keysIn(s, 'ds-hero')).toBeNull();
+	});
+
+	test('on: ds-surges and the hidden ds-hero are offered their keys exactly as before', () => {
+		setExperimental(true);
+		const s = deferredSuggest();
+		expect(keysIn(s, 'ds-surges')!.length).toBeGreaterThan(0);
+		expect(keysIn(s, 'ds-hero')!.length).toBeGreaterThanOrEqual(17);
+	});
 });

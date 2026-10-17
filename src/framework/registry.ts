@@ -213,6 +213,16 @@ export function isDefinitionHidden(def: Pick<ElementDefinition, 'hidden' | 'defe
 }
 
 /**
+ * SC-406 — is `def` deferred out of this release (`deferred` while the experimental switch is
+ * off)? Narrower than `isDefinitionHidden`: it does NOT include `hidden`, because ds-hero is
+ * `hidden: true` (SC-190) yet fully usable — including its in-fence autocomplete — with the
+ * switch ON, and ON must stay exactly as it was.
+ */
+export function isDefinitionDeferredOff(def: Pick<ElementDefinition, 'deferred'>): boolean {
+	return def.deferred === true && !isExperimental();
+}
+
+/**
  * Pure in-memory registry of ElementDefinitions, indexed by both id and every alias (F1
  * §3.1). Storage only — deliberately decoupled from Obsidian's
  * registerMarkdownCodeBlockProcessor wiring (pipeline/main.ts territory), so it is

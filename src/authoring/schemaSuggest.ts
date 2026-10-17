@@ -34,6 +34,7 @@
 //    for — it has no top-level-vs-nested ambiguity to introduce, indented or not.
 import { EditorSuggest } from 'obsidian';
 import type { App, Editor, EditorPosition, EditorSuggestContext, EditorSuggestTriggerInfo, TFile } from 'obsidian';
+import { isDefinitionDeferredOff } from '@/framework/registry';
 import type { ElementRegistry } from '@/framework/registry';
 import { shapeFromSchemaYaml, type SchemaShape } from './schemaShape';
 import { FENCE_LINE, scanFenceState } from './fenceScan';
@@ -71,7 +72,9 @@ export class DsSchemaSuggest extends EditorSuggest<string> {
 		const state = scanFenceState(editor, cursor.line);
 		if (!state.inFence || !state.lang) return null;
 		const def = this.registry.get(state.lang);
-		if (!def?.schema) return null;
+		// SC-406: a deferred element (switch off) gets no key/enum autocomplete either — its
+		// block renders an inert card, so offering its schema's keys would advertise it.
+		if (!def?.schema || isDefinitionDeferredOff(def)) return null;
 
 		const before = editor.getLine(cursor.line).slice(0, cursor.ch);
 		const enumCtx = /^(\s*)([A-Za-z0-9_-]+):\s*(\S*)$/.exec(before);
