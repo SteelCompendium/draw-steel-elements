@@ -969,10 +969,11 @@ export class InitiativeView extends ElementView<EncounterData> {
 		label: string,
 		onClick: (() => void) | null,
 		owner: Component,
+		control?: string,
 	): HTMLElement {
 		let el: HTMLElement;
 		if (onClick) {
-			el = iconButton(parent, { label, onClick }, owner).buttonEl;
+			el = iconButton(parent, { label, control, onClick }, owner).buttonEl;
 		} else {
 			el = parent.createSpan();
 		}
@@ -1109,6 +1110,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		group: EnemyGroup | undefined,
 		onClick: (() => void) | null,
 		owner: Component,
+		control?: string,
 	): HTMLElement | null {
 		const spec = this.staminaSpecFor(character, creature, group);
 		if (!spec) return null;
@@ -1117,6 +1119,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 			owner,
 			onClick: this.canWrite && onClick ? onClick : undefined,
 			gauge: spec.gauge,
+			control,
 		});
 		bar?.addClass('dse-init__bar');
 		// SC-183 r2: a shared minion pool has no rules state (see the state-chip note
@@ -1455,12 +1458,13 @@ export class InitiativeView extends ElementView<EncounterData> {
 			`Edit stamina: ${name}`,
 			this.canWrite ? openHeroStamina : null,
 			owner,
+			'init.hero.stamina',
 		);
 		this.updateStaminaDisplay(staminaEl, character);
 
 		// SC-183 — the row's real stamina instrument (Steel screen only; base/print keep
 		// the numeric readout above).
-		barEl = this.buildRowStamina(rowEl, character, undefined, undefined, openHeroStamina, owner);
+		barEl = this.buildRowStamina(rowEl, character, undefined, undefined, openHeroStamina, owner, 'init.hero.bar');
 	}
 
 	// ------------------------------------------------------------------- group row
@@ -1620,6 +1624,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 						instancesGrid,
 						{
 							label: selected ? selectedLabel : label,
+							control: 'init.cell.stamina',
 							pressed: selected,
 							onClick: () => {
 								// Repaint selection in place: kit handles own aria-pressed;
@@ -1803,13 +1808,14 @@ export class InitiativeView extends ElementView<EncounterData> {
 			`Edit stamina: ${name}`,
 			this.canWrite ? openDetailStamina : null,
 			owner,
+			'init.detail.stamina',
 		);
 		this.updateStaminaDisplay(staminaEl, instance, creature, group);
 
 		// SC-183 — the detail row's stamina instrument: the creature coordinate model
 		// (no dying reserve), or the shared pool with death ticks for a squad minion; a
 		// DEAD minion instance builds none and keeps the textual DEAD readout.
-		barEl = this.buildRowStamina(container, instance, creature, group, openDetailStamina, owner);
+		barEl = this.buildRowStamina(container, instance, creature, group, openDetailStamina, owner, 'init.detail.bar');
 	}
 
 	// ------------------------------------------------------ creature stamina modal

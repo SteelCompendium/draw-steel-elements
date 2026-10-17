@@ -15,6 +15,7 @@ import { setIcon, setTooltip } from 'obsidian';
 import type { Component } from 'obsidian';
 import { renderStaminaGauge, staminaState, updateStaminaGauge } from './staminaGauge';
 import type { StaminaGaugeOptions } from './staminaGauge';
+import { stampControl } from './controlId';
 
 /** The three numbers a stamina bar renders — deliberately NOT the `StaminaBar` model
  *  (kit stays decoupled from element-owned model shapes); callers map their model's
@@ -39,6 +40,8 @@ export interface StaminaBarRenderOptions {
 	owner?: Component;
 	/** Hover tooltip text applied when NOT canPersist (F1 §4.4 inert-but-visible). */
 	readOnlyTooltip?: string;
+	/** SC-408: `data-dse-control` id for the clickable bar (stamped only when it is clickable). */
+	control?: string;
 	/** SC-132: build the Steel cluster (default true). The modal previews mount their own
 	 *  gauge directly and pass false — they are not the whole instrument. */
 	cluster?: boolean;
@@ -128,6 +131,7 @@ export function renderStaminaBar(
 	if (opts.canPersist) {
 		if (opts.owner && opts.onClick) {
 			opts.owner.registerDomEvent(bar, 'click', opts.onClick);
+			stampControl(bar, opts.control);
 		}
 	} else if (opts.readOnlyTooltip !== undefined) {
 		setTooltip(bar, opts.readOnlyTooltip);

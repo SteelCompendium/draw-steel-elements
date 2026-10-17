@@ -25,6 +25,7 @@ import {
 	iconButton,
 	renderStaminaGauge,
 	setStaminaGaugeDelta,
+	stampControl,
 	staminaGaugeGeometry,
 	stepper,
 	tooltip,
@@ -126,6 +127,8 @@ export interface StaminaStepperRowOptions {
 	max?: number;
 	/** Accessible name of the stepper group (the ± buttons derive theirs from it). */
 	label: string;
+	/** SC-408: control-id prefix for the stepper's parts (see stepper's `control`). */
+	control?: string;
 	/** The "/ N" display max shown beside the stepper. */
 	displayMax: number;
 	onChange: (value: number) => void;
@@ -149,6 +152,7 @@ export function staminaStepperRow(
 			// modals' parseInt semantics), so persist() never writes a float.
 			integer: true,
 			label: opts.label,
+			control: opts.control,
 			onChange: opts.onChange,
 		},
 		owner,
@@ -319,6 +323,7 @@ export class StaminaEditModal extends DseModal {
 		});
 		applyInput.value = '0';
 		applyInput.setAttribute('aria-label', 'Amount to apply');
+		stampControl(applyInput, 'sedit.apply-amount');
 		// SC-133 RC-3: the Apply box is a MAGNITUDE, not a signed delta — Damage/Healing
 		// already pick the direction via which button is pressed. `min="0"` mirrors the
 		// exact idiom the temp stepper below already uses for the same reason (a
@@ -331,6 +336,7 @@ export class StaminaEditModal extends DseModal {
 				icon: 'sword',
 				label: 'Damage',
 				text: 'Damage',
+				control: 'sedit.damage',
 				onClick: () => {
 					const parsed = parseInt(applyInput.value);
 					if (!isNaN(parsed)) {
@@ -361,6 +367,7 @@ export class StaminaEditModal extends DseModal {
 				icon: 'plus',
 				label: 'Healing',
 				text: 'Healing',
+				control: 'sedit.healing',
 				onClick: () => {
 					const parsed = parseInt(applyInput.value);
 					if (!isNaN(parsed)) {
@@ -406,6 +413,7 @@ export class StaminaEditModal extends DseModal {
 			{
 				value: currentStamina,
 				label: 'Stamina',
+				control: 'sedit.stamina',
 				displayMax: maxStamina,
 				onChange: (value) => {
 					this.pendingStaminaChange = value - currentStamina;
@@ -428,6 +436,7 @@ export class StaminaEditModal extends DseModal {
 				editable: true,
 				integer: true, // typed "2.5" commits 2 (legacy parseInt semantics)
 				label: 'Temporary Stamina',
+				control: 'sedit.temp',
 				onChange: (value) => {
 					// SC-133 RC-5 (RAW reference/draw-steel-reference.md:279 — temp
 					// doesn't stack, take higher) + fix-round-1 C1: floor against the
@@ -457,6 +466,7 @@ export class StaminaEditModal extends DseModal {
 				icon: 'skull',
 				label: 'Kill',
 				text: 'Kill',
+				control: 'sedit.kill',
 				variant: 'danger',
 				onClick: () => {
 					this.pendingStaminaChange = negativeStaminaLimit - currentStamina;
@@ -472,6 +482,7 @@ export class StaminaEditModal extends DseModal {
 				icon: 'plus',
 				label: 'Full Heal',
 				text: 'Full Heal',
+				control: 'sedit.full-heal',
 				onClick: () => {
 					this.pendingStaminaChange = maxStamina - currentStamina;
 					this.pendingTempStaminaChange = -currentTempStamina; // Reset temp stamina to 0
@@ -491,6 +502,7 @@ export class StaminaEditModal extends DseModal {
 				icon: 'syringe',
 				label: SPEND_RECOVERY_LABEL,
 				text: SPEND_RECOVERY_LABEL,
+				control: 'sedit.spend-recovery',
 				onClick: () => {
 					// Defensive (CB-8): the button is real-disabled at zero remaining,
 					// and (SC-133 I3) at zero true gain too — see refresh() below; this
@@ -526,6 +538,7 @@ export class StaminaEditModal extends DseModal {
 				icon: 'undo',
 				label: 'Reset',
 				text: 'Reset',
+				control: 'sedit.reset',
 				onClick: () => {
 					this.pendingStaminaChange = 0;
 					this.pendingTempStaminaChange = 0;
@@ -536,6 +549,7 @@ export class StaminaEditModal extends DseModal {
 			{
 				label: 'No Stamina Change',
 				text: 'No Stamina Change',
+				control: 'sedit.apply',
 				variant: 'accent',
 				disabled: true,
 				onClick: () => {

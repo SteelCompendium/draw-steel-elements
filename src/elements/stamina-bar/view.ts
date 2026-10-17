@@ -121,6 +121,7 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 			owner: this,
 			onClick: canPersist ? () => this.openEditModal() : undefined,
 			readOnlyTooltip: READ_ONLY_TOOLTIP,
+			control: 'stamina.bar',
 		});
 		// SC-169 round 2: the chrome/authoring anchor. `.dse-stamina__cluster` is the plate
 		// that draws the visible (and, when winded/dying, state-coloured) 1px frame — see

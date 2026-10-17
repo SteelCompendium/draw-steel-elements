@@ -13,6 +13,7 @@
 // to be a real clickable node — obsidian renders a string message as text and there is
 // no other supported way to put a control inside a notice.
 import { Notice } from 'obsidian';
+import { stampControl } from './controlId';
 
 /** How long the undo stays reachable. Long enough to notice and act on, short enough
  *  that a stack of them never builds up during rapid bookkeeping. */
@@ -52,6 +53,7 @@ export function undoNotice(what: string, onUndo: () => void): UndoNoticeHandle {
 	undoEl.className = 'dse-undo-notice__action';
 	undoEl.textContent = 'Undo';
 	undoEl.setAttribute('role', 'button');
+	stampControl(undoEl, 'undo.action');
 	undoEl.setAttribute('tabindex', '0');
 	frag.appendChild(textEl);
 	frag.appendChild(undoEl);

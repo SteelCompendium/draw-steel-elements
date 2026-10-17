@@ -13,6 +13,7 @@
 // is owner-bound (registerDomEvent) so it is detached on owner.unload().
 import type { Component } from 'obsidian';
 import { setIcon } from 'obsidian';
+import { stampControl } from './controlId';
 import { tooltip } from './tooltip';
 
 export type IconButtonVariant = 'default' | 'accent' | 'ghost' | 'danger';
@@ -42,6 +43,8 @@ export interface IconButtonOptions {
 	 * Known gap (SC-324): when `tooltip` differs from `label`, the mount path restores `label` into aria-label afterwards and the tooltip string is discarded — Obsidian's setTooltip writes only aria-label, so the two cannot differ today.
 	 */
 	tooltip?: string;
+	/** SC-408: stable `data-dse-control` id (attribute only). */
+	control?: string;
 	onClick: (evt: MouseEvent) => void;
 }
 
@@ -76,6 +79,7 @@ export function iconButton(
 ): IconButtonHandle {
 	const buttonEl = parent.createEl('button', { cls: 'dse-btn' });
 	buttonEl.setAttribute('type', 'button'); // never an implicit form submit
+	stampControl(buttonEl, opts.control);
 	if (opts.variant && opts.variant !== 'default') {
 		buttonEl.addClass(`dse-btn--${opts.variant}`);
 	}

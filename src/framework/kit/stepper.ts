@@ -14,6 +14,7 @@
 import type { Component } from 'obsidian';
 import { iconButton } from './iconButton';
 import { MOVING_ATTR } from '../host/adoptView';
+import { stampControl } from './controlId';
 
 export interface StepperOptions {
 	value: number;
@@ -50,6 +51,9 @@ export interface StepperOptions {
 	 * ("Decrease {label}" / "Increase {label}").
 	 */
 	label: string;
+	/** SC-408: control-id prefix; stamps `<id>.dec`, `<id>.input` (or `<id>.value` when not
+	 *  editable) and `<id>.inc` (attributes only). */
+	control?: string;
 	/** Display formatting for the read-only value (ignored when `editable`). */
 	format?: (value: number) => string;
 	/**
@@ -115,18 +119,21 @@ export function stepper(
 		owner,
 	);
 	minusBtn.buttonEl.addClass('dse-stepper__btn');
+	if (opts.control) stampControl(minusBtn.buttonEl, `${opts.control}.dec`);
 
 	let valueEl: HTMLElement | undefined;
 	let inputEl: HTMLInputElement | undefined;
 	if (opts.editable) {
 		inputEl = rootEl.createEl('input', { cls: 'dse-stepper__input', type: 'number' });
 		inputEl.setAttribute('aria-label', opts.label);
+		if (opts.control) stampControl(inputEl, `${opts.control}.input`);
 		inputEl.setAttribute('aria-live', 'polite'); // §4.8 — ± presses change it programmatically
 		if (opts.min !== undefined) inputEl.setAttribute('min', String(opts.min));
 		if (opts.max !== undefined) inputEl.setAttribute('max', String(opts.max));
 		inputEl.setAttribute('step', String(step));
 	} else {
 		valueEl = rootEl.createSpan({ cls: 'dse-stepper__value' });
+		if (opts.control) stampControl(valueEl, `${opts.control}.value`);
 		valueEl.setAttribute('aria-live', 'polite'); // §4.8 — announce changes
 	}
 
@@ -136,6 +143,7 @@ export function stepper(
 		owner,
 	);
 	plusBtn.buttonEl.addClass('dse-stepper__btn');
+	if (opts.control) stampControl(plusBtn.buttonEl, `${opts.control}.inc`);
 
 	/** Reflects `current` onto the DOM in place + auto-disables at the bounds (real property). */
 	function render(): void {

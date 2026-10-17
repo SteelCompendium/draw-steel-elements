@@ -34,6 +34,7 @@
 // LEGACY theme renders, which this redesign is not allowed to do.
 import { setTooltip } from 'obsidian';
 import type { Component } from 'obsidian';
+import { stampControl } from './controlId';
 import { iconButton } from './iconButton';
 import type { IconButtonHandle } from './iconButton';
 
@@ -125,6 +126,7 @@ export function renderRecoveriesStrip(
 	const pipsEl = rootEl.createDiv({ cls: 'dse-stamina-rec__pips' });
 	pipsEl.setAttribute('role', 'slider');
 	pipsEl.setAttribute('aria-label', 'Recoveries');
+	stampControl(pipsEl, 'recov.markers');
 	pipsEl.setAttribute('aria-valuemin', '0');
 	pipsEl.setAttribute('aria-valuemax', String(opts.max));
 	for (let i = 0; i < opts.max; i++) {
@@ -143,6 +145,7 @@ export function renderRecoveriesStrip(
 		{
 			icon: 'wind',
 			label: 'Catch Breath',
+			control: 'recov.catch-breath',
 			// The text node stays in the DOM for Legacy (byte-identical) and is hidden by
 			// the Steel layer — Scott: "If there is a button, I think it needs to be only
 			// the icon."
@@ -184,10 +187,12 @@ export function renderRecoveriesStrip(
 		const dec = pop.createEl('button', { cls: 'dse-stamina-rec__pop-btn', text: '−' });
 		dec.type = 'button';
 		dec.setAttribute('aria-label', 'Spend a recovery');
+		stampControl(dec, 'recov.pop.dec');
 		const val = pop.createSpan({ cls: 'dse-stamina-rec__pop-val' });
 		const inc = pop.createEl('button', { cls: 'dse-stamina-rec__pop-btn', text: '+' });
 		inc.type = 'button';
 		inc.setAttribute('aria-label', 'Restore a recovery');
+		stampControl(inc, 'recov.pop.inc');
 		repaintPopover = () => val.setText(`${current} / ${opts.max}`);
 		repaintPopover();
 		dec.addEventListener('click', () => commit(current - 1));
@@ -195,6 +200,7 @@ export function renderRecoveriesStrip(
 		pop.createDiv({ cls: 'dse-stamina-rec__pop-sep' });
 		const cb = pop.createEl('button', { cls: 'dse-stamina-rec__pop-cb', text: 'Catch breath' });
 		cb.type = 'button';
+		stampControl(cb, 'recov.pop.catch-breath');
 		cb.addEventListener('click', () => {
 			closePopover();
 			opts.onCatchBreath();

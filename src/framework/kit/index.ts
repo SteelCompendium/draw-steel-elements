@@ -6,6 +6,9 @@
 // list — adding a widget means adding it here deliberately. Types re-export via
 // `export type` (isolatedModules). test/dom/kit/kit-index.test.ts pins completeness.
 
+// -- Stable control ids (SC-408) --
+export { CONTROL_ATTR, stampControl } from './controlId';
+
 // -- Control primitives (D2 §2.1/2.2/2.5/2.10, Task 2) --
 export { iconButton, buttonRow } from './iconButton';
 export type {
