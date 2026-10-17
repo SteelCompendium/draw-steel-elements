@@ -38,19 +38,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
 import { DOCS_SHOTS, DOCS_MANUAL } from './docs-manifest.mjs';
-import {
-	GIF_BYTE_BUDGET,
-	assertValidGifEntries,
-	compareFrameSets,
-	createPageDriver,
-	pngSize,
-	runGifSteps,
-	seedScript,
-	sha256,
-	unionCrop,
-	writeReviewFrames,
-} from './docs-gif.mjs';
-import { decodeCropped, encodeRgbaGif, mergeIdentical } from './gif-encode.mjs';
+import { assertValidGifEntries, createPageDriver, runGifEntry, runGifSteps, seedScript } from './docs-gif.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.dirname(dir);
@@ -235,50 +223,18 @@ async function captureBrowserGif(shot, dpr) {
 	}
 }
 
-/** Capture + encode one browser gif entry: 2x, then 1x if the 2x GIF busts the byte budget
- *  (the PNG rule). Returns { frames, bytes: Uint8Array, dpr, crop, merged }. */
-async function renderBrowserGif(shot) {
-	const dprs = [...new Set([shot.dpr ?? 2, 1])].filter((d) => d <= (shot.dpr ?? 2));
-	let result = null;
-	for (const dpr of dprs) {
-		const frames = await captureBrowserGif(shot, dpr);
-		const crop = unionCrop(frames, dpr, pngSize(frames[0].png));
-		const holds = frames.map((f) => f.hold);
-		const rgba = frames.map((f) => decodeCropped(f.png, crop));
-		const merged = mergeIdentical(rgba, holds).length;
-		const bytes = encodeRgbaGif(rgba, holds, crop.w, crop.h);
-		result = { frames, bytes, dpr, crop, merged };
-		if (bytes.length <= GIF_BYTE_BUDGET) break;
-		if (dpr > 1) console.log(`     (re-shooting ${shot.out} at 1x — 2x was ${bytes.length} B, over ${GIF_BYTE_BUDGET})`);
-	}
-	return result;
-}
-
 async function runBrowserGifs() {
 	for (const shot of browserGifs) {
 		try {
 			if (!fs.existsSync(path.join(dir, 'dist'))) {
 				throw new Error('visual-harness/dist missing — run `npm run harness:build` first');
 			}
-			const a = await renderBrowserGif(shot);
-			const loopSec = (a.frames.reduce((n, f) => n + f.hold, 0) / 1000).toFixed(1);
-			const sha = sha256(a.bytes);
-			writeReviewFrames(gifFramesDir(shot.out), a.frames, { out: shot.out, dpr: a.dpr, crop: a.crop, bytes: a.bytes.length, gifSha256: sha });
-			const over = a.bytes.length > GIF_BYTE_BUDGET ? ` — OVER BUDGET (${GIF_BYTE_BUDGET}), shorten the script` : '';
-			const summary = `${a.bytes.length} bytes, ${a.frames.length} captured / ${a.merged} gif frames, ${loopSec}s loop, browser @${a.dpr}x`;
-			if (checkStable) {
-				const b = await renderBrowserGif(shot);
-				const verdict = compareFrameSets(a.frames, b.frames);
-				if (a.dpr !== b.dpr) verdict.lines.push(`dpr differs between runs: ${a.dpr} vs ${b.dpr}`);
-				if (verdict.lines.length === 0 && sha256(b.bytes) !== sha) verdict.lines.push('frames identical but GIF bytes differ (encoder is not deterministic)');
-				if (verdict.lines.length) {
-					throw new Error(`NOT STABLE across two runs:\n    ${verdict.lines.join('\n    ')}`);
-				}
-				console.log(`  stable ${shot.out} (${summary}, gif sha256 ${sha.slice(0, 12)})${over}`);
-			} else {
-				fs.writeFileSync(path.join(outDir, shot.out), a.bytes);
-				console.log(`  ok ${shot.out} (${summary})${over}`);
-			}
+			await runGifEntry(shot, (dpr) => captureBrowserGif(shot, dpr), {
+				camera: 'browser',
+				outDir,
+				framesDir: gifFramesDir(shot.out),
+				checkStable,
+			});
 		} catch (e) {
 			failures.push({ out: shot.out, error: String(e.message ?? e) });
 			console.log(`FAIL ${shot.out}: ${String(e.message ?? e)}`);

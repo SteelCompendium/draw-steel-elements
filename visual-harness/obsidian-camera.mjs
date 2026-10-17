@@ -62,6 +62,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { DOCS_SHOTS, DOCS_COMPENDIUM_SEED } from './docs-manifest.mjs';
+import { assertValidGifEntries, createCdpDriver, runGifEntry, runGifSteps, seedScript } from './docs-gif.mjs';
 
 const { seedExperimental } = createRequire(import.meta.url)('./camera-data-json.cjs');
 
@@ -304,9 +305,12 @@ const DOCS_MODE = !!args.docs;
 // parity gates own that directory). A failed docs entry's evidence — and the "plugin not
 // loadable" window shot — go to the git-ignored dist/docs-errors/ instead.
 const errorsDir = DOCS_MODE ? path.join(dir, 'dist', 'docs-errors') : shotsDir;
+// SC-411: `--check-stable` (forwarded by docs-shots.mjs) is a verdict on GIF entries only.
+const checkStable = args['check-stable'] === '1';
 const docsShots = DOCS_SHOTS.filter(
-	(s) => s.source === 'obsidian' && (!args.only || s.out === args.only),
+	(s) => s.source === 'obsidian' && (!args.only || s.out === args.only) && (!checkStable || s.kind === 'gif'),
 );
+if (DOCS_MODE) assertValidGifEntries(DOCS_SHOTS);
 if (DOCS_MODE) {
 	elements = [];
 	extraNotes = [];
@@ -1659,6 +1663,107 @@ async function main() {
 			const rectOf = (sel) =>
 				`(() => { const r = ${sel}.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, vh: window.innerHeight, vw: window.innerWidth }; })()`;
 
+			// SC-411 — one scripted GIF (`kind: 'gif'`, source 'obsidian'). Same note-opening and
+			// theme machinery as every other docs kind; the interaction itself is
+			// docs-gif.mjs's runGifSteps driven over a CDP driver (real pointer + key events,
+			// `write: true` = the note text changing). Every capture gets a FRESH scratch note
+			// (`docs-<out>-<n>`): the tracker writes into the note it lives in, and a second
+			// `--check-stable` capture must start from the same text AND the same session state.
+			const gifRuns = new Map();
+			const captureDocsGif = async (entry, dpr) => {
+				const n = (gifRuns.get(entry.out) ?? 0) + 1;
+				gifRuns.set(entry.out, n);
+				const noteName = `${docsNoteName(entry)}-${n}`;
+				const notePath = `Harness/${noteName}.md`;
+				const text0 = entry.body ?? fs.readFileSync(path.join(vaultPath, 'Harness', `${entry.note}.md`), 'utf8');
+				const elSel = `document.querySelector('.workspace-leaf.mod-active [data-dse-element="${entry.element}"]')`;
+				const prefs = Object.entries(entry.prefs ?? {});
+				const prefApi = `window.app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+				const prevPrefs = [];
+				let splits = null;
+				let driver = null;
+				let emulated = false;
+				try {
+					await closeModals();
+					await closeDseSidebarLeaves();
+					await clearNotices();
+					await evaluate(
+						cdp,
+						`(async () => { const old = window.app.vault.getAbstractFileByPath(${JSON.stringify(notePath)}); if (old) await window.app.vault.delete(old); await window.app.vault.create(${JSON.stringify(notePath)}, ${JSON.stringify(text0)}); })()`,
+					);
+					for (const [k, v] of prefs) {
+						prevPrefs.push([k, await evaluate(cdp, `${prefApi}.get('${k}')`)]);
+						await evaluate(cdp, `${prefApi}.set('${k}', ${JSON.stringify(v)})`);
+					}
+					// Collapse the side panels for the capture: the one fixed clip spans the element AND
+					// the centred modal, and with the file explorer open it would also carry a strip of
+					// the vault's file list (and whatever happens to be hovered in it).
+					splits = await evaluate(
+						cdp,
+						`(() => { const w = window.app.workspace; const was = { left: !w.leftSplit.collapsed, right: !w.rightSplit.collapsed }; w.leftSplit.collapse(); w.rightSplit.collapse(); return was; })()`,
+					);
+					if (entry.viewport) {
+						await cdp.call('Emulation.setDeviceMetricsOverride', {
+							width: entry.viewport.width,
+							height: entry.viewport.height,
+							deviceScaleFactor: 0,
+							mobile: false,
+						});
+						emulated = true;
+						await sleep(500);
+					}
+					if (entry.seed !== undefined) await evaluate(cdp, seedScript(entry.seed));
+					await openNote(noteName, 'preview');
+					await waitFor(
+						cdp,
+						`(() => { const el = ${elSel}; if (!el) return false; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; })()`,
+						{ what: `rendered [data-dse-element="${entry.element}"] in ${notePath}` },
+					);
+					await sleep(600); // settle: fonts, compendium, images
+					await setPluginTheme(elSel, 'steel');
+					await clearNotices();
+					driver = createCdpDriver({
+						call: (m, p) => cdp.call(m, p),
+						evaluate: (e) => evaluate(cdp, e),
+						sleep,
+						rootExpr: elSel,
+						notePath,
+						dpr,
+						cursor: entry.cursor !== false,
+					});
+					await driver.install();
+					const { frames } = await runGifSteps(driver, entry);
+					return frames;
+				} catch (e) {
+					// The window as it stands at the failing step — taken BEFORE the cleanup below
+					// closes the modal and deletes the scratch note.
+					await errorShot(`docs-${entry.out.replace(/\.(png|gif)$/, '')}`);
+					throw e;
+				} finally {
+					await driver?.dispose();
+					await closeModals().catch(() => {});
+					// Park the pointer out of the way for whatever capture comes next.
+					await cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 2, y: 2, button: 'none' }).catch(() => {});
+					for (const [k, v] of prevPrefs) {
+						await evaluate(cdp, `${prefApi}.set('${k}', ${JSON.stringify(v)})`).catch(() => {});
+					}
+					if (splits) {
+						await evaluate(
+							cdp,
+							`(() => { const w = window.app.workspace; ${splits.left ? 'w.leftSplit.expand();' : ''} ${splits.right ? 'w.rightSplit.expand();' : ''} })()`,
+						).catch(() => {});
+					}
+					if (emulated) {
+						await cdp.call('Emulation.clearDeviceMetricsOverride').catch(() => {});
+						await sleep(300);
+					}
+					await evaluate(
+						cdp,
+						`(async () => { const f = window.app.vault.getAbstractFileByPath(${JSON.stringify(notePath)}); if (f) await window.app.vault.delete(f); })()`,
+					).catch(() => {});
+				}
+			};
+
 			// SC-142 phase 2b — WAIT FOR THE METADATA CACHE before any docs capture.
 			// The seeded compendium files are copied in a moment before Obsidian launches,
 			// and `layoutReady` fires BEFORE Obsidian has finished reading their
@@ -1687,6 +1792,16 @@ async function main() {
 				try {
 					await closeModals();
 					await closeDseSidebarLeaves();
+
+					if (entry.kind === 'gif') {
+						await runGifEntry(entry, (dpr) => captureDocsGif(entry, dpr), {
+							camera: 'obsidian',
+							outDir: docsOut,
+							framesDir: path.join(dir, 'dist', 'docs-gif-frames', entry.out),
+							checkStable,
+						});
+						continue;
+					}
 
 					if (entry.kind === 'settings') {
 						// Same popout dance as step 3f, plus an optional page: the 7.0.0
@@ -2039,7 +2154,9 @@ async function main() {
 					}
 				} catch (e) {
 					failures.push({ outName: entry.out, errors: [String(e)] });
-					await errorShot(`docs-${entry.out.replace(/\.(png|gif)$/, '')}`);
+					// A gif entry already took its error shot at the failing step (captureDocsGif); a second
+					// one here would photograph the cleaned-up window over it.
+					if (entry.kind !== 'gif') await errorShot(`docs-${entry.out.replace(/\.(png|gif)$/, '')}`);
 					console.log(`FAIL ${entry.out}: ${String(e)}`);
 					await closeModals().catch(() => {});
 				}
@@ -2081,7 +2198,11 @@ async function main() {
 		process.exit(1);
 	}
 	if (DOCS_MODE) {
-		console.log(`\nall ${docsShots.length} docs image(s) written to ${path.resolve(repo, args.out ?? 'docs/Media')}`);
+		console.log(
+			checkStable
+				? `\nall ${docsShots.length} obsidian gif entr${docsShots.length === 1 ? 'y is' : 'ies are'} stable`
+				: `\nall ${docsShots.length} docs image(s) written to ${path.resolve(repo, args.out ?? 'docs/Media')}`,
+		);
 		return;
 	}
 	const total =

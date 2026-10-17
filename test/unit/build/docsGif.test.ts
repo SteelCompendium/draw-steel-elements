@@ -205,3 +205,107 @@ describe('SC-411 docs-gif — determinism helpers', () => {
 		expect(r.err).toMatch(/grew past the 200x75 CSS px frame/);
 	});
 });
+
+describe('SC-411 docs-gif — the CDP driver (real Obsidian) over a fake CDP target', () => {
+	// `call` records every CDP method; `evaluate` answers the driver's few page queries by shape.
+	const FAKE = `
+		const calls = [];
+		const evals = [];
+		let notes = ['v1'];            // successive values of the note text (last one repeats)
+		let reads = 0;
+		const call = async (method, params) => { calls.push({ method, params }); return { data: '' }; };
+		const evaluate = async (expr) => {
+			evals.push(expr);
+			if (expr.includes('adapter.read')) return notes[Math.min(reads++, notes.length - 1)];
+			if (expr.includes('__sc411.point(')) return { x: 100, y: 50 };
+			if (expr.includes('__sc411.parkSpot')) return [1437, 1097];
+			return undefined;
+		};
+		const driver = g.createCdpDriver({ call, evaluate, sleep: async () => {}, rootExpr: 'document.body', notePath: 'Harness/n.md', dpr: 2 });
+		const mouse = () => calls.filter((c) => c.method === 'Input.dispatchMouseEvent').map((c) => c.params.type + '@' + c.params.x + ',' + c.params.y);
+	`;
+
+	it('click sends a REAL pointer sequence (move, press, release at the target) after pointing the synthetic cursor', () => {
+		const r = run(`${FAKE}
+			await driver.click('button.dse-x');
+			console.log(JSON.stringify({ mouse: mouse(), cursorFirst: evals.findIndex((e) => e.includes('sc411-cursor')) < calls.length, usesSelector: evals.some((e) => e.includes('button.dse-x')) }));
+		`);
+		expect(r.mouse).toEqual(['mouseMoved@100,50', 'mousePressed@100,50', 'mouseReleased@100,50']);
+		expect(r.usesSelector).toBe(true);
+	});
+
+	it('type focuses the target, selects when asked, and sends one real key event per character', () => {
+		const r = run(`${FAKE}
+			await driver.type('Ab', { into: 'modal:input.dse-condal__input', select: true });
+			const keys = calls.filter((c) => c.method === 'Input.dispatchKeyEvent').map((c) => c.params.type + ':' + (c.params.text ?? '-'));
+			console.log(JSON.stringify({ keys, focus: evals.find((e) => e.includes('.focus()')) }));
+		`);
+		expect(r.keys).toEqual(['keyDown:A', 'keyUp:-', 'keyDown:b', 'keyUp:-']);
+		expect(r.focus).toContain('modal:input.dse-condal__input');
+		expect(r.focus).toContain('select');
+	});
+
+	it('waitWrite resolves once the note text changes (then settles) and throws when it never does', () => {
+		const r = run(`${FAKE}
+			notes = ['v1', 'v1', 'v2'];
+			const mark = await driver.writeMark();
+			await driver.waitWrite(mark, 1000);
+			const reachedChange = reads;
+			notes = ['same'];
+			reads = 0;
+			let msg = null;
+			try { await driver.waitWrite('same', 30); } catch (e) { msg = e.message; }
+			console.log(JSON.stringify({ mark, reachedChange, msg }));
+		`);
+		expect(r.mark).toBe('v1');
+		expect(r.reachedChange).toBe(3); // the mark read, one unchanged poll, the poll that saw v2
+		expect(r.msg).toMatch(/Harness\/n\.md did not change within 30 ms/);
+	});
+
+	it('prepareFrame removes notices/tooltips and parks the pointer in a corner, except for a hover step', () => {
+		const r = run(`${FAKE}
+			await driver.prepareFrame({ park: true });
+			const parked = mouse();
+			calls.length = 0;
+			await driver.prepareFrame({ park: false });
+			console.log(JSON.stringify({ parked, hoverMoves: mouse(), removes: evals.some((e) => e.includes('.notice, .tooltip')) }));
+		`);
+		expect(r.parked).toEqual(['mouseMoved@1437,1097']);
+		expect(r.hoverMoves).toEqual([]);
+		expect(r.removes).toBe(true);
+	});
+
+	it('press maps names to real key events and rejects a key it does not know', () => {
+		const r = run(`${FAKE}
+			await driver.press('Enter');
+			let msg = null;
+			try { await driver.press('F13'); } catch (e) { msg = e.message; }
+			console.log(JSON.stringify({ enter: g.keyEventFor('Enter'), ctrlA: g.keyEventFor('Control+A').modifiers, none: g.keyEventFor('F13'), sent: calls.map((c) => c.params.key + ':' + c.params.type), msg }));
+		`);
+		expect(r.enter).toMatchObject({ key: 'Enter', vk: 13 });
+		expect(r.ctrlA).toBe(2);
+		expect(r.none).toBeNull();
+		expect(r.sent).toEqual(['Enter:keyDown', 'Enter:keyUp']);
+		expect(r.msg).toMatch(/unsupported key "F13"/);
+	});
+
+	it('compareFrameSets with a crop ignores differences outside it (the window title) and still catches them inside', () => {
+		const r = run(`
+			const a = png(6, 4, () => [10, 10, 10]);
+			const outside = png(6, 4, (x, y) => (y === 0 ? [200, 200, 200] : [10, 10, 10]));
+			const inside = png(6, 4, (x, y) => (x === 3 && y === 2 ? [90, 10, 10] : [10, 10, 10]));
+			const crop = { x: 0, y: 1, w: 6, h: 3 };
+			console.log(JSON.stringify({
+				outside: g.compareFrameSets([{ png: a }], [{ png: outside }], crop),
+				insideDiff: g.compareFrameSets([{ png: a }], [{ png: inside }], crop),
+				noCrop: g.compareFrameSets([{ png: a }], [{ png: outside }]).ok,
+				valid: g.validateGifEntry(base({ source: 'obsidian', body: 'x', viewport: { width: 980, height: 620 } })),
+			}));
+		`);
+		expect(r.outside).toEqual({ ok: true, lines: [] });
+		expect(r.insideDiff).toEqual({ ok: false, lines: ['frame 0: 1 px differ, max channel delta 80'] });
+		expect(r.noCrop).toBe(false);
+		expect(r.valid).toEqual([]);
+	});
+});
+

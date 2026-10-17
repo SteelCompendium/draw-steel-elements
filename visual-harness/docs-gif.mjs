@@ -74,6 +74,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { decodeCropped, encodeRgbaGif, mergeIdentical } from './gif-encode.mjs';
 
 const require = createRequire(import.meta.url);
 const { PNG } = require('pngjs');
@@ -320,20 +321,24 @@ export function writeReviewFrames(dir, frames, meta) {
 }
 
 /** Differing-pixel count and max channel delta between two PNG buffers (same size assumed;
- *  a size mismatch reports every pixel). */
-function pixelDiff(a, b) {
+ *  a size mismatch reports every pixel). With `crop`, only that box is compared. */
+function pixelDiff(a, b, crop) {
 	const pa = PNG.sync.read(a);
 	const pb = PNG.sync.read(b);
 	if (pa.width !== pb.width || pa.height !== pb.height) {
 		return { sizeMismatch: `${pa.width}x${pa.height} vs ${pb.width}x${pb.height}` };
 	}
+	const box = crop ?? { x: 0, y: 0, w: pa.width, h: pa.height };
 	let px = 0;
 	let max = 0;
-	for (let p = 0; p < pa.data.length; p += 4) {
-		let d = 0;
-		for (let c = 0; c < 4; c++) d = Math.max(d, Math.abs(pa.data[p + c] - pb.data[p + c]));
-		if (d > 0) px++;
-		if (d > max) max = d;
+	for (let y = box.y; y < box.y + box.h; y++) {
+		for (let x = box.x; x < box.x + box.w; x++) {
+			const p = (y * pa.width + x) * 4;
+			let d = 0;
+			for (let c = 0; c < 4; c++) d = Math.max(d, Math.abs(pa.data[p + c] - pb.data[p + c]));
+			if (d > 0) px++;
+			if (d > max) max = d;
+		}
 	}
 	return { px, max };
 }
@@ -344,8 +349,13 @@ function pixelDiff(a, b) {
  * is a pure function of the frames, so this implies an identical GIF). Returns
  * `{ ok, lines }`; on a mismatch `lines` names the frame indices, the differing pixel count
  * and the max channel delta.
+ *
+ * `crop` (optional, { x, y, w, h } device px) restricts the comparison to the box the GIF is
+ * actually cut from. The real-Obsidian camera needs it: its full-window frames carry the tab
+ * title (the scratch note's name, which differs per capture by design), and nothing outside the
+ * crop reaches the GIF. Frames whose raw bytes match are stable either way.
  */
-export function compareFrameSets(a, b) {
+export function compareFrameSets(a, b, crop) {
 	const lines = [];
 	if (a.length !== b.length) {
 		lines.push(`frame count differs: ${a.length} vs ${b.length}`);
@@ -353,7 +363,8 @@ export function compareFrameSets(a, b) {
 	}
 	for (let i = 0; i < a.length; i++) {
 		if (sha256(a[i].png) === sha256(b[i].png)) continue;
-		const d = pixelDiff(a[i].png, b[i].png);
+		const d = pixelDiff(a[i].png, b[i].png, crop);
+		if (crop && !d.sizeMismatch && d.px === 0) continue;
 		lines.push(
 			d.sizeMismatch
 				? `frame ${i}: size differs (${d.sizeMismatch})`
@@ -363,8 +374,63 @@ export function compareFrameSets(a, b) {
 	return { ok: lines.length === 0, lines };
 }
 
+// ------------------------------------------------------------------- one entry, end to end
+/** Capture + encode one gif entry: 2x, then 1x if the 2x GIF busts the byte budget (the PNG
+ *  rule). `capture(dpr)` is the camera's own scripted capture (fresh page / fresh note every
+ *  call) and returns the raw frames. Returns { frames, bytes, dpr, crop, merged }. */
+export async function renderGifEntry(entry, capture) {
+	const first = entry.dpr ?? 2;
+	const dprs = first === 1 ? [1] : [first, 1];
+	let result = null;
+	for (const dpr of dprs) {
+		const frames = await capture(dpr);
+		const crop = unionCrop(frames, dpr, pngSize(frames[0].png));
+		const holds = frames.map((f) => f.hold);
+		const rgba = frames.map((f) => decodeCropped(f.png, crop));
+		const merged = mergeIdentical(rgba, holds).length;
+		const bytes = encodeRgbaGif(rgba, holds, crop.w, crop.h);
+		result = { frames, bytes, dpr, crop, merged };
+		if (bytes.length <= GIF_BYTE_BUDGET) break;
+		if (dpr > 1) console.log(`     (re-shooting ${entry.out} at 1x — 2x was ${bytes.length} B, over ${GIF_BYTE_BUDGET})`);
+	}
+	return result;
+}
+
+/**
+ * Run one gif entry for either camera. `capture(dpr)` as above; `camera` is 'browser' |
+ * 'obsidian' (log label only). Writes the review frames to `framesDir`; then either writes
+ * `<outDir>/<out>` or, with `checkStable`, captures a SECOND time and throws unless both runs
+ * produced the same frame count and byte-identical frames (and so the same GIF). Throws on any
+ * failure; the caller records it. Returns the one-line summary it logged.
+ */
+export async function runGifEntry(entry, capture, { camera, outDir, framesDir, checkStable = false }) {
+	const a = await renderGifEntry(entry, capture);
+	const loopSec = (a.frames.reduce((n, f) => n + f.hold, 0) / 1000).toFixed(1);
+	const sha = sha256(a.bytes);
+	writeReviewFrames(framesDir, a.frames, { out: entry.out, camera, dpr: a.dpr, crop: a.crop, bytes: a.bytes.length, gifSha256: sha });
+	const over = a.bytes.length > GIF_BYTE_BUDGET ? ` — OVER BUDGET (${GIF_BYTE_BUDGET}), shorten the script` : '';
+	const summary = `${a.bytes.length} bytes, ${a.frames.length} captured / ${a.merged} gif frames, ${loopSec}s loop, ${camera} @${a.dpr}x`;
+	if (checkStable) {
+		const b = await renderGifEntry(entry, capture);
+		const verdict = compareFrameSets(a.frames, b.frames, a.crop);
+		if (a.dpr !== b.dpr) verdict.lines.push(`dpr differs between runs: ${a.dpr} vs ${b.dpr}`);
+		if (verdict.lines.length === 0 && sha256(b.bytes) !== sha) verdict.lines.push('frames identical but GIF bytes differ (encoder is not deterministic)');
+		if (verdict.lines.length) {
+			// Keep the second run's frames beside the first's, so the differing frames can be diffed.
+			writeReviewFrames(`${framesDir}.run2`, b.frames, { out: entry.out, camera, dpr: b.dpr, crop: b.crop, bytes: b.bytes.length });
+			throw new Error(`NOT STABLE across two runs (second run's frames: ${framesDir}.run2):\n    ${verdict.lines.join('\n    ')}`);
+		}
+		console.log(`  stable ${entry.out} (${summary}, gif sha256 ${sha.slice(0, 12)})${over}`);
+	} else {
+		fs.mkdirSync(outDir, { recursive: true });
+		fs.writeFileSync(path.join(outDir, entry.out), a.bytes);
+		console.log(`  ok ${entry.out} (${summary})${over}`);
+	}
+	return summary;
+}
+
 // ------------------------------------------------------------------ Playwright page driver
-const CURSOR_CSS = `#sc411-cursor{position:fixed;left:0;top:0;width:22px;height:22px;z-index:2147483647;pointer-events:none;
+export const CURSOR_CSS = `#sc411-cursor{position:fixed;left:0;top:0;width:22px;height:22px;z-index:2147483647;pointer-events:none;
 background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22'><path d='M2 2 L2 18 L6.5 13.5 L9.5 20 L12 19 L9 12.5 L15 12.5 Z' fill='white' stroke='black' stroke-width='1.4' stroke-linejoin='round'/></svg>") no-repeat;}`;
 
 /**
@@ -480,5 +546,209 @@ export async function createPageDriver(page, { cursor = true } = {}) {
 			}),
 		// caret 'hide' is Playwright's default; 'disabled' finishes transitions before the shot.
 		screenshotPng: () => page.screenshot({ animations: 'disabled', caret: 'hide' }),
+	};
+}
+
+// -------------------------------------------------------------------------- CDP driver
+/** Freeze CSS for real Obsidian: no transitions/animations, no caret. Without it ~1 capture in
+ *  3 differed by 8 px on a focused textarea's ring (SC-411 r1 spike); with it 5/5 identical. */
+export const FREEZE_CSS = '*,*::before,*::after{transition:none!important;animation:none!important;caret-color:transparent!important}';
+
+/** Keys `press` understands (CDP key-event fields). Single characters are typed as text. */
+const KEYS = {
+	Enter: { key: 'Enter', code: 'Enter', vk: 13 },
+	Escape: { key: 'Escape', code: 'Escape', vk: 27 },
+	Tab: { key: 'Tab', code: 'Tab', vk: 9 },
+	Backspace: { key: 'Backspace', code: 'Backspace', vk: 8 },
+	ArrowUp: { key: 'ArrowUp', code: 'ArrowUp', vk: 38 },
+	ArrowDown: { key: 'ArrowDown', code: 'ArrowDown', vk: 40 },
+	ArrowLeft: { key: 'ArrowLeft', code: 'ArrowLeft', vk: 37 },
+	ArrowRight: { key: 'ArrowRight', code: 'ArrowRight', vk: 39 },
+};
+
+/** CDP `Input.dispatchKeyEvent` params for a `press` key name, or null when unsupported. */
+export function keyEventFor(name) {
+	if (KEYS[name]) return KEYS[name];
+	if (name === 'Control+A') return { key: 'a', code: 'KeyA', vk: 65, modifiers: 2, commands: ['selectAll'] };
+	return null;
+}
+
+/**
+ * The driver for real Obsidian over raw CDP (obsidian-camera.mjs --docs). Same interface as the
+ * Playwright driver, so `runGifSteps` cannot tell them apart. Inputs are REAL: pointer clicks
+ * through `Input.dispatchMouseEvent` (move, press, release — hover and focus fire, unlike
+ * `el.click()`) and key events through `Input.dispatchKeyEvent`.
+ *
+ *   call(method, params)   CDP call on the main target
+ *   evaluate(expr)         Runtime.evaluate (awaits promises), returns the value
+ *   sleep(ms)
+ *   rootExpr               JS expression yielding the element root (selectors resolve inside it)
+ *   notePath               vault path of the note the element lives in — `write: true` polls
+ *                          its text (a block write is the note text changing)
+ *   dpr                    capture scale
+ *   cursor                 synthetic pointer overlay (default true)
+ * Call `await driver.install()` before the first step and `await driver.dispose()` after.
+ */
+export function createCdpDriver({ call, evaluate, sleep, rootExpr, notePath, dpr = 2, cursor = true }) {
+	const q = JSON.stringify;
+	const installJs = `(() => {
+		const root = () => (${rootExpr});
+		const scopes = (sel) => (sel.startsWith('modal:') ? [...document.querySelectorAll('.dse-modal')] : [root()]);
+		const inner = (sel) => (sel.startsWith('modal:') ? sel.slice(6).trim() : sel);
+		window.__sc411 = {
+			all(sel) { return scopes(sel).flatMap((sc) => (sc ? [...sc.querySelectorAll(inner(sel))] : [])); },
+			one(sel) {
+				const hits = this.all(sel);
+				if (hits.length !== 1) throw new Error(sel + ': ' + hits.length + ' matches (a step selector must match exactly one node)');
+				return hits[0];
+			},
+			point(sel) {
+				const el = this.one(sel);
+				const r = el.getBoundingClientRect();
+				if (r.width <= 0 || r.height <= 0) throw new Error(sel + ' has no box (not visible)');
+				const x = r.x + r.width / 2, y = r.y + r.height / 2;
+				if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) throw new Error(sel + ' is outside the window');
+				const hit = document.elementFromPoint(x, y);
+				if (!hit || !(el === hit || el.contains(hit) || hit.contains(el))) throw new Error(sel + ' is covered by ' + (hit ? hit.tagName + '.' + hit.className : 'nothing'));
+				return { x, y };
+			},
+			rect() {
+				const boxes = [root(), ...document.querySelectorAll('.dse-modal')].filter(Boolean).map((n) => n.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
+				const x0 = Math.min(...boxes.map((r) => r.left)), y0 = Math.min(...boxes.map((r) => r.top));
+				const x1 = Math.max(...boxes.map((r) => r.right)), y1 = Math.max(...boxes.map((r) => r.bottom));
+				return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+			},
+			parkSpot() {
+				const spots = [[window.innerWidth - 3, window.innerHeight - 3], [3, window.innerHeight - 3], [window.innerWidth - 3, 3], [3, 3]];
+				const dirty = (el) => !el || el.closest('.dse-modal') || (root() && root().contains(el));
+				return spots.find(([x, y]) => !dirty(document.elementFromPoint(x, y))) ?? null;
+			},
+		};
+		const st = document.createElement('style');
+		st.id = 'sc411-style';
+		st.textContent = ${q(FREEZE_CSS)} + ${q(cursor ? CURSOR_CSS : '')};
+		document.head.appendChild(st);
+		if (${cursor}) {
+			const c = document.createElement('div');
+			c.id = 'sc411-cursor';
+			c.style.display = 'none';
+			document.body.appendChild(c);
+		}
+	})()`;
+	const mouse = (type, x, y) =>
+		call('Input.dispatchMouseEvent', { type, x, y, button: type === 'mouseMoved' ? 'none' : 'left', buttons: type === 'mousePressed' ? 1 : 0, clickCount: type === 'mouseMoved' ? 0 : 1 });
+	const point = (sel) => evaluate(`window.__sc411.point(${q(sel)})`);
+	const moveCursor = async ({ x, y }) => {
+		if (!cursor) return;
+		await evaluate(`(() => { const c = document.getElementById('sc411-cursor'); c.style.display = 'block'; c.style.transform = 'translate(${Math.round(x)}px, ${Math.round(y)}px)'; })()`);
+	};
+	const settle = () => evaluate('new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 80))))');
+	const keyDown = (e, text) => call('Input.dispatchKeyEvent', { type: 'keyDown', key: e.key, code: e.code, windowsVirtualKeyCode: e.vk, modifiers: e.modifiers ?? 0, ...(e.commands ? { commands: e.commands } : {}), ...(text ? { text } : {}) });
+	const keyUp = (e) => call('Input.dispatchKeyEvent', { type: 'keyUp', key: e.key, code: e.code, windowsVirtualKeyCode: e.vk, modifiers: e.modifiers ?? 0 });
+	// WHY THIS EXISTS (measured, --check-stable): Chromium decides `:focus-visible` for a
+	// programmatic focus() from the last input modality, and that is PROCESS state. A modal opened
+	// in the first capture after launch autofocuses its first control WITH a focus ring, the same
+	// modal in a later capture (after typing and clicking in the first) WITHOUT — 1 935 px of
+	// difference on the montage sheet's "Success" chip, and the GIF depended on which capture it
+	// came from. So every capture starts from the same modality: a real key press, then a real
+	// click on an inert spot (the bottom-left margin of the note pane) — the state any capture
+	// after the first already had, and the natural one for a mouse-driven demo.
+	const prime = async () => {
+		const spot = await evaluate(`(() => {
+			const v = document.querySelector('.workspace-leaf.mod-active .markdown-preview-view');
+			if (!v) return null;
+			const r = v.getBoundingClientRect();
+			const x = r.left + 6, y = r.bottom - 6;
+			const hit = document.elementFromPoint(x, y);
+			return hit && (hit === v || v.contains(hit)) && !hit.closest('[data-dse-element]') ? [x, y] : null;
+		})()`);
+		const shift = { key: 'Shift', code: 'ShiftLeft', vk: 16 };
+		await keyDown(shift);
+		await keyUp(shift);
+		if (spot) {
+			await mouse('mouseMoved', spot[0], spot[1]);
+			await mouse('mousePressed', spot[0], spot[1]);
+			await mouse('mouseReleased', spot[0], spot[1]);
+		}
+	};
+	return {
+		install: async () => {
+			await evaluate(installJs);
+			await prime();
+		},
+		async dispose() {
+			await evaluate(`(() => { document.getElementById('sc411-style')?.remove(); document.getElementById('sc411-cursor')?.remove(); delete window.__sc411; })()`).catch(() => {});
+		},
+		async click(sel) {
+			const p = await point(sel);
+			await moveCursor(p);
+			await mouse('mouseMoved', p.x, p.y);
+			await mouse('mousePressed', p.x, p.y);
+			await mouse('mouseReleased', p.x, p.y);
+		},
+		async hover(sel) {
+			const p = await point(sel);
+			await moveCursor(p);
+			await mouse('mouseMoved', p.x, p.y);
+		},
+		async type(text, { into, select } = {}) {
+			if (into) {
+				await evaluate(`(() => { const el = window.__sc411.one(${q(into)}); el.focus(); ${select ? 'el.select?.();' : ''} })()`);
+			} else if (select) {
+				const e = keyEventFor('Control+A');
+				await keyDown(e);
+				await keyUp(e);
+			}
+			for (const ch of text) {
+				const e = { key: ch, code: ch === ' ' ? 'Space' : /[a-z]/i.test(ch) ? `Key${ch.toUpperCase()}` : /[0-9]/.test(ch) ? `Digit${ch}` : '', vk: ch.toUpperCase().charCodeAt(0) };
+				await keyDown(e, ch);
+				await keyUp(e);
+			}
+		},
+		async press(name) {
+			const e = keyEventFor(name);
+			if (!e) throw new Error(`press: unsupported key ${q(name)} (known: ${[...Object.keys(KEYS), 'Control+A'].join(', ')})`);
+			await keyDown(e);
+			await keyUp(e);
+		},
+		async waitFor(sel) {
+			const t0 = Date.now();
+			while (!(await evaluate(`window.__sc411.all(${q(sel)}).length > 0`))) {
+				if (Date.now() - t0 > 5000) throw new Error(`${sel} did not appear within 5000 ms`);
+				await sleep(50);
+			}
+		},
+		// A block write IS the note's text changing: the mark is the text now.
+		writeMark: () => evaluate(`window.app.vault.adapter.read(${q(notePath)})`),
+		async waitWrite(mark, timeoutMs) {
+			const t0 = Date.now();
+			while ((await evaluate(`window.app.vault.adapter.read(${q(notePath)})`)) === mark) {
+				if (Date.now() - t0 > timeoutMs) {
+					throw new Error(`write: true, but ${notePath} did not change within ${timeoutMs} ms (the script is wrong, or the product is)`);
+				}
+				await sleep(50);
+			}
+			// The write (PERSIST_DEBOUNCE_MS ~400 ms in) re-renders the section and the view adopts
+			// the new body; frames must not be taken mid-adoption.
+			await sleep(500);
+			await settle();
+		},
+		async prepareFrame({ park }) {
+			await evaluate(`(async () => { document.querySelectorAll('.notice, .tooltip').forEach((n) => n.remove()); await document.fonts.ready; })()`);
+			if (park !== false) {
+				const spot = await evaluate('window.__sc411.parkSpot()');
+				if (!spot) throw new Error('no window corner outside the element/modal to park the pointer in');
+				await mouse('mouseMoved', spot[0], spot[1]);
+			}
+			await settle();
+			// A tooltip can be created between the removal above and the parked pointer leaving.
+			await evaluate(`document.querySelectorAll('.notice, .tooltip').forEach((n) => n.remove())`);
+		},
+		rectOf: () => evaluate('window.__sc411.rect()'),
+		async screenshotPng() {
+			const vp = await evaluate('({ w: window.innerWidth, h: window.innerHeight })');
+			const res = await call('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: vp.w, height: vp.h, scale: dpr } });
+			return Buffer.from(res.data, 'base64');
+		},
 	};
 }
