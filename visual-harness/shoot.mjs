@@ -98,6 +98,58 @@ const comboName = (c) =>
 /** Only the realprint combo emulates the print MEDIUM; the twin stays on screen. */
 const mediaFor = (c) => (c.realprint ? 'print' : 'screen');
 
+// SC-372 - tables for assertTextScale (defined below the sweep; see the note there).
+const TEXT_SCALE_KNOBS = {
+	small: { pref: 'smallTextScale', tokens: ['secondary', 'label', 'caption', 'micro'] },
+	large: { pref: 'largeTextScale', tokens: ['heading', 'subheading', 'numeral', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'] },
+	control: { pref: 'controlTextScale', tokens: ['control'] },
+};
+const TEXT_SCALE_VALUES = [0.8, 1.2];
+/** [label, selector, knob, screenOnly] - real, un-nested consumers per role family. `screenOnly`
+ *  rows are Steel screen rules (print-excluded by their own selector anchor): on paper those
+ *  elements are not styled by the role scale at all, so they are not asserted there. The control
+ *  row is NOT screenOnly: on paper it must stay put, which is exactly what the help text promises. */
+const TEXT_SCALE_PAGES = [
+	{
+		element: 'statblock', fixture: 'default',
+		real: [
+			['statblock .dse-sb__item-l (secondary)', '.dse-sb__item-l', 'small'],
+			['statblock .dse-pr__badge (caption/secondary)', '.dse-pr__badge', 'small'],
+			['statblock .dse-head__eyebrow (label)', '.dse-head__eyebrow', 'small'],
+			['statblock .dse-head__primary (card name: heading)', '.dse-head__primary', 'large'],
+			['statblock .dse-sb__item-v (numeral)', '.dse-sb__item-v', 'large'],
+			['statblock .dse-sb__char-l (label)', '.dse-sb__char-l', 'small', true],
+			['statblock .dse-feature__meta-cell--keywords (subheading)', '.dse-feature__meta-cell--keywords', 'large', true],
+			['statblock button.dse-collapse__header (control)', 'button.dse-collapse__header', 'control'],
+		],
+	},
+	{
+		element: 'negotiation', fixture: 'default',
+		real: [
+			['negotiation .dse-nt__readout-value (subheading)', '.dse-nt__readout-value', 'large'],
+		],
+	},
+	{
+		element: 'initiative', fixture: 'controls',
+		real: [
+			['initiative .dse-stamina__threshold (micro)', '.dse-stamina__threshold', 'small'],
+			['initiative .dse-init__round (label)', '.dse-init__round', 'small', true],
+			['initiative h2.dse-init__title (h2)', 'h2.dse-init__title', 'large', true],
+			['initiative .dse-init__group--heroes h3 (h3)', '.dse-init__group--heroes h3', 'large', true],
+		],
+		prompt: true,
+	},
+];
+/** The modal page: montage "Log an action..." opens a real DseModal (kit/managedModal). */
+const TEXT_SCALE_MODAL_PAGE = {
+	element: 'montage', fixture: 'mid',
+	click: '.dse-mt__actionrow button[aria-label="Log an action\u2026"]',
+	real: [
+		['modal .dse-mt__sheet-sub (caption)', '.dse-modal .dse-mt__sheet-sub', 'small'],
+		['modal .dse-mt__sheet-eyebrow (micro)', '.dse-modal .dse-mt__sheet-eyebrow', 'small'],
+	],
+};
+
 // SC-204 — how far a flush child's corner arc may sit from its parent's INNER arc.
 // Both arcs are anchored on the same point, so any real difference is visible from the
 // first device pixel; the budget only exists so `calc()`/layout rounding is not a false
@@ -6245,56 +6297,9 @@ async function assertModalTextScaleAnchoring(page) {
 // Nested consumers of one knob compound (a badge inside a badge scales by value^2); every real
 // consumer below is deliberately un-nested, and the synthetic ones sit under a plain 16px parent.
 
-const TEXT_SCALE_KNOBS = {
-	small: { pref: 'smallTextScale', tokens: ['secondary', 'label', 'caption', 'micro'] },
-	large: { pref: 'largeTextScale', tokens: ['heading', 'subheading', 'numeral', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'] },
-	control: { pref: 'controlTextScale', tokens: ['control'] },
-};
-const TEXT_SCALE_VALUES = [0.8, 1.2];
-/** [label, selector, knob, screenOnly] - real, un-nested consumers per role family. `screenOnly`
- *  rows are Steel screen rules (print-excluded by their own selector anchor): on paper those
- *  elements are not styled by the role scale at all, so they are not asserted there. The control
- *  row is NOT screenOnly: on paper it must stay put, which is exactly what the help text promises. */
-const TEXT_SCALE_PAGES = [
-	{
-		element: 'statblock', fixture: 'default',
-		real: [
-			['statblock .dse-sb__item-l (secondary)', '.dse-sb__item-l', 'small'],
-			['statblock .dse-pr__badge (caption/secondary)', '.dse-pr__badge', 'small'],
-			['statblock .dse-head__eyebrow (label)', '.dse-head__eyebrow', 'small'],
-			['statblock .dse-head__primary (card name: heading)', '.dse-head__primary', 'large'],
-			['statblock .dse-sb__item-v (numeral)', '.dse-sb__item-v', 'large'],
-			['statblock .dse-sb__char-l (label)', '.dse-sb__char-l', 'small', true],
-			['statblock .dse-feature__meta-cell--keywords (subheading)', '.dse-feature__meta-cell--keywords', 'large', true],
-			['statblock button.dse-collapse__header (control)', 'button.dse-collapse__header', 'control'],
-		],
-	},
-	{
-		element: 'negotiation', fixture: 'default',
-		real: [
-			['negotiation .dse-nt__readout-value (subheading)', '.dse-nt__readout-value', 'large'],
-		],
-	},
-	{
-		element: 'initiative', fixture: 'controls',
-		real: [
-			['initiative .dse-stamina__threshold (micro)', '.dse-stamina__threshold', 'small'],
-			['initiative .dse-init__round (label)', '.dse-init__round', 'small', true],
-			['initiative h2.dse-init__title (h2)', 'h2.dse-init__title', 'large', true],
-			['initiative .dse-init__group--heroes h3 (h3)', '.dse-init__group--heroes h3', 'large', true],
-		],
-		prompt: true,
-	},
-];
-/** The modal page: montage "Log an action..." opens a real DseModal (kit/managedModal). */
-const TEXT_SCALE_MODAL_PAGE = {
-	element: 'montage', fixture: 'mid',
-	click: '.dse-mt__actionrow button[aria-label="Log an action\u2026"]',
-	real: [
-		['modal .dse-mt__sheet-sub (caption)', '.dse-modal .dse-mt__sheet-sub', 'small'],
-		['modal .dse-mt__sheet-eyebrow (micro)', '.dse-modal .dse-mt__sheet-eyebrow', 'small'],
-	],
-};
+// (The TEXT_SCALE_* tables sit up with the other module-level constants, above the top-level
+// sweep: this file awaits its sweep at module scope, so a const declared below it is still in
+// its temporal dead zone when the sweep reaches the gate.)
 
 /** Runs in the page. Never throws on a missing node - the Node side reports it by name. */
 function measureTextScale({ real, tokens, wantPrompt }) {
