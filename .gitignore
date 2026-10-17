@@ -46,3 +46,6 @@ demo-vault/.obsidian/plugins/*
 # SC-164: `mkdocs`/`mike deploy`'s own build output dir (mkdocs.yml has no explicit
 # site_dir, so this is the default) — regenerated on every deploy, never committed.
 site/
+
+# SC-408: real-Obsidian e2e run output (junit/coverage/failure bundles)
+e2e/.out/
