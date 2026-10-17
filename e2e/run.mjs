@@ -38,6 +38,7 @@ const PINNED = '1.14.4';
 const TAG = 'OBSIDIAN-E2E';
 const XVFB_RANGE = [200, 239];
 
+let interrupted = false; // set by the SIGINT/SIGTERM handler below
 class UsageError extends Error {}
 class EnvError extends Error {}
 
@@ -457,6 +458,7 @@ async function main() {
 		wdio.on('exit', (code, sig) => resolve(code ?? (sig ? 128 : -1)));
 	});
 	clearInterval(poll);
+	if (interrupted) return 2; // the signal handler is reaping and exiting; a tally would mislead
 
 	// ---- tally
 	const results = readJsonl(path.join(runDir, 'results'));
@@ -466,7 +468,7 @@ async function main() {
 	for (const r of results) {
 		if (r.state !== 'passed') {
 			failed++;
-			console.log(`${TAG} ${r.id} FAIL: ${(r.error ?? r.state).split('\n')[0]} [bundle ${path.join(runDir, r.id)}]`);
+			console.log(`${TAG} ${r.id} FAIL: ${(r.error ?? r.state).split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 4).join(' | ')} [bundle ${path.join(runDir, r.id)}]`);
 		} else if (r.knownBug) {
 			known++;
 			console.log(`${TAG} ${r.id} known-bug ${r.knownBug} (${r.durationMs} ms)`);
@@ -505,7 +507,6 @@ async function main() {
 	return 0;
 }
 
-let interrupted = false;
 for (const sig of ['SIGINT', 'SIGTERM']) {
 	process.once(sig, async () => {
 		if (interrupted) return;

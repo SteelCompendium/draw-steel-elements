@@ -22,9 +22,10 @@ before(async function () {
 	if (experimental) throw new Error('the experimental gate is ON in a shipped-spec session (data.json must not set it)');
 	await setWindowSize(1440, 1100);
 	const chrome = await ev<string>(`navigator.userAgent.match(/Chrome\\/([\\d.]+)/)?.[1] ?? '?'`);
+	const hasFocus = await ev<boolean>('document.hasFocus()');
 	const viewport = await ev<string>(`window.innerWidth + 'x' + window.innerHeight`);
 	console.log(
-		`OBSIDIAN-E2E session: obsidian app ${browser.getObsidianVersion()}, installer ${browser.getObsidianInstallerVersion()}, chrome ${chrome}, viewport ${viewport}, ${E2E.headed ? 'headed' : 'headless'}, pid ${process.pid}`,
+		`OBSIDIAN-E2E session: obsidian app ${browser.getObsidianVersion()}, installer ${browser.getObsidianInstallerVersion()}, chrome ${chrome}, viewport ${viewport}, hasFocus ${hasFocus}, ${E2E.headed ? 'headed' : 'headless'}, pid ${process.pid}`,
 	);
 });
 
