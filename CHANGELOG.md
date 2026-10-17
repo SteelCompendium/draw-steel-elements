@@ -552,9 +552,19 @@ for what needs action.
   stops itself, so the run is fully headless: it never touches the developer's own
   display and does not care whether Obsidian is already open. Before this, every
   docs image was a hand-taken screenshot, and by 7.0.0 all but one of them predated
-  the Steel rendering work and showed a plugin that no longer existed. Two images
-  (the animated GIFs) still need a human with a screen recorder; the runner names
-  them, and any Media file the manifest doesn't declare, at the end of every run.
+  the Steel rendering work and showed a plugin that no longer existed. The runner
+  names anything it cannot regenerate, and any Media file the manifest doesn't
+  declare, at the end of every run.
+- **The docs now show up-to-date animated GIFs for every interactive element**
+  (SC-411). The initiative tracker (on the README too), negotiation tracker, counter,
+  Stamina bar, Montage Test tracker, ability-card rolling and the initiative tracker's
+  Conditions manager each have a short GIF of the element in use, in the
+  current Steel look. The two old hand-recorded GIFs (initiative, negotiation) were
+  from before the re-skin; they are replaced. Every GIF is a scripted interaction
+  replayed against the real plugin by `npm run docs-shots` — nothing in `docs/Media`
+  is hand-recorded any more, so a GIF can no longer go stale on a landing — and
+  `npm run docs-shots -- --only=<name>.gif --check-stable` proves one regenerates
+  byte-identically.
 
 - [FEATURE] **One block renders any compendium entry: `ds-scc`** (SC-149). Sync
   the compendium, then write a fenced `ds-scc` block whose body is an entry's SCC

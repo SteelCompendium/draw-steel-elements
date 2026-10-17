@@ -4,6 +4,8 @@ The Counter Element is a tool designed to parse and display a numerical counter 
 define a counter with customizable maximum and minimum values using YAML syntax, and then renders this information in 
 an interactive format for easy tracking during gameplay or writing.
 
+![counter](Media/counter.gif)
+
 ## Usage
 
 To use the Counter Element, insert a code block with the language identifier `ds-counter`

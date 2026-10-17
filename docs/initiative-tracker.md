@@ -413,6 +413,8 @@ destructive operation**
 
 Conditions represent status effects affecting heroes or creatures, such as "dazed" or "slowed".
 
+![Adding a condition to a hero](Media/initiative-tracker-conditions.gif)
+
 ![initiative-tracker-add-conditions](Media/initiative-tracker-add-conditions.png)
 
 Click the "+" icon in the conditions section to open the **Conditions** manager for

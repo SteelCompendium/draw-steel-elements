@@ -278,6 +278,7 @@ regenerates all of them from the real plugin:
     npm run docs-shots                          # everything (~4 min)
     npm run docs-shots -- --only=statblock.png  # one image
     npm run docs-shots -- --browser-only        # skip the Obsidian half (no display used)
+    npm run docs-shots -- --only=counter.gif --check-stable   # an animated GIF: capture twice, compare
 
 **Run it before every release** (it is a step in the README's Release checklist). Docs images
 went stale silently for two years because nothing could regenerate them; now the fix is a
@@ -288,8 +289,8 @@ command, and a review of the diff.
 - `docs-manifest.mjs` — **the single source of truth**: one entry per file in `docs/Media`.
   Add an entry, reference `docs/Media/<out>` from the doc, re-run. Nothing else knows about
   docs images. Entries also declare what is deliberately NOT regenerable (`DOCS_MANUAL` —
-  the two animated GIFs, the favicon), which the run prints at the end along with any Media
-  file the manifest doesn't declare.
+  just the favicon, a brand asset: since SC-411 the animated GIFs are manifest entries too),
+  which the run prints at the end along with any Media file the manifest doesn't declare.
 - `docs-shots.mjs` — the runner. Element cards go through this harness's own page (fast, no
   display); everything else goes to `obsidian-camera.mjs --docs`.
 - **The 7.0.0 `experimental` switch (SC-407):** the Obsidian half (`--docs`) runs with it OFF,
@@ -305,7 +306,9 @@ command, and a review of the diff.
 Two properties are deliberate:
 
 - **It writes nowhere near `shots/`.** The `shots` / freeze / parity gates cannot move when
-  a docs image does, and vice versa.
+  a docs image does, and vice versa. That includes failures: a failed docs entry's error
+  window shot (and the "plugin not loadable" shot) goes to `visual-harness/dist/docs-errors/`
+  (`docs-<out>--ERROR.png`, git-ignored), never `shots/`.
 - **A docs image can show content no fixture has.** A manifest entry may carry its own note
   `body` or `canvas` JSON, written into the git-ignored `demo-vault/Harness/` under a
   `docs-` prefix. Adding a *fixture* for a docs image would move the `shots` count and the
@@ -331,3 +334,108 @@ Docs images are a publishing surface, so the framing differs from review evidenc
 dark chrome (the docs site is mkdocs-material `slate`), a 12px pad around the subject, and 2x
 (retina) capture — dropping to 1x automatically for anything that would otherwise ship a
 PNG over ~900 kB (a full statblock is 3 600 CSS px tall; at 2x it is a 2.5 MB download).
+
+### Animated GIFs (SC-411)
+
+Every interactive element's docs page shows a GIF, and none of them is a screen recording: a
+GIF is a **scripted interaction** declared in the manifest, replayed against the real plugin and
+encoded from the captured frames. A hand-recorded GIF goes stale on the next landing, exactly
+what the manifest was built to end for stills; this extends the same rule to motion.
+
+```js
+{
+  out: 'initiative-tracker.gif', kind: 'gif',
+  source: 'browser',                 // or 'obsidian'
+  element: 'initiative',             // REQUIRED, both sources (the deferred guard keys on it)
+  fixture: 'default',                // browser (+ width?, prefs?)   |  obsidian: body: … or note: …
+  seed: 7,                           // optional: seeds Math.random (dice)
+  dpr: 2,                            // 2 unless over the byte budget, then 1
+  cursor: true,                      // synthetic pointer overlay; false turns it off
+  viewport: { width, height },       // window / page size (must hold the card, and for Obsidian
+                                     // the centred modal too)
+  steps: [ { click: '.dse-init__title-text', hold: 500 }, … ],
+}
+```
+
+**Steps** are `action → settle → capture one frame` (unless `capture: false`):
+
+| step | meaning |
+|---|---|
+| `{ hold }` | capture the current state (the resting first frame, the last frame) |
+| `{ click: sel }` | move the synthetic cursor to `sel`, then a **real** pointer click (Playwright `locator.click()`; Obsidian CDP `Input.dispatchMouseEvent` move/press/release) — not `el.click()`, which fires no pointer, hover or focus events |
+| `{ hover: sel }` | move both cursors only (hover-revealed UI); the real pointer is *not* parked for this frame |
+| `{ type: text, into?: sel, select?: true, every?: n }` | focus `into` (or use the focused element), select-all first when `select`, send real key events; `every: n` captures one frame per `n` characters (a typing animation) |
+| `{ press: key }` | a real key event: `Enter`, `Escape`, `Tab`, `Backspace`, the arrows, `Control+A` |
+| `{ waitFor: sel }` | wait until `sel` exists (e.g. a modal's body after a click) |
+| `write: true` | modifier on `click` / `type` / `press`: **wait for the block write** before capturing. No write within 5 s fails the entry — the script is wrong or the product is |
+| `hold: ms` | how long the frame stays on screen (default 500); consecutive identical frames are merged and their holds added |
+| `capture: false`, `what: '…'` | act without capturing; a label for logs and `frames.json` |
+
+`write: true` means different things in the two cameras, because the two hosts differ. Browser:
+the harness host's `replaceSource` bumps `window.__dseHarnessWrites` (a no-op write otherwise),
+and the step waits for the counter. Obsidian: the step polls `app.vault.adapter.read(note)`
+until the note's text changes, then waits ~500 ms for the section re-render and view adoption.
+
+**Selectors** resolve **inside the element root** (`#mount` in the browser, the active leaf's
+`[data-dse-element]` in Obsidian), so they can never hit a second copy, and must match
+**exactly one node** (an ambiguous selector fails loudly instead of clicking the first of
+four). The prefix `modal:` resolves inside `.dse-modal`, which Obsidian appends to `<body>`.
+Use DSE classes and `aria-label`s (what the tests and the lifecycle gate already treat as
+contract); avoid positional `:nth-child` for content — `:has()` on a stable child
+(`.dse-init__entry:has(button[aria-label="Toggle turn taken: Frodo Baggins"]) …`) names a row
+by what it holds.
+
+**Validation is at load.** `docs-gif.mjs` rejects an unknown step or entry key, `write` on a
+step that cannot write (`hover`, `waitFor`, a capture-only step), a malformed selector prefix, a
+missing `element`, and a script that captures nothing — before anything launches. The deferred
+guard (`docs-deferred-guard.cjs`) refuses a gif entry for a deferred element from either
+source.
+
+**Two drivers, one interpreter.** `runGifSteps(driver, entry)` knows nothing about the camera;
+`createPageDriver` (Playwright, the browser half) and `createCdpDriver` (raw CDP,
+`obsidian-camera.mjs --docs`) implement the same small interface. Obsidian captures start from
+a **fresh scratch note** (`Harness/docs-<out>-<n>.md`, deleted afterwards): the trackers write
+into the note they live in, and a second capture must begin from the same text *and* the same
+session state. A `note:` entry copies the generated Harness note's text instead of mutating it.
+
+**Frames and size.** Each frame is a full fixed-size screenshot; the GIF is cut from the union
+of every frame's element rect (plus any open modal, plus the element chrome) + 12 px, so one
+fixed crop shows the whole animation. `gif-encode.mjs` (`gifenc` + `pngjs`, exact-pinned
+devDependencies, pure JS, no ffmpeg) uses one global 255-colour palette learned from *sampled*
+pixels, transparent-diff frames (`dispose=1`) and merges identical frames. The budget is
+1,000,000 B per GIF: 2x, falling back to 1x when over (the PNG rule); a GIF still over at 1x
+is printed `OVER BUDGET`. Review frames land in `visual-harness/dist/docs-gif-frames/<out>/NN.png`
+with a `frames.json` (holds, rects, sha256s) — git-ignored, never `docs/Media`.
+
+#### `--check-stable`: a GIF must be a regeneration target
+
+    npm run docs-shots -- --only=<x>.gif --check-stable
+
+Captures the entry **twice** (a fresh Chromium, or a fresh scratch note in the same Obsidian),
+asserts the same frame count and byte-identical frames (compared inside the GIF's crop, so the
+Obsidian window title — the scratch note's name — cannot fail it), and checks the encoder
+produced the same GIF. On a mismatch it prints the frame indices, the differing pixel count and
+the max channel delta, keeps the second run's frames next to the first's (`<out>.run2/`), and
+exits 1. Nothing is written to `docs/Media`. A GIF that fails it is not a regeneration target.
+
+#### The determinism knobs, and why each exists
+
+All are runner-side; none touches product code. Rates are measured (SC-411 r1 spike, r2):
+
+| hazard | what neutralises it | measured without it |
+|---|---|---|
+| raster noise on antialiased edges after an interaction repaint (browser) | `chromium.launch({ args: ['--disable-partial-raster'] })` | 1 run in 6 differed by 1 px; 13/13 identical with it |
+| CSS transitions / animations (browser) | `screenshot({ animations: 'disabled' })` | differed at a focus-ring frame |
+| CSS transitions / animations / caret blink (Obsidian) | freeze CSS (`transition: none; animation: none; caret-color: transparent`) injected for the run | 1 capture in 3 differed by 8 px (focused textarea ring); 5/5 identical with it |
+| hover state and hover-revealed chrome | the **real** pointer is parked in a corner outside the element before every capture (the synthetic cursor is DOM, so its position is deterministic) | hover chrome / tooltips appeared in frames |
+| Obsidian aria-label tooltips, notices | `.tooltip` / `.notice` removed before every capture (they are timer-driven) | tooltips ("Advance round") appeared in frames |
+| `:focus-visible` on a modal's autofocused control (Obsidian) | every capture starts from the same input modality (a real key press, then a real click on an inert spot) | the montage sheet's "Success" chip had its focus ring in the first capture after launch and not in later ones: 1,935 px |
+| the file explorer / ribbon beside the note (Obsidian) | both side panels collapsed for the capture (restored after) | a strip of the vault's file list in the clip |
+| dice (`Math.random`) | `seed:` installs a seeded PRNG before the page runs (init script / `Runtime.evaluate`) | rolls differ every run |
+| fonts | `await document.fonts.ready` before each capture | — |
+| write timing | `write: true` waits for the write, never a sleep | — |
+| deferred chrome | browser GIFs mount with `experimental=0` (harness param): the "Pin to sidebar" item that hover reveals does not exist in any frame | chrome strip with a deferred item |
+
+Obsidian self-updates its app asar on warm-up, so GIF bytes can move *across Obsidian releases*
+(the PNGs already do); stability is defined per environment, and a full `npm run docs-shots` in
+one environment leaves `git status` clean when nothing changed.

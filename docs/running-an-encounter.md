@@ -67,6 +67,8 @@ At the table:
   For a quick single removal you can skip the manager and click the condition's own icon
   in the row instead.
 
+![Adding a condition, start to finish](Media/initiative-tracker-conditions.gif)
+
 ![The conditions manager](Media/initiative-tracker-add-conditions.png)
 
 - **Minion squads** — a squad shares one Stamina pool. Click a minion to select it, then

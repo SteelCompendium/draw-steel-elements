@@ -161,4 +161,8 @@ and write the block for you — see
 ## Rolling on ability cards
 
 Rendered ability cards can roll their own power rolls: turn on **Enable rolling** in
-[Settings → Rolling](settings.md#rolling), and clicking a tier row rolls it.
+[Settings → Rolling](settings.md#rolling), and clicking a tier row rolls it. The dice button
+in the power roll's header rolls too: the result appears under the tiers, with the matching
+tier lit.
+
+![Rolling a power roll twice on an ability card](Media/feature-roll.gif)

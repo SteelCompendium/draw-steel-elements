@@ -48,6 +48,8 @@ or round — close it and click the cell you want instead. For a reminder of whi
 roll result counts as a success at each difficulty, open the **Test tiers** strip above
 the board.
 
+![Logging a success, then a failure through the sheet, then ending the round](Media/montage.gif)
+
 ![The Log an action sheet](Media/montage-sheet-modal.png)
 
 For an empty cell in the round currently in play, three small buttons sit right in the

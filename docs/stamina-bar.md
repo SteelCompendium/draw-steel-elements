@@ -28,6 +28,8 @@ This code block will render the stamina bar with the specified stamina values.
 This interactive bar visually represents the character's stamina, including any temporary stamina. 
 Clicking on the bar allows you to adjust the stamina values directly.
 
+![The stamina bar in use: open the editor, apply damage, catch a breath](Media/stamina-bar.gif)
+
 ![stamina bar modal](Media/stamina-bar-modal.png)
 
 ## Field Definitions
