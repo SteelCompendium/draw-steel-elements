@@ -57,8 +57,9 @@ This plugin exposes no programmatic API. Its interface is the set of code block 
 Users interact by writing YAML inside these fenced code blocks in Obsidian notes.
 `ds-scc` and `ds-sb`/`ds-ft`/`ds-fb` additionally accept a **whole-block reference**
 instead of inline YAML — see "Compendium reference (by-SCC)" below; `ds-scc` accepts ONLY
-that. All 22 elements register through the SAME `registerFrameworkElementDefinitions`
-(`main.ts`) — there is no longer a legacy (non-framework) element in this plugin.
+that. All 22 elements (13 shipped in 7.0.0; the 9 `deferred` ones sit behind the undocumented
+`experimental` switch, see `architecture.md` → `experimental.ts`) register through the SAME
+`registerFrameworkElementDefinitions` (`main.ts`) — there is no longer a legacy (non-framework) element in this plugin.
 
 **SC-149 (2026-08-10) — the eleven typed display elements are internal, not public.** D6
 shipped `displayFamily()` instances for kit/condition/treasure/ancestry/culture/career/

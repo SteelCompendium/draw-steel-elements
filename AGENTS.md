@@ -43,18 +43,18 @@ moves. Run it before a release; details in `visual-harness/README.md`.
 
 - **One rendering strategy: Element Framework v2** (`src/framework/` —
   `ElementRegistry` + `ElementPipeline` + `ElementView`, declared elements in
-  `src/elements/`). ALL 22 registered elements live on the framework (11 migrated +
+  `src/elements/`). ALL 22 registered elements live on the framework — 13 ship in 7.0.0, 9
+  are gated behind the `experimental` switch (see the **7.0.0 release gate** bullet below)
+  (11 migrated +
   `ds-roll` (D5) + the ONE public D6 compendium-reference element, `ds-scc` (SC-149's
   catch-all: body = an SCC code, renders whatever that code is) + 4 D8 GM-subsystem
   elements —
   `ds-encounter`/`ds-montage`/`ds-project`/`ds-party` — + 5 D7 hero-suite elements —
   `ds-hero`/`ds-conditions`/`ds-resource`/`ds-surges`/`ds-tokens`); every legacy processor
   is retired (`src/drawSteelAdmonition/` holds only `EncounterData` + negotiation
-  sub-views the framework reuses). **`ds-hero` is `hidden: true` as of 7.0.0** (SC-190,
-  `registry.ts`'s `ElementDefinition.hidden`): fully registered and functional, but
-  withheld from every discovery surface (`insert.ts`, `suggest.ts`) and the public docs
-  pending edit-modal/rendered-content QoL work; the other four D7 elements are
-  unaffected. Framework v2 replaced Vue 3 (2026-04-06 revert
+  sub-views the framework reuses). **`ds-hero` is `hidden: true`** (SC-190,
+  `registry.ts`'s `ElementDefinition.hidden`): withheld from every discovery surface
+  (`insert.ts`, `suggest.ts`) and the public docs. Framework v2 replaced Vue 3 (2026-04-06 revert
   decision, executed by D1) — see `.repo-docs/architecture.md` for the full picture.
 - **Sidebar host (D8)**: `src/framework/sidebar/` + `src/framework/host/
   SidebarBlockHost.ts` give any element a persistent `ItemView` leaf mount
@@ -143,7 +143,14 @@ moves. Run it before a release; details in `visual-harness/README.md`.
   an inert "not available in this release" card, the sidebar is not registered, and the
   `authoringControls` / `printPreview` prefs do not exist. Tests, the visual harness and
   the lifecycle/camera scratch vaults run with it ON; a test of the off state opts out
-  explicitly. See `.repo-docs/architecture.md` → `experimental.ts`.
+  explicitly. The user docs, README and CHANGELOG describe ONLY the shipped set (SC-407): the
+  deferred elements, the sidebar, the edit pencil/form editor and Print preview have no
+  user-doc footprint, and the switch itself is deliberately undocumented there. The docs
+  camera (`npm run docs-shots`) forces the switch OFF so docs images depict the shipping
+  product (`visual-harness/camera-data-json.cjs` `seedExperimental(file, on)`); every other
+  camera mode keeps it ON. What was removed, and where to restore it from, is the SC-407
+  restore map in `docs/superpowers/dse-7.0.0-release-audit.md` §11. See
+  `.repo-docs/architecture.md` → `experimental.ts`.
 - Output must be CJS format for Obsidian
 - Target ES2018
 - `obsidian`, `electron`, and CodeMirror packages are external (host-provided)
