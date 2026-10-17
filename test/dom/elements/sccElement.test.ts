@@ -29,6 +29,11 @@ const RULE_CODE = 'mcdm.heroes.v1/rule.combat/turn';
 const RULE_REL = 'rule/combat/turn.md';
 const GOBLIN_CODE = 'mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker';
 const GOBLIN_REL = 'monster/goblin/statblock/goblin-stinker.md';
+// SC-390: a beastheart companion. It used to ship as `type: feature-group` (table only, no
+// ds-* block -> "has no renderer"); it is a real `type: statblock` + `ds-sb` now, so it
+// takes the exact statblock path the goblin does. A REAL emitted file, not a hand-trim.
+const PANTHER_CODE = 'mcdm.beastheart.v1/monster.companion.beastheart.statblock/panther';
+const PANTHER_REL = 'monster/companion/beastheart/statblock/panther.md';
 const FEATURE_CODE = 'mcdm.heroes.v1/feature.fury.level-1/growing-ferocity';
 const FEATURE_REL = 'feature/fury/level-1/growing-ferocity.md';
 // SC-141 (landed): a REAL corpus ability file. Its frontmatter `type` is the LEAF of the
@@ -133,6 +138,7 @@ describe('SC-149 baseForSccType — one element, every family', () => {
 		['complication', 'complication'],
 		['rule.combat', 'rule'],
 		['monster.goblin.statblock', 'statblock'],
+		['monster.companion.beastheart.statblock', 'statblock'],
 		['feature.fury.level-1', 'feature'],
 		// SC-141's widened scopes reach ds-scc's renderer lookup for free — it keys on the
 		// adapter alias, so a family that widens carries its view with it.
@@ -241,6 +247,42 @@ describe('SC-149 ds-scc end-to-end against real md-dse fixtures', () => {
 		const card = root.querySelector('.dse-sb') as HTMLElement;
 		expect(card).not.toBeNull();
 		expect(card.querySelector('.dse-head__primary--left')!.textContent).toBe('Goblin Stinker');
+	});
+
+	// SC-390: the beastheart panther (Scott's reported "has no renderer" card) renders the
+	// REAL statblock card — the Companion kind-noun, text Free Strike / Stamina verbatim, the
+	// Skills cell, its two Level-1 abilities, and no dangling "EV" (companions have none).
+	test('a beastheart companion code renders the REAL statblock card (SC-390)', async () => {
+		const root = await render(PANTHER_CODE, [PANTHER_REL]);
+		expect(errorText(root)).toBe('');
+		expect(root.textContent).not.toContain('has no renderer');
+		expect(root.getAttribute('data-dse-element')).toBe('statblock');
+		const card = root.querySelector('.dse-sb') as HTMLElement;
+		expect(card).not.toBeNull();
+
+		const head = card.querySelector('.dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__primary--left')!.textContent).toBe('Panther');
+		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Companion');
+		expect(head.querySelector('.dse-head__deck--right')).toBeNull();
+		expect(card.textContent).not.toContain('EV');
+
+		// Text stats print verbatim; nothing coerces them to a number.
+		const items = Array.from(card.querySelectorAll('.dse-sb__item')).map((el) => [
+			el.querySelector('.dse-sb__item-l')!.textContent,
+			el.querySelector('.dse-sb__item-v')!.textContent,
+		]);
+		expect(items).toContainEqual(['Free Strike', '1 + M']);
+		expect(items).toContainEqual(['Stamina', '= yours']);
+
+		const skills = card.querySelector('.dse-sb__kv--skills') as HTMLElement;
+		expect(skills.querySelector('.dse-sb__kv-l')!.textContent).toBe('Skills');
+		expect(skills.querySelector('.dse-sb__kv-v')!.textContent).toContain('Sneak');
+
+		const features = card.querySelectorAll('.dse-sb > .dse-feature__nested > .dse-feature');
+		expect(features).toHaveLength(2);
+		expect(features[0].textContent).toContain('Pounce');
+		expect(features[0].textContent).toContain('Signature');
+		expect(features[1].textContent).toContain('Mighty Spring');
 	});
 
 	// The degrade ladder is RefUnwrapView's, unchanged by SC-149 — but a code that isn't

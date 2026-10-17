@@ -9,7 +9,7 @@
 //     .dse-head                             ← kit cardHead (§3.8 slot fill below)
 //     .dse-sb__meta                         ← the info grid:
 //       .dse-sb__items > .dse-sb__item      ←   Size/Speed/Stamina/Stability/Free Strike
-//       .dse-sb__grid  > .dse-sb__kv        ←   Immunity/Weakness/Movement/With Captain
+//       .dse-sb__grid  > .dse-sb__kv        ←   Immunity/Weakness/Movement/With Captain/Skills
 //     .dse-sb__chars > .dse-sb__char        ← Might/Agility/Reason/Intuition/Presence
 //     .dse-hr (kit divider, ornament)       ← the legacy ◆ rule before the features
 //     .dse-feature__nested > .dse-feature…  ← Task 5's renderFeatureList (shared grammar)
@@ -27,6 +27,9 @@
 // The legacy 'Unknown Ancestry' fallback has no 3.x analog — `keywords` has no
 // domain-specific empty-value string, so a keywordless statblock's left-eyebrow
 // slot renders empty (F2 golden update; the slot itself is never omitted).
+// SC-390: the one deliberate exception to "fallbacks print verbatim" is an EMPTY `ev` (`ev: ""`,
+// what companions and the summoner champions carry): the EV chip is omitted rather than
+// printing a dangling "EV ". An ABSENT `ev` still reads 'EV N/A'.
 //
 // Role tint: the shared applyRoleTint (roleTint.ts, extracted from T6a) maps the
 // SDK `role` string (falling back to `organization` when `role` is empty — the
@@ -61,7 +64,7 @@ import {
 } from './stickyHeader';
 import { FeatureConfig } from '@model/FeatureConfig';
 import type { StatblockConfig } from '@model/StatblockConfig';
-import type { Statblock } from 'steel-compendium-sdk';
+import type { CompanionStatblock } from './companionFields';
 
 /** SC-123: the villain band's head wording + its session slot. The title is the
  *  site's own ("Villain Actions", steel-statblock.css `.sb__band-title`); the slot
@@ -134,13 +137,15 @@ function crestIconForRole(role: DseRole | undefined): string | undefined {
  * production carries `role: ""`, so without this fallback those ~52 boss/solo
  * creatures would render with no role tint at all (task-1-review.md Critical).
  */
-export function statblockHeaderParts(statblock: Statblock): {
+export function statblockHeaderParts(statblock: CompanionStatblock): {
 	name: string;
 	leftEyebrow: string;
 	leftDeck: string | undefined;
 	rightEyebrow: string;
 	rightPrimary: string;
-	rightDeck: string;
+	/** `undefined` = no EV chip at all (SC-390: an EMPTY `ev`, which companions and the
+	 *  summoner champions carry, used to print a dangling "EV "). */
+	rightDeck: string | undefined;
 	role: string | undefined;
 } {
 	const orgRole = [statblock.organization, statblock.role]
@@ -166,7 +171,14 @@ export function statblockHeaderParts(statblock: Statblock): {
 		leftDeck: statblock.keywords && statblock.keywords.length > 0 ? statblock.keywords.join(', ') : undefined,
 		rightEyebrow: statblock.level !== undefined ? `Level ${statblock.level}` : 'Level N/A',
 		rightPrimary: orgRole.length > 0 ? orgRole : 'No Role',
-		rightDeck: statblock.ev !== undefined ? `EV ${statblock.ev}` : 'EV N/A',
+		// An ABSENT `ev` keeps the legacy 'EV N/A' fallback verbatim; an EMPTY one (the
+		// shape steel-etl emits for companions and champions: `ev: ""`) omits the slot.
+		rightDeck:
+			statblock.ev === undefined
+				? 'EV N/A'
+				: String(statblock.ev).trim() === ''
+					? undefined
+					: `EV ${statblock.ev}`,
 		role: statblock.role || statblock.organization,
 	};
 }
@@ -209,7 +221,7 @@ interface StatblockKv extends StickyPair {
  *
  * The five primary stats: Size / Speed / Stamina / Stability / Free Strike.
  */
-function statblockDefenseCells(sb: Statblock): StickyPair[] {
+function statblockDefenseCells(sb: CompanionStatblock): StickyPair[] {
 	return [
 		{ label: 'Size', value: `${sb.size ?? '-'}` },
 		{ label: 'Speed', value: `${sb.speed ?? '-'}` },
@@ -222,18 +234,23 @@ function statblockDefenseCells(sb: Statblock): StickyPair[] {
 /** The secondary-stats cells in the FULL CARD's order. Legacy StatsView parity:
  *  Immunity/Weakness/Movement always print (with the '-' fallback); the With Captain cell
  *  only exists when the field does. */
-function statblockMetaCells(sb: Statblock): StatblockKv[] {
+function statblockMetaCells(sb: CompanionStatblock): StatblockKv[] {
 	const cells: StatblockKv[] = [
 		{ modifier: 'immunity', label: 'Immunity', value: sb.immunities?.length ? sb.immunities.join(', ') : '-' },
 		{ modifier: 'weakness', label: 'Weakness', value: sb.weaknesses?.length ? sb.weaknesses.join(', ') : '-' },
 		{ modifier: 'movement', label: 'Movement', value: `${sb.movement ?? '-'}` },
 	];
 	if (sb.withCaptain) cells.push({ modifier: 'captain', label: 'With Captain', value: sb.withCaptain });
+	// SC-390: a companion's Skills ride the 4th meta slot, exactly where the site puts them
+	// (its Captain slot, relabelled). `skills` is only ever a non-empty list or absent.
+	if (Array.isArray(sb.skills) && sb.skills.length > 0) {
+		cells.push({ modifier: 'skills', label: 'Skills', value: sb.skills.join(', ') });
+	}
 	return cells;
 }
 
 /** The five characteristics in legacy order, values already formatted. */
-function statblockCharCells(sb: Statblock): StickyPair[] {
+function statblockCharCells(sb: CompanionStatblock): StickyPair[] {
 	const chars = sb.characteristics;
 	return [
 		{ label: 'Might', value: formatCharacteristic(chars.might) },
@@ -253,12 +270,13 @@ function statblockCharCells(sb: Statblock): StickyPair[] {
  * full card's grid order above: in the bar the movement/captain pair is the thing a GM
  * re-checks mid-turn, so it leads. Exported for the DOM tests.
  */
-export function statblockStickyParts(sb: Statblock): StickyHeaderParts {
+export function statblockStickyParts(sb: CompanionStatblock): StickyHeaderParts {
 	const header = statblockHeaderParts(sb);
 	const meta = statblockMetaCells(sb);
 	const byModifier = (modifier: string): StatblockKv | undefined =>
 		meta.find((cell) => cell.modifier === modifier);
-	const secondary = ['movement', 'captain', 'immunity', 'weakness']
+	// SC-390: Skills sits where the site's sticky bar puts the Captain-slot cell it fills.
+	const secondary = ['movement', 'captain', 'skills', 'immunity', 'weakness']
 		.map(byModifier)
 		.filter((cell): cell is StatblockKv => cell !== undefined)
 		.map(({ label, value }) => ({ label, value }));
@@ -372,7 +390,7 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 
 	/** The .dse-sb__meta info grid: the legacy StatsView surface — the
 	 *  Size/Speed/Stamina/Stability/Free Strike item row, then the
-	 *  Immunity/Weakness/Movement/With Captain kv cells — labels + values VERBATIM
+	 *  Immunity/Weakness/Movement/With Captain/Skills kv cells — labels + values VERBATIM
 	 *  (incl. the '-' fallbacks); the "label: " colon is CSS-owned. */
 	private renderMeta(card: HTMLElement, model: StatblockConfig): void {
 		const sb = model.statblock;

@@ -38,7 +38,7 @@ import { DEFAULT_SETTINGS } from '@model/Settings';
 import { StatblockConfig } from '@model/StatblockConfig';
 import { App, Plugin, MarkdownRenderer, makeFakeContext, flushAsync } from '../../mocks/obsidian';
 import { statblockElement } from '../../../src/elements/statblock/definition';
-import { StatblockElementView } from '../../../src/elements/statblock/view';
+import { StatblockElementView, statblockStickyParts } from '../../../src/elements/statblock/view';
 import { RefUnwrapView } from '../../../src/elements/shared/RefUnwrapView';
 import { styleGuardFindings } from '../kit/styleGuard';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
@@ -87,6 +87,30 @@ might: -1
 agility: 2
 reason: 0
 intuition: 1
+`;
+
+/** SC-390: a beastheart-companion-shaped statblock — TEXT free_strike/stamina, em-dash
+ *  free movement, no EV. Append `skills:` etc. per test. */
+const COMPANION_BASE = `type: statblock
+name: Test Panther
+level: 1
+role: ""
+organization: Companion
+keywords:
+  - Animal
+  - Companion
+ev: ""
+stamina: = yours
+speed: 7
+movement: Climb
+size: 1M
+stability: 1
+free_strike: 1 + M
+might: 2
+agility: 2
+reason: -1
+intuition: 2
+presence: 1
 `;
 
 function makeHost(overrides: Partial<BlockHost> = {}) {
@@ -358,6 +382,100 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		const values = Array.from(grid.querySelectorAll('.dse-sb__kv-v')).map((el) => el.textContent);
 		expect(labels).toEqual(['Immunity', 'Weakness', 'Movement', 'With Captain']);
 		expect(values).toEqual(['-', 'fire 2, holy 1', 'climb', 'Strike damage +2']);
+	});
+
+	// SC-390: beastheart companions carry a `skills` list and TEXT stats (free_strike
+	// "1 + M", stamina "= yours"). The Skills cell takes the 4th meta slot, exactly where the
+	// site puts it (steel-etl companion_statblock.go: the Captain slot, relabelled "Skills");
+	// it exists only when the list is non-empty, like With Captain.
+	test('SC-390: a non-empty `skills` list renders a Skills kv cell after Movement, comma-joined; text free_strike/stamina print verbatim', async () => {
+		const { root } = await renderStatblock(`${COMPANION_BASE}skills:\n  - Sneak\n  - Hide\n`);
+
+		const grid = root.querySelector('.dse-sb__meta > .dse-sb__grid') as HTMLElement;
+		const labels = Array.from(grid.querySelectorAll('.dse-sb__kv-l')).map((el) => el.textContent);
+		const values = Array.from(grid.querySelectorAll('.dse-sb__kv-v')).map((el) => el.textContent);
+		expect(labels).toEqual(['Immunity', 'Weakness', 'Movement', 'Skills']);
+		expect(values).toEqual(['-', '-', 'Climb', 'Sneak, Hide']);
+		expect(grid.querySelector('.dse-sb__kv--skills')).not.toBeNull();
+
+		const items = Array.from(root.querySelectorAll('.dse-sb__item')).map(
+			(el) => `${el.querySelector('.dse-sb__item-l')!.textContent}=${el.querySelector('.dse-sb__item-v')!.textContent}`,
+		);
+		expect(items).toContain('Free Strike=1 + M');
+		expect(items).toContain('Stamina== yours');
+	});
+
+	test('SC-390: no `skills` (absent or empty) -> NO Skills cell, and the existing three/four-cell grids are unchanged', async () => {
+		for (const body of [COMPANION_BASE, `${COMPANION_BASE}skills: []\n`, humanBanditChief]) {
+			const { root } = await renderStatblock(body);
+			expect(root.querySelector('.dse-sb__kv--skills')).toBeNull();
+			const labels = Array.from(root.querySelectorAll('.dse-sb__grid .dse-sb__kv-l')).map((el) => el.textContent);
+			expect(labels).not.toContain('Skills');
+		}
+		const { root } = await renderStatblock(WITH_META);
+		const labels = Array.from(root.querySelectorAll('.dse-sb__grid .dse-sb__kv-l')).map((el) => el.textContent);
+		expect(labels).toEqual(['Immunity', 'Weakness', 'Movement', 'With Captain']);
+	});
+
+	test('SC-390: the pinned mini-header carries Skills too (it must not disagree with the card)', () => {
+		const withSkills = StatblockConfig.readYaml(`${COMPANION_BASE}skills:\n  - Sneak\n`).statblock;
+		const secondary = statblockStickyParts(withSkills).secondary;
+		expect(secondary).toContainEqual({ label: 'Skills', value: 'Sneak' });
+		const without = StatblockConfig.readYaml(COMPANION_BASE).statblock;
+		expect(statblockStickyParts(without).secondary.map((p) => p.label)).not.toContain('Skills');
+	});
+
+	// SC-390: steel-etl's companions and the 4 summoner champions carry `ev: ""`. The head
+	// used to print a dangling "EV " chip for them; an empty EV now omits the slot, while a
+	// set EV (and the legacy "EV N/A" for an ABSENT key, pinned above) is unchanged.
+	test('SC-390: an empty `ev` omits the EV chip entirely (no dangling "EV "); a set `ev` still prints', async () => {
+		const { root: empty } = await renderStatblock(statblockRolelessCorpus);
+		expect(statblockRolelessCorpus).toMatch(/^ev: ""$/m);
+		expect(empty.querySelector('.dse-sb > .dse-head .dse-head__deck--right')).toBeNull();
+		expect(empty.querySelector('.dse-sb > .dse-head')!.textContent).not.toContain('EV');
+
+		const { root: whitespace } = await renderStatblock(`${COMPANION_BASE}ev: "  "\n`);
+		expect(whitespace.querySelector('.dse-sb > .dse-head .dse-head__deck--right')).toBeNull();
+
+		const { root: set } = await renderStatblock(humanBanditChief);
+		expect(set.querySelector('.dse-sb > .dse-head .dse-head__deck--right')!.textContent).toBe('EV 20');
+	});
+
+	// SC-390: steel-etl embeds a companion's plain Level-1 features as `feature_type: feature`
+	// (the member's own entity type), which is not one of the SDK's ability/trait/subtrait
+	// values. SDK 3.0.0's Feature.fromDTO answered that with `dto.isTrait is not a function` and
+	// the whole card failed to render; StatblockConfig.readYaml now settles the type with the
+	// SDK's own rule (SC-155's fix, shipped in a later SDK) before handing the block over.
+	test('SC-390: a statblock feature whose feature_type is not ability/trait/subtrait (or is missing) is classified, not a crash', async () => {
+		const body = `${COMPANION_BASE}features:
+  - name: Mighty Spring
+    feature_type: feature
+    effects:
+      - effect: They can jump.
+  - name: Absent Type
+    effects:
+      - effect: No feature_type at all.
+  - name: Pounce
+    feature_type: feature
+    usage: Maneuver
+    keywords: [Melee]
+    distance: Melee 1
+    target: One enemy
+    effects:
+      - effect: Bites.
+  - name: Kept
+    feature_type: subtrait
+`;
+		const sb = StatblockConfig.readYaml(body).statblock;
+		expect(sb.features.map((f) => [f.name, f.feature_type])).toEqual([
+			['Mighty Spring', 'trait'],
+			['Absent Type', 'trait'],
+			['Pounce', 'ability'],
+			['Kept', 'subtrait'],
+		]);
+		const { root } = await renderStatblock(body);
+		expect(root.querySelector('.dse-error-card')).toBeNull();
+		expect(root.querySelectorAll('.dse-sb > .dse-feature__nested > .dse-feature')).toHaveLength(4);
 	});
 
 	test('.dse-sb__chars: the five characteristics render as verbatim "Name +N" pairs, legacy order', async () => {
