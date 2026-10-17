@@ -181,3 +181,26 @@ test('SC-279: flat mode drops Edges / Banes from the strip', async () => {
 	expect(containerEl.querySelector('.dse-stepper')).toBeNull();
 	expect(containerEl.querySelector('.dse-rollbar__net')).toBeNull();
 });
+
+test('SC-279: ds-roll restores the Main-action checkbox from the session after a re-render', async () => {
+	const { deps } = makeDeps();
+	deps.roll = stubService([5, 6]);
+	const mountAgain = async () => {
+		const owner = new Component();
+		owner.load();
+		const containerEl = document.createElement('div');
+		document.body.appendChild(containerEl);
+		await new ElementPipeline(deps).run(rollElement, 'main_action: false', makeHost(containerEl, owner, 'rebuild'));
+		await flushAsync(2);
+		return containerEl;
+	};
+	const first = await mountAgain();
+	const box = (el: HTMLElement) => el.querySelector<HTMLInputElement>('.dse-rollbar__check--main input')!;
+	expect(box(first).checked).toBe(false); // the authored default
+	box(first).click();
+	first.querySelector<HTMLButtonElement>('button[aria-label="Roll"]')!.click();
+	await flushAsync(1);
+	const rebuilt = await mountAgain(); // the echo-rebuild: a brand-new view over the same session
+	expect(box(rebuilt).checked).toBe(true);
+	expect(rebuilt.querySelector('.dse-rollbar__summary')!.textContent).toBe('main action');
+});

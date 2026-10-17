@@ -75,7 +75,8 @@ export class RollView extends ElementView<RollModel> {
 				defaults: { ...seeds, mainAction: model.mainAction },
 				persist: { session: this.cx.session, blockKey: this.blockKey(), slot: MODS_OPEN_SLOT },
 				showMainAction: true,
-				mainAction: model.mainAction,
+				// LOW-4: ds-roll's last state INCLUDES mainAction (cards deliberately drop it, OD-6).
+				mainAction: last?.mainAction ?? model.mainAction,
 				onRoll: (state) => void this.doRoll(state),
 			},
 			this,
