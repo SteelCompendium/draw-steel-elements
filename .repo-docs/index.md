@@ -23,6 +23,7 @@ An Obsidian plugin that renders Draw Steel TTRPG (by MCDM Productions) content a
 | Install dependencies | `npm i` |
 | Run locally (watch mode) | `npm run dev` |
 | Run tests | `npm test` |
+| Functional tests in a real Obsidian | `npm run e2e` (see `e2e/README.md`) |
 | Build for production | `npm run build` |
 | Type check only | `npm run tsc` |
 | Prepare release | `just release <version>` |
