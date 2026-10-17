@@ -28,7 +28,8 @@ import { tokensElement } from '@/elements/tokens/definition';
 import { rollElement } from '@/elements/roll/definition';
 import { heroElement } from '@/elements/hero/definition';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
-import { App, Plugin, makeFakeContext, flushAsync } from '../../mocks/obsidian';
+import { App, Plugin, makeFakeContext, flushAsync, stringifyYaml } from '../../mocks/obsidian';
+import { PERSIST_DEBOUNCE_MS } from '@/framework/view';
 import { makeCompendiumDeps } from '../elements/_refHarness';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -292,5 +293,70 @@ describe('SC-406 — pref catalog, legacy alias, settings round-trip', () => {
 			await loadPlugin(data as Record<string, unknown>);
 			expect(isExperimental()).toBe(expected);
 		}
+	});
+});
+
+// SC-406 fix round 1 (MEDIUM-1): a gated key in a block's `prefs:` is rejected (not applied)
+// while the switch is off, but a write to the block must keep it in the note.
+describe('SC-406 — gated per-block `prefs:` keys survive a block write', () => {
+	/** Render a ds-counter through the plugin's own pipeline (its prefs store carries the live
+	 *  catalog for the switch state), click + once, and return the body the write produced. */
+	async function writeBody(data: Record<string, unknown>, source: string): Promise<string> {
+		jest.useFakeTimers();
+		try {
+			const { plugin } = await loadPlugin(data);
+			const host = makeHost('ds-counter');
+			await plugin.frameworkV2!.pipeline.run(counterElement, source, host);
+			(host.containerEl.querySelector('button[aria-label^="Increase"]') as HTMLElement).click();
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
+			expect(host.replaceSource).toHaveBeenCalledTimes(1);
+			return (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		} finally {
+			jest.useRealTimers();
+		}
+	}
+	const warn = (): jest.SpyInstance => jest.spyOn(console, 'warn').mockImplementation(() => {});
+	afterEach(() => jest.restoreAllMocks());
+
+	test('off: printPreview keeps its place and value next to an applied key', async () => {
+		warn();
+		const body = await writeBody({}, 'prefs:\n  printPreview: "on"\n  reduceMotion: true\ncurrent_value: 3\n');
+		expect(body.startsWith(stringifyYaml({ prefs: { printPreview: 'on', reduceMotion: true } }))).toBe(true);
+		expect(body).toContain('current_value: 4');
+	});
+
+	test('off: when printPreview is the ONLY key the prefs map is not removed', async () => {
+		warn();
+		const body = await writeBody({}, 'prefs:\n  printPreview: "on"\ncurrent_value: 3\n');
+		expect(body.startsWith(stringifyYaml({ prefs: { printPreview: 'on' } }))).toBe(true);
+	});
+
+	test('off: authoringControls is kept the same way; a typo key is still dropped (as before the gate)', async () => {
+		warn();
+		const body = await writeBody({}, 'prefs:\n  authoringControls: true\n  nonsenseKey: 1\n  reduceMotion: true\ncurrent_value: 3\n');
+		expect(body.startsWith(stringifyYaml({ prefs: { authoringControls: true, reduceMotion: true } }))).toBe(true);
+		expect(body).not.toContain('nonsenseKey');
+	});
+
+	test('off: two blocks with different gated prefs do not cross-talk', async () => {
+		warn();
+		const a = await writeBody({}, 'prefs:\n  printPreview: "on"\ncurrent_value: 3\n');
+		const b = await writeBody({}, 'prefs:\n  authoringControls: true\ncurrent_value: 7\n');
+		expect(a).toContain('printPreview') ;
+		expect(a).not.toContain('authoringControls');
+		expect(b).toContain('authoringControls');
+		expect(b).not.toContain('printPreview');
+	});
+
+	test('off: a block with no gated key writes exactly what it always did', async () => {
+		warn();
+		const body = await writeBody({}, 'prefs:\n  reduceMotion: true\ncurrent_value: 3\n');
+		expect(body.startsWith(stringifyYaml({ prefs: { reduceMotion: true } }))).toBe(true);
+		expect(body).not.toContain('printPreview');
+	});
+
+	test('on: printPreview is an applied override and the write is the pre-SC-406 shape', async () => {
+		const body = await writeBody({ experimental: true }, 'prefs:\n  printPreview: "on"\n  reduceMotion: true\ncurrent_value: 3\n');
+		expect(body.startsWith(stringifyYaml({ prefs: { printPreview: 'on', reduceMotion: true } }))).toBe(true);
 	});
 });

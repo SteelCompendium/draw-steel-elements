@@ -23,6 +23,7 @@ import type { SccAnchorResolver } from '@/refs/rewriteSccAnchors';
 import type { CompendiumIndex } from '@/services/CompendiumIndex';
 import type { DsePrefs } from './seams/prefs';
 import { extractPrefOverrides, applyPrefOverrides, withPrefOverrides } from './prefOverrides';
+import type { PrefPassthrough } from './prefOverrides';
 import { watchPrintMedia } from './printMedia';
 import {
 	extractCollapseKeys,
@@ -318,6 +319,8 @@ export interface PrepareModelDeps {
 export interface PreparedModel<M> {
 	readonly model: M;
 	readonly prefOverrides: Partial<DsePrefs> | undefined;
+	/** SC-406: gated `prefs:` keys (switch off) rejected but kept so a write-back re-emits them. */
+	readonly prefPassthrough: PrefPassthrough | undefined;
 	/** SC-169: the three reserved collapse keys as authored, plus exactly which of them
 	 *  were popped out of the block body (the serializer wrapper's re-emit list). */
 	readonly collapseKeys: CollapseKeys;
@@ -415,7 +418,9 @@ export async function prepareModel<M>(
 	// D4 §1.3 (Plan 13): pop the reserved per-block `prefs:` map BEFORE schema
 	// validation (schemas never see the reserved key) and before def.parse (it never
 	// enters the semantic model).
-	const prefOverrides = extractPrefOverrides(rawData, prefs);
+	const passthrough: PrefPassthrough = { values: {}, order: [] };
+	const prefOverrides = extractPrefOverrides(rawData, prefs, passthrough);
+	const prefPassthrough = Object.keys(passthrough.values).length > 0 ? passthrough : undefined;
 
 	// SC-169: the three reserved top-level collapse keys (`collapsed:`, `collapsible:`,
 	// `collapse_default:`) — the AUTHORED whole-element collapse contract. Popped here for
@@ -468,7 +473,7 @@ export async function prepareModel<M>(
 		model = runStage('render', () => def.parse(rawData, bodySource));
 	}
 
-	return { model, prefOverrides, collapseKeys };
+	return { model, prefOverrides, prefPassthrough, collapseKeys };
 }
 
 /** Services bundle ElementPipeline needs beyond app/plugin/settings (F1 §2.2's onload
@@ -559,7 +564,7 @@ export class ElementPipeline {
 			// catch below, which renders it via renderErrorCard exactly as the old inline
 			// early-return did (isValidationResult recognizes a raw ValidationResult however
 			// it arrives).
-			const { model, prefOverrides, collapseKeys } = await prepareModel(def, source, {
+			const { model, prefOverrides, prefPassthrough, collapseKeys } = await prepareModel(def, source, {
 				prefs,
 				refs: cx.refs,
 				validation,
@@ -613,7 +618,9 @@ export class ElementPipeline {
 				}
 				// D4: a block carrying prefs: must not lose it when replaceSource
 				// rewrites the body from serialize(model).
-				view.setSerializer(prefOverrides ? withPrefOverrides(serialize, prefOverrides) : serialize);
+				view.setSerializer(
+					prefOverrides || prefPassthrough ? withPrefOverrides(serialize, prefOverrides, prefPassthrough) : serialize,
+				);
 			}
 			// SC-169 FIX ROUND 1 (H-1) — everything below this line is PIPELINE-owned DOM
 			// appended into DOM the VIEW owns, so it has to be re-appended every time the

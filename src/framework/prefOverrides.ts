@@ -30,6 +30,24 @@
 import { stringifyYaml } from 'obsidian';
 import type { Component } from 'obsidian';
 import type { DsePrefs, PreferenceStore } from './seams/prefs';
+import { EXPERIMENTAL_PREF_KEYS } from '@/prefs/catalog';
+import { isExperimental } from './experimental';
+
+/**
+ * SC-406 — the gated keys of a block's `prefs:` map, held aside while the experimental switch
+ * is off. A beta-era note may carry `printPreview` (or `authoringControls`) in a block's
+ * `prefs:`; with the switch off those descriptors do not exist, so `extractPrefOverrides`
+ * rejects them (warn, do not apply) — but a later write to the block must not DELETE them from
+ * the user's note, and turning the switch back on must find them still there. `values` are the
+ * kept entries; `order` is every key of the author's map (applied and kept) in their original
+ * order, so the re-emit reads the way it was written. Only ever populated for
+ * `EXPERIMENTAL_PREF_KEYS` while the switch is off: typo keys are still dropped on write (as
+ * they always were) and, switch on, this stays empty — byte-identical to before SC-406.
+ */
+export interface PrefPassthrough {
+	values: Record<string, unknown>;
+	order: string[];
+}
 
 /**
  * Pops the reserved `prefs:` key off the parsed block data (mutates rawData) and
@@ -39,6 +57,8 @@ import type { DsePrefs, PreferenceStore } from './seams/prefs';
 export function extractPrefOverrides(
 	rawData: unknown,
 	prefs: PreferenceStore,
+	/** SC-406: when given, receives the gated keys that are rejected-but-kept (see PrefPassthrough). */
+	passthrough?: PrefPassthrough,
 ): Partial<DsePrefs> | undefined {
 	if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) return undefined;
 	const record = rawData as Record<string, unknown>;
@@ -51,10 +71,15 @@ export function extractPrefOverrides(
 	}
 	const byKey = new Map(prefs.descriptors().map((d) => [d.key as string, d]));
 	const out: Record<string, unknown> = {};
+	if (passthrough) passthrough.order = Object.keys(bag);
 	for (const [key, value] of Object.entries(bag)) {
 		const descriptor = byKey.get(key);
 		if (!descriptor) {
 			console.warn(`Draw Steel Elements: ignoring unknown per-block pref "${key}".`);
+			// SC-406: a gated key (switch off) is not applied, but is kept for the write-back.
+			if (passthrough && !isExperimental() && (EXPERIMENTAL_PREF_KEYS as readonly string[]).includes(key)) {
+				passthrough.values[key] = value;
+			}
 			continue;
 		}
 		if (!descriptor.attr) {
@@ -112,7 +137,17 @@ export function applyPrefOverrides(
 /** Serializer wrapper: re-emit the author's `prefs:` map ahead of the element body. */
 export function withPrefOverrides<M>(
 	serialize: (model: M) => string,
-	overrides: Partial<DsePrefs>,
+	overrides: Partial<DsePrefs> | undefined,
+	/** SC-406: gated keys to re-emit alongside the applied ones, in the author's key order. */
+	passthrough?: PrefPassthrough,
 ): (model: M) => string {
-	return (model) => stringifyYaml({ prefs: overrides }) + serialize(model);
+	const kept = passthrough && Object.keys(passthrough.values).length > 0 ? passthrough : undefined;
+	if (!kept) return (model) => stringifyYaml({ prefs: overrides ?? {} }) + serialize(model);
+	const applied = (overrides ?? {}) as Record<string, unknown>;
+	const merged: Record<string, unknown> = {};
+	for (const key of kept.order) {
+		if (key in kept.values) merged[key] = kept.values[key];
+		else if (key in applied) merged[key] = applied[key];
+	}
+	return (model) => stringifyYaml({ prefs: merged }) + serialize(model);
 }
