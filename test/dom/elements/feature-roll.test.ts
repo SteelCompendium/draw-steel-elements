@@ -269,6 +269,40 @@ describe('pipeline integration — the fidelity bar and the opt-in', () => {
 		});
 	}
 
+	// SC-279 r5 LOW-1: `sbVillain` defaults to 'banded', so a villain statblock renders its list in TWO
+	// renderFeatureList calls (the rest, then the villain band) that would both start at f0 without
+	// `rollIndices`. Neither stock fixture has a rolling villain action, so this builds one.
+	test('statblock villain band: a villain action does not share roll state with a regular ability', async () => {
+		const ability = (name: string, extra: string[]) => [
+			'  - type: feature', '    feature_type: ability', `    name: ${name}`, ...extra,
+			'    effects:', '      - roll: Power Roll + 1', '        tier1: One.', '        tier2: Two.', '        tier3: Three.',
+		];
+		const head = FIXTURES.statblock.default.split('\nfeatures:\n')[0];
+		const source = [
+			head, 'features:',
+			...ability('Rest A', ['    usage: Main action']),
+			...ability('Villain V', ['    cost: Villain Action 1', '    usage: "-"']),
+		].join('\n');
+		const { containerEl } = await mountFixture('statblock', true, source);
+		const launches = [...containerEl.querySelectorAll<HTMLButtonElement>('.dse-roll-btn')];
+		expect(launches).toHaveLength(2);
+		expect(launches[1].closest('.dse-sb__band--villain')).not.toBeNull(); // really in the band
+		const areaOf = (i: number) => launches[i].closest('.dse-feature')!.querySelector<HTMLElement>('.dse-roll-area')!;
+		launches[0].click();
+		await flushAsync(1);
+		const a = areaOf(0);
+		a.querySelector<HTMLButtonElement>('.dse-rollbar__mods > .dse-collapse__header')!.click();
+		a.querySelector<HTMLButtonElement>('button[aria-label="Increase Edges"]')!.click();
+		a.querySelector<HTMLButtonElement>('button[aria-label="Roll"]')!.click();
+		await flushAsync(1);
+		launches[1].click();
+		await flushAsync(1);
+		const v = areaOf(1);
+		expect(v.querySelector('.dse-rollbar__mods > .dse-collapse__header')!.getAttribute('aria-expanded')).toBe('false');
+		expect(v.querySelector('.dse-rollbar__summary')!.textContent).not.toContain('edge');
+		expect(v.querySelector('.dse-rollcard__breakdown')!.textContent).not.toContain('edge');
+	});
+
 	test('statblock abilities gain the roller too (shared grammar)', async () => {
 		const { containerEl } = await mountFixture('statblock', true);
 		const panels = containerEl.querySelectorAll('.dse-pr');
