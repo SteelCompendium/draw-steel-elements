@@ -41,4 +41,25 @@ describe('SC-407 docs-shots deferred-element guard', () => {
 		expect(() => assertNoDeferredBrowserShots(gif({ source: 'obsidian', element: 'encounter' }), repo)).toThrow(/x\.gif -> encounter \(gif, obsidian\)/);
 		expect(() => assertNoDeferredBrowserShots(gif({ element: undefined }), repo)).toThrow(/gif entry without an element/);
 	});
+
+	// SC-411 r4 (INFO-1): the reason in the message follows the source of the refused entry.
+	test('the refusal message gives the reason that applies to the entry\'s source', () => {
+		const msg = (shots: unknown[]) => {
+			try {
+				assertNoDeferredBrowserShots(shots, repo);
+			} catch (e) {
+				return (e as Error).message;
+			}
+			return '';
+		};
+		const gif = (over: Record<string, unknown>) => ({ out: 'x.gif', kind: 'gif', source: 'browser', element: 'surges', steps: [{}], ...over });
+		const browser = msg([gif({})]);
+		expect(browser).toMatch(/browser half renders with the experimental switch ON/);
+		expect(browser).not.toMatch(/placeholder/);
+		const obsidian = msg([gif({ source: 'obsidian' })]);
+		expect(obsidian).toMatch(/Obsidian half runs with the switch OFF/);
+		expect(obsidian).toMatch(/placeholder card/);
+		expect(obsidian).not.toMatch(/switch ON/);
+		expect(msg([gif({ element: undefined })])).toMatch(/must name its `element`/);
+	});
 });

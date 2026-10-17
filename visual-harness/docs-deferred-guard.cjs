@@ -45,22 +45,40 @@ function deferredElementIds(repo) {
 function assertNoDeferredBrowserShots(shots, repo) {
 	const deferred = new Set(deferredElementIds(repo));
 	const bad = [];
+	// The reason differs by where the entry is captured; the message names only the ones that apply.
+	const reasons = new Set();
+	const BROWSER = 'the browser half renders with the experimental switch ON, so a browser entry for a deferred element would publish an unfinished feature';
+	const OBSIDIAN_GIF = 'the Obsidian half runs with the switch OFF, so a gif entry for a deferred element would animate the "not available in this release" placeholder card';
+	const NO_ELEMENT = 'a gif entry must name its `element`, or this guard cannot check it';
 	for (const shot of shots) {
 		if (shot.kind === 'gif') {
-			if (typeof shot.element !== 'string' || shot.element === '') bad.push(`${shot.out} -> gif entry without an element (required, so this guard can check it)`);
-			else if (deferred.has(shot.element)) bad.push(`${shot.out} -> ${shot.element} (gif, ${shot.source})`);
+			if (typeof shot.element !== 'string' || shot.element === '') {
+				bad.push(`${shot.out} -> gif entry without an element (required, so this guard can check it)`);
+				reasons.add(NO_ELEMENT);
+			} else if (deferred.has(shot.element)) {
+				bad.push(`${shot.out} -> ${shot.element} (gif, ${shot.source})`);
+				reasons.add(shot.source === 'obsidian' ? OBSIDIAN_GIF : BROWSER);
+			}
 			continue;
 		}
 		if (shot.source !== 'browser') continue;
 		// `gallery: true` (docs-shots.mjs) mounts EVERY fixture, deferred ones included.
-		if (shot.gallery && !Array.isArray(shot.gallery)) bad.push(`${shot.out} -> gallery: ${String(shot.gallery)} (every element)`);
+		if (shot.gallery && !Array.isArray(shot.gallery)) {
+			bad.push(`${shot.out} -> gallery: ${String(shot.gallery)} (every element)`);
+			reasons.add(BROWSER);
+		}
 		const ids = [shot.element, ...(Array.isArray(shot.gallery) ? shot.gallery : [])].filter(Boolean);
-		for (const id of ids) if (deferred.has(id)) bad.push(`${shot.out} -> ${id}`);
+		for (const id of ids) {
+			if (deferred.has(id)) {
+				bad.push(`${shot.out} -> ${id}`);
+				reasons.add(BROWSER);
+			}
+		}
 	}
 	if (bad.length) {
 		throw new Error(
 			`docs-manifest.mjs has entr${bad.length === 1 ? 'y' : 'ies'} for deferred (7.0.0-gated) elements, or gif entries that cannot be checked: ${bad.join(', ')}. ` +
-				'The browser half renders with the experimental switch ON, so these would publish an unfinished feature. ' +
+				`Why: ${[...reasons].join('; ')}. ` +
 				'Remove the entry (docs depict the shipping product) or un-defer the element first.',
 		);
 	}
