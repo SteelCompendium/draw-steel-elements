@@ -26,6 +26,18 @@ for what needs action.
   kept through 6.x so a hotkey bound to it would keep working; a hotkey still bound to it
   now does nothing — bind it to **Sync compendium** instead (see the
   [migration guide](docs/migrating-to-7.md#1-re-sync-your-compendium)).
+- [FIX] **Beastheart companions (Panther, Drake and the rest) now render when you reference
+  them with `ds-scc`** (SC-390). They showed a "has no renderer in this plugin" card; they
+  now draw as full statblock cards: "Companion" in the head, a **Skills** line in the stat
+  grid, free strike and stamina as written ("1 + M", "= yours"), and their level 1
+  abilities. This needs the matching compendium data, so run **Sync compendium** after the
+  next compendium update. The docs now also say which kinds of entry `ds-scc` can't draw yet
+  (skills, saints, gods, chapters, projects, movement, negotiation, skill groups and
+  monster-group lore).
+- [FIX] **A statblock with an empty EV no longer prints a dangling "EV"** (SC-390).
+  Companions and the summoner champions have no EV; their cards used to show "EV" with
+  nothing after it. The label is now left out. A statblock that omits `ev` entirely still
+  reads "EV N/A". This changes the print output of statblocks with an empty EV.
 - [FIX] **Power-roll tier rows are compact again: about 50px for a one-line outcome, the
   same as the site** (SC-378). Every tier row (ability/feature cards, statblock abilities,
   featureblock, a kit's signature ability, negotiation arguments) had grown to

@@ -79,8 +79,9 @@ about.
 
 ## Referencing a compendium entry in your notes
 
-Once the compendium is synced, a `ds-scc` block renders any entry in it. The body is the
-entry's SCC code — nothing else:
+Once the compendium is synced, a `ds-scc` block renders most entries in it (see
+[what renders, and what doesn't yet](#what-renders-and-what-doesnt-yet) below). The body is
+the entry's SCC code — nothing else:
 
 ````markdown
 ```ds-scc
@@ -106,6 +107,23 @@ your vault, the block offers a link to the entry on steelcompendium.io and a nud
 condition, a rule, a statblock — using whichever layout suits it, and those layouts change
 as the plugin develops. The code you write is stable; the card it produces is not
 specified.
+
+### What renders, and what doesn't yet
+
+`ds-scc` draws these kinds of entry today:
+
+- **Statblocks** — monsters, retainers, summoned creatures, and beastheart companions
+  (a companion's card shows its skills and its level 1 abilities).
+- **Features and abilities**, and **featureblocks** (including dynamic terrain).
+- **Kits, conditions, rules, ancestries, cultures, careers, classes, titles, perks,
+  complications and treasures.**
+
+These kinds of entry have no card in the plugin yet: **skills, skill groups, saints, gods,
+chapters, projects, movement, negotiation, and monster-group lore.** A `ds-scc` block that
+points at one shows a card saying the entry "has no renderer in this plugin" instead of the
+entry itself. The block isn't broken, there's just nothing to draw yet. **Insert Draw
+Steel: compendium reference** still lists them, so you can search for one and insert it. It
+will start rendering as soon as the plugin learns to draw that kind of entry.
 
 Statblocks, features and featureblocks accept the same reference in their own blocks — see
 [Use a creature from the compendium](statblock.md#use-a-creature-from-the-compendium).

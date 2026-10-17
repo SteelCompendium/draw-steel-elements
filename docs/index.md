@@ -30,7 +30,7 @@ running a fight, assuming no YAML or markdown knowledge.
   the plugin writes the block for you. Also: the insert commands and per-block overrides.
 - **[Compendium Sync](compendium-sync.md)** — download the official
   [Draw Steel Compendium](https://steelcompendium.io/compendium) into your vault and
-  reference any entry by its code.
+  reference an entry by its code.
 - **[Settings](settings.md)** — what every settings page does, and the statblock presets.
 - **[Migrating from 5.x to 7.0.0](migrating-to-7.md)** — read this before your first sync
   if you have used the plugin before.
@@ -67,8 +67,10 @@ A group of features shown together — Malice features, Dynamic Terrain, and sim
 
 **[Compendium reference](compendium-sync.md#referencing-a-compendium-entry-in-your-notes)** — `ds-scc`
 
-Renders any entry from your synced compendium. The body is the entry's SCC code and
-nothing else, so the card always reflects the currently synced version.
+Renders most entries from your synced compendium (statblocks, features, kits and the rest;
+[a few kinds don't have a card yet](compendium-sync.md#what-renders-and-what-doesnt-yet)).
+The body is the entry's SCC code and nothing else, so the card always reflects the currently
+synced version.
 
 **[Horizontal rule](horizontal-rule.md)** — `ds-hr`, `ds-horizontal-rule`
 
@@ -122,7 +124,11 @@ good for a sheet you look at, not one you click:
 [Draw Steel Compendium](https://steelcompendium.io/compendium) in your Obsidian Vault.
 
 Once it's synced, a [`ds-scc` block](compendium-sync.md#referencing-a-compendium-entry-in-your-notes)
-renders any entry in it — the body is just the entry's SCC code.
+renders most entries in it — the body is just the entry's SCC code. Statblocks (including
+beastheart companions), features, featureblocks and kits all render; skills, skill groups,
+saints, gods, chapters, projects, movement, negotiation and monster-group lore show a
+["has no renderer" card for now](compendium-sync.md#what-renders-and-what-doesnt-yet), though
+the insert command still offers them.
 
 Upgrading from before 7.0.0? The compendium tree was reorganised, and the plugin can move
 your existing copy to the new paths so Obsidian keeps your links working — see
