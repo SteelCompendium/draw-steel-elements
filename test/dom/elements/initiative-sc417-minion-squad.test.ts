@@ -296,6 +296,9 @@ describe('SC-417 B — the heal path (grid dblclick -> pool modal -> whole-view 
 		expect(info(m)).toContain("can't raise the pool above the living minions' share (120 stamina)");
 		expect(actionBtn(m).getAttribute('title')).toContain("can't regain Stamina past a dead minion's share");
 		expect(actionBtn(m).getAttribute('title')).toContain('120');
+		// LOW-R3: the accessible name (aria-label, also the hover tooltip) carries it too.
+		expect(actionBtn(m).getAttribute('aria-label')).toContain('Heal 1 stamina');
+		expect(actionBtn(m).getAttribute('aria-label')).toContain("can't regain Stamina past a dead minion's share");
 	});
 
 	test('LOW-1: a heal that stays inside the living share says the dead stay dead (no negative numbers, no kill talk)', async () => {
@@ -334,7 +337,8 @@ describe('SC-417 defects found on develop (round 2 fixes: HIGH-1, MEDIUM-1, LOW-
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect(written(host)).toEqual({ pool: 120, dead: [1] });
 		expect(detailText(root)).toBe('DEAD');
-		expectGridConsistent(root, 120, [1]); // today: every cell still reads 160/160 (40)
+		expectGridConsistent(root, 120, [1]);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1); // one rebuild, one write
 	});
 
 	test('HIGH-1: a heal from the detail row repaints the whole squad (grid cells follow the pool)', async () => {
@@ -349,7 +353,8 @@ describe('SC-417 defects found on develop (round 2 fixes: HIGH-1, MEDIUM-1, LOW-
 		actionBtn(m).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect(written(host)).toEqual({ pool: 160, dead: [] });
-		expectGridConsistent(root, 160, []); // today: every cell still reads 150/160 (40)
+		expectGridConsistent(root, 160, []);
+		expect(host.replaceSource).toHaveBeenCalledTimes(2); // the grid damage, then exactly one write for the detail-row heal
 	});
 
 	// MEDIUM-1 — overkill by at least one minion's share through the Apply-damage row:
@@ -362,8 +367,8 @@ describe('SC-417 defects found on develop (round 2 fixes: HIGH-1, MEDIUM-1, LOW-
 		const m = openFromGrid(root, 1);
 		applyDamage(m, 50, 4); // 200 damage vs a 160 pool
 		expect(checks(m).every((c) => c.checked && c.disabled)).toBe(true);
-		expect(info(m)).toContain('will kill 4 minion(s)'); // today: "kill 5"
-		expect(actionBtn(m).disabled).toBe(false); // today: disabled, "Select 5 minion(s) to kill"
+		expect(info(m)).toContain('will kill 4 minion(s)');
+		expect(actionBtn(m).disabled).toBe(false);
 		actionBtn(m).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect(written(host)).toEqual({ pool: 0, dead: [1, 2, 3, 4] });
@@ -380,7 +385,7 @@ describe('SC-417 defects found on develop (round 2 fixes: HIGH-1, MEDIUM-1, LOW-
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		m = openFromGrid(root, 4);
 		applyDamage(m, 80, 1); // 80 vs the last 40
-		expect(actionBtn(m).disabled).toBe(false); // today: "kill 2 minion(s)" with one alive
+		expect(actionBtn(m).disabled).toBe(false);
 		actionBtn(m).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect(written(host)).toEqual({ pool: 0, dead: [1, 2, 3, 4] });
@@ -402,9 +407,74 @@ describe('SC-417 defects found on develop (round 2 fixes: HIGH-1, MEDIUM-1, LOW-
 		const m = openFromGrid(root, 1);
 		applyDamage(m, 2, 1);
 		expect(checks(m).every((c) => c.checked && c.disabled)).toBe(true);
-		expect(actionBtn(m).disabled).toBe(false); // today: "kill 1 minion(s)" with 2 auto-checked
+		expect(actionBtn(m).disabled).toBe(false);
 		actionBtn(m).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect(written(host)).toEqual({ pool: 0, dead: [1, 2, 3, 4] });
+	});
+});
+
+describe('SC-417 round 4 — the kill ladder for an underfunded pool (damage = ladder + two clamps; a heal never kills)', () => {
+	// The SC-195 post-captain state: the captain's +4 Stamina bonus (per 44, pool 176) is
+	// switched off by relieving the captain, leaving pool 77 for 3 living minions at 40 each
+	// (below the 80 the max-based ladder expects). Owner ruling: damage keeps the ccee0e6
+	// ladder (the boundaries the change crosses), a heal never demands a kill.
+	const CAPTAINED = MORDOR.replace('        squad_role: minion\n', '        squad_role: minion\n        with_captain_stamina: 4\n');
+
+	async function relievedSquad() {
+		jest.useFakeTimers();
+		const r = await renderInit(CAPTAINED);
+		let m = openFromGrid(r.root, 1);
+		applyDamage(m, 44, 1);
+		check(m, 1);
+		actionBtn(m).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		m = openFromGrid(r.root, 2);
+		applyDamage(m, 43, 1);
+		actionBtn(m).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		(r.root.querySelector('.dse-init__cell[data-squad-role="captain"]') as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		(r.root.querySelector('.dse-init__detail button.dse-init__captain') as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(written(r.host).pool).toBe(77); // the underfunded state: 3 alive x 40 = 120 > 77
+		return r;
+	}
+
+	test('MEDIUM-R3: after the captain is relieved, a +1 heal is enabled with 0 kills (no kill text, no title)', async () => {
+		const { root } = await relievedSquad();
+		const m = openFromGrid(root, 2);
+		typePool(m, 78);
+		expect(actionBtn(m).textContent).toContain('Heal 1 stamina');
+		expect(actionBtn(m).disabled).toBe(false);
+		expect(info(m)).not.toMatch(/kill|-\d/);
+		expect(actionBtn(m).hasAttribute('title')).toBe(false);
+		expect(checks(m).every((c) => !c.checked && c.disabled)).toBe(true);
+	});
+
+	test('post-captain underfunded pool: 1 damage demands 0 kills (the ladder, not a survivors count)', async () => {
+		const { root } = await relievedSquad();
+		const m = openFromGrid(root, 2);
+		applyDamage(m, 1, 1);
+		expect(info(m)).toContain('1 damage will kill 0 minion(s)');
+		expect(actionBtn(m).disabled).toBe(false);
+	});
+
+	test('6.0.2-damaged block (pool 2, 2 alive): 1 damage demands 0 kills and a +1 heal is enabled with 0 kills', async () => {
+		const damaged = MORDOR.replace(
+			'        squad_role: minion\n',
+			'        squad_role: minion\n        instances:\n          - id: 1\n          - id: 2\n            isDead: true\n          - id: 3\n            isDead: true\n          - id: 4\n',
+		).replace('    is_squad: true\n', '    is_squad: true\n    minion_stamina_pool: 2\n');
+		const { root } = await renderInit(damaged);
+		let m = openFromGrid(root, 1);
+		applyDamage(m, 1, 1);
+		expect(info(m)).toContain('1 damage will kill 0 minion(s)');
+		expect(actionBtn(m).disabled).toBe(false);
+		m = openFromGrid(root, 1); // a second modal on the same (unchanged) squad
+		typePool(m, 3);
+		expect(actionBtn(m).textContent).toContain('Heal 1 stamina');
+		expect(actionBtn(m).disabled).toBe(false);
+		expect(info(m)).not.toMatch(/kill|-\d/);
+		expect(actionBtn(m).hasAttribute('title')).toBe(false);
 	});
 });
