@@ -35,13 +35,24 @@ Three user knobs multiply the bands, and are what the settings sliders write:
 | Knob | Setting | Multiplies |
 |---|---|---|
 | `--dse-fs-small-scale` | Small text size | `secondary`, `label`, `caption`, `micro` |
-| `--dse-fs-large-scale` | Large text size | `heading`, `subheading`, `numeral` |
+| `--dse-fs-large-scale` | Large text size | `heading`, `subheading`, `numeral`, and the `h1`–`h6` heading scale |
 | `--dse-fs-control-scale` | Control text size | `control` |
 
 All three default to `1` and are stamped inline per element root only when moved off `1`
 (`css: { varName, toCss }` in `src/prefs/catalog.ts`, same remove-on-default semantics as
 every other css-bearing pref), so a vault that never opens Settings renders exactly what it
-rendered before the scale existed.
+rendered before the scale existed. The stamp also lands on a modal's dialog root
+(`reflectCss()`); small and large apply in print and export, control is screen-only.
+
+**Where the multiplier takes effect (SC-372).** The scale-dependent tokens are
+`calc(<r>em * var(--dse-fs-*-scale))`, and a `var()` inside a custom property substitutes on
+the element the property is *declared* on. They are therefore declared on `:root` **and**
+on every root the prefs seam stamps — one rule, selector list `:root, :is([data-dse-element],
+.dse-modal)` — so the multiplier resolves where it is stamped. Declaring them on `:root`
+alone (the pre-SC-372 shape) flattened them to `* 1` and made all three knobs inert. A new
+scale-dependent token goes in that rule; `test/unit/build/scaleTokenScope.test.ts` fails
+otherwise. Because every role is an `em` ratio, a role nested inside another consumer of the
+same knob compounds the multiplier (value squared) — keep a role's consumers un-nested.
 
 ## How to pick one
 
