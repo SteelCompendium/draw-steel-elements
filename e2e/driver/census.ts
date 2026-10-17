@@ -16,8 +16,8 @@ export interface EventfulNode {
 	events: string[];
 }
 
-type Cdp = (cmd: string, params: Record<string, unknown>) => Promise<any>;
-const cdp: Cdp = (cmd, params) => browser.sendCommandAndGetResult(cmd, params) as Promise<any>;
+/** One CDP command through chromedriver's passthrough, typed by the reply shape the caller reads. */
+const cdp = <T>(cmd: string, params: Record<string, unknown>): Promise<T> => browser.sendCommandAndGetResult(cmd, params) as Promise<T>;
 
 /**
  * Every element matching any of `selectors` (and not inside `excludeInside`) that has at least
@@ -29,21 +29,21 @@ export async function eventfulNodes(selectors: string[], excludeInside = '[data-
 		for (const sel of ${JSON.stringify(selectors)}) for (const el of document.querySelectorAll(sel)) if (!el.closest(${JSON.stringify(excludeInside)})) seen.add(el);
 		return Array.from(seen);
 	})()`;
-	const arr = await cdp('Runtime.evaluate', { expression: expr });
-	const props = await cdp('Runtime.getProperties', { objectId: arr.result.objectId, ownProperties: true });
+	const arr = await cdp<{ result: { objectId: string } }>('Runtime.evaluate', { expression: expr });
+	const props = await cdp<{ result: Array<{ name: string; value?: { objectId?: string } }> }>('Runtime.getProperties', { objectId: arr.result.objectId, ownProperties: true });
 	const out: EventfulNode[] = [];
-	for (const p of props.result as Array<{ name: string; value?: { objectId?: string } }>) {
+	for (const p of props.result) {
 		if (!/^\d+$/.test(p.name) || !p.value?.objectId) continue;
 		const objectId = p.value.objectId;
-		const { listeners } = await cdp('DOMDebugger.getEventListeners', { objectId });
-		const events = Array.from(new Set<string>((listeners as Array<{ type: string }>).map((l) => l.type))).filter((t) => INPUT_EVENTS.has(t));
+		const { listeners } = await cdp<{ listeners: Array<{ type: string }> }>('DOMDebugger.getEventListeners', { objectId });
+		const events = Array.from(new Set<string>(listeners.map((l) => l.type))).filter((t) => INPUT_EVENTS.has(t));
 		if (!events.length) continue;
-		const d = await cdp('Runtime.callFunctionOn', {
+		const d = await cdp<{ result: { value: Omit<EventfulNode, 'events'> } }>('Runtime.callFunctionOn', {
 			objectId,
 			returnByValue: true,
 			functionDeclaration: `function () { return { id: this.getAttribute('data-dse-control'), tag: this.tagName.toLowerCase(), cls: String(this.className).slice(0, 80), text: (this.textContent || '').trim().slice(0, 30) }; }`,
 		});
-		out.push({ ...(d.result.value as Omit<EventfulNode, 'events'>), events });
+		out.push({ ...d.result.value, events });
 	}
 	return out;
 }

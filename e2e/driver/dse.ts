@@ -68,8 +68,8 @@ const labelOfRef = (ref: ControlRef): string =>
 
 function pick(from: { $(sel: string): El; $$(sel: string): unknown }, ref: ControlRef, opts?: ControlOptions): El {
 	const sel = selectorOf(ref);
-	const el = opts?.nth !== undefined ? ((from.$$(sel) as unknown as El[])[opts.nth] as El) : from.$(sel);
-	controlLabels.set(el as object, labelOfRef(ref));
+	const el = opts?.nth !== undefined ? ((from.$$(sel) as El[])[opts.nth]) : from.$(sel);
+	controlLabels.set(el, labelOfRef(ref));
 	return el;
 }
 
@@ -78,8 +78,8 @@ function scopeOf(root: El): Scope {
 		root,
 		control(ref, opts) {
 			// Host ids (Obsidian's own X / backdrop) live outside the dialog element.
-			if (typeof ref === 'string' && HOST_CONTROLS[ref]) return pick({ $: (sel) => $(sel) as unknown as El, $$: (sel) => $$(sel) }, ref, opts);
-			return pick(root as unknown as { $(sel: string): El; $$(sel: string): unknown }, ref, opts);
+			if (typeof ref === 'string' && HOST_CONTROLS[ref]) return pick({ $: (sel) => $(sel), $$: (sel) => $$(sel) }, ref, opts);
+			return pick(root, ref, opts);
 		},
 	};
 }
@@ -179,11 +179,11 @@ function declareTarget(elementId: string, n: number): void {
 /** The n-th (0-based) block of `lang` in the visible Reading view. */
 function block(lang: string, n = 0): Scope {
 	declareTarget(elementIdOf(lang), n);
-	return scopeOf($$(`${READING} [data-dse-element="${elementIdOf(lang)}"]`)[n] as unknown as El);
+	return scopeOf($$(`${READING} [data-dse-element="${elementIdOf(lang)}"]`)[n]);
 }
 
 /** The single open DSE modal of `kind`. Fails if none opens, or if more than one is open. */
-async function modal(kind: keyof typeof MODAL_KINDS | string): Promise<Scope> {
+async function modal(kind: keyof typeof MODAL_KINDS  ): Promise<Scope> {
 	const must = MODAL_KINDS[kind];
 	if (!must) throw new Error(`unknown modal kind "${kind}" (known: ${Object.keys(MODAL_KINDS).join(', ')})`);
 	const css = '.modal-container .dse-modal';
@@ -196,23 +196,23 @@ async function modal(kind: keyof typeof MODAL_KINDS | string): Promise<Scope> {
 	if (count !== 1) throw new Error(`expected exactly one open .dse-modal, found ${count}`);
 	const root = $(css);
 	if (!(await root.$(must).isExisting())) throw new Error(`the open .dse-modal is not a "${kind}" modal (no ${must})`);
-	return scopeOf(root as unknown as El);
+	return scopeOf(root);
 }
 
 /** The newest Notice (toast) on screen, as a scope: an older one still fading out can never be
  *  the match. Click controls inside it with `{ stable: true }` - toasts slide in. */
 function toast(): Scope {
-	return scopeOf($('.notice-container .notice:last-child') as unknown as El);
+	return scopeOf($('.notice-container .notice:last-child'));
 }
 
 /** Resolve a control reference outside any scope (page-wide). */
 function control(ref: ControlRef, opts?: ControlOptions): El {
-	return pick({ $: (sel) => $(sel) as unknown as El, $$: (sel) => $$(sel) }, ref, opts);
+	return pick({ $: (sel) => $(sel), $$: (sel) => $$(sel) }, ref, opts);
 }
 
 // ------------------------------------------------------------------------------ input
 
-const labelOf = (el: El): string => controlLabels.get(el as object) ?? `selector:${String((el as unknown as { selector: unknown }).selector)}`;
+const labelOf = (el: El): string => controlLabels.get(el) ?? `selector:${String((el as unknown as { selector: unknown }).selector)}`;
 
 /** --slow=<ms>: outline the target and hold so a human watching a headed run can follow. */
 async function beforeAction(el: El): Promise<void> {
@@ -244,10 +244,10 @@ async function waitStable(el: El): Promise<void> {
 	let same = 0;
 	await browser.waitUntil(
 		async () => {
-			const now = (await browser.execute(
+			const now: string = await browser.execute<string, [typeof e]>(
 				'const r = arguments[0].getBoundingClientRect(); return [r.x, r.y, r.width, r.height].map((n) => Math.round(n * 10)).join(",");',
 				e,
-			)) as string;
+			);
 			same = now === last ? same + 1 : 0;
 			last = now;
 			return same >= 2;
@@ -363,7 +363,7 @@ export interface AimedAt {
 	readonly aimedAt: string;
 }
 const AIMED = new WeakSet<object>(); // brand: `in` on a wdio element proxy is not trustworthy
-const aimedAt = (hostId: keyof typeof HOST_CONTROLS | string): AimedAt => {
+const aimedAt = (hostId: keyof typeof HOST_CONTROLS  ): AimedAt => {
 	if (!HOST_CONTROLS[hostId]) throw new Error(`aimedAt("${hostId}"): only host ids (${Object.keys(HOST_CONTROLS).join(', ')}) can be aimed at without focus`);
 	const pseudo: AimedAt = { aimedAt: hostId };
 	AIMED.add(pseudo);
@@ -378,7 +378,7 @@ const aimedAt = (hostId: keyof typeof HOST_CONTROLS | string): AimedAt => {
  */
 async function press(key: string, target?: El | AimedAt): Promise<void> {
 	let label = '(page)';
-	if (target && AIMED.has(target as object)) label = (target as AimedAt).aimedAt;
+	if (target && AIMED.has(target)) label = (target as AimedAt).aimedAt;
 	else if (target) {
 		const el = target as El;
 		label = labelOf(el);

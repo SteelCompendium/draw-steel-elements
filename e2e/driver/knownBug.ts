@@ -4,7 +4,7 @@
 // the OBSIDIAN-E2E summary line. fn must encode the CORRECT behaviour.
 import { writeBundle } from './artifacts';
 import { closeModals } from './cleanup';
-import { state } from './state';
+import { errText, state } from './state';
 
 export interface KnownBugOptions {
 	/** Pin WHAT fails: the failure message must match, or the test fails ("failed differently"). */
@@ -24,7 +24,7 @@ export function knownBug(ticket: string, title: string, fn: () => Promise<void>,
 		if (failure === undefined) {
 			throw new Error(`known bug ${ticket} appears fixed - remove the marker`);
 		}
-		const msg = failure instanceof Error ? failure.message : String(failure);
+		const msg = errText(failure);
 		if (opts.failsWith && !opts.failsWith.test(msg)) {
 			throw new Error(`known bug ${ticket} failed differently than pinned (${opts.failsWith}): ${msg}`);
 		}

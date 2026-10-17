@@ -10,7 +10,7 @@ import { writeBundle } from './artifacts';
 import { invariantProblems } from './invariants';
 import { ev, waitFor } from './page';
 import { enableFocusEmulation, installRecorders, mark, setWindowSize } from './recorders';
-import { appendRunLine, resetTestState, state, testIdOf } from './state';
+import { appendRunLine, errText, resetTestState, state, testIdOf } from './state';
 
 before(async function () {
 	this.timeout(120_000);
@@ -73,6 +73,6 @@ afterEach(async function () {
 		state: failed ? 'failed' : 'passed',
 		knownBug: known,
 		durationMs: test.duration ?? null,
-		error: failed ? String(reason instanceof Error ? reason.message : reason).slice(0, 2000) : null,
+		error: failed ? errText(reason).slice(0, 2000) : null,
 	});
 });

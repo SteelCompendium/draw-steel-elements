@@ -12,7 +12,7 @@ import { ev } from './page';
 import { eventsSince } from './recorders';
 import { readFixture, state } from './state';
 
-type Step = () => Promise<unknown> | unknown;
+type Step = () => unknown;
 
 export async function writeBundle(
 	testId: string,

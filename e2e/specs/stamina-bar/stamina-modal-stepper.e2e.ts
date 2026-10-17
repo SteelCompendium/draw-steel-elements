@@ -180,7 +180,7 @@ describe('stamina-edit-modal: what only a real Obsidian can answer', () => {
 	});
 
 	it('[STAM-K03] a second modal stacks on the first and Escape closes only the top one', async () => {
-		const modal = await openBarModal(NOTE);
+		await openBarModal(NOTE);
 		// The first modal's backdrop covers the bar, so a person cannot open a second one by hand;
 		// a synthetic click on the bar stands in for "something else opened a stamina modal".
 		await dse.page(`document.querySelector('.markdown-reading-view .dse-stamina--clickable').click()`);

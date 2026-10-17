@@ -29,6 +29,13 @@ export const state = {
 	error: undefined as unknown,
 };
 
+/** A thrown value as text (Error message, string, or JSON), never `[object Object]`. */
+export function errText(e: unknown): string {
+	if (e instanceof Error) return e.message;
+	if (typeof e === 'string') return e;
+	return JSON.stringify(e) ?? String(typeof e);
+}
+
 /** `[STAM-D01] ...` -> `STAM-D01`; falls back to a slug of the title. */
 export function testIdOf(title: string): string {
 	const m = /\[([A-Z][A-Z0-9]*(?:-[A-Za-z0-9]+)+)\]/.exec(title);

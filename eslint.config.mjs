@@ -5,6 +5,14 @@
 import tsparser from "@typescript-eslint/parser";
 import { defineConfig } from "eslint/config";
 import obsidianmd from "eslint-plugin-obsidianmd";
+import tseslint from "typescript-eslint";
+import js from "@eslint/js";
+import globals from "globals";
+
+// The Obsidian plugin-submission rules (obsidianmd/*) do not apply to the Node-side e2e layer.
+const noObsidianRules = Object.fromEntries(
+  Object.keys(obsidianmd.rules ?? {}).map((name) => [`obsidianmd/${name}`, "off"]),
+);
 
 export default defineConfig([
   {
@@ -21,11 +29,13 @@ export default defineConfig([
       "test/**",
       "*.config.mjs",
       "esbuild.config.mjs",
+      // SC-408: run output (failure bundles, copied plugin build) is never source.
+      "e2e/.out/**",
     ],
   },
   ...obsidianmd.configs.recommended,
   {
-    files: ["**/*.ts"],
+    files: ["src/**/*.ts", "main.ts"],
     languageOptions: {
       parser: tsparser,
       parserOptions: { project: "./tsconfig.json" },
@@ -44,5 +54,36 @@ export default defineConfig([
         },
       ],
     },
+  },
+  // SC-408: the real-Obsidian e2e layer (e2e/) is Node test code, not plugin source: it is linted
+  // against its own tsconfig with TypeScript's recommended rules, and the Obsidian-plugin-submission
+  // rules (obsidianmd/*) do not apply to it.
+  {
+    files: ["e2e/**/*.ts", "e2e/**/*.mts"],
+    languageOptions: {
+      parser: tsparser,
+      parserOptions: { project: "./e2e/tsconfig.json" },
+    },
+    plugins: { "@typescript-eslint": tseslint.plugin },
+    rules: {
+      ...noObsidianRules,
+      "import/no-nodejs-modules": "off", // Node-side test code: fs/path/child_process are the point
+      ...tseslint.configs.recommendedTypeChecked.reduce((acc, c) => ({ ...acc, ...(c.rules ?? {}) }), {}),
+      // wdio chainable elements are thenables; awaiting them is the API, not a mistake.
+      "@typescript-eslint/await-thenable": "off",
+      // page-side evaluation returns untyped values by design (`ev<T>` is the typed seam).
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/require-await": "off",
+    },
+  },
+  // e2e/run.mjs: plain Node ESM, JS recommended rules + Node globals, no type information.
+  {
+    files: ["e2e/**/*.mjs"],
+    languageOptions: { ecmaVersion: "latest", sourceType: "module", globals: { ...globals.node } },
+    rules: { ...js.configs.recommended.rules, ...noObsidianRules, "import/no-nodejs-modules": "off" },
   },
 ]);
