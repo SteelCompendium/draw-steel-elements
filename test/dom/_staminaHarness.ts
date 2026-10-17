@@ -140,7 +140,7 @@ export function makeDeps(prefOverrides: Record<string, unknown> = {}): ElementPi
 	const app = new App();
 	app.vault.setFile('Media/token_1.png', '');
 	const plugin = new Plugin(app);
-	const storage: PrefsStorage = { get: async (k: string) => prefOverrides[k] as any, set: async () => {} };
+	const storage: PrefsStorage = { get: async () => prefOverrides as any, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
 	prefs.describe(DSE_PREF_DESCRIPTORS);
 	const theme = createThemeService(prefs, plugin as any);
@@ -167,5 +167,6 @@ export const lastModal = (): HTMLElement => document.body.lastElementChild as HT
 
 /** Last YAML the host was asked to write, or null. */
 export function lastWrite(host: { replaceSource: jest.Mock }): string | null {
-	return (host.replaceSource.mock.calls.at(-1)?.[0] as string | undefined) ?? null;
+	const calls = host.replaceSource.mock.calls;
+	return calls.length ? (calls[calls.length - 1][0] as string) : null;
 }
