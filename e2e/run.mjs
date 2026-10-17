@@ -114,14 +114,17 @@ function scanSpec(file) {
 function discoverSpecs(args) {
 	const specsRoot = path.join(here, 'specs');
 	let root = specsRoot;
+	let single = null; // --element can also name one top-level spec file (e.g. _census)
 	if (args.element) {
 		root = path.join(specsRoot, args.element);
-		if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+		const asFile = path.join(specsRoot, `${args.element}.e2e.ts`);
+		if (fs.existsSync(asFile) && !fs.existsSync(root)) single = asFile;
+		else if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
 			const known = fs.readdirSync(specsRoot, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
 			throw new UsageError(`--element=${args.element}: no such directory under e2e/specs/ (have: ${known.join(', ') || 'none'})`);
 		}
 	}
-	const files = walk(root, (n) => n.endsWith('.e2e.ts')).sort();
+	const files = single ? [single] : walk(root, (n) => n.endsWith('.e2e.ts')).sort();
 	if (!files.length) throw new UsageError(`no *.e2e.ts specs under ${path.relative(repo, root)}`);
 	const scanned = files.map((f) => ({ file: f, ids: scanSpec(f) }));
 	const dupes = [...new Set(scanned.flatMap((s) => s.ids).filter((id, i, all) => all.indexOf(id) !== i))];
@@ -363,7 +366,40 @@ function mergeCoverage(runDir) {
 	const doc = { run: path.basename(runDir), pairs: list };
 	fs.writeFileSync(path.join(runDir, 'coverage.json'), JSON.stringify(doc, null, 2));
 	fs.writeFileSync(path.join(outRoot, 'coverage.json'), JSON.stringify(doc, null, 2));
-	return list.length;
+	return list;
+}
+
+/** Every coverage manifest (e2e/manifest/*.ts, TypeScript read through tsx's API so this stays
+ *  a plain-Node script on any Node >= 20). */
+async function loadManifests() {
+	const { tsImport } = await import('tsx/esm/api');
+	const dir = path.join(here, 'manifest');
+	const files = fs.readdirSync(dir).filter((f) => f.endsWith('.ts') && f !== 'surface.ts').sort();
+	const surfaces = [];
+	for (const f of files) {
+		const mod = await tsImport(`./manifest/${f}`, import.meta.url);
+		surfaces.push(mod.default?.default ?? mod.default); // a CJS-flavoured .ts nests its default export
+	}
+	return surfaces;
+}
+
+/** The exercised-set gate (S2 section 4.6, check 3): every manifest (control, kind) pair must have been
+ *  driven by at least one test, and nothing may be driven that no manifest declares. */
+function coverageGate(surfaces, driven) {
+	const required = new Map(); // "control kind" -> surfaces
+	for (const s of surfaces) {
+		const add = (control, kind) => {
+			const k = `${control}\u0000${kind}`;
+			if (!required.has(k)) required.set(k, new Set());
+			required.get(k).add(s.name);
+		};
+		for (const [control, spec] of Object.entries(s.controls)) for (const kind of spec.kinds) add(control, kind);
+		for (const r of s.reach) for (const kind of r.kinds) add(r.control, kind);
+	}
+	const drivenKeys = new Set(driven.map((d) => `${d.control}\u0000${d.kind}`));
+	const missing = [...required.keys()].filter((k) => !drivenKeys.has(k)).map((k) => k.replace('\u0000', ' x '));
+	const unmanifested = driven.filter((d) => d.control !== '(page)' && !required.has(`${d.control}\u0000${d.kind}`)).map((d) => `${d.control} x ${d.kind} (${d.tests.join(',')})`);
+	return { total: required.size, exercised: required.size - missing.length, missing, unmanifested };
 }
 
 function pruneOldRuns(keep = 12) {
@@ -487,15 +523,26 @@ async function main() {
 		}
 	}
 	const total = results.length + expectedIds.filter((id) => !reported.has(id)).length;
-	const pairs = mergeCoverage(runDir);
-	console.log(`${TAG} done: ${ok}/${total} ok, ${failed} failed, ${known} known-bug`);
-	console.log(`${TAG} coverage driven: ${pairs} (control, kind) pair(s) -> ${path.join(outRoot, 'coverage.json')}`);
+	const driven = mergeCoverage(runDir);
+	const partial = args.only.length > 0 || args.element !== null;
+	const gate = coverageGate(await loadManifests(), driven);
+	const coverageText = `coverage: ${gate.exercised}/${gate.total} pairs${partial ? ' (partial run: gate skipped)' : ''}`;
+	console.log(`${TAG} done: ${ok}/${total} ok, ${failed} failed, ${known} known-bug, ${coverageText}`);
+	console.log(`${TAG} coverage driven: ${driven.length} (control, kind) pair(s) -> ${path.join(outRoot, 'coverage.json')}`);
+	let gateFailed = false;
+	if (!partial && failed === 0 && wdioCode === 0 && (gate.missing.length || gate.unmanifested.length)) {
+		gateFailed = true;
+		if (gate.missing.length) console.log(`${TAG} coverage gate FAILED: ${gate.missing.length} manifest pair(s) were exercised by zero tests:\n  ${gate.missing.join('\n  ')}`);
+		if (gate.unmanifested.length) console.log(`${TAG} coverage gate FAILED: ${gate.unmanifested.length} driven pair(s) are in no manifest:\n  ${gate.unmanifested.join('\n  ')}`);
+	} else if (partial && gate.missing.length) {
+		console.log(`${TAG} (partial run) ${gate.missing.length} manifest pair(s) not exercised in this selection`);
+	}
 
 	await reapAll(false);
 	if (reaped) console.log(`${TAG} reaped ${reaped} leftover child process(es) that outlived wdio`);
 	pruneOldRuns();
 
-	if (failed > 0) return 1;
+	if (failed > 0 || gateFailed) return 1;
 	if (wdioCode !== 0) {
 		console.log(`${TAG} environment: wdio exited ${wdioCode} with no failing test recorded (a session failed to start, or a worker crashed)`);
 		return 2;

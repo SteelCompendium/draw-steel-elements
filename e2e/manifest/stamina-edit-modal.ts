@@ -22,7 +22,7 @@ export default surface('stamina-edit-modal', {
 		// -- S. Stamina stepper
 		'sedit.stamina.dec': c(['click'], ['S01']),
 		'sedit.stamina.inc': c(['click'], ['S01']),
-		'sedit.stamina.input': c(['type', 'press:Enter', 'press:Escape', 'blur'], ['S02', 'S03', 'S04', 'S05', 'S06', 'S07', 'S08', 'S13', 'S14']),
+		'sedit.stamina.input': c(['click', 'type', 'press:Enter', 'press:Escape', 'blur'], ['S02', 'S03', 'S04', 'S05', 'S06', 'S07', 'S08', 'S13', 'S14']),
 		// -- T. Temporary Stamina stepper
 		'sedit.temp.dec': c(['click', 'click-disabled'], ['T04', 'T05']),
 		'sedit.temp.inc': c(['click'], ['T01']),
