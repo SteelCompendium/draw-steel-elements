@@ -270,3 +270,24 @@ test('CSS: print hides the WHOLE strip (@media print + the preview twin) and the
 	expect(css).toMatch(/\n\[data-dse-print="on"\] \.dse-rollbar \{\s*display: none;/);
 	expect(css).toMatch(/\.dse-rollbar__panel:not\(\[hidden\]\) \{\s*flex: 1 1 100%;\s*display: flex;/);
 });
+
+test('after Reset is pressed from the keyboard (it disables itself) focus moves to the Modifiers header', () => {
+	const { parent, handle } = mount({ defaults: { edges: 0 } });
+	handle.setState({ edges: 1 });
+	resetBtn(parent).focus();
+	expect(document.activeElement).toBe(resetBtn(parent));
+	resetBtn(parent).click();
+	expect(resetBtn(parent).disabled).toBe(true);
+	expect(document.activeElement).toBe(modsHeader(parent));
+	// A Reset that was not focused (e.g. a pointer click) does not steal focus.
+	handle.setState({ edges: 1 });
+	skillBox(parent).focus();
+	resetBtn(parent).click();
+	expect(document.activeElement).toBe(skillBox(parent));
+});
+
+test('the "19–20" range in the Main-action label sits in a nowrap span (it never breaks across lines)', () => {
+	const { parent } = mount({ showMainAction: true });
+	const nowrap = parent.querySelector('.dse-rollbar__check--main .dse-rollbar__nowrap')!;
+	expect(nowrap.textContent).toBe('19–20');
+});

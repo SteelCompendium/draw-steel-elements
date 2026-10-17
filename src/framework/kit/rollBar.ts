@@ -170,11 +170,22 @@ export function rollBar(parent: HTMLElement, opts: RollBarOptions, owner: Compon
 	}
 
 	// -- native labelled checkboxes: filled vs empty box + the words in the label and the summary --
-	const checkbox = (cls: string, text: string, checked: boolean, onChange: (on: boolean) => void): HTMLInputElement => {
+	/** `nowrap` (optional) is a substring kept on one line (a range like "19–20" must never break). */
+	const checkbox = (
+		cls: string, text: string, checked: boolean, onChange: (on: boolean) => void, nowrap?: string,
+	): HTMLInputElement => {
 		const labelEl = panelEl.createEl('label', { cls: `dse-rollbar__check ${cls}` });
 		const inputEl = labelEl.createEl('input', { type: 'checkbox' });
 		inputEl.checked = checked;
-		labelEl.createSpan({ text });
+		const textEl = labelEl.createSpan();
+		const at = nowrap ? text.indexOf(nowrap) : -1;
+		if (nowrap && at >= 0) {
+			textEl.appendText(text.slice(0, at));
+			textEl.createSpan({ cls: 'dse-rollbar__nowrap', text: nowrap });
+			textEl.appendText(text.slice(at + nowrap.length));
+		} else {
+			textEl.setText(text);
+		}
 		owner.registerDomEvent(inputEl, 'change', () => { onChange(inputEl.checked); render(); });
 		return inputEl;
 	};
@@ -185,7 +196,7 @@ export function rollBar(parent: HTMLElement, opts: RollBarOptions, owner: Compon
 	const mainBox = hasMainAction
 		? checkbox('dse-rollbar__check--main', 'Main action — natural 19–20 is a critical hit', state.mainAction, (on) => {
 				state.mainAction = on;
-			})
+			}, '19–20')
 		: undefined;
 
 	// -- reset: text + icon, back to the host's defaults; disabled when already there --
@@ -193,7 +204,13 @@ export function rollBar(parent: HTMLElement, opts: RollBarOptions, owner: Compon
 		panelEl,
 		{
 			icon: 'rotate-ccw', label: 'Reset modifiers', text: 'Reset modifiers', variant: 'ghost',
-			onClick: () => { setState({ ...defaults }); },
+			onClick: () => {
+				// Reset disables itself (the strip is then at its defaults); a keyboard user who
+				// pressed it would lose focus to <body>, so hand it to the disclosure header.
+				const hadFocus = resetButton.buttonEl.ownerDocument.activeElement === resetButton.buttonEl;
+				setState({ ...defaults });
+				if (hadFocus) mods.headerEl.focus();
+			},
 		},
 		owner,
 	);

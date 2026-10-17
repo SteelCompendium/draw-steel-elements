@@ -15165,7 +15165,7 @@ body.theme-light
 	display: contents;
 }
 [data-dse-element] .dse-rollbar__mods > .dse-collapse__header {
-	flex: 1 1 10rem;
+	flex: 1 1 7rem;
 	flex-wrap: wrap;
 	width: auto;
 	min-width: 0;
@@ -15214,11 +15214,31 @@ body.theme-light
 [data-dse-element] .dse-rollbar__check {
 	flex: 1 1 100%;
 }
+/* A grid, not a flex row: the box lines up with the FIRST line of a label that wraps at a
+   sidebar width, while `align-content: center` still centres a one-line label in the
+   control-height row. */
 [data-dse-element] .dse-rollbar__check {
-	display: flex;
-	align-items: center;
+	display: grid;
+	grid-template-columns: auto 1fr;
+	align-items: baseline;
+	align-content: center;
 	min-height: var(--dse-control-min, var(--dse-touch-min));
 	cursor: pointer;
+}
+/* A numeric range ("19–20") never breaks across lines. */
+[data-dse-element] .dse-rollbar__nowrap {
+	white-space: nowrap;
+}
+/* The characteristic's editable input is taller than the read-only Edges/Banes values; giving it
+   the buttons' own height keeps all three ± rows level (scoped to the strip). */
+[data-dse-element] .dse-rollbar .dse-stepper__input {
+	box-sizing: border-box;
+	height: var(--dse-control-min, var(--dse-touch-min));
+}
+/* "Reset modifiers": the ghost button's inline padding indented its icon ~9px right of the
+   captions and checkboxes; drop it so the icon sits flush with that column. */
+[data-dse-element] .dse-rollbar__reset {
+	padding-inline-start: 0;
 }
 [data-dse-element] .dse-rollcard {
 	margin-top: 0.35rem;
