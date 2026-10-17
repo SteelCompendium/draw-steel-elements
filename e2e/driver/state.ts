@@ -24,7 +24,7 @@ export const state = {
 
 /** `[STAM-D01] ...` -> `STAM-D01`; falls back to a slug of the title. */
 export function testIdOf(title: string): string {
-	const m = /\[([A-Z][A-Z0-9]*-[A-Za-z0-9]+)\]/.exec(title);
+	const m = /\[([A-Z][A-Z0-9]*(?:-[A-Za-z0-9]+)+)\]/.exec(title);
 	if (m) return m[1];
 	return (
 		title

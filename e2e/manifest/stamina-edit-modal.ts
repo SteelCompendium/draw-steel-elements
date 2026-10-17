@@ -5,9 +5,11 @@ import { c, surface } from './surface';
 
 export default surface('stamina-edit-modal', {
 	reach: [
-		{ host: 'initiative', control: 'init.hero.stamina', ...c(['click'], ['E07']) },
+		// The numeric controls are the keyboard / assistive-tech write path: the Steel theme stands them
+		// down visually (not clickable by pointer), so a scenario reaches them with Tab + Enter.
+		{ host: 'initiative', control: 'init.hero.stamina', ...c(['press:Enter'], ['E07']) },
 		{ host: 'initiative', control: 'init.hero.bar', ...c(['click'], ['E08']) },
-		{ host: 'initiative', control: 'init.detail.stamina', ...c(['click'], ['E09']) },
+		{ host: 'initiative', control: 'init.detail.stamina', ...c(['press:Enter'], ['E09']) },
 		{ host: 'initiative', control: 'init.detail.bar', ...c(['click'], ['E10', 'E21']) },
 		// The roster cell is one <button>: a click selects the instance, a double-click edits its stamina.
 		{ host: 'initiative', control: 'init.cell.stamina', ...c(['click', 'dblclick'], ['E11', 'E12', 'E20']) },

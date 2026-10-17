@@ -101,7 +101,7 @@ function walk(dir, pred, out = []) {
 }
 
 const TITLE_RE = /\b(?:it|knownBug)\s*\(\s*(?:(['"`])[^'"`]*\1\s*,\s*)?(['"`])((?:\\.|(?!\2)[^\\])*)\2/g;
-const ID_RE = /\[([A-Z][A-Z0-9]*-[A-Za-z0-9]+)\]/g;
+const ID_RE = /\[([A-Z][A-Z0-9]*(?:-[A-Za-z0-9]+)+)\]/g;
 
 /** Pre-scan spec files for the `[ID]`s in their it()/knownBug() titles. */
 function scanSpec(file) {
