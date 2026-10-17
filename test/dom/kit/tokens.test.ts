@@ -15,6 +15,11 @@ import { Component } from '../../mocks/obsidian';
 
 const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 
+/** Top-level `:root { … }` blocks, including SC-372's shared `:root, :is([data-dse-element], .dse-modal) { … }`
+ *  (the scale-dependent type tokens, re-declared on every stamped root). Line-anchored so a comment that
+ *  merely mentions ":root," cannot start a match. */
+const ROOT_BLOCK = /^:root\s*(?:,[^{}]*)?\{([^}]*)\}/gm;
+
 /**
  * All --dse-* custom-property DEFINITIONS (not `var(--dse-*)` references) inside
  * top-level :root blocks. The leading [\s{;] guard excludes var() references (which
@@ -23,7 +28,7 @@ const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css')
  */
 function rootDseDefinitions(css: string): string[] {
 	const defs: string[] = [];
-	for (const block of css.matchAll(/:root\s*\{([^}]*)\}/g)) {
+	for (const block of css.matchAll(ROOT_BLOCK)) {
 		for (const d of block[1].matchAll(/(?:^|[\s{;])--dse-([a-z0-9-]+)\s*:/g)) {
 			defs.push(d[1]);
 		}
@@ -33,7 +38,7 @@ function rootDseDefinitions(css: string): string[] {
 
 /** Trimmed value of a --dse-<name> definition inside the :root base (or undefined). */
 function rootValue(name: string): string | undefined {
-	for (const block of sheet.matchAll(/:root\s*\{([^}]*)\}/g)) {
+	for (const block of sheet.matchAll(ROOT_BLOCK)) {
 		const m = block[1].match(new RegExp(`(?:^|[\\s{;])--dse-${name}\\s*:\\s*([^;]+);`));
 		if (m) return m[1].trim();
 	}
