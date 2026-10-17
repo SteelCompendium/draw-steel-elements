@@ -186,6 +186,11 @@ export interface RenderFeatureOptions {
 	 *  the pre-D5 grammar (the fidelity bar); present ⇒ each rolling effect gains
 	 *  a roll controller. Built by featureRollHooks(cx) in the element views. */
 	roll?: FeatureRollHooks;
+	/** SC-279 — renderFeatureList only: each config's STABLE position in the block's whole
+	 *  feature list (parallel to `configs`), for callers that render the list in several
+	 *  calls (statblock's villain band, featureblock's level runs). Absent ⇒ the config's own
+	 *  index. Keys the per-feature roll session namespace; see `namespacedRoll`. */
+	rollIndices?: readonly number[];
 	/** SC-10 Task 5: featureblock's per-option glyph. When true, the cardHead's
 	 *  leading column carries the SDK's OWN `Feature.icon` glyph verbatim (the
 	 *  site's `fb__feat-icon` — a literal emoji classifier: ⭐ passive, ☠ villain,
@@ -536,10 +541,32 @@ export function renderFeatureList(
 ): HTMLElement | null {
 	if (!configs || configs.length === 0) return null;
 	const listEl = parent.createDiv({ cls: 'dse-feature__nested' });
-	for (const config of configs) {
-		renderFeature(listEl, config, owner, renderMd, opts);
-	}
+	configs.forEach((config, i) => {
+		const index = opts.rollIndices?.[i] ?? i;
+		const featureOpts = opts.roll ? { ...opts, roll: namespacedRoll(opts.roll, index) } : opts;
+		renderFeature(listEl, config, owner, renderMd, featureOpts);
+	});
 	return listEl;
+}
+
+/**
+ * SC-279 — every `renderFeature` call restarts its rolling-effect ordinal at 0, so features
+ * listed under ONE blockKey (a statblock's / featureblock's abilities, or a feature's nested
+ * features) would all key `roll.lastInput.0` / `roll.history.0` / `roll.modsOpen.0` and leak
+ * each other's edges and open state into their rolls. Each listed feature therefore gets its
+ * own `f<i>::`-prefixed view of the session (the hero sheet does the same per ability row).
+ */
+function namespacedRoll(roll: FeatureRollHooks, index: number): FeatureRollHooks {
+	const ns = `f${index}::`;
+	const base = roll.session;
+	return {
+		...roll,
+		session: {
+			get: (blockKey, slot) => base.get(blockKey, `${ns}${slot}`),
+			set: (blockKey, slot, value) => base.set(blockKey, `${ns}${slot}`, value),
+			clear: () => base.clear(),
+		},
+	};
 }
 
 /** Mounts one feature/ability card into `parent` and returns its `.dse-feature` root. */
@@ -828,15 +855,15 @@ export function renderFeature(
 		}
 
 		if (effect.features && effect.features.length > 0) {
-			// D5: nested abilities inherit the hooks (single shared blockKey). Each
-			// nested feature gets its own renderFeature frame — that resets the
-			// rollableIndex ordinal, so every nested feature shares the parent's
-			// blockKey ordinal space: the parent's rolling effect 0 and a nested
-			// feature's effect 0 land on the SAME session slot (and nested siblings
-			// collide with each other likewise); acceptable for best-effort dice
-			// state (F1 §4.3 key drift is already documented) — not a bug.
+			// D5: nested abilities inherit the hooks (single shared blockKey). Each nested
+			// feature gets its own renderFeature frame, which resets the rollableIndex
+			// ordinal — SC-279: renderFeatureList therefore namespaces the session per listed
+			// feature (`f<i>::`, compounding under this feature's own namespace), so the
+			// parent's rolling effect 0 and a nested feature's effect 0 no longer share a
+			// slot. `rollIndices` addressed the OUTER list, so it must not reach this one.
 			renderFeatureList(hostEl, FeatureConfig.allFrom(effect.features), owner, renderMd, {
 				...opts,
+				rollIndices: undefined,
 				headingLevel: Math.min(level + 1, 6),
 			});
 		}

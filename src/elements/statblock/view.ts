@@ -487,7 +487,10 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 			return;
 		}
 		const rest = configs.filter((config) => actionTypeOf(config) !== 'villain');
-		if (rest.length > 0) renderFeatureList(card, rest, this, renderMd, opts);
+		// SC-279: the roll session namespace is keyed by position in the WHOLE list, so a
+		// feature keeps its slots whichever of the two calls renders it.
+		const indicesOf = (list: FeatureConfig[]) => list.map((config) => configs.indexOf(config));
+		if (rest.length > 0) renderFeatureList(card, rest, this, renderMd, { ...opts, rollIndices: indicesOf(rest) });
 
 		// The kit primitive already owns the header button, the chevron, the
 		// aria-expanded/aria-controls wiring and print-forced-open; the band is that
@@ -514,6 +517,6 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 		setIcon(crestEl, crestIconFor('villain')!);
 		const titleEl = band.headerEl.querySelector('.dse-collapse__title');
 		if (titleEl) band.headerEl.insertBefore(crestEl, titleEl);
-		renderFeatureList(band.contentEl, villains, this, renderMd, opts);
+		renderFeatureList(band.contentEl, villains, this, renderMd, { ...opts, rollIndices: indicesOf(villains) });
 	}
 }

@@ -185,7 +185,10 @@ export class FeatureblockElementView extends ElementView<FeatureblockConfig> {
 			else runs.push({ level, features: [feature] });
 		}
 
+		let offset = 0; // SC-279: position of the run's first feature in the whole list (roll session keys)
 		for (const run of runs) {
+			const first = offset;
+			offset += run.features.length;
 			let host = card;
 			if (run.level > 0) {
 				host = card.createDiv({ cls: 'dse-fb__band--adv' });
@@ -194,6 +197,7 @@ export class FeatureblockElementView extends ElementView<FeatureblockConfig> {
 			}
 			renderFeatureList(host, FeatureConfig.allFrom(run.features), this, renderMd, {
 				roll: featureRollHooks(this.cx),
+				rollIndices: run.features.map((_, i) => first + i),
 				// SC-10 Task 5: featureblock options carry the SDK's own icon glyph
 				// (site's fb__feat-icon) instead of the generic act-based crest.
 				featBlockIcon: true,

@@ -216,6 +216,59 @@ describe('pipeline integration — the fidelity bar and the opt-in', () => {
 		expect(containerEl.querySelectorAll('.dse-roll-btn')).toHaveLength(panels.length);
 	});
 
+	// SC-279 HIGH-1: every renderFeature call restarts its rolling-effect ordinal at 0, so a block's
+	// abilities used to share roll.lastInput.0 / roll.history.0 / roll.modsOpen.0.
+	// The featureblock source has three rolling abilities in THREE level runs (0, 1, 0), so the
+	// per-run call into renderFeatureList must still key each ability by its place in the whole list.
+	const ability = (name: string, level: number) => [
+		'  - type: feature',
+		'    feature_type: ability',
+		`    name: ${name}`,
+		...(level ? [`    level: ${level}`] : []),
+		'    usage: Main action',
+		'    effects:',
+		'      - roll: Power Roll + Might',
+		'        tier1: One.',
+		'        tier2: Two.',
+		'        tier3: Three.',
+	];
+	const featureblockSource = [
+		'type: featureblock', 'featureblock_type: Malice Features', 'name: Three Strikes', 'features:',
+		...ability('Strike A', 0), ...ability('Strike B', 1), ...ability('Strike C', 0),
+	].join('\n');
+	const cases: [string, string | undefined][] = [['statblock', undefined], ['featureblock', featureblockSource]];
+	for (const [elementId, source] of cases) {
+		test(`${elementId}: abilities do not share roll state (A's edge and open strip never reach B or C)`, async () => {
+			const { containerEl } = await mountFixture(elementId, true, source);
+			const launches = [...containerEl.querySelectorAll<HTMLButtonElement>('.dse-roll-btn')];
+			expect(launches.length).toBeGreaterThan(1);
+			const areaOf = (i: number) => launches[i].closest('.dse-feature')!.querySelector<HTMLElement>('.dse-roll-area')!;
+			launches[0].click();
+			await flushAsync(1);
+			const a = areaOf(0);
+			a.querySelector<HTMLButtonElement>('.dse-rollbar__mods > .dse-collapse__header')!.click(); // open A's strip
+			a.querySelector<HTMLButtonElement>('button[aria-label="Increase Edges"]')!.click();
+			a.querySelector<HTMLButtonElement>('button[aria-label="Roll"]')!.click();
+			await flushAsync(1);
+			expect(a.querySelector('.dse-rollcard__breakdown')!.textContent).toContain('edge');
+			launches[1].click(); // B's first click
+			await flushAsync(1);
+			const b = areaOf(1);
+			expect(b.querySelector('.dse-rollbar__mods > .dse-collapse__header')!.getAttribute('aria-expanded')).toBe('false');
+			expect(b.querySelector('.dse-rollbar__summary')!.textContent).not.toContain('edge');
+			expect(b.querySelector('.dse-rollcard__breakdown')!.textContent).not.toContain('edge');
+			if (launches.length > 2) {
+				launches[2].click();
+				await flushAsync(1);
+				const c = areaOf(2);
+				expect(c.querySelector('.dse-rollbar__mods > .dse-collapse__header')!.getAttribute('aria-expanded')).toBe('false');
+				expect(c.querySelector('.dse-rollbar__summary')!.textContent).not.toContain('edge');
+			}
+			// …and A kept its own state.
+			expect(a.querySelector('.dse-rollbar__summary')!.textContent).toContain('1 edge');
+		});
+	}
+
 	test('statblock abilities gain the roller too (shared grammar)', async () => {
 		const { containerEl } = await mountFixture('statblock', true);
 		const panels = containerEl.querySelectorAll('.dse-pr');
