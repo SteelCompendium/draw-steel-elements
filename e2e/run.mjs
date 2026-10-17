@@ -8,20 +8,27 @@
 //   npm run e2e -- --obsidian=pinned|installed     # app+installer 1.14.4 (default) | /usr/bin/obsidian
 //   npm run e2e -- --headed [--slow=300]           # watch it (DSE_E2E_HEADED_DISPLAY, default :1)
 //
-// Exit 0 = every test ok (known-bug expected failures count as ok); 1 = a test failed;
-// 2 = usage or environment (no Xvfb, build failed, session never started, interrupted).
-// Final line:  OBSIDIAN-E2E done: N/M ok, F failed, K known-bug
+// Exit 0 = every test ok (known-bug expected failures count as ok); 1 = a test failed, a test was
+// skipped, or (full runs only) the coverage gate failed; 2 = usage or environment (unknown
+// --only id, `.skip`/`.only`/`xit` in a selected spec, no Xvfb, build failed, session never
+// started, interrupted).
+// Final line:  OBSIDIAN-E2E done: N/M ok, F failed, K known-bug, coverage: X/Y pairs
+//   (a partial run - --only / --element - prints the coverage but skips the gate).
 //
 // THE DISPLAY. Real Obsidian needs an X display, and agent shells export DISPLAY=:1, which is a
 // person's real screen. So unless --headed, this ALWAYS starts its own private Xvfb in
-// :200-:239 and gives every child that display explicitly; the inherited DISPLAY/XAUTHORITY/
-// WAYLAND_DISPLAY are dropped. --headed is the only way onto a real display.
+// :200-:239 and gives every wdio / chromedriver / Obsidian child that display explicitly; the
+// inherited DISPLAY/XAUTHORITY/WAYLAND_DISPLAY are dropped from their environment (Xvfb itself
+// and the build step still inherit the shell's, harmlessly: neither opens a window).
+// --headed is the only way onto a real display.
 //
 // CHILD HYGIENE. Everything this spawns (Xvfb, wdio and its workers, chromedriver, Obsidian) is
 // reaped by PID on every exit path - normal, failure, SIGINT/SIGTERM, mid-startup. Descendants
-// are tracked by polling the process tree while running, and any leftover process whose
-// environment carries this run's DSE_E2E_RUN_ID is also found and killed. Nothing is ever
-// killed by name.
+// are tracked by polling the process tree while running. Backstop for anything that escaped the
+// tree (reparented to init): every wdio-side child gets a TMPDIR unique to this run, so
+// Obsidian's and chromedriver's command lines (--user-data-dir=...) carry that unique path, and a
+// leftover process whose /proc/<pid>/cmdline contains that directory is found and killed. (/proc/<pid>/environ
+// cannot be used: Chromium overwrites it.) Nothing is ever killed by name.
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
@@ -111,6 +118,18 @@ function scanSpec(file) {
 	return ids;
 }
 
+/** `file:line` of every `.skip(` / `.only(` on it|describe|knownBug and every xit( / xdescribe(. */
+const SKIP_RE = /\b(?:it|describe|knownBug)\s*\.\s*(?:skip|only)\s*\(|\bx(?:it|describe)\s*\(/;
+function skipFindings(file) {
+	const out = [];
+	fs.readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+		const t = line.trim();
+		if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return; // prose, not code
+		if (SKIP_RE.test(line)) out.push(`${path.relative(repo, file)}:${i + 1}: ${t.slice(0, 80)}`);
+	});
+	return out;
+}
+
 function discoverSpecs(args) {
 	const specsRoot = path.join(here, 'specs');
 	let root = specsRoot;
@@ -138,6 +157,11 @@ function discoverSpecs(args) {
 			throw new UsageError(`--only names unknown test id(s): ${unknown.join(', ')} (known: ${[...known].sort().join(', ') || 'none'})`);
 		}
 		chosen = scanned.filter((s) => s.ids.some((id) => args.only.includes(id)));
+	}
+	// A skipped or focused test silently changes what ran (review R1, M-2): refuse it in ANY run.
+	const skips = chosen.flatMap((s) => skipFindings(s.file));
+	if (skips.length) {
+		throw new UsageError(`skipped / focused tests are not allowed (a skip shrinks the run silently, an only hides the rest):\n  ${skips.join('\n  ')}`);
 	}
 	const ids = chosen.flatMap((s) => s.ids).filter((id) => !args.only.length || args.only.includes(id));
 	return { files: chosen.map((s) => s.file), expectedIds: ids };
@@ -243,14 +267,21 @@ function trackDescendants(rootPid) {
 	}
 }
 
-/** PIDs of live processes (other than us) whose environment carries this run's id. */
+/** PIDs of live processes (other than us) that belong to this run: their command line carries the
+ *  run's unique TMPDIR (Obsidian's --user-data-dir lives under it), or - for the
+ *  processes whose environment is intact, i.e. not Chromium's - their environment carries the run id. */
+let runDirNeedle = '';
+let ownTmpDir = ''; // the TMPDIR this run created for its wdio side (removed on every exit path)
+const rmOwnTmp = () => ownTmpDir && fs.rmSync(ownTmpDir, { recursive: true, force: true });
 function taggedPids() {
-	const needle = `DSE_E2E_RUN_ID=${runId}\0`;
+	if (!runDirNeedle) return [];
+	const envNeedle = `DSE_E2E_RUN_ID=${runId}\0`;
 	const found = [];
 	for (const d of fs.readdirSync('/proc')) {
 		if (!/^\d+$/.test(d) || Number(d) === process.pid) continue;
 		try {
-			if (fs.readFileSync(`/proc/${d}/environ`, 'latin1').includes(needle)) found.push(Number(d));
+			if (fs.readFileSync(`/proc/${d}/cmdline`, 'latin1').includes(runDirNeedle)) found.push(Number(d));
+			else if (fs.readFileSync(`/proc/${d}/environ`, 'latin1').includes(envNeedle)) found.push(Number(d));
 		} catch {
 			/* gone, or not ours */
 		}
@@ -385,7 +416,7 @@ async function loadManifests() {
 
 /** The exercised-set gate (S2 section 4.6, check 3): every manifest (control, kind) pair must have been
  *  driven by at least one test, and nothing may be driven that no manifest declares. */
-function coverageGate(surfaces, driven) {
+function coverageGate(surfaces, driven, knownBugIds) {
 	const required = new Map(); // "control kind" -> surfaces
 	for (const s of surfaces) {
 		const add = (control, kind) => {
@@ -398,8 +429,13 @@ function coverageGate(surfaces, driven) {
 	}
 	const drivenKeys = new Set(driven.map((d) => `${d.control}\u0000${d.kind}`));
 	const missing = [...required.keys()].filter((k) => !drivenKeys.has(k)).map((k) => k.replace('\u0000', ' x '));
+	// A pair driven ONLY by known-bug tests is not exercised: a marker's body stops at the first
+	// failing assertion, and a fixed bug would silently remove the pair's only driver (review R1, L-2).
+	const knownOnly = driven
+		.filter((d) => required.has(`${d.control}\u0000${d.kind}`) && d.tests.every((t) => knownBugIds.has(t)))
+		.map((d) => `${d.control} x ${d.kind} (only: ${d.tests.join(',')})`);
 	const unmanifested = driven.filter((d) => d.control !== '(page)' && !required.has(`${d.control}\u0000${d.kind}`)).map((d) => `${d.control} x ${d.kind} (${d.tests.join(',')})`);
-	return { total: required.size, exercised: required.size - missing.length, missing, unmanifested };
+	return { total: required.size, exercised: required.size - missing.length - knownOnly.length, missing, knownOnly, unmanifested };
 }
 
 function pruneOldRuns(keep = 12) {
@@ -429,6 +465,13 @@ async function main() {
 	runId = `${new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '').replace('T', '-')}-${randomBytes(2).toString('hex')}`;
 	const runDir = path.join(outRoot, runId);
 	fs.mkdirSync(runDir, { recursive: true });
+	// The wdio side's TMPDIR: short (Chromium's SingletonSocket path must fit a 108-byte unix socket
+	// address, which a TMPDIR under e2e/.out/<run>/ overflows) yet unique to this run, so every
+	// wdio / chromedriver / Obsidian command line (--user-data-dir=...) carries it.
+	const tmpDir = path.join(os.tmpdir(), `dse-e2e-${runId}`);
+	fs.mkdirSync(tmpDir, { recursive: true });
+	runDirNeedle = tmpDir + path.sep;
+	ownTmpDir = tmpDir;
 
 	// Build first, like the lifecycle gate (npm run build-no-check = esbuild production).
 	const build = spawnSync('npm', ['run', '--silent', 'build-no-check'], { cwd: repo, stdio: 'inherit' });
@@ -460,6 +503,7 @@ async function main() {
 	Object.assign(env, {
 		DISPLAY: display,
 		OBSIDIAN_CACHE: cache,
+		TMPDIR: tmpDir,
 		DSE_E2E_RUN_ID: runId,
 		DSE_E2E_RUN_DIR: runDir,
 		DSE_E2E_CACHE: cache,
@@ -504,7 +548,7 @@ async function main() {
 	for (const r of results) {
 		if (r.state !== 'passed') {
 			failed++;
-			console.log(`${TAG} ${r.id} FAIL: ${(r.error ?? r.state).split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 4).join(' | ')} [bundle ${path.join(runDir, r.id)}]`);
+			console.log(`${TAG} ${r.id} FAIL: ${(r.error ?? r.state).split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 14).join(' | ')} [bundle ${path.join(runDir, r.id)}]`);
 		} else if (r.knownBug) {
 			known++;
 			console.log(`${TAG} ${r.id} known-bug ${r.knownBug} (${r.durationMs} ms)`);
@@ -525,20 +569,22 @@ async function main() {
 	const total = results.length + expectedIds.filter((id) => !reported.has(id)).length;
 	const driven = mergeCoverage(runDir);
 	const partial = args.only.length > 0 || args.element !== null;
-	const gate = coverageGate(await loadManifests(), driven);
+	const gate = coverageGate(await loadManifests(), driven, new Set(results.filter((r) => r.knownBug).map((r) => r.id)));
 	const coverageText = `coverage: ${gate.exercised}/${gate.total} pairs${partial ? ' (partial run: gate skipped)' : ''}`;
 	console.log(`${TAG} done: ${ok}/${total} ok, ${failed} failed, ${known} known-bug, ${coverageText}`);
 	console.log(`${TAG} coverage driven: ${driven.length} (control, kind) pair(s) -> ${path.join(outRoot, 'coverage.json')}`);
 	let gateFailed = false;
-	if (!partial && failed === 0 && wdioCode === 0 && (gate.missing.length || gate.unmanifested.length)) {
+	if (!partial && failed === 0 && wdioCode === 0 && (gate.missing.length || gate.knownOnly.length || gate.unmanifested.length)) {
 		gateFailed = true;
 		if (gate.missing.length) console.log(`${TAG} coverage gate FAILED: ${gate.missing.length} manifest pair(s) were exercised by zero tests:\n  ${gate.missing.join('\n  ')}`);
+		if (gate.knownOnly.length) console.log(`${TAG} coverage gate FAILED: ${gate.knownOnly.length} pair(s) are driven only by known-bug tests (a marker stops at its first failing assertion, so this proves nothing):\n  ${gate.knownOnly.join('\n  ')}`);
 		if (gate.unmanifested.length) console.log(`${TAG} coverage gate FAILED: ${gate.unmanifested.length} driven pair(s) are in no manifest:\n  ${gate.unmanifested.join('\n  ')}`);
 	} else if (partial && gate.missing.length) {
 		console.log(`${TAG} (partial run) ${gate.missing.length} manifest pair(s) not exercised in this selection`);
 	}
 
 	await reapAll(false);
+	rmOwnTmp();
 	if (reaped) console.log(`${TAG} reaped ${reaped} leftover child process(es) that outlived wdio`);
 	pruneOldRuns();
 
@@ -560,6 +606,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 		interrupted = true;
 		console.log(`${TAG} environment: received ${sig}, cleaning up`);
 		await reapAll();
+		rmOwnTmp();
 		process.exit(2);
 	});
 }
@@ -578,5 +625,6 @@ try {
 	code = 2;
 } finally {
 	await reapAll();
+	rmOwnTmp();
 }
 process.exit(interrupted ? 2 : code);

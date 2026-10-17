@@ -2,6 +2,7 @@
 // display, the Obsidian binary choice, sharding and the summary line, and hands everything
 // here through DSE_E2E_* environment variables.
 import * as path from 'node:path';
+import { PendingReporter } from './driver/pendingReporter';
 
 const env = process.env;
 const need = (name: string): string => {
@@ -36,7 +37,8 @@ export const config: WebdriverIO.Config = {
 		},
 	],
 	services: ['obsidian'],
-	reporters: ['spec'],
+	// PendingReporter: a skipped (pending) test is a failure, not a smaller run (review R1, M-2).
+	reporters: ['spec', [PendingReporter, {}]],
 	cacheDir: path.resolve(need('DSE_E2E_CACHE')),
 	// No auto-retries anywhere: a flake is a bug in the test or the product (S2 section 4.8).
 	specFileRetries: 0,

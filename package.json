@@ -50,6 +50,7 @@
     "@wdio/globals": "9.31.3",
     "@wdio/local-runner": "9.32.0",
     "@wdio/mocha-framework": "9.32.0",
+    "@wdio/reporter": "9.32.0",
     "@wdio/spec-reporter": "9.32.0",
     "builtin-modules": "5.0.0",
     "css": "^3.0.0",
