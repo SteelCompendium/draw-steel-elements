@@ -3,6 +3,7 @@
   "packages": [
     "github-cli@latest",
     "jq@latest",
+    "nodejs@24",
     "xvfb@latest"
   ],
   "shell": {
