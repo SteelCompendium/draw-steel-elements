@@ -68,12 +68,12 @@ Open any note, make sure you are in **Editing view** (`Ctrl/Cmd + E`), and type:
 ```
 
 A list of everything the plugin can draw appears. Keep typing to narrow it — `/dsstat` for
-a statblock, `/dsroll` for a dice roller. Pick one with the arrow keys and `Enter`.
+a statblock, `/dsinit` for an initiative tracker. Pick one with the arrow keys and `Enter`.
 
 The plugin writes a complete, working example into your note. Switch to Reading view
 (`Ctrl/Cmd + E`) and there it is:
 
-![A rolling power-roll card](Media/simple_feature_power_roll.png)
+![A power-roll ability card](Media/simple_feature_power_roll.png)
 
 Now go back to Editing view and change something — a name, a number. Return to Reading
 view. That is the whole authoring loop: **edit the text, look at the card**.
@@ -131,9 +131,9 @@ and numbers — they read exactly as they look. The full field list is in
 
 ## Where to go next
 
-- **[Run an encounter](running-an-encounter.md)** — build the fight from compendium
-  monsters, with a difficulty budget, then hand it to the tracker.
-- **[Track your hero](hero-suite.md)** — Stamina, heroic resource, surges and conditions.
+- **[Run an encounter](running-an-encounter.md)** — set up the fight from compendium
+  monsters, then run it with the tracker.
+- **[Track your hero](hero-suite.md)** — the Stamina bar.
 - **[Customize a monster](customizing-a-monster.md)** — the homebrew loop.
 - **[Style your statblocks](styling-statblocks.md)** — make cards look the way you like.
 - **[Settings](settings.md)** — a tour of every page.

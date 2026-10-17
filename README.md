@@ -1,7 +1,7 @@
 # Draw Steel Elements Plugin for Obsidian
 
-Statblocks, ability cards, initiative and negotiation trackers, hero trackers and a synced
-copy of the Draw Steel Compendium — all inside your Obsidian vault.
+Statblocks, ability cards, initiative, negotiation and montage trackers, a Stamina bar and a
+synced copy of the Draw Steel Compendium — all inside your Obsidian vault.
 
 _The Draw Steel Elements Obsidian Plugin is an independent product published under the
 DRAW STEEL Creator License and is not affiliated with MCDM Productions, LLC. DRAW STEEL ©
@@ -65,7 +65,6 @@ Then either:
 | [Feature / ability card](./docs/Features.md) | `ds-feature`, `ds-ft`, `ds-feat` | Abilities, traits, tests and other power rolls. |
 | [Featureblock](./docs/featureblock.md) | `ds-featureblock`, `ds-fb` | A group of features (Malice, Dynamic Terrain, …). |
 | [Compendium reference](./docs/compendium-sync.md#referencing-a-compendium-entry-in-your-notes) | `ds-scc` | Renders any entry from your synced compendium by its code. |
-| [Roll](./docs/Roll.md) | `ds-roll`, `ds-r`, `ds-power-roll` | A standalone power roll / test / flat dice roller. |
 | [Horizontal rule](./docs/horizontal-rule.md) | `ds-hr` | A Draw Steel styled section divider. |
 
 ### Running the game
@@ -74,23 +73,13 @@ Then either:
 |---|---|---|
 | [Initiative tracker](./docs/initiative-tracker.md) | `ds-initiative`, `ds-it` | Run an encounter: turns, Stamina, conditions, Malice. |
 | [Negotiation tracker](./docs/negotiation-tracker.md) | `ds-negotiation`, `ds-nt` | Run a negotiation: interest, patience, motivations, pitfalls. |
-| [Encounter builder](./docs/gm-trackers.md#encounter-builder-ds-encounter) | `ds-encounter` | Build an encounter from compendium monsters with a live EV budget. |
-| [Montage Test tracker](./docs/gm-trackers.md#montage-test-tracker-ds-montage) | `ds-montage` | Track successes, failures and rounds in a montage test. |
-| [Project tracker](./docs/gm-trackers.md#project-tracker-ds-project) | `ds-project` | Track a downtime project's goal and accumulated points. |
-| [Party tracker](./docs/gm-trackers.md#party-tracker-ds-party) | `ds-party` | Victories, XP, renown, wealth and hero tokens for the whole party. |
+| [Montage Test tracker](./docs/gm-trackers.md) | `ds-montage` | Track successes, failures and rounds in a montage test. |
 
-Any tracker can be pinned to a **persistent sidebar panel** so it stays visible while you
-navigate between notes — see [Pinning to the sidebar](./docs/writing-blocks.md#pinning-a-block-to-the-sidebar).
-
-### Hero trackers
+### Hero tracker
 
 | Element | Block | What it does |
 |---|---|---|
 | [Stamina bar](./docs/stamina-bar.md) | `ds-stamina-bar`, `ds-stam` | Stamina, temporary Stamina, Recoveries, Winded/Dying. |
-| [Conditions](./docs/hero-suite.md#conditions-ds-conditions) | `ds-conditions`, `ds-cond` | A conditions strip for one hero or creature. |
-| [Heroic resource](./docs/hero-suite.md#heroic-resource-ds-resource) | `ds-resource` | Ferocity, Focus, Piety, … tracked by class. |
-| [Surges](./docs/hero-suite.md#surges-ds-surges) | `ds-surges` | A surge counter. |
-| [Hero tokens](./docs/hero-suite.md#hero-tokens-ds-tokens) | `ds-tokens` | The party's shared hero token pool. |
 
 ### Character sheet pieces (great in [Canvas](./docs/canvas-character-sheet.md))
 
@@ -119,8 +108,8 @@ is copied into your note.
 ## Settings
 
 **Settings → Draw Steel Elements** is a short index of pages: Appearance, Typography,
-Statblock display, Featureblock display, Element defaults, Rolling, Authoring, Compendium,
-Links and Initiative tracker. Statblocks ship with three one-click presets, and Obsidian's
+Statblock display, Featureblock display, Feature display, Element defaults, Rolling,
+Compendium, Links and Initiative tracker. Statblocks ship with three one-click presets, and Obsidian's
 own settings search finds every individual setting by name. See the
 [settings guide](./docs/settings.md).
 

@@ -30,10 +30,6 @@ Choosing a statblock look, with pictures:
 
 - **Reduce motion** — turn off transitions and animations inside Draw Steel elements. Your
   system's own reduced-motion preference is always honoured regardless of this setting.
-- **Print preview** — show every element in its print/export layout on screen, so you can
-  check a handout without printing it. The preview draws its own white page with black
-  text, matching what the PDF export produces — regardless of your Obsidian theme. In a
-  dark vault, elements with Print preview on sit as white pages on your dark note.
 - **Initiative portraits** — show creature portraits in the initiative tracker.
 
 ## Typography
@@ -95,7 +91,7 @@ The individual settings:
   Screen only: print, PDF export and canvas cards never show it.
 - **↳ Sticky mini-header: include secondary stats** — add a second line to that pinned bar
   with Movement, With Captain, Immunity and Weakness. On by default; greyed out while the
-  mini-header is off. In a narrow pane (a sidebar leaf) the second line is dropped whatever
+  mini-header is off. In a narrow pane the second line is dropped whatever
   this says — there is no room for it. (It repeats "sticky mini-header" in its name on
   purpose: it is the row directly above it that this belongs to, and a settings-search hit
   arrives with no neighbours to say so. Don't confuse it with **Secondary stats** above,
@@ -134,7 +130,7 @@ featureblock rather than a statblock.
 
 ## Feature display
 
-How an **ability card** itself is laid out — the card the [Feature element](feature.md)
+How an **ability card** itself is laid out — the card the [Feature element](Features.md)
 renders on its own, and the same card wherever it appears inside a statblock or a
 featureblock. The preview on this page is a standalone ability card.
 
@@ -159,20 +155,13 @@ its Advanced list — they were always ability-card settings, so this is where t
 
 ## Rolling
 
-- **Enable rolling** (off by default) — adds a dice roller to rendered ability cards. The
-  standalone [Roll element](Roll.md) always rolls, whatever this says.
+- **Enable rolling** (off by default) — adds a dice roller to rendered ability cards.
 - **Roller** — roll natively, or hand the raw dice to the community
   [Dice Roller](https://github.com/javalent/dice-roller) plugin when it's installed. Draw
   Steel's tier/edge/bane maths always stays native, and the plugin falls back to its own
   roller automatically if Dice Roller is missing or fails.
 - **Click ability to roll** — with rolling enabled, clicking a power-roll tier row on an
   ability card rolls it.
-
-## Authoring
-
-- **Show edit button on rendered blocks** (off by default) — adds a pencil to each rendered
-  block, in its [element menu](common-element-fields.md#the-menu), that opens a form editor. See
-  [Writing and editing blocks](writing-blocks.md#edit-a-rendered-block-with-a-form).
 
 ## Compendium
 

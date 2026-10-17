@@ -55,11 +55,6 @@ Two rules keep you out of trouble:
   (`Ctrl/Cmd + Z`) back to the last version that rendered and redo the change more
   carefully.
 
-Prefer not to edit text at all? Turn on
-**[Settings → Authoring → "Show edit button on rendered blocks"](settings.md#authoring)**
-and every card gains a pencil that opens a form, with a live preview and a Save button that
-refuses to save something broken.
-
 ## 3. Keep it somewhere sensible
 
 Your homebrew is an ordinary note — put it wherever you like, **except inside the
@@ -84,4 +79,4 @@ For a single ability rather than a whole creature, `/ds` → **Feature**; see
 - [Statblock Element](statblock.md) — every statblock field
 - [Feature Element](Features.md) — abilities, traits, power rolls
 - [Featureblock](featureblock.md) — groups of features (Malice, Dynamic Terrain)
-- [Writing and editing blocks](writing-blocks.md) — `/ds`, autocomplete, the form editor
+- [Writing and editing blocks](writing-blocks.md) — `/ds`, autocomplete

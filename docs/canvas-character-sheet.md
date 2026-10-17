@@ -4,10 +4,9 @@ With [Obsidian Canvas](https://obsidian.md/canvas) you can lay out a flexible ch
 sheet from the elements below.
 
 **Elements on a canvas are read-only.** A canvas text node gives the plugin no file to write
-back to, so anything interactive — spending a Recovery, stepping a resource — is disabled
+back to, so anything interactive — spending a Recovery, stepping a counter — is disabled
 rather than silently discarded, and each card carries a small "Read-only" badge. Use a canvas
-for a sheet you **look at**; keep the blocks you actually click in ordinary notes, or pin
-them to the [sidebar](writing-blocks.md#pinning-a-block-to-the-sidebar).
+for a sheet you **look at**; keep the blocks you actually click in ordinary notes.
 
 ![canvas character sheet](Media/canvas-character-sheet.png)
 
@@ -43,11 +42,3 @@ Displays arbitrary key-value pairs.
 Displays skills
 
 ![Skills](Media/skills.png)
-
-**[Hero trackers](hero-suite.md)**
-
-Since 7.0.0 there are purpose-built trackers you can drop on a canvas too: a
-[heroic resource](hero-suite.md#heroic-resource-ds-resource) counter, a
-[surge](hero-suite.md#surges-ds-surges) counter, a
-[conditions](hero-suite.md#conditions-ds-conditions) strip, and the party's
-[hero token](hero-suite.md#hero-tokens-ds-tokens) pool.

@@ -1,7 +1,7 @@
 # Draw Steel Elements Plugin for Obsidian
 
-Statblocks, ability cards, initiative and negotiation trackers, hero trackers and a synced
-copy of the Draw Steel Compendium — all inside your Obsidian vault.
+Statblocks, ability cards, initiative, negotiation and montage trackers, a Stamina bar and a
+synced copy of the Draw Steel Compendium — all inside your Obsidian vault.
 
 _The Draw Steel Elements Obsidian Plugin is an independent product published under the DRAW STEEL Creator License and is not affiliated with MCDM Productions, LLC. DRAW STEEL © 2024 MCDM Productions, LLC._
 
@@ -19,16 +19,15 @@ running a fight, assuming no YAML or markdown knowledge.
 
 - **[Getting started](getting-started.md)** — install, sync, your first element, your first fight
 - **[Run an encounter](running-an-encounter.md)** — build it, then run it
-- **[Track your hero](hero-suite.md)** — Stamina, heroic resource, surges and conditions, one tracker at a time
+- **[Track your hero](hero-suite.md)** — the Stamina bar
 - **[Customize a monster](customizing-a-monster.md)** — the homebrew loop
 - **[Style your statblocks](styling-statblocks.md)** — presets and the display settings
-- **[Advanced usage](advanced-usage.md)** — per-block overrides, the sidebar, canvas, print, rolling
+- **[Advanced usage](advanced-usage.md)** — per-block overrides, canvas, print, rolling
 
 ### Reference
 
 - **[Writing and editing blocks](writing-blocks.md)** — type `/ds`, pick an element, and
-  the plugin writes the block for you. Also: the insert commands, the edit button, and
-  pinning a tracker to the sidebar.
+  the plugin writes the block for you. Also: the insert commands and per-block overrides.
 - **[Compendium Sync](compendium-sync.md)** — download the official
   [Draw Steel Compendium](https://steelcompendium.io/compendium) into your vault and
   reference any entry by its code.
@@ -71,12 +70,6 @@ A group of features shown together — Malice features, Dynamic Terrain, and sim
 Renders any entry from your synced compendium. The body is the entry's SCC code and
 nothing else, so the card always reflects the currently synced version.
 
-**[Roll](Roll.md)** — `ds-roll`, `ds-r`, `ds-power-roll`
-
-A standalone dice roller: power rolls with tiers, tests, opposed rolls and flat dice.
-
-![roll](Media/roll.png)
-
 **[Horizontal rule](horizontal-rule.md)** — `ds-hr`, `ds-horizontal-rule`
 
 A section divider styled like the ones in the book.
@@ -97,26 +90,11 @@ power roll.
 
 ![Initiative Tracker.png](Media/negotiation.png)
 
-**[Encounter builder](gm-trackers.md#encounter-builder-ds-encounter)** — `ds-encounter`
-
-List monsters by compendium code and see the encounter's EV, your party's budget, the
-resulting difficulty and the Victory payout — then hand the roster off to a new initiative
-tracker block.
-
-**[Montage Test tracker](gm-trackers.md#montage-test-tracker-ds-montage)** — `ds-montage`
+**[Montage Test tracker](gm-trackers.md)** — `ds-montage`
 
 Successes, failures, rounds and who used which skill during a montage test.
 
-**[Project / downtime tracker](gm-trackers.md#project-tracker-ds-project)** — `ds-project`
-
-A downtime project's goal, its prerequisites, and every respite roll that went into it.
-
-**[Party tracker](gm-trackers.md#party-tracker-ds-party)** — `ds-party`
-
-The whole party in one table: level, victories, XP, renown, wealth and the shared hero
-token pool.
-
-### Hero trackers
+### Hero tracker
 
 **[Stamina bar](stamina-bar.md)** — `ds-stamina-bar`, `ds-stamina`, `ds-stam`
 
@@ -124,24 +102,6 @@ Current, maximum and temporary Stamina, with an optional Recoveries row, a Catch
 button, and the Winded and Dying states.
 
 ![stamina-bar](Media/stamina-bar.png)
-
-**[Conditions](hero-suite.md#conditions-ds-conditions)** — `ds-conditions`, `ds-cond`
-
-A conditions strip for a single hero or creature, with the same Conditions manager the
-initiative tracker uses.
-
-**[Heroic resource](hero-suite.md#heroic-resource-ds-resource)** — `ds-resource`
-
-A counter for Ferocity, Focus, Piety, Essence and the rest — name the class and the block
-labels itself.
-
-**[Surges](hero-suite.md#surges-ds-surges)** — `ds-surges`
-
-A surge counter, with the damage a surge adds shown alongside it.
-
-**[Hero tokens](hero-suite.md#hero-tokens-ds-tokens)** — `ds-tokens`
-
-The party's shared hero token pool, in one canonical block.
 
 ### Character sheet pieces
 

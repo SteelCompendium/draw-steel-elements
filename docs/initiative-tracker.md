@@ -42,10 +42,8 @@ In the above example, there are two Heroes and one Enemy Group (Initiative Group
 
 To use the Initiative Tracker, you need to include a code block with the `ds-initiative` language identifier (or the shorter `ds-it` / `ds-init`) in your Obsidian note. Inside this code block, you define your encounter data in YAML format.
 
-Two shortcuts save you the typing: type **`/ds`** in the editor and pick *Initiative tracker*
-for a filled-in example, or build the fight in an
-[encounter builder](gm-trackers.md#encounter-builder-ds-encounter) block and press
-**Create tracker block**, which writes a ready-to-run tracker for you.
+To save the typing, type **`/ds`** in the editor and pick *Initiative tracker* for a
+filled-in example.
 
 In the plugin settings, you can configure a [default image](settings.md#initiative-tracker) to use if none is provided.
 
@@ -183,8 +181,7 @@ The reference supports multiple formats:
 
 1. **Compendium code**: `scc.v1:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker` —
    resolved against your [synced compendium](compendium-sync.md), so it doesn't depend on
-   where the file sits in your vault. This is what the
-   [encounter builder](gm-trackers.md#encounter-builder-ds-encounter) writes.
+   where the file sits in your vault.
 2. **Full Path from vault root**: `Homebrew/monsters/MonsterName.md` (with or without `.md`)
 3. **Path inside your compendium folder**: `DS Compendium/monster/goblin/statblock/goblin-stinker`
    (with or without `.md`)
@@ -338,8 +335,8 @@ limited in their action options as minions are."
 
 The Malice controls sit in a single full-width bar between the Heroes and the Enemy
 Groups: the pool stepper and the log disclosure on the left, the quick-add on the right,
-and the log's drawer opening full-width beneath the bar. In a narrow pane (a split view or
-the sidebar) the bar stacks into a single column. The round counter and *Advance round*
+and the log's drawer opening full-width beneath the bar. In a narrow pane (a split view)
+the bar stacks into a single column. The round counter and *Advance round*
 live on the Heroes heading line instead (see below).
 
 **Adjusting the pool**: the pool is a stepper — a **−** and a **+** button always shown on
@@ -451,15 +448,3 @@ applied as you made it.
 ### Data Persistence
 
 All interactions with the tracker update the underlying YAML data in the code block. This ensures that your encounter state is preserved even after closing and reopening the note.
-
-### Pinning to the Sidebar
-
-Running a session across several notes — the party tracker in one, a hero sheet in
-another? Hover the tracker, open its **⋯** menu, and choose **Pin to sidebar** to pin it to
-a persistent panel in Obsidian's right sidebar — it stays visible and interactive as you
-navigate to other notes, and edits made in the sidebar or in the note stay in sync. Unpin it
-the same way, from the sidebar's own **⋯** menu. (The "Send initiative tracker to sidebar"
-and "Send block to sidebar" commands still work too.) Open the sidebar directly at any time
-via the sword icon in the ribbon ("Open Draw Steel sidebar"). If your whole session already
-lives in one note, skip the sidebar and pin that note's tab instead — see
-[Pinning a block to the sidebar](writing-blocks.md#pinning-a-block-to-the-sidebar).

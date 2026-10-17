@@ -215,28 +215,19 @@ keywords:
 
 ## What's new in 7.0.0, at a glance
 
-- **[Hero trackers](hero-suite.md)** — new standalone blocks for heroic resource, surges,
-  conditions, and a shared party-wide hero token pool.
 - **One block renders any compendium entry** — sync the compendium and a
   [`ds-scc` block](compendium-sync.md#referencing-a-compendium-entry-in-your-notes)
   whose body is an entry's code renders that entry, whatever it is: a kit, a
   condition, a rule, a statblock. A search-and-insert command finds any entry
   and writes the block for you without leaving the editor.
-- **[Director's trackers](gm-trackers.md)** — an Encounter Builder that computes
-  live EV/budget from your synced compendium, plus trackers for montages,
-  downtime projects, and party-level victories/renown/wealth.
 - **The Montage Test tracker is a working board, not just a scoreboard** — a grid of one
   row per hero and one column per round, a click on any cell to log or correct that hero's
   round in a small form (success/failure/assist, an optional skill and note), and a
-  **Log an action…** button that opens the same form for the next hero to act. A collapsible cheat-sheet shows the test
-  tiers by difficulty; a collapsible guide at the foot covers running the montage end to
-  end. See [GM Trackers](gm-trackers.md) → "Montage Test tracker".
+  **Log an action…** button that opens the same form for the next hero to act. A collapsible
+  cheat-sheet shows the test tiers by difficulty; a collapsible guide at the foot covers running the montage end to
+  end. See [Montage Test Tracker](gm-trackers.md).
 - **Malice panel and per-turn action checklist** in the initiative tracker —
   see [Initiative Tracker](initiative-tracker.md).
-- **Draw Steel sidebar** — pin any tracker to a persistent panel in
-  Obsidian's right sidebar so it survives navigating between notes; see
-  [Pinning to the Sidebar](initiative-tracker.md#pinning-to-the-sidebar) for
-  the "send to sidebar" commands.
 - **`scc.v1:` links now resolve everywhere** — in compendium notes, inside
   element text, and as references — checking your local compendium first,
   with an optional fallback to steelcompendium.io.
@@ -246,10 +237,8 @@ keywords:
   See [Stamina Bar](stamina-bar.md).
 - **A standard menu panel on card elements** — hover a statblock, featureblock or
   stamina bar and a small icon panel appears at its top-right, carrying
-  collapse/expand and (when **Show edit button** is on) the edit pencil, which
-  moved there from the card's corner. Collapsed, an element is one line: type,
-  name, expand. Block keys: `collapsed:`, `collapse_default:` and
-  `collapsible:` — see
+  collapse/expand. Collapsed, an element is one line: type, name, expand. Block keys:
+  `collapsed:`, `collapse_default:` and `collapsible:` — see
   [Common Element Fields](common-element-fields.md).
   **One thing to know:** the Stamina Bar's own "Stamina Bar" disclosure header
   is gone, replaced by that panel. Your blocks need no change —
@@ -259,5 +248,10 @@ keywords:
   searchable from Obsidian's own settings search, with a live preview of the
   card you're changing and seven more of the website's statblock layout
   options.
+
+**A block for an element that isn't in this release.** If one of your notes has a block for
+an element this release doesn't include (a beta build may have let you write one), it shows
+a small card reading "`ds-…` is not available in this release" instead of the element. The
+block's text in your note is left exactly as you wrote it.
 
 See the [changelog](../CHANGELOG.md) for the full list of 7.0.0 changes.

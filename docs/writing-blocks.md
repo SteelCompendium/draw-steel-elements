@@ -12,7 +12,7 @@ screenshots; this page is the reference.
 ### Type `/ds`
 
 In the editor, type **`/ds`** on an empty line. A list of every element appears; keep
-typing to filter it (`/dsstat`, `/dsroll`, …). Pick one and the trigger is replaced with a
+typing to filter it (`/dsstat`, `/dsinit`, …). Pick one and the trigger is replaced with a
 complete, filled-in example block you can edit.
 
 ### Or use the command palette
@@ -28,23 +28,10 @@ Both routes insert; neither ever overwrites text you already wrote.
 
 With your cursor inside a `ds-` block, start typing a field name and Obsidian suggests the
 fields that element accepts. After a field that only allows certain values (for example
-`mode:` in a [roll block](Roll.md)), the suggestions become that field's allowed values.
+`style:` in a [skills block](skills-element.md#layouts-style)), the suggestions become that field's allowed values.
 
 Field-name suggestions are offered for top-level fields; deeper, indented fields are not
 suggested yet.
-
-## Edit a rendered block with a form
-
-Turn on **Settings → Draw Steel Elements → Authoring → "Show edit button on rendered
-blocks"** and every rendered block gains a small pencil — in the
-[element menu](common-element-fields.md#the-menu) at the block's top-right corner for the
-elements that have one, and in the card's own corner for the few that don't. Clicking it
-opens a form with one
-control per field, a live preview of the card as you change it, and a Save button that
-stays disabled while the block is invalid. Saving writes the block back into your note
-through the same path the trackers use, so nothing else in the note is touched.
-
-The setting is off by default; the insert commands and `/ds` work either way.
 
 ## Insert content from the compendium
 
@@ -82,47 +69,6 @@ overwrote them would defeat it. If you want content that keeps updating, use **I
 compendium reference** instead.
 
 Snapshots are offered for statblocks, features and featureblocks only.
-
-## Pinning a block to the sidebar
-
-The Draw Steel sidebar is a **GM dashboard assembled from blocks that live in different
-notes** — the initiative tracker from your session note, the party tracker from your
-campaign note, a hero sheet from someone's character note, all running at once in one
-panel. That's the one thing it does that a pinned note tab can't: if everything you track
-already lives in a single note, pin *that note's tab* in the right sidebar instead (see
-"One note instead?" below) — it's simpler and needs nothing from this page.
-
-**To pin a block:** open its note in Reading view, hover the block (any element that shows a
-**⋯** menu), open that menu, and choose **Pin to sidebar**. The block moves into a
-persistent panel in Obsidian's right sidebar, stays interactive there, and stays in sync
-with the note. Pin blocks from as many different notes as you like — they stack in the same
-panel, each with its own header naming the element and the note it came from.
-
-![Two blocks pinned to the Draw Steel sidebar, each with its own header](Media/sidebar.png)
-
-To remove one, open its **⋯** menu in the sidebar and choose **Unpin from sidebar** — that
-panel closes; the others stay. Open (or re-focus) the panel any time with the crossed-swords
-ribbon icon, or the **Open Draw Steel sidebar** command; an empty panel explains itself and
-how to fill it.
-
-Two older paths still work, for a cursor-driven workflow: put your cursor inside a block and
-run **Send block to sidebar**, or — for the initiative tracker specifically, from anywhere
-in its note — **Send initiative tracker to sidebar**.
-
-Pinning a tracker adds a hidden `_dse_anchor:` line to it — that's the plugin's bookmark
-for finding the block again after you edit the note around it. Leave it alone. A `ds-scc`
-block, whose content is exactly one compendium code, is never written to: pinning one
-leaves the note unchanged and the sidebar finds it by its code.
-
-### One note instead?
-
-If everything you're tracking for a session already lives in one note, you don't need the
-sidebar at all: open that note in the right sidebar the normal Obsidian way (drag its tab
-over, or open it and use "Move to right sidebar") and pin the tab. You get the same
-persistent panel, plus things the Draw Steel sidebar doesn't have — a close button and
-drag-to-reorder for free, room for ordinary prose alongside your blocks, and no rebuild
-flash while you edit. Use the Draw Steel sidebar when your trackers live in different notes;
-use a pinned note tab when they don't.
 
 ## Per-block appearance overrides (advanced)
 

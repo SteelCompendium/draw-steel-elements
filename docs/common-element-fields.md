@@ -1,7 +1,7 @@
 # The element menu, and collapsing a block
 
-Almost every element the plugin draws — statblocks, ability cards, the hero trackers, the
-GM trackers — carries the same small menu, and the same way of folding itself down to one line.
+Almost every element the plugin draws — statblocks, ability cards, the
+trackers — carries the same small menu, and the same way of folding itself down to one line.
 This page explains both.
 
 ## The menu
@@ -10,12 +10,9 @@ Move your mouse over an element and a small panel of icon buttons appears at its
 corner**, sitting just above the card's edge:
 
 - **Collapse** (a chevron) is always there, and is always the rightmost button.
-- **Edit** (a pencil) appears only if you have turned on *Show edit button on rendered blocks*
-  in [Settings](settings.md#authoring). It opens the same
-  [form editor](writing-blocks.md#edit-a-rendered-block-with-a-form) the insert commands use.
 
-More buttons will be added here over time; new ones appear to the *left*, so the collapse
-chevron never moves.
+Some elements add buttons of their own — the montage tracker's menu, for one; they sit to
+the *left*, so the collapse chevron never moves.
 
 The panel is invisible until you point at the element, so it stays out of your way while
 you're reading. Two exceptions, both deliberate:
@@ -33,12 +30,12 @@ name, and an expand button on the right:
 ```
 STATBLOCK: Human Bandit Chief                                    ⌄
 STAMINA (15/20)                                                  ⌄
-ENCOUNTER: Ambush at the Ford (EV 42)                            ⌄
+MONTAGE: Cross the Ashfall Wastes (round 2 · 3/6)               ⌄
 SKILLS (12 selected)                                             ⌄
 ```
 
-Elements that have a name show it. Elements that don't — a standalone Stamina bar, a
-conditions strip — show the number that matters instead. Some show both.
+Elements that have a name show it. Elements that don't — a standalone Stamina bar, for
+example — show the number that matters instead. Some show both.
 
 While an element is collapsed the hover menu is hidden: the expand button on the line is the
 only control, so there is never a second, differently-placed way to open it back up.
@@ -102,13 +99,11 @@ and **Start collapsed**. A field written in a block always beats the setting.
 ## Which elements have this
 
 Every element that draws a card: statblocks, ability cards and featureblocks, the compendium
-reference block, every hero-suite element (stamina bar, conditions, heroic resource, surges,
-hero tokens, skills, characteristics, values row, counter) and every GM tracker (initiative,
-negotiation, encounter builder, montage, project, party).
+reference block, the stamina bar, skills, characteristics, values row, counter, and every
+tracker (initiative, negotiation, montage).
 
-Two elements deliberately don't, because there would be nothing to fold or nowhere to put the
-menu: the [horizontal rule](horizontal-rule.md) (`ds-hr`) and the [dice roller](Roll.md)
-(`ds-roll`).
+One element deliberately doesn't, because there would be nothing to fold or nowhere to put
+the menu: the [horizontal rule](horizontal-rule.md) (`ds-hr`).
 
 ### Blocks that aren't a list of fields
 
