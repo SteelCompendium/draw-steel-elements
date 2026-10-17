@@ -298,3 +298,26 @@ describe('[W02] ds-stamina: two Applies inside one debounce window coalesce into
 		expect(host.replaceSource.mock.calls.map((c) => (c[0] as string).match(/current_stamina: (-?\d+)/)?.[1])).toEqual(['12', '9']);
 	});
 });
+
+// ------------------------------------------------------------------ [F08] max undefined
+
+describe('[F08] a missing max_stamina never reaches the modal (so the modal-level NaN is latent only)', () => {
+	// StaminaEditModal would persist NaN for an undefined max, but no shipped host can pass
+	// one: each rejects the block before any stamina control exists. These tests pin the
+	// guards; if one is ever relaxed, the modal-level NaN becomes reachable.
+	test('initiative: a creature with no max_stamina is an error card with no stamina control', async () => {
+		const src = ['heroes: []', 'enemy_groups:', '  - name: "G"', '    creatures:', '      - name: "Blob"', '        amount: 1', '        current_stamina: 10'].join('\n');
+		const { root } = await mountInit(src);
+		expect(root.querySelector('.dse-error-card-message')!.textContent).toBe("Creature 'Blob' in group 'G' is missing or has an invalid 'max_stamina' field.");
+		expect(root.querySelector('.dse-init__stamina')).toBeNull();
+	});
+
+	test('ds-stamina: a block with no max_stamina fails its schema (no bar, no modal)', async () => {
+		const host = makeHost('ds-stam');
+		await new ElementPipeline(makeDeps()).run(staminaBarElement, 'current_stamina: 10', host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(root.getAttribute('data-dse-error-stage')).toBe('schema');
+		expect(root.textContent).toContain('max_stamina is required');
+		expect(root.querySelector('.dse-stamina')).toBeNull();
+	});
+});
