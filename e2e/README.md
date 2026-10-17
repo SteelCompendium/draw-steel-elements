@@ -13,12 +13,14 @@ npm run e2e -- --obsidian=installed        # /usr/bin/obsidian + newest ~/.confi
 npm run e2e -- --headed [--slow=300]       # watch it; one shard; outlines each target
 ```
 
-Exit 0 ok, 1 a test failed or the coverage gate failed, 2 usage/environment. Last line:
+Exit 0 ok, 1 a test failed (or was skipped at runtime) or the coverage gate failed, 2 usage/environment
+(an unknown `--only` id, or a `.skip` / `.only` / `xit` / `xdescribe` in a selected spec, which names `file:line`). Last line:
 `OBSIDIAN-E2E done: N/M ok, F failed, K known-bug, coverage: X/Y pairs` (K = expected failures from
 `knownBug`). Run from a devbox shell (Node + Xvfb).
 
 **Headless vs headed.** Headless always starts its own Xvfb in `:200-:239` and sets `DISPLAY` for
-every child; it never inherits your shell's `DISPLAY` (agent shells export `:1`, your real screen).
+every wdio / chromedriver / Obsidian child; those never inherit your shell's `DISPLAY` (agent shells
+export `:1`, your real screen). Xvfb itself and the build step do inherit it, harmlessly (they open no window).
 `--headed` is the only way onto a real display: `DSE_E2E_HEADED_DISPLAY` if set, else `:1`.
 Agents: never `--headed` on `:1`; test it against a throwaway Xvfb.
 
@@ -29,6 +31,9 @@ worktree (~1 GB per version set; the first run of a new version downloads).
 **Output** goes to `e2e/.out/<run>/` (gitignored, newest 12 runs kept): a bundle per failing test
 (`<test-id>/`: screenshot, DOM, note before/after + diff, page events, versions, vault copy),
 `results/`, `coverage.json`.
+
+`npm run tsc` also type-checks the specs and driver (`tsc -p e2e`), and `npm run lint` lints `e2e/`
+(its own config block in `eslint.config.mjs`).
 
 ## Layers, ids, manifests, the coverage gate
 
@@ -47,7 +52,10 @@ adoption across a write), it is an e2e scenario.
   manifest. (b) `specs/_census.e2e.ts`: same, from the browser's own event listeners
   (CDP `DOMDebugger.getEventListeners`), which also finds div-with-a-listener controls.
   (c) The exercised-set gate in `run.mjs`: a FULL run exits 1 if any manifest (control, kind) pair
-  was driven by zero tests, or a driven pair is in no manifest. `--only`/`--element` print coverage, skip the gate.
+  was driven by zero tests, was driven ONLY by `knownBug` tests (a marker stops at its first failing
+  assertion), or a driven pair is in no manifest. `--only`/`--element` print coverage, skip the gate.
+  A drive is recorded after the action happened; `press` needs the control to hold focus (host ids:
+  `dse.aimedAt('modal.close')`) and `blur` needs the control focused.
 
 ## Adding a scenario
 
@@ -68,7 +76,21 @@ it('[STAM-X01] what a user sees happen', async () => {
 });
 ```
 
-- Fixture notes are real `.md` files in `vaults/shipped/`; open them in Obsidian by hand.
+- Fixture notes are real `.md` files in `vaults/shipped/`; open them in Obsidian by hand:
+
+  | Note | Contents |
+  |---|---|
+  | `Stamina/basic.md` | one `ds-stamina-bar`: 15/20, temp 5, Recoveries not tracked |
+  | `Stamina/recoveries.md` | 12/30, temp 0, 3 of 6 Recoveries (recovery value 10) |
+  | `Stamina/recoveries-full.md` | 30/30, 3 of 6 Recoveries |
+  | `Stamina/recoveries-zero.md` | 12/30, 0 of 6 Recoveries |
+  | `Stamina/dying.md` | -2/30, 3 of 6 Recoveries |
+  | `Stamina/legacy-low.md` | 2/30, Recoveries not tracked |
+  | `Stamina/two-blocks.md` | two `ds-stamina-bar` blocks: 15/20 +5 temp, then 8/10 |
+  | `Initiative/tracker.md` | `ds-initiative`: hero Alice Alpha 30/30, three Ogres 60/60 (cells `0-1`..`0-3`) |
+
+- Edits are checked per fence: `dse.block(lang, n)` declares which block of the open note a test edits, and
+  after the test every OTHER fence must be byte-identical to the fixture (a write into a sibling block fails).
 - Drive controls by id (`modal.control('sedit.damage')`); `{ css }` / `{ name }` are for READING nodes only
   (driving one is flagged by the gate). Repeated nodes: `control('recov.marker', { nth: 4 })`.
 - Negative checks: `dse.expectNoWrite(path, action)` waits for write-idle, never sleeps. Never `sleep`; wait
