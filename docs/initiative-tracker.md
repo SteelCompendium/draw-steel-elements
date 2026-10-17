@@ -309,6 +309,8 @@ The Stamina Pool modal for Minions allows you to manage the combined stamina of 
 
 When the Stamina Pool of minions gets reduced to thresholds that would kill a minion, the modal will allow the user to select which minion to kill.  The modal has some guardrails in place to help ensure the Director is following minion rules, but its not perfect and there is some flexibility. 
 
+Damage that is more than the squad has left (an area attack that overkills, say) simply kills every minion still standing. A dead minion stays dead: healing the squad can't lift the pool above what the living minions are worth, and the modal tells you that limit instead of applying the heal.
+
 ![minion-stamina-pool-modal](Media/minion-stamina-pool-modal.png)
 
 ### Action Checklist

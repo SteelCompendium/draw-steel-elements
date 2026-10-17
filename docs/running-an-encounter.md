@@ -71,6 +71,8 @@ At the table:
 
 - **Minion squads** — a squad shares one Stamina pool. Click a minion to select it, then
   click the pool to open its editor, which walks you through which minions die.
+  Damage beyond what is left just kills the remaining minions, and healing can't bring a dead
+  minion back — the pool never goes above what the living minions are worth.
 
 ![The minion stamina pool](Media/minion-stamina-pool-modal.png)
 
