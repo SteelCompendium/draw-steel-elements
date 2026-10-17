@@ -142,14 +142,16 @@ moves. Run it before a release; details in `visual-harness/README.md`.
   keeps the deferred features out of the release. OFF: the nine `deferred` elements render
   an inert "not available in this release" card, the sidebar is not registered, and the
   `authoringControls` / `printPreview` prefs do not exist. Tests, the visual harness and
-  the lifecycle/camera scratch vaults run with it ON; a test of the off state opts out
-  explicitly. The user docs, README and CHANGELOG describe ONLY the shipped set (SC-407): the
+  the lifecycle/camera scratch vaults run with it ON (except `npm run docs-shots`, whose
+  Obsidian half forces it OFF; its browser half renders ON, guarded by
+  `visual-harness/docs-deferred-guard.cjs`, which rejects a manifest entry for a deferred
+  element); a test of the off state opts out explicitly. The user docs, README and CHANGELOG describe ONLY the shipped set (SC-407): the
   deferred elements, the sidebar, the edit pencil/form editor and Print preview have no
   user-doc footprint, and the switch itself is deliberately undocumented there. The docs
   camera (`npm run docs-shots`) forces the switch OFF so docs images depict the shipping
   product (`visual-harness/camera-data-json.cjs` `seedExperimental(file, on)`); every other
   camera mode keeps it ON. What was removed, and where to restore it from, is the SC-407
-  restore map in `docs/superpowers/dse-7.0.0-release-audit.md` §11. See
+  restore map in `docs/superpowers/dse-7.0.0-release-audit.md` §11a. See
   `.repo-docs/architecture.md` → `experimental.ts`.
 - Output must be CJS format for Obsidian
 - Target ES2018
