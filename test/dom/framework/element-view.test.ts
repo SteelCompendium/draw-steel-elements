@@ -330,6 +330,36 @@ describe('T-7 (Plan 02): ElementView<M> (F1 §3.3)', () => {
 			expect(host.replaceSource).toHaveBeenCalledTimes(1);
 		});
 
+		test('SC-408: hasPendingWrite() is true from persist() until the write settles, false when idle and after a rejected write', async () => {
+			jest.useFakeTimers();
+			let settle!: (ok: boolean) => void;
+			const host = makeHost();
+			host.replaceSource.mockImplementation(() => new Promise<boolean>((resolve) => (settle = resolve)));
+			const { cx } = makeContext(host);
+			const view = new TestView(cx);
+			await view.mount(document.createElement('div'), { value: 'x' });
+			view.injectSerializer((m) => `value: ${m.value}`);
+
+			expect(view.hasPendingWrite()).toBe(false); // idle
+			const result = view.triggerPersist();
+			expect(view.hasPendingWrite()).toBe(true); // waiting out the debounce timer
+			jest.advanceTimersByTime(PERSIST_DEBOUNCE_MS);
+			expect(host.replaceSource).toHaveBeenCalledTimes(1);
+			expect(view.hasPendingWrite()).toBe(true); // timer fired, write still in flight
+			settle(true);
+			await result;
+			expect(view.hasPendingWrite()).toBe(false);
+
+			// a rejecting write must not leave the view "pending" forever
+			const errSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+			host.replaceSource.mockImplementation(() => Promise.reject(new Error('ENOENT')));
+			const failed = view.triggerPersist();
+			jest.advanceTimersByTime(PERSIST_DEBOUNCE_MS);
+			await expect(failed).resolves.toBe(false);
+			expect(view.hasPendingWrite()).toBe(false);
+			errSpy.mockRestore();
+		});
+
 		test('unload() with nothing pending is a harmless no-op (no spurious write)', async () => {
 			const host = makeHost();
 			const { cx } = makeContext(host);

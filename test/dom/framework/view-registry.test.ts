@@ -273,3 +273,28 @@ describe('SC-340 Task 4 review (carried fix): no claim ticket for a write that c
 		expect(entry.tickets).toHaveLength(0);
 	});
 });
+
+describe('SC-408: ViewRegistry.pendingWrites() (the e2e driver waits for write-idle on it)', () => {
+	test('lists a live view from its edit until the debounced write lands, then is empty', async () => {
+		jest.useFakeTimers();
+		const { app, registry, root } = await mountCounter();
+		expect(registry.pendingWrites()).toHaveLength(0);
+		(root.querySelector('button[aria-label^="Increase"]') as HTMLElement).click();
+		expect(registry.pendingWrites().map((e) => e.root)).toEqual([root]);
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(app.vault.modifyCalls).toHaveLength(1);
+		expect(registry.pendingWrites()).toHaveLength(0);
+		jest.useRealTimers();
+	});
+
+	test('a view that does not track writes never appears', () => {
+		const registry = new ViewRegistry({ enabled: false });
+		registry.load();
+		const { app, plugin } = makeEnv();
+		const ctx = makeFakeContext(app, 'Note.md');
+		const host = new ReadingModeBlockHost(plugin as any, ctx.el, ctx as any, 'ds-counter', null, registry);
+		registry.own(new Component(), host, ctx.el);
+		expect(registry.size).toBe(1);
+		expect(registry.pendingWrites()).toHaveLength(0);
+	});
+});

@@ -83,6 +83,8 @@ export abstract class ElementView<M> extends Component {
 	private persistTimer: number | undefined;
 	private persistScheduled = false;
 	private persistWaiters: Array<(ok: boolean) => void> = [];
+	/** Writes handed to host.replaceSource that have not settled yet (hasPendingWrite). */
+	private persistInFlight = 0;
 
 	// -- default update() "unload children" bookkeeping -------------------------------
 	// The real obsidian Component exposes no public "unload just my children" primitive
@@ -267,6 +269,16 @@ export abstract class ElementView<M> extends Component {
 		});
 	}
 
+	/**
+	 * SC-408: true while an edit is not yet on its way to disk for good — a persist() is waiting
+	 * out its debounce timer, or its replaceSource() write has not settled. The e2e driver
+	 * (via ViewRegistry.pendingWrites) waits for this to go false so a "no write happened"
+	 * assertion checks write-idle instead of sleeping a guessed window.
+	 */
+	hasPendingWrite(): boolean {
+		return this.persistScheduled || this.persistInFlight > 0;
+	}
+
 	/** The window this view lives in (popout-safe timer/document access). */
 	protected get win(): Window {
 		return this.rootEl.ownerDocument.defaultView as Window;
@@ -289,6 +301,13 @@ export abstract class ElementView<M> extends Component {
 		// persist() only ever sets persistScheduled after confirming this.serialize is
 		// set, so it is guaranteed defined here.
 		const yaml = this.serialize!(this.model);
+		this.persistInFlight++;
+		let settled = false;
+		const settle = (): void => {
+			if (settled) return;
+			settled = true;
+			this.persistInFlight--;
+		};
 		// SC-282 r2 (LOW-2) — replaceSource can REJECT, not just resolve false: a write
 		// already scheduled by the debounce timer above can still be in flight when its
 		// backing file is deleted out from under it (e.g. SidebarBlockHost's underlying
@@ -303,9 +322,11 @@ export abstract class ElementView<M> extends Component {
 		void this.cx.host
 			.replaceSource(yaml)
 			.then((ok) => {
+				settle();
 				for (const resolve of waiters) resolve(ok);
 			})
 			.catch((error: unknown) => {
+				settle();
 				// SC-282 r2 re-review (LOW-B) — the plain `.catch` above (LOW-2) turned every
 				// write failure silent: no unhandled rejection AND no console output, so the
 				// callers' own try/catch + console.error wrappers around persist() (e.g.

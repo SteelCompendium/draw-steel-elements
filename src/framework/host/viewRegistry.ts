@@ -48,6 +48,11 @@ function findLastMatchingTicketIndex(tickets: Array<{ body: string; at: number }
 	return -1;
 }
 
+/** The slice of ElementView the registry reads to answer pendingWrites(). */
+interface WriteTrackingView {
+	hasPendingWrite(): boolean;
+}
+
 export interface ViewRegistryStats {
 	claims: number;
 	misses: number;
@@ -75,6 +80,16 @@ export class ViewRegistry extends Component {
 
 	liveEntries(): readonly ViewRegistryEntry[] {
 		return [...this.entries];
+	}
+
+	/**
+	 * SC-408: the live entries whose view still has an edit on its way to disk (a persist()
+	 * waiting out its debounce, or a replaceSource() write in flight). Empty = write-idle.
+	 * The e2e driver polls this to prove a negative ("nothing was written") without a fixed
+	 * quiet window. Views that do not track writes (no hasPendingWrite) never appear.
+	 */
+	pendingWrites(): readonly ViewRegistryEntry[] {
+		return [...this.entries].filter((e) => (e.view as Partial<WriteTrackingView>).hasPendingWrite?.() === true);
 	}
 
 	/** Take ownership of a freshly mounted reading-mode view. */
