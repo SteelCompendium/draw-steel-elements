@@ -262,17 +262,19 @@ describe('SC-411 docs-gif — the CDP driver (real Obsidian) over a fake CDP tar
 		expect(r.msg).toMatch(/Harness\/n\.md did not change within 30 ms/);
 	});
 
-	it('prepareFrame removes notices/tooltips and parks the pointer in a corner, except for a hover step', () => {
+	it('prepareFrame removes notices/tooltips, blurs a focused button, and parks the pointer in a corner, except for a hover step', () => {
 		const r = run(`${FAKE}
 			await driver.prepareFrame({ park: true });
 			const parked = mouse();
 			calls.length = 0;
 			await driver.prepareFrame({ park: false });
-			console.log(JSON.stringify({ parked, hoverMoves: mouse(), removes: evals.some((e) => e.includes('.notice, .tooltip')) }));
+			console.log(JSON.stringify({ parked, hoverMoves: mouse(), removes: evals.some((e) => e.includes('.notice, .tooltip')), blursButtons: evals.some((e) => e.includes('.blur()') && e.includes('input, textarea, select')) }));
 		`);
 		expect(r.parked).toEqual(['mouseMoved@1437,1097']);
 		expect(r.hoverMoves).toEqual([]);
 		expect(r.removes).toBe(true);
+		// A modal's autofocused button is blurred (its :focus-visible ring depends on input history); text entry is not.
+		expect(r.blursButtons).toBe(true);
 	});
 
 	it('press maps names to real key events and rejects a key it does not know', () => {

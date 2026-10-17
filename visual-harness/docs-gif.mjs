@@ -645,37 +645,8 @@ export function createCdpDriver({ call, evaluate, sleep, rootExpr, notePath, dpr
 	const settle = () => evaluate('new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 80))))');
 	const keyDown = (e, text) => call('Input.dispatchKeyEvent', { type: 'keyDown', key: e.key, code: e.code, windowsVirtualKeyCode: e.vk, modifiers: e.modifiers ?? 0, ...(e.commands ? { commands: e.commands } : {}), ...(text ? { text } : {}) });
 	const keyUp = (e) => call('Input.dispatchKeyEvent', { type: 'keyUp', key: e.key, code: e.code, windowsVirtualKeyCode: e.vk, modifiers: e.modifiers ?? 0 });
-	// WHY THIS EXISTS (measured, --check-stable): Chromium decides `:focus-visible` for a
-	// programmatic focus() from the last input modality, and that is PROCESS state. A modal opened
-	// in the first capture after launch autofocuses its first control WITH a focus ring, the same
-	// modal in a later capture (after typing and clicking in the first) WITHOUT — 1 935 px of
-	// difference on the montage sheet's "Success" chip, and the GIF depended on which capture it
-	// came from. So every capture starts from the same modality: a real key press, then a real
-	// click on an inert spot (the bottom-left margin of the note pane) — the state any capture
-	// after the first already had, and the natural one for a mouse-driven demo.
-	const prime = async () => {
-		const spot = await evaluate(`(() => {
-			const v = document.querySelector('.workspace-leaf.mod-active .markdown-preview-view');
-			if (!v) return null;
-			const r = v.getBoundingClientRect();
-			const x = r.left + 6, y = r.bottom - 6;
-			const hit = document.elementFromPoint(x, y);
-			return hit && (hit === v || v.contains(hit)) && !hit.closest('[data-dse-element]') ? [x, y] : null;
-		})()`);
-		const shift = { key: 'Shift', code: 'ShiftLeft', vk: 16 };
-		await keyDown(shift);
-		await keyUp(shift);
-		if (spot) {
-			await mouse('mouseMoved', spot[0], spot[1]);
-			await mouse('mousePressed', spot[0], spot[1]);
-			await mouse('mouseReleased', spot[0], spot[1]);
-		}
-	};
 	return {
-		install: async () => {
-			await evaluate(installJs);
-			await prime();
-		},
+		install: () => evaluate(installJs),
 		async dispose() {
 			await evaluate(`(() => { document.getElementById('sc411-style')?.remove(); document.getElementById('sc411-cursor')?.remove(); delete window.__sc411; })()`).catch(() => {});
 		},
@@ -740,6 +711,16 @@ export function createCdpDriver({ call, evaluate, sleep, rootExpr, notePath, dpr
 				if (!spot) throw new Error('no window corner outside the element/modal to park the pointer in');
 				await mouse('mouseMoved', spot[0], spot[1]);
 			}
+			// Blur a focused BUTTON-like control (a modal autofocuses its first chip). Whether that
+			// control paints a `:focus-visible` ring is decided by Chromium from process-wide input
+			// history, so the same modal had its ring in one capture and not in another (measured: the
+			// montage sheet's "Success" chip, 1 935 px, between a lone `--only` run and a full
+			// `docs-shots` run, and between consecutive captures in one session). Text entry stays
+			// focused: its ring is part of what a typing frame shows, and it always paints.
+			await evaluate(`(() => {
+				const a = document.activeElement;
+				if (a && a !== document.body && !a.matches('input, textarea, select, [contenteditable]')) a.blur();
+			})()`);
 			await settle();
 			// A tooltip can be created between the removal above and the parked pointer leaving.
 			await evaluate(`document.querySelectorAll('.notice, .tooltip').forEach((n) => n.remove())`);
