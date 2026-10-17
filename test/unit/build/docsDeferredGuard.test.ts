@@ -26,5 +26,7 @@ describe('SC-407 docs-shots deferred-element guard', () => {
 		expect(() =>
 			assertNoDeferredBrowserShots([{ out: 'g.png', source: 'browser', gallery: ['statblock', 'surges'] }], repo),
 		).toThrow(/g\.png -> surges/);
+		// `gallery: true` mounts every fixture, deferred ones included.
+		expect(() => assertNoDeferredBrowserShots([{ out: 'all.png', source: 'browser', gallery: true }], repo)).toThrow(/all\.png -> gallery: true/);
 	});
 });

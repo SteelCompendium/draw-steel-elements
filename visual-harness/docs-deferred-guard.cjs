@@ -41,6 +41,8 @@ function assertNoDeferredBrowserShots(shots, repo) {
 	const bad = [];
 	for (const shot of shots) {
 		if (shot.source !== 'browser') continue;
+		// `gallery: true` (docs-shots.mjs) mounts EVERY fixture, deferred ones included.
+		if (shot.gallery && !Array.isArray(shot.gallery)) bad.push(`${shot.out} -> gallery: ${String(shot.gallery)} (every element)`);
 		const ids = [shot.element, ...(Array.isArray(shot.gallery) ? shot.gallery : [])].filter(Boolean);
 		for (const id of ids) if (deferred.has(id)) bad.push(`${shot.out} -> ${id}`);
 	}

@@ -7,9 +7,9 @@ Malice for you.
 New to the plugin? Start with [Getting started](getting-started.md).
 
 The example below references its monsters by compendium code, so it needs the compendium
-synced first (**Settings → Draw Steel Elements → Compendium → Sync**). Without a sync those
-creatures show a "not available in this vault" card; you can always type a creature out
-instead, with a `name` and `max_stamina`.
+synced first (**Settings → Draw Steel Elements → Compendium → Sync**). Without a sync the
+tracker shows an error card saying the reference is not available in this vault; you can
+always type a creature out instead, with a `name` and `max_stamina`.
 
 ## 1. Set up the fight
 
