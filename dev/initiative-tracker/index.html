@@ -2135,6 +2135,7 @@ while you hover to toggle it. The shapes differ, so the state never depends on c
 <h3 id="stamina-pool-modal-for-minions">Stamina Pool Modal for Minions<a class="headerlink" href="#stamina-pool-modal-for-minions" title="Permanent link">&para;</a></h3>
 <p>The Stamina Pool modal for Minions allows you to manage the combined stamina of a minion group.  This modal works similarly to the Stamina Modals for normal creatures, but has some additional functionality.</p>
 <p>When the Stamina Pool of minions gets reduced to thresholds that would kill a minion, the modal will allow the user to select which minion to kill.  The modal has some guardrails in place to help ensure the Director is following minion rules, but its not perfect and there is some flexibility. </p>
+<p>Damage that is more than the squad has left (an area attack that overkills, say) simply kills every minion still standing. A dead minion stays dead: healing the squad can't lift the pool above what the living minions are worth, and the modal tells you that limit instead of applying the heal.</p>
 <p><img alt="minion-stamina-pool-modal" src="../Media/minion-stamina-pool-modal.png" /></p>
 <h3 id="action-checklist">Action Checklist<a class="headerlink" href="#action-checklist" title="Permanent link">&para;</a></h3>
 <p>Each hero and each creature instance shows a small [Main] [Maneuver] [Move] [Triggered]
