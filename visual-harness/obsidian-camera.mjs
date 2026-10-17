@@ -626,7 +626,9 @@ async function main() {
 	// original bytes back (or deletes the file if there was none) on every way out of this
 	// process — the `finally` below, a signal, a crash — and refuses to touch an unparseable
 	// one. Throws here, before Obsidian is spawned, if it must refuse.
-	const dataJson = seedExperimental(path.join(repo, 'data.json'));
+	// SC-407: docs mode (`npm run docs-shots`) is the exception — the publishing images depict
+	// the shipping product, so there the switch is forced OFF; every other mode keeps it ON.
+	const dataJson = seedExperimental(path.join(repo, 'data.json'), !DOCS_MODE);
 	process.on('exit', () => dataJson.restore());
 	for (const sig of ['SIGINT', 'SIGTERM']) {
 		process.once(sig, () => {

@@ -18,8 +18,13 @@ const fs = require('node:fs');
  * Turn `experimental: true` on in `file` (merged into whatever JSON object is there; created
  * when absent). Returns `{ restore() }`. THROWS — before writing anything — when the file
  * exists but is not a JSON object: the user's settings are not ours to overwrite.
+ *
+ * SC-407: `on = false` is the docs camera's mode (`--docs`): the publishing images depict the
+ * SHIPPING product, so the switch must be OFF for the run. Absent already means off, so the
+ * file is written only when it carries `experimental: true` (set to `false`); a missing file
+ * or one without the key is left alone. Same restore/refuse rules as the ON mode.
  */
-function seedExperimental(file) {
+function seedExperimental(file, on = true) {
 	let original = null; // Buffer of the original bytes, or null when the file did not exist
 	try {
 		original = fs.readFileSync(file);
@@ -39,8 +44,10 @@ function seedExperimental(file) {
 		}
 		saved = parsed;
 	}
-	if (saved.experimental !== true) {
-		fs.writeFileSync(file, JSON.stringify({ ...saved, experimental: true }));
+	if (on) {
+		if (saved.experimental !== true) fs.writeFileSync(file, JSON.stringify({ ...saved, experimental: true }));
+	} else if (saved.experimental === true) {
+		fs.writeFileSync(file, JSON.stringify({ ...saved, experimental: false }));
 	}
 	let restored = false;
 	return {

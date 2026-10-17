@@ -271,7 +271,6 @@ export const DOCS_SHOTS = [
 	},
 	{ out: 'feature.png', source: 'browser', element: 'feature' },
 	{ out: 'featureblocks.png', source: 'browser', element: 'featureblock' },
-	{ out: 'roll.png', source: 'browser', element: 'roll' },
 	{ out: 'skills.png', source: 'browser', element: 'skills' },
 	{ out: 'characteristics.png', source: 'browser', element: 'characteristics' },
 	{ out: 'values-row.png', source: 'browser', element: 'values-row' },
@@ -282,21 +281,9 @@ export const DOCS_SHOTS = [
 	{ out: 'stamina-bar.png', source: 'browser', element: 'stamina-bar', fixture: 'recoveries' },
 	{ out: 'negotiation.png', source: 'browser', element: 'negotiation' },
 	{ out: 'initiative-tracker.png', source: 'browser', element: 'initiative' },
-	// docs/hero-suite.md
-	// SC-190: `hero.png` (a rendered `ds-hero` card) is deliberately NOT captured here —
-	// `ds-hero` is registered but unadvertised (definition.ts's `hidden: true`), and its
-	// own doc section is withdrawn, so there is no page left for this image to illustrate.
-	{ out: 'conditions.png', source: 'browser', element: 'conditions' },
-	{ out: 'heroic-resource.png', source: 'browser', element: 'heroic-resource' },
-	{ out: 'surges.png', source: 'browser', element: 'surges' },
-	{ out: 'hero-tokens.png', source: 'browser', element: 'hero-tokens' },
-	// docs/gm-trackers.md
-	{ out: 'encounter.png', source: 'browser', element: 'encounter' },
 	// SC-191 impl spec §F: the `mid` fixture (live board, brink alert) instead of the
 	// empty default grid — the docs image now shows a board with play on it.
 	{ out: 'montage.png', source: 'browser', element: 'montage', fixture: 'mid' },
-	{ out: 'project.png', source: 'browser', element: 'project' },
-	{ out: 'party.png', source: 'browser', element: 'party' },
 	// The README/docs sample image: a CURATED gallery (entry.ts's `gallery=<ids>` subset —
 	// the full sweep gallery is every element and 24 000 px tall, which is review evidence,
 	// not a picture for the top of a README). Three elements that say what the plugin is:
@@ -399,23 +386,6 @@ export const DOCS_SHOTS = [
 		trigger: '[data-dse-element="montage"] .dse-mt__actionrow button[aria-label="Log an action…"]',
 		ready: '.dse-modal .dse-modal__body',
 	},
-	// docs/writing-blocks.md / docs/advanced-usage.md → "Pinning a block to the sidebar"
-	// TWO panels (SC-184 fix round, MEDIUM-1): the prose pitches "pin blocks from as many
-	// different notes as you like — they stack in the same panel, each with its own
-	// header," and a single-panel screenshot was undercutting exactly that sentence.
-	// `counter` + `surges` are both small enough to fit on-screen together at sidebar-leaf
-	// width, so the shot actually shows the stack + separator the prose describes — the
-	// same pair the SC-184 ad-hoc evidence camera proved out first
-	// (visual-harness/sc184-evidence.mjs's `sc184-evidence-multi-panel.png`).
-	{
-		out: 'sidebar.png',
-		source: 'obsidian',
-		kind: 'sidebar',
-		panels: [
-			{ note: 'counter', element: 'counter' },
-			{ note: 'surges', element: 'surges' },
-		],
-	},
 	// docs/canvas-character-sheet.md
 	{ out: 'canvas-character-sheet.png', source: 'obsidian', kind: 'canvas', canvas: CHARACTER_SHEET_CANVAS },
 	// ————————————————————————————— tutorials (SC-142 phase 2b) —————————————————————————
@@ -464,16 +434,6 @@ export const DOCS_SHOTS = [
 		body: TUTORIAL_SNAPSHOT,
 		element: 'statblock',
 		mode: 'source',
-	},
-	// Print preview (advanced-usage.md): the same card in its print/export layout.
-	{
-		out: 'tutorial-print-preview.png',
-		source: 'obsidian',
-		kind: 'note',
-		body: TUTORIAL_NOTE,
-		element: 'statblock',
-		pref: ['printPreview', 'on'],
-		prefRestore: 'off',
 	},
 ];
 

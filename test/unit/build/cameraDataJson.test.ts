@@ -51,6 +51,24 @@ describe('SC-406 camera data.json seeding', () => {
 		expect(fs.readFileSync(file, 'utf8')).toBe(original);
 	});
 
+	test('SC-407: on=false (docs mode) forces the switch OFF for the run and restores the original bytes', () => {
+		const original = '{"experimental":true,"prefs":{"textScale":1.2}}';
+		fs.writeFileSync(file, original);
+		const seeded = seedExperimental(file, false);
+		expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual({ experimental: false, prefs: { textScale: 1.2 } });
+		seeded.restore();
+		expect(fs.readFileSync(file, 'utf8')).toBe(original);
+
+		// Absent already means off: no file is created, and a file without the key is not rewritten.
+		fs.rmSync(file);
+		seedExperimental(file, false).restore();
+		expect(fs.existsSync(file)).toBe(false);
+		fs.writeFileSync(file, '{"prefs":{}}');
+		const untouched = seedExperimental(file, false);
+		expect(fs.readFileSync(file, 'utf8')).toBe('{"prefs":{}}');
+		untouched.restore();
+	});
+
 	test('an unparseable or non-object data.json aborts without touching it', () => {
 		for (const bytes of ['{ not json', '[1,2]', 'null', '']) {
 			fs.writeFileSync(file, bytes);
