@@ -216,7 +216,7 @@ When on, everything is exactly as today; tests and the visual harness run with i
 ## 7. Settings & preferences
 
 Settings UI: an index of pages, searchable via Obsidian's own settings search, with a live
-preview on five pages and a per-page Reset. After gating the index has **eight** pages
+preview on five pages and a per-page Reset. After gating the index has **ten** pages
 (Authoring gone; Appearance loses its Print preview row). Sparse `prefs` storage,
 `settingsVersion: 3`.
 
@@ -397,6 +397,9 @@ legacy sync alias survives (it was removed in SC-406).
 **Harness:** `visual-harness/camera-data-json.cjs` `seedExperimental(file, on = true)` and
 `visual-harness/obsidian-camera.mjs` (`!DOCS_MODE`) — `npm run docs-shots` captures with the switch OFF;
 `obsidian-shots` and every gate keep it ON. When the switch is retired, drop the `on` parameter.
+`visual-harness/docs-deferred-guard.cjs` (fix round) makes `docs-shots` reject a browser manifest entry for a
+`deferred` element (the browser half renders with the switch ON); restoring a deferred element's docs image
+requires un-deferring it first.
 
 ---
 
