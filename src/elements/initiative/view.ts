@@ -40,8 +40,8 @@
 //    just saves;
 //  - mid-level: instance-cell select rebuilds only the detail-row sub-container and
 //    repaints cell selection through the kit handles;
-//  - coarse rebuilds (Reset Round / Reset Encounter / squad-pool edits from the grid)
-//    go through rebuildAndPersist(): framework default update() (unload owned children
+//  - coarse rebuilds (Reset Round / Reset Encounter / squad-pool edits from the
+//    grid or the detail row) go through rebuildAndPersist(): framework default update() (unload owned children
 //    + onMount against this.model), then persist — the negotiation resetNegotiation
 //    shape.
 //
@@ -154,8 +154,8 @@ export class InitiativeView extends ElementView<EncounterData> {
 	}
 
 	/** The one whole-model change path (Reset Round / Reset Encounter / squad-pool edits
-	 *  from the grid): this.model was already mutated; rebuild through the framework
-	 *  default update() (unload owned children + onMount), then persist. Failures are
+	 *  from the grid or the detail row): this.model was already mutated; rebuild through
+	 *  the framework default update() (unload owned children + onMount), then persist. Failures are
 	 *  caught and logged — never left as unhandled rejections (negotiation's
 	 *  resetNegotiation pattern). */
 	private async rebuildAndPersist(): Promise<void> {
@@ -1764,22 +1764,15 @@ export class InitiativeView extends ElementView<EncounterData> {
 		let barEl: HTMLElement | null = null;
 		const openDetailStamina = (): void => {
 			if (isSquadMinion) {
-				// For minions in a squad: the pool modal. Persist callback
-				// refreshes the affected UI (this detail row, as legacy did)
-				// and saves.
+				// For minions in a squad: the pool modal. The pool is SHARED by every cell
+				// of the squad, so a pool edit is a whole-model change: the coarse rebuild
+				// path (same as the grid's dblclick route), never a detail-row-only
+				// repaint — that left the other minions' cells on the old pool and the
+				// killed minion's cell without DEAD (SC-417). The selected instance
+				// survives (cell clicks persist `selectedInstanceKey`).
 				this.openModal(
 					new MinionStaminaPoolModal(this.cx.app, group, creature, () => {
-						container.empty();
-						this.buildDetailedCreatureRow(
-							container,
-							creature,
-							instance,
-							instanceKey,
-							group,
-							groupBodyEl,
-							owner,
-						);
-						void this.persist();
+						void this.rebuildAndPersist();
 					}),
 				);
 			} else {

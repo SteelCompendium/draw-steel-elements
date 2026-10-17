@@ -288,7 +288,7 @@ describe('SC-417 defects found on develop (test.failing until fixed — flip to 
 	// says DEAD. Real Obsidian keeps it that way: SC-340 view adoption reuses the root
 	// after the write instead of re-rendering (sc417-obsidian-1b-after-detail-kill.png).
 	// The same "pool vs per-member tiles disagree" class as Scott's 6.0.2 screenshot.
-	test.failing('HIGH-1: a kill from the detail row repaints the whole squad (grid cells follow the pool)', async () => {
+	test('HIGH-1: a kill from the detail row repaints the whole squad (grid cells follow the pool)', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(MORDOR);
 		const m = openFromDetail(root);
@@ -301,7 +301,7 @@ describe('SC-417 defects found on develop (test.failing until fixed — flip to 
 		expectGridConsistent(root, 120, [1]); // today: every cell still reads 160/160 (40)
 	});
 
-	test.failing('HIGH-1: a heal from the detail row repaints the whole squad (grid cells follow the pool)', async () => {
+	test('HIGH-1: a heal from the detail row repaints the whole squad (grid cells follow the pool)', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(MORDOR);
 		let m = openFromGrid(root, 1);
