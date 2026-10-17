@@ -53,6 +53,9 @@ beforeEach(async function () {
 afterEach(async function () {
 	const test = this.currentTest;
 	if (!test) return;
+	// A runtime `this.skip()` leaves a pending test: PendingReporter records it as a failure (once);
+	// recording it here as well would count it twice.
+	if (test.isPending()) return;
 	const known = /\[known bug ([^\]]+)\]/.exec(test.title)?.[1] ?? null;
 	// state 'passed' is the only good outcome. 'failed' = the body or an invariant threw;
 	// undefined = a beforeEach hook failed (the body never ran), mocha skips the rest of the suite.
