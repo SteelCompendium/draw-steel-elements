@@ -5,6 +5,10 @@
 //     npm run docs-shots                       # everything
 //     npm run docs-shots -- --only=statblock.png
 //     npm run docs-shots -- --browser-only     # skip the Obsidian half (no display needed)
+//     npm run docs-shots -- --only=counter.gif --check-stable
+//                                              # SC-411: capture a GIF entry twice, assert the
+//                                              # same frame count + byte-identical frames
+//                                              # (exit 1, with indices/px/delta, otherwise)
 //
 // Two cameras, one manifest (docs-manifest.mjs):
 //   browser  — the F4 harness page in Chromium (playwright). Pure element cards. Fast,
@@ -34,6 +38,19 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
 import { DOCS_SHOTS, DOCS_MANUAL } from './docs-manifest.mjs';
+import {
+	GIF_BYTE_BUDGET,
+	assertValidGifEntries,
+	compareFrameSets,
+	createPageDriver,
+	pngSize,
+	runGifSteps,
+	seedScript,
+	sha256,
+	unionCrop,
+	writeReviewFrames,
+} from './docs-gif.mjs';
+import { decodeCropped, encodeRgbaGif, mergeIdentical } from './gif-encode.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.dirname(dir);
@@ -41,6 +58,8 @@ const repo = path.dirname(dir);
 // deferred element (see docs-deferred-guard.cjs). Runs before anything is captured.
 const { assertNoDeferredBrowserShots } = createRequire(import.meta.url)('./docs-deferred-guard.cjs');
 assertNoDeferredBrowserShots(DOCS_SHOTS, repo);
+// SC-411: a malformed `kind: 'gif'` entry is a loud error here, before anything launches.
+assertValidGifEntries(DOCS_SHOTS);
 const pageUrl = 'file://' + path.join(dir, 'index.html');
 const outDir = path.join(repo, 'docs', 'Media');
 
@@ -54,12 +73,25 @@ const args = Object.fromEntries(
 		}),
 );
 
-const wanted = DOCS_SHOTS.filter((s) => !args.only || s.out === args.only);
+const checkStable = args['check-stable'] === '1';
+// --check-stable is a verdict on GIF entries only (a PNG is a single frame; the shots gate
+// owns those): it narrows `wanted` to them.
+const wanted = DOCS_SHOTS.filter((s) => (!args.only || s.out === args.only) && (!checkStable || s.kind === 'gif'));
 if (args.only && wanted.length === 0) {
-	console.error(`unknown --only=${args.only} (not in docs-manifest.mjs)`);
+	console.error(
+		checkStable
+			? `--check-stable needs a gif entry; --only=${args.only} is not one in docs-manifest.mjs`
+			: `unknown --only=${args.only} (not in docs-manifest.mjs)`,
+	);
 	process.exit(2);
 }
-const browserShots = wanted.filter((s) => s.source === 'browser');
+if (checkStable && wanted.length === 0) {
+	console.error('--check-stable: docs-manifest.mjs has no gif entries');
+	process.exit(2);
+}
+const browserShots = wanted.filter((s) => s.source === 'browser' && s.kind !== 'gif');
+const browserGifs = wanted.filter((s) => s.source === 'browser' && s.kind === 'gif');
+// The Obsidian half owns every obsidian entry, GIFs included (SC-411 r2b).
 const obsidianShots = wanted.filter((s) => s.source === 'obsidian');
 
 fs.mkdirSync(outDir, { recursive: true });
@@ -152,6 +184,108 @@ async function runBrowserShots() {
 	}
 }
 
+// ------------------------------------------------------------ browser GIFs (SC-411)
+/** Where the raw frames of each GIF are dumped for review (git-ignored `dist/`). */
+const gifFramesDir = (out) => path.join(dir, 'dist', 'docs-gif-frames', out);
+
+/** One scripted capture of a browser gif entry at `dpr`: a fresh Chromium, a fresh context,
+ *  a fresh page — so two captures share nothing. Returns the raw frames. */
+async function captureBrowserGif(shot, dpr) {
+	// --disable-partial-raster: without it ~1 run in 6 differed by 1 px on antialiased edges
+	// after an interaction repaint (SC-411 r1 spike); with it 13/13 runs were byte-identical.
+	const browser = await chromium.launch({ args: ['--disable-partial-raster'] });
+	try {
+		const context = await browser.newContext({
+			viewport: shot.viewport ?? { width: 1000, height: 1400 },
+			deviceScaleFactor: dpr,
+		});
+		const page = await context.newPage();
+		const pageErrors = [];
+		page.on('pageerror', (e) => pageErrors.push(String(e)));
+		if (shot.seed !== undefined) await page.addInitScript(seedScript(shot.seed));
+		// experimental=0: a GIF depicts the SHIPPING product, so the deferred chrome (the
+		// "Pin to sidebar" item that hover reveals) must not exist in any frame.
+		const params = {
+			theme: 'steel',
+			bg: shot.bg ?? 'dark',
+			element: shot.element,
+			fixture: shot.fixture ?? 'default',
+			experimental: '0',
+			// The hover/focus chrome sits ABOVE the card's top edge; without breathing room
+			// (the SC-169 `pad` param) a focused frame would clip it off the viewport top.
+			pad: '16',
+		};
+		if (shot.width) params.width = String(shot.width);
+		if (shot.prefs) {
+			params.prefs = Object.entries(shot.prefs)
+				.map(([k, v]) => `${k}:${v}`)
+				.join(',');
+		}
+		await page.goto(`${pageUrl}?${new URLSearchParams(params)}`);
+		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 20000 });
+		await page.evaluate(() => document.fonts.ready);
+		const done = await page.evaluate(() => window.__dseHarnessDone);
+		if (done.errors.length || pageErrors.length) throw new Error([...done.errors, ...pageErrors].join(' | '));
+		const driver = await createPageDriver(page, { cursor: shot.cursor !== false });
+		const { frames } = await runGifSteps(driver, shot);
+		if (pageErrors.length) throw new Error(pageErrors.join(' | '));
+		return frames;
+	} finally {
+		await browser.close();
+	}
+}
+
+/** Capture + encode one browser gif entry: 2x, then 1x if the 2x GIF busts the byte budget
+ *  (the PNG rule). Returns { frames, bytes: Uint8Array, dpr, crop, merged }. */
+async function renderBrowserGif(shot) {
+	const dprs = [...new Set([shot.dpr ?? 2, 1])].filter((d) => d <= (shot.dpr ?? 2));
+	let result = null;
+	for (const dpr of dprs) {
+		const frames = await captureBrowserGif(shot, dpr);
+		const crop = unionCrop(frames, dpr, pngSize(frames[0].png));
+		const holds = frames.map((f) => f.hold);
+		const rgba = frames.map((f) => decodeCropped(f.png, crop));
+		const merged = mergeIdentical(rgba, holds).length;
+		const bytes = encodeRgbaGif(rgba, holds, crop.w, crop.h);
+		result = { frames, bytes, dpr, crop, merged };
+		if (bytes.length <= GIF_BYTE_BUDGET) break;
+		if (dpr > 1) console.log(`     (re-shooting ${shot.out} at 1x — 2x was ${bytes.length} B, over ${GIF_BYTE_BUDGET})`);
+	}
+	return result;
+}
+
+async function runBrowserGifs() {
+	for (const shot of browserGifs) {
+		try {
+			if (!fs.existsSync(path.join(dir, 'dist'))) {
+				throw new Error('visual-harness/dist missing — run `npm run harness:build` first');
+			}
+			const a = await renderBrowserGif(shot);
+			const loopSec = (a.frames.reduce((n, f) => n + f.hold, 0) / 1000).toFixed(1);
+			const sha = sha256(a.bytes);
+			writeReviewFrames(gifFramesDir(shot.out), a.frames, { out: shot.out, dpr: a.dpr, crop: a.crop, bytes: a.bytes.length, gifSha256: sha });
+			const over = a.bytes.length > GIF_BYTE_BUDGET ? ` — OVER BUDGET (${GIF_BYTE_BUDGET}), shorten the script` : '';
+			const summary = `${a.bytes.length} bytes, ${a.frames.length} captured / ${a.merged} gif frames, ${loopSec}s loop, browser @${a.dpr}x`;
+			if (checkStable) {
+				const b = await renderBrowserGif(shot);
+				const verdict = compareFrameSets(a.frames, b.frames);
+				if (a.dpr !== b.dpr) verdict.lines.push(`dpr differs between runs: ${a.dpr} vs ${b.dpr}`);
+				if (verdict.lines.length === 0 && sha256(b.bytes) !== sha) verdict.lines.push('frames identical but GIF bytes differ (encoder is not deterministic)');
+				if (verdict.lines.length) {
+					throw new Error(`NOT STABLE across two runs:\n    ${verdict.lines.join('\n    ')}`);
+				}
+				console.log(`  stable ${shot.out} (${summary}, gif sha256 ${sha.slice(0, 12)})${over}`);
+			} else {
+				fs.writeFileSync(path.join(outDir, shot.out), a.bytes);
+				console.log(`  ok ${shot.out} (${summary})${over}`);
+			}
+		} catch (e) {
+			failures.push({ out: shot.out, error: String(e.message ?? e) });
+			console.log(`FAIL ${shot.out}: ${String(e.message ?? e)}`);
+		}
+	}
+}
+
 // ------------------------------------------------------------------- the virtual display
 /** Xvfb, in preference order: explicit env, PATH, this repo's devbox profile. */
 function resolveXvfb() {
@@ -233,7 +367,7 @@ async function runObsidianShots() {
 	}
 
 	try {
-		const only = args.only ? [`--only=${args.only}`] : [];
+		const only = [...(args.only ? [`--only=${args.only}`] : []), ...(checkStable ? ['--check-stable'] : [])];
 		const res = spawnSync(
 			process.execPath,
 			[path.join(dir, 'obsidian-camera.mjs'), '--docs', `--out=${outDir}`, ...only],
@@ -252,15 +386,16 @@ async function runObsidianShots() {
 
 // ------------------------------------------------------------------------------- main
 console.log(
-	`docs-shots: ${browserShots.length} browser + ${obsidianShots.length} obsidian image(s) → ${path.relative(repo, outDir)}`,
+	`docs-shots: ${browserShots.length + browserGifs.length} browser + ${obsidianShots.length} obsidian image(s) → ${path.relative(repo, outDir)}`,
 );
 await runBrowserShots();
+await runBrowserGifs();
 if (args['browser-only'] !== '1') await runObsidianShots();
 
 // Orphan report: a Media file nobody declares and nobody documents as manual. Reported,
 // never deleted — deleting a file the docs still reference is a broken image, and that is
 // a human's call.
-if (!args.only) {
+if (!args.only && !checkStable) {
 	const declared = new Set([...DOCS_SHOTS.map((s) => s.out), ...DOCS_MANUAL.map((s) => s.out)]);
 	const orphans = fs.readdirSync(outDir).filter((f) => !declared.has(f));
 	if (orphans.length) {
@@ -279,4 +414,8 @@ if (failures.length) {
 	for (const f of failures) console.error(`  ${f.out}: ${f.error}`);
 	process.exit(1);
 }
-console.log(`\nall ${wanted.length} docs image(s) written to ${path.relative(repo, outDir)}`);
+console.log(
+	checkStable
+		? `\nall ${wanted.length} gif entr${wanted.length === 1 ? 'y is' : 'ies are'} stable (nothing written to ${path.relative(repo, outDir)})`
+		: `\nall ${wanted.length} docs image(s) written to ${path.relative(repo, outDir)}`,
+);
