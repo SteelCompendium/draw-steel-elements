@@ -28,7 +28,7 @@ for what needs action.
   [migration guide](docs/migrating-to-7.md#1-re-sync-your-compendium)).
 - [FIX] **Power-roll tier rows are compact again: about 50px for a one-line outcome, the
   same as the site** (SC-378). Every tier row (ability/feature cards, statblock abilities,
-  featureblock, a kit's signature ability, negotiation arguments, `ds-roll`) had grown to
+  featureblock, a kit's signature ability, negotiation arguments) had grown to
   about 82px, because SC-202's paragraph-spacing reset was also adding a full line of
   space above and below each outcome's text. This was a regression in the 7.0.0 cycle,
   never in a release. Print/export was never affected.
@@ -42,7 +42,7 @@ for what needs action.
 - [FIX] **Typing into a field inside a Draw Steel card now works with the mouse** (SC-377). A
   click inside any card was swallowed so Obsidian would not open the block for editing, and
   that also stopped the browser from focusing the field, so the initiative tracker's quick-add
-  Amount and Label, the counter's number box and the party's award box could only be reached
+  Amount and Label and the counter's number box could only be reached
   with Tab. A click on a field now focuses it (the block still does not open for editing), and
   a click on anything else - the rest of the card, another Draw Steel card, or the same block in
   another pane - now leaves the field the way a click outside the card does, so a half-typed
@@ -68,15 +68,14 @@ for what needs action.
   letter-spacing. The title's line-height and the Text size preference still scale it the
   same way as before.
 - [FIX] **Headings (`#` through `######`) inside a card's markdown body — and the roster
-  heading, hero region title, and initiative group headers — are back to Obsidian's own
+  heading and initiative group headers — are back to Obsidian's own
   heading sizes, instead of the plain browser default** (SC-318). SC-202 had re-grounded a
   card's own `h1`-`h6` tags to the raw, unstyled browser default so a real vault note and
   the preview harness would agree — but that also meant a `######` heading rendered SMALLER
-  than body text (10.7px), the hero's CHARACTERISTICS region title shrank (21.1px to
-  18.7px), and a `###` heading lost most of its top spacing (40px to 19px) after a
-  paragraph. Screen now restates Obsidian's own scale instead of the browser's, matching
-  what print/export and a real Obsidian note already showed the whole time — every one of
-  those three changes is reversed. Print/export is unaffected either way — it already
+  than body text (10.7px), and a `###` heading lost most of its top spacing (40px to
+  19px) after a paragraph. Screen now restates Obsidian's own scale instead of the
+  browser's, matching what print/export and a real Obsidian note already showed the whole
+  time — both of those changes are reversed. Print/export is unaffected either way — it already
   looked like this.
 - [FIX] **The example inserted for a new `ds-feature` block no longer claims to be a villain
   action while rendering as a main action** (SC-236). The Draw Steel Elements authoring example
@@ -116,7 +115,7 @@ for what needs action.
   wherever the text is now split into one chip per keyword) — everything you can read is
   unchanged; nothing shifts by a visible amount.
 - [FIX] **Card headers (ability, statblock, featureblock, montage, and every other card with
-  a right-rail chip) now have a narrow form** (SC-284). At a sidebar-leaf width (~300px) the
+  a right-rail chip) now have a narrow form** (SC-284). At a narrow width (~300px) the
   header's NAME used to wrap a word (often a letter) per line while the right-rail chips kept
   their own width and squeezed it — not the other way around. The right rail now stacks below
   the name at narrow widths instead — matching the site — with nothing hidden.
@@ -125,14 +124,6 @@ for what needs action.
   community-plugin review rejects; 7.0.0 also carries forward 6.0.2's three added
   Crafting/Lore skills (Carpentry, Cooking, Strategy). No user-facing behavior change beyond
   those skills.
-- [FIX] **A pinned sidebar panel now follows its note when the note (or a parent folder) is
-  renamed or moved, instead of turning into a permanent "Note not found" card** (SC-282).
-  Deleting the note (or a parent folder) now removes the panel automatically instead of
-  leaving it behind. Renaming never disturbs the panel's own live content — an in-progress
-  encounter or initiative tracker keeps running exactly as it was. This covers a sidebar tab
-  that is currently in the background or a collapsed sidebar too (Obsidian defers loading
-  those until you click them — common right after a restart), not just the one you're
-  looking at.
 - [FIX] **The Settings Sync and Check-for-updates buttons now show when a compendium
   operation is running, instead of staying clickable through the whole run** (SC-243).
   Previously a double-click, the command palette, or the migration modal's "sync anyway"/
@@ -151,25 +142,16 @@ for what needs action.
   write. A hidden kill switch restores the pre-SC-340 behavior if needed: setting
   `"viewAdoption": false` in the plugin's `data.json` and reloading Obsidian turns view
   adoption off again (not exposed in the Settings UI).
-- [FIX] **A pinned sidebar panel that showed "Backing block not found" now recovers on its
-  own once the block reappears or is edited elsewhere** (SC-288). If the block behind a
-  pinned sidebar panel briefly became unaddressable — the note was edited out from under it
-  — the panel correctly showed the read-only "panel unavailable" notice, but the very next
-  valid edit to that block failed to bring it back: the notice and the disabled controls
-  stayed stuck even though the block was valid again, and the only way out was to unpin and
-  re-pin. A degraded panel now recovers on the next valid change — including an editor undo
-  right after a sidebar edit, and a panel stuck on a parse-error notice after a bad outside
-  edit — no re-pin needed.
 - [FIX] **Initiative tracker: an unsynced compendium creature no longer asks about
   duplicate files, and the console no longer logs a warning for every creature without a
-  portrait** (SC-240). A statblock reference the encounter builder creates from the
-  compendium (`scc.v1:…`) that fails to resolve used to wrap the real reason ("…is not
+  portrait** (SC-240). A statblock reference to a compendium code
+  (`scc.v1:…`) that fails to resolve used to wrap the real reason ("…is not
   available in this vault. Sync the compendium…") in a stock "Are there multiple instances
   of the '<ref>' file in your vault?" hint left over from plain-filename references — nonsense
   for an SCC code, since there is no vault file to have duplicates of. That hint is gone for
-  SCC-shaped references; ordinary filename references are unaffected. Separately, every
-  builder-created tracker used to log a `console.warn` for each creature with no portrait,
-  purely because compendium statblocks carry no `image` field — an already-handled state
+  SCC-shaped references; ordinary filename references are unaffected. Separately, a tracker
+  used to log a `console.warn` for each compendium creature with no portrait, purely
+  because compendium statblocks carry no `image` field — an already-handled state
   (the themed fallback glyph still renders). The warning now fires only when a portrait image
   WAS specified and still couldn't be resolved.
 - [FIX] **Typing a negative number into the minion pool's Apply Damage box no longer heals
@@ -237,7 +219,7 @@ for what needs action.
   expanded. The hand-rolled ⋯ menu is gone: the card's standard element menu now carries
   **Add a round**, **Add a hero**, **Set limits…** and **Reset progress**. Notes typed on
   any logged test list under the outcome band, tagged with the hero and round. See
-  [GM Trackers](docs/gm-trackers.md) → "Montage Test tracker".
+  [Montage Test Tracker](docs/gm-trackers.md).
 - [FEATURE] **The squad captain's Stamina bonus now applies to the minion pool**
   (SC-195). "While a minion squad has a captain, each minion in the squad gains the
   benefits noted at the 'With Captain' entry on their stat block" — when that benefit is
@@ -252,23 +234,6 @@ for what needs action.
   and print readout always used the squad's original size; both now agree (the max never
   shrinks as minions die). See [`docs/initiative-tracker.md`](docs/initiative-tracker.md)
   → "Minions and Captains" for the full YAML.
-- [FIX] **The Draw Steel sidebar: pin/unpin from the element menu, panel headers, an
-  empty state, and layout that survives restart** (SC-184). The sidebar's one-panel MVP
-  shipped without the chrome it was always specced to grow: the only way to pin a block
-  was a cursor-gated command that is never in the palette in Reading mode (the only mode
-  elements render in), there was no way to remove a single panel short of closing the
-  whole leaf and losing every one, panels were an unlabeled unseparated stack, and the
-  ribbon icon opened straight into a blank div. Fixed: every chrome-bearing block's **⋯**
-  menu now offers **Pin to sidebar** in a note and **Unpin from sidebar** once it's
-  pinned; each panel gets a header naming its element and source note, clickable back to
-  it; `Workspace.requestSaveLayout()` is now called on every pin/unpin (previously only
-  the *first* pin reliably survived a restart); an empty sidebar explains what it's for
-  and how to fill it; and a broken panel (unknown element, or its note deleted/renamed)
-  gets a "Remove panel" button instead of sitting there forever. The dead `collapsed`
-  field (persisted, never read) is deleted. Docs reframed: the sidebar is sold as a GM
-  dashboard assembled from blocks that live in **different** notes, not as "your tracker,
-  but persistent" — a pinned note tab does that better when everything already lives in
-  one note, and the docs now say so.
 - [FIX] **The note no longer jumps to the top when you click a tracker control**
   (SC-198). Ticking an action, spending malice or nudging stamina writes the note, and
   Obsidian rebuilds the whole reading view whenever a note changes — which briefly
@@ -278,7 +243,7 @@ for what needs action.
   rebuild, so the scroll position is never lost. Measured on a 4800px note: scroll
   position 2596px → 0 before, 2596px → 2596px (never moved) after. The brief flash while
   Obsidian re-renders is unchanged — that is Obsidian's own rebuild, not something the
-  plugin drives. A tracker in the sidebar was already immune and still is.
+  plugin drives.
 - [FIX] **The card's border no longer fades away at its top corners** (SC-189). On a
   statblock or featureblock, the header band's own corners were rounded a little tighter
   than the card's, so the band quietly painted over the card's 1px hairline for the whole
@@ -292,8 +257,7 @@ for what needs action.
   30px button height (which overrode the panel's own, declared size in every real vault);
   both are now the plugin's again. And the card's top edge casts a small shadow up onto the
   panel, so the panel reads as a tab tucked *behind* the card instead of a second plate
-  parked against it. The panel's icons also got room to breathe — the edit pencil was almost
-  touching the plate's top edge.
+  parked against it. The panel's icons also got room to breathe.
 - [FIX] **Buttons and other controls are no longer oversized** (SC-185). A bare button
   ("Reset Encounter State" and its neighbours) rendered about 23% larger than a native
   Obsidian button beside it. Control text now defaults to 0.85em instead of 1em — 13.6px
@@ -329,13 +293,6 @@ for what needs action.
   draws one at all, only its "Cards" mode does. The bar is gone in both places, and the ◆
   divider between consecutive features (added between two features, never before the
   first or trailing after the last) is unchanged.
-- **The hero sheet (`ds-hero`) is held back from this release** (SC-190). Its edit
-  modal and rendered card both need more work before they're ready to advertise as
-  supported, so it doesn't appear in the docs, the command palette, or `/ds` — only
-  the four standalone hero trackers (heroic resource, surges, conditions, hero
-  tokens) ship as documented in 7.0.0. The code isn't going anywhere: a
-  hand-written `~~~ds-hero` block still renders and stays fully interactive, this is
-  just not yet a feature we're pointing anyone at. Planned for a later 7.x release.
 - **The skill list gets a new look, two selectable layouts, and an unowned-skills
   toggle** (SC-182). A `ds-skills` block now renders as a **ledger** by default — a
   responsive grid of group panels with owned/total tallies (`3/11`) and ◆ marks, about
@@ -359,8 +316,7 @@ for what needs action.
   Duration (End of Turn / Save Ends / End of Encounter) is now its own field instead of
   being crammed into the same slot as the visual effect, which also fixes a bug where
   opening Customize on a duration you'd written by hand and saving would silently erase
-  it. Every entry point — the conditions strip, the hero sheet, and the initiative
-  tracker — opens the same modal.
+  it. The initiative tracker opens this modal.
 - **The initiative tracker adopts the stamina bar's design** (SC-183). Every hero row
   and every opened enemy row in the tracker now carries the real stamina instrument the
   `ds-stamina` element ships — a big current-value readout, the temp-stamina plate, and
@@ -415,7 +371,7 @@ for what needs action.
   the four action pips sit on the card's own inset like everything else in the row, and
   the Stamina instrument is now one line — the gauge across the row with the big current
   value at its right end, instead of a number stranded on a line of its own above the bar.
-  Rows are shorter and read as one object. At sidebar width the pips take their own line
+  Rows are shorter and read as one object. At narrow widths the pips take their own line
   and the instrument stacks again, so nothing gets crushed.
 - [FIX] **Inner features get real breathing room** (SC-168). A feature nested inside a
   standalone ability/feature card (an `effect.features` sub-feature) rendered flush
@@ -425,13 +381,12 @@ for what needs action.
   action-type spine as the card's left edge. Print is unchanged.
 - **A standard menu panel on every card element, and a one-line collapsed form** (SC-169).
   Hover any element that draws a card — statblocks, ability cards, featureblocks, compendium
-  references, the whole hero suite, every GM tracker — and a small panel appears at its
+  references, the Stamina bar, every tracker — and a small panel appears at its
   top-right, in the shape of a window's title-bar controls: icon-only, short, and it grows
   leftward as items are added, so the collapse button never moves. It always carries
-  collapse/expand, and — when **Show edit button** is on — the edit pencil now lives there
-  instead of in the card's corner. Collapsed, an element becomes one line: its type, its name,
-  and an expand button ("HERO: Torin Stonefist", "STATBLOCK: Goblin Stinker",
-  "STAMINA (31/48)", "ENCOUNTER: Ambush at the Ford (EV 42)", "SKILLS (12 selected)"). A block
+  collapse/expand. Collapsed, an element becomes one line: its type, its name,
+  and an expand button ("STATBLOCK: Goblin Stinker", "STAMINA (31/48)",
+  "SKILLS (12 selected)"). A block
   that references a compendium entry shows that entry's real name, not its code. Three
   block keys control it: `collapsed:` (start collapsed), `collapse_default:` (the same
   thing, the older spelling) and `collapsible: false` (no collapse control at all, and no
@@ -441,8 +396,8 @@ for what needs action.
   lines, above the code. Collapsing something is remembered for
   the session and never edits your note, and the panel never appears in print or in an
   exported PDF — a collapsed element prints in full. On mobile the panel is always visible
-  instead of waiting for a hover. The two elements that deliberately don't get one are the
-  horizontal rule and the dice roller. See
+  instead of waiting for a hover. The one element that deliberately doesn't get one is the
+  horizontal rule. See
   [the element menu](docs/common-element-fields.md) for the whole feature.
 - **The stamina bar's "Stamina Bar" header is gone** (SC-169). It was a second collapse
   control with its own look, doing what the new panel now does for every element. Notes are
@@ -457,10 +412,10 @@ for what needs action.
   **Statblock display** control it — **Sticky mini-header** and **↳ Sticky mini-header:
   include secondary stats**, both on by default, matching the website — and neither is
   part of a preset, so picking a look never changes your scrolling. It works wherever a
-  statblock scrolls: a note in Reading view, a pop-out window, and a sidebar panel, where
+  statblock scrolls: a note in Reading view, a pop-out window, and a narrow pane, where
   it reflows to just the name and role because that is all a 300px-wide bar can usefully
-  say. It is deliberately absent where scrolling isn't a thing: print, PDF export, print
-  preview, and canvas cards — and inside a callout, whose body never scrolls.
+  say. It is deliberately absent where scrolling isn't a thing: print, PDF export, and
+  canvas cards — and inside a callout, whose body never scrolls.
 - [BUGFIX] **Statblock and feature cards get their missing backgrounds and colour washes
   back** (SC-171). In the app — as opposed to the screenshots — several Steel surfaces were
   painting nothing at all: a statblock's header band lost its background *and* the coloured
@@ -473,31 +428,14 @@ for what needs action.
 - [BUGFIX] **PDF export now prints the print layout, not the screen one** (SC-170).
   Exporting a note to PDF (or printing it) carried the full on-screen card treatment onto
   the page — the gradient plate, its 1px frame and rounded corners, the raised bevel, a
-  drop shadow under every card, boxed characteristic cells and small-caps labels — even
-  though the print preview showed the plain, ink-economical layout that was supposed to go
-  to paper. The two disagreed because only the preview ever turned the screen styling off;
-  real printing merely tried to, and lost. Print preview and PDF export are now the same
-  rendering, so the preview is a genuine proof of what you will get, and a handout costs
-  what it should in ink. Light-mode vaults were hit hardest: PDF export always renders in
+  drop shadow under every card, boxed characteristic cells and small-caps labels — instead
+  of the plain, ink-economical layout that was supposed to go to paper. The screen styling
+  was only ever reliably turned off on screen; real printing merely tried to, and lost.
+  Printing and PDF export now get the plain print layout, and a handout costs what it
+  should in ink. Light-mode vaults were hit hardest: PDF export always renders in
   the light scheme, which is exactly the case where the old print rules were most
   outranked. One smaller print bug went with it: buttons, tabs and other control text kept
-  the theme's serif when printed instead of the plain sans the preview uses — the printed
-  page and the preview now agree on that too.
-- [BUGFIX] **"Open in sidebar" stops piling up initiative trackers** (SC-153). Every
-  press of an encounter block's "Open in sidebar" button appended another
-  `ds-initiative` block to the note AND stacked another copy of it in the sidebar —
-  three presses left three trackers and three panels, while the sidebar kept showing
-  the first one, so the panel you were looking at went stale as soon as a second
-  tracker existed. The button is now idempotent: the first press creates the tracker,
-  and every press after that binds to that same block and brings its panel back up
-  **without rewriting a single byte of it** — so a fight already in progress keeps its
-  round counter, its Stamina, its conditions and any combatants you added at the table.
-  The tracker is a snapshot of the encounter as it stood when it was built: if you
-  change the encounter afterwards, those edits deliberately do not reach an existing
-  tracker, and the way to get a fresh one is to delete the tracker block and press
-  again. An encounter recognises its own tracker by a durable id, so a note with two
-  encounters still gets one tracker each. Pinning any block that is already pinned is
-  now a no-op everywhere in the sidebar, not just for this button.
+  the theme's serif when printed instead of the plain sans of the print layout.
 - [BUGFIX] **Compendium links (`scc.v1:`) no longer prompt-then-do-nothing outside
   Reading view** (SC-135). Clicking one previously worked only where the plugin already
   rewrites it into a real note link — Reading view, and inside rendered element cards.
@@ -516,21 +454,19 @@ for what needs action.
   compendium using wikilinks or plain vault paths — both are documented under
   [Compendium links](docs/compendium-sync.md#compendium-links) and planned for a later
   release.
-- [FIX] **The encounter and initiative tracker blocks are properly spaced** (SC-154).
-  Both had shipped without the same breathing room every other tracker (negotiation,
-  montage, the party sheet) already gets: buttons, headings and rows sat flush against
+- [FIX] **The initiative tracker block is properly spaced** (SC-154).
+  It had shipped without the same breathing room every other tracker (negotiation,
+  montage) already gets: buttons, headings and rows sat flush against
   the note's own margin with no padding at all. On top of that, the initiative
   tracker's "Reset turns (this round)" / "Advance round" buttons wrapped their own
   text across two to four cramped lines regardless of how wide the note was, because
   the Malice panel that holds them was capped narrower than either button's label
   ever fit — while the same row had hundreds of pixels of empty space to its left.
-  Both are fixed: the tracker roots now carry the same padding their sibling trackers
+  Both are fixed: the tracker root now carries the same padding its sibling trackers
   do, the round-control buttons keep their label on one line and wrap as whole
   buttons (never mid-word) if the width genuinely doesn't allow it, the turn
-  indicator no longer sits glued to the row beside it, the Malice quick-add
-  "Amount"/label boxes are wide enough for their own placeholder text, and the
-  encounter roster table scrolls horizontally instead of silently losing its Count
-  and EV columns at sidebar width. The round and Malice controls also moved out of
+  indicator no longer sits glued to the row beside it and the Malice quick-add
+  "Amount"/label boxes are wide enough for their own placeholder text. The round and Malice controls also moved out of
   the "Enemy groups" heading's right edge — where they left the whole left half of
   that band empty — into a single **command bar** between the heroes and the
   enemies: round counter and its two controls at the left, Malice pool and
@@ -547,29 +483,19 @@ for what needs action.
   (SC-152). The trackers and the reference cards have had the Steel plate — the
   forged gradient ground, hairline edge, rounded corner and soft bevel — since the
   look shipped, but the pieces you actually build a character sheet from did not:
-  Characteristics, Values row, Heroic resource, Surges, Hero tokens and
-  Conditions all rendered as bare text on the page, so a sheet made of them read as
-  an undifferentiated run of lines with the odd styled block (a Counter) floating in
-  it. All six now carry the same plate, so a sheet reads as a set of matching
+  Characteristics and Values row both rendered as bare text on the page, so a
+  sheet made of them read as an undifferentiated run of lines with the odd styled
+  block (a Counter) floating in it. Both now carry the same plate, so a sheet reads as a set of matching
   panels. The characteristics element goes one further: it renders the statblock's
   own characteristics rail — same code, same CSS, same signed values, following the
   same two Characteristics display settings — because they are exactly the same
-  five numbers (the hero sheet's Characteristics region does too). `ds-skills` is
+  five numbers. `ds-skills` is
   deliberately left bare for now: it needs a real overhaul, not a frame (tracked
   separately). The plate is written as a
   screen treatment; a real Ctrl-P / Export-to-PDF currently carries it through
   anyway, along with the other Steel surfaces, and getting print back to a plain,
   ink-cheap rendering is tracked separately as SC-170.
-- **Heroic resource and Surges get the padding and the bold label they were always
-  meant to have** (SC-152). Their styling was keyed to a descendant of the element,
-  but the class lands on the element itself, so the whole block — the inset that
-  keeps the content off the edge, and the bold "Ferocity" / "Surges" label — had
-  never applied to either panel. Both now match Hero tokens, which had the same
-  styling and always did apply it. (Two print/PDF exports of those two panels change
-  as a result: they gain the same small inset and bold label their sibling already
-  had on paper.)
-- The Hero sheet, the Stamina bar and the roll card were already styled and keep the
-  framing they had.
+- The Stamina bar was already styled and keeps the framing it had.
 - **Statblocks now look like the website out of the box** (SC-123). Two display
   settings shipped on the plugin's own historical look rather than the site's, and
   they were the last two that differed. **Characteristics** now default to the
@@ -601,28 +527,15 @@ for what needs action.
   first fight, assuming no YAML or markdown knowledge), **Run an encounter**,
   **Track your hero**, **Customize a monster** (the homebrew loop — snapshot an
   entry, then make it yours), **Style your statblocks**, and **Advanced usage**
-  (per-block appearance overrides, reference vs. snapshot semantics, the sidebar,
-  canvas, print/PDF behaviour, rolling). Every visual step carries a screenshot
+  (per-block appearance overrides, reference vs. snapshot semantics, canvas,
+  print/PDF behaviour, rolling). Every visual step carries a screenshot
   generated from the real plugin by the pipeline below, including Obsidian's own
   command palette and compendium search.
-- [FIX] **Pinning a `ds-scc` block to the sidebar no longer breaks it** (SC-158).
-  "Send block to sidebar" marks a block so the panel can find it again after you
-  edit the note around it, and it did that by writing a hidden `_dse_anchor:` line
-  into the block. For every other element that line is invisible — but a `ds-scc`
-  block's content is exactly one compendium code, so the extra line turned the
-  block into an error message ("its body must be a single SCC code"), and it
-  stayed broken after the sidebar was closed, because the line had been saved into
-  your note. Blocks whose content has an exact format are no longer written to at
-  all: pinning one now leaves the note **byte-for-byte unchanged** and the sidebar
-  finds the block by its content instead. Pinning, restoring after a restart, and
-  surviving edits elsewhere in the note all still work. If you have a note with a
-  stray `_dse_anchor:` line inside a `ds-scc` block from an earlier build, delete
-  that line and the block renders again.
 - [INTERNAL] **Every screenshot in the README and the docs is now generated by one
-  command** (SC-142). `npm run docs-shots` regenerates all 34 of them from the real
+  command** (SC-142). `npm run docs-shots` regenerates every one of them that can be from the real
   plugin, driven by a single manifest (`visual-harness/docs-manifest.mjs`): element
   cards through the existing browser harness, and the surfaces only the app has —
-  the settings pages, the four modals, a real canvas, a real sidebar leaf — through
+  the settings pages, the four modals, a real canvas — through
   the Obsidian camera. The camera runs on an **Xvfb virtual display** it starts and
   stops itself, so the run is fully headless: it never touches the developer's own
   display and does not care whether Obsidian is already open. Before this, every
@@ -700,7 +613,7 @@ for what needs action.
   sharing its origin and scale, with your true maximum keeping its own mark. Every
   state is said at least three ways — frame colour, crest silhouette, the word, and
   the colour of the numeral — so none of it depends on telling two colours apart.
-  In a sidebar-width pane the whole cluster collapses to a two-line rail.
+  In a narrow pane the whole cluster collapses to a two-line rail.
 - [FEATURE] **Recoveries are editable by clicking a marker** (SC-132). Clicking
   the last available marker spends exactly one, clicking the first spent one
   restores exactly one, and any distance is a single click — Draw Steel takes
@@ -712,12 +625,6 @@ for what needs action.
   Settings → Element defaults → Advanced → "Edit Recoveries with a popover" turns
   each marker click — and each arrow key — into a small − / + popover instead, so no
   single stray input can change the count.
-- [FEATURE] **The hero sheet's Stamina can be edited from the sheet itself**
-  (SC-132). The sheet used to carry a `− 31 +` counter row under the bar, which
-  duplicated the bar's own readout and existed only because the bar itself was
-  read-only there. The row is gone; the bar now opens the same Stamina editor the
-  standalone `ds-stamina` block does, and the Recovery markers underneath it are
-  live.
 - [FIX] **The kit card's band headers ("Equipment", "Kit Bonuses", "Signature
   Ability") are no longer tiny** (SC-143). The Steel rule ported the site's
   `.8rem` band-head size as a bare `0.8em`, skipping the 20px-site-root vs.
@@ -731,15 +638,6 @@ for what needs action.
   count and date only appeared if you closed the settings window and opened it
   again. The line now follows the sync live, whether you started it from the
   settings button, the command palette or the first-run prompt.
-- [FIX] **The hero sheet you insert starts with two real abilities** (SC-156). The
-  starter block behind `/ds` -> Hero sheet and "Insert Draw Steel: Hero sheet"
-  listed two ability codes that were never valid — `.../brute-strike` and
-  `.../into-the-fray`, with a literal `...` where the type belongs — so every hero
-  sheet anyone inserted began with two permanently broken ability rows. (It is also
-  where the SC-141 report's broken input came from.) They are now two real Fury
-  level-1 abilities, a signature and a heroic one: **Brutal Slam** and **Thunder
-  Roar**. A test now resolves every code the example ships against the real corpus,
-  so a placeholder cannot get back in.
 - [INTERNAL] Both reported failures of the compendium insert commands are pinned by
   regression tests over the real corpus bytes (SC-147, SC-148). Neither needed a
   code change: "Insert compendium reference" writing a `ds-rule` fence that then
@@ -749,19 +647,17 @@ for what needs action.
   removed the `ds-rule` fallback the fence came from. The tests drive both commands
   end to end for the exact entry from the reports.
 - [FIX] **Abilities referenced by their compendium code now render** (SC-141).
-  Listing an ability in a `ds-hero` sheet by its code — say
+  Referencing an ability by its code — say
   `scc.v1:mcdm.heroes.v1/feature.ability.shadow.level-1/coat-the-blade` — produced
   the error *"Coat the Blade" found but is not an ability entry*, even though the
   file was right there in your synced compendium. The plugin was looking for
   compendium files labelled `feature`, but every one of the roughly 700 ability
   and trait files is labelled `ability` or `trait`, so none of them could be read:
-  no ability in the book could be referenced by code, in a hero sheet or in a
+  no ability in the book could be referenced by code, in a
   `ds-feature` block. They all work now, including by name (`Coat the Blade`).
-  Alongside it, two smaller repairs to how a bad entry is reported: a code that
+  Alongside it, a smaller repair to how a missing entry is reported: a code that
   genuinely cannot be found now says so plainly and names both possible causes
-  (an un-synced compendium **or** a wrong code) instead of only blaming the sync,
-  and a broken entry can only ever cost its own row — the rest of the ability
-  list, and the rest of the sheet, keep working around it. Looking an ability up
+  (an un-synced compendium **or** a wrong code) instead of only blaming the sync. Looking an ability up
   **by name** now prefers the real ability over the stub the compendium also
   carries under the class-progression code — before, the name quietly found the
   stub, which is a one-line pointer with none of the ability on it. Where a name
@@ -786,14 +682,6 @@ for what needs action.
   nothing had happened. The preview now uses the same gauge the bar does, and a
   pending change is ghosted onto it so you can see what Apply will do before you
   press it. The Minion Stamina Pool modal gets the same instrument.
-- [FIX] **The hero sheet's grid panels no longer stretch to their tallest
-  neighbour** (SC-107). Characteristics/Conditions/Skills (and any other sparse
-  region sharing a row with a fuller one, e.g. Stamina) used to inherit CSS
-  grid's default row-stretch behaviour, so a two-line panel's border box grew
-  to match a much taller neighbour and showed a slab of empty space below its
-  own content. Steel now sizes each region to its own content
-  (`align-items: start` on `.dse-hero__grid`, Steel-scoped) — the leftover
-  height becomes gap between rows instead of dead air inside a panel.
 - [FIX] **Statblock display settings brought back in line with the v2 site**
   (SC-146). An audit against the live site found the shipped settings had
   drifted:
@@ -861,11 +749,9 @@ for what needs action.
   **searchable from Obsidian's own settings search** (SC-131). It was one
   6850px scroll page — nine stacked sections and a full statblock preview — and
   the queued display-parity settings would have pushed it past 8000. It is now
-  a short index of ten navigable pages (Appearance, Typography, Statblock
-  display, Featureblock display, Element defaults, Rolling, Authoring,
-  Compendium, Links, Initiative tracker), each holding only its own settings —
-  nine at the rebuild, plus the Featureblock display page the display-parity
-  ports (SC-123) add. Because the settings are now
+  a short index of navigable pages (Appearance, Typography, Statblock
+  display, Featureblock display, Element defaults, Rolling, Compendium, Links,
+  Initiative tracker), each holding only its own settings. Because the settings are now
   declared rather than hand-drawn, Obsidian indexes every one of them: typing
   "font" or "density" into the search box at the top of the settings window
   finds Draw Steel Elements rows alongside Obsidian's own, from any tab, and
@@ -877,13 +763,6 @@ for what needs action.
   secondary font slots moved from a collapsed "Advanced" disclosure onto an
   Advanced sub-page, where search can still reach them individually. Every
   setting, its default, and its live-apply behaviour is unchanged.
-- [BUGFIX] The encounter builder's "Create initiative tracker block" produces a
-  tracker that renders again. The builder writes compendium references as SCC
-  codes (`scc.v1:...`), but the tracker's reference resolver only understood
-  vault file paths, so every builder-generated tracker died to an error card the
-  moment it rendered. The tracker now resolves SCC codes through the compendium
-  reference system; hand-written file-path references are untouched, and
-  encounters you generated before the fix start working with no edits (SC-134).
 - [BUGFIX] The stamina edit modal's math no longer runs backwards or overspends
   (SC-133). Three fixes: a negative number typed into the Apply box inverted the
   operation ("Damage -3" *granted* 3 temp stamina and saved it) — amounts are
@@ -925,9 +804,7 @@ for what needs action.
 - Settings' Compendium section is reworked: destination folder, release (pin a
   tag or leave empty for latest), locale, a synced-status line, and
   Sync/Check-for-updates buttons.
-- New commands: "Sync compendium" (the old command id remains as a hidden
-  "Sync compendium (legacy alias)" so hotkeys keep working; it will be removed
-  in 8.0.0).
+- New command: "Sync compendium".
 - Updates `steel-compendium-sdk` to 3.x.
 - New: **compendium reference cards** — every entry in the synced compendium
   renders as a styled card from its SCC code alone, via the new `ds-scc` block
@@ -942,22 +819,9 @@ for what needs action.
   ("Search compendium") to find and insert a reference to any compendium entry,
   or (for statblocks, features and featureblocks) a full inline copy, without
   leaving the editor.
-- New: **Draw Steel sidebar** — pin any tracker (initiative, encounter, montage,
-  project, party) to a persistent right-sidebar panel that survives navigating
-  between notes, via the new sword icon in the ribbon ("Open Draw Steel
-  sidebar") or the "Send block to sidebar" / "Send initiative tracker to
-  sidebar" commands. Edits made in the sidebar and edits made in the note stay
-  in sync.
-- New: **Encounter Builder** (`ds-encounter`) — plan an encounter against your
-  synced compendium: add monsters by reference, see live EV/budget/difficulty
-  computed from the real statblocks (never inlined stats), then hand off to a
-  ready-to-run tracker with one click ("Create tracker block" or "Open in
-  sidebar").
-- New: **Montage tracker** (`ds-montage`), **Project/Downtime tracker**
-  (`ds-project`), and **Party tracker** (`ds-party`) — trackers for Draw
-  Steel's other GM subsystems (montage tests, downtime projects, and
-  party-level victories/renown/wealth), following the same interactive,
-  persisted-block model as the initiative tracker.
+- New: **Montage tracker** (`ds-montage`) — a tracker for Draw Steel's
+  montage tests, following the same interactive, persisted-block model as the
+  initiative tracker.
 - New: the initiative tracker's **Malice panel** is now first-class — a
   keyboard-accessible pool stepper, a round counter with "Reset turns (this
   round)" vs. "Advance round" (advancing can apply a configured per-round
@@ -965,19 +829,8 @@ for what needs action.
   gains (e.g. "+3 Feytouched").
 - New: heroes and creatures in the initiative tracker get a per-turn action
   checklist (Main / Maneuver / Move / Triggered).
-- New: **Hero suite** — a flagship **hero sheet** (`ds-hero`) composing
-  characteristics, stamina (with recoveries and a winded/dying badge), heroic
-  resource, surges, conditions, skills, and abilities (with click-to-expand
-  ability cards and dice rolling) over one persisted block; your authored
-  definition (name, class, ancestry, kit, abilities, …) stays byte-stable —
-  only the small play-state churns as you use the sheet. Also ships as four
-  standalone trackers you can use on their own: **Heroic resource**
-  (`ds-resource`, class-aware), **Surge tracker** (`ds-surges`), **Conditions
-  strip** (`ds-conditions`), and **Hero Tokens** (`ds-tokens`, a shared
-  party-wide pool). The Stamina tracker (`ds-stamina`) gains recoveries and a
-  Catch Breath action. The hero sheet works from inline YAML or resolves
-  class/ancestry/kit live from your synced compendium; it can also be pinned
-  to the Draw Steel sidebar like any other tracker.
+- New: the Stamina tracker (`ds-stamina`) gains recoveries and a Catch Breath
+  action.
 - [BUGFIX] Stamina: the bar's winded coloring now matches the rules (winded at
   half Stamina **or below** — it previously flipped one point late), and the
   Stamina modal's "Spend Recovery" button now spends from your tracked
@@ -1026,8 +879,8 @@ for what needs action.
   action spine, the statblock notch) are **not** part of it. Bundling the slab as
   a future upgrade would close the face gap.
 - The Steel theme's body typography now reaches **every** element family, not just
-  the shared card families above: the hero sheet, encounter/negotiation/montage/
-  initiative/project/party trackers, and every other plugin-only surface now set
+  the shared card families above: the negotiation/montage/initiative
+  trackers, and every other plugin-only surface now set
   body and label text in the same serif face, open line-height and cooler ink as
   the card families, so a note reads as one coherent type system instead of a
   serif card sitting next to a sans tracker. The routing moved from a four-family
@@ -1035,28 +888,23 @@ for what needs action.
   stepper/counter values in their prior, non-serif rendering was part of this
   change but was later found to have quietly stopped working during the font-slot
   groundwork below; it is now removed deliberately — controls follow the Body
-  font, see the typography settings entry below.) The encounter head's
-  `EV n / n` chip now takes the exact same serif small-caps treatment as every
-  other chip in the kit — a fully uniform chip family, with no numeric-content
-  exemption. Its digits render at small-caps cap height, a Source Serif 4 `smcp`
-  behavior; this is accepted as the correct, uniform look, and the old sans
-  rendering's big-digit emphasis is gone by design.
+  font, see the typography settings entry below.)
   `steelTypography.test.ts` gained a contract test
   that locks the shape of the selector itself — every element root, not a named
   list — so a future edit can't quietly narrow the routing back down without
   failing the suite. Same honest limits as above: screen-only (print and PDF export
   are untouched), serif-not-slab, and only the 600/700 weights ship.
 - The Steel theme now reaches DSE's modals too — stamina edit / Spend Recovery,
-  condition pickers, the form editor, and other modal dialogs now follow the
+  the Conditions manager, and other modal dialogs now follow the
   active look: they render the forged treatment (title emboss, sunken sections,
   forged footer buttons) instead of unstyled app defaults. (Verified by DOM
   contract tests asserting the
   theme attribute stamps, re-stamps live, and tears down on close — not a
   rendered screenshot, since no frozen harness shot opens a modal.)
-- [INTERNAL] Featureblock advancement bands and the sidebar panel now have
-  dedicated visual-harness fixtures: the featureblock fixture's frozen renders
-  joined the golden-PNG set (98 → 101), while its remaining shots and both new
-  sidebar shots are regenerated (unfrozen) goldens verified by eye.
+- [INTERNAL] Featureblock advancement bands now have a dedicated
+  visual-harness fixture: the featureblock fixture's frozen renders joined the
+  golden-PNG set (98 → 101), while its remaining shots are regenerated
+  (unfrozen) goldens verified by eye.
 - [INTERNAL] The font system's single `--dse-font-display` token is retired,
   replaced by six semantic slots (title/body/card-body/label/controls/mono),
   each independently themeable. Every consumer was re-pointed to its
@@ -1120,9 +968,8 @@ for what needs action.
   this closes out the last provisional Steel color values (SC-106).
 - [STEEL] Buttons and steppers are compact. Every `+`/`−` and icon button used
   to render as a 44×44 box around a 16px glyph — a touch-sized target applied
-  on desktop, where it read as roughly 3× too big — on counters, the hero
-  sheet, heroic resource, surges, hero tokens, rolls, montage, party and
-  conditions. Controls now sit at a compact 28px on a mouse/trackpad and switch
+  on desktop, where it read as roughly 3× too big — on counters, montage and the
+  other trackers. Controls now sit at a compact 28px on a mouse/trackpad and switch
   back to the full 44px target on touch devices (Obsidian mobile, tablets), so
   nothing gets harder to tap where tapping is how you use it. Control size also
   follows your text/card size settings now instead of being frozen at one pixel
@@ -1159,9 +1006,6 @@ for what needs action.
   stack for the rare case that setting is empty; the digits stay in the card's
   serif. Fixed on screen only — PDF/print export still shows `²11` for now
   (SC-121).
-- [BUGFIX] The hero sheet's Stamina card no longer shows a small empty pill
-  beside the recovery dots on a healthy character. The winded/dying badge was
-  meant to hide itself and never did (SC-121).
 - [BUGFIX] A treasure's Project line shows real links again instead of printing
   the link source. The characteristics it lists (Reason, Intuition, …) are
   links in the compendium data, and the row rendered them as literal text —
@@ -1194,7 +1038,7 @@ for what needs action.
 - [STEEL] Those same prose tables now scroll sideways instead of running off the
   edge. A wide book table (the perk's five-column familiar statblock) put its
   last columns outside the card with no way to reach them once the card was
-  narrow — in a sidebar, for instance. The table now sits in its own scrolling
+  narrow. The table now sits in its own scrolling
   frame, so it stays inside the card and you can swipe/scroll across it. At full
   width nothing changes (SC-121).
 - [STEEL] The statblock's Size / Speed / Stamina / Stability / Free Strike row
@@ -1218,19 +1062,8 @@ for what needs action.
   This moves every crest at once — statblock headers, kit headers, featureblock
   role crests and ability action crests all come from one shield primitive
   (SC-121).
-- [BUGFIX] The hero sheet folds to one column in a sidebar. Its two-column
-  region grid was supposed to fold to a single column when the sheet gets
-  narrow, but the rule was attached to the grid itself — an element can't
-  measure itself that way, so the fold never happened at all. It now folds as
-  intended; a real 300px sidebar leaf is still tight and can still clip
-  Presence (tracked as FOLLOWUPS #48) (SC-121).
-- [BUGFIX] The element editor's raw-YAML box has a usable size. Opening "Edit"
-  on an element without a form schema showed a two-line text box sitting on top
-  of its own label, with the preview below it taking the whole dialog. The box
-  is now full-width, ten lines tall, resizable, and in a monospace face
-  (SC-121).
 - [BUGFIX] Trackers and other interactive elements (initiative, negotiation,
-  hero, montage, party, project, encounter) now render correctly on Obsidian
+  montage) now render correctly on Obsidian
   installs whose bundled Electron ships an older Chromium: the built
   `styles.css` used native CSS nesting, which those older Chromiums silently
   drop, collapsing the affected layouts to plain unstyled stacks (e.g. the
@@ -1281,15 +1114,6 @@ for what needs action.
   and the feature list. It had been losing the head band, the notch and the
   divider all at once, leaving the two sections butted together with nothing
   separating them (FOLLOWUPS #56).
-- [BUGFIX] The "Show edit button on rendered blocks" pencil now renders
-  inside the card it edits, for every element — kits, complications, and the
-  rest of the compendium-reference cards, plus statblocks, used to render it
-  as a stray line floating below/outside the card's border (only
-  counter/initiative/trackers/features got it right, because their card
-  border happens to sit on the element's outer container instead of a nested
-  div). Fixed once, at the framework level, for every element. Also:
-  `ds-hr`/`ds-horizontal-rule` no longer shows the pencil at all — a rule has
-  no configuration, so there was never anything to edit (SC-145).
 - [INTERNAL] Docs are now versioned on gh-pages via
   [mike](https://github.com/jimporter/mike) (SC-164, follow-on to SC-163's
   branch split). `main` pushes deploy the released docs as the `latest`
