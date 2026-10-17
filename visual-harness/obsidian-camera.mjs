@@ -60,7 +60,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { DOCS_SHOTS, DOCS_COMPENDIUM_SEED } from './docs-manifest.mjs';
+
+const { seedExperimental } = createRequire(import.meta.url)('./camera-data-json.cjs');
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.dirname(dir);
@@ -553,20 +556,6 @@ function seedUdd() {
 		path.join(udd, `${VAULT_ID}.json`),
 		JSON.stringify({ x: 0, y: 0, width: 1440, height: 1100, isMaximized: false, devTools: false, zoom: 0 }),
 	);
-	// SC-406: the 7.0.0 release gate (`experimental`, absent = off) hides the deferred
-	// elements and the sidebar. The camera photographs all of them, so switch it ON in the
-	// plugin's data.json (demo-vault's plugin dir IS the repo root; git-ignored). Merged,
-	// never overwritten: any prefs a previous run or session left there are kept.
-	const dataJson = path.join(repo, 'data.json');
-	let saved = {};
-	try {
-		saved = JSON.parse(fs.readFileSync(dataJson, 'utf8'));
-	} catch {
-		/* no data.json yet, or unreadable — start from nothing */
-	}
-	if (saved.experimental !== true) {
-		fs.writeFileSync(dataJson, JSON.stringify({ ...saved, experimental: true }));
-	}
 	// Deterministic layout: drop any leftover workspace.json (untracked; Obsidian rewrites
 	// it every run) so the note pane geometry doesn't depend on prior manual sessions.
 	fs.rmSync(path.join(vaultPath, '.obsidian', 'workspace.json'), { force: true });
@@ -583,6 +572,9 @@ function spawnObsidian() {
 	child.exited.then(() => (child.alive = false));
 	return child;
 }
+
+/** The camera's main Obsidian child, for the signal handler (SC-406 data.json restore). */
+let liveChild = null;
 
 async function killChild(child) {
 	if (!child?.alive) return;
@@ -627,8 +619,27 @@ async function main() {
 		throw new Error(`port ${PORT} already serving CDP — another instance owns it; aborting`);
 	}
 	seedUdd();
+	// SC-406: the 7.0.0 release gate (`experimental`, absent = off) hides the deferred elements
+	// and the sidebar; the camera photographs all of them, so switch it ON in the plugin's
+	// data.json for this run only. demo-vault's plugin dir IS the repo root, so that file is
+	// the live plugin data of the vault a human reviews in: camera-data-json.cjs puts the
+	// original bytes back (or deletes the file if there was none) on every way out of this
+	// process — the `finally` below, a signal, a crash — and refuses to touch an unparseable
+	// one. Throws here, before Obsidian is spawned, if it must refuse.
+	const dataJson = seedExperimental(path.join(repo, 'data.json'));
+	process.on('exit', () => dataJson.restore());
+	for (const sig of ['SIGINT', 'SIGTERM']) {
+		process.once(sig, () => {
+			// Kill Obsidian FIRST — it could rewrite data.json on its way out — then restore.
+			void killChild(liveChild).finally(() => {
+				dataJson.restore();
+				process.exit(130);
+			});
+		});
+	}
 	await warmUpUpdate();
 	const child = spawnObsidian();
+	liveChild = child;
 	console.log(`spawned obsidian pid=${child.pid} (udd=${udd}, port=${PORT}, display=${DISPLAY})`);
 
 	const failures = [];
@@ -2053,6 +2064,8 @@ async function main() {
 	} finally {
 		cdp?.close();
 		await killChild(child);
+		// Obsidian is gone: only now is it safe to put data.json back (SC-406).
+		dataJson.restore();
 	}
 
 	if (failures.length) {
