@@ -172,11 +172,12 @@ export function statblockHeaderParts(statblock: CompanionStatblock): {
 		rightEyebrow: statblock.level !== undefined ? `Level ${statblock.level}` : 'Level N/A',
 		rightPrimary: orgRole.length > 0 ? orgRole : 'No Role',
 		// An ABSENT `ev` keeps the legacy 'EV N/A' fallback verbatim; an EMPTY one (the
-		// shape steel-etl emits for companions and champions: `ev: ""`) omits the slot.
+		// shape steel-etl emits for companions and champions: `ev: ""`), a blank one, or a
+		// YAML null (bare `ev:` / `ev: ~`, which the site also omits) omits the slot.
 		rightDeck:
 			statblock.ev === undefined
 				? 'EV N/A'
-				: String(statblock.ev).trim() === ''
+				: (statblock.ev as unknown) === null || String(statblock.ev).trim() === ''
 					? undefined
 					: `EV ${statblock.ev}`,
 		role: statblock.role || statblock.organization,
@@ -242,10 +243,13 @@ function statblockMetaCells(sb: CompanionStatblock): StatblockKv[] {
 	];
 	if (sb.withCaptain) cells.push({ modifier: 'captain', label: 'With Captain', value: sb.withCaptain });
 	// SC-390: a companion's Skills ride the 4th meta slot, exactly where the site puts them
-	// (its Captain slot, relabelled). `skills` is only ever a non-empty list or absent.
-	if (Array.isArray(sb.skills) && sb.skills.length > 0) {
-		cells.push({ modifier: 'skills', label: 'Skills', value: sb.skills.join(', ') });
-	}
+	// (its Captain slot, relabelled). steel-etl only emits a non-empty list or no key, but a
+	// hand-written block may give a bare scalar (one entry, as `toLegacyList` treats legacy
+	// keys) or blank entries; the cell renders only when something non-blank is left.
+	const skills = (Array.isArray(sb.skills) ? sb.skills : sb.skills != null ? [sb.skills] : [])
+		.map((skill) => String(skill).trim())
+		.filter(Boolean);
+	if (skills.length > 0) cells.push({ modifier: 'skills', label: 'Skills', value: skills.join(', ') });
 	return cells;
 }
 

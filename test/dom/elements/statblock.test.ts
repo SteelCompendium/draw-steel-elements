@@ -445,6 +445,24 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		expect(kv).toEqual(['Immunity=Poison 3', 'Weakness=-', 'Movement=-', 'Skills=Alertness']);
 	});
 
+	// Hand-authoring shapes: a bare scalar is a one-entry list (the file's own `toLegacyList`
+	// precedent), and blank entries never produce an empty "Skills" cell.
+	test('SC-390: `skills: Sneak` (a scalar) renders as one entry; `skills: [""]` / blank entries render no cell', async () => {
+		const { root: scalar } = await renderStatblock(`${COMPANION_BASE}skills: Sneak\n`);
+		expect(scalar.querySelector('.dse-error-card')).toBeNull();
+		expect(scalar.querySelector('.dse-sb__kv--skills .dse-sb__kv-v')!.textContent).toBe('Sneak');
+
+		for (const skills of ['skills: [""]', 'skills: ["", "  "]', 'skills: ~', 'skills: ""']) {
+			const { root } = await renderStatblock(`${COMPANION_BASE}${skills}\n`);
+			expect(root.querySelector('.dse-error-card')).toBeNull();
+			expect(root.querySelector('.dse-sb__meta')).not.toBeNull();
+			expect(root.querySelector('.dse-sb__kv--skills')).toBeNull();
+		}
+
+		const { root: mixed } = await renderStatblock(`${COMPANION_BASE}skills: [Sneak, "", " Hide "]\n`);
+		expect(mixed.querySelector('.dse-sb__kv--skills .dse-sb__kv-v')!.textContent).toBe('Sneak, Hide');
+	});
+
 	test('SC-390: the pinned mini-header carries Skills too (it must not disagree with the card)', () => {
 		const withSkills = StatblockConfig.readYaml(`${COMPANION_BASE}skills:\n  - Sneak\n`).statblock;
 		const secondary = statblockStickyParts(withSkills).secondary;
@@ -462,8 +480,18 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		expect(empty.querySelector('.dse-sb > .dse-head .dse-head__deck--right')).toBeNull();
 		expect(empty.querySelector('.dse-sb > .dse-head')!.textContent).not.toContain('EV');
 
-		const { root: whitespace } = await renderStatblock(`${COMPANION_BASE}ev: "  "\n`);
-		expect(whitespace.querySelector('.dse-sb > .dse-head .dse-head__deck--right')).toBeNull();
+		// A whitespace-only EV, built by REPLACING the base's `ev: ""` (appending a second `ev:`
+		// key is a YAML duplicate-key error, which would error-card the block and pass vacuously).
+		// A bare `ev:` / `ev: ~` is YAML null — the site omits it too (empty after TrimSpace).
+		for (const evLine of ['ev: "  "', 'ev: ~', 'ev:']) {
+			const { root: blank } = await renderStatblock(COMPANION_BASE.replace('ev: ""', evLine));
+			expect(blank.querySelector('.dse-error-card')).toBeNull();
+			expect(blank.querySelector('.dse-sb > .dse-head')).not.toBeNull();
+			expect(blank.querySelector('.dse-sb > .dse-head .dse-head__deck--right')).toBeNull();
+			expect(blank.querySelector('.dse-sb > .dse-head')!.textContent).not.toMatch(/EV|null/);
+		}
+		const { root: zero } = await renderStatblock(COMPANION_BASE.replace('ev: ""', 'ev: 0'));
+		expect(zero.querySelector('.dse-sb > .dse-head .dse-head__deck--right')!.textContent).toBe('EV 0');
 
 		const { root: set } = await renderStatblock(humanBanditChief);
 		expect(set.querySelector('.dse-sb > .dse-head .dse-head__deck--right')!.textContent).toBe('EV 20');
