@@ -6653,6 +6653,65 @@ Shared globals
 	--dse-fs-h6: calc(1em * var(--dse-fs-large-scale));
 }
 
+
+/* -- SC-372: EACH TEXT-SIZE KNOB APPLIES ONCE (nested same-knob consumers) --
+   Every role token is an em RATIO times its knob, and em is the PARENT's size. So a consumer of
+   a knob's role nested inside another consumer of the SAME knob gets the knob twice (value
+   squared): a power-roll badge's text inside the badge measured 12.96 -> 18.66px at Small 120%
+   (x1.44) and the "12-16" tier wrapped. The fix: inside a REGISTERED consumer of knob K, the K
+   roles are re-declared as their plain em ratios — the container's own em already carries the
+   knob once. Three targets per container: its children (custom properties inherit, so one level
+   is enough), its ::before/::after (a pseudo-element inherits from its originating element, not
+   from a child), and any element root / modal nested ANYWHERE inside it (a root re-declares the
+   tokens with its own stamp via the rule above, which would re-apply the knob — e.g. a party
+   member's hero_ref that embeds a ds-counter, G-S6h). `:where()` keeps the first two at zero
+   specificity; the third is (0,1,0) and comes after the token rule, so it wins over it.
+   At default prefs every knob is 1, so each plain ratio equals what the token rule computes:
+   zero pixels move.
+
+   REGISTER a selector here when a consumer of a knob's role can CONTAIN text that is itself a
+   consumer of the same knob, or rendered markdown (which can embed an element). Copy the
+   consumer rule's own selector — scope, theme and print anchors included — so the reset fires
+   exactly where that rule wins and nowhere else. The `text scale once OK` sweep in
+   `npm run shots` fails on any element that scales by a knob twice and names the chain;
+   test/unit/build/scaleTokenScope.test.ts pins that each ratio here equals the token rule's. */
+/* Small text size (secondary / label / caption / micro). The last entry: an option chip is caption-sized
+   EXCEPT where negotiation's screen rule makes a non-spent chip control-sized (that chip's text is not small-scaled). */
+:where(
+	.dse-pr__badge,
+	[data-dse-element='initiative'] .dse-init .dse-init__malice-log,
+	[data-dse-element='negotiation'] .dse-nt .dse-nt__check,
+	[data-dse-theme='steel'][data-dse-element='montage']:not([data-dse-print="on"]) .dse-mt .dse-mt__board-rhead,
+	[data-dse-theme='steel'][data-dse-element='montage']:not([data-dse-print="on"]) .dse-mt .dse-mt__guide-item,
+	[data-dse-theme='steel'][data-dse-element='montage']:not([data-dse-print="on"]) .dse-mt .dse-mt__brief-text,
+	[data-dse-element='party'] .dse-party .dse-party__member-ref,
+	[data-dse-element='party'] .dse-party .dse-party__member-deck,
+	.dse-optchip:not([data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__chip:not([data-kind='spent']))
+) {
+	& > *,
+	&::before,
+	&::after,
+	& :is([data-dse-element], .dse-modal) {
+		--dse-fs-secondary: 0.9em;
+		--dse-fs-label: 0.85em;
+		--dse-fs-caption: 0.8em;
+		--dse-fs-micro: 0.7em;
+	}
+}
+/* Control text size (control). Large text size has no nested consumer today: register here when one appears. */
+:where(
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__actions,
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__grouphead > .dse-init__turnbox,
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox
+) {
+	& > *,
+	&::before,
+	&::after,
+	& :is([data-dse-element], .dse-modal) {
+		--dse-fs-control: 0.85em;
+	}
+}
+
 /* -- Mono slot: the reachable re-home (SC-121 batch 3 / workspace FOLLOWUPS #45) --
    `--dse-font-mono: var(--font-monospace)` in the :root base above can never
    resolve: var() substitutes at COMPUTED-VALUE time on the element the custom

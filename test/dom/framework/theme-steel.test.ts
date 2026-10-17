@@ -205,7 +205,7 @@ describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => 
 		// Widened by SC-104 / FOLLOWUPS #31: :is([data-dse-element], .dse-modal).
 		expect(sheet).toMatch(/:is\(\[data-dse-element\], \.dse-modal\)\[data-dse-theme="steel"\]\s*\{/);
 		// It comes AFTER the :root unscoped base (override layering).
-		const base = sheet.search(/:root\s*\{[^}]*--dse-surface\s*:/);
+		const base = sheet.search(/^:root\s*(?:,[^{}]*)?\{[^}]*--dse-surface\s*:/m);
 		const steel = sheet.search(/:is\(\[data-dse-element\], \.dse-modal\)\[data-dse-theme="steel"\]\s*\{/);
 		expect(base).toBeGreaterThan(-1);
 		expect(steel).toBeGreaterThan(base);

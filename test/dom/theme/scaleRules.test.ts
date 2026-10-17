@@ -202,9 +202,13 @@ describe('SC-112 Task 7: card-scale consumer', () => {
 	});
 });
 
+/** Top-level `:root { … }` blocks, including SC-372's shared `:root, :is([data-dse-element], .dse-modal) { … }`.
+ *  Line-anchored so a comment that merely mentions ":root," cannot start a match. */
+const ROOT_BLOCK = /^:root\s*(?:,[^{}]*)?\{([^}]*)\}/gm;
+
 describe('SC-112 Task 7: the :root defaults are the inert 1', () => {
 	test('--dse-text-scale / --dse-card-scale default to 1 in the Legacy base', () => {
-		const roots = css.match(/:root\s*\{[^}]*\}/g)?.join('\n') ?? '';
+		const roots = css.match(ROOT_BLOCK)?.join('\n') ?? '';
 		expect(roots).toMatch(/--dse-text-scale:\s*1;/);
 		expect(roots).toMatch(/--dse-card-scale:\s*1;/);
 	});

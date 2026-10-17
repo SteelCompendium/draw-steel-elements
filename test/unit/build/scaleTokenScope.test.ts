@@ -47,6 +47,9 @@ const SCALE_DEPENDENT = [
 ];
 /** The two kinds of root prefs.reflect() / prefs.reflectCss() stamp, plus the unstamped default. */
 const SHARED_SELECTOR = ':root, :is([data-dse-element], .dse-modal)';
+/** The inner rule of a registry entry (styles-source.css "SC-372: EACH TEXT-SIZE KNOB APPLIES ONCE"):
+ *  inside a registered consumer of knob K, the K roles are plain em ratios, so the knob applies once. */
+const ONCE_SELECTOR = '& > *, &::before, &::after, & :is([data-dse-element], .dse-modal)';
 
 describe('SC-372: scale-dependent --dse-fs-* tokens resolve on the root that carries the stamp', () => {
 	const declaring = rules.filter((r) => fsDecls(r.body).some((d) => SCALE_REF.test(d.value)));
@@ -66,11 +69,34 @@ describe('SC-372: scale-dependent --dse-fs-* tokens resolve on the root that car
 		for (const n of ['secondary', 'label', 'caption', 'micro']) expect(knob(`--dse-fs-${n}`)).toBe('small');
 	});
 
-	it('no other rule declares any of them (a second declaration would shadow or fork the first)', () => {
+	it('every other declaration of one is in a "applies once" registry rule (SC-372 F1), never a stray rule', () => {
 		for (const name of SCALE_DEPENDENT) {
 			const sites = rules.filter((r) => fsDecls(r.body).some((d) => d.name === name));
-			expect(sites.map((r) => r.selector)).toEqual([SHARED_SELECTOR]);
+			expect(sites.length).toBeGreaterThanOrEqual(1);
+			expect(sites[0].selector).toBe(SHARED_SELECTOR);
+			for (const extra of sites.slice(1)) expect(extra.selector).toBe(ONCE_SELECTOR);
 		}
+	});
+
+	it('each registry rule re-declares the FULL token set of exactly one knob, each at its token rule\'s own em ratio', () => {
+		const tokenDecls = fsDecls(declaring[0].body);
+		const coefficient = (name: string) => tokenDecls.find((d) => d.name === name)!.value.match(/calc\(([\d.]+)em \*/)![1] + 'em';
+		const knobOf = (name: string) => tokenDecls.find((d) => d.name === name)!.value.match(SCALE_REF)![1];
+		const registry = rules.filter((r) => r.selector === ONCE_SELECTOR);
+		expect(registry.length).toBeGreaterThanOrEqual(1);
+		const knobsSeen: string[] = [];
+		for (const r of registry) {
+			const decls = fsDecls(r.body);
+			const knobs = new Set(decls.map((d) => knobOf(d.name)));
+			expect([...knobs]).toHaveLength(1);
+			const knob = [...knobs][0];
+			knobsSeen.push(knob);
+			const full = tokenDecls.filter((t) => t.value.includes(`var(--dse-fs-${knob}-scale)`)).map((t) => t.name);
+			expect(decls.map((d) => d.name).sort()).toEqual(full.sort());
+			for (const d of decls) expect(d.value).toBe(coefficient(d.name));
+		}
+		// One registry rule per knob that has nested consumers today (small, control); large has none yet.
+		expect(knobsSeen.sort()).toEqual(['control', 'small']);
 	});
 
 	it('the three multipliers themselves stay on plain :root (the default every unstamped root inherits)', () => {
