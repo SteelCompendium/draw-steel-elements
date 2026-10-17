@@ -51,6 +51,9 @@ import statblockVillainCorpus from '../../fixtures/statblock/villain-corpus.yaml
 // visual harness (visual-harness/entry.ts FIXTURES.statblock 'roleless-corpus') so the DOM
 // catcher below and the shots render the same bytes.
 import statblockRolelessCorpus from '../../fixtures/statblock/roleless-corpus.yaml';
+// SC-390: the corpus-shaped beastheart companion (the panther's real emitted ds-sb block).
+// Shared verbatim with the visual harness (FIXTURES.statblock 'companion-corpus').
+import statblockCompanionCorpus from '../../fixtures/statblock/companion-corpus.yaml';
 
 const SB_ALIASES = ['ds-sb', 'ds-statblock'] as const;
 
@@ -415,6 +418,31 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		const { root } = await renderStatblock(WITH_META);
 		const labels = Array.from(root.querySelectorAll('.dse-sb__grid .dse-sb__kv-l')).map((el) => el.textContent);
 		expect(labels).toEqual(['Immunity', 'Weakness', 'Movement', 'With Captain']);
+	});
+
+	// SC-390: the harness fixture is the real panther; a second companion SHAPE (basilisk: size
+	// 1L, a Poison immunity, no movement) is inline here rather than a second capture id.
+	test('SC-390: the companion-corpus fixture renders end to end (Companion head, text stats, Skills, 2 abilities, no EV); a 1L immune companion fills the Immunity cell', async () => {
+		expect(statblockCompanionCorpus).toMatch(/^stamina: = yours$/m);
+		expect(statblockCompanionCorpus).toMatch(/^free_strike: 1 \+ M$/m);
+		expect(statblockCompanionCorpus).toMatch(/^ev: ""$/m);
+
+		const { root } = await renderStatblock(statblockCompanionCorpus);
+		expect(root.querySelector('.dse-error-card')).toBeNull();
+		const head = root.querySelector('.dse-sb > .dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__primary--left')!.textContent).toBe('Panther');
+		expect(head.querySelector('.dse-head__deck--right')).toBeNull();
+		expect(root.querySelector('.dse-sb__kv--skills .dse-sb__kv-v')!.textContent).toBe('Sneak');
+		expect(root.querySelectorAll('.dse-sb > .dse-feature__nested > .dse-feature')).toHaveLength(2);
+
+		const { root: basilisk } = await renderStatblock(
+			COMPANION_BASE.replace('size: 1M', 'size: 1L').replace('movement: Climb\n', '') +
+				'immunities:\n  - Poison 3\nskills:\n  - Alertness\n',
+		);
+		const kv = Array.from(basilisk.querySelectorAll('.dse-sb__grid .dse-sb__kv')).map(
+			(el) => `${el.querySelector('.dse-sb__kv-l')!.textContent}=${el.querySelector('.dse-sb__kv-v')!.textContent}`,
+		);
+		expect(kv).toEqual(['Immunity=Poison 3', 'Weakness=-', 'Movement=-', 'Skills=Alertness']);
 	});
 
 	test('SC-390: the pinned mini-header carries Skills too (it must not disagree with the card)', () => {

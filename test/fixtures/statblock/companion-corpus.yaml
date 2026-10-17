@@ -1,0 +1,98 @@
+# SC-390 — the CORPUS-SHAPED BEASTHEART COMPANION statblock.
+#
+# Why it exists: companions used to ship as `type: feature-group` (a markdown table, no
+# ds-* block) and rendered as "has no renderer". steel-etl now emits them as
+# `type: statblock` with a real ds-sb block, and three things on the card are new for the
+# plugin: TEXT stats (`stamina: = yours`, `free_strike: 1 + M` — printed verbatim, never
+# coerced to a number), a `skills` list (the Skills cell in the 4th meta slot), and an EMPTY
+# `ev` (the EV chip is omitted, not printed as a dangling "EV "). No other fixture renders
+# any of them, so none of them could be seen by a camera or a freeze line.
+#
+# CORPUS-SHAPED, not invented: this is the `ds-sb` block of the REAL emitted file
+#   data-unified/en/unified/md-dse/monster/companion/beastheart/statblock/panther.md
+# byte-for-byte (including each embedded ability's own `metadata`, which the view ignores).
+# The same bytes are the md-dse fixture in test/fixtures/md-dse/monster/companion/beastheart/
+# statblock/panther.md (sccElement.test.ts renders it through ds-scc). Single-sourced with
+# statblock.test.ts's companion catcher (both import this file).
+#
+# A SEPARATE fixture, deliberately not an edit to an existing statblock fixture: changing
+# those would move the FROZEN statblock shots. Its own shots (`statblock-companion-corpus--*`)
+# are new filenames, invisible to the freeze baseline by construction (sha256sum -c only
+# checks names it lists) — a WIDENING.
+agility: 2
+ev: ""
+features:
+    - ability_type: Signature Ability
+      distance: Melee 1
+      effects:
+        - effect: The target takes damage equal to 3 + the panther's Might score, and if they have M < AVERAGE, they are knocked [prone](scc.v1:mcdm.heroes.v1/condition/prone).
+          name: Effect
+        - cost: Spend 1 Ferocity
+          effect: The panther can jump up to a number of squares equal to their speed before using this ability. If they jump at least 1 square in this way, a target who has M < STRONG is knocked [prone](scc.v1:mcdm.heroes.v1/condition/prone).
+      feature_type: ability
+      flavor: The panther bunches up, then uncoils into a deadly leap.
+      keywords:
+        - Companion
+        - Melee
+        - Weapon
+      metadata:
+        ability_type: Signature
+        action_type: Maneuver
+        class: beastheart
+        content: "*The panther bunches up, then uncoils into a deadly leap.*\n\n| **Companion, Melee, Weapon** |     **Maneuver** |\n|------------------------------|-----------------:|\n| **\U0001F4CF Melee 1**               | **\U0001F3AF One enemy** |\n\n**Effect:** The target takes damage equal to 3 + the panther's Might score, and if they have M < AVERAGE, they are knocked [prone](scc.v1:mcdm.heroes.v1/condition/prone).\n\n**Spend 1 Ferocity:** The panther can jump up to a number of squares equal to their speed before using this ability. If they jump at least 1 square in this way, a target who has M < STRONG is knocked [prone](scc.v1:mcdm.heroes.v1/condition/prone)."
+        distance: Melee 1
+        feature_type: ability
+        flavor: The panther bunches up, then uncoils into a deadly leap.
+        item_id: pounce
+        item_name: Pounce
+        keywords:
+            - Companion
+            - Melee
+            - Weapon
+        level: 1
+        scc:
+            - mcdm.beastheart.v1/feature.ability.companion.beastheart.panther.level-1/pounce
+        target: One enemy
+        type: feature/ability/companion/beastheart/panther/level-1
+      name: Pounce
+      target: One enemy
+      type: feature
+      usage: Maneuver
+    - effects:
+        - effect: Whenever the panther takes the Advance move action or the Charge action, they can [jump](scc.v1:mcdm.heroes.v1/movement/jump) up to a number of squares equal to their speed in any direction, including vertically, as part of this movement.
+      feature_type: feature
+      metadata:
+        action_type: feature
+        class: beastheart
+        feature_type: feature
+        item_id: mighty-spring
+        item_name: Mighty Spring
+        level: 1
+        scc:
+            - mcdm.beastheart.v1/feature.companion.beastheart.panther.level-1/mighty-spring
+        type: feature/companion/beastheart/panther/level-1
+      name: Mighty Spring
+      type: feature
+free_strike: 1 + M
+intuition: 2
+keywords:
+    - Animal
+    - Companion
+level: 1
+metadata:
+    scc: mcdm.beastheart.v1/monster.companion.beastheart.statblock/panther
+    source: mcdm.beastheart.v1
+might: 2
+movement: Climb
+name: Panther
+organization: Companion
+presence: 1
+reason: -1
+role: ""
+size: 1M
+skills:
+    - Sneak
+speed: 7
+stability: 1
+stamina: = yours
+type: statblock

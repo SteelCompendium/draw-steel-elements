@@ -98,6 +98,13 @@ import statblockVillainCorpus from '../test/fixtures/statblock/villain-corpus.ya
 // real one rather than invented. Single-sourced with statblock.test.ts's roleless catcher.
 import statblockRolelessCorpus from '../test/fixtures/statblock/roleless-corpus.yaml';
 
+// SC-390: the CORPUS-SHAPED BEASTHEART COMPANION statblock — text stats ("= yours", "1 + M"),
+// a Skills cell and an empty `ev` (no EV chip), none of which any other fixture here renders.
+// It is the REAL emitted `ds-sb` block of the panther, byte-for-byte. Single-sourced with
+// statblock.test.ts's companion catcher. Its shots (`statblock-companion-corpus--*`) are new
+// filenames — a freeze WIDENING, invisible to the baseline until applied.
+import statblockCompanionCorpus from '../test/fixtures/statblock/companion-corpus.yaml';
+
 // SC-406: the harness renders every element and the sidebar/pin chrome, so the 7.0.0 release gate
 // (src/framework/experimental.ts, default OFF) is switched ON — no fixture or shot moves.
 setExperimental(true);
@@ -1049,6 +1056,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 		default: statblockDefault,
 		'villain-corpus': statblockVillainCorpus,
 		'roleless-corpus': statblockRolelessCorpus,
+		'companion-corpus': statblockCompanionCorpus,
 		// SC-146 FIX ROUND 1, I3 — see the block comment above FIXTURES.
 		'stats-ledger': statblockStatsLedger,
 		'stats-gridc': statblockStatsGridc,
