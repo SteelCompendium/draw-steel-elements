@@ -293,7 +293,7 @@ describe('SC-408: ViewRegistry.pendingWrites() (the e2e driver waits for write-i
 		const { app, plugin } = makeEnv();
 		const ctx = makeFakeContext(app, 'Note.md');
 		const host = new ReadingModeBlockHost(plugin as any, ctx.el, ctx as any, 'ds-counter', null, registry);
-		registry.own(new Component(), host, ctx.el);
+		registry.own(new Component() as any, host, ctx.el);
 		expect(registry.size).toBe(1);
 		expect(registry.pendingWrites()).toHaveLength(0);
 	});
