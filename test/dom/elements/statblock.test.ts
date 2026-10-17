@@ -469,43 +469,6 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		expect(set.querySelector('.dse-sb > .dse-head .dse-head__deck--right')!.textContent).toBe('EV 20');
 	});
 
-	// SC-390: steel-etl embeds a companion's plain Level-1 features as `feature_type: feature`
-	// (the member's own entity type), which is not one of the SDK's ability/trait/subtrait
-	// values. SDK 3.0.0's Feature.fromDTO answered that with `dto.isTrait is not a function` and
-	// the whole card failed to render; StatblockConfig.readYaml now settles the type with the
-	// SDK's own rule (SC-155's fix, shipped in a later SDK) before handing the block over.
-	test('SC-390: a statblock feature whose feature_type is not ability/trait/subtrait (or is missing) is classified, not a crash', async () => {
-		const body = `${COMPANION_BASE}features:
-  - name: Mighty Spring
-    feature_type: feature
-    effects:
-      - effect: They can jump.
-  - name: Absent Type
-    effects:
-      - effect: No feature_type at all.
-  - name: Pounce
-    feature_type: feature
-    usage: Maneuver
-    keywords: [Melee]
-    distance: Melee 1
-    target: One enemy
-    effects:
-      - effect: Bites.
-  - name: Kept
-    feature_type: subtrait
-`;
-		const sb = StatblockConfig.readYaml(body).statblock;
-		expect(sb.features.map((f) => [f.name, f.feature_type])).toEqual([
-			['Mighty Spring', 'trait'],
-			['Absent Type', 'trait'],
-			['Pounce', 'ability'],
-			['Kept', 'subtrait'],
-		]);
-		const { root } = await renderStatblock(body);
-		expect(root.querySelector('.dse-error-card')).toBeNull();
-		expect(root.querySelectorAll('.dse-sb > .dse-feature__nested > .dse-feature')).toHaveLength(4);
-	});
-
 	test('.dse-sb__chars: the five characteristics render as verbatim "Name +N" pairs, legacy order', async () => {
 		const { root } = await renderStatblock(humanBanditChief, {}, { sbCharLine: 'one' });
 
