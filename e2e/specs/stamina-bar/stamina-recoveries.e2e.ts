@@ -1,0 +1,217 @@
+// SC-408 pilot: ds-stamina-bar's Recoveries strip (markers, Catch Breath, the optional popover
+// editor, the undo toast) and the modal's Spend Recovery action.
+//   recoveries.md       12/30, no temp, 3 of 6 Recoveries (recovery value 10)
+//   recoveries-full.md  30/30, 3 of 6      recoveries-zero.md  12/30, 0 of 6
+//   dying.md            -2/30, 3 of 6      legacy-low.md       2/30, Recoveries not tracked
+import { expect } from '@wdio/globals';
+import { dse, knownBug } from '../../driver/dse';
+import { applyAmount, applyAndWrite, expectApplyLabel, noticeTexts, openBarModal } from '../../driver/stamina';
+
+const REC = 'Stamina/recoveries.md';
+const BAR = 'ds-stamina-bar';
+const filledPips = (): Promise<number> => dse.page<number>(`document.querySelectorAll('.markdown-reading-view .dse-stamina-rec__pip--filled').length`);
+const sliderNow = (): Promise<string | null> => dse.page<string | null>(`document.querySelector('.markdown-reading-view .dse-stamina-rec__pips').getAttribute('aria-valuenow')`);
+
+async function openRec(note: string) {
+	await dse.openNote(note);
+	return dse.block(BAR);
+}
+
+describe('ds-stamina-bar: Catch Breath', () => {
+	it('[RECOV-R01] Catch Breath heals the recovery value, spends one Recovery, posts an undo toast, one write', async () => {
+		const bar = await openRec(REC);
+		const w = await dse.waitForWrite(REC, () => dse.click(bar.control('recov.catch-breath')));
+		expect(w.count).toBe(1);
+		await dse.expectNoteBlock(REC, BAR).toMatchObject({ current_stamina: 22, recoveries: 2, recoveries_max: 6 });
+		expect(await filledPips()).toBe(2);
+		await dse.waitFor(`document.querySelector('.notice')?.textContent.includes('Caught breath: +10 Stamina')`, 'the undo toast');
+		expect((await noticeTexts()).join(' ')).toContain('−1 Recovery');
+	});
+
+	it('[RECOV-R02a] Catch Breath is really disabled with no Recoveries left and a click writes nothing', async () => {
+		const bar = await openRec('Stamina/recoveries-zero.md');
+		await expect(bar.control('recov.catch-breath')).toBeDisabled();
+		await dse.expectNoWrite('Stamina/recoveries-zero.md', () => dse.click(bar.control('recov.catch-breath')));
+		await dse.expectNoteBlock('Stamina/recoveries-zero.md', BAR).toMatchObject({ current_stamina: 12, recoveries: 0 });
+	});
+
+	it('[RECOV-R02b] Catch Breath is really disabled while dying (RR: "Can\'t Catch Breath")', async () => {
+		const bar = await openRec('Stamina/dying.md');
+		await expect(bar.control('recov.catch-breath')).toBeDisabled();
+		await dse.expectNoWrite('Stamina/dying.md', () => dse.click(bar.control('recov.catch-breath')));
+	});
+
+	// R03 / S1 B4 (SC-428): at full Stamina a press heals 0 yet still spends a Recovery. The
+	// modal's Spend Recovery disables itself in exactly this state ("Already at maximum Stamina").
+	knownBug(
+		'SC-428',
+		'[RECOV-R03] Catch Breath at full Stamina is disabled instead of spending a Recovery for nothing',
+		async () => {
+			const bar = await openRec('Stamina/recoveries-full.md');
+			await expect(bar.control('recov.catch-breath')).toBeDisabled({ wait: 1500 });
+		},
+		{ failsWith: /disabled/i },
+	);
+
+	it('[RECOV-R06] the undo toast restores Stamina and the Recovery, once', async () => {
+		const bar = await openRec(REC);
+		await dse.click(bar.control('recov.catch-breath'));
+		await dse.waitFor(`!!document.querySelector('.notice .dse-undo-notice__action')`, 'the undo toast');
+		await dse.click(dse.control('undo.action'));
+		await dse.waitFor(`!document.querySelector('.notice .dse-undo-notice__action')`, 'the toast to dismiss itself');
+		await dse.settle();
+		await dse.expectNoteBlock(REC, BAR).toMatchObject({ current_stamina: 12, recoveries: 3 });
+		expect(await filledPips()).toBe(3);
+	});
+
+	it('[RECOV-W03] a modal Apply refreshes the Winded / Dying badge and Catch Breath state in place', async () => {
+		const modal = await openBarModal(REC); // 12/30 is Winded (<= 15)
+		// The Steel theme carries the state on the cluster (the strip's own badge is Legacy-only).
+		const state = dse.control({ css: '.markdown-reading-view .dse-stamina__cluster' });
+		await expect(state).toHaveAttribute('data-state', 'winded');
+		await applyAmount(modal, '10', 'sedit.healing');
+		await applyAndWrite(modal, REC);
+		await expect(state).toHaveAttribute('data-state', 'healthy'); // 22/30
+		await expect(dse.block(BAR).control('recov.catch-breath')).toBeEnabled();
+		const m2 = await (async () => {
+			await dse.click(dse.block(BAR).control('stamina.bar'));
+			return dse.modal('stamina-edit');
+		})();
+		await dse.click(m2.control('sedit.kill'));
+		await applyAndWrite(m2, REC);
+		await expect(state).toHaveAttribute('data-state', 'dying');
+		await expect(dse.block(BAR).control('recov.catch-breath')).toBeDisabled();
+	});
+});
+
+describe('ds-stamina-bar: Recoveries markers (Model M: a click sets the count)', () => {
+	it('[RECOV-R04] clicking a marker sets the count: later ones restore up to it, earlier ones spend down to it', async () => {
+		const bar = await openRec(REC); // 3 of 6
+		await dse.click(bar.control('recov.marker', { nth: 4 })); // the 5th marker -> 5
+		expect(await sliderNow()).toBe('5');
+		await dse.click(bar.control('recov.marker', { nth: 1 })); // the 2nd marker, available -> spends down to 1
+		expect(await sliderNow()).toBe('1');
+		await dse.settle();
+		await dse.expectNoteBlock(REC, BAR).toMatchObject({ recoveries: 1, current_stamina: 12 });
+		expect(await filledPips()).toBe(1);
+	});
+
+	it('[RECOV-R05] the marker row is one keyboard slider: arrows step, Home / End jump', async () => {
+		const bar = await openRec(REC); // 3 of 6
+		await dse.click(bar.control('recov.marker', { nth: 2 })); // the 3rd marker is available -> 2
+		const row = bar.control('recov.markers');
+		// A marker click leaves focus on the page, not on the row (see the report), so a keyboard
+		// user Tabs to the row first.
+		await dse.tabTo(row);
+		await dse.press('ArrowRight', row);
+		expect(await sliderNow()).toBe('3');
+		await dse.press('ArrowLeft', row);
+		await dse.press('ArrowLeft', row);
+		expect(await sliderNow()).toBe('1');
+		await dse.press('Home', row);
+		expect(await sliderNow()).toBe('0');
+		await dse.press('End', row);
+		expect(await sliderNow()).toBe('6');
+		await dse.press('Escape', row); // no popover open: harmless
+		await dse.settle();
+		await dse.expectNoteBlock(REC, BAR).toMatchObject({ recoveries: 6 });
+	});
+});
+
+describe('modal Spend Recovery', () => {
+	it('[STAM-Q06] Spend Recovery heals the recovery value and spends one Recovery on Apply', async () => {
+		const modal = await openBarModal(REC);
+		await dse.click(modal.control('sedit.spend-recovery'));
+		await expectApplyLabel(modal, 'Gain 10 Stamina');
+		expect(await applyAndWrite(modal, REC)).toBe(1);
+		await dse.expectNoteBlock(REC, BAR).toMatchObject({ current_stamina: 22, recoveries: 2 }); // Q07
+	});
+
+	it('[STAM-Q08] two presses heal twice (the second capped at max) and spend two Recoveries', async () => {
+		const modal = await openBarModal(REC);
+		await dse.click(modal.control('sedit.spend-recovery'));
+		await dse.click(modal.control('sedit.spend-recovery'));
+		await dse.click(modal.control('sedit.spend-recovery'));
+		await expectApplyLabel(modal, 'Gain 18 Stamina'); // 12 -> 22 -> 30 (capped); the 3rd press is a no-gain
+		await expect(modal.control('sedit.spend-recovery')).toBeDisabled();
+		expect(await applyAndWrite(modal, REC)).toBe(1);
+		await dse.expectNoteBlock(REC, BAR).toMatchObject({ current_stamina: 30, recoveries: 1 });
+	});
+
+	it('[STAM-Q09] Spend Recovery is really disabled with none left, with the reason, and a click does nothing', async () => {
+		const modal = await openBarModal('Stamina/recoveries-zero.md');
+		const btn = modal.control('sedit.spend-recovery');
+		await expect(btn).toBeDisabled();
+		await expect(btn).toHaveAttribute('aria-label', 'No Recoveries remaining');
+		await dse.click(btn);
+		await expectApplyLabel(modal, 'No Stamina Change');
+		await dse.click(modal.control('modal.close'));
+	});
+
+	it('[STAM-Q10] Spend Recovery is disabled at full Stamina with the reason', async () => {
+		const modal = await openBarModal('Stamina/recoveries-full.md');
+		const btn = modal.control('sedit.spend-recovery');
+		await expect(btn).toBeDisabled();
+		await expect(btn).toHaveAttribute('aria-label', 'Already at maximum Stamina');
+		await dse.click(modal.control('modal.close'));
+	});
+
+	it('[STAM-Q13] Spend Recovery on a bar that does not track Recoveries heals for free, with no limit [current behaviour — ruling pending SC-408]', async () => {
+		const note = 'Stamina/legacy-low.md'; // 2/30, no recoveries fields; recovery value 10
+		const modal = await openBarModal(note);
+		for (let i = 0; i < 3; i++) await dse.click(modal.control('sedit.spend-recovery'));
+		await expectApplyLabel(modal, 'Gain 28 Stamina'); // S1 B5
+		expect(await applyAndWrite(modal, note)).toBe(1);
+		const block = (await dse.expectNoteBlock(note, BAR).value()) as Record<string, unknown>;
+		expect(block).toMatchObject({ current_stamina: 30 });
+		expect(block).not.toHaveProperty('recoveries');
+	});
+});
+
+describe('ds-stamina-bar: the optional Recoveries popover editor (preference on)', () => {
+	before(async () => {
+		await dse.setPrefs({ staminaRecoveryPopover: true });
+	});
+	after(async () => {
+		await dse.setPrefs({});
+	});
+
+	it('[RECOV-R07] a marker click opens a popover instead of committing; its buttons commit', async () => {
+		const bar = await openRec(REC); // 3 of 6
+		await dse.click(bar.control('recov.marker', { nth: 4 }));
+		await expect(dse.control({ css: '.dse-stamina-rec__pop' })).toBeDisplayed();
+		expect(await sliderNow()).toBe('3'); // nothing committed yet
+		await dse.click(bar.control('recov.pop.dec'));
+		expect(await sliderNow()).toBe('2');
+		await dse.click(bar.control('recov.pop.inc'));
+		await dse.click(bar.control('recov.pop.inc'));
+		expect(await sliderNow()).toBe('4');
+		const w = await dse.waitForWrite(REC, () => dse.click(bar.control('recov.pop.catch-breath')));
+		expect(w.count).toBe(1);
+		await dse.expectNoteBlock(REC, BAR).toMatchObject({ current_stamina: 22, recoveries: 3 }); // 4 - 1 spent by Catch Breath
+		await expect(dse.control({ css: '.dse-stamina-rec__pop' })).not.toBeExisting(); // Catch breath closes it
+	});
+
+	it('[RECOV-R09] Escape closes the popover', async () => {
+		const bar = await openRec(REC);
+		await dse.click(bar.control('recov.marker', { nth: 4 }));
+		await expect(dse.control({ css: '.dse-stamina-rec__pop' })).toBeDisplayed();
+		await dse.tabTo(bar.control('recov.markers'));
+		await dse.press('Escape', bar.control('recov.markers'));
+		await expect(dse.control({ css: '.dse-stamina-rec__pop' })).not.toBeExisting();
+		await dse.expectNoWrite(REC, async () => undefined);
+	});
+
+	// R08 / S1 B15 (SC-428): the popover's "Catch breath" stays enabled with no Recoveries left
+	// (a silent no-op), where the strip's own Catch Breath button is really disabled.
+	knownBug(
+		'SC-428',
+		'[RECOV-R08] the popover Catch breath is disabled with no Recoveries left',
+		async () => {
+			const bar = await openRec('Stamina/recoveries-zero.md');
+			await dse.click(bar.control('recov.marker', { nth: 0 }));
+			await expect(bar.control('recov.pop.catch-breath')).toBeDisabled({ wait: 1500 });
+		},
+		{ failsWith: /disabled/i },
+	);
+});

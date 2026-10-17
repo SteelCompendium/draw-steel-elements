@@ -282,6 +282,22 @@ async function blur(el: El): Promise<void> {
 	await away.click();
 }
 
+/**
+ * Move keyboard focus onto `el` with real Tab presses (at most `max`), the way a keyboard user
+ * gets there. Fails if it is not reached. Records no coverage (it drives no control).
+ */
+async function tabTo(el: El, max = 10): Promise<void> {
+	const target = await el;
+	for (let i = 0; i < max; i++) {
+		const hit = await browser.execute('return document.activeElement === arguments[0];', target);
+		if (hit) return;
+		await browser.keys('Tab');
+	}
+	if (!(await browser.execute('return document.activeElement === arguments[0];', target))) {
+		throw new Error(`Tab did not reach the control within ${max} presses`);
+	}
+}
+
 /** A key or chord ("Escape", "Enter", "Control+a") to whatever has focus. `target` is only
  *  the coverage label: which control the keystroke was aimed at. */
 async function press(key: string, target?: El): Promise<void> {
@@ -412,6 +428,7 @@ export const dse = {
 	dblclick,
 	blur,
 	press,
+	tabTo,
 	settle,
 	page,
 	waitFor,
