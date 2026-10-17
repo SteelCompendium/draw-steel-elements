@@ -4,6 +4,7 @@
 // entry under jest is safe: `obsidian` maps to the test mock, `.md` imports go through
 // rawTextTransformer, and the browser boot is guarded on a #mount element jsdom lacks.
 import { ElementPipeline } from '../../../src/framework/pipeline';
+import { isExperimental } from '../../../src/framework/experimental';
 import { createElementRegistry } from '../../../src/framework/registry';
 import {
 	FIXTURES,
@@ -313,4 +314,39 @@ describe('mountFromParams stamps Steel regardless of the requested theme (SC-144
 			expect(root.getAttribute('data-dse-theme')).toBe('steel');
 		},
 	);
+});
+
+// SC-411: the docs GIF runner's two harness hooks. Defaults must stay as they were, or an
+// `npm run shots` capture would move: the harness renders with the release gate ON unless
+// `experimental=0` asks otherwise, and the host's replaceSource still resolves true.
+describe('SC-411 docs GIF harness hooks', () => {
+	const base = { element: 'feature', fixture: 'default', theme: 'steel', bg: 'dark', print: false, readonly: false, gallery: false } as const;
+	let mount: HTMLDivElement;
+
+	beforeEach(() => {
+		mount = document.createElement('div');
+		mount.id = 'mount';
+		document.body.appendChild(mount);
+	});
+
+	afterEach(() => {
+		mount.remove();
+	});
+
+	test('experimental=0 switches the gate OFF for that mount; absent (the default) leaves it ON', async () => {
+		expect(parseParams('?element=feature').experimental).toBeUndefined();
+		expect(parseParams('?element=feature&experimental=0').experimental).toBe(false);
+		await mountFromParams(document, { ...base, experimental: false });
+		expect(isExperimental()).toBe(false);
+		await mountFromParams(document, { ...base });
+		expect(isExperimental()).toBe(true);
+	});
+
+	test('the host counts replaceSource calls on window.__dseHarnessWrites and still resolves true', async () => {
+		const host = makeHarnessHost(document.createElement('div'), { readonly: false, language: 'ds-counter' });
+		delete window.__dseHarnessWrites;
+		await expect(host.replaceSource('a')).resolves.toBe(true);
+		await host.replaceSource('b');
+		expect(window.__dseHarnessWrites).toBe(2);
+	});
 });

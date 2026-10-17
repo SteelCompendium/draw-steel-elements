@@ -1103,6 +1103,10 @@ export interface HarnessParams {
 	scroll?: number;
 	/** SC-160: how far to scroll that container before the shot (0 = the unscrolled twin). */
 	scrollTo?: number;
+	/** SC-411: `experimental=0` switches the 7.0.0 release gate OFF for this mount, so the
+	 *  deferred chrome (the "Pin to sidebar" item) is absent from a docs GIF's hover/focus
+	 *  frames. Absent = the harness default (ON), so no `npm run shots` capture moves. */
+	experimental?: boolean;
 	/** SC-123: preference values to apply BEFORE the mount (pref-variant coverage).
 	 *  Wire format is the compact `key:value,key:value` of the `prefs` query param. */
 	prefs?: Record<string, string>;
@@ -1232,6 +1236,7 @@ export function parseParams(search: string): HarnessParams {
 						.filter(Boolean),
 		width: Number.isFinite(width) && width > 0 ? width : undefined,
 		prefs: parsePrefParam(q.get('prefs')),
+		experimental: q.get('experimental') === '0' ? false : undefined,
 		stack: parseStackParam(q.get('stack')),
 		pad: Number.isFinite(pad) && pad > 0 ? pad : undefined,
 		mobile: q.get('mobile') === '1',
@@ -1940,7 +1945,13 @@ export function makeHarnessHost(
 		canPersist: !opts.readonly,
 		addChild: (child: unknown) => child,
 		getBlockInfo: () => ({ language: opts.language, lineStart: 0, lineEnd: 0 }),
-		replaceSource: async () => true,
+		replaceSource: async () => {
+			// SC-411: the docs GIF runner's `write: true` steps wait on this counter, so a
+			// scripted interaction that was meant to write (and did not) fails loudly. The
+			// write itself is still a no-op here.
+			if (typeof window !== 'undefined') window.__dseHarnessWrites = (window.__dseHarnessWrites ?? 0) + 1;
+			return true;
+		},
 		blockKey: () => `Harness.md::${opts.language}::0`,
 	} as BlockHost;
 }
@@ -2186,6 +2197,10 @@ export async function mountFromParams(
 	// caller gets the screen-cascade branch by default.
 	const isRealPrint = doc.defaultView?.matchMedia?.('print')?.matches === true;
 	doc.body.classList.remove('theme-dark', 'theme-light');
+	// SC-411: the module switches the release gate ON at load (above); only `experimental=0`
+	// (the docs GIFs) turns it back off. Always written, so a direct test caller cannot
+	// inherit a previous call's OFF.
+	setExperimental(params.experimental !== false);
 	// Real paper forces `theme-light` UNCONDITIONALLY (measured — `applyRealPrintCascade`'s
 	// own comment), even though this combo's OWN `bg` is 'dark': that mismatch is the
 	// point, proving the force holds regardless of the starting theme.
@@ -2327,6 +2342,8 @@ declare global {
 			chromeShots: typeof CHROME_SHOTS;
 		};
 		__dseHarnessDone?: { errors: string[] };
+		/** SC-411: number of `replaceSource` calls the harness host has received. */
+		__dseHarnessWrites?: number;
 	}
 }
 
