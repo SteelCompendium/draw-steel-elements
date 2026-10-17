@@ -282,12 +282,24 @@ export class MinionStaminaPoolModal extends DseModal {
 		const poolCurrentStamina = minionPoolOf(this.group, this.creature) ?? poolMaxStamina;
 		const newStamina = poolCurrentStamina + this.pendingStaminaChange;
 		const effectivePerMinion = minionMaxStamina + foldedCaptainStaminaBonus(this.creature);
-		// How many minions should die for this much damage (legacy verbatim, divisor
-		// updated for SC-195).
-		const initialMinionsKilled = Math.floor((poolMaxStamina - poolCurrentStamina) / effectivePerMinion);
-		const finalMinionsKilled = Math.floor((poolMaxStamina - newStamina) / effectivePerMinion);
-		const minionsToKill = finalMinionsKilled - initialMinionsKilled;
-		return { minionMaxStamina, aliveMinions, poolMaxStamina, poolCurrentStamina, newStamina, minionsToKill };
+		// How many LIVING minions this edit kills, counted from the survivors the new pool
+		// can still pay for (SC-417 MEDIUM-1). The legacy ladder
+		// (`floor((max - new) / per) - floor((max - cur) / per)`) used the UNCLAMPED new
+		// pool, so overkill (or a pool already damaged below its death ticks) asked for
+		// more kills than there are living minions and Apply stayed disabled for good. On
+		// a consistent squad the two agree (`alive = N - floor((max - cur) / per)`), but
+		// this one is bounded by `aliveMinions` and a pool of 0 kills every living minion.
+		// Only a heal can come out negative (= it would lift the pool past a dead minion's
+		// share, which the modal refuses); damage never demands a negative count.
+		const clampedNew = Math.max(0, newStamina);
+		let minionsToKill = 0;
+		if (this.pendingStaminaChange !== 0) {
+			minionsToKill = clampedNew === 0 ? aliveMinions : aliveMinions - Math.ceil(clampedNew / effectivePerMinion);
+			if (this.pendingStaminaChange < 0) minionsToKill = Math.max(0, minionsToKill);
+		}
+		// The highest pool the living minions can hold (what a heal may not exceed).
+		const livingShare = aliveMinions * effectivePerMinion;
+		return { minionMaxStamina, aliveMinions, poolMaxStamina, poolCurrentStamina, newStamina, minionsToKill, livingShare };
 	}
 
 	private clampedNewStamina(): number {
@@ -325,15 +337,23 @@ export class MinionStaminaPoolModal extends DseModal {
 	}
 
 	private updateInfoText(): void {
-		const totalPendingDamage = -this.pendingStaminaChange; // negative when taking damage
-		const { minionsToKill } = this.poolNumbers();
-		this.infoTextEl.textContent = `${totalPendingDamage} damage will kill ${minionsToKill} minion(s). \nSelect ${minionsToKill} minion(s) to kill.`;
+		const { minionsToKill, livingShare } = this.poolNumbers();
+		if (minionsToKill < 0) {
+			// A heal past a dead minion's share (SC-417 LOW-1): say the rule, never a
+			// negative count.
+			this.infoTextEl.textContent = `A heal can't raise the pool above the living minions' share (${livingShare} stamina).`;
+		} else if (this.pendingStaminaChange > 0) {
+			this.infoTextEl.textContent = `Heal ${this.pendingStaminaChange} stamina; dead minions stay dead.`;
+		} else {
+			const totalPendingDamage = -this.pendingStaminaChange;
+			this.infoTextEl.textContent = `${totalPendingDamage} damage will kill ${minionsToKill} minion(s). \nSelect ${minionsToKill} minion(s) to kill.`;
+		}
 	}
 
 	/** Legacy wording verbatim; the disabled state is the REAL property (CB-8). */
 	private updateActionButton(): void {
 		const staminaChange = this.pendingStaminaChange;
-		const { minionsToKill } = this.poolNumbers();
+		const { minionsToKill, livingShare } = this.poolNumbers();
 
 		// Count the number of minions selected
 		const selectedMinions = this.minionCheckboxes.filter((item) => item.checkbox.checked).length;
@@ -360,6 +380,12 @@ export class MinionStaminaPoolModal extends DseModal {
 		// Explain the disabled state (legacy tooltip preserved).
 		if (disableActionButton && minionsToKill > 0) {
 			this.actionBtn.buttonEl.setAttribute('title', `Select ${minionsToKill} minion(s) to kill`);
+		} else if (minionsToKill < 0) {
+			// SC-417 LOW-1: the refused heal gets its reason.
+			this.actionBtn.buttonEl.setAttribute(
+				'title',
+				`Minions can't regain Stamina past a dead minion's share (at most ${livingShare})`,
+			);
 		} else {
 			this.actionBtn.buttonEl.removeAttribute('title');
 		}

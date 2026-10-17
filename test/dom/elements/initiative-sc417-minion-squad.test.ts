@@ -278,9 +278,45 @@ describe('SC-417 B — the heal path (grid dblclick -> pool modal -> whole-view 
 		expect(host.replaceSource).toHaveBeenCalledTimes(1);
 		expect(written(host)).toEqual({ pool: 120, dead: [1] });
 	});
+
+	// LOW-1 — a refused heal used to read "-1 damage will kill -1 minion(s)" with a disabled
+	// Apply and no reason. It now says what the rule is, and the button carries the reason.
+	test('LOW-1: a refused heal explains itself (no negative numbers) and the disabled Apply carries the reason', async () => {
+		jest.useFakeTimers();
+		const { root } = await renderInit(MORDOR);
+		let m = openFromGrid(root, 1);
+		applyDamage(m, 40, 1);
+		check(m, 1);
+		actionBtn(m).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		m = openFromGrid(root, 2);
+		typePool(m, 121); // 1 dead: the living three are worth 120
+		expect(actionBtn(m).disabled).toBe(true);
+		expect(info(m)).not.toMatch(/-\d/);
+		expect(info(m)).toContain("can't raise the pool above the living minions' share (120 stamina)");
+		expect(actionBtn(m).getAttribute('title')).toContain("can't regain Stamina past a dead minion's share");
+		expect(actionBtn(m).getAttribute('title')).toContain('120');
+	});
+
+	test('LOW-1: a heal that stays inside the living share says the dead stay dead (no negative numbers, no kill talk)', async () => {
+		jest.useFakeTimers();
+		const { root } = await renderInit(MORDOR);
+		let m = openFromGrid(root, 1);
+		applyDamage(m, 50, 1); // 160 -> 110, 1 dead
+		check(m, 1);
+		actionBtn(m).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		m = openFromGrid(root, 2);
+		typePool(m, 120);
+		expect(actionBtn(m).disabled).toBe(false);
+		expect(info(m)).not.toMatch(/-\d|kill/);
+		expect(info(m)).toContain('Heal 10 stamina');
+		expect(info(m)).toContain('dead minions stay dead');
+		expect(actionBtn(m).hasAttribute('title')).toBe(false);
+	});
 });
 
-describe('SC-417 defects found on develop (test.failing until fixed — flip to `test` with the fix)', () => {
+describe('SC-417 defects found on develop (round 2 fixes: HIGH-1, MEDIUM-1, LOW-1)', () => {
 	// HIGH-1 — the DETAIL-ROW path (single click on the open minion's stamina readout or its
 	// bar) mutates the shared pool + isDead, then rebuilds ONLY the detail row
 	// (view.ts buildDetailedCreatureRow's MinionStaminaPoolModal persist callback). Every
@@ -320,7 +356,7 @@ describe('SC-417 defects found on develop (test.failing until fixed — flip to 
 	// poolNumbers() computes the kill ladder from the UNCLAMPED newStamina, so it demands
 	// more kills than there are living minions; every living checkbox is auto-checked and
 	// locked, the count can never match, and Apply is disabled for good.
-	test.failing('MEDIUM-1: an area attack that overkills the whole squad can be applied (all living minions die, pool 0)', async () => {
+	test('MEDIUM-1: an area attack that overkills the whole squad can be applied (all living minions die, pool 0)', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(MORDOR);
 		const m = openFromGrid(root, 1);
@@ -334,7 +370,7 @@ describe('SC-417 defects found on develop (test.failing until fixed — flip to 
 		expectGridConsistent(root, 0, [1, 2, 3, 4]);
 	});
 
-	test.failing('MEDIUM-1: overkilling the last living minion by a full share can be applied', async () => {
+	test('MEDIUM-1: overkilling the last living minion by a full share can be applied', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(MORDOR);
 		let m = openFromGrid(root, 1);
@@ -355,7 +391,7 @@ describe('SC-417 defects found on develop (test.failing until fixed — flip to 
 	// disagrees with the 2 recorded deaths, so driving the pool to 0 asks for 1 kill while
 	// both living orcs are auto-checked — Apply is disabled and the squad can never be
 	// finished. A pool at 0 must kill every living minion, whatever the history.
-	test.failing('MEDIUM-1: a 6.0.2-damaged block (pool 2/160, 2 of 4 dead) can still be finished off', async () => {
+	test('MEDIUM-1: a 6.0.2-damaged block (pool 2/160, 2 of 4 dead) can still be finished off', async () => {
 		jest.useFakeTimers();
 		const damaged = MORDOR.replace(
 			'        squad_role: minion\n',
