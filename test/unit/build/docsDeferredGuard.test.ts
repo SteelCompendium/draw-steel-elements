@@ -29,4 +29,16 @@ describe('SC-407 docs-shots deferred-element guard', () => {
 		// `gallery: true` mounts every fixture, deferred ones included.
 		expect(() => assertNoDeferredBrowserShots([{ out: 'all.png', source: 'browser', gallery: true }], repo)).toThrow(/all\.png -> gallery: true/);
 	});
+
+	// SC-411 (O8): a GIF scripts an interaction with an element, so a gif entry for a deferred element is
+	// refused from EITHER source (the Obsidian half would animate the switch-OFF placeholder card), and a
+	// gif entry that names no element cannot be checked at all.
+	test('rejects a kind:gif entry for a deferred element from either source, and a gif entry with no element', () => {
+		const gif = (over: Record<string, unknown>) => [{ out: 'x.gif', kind: 'gif', source: 'browser', element: 'initiative', steps: [{}], ...over }];
+		expect(() => assertNoDeferredBrowserShots(gif({}), repo)).not.toThrow();
+		expect(() => assertNoDeferredBrowserShots(gif({ source: 'obsidian', element: 'stamina-bar' }), repo)).not.toThrow();
+		expect(() => assertNoDeferredBrowserShots(gif({ element: 'surges' }), repo)).toThrow(/x\.gif -> surges \(gif, browser\)/);
+		expect(() => assertNoDeferredBrowserShots(gif({ source: 'obsidian', element: 'encounter' }), repo)).toThrow(/x\.gif -> encounter \(gif, obsidian\)/);
+		expect(() => assertNoDeferredBrowserShots(gif({ element: undefined }), repo)).toThrow(/gif entry without an element/);
+	});
 });
