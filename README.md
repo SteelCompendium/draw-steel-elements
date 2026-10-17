@@ -64,7 +64,7 @@ Then either:
 | [Statblock](./docs/statblock.md) | `ds-statblock`, `ds-sb` | A full creature statblock. |
 | [Feature / ability card](./docs/Features.md) | `ds-feature`, `ds-ft`, `ds-feat` | Abilities, traits, tests and other power rolls. |
 | [Featureblock](./docs/featureblock.md) | `ds-featureblock`, `ds-fb` | A group of features (Malice, Dynamic Terrain, …). |
-| [Compendium reference](./docs/compendium-sync.md#referencing-a-compendium-entry-in-your-notes) | `ds-scc` | Renders any entry from your synced compendium by its code. |
+| [Compendium reference](./docs/compendium-sync.md#referencing-a-compendium-entry-in-your-notes) | `ds-scc` | Renders most entries from your synced compendium by their code (statblocks, features, kits and more; [a few kinds have no card yet](./docs/compendium-sync.md#what-renders-and-what-doesnt-yet)). |
 | [Horizontal rule](./docs/horizontal-rule.md) | `ds-hr` | A Draw Steel styled section divider. |
 
 ### Running the game
@@ -93,7 +93,9 @@ Then either:
 [Compendium Sync](./docs/compendium-sync.md) downloads the
 [Draw Steel Compendium](https://steelcompendium.io/compendium) into a folder in your vault
 and keeps it up to date, without touching your own notes. Once it's synced, a `ds-scc`
-block renders any entry in it — the body is just the entry's code:
+block renders most entries in it — the body is just the entry's code (statblocks, features,
+featureblocks and kits all render; skills, saints, gods and a few other kinds show a "has no
+renderer" card for now, see [what renders](./docs/compendium-sync.md#what-renders-and-what-doesnt-yet)):
 
 ````markdown
 ```ds-scc

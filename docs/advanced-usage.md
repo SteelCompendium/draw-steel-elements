@@ -149,4 +149,5 @@ Every element also accepts several aliases (`ds-sb` for `ds-statblock`, `ds-it` 
 The plugin registers a few blocks that exist as internal machinery rather than as an
 authoring surface. If you find one in the code or in a compendium file, don't build on it:
 its inline format is internal and can change without notice. `ds-scc` is the supported way
-to render any compendium entry.
+to render a compendium entry (most kinds render; see
+[what renders, and what doesn't yet](compendium-sync.md#what-renders-and-what-doesnt-yet)).
