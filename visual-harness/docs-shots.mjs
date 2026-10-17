@@ -31,11 +31,16 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
 import { DOCS_SHOTS, DOCS_MANUAL } from './docs-manifest.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.dirname(dir);
+// SC-407: the browser half renders with the experimental switch ON, so refuse any entry for a
+// deferred element (see docs-deferred-guard.cjs). Runs before anything is captured.
+const { assertNoDeferredBrowserShots } = createRequire(import.meta.url)('./docs-deferred-guard.cjs');
+assertNoDeferredBrowserShots(DOCS_SHOTS, repo);
 const pageUrl = 'file://' + path.join(dir, 'index.html');
 const outDir = path.join(repo, 'docs', 'Media');
 

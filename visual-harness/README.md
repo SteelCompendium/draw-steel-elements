@@ -292,6 +292,11 @@ command, and a review of the diff.
   file the manifest doesn't declare.
 - `docs-shots.mjs` — the runner. Element cards go through this harness's own page (fast, no
   display); everything else goes to `obsidian-camera.mjs --docs`.
+- **The 7.0.0 `experimental` switch (SC-407):** the Obsidian half (`--docs`) runs with it OFF,
+  so deferred elements would show their placeholder card. The browser half renders through
+  `entry.ts`, which turns it ON — so `docs-deferred-guard.cjs` makes the runner refuse (before
+  capturing anything) a browser entry whose `element` / `gallery` id is a `deferred`
+  definition. The deferred set is read from `src/elements/*/definition.ts`, not hard-coded.
 - `obsidian-camera.mjs --docs` — the same camera, same CDP plumbing, writing to `docs/Media`
   instead of `shots/`. Kinds: `note`, `settings` (with an optional page to navigate into),
   `modal` (real affordance clicks, with `pre:` clicks for controls that only exist after
