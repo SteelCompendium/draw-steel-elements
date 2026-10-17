@@ -105,7 +105,9 @@ const TEXT_SCALE_KNOBS = {
 	control: { pref: 'controlTextScale', tokens: ['control'] },
 };
 const TEXT_SCALE_VALUES = [0.8, 1.2];
-/** [label, selector, knob, screenOnly] - real, un-nested consumers per role family. `screenOnly`
+/** [label, selector, knob, screenOnly] - real consumers per role family, including three NESTED ones (inside a
+ *  same-knob consumer; they must measure exactly once, which also catches an over-broad registry entry that
+ *  would make text inert). `screenOnly`
  *  rows are Steel screen rules (print-excluded by their own selector anchor): on paper those
  *  elements are not styled by the role scale at all, so they are not asserted there. The control
  *  row is NOT screenOnly: on paper it must stay put, which is exactly what the help text promises. */
@@ -121,12 +123,14 @@ const TEXT_SCALE_PAGES = [
 			['statblock .dse-sb__char-l (label)', '.dse-sb__char-l', 'small', true],
 			['statblock .dse-feature__meta-cell--keywords (subheading)', '.dse-feature__meta-cell--keywords', 'large', true],
 			['statblock button.dse-collapse__header (control)', 'button.dse-collapse__header', 'control'],
+			['statblock .dse-pr__badge-text (nested secondary)', '.dse-pr__badge-text', 'small'],
 		],
 	},
 	{
 		element: 'negotiation', fixture: 'default',
 		real: [
 			['negotiation .dse-nt__readout-value (subheading)', '.dse-nt__readout-value', 'large'],
+			['negotiation .dse-nt__why (nested caption)', '.dse-nt__why', 'small'],
 		],
 	},
 	{
@@ -136,6 +140,7 @@ const TEXT_SCALE_PAGES = [
 			['initiative .dse-init__round (label)', '.dse-init__round', 'small', true],
 			['initiative h2.dse-init__title (h2)', 'h2.dse-init__title', 'large', true],
 			['initiative .dse-init__group--heroes h3 (h3)', '.dse-init__group--heroes h3', 'large', true],
+			['initiative .dse-init__action-toggle (nested control)', 'button.dse-init__action-toggle', 'control', true],
 		],
 		prompt: true,
 	},
@@ -5787,6 +5792,8 @@ try {
 		// SC-372 - the three text-size knobs reach the --dse-fs-* role tokens (see the
 		// block above the function). Same "own navigations, captures nothing" shape.
 		await assertTextScale(page);
+		// SC-372 F1 - and each knob applies exactly ONCE on every element of every page.
+		await assertTextScaleOnce(page, manifest);
 	}
 } catch (e) {
 	// Anything that escapes snap()'s own try/catch (e.g. the manifest load itself
@@ -6294,8 +6301,9 @@ async function assertModalTextScaleAnchoring(page) {
 //   - the one rule that DIVIDES by a scale (the initiative's "Untitled encounter" prompt, calc(label /
 //     1.462 / large-scale)) still lands on the plain label size at a moved large/small knob.
 // Ratios, not absolute sizes, so a retune of a role's em coefficient cannot false-red this gate.
-// Nested consumers of one knob compound (a badge inside a badge scales by value^2); every real
-// consumer below is deliberately un-nested, and the synthetic ones sit under a plain 16px parent.
+// The synthetic probes sit under a plain 16px parent. That a knob applies exactly ONCE to every element
+// (nested same-knob consumers used to compound it: a badge's text inside the badge scaled by value^2) is
+// swept over the whole manifest by assertTextScaleOnce below.
 
 // (The TEXT_SCALE_* tables sit up with the other module-level constants, above the top-level
 // sweep: this file awaits its sweep at module scope, so a const declared below it is still in
@@ -6385,7 +6393,7 @@ async function assertTextScale(page) {
 					// Control text is screen-only chrome: on paper (either surface) it must not move.
 					const expected = cKnob === knob && !(cKnob === 'control' && mode !== 'screen') ? b * value : b;
 					compared += 1;
-					if (!near(m, expected)) problems.push(`${at}: ${label} measures ${m}px, expected ${expected.toFixed(4)}px (baseline ${b}px${cKnob === knob ? ` x ${value}` : ', must not move'})`);
+					if (!near(m, expected)) problems.push(`${at}: ${label} measures ${m}px, expected ${expected.toFixed(4)}px (baseline ${b}px${expected !== b ? ` x ${value}` : ', must not move'})`);
 				}
 				// Synthetic: every scale-dependent token, on the root and (modal case) in the dialog.
 				for (const h of synthHosts) {
@@ -6398,7 +6406,7 @@ async function assertTextScale(page) {
 						const m = moved.synth[h][t];
 						const expected = tKnob === knob ? b * value : b;
 						compared += 1;
-						if (!near(m, expected)) problems.push(`${at}: --dse-fs-${t} on the ${h === 'modal' ? 'DseModal dialog' : 'element root'} measures ${m}px, expected ${expected.toFixed(4)}px (baseline ${b}px${tKnob === knob ? ` x ${value}` : ', must not move'})`);
+						if (!near(m, expected)) problems.push(`${at}: --dse-fs-${t} on the ${h === 'modal' ? 'DseModal dialog' : 'element root'} measures ${m}px, expected ${expected.toFixed(4)}px (baseline ${b}px${expected !== b ? ` x ${value}` : ', must not move'})`);
 					}
 				}
 				// The one calc() that divides by a scale.
@@ -6424,6 +6432,117 @@ async function assertTextScale(page) {
 		`\ntext scale OK (${compared} comparisons: small/large/control at 80% and 120% on an element root, in a real DseModal and ` +
 			`in both print surfaces; a knob scales its own tokens exactly and moves no other knob's; control text does not move on paper; ` +
 			`the "Untitled encounter" prompt stays on the label size)`,
+	);
+}
+
+// ======================================================================================
+// SC-372 F1 - EACH TEXT-SIZE KNOB APPLIES EXACTLY ONCE, ON EVERY ELEMENT OF EVERY PAGE.
+//
+// assertTextScale above pins named consumers. This sweep is its backstop for the ones nobody named: for
+// EVERY manifest page (element x fixture, interaction shots incl. the DseModal, pref shots, chrome
+// stacks) on screen, and every element x fixture page on the print twin, it mounts once at default prefs,
+// then RESTAMPS each knob inline on every stamped root ([data-dse-element], .dse-modal) at 1.2 - exactly
+// what prefs.set() -> stampCss() does live - and requires every visible in-root element (and its
+// ::before/::after with content) to scale by exactly 1 or exactly 1.2. A ratio of 1.44 is a nested
+// same-knob consumer (a role is an em ratio times the knob and em is the PARENT's size, so a consumer
+// inside a consumer applies the knob twice); the report names the chain of ancestors that applied it.
+// On paper the control knob must not move at all. The remedy is a registry entry in styles-source.css,
+// "SC-372: EACH TEXT-SIZE KNOB APPLIES ONCE".
+/** In page: measure, restamp each knob, measure, restore. Returns violations only. */
+function sweepKnobs({ S, knobs, mustNotMove = [] }) {
+	const els = [...document.querySelectorAll('[data-dse-element], .dse-modal')].flatMap((r) => [r, ...r.querySelectorAll('*')]);
+	const uniq = [...new Set(els)];
+	const targets = [];
+	const visible = new Set();
+	for (const e of uniq) {
+		if (typeof e.checkVisibility !== 'function' || e.checkVisibility()) visible.add(e);
+		targets.push([e, null]);
+		for (const pe of ['::before', '::after']) {
+			const c = getComputedStyle(e, pe).content;
+			if (c && c !== 'none' && c !== 'normal') targets.push([e, pe]);
+		}
+	}
+	const read = () => targets.map(([e, pe]) => parseFloat(getComputedStyle(e, pe).fontSize));
+	const base = read();
+	const roots = [...document.querySelectorAll('[data-dse-element], .dse-modal')];
+	const name = (e, pe) => e.tagName.toLowerCase() + [...e.classList].filter((c) => !c.includes('--') && !c.startsWith('is-')).map((c) => '.' + c).join('') + (pe || '');
+	const out = [];
+	let compared = 0;
+	for (const knob of knobs) {
+		const prev = roots.map((r) => r.style.getPropertyValue(`--dse-fs-${knob}-scale`));
+		for (const r of roots) r.style.setProperty(`--dse-fs-${knob}-scale`, String(S));
+		const moved = read();
+		const ratio = new Map(targets.map(([e, pe], i) => [pe ? null : e, moved[i] / base[i]]));
+		targets.forEach(([e, pe], i) => {
+			if (!(base[i] > 0) || !visible.has(e)) return;
+			compared++;
+			const r = moved[i] / base[i];
+			if (Math.abs(r - 1) <= 2e-3 || (!mustNotMove.includes(knob) && Math.abs(r - S) <= 2e-3 * S)) return;
+			// Report only where the excess is INTRODUCED (own multiplier != 1); a descendant that merely
+			// inherits an over-scaled parent's size is the same finding, not a new one.
+			const host = pe ? e : e.parentElement;
+			const parentR = host && ratio.has(host) && host !== e ? ratio.get(host) : pe ? ratio.get(e) : 1;
+			if (Math.abs(r / parentR - 1) <= 2e-3 && !(pe && false)) return;
+			// chain: ancestors-or-self whose OWN multiplier (ratio / parent's ratio) is S
+			const chain = [];
+			let cur = pe ? e : e.parentElement, curR = r, curName = name(e, pe);
+			for (;;) {
+				const pr = cur && ratio.has(cur) ? ratio.get(cur) : 1;
+				if (Math.abs(curR / pr - S) <= 2e-3 * S) chain.unshift(curName);
+				if (!cur || !ratio.has(cur)) break;
+				curR = pr; curName = name(cur); cur = cur.parentElement;
+			}
+			out.push({ knob, el: name(e, pe), ratio: +r.toFixed(4), base: base[i], chain: chain.join(' > ') });
+		});
+		roots.forEach((r, i) => (prev[i] ? r.style.setProperty(`--dse-fs-${knob}-scale`, prev[i]) : r.style.removeProperty(`--dse-fs-${knob}-scale`)));
+	}
+	return { out, compared, n: targets.length };
+}
+
+async function assertTextScaleOnce(page, manifest) {
+	const S = 1.2;
+	const t0 = Date.now();
+	const pages = [];
+	for (const e of manifest.elements) for (const f of e.fixtures) pages.push({ id: `${e.id}:${f}`, q: { element: e.id, fixture: f }, print: true });
+	for (const n of manifest.interactionShots ?? []) pages.push({ id: n.id, q: { element: n.element, fixture: n.fixture }, click: n.click });
+	for (const n of manifest.prefShots ?? []) pages.push({ id: n.id, q: { element: n.element, fixture: n.fixture, ...(n.prefs ? { prefs: Object.entries(n.prefs).map(([k, v]) => `${k}:${v}`).join(',') } : {}), ...(n.width ? { width: String(n.width) } : {}) } });
+	for (const n of manifest.chromeShots ?? []) pages.push({ id: n.id, q: { stack: n.stack.map((e) => `${e.element}:${e.fixture}`).join(','), ...(n.prefs ? { prefs: Object.entries(n.prefs).map(([k, v]) => `${k}:${v}`).join(',') } : {}) }, hover: n.hover });
+	const problems = new Map();
+	let compared = 0;
+	let loads = 0;
+	await page.emulateMedia({ media: 'screen' });
+	for (const pg of pages) {
+		for (const surface of pg.print ? ['screen', 'twin'] : ['screen']) {
+			const q = new URLSearchParams({ ...pg.q, theme: 'steel', bg: 'dark', sheet: '1' });
+			if (surface === 'twin') q.set('print', '1');
+			await page.goto(`${pageUrl}?${q}`);
+			await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
+			loads += 1;
+			if (pg.click) { await page.locator(pg.click).first().click(); await page.mouse.move(0, 0); }
+			if (pg.hover) await page.locator(pg.hover).first().hover();
+			// On paper control text must not move at all; small/large still exactly once.
+			const r = await page.evaluate(sweepKnobs, { S, knobs: ['small', 'large', 'control'], mustNotMove: surface === 'screen' ? [] : ['control'] });
+			compared += r.compared;
+			for (const v of r.out) {
+				const k = `[${surface}] ${v.knob}: ${v.chain || '(no own-scaling ancestor)'} -> ${v.el} x${v.ratio}`;
+				if (!problems.has(k)) problems.set(k, new Set());
+				problems.get(k).add(pg.id);
+			}
+		}
+	}
+	const secs = ((Date.now() - t0) / 1000).toFixed(0);
+	if (problems.size) {
+		console.error(
+			`\nTEXT SCALE COMPOUNDS - ${problems.size} distinct element(s) scale by a knob more than once, or (on paper) control moved (${compared} comparisons, ${loads} loads, ${secs}s):\n` +
+				[...problems].map(([k, v]) => `  ${k}   (${[...v].slice(0, 4).join(', ')}${v.size > 4 ? ` +${v.size - 4}` : ''})`).join('\n') +
+				`\nRemedy: register the outer consumer's own selector in styles-source.css -> "SC-372: EACH TEXT-SIZE KNOB APPLIES ONCE" ` +
+				`(copy its scope/theme/print anchors), so its children, ::before/::after and nested roots re-declare the knob's roles as plain em ratios.`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\ntext scale once OK (${compared} comparisons over ${loads} loads: every visible element in every stamped root scales by exactly 1 or exactly ${S} per knob, ` +
+			`on screen and the print twin, control never on paper; ${secs}s)`,
 	);
 }
 
