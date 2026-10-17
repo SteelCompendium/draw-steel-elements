@@ -25,12 +25,12 @@
 //     source: 'browser' | 'obsidian',
 //     element: 'initiative',          // REQUIRED, both sources: the deferred-element guard
 //                                     // (docs-deferred-guard.cjs) keys on it
-//     // browser: fixture?, width?, prefs?        obsidian: note? | body?
+//     // browser: fixture?, width?, bg?, prefs?     obsidian: note? | body?, prefs?
+//     // (a key the entry's camera does not read is refused at load, never silently ignored)
 //     seed?: 7,                       // seeds Math.random (dice) before the page runs
 //     dpr?: 2,                        // 2 unless over the byte budget, then 1 (like the PNGs)
 //     cursor?: true,                  // synthetic pointer overlay; false turns it off
 //     viewport?: { width, height },   // browser; default 1000x1400 (must hold the whole card)
-//     frame?: 'element' | 'leaf',     // obsidian only (2b)
 //     steps: [ … ],
 //   }
 //
@@ -41,12 +41,16 @@
 //   hover:  sel          move both cursors only (hover-revealed UI); the pointer is NOT parked
 //   type:   text         focus `into` (or use the focused element), `select:true` selects all
 //                        first, insert the text with real key events; `every:n` captures one
-//                        frame per n characters (a typing animation)
-//   press:  key          real key event ('Enter', 'Escape', 'Control+A')
+//                        frame per n characters (a typing animation). The synthetic cursor then
+//                        moves just off the field's bottom-right corner, so it never covers
+//                        the typed value
+//   press:  key          real key event ('Enter', 'Escape', 'Control+A'); same cursor rule when
+//                        a text field is focused
 //   waitFor: sel         wait until sel exists (e.g. a modal body after a click)
 //   write:  true         modifier on click/type/press: WAIT FOR THE BLOCK WRITE before
-//                        capturing; no write within 5 s FAILS the entry (the script is wrong
-//                        or the product is)
+//                        capturing, then for quiet (no further write for WRITE_QUIET_MS, so a
+//                        late debounced write cannot satisfy the NEXT step's wait); no write
+//                        within 5 s FAILS the entry (the script is wrong or the product is)
 //   hold:   ms           how long this frame stays on screen (default 500); consecutive
 //                        identical frames are merged and their holds added
 //   capture: false       act without capturing
@@ -55,11 +59,14 @@
 // SELECTORS resolve INSIDE the element root (`#mount` in the browser, the active leaf's
 // `[data-dse-element]` in Obsidian), so they can never hit a second copy; they must match
 // exactly one node (a strict match, so a vague selector fails loudly instead of clicking
-// the first of three). The prefix `modal:` resolves inside `.dse-modal` instead (Obsidian
-// appends modals to <body>). Use DSE classes and aria-labels; never positional :nth-child.
+// the first of three) within 5 s (SELECTOR_TIMEOUT_MS, both drivers: a stale selector fails
+// in 5 s, not Playwright's 30). The prefix `modal:` resolves inside `.dse-modal` instead
+// (Obsidian appends modals to <body>). Use DSE classes and aria-labels; never positional
+// :nth-child.
 //
 // DRIVER INTERFACE (every method async):
 //   click(sel) hover(sel) type(text, { into, select }) press(key) waitFor(sel)
+//   cursorAside(sel|null)        -> (optional) park the synthetic cursor off the typed field
 //   writeMark()                  -> opaque mark of "writes so far"
 //   waitWrite(mark, timeoutMs)   -> resolves once a write after `mark` landed + settled,
 //                                   throws on timeout
@@ -82,6 +89,12 @@ const { PNG } = require('pngjs');
 export const GIF_BYTE_BUDGET = 1_000_000;
 export const DEFAULT_HOLD_MS = 500;
 export const WRITE_TIMEOUT_MS = 5000;
+/** How long a selector may take to resolve / become actionable, both drivers. */
+export const SELECTOR_TIMEOUT_MS = 5000;
+/** After a write lands, how long the write signal must stay quiet before the step moves on:
+ *  just over PERSIST_DEBOUNCE_MS (400 ms, src/framework/view.ts), so a second debounced write from the
+ *  same action — or a straggler from the previous one — cannot satisfy the next step's wait. */
+export const WRITE_QUIET_MS = 450;
 /** CSS px of breathing room around the union of element rects. */
 export const FRAME_PAD = 12;
 
@@ -91,10 +104,14 @@ const WRITING_ACTIONS = ['click', 'type', 'press'];
 const MODIFIER_KEYS = ['hold', 'write', 'capture', 'what', 'into', 'select', 'every'];
 const TYPE_ONLY_KEYS = ['into', 'select', 'every'];
 const STEP_KEYS = new Set([...ACTION_KEYS, ...MODIFIER_KEYS]);
-const ENTRY_KEYS = new Set([
-	'out', 'kind', 'source', 'element', 'fixture', 'width', 'prefs', 'note', 'body', 'seed',
-	'dpr', 'cursor', 'viewport', 'frame', 'steps', 'bg', 'pref',
-]);
+/** The entry keys each camera actually reads (docs-shots.mjs captureBrowserGif /
+ *  obsidian-camera.mjs captureDocsGif). Anything else is refused at load: an accepted key that
+ *  nothing reads (`frame: 'leaf'` was one) breaks the "a malformed entry is a loud error" contract. */
+const COMMON_ENTRY_KEYS = ['out', 'kind', 'source', 'element', 'prefs', 'seed', 'dpr', 'cursor', 'viewport', 'steps'];
+const ENTRY_KEYS = {
+	browser: new Set([...COMMON_ENTRY_KEYS, 'fixture', 'width', 'bg']),
+	obsidian: new Set([...COMMON_ENTRY_KEYS, 'note', 'body']),
+};
 
 /** A selector prefix is `<ident>:` followed by something that starts a selector (a class, id,
  *  attribute, universal, combinator or whitespace) — never a CSS pseudo-class name, which
@@ -160,21 +177,27 @@ function stepProblems(step) {
 export function validateGifEntry(entry) {
 	const out = [];
 	if (typeof entry.out !== 'string' || !/^[\w.-]+\.gif$/.test(entry.out)) out.push('out must be a plain "<name>.gif" filename');
-	for (const k of Object.keys(entry)) if (!ENTRY_KEYS.has(k)) out.push(`unknown entry key "${k}"`);
 	if (entry.source !== 'browser' && entry.source !== 'obsidian') out.push('source must be "browser" or "obsidian"');
+	else {
+		const other = ENTRY_KEYS[entry.source === 'browser' ? 'obsidian' : 'browser'];
+		for (const k of Object.keys(entry)) {
+			if (ENTRY_KEYS[entry.source].has(k)) continue;
+			out.push(
+				other.has(k)
+					? `entry key "${k}" is not read by the ${entry.source} camera (it would be silently ignored)`
+					: `unknown entry key "${k}"`,
+			);
+		}
+	}
 	if (typeof entry.element !== 'string' || entry.element === '') {
 		out.push('element is required (the deferred-element guard keys on it)');
 	}
 	if (entry.source === 'obsidian' && (entry.note === undefined) === (entry.body === undefined)) {
 		out.push('an obsidian gif needs exactly one of note / body');
 	}
-	if (entry.source === 'browser' && (entry.note !== undefined || entry.body !== undefined)) {
-		out.push('note / body are obsidian-only');
-	}
 	if (entry.seed !== undefined && !Number.isInteger(entry.seed)) out.push('seed must be an integer');
 	if (entry.dpr !== undefined && entry.dpr !== 1 && entry.dpr !== 2) out.push('dpr must be 1 or 2');
 	if (entry.cursor !== undefined && typeof entry.cursor !== 'boolean') out.push('cursor must be a boolean');
-	if (entry.frame !== undefined && !['element', 'leaf'].includes(entry.frame)) out.push('frame must be "element" or "leaf"');
 	if (entry.viewport !== undefined) {
 		const v = entry.viewport;
 		if (!v || !(v.width > 0) || !(v.height > 0)) out.push('viewport needs positive width and height');
@@ -235,6 +258,7 @@ export async function runGifSteps(driver, entry) {
 				const parts = chunksOf(step.type, step.every);
 				for (const [n, part] of parts.entries()) {
 					await driver.type(part, { into: step.into, select: step.select === true && n === 0 });
+					await driver.cursorAside?.(step.into ?? null);
 					const last = n === parts.length - 1;
 					if (last && step.write) await driver.waitWrite(mark, WRITE_TIMEOUT_MS);
 					if (doCapture) await capture(step, `${label} [${n + 1}/${parts.length}]`);
@@ -243,7 +267,10 @@ export async function runGifSteps(driver, entry) {
 			}
 			if (action === 'click') await driver.click(step.click);
 			else if (action === 'hover') await driver.hover(step.hover);
-			else if (action === 'press') await driver.press(step.press);
+			else if (action === 'press') {
+				await driver.press(step.press);
+				await driver.cursorAside?.(null);
+			}
 			else if (action === 'waitFor') await driver.waitFor(step.waitFor);
 			if (step.write) await driver.waitWrite(mark, WRITE_TIMEOUT_MS);
 			if (doCapture) await capture(step, label);
@@ -276,6 +303,12 @@ export function unionCrop(frames, dpr, frameSize) {
 		}),
 		{ x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity },
 	);
+	if (u.x0 < -0.5 || u.y0 < -0.5) {
+		throw new Error(
+			`part of the element is off the frame's top/left edge (union starts at ${Math.floor(u.x0)},${Math.floor(u.y0)}) — ` +
+				'it would be cut off silently (scrolled inside its pane, or under the window chrome)',
+		);
+	}
 	const over = (v, max) => v > max + 0.5;
 	if (over(u.x1, frameSize.width / dpr) || over(u.y1, frameSize.height / dpr)) {
 		throw new Error(
@@ -306,6 +339,13 @@ export function seedScript(seed) {
 		`return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();`
 	);
 }
+
+/** Obsidian only: `seedScript` overrides `Math.random` app-wide, so the camera saves the real one
+ *  first and puts it back in the entry's `finally` (a later entry in the same session must not
+ *  inherit the seed). */
+export const saveRandomScript = () => '(() => { window.__sc411Random = Math.random; })()';
+export const restoreRandomScript = () =>
+	'(() => { if (window.__sc411Random) { Math.random = window.__sc411Random; delete window.__sc411Random; } })()';
 
 /** Write the raw frames (exactly the bytes --check-stable hashes) + a frames.json to
  *  `<dir>/NN.png` for human review. `dir` is under the git-ignored visual-harness/dist/. */
@@ -404,6 +444,8 @@ export async function renderGifEntry(entry, capture) {
  * failure; the caller records it. Returns the one-line summary it logged.
  */
 export async function runGifEntry(entry, capture, { camera, outDir, framesDir, checkStable = false }) {
+	// A `.run2` left by an earlier unstable run must not outlive the run that supersedes it.
+	fs.rmSync(`${framesDir}.run2`, { recursive: true, force: true });
 	const a = await renderGifEntry(entry, capture);
 	const loopSec = (a.frames.reduce((n, f) => n + f.hold, 0) / 1000).toFixed(1);
 	const sha = sha256(a.bytes);
@@ -440,7 +482,8 @@ background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' 
  * DOM (a fixed-position node on <body>, outside #mount); the REAL pointer is parked off the
  * element before every capture so hover chrome and hover timing never reach a frame.
  */
-export async function createPageDriver(page, { cursor = true } = {}) {
+export async function createPageDriver(page, { cursor = true, now = Date.now } = {}) {
+	const timeout = SELECTOR_TIMEOUT_MS;
 	const root = () => page.locator('#mount');
 	const resolve = (sel) => (sel.startsWith('modal:') ? page.locator('.dse-modal').locator(sel.slice(6).trim()) : root().locator(sel));
 	if (cursor) {
@@ -452,20 +495,23 @@ export async function createPageDriver(page, { cursor = true } = {}) {
 			document.body.appendChild(c);
 		});
 	}
-	const moveCursor = async (loc) => {
-		if (!cursor) return;
-		await loc.scrollIntoViewIfNeeded();
-		const box = await loc.boundingBox();
-		if (!box) throw new Error('target has no box to point at');
-		await page.evaluate(
+	const placeCursor = (x, y) =>
+		page.evaluate(
 			({ x, y }) => {
 				const c = document.getElementById('sc411-cursor');
 				c.style.display = 'block';
 				c.style.transform = `translate(${x}px, ${y}px)`;
 			},
-			{ x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2) },
+			{ x: Math.round(x), y: Math.round(y) },
 		);
+	const moveCursor = async (loc) => {
+		if (!cursor) return;
+		await loc.scrollIntoViewIfNeeded({ timeout });
+		const box = await loc.boundingBox({ timeout });
+		if (!box) throw new Error('target has no box to point at');
+		await placeCursor(box.x + box.width / 2, box.y + box.height / 2);
 	};
+	const writeCount = () => page.evaluate(() => window.__dseHarnessWrites ?? 0);
 	// Two rAF + a short timer: the views update in place, or via rebuild + a debounced write.
 	const settle = () =>
 		page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 60)))));
@@ -473,18 +519,18 @@ export async function createPageDriver(page, { cursor = true } = {}) {
 		async click(sel) {
 			const loc = resolve(sel);
 			await moveCursor(loc);
-			await loc.click();
+			await loc.click({ timeout });
 		},
 		async hover(sel) {
 			const loc = resolve(sel);
 			await moveCursor(loc);
-			await loc.hover();
+			await loc.hover({ timeout });
 		},
 		async type(text, { into, select } = {}) {
 			if (into) {
 				const loc = resolve(into);
-				if (select) await loc.press('Control+A');
-				await loc.pressSequentially(text);
+				if (select) await loc.press('Control+A', { timeout });
+				await loc.pressSequentially(text, { timeout });
 			} else {
 				if (select) await page.keyboard.press('Control+A');
 				await page.keyboard.type(text);
@@ -494,14 +540,40 @@ export async function createPageDriver(page, { cursor = true } = {}) {
 			await page.keyboard.press(key);
 		},
 		async waitFor(sel) {
-			await resolve(sel).waitFor({ state: 'attached', timeout: 5000 });
+			await resolve(sel).waitFor({ state: 'attached', timeout });
 		},
-		writeMark: () => page.evaluate(() => window.__dseHarnessWrites ?? 0),
+		// The synthetic cursor steps off a text field being typed into: its tip goes to the field's
+		// bottom-right corner, so the arrow (which extends down and right) sits outside the box and
+		// never covers the value. `sel` null = the focused element, if it is a text field.
+		async cursorAside(sel) {
+			if (!cursor) return;
+			const box = sel
+				? await resolve(sel).boundingBox({ timeout })
+				: await page.evaluate(() => {
+						const a = document.activeElement;
+						if (!a || !a.matches('input, textarea, [contenteditable]')) return null;
+						const r = a.getBoundingClientRect();
+						return { x: r.x, y: r.y, width: r.width, height: r.height };
+					});
+			if (box) await placeCursor(box.x + box.width, box.y + box.height);
+		},
+		writeMark: writeCount,
 		async waitWrite(mark, timeoutMs) {
 			try {
 				await page.waitForFunction((m) => (window.__dseHarnessWrites ?? 0) > m, mark, { timeout: timeoutMs });
 			} catch {
 				throw new Error(`write: true, but no block write landed within ${timeoutMs} ms (the script is wrong, or the product is)`);
+			}
+			// Quiet: no further write for WRITE_QUIET_MS (see the constant).
+			let last = await writeCount();
+			let since = now();
+			while (now() - since < WRITE_QUIET_MS) {
+				await page.waitForTimeout(50);
+				const c = await writeCount();
+				if (c !== last) {
+					last = c;
+					since = now();
+				}
 			}
 			await settle();
 		},
@@ -549,6 +621,52 @@ export async function createPageDriver(page, { cursor = true } = {}) {
 	};
 }
 
+// ------------------------------------------------------------- browser capture set-up
+/** Chromium flags for GIF capture. `--disable-partial-raster`: without it ~1 run in 6 differed by
+ *  1 px on antialiased edges after an interaction repaint (SC-411 r1 spike); with it 13/13 runs
+ *  were byte-identical. Exported (and launched through `launchGifBrowser`) so jest can pin it. */
+export const BROWSER_LAUNCH_ARGS = ['--disable-partial-raster'];
+
+/** Launch the GIF browser. `chromium` is playwright's `chromium` (injected so a test can fake it). */
+export const launchGifBrowser = (chromium) => chromium.launch({ args: BROWSER_LAUNCH_ARGS });
+
+/** The harness URL query for a browser gif entry. `experimental=0`: a GIF depicts the SHIPPING
+ *  product, so the deferred chrome (the "Pin to sidebar" item that hover reveals) must not exist
+ *  in any frame. `pad=16` (the SC-169 harness param): the hover/focus chrome sits ABOVE the
+ *  card's top edge and would clip off the viewport top without breathing room. */
+export function browserGifParams(shot) {
+	const params = {
+		theme: 'steel',
+		bg: shot.bg ?? 'dark',
+		element: shot.element,
+		fixture: shot.fixture ?? 'default',
+		experimental: '0',
+		pad: '16',
+	};
+	if (shot.width) params.width = String(shot.width);
+	if (shot.prefs) {
+		params.prefs = Object.entries(shot.prefs)
+			.map(([k, v]) => `${k}:${v}`)
+			.join(',');
+	}
+	return params;
+}
+
+/** Open the harness page for a browser gif entry and wait for the mount: installs the seeded
+ *  `Math.random` (when `seed` is set) BEFORE the navigation so the page's own scripts see it, then
+ *  loads, waits for fonts, and returns the page errors collected so far (empty = clean). */
+export async function openBrowserGifPage(page, shot, pageUrl) {
+	const pageErrors = [];
+	page.on('pageerror', (e) => pageErrors.push(String(e)));
+	if (shot.seed !== undefined) await page.addInitScript(seedScript(shot.seed));
+	await page.goto(`${pageUrl}?${new URLSearchParams(browserGifParams(shot))}`);
+	await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 20000 });
+	await page.evaluate(() => document.fonts.ready);
+	const done = await page.evaluate(() => window.__dseHarnessDone);
+	if (done.errors.length || pageErrors.length) throw new Error([...done.errors, ...pageErrors].join(' | '));
+	return pageErrors;
+}
+
 // -------------------------------------------------------------------------- CDP driver
 /** Freeze CSS for real Obsidian: no transitions/animations, no caret. Without it ~1 capture in
  *  3 differed by 8 px on a focused textarea's ring (SC-411 r1 spike); with it 5/5 identical. */
@@ -587,9 +705,10 @@ export function keyEventFor(name) {
  *                          its text (a block write is the note text changing)
  *   dpr                    capture scale
  *   cursor                 synthetic pointer overlay (default true)
+ *   now                    clock (ms), injectable for tests
  * Call `await driver.install()` before the first step and `await driver.dispose()` after.
  */
-export function createCdpDriver({ call, evaluate, sleep, rootExpr, notePath, dpr = 2, cursor = true }) {
+export function createCdpDriver({ call, evaluate, sleep, rootExpr, notePath, dpr = 2, cursor = true, now = Date.now }) {
 	const q = JSON.stringify;
 	const installJs = `(() => {
 		const root = () => (${rootExpr});
@@ -642,6 +761,7 @@ export function createCdpDriver({ call, evaluate, sleep, rootExpr, notePath, dpr
 		if (!cursor) return;
 		await evaluate(`(() => { const c = document.getElementById('sc411-cursor'); c.style.display = 'block'; c.style.transform = 'translate(${Math.round(x)}px, ${Math.round(y)}px)'; })()`);
 	};
+	const readNote = () => evaluate(`window.app.vault.adapter.read(${q(notePath)})`);
 	const settle = () => evaluate('new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 80))))');
 	const keyDown = (e, text) => call('Input.dispatchKeyEvent', { type: 'keyDown', key: e.key, code: e.code, windowsVirtualKeyCode: e.vk, modifiers: e.modifiers ?? 0, ...(e.commands ? { commands: e.commands } : {}), ...(text ? { text } : {}) });
 	const keyUp = (e) => call('Input.dispatchKeyEvent', { type: 'keyUp', key: e.key, code: e.code, windowsVirtualKeyCode: e.vk, modifiers: e.modifiers ?? 0 });
@@ -690,14 +810,37 @@ export function createCdpDriver({ call, evaluate, sleep, rootExpr, notePath, dpr
 			}
 		},
 		// A block write IS the note's text changing: the mark is the text now.
-		writeMark: () => evaluate(`window.app.vault.adapter.read(${q(notePath)})`),
+		writeMark: readNote,
+		// See the Playwright driver: the tip goes to the typed field's bottom-right corner.
+		async cursorAside(sel) {
+			if (!cursor) return;
+			const corner = await evaluate(`(() => {
+				const el = ${sel ? `window.__sc411.one(${q(sel)})` : 'document.activeElement'};
+				if (!el || !el.matches('input, textarea, [contenteditable]')) return null;
+				const r = el.getBoundingClientRect();
+				return { x: r.right, y: r.bottom };
+			})()`);
+			if (corner) await moveCursor(corner);
+		},
 		async waitWrite(mark, timeoutMs) {
-			const t0 = Date.now();
-			while ((await evaluate(`window.app.vault.adapter.read(${q(notePath)})`)) === mark) {
-				if (Date.now() - t0 > timeoutMs) {
+			const t0 = now();
+			let text = await readNote();
+			while (text === mark) {
+				if (now() - t0 > timeoutMs) {
 					throw new Error(`write: true, but ${notePath} did not change within ${timeoutMs} ms (the script is wrong, or the product is)`);
 				}
 				await sleep(50);
+				text = await readNote();
+			}
+			// Quiet: no further change for WRITE_QUIET_MS (see the constant).
+			let since = now();
+			while (now() - since < WRITE_QUIET_MS) {
+				await sleep(50);
+				const t = await readNote();
+				if (t !== text) {
+					text = t;
+					since = now();
+				}
 			}
 			// The write (PERSIST_DEBOUNCE_MS ~400 ms in) re-renders the section and the view adopts
 			// the new body; frames must not be taken mid-adoption.

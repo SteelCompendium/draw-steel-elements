@@ -62,7 +62,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { DOCS_SHOTS, DOCS_COMPENDIUM_SEED } from './docs-manifest.mjs';
-import { assertValidGifEntries, createCdpDriver, runGifEntry, runGifSteps, seedScript } from './docs-gif.mjs';
+import {
+	assertValidGifEntries,
+	createCdpDriver,
+	restoreRandomScript,
+	runGifEntry,
+	runGifSteps,
+	saveRandomScript,
+	seedScript,
+} from './docs-gif.mjs';
 
 const { seedExperimental } = createRequire(import.meta.url)('./camera-data-json.cjs');
 
@@ -1712,7 +1720,11 @@ async function main() {
 						emulated = true;
 						await sleep(500);
 					}
-					if (entry.seed !== undefined) await evaluate(cdp, seedScript(entry.seed));
+					// App-wide override, undone in the `finally` (a later entry must not inherit the seed).
+					if (entry.seed !== undefined) {
+						await evaluate(cdp, saveRandomScript());
+						await evaluate(cdp, seedScript(entry.seed));
+					}
 					await openNote(noteName, 'preview');
 					await waitFor(
 						cdp,
@@ -1741,6 +1753,7 @@ async function main() {
 					throw e;
 				} finally {
 					await driver?.dispose();
+					if (entry.seed !== undefined) await evaluate(cdp, restoreRandomScript()).catch(() => {});
 					await closeModals().catch(() => {});
 					// Park the pointer out of the way for whatever capture comes next.
 					await cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 2, y: 2, button: 'none' }).catch(() => {});

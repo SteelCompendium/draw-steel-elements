@@ -38,7 +38,14 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
 import { DOCS_SHOTS, DOCS_MANUAL } from './docs-manifest.mjs';
-import { assertValidGifEntries, createPageDriver, runGifEntry, runGifSteps, seedScript } from './docs-gif.mjs';
+import {
+	assertValidGifEntries,
+	createPageDriver,
+	launchGifBrowser,
+	openBrowserGifPage,
+	runGifEntry,
+	runGifSteps,
+} from './docs-gif.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.dirname(dir);
@@ -179,41 +186,14 @@ const gifFramesDir = (out) => path.join(dir, 'dist', 'docs-gif-frames', out);
 /** One scripted capture of a browser gif entry at `dpr`: a fresh Chromium, a fresh context,
  *  a fresh page — so two captures share nothing. Returns the raw frames. */
 async function captureBrowserGif(shot, dpr) {
-	// --disable-partial-raster: without it ~1 run in 6 differed by 1 px on antialiased edges
-	// after an interaction repaint (SC-411 r1 spike); with it 13/13 runs were byte-identical.
-	const browser = await chromium.launch({ args: ['--disable-partial-raster'] });
+	const browser = await launchGifBrowser(chromium);
 	try {
 		const context = await browser.newContext({
 			viewport: shot.viewport ?? { width: 1000, height: 1400 },
 			deviceScaleFactor: dpr,
 		});
 		const page = await context.newPage();
-		const pageErrors = [];
-		page.on('pageerror', (e) => pageErrors.push(String(e)));
-		if (shot.seed !== undefined) await page.addInitScript(seedScript(shot.seed));
-		// experimental=0: a GIF depicts the SHIPPING product, so the deferred chrome (the
-		// "Pin to sidebar" item that hover reveals) must not exist in any frame.
-		const params = {
-			theme: 'steel',
-			bg: shot.bg ?? 'dark',
-			element: shot.element,
-			fixture: shot.fixture ?? 'default',
-			experimental: '0',
-			// The hover/focus chrome sits ABOVE the card's top edge; without breathing room
-			// (the SC-169 `pad` param) a focused frame would clip it off the viewport top.
-			pad: '16',
-		};
-		if (shot.width) params.width = String(shot.width);
-		if (shot.prefs) {
-			params.prefs = Object.entries(shot.prefs)
-				.map(([k, v]) => `${k}:${v}`)
-				.join(',');
-		}
-		await page.goto(`${pageUrl}?${new URLSearchParams(params)}`);
-		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 20000 });
-		await page.evaluate(() => document.fonts.ready);
-		const done = await page.evaluate(() => window.__dseHarnessDone);
-		if (done.errors.length || pageErrors.length) throw new Error([...done.errors, ...pageErrors].join(' | '));
+		const pageErrors = await openBrowserGifPage(page, shot, pageUrl);
 		const driver = await createPageDriver(page, { cursor: shot.cursor !== false });
 		const { frames } = await runGifSteps(driver, shot);
 		if (pageErrors.length) throw new Error(pageErrors.join(' | '));
