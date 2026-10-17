@@ -5732,6 +5732,9 @@ try {
 		// narrowed-run skip reasoning as the gates above, and must run before
 		// `browser.close()` in the `finally` block below.
 		await assertModalTextScaleAnchoring(page);
+		// SC-372 - the three text-size knobs reach the --dse-fs-* role tokens (see the
+		// block above the function). Same "own navigations, captures nothing" shape.
+		await assertTextScale(page);
 	}
 } catch (e) {
 	// Anything that escapes snap()'s own try/catch (e.g. the manifest load itself
@@ -6211,6 +6214,211 @@ async function assertModalTextScaleAnchoring(page) {
 		'\nmodal text-scale anchoring OK (.dse-modal__body scales exactly x1.4 at textScale ' +
 			'1.4, with AND without an intervening .modal-content-style absolute font-size reset ' +
 			'— no compounding)',
+	);
+}
+
+// ======================================================================================
+// SC-372 - THE THREE TEXT-SIZE KNOBS REACH THE --dse-fs-* ROLE TOKENS.
+//
+// `smallTextScale` / `largeTextScale` / `controlTextScale` stamp `--dse-fs-{small,large,control}-scale`
+// inline on the root (element root via prefs.reflect(), DseModal dialog via reflectCss()). The role
+// tokens are `calc(<r>em * var(--dse-fs-*-scale))`, and a var() inside a custom property substitutes
+// on the element the property is DECLARED on - so declared only on :root they computed `* 1` on
+// <html> and every descendant inherited the flattened value: card name 20px at 80%, 100% and 120%, all
+// three knobs inert (measured 2026-10-16, SC-318 r3 INFO-1 -> SC-372). jsdom resolves no var() cascade,
+// so only a real browser can see this; jest pins the CSS structure (scaleTokenScope.test.ts), this
+// gate pins the behaviour.
+//
+// WHAT IT MEASURES, in a real Chromium, against a baseline load of the SAME page with no prefs:
+//   - REAL consumers (a card name, a numeral, a label, a caption, a collapse-header button, an h2/h3,
+//     ...) and SYNTHETIC ones (a span with `font-size: var(--dse-fs-<role>)` under a 16px parent, for
+//     every one of the 14 scale-dependent tokens), at 80% and 120% of each knob;
+//   - on an ELEMENT ROOT, inside a real DseModal (the montage "Log an action" sheet), and in BOTH
+//     print surfaces (the screen-media twin and real print media);
+//   - that a consumer of the moved knob's tokens scales by EXACTLY the knob (ratio === value), and
+//     that every consumer of the other two knobs does not move at all (isolation);
+//   - print: small and large apply (catalog help text: "including print and export"), control does
+//     not - a real control consumer must be byte-for-byte the default size on paper;
+//   - the one rule that DIVIDES by a scale (the initiative's "Untitled encounter" prompt, calc(label /
+//     1.462 / large-scale)) still lands on the plain label size at a moved large/small knob.
+// Ratios, not absolute sizes, so a retune of a role's em coefficient cannot false-red this gate.
+// Nested consumers of one knob compound (a badge inside a badge scales by value^2); every real
+// consumer below is deliberately un-nested, and the synthetic ones sit under a plain 16px parent.
+
+const TEXT_SCALE_KNOBS = {
+	small: { pref: 'smallTextScale', tokens: ['secondary', 'label', 'caption', 'micro'] },
+	large: { pref: 'largeTextScale', tokens: ['heading', 'subheading', 'numeral', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'] },
+	control: { pref: 'controlTextScale', tokens: ['control'] },
+};
+const TEXT_SCALE_VALUES = [0.8, 1.2];
+/** [label, selector, knob, screenOnly] - real, un-nested consumers per role family. `screenOnly`
+ *  rows are Steel screen rules (print-excluded by their own selector anchor): on paper those
+ *  elements are not styled by the role scale at all, so they are not asserted there. The control
+ *  row is NOT screenOnly: on paper it must stay put, which is exactly what the help text promises. */
+const TEXT_SCALE_PAGES = [
+	{
+		element: 'statblock', fixture: 'default',
+		real: [
+			['statblock .dse-sb__item-l (secondary)', '.dse-sb__item-l', 'small'],
+			['statblock .dse-pr__badge (caption/secondary)', '.dse-pr__badge', 'small'],
+			['statblock .dse-head__eyebrow (label)', '.dse-head__eyebrow', 'small'],
+			['statblock .dse-head__primary (card name: heading)', '.dse-head__primary', 'large'],
+			['statblock .dse-sb__item-v (numeral)', '.dse-sb__item-v', 'large'],
+			['statblock .dse-sb__char-l (label)', '.dse-sb__char-l', 'small', true],
+			['statblock .dse-feature__meta-cell--keywords (subheading)', '.dse-feature__meta-cell--keywords', 'large', true],
+			['statblock button.dse-collapse__header (control)', 'button.dse-collapse__header', 'control'],
+		],
+	},
+	{
+		element: 'negotiation', fixture: 'default',
+		real: [
+			['negotiation .dse-nt__readout-value (subheading)', '.dse-nt__readout-value', 'large'],
+		],
+	},
+	{
+		element: 'initiative', fixture: 'controls',
+		real: [
+			['initiative .dse-stamina__threshold (micro)', '.dse-stamina__threshold', 'small'],
+			['initiative .dse-init__round (label)', '.dse-init__round', 'small', true],
+			['initiative h2.dse-init__title (h2)', 'h2.dse-init__title', 'large', true],
+			['initiative .dse-init__group--heroes h3 (h3)', '.dse-init__group--heroes h3', 'large', true],
+		],
+		prompt: true,
+	},
+];
+/** The modal page: montage "Log an action..." opens a real DseModal (kit/managedModal). */
+const TEXT_SCALE_MODAL_PAGE = {
+	element: 'montage', fixture: 'mid',
+	click: '.dse-mt__actionrow button[aria-label="Log an action\u2026"]',
+	real: [
+		['modal .dse-mt__sheet-sub (caption)', '.dse-modal .dse-mt__sheet-sub', 'small'],
+		['modal .dse-mt__sheet-eyebrow (micro)', '.dse-modal .dse-mt__sheet-eyebrow', 'small'],
+	],
+};
+
+/** Runs in the page. Never throws on a missing node - the Node side reports it by name. */
+function measureTextScale({ real, tokens, wantPrompt }) {
+	const out = { real: {}, synth: { root: {}, modal: {} }, stamped: {}, prompt: null };
+	const root = document.querySelector('[data-dse-element]');
+	const modal = document.querySelector('.dse-modal');
+	for (const [label, sel] of real) {
+		const el = document.querySelector(sel);
+		out.real[label] = el ? parseFloat(getComputedStyle(el).fontSize) : null;
+	}
+	const synth = (host, into) => {
+		if (!host) return;
+		const wrap = document.createElement('div');
+		wrap.style.fontSize = '16px';
+		host.appendChild(wrap);
+		for (const t of tokens) {
+			const c = document.createElement('span');
+			c.style.fontSize = `var(--dse-fs-${t})`;
+			c.textContent = 'x';
+			wrap.appendChild(c);
+			into[t] = parseFloat(getComputedStyle(c).fontSize);
+		}
+		wrap.remove();
+	};
+	synth(root, out.synth.root);
+	synth(modal && (modal.querySelector('.dse-modal__body') || modal), out.synth.modal);
+	const stampOf = (n) => n && ['small', 'large', 'control'].map((k) => n.style.getPropertyValue(`--dse-fs-${k}-scale`));
+	out.stamped = { root: stampOf(root), modal: stampOf(modal) };
+	if (wantPrompt && document.querySelector('.dse-init__title[data-empty]')) {
+		out.prompt = {
+			prompt: parseFloat(getComputedStyle(document.querySelector('.dse-init__title-text'), '::before').fontSize),
+			label: parseFloat(getComputedStyle(document.querySelector('.dse-init__round')).fontSize),
+		};
+	}
+	return out;
+}
+
+async function assertTextScale(page) {
+	const problems = [];
+	let compared = 0;
+	const allTokens = Object.values(TEXT_SCALE_KNOBS).flatMap((k) => k.tokens);
+	const knobOfToken = Object.fromEntries(Object.entries(TEXT_SCALE_KNOBS).flatMap(([k, v]) => v.tokens.map((t) => [t, k])));
+	const near = (a, b) => Math.abs(a - b) <= Math.max(0.005, Math.abs(b) * 1e-4);
+	const load = async (pg, mode, prefs) => {
+		const q = new URLSearchParams({ element: pg.element, fixture: pg.fixture, theme: 'steel', bg: 'dark' });
+		if (prefs) q.set('prefs', prefs);
+		if (mode === 'twin') q.set('print', '1');
+		if (mode !== 'realprint') q.set('sheet', '1');
+		await page.emulateMedia({ media: mode === 'realprint' ? 'print' : 'screen' });
+		await page.goto(`${pageUrl}?${q}`);
+		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
+		if (pg.click) {
+			await page.click(pg.click);
+			await page.waitForSelector('.dse-modal', { timeout: 5000 });
+		}
+		const real = pg.real.filter((r) => !r[3] || mode === 'screen').map(([label, sel]) => [label, sel]);
+		return page.evaluate(measureTextScale, { real, tokens: allTokens, wantPrompt: !!pg.prompt && mode === 'screen' });
+	};
+
+	const cases = [];
+	for (const pg of TEXT_SCALE_PAGES) for (const mode of ['screen', 'twin', 'realprint']) cases.push({ pg, mode, ctx: mode === 'screen' ? 'element root' : mode === 'twin' ? 'print twin' : 'real print' });
+	cases.push({ pg: TEXT_SCALE_MODAL_PAGE, mode: 'screen', ctx: 'modal' });
+
+	for (const { pg, mode, ctx } of cases) {
+		const base = await load(pg, mode, null);
+		const where = `${pg.element}:${pg.fixture} [${ctx}]`;
+		for (const [label, v] of Object.entries(base.real)) if (!(v > 0)) problems.push(`${where}: consumer "${label}" not found / zero size at the baseline`);
+		const synthHosts = ctx === 'modal' ? ['root', 'modal'] : ['root'];
+		for (const h of synthHosts) for (const t of allTokens) if (!(base.synth[h][t] > 0)) problems.push(`${where}: synthetic --dse-fs-${t} on the ${h} measured ${base.synth[h][t]} at the baseline`);
+		for (const knob of Object.keys(TEXT_SCALE_KNOBS)) {
+			for (const value of TEXT_SCALE_VALUES) {
+				const moved = await load(pg, mode, `${TEXT_SCALE_KNOBS[knob].pref}:${value}`);
+				const at = `${where} ${TEXT_SCALE_KNOBS[knob].pref}=${value}`;
+				const stampedOn = ctx === 'modal' ? moved.stamped.modal : moved.stamped.root;
+				const stampIdx = ['small', 'large', 'control'].indexOf(knob);
+				if (!stampedOn || stampedOn[stampIdx] !== String(value)) problems.push(`${at}: the pref was not stamped on the root (inline --dse-fs-${knob}-scale = ${JSON.stringify(stampedOn && stampedOn[stampIdx])})`);
+				// Real consumers.
+				for (const [label, , cKnob] of pg.real) {
+					if (!(label in base.real)) continue;
+					const b = base.real[label];
+					const m = moved.real[label];
+					if (!(b > 0) || !(m > 0)) continue;
+					// Control text is screen-only chrome: on paper (either surface) it must not move.
+					const expected = cKnob === knob && !(cKnob === 'control' && mode !== 'screen') ? b * value : b;
+					compared += 1;
+					if (!near(m, expected)) problems.push(`${at}: ${label} measures ${m}px, expected ${expected.toFixed(4)}px (baseline ${b}px${cKnob === knob ? ` x ${value}` : ', must not move'})`);
+				}
+				// Synthetic: every scale-dependent token, on the root and (modal case) in the dialog.
+				for (const h of synthHosts) {
+					for (const t of allTokens) {
+						const tKnob = knobOfToken[t];
+						// The control TOKEN scales in print too (the help text promises only that no
+						// consumer shows it); it is checked on screen contexts and in the modal.
+						if (tKnob === 'control' && knob === 'control' && mode !== 'screen') continue;
+						const b = base.synth[h][t];
+						const m = moved.synth[h][t];
+						const expected = tKnob === knob ? b * value : b;
+						compared += 1;
+						if (!near(m, expected)) problems.push(`${at}: --dse-fs-${t} on the ${h === 'modal' ? 'DseModal dialog' : 'element root'} measures ${m}px, expected ${expected.toFixed(4)}px (baseline ${b}px${tKnob === knob ? ` x ${value}` : ', must not move'})`);
+					}
+				}
+				// The one calc() that divides by a scale.
+				if (pg.prompt && base.prompt && moved.prompt) {
+					compared += 1;
+					if (!near(moved.prompt.prompt, moved.prompt.label)) problems.push(`${at}: the "Untitled encounter" prompt measures ${moved.prompt.prompt}px, not the label size ${moved.prompt.label}px`);
+				}
+			}
+		}
+	}
+	await page.emulateMedia({ media: 'screen' });
+	if (problems.length) {
+		console.error(
+			`\nTEXT SCALE BROKEN - a text-size preference does not reach the --dse-fs-* tokens it names (SC-372):\n` +
+				problems.map((p) => `  ${p}`).join('\n') +
+				`\nSee styles-source.css -> "SC-372: THE SCALE-DEPENDENT TYPE-SIZE TOKENS": they must be declared on the roots the ` +
+				`prefs seam stamps (an element root, a DseModal), not on :root alone - a var() inside a custom property resolves ` +
+				`where the property is declared.`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\ntext scale OK (${compared} comparisons: small/large/control at 80% and 120% on an element root, in a real DseModal and ` +
+			`in both print surfaces; a knob scales its own tokens exactly and moves no other knob's; control text does not move on paper; ` +
+			`the "Untitled encounter" prompt stays on the label size)`,
 	);
 }
 
