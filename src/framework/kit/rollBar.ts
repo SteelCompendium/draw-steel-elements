@@ -15,7 +15,8 @@
 //
 // A11y (§3.6/§4): all controls are real buttons/inputs (Tab/Enter/Space), stepper
 // labels name their subject and equal the visible caption (label-in-name), the
-// toggles are checkboxes (state = a check SHAPE + a word, never a hue), the net
+// toggles are checkboxes (state = a filled vs empty box, and the header summary says it
+// in words — never a hue alone), the net
 // line is aria-live. Styling via .dse-rollbar* classes + existing --dse-* tokens
 // only (OD-D5-9: no new tokens).
 import type { Component } from 'obsidian';
@@ -168,7 +169,7 @@ export function rollBar(parent: HTMLElement, opts: RollBarOptions, owner: Compon
 		netEl.setAttribute('aria-live', 'polite');
 	}
 
-	// -- native labelled checkboxes: state is a check SHAPE + the words in the label --
+	// -- native labelled checkboxes: filled vs empty box + the words in the label and the summary --
 	const checkbox = (cls: string, text: string, checked: boolean, onChange: (on: boolean) => void): HTMLInputElement => {
 		const labelEl = panelEl.createEl('label', { cls: `dse-rollbar__check ${cls}` });
 		const inputEl = labelEl.createEl('input', { type: 'checkbox' });
