@@ -30,6 +30,7 @@ import { heroElement } from '@/elements/hero/definition';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
 import { App, Plugin, makeFakeContext, flushAsync, stringifyYaml } from '../../mocks/obsidian';
 import { PERSIST_DEBOUNCE_MS } from '@/framework/view';
+import { DseSettingTab } from '@views/SettingsTab';
 import { makeCompendiumDeps } from '../elements/_refHarness';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -358,5 +359,51 @@ describe('SC-406 — gated per-block `prefs:` keys survive a block write', () =>
 	test('on: printPreview is an applied override and the write is the pre-SC-406 shape', async () => {
 		const body = await writeBody({ experimental: true }, 'prefs:\n  printPreview: "on"\n  reduceMotion: true\ncurrent_value: 3\n');
 		expect(body.startsWith(stringifyYaml({ prefs: { printPreview: 'on', reduceMotion: true } }))).toBe(true);
+	});
+});
+
+// SC-406 fix round 1 (MEDIUM-2): a prefs save while off must not delete the stored values of the
+// two withheld prefs from data.json — they are invisible, not retired.
+describe('SC-406 — stored gated prefs survive a prefs save while off', () => {
+	const STORED = { printPreview: 'on', authoringControls: true, textScale: 1.2, retiredKey: 'x' };
+
+	async function savedAfter(data: Record<string, unknown>, act: (plugin: DrawSteelAdmonitionPlugin) => Promise<void>): Promise<Record<string, unknown>> {
+		const saved: Record<string, unknown>[] = [];
+		const { plugin } = await loadPlugin(data);
+		plugin.saveData = async (d: never) => { saved.push(JSON.parse(JSON.stringify((d as { prefs: unknown }).prefs))); };
+		await flushAsync(); // the store's own async load of the stored slice
+		await act(plugin);
+		(plugin as unknown as { prefsStorage: { flush(): void } }).prefsStorage.flush();
+		await flushAsync();
+		return saved[saved.length - 1];
+	}
+	const setUnrelated = async (p: DrawSteelAdmonitionPlugin): Promise<void> => p.frameworkV2!.services.prefs.set('reduceMotion', true);
+
+	test('off: an unrelated pref change keeps printPreview and authoringControls (a retired key is still dropped)', async () => {
+		const prefs = await savedAfter({ prefs: STORED }, setUnrelated);
+		expect(prefs).toEqual({ printPreview: 'on', authoringControls: true, textScale: 1.2, reduceMotion: true });
+	});
+
+	test('off: "Reset all preferences" resets the visible prefs and leaves the invisible stored ones alone', async () => {
+		const prefs = await savedAfter({ prefs: STORED }, async (plugin) => {
+			await setUnrelated(plugin);
+			const tab = new DseSettingTab(plugin.app as never, plugin);
+			const defs = (tab as unknown as { getSettingDefinitions(): { name: string; action(a: null, b: number): void }[] }).getSettingDefinitions();
+			defs[defs.length - 1].action(null, 0);
+			await flushAsync(2);
+		});
+		expect(prefs).toEqual({ printPreview: 'on', authoringControls: true });
+	});
+
+	test('on: unchanged — the two are ordinary described prefs, and the retired key is dropped as before', async () => {
+		const prefs = await savedAfter({ experimental: true, prefs: STORED }, setUnrelated);
+		expect(prefs).toEqual({ printPreview: 'on', authoringControls: true, textScale: 1.2, reduceMotion: true });
+	});
+
+	test('on after off loses nothing: the value written back while off is read again with the switch on', async () => {
+		const stored = await savedAfter({ prefs: { printPreview: 'on' } }, setUnrelated);
+		const { plugin } = await loadPlugin({ experimental: true, prefs: stored });
+		await flushAsync();
+		expect(plugin.frameworkV2!.services.prefs.get('printPreview')).toBe('on');
 	});
 });

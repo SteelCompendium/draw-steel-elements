@@ -32,7 +32,7 @@ import { createThemeService, registerThemeServiceForApp } from '@/framework/seam
 import type { ThemeService } from '@/framework/seams/theme';
 import { createPreferenceStore, registerPrefsForApp } from '@/framework/seams/prefs';
 import type { PreferenceStore, PrefsStorage } from '@/framework/seams/prefs';
-import { activePrefDescriptors } from '@/prefs/catalog';
+import { activePrefDescriptors, EXPERIMENTAL_PREF_KEYS } from '@/prefs/catalog';
 import { isExperimental, readExperimentalSetting, setExperimental } from '@/framework/experimental';
 import { createReferenceService } from '@/framework/seams/refs';
 import type { ReferenceService } from '@/framework/seams/refs';
@@ -210,6 +210,9 @@ export function initializeElementFrameworkV2(
 	// `printPreview` (activePrefDescriptors) — so the Authoring page / Print preview row do
 	// not render and a per-block `prefs:` naming either is rejected as unknown.
 	prefs.describe(activePrefDescriptors());
+	// SC-406: ...and a value already stored for either must survive an unrelated pref save
+	// (persist() only rebuilds from described keys), so turning the switch back on finds it.
+	if (!isExperimental()) prefs.retainUndescribed(EXPERIMENTAL_PREF_KEYS);
 	// SC-112 (Plan 23 Task 2) — mirrors the ThemeService registration immediately
 	// below: register the live PreferenceStore against `app` so DseModal.open()
 	// can look it up and stamp css-bearing prefs (font/scale custom properties) on

@@ -83,6 +83,17 @@ export interface PreferenceStore {
 	/** All registered descriptors, in registration order (D4: drives the settings
 	 *  renderer and per-block `prefs:` validation). */
 	descriptors(): readonly PrefDescriptor[];
+	/**
+	 * SC-406 — keep these UNDESCRIBED keys, as stored, through every later `persist()`.
+	 * `persist()` otherwise rebuilds the snapshot from the described descriptors only, so a
+	 * value whose descriptor is withheld (the release gate's `authoringControls`/`printPreview`
+	 * while the experimental switch is off) would be silently deleted from `data.json` by the
+	 * next unrelated pref change — and be gone when the switch is turned back on. Scoped to the
+	 * named keys, so a retired or stale key is still dropped on save exactly as before; a key
+	 * that IS described is never carried (the live value wins). The caller passes its own key
+	 * list: `seams/` stays free of any catalog import.
+	 */
+	retainUndescribed(keys: readonly string[]): void;
 }
 
 /**
@@ -123,6 +134,8 @@ class DsePreferenceStore implements PreferenceStore {
 	/** Raw snapshot from storage.get(), kept so a descriptor described() AFTER the
 	 *  async load resolves can still pick up its already-loaded persisted value. */
 	private persistedSnapshot: Partial<Record<string, unknown>> = {};
+	/** SC-406: undescribed keys `persist()` must carry forward (see `retainUndescribed`). */
+	private readonly retained = new Set<string>();
 
 	constructor(private readonly storage: PrefsStorage) {
 		this.describe(BUILTIN_DESCRIPTORS);
@@ -175,6 +188,10 @@ class DsePreferenceStore implements PreferenceStore {
 		return [...this.descriptorMap.values()];
 	}
 
+	retainUndescribed(keys: readonly string[]): void {
+		for (const key of keys) this.retained.add(key);
+	}
+
 	get<K extends keyof DsePrefs>(key: K): DsePrefs[K] {
 		const k = key as string;
 		const descriptor = this.descriptorFor(k);
@@ -196,6 +213,10 @@ class DsePreferenceStore implements PreferenceStore {
 			const value = this.values.get(key);
 			if (value === descriptor.default) continue; // sparse: defaults are implicit
 			snapshot[key] = value;
+		}
+		// SC-406: carry forward the retained keys that have no descriptor right now.
+		for (const [key, value] of Object.entries(this.persistedSnapshot)) {
+			if (this.retained.has(key) && !this.descriptorMap.has(key)) snapshot[key] = value;
 		}
 		this.persistedSnapshot = snapshot;
 		await this.storage.set(snapshot);
