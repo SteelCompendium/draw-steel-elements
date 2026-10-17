@@ -300,9 +300,13 @@ export class MinionStaminaPoolModal extends DseModal {
 		} else {
 			minionsToKill = Math.min(aliveMinions, minionsToKill);
 		}
-		// The highest pool the living minions can hold (what a heal may not exceed).
-		const livingShare = aliveMinions * effectivePerMinion;
-		return { minionMaxStamina, aliveMinions, poolMaxStamina, poolCurrentStamina, newStamina, minionsToKill, livingShare };
+		// The highest pool a heal may reach: the top of the death bracket the pool already
+		// sits in. This is the SAME bound the ladder refuses on (`minionsToKill < 0` iff
+		// `new > poolMax - initialMinionsKilled * per`), so the message and the refusal can't
+		// disagree. It equals the living minions' worth (`alive * per`) on a consistent squad,
+		// and sits below it when the pool is underfunded (captain relieved, 6.0.2 damage).
+		const healCeiling = poolMaxStamina - initialMinionsKilled * effectivePerMinion;
+		return { minionMaxStamina, aliveMinions, poolMaxStamina, poolCurrentStamina, newStamina, minionsToKill, healCeiling };
 	}
 
 	private clampedNewStamina(): number {
@@ -340,11 +344,11 @@ export class MinionStaminaPoolModal extends DseModal {
 	}
 
 	private updateInfoText(): void {
-		const { minionsToKill, livingShare } = this.poolNumbers();
+		const { minionsToKill, healCeiling } = this.poolNumbers();
 		if (minionsToKill < 0) {
 			// A heal past a dead minion's share (SC-417 LOW-1): say the rule, never a
 			// negative count.
-			this.infoTextEl.textContent = `A heal can't raise the pool above the living minions' share (${livingShare} stamina).`;
+			this.infoTextEl.textContent = `A heal can't raise the pool above the living minions' share (${healCeiling} stamina).`;
 		} else if (this.pendingStaminaChange > 0) {
 			this.infoTextEl.textContent = `Heal ${this.pendingStaminaChange} stamina; dead minions stay dead.`;
 		} else {
@@ -356,7 +360,7 @@ export class MinionStaminaPoolModal extends DseModal {
 	/** Legacy wording verbatim; the disabled state is the REAL property (CB-8). */
 	private updateActionButton(): void {
 		const staminaChange = this.pendingStaminaChange;
-		const { minionsToKill, livingShare } = this.poolNumbers();
+		const { minionsToKill, healCeiling } = this.poolNumbers();
 
 		// Count the number of minions selected
 		const selectedMinions = this.minionCheckboxes.filter((item) => item.checkbox.checked).length;
@@ -385,7 +389,7 @@ export class MinionStaminaPoolModal extends DseModal {
 			this.actionBtn.buttonEl.setAttribute('title', `Select ${minionsToKill} minion(s) to kill`);
 		} else if (minionsToKill < 0) {
 			// SC-417 LOW-1: the refused heal gets its reason.
-			const reason = `Minions can't regain Stamina past a dead minion's share (at most ${livingShare})`;
+			const reason = `Minions can't regain Stamina past a dead minion's share (at most ${healCeiling})`;
 			this.actionBtn.buttonEl.setAttribute('title', reason);
 			// LOW-R3: the accessible name (aria-label, the hover tooltip) carries it too — the
 			// visible text stays the action (house rule: Spend Recovery's disable reason).

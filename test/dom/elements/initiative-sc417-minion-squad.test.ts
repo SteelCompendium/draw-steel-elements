@@ -452,6 +452,17 @@ describe('SC-417 round 4 — the kill ladder for an underfunded pool (damage = l
 		expect(checks(m).every((c) => !c.checked && c.disabled)).toBe(true);
 	});
 
+	test('LOW-R5: a refused heal in the post-captain underfunded pool (77, 3 alive) names the real ceiling, 84, not 3 x 40', async () => {
+		const { root } = await relievedSquad();
+		const m = openFromGrid(root, 2);
+		typePool(m, 85);
+		expect(actionBtn(m).disabled).toBe(true);
+		expect(info(m)).toContain('(84 stamina)');
+		expect(actionBtn(m).getAttribute('title')).toContain('at most 84');
+		typePool(m, 84); // the ceiling itself is allowed
+		expect(actionBtn(m).disabled).toBe(false);
+	});
+
 	test('post-captain underfunded pool: 1 damage demands 0 kills (the ladder, not a survivors count)', async () => {
 		const { root } = await relievedSquad();
 		const m = openFromGrid(root, 2);
@@ -476,5 +487,20 @@ describe('SC-417 round 4 — the kill ladder for an underfunded pool (damage = l
 		expect(actionBtn(m).disabled).toBe(false);
 		expect(info(m)).not.toMatch(/kill|-\d/);
 		expect(actionBtn(m).hasAttribute('title')).toBe(false);
+	});
+
+	test('LOW-R5: a refused heal on a 6.0.2-damaged block (pool 2, 2 alive) names the real ceiling, 40, not 2 x 40', async () => {
+		const damaged = MORDOR.replace(
+			'        squad_role: minion\n',
+			'        squad_role: minion\n        instances:\n          - id: 1\n          - id: 2\n            isDead: true\n          - id: 3\n            isDead: true\n          - id: 4\n',
+		).replace('    is_squad: true\n', '    is_squad: true\n    minion_stamina_pool: 2\n');
+		const { root } = await renderInit(damaged);
+		const m = openFromGrid(root, 1);
+		typePool(m, 41);
+		expect(actionBtn(m).disabled).toBe(true);
+		expect(info(m)).toContain('(40 stamina)');
+		expect(actionBtn(m).getAttribute('title')).toContain('at most 40');
+		typePool(m, 40);
+		expect(actionBtn(m).disabled).toBe(false);
 	});
 });
