@@ -735,7 +735,11 @@ export class InitiativeView extends ElementView<EncounterData> {
 		const row = fromEl.closest('.dse-init__row, .dse-init__grouphead') ?? fromEl;
 		row.querySelectorAll<HTMLElement>('.dse-init__turn').forEach((el) => {
 			this.updateTurnGlyph(el, taken);
-			if (el.tagName === 'BUTTON') el.setAttribute('aria-pressed', String(taken));
+			if (el.tagName === 'BUTTON') {
+				el.setAttribute('aria-pressed', String(taken));
+				// SC-423 R3: same stamp as the portrait toggle below and `iconButton.setPressed`.
+				el.toggleAttribute('data-pressed', taken);
+			}
 		});
 		row.querySelectorAll<HTMLElement>('.dse-init__portrait-toggle').forEach((el) => {
 			el.toggleAttribute('data-taken', taken);
