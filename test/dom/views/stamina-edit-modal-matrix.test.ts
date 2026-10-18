@@ -457,6 +457,24 @@ describe('[Q06][Q07][Q09][Q10][Q15] Spend Recovery across positions (tracked poo
 	});
 });
 
+// B5 / SC-432 (Scott, 2026-10-18: "disable Spend Recovery for creatures"): a creature has no Recoveries
+// to spend, yet today the button heals it for free. These assert the RULED behaviour and fail today, so
+// they are `test.failing` markers; the SC-432 fixer removes the `.failing`. (The `kind: 'creature'` rows
+// of the position matrix above exercise the same code path with a pool a shipped creature never has;
+// SC-432 rewrites them with the fix.) The hero with no pool is a plain pin in stamina-edit-modal.test.ts
+// until SC-432 designs the relabel + confirmation.
+describe('[Q13] Spend Recovery is disabled for a creature [known bug SC-432]', () => {
+	test.failing.each([
+		{ name: 'no pool (how every initiative creature is)', rec: undefined },
+		{ name: 'with a tracked pool', rec: 3 },
+	])('creature 10/30, $name: the Spend Recovery button is disabled', ({ rec }) => {
+		const { content } = openStaminaModal({
+			max: 30, current: 10, isHero: false, ...(rec === undefined ? {} : { recoveries: rec, recoveries_max: 6 }),
+		});
+		expect(spendRecoveryBtn(content)!.disabled).toBe(true);
+	});
+});
+
 describe('[Q06] opts.recoveryValue overrides the derived floor(max/3)', () => {
 	test.each([
 		{ override: 7, dS: 7 },

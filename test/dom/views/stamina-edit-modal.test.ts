@@ -143,7 +143,7 @@ describe('T-5: StaminaEditModal — temp stamina absorbs damage first', () => {
 		expect(bar.temp_stamina).toBe(0);
 	});
 
-	test('Spend Recovery heals floor(max/3)', () => {
+	test('Spend Recovery heals floor(max/3) (a hero with no pool) [current behaviour — SC-432 will relabel + confirm]', () => {
 		const { content, bar } = makeModal(21, 10, 0);
 		btn(content, 'Spend Recovery').click();
 		apply(content);
@@ -259,7 +259,7 @@ describe('FOLLOWUPS #27b: StaminaEditModal — Spend Recovery synced with recove
 	// disables too, once a press would heal 0, with the same reason a tracked block
 	// gets. What's unchanged and still asserted: `recoveries` never gets written for
 	// an untracked block (no counter to decrement in the first place).
-	test('legacy block (no recoveries field): Spend Recovery still real-disables at zero true gain (no gain != no tracking), recoveries stays undefined through Apply', () => {
+	test('legacy block (no recoveries field): Spend Recovery still real-disables at zero true gain (no gain != no tracking), recoveries stays undefined through Apply [current behaviour — SC-432 will relabel + confirm]', () => {
 		const { content, bar } = makeModal(21, 10, 0);
 		const spend = btn(content, 'Spend Recovery');
 		for (let i = 0; i < 5; i++) spend.click(); // only the first 2 succeed (10 -> 17 -> 21); the rest are swallowed once real-disabled
@@ -491,6 +491,11 @@ describe('SC-133 RC-4: Spend Recovery never over-burns Recoveries, and the previ
 	});
 });
 
+// SC-408 / SC-433 (Scott, 2026-10-18, B6): the temp field is to become a DIRECT edit like the
+// Stamina field ("keep the higher" only for gaining temp from an effect). The tests below that pin
+// the OLD typed/minus behaviour are `test.failing` markers asserting the ruled behaviour, titled
+// "[known bug SC-433]"; the SC-433 fixer removes the `.failing` as it lands the change.
+//
 // SC-133 RC-5 (RAW reference/draw-steel-reference.md:279 — temp doesn't stack,
 // take higher) + fix-round-1 C1: granting temp through the modal must never
 // reduce it below the character's CURRENT session position — floored against
@@ -510,12 +515,12 @@ describe('SC-133 RC-5: granting temp does not stack — take the higher of curre
 		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
 	}
 
-	test('typing a grant lower than current temp leaves temp unchanged (takes the higher)', () => {
+	test.failing('typing a temp value lower than the current one applies it as typed: 3 over 5 is a loss of 2 [known bug SC-433]', () => {
 		const { modal, content, bar } = makeModal(20, 20, 5);
 		typeTemp(content, '3');
-		expect(modal.pendingTempStaminaChange).toBe(0);
+		expect(modal.pendingTempStaminaChange).toBe(-2);
 		apply(content);
-		expect(bar.temp_stamina).toBe(5);
+		expect(bar.temp_stamina).toBe(3);
 	});
 
 	test('typing a grant higher than current temp raises temp to the granted amount', () => {
@@ -532,14 +537,14 @@ describe('SC-133 RC-5: granting temp does not stack — take the higher of curre
 		expect(modal.pendingTempStaminaChange).toBe(0);
 	});
 
-	test('the minus button cannot walk temp below the session-start value (no RAW partial-fade path)', () => {
+	test.failing('the minus button lowers temp by one: at temp 5 Apply writes 4 [known bug SC-433]', () => {
 		const { modal, content, bar } = makeModal(20, 20, 5);
 		const minus = content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
 			.querySelector('button[aria-label="Decrease Temporary Stamina"]') as HTMLButtonElement;
 		minus.click();
-		expect(modal.pendingTempStaminaChange).toBe(0);
+		expect(modal.pendingTempStaminaChange).toBe(-1);
 		apply(content);
-		expect(bar.temp_stamina).toBe(5);
+		expect(bar.temp_stamina).toBe(4);
 	});
 
 	test('granting from a temp of 0 is unaffected (no existing temp to take-higher against)', () => {
@@ -550,14 +555,14 @@ describe('SC-133 RC-5: granting temp does not stack — take the higher of curre
 		expect(bar.temp_stamina).toBe(4);
 	});
 
-	test('a later, larger typed grant still takes the higher against the running position (9 then 3 stays 9)', () => {
+	test.failing('a typed temp value after an earlier typed grant is applied as typed (9 then 3 gives 3) [known bug SC-433]', () => {
 		const { modal, content, bar } = makeModal(20, 20, 5);
 		typeTemp(content, '9'); // 9 > 5 -> running becomes 9
 		expect(modal.pendingTempStaminaChange).toBe(4);
-		typeTemp(content, '3'); // 3 < running 9 -> blocked, stays 9 (NOT re-floored to the stale 5)
-		expect(modal.pendingTempStaminaChange).toBe(4);
+		typeTemp(content, '3'); // a direct edit: 3, not "blocked at the running 9"
+		expect(modal.pendingTempStaminaChange).toBe(-2);
 		apply(content);
-		expect(bar.temp_stamina).toBe(9);
+		expect(bar.temp_stamina).toBe(3);
 	});
 
 	// C1 (CRITICAL, fix-round-1): the floor must track the RUNNING session
@@ -582,15 +587,15 @@ describe('SC-133 RC-5: granting temp does not stack — take the higher of curre
 			expect(bar.temp_stamina).toBe(3);
 		});
 
-		test('A2: Damage absorbs 3 of 5 temp (running -> 2), then minus is blocked at the running position, not the stale 5', () => {
+		test.failing('A2: Damage absorbs 3 of 5 temp (running -> 2), then minus lowers the running position to 1 [known bug SC-433]', () => {
 			const { modal, content, bar } = makeModal(20, 20, 5);
 			clickDamageHere(content, 3); // running 5 -> 2
 			const minus = content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
 				.querySelector('button[aria-label="Decrease Temporary Stamina"]') as HTMLButtonElement;
-			minus.click(); // blocked: stays at running 2, does NOT jump to 5
-			expect(modal.pendingTempStaminaChange).toBe(-3);
+			minus.click(); // a direct edit: 2 -> 1 (never a jump back up to the stale 5)
+			expect(modal.pendingTempStaminaChange).toBe(-4);
 			apply(content);
-			expect(bar.temp_stamina).toBe(2);
+			expect(bar.temp_stamina).toBe(1);
 		});
 
 		test('A4: Damage absorbs 3 of 5 temp (running -> 2), then typing 4 grants to 4 (RAW: take higher of running 2 vs granted 4), not the stale 5', () => {
