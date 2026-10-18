@@ -45,8 +45,8 @@ Choosing a statblock look, with pictures:
     - **Small text size** covers everything quieter than the body: labels, captions,
       hints, chips, log lines, tallies. Turn it up if the small print in the trackers is
       hard to read.
-    - **Large text size** covers everything louder: card names, band titles, and the big
-      display numbers on a statblock.
+    - **Large text size** covers everything louder: card names, band titles, ability keyword
+      and action chips, and the big display numbers on a statblock.
     - **Control text size** covers buttons, steppers, tabs and collapse headers. Turn it
       down if the buttons shout louder than the content.
 

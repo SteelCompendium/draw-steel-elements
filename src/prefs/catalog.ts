@@ -358,7 +358,7 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		ui: {
 			group: 'Typography', label: 'Large text size', control: 'slider',
 			min: TYPE_SCALE.min, max: TYPE_SCALE.max, step: TYPE_SCALE.step,
-			help: 'Size of text above the body size — card names, band titles and display stat numbers — relative to the element\'s body text (80%–120%). 100% keeps today\'s look. Applies everywhere, including print and export.',
+			help: 'Size of text above the body size — card names, band titles, ability keyword and action chips and display stat numbers — relative to the element\'s body text (80%–120%). 100% keeps today\'s look. Applies everywhere, including print and export.',
 		},
 	}),
 	d({

@@ -47,7 +47,7 @@ for what needs action.
   reads "EV N/A".
 - [FIX] **The Small, Large and Control text size sliders now actually change the text**
   (SC-372). They saved fine but did nothing: moving "Large text size" to 120% left a card name
-  at 20px, and the other two sliders were the same. Card names, band titles, display numbers and
+  at 20px, and the other two sliders were the same. Card names, band titles, ability keyword and action chips, display numbers and
   headings now follow Large text size; labels, captions, hints and tallies follow Small text size;
   buttons, steppers, tabs and collapse headers follow Control text size (screen only), including
   text nested inside other text such as the power-roll tier badges. They work
