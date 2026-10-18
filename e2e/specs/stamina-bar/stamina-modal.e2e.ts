@@ -158,21 +158,57 @@ describe('stamina-edit-modal from ds-stamina-bar: quick actions and temporary St
 		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ temp_stamina: 8 });
 	});
 
-	it('[STAM-T03] a typed temp value lower than the current changes nothing (RAW: take the higher)', async () => {
-		const modal = await openBarModal(NOTE);
-		await dse.type(modal.control('sedit.temp.input'), '3', { replace: true });
-		await dse.blur(modal.control('sedit.temp.input'));
-		await expectApplyLabel(modal, 'No Stamina Change');
-		await expect(modal.control('sedit.temp.input')).toHaveValue('5');
-		await dse.click(modal.control('modal.close'));
-	});
+	// T03 / S1 B6 (SC-433, ruled by Scott 2026-10-18): the temp field is a DIRECT edit like the Stamina
+	// field; "keep the higher" belongs only to gaining temp from an effect. Today a typed lower value is
+	// swallowed (the field snaps back to 5 and nothing changes).
+	knownBug(
+		'SC-433',
+		'[STAM-T03] a typed temp value lower than the current is applied as typed: 3 over 5 is a loss of 2',
+		async () => {
+			const modal = await openBarModal(NOTE);
+			await dse.type(modal.control('sedit.temp.input'), '3', { replace: true });
+			await dse.blur(modal.control('sedit.temp.input'));
+			await expectApplyLabel(modal, 'Lose 2 Temp Stamina', {
+				wait: 1500,
+				message: 'a typed temp value lower than the current should be applied as typed (Lose 2 Temp Stamina)',
+			});
+			await expect(modal.control('sedit.temp.input')).toHaveValue('3');
+			expect(await applyAndWrite(modal, NOTE)).toBe(1);
+			await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ temp_stamina: 3 });
+		},
+		{ failsWith: /a typed temp value lower than the current should be applied as typed/ },
+	);
 
-	it('[STAM-T04] the temp "-" at temp 5 does nothing, enabled but a no-op [current behaviour — ruling pending SC-408]', async () => {
+	// T04 / S1 B6 (SC-433): the temp "-" is enabled but a silent no-op (it can never lower temp, not
+	// even to walk back a "+" pressed in the same session). Ruled: a direct edit, so "-" at 5 gives 4.
+	knownBug(
+		'SC-433',
+		'[STAM-T04] the temp "-" at temp 5 lowers it by one: Apply writes temp_stamina 4',
+		async () => {
+			const modal = await openBarModal(NOTE);
+			await expect(modal.control('sedit.temp.dec')).toBeEnabled();
+			await dse.click(modal.control('sedit.temp.dec'));
+			await expectApplyLabel(modal, 'Lose 1 Temp Stamina', {
+				wait: 1500,
+				message: 'the temp "-" at 5 should lower temp to 4 (Lose 1 Temp Stamina)',
+			});
+			expect(await applyAndWrite(modal, NOTE)).toBe(1);
+			await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ temp_stamina: 4 });
+		},
+		{ failsWith: /the temp "-" at 5 should lower temp to 4/ },
+	);
+
+	// T11: the plain driver of `sedit.temp.dec x click` (the exercised-set gate needs a non-known-bug one).
+	// It asserts only what holds both today (where "-" does nothing, B6) and once SC-433 lands (where
+	// "-" lowers temp): after a click the Apply label always agrees with the temp field, and nothing is
+	// written until Apply.
+	it('[STAM-T11] after the temp "-" is pressed, the Apply label always agrees with the temp field and nothing is written', async () => {
 		const modal = await openBarModal(NOTE);
-		await expect(modal.control('sedit.temp.dec')).toBeEnabled();
-		await dse.click(modal.control('sedit.temp.dec')); // S1 B6
-		await expectApplyLabel(modal, 'No Stamina Change');
-		await expect(modal.control('sedit.temp.input')).toHaveValue('5');
+		await dse.expectNoWrite(NOTE, () => dse.click(modal.control('sedit.temp.dec')));
+		const shown = Number(await modal.control('sedit.temp.input').getValue());
+		const delta = shown - 5;
+		const expected = delta === 0 ? 'No Stamina Change' : delta > 0 ? `Gain ${delta} Temp Stamina` : `Lose ${-delta} Temp Stamina`;
+		await expectApplyLabel(modal, expected);
 		await dse.click(modal.control('modal.close'));
 	});
 
@@ -192,13 +228,22 @@ describe('stamina-edit-modal from ds-stamina-bar: quick actions and temporary St
 		await dse.click(modal.control('modal.close'));
 	});
 
-	it('[STAM-T10] a negative temp value clamps to 0 and so changes nothing', async () => {
-		const modal = await openBarModal(NOTE);
-		await dse.type(modal.control('sedit.temp.input'), '-3', { replace: true });
-		await dse.blur(modal.control('sedit.temp.input'));
-		await expectApplyLabel(modal, 'No Stamina Change');
-		await dse.click(modal.control('modal.close'));
-	});
+	// T10 / SC-433: a typed negative temp clamps to 0 and, being a direct edit, is applied as 0 (a loss
+	// of the whole 5). Today "keep the higher" swallows it and nothing changes.
+	knownBug(
+		'SC-433',
+		'[STAM-T10] a negative typed temp value clamps to 0 and is applied as typed: temp goes to 0',
+		async () => {
+			const modal = await openBarModal(NOTE);
+			await dse.type(modal.control('sedit.temp.input'), '-3', { replace: true });
+			await dse.blur(modal.control('sedit.temp.input'));
+			await expectApplyLabel(modal, 'Lose 5 Temp Stamina', {
+				wait: 1500,
+				message: 'a negative typed temp value should clamp to 0 and be applied as typed (Lose 5 Temp Stamina)',
+			});
+		},
+		{ failsWith: /a negative typed temp value should clamp to 0 and be applied as typed/ },
+	);
 });
 
 describe('stamina-edit-modal from ds-stamina-bar: footer', () => {

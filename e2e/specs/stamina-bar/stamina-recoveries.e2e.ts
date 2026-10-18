@@ -175,7 +175,11 @@ describe('modal Spend Recovery', () => {
 		await dse.expectNoteBlock(REC, BAR).toMatchObject({ current_stamina: 17, recoveries: 3 });
 	});
 
-	it('[STAM-Q13] Spend Recovery on a bar that does not track Recoveries heals for free, with no limit [current behaviour — ruling pending SC-408]', async () => {
+	// Q13 / S1 B5, ruled (SC-432): for a hero with no pool to spend from, Spend Recovery stays a plain
+	// "heal one Recovery's worth" shortcut, relabelled so it does not claim to spend anything, behind a
+	// confirmation dialog. Neither the label nor the dialog is designed yet, so this pins TODAY's
+	// behaviour and the SC-432 fixer rewrites it. (A creature cannot reach this: see INIT-STAM-Q13.)
+	it('[STAM-Q13] Spend Recovery on a hero bar with no pool heals for free, with no limit [current behaviour — SC-432 will relabel + confirm]', async () => {
 		const note = 'Stamina/legacy-low.md'; // 2/30, no recoveries fields; recovery value 10
 		const modal = await openBarModal(note);
 		for (let i = 0; i < 3; i++) await dse.click(modal.control('sedit.spend-recovery'));

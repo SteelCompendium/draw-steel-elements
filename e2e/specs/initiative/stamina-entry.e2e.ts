@@ -9,6 +9,7 @@ import { dse, knownBug } from '../../driver/dse';
 import { applyAmount, applyAndWrite, expectApplyLabel } from '../../driver/stamina';
 
 const NOTE = 'Initiative/tracker.md';
+const HURT = 'Initiative/hurt.md'; // Ogre #1 at 20/60, Ogre #2 at 60/60
 const INIT = 'ds-initiative';
 
 type Scope = ReturnType<typeof dse.block>;
@@ -127,6 +128,22 @@ describe('initiative: creatures', () => {
 		});
 		await expect(root.control({ css: '.dse-init__cell[data-instance-key="0-2"] .dse-init__cell-stamina' })).toHaveText('53/60');
 	});
+
+	// Q13 / S1 B5, ruled by Scott 2026-10-18 (SC-432): "disable Spend Recovery for creatures". A creature
+	// has no Recoveries at all, yet today Spend Recovery heals it for free, with no limit (20/60 -> 60/60
+	// in three presses). The creature is hurt on purpose: at full Stamina the button is disabled anyway.
+	knownBug(
+		'SC-432',
+		'[INIT-STAM-Q13] Spend Recovery is disabled for a creature',
+		async () => {
+			await dse.openNote(HURT);
+			await dse.click(dse.block(INIT).control('init.detail.bar'));
+			const modal = await dse.modal('stamina-edit');
+			await expect(modal.control('sedit.spend-recovery')).toBeDisabled({ wait: 1500, message: 'Spend Recovery should be disabled for a creature' });
+			await dse.click(modal.control('modal.close'));
+		},
+		{ failsWith: /Spend Recovery should be disabled for a creature/ },
+	);
 
 	// B2 / S1 (SC-426): the cell route passes no detail-row elements to the modal callback, so
 	// editing the instance shown in the detail row repaints the cell only. The write is right, and
