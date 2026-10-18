@@ -4,6 +4,10 @@ Drives a real Obsidian (WebdriverIO + `wdio-obsidian-service` behind our own `dr
 real pointer and key events, then asserts the **note file** and the DOM. Shipped specs run
 with `experimental` OFF (the real 7.0.0 product).
 
+**Required gate: a green full `npm run e2e` (0 failed, `coverage: Y/Y pairs`) is required before landing
+ANY change to this plugin** (Scott, SC-408, 2026-10-18: "make it required to land future changes"), not only
+changes to the surfaces covered so far. Run order is in the `dse-verify` skill (step 4b, after lifecycle).
+
 ```bash
 npm run e2e                                # full run: headless on a private Xvfb, pinned Obsidian 1.14.4, coverage gate ON
 npm run e2e -- --element=stamina-bar       # one dir under specs/ (or a top-level file: --element=_census)

@@ -15,7 +15,7 @@ first** -- it contains the reading guide, role-based routing, and links to all o
 - `npm run dev` -- build with watch mode
 - `npm run build` -- production build (type check + minified)
 - `npm test` -- run tests (Jest: `unit` node project + `dom` jsdom project; `npx jest --selectProjects unit|dom` to run one)
-- `npm run e2e` -- functional tests in a real Obsidian (headless, own Xvfb); see `e2e/README.md`
+- `npm run e2e` -- functional tests in a real Obsidian (headless, own Xvfb); **a required gate before landing any change** (Scott, SC-408); see `e2e/README.md`
 
 ## Visual harness (see it rendered)
 
