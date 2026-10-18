@@ -1913,15 +1913,30 @@ describe('SC-183 round 3: the portrait is the turn control', () => {
 		expect(toggle.hasAttribute('data-pressed')).toBe(false);
 	});
 
-	test('SC-423: the checkbox click repaints the portrait data-pressed too', async () => {
+	test('SC-423: the checkbox click repaints data-pressed on itself AND on the portrait toggle', async () => {
 		const { root } = await renderInit(quickStart);
 		const row = root.querySelector('.dse-init__group--heroes .dse-init__row') as HTMLElement;
 		const box = row.querySelector<HTMLElement>('button.dse-init__turn')!;
 		const toggle = row.querySelector<HTMLElement>('button.dse-init__portrait-toggle')!;
 		box.click();
+		expect(box.getAttribute('data-pressed')).toBe('');
 		expect(toggle.hasAttribute('data-pressed')).toBe(true);
 		box.click();
+		expect(box.hasAttribute('data-pressed')).toBe(false);
 		expect(toggle.hasAttribute('data-pressed')).toBe(false);
+	});
+
+	test('SC-423: the enemy-group header turn button keeps data-pressed in step with aria-pressed in place', async () => {
+		const { root } = await renderInit(quickStart);
+		const btn = root.querySelector<HTMLElement>('.dse-init__grouphead .dse-init__turn')!;
+		expect(btn.tagName).toBe('BUTTON');
+		expect(btn.hasAttribute('data-pressed')).toBe(false);
+		btn.click();
+		expect(btn.getAttribute('aria-pressed')).toBe('true');
+		expect(btn.getAttribute('data-pressed')).toBe('');
+		btn.click();
+		expect(btn.getAttribute('aria-pressed')).toBe('false');
+		expect(btn.hasAttribute('data-pressed')).toBe(false);
 	});
 
 	test('read-only renders NO portrait toggle (no dead-end write affordance, F1 §4.4)', async () => {
