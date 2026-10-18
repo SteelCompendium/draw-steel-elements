@@ -2706,9 +2706,10 @@ async function probeInputsInState(page, cdp, docRootNodeId, state, count, props)
 //   2. the socket box paints exactly what the hero portrait's mark paints (same fill, same shadows, same
 //      border), for the group header AND for the portraits-off fallback.
 /** Runs in the page. `off` = the portraits-off preference is active. Reads each state from a FRESHLY
- *  RENDERED element - never by clicking one into the other: the kit button carries `data-pressed` from
- *  its build and a click only flips `data-taken`/`aria-pressed`, so a toggled button is not what a
- *  fresh render of that state looks like (the kit's sheen rule keys on `[data-pressed]`). */
+ *  RENDERED element - never by clicking one into the other: this check is about what the SOCKET paints,
+ *  not about click repaint (which `assertPortraitMarkParity` covers for the hero portrait, SC-423). Before
+ *  SC-423 a click only flipped `data-taken`/`aria-pressed` and not the kit's `[data-pressed]`, so a toggled
+ *  portrait was not what a fresh render of that state looks like (the kit's sheen rule keys on it). */
 function measureTurnMarks(off) {
 	const paint = (el) => {
 		const c = getComputedStyle(el);
@@ -2794,6 +2795,97 @@ async function assertTurnMarkParity(page) {
 	console.log(
 		`\nturn mark parity OK (hero vs enemy-group mark: ${compared} comparisons across ` +
 			`dark/light x portraits-on/off x not-acted/acted on the computed cascade; no kit button paint inside any socket)`,
+	);
+}
+
+// ======================================================================================
+// SC-423 - THE PORTRAIT PAINTS THE SAME WHETHER IT WAS RENDERED ACTED OR CLICKED ACTED.
+//
+// A hero portrait clicked acted got its seal but not its 2px metal frame until something re-rendered the
+// whole tracker. Same cascade trap as the turn button above: the kit's sheen rule (0,8,0) paints the chip
+// bevel on every `.dse-btn:not([data-pressed])`, the frame rule was (0,5,0), and the click's in-place
+// repaint flipped `data-taken` without `data-pressed`. The reverse was broken too: a portrait rebuilt
+// acted and then un-toggled in place kept `data-pressed` and lost its bevel. A jest test can pin the
+// attributes (and does), but only the browser knows what the cascade resolves, so: take the paint of a
+// portrait RENDERED in each state (the `fight` fixture ships one hero acted and one not), click the OTHER
+// hero's portrait into that state IN PLACE (no rebuild - the same element must survive), and require the
+// computed paint to match exactly, in both directions and both schemes.
+/** Runs in the page. Never rebuilds: it holds the two toggle elements and clicks them. */
+function measurePortraitMarks() {
+	const paint = (el) => {
+		const c = getComputedStyle(el);
+		return {
+			backgroundColor: c.backgroundColor,
+			backgroundImage: c.backgroundImage,
+			boxShadow: c.boxShadow,
+			borderTopColor: c.borderTopColor,
+			borderTopWidth: c.borderTopWidth,
+		};
+	};
+	const toggles = Array.from(document.querySelectorAll('.dse-init__group--heroes button.dse-init__portrait-toggle'));
+	const acted = toggles.find((b) => b.hasAttribute('data-taken'));
+	const idle = toggles.find((b) => !b.hasAttribute('data-taken'));
+	if (!acted || !idle) return { missing: `${!acted ? 'an acted ' : ''}${!idle ? 'a not-acted ' : ''}hero portrait` };
+	const renderedActed = paint(acted);
+	const renderedIdle = paint(idle);
+	// Direction 1: rendered not-acted -> CLICKED acted, in place.
+	idle.click();
+	const clickedActed = paint(idle);
+	const idleSurvived = idle.isConnected && idle.hasAttribute('data-taken');
+	// Direction 2: rendered acted -> CLICKED not-acted, in place.
+	acted.click();
+	const clickedIdle = paint(acted);
+	const actedSurvived = acted.isConnected && !acted.hasAttribute('data-taken');
+	return { renderedActed, renderedIdle, clickedActed, clickedIdle, idleSurvived, actedSurvived };
+}
+
+async function assertPortraitMarkParity(page) {
+	const problems = [];
+	let compared = 0;
+	const KEYS = ['backgroundColor', 'backgroundImage', 'boxShadow', 'borderTopColor', 'borderTopWidth'];
+	for (const bg of ['dark', 'light']) {
+		const query = new URLSearchParams({ element: 'initiative', fixture: 'fight', theme: 'steel', bg, sheet: '1' });
+		await page.emulateMedia({ media: 'screen' });
+		await page.goto(`${pageUrl}?${query}`);
+		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
+		const m = await page.evaluate(measurePortraitMarks);
+		if (m.missing) {
+			problems.push(`${bg}: fixture has no ${m.missing} - the check would be blind`);
+			continue;
+		}
+		if (!m.idleSurvived || !m.actedSurvived) {
+			problems.push(`${bg}: a click rebuilt the portrait instead of repainting it in place - the check would be blind`);
+		}
+		// The two rendered states must differ, or "clicked matches rendered" proves nothing.
+		if (m.renderedActed.boxShadow === m.renderedIdle.boxShadow) {
+			problems.push(`${bg}: rendered acted and not-acted portraits paint the same box-shadow - the check would be blind`);
+		}
+		if (!/\b2px inset\b/.test(m.renderedActed.boxShadow)) {
+			problems.push(`${bg}: the rendered acted portrait has no 2px inset frame (${m.renderedActed.boxShadow.slice(0, 90)})`);
+		}
+		for (const [label, got, want] of [
+			['not-acted -> clicked acted', m.clickedActed, m.renderedActed],
+			['acted -> clicked not-acted', m.clickedIdle, m.renderedIdle],
+		]) {
+			compared += 1;
+			for (const k of KEYS) {
+				if (got[k] !== want[k]) {
+					problems.push(`${bg}|${label}: in place the portrait's ${k} is "${got[k].slice(0, 90)}" but rendered in that state it is "${want[k].slice(0, 90)}"`);
+				}
+			}
+		}
+	}
+	if (problems.length) {
+		console.error(
+			`\nPORTRAIT MARK PARITY VIOLATED - a portrait toggled in place does not paint what a freshly rendered one does:\n` +
+				problems.map((p) => `  ${p}`).join('\n') +
+				`\nSee styles-source.css -> "12b. seal" (the frame rule's specificity note) and view.ts repaintTurn (data-pressed).`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\nportrait mark parity OK (clicked-in-place vs rendered, both directions: ${compared} comparisons across ` +
+			`dark/light x not-acted->acted/acted->not-acted on the computed cascade, ${KEYS.length} paint properties each)`,
 	);
 }
 
@@ -5557,6 +5649,8 @@ try {
 		await assertChromePlacement(page);
 		// SC-377 R1F2 - the one turn mark, on the computed cascade (see the block above).
 		await assertTurnMarkParity(page);
+		// SC-423 - a portrait clicked in place paints what a rendered one does (see the block above).
+		await assertPortraitMarkParity(page);
 		// SC-377 R2 - the title line does not move when edited or saved (see the block above).
 		await assertTitleLineStable(page);
 		// SC-191 fix-round-1 M-5 — the equal-width-track gate (see the block above). Same
