@@ -2832,11 +2832,17 @@ function measurePortraitMarks() {
 	idle.click();
 	const clickedActed = paint(idle);
 	const idleSurvived = idle.isConnected && idle.hasAttribute('data-taken');
+	// Direction 1b: the CSS half. The acted rule must not depend on the TS half having stamped
+	// `[data-pressed]` (the kit sheen rule keys on its absence), so strip it, measure, restore.
+	const pressedWas = idle.getAttribute('data-pressed');
+	idle.removeAttribute('data-pressed');
+	const strippedActed = paint(idle);
+	if (pressedWas !== null) idle.setAttribute('data-pressed', pressedWas);
 	// Direction 2: rendered acted -> CLICKED not-acted, in place.
 	acted.click();
 	const clickedIdle = paint(acted);
 	const actedSurvived = acted.isConnected && !acted.hasAttribute('data-taken');
-	return { renderedActed, renderedIdle, clickedActed, clickedIdle, idleSurvived, actedSurvived };
+	return { renderedActed, renderedIdle, clickedActed, strippedActed, clickedIdle, idleSurvived, actedSurvived };
 }
 
 async function assertPortraitMarkParity(page) {
@@ -2865,6 +2871,7 @@ async function assertPortraitMarkParity(page) {
 		}
 		for (const [label, got, want] of [
 			['not-acted -> clicked acted', m.clickedActed, m.renderedActed],
+			['not-acted -> clicked acted, data-pressed stripped (CSS half alone)', m.strippedActed, m.renderedActed],
 			['acted -> clicked not-acted', m.clickedIdle, m.renderedIdle],
 		]) {
 			compared += 1;
@@ -2884,8 +2891,8 @@ async function assertPortraitMarkParity(page) {
 		process.exit(1);
 	}
 	console.log(
-		`\nportrait mark parity OK (clicked-in-place vs rendered, both directions: ${compared} comparisons across ` +
-			`dark/light x not-acted->acted/acted->not-acted on the computed cascade, ${KEYS.length} paint properties each)`,
+		`\nportrait mark parity OK (clicked-in-place vs rendered, both directions, plus acted with data-pressed stripped: ${compared} comparisons across ` +
+			`dark/light x not-acted->acted/acted->not-acted/CSS-half-alone on the computed cascade, ${KEYS.length} paint properties each)`,
 	);
 }
 
