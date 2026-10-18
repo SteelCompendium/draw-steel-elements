@@ -120,9 +120,10 @@ export const DSE_TOKEN_NAMES = [
 	//    smallTextScale/largeTextScale/controlTextScale prefs (catalog.ts, via
 	//    snap()); at their default of 1 every role computes to the literal it was
 	//    transcribed from, which is what makes adoption a zero-pixel rename.
-	//    Fourteen of these tokens are scale-dependent (the eight roles plus h1-h6)
-	//    and are declared on `:root` AND every stamped root (SC-372) — see the
-	//    stylesheet's "THE SCALE-DEPENDENT ROLE TOKENS".
+	//    Eight of the nine roles (all but `body`) are scale-dependent, and so are
+	//    the six h1-h6 tokens below (SC-318): those fourteen are declared on
+	//    `:root` AND every stamped root (SC-372) — see the stylesheet's "THE
+	//    SCALE-DEPENDENT ROLE TOKENS".
 	//    All twelve are theme- AND print-invariant: a caption is a caption on
 	//    paper, and the size prefs apply everywhere including print/export, the
 	//    same contract the --dse-font-* family pickers carry. Authoring rules:
