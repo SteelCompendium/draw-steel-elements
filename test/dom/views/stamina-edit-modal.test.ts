@@ -537,6 +537,20 @@ describe('SC-133 RC-5: granting temp does not stack — take the higher of curre
 		expect(modal.pendingTempStaminaChange).toBe(0);
 	});
 
+	// Bounds that hold today (where "-" does nothing) AND after SC-433 (where it lowers temp by one):
+	// the minus button can never RAISE temp. The SC-433 markers around it are `test.failing`, which
+	// passes on ANY failure, so this plain test is what would catch a "-" that goes the wrong way.
+	test('the minus button never raises the pending temp, and never takes it below 0', () => {
+		const { modal, content, bar } = makeModal(20, 20, 5);
+		const minus = content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
+			.querySelector('button[aria-label="Decrease Temporary Stamina"]') as HTMLButtonElement;
+		minus.click();
+		expect(modal.pendingTempStaminaChange).toBeLessThanOrEqual(0);
+		expect(5 + modal.pendingTempStaminaChange).toBeGreaterThanOrEqual(0);
+		if (!actionBtn(content).disabled) apply(content);
+		expect(bar.temp_stamina).toBeLessThanOrEqual(5);
+	});
+
 	test.failing('the minus button lowers temp by one: at temp 5 Apply writes 4 [known bug SC-433]', () => {
 		const { modal, content, bar } = makeModal(20, 20, 5);
 		const minus = content.querySelectorAll<HTMLElement>('.dse-stepper')[1]

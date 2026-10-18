@@ -202,10 +202,13 @@ describe('stamina-edit-modal from ds-stamina-bar: quick actions and temporary St
 	// It asserts only what holds both today (where "-" does nothing, B6) and once SC-433 lands (where
 	// "-" lowers temp): after a click the Apply label always agrees with the temp field, and nothing is
 	// written until Apply.
-	it('[STAM-T11] after the temp "-" is pressed, the Apply label always agrees with the temp field and nothing is written', async () => {
+	it('[STAM-T11] after the temp "-" is pressed, the Apply label always agrees with the temp field, temp never rises, and nothing is written', async () => {
 		const modal = await openBarModal(NOTE);
 		await dse.expectNoWrite(NOTE, () => dse.click(modal.control('sedit.temp.dec')));
 		const shown = Number(await modal.control('sedit.temp.input').getValue());
+		// Bounds that hold today and after SC-433: a "-" press can never RAISE temp, nor take it below 0.
+		expect(shown).toBeLessThanOrEqual(5); // never raised above its starting 5
+		expect(shown).toBeGreaterThanOrEqual(0);
 		const delta = shown - 5;
 		const expected = delta === 0 ? 'No Stamina Change' : delta > 0 ? `Gain ${delta} Temp Stamina` : `Lose ${-delta} Temp Stamina`;
 		await expectApplyLabel(modal, expected);
