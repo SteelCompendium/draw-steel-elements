@@ -1872,6 +1872,58 @@ describe('SC-183 round 3: the portrait is the turn control', () => {
 		expect(toggle.querySelector('.dse-init__pt-word')!.textContent).toBe('To go');
 	});
 
+	// SC-423 — the kit's sheen rule (0,8,0) excludes `:not([data-pressed])` and the Steel acted
+	// frame (0,5,0) only wins against it when `[data-pressed]` is present, so the in-place repaint
+	// must keep `data-pressed` in lockstep with `data-taken` / `aria-pressed` — exactly what a
+	// full rebuild through the kit's `iconButton.setPressed` stamps (present-as-empty / absent).
+	test('SC-423: a portrait click flips data-taken, aria-pressed AND data-pressed in place, and the second click reverses all three', async () => {
+		const { root } = await renderInit(quickStart);
+		const toggle = root.querySelector<HTMLElement>(
+			'.dse-init__group--heroes .dse-init__row button.dse-init__portrait-toggle',
+		)!;
+		expect(toggle.hasAttribute('data-taken')).toBe(false);
+		expect(toggle.getAttribute('aria-pressed')).toBe('false');
+		expect(toggle.hasAttribute('data-pressed')).toBe(false);
+
+		toggle.click();
+		expect(toggle.hasAttribute('data-taken')).toBe(true);
+		expect(toggle.getAttribute('aria-pressed')).toBe('true');
+		expect(toggle.getAttribute('data-pressed')).toBe('');
+
+		toggle.click();
+		expect(toggle.hasAttribute('data-taken')).toBe(false);
+		expect(toggle.getAttribute('aria-pressed')).toBe('false');
+		expect(toggle.hasAttribute('data-pressed')).toBe(false);
+	});
+
+	test('SC-423: a portrait rendered acted drops data-pressed when un-toggled in place (the reverse path)', async () => {
+		const actedSource = legacyBytes(quickStart, (m) => {
+			m.heroes[0].has_taken_turn = true;
+		});
+		const { root } = await renderInit(actedSource);
+		const toggle = root.querySelector<HTMLElement>(
+			'.dse-init__group--heroes .dse-init__row button.dse-init__portrait-toggle',
+		)!;
+		expect(toggle.hasAttribute('data-taken')).toBe(true);
+		expect(toggle.getAttribute('data-pressed')).toBe('');
+
+		toggle.click();
+		expect(toggle.hasAttribute('data-taken')).toBe(false);
+		expect(toggle.getAttribute('aria-pressed')).toBe('false');
+		expect(toggle.hasAttribute('data-pressed')).toBe(false);
+	});
+
+	test('SC-423: the checkbox click repaints the portrait data-pressed too', async () => {
+		const { root } = await renderInit(quickStart);
+		const row = root.querySelector('.dse-init__group--heroes .dse-init__row') as HTMLElement;
+		const box = row.querySelector<HTMLElement>('button.dse-init__turn')!;
+		const toggle = row.querySelector<HTMLElement>('button.dse-init__portrait-toggle')!;
+		box.click();
+		expect(toggle.hasAttribute('data-pressed')).toBe(true);
+		box.click();
+		expect(toggle.hasAttribute('data-pressed')).toBe(false);
+	});
+
 	test('read-only renders NO portrait toggle (no dead-end write affordance, F1 §4.4)', async () => {
 		const { root } = await renderInit(quickStart, { canPersist: false });
 		expect(root.querySelectorAll('.dse-init__portrait-toggle').length).toBe(0);
