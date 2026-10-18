@@ -49,10 +49,10 @@ for what needs action.
   (SC-372). They saved fine but did nothing: moving "Large text size" to 120% left a card name
   at 20px, and the other two sliders were the same. Card names, band titles, display numbers and
   headings now follow Large text size; labels, captions, hints and tallies follow Small text size;
-  buttons, steppers, tabs and collapse headers follow Control text size (screen only). They work
+  buttons, steppers, tabs and collapse headers follow Control text size (screen only), including
+  text nested inside other text such as the power-roll tier badges. They work
   inside dialogs too, and Small and Large apply in print and export as the setting says. Nothing
-  changes at the default 100%. Text nested inside other small text (power-roll tier badges, the
-  malice log heading, montage round headers) scales once, not twice.
+  changes at the default 100%.
 - [FIX] **Power-roll tier rows are compact again: about 50px for a one-line outcome, the
   same as the site** (SC-378). Every tier row (ability/feature cards, statblock abilities,
   featureblock, a kit's signature ability, negotiation arguments) had grown to

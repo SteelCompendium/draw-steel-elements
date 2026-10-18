@@ -60,7 +60,9 @@ contain text that is itself a consumer of the same knob, or rendered markdown (w
 an element): copy the consumer rule's own selector (scope, theme and print anchors included) into
 the knob's `:where(...)` list. `scaleTokenScope.test.ts` pins every registry ratio to the token
 rule's coefficient, and the `text scale once OK` sweep in `npm run shots` fails, naming the
-chain, on any element that scales by a knob twice.
+chain, on any element that scales by a knob twice. It does not catch text that stops scaling
+(goes inert) because a registry entry is too broad: only the named `TEXT_SCALE_PAGES` rows in
+`shoot.mjs`, including the three nested ones, pin that.
 
 ## How to pick one
 
