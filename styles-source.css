@@ -13844,8 +13844,19 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
    portrait's lower-right corner, bearing the brand's ◆ diamond, with the frame turning to
    engraved metal around it. At roster scale the eye reads a row of discs; up close it
    reads a stamp. Word channel: the seal's disc plus the `aria-pressed` state; the printed
-   word is not shown (it would fight the seal for the same corner). */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle[data-taken] {
+   word is not shown (it would fight the seal for the same corner).
+   SPECIFICITY IS THE WHOLE POINT (SC-423): the kit's sheen rule is
+   `[theme]:not([print]) :is(.dse-btn, ...):not(.dse-btn--accent):not(.dse-btn--ghost):not(.dse-btn--danger)
+   :not([data-pressed]):not([aria-selected="true"])` = (0,8,0) and paints `box-shadow: var(--dse-chip-bevel)`.
+   The plain `[theme]:not([print])[element] .dse-init__portrait-toggle[data-taken]` is only (0,5,0), so the
+   frame won only while `[data-pressed]` kept the sheen rule out: right after a full rebuild, but NOT after
+   the portrait's own click, whose in-place repaint (view.ts `repaintTurn`) used to flip `data-taken` /
+   `aria-pressed` without `data-pressed`. The TS now stamps `data-pressed` too; this selector is the
+   belt-and-braces half, so the frame no longer depends on that attribute: `.dse-btn` + the three
+   `:not(.dse-btn--*)` mirror the kit's own chain, making it (0,9,0) and the winner in every state,
+   including a button whose `data-pressed` ever drifts. The turn button's block (12e, below) carries the
+   same note for the same trap. `assertPortraitMarkParity` (shoot.mjs) checks the COMPUTED result. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle.dse-btn:not(.dse-btn--accent):not(.dse-btn--ghost):not(.dse-btn--danger)[data-taken] {
 	box-shadow: inset 0 0 0 2px var(--dse-metal), inset 0 0 12px rgba(0, 0, 0, 0.55);
 }
 /* The disc itself (struck / empty ring / ghost) is shared with the enemy-group header: see
