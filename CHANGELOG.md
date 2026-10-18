@@ -33,7 +33,8 @@ for what needs action.
   abilities. This needs the matching compendium data, so run **Sync compendium** after the
   next compendium update. The docs now also say which kinds of entry `ds-scc` can't draw yet
   (skills, saints, gods, chapters, projects, movement, negotiation, skill groups and
-  monster-group lore).
+  monster-group lore). Updates `steel-compendium-sdk` to 3.1.0, which carries a companion's
+  `skills` and its text `free_strike` ("1 + M") itself.
 - [FIX] **A statblock with an empty EV no longer prints a dangling "EV"** (SC-390).
   Companions and the summoner champions have no EV; their cards used to show "EV" with
   nothing after it. The label is now left out. A statblock that omits `ev` entirely still

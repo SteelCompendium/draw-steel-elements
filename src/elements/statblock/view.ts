@@ -64,7 +64,7 @@ import {
 } from './stickyHeader';
 import { FeatureConfig } from '@model/FeatureConfig';
 import type { StatblockConfig } from '@model/StatblockConfig';
-import type { CompanionStatblock } from './companionFields';
+import type { Statblock } from 'steel-compendium-sdk';
 
 /** SC-123: the villain band's head wording + its session slot. The title is the
  *  site's own ("Villain Actions", steel-statblock.css `.sb__band-title`); the slot
@@ -137,7 +137,7 @@ function crestIconForRole(role: DseRole | undefined): string | undefined {
  * production carries `role: ""`, so without this fallback those ~52 boss/solo
  * creatures would render with no role tint at all (task-1-review.md Critical).
  */
-export function statblockHeaderParts(statblock: CompanionStatblock): {
+export function statblockHeaderParts(statblock: Statblock): {
 	name: string;
 	leftEyebrow: string;
 	leftDeck: string | undefined;
@@ -222,7 +222,7 @@ interface StatblockKv extends StickyPair {
  *
  * The five primary stats: Size / Speed / Stamina / Stability / Free Strike.
  */
-function statblockDefenseCells(sb: CompanionStatblock): StickyPair[] {
+function statblockDefenseCells(sb: Statblock): StickyPair[] {
 	return [
 		{ label: 'Size', value: `${sb.size ?? '-'}` },
 		{ label: 'Speed', value: `${sb.speed ?? '-'}` },
@@ -235,7 +235,7 @@ function statblockDefenseCells(sb: CompanionStatblock): StickyPair[] {
 /** The secondary-stats cells in the FULL CARD's order. Legacy StatsView parity:
  *  Immunity/Weakness/Movement always print (with the '-' fallback); the With Captain cell
  *  only exists when the field does. */
-function statblockMetaCells(sb: CompanionStatblock): StatblockKv[] {
+function statblockMetaCells(sb: Statblock): StatblockKv[] {
 	const cells: StatblockKv[] = [
 		{ modifier: 'immunity', label: 'Immunity', value: sb.immunities?.length ? sb.immunities.join(', ') : '-' },
 		{ modifier: 'weakness', label: 'Weakness', value: sb.weaknesses?.length ? sb.weaknesses.join(', ') : '-' },
@@ -254,7 +254,7 @@ function statblockMetaCells(sb: CompanionStatblock): StatblockKv[] {
 }
 
 /** The five characteristics in legacy order, values already formatted. */
-function statblockCharCells(sb: CompanionStatblock): StickyPair[] {
+function statblockCharCells(sb: Statblock): StickyPair[] {
 	const chars = sb.characteristics;
 	return [
 		{ label: 'Might', value: formatCharacteristic(chars.might) },
@@ -274,7 +274,7 @@ function statblockCharCells(sb: CompanionStatblock): StickyPair[] {
  * full card's grid order above: in the bar the movement/captain pair is the thing a GM
  * re-checks mid-turn, so it leads. Exported for the DOM tests.
  */
-export function statblockStickyParts(sb: CompanionStatblock): StickyHeaderParts {
+export function statblockStickyParts(sb: Statblock): StickyHeaderParts {
 	const header = statblockHeaderParts(sb);
 	const meta = statblockMetaCells(sb);
 	const byModifier = (modifier: string): StatblockKv | undefined =>
