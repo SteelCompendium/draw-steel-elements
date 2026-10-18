@@ -431,11 +431,11 @@ describe('[Q06][Q07][Q09][Q10][Q15] Spend Recovery across positions (tracked poo
 	};
 	const cases: SR[] = [
 		{ name: 'full: starts disabled (max reason)', kind: 'creature', cur: 30, rec: 3, presses: 0, dS: 0, spent: 0, enabled: false, reason: REASON_MAX },
-		{ name: 'one short of max: heals only the gap, then disabled (max reason)', kind: 'creature', cur: 25, rec: 3, presses: 1, dS: 5, spent: 1, enabled: false, reason: REASON_MAX },
-		{ name: 'mid: one press heals 10, still enabled', kind: 'creature', cur: 10, rec: 3, presses: 1, dS: 10, spent: 1, enabled: true },
-		{ name: 'mid: two presses heal 20, still enabled', kind: 'creature', cur: 5, rec: 3, presses: 2, dS: 20, spent: 2, enabled: true },
-		{ name: 'mid: presses stop at the last Recovery (none-left reason wins)', kind: 'creature', cur: 0, rec: 2, presses: 2, dS: 20, spent: 2, enabled: false, reason: REASON_NONE },
-		{ name: 'last Recovery that also reaches max: none-left reason wins over max reason', kind: 'creature', cur: 20, rec: 1, presses: 1, dS: 10, spent: 1, enabled: false, reason: REASON_NONE },
+		{ name: 'one short of max: heals only the gap, then disabled (max reason) [current behaviour — SC-432 changes this]', kind: 'creature', cur: 25, rec: 3, presses: 1, dS: 5, spent: 1, enabled: false, reason: REASON_MAX },
+		{ name: 'mid: one press heals 10, still enabled [current behaviour — SC-432 changes this]', kind: 'creature', cur: 10, rec: 3, presses: 1, dS: 10, spent: 1, enabled: true },
+		{ name: 'mid: two presses heal 20, still enabled [current behaviour — SC-432 changes this]', kind: 'creature', cur: 5, rec: 3, presses: 2, dS: 20, spent: 2, enabled: true },
+		{ name: 'mid: presses stop at the last Recovery (none-left reason wins) [current behaviour — SC-432 changes this]', kind: 'creature', cur: 0, rec: 2, presses: 2, dS: 20, spent: 2, enabled: false, reason: REASON_NONE },
+		{ name: 'last Recovery that also reaches max: none-left reason wins over max reason [current behaviour — SC-432 changes this]', kind: 'creature', cur: 20, rec: 1, presses: 1, dS: 10, spent: 1, enabled: false, reason: REASON_NONE },
 		{ name: 'zero Recoveries: starts disabled (none-left reason)', kind: 'creature', cur: 10, rec: 0, presses: 0, dS: 0, spent: 0, enabled: false, reason: REASON_NONE },
 		{ name: '[Q15] hero dying (-4): heals from below zero', kind: 'hero', cur: -4, rec: 2, presses: 1, dS: 10, spent: 1, enabled: true },
 		{ name: '[Q15] hero at the floor (-15): heals from the floor', kind: 'hero', cur: -15, rec: 2, presses: 1, dS: 10, spent: 1, enabled: true },
@@ -461,7 +461,8 @@ describe('[Q06][Q07][Q09][Q10][Q15] Spend Recovery across positions (tracked poo
 // to spend, yet today the button heals it for free. These assert the RULED behaviour and fail today, so
 // they are `test.failing` markers; the SC-432 fixer removes the `.failing`. (The `kind: 'creature'` rows
 // of the position matrix above exercise the same code path with a pool a shipped creature never has;
-// SC-432 rewrites them with the fix.) The hero with no pool is a plain pin in stamina-edit-modal.test.ts
+// SC-432 rewrites them with the fix: those five rows and the `[Q16] max 3` test carry the title suffix
+// "[current behaviour — SC-432 changes this]" so the fixer finds them.) The hero with no pool is a plain pin in stamina-edit-modal.test.ts
 // until SC-432 designs the relabel + confirmation.
 describe('[Q13] Spend Recovery is disabled for a creature [known bug SC-432]', () => {
 	test.failing.each([
@@ -497,7 +498,7 @@ describe('[Q16] recoveryValue 0 (max <= 2): Spend Recovery can never gain, so it
 		expect(updateCallback).not.toHaveBeenCalled();
 	});
 
-	test('max 3 (floor(3/3) = 1) is the smallest bar where it works', () => {
+	test('max 3 (floor(3/3) = 1) is the smallest bar where it works [current behaviour — SC-432 changes this]', () => {
 		const { content } = openStaminaModal({ max: 3, current: 0, isHero: false, recoveries: 3, recoveries_max: 3 });
 		const sr = spendRecoveryBtn(content)!;
 		expect(sr.disabled).toBe(false);
