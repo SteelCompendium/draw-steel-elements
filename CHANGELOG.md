@@ -22,6 +22,12 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Initiative: clicking a hero's portrait now shows the acted frame immediately**
+  (SC-423). The 2px light-grey metal frame used to appear only after something else
+  re-rendered the tracker (adding a Malice log entry, for example); the seal badge showed at
+  once but the frame did not. Un-clicking clears it immediately too. The enemy-group and
+  portraits-off turn buttons got the same in-place fix. The initiative docs GIF is
+  regenerated.
 - [BREAKING] **The "Sync compendium (legacy alias)" command is removed** (SC-406). It was
   kept through 6.x so a hotkey bound to it would keep working; a hotkey still bound to it
   now does nothing — bind it to **Sync compendium** instead (see the
