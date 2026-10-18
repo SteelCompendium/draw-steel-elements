@@ -740,6 +740,11 @@ export class InitiativeView extends ElementView<EncounterData> {
 		row.querySelectorAll<HTMLElement>('.dse-init__portrait-toggle').forEach((el) => {
 			el.toggleAttribute('data-taken', taken);
 			el.setAttribute('aria-pressed', String(taken));
+			// SC-423: the kit's `iconButton.setPressed` stamps `[data-pressed]` with `aria-pressed`
+			// at build; an in-place repaint must too (present-as-empty / absent), or the kit's
+			// sheen rule (keyed on `:not([data-pressed])`) outranks the Steel acted frame until the
+			// next full rebuild — and a button rebuilt acted keeps `data-pressed` once un-toggled.
+			el.toggleAttribute('data-pressed', taken);
 			el.querySelector<HTMLElement>('.dse-init__pt-word')?.setText(taken ? 'Done' : 'To go');
 		});
 	}
