@@ -77,7 +77,8 @@ Skips `tsc` and just runs esbuild in production mode. Used by the release recipe
 - **Jest (unit + jsdom):** `npm test` (`unit` node project, `dom` jsdom project). Test files are `*.test.ts`
   under `test/unit` and `test/dom`.
 - **Real-Obsidian functional tests (SC-408):** `npm run e2e` drives a real Obsidian headlessly with real
-  input and asserts the note file; per-control coverage manifests are gated. See `e2e/README.md`.
+  input and asserts the note file; per-control coverage manifests are gated. **Required to land any change**
+  (Scott, SC-408). See `e2e/README.md`.
 - **Real-Obsidian write-lifecycle gate:** `npm run obsidian-lifecycle`.
 
 ## Debugging

@@ -92,6 +92,7 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Stamina/legacy-low.md` | 2/30, Recoveries not tracked |
   | `Stamina/two-blocks.md` | two `ds-stamina-bar` blocks: 15/20 +5 temp, then 8/10 |
   | `Initiative/tracker.md` | `ds-initiative`: hero Alice Alpha 30/30, three Ogres 60/60 (cells `0-1`..`0-3`) |
+  | `Initiative/hurt.md` | `ds-initiative`: hero Alice Alpha 30/30, Ogre #1 at 20/60 and Ogre #2 at 60/60 (a hurt creature, for Spend Recovery) |
 
 - Edits are checked per fence: `dse.block(lang, n)` declares which block of the open note a test edits, and
   after the test every OTHER fence must be byte-identical to the fixture (a write into a sibling block fails).
@@ -101,6 +102,8 @@ it('[STAM-X01] what a user sees happen', async () => {
   for a state. No retries: a flake is a bug.
 - **Known bugs.** `knownBug('SC-123', '[ID] correct behaviour', fn, { failsWith: /msg/ })` encodes the
   CORRECT behaviour; it passes while `fn` fails and FAILS the moment it passes ("known bug SC-123 appears
-  fixed - remove the marker"). Pin current behaviour of an open design question with a title suffix
-  `[current behaviour — ruling pending ...]` instead.
+  fixed - remove the marker"). Pin today's behaviour of something a ticket has
+  ruled will CHANGE (but has not designed yet) as a plain test, with the title suffix
+  `[current behaviour — SC-nnn will ...]` (e.g. `SC-432 will relabel + confirm`, `SC-432 changes this`): the
+  ticket's fixer rewrites it. The retired `[... ruling pending ...]` wording is no longer used.
 - Preferences: `before(() => dse.setPrefs({ staminaRecoveryPopover: true }))` + `after(() => dse.setPrefs({}))`.
