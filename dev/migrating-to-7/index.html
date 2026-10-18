@@ -1387,11 +1387,13 @@ has both an old and a new key for the same value, the new key always wins.</p>
 </code></pre></div>
 <h2 id="whats-new-in-700-at-a-glance">What's new in 7.0.0, at a glance<a class="headerlink" href="#whats-new-in-700-at-a-glance" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>One block renders any compendium entry</strong> — sync the compendium and a
+<li><strong>One block renders most compendium entries</strong> — sync the compendium and a
   <a href="../compendium-sync/#referencing-a-compendium-entry-in-your-notes"><code>ds-scc</code> block</a>
-  whose body is an entry's code renders that entry, whatever it is: a kit, a
-  condition, a rule, a statblock. A search-and-insert command finds any entry
-  and writes the block for you without leaving the editor.</li>
+  whose body is an entry's code renders that entry: a kit, a condition, a rule, a statblock
+  (beastheart companions included), a feature. Skills, skill groups, saints, gods, chapters,
+  projects, movement, negotiation and monster-group lore show a "has no renderer" card for
+  now (<a href="../compendium-sync/#what-renders-and-what-doesnt-yet">details</a>). A search-and-insert
+  command finds any entry and writes the block for you without leaving the editor.</li>
 <li><strong>The Montage Test tracker is a working board, not just a scoreboard</strong> — a grid of one
   row per hero and one column per round, a click on any cell to log or correct that hero's
   round in a small form (success/failure/assist, an optional skill and note), and a

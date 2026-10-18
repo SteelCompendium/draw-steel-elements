@@ -544,6 +544,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Referencing a compendium entry in your notes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-renders-and-what-doesnt-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What renders, and what doesn't yet
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1186,6 +1203,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Referencing a compendium entry in your notes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-renders-and-what-doesnt-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What renders, and what doesn't yet
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1335,8 +1369,9 @@ they don't collide with a compendium path, and any that do are skipped and repor
 <strong>fresh install never sees either prompt</strong> — there is no folder yet, and nothing to ask
 about.</p>
 <h2 id="referencing-a-compendium-entry-in-your-notes">Referencing a compendium entry in your notes<a class="headerlink" href="#referencing-a-compendium-entry-in-your-notes" title="Permanent link">&para;</a></h2>
-<p>Once the compendium is synced, a <code>ds-scc</code> block renders any entry in it. The body is the
-entry's SCC code — nothing else:</p>
+<p>Once the compendium is synced, a <code>ds-scc</code> block renders most entries in it (see
+<a href="#what-renders-and-what-doesnt-yet">what renders, and what doesn't yet</a> below). The body is
+the entry's SCC code — nothing else:</p>
 <div class="highlight"><pre><span></span><code><span class="sb">```ds-scc</span>
 <span class="s">mcdm.heroes.v1/kit/panther</span>
 <span class="sb">```</span>
@@ -1355,6 +1390,21 @@ your vault, the block offers a link to the entry on steelcompendium.io and a nud
 condition, a rule, a statblock — using whichever layout suits it, and those layouts change
 as the plugin develops. The code you write is stable; the card it produces is not
 specified.</p>
+<h3 id="what-renders-and-what-doesnt-yet">What renders, and what doesn't yet<a class="headerlink" href="#what-renders-and-what-doesnt-yet" title="Permanent link">&para;</a></h3>
+<p><code>ds-scc</code> draws these kinds of entry today:</p>
+<ul>
+<li><strong>Statblocks</strong> — monsters, retainers, summoned creatures, and beastheart companions
+  (a companion's card shows its skills and its level 1 abilities).</li>
+<li><strong>Features and abilities</strong>, and <strong>featureblocks</strong> (including dynamic terrain).</li>
+<li><strong>Kits, conditions, rules, ancestries, cultures, careers, classes, titles, perks,
+  complications and treasures.</strong></li>
+</ul>
+<p>These kinds of entry have no card in the plugin yet: <strong>skills, skill groups, saints, gods,
+chapters, projects, movement, negotiation, and monster-group lore.</strong> A <code>ds-scc</code> block that
+points at one shows a card saying the entry "has no renderer in this plugin" instead of the
+entry itself. The block isn't broken, there's just nothing to draw yet. <strong>Insert Draw
+Steel: compendium reference</strong> still lists them, so you can search for one and insert it. It
+will start rendering as soon as the plugin learns to draw that kind of entry.</p>
 <p>Statblocks, features and featureblocks accept the same reference in their own blocks — see
 <a href="../statblock/#use-a-creature-from-the-compendium">Use a creature from the compendium</a>.</p>
 <h2 id="compendium-links">Compendium links<a class="headerlink" href="#compendium-links" title="Permanent link">&para;</a></h2>
