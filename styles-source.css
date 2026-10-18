@@ -13852,11 +13852,19 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
    frame won only while `[data-pressed]` kept the sheen rule out: right after a full rebuild, but NOT after
    the portrait's own click, whose in-place repaint (view.ts `repaintTurn`) used to flip `data-taken` /
    `aria-pressed` without `data-pressed`. The TS now stamps `data-pressed` too; this selector is the
-   belt-and-braces half, so the frame no longer depends on that attribute: `.dse-btn` + the three
+   belt-and-braces half, so the acted paint no longer depends on that attribute: `.dse-btn` + the three
    `:not(.dse-btn--*)` mirror the kit's own chain, making it (0,9,0) and the winner in every state,
-   including a button whose `data-pressed` ever drifts. The turn button's block (12e, below) carries the
-   same note for the same trap. `assertPortraitMarkParity` (shoot.mjs) checks the COMPUTED result. */
+   including a button whose `data-pressed` ever drifts. It restates EVERY property the sheen rule sets
+   (background-image, border-color, box-shadow) at the value a `[data-pressed]` acted portrait computes:
+   `background-image: none` (12a's `background: none`, which the sheen would otherwise paint over with its
+   gradient: a white wash in light), and `border-color: var(--dse-accent-fg)` (12a's `border: none` leaves
+   the colour at `currentcolor`, and a pressed button's `color` is `--dse-accent-fg`; the border has no
+   width so nothing paints, but the computed paint is then identical). The turn button's block (12e,
+   below) carries the same note for the same trap. `assertPortraitMarkParity` (shoot.mjs) strips
+   `data-pressed` and checks the COMPUTED result. */
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle.dse-btn:not(.dse-btn--accent):not(.dse-btn--ghost):not(.dse-btn--danger)[data-taken] {
+	background-image: none;
+	border-color: var(--dse-accent-fg);
 	box-shadow: inset 0 0 0 2px var(--dse-metal), inset 0 0 12px rgba(0, 0, 0, 0.55);
 }
 /* The disc itself (struck / empty ring / ghost) is shared with the enemy-group header: see
