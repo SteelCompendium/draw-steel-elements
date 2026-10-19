@@ -913,3 +913,130 @@ describe('SC-133 RC-1/RC-2: the modal preview shows temp stamina and shares the 
 		expect(gauge.getAttribute('data-zone')).toBe('off');
 	});
 });
+
+describe('SC-430: Apply follows a half-typed Stamina / Temp draft, so the press that blurs the field lands on an enabled button', () => {
+	function stepperInputs(content: HTMLElement): { stamina: HTMLInputElement; temp: HTMLInputElement } {
+		const [s, t] = Array.from(content.querySelectorAll<HTMLInputElement>('.dse-stepper__input'));
+		return { stamina: s, temp: t };
+	}
+	/** Type without committing: set the value and fire `input` only (focus stays in the field). */
+	function typeDraft(el: HTMLInputElement, v: string): void {
+		el.value = v;
+		el.dispatchEvent(new Event('input', { bubbles: true }));
+	}
+
+	test('typing a new Stamina value enables Apply and labels it, with nothing committed yet', () => {
+		const { modal, content } = makeModal(20, 15, 0);
+		expect(actionBtn(content).disabled).toBe(true);
+		typeDraft(stepperInputs(content).stamina, '12');
+		expect(actionBtn(content).disabled).toBe(false);
+		expect(actionBtn(content).textContent).toContain('Lose 3 Stamina');
+		expect(modal.pendingStaminaChange).toBe(0); // the draft is a preview, not a commit
+	});
+
+	test('Apply clicked while the draft is still uncommitted (no blur) commits it and persists', () => {
+		const { content, bar, updateCallback } = makeModal(20, 15, 0);
+		typeDraft(stepperInputs(content).stamina, '12');
+		apply(content);
+		expect(bar.current_stamina).toBe(12);
+		expect(updateCallback).toHaveBeenCalledTimes(1);
+	});
+
+	test('the blur-then-click order is unchanged: the label does not change at blur, and one click applies once', () => {
+		const { content, bar, updateCallback } = makeModal(20, 15, 0);
+		const { stamina } = stepperInputs(content);
+		document.body.appendChild(content);
+		typeDraft(stamina, '12');
+		const before = actionBtn(content).textContent;
+		stamina.dispatchEvent(new FocusEvent('blur'));
+		expect(actionBtn(content).textContent).toBe(before);
+		expect(actionBtn(content).disabled).toBe(false);
+		apply(content);
+		expect(bar.current_stamina).toBe(12);
+		expect(updateCallback).toHaveBeenCalledTimes(1);
+	});
+
+	test('a draft equal to the current value leaves Apply disabled, as it would after blur', () => {
+		const { content } = makeModal(20, 15, 0);
+		typeDraft(stepperInputs(content).stamina, '15');
+		expect(actionBtn(content).disabled).toBe(true);
+		expect(actionBtn(content).textContent).toContain('No Stamina Change');
+	});
+
+	test('an empty / unparseable draft leaves Apply exactly as it was before typing', () => {
+		const { content } = makeModal(20, 15, 0);
+		const { stamina } = stepperInputs(content);
+		typeDraft(stamina, '');
+		expect(actionBtn(content).disabled).toBe(true);
+		expect(actionBtn(content).textContent).toContain('No Stamina Change');
+
+		clickDamage(content, 4); // no temp to absorb it: Stamina takes the 4
+		const label = actionBtn(content).textContent;
+		typeDraft(stepperInputs(content).stamina, '');
+		expect(actionBtn(content).disabled).toBe(false);
+		expect(actionBtn(content).textContent).toBe(label);
+	});
+
+	test('a draft replaces the stamina part of an existing pending edit, as the blur commit would', () => {
+		const { content } = makeModal(20, 15, 0);
+		clickDamage(content, 4);
+		expect(actionBtn(content).textContent).toContain('Lose 4 Stamina');
+		typeDraft(stepperInputs(content).stamina, '18');
+		expect(actionBtn(content).textContent).toContain('Gain 3 Stamina');
+		// and the committed label after the blur is the same text
+		const draftLabel = actionBtn(content).textContent;
+		document.body.appendChild(content);
+		stepperInputs(content).stamina.dispatchEvent(new FocusEvent('blur'));
+		expect(actionBtn(content).textContent).toBe(draftLabel);
+	});
+
+	test('typing then Escape: the label returns to the committed state and nothing is written', () => {
+		const { content, bar, updateCallback } = makeModal(20, 15, 0);
+		const { stamina } = stepperInputs(content);
+		typeDraft(stamina, '12');
+		expect(actionBtn(content).disabled).toBe(false);
+		stamina.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+		expect(stamina.value).toBe('15');
+		expect(actionBtn(content).disabled).toBe(true);
+		expect(actionBtn(content).textContent).toContain('No Stamina Change');
+		expect(updateCallback).not.toHaveBeenCalled();
+		expect(bar.current_stamina).toBe(15);
+	});
+
+	test('a typed value past max labels what blur would label, and Apply still persists the CLAMPED value', () => {
+		const { content, bar } = makeModal(20, 15, 0);
+		typeDraft(stepperInputs(content).stamina, '30');
+		const draftLabel = actionBtn(content).textContent;
+		apply(content);
+		expect(draftLabel).toContain('Gain 15 Stamina'); // same unclamped text blur shows (SC-427 owns that label)
+		expect(bar.current_stamina).toBe(20);
+	});
+
+	test('Temp Stamina: a typed grant enables Apply and labels it; clicking Apply with the draft uncommitted persists it', () => {
+		const { modal, content, bar } = makeModal(20, 15, 2);
+		typeDraft(stepperInputs(content).temp, '6');
+		expect(actionBtn(content).disabled).toBe(false);
+		expect(actionBtn(content).textContent).toContain('Gain 4 Temp Stamina');
+		expect(modal.pendingTempStaminaChange).toBe(0);
+		apply(content);
+		expect(bar.temp_stamina).toBe(6);
+		expect(bar.current_stamina).toBe(15);
+	});
+
+	test('Temp Stamina: the take-higher floor (SC-133 RC-5) applies to the draft preview too', () => {
+		const { content } = makeModal(20, 15, 5);
+		typeDraft(stepperInputs(content).temp, '2'); // lower than the 5 already held: grants nothing
+		expect(actionBtn(content).disabled).toBe(true);
+		expect(actionBtn(content).textContent).toContain('No Stamina Change');
+	});
+
+	test('a Stamina draft and an already-committed Temp change combine in one label', () => {
+		const { content } = makeModal(20, 15, 5);
+		const { stamina, temp } = stepperInputs(content);
+		typeDraft(temp, '8');
+		document.body.appendChild(content);
+		temp.dispatchEvent(new FocusEvent('blur'));
+		typeDraft(stamina, '12');
+		expect(actionBtn(content).textContent).toBe('Lose 3 Stamina and Gain 3 Temp Stamina');
+	});
+});

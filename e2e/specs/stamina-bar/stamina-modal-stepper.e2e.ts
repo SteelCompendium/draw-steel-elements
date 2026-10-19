@@ -85,24 +85,31 @@ describe('stamina-edit-modal: Stamina stepper', () => {
 		await dse.click(modal.control('modal.close'));
 	});
 
-	// S13 / S1 B7, confirmed in real Obsidian (SC-430): the Stamina input's blur enables Apply only
-	// AFTER the press, so a press on the button's own padding (the disabled button) is swallowed.
-	// Correct behaviour: the first click applies. (Chrome 150 and Chrome 106 alike.)
-	knownBug(
-		'SC-430',
-		'[STAM-S13] type a new Stamina value, then click the edge of Apply: the first click applies',
-		async () => {
-			const modal = await openBarModal(NOTE);
-			await dse.type(modal.control('sedit.stamina.input'), '12', { replace: true });
-			const w = await dse.waitForWrite(NOTE, async () => {
-				await dse.click(modal.control('sedit.apply'), { inset: 3 });
-				await expect(modal.root).not.toBeExisting({ wait: 1500, message: 'the first click on Apply should apply and close the modal' });
-			});
-			expect(w.count).toBe(1);
-			await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 12 });
-		},
-		{ failsWith: /first click on Apply should apply/ },
-	);
+	// S13 / S1 B7 (SC-430, fixed): the Stamina input's blur used to enable Apply only AFTER the press, so
+	// a press on the button's own padding (the then-disabled button) was swallowed. Apply now follows
+	// the half-typed draft, so the first click applies. (Chrome 150 and Chrome 106 alike.)
+	it('[STAM-S13] type a new Stamina value, then click the edge of Apply: the first click applies', async () => {
+		const modal = await openBarModal(NOTE);
+		await dse.type(modal.control('sedit.stamina.input'), '12', { replace: true });
+		const w = await dse.waitForWrite(NOTE, async () => {
+			await dse.click(modal.control('sedit.apply'), { inset: 3 });
+			await expect(modal.root).not.toBeExisting({ wait: 1500, message: 'the first click on Apply should apply and close the modal' });
+		});
+		expect(w.count).toBe(1);
+		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 12 });
+	});
+
+	// SC-430 D3: the Temp Stamina field gates Apply the same way.
+	it('[STAM-S13c] type a new Temp Stamina value, then click the edge of Apply: the first click applies', async () => {
+		const modal = await openBarModal(NOTE);
+		await dse.type(modal.control('sedit.temp.input'), '8', { replace: true });
+		const w = await dse.waitForWrite(NOTE, async () => {
+			await dse.click(modal.control('sedit.apply'), { inset: 3 });
+			await expect(modal.root).not.toBeExisting({ wait: 1500, message: 'the first click on Apply should apply and close the modal' });
+		});
+		expect(w.count).toBe(1);
+		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 15, temp_stamina: 8 });
+	});
 
 	it('[STAM-S13b] type a new Stamina value, then click the label of Apply: the first click applies', async () => {
 		const modal = await openBarModal(NOTE);

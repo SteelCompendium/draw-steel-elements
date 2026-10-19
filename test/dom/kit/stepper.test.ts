@@ -410,6 +410,81 @@ describe('Plan 08 Task 2: kit/stepper (D2 §2.2)', () => {
 			expect(inputEl.value).toBe('3');
 		});
 
+		describe('onDraftInput / commitDraft (SC-430) — observe a half-typed draft without committing it', () => {
+			function typeDraft(el: HTMLInputElement, v: string): void {
+				el.value = v;
+				el.dispatchEvent(new Event('input', { bubbles: true }));
+			}
+
+			test('an input event reports the value a commit WOULD land (truncated, then clamped) and commits nothing', () => {
+				const onDraftInput = jest.fn();
+				const { handle, inputEl, onChange } = editable({ integer: true, onDraftInput });
+				typeDraft(inputEl, '7.9');
+				expect(onDraftInput).toHaveBeenLastCalledWith(7);
+				typeDraft(inputEl, '50');
+				expect(onDraftInput).toHaveBeenLastCalledWith(10); // clamped to max
+				expect(onChange).not.toHaveBeenCalled();
+				expect(handle.getValue()).toBe(3);
+			});
+
+			test('an empty draft reports null', () => {
+				const onDraftInput = jest.fn();
+				const { inputEl } = editable({ onDraftInput });
+				typeDraft(inputEl, '');
+				expect(onDraftInput).toHaveBeenLastCalledWith(null);
+			});
+
+			test('Enter, Escape and an invalid-draft blur each report null (the draft resolved) BEFORE onChange fires', () => {
+				const order: string[] = [];
+				const onChange = jest.fn(() => order.push('change'));
+				const onDraftInput = jest.fn((d: number | null) => order.push(`draft:${d}`));
+				const { inputEl } = editable({ onDraftInput }, onChange);
+				document.body.appendChild(inputEl.parentElement!.parentElement!);
+				typeDraft(inputEl, '6');
+				keydown(inputEl, 'Enter');
+				expect(order).toEqual(['draft:6', 'draft:null', 'change']);
+
+				order.length = 0;
+				typeDraft(inputEl, '9');
+				keydown(inputEl, 'Escape');
+				expect(order).toEqual(['draft:9', 'draft:null']);
+
+				order.length = 0;
+				typeDraft(inputEl, '');
+				blur(inputEl);
+				expect(order).toEqual(['draft:null', 'draft:null']);
+				inputEl.parentElement!.parentElement!.remove();
+			});
+
+			test('commitDraft() commits a dirty draft through the same path as blur — once — and is a no-op when clean', () => {
+				const { handle, inputEl, onChange } = editable();
+				handle.commitDraft(); // clean draft
+				expect(onChange).not.toHaveBeenCalled();
+				inputEl.value = '8';
+				handle.commitDraft();
+				expect(onChange).toHaveBeenCalledTimes(1);
+				expect(onChange).toHaveBeenCalledWith(8);
+				expect(handle.getValue()).toBe(8);
+				handle.commitDraft();
+				expect(onChange).toHaveBeenCalledTimes(1);
+			});
+
+			test('commitDraft() on a non-editable stepper does nothing', () => {
+				const parent = document.createElement('div');
+				const onChange = jest.fn();
+				const handle = stepper(parent, { value: 3, label: 'x', onChange }, fakeOwner());
+				expect(() => handle.commitDraft()).not.toThrow();
+				expect(onChange).not.toHaveBeenCalled();
+			});
+
+			test('without onDraftInput an input event does nothing (default behavior unchanged)', () => {
+				const { handle, inputEl, onChange } = editable();
+				typeDraft(inputEl, '9');
+				expect(onChange).not.toHaveBeenCalled();
+				expect(handle.getValue()).toBe(3);
+			});
+		});
+
 		describe('integer: true — typed commits truncate toward zero (parseInt semantics)', () => {
 			test('typing "7.5" commits 7, not a float', () => {
 				const { handle, inputEl, onChange } = editable({ integer: true });

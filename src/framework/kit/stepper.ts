@@ -66,6 +66,17 @@ export interface StepperOptions {
 	renderValue?: (valueEl: HTMLElement, value: number) => void;
 	/** Fired once per user-driven value CHANGE — never by setValue(). */
 	onChange: (value: number) => void;
+	/**
+	 * SC-430 — opt-in, `editable` only: observe the half-typed DRAFT without committing it
+	 * (commit stays on blur / Enter — lifecycle G-S3 pins that a half-typed draft survives the
+	 * adoption blur). Fired on every `input` event with the value a commit WOULD land
+	 * (Math.trunc'd when `integer`, then clamped to [min,max]), or `null` when the draft is
+	 * empty / unparseable; and with `null` once the draft is RESOLVED (committed, reverted by
+	 * Escape, or discarded as invalid), BEFORE `onChange` fires for a commit. A caller that
+	 * previews a pending edit (e.g. an Apply button's label/enabled state) uses it to follow
+	 * the draft. When absent no listener is added and nothing else changes.
+	 */
+	onDraftInput?: (draft: number | null) => void;
 }
 
 export interface StepperHandle {
@@ -73,6 +84,12 @@ export interface StepperHandle {
 	/** External update, in place: clamps, re-renders, refreshes button disabling. Does NOT fire onChange. */
 	setValue(value: number): void;
 	getValue(): number;
+	/**
+	 * SC-430: commit the typed draft NOW through the same path blur/Enter use (a no-op
+	 * when the draft is clean or the stepper isn't `editable`). Lets a caller whose own
+	 * button is about to read the value make sure a pending draft has landed first.
+	 */
+	commitDraft(): void;
 }
 
 /** Mounts a decrement / value / increment triad into `parent` (D2 §2.2). */
@@ -177,12 +194,20 @@ export function stepper(
 		opts.onChange(current);
 	}
 
+	let commitTypedDraft: () => void = () => undefined;
 	if (inputEl) {
 		const el = inputEl;
-		const commitDraft = (): void => {
+		/** What a commit of the current draft would land: truncated + fully clamped, or null. */
+		const parseDraft = (): number | null => {
 			const raw = el.value.trim();
 			const parsed = raw === '' ? NaN : Number(raw);
-			if (Number.isNaN(parsed)) {
+			if (Number.isNaN(parsed)) return null;
+			return clamp(opts.integer ? Math.trunc(parsed) : parsed);
+		};
+		const commitDraft = (): void => {
+			opts.onDraftInput?.(null); // the draft is resolving — before onChange runs
+			const next = parseDraft();
+			if (next === null) {
 				render(); // invalid draft → revert, no commit
 				return;
 			}
@@ -190,7 +215,7 @@ export function stepper(
 			// FULL clamp here (typing is deliberate — it lands inside [min,max] even
 			// when clampInitial:false left `current` out of range); stepClamp inside
 			// commit() is then an identity on the already-clamped value.
-			commit(clamp(opts.integer ? Math.trunc(parsed) : parsed));
+			commit(next);
 		};
 		owner.registerDomEvent(el, 'keydown', (evt: KeyboardEvent) => {
 			if (evt.key === 'Enter') {
@@ -203,6 +228,7 @@ export function stepper(
 					evt.preventDefault();
 					evt.stopPropagation();
 					render();
+					opts.onDraftInput?.(null);
 				}
 			}
 		});
@@ -220,6 +246,11 @@ export function stepper(
 			if (!el.isConnected || el.closest(`[${MOVING_ATTR}]`)) return;
 			commitDraft();
 		});
+		commitTypedDraft = commitDraft;
+		const onDraftInput = opts.onDraftInput;
+		if (onDraftInput) {
+			owner.registerDomEvent(el, 'input', () => onDraftInput(parseDraft()));
+		}
 	}
 
 	render();
@@ -231,5 +262,6 @@ export function stepper(
 			render();
 		},
 		getValue: () => current,
+		commitDraft: () => commitTypedDraft(),
 	};
 }

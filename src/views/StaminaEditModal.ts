@@ -132,6 +132,8 @@ export interface StaminaStepperRowOptions {
 	/** The "/ N" display max shown beside the stepper. */
 	displayMax: number;
 	onChange: (value: number) => void;
+	/** SC-430: forwarded to the stepper's opt-in `onDraftInput` (see StepperOptions). */
+	onDraftInput?: (draft: number | null) => void;
 }
 
 /** The shared "⊖ [value] ⊕ / max" row: a kit editable stepper plus the max display. */
@@ -154,6 +156,7 @@ export function staminaStepperRow(
 			label: opts.label,
 			control: opts.control,
 			onChange: opts.onChange,
+			onDraftInput: opts.onDraftInput,
 		},
 		owner,
 	);
@@ -231,6 +234,13 @@ export class StaminaEditModal extends DseModal {
 	// (D7 §4.2). Applied to `staminaBar.recoveries` on Apply, alongside the stamina
 	// fields; reset back to 0 by Reset.
 	private pendingRecoveriesChange: number = 0;
+	// SC-430: the change a half-typed (not yet committed) Stamina / Temp Stamina draft
+	// WOULD stage if it committed now, or null when there is no parseable dirty draft.
+	// Read ONLY by updateActionButton, so Apply's enabled state and label follow the draft
+	// and the press that blurs the field lands on an already-enabled button. The pending*
+	// fields above stay the committed truth; the draft is never persisted by itself.
+	private draftStaminaChange: number | null = null;
+	private draftTempStaminaChange: number | null = null;
 
 	constructor(
 		app: App,
@@ -408,6 +418,8 @@ export class StaminaEditModal extends DseModal {
 		// matches what Apply persists — this does not reach the stepper's own typed-
 		// overshoot corridor above, which can still disagree with Apply until the
 		// corrective "+"/Apply's clamp resolves it, same as before this fix.)
+		/** The pending Stamina change a typed/stepped `value` stages (onChange AND the SC-430 draft preview). */
+		const stagedStamina = (value: number): number => value - currentStamina;
 		const staminaStepper = staminaStepperRow(
 			adjustSection,
 			{
@@ -416,8 +428,12 @@ export class StaminaEditModal extends DseModal {
 				control: 'sedit.stamina',
 				displayMax: maxStamina,
 				onChange: (value) => {
-					this.pendingStaminaChange = value - currentStamina;
+					this.pendingStaminaChange = stagedStamina(value);
 					refresh();
+				},
+				onDraftInput: (draft) => {
+					this.draftStaminaChange = draft === null || draft === staminaStepper.getValue() ? null : stagedStamina(draft);
+					this.updateActionButton(actionBtn);
 				},
 			},
 			this.lifecycle,
@@ -428,6 +444,10 @@ export class StaminaEditModal extends DseModal {
 		// min 0 IS the legacy behavior: the decrement guard refused to go below 0 and
 		// typed negatives were corrected to 0 — the stepper floor reproduces both
 		// (with a real disabled minus at the floor instead of a silent no-op, CB-8).
+		/** The pending Temp change a typed/stepped `value` stages — SC-133 RC-5's take-higher
+		 *  floor against the CURRENT session position (onChange AND the SC-430 draft preview). */
+		const stagedTemp = (value: number): number =>
+			Math.max(value, currentTempStamina + this.pendingTempStaminaChange) - currentTempStamina;
 		const tempStepper = stepper(
 			tempSection,
 			{
@@ -437,6 +457,10 @@ export class StaminaEditModal extends DseModal {
 				integer: true, // typed "2.5" commits 2 (legacy parseInt semantics)
 				label: 'Temporary Stamina',
 				control: 'sedit.temp',
+				onDraftInput: (draft) => {
+					this.draftTempStaminaChange = draft === null || draft === tempStepper.getValue() ? null : stagedTemp(draft);
+					this.updateActionButton(actionBtn);
+				},
 				onChange: (value) => {
 					// SC-133 RC-5 (RAW reference/draw-steel-reference.md:279 — temp
 					// doesn't stack, take higher) + fix-round-1 C1: floor against the
@@ -450,8 +474,7 @@ export class StaminaEditModal extends DseModal {
 					// typed grants and the minus button; does NOT retrofit take-higher
 					// onto a run of "+" clicks from the SAME position — I4 pins that
 					// gap as a characterization test for SC-132, not fixed here.
-					const granted = Math.max(value, currentTempStamina + this.pendingTempStaminaChange);
-					this.pendingTempStaminaChange = granted - currentTempStamina;
+					this.pendingTempStaminaChange = stagedTemp(value);
 					refresh();
 				},
 			},
@@ -553,6 +576,11 @@ export class StaminaEditModal extends DseModal {
 				variant: 'accent',
 				disabled: true,
 				onClick: () => {
+					// SC-430: a still-typed draft lands first, through the same path blur uses
+					// (a no-op when the field's blur already committed it). clampStamina below
+					// still owns the persisted value.
+					staminaStepper.commitDraft();
+					tempStepper.commitDraft();
 					// Legacy Apply verbatim — clampStamina is the byte-compat gate.
 					const newCurrentStamina = this.clampStamina(
 						currentStamina + this.pendingStaminaChange,
@@ -577,6 +605,10 @@ export class StaminaEditModal extends DseModal {
 		/** One targeted refresh after every edit: steppers, bar, apply button, and (D7
 		 *  #27b) Spend Recovery's own disabled state — in place. */
 		const refresh = (): void => {
+			// SC-430: the steppers below are re-rendered from the pending values, which discards
+			// any typed draft — so the draft previews are stale by definition.
+			this.draftStaminaChange = null;
+			this.draftTempStaminaChange = null;
 			staminaStepper.setValue(currentStamina + this.pendingStaminaChange);
 			tempStepper.setValue(currentTempStamina + this.pendingTempStaminaChange);
 			updateBar();
@@ -681,8 +713,9 @@ export class StaminaEditModal extends DseModal {
 
 	/** Legacy wording verbatim; the disabled state is the REAL property (CB-8). */
 	private updateActionButton(actionBtn: IconButtonHandle): void {
-		const staminaChange = this.pendingStaminaChange;
-		const tempStaminaChange = this.pendingTempStaminaChange;
+		// SC-430: a dirty, parseable typed draft counts as if it had already committed.
+		const staminaChange = this.draftStaminaChange ?? this.pendingStaminaChange;
+		const tempStaminaChange = this.draftTempStaminaChange ?? this.pendingTempStaminaChange;
 		let actionText = '';
 
 		if (staminaChange < 0) {
