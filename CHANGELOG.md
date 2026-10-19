@@ -28,8 +28,9 @@ for what needs action.
   stay) instead of leaving all of them checked with Apply stuck on "Select 4 minion(s)". The
   window opens with the cursor in the Apply box, like the single-creature Stamina window, so
   Space or Enter right after opening no longer lowers the pool. The "minions hit" box now caps
-  at the minions still alive, and the "0 damage will kill 0 minion(s)" line stays hidden until
-  there is a change pending.
+  at the minions still alive (a larger typed number is brought down to it when you press Apply
+  Damage), the "0 damage will kill 0 minion(s)" line stays hidden until there is a change
+  pending, and "Select 0 minion(s) to kill." no longer appears when no minion is owed.
 - [FIX] **Initiative: editing the selected enemy's Stamina from its roster cell now updates the
   detail row too** (SC-426). Double-clicking a creature's cell in the roster and applying a
   new Stamina (or Temp Stamina) used to change the cell and the note but leave the detail row

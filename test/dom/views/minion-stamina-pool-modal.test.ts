@@ -722,6 +722,33 @@ describe('SC-429: the four pool-modal defects', () => {
 			btn(content, 'Increase Stamina pool').click();
 			expect(checks(content).every((c) => !c.checked && !c.disabled)).toBe(true);
 		});
+
+		// SC-430's contract (a typed draft shows the post-commit Apply state) must not count the
+		// boxes the commit is about to REVERT: at pool 0 box #5 is the modal's own tick, and typing
+		// 1 un-ticks it at blur, leaving the user's four.
+		test('a typed draft off a 0 pool predicts Apply from the user\'s ticks only: label / state / title identical before and after the blur', async () => {
+			const { content } = await setup();
+			document.body.appendChild(content);
+			applyDamage(content, 4, 4); // pool 4: 4 kills owed
+			checks(content).slice(0, 4).forEach(userCheck);
+			expect(actionBtn(content).disabled).toBe(false);
+			for (let i = 0; i < 4; i++) btn(content, 'Decrease Stamina pool').click(); // pool 0: #5 auto-ticked
+			expect(checks(content)[4].checked).toBe(true);
+			const input = content.querySelector<HTMLInputElement>('.dse-stepper__input')!;
+			input.value = '1';
+			input.dispatchEvent(new Event('input', { bubbles: true })); // typed, no blur
+			const snap = () => ({
+				label: actionBtn(content).textContent,
+				disabled: actionBtn(content).disabled,
+				title: actionBtn(content).getAttribute('title'),
+			});
+			const draft = snap();
+			expect(draft.disabled).toBe(false); // 4 user ticks, 4 owed
+			expect(draft.title).toBeNull();
+			input.dispatchEvent(new FocusEvent('blur'));
+			expect(checks(content).map((c) => c.checked)).toEqual([true, true, true, true, false]);
+			expect(snap()).toEqual(draft);
+		});
 	});
 
 	describe('item 2 — initial focus mirrors the stamina edit modal (its Apply box), never a stepper button', () => {
@@ -756,6 +783,32 @@ describe('SC-429: the four pool-modal defects', () => {
 		});
 	});
 
+	describe('Apply Damage caps the typed minion count at the LIVING minions (a typed value bypasses the input max)', () => {
+		const countBox = (content: HTMLElement) =>
+			content.querySelector<HTMLInputElement>('input[aria-label="Number of minions hit"]')!;
+
+		test('full squad: 1 damage to 9 minions applies 5 damage and shows 5 in the box', async () => {
+			const { content } = await setup();
+			applyDamage(content, 1, 9);
+			expect(infoEl(content).textContent).toContain('5 damage will kill 1 minion(s)');
+			expect(countBox(content).value).toBe('5');
+		});
+
+		test('2 dead: 2 damage to 5 minions applies to 3 (6 damage, 1 kill) and shows 3 in the box', async () => {
+			const { content } = await setup({ deadCount: 2 });
+			applyDamage(content, 2, 5);
+			expect(infoEl(content).textContent).toContain('6 damage will kill 1 minion(s)');
+			expect(countBox(content).value).toBe('3');
+		});
+
+		test('a count within the living minions is left as typed', async () => {
+			const { content } = await setup();
+			applyDamage(content, 2, 3);
+			expect(infoEl(content).textContent).toContain('6 damage will kill 1 minion(s)');
+			expect(countBox(content).value).toBe('3');
+		});
+	});
+
 	describe('item 4 — the kill/select info line is hidden when nothing is pending', () => {
 		test('at rest the line is hidden and empty (no "0 damage will kill 0 minion(s)")', async () => {
 			const { content } = await setup();
@@ -771,6 +824,15 @@ describe('SC-429: the four pool-modal defects', () => {
 			btn(content, 'Reset').click();
 			expect(infoEl(content).hidden).toBe(true);
 			expect(infoEl(content).textContent).toBe('');
+		});
+
+		test('"Select N minion(s) to kill." is dropped when N is 0, and kept when kills are owed', async () => {
+			const { content } = await setup();
+			applyDamage(content, 3, 1); // crosses no death tick
+			expect(infoEl(content).textContent).toBe('3 damage will kill 0 minion(s).');
+			btn(content, 'Reset').click();
+			applyDamage(content, 4, 2); // 8 damage: 2 kills
+			expect(infoEl(content).textContent).toBe('8 damage will kill 2 minion(s). \nSelect 2 minion(s) to kill.');
 		});
 
 		test('a half-typed pool draft shows the line at once; a draft equal to the pool hides it', async () => {

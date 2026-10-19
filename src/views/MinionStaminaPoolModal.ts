@@ -182,7 +182,12 @@ export class MinionStaminaPoolModal extends DseModal {
 						// going negative (or both, which would otherwise cancel back out to a
 						// positive `totalDamage`) must never flip this into a heal.
 						const clampedDamage = Math.max(0, damage);
-						const clampedMinions = Math.max(0, minions);
+						// SC-429: ...and cap the count at the LIVING minions. The box's `max` only bounds
+						// the spinner; a typed or pasted number goes straight through, and the rules
+						// cannot hit more minions than are alive. Show the cap in the box.
+						const alive = this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0;
+						const clampedMinions = Math.min(alive, Math.max(0, minions));
+						minionCountInput.value = String(clampedMinions);
 						const totalDamage = clampedDamage * clampedMinions;
 						this.pendingStaminaChange -= totalDamage;
 						this.refresh();
@@ -409,7 +414,10 @@ export class MinionStaminaPoolModal extends DseModal {
 			this.infoTextEl.textContent = '';
 		} else {
 			const totalPendingDamage = -pending;
-			this.infoTextEl.textContent = `${totalPendingDamage} damage will kill ${minionsToKill} minion(s). \nSelect ${minionsToKill} minion(s) to kill.`;
+			// SC-429: with no kills owed there is nothing to select, so drop that sentence.
+			this.infoTextEl.textContent =
+				`${totalPendingDamage} damage will kill ${minionsToKill} minion(s).` +
+				(minionsToKill > 0 ? ` \nSelect ${minionsToKill} minion(s) to kill.` : '');
 		}
 	}
 
@@ -427,6 +435,8 @@ export class MinionStaminaPoolModal extends DseModal {
 			// later.
 			if (newStamina <= 0) selectedMinions = this.minionCheckboxes.length;
 			else if (minionsToKill <= 0) selectedMinions = 0;
+			// The commit reverts the boxes the modal ticked itself (SC-429), leaving the user's.
+			else selectedMinions = this.minionCheckboxes.filter((item) => item.checkbox.checked && !item.auto).length;
 		}
 
 		// Disable the apply button if the number of selected minions doesn't match minionsToKill
