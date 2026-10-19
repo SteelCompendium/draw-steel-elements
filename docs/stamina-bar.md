@@ -72,11 +72,14 @@ When `recoveries_max` is set, the bar gains:
   sets the count** — clicking the last available one spends exactly one, clicking the
   first spent one restores exactly one, and any distance is a single click (Draw Steel
   loses Recoveries in multiples, e.g. "the target loses 1d3 Recoveries"). The row is also
-  a keyboard control: arrow keys step it, Home/End empty and refill it. Every change
+  a keyboard control: arrow keys step it, Home/End empty and refill it, and a click on a
+  marker leaves the keyboard on the row so you can carry on with the keys. Every change
   offers an **Undo** in the notice that follows.
 - A **Catch Breath** button that spends one Recovery to heal 1/3 of max Stamina (rounded
-  down), capped at `max_stamina`. Disabled while Dying or with no Recoveries left. It is
-  icon-only; hover it for the label.
+  down), capped at `max_stamina`. Disabled — with the reason as its tooltip — while Dying,
+  with no Recoveries left, at full Stamina, or when the recovery value is 0 (a `max_stamina`
+  of 2 or less), so it never spends a Recovery for nothing. The popover's "Catch breath"
+  button follows the same rule. It is icon-only; hover it for the label.
 - A **Winded**/**Dying** state, per the core rules ("Stamina and Death"): Winded at half
   Stamina max or below, Dying at 0 Stamina or below. The whole cluster carries it — the
   frame's colour, the crest's silhouette (shield → alert shield → skull), the state word,

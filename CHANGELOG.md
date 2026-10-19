@@ -60,6 +60,16 @@ for what needs action.
   once but the frame did not. Un-clicking clears it immediately too. The enemy-group and
   portraits-off turn buttons got the same in-place fix. The initiative docs GIF is
   regenerated.
+- [FIX] **Catch Breath no longer spends a Recovery for nothing** (SC-428). At full Stamina (or
+  when the recovery value is 0, i.e. a max Stamina of 2 or less) the Catch Breath button used to
+  stay enabled, and a click spent a Recovery for +0 Stamina. It is now disabled with a tooltip
+  saying why, on the Stamina bar and the hero sheet, and the Recoveries popover's "Catch breath"
+  button is disabled in the same cases (and with no Recoveries left, or while Dying) instead of
+  doing nothing. The Stamina editor's Spend Recovery now says "Recovery value is 0" rather than
+  "Already at maximum Stamina" when the recovery value is the reason.
+- [FIX] **Clicking a Recoveries marker keeps the keyboard on the marker row** (SC-428). After a
+  click, the arrow keys, Home/End and Escape went nowhere until you Tabbed back to the row, and
+  Tab restarted from the page. Focus now stays on the row, also through the save that follows.
 - [FIX] **Stamina editor and minion pool editor: the first click on Apply now applies a typed
   value** (SC-430). Type a new Stamina, Temporary Stamina or minion-pool value and click Apply,
   and if you hit the button's edge the click was swallowed: the field committed, the button's
