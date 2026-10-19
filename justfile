@@ -1,5 +1,8 @@
 #!/usr/bin/env just --justfile
 
+build:
+    npm run build
+
 # git switch to the HEAD of a PR number. Creates branch if needed
 switch_to_pr pr_num:
     #!/usr/bin/env bash
