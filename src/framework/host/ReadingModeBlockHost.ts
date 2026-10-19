@@ -360,10 +360,6 @@ export class ReadingModeBlockHost implements BlockHost {
 		// content inside the callback and falls back to the durable locate when it is stale.
 		const section = this.readSection();
 
-		// SC-198: hold the preview's height across the rebuild this write is about to
-		// provoke (only meaningful while the block is on screen, i.e. its section resolves).
-		if (section) this.scrollPin?.pin(this.containerEl);
-
 		let wrote = false;
 		let dropped = false;
 		let changedContent = false;
@@ -402,6 +398,15 @@ export class ReadingModeBlockHost implements BlockHost {
 				this.knownBody = newSource;
 				const next = lines.join('\n');
 				changedContent = next !== content;
+				// SC-198: hold the preview's height across the rebuild this write is about to
+				// provoke (only meaningful while the block is on screen, i.e. its section
+				// resolves). SC-260: decided HERE, not before Vault.process — a write whose result
+				// is byte-identical to the disk is no-opped by Obsidian (no `modify`, no rebuild),
+				// so a pin taken for it would hold phantom scroll space for the full PIN_TTL_MS.
+				// Still synchronous inside the callback, i.e. before Obsidian writes and so before
+				// the rebuild. `pin` is fail-safe (every path is early-return or DOM attribute/timer
+				// work), so it cannot abort the write.
+				if (section && changedContent) this.scrollPin?.pin(this.containerEl);
 				return next;
 			});
 			settled = true;

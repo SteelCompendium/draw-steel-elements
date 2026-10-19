@@ -22,6 +22,11 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **A save that changes nothing no longer leaves extra blank scroll space at the bottom
+  of the note** (SC-260). When a block wrote back exactly what the note already contained
+  (for example re-applying the same value in reading mode), the page held its height for a
+  couple of seconds waiting for a redraw that never came. It now only holds the height when
+  the note is actually going to change.
 - [FIX] **Initiative: the minion Stamina pool window no longer gets stuck all-checked, and no
   longer opens on a stepper button** (SC-429). Lowering the pool to 0 ticks every minion for
   you; raising it again now un-ticks the ones the window ticked (the ones you ticked yourself

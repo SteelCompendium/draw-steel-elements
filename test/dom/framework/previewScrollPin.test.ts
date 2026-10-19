@@ -15,7 +15,8 @@ import { registerFrameworkElements } from '../../../src/framework/registerFramew
 import type { ElementDefinition, ElementRegistry } from '../../../src/framework/registry';
 import type { ElementPipeline } from '../../../src/framework/pipeline';
 import type { BlockHost } from '../../../src/framework/host/BlockHost';
-import { App, Plugin, makeFakeContext } from '../../mocks/obsidian';
+import { ViewRegistry } from '../../../src/framework/host/viewRegistry';
+import { App, Component, Plugin, makeFakeContext } from '../../mocks/obsidian';
 
 const PIN_ATTR = 'data-dse-scroll-pin';
 const PIN_VAR = '--dse-scroll-pin';
@@ -177,6 +178,96 @@ describe('SC-198: ReadingModeBlockHost pins around its own write', () => {
 		// The note was still untouched at pin time — i.e. the pin is not racing the rebuild.
 		expect(contentAtPin[0]).toBe(NOTE);
 		expect(app.vault.getContent('Note.md')).toContain('round: 2');
+		document.body.innerHTML = '';
+	});
+
+	// SC-260: a write whose result is byte-identical to the disk is no-opped by Obsidian (no
+	// `modify`, no rebuild), so a pin taken for it would hold phantom scroll space for the full
+	// TTL. The pin is therefore decided inside the Vault.process callback, once the result is known.
+	test('SC-260: a no-op write (body identical to disk) takes no pin, still resolves true and leaves no claim ticket', async () => {
+		const app = new App();
+		app.vault.setFile('Note.md', NOTE);
+		const plugin = new Plugin(app);
+		const ctx = makeFakeContext(app, 'Note.md');
+		const { scroller, el } = makeScroller();
+		el.appendChild(ctx.el);
+		const scrollPin = new PreviewScrollPin();
+		const spy = jest.spyOn(scrollPin, 'pin');
+		const registry = new ViewRegistry({ enabled: true });
+		registry.load();
+
+		const host = new ReadingModeBlockHost(plugin as any, ctx.el, ctx as any, 'ds-initiative', scrollPin, registry);
+		const entry = registry.own(new Component() as any, host, document.createElement('div'));
+		await expect(host.replaceSource('round: 1')).resolves.toBe(true);
+
+		expect(spy).not.toHaveBeenCalled();
+		expect(scroller.hasAttribute(PIN_ATTR)).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(NOTE);
+		expect(entry.tickets).toHaveLength(0);
+		document.body.innerHTML = '';
+	});
+
+	test('SC-260: a changing write pins exactly once, inside the callback, before the vault write lands', async () => {
+		const app = new App();
+		app.vault.setFile('Note.md', NOTE);
+		const plugin = new Plugin(app);
+		const ctx = makeFakeContext(app, 'Note.md');
+		const { el } = makeScroller();
+		el.appendChild(ctx.el);
+		const scrollPin = new PreviewScrollPin();
+		const order: string[] = [];
+		jest.spyOn(scrollPin, 'pin').mockImplementation(() => {
+			order.push(`pin(disk=${app.vault.getContent('Note.md') === NOTE ? 'old' : 'new'})`);
+		});
+		const original = app.vault.process.bind(app.vault);
+		app.vault.process = (async (file: any, fn: any) => {
+			order.push('process-start');
+			const result = await original(file, (content: string) => {
+				const next = fn(content);
+				order.push('callback-returns');
+				return next;
+			});
+			order.push('process-done');
+			return result;
+		}) as any;
+
+		const host = new ReadingModeBlockHost(plugin as any, ctx.el, ctx as any, 'ds-initiative', scrollPin);
+		await expect(host.replaceSource('round: 2')).resolves.toBe(true);
+
+		expect(scrollPin.pin).toHaveBeenCalledTimes(1);
+		expect(order).toEqual(['process-start', 'pin(disk=old)', 'callback-returns', 'process-done']);
+		expect(app.vault.getContent('Note.md')).toContain('round: 2');
+		document.body.innerHTML = '';
+	});
+
+	test("SC-260: a write the host drops ('miss') or aborts ('abort') takes no pin", async () => {
+		const app = new App();
+		app.vault.setFile('Note.md', NOTE);
+		const plugin = new Plugin(app);
+		const { el } = makeScroller();
+		const scrollPin = new PreviewScrollPin();
+		const spy = jest.spyOn(scrollPin, 'pin');
+		const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+		const sectionInfo = { text: NOTE, lineStart: 2, lineEnd: 4 };
+
+		// 'miss': section resolves but the body on disk is not what this host last knew, and
+		// nothing in the note matches the known body either.
+		const missCtx = makeFakeContext(app, 'Note.md');
+		el.appendChild(missCtx.el);
+		const missHost = new ReadingModeBlockHost(plugin as any, missCtx.el, missCtx as any, 'ds-initiative', scrollPin);
+		missHost.setMountedBody('round: 99');
+		await expect(missHost.replaceSource('round: 100')).resolves.toBe(false);
+
+		// 'abort': the section range does not hold a fence and the host has no durable identity.
+		const abortCtx = makeFakeContext(app, 'Note.md');
+		(abortCtx as any).getSectionInfo = () => ({ ...sectionInfo, lineStart: 0, lineEnd: 0 });
+		el.appendChild(abortCtx.el);
+		const abortHost = new ReadingModeBlockHost(plugin as any, abortCtx.el, abortCtx as any, 'ds-initiative', scrollPin);
+		await expect(abortHost.replaceSource('round: 5')).resolves.toBe(false);
+
+		expect(spy).not.toHaveBeenCalled();
+		expect(app.vault.getContent('Note.md')).toBe(NOTE);
+		warn.mockRestore();
 		document.body.innerHTML = '';
 	});
 
