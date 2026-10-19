@@ -236,11 +236,11 @@ describe('D7 Task 4: ds-stamina Recoveries / Winded — additive, gated on recov
 		await pipeline.run(staminaBarElement, RECOVERIES_YAML, host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		// canPersist: false stamps the read-only reason as Catch Breath's OWN aria-label
-		// (native setTooltip's side effect — FOLLOWUPS #27-fix-round finding 1's class of
-		// bug), so it's found by its stable icon here, not the (now-replaced) label text.
+		// Found by its stable icon. SC-324: canPersist: false puts the read-only reason AFTER
+		// the name in Catch Breath's one aria-label (hover + AT), never in place of it.
 		const catchBreathBtn = root.querySelector('button:has([data-icon="wind"])') as HTMLButtonElement;
 		expect(catchBreathBtn.disabled).toBe(true);
+		expect(catchBreathBtn.getAttribute('aria-label')).toBe('Catch Breath: Read-only in this context');
 
 		document.body.appendChild(host.containerEl);
 		try {

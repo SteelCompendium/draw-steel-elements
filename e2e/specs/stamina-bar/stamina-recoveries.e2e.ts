@@ -148,7 +148,7 @@ describe('modal Spend Recovery', () => {
 		const modal = await openBarModal('Stamina/recoveries-zero.md');
 		const btn = modal.control('sedit.spend-recovery');
 		await expect(btn).toBeDisabled();
-		await expect(btn).toHaveAttribute('aria-label', 'No Recoveries remaining');
+		await expect(btn).toHaveAttribute('aria-label', 'Spend Recovery: No Recoveries remaining');
 		await dse.click(btn);
 		await expectApplyLabel(modal, 'No Stamina Change');
 		await dse.click(modal.control('modal.close'));
@@ -158,7 +158,7 @@ describe('modal Spend Recovery', () => {
 		const modal = await openBarModal('Stamina/recoveries-full.md');
 		const btn = modal.control('sedit.spend-recovery');
 		await expect(btn).toBeDisabled();
-		await expect(btn).toHaveAttribute('aria-label', 'Already at maximum Stamina');
+		await expect(btn).toHaveAttribute('aria-label', 'Spend Recovery: Already at maximum Stamina');
 		await dse.click(modal.control('modal.close'));
 	});
 

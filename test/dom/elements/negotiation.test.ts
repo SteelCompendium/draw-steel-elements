@@ -340,7 +340,7 @@ describe('T-7: negotiation rendered through the REAL ElementPipeline (D2 §3.10 
 		const label = completeBtn(root)!.getAttribute('aria-label')!;
 		expect(label.startsWith('Complete Argument: ')).toBe(true);
 		expect(label).toContain('Resolve the Argument using the current state of motivations, pitfalls');
-		expect(label).toContain('Requires Power Roll tier to be selected.');
+		expect(label).toContain('Requires a Power Roll tier to be selected.');
 	});
 
 	test('learn-more tab: rules text + a STATIC (non-selectable) 3-tier power roll panel', async () => {

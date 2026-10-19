@@ -273,7 +273,9 @@ export function renderRecoveriesStrip(
 		});
 	} else {
 		pipsEl.setAttribute('aria-disabled', 'true');
-		if (opts.readOnlyTooltip !== undefined) setTooltip(catchBreath.buttonEl, opts.readOnlyTooltip);
+		// SC-324: the reason follows the name ("Catch Breath: Read-only in this context") —
+		// it must not become the whole accessible name of this icon-only button.
+		if (opts.readOnlyTooltip !== undefined) catchBreath.setLabel(`Catch Breath: ${opts.readOnlyTooltip}`);
 	}
 
 	return {

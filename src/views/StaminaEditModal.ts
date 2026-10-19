@@ -28,7 +28,6 @@ import {
 	stampControl,
 	staminaGaugeGeometry,
 	stepper,
-	tooltip,
 	updateStaminaGauge,
 } from '@/framework/kit';
 import type { IconButtonHandle, StaminaGaugeValues, StepperHandle } from '@/framework/kit';
@@ -183,11 +182,13 @@ const NO_RECOVERIES_TOOLTIP = 'No Recoveries remaining';
  *  happen at the max-side cap, so the reason is always accurate. */
 const NO_GAIN_TOOLTIP = 'Already at maximum Stamina';
 /** The Spend Recovery button's own accessible name/tooltip (FOLLOWUPS #27-fix-round
- *  finding 1) — re-asserted whenever the button re-enables, so the reason tooltip
- *  above never sticks past the state it describes (native setTooltip stamps
- *  aria-label as a side effect, so "clearing" a tooltip means re-asserting the
- *  correct one, not removing an attribute production never sets). */
+ *  finding 1) — re-asserted via setLabel whenever the button re-enables, so the reason
+ *  above never sticks past the state it describes (the hover tooltip IS the aria-label,
+ *  so "clearing" a reason means re-asserting the plain label). */
 const SPEND_RECOVERY_LABEL = 'Spend Recovery';
+/** SC-324: the disabled reason is part of the ONE aria-label (hover + accessible name), so
+ *  it follows the action: "Spend Recovery: No Recoveries remaining" — never replaces it. */
+const spendRecoveryReasonLabel = (reason: string): string => `${SPEND_RECOVERY_LABEL}: ${reason}`;
 
 // ---------------------------------------------------------------------------------
 // The single-stamina modal (hero / creature)
@@ -635,21 +636,22 @@ export class StaminaEditModal extends DseModal {
 				spendRecoveryBtn.setDisabled(noneLeft || noGain);
 				// House rule: never a silent disable — a visible reason tooltip
 				// accompanies the real `disabled` (CB-8), cleared once available again
-				// (e.g. after Reset). FOLLOWUPS #27-fix-round finding 1: Obsidian's
-				// native setTooltip stamps `aria-label` as a side effect (§2.5), so
-				// "clearing" the reason means RE-ASSERTING the button's own label, not
-				// removing an attribute (`data-tooltip`) real Obsidian never sets — the
-				// old removeAttribute left the reason as the permanent accessible name
-				// once the button had ever been disabled.
-				if (noneLeft) tooltip(spendRecoveryBtn.buttonEl, NO_RECOVERIES_TOOLTIP);
-				else if (noGain) tooltip(spendRecoveryBtn.buttonEl, NO_GAIN_TOOLTIP);
-				else tooltip(spendRecoveryBtn.buttonEl, SPEND_RECOVERY_LABEL);
+				// (e.g. after Reset). The tooltip IS the `aria-label` (§2.5), so the reason
+				// is carried IN the label ("Spend Recovery: <reason>", SC-324 — it must not
+				// replace the action name) and "clearing" it means RE-ASSERTING the plain
+				// label via setLabel (FOLLOWUPS #27-fix-round finding 1).
+				spendRecoveryBtn.setLabel(
+					noneLeft
+						? spendRecoveryReasonLabel(NO_RECOVERIES_TOOLTIP)
+						: noGain
+							? spendRecoveryReasonLabel(NO_GAIN_TOOLTIP)
+							: SPEND_RECOVERY_LABEL,
+				);
 			} else {
 				// Same house rule, untracked branch: no Recoveries counter to run out of,
 				// but "no gain" is still a real, visible disabled reason.
 				spendRecoveryBtn.setDisabled(noGain);
-				if (noGain) tooltip(spendRecoveryBtn.buttonEl, NO_GAIN_TOOLTIP);
-				else tooltip(spendRecoveryBtn.buttonEl, SPEND_RECOVERY_LABEL);
+				spendRecoveryBtn.setLabel(noGain ? spendRecoveryReasonLabel(NO_GAIN_TOOLTIP) : SPEND_RECOVERY_LABEL);
 			}
 		};
 		refresh();

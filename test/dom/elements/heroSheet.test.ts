@@ -418,10 +418,11 @@ describe('D7 Task 9: read-only mount (canPersist=false) disables every write aff
 		expect(staminaRegion.querySelector('.dse-stamina-rec__pips')!.getAttribute('aria-disabled')).toBe('true');
 		expect(staminaRegion.querySelector('.dse-stamina-rec__pips')!.hasAttribute('tabindex')).toBe(false);
 		staminaRegion.querySelectorAll<HTMLElement>('.dse-stamina-rec__pip').forEach((pip) => pip.click());
-		// Catch Breath's aria-label is dynamic (its own read-only reason tooltip stamps
-		// aria-label as a side effect too — FOLLOWUPS #27-fix-round finding 1's class of
-		// bug, native setTooltip), so it's found by its stable icon, not the label text.
-		expect(staminaRegion.querySelector<HTMLButtonElement>('button:has([data-icon="wind"])')!.disabled).toBe(true);
+		// Catch Breath is found by its stable icon. SC-324: its read-only reason follows the
+		// name in the ONE aria-label (hover + AT), it does not replace it.
+		const catchBreath = staminaRegion.querySelector<HTMLButtonElement>('button:has([data-icon="wind"])')!;
+		expect(catchBreath.disabled).toBe(true);
+		expect(catchBreath.getAttribute('aria-label')).toBe('Catch Breath: Read-only in this context');
 
 		const respite = root.querySelector<HTMLButtonElement>('button[aria-label^="Respite"]')!;
 		expect(respite.disabled).toBe(true);

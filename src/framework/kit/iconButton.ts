@@ -14,6 +14,7 @@
 import type { Component } from 'obsidian';
 import { setIcon } from 'obsidian';
 import { stampControl } from './controlId';
+import { tooltip } from './tooltip';
 
 export type IconButtonVariant = 'default' | 'accent' | 'ghost' | 'danger';
 
@@ -129,8 +130,12 @@ export function iconButton(
 			buttonEl.disabled = disabled;
 		},
 		setPressed,
+		// Routed through the kit tooltip() (Obsidian setTooltip): it writes the same
+		// aria-label AND refreshes a tooltip that is already showing (a keyboard press
+		// leaves the pointer resting on the button), which a bare setAttribute does not
+		// (SC-324 r2 L2). Mount keeps the bare write — nothing is showing yet.
 		setLabel: (label: string): void => {
-			buttonEl.setAttribute('aria-label', label);
+			tooltip(buttonEl, label);
 		},
 	};
 }

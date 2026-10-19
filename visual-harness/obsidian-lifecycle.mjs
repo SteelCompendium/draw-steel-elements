@@ -878,7 +878,7 @@ const SCENARIOS = [
 				await t.tag(TRACKER, 'w', writer);
 				await t.tag(TRACKER, 'o', other);
 				const m = await t.mark();
-				await t.ev(`${t.root(TRACKER, writer)}.querySelector('button[aria-label="Advance round"]').click()`);
+				await t.ev(`${t.root(TRACKER, writer)}.querySelector('.dse-init__round-advance').click()`);
 				await t.sleep(2500);
 				t.expect(await t.sameRoot(TRACKER, 'w', writer), 'writer lost its view');
 				t.expect(!(await t.sameRoot(TRACKER, 'o', other)), 'the other instance kept a stale view');

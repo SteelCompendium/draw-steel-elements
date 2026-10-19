@@ -422,8 +422,8 @@ describe('[Q14] Spend Recovery is rendered or suppressed by opts.spendRecovery',
 });
 
 describe('[Q06][Q07][Q09][Q10][Q15] Spend Recovery across positions (tracked pool, recoveryValue = floor(30/3) = 10)', () => {
-	const REASON_MAX = 'Already at maximum Stamina';
-	const REASON_NONE = 'No Recoveries remaining';
+	const REASON_MAX = 'Spend Recovery: Already at maximum Stamina';
+	const REASON_NONE = 'Spend Recovery: No Recoveries remaining';
 	type SR = {
 		name: string; kind: Kind; cur: number; rec: number; presses: number;
 		/** pending stamina change, pending recoveries spent, enabled afterwards, reason when disabled */
@@ -509,7 +509,7 @@ describe('[Q16] recoveryValue 0 (max <= 2): Spend Recovery can never gain, so it
 	test.failing('[Q16] the disabled reason for a zero recovery value is not the "Already at maximum Stamina" text [known bug SC-428]', () => {
 		// 0/2 is nowhere near max, yet the tooltip claims it is at maximum.
 		const { content } = openStaminaModal({ max: 2, current: 0, isHero: false, recoveries: 3, recoveries_max: 3 });
-		expect(spendRecoveryBtn(content)!.getAttribute('aria-label')).not.toBe('Already at maximum Stamina');
+		expect(spendRecoveryBtn(content)!.getAttribute('aria-label')).not.toContain('Already at maximum Stamina');
 	});
 });
 

@@ -236,14 +236,14 @@ describe('FOLLOWUPS #27b: StaminaEditModal — Spend Recovery synced with recove
 	// the fix, this stuck the "No Recoveries remaining" name on the button forever
 	// after the first disable — the jest mock's pre-fix divergence (it wrote
 	// `data-tooltip`, not `aria-label`) hid exactly this.
-	test('aria-label lifecycle: mounted → "Spend Recovery", disabled → "No Recoveries remaining", re-enabled → "Spend Recovery" again', () => {
+	test('aria-label lifecycle: mounted → "Spend Recovery", disabled → "Spend Recovery: No Recoveries remaining" (the action name is kept), re-enabled → "Spend Recovery" again', () => {
 		const { content } = makeRecoveryModal(21, 0, 1, 5);
 		const spend = btn(content, 'Spend Recovery');
 		expect(spend.getAttribute('aria-label')).toBe('Spend Recovery');
 
 		spend.click(); // remaining 1 -> 0
 		expect(spend.disabled).toBe(true);
-		expect(spend.getAttribute('aria-label')).toBe('No Recoveries remaining');
+		expect(spend.getAttribute('aria-label')).toBe('Spend Recovery: No Recoveries remaining');
 
 		btn(content, 'Reset').click(); // remaining back to 1
 		expect(spend.disabled).toBe(false);
@@ -264,7 +264,7 @@ describe('FOLLOWUPS #27b: StaminaEditModal — Spend Recovery synced with recove
 		const spend = btn(content, 'Spend Recovery');
 		for (let i = 0; i < 5; i++) spend.click(); // only the first 2 succeed (10 -> 17 -> 21); the rest are swallowed once real-disabled
 		expect(spend.disabled).toBe(true);
-		expect(spend.getAttribute('aria-label')).toBe('Already at maximum Stamina');
+		expect(spend.getAttribute('aria-label')).toBe('Spend Recovery: Already at maximum Stamina');
 		apply(content);
 		expect(bar.current_stamina).toBe(21);
 		expect(bar.recoveries).toBeUndefined();
@@ -278,7 +278,7 @@ describe('FOLLOWUPS #27b: StaminaEditModal — Spend Recovery synced with recove
 		// Recovery') — same reason spendRecoveryBtn's icon-based lookup exists.
 		const spend = spendRecoveryBtn(content);
 		expect(spend.disabled).toBe(true);
-		expect(spend.getAttribute('aria-label')).toBe('Already at maximum Stamina');
+		expect(spend.getAttribute('aria-label')).toBe('Spend Recovery: Already at maximum Stamina');
 	});
 
 	// FOLLOWUPS #27-fix-round finding 2 (HIGH): `recoveries_max` — not `recoveries` — is
@@ -448,7 +448,7 @@ describe('SC-133 RC-4: Spend Recovery never over-burns Recoveries, and the previ
 		expect(spend.disabled).toBe(false);
 		spend.click(); // 18 -> 20 (full heal), 7 Recoveries left
 		expect(spend.disabled).toBe(true); // disabled: NOT because Recoveries ran out
-		expect(spend.getAttribute('aria-label')).toBe('Already at maximum Stamina');
+		expect(spend.getAttribute('aria-label')).toBe('Spend Recovery: Already at maximum Stamina');
 	});
 
 	test('I3: a click on the auto-disabled button is a no-op (CB-8) — no further heal, no further Recovery spent', () => {

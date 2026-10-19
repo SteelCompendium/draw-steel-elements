@@ -397,7 +397,7 @@ export class ArgumentView {
 				icon: 'messages-square',
 				// SC-324: label IS the hover tooltip (one aria-label) — the explanation lives here.
 				label:
-					'Complete Argument: Resolve the Argument using the current state of motivations, pitfalls, etc.\nRequires Power Roll tier to be selected.',
+					'Complete Argument: Resolve the Argument using the current state of motivations, pitfalls, etc.\nRequires a Power Roll tier to be selected.',
 				text: 'Complete Argument',
 				disabled: true, // armed by tier selection (a radiogroup pick)
 				onClick: () => this.completeArgument(),
