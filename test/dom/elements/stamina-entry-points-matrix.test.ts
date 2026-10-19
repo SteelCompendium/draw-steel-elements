@@ -17,7 +17,7 @@ import { staminaBarElement } from '../../../src/elements/stamina-bar/definition'
 import { parseYaml } from '../../mocks/obsidian';
 import { makeCompendiumDeps, loadMdDseFixture } from './_refHarness';
 import { stubService } from './rollTestHelpers';
-import { applyBtn, lastModal, lastWrite, makeDeps, makeHost, spendRecoveryBtn, typeCommit } from '../_staminaHarness';
+import { applyBtn, lastModal, lastWrite, makeDeps, makeHost, spendRecoveryBtn, tempInput, typeCommit } from '../_staminaHarness';
 import quickStart from '../../fixtures/initiative/quick-start.yaml';
 
 // The hero sheet's "Edit definition" pulls in the form editor; the stamina paths do not.
@@ -185,14 +185,34 @@ describe('[E12] grid dblclick on the SELECTED instance: the detail row must foll
 		expect(lastWrite(host)).toMatch(/current_stamina: 10/);
 	});
 
-	test.failing('[E12] the detail-row readout shows 10/40 [known bug SC-426]', async () => {
+	test('[E12] the detail-row readout shows 10/40', async () => {
 		const { root } = await editSelected();
 		expect(root.querySelector('.dse-init__detail .dse-init__stamina')!.textContent).toBe('10/40');
 	});
 
-	test.failing('[E12] the detail-row bar shows 10 [known bug SC-426]', async () => {
+	test('[E12] the detail-row bar shows 10', async () => {
 		const { root } = await editSelected();
 		expect(root.querySelector('.dse-init__detail .dse-init__bar .dse-stamina__ccur')!.textContent).toBe('10');
+	});
+
+	test('[E12] the detail-row state chip follows the edit (10/40 is Winded)', async () => {
+		const { root } = await editSelected();
+		const chip = root.querySelector('.dse-init__detail .dse-init__state')!;
+		expect(chip.getAttribute('data-state')).toBe('winded');
+		expect(chip.textContent).toBe('Winded');
+	});
+
+	test('[E12] Temp Stamina set from the cell reaches the detail-row readout and bar', async () => {
+		const { root } = await mountInit(quickStart);
+		const cell = root.querySelector('.dse-init__cell[data-instance-key="0-1"]') as HTMLElement;
+		cell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+		const modal = lastModal();
+		typeCommit(tempInput(modal), '5');
+		applyBtn(modal).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(cell.querySelector('.dse-init__cell-stamina')!.textContent).toBe('40(+5)/40');
+		expect(root.querySelector('.dse-init__detail .dse-init__stamina')!.textContent).toBe('40(+5)/40');
+		expect(root.querySelector('.dse-init__detail .dse-init__bar .dse-stamina__ctemp')!.textContent).toBe('+5');
 	});
 
 	test('control: dblclick on a NON-selected instance (0-2) leaves the detail row (Orc #1) alone', async () => {
@@ -206,6 +226,8 @@ describe('[E12] grid dblclick on the SELECTED instance: the detail row must foll
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect(cell.querySelector('.dse-init__cell-stamina')!.textContent).toBe('25/40');
 		expect(root.querySelector('.dse-init__detail .dse-init__stamina')!.textContent).toBe(before);
+		expect(root.querySelector('.dse-init__detail .dse-init__bar .dse-stamina__ccur')!.textContent).toBe('40');
+		expect(root.querySelector('.dse-init__detail .dse-init__state')!.getAttribute('data-state')).toBe('healthy');
 		expect(host.replaceSource).toHaveBeenCalledTimes(1);
 	});
 });

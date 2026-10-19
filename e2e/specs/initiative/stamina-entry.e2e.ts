@@ -145,12 +145,9 @@ describe('initiative: creatures', () => {
 		{ failsWith: /Spend Recovery should be disabled for a creature/ },
 	);
 
-	// B2 / S1 (SC-426): the cell route passes no detail-row elements to the modal callback, so
-	// editing the instance shown in the detail row repaints the cell only. The write is right, and
-	// because view adoption keeps the DOM after the write, the stale readout stays until the next
-	// rebuild (confirmed in real Obsidian). Correct behaviour: the detail row follows the edit.
-	knownBug(
-		'SC-426',
+	// B2 / S1 (SC-426, fixed): a roster-cell edit of the instance shown in the detail row repaints the
+	// detail row too (number, bar and state chip), not just the cell. The detail row follows the edit.
+	it(
 		'[INIT-STAM-B2] a roster-cell edit of the instance shown in the detail row updates the detail readout too',
 		async () => {
 			const root = await openTracker();
@@ -163,11 +160,7 @@ describe('initiative: creatures', () => {
 				enemy_groups: [{ creatures: [{ instances: [{ id: 1, current_stamina: 50 }, { id: 2, current_stamina: 60 }, { id: 3, current_stamina: 60 }] }] }],
 			});
 			await expect(root.control({ css: '.dse-init__cell[data-instance-key="0-1"] .dse-init__cell-stamina' })).toHaveText('50/60');
-			await expect(root.control('init.detail.stamina')).toHaveText('50/60', {
-				wait: 1500,
-				message: 'the detail row should show the edited instance\'s new Stamina (50/60)',
-			});
+			await expect(root.control('init.detail.stamina')).toHaveText('50/60');
 		},
-		{ failsWith: /the detail row should show the edited instance's new Stamina/ },
 	);
 });

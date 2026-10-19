@@ -1727,6 +1727,10 @@ export class InitiativeView extends ElementView<EncounterData> {
 		owner: Component,
 	): void {
 		container.addClass('dse-init__row');
+		// SC-426 — which instance this detail row currently shows. The grid cell's stamina
+		// modal has no handle on the row, so it asks the DOM (`detailHandlesFor`) whether
+		// the instance it just edited is the one on display.
+		container.setAttribute('data-detail-key', instanceKey);
 		// SC-183 r2 — the open creature's squad role, so the detail row says "this is the
 		// captain" as plainly as the roster cell does.
 		if (group.is_squad && creature.squad_role) {
@@ -1844,6 +1848,21 @@ export class InitiativeView extends ElementView<EncounterData> {
 			});
 	}
 
+	/** SC-426 — the detail row's stamina handles when it currently shows `instanceKey`,
+	 *  else null (it shows a different creature, so an edit must not touch it). For the
+	 *  grid-cell route, which opens the stamina modal with no row in hand. Looked up at
+	 *  apply time, so a row rebuilt while the modal was open is still found. */
+	private detailHandlesFor(
+		groupBodyEl: HTMLElement,
+		instanceKey: string,
+	): { rowEl: HTMLElement; staminaEl: HTMLElement; barEl: HTMLElement | null } | null {
+		const rowEl = groupBodyEl.querySelector<HTMLElement>(':scope > .dse-init__detail');
+		if (!rowEl || rowEl.getAttribute('data-detail-key') !== instanceKey) return null;
+		const staminaEl = rowEl.querySelector<HTMLElement>(':scope .dse-init__health > .dse-init__stamina');
+		if (!staminaEl) return null;
+		return { rowEl, staminaEl, barEl: rowEl.querySelector<HTMLElement>(':scope > .dse-init__bar') };
+	}
+
 	private openCreatureStaminaModal(
 		instance: CreatureInstance,
 		creature: Creature,
@@ -1853,7 +1872,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		barEl?: HTMLElement | null,
 		/** SC-183 r2: the detail row, when the caller has one — the state chip lives on
 		 *  its conditions line and repaints with the rest. The grid dblclick path has no
-		 *  row in hand, exactly like its numeric refresh. */
+		 *  row in hand and passes null; the callback then finds the row itself (SC-426). */
 		rowEl?: HTMLElement | null,
 		group?: EnemyGroup,
 	): void {
@@ -1862,7 +1881,14 @@ export class InitiativeView extends ElementView<EncounterData> {
 			new StaminaEditModal(this.cx.app, staminaBar, false, creature.name, () => {
 				staminaBar.updateCreature(instance);
 				this.updateStaminaDisplay(staminaEl, instance, creature);
-				if (rowEl) this.refreshRowState(rowEl, instance, creature, group);
+				// SC-426: the grid-cell route passes no row/bar — when the detail row is
+				// showing THIS instance, repaint its number, bar and state chip through the
+				// same refreshers the detail-row route uses; a row showing another creature
+				// is left alone.
+				const detail = rowEl ? null : this.detailHandlesFor(groupBodyEl, instanceKey);
+				if (detail) this.updateStaminaDisplay(detail.staminaEl, instance, creature);
+				const stateRowEl = rowEl ?? detail?.rowEl;
+				if (stateRowEl) this.refreshRowState(stateRowEl, instance, creature, group);
 				if (group) this.refreshCaptainState(groupBodyEl, group);
 
 				// SC-195: a captain's Stamina crossing 0 (or a down captain healing back
@@ -1879,10 +1905,9 @@ export class InitiativeView extends ElementView<EncounterData> {
 					}
 				}
 
-				// SC-183: the detail row's bar repaints with the same numbers (only
-				// passed from the detail-row path — the grid dblclick path has no row
-				// bar in hand, exactly like its numeric refresh).
-				this.refreshRowStamina(barEl ?? null, instance, creature);
+				// SC-183: the detail row's bar repaints with the same numbers (passed by the
+				// detail-row path; the grid dblclick path finds it via SC-426's `detail`).
+				this.refreshRowStamina(barEl ?? detail?.barEl ?? null, instance, creature);
 				void this.persist();
 
 				// CB-6: refresh THE instance's own grid cell, found by data-instance-key
