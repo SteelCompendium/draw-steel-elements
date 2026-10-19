@@ -22,6 +22,12 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Notes with Windows (CRLF) line endings work with the sidebar, and saves keep the note's line
+  endings.** A block pinned to the sidebar in a CRLF note could not be found, so its changes never saved.
+  Saving a block from Reading view or the sidebar, pinning one, and the encounter builder's "Create tracker
+  block" no longer leave a CRLF note with mixed line endings: the note's own ending (its majority ending, if
+  it already mixed the two) is used for the text DSE writes, and nothing outside the block is touched. Notes
+  with Unix (LF) endings are unchanged.
 - [FIX] **A save that changes nothing no longer leaves extra blank scroll space at the bottom
   of the note** (SC-260). When a block wrote back exactly what the note already contained
   (for example re-applying the same value in reading mode), the page held its height for a
