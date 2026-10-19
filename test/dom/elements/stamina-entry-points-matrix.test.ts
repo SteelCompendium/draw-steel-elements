@@ -92,14 +92,17 @@ describe('[E06] ds-hero with an unresolved class (max Stamina unavailable)', () 
 		expect(heroState(host).stamina).toEqual({ current: 26, temp: 0 });
 	});
 
-	test.failing('[E06] Full Heal then Apply does not write current 0 [known bug SC-425]', async () => {
+	// SC-427 (F2) side effect: Full Heal no longer stages a negative change, so with max 0 Apply stays
+	// disabled and nothing is written. Only this half of SC-425's finding closes; Damage above is still open.
+	test('[E06] Full Heal then Apply does not write current 0 (closed incidentally by SC-427 F2)', async () => {
 		const { host, staminaRegion } = await mountHero(heroSource(NO_SUCH_CLASS, 31));
 		heroBar(staminaRegion).click();
 		const modal = lastModal();
 		modal.querySelector<HTMLButtonElement>('button[aria-label="Full Heal"]')!.click();
+		expect(applyBtn(modal).disabled).toBe(true); // nothing to apply
 		applyBtn(modal).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-		expect(heroState(host).stamina.current).not.toBe(0);
+		expect(host.replaceSource).not.toHaveBeenCalled(); // so nothing is written (it used to write current 0)
 	});
 });
 

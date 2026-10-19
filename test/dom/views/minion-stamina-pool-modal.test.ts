@@ -89,7 +89,7 @@ function actionBtn(content: HTMLElement): HTMLButtonElement {
 	return el;
 }
 
-function applyDamage(content: HTMLElement, damage: number, minions: number): void {
+function applyDamage(content: HTMLElement, damage: number | string, minions: number | string): void {
 	const inputs = content.querySelectorAll<HTMLInputElement>('.dse-sedit__apply-input');
 	inputs[0].value = String(damage); // damage per minion
 	inputs[1].value = String(minions); // number of minions hit
@@ -478,6 +478,34 @@ describe('SC-241: negative Apply Damage input (damage or minion count) is clampe
 		applyDamage(content, 3, 1);
 		actionBtn(content).click();
 		expect(group.minion_stamina_pool).toBe(17);
+	});
+});
+
+// SC-427 (F1): the same "1e3 reads as 1" defect SC-427 fixed in StaminaEditModal's Apply box --
+// both boxes went through parseInt, but a number input legitimately holds exponent form.
+describe('SC-427: an exponent in the Apply Damage boxes is read as a number ("1e3" is 1000, not 1)', () => {
+	test('damage "1e3" lands exactly what a typed 1000 does (and not the old parseInt 1)', async () => {
+		const exp = await setup();
+		applyDamage(exp.content, '1e3', 1);
+		const plain = await setup();
+		applyDamage(plain.content, '1000', 1);
+		expect((exp.modal as any).pendingStaminaChange).toBe((plain.modal as any).pendingStaminaChange);
+		expect((exp.modal as any).pendingStaminaChange).toBe(-1000);
+	});
+
+	test('minion count "1e1" is 10, then capped at the 5 living minions and shown as 5', async () => {
+		const { content, modal } = await setup();
+		applyDamage(content, 1, '1e1');
+		expect((modal as any).pendingStaminaChange).toBe(-5);
+		expect(content.querySelector<HTMLInputElement>('input[aria-label="Number of minions hit"]')!.value).toBe('5');
+	});
+
+	test('a decimal still truncates toward zero ("2.9" is 2) and an empty box still does nothing', async () => {
+		const { content, modal } = await setup();
+		applyDamage(content, '2.9', 1);
+		expect((modal as any).pendingStaminaChange).toBe(-2);
+		applyDamage(content, '', 1);
+		expect((modal as any).pendingStaminaChange).toBe(-2);
 	});
 });
 

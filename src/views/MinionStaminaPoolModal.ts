@@ -28,7 +28,7 @@ import { ConditionManager } from '@utils/Conditions';
 import { applyConditionColor, applyConditionEffect } from '@/elements/conditionColor';
 import { DseModal, iconButton } from '@/framework/kit';
 import type { IconButtonHandle, StepperHandle } from '@/framework/kit';
-import { staminaPreviewBar, staminaStepperRow, setButtonText } from './StaminaEditModal';
+import { readAmount, staminaPreviewBar, staminaStepperRow, setButtonText } from './StaminaEditModal';
 import type { StaminaPreviewBarHandle } from './StaminaEditModal';
 
 export class MinionStaminaPoolModal extends DseModal {
@@ -174,8 +174,10 @@ export class MinionStaminaPoolModal extends DseModal {
 				label: 'Apply Damage',
 				text: 'Apply Damage',
 				onClick: () => {
-					const damage = parseInt(damageInput.value);
-					const minions = parseInt(minionCountInput.value);
+					// SC-427: readAmount (Number + trunc), not parseInt — a number input may hold
+					// "1e3" (= 1000), which parseInt read as 1.
+					const damage = readAmount(damageInput.value);
+					const minions = readAmount(minionCountInput.value);
 					if (!isNaN(damage) && !isNaN(minions)) {
 						// SC-241: clamp BOTH parsed values to a magnitude — the same class of
 						// bug SC-133 RC-3 fixed in StaminaEditModal's Apply box. Either box

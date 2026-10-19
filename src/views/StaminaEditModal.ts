@@ -192,7 +192,7 @@ const spendRecoveryReasonLabel = (reason: string): string => labelWithReason(SPE
  * Truncates toward zero (the legacy parseInt rule for "7.9" -> 7); empty / unparseable -> NaN
  * (the caller's "do nothing" guard — note `Number('')` is 0, so blank is screened out first).
  */
-function readAmount(raw: string): number {
+export function readAmount(raw: string): number {
 	const trimmed = raw.trim();
 	return trimmed === '' ? NaN : Math.trunc(Number(trimmed));
 }
@@ -518,7 +518,9 @@ export class StaminaEditModal extends DseModal {
 				text: 'Full Heal',
 				control: 'sedit.full-heal',
 				onClick: () => {
-					this.pendingStaminaChange = maxStamina - currentStamina;
+					// SC-427: never negative — a stored value already past max (25/20) is "no
+					// Stamina change", not "Lose 5" (Full Heal is a heal; same class as Kill).
+					this.pendingStaminaChange = Math.max(0, maxStamina - currentStamina);
 					this.pendingTempStaminaChange = -currentTempStamina; // Reset temp stamina to 0
 					refresh();
 				},
@@ -598,11 +600,14 @@ export class StaminaEditModal extends DseModal {
 					staminaStepper.commitDraft();
 					tempStepper.commitDraft();
 					// Legacy Apply verbatim — clampStamina is the byte-compat gate.
-					const newCurrentStamina = this.clampStamina(
-						currentStamina + this.pendingStaminaChange,
-						negativeStaminaLimit,
-						maxStamina,
-					);
+					// SC-427: with no pending Stamina change Apply leaves `current_stamina` exactly
+					// as stored — a Temp / Recoveries-only Apply on a hand-edited out-of-range
+					// value (25/20, creature -3) must not silently rewrite it to the clamp, which
+					// the label never announced. clampStamina still owns every real change.
+					const newCurrentStamina =
+						this.pendingStaminaChange === 0
+							? currentStamina
+							: this.clampStamina(currentStamina + this.pendingStaminaChange, negativeStaminaLimit, maxStamina);
 					this.staminaBar.current_stamina = newCurrentStamina;
 					this.staminaBar.temp_stamina = currentTempStamina + this.pendingTempStaminaChange;
 					// FOLLOWUPS #27b: floored at 0 defensively (the disable gate already

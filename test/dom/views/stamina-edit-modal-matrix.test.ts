@@ -484,6 +484,46 @@ describe('[O2] opening on a hand-edited out-of-range current stages nothing', ()
 		expect(applyBtn(under.content).textContent).toBe('No Stamina Change');
 	});
 
+	test('Full Heal at a stored value past max stages no stamina change (never "Lose"), and still clears temp', () => {
+		const plain = openStaminaModal({ max: 20, current: 25, isHero: false });
+		btn(plain.content, 'Full Heal').click();
+		expect(applyBtn(plain.content).textContent).toBe('No Stamina Change');
+		expect(applyBtn(plain.content).disabled).toBe(true);
+		const withTemp = openStaminaModal({ max: 20, current: 25, temp: 4, isHero: false });
+		btn(withTemp.content, 'Full Heal').click();
+		expect(applyBtn(withTemp.content).textContent).toBe('Lose 4 Temp Stamina');
+	});
+
+	test('Full Heal below the hero floor is still a heal: -10 under a -7 floor, max 15 -> Gain 25', () => {
+		const { content, bar } = openStaminaModal({ max: 15, current: -10, isHero: true });
+		btn(content, 'Full Heal').click();
+		expect(applyBtn(content).textContent).toBe('Gain 25 Stamina');
+		applyBtn(content).click();
+		expect(bar.current_stamina).toBe(15);
+	});
+
+	test.each([
+		{ id: 'creature 25/20', max: 20, current: 25, isHero: false },
+		{ id: 'creature -3/20', max: 20, current: -3, isHero: false },
+		{ id: 'hero -10/15 (floor -7)', max: 15, current: -10, isHero: true },
+	])('$id: a Temp-only Apply leaves current Stamina exactly as stored (no silent clamp rewrite)', ({ max, current, isHero }) => {
+		const { content, bar, updateCallback } = openStaminaModal({ max, current, temp: 2, isHero });
+		btn(content, 'Increase Temporary Stamina').click();
+		expect(applyBtn(content).textContent).toBe('Gain 1 Temp Stamina');
+		applyBtn(content).click();
+		expect(updateCallback).toHaveBeenCalledTimes(1);
+		expect(bar.current_stamina).toBe(current);
+		expect(bar.temp_stamina).toBe(3);
+	});
+
+	test('a REAL Stamina change on an out-of-range stored value still lands in range (clampStamina owns it)', () => {
+		const { content, bar } = openStaminaModal({ max: 20, current: -3, isHero: false });
+		btn(content, 'Increase Stamina').click(); // shown 0 -> 1: stages +4 from the stored -3
+		expect(applyBtn(content).textContent).toBe('Gain 4 Stamina');
+		applyBtn(content).click();
+		expect(bar.current_stamina).toBe(1);
+	});
+
 	test('Kill below the hero floor stages no stamina change (never "Gain"), and still clears temp', () => {
 		const { content } = openStaminaModal({ max: 15, current: -10, temp: 4, isHero: true });
 		btn(content, 'Kill').click();
@@ -503,7 +543,10 @@ describe('[Q05] a bar whose max is 0 (unavailable) must not zero current stamina
 		expect(bar.current_stamina).toBe(26);
 	});
 
-	test.failing('[Q05] Full Heal on 31 does not write 0 [known bug SC-425]', () => {
+	// SC-427 (F2) side effect: Full Heal is now Math.max(0, max - current), so with max 0 it stages
+	// no Stamina change (Apply stays disabled) instead of a "Lose 31" that Apply then wrote as 0.
+	// Only the Full Heal half of SC-425's finding is closed by it; the Damage row above is still open.
+	test('[Q05] Full Heal on 31 does not write 0 (closed incidentally by SC-427 F2; Apply stays disabled)', () => {
 		const { content, bar } = openStaminaModal({ max: 0, current: 31, isHero: true });
 		btn(content, 'Full Heal').click();
 		applyBtn(content).click();
