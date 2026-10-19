@@ -520,7 +520,7 @@ export const DOCS_SHOTS = [
 			{ hold: 1500, what: 'resting' },
 			{ click: 'button.dse-nt__chip[aria-label="Appeal to Higher Authority"]', write: true, hold: 900, what: 'motivation chosen; tiers recompute' },
 			{ click: 'button.dse-pr__row[data-tier="mid"]', hold: 900, what: 'mid tier selected' },
-			{ click: 'button[aria-label="Complete Argument"]', write: true, hold: 1400, what: 'argument completed' },
+			{ click: 'button[aria-label^="Complete Argument"]', write: true, hold: 1400, what: 'argument completed' },
 			{ click: '.dse-track__slot[aria-label="Patience 4"]', write: true, hold: 1000, what: 'Patience set to 4 by hand' },
 			{ click: 'button[aria-label="Mark Peace as already appealed to."]', write: true, hold: 1200, what: 'Peace marked spent' },
 			{ click: '.dse-tabs__tab[aria-selected="false"]', hold: 1500, what: 'Learn Motivation/Pitfall tab' },

@@ -338,6 +338,14 @@ describe('FOLLOWUPS #28 LOW: sheet-level roll-disabled fallback (Task 9 coverage
 });
 
 describe('D7 Task 9: [respite] (OD-8)', () => {
+	test('SC-324: the Respite button\'s aria-label (the hover tooltip) carries its explanation, not just its name', async () => {
+		const { root } = await renderHero(HERO_SOURCE);
+		const label = root.querySelector<HTMLButtonElement>('button[aria-label^="Respite"]')!.getAttribute('aria-label')!;
+		expect(label).toBe(
+			'Respite: Restore Stamina + Recoveries; clear Surges, temp Stamina, and end-of-encounter conditions',
+		);
+	});
+
 	test('restores Stamina + Recoveries to derived max, clears Surges/temp/EoE conditions', async () => {
 		jest.useFakeTimers();
 		const source = HERO_SOURCE.replace(
@@ -346,7 +354,7 @@ describe('D7 Task 9: [respite] (OD-8)', () => {
 		).replace('temp: 0', 'temp: 2');
 		const { root, host } = await renderHero(source);
 
-		root.querySelector<HTMLButtonElement>('button[aria-label="Respite"]')!.click();
+		root.querySelector<HTMLButtonElement>('button[aria-label^="Respite"]')!.click();
 
 		expect(region(root, 'stamina')!.querySelector('.dse-stamina__num')?.textContent).toContain('48/48');
 		const surgeValue = region(root, 'surges')!.querySelector<HTMLInputElement>('.dse-surge__stepper .dse-stepper__input')!;
@@ -415,7 +423,10 @@ describe('D7 Task 9: read-only mount (canPersist=false) disables every write aff
 		// bug, native setTooltip), so it's found by its stable icon, not the label text.
 		expect(staminaRegion.querySelector<HTMLButtonElement>('button:has([data-icon="wind"])')!.disabled).toBe(true);
 
-		expect(root.querySelector<HTMLButtonElement>('button[aria-label="Respite"]')!.disabled).toBe(true);
+		const respite = root.querySelector<HTMLButtonElement>('button[aria-label^="Respite"]')!;
+		expect(respite.disabled).toBe(true);
+		// SC-324: the read-only reason is part of the one string hover and AT both read.
+		expect(respite.getAttribute('aria-label')).toBe('Respite: Read-only in this context');
 
 		const resourceRegion = region(root, 'resource')!;
 		expect(resourceRegion.querySelector<HTMLButtonElement>('.dse-res__stepper button[aria-label^="Decrease"]')!.disabled).toBe(true);

@@ -205,13 +205,13 @@ export class HeroSheetView extends ElementView<HeroModel> {
 			actions,
 			{
 				icon: 'sparkles',
-				label: 'Respite',
+				// SC-324: label IS the hover tooltip (one aria-label) — leads with the name.
+				label: this.readOnly
+					? `Respite: ${READ_ONLY_TOOLTIP}`
+					: 'Respite: Restore Stamina + Recoveries; clear Surges, temp Stamina, and end-of-encounter conditions',
 				text: 'Respite',
 				variant: 'ghost',
 				disabled: this.readOnly,
-				tooltip: this.readOnly
-					? READ_ONLY_TOOLTIP
-					: 'Restore Stamina + Recoveries; clear Surges, temp Stamina, and end-of-encounter conditions',
 				onClick: () => this.respite(),
 			},
 			this,

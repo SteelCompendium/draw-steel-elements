@@ -6,7 +6,6 @@
 import { buildConditionIcons } from '../../../src/framework/kit/conditionIcons';
 import { ConditionManager } from '../../../src/utils/Conditions';
 import { Component } from '../../mocks/obsidian';
-import * as obsidian from '../../mocks/obsidian';
 
 // Same convention as iconButton.test.ts: the mock Component's runtime shape
 // (registerDomEvent/register/unload) is what matters, not structural tsc satisfaction.
@@ -28,7 +27,6 @@ describe('D7 Task 1: kit/conditionIcons — buildConditionIcons', () => {
 	test('renders one icon per condition, using the manager key -> icon/displayName', () => {
 		const root = document.createElement('div');
 		const mgr = new ConditionManager();
-		const spy = jest.spyOn(obsidian, 'setTooltip');
 
 		buildConditionIcons(root, ['grabbed', 'bleeding'], mgr, {
 			owner: fakeOwner(),
@@ -38,11 +36,9 @@ describe('D7 Task 1: kit/conditionIcons — buildConditionIcons', () => {
 		const icons = root.querySelectorAll('.dse-cond');
 		expect(icons).toHaveLength(2);
 		expect(iconOf(icons[0])).toBe('hand'); // grabbed
-		// The native hover tooltip is the bare condition name ("Grabbed")...
-		expect(spy).toHaveBeenCalledWith(icons[0], 'Grabbed', undefined);
-		// ...but per iconButton (FOLLOWUPS #27-fix-round finding 1: native setTooltip
-		// stamps aria-label as a side effect), the REQUIRED accessible name always wins
-		// as the final aria-label, even though it differs from the tooltip text.
+		// SC-324: aria-label is the one string for the hover tooltip AND the accessible
+		// name, so the fuller action-leading label ("Remove condition: Grabbed") is what
+		// both a hovering and a screen-reader user get.
 		expect(icons[0].getAttribute('aria-label')).toBe('Remove condition: Grabbed');
 		expect(iconOf(icons[1])).toBe('droplet'); // bleeding
 	});

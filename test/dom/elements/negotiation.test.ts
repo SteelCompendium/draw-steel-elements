@@ -334,6 +334,15 @@ describe('T-7: negotiation rendered through the REAL ElementPipeline (D2 §3.10 
 		expect(completeBtn(root)!.disabled).toBe(true);
 	});
 
+	test('SC-324: the Complete Argument aria-label (the hover tooltip) explains what it does and what arms it', async () => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const root = await renderFrodo(pipeline, makeHost());
+		const label = completeBtn(root)!.getAttribute('aria-label')!;
+		expect(label.startsWith('Complete Argument: ')).toBe(true);
+		expect(label).toContain('Resolve the Argument using the current state of motivations, pitfalls');
+		expect(label).toContain('Requires Power Roll tier to be selected.');
+	});
+
 	test('learn-more tab: rules text + a STATIC (non-selectable) 3-tier power roll panel', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();

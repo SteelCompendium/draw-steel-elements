@@ -103,8 +103,7 @@ export class ConditionsPanel extends HeroPanel<Condition[]> {
 				chipEl,
 				{
 					icon: 'dices',
-					label: `Roll save vs ${displayName}`,
-					tooltip: 'Roll save (6+ ends)',
+					label: `Roll save vs ${displayName} (6+ ends)`,
 					variant: 'ghost',
 					onClick: () => this.rollSave(entry, displayName, resultEl),
 				},
@@ -119,7 +118,6 @@ export class ConditionsPanel extends HeroPanel<Condition[]> {
 				{
 					icon: 'x',
 					label: `Remove condition: ${displayName}`,
-					tooltip: 'Remove',
 					variant: 'ghost',
 					onClick: () => this.removeCondition(entry),
 				},

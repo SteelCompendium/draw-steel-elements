@@ -196,7 +196,6 @@ export function mountChrome<M>(opts: MountChromeOptions<M>, owner: Component): C
 					icon: 'chevron-up',
 					label: `Collapse ${ctx.def.name}`,
 					variant: 'ghost',
-					tooltip: `Collapse ${ctx.def.name}`,
 					onClick: () => apply(!collapsed, true),
 				},
 				owner,
@@ -217,7 +216,6 @@ export function mountChrome<M>(opts: MountChromeOptions<M>, owner: Component): C
 					icon: 'chevron-down',
 					label: `Expand ${ctx.def.name}`,
 					variant: 'ghost',
-					tooltip: `Expand ${ctx.def.name}`,
 					onClick: () => apply(false, true),
 				},
 				owner,
@@ -229,7 +227,7 @@ export function mountChrome<M>(opts: MountChromeOptions<M>, owner: Component): C
 	function pushItem(item: ChromeMenuItem, itemOwner: Component): void {
 		const handle = iconButton(
 			panelEl,
-			{ icon: item.icon, label: item.label, variant: 'ghost', tooltip: item.label, onClick: item.onClick },
+			{ icon: item.icon, label: item.label, variant: 'ghost', onClick: item.onClick },
 			itemOwner,
 		);
 		handle.buttonEl.setAttribute('data-dse-chrome-item', item.id);

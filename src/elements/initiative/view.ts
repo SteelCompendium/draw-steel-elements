@@ -453,8 +453,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				{
 					icon: 'skip-forward',
 					text: 'Advance round',
-					label: 'Advance round',
-					tooltip:
+					label:
 						typeof gain === 'number' && gain !== 0
 							? `Advance round (+${gain} Malice)`
 							: 'Advance round',
@@ -709,7 +708,6 @@ export class InitiativeView extends ElementView<EncounterData> {
 					icon: taken ? 'check' : 'dot',
 					label: `Toggle turn taken: ${name}`,
 					pressed: taken,
-					tooltip: 'Toggle to mark turn taken',
 					onClick: () => {
 						const nowTaken = toggle();
 						this.repaintTurn(box, nowTaken);
@@ -775,7 +773,6 @@ export class InitiativeView extends ElementView<EncounterData> {
 			{
 				label: `Toggle turn taken: ${name}`,
 				pressed: taken,
-				tooltip: 'Click the portrait to mark this turn taken',
 				onClick: () => {
 					const nowTaken = toggle();
 					this.repaintTurn(portraitEl, nowTaken);
@@ -855,7 +852,6 @@ export class InitiativeView extends ElementView<EncounterData> {
 						text: label,
 						label: `Toggle ${label} action: ${name}`,
 						pressed,
-						tooltip: `Toggle ${label} action`,
 						onClick: () => {
 							actor.actions = actor.actions ?? {
 								main: false,
@@ -930,7 +926,6 @@ export class InitiativeView extends ElementView<EncounterData> {
 						text: label,
 						label: `Toggle ${label} action: ${name}`,
 						pressed,
-						tooltip: `Toggle ${label} action`,
 						onClick: () => {
 							const actions = (creature.actions = creature.actions ?? EMPTY_SQUAD_ACTIONS());
 							const next = !actions[key];
@@ -1293,7 +1288,6 @@ export class InitiativeView extends ElementView<EncounterData> {
 					? `Relieve ${creature.name} as captain`
 					: `Make ${creature.name} captain of ${target.name}`,
 				pressed: isCaptain,
-				tooltip: isCaptain ? 'Relieve as captain' : 'Make captain',
 				onClick: () => {
 					if (isCaptain) relieveCaptain(creature);
 					else promoteCaptain(group, creature, target);
@@ -2052,7 +2046,6 @@ export class InitiativeView extends ElementView<EncounterData> {
 			{
 				icon: 'plus-circle',
 				label: 'Add Condition',
-				tooltip: 'Add Condition',
 				onClick: () => {
 					this.openModal(
 						new ConditionsModal(this.cx.app, character, this.conditionManager, (updated) => {

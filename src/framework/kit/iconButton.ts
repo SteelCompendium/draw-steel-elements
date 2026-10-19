@@ -14,7 +14,6 @@
 import type { Component } from 'obsidian';
 import { setIcon } from 'obsidian';
 import { stampControl } from './controlId';
-import { tooltip } from './tooltip';
 
 export type IconButtonVariant = 'default' | 'accent' | 'ghost' | 'danger';
 
@@ -22,9 +21,16 @@ export interface IconButtonOptions {
 	/** Lucide icon name for setIcon → `.dse-btn__icon`. */
 	icon?: string;
 	/**
-	 * REQUIRED accessible name (§4.2) — the aria-label. For icon-only buttons this is
-	 * the whole name; with visible `text` it still wins as the announced name, so keep
-	 * the two consistent.
+	 * REQUIRED accessible name (§4.2) AND the hover tooltip — one string. Obsidian
+	 * renders its hover tooltip from the element's `aria-label` (the delegated
+	 * pointerover handler reads that attribute at hover time; `setTooltip` is only
+	 * `setAttribute("aria-label", …)`), so the accessible name and the hover text cannot
+	 * differ. Put the FULL string here: lead with what the button does, then any
+	 * explanation ("Mark spent: this appeal can no longer be used"). A screen-reader user
+	 * hears all of it, and so does a hovering user. For icon-only buttons this is the
+	 * whole name; with visible `text` it still wins as the announced name, so keep the
+	 * two consistent. (SC-324 removed the separate `tooltip` option — it could only ever
+	 * be overwritten by this label.)
 	 */
 	label: string;
 	/** Visible text → `.dse-btn__text`. */
@@ -38,11 +44,6 @@ export interface IconButtonOptions {
 	pressed?: boolean;
 	/** Initial disabled state — the REAL property (CB-8), never a class. */
 	disabled?: boolean;
-	/**
-	 * Native hover tooltip via kit tooltip() / Obsidian setTooltip (§2.5).
-	 * Known gap (SC-324): when `tooltip` differs from `label`, the mount path restores `label` into aria-label afterwards and the tooltip string is discarded — Obsidian's setTooltip writes only aria-label, so the two cannot differ today.
-	 */
-	tooltip?: string;
 	/** SC-408: stable `data-dse-control` id (attribute only). */
 	control?: string;
 	onClick: (evt: MouseEvent) => void;
@@ -109,13 +110,9 @@ export function iconButton(
 
 	buttonEl.disabled = opts.disabled === true;
 
-	// FOLLOWUPS #27-fix-round finding 1: native setTooltip (kit tooltip(), §2.5) stamps
-	// aria-label as its OWN side effect. Ordered before the aria-label assignment below
-	// so the REQUIRED accessible name (opts.label, §4.2) always wins as the final write
-	// — otherwise a `tooltip` string that differs from `label` (common: "Remove
-	// condition: Grabbed" as the label, "Grabbed" as the hover tooltip) would silently
-	// clobber the button's real name.
-	if (opts.tooltip !== undefined) tooltip(buttonEl, opts.tooltip);
+	// One string, one attribute: Obsidian's hover renderer reads `aria-label` (see the
+	// `label` doc above), so writing it here IS the hover tooltip — no setTooltip() call
+	// is needed (with no placement/classes options setTooltip does nothing else).
 	buttonEl.setAttribute('aria-label', opts.label);
 
 	owner.registerDomEvent(buttonEl, 'click', (evt: MouseEvent) => {

@@ -318,7 +318,7 @@ describe('D8 T-9: "Advance round" resets the checklist (spec §7.2 — Triggered
 		) as HTMLElement).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
-		(root.querySelector('button[aria-label="Advance round"]') as HTMLElement).click();
+		(root.querySelector('button[aria-label^="Advance round"]') as HTMLElement).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		expect(root.querySelector('.dse-init__round-value')!.textContent).toBe('Round 2');
@@ -403,7 +403,7 @@ describe('D8 T-9: "Reset turns (this round)" — turn-only correction, distinct 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		(resetRun.root.querySelector('button[aria-label="Reset turns (this round)"]') as HTMLElement).click();
-		(advanceRun.root.querySelector('button[aria-label="Advance round"]') as HTMLElement).click();
+		(advanceRun.root.querySelector('button[aria-label^="Advance round"]') as HTMLElement).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		// Both clear the checklist identically …

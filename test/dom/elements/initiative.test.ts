@@ -302,7 +302,6 @@ describe('T-9: kit DOM through the REAL ElementPipeline (quick-start fixture)', 
 	});
 
 	test('a11y: turn indicators are real toggle buttons; cells real aria-pressed buttons tagged data-instance-key (CB-6); stamina/malice/conditions labelled', async () => {
-		const tooltipSpy = jest.spyOn(obsidian, 'setTooltip');
 		const { root } = await renderInit(quickStart);
 
 		// Turn indicators: REAL <button type=button aria-pressed> with an accessible
@@ -315,12 +314,10 @@ describe('T-9: kit DOM through the REAL ElementPipeline (quick-start fixture)', 
 			expect(turn.getAttribute('aria-pressed')).toBe('false');
 			expect(turn.hasAttribute('data-taken')).toBe(false);
 			expect(iconOf(turn)).toBe('dot');
-			// The native hover tooltip is the generic instruction...
-			expect(tooltipSpy).toHaveBeenCalledWith(turn, 'Toggle to mark turn taken', undefined);
 		}
-		// ...but per iconButton (FOLLOWUPS #27-fix-round finding 1: native setTooltip
-		// stamps aria-label as a side effect), the REQUIRED per-instance accessible name
-		// always wins as the final aria-label, even though it differs from the tooltip.
+		// SC-324: aria-label is the one string for the hover tooltip AND the accessible
+		// name — the per-instance, action-leading label (the old generic "Toggle to mark
+		// turn taken" tooltip was never shown and is gone).
 		expect(turns[0].getAttribute('aria-label')).toBe('Toggle turn taken: Frodo Baggins');
 		expect(turns[2].getAttribute('aria-label')).toBe('Toggle turn taken: Mordor Forces');
 
@@ -365,7 +362,6 @@ describe('T-9: kit DOM through the REAL ElementPipeline (quick-start fixture)', 
 	});
 
 	test('squad fixture: condition icons are real buttons riding applyConditionColor (validated custom property, NEVER el.style.color)', async () => {
-		const tooltipSpy = jest.spyOn(obsidian, 'setTooltip');
 		const { root } = await renderInit(squad);
 
 		// Aragorn: grabbed (hand) + bleeding (droplet, crimson) + the add affordance.
@@ -376,9 +372,6 @@ describe('T-9: kit DOM through the REAL ElementPipeline (quick-start fixture)', 
 		expect(heroConditions[0].tagName).toBe('BUTTON');
 		expect(iconOf(heroConditions[0])).toBe('hand');
 		expect(heroConditions[0].getAttribute('aria-label')).toBe('Remove condition: Grabbed');
-		// The native hover tooltip is the bare condition name; per iconButton
-		// (FOLLOWUPS #27-fix-round finding 1) it never clobbers the aria-label above.
-		expect(tooltipSpy).toHaveBeenCalledWith(heroConditions[0], 'Grabbed', undefined);
 		expect(iconOf(heroConditions[1])).toBe('droplet');
 		// The user color arrives as the VALIDATED --dse-condition-color property (T8
 		// helper) — never an inline color style.

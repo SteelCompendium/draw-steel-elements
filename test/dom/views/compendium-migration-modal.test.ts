@@ -92,6 +92,11 @@ function makeModal(plan = makePlan(), report = emptyReport()) {
 	};
 }
 
+// SC-324: the label is the one string both hover and AT read, so it carries the consequence.
+const SYNC_ANYWAY_LABEL =
+	'Sync without moving: Downloads the new compendium and leaves your old files where they are. ' +
+	'Links to compendium notes will stop working, and the move can no longer be done.';
+
 function footerBtn(container: HTMLElement, label: string): HTMLButtonElement {
 	const el = container.querySelector<HTMLButtonElement>(
 		`.dse-modal__footer button[aria-label="${label}"]`,
@@ -163,11 +168,19 @@ describe('CompendiumMigrationModal — preview', () => {
 
 	test('H2 — syncing without migrating is its own labelled, danger-variant button', () => {
 		const { container, callbacks } = makeModal();
-		const button = footerBtn(container, 'Sync without moving (links will break)');
+		const button = footerBtn(container, SYNC_ANYWAY_LABEL);
 		expect(button.classList.contains('dse-btn--danger')).toBe(true);
 		button.click();
 		expect(callbacks.syncAnyway).toHaveBeenCalledTimes(1);
 		expect(callbacks.decline).not.toHaveBeenCalled();
+	});
+
+	test('SC-324 — the sync-without-moving aria-label (the hover tooltip) carries the consequence, not just the name', () => {
+		const { container } = makeModal();
+		const label = footerBtn(container, SYNC_ANYWAY_LABEL).getAttribute('aria-label')!;
+		expect(label.startsWith('Sync without moving: ')).toBe(true);
+		expect(label).toContain('Links to compendium notes will stop working');
+		expect(label).toContain('the move can no longer be done');
 	});
 
 	test('H2 — the preview says out loud that syncing first is a one-way door', () => {

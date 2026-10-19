@@ -172,20 +172,21 @@ describe('Plan 08 Task 2: kit/iconButton (D2 §2.1)', () => {
 		});
 	});
 
-	test('tooltip option routes through the kit tooltip() → Obsidian setTooltip, WITHOUT clobbering the required aria-label', () => {
+	// SC-324: there is no separate `tooltip` option any more. Obsidian's hover renderer
+	// reads `aria-label`, so `label` IS the hover text — the mounted attribute (not a
+	// spy) is the end state a hovering or screen-reader user gets.
+	test('label is the mounted aria-label verbatim — the full hover/AT string, explanation included', () => {
+		const parent = document.createElement('div');
+		const label = 'Copy link: Copies the SCC link to the clipboard';
+		const { buttonEl } = iconButton(parent, { icon: 'copy', label, onClick: () => {} }, fakeOwner());
+		expect(buttonEl.getAttribute('aria-label')).toBe(label);
+	});
+
+	test('mounting does not route through Obsidian setTooltip (aria-label is written directly)', () => {
 		const parent = document.createElement('div');
 		const spy = jest.spyOn(obsidian, 'setTooltip');
-		const { buttonEl } = iconButton(
-			parent,
-			{ icon: 'copy', label: 'Copy link', tooltip: 'Copy the SCC link', onClick: () => {} },
-			fakeOwner(),
-		);
-		// Native setTooltip really was called with the hover text...
-		expect(spy).toHaveBeenCalledWith(buttonEl, 'Copy the SCC link', undefined);
-		// ...but real Obsidian's setTooltip ALSO stamps aria-label as a side effect
-		// (the obsidian mock mirrors that, FOLLOWUPS #27-fix-round finding 1), so
-		// iconButton asserts the REQUIRED accessible name (§4.2) — which here
-		// deliberately differs from the tooltip text — LAST, so it always wins.
+		const { buttonEl } = iconButton(parent, { label: 'Copy link', onClick: () => {} }, fakeOwner());
+		expect(spy).not.toHaveBeenCalled();
 		expect(buttonEl.getAttribute('aria-label')).toBe('Copy link');
 	});
 

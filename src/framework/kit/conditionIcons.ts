@@ -125,7 +125,6 @@ export function buildConditionIcons(
 				{
 					icon: iconName,
 					label: `Remove condition: ${displayName}`,
-					tooltip: displayName,
 					onClick: () => opts.onRemove?.(conditionEntry),
 				},
 				opts.owner,

@@ -155,6 +155,11 @@ describe('D7 Task 2: three chips render with correct duration badges (example.ya
 		expect(saveBtn(chip)).not.toBeNull();
 	});
 
+	test('SC-324: the save button\'s aria-label (the hover tooltip) carries the "6+ ends" explanation as well as the condition name', async () => {
+		const { root } = await renderConditions();
+		expect(saveBtn(chipByName(root, 'Bleeding'))!.getAttribute('aria-label')).toBe('Roll save vs Bleeding (6+ ends)');
+	});
+
 	test('Slowed shows the "EoT" duration badge and no save-roll affordance', async () => {
 		const { root } = await renderConditions();
 		const chip = chipByName(root, 'Slowed');

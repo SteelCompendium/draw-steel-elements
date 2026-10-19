@@ -167,12 +167,12 @@ export class CompendiumMigrationModal extends DseModal {
 				},
 			},
 			{
-				label: 'Sync without moving (links will break)',
+				// SC-324: label IS the hover tooltip (one aria-label) — name, then the explanation.
+				label:
+					'Sync without moving: Downloads the new compendium and leaves your old files where they are. ' +
+					'Links to compendium notes will stop working, and the move can no longer be done.',
 				text: 'Sync without moving',
 				variant: 'danger',
-				tooltip:
-					'Downloads the new compendium and leaves your old files where they are. ' +
-					'Links to compendium notes will stop working, and the move can no longer be done.',
 				onClick: () => {
 					this.answered = true;
 					this.close();

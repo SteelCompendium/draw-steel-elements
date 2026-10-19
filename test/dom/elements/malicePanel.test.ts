@@ -221,7 +221,7 @@ describe('D8 T-5: Malice panel — round counter + "Advance round" (spec §7.2/�
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(withGainSource);
 
-		(root.querySelector('button[aria-label="Advance round"]') as HTMLElement).click();
+		(root.querySelector('button[aria-label^="Advance round"]') as HTMLElement).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		expect(root.querySelector('.dse-init__round-value')!.textContent).toBe('Round 2');
@@ -239,11 +239,20 @@ describe('D8 T-5: Malice panel — round counter + "Advance round" (spec §7.2/�
 		);
 	});
 
+	test('SC-324: the Advance round aria-label (the hover tooltip) names the Malice it grants when round_gain is configured, and is bare otherwise', async () => {
+		const withGain = await renderInit(withGainSource);
+		expect(withGain.root.querySelector('.dse-init__round-advance')!.getAttribute('aria-label')).toBe(
+			'Advance round (+3 Malice)',
+		);
+		const noGain = await renderInit(baseSource);
+		expect(noGain.root.querySelector('.dse-init__round-advance')!.getAttribute('aria-label')).toBe('Advance round');
+	});
+
 	test('a second Advance round press continues incrementing from the persisted round', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(withGainSource);
 
-		const advance = () => (root.querySelector('button[aria-label="Advance round"]') as HTMLElement).click();
+		const advance = () => (root.querySelector('button[aria-label^="Advance round"]') as HTMLElement).click();
 		advance();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		advance();
