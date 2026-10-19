@@ -1,6 +1,7 @@
 import { describe, test, expect } from '@jest/globals';
 import fs from 'fs';
 import path from 'path';
+import * as ts from 'typescript';
 
 /**
  * SC-450 — the structural guard against a fifth `data-pressed` drift.
@@ -9,25 +10,39 @@ import path from 'path';
  * in-place repaint wrote only `aria-pressed`, and the kit's sheen rule (keyed on
  * `.dse-btn:not([data-pressed])`) then painted a toggled control differently from a rebuilt one.
  * SC-450 audited every other writer in `src/` and collapsed them into ONE function,
- * `setPressedState` (src/framework/kit/iconButton.ts). This test keeps it that way: it scans
- * `src/**` for any write of `aria-pressed` or `data-pressed` outside that file and fails on it,
- * naming file:line. Reads (`getAttribute` / `hasAttribute`), comments, and CSS selector strings
- * (`[aria-pressed="true"]`, which never contain the quoted bare name) are not writes.
+ * `setPressedState` (src/framework/kit/iconButton.ts). This test keeps it that way: it parses
+ * every `src/**` file with the TypeScript compiler and fails on any write of `aria-pressed` /
+ * `data-pressed` outside that function's body, naming file:line.
  *
- * To add a toggle: call `setPressedState(el, pressed)` (re-exported from `@/framework/kit`), or
- * use an `iconButton` handle's `setPressed`. Only extend ALLOWED below for an element that is
- * deliberately NOT a toggle control, with the reason.
+ * It works on the AST, not on text, so comments and CSS selector strings (`[aria-pressed="true"]`,
+ * which never equal the bare name) are invisible by construction, and a string containing ` //`
+ * cannot hide a write after it (SC-450 R2 LOW-2). A hit is any of:
+ *   - a string / template literal whose compile-time value is `aria-pressed` or `data-pressed`
+ *     (folds `'aria-' + 'pressed'` and `` `aria-${'pressed'}` ``), unless it is the first argument of a
+ *     `getAttribute` / `hasAttribute` READ;
+ *   - `.dataset.pressed` / `.dataset['pressed']` as an assignment target, `delete`, or `++`/`--` operand;
+ *   - `.ariaPressed` / `['ariaPressed']` as an assignment target (`=`, `??=`, `||=`, `&&=`, ...);
+ *   - an `ariaPressed` object key (`Object.assign(el, { ariaPressed: 'true' })`) or the literal `'ariaPressed'`.
+ * To add a toggle: call `setPressedState(el, pressed)` (re-exported from `@/framework/kit`), or use an
+ * `iconButton` handle's `setPressed`. Extend ALLOWED only for an element that is deliberately NOT a
+ * toggle control, with the reason; entries match by exact line text and exact count.
  */
 
 const SRC_DIR = path.join(__dirname, '..', '..', '..', 'src');
 
-/** The one module that owns the pair. */
+/** The one module that owns the pair, and the one function in it allowed to write. */
 const WRITER_MODULE = 'framework/kit/iconButton.ts';
+const WRITER_FN = 'setPressedState';
 
-/** Bare writes that are intentionally not routed through `setPressedState`. `count` is exact. */
-const ALLOWED: { file: string; count: number; reason: string }[] = [
+/**
+ * Bare writes that are intentionally not routed through `setPressedState`. Matched per hit by the
+ * trimmed text of its line; `count` is exact, so swapping one allowed write for a different bare
+ * one (same count, different text) fails.
+ */
+const ALLOWED: { file: string; line: string; count: number; reason: string }[] = [
 	{
 		file: 'elements/initiative/view.ts',
+		line: "el.toggleAttribute('data-pressed', pressed);",
 		count: 2,
 		reason:
 			'the read-only action-economy <span>s (no controller): a static state display, not a toggle - ' +
@@ -44,37 +59,108 @@ function walk(dir: string, out: string[] = []): string[] {
 	return out;
 }
 
-/** Blanks block comments (keeping newlines so line numbers hold) and `//` line comments. */
-function stripComments(src: string): string {
-	return src
-		.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
-		.replace(/(^|\s)\/\/.*$/gm, '$1');
-}
-
 interface Hit {
 	line: number;
 	text: string;
+	/** Name of the enclosing function declaration, if any. */
+	fn: string | null;
 }
 
-/** Every quoted `aria-pressed` / `data-pressed` that is not the argument of a read. */
-function findPressedWrites(src: string): Hit[] {
-	const code = stripComments(src);
-	const hits: Hit[] = [];
-	const token = /(['"`])(aria-pressed|data-pressed)\1/g;
-	let m: RegExpExecArray | null;
-	while ((m = token.exec(code))) {
-		const before = code.slice(Math.max(0, m.index - 24), m.index);
-		if (/\b(get|has)Attribute\(\s*$/.test(before)) continue;
-		const line = code.slice(0, m.index).split('\n').length;
-		hits.push({ line, text: code.split('\n')[line - 1].trim() });
+const PRESSED_NAMES = new Set(['aria-pressed', 'data-pressed']);
+const ASSIGNMENT_KINDS = new Set<ts.SyntaxKind>([
+	ts.SyntaxKind.EqualsToken,
+	ts.SyntaxKind.PlusEqualsToken,
+	ts.SyntaxKind.MinusEqualsToken,
+	ts.SyntaxKind.QuestionQuestionEqualsToken,
+	ts.SyntaxKind.BarBarEqualsToken,
+	ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+]);
+
+/** The compile-time string value of an expression made only of literals, `+` and template spans. */
+function staticText(node: ts.Node): string | undefined {
+	if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
+	if (ts.isParenthesizedExpression(node)) return staticText(node.expression);
+	if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+		const l = staticText(node.left);
+		const r = staticText(node.right);
+		return l !== undefined && r !== undefined ? l + r : undefined;
 	}
-	// The property form: `el.ariaPressed = ...`.
-	const prop = /\.ariaPressed\s*=(?!=)/g;
-	while ((m = prop.exec(code))) {
-		const line = code.slice(0, m.index).split('\n').length;
-		hits.push({ line, text: code.split('\n')[line - 1].trim() });
+	if (ts.isTemplateExpression(node)) {
+		let s = node.head.text;
+		for (const span of node.templateSpans) {
+			const v = staticText(span.expression);
+			if (v === undefined) return undefined;
+			s += v + span.literal.text;
+		}
+		return s;
 	}
-	return hits;
+	return undefined;
+}
+
+/** Is `node` the target of a write (assignment of any kind, `delete`, `++`/`--`)? */
+function isWriteTarget(node: ts.Node): boolean {
+	const p = node.parent;
+	if (!p) return false;
+	if (ts.isBinaryExpression(p) && p.left === node && ASSIGNMENT_KINDS.has(p.operatorToken.kind)) return true;
+	if (ts.isDeleteExpression(p)) return true;
+	if ((ts.isPrefixUnaryExpression(p) || ts.isPostfixUnaryExpression(p)) &&
+		(p.operator === ts.SyntaxKind.PlusPlusToken || p.operator === ts.SyntaxKind.MinusMinusToken)) return true;
+	return false;
+}
+
+/** `x.dataset.pressed` / `x.dataset['pressed']`; `x.ariaPressed` / `x['ariaPressed']` - by member name. */
+function memberName(node: ts.Node): { name: string; owner: ts.Expression } | null {
+	if (ts.isPropertyAccessExpression(node)) return { name: node.name.text, owner: node.expression };
+	if (ts.isElementAccessExpression(node)) {
+		const v = staticText(node.argumentExpression);
+		if (v !== undefined) return { name: v, owner: node.expression };
+	}
+	return null;
+}
+
+function isDatasetOwner(owner: ts.Expression): boolean {
+	const m = memberName(owner);
+	return !!m && m.name === 'dataset';
+}
+
+/** Every write of aria-pressed / data-pressed (or its property-form twins) in `source`, one hit per line. */
+function findPressedWrites(source: string, fileName = 'x.ts'): Hit[] {
+	const sf = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true);
+	const lines = source.split('\n');
+	const hits = new Map<number, Hit>();
+	const add = (node: ts.Node): void => {
+		const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line;
+		let fn: string | null = null;
+		for (let p: ts.Node | undefined = node.parent; p; p = p.parent) {
+			if (ts.isFunctionDeclaration(p) && p.name) {
+				fn = p.name.text;
+				break;
+			}
+		}
+		if (!hits.has(line)) hits.set(line, { line: line + 1, text: lines[line].trim(), fn });
+	};
+	const visit = (node: ts.Node): void => {
+		// Names: any literal / folded expression whose value is a pressed attribute name (or `ariaPressed`),
+		// except the first argument of a getAttribute / hasAttribute READ.
+		const v = staticText(node);
+		if (v !== undefined && (PRESSED_NAMES.has(v) || v === 'ariaPressed') && !(node.parent && staticText(node.parent) !== undefined)) {
+			const p = node.parent;
+			const isRead =
+				!!p && ts.isCallExpression(p) && p.arguments[0] === node &&
+				ts.isPropertyAccessExpression(p.expression) && ['getAttribute', 'hasAttribute'].includes(p.expression.name.text);
+			if (!isRead) add(node);
+		}
+		// `ariaPressed` as an identifier key in an object literal / shorthand.
+		if ((ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) && ts.isIdentifier(node.name) && node.name.text === 'ariaPressed') add(node);
+		const m = memberName(node);
+		if (m && isWriteTarget(node)) {
+			if (m.name === 'ariaPressed') add(node);
+			if (m.name === 'pressed' && isDatasetOwner(m.owner)) add(node);
+		}
+		ts.forEachChild(node, visit);
+	};
+	visit(sf);
+	return [...hits.values()];
 }
 
 describe('SC-450: aria-pressed / data-pressed are written by ONE function', () => {
@@ -83,44 +169,73 @@ describe('SC-450: aria-pressed / data-pressed are written by ONE function', () =
 		src: fs.readFileSync(f, 'utf8'),
 	}));
 
-	test('no bare aria-pressed / data-pressed write exists in src/ outside iconButton.ts (bar the allowlist)', () => {
+	/** Hits in a file that are neither inside the writer function nor consumed by an allowlist entry. */
+	function offendersOf(rel: string, src: string): { offenders: Hit[]; unused: string[] } {
+		let hits = findPressedWrites(src, rel);
+		if (rel === WRITER_MODULE) hits = hits.filter((h) => h.fn !== WRITER_FN);
+		const remaining = new Map(ALLOWED.filter((a) => a.file === rel).map((a) => [a.line, a.count]));
+		const offenders: Hit[] = [];
+		for (const h of hits) {
+			const left = remaining.get(h.text);
+			if (left !== undefined && left > 0) remaining.set(h.text, left - 1);
+			else offenders.push(h);
+		}
+		return { offenders, unused: [...remaining].filter(([, n]) => n > 0).map(([line, n]) => `${rel}: ${n} allowed write(s) of "${line}" no longer present`) };
+	}
+
+	test('no write exists in src/ outside setPressedState (iconButton.ts is scanned too), bar the allowlist', () => {
 		const offenders: string[] = [];
 		for (const { rel, src } of files) {
-			if (rel === WRITER_MODULE) continue;
-			const hits = findPressedWrites(src);
-			const allowed = ALLOWED.find((a) => a.file === rel)?.count ?? 0;
-			if (hits.length > allowed) {
-				offenders.push(
-					`${rel}: ${hits.length} write(s), ${allowed} allowed:\n` +
-						hits.map((h) => `    line ${h.line}: ${h.text}`).join('\n'),
-				);
+			const r = offendersOf(rel, src);
+			if (r.offenders.length) {
+				offenders.push(`${rel}:\n` + r.offenders.map((h) => `    line ${h.line}: ${h.text}`).join('\n'));
 			}
 		}
 		expect(offenders).toEqual([]);
 	});
 
-	test('the allowlist carries no stale entry (each file still has exactly its allowed bare writes)', () => {
+	test('the allowlist carries no stale entry (each allowed line still occurs exactly its count)', () => {
 		for (const a of ALLOWED) {
 			const f = files.find((x) => x.rel === a.file);
 			expect(f).toBeDefined();
-			expect({ file: a.file, writes: findPressedWrites(f!.src).length }).toEqual({ file: a.file, writes: a.count });
+			expect(offendersOf(a.file, f!.src).unused).toEqual([]);
+			expect(findPressedWrites(f!.src, a.file).filter((h) => h.text === a.line)).toHaveLength(a.count);
 		}
 	});
 
-	test('the writer module really owns both attributes, and the scanner recognises every write shape (can fail)', () => {
+	test('the writer function owns both attributes, and nothing else in its module writes', () => {
 		const writer = files.find((x) => x.rel === WRITER_MODULE)!;
-		expect(findPressedWrites(writer.src).map((h) => h.text).join('\n')).toMatch(/aria-pressed[\s\S]*data-pressed/);
+		const inFn = findPressedWrites(writer.src, WRITER_MODULE).filter((h) => h.fn === WRITER_FN);
+		expect(inFn.map((h) => h.text).join('\n')).toMatch(/aria-pressed[\s\S]*data-pressed/);
+		expect(offendersOf(WRITER_MODULE, writer.src).offenders).toEqual([]);
+	});
 
-		const shapes = [
+	test('the scanner recognises every write shape and ignores reads, comments and selectors (can fail)', () => {
+		const writes = [
 			`chip.setAttribute('aria-pressed', String(on));`,
 			`chip.setAttribute("aria-pressed", "true");`,
 			`el.toggleAttribute('data-pressed', on);`,
 			`el.removeAttribute('data-pressed');`,
 			`parent.createEl('button', { attr: { 'aria-pressed': 'false' } });`,
-			`el.ariaPressed = 'true';`,
 			'el.setAttribute(`aria-pressed`, x);',
+			`el.setAttribute('aria-' + 'pressed', x);`,
+			`el.setAttribute('data-' + 'pressed', x);`,
+			'el.setAttribute(`aria-${"pressed"}`, x);',
+			`const NAME = 'aria-pressed'; el.setAttribute(NAME, x);`,
+			`el.dataset.pressed = '';`,
+			`el.dataset['pressed'] = '';`,
+			`delete el.dataset.pressed;`,
+			`el.ariaPressed = 'true';`,
+			`el.ariaPressed ??= 'true';`,
+			`el.ariaPressed ||= 'true';`,
+			`el.ariaPressed &&= 'true';`,
+			`el['ariaPressed'] = 'true';`,
+			`Object.assign(el, { ariaPressed: 'true' });`,
+			`Object.assign(el, { 'ariaPressed': 'true' });`,
+			`const u = 'http://x//y'; el.setAttribute('aria-pressed', x);`, // a ` //` in a string must not hide the write
 		];
-		for (const s of shapes) expect({ s, n: findPressedWrites(s).length }).toEqual({ s, n: 1 });
+		// Every shape yields a hit.
+		for (const s of writes) expect({ s, hit: findPressedWrites(s).length > 0 }).toEqual({ s, hit: true });
 
 		const harmless = [
 			`const on = chip.getAttribute('aria-pressed') === 'true';`,
@@ -129,7 +244,22 @@ describe('SC-450: aria-pressed / data-pressed are written by ONE function', () =
 			`// chip.setAttribute('aria-pressed', 'true');`,
 			`/* el.toggleAttribute('data-pressed', on); */`,
 			`const ok = el.ariaPressed === 'true';`,
+			`const p = el.dataset.pressed;`,
+			`el.setAttribute('aria-label', 'x');`,
 		];
 		for (const s of harmless) expect({ s, n: findPressedWrites(s).length }).toEqual({ s, n: 0 });
+	});
+
+	test('an allowlist entry matches by line text: swapping an allowed write for a different bare write fails', () => {
+		const view = files.find((x) => x.rel === 'elements/initiative/view.ts')!;
+		const allowedLine = ALLOWED[0].line;
+		// Remove one allowed span write, add a bare aria-pressed write in its place: the count of hits stays equal.
+		const swapped = view.src.replace(allowedLine, `chip.setAttribute('aria-pressed', 'true');`);
+		expect(swapped).not.toBe(view.src);
+		const before = findPressedWrites(view.src, view.rel).length;
+		expect(findPressedWrites(swapped, view.rel)).toHaveLength(before);
+		const r = offendersOf(view.rel, swapped);
+		expect(r.offenders.map((h) => h.text)).toEqual([`chip.setAttribute('aria-pressed', 'true');`]);
+		expect(r.unused).not.toEqual([]);
 	});
 });
