@@ -2954,6 +2954,162 @@ async function assertPortraitMarkParity(page) {
 }
 
 // ======================================================================================
+// SC-450 - EVERY OTHER `aria-pressed` TOGGLE PAINTS THE SAME WHETHER IT WAS RENDERED PRESSED OR TOGGLED
+// PRESSED. (SC-423 fixed the initiative portrait/turn buttons; this is the audit of the rest.)
+//
+// SC-423's trap: the kit's `iconButton` stamps `[data-pressed]` with `aria-pressed`, a by-hand in-place
+// repaint wrote only `aria-pressed`, and a cascade rule keyed on `:not([data-pressed])` then painted a
+// toggled control differently from a rebuilt one. SC-450 audited every other `aria-pressed` write in
+// `src/`: the negotiation argument + dossier chips (repainted IN PLACE on the same <button>), the montage
+// LogActionModal result chips (in place), and the ConditionsModal icon / duration / colour / effect
+// pickers (rebuilt, never toggled in place). None is a `.dse-btn`, so the sheen rule never reaches them and
+// their pressed look is keyed on `aria-pressed` alone - NO DRIFT at audit time. This gate keeps it so: a
+// future rule keyed on a second attribute/class (or a repaint that forgets one) fails here, on the
+// COMPUTED cascade, which a jsdom test cannot see. Per site it takes the paint of a control RENDERED in
+// each state, toggles the other control into that state (the way a click does), and requires the computed
+// paint to match, in both directions, in both schemes. Transitions are disabled for the measurement so a
+// mid-flight interpolation can never pass or fail it. Hover is excluded by parking the pointer at 0,0 and
+// clicking via `el.click()`.
+//   mode 'toggle': independent toggles (a click flips only the clicked control).
+//   mode 'select': single-select group (a click presses the clicked control and releases the other).
+//   inPlace:       the click must repaint the SAME element (else the check would be blind to the in-place path).
+const PRESSED_PARITY_KEYS = [
+	'backgroundColor', 'backgroundImage', 'boxShadow', 'borderTopColor', 'borderTopWidth', 'color',
+	'outlineStyle', 'outlineWidth', 'outlineColor',
+];
+/** Runs in the page. One site per call; never reloads. */
+function measurePressedToggle(spec) {
+	const KEYS = spec.keys;
+	const paint = (el) => {
+		// Focus is not part of the pressed look: a modal focuses its first control on open and the
+		// ConditionsModal re-focuses the control it just rebuilt, and either would paint a focus ring.
+		if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+		const c = getComputedStyle(el);
+		const o = {};
+		for (const k of KEYS) o[k] = c[k];
+		return o;
+	};
+	const isOn = (el) => el.getAttribute('aria-pressed') === 'true';
+	const query = () => Array.from(document.querySelectorAll(spec.chipSel));
+	// A group whose fixture renders nothing pressed (the colour swatches) is primed by one real click,
+	// which the rebuild turns into a RENDERED-pressed control to compare against.
+	if (spec.prime) query().find((c) => !isOn(c))?.click();
+	const chips = query();
+	const P = chips.find(isOn);
+	const X = chips.find((c) => !isOn(c));
+	const extraP = spec.refPressedSel ? document.querySelector(spec.refPressedSel) : null;
+	const refEl = P ?? extraP;
+	if (!refEl || !X) return { missing: `${!refEl ? 'a rendered-pressed ' : ''}${!X ? 'a rendered-idle ' : ''}control for ${spec.chipSel}` };
+	const refPressed = paint(refEl);
+	const refIdle = paint(X);
+	const idxX = chips.indexOf(X);
+	const idxP = P ? chips.indexOf(P) : -1;
+	const out = { refsDiffer: KEYS.some((k) => refPressed[k] !== refIdle[k]), steps: [], survived: true };
+	if (spec.mode === 'select') {
+		X.click();
+		const after = query();
+		if (spec.inPlace && after[idxX] !== X) out.survived = false;
+		out.steps.push({ label: 'idle -> pressed', got: paint(after[idxX]), want: refPressed, ok: isOn(after[idxX]) });
+		out.steps.push({ label: 'pressed -> idle', got: paint(after[idxP]), want: refIdle, ok: !isOn(after[idxP]) });
+	} else {
+		X.click();
+		if (spec.inPlace && !(X.isConnected && isOn(X))) out.survived = false;
+		out.steps.push({ label: 'idle -> pressed', got: paint(X), want: refPressed, ok: isOn(X) });
+		// A group with no rendered-pressed member (the pitfall chip) releases the control it just pressed.
+		const back = P ?? X;
+		back.click();
+		if (spec.inPlace && !(back.isConnected && !isOn(back))) out.survived = false;
+		out.steps.push({ label: 'pressed -> idle', got: paint(back), want: refIdle, ok: !isOn(back) });
+	}
+	return out;
+}
+
+async function assertPressedToggleParity(page) {
+	const problems = [];
+	let compared = 0;
+	let sites = 0;
+	const negotiation = [
+		// ORDER MATTERS: the pitfall site borrows the rendered-pressed MOTIVATION chip as its pressed reference
+		// (no pitfall is rendered pressed in the fixture), so it must run before the motivation site toggles it.
+		{ label: 'negotiation argument pitfall chip', chipSel: 'button.dse-nt__chip[data-kind="pitfall"]', mode: 'toggle', inPlace: true, refPressedSel: 'button.dse-nt__chip[data-kind="motivation"][aria-pressed="true"]' },
+		{ label: 'negotiation argument motivation chip', chipSel: 'button.dse-nt__chip[data-kind="motivation"]', mode: 'toggle', inPlace: true },
+		{ label: 'negotiation dossier "Mark spent" chip', chipSel: 'button.dse-nt__chip[data-kind="spent"]', mode: 'toggle', inPlace: true },
+	];
+	const conditionsEditor = [
+		{ label: 'ConditionsModal duration chips', chipSel: '.dse-modal .dse-durseg[aria-label="Duration"] button.dse-optchip', mode: 'select', inPlace: false },
+		{ label: 'ConditionsModal effect chips', chipSel: '.dse-modal .dse-durseg[aria-label="Effect"] button.dse-optchip', mode: 'select', inPlace: false },
+		// Each swatch paints its own fill, so the fill is not comparable across swatches; the pressed ring is.
+		// The fixture's condition has no swatch colour, so nothing is rendered pressed: `prime` clicks one first.
+		{ label: 'ConditionsModal colour swatches', chipSel: '.dse-modal .dse-swatches button.dse-swatch', mode: 'select', inPlace: false, prime: true, skip: ['backgroundColor'] },
+		{ label: 'ConditionsModal icon choices', chipSel: '.dse-modal .dse-cond-icons__choice', mode: 'select', inPlace: false },
+	];
+	const pages = [
+		{ id: 'negotiation:checked', query: { element: 'negotiation', fixture: 'checked' }, sites: negotiation },
+		{
+			id: 'montage:mid LogActionModal',
+			query: { element: 'montage', fixture: 'mid' },
+			open: async () => {
+				await page.click('.dse-mt__actionrow button[aria-label="Log an action…"]');
+			},
+			// The new-mode default presses Success; the other result chips are idle.
+			sites: [{ label: 'montage LogActionModal result chips', chipSel: '.dse-modal .dse-optchip[data-kind]', mode: 'select', inPlace: true }],
+		},
+		{
+			id: 'conditions:default ConditionsModal',
+			query: { element: 'conditions', fixture: 'default' },
+			open: async () => {
+				await page.click('.dse-cond-strip__add');
+				await page.click('.dse-modal .dse-condal__act[aria-label="Customize Bleeding"]');
+			},
+			sites: conditionsEditor,
+		},
+	];
+	for (const bg of ['dark', 'light']) {
+		for (const pg of pages) {
+			await page.emulateMedia({ media: 'screen' });
+			await page.goto(`${pageUrl}?${new URLSearchParams({ ...pg.query, theme: 'steel', bg, sheet: '1' })}`);
+			await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
+			await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation: none !important; }' });
+			if (pg.open) await pg.open();
+			await page.mouse.move(0, 0);
+			for (const site of pg.sites) {
+				const keys = PRESSED_PARITY_KEYS.filter((k) => !(site.skip ?? []).includes(k));
+				const m = await page.evaluate(measurePressedToggle, { ...site, keys });
+				const at = `${bg}|${site.label}`;
+				if (m.missing) {
+					problems.push(`${at}: fixture has no ${m.missing} - the check would be blind`);
+					continue;
+				}
+				sites += 1;
+				if (!m.survived) problems.push(`${at}: a click rebuilt a control that must repaint in place (or left it in the wrong state) - the check would be blind`);
+				if (!m.refsDiffer) problems.push(`${at}: rendered pressed and idle controls paint identically - the check would be blind`);
+				for (const s of m.steps) {
+					compared += 1;
+					if (!s.ok) problems.push(`${at}|${s.label}: the toggle did not reach the expected aria-pressed state`);
+					for (const k of keys) {
+						if (s.got[k] !== s.want[k]) {
+							problems.push(`${at}|${s.label}: toggled ${k} is "${String(s.got[k]).slice(0, 90)}" but rendered in that state it is "${String(s.want[k]).slice(0, 90)}"`);
+						}
+					}
+				}
+			}
+		}
+	}
+	if (problems.length) {
+		console.error(
+			`\nPRESSED TOGGLE PARITY VIOLATED - an aria-pressed control toggled in place does not paint what a freshly rendered one does:\n` +
+				problems.map((p) => `  ${p}`).join('\n') +
+				`\nSee the SC-450 block above this gate, and kit/iconButton.ts setPressedState (the one place aria-pressed + data-pressed are written).`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\npressed toggle parity OK (toggled vs rendered, both directions: ${compared} comparisons across ` +
+			`${sites / 2} sites x dark/light on the computed cascade, ${PRESSED_PARITY_KEYS.length} paint properties each)`,
+	);
+}
+
+// ======================================================================================
 // SC-377 R2 / R2F - THE TITLE LINE DOES NOT MOVE WHEN IT IS EDITED OR SAVED.
 //
 // Scott, 2026-10-09: "I want the shift evened out when saving a title." The editor used to be a one-line
@@ -5715,6 +5871,8 @@ try {
 		await assertTurnMarkParity(page);
 		// SC-423 - a portrait clicked in place paints what a rendered one does (see the block above).
 		await assertPortraitMarkParity(page);
+		// SC-450 - every other aria-pressed toggle paints the same toggled as rendered (see the block above).
+		await assertPressedToggleParity(page);
 		// SC-377 R2 - the title line does not move when edited or saved (see the block above).
 		await assertTitleLineStable(page);
 		// SC-191 fix-round-1 M-5 — the equal-width-track gate (see the block above). Same
