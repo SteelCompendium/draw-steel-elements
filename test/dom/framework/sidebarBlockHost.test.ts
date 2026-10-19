@@ -362,6 +362,18 @@ describe('SC-453: SidebarBlockHost on CRLF / mixed-ending notes', () => {
 		expect(onExternalChange).not.toHaveBeenCalled();
 	});
 
+	test('a new source that itself carries CRLF is still recognised as our own write (self-echo compares LF bodies)', async () => {
+		const { file, app } = setup(toCrlf(fencedNote()));
+		const onExternalChange = jest.fn();
+		const { host } = makeHost(app, file, onExternalChange);
+		await host.refresh();
+
+		await host.replaceSource(`current_value: 5\r\n_dse_anchor: ${ANCHOR_ID}`);
+		await flushAsync();
+
+		expect(onExternalChange).not.toHaveBeenCalled();
+	});
+
 	test('two same-kind blocks in one CRLF note: writing one leaves the other byte-identical', async () => {
 		const other = ['```ds-counter', 'current_value: 2', '_dse_anchor: other9', '```'].join('\n');
 		const note = toCrlf(['# Notes', '', other, '', '```ds-counter', 'current_value: 1', `_dse_anchor: ${ANCHOR_ID}`, '```', '', 'tail'].join('\n'));
