@@ -235,6 +235,17 @@ export function renderRecoveriesStrip(
 
 	if (opts.canPersist) {
 		opts.owner.registerDomEvent(pipsEl, 'click', (evt: MouseEvent) => {
+			// SC-428: a click leaves keyboard focus ON the marker row (the slider is the strip's
+			// one tab stop), so Tab / the arrow keys continue from it. The browser would have done
+			// this on mousedown, but the element click shield (pipeline.ts armClickShield)
+			// preventDefaults every non-editable press inside a card to keep Obsidian from
+			// opening the block for editing — and a prevented press cannot move focus. So focus
+			// follows the click explicitly, the same "selection follows focus" the kit's track /
+			// powerRollPanel use for their keys. It also makes the write that follows safe: the
+			// view is adopted into the re-drawn section after the click's persist, and adoption
+			// (host/adoptView.ts captureFocus) refocuses whatever held focus inside the root —
+			// before this, nothing did, so there was nothing to restore.
+			pipsEl.focus({ preventScroll: true });
 			if (opts.popoverEditor) {
 				togglePopover();
 				return;

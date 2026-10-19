@@ -176,6 +176,48 @@ describe('[R07][R08] popover editor: its "Catch breath" button honours the same 
 	});
 });
 
+describe('[R04] a marker click leaves keyboard focus on the marker row (SC-428)', () => {
+	// jsdom has no click shield, so the click alone would never move focus here: the row only
+	// holds focus because the click handler puts it there (in a real Obsidian the shield's
+	// preventDefault on mousedown is what stopped the browser doing it).
+	const pip = (root: HTMLElement, i: number) => root.querySelectorAll<HTMLElement>('.dse-stamina-rec__pip')[i];
+
+	test('clicking a marker focuses the slider row, and a second click keeps it there', async () => {
+		const { root } = await mount(yaml(31, 6));
+		expect(document.activeElement).toBe(document.body);
+		pip(root, 2).click();
+		expect(document.activeElement).toBe(pipsRow(root));
+		pip(root, 4).click();
+		expect(document.activeElement).toBe(pipsRow(root));
+	});
+
+	test('focus survives the click\'s own re-render: the row node and its focus are the same after the update', async () => {
+		const { root } = await mount(yaml(31, 6));
+		const row = pipsRow(root);
+		pip(root, 1).click(); // 6 -> 1: the strip repaints in place
+		expect(pipsRow(root)).toBe(row);
+		expect(document.activeElement).toBe(row);
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(document.activeElement).toBe(row);
+	});
+
+	test('with the popover editor on, the click that opens the popover also focuses the row (so Escape works)', async () => {
+		const { root } = await mount(yaml(31, 6), { popover: true });
+		pip(root, 2).click();
+		expect(root.querySelector('.dse-stamina-rec__pop')).not.toBeNull();
+		expect(document.activeElement).toBe(pipsRow(root));
+		pipsRow(root).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		expect(root.querySelector('.dse-stamina-rec__pop')).toBeNull();
+	});
+
+	test('a read-only strip is inert: a click neither changes the count nor takes focus', async () => {
+		const { root } = await mount(yaml(31, 6), { canPersist: false });
+		pip(root, 2).click();
+		expect(document.activeElement).toBe(document.body);
+		expect(pipsRow(root).getAttribute('aria-valuenow')).toBe('6');
+	});
+});
+
 describe('[R09] Escape on the markers row', () => {
 	test('closes an open popover', async () => {
 		const { root } = await mount(yaml(31, 6), { popover: true });

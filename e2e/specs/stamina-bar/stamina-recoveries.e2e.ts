@@ -5,7 +5,7 @@
 //   dying.md            -2/30, 3 of 6      legacy-low.md       2/30, Recoveries not tracked
 //   info-string.md      12/30, 3 of 6, fence line "```ds-stamina-bar  extra words" (SC-290)
 import { expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
+import { dse } from '../../driver/dse';
 import { applyAmount, applyAndWrite, expectApplyLabel, noticeTexts, openBarModal } from '../../driver/stamina';
 
 const REC = 'Stamina/recoveries.md';
@@ -55,17 +55,16 @@ describe('ds-stamina-bar: Catch Breath', () => {
 		await dse.expectNoWrite('Stamina/dying.md', () => dse.click(bar.control('recov.catch-breath')));
 	});
 
-	// R03 / S1 B4 (SC-428): at full Stamina a press heals 0 yet still spends a Recovery. The
-	// modal's Spend Recovery disables itself in exactly this state ("Already at maximum Stamina").
-	knownBug(
-		'SC-428',
-		'[RECOV-R03] Catch Breath at full Stamina is disabled instead of spending a Recovery for nothing',
-		async () => {
-			const bar = await openRec('Stamina/recoveries-full.md');
-			await expect(bar.control('recov.catch-breath')).toBeDisabled({ wait: 1500, message: 'Catch Breath at full Stamina should be disabled' });
-		},
-		{ failsWith: /Catch Breath at full Stamina should be disabled/ },
-	);
+	// R03 / S1 B4 (SC-428, fixed): at full Stamina a press would heal 0 yet still spend a Recovery. The
+	// button is really disabled now, with the reason the modal's Spend Recovery gives (STAM-Q10).
+	it('[RECOV-R03] Catch Breath at full Stamina is disabled, says why, and a click writes nothing', async () => {
+		const note = 'Stamina/recoveries-full.md';
+		const bar = await openRec(note);
+		await expect(bar.control('recov.catch-breath')).toBeDisabled();
+		await expect(bar.control('recov.catch-breath')).toHaveAttribute('aria-label', 'Already at maximum Stamina');
+		await dse.expectNoWrite(note, () => dse.click(bar.control('recov.catch-breath')));
+		await dse.expectNoteBlock(note, BAR).toMatchObject({ current_stamina: 30, recoveries: 3 });
+	});
 
 	it('[RECOV-R06] the undo toast restores Stamina and the Recovery, once', async () => {
 		const bar = await openRec(REC);
@@ -120,9 +119,7 @@ describe('ds-stamina-bar: Recoveries markers (Model M: a click sets the count)',
 		const bar = await openRec(REC); // 3 of 6
 		await dse.click(bar.control('recov.marker', { nth: 2 })); // the 3rd marker is available -> 2
 		const row = bar.control('recov.markers');
-		// A marker click leaves focus on the page, not on the row (see the report), so a keyboard
-		// user Tabs to the row first.
-		await dse.tabTo(row);
+		// SC-428: the marker click left focus on the row, so the keys go straight to it.
 		await dse.press('ArrowRight', row);
 		expect(await sliderNow()).toBe('3');
 		await dse.press('ArrowLeft', row);
@@ -135,6 +132,25 @@ describe('ds-stamina-bar: Recoveries markers (Model M: a click sets the count)',
 		await dse.press('Escape', row); // no popover open: harmless
 		await dse.settle();
 		await dse.expectNoteBlock(REC, BAR).toMatchObject({ recoveries: 6 });
+	});
+});
+
+describe('ds-stamina-bar: keyboard focus after a marker click (SC-428)', () => {
+	// The element click shield preventDefaults every press inside a card, so the browser never moved
+	// focus on a marker click; the strip now focuses its slider row itself. The click's write then
+	// re-draws the section and the view is adopted into it, which must not drop that focus either.
+	it('[RECOV-R10] a marker click leaves focus on the marker row, through the write, and Tab continues from it', async () => {
+		const bar = await openRec(REC); // 3 of 6
+		const row = bar.control('recov.markers');
+		await dse.click(bar.control('recov.marker', { nth: 4 })); // -> 5
+		expect(await dse.focusedControl()).toBe('recov.markers');
+		await dse.settle(); // the write + the adoption re-draw have happened
+		expect(await dse.focusedControl()).toBe('recov.markers');
+		await dse.press('ArrowLeft', row); // an arrow key lands on the row with no Tab first
+		expect(await sliderNow()).toBe('4');
+		await dse.press('Tab', row); // and Tab moves on to the NEXT control after the row, not back to the page
+		expect(await dse.focusedControl()).toBe('recov.catch-breath');
+		await dse.settle();
 	});
 });
 
@@ -233,22 +249,22 @@ describe('ds-stamina-bar: the optional Recoveries popover editor (preference on)
 		const bar = await openRec(REC);
 		await dse.click(bar.control('recov.marker', { nth: 4 }));
 		await expect(dse.control({ css: '.dse-stamina-rec__pop' })).toBeDisplayed();
-		await dse.tabTo(bar.control('recov.markers'));
-		await dse.press('Escape', bar.control('recov.markers'));
+		await dse.press('Escape', bar.control('recov.markers')); // SC-428: the click already focused the row
 		await expect(dse.control({ css: '.dse-stamina-rec__pop' })).not.toBeExisting();
 		await dse.expectNoWrite(REC, async () => undefined);
 	});
 
-	// R08 / S1 B15 (SC-428): the popover's "Catch breath" stays enabled with no Recoveries left
-	// (a silent no-op), where the strip's own Catch Breath button is really disabled.
-	knownBug(
-		'SC-428',
-		'[RECOV-R08] the popover Catch breath is disabled with no Recoveries left',
-		async () => {
-			const bar = await openRec('Stamina/recoveries-zero.md');
-			await dse.click(bar.control('recov.marker', { nth: 0 }));
-			await expect(bar.control('recov.pop.catch-breath')).toBeDisabled({ wait: 1500, message: 'the popover Catch breath should be disabled with no Recoveries left' });
-		},
-		{ failsWith: /the popover Catch breath should be disabled with no Recoveries left/ },
-	);
+	// R08 / S1 B15 (SC-428, fixed): the popover's "Catch breath" is really disabled whenever the strip's
+	// Catch Breath is, with the same reason, and a click on it writes nothing.
+	it('[RECOV-R08] the popover Catch breath is disabled with no Recoveries left, says why, and a click writes nothing', async () => {
+		const note = 'Stamina/recoveries-zero.md';
+		const bar = await openRec(note);
+		await dse.click(bar.control('recov.marker', { nth: 0 }));
+		await expect(dse.control({ css: '.dse-stamina-rec__pop' })).toBeDisplayed();
+		await expect(bar.control('recov.pop.catch-breath')).toBeDisabled();
+		await expect(bar.control('recov.pop.catch-breath')).toHaveAttribute('aria-label', 'No Recoveries remaining');
+		await expect(bar.control('recov.catch-breath')).toHaveAttribute('aria-label', 'No Recoveries remaining');
+		await dse.expectNoWrite(note, () => dse.click(bar.control('recov.pop.catch-breath')));
+		await expect(dse.control({ css: '.dse-stamina-rec__pop' })).toBeDisplayed(); // a no-op leaves the popover open
+	});
 });
