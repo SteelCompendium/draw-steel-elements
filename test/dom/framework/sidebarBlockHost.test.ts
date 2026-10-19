@@ -374,6 +374,20 @@ describe('SC-453: SidebarBlockHost on CRLF / mixed-ending notes', () => {
 		expect(onExternalChange).not.toHaveBeenCalled();
 	});
 
+	test('LF note, new body ending in a lone CR: our own write is still not mistaken for an external edit', async () => {
+		const { file, app } = setup();
+		const onExternalChange = jest.fn();
+		const { host } = makeHost(app, file, onExternalChange);
+		await host.refresh();
+
+		// Written as-is into the LF note; the lone CR then sits in front of the close fence's LF, so
+		// the read-back (extractBody) strips it. The self-echo record must be what is READ BACK.
+		await expect(host.replaceSource(`current_value: 5\n_dse_anchor: ${ANCHOR_ID}\r`)).resolves.toBe(true);
+		await flushAsync();
+
+		expect(onExternalChange).not.toHaveBeenCalled();
+	});
+
 	test('two same-kind blocks in one CRLF note: writing one leaves the other byte-identical', async () => {
 		const other = ['```ds-counter', 'current_value: 2', '_dse_anchor: other9', '```'].join('\n');
 		const note = toCrlf(['# Notes', '', other, '', '```ds-counter', 'current_value: 1', `_dse_anchor: ${ANCHOR_ID}`, '```', '', 'tail'].join('\n'));

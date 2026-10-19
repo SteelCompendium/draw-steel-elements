@@ -48,7 +48,7 @@ import type { Component, Plugin, TFile } from 'obsidian';
 import type { BlockHost, BlockInfo, RenderMode } from './BlockHost';
 import { findAnchoredBlock, findFenceByBody, listFences } from '../sidebar/anchor';
 import { replaceFenceBlock } from './fenceLine';
-import { splitLines, stripCr } from './lineEnding';
+import { splitLines } from './lineEnding';
 
 /** Extracts the body text (lines strictly between the fences) at `info` from `content`.
  *  SC-453: always LF-joined (a CRLF note's `\r` terminators are dropped), so what the element
@@ -293,9 +293,6 @@ export class SidebarBlockHost implements BlockHost {
 	async replaceSource(newSource: string): Promise<boolean> {
 		if (!this.canPersist) return false;
 
-		// SC-453: LF-normalised, to match extractBody's (always-LF) read-back of our own write.
-		this.lastWritten = stripCr(newSource);
-
 		let wrote = false;
 		let finalContent: string | null = null;
 		await this.plugin.app.vault.process(this.backingFile, (content) => {
@@ -312,6 +309,15 @@ export class SidebarBlockHost implements BlockHost {
 			// strict-body element persists — ds-scc is shape:"static" — so this is
 			// defense in depth for a future one, and it costs one assignment.)
 			if (this.anchorId === null) this.boundBody = newSource;
+			// Self-echo record (SC-453): what a read-back of the block we just wrote will yield —
+			// extractBody's view of `next`, not `newSource` itself — so it matches whatever the note's
+			// line ending did to the text (CRLF terminators dropped, a lone CR before the close fence
+			// dropped). Set here, in the callback, so it is in place before Obsidian emits `modify`.
+			this.lastWritten = extractBody(next, {
+				language: info.language,
+				lineStart: info.lineStart,
+				lineEnd: info.lineStart + newSource.split('\n').length + 1,
+			});
 			wrote = true;
 			finalContent = next;
 			return finalContent;
