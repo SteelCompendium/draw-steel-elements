@@ -437,7 +437,7 @@ requires un-deferring it first.
 Open 7.0.0-project bugs on shipping surfaces, for the walkthrough to start from: SC-367,
 SC-368 (card-head size / colour vs site), SC-366 (web-fallback link colour), SC-361
 (swatch focus), SC-290 (fence info string), SC-260 (no-op writes), SC-324 (kit icon
-tooltips; fixed in dse 2b7ad20). DSE-labelled bugs outside the project that touch shipping surfaces: SC-370,
+tooltips; fixed by SC-324). DSE-labelled bugs outside the project that touch shipping surfaces: SC-370,
 SC-375, SC-373, SC-374, SC-291, SC-292, SC-250, SC-251, SC-253, SC-316, SC-238, SC-348,
 SC-271, SC-358, SC-357, SC-252, SC-384.
 
