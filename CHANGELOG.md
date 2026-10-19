@@ -28,6 +28,14 @@ for what needs action.
   block" no longer leave a CRLF note with mixed line endings: the note's own ending (its majority ending, if
   it already mixed the two) is used for the text DSE writes, and nothing outside the block is touched. Notes
   with Unix (LF) endings are unchanged.
+- [FIX] **Stamina editor: the Apply button now says exactly what it will apply, and a few smaller
+  fixes** (SC-427). Typing a Stamina value above max (or below the lowest allowed) used to make the
+  button promise more than it did: with max 20 and 10 current, typing 30 said "Gain 20 Stamina" but
+  only gained 10. The field now snaps to the nearest allowed value as you commit it (30 becomes 20),
+  the button says "Gain 10 Stamina" (also while you are still typing), and the + / - buttons stop at
+  the limits. A hand-edited Stamina that is already out of range no longer flips the buttons around:
+  Damage never heals, Healing never damages, and Kill never says "Gain". An exponent in the Apply box
+  such as "1e3" now counts as 1000 (it counted as 1). Reset also puts the Apply box back to 0.
 - [FIX] **A save that changes nothing no longer leaves extra blank scroll space at the bottom
   of the note** (SC-260). When a block wrote back exactly what the note already contained
   (for example re-applying the same value in reading mode), the page held its height for a
