@@ -186,6 +186,17 @@ const SPEND_RECOVERY_LABEL = 'Spend Recovery';
  *  it follows the action: "Spend Recovery: No Recoveries remaining" — never replaces it. */
 const spendRecoveryReasonLabel = (reason: string): string => labelWithReason(SPEND_RECOVERY_LABEL, reason);
 
+/**
+ * SC-427: reads the Apply box as a whole-number MAGNITUDE. `Number()`, not `parseInt`: a
+ * number input's value may be exponent form ("1e3" is valid and means 1000; parseInt read 1).
+ * Truncates toward zero (the legacy parseInt rule for "7.9" -> 7); empty / unparseable -> NaN
+ * (the caller's "do nothing" guard — note `Number('')` is 0, so blank is screened out first).
+ */
+function readAmount(raw: string): number {
+	const trimmed = raw.trim();
+	return trimmed === '' ? NaN : Math.trunc(Number(trimmed));
+}
+
 // ---------------------------------------------------------------------------------
 // The single-stamina modal (hero / creature)
 
@@ -351,7 +362,7 @@ export class StaminaEditModal extends DseModal {
 				text: 'Damage',
 				control: 'sedit.damage',
 				onClick: () => {
-					const parsed = parseInt(applyInput.value);
+					const parsed = readAmount(applyInput.value);
 					if (!isNaN(parsed)) {
 						// SC-133 RC-3: clamp to a magnitude — a negative typed/leftover
 						// value must never invert Damage into a temp-stamina mint (it
@@ -382,7 +393,7 @@ export class StaminaEditModal extends DseModal {
 				text: 'Healing',
 				control: 'sedit.healing',
 				onClick: () => {
-					const parsed = parseInt(applyInput.value);
+					const parsed = readAmount(applyInput.value);
 					if (!isNaN(parsed)) {
 						// SC-133 RC-3: same magnitude clamp as Damage — a negative value
 						// must never invert Healing into applied damage.
@@ -400,33 +411,28 @@ export class StaminaEditModal extends DseModal {
 
 		// Numeric adjust (kit stepper) + temp stamina.
 		const adjustSection = row.createDiv({ cls: 'dse-modal__section dse-sedit__adjust' });
-		// Deliberately UNBOUNDED (no stepper min/max): the legacy modal clamped the
-		// STEP but never the pending VALUE — e.g. typing a value past max shows the raw
-		// number, with clampStamina at Apply owning the final persisted value. KNOWN
-		// DEVIATION (degenerate overshoot corridor): once the pending value sits past
-		// max, legacy's next `+` was CORRECTIVE — its step was min(1, distance-to-max),
-		// NEGATIVE when over, so it snapped the value back to max — e.g. max 20,
-		// current 10: typing 22 → `+` (→20) → `−`×3 → legacy persisted 17, while this
-		// unbounded stepper walks 22 → 23 → 20 and Apply's clamp persists 20. A
-		// deliberate, no-corruption deviation (both persist in-range values) — PENDING
-		// maintainer sign-off on strict byte-compat vs. this cleaner behavior.
-		// (SC-133 RC-4/I2: Spend Recovery below is now itself a MEMBER of this
-		// corridor, not just a non-contributor — recoverySpendResult heals from the
-		// CLAMPED position, so a press while the pending sum sits outside [floor, max]
-		// (reachable only via THIS stepper's own typed/± overshoot, illustrated above —
-		// Damage below is capped at amountToDeath and can never drive the sum past the
-		// floor) snaps it back into range exactly like the stepper's own corrective
-		// "+". Stacked Spend Recovery presses can no longer push the pending value
-		// further past either clamp, and every SPEND RECOVERY press's own preview
-		// matches what Apply persists — this does not reach the stepper's own typed-
-		// overshoot corridor above, which can still disagree with Apply until the
-		// corrective "+"/Apply's clamp resolves it, same as before this fix.)
+		// SC-427: BOUNDED to [negativeStaminaLimit, maxStamina] through the kit stepper's own
+		// min/max (the minion pool modal's idiom). The invariant: the field's shown value, the
+		// Apply label (committed AND the SC-430 half-typed draft) and the value Apply persists
+		// always agree — a typed 30 over max 20 commits (and shows) 20, a `+` at max is a real
+		// disabled button instead of a step past the bound. The kit clamps every typed/stepped
+		// commit and parseDraft (the draft preview) before this modal sees it. This retires the
+		// old "KNOWN DEVIATION (degenerate overshoot corridor)": legacy's corrective `+` from an
+		// overshoot no longer has an overshoot to correct.
+		//
+		// A hand-edited out-of-range stored value (25/20, creature -3, hero -10 under a -7
+		// floor) must not STAGE a change by merely opening: the kit seeds/clamps only the
+		// DISPLAYED value (no onChange fires), pendingStaminaChange stays 0, so the modal opens
+		// on "No Stamina Change" with Apply disabled. The first real edit then stages from the
+		// stored value (shown 20 under stored 25, `-` -> 19 -> "Lose 6", persists 19).
 		/** The pending Stamina change a typed/stepped `value` stages (onChange AND the SC-430 draft preview). */
 		const stagedStamina = (value: number): number => value - currentStamina;
 		const staminaStepper = staminaStepperRow(
 			adjustSection,
 			{
 				value: currentStamina,
+				min: negativeStaminaLimit,
+				max: maxStamina,
 				label: 'Stamina',
 				control: 'sedit.stamina',
 				displayMax: maxStamina,
@@ -495,7 +501,9 @@ export class StaminaEditModal extends DseModal {
 				control: 'sedit.kill',
 				variant: 'danger',
 				onClick: () => {
-					this.pendingStaminaChange = negativeStaminaLimit - currentStamina;
+					// SC-427: never positive — a hand-edited current already BELOW the floor
+					// (hero -10 under a -7 floor) must not turn Kill into a "Gain".
+					this.pendingStaminaChange = Math.min(0, negativeStaminaLimit - currentStamina);
 					this.pendingTempStaminaChange = -currentTempStamina; // Remove all temp STAMINA
 					refresh();
 				},
@@ -569,6 +577,10 @@ export class StaminaEditModal extends DseModal {
 					this.pendingStaminaChange = 0;
 					this.pendingTempStaminaChange = 0;
 					this.pendingRecoveriesChange = 0;
+					// SC-427: as the minion pool modal's Reset resets its inputs — the Apply
+					// box returns to its opening '0'. refresh() re-renders both steppers
+					// from the pending values, which also drops any half-typed draft.
+					applyInput.value = '0';
 					refresh();
 				},
 			},
@@ -668,10 +680,11 @@ export class StaminaEditModal extends DseModal {
 	 *  ACTUALLY deliver right now, computed from the CLAMPED (Apply-would-persist)
 	 *  position rather than the raw pending sum.
 	 *
-	 *  A raw sum can already sit past either clamp before this press — NOT via
-	 *  Damage (capped at amountToDeath above, can never drive the sum past the
-	 *  floor) but via the STAMINA STEPPER's own typed or ± overshoot (deliberately
-	 *  unbounded; see the KNOWN DEVIATION comment above). Adding recoveryValue to
+	 *  A raw sum could once sit past either clamp before this press — via the
+	 *  STAMINA STEPPER's own typed or ± overshoot, when it was unbounded. Since SC-427
+	 *  the stepper is bounded to [floor, max], so that route is closed; the rebasing
+	 *  below stays as the cheap guard (and as the one place a hand-edited out-of-range
+	 *  STORED value, e.g. 25/20, is snapped in). Adding recoveryValue to
 	 *  that RAW sum and re-clamping (what the first
 	 *  RC-4 pass did, headroom-to-max only) can report a gain that doesn't match
 	 *  what Apply will actually persist — either silently zero when the two clamped
@@ -695,9 +708,8 @@ export class StaminaEditModal extends DseModal {
 	 *  which permanently reports no gain regardless of position; SC-428: refresh()
 	 *  words that case "Recovery value is 0" via zeroHealReason, not the max-side
 	 *  text). So the
-	 *  net effect is that Spend Recovery, like the stepper's own "+", becomes
-	 *  another documented member of the corrective corridor above rather than a
-	 *  route to a silently-zero OR dishonest partial spend. */
+	 *  net effect is that Spend Recovery never reports a silently-zero OR dishonest
+	 *  partial spend. */
 	private recoverySpendResult(
 		currentStamina: number,
 		negativeStaminaLimit: number,
@@ -716,11 +728,13 @@ export class StaminaEditModal extends DseModal {
 	}
 
 	private amountToMaxStamina(currentStamina: number, maxStamina: number) {
-		return maxStamina - currentStamina - this.pendingStaminaChange;
+		// SC-427: floored at 0 — a stored value past max (25/20) must not turn Healing into damage.
+		return Math.max(0, maxStamina - currentStamina - this.pendingStaminaChange);
 	}
 
 	private amountToDeath(currentStamina: number, negativeStaminaLimit: number) {
-		return (negativeStaminaLimit * -1) + currentStamina + this.pendingStaminaChange;
+		// SC-427: floored at 0 — a stored value below the floor (creature -3) must not turn Damage into a heal.
+		return Math.max(0, (negativeStaminaLimit * -1) + currentStamina + this.pendingStaminaChange);
 	}
 
 	/** Legacy wording verbatim; the disabled state is the REAL property (CB-8). */

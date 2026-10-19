@@ -251,17 +251,17 @@ describe('[A08] a decimal in the Apply box is truncated (parseInt), not rounded'
 	});
 });
 
-describe('[A09] "1e3" is a valid number-input value and means 1000 [known bug SC-427]', () => {
+describe('[A09] "1e3" is a valid number-input value and means 1000', () => {
 	// parseInt("1e3") === 1, so today Damage deals 1 and Healing heals 1. The correct
 	// behaviour is 1000 (then capped at the floor / max).
-	test.failing('[A09] Damage "1e3" on a creature 20/20 is capped at 20 [known bug SC-427]', () => {
+	test('[A09] Damage "1e3" on a creature 20/20 is capped at 20', () => {
 		const { content } = openStaminaModal({ max: 20, current: 20, isHero: false });
 		pressDamage(content, '1e3');
 		expect(applyInput(content).value).toBe('1e3'); // jsdom keeps the valid exponent form
 		expect(applyBtn(content).textContent).toBe('Lose 20 Stamina');
 	});
 
-	test.failing('[A09] Healing "1e3" on a creature 5/20 is capped at max (+15) [known bug SC-427]', () => {
+	test('[A09] Healing "1e3" on a creature 5/20 is capped at max (+15)', () => {
 		const { content } = openStaminaModal({ max: 20, current: 5, isHero: false });
 		pressHealing(content, '1e3');
 		expect(applyInput(content).value).toBe('1e3');
@@ -269,26 +269,26 @@ describe('[A09] "1e3" is a valid number-input value and means 1000 [known bug SC
 	});
 });
 
-describe('[A10][A14][Q03] out-of-range current (hand-edited YAML) must not invert the controls [known bug SC-427]', () => {
-	test.failing('[A10] Damage on a creature already at -3 never heals [known bug SC-427]', () => {
+describe('[A10][A14][Q03] out-of-range current (hand-edited YAML) must not invert the controls', () => {
+	test('[A10] Damage on a creature already at -3 never heals', () => {
 		const { modal, content } = openStaminaModal({ max: 20, current: -3, isHero: false });
 		pressDamage(content, 5);
 		expect(modal.pendingStaminaChange).toBeLessThanOrEqual(0);
 	});
 
-	test.failing('[A14] Healing on a bar at 25/20 never damages [known bug SC-427]', () => {
+	test('[A14] Healing on a bar at 25/20 never damages', () => {
 		const { modal, content } = openStaminaModal({ max: 20, current: 25, isHero: false });
 		pressHealing(content, 5);
 		expect(modal.pendingStaminaChange).toBeGreaterThanOrEqual(0);
 	});
 
-	test.failing('[Q03] Kill on a hero below the death floor (-10, max 15, floor -7) does not say "Gain" [known bug SC-427]', () => {
+	test('[Q03] Kill on a hero below the death floor (-10, max 15, floor -7) does not say "Gain"', () => {
 		const { content } = openStaminaModal({ max: 15, current: -10, isHero: true });
 		btn(content, 'Kill').click();
 		expect(applyBtn(content).textContent).not.toMatch(/^Gain/);
 	});
 
-	test.failing('[Q03] Kill on a creature already at -3 does not say "Gain" [known bug SC-427]', () => {
+	test('[Q03] Kill on a creature already at -3 does not say "Gain"', () => {
 		const { content } = openStaminaModal({ max: 20, current: -3, isHero: false });
 		btn(content, 'Kill').click();
 		expect(applyBtn(content).textContent).not.toMatch(/^Gain/);
@@ -328,7 +328,7 @@ describe('[S01][S02][S04] typed in-range values: the label equals the persisted 
 	});
 });
 
-describe('[S08][S09] typed values outside [floor, max]: the Apply label must equal the applied change [known bug SC-427]', () => {
+describe('[S08][S09] typed values outside [floor, max]: the Apply label must equal the applied change', () => {
 	// The modal clamps at Apply (the persisted value is right), but the preview / label is
 	// computed from the RAW typed value, so it promises a change that is not applied.
 	const out = [
@@ -337,8 +337,8 @@ describe('[S08][S09] typed values outside [floor, max]: the Apply label must equ
 		{ id: 'S09', kind: 'creature', cur: 10, typed: '-5', persisted: 0 },
 		{ id: 'S09', kind: 'hero', cur: 10, typed: '-50', persisted: -10 },
 	] as const;
-	test.failing.each(out)(
-		'[$id] $kind 10/20: typed $typed -> label matches the persisted change [known bug SC-427]',
+	test.each(out)(
+		'[$id] $kind 10/20: typed $typed -> label matches the persisted change',
 		({ kind, cur, typed, persisted }) => {
 			const { content, bar } = openStaminaModal({ max: 20, current: cur, isHero: kind === 'hero' });
 			typeCommit(staminaInput(content), typed);
@@ -357,23 +357,137 @@ describe('[S08][S09] typed values outside [floor, max]: the Apply label must equ
 	});
 });
 
-describe('[S10] typed overshoot then "+" (documented KNOWN DEVIATION, StaminaEditModal.ts:383-392)', () => {
-	test('max 20, current 10: type 22, press + -> the stepper shows 23 but Apply persists 20', () => {
+describe('[S10] typed overshoot then ± (SC-427: the field is bounded, so there is no overshoot to walk past)', () => {
+	test('max 20, current 10: type 22 -> the field shows 20, "+" is disabled, label and Apply say +10', () => {
 		const { content, bar } = openStaminaModal({ max: 20, current: 10, isHero: false });
 		typeCommit(staminaInput(content), '22');
-		btn(content, 'Increase Stamina').click();
-		expect(staminaInput(content).value).toBe('23');
+		expect(staminaInput(content).value).toBe('20');
+		expect(btn(content, 'Increase Stamina').disabled).toBe(true);
+		expect(applyBtn(content).textContent).toBe('Gain 10 Stamina');
+		btn(content, 'Increase Stamina').click(); // a disabled button: nothing moves
+		expect(staminaInput(content).value).toBe('20');
 		applyBtn(content).click();
 		expect(bar.current_stamina).toBe(20);
 	});
 
-	test('max 20, current 10 creature: type -3, press - -> shows -4 but Apply persists 0', () => {
+	test('max 20, current 10 creature: type -3 -> the field shows 0, "-" is disabled, label and Apply say -10', () => {
 		const { content, bar } = openStaminaModal({ max: 20, current: 10, isHero: false });
 		typeCommit(staminaInput(content), '-3');
-		btn(content, 'Decrease Stamina').click();
-		expect(staminaInput(content).value).toBe('-4');
+		expect(staminaInput(content).value).toBe('0');
+		expect(btn(content, 'Decrease Stamina').disabled).toBe(true);
+		expect(applyBtn(content).textContent).toBe('Lose 10 Stamina');
 		applyBtn(content).click();
 		expect(bar.current_stamina).toBe(0);
+	});
+});
+
+describe('[S11] the Stamina stepper stops at the bounds: max for both kinds, floor 0 (creature) / ceil(-max/2) (hero)', () => {
+	test.each([
+		{ kind: 'creature', cur: 19, dir: 'Increase Stamina', stops: 20, label: 'Gain 1 Stamina' },
+		{ kind: 'hero', cur: 19, dir: 'Increase Stamina', stops: 20, label: 'Gain 1 Stamina' },
+		{ kind: 'creature', cur: 1, dir: 'Decrease Stamina', stops: 0, label: 'Lose 1 Stamina' },
+		{ kind: 'hero', cur: -9, dir: 'Decrease Stamina', stops: -10, label: 'Lose 1 Stamina' },
+	] as const)('$kind at $cur: one $dir lands on $stops, the next press is disabled and stages nothing more', ({ kind, cur, dir, stops, label }) => {
+		const { content, bar } = openStaminaModal({ max: 20, current: cur, isHero: kind === 'hero' });
+		btn(content, dir).click();
+		expect(staminaInput(content).value).toBe(String(stops));
+		expect(btn(content, dir).disabled).toBe(true);
+		btn(content, dir).click();
+		expect(staminaInput(content).value).toBe(String(stops));
+		expect(applyBtn(content).textContent).toBe(label);
+		applyBtn(content).click();
+		expect(bar.current_stamina).toBe(stops);
+	});
+
+	test.each([
+		{ kind: 'creature', cur: 20, dir: 'Increase Stamina' },
+		{ kind: 'creature', cur: 0, dir: 'Decrease Stamina' },
+		{ kind: 'hero', cur: -10, dir: 'Decrease Stamina' },
+	] as const)('$kind opened exactly at the bound: $dir starts disabled and Apply stays on "No Stamina Change"', ({ kind, cur, dir }) => {
+		const { content } = openStaminaModal({ max: 20, current: cur, isHero: kind === 'hero' });
+		expect(btn(content, dir).disabled).toBe(true);
+		expect(applyBtn(content).textContent).toBe('No Stamina Change');
+		expect(applyBtn(content).disabled).toBe(true);
+	});
+
+	test.each([
+		{ id: 'creature over max', kind: 'creature', typed: '30', shows: '20' },
+		{ id: 'hero over max', kind: 'hero', typed: '99', shows: '20' },
+		{ id: 'creature under floor', kind: 'creature', typed: '-5', shows: '0' },
+		{ id: 'hero under floor', kind: 'hero', typed: '-50', shows: '-10' },
+	] as const)('$id: typed $typed -> the field itself shows $shows', ({ kind, typed, shows }) => {
+		const { content } = openStaminaModal({ max: 20, current: 10, isHero: kind === 'hero' });
+		typeCommit(staminaInput(content), typed);
+		expect(staminaInput(content).value).toBe(shows);
+	});
+
+	test('a hero floor is per-hero: a max-15 hero floors at -7 where a creature floors at 0', () => {
+		const hero = openStaminaModal({ max: 15, current: 5, isHero: true });
+		typeCommit(staminaInput(hero.content), '-50');
+		expect(staminaInput(hero.content).value).toBe('-7');
+		expect(applyBtn(hero.content).textContent).toBe('Lose 12 Stamina');
+		const creature = openStaminaModal({ max: 15, current: 5, isHero: false });
+		typeCommit(staminaInput(creature.content), '-50');
+		expect(staminaInput(creature.content).value).toBe('0');
+		expect(applyBtn(creature.content).textContent).toBe('Lose 5 Stamina');
+	});
+});
+
+describe('[S12] "1e3" typed into the steppers (the kit stepper reads it with Number(), so it was never affected)', () => {
+	test('Stamina: "1e3" is 1000, clamped to max', () => {
+		const { content } = openStaminaModal({ max: 20, current: 10, isHero: false });
+		typeCommit(staminaInput(content), '1e3');
+		expect(staminaInput(content).value).toBe('20');
+		expect(applyBtn(content).textContent).toBe('Gain 10 Stamina');
+	});
+
+	test('Temporary Stamina: "1e3" is 1000 (temp has no upper bound)', () => {
+		const { content } = openStaminaModal({ max: 20, current: 10, isHero: false });
+		typeCommit(tempInput(content), '1e3');
+		expect(tempInput(content).value).toBe('1000');
+		expect(applyBtn(content).textContent).toBe('Gain 1000 Temp Stamina');
+	});
+});
+
+describe('[O2] opening on a hand-edited out-of-range current stages nothing', () => {
+	test.each([
+		{ id: 'creature 25/20', max: 20, current: 25, isHero: false },
+		{ id: 'creature -3/20', max: 20, current: -3, isHero: false },
+		{ id: 'hero -10/15 (floor -7)', max: 15, current: -10, isHero: true },
+	])('$id: "No Stamina Change", Apply disabled, nothing pending, nothing written', ({ max, current, isHero }) => {
+		const { modal, content, bar, updateCallback } = openStaminaModal({ max, current, isHero });
+		expect(applyBtn(content).textContent).toBe('No Stamina Change');
+		expect(applyBtn(content).disabled).toBe(true);
+		expect(modal.pendingStaminaChange).toBe(0);
+		expect(modal.pendingTempStaminaChange).toBe(0);
+		applyBtn(content).click();
+		expect(updateCallback).not.toHaveBeenCalled();
+		expect(bar.current_stamina).toBe(current);
+	});
+
+	test('the first real edit stages from the STORED value: 25/20, "-" lands the field on 19 and says -6', () => {
+		const { modal, content, bar } = openStaminaModal({ max: 20, current: 25, isHero: false });
+		btn(content, 'Decrease Stamina').click();
+		expect(staminaInput(content).value).toBe('19');
+		expect(modal.pendingStaminaChange).toBe(-6);
+		expect(applyBtn(content).textContent).toBe('Lose 6 Stamina');
+		applyBtn(content).click();
+		expect(bar.current_stamina).toBe(19);
+	});
+
+	test('Healing / Damage at the wrong side of the range are no-ops, not inversions', () => {
+		const over = openStaminaModal({ max: 20, current: 25, isHero: false });
+		pressHealing(over.content, 5);
+		expect(applyBtn(over.content).textContent).toBe('No Stamina Change');
+		const under = openStaminaModal({ max: 20, current: -3, isHero: false });
+		pressDamage(under.content, 5);
+		expect(applyBtn(under.content).textContent).toBe('No Stamina Change');
+	});
+
+	test('Kill below the hero floor stages no stamina change (never "Gain"), and still clears temp', () => {
+		const { content } = openStaminaModal({ max: 15, current: -10, temp: 4, isHero: true });
+		btn(content, 'Kill').click();
+		expect(applyBtn(content).textContent).toBe('Lose 4 Temp Stamina');
 	});
 });
 
@@ -541,10 +655,33 @@ describe('[F05][F06] Reset', () => {
 		expect(updateCallback).not.toHaveBeenCalled();
 	});
 
-	test.failing('[F06] Reset clears the Apply box too (as the pool modal does) [known bug SC-427]', () => {
+	test('[F06] Reset clears the Apply box too (as the pool modal does)', () => {
 		const { content } = openStaminaModal({ max: 20, current: 20, isHero: false });
 		pressDamage(content, 7);
 		btn(content, 'Reset').click();
 		expect(applyInput(content).value).toBe('0');
+	});
+
+	test('[F06] Reset also drops a half-typed Stamina / Temp draft: the label and both fields go back to the opening state', () => {
+		const { content } = openStaminaModal({ max: 20, current: 10, temp: 2, isHero: false });
+		for (const [input, v] of [[staminaInput(content), '15'], [tempInput(content), '6']] as const) {
+			input.value = v;
+			input.dispatchEvent(new Event('input', { bubbles: true }));
+		}
+		expect(applyBtn(content).textContent).toBe('Gain 5 Stamina and Gain 4 Temp Stamina');
+		btn(content, 'Reset').click();
+		expect(applyBtn(content).textContent).toBe('No Stamina Change');
+		expect(applyBtn(content).disabled).toBe(true);
+		expect(staminaInput(content).value).toBe('10');
+		expect(tempInput(content).value).toBe('2');
+	});
+
+	test('[F06] Reset leaves the Apply box at the opening 0 even after a Healing press, and Damage then does nothing', () => {
+		const { content } = openStaminaModal({ max: 20, current: 10, isHero: false });
+		pressHealing(content, 4);
+		btn(content, 'Reset').click();
+		expect(applyInput(content).value).toBe('0');
+		btn(content, 'Damage').click();
+		expect(applyBtn(content).textContent).toBe('No Stamina Change');
 	});
 });

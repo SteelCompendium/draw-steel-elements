@@ -1003,13 +1003,28 @@ describe('SC-430: Apply\'s label follows a half-typed Stamina / Temp draft, so n
 		expect(bar.current_stamina).toBe(15);
 	});
 
-	test('a typed value past max labels what blur would label, and Apply still persists the CLAMPED value', () => {
+	test('a typed value past max labels the CLAMPED change (what blur lands and Apply persists)', () => {
 		const { content, bar } = makeModal(20, 15, 0);
 		typeDraft(stepperInputs(content).stamina, '30');
 		const draftLabel = actionBtn(content).textContent;
+		expect(draftLabel).toContain('Gain 5 Stamina'); // 15 -> max 20, never the typed 30's "Gain 15" (SC-427)
+		document.body.appendChild(content);
+		stepperInputs(content).stamina.dispatchEvent(new FocusEvent('blur')); // the blur commit lands the same text
+		expect(actionBtn(content).textContent).toBe(draftLabel);
+		expect(stepperInputs(content).stamina.value).toBe('20');
 		apply(content);
-		expect(draftLabel).toContain('Gain 15 Stamina'); // same unclamped text blur shows (SC-427 owns that label)
 		expect(bar.current_stamina).toBe(20);
+	});
+
+	test.each([
+		{ kind: 'creature', isHero: false, typed: '-5', label: 'Lose 15 Stamina' }, // creature floor 0, from 15
+		{ kind: 'hero', isHero: true, typed: '-50', label: 'Lose 25 Stamina' }, // hero floor -10, from 15
+	])('a $kind draft below the floor labels the CLAMPED change, never the typed one (SC-427)', ({ isHero, typed, label }) => {
+		const { content, bar } = makeModal(20, 15, 0, isHero);
+		typeDraft(stepperInputs(content).stamina, typed);
+		expect(actionBtn(content).textContent).toBe(label);
+		apply(content);
+		expect(bar.current_stamina).toBe(isHero ? -10 : 0);
 	});
 
 	test('Temp Stamina: a typed grant enables Apply and labels it; clicking Apply with the draft uncommitted persists it', () => {
