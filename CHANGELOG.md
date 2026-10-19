@@ -22,6 +22,13 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Hovering a button now shows its explanation, not just its name** (SC-324). The
+  hero **Respite** button, the negotiation **Complete Argument** button, the compendium
+  migration's **Sync without moving** button, a save-ends condition's **Roll save** button
+  and the initiative **Advance round** button (with its Malice gain) each carried hover text
+  that was silently thrown away, so the hover repeated the label. Obsidian draws the hover
+  from the same text screen readers announce, so each of those buttons now has one full
+  label (the name first, then what it does), and screen-reader users hear it too.
 - [FIX] **Initiative: clicking a hero's portrait now shows the acted frame immediately**
   (SC-423). The 2px light-grey metal frame used to appear only after something else
   re-rendered the tracker (adding a Malice log entry, for example); the seal badge showed at
