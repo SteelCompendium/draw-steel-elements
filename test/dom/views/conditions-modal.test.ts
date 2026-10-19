@@ -216,6 +216,22 @@ describe('SC-186: the inline row editor (cog) — Duration / Color / Effect', ()
 		expect(rowByName(container, 'Slowed').classList.contains('dse-condal__row--open')).toBe(true);
 	});
 
+	test('SC-450: every pressed picker control (icon / duration / colour / effect) carries [data-pressed] with aria-pressed, before and after a pick', () => {
+		const { container } = makeModal([{ key: 'bleeding', duration: 'eot', color: '#d94a4a', effect: 'pulse', icon: 'skull' } as Condition]);
+		(rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]') as HTMLElement).click();
+		const lockstep = () => {
+			const toggles = Array.from(container.querySelectorAll<HTMLElement>('.dse-condal__editor [aria-pressed]'));
+			expect(toggles.length).toBeGreaterThan(10);
+			expect(toggles.some((t) => t.getAttribute('aria-pressed') === 'true')).toBe(true);
+			for (const t of toggles) expect(t.hasAttribute('data-pressed')).toBe(t.getAttribute('aria-pressed') === 'true');
+		};
+		lockstep();
+		(container.querySelector('.dse-condal__editor button[aria-label="Save Ends"]') as HTMLElement).click();
+		lockstep();
+		(container.querySelector('.dse-condal__editor button[aria-label="Icon: sparkles"]') as HTMLElement).click();
+		lockstep();
+	});
+
 	test('picking a duration chip writes `duration` live and applies immediately', () => {
 		const onChange = jest.fn();
 		const { container } = makeModal(['bleeding'], onChange);

@@ -1194,6 +1194,29 @@ describe('SC-191 fix round 2: the bottom action bar (mock6.js `actionBar()`)', (
 		jest.useRealTimers();
 	});
 
+	test('SC-450: the result chips keep [data-pressed] in lockstep with aria-pressed when a click repaints them in place', () => {
+		const model = parse(parseYaml(montageMidYaml), montageMidYaml);
+		const modal = new LogActionModal(new App() as any, {
+			model,
+			mode: { kind: 'new', hero: 'Kira', round: 1 },
+			onSubmit: () => {},
+		});
+		modal.open();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		const chip = (kind: string) => modalEl.querySelector(`.dse-optchip[data-kind="${kind}"]`) as HTMLElement;
+		const lockstep = () => {
+			for (const kind of ['success', 'failure']) {
+				expect(chip(kind).hasAttribute('data-pressed')).toBe(chip(kind).getAttribute('aria-pressed') === 'true');
+			}
+		};
+		expect(chip('success').getAttribute('aria-pressed')).toBe('true');
+		lockstep();
+		chip('failure').click();
+		expect(chip('failure').getAttribute('aria-pressed')).toBe('true');
+		expect(chip('success').getAttribute('aria-pressed')).toBe('false');
+		lockstep();
+	});
+
 	test('SC-334 MED-1 (defence in depth): the sheet itself refuses a NEW entry for a (hero, round) that already has one', () => {
 		const model = parse(parseYaml(montageMidYaml), montageMidYaml); // Kira round 1: success/Nature
 		const modal = new LogActionModal(new App() as any, {

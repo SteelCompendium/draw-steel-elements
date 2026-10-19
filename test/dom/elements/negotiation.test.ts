@@ -661,6 +661,30 @@ describe('T-7: persisted mutations — exactly ONE debounced replaceSource, byte
 		expect(motivationChip(root, 'Higher Authority').classList.contains('is-spent')).toBe(false);
 	});
 
+	test('SC-450: chips repainted in place keep [data-pressed] in lockstep with aria-pressed (argument motivation + pitfall, dossier Spent)', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const root = await renderFrodo(pipeline, makeHost());
+		const lockstep = (chip: HTMLElement) =>
+			expect(chip.hasAttribute('data-pressed')).toBe(chip.getAttribute('aria-pressed') === 'true');
+		const sites = [
+			() => motivationChip(root, 'Higher Authority'),
+			() => pitfallChip(root, 'Power'),
+			() => spentChip(root, 'Higher Authority'),
+		];
+		for (const site of sites) {
+			const chip = site();
+			lockstep(chip);
+			chip.click();
+			expect(site()).toBe(chip); // repainted in place, not rebuilt
+			expect(chip.getAttribute('aria-pressed')).toBe('true');
+			lockstep(chip);
+			chip.click();
+			expect(chip.getAttribute('aria-pressed')).toBe('false');
+			lockstep(chip);
+		}
+	});
+
 	test('tier radiogroup: click checks EXACTLY ONE radio (roving tabindex) and enables Complete — selection alone never writes', async () => {
 		jest.useFakeTimers();
 		const pipeline = new ElementPipeline(makeDeps());

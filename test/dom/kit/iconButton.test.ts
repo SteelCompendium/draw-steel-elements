@@ -10,7 +10,7 @@
 // .dse-btn CSS must derive its ≥44px hit area from var(--dse-touch-min) (§4.6).
 import * as fs from 'fs';
 import * as path from 'path';
-import { iconButton, buttonRow } from '../../../src/framework/kit/iconButton';
+import { iconButton, buttonRow, setPressedState } from '../../../src/framework/kit/iconButton';
 import { styleGuardFindings } from './styleGuard';
 import { Component } from '../../mocks/obsidian';
 import * as obsidian from '../../mocks/obsidian';
@@ -163,6 +163,21 @@ describe('Plan 08 Task 2: kit/iconButton (D2 §2.1)', () => {
 			handle.setPressed(false);
 			expect(handle.buttonEl.getAttribute('aria-pressed')).toBe('false');
 			expect(handle.buttonEl.hasAttribute('data-pressed')).toBe(false);
+		});
+
+		test('SC-450: setPressedState is the one writer of the pair - it stamps and clears aria-pressed + [data-pressed] on ANY element, and setPressed delegates to it', () => {
+			const chip = document.createElement('button');
+			setPressedState(chip, true);
+			expect(chip.getAttribute('aria-pressed')).toBe('true');
+			expect(chip.getAttribute('data-pressed')).toBe('');
+			setPressedState(chip, false);
+			expect(chip.getAttribute('aria-pressed')).toBe('false');
+			expect(chip.hasAttribute('data-pressed')).toBe(false);
+
+			const handle = iconButton(document.createElement('div'), { label: 'x', pressed: false, onClick: () => {} }, fakeOwner());
+			handle.setPressed(true);
+			expect(handle.buttonEl.getAttribute('aria-pressed')).toBe('true');
+			expect(handle.buttonEl.getAttribute('data-pressed')).toBe('');
 		});
 
 		test('omitting pressed renders NO aria-pressed (a plain button, not a toggle)', () => {
