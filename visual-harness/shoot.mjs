@@ -2968,8 +2968,8 @@ async function assertPortraitMarkParity(page) {
 // COMPUTED cascade, which a jsdom test cannot see. Per site it takes the paint of a control RENDERED in
 // each state, toggles the other control into that state (the way a click does), and requires the computed
 // paint to match, in both directions, in both schemes. Transitions are disabled for the measurement so a
-// mid-flight interpolation can never pass or fail it. Hover is excluded by parking the pointer at 0,0 and
-// clicking via `el.click()`.
+// mid-flight interpolation can never pass or fail it. Clicks are `el.click()`, which moves neither pointer nor
+// focus; the hover and focus-visible states are then driven for real per read (see PRESSED_PARITY_STATES).
 //   mode 'toggle': independent toggles (a click flips only the clicked control).
 //   mode 'select': single-select group (a click presses the clicked control and releases the other).
 //   inPlace:       the click must repaint the SAME element (else the check would be blind to the in-place path).
@@ -2977,18 +2977,17 @@ const PRESSED_PARITY_KEYS = [
 	'backgroundColor', 'backgroundImage', 'boxShadow', 'borderTopColor', 'borderTopWidth', 'color',
 	'outlineStyle', 'outlineWidth', 'outlineColor',
 ];
-/** Runs in the page. One site per call; never reloads. */
-function measurePressedToggle(spec) {
-	const KEYS = spec.keys;
-	const paint = (el) => {
-		// Focus is not part of the pressed look: a modal focuses its first control on open and the
-		// ConditionsModal re-focuses the control it just rebuilt, and either would paint a focus ring.
-		if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-		const c = getComputedStyle(el);
-		const o = {};
-		for (const k of KEYS) o[k] = c[k];
-		return o;
-	};
+// SC-450 R3 (LOW-1): measured at rest, hover and focus-visible - the same three states as the BTN_STATES sweep -
+// because a rule keyed on the second attribute can sit behind `:hover` / `:focus-visible` (a resting-only gate
+// passed a hover-only `:not([data-pressed]):hover` mutation). Each state is driven for real: rest parks the
+// pointer at 0,0 and blurs; hover moves the pointer to the control's centre (two moves, so Chromium recomputes
+// the hover chain); focus-visible presses Tab (keyboard modality) then focuses the control. A state that is not
+// genuinely active on the control fails the gate (never silently read as rest).
+const PRESSED_PARITY_STATES = ['rest', 'hover', 'focus-visible'];
+const PT_ATTR = (tag) => `data-sc450-${tag}`;
+/** Runs in the page. Primes (if asked), then tags the rendered-pressed ref (refP), a rendered-idle ref (refI) and
+ *  remembers which positions a click will touch. Returns {missing} when the fixture cannot supply them. */
+function ptInit(spec) {
 	const isOn = (el) => el.getAttribute('aria-pressed') === 'true';
 	const query = () => Array.from(document.querySelectorAll(spec.chipSel));
 	// A group whose fixture renders nothing pressed (the colour swatches) is primed by one real click,
@@ -3000,28 +2999,90 @@ function measurePressedToggle(spec) {
 	const extraP = spec.refPressedSel ? document.querySelector(spec.refPressedSel) : null;
 	const refEl = P ?? extraP;
 	if (!refEl || !X) return { missing: `${!refEl ? 'a rendered-pressed ' : ''}${!X ? 'a rendered-idle ' : ''}control for ${spec.chipSel}` };
-	const refPressed = paint(refEl);
-	const refIdle = paint(X);
-	const idxX = chips.indexOf(X);
-	const idxP = P ? chips.indexOf(P) : -1;
-	const out = { refsDiffer: KEYS.some((k) => refPressed[k] !== refIdle[k]), steps: [], survived: true };
-	if (spec.mode === 'select') {
-		X.click();
-		const after = query();
-		if (spec.inPlace && after[idxX] !== X) out.survived = false;
-		out.steps.push({ label: 'idle -> pressed', got: paint(after[idxX]), want: refPressed, ok: isOn(after[idxX]) });
-		out.steps.push({ label: 'pressed -> idle', got: paint(after[idxP]), want: refIdle, ok: !isOn(after[idxP]) });
+	for (const a of Array.from(document.querySelectorAll('[data-sc450-refP],[data-sc450-refI],[data-sc450-gotX],[data-sc450-gotP]'))) {
+		for (const t of ['refP', 'refI', 'gotX', 'gotP']) a.removeAttribute(`data-sc450-${t}`);
+	}
+	refEl.setAttribute('data-sc450-refP', '');
+	X.setAttribute('data-sc450-refI', '');
+	window.__sc450pt = { spec, idxX: chips.indexOf(X), idxP: P ? chips.indexOf(P) : -1, X, P, query };
+	return { ok: true };
+}
+/** Runs in the page. Performs one click ('press' = the idle control; 'release' = the pressed one, or the control
+ *  just pressed when the group has no rendered-pressed member) and retags the controls it produced. */
+function ptClick(step) {
+	const st = window.__sc450pt;
+	const isOn = (el) => el.getAttribute('aria-pressed') === 'true';
+	const out = { survived: true, ok: true };
+	if (st.spec.mode === 'select') {
+		st.X.click();
+		const after = st.query();
+		if (st.spec.inPlace && after[st.idxX] !== st.X) out.survived = false;
+		after[st.idxX].setAttribute('data-sc450-gotX', '');
+		after[st.idxP].setAttribute('data-sc450-gotP', '');
+		out.ok = isOn(after[st.idxX]) && !isOn(after[st.idxP]);
+	} else if (step === 'press') {
+		st.X.click();
+		if (st.spec.inPlace && !(st.X.isConnected && isOn(st.X))) out.survived = false;
+		st.X.setAttribute('data-sc450-gotX', '');
+		out.ok = isOn(st.X);
 	} else {
-		X.click();
-		if (spec.inPlace && !(X.isConnected && isOn(X))) out.survived = false;
-		out.steps.push({ label: 'idle -> pressed', got: paint(X), want: refPressed, ok: isOn(X) });
 		// A group with no rendered-pressed member (the pitfall chip) releases the control it just pressed.
-		const back = P ?? X;
+		const back = st.P ?? st.X;
 		back.click();
-		if (spec.inPlace && !(back.isConnected && !isOn(back))) out.survived = false;
-		out.steps.push({ label: 'pressed -> idle', got: paint(back), want: refIdle, ok: !isOn(back) });
+		if (st.spec.inPlace && !(back.isConnected && !isOn(back))) out.survived = false;
+		back.setAttribute('data-sc450-gotP', '');
+		out.ok = !isOn(back);
 	}
 	return out;
+}
+/** Runs in the page. Where to point the pointer, and whether the control is what is actually under it. */
+function ptCentre(tag) {
+	const el = document.querySelector(`[data-sc450-${tag}]`);
+	if (!el) return null;
+	const r = el.getBoundingClientRect();
+	const x = r.left + r.width / 2;
+	const y = r.top + r.height / 2;
+	const hit = document.elementFromPoint(x, y);
+	return { x, y, hit: !!hit && (hit === el || el.contains(hit)) };
+}
+/** Runs in the page. Reads one control's paint and whether the state being sampled is genuinely active on it. */
+function ptRead({ tag, state, keys }) {
+	const el = document.querySelector(`[data-sc450-${tag}]`);
+	if (!el) return null;
+	if (state === 'focus-visible') el.focus();
+	const c = getComputedStyle(el);
+	const paint = {};
+	for (const k of keys) paint[k] = c[k];
+	const active = state === 'hover' ? el.matches(':hover') : state === 'focus-visible' ? el.matches(':focus-visible') : true;
+	return { paint, active };
+}
+
+/** Node side: drive `state` for real on the tagged control, then read it. */
+async function ptPaintIn(page, tag, state, keys, problems, at) {
+	// Park the pointer and drop focus first - a stale hover or a modal's auto-focus ring is not part of any state.
+	await page.mouse.move(0, 0);
+	await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
+	if (state === 'hover') {
+		const c = await page.evaluate(ptCentre, tag);
+		if (!c || !c.hit) {
+			problems.push(`${at}|${tag}|hover: the control is missing or covered at its centre - the check would be blind`);
+			return null;
+		}
+		await page.mouse.move(c.x, c.y);
+		await page.mouse.move(c.x + 0.5, c.y + 0.5);
+	} else if (state === 'focus-visible') {
+		await page.keyboard.press('Tab');
+	}
+	const r = await page.evaluate(ptRead, { tag, state, keys });
+	if (!r) {
+		problems.push(`${at}|${tag}|${state}: the control vanished - the check would be blind`);
+		return null;
+	}
+	if (!r.active) {
+		problems.push(`${at}|${tag}|${state}: the control could not be put into :${state} - the check would be blind`);
+		return null;
+	}
+	return r.paint;
 }
 
 async function assertPressedToggleParity(page) {
@@ -3074,21 +3135,44 @@ async function assertPressedToggleParity(page) {
 			await page.mouse.move(0, 0);
 			for (const site of pg.sites) {
 				const keys = PRESSED_PARITY_KEYS.filter((k) => !(site.skip ?? []).includes(k));
-				const m = await page.evaluate(measurePressedToggle, { ...site, keys });
 				const at = `${bg}|${site.label}`;
-				if (m.missing) {
-					problems.push(`${at}: fixture has no ${m.missing} - the check would be blind`);
+				const init = await page.evaluate(ptInit, site);
+				if (init.missing) {
+					problems.push(`${at}: fixture has no ${init.missing} - the check would be blind`);
 					continue;
 				}
 				sites += 1;
-				if (!m.survived) problems.push(`${at}: a click rebuilt a control that must repaint in place (or left it in the wrong state) - the check would be blind`);
-				if (!m.refsDiffer) problems.push(`${at}: rendered pressed and idle controls paint identically - the check would be blind`);
-				for (const s of m.steps) {
-					compared += 1;
-					if (!s.ok) problems.push(`${at}|${s.label}: the toggle did not reach the expected aria-pressed state`);
-					for (const k of keys) {
-						if (s.got[k] !== s.want[k]) {
-							problems.push(`${at}|${s.label}: toggled ${k} is "${String(s.got[k]).slice(0, 90)}" but rendered in that state it is "${String(s.want[k]).slice(0, 90)}"`);
+				// The rendered references, in every state, BEFORE any click.
+				const refs = { P: {}, I: {} };
+				for (const state of PRESSED_PARITY_STATES) {
+					refs.P[state] = await ptPaintIn(page, 'refP', state, keys, problems, at);
+					refs.I[state] = await ptPaintIn(page, 'refI', state, keys, problems, at);
+				}
+				if (refs.P.rest && refs.I.rest && keys.every((k) => refs.P.rest[k] === refs.I.rest[k])) {
+					problems.push(`${at}: rendered pressed and idle controls paint identically - the check would be blind`);
+				}
+				const steps =
+					site.mode === 'select'
+						? [{ click: 'press', reads: [['gotX', 'P', 'idle -> pressed'], ['gotP', 'I', 'pressed -> idle']] }]
+						: [
+								{ click: 'press', reads: [['gotX', 'P', 'idle -> pressed']] },
+								{ click: 'release', reads: [['gotP', 'I', 'pressed -> idle']] },
+							];
+				for (const step of steps) {
+					const c = await page.evaluate(ptClick, step.click);
+					if (!c.survived) problems.push(`${at}: a click rebuilt a control that must repaint in place (or left it in the wrong state) - the check would be blind`);
+					if (!c.ok) problems.push(`${at}|${step.click}: the toggle did not reach the expected aria-pressed state`);
+					for (const [tag, ref, label] of step.reads) {
+						for (const state of PRESSED_PARITY_STATES) {
+							const got = await ptPaintIn(page, tag, state, keys, problems, at);
+							const want = refs[ref][state];
+							if (!got || !want) continue; // already reported as blind
+							compared += 1;
+							for (const k of keys) {
+								if (got[k] !== want[k]) {
+									problems.push(`${at}|${state}|${label}: toggled ${k} is "${String(got[k]).slice(0, 90)}" but rendered in that state it is "${String(want[k]).slice(0, 90)}"`);
+								}
+							}
 						}
 					}
 				}
@@ -3105,7 +3189,7 @@ async function assertPressedToggleParity(page) {
 	}
 	console.log(
 		`\npressed toggle parity OK (toggled vs rendered, both directions: ${compared} comparisons across ` +
-			`${sites / 2} sites x dark/light on the computed cascade, ${PRESSED_PARITY_KEYS.length} paint properties each)`,
+			`${sites / 2} sites x dark/light x ${PRESSED_PARITY_STATES.join('/')} on the computed cascade, ${PRESSED_PARITY_KEYS.length} paint properties each)`,
 	);
 }
 
