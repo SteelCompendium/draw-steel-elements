@@ -203,7 +203,7 @@ describe('[R04] a marker click leaves keyboard focus on the marker row (SC-428)'
 		expect(document.activeElement).toBe(row);
 	});
 
-	test('a click asks for focus WITHOUT the focus ring (a mouse click draws none); the keyboard path does not suppress it', async () => {
+	test('a click asks for focus WITHOUT the focus ring (a mouse click draws none)', async () => {
 		const { root } = await mount(yaml(31, 6));
 		const spy = jest.spyOn(pipsRow(root), 'focus');
 		pip(root, 2).click();
