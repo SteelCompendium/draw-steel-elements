@@ -41,6 +41,11 @@ export class MinionStaminaPoolModal extends DseModal {
 
 	// Pending STAMINA change — the legacy bookkeeping, verbatim.
 	private pendingStaminaChange: number = 0;
+	// SC-430: the pending change a half-typed (uncommitted) pool draft WOULD stage, or null
+	// when there is no parseable dirty draft. Read only through effectivePending(), so
+	// Apply's enabled state/label follow the draft and the press that blurs the field lands
+	// on an already-enabled button. The committed truth stays pendingStaminaChange.
+	private draftStaminaChange: number | null = null;
 	private minionCheckboxes: { instance: CreatureInstance; checkbox: HTMLInputElement }[] = [];
 
 	private bar!: StaminaPreviewBarHandle;
@@ -101,6 +106,11 @@ export class MinionStaminaPoolModal extends DseModal {
 				onChange: (value) => {
 					this.pendingStaminaChange = value - poolCurrentStamina;
 					this.refresh();
+				},
+				onDraftInput: (draft) => {
+					this.draftStaminaChange =
+						draft === null || draft === this.poolStepper.getValue() ? null : draft - poolCurrentStamina;
+					this.updateActionButton();
 				},
 			},
 			this.lifecycle,
@@ -218,6 +228,9 @@ export class MinionStaminaPoolModal extends DseModal {
 				variant: 'accent',
 				disabled: true,
 				onClick: () => {
+					// SC-430: a still-typed pool draft lands first, through the same path blur
+					// uses (a no-op when blur already committed it).
+					this.poolStepper.commitDraft();
 					const newStamina = poolCurrentStamina + this.pendingStaminaChange;
 					// CB-1's original fix (the `len ?? 0 * max` precedence bug, clamping the
 					// pool to the alive-minion COUNT instead of count * max) is superseded by
@@ -257,6 +270,8 @@ export class MinionStaminaPoolModal extends DseModal {
 
 	/** One targeted refresh after every edit: stepper, bar, info, checkboxes, apply. */
 	private refresh(): void {
+		// SC-430: setValue below re-renders the input, discarding any typed draft.
+		this.draftStaminaChange = null;
 		// Legacy display parity: the pool input always showed the CLAMPED new value.
 		this.poolStepper.setValue(this.clampedNewStamina());
 		this.updateStaminaBar();
@@ -280,7 +295,8 @@ export class MinionStaminaPoolModal extends DseModal {
 		const aliveMinions = this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0;
 		const poolMaxStamina = minionPoolMaxOf(this.creature);
 		const poolCurrentStamina = minionPoolOf(this.group, this.creature) ?? poolMaxStamina;
-		const newStamina = poolCurrentStamina + this.pendingStaminaChange;
+		const pending = this.effectivePending();
+		const newStamina = poolCurrentStamina + pending;
 		const effectivePerMinion = minionMaxStamina + foldedCaptainStaminaBonus(this.creature);
 		// How many minions this edit kills. DAMAGE uses the death ladder (the boundaries the
 		// pending change crosses: `floor((max - new) / per) - floor((max - cur) / per)`,
@@ -293,9 +309,9 @@ export class MinionStaminaPoolModal extends DseModal {
 		const initialMinionsKilled = Math.floor((poolMaxStamina - poolCurrentStamina) / effectivePerMinion);
 		const finalMinionsKilled = Math.floor((poolMaxStamina - newStamina) / effectivePerMinion);
 		let minionsToKill = finalMinionsKilled - initialMinionsKilled;
-		if (this.pendingStaminaChange > 0) {
+		if (pending > 0) {
 			minionsToKill = Math.min(0, minionsToKill);
-		} else if (this.pendingStaminaChange < 0 && newStamina <= 0) {
+		} else if (pending < 0 && newStamina <= 0) {
 			minionsToKill = aliveMinions;
 		} else {
 			minionsToKill = Math.min(aliveMinions, minionsToKill);
@@ -307,6 +323,11 @@ export class MinionStaminaPoolModal extends DseModal {
 		// and sits below it when the pool is underfunded (captain relieved, 6.0.2 damage).
 		const healCeiling = poolMaxStamina - initialMinionsKilled * effectivePerMinion;
 		return { minionMaxStamina, aliveMinions, poolMaxStamina, poolCurrentStamina, newStamina, minionsToKill, healCeiling };
+	}
+
+	/** SC-430: the committed pending change, or the one a dirty typed draft would stage. */
+	private effectivePending(): number {
+		return this.draftStaminaChange ?? this.pendingStaminaChange;
 	}
 
 	private clampedNewStamina(): number {
@@ -359,11 +380,18 @@ export class MinionStaminaPoolModal extends DseModal {
 
 	/** Legacy wording verbatim; the disabled state is the REAL property (CB-8). */
 	private updateActionButton(): void {
-		const staminaChange = this.pendingStaminaChange;
-		const { minionsToKill, healCeiling } = this.poolNumbers();
+		const staminaChange = this.effectivePending();
+		const { newStamina, minionsToKill, healCeiling } = this.poolNumbers();
 
 		// Count the number of minions selected
-		const selectedMinions = this.minionCheckboxes.filter((item) => item.checkbox.checked).length;
+		let selectedMinions = this.minionCheckboxes.filter((item) => item.checkbox.checked).length;
+		if (this.draftStaminaChange !== null) {
+			// SC-430: the boxes are only re-derived when the draft commits (updateCheckboxes);
+			// predict that outcome so a draft that empties the pool (all auto-checked) or needs
+			// no kills (all cleared) enables Apply now rather than one blur later.
+			if (newStamina <= 0) selectedMinions = this.minionCheckboxes.length;
+			else if (minionsToKill <= 0) selectedMinions = 0;
+		}
 
 		// Disable the apply button if the number of selected minions doesn't match minionsToKill
 		const disableActionButton = minionsToKill !== selectedMinions;

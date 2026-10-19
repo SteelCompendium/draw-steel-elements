@@ -487,3 +487,107 @@ describe('SC-340 (carried over from SC-331): pool modal, no change, no write', (
 		expect(updateCallback).not.toHaveBeenCalled();
 	});
 });
+
+describe('SC-430: Apply follows a half-typed pool draft, so the press that blurs the field lands on an enabled button', () => {
+	function poolInput(content: HTMLElement): HTMLInputElement {
+		return content.querySelector<HTMLInputElement>('.dse-stepper__input')!;
+	}
+	/** Type without committing: set the value and fire `input` only (focus stays in the field). */
+	function typeDraft(el: HTMLInputElement, v: string): void {
+		el.value = v;
+		el.dispatchEvent(new Event('input', { bubbles: true }));
+	}
+
+	test('typing a new pool value enables Apply and labels it, with nothing committed yet', async () => {
+		const { modal, content } = await setup(); // pool 20/20, 5 minions of 4
+		expect(actionBtn(content).disabled).toBe(true);
+		typeDraft(poolInput(content), '17');
+		expect(actionBtn(content).disabled).toBe(false);
+		expect(actionBtn(content).textContent).toContain('Deal 3 damage');
+		expect((modal as any).pendingStaminaChange).toBe(0); // a preview, not a commit
+	});
+
+	test('Apply clicked while the draft is still uncommitted (no blur) commits it, persists once, no double application', async () => {
+		const { content, group, updateCallback } = await setup();
+		typeDraft(poolInput(content), '17');
+		actionBtn(content).click();
+		expect(group.minion_stamina_pool).toBe(17);
+		expect(updateCallback).toHaveBeenCalledTimes(1);
+	});
+
+	test('the blur-then-click order is unchanged: the label does not change at blur, and one click applies once', async () => {
+		const { content, group, updateCallback } = await setup();
+		const input = poolInput(content);
+		document.body.appendChild(content);
+		typeDraft(input, '17');
+		const before = actionBtn(content).textContent;
+		input.dispatchEvent(new FocusEvent('blur'));
+		expect(actionBtn(content).textContent).toBe(before);
+		expect(actionBtn(content).disabled).toBe(false);
+		actionBtn(content).click();
+		expect(group.minion_stamina_pool).toBe(17);
+		expect(updateCallback).toHaveBeenCalledTimes(1);
+	});
+
+	test('a draft equal to the current pool leaves Apply disabled, as it would after blur', async () => {
+		const { content } = await setup();
+		typeDraft(poolInput(content), '20');
+		expect(actionBtn(content).disabled).toBe(true);
+		expect(actionBtn(content).textContent).toContain('No Stamina Change');
+	});
+
+	test('an empty / unparseable draft leaves Apply exactly as it was before typing', async () => {
+		const { content } = await setup();
+		typeDraft(poolInput(content), '');
+		expect(actionBtn(content).disabled).toBe(true);
+		expect(actionBtn(content).textContent).toContain('No Stamina Change');
+
+		applyDamage(content, 3, 1); // pending -3, committed
+		const label = actionBtn(content).textContent;
+		typeDraft(poolInput(content), '');
+		expect(actionBtn(content).disabled).toBe(false);
+		expect(actionBtn(content).textContent).toBe(label);
+	});
+
+	test('typing then Escape: Apply returns to the committed state and nothing is written', async () => {
+		const { content, group, updateCallback } = await setup();
+		const input = poolInput(content);
+		typeDraft(input, '17');
+		expect(actionBtn(content).disabled).toBe(false);
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+		expect(input.value).toBe('20');
+		expect(actionBtn(content).disabled).toBe(true);
+		expect(actionBtn(content).textContent).toContain('No Stamina Change');
+		expect(updateCallback).not.toHaveBeenCalled();
+		expect(group.minion_stamina_pool).toBe(20);
+	});
+
+	test('a draft that kills minions labels the kills but keeps Apply disabled until they are selected, like blur', async () => {
+		const { content, group } = await setup();
+		typeDraft(poolInput(content), '12'); // 8 damage = 2 kills at 4 per minion
+		expect(actionBtn(content).textContent).toContain('Deal 8 damage, kill 2 minion(s)');
+		expect(actionBtn(content).disabled).toBe(true);
+		actionBtn(content).click(); // disabled: nothing happens
+		expect(group.minion_stamina_pool).toBe(20);
+	});
+
+	test('a draft that empties the pool enables Apply (the boxes auto-check on commit); the click kills the squad', async () => {
+		const { content, group, minion, updateCallback } = await setup();
+		typeDraft(poolInput(content), '0');
+		expect(actionBtn(content).disabled).toBe(false);
+		actionBtn(content).click();
+		expect(group.minion_stamina_pool).toBe(0);
+		expect(minion.instances!.every((i) => i.isDead)).toBe(true);
+		expect(updateCallback).toHaveBeenCalledTimes(1);
+	});
+
+	test('a typed heal inside the living minions\' share enables Apply and labels it; the click persists the healed pool', async () => {
+		const { content, group } = await setup({ pool: 10 });
+		// pool 10 sits in the 2-dead bracket (ceiling 12): 11 stays inside it
+		typeDraft(poolInput(content), '11');
+		expect(actionBtn(content).disabled).toBe(false);
+		expect(actionBtn(content).textContent).toContain('Heal 1 stamina');
+		actionBtn(content).click();
+		expect(group.minion_stamina_pool).toBe(11);
+	});
+});

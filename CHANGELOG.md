@@ -28,11 +28,11 @@ for what needs action.
   once but the frame did not. Un-clicking clears it immediately too. The enemy-group and
   portraits-off turn buttons got the same in-place fix. The initiative docs GIF is
   regenerated.
-- [FIX] **Stamina editor: the first click on Apply now applies a typed value** (SC-430). Type a
-  new Stamina (or Temporary Stamina) value and click Apply, and if you hit the button's edge
-  the click was swallowed: the field committed, the button's label changed ("Lose 3 Stamina"),
-  nothing was saved, and you had to click again. Apply now enables and relabels as you type, and
-  clicking it saves the typed value straight away.
+- [FIX] **Stamina editor and minion pool editor: the first click on Apply now applies a typed
+  value** (SC-430). Type a new Stamina, Temporary Stamina or minion-pool value and click Apply,
+  and if you hit the button's edge the click was swallowed: the field committed, the button's
+  label changed ("Lose 3 Stamina"), nothing was saved, and you had to click again. Apply now
+  enables and relabels as you type, and clicking it saves the typed value straight away.
 - [BREAKING] **The "Sync compendium (legacy alias)" command is removed** (SC-406). It was
   kept through 6.x so a hotkey bound to it would keep working; a hotkey still bound to it
   now does nothing — bind it to **Sync compendium** instead (see the
