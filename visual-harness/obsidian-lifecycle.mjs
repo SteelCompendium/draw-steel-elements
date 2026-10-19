@@ -28,6 +28,9 @@
 // mouse press (CDP Input.dispatchMouseEvent, never .focus()) in BOTH Reading view and Live
 // Preview and asserts the click focuses the field, typed text lands, and the block is NOT
 // opened for source editing (editor cursor never jumps into the fence).
+// SC-453 appends G-S10 (26 total): an all-CRLF note on disk, a Reading view write and a sidebar
+// pin + sidebar write, each asserted at the BYTE level (all-CRLF, edit landed, text outside the
+// block identical), plus a pin that an editor insert never leaves the note mixed-ending.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -152,6 +155,8 @@ Object.assign(FIXTURES, {
 	'Lifecycle/tall.md': `# tall\n\n${Array.from({ length: 30 }, (_, i) => `PRE filler ${i}.`).join('\n\n')}\n\n${fence('ds-initiative', ['heroes:', ...Array.from({ length: 25 }, (_, i) => HERO(`Hero ${String(i + 1).padStart(2, '0')}`)).flat(), 'enemy_groups: []', 'malice:', '  value: 1'])}\n\n${Array.from({ length: 30 }, (_, i) => `POST filler ${i}.`).join('\n\n')}\n`,
 	'Lifecycle/party.md': `# party\n\n${fence('ds-party', ['members:', '  - name: Kira', '    level: 3', '    hero_ref: "```ds-counter\\nname: Nested\\ncurrent_value: 1\\nmax_value: 5\\nmin_value: 0\\n```"', 'party:', '  hero_tokens: 2'])}\n`,
 	'Lifecycle/hoverhost.md': '# hover host\n\nSee [[counter]] here.\n',
+	// SC-453: an all-CRLF note (written to disk as CRLF bytes) with one counter between ABOVE and BELOW.
+	'Lifecycle/crlf.md': `# crlf\n\nABOVE\n\n${COUNTER(10)}\n\nBELOW\n`.replace(/\n/g, '\r\n'),
 });
 
 // ------------------------------------------------------------------ note integrity
@@ -1362,6 +1367,74 @@ const SCENARIOS = [
 				root: '[data-dse-element="party"]',
 				inputs: [{ sel: 'input.dse-party__award-input', typed: '4', expectValue: (v) => v.length === 2 && v.includes('4') }],
 			});
+		},
+	},
+	{
+		// SC-453: a CRLF note. The sidebar host used to miss its block (the anchor scan never matched a
+		// fence line ending in \r), so no sidebar write landed; and a write that did land (reading mode)
+		// left the note mixed-ending. Real bytes on disk: the note is written as CRLF, a Reading-view
+		// click and then a sidebar-pinned click each write, and after each the file must be ALL-CRLF
+		// (no bare LF, no bare CR), the edit landed, and the text above/below the block byte-identical.
+		id: 'G-S10',
+		async run(t) {
+			const rel = 'Lifecycle/crlf.md';
+			const PREFIX = '# crlf\r\n\r\nABOVE\r\n\r\n```ds-counter\r\n';
+			const SUFFIX = '\r\n```\r\n\r\nBELOW\r\n';
+			const allCrlf = (s) => !/\r(?!\n)|(?<!\r)\n/.test(s);
+			const waitDisk = async (pred, what) => {
+				const t0 = Date.now();
+				while (!pred(t.read(rel))) {
+					if (Date.now() - t0 > 15000) throw new Error(`timed out waiting for ${what}; disk is ${JSON.stringify(t.read(rel))}`);
+					await sleep(100);
+				}
+			};
+			const check = (label, text, value) => {
+				t.expect(allCrlf(text), `${label}: the note is not all-CRLF: ${JSON.stringify(text)}`);
+				t.expect(text.startsWith(PREFIX) && text.endsWith(SUFFIX), `${label}: text outside the block changed: ${JSON.stringify(text)}`);
+				t.expect(text.includes(`current_value: ${value}`), `${label}: the edit did not land (want current_value: ${value}): ${JSON.stringify(text)}`);
+			};
+			t.expect(t.read(rel) === FIXTURES[rel] && allCrlf(t.read(rel)), 'the fixture is not on disk as all-CRLF');
+
+			// 1. Reading view: a click on Increase writes through ReadingModeBlockHost.
+			await t.open(rel);
+			await t.reset(rel);
+			await t.waitFor(`!!(${t.root('[data-dse-element="counter"]')})`, 'the counter rendered in Reading view');
+			await t.clickIncrease(0);
+			await waitDisk((s) => s.includes('current_value: 11'), 'the Reading view write');
+			check('Reading view', t.read(rel), 11);
+
+			// 2. Sidebar: pin the block (stamps a _dse_anchor), then click Increase INSIDE the sidebar panel.
+			await t.reset(rel);
+			await t.ev(`(async () => { await (${LC_LEAF}).setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'source', source: false }, active: true }); })()`);
+			await t.sleep(1500);
+			await t.ev(`(${LC_LEAF}).view.editor.setCursor({ line: 5, ch: 0 })`);
+			t.expect(await t.ev(`app.commands.executeCommandById('draw-steel-elements:send-block-to-sidebar')`), 'the send-block-to-sidebar command did not run');
+			await waitDisk((s) => s.includes('_dse_anchor:'), 'the anchor stamp');
+			t.expect(allCrlf(t.read(rel)), `pinning stamped an LF line into the CRLF note: ${JSON.stringify(t.read(rel))}`);
+			const panelCounter = `Array.from(app.workspace.getLeavesOfType('dse-sidebar')[0].view.containerEl.querySelectorAll('[data-dse-element="counter"]')).find((x) => x.isConnected)`;
+			await t.waitFor(`!!(${panelCounter})`, 'the counter mounted in the sidebar panel');
+			await t.ev(`(${panelCounter}).querySelector('button[aria-label^="Increase"]').click()`);
+			await waitDisk((s) => s.includes('current_value: 11'), 'the sidebar write');
+			const sidebarText = t.read(rel);
+			t.expect(/_dse_anchor: [A-Za-z0-9_-]+\r\n```/.test(sidebarText), `the anchor did not survive the sidebar write: ${JSON.stringify(sidebarText)}`);
+			t.expect(allCrlf(sidebarText) && sidebarText.startsWith(PREFIX) && sidebarText.endsWith('\r\n```\r\n\r\nBELOW\r\n'), `Sidebar: not all-CRLF or text outside the block changed: ${JSON.stringify(sidebarText)}`);
+			t.expect(await t.ev(`!document.querySelector('[data-dse-sidebar-unavailable]')`), 'the sidebar panel degraded to the not-found card');
+
+			// 3. Editor inserts (authoring scaffolds, compendium inserts) go through CodeMirror, whose document
+			// is LF-normalised: Obsidian itself saves the WHOLE file back as LF after ANY editor edit (measured
+			// on 1.14.4 with a one-character edit too). Nothing DSE-side applies, but the note must never end up
+			// MIXED, so that stays pinned here: all-LF or all-CRLF, with the inserted text present.
+			await t.ev(`(async () => { for (const l of app.workspace.getLeavesOfType('dse-sidebar')) l.detach(); })()`);
+			await t.reset(rel);
+			await t.ev(`(async () => { await (${LC_LEAF}).setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'source', source: false }, active: true }); })()`);
+			await t.sleep(1500);
+			await t.ev(`(${LC_LEAF}).view.editor.replaceRange('INSERT1\\nINSERT2\\n', { line: 2, ch: 0 })`);
+			await waitDisk((s) => s.includes('INSERT2'), 'the editor insert to be saved');
+			const inserted = t.read(rel);
+			t.expect(allCrlf(inserted) || !inserted.includes('\r'), `an editor insert left the note mixed-ending: ${JSON.stringify(inserted)}`);
+
+			await t.reset(rel);
+			return 'CRLF note stayed all-CRLF on disk across a Reading view write and a sidebar pin + sidebar write (edits landed, text outside the block byte-identical); an editor insert never leaves it mixed';
 		},
 	},
 ];
