@@ -85,9 +85,10 @@ describe('stamina-edit-modal: Stamina stepper', () => {
 		await dse.click(modal.control('modal.close'));
 	});
 
-	// S13 / S1 B7 (SC-430, fixed): the Stamina input's blur used to enable Apply only AFTER the press, so
-	// a press on the button's own padding (the then-disabled button) was swallowed. Apply now follows
-	// the half-typed draft, so the first click applies. (Chrome 150 and Chrome 106 alike.)
+	// S13 / S1 B7 (SC-430, fixed): Apply's label used to change only at the field's blur, i.e. between
+	// mousedown and mouseup. The right-aligned button re-sized under the pointer, so a press on its
+	// padding was lost (measured: not because it was disabled). Apply's label now follows the
+	// half-typed draft and nothing moves at blur, so the first click applies. (Chrome 150 and 106.)
 	it('[STAM-S13] type a new Stamina value, then click the edge of Apply: the first click applies', async () => {
 		const modal = await openBarModal(NOTE);
 		await dse.type(modal.control('sedit.stamina.input'), '12', { replace: true });
@@ -99,16 +100,21 @@ describe('stamina-edit-modal: Stamina stepper', () => {
 		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 12 });
 	});
 
-	// SC-430 D3: the Temp Stamina field gates Apply the same way.
-	it('[STAM-S13c] type a new Temp Stamina value, then click the edge of Apply: the first click applies', async () => {
+	// SC-430 D3: the Temp Stamina field. The label must SHRINK at blur for this to bite (a label that
+	// grows keeps the inset point on the button either way and passes with the fix reverted): the
+	// pending Damage makes it "Lose 2 Stamina and Lose 5 Temp Stamina", and committing Temp 5 (the
+	// current value) drops the Temp part, so a late label update would move the button's left edge.
+	it('[STAM-S13c] Damage 7, then type Temp 5 and click the edge of Apply: the first click applies', async () => {
 		const modal = await openBarModal(NOTE);
-		await dse.type(modal.control('sedit.temp.input'), '8', { replace: true });
+		await applyAmount(modal, '7', 'sedit.damage');
+		await expectApplyLabel(modal, 'Lose 2 Stamina and Lose 5 Temp Stamina');
+		await dse.type(modal.control('sedit.temp.input'), '5', { replace: true });
 		const w = await dse.waitForWrite(NOTE, async () => {
 			await dse.click(modal.control('sedit.apply'), { inset: 3 });
 			await expect(modal.root).not.toBeExisting({ wait: 1500, message: 'the first click on Apply should apply and close the modal' });
 		});
 		expect(w.count).toBe(1);
-		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 15, temp_stamina: 8 });
+		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 13, temp_stamina: 5 });
 	});
 
 	it('[STAM-S13b] type a new Stamina value, then click the label of Apply: the first click applies', async () => {
