@@ -160,7 +160,10 @@ describe('initiative: creatures', () => {
 				enemy_groups: [{ creatures: [{ instances: [{ id: 1, current_stamina: 50 }, { id: 2, current_stamina: 60 }, { id: 3, current_stamina: 60 }] }] }],
 			});
 			await expect(root.control({ css: '.dse-init__cell[data-instance-key="0-1"] .dse-init__cell-stamina' })).toHaveText('50/60');
-			await expect(root.control('init.detail.stamina')).toHaveText('50/60');
+			// The Steel layer stands the detail numeric down visually (a screen reader / keyboard write path), so
+			// read its text as a property; the bar's number is what a player sees.
+			await expect(root.control('init.detail.stamina')).toHaveElementProperty('textContent', '50/60');
+			await expect(root.control({ css: '.dse-init__detail > .dse-init__bar .dse-stamina__ccur' })).toHaveText('50');
 		},
 	);
 });
