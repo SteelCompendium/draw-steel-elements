@@ -6,6 +6,8 @@
 //      line-by-line for the target alias.
 //   2. An earlier fence that never finds a valid close before EOF must NOT blind the
 //      scanner to a real, well-formed block later in the note.
+import { parse as parseYamlPkg } from 'yaml';
+import { parseYaml, stringifyYaml } from '../../mocks/obsidian';
 import {
 	ANCHOR_KEY,
 	ensureAnchor,
@@ -111,6 +113,54 @@ describe('D8 Task 2 review fix — anchor.ts fence scanner (finding #4, CRITICAL
 		const { body, id } = ensureAnchor('current_value: 1');
 		expect(readAnchor(body)).toBe(id);
 		expect(ensureAnchor(body)).toEqual({ body, id }); // idempotent once anchored
+	});
+
+	// SC-360 — a freshly minted id must survive the YAML round trip every sidebar write does
+	// (parseYaml -> model -> stringifyYaml) as the SAME string. A random hex id that happened to
+	// read as a YAML number (`056948`, `092e50`, `4e8540`, `000000`) was re-emitted as
+	// `56948` / `9.2e+51` / `.inf` / `0`, so `findAnchoredBlock(id)` lost the block right after
+	// the panel's first write (~3% of ids). Deterministic sweep (stubbed Math.random), not sampling.
+	describe('SC-360: a minted anchor id is always a plain YAML string', () => {
+		afterEach(() => jest.restoreAllMocks());
+
+		/** Math.random() values to mint ids from: the whole [0,1) edge set, every 6-hex-digit
+		 *  fraction built from digit / 'e' / 'f' / '0' nibbles (the shapes YAML mis-reads as
+		 *  numbers, inf or exponents), and a fine grid over the unit interval. */
+		function sweepValues(): number[] {
+			const out = [0, 0.5, 1 - 2 ** -53];
+			const nibbles = [0, 1, 9, 14, 15, 10]; // 0 1 9 e f a
+			const total = 16 ** 6;
+			const walk = (depth: number, acc: number) => {
+				if (depth === 6) {
+					out.push(acc / total);
+					return;
+				}
+				for (const n of nibbles) walk(depth + 1, acc * 16 + n);
+			};
+			walk(0, 0);
+			for (let k = 0; k < 4096; k++) out.push((k + 0.5) / 4096);
+			return out;
+		}
+
+		test('every id from the generator round-trips parseYaml/stringifyYaml unchanged, as a string, in YAML 1.2 and 1.1', () => {
+			const seen = new Set<string>();
+			const random = jest.spyOn(Math, 'random');
+			for (const r of sweepValues()) {
+				random.mockReturnValue(r);
+				const { body, id } = ensureAnchor('current_value: 1');
+				seen.add(id);
+
+				expect(id).toMatch(/^[A-Za-z0-9_-]{6}$/); // same shape the matchers accept
+				const model = parseYaml(body);
+				expect(typeof model[ANCHOR_KEY]).toBe('string');
+				expect(model[ANCHOR_KEY]).toBe(id);
+				expect(readAnchor(stringifyYaml(model))).toBe(id);
+				// Obsidian ships YAML 1.2 core; 1.1 adds octal/binary/sexagesimal/yes-no booleans,
+				// so also prove the id is a string there.
+				expect(parseYamlPkg(body, { version: '1.1' })[ANCHOR_KEY]).toBe(id);
+			}
+			expect(seen.size).toBeGreaterThan(1000); // the sweep really produced varied ids
+		});
 	});
 
 	test('FOLLOWUPS #28 LOW: a CRLF-authored body stays all-CRLF after stamping — the appended anchor line does not mix EOLs', () => {

@@ -372,6 +372,44 @@ describe('D8 Task 3: initiative-in-sidebar end-to-end (spec §1 canonical use)',
 		expect(panelEl.querySelector('.dse-init__entry .dse-init__name')?.textContent).toBe('Frodo Baggins');
 	});
 
+	// SC-360 — the SC-288 r2 undo case above failed ~3% of runs (`data-dse-sidebar-unavailable`
+	// was "true" right after the panel's own first write), and it looked like host-load flake.
+	// It was the random anchor id: one that YAML reads as a number (`12e456` -> 1.2e457 -> `.inf`,
+	// `000000` -> `0`) is rewritten by the write's parseYaml/stringifyYaml round trip, so the
+	// panel could no longer find its own block. Pins the minted id to such a value (the
+	// pre-fix generator turned this Math.random into exactly `12e456`) and replays the undo case.
+	test.each([[0x12e456 / 16 ** 6], [0 / 16 ** 6], [0x0e0000 / 16 ** 6]])(
+		'SC-360: a numeric-looking minted anchor id (Math.random=%p) survives the panel\'s first write, and undo recovers',
+		async (pinned) => {
+			const { app, services, fireModify } = setup();
+			app.vault.setFile('Session.md', sessionNote());
+			const random = jest.spyOn(Math, 'random').mockReturnValueOnce(pinned);
+			try {
+				await sendToSidebar(services, 'Session.md', 'ds-initiative');
+			} finally {
+				random.mockRestore();
+			}
+			await flushAsync();
+			const { view } = await openSidebarLeaf(app);
+
+			await clickMalice(app, view);
+			const afterWrite = app.vault.getContent('Session.md')!;
+			const panelEl = panelElOf(view);
+			expect(panelEl.getAttribute('data-dse-sidebar-unavailable')).toBeNull();
+
+			app.vault.setFile('Session.md', 'the block is gone; only prose remains');
+			fireModify(app.vault.getAbstractFileByPath('Session.md') as TFile);
+			await flushAsync();
+			expect(panelEl.getAttribute('data-dse-sidebar-unavailable')).toBe('true');
+
+			app.vault.setFile('Session.md', afterWrite);
+			fireModify(app.vault.getAbstractFileByPath('Session.md') as TFile);
+			await flushAsync();
+			expect(panelEl.getAttribute('data-dse-sidebar-unavailable')).toBeNull();
+			expect(initRoots(view).length).toBe(1);
+		},
+	);
+
 	// SC-288 r2 (LOW-1, r1 review) — the remount branch's own `forgetMountedChild()` call
 	// (SidebarPanel.handleExternalChange) had no covering test: deleting that one line
 	// left the full suite green. It fixes a second, real "stuck panel" shape the ticket
