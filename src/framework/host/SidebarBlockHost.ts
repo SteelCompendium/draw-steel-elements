@@ -47,21 +47,11 @@
 import type { Component, Plugin, TFile } from 'obsidian';
 import type { BlockHost, BlockInfo, RenderMode } from './BlockHost';
 import { findAnchoredBlock, findFenceByBody, listFences } from '../sidebar/anchor';
+import { emitOpenFenceLine, parseOpenFenceLine } from './fenceLine';
 
-/** Matches a fence-open line, capturing the fence run and the language token — same shape
- *  as ReadingModeBlockHost's OPEN_FENCE (not exported there, so re-declared narrowly here
- *  rather than reaching into that module's internals). */
-const OPEN_FENCE = /^([`~]{3,})(\S*)/;
 /** Matches a fence-close line, capturing the fence run (mirrors ReadingModeBlockHost's
  *  CLOSE_FENCE — grabs whatever close-fence characters are actually there). */
 const CLOSE_FENCE = /^([`~]{3,})/;
-
-function parseOpenFence(line: string | undefined): { fence: string; language: string } | null {
-	if (line == null) return null;
-	const match = line.match(OPEN_FENCE);
-	if (!match) return null;
-	return { fence: match[1], language: match[2] };
-}
 
 function parseCloseFence(line: string | undefined): string | null {
 	if (line == null) return null;
@@ -321,11 +311,11 @@ export class SidebarBlockHost implements BlockHost {
 			if (!info) return content; // block moved/vanished under us: abort, don't corrupt
 
 			const lines = content.split('\n');
-			const openFence = parseOpenFence(lines[info.lineStart]);
+			const openFence = parseOpenFenceLine(lines[info.lineStart]);
 			if (!openFence) return content;
 			const closeFence = parseCloseFence(lines[info.lineEnd]) ?? openFence.fence;
 
-			const newBlockLines = [`${openFence.fence}${openFence.language}`, ...newSource.split('\n'), closeFence];
+			const newBlockLines = [emitOpenFenceLine(openFence), ...newSource.split('\n'), closeFence];
 			lines.splice(info.lineStart, info.lineEnd - info.lineStart + 1, ...newBlockLines);
 			// SC-158: a strict-body element is addressed BY its body, so our own write has
 			// to move the binding with it or the very next lookup misses. (No shipped

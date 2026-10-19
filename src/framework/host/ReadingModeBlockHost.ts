@@ -57,19 +57,14 @@ import type { BlockHost, BlockInfo, RenderMode } from './BlockHost';
 import type { PreviewScrollPin } from './previewScrollPin';
 import { listFences } from '../sidebar/anchor';
 import { notifyDroppedWrite } from './droppedWriteNotice';
+import { OPEN_FENCE, emitOpenFenceLine, parseOpenFenceLine } from './fenceLine';
 import type { ViewRegistry, ViewRegistryEntry } from './viewRegistry';
 
-/** Matches a fence-open line, capturing the fence run and the language token. */
-const OPEN_FENCE = /^([`~]{3,})(\S*)/;
 /** Matches a fence-close line, capturing the fence run. */
 const CLOSE_FENCE = /^([`~]{3,})/;
 
-function parseOpenFence(text: string, lineStart: number): { fence: string; language: string } | null {
-	const line = text.split('\n')[lineStart];
-	if (line == null) return null;
-	const match = line.match(OPEN_FENCE);
-	if (!match) return null;
-	return { fence: match[1], language: match[2] };
+function parseOpenFence(text: string, lineStart: number) {
+	return parseOpenFenceLine(text.split('\n')[lineStart]);
 }
 
 function parseCloseFence(line: string | undefined): string | null {
@@ -392,7 +387,7 @@ export class ReadingModeBlockHost implements BlockHost {
 				const openFence = parseOpenFence(content, target.lineStart);
 				if (!openFence) return content; // resolveWriteTarget guarantees one; defensive
 				const closeFence = parseCloseFence(lines[target.lineEnd]) ?? openFence.fence;
-				const newBlockLines = [`${openFence.fence}${openFence.language}`, ...newSource.split('\n'), closeFence];
+				const newBlockLines = [emitOpenFenceLine(openFence), ...newSource.split('\n'), closeFence];
 				lines.splice(target.lineStart, target.lineEnd - target.lineStart + 1, ...newBlockLines);
 				wrote = true;
 				// SC-343 fix round 1: set synchronously with the splice, inside the callback — not

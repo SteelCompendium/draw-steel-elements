@@ -100,6 +100,42 @@ describe('D8 Task 2: SidebarBlockHost (spec §1.4)', () => {
 		expect(lines[7]).toBe('tail');
 	});
 
+	// SC-290: replaceSource re-emits the opening fence line from the LIVE document and must
+	// keep everything past the fence characters (the info string), not just the first token.
+	// The close fence is untouched by this ticket: it is still the live close line's run.
+	test.each([
+		['an extra token', '```', 'ds-counter extra', '```'],
+		['extra tokens and wider spacing', '```', 'ds-counter  foo bar', '```'],
+		['a tilde fence with an info string', '~~~', 'ds-counter extra', '~~~'],
+		['a 4-backtick fence with an info string', '````', 'ds-counter extra', '````'],
+		['a language-only fence (unchanged)', '```', 'ds-counter', '```'],
+		['a language-only tilde fence (unchanged)', '~~~', 'ds-counter', '~~~'],
+	])('SC-290: replaceSource keeps the full info string on %s', async (_label, fence, info, close) => {
+		const opener = `${fence}${info}`;
+		const note = ['# Notes', '', opener, 'current_value: 1', `_dse_anchor: ${ANCHOR_ID}`, close, '', 'tail'].join('\n');
+		const { vault, file, app } = setup(note);
+		const { host } = makeHost(app, file);
+		await host.refresh();
+
+		const ok = await host.replaceSource(`current_value: 5\n_dse_anchor: ${ANCHOR_ID}`);
+
+		expect(ok).toBe(true);
+		expect(vault.text('Note.md')).toBe(
+			['# Notes', '', opener, 'current_value: 5', `_dse_anchor: ${ANCHOR_ID}`, close, '', 'tail'].join('\n'),
+		);
+	});
+
+	test('SC-290: a language-only fence with trailing whitespace still re-emits without the trailing whitespace (as before)', async () => {
+		const note = ['# Notes', '', '```ds-counter  ', 'current_value: 1', `_dse_anchor: ${ANCHOR_ID}`, '```'].join('\n');
+		const { vault, file, app } = setup(note);
+		const { host } = makeHost(app, file);
+		await host.refresh();
+
+		await host.replaceSource(`current_value: 5\n_dse_anchor: ${ANCHOR_ID}`);
+
+		expect(vault.text('Note.md')!.split('\n')[2]).toBe('```ds-counter');
+	});
+
 	test('canPersist flips false and replaceSource resolves false (never throws) once the anchored block is deleted from the note', async () => {
 		const { vault, file, app } = setup();
 		const { host } = makeHost(app, file);

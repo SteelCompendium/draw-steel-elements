@@ -57,6 +57,58 @@ describe('T-5 (Plan 02): ReadingModeBlockHost (F1 §3.4)', () => {
 			expect(app.vault.modifyCalls).toHaveLength(1);
 		});
 
+		// SC-290: the opening fence line is re-emitted from the LIVE document and must keep
+		// everything past the fence characters (the info string), not just the first token.
+		// Hand-rolled ctx: makeFakeContext's section scan only recognises a bare `ds-*` fence.
+		test.each([
+			['an extra token', '```', 'ds-counter extra', '```'],
+			['extra tokens and wider spacing', '```', 'ds-counter  foo bar', '```'],
+			['a tilde fence with an info string', '~~~', 'ds-counter extra', '~~~'],
+			['a 4-backtick fence with an info string', '````', 'ds-counter extra', '````'],
+			['a language-only fence (unchanged)', '```', 'ds-counter', '```'],
+			['a language-only tilde fence (unchanged)', '~~~', 'ds-counter', '~~~'],
+		])('SC-290: keeps the full info string on %s', async (_label, fence, info, close) => {
+			const opener = `${fence}${info}`;
+			const before = ['Before text.', '', opener, 'current_value: 1', close, '', 'After text.'].join('\n');
+			const app = new App();
+			app.vault.setFile('Note.md', before);
+			const plugin = new Plugin(app);
+			const el = document.createElement('div');
+			const ctx: MarkdownPostProcessorContext = {
+				docId: 'fake-doc-info-string',
+				sourcePath: 'Note.md',
+				frontmatter: undefined,
+				addChild: () => {},
+				getSectionInfo: () => ({ text: before, lineStart: 2, lineEnd: 4 }),
+			};
+			const host = new ReadingModeBlockHost(plugin as any, el, ctx as any, 'ds-counter');
+
+			await expect(host.replaceSource('current_value: 5')).resolves.toBe(true);
+
+			expect(app.vault.getContent('Note.md')).toBe(
+				['Before text.', '', opener, 'current_value: 5', close, '', 'After text.'].join('\n'),
+			);
+		});
+
+		test('SC-290: a language-only fence with trailing whitespace still re-emits without the trailing whitespace (as before)', async () => {
+			const before = ['```ds-counter  ', 'current_value: 1', '```'].join('\n');
+			const app = new App();
+			app.vault.setFile('Note.md', before);
+			const plugin = new Plugin(app);
+			const ctx: MarkdownPostProcessorContext = {
+				docId: 'fake-doc-trailing-ws',
+				sourcePath: 'Note.md',
+				frontmatter: undefined,
+				addChild: () => {},
+				getSectionInfo: () => ({ text: before, lineStart: 0, lineEnd: 2 }),
+			};
+			const host = new ReadingModeBlockHost(plugin as any, document.createElement('div'), ctx as any, 'ds-counter');
+
+			await host.replaceSource('current_value: 5');
+
+			expect(app.vault.getContent('Note.md')).toBe('```ds-counter\ncurrent_value: 5\n```');
+		});
+
 		test('resolves false (no write) when the vault has no file at sourcePath', async () => {
 			const app = new App();
 			const plugin = new Plugin(app);
