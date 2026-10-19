@@ -3,6 +3,7 @@
 //   recoveries.md       12/30, no temp, 3 of 6 Recoveries (recovery value 10)
 //   recoveries-full.md  30/30, 3 of 6      recoveries-zero.md  12/30, 0 of 6
 //   dying.md            -2/30, 3 of 6      legacy-low.md       2/30, Recoveries not tracked
+//   info-string.md      12/30, 3 of 6, fence line "```ds-stamina-bar  extra words" (SC-290)
 import { expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
 import { applyAmount, applyAndWrite, expectApplyLabel, noticeTexts, openBarModal } from '../../driver/stamina';
@@ -26,6 +27,19 @@ describe('ds-stamina-bar: Catch Breath', () => {
 		expect(await filledPips()).toBe(2);
 		await dse.waitFor(`document.querySelector('.notice')?.textContent.includes('Caught breath: +10 Stamina')`, 'the undo toast');
 		expect((await noticeTexts()).join(' ')).toContain('−1 Recovery');
+	});
+
+	// SC-290: the write-back used to re-emit the opening fence as fence + first token only.
+	it('[RECOV-I01] a write keeps the extra words (and their spacing) on the opening fence line', async () => {
+		const note = 'Stamina/info-string.md';
+		const bar = await openRec(note);
+		const w = await dse.waitForWrite(note, () => dse.click(bar.control('recov.catch-breath')));
+		expect(w.count).toBe(1);
+		// (expectNoteBlock only reads bare-language fences, so read the raw lines.)
+		const lines = (await dse.noteText(note)).split('\n');
+		expect(lines).toContain('```ds-stamina-bar  extra words');
+		expect(lines).toContain('current_stamina: 22');
+		expect(lines).toContain('recoveries: 2');
 	});
 
 	it('[RECOV-R02a] Catch Breath is really disabled with no Recoveries left and a click writes nothing', async () => {

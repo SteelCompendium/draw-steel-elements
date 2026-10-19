@@ -90,6 +90,7 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Stamina/recoveries-zero.md` | 12/30, 0 of 6 Recoveries |
   | `Stamina/dying.md` | -2/30, 3 of 6 Recoveries |
   | `Stamina/legacy-low.md` | 2/30, Recoveries not tracked |
+  | `Stamina/info-string.md` | one `ds-stamina-bar` whose fence line is ` ```ds-stamina-bar  extra words ` (12/30, 3 of 6 Recoveries; SC-290) |
   | `Stamina/two-blocks.md` | two `ds-stamina-bar` blocks: 15/20 +5 temp, then 8/10 |
   | `Initiative/tracker.md` | `ds-initiative`: hero Alice Alpha 30/30, three Ogres 60/60 (cells `0-1`..`0-3`) |
   | `Initiative/hurt.md` | `ds-initiative`: hero Alice Alpha 30/30, Ogre #1 at 20/60 and Ogre #2 at 60/60 (a hurt creature, for Spend Recovery) |
