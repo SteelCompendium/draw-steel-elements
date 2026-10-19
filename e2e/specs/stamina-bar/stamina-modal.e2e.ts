@@ -65,21 +65,17 @@ describe('stamina-edit-modal from ds-stamina-bar: open, Apply box, Damage, Heali
 		await dse.expectNoWrite(NOTE, () => dse.click(modal.control('modal.close')));
 	});
 
-	// A09 / S1 B9 (SC-427): the Apply box takes "1e3" (a valid number-input value) but the modal
-	// reads it with parseInt, so it applies 1. Correct behaviour: 1000, capped at the death floor.
-	knownBug(
-		'SC-427',
-		'[STAM-D09] an exponent amount is read as a number: 1e3 damage is capped at the death floor',
-		async () => {
-			const modal = await openBarModal(NOTE);
-			await applyAmount(modal, '1e3', 'sedit.damage');
-			await expectApplyLabel(modal, 'Lose 25 Stamina and Lose 5 Temp Stamina', {
-				wait: 1500,
-				message: 'an exponent amount (1e3) should be read as 1000 and capped at the death floor',
-			});
-		},
-		{ failsWith: /an exponent amount \(1e3\) should be read as 1000/ },
-	);
+	// A09 / S1 B9 (SC-427, fixed): the Apply box takes "1e3" (a valid number-input value); the modal
+	// used to read it with parseInt and apply 1. It is 1000, capped at the death floor.
+	it('[STAM-D09] an exponent amount is read as a number: 1e3 damage is capped at the death floor', async () => {
+		const modal = await openBarModal(NOTE);
+		await applyAmount(modal, '1e3', 'sedit.damage');
+		await expectApplyLabel(modal, 'Lose 25 Stamina and Lose 5 Temp Stamina', {
+			wait: 1500,
+			message: 'an exponent amount (1e3) should be read as 1000 and capped at the death floor',
+		});
+		await dse.expectNoWrite(NOTE, () => dse.click(modal.control('modal.close')));
+	});
 
 	it('[STAM-H01] Healing is capped at max Stamina and leaves temp alone', async () => {
 		const modal = await openBarModal(NOTE);
@@ -267,18 +263,14 @@ describe('stamina-edit-modal from ds-stamina-bar: footer', () => {
 		await dse.expectNoWrite(NOTE, () => dse.click(modal.control('modal.close')));
 	});
 
-	// F06 / S1 B10 (SC-427): the pool modal's Reset also clears its inputs; this one leaves the
-	// typed amount in the Apply box.
-	knownBug(
-		'SC-427',
-		'[STAM-F06] Reset also clears the Apply box',
-		async () => {
-			const modal = await openBarModal(NOTE);
-			await applyAmount(modal, '7', 'sedit.damage');
-			await dse.click(modal.control('sedit.reset'));
-			const value = await modal.control('sedit.apply-amount').getValue();
-			if (value !== '0' && value !== '') throw new Error(`the Apply box should be cleared by Reset (it still holds "${value}")`);
-		},
-		{ failsWith: /Apply box should be cleared/ },
-	);
+	// F06 / S1 B10 (SC-427, fixed): like the pool modal's Reset, this Reset also clears the Apply
+	// box (back to its opening 0); it used to leave the typed amount in place.
+	it('[STAM-F06] Reset also clears the Apply box', async () => {
+		const modal = await openBarModal(NOTE);
+		await applyAmount(modal, '7', 'sedit.damage');
+		await dse.click(modal.control('sedit.reset'));
+		const value = await modal.control('sedit.apply-amount').getValue();
+		if (value !== '0' && value !== '') throw new Error(`the Apply box should be cleared by Reset (it still holds "${value}")`);
+		await dse.expectNoWrite(NOTE, () => dse.click(modal.control('modal.close')));
+	});
 });

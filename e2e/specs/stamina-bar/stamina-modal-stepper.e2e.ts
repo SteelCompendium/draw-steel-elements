@@ -57,22 +57,21 @@ describe('stamina-edit-modal: Stamina stepper', () => {
 		await dse.click(modal.control('modal.close'));
 	});
 
-	// S1 B3 (SC-427): a typed value past max is accepted into the stepper, and the Apply label
-	// then announces the unclamped change while Apply persists the clamped one.
-	knownBug(
-		'SC-427',
-		'[STAM-S08] a typed Stamina above max: the Apply label says what will actually be applied',
-		async () => {
-			const modal = await openBarModal(NOTE);
-			await dse.type(modal.control('sedit.stamina.input'), '30', { replace: true });
-			await dse.press('Enter', modal.control('sedit.stamina.input'));
-			await expectApplyLabel(modal, 'Gain 5 Stamina', {
-				wait: 1500, // 15 -> max 20
-				message: 'the Apply label should state the applied change (Gain 5), not the typed overshoot',
-			});
-		},
-		{ failsWith: /Apply label should state the applied change/ },
-	);
+	// S1 B3 (SC-427, fixed): a typed value past max used to be accepted into the stepper, with the
+	// Apply label announcing the unclamped change while Apply persisted the clamped one. The field
+	// is now bounded to [floor, max], so the typed 30 commits as 20 and the label says Gain 5.
+	it('[STAM-S08] a typed Stamina above max: the Apply label says what will actually be applied', async () => {
+		const modal = await openBarModal(NOTE);
+		await dse.type(modal.control('sedit.stamina.input'), '30', { replace: true });
+		await dse.press('Enter', modal.control('sedit.stamina.input'));
+		await expectApplyLabel(modal, 'Gain 5 Stamina', {
+			wait: 1500, // 15 -> max 20
+			message: 'the Apply label should state the applied change (Gain 5), not the typed overshoot',
+		});
+		await expect(modal.control('sedit.stamina.input')).toHaveValue('20'); // the field itself shows the clamp
+		expect(await applyAndWrite(modal, NOTE)).toBe(1);
+		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 20 });
+	});
 
 	// S14: Chromium order is mousedown -> blur (commit) -> click, so Damage lands on top of the
 	// freshly committed typed value.
