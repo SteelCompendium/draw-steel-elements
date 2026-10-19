@@ -1408,8 +1408,16 @@ const SCENARIOS = [
 			await t.ev(`(async () => { await (${LC_LEAF}).setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'source', source: false }, active: true }); })()`);
 			await t.sleep(1500);
 			await t.ev(`(${LC_LEAF}).view.editor.setCursor({ line: 5, ch: 0 })`);
-			t.expect(await t.ev(`app.commands.executeCommandById('draw-steel-elements:send-block-to-sidebar')`), 'the send-block-to-sidebar command did not run');
-			await waitDisk((s) => s.includes('_dse_anchor:'), 'the anchor stamp');
+			// SC-383: generateAnchorId can mint hex ids YAML reads as numbers (927e10, 012345), which loses the
+			// anchor on the first write (~3% of runs). Pin Math.random to one that cannot ('abcdef') while pinning.
+			await t.ev(`(() => { window.__lcRandom = Math.random; Math.random = () => 0xabcdef / 0x1000000; return true; })()`);
+			try {
+				t.expect(await t.ev(`app.commands.executeCommandById('draw-steel-elements:send-block-to-sidebar')`), 'the send-block-to-sidebar command did not run');
+				await waitDisk((s) => s.includes('_dse_anchor:'), 'the anchor stamp');
+			} finally {
+				await t.ev(`(() => { if (window.__lcRandom) Math.random = window.__lcRandom; delete window.__lcRandom; return true; })()`);
+			}
+			t.expect(t.read(rel).includes('_dse_anchor: abcdef\r\n'), `the stubbed anchor id was not stamped: ${JSON.stringify(t.read(rel))}`);
 			t.expect(allCrlf(t.read(rel)), `pinning stamped an LF line into the CRLF note: ${JSON.stringify(t.read(rel))}`);
 			const panelCounter = `Array.from(app.workspace.getLeavesOfType('dse-sidebar')[0].view.containerEl.querySelectorAll('[data-dse-element="counter"]')).find((x) => x.isConnected)`;
 			await t.waitFor(`!!(${panelCounter})`, 'the counter mounted in the sidebar panel');
