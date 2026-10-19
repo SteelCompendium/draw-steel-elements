@@ -25,10 +25,27 @@ const ANCHOR_LINE = new RegExp(`^${ANCHOR_KEY}:\\s*['"]?([A-Za-z0-9_-]+)['"]?\\s
  *  copy; the two files must never test "is this a fence marker line" two different ways. */
 export const FENCE_LINE = /^([`~]{3,})(.*)$/;
 
+const LEADING_LETTERS = 'abcdf';
+
 /** Small non-crypto id generator (Math.random-based — mobile-safe, no `crypto` node
- *  module; F1/D8 convention for anything that doesn't need cryptographic uniqueness). */
+ *  module; F1/D8 convention for anything that doesn't need cryptographic uniqueness).
+ *
+ *  SC-360: the id is stamped UNQUOTED (`_dse_anchor: <id>`) and every sidebar write re-emits it
+ *  through parseYaml -> model -> stringifyYaml, so it must read back as a plain YAML STRING.
+ *  A bare 6-hex-digit id did not: `056948` came back `56948`, `092e50` -> `9.2e+51`,
+ *  `4e8540` -> `.inf`, `000000` -> `0` (~3% of ids), and the panel then could not find its
+ *  own block ("Backing block not found") right after its first save. Every YAML scalar that
+ *  is not a string (numbers incl. 0x/0o/0b and exponents, `.inf`/`.nan`, booleans, null,
+ *  sexagesimal) starts with a digit, a sign, a `.`, or one of the words true/false/null/yes/
+ *  no/on/off/y/n - none of which can be spelled from hex characters starting with a letter.
+ *  One exception: the `yaml` package's 1.1 float rule accepts an empty mantissa, so `e14000`
+ *  reads as NaN there (Obsidian ships 1.2, but the sweep in anchor.test.ts holds both) - so the
+ *  leading letter is one of a b c d f (never `e`), then 5 hex digits: 6 chars, 5 * 16^5 ids.
+ *  One Math.random() call, split arithmetically, keeps the generator deterministic to test. */
 function generateAnchorId(): string {
-	return Math.random().toString(16).slice(2, 8).padEnd(6, '0');
+	const rest = 16 ** 5;
+	const n = Math.floor(Math.random() * LEADING_LETTERS.length * rest);
+	return LEADING_LETTERS[Math.floor(n / rest)] + (n % rest).toString(16).padStart(5, '0');
 }
 
 /** `body`'s dominant end-of-line style — CRLF only when every line break in `body` is

@@ -40,6 +40,11 @@ for what needs action.
   out-of-range Stamina. An exponent in the Apply box such as "1e3" now counts as 1000 (it counted as 1), in the
   initiative minion Stamina window's damage and minion-count boxes too. Reset also puts the Apply
   box back to 0.
+- [FIX] **Fixed: the sidebar sometimes lost its encounter ("Backing block not found") right
+  after its first save, about 1 time in 33** (SC-360). The hidden id that ties a sidebar panel
+  to its block could be a value like `056948` or `4e8540`, which the first save rewrote into
+  a different number, so the panel could no longer find its own block. New ids can no longer
+  take that shape. A note that was already affected is not repaired by this fix.
 - [FIX] **A save that changes nothing no longer leaves extra blank scroll space at the bottom
   of the note** (SC-260). When a block wrote back exactly what the note already contained
   (for example re-applying the same value in reading mode), the page held its height for a
