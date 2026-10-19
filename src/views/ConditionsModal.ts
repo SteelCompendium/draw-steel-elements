@@ -53,7 +53,7 @@ import type { App } from 'obsidian';
 import { getIconIds, setIcon } from 'obsidian';
 import type { Condition, ConditionHolder } from '@drawSteelAdmonition/EncounterData';
 import { ConditionManager, ConditionConfig } from '@utils/Conditions';
-import { DseModal, iconButton } from '@/framework/kit';
+import { DseModal, iconButton, setPressedState } from '@/framework/kit';
 import { applyConditionColor, applyConditionEffect, CONDITION_EFFECTS } from '@/elements/conditionColor';
 import {
 	resolveDuration,
@@ -301,7 +301,7 @@ export class ConditionsModal extends DseModal {
 				button.type = 'button';
 				button.setAttribute('aria-label', label);
 				button.setAttribute('title', label);
-				button.setAttribute('aria-pressed', String(value === entry.icon));
+				setPressedState(button, value === entry.icon);
 				setIcon(button.createSpan(), icon);
 				if (value === undefined) button.createSpan({ text: 'Default' });
 				button.addEventListener('click', () => {
@@ -341,7 +341,7 @@ export class ConditionsModal extends DseModal {
 		for (const preset of DURATION_PRESETS) {
 			const chip = group.createEl('button', { cls: 'dse-optchip', text: preset.label });
 			chip.setAttribute('type', 'button');
-			chip.setAttribute('aria-pressed', String(preset.value === active));
+			setPressedState(chip, preset.value === active);
 			chip.setAttribute('aria-label', preset.label);
 			this.lifecycle.registerDomEvent(chip, 'click', () => this.setDuration(index, preset.value));
 		}
@@ -380,7 +380,7 @@ export class ConditionsModal extends DseModal {
 			sw.setAttribute('type', 'button');
 			sw.setAttribute('title', `${name} (${hex})`);
 			sw.setAttribute('aria-label', `Color ${hex}`);
-			sw.setAttribute('aria-pressed', String(hex === entry.color));
+			setPressedState(sw, hex === entry.color);
 			sw.style.setProperty('--dse-swatch', hex);
 			this.lifecycle.registerDomEvent(sw, 'click', () => this.setColor(index, hex));
 		}
@@ -409,7 +409,7 @@ export class ConditionsModal extends DseModal {
 		for (const fx of EFFECT_PRESETS) {
 			const chip = group.createEl('button', { cls: 'dse-optchip', text: fx });
 			chip.setAttribute('type', 'button');
-			chip.setAttribute('aria-pressed', String(fx === active));
+			setPressedState(chip, fx === active);
 			chip.setAttribute('aria-label', fx);
 			this.lifecycle.registerDomEvent(chip, 'click', () => this.setEffect(index, fx));
 		}

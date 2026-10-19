@@ -27,7 +27,7 @@
 // Read-only hosts (F1 §4.4): chips and checkboxes are REAL-disabled with no listeners, the
 // panel renders STATIC and the Complete footer is omitted entirely — no dead-end affordances.
 import { Component, setIcon } from 'obsidian';
-import { iconButton, powerRollPanel, tooltip } from '@/framework/kit';
+import { iconButton, powerRollPanel, setPressedState, tooltip } from '@/framework/kit';
 import type { IconButtonHandle, PowerRollPanelHandle, PowerRollTier, RenderMdCallback } from '@/framework/kit';
 import { NegotiationData } from '@model/NegotiationData';
 import { ArgumentPowerRoll, ArgumentResult } from '@model/ArgumentPowerRolls';
@@ -164,7 +164,7 @@ export class ArgumentView {
 	private paintMotivationChip(chip: HTMLButtonElement, name: string, spent: boolean): void {
 		const pressed = this.data.currentArgument.motivationsUsed.includes(name);
 		chip.empty();
-		chip.setAttribute('aria-pressed', String(pressed));
+		setPressedState(chip, pressed);
 		chip.toggleClass('is-spent', spent);
 		const glyph = chip.createSpan({ cls: 'dse-nt__chip-glyph', text: spent ? '◇' : '◆' });
 		glyph.setAttribute('aria-hidden', 'true');
@@ -182,7 +182,7 @@ export class ArgumentView {
 	private paintPitfallChip(chip: HTMLButtonElement, name: string): void {
 		const pressed = this.data.currentArgument.pitfallsUsed.includes(name);
 		chip.empty();
-		chip.setAttribute('aria-pressed', String(pressed));
+		setPressedState(chip, pressed);
 		const icon = chip.createSpan({ cls: 'dse-nt__icon dse-nt__chip-icon' });
 		icon.setAttribute('aria-hidden', 'true');
 		setIcon(icon, 'triangle-alert');

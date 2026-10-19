@@ -71,6 +71,20 @@ export interface IconButtonHandle {
 }
 
 /**
+ * SC-450 — THE ONE WRITER of a toggle's pressed state: `aria-pressed` (the AT state) and
+ * `[data-pressed]` (the CSS hook) together, never one without the other. Works on any element,
+ * so a hand-built toggle (a chip, a swatch, an in-place portrait repaint) goes through the same
+ * code as `iconButton`'s `setPressed`. Why it must be one function: the kit's sheen rule keys on
+ * `.dse-btn:not([data-pressed])`, so a repaint that flipped only `aria-pressed` painted a
+ * toggled control differently from a rebuilt one (SC-423). `test/unit/build/ariaPressedWriters
+ * .test.ts` fails on any other writer in `src/`.
+ */
+export function setPressedState(el: HTMLElement, pressed: boolean): void {
+	el.setAttribute('aria-pressed', String(pressed));
+	el.toggleAttribute('data-pressed', pressed);
+}
+
+/**
  * Mounts an accessible icon/text button into `parent`. Real `<button type="button">`,
  * required aria-label, ≥44×44 px hit area via CSS padding (`--dse-touch-min`, §4.6).
  */
@@ -102,11 +116,7 @@ export function iconButton(
 		buttonEl.createSpan({ cls: 'dse-btn__text', text: opts.text });
 	}
 
-	const setPressed = (pressed: boolean): void => {
-		buttonEl.setAttribute('aria-pressed', String(pressed));
-		if (pressed) buttonEl.setAttribute('data-pressed', '');
-		else buttonEl.removeAttribute('data-pressed');
-	};
+	const setPressed = (pressed: boolean): void => setPressedState(buttonEl, pressed);
 	if (opts.pressed !== undefined) setPressed(opts.pressed);
 
 	buttonEl.disabled = opts.disabled === true;

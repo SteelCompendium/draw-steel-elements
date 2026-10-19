@@ -10,7 +10,7 @@
 export { CONTROL_ATTR, stampControl } from './controlId';
 
 // -- Control primitives (D2 §2.1/2.2/2.5/2.10, Task 2) --
-export { iconButton, buttonRow } from './iconButton';
+export { iconButton, buttonRow, setPressedState } from './iconButton';
 export type {
 	IconButtonOptions,
 	IconButtonHandle,

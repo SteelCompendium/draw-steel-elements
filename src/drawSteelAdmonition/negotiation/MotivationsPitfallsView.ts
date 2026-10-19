@@ -14,7 +14,7 @@
 // no write path. Persistence is unchanged: a user toggle persists, rendering never writes.
 import { setIcon } from 'obsidian';
 import type { Component } from 'obsidian';
-import { tooltip } from '@/framework/kit';
+import { setPressedState, tooltip } from '@/framework/kit';
 import { NegotiationData } from '@model/NegotiationData';
 
 interface MotivationRow {
@@ -95,7 +95,7 @@ export class MotivationsPitfallsView {
 
 	private paintChip(chip: HTMLButtonElement, name: string, spent: boolean): void {
 		chip.empty();
-		chip.setAttribute('aria-pressed', String(spent));
+		setPressedState(chip, spent);
 		if (spent) {
 			const check = chip.createSpan({ cls: 'dse-nt__icon dse-nt__chip-check' });
 			check.setAttribute('aria-hidden', 'true');

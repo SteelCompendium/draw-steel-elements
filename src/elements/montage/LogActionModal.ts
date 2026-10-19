@@ -20,7 +20,7 @@
 // (ghost) · Log/Save (accent) — spec §D's own footer line.
 import type { App } from 'obsidian';
 import { setIcon } from 'obsidian';
-import { DseModal } from '@/framework/kit';
+import { DseModal, setPressedState } from '@/framework/kit';
 import type { IconButtonHandle } from '@/framework/kit';
 import type { MontageEntry, MontageModel, MontageResult } from './model';
 import { wouldReuseSkill, isKnownMontageResult } from './model';
@@ -207,7 +207,7 @@ export class LogActionModal extends DseModal {
 
 	private reflectResult(): void {
 		this.resultChipEls.forEach((chip, i) => {
-			chip.setAttribute('aria-pressed', String(RESULT_CHIPS[i].value === this.selectedResult));
+			setPressedState(chip, RESULT_CHIPS[i].value === this.selectedResult);
 		});
 	}
 
