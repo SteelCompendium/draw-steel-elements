@@ -108,6 +108,8 @@ describe('D8 Task 2: SidebarBlockHost (spec §1.4)', () => {
 		['extra tokens and wider spacing', '```', 'ds-counter  foo bar', '```'],
 		['a tilde fence with an info string', '~~~', 'ds-counter extra', '~~~'],
 		['a 4-backtick fence with an info string', '````', 'ds-counter extra', '````'],
+		['a space before the language', '```', ' ds-counter extra', '```'],
+		['tabs between tokens', '```', 'ds-counter\textra\tmore', '```'],
 		['a language-only fence (unchanged)', '```', 'ds-counter', '```'],
 		['a language-only tilde fence (unchanged)', '~~~', 'ds-counter', '~~~'],
 	])('SC-290: replaceSource keeps the full info string on %s', async (_label, fence, info, close) => {
