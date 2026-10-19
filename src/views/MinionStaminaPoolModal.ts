@@ -50,13 +50,17 @@ export class MinionStaminaPoolModal extends DseModal {
 	// click in Chromium. The preview bar is fixed geometry and may lag. The committed truth
 	// stays pendingStaminaChange.
 	private draftStaminaChange: number | null = null;
-	private minionCheckboxes: { instance: CreatureInstance; checkbox: HTMLInputElement }[] = [];
+	// SC-429: `auto` marks a box the MODAL checked (the "pool at 0 -> every remaining minion
+	// dies" rule), as opposed to one the USER ticked. When that rule stops applying, only the
+	// auto boxes revert; the user's own ticks keep their state.
+	private minionCheckboxes: { instance: CreatureInstance; checkbox: HTMLInputElement; auto: boolean }[] = [];
 
 	private bar!: StaminaPreviewBarHandle;
 	private poolStepper!: StepperHandle;
 	private infoTextEl!: HTMLElement;
 	private warningIconEl!: HTMLElement;
 	private actionBtn!: IconButtonHandle;
+	private damageInput!: HTMLInputElement;
 
 	constructor(
 		app: App,
@@ -68,6 +72,18 @@ export class MinionStaminaPoolModal extends DseModal {
 		this.group = group;
 		this.creature = creature;
 		this.persist = persist;
+	}
+
+	/**
+	 * SC-429 / item 2: initial focus. DseModal focuses the FIRST focusable control after
+	 * onOpen; StaminaEditModal's first control is its Apply box, but here the stepper row
+	 * comes first in the DOM, so a bare open left focus on "Decrease Stamina pool" (Space/Enter
+	 * right after opening decremented the pool). Mirror the stamina edit modal: focus the
+	 * Apply box (the damage field, the first control of the Apply row).
+	 */
+	open(): void {
+		super.open();
+		this.damageInput?.focus();
 	}
 
 	onOpen() {
@@ -130,6 +146,7 @@ export class MinionStaminaPoolModal extends DseModal {
 			cls: 'dse-sedit__apply-input',
 			attr: { size: 3 },
 		});
+		this.damageInput = damageInput;
 		damageInput.value = '0';
 		damageInput.setAttribute('aria-label', 'Damage per minion');
 		// SC-241: the Apply box is a MAGNITUDE, not a signed delta — `min="0"` mirrors
@@ -142,7 +159,10 @@ export class MinionStaminaPoolModal extends DseModal {
 			attr: { size: 3 },
 		});
 		minionCountInput.value = '1';
-		minionCountInput.max = this.creature.instances?.length.toString() ?? '';
+		// SC-429: the cap is the LIVING minions (the same `!isDead` rule the list and the kill
+		// math use), not every instance the squad ever had.
+		minionCountInput.max =
+			this.creature.instances?.filter((inst) => !inst.isDead).length.toString() ?? '';
 		minionCountInput.min = '0';
 		minionCountInput.setAttribute('aria-label', 'Number of minions hit');
 		applyRow.createSpan({ text: 'minions' });
@@ -186,11 +206,13 @@ export class MinionStaminaPoolModal extends DseModal {
 			// crimson, evicted — SC-5).
 			const checkbox = minionRow.createEl('input', { type: 'checkbox', cls: 'dse-minion__check' });
 			checkbox.setAttribute('aria-label', `Kill ${this.creature.name} #${instance.id}`);
+			const entry = { instance, checkbox, auto: false };
 			this.lifecycle.registerDomEvent(checkbox, 'change', () => {
+				entry.auto = false; // a hand toggle always makes the box the user's own (SC-429)
 				this.updateCheckboxes();
 				this.updateActionButton();
 			});
-			this.minionCheckboxes.push({ instance, checkbox });
+			this.minionCheckboxes.push(entry);
 
 			const minionName = minionRow.createSpan({
 				text: `${this.creature.name} #${instance.id}`,
@@ -200,6 +222,7 @@ export class MinionStaminaPoolModal extends DseModal {
 			this.lifecycle.registerDomEvent(minionName, 'click', () => {
 				if (!checkbox.disabled) {
 					checkbox.checked = !checkbox.checked;
+					entry.auto = false; // SC-429: as the change handler above
 					this.updateCheckboxes();
 					this.updateActionButton();
 				}
@@ -223,6 +246,7 @@ export class MinionStaminaPoolModal extends DseModal {
 					this.minionCheckboxes.forEach((item) => {
 						item.checkbox.checked = false;
 						item.checkbox.disabled = true;
+						item.auto = false;
 					});
 					this.refresh();
 				},
@@ -372,12 +396,17 @@ export class MinionStaminaPoolModal extends DseModal {
 	private updateInfoText(): void {
 		const { minionsToKill, healCeiling } = this.poolNumbers();
 		const pending = this.effectivePending(); // SC-430: follows a typed draft (see the field comment)
+		this.infoTextEl.hidden = pending === 0; // SC-429: the `hidden` attribute, never inline display
 		if (minionsToKill < 0) {
 			// A heal past a dead minion's share (SC-417 LOW-1): say the rule, never a
 			// negative count.
 			this.infoTextEl.textContent = `A heal can't raise the pool above the living minions' share (${healCeiling} stamina).`;
 		} else if (pending > 0) {
 			this.infoTextEl.textContent = `Heal ${pending} stamina; dead minions stay dead.`;
+		} else if (pending === 0) {
+			// SC-429: nothing pending (no damage, so no kills to select) — hide the line rather
+			// than read "0 damage will kill 0 minion(s). Select 0 minion(s) to kill."
+			this.infoTextEl.textContent = '';
 		} else {
 			const totalPendingDamage = -pending;
 			this.infoTextEl.textContent = `${totalPendingDamage} damage will kill ${minionsToKill} minion(s). \nSelect ${minionsToKill} minion(s) to kill.`;
@@ -448,11 +477,22 @@ export class MinionStaminaPoolModal extends DseModal {
 		// If minion pool stamina reaches 0, auto-select all checkboxes
 		if (newStamina <= 0) {
 			this.minionCheckboxes.forEach((item) => {
+				// Only a box the user had not already ticked becomes the modal's (auto) tick.
+				if (!item.checkbox.checked) item.auto = true;
 				item.checkbox.checked = true;
 				item.checkbox.disabled = true;
 			});
 			return;
 		}
+
+		// SC-429: the 0-pool rule no longer applies — revert what IT checked (the user's own
+		// ticks stay; the branches below re-derive availability from them).
+		this.minionCheckboxes.forEach((item) => {
+			if (item.auto) {
+				item.checkbox.checked = false;
+				item.auto = false;
+			}
+		});
 
 		// If no minions need to be killed, disable all checkboxes
 		if (minionsToKill <= 0) {

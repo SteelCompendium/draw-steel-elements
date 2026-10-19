@@ -13,6 +13,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { parseEncounterData, EncounterData, EnemyGroup, Creature } from '@drawSteelAdmonition/EncounterData';
 import { MinionStaminaPoolModal } from '@views/MinionStaminaPoolModal';
+import { StaminaEditModal } from '@views/StaminaEditModal';
+import { StaminaBar } from '@model/StaminaBar';
 import { CodeBlocks } from '@utils/CodeBlocks';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App, makeFakeContext, flushAsync, FakeContext } from '../../mocks/obsidian';
@@ -611,7 +613,7 @@ describe('SC-430: Apply, its warning and the info text above it follow a half-ty
 		typeDraft(input, '11');
 		const draft = snapshot(content);
 		expect(draft.info).toBe('Heal 1 stamina; dead minions stay dead.');
-		expect(draft.info).not.toBe(idle); // the 2-line idle text is already gone while typing
+		expect(draft.info).not.toBe(idle); // the idle line (hidden since SC-429) already reads the heal while typing
 		input.dispatchEvent(new FocusEvent('blur'));
 		expect(snapshot(content)).toEqual(draft);
 	});
@@ -636,5 +638,159 @@ describe('SC-430: Apply, its warning and the info text above it follow a half-ty
 		typeDraft(input, '11');
 		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 		expect(content.querySelector('.dse-sedit__info')!.textContent).toBe(idle);
+	});
+});
+
+describe('SC-429: the four pool-modal defects', () => {
+	const checks = (content: HTMLElement) =>
+		Array.from(content.querySelectorAll<HTMLInputElement>('.dse-minion__check'));
+	const infoEl = (content: HTMLElement) => content.querySelector('.dse-sedit__info') as HTMLElement;
+	/** A hand-made tick, exactly as a user's click would do it. */
+	function userCheck(box: HTMLInputElement): void {
+		box.checked = true;
+		box.dispatchEvent(new Event('change'));
+	}
+
+	describe('item 1 — boxes the modal auto-checked at a 0 pool are reverted when the rule stops applying', () => {
+		test('0 -> 1: every auto-checked box un-checks and re-enables; Apply asks for 4 and stays disabled', async () => {
+			const { content } = await setup(); // pool 20, 5 goblins of 4
+			applyDamage(content, 4, 5); // pool 0: all 5 auto-checked and locked
+			expect(checks(content).every((c) => c.checked && c.disabled)).toBe(true);
+
+			btn(content, 'Increase Stamina pool').click(); // pool 1: 19 damage = 4 kills
+			expect(checks(content).every((c) => !c.checked && !c.disabled)).toBe(true);
+			expect(actionBtn(content).disabled).toBe(true); // 0 of 4 selected
+			expect(actionBtn(content).textContent).toContain('Deal 19 damage, kill 4 minion(s)');
+			expect(actionBtn(content).getAttribute('title')).toBe('Select 4 minion(s) to kill');
+		});
+
+		test('after the revert the user picks 4 by hand: the 5th box locks and Apply enables', async () => {
+			const { content, minion, group } = await setup();
+			applyDamage(content, 4, 5);
+			btn(content, 'Increase Stamina pool').click();
+			checks(content).slice(0, 4).forEach(userCheck);
+			expect(checks(content)[4].disabled).toBe(true); // 4 of 4 chosen: the rest lock
+			expect(actionBtn(content).disabled).toBe(false);
+			actionBtn(content).click();
+			expect(group.minion_stamina_pool).toBe(1);
+			expect(minion.instances!.filter((i) => i.isDead)).toHaveLength(4);
+		});
+
+		test('a box the USER checked before the pool hit 0 keeps its state through 0 -> 1', async () => {
+			const { content } = await setup();
+			applyDamage(content, 4, 1); // pool 16: 1 kill owed
+			userCheck(checks(content)[1]); // the user chose minion #2 by hand
+			applyDamage(content, 4, 4); // pool 0: the rest are auto-checked
+			expect(checks(content).every((c) => c.checked && c.disabled)).toBe(true);
+
+			btn(content, 'Increase Stamina pool').click(); // pool 1: 4 kills owed
+			const state = checks(content).map((c) => c.checked);
+			expect(state).toEqual([false, true, false, false, false]); // only the user's own tick survives
+			expect(checks(content).every((c) => !c.disabled)).toBe(true); // 1 of 4 chosen: all still open
+			expect(actionBtn(content).disabled).toBe(true);
+			expect(actionBtn(content).getAttribute('title')).toBe('Select 4 minion(s) to kill');
+		});
+
+		test('0 -> 1 -> 0 -> 1: the rule re-applies and reverts each time (no stale auto-flags)', async () => {
+			const { content } = await setup();
+			applyDamage(content, 4, 5);
+			btn(content, 'Increase Stamina pool').click();
+			expect(checks(content).some((c) => c.checked)).toBe(false);
+			btn(content, 'Decrease Stamina pool').click(); // back to 0
+			expect(checks(content).every((c) => c.checked && c.disabled)).toBe(true);
+			btn(content, 'Increase Stamina pool').click();
+			expect(checks(content).every((c) => !c.checked && !c.disabled)).toBe(true);
+		});
+
+		test('a box ticked by hand after a revert stays ticked on the way back to 0 and up again', async () => {
+			const { content } = await setup();
+			applyDamage(content, 4, 5);
+			btn(content, 'Increase Stamina pool').click();
+			userCheck(checks(content)[2]);
+			btn(content, 'Decrease Stamina pool').click(); // pool 0: everything locked and checked
+			expect(checks(content).every((c) => c.checked && c.disabled)).toBe(true);
+			btn(content, 'Increase Stamina pool').click();
+			expect(checks(content).map((c) => c.checked)).toEqual([false, false, true, false, false]);
+		});
+
+		test('Reset after an auto-check clears every box and a later 0 -> 1 leaves nothing stuck', async () => {
+			const { content } = await setup();
+			applyDamage(content, 4, 5);
+			btn(content, 'Reset').click();
+			expect(checks(content).every((c) => !c.checked && c.disabled)).toBe(true);
+			applyDamage(content, 4, 5);
+			btn(content, 'Increase Stamina pool').click();
+			expect(checks(content).every((c) => !c.checked && !c.disabled)).toBe(true);
+		});
+	});
+
+	describe('item 2 — initial focus mirrors the stamina edit modal (its Apply box), never a stepper button', () => {
+		test('on open, focus is on the Apply damage box, not "Decrease Stamina pool"', async () => {
+			const { content } = await setup();
+			const focused = document.activeElement as HTMLElement;
+			expect(focused).toBe(content.querySelector('input[aria-label="Damage per minion"]'));
+			expect(focused.classList.contains('dse-sedit__apply-input')).toBe(true);
+			expect(focused).not.toBe(btn(content, 'Decrease Stamina pool'));
+			expect(document.activeElement!.tagName).toBe('INPUT');
+		});
+
+		test('the focused element is the same kind of control the stamina edit modal focuses (an Apply box)', async () => {
+			const sedit = new StaminaEditModal(new App() as any, new StaminaBar(false, false, 20, 20, 0, 1), true, 'Frodo', jest.fn());
+			sedit.open();
+			expect(document.activeElement!.classList.contains('dse-sedit__apply-input')).toBe(true);
+		});
+	});
+
+	describe('item 3 — the minion-count box caps at the LIVING minions', () => {
+		test('a full squad caps at 5', async () => {
+			const { content } = await setup();
+			const count = content.querySelector<HTMLInputElement>('input[aria-label="Number of minions hit"]')!;
+			expect(count.max).toBe('5');
+		});
+
+		test('a squad with 2 dead caps at 3', async () => {
+			const { content } = await setup({ deadCount: 2 });
+			const count = content.querySelector<HTMLInputElement>('input[aria-label="Number of minions hit"]')!;
+			expect(count.max).toBe('3');
+			expect(count.min).toBe('0');
+		});
+	});
+
+	describe('item 4 — the kill/select info line is hidden when nothing is pending', () => {
+		test('at rest the line is hidden and empty (no "0 damage will kill 0 minion(s)")', async () => {
+			const { content } = await setup();
+			expect(infoEl(content).hidden).toBe(true);
+			expect(infoEl(content).textContent).toBe('');
+		});
+
+		test('it appears as soon as damage is pending, and hides again on Reset', async () => {
+			const { content } = await setup();
+			applyDamage(content, 3, 1);
+			expect(infoEl(content).hidden).toBe(false);
+			expect(infoEl(content).textContent).toContain('3 damage will kill 0 minion(s)');
+			btn(content, 'Reset').click();
+			expect(infoEl(content).hidden).toBe(true);
+			expect(infoEl(content).textContent).toBe('');
+		});
+
+		test('a half-typed pool draft shows the line at once; a draft equal to the pool hides it', async () => {
+			const { content } = await setup();
+			const input = content.querySelector<HTMLInputElement>('.dse-stepper__input')!;
+			input.value = '17';
+			input.dispatchEvent(new Event('input', { bubbles: true }));
+			expect(infoEl(content).hidden).toBe(false);
+			expect(infoEl(content).textContent).toContain('3 damage will kill 0 minion(s)');
+			input.value = '20';
+			input.dispatchEvent(new Event('input', { bubbles: true }));
+			expect(infoEl(content).hidden).toBe(true);
+		});
+
+		test('heal text is unaffected: a pending heal shows its line (and un-hides it)', async () => {
+			const { content } = await setup({ pool: 10 }); // the 2-dead bracket, heal ceiling 12
+			expect(infoEl(content).hidden).toBe(true);
+			btn(content, 'Increase Stamina pool').click();
+			expect(infoEl(content).hidden).toBe(false);
+			expect(infoEl(content).textContent).toBe('Heal 1 stamina; dead minions stay dead.');
+		});
 	});
 });

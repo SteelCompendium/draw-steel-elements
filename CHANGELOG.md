@@ -22,6 +22,14 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Initiative: the minion Stamina pool window no longer gets stuck all-checked, and no
+  longer opens on a stepper button** (SC-429). Lowering the pool to 0 ticks every minion for
+  you; raising it again now un-ticks the ones the window ticked (the ones you ticked yourself
+  stay) instead of leaving all of them checked with Apply stuck on "Select 4 minion(s)". The
+  window opens with the cursor in the Apply box, like the single-creature Stamina window, so
+  Space or Enter right after opening no longer lowers the pool. The "minions hit" box now caps
+  at the minions still alive, and the "0 damage will kill 0 minion(s)" line stays hidden until
+  there is a change pending.
 - [FIX] **Initiative: editing the selected enemy's Stamina from its roster cell now updates the
   detail row too** (SC-426). Double-clicking a creature's cell in the roster and applying a
   new Stamina (or Temp Stamina) used to change the cell and the note but leave the detail row
