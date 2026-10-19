@@ -110,6 +110,9 @@ describe('SC-428: catchBreathBlockedReason (the one gate behind every Catch Brea
 		['full Stamina', { current: 48 }, 'Already at maximum Stamina'],
 		['recovery value 0', { recoveryValue: 0, max: 2, current: 1 }, 'Recovery value is 0'],
 		['recovery value 0 even at max', { recoveryValue: 0, max: 2, current: 2 }, 'Recovery value is 0'],
+		['unknown recovery value (unresolved max)', { recoveryValue: null }, 'Max Stamina unknown'],
+		['unknown value still loses to none left', { recoveryValue: null, remaining: 0 }, 'No Recoveries remaining'],
+		['unknown value still loses to dying', { recoveryValue: null, dying: true, current: 0 }, "Can't catch breath while dying"],
 		['none left wins over dying', { remaining: 0, dying: true, current: 0 }, 'No Recoveries remaining'],
 		['dying wins over a zero heal', { dying: true, current: 0, recoveryValue: 0, max: 2 }, "Can't catch breath while dying"],
 	])('%s', (_name, patch, reason) => {
@@ -120,5 +123,6 @@ describe('SC-428: catchBreathBlockedReason (the one gate behind every Catch Brea
 		expect(zeroHealReason(10)).toBe('Already at maximum Stamina');
 		expect(zeroHealReason(0)).toBe('Recovery value is 0');
 		expect(zeroHealReason(NaN)).toBe('Recovery value is 0');
+		expect(zeroHealReason(null)).toBe('Max Stamina unknown');
 	});
 });

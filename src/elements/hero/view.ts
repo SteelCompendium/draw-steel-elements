@@ -44,7 +44,7 @@ import type { PanelHost } from '@/framework/kit';
 import { openManagedModal } from '@/framework/kit';
 import { StaminaBar, catchBreathBlockedReason, recoveryHealAmount } from '@model/StaminaBar';
 import { StaminaEditModal } from '@views/StaminaEditModal';
-import { charsAreSplit, iconButton, renderCharacteristicsRow, renderRecoveriesStrip, renderStaminaBar, undoNotice, updateStaminaBar, tabs } from '@/framework/kit';
+import { charsAreSplit, iconButton, labelWithReason, renderCharacteristicsRow, renderRecoveriesStrip, renderStaminaBar, undoNotice, updateStaminaBar, tabs } from '@/framework/kit';
 import type { CharacteristicsValues, IconButtonHandle, RecoveriesStripHandle, StaminaBarValues } from '@/framework/kit';
 import { openFormEditor } from '@/authoring/FormModal';
 import { FeatureConfig } from '@model/FeatureConfig';
@@ -207,7 +207,7 @@ export class HeroSheetView extends ElementView<HeroModel> {
 				icon: 'sparkles',
 				// SC-324: label IS the hover tooltip (one aria-label) — leads with the name.
 				label: this.readOnly
-					? `Respite: ${READ_ONLY_TOOLTIP}`
+					? labelWithReason('Respite', READ_ONLY_TOOLTIP)
 					: 'Respite: Restore Stamina + Recoveries; clear Surges, temp Stamina, and end-of-encounter conditions',
 				text: 'Respite',
 				variant: 'ghost',
@@ -391,6 +391,7 @@ export class HeroSheetView extends ElementView<HeroModel> {
 				},
 				{
 					recoveryValue: this.stats.recoveryValue.value ?? undefined,
+					recoveryValueUnknown: this.stats.recoveryValue.value === null,
 					spendRecovery: tracked,
 				},
 			),
@@ -437,7 +438,7 @@ export class HeroSheetView extends ElementView<HeroModel> {
 		return catchBreathBlockedReason({
 			remaining: model.state.recoveries ?? 0,
 			dying: this.woundState(model).dying,
-			recoveryValue: this.stats.recoveryValue.value ?? 0,
+			recoveryValue: this.stats.recoveryValue.value, // null (unresolved class) reads "unknown", not 0
 			current: model.state.stamina.current,
 			max: this.stats.maxStamina.value ?? model.state.stamina.current,
 		});

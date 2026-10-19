@@ -153,6 +153,28 @@ describe('[R01][R02][R03] ds-hero Catch Breath across positions (resolved fury, 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect(host.replaceSource).not.toHaveBeenCalled();
 	});
+
+	// SC-428 review LOW-1: with an unresolved class the recovery value is UNKNOWN, not 0. An authored
+	// `recoveries_max` keeps the strip (and the modal's Spend Recovery) on screen.
+	const unresolvedWithPool = (current: number) => heroSource(NO_SUCH_CLASS, current).replace('state:', 'recoveries_max: 8\nstate:');
+
+	test('[R03] unresolved class + authored recoveries_max: Catch Breath is disabled and says Max Stamina is unknown (not "Recovery value is 0")', async () => {
+		const { host, staminaRegion } = await mountHero(unresolvedWithPool(31));
+		const cb = heroCatchBreath(staminaRegion);
+		expect(cb.disabled).toBe(true);
+		expect(cb.getAttribute('aria-label')).toBe('Catch Breath: Max Stamina unknown');
+		cb.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).not.toHaveBeenCalled();
+	});
+
+	test('[Q16] unresolved class + authored recoveries_max: the modal\'s Spend Recovery says the same', async () => {
+		const { staminaRegion } = await mountHero(unresolvedWithPool(31));
+		heroBar(staminaRegion).click();
+		const spend = spendRecoveryBtn(lastModal())!;
+		expect(spend.disabled).toBe(true);
+		expect(spend.getAttribute('aria-label')).toBe('Spend Recovery: Max Stamina unknown');
+	});
 });
 
 // ------------------------------------------------------------------ initiative host

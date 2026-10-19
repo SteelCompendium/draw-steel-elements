@@ -221,13 +221,17 @@ export const REASON_NO_RECOVERIES = 'No Recoveries remaining';
 export const REASON_DYING = "Can't catch breath while dying";
 /** The recovery value itself is 0 (floor(max / 3) with max Stamina <= 2): a press can never heal. */
 export const REASON_ZERO_RECOVERY_VALUE = 'Recovery value is 0';
+/** The recovery value cannot be derived at all (a hero whose class, so max Stamina, is
+ *  unresolved): not 0, unknown. */
+export const REASON_RECOVERY_VALUE_UNKNOWN = 'Max Stamina unknown';
 /** Recoveries remain, but Stamina is already full so a press would heal 0. */
 export const REASON_AT_MAX_STAMINA = 'Already at maximum Stamina';
 
 /** The reason a press that heals nothing heals nothing. A zero recovery value wins over "at
  *  maximum" — it is the permanent cause, and true at any current Stamina. `!(x > 0)` (not
  *  `x <= 0`) so a NaN value reads as zero, matching the modal's own NaN-safe gain guard. */
-export function zeroHealReason(recoveryValue: number): string {
+export function zeroHealReason(recoveryValue: number | null): string {
+	if (recoveryValue === null) return REASON_RECOVERY_VALUE_UNKNOWN;
 	return recoveryValue > 0 ? REASON_AT_MAX_STAMINA : REASON_ZERO_RECOVERY_VALUE;
 }
 
@@ -236,16 +240,19 @@ export interface CatchBreathAvailability {
 	remaining: number;
 	/** Stamina <= 0. */
 	dying: boolean;
-	recoveryValue: number;
+	/** null = unknown (the hero sheet's value when its max Stamina is unresolved). */
+	recoveryValue: number | null;
 	current: number;
 	max: number;
 }
 
 /** Why Catch Breath cannot be used right now, or null when it can. Precedence: none left,
- *  dying, then a press that would heal nothing (zero recovery value, else full Stamina). */
+ *  dying, an unknown recovery value, then a press that would heal nothing (zero recovery
+ *  value, else full Stamina). */
 export function catchBreathBlockedReason(a: CatchBreathAvailability): string | null {
 	if (!(a.remaining > 0)) return REASON_NO_RECOVERIES;
 	if (a.dying) return REASON_DYING;
+	if (a.recoveryValue === null) return REASON_RECOVERY_VALUE_UNKNOWN;
 	if (!(recoveryHealAmount(a.recoveryValue, a.current, a.max) > 0)) return zeroHealReason(a.recoveryValue);
 	return null;
 }

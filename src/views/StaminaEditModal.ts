@@ -213,6 +213,9 @@ export interface StaminaEditModalOptions {
 	 * control.
 	 */
 	spendRecovery?: boolean;
+	/** SC-428: the caller could not derive a recovery value at all (hero sheet, unresolved
+	 *  class) — a zero-gain Spend Recovery then says so instead of "Recovery value is 0". */
+	recoveryValueUnknown?: boolean;
 }
 
 export class StaminaEditModal extends DseModal {
@@ -625,7 +628,7 @@ export class StaminaEditModal extends DseModal {
 			// NaN-safety).
 			const noGain = !(this.recoverySpendResult(currentStamina, negativeStaminaLimit, maxStamina).gain > 0);
 			// SC-428: why a zero-gain press is zero — "recovery value is 0" vs "already at max".
-			const recoveryValue = this.recoveryValueNow();
+			const recoveryValue = this.opts.recoveryValueUnknown ? null : this.recoveryValueNow();
 			if (!spendRecoveryBtn) {
 				// The caller suppressed the control (SC-132 H1) — nothing to disable.
 			} else if (recoveriesTracked) {
