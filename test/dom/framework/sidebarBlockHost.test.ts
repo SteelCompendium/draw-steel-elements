@@ -368,7 +368,7 @@ describe('SC-453: SidebarBlockHost on CRLF / mixed-ending notes', () => {
 		const { vault, file, app } = setup(note);
 		const { host } = makeHost(app, file);
 		await host.refresh();
-		expect(host.getBlockInfo()).toEqual({ language: ALIAS, lineStart: 4, lineEnd: 7 });
+		expect(host.getBlockInfo()).toEqual({ language: ALIAS, lineStart: 7, lineEnd: 10 });
 
 		await host.replaceSource(NEW_BODY);
 

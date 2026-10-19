@@ -47,21 +47,14 @@
 import type { Component, Plugin, TFile } from 'obsidian';
 import type { BlockHost, BlockInfo, RenderMode } from './BlockHost';
 import { findAnchoredBlock, findFenceByBody, listFences } from '../sidebar/anchor';
-import { emitOpenFenceLine, parseOpenFenceLine } from './fenceLine';
+import { replaceFenceBlock } from './fenceLine';
+import { splitLines, stripCr } from './lineEnding';
 
-/** Matches a fence-close line, capturing the fence run (mirrors ReadingModeBlockHost's
- *  CLOSE_FENCE — grabs whatever close-fence characters are actually there). */
-const CLOSE_FENCE = /^([`~]{3,})/;
-
-function parseCloseFence(line: string | undefined): string | null {
-	if (line == null) return null;
-	const match = line.match(CLOSE_FENCE);
-	return match ? match[1] : null;
-}
-
-/** Extracts the body text (lines strictly between the fences) at `info` from `content`. */
+/** Extracts the body text (lines strictly between the fences) at `info` from `content`.
+ *  SC-453: always LF-joined (a CRLF note's `\r` terminators are dropped), so what the element
+ *  parses — and what the self-echo guard compares — never depends on the note's line ending. */
 function extractBody(content: string, info: BlockInfo): string {
-	return content.split('\n').slice(info.lineStart + 1, info.lineEnd).join('\n');
+	return splitLines(content).slice(info.lineStart + 1, info.lineEnd).join('\n');
 }
 
 export class SidebarBlockHost implements BlockHost {
@@ -300,7 +293,8 @@ export class SidebarBlockHost implements BlockHost {
 	async replaceSource(newSource: string): Promise<boolean> {
 		if (!this.canPersist) return false;
 
-		this.lastWritten = newSource;
+		// SC-453: LF-normalised, to match extractBody's (always-LF) read-back of our own write.
+		this.lastWritten = stripCr(newSource);
 
 		let wrote = false;
 		let finalContent: string | null = null;
@@ -310,20 +304,16 @@ export class SidebarBlockHost implements BlockHost {
 			const info = this.locate(content);
 			if (!info) return content; // block moved/vanished under us: abort, don't corrupt
 
-			const lines = content.split('\n');
-			const openFence = parseOpenFenceLine(lines[info.lineStart]);
-			if (!openFence) return content;
-			const closeFence = parseCloseFence(lines[info.lineEnd]) ?? openFence.fence;
-
-			const newBlockLines = [emitOpenFenceLine(openFence), ...newSource.split('\n'), closeFence];
-			lines.splice(info.lineStart, info.lineEnd - info.lineStart + 1, ...newBlockLines);
+			// SC-453: the splice re-emits the block in the note's own line ending.
+			const next = replaceFenceBlock(content, info.lineStart, info.lineEnd, newSource);
+			if (next === null) return content;
 			// SC-158: a strict-body element is addressed BY its body, so our own write has
 			// to move the binding with it or the very next lookup misses. (No shipped
 			// strict-body element persists — ds-scc is shape:"static" — so this is
 			// defense in depth for a future one, and it costs one assignment.)
 			if (this.anchorId === null) this.boundBody = newSource;
 			wrote = true;
-			finalContent = lines.join('\n');
+			finalContent = next;
 			return finalContent;
 		});
 

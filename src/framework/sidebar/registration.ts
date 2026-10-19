@@ -6,6 +6,7 @@ import { Notice, TFile } from 'obsidian';
 import type { App, Editor, MarkdownFileInfo, MarkdownView, Plugin } from 'obsidian';
 import { DseSidebarView, VIEW_TYPE_DSE_SIDEBAR, isUnderDeletedPath, renamedPanelPath } from './DseSidebarView';
 import type { DseSidebarServices, DseSidebarState, SidebarPanelState } from './DseSidebarView';
+import { detectEol, splitLines, terminateLines } from '../host/lineEnding';
 import { ensureAnchor, fenceAlias, findFenceAtLine, listFences, matchFenceLine, isFenceClose } from './anchor';
 
 /** Top-down scan (fences don't nest — same rationale as anchor.ts's scanner, whose exact
@@ -215,7 +216,10 @@ export async function sendToSidebar(
 		if (!atCursor && fences.length > 1) noticeLine = info.lineStart + 1; // 1-based, for the user
 
 		const lines = content.split('\n');
-		const body = lines.slice(info.lineStart + 1, info.lineEnd).join('\n');
+		// SC-453: the body is LF-joined whatever the note's line ending (a CRLF note's `\r`
+		// terminators dropped), so the strict-body identity below and ensureAnchor see the same
+		// text as an LF note; the stamped lines get the note's own ending back when spliced in.
+		const body = splitLines(content).slice(info.lineStart + 1, info.lineEnd).join('\n');
 		bound = true;
 		if (strictBody) {
 			boundBody = body;
@@ -226,7 +230,7 @@ export async function sendToSidebar(
 		anchorId = id;
 		if (anchoredBody === body) return content; // already anchored — no write needed
 
-		lines.splice(info.lineStart + 1, info.lineEnd - info.lineStart - 1, ...anchoredBody.split('\n'));
+		lines.splice(info.lineStart + 1, info.lineEnd - info.lineStart - 1, ...terminateLines(anchoredBody.split('\n'), detectEol(content)));
 		return lines.join('\n');
 	});
 	if (!bound) return false; // no matching block found

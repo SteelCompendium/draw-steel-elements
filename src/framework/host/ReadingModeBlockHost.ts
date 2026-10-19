@@ -57,7 +57,8 @@ import type { BlockHost, BlockInfo, RenderMode } from './BlockHost';
 import type { PreviewScrollPin } from './previewScrollPin';
 import { listFences } from '../sidebar/anchor';
 import { notifyDroppedWrite } from './droppedWriteNotice';
-import { OPEN_FENCE, emitOpenFenceLine, parseOpenFenceLine } from './fenceLine';
+import { stripCr } from './lineEnding';
+import { OPEN_FENCE, parseOpenFenceLine, replaceFenceBlock } from './fenceLine';
 import type { ViewRegistry, ViewRegistryEntry } from './viewRegistry';
 
 /** Matches a fence-close line, capturing the fence run. */
@@ -141,11 +142,13 @@ export function locateByBody(
 	nearLine: number,
 ): { lineStart: number; lineEnd: number } | null {
 	// SC-343 fix round 1: anchor.ts's FENCE_LINE is a plain `.` match, which never matches
-	// `\r` — a CRLF note's fence lines fail to parse and listFences sees zero fences. Strip
-	// just the `\r` immediately before each `\n` (never a lone `\r`, which would shift line
-	// indices against replaceSource's own `content.split('\n')`) so fence lines parse while
-	// every line NUMBER stays identical to the untouched content's.
-	const lf = content.replace(/\r(?=\n)/g, '');
+	// `\r` — a CRLF note's fence lines used to fail to parse and listFences saw zero fences.
+	// Strip just the `\r` immediately before each `\n` (never a lone `\r`, which would shift
+	// line indices against replaceSource's own `content.split('\n')`) so every line NUMBER stays
+	// identical to the untouched content's. (SC-453: anchor.ts's scanner now tolerates CRLF
+	// itself; this stays because the `lines` below, which locateUnterminatedTrailingFence and
+	// the body slices read, must be CR-free too.)
+	const lf = stripCr(content);
 	const wanted = normalizeBody(body);
 	const lines = lf.split('\n');
 	let best: { lineStart: number; lineEnd: number } | null = null;
@@ -379,12 +382,9 @@ export class ReadingModeBlockHost implements BlockHost {
 					dropped = true;
 					return content;
 				}
-				const lines = content.split('\n');
-				const openFence = parseOpenFence(content, target.lineStart);
-				if (!openFence) return content; // resolveWriteTarget guarantees one; defensive
-				const closeFence = parseCloseFence(lines[target.lineEnd]) ?? openFence.fence;
-				const newBlockLines = [emitOpenFenceLine(openFence), ...newSource.split('\n'), closeFence];
-				lines.splice(target.lineStart, target.lineEnd - target.lineStart + 1, ...newBlockLines);
+				// SC-453: the splice re-emits the block in the note's own line ending.
+				const next = replaceFenceBlock(content, target.lineStart, target.lineEnd, newSource);
+				if (next === null) return content; // resolveWriteTarget guarantees an open fence; defensive
 				wrote = true;
 				// SC-343 fix round 1: set synchronously with the splice, inside the callback — not
 				// after the `await` resumes. Two overlapping replaceSource calls on one host (a
@@ -396,7 +396,6 @@ export class ReadingModeBlockHost implements BlockHost {
 				// locate path hunting for a body nobody has any more — a dropped write + a false
 				// Notice for two writes that both actually landed.
 				this.knownBody = newSource;
-				const next = lines.join('\n');
 				changedContent = next !== content;
 				// SC-198: hold the preview's height across the rebuild this write is about to
 				// provoke (only meaningful while the block is on screen, i.e. its section

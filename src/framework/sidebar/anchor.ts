@@ -8,6 +8,7 @@
 // reading-mode's lineStart-keyed SessionStore) — the id travels IN the content, not
 // alongside it.
 import type { BlockInfo } from '../host/BlockHost';
+import { splitLines, stripCr } from '../host/lineEnding';
 
 /** Exported so `framework/pipeline.ts`'s `prepareModel` can exclude this exact key from
  *  what SCHEMA VALIDATION sees (D7 Task 10 finding — see that file's own doc for the
@@ -164,7 +165,7 @@ export function findFirstFence(content: string, alias: string): BlockInfo | null
  * binding the user never touched.
  */
 export function findFenceByBody(content: string, alias: string, body: string): BlockInfo | null {
-	const wanted = body.replace(/\s+$/, '');
+	const wanted = stripCr(body).replace(/\s+$/, '');
 	for (const block of iterateFences(content, alias)) {
 		if (block.body.replace(/\s+$/, '') === wanted) return block.info;
 	}
@@ -248,9 +249,14 @@ export function isFenceClose(open: { fenceChar: string; fenceLen: number }, line
  * permanently hide every real block after it — the second consequence flagged by finding
  * #4). Instead that single candidate open is abandoned (treated as ordinary content) and
  * the scan resumes on the very next line, so a later well-formed block is still found.
+ *
+ * SC-453 — line endings: lines are split on `\r?\n`, so a CRLF note's fence lines parse
+ * (`FENCE_LINE`'s `.` never matches `\r`) and `body` comes back LF-joined. The line COUNT and
+ * indices are identical to `content.split('\n')`'s (a lone `\r` stays inside its line), which is
+ * what every caller that also splits the raw content on `\n` relies on for `info.lineStart/End`.
  */
 function* iterateFences(content: string, alias: string): Generator<{ info: BlockInfo; body: string }> {
-	const lines = content.split('\n');
+	const lines = splitLines(content);
 	let i = 0;
 	while (i < lines.length) {
 		const openMatch = matchFenceLine(lines[i]);
