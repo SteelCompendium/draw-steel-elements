@@ -342,3 +342,125 @@ describe('SC-343: guarded replaceSource', () => {
 		expect(app.vault.getContent('Note.md')).toContain('current_value: 3');
 	});
 });
+
+// SC-453 — a CRLF note: the section/durable locate already worked (SC-343's local CR strip),
+// but the rewritten block was emitted with LF, leaving the note mixed-ending. Policy: all-CRLF
+// stays all-CRLF after a write, all-LF is byte-identical to the pre-SC-453 output, a mixed
+// note follows its dominant ending (tie: first line break) and loses nothing.
+describe('SC-453: ReadingModeBlockHost.replaceSource on CRLF / mixed-ending notes', () => {
+	let warn: jest.SpyInstance;
+	beforeEach(() => {
+		resetDroppedWriteNotices();
+		Notice.notices.length = 0;
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => warn.mockRestore());
+
+	type Section = { current: { text: string; lineStart: number; lineEnd: number } | null };
+	const toCrlf = (s: string): string => s.replace(/\n/g, '\r\n');
+	const CTR = (n: number, name = 'A'): string[] => ['```ds-counter', `name: ${name}`, `current_value: ${n}`, '```'];
+	const bodyOf = (n: number, name = 'A'): string => `name: ${name}\ncurrent_value: ${n}`;
+
+	function hostFor(app: App, section: Section, body: string) {
+		const host = new ReadingModeBlockHost(new Plugin(app) as any, document.createElement('div'), switchableCtx('Note.md', section) as any, 'ds-counter');
+		host.setMountedBody(body);
+		return host;
+	}
+
+	test('a write lands in a CRLF note: the whole note is all-CRLF afterward, content above/below byte-identical', async () => {
+		const app = new App();
+		const live = toCrlf(['# N', '', 'above', '', ...CTR(1), '', 'below'].join('\n'));
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: { text: live, lineStart: 4, lineEnd: 7 } }, bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		const out = app.vault.getContent('Note.md')!;
+		expect(out).toBe(toCrlf(['# N', '', 'above', '', ...CTR(2), '', 'below'].join('\n')));
+		expect(out.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('an all-LF note stays byte-identical to the pre-SC-453 output', async () => {
+		const app = new App();
+		const live = ['# N', '', ...CTR(1), '', 'below'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: { text: live, lineStart: 2, lineEnd: 5 } }, bodyOf(1));
+
+		await host.replaceSource(bodyOf(2));
+
+		expect(app.vault.getContent('Note.md')).toBe(['# N', '', ...CTR(2), '', 'below'].join('\n'));
+	});
+
+	test('two same-kind blocks in one CRLF note: the write lands in the right one and the other is byte-identical', async () => {
+		const app = new App();
+		const live = toCrlf(['top', ...CTR(1, 'First'), 'mid', ...CTR(1, 'Second'), 'bottom'].join('\n'));
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: { text: live, lineStart: 6, lineEnd: 9 } }, bodyOf(1, 'Second'));
+
+		await host.replaceSource(bodyOf(2, 'Second'));
+
+		expect(app.vault.getContent('Note.md')).toBe(toCrlf(['top', ...CTR(1, 'First'), 'mid', ...CTR(2, 'Second'), 'bottom'].join('\n')));
+	});
+
+	test('a CRLF note whose close fence is its last line with no trailing newline: no CR is invented at EOF', async () => {
+		const app = new App();
+		const live = toCrlf(['# N', ...CTR(1)].join('\n'));
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: { text: live, lineStart: 1, lineEnd: 4 } }, bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(toCrlf(['# N', ...CTR(2)].join('\n')));
+	});
+
+	test('a hand-edited CRLF note, section gone: the durable locate finds the block and the write stays all-CRLF', async () => {
+		const app = new App();
+		const live = toCrlf(['# N', ...CTR(1)].join('\n'));
+		app.vault.setFile('Note.md', live);
+		const section: Section = { current: { text: live, lineStart: 1, lineEnd: 4 } };
+		const host = hostFor(app, section, bodyOf(1));
+		// Hand-edit: three lines inserted above the block, CRLF kept; then the section is torn down.
+		const edited = toCrlf(['x', 'y', 'z', '# N', ...CTR(1)].join('\n'));
+		app.vault.setFile('Note.md', edited);
+		section.current = null;
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(toCrlf(['x', 'y', 'z', '# N', ...CTR(2)].join('\n')));
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('unterminated fence at EOF in a CRLF note: written and closed, still all-CRLF', async () => {
+		const app = new App();
+		const live = toCrlf(['Before', '', '```ds-counter', 'name: A', 'current_value: 1'].join('\n') + '\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: { text: live, lineStart: 2, lineEnd: 4 } }, bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(toCrlf(['Before', '', ...CTR(2), ''].join('\n')));
+	});
+
+	test('a CRLF-dominant mixed note: the block is CRLF, a stray LF line outside it is untouched, nothing is lost', async () => {
+		const app = new App();
+		const live = `# N\r\n${CTR(1).join('\r\n')}\r\nstray-lf\ntail\r\n`;
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: { text: live, lineStart: 1, lineEnd: 4 } }, bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(`# N\r\n${CTR(2).join('\r\n')}\r\nstray-lf\ntail\r\n`);
+	});
+
+	test('an LF-dominant mixed note: the block is LF, a stray CRLF line outside it is untouched, nothing is lost', async () => {
+		const app = new App();
+		const live = `# N\n${CTR(1).join('\n')}\nstray-crlf\r\ntail\n`;
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: { text: live, lineStart: 1, lineEnd: 4 } }, bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(`# N\n${CTR(2).join('\n')}\nstray-crlf\r\ntail\n`);
+	});
+});

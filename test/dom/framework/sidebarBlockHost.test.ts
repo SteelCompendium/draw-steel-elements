@@ -303,3 +303,154 @@ describe('D8 Task 2: SidebarBlockHost (spec §1.4)', () => {
 		});
 	});
 });
+
+// SC-453 — a CRLF note: the host used to miss its block (FENCE_LINE never matches a `\r`), so
+// no write ever landed; and once it could, the rewritten block was LF in an otherwise-CRLF
+// note. Policy: a note that is all-CRLF stays all-CRLF after a write; an all-LF note is
+// byte-identical to the pre-SC-453 output; a mixed note follows its dominant ending
+// (a tie goes to the first line break) and loses no content.
+describe('SC-453: SidebarBlockHost on CRLF / mixed-ending notes', () => {
+	const toCrlf = (s: string): string => s.replace(/\n/g, '\r\n');
+	const NEW_BODY = `current_value: 5\n_dse_anchor: ${ANCHOR_ID}`;
+
+	test('locates the anchored block in a CRLF note and exposes an LF body to the element', async () => {
+		const { file, app } = setup(toCrlf(fencedNote()));
+		const { host } = makeHost(app, file);
+		await host.refresh();
+
+		expect(host.canPersist).toBe(true);
+		expect(host.getBlockInfo()).toEqual({ language: ALIAS, lineStart: 2, lineEnd: 5 });
+		expect(host.currentBody()).toBe(`current_value: 1\n_dse_anchor: ${ANCHOR_ID}`);
+	});
+
+	test('a write lands in a CRLF note: the whole note is all-CRLF afterward and content above/below is byte-identical', async () => {
+		const note = toCrlf(fencedNote());
+		const { vault, file, app } = setup(note);
+		const { host } = makeHost(app, file);
+		await host.refresh();
+
+		await expect(host.replaceSource(NEW_BODY)).resolves.toBe(true);
+
+		const updated = vault.text('Note.md')!;
+		expect(updated).toBe(toCrlf(['# Notes', '', '```ds-counter', 'current_value: 5', `_dse_anchor: ${ANCHOR_ID}`, '```', '', 'tail'].join('\n')));
+		expect(updated.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/); // every break is CRLF: no bare LF, no bare CR
+		expect(updated.startsWith('# Notes\r\n\r\n```ds-counter\r\n')).toBe(true);
+		expect(updated.endsWith('```\r\n\r\ntail')).toBe(true);
+	});
+
+	test('an all-LF note stays byte-identical to the pre-SC-453 output', async () => {
+		const { vault, file, app } = setup();
+		const { host } = makeHost(app, file);
+		await host.refresh();
+
+		await host.replaceSource(NEW_BODY);
+
+		expect(vault.text('Note.md')).toBe(
+			['# Notes', '', '```ds-counter', 'current_value: 5', `_dse_anchor: ${ANCHOR_ID}`, '```', '', 'tail'].join('\n'),
+		);
+	});
+
+	test('our own write in a CRLF note is not mistaken for an external edit (self-echo guard compares LF bodies)', async () => {
+		const { file, app } = setup(toCrlf(fencedNote()));
+		const onExternalChange = jest.fn();
+		const { host } = makeHost(app, file, onExternalChange);
+		await host.refresh();
+
+		await host.replaceSource(NEW_BODY);
+		await flushAsync();
+
+		expect(onExternalChange).not.toHaveBeenCalled();
+	});
+
+	test('two same-kind blocks in one CRLF note: writing one leaves the other byte-identical', async () => {
+		const other = ['```ds-counter', 'current_value: 2', '_dse_anchor: other9', '```'].join('\n');
+		const note = toCrlf(['# Notes', '', other, '', '```ds-counter', 'current_value: 1', `_dse_anchor: ${ANCHOR_ID}`, '```', '', 'tail'].join('\n'));
+		const { vault, file, app } = setup(note);
+		const { host } = makeHost(app, file);
+		await host.refresh();
+		expect(host.getBlockInfo()).toEqual({ language: ALIAS, lineStart: 4, lineEnd: 7 });
+
+		await host.replaceSource(NEW_BODY);
+
+		const updated = vault.text('Note.md')!;
+		expect(updated.startsWith(toCrlf(['# Notes', '', other, ''].join('\n')))).toBe(true);
+		expect(updated).toContain('current_value: 5');
+		expect(updated.match(/current_value: 2/g)).toHaveLength(1);
+		expect(updated.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
+	});
+
+	test('a hand-edited CRLF note is re-located by id after a write, and a second write still lands', async () => {
+		const { vault, file, app } = setup(toCrlf(fencedNote()));
+		const { host } = makeHost(app, file);
+		await host.refresh();
+		await host.replaceSource(NEW_BODY);
+
+		// The user hand-edits above the block in an editor that keeps CRLF, shifting it down 3 lines.
+		const edited = toCrlf(['one', 'two', 'three'].join('\n')) + '\r\n' + vault.text('Note.md')!;
+		vault.setText('Note.md', edited);
+		vault.emit('modify', fakeTFile('Note.md'));
+		await flushAsync();
+		expect(host.getBlockInfo()).toEqual({ language: ALIAS, lineStart: 5, lineEnd: 8 });
+
+		await expect(host.replaceSource(`current_value: 9\n_dse_anchor: ${ANCHOR_ID}`)).resolves.toBe(true);
+		const updated = vault.text('Note.md')!;
+		expect(updated).toContain('current_value: 9');
+		expect(updated.startsWith('one\r\ntwo\r\nthree\r\n# Notes\r\n')).toBe(true);
+		expect(updated.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
+	});
+
+	test('a CRLF note whose close fence is its last line with no trailing newline: the write lands and no CR is invented at EOF', async () => {
+		const note = toCrlf(['# Notes', '', '```ds-counter', 'current_value: 1', `_dse_anchor: ${ANCHOR_ID}`, '```'].join('\n'));
+		const { vault, file, app } = setup(note);
+		const { host } = makeHost(app, file);
+		await host.refresh();
+
+		await expect(host.replaceSource(NEW_BODY)).resolves.toBe(true);
+
+		expect(vault.text('Note.md')).toBe(
+			toCrlf(['# Notes', '', '```ds-counter', 'current_value: 5', `_dse_anchor: ${ANCHOR_ID}`, '```'].join('\n')),
+		);
+	});
+
+	test('a CRLF-dominant mixed note: the block is written CRLF, a stray LF line below it is untouched, nothing is lost', async () => {
+		const note = `# Notes\r\n\r\n\`\`\`ds-counter\r\ncurrent_value: 1\r\n_dse_anchor: ${ANCHOR_ID}\r\n\`\`\`\r\nstray-lf\ntail\r\n`;
+		const { vault, file, app } = setup(note);
+		const { host } = makeHost(app, file);
+		await host.refresh();
+
+		await expect(host.replaceSource(NEW_BODY)).resolves.toBe(true);
+
+		expect(vault.text('Note.md')).toBe(
+			`# Notes\r\n\r\n\`\`\`ds-counter\r\ncurrent_value: 5\r\n_dse_anchor: ${ANCHOR_ID}\r\n\`\`\`\r\nstray-lf\ntail\r\n`,
+		);
+	});
+
+	test('an LF-dominant mixed note: the block is written LF, a stray CRLF line is untouched, nothing is lost', async () => {
+		const note = `# Notes\n\n\`\`\`ds-counter\ncurrent_value: 1\n_dse_anchor: ${ANCHOR_ID}\n\`\`\`\nstray-crlf\r\ntail\n`;
+		const { vault, file, app } = setup(note);
+		const { host } = makeHost(app, file);
+		await host.refresh();
+
+		await expect(host.replaceSource(NEW_BODY)).resolves.toBe(true);
+
+		expect(vault.text('Note.md')).toBe(
+			`# Notes\n\n\`\`\`ds-counter\ncurrent_value: 5\n_dse_anchor: ${ANCHOR_ID}\n\`\`\`\nstray-crlf\r\ntail\n`,
+		);
+	});
+
+	test('a strict-body (unanchored) host binds by body in a CRLF note and its write keeps the binding', async () => {
+		const note = toCrlf(['# Notes', '', '```ds-counter', 'current_value: 1', '```', '', 'tail'].join('\n'));
+		const { vault, file, app } = setup(note);
+		const plugin = { app } as unknown as Plugin;
+		const owner = new Component();
+		owner.load();
+		const host = new SidebarBlockHost(plugin, file, ALIAS, null, 'current_value: 1', document.createElement('div'), owner, () => {}, () => {}, () => {});
+		await host.refresh();
+		expect(host.canPersist).toBe(true);
+
+		await expect(host.replaceSource('current_value: 2')).resolves.toBe(true);
+
+		expect(vault.text('Note.md')).toBe(toCrlf(['# Notes', '', '```ds-counter', 'current_value: 2', '```', '', 'tail'].join('\n')));
+		expect(host.canPersist).toBe(true);
+	});
+});

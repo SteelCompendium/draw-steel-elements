@@ -12,7 +12,9 @@ import {
 	fenceAlias,
 	findAnchoredBlock,
 	findFenceAtLine,
+	findFenceByBody,
 	findFirstFence,
+	findGeneratedBlock,
 	listFences,
 	readAnchor,
 } from '@/framework/sidebar/anchor';
@@ -172,5 +174,64 @@ describe('D8 Task 2 review fix — anchor.ts fence scanner (finding #4, CRITICAL
 
 			expect(listFences(note, 'ds-counter')).toHaveLength(2);
 		});
+	});
+});
+
+// SC-453 — a CRLF note's fence lines used to fail FENCE_LINE (`.` never matches `\r`), so
+// listFences saw zero fences and every sidebar lookup missed. The scanner now treats `\r\n` as
+// the line terminator (and only that: a lone `\r` stays inside its line), with line indices
+// identical to the LF twin's so every caller that splits the same content on `\n` stays aligned.
+describe('SC-453: anchor.ts scans a CRLF note exactly like its LF twin', () => {
+	const LF = [
+		'# Notes', // 0
+		'', // 1
+		'```ds-counter', // 2
+		'current_value: 1', // 3
+		'_dse_anchor: aaa111', // 4
+		'```', // 5
+		'', // 6
+		'```ds-counter extra', // 7
+		'current_value: 2', // 8
+		'_dse_anchor: bbb222', // 9
+		'_dse_from: gen777', // 10
+		'```', // 11
+		'tail', // 12
+	].join('\n');
+	const CRLF = LF.replace(/\n/g, '\r\n');
+
+	test('listFences / findAnchoredBlock / findFenceAtLine / findGeneratedBlock return the LF twin\'s positions', () => {
+		expect(listFences(CRLF, 'ds-counter')).toEqual(listFences(LF, 'ds-counter'));
+		expect(listFences(CRLF, 'ds-counter')).toHaveLength(2);
+		expect(findAnchoredBlock(CRLF, 'ds-counter', 'aaa111')).toEqual({ language: 'ds-counter', lineStart: 2, lineEnd: 5 });
+		expect(findAnchoredBlock(CRLF, 'ds-counter', 'bbb222')).toEqual({ language: 'ds-counter', lineStart: 7, lineEnd: 11 });
+		expect(findFenceAtLine(CRLF, 'ds-counter', 9)).toEqual({ language: 'ds-counter', lineStart: 7, lineEnd: 11 });
+		expect(findGeneratedBlock(CRLF, 'ds-counter', 'gen777')).toEqual({ language: 'ds-counter', lineStart: 7, lineEnd: 11 });
+	});
+
+	test('two same-kind blocks do not cross-talk: each anchor resolves to its own fence only', () => {
+		expect(findAnchoredBlock(CRLF, 'ds-counter', 'aaa111')?.lineStart).toBe(2);
+		expect(findAnchoredBlock(CRLF, 'ds-counter', 'bbb222')?.lineStart).toBe(7);
+		expect(findAnchoredBlock(CRLF, 'ds-counter', 'zzz999')).toBeNull();
+	});
+
+	test('findFenceByBody matches a CRLF block against an LF body and a CRLF body alike', () => {
+		const body = 'current_value: 1\n_dse_anchor: aaa111';
+		expect(findFenceByBody(CRLF, 'ds-counter', body)).toEqual({ language: 'ds-counter', lineStart: 2, lineEnd: 5 });
+		expect(findFenceByBody(CRLF, 'ds-counter', body.replace(/\n/g, '\r\n'))).toEqual({
+			language: 'ds-counter',
+			lineStart: 2,
+			lineEnd: 5,
+		});
+	});
+
+	test('a mixed-ending note still finds every block (LF and CRLF fence lines both parse)', () => {
+		const mixed = '```ds-counter\r\n_dse_anchor: aaa111\r\n```\n\n```ds-counter\n_dse_anchor: bbb222\r\n```\r\n';
+		expect(findAnchoredBlock(mixed, 'ds-counter', 'aaa111')).toEqual({ language: 'ds-counter', lineStart: 0, lineEnd: 2 });
+		expect(findAnchoredBlock(mixed, 'ds-counter', 'bbb222')).toEqual({ language: 'ds-counter', lineStart: 4, lineEnd: 6 });
+	});
+
+	test('a CRLF note whose last line (the close fence) has no trailing newline still closes the fence', () => {
+		const note = '```ds-counter\r\n_dse_anchor: aaa111\r\n```';
+		expect(findAnchoredBlock(note, 'ds-counter', 'aaa111')).toEqual({ language: 'ds-counter', lineStart: 0, lineEnd: 2 });
 	});
 });

@@ -199,4 +199,77 @@ describe('D8 Task 2 review fix — registration.ts (finding #3)', () => {
 			});
 		});
 	});
+
+	// SC-453 — stamping a `_dse_anchor` into a CRLF note: the pin used to find NO fence at all
+	// (FENCE_LINE never matches `\r`), so nothing bound; once found, the stamped line must carry
+	// the note's own ending so the note does not turn mixed-ending on first pin.
+	describe('SC-453: sendToSidebar on a CRLF note', () => {
+		const crlf = (lines: string[]): string => lines.join('\r\n');
+
+		test('binds the block and stamps the anchor with CRLF: the note stays all-CRLF, content outside the block byte-identical', async () => {
+			const { app, services } = setup();
+			app.vault.setFile('Note.md', crlf(['# Notes', '', '```ds-counter', 'current_value: 1', '```', '', 'tail']));
+
+			await expect(sendToSidebar(services, 'Note.md', 'ds-counter')).resolves.toBe(true);
+
+			const out = app.vault.getContent('Note.md')!;
+			expect(out).toMatch(/^# Notes\r\n\r\n```ds-counter\r\ncurrent_value: 1\r\n_dse_anchor: [A-Za-z0-9_-]+\r\n```\r\n\r\ntail$/);
+			expect(out.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
+		});
+
+		test('binds the occurrence AT the cursor among two same-kind blocks and leaves the other untouched', async () => {
+			const { app, services } = setup();
+			const note = crlf(['```ds-counter', 'current_value: 1', '```', '', '```ds-counter', 'current_value: 2', '```']);
+			app.vault.setFile('Note.md', note);
+
+			await sendToSidebar(services, 'Note.md', 'ds-counter', 5);
+
+			const out = app.vault.getContent('Note.md')!;
+			expect(out.startsWith(crlf(['```ds-counter', 'current_value: 1', '```', '', '```ds-counter', 'current_value: 2', '_dse_anchor: ']))).toBe(true);
+			expect(out.match(/_dse_anchor/g)).toHaveLength(1);
+			expect(out.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
+		});
+
+		test('a block that is already anchored is bound without a write (note byte-identical)', async () => {
+			const { app, services } = setup();
+			const note = crlf(['```ds-counter', 'current_value: 1', '_dse_anchor: abc123', '```']);
+			app.vault.setFile('Note.md', note);
+
+			await expect(sendToSidebar(services, 'Note.md', 'ds-counter')).resolves.toBe(true);
+
+			expect(app.vault.getContent('Note.md')).toBe(note);
+		});
+
+		test('a strict-body block (ds-scc) in a CRLF note is bound by its LF body and the note is left byte-identical', async () => {
+			const { app, services } = setup();
+			const note = crlf(['# Notes', '', '```ds-scc', 'mcdm.heroes.v1/feature.ability.fury.level-1/gouge', '```']);
+			app.vault.setFile('Note.md', note);
+
+			await expect(sendToSidebar(services, 'Note.md', 'ds-scc')).resolves.toBe(true);
+
+			expect(app.vault.getContent('Note.md')).toBe(note);
+			const view = app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0]?.view as unknown as DseSidebarView;
+			expect(view.getState()).toMatchObject({
+				panels: [expect.objectContaining({ alias: 'ds-scc', body: 'mcdm.heroes.v1/feature.ability.fury.level-1/gouge' })],
+			});
+		});
+
+		test('an all-LF note is stamped exactly as before (LF joiner, byte-identical regression guard)', async () => {
+			const { app, services } = setup();
+			app.vault.setFile('Note.md', ['# Notes', '', '```ds-counter', 'current_value: 1', '```', 'tail'].join('\n'));
+
+			await sendToSidebar(services, 'Note.md', 'ds-counter');
+
+			expect(app.vault.getContent('Note.md')).toMatch(/^# Notes\n\n```ds-counter\ncurrent_value: 1\n_dse_anchor: [A-Za-z0-9_-]+\n```\ntail$/);
+		});
+
+		test('a CRLF block with an empty body is stamped with CRLF too', async () => {
+			const { app, services } = setup();
+			app.vault.setFile('Note.md', crlf(['```ds-counter', '```', 'tail']));
+
+			await sendToSidebar(services, 'Note.md', 'ds-counter');
+
+			expect(app.vault.getContent('Note.md')).toMatch(/^```ds-counter\r\n_dse_anchor: [A-Za-z0-9_-]+\r\n```\r\ntail$/);
+		});
+	});
 });

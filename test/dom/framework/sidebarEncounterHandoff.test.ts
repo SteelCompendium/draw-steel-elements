@@ -328,6 +328,49 @@ describe('SC-153: "Open in sidebar" is idempotent', () => {
 		plugin.onunload();
 	});
 
+	// SC-453 — the appended tracker fence is new text written into an existing note, so it
+	// carries the note's own line ending; and a CRLF note's existing generated block must still
+	// be FOUND (anchor.ts's scanner) so a re-press binds instead of appending a duplicate.
+	test('SC-453: in a CRLF note the appended tracker block is CRLF (all-CRLF note), and a re-press binds without writing', async () => {
+		const app = new App();
+		const plugin = makePlugin(app);
+		await plugin.onload();
+		const note = '# Session\r\n\r\nSome prose.\r\n';
+		app.vault.setFile('Session.md', note);
+
+		const button = await mountEncounter(plugin, 'Session.md', 'party: {}\nmonsters: []');
+		button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		await flushAsync();
+		const afterFirst = app.vault.getContent('Session.md')!;
+
+		expect(afterFirst.startsWith('# Session\r\n\r\nSome prose.\r\n\r\n```ds-initiative\r\n')).toBe(true);
+		expect(afterFirst.endsWith('```\r\n')).toBe(true);
+		expect(afterFirst.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
+		expect(fenceCount(afterFirst)).toBe(1);
+
+		button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		await flushAsync();
+		expect(app.vault.getContent('Session.md')).toBe(afterFirst);
+		expect(sidebarPanels(app)).toBe(1);
+		plugin.onunload();
+	});
+
+	test('SC-453: in an all-LF note the appended tracker block is byte-for-byte what it was (LF)', async () => {
+		const app = new App();
+		const plugin = makePlugin(app);
+		await plugin.onload();
+		app.vault.setFile('Session.md', '# Session\n\nSome prose.\n');
+
+		const button = await mountEncounter(plugin, 'Session.md', 'party: {}\nmonsters: []');
+		button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		await flushAsync();
+
+		const out = app.vault.getContent('Session.md')!;
+		expect(out.startsWith('# Session\n\nSome prose.\n\n```ds-initiative\n')).toBe(true);
+		expect(out).not.toContain('\r');
+		plugin.onunload();
+	});
+
 	test('a DIFFERENT encounter in the same note still gets its own tracker and its own panel', async () => {
 		const app = new App();
 		const plugin = makePlugin(app);
