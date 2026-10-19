@@ -488,7 +488,7 @@ describe('SC-340 (carried over from SC-331): pool modal, no change, no write', (
 	});
 });
 
-describe('SC-430: Apply follows a half-typed pool draft, so the press that blurs the field lands on an enabled button', () => {
+describe('SC-430: Apply, its warning and the info text above it follow a half-typed pool draft, so nothing re-lays-out at the blur', () => {
 	function poolInput(content: HTMLElement): HTMLInputElement {
 		return content.querySelector<HTMLInputElement>('.dse-stepper__input')!;
 	}
@@ -589,5 +589,52 @@ describe('SC-430: Apply follows a half-typed pool draft, so the press that blurs
 		expect(actionBtn(content).textContent).toContain('Heal 1 stamina');
 		actionBtn(content).click();
 		expect(group.minion_stamina_pool).toBe(11);
+	});
+
+	// Real Obsidian (SC-430 review HIGH-1): the info text dropped from 2 lines to 1 at blur, which moved
+	// Apply up 13px between mousedown and mouseup and lost the click. jsdom has no layout, so pin the
+	// cause instead: every piece of text that changes at commit already shows its post-commit value.
+	function snapshot(content: HTMLElement) {
+		return {
+			info: content.querySelector('.dse-sedit__info')!.textContent,
+			label: actionBtn(content).textContent,
+			disabled: actionBtn(content).disabled,
+			warnHidden: (content.querySelector('.dse-sedit__warn') as HTMLElement).hidden,
+		};
+	}
+
+	test('a typed HEAL draft: the info text, Apply label and warning icon are identical before and after the blur', async () => {
+		const { content } = await setup({ pool: 10 });
+		const input = poolInput(content);
+		document.body.appendChild(content);
+		const idle = content.querySelector('.dse-sedit__info')!.textContent;
+		typeDraft(input, '11');
+		const draft = snapshot(content);
+		expect(draft.info).toBe('Heal 1 stamina; dead minions stay dead.');
+		expect(draft.info).not.toBe(idle); // the 2-line idle text is already gone while typing
+		input.dispatchEvent(new FocusEvent('blur'));
+		expect(snapshot(content)).toEqual(draft);
+	});
+
+	test('a typed DAMAGE draft after a committed heal: the info text is identical before and after the blur', async () => {
+		const { content } = await setup({ pool: 10 });
+		const input = poolInput(content);
+		document.body.appendChild(content);
+		typeDraft(input, '11');
+		input.dispatchEvent(new FocusEvent('blur')); // commit the heal: 1-line info text
+		typeDraft(input, '9');
+		const draft = snapshot(content);
+		expect(draft.info).toContain('1 damage will kill 0 minion(s)'); // the 2-line text, while typing
+		input.dispatchEvent(new FocusEvent('blur'));
+		expect(snapshot(content)).toEqual(draft);
+	});
+
+	test('Escape on a heal draft restores the committed info text', async () => {
+		const { content } = await setup({ pool: 10 });
+		const input = poolInput(content);
+		const idle = content.querySelector('.dse-sedit__info')!.textContent;
+		typeDraft(input, '11');
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+		expect(content.querySelector('.dse-sedit__info')!.textContent).toBe(idle);
 	});
 });

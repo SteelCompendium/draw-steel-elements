@@ -914,7 +914,7 @@ describe('SC-133 RC-1/RC-2: the modal preview shows temp stamina and shares the 
 	});
 });
 
-describe('SC-430: Apply follows a half-typed Stamina / Temp draft, so the press that blurs the field lands on an enabled button', () => {
+describe('SC-430: Apply\'s label follows a half-typed Stamina / Temp draft, so nothing re-lays-out at the blur', () => {
 	function stepperInputs(content: HTMLElement): { stamina: HTMLInputElement; temp: HTMLInputElement } {
 		const [s, t] = Array.from(content.querySelectorAll<HTMLInputElement>('.dse-stepper__input'));
 		return { stamina: s, temp: t };

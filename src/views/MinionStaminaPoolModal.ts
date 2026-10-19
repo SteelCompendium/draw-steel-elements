@@ -42,9 +42,13 @@ export class MinionStaminaPoolModal extends DseModal {
 	// Pending STAMINA change — the legacy bookkeeping, verbatim.
 	private pendingStaminaChange: number = 0;
 	// SC-430: the pending change a half-typed (uncommitted) pool draft WOULD stage, or null
-	// when there is no parseable dirty draft. Read only through effectivePending(), so
-	// Apply's enabled state/label follow the draft and the press that blurs the field lands
-	// on an already-enabled button. The committed truth stays pendingStaminaChange.
+	// when there is no parseable dirty draft. Read only through effectivePending() by every
+	// piece of UI that re-renders at commit and can change size: Apply's label/state, the
+	// heal-warning icon beside it, and the info text above it (2 lines -> 1 shifts Apply up by
+	// a line). All of them show the post-commit result while the field is still focused, so
+	// nothing moves at blur — a button that moves between mousedown (blur) and mouseup loses the
+	// click in Chromium. The preview bar is fixed geometry and may lag. The committed truth
+	// stays pendingStaminaChange.
 	private draftStaminaChange: number | null = null;
 	private minionCheckboxes: { instance: CreatureInstance; checkbox: HTMLInputElement }[] = [];
 
@@ -110,6 +114,7 @@ export class MinionStaminaPoolModal extends DseModal {
 				onDraftInput: (draft) => {
 					this.draftStaminaChange =
 						draft === null || draft === this.poolStepper.getValue() ? null : draft - poolCurrentStamina;
+					this.updateInfoText();
 					this.updateActionButton();
 				},
 			},
@@ -366,14 +371,15 @@ export class MinionStaminaPoolModal extends DseModal {
 
 	private updateInfoText(): void {
 		const { minionsToKill, healCeiling } = this.poolNumbers();
+		const pending = this.effectivePending(); // SC-430: follows a typed draft (see the field comment)
 		if (minionsToKill < 0) {
 			// A heal past a dead minion's share (SC-417 LOW-1): say the rule, never a
 			// negative count.
 			this.infoTextEl.textContent = `A heal can't raise the pool above the living minions' share (${healCeiling} stamina).`;
-		} else if (this.pendingStaminaChange > 0) {
-			this.infoTextEl.textContent = `Heal ${this.pendingStaminaChange} stamina; dead minions stay dead.`;
+		} else if (pending > 0) {
+			this.infoTextEl.textContent = `Heal ${pending} stamina; dead minions stay dead.`;
 		} else {
-			const totalPendingDamage = -this.pendingStaminaChange;
+			const totalPendingDamage = -pending;
 			this.infoTextEl.textContent = `${totalPendingDamage} damage will kill ${minionsToKill} minion(s). \nSelect ${minionsToKill} minion(s) to kill.`;
 		}
 	}
@@ -388,7 +394,8 @@ export class MinionStaminaPoolModal extends DseModal {
 		if (this.draftStaminaChange !== null) {
 			// SC-430: the boxes are only re-derived when the draft commits (updateCheckboxes);
 			// predict that outcome so a draft that empties the pool (all auto-checked) or needs
-			// no kills (all cleared) enables Apply now rather than one blur later.
+			// no kills (all cleared) shows the post-commit Apply state now rather than one blur
+			// later.
 			if (newStamina <= 0) selectedMinions = this.minionCheckboxes.length;
 			else if (minionsToKill <= 0) selectedMinions = 0;
 		}

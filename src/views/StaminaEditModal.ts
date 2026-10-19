@@ -236,8 +236,11 @@ export class StaminaEditModal extends DseModal {
 	private pendingRecoveriesChange: number = 0;
 	// SC-430: the change a half-typed (not yet committed) Stamina / Temp Stamina draft
 	// WOULD stage if it committed now, or null when there is no parseable dirty draft.
-	// Read ONLY by updateActionButton, so Apply's enabled state and label follow the draft
-	// and the press that blurs the field lands on an already-enabled button. The pending*
+	// Read ONLY by updateActionButton, so Apply's label (and enabled state) already show the
+	// post-commit result while the field is still focused. That keeps Apply from MOVING at
+	// blur: a right-aligned label that changes width between mousedown (blur) and mouseup
+	// shifts the button out from under the press, and Chromium drops that click. Nothing else
+	// in this modal changes size at commit (the gauge is fixed geometry). The pending*
 	// fields above stay the committed truth; the draft is never persisted by itself.
 	private draftStaminaChange: number | null = null;
 	private draftTempStaminaChange: number | null = null;
@@ -577,8 +580,9 @@ export class StaminaEditModal extends DseModal {
 				disabled: true,
 				onClick: () => {
 					// SC-430: a still-typed draft lands first, through the same path blur uses
-					// (a no-op when the field's blur already committed it). clampStamina below
-					// still owns the persisted value.
+					// (a no-op when the field's blur already committed it — the usual pointer
+					// path; this is the backstop for a click with no preceding blur).
+					// clampStamina below still owns the persisted value.
 					staminaStepper.commitDraft();
 					tempStepper.commitDraft();
 					// Legacy Apply verbatim — clampStamina is the byte-compat gate.
