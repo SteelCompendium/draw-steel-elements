@@ -142,12 +142,14 @@ export function locateByBody(
 	nearLine: number,
 ): { lineStart: number; lineEnd: number } | null {
 	// SC-343 fix round 1: anchor.ts's FENCE_LINE is a plain `.` match, which never matches
-	// `\r` — a CRLF note's fence lines used to fail to parse and listFences saw zero fences.
-	// Strip just the `\r` immediately before each `\n` (never a lone `\r`, which would shift
-	// line indices against replaceSource's own `content.split('\n')`) so every line NUMBER stays
-	// identical to the untouched content's. (SC-453: anchor.ts's scanner now tolerates CRLF
-	// itself; this stays because the `lines` below, which locateUnterminatedTrailingFence and
-	// the body slices read, must be CR-free too.)
+	// `\r`, so a CRLF note's fence lines used to fail to parse and listFences saw zero fences.
+	// Strip just the `\r` immediately before each `\n` (never a lone `\r`: line numbers here must
+	// stay identical to replaceSource's own `content.split('\n')`). SC-453: anchor.ts's scanner
+	// and normalizeBody now tolerate CRLF themselves, so this strip is redundant for correctness
+	// (removing it leaves every test green); it is kept as a cheap guard so `lines` below is
+	// CR-free for the fence-matching helpers. NOTE (SC-460): that is `split('\n')` numbering;
+	// Obsidian's section numbering counts a lone `\r` as a break, so a note with one above the
+	// block can still fail to resolve a section (pre-existing, not addressed here).
 	const lf = stripCr(content);
 	const wanted = normalizeBody(body);
 	const lines = lf.split('\n');

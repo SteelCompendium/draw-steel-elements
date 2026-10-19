@@ -15,7 +15,10 @@ export type Eol = '\r\n' | '\n';
 
 /** The dominant line ending of `text`: whichever of CRLF / bare LF has more occurrences, the
  *  FIRST line break's style on a tie, and LF when there is no line break at all. A lone `\r` is
- *  not a line break here (it never separates lines in Obsidian's `split('\n')` line numbering). */
+ *  not a line break here: this file follows the `split('\n')` numbering the hosts splice by.
+ *  (Obsidian's own section numbering DOES count a lone `\r` as a break — measured on 1.14.4, a lone
+ *  `\r` above a block makes Reading-view writes drop silently; a pre-existing gap, SC-460, that this
+ *  file does not and cannot fix.) */
 export function detectEol(text: string): Eol {
 	let crlf = 0;
 	let lf = 0;
