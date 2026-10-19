@@ -28,7 +28,9 @@ for what needs action.
   and the initiative **Advance round** button (with its Malice gain) each carried hover text
   that was silently thrown away, so the hover repeated the label. Obsidian draws the hover
   from the same text screen readers announce, so each of those buttons now has one full
-  label (the name first, then what it does), and screen-reader users hear it too.
+  label (the name first, then what it does), and screen-reader users hear it too. The
+  stamina modal's **Spend Recovery** and the read-only **Catch Breath** button now keep their
+  name when they show why they are disabled ("Spend Recovery: No Recoveries remaining").
 - [FIX] **Initiative: clicking a hero's portrait now shows the acted frame immediately**
   (SC-423). The 2px light-grey metal frame used to appear only after something else
   re-rendered the tracker (adding a Malice log entry, for example); the seal badge showed at
