@@ -404,9 +404,16 @@ export class ReadingModeBlockHost implements BlockHost {
 				// is byte-identical to the disk is no-opped by Obsidian (no `modify`, no rebuild),
 				// so a pin taken for it would hold phantom scroll space for the full PIN_TTL_MS.
 				// Still synchronous inside the callback, i.e. before Obsidian writes and so before
-				// the rebuild. `pin` is fail-safe (every path is early-return or DOM attribute/timer
-				// work), so it cannot abort the write.
-				if (section && changedContent) this.scrollPin?.pin(this.containerEl);
+				// the rebuild. `pin` is fail-safe by construction, but it now runs AFTER
+				// `knownBody = newSource`: a throw here would abort the write and leave knownBody
+				// ahead of the disk, so a pin failure is contained (warn, write proceeds).
+				if (section && changedContent) {
+					try {
+						this.scrollPin?.pin(this.containerEl);
+					} catch (err) {
+						console.warn('[DSE] scroll pin failed; continuing with the write', err);
+					}
+				}
 				return next;
 			});
 			settled = true;

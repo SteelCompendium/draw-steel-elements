@@ -156,7 +156,7 @@ describe('SC-198: PreviewScrollPin', () => {
 const NOTE = ['# Session notes', '', '```ds-initiative', 'round: 1', '```', '', 'After.'].join('\n');
 
 describe('SC-198: ReadingModeBlockHost pins around its own write', () => {
-	test('pins BEFORE vault.process runs — the pin must be up when Obsidian sees the modify', async () => {
+	test('pins inside the vault.process callback, before the write lands — the pin must be up when Obsidian sees the modify', async () => {
 		const app = new App();
 		app.vault.setFile('Note.md', NOTE);
 		const plugin = new Plugin(app);
@@ -237,6 +237,32 @@ describe('SC-198: ReadingModeBlockHost pins around its own write', () => {
 		expect(scrollPin.pin).toHaveBeenCalledTimes(1);
 		expect(order).toEqual(['process-start', 'pin(disk=old)', 'callback-returns', 'process-done']);
 		expect(app.vault.getContent('Note.md')).toContain('round: 2');
+		document.body.innerHTML = '';
+	});
+
+	test('SC-260: a pin() that throws does not abort the write — it resolves true, the disk changes and the next write lands', async () => {
+		const app = new App();
+		app.vault.setFile('Note.md', NOTE);
+		const plugin = new Plugin(app);
+		const ctx = makeFakeContext(app, 'Note.md');
+		const { el } = makeScroller();
+		el.appendChild(ctx.el);
+		const scrollPin = new PreviewScrollPin();
+		const spy = jest.spyOn(scrollPin, 'pin').mockImplementation(() => {
+			throw new Error('pin exploded');
+		});
+		const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+		const host = new ReadingModeBlockHost(plugin as any, ctx.el, ctx as any, 'ds-initiative', scrollPin);
+		await expect(host.replaceSource('round: 2')).resolves.toBe(true);
+		expect(app.vault.getContent('Note.md')).toContain('round: 2');
+		expect(warn).toHaveBeenCalledTimes(1);
+
+		// knownBody stayed in step with the disk, so a second write still finds its block.
+		await expect(host.replaceSource('round: 3')).resolves.toBe(true);
+		expect(app.vault.getContent('Note.md')).toContain('round: 3');
+		expect(spy).toHaveBeenCalledTimes(2);
+		warn.mockRestore();
 		document.body.innerHTML = '';
 	});
 
