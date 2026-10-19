@@ -13,6 +13,9 @@ const BAR = 'ds-stamina-bar';
 const filledPips = (): Promise<number> => dse.page<number>(`document.querySelectorAll('.markdown-reading-view .dse-stamina-rec__pip--filled').length`);
 const sliderNow = (): Promise<string | null> => dse.page<string | null>(`document.querySelector('.markdown-reading-view .dse-stamina-rec__pips').getAttribute('aria-valuenow')`);
 
+/** Does the focused element show its keyboard focus ring (:focus-visible)? */
+const focusRing = (): Promise<boolean> => dse.page<boolean>(`document.activeElement?.matches(':focus-visible') === true`);
+
 async function openRec(note: string) {
 	await dse.openNote(note);
 	return dse.block(BAR);
@@ -144,13 +147,34 @@ describe('ds-stamina-bar: keyboard focus after a marker click (SC-428)', () => {
 		const row = bar.control('recov.markers');
 		await dse.click(bar.control('recov.marker', { nth: 4 })); // -> 5
 		expect(await dse.focusedControl()).toBe('recov.markers');
+		// A MOUSE click draws no focus ring (:focus-visible), right after and after the write.
+		expect(await focusRing()).toBe(false);
 		await dse.settle(); // the write + the adoption re-draw have happened
 		expect(await dse.focusedControl()).toBe('recov.markers');
+		expect(await focusRing()).toBe(false);
 		await dse.press('ArrowLeft', row); // an arrow key lands on the row with no Tab first
 		expect(await sliderNow()).toBe('4');
 		await dse.press('Tab', row); // and Tab moves on to the NEXT control after the row, not back to the page
 		expect(await dse.focusedControl()).toBe('recov.catch-breath');
 		await dse.settle();
+	});
+
+	// A keyboard Catch Breath that fills Stamina disables the button while it holds focus; real Chromium
+	// drops focus to <body> then, so the strip hands it to the marker row (review M1).
+	it('[RECOV-R11] a keyboard Catch Breath that reaches full Stamina leaves focus on the marker row, not <body>', async () => {
+		const bar = await openRec(REC); // 12/30, recovery value 10
+		const cb = bar.control('recov.catch-breath');
+		await dse.tabTo(cb);
+		await dse.press('Enter', cb); // 22/30: still enabled, focus stays through the write
+		await dse.settle();
+		await dse.expectNoteBlock(REC, BAR).toMatchObject({ current_stamina: 22, recoveries: 2 });
+		expect(await dse.focusedControl()).toBe('recov.catch-breath');
+		await dse.press('Enter', cb); // 30/30: the button disables itself
+		await expect(cb).toBeDisabled();
+		expect(await dse.focusedControl()).toBe('recov.markers');
+		await dse.settle();
+		expect(await dse.focusedControl()).toBe('recov.markers');
+		await dse.expectNoteBlock(REC, BAR).toMatchObject({ current_stamina: 30, recoveries: 1 });
 	});
 });
 
@@ -243,6 +267,22 @@ describe('ds-stamina-bar: the optional Recoveries popover editor (preference on)
 		expect(w.count).toBe(1);
 		await dse.expectNoteBlock(REC, BAR).toMatchObject({ current_stamina: 22, recoveries: 3 }); // 4 - 1 spent by Catch Breath
 		await expect(dse.control({ css: '.dse-stamina-rec__pop' })).not.toBeExisting(); // Catch breath closes it
+	});
+
+	// Pressing the popover's Catch breath with the keyboard closes the popover and removes the focused button;
+	// focus returns to the marker row (the popover's trigger) instead of falling to <body> (review INFO).
+	it('[RECOV-R12] the popover Catch breath pressed from the keyboard closes the popover and returns focus to the marker row', async () => {
+		const bar = await openRec(REC); // 3 of 6
+		await dse.click(bar.control('recov.marker', { nth: 4 }));
+		await expect(dse.control({ css: '.dse-stamina-rec__pop' })).toBeDisplayed();
+		const cb = bar.control('recov.pop.catch-breath');
+		await dse.tabTo(cb);
+		const w = await dse.waitForWrite(REC, () => dse.press('Enter', cb));
+		expect(w.count).toBe(1);
+		await expect(dse.control({ css: '.dse-stamina-rec__pop' })).not.toBeExisting();
+		expect(await dse.focusedControl()).toBe('recov.markers');
+		await dse.settle();
+		expect(await dse.focusedControl()).toBe('recov.markers');
 	});
 
 	it('[RECOV-R09] Escape closes the popover', async () => {

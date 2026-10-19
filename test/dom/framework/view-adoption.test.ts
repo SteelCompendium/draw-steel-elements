@@ -249,6 +249,36 @@ describe('SC-340 Task 4: claim and adopt', () => {
 		outer.remove();
 	});
 
+	// SC-428 review M2: a focus that did NOT show the ring (a mouse click) must not come back
+	// WITH it after the adoption, and a keyboard focus (ring showing) must keep it.
+	test.each([
+		{ name: 'a mouse-set focus (no ring) is restored without the ring', visible: false },
+		{ name: 'a keyboard focus (ring showing) is restored with it', visible: true },
+	])('focus: $name', async ({ visible }) => {
+		const outer = document.body.createDiv();
+		const root = outer.createDiv();
+		const row = root.createDiv({ attr: { tabindex: '0' } });
+		row.focus();
+		// jsdom has no :focus-visible; say what Chromium would.
+		const realMatches = row.matches.bind(row);
+		row.matches = (sel: string) => (sel === ':focus-visible' ? visible : realMatches(sel));
+		const state = captureFocus(root)!;
+		expect(state.visible).toBe(visible);
+
+		const el = document.createElement('div');
+		el.appendChild(root);
+		row.blur();
+		const focusSpy = jest.spyOn(row, 'focus');
+		restoreFocusWhenConnected(el, state);
+		document.body.appendChild(el);
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true, focusVisible: visible });
+		expect(document.activeElement).toBe(row);
+		el.remove();
+		outer.remove();
+	});
+
 	// Fix round 1 (M-5): a real move measured ~41 ms between blur and reinsertion — long
 	// enough for the user to click something else. Adoption must not fight them for focus:
 	// only refocus when nothing else has claimed it (activeElement is body or null).

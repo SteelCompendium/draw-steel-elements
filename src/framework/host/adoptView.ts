@@ -17,6 +17,9 @@ export interface FocusState {
 	 *  moves — used (not `el`'s, resolved only once the move is already in flight) to decide
 	 *  which document's body to observe and which document's activeElement to read. */
 	doc: Document;
+	/** SC-428 review M2: did the element show its focus ring (`:focus-visible`)? A mouse-set
+	 *  focus (no ring) must come back without one, a keyboard one with it. */
+	visible: boolean;
 }
 
 /** The focused element inside `root` (and its text selection), or null. */
@@ -32,7 +35,13 @@ export function captureFocus(root: HTMLElement): FocusState | null {
 	} catch {
 		// number/checkbox inputs throw on selectionStart: focus only
 	}
-	return { el: active, start, end, doc };
+	let visible = true;
+	try {
+		visible = active.matches(':focus-visible');
+	} catch {
+		// an engine without :focus-visible: keep the old behaviour (plain focus())
+	}
+	return { el: active, start, end, doc, visible };
 }
 
 /** Refocus `state.el` (and its caret) once `el` is in the document; give up after `timeoutMs`. */
@@ -46,7 +55,8 @@ export function restoreFocusWhenConnected(el: HTMLElement, state: FocusState, ti
 		// focus back when nothing else has claimed it (activeElement is body, or null in some
 		// embedding contexts); never fight the user for it.
 		if (doc.activeElement !== doc.body && doc.activeElement !== null) return;
-		state.el.focus({ preventScroll: true });
+		// `focusVisible` (Chromium 124+) restores the ring state; older engines ignore the key.
+		state.el.focus({ preventScroll: true, focusVisible: state.visible } as FocusOptions);
 		if (state.start !== null) {
 			try {
 				(state.el as HTMLInputElement).setSelectionRange(state.start, state.end ?? state.start);

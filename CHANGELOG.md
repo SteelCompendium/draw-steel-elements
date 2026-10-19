@@ -70,6 +70,10 @@ for what needs action.
 - [FIX] **Clicking a Recoveries marker keeps the keyboard on the marker row** (SC-428). After a
   click, the arrow keys, Home/End and Escape went nowhere until you Tabbed back to the row, and
   Tab restarted from the page. Focus now stays on the row, also through the save that follows.
+  A mouse click draws no focus ring on the row (the keyboard still does), and a keyboard Catch
+  Breath that fills Stamina, or the popover's Catch breath pressed with the keyboard, hands
+  focus to the row instead of dropping it. A hero whose class is unresolved reads "Max Stamina
+  unknown" rather than "Recovery value is 0".
 - [FIX] **Stamina editor and minion pool editor: the first click on Apply now applies a typed
   value** (SC-430). Type a new Stamina, Temporary Stamina or minion-pool value and click Apply,
   and if you hit the button's edge the click was swallowed: the field committed, the button's

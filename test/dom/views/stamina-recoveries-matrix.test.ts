@@ -81,7 +81,7 @@ describe('[R03] Catch Breath at full Stamina must not spend a Recovery for +0 (S
 		const { root, host } = await mount(yaml(48, 6));
 		catchBreathBtn(root).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-		expect(recoveriesOf(lastWrite(host))).not.toBe('5');
+		expect(host.replaceSource).not.toHaveBeenCalled();
 	});
 
 	test('[R03] 48/48 with 6 Recoveries: a click raises no "Caught breath: +0" toast', async () => {
@@ -191,7 +191,9 @@ describe('[R04] a marker click leaves keyboard focus on the marker row (SC-428)'
 		expect(document.activeElement).toBe(pipsRow(root));
 	});
 
-	test('focus survives the click\'s own re-render: the row node and its focus are the same after the update', async () => {
+	// What jsdom proves is the in-place update; the real re-draw + adoption across the write is
+	// e2e [RECOV-R10]'s job (jsdom's replaceSource is a mock, so no section is re-drawn here).
+	test('the row keeps its node and its focus through the click\'s in-place update and the debounced persist', async () => {
 		const { root } = await mount(yaml(31, 6));
 		const row = pipsRow(root);
 		pip(root, 1).click(); // 6 -> 1: the strip repaints in place
@@ -199,6 +201,13 @@ describe('[R04] a marker click leaves keyboard focus on the marker row (SC-428)'
 		expect(document.activeElement).toBe(row);
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect(document.activeElement).toBe(row);
+	});
+
+	test('a click asks for focus WITHOUT the focus ring (a mouse click draws none); the keyboard path does not suppress it', async () => {
+		const { root } = await mount(yaml(31, 6));
+		const spy = jest.spyOn(pipsRow(root), 'focus');
+		pip(root, 2).click();
+		expect(spy).toHaveBeenCalledWith({ preventScroll: true, focusVisible: false });
 	});
 
 	test('with the popover editor on, the click that opens the popover also focuses the row (so Escape works)', async () => {
@@ -215,6 +224,54 @@ describe('[R04] a marker click leaves keyboard focus on the marker row (SC-428)'
 		pip(root, 2).click();
 		expect(document.activeElement).toBe(document.body);
 		expect(pipsRow(root).getAttribute('aria-valuenow')).toBe('6');
+	});
+});
+
+describe('[R04] keyboard focus is handed on, never dropped to <body> (SC-428 review)', () => {
+	test('a keyboard Catch Breath that fills Stamina disables the focused button: focus moves to the marker row', async () => {
+		const { root } = await mount(yaml(47, 6)); // heals 1 -> 48/48: now disabled
+		const cb = catchBreathBtn(root);
+		cb.focus();
+		expect(document.activeElement).toBe(cb);
+		cb.click();
+		expect(cb.disabled).toBe(true);
+		expect(document.activeElement).toBe(pipsRow(root));
+	});
+
+	test('a Catch Breath that does NOT disable leaves focus on the button', async () => {
+		const { root } = await mount(yaml(20, 6)); // heals 16 -> 36/48: still enabled
+		const cb = catchBreathBtn(root);
+		cb.focus();
+		cb.click();
+		expect(cb.disabled).toBe(false);
+		expect(document.activeElement).toBe(cb);
+	});
+
+	test('a disabled Catch Breath that never had focus does not steal it', async () => {
+		const { root } = await mount(yaml(47, 6));
+		const other = document.body.createEl('button');
+		other.focus();
+		catchBreathBtn(root).click();
+		expect(document.activeElement).toBe(other);
+		other.remove();
+	});
+
+	test('the popover\'s Catch breath pressed from the keyboard closes the popover and returns focus to the marker row', async () => {
+		const { root } = await mount(yaml(31, 6), { popover: true });
+		openPopover(root);
+		const cb = popoverCatchBreath(root)!;
+		cb.focus();
+		cb.click();
+		expect(root.querySelector('.dse-stamina-rec__pop')).toBeNull();
+		expect(document.activeElement).toBe(pipsRow(root));
+	});
+
+	test('the popover\'s Catch breath clicked with the mouse (never focused) does not pull focus onto the row', async () => {
+		const { root } = await mount(yaml(31, 6), { popover: true });
+		openPopover(root); // the opening click focuses the row (R04) ...
+		(document.activeElement as HTMLElement | null)?.blur(); // ... then focus is elsewhere
+		popoverCatchBreath(root)!.click();
+		expect(document.activeElement).toBe(document.body);
 	});
 });
 

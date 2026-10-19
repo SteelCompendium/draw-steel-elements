@@ -217,6 +217,10 @@ export function renderRecoveriesStrip(
 		stampControl(cb, 'recov.pop.catch-breath');
 		cb.addEventListener('click', () => {
 			if (cb.disabled) return;
+			// Pressed from the keyboard, the button holds focus and closing removes it (focus falls
+			// to <body>): return it to the marker row, the popover's trigger. A mouse click never
+			// focused it (click shield), so this is the keyboard path only.
+			if (cb.ownerDocument.activeElement === cb) pipsEl.focus({ preventScroll: true });
 			closePopover();
 			opts.onCatchBreath();
 		});
@@ -247,7 +251,10 @@ export function renderRecoveriesStrip(
 			// view is adopted into the re-drawn section after the click's persist, and adoption
 			// (host/adoptView.ts captureFocus) refocuses whatever held focus inside the root —
 			// before this, nothing did, so there was nothing to restore.
-			pipsEl.focus({ preventScroll: true });
+			// `focusVisible: false`: a MOUSE click draws no focus ring (standard :focus-visible
+			// semantics) — a scripted focus() after a click would otherwise show the 2px keyboard
+			// ring on every marker click. adoptView remembers the ring state across the re-draw.
+			pipsEl.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
 			if (opts.popoverEditor) {
 				togglePopover();
 				return;
@@ -337,7 +344,12 @@ export function renderRecoveriesStrip(
 
 			cbDisabled = state.catchBreathDisabled;
 			cbReason = state.catchBreathReason ?? null;
+			// SC-428 review M1: a KEYBOARD Catch Breath that fills Stamina disables the button while
+			// it holds focus, and Chromium then drops focus to <body>. Hand it to the marker row
+			// (this strip's other tab stop) first, so Tab / Shift+Tab continue from here.
+			const cbHadFocus = catchBreath.buttonEl.ownerDocument.activeElement === catchBreath.buttonEl;
 			catchBreath.setDisabled(state.catchBreathDisabled);
+			if (cbHadFocus && state.catchBreathDisabled && opts.canPersist) pipsEl.focus({ preventScroll: true });
 			// Read-only keeps its own tooltip (set once at mount); otherwise the reason when
 			// disabled, the plain name when available again.
 			if (opts.canPersist) {
