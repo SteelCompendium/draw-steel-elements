@@ -224,12 +224,6 @@ export const REASON_ZERO_RECOVERY_VALUE = 'Recovery value is 0';
 /** Recoveries remain, but Stamina is already full so a press would heal 0. */
 export const REASON_AT_MAX_STAMINA = 'Already at maximum Stamina';
 
-/** SC-324: a control's hover tooltip IS its one aria-label, so a disabled reason follows the
- *  action's name ("Catch Breath: Already at maximum Stamina") and never replaces it. */
-export function labelWithReason(name: string, reason: string): string {
-	return `${name}: ${reason}`;
-}
-
 /** The reason a press that heals nothing heals nothing. A zero recovery value wins over "at
  *  maximum" — it is the permanent cause, and true at any current Stamina. `!(x > 0)` (not
  *  `x <= 0`) so a NaN value reads as zero, matching the modal's own NaN-safe gain guard. */

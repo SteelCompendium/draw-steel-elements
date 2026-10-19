@@ -144,7 +144,7 @@ describe('[R01][R02][R03] ds-hero Catch Breath across positions (resolved fury, 
 	test('[R03] at full Stamina (48/48, 6 Recoveries) the button is disabled, with the reason as its tooltip (SC-428)', async () => {
 		const { staminaRegion } = await mountHero(heroSource(FURY, 48));
 		expect(heroCatchBreath(staminaRegion).disabled).toBe(true);
-		expect(heroCatchBreath(staminaRegion).getAttribute('aria-label')).toBe('Already at maximum Stamina');
+		expect(heroCatchBreath(staminaRegion).getAttribute('aria-label')).toBe('Catch Breath: Already at maximum Stamina');
 	});
 
 	test('[R03] at full Stamina a click writes nothing and spends no Recovery (SC-428)', async () => {

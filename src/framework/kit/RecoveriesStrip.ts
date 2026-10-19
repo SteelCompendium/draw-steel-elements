@@ -37,11 +37,13 @@ import type { Component } from 'obsidian';
 import { stampControl } from './controlId';
 import { iconButton } from './iconButton';
 import type { IconButtonHandle } from './iconButton';
-import { tooltip } from './tooltip';
+import { labelWithReason, tooltip } from './tooltip';
 
 /** The strip's Catch Breath button's own accessible name — re-asserted whenever the button
  *  re-enables, so a disabled reason never outlives the state it describes. */
 const CATCH_BREATH_LABEL = 'Catch Breath';
+/** The popover button's visible text / name (lower-case b, as it has always read). */
+const POPOVER_CATCH_BREATH_LABEL = 'Catch breath';
 
 /** The keys the marker row treats as value input. Named once so the direct-commit branch
  *  and the popover branch cannot disagree about what counts as an edit. */
@@ -210,7 +212,7 @@ export function renderRecoveriesStrip(
 		dec.addEventListener('click', () => commit(current - 1));
 		inc.addEventListener('click', () => commit(current + 1));
 		pop.createDiv({ cls: 'dse-stamina-rec__pop-sep' });
-		const cb = pop.createEl('button', { cls: 'dse-stamina-rec__pop-cb', text: 'Catch breath' });
+		const cb = pop.createEl('button', { cls: 'dse-stamina-rec__pop-cb', text: POPOVER_CATCH_BREATH_LABEL });
 		cb.type = 'button';
 		stampControl(cb, 'recov.pop.catch-breath');
 		cb.addEventListener('click', () => {
@@ -222,7 +224,7 @@ export function renderRecoveriesStrip(
 			val.setText(`${current} / ${opts.max}`);
 			// SC-428: real-disabled with the same reason as the strip button — never a silent no-op.
 			cb.disabled = cbDisabled;
-			if (cbDisabled && cbReason) tooltip(cb, cbReason);
+			if (cbDisabled && cbReason) tooltip(cb, labelWithReason(POPOVER_CATCH_BREATH_LABEL, cbReason));
 			else cb.removeAttribute('aria-label'); // the visible text is its accessible name
 		};
 		repaintPopover();
@@ -306,7 +308,7 @@ export function renderRecoveriesStrip(
 		pipsEl.setAttribute('aria-disabled', 'true');
 		// SC-324: the reason follows the name ("Catch Breath: Read-only in this context") —
 		// it must not become the whole accessible name of this icon-only button.
-		if (opts.readOnlyTooltip !== undefined) catchBreath.setLabel(`Catch Breath: ${opts.readOnlyTooltip}`);
+		if (opts.readOnlyTooltip !== undefined) catchBreath.setLabel(labelWithReason(CATCH_BREATH_LABEL, opts.readOnlyTooltip));
 	}
 
 	return {
@@ -339,7 +341,7 @@ export function renderRecoveriesStrip(
 			// Read-only keeps its own tooltip (set once at mount); otherwise the reason when
 			// disabled, the plain name when available again.
 			if (opts.canPersist) {
-				if (cbDisabled && cbReason) tooltip(catchBreath.buttonEl, cbReason);
+				if (cbDisabled && cbReason) catchBreath.setLabel(labelWithReason(CATCH_BREATH_LABEL, cbReason));
 				else catchBreath.setLabel(CATCH_BREATH_LABEL);
 			}
 			repaintPopover?.();

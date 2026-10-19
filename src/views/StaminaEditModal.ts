@@ -23,6 +23,7 @@ import type { App, Component } from 'obsidian';
 import {
 	DseModal,
 	iconButton,
+	labelWithReason,
 	renderStaminaGauge,
 	setStaminaGaugeDelta,
 	stampControl,
@@ -31,7 +32,7 @@ import {
 	updateStaminaGauge,
 } from '@/framework/kit';
 import type { IconButtonHandle, StaminaGaugeValues, StepperHandle } from '@/framework/kit';
-import { REASON_NO_RECOVERIES, StaminaBar, labelWithReason, zeroHealReason } from '@model/StaminaBar';
+import { REASON_NO_RECOVERIES, StaminaBar, zeroHealReason } from '@model/StaminaBar';
 
 // ---------------------------------------------------------------------------------
 // Shared §3.5b template primitives (composed by BOTH stamina modals)
@@ -174,7 +175,7 @@ export function setButtonText(btn: IconButtonHandle, text: string): void {
 
 // SC-428: the three disabled reasons (no Recoveries / zero recovery value / already at max)
 // live in model/StaminaBar.ts and are SHARED with the Catch Breath strip + popover — one
-// wording per reason on every surface, composed name-first (SC-324, `labelWithReason`). House rule (FOLLOWUPS #27b, SC-133 I3): a disabled
+// wording per reason on every surface, composed name-first (SC-324, kit `labelWithReason`). House rule (FOLLOWUPS #27b, SC-133 I3): a disabled
 // Spend Recovery always shows why (CB-8).
 /** The Spend Recovery button's own accessible name/tooltip (FOLLOWUPS #27-fix-round
  *  finding 1) — re-asserted via setLabel whenever the button re-enables, so the reason

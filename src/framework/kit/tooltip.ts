@@ -18,3 +18,10 @@ export interface DseTooltipOptions {
 export function tooltip(el: HTMLElement, text: string, options?: DseTooltipOptions): void {
 	setTooltip(el, text, options?.placement !== undefined ? { placement: options.placement } : undefined);
 }
+
+/** SC-324 / SC-428: a control's hover tooltip IS its one aria-label, so a disabled reason follows
+ *  the action's name ("Catch Breath: Already at maximum Stamina") and never replaces it. The one
+ *  composer for every "name: reason" label (Catch Breath strip + popover, Spend Recovery). */
+export function labelWithReason(name: string, reason: string): string {
+	return `${name}: ${reason}`;
+}

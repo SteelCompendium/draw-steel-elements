@@ -74,7 +74,7 @@ describe('[R03] Catch Breath at full Stamina must not spend a Recovery for +0 (S
 	test('[R03] 48/48 with 6 Recoveries: the button is disabled, with the reason as its tooltip', async () => {
 		const { root } = await mount(yaml(48, 6));
 		expect(catchBreathBtn(root).disabled).toBe(true);
-		expect(catchBreathBtn(root).getAttribute('aria-label')).toBe('Already at maximum Stamina');
+		expect(catchBreathBtn(root).getAttribute('aria-label')).toBe('Catch Breath: Already at maximum Stamina');
 	});
 
 	test('[R03] 48/48 with 6 Recoveries: a click writes nothing and keeps all 6', async () => {
@@ -131,14 +131,14 @@ describe('[R07][R08] popover editor: its "Catch breath" button honours the same 
 		{ name: 'dying (current 0)', cur: 0, rec: 6, reason: "Can't catch breath while dying" },
 		{ name: 'dying (current below 0)', cur: -3, rec: 6, reason: "Can't catch breath while dying" },
 		{ name: 'at full Stamina (48/48)', cur: 48, rec: 6, reason: 'Already at maximum Stamina' },
-	])('[R08] popover Catch breath is real-disabled when $name, with the strip button\'s reason (SC-428)', async ({ cur, rec, reason }) => {
+	])('[R08] popover Catch breath is real-disabled when $name, with the strip button\'s reason, name first (SC-428)', async ({ cur, rec, reason }) => {
 		const { root } = await mount(yaml(cur, rec), { popover: true });
 		expect(catchBreathBtn(root).disabled).toBe(true); // the strip button is too
 		openPopover(root);
 		expect(popoverCatchBreath(root)!.disabled).toBe(true);
 		// One source of truth: the same wording on both surfaces.
-		expect(catchBreathBtn(root).getAttribute('aria-label')).toBe(reason);
-		expect(popoverCatchBreath(root)!.getAttribute('aria-label')).toBe(reason);
+		expect(catchBreathBtn(root).getAttribute('aria-label')).toBe(`Catch Breath: ${reason}`);
+		expect(popoverCatchBreath(root)!.getAttribute('aria-label')).toBe(`Catch breath: ${reason}`);
 	});
 
 	test('[R08] recovery value 0 (max 2): both Catch Breath buttons are disabled and say the recovery value is 0 (SC-428)', async () => {
@@ -146,8 +146,8 @@ describe('[R07][R08] popover editor: its "Catch breath" button honours the same 
 		openPopover(root);
 		expect(catchBreathBtn(root).disabled).toBe(true);
 		expect(popoverCatchBreath(root)!.disabled).toBe(true);
-		expect(catchBreathBtn(root).getAttribute('aria-label')).toBe('Recovery value is 0');
-		expect(popoverCatchBreath(root)!.getAttribute('aria-label')).toBe('Recovery value is 0');
+		expect(catchBreathBtn(root).getAttribute('aria-label')).toBe('Catch Breath: Recovery value is 0');
+		expect(popoverCatchBreath(root)!.getAttribute('aria-label')).toBe('Catch breath: Recovery value is 0');
 	});
 
 	test('[R08] a disabled popover Catch breath click writes nothing and leaves the popover open (SC-428)', async () => {
@@ -168,7 +168,7 @@ describe('[R07][R08] popover editor: its "Catch breath" button honours the same 
 		root.querySelector<HTMLButtonElement>('button[aria-label="Spend a recovery"]')!.click(); // 1 -> 0
 		expect(popoverCatchBreath(root)).toBe(cb); // same node: updated in place, not re-rendered
 		expect(cb.disabled).toBe(true);
-		expect(cb.getAttribute('aria-label')).toBe('No Recoveries remaining');
+		expect(cb.getAttribute('aria-label')).toBe('Catch breath: No Recoveries remaining');
 		root.querySelector<HTMLButtonElement>('button[aria-label="Restore a recovery"]')!.click(); // 0 -> 1
 		expect(cb.disabled).toBe(false);
 		expect(cb.getAttribute('aria-label')).toBeNull();

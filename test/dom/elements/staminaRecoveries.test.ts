@@ -210,10 +210,10 @@ describe('D7 Task 4: ds-stamina Recoveries / Winded — additive, gated on recov
 		);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		// SC-428: a disabled Catch Breath's tooltip/name is its reason, so find it by its icon.
+		// SC-428: a disabled Catch Breath's label carries its reason (name first), so find it by its icon.
 		const catchBreathBtn = root.querySelector('button:has([data-icon="wind"])') as HTMLButtonElement;
 		expect(catchBreathBtn.disabled).toBe(true);
-		expect(catchBreathBtn.getAttribute('aria-label')).toBe('No Recoveries remaining');
+		expect(catchBreathBtn.getAttribute('aria-label')).toBe('Catch Breath: No Recoveries remaining');
 	});
 
 	test('Catch Breath is disabled while dying (RR §8: "Can\'t Catch Breath")', async () => {
@@ -227,10 +227,10 @@ describe('D7 Task 4: ds-stamina Recoveries / Winded — additive, gated on recov
 		);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		// SC-428: a disabled Catch Breath's tooltip/name is its reason, so find it by its icon.
+		// SC-428: a disabled Catch Breath's label carries its reason (name first), so find it by its icon.
 		const catchBreathBtn = root.querySelector('button:has([data-icon="wind"])') as HTMLButtonElement;
 		expect(catchBreathBtn.disabled).toBe(true);
-		expect(catchBreathBtn.getAttribute('aria-label')).toBe("Can't catch breath while dying");
+		expect(catchBreathBtn.getAttribute('aria-label')).toBe("Catch Breath: Can't catch breath while dying");
 	});
 
 	test('canPersist: false — Catch Breath is real-disabled and clicking it writes nothing', async () => {
@@ -277,7 +277,7 @@ describe('D7 Task 4: ds-stamina Recoveries / Winded — additive, gated on recov
 		// Kill drops current_stamina to the negative death floor -> dying.
 		expect(status.hidden).toBe(false);
 		expect(status.getAttribute('data-state')).toBe('dying');
-		// SC-428: a disabled Catch Breath's tooltip/name is its reason, so find it by its icon.
+		// SC-428: a disabled Catch Breath's label carries its reason (name first), so find it by its icon.
 		const catchBreathBtn = root.querySelector('button:has([data-icon="wind"])') as HTMLButtonElement;
 		expect(catchBreathBtn.disabled).toBe(true);
 	});

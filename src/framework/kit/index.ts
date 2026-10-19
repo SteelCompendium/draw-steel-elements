@@ -19,7 +19,7 @@ export type {
 } from './iconButton';
 export { stepper } from './stepper';
 export type { StepperOptions, StepperHandle } from './stepper';
-export { tooltip } from './tooltip';
+export { labelWithReason, tooltip } from './tooltip';
 export type { DseTooltipOptions } from './tooltip';
 export { divider } from './divider';
 export type { DividerOptions, DividerHandle } from './divider';

@@ -61,7 +61,7 @@ describe('ds-stamina-bar: Catch Breath', () => {
 		const note = 'Stamina/recoveries-full.md';
 		const bar = await openRec(note);
 		await expect(bar.control('recov.catch-breath')).toBeDisabled();
-		await expect(bar.control('recov.catch-breath')).toHaveAttribute('aria-label', 'Already at maximum Stamina');
+		await expect(bar.control('recov.catch-breath')).toHaveAttribute('aria-label', 'Catch Breath: Already at maximum Stamina');
 		await dse.expectNoWrite(note, () => dse.click(bar.control('recov.catch-breath')));
 		await dse.expectNoteBlock(note, BAR).toMatchObject({ current_stamina: 30, recoveries: 3 });
 	});
@@ -262,8 +262,8 @@ describe('ds-stamina-bar: the optional Recoveries popover editor (preference on)
 		await dse.click(bar.control('recov.marker', { nth: 0 }));
 		await expect(dse.control({ css: '.dse-stamina-rec__pop' })).toBeDisplayed();
 		await expect(bar.control('recov.pop.catch-breath')).toBeDisabled();
-		await expect(bar.control('recov.pop.catch-breath')).toHaveAttribute('aria-label', 'No Recoveries remaining');
-		await expect(bar.control('recov.catch-breath')).toHaveAttribute('aria-label', 'No Recoveries remaining');
+		await expect(bar.control('recov.pop.catch-breath')).toHaveAttribute('aria-label', 'Catch breath: No Recoveries remaining');
+		await expect(bar.control('recov.catch-breath')).toHaveAttribute('aria-label', 'Catch Breath: No Recoveries remaining');
 		await dse.expectNoWrite(note, () => dse.click(bar.control('recov.pop.catch-breath')));
 		await expect(dse.control({ css: '.dse-stamina-rec__pop' })).toBeDisplayed(); // a no-op leaves the popover open
 	});
