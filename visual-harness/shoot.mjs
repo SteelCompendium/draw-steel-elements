@@ -3039,6 +3039,8 @@ function ptClick(step) {
 function ptCentre(tag) {
 	const el = document.querySelector(`[data-sc450-${tag}]`);
 	if (!el) return null;
+	// The sweep's viewport is shorter than the fixture: a control below the fold cannot be hovered.
+	el.scrollIntoView({ block: 'center', inline: 'center' });
 	const r = el.getBoundingClientRect();
 	const x = r.left + r.width / 2;
 	const y = r.top + r.height / 2;
