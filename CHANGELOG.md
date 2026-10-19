@@ -26,8 +26,7 @@ for what needs action.
   detail row too** (SC-426). Double-clicking a creature's cell in the roster and applying a
   new Stamina (or Temp Stamina) used to change the cell and the note but leave the detail row
   above it on the old number, with a full bar and no Winded tag, until the tracker next
-  re-rendered. The number, the bar and the Winded/Dead tag now follow the edit at once. Editing
-  a creature the detail row is not showing still leaves the detail row alone.
+  re-rendered. The number, the bar and the Winded/Dead tag now follow the edit at once.
 - [FIX] **Hovering a button now shows its explanation, not just its name** (SC-324). The
   hero **Respite** button, the negotiation **Complete Argument** button, the compendium
   migration's **Sync without moving** button, a save-ends condition's **Roll save** button

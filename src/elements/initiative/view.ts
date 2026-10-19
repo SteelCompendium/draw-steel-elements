@@ -1851,7 +1851,8 @@ export class InitiativeView extends ElementView<EncounterData> {
 	/** SC-426 — the detail row's stamina handles when it currently shows `instanceKey`,
 	 *  else null (it shows a different creature, so an edit must not touch it). For the
 	 *  grid-cell route, which opens the stamina modal with no row in hand. Looked up at
-	 *  apply time, so a row rebuilt while the modal was open is still found. */
+	 *  apply time, so a detail row re-drawn by a selection change while the modal was open
+	 *  is still found. */
 	private detailHandlesFor(
 		groupBodyEl: HTMLElement,
 		instanceKey: string,
