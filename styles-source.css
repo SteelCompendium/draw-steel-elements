@@ -1812,6 +1812,14 @@ code.dsa {
 	background: var(--dse-border);
 }
 
+/* SC-428: the popover's "Catch breath" is really disabled (with a reason tooltip) whenever the
+   strip's Catch Breath is — dim it the way the kit button does (.dse-btn[disabled]). */
+.dse-stamina-rec__pop-cb[disabled] {
+	color: var(--dse-fg-muted);
+	opacity: 0.5;
+	cursor: default;
+}
+
 /* The undo toast's action, inside an Obsidian Notice (workspace chrome, not an element
    root — so this rule is deliberately unscoped and theme-agnostic). */
 .dse-undo-notice__action {

@@ -506,10 +506,18 @@ describe('[Q16] recoveryValue 0 (max <= 2): Spend Recovery can never gain, so it
 		expect(applyBtn(content).textContent).toBe('Gain 1 Stamina');
 	});
 
-	test.failing('[Q16] the disabled reason for a zero recovery value is not the "Already at maximum Stamina" text [known bug SC-428]', () => {
-		// 0/2 is nowhere near max, yet the tooltip claims it is at maximum.
+	test('[Q16] the disabled reason for a zero recovery value says so, not "Already at maximum Stamina" (SC-428)', () => {
+		// 0/2 is nowhere near max: the recovery value (floor(2/3)) is what is 0.
 		const { content } = openStaminaModal({ max: 2, current: 0, isHero: false, recoveries: 3, recoveries_max: 3 });
-		expect(spendRecoveryBtn(content)!.getAttribute('aria-label')).not.toContain('Already at maximum Stamina');
+		expect(spendRecoveryBtn(content)!.disabled).toBe(true);
+		expect(spendRecoveryBtn(content)!.getAttribute('aria-label')).toBe('Spend Recovery: Recovery value is 0');
+	});
+
+	test('[Q16] a zero recovery value with no Recoveries left still reports the Recoveries first (precedence), and at max 2 / current 2 still says the value is 0 (SC-428)', () => {
+		const none = openStaminaModal({ max: 2, current: 0, isHero: false, recoveries: 0, recoveries_max: 3 });
+		expect(spendRecoveryBtn(none.content)!.getAttribute('aria-label')).toBe('Spend Recovery: No Recoveries remaining');
+		const full = openStaminaModal({ max: 2, current: 2, isHero: false, recoveries: 3, recoveries_max: 3 });
+		expect(spendRecoveryBtn(full.content)!.getAttribute('aria-label')).toBe('Spend Recovery: Recovery value is 0');
 	});
 });
 

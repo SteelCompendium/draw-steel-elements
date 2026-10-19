@@ -5,7 +5,7 @@
 //
 // Known-bug convention (SC-408 ledger): a test of the CORRECT behaviour that fails today
 // because of a filed bug is a `test.failing` citing the ticket; it fails once the bug is
-// fixed so the marker gets removed.
+// fixed so the marker gets removed. (SC-428 flipped this file's markers to plain tests.)
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
 import { staminaBarElement } from '../../../src/elements/stamina-bar/definition';
@@ -68,22 +68,23 @@ describe('[R01][R02] Catch Breath button: enabled state and effect across positi
 	});
 });
 
-describe('[R03] Catch Breath at full Stamina must not spend a Recovery for +0 [known bug SC-428]', () => {
+describe('[R03] Catch Breath at full Stamina must not spend a Recovery for +0 (SC-428)', () => {
 	// The modal's own Spend Recovery real-disables in exactly this state ("Already at
-	// maximum Stamina", SC-133 I3); the strip's button only gates on dying / none left.
-	test.failing('[R03] 48/48 with 6 Recoveries: the button is disabled [known bug SC-428]', async () => {
+	// maximum Stamina", SC-133 I3); SC-428 gave the strip's button the same gate + reason.
+	test('[R03] 48/48 with 6 Recoveries: the button is disabled, with the reason as its tooltip', async () => {
 		const { root } = await mount(yaml(48, 6));
 		expect(catchBreathBtn(root).disabled).toBe(true);
+		expect(catchBreathBtn(root).getAttribute('aria-label')).toBe('Already at maximum Stamina');
 	});
 
-	test.failing('[R03] 48/48 with 6 Recoveries: a click writes nothing and keeps all 6 [known bug SC-428]', async () => {
+	test('[R03] 48/48 with 6 Recoveries: a click writes nothing and keeps all 6', async () => {
 		const { root, host } = await mount(yaml(48, 6));
 		catchBreathBtn(root).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect(recoveriesOf(lastWrite(host))).not.toBe('5');
 	});
 
-	test.failing('[R03] 48/48 with 6 Recoveries: a click raises no "Caught breath: +0" toast [known bug SC-428]', async () => {
+	test('[R03] 48/48 with 6 Recoveries: a click raises no "Caught breath: +0" toast', async () => {
 		const { root } = await mount(yaml(48, 6));
 		catchBreathBtn(root).click();
 		expect(Notice.notices.filter((m) => m.includes('Caught breath'))).toEqual([]);
@@ -125,21 +126,53 @@ describe('[R07][R08] popover editor: its "Catch breath" button honours the same 
 		expect(host.replaceSource).not.toHaveBeenCalled();
 	});
 
-	test.failing.each([
-		{ name: '0 Recoveries left', cur: 20, rec: 0 },
-		{ name: 'dying (current 0)', cur: 0, rec: 6 },
-		{ name: 'dying (current below 0)', cur: -3, rec: 6 },
-	])('[R08] popover Catch breath is real-disabled when $name, like the strip button [known bug SC-428]', async ({ cur, rec }) => {
+	test.each([
+		{ name: '0 Recoveries left', cur: 20, rec: 0, reason: 'No Recoveries remaining' },
+		{ name: 'dying (current 0)', cur: 0, rec: 6, reason: "Can't catch breath while dying" },
+		{ name: 'dying (current below 0)', cur: -3, rec: 6, reason: "Can't catch breath while dying" },
+		{ name: 'at full Stamina (48/48)', cur: 48, rec: 6, reason: 'Already at maximum Stamina' },
+	])('[R08] popover Catch breath is real-disabled when $name, with the strip button\'s reason (SC-428)', async ({ cur, rec, reason }) => {
 		const { root } = await mount(yaml(cur, rec), { popover: true });
-		expect(catchBreathBtn(root).disabled).toBe(true); // the strip button already is
+		expect(catchBreathBtn(root).disabled).toBe(true); // the strip button is too
 		openPopover(root);
 		expect(popoverCatchBreath(root)!.disabled).toBe(true);
+		// One source of truth: the same wording on both surfaces.
+		expect(catchBreathBtn(root).getAttribute('aria-label')).toBe(reason);
+		expect(popoverCatchBreath(root)!.getAttribute('aria-label')).toBe(reason);
 	});
 
-	test.failing('[R08][R03] popover Catch breath is real-disabled at full Stamina too [known bug SC-428]', async () => {
-		const { root } = await mount(yaml(48, 6), { popover: true });
+	test('[R08] recovery value 0 (max 2): both Catch Breath buttons are disabled and say the recovery value is 0 (SC-428)', async () => {
+		const { root } = await mount(['max_stamina: 2', 'current_stamina: 1', 'recoveries: 3', 'recoveries_max: 3'].join('\n'), { popover: true });
 		openPopover(root);
+		expect(catchBreathBtn(root).disabled).toBe(true);
 		expect(popoverCatchBreath(root)!.disabled).toBe(true);
+		expect(catchBreathBtn(root).getAttribute('aria-label')).toBe('Recovery value is 0');
+		expect(popoverCatchBreath(root)!.getAttribute('aria-label')).toBe('Recovery value is 0');
+	});
+
+	test('[R08] a disabled popover Catch breath click writes nothing and leaves the popover open (SC-428)', async () => {
+		const { root, host } = await mount(yaml(48, 6), { popover: true });
+		openPopover(root);
+		popoverCatchBreath(root)!.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).not.toHaveBeenCalled();
+		expect(root.querySelector('.dse-stamina-rec__pop')).not.toBeNull();
+	});
+
+	test('[R08] an OPEN popover follows the state in place: spending the last Recovery disables it, restoring one re-enables it and clears the reason (SC-428)', async () => {
+		const { root } = await mount(yaml(31, 1), { popover: true });
+		openPopover(root);
+		const cb = popoverCatchBreath(root)!;
+		expect(cb.disabled).toBe(false);
+		expect(cb.getAttribute('aria-label')).toBeNull();
+		root.querySelector<HTMLButtonElement>('button[aria-label="Spend a recovery"]')!.click(); // 1 -> 0
+		expect(popoverCatchBreath(root)).toBe(cb); // same node: updated in place, not re-rendered
+		expect(cb.disabled).toBe(true);
+		expect(cb.getAttribute('aria-label')).toBe('No Recoveries remaining');
+		root.querySelector<HTMLButtonElement>('button[aria-label="Restore a recovery"]')!.click(); // 0 -> 1
+		expect(cb.disabled).toBe(false);
+		expect(cb.getAttribute('aria-label')).toBeNull();
+		expect(catchBreathBtn(root).getAttribute('aria-label')).toBe('Catch Breath');
 	});
 });
 

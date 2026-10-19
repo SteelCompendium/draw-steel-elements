@@ -40,7 +40,7 @@ import {
 	updateStaminaBar,
 } from '@/framework/kit';
 import type { RecoveriesStripHandle, StaminaBarValues } from '@/framework/kit';
-import { StaminaBar, recoveryHealAmount } from '@model/StaminaBar';
+import { StaminaBar, catchBreathBlockedReason, recoveryHealAmount } from '@model/StaminaBar';
 import { StaminaEditModal } from '@views/StaminaEditModal';
 
 const READ_ONLY_TOOLTIP = 'Read-only in this context';
@@ -191,10 +191,25 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 		// RR §8: winded takes the "at half max or below" wording (`<=`); dying (`<= 0`)
 		// implies winded too and takes display priority. See StaminaBar's isWinded/
 		// isDying getters for the citation.
+		// SC-428: one shared predicate + reason (model/StaminaBar.ts) — also disabled when a
+		// press would heal 0 (full Stamina, or a recovery value of 0), never a silent no-op.
+		const blocked = this.catchBreathBlock(model);
 		this.recStrip.update({
 			remaining,
 			wound: model.isDying ? 'dying' : model.isWinded ? 'winded' : null,
-			catchBreathDisabled: !this.cx.host.canPersist || model.isDying || remaining <= 0,
+			catchBreathDisabled: !this.cx.host.canPersist || blocked !== null,
+			catchBreathReason: blocked,
+		});
+	}
+
+	/** SC-428: why Catch Breath is unavailable (null = available). */
+	private catchBreathBlock(model: StaminaBar): string | null {
+		return catchBreathBlockedReason({
+			remaining: model.recoveries ?? 0,
+			dying: model.isDying,
+			recoveryValue: model.recoveryValue,
+			current: model.current_stamina,
+			max: model.max_stamina,
 		});
 	}
 
@@ -223,7 +238,7 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 	private catchBreath(): void {
 		const model = this.model;
 		const remaining = model.recoveries ?? 0;
-		if (remaining <= 0 || model.isDying) return; // defensive: the button is disabled too
+		if (this.catchBreathBlock(model) !== null) return; // defensive: the button is disabled too
 
 		const beforeStamina = model.current_stamina;
 		const healed = recoveryHealAmount(model.recoveryValue, model.current_stamina, model.max_stamina);

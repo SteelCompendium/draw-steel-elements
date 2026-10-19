@@ -37,6 +37,11 @@ import type { Component } from 'obsidian';
 import { stampControl } from './controlId';
 import { iconButton } from './iconButton';
 import type { IconButtonHandle } from './iconButton';
+import { tooltip } from './tooltip';
+
+/** The strip's Catch Breath button's own accessible name — re-asserted whenever the button
+ *  re-enables, so a disabled reason never outlives the state it describes. */
+const CATCH_BREATH_LABEL = 'Catch Breath';
 
 /** The keys the marker row treats as value input. Named once so the direct-commit branch
  *  and the popover branch cannot disagree about what counts as an edit. */
@@ -75,6 +80,10 @@ export interface RecoveriesStripState {
 	/** RR §8: "Can't Catch Breath [while dying]" — plus the obvious floor at 0 remaining,
 	 *  and the read-only gate. Computed by the caller, which owns the stamina model. */
 	catchBreathDisabled: boolean;
+	/** SC-428: WHY it is disabled (house rule: a disabled control says why — CB-8), shown as
+	 *  the tooltip on BOTH Catch Breath controls (the strip icon and the popover button).
+	 *  Null/omitted = no reason to show (available, or read-only, whose own tooltip stays). */
+	catchBreathReason?: string | null;
 }
 
 export interface RecoveriesStripHandle {
@@ -145,7 +154,7 @@ export function renderRecoveriesStrip(
 		rootEl,
 		{
 			icon: 'wind',
-			label: 'Catch Breath',
+			label: CATCH_BREATH_LABEL,
 			control: 'recov.catch-breath',
 			// The text node stays in the DOM for Legacy (byte-identical) and is hidden by
 			// the Steel layer — Scott: "If there is a button, I think it needs to be only
@@ -157,6 +166,10 @@ export function renderRecoveriesStrip(
 	);
 
 	let current = 0;
+	// SC-428: the latest availability, kept so a popover opened AFTER an update (the popover
+	// is built on demand) paints the same disabled state + reason as the strip button.
+	let cbDisabled = false;
+	let cbReason: string | null = null;
 	let popover: HTMLElement | null = null;
 	let repaintPopover: (() => void) | null = null;
 
@@ -194,8 +207,6 @@ export function renderRecoveriesStrip(
 		inc.type = 'button';
 		inc.setAttribute('aria-label', 'Restore a recovery');
 		stampControl(inc, 'recov.pop.inc');
-		repaintPopover = () => val.setText(`${current} / ${opts.max}`);
-		repaintPopover();
 		dec.addEventListener('click', () => commit(current - 1));
 		inc.addEventListener('click', () => commit(current + 1));
 		pop.createDiv({ cls: 'dse-stamina-rec__pop-sep' });
@@ -203,9 +214,18 @@ export function renderRecoveriesStrip(
 		cb.type = 'button';
 		stampControl(cb, 'recov.pop.catch-breath');
 		cb.addEventListener('click', () => {
+			if (cb.disabled) return;
 			closePopover();
 			opts.onCatchBreath();
 		});
+		repaintPopover = () => {
+			val.setText(`${current} / ${opts.max}`);
+			// SC-428: real-disabled with the same reason as the strip button — never a silent no-op.
+			cb.disabled = cbDisabled;
+			if (cbDisabled && cbReason) tooltip(cb, cbReason);
+			else cb.removeAttribute('aria-label'); // the visible text is its accessible name
+		};
+		repaintPopover();
 	};
 
 	const togglePopover = (): void => {
@@ -302,7 +322,15 @@ export function renderRecoveriesStrip(
 				statusEl.removeAttribute('data-state');
 			}
 
+			cbDisabled = state.catchBreathDisabled;
+			cbReason = state.catchBreathReason ?? null;
 			catchBreath.setDisabled(state.catchBreathDisabled);
+			// Read-only keeps its own tooltip (set once at mount); otherwise the reason when
+			// disabled, the plain name when available again.
+			if (opts.canPersist) {
+				if (cbDisabled && cbReason) tooltip(catchBreath.buttonEl, cbReason);
+				else catchBreath.setLabel(CATCH_BREATH_LABEL);
+			}
 			repaintPopover?.();
 		},
 	};

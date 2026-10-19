@@ -208,3 +208,50 @@ export class StaminaBar extends ComponentWrapper{
 export function recoveryHealAmount(recoveryValue: number, current: number, max: number, capped = true): number {
 	return capped ? Math.max(Math.min(recoveryValue, max - current), 0) : recoveryValue;
 }
+
+// SC-428 — ONE source of truth for why Catch Breath / Spend Recovery is unavailable, so the
+// strip button, the Recoveries popover button, the hero sheet's strip and the Stamina modal's
+// Spend Recovery can never word the same reason two ways (the house rule: a control that is
+// disabled always says why — CB-8). The modal imports the constants and `zeroHealReason`;
+// the two Catch Breath views and the strip go through `catchBreathBlockedReason`.
+
+/** No Recoveries left to spend. */
+export const REASON_NO_RECOVERIES = 'No Recoveries remaining';
+/** RR §8: "Can't Catch Breath" while dying (Stamina <= 0). */
+export const REASON_DYING = "Can't catch breath while dying";
+/** The recovery value itself is 0 (floor(max / 3) with max Stamina <= 2): a press can never heal. */
+export const REASON_ZERO_RECOVERY_VALUE = 'Recovery value is 0';
+/** Recoveries remain, but Stamina is already full so a press would heal 0. */
+export const REASON_AT_MAX_STAMINA = 'Already at maximum Stamina';
+
+/** SC-324: a control's hover tooltip IS its one aria-label, so a disabled reason follows the
+ *  action's name ("Catch Breath: Already at maximum Stamina") and never replaces it. */
+export function labelWithReason(name: string, reason: string): string {
+	return `${name}: ${reason}`;
+}
+
+/** The reason a press that heals nothing heals nothing. A zero recovery value wins over "at
+ *  maximum" — it is the permanent cause, and true at any current Stamina. `!(x > 0)` (not
+ *  `x <= 0`) so a NaN value reads as zero, matching the modal's own NaN-safe gain guard. */
+export function zeroHealReason(recoveryValue: number): string {
+	return recoveryValue > 0 ? REASON_AT_MAX_STAMINA : REASON_ZERO_RECOVERY_VALUE;
+}
+
+export interface CatchBreathAvailability {
+	/** Recoveries left to spend. */
+	remaining: number;
+	/** Stamina <= 0. */
+	dying: boolean;
+	recoveryValue: number;
+	current: number;
+	max: number;
+}
+
+/** Why Catch Breath cannot be used right now, or null when it can. Precedence: none left,
+ *  dying, then a press that would heal nothing (zero recovery value, else full Stamina). */
+export function catchBreathBlockedReason(a: CatchBreathAvailability): string | null {
+	if (!(a.remaining > 0)) return REASON_NO_RECOVERIES;
+	if (a.dying) return REASON_DYING;
+	if (!(recoveryHealAmount(a.recoveryValue, a.current, a.max) > 0)) return zeroHealReason(a.recoveryValue);
+	return null;
+}

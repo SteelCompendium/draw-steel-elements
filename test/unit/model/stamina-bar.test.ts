@@ -1,4 +1,4 @@
-import { StaminaBar } from '@model/StaminaBar';
+import { StaminaBar, catchBreathBlockedReason, zeroHealReason } from '@model/StaminaBar';
 import { Hero } from '@drawSteelAdmonition/EncounterData';
 import { stringifyYaml } from '../../mocks/obsidian';
 import { initializeSchemaRegistry, resetSchemaRegistry } from '@utils/JsonSchemaValidator';
@@ -94,5 +94,31 @@ describe('T-6: StaminaBar hero round-trip', () => {
 		expect(hero.current_stamina).toBe(50);
 		expect(hero.temp_stamina).toBe(0);
 		expect(hero.max_stamina).toBe(80);
+	});
+});
+
+describe('SC-428: catchBreathBlockedReason (the one gate behind every Catch Breath / Spend Recovery surface)', () => {
+	const ok = { remaining: 3, dying: false, recoveryValue: 16, current: 31, max: 48 };
+
+	test('available -> null', () => {
+		expect(catchBreathBlockedReason(ok)).toBeNull();
+	});
+
+	test.each([
+		['none left', { remaining: 0 }, 'No Recoveries remaining'],
+		['dying', { dying: true, current: 0 }, "Can't catch breath while dying"],
+		['full Stamina', { current: 48 }, 'Already at maximum Stamina'],
+		['recovery value 0', { recoveryValue: 0, max: 2, current: 1 }, 'Recovery value is 0'],
+		['recovery value 0 even at max', { recoveryValue: 0, max: 2, current: 2 }, 'Recovery value is 0'],
+		['none left wins over dying', { remaining: 0, dying: true, current: 0 }, 'No Recoveries remaining'],
+		['dying wins over a zero heal', { dying: true, current: 0, recoveryValue: 0, max: 2 }, "Can't catch breath while dying"],
+	])('%s', (_name, patch, reason) => {
+		expect(catchBreathBlockedReason({ ...ok, ...patch })).toBe(reason);
+	});
+
+	test('zeroHealReason: a NaN or non-positive recovery value reads as zero, not "at maximum"', () => {
+		expect(zeroHealReason(10)).toBe('Already at maximum Stamina');
+		expect(zeroHealReason(0)).toBe('Recovery value is 0');
+		expect(zeroHealReason(NaN)).toBe('Recovery value is 0');
 	});
 });

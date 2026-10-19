@@ -7,7 +7,8 @@
 //
 // Known-bug convention (SC-408 ledger): a test of the CORRECT behaviour that fails today
 // because of a filed bug is a `test.failing` citing the ticket; it fails once the bug is
-// fixed so the marker gets removed.
+// fixed so the marker gets removed. (The [R03] Catch Breath markers here were flipped to
+// plain tests by SC-428.)
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
@@ -140,12 +141,13 @@ describe('[R01][R02][R03] ds-hero Catch Breath across positions (resolved fury, 
 		expect(heroState(host).recoveries).toBe(rec - 1);
 	});
 
-	test.failing('[R03] at full Stamina (48/48, 6 Recoveries) the button is disabled [known bug SC-428]', async () => {
+	test('[R03] at full Stamina (48/48, 6 Recoveries) the button is disabled, with the reason as its tooltip (SC-428)', async () => {
 		const { staminaRegion } = await mountHero(heroSource(FURY, 48));
 		expect(heroCatchBreath(staminaRegion).disabled).toBe(true);
+		expect(heroCatchBreath(staminaRegion).getAttribute('aria-label')).toBe('Already at maximum Stamina');
 	});
 
-	test.failing('[R03] at full Stamina a click writes nothing and spends no Recovery [known bug SC-428]', async () => {
+	test('[R03] at full Stamina a click writes nothing and spends no Recovery (SC-428)', async () => {
 		const { host, staminaRegion } = await mountHero(heroSource(FURY, 48));
 		heroCatchBreath(staminaRegion).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);

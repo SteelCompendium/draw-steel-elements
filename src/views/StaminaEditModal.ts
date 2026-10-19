@@ -31,7 +31,7 @@ import {
 	updateStaminaGauge,
 } from '@/framework/kit';
 import type { IconButtonHandle, StaminaGaugeValues, StepperHandle } from '@/framework/kit';
-import { StaminaBar } from '@model/StaminaBar';
+import { REASON_NO_RECOVERIES, StaminaBar, labelWithReason, zeroHealReason } from '@model/StaminaBar';
 
 // ---------------------------------------------------------------------------------
 // Shared §3.5b template primitives (composed by BOTH stamina modals)
@@ -172,15 +172,10 @@ export function setButtonText(btn: IconButtonHandle, text: string): void {
 	btn.setLabel(text);
 }
 
-/** FOLLOWUPS #27b: the visible reason (house rule — never a silent disable, same
- *  convention as the bar's own read-only tooltip) shown on Spend Recovery when no
- *  Recoveries remain. */
-const NO_RECOVERIES_TOOLTIP = 'No Recoveries remaining';
-/** SC-133 I3 (fix-round-1): same house rule, for the OTHER reason Spend Recovery
- *  disables — Recoveries remain, but the next press would heal 0. Under the
- *  rebased gain calc (see StaminaEditModal.recoverySpendResult) this can only
- *  happen at the max-side cap, so the reason is always accurate. */
-const NO_GAIN_TOOLTIP = 'Already at maximum Stamina';
+// SC-428: the three disabled reasons (no Recoveries / zero recovery value / already at max)
+// live in model/StaminaBar.ts and are SHARED with the Catch Breath strip + popover — one
+// wording per reason on every surface, composed name-first (SC-324, `labelWithReason`). House rule (FOLLOWUPS #27b, SC-133 I3): a disabled
+// Spend Recovery always shows why (CB-8).
 /** The Spend Recovery button's own accessible name/tooltip (FOLLOWUPS #27-fix-round
  *  finding 1) — re-asserted via setLabel whenever the button re-enables, so the reason
  *  above never sticks past the state it describes (the hover tooltip IS the aria-label,
@@ -188,7 +183,7 @@ const NO_GAIN_TOOLTIP = 'Already at maximum Stamina';
 const SPEND_RECOVERY_LABEL = 'Spend Recovery';
 /** SC-324: the disabled reason is part of the ONE aria-label (hover + accessible name), so
  *  it follows the action: "Spend Recovery: No Recoveries remaining" — never replaces it. */
-const spendRecoveryReasonLabel = (reason: string): string => `${SPEND_RECOVERY_LABEL}: ${reason}`;
+const spendRecoveryReasonLabel = (reason: string): string => labelWithReason(SPEND_RECOVERY_LABEL, reason);
 
 // ---------------------------------------------------------------------------------
 // The single-stamina modal (hero / creature)
@@ -628,6 +623,8 @@ export class StaminaEditModal extends DseModal {
 			// 0)`, not `gain <= 0` (matches onClick's guard — see its comment for why:
 			// NaN-safety).
 			const noGain = !(this.recoverySpendResult(currentStamina, negativeStaminaLimit, maxStamina).gain > 0);
+			// SC-428: why a zero-gain press is zero — "recovery value is 0" vs "already at max".
+			const recoveryValue = this.recoveryValueNow();
 			if (!spendRecoveryBtn) {
 				// The caller suppressed the control (SC-132 H1) — nothing to disable.
 			} else if (recoveriesTracked) {
@@ -642,16 +639,16 @@ export class StaminaEditModal extends DseModal {
 				// label via setLabel (FOLLOWUPS #27-fix-round finding 1).
 				spendRecoveryBtn.setLabel(
 					noneLeft
-						? spendRecoveryReasonLabel(NO_RECOVERIES_TOOLTIP)
+						? spendRecoveryReasonLabel(REASON_NO_RECOVERIES)
 						: noGain
-							? spendRecoveryReasonLabel(NO_GAIN_TOOLTIP)
+							? spendRecoveryReasonLabel(zeroHealReason(recoveryValue))
 							: SPEND_RECOVERY_LABEL,
 				);
 			} else {
 				// Same house rule, untracked branch: no Recoveries counter to run out of,
 				// but "no gain" is still a real, visible disabled reason.
 				spendRecoveryBtn.setDisabled(noGain);
-				spendRecoveryBtn.setLabel(noGain ? spendRecoveryReasonLabel(NO_GAIN_TOOLTIP) : SPEND_RECOVERY_LABEL);
+				spendRecoveryBtn.setLabel(noGain ? spendRecoveryReasonLabel(zeroHealReason(recoveryValue)) : SPEND_RECOVERY_LABEL);
 			}
 		};
 		refresh();
@@ -691,8 +688,9 @@ export class StaminaEditModal extends DseModal {
 	 *  this model a Recovery healing from ANY floor position always helps, as long
 	 *  as recoveryValue > 0 — gain is only ever 0 at the max-side cap (or, degenerate
 	 *  but real: recoveryValue itself is 0 whenever max_stamina ≤ 2, floor(max/3),
-	 *  which permanently reports no gain and shows the max-side tooltip regardless
-	 *  of position — doc note only, not a behavior this fix needs to change). So the
+	 *  which permanently reports no gain regardless of position; SC-428: refresh()
+	 *  words that case "Recovery value is 0" via zeroHealReason, not the max-side
+	 *  text). So the
 	 *  net effect is that Spend Recovery, like the stepper's own "+", becomes
 	 *  another documented member of the corrective corridor above rather than a
 	 *  route to a silently-zero OR dishonest partial spend. */
@@ -702,11 +700,15 @@ export class StaminaEditModal extends DseModal {
 		maxStamina: number,
 	): { gain: number; newStamina: number } {
 		const before = this.clampStamina(currentStamina + this.pendingStaminaChange, negativeStaminaLimit, maxStamina);
-		// SC-132 H1: the caller's derived value wins when it supplied one (the hero
-		// sheet's, which kits can move); otherwise RR §8's floor(max/3) off the model.
-		const recoveryValue = this.opts.recoveryValue ?? this.staminaBar.recoveryValue;
+		const recoveryValue = this.recoveryValueNow();
 		const after = this.clampStamina(before + recoveryValue, negativeStaminaLimit, maxStamina);
 		return { gain: after - before, newStamina: after };
+	}
+
+	/** SC-132 H1: the caller's derived value wins when it supplied one (the hero sheet's,
+	 *  which kits can move); otherwise RR §8's floor(max/3) off the model. */
+	private recoveryValueNow(): number {
+		return this.opts.recoveryValue ?? this.staminaBar.recoveryValue;
 	}
 
 	private amountToMaxStamina(currentStamina: number, maxStamina: number) {

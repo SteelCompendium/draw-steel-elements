@@ -42,7 +42,7 @@ import type { RenderContext } from '@/framework/context';
 import type { ElementDefinition } from '@/framework/registry';
 import type { PanelHost } from '@/framework/kit';
 import { openManagedModal } from '@/framework/kit';
-import { StaminaBar, recoveryHealAmount } from '@model/StaminaBar';
+import { StaminaBar, catchBreathBlockedReason, recoveryHealAmount } from '@model/StaminaBar';
 import { StaminaEditModal } from '@views/StaminaEditModal';
 import { charsAreSplit, iconButton, renderCharacteristicsRow, renderRecoveriesStrip, renderStaminaBar, undoNotice, updateStaminaBar, tabs } from '@/framework/kit';
 import type { CharacteristicsValues, IconButtonHandle, RecoveriesStripHandle, StaminaBarValues } from '@/framework/kit';
@@ -421,10 +421,25 @@ export class HeroSheetView extends ElementView<HeroModel> {
 		if (!this.recStrip) return;
 		const remaining = model.state.recoveries ?? 0;
 		const { dying, winded } = this.woundState(model);
+		// SC-428: the same shared predicate + reason as the standalone bar.
+		const blocked = this.catchBreathBlock(model);
 		this.recStrip.update({
 			remaining,
 			wound: dying ? 'dying' : winded ? 'winded' : null,
-			catchBreathDisabled: this.readOnly || dying || remaining <= 0,
+			catchBreathDisabled: this.readOnly || blocked !== null,
+			catchBreathReason: blocked,
+		});
+	}
+
+	/** SC-428: why Catch Breath is unavailable (null = available). Same inputs the heal itself
+	 *  uses (catchBreath below), so the gate and the press cannot disagree. */
+	private catchBreathBlock(model: HeroModel): string | null {
+		return catchBreathBlockedReason({
+			remaining: model.state.recoveries ?? 0,
+			dying: this.woundState(model).dying,
+			recoveryValue: this.stats.recoveryValue.value ?? 0,
+			current: model.state.stamina.current,
+			max: this.stats.maxStamina.value ?? model.state.stamina.current,
 		});
 	}
 
@@ -460,8 +475,7 @@ export class HeroSheetView extends ElementView<HeroModel> {
 	private catchBreath(): void {
 		const model = this.model;
 		const remaining = model.state.recoveries ?? 0;
-		const { dying } = this.woundState(model);
-		if (remaining <= 0 || dying) return; // defensive: the button is disabled too
+		if (this.catchBreathBlock(model) !== null) return; // defensive: the button is disabled too
 
 		const max = this.stats.maxStamina.value ?? model.state.stamina.current;
 		const recoveryValue = this.stats.recoveryValue.value ?? 0;
