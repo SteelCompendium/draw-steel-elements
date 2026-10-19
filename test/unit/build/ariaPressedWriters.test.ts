@@ -22,6 +22,8 @@ import * as ts from 'typescript';
  *     `getAttribute` / `hasAttribute` READ;
  *   - `.dataset.pressed` / `.dataset['pressed']` as an assignment target, `delete`, or `++`/`--` operand;
  *   - `.ariaPressed` / `['ariaPressed']` as an assignment target (`=`, `??=`, `||=`, `&&=`, ...);
+ *   - attribute names compare case-insensitively (HTML lower-cases them: `'ARIA-PRESSED'` is a real write);
+ *   - a `pressed` key in an object literal passed to `Object.assign(<x>.dataset, ...)`;
  *   - an `ariaPressed` object key (`Object.assign(el, { ariaPressed: 'true' })`) or the literal `'ariaPressed'`.
  * To add a toggle: call `setPressedState(el, pressed)` (re-exported from `@/framework/kit`), or use an
  * `iconButton` handle's `setPressed`. Extend ALLOWED only for an element that is deliberately NOT a
@@ -143,7 +145,7 @@ function findPressedWrites(source: string, fileName = 'x.ts'): Hit[] {
 		// Names: any literal / folded expression whose value is a pressed attribute name (or `ariaPressed`),
 		// except the first argument of a getAttribute / hasAttribute READ.
 		const v = staticText(node);
-		if (v !== undefined && (PRESSED_NAMES.has(v) || v === 'ariaPressed') && !(node.parent && staticText(node.parent) !== undefined)) {
+		if (v !== undefined && (PRESSED_NAMES.has(v.toLowerCase()) || v === 'ariaPressed') && !(node.parent && staticText(node.parent) !== undefined)) {
 			const p = node.parent;
 			const isRead =
 				!!p && ts.isCallExpression(p) && p.arguments[0] === node &&
@@ -152,6 +154,15 @@ function findPressedWrites(source: string, fileName = 'x.ts'): Hit[] {
 		}
 		// `ariaPressed` as an identifier key in an object literal / shorthand.
 		if ((ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) && ts.isIdentifier(node.name) && node.name.text === 'ariaPressed') add(node);
+		// `Object.assign(el.dataset, { pressed: '' })`: a `pressed` key written into a dataset.
+		if (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) {
+			const key = ts.isIdentifier(node.name) ? node.name.text : ts.isStringLiteralLike(node.name) ? node.name.text : undefined;
+			const lit = node.parent;
+			const call = lit && ts.isObjectLiteralExpression(lit) ? lit.parent : undefined;
+			if (key === 'pressed' && call && ts.isCallExpression(call) && call.arguments[0] !== lit &&
+				ts.isPropertyAccessExpression(call.expression) && call.expression.name.text === 'assign' &&
+				call.arguments[0] && isDatasetOwner(call.arguments[0])) add(node);
+		}
 		const m = memberName(node);
 		if (m && isWriteTarget(node)) {
 			if (m.name === 'ariaPressed') add(node);
@@ -222,6 +233,10 @@ describe('SC-450: aria-pressed / data-pressed are written by ONE function', () =
 			`el.setAttribute('data-' + 'pressed', x);`,
 			'el.setAttribute(`aria-${"pressed"}`, x);',
 			`const NAME = 'aria-pressed'; el.setAttribute(NAME, x);`,
+			`el.setAttribute('ARIA-PRESSED', 'true');`,
+			`el.toggleAttribute('Data-Pressed', on);`,
+			`Object.assign(el.dataset, { pressed: '' });`,
+			`Object.assign(el.dataset, { 'pressed': '' });`,
 			`el.dataset.pressed = '';`,
 			`el.dataset['pressed'] = '';`,
 			`delete el.dataset.pressed;`,
@@ -246,6 +261,8 @@ describe('SC-450: aria-pressed / data-pressed are written by ONE function', () =
 			`const ok = el.ariaPressed === 'true';`,
 			`const p = el.dataset.pressed;`,
 			`el.setAttribute('aria-label', 'x');`,
+			`Object.assign(el.dataset, { other: '' });`,
+			`Object.assign(el.style, { pressed: '' });`,
 		];
 		for (const s of harmless) expect({ s, n: findPressedWrites(s).length }).toEqual({ s, n: 0 });
 	});
