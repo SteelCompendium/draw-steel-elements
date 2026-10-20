@@ -545,7 +545,7 @@ export class EncounterView extends ElementView<EncounterModel> {
 		// NUMBER (`56948`, `9.2e+51`, `.inf` -> Infinity, `0`), because it was written unquoted and YAML
 		// read it back as one. Hand it out as a string: `findGeneratedBlock` compares with `===` against
 		// the string the tracker's `_dse_from` reads back as. (`0` is a real id, not "no anchor".)
-		const existing: unknown = this.model._dse_anchor;
+		const existing: string | number | null | undefined = this.model._dse_anchor;
 		if (existing !== undefined && existing !== null && existing !== '') return String(existing);
 		const id = generateAnchorId(); // SC-360: the shared generator - a bare hex id can read as a YAML number
 		this.model._dse_anchor = id;

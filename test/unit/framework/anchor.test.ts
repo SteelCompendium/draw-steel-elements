@@ -149,7 +149,7 @@ describe('D8 Task 2 review fix — anchor.ts fence scanner (finding #4, CRITICAL
 			for (const r of sweepValues()) {
 				random.mockReturnValue(r);
 				const { body, id } = ensureAnchor('current_value: 1');
-				seen.add(id);
+				seen.add(id as string);
 
 				expect(id).toMatch(/^[A-Za-z0-9_-]{6}$/); // same shape the matchers accept
 				const model = parseYaml(body);
