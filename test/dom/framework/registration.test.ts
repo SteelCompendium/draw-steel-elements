@@ -381,3 +381,68 @@ describe('SC-455: sendToSidebar on a block inside a blockquote / callout', () =>
 		expect(app.vault.getContent('Note.md')).toBe(note);
 	});
 });
+
+// SC-460 — a lone CR above the block. The editor cursor line (CodeMirror) and Obsidian's section line
+// numbers both count a lone CR as a break, so the block "at the cursor" must be found in that numbering
+// or a pin from the close fence of a block picks the wrong one.
+describe('SC-460: sendToSidebar on a note with lone CRs', () => {
+	beforeEach(() => {
+		Notice.notices.length = 0;
+	});
+	const twoBlocks = (): string =>
+		[
+			'# Notes', // 0
+			'a\rb', // 1, 2
+			'```ds-counter', // 3
+			'current_value: 1', // 4
+			'```', // 5
+			'mid\rdle', // 6, 7
+			'```ds-counter', // 8
+			'current_value: 2', // 9
+			'```', // 10
+			'tail', // 11
+		].join('\n');
+
+	test('the cursor on the CLOSE fence of the second block pins the second block, with no "multiple blocks" Notice', async () => {
+		const { app, services } = setup();
+		app.vault.setFile('Note.md', twoBlocks());
+
+		await expect(sendToSidebar(services, 'Note.md', 'ds-counter', 10)).resolves.toBe(true);
+
+		const out = app.vault.getContent('Note.md')!;
+		expect(out).toMatch(/^# Notes\na\rb\n```ds-counter\ncurrent_value: 1\n```\nmid\rdle\n```ds-counter\ncurrent_value: 2\n_dse_anchor: [A-Za-z0-9_-]+\n```\ntail$/);
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('a pin from the chrome menu (the cursor line is the block\'s own Obsidian line) picks the right block', async () => {
+		const { app, services, plugin } = setup();
+		registerDseSidebar(plugin as any, services);
+		app.vault.setFile('Note.md', twoBlocks());
+
+		await requestPinToSidebar('Note.md', 'ds-counter', 8);
+
+		const out = app.vault.getContent('Note.md')!;
+		expect(out.match(/_dse_anchor/g)).toHaveLength(1);
+		expect(out).toMatch(/current_value: 2\n_dse_anchor: [A-Za-z0-9_-]+\n```\ntail$/);
+		expect(Notice.notices).toHaveLength(0);
+		unregisterDseSidebar();
+	});
+
+	test('a CRLF note with a lone CR above is stamped with CRLF and the lone CR is kept', async () => {
+		const { app, services } = setup();
+		app.vault.setFile('Note.md', ['# Notes', 'a\rb', '```ds-counter', 'current_value: 1', '```', 'tail'].join('\r\n'));
+
+		await expect(sendToSidebar(services, 'Note.md', 'ds-counter')).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toMatch(/^# Notes\r\na\rb\r\n```ds-counter\r\ncurrent_value: 1\r\n_dse_anchor: [A-Za-z0-9_-]+\r\n```\r\ntail$/);
+	});
+
+	test('a note with no lone CR is stamped exactly as before (regression guard)', async () => {
+		const { app, services } = setup();
+		app.vault.setFile('Note.md', twoBlocks().replace(/\r/g, '\n'));
+
+		await sendToSidebar(services, 'Note.md', 'ds-counter', 10);
+
+		expect(app.vault.getContent('Note.md')).toMatch(/current_value: 2\n_dse_anchor: [A-Za-z0-9_-]+\n```\ntail$/);
+	});
+});

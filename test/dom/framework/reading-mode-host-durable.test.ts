@@ -1003,3 +1003,237 @@ describe('SC-455: Live Preview callout (no section info)', () => {
 		expect(host.canPersist).toBe(false);
 	});
 });
+
+// SC-460 — a lone CR (a carriage return with no LF after it) anywhere above a block. Measured in real
+// Obsidian 1.14.4: getSectionInfo, the metadata cache and the editor all count a lone CR as ONE line break
+// (CR, CRLF and LF alike; U+2028/U+2029/NEL/VT/FF are not breaks), so the section's lineStart/lineEnd are in
+// THAT numbering. The host used to index the note with split('\n'), so every number below a lone CR was one
+// line off, readSection could not parse the fence, and the write was dropped (a Notice since SC-455, but never saved).
+describe('SC-460: ReadingModeBlockHost.replaceSource in a note with lone CRs', () => {
+	let warn: jest.SpyInstance;
+	beforeEach(() => {
+		resetDroppedWriteNotices();
+		Notice.notices.length = 0;
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => warn.mockRestore());
+
+	type Section = { current: { text: string; lineStart: number; lineEnd: number } | null };
+	const toCrlf = (s: string): string => s.replace(/\n/g, '\r\n');
+	const CTR = (n: number, name = 'A'): string[] => ['```ds-counter', `name: ${name}`, `current_value: ${n}`, '```'];
+	const bodyOf = (n: number, name = 'A'): string => `name: ${name}\ncurrent_value: ${n}`;
+
+	/** The section Obsidian reports for the `nth` ds-counter fence of `live`: the fence lines, in ITS line numbering. */
+	function sectionOf(live: string, nth = 0, text = live): { text: string; lineStart: number; lineEnd: number } {
+		const lines = live.split(/\r\n|\r|\n/);
+		let lineStart = -1;
+		for (let i = 0, seen = 0; i < lines.length; i++) {
+			if (lines[i] === '```ds-counter' && seen++ === nth) {
+				lineStart = i;
+				break;
+			}
+		}
+		const lineEnd = lines.indexOf('```', lineStart + 1);
+		return { text, lineStart, lineEnd };
+	}
+
+	function hostFor(app: App, section: Section, body: string, alias = 'ds-counter') {
+		const host = new ReadingModeBlockHost(new Plugin(app) as any, document.createElement('div'), switchableCtx('Note.md', section) as any, alias);
+		host.setMountedBody(body);
+		return host;
+	}
+
+	test('LF note, a lone CR above the block: the write lands, the lone CR and everything else are byte-identical', async () => {
+		const app = new App();
+		const live = ['# N', '', 'a\rb', '', ...CTR(1), '', 'below'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: sectionOf(live) }, bodyOf(1));
+		expect(sectionOf(live).lineStart).toBe(5); // one line further down than split('\n') puts it
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(['# N', '', 'a\rb', '', ...CTR(2), '', 'below'].join('\n'));
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('CRLF note, a lone CR above the block: the whole note keeps its endings and the lone CR survives', async () => {
+		const app = new App();
+		const live = toCrlf(['# N', '', 'a\rb', '', ...CTR(1), '', 'below'].join('\n'));
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: sectionOf(live) }, bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		const out = app.vault.getContent('Note.md')!;
+		expect(out).toBe(toCrlf(['# N', '', 'a\rb', '', ...CTR(2), '', 'below'].join('\n')));
+		expect(out.replace(/\r\n/g, '').replace(/\r/g, '')).not.toMatch(/\n/); // the only bare CR is the one that was there
+		expect(out.match(/\r(?!\n)/g)).toHaveLength(1);
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('several lone CRs above (one at the very start) and one below: the write lands and all of them survive', async () => {
+		const app = new App();
+		const live = ['\rtop', 'a\rb\rc', '', ...CTR(1), 'x\ry'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: sectionOf(live) }, bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(['\rtop', 'a\rb\rc', '', ...CTR(2), 'x\ry'].join('\n'));
+	});
+
+	test('a lone CR only BELOW the block (regression guard): the write lands as before', async () => {
+		const app = new App();
+		const live = ['# N', '', ...CTR(1), '', 'be\rlow'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: sectionOf(live) }, bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(['# N', '', ...CTR(2), '', 'be\rlow'].join('\n'));
+	});
+
+	test('a fence that directly follows a lone CR (no LF) is a block of its own and the write lands', async () => {
+		const app = new App();
+		const live = `# N\n\nA\r${CTR(1).join('\n')}\n\nbelow\n`;
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: sectionOf(live) }, bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(`# N\n\nA\r${CTR(2).join('\n')}\n\nbelow\n`);
+	});
+
+	test('Live Preview hands the host an LF-normalised copy of the note: the write still lands on the RAW note, lone CR kept', async () => {
+		const app = new App();
+		const live = ['a\rb', ...CTR(1, 'Twin'), 'mid', ...CTR(1, 'Twin')].join('\n');
+		app.vault.setFile('Note.md', live);
+		const lfText = live.replace(/\r\n|\r/g, '\n');
+		const host = hostFor(app, { current: sectionOf(live, 1, lfText) }, bodyOf(1, 'Twin'));
+
+		await expect(host.replaceSource(bodyOf(6, 'Twin'))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(['a\rb', ...CTR(1, 'Twin'), 'mid', ...CTR(6, 'Twin')].join('\n'));
+	});
+
+	test('two blocks with a lone CR between them: each write lands in its own block, in either order', async () => {
+		const note = (a: number, b: number): string => ['# N', 'x\ry', ...CTR(a, 'One'), 'mid\rdle', ...CTR(b, 'Two'), 'end'].join('\n');
+		for (const order of [['One', 'Two'], ['Two', 'One']]) {
+			const app = new App();
+			const live = note(1, 1);
+			app.vault.setFile('Note.md', live);
+			const hosts: Record<string, ReadingModeBlockHost> = {
+				One: hostFor(app, { current: sectionOf(live, 0) }, bodyOf(1, 'One')),
+				Two: hostFor(app, { current: sectionOf(live, 1) }, bodyOf(1, 'Two')),
+			};
+			for (const name of order) await expect(hosts[name].replaceSource(bodyOf(name === 'One' ? 5 : 7, name))).resolves.toBe(true);
+			expect(app.vault.getContent('Note.md')).toBe(note(5, 7));
+			expect(Notice.notices).toHaveLength(0);
+		}
+	});
+
+	test('two IDENTICAL blocks with a lone CR above: writing the second never touches the first (and vice versa)', async () => {
+		for (const nth of [0, 1]) {
+			const app = new App();
+			const live = ['a\rb', ...CTR(1, 'Twin'), 'mid', ...CTR(1, 'Twin')].join('\n');
+			app.vault.setFile('Note.md', live);
+			const host = hostFor(app, { current: sectionOf(live, nth) }, bodyOf(1, 'Twin'));
+
+			await expect(host.replaceSource(bodyOf(9, 'Twin'))).resolves.toBe(true);
+
+			expect(app.vault.getContent('Note.md')).toBe(['a\rb', ...CTR(nth === 0 ? 9 : 1, 'Twin'), 'mid', ...CTR(nth === 1 ? 9 : 1, 'Twin')].join('\n'));
+		}
+	});
+
+	test('a lone CR inside a callout, above a callout block (composes with the SC-455 prefix): the write lands, prefix kept', async () => {
+		const app = new App();
+		const callout = (n: number): string[] => ['> [!note] T', '> text\rmore', ...CTR(n).map((l) => `> ${l}`), '> tail'];
+		const live = ['# N', 'a\rb', '', ...callout(1), '', 'below'].join('\n');
+		app.vault.setFile('Note.md', live);
+		// Obsidian: the whole callout is the section; its lines are counted with the CR as a break.
+		const lines = live.split(/\r\n|\r|\n/);
+		const lineStart = lines.indexOf('> [!note] T');
+		const section = { text: live, lineStart, lineEnd: lines.indexOf('> tail') };
+		const host = hostFor(app, { current: section }, bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(['# N', 'a\rb', '', ...callout(2), '', 'below'].join('\n'));
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('a lone CR INSIDE the block body is a line break: the body is rewritten from the element\'s text, nothing around it moves', async () => {
+		const app = new App();
+		// The processor is handed src with the CR as a line break ('name: A\ncurrent_value: 1'), measured.
+		const live = ['a\rb', '```ds-counter', 'name: A\rcurrent_value: 1', '```', 'below'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: sectionOf(live) }, bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(['a\rb', ...CTR(2), 'below'].join('\n'));
+	});
+
+	test('a lone CR inside the body of a CRLF note: the rewritten body takes the note\'s CRLF, the CR above is kept', async () => {
+		const app = new App();
+		const live = ['a\rb', '```ds-counter', 'name: A\rcurrent_value: 1', '```', 'below'].join('\r\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: sectionOf(live) }, bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(['a\rb', ...CTR(2), 'below'].join('\r\n'));
+	});
+
+	test('a write that still cannot land (the block was edited away): exactly one Notice, the note is unchanged', async () => {
+		const app = new App();
+		const live = ['a\rb', ...CTR(1)].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: sectionOf(live) }, bodyOf(1));
+		const edited = ['a\rb', 'the block was deleted here'].join('\n');
+		app.vault.setFile('Note.md', edited);
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(false);
+
+		expect(app.vault.getContent('Note.md')).toBe(edited);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+	});
+
+	test('a section that is not a block at all (no identity): exactly one unsavable Notice, the note is unchanged', async () => {
+		const app = new App();
+		const live = ['a\rb', 'just a paragraph', '', 'another'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: { text: live, lineStart: 2, lineEnd: 2 } }, bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(false);
+
+		expect(app.vault.getContent('Note.md')).toBe(live);
+		expect(Notice.notices).toEqual([unsavableWriteMessage('Note')]);
+	});
+
+	test('an identical-content write is a no-op with no Notice', async () => {
+		const app = new App();
+		const live = ['a\rb', ...CTR(1)].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: sectionOf(live) }, bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(1))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(live);
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('getBlockInfo reports the fence in Obsidian\'s numbering (what the chrome Pin hands the sidebar as its cursor line)', () => {
+		const app = new App();
+		const live = ['a\rb', '', ...CTR(1)].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: sectionOf(live) }, bodyOf(1));
+
+		expect(host.getBlockInfo()).toEqual({ language: 'ds-counter', lineStart: 3, lineEnd: 6 });
+	});
+
+	test('locateByBody finds a block below a lone CR and reports Obsidian\'s numbering', () => {
+		const note = ['a\rb', ...CTR(1)].join('\n');
+		expect(locateByBody(note, 'ds-counter', bodyOf(1), 0)).toEqual({ lineStart: 2, lineEnd: 5 });
+	});
+});

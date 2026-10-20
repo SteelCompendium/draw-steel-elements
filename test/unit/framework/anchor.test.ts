@@ -461,3 +461,59 @@ describe('SC-455: anchor.ts fence scanner on blockquote / callout prefixes', () 
 		]);
 	});
 });
+
+// SC-460 — Obsidian counts a lone CR as a line break (measured on 1.14.4), and every number anchor.ts
+// hands out is compared with one of Obsidian's (getSectionInfo's lineStart, the editor cursor line), so
+// the scanner numbers lines the same way.
+describe('SC-460: anchor.ts numbers lines the way Obsidian does (a lone CR is a break)', () => {
+	const NOTE = [
+		'# Notes', // 0
+		'a\rb', // 1, 2   (a lone CR: two lines for Obsidian)
+		'', // 3
+		'```ds-counter', // 4
+		'current_value: 1', // 5
+		'_dse_anchor: aaa111', // 6
+		'```', // 7
+		'x\ry\rz', // 8, 9, 10
+		'```ds-counter', // 11
+		'current_value: 2', // 12
+		'_dse_anchor: bbb222', // 13
+		'_dse_from: gen777', // 14
+		'```', // 15
+		'tail', // 16
+	].join('\n');
+
+	test('listFences / findAnchoredBlock / findFenceAtLine / findGeneratedBlock / findFirstFence report Obsidian\'s line numbers', () => {
+		expect(listFences(NOTE, 'ds-counter')).toEqual([
+			{ language: 'ds-counter', lineStart: 4, lineEnd: 7 },
+			{ language: 'ds-counter', lineStart: 11, lineEnd: 15 },
+		]);
+		expect(findAnchoredBlock(NOTE, 'ds-counter', 'bbb222')).toEqual({ language: 'ds-counter', lineStart: 11, lineEnd: 15 });
+		expect(findGeneratedBlock(NOTE, 'ds-counter', 'gen777')).toEqual({ language: 'ds-counter', lineStart: 11, lineEnd: 15 });
+		expect(findFirstFence(NOTE, 'ds-counter')).toEqual({ language: 'ds-counter', lineStart: 4, lineEnd: 7 });
+	});
+
+	test('findFenceAtLine: the editor cursor on the CLOSE fence of the second block still picks the second block', () => {
+		// The editor (CodeMirror) numbers lines the same way, so its cursor line is a valid index here.
+		expect(findFenceAtLine(NOTE, 'ds-counter', 15)).toEqual({ language: 'ds-counter', lineStart: 11, lineEnd: 15 });
+		expect(findFenceAtLine(NOTE, 'ds-counter', 7)).toEqual({ language: 'ds-counter', lineStart: 4, lineEnd: 7 });
+		expect(findFenceAtLine(NOTE, 'ds-counter', 9)).toBeNull(); // the text between the blocks
+	});
+
+	test('a CRLF note with a lone CR above is numbered the same way', () => {
+		const crlf = NOTE.replace(/\n/g, '\r\n');
+		expect(listFences(crlf, 'ds-counter')).toEqual(listFences(NOTE, 'ds-counter'));
+		expect(findAnchoredBlock(crlf, 'ds-counter', 'aaa111')?.lineStart).toBe(4);
+	});
+
+	test('a fence that directly follows a lone CR is found, and a lone CR inside a body is a line break in it', () => {
+		const note = 'text\r```ds-counter\rcurrent_value: 1\r_dse_anchor: ccc333\r```\n';
+		expect(findAnchoredBlock(note, 'ds-counter', 'ccc333')).toEqual({ language: 'ds-counter', lineStart: 1, lineEnd: 4 });
+		expect(findFenceByBody(note, 'ds-counter', 'current_value: 1\n_dse_anchor: ccc333')).toEqual({ language: 'ds-counter', lineStart: 1, lineEnd: 4 });
+	});
+
+	test('a note with no lone CR is numbered exactly as before', () => {
+		const lf = NOTE.replace(/\r/g, '\n');
+		expect(listFences(lf, 'ds-counter')).toEqual(listFences(NOTE, 'ds-counter'));
+	});
+});

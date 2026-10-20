@@ -678,3 +678,82 @@ describe('SC-455: SidebarBlockHost on a block inside a blockquote / callout', ()
 		expect(Notice.notices).toHaveLength(0);
 	});
 });
+
+// SC-460 — a lone CR above the block. Obsidian (and the editor cursor the sidebar is pinned from)
+// count it as a line break, so the host's block positions are in that numbering and the splice lands
+// on the right lines without touching the lone CR.
+describe('SC-460: SidebarBlockHost on a note with lone CRs', () => {
+	const toCrlf = (s: string): string => s.replace(/\n/g, '\r\n');
+	const NEW_BODY = `current_value: 5\n_dse_anchor: ${ANCHOR_ID}`;
+	const blockLines = (n: number): string[] => ['```ds-counter', `current_value: ${n}`, `_dse_anchor: ${ANCHOR_ID}`, '```'];
+	const noteWith = (n: number): string => ['# Notes', 'a\rb', '', ...blockLines(n), 'x\ry', 'tail'].join('\n');
+
+	test('locates the anchored block below a lone CR, in Obsidian\'s numbering, with an LF body', async () => {
+		const { file, app } = setup(noteWith(1));
+		const { host } = makeHost(app, file);
+		await host.refresh();
+
+		expect(host.canPersist).toBe(true);
+		expect(host.getBlockInfo()).toEqual({ language: ALIAS, lineStart: 4, lineEnd: 7 });
+		expect(host.currentBody()).toBe(`current_value: 1\n_dse_anchor: ${ANCHOR_ID}`);
+	});
+
+	test('a write lands in an LF note with a lone CR above and one below: both survive, nothing else moves', async () => {
+		const { vault, file, app } = setup(noteWith(1));
+		const { host } = makeHost(app, file);
+		await host.refresh();
+
+		await expect(host.replaceSource(NEW_BODY)).resolves.toBe(true);
+
+		expect(vault.text('Note.md')).toBe(noteWith(5));
+	});
+
+	test('a write lands in a CRLF note with a lone CR above: the CRLF block and the lone CR are both kept', async () => {
+		const { vault, file, app } = setup(toCrlf(noteWith(1)));
+		const { host } = makeHost(app, file);
+		await host.refresh();
+
+		await expect(host.replaceSource(NEW_BODY)).resolves.toBe(true);
+
+		expect(vault.text('Note.md')).toBe(toCrlf(noteWith(5)));
+	});
+
+	test('two same-kind blocks with a lone CR between them: writing one leaves the other byte-identical', async () => {
+		const other = ['```ds-counter', 'current_value: 2', '_dse_anchor: other9', '```'].join('\n');
+		const note = ['# Notes', 'a\rb', other, 'mid\rdle', ...blockLines(1), 'tail'].join('\n');
+		const { vault, file, app } = setup(note);
+		const { host } = makeHost(app, file);
+		await host.refresh();
+		expect(host.getBlockInfo()).toEqual({ language: ALIAS, lineStart: 8, lineEnd: 11 });
+
+		await expect(host.replaceSource(NEW_BODY)).resolves.toBe(true);
+
+		expect(vault.text('Note.md')).toBe(['# Notes', 'a\rb', other, 'mid\rdle', ...blockLines(5), 'tail'].join('\n'));
+	});
+
+	test('our own write is not mistaken for an external edit', async () => {
+		const { file, app } = setup(noteWith(1));
+		const onExternalChange = jest.fn();
+		const { host } = makeHost(app, file, onExternalChange);
+		await host.refresh();
+
+		await host.replaceSource(NEW_BODY);
+		await flushAsync();
+
+		expect(onExternalChange).not.toHaveBeenCalled();
+	});
+
+	test('a block that is gone from the note: exactly one Notice, the note is unchanged', async () => {
+		const { vault, file, app } = setup(noteWith(1));
+		const { host } = makeHost(app, file);
+		await host.refresh();
+		resetDroppedWriteNotices();
+		Notice.notices.length = 0;
+		vault.setText('Note.md', 'a\rb\nno block any more\n');
+
+		await expect(host.replaceSource(NEW_BODY)).resolves.toBe(false);
+
+		expect(vault.text('Note.md')).toBe('a\rb\nno block any more\n');
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+	});
+});
