@@ -35,8 +35,9 @@ for what needs action.
   the button says "Gain 10 Stamina" (also while you are still typing), and the + / - buttons stop at
   the limits. A hand-edited Stamina that is already out of range no longer flips the buttons around:
   Damage never heals, Healing never damages, and Kill and Full Heal never say "Gain" / "Lose" the
-  wrong way round; applying only a Temp Stamina change no longer quietly rewrites an out-of-range
-  Stamina. An exponent in the Apply box such as "1e3" now counts as 1000 (it counted as 1), in the
+  wrong way round, and a Damage or Healing that only brings it part of the way back still shows the
+  change that really gets saved; applying only a Temp Stamina change no longer quietly rewrites an
+  out-of-range Stamina. An exponent in the Apply box such as "1e3" now counts as 1000 (it counted as 1), in the
   initiative minion Stamina window's damage and minion-count boxes too. Reset also puts the Apply
   box back to 0.
 - [FIX] **A save that changes nothing no longer leaves extra blank scroll space at the bottom

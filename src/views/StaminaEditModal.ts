@@ -255,6 +255,9 @@ export class StaminaEditModal extends DseModal {
 	// fields above stay the committed truth; the draft is never persisted by itself.
 	private draftStaminaChange: number | null = null;
 	private draftTempStaminaChange: number | null = null;
+	// SC-427 (review R1-M1): the stored position and bounds updateActionButton needs to label the
+	// Stamina part with what Apply will actually write (see there). Set once in onOpen.
+	private staminaFrame = { current: 0, floor: 0, max: 0 };
 
 	constructor(
 		app: App,
@@ -281,6 +284,7 @@ export class StaminaEditModal extends DseModal {
 		const currentStamina = this.staminaBar.current_stamina ?? maxStamina;
 		const currentTempStamina = this.staminaBar.temp_stamina ?? 0;
 		const negativeStaminaLimit = this.isHero ? Math.ceil(-0.5 * maxStamina) : 0;
+		this.staminaFrame = { current: currentStamina, floor: negativeStaminaLimit, max: maxStamina };
 		// FOLLOWUPS #27b (fixed by #27-fix-round finding 2): gated on `recoveries_max`
 		// (D7 §4.2) — the same presence gate stamina-bar/view.ts uses
 		// (model.recoveries_max !== undefined) to decide whether to render the
@@ -745,7 +749,14 @@ export class StaminaEditModal extends DseModal {
 	/** Legacy wording verbatim; the disabled state is the REAL property (CB-8). */
 	private updateActionButton(actionBtn: IconButtonHandle): void {
 		// SC-430: a dirty, parseable typed draft counts as if it had already committed.
-		const staminaChange = this.draftStaminaChange ?? this.pendingStaminaChange;
+		// SC-427 (R1-M1): the label states what Apply WRITES, not the raw staged sum. On a hand-edited
+		// out-of-range stored value (25/20) a partial Damage / Healing leaves current + pending
+		// outside [floor, max] (25 - 3 = 22), which Apply clamps (to 20, a loss of 5). In range this is
+		// the identity; a zero raw change stays zero (Apply then leaves current_stamina as stored).
+		const rawStaminaChange = this.draftStaminaChange ?? this.pendingStaminaChange;
+		const { current, floor, max } = this.staminaFrame;
+		const staminaChange =
+			rawStaminaChange === 0 ? 0 : this.clampStamina(current + rawStaminaChange, floor, max) - current;
 		const tempStaminaChange = this.draftTempStaminaChange ?? this.pendingTempStaminaChange;
 		let actionText = '';
 

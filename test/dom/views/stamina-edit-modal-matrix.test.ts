@@ -449,6 +449,39 @@ describe('[S12] "1e3" typed into the steppers (the kit stepper reads it with Num
 	});
 });
 
+// SC-427 review R1-M1: on an out-of-range STORED value a partial Damage / Healing leaves
+// stored + pending outside [floor, max]; the label must state what Apply actually WRITES
+// (the clamped change), exactly like the field and the persisted value.
+describe('[M1] Damage / Healing on an out-of-range stored value: label == field == persisted', () => {
+	type Case = { id: string; max: number; cur: number; temp?: number; hero: boolean; presses: Array<['Damage' | 'Healing', number]>; label: string; field: number; persisted: number; temp2?: number };
+	const cases: Case[] = [
+		{ id: 'creature 25/20, Damage 3', max: 20, cur: 25, hero: false, presses: [['Damage', 3]], label: 'Lose 5 Stamina', field: 20, persisted: 20 },
+		{ id: 'hero -14/20 (floor -10), Healing 2', max: 20, cur: -14, hero: true, presses: [['Healing', 2]], label: 'Gain 4 Stamina', field: -10, persisted: -10 },
+		{ id: 'creature -3/20, Healing 2', max: 20, cur: -3, hero: false, presses: [['Healing', 2]], label: 'Gain 3 Stamina', field: 0, persisted: 0 },
+		{ id: 'hero -10/15 (floor -7), Healing 2', max: 15, cur: -10, hero: true, presses: [['Healing', 2]], label: 'Gain 3 Stamina', field: -7, persisted: -7 },
+		{
+			id: 'hero 18/15 temp 4, Damage 3 twice', max: 15, cur: 18, temp: 4, hero: true, presses: [['Damage', 3], ['Damage', 3]],
+			label: 'Lose 3 Stamina and Lose 4 Temp Stamina', field: 15, persisted: 15, temp2: 0,
+		},
+	];
+	test.each(cases)('$id', ({ max, cur, temp, hero, presses, label, field, persisted, temp2 }) => {
+		const { content, bar } = openStaminaModal({ max, current: cur, temp, isHero: hero });
+		for (const [action, amount] of presses) (action === 'Damage' ? pressDamage : pressHealing)(content, amount);
+		expect(applyBtn(content).textContent).toBe(label);
+		expect(applyBtn(content).disabled).toBe(false);
+		expect(staminaInput(content).value).toBe(String(field));
+		applyBtn(content).click();
+		expect(bar.current_stamina).toBe(persisted);
+		if (temp2 !== undefined) expect(bar.temp_stamina).toBe(temp2);
+	});
+
+	test('in range nothing changes: 10/20 Damage 3 is still "Lose 3 Stamina" (the clamp is the identity)', () => {
+		const { content } = openStaminaModal({ max: 20, current: 10, isHero: false });
+		pressDamage(content, 3);
+		expect(applyBtn(content).textContent).toBe('Lose 3 Stamina');
+	});
+});
+
 describe('[O2] opening on a hand-edited out-of-range current stages nothing', () => {
 	test.each([
 		{ id: 'creature 25/20', max: 20, current: 25, isHero: false },
