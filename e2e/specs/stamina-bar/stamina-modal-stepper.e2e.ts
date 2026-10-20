@@ -3,7 +3,7 @@
 // order on blur-then-click, Escape / X / backdrop semantics, an external edit while the modal
 // is open, modal stacking. basic.md = 15/20 Stamina, 5 temp, hero rules.
 import { expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
+import { dse } from '../../driver/dse';
 import { applyAmount, applyAndWrite, expectApplyLabel, openBarModal } from '../../driver/stamina';
 
 const NOTE = 'Stamina/basic.md';
@@ -126,27 +126,36 @@ describe('stamina-edit-modal: Stamina stepper', () => {
 });
 
 describe('stamina-edit-modal: closing without Apply never writes', () => {
-	// S06 / SC-431 (found by P2a): the stepper swallows Escape on a dirty draft "so a containing
-	// modal doesn't close on the SAME press" (stepper.ts) and jsdom pins that, but real Obsidian's
-	// modal Scope closes the whole modal anyway, losing every pending edit. Intended behaviour (the
-	// ticket): the first Escape reverts only the half-typed draft and the modal stays open with the
-	// Damage still pending; a second Escape closes it, with no write.
-	knownBug(
-		'SC-431',
-		'[STAM-S06] Escape on a half-typed Stamina draft reverts only the draft; the modal stays open with the Damage still pending',
-		async () => {
-			const modal = await openBarModal(NOTE);
-			await applyAmount(modal, '4', 'sedit.damage');
-			await dse.type(modal.control('sedit.stamina.input'), '12', { replace: true });
-			await dse.press('Escape', modal.control('sedit.stamina.input'));
-			await expect(modal.root).toBeExisting({ wait: 1500, message: 'the first Escape should revert only the half-typed draft and keep the modal open' });
-			await expect(modal.control('sedit.stamina.input')).toHaveValue('15');
-			await expectApplyLabel(modal, 'Lose 4 Temp Stamina'); // the Damage is still pending
-			await dse.expectNoWrite(NOTE, () => dse.press('Escape', modal.control('sedit.stamina.input')));
-			await expect(modal.root).not.toBeExisting();
-		},
-		{ failsWith: /the first Escape should revert only the half-typed draft/ },
-	);
+	// S06 / SC-431 (found by P2a, fixed): the stepper swallows Escape on a dirty draft, but real Obsidian
+	// runs the modal's Scope from a window capture listener, i.e. BEFORE the field's handler, so the whole
+	// modal used to close and every pending edit was lost. DseModal's Escape handler now asks the focused
+	// field first: the first Escape reverts only the half-typed draft and the modal stays open with the
+	// Damage still pending; the second Escape closes it, with no write.
+	it('[STAM-S06] Escape on a half-typed Stamina draft reverts only the draft; the modal stays open with the Damage still pending', async () => {
+		const modal = await openBarModal(NOTE);
+		await applyAmount(modal, '4', 'sedit.damage');
+		await dse.type(modal.control('sedit.stamina.input'), '12', { replace: true });
+		await dse.press('Escape', modal.control('sedit.stamina.input'));
+		await expect(modal.root).toBeExisting({ wait: 1500, message: 'the first Escape should revert only the half-typed draft and keep the modal open' });
+		await expect(modal.control('sedit.stamina.input')).toHaveValue('15');
+		await expectApplyLabel(modal, 'Lose 4 Temp Stamina'); // the Damage is still pending
+		await dse.expectNoWrite(NOTE, () => dse.press('Escape', modal.control('sedit.stamina.input')));
+		await expect(modal.root).not.toBeExisting();
+	});
+
+	// SC-431: the same for the Temporary Stamina field (the ticket names both).
+	it('[STAM-T12] Escape on a half-typed Temp Stamina draft reverts only the draft; the modal stays open with the Damage still pending', async () => {
+		const modal = await openBarModal(NOTE);
+		await applyAmount(modal, '4', 'sedit.damage');
+		await dse.type(modal.control('sedit.temp.input'), '9', { replace: true });
+		await dse.press('Escape', modal.control('sedit.temp.input'));
+		await expect(modal.root).toBeExisting({ wait: 1500, message: 'the first Escape should revert only the half-typed draft and keep the modal open' });
+		await expect(modal.control('sedit.temp.input')).toHaveValue('1'); // the pending Damage already took 4 of the 5 temp
+		await expectApplyLabel(modal, 'Lose 4 Temp Stamina'); // the Damage is still pending
+		await dse.expectNoWrite(NOTE, () => dse.press('Escape', modal.control('sedit.temp.input')));
+		await expect(modal.root).not.toBeExisting();
+		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 15, temp_stamina: 5 });
+	});
 
 	it('[STAM-S07] Escape with a clean draft closes the modal without writing', async () => {
 		const modal = await openBarModal(NOTE);
