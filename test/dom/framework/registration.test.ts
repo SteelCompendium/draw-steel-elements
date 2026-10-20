@@ -148,6 +148,25 @@ describe('D8 Task 2 review fix — registration.ts (finding #3)', () => {
 			expect(app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0]?.view).toBeUndefined();
 		});
 
+		// SC-360 (r4 re-review LOW-B) - the pin item's own refusal wording: a hand-edited `_dse_anchor` line the
+		// sidebar cannot read must NOT be answered with "couldn't find that block" (it exists), and must not
+		// write a second key.
+		test('requestPinToSidebar says WHY when the block\'s `_dse_anchor` line is unreadable - one Notice, note untouched, nothing mounted', async () => {
+			const { app, plugin, services } = setup();
+			registerDseSidebar(plugin as any, services);
+			const note = '```ds-counter\ncurrent_value: 1\n_dse_anchor: abc123 # mine\n```';
+			app.vault.setFile('Note.md', note);
+
+			await requestPinToSidebar('Note.md', 'ds-counter');
+			await flushAsync();
+
+			expect(Notice.notices).toHaveLength(1);
+			expect(Notice.notices[0]).toContain('_dse_anchor');
+			expect(Notice.notices[0]).not.toContain("couldn't find that block");
+			expect(app.vault.getContent('Note.md')).toBe(note);
+			expect(app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0]?.view).toBeUndefined();
+		});
+
 		// The review's exact reproduction (probe B5): the chrome pin item hands
 		// requestPinToSidebar the bare LANGUAGE token (`getBlockInfo().language`, first
 		// fence-info-string token only — see ReadingModeBlockHost's OPEN_FENCE), but the

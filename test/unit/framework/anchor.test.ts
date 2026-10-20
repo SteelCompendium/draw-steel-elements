@@ -240,8 +240,20 @@ describe('D8 Task 2 review fix — anchor.ts fence scanner (finding #4, CRITICAL
 			expect(ensureAnchor(body)).toEqual({ body, id: null });
 		});
 
-		test('a body that is not valid YAML is never stamped (id null, body untouched)', () => {
-			const body = 'current_value: [1,\nlabel: "Foo';
+		// r4 re-review MEDIUM-A: a YAML error alone must not stop a pin (it pinned before r3 and the panel just
+		// shows the block's own error card); only a body that MENTIONS the key is refused, because a key may be
+		// hiding in what we cannot parse.
+		test('a body with a YAML error but no `_dse_anchor` is still stamped, as before', () => {
+			const body = 'current_value: 1\ncurrent_value: 2'; // duplicate key = parse error
+			expect(() => parseYamlPkg(body)).toThrow();
+			const { body: stamped, id } = ensureAnchor(body);
+			expect(id).toMatch(/^[a-df][0-9a-f]{5}$/);
+			expect(stamped).toBe(`${body}\n${ANCHOR_KEY}: ${id}`);
+		});
+
+		test('a body with a YAML error that mentions `_dse_anchor` is refused (id null, body untouched)', () => {
+			const body = `current_value: 1\ncurrent_value: 2\n${ANCHOR_KEY}: abc123 # c`;
+			expect(() => parseYamlPkg(body)).toThrow();
 			expect(ensureAnchor(body)).toEqual({ body, id: null });
 		});
 
