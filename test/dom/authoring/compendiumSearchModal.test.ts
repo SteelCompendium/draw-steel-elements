@@ -39,6 +39,8 @@ import {
 	registerCompendiumInsertCommands,
 } from '@/authoring/compendiumInsert';
 import { adapterForType, referenceAliasForType, snapshotAliasForType } from '@/services/typeAdapters';
+import { createPreferenceStore, registerPrefsForApp } from '@/framework/seams/prefs';
+import { DSE_PREF_DESCRIPTORS } from '@/prefs/catalog';
 import type { CompendiumSyncService } from '@/data/CompendiumSyncService';
 
 const KIT = 'mcdm.heroes.v1/kit/panther';
@@ -255,6 +257,59 @@ describe('CompendiumSearchModal (spec §4.2)', () => {
 // SC-149 retarget of the former `typeToAlias` suite: one lookup became two, because a
 // reference and a snapshot no longer answer the same question. Reference = ds-scc for
 // everything except the three public typed families; snapshot = those three families only.
+// SC-422 — the modal is a SuggestModal: not an element root, not a DseModal, so nothing
+// stamped the Small / Control text-size prefs on it and its type/source chips, code line and
+// empty-index hint (all `--dse-fs-*` roles) ignored them. onOpen now makes its dialog box a
+// chrome root, owned by a Component that onClose unloads.
+describe('CompendiumSearchModal text-size prefs (SC-422)', () => {
+	function openWithPrefs() {
+		const { app, index } = setup();
+		const prefs = createPreferenceStore({ get: async () => undefined, set: async () => {} });
+		prefs.describe(DSE_PREF_DESCRIPTORS);
+		registerPrefsForApp(app as any, prefs);
+		const modal = new CompendiumSearchModal(app as any, index, jest.fn());
+		modal.open();
+		// Real Obsidian's modalEl is the dialog box; the F3 mock only builds containerEl.
+		const root = (modal as any).modalEl ?? modal.containerEl;
+		return { modal, prefs, root: root as HTMLElement };
+	}
+	const scaleOf = (el: HTMLElement, knob: string) => el.style.getPropertyValue(`--dse-fs-${knob}-scale`);
+
+	test('opening makes the dialog box a chrome root that carries all three knobs as they change', async () => {
+		const { prefs, root } = openWithPrefs();
+		expect(root.classList.contains('dse-fs-root')).toBe(true);
+		await prefs.set('smallTextScale', 1.2);
+		await prefs.set('largeTextScale', 0.8);
+		await prefs.set('controlTextScale', 1.2);
+		expect([scaleOf(root, 'small'), scaleOf(root, 'large'), scaleOf(root, 'control')]).toEqual(['1.2', '0.8', '1.2']);
+	});
+
+	test('the suggestion rows the modal renders sit inside the stamped root', () => {
+		const { modal, root } = openWithPrefs();
+		const row = document.createElement('div');
+		root.appendChild(row); // Obsidian renders rows under modalEl; the mock leaves placement to the caller
+		modal.renderSuggestion(modal.getSuggestions('panth')[0], row);
+		expect(row.querySelector('.dse-compendium-suggest__code')?.closest('.dse-fs-root')).toBe(root);
+	});
+
+	test('closing releases the subscription: a later pref change no longer writes to the closed modal', async () => {
+		const { modal, prefs, root } = openWithPrefs();
+		await prefs.set('smallTextScale', 1.2);
+		modal.close();
+		await prefs.set('smallTextScale', 0.8);
+		expect(scaleOf(root, 'small')).toBe('1.2');
+	});
+
+	test('with no prefs registered for the app it still opens and closes (a bare App)', () => {
+		const { app, index } = setup();
+		const modal = new CompendiumSearchModal(app as any, index, jest.fn());
+		expect(() => {
+			modal.open();
+			modal.close();
+		}).not.toThrow();
+	});
+});
+
 describe('referenceAliasForType (spec §4.3, SC-149)', () => {
 	// N-2: the fence written into the note is the element's CANONICAL alias (`ds-sb`),
 	// not TYPE_ADAPTERS' internal long-form family identifier (`ds-statblock`). Both

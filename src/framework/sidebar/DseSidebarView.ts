@@ -9,6 +9,7 @@ import type { ElementPipeline } from '../pipeline';
 import type { ElementRegistry } from '../registry';
 import type { ReferenceService } from '../seams/refs';
 import type { PreferenceStore } from '../seams/prefs';
+import { stampTextScaleRoot } from '../kit/textScaleRoot';
 import type { ValidationService } from '../validation';
 import { SidebarPanel } from './SidebarPanel';
 
@@ -90,7 +91,7 @@ export class DseSidebarView extends ItemView {
 	}
 
 	protected async onOpen(): Promise<void> {
-		this.panelsEl = this.contentEl.createDiv({ cls: 'dse-sidebar' });
+		this.panelsEl = this.createPanelsEl();
 		this.updateEmptyState();
 		this.registerVaultListeners();
 	}
@@ -349,8 +350,24 @@ export class DseSidebarView extends ItemView {
 	 *  leaf (WorkspaceLeaf.setViewState awaits it) — this guard only matters for a test or
 	 *  future caller that drives the view directly without going through a leaf. */
 	private ensurePanelsEl(): HTMLElement {
-		if (!this.panelsEl) this.panelsEl = this.contentEl.createDiv({ cls: 'dse-sidebar' });
+		if (!this.panelsEl) this.panelsEl = this.createPanelsEl();
 		return this.panelsEl;
+	}
+
+	/**
+	 * SC-422 — the `.dse-sidebar` container is a stamped chrome root. The panel header
+	 * (`.dse-sidebar__panel-header`) and the empty-state message both read `--dse-fs-*` roles
+	 * but sit OUTSIDE every element root (a panel's element root is its body, a sibling of the
+	 * header), so the Small text size never reached them. One stamp on the container covers
+	 * both; each element root inside re-stamps itself with the same values. This view is the
+	 * lifetime owner: its unload (leaf detach / plugin unload) releases the subscription.
+	 * `prefs` is the optional services bundle's — absent in a bare test, where the root just
+	 * resolves the default.
+	 */
+	private createPanelsEl(): HTMLElement {
+		const el = this.contentEl.createDiv({ cls: 'dse-sidebar' });
+		stampTextScaleRoot(el, this.services.prefs, this);
+		return el;
 	}
 }
 

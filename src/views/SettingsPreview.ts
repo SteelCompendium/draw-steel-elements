@@ -12,6 +12,8 @@
 import type { Component } from 'obsidian';
 import type DrawSteelAdmonitionPlugin from 'main';
 import type { BlockHost } from '@/framework/host/BlockHost';
+import { stampTextScaleRoot } from '@/framework/kit/textScaleRoot';
+import type { PreferenceStore } from '@/framework/seams/prefs';
 
 /**
  * The canned preview statblock — the Human Bandit Chief's HEADER verbatim from the pinned
@@ -216,9 +218,18 @@ export const PREVIEW_STAGE_CLS = 'dse-settings-preview__stage';
  * Returns the STAGE (the framed well). The element root mounts as a direct child of it,
  * so every existing `.dse-settings-preview [data-dse-element]` selector — the tests, the
  * settings-evidence camera — keeps matching.
+ *
+ * SC-422 — the CAPTION sits outside the stamped element root (it is the stage's sibling),
+ * so it ignored the Small text size while the sample under it followed it. `textScale`
+ * stamps the panel wrapper — the smallest node holding the caption and the stage — as a
+ * chrome root for `owner`'s lifetime. The element root inside re-stamps itself, identically.
  */
-export function buildPreviewPanel(containerEl: HTMLElement): HTMLElement {
+export function buildPreviewPanel(
+	containerEl: HTMLElement,
+	textScale?: { prefs: PreferenceStore | undefined; owner: Component },
+): HTMLElement {
 	const wrap = containerEl.createDiv({ cls: PREVIEW_CLS });
+	if (textScale) stampTextScaleRoot(wrap, textScale.prefs, textScale.owner);
 	const label = wrap.createDiv({ cls: PREVIEW_LABEL_CLS });
 	label.createSpan({ text: 'Preview' });
 	label.createSpan({
@@ -241,7 +252,7 @@ export function mountSettingsPreview(
 	const fw = plugin.frameworkV2;
 	const def = fw?.registry.get(subject);
 	if (!fw || !def) return; // framework not constructed (never in practice): no preview
-	const stage = buildPreviewPanel(containerEl);
+	const stage = buildPreviewPanel(containerEl, { prefs: fw.services.prefs, owner });
 	const host: BlockHost = {
 		mode: 'reading',
 		sourcePath: '',

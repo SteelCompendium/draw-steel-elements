@@ -10,6 +10,8 @@ import { initializeElementFrameworkV2, registerFrameworkElementDefinitions } fro
 import { DseSidebarView, VIEW_TYPE_DSE_SIDEBAR } from '@/framework/sidebar/DseSidebarView';
 import type { DseSidebarServices, SidebarPanelState } from '@/framework/sidebar/DseSidebarView';
 import { PERSIST_DEBOUNCE_MS } from '@/framework/view';
+import { createPreferenceStore } from '@/framework/seams/prefs';
+import { DSE_PREF_DESCRIPTORS } from '@/prefs/catalog';
 
 const ANCHOR_A = 'aaa111';
 const ANCHOR_B = 'bbb222';
@@ -272,5 +274,55 @@ describe('D8 Task 2: DseSidebarView (spec §1.3)', () => {
 		expect(panels).toContain(stale);
 		expect(stale.getAttribute('data-dse-sidebar-unavailable')).toBe('true');
 		expect(stale.querySelector('.dse-error-card-message')?.textContent).toContain('re-link this panel');
+	});
+});
+
+// SC-422 — the panel header and the empty-state message read `--dse-fs-label` but sit outside
+// every element root (a panel's element root is its body), so the Small text size never
+// reached them. The `.dse-sidebar` container is a chrome root, owned by the view.
+describe('SC-422: the sidebar container follows the text-size prefs', () => {
+	function setupWithPrefs() {
+		const { app, plugin, services } = setup();
+		const prefs = createPreferenceStore({ get: async () => undefined, set: async () => {} });
+		prefs.describe(DSE_PREF_DESCRIPTORS);
+		const withPrefs = { ...services, prefs } as DseSidebarServices;
+		// Re-registering the type replaces setup()'s prefs-less factory.
+		plugin.registerView(VIEW_TYPE_DSE_SIDEBAR, ((leaf: any) => new DseSidebarView(leaf, withPrefs)) as any);
+		return { app, prefs };
+	}
+
+	test('the container is a chrome root, and the empty message and a panel header sit inside it', async () => {
+		const { app, prefs } = setupWithPrefs();
+		const { view } = await openView(app);
+		const root = view.contentEl.querySelector('.dse-sidebar') as HTMLElement;
+		expect(root.classList.contains('dse-fs-root')).toBe(true);
+		expect(root.querySelector('.dse-sidebar__empty-message')).not.toBeNull();
+		await prefs.set('smallTextScale', 1.2);
+		await prefs.set('controlTextScale', 0.8);
+		expect(root.style.getPropertyValue('--dse-fs-small-scale')).toBe('1.2');
+		expect(root.style.getPropertyValue('--dse-fs-control-scale')).toBe('0.8');
+
+		app.vault.setFile('Note.md', counterBlock(ANCHOR_A));
+		view.addPanel({ filePath: 'Note.md', alias: 'ds-counter', anchorId: ANCHOR_A });
+		await flushAsync();
+		expect(view.contentEl.querySelector('.dse-sidebar__panel-header')?.closest('.dse-fs-root')).toBe(root);
+	});
+
+	test('unloading the view releases the subscription: a later pref change no longer writes', async () => {
+		const { app, prefs } = setupWithPrefs();
+		const { view } = await openView(app);
+		const root = view.contentEl.querySelector('.dse-sidebar') as HTMLElement;
+		await prefs.set('smallTextScale', 1.2);
+		view.unload();
+		await prefs.set('smallTextScale', 0.8);
+		expect(root.style.getPropertyValue('--dse-fs-small-scale')).toBe('1.2');
+	});
+
+	test('without a prefs service (a bare caller) the view still opens, with the class and no stamp', async () => {
+		const { app } = setup();
+		const { view } = await openView(app);
+		const root = view.contentEl.querySelector('.dse-sidebar') as HTMLElement;
+		expect(root.classList.contains('dse-fs-root')).toBe(true);
+		expect(root.style.getPropertyValue('--dse-fs-small-scale')).toBe('');
 	});
 });

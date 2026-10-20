@@ -2324,7 +2324,12 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
    schemes were checked.
 
    Screen-only chrome by construction: nothing inside a [data-dse-element] root, so no
-   print rule and no frozen shot can reach these classes.                          */
+   print rule and no frozen shot can reach these classes.
+
+   TEXT-SIZE PREFS (SC-422): the chip/code/hint sizes below are `--dse-fs-*` roles, and a
+   SuggestModal is neither an element root nor a DseModal, so CompendiumSearchModal stamps
+   its dialog box as a `.dse-fs-root` chrome root on open (and releases it on close) —
+   that is what lets the Small text size reach them.                               */
 
 .dse-compendium-suggest__head {
 	display: flex;
@@ -6556,7 +6561,7 @@ Shared globals
 	   THE THREE *-scale MULTIPLIERS ARE THE USER KNOBS
 	   (smallTextScale / largeTextScale / controlTextScale in prefs/catalog.ts).
 	   Each stamps a snap()-normalized non-1 value INLINE per element root (and
-	   per modal dialog root) and REMOVES it at 1 (site remove-on-default
+	   per modal dialog root, per chrome root — SC-422) and REMOVES it at 1 (site remove-on-default
 	   semantics), so these :root declarations are what every root resolves at
 	   defaults — and every role then computes to exactly the literal it was
 	   transcribed from, which is what makes adopting a token a zero-pixel rename.
@@ -6571,7 +6576,7 @@ Shared globals
 	   stamp on an element root / modal never reached any role: all three knobs
 	   were inert (measured before the fix: card name 20px at 0.8, 1.0 and 1.2).
 	   They live in the next rule instead, whose selector list is `:root` PLUS
-	   every root the prefs seam stamps (an element root, a DseModal dialog), so
+	   every root the prefs seam stamps (an element root, a DseModal dialog, a `.dse-fs-root` chrome root), so
 	   the multiplier resolves where it is stamped. Stamping <html> would also
 	   have "worked" but is the wrong fix: reflect()/reflectCss() are per root on
 	   purpose (popout windows, modals, embeds each own their scale).
@@ -6596,17 +6601,23 @@ Shared globals
    `calc()` substitutes ON the root that carries the user's stamped multiplier
    (see "THE SCALE-DEPENDENT ROLE TOKENS ARE NOT DECLARED IN THIS BLOCK" in
    the SC-185 comment above). ONE rule, ONE source of truth: the selector list is
-   `:root` (unstamped contexts — a bare harness page, an error card, the sidebar
-   panel header — keep resolving the default 1, exactly as before) plus
-   `:is([data-dse-element], .dse-modal)`, the same two scope members the mono slot
-   below uses and the only two kinds of root prefs.reflect()/reflectCss() ever
-   stamp (pipeline.ts element roots, which also covers sidebar panels, the
-   settings preview and the form-editor preview; DseModal.open()'s dialog).
+   `:root` (unstamped contexts — a bare harness page, an error card — keep
+   resolving the default 1, exactly as before) plus
+   `:is([data-dse-element], .dse-modal, .dse-fs-root)`: the three kinds of root
+   prefs.reflect()/reflectCss() ever stamp (pipeline.ts element roots, which also
+   covers sidebar panels, the settings preview sample and the form-editor preview;
+   DseModal.open()'s dialog; and, since SC-422, a CHROME root — plugin chrome
+   outside any element root or DseModal that still reads the roles: the Compendium
+   search modal, the settings preview caption's panel, the sidebar container. Those
+   carry `.dse-fs-root`, added by src/framework/kit/textScaleRoot.ts together with
+   the prefs stamp; a class on its own stamps nothing, and a stamp without the class
+   would never reach a role). The mono slot below keeps the two-member list: chrome
+   roots do not use it.
    Specificity (0,1,0) and no other rule declares these names, so nothing is
    shadowed; at default prefs the stamp is absent, the multiplier inherits `1`
    from :root, and every role computes to the same value it always did. */
 :root,
-:is([data-dse-element], .dse-modal) {
+:is([data-dse-element], .dse-modal, .dse-fs-root) {
 	/* Above body — headline text inside a card. heading = the thing the card is
 	   named after (a statblock/ability name); subheading = a band or group title
 	   under it; numeral = a display stat VALUE meant to be read across a table. */
@@ -6662,7 +6673,7 @@ Shared globals
    roles are re-declared as their plain em ratios — the container's own em already carries the
    knob once. Three targets per container: its children (custom properties inherit, so one level
    is enough), its ::before/::after (a pseudo-element inherits from its originating element, not
-   from a child), and any element root / modal nested ANYWHERE inside it (a root re-declares the
+   from a child), and any element root / modal / chrome root nested ANYWHERE inside it (a root re-declares the
    tokens with its own stamp via the rule above, which would re-apply the knob — e.g. a party
    member's hero_ref that embeds a ds-counter, G-S6h). `:where()` keeps the first two at zero
    specificity; the third is (0,1,0) and comes after the token rule, so it wins over it.
@@ -6691,7 +6702,7 @@ Shared globals
 	& > *,
 	&::before,
 	&::after,
-	& :is([data-dse-element], .dse-modal) {
+	& :is([data-dse-element], .dse-modal, .dse-fs-root) {
 		--dse-fs-secondary: 0.9em;
 		--dse-fs-label: 0.85em;
 		--dse-fs-caption: 0.8em;
@@ -6707,7 +6718,7 @@ Shared globals
 	& > *,
 	&::before,
 	&::after,
-	& :is([data-dse-element], .dse-modal) {
+	& :is([data-dse-element], .dse-modal, .dse-fs-root) {
 		--dse-fs-control: 0.85em;
 	}
 }
@@ -16275,6 +16286,10 @@ body.theme-light
    same reasoning `.dse-error-card` (above, "Framework error card") already applies —
    Obsidian theme vars only, no hard-coded colors, unscoped by theme or print (an ItemView
    leaf is never printed/exported).
+
+   TEXT-SIZE PREFS (SC-422): the header and the empty-state message read `--dse-fs-label`
+   and sit outside every element root, so DseSidebarView marks the `.dse-sidebar`
+   container a `.dse-fs-root` chrome root (the Small text size reaches both).
 */
 
 /* -- Panel header: element label + source note name, and visual separation between
@@ -16390,6 +16405,9 @@ body.theme-light
    that can only match inside a settings modal can never reach a print capture at all.
    (Type SIZES are still the plugin's own --dse-fs-* role scale — SC-185's contract has
    no chrome exemption, and "eyebrow label" is exactly what --dse-fs-label names.)
+   The caption sits outside the stamped preview element root, so buildPreviewPanel marks
+   the `.dse-settings-preview` wrapper a `.dse-fs-root` chrome root (SC-422): the Small
+   text size then resizes the caption together with the sample under it.
 
    THE SHAPE: a captioned panel at the END of the page, in normal flow, sized to its
    content. `settingsDeclarative.previewDefinition` carries the full derivation of why it

@@ -86,6 +86,39 @@ test('closing the settings window unloads the preview owner: later pref changes 
 	expect(root!.getAttribute('data-dse-density')).toBe('comfortable'); // dead subscription
 });
 
+// —— SC-422 — the caption sits outside the stamped element root ——
+// `.dse-settings-preview__label` reads `--dse-fs-label` but is the stage's SIBLING, so it
+// never saw the Small text size the sample under it follows. The panel wrapper is now a
+// chrome root owned by the same per-mount Component as the preview root's own subscriptions.
+function previewPanel(tab: DseSettingTab): HTMLElement | null {
+	return (tab.containerEl as HTMLElement).querySelector<HTMLElement>('.dse-settings-preview');
+}
+
+test('SC-422: the panel holding the caption is a chrome root and follows the Small text size live', async () => {
+	const { plugin, tab } = await makeTab();
+	await open(tab);
+	const panel = previewPanel(tab)!;
+	expect(panel.classList.contains('dse-fs-root')).toBe(true);
+	expect(panel.querySelector('.dse-settings-preview__label')).not.toBeNull();
+	await plugin.frameworkV2!.services.prefs.set('smallTextScale', 1.2);
+	await flushAsync(1);
+	expect(panel.style.getPropertyValue('--dse-fs-small-scale')).toBe('1.2');
+	// The sample's own root re-stamps the same value, so the knob is not applied twice.
+	expect(previewRoot(tab)!.style.getPropertyValue('--dse-fs-small-scale')).toBe('1.2');
+});
+
+test('SC-422: closing the settings window releases the caption panel\'s subscription', async () => {
+	const { plugin, tab } = await makeTab();
+	await open(tab);
+	const panel = previewPanel(tab)!;
+	await plugin.frameworkV2!.services.prefs.set('smallTextScale', 1.2);
+	await flushAsync(1);
+	close(tab);
+	await plugin.frameworkV2!.services.prefs.set('smallTextScale', 0.8);
+	await flushAsync(1);
+	expect(panel.style.getPropertyValue('--dse-fs-small-scale')).toBe('1.2');
+});
+
 // —— SC-131 C1 regression ——
 // Obsidian calls getSettingDefinitions() ONLY from update(); re-opening the settings
 // window replays the cached definitions. A preview whose Component was created during the

@@ -314,10 +314,11 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 	// WHERE THE MULTIPLIER TAKES EFFECT (SC-372). The role tokens are
 	// `calc(<r>em * var(--dse-fs-*-scale))`, and a var() inside a custom property
 	// substitutes on the element the property is DECLARED on — so styles-source.css
-	// declares them on `:root, :is([data-dse-element], .dse-modal)`, i.e. on every
-	// root this file's stamp can land on (reflect() = element roots, reflectCss() =
-	// modal dialogs). Declared on :root alone they flattened to `* 1` and all three
-	// knobs were inert. Per-root, never <html>: popouts and modals each own a scale.
+	// declares them on `:root, :is([data-dse-element], .dse-modal, .dse-fs-root)`, i.e. on
+	// every root this file's stamp can land on (reflect() = element roots, reflectCss() =
+	// modal dialogs and, SC-422, chrome roots — framework/kit/textScaleRoot.ts). Declared on
+	// :root alone they flattened to `* 1` and all three knobs were inert. Per-root, never
+	// <html>: popouts and modals each own a scale.
 	//
 	// WHY THREE AND NOT ONE. Text size above already zooms an element as a whole;
 	// what it cannot do is change the RELATIONSHIP between sizes, which is the

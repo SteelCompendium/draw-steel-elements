@@ -45,11 +45,12 @@ const SCALE_DEPENDENT = [
 	'--dse-fs-control',
 	'--dse-fs-secondary', '--dse-fs-label', '--dse-fs-caption', '--dse-fs-micro',
 ];
-/** The two kinds of root prefs.reflect() / prefs.reflectCss() stamp, plus the unstamped default. */
-const SHARED_SELECTOR = ':root, :is([data-dse-element], .dse-modal)';
+/** The three kinds of root prefs.reflect() / prefs.reflectCss() stamp, plus the unstamped default:
+ *  an element root, a DseModal dialog, and (SC-422) a `.dse-fs-root` chrome root. */
+const SHARED_SELECTOR = ':root, :is([data-dse-element], .dse-modal, .dse-fs-root)';
 /** The inner rule of a registry entry (styles-source.css "SC-372: EACH TEXT-SIZE KNOB APPLIES ONCE"):
  *  inside a registered consumer of knob K, the K roles are plain em ratios, so the knob applies once. */
-const ONCE_SELECTOR = '& > *, &::before, &::after, & :is([data-dse-element], .dse-modal)';
+const ONCE_SELECTOR = '& > *, &::before, &::after, & :is([data-dse-element], .dse-modal, .dse-fs-root)';
 
 describe('SC-372: scale-dependent --dse-fs-* tokens resolve on the root that carries the stamp', () => {
 	const declaring = rules.filter((r) => fsDecls(r.body).some((d) => SCALE_REF.test(d.value)));
@@ -114,12 +115,37 @@ describe('SC-372: scale-dependent --dse-fs-* tokens resolve on the root that car
 		expect([...referenced].sort()).toEqual(stamped.sort());
 	});
 
-	it('the selector keys on the two things the stampers put on a root: data-dse-element (pipeline) and .dse-modal (DseModal)', () => {
+	it('the selector keys on the three things the stampers put on a root: data-dse-element (pipeline), .dse-modal (DseModal), .dse-fs-root (chrome)', () => {
 		const pipeline = fs.readFileSync(path.join(root, 'src/framework/pipeline.ts'), 'utf8');
 		const modal = fs.readFileSync(path.join(root, 'src/framework/kit/managedModal.ts'), 'utf8');
 		expect(pipeline).toMatch(/root\.setAttribute\('data-dse-element', def\.id\)/);
 		expect(pipeline).toMatch(/cx\.prefs\.reflect\(root, view\)/);
 		expect(modal).toMatch(/this\.dialogEl\(\)\.addClass\('dse-modal'\)/);
 		expect(modal).toMatch(/prefs\.reflectCss\(this\.dialogEl\(\), this\.lifecycle\)/);
+		// SC-422: the chrome stamp is ONE helper (class + reflectCss), and its class is the selector's third member.
+		const helper = fs.readFileSync(path.join(root, 'src/framework/kit/textScaleRoot.ts'), 'utf8');
+		expect(helper).toMatch(/TEXT_SCALE_ROOT_CLS = 'dse-fs-root'/);
+		expect(helper).toMatch(/rootEl\.addClass\(TEXT_SCALE_ROOT_CLS\)/);
+		expect(helper).toMatch(/prefs\?\.reflectCss\(rootEl, owner\)/);
+	});
+
+	it('every chrome surface stamps through that helper, onto the root that holds its text, with a Component owner (SC-422)', () => {
+		const read = (p: string) => fs.readFileSync(path.join(root, p), 'utf8');
+		// Compendium search modal: a SuggestModal, so its OWN Component is loaded in onOpen / unloaded in onClose.
+		const search = read('src/authoring/CompendiumSearchModal.ts');
+		expect(search).toMatch(/stampTextScaleRoot\(this\.modalEl \?\? this\.containerEl, prefsForApp\(this\.app\), this\.prefsOwner\)/);
+		expect(search).toMatch(/this\.prefsOwner\.load\(\)/);
+		expect(search).toMatch(/this\.prefsOwner\.unload\(\)/);
+		// Settings preview: the wrapper holding the caption AND the stage, owned by the per-mount Component.
+		const preview = read('src/views/SettingsPreview.ts');
+		expect(preview).toMatch(/stampTextScaleRoot\(wrap, textScale\.prefs, textScale\.owner\)/);
+		expect(preview).toMatch(/buildPreviewPanel\(containerEl, \{ prefs: fw\.services\.prefs, owner \}\)/);
+		// Sidebar: the .dse-sidebar container (header + empty message), owned by the view.
+		const sidebar = read('src/framework/sidebar/DseSidebarView.ts');
+		expect(sidebar).toMatch(/stampTextScaleRoot\(el, this\.services\.prefs, this\)/);
+		// No other source file adds the class or stamps by hand: the helper stays the only door.
+		for (const file of ['src/authoring/CompendiumSearchModal.ts', 'src/views/SettingsPreview.ts', 'src/framework/sidebar/DseSidebarView.ts']) {
+			expect(read(file)).not.toMatch(/reflectCss\(/);
+		}
 	});
 });

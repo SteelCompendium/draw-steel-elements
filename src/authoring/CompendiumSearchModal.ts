@@ -6,8 +6,10 @@
 // `cx`-free by design (binding note 2, task-10-brief.md): the modal takes the
 // CompendiumIndex directly rather than a RenderContext, so it can be opened from a plain
 // editor command with no pipeline/element machinery in scope.
-import { SuggestModal } from 'obsidian';
+import { Component, SuggestModal } from 'obsidian';
 import type { App, TFile } from 'obsidian';
+import { stampTextScaleRoot } from '@/framework/kit/textScaleRoot';
+import { prefsForApp } from '@/framework/seams/prefs';
 import type { CompendiumEntry, CompendiumIndex } from '@/services/CompendiumIndex';
 
 /** Sentinel `scc` value for the synthetic "Sync compendium" row (empty-index state, spec
@@ -71,6 +73,15 @@ export function parseCompendiumQuery(query: string): {
 }
 
 export class CompendiumSearchModal extends SuggestModal<CompendiumEntry> {
+	/**
+	 * SC-422 — lifetime owner of this modal's text-size pref subscription. A SuggestModal is
+	 * neither an element root nor a DseModal, so nothing stamps the Small / Control knobs on
+	 * it (the type/source chips, the code line and the empty-index hint all read `--dse-fs-*`
+	 * roles). Loaded in onOpen, unloaded in onClose: the subscription dies with the modal.
+	 * One-shot, like DseModal's `lifecycle` — Obsidian modals are not reopened.
+	 */
+	private readonly prefsOwner = new Component();
+
 	constructor(
 		app: App,
 		private readonly index: CompendiumIndex,
@@ -79,6 +90,21 @@ export class CompendiumSearchModal extends SuggestModal<CompendiumEntry> {
 	) {
 		super(app);
 		this.setPlaceholder(opts.placeholder ?? 'Search the compendium…');
+	}
+
+	onOpen(): void {
+		// Modal.onOpen() is declared `Promise<void> | void`; the call is fire-and-forget (the
+		// base is a no-op, and DseModal subclasses do the same — see FormModal.onOpen).
+		void super.onOpen();
+		this.prefsOwner.load();
+		// `modalEl` is the dialog box that holds the input AND the suggestion list; the F3
+		// test mock only builds `containerEl`, so fall back to it (same as DseModal.dialogEl).
+		stampTextScaleRoot(this.modalEl ?? this.containerEl, prefsForApp(this.app), this.prefsOwner);
+	}
+
+	onClose(): void {
+		this.prefsOwner.unload();
+		super.onClose();
 	}
 
 	getSuggestions(query: string): CompendiumEntry[] {
