@@ -303,10 +303,11 @@ export function isFenceClose(open: { fenceChar: string; fenceLen: number; prefix
  * which `body` comes back without; the block closes only on a line carrying the same prefix, and a
  * line that has left the quote ends it (an unterminated candidate, abandoned as above).
  *
- * SC-453 — line endings: lines are split on `\r?\n`, so a CRLF note's fence lines parse
- * (the old fence regex's `.` never matched `\r`) and `body` comes back LF-joined. The line COUNT and
- * indices are identical to `content.split('\n')`'s (a lone `\r` stays inside its line), which is
- * what every caller that also splits the raw content on `\n` relies on for `info.lineStart/End`.
+ * SC-453 / SC-460 — line endings: lines are split by OBSIDIAN's rule (`splitLines`: CR, CRLF and LF each
+ * end a line), so a CRLF note's fence lines parse and `body` comes back LF-joined, and `info.lineStart/End`
+ * are in the same numbering as Obsidian's section lineStart/lineEnd, the editor's cursor line and
+ * `replaceFenceBlock`'s indices. A lone CR above a block therefore shifts these numbers exactly as it
+ * shifts Obsidian's.
  */
 function* iterateFences(content: string, alias: string): Generator<{ info: BlockInfo; body: string }> {
 	const lines = splitLines(content);

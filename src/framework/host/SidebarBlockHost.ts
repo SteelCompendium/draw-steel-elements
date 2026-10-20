@@ -54,7 +54,8 @@ import { splitLines } from './lineEnding';
 /** Extracts the body text (lines strictly between the fences) at `info` from `content`.
  *  SC-453: always LF-joined (a CRLF note's `\r` terminators are dropped), so what the element
  *  parses — and what the self-echo guard compares — never depends on the note's line ending.
- *  SC-455: and prefix-free — a block inside a callout is parsed without its `> `. */
+ *  SC-455: and prefix-free — a block inside a callout is parsed without its `> `.
+ *  SC-460: lines are Obsidian's (a lone CR is a break), so `info`'s positions are in the numbering `locate` returns. */
 function extractBody(content: string, info: BlockInfo): string {
 	return blockBodyLines(splitLines(content), info.lineStart, info.lineEnd).join('\n');
 }
@@ -330,11 +331,16 @@ export class SidebarBlockHost implements BlockHost {
 			// extractBody's view of `next`, not `newSource` itself — so it matches whatever the note's
 			// line ending did to the text (CRLF terminators dropped, a lone CR before the close fence
 			// dropped). Set here, in the callback, so it is in place before Obsidian emits `modify`.
-			this.lastWritten = extractBody(next, {
-				language: info.language,
-				lineStart: info.lineStart,
-				lineEnd: info.lineStart + newSource.split('\n').length + 1,
-			});
+			// SC-460: where that block ends is read back from the bytes written, not counted from `newSource` -
+			// a body ending in a lone CR joins the close fence's LF into one CRLF break and is a line shorter.
+			this.lastWritten = extractBody(
+				next,
+				this.locate(next) ?? {
+					language: info.language,
+					lineStart: info.lineStart,
+					lineEnd: info.lineStart + splitLines(newSource).length + 1,
+				},
+			);
 			wrote = true;
 			finalContent = next;
 			return finalContent;

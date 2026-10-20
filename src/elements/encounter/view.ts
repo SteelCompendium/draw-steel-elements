@@ -18,7 +18,7 @@ import type { EncounterComputed, EncounterModel, EncounterRow } from './model';
 import { computeEncounter, rowEv } from './budget';
 import { serialize as serializeInitiative } from '../initiative/model';
 import { GENERATED_FROM_KEY, findGeneratedBlock, generateAnchorId } from '@/framework/sidebar/anchor';
-import { detectEol, toEol } from '@/framework/host/lineEnding';
+import { detectEol, splitLines, toEol } from '@/framework/host/lineEnding';
 import type { EncounterData, EnemyGroup } from '../initiative/model';
 
 /** One resolved (or degraded) roster row — the shape buildRoster/buildEncounterData
@@ -493,7 +493,7 @@ export class EncounterView extends ElementView<EncounterModel> {
 				}
 				const trimmed = content.replace(/\s*$/, '');
 				// +2 for the blank line and the opening fence the template below adds.
-				lineStart = trimmed.split('\n').length + 1;
+				lineStart = splitLines(trimmed).length + 1; // Obsidian's numbering (SC-460)
 				// SC-453: the appended fence takes the note's own line ending (LF notes: unchanged).
 				const eol = detectEol(content);
 				return `${trimmed}${eol}${eol}${toEol(`\`\`\`ds-initiative\n${body}\n\`\`\`\n`, eol)}`;

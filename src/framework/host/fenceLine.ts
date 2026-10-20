@@ -16,7 +16,7 @@
 // where a write picks up the note's own line ending (see lineEnding.ts for the policy).
 
 import { addBlockPrefix, blankLinesAreTrimmed, matchFenceMarker, stripBlockPrefix } from './blockPrefix';
-import { detectEol, stripCr, terminateLines } from './lineEnding';
+import { detectEol, joinWithEols, splitWithEols, stripCr } from './lineEnding';
 
 export interface OpenFenceLine {
 	/** SC-455: the blockquote/callout prefix in front of the fence run, exactly as written ('' when un-nested). */
@@ -68,11 +68,11 @@ function closeFenceOf(open: OpenFenceLine, line: string | undefined): { prefix: 
 }
 
 /**
- * Replaces the fenced block at lines `[lineStart, lineEnd]` (fence lines inclusive; 0-based
- * indices into `content.split('\n')`) with `newSource` as its body, keeping the live opening
- * fence line's info string (SC-290) and the live closing fence's run (or the opener's, when
- * `lineEnd` is not a fence line — an unterminated fence running to EOF). Null when `lineStart`
- * is not a fence-open line.
+ * Replaces the fenced block at lines `[lineStart, lineEnd]` (fence lines inclusive; 0-based line
+ * numbers in OBSIDIAN's numbering — CR, CRLF and LF each end a line, SC-460) with `newSource` as its
+ * body, keeping the live opening fence line's info string (SC-290) and the live closing fence's run (or
+ * the opener's, when `lineEnd` is not a fence line — an unterminated fence running to EOF). Null when
+ * `lineStart` is not a fence-open line.
  *
  * SC-453 — line endings. For an LF-dominant note this is the exact pre-SC-453 splice (byte for
  * byte, even if `newSource` itself carries CRLF). For a CRLF-dominant note the new block is
@@ -80,9 +80,15 @@ function closeFenceOf(open: OpenFenceLine, line: string | undefined): { prefix: 
  * line is terminated `\r\n`, and the LAST new line (the close fence) copies the ending of the
  * line it replaces — so a block that ends the note with no trailing newline does not grow a
  * stray `\r`. Lines outside `[lineStart, lineEnd]` are never touched.
+ *
+ * SC-460 — the note is held as lines plus each line's own terminator (`splitWithEols`), so the
+ * terminator after the close fence, and every byte outside the block (a lone CR above or below it
+ * included), is carried through exactly. The rewritten lines take the note's dominant ending; a lone CR
+ * INSIDE the old body was a line break there and is replaced with the rest of the body, while a lone CR
+ * inside `newSource` (the element's own text) is written as given.
  */
 export function replaceFenceBlock(content: string, lineStart: number, lineEnd: number, newSource: string): string | null {
-	const lines = content.split('\n');
+	const { lines, eols } = splitWithEols(content);
 	const openFence = parseOpenFenceLine(lines[lineStart]);
 	if (!openFence) return null;
 	const close = closeFenceOf(openFence, lines[lineEnd]);
@@ -91,33 +97,36 @@ export function replaceFenceBlock(content: string, lineStart: number, lineEnd: n
 	const trimBlank = blankLinesAreTrimmed(openFence.prefix, lines.slice(lineStart + 1, lineEnd));
 	const withPrefix = (line: string): string => addBlockPrefix(openFence.prefix, line, trimBlank);
 	const count = lineEnd - lineStart + 1;
+	const eol = detectEol(content);
 
-	if (detectEol(content) === '\n') {
-		lines.splice(lineStart, count, emitOpenFenceLine(openFence), ...newSource.split('\n').map(withPrefix), closeLine);
-		return lines.join('\n');
-	}
-
-	const lastReplacedHadCr = lines[lineEnd]?.endsWith('\r') ?? false;
-	const block = [emitOpenFenceLine(openFence), ...stripCr(newSource).split('\n').map(withPrefix), closeLine];
-	const last = block.length - 1;
-	lines.splice(lineStart, count, ...block.map((line, i) => (i < last || lastReplacedHadCr ? `${line}\r` : line)));
-	return lines.join('\n');
+	const body = (eol === '\n' ? newSource : stripCr(newSource)).split('\n').map(withPrefix);
+	const block = [emitOpenFenceLine(openFence), ...body, closeLine];
+	// The close fence keeps the terminator of the line it replaces (none at EOF) - except that an LF note
+	// never keeps a CR in front of its LF (the pre-SC-453 splice dropped it, and a mixed LF-dominant note
+	// is not made to keep one).
+	const replacedEol = eols[lineEnd] ?? '';
+	const closeEol = eol === '\n' && replacedEol === '\r\n' ? '\n' : replacedEol;
+	lines.splice(lineStart, count, ...block);
+	eols.splice(lineStart, count, ...block.map((_, i) => (i < block.length - 1 ? eol : closeEol)));
+	return joinWithEols(lines, eols);
 }
 
 /**
  * SC-455: replaces only the BODY lines of the block at `[lineStart, lineEnd]` with `newBody`
  * (LF-joined, prefix-free), leaving both fence lines byte-for-byte — the anchor stamp's splice.
- * Each new line gets the block's prefix and the note's own line ending (SC-453). Null when
- * `lineStart` is not a fence-open line.
+ * Each new line gets the block's prefix and the note's own line ending (SC-453). Line numbers are
+ * Obsidian's (SC-460). Null when `lineStart` is not a fence-open line.
  */
 export function replaceFenceBody(content: string, lineStart: number, lineEnd: number, newBody: string): string | null {
-	const lines = content.split('\n');
+	const { lines, eols } = splitWithEols(content);
 	const openFence = parseOpenFenceLine(lines[lineStart]);
 	if (!openFence) return null;
 	const trimBlank = blankLinesAreTrimmed(openFence.prefix, lines.slice(lineStart + 1, lineEnd));
 	const body = stripCr(newBody)
 		.split('\n')
 		.map((line) => addBlockPrefix(openFence.prefix, line, trimBlank));
-	lines.splice(lineStart + 1, lineEnd - lineStart - 1, ...terminateLines(body, detectEol(content)));
-	return lines.join('\n');
+	const eol = detectEol(content);
+	lines.splice(lineStart + 1, lineEnd - lineStart - 1, ...body);
+	eols.splice(lineStart + 1, lineEnd - lineStart - 1, ...body.map(() => eol));
+	return joinWithEols(lines, eols);
 }

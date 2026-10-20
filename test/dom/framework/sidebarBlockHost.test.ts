@@ -724,7 +724,7 @@ describe('SC-460: SidebarBlockHost on a note with lone CRs', () => {
 		const { vault, file, app } = setup(note);
 		const { host } = makeHost(app, file);
 		await host.refresh();
-		expect(host.getBlockInfo()).toEqual({ language: ALIAS, lineStart: 8, lineEnd: 11 });
+		expect(host.getBlockInfo()).toEqual({ language: ALIAS, lineStart: 9, lineEnd: 12 });
 
 		await expect(host.replaceSource(NEW_BODY)).resolves.toBe(true);
 

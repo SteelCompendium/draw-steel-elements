@@ -66,15 +66,18 @@ import type { BlockHost, BlockInfo, RenderMode } from './BlockHost';
 import type { PreviewScrollPin } from './previewScrollPin';
 import { listFences } from '../sidebar/anchor';
 import { notifyDroppedWrite, notifyUnsavableWrite } from './droppedWriteNotice';
-import { stripCr } from './lineEnding';
+import { splitLines } from './lineEnding';
 import { blockBodyLines, parseOpenFenceLine, replaceFenceBlock } from './fenceLine';
 import type { ViewRegistry, ViewRegistryEntry } from './viewRegistry';
 
 /** Matches a fence-close line, capturing the fence run. */
 const CLOSE_FENCE = /^([`~]{3,})/;
 
+// SC-460: every line number in this file (a section's lineStart/lineEnd, the positions locateByBody and
+// locateInSection return, anything spliced by replaceFenceBlock) is in OBSIDIAN's numbering, where a lone
+// CR is a line break like LF and CRLF (lineEnding.ts) - so every index into the note goes through splitLines.
 function parseOpenFence(text: string, lineStart: number) {
-	return parseOpenFenceLine(text.split('\n')[lineStart]);
+	return parseOpenFenceLine(splitLines(text)[lineStart]);
 }
 
 function parseCloseFence(line: string | undefined): string | null {
@@ -151,22 +154,16 @@ export function locateByBody(
 	body: string,
 	nearLine: number | null,
 ): { lineStart: number; lineEnd: number } | 'ambiguous' | null {
-	// SC-343 fix round 1: anchor.ts's FENCE_LINE is a plain `.` match, which never matches
-	// `\r`, so a CRLF note's fence lines used to fail to parse and listFences saw zero fences.
-	// Strip just the `\r` immediately before each `\n` (never a lone `\r`: line numbers here must
-	// stay identical to replaceSource's own `content.split('\n')`). SC-453: anchor.ts's scanner
-	// and normalizeBody now tolerate CRLF themselves, so this strip is redundant for correctness
-	// (removing it leaves every test green); it is kept as a cheap guard so `lines` below is
-	// CR-free for the fence-matching helpers. NOTE (SC-460): that is `split('\n')` numbering;
-	// Obsidian's section numbering counts a lone `\r` as a break, so a note with one above the
-	// block can still fail to resolve a section (pre-existing, not addressed here).
-	const lf = stripCr(content);
+	// SC-343 fix round 1 / SC-453: a CRLF note's fence lines must parse (the old fence regex's `.` never
+	// matched `\r`). SC-460: lines are split by Obsidian's rule (CR, CRLF, LF), which also drops every CR
+	// terminator, so `lines` is CR-free for the fence-matching helpers and the positions returned are in
+	// the same numbering as a section's lineStart/lineEnd and replaceFenceBlock's indices.
 	const wanted = normalizeBody(body);
-	const lines = lf.split('\n');
+	const lines = splitLines(content);
 	let best: { lineStart: number; lineEnd: number } | null = null;
 	let bestDistance = Infinity;
 	let matched = 0;
-	for (const info of listFences(lf, language)) {
+	for (const info of listFences(content, language)) {
 		const candidate = normalizeBody(blockBodyLines(lines, info.lineStart, info.lineEnd).join('\n'));
 		if (candidate !== wanted) continue;
 		matched++;
@@ -215,7 +212,7 @@ export function locateInSection(
 	ordinal: number,
 	near: number | null,
 ): { lineStart: number; lineEnd: number } | 'ambiguous' | null {
-	const lines = stripCr(content).split('\n');
+	const lines = splitLines(content);
 	const windowLines = lines.slice(section.lineStart, section.lineEnd + 1);
 	// A section starts at a block boundary, so scanning the window on its own sees what a scan of the whole note would.
 	const fences = listFences(windowLines.join('\n'), language).map((f) => ({
@@ -423,7 +420,7 @@ export class ReadingModeBlockHost implements BlockHost {
 			try {
 				const lineStart = cm.state.doc.lineAt(cm.posAtDOM(widget)).number - 1;
 				const text = view.editor.getValue();
-				const lines = text.split('\n');
+				const lines = splitLines(text);
 				let lineEnd = lineStart;
 				while (lineEnd + 1 < lines.length && /^[ ]{0,3}>/.test(lines[lineEnd + 1])) lineEnd++;
 				return { text, lineStart, lineEnd };
@@ -518,8 +515,7 @@ export class ReadingModeBlockHost implements BlockHost {
 	/** SC-455: does the section window look like a list (a list-item line, or a fence indented 2+ spaces)? Only used to word the Notice. */
 	private looksLikeList(content: string, section: MarkdownSectionInformation | null): boolean {
 		if (!section) return false;
-		return stripCr(content)
-			.split('\n')
+		return splitLines(content)
 			.slice(section.lineStart, section.lineEnd + 1)
 			.some((l) => /^[ \t]*(?:[-*+]|\d+[.)])[ \t]/.test(l) || /^ {2,}[`~]{3,}/.test(l));
 	}
@@ -637,7 +633,7 @@ export class ReadingModeBlockHost implements BlockHost {
 		section: MarkdownSectionInformation | null,
 	): { lineStart: number; lineEnd: number } | 'abort' | 'miss' {
 		if (section) {
-			const lines = content.split('\n');
+			const lines = splitLines(content);
 			const { lineStart, lineEnd } = section;
 			const openFence = parseOpenFence(content, lineStart);
 			if (!openFence || openFence.prefix !== '') {
