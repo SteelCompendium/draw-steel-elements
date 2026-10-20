@@ -292,7 +292,14 @@ export class SidebarBlockHost implements BlockHost {
 		this.backingFile = newFile;
 	}
 
+	/** SC-455: whether the last failed `replaceSource` already showed the user a Notice (BlockHost.lastWriteReported). */
+	private reported = false;
+	get lastWriteReported(): boolean {
+		return this.reported;
+	}
+
 	async replaceSource(newSource: string): Promise<boolean> {
+		this.reported = false;
 		if (!this.canPersist) return false;
 
 		let wrote = false;
@@ -350,7 +357,10 @@ export class SidebarBlockHost implements BlockHost {
 		}
 		// SC-455: a write that could not land is never silent — the same "not saved" Notice the
 		// reading-mode host shows when its block changed on disk first.
-		if (lost) notifyDroppedWrite(this.backingFile.path, this.backingFile.basename);
+		if (lost) {
+			notifyDroppedWrite(this.backingFile.path, this.backingFile.basename);
+			this.reported = true;
+		}
 		return wrote;
 	}
 

@@ -18,9 +18,9 @@ export function droppedWriteMessage(noteName: string): string {
 	return `Draw Steel Elements: a change to a block in ${noteName} was not saved — the block changed on disk first.`;
 }
 
-/** SC-455 text (plain words, the note's name, what to do). `noteName` is the note's basename, no extension. */
-export function unsavableWriteMessage(noteName: string): string {
-	return `Draw Steel Elements: a change to a block in ${noteName} was not saved — the plugin can't tell where this block sits in the note (blocks inside lists can't be edited yet).`;
+/** SC-455 text (plain words, the note's name). The list hint only when the block sits in a list shape. */
+export function unsavableWriteMessage(noteName: string, listShape = false): string {
+	return `Draw Steel Elements: a change to a block in ${noteName} was not saved — the plugin can't tell where this block sits in the note${listShape ? " (blocks inside lists can't be edited yet)" : ''}.`;
 }
 
 /** sourcePath -> time (ms) the last Notice for that note was shown. */
@@ -47,12 +47,12 @@ export function notifyDroppedWrite(sourcePath: string, noteName: string, now: nu
  * out, or its shape is not supported). Always warns; shows the Notice unless one was shown for the same
  * note less than DROPPED_WRITE_NOTICE_INTERVAL_MS ago. Returns whether a Notice was shown.
  */
-export function notifyUnsavableWrite(sourcePath: string, noteName: string, now: number = Date.now()): boolean {
+export function notifyUnsavableWrite(sourcePath: string, noteName: string, listShape = false, now: number = Date.now()): boolean {
 	console.warn(`Draw Steel Elements: could not save a write to ${sourcePath} — the block's location is not one the plugin can edit.`);
 	const previous = lastUnsavableAt.get(sourcePath);
 	if (previous !== undefined && now - previous < DROPPED_WRITE_NOTICE_INTERVAL_MS) return false;
 	lastUnsavableAt.set(sourcePath, now);
-	new Notice(unsavableWriteMessage(noteName));
+	new Notice(unsavableWriteMessage(noteName, listShape));
 	return true;
 }
 

@@ -264,7 +264,8 @@ class FormModal extends DseModal {
 		if (this.saveDisabled) return;
 		const ok = await this.cx.host.replaceSource(this.currentBody());
 		if (ok) this.close();
-		else new Notice("Draw Steel Elements: couldn't save — the block may have moved.");
+		// SC-455: a host that already said why it could not write (its own Notice) is not repeated here.
+		else if (!this.cx.host.lastWriteReported) new Notice("Draw Steel Elements: couldn't save — the block may have moved.");
 	}
 }
 

@@ -88,6 +88,12 @@ export interface BlockHost {
 	 * write time — never throws, never logs.
 	 */
 	replaceSource(newSource: string): Promise<boolean>;
+	/**
+	 * SC-455 — optional: true when the LAST `replaceSource` call that failed already told the user why
+	 * (the host showed its own Notice), false when it landed or failed silently. A caller that adds its
+	 * own Notice on a false result (the form editor) skips it when this is true: one Notice per attempt.
+	 */
+	readonly lastWriteReported?: boolean;
 	/** Best-effort stable key for session state (F1 §4.3). Never used for document state. */
 	blockKey(): string;
 	/**

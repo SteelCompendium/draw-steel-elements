@@ -78,11 +78,17 @@ export function stripBlockPrefix(line: string, prefix: string): string | null {
  * A body/fence line to WRITE under `prefix`. An empty line is just the prefix — with its trailing
  * space dropped (`>`) unless `trimBlank` is false (the block spells empty lines `> `). The identity
  * for the empty prefix.
+ *
+ * The inverse of `stripBlockPrefix` for every prefix and text: `stripBlockPrefix` takes ONE optional
+ * space after the last `>` as the marker's own, so a prefix with no space after it (`>`, `>>`) and a
+ * text that starts with a space (nested YAML) needs that marker space written, or the text would
+ * read back one space short (SC-455 review HIGH-1).
  */
 export function addBlockPrefix(prefix: string, text: string, trimBlank = true): string {
 	if (prefix === '') return text;
-	if (text !== '') return prefix + text;
-	return trimBlank ? prefix.trimEnd() : prefix;
+	if (text === '') return trimBlank ? prefix.trimEnd() : prefix;
+	if (!prefix.endsWith(' ') && (text[0] === ' ' || text[0] === '\t')) return `${prefix} ${text}`;
+	return prefix + text;
 }
 
 /**

@@ -149,8 +149,8 @@ export function locateByBody(
 	content: string,
 	language: string,
 	body: string,
-	nearLine: number,
-): { lineStart: number; lineEnd: number } | null {
+	nearLine: number | null,
+): { lineStart: number; lineEnd: number } | 'ambiguous' | null {
 	// SC-343 fix round 1: anchor.ts's FENCE_LINE is a plain `.` match, which never matches
 	// `\r`, so a CRLF note's fence lines used to fail to parse and listFences saw zero fences.
 	// Strip just the `\r` immediately before each `\n` (never a lone `\r`: line numbers here must
@@ -165,10 +165,12 @@ export function locateByBody(
 	const lines = lf.split('\n');
 	let best: { lineStart: number; lineEnd: number } | null = null;
 	let bestDistance = Infinity;
+	let matched = 0;
 	for (const info of listFences(lf, language)) {
 		const candidate = normalizeBody(blockBodyLines(lines, info.lineStart, info.lineEnd).join('\n'));
 		if (candidate !== wanted) continue;
-		const distance = Math.abs(info.lineStart - nearLine);
+		matched++;
+		const distance = Math.abs(info.lineStart - (nearLine ?? 0));
 		if (distance < bestDistance) {
 			best = { lineStart: info.lineStart, lineEnd: info.lineEnd };
 			bestDistance = distance;
@@ -181,13 +183,17 @@ export function locateByBody(
 	if (unterminated) {
 		const candidate = normalizeBody(lines.slice(unterminated.lineStart + 1, unterminated.lineEnd + 1).join('\n'));
 		if (candidate === wanted) {
-			const distance = Math.abs(unterminated.lineStart - nearLine);
+			matched++;
+			const distance = Math.abs(unterminated.lineStart - (nearLine ?? 0));
 			if (distance < bestDistance) {
 				best = unterminated;
 				bestDistance = distance;
 			}
 		}
 	}
+	// SC-455 review LOW-1: with no known position (a Live Preview callout written before its widget was
+	// ever attached) equal bodies cannot be told apart by distance - never guess one.
+	if (nearLine === null && matched > 1) return 'ambiguous';
 	return best;
 }
 
@@ -366,7 +372,6 @@ export class ReadingModeBlockHost implements BlockHost {
 			// durable identity applies even before the editor can place it) and ask the editor.
 			this.lpCalloutSeen = true;
 			this.knownLanguage ??= this.alias;
-			this.knownLineStart ??= 0;
 			section = this.livePreviewCalloutSection();
 		}
 		if (!section) return null;
@@ -459,7 +464,6 @@ export class ReadingModeBlockHost implements BlockHost {
 		return (
 			(this.sectionResolvedOnce || this.lpCalloutSeen) &&
 			this.knownBody !== null &&
-			this.knownLineStart !== null &&
 			this.knownLanguage !== null
 		);
 	}
@@ -505,11 +509,33 @@ export class ReadingModeBlockHost implements BlockHost {
 		};
 	}
 
+	/** SC-455: whether the last failed `replaceSource` already showed the user a Notice (BlockHost.lastWriteReported). */
+	private reported = false;
+	get lastWriteReported(): boolean {
+		return this.reported;
+	}
+
+	/** SC-455: does the section window look like a list (a list-item line, or a fence indented 2+ spaces)? Only used to word the Notice. */
+	private looksLikeList(content: string, section: MarkdownSectionInformation | null): boolean {
+		if (!section) return false;
+		return stripCr(content)
+			.split('\n')
+			.slice(section.lineStart, section.lineEnd + 1)
+			.some((l) => /^[ \t]*(?:[-*+]|\d+[.)])[ \t]/.test(l) || /^ {2,}[`~]{3,}/.test(l));
+	}
+
 	async replaceSource(newSource: string): Promise<boolean> {
+		this.reported = false;
 		if (!this.canPersist) return false;
 
 		const abstractFile = this.plugin.app.vault.getAbstractFileByPath(this.ctx.sourcePath);
-		if (!(abstractFile instanceof TFile)) return false;
+		if (!(abstractFile instanceof TFile)) {
+			// SC-455: the note is gone (deleted / renamed mid-write): never a silent false.
+			const name = this.ctx.sourcePath.split('/').pop()?.replace(/\.md$/, '') ?? this.ctx.sourcePath;
+			notifyUnsavableWrite(this.ctx.sourcePath, name);
+			this.reported = true;
+			return false;
+		}
 
 		// Captured immediately before entering Vault.process, with nothing async in between.
 		// SC-343: it is only a HINT now — resolveWriteTarget re-validates it against the live
@@ -519,6 +545,7 @@ export class ReadingModeBlockHost implements BlockHost {
 		let wrote = false;
 		let dropped = false;
 		let unplaceable = false;
+		let listShape = false;
 		let changedContent = false;
 		let settled = false;
 		// SC-340 §6.2: the claim ticket must exist before Vault.process — Obsidian fires
@@ -533,6 +560,7 @@ export class ReadingModeBlockHost implements BlockHost {
 				const target = this.resolveWriteTarget(content, section);
 				if (target === 'abort') {
 					unplaceable = true; // SC-455: a write that cannot land is never silent
+					listShape = this.looksLikeList(content, section);
 					return content;
 				}
 				if (target === 'miss') {
@@ -589,7 +617,8 @@ export class ReadingModeBlockHost implements BlockHost {
 			}
 		}
 		if (dropped) notifyDroppedWrite(this.ctx.sourcePath, abstractFile.basename);
-		if (unplaceable) notifyUnsavableWrite(this.ctx.sourcePath, abstractFile.basename);
+		if (unplaceable) notifyUnsavableWrite(this.ctx.sourcePath, abstractFile.basename, listShape);
+		this.reported = dropped || unplaceable;
 		return wrote;
 	}
 
@@ -655,7 +684,8 @@ export class ReadingModeBlockHost implements BlockHost {
 			if (openOk && (closeOk || unterminatedAtEof) && bodyOk) return { lineStart, lineEnd };
 		}
 		if (!this.hasDurableIdentity) return 'abort';
-		const located = locateByBody(content, this.knownLanguage!, this.knownBody!, this.knownLineStart!);
+		const located = locateByBody(content, this.knownLanguage!, this.knownBody!, this.knownLineStart);
+		if (located === 'ambiguous') return 'abort';
 		if (!located) return 'miss';
 		this.knownLineStart = located.lineStart;
 		return located;
