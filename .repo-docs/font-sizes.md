@@ -42,13 +42,14 @@ All three default to `1` and are stamped inline per element root only when moved
 (`css: { varName, toCss }` in `src/prefs/catalog.ts`, same remove-on-default semantics as
 every other css-bearing pref), so a vault that never opens Settings renders exactly what it
 rendered before the scale existed. The stamp also lands on a modal's dialog root
-(`reflectCss()`); small and large apply in print and export, control is screen-only.
+(`reflectCss()`) and on the plugin's **chrome roots** (below); small and large apply in print
+and export, control is screen-only.
 
 **Where the multiplier takes effect (SC-372).** The scale-dependent tokens are
 `calc(<r>em * var(--dse-fs-*-scale))`, and a `var()` inside a custom property substitutes on
 the element the property is *declared* on. They are therefore declared on `:root` **and**
 on every root the prefs seam stamps — one rule, selector list `:root, :is([data-dse-element],
-.dse-modal)` — so the multiplier resolves where it is stamped. Declaring them on `:root`
+.dse-modal, .dse-fs-root)` — so the multiplier resolves where it is stamped. Declaring them on `:root`
 alone (the pre-SC-372 shape) flattened them to `* 1` and made all three knobs inert. A new
 scale-dependent token goes in that rule; `test/unit/build/scaleTokenScope.test.ts` fails
 otherwise. Because every role is an `em` ratio and `em` is the PARENT's size, a role nested
@@ -63,6 +64,22 @@ rule's coefficient, and the `text scale once OK` sweep in `npm run shots` fails,
 chain, on any element that scales by a knob twice. It does not catch text that stops scaling
 (goes inert) because a registry entry is too broad: only the named `TEXT_SCALE_PAGES` rows in
 `shoot.mjs`, including the three nested ones, pin that.
+
+**Stamped roots (SC-422).** Three kinds of root carry a stamp: an **element root**
+(`[data-dse-element]`, stamped by the pipeline's `prefs.reflect()`), a **`DseModal` dialog**
+(`.dse-modal`, `reflectCss()` in `DseModal.open()`), and a **chrome root** (`.dse-fs-root`) —
+plugin chrome that sits outside both but still reads the roles. Today that is: the Compendium
+search modal's dialog box (`CompendiumSearchModal`, a `SuggestModal`), the settings preview
+panel wrapper (`.dse-settings-preview`, which holds the caption AND the sample), and the sidebar
+view's `.dse-sidebar` container (panel header + empty message). A new surface that reads a role
+but is none of those makes itself a chrome root with `stampTextScaleRoot(el, prefs, owner)`
+(`src/framework/kit/textScaleRoot.ts`: adds the class and calls `prefs.reflectCss`), where
+`owner` is a `Component` whose unload releases the subscription (a `SuggestModal` has none of its
+own, so it creates one in `onOpen` and unloads it in `onClose`). Stamp the **smallest container
+that holds the text**; element roots nested inside re-stamp themselves identically, so nothing
+applies twice. Never stamp `<html>`. `shoot.mjs`'s `TEXT_SCALE_CHROME_PAGES` mounts each chrome
+surface through its real code (`visual-harness/chromeSurfaces.ts`, `surface=` URL param) for both
+the `text scale OK` gate and the `text scale once OK` sweep; add the new surface there too.
 
 ## How to pick one
 

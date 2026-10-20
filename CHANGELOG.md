@@ -60,6 +60,12 @@ for what needs action.
   pin the wrong one of two blocks. Obsidian counts such a character as a line break, and the plugin now
   counts lines the same way. The character itself and everything else outside the block are left exactly as
   they were.
+- [FIX] **The text size settings now also resize the Compendium search window, the settings preview
+  caption, and the sidebar header** (SC-422). Small text size already resized text inside Draw Steel
+  blocks and dialogs, but three places around them ignored it: the type, source and code lines (and
+  the "no compendium indexed yet" hint) in the Compendium search window, the "Preview" caption above
+  the sample in Settings, and the sidebar's panel header and empty-sidebar message (sidebar is
+  experimental). They now follow Small text size like the rest. At the default sizes nothing changes.
 - [FIX] **Notes with Windows (CRLF) line endings work with the sidebar, and saves keep the note's line
   endings.** A block pinned to the sidebar in a CRLF note could not be found, so its changes never saved.
   Saving a block from Reading view or the sidebar, pinning one, and the encounter builder's "Create tracker
