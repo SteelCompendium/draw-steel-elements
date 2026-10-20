@@ -2,7 +2,7 @@
 // parseEncounterData) + BYTE-COMPAT serialize.
 //
 // BYTE-COMPAT ORACLE: the legacy write path (the former CodeBlocks.updateInitiativeTracker ->
-// updateCodeBlock -> updateMarkdownCodeBlock, src/utils/CodeBlocks.ts:102; canvas :79 —
+// updateCodeBlock -> updateMarkdownCodeBlock, src/utils/CodeBlocks.ts —
 // deleted in SC-454) did exactly `stringifyYaml(data).trim()` on the WHOLE materialized EncounterData the legacy
 // processor holds. The fixtures (quick-start.yaml, squad.yaml) and the mid-encounter source
 // below are REF-FREE (no `statblock` strings), so the legacy async parseEncounterData never

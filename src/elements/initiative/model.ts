@@ -35,7 +35,7 @@
 //
 // serialize(model): the BYTE-COMPAT boundary. The legacy write path
 // (the former CodeBlocks.updateInitiativeTracker -> updateCodeBlock -> updateMarkdownCodeBlock,
-// src/utils/CodeBlocks.ts:102; canvas :79 — deleted in SC-454) did exactly `stringifyYaml(data).trim()` on the
+// src/utils/CodeBlocks.ts — deleted in SC-454) did exactly `stringifyYaml(data).trim()` on the
 // WHOLE materialized EncounterData the processor holds — this is the same expression on the
 // same object shape. `.trim()` matches the legacy writer exactly and is also required by
 // ReadingModeBlockHost.replaceSource, which does `newSource.split('\n')` — an untrimmed

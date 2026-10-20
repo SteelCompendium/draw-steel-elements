@@ -169,6 +169,7 @@ describe('T-4: minion pool — minionsToKill math (via the modal info text)', ()
 		expect(updated).not.toContain('```\n```'); // no language-less fence left behind
 		// The minion's condition is gone from the persisted enemy section (the hero
 		// Aragorn's own untouched `grabbed` legitimately remains above it).
+		expect(updated.indexOf('enemy_groups:')).toBeGreaterThanOrEqual(0); // else the slice below is vacuous
 		expect(updated.slice(updated.indexOf('enemy_groups:'))).not.toContain('grabbed');
 	});
 
@@ -189,6 +190,7 @@ describe('T-4: minion pool — minionsToKill math (via the modal info text)', ()
 		expect(updated).toContain('minion_stamina_pool: 17'); // damage saved correctly (CB-1)
 		// Condition removal saved: the minion's condition is gone from the persisted
 		// enemy section (the hero's own untouched `grabbed` legitimately remains).
+		expect(updated.indexOf('enemy_groups:')).toBeGreaterThanOrEqual(0); // else the slice below is vacuous
 		expect(updated.slice(updated.indexOf('enemy_groups:'))).not.toContain('grabbed');
 	});
 });

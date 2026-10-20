@@ -11,7 +11,7 @@
 // path (the former CodeBlocks.updateStaminaBar -> updateCodeBlock -> updateMarkdownCodeBlock,
 // in src/utils/CodeBlocks.ts, deleted in SC-454) did exactly `stringifyYaml(data).trim()`
 // where `data` IS the StaminaBar class instance
-// (CodeBlocks.updateStaminaBar(app, data: StaminaBar, ctx)) — reusing the SAME class
+// (the former CodeBlocks.updateStaminaBar(app, data: StaminaBar, ctx)) — reusing the SAME class
 // instance shape here (rather than building a fresh DTO) is itself the compatibility
 // guarantee: field set + insertion order (collapsible, collapse_default, max_stamina,
 // current_stamina, temp_stamina, height, style) fall out of StaminaBar's own constructor

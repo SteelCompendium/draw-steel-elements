@@ -16,7 +16,7 @@
 // section that no view depends on.
 //
 // Correctness fixes over the former legacy src/utils/CodeBlocks.ts (deleted in SC-454;
-// it stayed live for unmigrated elements until then):
+// it had no caller in src/ after the Plan 07 counter migration, afedb2a):
 //   - CB-3 (lost update): legacy `vault.read` → splice → `vault.modify` is a
 //     non-atomic read-modify-write; two concurrent updates race and one is silently
 //     dropped. replaceSource() here uses `Vault.process` (atomic read-modify-write)
