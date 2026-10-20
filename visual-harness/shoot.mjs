@@ -6957,6 +6957,8 @@ async function assertTextScale(page) {
 						if (tKnob === 'control' && knob === 'control' && mode !== 'screen') continue;
 						const b = base.synth[h][t];
 						const m = moved.synth[h][t];
+						// A missing root (e.g. a chrome surface whose stamp is gone) is already reported above; do not crash on it.
+						if (!(b > 0) || !(m > 0)) continue;
 						const expected = tKnob === knob ? b * value : b;
 						compared += 1;
 						if (!near(m, expected)) problems.push(`${at}: --dse-fs-${t} on the ${h === 'modal' ? 'DseModal dialog' : ctx === 'chrome root' ? 'chrome root' : 'element root'} measures ${m}px, expected ${expected.toFixed(4)}px (baseline ${b}px${expected !== b ? ` x ${value}` : ', must not move'})`);
