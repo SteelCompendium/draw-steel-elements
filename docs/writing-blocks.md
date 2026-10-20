@@ -70,6 +70,44 @@ compendium reference** instead.
 
 Snapshots are offered for statblocks, features and featureblocks only.
 
+## Blocks inside callouts and quotes
+
+A block can sit inside a callout or a quote — every line of it starts with `>`:
+
+````markdown
+> [!note] Camp
+> Rest by the fire.
+> ```ds-stamina-bar
+> max_stamina: 30
+> current_stamina: 12
+> ```
+````
+
+Clicking its controls saves the change back into your note, and the `>` stays on every line.
+Nothing else in the callout or the note is touched.
+
+**What works**
+
+- A block in a callout (`> [!note]`), in a plain quote (`> text`), and in a callout inside a
+  callout (`> > `). The space after the `>` is optional.
+- Several blocks in the same callout, even identical ones.
+- **Reading view** and **Live Preview** (for callouts), and the [sidebar](gm-trackers.md): put the
+  cursor in the block and run **Send block to sidebar**.
+- A list inside a callout (`> - item` with the block indented under it), in Reading view.
+
+**What doesn't work yet**
+
+- **A block inside a list item** — the code fence indented under `- item` or `1. item`, with no `>`
+  in front. It draws, but it can't save: clicking a control shows a notice saying the change was
+  not saved, and your note stays as it was. Move the block out of the list (or into a callout) to
+  edit it. The same goes for a fence indented by a few spaces outside a list.
+- **Live Preview doesn't draw Draw Steel blocks inside a plain quote** (`> text`) at all; Obsidian
+  shows the raw text there. Use a callout, or switch to Reading view.
+
+One thing to expect in Live Preview: clicking a control in a block inside a callout also opens that
+callout as its source text, which is how Obsidian treats any click inside a callout. The change is
+saved; move the cursor out of the callout and the block is drawn again.
+
 ## Per-block appearance overrides (advanced)
 
 Most appearance settings are global (see [Settings](settings.md)), but a single block can

@@ -22,6 +22,13 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **A block inside a callout or a quote now saves its changes** (SC-455). A Draw Steel block
+  nested in `> [!note]`, a plain quote, or a callout inside a callout (each line starting with
+  `> `) drew and took clicks but never wrote them back, and said nothing; the change was lost on the
+  next redraw. It now saves in Reading view, in Live Preview (callouts) and from the sidebar, keeping
+  the `> ` on every line and leaving the rest of the note untouched. A block that still can't be saved
+  (one in a list item) now tells you with a notice instead of failing silently; see
+  [Blocks inside callouts and quotes](docs/writing-blocks.md#blocks-inside-callouts-and-quotes).
 - [FIX] **Notes with Windows (CRLF) line endings work with the sidebar, and saves keep the note's line
   endings.** A block pinned to the sidebar in a CRLF note could not be found, so its changes never saved.
   Saving a block from Reading view or the sidebar, pinning one, and the encounter builder's "Create tracker
