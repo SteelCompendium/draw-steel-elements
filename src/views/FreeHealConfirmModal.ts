@@ -27,7 +27,7 @@ export function freeHealConfirmMessage(amount: number | null): string {
 	const worth = amount === null ? "one Recovery's worth of Stamina" : `one Recovery's worth of Stamina (${amount})`;
 	return (
 		`This hero has no Recoveries tracked, so there is no Recovery to spend. ` +
-		`${FREE_HEAL_LABEL} heals ${worth} and does not track or spend a Recovery. ` +
+		`${FREE_HEAL_LABEL} heals ${worth}, stopping at maximum Stamina, and does not track or spend a Recovery. ` +
 		`You won't be asked again while this window is open.`
 	);
 }

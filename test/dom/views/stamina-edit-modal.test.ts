@@ -1182,6 +1182,7 @@ describe('SC-432: Spend Recovery for creatures and heroes without a pool', () =>
 			expect(dialog.el.textContent).toContain('Heal without spending a Recovery?');
 			expect(dialog.el.textContent).toContain('no Recovery to spend');
 			expect(dialog.el.textContent).toContain("one Recovery's worth of Stamina (10)");
+			expect(dialog.el.textContent).toContain('stopping at maximum Stamina');
 			expect(dialog.el.textContent).toContain('does not track or spend a Recovery');
 			expect(actionBtn(content).textContent).toBe('No Stamina Change');
 			expect(content.querySelector<HTMLInputElement>('.dse-stepper__input')!.value).toBe('10');

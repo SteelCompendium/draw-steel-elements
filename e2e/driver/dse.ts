@@ -48,7 +48,8 @@ export interface Scope {
  * Obsidian's own chrome has no `data-dse-control`; the manifest still names these host controls
  * by id and the driver resolves them from Obsidian's selectors. (`.modal-header-button` is the
  * 1.14 close X, `.modal-close-button` the older one.) The backdrop is a sibling of the dialog,
- * so host ids always resolve page-wide.
+ * so host ids resolve page-wide, except through a modal scope (`scopeOf(root, true)`), which resolves
+ * them inside its own `.modal-container`.
  */
 const HOST_CONTROLS: Record<string, string> = {
 	'modal.close': '.modal-container .modal-close-button, .modal-container .modal-header-button',
@@ -76,12 +77,27 @@ function pick(from: { $(sel: string): El; $$(sel: string): unknown }, ref: Contr
 	return el;
 }
 
-function scopeOf(root: El): Scope {
+/** The host selectors relative to ONE `.modal-container` (the X and the backdrop are both inside it). */
+const withinContainer = (sel: string): string => sel.replace(/\.modal-container /g, '');
+
+/**
+ * `isModal`: the root is a modal's dialog element. Its host ids (Obsidian's own X / backdrop) then
+ * resolve inside ITS `.modal-container` only (SC-432): with a confirmation open over the stamina
+ * modal, `dialog.control('modal.close')` must hit the confirmation's X, not the one underneath.
+ * Other scopes (a block, a toast) keep the page-wide lookup.
+ */
+function scopeOf(root: El, isModal = false): Scope {
 	return {
 		root,
 		control(ref, opts) {
-			// Host ids (Obsidian's own X / backdrop) live outside the dialog element.
-			if (typeof ref === 'string' && HOST_CONTROLS[ref]) return pick({ $: (sel) => $(sel), $$: (sel) => $$(sel) }, ref, opts);
+			// Host ids (Obsidian's own X / backdrop) live outside the dialog element, in its container.
+			if (typeof ref === 'string' && HOST_CONTROLS[ref]) {
+				if (isModal) {
+					const container = root.parentElement();
+					return pick({ $: (sel) => container.$(withinContainer(sel)), $$: (sel) => container.$$(withinContainer(sel)) }, ref, opts);
+				}
+				return pick({ $: (sel) => $(sel), $$: (sel) => $$(sel) }, ref, opts);
+			}
 			return pick(root, ref, opts);
 		},
 	};
@@ -209,7 +225,7 @@ async function modal(kind: keyof typeof MODAL_KINDS  ): Promise<Scope> {
 	});
 	const count = await $$(css).length;
 	if (count !== 1) throw new Error(`expected exactly one open ${kind} modal, found ${count}`);
-	return scopeOf($(css));
+	return scopeOf($(css), true);
 }
 
 /** The newest Notice (toast) on screen, as a scope: an older one still fading out can never be

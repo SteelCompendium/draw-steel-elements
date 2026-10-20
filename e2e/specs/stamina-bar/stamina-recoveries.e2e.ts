@@ -296,6 +296,30 @@ describe('modal Spend Recovery', () => {
 		expect(block).not.toHaveProperty('recoveries');
 	});
 
+	// The confirmation's own X and a click outside it (Obsidian's backdrop) are two more ways to dismiss it. Each
+	// closes ONLY the confirmation (the driver scopes host ids to the modal's own container), stages nothing,
+	// and leaves the stamina modal's pending edit alone.
+	it('[STAM-Q13X] the confirmation X and a click outside it each close only the confirmation: nothing staged, the pending edit survives', async () => {
+		const modal = await openBarModal(FREE);
+		await applyAmount(modal, '1', 'sedit.damage');
+		await dse.click(modal.control('sedit.spend-recovery'));
+		const viaX = await dse.modal('free-heal-confirm');
+		await dse.click(viaX.control('modal.close'));
+		await expect(viaX.root).not.toBeExisting();
+		await expect(modal.root).toBeExisting();
+		await expectApplyLabel(modal, 'Lose 1 Stamina');
+		await dse.click(modal.control('sedit.spend-recovery')); // not "asked": it asks again
+		const viaBackdrop = await dse.modal('free-heal-confirm');
+		await dse.click(viaBackdrop.control('modal.backdrop'), { inset: 5 });
+		await expect(viaBackdrop.root).not.toBeExisting();
+		await expect(modal.root).toBeExisting();
+		await expectApplyLabel(modal, 'Lose 1 Stamina');
+		expect(await applyAndWrite(modal, FREE)).toBe(1);
+		const block = (await dse.expectNoteBlock(FREE, BAR).value()) as Record<string, unknown>;
+		expect(block).toMatchObject({ current_stamina: 1 });
+		expect(block).not.toHaveProperty('recoveries');
+	});
+
 	it('[STAM-Q13P] a hero WITH a pool is unchanged: still "Spend Recovery", the first press stages at once with no dialog', async () => {
 		const modal = await openBarModal(REC);
 		const spend = modal.control('sedit.spend-recovery');
