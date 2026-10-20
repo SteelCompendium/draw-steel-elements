@@ -209,6 +209,48 @@ describe('D8 Task 2 review fix — anchor.ts fence scanner (finding #4, CRITICAL
 			expect(readGeneratedFrom(`_dse_from: ${id}\r\nround: 1`)).toBe(id);
 		});
 
+		// SC-360 (r2 review LOW-1) - YAML sees a `_dse_anchor` key that the line reader cannot. Appending a
+		// second one makes the block die with "Map keys must be unique". Next-line values were read by the
+		// base reader; they must stay readable. Every other form is REFUSED (id null, body untouched):
+		// the key is there, the lookups could never find a value they cannot read, and appending would
+		// duplicate it. Safest non-duplicating choice - the caller tells the user to fix the line.
+		test.each([
+			['next indented line', `${ANCHOR_KEY}:\n  abc123`, 'abc123'],
+			['next indented line, CRLF', `${ANCHOR_KEY}:\r\n  abc123\r\nother: 1`, 'abc123'],
+			['next indented line, quoted', `${ANCHOR_KEY}:\n  "056948"`, '056948'],
+		])('hand-typed value on the %s is still read and reused (no second key)', (_name, anchorLines, id) => {
+			const body = `current_value: 1\n${anchorLines}`;
+			expect(readAnchor(body)).toBe(id);
+			expect(ensureAnchor(body)).toEqual({ body, id });
+		});
+
+		test.each([
+			['an inline comment', `${ANCHOR_KEY}: abc123 # c`],
+			['a tag', `${ANCHOR_KEY}: !!str 056948`],
+			['a YAML anchor', `${ANCHOR_KEY}: &a abc123`],
+			['~', `${ANCHOR_KEY}: ~`],
+			['an empty value', `${ANCHOR_KEY}:`],
+			['an empty string', `${ANCHOR_KEY}: ""`],
+			['a folded scalar', `${ANCHOR_KEY}: >\n  abc123`],
+			['a space before the colon', `${ANCHOR_KEY} : abc123`],
+			['a quoted key', `"${ANCHOR_KEY}": abc123`],
+		])('a key YAML sees but the reader cannot (%s): ensureAnchor refuses - id null, body untouched, no second key', (_name, anchorLines) => {
+			const body = `current_value: 1\n${anchorLines}`;
+			expect(readAnchor(body)).toBeNull();
+			expect(ensureAnchor(body)).toEqual({ body, id: null });
+		});
+
+		test('a body that is not valid YAML is never stamped (id null, body untouched)', () => {
+			const body = 'current_value: [1,\nlabel: "Foo';
+			expect(ensureAnchor(body)).toEqual({ body, id: null });
+		});
+
+		test('control: parseable YAML without the key is still stamped', () => {
+			const { body, id } = ensureAnchor('current_value: 1');
+			expect(id).toMatch(/^[a-df][0-9a-f]{5}$/);
+			expect(body).toBe(`current_value: 1\n${ANCHOR_KEY}: ${id}`);
+		});
+
 		test('the widened match does not swallow trailing content or a comment on the line', () => {
 			expect(readAnchor(`${ANCHOR_KEY}: 9.2e+51 extra words`)).toBeNull();
 			expect(readAnchor(`${ANCHOR_KEY}: abc123 # note`)).toBeNull();

@@ -509,4 +509,48 @@ describe('SC-153: "Open in sidebar" is idempotent', () => {
 		},
 	);
 
+	// SC-360 (r2 review MEDIUM-1) - encounters that ALREADY carry an id minted before the fix. The id
+	// lives in the encounter's own `_dse_anchor`; the model hands it back as typed (a NUMBER when it was
+	// written unquoted: `56948`, `9.2e+51`, `.inf` -> Infinity, `0`), and it went into the tracker's
+	// `_dse_from` unquoted, which the initiative's first save rewrites. Either way a second press could
+	// no longer find its tracker and appended another one. Every shape must leave exactly ONE tracker
+	// after the second press, with the initiative's own parse -> stringify save in between.
+	test.each([
+		['"056948"'], ['9.2e+51'], ['56948'], ['.inf'], ['0'], ['abc123'],
+	])('SC-360: an encounter already carrying the id %s opens its tracker once, not once per press', async (stored) => {
+		const app = new App();
+		const plugin = makePlugin(app);
+		await plugin.onload();
+		app.vault.setFile('Session.md', '# Session\n');
+		const host = makeHost('Session.md');
+		await plugin.frameworkV2!.pipeline.run(
+			encounterElement,
+			`party: {}\nmonsters: []\n_dse_anchor: ${stored}`,
+			host,
+		);
+		const press = (): void => {
+			(host.containerEl.firstElementChild as HTMLElement)
+				.querySelector<HTMLButtonElement>('[aria-label="Create initiative tracker block"]')!
+				.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		};
+
+		press();
+		await flushAsync();
+		expect(fenceCount(app.vault.getContent('Session.md')!)).toBe(1);
+
+		// The initiative's first save: parse the block, write the model back.
+		const note = app.vault.getContent('Session.md')!;
+		app.vault.setFile(
+			'Session.md',
+			note.replace(/```ds-initiative\n([\s\S]*?)\n```/, (_m, body: string) => '```ds-initiative\n' + stringifyYaml(parseYaml(body)).trimEnd() + '\n```'),
+		);
+
+		press();
+		await flushAsync();
+		expect(fenceCount(app.vault.getContent('Session.md')!)).toBe(1);
+
+		await new Promise((resolve) => setTimeout(resolve, PERSIST_DEBOUNCE_MS + 50)); // drain any write-behind
+		plugin.onunload();
+	});
+
 });

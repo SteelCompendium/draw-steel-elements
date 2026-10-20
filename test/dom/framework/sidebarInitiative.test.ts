@@ -19,7 +19,7 @@
 // mock changed. `test/fakes/fakeObsidian.ts` was considered instead (it DOES have real
 // event delivery) but its `makeFakeApp()` has no `workspace` at all, so it can't host
 // DseSidebarView/WorkspaceLeaf — the monkey-patch is the smaller, more targeted fix.
-import { App, Plugin, TFile, flushAsync, parseYaml } from '../../mocks/obsidian';
+import { App, Notice, Plugin, TFile, flushAsync, parseYaml } from '../../mocks/obsidian';
 // Real ambient `obsidian` types (type-only, erased at runtime) — same convention
 // registration.ts itself uses; the mock module has no MarkdownFileInfo/MarkdownView.
 import type { Editor, MarkdownFileInfo, MarkdownView } from 'obsidian';
@@ -435,6 +435,25 @@ describe('D8 Task 3: initiative-in-sidebar end-to-end (spec §1 canonical use)',
 			expect(panelEl.querySelector('.dse-init__entry .dse-init__name')?.textContent).toBe('Frodo Baggins');
 		},
 	);
+
+	// SC-360 (r2 review LOW-1) - a hand-edited anchor line YAML reads but the sidebar cannot: pinning must
+	// not append a second `_dse_anchor:` key (the block would die with "Map keys must be unique"). It
+	// refuses instead - note untouched, no panel, one Notice saying what to fix.
+	test('SC-360: pinning a block whose anchor line the sidebar cannot read refuses (note untouched, no panel, a Notice) instead of adding a second key', async () => {
+		const { app, services } = setup();
+		const note = sessionNote().replace('```ds-initiative\n', '```ds-initiative\n_dse_anchor: abc123 # mine\n');
+		app.vault.setFile('Session.md', note);
+		Notice.notices.length = 0;
+
+		const bound = await sendToSidebar(services, 'Session.md', 'ds-initiative');
+		await flushAsync();
+
+		expect(bound).toBe(false);
+		expect(app.vault.getContent('Session.md')).toBe(note);
+		expect(app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR).length === 0 ||
+			(app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0].view as unknown as DseSidebarView).contentEl.querySelectorAll('.dse-sidebar__panel').length === 0).toBe(true);
+		expect(Notice.notices.filter((n) => /_dse_anchor/.test(n))).toHaveLength(1);
+	});
 
 	// SC-288 r2 (LOW-1, r1 review) — the remount branch's own `forgetMountedChild()` call
 	// (SidebarPanel.handleExternalChange) had no covering test: deleting that one line
