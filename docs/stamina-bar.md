@@ -104,6 +104,10 @@ recoveries_max: 10
 ## Interaction
 
 - **Clicking** on the stamina bar opens an editor where you can adjust the `current_stamina`, `max_stamina`, and `temp_stamina` values directly.
+- The editor's **Spend Recovery** quick action heals 1/3 of max Stamina and spends one Recovery, when the bar
+  tracks Recoveries (`recoveries_max` is set). On a bar that tracks none there is nothing to spend, so the button
+  reads **Heal Recovery Value** instead (it heals the same amount and spends nothing), and the first press in an
+  editor window asks you to confirm that before it heals. Cancel or Escape closes just that question.
 - The stamina bar **automatically updates** to reflect any changes in the stamina values.
 - The bar displays different colors or overlays to indicate various states (e.g., low stamina, temporary stamina).
 
