@@ -269,15 +269,17 @@ describe('CompendiumSearchModal text-size prefs (SC-422)', () => {
 		registerPrefsForApp(app as any, prefs);
 		const modal = new CompendiumSearchModal(app as any, index, jest.fn());
 		modal.open();
-		// Real Obsidian's modalEl is the dialog box; the F3 mock only builds containerEl.
-		const root = (modal as any).modalEl ?? modal.containerEl;
-		return { modal, prefs, root: root as HTMLElement };
+		// The dialog box (`.modal.prompt`): the mock SuggestModal builds it like the real host does.
+		return { modal, prefs, root: modal.modalEl };
 	}
 	const scaleOf = (el: HTMLElement, knob: string) => el.style.getPropertyValue(`--dse-fs-${knob}-scale`);
 
 	test('opening makes the dialog box a chrome root that carries all three knobs as they change', async () => {
-		const { prefs, root } = openWithPrefs();
+		const { modal, prefs, root } = openWithPrefs();
+		// The stamp lands on the production branch: `.prompt` (modalEl), not the `.modal-container` fallback.
+		expect(root.classList.contains('prompt')).toBe(true);
 		expect(root.classList.contains('dse-fs-root')).toBe(true);
+		expect(modal.containerEl.classList.contains('dse-fs-root')).toBe(false);
 		await prefs.set('smallTextScale', 1.2);
 		await prefs.set('largeTextScale', 0.8);
 		await prefs.set('controlTextScale', 1.2);
@@ -286,8 +288,7 @@ describe('CompendiumSearchModal text-size prefs (SC-422)', () => {
 
 	test('the suggestion rows the modal renders sit inside the stamped root', () => {
 		const { modal, root } = openWithPrefs();
-		const row = document.createElement('div');
-		root.appendChild(row); // Obsidian renders rows under modalEl; the mock leaves placement to the caller
+		const row = modal.resultContainerEl.createDiv({ cls: 'suggestion-item' }); // rows live under modalEl, as in Obsidian
 		modal.renderSuggestion(modal.getSuggestions('panth')[0], row);
 		expect(row.querySelector('.dse-compendium-suggest__code')?.closest('.dse-fs-root')).toBe(root);
 	});

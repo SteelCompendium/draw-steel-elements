@@ -681,16 +681,23 @@ export class Modal {
 export abstract class SuggestModal<T> extends Modal {
 	limit = 100;
 	emptyStateText = 'No results found.';
+	/** SC-422: real Obsidian's SuggestModal draws its dialog box (`.modal.prompt`) inside the container and
+	 *  puts the input and the result list in it; code that stamps or styles the dialog box (e.g. the text-size
+	 *  stamp in CompendiumSearchModal) must take the same branch here as in production. */
+	modalEl: HTMLElement;
 	inputEl: HTMLInputElement;
 	resultContainerEl: HTMLElement;
 
 	constructor(app: App) {
 		super(app);
+		this.modalEl = document.createElement('div');
+		this.modalEl.className = 'modal prompt';
+		this.containerEl.appendChild(this.modalEl);
 		this.inputEl = document.createElement('input');
 		this.inputEl.type = 'text';
 		this.resultContainerEl = document.createElement('div');
-		this.contentEl.appendChild(this.inputEl);
-		this.contentEl.appendChild(this.resultContainerEl);
+		this.modalEl.appendChild(this.inputEl);
+		this.modalEl.appendChild(this.resultContainerEl);
 	}
 
 	setPlaceholder(placeholder: string): void {

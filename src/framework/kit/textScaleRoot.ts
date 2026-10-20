@@ -37,5 +37,6 @@ export function stampTextScaleRoot(
 	owner: Component,
 ): void {
 	rootEl.addClass(TEXT_SCALE_ROOT_CLS);
+	// NB: reflectCss stamps EVERY css-bearing pref (font slots, --dse-text-scale, --dse-card-scale), not just the three knobs; no chrome rule reads those today.
 	prefs?.reflectCss(rootEl, owner);
 }

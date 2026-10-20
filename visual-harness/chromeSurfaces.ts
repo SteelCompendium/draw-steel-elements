@@ -57,8 +57,6 @@ export async function mountChromeSurface(
 		// into its result container exactly as the real chooser would, under the dialog root.
 		const modal = new CompendiumSearchModal(deps.app as never, fakeIndex(surface === 'search-modal'), () => {});
 		modal.open();
-		const root = (modal as unknown as { modalEl?: HTMLElement }).modalEl ?? modal.containerEl;
-		root.appendChild(modal.resultContainerEl);
 		for (const entry of modal.getSuggestions('')) {
 			modal.renderSuggestion(entry, modal.resultContainerEl.createDiv({ cls: 'suggestion-item' }));
 		}
