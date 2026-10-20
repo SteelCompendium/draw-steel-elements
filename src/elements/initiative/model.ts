@@ -34,8 +34,8 @@
 // `has_taken_turn` only — see advanceRound's own doc comment for the full contract).
 //
 // serialize(model): the BYTE-COMPAT boundary. The legacy write path
-// (CodeBlocks.updateInitiativeTracker -> updateCodeBlock -> updateMarkdownCodeBlock,
-// src/utils/CodeBlocks.ts:102; canvas :79) does exactly `stringifyYaml(data).trim()` on the
+// (the former CodeBlocks.updateInitiativeTracker -> updateCodeBlock -> updateMarkdownCodeBlock,
+// src/utils/CodeBlocks.ts:102; canvas :79 — deleted in SC-454) did exactly `stringifyYaml(data).trim()` on the
 // WHOLE materialized EncounterData the processor holds — this is the same expression on the
 // same object shape. `.trim()` matches the legacy writer exactly and is also required by
 // ReadingModeBlockHost.replaceSource, which does `newSource.split('\n')` — an untrimmed

@@ -15,8 +15,8 @@
 // never `host.addChild`; `host.addChild` here is for something meant to die with the
 // section that no view depends on.
 //
-// Correctness fixes over the legacy src/utils/CodeBlocks.ts (NOT modified by this
-// file — it stays live for unmigrated elements until D1):
+// Correctness fixes over the former legacy src/utils/CodeBlocks.ts (deleted in SC-454;
+// it stayed live for unmigrated elements until then):
 //   - CB-3 (lost update): legacy `vault.read` → splice → `vault.modify` is a
 //     non-atomic read-modify-write; two concurrent updates race and one is silently
 //     dropped. replaceSource() here uses `Vault.process` (atomic read-modify-write)
@@ -32,8 +32,8 @@
 //     blockKey) for the rare case a fence can't be re-parsed.
 //
 // Canvas / non-addressable contexts (F1 §4.4, §9 risk "Canvas writeback fragility"):
-// the legacy canvas-selection-matching fallback (CodeBlocks.findCanvasNodeAndUpdate /
-// updateCanvasCard) is intentionally NOT ported here. Per spec §9 that risk is
+// the legacy canvas-selection-matching fallback (the former CodeBlocks.findCanvasNodeAndUpdate /
+// updateCanvasCard, deleted in SC-454) is intentionally NOT ported here. Per spec §9 that risk is
 // "quarantined ... converted to explicit false/read-only; a proper canvas-node
 // identity fix is out of scope (FOLLOWUPS candidate)". Any context with
 // `sourcePath === ""` (canvas text nodes) therefore always resolves

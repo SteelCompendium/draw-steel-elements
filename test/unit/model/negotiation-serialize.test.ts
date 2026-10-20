@@ -1,6 +1,6 @@
 // Plan 05 Task 4: negotiation element model — parse + BYTE-COMPAT serialize.
-// The legacy write path (CodeBlocks.updateNegotiationTracker -> updateCodeBlock ->
-// updateMarkdownCodeBlock, src/utils/CodeBlocks.ts:102 / canvas :79) does exactly
+// The legacy write path (the former CodeBlocks.updateNegotiationTracker -> updateCodeBlock ->
+// updateMarkdownCodeBlock, src/utils/CodeBlocks.ts:102 / canvas :79 — deleted in SC-454) did exactly
 // `stringifyYaml(data).trim()` on the WHOLE NegotiationData instance the processor holds.
 // So the compatibility oracle here is the legacy writer's own output for the same input:
 // `stringifyYaml(new NegotiationData(parseYaml(src))).trim()` — NOT the source bytes.

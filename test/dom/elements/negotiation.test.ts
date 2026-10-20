@@ -48,7 +48,7 @@ import frodoYaml from '../../fixtures/negotiation/frodo.yaml';
 
 const NT_ALIASES = ['ds-nt', 'ds-negotiation', 'ds-negotiation-tracker'] as const;
 
-/** The exact bytes the LEGACY writer (CodeBlocks.updateNegotiationTracker) would put back
+/** The exact bytes the LEGACY writer (the former CodeBlocks.updateNegotiationTracker, deleted in SC-454) would put back
  *  into the note for this source after `mutate` — the byte-compat oracle. */
 function legacyBytes(source: string, mutate?: (m: NegotiationData) => void): string {
 	const model = parseNegotiationData(source);

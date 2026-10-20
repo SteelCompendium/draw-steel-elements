@@ -8,8 +8,9 @@
 // needs it.
 //
 // serialize(model): the BYTE-COMPAT boundary (D1 spec §"Step 3"/F1 §6). The legacy write
-// path (CodeBlocks.updateStaminaBar -> updateCodeBlock -> updateMarkdownCodeBlock) does
-// exactly `stringifyYaml(data).trim()` where `data` IS the StaminaBar class instance
+// path (the former CodeBlocks.updateStaminaBar -> updateCodeBlock -> updateMarkdownCodeBlock,
+// in src/utils/CodeBlocks.ts, deleted in SC-454) did exactly `stringifyYaml(data).trim()`
+// where `data` IS the StaminaBar class instance
 // (CodeBlocks.updateStaminaBar(app, data: StaminaBar, ctx)) — reusing the SAME class
 // instance shape here (rather than building a fresh DTO) is itself the compatibility
 // guarantee: field set + insertion order (collapsible, collapse_default, max_stamina,

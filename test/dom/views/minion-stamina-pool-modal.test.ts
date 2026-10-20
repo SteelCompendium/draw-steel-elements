@@ -5,7 +5,8 @@
 //   - CB-1: the pool-clamp precedence at Apply ((aliveCount) * minionMax, not
 //     `len ?? 0 * max`);
 //   - CB-2: condition removal persists via the injected callback (never a
-//     CodeBlocks.updateCodeBlock(app, data, ctx, "") empty-fence write);
+//     CodeBlocks.updateCodeBlock(app, data, ctx, "") empty-fence write — the former
+//     src/utils/CodeBlocks.ts, deleted in SC-454);
 //   - DC-6: condition removal AND damage in one session each persist once.
 // New under D2: kit controls (real disabled — CB-8), zero inline colors/widths (SC-5),
 // the checked-minion crimson is a `.dse-minion__check:checked ~ *` token rule.
@@ -15,9 +16,9 @@ import { parseEncounterData, EncounterData, EnemyGroup, Creature } from '@drawSt
 import { MinionStaminaPoolModal } from '@views/MinionStaminaPoolModal';
 import { StaminaEditModal } from '@views/StaminaEditModal';
 import { StaminaBar } from '@model/StaminaBar';
-import { CodeBlocks } from '@utils/CodeBlocks';
+import { replaceFenceBody } from '@/framework/host/fenceLine';
 import { DEFAULT_SETTINGS } from '@model/Settings';
-import { App, makeFakeContext, flushAsync, FakeContext } from '../../mocks/obsidian';
+import { App, makeFakeContext, flushAsync, FakeContext, stringifyYaml } from '../../mocks/obsidian';
 import squadYaml from '../../fixtures/initiative/squad.yaml';
 import { attachObsidianKeymap, pressEscape } from '../_obsidianKeymap';
 
@@ -32,9 +33,20 @@ interface Setup {
 	updateCallback: jest.Mock;
 }
 
-// `persist: true` mirrors production: the caller-injected persist callback
-// writes the block back via CodeBlocks.updateInitiativeTracker (the modal itself
-// never touches CodeBlocks — needed for the CB-2/DC-6 scenarios).
+// `persist: true` mirrors production: the caller-injected persist callback writes the
+// block back through the shared fence helper (src/framework/host/fenceLine.ts's
+// replaceFenceBody, SC-454 — this stood on the deleted src/utils/CodeBlocks.ts before);
+// the modal itself never touches the vault — needed for the CB-2/DC-6 scenarios.
+async function persistBlock(app: App, ctx: FakeContext, data: EncounterData): Promise<void> {
+	const section = ctx.getSectionInfo(ctx.el);
+	if (!section) throw new Error('persistBlock: no ds-* block in the fake note');
+	const file = app.vault.getAbstractFileByPath(ctx.sourcePath) as any;
+	const content = await app.vault.read(file);
+	const next = replaceFenceBody(content, section.lineStart, section.lineEnd, stringifyYaml(data).trim());
+	if (next === null) throw new Error('persistBlock: lineStart is not a fence-open line');
+	await app.vault.modify(file, next);
+}
+
 async function setup(
 	options: {
 		condition?: boolean | { color?: string; effect?: string };
@@ -68,7 +80,7 @@ async function setup(
 		minion.instances![0].conditions = [{ key: 'grabbed', color: custom.color, effect: custom.effect }];
 	}
 	const updateCallback = options.persist
-		? (jest.fn(() => { CodeBlocks.updateInitiativeTracker(app as any, data, ctx as any); }) as jest.Mock)
+		? (jest.fn(() => { void persistBlock(app, ctx, data); }) as jest.Mock)
 		: jest.fn();
 	const modal = new MinionStaminaPoolModal(app as any, group, minion, updateCallback);
 	modal.open();
@@ -139,10 +151,10 @@ describe('T-4: minion pool — minionsToKill math (via the modal info text)', ()
 	});
 
 	// CB-2 (high, F3 §2.1, FIXED): condition removal used to call
-	// CodeBlocks.updateCodeBlock(app, data, ctx, "") directly, rewriting the fence
+	// the former CodeBlocks.updateCodeBlock(app, data, ctx, "") directly, rewriting the fence
 	// with an EMPTY language and killing the tracker. The modal routes ALL
 	// persistence through the injected persist callback (which writes via
-	// updateInitiativeTracker), so the fence keeps its real language.
+	// persistBlock above), so the fence keeps its real language.
 	test('CB-2: removing a condition persists via the callback and keeps the ds-initiative fence', async () => {
 		const { app, content, minion, updateCallback } = await setup({ condition: true, persist: true });
 		(content.querySelector('.condition-icon') as HTMLElement).click();

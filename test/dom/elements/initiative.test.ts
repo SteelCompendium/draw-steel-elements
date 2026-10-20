@@ -8,7 +8,7 @@
 // Driven through the REAL ElementPipeline (the Plan 06 harness, selectors migrated).
 //
 // BYTE-COMPAT oracle (UNCHANGED from Plan 06): the legacy writer
-// (CodeBlocks.updateInitiativeTracker) did exactly
+// (the former CodeBlocks.updateInitiativeTracker, deleted in SC-454) did exactly
 // `stringifyYaml(<the live materialized EncounterData>).trim()` — so expected bytes are
 // always `serialize(parse(parseYaml(src)) + the same mutation)`, the same expression on
 // the same object shape (pinned against legacy by initiative-serialize.test.ts).

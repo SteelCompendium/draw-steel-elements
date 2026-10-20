@@ -1381,7 +1381,7 @@ export interface FakeContext extends MarkdownPostProcessorContext {
  * getSectionInfo RE-SCANS the file's CURRENT content on every call for the
  * blockIndex-th ds-* fenced block (``` or ~~~) — modeling Obsidian re-rendering
  * after each write. Returns { text: <whole file>, lineStart, lineEnd } with the
- * fence lines inclusive, matching what CodeBlocks.updateMarkdownCodeBlock splices.
+ * fence lines inclusive, matching what the former CodeBlocks.updateMarkdownCodeBlock (deleted in SC-454) spliced.
  */
 export function makeFakeContext(app: App, sourcePath: string, blockIndex = 0): FakeContext {
 	const el: HTMLElement =

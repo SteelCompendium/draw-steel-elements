@@ -8,8 +8,8 @@
 // unused: Counter has no SDK reader that needs the original source text.
 //
 // serialize(model): the BYTE-COMPAT boundary. The legacy write path
-// (CodeBlocks.updateCounter -> updateCodeBlock -> updateMarkdownCodeBlock,
-// src/utils/CodeBlocks.ts:102; canvas path :79) does exactly `stringifyYaml(data).trim()`
+// (the former CodeBlocks.updateCounter -> updateCodeBlock -> updateMarkdownCodeBlock,
+// src/utils/CodeBlocks.ts:102; canvas path :79 — deleted in SC-454) did exactly `stringifyYaml(data).trim()`
 // where `data` IS the whole Counter class instance the legacy CounterView held — no DTO
 // projection. Reusing the SAME class instance here is itself the compatibility guarantee:
 // field set + insertion order (max_value, current_value, min_value, name, value_height,

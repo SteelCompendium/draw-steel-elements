@@ -13,8 +13,8 @@
 // Persistence is UNTOUCHED (F1 §6 byte-compat bar): the write path still drives a REAL
 // ReadingModeBlockHost + FakeVault ("exactly one replaceSource, fence/alias preserved"),
 // and `serialize` stays byte-identical to the legacy
-// `stringifyYaml(Counter.parseYaml(...)).trim()` (CodeBlocks.updateCounter ->
-// updateMarkdownCodeBlock did exactly `stringifyYaml(data).trim()`).
+// `stringifyYaml(Counter.parseYaml(...)).trim()` (the former CodeBlocks.updateCounter ->
+// updateMarkdownCodeBlock, deleted in SC-454, did exactly `stringifyYaml(data).trim()`).
 import * as fs from 'fs';
 import * as path from 'path';
 import { ElementPipeline } from '../../../src/framework/pipeline';

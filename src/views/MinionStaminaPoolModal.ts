@@ -11,7 +11,8 @@
 //   CB-1 — the Apply clamp uses `(aliveCount) * minionMaxStamina` (parenthesized), never
 //          the old `len ?? 0 * max` precedence bug;
 //   CB-2 — ALL persistence routes through the injected persist callback (the old direct
-//          CodeBlocks.updateCodeBlock(app, data, ctx, "") empty-fence write is dead);
+//          CodeBlocks.updateCodeBlock(app, data, ctx, "") empty-fence write is dead —
+//          src/utils/CodeBlocks.ts itself was deleted in SC-454);
 //   DC-6 — condition removal AND damage in one session each persist once.
 import { setIcon } from 'obsidian';
 import type { App } from 'obsidian';
@@ -36,7 +37,7 @@ export class MinionStaminaPoolModal extends DseModal {
 	private creature: Creature; // Minion creature
 	// Injected persistence: the modal mutates the caller's shared encounter data in
 	// place, then persist() writes it back (and rebuilds the caller's UI). The modal
-	// never touches CodeBlocks/ctx directly (CB-2).
+	// never touches the vault/ctx directly (CB-2; the former CodeBlocks, deleted in SC-454, was the old direct writer).
 	private persist: () => void;
 
 	// Pending STAMINA change — the legacy bookkeeping, verbatim.
@@ -562,8 +563,8 @@ export class MinionStaminaPoolModal extends DseModal {
 					character.conditions = conditions.filter((entry) => entry !== conditionEntry);
 					container.empty();
 					this.buildConditionIcons(container, character);
-					// Route through the injected callback — never CodeBlocks directly.
-					// The old direct CodeBlocks.updateCodeBlock(app, data, ctx, "") call
+					// Route through the injected callback — never a direct vault write.
+					// The old direct CodeBlocks.updateCodeBlock(app, data, ctx, "") call (src/utils/CodeBlocks.ts, deleted in SC-454)
 					// rewrote the fence with an EMPTY language, corrupting the block (CB-2).
 					this.persist();
 				});

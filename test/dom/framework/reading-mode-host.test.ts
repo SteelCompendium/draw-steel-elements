@@ -1,8 +1,9 @@
 // T-5 (Plan 02): ReadingModeBlockHost — the reading-mode mode adapter + persisted-write
 // path (F1 §3.4, §4.2, §4.3, §4.4).
 //
-// This is the fixed-and-proven counterpart to the legacy CB-3/CB-5 bugs still tracked
-// (as test.failing) against CodeBlocks in test/unit/utils/code-blocks.test.ts:
+// This is the fixed-and-proven counterpart to the legacy CB-3/CB-5 bugs that used to be tracked
+// (as test.failing) against the former src/utils/CodeBlocks.ts in
+// test/unit/utils/code-blocks.test.ts (both deleted in SC-454):
 //   - CB-3 (lost update): legacy vault.read → splice → vault.modify is non-atomic; the
 //     host below uses Vault.process (atomic on the vault fake by construction — see
 //     FakeVault.process's doc comment) and re-resolves the block's position at write
@@ -240,7 +241,7 @@ describe('T-5 (Plan 02): ReadingModeBlockHost (F1 §3.4)', () => {
 		});
 
 		test('canvas context (sourcePath === "") is never persistable, even if section info resolves', async () => {
-			// Models the legacy quirk (CodeBlocks.findCanvasNodeAndUpdate) where
+			// Models the legacy quirk (the former CodeBlocks.findCanvasNodeAndUpdate, deleted in SC-454) where
 			// ctx.getSectionInfo(ctx.el) CAN resolve for a canvas text node despite there
 			// being no addressable vault file. F1 §4.4/§9 quarantines (does not port) the
 			// canvas selection-matching fallback: sourcePath === "" always short-circuits
