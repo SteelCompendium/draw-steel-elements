@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { StaminaBar } from '@model/StaminaBar';
 import { StaminaEditModal } from '@views/StaminaEditModal';
+import { FreeHealConfirmModal } from '@views/FreeHealConfirmModal';
 import { App } from '../../mocks/obsidian';
 import { styleGuardFindings } from '../kit/styleGuard';
 import { attachObsidianKeymap, pressEscape } from '../_obsidianKeymap';
@@ -61,6 +62,15 @@ function clickHealing(content: HTMLElement, amount: number): void {
 function apply(content: HTMLElement): void {
 	actionBtn(content).click();
 }
+
+/** SC-432: the free-heal confirmation dialog, if one is open (a separate modal over the Stamina modal). */
+function freeHealDialog(): { el: HTMLElement; confirm: HTMLButtonElement; cancel: HTMLButtonElement } | null {
+	const confirm = document.querySelector<HTMLButtonElement>('[data-dse-control="sedit.free-heal.confirm"]');
+	const cancel = document.querySelector<HTMLButtonElement>('[data-dse-control="sedit.free-heal.cancel"]');
+	if (!confirm || !cancel) return null;
+	return { el: confirm.closest('.modal-container') as HTMLElement, confirm, cancel };
+}
+const FREE_HEAL_TIP = 'Heal Recovery Value: Spends no Recovery';
 
 afterEach(() => {
 	document.body.innerHTML = '';
@@ -144,9 +154,10 @@ describe('T-5: StaminaEditModal — temp stamina absorbs damage first', () => {
 		expect(bar.temp_stamina).toBe(0);
 	});
 
-	test('Spend Recovery heals floor(max/3) (a hero with no pool) [current behaviour — SC-432 will relabel + confirm]', () => {
+	test('a hero with no pool: the relabelled heal button (after its confirmation) heals floor(max/3) (SC-432)', () => {
 		const { content, bar } = makeModal(21, 10, 0);
-		btn(content, 'Spend Recovery').click();
+		btn(content, FREE_HEAL_TIP).click();
+		freeHealDialog()!.confirm.click();
 		apply(content);
 		expect(bar.current_stamina).toBe(17); // 10 + floor(21/3)
 	});
@@ -260,12 +271,14 @@ describe('FOLLOWUPS #27b: StaminaEditModal — Spend Recovery synced with recove
 	// disables too, once a press would heal 0, with the same reason a tracked block
 	// gets. What's unchanged and still asserted: `recoveries` never gets written for
 	// an untracked block (no counter to decrement in the first place).
-	test('legacy block (no recoveries field): Spend Recovery still real-disables at zero true gain (no gain != no tracking), recoveries stays undefined through Apply [current behaviour — SC-432 will relabel + confirm]', () => {
+	test('legacy block (no recoveries field): the relabelled heal still real-disables at zero true gain (no gain != no tracking), recoveries stays undefined through Apply (SC-432)', () => {
 		const { content, bar } = makeModal(21, 10, 0);
-		const spend = btn(content, 'Spend Recovery');
+		const spend = btn(content, FREE_HEAL_TIP);
+		spend.click();
+		freeHealDialog()!.confirm.click();
 		for (let i = 0; i < 5; i++) spend.click(); // only the first 2 succeed (10 -> 17 -> 21); the rest are swallowed once real-disabled
 		expect(spend.disabled).toBe(true);
-		expect(spend.getAttribute('aria-label')).toBe('Spend Recovery: Already at maximum Stamina');
+		expect(spend.getAttribute('aria-label')).toBe('Heal Recovery Value: Already at maximum Stamina');
 		apply(content);
 		expect(bar.current_stamina).toBe(21);
 		expect(bar.recoveries).toBeUndefined();
@@ -279,7 +292,7 @@ describe('FOLLOWUPS #27b: StaminaEditModal — Spend Recovery synced with recove
 		// Recovery') — same reason spendRecoveryBtn's icon-based lookup exists.
 		const spend = spendRecoveryBtn(content);
 		expect(spend.disabled).toBe(true);
-		expect(spend.getAttribute('aria-label')).toBe('Spend Recovery: Already at maximum Stamina');
+		expect(spend.getAttribute('aria-label')).toBe('Heal Recovery Value: Already at maximum Stamina');
 	});
 
 	// FOLLOWUPS #27-fix-round finding 2 (HIGH): `recoveries_max` — not `recoveries` — is
@@ -703,7 +716,7 @@ describe('D2 §3.5b: the managedModal template (kit scaffold, CB-8, SC-5)', () =
 
 	test('every control is a real <button> (kit iconButton/stepper) — no click-handling divs', () => {
 		const { content } = makeModal(20, 10, 0);
-		for (const label of ['Damage', 'Healing', 'Kill', 'Full Heal', 'Spend Recovery', 'Reset']) {
+		for (const label of ['Damage', 'Healing', 'Kill', 'Full Heal', FREE_HEAL_TIP, 'Reset']) {
 			expect(btn(content, label).tagName).toBe('BUTTON');
 		}
 		// The two steppers (Stamina + Temporary Stamina) are kit steppers with editable inputs.
@@ -1101,5 +1114,179 @@ describe('SC-430: Apply\'s label follows a half-typed Stamina / Temp draft, so n
 		temp.dispatchEvent(new FocusEvent('blur'));
 		typeDraft(stamina, '12');
 		expect(actionBtn(content).textContent).toBe('Lose 3 Stamina and Gain 3 Temp Stamina');
+	});
+});
+
+// SC-432 (Scott, 2026-10-18: "I agree with your recommendation. Maybe make a confirmation dialog for the
+// hero without a pool to ensure the user understands"): a creature has no Recoveries, so its Spend Recovery
+// is disabled; a hero with no pool keeps a plain "heal one Recovery's worth" shortcut, relabelled, that asks
+// once per modal session before it heals; a hero WITH a pool is unchanged.
+describe('SC-432: Spend Recovery for creatures and heroes without a pool', () => {
+	function makePoolModal(max: number, current: number, recoveries: number, recoveriesMax: number, isHero: boolean) {
+		const app = new App();
+		const bar = new StaminaBar(false, false, max, current, 0, 1, 'default', recoveries, recoveriesMax);
+		const updateCallback = jest.fn();
+		const modal = new StaminaEditModal(app as any, bar, isHero, 'Frodo', updateCallback);
+		modal.open();
+		return { modal: modal as any, bar, content: (modal as any).contentEl as HTMLElement, updateCallback };
+	}
+
+	describe('a creature', () => {
+		test.each([
+			{ id: 'no pool, hurt', current: 10, pool: false },
+			{ id: 'no pool, at zero', current: 0, pool: false },
+			{ id: 'no pool, at max (the max reason must not win)', current: 30, pool: false },
+			{ id: 'with a pool, hurt', current: 10, pool: true },
+			{ id: 'with a pool, none left (the none-left reason must not win)', current: 10, pool: 'empty' as const },
+		])('$id: Spend Recovery stays, disabled, naming the creature reason', ({ current, pool }) => {
+			const { content } = pool === false
+				? makeModal(30, current, 0, false)
+				: makePoolModal(30, current, pool === 'empty' ? 0 : 3, 6, false);
+			const spend = spendRecoveryBtn(content);
+			expect(spend.disabled).toBe(true);
+			expect(spend.textContent).toBe('Spend Recovery');
+			expect(spend.getAttribute('aria-label')).toBe('Spend Recovery: Creatures have no Recoveries');
+		});
+
+		test('a click on it changes nothing and opens no dialog', () => {
+			const { content, updateCallback } = makeModal(30, 10, 0, false);
+			spendRecoveryBtn(content).click();
+			expect(actionBtn(content).textContent).toBe('No Stamina Change');
+			expect(freeHealDialog()).toBeNull();
+			expect(updateCallback).not.toHaveBeenCalled();
+		});
+
+		test('Reset does not re-enable it', () => {
+			const { content } = makeModal(30, 10, 0, false);
+			btn(content, 'Reset').click();
+			expect(spendRecoveryBtn(content).disabled).toBe(true);
+			expect(spendRecoveryBtn(content).getAttribute('aria-label')).toBe('Spend Recovery: Creatures have no Recoveries');
+		});
+	});
+
+	describe('a hero with no Recoveries pool', () => {
+		test('the button says it heals, not spends, and its tooltip says no Recovery is spent', () => {
+			const { content } = makeModal(30, 10, 0);
+			const heal = spendRecoveryBtn(content);
+			expect(heal.textContent).toBe('Heal Recovery Value');
+			expect(heal.getAttribute('aria-label')).toBe('Heal Recovery Value: Spends no Recovery');
+			expect(content.textContent).not.toContain('Spend Recovery');
+			expect(heal.disabled).toBe(false);
+		});
+
+		test('the first press opens the confirmation and stages nothing yet; the dialog says no Recovery is tracked or spent', () => {
+			const { content } = makeModal(30, 10, 0);
+			spendRecoveryBtn(content).click();
+			const dialog = freeHealDialog()!;
+			expect(dialog).not.toBeNull();
+			expect(dialog.el.textContent).toContain('Heal without spending a Recovery?');
+			expect(dialog.el.textContent).toContain('no Recovery to spend');
+			expect(dialog.el.textContent).toContain("one Recovery's worth of Stamina (10)");
+			expect(dialog.el.textContent).toContain('does not track or spend a Recovery');
+			expect(actionBtn(content).textContent).toBe('No Stamina Change');
+			expect(content.querySelector<HTMLInputElement>('.dse-stepper__input')!.value).toBe('10');
+		});
+
+		test('Confirm stages the heal exactly as before (Apply writes it, recoveries untouched) and closes only the dialog', () => {
+			const { content, bar, updateCallback } = makeModal(30, 10, 0);
+			spendRecoveryBtn(content).click();
+			freeHealDialog()!.confirm.click();
+			expect(freeHealDialog()).toBeNull();
+			expect(document.body.contains(content)).toBe(true);
+			expect(actionBtn(content).textContent).toBe('Gain 10 Stamina');
+			apply(content);
+			expect(updateCallback).toHaveBeenCalledTimes(1);
+			expect(bar.current_stamina).toBe(20);
+			expect(bar.recoveries).toBeUndefined();
+			expect(bar.recoveries_max).toBeUndefined();
+		});
+
+		test('later presses in the same session do not ask again, and neither does one after Reset', () => {
+			const { content } = makeModal(30, 0, 0);
+			spendRecoveryBtn(content).click();
+			freeHealDialog()!.confirm.click();
+			spendRecoveryBtn(content).click();
+			expect(freeHealDialog()).toBeNull();
+			expect(actionBtn(content).textContent).toBe('Gain 20 Stamina');
+			btn(content, 'Reset').click();
+			spendRecoveryBtn(content).click();
+			expect(freeHealDialog()).toBeNull();
+			expect(actionBtn(content).textContent).toBe('Gain 10 Stamina');
+		});
+
+		test('Cancel adds nothing, leaves the Stamina modal open with its pending state intact, and the next press asks again', () => {
+			const { content, bar, updateCallback } = makeModal(30, 20, 5);
+			clickDamage(content, 8);
+			const pending = actionBtn(content).textContent;
+			expect(pending).toBe('Lose 3 Stamina and Lose 5 Temp Stamina');
+			spendRecoveryBtn(content).click();
+			freeHealDialog()!.cancel.click();
+			expect(freeHealDialog()).toBeNull();
+			expect(document.body.contains(content)).toBe(true);
+			expect(actionBtn(content).textContent).toBe(pending);
+			expect(updateCallback).not.toHaveBeenCalled();
+			expect(bar.current_stamina).toBe(20);
+			spendRecoveryBtn(content).click();
+			expect(freeHealDialog()).not.toBeNull();
+		});
+
+		test('Escape in the dialog closes only the dialog; the Stamina modal stays open with its pending state', () => {
+			const onOpen = jest.spyOn(FreeHealConfirmModal.prototype, 'onOpen');
+			try {
+				const { modal, content } = makeModal(30, 20, 0);
+				clickDamage(content, 4);
+				const pending = actionBtn(content).textContent;
+				spendRecoveryBtn(content).click();
+				const dialog = freeHealDialog()!;
+				attachObsidianKeymap(onOpen.mock.contexts[0] as FreeHealConfirmModal);
+				pressEscape(dialog.cancel);
+				expect(freeHealDialog()).toBeNull();
+				expect(document.body.contains(modal.containerEl)).toBe(true);
+				expect(actionBtn(content).textContent).toBe(pending);
+			} finally {
+				onOpen.mockRestore();
+			}
+		});
+
+		test('closing the Stamina modal (view unload) closes an open dialog with it', () => {
+			const { modal, content } = makeModal(30, 10, 0);
+			spendRecoveryBtn(content).click();
+			expect(freeHealDialog()).not.toBeNull();
+			modal.close();
+			expect(freeHealDialog()).toBeNull();
+		});
+
+		test('at max Stamina the button starts disabled with the max reason and never opens the dialog', () => {
+			const { content } = makeModal(30, 30, 0);
+			const heal = spendRecoveryBtn(content);
+			expect(heal.disabled).toBe(true);
+			heal.click();
+			expect(freeHealDialog()).toBeNull();
+		});
+
+		test('a fresh modal asks again (the session is the modal instance)', () => {
+			const first = makeModal(30, 10, 0);
+			spendRecoveryBtn(first.content).click();
+			freeHealDialog()!.confirm.click();
+			first.modal.close();
+			const second = makeModal(30, 10, 0);
+			spendRecoveryBtn(second.content).click();
+			expect(freeHealDialog()).not.toBeNull();
+		});
+	});
+
+	describe('a hero WITH a pool is unchanged', () => {
+		test('Spend Recovery keeps its name and heals + spends on the first press with no dialog', () => {
+			const { content, bar } = makePoolModal(30, 10, 3, 6, true);
+			const spend = spendRecoveryBtn(content);
+			expect(spend.textContent).toBe('Spend Recovery');
+			expect(spend.getAttribute('aria-label')).toBe('Spend Recovery');
+			spend.click();
+			expect(freeHealDialog()).toBeNull();
+			expect(actionBtn(content).textContent).toBe('Gain 10 Stamina');
+			apply(content);
+			expect(bar.current_stamina).toBe(20);
+			expect(bar.recoveries).toBe(2);
+		});
 	});
 });

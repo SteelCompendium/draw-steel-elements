@@ -217,6 +217,9 @@ export function recoveryHealAmount(recoveryValue: number, current: number, max: 
 
 /** No Recoveries left to spend. */
 export const REASON_NO_RECOVERIES = 'No Recoveries remaining';
+/** SC-432: creatures (monsters, NPCs) have no Recoveries in Draw Steel, so the Stamina modal's
+ *  Spend Recovery is always disabled for one, whatever its Stamina. */
+export const REASON_CREATURE_NO_RECOVERIES = 'Creatures have no Recoveries';
 /** RR §8: "Can't Catch Breath" while dying (Stamina <= 0). */
 export const REASON_DYING = "Can't catch breath while dying";
 /** The recovery value itself is 0 (floor(max / 3) with max Stamina <= 2): a press can never heal. */

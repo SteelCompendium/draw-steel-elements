@@ -28,11 +28,13 @@ import {
 	setStaminaGaugeDelta,
 	stampControl,
 	staminaGaugeGeometry,
+	openManagedModal,
 	stepper,
 	updateStaminaGauge,
 } from '@/framework/kit';
 import type { IconButtonHandle, StaminaGaugeValues, StepperHandle } from '@/framework/kit';
-import { REASON_NO_RECOVERIES, StaminaBar, zeroHealReason } from '@model/StaminaBar';
+import { REASON_CREATURE_NO_RECOVERIES, REASON_NO_RECOVERIES, StaminaBar, zeroHealReason } from '@model/StaminaBar';
+import { FREE_HEAL_LABEL, FREE_HEAL_NOTE, FreeHealConfirmModal } from './FreeHealConfirmModal';
 
 // ---------------------------------------------------------------------------------
 // Shared §3.5b template primitives (composed by BOTH stamina modals)
@@ -185,6 +187,11 @@ const SPEND_RECOVERY_LABEL = 'Spend Recovery';
 /** SC-324: the disabled reason is part of the ONE aria-label (hover + accessible name), so
  *  it follows the action: "Spend Recovery: No Recoveries remaining" — never replaces it. */
 const spendRecoveryReasonLabel = (reason: string): string => labelWithReason(SPEND_RECOVERY_LABEL, reason);
+/** SC-432: a HERO with no Recoveries pool gets the same quick action relabelled (it heals one
+ *  Recovery's worth and spends nothing); its own accessible name / tooltip states that, and the
+ *  disabled reasons compose onto it name-first exactly like Spend Recovery's. */
+const FREE_HEAL_TIP = labelWithReason(FREE_HEAL_LABEL, FREE_HEAL_NOTE);
+const freeHealReasonLabel = (reason: string): string => labelWithReason(FREE_HEAL_LABEL, reason);
 
 /**
  * SC-427: reads the Apply box as a whole-number MAGNITUDE. `Number()`, not `parseInt`: a
@@ -258,6 +265,10 @@ export class StaminaEditModal extends DseModal {
 	// SC-427 (review R1-M1): the stored position and bounds updateActionButton needs to label the
 	// Stamina part with what Apply will actually write (see there). Set once in onOpen.
 	private staminaFrame = { current: 0, floor: 0, max: 0 };
+	// SC-432: the free-heal confirmation (hero with no Recoveries pool) is asked on the FIRST press
+	// in this modal session and never again; a Cancel leaves it false so the next press asks again.
+	// Per modal INSTANCE, so a freshly opened modal always asks (a closed modal is one-shot).
+	private freeHealConfirmed = false;
 
 	constructor(
 		app: App,
@@ -298,6 +309,14 @@ export class StaminaEditModal extends DseModal {
 		// both no-ops for it (behavior unchanged, per the followup).
 		const recoveriesTracked = this.staminaBar.recoveries_max !== undefined;
 		const currentRecoveries = this.staminaBar.recoveries ?? 0;
+		// SC-432 (Scott, 2026-10-18): a creature has no Recoveries at all, so its Spend Recovery is
+		// always disabled; a hero with no pool to spend from keeps a plain "heal one Recovery's
+		// worth" shortcut, relabelled (it spends nothing) and confirmed on first use. A hero WITH a
+		// pool is the unchanged Spend Recovery. `recoveriesTracked` stays the pool gate everywhere.
+		const isCreature = !this.isHero;
+		const isFreeHeal = this.isHero && !recoveriesTracked;
+		const buttonLabel = isFreeHeal ? FREE_HEAL_LABEL : SPEND_RECOVERY_LABEL;
+		const buttonTip = isFreeHeal ? FREE_HEAL_TIP : SPEND_RECOVERY_LABEL;
 
 		// -- The preview bar (shared template) --------------------------------------
 		const bar = staminaPreviewBar(this.body, { dyingZone: this.isHero });
@@ -543,10 +562,13 @@ export class StaminaEditModal extends DseModal {
 			quickSection,
 			{
 				icon: 'syringe',
-				label: SPEND_RECOVERY_LABEL,
-				text: SPEND_RECOVERY_LABEL,
+				label: buttonTip,
+				text: buttonLabel,
 				control: 'sedit.spend-recovery',
 				onClick: () => {
+					// SC-432 backstop: a creature has nothing to spend or heal from (the button is
+					// real-disabled for it — see refresh() below).
+					if (isCreature) return;
 					// Defensive (CB-8): the button is real-disabled at zero remaining,
 					// and (SC-133 I3) at zero true gain too — see refresh() below; this
 					// early-return is a backstop in case onClick fires anyway.
@@ -564,15 +586,40 @@ export class StaminaEditModal extends DseModal {
 					// adjustment > 0` guard got dropped in the RC-4 rewrite, and `<= 0`
 					// lets a NaN gain (e.g. a malformed `max_stamina`) THROUGH — NaN <= 0
 					// is false. `!(gain > 0)` catches NaN the same way `isNaN` did.
-					const { gain, newStamina } = this.recoverySpendResult(currentStamina, negativeStaminaLimit, maxStamina);
+					const { gain } = this.recoverySpendResult(currentStamina, negativeStaminaLimit, maxStamina);
 					if (!(gain > 0)) return;
-					this.pendingStaminaChange = newStamina - currentStamina;
-					if (recoveriesTracked) this.pendingRecoveriesChange -= 1;
-					refresh();
+					// SC-432: the first free heal of a session asks first. Nothing is staged until the
+					// user confirms; Cancel / Escape leave the pending state exactly as it was.
+					if (isFreeHeal && !this.freeHealConfirmed) {
+						const recoveryValue = this.opts.recoveryValueUnknown ? null : this.recoveryValueNow();
+						openManagedModal(this.lifecycle, () =>
+							new FreeHealConfirmModal(
+								this.app,
+								recoveryValue,
+								() => {
+									this.freeHealConfirmed = true;
+									stageRecovery();
+								},
+								() => spendRecoveryBtn?.buttonEl.focus(),
+							),
+						);
+						return;
+					}
+					stageRecovery();
 				},
 			},
 			this.lifecycle,
 		);
+		/** Stage one Recovery's worth of healing (and, with a pool, spend one Recovery). Recomputed
+		 *  from the live pending state so the confirmed press lands exactly where an unconfirmed
+		 *  one would have. */
+		const stageRecovery = (): void => {
+			const { gain, newStamina } = this.recoverySpendResult(currentStamina, negativeStaminaLimit, maxStamina);
+			if (!(gain > 0)) return;
+			this.pendingStaminaChange = newStamina - currentStamina;
+			if (recoveriesTracked) this.pendingRecoveriesChange -= 1;
+			refresh();
+		};
 		spendRecoveryBtn?.buttonEl.classList.add('dse-sedit__btn');
 
 		// -- Footer: Reset + the dynamic apply button (accent) ----------------------
@@ -655,6 +702,11 @@ export class StaminaEditModal extends DseModal {
 			const recoveryValue = this.opts.recoveryValueUnknown ? null : this.recoveryValueNow();
 			if (!spendRecoveryBtn) {
 				// The caller suppressed the control (SC-132 H1) — nothing to disable.
+			} else if (isCreature) {
+				// SC-432: disabled whatever the Stamina or any pool — the creature reason is the
+				// only one that can apply, so neither "none left" nor "at maximum" overrides it.
+				spendRecoveryBtn.setDisabled(true);
+				spendRecoveryBtn.setLabel(spendRecoveryReasonLabel(REASON_CREATURE_NO_RECOVERIES));
 			} else if (recoveriesTracked) {
 				const remaining = currentRecoveries + this.pendingRecoveriesChange;
 				const noneLeft = remaining <= 0;
@@ -673,10 +725,11 @@ export class StaminaEditModal extends DseModal {
 							: SPEND_RECOVERY_LABEL,
 				);
 			} else {
-				// Same house rule, untracked branch: no Recoveries counter to run out of,
-				// but "no gain" is still a real, visible disabled reason.
+				// Same house rule, untracked branch (here always the SC-432 free heal, a creature
+				// having returned above): no Recoveries counter to run out of, but "no gain" is
+				// still a real, visible disabled reason.
 				spendRecoveryBtn.setDisabled(noGain);
-				spendRecoveryBtn.setLabel(noGain ? spendRecoveryReasonLabel(zeroHealReason(recoveryValue)) : SPEND_RECOVERY_LABEL);
+				spendRecoveryBtn.setLabel(noGain ? freeHealReasonLabel(zeroHealReason(recoveryValue)) : buttonTip);
 			}
 		};
 		refresh();

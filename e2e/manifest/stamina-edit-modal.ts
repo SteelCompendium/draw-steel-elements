@@ -31,6 +31,9 @@ export default surface('stamina-edit-modal', {
 		'sedit.kill': c(['click'], ['Q01']),
 		'sedit.full-heal': c(['click'], ['Q04']),
 		'sedit.spend-recovery': c(['click', 'click-disabled'], ['Q06', 'Q07', 'Q08', 'Q09', 'Q10', 'Q13']),
+		// -- SC-432: the confirmation over the modal (first press of the relabelled heal, hero with no pool)
+		'sedit.free-heal.cancel': c(['click'], ['Q13']),
+		'sedit.free-heal.confirm': c(['click'], ['Q13']),
 		// -- F. Footer
 		'sedit.reset': c(['click'], ['F05', 'F06']),
 		'sedit.apply': c(['click', 'click-disabled'], ['F01', 'F02', 'F03', 'F04', 'M07', 'W01']),

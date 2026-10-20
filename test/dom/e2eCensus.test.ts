@@ -184,6 +184,17 @@ describe('SC-408 census: the StaminaEditModal', () => {
 	test('on a bar that does not track Recoveries the same controls are identified', async () => {
 		expect(censusProblems(await openModal(LEGACY), modalIds)).toEqual([]);
 	});
+
+	test('SC-432: the free-heal confirmation (first press of the relabelled button, no pool) has both its buttons identified', async () => {
+		const modalEl = await openModal(LEGACY);
+		modalEl.querySelector<HTMLButtonElement>('[data-dse-control="sedit.spend-recovery"]')!.click();
+		const dialogEl = document.body.lastElementChild as HTMLElement;
+		expect(dialogEl).not.toBe(modalEl);
+		expect(censusProblems(dialogEl, modalIds)).toEqual([]);
+		for (const id of ['sedit.free-heal.cancel', 'sedit.free-heal.confirm']) {
+			expect(dialogEl.querySelector(`[data-dse-control="${id}"]`)).not.toBeNull();
+		}
+	});
 });
 
 describe('SC-408 census: initiative stamina entry points', () => {

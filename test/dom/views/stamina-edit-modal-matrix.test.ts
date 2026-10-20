@@ -647,7 +647,7 @@ describe('[Q14] Spend Recovery is rendered or suppressed by opts.spendRecovery',
 	});
 });
 
-describe('[Q06][Q07][Q09][Q10][Q15] Spend Recovery across positions (tracked pool, recoveryValue = floor(30/3) = 10)', () => {
+describe('[Q06][Q07][Q09][Q10][Q15] Spend Recovery across positions (a hero with a tracked pool, recoveryValue = floor(30/3) = 10)', () => {
 	const REASON_MAX = 'Spend Recovery: Already at maximum Stamina';
 	const REASON_NONE = 'Spend Recovery: No Recoveries remaining';
 	type SR = {
@@ -656,13 +656,13 @@ describe('[Q06][Q07][Q09][Q10][Q15] Spend Recovery across positions (tracked poo
 		dS: number; spent: number; enabled: boolean; reason?: string;
 	};
 	const cases: SR[] = [
-		{ name: 'full: starts disabled (max reason)', kind: 'creature', cur: 30, rec: 3, presses: 0, dS: 0, spent: 0, enabled: false, reason: REASON_MAX },
-		{ name: 'one short of max: heals only the gap, then disabled (max reason) [current behaviour — SC-432 changes this]', kind: 'creature', cur: 25, rec: 3, presses: 1, dS: 5, spent: 1, enabled: false, reason: REASON_MAX },
-		{ name: 'mid: one press heals 10, still enabled [current behaviour — SC-432 changes this]', kind: 'creature', cur: 10, rec: 3, presses: 1, dS: 10, spent: 1, enabled: true },
-		{ name: 'mid: two presses heal 20, still enabled [current behaviour — SC-432 changes this]', kind: 'creature', cur: 5, rec: 3, presses: 2, dS: 20, spent: 2, enabled: true },
-		{ name: 'mid: presses stop at the last Recovery (none-left reason wins) [current behaviour — SC-432 changes this]', kind: 'creature', cur: 0, rec: 2, presses: 2, dS: 20, spent: 2, enabled: false, reason: REASON_NONE },
-		{ name: 'last Recovery that also reaches max: none-left reason wins over max reason [current behaviour — SC-432 changes this]', kind: 'creature', cur: 20, rec: 1, presses: 1, dS: 10, spent: 1, enabled: false, reason: REASON_NONE },
-		{ name: 'zero Recoveries: starts disabled (none-left reason)', kind: 'creature', cur: 10, rec: 0, presses: 0, dS: 0, spent: 0, enabled: false, reason: REASON_NONE },
+		{ name: 'full: starts disabled (max reason)', kind: 'hero', cur: 30, rec: 3, presses: 0, dS: 0, spent: 0, enabled: false, reason: REASON_MAX },
+		{ name: 'one short of max: heals only the gap, then disabled (max reason)', kind: 'hero', cur: 25, rec: 3, presses: 1, dS: 5, spent: 1, enabled: false, reason: REASON_MAX },
+		{ name: 'mid: one press heals 10, still enabled', kind: 'hero', cur: 10, rec: 3, presses: 1, dS: 10, spent: 1, enabled: true },
+		{ name: 'mid: two presses heal 20, still enabled', kind: 'hero', cur: 5, rec: 3, presses: 2, dS: 20, spent: 2, enabled: true },
+		{ name: 'mid: presses stop at the last Recovery (none-left reason wins)', kind: 'hero', cur: 0, rec: 2, presses: 2, dS: 20, spent: 2, enabled: false, reason: REASON_NONE },
+		{ name: 'last Recovery that also reaches max: none-left reason wins over max reason', kind: 'hero', cur: 20, rec: 1, presses: 1, dS: 10, spent: 1, enabled: false, reason: REASON_NONE },
+		{ name: 'zero Recoveries: starts disabled (none-left reason)', kind: 'hero', cur: 10, rec: 0, presses: 0, dS: 0, spent: 0, enabled: false, reason: REASON_NONE },
 		{ name: '[Q15] hero dying (-4): heals from below zero', kind: 'hero', cur: -4, rec: 2, presses: 1, dS: 10, spent: 1, enabled: true },
 		{ name: '[Q15] hero at the floor (-15): heals from the floor', kind: 'hero', cur: -15, rec: 2, presses: 1, dS: 10, spent: 1, enabled: true },
 		{ name: '[Q15] hero dying (-4): two presses climb past zero', kind: 'hero', cur: -4, rec: 3, presses: 2, dS: 20, spent: 2, enabled: true },
@@ -683,22 +683,69 @@ describe('[Q06][Q07][Q09][Q10][Q15] Spend Recovery across positions (tracked poo
 	});
 });
 
-// B5 / SC-432 (Scott, 2026-10-18: "disable Spend Recovery for creatures"): a creature has no Recoveries
-// to spend, yet today the button heals it for free. These assert the RULED behaviour and fail today, so
-// they are `test.failing` markers; the SC-432 fixer removes the `.failing`. (The `kind: 'creature'` rows
-// of the position matrix above exercise the same code path with a pool a shipped creature never has;
-// SC-432 rewrites them with the fix: those five rows and the `[Q16] max 3` test carry the title suffix
-// "[current behaviour — SC-432 changes this]" so the fixer finds them.) The hero with no pool is a plain pin in stamina-edit-modal.test.ts
-// until SC-432 designs the relabel + confirmation.
-describe('[Q13] Spend Recovery is disabled for a creature [known bug SC-432]', () => {
-	test.failing.each([
-		{ name: 'no pool (how every initiative creature is)', rec: undefined },
-		{ name: 'with a tracked pool', rec: 3 },
-	])('creature 10/30, $name: the Spend Recovery button is disabled', ({ rec }) => {
+// B5 / SC-432 (Scott, 2026-10-18: "disable Spend Recovery for creatures"): a creature has no Recoveries to
+// spend, so Spend Recovery stays visible but disabled, whatever its Stamina or pool. (The position matrix
+// above is hero-only for that reason: a shipped creature never has a pool.) A hero with no pool gets the
+// relabelled, confirmed free heal; its dialog flow is pinned in stamina-edit-modal.test.ts.
+describe('[Q13] Spend Recovery is disabled for a creature, whatever its Stamina or pool', () => {
+	const REASON_CREATURE = 'Spend Recovery: Creatures have no Recoveries';
+	test.each([
+		{ name: 'no pool (how every initiative creature is), hurt', cur: 10, rec: undefined },
+		{ name: 'no pool, dead (0)', cur: 0, rec: undefined },
+		{ name: 'no pool, at max (the max reason must not override)', cur: 30, rec: undefined },
+		{ name: 'with a tracked pool, hurt', cur: 10, rec: 3 },
+		{ name: 'with a tracked pool, none left (the none-left reason must not override)', cur: 10, rec: 0 },
+		{ name: 'with a tracked pool, at max', cur: 30, rec: 3 },
+	])('creature $cur/30, $name: the button is disabled with the creature reason', ({ cur, rec }) => {
 		const { content } = openStaminaModal({
-			max: 30, current: 10, isHero: false, ...(rec === undefined ? {} : { recoveries: rec, recoveries_max: 6 }),
+			max: 30, current: cur, isHero: false, ...(rec === undefined ? {} : { recoveries: rec, recoveries_max: 6 }),
 		});
-		expect(spendRecoveryBtn(content)!.disabled).toBe(true);
+		const sr = spendRecoveryBtn(content)!;
+		expect(sr.disabled).toBe(true);
+		expect(sr.getAttribute('aria-label')).toBe(REASON_CREATURE);
+	});
+
+	test('pressing it (even by a synthetic click) never stages a heal or spends a Recovery', () => {
+		const { content, bar, updateCallback } = openStaminaModal({ max: 30, current: 10, isHero: false, recoveries: 3, recoveries_max: 6 });
+		spendRecoveryBtn(content)!.click();
+		expect(applyBtn(content).textContent).toBe('No Stamina Change');
+		expect(updateCallback).not.toHaveBeenCalled();
+		expect(bar.recoveries).toBe(3);
+	});
+});
+
+describe('[Q13] a hero with no pool: the relabelled free heal, across positions (recoveryValue = floor(30/3) = 10)', () => {
+	const REASON_MAX = 'Heal Recovery Value: Already at maximum Stamina';
+	const TIP = 'Heal Recovery Value: Spends no Recovery';
+	const confirmFirstPress = (): void => {
+		document.querySelector<HTMLButtonElement>('[data-dse-control="sedit.free-heal.confirm"]')!.click();
+	};
+	const cases = [
+		{ name: 'full: starts disabled (max reason)', cur: 30, presses: 0, dS: 0, enabled: false, reason: REASON_MAX },
+		{ name: 'one short of max: heals only the gap, then disabled (max reason)', cur: 25, presses: 1, dS: 5, enabled: false, reason: REASON_MAX },
+		{ name: 'mid: one press heals 10, still enabled', cur: 10, presses: 1, dS: 10, enabled: true },
+		{ name: 'mid: two presses heal 20 with no limit (no pool to run out of)', cur: 0, presses: 2, dS: 20, enabled: true },
+		{ name: 'dying (-4): heals from below zero', cur: -4, presses: 1, dS: 10, enabled: true },
+		{ name: 'at the floor (-15): heals from the floor', cur: -15, presses: 1, dS: 10, enabled: true },
+		{ name: 'three presses to full (the repro): 0 -> 30, then disabled', cur: 0, presses: 3, dS: 30, enabled: false, reason: REASON_MAX },
+	];
+	test.each(cases)('$name', (c) => {
+		const { content, bar, updateCallback } = openStaminaModal({ max: 30, current: c.cur, isHero: true });
+		const sr = spendRecoveryBtn(content)!;
+		for (let i = 0; i < c.presses; i++) {
+			sr.click();
+			if (i === 0) confirmFirstPress();
+		}
+		expect(applyBtn(content).textContent).toBe(expectedApplyLabel(c.dS, 0));
+		expect(sr.disabled).toBe(!c.enabled);
+		expect(sr.getAttribute('aria-label')).toBe(c.reason ?? TIP);
+		if (c.presses > 0) {
+			applyBtn(content).click();
+			expect(updateCallback).toHaveBeenCalledTimes(1);
+			expect(bar.current_stamina).toBe(c.cur + c.dS);
+			expect(bar.recoveries).toBeUndefined();
+			expect(bar.recoveries_max).toBeUndefined();
+		}
 	});
 });
 
@@ -716,7 +763,7 @@ describe('[Q06] opts.recoveryValue overrides the derived floor(max/3)', () => {
 
 describe('[Q16] recoveryValue 0 (max <= 2): Spend Recovery can never gain, so it is disabled', () => {
 	test.each([{ max: 1 }, { max: 2 }])('max $max (floor(max/3) = 0) with Recoveries left: disabled from the start, a press does nothing', ({ max }) => {
-		const { content, updateCallback } = openStaminaModal({ max, current: 0, isHero: false, recoveries: 3, recoveries_max: 3 });
+		const { content, updateCallback } = openStaminaModal({ max, current: 0, isHero: true, recoveries: 3, recoveries_max: 3 });
 		const sr = spendRecoveryBtn(content)!;
 		expect(sr.disabled).toBe(true);
 		sr.click();
@@ -724,8 +771,8 @@ describe('[Q16] recoveryValue 0 (max <= 2): Spend Recovery can never gain, so it
 		expect(updateCallback).not.toHaveBeenCalled();
 	});
 
-	test('max 3 (floor(3/3) = 1) is the smallest bar where it works [current behaviour — SC-432 changes this]', () => {
-		const { content } = openStaminaModal({ max: 3, current: 0, isHero: false, recoveries: 3, recoveries_max: 3 });
+	test('max 3 (floor(3/3) = 1) is the smallest bar where it works', () => {
+		const { content } = openStaminaModal({ max: 3, current: 0, isHero: true, recoveries: 3, recoveries_max: 3 });
 		const sr = spendRecoveryBtn(content)!;
 		expect(sr.disabled).toBe(false);
 		sr.click();
@@ -734,15 +781,15 @@ describe('[Q16] recoveryValue 0 (max <= 2): Spend Recovery can never gain, so it
 
 	test('[Q16] the disabled reason for a zero recovery value says so, not "Already at maximum Stamina" (SC-428)', () => {
 		// 0/2 is nowhere near max: the recovery value (floor(2/3)) is what is 0.
-		const { content } = openStaminaModal({ max: 2, current: 0, isHero: false, recoveries: 3, recoveries_max: 3 });
+		const { content } = openStaminaModal({ max: 2, current: 0, isHero: true, recoveries: 3, recoveries_max: 3 });
 		expect(spendRecoveryBtn(content)!.disabled).toBe(true);
 		expect(spendRecoveryBtn(content)!.getAttribute('aria-label')).toBe('Spend Recovery: Recovery value is 0');
 	});
 
 	test('[Q16] a zero recovery value with no Recoveries left still reports the Recoveries first (precedence), and at max 2 / current 2 still says the value is 0 (SC-428)', () => {
-		const none = openStaminaModal({ max: 2, current: 0, isHero: false, recoveries: 0, recoveries_max: 3 });
+		const none = openStaminaModal({ max: 2, current: 0, isHero: true, recoveries: 0, recoveries_max: 3 });
 		expect(spendRecoveryBtn(none.content)!.getAttribute('aria-label')).toBe('Spend Recovery: No Recoveries remaining');
-		const full = openStaminaModal({ max: 2, current: 2, isHero: false, recoveries: 3, recoveries_max: 3 });
+		const full = openStaminaModal({ max: 2, current: 2, isHero: true, recoveries: 3, recoveries_max: 3 });
 		expect(spendRecoveryBtn(full.content)!.getAttribute('aria-label')).toBe('Spend Recovery: Recovery value is 0');
 	});
 });
