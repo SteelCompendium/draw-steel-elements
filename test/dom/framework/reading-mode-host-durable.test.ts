@@ -6,7 +6,11 @@ import {
 } from '../../../src/framework/host/ReadingModeBlockHost';
 import { App, Notice, Plugin, makeFakeContext } from '../../mocks/obsidian';
 import type { MarkdownPostProcessorContext } from '../../mocks/obsidian';
-import { droppedWriteMessage, resetDroppedWriteNotices } from '../../../src/framework/host/droppedWriteNotice';
+import {
+	droppedWriteMessage,
+	resetDroppedWriteNotices,
+	unsavableWriteMessage,
+} from '../../../src/framework/host/droppedWriteNotice';
 
 /** A ctx whose getSectionInfo returns whatever `section.current` holds (null = gone). */
 function switchableCtx(sourcePath: string, section: { current: { text: string; lineStart: number; lineEnd: number } | null }) {
@@ -79,16 +83,17 @@ describe('SC-343: durable identity and canPersist', () => {
 		expect(host.canPersist).toBe(false);
 	});
 
-	test('a fence not at column 0 (callout) never forms a durable identity: read-only once its section is gone', () => {
+	test('a block in a callout forms a durable identity too (SC-455): still persistable once its section is gone', () => {
 		const app = new App();
 		const text = ['> [!note]', '> ```ds-counter', '> name: A', '> ```'].join('\n');
 		app.vault.setFile('Note.md', text);
 		const section = { current: { text, lineStart: 0, lineEnd: 3 } as { text: string; lineStart: number; lineEnd: number } | null };
 		const host = new ReadingModeBlockHost(new Plugin(app) as any, document.createElement('div'), switchableCtx('Note.md', section) as any, 'ds-counter');
 		host.setMountedBody('name: A');
-		expect(host.canPersist).toBe(true); // section resolves: unchanged from today
+		expect(host.canPersist).toBe(true);
 		section.current = null;
-		expect(host.canPersist).toBe(false); // no language could be read -> no durable identity
+		expect(host.canPersist).toBe(true); // the language was read from inside the callout
+		expect(host.lastKnownLineStart).toBe(1); // the FENCE line, not the callout's header
 	});
 
 	test('a host whose section resolved once but setMountedBody was never called: canPersist false after the section goes', () => {
@@ -219,18 +224,6 @@ describe('SC-343: guarded replaceSource', () => {
 		expect(Notice.notices).toHaveLength(0);
 	});
 
-	test('fence not at column 0 (callout): no write and NO Notice (unchanged from today)', async () => {
-		const app = new App();
-		const live = ['> [!note]', '> ```ds-counter', '> name: A', '> ```'].join('\n');
-		app.vault.setFile('Note.md', live);
-		const section = { current: { text: live, lineStart: 0, lineEnd: 3 } };
-		const host = hostFor(app, 'Note.md', section, 'name: A');
-
-		await expect(host.replaceSource('name: B')).resolves.toBe(false);
-		expect(app.vault.getContent('Note.md')).toBe(live);
-		expect(Notice.notices).toHaveLength(0);
-	});
-
 	test('unterminated fence at the end of the note: still writes and closes the fence (unchanged from today)', async () => {
 		const app = new App();
 		const live = ['Before', '', '```ds-counter', 'name: A', 'current_value: 1'].join('\n');
@@ -312,7 +305,8 @@ describe('SC-343: guarded replaceSource', () => {
 
 		await expect(host.replaceSource('name: B')).resolves.toBe(false);
 		expect(app.vault.getContent('Note.md')).toBe(live);
-		expect(Notice.notices).toHaveLength(0);
+		// SC-455: a write that cannot land is never silent any more (the note is still untouched).
+		expect(Notice.notices).toEqual([unsavableWriteMessage('Note')]);
 	});
 
 	test('overlapping writes on one host (a timer flush racing an unload flush): both land, no dropped write, no Notice', async () => {
@@ -462,5 +456,420 @@ describe('SC-453: ReadingModeBlockHost.replaceSource on CRLF / mixed-ending note
 		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
 
 		expect(app.vault.getContent('Note.md')).toBe(`# N\n${CTR(2).join('\n')}\nstray-crlf\r\ntail\n`);
+	});
+});
+
+// SC-455 — a block nested in a blockquote / callout. Measured in real Obsidian 1.14.4: the Reading
+// view section is the WHOLE quote/callout (lineStart = its first line, e.g. the `> [!note]` header,
+// not the fence), and Live Preview gives a callout NO section at all (see the LP describe below).
+// The write re-emits the block's own `> ` prefix on every line it writes and touches nothing else.
+describe('SC-455: ReadingModeBlockHost.replaceSource on a block inside a blockquote / callout', () => {
+	let warn: jest.SpyInstance;
+	beforeEach(() => {
+		resetDroppedWriteNotices();
+		Notice.notices.length = 0;
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => warn.mockRestore());
+
+	type Section = { current: { text: string; lineStart: number; lineEnd: number } | null };
+	const CTR = (n: number, name = 'A', extra = ''): string[] => [`\`\`\`ds-counter${extra}`, `name: ${name}`, `current_value: ${n}`, '```'];
+	const bodyOf = (n: number, name = 'A'): string => `name: ${name}\ncurrent_value: ${n}`;
+	/** `lines` under `prefix`; an empty line becomes the prefix with its trailing space dropped (`>`). */
+	const under = (prefix: string, lines: string[]): string[] => lines.map((l) => (l === '' ? prefix.trimEnd() : prefix + l));
+
+	function hostFor(app: App, section: Section, body: string | null, el: HTMLElement = document.createElement('div')) {
+		const host = new ReadingModeBlockHost(new Plugin(app) as any, el, switchableCtx('Note.md', section) as any, 'ds-counter');
+		if (body !== null) host.setMountedBody(body);
+		return host;
+	}
+	/** What real Obsidian reports for a block inside a quote/callout: the container's whole range. */
+	const sectionOf = (text: string, lineStart: number, lineEnd: number): Section => ({ current: { text, lineStart, lineEnd } });
+
+	test('plain blockquote: the write keeps the `> ` on every line, content above/below byte-identical', async () => {
+		const app = new App();
+		const live = ['# N', '', 'above', '', ...under('> ', CTR(1)), '', 'below'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, sectionOf(live, 4, 7), bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(['# N', '', 'above', '', ...under('> ', CTR(2)), '', 'below'].join('\n'));
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('callout with a header and text above and below the fence: only the block changes', async () => {
+		const app = new App();
+		const callout = ['> [!note] Title', '> text above', ...under('> ', CTR(1)), '> text below'];
+		const live = ['top', '', ...callout, '', 'bottom'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, sectionOf(live, 2, 10), bodyOf(1)); // whole callout, header first
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		const calloutAfter = ['> [!note] Title', '> text above', ...under('> ', CTR(2)), '> text below'];
+		expect(app.vault.getContent('Note.md')).toBe(['top', '', ...calloutAfter, '', 'bottom'].join('\n'));
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('getBlockInfo reports the FENCE lines inside the callout, not the callout range', () => {
+		const app = new App();
+		const live = ['top', '> [!note] Title', '> text', ...under('> ', CTR(1)), '> after'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, sectionOf(live, 1, 8), bodyOf(1));
+
+		expect(host.getBlockInfo()).toEqual({ language: 'ds-counter', lineStart: 3, lineEnd: 6 });
+	});
+
+	test('nested callout (`> > `): the whole two-level prefix is re-emitted', async () => {
+		const app = new App();
+		const nested = ['> [!note] Outer', '> outer text', '> > [!tip] Inner', ...under('> > ', CTR(1)), '> > inner below', '> outer below'];
+		const live = ['top', ...nested, 'bottom'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, sectionOf(live, 1, 10), bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		const after = ['> [!note] Outer', '> outer text', '> > [!tip] Inner', ...under('> > ', CTR(2)), '> > inner below', '> outer below'];
+		expect(app.vault.getContent('Note.md')).toBe(['top', ...after, 'bottom'].join('\n'));
+	});
+
+	test('`>` with no space after it is accepted and re-emitted as written', async () => {
+		const app = new App();
+		const live = ['top', ...under('>', CTR(1)), 'bottom'].join('\n'); // >```ds-counter / >name: A / ...
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, sectionOf(live, 1, 4), bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(['top', ...under('>', CTR(2)), 'bottom'].join('\n'));
+	});
+
+	test.each([
+		['`>`', '>'],
+		['`> `', '> '],
+	])('an empty body line written as %s survives a write (round trip), and new empty lines follow the same style', async (_label, blank) => {
+		const app = new App();
+		const block = ['> ```ds-counter', '> name: A', blank, '> current_value: 1', '> ```'];
+		const live = ['top', ...block, 'bottom'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, sectionOf(live, 1, 5), 'name: A\n\ncurrent_value: 1');
+
+		await expect(host.replaceSource('name: A\n\ncurrent_value: 2')).resolves.toBe(true);
+		expect(app.vault.getContent('Note.md')).toBe(['top', '> ```ds-counter', '> name: A', blank, '> current_value: 2', '> ```', 'bottom'].join('\n'));
+
+		// A body that gains another blank line writes it in the block's own blank style.
+		await expect(host.replaceSource('name: A\n\ncurrent_value: 2\n\nextra: 1')).resolves.toBe(true);
+		expect(app.vault.getContent('Note.md')).toBe(
+			['top', '> ```ds-counter', '> name: A', blank, '> current_value: 2', blank, '> extra: 1', '> ```', 'bottom'].join('\n'),
+		);
+	});
+
+	test('a multi-line body write prefixes every new line (the block grows and shrinks)', async () => {
+		const app = new App();
+		const live = ['> [!note]', ...under('> ', CTR(1)), '> tail'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, sectionOf(live, 0, 5), bodyOf(1));
+
+		await host.replaceSource('name: A\ncurrent_value: 2\nmax_value: 9\nmin_value: 0\nnotes: |\n  one\n  two');
+		expect(app.vault.getContent('Note.md')).toBe(
+			['> [!note]', '> ```ds-counter', '> name: A', '> current_value: 2', '> max_value: 9', '> min_value: 0', '> notes: |', '>   one', '>   two', '> ```', '> tail'].join('\n'),
+		);
+
+		await host.replaceSource('name: A');
+		expect(app.vault.getContent('Note.md')).toBe(['> [!note]', '> ```ds-counter', '> name: A', '> ```', '> tail'].join('\n'));
+	});
+
+	test('the info string on the opening fence is kept inside the prefix (SC-290)', async () => {
+		const app = new App();
+		const live = ['> [!note]', ...under('> ', CTR(1, 'A', '  extra words'))].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, sectionOf(live, 0, 4), bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(['> [!note]', ...under('> ', CTR(2, 'A', '  extra words'))].join('\n'));
+	});
+
+	test('two different-bodied blocks in ONE callout do not cross-talk (both write orders)', async () => {
+		const app = new App();
+		const callout = ['> [!note]', ...under('> ', CTR(1, 'First')), '> mid', ...under('> ', CTR(1, 'Second'))];
+		const live = callout.join('\n');
+		app.vault.setFile('Note.md', live);
+		const first = hostFor(app, sectionOf(live, 0, 9), bodyOf(1, 'First'));
+		const second = hostFor(app, sectionOf(live, 0, 9), bodyOf(1, 'Second'));
+
+		await second.replaceSource(bodyOf(7, 'Second'));
+		await first.replaceSource(bodyOf(5, 'First'));
+		expect(app.vault.getContent('Note.md')).toBe(
+			['> [!note]', ...under('> ', CTR(5, 'First')), '> mid', ...under('> ', CTR(7, 'Second'))].join('\n'),
+		);
+
+		// And the other order, from a fresh note.
+		app.vault.setFile('Note.md', live);
+		const first2 = hostFor(app, sectionOf(live, 0, 9), bodyOf(1, 'First'));
+		const second2 = hostFor(app, sectionOf(live, 0, 9), bodyOf(1, 'Second'));
+		await first2.replaceSource(bodyOf(5, 'First'));
+		await second2.replaceSource(bodyOf(7, 'Second'));
+		expect(app.vault.getContent('Note.md')).toBe(
+			['> [!note]', ...under('> ', CTR(5, 'First')), '> mid', ...under('> ', CTR(7, 'Second'))].join('\n'),
+		);
+	});
+
+	test('two IDENTICAL blocks in one callout are told apart by their position in the callout (DOM order)', async () => {
+		const app = new App();
+		const live = ['> [!note]', ...under('> ', CTR(1, 'Twin')), '> mid', ...under('> ', CTR(1, 'Twin'))].join('\n');
+		app.vault.setFile('Note.md', live);
+		// Reading view's DOM for that callout: both blocks are .block-language-ds-counter siblings.
+		const callout = document.createElement('div');
+		callout.className = 'callout';
+		const content = document.createElement('div');
+		content.className = 'callout-content';
+		callout.appendChild(content);
+		const els = [0, 1].map(() => {
+			const d = document.createElement('div');
+			d.className = 'block-language-ds-counter';
+			content.appendChild(d);
+			return d;
+		});
+		const upper = hostFor(app, sectionOf(live, 0, 9), bodyOf(1, 'Twin'), els[0]);
+		const lower = hostFor(app, sectionOf(live, 0, 9), bodyOf(1, 'Twin'), els[1]);
+
+		await lower.replaceSource(bodyOf(9, 'Twin'));
+		expect(app.vault.getContent('Note.md')).toBe(
+			['> [!note]', ...under('> ', CTR(1, 'Twin')), '> mid', ...under('> ', CTR(9, 'Twin'))].join('\n'),
+		);
+		await upper.replaceSource(bodyOf(4, 'Twin'));
+		expect(app.vault.getContent('Note.md')).toBe(
+			['> [!note]', ...under('> ', CTR(4, 'Twin')), '> mid', ...under('> ', CTR(9, 'Twin'))].join('\n'),
+		);
+	});
+
+	test('two blocks in two DIFFERENT callouts do not cross-talk (both write orders)', async () => {
+		const app = new App();
+		const a = ['> [!note] A', ...under('> ', CTR(1, 'Same'))];
+		const b = ['> [!tip] B', ...under('> ', CTR(1, 'Other'))];
+		const live = [...a, '', ...b].join('\n');
+		app.vault.setFile('Note.md', live);
+		const hostA = hostFor(app, sectionOf(live, 0, 4), bodyOf(1, 'Same'));
+		const hostB = hostFor(app, sectionOf(live, 6, 10), bodyOf(1, 'Other'));
+
+		await hostB.replaceSource(bodyOf(3, 'Other'));
+		await hostA.replaceSource(bodyOf(2, 'Same'));
+		expect(app.vault.getContent('Note.md')).toBe(
+			[['> [!note] A', ...under('> ', CTR(2, 'Same'))].join('\n'), '', ['> [!tip] B', ...under('> ', CTR(3, 'Other'))].join('\n')].join('\n'),
+		);
+	});
+
+	test('a CRLF note with a callout stays all-CRLF after a write (SC-453)', async () => {
+		const app = new App();
+		const live = ['# N', '', '> [!note]', ...under('> ', CTR(1)), '> tail', '', 'below'].join('\r\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, sectionOf(live, 2, 7), bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		const out = app.vault.getContent('Note.md')!;
+		expect(out).toBe(['# N', '', '> [!note]', ...under('> ', CTR(2)), '> tail', '', 'below'].join('\r\n'));
+		expect(out.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
+	});
+
+	test('a hand-edited callout block (lines inserted above, section gone) is re-located by its body and written', async () => {
+		const app = new App();
+		const live = ['> [!note]', ...under('> ', CTR(1))].join('\n');
+		app.vault.setFile('Note.md', live);
+		const section = sectionOf(live, 0, 4);
+		const host = hostFor(app, section, bodyOf(1));
+		host.notePersistIntent();
+		const edited = ['x', 'y', 'z', live].join('\n');
+		app.vault.setFile('Note.md', edited);
+		section.current = null; // the callout section was torn down before the flush
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(['x', 'y', 'z', '> [!note]', ...under('> ', CTR(2))].join('\n'));
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('a callout block that grew since the section was read: the stale range never corrupts, the body relocates it', async () => {
+		const app = new App();
+		const live = ['> [!note]', '> ```ds-counter', '> name: A', '> current_value: 1', '> extra: yes', '> ```', '> tail'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, sectionOf(live, 0, 6), 'name: A\ncurrent_value: 1\nextra: yes');
+
+		await expect(host.replaceSource('name: A\ncurrent_value: 2\nextra: yes')).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(
+			['> [!note]', '> ```ds-counter', '> name: A', '> current_value: 2', '> extra: yes', '> ```', '> tail'].join('\n'),
+		);
+	});
+
+	test('regression guard: an un-nested block is written byte-for-byte as before', async () => {
+		const app = new App();
+		const live = ['# N', '', '```ds-counter  extra', 'name: A', 'current_value: 1', '```', '', '> unrelated quote', ''].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, sectionOf(live, 2, 5), bodyOf(1));
+
+		await host.replaceSource(`${bodyOf(2)}\n\nnotes: x`);
+
+		expect(app.vault.getContent('Note.md')).toBe(
+			['# N', '', '```ds-counter  extra', 'name: A', 'current_value: 2', '', 'notes: x', '```', '', '> unrelated quote', ''].join('\n'),
+		);
+	});
+
+	test('an identical-content write is a no-op with NO Notice (the callout note is byte-identical)', async () => {
+		const app = new App();
+		const live = ['> [!note]', ...under('> ', CTR(1))].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, sectionOf(live, 0, 4), bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(1))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(live);
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('the file changed underneath (block gone): still the one existing "changed on disk first" Notice, nothing new', async () => {
+		const app = new App();
+		const live = ['> [!note]', ...under('> ', CTR(1, 'Vigor'))].join('\n');
+		app.vault.setFile('Folder/Session 3.md', live);
+		const ctx = switchableCtx('Folder/Session 3.md', sectionOf(live, 0, 4));
+		const host = new ReadingModeBlockHost(new Plugin(app) as any, document.createElement('div'), ctx as any, 'ds-counter');
+		host.setMountedBody(bodyOf(1, 'Health'));
+
+		await expect(host.replaceSource(bodyOf(2, 'Health'))).resolves.toBe(false);
+
+		expect(app.vault.getContent('Folder/Session 3.md')).toBe(live);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Session 3')]);
+	});
+
+	test('a fence inside a list item cannot be written: a "could not be saved" Notice, the note unchanged', async () => {
+		const app = new App();
+		const live = ['# N', '', '- item', '  ```ds-counter', '  name: A', '  current_value: 1', '  ```', '', 'below'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, sectionOf(live, 2, 6), bodyOf(1)); // Reading view: the whole list
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(false);
+
+		expect(app.vault.getContent('Note.md')).toBe(live);
+		expect(Notice.notices).toEqual([unsavableWriteMessage('Note')]);
+	});
+
+	test('a section that holds no readable fence at all (no identity): the same Notice instead of a silent false', async () => {
+		const app = new App();
+		const live = ['> [!note]', '> just text, the block was edited away'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, sectionOf(live, 0, 1), null);
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(false);
+
+		expect(app.vault.getContent('Note.md')).toBe(live);
+		expect(Notice.notices).toEqual([unsavableWriteMessage('Note')]);
+	});
+
+	test('a callout with a fence that never closes inside the quote is not written (and says so)', async () => {
+		const app = new App();
+		const live = ['> [!note]', '> ```ds-counter', '> name: A', '', 'after the quote'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, sectionOf(live, 0, 2), 'name: A');
+
+		await expect(host.replaceSource('name: B')).resolves.toBe(false);
+
+		expect(app.vault.getContent('Note.md')).toBe(live);
+		expect(Notice.notices).toHaveLength(1);
+	});
+});
+
+// Live Preview draws a callout as ONE CodeMirror widget and (measured, Obsidian 1.14.4) hands its
+// code-block processors a context whose getSectionInfo is null for every node — so the block used to
+// be read-only there. The host finds the callout through the editor instead (cm.posAtDOM).
+describe('SC-455: Live Preview callout (no section info)', () => {
+	let warn: jest.SpyInstance;
+	beforeEach(() => {
+		resetDroppedWriteNotices();
+		Notice.notices.length = 0;
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => warn.mockRestore());
+
+	const CTR = (n: number, name = 'A'): string[] => ['> ```ds-counter', `> name: ${name}`, `> current_value: ${n}`, '> ```'];
+	const bodyOf = (n: number, name = 'A'): string => `name: ${name}\ncurrent_value: ${n}`;
+
+	/** A CM6-like editor view over `text` whose callout widget starts at `widgetLine`. */
+	function lpHost(app: App, text: string, widgetLine: number, opts: { widgetClass?: string; attached?: boolean; blocks?: number; insideDseElement?: boolean } = {}) {
+		const widget = document.createElement('div');
+		widget.className = opts.widgetClass ?? 'cm-embed-block cm-callout';
+		const els: HTMLElement[] = [];
+		let holder: HTMLElement = widget;
+		if (opts.insideDseElement) {
+			// ds-party's hero_ref: the callout widget holds a DSE root, and the block is rendered inside THAT.
+			holder = document.createElement('div');
+			holder.setAttribute('data-dse-element', 'party');
+			widget.appendChild(holder);
+		}
+		for (let i = 0; i < (opts.blocks ?? 1); i++) {
+			const el = document.createElement('div');
+			el.className = 'block-language-ds-counter';
+			holder.appendChild(el);
+			els.push(el);
+		}
+		const cmDom = document.createElement('div');
+		if (opts.attached !== false) cmDom.appendChild(widget);
+		const lineOffsets: number[] = [];
+		text.split('\n').reduce((off, l) => (lineOffsets.push(off), off + l.length + 1), 0);
+		const cm = {
+			dom: cmDom,
+			posAtDOM: (node: Node) => (node === widget ? lineOffsets[widgetLine] : (() => { throw new Error('not in view'); })()),
+			state: { doc: { lineAt: (pos: number) => ({ number: lineOffsets.filter((o) => o <= pos).length }) } },
+		};
+		const view = { file: { path: 'Note.md' }, editor: { cm, getValue: () => text }, containerEl: cmDom };
+		const plugin = new Plugin(app) as any;
+		plugin.app.workspace.getLeavesOfType = () => [{ view }];
+		const ctx = {
+			docId: 'doc-lp',
+			sourcePath: 'Note.md',
+			frontmatter: undefined,
+			addChild: () => {},
+			getSectionInfo: () => null,
+			containerEl: widget,
+			el: widget,
+		};
+		return els.map((el) => new ReadingModeBlockHost(plugin, el, ctx as any, 'ds-counter'));
+	}
+
+	test('a callout widget in Live Preview is persistable and a click-write lands inside the callout', async () => {
+		const app = new App();
+		const live = ['# N', '', '> [!note] T', ...CTR(1), '> tail', '', 'below'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const [host] = lpHost(app, live, 2);
+		host.setMountedBody(bodyOf(1));
+
+		expect(host.canPersist).toBe(true);
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(['# N', '', '> [!note] T', ...CTR(2), '> tail', '', 'below'].join('\n'));
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('two identical blocks in one Live Preview callout: each write lands in its own block', async () => {
+		const app = new App();
+		const live = ['> [!note] T', ...CTR(1, 'Twin'), '> mid', ...CTR(1, 'Twin')].join('\n');
+		app.vault.setFile('Note.md', live);
+		const [upper, lower] = lpHost(app, live, 0, { blocks: 2 });
+		upper.setMountedBody(bodyOf(1, 'Twin'));
+		lower.setMountedBody(bodyOf(1, 'Twin'));
+
+		await lower.replaceSource(bodyOf(6, 'Twin'));
+		expect(app.vault.getContent('Note.md')).toBe(['> [!note] T', ...CTR(1, 'Twin'), '> mid', ...CTR(6, 'Twin')].join('\n'));
+	});
+
+	test('a block rendered BY a DSE element inside a Live Preview callout (a nested render) stays read-only', () => {
+		const app = new App();
+		const live = ['> [!note] T', ...CTR(1)].join('\n');
+		app.vault.setFile('Note.md', live);
+		const [host] = lpHost(app, live, 0, { insideDseElement: true });
+		host.setMountedBody(bodyOf(1));
+
+		expect(host.canPersist).toBe(false);
 	});
 });

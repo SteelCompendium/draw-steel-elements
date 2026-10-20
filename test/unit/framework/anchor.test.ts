@@ -405,3 +405,59 @@ describe('SC-453: anchor.ts scans a CRLF note exactly like its LF twin', () => {
 		expect(findAnchoredBlock(note, 'ds-counter', 'aaa111')).toEqual({ language: 'ds-counter', lineStart: 0, lineEnd: 2 });
 	});
 });
+
+// SC-455 — the scanner sees blocks inside a blockquote / callout: `> `-prefixed fence lines open and
+// close a block, the body comes back prefix-free, and nothing about an un-nested note changes.
+describe('SC-455: anchor.ts fence scanner on blockquote / callout prefixes', () => {
+	const callout = [
+		'# Notes', // 0
+		'', // 1
+		'> [!note] Title', // 2
+		'> text above', // 3
+		'> ```ds-counter', // 4
+		'> current_value: 1', // 5
+		'> _dse_anchor: abc123', // 6
+		'> ```', // 7
+		'> text below', // 8
+		'', // 9
+		'tail', // 10
+	].join('\n');
+
+	test('listFences finds a fence inside a callout, with the fence lines (not the callout range)', () => {
+		expect(listFences(callout, 'ds-counter')).toEqual([{ language: 'ds-counter', lineStart: 4, lineEnd: 7 }]);
+	});
+
+	test('findAnchoredBlock / findFenceAtLine / findFenceByBody / findGeneratedBlock all see through the prefix', () => {
+		expect(findAnchoredBlock(callout, 'ds-counter', 'abc123')).toEqual({ language: 'ds-counter', lineStart: 4, lineEnd: 7 });
+		expect(findFenceAtLine(callout, 'ds-counter', 5)).toEqual({ language: 'ds-counter', lineStart: 4, lineEnd: 7 });
+		expect(findFenceAtLine(callout, 'ds-counter', 3)).toBeNull();
+		expect(findFenceByBody(callout, 'ds-counter', 'current_value: 1\n_dse_anchor: abc123')).toEqual({ language: 'ds-counter', lineStart: 4, lineEnd: 7 });
+		const generated = ['> ```ds-initiative', '> _dse_from: gen42', '> heroes: []', '> ```'].join('\n');
+		expect(findGeneratedBlock(generated, 'ds-initiative', 'gen42')).toEqual({ language: 'ds-initiative', lineStart: 0, lineEnd: 3 });
+	});
+
+	test('the prefix forms: plain quote, nested `> > `, `>` with no space, `>>`, CRLF', () => {
+		for (const prefix of ['> ', '> > ', '>', '>>', '> >  ']) {
+			const note = [`${prefix}\`\`\`ds-counter`, `${prefix}a: 1`, prefix.trimEnd(), `${prefix}b: 2`, `${prefix}\`\`\``].join('\n');
+			expect(listFences(note, 'ds-counter')).toEqual([{ language: 'ds-counter', lineStart: 0, lineEnd: 4 }]);
+			expect(listFences(note.replace(/\n/g, '\r\n'), 'ds-counter')).toEqual([{ language: 'ds-counter', lineStart: 0, lineEnd: 4 }]);
+		}
+	});
+
+	test('a fence-marker line carrying a different quote depth or none is body content / ends the quote, never a close', () => {
+		// The `> ```` inside the (col-0) 4-backtick outer fence is literal content of that region.
+		const documented = ['````md', '> ```ds-counter', '> current_value: 99', '> _dse_anchor: fake', '> ```', '````', '', '```ds-counter', 'current_value: 1', '```'].join('\n');
+		expect(listFences(documented, 'ds-counter')).toEqual([{ language: 'ds-counter', lineStart: 7, lineEnd: 9 }]);
+		// A quoted fence whose quote ends before any close is NOT closed by an un-quoted fence further down.
+		const ended = ['> ```ds-counter', '> a: 1', '', '```', 'text', '```'].join('\n');
+		expect(listFences(ended, 'ds-counter')).toEqual([]);
+	});
+
+	test('a fence indented inside a list item is not recognised (unsupported shape), and an un-nested note scans exactly as before', () => {
+		expect(listFences(['- item', '  ```ds-counter', '  a: 1', '  ```'].join('\n'), 'ds-counter')).toEqual([]);
+		expect(listFences(['```ds-counter', 'a: 1', '```', '', '```ds-counter', 'b: 2', '```'].join('\n'), 'ds-counter')).toEqual([
+			{ language: 'ds-counter', lineStart: 0, lineEnd: 2 },
+			{ language: 'ds-counter', lineStart: 4, lineEnd: 6 },
+		]);
+	});
+});

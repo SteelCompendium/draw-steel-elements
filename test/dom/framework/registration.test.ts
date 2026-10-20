@@ -292,3 +292,92 @@ describe('D8 Task 2 review fix — registration.ts (finding #3)', () => {
 		});
 	});
 });
+
+// SC-455 — pinning a block that sits inside a blockquote / callout: the command sees the fence under
+// the cursor, the anchor is stamped INSIDE the quote with the block's own prefix, and nothing else in
+// the note moves.
+describe('SC-455: sendToSidebar on a block inside a blockquote / callout', () => {
+	beforeEach(() => {
+		Notice.notices.length = 0;
+	});
+	const calloutNote = (): string =>
+		['# Notes', '', '> [!note] Title', '> text above', '> ```ds-counter', '> current_value: 1', '> ```', '> text below', '', 'tail'].join('\n');
+
+	test('"Send block to sidebar" is enabled with the cursor inside a fence in a callout, disabled on the callout text', () => {
+		const { plugin, services } = setup();
+		registerDseSidebar(plugin as any, services);
+		const command = plugin.commands.find((c) => c.id === 'send-block-to-sidebar');
+		const editor = new Editor(calloutNote());
+		const ctx = { file: { path: 'Note.md' } } as any;
+
+		editor.cursor = { line: 5, ch: 0 }; // `> current_value: 1`
+		expect(command.editorCheckCallback(true, editor, ctx)).toBe(true);
+		editor.cursor = { line: 3, ch: 0 }; // `> text above`
+		expect(command.editorCheckCallback(true, editor, ctx)).toBe(false);
+		editor.cursor = { line: 7, ch: 0 }; // `> text below`, after the quoted fence closed
+		expect(command.editorCheckCallback(true, editor, ctx)).toBe(false);
+	});
+
+	test('the anchor is stamped inside the callout with the `> ` prefix; everything else is byte-identical', async () => {
+		const { app, services } = setup();
+		app.vault.setFile('Note.md', calloutNote());
+
+		await expect(sendToSidebar(services, 'Note.md', 'ds-counter', 5)).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toMatch(
+			/^# Notes\n\n> \[!note\] Title\n> text above\n> ```ds-counter\n> current_value: 1\n> _dse_anchor: [A-Za-z0-9_-]+\n> ```\n> text below\n\ntail$/,
+		);
+	});
+
+	test('a nested `> > ` block, a `>` with no space and a CRLF callout are stamped with their own prefix and ending', async () => {
+		const { app, services } = setup();
+		app.vault.setFile('Note.md', ['> [!a]', '> > [!b]', '> > ```ds-counter', '> > current_value: 1', '> > ```'].join('\n'));
+		await sendToSidebar(services, 'Note.md', 'ds-counter');
+		expect(app.vault.getContent('Note.md')).toMatch(/^> \[!a\]\n> > \[!b\]\n> > ```ds-counter\n> > current_value: 1\n> > _dse_anchor: [A-Za-z0-9_-]+\n> > ```$/);
+
+		app.vault.setFile('Note.md', ['>```ds-counter', '>current_value: 1', '>```'].join('\n'));
+		await sendToSidebar(services, 'Note.md', 'ds-counter');
+		expect(app.vault.getContent('Note.md')).toMatch(/^>```ds-counter\n>current_value: 1\n>_dse_anchor: [A-Za-z0-9_-]+\n>```$/);
+
+		app.vault.setFile('Note.md', ['> [!a]', '> ```ds-counter', '> current_value: 1', '> ```'].join('\r\n'));
+		await sendToSidebar(services, 'Note.md', 'ds-counter');
+		const out = app.vault.getContent('Note.md')!;
+		expect(out).toMatch(/^> \[!a\]\r\n> ```ds-counter\r\n> current_value: 1\r\n> _dse_anchor: [A-Za-z0-9_-]+\r\n> ```$/);
+		expect(out.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
+	});
+
+	test('with two blocks in the callout, the cursor picks the right one and the other is untouched', async () => {
+		const { app, services } = setup();
+		app.vault.setFile('Note.md', ['> [!note]', '> ```ds-counter', '> current_value: 1', '> ```', '> mid', '> ```ds-counter', '> current_value: 2', '> ```'].join('\n'));
+
+		await sendToSidebar(services, 'Note.md', 'ds-counter', 6);
+
+		const out = app.vault.getContent('Note.md')!;
+		expect(out.startsWith(['> [!note]', '> ```ds-counter', '> current_value: 1', '> ```', '> mid', '> ```ds-counter', '> current_value: 2', '> _dse_anchor: '].join('\n'))).toBe(true);
+		expect(out.match(/_dse_anchor/g)).toHaveLength(1);
+	});
+
+	test('a strict-body block (ds-scc) in a callout is bound by its prefix-free body and the note is left byte-identical', async () => {
+		const { app, services } = setup();
+		const note = ['> [!note]', '> ```ds-scc', '> mcdm.heroes.v1/feature.ability.fury.level-1/gouge', '> ```'].join('\n');
+		app.vault.setFile('Note.md', note);
+
+		await expect(sendToSidebar(services, 'Note.md', 'ds-scc')).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(note);
+		const view = app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0]?.view as unknown as DseSidebarView;
+		expect(view.getState()).toMatchObject({
+			panels: [expect.objectContaining({ alias: 'ds-scc', body: 'mcdm.heroes.v1/feature.ability.fury.level-1/gouge' })],
+		});
+	});
+
+	test('a block already anchored inside a callout is bound without a write', async () => {
+		const { app, services } = setup();
+		const note = ['> [!note]', '> ```ds-counter', '> current_value: 1', '> _dse_anchor: abc123', '> ```'].join('\n');
+		app.vault.setFile('Note.md', note);
+
+		await expect(sendToSidebar(services, 'Note.md', 'ds-counter')).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(note);
+	});
+});

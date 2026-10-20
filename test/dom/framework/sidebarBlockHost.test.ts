@@ -5,7 +5,8 @@
 // which the self-echo / external-modify assertions below need to actually exercise.
 import { Component } from 'obsidian';
 import type { App, Plugin, TFile } from 'obsidian';
-import { flushAsync } from '../../mocks/obsidian';
+import { Notice, flushAsync } from '../../mocks/obsidian';
+import { droppedWriteMessage, resetDroppedWriteNotices } from '@/framework/host/droppedWriteNotice';
 import { makeFakeApp, seedNote, fakeTFile } from '../../fakes/fakeObsidian';
 import { SidebarBlockHost } from '@/framework/host/SidebarBlockHost';
 
@@ -478,5 +479,170 @@ describe('SC-453: SidebarBlockHost on CRLF / mixed-ending notes', () => {
 
 		expect(vault.text('Note.md')).toBe(toCrlf(['# Notes', '', '```ds-counter', 'current_value: 2', '```', '', 'tail'].join('\n')));
 		expect(host.canPersist).toBe(true);
+	});
+});
+
+// SC-455 — an anchored block inside a blockquote / callout. The anchor scan sees through the `> `
+// prefix, the body the element parses is prefix-free, and a write re-emits the block's own prefix on
+// every line it writes while leaving every other byte of the note alone.
+describe('SC-455: SidebarBlockHost on a block inside a blockquote / callout', () => {
+	let warn: jest.SpyInstance;
+	beforeEach(() => {
+		resetDroppedWriteNotices();
+		Notice.notices.length = 0;
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => warn.mockRestore());
+
+	const BODY = (n: number): string => `current_value: ${n}\n_dse_anchor: ${ANCHOR_ID}`;
+	const block = (n: number, info = ''): string[] => [`\`\`\`ds-counter${info}`, `current_value: ${n}`, `_dse_anchor: ${ANCHOR_ID}`, '```'];
+	const under = (prefix: string, lines: string[]): string[] => lines.map((l) => (l === '' ? prefix.trimEnd() : prefix + l));
+	const toCrlf = (s: string): string => s.replace(/\n/g, '\r\n');
+
+	async function mounted(note: string, onExternalChange: (b: string) => void = () => {}) {
+		const { vault, file, app } = setup(note);
+		const { host } = makeHost(app, file, onExternalChange);
+		await host.refresh();
+		return { vault, host, file, app };
+	}
+
+	test('the anchor is found through a callout prefix; getBlockInfo is the fence, currentBody is prefix-free', async () => {
+		const note = ['# Notes', '', '> [!note] Title', '> text above', ...under('> ', block(1)), '> text below', '', 'tail'].join('\n');
+		const { host } = await mounted(note);
+
+		expect(host.getBlockInfo()).toEqual({ language: ALIAS, lineStart: 4, lineEnd: 7 });
+		expect(host.canPersist).toBe(true);
+		expect(host.currentBody()).toBe(`current_value: 1\n_dse_anchor: ${ANCHOR_ID}`);
+	});
+
+	test('a write keeps the `> ` on every written line; the header, the lines around the block and the rest of the note are byte-identical', async () => {
+		const note = ['# Notes', '', '> [!note] Title', '> text above', ...under('> ', block(1)), '> text below', '', 'tail'].join('\n');
+		const { vault, host } = await mounted(note);
+
+		await expect(host.replaceSource(`current_value: 5\nmax_value: 9\n_dse_anchor: ${ANCHOR_ID}`)).resolves.toBe(true);
+
+		expect(vault.text('Note.md')).toBe(
+			['# Notes', '', '> [!note] Title', '> text above', '> ```ds-counter', '> current_value: 5', '> max_value: 9', `> _dse_anchor: ${ANCHOR_ID}`, '> ```', '> text below', '', 'tail'].join('\n'),
+		);
+	});
+
+	test('a plain blockquote, a nested `> > ` callout and `>` with no space all round-trip their own prefix', async () => {
+		for (const prefix of ['> ', '> > ', '>', '>> ']) {
+			const note = ['top', ...under(prefix, ['[!note] x', ...block(1), 'tail']), 'bottom'].join('\n');
+			const { vault, host } = await mounted(note);
+
+			await expect(host.replaceSource(BODY(2))).resolves.toBe(true);
+
+			expect(vault.text('Note.md')).toBe(['top', ...under(prefix, ['[!note] x', ...block(2), 'tail']), 'bottom'].join('\n'));
+		}
+	});
+
+	test.each([
+		['`>`', '>'],
+		['`> `', '> '],
+	])('an empty body line written as %s survives a write', async (_label, blank) => {
+		const note = ['top', '> ```ds-counter', '> current_value: 1', blank, `> _dse_anchor: ${ANCHOR_ID}`, '> ```', 'bottom'].join('\n');
+		const { vault, host } = await mounted(note);
+
+		await expect(host.replaceSource(`current_value: 2\n\n_dse_anchor: ${ANCHOR_ID}`)).resolves.toBe(true);
+
+		expect(vault.text('Note.md')).toBe(['top', '> ```ds-counter', '> current_value: 2', blank, `> _dse_anchor: ${ANCHOR_ID}`, '> ```', 'bottom'].join('\n'));
+	});
+
+	test('the info string on the opening fence survives inside the prefix (SC-290)', async () => {
+		const note = ['> [!note]', ...under('> ', block(1, '  extra words'))].join('\n');
+		const { vault, host } = await mounted(note);
+
+		await host.replaceSource(BODY(3));
+
+		expect(vault.text('Note.md')).toBe(['> [!note]', ...under('> ', block(3, '  extra words'))].join('\n'));
+	});
+
+	test('two same-kind blocks in one callout, and in two callouts, do not cross-talk (both write orders)', async () => {
+		const other = (n: number): string[] => ['```ds-counter', `current_value: ${n}`, '_dse_anchor: other9', '```'];
+		const inOne = (a: number, b: number): string => ['> [!note]', ...under('> ', other(a)), '> mid', ...under('> ', block(b))].join('\n');
+		const inTwo = (a: number, b: number): string => [['> [!note]', ...under('> ', other(a))].join('\n'), '', ['> [!tip]', ...under('> ', block(b))].join('\n')].join('\n');
+		for (const [make, label] of [[inOne, 'one callout'], [inTwo, 'two callouts']] as const) {
+			const { vault, host } = await mounted(make(2, 1));
+
+			await host.replaceSource(BODY(7));
+
+			expect([label, vault.text('Note.md')]).toEqual([label, make(2, 7)]);
+		}
+	});
+
+	test('a CRLF callout stays all-CRLF after a write (SC-453)', async () => {
+		const note = toCrlf(['# Notes', '', '> [!note]', ...under('> ', block(1)), '> tail', '', 'end'].join('\n'));
+		const { vault, host } = await mounted(note);
+
+		await expect(host.replaceSource(BODY(4))).resolves.toBe(true);
+
+		const out = vault.text('Note.md')!;
+		expect(out).toBe(toCrlf(['# Notes', '', '> [!note]', ...under('> ', block(4)), '> tail', '', 'end'].join('\n')));
+		expect(out.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
+	});
+
+	test('a hand-edited callout is re-located by id after a write, and our own write is not mistaken for an external edit', async () => {
+		const onExternalChange = jest.fn();
+		const note = ['> [!note]', ...under('> ', block(1))].join('\n');
+		const { vault, host } = await mounted(note, onExternalChange);
+		await host.replaceSource(BODY(2));
+		await flushAsync();
+		expect(onExternalChange).not.toHaveBeenCalled();
+
+		vault.setText('Note.md', ['one', 'two', vault.text('Note.md')!].join('\n'));
+		vault.emit('modify', fakeTFile('Note.md'));
+		await flushAsync();
+		expect(host.getBlockInfo()).toEqual({ language: ALIAS, lineStart: 3, lineEnd: 6 });
+		expect(onExternalChange).not.toHaveBeenCalled(); // only lines shifted: the body is still what we wrote
+
+		await expect(host.replaceSource(BODY(9))).resolves.toBe(true);
+		expect(vault.text('Note.md')).toBe(['one', 'two', '> [!note]', ...under('> ', block(9))].join('\n'));
+	});
+
+	test('a strict-body (unanchored) host binds by its prefix-free body inside a callout and its write keeps the binding', async () => {
+		const note = ['> [!note]', '> ```ds-counter', '> current_value: 1', '> ```'].join('\n');
+		const { vault, file, app } = setup(note);
+		const owner = new Component();
+		owner.load();
+		const host = new SidebarBlockHost({ app } as unknown as Plugin, file, ALIAS, null, 'current_value: 1', document.createElement('div'), owner, () => {}, () => {}, () => {});
+		await host.refresh();
+		expect(host.canPersist).toBe(true);
+
+		await expect(host.replaceSource('current_value: 2')).resolves.toBe(true);
+
+		expect(vault.text('Note.md')).toBe(['> [!note]', '> ```ds-counter', '> current_value: 2', '> ```'].join('\n'));
+		expect(host.canPersist).toBe(true);
+	});
+
+	test('regression guard: an un-nested block with a quote elsewhere in the note is written exactly as before', async () => {
+		const note = ['> a quote', '', ...block(1), '', '> another'].join('\n');
+		const { vault, host } = await mounted(note);
+
+		await host.replaceSource(BODY(2));
+
+		expect(vault.text('Note.md')).toBe(['> a quote', '', ...block(2), '', '> another'].join('\n'));
+	});
+
+	test('a write whose block has vanished from the LIVE note says so (a Notice) instead of returning false silently', async () => {
+		const note = ['> [!note]', ...under('> ', block(1))].join('\n');
+		const { vault, host } = await mounted(note);
+		// The note changed on disk but the vault event has not reached the host's cache yet.
+		vault.setText('Note.md', '> [!note]\n> the block was deleted');
+
+		await expect(host.replaceSource(BODY(2))).resolves.toBe(false);
+
+		expect(vault.text('Note.md')).toBe('> [!note]\n> the block was deleted');
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+	});
+
+	test('an identical-content write is a no-op without a Notice', async () => {
+		const note = ['> [!note]', ...under('> ', block(1))].join('\n');
+		const { vault, host } = await mounted(note);
+
+		await expect(host.replaceSource(BODY(1))).resolves.toBe(true);
+
+		expect(vault.text('Note.md')).toBe(note);
+		expect(Notice.notices).toHaveLength(0);
 	});
 });
