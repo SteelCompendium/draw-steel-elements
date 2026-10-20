@@ -4,7 +4,7 @@
 // footer of Task-2 iconButtons — REAL <button>s with the REAL disabled property, which
 // fixes CB-8 inside modals. Escape-close and the focus trap are Obsidian Modal
 // defaults and are deliberately NOT reimplemented here; DSE adds only the initial
-// focus to the first control (§2.6).
+// focus to the first control (§2.6) and (SC-431) a draft-first Escape: see onEscapeKey.
 //
 // F1 §4.5 (view-unload-closes-modal): openManagedModal(owner, factory) opens the
 // modal AND registers owner.register(() => modal.close()) so the modal cannot outlive
@@ -19,6 +19,7 @@ import { iconButton } from './iconButton';
 import type { IconButtonHandle, IconButtonOptions } from './iconButton';
 import { themeServiceForApp } from '../seams/theme';
 import { prefsForApp } from '../seams/prefs';
+import { cancelDraftAt } from './draftCancel';
 
 let titleCounter = 0;
 
@@ -94,6 +95,31 @@ export class DseModal extends Modal {
 	/** A .dse-modal__section panel inside the body (side-by-side apply/quick-mod panels). */
 	section(): HTMLElement {
 		return this.body.createDiv({ cls: 'dse-modal__section' });
+	}
+
+	/**
+	 * SC-431: Escape is draft-first. Obsidian's Modal constructor registers
+	 * `this.onEscapeKey` as its Escape handler on `this.scope`, and the Keymap runs that Scope
+	 * from a `window` keydown CAPTURE listener, i.e. before the event reaches the focused field.
+	 * A field's own `stopPropagation()` therefore cannot keep the modal open. So when the focused
+	 * field holds a half-typed draft (a kit `stepper` registers a canceler in kit/draftCancel.ts),
+	 * revert just that draft and swallow the key; otherwise fall through to the host's close.
+	 *
+	 * `onEscapeKey` is not in obsidian.d.ts (it is the method the Modal constructor binds), hence
+	 * the cast; the e2e scenario STAM-S06 fails if a host version stops calling it.
+	 */
+	onEscapeKey(evt: KeyboardEvent): void {
+		if (!evt.defaultPrevented && cancelDraftAt(evt.target)) {
+			evt.preventDefault();
+			evt.stopPropagation();
+			return;
+		}
+		const host = (Modal.prototype as unknown as { onEscapeKey?: (evt: KeyboardEvent) => void }).onEscapeKey;
+		if (host) host.call(this, evt);
+		else if (!evt.defaultPrevented) {
+			evt.preventDefault();
+			this.close();
+		}
 	}
 
 	open(): void {

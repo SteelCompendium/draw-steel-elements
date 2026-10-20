@@ -588,8 +588,47 @@ export class Plugin extends Component {
 }
 
 // ---------------------------------------------------------------- UI classes
+/**
+ * SC-431 -- Obsidian's keymap Scope, modelled on the real `handleKey` (app.js 1.14.4): handlers
+ * run in REGISTRATION order; the first whose modifiers/key match and that returns non-undefined
+ * ends the walk (a keyed handler ends it even on `undefined`); an unmatched event goes to the
+ * parent. Returning `false` means "handled" -- the caller (the Keymap) then preventDefault +
+ * stopPropagation. Only what tests drive: no tabFocusContainerEl, no windows.
+ */
+export interface MockKeymapHandler {
+	modifiers: string | null;
+	key: string | null;
+	func: (evt: KeyboardEvent, ctx: { modifiers: string; key: string | null; vkey: string | null }) => any;
+}
+export class Scope {
+	keys: MockKeymapHandler[] = [];
+	constructor(private parent?: Scope) {}
+	register(modifiers: string[] | null, key: string | null, func: MockKeymapHandler['func']): MockKeymapHandler {
+		const handler = { modifiers: modifiers ? modifiers.join(',') : null, key, func };
+		this.keys.push(handler);
+		return handler;
+	}
+	unregister(handler: MockKeymapHandler): void {
+		this.keys = this.keys.filter((k) => k !== handler);
+	}
+	handleKey(evt: KeyboardEvent, ctx: { modifiers: string; key: string | null; vkey: string | null }): any {
+		for (const h of this.keys) {
+			const matches =
+				(h.modifiers === null || h.modifiers === ctx.modifiers) &&
+				(!h.key || (!!ctx.key && h.key.toLowerCase() === ctx.key.toLowerCase()));
+			if (!matches) continue;
+			const result = h.func(evt, ctx);
+			if (result !== undefined) return result;
+			if (h.key !== null || h.modifiers !== null) return result;
+		}
+		return this.parent?.handleKey(evt, ctx);
+	}
+}
+
 export class Modal {
 	app: App;
+	/** Real Obsidian registers its Escape handler here in the constructor, as `this.onEscapeKey`. */
+	scope: Scope = new Scope();
 	containerEl: HTMLElement;
 	titleEl: HTMLElement;
 	contentEl: HTMLElement;
@@ -603,6 +642,13 @@ export class Modal {
 		this.containerEl.className = 'modal-container';
 		this.titleEl = (this.containerEl as any).createEl('div', { cls: 'modal-title' });
 		this.contentEl = (this.containerEl as any).createEl('div', { cls: 'modal-content' });
+		this.scope.register([], 'Escape', this.onEscapeKey.bind(this));
+	}
+	/** Not in obsidian.d.ts; the real default: ignore a handled event, else swallow it and close. */
+	onEscapeKey(evt: KeyboardEvent): void {
+		if (evt.defaultPrevented) return;
+		evt.preventDefault();
+		this.close();
 	}
 	open(): void {
 		document.body.appendChild(this.containerEl);

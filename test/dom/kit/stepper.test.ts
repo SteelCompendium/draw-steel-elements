@@ -4,6 +4,7 @@
 // mode whose Enter/blur commit path fires onChange exactly ONCE (CB-10) and whose Escape
 // reverts, and a { setValue, getValue } Handle that updates in place (CB-7).
 import { stepper } from '../../../src/framework/kit/stepper';
+import { cancelDraftAt } from '../../../src/framework/kit/draftCancel';
 import { Component } from '../../mocks/obsidian';
 
 // SC-337: real Obsidian's owner Component is always loaded by its parent by the time it
@@ -408,6 +409,38 @@ describe('Plan 08 Task 2: kit/stepper (D2 §2.2)', () => {
 			keydown(inputEl, 'Enter');
 			expect(onChange).not.toHaveBeenCalled();
 			expect(inputEl.value).toBe('3');
+		});
+
+		describe('draft-cancel registry (SC-431) — what a containing DseModal asks before it closes on Escape', () => {
+			test('cancelDraftAt reverts a dirty draft (true, no commit, reported to onDraftInput) and is false when clean', () => {
+				const onDraftInput = jest.fn();
+				const { handle, inputEl, onChange } = editable({ onDraftInput });
+				expect(cancelDraftAt(inputEl)).toBe(false); // clean: nothing to cancel, the caller closes
+				inputEl.value = '9';
+				expect(cancelDraftAt(inputEl)).toBe(true);
+				expect(inputEl.value).toBe('3');
+				expect(onDraftInput).toHaveBeenLastCalledWith(null);
+				expect(onChange).not.toHaveBeenCalled();
+				expect(handle.getValue()).toBe(3);
+				expect(cancelDraftAt(inputEl)).toBe(false); // now clean again
+			});
+
+			test('a node that is not a stepper input (or null) is never cancelled', () => {
+				editable();
+				expect(cancelDraftAt(document.createElement('input'))).toBe(false);
+				expect(cancelDraftAt(null)).toBe(false);
+			});
+
+			test('the canceler is dropped when the owner unloads (no stale entry outlives a closed modal)', () => {
+				const owner = fakeOwner();
+				const parent = document.createElement('div');
+				const handle = stepper(parent, { value: 3, label: 'Stamina', editable: true, onChange: jest.fn() }, owner);
+				const inputEl = handle.rootEl.querySelector<HTMLInputElement>('input.dse-stepper__input')!;
+				inputEl.value = '9';
+				owner.unload();
+				expect(cancelDraftAt(inputEl)).toBe(false);
+				expect(inputEl.value).toBe('9'); // untouched
+			});
 		});
 
 		describe('onDraftInput / commitDraft (SC-430) — observe a half-typed draft without committing it', () => {

@@ -15,6 +15,7 @@ import type { Component } from 'obsidian';
 import { iconButton } from './iconButton';
 import { MOVING_ATTR } from '../host/adoptView';
 import { stampControl } from './controlId';
+import { registerDraftCancel } from './draftCancel';
 
 export interface StepperOptions {
 	value: number;
@@ -217,18 +218,26 @@ export function stepper(
 			// commit() is then an identity on the already-clamped value.
 			commit(next);
 		};
+		/** Reverts a DIRTY draft to the shown value (no commit); false = nothing to revert. */
+		const cancelDraft = (): boolean => {
+			if (el.value === String(current)) return false;
+			render();
+			opts.onDraftInput?.(null);
+			return true;
+		};
+		// SC-431: a containing DseModal calls this from its Obsidian Scope, which runs in the
+		// window capture phase BEFORE the keydown handler below can swallow the key.
+		registerDraftCancel(el, cancelDraft, owner);
 		owner.registerDomEvent(el, 'keydown', (evt: KeyboardEvent) => {
 			if (evt.key === 'Enter') {
 				evt.preventDefault();
 				commitDraft();
 			} else if (evt.key === 'Escape') {
-				// Revert only a dirty draft, and swallow the key so a containing modal
-				// doesn't close on the SAME press; a clean Escape bubbles normally.
-				if (el.value !== String(current)) {
+				// Revert only a dirty draft, and swallow the key; a clean Escape bubbles
+				// normally. (Inside a DseModal the Scope already handled a dirty one.)
+				if (cancelDraft()) {
 					evt.preventDefault();
 					evt.stopPropagation();
-					render();
-					opts.onDraftInput?.(null);
 				}
 			}
 		});

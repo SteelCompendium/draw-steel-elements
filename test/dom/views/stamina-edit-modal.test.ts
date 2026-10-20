@@ -12,6 +12,7 @@ import { StaminaBar } from '@model/StaminaBar';
 import { StaminaEditModal } from '@views/StaminaEditModal';
 import { App } from '../../mocks/obsidian';
 import { styleGuardFindings } from '../kit/styleGuard';
+import { attachObsidianKeymap, pressEscape } from '../_obsidianKeymap';
 
 function makeModal(max: number, current: number, temp: number, isHero = true) {
 	const app = new App();
@@ -1001,6 +1002,55 @@ describe('SC-430: Apply\'s label follows a half-typed Stamina / Temp draft, so n
 		expect(actionBtn(content).textContent).toContain('No Stamina Change');
 		expect(updateCallback).not.toHaveBeenCalled();
 		expect(bar.current_stamina).toBe(15);
+	});
+
+	// SC-431: real Obsidian runs the modal's Scope from a window CAPTURE listener, so the stepper's own
+	// stopPropagation never kept the modal open. Both fields must now revert only the draft.
+	describe.each([
+		['Stamina', 'stamina' as const, '12'],
+		['Temporary Stamina', 'temp' as const, '9'],
+	])('SC-431: Escape in the %s field with a Damage pending', (_name, field, typed) => {
+		test('the first Escape reverts only the draft (modal open, Damage still pending, nothing written); the second closes', () => {
+			const { modal, content, bar, updateCallback } = makeModal(20, 15, 5);
+			const detach = attachObsidianKeymap(modal);
+			const onClose = jest.spyOn(modal, 'onClose');
+			clickDamage(content, 4);
+			const pendingLabel = actionBtn(content).textContent;
+			expect(pendingLabel).toBe('Lose 4 Temp Stamina');
+			const input = stepperInputs(content)[field];
+			const shown = input.value;
+			input.focus();
+			typeDraft(input, typed);
+
+			pressEscape(input);
+
+			expect(input.value).toBe(shown);
+			expect(onClose).not.toHaveBeenCalled();
+			expect(document.body.contains(modal.containerEl)).toBe(true);
+			expect(actionBtn(content).textContent).toBe(pendingLabel);
+			expect(updateCallback).not.toHaveBeenCalled();
+
+			pressEscape(input);
+
+			expect(onClose).toHaveBeenCalledTimes(1);
+			expect(document.body.contains(modal.containerEl)).toBe(false);
+			expect(updateCallback).not.toHaveBeenCalled();
+			expect(bar.current_stamina).toBe(15);
+			detach();
+		});
+
+		test('Escape with a clean field closes the modal at once', () => {
+			const { modal, content } = makeModal(20, 15, 5);
+			const detach = attachObsidianKeymap(modal);
+			const onClose = jest.spyOn(modal, 'onClose');
+			const input = stepperInputs(content)[field];
+			input.focus();
+
+			pressEscape(input);
+
+			expect(onClose).toHaveBeenCalledTimes(1);
+			detach();
+		});
 	});
 
 	test('a typed value past max labels the CLAMPED change (what blur lands and Apply persists)', () => {

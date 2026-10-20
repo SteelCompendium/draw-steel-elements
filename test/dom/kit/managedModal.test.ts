@@ -5,6 +5,8 @@
 // registers the F1 §4.5 view-unload-closes-modal contract via owner.register().
 // Escape-close + focus trap stay Obsidian Modal defaults (not reimplemented here).
 import { DseModal, openManagedModal } from '../../../src/framework/kit/managedModal';
+import { stepper } from '../../../src/framework/kit/stepper';
+import { attachObsidianKeymap, pressEscape } from '../_obsidianKeymap';
 import { createPreferenceStore, registerPrefsForApp } from '../../../src/framework/seams/prefs';
 import type { PrefDescriptor, PreferenceStore, PrefsStorage } from '../../../src/framework/seams/prefs';
 import { DSE_PREF_DESCRIPTORS } from '../../../src/prefs/catalog';
@@ -477,5 +479,121 @@ describe('SC-334: the modal body leaves room for the focus ring', () => {
 		const reach = Number(ring![1]) + Number(ring![2]);
 		expect(px(padding)).toBeGreaterThanOrEqual(reach);
 		expect(px(margin)).toBe(-px(padding));
+	});
+});
+
+// SC-431: Obsidian's Keymap runs the modal Scope from a window CAPTURE listener, before the focused
+// field's own keydown handler, so a field's stopPropagation() cannot keep the modal open. The
+// DseModal's Escape handler therefore consults the focused field first. These tests route keys
+// through a stand-in Keymap (test/dom/_obsidianKeymap.ts) so that ordering is real.
+describe('SC-431: Escape is draft-first inside a DseModal', () => {
+	function openWithStepper() {
+		const owner = fakeOwner();
+		const onChange = jest.fn();
+		let inputEl!: HTMLInputElement;
+		const modal = openManagedModal(owner, () => {
+			const m = makeModal();
+			const handle = stepper(m.body, { value: 15, min: 0, max: 20, editable: true, label: 'Stamina', onChange }, m.lifecycle);
+			inputEl = handle.rootEl.querySelector<HTMLInputElement>('input.dse-stepper__input')!;
+			return m;
+		});
+		const detach = attachObsidianKeymap(modal);
+		const onClose = jest.spyOn(modal, 'onClose');
+		const bubbled = jest.fn();
+		modal.containerEl.addEventListener('keydown', bubbled);
+		inputEl.focus();
+		return { owner, modal, inputEl, onChange, onClose, bubbled, detach };
+	}
+
+	test('Escape on a dirty draft reverts only the draft: the modal stays open, nothing commits, the key is swallowed', () => {
+		const { modal, inputEl, onChange, onClose, bubbled, detach } = openWithStepper();
+		inputEl.value = '12';
+
+		const notPrevented = pressEscape(inputEl);
+
+		expect(inputEl.value).toBe('15');
+		expect(onClose).not.toHaveBeenCalled();
+		expect(document.body.contains(modal.containerEl)).toBe(true);
+		expect(onChange).not.toHaveBeenCalled();
+		expect(notPrevented).toBe(false); // preventDefault'd
+		expect(bubbled).not.toHaveBeenCalled(); // and stopped before it reached the modal's own tree
+		detach();
+		modal.close();
+	});
+
+	test('a second Escape (the draft is now clean) closes the modal', () => {
+		const { modal, inputEl, onClose, detach } = openWithStepper();
+		inputEl.value = '12';
+		pressEscape(inputEl);
+		expect(onClose).not.toHaveBeenCalled();
+
+		pressEscape(inputEl);
+
+		expect(onClose).toHaveBeenCalledTimes(1);
+		expect(document.body.contains(modal.containerEl)).toBe(false);
+		detach();
+	});
+
+	test('Escape on a clean draft closes the modal without committing anything', () => {
+		const { modal, inputEl, onChange, onClose, detach } = openWithStepper();
+
+		pressEscape(inputEl);
+
+		expect(onClose).toHaveBeenCalledTimes(1);
+		expect(document.body.contains(modal.containerEl)).toBe(false);
+		expect(onChange).not.toHaveBeenCalled();
+		detach();
+	});
+
+	test('Escape from a control with no draft (a footer button) still closes the modal', () => {
+		const { modal, onClose, detach } = openWithStepper();
+		const [apply] = modal.footer([{ label: 'Apply', text: 'Apply', onClick: jest.fn() }]);
+
+		pressEscape(apply.buttonEl);
+
+		expect(onClose).toHaveBeenCalledTimes(1);
+		detach();
+	});
+
+	test('an Escape another handler already consumed (defaultPrevented) neither cancels a draft nor closes the modal', () => {
+		const { modal, inputEl, onClose, detach } = openWithStepper();
+		inputEl.value = '12';
+		const evt = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+		evt.preventDefault();
+
+		modal.onEscapeKey(evt);
+
+		expect(inputEl.value).toBe('12');
+		expect(onClose).not.toHaveBeenCalled();
+		detach();
+		modal.close();
+	});
+
+	test('after the modal closes its field no longer cancels anything (the canceler is torn down with the modal lifecycle)', () => {
+		const { modal, inputEl, onChange, detach } = openWithStepper();
+		modal.close();
+		inputEl.value = '12';
+
+		const notPrevented = pressEscape(inputEl);
+
+		expect(inputEl.value).toBe('12'); // not reverted
+		expect(notPrevented).toBe(true); // not swallowed
+		expect(onChange).not.toHaveBeenCalled();
+		detach();
+	});
+
+	test('reopening a fresh modal registers a fresh canceler: draft-first holds on the second open too', () => {
+		const first = openWithStepper();
+		first.modal.close();
+		first.detach();
+		const second = openWithStepper();
+		second.inputEl.value = '12';
+
+		pressEscape(second.inputEl);
+
+		expect(second.inputEl.value).toBe('15');
+		expect(second.onClose).not.toHaveBeenCalled();
+		second.detach();
+		second.modal.close();
 	});
 });

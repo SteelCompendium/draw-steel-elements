@@ -19,6 +19,7 @@ import { CodeBlocks } from '@utils/CodeBlocks';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App, makeFakeContext, flushAsync, FakeContext } from '../../mocks/obsidian';
 import squadYaml from '../../fixtures/initiative/squad.yaml';
+import { attachObsidianKeymap, pressEscape } from '../_obsidianKeymap';
 
 interface Setup {
 	app: App;
@@ -590,6 +591,26 @@ describe('SC-430: Apply, its warning and the info text above it follow a half-ty
 		expect(actionBtn(content).textContent).toContain('No Stamina Change');
 		expect(updateCallback).not.toHaveBeenCalled();
 		expect(group.minion_stamina_pool).toBe(20);
+	});
+
+	test('SC-431: through the modal Scope, the first Escape reverts only the pool draft; the second closes the modal', async () => {
+		const { modal, content, updateCallback } = await setup();
+		const detach = attachObsidianKeymap(modal);
+		const onClose = jest.spyOn(modal, 'onClose');
+		const input = poolInput(content);
+		input.focus();
+		typeDraft(input, '17');
+
+		pressEscape(input);
+
+		expect(input.value).toBe('20');
+		expect(onClose).not.toHaveBeenCalled();
+
+		pressEscape(input);
+
+		expect(onClose).toHaveBeenCalledTimes(1);
+		expect(updateCallback).not.toHaveBeenCalled();
+		detach();
 	});
 
 	test('a draft that kills minions labels the kills but keeps Apply disabled until they are selected, like blur', async () => {
