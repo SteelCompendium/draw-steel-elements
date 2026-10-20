@@ -10,7 +10,7 @@
 // Unlike test/dom/elements/encounter.test.ts (which drives the seam directly with a stub
 // via setEncounterSidebarHandoff, proving the VIEW's try/catch/Notice behavior), this file
 // drives the REAL plugin.onload()/onunload() lifecycle — the thing Task 10 actually adds.
-import { App, Notice, flushAsync } from '../../mocks/obsidian';
+import { App, Notice, flushAsync, parseYaml, stringifyYaml } from '../../mocks/obsidian';
 import DrawSteelAdmonitionPlugin from 'main';
 import { ElementPipeline } from '@/framework/pipeline';
 import type { BlockHost, RenderMode } from '@/framework/host/BlockHost';
@@ -18,6 +18,7 @@ import { encounterElement } from '@/elements/encounter/definition';
 import { setEncounterSidebarHandoff } from '@/elements/encounter/view';
 import { VIEW_TYPE_DSE_SIDEBAR, DseSidebarView } from '@/framework/sidebar/DseSidebarView';
 import { PERSIST_DEBOUNCE_MS } from '@/framework/view';
+import { readGeneratedFrom } from '@/framework/sidebar/anchor';
 import { makeCompendiumDeps } from '../elements/_refHarness';
 
 function makeHost(sourcePath: string): BlockHost & { containerEl: HTMLElement } {
@@ -469,4 +470,43 @@ describe('SC-153: "Open in sidebar" is idempotent', () => {
 		expect(writes.some((w) => new RegExp(`_dse_anchor:\\s*["']?${from}["']?\\s*$`, 'm').test(w))).toBe(true);
 		plugin.onunload();
 	});
+	// SC-360 - the encounter mints its own id (`ensureEncounterAnchor`) and writes it UNQUOTED into
+	// the generated tracker as `_dse_from: <id>`. The initiative's first write re-emits the block
+	// through parseYaml/stringifyYaml, so an id YAML reads as a number came back rewritten
+	// (`056948` -> `56948`, `4e8540` -> `.inf`) and `findGeneratedBlock` no longer recognised its own
+	// tracker - the next "Open in sidebar" press would append a second one. Pins Math.random to
+	// the values the pre-fix formula turned into exactly those ids.
+	test.each([[0x056948 / 16 ** 6], [0x4e8540 / 16 ** 6], [0x092e50 / 16 ** 6], [0 / 16 ** 6]])(
+		'SC-360: the generated tracker\'s `_dse_from` survives the initiative\'s own re-serialise (Math.random=%p)',
+		async (pinned) => {
+			const app = new App();
+			const plugin = makePlugin(app);
+			await plugin.onload();
+			app.vault.setFile('Session.md', '# Session\n');
+
+			const host = makeHost('Session.md');
+			await plugin.frameworkV2!.pipeline.run(encounterElement, 'party: {}\nmonsters: []', host);
+			const button = (host.containerEl.firstElementChild as HTMLElement).querySelector<HTMLButtonElement>(
+				'[aria-label="Create initiative tracker block"]',
+			)!;
+
+			const random = jest.spyOn(Math, 'random').mockReturnValue(pinned);
+			try {
+				button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+				await flushAsync();
+			} finally {
+				random.mockRestore();
+			}
+
+			const trackerBody = /```ds-initiative\n([\s\S]*?)\n```/.exec(app.vault.getContent('Session.md')!)![1];
+			const from = readGeneratedFrom(trackerBody);
+			expect(from).not.toBeNull();
+			// What the initiative does on its first write: parse the block, write the model back.
+			expect(readGeneratedFrom(stringifyYaml(parseYaml(trackerBody)))).toBe(from);
+
+			await new Promise((resolve) => setTimeout(resolve, PERSIST_DEBOUNCE_MS + 50)); // drain the id's write-behind
+			plugin.onunload();
+		},
+	);
+
 });
