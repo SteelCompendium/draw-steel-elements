@@ -17,6 +17,8 @@ export const state = {
 	touched: new Set<string>(),
 	/** The note `openNote` opened last (the one `block()` refers to). */
 	currentNote: '' as string,
+	/** SC-455: how `openNote` opened it - `block()` looks for blocks in that view. */
+	viewMode: 'reading' as 'reading' | 'live-preview',
 	/** Per note: the fence indexes the test says it is editing (`dse.block` declares them). Every OTHER
 	 *  fence of that note must come out byte-identical to the fixture (review R1, L-3). */
 	targets: new Map<string, Set<number>>(),
@@ -53,6 +55,7 @@ export function resetTestState(title: string): void {
 	state.mark = 0;
 	state.touched.clear();
 	state.currentNote = '';
+	state.viewMode = 'reading';
 	state.targets.clear();
 	state.exempt.clear();
 	state.testTitle = title;

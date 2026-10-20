@@ -56,6 +56,9 @@ const HOST_CONTROLS: Record<string, string> = {
 };
 
 const READING = '.workspace-leaf.mod-active .markdown-reading-view';
+const LIVE_PREVIEW = '.workspace-leaf.mod-active .markdown-source-view';
+/** The view `block()` looks in: where `openNote` last opened the note (SC-455). */
+const viewSelector = (): string => (state.viewMode === 'live-preview' ? LIVE_PREVIEW : READING);
 const controlLabels = new WeakMap<object, string>();
 
 export function selectorOf(ref: ControlRef): string {
@@ -134,30 +137,37 @@ async function resetFixtures(): Promise<void> {
 
 /**
  * Reset the vault to fixture state, close anything a previous test left behind, open `rel` in
- * Reading view and wait until its DSE blocks are mounted and the plugin is write-idle. Marks
- * the recorders just before the open, so errors while rendering the note are caught too.
+ * Reading view (or, with `{ mode: 'live-preview' }`, in Live Preview with the cursor parked on
+ * line 0 so every callout is drawn rather than shown as source) and wait until its DSE blocks
+ * are mounted and the plugin is write-idle. Marks the recorders just before the open, so errors
+ * while rendering the note are caught too.
  */
-async function openNote(rel: string): Promise<void> {
+async function openNote(rel: string, opts: { mode?: 'reading' | 'live-preview' } = {}): Promise<void> {
+	const mode = opts.mode ?? 'reading';
 	await closeEverything();
 	await resetFixtures();
 	state.touched.add(rel);
 	state.currentNote = rel;
+	state.viewMode = mode;
 	state.mark = await mark();
+	const viewState = mode === 'reading' ? "{ mode: 'preview' }" : "{ mode: 'source', source: false }";
 	await ev(`(async () => {
 		const leaf = app.workspace.getLeaf('tab');
-		await leaf.setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'preview' }, active: true });
+		await leaf.setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, ...${viewState} }, active: true });
 		app.workspace.setActiveLeaf(leaf, { focus: true });
 	})()`);
+	const scope = mode === 'reading' ? '.markdown-reading-view' : '.markdown-source-view';
 	await waitFor(
 		`(() => {
 			const view = app.workspace.getMostRecentLeaf()?.view;
 			if (!view || view.file?.path !== ${JSON.stringify(rel)} || !view.containerEl) return false;
-			const roots = Array.from(view.containerEl.querySelectorAll('.markdown-reading-view [data-dse-element]')).filter((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]'));
+			const roots = Array.from(view.containerEl.querySelectorAll('${scope} [data-dse-element]')).filter((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]'));
 			const mine = ${REGISTRY}.liveEntries().filter((e) => e.host.sourcePath === ${JSON.stringify(rel)} && e.root.isConnected);
 			return roots.length > 0 && mine.length >= roots.length;
 		})()`,
-		`${rel} to render its blocks in Reading view`,
+		`${rel} to render its blocks in ${mode === 'reading' ? 'Reading view' : 'Live Preview'}`,
 	);
+	if (mode === 'live-preview') await ev(`app.workspace.getMostRecentLeaf().view.editor.setCursor({ line: 0, ch: 0 })`);
 	await waitWriteIdle();
 }
 
@@ -176,10 +186,10 @@ function declareTarget(elementId: string, n: number): void {
 	});
 }
 
-/** The n-th (0-based) block of `lang` in the visible Reading view. */
+/** The n-th (0-based) block of `lang` in the visible view (Reading view, or Live Preview when `openNote` was told so). */
 function block(lang: string, n = 0): Scope {
 	declareTarget(elementIdOf(lang), n);
-	return scopeOf($$(`${READING} [data-dse-element="${elementIdOf(lang)}"]`)[n]);
+	return scopeOf($$(`${viewSelector()} [data-dse-element="${elementIdOf(lang)}"]`)[n]);
 }
 
 /** The single open DSE modal of `kind`. Fails if none opens, or if more than one is open. */
@@ -470,18 +480,21 @@ async function expectNoWrite(rel: string, action: () => Promise<unknown>): Promi
 
 // ----------------------------------------------------------------------- note assertions
 
-/** Read the note through the vault, take the n-th fence of `lang`, parse it as YAML. */
+/** Read the note through the vault, take the n-th fence of `lang`, parse it as YAML (a fence inside
+ *  a callout / blockquote is read without its `> ` prefix, SC-455). */
 async function readBlock(rel: string, lang: string, n: number): Promise<unknown> {
 	const text = await ev<string>(`app.vault.read(app.vault.getAbstractFileByPath(${JSON.stringify(rel)}))`);
 	const lines = text.split('\n');
 	let seen = -1;
 	for (let i = 0; i < lines.length; i++) {
-		const m = /^```(\S+)\s*$/.exec(lines[i]);
-		if (!m || m[1] !== lang) continue;
+		const m = /^((?:>[ ]?)*)```(\S+)\s*$/.exec(lines[i]);
+		if (!m || m[2] !== lang) continue;
+		const depth = (m[1].match(/>/g) ?? []).length;
+		const unquote = (line: string): string => (depth === 0 ? line : line.replace(new RegExp(`^(?:>[ ]?){0,${depth}}`), ''));
 		seen++;
 		const body: string[] = [];
 		let j = i + 1;
-		for (; j < lines.length && lines[j].trim() !== '```'; j++) body.push(lines[j]);
+		for (; j < lines.length && unquote(lines[j]).trim() !== '```'; j++) body.push(unquote(lines[j]));
 		if (seen === n) return yaml.load(body.join('\n'));
 		i = j;
 	}

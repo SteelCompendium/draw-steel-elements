@@ -92,6 +92,11 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Stamina/legacy-low.md` | 2/30, Recoveries not tracked |
   | `Stamina/info-string.md` | one `ds-stamina-bar` whose fence line is ` ```ds-stamina-bar  extra words ` (12/30, 3 of 6 Recoveries; SC-290) |
   | `Stamina/two-blocks.md` | two `ds-stamina-bar` blocks: 15/20 +5 temp, then 8/10 |
+  | `Callout/callout.md` | one `ds-stamina-bar` (12/30, 3 of 6 Recoveries) inside a `> [!note]` callout, text above and below it (SC-455) |
+  | `Callout/nested.md` | the same block inside a callout nested in a callout (`> > ` on every line) |
+  | `Callout/quote.md` | the same block inside a plain blockquote (Reading view only: Live Preview does not draw it) |
+  | `Callout/twins.md` | two IDENTICAL `ds-stamina-bar` blocks in one callout |
+  | `Callout/list.md`, `Callout/list-lp.md` | the block's fence indented inside a list item: not supported yet, so a click shows the "not saved" Notice (two copies: the Notice is rate-limited per note) |
   | `Initiative/tracker.md` | `ds-initiative`: hero Alice Alpha 30/30, three Ogres 60/60 (cells `0-1`..`0-3`) |
   | `Initiative/hurt.md` | `ds-initiative`: hero Alice Alpha 30/30, Ogre #1 at 20/60 and Ogre #2 at 60/60 (a hurt creature, for Spend Recovery) |
 

@@ -13,21 +13,32 @@ export interface Skeleton {
 	unterminated: boolean;
 }
 
+/** SC-455: a fence line may sit inside a blockquote / callout: `> ```ds-x`, `> > ```ds-x`. */
+const FENCE_OPEN = /^((?:>[ ]?)*)```(\S*)/;
+
+/** `line` without up to `depth` leading `>` markers (each with its one optional space). */
+const stripQuote = (line: string, depth: number): string => (depth === 0 ? line : line.replace(new RegExp(`^(?:>[ ]?){0,${depth}}`), ''));
+const quoteDepth = (prefix: string): number => (prefix.match(/>/g) ?? []).length;
+
 /** Everything outside the fences, exactly; fences only counted. (The lifecycle's scanOutside,
- *  tightened from "set of outside lines" to the byte-exact outside text.) */
+ *  tightened from "set of outside lines" to the byte-exact outside text.) A fence inside a
+ *  callout / blockquote counts as a fence: its `> ` lines are inside it, the header and the
+ *  other quoted lines stay in the outside text (SC-455). */
 export function skeletonOf(note: string): Skeleton {
 	const out: string[] = [];
 	let inFence = false;
+	let depth = 0;
 	let fences = 0;
 	for (const line of note.split('\n')) {
 		if (!inFence) {
-			const m = /^```(\S*)/.exec(line);
+			const m = FENCE_OPEN.exec(line);
 			if (m) {
 				inFence = true;
+				depth = quoteDepth(m[1]);
 				fences++;
-				out.push(`<<fence ${m[1]}>>`);
+				out.push(`<<fence ${m[1]}${m[2]}>>`);
 			} else out.push(line);
-		} else if (line.trim() === '```') inFence = false;
+		} else if (stripQuote(line, depth).trim() === '```') inFence = false;
 	}
 	return { text: out.join('\n'), fences, unterminated: inFence };
 }
@@ -38,16 +49,17 @@ export interface Fence {
 	text: string;
 }
 
-/** Every fenced block of a note, in order. */
+/** Every fenced block of a note, in order (a block inside a callout / blockquote included, SC-455). */
 export function fencesOf(note: string): Fence[] {
 	const out: Fence[] = [];
 	const lines = note.split('\n');
 	for (let i = 0; i < lines.length; i++) {
-		const m = /^```(\S*)/.exec(lines[i]);
+		const m = FENCE_OPEN.exec(lines[i]);
 		if (!m) continue;
+		const depth = quoteDepth(m[1]);
 		let j = i + 1;
-		while (j < lines.length && lines[j].trim() !== '```') j++;
-		out.push({ lang: m[1], text: lines.slice(i, Math.min(j, lines.length - 1) + 1).join('\n') });
+		while (j < lines.length && stripQuote(lines[j], depth).trim() !== '```') j++;
+		out.push({ lang: m[2], text: lines.slice(i, Math.min(j, lines.length - 1) + 1).join('\n') });
 		i = j;
 	}
 	return out;

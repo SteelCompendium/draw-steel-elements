@@ -31,6 +31,10 @@
 // SC-453 appends G-S10 (26 total): an all-CRLF note on disk, a Reading view write and a sidebar
 // pin + sidebar write, each asserted at the BYTE level (all-CRLF, edit landed, text outside the
 // block identical), plus a pin that an editor insert never leaves the note mixed-ending.
+// SC-455 appends G-S11 (27 total): a counter inside a `> [!note]` callout and inside a nested `> > ` callout,
+// pinned to the sidebar from the editor (the anchor is stamped INSIDE the quote with its prefix) and then
+// clicked in the sidebar panel — bytes on disk: edit landed, `> ` on every block line, everything else identical.
+// (Reading view and Live Preview writes through a callout are in the e2e suite: e2e/specs/callout/.)
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -157,6 +161,9 @@ Object.assign(FIXTURES, {
 	'Lifecycle/hoverhost.md': '# hover host\n\nSee [[counter]] here.\n',
 	// SC-453: an all-CRLF note (written to disk as CRLF bytes) with one counter between ABOVE and BELOW.
 	'Lifecycle/crlf.md': `# crlf\n\nABOVE\n\n${COUNTER(10)}\n\nBELOW\n`.replace(/\n/g, '\r\n'),
+	// SC-455: a counter inside a callout (text above and below it) and inside a callout nested in a callout.
+	'Lifecycle/callout.md': `# callout\n\nABOVE\n\n${['[!note] Camp', 'text above', ...COUNTER(10).split('\n'), 'text below'].map((l) => `> ${l}`).join('\n')}\n\nBELOW\n`,
+	'Lifecycle/nested.md': `# nested\n\nABOVE\n\n> [!note] Outer\n> outer text\n${['[!tip] Inner', ...COUNTER(10).split('\n'), 'inner below'].map((l) => `> > ${l}`).join('\n')}\n> outer below\n\nBELOW\n`,
 });
 
 // ------------------------------------------------------------------ note integrity
@@ -1452,6 +1459,77 @@ const SCENARIOS = [
 
 			await t.reset(rel);
 			return 'CRLF note stayed all-CRLF on disk across a Reading view write and a sidebar pin + sidebar write (edits landed, text outside the block byte-identical); an editor insert never leaves it mixed';
+		},
+	},
+	{
+		// SC-455: a block inside a callout / blockquote, pinned to the sidebar and written from there. The
+		// anchor stamp must land INSIDE the quote with the block's own prefix, and the sidebar write must keep
+		// `> ` (or `> > `) on every line it writes. Real bytes on disk after each step: the edit landed, every
+		// line between the fences carries the prefix, both fence lines and everything outside the block are
+		// byte-identical to the fixture (apart from the one stamped anchor line).
+		id: 'G-S11',
+		async run(t) {
+			const noted = [];
+			for (const [rel, prefix] of [['Lifecycle/callout.md', '> '], ['Lifecycle/nested.md', '> > ']]) {
+				const fixtureLines = FIXTURES[rel].split('\n');
+				const open = fixtureLines.findIndex((l) => l === `${prefix}\`\`\`ds-counter`);
+				const close = fixtureLines.findIndex((l, i) => i > open && l === `${prefix}\`\`\``);
+				const outside = (text) => {
+					const lines = text.split('\n');
+					const end = lines.length - (fixtureLines.length - close);
+					return { head: lines.slice(0, open + 1), tail: lines.slice(end), body: lines.slice(open + 1, end) };
+				};
+				const fx = outside(FIXTURES[rel]);
+				const waitDisk = async (pred, what) => {
+					const t0 = Date.now();
+					while (!pred(t.read(rel))) {
+						if (Date.now() - t0 > 15000) throw new Error(`${rel}: timed out waiting for ${what}; disk is ${JSON.stringify(t.read(rel))}`);
+						await sleep(100);
+					}
+				};
+				const checkShape = (label, text) => {
+					const now = outside(text);
+					t.expect(JSON.stringify(now.head) === JSON.stringify(fx.head) && JSON.stringify(now.tail) === JSON.stringify(fx.tail), `${rel} ${label}: text outside the block (or a fence line) changed: ${JSON.stringify(text)}`);
+					t.expect(now.body.length > 0 && now.body.every((l) => l.startsWith(prefix.trimEnd())), `${rel} ${label}: a block line lost its prefix: ${JSON.stringify(now.body)}`);
+					return now;
+				};
+				t.expect(t.read(rel) === FIXTURES[rel], `${rel}: the fixture is not on disk`);
+
+				// 1. Pin from the editor: the cursor on a line of the quoted fence.
+				await t.reset(rel);
+				await t.ev(`(async () => { await (${LC_LEAF}).setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'source', source: false }, active: true }); })()`);
+				await t.sleep(1500);
+				await t.ev(`(${LC_LEAF}).view.editor.setCursor({ line: ${open + 2}, ch: 0 })`);
+				await t.ev(`(() => { window.__lcRandom = Math.random; Math.random = () => 0xabcdef / 0x1000000; return true; })()`); // SC-383, as G-S10
+				try {
+					t.expect(await t.ev(`app.commands.executeCommandById('draw-steel-elements:send-block-to-sidebar')`), `${rel}: the send-block-to-sidebar command did not run (not available inside the callout?)`);
+					await waitDisk((s) => s.includes('_dse_anchor:'), 'the anchor stamp');
+				} finally {
+					await t.ev(`(() => { if (window.__lcRandom) Math.random = window.__lcRandom; delete window.__lcRandom; return true; })()`);
+				}
+				const stamped = t.read(rel);
+				const id = /_dse_anchor: ([A-Za-z0-9_-]+)\n/.exec(stamped)?.[1];
+				t.expect(!!id, `${rel}: no _dse_anchor stamped: ${JSON.stringify(stamped)}`);
+				const expectedStamp = [...fixtureLines.slice(0, close), `${prefix}_dse_anchor: ${id}`, ...fixtureLines.slice(close)].join('\n');
+				t.expect(stamped === expectedStamp, `${rel}: the stamp is not exactly one prefixed anchor line inside the block:\n got  ${JSON.stringify(stamped)}\n want ${JSON.stringify(expectedStamp)}`);
+				const held = await t.ev(`app.workspace.getLeavesOfType('dse-sidebar')[0].view.getState().panels.map((p) => p.anchorId)`);
+				t.expect(held.length === 1 && held[0] === id, `${rel}: the panel holds ${JSON.stringify(held)} but disk has anchor ${JSON.stringify(id)}`);
+
+				// 2. Click Increase INSIDE the sidebar panel: the write goes through SidebarBlockHost.
+				const panelCounter = `Array.from(app.workspace.getLeavesOfType('dse-sidebar')[0].view.containerEl.querySelectorAll('[data-dse-element="counter"]')).find((x) => x.isConnected)`;
+				await t.waitFor(`!!(${panelCounter})`, `${rel}: the counter mounted in the sidebar panel`);
+				await t.ev(`(${panelCounter}).querySelector('button[aria-label^="Increase"]').click()`);
+				await waitDisk((s) => s.includes('current_value: 11'), 'the sidebar write');
+				const written = t.read(rel);
+				const now = checkShape('sidebar write', written);
+				t.expect(now.body.includes(`${prefix}current_value: 11`) && now.body.includes(`${prefix}_dse_anchor: ${id}`), `${rel}: the edit or the anchor is missing / not prefixed: ${JSON.stringify(now.body)}`);
+				t.expect(await t.ev(`!document.querySelector('[data-dse-sidebar-unavailable]')`), `${rel}: the sidebar panel degraded to the not-found card`);
+
+				await t.ev(`(async () => { for (const l of app.workspace.getLeavesOfType('dse-sidebar')) l.detach(); })()`);
+				await t.reset(rel);
+				noted.push(rel.split('/')[1]);
+			}
+			return `a counter in ${noted.join(' and ')}: pinned from the editor (anchor stamped inside the quote with its prefix) and written from the sidebar, prefix on every block line, text outside the block byte-identical`;
 		},
 	},
 ];
