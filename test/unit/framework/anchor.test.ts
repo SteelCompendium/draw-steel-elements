@@ -20,7 +20,6 @@ import {
 	listFences,
 	readAnchor,
 	readGeneratedFrom,
-	findGeneratedBlock,
 } from '@/framework/sidebar/anchor';
 
 describe('D8 Task 2 review fix — anchor.ts fence scanner (finding #4, CRITICAL)', () => {
