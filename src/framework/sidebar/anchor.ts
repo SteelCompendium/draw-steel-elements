@@ -92,13 +92,17 @@ export function ensureAnchor(body: string): { body: string; id: string | null } 
 	// be unique". Reusing its value would not help either: `findAnchoredBlock` goes through the same line
 	// reader, so a panel bound to a value it cannot read could never find the block. So: stamp nothing and
 	// report `id: null` - the caller refuses the pin and tells the user to fix the line (the safest
-	// non-duplicating choice). A body that does not parse at all is never stamped either (we cannot know
-	// whether a key is hiding in it).
+	// non-duplicating choice). A body that does not parse AND mentions the key is not stamped either (we
+	// cannot know whether a second one would collide).
 	let parsed: unknown;
 	try {
 		parsed = parseYaml(body);
 	} catch {
-		return { body, id: null };
+		// r4 re-review MEDIUM-A: a YAML error by itself must not stop a pin (it never did; the panel shows the
+		// block's own error card). Refuse only when the body mentions the key - one may be hiding in what we
+		// cannot parse - and otherwise stamp as before.
+		if (body.includes(ANCHOR_KEY)) return { body, id: null };
+		parsed = null;
 	}
 	if (parsed !== null && typeof parsed === 'object' && Object.prototype.hasOwnProperty.call(parsed, ANCHOR_KEY)) {
 		return { body, id: null };

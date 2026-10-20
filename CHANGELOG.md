@@ -47,10 +47,12 @@ for what needs action.
   different number, so the panel (or the encounter) could no longer find its own block. New ids
   can no longer take that shape. A note pinned before this fix can still lose its panel once, on
   its first save after you update. Re-linking the panel from the note ("Send to sidebar" again)
-  repairs it for good: it reuses the id the save left behind instead of adding a second one, and
-  an encounter that already carries such an id now opens just one tracker. If a block has a
-  hand-edited `_dse_anchor` line the sidebar cannot read, it is no longer sent to the sidebar
-  (you get a message saying what to fix) instead of getting a second, conflicting line.
+  repairs it for good: it reuses the id the save left behind instead of adding a second one. An
+  encounter that already carries such an id now opens one tracker per press. If its old tracker was
+  already hit by the bug, it may open one more tracker one last time; the old tracker keeps its
+  state. If a block has a hand-edited `_dse_anchor` line the sidebar cannot read, it is no
+  longer sent to the sidebar (you get a message saying what to fix) instead of getting a
+  second, conflicting line.
 - [FIX] **A save that changes nothing no longer leaves extra blank scroll space at the bottom
   of the note** (SC-260). When a block wrote back exactly what the note already contained
   (for example re-applying the same value in reading mode), the page held its height for a
