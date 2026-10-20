@@ -210,9 +210,9 @@ export function locateInSection(
 	near: number | null,
 ): { lineStart: number; lineEnd: number } | 'ambiguous' | null {
 	const lines = stripCr(content).split('\n');
-	const window = lines.slice(section.lineStart, section.lineEnd + 1);
+	const windowLines = lines.slice(section.lineStart, section.lineEnd + 1);
 	// A section starts at a block boundary, so scanning the window on its own sees what a scan of the whole note would.
-	const fences = listFences(window.join('\n'), language).map((f) => ({
+	const fences = listFences(windowLines.join('\n'), language).map((f) => ({
 		lineStart: f.lineStart + section.lineStart,
 		lineEnd: f.lineEnd + section.lineStart,
 	}));
