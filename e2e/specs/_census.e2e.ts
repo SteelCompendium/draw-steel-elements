@@ -10,8 +10,9 @@ import { openBarModal } from '../driver/stamina';
 import { idsOf } from '../manifest/surface';
 import barManifest from '../manifest/stamina-bar';
 import modalManifest from '../manifest/stamina-edit-modal';
+import conditionsManifest from '../manifest/conditions-modal';
 
-const ALL_IDS = new Set([...idsOf(barManifest), ...idsOf(modalManifest)]);
+const ALL_IDS = new Set([...idsOf(barManifest), ...idsOf(modalManifest), ...idsOf(conditionsManifest)]);
 const BAR_SCOPE = ['.markdown-reading-view [data-dse-element="stamina-bar"] *'];
 
 describe('real-Obsidian census (pilot surfaces)', () => {

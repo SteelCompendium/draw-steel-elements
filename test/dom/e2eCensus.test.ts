@@ -27,6 +27,7 @@ import { DSE_PREF_DESCRIPTORS } from '../../src/prefs/catalog';
 import { FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main';
 import staminaBarManifest from '../../e2e/manifest/stamina-bar';
 import modalManifest from '../../e2e/manifest/stamina-edit-modal';
+import conditionsManifest from '../../e2e/manifest/conditions-modal';
 import { idsOf } from '../../e2e/manifest/surface';
 
 const INTERACTIVE = 'button, input, select, textarea, [role="button"], [role="slider"], [tabindex], [contenteditable]';
@@ -193,7 +194,7 @@ describe('SC-408 census: initiative stamina entry points', () => {
 		// Scope: the stamina entry points only, not the whole tracker (malice, conditions, ... are
 		// other surfaces). Everything the tracker stamps with an id must still be in the manifest.
 		const entryPoints = 'button.dse-init__stamina, .dse-init__bar.dse-stamina--clickable, button.dse-init__cell';
-		expect(censusProblems(root, new Set(idsOf(modalManifest)), entryPoints)).toEqual([]);
+		expect(censusProblems(root, new Set([...idsOf(modalManifest), ...idsOf(conditionsManifest)]), entryPoints)).toEqual([]);
 		for (const id of ['init.hero.stamina', 'init.hero.bar', 'init.detail.stamina', 'init.detail.bar', 'init.cell.stamina']) {
 			expect(root.querySelector(`[data-dse-control="${id}"]`)).not.toBeNull();
 		}
