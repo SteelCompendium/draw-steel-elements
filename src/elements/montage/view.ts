@@ -37,6 +37,7 @@
 // reads.
 import { Component, Notice } from 'obsidian';
 import { ElementView } from '@/framework/view';
+import { MOVING_ATTR } from '@/framework/host/adoptView';
 import type { ChromeMenuItem } from '@/framework/chrome/types';
 import { iconButton, openManagedModal } from '@/framework/kit';
 import type { DseModal } from '@/framework/kit';
@@ -75,6 +76,32 @@ const GUIDE_SLOT = 'montage.guide';
 const STUB_NOOP = (): void => {};
 
 export class MontageView extends ElementView<MontageModel> {
+	/** SC-326 r2 — the board's horizontal scroll, captured by `update()` just before the
+	 *  element is emptied and consumed by `onMount` right after the fresh board is built (a
+	 *  scrollLeft set before the board exists, or while it is still detached, is a no-op). */
+	private pendingBoardScroll: { left: number; atEnd: boolean } | null = null;
+	/** The board's scrollLeft as the user (or `restoreBoardScroll`) last left it — kept from the
+	 *  board's own `scroll` events, so a DOM move that silently resets it can be undone. */
+	private boardLeft = 0;
+
+	/** SC-326 r2 — every write rebuilds the whole element (the framework default `update`:
+	 *  empty the root, run `onMount` again), which throws the board away; its replacement
+	 *  starts at scrollLeft 0, so a tap in a far round column snapped the board back to
+	 *  round 1 (measured in real Obsidian: 884 -> 0 on the first frame after the tap). Carry
+	 *  the position across. */
+	async update(model: MontageModel): Promise<void> {
+		const board = this.rootEl.querySelector<HTMLElement>('.dse-mt__board');
+		this.pendingBoardScroll =
+			board && board.scrollLeft > 0
+				? { left: board.scrollLeft, atEnd: board.scrollWidth - board.clientWidth - board.scrollLeft <= 1 }
+				: null;
+		try {
+			await super.update(model);
+		} finally {
+			this.pendingBoardScroll = null; // never leak into a later mount
+		}
+	}
+
 	protected async onMount(root: HTMLElement, model: MontageModel): Promise<void> {
 		// Per-mount listener owner: torn down by the framework default update() before
 		// the next onMount runs (F1 §4.5) — nothing accumulates across resets/refreshes.
@@ -110,6 +137,7 @@ export class MontageView extends ElementView<MontageModel> {
 			(entry) => this.commitNewEntry(entry),
 			() => this.openAddHero(),
 		).build(container);
+		this.restoreBoardScroll(container, cycleOwner);
 		new OutcomeBandView(model).build(container);
 		this.buildActionBar(container, model, canPersist, cycleOwner);
 		// The foot rules guide (spec §A: "collapsed by default"). Its "Each test" block
@@ -434,6 +462,57 @@ export class MontageView extends ElementView<MontageModel> {
 				},
 			),
 		);
+	}
+
+	/** Put the board back where `update()` found it, then keep it there. Round count changes
+	 *  (the chrome's "Add a round") are handled by one rule: a board that was scrolled to its
+	 *  FAR END stays at its far end (so a newly added last round is in view, not hidden past
+	 *  the old edge); any other position is kept as is, and the browser clamps it if the
+	 *  board got narrower.
+	 *
+	 *  The rebuild is not the only thing that zeroes the board. After the write lands the host
+	 *  re-draws the section and ADOPTS this live root into it (`adoptView`: `appendChild` of
+	 *  the root into the new section, detached until Obsidian inserts it) — and a scroll
+	 *  container's offset does not survive being taken out of the document. Measured in real
+	 *  Obsidian (lifecycle G-S12): 884 held through the rebuild, then 0 at the adoption ~0.55 s
+	 *  later, with no `scroll` event and no ResizeObserver callback to react to (the root is out
+	 *  and back within one frame). The framework path is shared by every element, so this view
+	 *  undoes it locally: remember the offset from the board's `scroll` events, notice the move
+	 *  through the `data-dse-moving` mark `adoptView` puts on the root, and re-apply the offset
+	 *  as soon as the board is in the document again (before paint — it is never drawn at 0). */
+	private restoreBoardScroll(container: HTMLElement, owner: Component): void {
+		const board = container.querySelector<HTMLElement>('.dse-mt__board');
+		if (!board) return;
+		const saved = this.pendingBoardScroll;
+		this.pendingBoardScroll = null;
+		if (saved) board.scrollLeft = saved.atEnd ? board.scrollWidth : saved.left;
+		this.boardLeft = board.scrollLeft;
+		owner.registerDomEvent(board, 'scroll', () => {
+			this.boardLeft = board.scrollLeft;
+		});
+		const doc = board.ownerDocument;
+		const win = doc.defaultView;
+		if (!win) return;
+		const reapply = (): boolean => {
+			if (!board.isConnected) return false;
+			if (board.scrollLeft !== this.boardLeft) board.scrollLeft = this.boardLeft;
+			return true;
+		};
+		const mark = new win.MutationObserver(() => {
+			if (this.rootEl.hasAttribute(MOVING_ATTR) || reapply()) return;
+			// moved into a section Obsidian has not inserted yet: wait for it to arrive
+			const arrival = new win.MutationObserver(() => {
+				if (reapply()) arrival.disconnect();
+			});
+			arrival.observe(doc.body, { childList: true, subtree: true });
+			const timer = win.setTimeout(() => arrival.disconnect(), 5000);
+			owner.register(() => {
+				arrival.disconnect();
+				win.clearTimeout(timer);
+			});
+		});
+		mark.observe(this.rootEl, { attributes: true, attributeFilter: [MOVING_ATTR] });
+		owner.register(() => mark.disconnect());
 	}
 
 	// ------------------------------------------------------------------------- commit

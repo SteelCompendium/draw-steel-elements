@@ -41,6 +41,7 @@ import montageMidYaml from '../../../src/elements/montage/fixture-mid.yaml';
 import montageDoneYaml from '../../../src/elements/montage/fixture-done.yaml';
 import montageFailedYaml from '../../../src/elements/montage/fixture-failed.yaml';
 import montageOldShapeYaml from '../../../src/elements/montage/fixture-old-shape.yaml';
+import { MOVING_ATTR } from '../../../src/framework/host/adoptView';
 
 const MT_ALIASES = ['ds-montage'] as const;
 
@@ -1867,6 +1868,106 @@ describe('SC-191 slice 2: source hygiene + CSS contract', () => {
 		// the frame itself is unchanged: border + radius stay on the scroll box
 		expect(frame![1]).toMatch(/border:\s*1px solid var\(--dse-metal-line\);/);
 		expect(frame![1]).toMatch(/border-radius:\s*var\(--dse-radius\);/);
+	});
+});
+
+describe('SC-326 r2: the board keeps its horizontal scroll across the rebuild every write triggers', () => {
+	// jsdom has no layout: `scrollLeft` is inert there. Give every element a per-element
+	// scrollLeft (a rebuilt board is a NEW element and starts at 0, exactly like the browser)
+	// and a controllable scrollWidth/clientWidth, and put the real descriptors back after.
+	const layout = { scrollWidth: 2000, clientWidth: 700 };
+	// the board that is about to be thrown away keeps the width it had; only its replacement
+	// can be wider (the rebuilt grid has the extra round column)
+	let oldBoard: Element | null = null;
+	const lefts = new WeakMap<Element, number>();
+	const saved = ['scrollLeft', 'scrollWidth', 'clientWidth'].map((k) => [k, Object.getOwnPropertyDescriptor(Element.prototype, k)] as const);
+	beforeEach(() => {
+		Object.defineProperty(Element.prototype, 'scrollLeft', {
+			configurable: true,
+			get(this: Element) {
+				return lefts.get(this) ?? 0;
+			},
+			set(this: Element, v: number) {
+				// the browser clamps to [0, scrollWidth - clientWidth]
+				lefts.set(this, Math.max(0, Math.min(v, layout.scrollWidth - layout.clientWidth)));
+			},
+		});
+		Object.defineProperty(Element.prototype, 'scrollWidth', {
+			configurable: true,
+			get(this: Element) {
+				return this === oldBoard ? 2000 : layout.scrollWidth;
+			},
+		});
+		Object.defineProperty(Element.prototype, 'clientWidth', { configurable: true, get: () => layout.clientWidth });
+		layout.scrollWidth = 2000;
+		oldBoard = null;
+	});
+	afterEach(() => {
+		for (const [k, d] of saved) {
+			if (d) Object.defineProperty(Element.prototype, k, d);
+			else delete (Element.prototype as unknown as Record<string, unknown>)[k];
+		}
+		jest.useRealTimers();
+	});
+
+	test('a quick-trio tap from a far column leaves the board where it was (fails if the rebuilt board resets to 0)', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(QUICK_TRIO_FIXTURE);
+		const board = root.querySelector('.dse-mt__board') as HTMLElement;
+		board.scrollLeft = 640; // mid-way: neither the start nor the far end (max 1300)
+		(cellFor(root, 'Bram', 2).querySelector('.dse-mt__quick[data-kind="success"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+		const next = rebuilt.querySelector('.dse-mt__board') as HTMLElement;
+		expect(next).not.toBe(board); // really a new board
+		expect(cellFor(rebuilt, 'Bram', 2).getAttribute('data-kind')).toBe('success'); // and the write did land
+		expect(next.scrollLeft).toBe(640);
+	});
+
+	test('a board scrolled to its far end stays at its far end when "Add a round" makes it wider (the new round is in view)', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(montageMidYaml);
+		const board = root.querySelector('.dse-mt__board') as HTMLElement;
+		board.scrollLeft = 1300; // = scrollWidth - clientWidth: the far end
+		oldBoard = board;
+		layout.scrollWidth = 2300; // the added round column widens the REBUILT grid
+		chromeItem(root, 'montage-add-round')!.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const next = (host.containerEl.firstElementChild as HTMLElement).querySelector('.dse-mt__board') as HTMLElement;
+		expect(next.scrollLeft).toBe(1600); // the NEW far end, not the old 1300
+	});
+
+	// The second reset, measured in real Obsidian (lifecycle G-S12): once the write lands the host
+	// re-draws the section and `adoptView` moves the live root into the new section (marked
+	// `data-dse-moving` for the appendChild, detached until Obsidian inserts it) — a browser throws
+	// a scroll container's offset away when it leaves the document. jsdom keeps offsets, so the
+	// test plays the browser's part (zeroing the board on the move).
+	test('the board survives the host adopting its root into a new section (moved while detached, then inserted)', async () => {
+		const { root } = await renderMontage(QUICK_TRIO_FIXTURE);
+		document.body.appendChild(root);
+		const board = root.querySelector('.dse-mt__board') as HTMLElement;
+		board.scrollLeft = 640;
+		board.dispatchEvent(new Event('scroll')); // the user's scroll, as the browser would report it
+		const section = document.createElement('div'); // the new, still-detached section
+		root.setAttribute(MOVING_ATTR, '');
+		section.appendChild(root);
+		root.removeAttribute(MOVING_ATTR);
+		board.scrollLeft = 0; // what leaving the document does to a scroll container
+		await Promise.resolve();
+		document.body.appendChild(section); // Obsidian inserts the section later
+		await new Promise((r) => setTimeout(r, 0));
+		expect(board.isConnected).toBe(true);
+		expect(board.scrollLeft).toBe(640);
+		section.remove();
+	});
+
+	test('a board that was never scrolled is not touched (stays at 0)', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(QUICK_TRIO_FIXTURE);
+		(cellFor(root, 'Bram', 2).querySelector('.dse-mt__quick[data-kind="failure"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const next = (host.containerEl.firstElementChild as HTMLElement).querySelector('.dse-mt__board') as HTMLElement;
+		expect(next.scrollLeft).toBe(0);
 	});
 });
 

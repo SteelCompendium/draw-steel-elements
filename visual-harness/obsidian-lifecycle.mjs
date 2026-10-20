@@ -39,6 +39,9 @@
 // them). Obsidian counts it as a line break, so section line numbers are off against split('\n'); a Reading view click
 // and a Live Preview click, and a sidebar pin from the close fence of the second block, must still land in the right
 // block and leave every other byte (the lone CRs included) untouched. A CR-only note (only lone CRs as breaks) stays CR-only.
+// SC-326 appends G-S13 (29 total): a 20-round montage board scrolled to its far end keeps its horizontal scroll
+// across a quick-trio tap and End round — the rebuild every write triggers AND the later adoption move both reset
+// a scroll container's offset (measured before the fix: 884 -> 0).
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -173,6 +176,9 @@ Object.assign(FIXTURES, {
 	// SC-455: a counter inside a callout (text above and below it) and inside a callout nested in a callout.
 	'Lifecycle/callout.md': `# callout\n\nABOVE\n\n${['[!note] Camp', 'text above', ...COUNTER(10).split('\n'), 'text below'].map((l) => `> ${l}`).join('\n')}\n\nBELOW\n`,
 	'Lifecycle/nested.md': `# nested\n\nABOVE\n\n> [!note] Outer\n> outer text\n${['[!tip] Inner', ...COUNTER(10).split('\n'), 'inner below'].map((l) => `> > ${l}`).join('\n')}\n> outer below\n\nBELOW\n`,
+	// SC-326: a 20-round montage (wider than any pane, even at fine pointer), current round = the LAST column,
+	// so the only live sockets are at the far right of the horizontally scrolling board.
+	'Lifecycle/montage.md': `# montage\n\nABOVE\n\n${fence('ds-montage', ['title: Long March', 'rounds: 20', 'success_limit: 12', 'failure_limit: 6', 'participants:', '  - name: Kira', '  - name: Bram', 'current_round: 20'])}\n\nBELOW\n`,
 });
 
 // ------------------------------------------------------------------ note integrity
@@ -1717,6 +1723,47 @@ const SCENARIOS = [
 				await t.reset(rel);
 			}
 			return 'a lone CR above (and below) a block: Reading view clicks (LF note, CRLF note, 2nd of two blocks) and Live Preview clicks land in the right block, a sidebar pin from the 2nd block\'s close fence stamps it and its panel writes it, and a CR-only note stays CR-only (Reading view, Live Preview, sidebar); the lone CRs and every byte outside the blocks are unchanged';
+		},
+	},
+	{
+		// SC-326 r2: the montage board scrolls sideways (SC-326 r1), and every write rebuilds the whole
+		// element — so a write from a far column (the quick trio's tap; End round) must NOT snap the board
+		// back to round 1. Reading view, real Obsidian: scroll the board to its far end, click, and sample
+		// `scrollLeft` of whatever board is in the DOM on every frame for 2.5 s (covers the 400 ms persist
+		// debounce, the write, and any host re-draw / adoption).
+		id: 'G-S13',
+		async run(t) {
+			const rel = 'Lifecycle/montage.md';
+			await t.open(rel);
+			await t.reset(rel);
+			const BOARD = `(${t.root('[data-dse-element="montage"]')})?.querySelector('.dse-mt__board')`;
+			await t.waitFor(`!!(${BOARD})`, 'the montage board');
+			const geo = await t.ev(`(() => { const b = ${BOARD}; return { ox: getComputedStyle(b).overflowX, sw: b.scrollWidth, cw: b.clientWidth }; })()`);
+			t.expect(geo.sw > geo.cw + 100 && (geo.ox === 'auto' || geo.ox === 'scroll'), `the 20-round board does not scroll sideways: ${JSON.stringify(geo)}`);
+			const sampleAfter = async (clickExpr) => {
+				await t.ev(`(() => { const b = ${BOARD}; b.scrollLeft = b.scrollWidth; })()`);
+				await t.sleep(300);
+				return t.ev(`new Promise((resolve) => { const out = []; let boards = new Set(); const t0 = performance.now(); const tick = () => { const b = ${BOARD}; if (b) { out.push(Math.round(b.scrollLeft)); boards.add(b); } else out.push(null); if (performance.now() - t0 < 2500) requestAnimationFrame(tick); else resolve({ out, distinctBoards: boards.size, max: b ? b.scrollWidth - b.clientWidth : null }); }; const start = ${BOARD}.scrollLeft; const el = ${clickExpr}; if (!el) { resolve({ error: 'no control to click' }); return; } out.push(Math.round(start)); el.click(); requestAnimationFrame(tick); })`);
+			};
+			const verdict = (label, r) => {
+				t.expect(!r.error, `${label}: ${r.error}`);
+				const first = r.out[0];
+				t.expect(first > 100, `${label}: the board was not scrolled to the far end before the click (scrollLeft ${first})`);
+				const bad = r.out.filter((v) => v === null || Math.abs(v - first) > 1);
+				t.expect(bad.length === 0, `${label}: scrollLeft moved after the write — start ${first}, ${bad.length}/${r.out.length} frames off (min ${Math.min(...r.out.filter((v) => v !== null))}, saw ${r.distinctBoards} board element(s))`);
+				return `${label}: scrollLeft held at ${first}/${r.max} over ${r.out.length} frames (${r.distinctBoards} board element(s) seen)`;
+			};
+			const notes = [];
+			// 1. the quick trio's tap, in the last round column.
+			notes.push(verdict('quick-trio tap', await sampleAfter(`(${t.root('[data-dse-element="montage"]')}).querySelector('.dse-mt__cell[data-hero="Kira"][data-round="20"] .dse-mt__quick[data-kind="success"]')`)));
+			const t0 = Date.now();
+			while (!/result: success/.test(t.read(rel)) && Date.now() - t0 < 10000) await t.sleep(100);
+			t.expect(/hero: Kira\n\s*round: 20\n\s*result: success/.test(t.read(rel)), `the quick-trio write did not land: ${t.read(rel)}`);
+			// 2. End round (the action bar button), still scrolled to the far end.
+			notes.push(verdict('End round', await sampleAfter(`Array.from((${t.root('[data-dse-element="montage"]')}).querySelectorAll('button')).find((b) => /^End round/.test(b.textContent.trim()))`)));
+			t.expect(t.integrity(rel).ok, 'note integrity');
+			await t.reset(rel);
+			return notes.join('; ');
 		},
 	},
 ];
