@@ -44,7 +44,9 @@ for what needs action.
   after its first save, about 1 time in 33** (SC-360). The hidden id that ties a sidebar panel
   to its block could be a value like `056948` or `4e8540`, which the first save rewrote into
   a different number, so the panel could no longer find its own block. New ids can no longer
-  take that shape. A note that was already affected is not repaired by this fix.
+  take that shape. A note that was already affected is repaired by re-linking the panel from
+  the note ("Send to sidebar" again); that now reuses the id the first save left behind
+  instead of adding a second one.
 - [FIX] **A save that changes nothing no longer leaves extra blank scroll space at the bottom
   of the note** (SC-260). When a block wrote back exactly what the note already contained
   (for example re-applying the same value in reading mode), the page held its height for a

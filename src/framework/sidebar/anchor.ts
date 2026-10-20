@@ -15,7 +15,16 @@ import { splitLines, stripCr } from '../host/lineEnding';
  *  full rationale: an `additionalProperties: false` element schema has no way to "know"
  *  about this sidebar-only key, so the two files must never drift on its spelling). */
 export const ANCHOR_KEY = '_dse_anchor';
-const ANCHOR_LINE = new RegExp(`^${ANCHOR_KEY}:\\s*['"]?([A-Za-z0-9_-]+)['"]?\\s*$`, 'm');
+/** The value of an identity/provenance line: ONE scalar token, optionally quoted, nothing else on the
+ *  line. SC-360: wider than the ids we mint (`[A-Za-z0-9_-]`) on purpose - a note the old generator
+ *  already damaged holds the id YAML rewrote it to (`56948`, `9.2e+51`, `4e+207`, `.inf`, `-.inf`,
+ *  `.nan`, `1e-7`), and a re-pin must READ that as the anchor and reuse it; reading it as "no anchor"
+ *  made `ensureAnchor` append a second `_dse_anchor:` line (duplicate key, block dead). The
+ *  charset is exactly what a YAML number/inf/nan scalar can contain, so a flow collection, a comment
+ *  (`# ...`), a second word or a following line is still not swallowed. `[ \t]*` (not `\s*`) after
+ *  the colon so an empty value cannot reach across the newline to the next key. */
+const SCALAR_TOKEN = String.raw`[ \t]*['"]?([A-Za-z0-9_.+-]+)['"]?[ \t]*\r?$`;
+const ANCHOR_LINE = new RegExp(`^${ANCHOR_KEY}:${SCALAR_TOKEN}`, 'm');
 
 /** A fence-marker line: 3+ backticks/tildes (captured), then the rest of the line — the
  *  info string for an opener, or (after trimming) empty for a closer. Exported so
@@ -100,10 +109,7 @@ export function ensureAnchor(body: string): { body: string; id: string } {
  * `additionalProperties: false` schema, this key must be hidden there too.
  */
 export const GENERATED_FROM_KEY = '_dse_from';
-const GENERATED_FROM_LINE = new RegExp(
-	`^${GENERATED_FROM_KEY}:\\s*['"]?([A-Za-z0-9_-]+)['"]?\\s*$`,
-	'm',
-);
+const GENERATED_FROM_LINE = new RegExp(`^${GENERATED_FROM_KEY}:${SCALAR_TOKEN}`, 'm');
 
 /** Reads the `_dse_from:` value out of a block body, or null if absent/malformed. */
 export function readGeneratedFrom(body: string): string | null {
