@@ -97,6 +97,7 @@ function elementIdOf(lang: string): string {
 /** What each modal kind must contain, so `modal('stamina-edit')` cannot match some other modal. */
 const MODAL_KINDS: Record<string, string> = {
 	'stamina-edit': '.dse-sedit__row',
+	conditions: '.dse-condal__addwrap',
 };
 
 // ------------------------------------------------------------------------- note + blocks
