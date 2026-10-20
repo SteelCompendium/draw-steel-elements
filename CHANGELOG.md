@@ -35,6 +35,11 @@ for what needs action.
   throw focus back to the row's cog button, so you had to Tab all the way back to the next option. Focus
   now stays on the option you just chose (a custom color stays on the custom color field), and a mouse
   click shows no extra focus ring.
+- [FIX] **The Montage board scrolls sideways instead of cutting off its right-hand columns** (SC-326).
+  With many rounds (or on a touch screen, where the round columns are wider) the board grew wider than
+  the card and the later rounds and the Tally were clipped with no way to reach them. The board now scrolls
+  sideways inside its frame (mouse wheel, trackpad, touch, or Tab to a control). A board that fits looks
+  exactly as before, and the narrow one-column layout and printing are unchanged.
 - [FIX] **A block inside a callout or a quote now saves its changes** (SC-455). A Draw Steel block
   nested in `> [!note]`, a plain quote, or a callout inside a callout (each line starting with
   `> `) drew and took clicks but never wrote them back, and said nothing; the change was lost on the
