@@ -53,7 +53,8 @@ import type { App } from 'obsidian';
 import { getIconIds, setIcon } from 'obsidian';
 import type { Condition, ConditionHolder } from '@drawSteelAdmonition/EncounterData';
 import { ConditionManager, ConditionConfig } from '@utils/Conditions';
-import { DseModal, iconButton, setPressedState } from '@/framework/kit';
+import { DseModal, iconButton, setPressedState, stampControl } from '@/framework/kit';
+import { registerEscapeConsumer } from '@/framework/kit/escapeConsumer';
 import { applyConditionColor, applyConditionEffect, CONDITION_EFFECTS } from '@/elements/conditionColor';
 import {
 	resolveDuration,
@@ -441,6 +442,7 @@ export class ConditionsModal extends DseModal {
 					icon: 'plus',
 					text: 'Add condition',
 					label: 'Add condition',
+					control: 'cond.add',
 					onClick: () => {
 						this.addOpen = true;
 						this.renderAdd();
@@ -479,6 +481,7 @@ export class ConditionsModal extends DseModal {
 
 		const input = box.createEl('input', { cls: 'dse-condal__input' });
 		input.type = 'text';
+		stampControl(input, 'cond.input');
 		// SC-186 fix-round MED-4: role="combobox" belongs on the INPUT (the WAI-ARIA
 		// combobox pattern's editable element), not the wrapping div — aria-expanded/
 		// aria-controls/aria-activedescendant all ride the same element.
@@ -553,6 +556,19 @@ export class ConditionsModal extends DseModal {
 			activeIndex = 0;
 			renderMenu();
 		});
+		// SC-431: the keydown handler below cannot keep this modal open on Escape (Obsidian's
+		// Scope runs first, in the window capture phase), so the dropdown also registers as an
+		// Escape consumer: DseModal.onEscapeKey asks it before closing the modal. Dropdown open
+		// -> close just the dropdown; nothing open -> false, and the modal closes as before.
+		registerEscapeConsumer(
+			input,
+			() => {
+				if (!this.addOpen) return false;
+				this.closeAdd();
+				return true;
+			},
+			this.lifecycle,
+		);
 		this.lifecycle.registerDomEvent(input, 'keydown', (evt: KeyboardEvent) => {
 			const matches = this.matchesFor(input.value);
 			if (evt.key === 'ArrowDown') {

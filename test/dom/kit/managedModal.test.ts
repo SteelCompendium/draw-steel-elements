@@ -6,6 +6,7 @@
 // Escape-close + focus trap stay Obsidian Modal defaults (not reimplemented here).
 import { DseModal, openManagedModal } from '../../../src/framework/kit/managedModal';
 import { stepper } from '../../../src/framework/kit/stepper';
+import { consumeEscapeAt } from '../../../src/framework/kit/escapeConsumer';
 import { attachObsidianKeymap, pressEscape } from '../_obsidianKeymap';
 import { createPreferenceStore, registerPrefsForApp } from '../../../src/framework/seams/prefs';
 import type { PrefDescriptor, PreferenceStore, PrefsStorage } from '../../../src/framework/seams/prefs';
@@ -486,7 +487,7 @@ describe('SC-334: the modal body leaves room for the focus ring', () => {
 // field's own keydown handler, so a field's stopPropagation() cannot keep the modal open. The
 // DseModal's Escape handler therefore consults the focused field first. These tests route keys
 // through a stand-in Keymap (test/dom/_obsidianKeymap.ts) so that ordering is real.
-describe('SC-431: Escape is draft-first inside a DseModal', () => {
+describe('SC-431: Escape backs out of a draft first inside a DseModal', () => {
 	function openWithStepper() {
 		const owner = fakeOwner();
 		const onChange = jest.fn();
@@ -497,16 +498,16 @@ describe('SC-431: Escape is draft-first inside a DseModal', () => {
 			inputEl = handle.rootEl.querySelector<HTMLInputElement>('input.dse-stepper__input')!;
 			return m;
 		});
-		const detach = attachObsidianKeymap(modal);
+		attachObsidianKeymap(modal);
 		const onClose = jest.spyOn(modal, 'onClose');
 		const bubbled = jest.fn();
 		modal.containerEl.addEventListener('keydown', bubbled);
 		inputEl.focus();
-		return { owner, modal, inputEl, onChange, onClose, bubbled, detach };
+		return { owner, modal, inputEl, onChange, onClose, bubbled };
 	}
 
 	test('Escape on a dirty draft reverts only the draft: the modal stays open, nothing commits, the key is swallowed', () => {
-		const { modal, inputEl, onChange, onClose, bubbled, detach } = openWithStepper();
+		const { modal, inputEl, onChange, onClose, bubbled } = openWithStepper();
 		inputEl.value = '12';
 
 		const notPrevented = pressEscape(inputEl);
@@ -517,12 +518,11 @@ describe('SC-431: Escape is draft-first inside a DseModal', () => {
 		expect(onChange).not.toHaveBeenCalled();
 		expect(notPrevented).toBe(false); // preventDefault'd
 		expect(bubbled).not.toHaveBeenCalled(); // and stopped before it reached the modal's own tree
-		detach();
 		modal.close();
 	});
 
 	test('a second Escape (the draft is now clean) closes the modal', () => {
-		const { modal, inputEl, onClose, detach } = openWithStepper();
+		const { modal, inputEl, onClose } = openWithStepper();
 		inputEl.value = '12';
 		pressEscape(inputEl);
 		expect(onClose).not.toHaveBeenCalled();
@@ -531,32 +531,29 @@ describe('SC-431: Escape is draft-first inside a DseModal', () => {
 
 		expect(onClose).toHaveBeenCalledTimes(1);
 		expect(document.body.contains(modal.containerEl)).toBe(false);
-		detach();
 	});
 
 	test('Escape on a clean draft closes the modal without committing anything', () => {
-		const { modal, inputEl, onChange, onClose, detach } = openWithStepper();
+		const { modal, inputEl, onChange, onClose } = openWithStepper();
 
 		pressEscape(inputEl);
 
 		expect(onClose).toHaveBeenCalledTimes(1);
 		expect(document.body.contains(modal.containerEl)).toBe(false);
 		expect(onChange).not.toHaveBeenCalled();
-		detach();
 	});
 
 	test('Escape from a control with no draft (a footer button) still closes the modal', () => {
-		const { modal, onClose, detach } = openWithStepper();
+		const { modal, onClose } = openWithStepper();
 		const [apply] = modal.footer([{ label: 'Apply', text: 'Apply', onClick: jest.fn() }]);
 
 		pressEscape(apply.buttonEl);
 
 		expect(onClose).toHaveBeenCalledTimes(1);
-		detach();
 	});
 
 	test('an Escape another handler already consumed (defaultPrevented) neither cancels a draft nor closes the modal', () => {
-		const { modal, inputEl, onClose, detach } = openWithStepper();
+		const { modal, inputEl, onClose } = openWithStepper();
 		inputEl.value = '12';
 		const evt = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
 		evt.preventDefault();
@@ -565,27 +562,25 @@ describe('SC-431: Escape is draft-first inside a DseModal', () => {
 
 		expect(inputEl.value).toBe('12');
 		expect(onClose).not.toHaveBeenCalled();
-		detach();
 		modal.close();
 	});
 
-	test('after the modal closes its field no longer cancels anything (the canceler is torn down with the modal lifecycle)', () => {
-		const { modal, inputEl, onChange, detach } = openWithStepper();
+	test('after the modal closes its field is no longer an Escape consumer (the registry entry is torn down with the modal lifecycle)', () => {
+		const { modal, inputEl, onChange } = openWithStepper();
 		modal.close();
 		inputEl.value = '12';
 
-		const notPrevented = pressEscape(inputEl);
+		// Asked directly: a keydown on the closed modal's detached input never reaches any window
+		// listener, so dispatching one would pass even with the teardown deleted.
+		expect(consumeEscapeAt(inputEl)).toBe(false);
 
 		expect(inputEl.value).toBe('12'); // not reverted
-		expect(notPrevented).toBe(true); // not swallowed
 		expect(onChange).not.toHaveBeenCalled();
-		detach();
 	});
 
-	test('reopening a fresh modal registers a fresh canceler: draft-first holds on the second open too', () => {
+	test('reopening a fresh modal registers a fresh consumer: draft-first holds on the second open too', () => {
 		const first = openWithStepper();
 		first.modal.close();
-		first.detach();
 		const second = openWithStepper();
 		second.inputEl.value = '12';
 
@@ -593,7 +588,6 @@ describe('SC-431: Escape is draft-first inside a DseModal', () => {
 
 		expect(second.inputEl.value).toBe('15');
 		expect(second.onClose).not.toHaveBeenCalled();
-		second.detach();
 		second.modal.close();
 	});
 });

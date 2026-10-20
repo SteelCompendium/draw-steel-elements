@@ -1012,7 +1012,7 @@ describe('SC-430: Apply\'s label follows a half-typed Stamina / Temp draft, so n
 	])('SC-431: Escape in the %s field with a Damage pending', (_name, field, typed) => {
 		test('the first Escape reverts only the draft (modal open, Damage still pending, nothing written); the second closes', () => {
 			const { modal, content, bar, updateCallback } = makeModal(20, 15, 5);
-			const detach = attachObsidianKeymap(modal);
+			attachObsidianKeymap(modal);
 			const onClose = jest.spyOn(modal, 'onClose');
 			clickDamage(content, 4);
 			const pendingLabel = actionBtn(content).textContent;
@@ -1036,12 +1036,11 @@ describe('SC-430: Apply\'s label follows a half-typed Stamina / Temp draft, so n
 			expect(document.body.contains(modal.containerEl)).toBe(false);
 			expect(updateCallback).not.toHaveBeenCalled();
 			expect(bar.current_stamina).toBe(15);
-			detach();
 		});
 
 		test('Escape with a clean field closes the modal at once', () => {
 			const { modal, content } = makeModal(20, 15, 5);
-			const detach = attachObsidianKeymap(modal);
+			attachObsidianKeymap(modal);
 			const onClose = jest.spyOn(modal, 'onClose');
 			const input = stepperInputs(content)[field];
 			input.focus();
@@ -1049,7 +1048,6 @@ describe('SC-430: Apply\'s label follows a half-typed Stamina / Temp draft, so n
 			pressEscape(input);
 
 			expect(onClose).toHaveBeenCalledTimes(1);
-			detach();
 		});
 	});
 

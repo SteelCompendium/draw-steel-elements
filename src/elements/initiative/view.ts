@@ -2071,6 +2071,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 			{
 				icon: 'plus-circle',
 				label: 'Add Condition',
+				control: 'init.cond.add',
 				onClick: () => {
 					this.openModal(
 						new ConditionsModal(this.cx.app, character, this.conditionManager, (updated) => {

@@ -14,6 +14,8 @@ import { ConditionManager } from '@utils/Conditions';
 import { openManagedModal } from '@/framework/kit';
 import { App, Component } from '../../mocks/obsidian';
 import { styleGuardFindings } from '../kit/styleGuard';
+import { attachObsidianKeymap, pressEscape } from '../_obsidianKeymap';
+import { consumeEscapeAt } from '../../../src/framework/kit/escapeConsumer';
 
 function makeModal(conditions: (string | Condition)[] = [], onChange = jest.fn()) {
 	const holder: ConditionHolder = { conditions };
@@ -601,15 +603,67 @@ describe('SC-186: add — the real combobox (arrow keys + Enter, Escape, known +
 		expect(document.activeElement).toBe(addBtn);
 	});
 
-	test('SC-186 fix-round LOW-4: Escape inside the combobox does not bubble past this modal (stopPropagation)', () => {
-		const { container } = makeModal([]);
-		const input = openCombobox(container);
-		const outerHandler = jest.fn();
-		// A real Obsidian Modal closes itself on an Escape that reaches its own Scope —
-		// simulated here as a bubble-phase listener on an ancestor of the input.
-		container.addEventListener('keydown', outerHandler);
-		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-		expect(outerHandler).not.toHaveBeenCalled();
+	// SC-431: the original LOW-4 test simulated "Obsidian's Scope" as a BUBBLE-phase listener on an
+	// ancestor, which is not how Obsidian orders it: the Keymap runs the modal Scope from a window
+	// CAPTURE listener, before the input's own handler, so stopPropagation() never saved the modal
+	// (confirmed in real Obsidian). The stand-in keymap reproduces the real ordering.
+	describe('SC-431: Escape in the add dropdown closes only the dropdown, through the modal Scope', () => {
+		function openWithKeymap() {
+			const made = makeModal([]);
+			attachObsidianKeymap(made.modal);
+			const onClose = jest.spyOn(made.modal, 'onClose');
+			const input = openCombobox(made.container);
+			input.focus();
+			return { ...made, onClose, input };
+		}
+
+		test('the first Escape closes just the dropdown (modal open, Add condition refocused, the key swallowed)', () => {
+			const { container, onClose, input, onChange } = openWithKeymap();
+			const outerHandler = jest.fn();
+			container.addEventListener('keydown', outerHandler);
+
+			const notPrevented = pressEscape(input);
+
+			expect(onClose).not.toHaveBeenCalled();
+			expect(document.body.contains(container)).toBe(true);
+			expect(container.querySelector('.dse-condal__combobox')).toBeNull();
+			const addBtn = container.querySelector('button[aria-label="Add condition"]') as HTMLElement;
+			expect(document.activeElement).toBe(addBtn);
+			expect(notPrevented).toBe(false);
+			expect(outerHandler).not.toHaveBeenCalled();
+			expect(onChange).not.toHaveBeenCalled();
+		});
+
+		test('a second Escape (dropdown now closed) closes the modal', () => {
+			const { container, onClose, input } = openWithKeymap();
+			pressEscape(input);
+			expect(onClose).not.toHaveBeenCalled();
+
+			pressEscape(document.activeElement as HTMLElement);
+
+			expect(onClose).toHaveBeenCalledTimes(1);
+			expect(document.body.contains(container)).toBe(false);
+		});
+
+		test('Escape with the dropdown closed still closes the modal at once (unchanged)', () => {
+			const { modal, container } = makeModal([]);
+			attachObsidianKeymap(modal);
+			const onClose = jest.spyOn(modal, 'onClose');
+			const addBtn = container.querySelector('button[aria-label="Add condition"]') as HTMLElement;
+			addBtn.focus();
+
+			pressEscape(addBtn);
+
+			expect(onClose).toHaveBeenCalledTimes(1);
+			expect(document.body.contains(container)).toBe(false);
+		});
+
+		test('after the modal closes, the stale combobox input is no longer an Escape consumer', () => {
+			const { modal, input } = openWithKeymap();
+			modal.close();
+
+			expect(consumeEscapeAt(input)).toBe(false);
+		});
 	});
 
 	test('SC-186 fix-round HIGH-2: outside-close is a single DOCUMENT-level mousedown, not focusout', () => {

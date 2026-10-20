@@ -15,7 +15,7 @@ import type { Component } from 'obsidian';
 import { iconButton } from './iconButton';
 import { MOVING_ATTR } from '../host/adoptView';
 import { stampControl } from './controlId';
-import { registerDraftCancel } from './draftCancel';
+import { registerEscapeConsumer } from './escapeConsumer';
 
 export interface StepperOptions {
 	value: number;
@@ -227,7 +227,7 @@ export function stepper(
 		};
 		// SC-431: a containing DseModal calls this from its Obsidian Scope, which runs in the
 		// window capture phase BEFORE the keydown handler below can swallow the key.
-		registerDraftCancel(el, cancelDraft, owner);
+		registerEscapeConsumer(el, cancelDraft, owner);
 		owner.registerDomEvent(el, 'keydown', (evt: KeyboardEvent) => {
 			if (evt.key === 'Enter') {
 				evt.preventDefault();

@@ -595,7 +595,7 @@ describe('SC-430: Apply, its warning and the info text above it follow a half-ty
 
 	test('SC-431: through the modal Scope, the first Escape reverts only the pool draft; the second closes the modal', async () => {
 		const { modal, content, updateCallback } = await setup();
-		const detach = attachObsidianKeymap(modal);
+		attachObsidianKeymap(modal);
 		const onClose = jest.spyOn(modal, 'onClose');
 		const input = poolInput(content);
 		input.focus();
@@ -610,7 +610,6 @@ describe('SC-430: Apply, its warning and the info text above it follow a half-ty
 
 		expect(onClose).toHaveBeenCalledTimes(1);
 		expect(updateCallback).not.toHaveBeenCalled();
-		detach();
 	});
 
 	test('a draft that kills minions labels the kills but keeps Apply disabled until they are selected, like blur', async () => {

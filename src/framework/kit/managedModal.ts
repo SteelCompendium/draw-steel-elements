@@ -19,7 +19,7 @@ import { iconButton } from './iconButton';
 import type { IconButtonHandle, IconButtonOptions } from './iconButton';
 import { themeServiceForApp } from '../seams/theme';
 import { prefsForApp } from '../seams/prefs';
-import { cancelDraftAt } from './draftCancel';
+import { consumeEscapeAt } from './escapeConsumer';
 
 let titleCounter = 0;
 
@@ -98,18 +98,19 @@ export class DseModal extends Modal {
 	}
 
 	/**
-	 * SC-431: Escape is draft-first. Obsidian's Modal constructor registers
+	 * SC-431: Escape backs out first. Obsidian's Modal constructor registers
 	 * `this.onEscapeKey` as its Escape handler on `this.scope`, and the Keymap runs that Scope
 	 * from a `window` keydown CAPTURE listener, i.e. before the event reaches the focused field.
 	 * A field's own `stopPropagation()` therefore cannot keep the modal open. So when the focused
-	 * field holds a half-typed draft (a kit `stepper` registers a canceler in kit/draftCancel.ts),
-	 * revert just that draft and swallow the key; otherwise fall through to the host's close.
+	 * field has something to back out of (a kit `stepper` with a half-typed draft, the Conditions
+	 * add-dropdown: each registers an Escape consumer, kit/escapeConsumer.ts), back out of just that
+	 * and swallow the key; otherwise fall through to the host's close.
 	 *
 	 * `onEscapeKey` is not in obsidian.d.ts (it is the method the Modal constructor binds), hence
 	 * the cast; the e2e scenario STAM-S06 fails if a host version stops calling it.
 	 */
 	onEscapeKey(evt: KeyboardEvent): void {
-		if (!evt.defaultPrevented && cancelDraftAt(evt.target)) {
+		if (!evt.defaultPrevented && consumeEscapeAt(evt.target)) {
 			evt.preventDefault();
 			evt.stopPropagation();
 			return;

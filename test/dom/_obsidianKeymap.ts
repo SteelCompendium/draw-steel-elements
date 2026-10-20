@@ -8,7 +8,16 @@ import type { Scope } from '../mocks/obsidian';
 const modifiersOf = (e: KeyboardEvent): string =>
 	[e.ctrlKey && 'Ctrl', e.metaKey && 'Meta', e.altKey && 'Alt', e.shiftKey && 'Shift'].filter(Boolean).join(',');
 
-/** Routes window-capture keydowns to `modal.scope`; returns the detach function. */
+// Every attached stand-in keymap is detached after EACH test (registered here, on the importing
+// file's root), so a failing assertion can never leave a window listener pointing at a dead modal
+// for the next test's Escapes to hit first (SC-431 r1 review, LOW-2).
+const live = new Set<() => void>();
+afterEach(() => {
+	for (const detach of live) detach();
+	live.clear();
+});
+
+/** Routes window-capture keydowns to `modal.scope`; returns the (idempotent) detach function. */
 export function attachObsidianKeymap(modal: { scope: unknown }): () => void {
 	// jest maps `obsidian` to the mock, whose Scope carries the `handleKey` the real one keeps internal.
 	const scope = modal.scope as Scope;
@@ -20,7 +29,12 @@ export function attachObsidianKeymap(modal: { scope: unknown }): () => void {
 		}
 	};
 	window.addEventListener('keydown', onKey, true);
-	return () => window.removeEventListener('keydown', onKey, true);
+	const detach = (): void => {
+		window.removeEventListener('keydown', onKey, true);
+		live.delete(detach);
+	};
+	live.add(detach);
+	return detach;
 }
 
 /** Dispatches a real, bubbling, cancelable Escape keydown at `target`; true = not default-prevented. */
