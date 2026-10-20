@@ -19,6 +19,8 @@ import {
 	findGeneratedBlock,
 	listFences,
 	readAnchor,
+	readGeneratedFrom,
+	findGeneratedBlock,
 } from '@/framework/sidebar/anchor';
 
 describe('D8 Task 2 review fix — anchor.ts fence scanner (finding #4, CRITICAL)', () => {
@@ -160,6 +162,57 @@ describe('D8 Task 2 review fix — anchor.ts fence scanner (finding #4, CRITICAL
 				expect(parseYamlPkg(body, { version: '1.1' })[ANCHOR_KEY]).toBe(id);
 			}
 			expect(seen.size).toBeGreaterThan(1000); // the sweep really produced varied ids
+		});
+	});
+
+	// SC-360 (r1b ruling) - a note whose anchor was ALREADY rewritten by the old generator's ids
+	// (`056948` -> `56948`, `4e8540` -> `.inf`, ...) must be re-pinnable: the reader has to see
+	// the rewritten scalar as the anchor, so `ensureAnchor` reuses it. Before, `.inf` / `9.2e+51`
+	// read as "no anchor", `ensureAnchor` appended a second `_dse_anchor:` line, and the block
+	// died with "Map keys must be unique".
+	describe('SC-360: readers accept any YAML scalar token a rewritten id can become', () => {
+		const REWRITTEN = ['9.2e+51', '.inf', '4e+207', '56948', '0', '-.inf', '.nan', '1e-7'];
+
+		test.each(REWRITTEN)('readAnchor reads the rewritten id %s, and ensureAnchor reuses it (one line, body untouched)', (id) => {
+			const body = `current_value: 1\n${ANCHOR_KEY}: ${id}`;
+			expect(readAnchor(body)).toBe(id);
+			expect(ensureAnchor(body)).toEqual({ body, id });
+			expect(body.match(/_dse_anchor:/g)).toHaveLength(1);
+		});
+
+		test.each(REWRITTEN)('readGeneratedFrom / findGeneratedBlock read the rewritten _dse_from %s', (id) => {
+			const body = `_dse_from: ${id}\nround: 1`;
+			expect(readGeneratedFrom(body)).toBe(id);
+			const note = ['```ds-initiative', body, '```'].join('\n');
+			expect(findGeneratedBlock(note, 'ds-initiative', id)).toEqual({ language: 'ds-initiative', lineStart: 0, lineEnd: 3 });
+		});
+
+		test('quoted ids and the new letter-led ids still read correctly', () => {
+			expect(readAnchor(`${ANCHOR_KEY}: "056948"`)).toBe('056948');
+			expect(readAnchor(`${ANCHOR_KEY}: '056948'`)).toBe('056948');
+			expect(readAnchor(`${ANCHOR_KEY}: abc123`)).toBe('abc123');
+			expect(readAnchor(`${ANCHOR_KEY}: d0e5f9\r\nother: 1`)).toBe('d0e5f9');
+			expect(readGeneratedFrom('_dse_from: "056948"')).toBe('056948');
+			expect(readGeneratedFrom('_dse_from: f12345')).toBe('f12345');
+		});
+
+		test('the widened match does not swallow trailing content or a comment on the line', () => {
+			expect(readAnchor(`${ANCHOR_KEY}: 9.2e+51 extra words`)).toBeNull();
+			expect(readAnchor(`${ANCHOR_KEY}: abc123 # note`)).toBeNull();
+			expect(readAnchor(`${ANCHOR_KEY}: .inf, other`)).toBeNull();
+			expect(readAnchor(`${ANCHOR_KEY}: [a, b]`)).toBeNull();
+			expect(readGeneratedFrom('_dse_from: 9.2e+51 extra')).toBeNull();
+			expect(readGeneratedFrom('_dse_from: abc123 # note')).toBeNull();
+		});
+
+		test('the widened match never takes a value from a different key', () => {
+			expect(readAnchor('other: .inf')).toBeNull();
+			expect(readAnchor(`x${ANCHOR_KEY}: .inf`)).toBeNull();
+			expect(readAnchor(`${ANCHOR_KEY}_old: .inf`)).toBeNull();
+			expect(readAnchor('  _dse_anchor: .inf')).toBeNull(); // indented = nested under another key
+			expect(readAnchor('_dse_from: .inf')).toBeNull(); // the provenance key is not the identity key
+			expect(readGeneratedFrom(`${ANCHOR_KEY}: .inf`)).toBeNull();
+			expect(readAnchor(`${ANCHOR_KEY}:\nnext_key: .inf`)).toBeNull(); // empty value must not reach the next line
 		});
 	});
 

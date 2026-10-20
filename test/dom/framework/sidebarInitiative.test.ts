@@ -410,6 +410,32 @@ describe('D8 Task 3: initiative-in-sidebar end-to-end (spec §1 canonical use)',
 		},
 	);
 
+	// SC-360 (r1b ruling) - notes the old generator already damaged: the sidebar's first write
+	// rewrote the minted id (`056948` -> `56948`, `4e8540` -> `.inf`). Re-linking the panel from
+	// the note must repair them: the rewritten scalar is reused as the anchor, so there is exactly
+	// one `_dse_anchor:` line (no "Map keys must be unique"), the block renders and the panel mounts.
+	test.each([['9.2e+51'], ['.inf'], ['4e+207'], ['56948'], ['0']])(
+		'SC-360: re-pinning a block whose anchor was rewritten to %s reuses it - one anchor line, block renders, panel attaches',
+		async (rewritten) => {
+			const { app, services } = setup();
+			const note = sessionNote().replace('```ds-initiative\n', '```ds-initiative\n_dse_anchor: ' + rewritten + '\n');
+			app.vault.setFile('Session.md', note);
+
+			await sendToSidebar(services, 'Session.md', 'ds-initiative');
+			await flushAsync();
+			const { view } = await openSidebarLeaf(app);
+
+			expect(app.vault.getContent('Session.md')).toBe(note); // reused as found: not re-stamped
+			expect((app.vault.getContent('Session.md')!.match(/^_dse_anchor:/gm) ?? []).length).toBe(1);
+			expect(firstPanel(view).state.anchorId).toBe(rewritten);
+			const panelEl = panelElOf(view);
+			expect(panelEl.getAttribute('data-dse-sidebar-unavailable')).toBeNull();
+			expect(panelEl.querySelector('.dse-error-card')).toBeNull();
+			expect(initRoots(view).length).toBe(1);
+			expect(panelEl.querySelector('.dse-init__entry .dse-init__name')?.textContent).toBe('Frodo Baggins');
+		},
+	);
+
 	// SC-288 r2 (LOW-1, r1 review) — the remount branch's own `forgetMountedChild()` call
 	// (SidebarPanel.handleExternalChange) had no covering test: deleting that one line
 	// left the full suite green. It fixes a second, real "stuck panel" shape the ticket
