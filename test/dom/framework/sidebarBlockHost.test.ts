@@ -615,6 +615,38 @@ describe('SC-455: SidebarBlockHost on a block inside a blockquote / callout', ()
 		expect(host.canPersist).toBe(true);
 	});
 
+	test('a `>` (no space) callout with nested YAML: our own write is not mistaken for an external edit, and indentation is intact', async () => {
+		const onExternalChange = jest.fn();
+		const body = ['heroes:', ' - name: Alice', '   max_stamina: 30', `_dse_anchor: ${ANCHOR_ID}`].join('\n');
+		const note = ['>```ds-counter', ...body.split('\n').map((l) => (l.startsWith(' ') ? `> ${l}` : `>${l}`)), '>```'].join('\n');
+		const { vault, host } = await mounted(note, onExternalChange);
+
+		await expect(host.replaceSource(body)).resolves.toBe(true);
+		await flushAsync();
+
+		expect(vault.text('Note.md')).toBe(note);
+		expect(onExternalChange).not.toHaveBeenCalled();
+		const next = body.replace('30', '31');
+		await expect(host.replaceSource(next)).resolves.toBe(true);
+		await flushAsync();
+		expect(vault.text('Note.md')).toBe(note.replace('30', '31'));
+		expect(onExternalChange).not.toHaveBeenCalled();
+	});
+
+	test('a lost block reports it: lastWriteReported is true, and false after a write that lands', async () => {
+		const note = ['> [!note]', ...under('> ', block(1))].join('\n');
+		const { vault, host } = await mounted(note);
+		vault.setText('Note.md', '> [!note]\n> the block was deleted');
+		await host.replaceSource(BODY(2));
+		expect(host.lastWriteReported).toBe(true);
+
+		vault.setText('Note.md', note);
+		vault.emit('modify', fakeTFile('Note.md'));
+		await flushAsync();
+		await expect(host.replaceSource(BODY(3))).resolves.toBe(true);
+		expect(host.lastWriteReported).toBe(false);
+	});
+
 	test('regression guard: an un-nested block with a quote elsewhere in the note is written exactly as before', async () => {
 		const note = ['> a quote', '', ...block(1), '', '> another'].join('\n');
 		const { vault, host } = await mounted(note);

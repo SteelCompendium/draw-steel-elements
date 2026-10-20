@@ -37,7 +37,7 @@ properties:
   count: { type: integer }
 `;
 
-function makeCx(writes: string[], opts: { replaceSourceResult?: boolean } = {}) {
+function makeCx(writes: string[], opts: { replaceSourceResult?: boolean; hostReported?: boolean } = {}) {
 	const containerEl = document.createElement('div');
 	const replaceSource = async (body: string) => {
 		const ok = opts.replaceSourceResult ?? true;
@@ -50,6 +50,8 @@ function makeCx(writes: string[], opts: { replaceSourceResult?: boolean } = {}) 
 			mode: 'reading', sourcePath: 'N.md', containerEl, canPersist: true,
 			addChild: <T,>(c: T) => c, getBlockInfo: () => null, blockKey: () => 'k',
 			replaceSource,
+			// SC-455: a host that already told the user why the write failed
+			...(opts.hostReported ? { lastWriteReported: true } : {}),
 		},
 		prefs: { descriptors: () => [] },
 	} as never;
@@ -169,6 +171,18 @@ describe('Important 4: Save failure surfacing', () => {
 		expect(Notice.notices.length).toBe(before + 1);
 		expect(Notice.notices[Notice.notices.length - 1]).toMatch(/save/i);
 		expect(document.body.contains(modal.containerEl)).toBe(true); // still open
+		modal.close();
+	});
+
+	// SC-455 review LOW-2: one Notice per failed attempt - when the host already reported why
+	// (its own Notice), the form does not add a second one; the modal still stays open.
+	test('a false replaceSource the HOST already reported adds no second Notice, and the modal stays open', async () => {
+		const validation = createValidationService();
+		const before = Notice.notices.length;
+		const modal = openFormEditor(fakeOwner(), makeCx([], { replaceSourceResult: false, hostReported: true }), schemaDef(), 'name: Goblin', validation);
+		await modal.save();
+		expect(Notice.notices.length).toBe(before);
+		expect(document.body.contains(modal.containerEl)).toBe(true);
 		modal.close();
 	});
 });

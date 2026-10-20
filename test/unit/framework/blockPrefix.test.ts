@@ -77,6 +77,20 @@ describe('SC-455: stripBlockPrefix / addBlockPrefix', () => {
 	});
 });
 
+// SC-455 review HIGH-1: what is written must read back as itself, whatever the prefix spelling.
+describe('SC-455: stripBlockPrefix(addBlockPrefix(p, t), p) === t', () => {
+	const PREFIXES = ['> ', '>', '> > ', '>>', '> >', ' > ', '>   ', ''];
+	const TEXTS = ['name: A', '', ' one space', '  - name: x', '    deeper: 1', '\tTabbed', 'a:\n b:', '> already quoted', ' '];
+	test.each(PREFIXES.flatMap((p) => TEXTS.flatMap((t) => [[p, t, true], [p, t, false]] as const)))(
+		'prefix %j, text %j (trimBlank %s)',
+		(prefix, text, trimBlank) => {
+			for (const line of text.split('\n')) {
+				expect(stripBlockPrefix(addBlockPrefix(prefix, line, trimBlank), prefix)).toBe(line);
+			}
+		},
+	);
+});
+
 describe('SC-455: fenceLine splices with a prefix', () => {
 	test('parseOpenFenceLine reads the prefix; the info string keeps its spacing after the fence run', () => {
 		expect(parseOpenFenceLine('> > ```ds-counter  extra  ')).toEqual({ prefix: '> > ', fence: '```', language: 'ds-counter', info: 'ds-counter  extra' });
@@ -104,6 +118,15 @@ describe('SC-455: fenceLine splices with a prefix', () => {
 	test('replaceFenceBlock on an un-nested block is the pre-SC-455 splice, byte for byte (a "> " body line is just body)', () => {
 		const note = ['```ds-counter  extra', 'a: 1', '```', '> quote'].join('\n');
 		expect(replaceFenceBlock(note, 0, 2, 'a: 2\n> kept')).toBe(['```ds-counter  extra', 'a: 2', '> kept', '```', '> quote'].join('\n'));
+	});
+
+	test('a body with leading-space lines is written back unchanged under a `>` (no space) prefix, again and again', () => {
+		const note = ['>```ds-counter', '>a:', '>  b:', '>    c: 1', '>```'].join('\n');
+		const body = blockBodyLines(note.split('\n'), 0, 4).join('\n');
+		expect(body).toBe('a:\n b:\n   c: 1');
+		const once = replaceFenceBlock(note, 0, 4, body)!;
+		expect(once).toBe(note);
+		expect(replaceFenceBlock(once, 0, 4, body)).toBe(note);
 	});
 
 	test('replaceFenceBody swaps only the body: both fence lines stay byte-identical (trailing space, CRLF), prefix and ending re-applied', () => {

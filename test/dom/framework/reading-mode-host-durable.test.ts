@@ -752,7 +752,7 @@ describe('SC-455: ReadingModeBlockHost.replaceSource on a block inside a blockqu
 		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(false);
 
 		expect(app.vault.getContent('Note.md')).toBe(live);
-		expect(Notice.notices).toEqual([unsavableWriteMessage('Note')]);
+		expect(Notice.notices).toEqual([unsavableWriteMessage('Note', true)]);
 	});
 
 	test('a list inside a callout works: the fence under `> - item` keeps its `>   ` prefix on every written line', async () => {
@@ -766,9 +766,9 @@ describe('SC-455: ReadingModeBlockHost.replaceSource on a block inside a blockqu
 		expect(app.vault.getContent('Note.md')).toBe(['top', '> - item', ...under('>   ', CTR(2)), '> tail'].join('\n'));
 	});
 
-	test('a fence indented a few spaces outside any quote is another unsupported shape: the Notice, the note unchanged', async () => {
+	test('a fence indented a space outside any quote is another unsupported shape: the Notice (no list hint: it is no list), the note unchanged', async () => {
 		const app = new App();
-		const live = ['top', '', ...CTR(1).map((l) => `  ${l}`), '', 'below'].join('\n');
+		const live = ['top', '', ...CTR(1).map((l) => ` ${l}`), '', 'below'].join('\n');
 		app.vault.setFile('Note.md', live);
 		const host = hostFor(app, sectionOf(live, 2, 5), bodyOf(1));
 
@@ -800,6 +800,84 @@ describe('SC-455: ReadingModeBlockHost.replaceSource on a block inside a blockqu
 
 		expect(app.vault.getContent('Note.md')).toBe(live);
 		expect(Notice.notices).toHaveLength(1);
+	});
+});
+
+// SC-455 review HIGH-1: a `>` opener with no space after it. Body lines that start with a space
+// (nested YAML, a raw-mode form save) used to lose one space per write, so the host's own record of
+// what it wrote no longer matched the disk.
+describe('SC-455: a block whose prefix has no space after `>` keeps its leading-space lines', () => {
+	let warn: jest.SpyInstance;
+	beforeEach(() => {
+		resetDroppedWriteNotices();
+		Notice.notices.length = 0;
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => warn.mockRestore());
+
+	const NESTED = 'heroes:\n - name: Alice\n   max_stamina: 30\nmalice:\n value: 1';
+	for (const prefix of ['>', '>>', '> >']) {
+		test(`prefix ${JSON.stringify(prefix)}: two writes on one host both land, no Notice, indentation intact`, async () => {
+			const app = new App();
+			// the marker's own space, then the line (so ` - name` is `>  - name`, which reads back as ` - name`)
+			const quote = (l: string): string => (l.startsWith(' ') ? `${prefix} ${l}` : prefix + l);
+			const note = [`${prefix}\`\`\`ds-counter`, ...NESTED.split('\n').map(quote), `${prefix}\`\`\``].join('\n');
+			app.vault.setFile('Note.md', note);
+			const section = { current: { text: note, lineStart: 0, lineEnd: 6 } };
+			const host = new ReadingModeBlockHost(new Plugin(app) as any, document.createElement('div'), switchableCtx('Note.md', section) as any, 'ds-counter');
+			host.setMountedBody(NESTED);
+
+			await expect(host.replaceSource(NESTED)).resolves.toBe(true); // a raw-mode form save without edits
+			expect(app.vault.getContent('Note.md')).toBe(note); // byte-identical, not one space short
+			const edited = NESTED.replace('value: 1', 'value: 2');
+			await expect(host.replaceSource(edited)).resolves.toBe(true);
+			await expect(host.replaceSource(edited.replace('value: 2', 'value: 3'))).resolves.toBe(true);
+
+			expect(app.vault.getContent('Note.md')).toBe(note.replace('value: 1', 'value: 3'));
+			expect(Notice.notices).toHaveLength(0);
+		});
+	}
+});
+
+// SC-455 review LOW-1 / INFO-2: nothing is ever written to a guessed twin, and a lost write never
+// goes unreported.
+describe('SC-455: a write that cannot be placed never guesses (and reports)', () => {
+	let warn: jest.SpyInstance;
+	beforeEach(() => {
+		resetDroppedWriteNotices();
+		Notice.notices.length = 0;
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => warn.mockRestore());
+
+	test('a missing TFile shows the unsavable Notice and reports it (no silent false)', async () => {
+		const app = new App();
+		const live = ['> [!note]', '> ```ds-counter', '> name: A', '> ```'].join('\n');
+		const section = { current: { text: live, lineStart: 0, lineEnd: 3 } };
+		const host = new ReadingModeBlockHost(new Plugin(app) as any, document.createElement('div'), switchableCtx('Gone/Note.md', section) as any, 'ds-counter');
+		host.setMountedBody('name: A');
+
+		await expect(host.replaceSource('name: B')).resolves.toBe(false);
+
+		expect(Notice.notices).toEqual([unsavableWriteMessage('Note')]);
+		expect(host.lastWriteReported).toBe(true);
+	});
+
+	test('lastWriteReported is true for an unplaceable write, false again after a write that lands', async () => {
+		const app = new App();
+		const live = ['> [!note]', '> just text'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const section = { current: { text: live, lineStart: 0, lineEnd: 1 } as { text: string; lineStart: number; lineEnd: number } };
+		const host = new ReadingModeBlockHost(new Plugin(app) as any, document.createElement('div'), switchableCtx('Note.md', section) as any, 'ds-counter');
+		await host.replaceSource('name: B');
+		expect(host.lastWriteReported).toBe(true);
+
+		const ok = ['> ```ds-counter', '> name: A', '> ```'].join('\n');
+		app.vault.setFile('Note.md', ok);
+		section.current = { text: ok, lineStart: 0, lineEnd: 2 };
+		host.setMountedBody('name: A');
+		await expect(host.replaceSource('name: B')).resolves.toBe(true);
+		expect(host.lastWriteReported).toBe(false);
 	});
 });
 
@@ -884,6 +962,35 @@ describe('SC-455: Live Preview callout (no section info)', () => {
 
 		await lower.replaceSource(bodyOf(6, 'Twin'));
 		expect(app.vault.getContent('Note.md')).toBe(['> [!note] T', ...CTR(1, 'Twin'), '> mid', ...CTR(6, 'Twin')].join('\n'));
+	});
+
+	test('two identical blocks, widget not attached to the editor yet: the lower one is never written into the upper twin', async () => {
+		const app = new App();
+		const live = ['> [!note] T', ...CTR(1, 'Twin'), '> mid', ...CTR(1, 'Twin')].join('\n');
+		app.vault.setFile('Note.md', live);
+		const [upper, lower] = lpHost(app, live, 0, { blocks: 2, attached: false });
+		upper.setMountedBody(bodyOf(1, 'Twin'));
+		lower.setMountedBody(bodyOf(1, 'Twin'));
+
+		await lower.replaceSource(bodyOf(6, 'Twin'));
+
+		// Either it landed in the LOWER block (resolved by DOM order) or it was refused and reported; never the upper one.
+		const out = app.vault.getContent('Note.md')!;
+		expect(out.split('\n').slice(0, 5)).toEqual(live.split('\n').slice(0, 5));
+		if (out === live) expect(Notice.notices).toEqual([unsavableWriteMessage('Note')]);
+	});
+
+	test('a single block, widget not attached yet: the write still lands (the body is unique)', async () => {
+		const app = new App();
+		const live = ['# N', '> [!note] T', ...CTR(1), '> tail'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const [host] = lpHost(app, live, 1, { attached: false });
+		host.setMountedBody(bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(['# N', '> [!note] T', ...CTR(2), '> tail'].join('\n'));
+		expect(Notice.notices).toHaveLength(0);
 	});
 
 	test('a block rendered BY a DSE element inside a Live Preview callout (a nested render) stays read-only', () => {

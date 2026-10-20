@@ -62,16 +62,19 @@ describe('SC-455: unsavable-write Notice', () => {
 	});
 	afterEach(() => warn.mockRestore());
 
-	test('says plainly that the change was not saved, names the note and the list case', () => {
+	test('says plainly that the change was not saved and names the note; the list hint only for a list shape', () => {
 		expect(unsavableWriteMessage('Session 3')).toBe(
+			"Draw Steel Elements: a change to a block in Session 3 was not saved — the plugin can't tell where this block sits in the note.",
+		);
+		expect(unsavableWriteMessage('Session 3', true)).toBe(
 			"Draw Steel Elements: a change to a block in Session 3 was not saved — the plugin can't tell where this block sits in the note (blocks inside lists can't be edited yet).",
 		);
 	});
 
 	test('shows once per note per 5 s, always warns, and keeps its own clock apart from the dropped-write one', () => {
-		expect(notifyUnsavableWrite('A.md', 'A', 1_000)).toBe(true);
-		expect(notifyUnsavableWrite('A.md', 'A', 1_000 + DROPPED_WRITE_NOTICE_INTERVAL_MS - 1)).toBe(false);
-		expect(notifyUnsavableWrite('A.md', 'A', 1_000 + DROPPED_WRITE_NOTICE_INTERVAL_MS)).toBe(true);
+		expect(notifyUnsavableWrite('A.md', 'A', false, 1_000)).toBe(true);
+		expect(notifyUnsavableWrite('A.md', 'A', false, 1_000 + DROPPED_WRITE_NOTICE_INTERVAL_MS - 1)).toBe(false);
+		expect(notifyUnsavableWrite('A.md', 'A', false, 1_000 + DROPPED_WRITE_NOTICE_INTERVAL_MS)).toBe(true);
 		// a dropped-write Notice moments after an unsavable one is a different message and still shows
 		expect(notifyDroppedWrite('A.md', 'A', 1_000 + DROPPED_WRITE_NOTICE_INTERVAL_MS + 1)).toBe(true);
 		expect(Notice.notices).toEqual([unsavableWriteMessage('A'), unsavableWriteMessage('A'), droppedWriteMessage('A')]);
