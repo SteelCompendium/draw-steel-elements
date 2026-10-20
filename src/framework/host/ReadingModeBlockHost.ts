@@ -48,17 +48,26 @@
 // by its body, nearest the last known line (identical twins resolve by distance). A write
 // that cannot be placed is dropped with a Notice (droppedWriteNotice.ts). A host whose
 // section never resolved (print/export, canvas, blocks nested in another view's
-// MarkdownRenderer.render) never gets this identity. Hover popovers are NOT in that list —
+// MarkdownRenderer.render) never gets this identity.
+//
+// SC-455 — a block inside a blockquote / callout. Measured in real Obsidian 1.14.4: in Reading view
+// getSectionInfo returns the WHOLE quote/callout (lineStart = its first line, e.g. the `> [!note]`
+// header, not the fence), so the host finds its own fence INSIDE that window (`locateInSection`: by
+// body, identical twins by their DOM order); in Live Preview a callout is one CodeMirror widget whose
+// processors get NO section info at all, so the host finds the callout through the editor instead
+// (`livePreviewCalloutSection`: cm.posAtDOM). The write re-emits the block's own `> ` prefix on every
+// line (fenceLine.ts / blockPrefix.ts), and a write that cannot be placed says so (a Notice) rather
+// than returning false silently. Hover popovers are NOT in that list —
 // measured on Obsidian 1.14.2 (base and head alike, 2026-09-24), a hover popover's section
 // RESOLVES and a click writes the correct block, same as any other reading-mode context.
 import { MarkdownRenderChild, TFile } from 'obsidian';
-import type { Component, MarkdownPostProcessorContext, MarkdownSectionInformation, Plugin } from 'obsidian';
+import type { Component, MarkdownPostProcessorContext, MarkdownSectionInformation, MarkdownView, Plugin } from 'obsidian';
 import type { BlockHost, BlockInfo, RenderMode } from './BlockHost';
 import type { PreviewScrollPin } from './previewScrollPin';
 import { listFences } from '../sidebar/anchor';
-import { notifyDroppedWrite } from './droppedWriteNotice';
+import { notifyDroppedWrite, notifyUnsavableWrite } from './droppedWriteNotice';
 import { stripCr } from './lineEnding';
-import { OPEN_FENCE, parseOpenFenceLine, replaceFenceBlock } from './fenceLine';
+import { blockBodyLines, parseOpenFenceLine, replaceFenceBlock } from './fenceLine';
 import type { ViewRegistry, ViewRegistryEntry } from './viewRegistry';
 
 /** Matches a fence-close line, capturing the fence run. */
@@ -98,13 +107,14 @@ function locateUnterminatedTrailingFence(
 	let i = 0;
 	let candidate: { lineStart: number; lineEnd: number } | null = null;
 	while (i < lines.length) {
-		const open = lines[i].match(OPEN_FENCE);
-		if (!open) {
+		const open = parseOpenFenceLine(lines[i]);
+		if (!open || open.prefix !== '') {
+			// (SC-455: a trailing fence that never closes is only ever recovered for an un-nested block.)
 			i++;
 			continue;
 		}
-		const fenceChar = open[1][0];
-		const fenceLen = open[1].length;
+		const fenceChar = open.fence[0];
+		const fenceLen = open.fence.length;
 		let j = i + 1;
 		let closed = false;
 		while (j < lines.length) {
@@ -120,7 +130,7 @@ function locateUnterminatedTrailingFence(
 			// open. Abandon it (same recovery as iterateFences: don't treat as opaque
 			// through to EOF) and keep scanning from the very next line, so a later,
 			// better-matching trailing open can still override.
-			if (open[2] === language) candidate = { lineStart: i, lineEnd: lines.length - 1 };
+			if (open.language === language) candidate = { lineStart: i, lineEnd: lines.length - 1 };
 			i++;
 			continue;
 		}
@@ -156,7 +166,7 @@ export function locateByBody(
 	let best: { lineStart: number; lineEnd: number } | null = null;
 	let bestDistance = Infinity;
 	for (const info of listFences(lf, language)) {
-		const candidate = normalizeBody(lines.slice(info.lineStart + 1, info.lineEnd).join('\n'));
+		const candidate = normalizeBody(blockBodyLines(lines, info.lineStart, info.lineEnd).join('\n'));
 		if (candidate !== wanted) continue;
 		const distance = Math.abs(info.lineStart - nearLine);
 		if (distance < bestDistance) {
@@ -181,6 +191,53 @@ export function locateByBody(
 	return best;
 }
 
+/**
+ * SC-455: the `language` block inside a Reading-view / Live Preview SECTION WINDOW
+ * `[section.lineStart, section.lineEnd]` of `content` — the whole quote or callout Obsidian reports
+ * for a block nested in one, where the section's first line is NOT the fence. Fence lines inclusive.
+ *  - the block whose (prefix-free) body equals `body` (any block of the language when `body` is null);
+ *  - several equal ones (identical twins in one callout) are told apart by `ordinal` — this block's
+ *    position among the language's blocks in the callout's DOM, which is document order — else by the
+ *    one nearest `near`; 'ambiguous' when even that cannot pick one;
+ *  - null when the window holds no such block.
+ */
+export function locateInSection(
+	content: string,
+	section: { lineStart: number; lineEnd: number },
+	language: string,
+	body: string | null,
+	ordinal: number,
+	near: number | null,
+): { lineStart: number; lineEnd: number } | 'ambiguous' | null {
+	const lines = stripCr(content).split('\n');
+	const window = lines.slice(section.lineStart, section.lineEnd + 1);
+	// A section starts at a block boundary, so scanning the window on its own sees what a scan of the whole note would.
+	const fences = listFences(window.join('\n'), language).map((f) => ({
+		lineStart: f.lineStart + section.lineStart,
+		lineEnd: f.lineEnd + section.lineStart,
+	}));
+	const wanted = body === null ? null : normalizeBody(body);
+	const matches =
+		wanted === null
+			? fences
+			: fences.filter((f) => normalizeBody(blockBodyLines(lines, f.lineStart, f.lineEnd).join('\n')) === wanted);
+	if (matches.length <= 1) return matches[0] ?? null;
+	const byOrder = ordinal >= 0 ? fences[ordinal] : undefined;
+	if (byOrder && matches.includes(byOrder)) return byOrder;
+	if (near !== null) {
+		const ranked = matches.map((f) => ({ f, d: Math.abs(f.lineStart - near) })).sort((a, b) => a.d - b.d);
+		if (ranked[0].d < ranked[1].d) return ranked[0].f;
+	}
+	return 'ambiguous';
+}
+
+/** CodeMirror's EditorView, as much of it as the Live Preview callout lookup touches. */
+interface CmEditorView {
+	dom: HTMLElement;
+	posAtDOM(node: Node, offset?: number): number;
+	state: { doc: { lineAt(pos: number): { number: number } } };
+}
+
 export class ReadingModeBlockHost implements BlockHost {
 	readonly mode: RenderMode = 'reading';
 	private el: HTMLElement;
@@ -201,6 +258,13 @@ export class ReadingModeBlockHost implements BlockHost {
 	private knownLineStart: number | null = null;
 	/** The fence language read from the document (null until an opening fence parses). */
 	private knownLanguage: string | null = null;
+	/** SC-455: this block lives in a Live Preview callout widget — Obsidian gives those no section
+	 *  info, so the durable identity stands in for the section the host never resolves once. */
+	private lpCalloutSeen = false;
+	/** SC-455: the block's own fence inside the section window, as of the last section read (null = not found). */
+	private ownFence: { lineStart: number; lineEnd: number; language: string } | null = null;
+	/** SC-455: the block's position among the language's blocks in its callout's DOM, as of the last time it was attached. */
+	private lastOrdinal = -1;
 
 	/** SC-340: this host's registry entry (set by ViewRegistry.own). */
 	private entry: ViewRegistryEntry | null = null;
@@ -296,19 +360,104 @@ export class ReadingModeBlockHost implements BlockHost {
 	/** SC-343: every section read goes through here so the durable position stays fresh. */
 	private readSection(): MarkdownSectionInformation | null {
 		if (this.ctx.sourcePath === '') return null; // canvas: quarantined, see file header
-		const section = this.ctx.getSectionInfo(this.containerEl);
+		let section = this.ctx.getSectionInfo(this.containerEl);
+		if (!section && this.livePreviewCalloutWidget()) {
+			// SC-455: Live Preview gives a callout's blocks no section; remember that this is one (so the
+			// durable identity applies even before the editor can place it) and ask the editor.
+			this.lpCalloutSeen = true;
+			this.knownLanguage ??= this.alias;
+			this.knownLineStart ??= 0;
+			section = this.livePreviewCalloutSection();
+		}
 		if (!section) return null;
 		this.sectionResolvedOnce = true;
-		this.knownLineStart = section.lineStart;
-		const fence = parseOpenFence(section.text, section.lineStart);
-		if (fence) this.knownLanguage = fence.language;
+		this.ownFence = this.findOwnFence(section.text, section);
+		this.knownLineStart = this.ownFence ? this.ownFence.lineStart : section.lineStart;
+		if (this.ownFence) this.knownLanguage = this.ownFence.language;
 		return section;
+	}
+
+	/**
+	 * SC-455: this block's fence within `text` for `section`: the section's own first line when that is
+	 * a plain (un-nested) fence — every block outside a quote/callout, exactly as before — else the
+	 * block found inside the quote/callout window (`locateInSection`).
+	 */
+	private findOwnFence(
+		text: string,
+		section: { lineStart: number; lineEnd: number },
+	): { lineStart: number; lineEnd: number; language: string } | null {
+		const open = parseOpenFence(text, section.lineStart);
+		if (open && open.prefix === '') return { lineStart: section.lineStart, lineEnd: section.lineEnd, language: open.language };
+		const found = locateInSection(text, section, this.alias, this.knownBody, this.domOrdinal(), this.knownLineStart);
+		if (found === null || found === 'ambiguous') return null;
+		return { ...found, language: parseOpenFence(text, found.lineStart)?.language ?? this.alias };
+	}
+
+	/** SC-455: the Live Preview callout widget this block is rendered in (not a nested render inside a DSE element), or null. */
+	private livePreviewCalloutWidget(): Element | null {
+		const el = this.containerEl;
+		const widget = el.closest('.cm-embed-block.cm-callout');
+		if (!widget || el.parentElement?.closest('[data-dse-element]')) return null;
+		return widget;
+	}
+
+	/**
+	 * SC-455: Obsidian's Live Preview draws a callout as one CodeMirror widget and hands its blocks a
+	 * context whose getSectionInfo is null (measured, 1.14.4). The editor knows where the widget sits:
+	 * the section is the callout's lines, starting at the document line `cm.posAtDOM(widget)` reports.
+	 * Null while the widget is not attached to an editor yet (the host's construction) or is gone.
+	 */
+	private livePreviewCalloutSection(): MarkdownSectionInformation | null {
+		const widget = this.livePreviewCalloutWidget();
+		if (!widget) return null;
+		for (const leaf of this.plugin.app.workspace.getLeavesOfType('markdown')) {
+			const view = leaf.view as MarkdownView;
+			if (view.file?.path !== this.ctx.sourcePath) continue;
+			const cm = (view.editor as unknown as { cm?: CmEditorView } | undefined)?.cm;
+			if (!cm?.dom.contains(widget)) continue;
+			try {
+				const lineStart = cm.state.doc.lineAt(cm.posAtDOM(widget)).number - 1;
+				const text = view.editor.getValue();
+				const lines = text.split('\n');
+				let lineEnd = lineStart;
+				while (lineEnd + 1 < lines.length && /^[ ]{0,3}>/.test(lines[lineEnd + 1])) lineEnd++;
+				return { text, lineStart, lineEnd };
+			} catch {
+				continue; // the widget is not in this editor's viewport / document any more
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * SC-455: this block's position among the blocks of its language in its quote/callout (document
+	 * order), from the DOM — what tells identical twins in one callout apart. -1 when it cannot be
+	 * read (no callout, detached); the last good value is kept for a write after the section is gone.
+	 */
+	private domOrdinal(): number {
+		const el = this.containerEl;
+		let top: Element | null = null;
+		for (let n = el.parentElement; n; n = n.parentElement) {
+			if (n.matches('.callout, blockquote, .cm-embed-block')) top = n;
+		}
+		if (!top) return this.lastOrdinal;
+		const alias = this.alias;
+		const blocks = Array.from(top.querySelectorAll('div, code')).filter(
+			(n) =>
+				((n.tagName === 'DIV' && n.classList.contains(`block-language-${alias}`)) ||
+					// a sibling Obsidian has not handed to its processor yet is still a bare <pre><code>
+					(n.tagName === 'CODE' && n.parentElement?.tagName === 'PRE' && n.classList.contains(`language-${alias}`))) &&
+				!n.parentElement?.closest('[data-dse-element]'),
+		);
+		const own = blocks.indexOf(el);
+		if (own >= 0) this.lastOrdinal = own;
+		return own >= 0 ? own : this.lastOrdinal;
 	}
 
 	/** SC-343: identity good enough to find the block again by its body. */
 	private get hasDurableIdentity(): boolean {
 		return (
-			this.sectionResolvedOnce &&
+			(this.sectionResolvedOnce || this.lpCalloutSeen) &&
 			this.knownBody !== null &&
 			this.knownLineStart !== null &&
 			this.knownLanguage !== null
@@ -346,6 +495,8 @@ export class ReadingModeBlockHost implements BlockHost {
 	getBlockInfo(): BlockInfo | null {
 		const section = this.readSection();
 		if (!section) return null;
+		// SC-455: the block's own fence — for a block in a quote/callout that is inside the section, not its first line.
+		if (this.ownFence) return { language: this.ownFence.language, lineStart: this.ownFence.lineStart, lineEnd: this.ownFence.lineEnd };
 		const fence = parseOpenFence(section.text, section.lineStart);
 		return {
 			language: fence?.language ?? this.alias,
@@ -367,6 +518,7 @@ export class ReadingModeBlockHost implements BlockHost {
 
 		let wrote = false;
 		let dropped = false;
+		let unplaceable = false;
 		let changedContent = false;
 		let settled = false;
 		// SC-340 §6.2: the claim ticket must exist before Vault.process — Obsidian fires
@@ -379,14 +531,21 @@ export class ReadingModeBlockHost implements BlockHost {
 		try {
 			await this.plugin.app.vault.process(abstractFile, (content) => {
 				const target = this.resolveWriteTarget(content, section);
-				if (target === 'abort') return content;
+				if (target === 'abort') {
+					unplaceable = true; // SC-455: a write that cannot land is never silent
+					return content;
+				}
 				if (target === 'miss') {
 					dropped = true;
 					return content;
 				}
 				// SC-453: the splice re-emits the block in the note's own line ending.
+				// SC-455: and with the block's own quote/callout prefix on every line it writes.
 				const next = replaceFenceBlock(content, target.lineStart, target.lineEnd, newSource);
-				if (next === null) return content; // resolveWriteTarget guarantees an open fence; defensive
+				if (next === null) {
+					unplaceable = true; // resolveWriteTarget guarantees an open fence; defensive
+					return content;
+				}
 				wrote = true;
 				// SC-343 fix round 1: set synchronously with the splice, inside the callback — not
 				// after the `await` resumes. Two overlapping replaceSource calls on one host (a
@@ -430,6 +589,7 @@ export class ReadingModeBlockHost implements BlockHost {
 			}
 		}
 		if (dropped) notifyDroppedWrite(this.ctx.sourcePath, abstractFile.basename);
+		if (unplaceable) notifyUnsavableWrite(this.ctx.sourcePath, abstractFile.basename);
 		return wrote;
 	}
 
@@ -439,7 +599,9 @@ export class ReadingModeBlockHost implements BlockHost {
 	 *    an unterminated fence running to the last line, and the body we last knew);
 	 *  - else, with a durable identity, the block found by that body nearest the last line;
 	 *  - 'miss' when the identity exists but nothing matches (dropped + Notice);
-	 *  - 'abort' when there is no identity at all (today's silent no-write).
+	 *  - 'abort' when the block cannot be placed at all — no readable fence at the section, no
+	 *    identity, or a callout's identical twins that cannot be told apart (SC-455: this used to
+	 *    be a silent no-write; the caller now says so with a Notice).
 	 */
 	private resolveWriteTarget(
 		content: string,
@@ -449,7 +611,17 @@ export class ReadingModeBlockHost implements BlockHost {
 			const lines = content.split('\n');
 			const { lineStart, lineEnd } = section;
 			const openFence = parseOpenFence(content, lineStart);
-			const openOk = openFence !== null;
+			if (!openFence || openFence.prefix !== '') {
+				// SC-455: the section is a quote/callout (or a list, or something else whose first line is no
+				// plain fence): find this block's own fence inside the window.
+				const found = locateInSection(content, section, this.alias, this.knownBody, this.domOrdinal(), this.knownLineStart);
+				if (found === 'ambiguous') return 'abort';
+				if (found) {
+					this.knownLineStart = found.lineStart;
+					return found;
+				}
+			}
+			const openOk = openFence !== null && openFence.prefix === '';
 			const closeOk = parseCloseFence(lines[lineEnd]) !== null;
 			// SC-343 final review (close-fence hardening, data-loss note): "unterminated at
 			// EOF" must ALSO confirm there is no matching close fence anywhere inside the

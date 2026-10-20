@@ -47,14 +47,16 @@
 import type { Component, Plugin, TFile } from 'obsidian';
 import type { BlockHost, BlockInfo, RenderMode } from './BlockHost';
 import { findAnchoredBlock, findFenceByBody, listFences } from '../sidebar/anchor';
-import { replaceFenceBlock } from './fenceLine';
+import { notifyDroppedWrite } from './droppedWriteNotice';
+import { blockBodyLines, replaceFenceBlock } from './fenceLine';
 import { splitLines } from './lineEnding';
 
 /** Extracts the body text (lines strictly between the fences) at `info` from `content`.
  *  SC-453: always LF-joined (a CRLF note's `\r` terminators are dropped), so what the element
- *  parses — and what the self-echo guard compares — never depends on the note's line ending. */
+ *  parses — and what the self-echo guard compares — never depends on the note's line ending.
+ *  SC-455: and prefix-free — a block inside a callout is parsed without its `> `. */
 function extractBody(content: string, info: BlockInfo): string {
-	return splitLines(content).slice(info.lineStart + 1, info.lineEnd).join('\n');
+	return blockBodyLines(splitLines(content), info.lineStart, info.lineEnd).join('\n');
 }
 
 export class SidebarBlockHost implements BlockHost {
@@ -294,16 +296,24 @@ export class SidebarBlockHost implements BlockHost {
 		if (!this.canPersist) return false;
 
 		let wrote = false;
+		let lost = false;
 		let finalContent: string | null = null;
 		await this.plugin.app.vault.process(this.backingFile, (content) => {
 			// SC-158: locate against the LIVE content the same way getBlockInfo does — by
 			// anchor, or by body for a strict-body element (which has none).
 			const info = this.locate(content);
-			if (!info) return content; // block moved/vanished under us: abort, don't corrupt
+			if (!info) {
+				lost = true; // block moved/vanished under us: abort, don't corrupt — and say so (SC-455)
+				return content;
+			}
 
 			// SC-453: the splice re-emits the block in the note's own line ending.
+			// SC-455: and with the block's own quote/callout prefix on every line it writes.
 			const next = replaceFenceBlock(content, info.lineStart, info.lineEnd, newSource);
-			if (next === null) return content;
+			if (next === null) {
+				lost = true;
+				return content;
+			}
 			// SC-158: a strict-body element is addressed BY its body, so our own write has
 			// to move the binding with it or the very next lookup misses. (No shipped
 			// strict-body element persists — ds-scc is shape:"static" — so this is
@@ -338,6 +348,9 @@ export class SidebarBlockHost implements BlockHost {
 			// subsequent interaction silently failing to save forever.
 			if (this.getBlockInfo() === null) this.notifyAnchorLost();
 		}
+		// SC-455: a write that could not land is never silent — the same "not saved" Notice the
+		// reading-mode host shows when its block changed on disk first.
+		if (lost) notifyDroppedWrite(this.backingFile.path, this.backingFile.basename);
 		return wrote;
 	}
 

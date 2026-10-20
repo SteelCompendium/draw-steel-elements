@@ -6,7 +6,9 @@ import { Notice, TFile } from 'obsidian';
 import type { App, Editor, MarkdownFileInfo, MarkdownView, Plugin } from 'obsidian';
 import { DseSidebarView, VIEW_TYPE_DSE_SIDEBAR, isUnderDeletedPath, renamedPanelPath } from './DseSidebarView';
 import type { DseSidebarServices, DseSidebarState, SidebarPanelState } from './DseSidebarView';
-import { detectEol, splitLines, terminateLines } from '../host/lineEnding';
+import { stripBlockPrefix } from '../host/blockPrefix';
+import { blockBodyLines, replaceFenceBody } from '../host/fenceLine';
+import { splitLines } from '../host/lineEnding';
 import { ensureAnchor, fenceAlias, findFenceAtLine, listFences, matchFenceLine, isFenceClose } from './anchor';
 
 /** Top-down scan (fences don't nest — same rationale as anchor.ts's scanner, whose exact
@@ -23,15 +25,19 @@ import { ensureAnchor, fenceAlias, findFenceAtLine, listFences, matchFenceLine, 
  *  Before this, a fence carrying extra info-string content (e.g. ```` ```ds-counter extra
  *  ````) derived a different "alias" here than the chrome pin item's
  *  `getBlockInfo().language` did, so the two entry points disagreed about the identity of
- *  the exact same block. */
+ *  the exact same block.
+ *
+ *  SC-455: a fence may sit inside a blockquote / callout (`> ```ds-counter`); it is then only
+ *  closed by a line in the same quote, and a line that has left the quote ends the open fence. */
 function aliasAtLine(editor: Editor, line: number): string | null {
-	let open: { fenceChar: string; fenceLen: number; alias: string } | null = null;
+	let open: { fenceChar: string; fenceLen: number; alias: string; prefix: string } | null = null;
 	for (let i = 0; i < line; i++) {
-		const match = matchFenceLine(editor.getLine(i));
-		if (!match) continue;
+		const text = editor.getLine(i);
+		if (open !== null && stripBlockPrefix(text, open.prefix) === null) open = null; // the quote ended, unclosed
 		if (open === null) {
-			open = { fenceChar: match.marker[0], fenceLen: match.marker.length, alias: fenceAlias(match.rest) };
-		} else if (isFenceClose(open, editor.getLine(i))) {
+			const match = matchFenceLine(text);
+			if (match) open = { fenceChar: match.marker[0], fenceLen: match.marker.length, alias: fenceAlias(match.rest), prefix: match.prefix };
+		} else if (isFenceClose(open, text)) {
 			open = null;
 		}
 	}
@@ -236,11 +242,11 @@ async function bindBlockToSidebar(
 		const info = atCursor ?? fences[0];
 		if (!atCursor && fences.length > 1) noticeLine = info.lineStart + 1; // 1-based, for the user
 
-		const lines = content.split('\n');
 		// SC-453: the body is LF-joined whatever the note's line ending (a CRLF note's `\r`
 		// terminators dropped), so the strict-body identity below and ensureAnchor see the same
 		// text as an LF note; the stamped lines get the note's own ending back when spliced in.
-		const body = splitLines(content).slice(info.lineStart + 1, info.lineEnd).join('\n');
+		// SC-455: and prefix-free — a block inside a callout is read, and re-stamped, without its `> `.
+		const body = blockBodyLines(splitLines(content), info.lineStart, info.lineEnd).join('\n');
 		bound = true;
 		if (strictBody) {
 			boundBody = body;
@@ -256,8 +262,7 @@ async function bindBlockToSidebar(
 		anchorId = id;
 		if (anchoredBody === body) return content; // already anchored — no write needed
 
-		lines.splice(info.lineStart + 1, info.lineEnd - info.lineStart - 1, ...terminateLines(anchoredBody.split('\n'), detectEol(content)));
-		return lines.join('\n');
+		return replaceFenceBody(content, info.lineStart, info.lineEnd, anchoredBody) ?? content;
 	});
 	if (unreadableAnchor) return 'unreadable-anchor';
 	if (!bound) return 'not-found'; // no matching block found

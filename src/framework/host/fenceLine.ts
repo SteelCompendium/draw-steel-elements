@@ -8,15 +8,19 @@
 // line past the fence characters — language token, inter-token spacing and extra tokens —
 // so the re-emit is `${fence}${info}`.
 //
+// SC-455 — a block inside a blockquote / callout carries a PREFIX (`> `, `> > `, `>`) on every line.
+// `parseOpenFenceLine` reads it off the opening line (blockPrefix.ts owns what a prefix is), and the
+// splices below re-emit it on every line they write; for an un-nested block it is '' and nothing changes.
+//
 // SC-453 — `replaceFenceBlock` is the ONE splice both hosts use to rewrite a located block, and
 // where a write picks up the note's own line ending (see lineEnding.ts for the policy).
 
-import { detectEol, stripCr } from './lineEnding';
-
-/** Matches a fence-open line, capturing the fence run and the language token. */
-export const OPEN_FENCE = /^([`~]{3,})(\S*)/;
+import { addBlockPrefix, blankLinesAreTrimmed, matchFenceMarker, stripBlockPrefix } from './blockPrefix';
+import { detectEol, stripCr, terminateLines } from './lineEnding';
 
 export interface OpenFenceLine {
+	/** SC-455: the blockquote/callout prefix in front of the fence run, exactly as written ('' when un-nested). */
+	prefix: string;
 	/** The fence run exactly as written (e.g. "```", "~~~", "````"). */
 	fence: string;
 	/** The first whitespace-delimited token after the fence run (the block type); may be ''. */
@@ -30,18 +34,38 @@ export interface OpenFenceLine {
 /** Parses `line` as a fence-open line; null when it is not one. */
 export function parseOpenFenceLine(line: string | undefined): OpenFenceLine | null {
 	if (line == null) return null;
-	const match = line.match(OPEN_FENCE);
+	const match = matchFenceMarker(line);
 	if (!match) return null;
-	return { fence: match[1], language: match[2], info: line.slice(match[1].length).trimEnd() };
+	return {
+		prefix: match.prefix,
+		fence: match.marker,
+		language: /^\S*/.exec(match.rest)![0],
+		info: match.rest.trimEnd(),
+	};
 }
 
-/** The opening fence line to write back: the fence run + the full original info string. */
+/** The opening fence line to write back: the prefix + the fence run + the full original info string. */
 export function emitOpenFenceLine(open: OpenFenceLine): string {
-	return `${open.fence}${open.info}`;
+	return `${open.prefix}${open.fence}${open.info}`;
 }
 
-/** Matches a fence-close line, capturing the fence run. */
-const CLOSE_FENCE = /^([`~]{3,})/;
+/**
+ * SC-455: the body of the block at `[lineStart, lineEnd]` (fence lines inclusive) as the element sees
+ * it — the lines strictly between the fences with the block's quote prefix taken off. `lines` is the
+ * note split on `\r?\n` (`splitLines`). The identity on the lines for an un-nested block.
+ */
+export function blockBodyLines(lines: readonly string[], lineStart: number, lineEnd: number): string[] {
+	const prefix = parseOpenFenceLine(lines[lineStart])?.prefix ?? '';
+	return lines.slice(lineStart + 1, lineEnd).map((line) => stripBlockPrefix(line, prefix) ?? line);
+}
+
+/** The close fence of the block `open` as it stands on `line`: its run and prefix (the opener's own when `line` is no fence). */
+function closeFenceOf(open: OpenFenceLine, line: string | undefined): { prefix: string; fence: string } {
+	const close = line === undefined ? null : matchFenceMarker(line);
+	// A block with no prefix is only ever closed by a prefix-free fence line, and vice versa.
+	if (close && (close.prefix === '') === (open.prefix === '')) return { prefix: close.prefix, fence: close.marker };
+	return { prefix: open.prefix, fence: open.fence };
+}
 
 /**
  * Replaces the fenced block at lines `[lineStart, lineEnd]` (fence lines inclusive; 0-based
@@ -61,18 +85,39 @@ export function replaceFenceBlock(content: string, lineStart: number, lineEnd: n
 	const lines = content.split('\n');
 	const openFence = parseOpenFenceLine(lines[lineStart]);
 	if (!openFence) return null;
-	const closeRun = lines[lineEnd]?.match(CLOSE_FENCE);
-	const closeFence = closeRun ? closeRun[1] : openFence.fence;
+	const close = closeFenceOf(openFence, lines[lineEnd]);
+	const closeLine = `${close.prefix}${close.fence}`;
+	// SC-455: the block's own prefix goes back on every line written, empty lines in the block's own style.
+	const trimBlank = blankLinesAreTrimmed(openFence.prefix, lines.slice(lineStart + 1, lineEnd));
+	const withPrefix = (line: string): string => addBlockPrefix(openFence.prefix, line, trimBlank);
 	const count = lineEnd - lineStart + 1;
 
 	if (detectEol(content) === '\n') {
-		lines.splice(lineStart, count, emitOpenFenceLine(openFence), ...newSource.split('\n'), closeFence);
+		lines.splice(lineStart, count, emitOpenFenceLine(openFence), ...newSource.split('\n').map(withPrefix), closeLine);
 		return lines.join('\n');
 	}
 
 	const lastReplacedHadCr = lines[lineEnd]?.endsWith('\r') ?? false;
-	const block = [emitOpenFenceLine(openFence), ...stripCr(newSource).split('\n'), closeFence];
+	const block = [emitOpenFenceLine(openFence), ...stripCr(newSource).split('\n').map(withPrefix), closeLine];
 	const last = block.length - 1;
 	lines.splice(lineStart, count, ...block.map((line, i) => (i < last || lastReplacedHadCr ? `${line}\r` : line)));
+	return lines.join('\n');
+}
+
+/**
+ * SC-455: replaces only the BODY lines of the block at `[lineStart, lineEnd]` with `newBody`
+ * (LF-joined, prefix-free), leaving both fence lines byte-for-byte — the anchor stamp's splice.
+ * Each new line gets the block's prefix and the note's own line ending (SC-453). Null when
+ * `lineStart` is not a fence-open line.
+ */
+export function replaceFenceBody(content: string, lineStart: number, lineEnd: number, newBody: string): string | null {
+	const lines = content.split('\n');
+	const openFence = parseOpenFenceLine(lines[lineStart]);
+	if (!openFence) return null;
+	const trimBlank = blankLinesAreTrimmed(openFence.prefix, lines.slice(lineStart + 1, lineEnd));
+	const body = stripCr(newBody)
+		.split('\n')
+		.map((line) => addBlockPrefix(openFence.prefix, line, trimBlank));
+	lines.splice(lineStart + 1, lineEnd - lineStart - 1, ...terminateLines(body, detectEol(content)));
 	return lines.join('\n');
 }

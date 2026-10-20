@@ -9,6 +9,8 @@
 // alongside it.
 import { parseYaml } from 'obsidian';
 import type { BlockInfo } from '../host/BlockHost';
+import { matchFenceMarker, stripBlockPrefix } from '../host/blockPrefix';
+import { blockBodyLines } from '../host/fenceLine';
 import { splitLines, stripCr } from '../host/lineEnding';
 
 /** Exported so `framework/pipeline.ts`'s `prepareModel` can exclude this exact key from
@@ -28,14 +30,6 @@ export const ANCHOR_KEY = '_dse_anchor';
  *  r2 review LOW-1) - an unindented next line is the next key and is never taken. */
 const SCALAR_TOKEN = String.raw`(?:[ \t]*|[ \t]*\r?\n[ \t]+)['"]?([A-Za-z0-9_.+-]+)['"]?[ \t]*$`; // multiline `$` also stops before a CR (SC-453 CRLF notes)
 const ANCHOR_LINE = new RegExp(`^${ANCHOR_KEY}:${SCALAR_TOKEN}`, 'm');
-
-/** A fence-marker line: 3+ backticks/tildes (captured), then the rest of the line — the
- *  info string for an opener, or (after trimming) empty for a closer. Exported so
- *  registration.ts's `aliasAtLine` (a live-Editor, prefix-scan variant of the same
- *  open/close matching — see that function's doc for why it can't just call the
- *  content-string scanner below) shares this single regex instead of carrying its own
- *  copy; the two files must never test "is this a fence marker line" two different ways. */
-export const FENCE_LINE = /^([`~]{3,})(.*)$/;
 
 const LEADING_LETTERS = 'abcdf';
 
@@ -247,10 +241,12 @@ export function findFenceAtLine(content: string, alias: string, line: number): B
  *  below) so registration.ts's `aliasAtLine` — a live-Editor, prefix-scan variant of this
  *  same open/close matching, needed because it must recognize a fence that's open but
  *  not yet closed (the cursor sitting inside a block the user is still typing) — builds
- *  its open/close test on the exact same primitives instead of a second hand-rolled copy. */
-export function matchFenceLine(line: string): { marker: string; rest: string } | null {
-	const match = FENCE_LINE.exec(line);
-	return match ? { marker: match[1], rest: match[2].trim() } : null;
+ *  its open/close test on the exact same primitives instead of a second hand-rolled copy.
+ *  SC-455: the line may sit inside a blockquote / callout; `prefix` is that quote prefix
+ *  ('' for an un-nested fence) — see host/blockPrefix.ts, the one place that defines it. */
+export function matchFenceLine(line: string): { prefix: string; marker: string; rest: string } | null {
+	const match = matchFenceMarker(line);
+	return match ? { prefix: match.prefix, marker: match.marker, rest: match.rest.trim() } : null;
 }
 
 /**
@@ -272,10 +268,15 @@ export function fenceAlias(rest: string): string {
 }
 
 /** True when `line` is a valid CLOSE for a fence opened with `open` — same character,
- *  at least as long, and carrying no info string of its own (a bare close). */
-export function isFenceClose(open: { fenceChar: string; fenceLen: number }, line: string): boolean {
-	const match = matchFenceLine(line);
-	return !!match && match.rest === '' && match.marker[0] === open.fenceChar && match.marker.length >= open.fenceLen;
+ *  at least as long, and carrying no info string of its own (a bare close). SC-455: a fence
+ *  opened inside a quote (`open.prefix`) is only closed by a line in the SAME quote, so a
+ *  fence-looking line outside it (or at another depth) is body content, never a close. */
+export function isFenceClose(open: { fenceChar: string; fenceLen: number; prefix?: string }, line: string): boolean {
+	const prefix = open.prefix ?? '';
+	const inner = stripBlockPrefix(line, prefix);
+	if (inner === null) return false;
+	const match = matchFenceLine(inner);
+	return !!match && match.prefix === '' && match.rest === '' && match.marker[0] === open.fenceChar && match.marker.length >= open.fenceLen;
 }
 
 /**
@@ -298,8 +299,12 @@ export function isFenceClose(open: { fenceChar: string; fenceLen: number }, line
  * #4). Instead that single candidate open is abandoned (treated as ordinary content) and
  * the scan resumes on the very next line, so a later well-formed block is still found.
  *
+ * SC-455 — blockquote / callout prefixes: a fence line may carry a quote prefix (`> `, `> > `, `>`),
+ * which `body` comes back without; the block closes only on a line carrying the same prefix, and a
+ * line that has left the quote ends it (an unterminated candidate, abandoned as above).
+ *
  * SC-453 — line endings: lines are split on `\r?\n`, so a CRLF note's fence lines parse
- * (`FENCE_LINE`'s `.` never matches `\r`) and `body` comes back LF-joined. The line COUNT and
+ * (the old fence regex's `.` never matched `\r`) and `body` comes back LF-joined. The line COUNT and
  * indices are identical to `content.split('\n')`'s (a lone `\r` stays inside its line), which is
  * what every caller that also splits the raw content on `\n` relies on for `info.lineStart/End`.
  */
@@ -312,10 +317,17 @@ function* iterateFences(content: string, alias: string): Generator<{ info: Block
 			i++;
 			continue;
 		}
-		const open = { fenceChar: openMatch.marker[0], fenceLen: openMatch.marker.length, alias: fenceAlias(openMatch.rest) };
+		const open = {
+			fenceChar: openMatch.marker[0],
+			fenceLen: openMatch.marker.length,
+			alias: fenceAlias(openMatch.rest),
+			prefix: openMatch.prefix,
+		};
 		let j = i + 1;
-		while (j < lines.length && !isFenceClose(open, lines[j])) j++;
-		if (j >= lines.length) {
+		// SC-455: a line that no longer carries the opener's quote prefix means the quote ended — the
+		// fence never closed inside it, so this candidate is abandoned (like any unterminated fence).
+		while (j < lines.length && !isFenceClose(open, lines[j]) && stripBlockPrefix(lines[j], open.prefix) !== null) j++;
+		if (j >= lines.length || !isFenceClose(open, lines[j])) {
 			// Unterminated — lenient recovery, see doc above: don't abandon the whole
 			// scan, just this one candidate open.
 			i++;
@@ -323,7 +335,7 @@ function* iterateFences(content: string, alias: string): Generator<{ info: Block
 		}
 
 		if (open.alias === alias) {
-			yield { info: { language: open.alias, lineStart: i, lineEnd: j }, body: lines.slice(i + 1, j).join('\n') };
+			yield { info: { language: open.alias, lineStart: i, lineEnd: j }, body: blockBodyLines(lines, i, j).join('\n') };
 		}
 		i = j + 1;
 	}
