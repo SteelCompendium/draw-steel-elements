@@ -29,6 +29,7 @@ import { INTERNAL_DISPLAY_ELEMENTS } from '../src/elements/display';
 import { SccResolver } from '../src/refs/SccResolver';
 import { createCompendiumIndex } from '../src/services/CompendiumIndex';
 import { App, Plugin } from '../test/mocks/obsidian-core';
+import { isChromeSurface, mountChromeSurface } from './chromeSurfaces';
 
 // Fixtures — D9 (Plan 15 Task 2): single-sourced from each element's own
 // authoring.example (src/elements/<id>/example.yaml), esbuild/jest `.yaml` text loader.
@@ -1171,6 +1172,13 @@ export interface HarnessParams {
 	 * `page.evaluate` for their bare-vs-host comparison — see shoot.mjs's own comments.
 	 */
 	sheet?: boolean;
+	/**
+	 * SC-422 — mount one of the plugin's CHROME surfaces (the Compendium search modal rows, the
+	 * settings preview caption, the sidebar header / empty message) through its real production
+	 * code instead of an element. Only the `text scale OK` gate in shoot.mjs requests it; it is
+	 * never in the shot manifest, so no PNG and no frozen byte exists for it.
+	 */
+	surface?: string;
 }
 
 /** SC-123: `kwUsage:text,sbCharBox:on` → `{ kwUsage: 'text', sbCharBox: 'on' }`.
@@ -1264,6 +1272,7 @@ export function parseParams(search: string): HarnessParams {
 		// SC-202 r6b: absent/anything-but-'1' means false — every pre-existing URL (the
 		// print/realprint combos included) keeps the sheet off exactly as before.
 		sheet: q.get('sheet') === '1',
+		surface: q.get('surface') ?? undefined,
 	};
 }
 
@@ -2395,6 +2404,11 @@ export async function mountFromParams(
 	// SC-169: the chrome panel overflows the element's TOP edge, and the shot is the
 	// #mount locator — without padding the camera clips the very thing under review.
 	mount.style.padding = params.pad ? `${params.pad}px` : '';
+	if (isChromeSurface(params.surface)) {
+		// SC-422: a chrome surface replaces the element mount (see chromeSurfaces.ts).
+		await mountChromeSurface(params.surface, { deps, pipeline, registry, mount, errors });
+		return { errors };
+	}
 	for (const target of targets) {
 		await mountOne(pipeline, registry, mount, target.element, target.fixture, params, errors);
 	}

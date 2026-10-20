@@ -145,6 +145,36 @@ const TEXT_SCALE_PAGES = [
 		prompt: true,
 	},
 ];
+/** SC-422 - plugin CHROME that sits outside every element root and DseModal, mounted by entry.ts's
+ *  `surface=` param through the real production code (visual-harness/chromeSurfaces.ts). Each is a
+ *  `.dse-fs-root` (src/framework/kit/textScaleRoot.ts) and must follow the same knobs, exactly once, as text
+ *  inside an element root. The settings preview rows also pin the NESTED case: its sample statblock is an
+ *  element root inside the chrome root, and must still measure exactly S, not S*S. */
+const TEXT_SCALE_CHROME_PAGES = [
+	{
+		surface: 'search-modal',
+		real: [
+			['search modal .dse-compendium-suggest__type (caption)', '.dse-compendium-suggest__type', 'small'],
+			['search modal .dse-compendium-suggest__source (caption)', '.dse-compendium-suggest__source', 'small'],
+			['search modal .dse-compendium-suggest__code (label)', '.dse-compendium-suggest__code', 'small'],
+		],
+	},
+	{
+		surface: 'search-modal-empty',
+		real: [['search modal empty-index .dse-compendium-suggest__hint (secondary)', '.dse-compendium-suggest__hint', 'small']],
+	},
+	{
+		surface: 'settings-preview',
+		real: [
+			['settings preview .dse-settings-preview__label (label)', '.dse-settings-preview__label', 'small'],
+			['settings preview caption hint (inherits the label size)', '.dse-settings-preview__label-hint', 'small'],
+			['settings preview sample .dse-head__primary (nested element root: heading)', '.dse-settings-preview .dse-head__primary', 'large'],
+			['settings preview sample .dse-sb__item-l (nested element root: secondary)', '.dse-settings-preview .dse-sb__item-l', 'small'],
+		],
+	},
+	{ surface: 'sidebar', real: [['sidebar .dse-sidebar__panel-header (label)', '.dse-sidebar__panel-header', 'small']] },
+	{ surface: 'sidebar-empty', real: [['sidebar .dse-sidebar__empty-message (label)', '.dse-sidebar__empty-message', 'small']] },
+];
 /** The modal page: montage "Log an action..." opens a real DseModal (kit/managedModal). */
 const TEXT_SCALE_MODAL_PAGE = {
 	element: 'montage', fixture: 'mid',
@@ -6812,7 +6842,8 @@ async function assertModalTextScaleAnchoring(page) {
 //   - REAL consumers (a card name, a numeral, a label, a caption, a collapse-header button, an h2/h3,
 //     ...) and SYNTHETIC ones (a span with `font-size: var(--dse-fs-<role>)` under a 16px parent, for
 //     every one of the 14 scale-dependent tokens), at 80% and 120% of each knob;
-//   - on an ELEMENT ROOT, inside a real DseModal (the montage "Log an action" sheet), and in BOTH
+//   - on an ELEMENT ROOT, inside a real DseModal (the montage "Log an action" sheet), on the CHROME
+//     surfaces that sit outside both (SC-422: TEXT_SCALE_CHROME_PAGES - each a `.dse-fs-root`), and in BOTH
 //     print surfaces (the screen-media twin and real print media);
 //   - that a consumer of the moved knob's tokens scales by EXACTLY the knob (ratio === value), and
 //     that every consumer of the other two knobs does not move at all (isolation);
@@ -6830,9 +6861,10 @@ async function assertModalTextScaleAnchoring(page) {
 // its temporal dead zone when the sweep reaches the gate.)
 
 /** Runs in the page. Never throws on a missing node - the Node side reports it by name. */
-function measureTextScale({ real, tokens, wantPrompt }) {
+function measureTextScale({ real, tokens, wantPrompt, rootSel }) {
 	const out = { real: {}, synth: { root: {}, modal: {} }, stamped: {}, prompt: null };
-	const root = document.querySelector('[data-dse-element]');
+	// SC-422: a chrome page's stamped root is its `.dse-fs-root`, not an element root.
+	const root = document.querySelector(rootSel || '[data-dse-element]');
 	const modal = document.querySelector('.dse-modal');
 	for (const [label, sel] of real) {
 		const el = document.querySelector(sel);
@@ -6872,7 +6904,7 @@ async function assertTextScale(page) {
 	const knobOfToken = Object.fromEntries(Object.entries(TEXT_SCALE_KNOBS).flatMap(([k, v]) => v.tokens.map((t) => [t, k])));
 	const near = (a, b) => Math.abs(a - b) <= Math.max(0.005, Math.abs(b) * 1e-4);
 	const load = async (pg, mode, prefs) => {
-		const q = new URLSearchParams({ element: pg.element, fixture: pg.fixture, theme: 'steel', bg: 'dark' });
+		const q = new URLSearchParams(pg.surface ? { surface: pg.surface, theme: 'steel', bg: 'dark' } : { element: pg.element, fixture: pg.fixture, theme: 'steel', bg: 'dark' });
 		if (prefs) q.set('prefs', prefs);
 		if (mode === 'twin') q.set('print', '1');
 		if (mode !== 'realprint') q.set('sheet', '1');
@@ -6884,16 +6916,17 @@ async function assertTextScale(page) {
 			await page.waitForSelector('.dse-modal', { timeout: 5000 });
 		}
 		const real = pg.real.filter((r) => !r[3] || mode === 'screen').map(([label, sel]) => [label, sel]);
-		return page.evaluate(measureTextScale, { real, tokens: allTokens, wantPrompt: !!pg.prompt && mode === 'screen' });
+		return page.evaluate(measureTextScale, { real, tokens: allTokens, wantPrompt: !!pg.prompt && mode === 'screen', rootSel: pg.surface ? '.dse-fs-root' : undefined });
 	};
 
 	const cases = [];
 	for (const pg of TEXT_SCALE_PAGES) for (const mode of ['screen', 'twin', 'realprint']) cases.push({ pg, mode, ctx: mode === 'screen' ? 'element root' : mode === 'twin' ? 'print twin' : 'real print' });
 	cases.push({ pg: TEXT_SCALE_MODAL_PAGE, mode: 'screen', ctx: 'modal' });
+	for (const pg of TEXT_SCALE_CHROME_PAGES) cases.push({ pg, mode: 'screen', ctx: 'chrome root' });
 
 	for (const { pg, mode, ctx } of cases) {
 		const base = await load(pg, mode, null);
-		const where = `${pg.element}:${pg.fixture} [${ctx}]`;
+		const where = `${pg.surface ? `surface:${pg.surface}` : `${pg.element}:${pg.fixture}`} [${ctx}]`;
 		for (const [label, v] of Object.entries(base.real)) if (!(v > 0)) problems.push(`${where}: consumer "${label}" not found / zero size at the baseline`);
 		const synthHosts = ctx === 'modal' ? ['root', 'modal'] : ['root'];
 		for (const h of synthHosts) for (const t of allTokens) if (!(base.synth[h][t] > 0)) problems.push(`${where}: synthetic --dse-fs-${t} on the ${h} measured ${base.synth[h][t]} at the baseline`);
@@ -6903,7 +6936,7 @@ async function assertTextScale(page) {
 				const at = `${where} ${TEXT_SCALE_KNOBS[knob].pref}=${value}`;
 				const stampedOn = ctx === 'modal' ? moved.stamped.modal : moved.stamped.root;
 				const stampIdx = ['small', 'large', 'control'].indexOf(knob);
-				if (!stampedOn || stampedOn[stampIdx] !== String(value)) problems.push(`${at}: the pref was not stamped on the root (inline --dse-fs-${knob}-scale = ${JSON.stringify(stampedOn && stampedOn[stampIdx])})`);
+				if (!stampedOn || stampedOn[stampIdx] !== String(value)) problems.push(`${at}: the pref was not stamped on the ${ctx === 'chrome root' ? 'chrome root (.dse-fs-root)' : 'root'} (inline --dse-fs-${knob}-scale = ${JSON.stringify(stampedOn && stampedOn[stampIdx])})`);
 				// Real consumers.
 				for (const [label, , cKnob] of pg.real) {
 					if (!(label in base.real)) continue;
@@ -6926,7 +6959,7 @@ async function assertTextScale(page) {
 						const m = moved.synth[h][t];
 						const expected = tKnob === knob ? b * value : b;
 						compared += 1;
-						if (!near(m, expected)) problems.push(`${at}: --dse-fs-${t} on the ${h === 'modal' ? 'DseModal dialog' : 'element root'} measures ${m}px, expected ${expected.toFixed(4)}px (baseline ${b}px${expected !== b ? ` x ${value}` : ', must not move'})`);
+						if (!near(m, expected)) problems.push(`${at}: --dse-fs-${t} on the ${h === 'modal' ? 'DseModal dialog' : ctx === 'chrome root' ? 'chrome root' : 'element root'} measures ${m}px, expected ${expected.toFixed(4)}px (baseline ${b}px${expected !== b ? ` x ${value}` : ', must not move'})`);
 					}
 				}
 				// The one calc() that divides by a scale.
@@ -6943,13 +6976,14 @@ async function assertTextScale(page) {
 			`\nTEXT SCALE BROKEN - a text-size preference does not reach the --dse-fs-* tokens it names (SC-372):\n` +
 				problems.map((p) => `  ${p}`).join('\n') +
 				`\nSee styles-source.css -> "SC-372: THE SCALE-DEPENDENT TYPE-SIZE TOKENS": they must be declared on the roots the ` +
-				`prefs seam stamps (an element root, a DseModal), not on :root alone - a var() inside a custom property resolves ` +
-				`where the property is declared.`,
+				`prefs seam stamps (an element root, a DseModal, a .dse-fs-root chrome root - SC-422), not on :root alone - a var() inside a custom property resolves ` +
+				`where the property is declared. A chrome surface failing here means its stampTextScaleRoot() call (src/framework/kit/textScaleRoot.ts) is missing or the class left the token rule.`,
 		);
 		process.exit(1);
 	}
 	console.log(
-		`\ntext scale OK (${compared} comparisons: small/large/control at 80% and 120% on an element root, in a real DseModal and ` +
+		`\ntext scale OK (${compared} comparisons: small/large/control at 80% and 120% on an element root, in a real DseModal, on ` +
+			`${TEXT_SCALE_CHROME_PAGES.length} chrome surfaces (search modal rows + empty-index hint, settings preview caption, sidebar header + empty message) and ` +
 			`in both print surfaces; a knob scales its own tokens exactly and moves no other knob's; control text does not move on paper; ` +
 			`the "Untitled encounter" prompt stays on the label size)`,
 	);
@@ -6961,7 +6995,8 @@ async function assertTextScale(page) {
 // assertTextScale above pins named consumers. This sweep is its backstop for the ones nobody named: for
 // EVERY manifest page (element x fixture, interaction shots incl. the DseModal, pref shots, chrome
 // stacks) on screen, and every element x fixture page on the print twin, it mounts once at default prefs,
-// then RESTAMPS each knob inline on every stamped root ([data-dse-element], .dse-modal) at 1.2 - exactly
+// then RESTAMPS each knob inline on every stamped root ([data-dse-element], .dse-modal, and since SC-422 the
+// chrome roots .dse-fs-root) at 1.2 - exactly
 // what prefs.set() -> stampCss() does live - and requires every visible in-root element (and its
 // ::before/::after with content) to scale by exactly 1 or exactly 1.2. A ratio of 1.44 is a nested
 // same-knob consumer (a role is an em ratio times the knob and em is the PARENT's size, so a consumer
@@ -6970,7 +7005,7 @@ async function assertTextScale(page) {
 // "SC-372: EACH TEXT-SIZE KNOB APPLIES ONCE".
 /** In page: measure, restamp each knob, measure, restore. Returns violations only. */
 function sweepKnobs({ S, knobs, mustNotMove = [] }) {
-	const els = [...document.querySelectorAll('[data-dse-element], .dse-modal')].flatMap((r) => [r, ...r.querySelectorAll('*')]);
+	const els = [...document.querySelectorAll('[data-dse-element], .dse-modal, .dse-fs-root')].flatMap((r) => [r, ...r.querySelectorAll('*')]);
 	const uniq = [...new Set(els)];
 	const targets = [];
 	const visible = new Set();
@@ -6984,7 +7019,8 @@ function sweepKnobs({ S, knobs, mustNotMove = [] }) {
 	}
 	const read = () => targets.map(([e, pe]) => parseFloat(getComputedStyle(e, pe).fontSize));
 	const base = read();
-	const roots = [...document.querySelectorAll('[data-dse-element], .dse-modal')];
+	const roots = [...document.querySelectorAll('[data-dse-element], .dse-modal, .dse-fs-root')];
+	const chromeRoots = document.querySelectorAll('.dse-fs-root').length;
 	const name = (e, pe) => e.tagName.toLowerCase() + [...e.classList].filter((c) => !c.includes('--') && !c.startsWith('is-')).map((c) => '.' + c).join('') + (pe || '');
 	const out = [];
 	let compared = 0;
@@ -7016,7 +7052,7 @@ function sweepKnobs({ S, knobs, mustNotMove = [] }) {
 		});
 		roots.forEach((r, i) => (prev[i] ? r.style.setProperty(`--dse-fs-${knob}-scale`, prev[i]) : r.style.removeProperty(`--dse-fs-${knob}-scale`)));
 	}
-	return { out, compared, n: targets.length };
+	return { out, compared, n: targets.length, chromeRoots };
 }
 
 async function assertTextScaleOnce(page, manifest) {
@@ -7027,6 +7063,9 @@ async function assertTextScaleOnce(page, manifest) {
 	for (const n of manifest.interactionShots ?? []) pages.push({ id: n.id, q: { element: n.element, fixture: n.fixture }, click: n.click });
 	for (const n of manifest.prefShots ?? []) pages.push({ id: n.id, q: { element: n.element, fixture: n.fixture, ...(n.prefs ? { prefs: Object.entries(n.prefs).map(([k, v]) => `${k}:${v}`).join(',') } : {}), ...(n.width ? { width: String(n.width) } : {}) } });
 	for (const n of manifest.chromeShots ?? []) pages.push({ id: n.id, q: { stack: n.stack.map((e) => `${e.element}:${e.fixture}`).join(','), ...(n.prefs ? { prefs: Object.entries(n.prefs).map(([k, v]) => `${k}:${v}`).join(',') } : {}) }, hover: n.hover });
+	// SC-422: the chrome surfaces outside every element root / DseModal (search modal, settings preview caption,
+	// sidebar). A page that mounts NO .dse-fs-root is itself a failure (below): it would otherwise sweep nothing.
+	for (const c of TEXT_SCALE_CHROME_PAGES) pages.push({ id: `surface:${c.surface}`, q: { surface: c.surface }, chrome: true });
 	const problems = new Map();
 	let compared = 0;
 	let loads = 0;
@@ -7043,6 +7082,11 @@ async function assertTextScaleOnce(page, manifest) {
 			// On paper control text must not move at all; small/large still exactly once.
 			const r = await page.evaluate(sweepKnobs, { S, knobs: ['small', 'large', 'control'], mustNotMove: surface === 'screen' ? [] : ['control'] });
 			compared += r.compared;
+			if (pg.chrome && r.chromeRoots === 0) {
+				const k = `[${surface}] chrome surface mounted no .dse-fs-root -> ${pg.id}`;
+				if (!problems.has(k)) problems.set(k, new Set());
+				problems.get(k).add(pg.id);
+			}
 			for (const v of r.out) {
 				const k = `[${surface}] ${v.knob}: ${v.chain || '(no own-scaling ancestor)'} -> ${v.el} x${v.ratio}`;
 				if (!problems.has(k)) problems.set(k, new Set());
@@ -7062,7 +7106,7 @@ async function assertTextScaleOnce(page, manifest) {
 	}
 	console.log(
 		`\ntext scale once OK (${compared} comparisons over ${loads} loads: every visible element in every stamped root scales by exactly 1 or exactly ${S} per knob, ` +
-			`on screen and the print twin, control never on paper; ${secs}s)`,
+			`on screen and the print twin, control never on paper, ${TEXT_SCALE_CHROME_PAGES.length} chrome surfaces included; ${secs}s)`,
 	);
 }
 
