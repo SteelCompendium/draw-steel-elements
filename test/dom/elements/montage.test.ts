@@ -1846,6 +1846,28 @@ describe('SC-191 slice 2: source hygiene + CSS contract', () => {
 		expect(board).not.toBeNull();
 		expect(board![1]).toMatch(/--dse-mt-colmin:\s*9\.2em;/);
 	});
+
+	// SC-326 — the board's frame used to be `overflow: hidden`, which clipped the right-hand
+	// round columns and the Tally with no way to reach them once the grid (round-column floor
+	// x rounds) outgrew the card. jsdom cannot lay the grid out, so this pins the DECLARATIONS
+	// (the in-run `assertMontageBoardScroll` gate in shoot.mjs is the real-Chromium proof that
+	// every cell is reachable). Can-fail: restoring `overflow: hidden` here turns it red.
+	test('CSS contract: the board frame scrolls sideways instead of clipping — overflow-x auto, overflow-y hidden, border + radius kept (SC-326)', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+		const decoration = sheet.match(
+			/\[data-dse-theme='steel'\]\[data-dse-element="montage"\]:not\(\[data-dse-print="on"\]\)\s+\.dse-mt\s*\{[\s\S]*?\n\}\n/,
+		);
+		expect(decoration).not.toBeNull();
+		const frame = decoration![0].match(/\/\* -- board frame \+ banding -- \*\/[\s\S]*?\.dse-mt__board\s*\{([\s\S]*?)\}/);
+		expect(frame).not.toBeNull();
+		expect(frame![1]).toMatch(/overflow-x:\s*auto;/);
+		expect(frame![1]).toMatch(/overflow-y:\s*hidden;/);
+		// no `overflow: hidden` shorthand left behind (it would clip x again if it ever won the cascade)
+		expect(frame![1]).not.toMatch(/overflow:\s*hidden/);
+		// the frame itself is unchanged: border + radius stay on the scroll box
+		expect(frame![1]).toMatch(/border:\s*1px solid var\(--dse-metal-line\);/);
+		expect(frame![1]).toMatch(/border-radius:\s*var\(--dse-radius\);/);
+	});
 });
 
 describe('SC-191 fix round 4: re-review-2 finding 2c — round headers agree with a complete montage', () => {

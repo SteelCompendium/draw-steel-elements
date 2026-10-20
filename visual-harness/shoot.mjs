@@ -979,6 +979,236 @@ async function assertMontageCoarseContainment(page) {
 	}
 }
 
+// SC-326 — the montage board SCROLLS, it does not CLIP. `.dse-mt__board` is a grid whose
+// round columns have a floor (`minmax(var(--dse-mt-colmin, 5.2em), 1fr)`; 9.2em under
+// `pointer: coarse`), so past a few rounds the grid is wider than the card. Before SC-326 the
+// board's frame was `overflow: hidden`: the right-hand round columns AND the tally were cut
+// off with no way to reach them (measured at SC-299 re-review-2: coarse, 900px pane — clipping
+// from 5 rounds, 8 rounds hid +585.7px across 20 cells). jsdom has no layout, so the jest pin
+// (`montage.test.ts`) can only pin the DECLARATION; this gate measures what it produces.
+//
+// At a 14-round montage in a 900px pane, under BOTH a fine and a real `pointer: coarse`
+// emulation (own browser context, exactly as `assertMontageCoarseContainment`, and proved
+// with `matchMedia` rather than assumed), it asserts that:
+//  1. the board is a horizontal scroll container (`overflow-x: auto|scroll`, and
+//     `scrollWidth > clientWidth` — so the fixture really overflows and the gate is not
+//     vacuous);
+//  2. REAL WHEEL INPUT scrolls it to its far end. `scrollIntoView` and `scrollLeft =` work on
+//     an `overflow: hidden` box too (they are programmatic), so a user-reachability claim
+//     cannot rest on them alone — a mouse wheel over the board is the discriminator;
+//  3. EVERY direct child of the board (the corner, every round header, the Tally header, and
+//     for every hero the name cell, every round cell and the tally cell) can be scrolled to
+//     lie fully inside the board's visible frame (`clientLeft..clientLeft+clientWidth`,
+//     likewise vertically), and `elementFromPoint` at its centre — after scrolling the cell
+//     AND the page into view; it is viewport-relative (re-review-2 MED-1) — resolves to that
+//     very child. A null hit is its own PROBE POINT OFF-SCREEN line, never a wrong hit.
+//
+// The 14 rounds are built IN THE PROBE (no new fixture, so shot/freeze counts do not move):
+// the `mid` fixture's real DOM is cloned out to 14 round columns (rounds 4+ clone the round-2
+// recorded cell / round-3 open-socket cell alternately, so both the widest content — the coarse
+// quick trio — and a skill-caption cell are present in the overflow) and the track list
+// rewritten by BoardView's own formula. The clones carry no listeners; this gate reads layout
+// and hit-tests only, it never clicks. Same "own navigation, captures nothing" shape.
+async function assertMontageBoardScroll(page) {
+	const browser = page.context().browser();
+	const VIEWPORT_HEIGHT = 2400; // see assertMontageCoarseContainment — tall, so probes stay on-screen
+	const ROUNDS = 14;
+	const PANE = 900;
+	const results = [];
+	let failed = false;
+	for (const pointer of ['fine', 'coarse']) {
+		const context = await browser.newContext(
+			pointer === 'coarse'
+				? { hasTouch: true, isMobile: true, viewport: { width: 1000, height: VIEWPORT_HEIGHT } }
+				: { viewport: { width: 1000, height: VIEWPORT_HEIGHT } },
+		);
+		const probe = await context.newPage();
+		try {
+			const query = new URLSearchParams({ element: 'montage', fixture: 'mid', theme: 'steel', bg: 'dark' });
+			await probe.goto(`${pageUrl}?${query}`);
+			await probe.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
+			const isCoarse = await probe.evaluate(() => matchMedia('(pointer: coarse)').matches);
+			if (isCoarse !== (pointer === 'coarse')) {
+				console.error(
+					`\nMONTAGE BOARD SCROLL: this Chromium reports (pointer: coarse) = ${isCoarse} for the ` +
+						`${pointer} context — the gate cannot prove anything about the ${pointer}-pointer CSS ` +
+						`without the right match. Check the Playwright/Chromium version.`,
+				);
+				process.exit(1);
+			}
+			const heroCount = await probe.evaluate(
+				({ rounds, pane }) => {
+					document.getElementById('mount').style.width = `${pane}px`;
+					const board = document.querySelector('.dse-mt__board');
+					const cols = ['minmax(6.2em, auto)']; // BoardView.build's own track list
+					for (let r = 0; r < rounds; r++) cols.push('minmax(var(--dse-mt-colmin, 5.2em), 1fr)');
+					cols.push('minmax(4.4em, auto)');
+					board.style.setProperty('--dse-mt-cols', cols.join(' '));
+					const tally = board.querySelector('.dse-mt__board-thead');
+					const rhead3 = board.querySelector(".dse-mt__board-rhead[data-round='3']");
+					for (let r = 4; r <= rounds; r++) {
+						const h = rhead3.cloneNode(true);
+						h.setAttribute('data-round', String(r));
+						h.setAttribute('data-state', 'future');
+						h.querySelector('.dse-mt__rhead-n').textContent = String(r);
+						h.querySelector('.dse-mt__rhead-sub').textContent = 'to come';
+						board.insertBefore(h, tally);
+					}
+					const heroes = [...board.querySelectorAll('.dse-mt__board-total')];
+					for (const total of heroes) {
+						const hero = total.getAttribute('data-hero');
+						for (let r = 4; r <= rounds; r++) {
+							const src = board.querySelector(`.dse-mt__cell[data-hero="${hero}"][data-round='${r % 2 === 0 ? 2 : 3}']`);
+							const c = src.cloneNode(true);
+							c.setAttribute('data-round', String(r));
+							board.insertBefore(c, total);
+						}
+					}
+					return heroes.length;
+				},
+				{ rounds: ROUNDS, pane: PANE },
+			);
+			await probe.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+
+			const geo = await probe.evaluate(() => {
+				const board = document.querySelector('.dse-mt__board');
+				const cs = getComputedStyle(board);
+				return {
+					overflowX: cs.overflowX,
+					overflowY: cs.overflowY,
+					scrollWidth: board.scrollWidth,
+					clientWidth: board.clientWidth,
+					children: board.children.length,
+				};
+			});
+			const problems = [];
+			const label = `${pointer} pointer, ${ROUNDS} rounds, ${PANE}px pane`;
+			if (geo.scrollWidth <= geo.clientWidth) {
+				problems.push(
+					`the fixture does not overflow (scrollWidth ${geo.scrollWidth} <= clientWidth ${geo.clientWidth}) — ` +
+						`the gate would prove nothing; raise ROUNDS or narrow PANE`,
+				);
+			}
+			if (geo.overflowX !== 'auto' && geo.overflowX !== 'scroll') {
+				problems.push(
+					`NOT A HORIZONTAL SCROLL CONTAINER — .dse-mt__board computed overflow-x is '${geo.overflowX}' ` +
+						`(need 'auto' or 'scroll'); the grid is ${geo.scrollWidth}px wide in a ${geo.clientWidth}px frame, so ` +
+						`${geo.scrollWidth - geo.clientWidth}px of round columns and tally are clipped with no way to reach them`,
+				);
+			}
+			const expectedChildren = (2 + ROUNDS) * (1 + heroCount);
+			if (geo.children !== expectedChildren) {
+				problems.push(`board has ${geo.children} grid children, expected ${expectedChildren} — the probe's DOM build drifted`);
+			}
+
+			// 2. real wheel input reaches the far end.
+			await probe.evaluate(() => {
+				document.querySelector('.dse-mt__board').scrollLeft = 0;
+			});
+			const box = await probe.evaluate(() => {
+				const b = document.querySelector('.dse-mt__board');
+				b.scrollIntoView({ block: 'center', behavior: 'instant' });
+				const r = b.getBoundingClientRect();
+				return { x: r.left + r.width / 2, y: r.top + Math.min(r.height / 2, 60) };
+			});
+			await probe.mouse.move(box.x, box.y);
+			await probe.mouse.wheel(geo.scrollWidth * 2, 0);
+			let wheelLeft = -1;
+			const maxLeft = geo.scrollWidth - geo.clientWidth;
+			for (let i = 0; i < 40; i++) {
+				const now = await probe.evaluate(() => document.querySelector('.dse-mt__board').scrollLeft);
+				if (now === wheelLeft && now > 0) break; // settled
+				wheelLeft = now;
+				await probe.waitForTimeout(50);
+			}
+			if (Math.abs(wheelLeft - maxLeft) > 1.5) {
+				problems.push(
+					`A MOUSE WHEEL OVER THE BOARD DID NOT SCROLL IT TO ITS FAR END — scrollLeft ${wheelLeft}px of ` +
+						`${maxLeft.toFixed(1)}px reachable (a user cannot scroll the clipped columns into view)`,
+				);
+			}
+
+			// 3. every child reachable + hit-testable.
+			const cells = await probe.evaluate(() => {
+				const board = document.querySelector('.dse-mt__board');
+				const describe = (el) => {
+					const hero = el.getAttribute('data-hero');
+					const round = el.getAttribute('data-round');
+					return `${el.className.replace('dse-mt__', '')}${hero ? ` ${hero}` : ''}${round ? ` r${round}` : ''}`;
+				};
+				const unreachable = [];
+				const offscreen = [];
+				const wrongHit = [];
+				let measured = 0;
+				for (const child of board.children) {
+					child.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'instant' });
+					const fr = board.getBoundingClientRect();
+					const frame = {
+						l: fr.left + board.clientLeft,
+						r: fr.left + board.clientLeft + board.clientWidth,
+						t: fr.top + board.clientTop,
+						b: fr.top + board.clientTop + board.clientHeight,
+					};
+					const cr = child.getBoundingClientRect();
+					measured++;
+					const outL = frame.l - cr.left;
+					const outR = cr.right - frame.r;
+					const outT = frame.t - cr.top;
+					const outB = cr.bottom - frame.b;
+					if (outL > 0.5 || outR > 0.5 || outT > 0.5 || outB > 0.5) {
+						unreachable.push(
+							`${describe(child)} (left ${outL.toFixed(1)}px / right ${outR.toFixed(1)}px / top ${outT.toFixed(1)}px / bottom ${outB.toFixed(1)}px outside the frame after scrolling it into view)`,
+						);
+						continue;
+					}
+					const x = cr.left + cr.width / 2;
+					const y = cr.top + cr.height / 2;
+					const hit = document.elementFromPoint(x, y);
+					if (!hit) {
+						offscreen.push(`${describe(child)} probe at (${x.toFixed(1)}, ${y.toFixed(1)})`);
+						continue;
+					}
+					let owner = hit;
+					while (owner && owner.parentElement !== board) owner = owner.parentElement;
+					if (owner !== child) {
+						wrongHit.push(`${describe(child)} centre hit ${hit.tagName}${hit.className ? `.${String(hit.className).split(' ')[0]}` : ''} belonging to ${owner ? describe(owner) : 'nothing in the board'}`);
+					}
+				}
+				return { measured, unreachable, offscreen, wrongHit };
+			});
+			if (cells.measured !== expectedChildren) {
+				problems.push(`measured ${cells.measured} board children, expected ${expectedChildren}`);
+			}
+			for (const u of cells.unreachable) problems.push(`CELL UNREACHABLE — ${u}`);
+			for (const o of cells.offscreen) {
+				problems.push(
+					`PROBE POINT OFF-SCREEN — not a wrong hit: ${o} falls outside this gate's own ${VIEWPORT_HEIGHT}px viewport ` +
+						`(elementFromPoint is viewport-relative and returned null); widen the gate's viewport`,
+				);
+			}
+			for (const w of cells.wrongHit) problems.push(`WRONG HIT — ${w}`);
+
+			if (problems.length) {
+				console.error(`\nMONTAGE BOARD CLIPS INSTEAD OF SCROLLING — ${label}:`);
+				for (const p of problems.slice(0, 24)) console.error(`  ${p}`);
+				if (problems.length > 24) console.error(`  … and ${problems.length - 24} more`);
+				console.error(`See styles-source.css → .dse-mt__board (board frame + banding, decoration tier) — overflow-x must be auto.`);
+				failed = true; // report BOTH pointer contexts before exiting
+				continue;
+			}
+			results.push(`${pointer}: ${geo.scrollWidth}px grid in a ${geo.clientWidth}px frame, ${cells.measured} cells reachable`);
+		} finally {
+			await context.close();
+		}
+	}
+	if (failed) process.exit(1);
+	console.log(
+		`\nmontage board scroll OK (${ROUNDS} rounds x ${PANE}px pane, mid fixture cloned in-probe — ` +
+			`${results.join('; ')}; overflow-x auto, real wheel reaches the far end, every board child ` +
+			`scrolls fully inside the frame and its centre hit-tests to itself, fine AND coarse pointer)`,
+	);
+}
+
 // SC-189 ROUND 3 — the HOST-LEAK gate. Scott's four defects of 2026-08-25 all traced to one
 // cause: a kit `.dse-btn` is a real `<button>`, so Obsidian's own app.css reaches it, and
 // nothing in styles-source.css ever declared `box-shadow` for a chrome button. The panel
@@ -5969,6 +6199,9 @@ try {
 		// (see the block above). Its own browser CONTEXT, not just its own navigation —
 		// same narrowed-run skip reasoning.
 		await assertMontageCoarseContainment(page);
+		// SC-326 - the board scrolls instead of clipping at high round counts, fine AND coarse
+		// pointer (see the block above). Own browser contexts, same narrowed-run skip reasoning.
+		await assertMontageBoardScroll(page);
 		// SC-189 round 3 — the host-leak gate (see the block above). Same "own navigations,
 		// captures nothing" shape, so it is skipped on a narrowed run for the same reason.
 		await assertChromeHostLeak(page);

@@ -4585,10 +4585,21 @@ Shared globals
 	}
 
 	/* -- board frame + banding -- */
+	/* SC-326 — the frame SCROLLS sideways instead of clipping. The round columns have a floor
+	   (`--dse-mt-colmin`: 5.2em, 9.2em under `pointer: coarse`), so a high round count makes the
+	   grid wider than the card; with the old `overflow: hidden` the right-hand rounds and the
+	   Tally were cut off with no way to reach them. `overflow-y` stays `hidden` (vertical
+	   behaviour identical to the old frame: the radius still clips the banding, the grid never
+	   grows a vertical scroll), and the border + radius stay on the scroll box, so the frame
+	   looks the same when nothing overflows — an overflow-free board draws no scrollbar. This is
+	   the decoration tier of a SCREEN-only, non-print selector, so print is untouched (no
+	   `overflow` was ever set there). The ≤420px stacked layout is one `minmax(0, 1fr)` track and
+	   never overflows. */
 	.dse-mt__board {
 		border: 1px solid var(--dse-metal-line);
 		border-radius: var(--dse-radius);
-		overflow: hidden;
+		overflow-x: auto;
+		overflow-y: hidden;
 	}
 	.dse-mt__board-corner,
 	.dse-mt__board-rhead,
