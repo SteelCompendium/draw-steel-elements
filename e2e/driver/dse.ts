@@ -98,6 +98,8 @@ function elementIdOf(lang: string): string {
 const MODAL_KINDS: Record<string, string> = {
 	'stamina-edit': '.dse-sedit__row',
 	conditions: '.dse-condal__addwrap',
+	// SC-432: the small confirmation OVER the stamina modal (two .dse-modal are open at once then).
+	'free-heal-confirm': '[data-dse-control="sedit.free-heal.confirm"]',
 };
 
 // ------------------------------------------------------------------------- note + blocks
@@ -193,21 +195,21 @@ function block(lang: string, n = 0): Scope {
 	return scopeOf($$(`${viewSelector()} [data-dse-element="${elementIdOf(lang)}"]`)[n]);
 }
 
-/** The single open DSE modal of `kind`. Fails if none opens, or if more than one is open. */
+/** The single open DSE modal of `kind` (matched by what it contains, so a confirmation open over
+ *  the stamina modal does not make `modal('stamina-edit')` ambiguous). Fails if none opens, or if
+ *  more than one of that kind is open. */
 async function modal(kind: keyof typeof MODAL_KINDS  ): Promise<Scope> {
 	const must = MODAL_KINDS[kind];
 	if (!must) throw new Error(`unknown modal kind "${kind}" (known: ${Object.keys(MODAL_KINDS).join(', ')})`);
-	const css = '.modal-container .dse-modal';
+	const css = `.modal-container .dse-modal:has(${must})`;
 	await browser.waitUntil(async () => (await $$(css).length) > 0, {
 		timeout: 8000,
 		interval: 40,
 		timeoutMsg: `no ${kind} modal opened`,
 	});
 	const count = await $$(css).length;
-	if (count !== 1) throw new Error(`expected exactly one open .dse-modal, found ${count}`);
-	const root = $(css);
-	if (!(await root.$(must).isExisting())) throw new Error(`the open .dse-modal is not a "${kind}" modal (no ${must})`);
-	return scopeOf(root);
+	if (count !== 1) throw new Error(`expected exactly one open ${kind} modal, found ${count}`);
+	return scopeOf($(css));
 }
 
 /** The newest Notice (toast) on screen, as a scope: an older one still fading out can never be

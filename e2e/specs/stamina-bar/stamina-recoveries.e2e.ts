@@ -229,19 +229,83 @@ describe('modal Spend Recovery', () => {
 		await dse.expectNoteBlock(REC, BAR).toMatchObject({ current_stamina: 17, recoveries: 3 });
 	});
 
-	// Q13 / S1 B5, ruled (SC-432): for a hero with no pool to spend from, Spend Recovery stays a plain
+	// Q13 / S1 B5, ruled (SC-432): for a hero with no pool to spend from, the quick action stays a plain
 	// "heal one Recovery's worth" shortcut, relabelled so it does not claim to spend anything, behind a
-	// confirmation dialog. Neither the label nor the dialog is designed yet, so this pins TODAY's
-	// behaviour and the SC-432 fixer rewrites it. (A creature cannot reach this: see INIT-STAM-Q13.)
-	it('[STAM-Q13] Spend Recovery on a hero bar with no pool heals for free, with no limit [current behaviour — SC-432 will relabel + confirm]', async () => {
-		const note = 'Stamina/legacy-low.md'; // 2/30, no recoveries fields; recovery value 10
-		const modal = await openBarModal(note);
-		for (let i = 0; i < 3; i++) await dse.click(modal.control('sedit.spend-recovery'));
-		await expectApplyLabel(modal, 'Gain 28 Stamina'); // S1 B5
-		expect(await applyAndWrite(modal, note)).toBe(1);
-		const block = (await dse.expectNoteBlock(note, BAR).value()) as Record<string, unknown>;
+	// confirmation shown on the FIRST press of a modal session. Nothing is staged until the user confirms.
+	// legacy-low.md: 2/30, no recoveries fields; recovery value 10.
+	const FREE = 'Stamina/legacy-low.md';
+	const FREE_TIP = 'Heal Recovery Value: Spends no Recovery';
+
+	it('[STAM-Q13] a hero bar with no pool: the button says it heals, the first press asks, Confirm stages the heal, later presses do not ask again, and nothing is spent', async () => {
+		const modal = await openBarModal(FREE);
+		const heal = modal.control('sedit.spend-recovery');
+		await expect(heal).toHaveText('Heal Recovery Value');
+		await expect(heal).toHaveAttribute('aria-label', FREE_TIP);
+		await dse.click(heal);
+		const dialog = await dse.modal('free-heal-confirm');
+		await expect(dialog.control({ css: '.dse-modal__title-text' })).toHaveText('Heal without spending a Recovery?', { ignoreCase: true });
+		expect(await dialog.control({ css: '.dse-modal__body p' }).getText()).toContain('no Recovery to spend');
+		await expectApplyLabel(modal, 'No Stamina Change'); // asked BEFORE anything is staged
+		await dse.click(dialog.control('sedit.free-heal.confirm'));
+		await expect(dialog.root).not.toBeExisting();
+		await expectApplyLabel(modal, 'Gain 10 Stamina');
+		await dse.click(heal);
+		await dse.click(heal);
+		expect(await dse.page<number>(`document.querySelectorAll('.modal-container .dse-modal').length`)).toBe(1); // no second dialog
+		await expectApplyLabel(modal, 'Gain 28 Stamina'); // 2 -> 12 -> 22 -> 30 (the third capped at max), S1 B5
+		await expect(heal).toBeDisabled(); // full: no gain left
+		await expect(heal).toHaveAttribute('aria-label', 'Heal Recovery Value: Already at maximum Stamina');
+		expect(await applyAndWrite(modal, FREE)).toBe(1);
+		const block = (await dse.expectNoteBlock(FREE, BAR).value()) as Record<string, unknown>;
 		expect(block).toMatchObject({ current_stamina: 30 });
 		expect(block).not.toHaveProperty('recoveries');
+		expect(block).not.toHaveProperty('recoveries_max');
+	});
+
+	it('[STAM-Q13C] Cancel on the confirmation adds nothing: the modal stays open, a pending edit survives, the next press asks again, no write', async () => {
+		const modal = await openBarModal(FREE);
+		await applyAmount(modal, '1', 'sedit.damage');
+		await expectApplyLabel(modal, 'Lose 1 Stamina');
+		await dse.click(modal.control('sedit.spend-recovery'));
+		const dialog = await dse.modal('free-heal-confirm');
+		await dse.click(dialog.control('sedit.free-heal.cancel'));
+		await expect(dialog.root).not.toBeExisting();
+		await expect(modal.root).toBeExisting();
+		await expectApplyLabel(modal, 'Lose 1 Stamina'); // untouched by the cancelled heal
+		await dse.click(modal.control('sedit.spend-recovery'));
+		const again = await dse.modal('free-heal-confirm'); // a Cancel does not count as "asked"
+		await dse.click(again.control('sedit.free-heal.cancel'));
+		await dse.expectNoWrite(FREE, () => dse.click(modal.control('modal.close')));
+		await dse.expectNoteBlock(FREE, BAR).toMatchObject({ current_stamina: 2 });
+	});
+
+	// SC-431 made Escape back out of the innermost thing. The confirmation is a second Obsidian modal: its
+	// Scope is the top of the stack, so Escape must close only it (a regression here would drop the whole edit).
+	it('[STAM-Q13E] Escape on the confirmation closes only the confirmation: the stamina modal and its pending edit stay, and Apply still writes it', async () => {
+		const modal = await openBarModal(FREE);
+		await applyAmount(modal, '1', 'sedit.damage');
+		await dse.click(modal.control('sedit.spend-recovery'));
+		const dialog = await dse.modal('free-heal-confirm');
+		await dse.expectNoWrite(FREE, () => dse.press('Escape', dse.aimedAt('modal.close')));
+		await expect(dialog.root).not.toBeExisting();
+		await expect(modal.root).toBeExisting();
+		await expectApplyLabel(modal, 'Lose 1 Stamina');
+		expect(await applyAndWrite(modal, FREE)).toBe(1);
+		const block = (await dse.expectNoteBlock(FREE, BAR).value()) as Record<string, unknown>;
+		expect(block).toMatchObject({ current_stamina: 1 });
+		expect(block).not.toHaveProperty('recoveries');
+	});
+
+	it('[STAM-Q13P] a hero WITH a pool is unchanged: still "Spend Recovery", the first press stages at once with no dialog', async () => {
+		const modal = await openBarModal(REC);
+		const spend = modal.control('sedit.spend-recovery');
+		await expect(spend).toHaveText('Spend Recovery');
+		await expect(spend).toHaveAttribute('aria-label', 'Spend Recovery');
+		await dse.click(spend);
+		await expectApplyLabel(modal, 'Gain 10 Stamina');
+		expect(await dse.page<number>(`document.querySelectorAll('.modal-container .dse-modal').length`)).toBe(1);
+		expect(await applyAndWrite(modal, REC)).toBe(1);
+		await dse.expectNoteBlock(REC, BAR).toMatchObject({ current_stamina: 22, recoveries: 2 });
 	});
 });
 

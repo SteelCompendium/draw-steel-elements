@@ -117,6 +117,6 @@ it('[STAM-X01] what a user sees happen', async () => {
   CORRECT behaviour; it passes while `fn` fails and FAILS the moment it passes ("known bug SC-123 appears
   fixed - remove the marker"). Pin today's behaviour of something a ticket has
   ruled will CHANGE (but has not designed yet) as a plain test, with the title suffix
-  `[current behaviour — SC-nnn will ...]` (e.g. `SC-432 will relabel + confirm`, `SC-432 changes this`): the
+  `[current behaviour — SC-nnn will ...]` (e.g. `SC-nnn will relabel + confirm`, `SC-nnn changes this`): the
   ticket's fixer rewrites it. The retired `[... ruling pending ...]` wording is no longer used.
 - Preferences: `before(() => dse.setPrefs({ staminaRecoveryPopover: true }))` + `after(() => dse.setPrefs({}))`.

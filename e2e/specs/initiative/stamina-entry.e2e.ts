@@ -5,7 +5,7 @@
 // visually (keyboard / assistive-tech write path), so those are reached with Tab + Enter and
 // the pointer path is the row bar. Steel is the shipped default.
 import { expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
+import { dse } from '../../driver/dse';
 import { applyAmount, applyAndWrite, expectApplyLabel } from '../../driver/stamina';
 
 const NOTE = 'Initiative/tracker.md';
@@ -130,20 +130,38 @@ describe('initiative: creatures', () => {
 	});
 
 	// Q13 / S1 B5, ruled by Scott 2026-10-18 (SC-432): "disable Spend Recovery for creatures". A creature
-	// has no Recoveries at all, yet today Spend Recovery heals it for free, with no limit (20/60 -> 60/60
-	// in three presses). The creature is hurt on purpose: at full Stamina the button is disabled anyway.
-	knownBug(
-		'SC-432',
-		'[INIT-STAM-Q13] Spend Recovery is disabled for a creature',
-		async () => {
-			await dse.openNote(HURT);
-			await dse.click(dse.block(INIT).control('init.detail.bar'));
-			const modal = await dse.modal('stamina-edit');
-			await expect(modal.control('sedit.spend-recovery')).toBeDisabled({ wait: 1500, message: 'Spend Recovery should be disabled for a creature' });
-			await dse.click(modal.control('modal.close'));
-		},
-		{ failsWith: /Spend Recovery should be disabled for a creature/ },
-	);
+	// has no Recoveries at all, so the button stays but is disabled with the reason, and a click does
+	// nothing. The creature is hurt on purpose: at full Stamina the button was disabled anyway.
+	it('[INIT-STAM-Q13] Spend Recovery is disabled for a creature, with the reason, and a click does nothing', async () => {
+		await dse.openNote(HURT);
+		await dse.click(dse.block(INIT).control('init.detail.bar'));
+		const modal = await dse.modal('stamina-edit');
+		const spend = modal.control('sedit.spend-recovery');
+		await expect(spend).toHaveText('Spend Recovery');
+		await expect(spend).toBeDisabled();
+		await expect(spend).toHaveAttribute('aria-label', 'Spend Recovery: Creatures have no Recoveries');
+		await dse.click(spend);
+		await expectApplyLabel(modal, 'No Stamina Change');
+		await dse.expectNoWrite(HURT, () => dse.click(modal.control('modal.close')));
+	});
+
+	// An initiative hero never has a Recoveries pool (the tracker keeps only Stamina), so it gets the same
+	// relabelled, confirmed free heal as a pool-less bar. Damage first: Alice starts at full Stamina.
+	it('[INIT-STAM-Q13H] an initiative hero has no pool: the relabelled heal asks first, and Confirm stages it', async () => {
+		const root = await openTracker();
+		await dse.click(root.control('init.hero.bar'));
+		const modal = await dse.modal('stamina-edit');
+		await applyAmount(modal, '15', 'sedit.damage');
+		const heal = modal.control('sedit.spend-recovery');
+		await expect(heal).toHaveText('Heal Recovery Value');
+		await dse.click(heal);
+		const dialog = await dse.modal('free-heal-confirm');
+		await expectApplyLabel(modal, 'Lose 15 Stamina'); // nothing staged until Confirm
+		await dse.click(dialog.control('sedit.free-heal.confirm'));
+		await expectApplyLabel(modal, 'Lose 5 Stamina'); // -15 + a recovery value of 10
+		expect(await applyAndWrite(modal, NOTE)).toBe(1);
+		await dse.expectNoteBlock(NOTE, INIT).toMatchObject({ heroes: [{ name: 'Alice Alpha', current_stamina: 25 }] });
+	});
 
 	// B2 / S1 (SC-426, fixed): a roster-cell edit of the instance shown in the detail row repaints the
 	// detail row too (number, bar and state chip), not just the cell. The detail row follows the edit.
