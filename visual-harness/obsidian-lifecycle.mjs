@@ -1409,7 +1409,8 @@ const SCENARIOS = [
 			await t.sleep(1500);
 			await t.ev(`(${LC_LEAF}).view.editor.setCursor({ line: 5, ch: 0 })`);
 			// SC-383: generateAnchorId can mint hex ids YAML reads as numbers (927e10, 012345), which loses the
-			// anchor on the first write (~3% of runs). Pin Math.random to one that cannot ('abcdef') while pinning.
+			// anchor on the first write (~3% of runs). Pin Math.random to one that cannot ('abcdef') while pinning
+			// (harmless once SC-360 fixes the generator; the assertions below do not depend on this value).
 			await t.ev(`(() => { window.__lcRandom = Math.random; Math.random = () => 0xabcdef / 0x1000000; return true; })()`);
 			try {
 				t.expect(await t.ev(`app.commands.executeCommandById('draw-steel-elements:send-block-to-sidebar')`), 'the send-block-to-sidebar command did not run');
@@ -1417,7 +1418,15 @@ const SCENARIOS = [
 			} finally {
 				await t.ev(`(() => { if (window.__lcRandom) Math.random = window.__lcRandom; delete window.__lcRandom; return true; })()`);
 			}
-			t.expect(t.read(rel).includes('_dse_anchor: abcdef\r\n'), `the stubbed anchor id was not stamped: ${JSON.stringify(t.read(rel))}`);
+			// Whatever id generateAnchorId minted (it does not matter which: SC-383 / SC-360 own that), the id on
+			// disk must be the one the panel holds, and YAML must read it as a STRING.
+			const stamped = /_dse_anchor: ([^\r\n]+)\r\n/.exec(t.read(rel))?.[1];
+			t.expect(!!stamped, `no _dse_anchor line stamped: ${JSON.stringify(t.read(rel))}`);
+			const held = await t.ev(`app.workspace.getLeavesOfType('dse-sidebar')[0].view.getState().panels.map((p) => p.anchorId)`);
+			t.expect(held.length === 1 && held[0] === stamped, `the panel holds ${JSON.stringify(held)} but disk has anchor ${JSON.stringify(stamped)}`);
+			// `yaml` (eemeli v2) is what Obsidian's parseYaml is (test/mocks/obsidian-core.ts); the page cannot require('obsidian').
+			const { parse: parseYaml } = await import('yaml');
+			t.expect(typeof parseYaml(`k: ${stamped}`).k === 'string', `YAML reads the stamped id ${JSON.stringify(stamped)} as a non-string`);
 			t.expect(allCrlf(t.read(rel)), `pinning stamped an LF line into the CRLF note: ${JSON.stringify(t.read(rel))}`);
 			const panelCounter = `Array.from(app.workspace.getLeavesOfType('dse-sidebar')[0].view.containerEl.querySelectorAll('[data-dse-element="counter"]')).find((x) => x.isConnected)`;
 			await t.waitFor(`!!(${panelCounter})`, 'the counter mounted in the sidebar panel');
