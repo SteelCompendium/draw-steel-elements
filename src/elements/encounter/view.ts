@@ -17,7 +17,7 @@ import { normalizeSccTarget } from '@/refs/SccResolver';
 import type { EncounterComputed, EncounterModel, EncounterRow } from './model';
 import { computeEncounter, rowEv } from './budget';
 import { serialize as serializeInitiative } from '../initiative/model';
-import { GENERATED_FROM_KEY, findGeneratedBlock } from '@/framework/sidebar/anchor';
+import { GENERATED_FROM_KEY, findGeneratedBlock, generateAnchorId } from '@/framework/sidebar/anchor';
 import { detectEol, toEol } from '@/framework/host/lineEnding';
 import type { EncounterData, EnemyGroup } from '../initiative/model';
 
@@ -541,7 +541,7 @@ export class EncounterView extends ElementView<EncounterModel> {
 	private ensureEncounterAnchor(): string {
 		const existing = this.model._dse_anchor;
 		if (existing) return existing;
-		const id = Math.random().toString(16).slice(2, 8).padEnd(6, '0');
+		const id = generateAnchorId(); // SC-360: the shared generator - a bare hex id can read as a YAML number
 		this.model._dse_anchor = id;
 		if (this.cx.host.canPersist) void this.persist();
 		return id;

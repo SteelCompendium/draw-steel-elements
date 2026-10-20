@@ -42,7 +42,7 @@ const LEADING_LETTERS = 'abcdf';
  *  reads as NaN there (Obsidian ships 1.2, but the sweep in anchor.test.ts holds both) - so the
  *  leading letter is one of a b c d f (never `e`), then 5 hex digits: 6 chars, 5 * 16^5 ids.
  *  One Math.random() call, split arithmetically, keeps the generator deterministic to test. */
-function generateAnchorId(): string {
+export function generateAnchorId(): string {
 	const rest = 16 ** 5;
 	const n = Math.floor(Math.random() * LEADING_LETTERS.length * rest);
 	return LEADING_LETTERS[Math.floor(n / rest)] + (n % rest).toString(16).padStart(5, '0');
