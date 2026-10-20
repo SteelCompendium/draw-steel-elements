@@ -755,6 +755,29 @@ describe('SC-455: ReadingModeBlockHost.replaceSource on a block inside a blockqu
 		expect(Notice.notices).toEqual([unsavableWriteMessage('Note')]);
 	});
 
+	test('a list inside a callout works: the fence under `> - item` keeps its `>   ` prefix on every written line', async () => {
+		const app = new App();
+		const live = ['top', '> - item', ...under('>   ', CTR(1)), '> tail'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, sectionOf(live, 1, 6), bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(['top', '> - item', ...under('>   ', CTR(2)), '> tail'].join('\n'));
+	});
+
+	test('a fence indented a few spaces outside any quote is another unsupported shape: the Notice, the note unchanged', async () => {
+		const app = new App();
+		const live = ['top', '', ...CTR(1).map((l) => `  ${l}`), '', 'below'].join('\n');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, sectionOf(live, 2, 5), bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(false);
+
+		expect(app.vault.getContent('Note.md')).toBe(live);
+		expect(Notice.notices).toEqual([unsavableWriteMessage('Note')]);
+	});
+
 	test('a section that holds no readable fence at all (no identity): the same Notice instead of a silent false', async () => {
 		const app = new App();
 		const live = ['> [!note]', '> just text, the block was edited away'].join('\n');
