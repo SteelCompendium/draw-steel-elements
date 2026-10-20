@@ -431,9 +431,9 @@ export async function prepareModel<M>(
 	// framework READS them without removing them, which is what keeps an existing note's
 	// `collapse_default: true` working (and byte-stable) after SC-169. See collapsedKey.ts.
 	// `collapsible:`/`collapse_default:` are claimed only for a CHROME-BEARING element whose
-	// own model does not own them. A definition without the slot is left completely alone
-	// (`ds-skills` keeps parsing its ComponentWrapper pair exactly as before); `ds-stamina`
-	// has the slot AND owns them, so they are read in place rather than removed.
+	// own model does not own them. A definition without the slot is left completely alone;
+	// `ds-stamina` and `ds-skills` (chrome-bearing since SC-255) have the slot AND own
+	// them, so they are read in place rather than removed.
 	const claimLegacyKeys = def.chrome !== undefined && def.collapseKeysOwnedByModel !== true;
 	// SC-169 fix round 1 (M-1): fold in anything the non-mapping-body rescue above peeled
 	// off the source text. `withPeeledKeys` is a no-op for every body that parses.

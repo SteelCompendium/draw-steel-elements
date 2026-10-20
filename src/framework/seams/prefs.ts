@@ -297,8 +297,8 @@ export function createPreferenceStore(storage: PrefsStorage): PreferenceStore {
 // Instead: a WeakMap<App, PreferenceStore> registry, keyed by the same `App`
 // instance every modal already carries — App is a stable per-plugin-instance
 // singleton, so the registry entry outlives any one modal and is reclaimed
-// automatically once the App itself is (WeakMap precedent:
-// src/model/ComponentWrapper.ts:47, and theme.ts's themeServiceByApp). The plugin
+// automatically once the App itself is (WeakMap precedent: theme.ts's
+// themeServiceByApp). The plugin
 // registers its store once (main.ts, right beside registerThemeServiceForApp); no
 // unregister is needed — a reload's fresh App gets its own key, and re-registering
 // the SAME app id (as tests do per-case) simply overwrites the prior entry.

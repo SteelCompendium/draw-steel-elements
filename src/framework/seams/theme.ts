@@ -142,7 +142,7 @@ export function createThemeService(prefs: PreferenceStore, owner: Component): Th
 // sites for one lookup. Instead: a WeakMap<App, ThemeService> registry, keyed by the
 // same `App` instance every modal already carries — App is a stable per-plugin-instance
 // singleton, so the registry entry outlives any one modal and is reclaimed automatically
-// once the App itself is (WeakMap precedent: src/model/ComponentWrapper.ts:47). The
+// once the App itself is (WeakMap precedent: src/framework/view.ts `AFTER_RENDER`). The
 // plugin registers its service once (main.ts, right after createThemeService); no
 // unregister is needed — a reload's fresh App gets its own key, and re-registering the
 // SAME app id (as tests do per-case) simply overwrites the prior entry.

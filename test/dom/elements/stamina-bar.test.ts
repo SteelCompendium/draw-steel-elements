@@ -64,10 +64,10 @@ function makeDeps(): ElementPipelineDeps {
 	const plugin = new Plugin(app);
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
-	// The framework chrome layer (not StaminaBarView) reads the collapsibleDefault/
-	// collapseDefault descriptors via prefs.get() when resolving the whole-element
-	// collapse from the block's raw keys (collapsedKey.ts extractCollapseKeys) — they
-	// must be registered, same convention as statblock.test.ts's makeDeps().
+	// readCollapsePref (framework/pipeline.ts) reads the collapsibleDefault/collapseDefault
+	// descriptors via prefs.get() when they are registered and falls back to the catalog
+	// defaults when they are not — registering them here is what lets a test set those
+	// prefs and have the chrome see them. Same convention as statblock.test.ts's makeDeps().
 	prefs.describe(DSE_PREF_DESCRIPTORS);
 	const theme = createThemeService(prefs, plugin as any);
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);

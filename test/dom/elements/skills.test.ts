@@ -72,10 +72,12 @@ function makeDeps(session: SessionStore = createSessionStore()): ElementPipeline
 	const plugin = new Plugin(app);
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
-	// The framework chrome layer (not SkillsView) reads the collapsibleDefault/
-	// collapseDefault descriptors via prefs.get() when resolving the whole-element
-	// collapse (SC-255 removed SkillsView's own resolveCollapsePrefs call) — they must
-	// be registered, same convention as statblock.test.ts's makeDeps().
+	// The framework chrome layer (not SkillsView — SC-255) resolves the whole-element
+	// collapse: readCollapsePref (framework/pipeline.ts) reads the collapsibleDefault/
+	// collapseDefault descriptors via prefs.get() when they are registered and falls back
+	// to the catalog defaults when they are not — registering them here is what lets a
+	// test set those prefs and have the chrome see them. Same convention as
+	// statblock.test.ts's makeDeps().
 	prefs.describe(DSE_PREF_DESCRIPTORS);
 	const theme = createThemeService(prefs, plugin as any);
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
