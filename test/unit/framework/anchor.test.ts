@@ -196,6 +196,20 @@ describe('D8 Task 2 review fix — anchor.ts fence scanner (finding #4, CRITICAL
 			expect(readGeneratedFrom('_dse_from: f12345')).toBe('f12345');
 		});
 
+		// SC-453 - CRLF notes. `sendToSidebar` hands `ensureAnchor` a body split on `\n` only, so each line
+		// still ends in `\r`; `iterateFences` (the lookup side) is LF-joined. Both must read the scalar.
+		test.each(REWRITTEN)('CRLF: rewritten id %s is read from a CRLF body, reused untouched, and found in a CRLF note', (id) => {
+			const body = ['current_value: 1', `${ANCHOR_KEY}: ${id}`, 'label: Foo'].join('\r\n');
+			expect(readAnchor(body)).toBe(id);
+			expect(readAnchor(`${body}\r\n`)).toBe(id);
+			expect(ensureAnchor(body)).toEqual({ body, id }); // reused, no second line, no EOL mixing
+			const note = ['# Note', '```ds-counter', body, '```', 'after'].join('\r\n');
+			expect(findAnchoredBlock(note, 'ds-counter', id)).toEqual({ language: 'ds-counter', lineStart: 1, lineEnd: 5 });
+			const quoted = ['```ds-counter', `${ANCHOR_KEY}: "${id}"`, '```'].join('\r\n');
+			expect(findAnchoredBlock(quoted, 'ds-counter', id)).toEqual({ language: 'ds-counter', lineStart: 0, lineEnd: 2 });
+			expect(readGeneratedFrom(`_dse_from: ${id}\r\nround: 1`)).toBe(id);
+		});
+
 		test('the widened match does not swallow trailing content or a comment on the line', () => {
 			expect(readAnchor(`${ANCHOR_KEY}: 9.2e+51 extra words`)).toBeNull();
 			expect(readAnchor(`${ANCHOR_KEY}: abc123 # note`)).toBeNull();

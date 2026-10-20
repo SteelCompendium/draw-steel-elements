@@ -23,7 +23,7 @@ export const ANCHOR_KEY = '_dse_anchor';
  *  charset is exactly what a YAML number/inf/nan scalar can contain, so a flow collection, a comment
  *  (`# ...`), a second word or a following line is still not swallowed. `[ \t]*` (not `\s*`) after
  *  the colon so an empty value cannot reach across the newline to the next key. */
-const SCALAR_TOKEN = String.raw`[ \t]*['"]?([A-Za-z0-9_.+-]+)['"]?[ \t]*\r?$`;
+const SCALAR_TOKEN = String.raw`[ \t]*['"]?([A-Za-z0-9_.+-]+)['"]?[ \t]*$`; // multiline `$` also stops before a CR (SC-453 CRLF notes)
 const ANCHOR_LINE = new RegExp(`^${ANCHOR_KEY}:${SCALAR_TOKEN}`, 'm');
 
 /** A fence-marker line: 3+ backticks/tildes (captured), then the rest of the line — the
