@@ -306,16 +306,19 @@ export class StaminaEditModal extends DseModal {
 			const dyingLength = negativeStaminaLimit * -1;
 			const barLength = maxStamina + dyingLength;
 			const adjustedCurrentStamina = this.staminaBar.current_stamina + dyingLength;
-			if (this.pendingStaminaChange > 0) {
+			// SC-427 (R3-F5): the bar previews the change Apply WRITES (clamped into [floor, max]),
+			// the same value the Apply label states — never the raw staged sum (25 - 3 = 22 under max 20).
+			const appliedStaminaChange = this.appliedStaminaChange(this.pendingStaminaChange);
+			if (appliedStaminaChange > 0) {
 				bar.set(
 					(adjustedCurrentStamina / barLength) * 100,
-					(this.pendingStaminaChange / barLength) * 100,
+					(appliedStaminaChange / barLength) * 100,
 					'heal',
 				);
-			} else if (this.pendingStaminaChange < 0) {
+			} else if (appliedStaminaChange < 0) {
 				bar.set(
-					((adjustedCurrentStamina + this.pendingStaminaChange) / barLength) * 100,
-					(this.pendingStaminaChange / barLength) * -100,
+					((adjustedCurrentStamina + appliedStaminaChange) / barLength) * 100,
+					(appliedStaminaChange / barLength) * -100,
 					'damage',
 				);
 			} else {
@@ -331,7 +334,7 @@ export class StaminaEditModal extends DseModal {
 					max: maxStamina,
 				},
 				{
-					current: this.staminaBar.current_stamina + this.pendingStaminaChange,
+					current: this.staminaBar.current_stamina + appliedStaminaChange,
 					temp: currentTempStamina + this.pendingTempStaminaChange,
 					max: maxStamina,
 				},
@@ -746,6 +749,17 @@ export class StaminaEditModal extends DseModal {
 		return Math.max(0, (negativeStaminaLimit * -1) + currentStamina + this.pendingStaminaChange);
 	}
 
+	/**
+	 * SC-427 (R1-M1, R3-F5): the Stamina change Apply will actually WRITE for a raw staged change —
+	 * `clampStamina(current + raw) - current`, or 0 for a zero raw change (Apply then leaves
+	 * `current_stamina` as stored). The ONE copy of this math: the Apply label, its disabled state
+	 * and the preview bar/gauge all read it, so they cannot disagree with each other or with Apply.
+	 */
+	private appliedStaminaChange(raw: number): number {
+		const { current, floor, max } = this.staminaFrame;
+		return raw === 0 ? 0 : this.clampStamina(current + raw, floor, max) - current;
+	}
+
 	/** Legacy wording verbatim; the disabled state is the REAL property (CB-8). */
 	private updateActionButton(actionBtn: IconButtonHandle): void {
 		// SC-430: a dirty, parseable typed draft counts as if it had already committed.
@@ -754,9 +768,7 @@ export class StaminaEditModal extends DseModal {
 		// outside [floor, max] (25 - 3 = 22), which Apply clamps (to 20, a loss of 5). In range this is
 		// the identity; a zero raw change stays zero (Apply then leaves current_stamina as stored).
 		const rawStaminaChange = this.draftStaminaChange ?? this.pendingStaminaChange;
-		const { current, floor, max } = this.staminaFrame;
-		const staminaChange =
-			rawStaminaChange === 0 ? 0 : this.clampStamina(current + rawStaminaChange, floor, max) - current;
+		const staminaChange = this.appliedStaminaChange(rawStaminaChange);
 		const tempStaminaChange = this.draftTempStaminaChange ?? this.pendingTempStaminaChange;
 		let actionText = '';
 

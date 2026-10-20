@@ -482,6 +482,42 @@ describe('[M1] Damage / Healing on an out-of-range stored value: label == field 
 	});
 });
 
+// SC-427 R3-F5: the preview bar draws the position Apply will WRITE (the clamped one), the same value
+// the label states, not the raw staged sum. Measured against a second modal OPENED AT the persisted
+// value: its (unstaged) bar is the reference for "where the pending marker must sit".
+describe('[M1b] the preview bar/gauge draw the clamped pending position', () => {
+	const prop = (root: HTMLElement, sel: string, name: string): string =>
+		root.querySelector<HTMLElement>(sel)!.style.getPropertyValue(name);
+	const gauge = (content: HTMLElement): HTMLElement => content.querySelector<HTMLElement>('.dse-stamina__cluster > *')!;
+	const legacyFill = (content: HTMLElement): number => parseFloat(prop(content, '.dse-stamina__fill', '--dse-fill'));
+	const legacyDelta = (content: HTMLElement): number => parseFloat(prop(content, '.dse-stamina__delta', '--dse-delta-fill'));
+
+	test.each([
+		{ id: 'creature 25/20, Damage 3 (persists 20)', max: 20, cur: 25, hero: false, press: pressDamage, amount: 3, persisted: 20, delta: 25 },
+		{ id: 'hero -14/20 (floor -10), Healing 2 (persists -10)', max: 20, cur: -14, hero: true, press: pressHealing, amount: 2, persisted: -10, delta: (4 / 30) * 100 },
+	])('$id: pending marker == a modal opened at the persisted value; band width == the clamped change', ({ max, cur, hero, press, amount, persisted, delta }) => {
+		const pending = openStaminaModal({ max, current: cur, isHero: hero });
+		press(pending.content, amount);
+		const ref = openStaminaModal({ max, current: persisted, isHero: hero });
+		// legacy track: where the bar ENDS (a heal's band sits after the fill, a damage band inside it) is
+		// where the persisted value sits; the delta is the clamped change
+		const heal = pending.content.querySelector('.dse-stamina__delta')!.getAttribute('data-kind') === 'heal';
+		expect(legacyFill(pending.content) + (heal ? legacyDelta(pending.content) : 0)).toBeCloseTo(legacyFill(ref.content), 6);
+		expect(legacyDelta(pending.content)).toBeCloseTo(delta, 6);
+		// steel gauge: the same pour / wound / cap position as the persisted value's gauge
+		for (const name of ['--dse-pour-w', '--dse-wound-w', '--dse-cap-x']) {
+			expect(gauge(pending.content).style.getPropertyValue(name)).toBe(gauge(ref.content).style.getPropertyValue(name));
+		}
+	});
+
+	test('in range the clamp is the identity: 10/20 Damage 3 draws fill 35 / delta 15', () => {
+		const { content } = openStaminaModal({ max: 20, current: 10, isHero: false });
+		pressDamage(content, 3);
+		expect(legacyFill(content)).toBeCloseTo(35, 6);
+		expect(legacyDelta(content)).toBeCloseTo(15, 6);
+	});
+});
+
 describe('[O2] opening on a hand-edited out-of-range current stages nothing', () => {
 	test.each([
 		{ id: 'creature 25/20', max: 20, current: 25, isHero: false },
