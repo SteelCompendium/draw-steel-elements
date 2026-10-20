@@ -1059,6 +1059,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#blocks-inside-callouts-and-quotes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Blocks inside callouts and quotes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#per-block-appearance-overrides-advanced" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1193,6 +1204,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#blocks-inside-callouts-and-quotes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Blocks inside callouts and quotes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#per-block-appearance-overrides-advanced" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1269,6 +1291,38 @@ changed nothing. Leaving it out keeps that trap out of your note. A snapshot del
 overwrote them would defeat it. If you want content that keeps updating, use <strong>Insert
 compendium reference</strong> instead.</p>
 <p>Snapshots are offered for statblocks, features and featureblocks only.</p>
+<h2 id="blocks-inside-callouts-and-quotes">Blocks inside callouts and quotes<a class="headerlink" href="#blocks-inside-callouts-and-quotes" title="Permanent link">&para;</a></h2>
+<p>A block can sit inside a callout or a quote — every line of it starts with <code>&gt;</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="k">&gt; </span><span class="ge">[!note] Camp</span>
+<span class="k">&gt; </span><span class="ge">Rest by the fire.</span>
+<span class="k">&gt; </span><span class="ge">```ds-stamina-bar</span>
+<span class="k">&gt; </span><span class="ge">max_stamina: 30</span>
+<span class="k">&gt; </span><span class="ge">current_stamina: 12</span>
+<span class="k">&gt; </span><span class="ge">```</span>
+</code></pre></div>
+<p>Clicking its controls saves the change back into your note, and the <code>&gt;</code> stays on every line.
+Nothing else in the callout or the note is touched.</p>
+<p><strong>What works</strong></p>
+<ul>
+<li>A block in a callout (<code>&gt; [!note]</code>), in a plain quote (<code>&gt; text</code>), and in a callout inside a
+  callout (<code>&gt; &gt;</code>). The space after the <code>&gt;</code> is optional.</li>
+<li>Several blocks in the same callout, even identical ones.</li>
+<li><strong>Reading view</strong> and <strong>Live Preview</strong> (for callouts), and the <a href="../gm-trackers/">sidebar</a>: put the
+  cursor in the block and run <strong>Send block to sidebar</strong>.</li>
+<li>A list inside a callout (<code>&gt; - item</code> with the block indented under it), in Reading view.</li>
+</ul>
+<p><strong>What doesn't work yet</strong></p>
+<ul>
+<li><strong>A block inside a list item</strong> — the code fence indented under <code>- item</code> or <code>1. item</code>, with no <code>&gt;</code>
+  in front. It draws, but it can't save: clicking a control shows a notice saying the change was
+  not saved, and your note stays as it was. Move the block out of the list (or into a callout) to
+  edit it. The same goes for a fence indented by a few spaces outside a list.</li>
+<li><strong>Live Preview doesn't draw Draw Steel blocks inside a plain quote</strong> (<code>&gt; text</code>) at all; Obsidian
+  shows the raw text there. Use a callout, or switch to Reading view.</li>
+</ul>
+<p>One thing to expect in Live Preview: clicking a control in a block inside a callout also opens that
+callout as its source text, which is how Obsidian treats any click inside a callout. The change is
+saved; move the cursor out of the callout and the block is drawn again.</p>
 <h2 id="per-block-appearance-overrides-advanced">Per-block appearance overrides (advanced)<a class="headerlink" href="#per-block-appearance-overrides-advanced" title="Permanent link">&para;</a></h2>
 <p>Most appearance settings are global (see <a href="../settings/">Settings</a>), but a single block can
 pin its own look with a reserved <code>prefs:</code> key:</p>
