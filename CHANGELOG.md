@@ -29,6 +29,12 @@ for what needs action.
   the `> ` on every line and leaving the rest of the note untouched. A block that still can't be saved
   (one in a list item) now tells you with a notice instead of failing silently; see
   [Blocks inside callouts and quotes](docs/writing-blocks.md#blocks-inside-callouts-and-quotes).
+- [FIX] **Edits in Reading view now save in notes that contain a stray carriage-return character above
+  the block** (SC-460). A lone carriage return (a `\r` with no line feed after it, left behind by some
+  imports and editors) anywhere above a block made clicks in Reading view do nothing, and the sidebar could
+  pin the wrong one of two blocks. Obsidian counts such a character as a line break, and the plugin now
+  counts lines the same way. The character itself and everything else outside the block are left exactly as
+  they were.
 - [FIX] **Notes with Windows (CRLF) line endings work with the sidebar, and saves keep the note's line
   endings.** A block pinned to the sidebar in a CRLF note could not be found, so its changes never saved.
   Saving a block from Reading view or the sidebar, pinning one, and the encounter builder's "Create tracker
