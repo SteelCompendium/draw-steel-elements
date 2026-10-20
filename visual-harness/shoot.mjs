@@ -1079,6 +1079,9 @@ async function assertMontageBoardScroll(page) {
 					scrollWidth: board.scrollWidth,
 					clientWidth: board.clientWidth,
 					children: board.children.length,
+					// the FRAME itself must not poke out of the card (an ancestor's clip would
+					// otherwise re-hide what the board's own scroll just made reachable)
+					frameOverhang: board.getBoundingClientRect().right - board.closest('.dse-mt').getBoundingClientRect().right,
 				};
 			});
 			const problems = [];
@@ -1095,6 +1098,9 @@ async function assertMontageBoardScroll(page) {
 						`(need 'auto' or 'scroll'); the grid is ${geo.scrollWidth}px wide in a ${geo.clientWidth}px frame, so ` +
 						`${geo.scrollWidth - geo.clientWidth}px of round columns and tally are clipped with no way to reach them`,
 				);
+			}
+			if (geo.frameOverhang > 0.5) {
+				problems.push(`the board's frame pokes ${geo.frameOverhang.toFixed(1)}px out of its .dse-mt card — an ancestor clip or a min-width has taken over from the board's own scroll`);
 			}
 			const expectedChildren = (2 + ROUNDS) * (1 + heroCount);
 			if (geo.children !== expectedChildren) {
