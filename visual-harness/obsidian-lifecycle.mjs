@@ -35,6 +35,10 @@
 // pinned to the sidebar from the editor (the anchor is stamped INSIDE the quote with its prefix) and then
 // clicked in the sidebar panel — bytes on disk: edit landed, `> ` on every block line, everything else identical.
 // (Reading view and Live Preview writes through a callout are in the e2e suite: e2e/specs/callout/.)
+// SC-460 appends G-S12 (28 total): a LONE CARRIAGE RETURN above a block (LF note, CRLF note, two blocks with one between
+// them). Obsidian counts it as a line break, so section line numbers are off against split('\n'); a Reading view click
+// and a Live Preview click, and a sidebar pin from the close fence of the second block, must still land in the right
+// block and leave every other byte (the lone CRs included) untouched.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -161,6 +165,10 @@ Object.assign(FIXTURES, {
 	'Lifecycle/hoverhost.md': '# hover host\n\nSee [[counter]] here.\n',
 	// SC-453: an all-CRLF note (written to disk as CRLF bytes) with one counter between ABOVE and BELOW.
 	'Lifecycle/crlf.md': `# crlf\n\nABOVE\n\n${COUNTER(10)}\n\nBELOW\n`.replace(/\n/g, '\r\n'),
+	// SC-460: a lone CR above (and below) the block - the note is LF, CRLF, or has two blocks with one between them.
+	'Lifecycle/straycr-lf.md': `# stray\n\nA\rB\n\n${COUNTER(10)}\n\nBELOW\rX\n`,
+	'Lifecycle/straycr-crlf.md': `# stray\n\nA\rB\n\n${COUNTER(10)}\n\nBELOW\rX\n`.replace(/\n/g, '\r\n'),
+	'Lifecycle/straycr-twins.md': `# stray\n\nA\rB\n\n${COUNTER(10, 'One')}\n\nMID\rDLE\n\n${COUNTER(10, 'Two')}\n\nEND\n`,
 	// SC-455: a counter inside a callout (text above and below it) and inside a callout nested in a callout.
 	'Lifecycle/callout.md': `# callout\n\nABOVE\n\n${['[!note] Camp', 'text above', ...COUNTER(10).split('\n'), 'text below'].map((l) => `> ${l}`).join('\n')}\n\nBELOW\n`,
 	'Lifecycle/nested.md': `# nested\n\nABOVE\n\n> [!note] Outer\n> outer text\n${['[!tip] Inner', ...COUNTER(10).split('\n'), 'inner below'].map((l) => `> > ${l}`).join('\n')}\n> outer below\n\nBELOW\n`,
@@ -1530,6 +1538,107 @@ const SCENARIOS = [
 				noted.push(rel.split('/')[1]);
 			}
 			return `a counter in ${noted.join(' and ')}: pinned from the editor (anchor stamped inside the quote with its prefix) and written from the sidebar, prefix on every block line, text outside the block byte-identical`;
+		},
+	},
+	{
+		// SC-460: a lone CR above the block. Obsidian numbers lines with CR, CRLF and LF each as one break (measured),
+		// the plugin used to index the note with split('\n'): every Reading view click below a lone CR was dropped (a
+		// Notice since SC-455, never saved) and a pin from the cursor could pick the wrong block. Real clicks, real
+		// bytes: the edit landed in the right block, the lone CRs and every other byte are unchanged, the block keeps
+		// the note's ending.
+		id: 'G-S12',
+		async run(t) {
+			const outside = (text) => text.replace(/```ds-counter[\s\S]*?\n```/g, '@@');
+			const blocks = (text) => text.match(/```ds-counter[\s\S]*?\n```/g) ?? [];
+			const loneCrs = (text) => (text.match(/\r(?!\n)/g) ?? []).length;
+			const waitDisk = async (rel, pred, what) => {
+				const t0 = Date.now();
+				while (!pred(t.read(rel))) {
+					if (Date.now() - t0 > 15000) throw new Error(`${rel}: timed out waiting for ${what}; disk is ${JSON.stringify(t.read(rel))}`);
+					await sleep(100);
+				}
+			};
+			/** `which` = index of the block that must hold current_value 11, every other block still 10. */
+			const check = (rel, label, text, which) => {
+				const fx = FIXTURES[rel];
+				t.expect(outside(text) === outside(fx), `${rel} ${label}: text outside the blocks changed:\n got  ${JSON.stringify(outside(text))}\n want ${JSON.stringify(outside(fx))}`);
+				t.expect(loneCrs(text) === loneCrs(fx), `${rel} ${label}: the lone CR count changed (${loneCrs(fx)} -> ${loneCrs(text)})`);
+				const now = blocks(text);
+				const was = blocks(fx);
+				t.expect(now.length === was.length, `${rel} ${label}: block count changed`);
+				now.forEach((b, i) => {
+					if (i === which) {
+						t.expect(/current_value: 11/.test(b), `${rel} ${label}: block #${i} did not get the edit: ${JSON.stringify(b)}`);
+						const crlf = fx.includes('\r\n');
+						const stray = crlf ? b.replace(/\r\n/g, '').match(/[\r\n]/) : b.match(/[\r]/);
+						t.expect(!stray, `${rel} ${label}: the rewritten block mixes line endings: ${JSON.stringify(b)}`);
+					} else {
+						t.expect(b === was[i], `${rel} ${label}: block #${i} was touched: ${JSON.stringify(b)}`);
+					}
+				});
+			};
+			const readingClick = async (rel, idx) => {
+				await t.open(rel);
+				await t.reset(rel);
+				const roots = `Array.from(${t.readingScope(LC_LEAF)}.querySelectorAll('[data-dse-element="counter"]')).filter((x) => x.isConnected)`;
+				await t.waitFor(`${roots}.length >= ${idx + 1}`, `${rel}: counter #${idx} rendered in Reading view`);
+				const m = await t.mark();
+				await t.realClick(`(${roots})[${idx}].querySelector('button[aria-label^="Increase"]')`);
+				await waitDisk(rel, (s) => s.includes('current_value: 11'), 'the Reading view write');
+				t.expect((await t.noticesSince(m)).length === 0, `${rel}: a Notice appeared: ${JSON.stringify(await t.noticesSince(m))}`);
+			};
+
+			// 1. Reading view, a lone CR above and below: LF note, CRLF note, and the SECOND of two blocks.
+			for (const [rel, idx] of [['Lifecycle/straycr-lf.md', 0], ['Lifecycle/straycr-crlf.md', 0], ['Lifecycle/straycr-twins.md', 1]]) {
+				t.expect(t.read(rel) === FIXTURES[rel], `${rel}: the fixture is not on disk byte for byte`);
+				await readingClick(rel, idx);
+				check(rel, 'Reading view', t.read(rel), idx);
+				await t.reset(rel);
+			}
+
+			// 2. Live Preview, same notes (LP hands the host an LF-normalised copy of the note).
+			for (const rel of ['Lifecycle/straycr-lf.md', 'Lifecycle/straycr-crlf.md']) {
+				const { rootEl } = await enterMode(t, rel, LC_MODES[1], '[data-dse-element="counter"]');
+				const m = await t.mark();
+				await t.realClick(`(${rootEl}).querySelector('button[aria-label^="Increase"]')`);
+				await waitDisk(rel, (s) => s.includes('current_value: 11'), 'the Live Preview write');
+				check(rel, 'Live Preview', t.read(rel), 0);
+				t.expect((await t.noticesSince(m)).length === 0, `${rel}: a Notice appeared in Live Preview`);
+				await t.reset(rel);
+			}
+
+			// 3. Sidebar: pin the SECOND block from the editor cursor on its close fence, then click in the panel.
+			const rel = 'Lifecycle/straycr-twins.md';
+			await t.reset(rel);
+			await t.ev(`(async () => { await (${LC_LEAF}).setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'source', source: false }, active: true }); })()`);
+			await t.sleep(1500);
+			const closeLine = await t.ev(`(() => { const ed = (${LC_LEAF}).view.editor; const r = []; for (let i = 0; i < ed.lineCount(); i++) if (ed.getLine(i) === '\`\`\`') r.push(i); return r[1]; })()`);
+			await t.ev(`(${LC_LEAF}).view.editor.setCursor({ line: ${closeLine}, ch: 0 })`);
+			const m = await t.mark();
+			await t.ev(`(() => { window.__lcRandom = Math.random; Math.random = () => 0xabcdef / 0x1000000; return true; })()`); // SC-383, as G-S10
+			try {
+				t.expect(await t.ev(`app.commands.executeCommandById('draw-steel-elements:send-block-to-sidebar')`), 'the send-block-to-sidebar command did not run');
+				await waitDisk(rel, (s) => s.includes('_dse_anchor:'), 'the anchor stamp');
+			} finally {
+				await t.ev(`(() => { if (window.__lcRandom) Math.random = window.__lcRandom; delete window.__lcRandom; return true; })()`);
+			}
+			const stamped = t.read(rel);
+			const [first, second] = blocks(stamped);
+			t.expect(!first.includes('_dse_anchor') && second.includes('_dse_anchor'), `the anchor went into the wrong block: ${JSON.stringify(stamped)}`);
+			t.expect(outside(stamped) === outside(FIXTURES[rel]) && loneCrs(stamped) === loneCrs(FIXTURES[rel]), `the stamp changed text outside the blocks: ${JSON.stringify(stamped)}`);
+			t.expect((await t.noticesSince(m)).length === 0, `pinning showed a Notice (a wrong-block "multiple blocks" one?): ${JSON.stringify(await t.noticesSince(m))}`);
+			const panelCounter = `Array.from(app.workspace.getLeavesOfType('dse-sidebar')[0].view.containerEl.querySelectorAll('[data-dse-element="counter"]')).find((x) => x.isConnected)`;
+			await t.waitFor(`!!(${panelCounter})`, 'the counter mounted in the sidebar panel');
+			await t.ev(`(${panelCounter}).querySelector('button[aria-label^="Increase"]').click()`);
+			await waitDisk(rel, (s) => s.includes('current_value: 11'), 'the sidebar write');
+			const sidebarText = t.read(rel);
+			t.expect(outside(sidebarText) === outside(FIXTURES[rel]) && loneCrs(sidebarText) === loneCrs(FIXTURES[rel]), `the sidebar write changed text outside the blocks: ${JSON.stringify(sidebarText)}`);
+			const [b1, b2] = blocks(sidebarText);
+			t.expect(b1 === blocks(FIXTURES[rel])[0] && /current_value: 11/.test(b2) && b2.includes('_dse_anchor'), `the sidebar write is wrong: ${JSON.stringify(sidebarText)}`);
+			t.expect(await t.ev(`!document.querySelector('[data-dse-sidebar-unavailable]')`), 'the sidebar panel degraded to the not-found card');
+			await t.ev(`(async () => { for (const l of app.workspace.getLeavesOfType('dse-sidebar')) l.detach(); })()`);
+			await t.reset(rel);
+			return 'a lone CR above (and below) a block: Reading view clicks (LF note, CRLF note, 2nd of two blocks) and Live Preview clicks land in the right block, a sidebar pin from the 2nd block\'s close fence stamps it and its panel writes it; the lone CRs and every byte outside the blocks are unchanged';
 		},
 	},
 ];
