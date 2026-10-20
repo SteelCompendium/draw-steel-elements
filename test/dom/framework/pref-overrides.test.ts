@@ -2,15 +2,13 @@
 // collapse-default prefs. Scaffolding mirrors test/dom/elements/statblock.test.ts
 // (real ElementPipeline + real framework services, no mocks of the seams under test).
 //
-// AMENDED DESIGN (task-5-report-d4.md "Continuation"): ComponentWrapper keeps
-// materializing concrete `collapsible`/`collapse_default` booleans on the model
-// (byte-compat, unchanged) — resolveCollapsePrefs instead consults a side channel
-// (declaredCollapsePrefs, keyed by model instance) recorded at construction time to
-// tell "the block declared this key" apart from "the constructor's own `?? true`/
-// `?? false` default filled it in". Tests 8-11 below exercise that distinction
-// directly; 1-7 exercise the presentation `prefs:` override map, which is unaffected
-// by the amendment (a different mechanism entirely — pipeline-level pop, not a model
-// constructor default).
+// COLLAPSE KEYS: ComponentWrapper keeps materializing concrete `collapsible`/
+// `collapse_default` booleans on the model (byte-compat, unchanged). Whether a block
+// DECLARED either key is decided by the framework chrome from the block's RAW keys
+// (chrome/collapsedKey.ts `extractCollapseKeys`), not from the model. The collapse tests
+// below exercise that distinction through the real pipeline; 1-7 exercise the
+// presentation `prefs:` override map, a different mechanism entirely (pipeline-level pop,
+// not a model constructor default).
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
@@ -365,7 +363,7 @@ presence: 0
 	});
 });
 
-describe('behavioral collapse-default prefs (D4 §1.3, AMENDED — declared-ness side channel)', () => {
+describe('behavioral collapse-default prefs (D4 §1.3 — declared-ness read from the raw block keys)', () => {
 	// SC-255: ds-skills no longer mounts its own kit collapsible (Scott's SC-169 ruling 3,
 	// applied to skills) — the framework chrome panel answers the same two keys and the same
 	// pref ladder, and "renders bare" now means "the panel has no collapse control" rather
@@ -425,7 +423,7 @@ describe('behavioral collapse-default prefs (D4 §1.3, AMENDED — declared-ness
 
 		// BYTES stay untouched: the model materializes the same hard default
 		// (`collapse_default: false`) it always has — serialize() never sees the
-		// pref, only resolveCollapsePrefs (render-time only) does.
+		// pref, only the chrome's render-time collapse resolution does.
 		const model = staminaBarElement.parse({ max_stamina: 20, current_stamina: 15, temp_stamina: 5 }, BASIC_STAM_YAML);
 		expect(staminaBarSerialize(model)).toBe(
 			['collapsible: true', 'collapse_default: false', 'max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5', 'height: 1', 'style: default'].join('\n'),

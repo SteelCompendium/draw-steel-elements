@@ -395,8 +395,9 @@ hand-wiring four call sites.
   map, presentation keys only. `extractPrefOverrides` pops it off the parsed YAML BEFORE
   schema validation and `def.parse`; three classes are dropped with a `console.warn`, not
   an error card — unknown keys, attr-less keys (behavioral, or SC-112's css-bearing
-  typography; those use the block's own `collapsible:`/`collapse_default:`, see
-  `resolveCollapsePrefs`), and `perBlock: false` keys (the conditional-DOM trio above). `applyPrefOverrides` pins the override AFTER
+  typography; those use the block's own `collapsible:`/`collapse_default:`, which the
+  chrome reads from the raw keys — `chrome/collapsedKey.ts` `extractCollapseKeys`), and
+  `perBlock: false` keys (the conditional-DOM trio above). `applyPrefOverrides` pins the override AFTER
   `reflect()` runs, so it wins on any later global change (listener-order precedence, no
   F1 signature change). For `shape: "persisted"` elements, `withPrefOverrides` wraps
   `def.serialize` to re-emit the `prefs:` map on every write-back — content-preserving but
