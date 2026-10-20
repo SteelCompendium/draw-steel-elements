@@ -148,7 +148,7 @@ export interface ElementDefinition<M = unknown> {
 	 * them off the block body the way it pops `collapsed:` — doing so would hide them from
 	 * `def.parse`, let ComponentWrapper's constructor substitute its own `?? true`/`?? false`
 	 * defaults, and rewrite the author's values on the next write-back. Two definitions set
-	 * it: `ds-stamina` and `ds-skills` (chrome-bearing since SC-255). See
+	 * it: `ds-stamina` and `ds-skills`. See
 	 * `framework/chrome/collapsedKey.ts` for the full precedence table.
 	 */
 	collapseKeysOwnedByModel?: boolean;

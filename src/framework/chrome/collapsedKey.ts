@@ -38,10 +38,9 @@
 //
 //   * the definition declares the `chrome` slot — a non-chrome element has no use for the
 //     framework reading of these keys, so it is left completely alone (zero blast radius
-//     across the ~30 elements that have not opted in); and
+//     across the elements that have not opted in, e.g. `ds-hr`); and
 //   * the definition does NOT set `collapseKeysOwnedByModel` — the flag `ds-stamina` and
-//     `ds-skills` (chrome-bearing since SC-255) both set, which switches the read to
-//     non-destructive.
+//     `ds-skills` both set, which switches the read to non-destructive.
 //
 // That combination is what makes an existing `ds-stamina` block with `collapse_default: true`
 // still start collapsed after SC-169 removed that element's own "Stamina Bar" header (Q3):
