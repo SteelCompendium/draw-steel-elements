@@ -85,10 +85,12 @@ describe('a block in a shape DSE cannot edit yet says so', () => {
 			await dse.openNote(note, { mode });
 			const bar = dse.block(BAR);
 			await dse.expectNoWrite(note, () => dse.click(bar.control('recov.catch-breath')));
-			await dse.waitFor(
-				`Array.from(document.querySelectorAll('.notice')).some((n) => n.textContent.includes('was not saved'))`,
-				'the "not saved" Notice',
-			);
+			// The exact unsavable text (not the "changed on disk first" one), and exactly ONE Draw Steel Notice.
+			const want = `Draw Steel Elements: a change to a block in ${note.slice('Callout/'.length, -'.md'.length)} was not saved — the plugin can't tell where this block sits in the note (blocks inside lists can't be edited yet).`;
+			const dseNotices = `Array.from(document.querySelectorAll('.notice')).map((n) => n.textContent).filter((t) => t.startsWith('Draw Steel Elements:'))`;
+			await dse.waitFor(`${dseNotices}.includes(${JSON.stringify(want)})`, 'the "not saved" Notice');
+			await dse.settle();
+			expect(await dse.page<string[]>(dseNotices)).toEqual([want]);
 			expect(await dse.noteText(note)).toBe(readFixture(note));
 		});
 	}
