@@ -193,8 +193,28 @@ export async function sendToSidebar(
 	alias: string,
 	cursorLine?: number,
 ): Promise<boolean> {
+	const result = await bindBlockToSidebar(services, filePath, alias, cursorLine);
+	if (result === 'unreadable-anchor') new Notice(UNREADABLE_ANCHOR_NOTICE);
+	return result === 'bound';
+}
+
+/** SC-360 (r2 review LOW-1) - shown when the block already has an `_dse_anchor` key YAML can see but the
+ *  sidebar cannot read, so pinning it would have appended a second key and killed the block. */
+const UNREADABLE_ANCHOR_NOTICE =
+	'Draw Steel Elements: this block already has an `_dse_anchor` line the sidebar cannot read, so it was not sent to the sidebar. Put it on one line as `_dse_anchor: value` (no comment or tag), or delete it, then send the block again.';
+
+type BindResult = 'bound' | 'not-found' | 'unreadable-anchor';
+
+/** `sendToSidebar`'s body, reporting WHY nothing was bound so each caller can say the right thing
+ *  (`requestPinToSidebar` must not answer an unreadable anchor with "couldn't find that block"). */
+async function bindBlockToSidebar(
+	services: DseSidebarServices,
+	filePath: string,
+	alias: string,
+	cursorLine?: number,
+): Promise<BindResult> {
 	const file = services.app.vault.getAbstractFileByPath(filePath);
-	if (!(file instanceof TFile)) return false;
+	if (!(file instanceof TFile)) return 'not-found';
 
 	// SC-158 — does this element's body tolerate a stamped line at all? A YAML-bodied
 	// element carries `_dse_anchor` as an unknown key and never notices; `ds-scc`'s body is
@@ -206,6 +226,7 @@ export async function sendToSidebar(
 	let anchorId: string | null = null;
 	let boundBody: string | null = null;
 	let bound = false;
+	let unreadableAnchor = false;
 	let noticeLine: number | null = null;
 	await services.app.vault.process(file, (content) => {
 		const fences = listFences(content, alias);
@@ -227,13 +248,19 @@ export async function sendToSidebar(
 		}
 
 		const { body: anchoredBody, id } = ensureAnchor(body);
+		if (id === null) {
+			bound = false;
+			unreadableAnchor = true;
+			return content; // SC-360: never write; the caller tells the user
+		}
 		anchorId = id;
 		if (anchoredBody === body) return content; // already anchored — no write needed
 
 		lines.splice(info.lineStart + 1, info.lineEnd - info.lineStart - 1, ...terminateLines(anchoredBody.split('\n'), detectEol(content)));
 		return lines.join('\n');
 	});
-	if (!bound) return false; // no matching block found
+	if (unreadableAnchor) return 'unreadable-anchor';
+	if (!bound) return 'not-found'; // no matching block found
 
 	if (noticeLine !== null) {
 		// `noticeLine` is only ever assigned inside the `vault.process(file, (content)
@@ -255,7 +282,7 @@ export async function sendToSidebar(
 	// Exactly one of the two identities is ever set: an id (stamped in the body) or the
 	// body itself (strict-body elements, never stamped).
 	view?.addPanel({ filePath, alias, anchorId, body: boundBody ?? undefined });
-	return true;
+	return 'bound';
 }
 
 /** SC-184 — plugin onunload cleanup, mirroring `setEncounterSidebarHandoff(null)`: drops
@@ -290,8 +317,10 @@ export async function requestPinToSidebar(filePath: string, alias: string, curso
 		return;
 	}
 	try {
-		const bound = await sendToSidebar(dseSidebarPinTarget, filePath, alias, cursorLine);
-		if (!bound) {
+		const result = await bindBlockToSidebar(dseSidebarPinTarget, filePath, alias, cursorLine);
+		if (result === 'unreadable-anchor') {
+			new Notice(UNREADABLE_ANCHOR_NOTICE);
+		} else if (result !== 'bound') {
 			new Notice(`Draw Steel Elements: couldn't find that block in ${filePath}.`);
 		}
 	} catch (error) {

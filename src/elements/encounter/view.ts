@@ -448,7 +448,9 @@ export class EncounterView extends ElementView<EncounterModel> {
 		const generatorId = this.ensureEncounterAnchor();
 
 		const data = this.buildEncounterData(resolved);
-		const body = `${GENERATED_FROM_KEY}: ${generatorId}\n${serializeInitiative(data)}`;
+		// Quoted: an old unquoted-looking id ("056948", "9.2e+51") would otherwise be re-read as a number by the
+		// initiative's first save and no longer match this encounter's id (SC-360, r2 review MEDIUM-1).
+		const body = `${GENERATED_FROM_KEY}: ${JSON.stringify(generatorId)}\n${serializeInitiative(data)}`;
 
 		let reused = false;
 		let lineStart = 0;
@@ -539,8 +541,12 @@ export class EncounterView extends ElementView<EncounterModel> {
 	 * host, and is strictly better than refusing to act.
 	 */
 	private ensureEncounterAnchor(): string {
-		const existing = this.model._dse_anchor;
-		if (existing) return existing;
+		// SC-360 (r2 review MEDIUM-1): an id minted before the generator fix can sit in the model as a
+		// NUMBER (`56948`, `9.2e+51`, `.inf` -> Infinity, `0`), because it was written unquoted and YAML
+		// read it back as one. Hand it out as a string: `findGeneratedBlock` compares with `===` against
+		// the string the tracker's `_dse_from` reads back as. (`0` is a real id, not "no anchor".)
+		const existing: unknown = this.model._dse_anchor;
+		if (existing !== undefined && existing !== null && existing !== '') return String(existing);
 		const id = generateAnchorId(); // SC-360: the shared generator - a bare hex id can read as a YAML number
 		this.model._dse_anchor = id;
 		if (this.cx.host.canPersist) void this.persist();

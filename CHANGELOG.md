@@ -41,12 +41,16 @@ for what needs action.
   initiative minion Stamina window's damage and minion-count boxes too. Reset also puts the Apply
   box back to 0.
 - [FIX] **Fixed: the sidebar sometimes lost its encounter ("Backing block not found") right
-  after its first save, about 1 time in 33** (SC-360). The hidden id that ties a sidebar panel
-  to its block could be a value like `056948` or `4e8540`, which the first save rewrote into
-  a different number, so the panel could no longer find its own block. New ids can no longer
-  take that shape. A note that was already affected is repaired by re-linking the panel from
-  the note ("Send to sidebar" again); that now reuses the id the first save left behind
-  instead of adding a second one.
+  after its first save, about 1 time in 33, and the encounter builder's "Open in sidebar"
+  sometimes added a second tracker block** (SC-360). The hidden id that ties a sidebar panel to
+  its block could be a value like `056948` or `4e8540`, which the first save rewrote into a
+  different number, so the panel (or the encounter) could no longer find its own block. New ids
+  can no longer take that shape. A note pinned before this fix can still lose its panel once, on
+  its first save after you update. Re-linking the panel from the note ("Send to sidebar" again)
+  repairs it for good: it reuses the id the save left behind instead of adding a second one, and
+  an encounter that already carries such an id now opens just one tracker. If a block has a
+  hand-edited `_dse_anchor` line the sidebar cannot read, it is no longer sent to the sidebar
+  (you get a message saying what to fix) instead of getting a second, conflicting line.
 - [FIX] **A save that changes nothing no longer leaves extra blank scroll space at the bottom
   of the note** (SC-260). When a block wrote back exactly what the note already contained
   (for example re-applying the same value in reading mode), the page held its height for a

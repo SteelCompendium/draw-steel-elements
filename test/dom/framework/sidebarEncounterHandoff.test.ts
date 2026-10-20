@@ -401,13 +401,13 @@ describe('SC-153: "Open in sidebar" is idempotent', () => {
 		const button = await mountEncounter(plugin, 'Session.md', 'party: {}\nmonsters: []');
 		button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 		await flushAsync();
-		const from1 = /_dse_from:\s*([A-Za-z0-9_-]+)/.exec(app.vault.getContent('Session.md')!)?.[1];
+		const from1 = /_dse_from:\s*["']?([A-Za-z0-9_-]+)/.exec(app.vault.getContent('Session.md')!)?.[1];
 		expect(from1).toBeDefined();
 
 		button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 		await flushAsync();
 		const content = app.vault.getContent('Session.md')!;
-		const from2 = /_dse_from:\s*([A-Za-z0-9_-]+)/.exec(content)?.[1];
+		const from2 = /_dse_from:\s*["']?([A-Za-z0-9_-]+)/.exec(content)?.[1];
 
 		// Stability is the identity claim: a regenerated id every press would append a new
 		// block every press, which is exactly the reported bug.
@@ -461,7 +461,7 @@ describe('SC-153: "Open in sidebar" is idempotent', () => {
 			await new Promise((resolve) => setTimeout(resolve, 10));
 		}
 
-		const from = /_dse_from:\s*([A-Za-z0-9_-]+)/.exec(app.vault.getContent('Session.md')!)?.[1];
+		const from = /_dse_from:\s*["']?([A-Za-z0-9_-]+)/.exec(app.vault.getContent('Session.md')!)?.[1];
 		expect(from).toBeDefined();
 		// The id is random hex, so about one in ten look numeric to YAML ("123456", "12e456"), and the
 		// serializer then writes them QUOTED (`_dse_anchor: "123456"`). A plain substring test failed

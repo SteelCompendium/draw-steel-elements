@@ -7,6 +7,7 @@
 // scanning for it, so it survives arbitrary line drift elsewhere in the note (unlike
 // reading-mode's lineStart-keyed SessionStore) — the id travels IN the content, not
 // alongside it.
+import { parseYaml } from 'obsidian';
 import type { BlockInfo } from '../host/BlockHost';
 import { splitLines, stripCr } from '../host/lineEnding';
 
@@ -22,8 +23,10 @@ export const ANCHOR_KEY = '_dse_anchor';
  *  made `ensureAnchor` append a second `_dse_anchor:` line (duplicate key, block dead). The
  *  charset is exactly what a YAML number/inf/nan scalar can contain, so a flow collection, a comment
  *  (`# ...`), a second word or a following line is still not swallowed. `[ \t]*` (not `\s*`) after
- *  the colon so an empty value cannot reach across the newline to the next key. */
-const SCALAR_TOKEN = String.raw`[ \t]*['"]?([A-Za-z0-9_.+-]+)['"]?[ \t]*$`; // multiline `$` also stops before a CR (SC-453 CRLF notes)
+ *  the colon so an empty value cannot reach across the newline to the next key; the one allowed
+ *  continuation is a value on the NEXT, INDENTED line (valid YAML, read by the pre-SC-360 reader,
+ *  r2 review LOW-1) - an unindented next line is the next key and is never taken. */
+const SCALAR_TOKEN = String.raw`(?:[ \t]*|[ \t]*\r?\n[ \t]+)['"]?([A-Za-z0-9_.+-]+)['"]?[ \t]*$`; // multiline `$` also stops before a CR (SC-453 CRLF notes)
 const ANCHOR_LINE = new RegExp(`^${ANCHOR_KEY}:${SCALAR_TOKEN}`, 'm');
 
 /** A fence-marker line: 3+ backticks/tildes (captured), then the rest of the line — the
@@ -79,9 +82,27 @@ function detectEol(body: string): '\r\n' | '\n' {
  *  unknown key — i.e. a YAML mapping. Callers must not call it for an element declaring
  *  `ElementDefinition.strictBody` (see `sendToSidebar`, the only caller); those blocks are
  *  found with `findFenceByBody` below instead. */
-export function ensureAnchor(body: string): { body: string; id: string } {
+export function ensureAnchor(body: string): { body: string; id: string | null } {
 	const existing = readAnchor(body);
 	if (existing) return { body, id: existing };
+
+	// SC-360 (r2 review LOW-1): the line reader is a regex, YAML is the authority. If YAML already sees an
+	// `_dse_anchor` key the reader could not read (a trailing `# comment`, `!!str`, `&a`, `~`, an empty
+	// value, `>`, `key :`, a quoted key ...), appending a second one makes the block die with "Map keys must
+	// be unique". Reusing its value would not help either: `findAnchoredBlock` goes through the same line
+	// reader, so a panel bound to a value it cannot read could never find the block. So: stamp nothing and
+	// report `id: null` - the caller refuses the pin and tells the user to fix the line (the safest
+	// non-duplicating choice). A body that does not parse at all is never stamped either (we cannot know
+	// whether a key is hiding in it).
+	let parsed: unknown;
+	try {
+		parsed = parseYaml(body);
+	} catch {
+		return { body, id: null };
+	}
+	if (parsed !== null && typeof parsed === 'object' && Object.prototype.hasOwnProperty.call(parsed, ANCHOR_KEY)) {
+		return { body, id: null };
+	}
 
 	const id = generateAnchorId();
 	const eol = detectEol(body);
