@@ -190,7 +190,9 @@ describe('harness compendium (SC-362)', () => {
 
 		test('a by-SCC fixture mounted with no compendium fails the mount', async () => {
 			// A stack mixing a declared and an undeclared fixture gets mode none, so the by-SCC
-			// card cannot resolve and must read as a failure, not a green notice.
+			// card cannot resolve. A typed family (`ds-rule`) with no compendium renders an ERROR
+			// card ("Compendium not installed"), which the pre-existing error-card check reports;
+			// this does not exercise the `.dse-ref-notice` guard (the web-card test above does).
 			const { errors } = await mountFromParams(document, {
 				...params('rule', 'by-scc'),
 				stack: [
@@ -199,6 +201,7 @@ describe('harness compendium (SC-362)', () => {
 				],
 			});
 			expect(errors.length).toBeGreaterThan(0);
+			expect(errors.join('\n')).toContain('error card');
 		});
 	});
 });

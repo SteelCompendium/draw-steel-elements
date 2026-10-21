@@ -371,8 +371,9 @@ effects:
 // BOTH fixtures at once, so they stay identical — with the real corpus codes
 // (fury.level-1 brutal-slam + thunder-roar). The harness mounts hero with NO compendium
 // (SC-362's `HARNESS_COMPENDIUM` seeds only the by-SCC fixtures that declare it, and holds
-// neither fury ability), so these rows degrade to the "not installed" notice here; the
-// codes are real so a vault with the compendium synced resolves them.
+// neither fury ability), so these rows degrade to hero's own per-ref issue row
+// (`.dse-hero__ability-issue`, "not installed") here; the codes are real so a vault with the
+// compendium synced resolves them.
 const heroSparse = `name: Wren Larkspur
 level: 1
 ancestry: scc.v1:mcdm.heroes.v1/ancestry/dwarf
@@ -1924,9 +1925,9 @@ export function attachHarnessCompendium(deps: ElementPipelineDeps, mode: Harness
 	if (mode === 'none') return;
 	const app = deps.app as unknown as App;
 	for (const [rel, text] of Object.entries(HARNESS_COMPENDIUM)) {
-		app.vault.setFile(`${DEFAULT_SETTINGS.compendiumDestinationDirectory}/${rel}`, text);
+		app.vault.setFile(`${deps.settings.compendiumDestinationDirectory}/${rel}`, text);
 	}
-	const resolver = new SccResolver(app as never, DEFAULT_SETTINGS);
+	const resolver = new SccResolver(app as never, deps.settings);
 	deps.sccAnchors = resolver;
 	if (mode === 'fixtures') deps.compendium = createCompendiumIndex(app as never, resolver);
 }
@@ -1939,7 +1940,9 @@ export function harnessCompendiumModeFor(
 ): HarnessCompendiumMode {
 	const modes = new Set(
 		targets.map(({ element, fixture }) => {
-			// mountOne falls back to the element's default fixture when `fixture` is not one of its own.
+			// mountOne falls back to the element's default fixture when `fixture` is not one of its
+			// own (after its `probeSource` step, whose gate-only sources are not in FIXTURES and so
+			// take the default's mode here).
 			const effective = FIXTURES[element]?.[fixture] !== undefined ? fixture : 'default';
 			return FIXTURE_COMPENDIUM[`${element}/${effective}`] ?? 'none';
 		}),
