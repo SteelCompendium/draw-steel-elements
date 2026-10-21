@@ -8886,6 +8886,9 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest:
    already do for their own card families): the kit-card top matter's
    "+N per echelon" row link was still rendering Obsidian violet even after
    Task 1, since `.dse-card` was never in this list.
+   SC-366 adds the not-installed notice card's "View on steelcompendium.io"
+   link (`.dse-ref-web-card__link`, RefUnwrapView.webCard) — the link class
+   only, so the notice card's other text keeps its own colours.
    SCREEN-ONLY: the print layer already forces --dse-accent to black for its
    own reasons (untouched by this task, SC-4 parked) — :not([data-dse-print])
    keeps this task's rule from repainting print links and drifting
@@ -8894,14 +8897,16 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest:
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb a,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb a,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__body a,
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card a {
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card a,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-ref-web-card__link {
 	color: var(--dse-accent);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature a:hover,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb a:hover,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb a:hover,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__body a:hover,
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card a:hover {
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card a:hover,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-ref-web-card__link:hover {
 	color: var(--dse-accent);
 	text-decoration: underline;
 }
