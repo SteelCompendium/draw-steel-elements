@@ -19,7 +19,7 @@ import { ViewRegistry } from '../../../src/framework/host/viewRegistry';
 import { App, Component, Plugin, makeFakeContext } from '../../mocks/obsidian';
 
 const PIN_ATTR = 'data-dse-scroll-pin';
-const PIN_VAR = '--dse-scroll-pin';
+const STYLE_ATTR = 'data-dse-scroll-pin-style';
 /** Must match PIN_TTL_MS in previewScrollPin.ts. */
 const TTL = 2500;
 
@@ -29,16 +29,20 @@ interface Metrics {
 	clientHeight?: number;
 }
 
+const setMetric = (scroller: HTMLElement, key: keyof Metrics, value: number): void => {
+	Object.defineProperty(scroller, key, { value, configurable: true, writable: true });
+};
+
 /** A reading-view shape: `.markdown-preview-view` > `.markdown-preview-sizer` > block el. */
-function makeScroller(metrics: Metrics = {}): { scroller: HTMLElement; el: HTMLElement } {
-	const scroller = document.createElement('div');
+function makeScroller(metrics: Metrics = {}, doc: Document = document): { scroller: HTMLElement; el: HTMLElement } {
+	const scroller = doc.createElement('div');
 	scroller.className = 'markdown-preview-view';
-	const sizer = document.createElement('div');
+	const sizer = doc.createElement('div');
 	sizer.className = 'markdown-preview-sizer';
-	const el = document.createElement('div');
+	const el = doc.createElement('div');
 	sizer.appendChild(el);
 	scroller.appendChild(sizer);
-	document.body.appendChild(scroller);
+	doc.body.appendChild(scroller);
 	for (const [key, value] of Object.entries({
 		scrollTop: 2596,
 		scrollHeight: 4883,
@@ -51,7 +55,20 @@ function makeScroller(metrics: Metrics = {}): { scroller: HTMLElement; el: HTMLE
 }
 
 const isPinned = (scroller: HTMLElement): boolean => scroller.hasAttribute(PIN_ATTR);
-const pinnedPx = (scroller: HTMLElement): string => scroller.style.getPropertyValue(PIN_VAR);
+/** The `<style>` that holds the scroller's pin rule (SC-470), looked up in the scroller's own document. */
+const pinStyle = (scroller: HTMLElement): HTMLStyleElement | null =>
+	scroller.ownerDocument.head.querySelector<HTMLStyleElement>(`style[${STYLE_ATTR}="${scroller.getAttribute(PIN_ATTR)}"]`);
+/** The height the scroller's rule holds, as '<n>px' ('' when no rule). */
+const pinnedPx = (scroller: HTMLElement): string => {
+	const m = /min-height: (\d+)px !important/.exec(pinStyle(scroller)?.textContent ?? '');
+	return m ? `${m[1]}px` : '';
+};
+const allPinStyles = (doc: Document = document): number => doc.head.querySelectorAll(`style[${STYLE_ATTR}]`).length;
+
+// Tests that pin without advancing the TTL leave their injected rule behind; start every test clean.
+afterEach(() => {
+	document.head.querySelectorAll(`style[${STYLE_ATTR}]`).forEach((n) => n.remove());
+});
 
 describe('SC-198: PreviewScrollPin', () => {
 	afterEach(() => {
@@ -67,6 +84,52 @@ describe('SC-198: PreviewScrollPin', () => {
 			// On the scroller, never the sizer: Obsidian may replace the sizer node during
 			// the rebuild, which would take an attribute set there with it.
 			expect(scroller.querySelector('.markdown-preview-sizer')!.hasAttribute(PIN_ATTR)).toBe(false);
+		});
+
+		// SC-470: the height rides in a per-pin stylesheet rule, never in an inherited custom
+		// property on the scroller (its set/clear restyled the whole preview: ~220 ms each way).
+		test('SC-470: the height is one injected rule keyed on the attribute value; no custom property or inline style on the scroller', () => {
+			const { scroller, el } = makeScroller();
+			new PreviewScrollPin().pin(el);
+			const id = scroller.getAttribute(PIN_ATTR)!;
+			expect(id).not.toBe('');
+			const styles = document.head.querySelectorAll(`style[${STYLE_ATTR}]`);
+			expect(styles).toHaveLength(1);
+			expect(styles[0].textContent).toBe(
+				`.markdown-preview-view[${PIN_ATTR}="${id}"] .markdown-preview-sizer { min-height: 4883px !important; }`,
+			);
+			expect(scroller.getAttribute('style')).toBeNull();
+			expect(scroller.style.getPropertyValue('--dse-scroll-pin')).toBe('');
+		});
+
+		test('SC-470: two pinned scrollers get distinct ids and rules (neither rule can match the other)', () => {
+			const a = makeScroller();
+			const b = makeScroller({ scrollHeight: 6000 });
+			const pin = new PreviewScrollPin();
+			pin.pin(a.el);
+			pin.pin(b.el);
+			expect(a.scroller.getAttribute(PIN_ATTR)).not.toBe(b.scroller.getAttribute(PIN_ATTR));
+			expect(allPinStyles()).toBe(2);
+			expect(pinnedPx(a.scroller)).toBe('4883px');
+			expect(pinnedPx(b.scroller)).toBe('6000px');
+		});
+
+		test("SC-470: a scroller in another window's document gets its rule in THAT document's head, and releaseAll() clears it there", () => {
+			const frame = document.createElement('iframe');
+			document.body.appendChild(frame);
+			const popout = frame.contentDocument!;
+			const main = makeScroller();
+			const out = makeScroller({}, popout);
+			const pin = new PreviewScrollPin();
+			pin.pin(main.el);
+			pin.pin(out.el);
+			expect(allPinStyles(document)).toBe(1);
+			expect(allPinStyles(popout)).toBe(1);
+			expect(pinnedPx(out.scroller)).toBe('4883px');
+			pin.releaseAll();
+			expect(allPinStyles(document)).toBe(0);
+			expect(allPinStyles(popout)).toBe(0);
+			expect(isPinned(out.scroller)).toBe(false);
 		});
 
 		test('does nothing when the block is not inside a reading-view scroller (sidebar/embed/canvas)', () => {
@@ -100,19 +163,23 @@ describe('SC-198: PreviewScrollPin', () => {
 			expect(isPinned(scroller)).toBe(true);
 			jest.advanceTimersByTime(1);
 			expect(isPinned(scroller)).toBe(false);
-			expect(pinnedPx(scroller)).toBe('');
+			expect(pinStyle(scroller)).toBeNull();
+			expect(allPinStyles()).toBe(0); // the injected rule goes with the attribute
 		});
 
-		test('a re-pin refreshes the TTL but KEEPS the original height (no ratchet on rapid clicks)', () => {
+		test('a re-pin refreshes the TTL but takes no ratchet from the scroller\'s own padding on rapid clicks', () => {
 			const { scroller, el } = makeScroller();
+			scroller.style.paddingTop = '32px';
+			scroller.style.paddingBottom = '32px';
 			const pin = new PreviewScrollPin();
 			pin.pin(el);
 			expect(pinnedPx(scroller)).toBe('4883px');
 
 			// While pinned, scrollHeight reads back inflated (the pinned value plus the
-			// scroller's own padding). Re-measuring would ratchet the pin up on every write.
-			Object.defineProperty(scroller, 'scrollHeight', { value: 4947, configurable: true, writable: true });
+			// scroller's own padding). Re-measuring it raw would ratchet the pin up on every write.
+			setMetric(scroller, 'scrollHeight', 4947);
 			jest.advanceTimersByTime(TTL - 500);
+			pin.pin(el);
 			pin.pin(el);
 			expect(pinnedPx(scroller)).toBe('4883px');
 
@@ -146,6 +213,7 @@ describe('SC-198: PreviewScrollPin', () => {
 			pin.releaseAll();
 			expect(isPinned(a.scroller)).toBe(false);
 			expect(isPinned(b.scroller)).toBe(false);
+			expect(allPinStyles()).toBe(0);
 			// Nothing left running that could re-touch a scroller the plugin no longer owns.
 			jest.advanceTimersByTime(TTL * 2);
 			expect(document.querySelector(`[${PIN_ATTR}]`)).toBeNull();
@@ -369,6 +437,7 @@ describe('SC-198: registerFrameworkElements shares one pin and releases it on un
 
 		plugin.unload();
 		expect(scroller.hasAttribute(PIN_ATTR)).toBe(false);
+		expect(allPinStyles()).toBe(0);
 		document.body.innerHTML = '';
 	});
 });
@@ -417,13 +486,13 @@ describe('SC-470: PreviewScrollPin.pinReadingViewsOf', () => {
 		expect(isPinned(short.scroller)).toBe(false);
 	});
 
-	test("the writer's view, already pinned by its write, keeps its FIRST height (never a re-measured one)", () => {
+	test("the writer's view, already pinned by its write, is re-pinned without ever being lowered (a collapsed height is never captured)", () => {
 		jest.useFakeTimers();
 		try {
 			const a = makeLeaf('Note.md', 'preview');
 			const pin = new PreviewScrollPin();
 			pin.pin(a.scroller.querySelector('[data-dse-element]') as HTMLElement);
-			Object.defineProperty(a.scroller, 'scrollHeight', { value: 300, configurable: true, writable: true });
+			setMetric(a.scroller, 'scrollHeight', 300);
 			pin.pinReadingViewsOf(workspaceOf(a), 'Note.md');
 			expect(pinnedPx(a.scroller)).toBe('4883px');
 			jest.advanceTimersByTime(TTL);
@@ -450,5 +519,63 @@ describe('SC-470: PreviewScrollPin.pinReadingViewsOf', () => {
 			spy.mockRestore();
 			on.mockRestore();
 		}
+	});
+});
+
+// SC-470 (Risk 4): a re-pin of an already-pinned scroller. Autosave while typing re-pins on every
+// `modify`, each refreshing the TTL, so the pin must neither hold a stale height as the note grows
+// nor ever take a collapsed one.
+describe('SC-470: re-pinning an already-pinned scroller', () => {
+	beforeEach(() => {
+		jest.useFakeTimers();
+	});
+	afterEach(() => {
+		jest.useRealTimers();
+		document.body.innerHTML = '';
+	});
+
+	function pinned(padding = 0) {
+		const { scroller, el } = makeScroller();
+		scroller.style.paddingTop = `${padding / 2}px`;
+		scroller.style.paddingBottom = `${padding / 2}px`;
+		const pin = new PreviewScrollPin();
+		pin.pin(el);
+		return { scroller, el, pin };
+	}
+
+	test('a re-pin while the sizer is collapsed (scrollHeight at or below the pinned height) never lowers it', () => {
+		const { scroller, el, pin } = pinned(64);
+		for (const collapsed of [4883, 2446, 246, 0]) {
+			setMetric(scroller, 'scrollHeight', collapsed);
+			pin.pin(el);
+			expect(pinnedPx(scroller)).toBe('4883px');
+		}
+		// the rule itself (what the browser reads), not just our bookkeeping
+		expect(pinStyle(scroller)!.textContent).toContain('min-height: 4883px !important');
+	});
+
+	test('a re-pin after the note grew past the pinned height raises it, and keeps the same id and the one <style>', () => {
+		const { scroller, el, pin } = pinned(64);
+		const id = scroller.getAttribute(PIN_ATTR);
+		setMetric(scroller, 'scrollHeight', 5400 + 64); // content 5400 + the scroller's padding
+		pin.pin(el);
+		expect(pinnedPx(scroller)).toBe('5400px');
+		expect(scroller.getAttribute(PIN_ATTR)).toBe(id);
+		expect(allPinStyles()).toBe(1);
+		// ...and a later collapse still cannot take it back down
+		setMetric(scroller, 'scrollHeight', 90);
+		pin.pin(el);
+		expect(pinnedPx(scroller)).toBe('5400px');
+	});
+
+	test('a re-pin restarts the TTL (autosave keeps the pin alive) and the release still removes the rule', () => {
+		const { scroller, el, pin } = pinned();
+		jest.advanceTimersByTime(TTL - 100);
+		pin.pin(el);
+		jest.advanceTimersByTime(TTL - 1);
+		expect(isPinned(scroller)).toBe(true);
+		jest.advanceTimersByTime(1);
+		expect(isPinned(scroller)).toBe(false);
+		expect(allPinStyles()).toBe(0);
 	});
 });
