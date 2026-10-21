@@ -120,6 +120,20 @@ describe('stamina-edit-modal: two blocks in one note', () => {
 	});
 });
 
+describe('stamina-edit-modal: a write adds no default keys the block never declared (SC-466)', () => {
+	it('[STAM-W11] a legacy ds-stamina block with only the stamina fields: a Damage rewrites exactly those two keys', async () => {
+		const note = 'Stamina/legacy-minimal.md'; // ```ds-stamina, max_stamina 20 + current_stamina 15, nothing else
+		await dse.openNote(note);
+		await dse.click(dse.block('ds-stamina').control('stamina.bar'));
+		const modal = await dse.modal('stamina-edit');
+		await applyAmount(modal, '3', 'sedit.damage');
+		await expectApplyLabel(modal, 'Lose 3 Stamina');
+		expect(await applyAndWrite(modal, note)).toBe(1);
+		// toEqual, not toMatchObject: no collapsible / collapse_default / temp_stamina / height / style appeared.
+		await dse.expectNoteBlock(note, 'ds-stamina').toEqual({ max_stamina: 20, current_stamina: 12 });
+	});
+});
+
 describe('stamina-edit-modal from ds-stamina-bar: quick actions and temporary Stamina', () => {
 	it('[STAM-Q01] Kill drops a hero to the death floor and clears temp', async () => {
 		const modal = await openBarModal(NOTE);

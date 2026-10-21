@@ -17,8 +17,10 @@
 // Clicking opens the unified managedModal StaminaEditModal (D2 §3.5b); the modal
 // mutates `this.model` in place (it is handed the SAME object reference) and its
 // updateCallback both refreshes the bar in place (targeted update, no rebuild) and
-// schedules persist(). The serialize path (model.ts) is untouched — persisted YAML
-// stays byte-compatible (F1 §6).
+// schedules persist(). The serialize path (model.ts) keeps persisted YAML byte-compatible
+// (F1 §6) for every key the block declared; since SC-466 it no longer adds the default keys a
+// block never wrote (collapsible, collapse_default, temp_stamina, height, style, ...). That
+// works because every writer here mutates this SAME parsed instance in place — never a copy.
 //
 // D7 Task 4 (spec §4.2): the Recoveries/Winded extension, ADDITIVE and gated entirely
 // on `model.recoveries_max !== undefined` (HARD INVARIANT: a legacy block with no

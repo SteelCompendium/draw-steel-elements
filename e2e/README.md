@@ -91,6 +91,7 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Stamina/dying.md` | -2/30, 3 of 6 Recoveries |
   | `Stamina/legacy-low.md` | 2/30, Recoveries not tracked |
   | `Stamina/info-string.md` | one `ds-stamina-bar` whose fence line is ` ```ds-stamina-bar  extra words ` (12/30, 3 of 6 Recoveries; SC-290) |
+  | `Stamina/legacy-minimal.md` | one legacy ```` ```ds-stamina ```` block with only `max_stamina: 20` + `current_stamina: 15` (SC-466: a write adds no default keys) |
   | `Stamina/two-blocks.md` | two `ds-stamina-bar` blocks: 15/20 +5 temp, then 8/10 |
   | `Callout/callout.md` | one `ds-stamina-bar` (12/30, 3 of 6 Recoveries) inside a `> [!note]` callout, text above and below it (SC-455) |
   | `Callout/nested.md` | the same block inside a callout nested in a callout (`> > ` on every line) |

@@ -11,10 +11,13 @@ interface RawComponentWrapperData {
 /**
  * The model fields stay concrete booleans (`?? true` / `?? false` in the constructor):
  * `yaml`'s stringify DROPS own-properties whose value is `undefined`, and stamina-bar's
- * `serialize()` does a bare `stringifyYaml(model)` on this class, so an `undefined` field
- * would silently strip `collapsible:`/`collapse_default:` from a persisted block's YAML
- * on its first re-serialize. Whether a block actually DECLARED either key is decided
+ * `serialize()` stringifies this class's own properties, so an `undefined` field would
+ * silently strip an AUTHORED `collapsible:`/`collapse_default:` from a persisted block's
+ * YAML on its first re-serialize. Whether a block actually DECLARED either key is decided
  * elsewhere, from the raw keys (`framework/chrome/collapsedKey.ts` `extractCollapseKeys`).
+ * SC-466: stamina-bar's `serialize()` additionally omits a key the source never declared
+ * while its value is still the default filled in here (`elements/stamina-bar/model.ts`),
+ * so these concrete defaults no longer leak into the user's note on a write.
  */
 export class ComponentWrapper {
     collapsible: boolean;
