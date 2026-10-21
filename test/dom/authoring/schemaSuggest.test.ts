@@ -7,6 +7,7 @@
 // so their own properties + the shared collapsible/collapse_default only surface if allOf
 // and $ref are both walked), and key-context suggestions bail on indented lines (Finding 2).
 import { DsSchemaSuggest } from '../../../src/authoring/schemaSuggest';
+import { scanFenceState } from '../../../src/authoring/fenceScan';
 import { createElementRegistry, type ElementDefinition } from '../../../src/framework/registry';
 import { skillsElement } from '../../../src/elements/skills/definition';
 import { staminaBarElement } from '../../../src/elements/stamina-bar/definition';
@@ -184,5 +185,45 @@ describe('SC-406 — deferred elements and key autocomplete', () => {
 		const s = deferredSuggest();
 		expect(keysIn(s, 'ds-surges')!.length).toBeGreaterThan(0);
 		expect(keysIn(s, 'ds-hero')!.length).toBeGreaterThanOrEqual(17);
+	});
+});
+
+// SC-476 — the block's type is the FIRST whitespace-delimited token of the opening line's info
+// string (the rest of DSE reads it that way); scanFenceState used to return the whole info string.
+describe('SC-476 — extra words after the fence language', () => {
+	const langAt = (opener: string) => scanFenceState(new Editor(opener + '\nbody') as never, 1).lang;
+
+	test.each([
+		['extra words after the language', '```ds-counter extra', 'ds-counter'],
+		['leading space before the language', '``` ds-counter', 'ds-counter'],
+		['a tab between the language and the extra word', '```ds-counter\textra', 'ds-counter'],
+		['a tilde fence with extra words', '~~~ds-counter extra words', 'ds-counter'],
+		['a callout-prefixed fence with extra words', '> ```ds-counter extra', 'ds-counter'],
+		['the language alone (unchanged)', '```ds-counter', 'ds-counter'],
+		['mixed case is still lowercased (unchanged)', '```DS-Counter extra', 'ds-counter'],
+	])('scanFenceState lang: %s', (_name, opener, expected) => {
+		expect(langAt(opener)).toBe(expected);
+	});
+
+	test('a bare fence has the empty language; outside a fence it is null', () => {
+		expect(langAt('```')).toBe('');
+		expect(langAt('```   ')).toBe('');
+		expect(scanFenceState(new Editor('prose\nbody') as never, 1).lang).toBeNull();
+	});
+
+	test('a block opened with extra info words still gets key completions', () => {
+		const s = suggest();
+		const editor = new Editor('```ds-x extra words\nna');
+		const info = s.onTrigger({ line: 1, ch: 2 }, editor as never, null);
+		expect(info).not.toBeNull();
+		expect(s.getSuggestions({ ...info!, editor: editor as never, file: null as never })).toEqual(['name']);
+	});
+
+	test('a block opened with extra info words still gets enum completions', () => {
+		const s = suggest();
+		const editor = new Editor('~~~ ds-x\textra\nstyle: ');
+		const info = s.onTrigger({ line: 1, ch: 7 }, editor as never, null);
+		expect(info).not.toBeNull();
+		expect(s.getSuggestions({ ...info!, editor: editor as never, file: null as never })).toEqual(['card', 'flat']);
 	});
 });

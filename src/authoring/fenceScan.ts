@@ -17,7 +17,7 @@ export const FENCE_LINE = new RegExp(`^${BQ_PREFIX}${LEADING_WS}(\`{3,}|~{3,})(.
 export interface FenceState {
 	/** True if `line` sits inside an already-opened fence (any language). */
 	inFence: boolean;
-	/** The opening fence's info string, trimmed + lowercased (e.g. "ds-roll", "js", ""). Null when not inside a fence. */
+	/** The opening fence's language: the first whitespace-delimited token of its info string, lowercased (e.g. "ds-roll", "js", ""). Null when not inside a fence. */
 	lang: string | null;
 }
 
@@ -47,7 +47,11 @@ export function scanFenceState(editor: Editor, line: number): FenceState {
 			inFence = true;
 			fenceChar = marker[0];
 			fenceLen = marker.length;
-			lang = rest.trim().toLowerCase();
+			// SC-476: the block's type is the FIRST whitespace-delimited token of the trimmed info
+			// string (```` ```ds-counter extra ```` is a ds-counter), the rule the rest of DSE
+			// uses. Mirrors SC-457's `fenceLanguage` (src/framework/host/blockPrefix.ts); swap this
+			// for that import once SC-457 lands.
+			lang = /^\S*/.exec(rest.trim())![0].toLowerCase();
 		} else if (marker[0] === fenceChar && marker.length >= fenceLen && rest.trim() === '') {
 			inFence = false;
 			lang = null;
