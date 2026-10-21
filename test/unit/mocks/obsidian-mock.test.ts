@@ -124,6 +124,18 @@ describe('obsidian mock: makeFakeContext.getSectionInfo', () => {
 		expect(at(5)).toBeNull();
 	});
 
+	test('a quoted fence ends with its quote (the later quoted ``` closes nothing); a ds line inside a ```md fence is body (SC-456)', () => {
+		const app = new App();
+		const note = ['> [!note]', '> ```ds-counter', '> a: 1', '', '```ds-counter', 'b: 1', '```', '', '> ```', '', '```md', '```ds-counter', 'c: 1', '```'].join('\n');
+		app.vault.setFile('Note.md', note);
+		const at = (n: number) => {
+			const ctx = makeFakeContext(app, 'Note.md', n);
+			return ctx.getSectionInfo(ctx.el);
+		};
+		expect(at(0)).toMatchObject({ lineStart: 4, lineEnd: 6 });
+		expect(at(1)).toBeNull();
+	});
+
 	test('ignores a non-ds fence and an unclosed ds fence', () => {
 		const app = new App();
 		app.vault.setFile('Note.md', '```js\nx\n```\n```ds-counter\na: 1');

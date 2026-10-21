@@ -1404,28 +1404,27 @@ export function makeFakeContext(app: App, sourcePath: string, blockIndex = 0): F
 			const lines = content.split('\n');
 			let matchIndex = -1;
 			let openLine = -1;
-			let open: { prefix: string; char: string; len: number } | null = null;
+			let open: { prefix: string; char: string; len: number; ds: boolean } | null = null;
 			for (let i = 0; i < lines.length; i++) {
-				if (open === null) {
-					// SC-456: the product's fence grammar - ``` / ~~~, a quote prefix, and a type that is the
-					// first token of the TRIMMED info string (so ```` ``` ds-x ```` and ```` ```ds-x extra ````
-					// are blocks; the rest of the info string stays in the note text this returns).
-					const m = matchFenceMarker(lines[i]);
-					if (m && /^ds-[\w-]+$/.test(m.rest.trim().split(/\s+/)[0])) {
-						openLine = i;
-						open = { prefix: m.prefix, char: m.marker[0], len: m.marker.length };
-					}
-				} else {
+				if (open !== null) {
 					const inner = stripBlockPrefix(lines[i], open.prefix);
 					const close = inner === null ? null : matchFenceMarker(inner);
 					if (close && close.prefix === '' && close.rest.trim() === '' && close.marker[0] === open.char && close.marker.length >= open.len) {
-						matchIndex++;
-						if (matchIndex === blockIndex) {
-							return { text: content, lineStart: openLine, lineEnd: i };
-						}
-						openLine = -1;
+						// Every fence's body is skipped (a ds-x line inside a ```md fence is not a block); only ds-* fences count.
+						if (open.ds && ++matchIndex === blockIndex) return { text: content, lineStart: openLine, lineEnd: i };
 						open = null;
+						continue;
 					}
+					if (inner !== null) continue; // still body
+					open = null; // SC-456: the quote ended - the fence never closed; this line may open a new one
+				}
+				// SC-456: the product's fence grammar - ``` / ~~~, a quote prefix, and a type that is the
+				// first token of the TRIMMED info string (so ```` ``` ds-x ```` and ```` ```ds-x extra ````
+				// are blocks; the rest of the info string stays in the note text this returns).
+				const m = matchFenceMarker(lines[i]);
+				if (m) {
+					openLine = i;
+					open = { prefix: m.prefix, char: m.marker[0], len: m.marker.length, ds: /^ds-[\w-]+$/.test(m.rest.trim().split(/\s+/)[0]) };
 				}
 			}
 			return null;

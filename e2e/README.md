@@ -102,6 +102,12 @@ it('[STAM-X01] what a user sees happen', async () => {
 
 - Edits are checked per fence: `dse.block(lang, n)` declares which block of the open note a test edits, and
   after the test every OTHER fence must be byte-identical to the fixture (a write into a sibling block fails).
+  The edited block's own opening and closing fence lines must stay byte-identical too (only its body may
+  change), so a write that rewrites an info string, the fence run or the closing line fails (SC-456). Fences
+  are read with the product's grammar (```` ``` ````/`~~~`, 4+ runs, quote prefixes, `` ``` ds-x ``; the block
+  type is the first token of the trimmed info string). The product deliberately trims trailing whitespace on
+  the fence lines it writes (SC-290), so a fixture must not carry trailing whitespace on the fence lines of a
+  block a test writes.
 - Drive controls by id (`modal.control('sedit.damage')`); `{ css }` / `{ name }` are for READING nodes only
   (driving one is flagged by the gate). Repeated nodes: `control('recov.marker', { nth: 4 })`.
 - Negative checks: `dse.expectNoWrite(path, action)` waits for write-idle, never sleeps. Never `sleep`; wait

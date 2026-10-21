@@ -7,6 +7,7 @@
 //
 // Notes are split on '\n' only, so a CRLF note's lines keep their '\r' and every comparison stays
 // byte-exact (SC-453).
+// blockPrefix.ts must stay dependency-free: an `obsidian` / DOM import there would stop this file loading in the wdio worker.
 import { matchFenceMarker, stripBlockPrefix } from '../../src/framework/host/blockPrefix';
 
 export interface Fence {
@@ -50,7 +51,7 @@ function closes(open: OpenFence, line: string): boolean {
 
 /** Every fenced block of a note, in order (a block inside a callout / blockquote included, SC-455). A
  *  fence-looking line inside an open fence is body, so a `ds-x` example inside a ```` ```md ```` fence
- *  is not a block. A fence opened and never closed runs to the end of the note. */
+ *  is not a block. A fence opened and never closed runs to the end of the note - or, when quoted, to the end of its quote. */
 export function scanFences(note: string): Fence[] {
 	const out: Fence[] = [];
 	const lines = note.split('\n');
@@ -59,20 +60,22 @@ export function scanFences(note: string): Fence[] {
 		if (!m) continue;
 		const open: OpenFence = { prefix: m.prefix, char: m.marker[0], len: m.marker.length };
 		let j = i + 1;
-		while (j < lines.length && !closes(open, lines[j])) j++;
-		const closed = j < lines.length;
-		const end = closed ? j : lines.length - 1;
+		// A quoted fence ends where its blockquote ends (a line without the opener's prefix): it never closed
+		// there, exactly as the product's scanner (`iterateFences`) and CommonMark treat it (SC-456 R1).
+		while (j < lines.length && !closes(open, lines[j]) && stripBlockPrefix(lines[j], open.prefix) !== null) j++;
+		const closed = j < lines.length && closes(open, lines[j]);
+		const end = closed ? j : j - 1; // unterminated: the last line still inside the fence (the quote's last line, or the note's)
 		out.push({
 			lang: typeOf(m.rest),
 			text: lines.slice(i, end + 1).join('\n'),
 			openLine: lines[i],
 			closeLine: closed ? lines[j] : null,
-			body: lines.slice(i + 1, closed ? j : lines.length).map((l) => stripBlockPrefix(l, open.prefix) ?? l),
+			body: lines.slice(i + 1, closed ? j : end + 1).map((l) => stripBlockPrefix(l, open.prefix) ?? l),
 			start: i,
 			end,
 			closed,
 		});
-		i = end;
+		i = end; // an unterminated fence resumes scanning at the line that left the quote
 	}
 	return out;
 }

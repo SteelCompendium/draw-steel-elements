@@ -5,7 +5,7 @@
 import { integrityProblems, scanFences, skeletonOf } from '../../e2e/driver/noteFences';
 import { matchFenceMarker } from '../../src/framework/host/blockPrefix';
 import { parseOpenFenceLine } from '../../src/framework/host/fenceLine';
-import { fenceAlias, isFenceClose, matchFenceLine } from '../../src/framework/sidebar/anchor';
+import { fenceAlias, isFenceClose, listFences, matchFenceLine } from '../../src/framework/sidebar/anchor';
 
 const nl = (...lines: string[]): string => lines.join('\n');
 const T0 = new Set([0]);
@@ -123,9 +123,28 @@ describe('e2e integrity: quote-prefixed fences (SC-455) and CRLF notes (SC-453) 
 		expect(scanFences(fixture).map((f) => f.body)).toEqual([['current_value: 1'], ['a: 1']]);
 	});
 
-	test('a quoted fence is closed only by a line in the same quote', () => {
-		const note = nl('> ```ds-x', '> a: 1', '```', '> ```');
-		expect(scanFences(note)[0]).toMatchObject({ closed: true, end: 3 });
+	// SC-456 R1: a quoted fence ends where its blockquote ends - it never closed there (product + CommonMark).
+	test('a quoted fence ends when its quote ends: a later quoted ``` does not close it', () => {
+		const note = nl('> ```ds-x', '> a: 1', '', '> ```');
+		expect(scanFences(note).map((f) => [f.start, f.end, f.closed])).toEqual([
+			[0, 1, false],
+			[3, 3, false], // the trailing `> ```, now outside the first fence, opens one of its own
+		]);
+		expect(skeletonOf(note).unterminated).toBe(true);
+		expect(integrityProblems('n.md', note, note, T0)).toEqual([expect.stringContaining('left unterminated')]);
+	});
+
+	test('an unclosed callout fence does not swallow the real block after it: the target is the real block (the false negative)', () => {
+		const fixture = nl('> [!note]', '> ```ds-x', '> a: 1', '', 'between', '', '```ds-x', 'b: 1', '```', '', '> [!note]', '> ```');
+		expect(scanFences(fixture).map((f) => [f.lang, f.start, f.end, f.closed])).toEqual([
+			['ds-x', 1, 2, false],
+			['ds-x', 6, 8, true],
+			['', 11, 11, false],
+		]);
+		// dse.block('ds-x', 1) would target the real block; corrupting its OPENING line must be reported
+		const corrupt = fixture.replace('```ds-x\nb: 1', '```ds-x BROKEN\nb: 2');
+		expect(integrityProblems('n.md', corrupt, fixture, new Set([1])).some((p) => p.includes('fence #1 (ds-x) opening line changed'))).toBe(true);
+		expect(integrityProblems('n.md', fixture.replace('b: 1', 'b: 2'), fixture, new Set([1])).filter((p) => !p.includes('left unterminated'))).toEqual([]);
 	});
 
 	test('CRLF: lines keep their \\r, comparison is byte-exact, a stray CR in the opening line is caught', () => {
@@ -135,8 +154,11 @@ describe('e2e integrity: quote-prefixed fences (SC-455) and CRLF notes (SC-453) 
 		expect(f.body).toEqual(['current_value: 1\r']);
 		expect(integrityProblems('n.md', fixture.replace('1\r', '2\r'), fixture, T0)).toEqual([]);
 		// LF-ified fence lines (a CRLF note rewritten with bare \n on the block's fence lines)
-		const lf = fixture.replace('extra\r\n', 'extra\n').replace('```\r\noutro', '```\nouro');
-		expect(integrityProblems('n.md', lf, fixture, T0).length).toBeGreaterThan(0);
+		const lf = fixture.replace('extra\r\n', 'extra\n').replace('```\r\noutro', '```\noutro');
+		const problems = integrityProblems('n.md', lf, fixture, T0);
+		expect(problems.some((p) => p.includes('opening line changed'))).toBe(true);
+		expect(problems.some((p) => p.includes('closing line changed'))).toBe(true);
+		expect(problems.some((p) => p.includes('outside the block bodies'))).toBe(true); // via the placeholder, not the text between the blocks
 	});
 });
 
@@ -169,9 +191,38 @@ describe('e2e integrity: agreement with the product parser (SC-456 O1)', () => {
 			const om = matchFenceLine(open)!;
 			const o = { fenceChar: om.marker[0], fenceLen: om.marker.length, prefix: om.prefix };
 			for (const close of [...lines, '> > ```', '> > ~~~', '>~~~', '> ````', '~~~~~']) {
-				const f = scanFences(`${open}\nbody\n${close}`)[0];
+				// the body line stays inside the opener's quote, so only the close line decides
+				const f = scanFences(`${open}\n${o.prefix}body\n${close}`)[0];
 				expect([open, close, f.closed]).toEqual([open, close, isFenceClose(o, close)]);
 			}
 		}
+	});
+});
+
+describe('e2e integrity: the scan agrees with the product scanner `listFences` on which ds-x blocks are closed, and where', () => {
+	const notes: Record<string, string> = {
+		plain: nl('a', '```ds-x', 'k: 1', '```', 'b'),
+		tilde: nl('~~~ds-x', 'k: 1', '~~~'),
+		fourBacktick: nl('````ds-x', '```', 'k: 1', '```', '````', 'tail'),
+		infoString: nl('```ds-x  extra words', 'k: 1', '```'),
+		spaceBeforeType: nl('``` ds-x', 'k: 1', '```'),
+		callout: nl('> [!note] T', '> ```ds-x', '> k: 1', '> ```', 'after'),
+		nested: nl('> > ```ds-x extra', '> > k: 1', '> > ```'),
+		twoBlocks: nl('```ds-x', 'a: 1', '```', '', '> ```ds-x', '> a: 1', '> ```'),
+		quoteEndsBeforeCloser: nl('> ```ds-x', '> a: 1', '', '> ```'),
+		quoteEndsThenRealBlock: nl('> [!note]', '> ```ds-x', '> a: 1', '', 'between', '', '```ds-x', 'b: 1', '```', '', '> [!note]', '> ```'),
+		reviewerCase1: nl('> > ```ds-x', '```ds-x extra', '```', '> ~~~', '', '> > ```'),
+		unquotedCloserInsideQuote: nl('> ```ds-x', '> a: 1', '```', '> ```'),
+		mdExample: nl('```md', '```ds-x', 'a: 1', '```', '````ds-x', 'b: 1', '````'),
+		unterminatedAtEof: nl('intro', '```ds-x', 'a: 1'),
+		crlf: 'intro\r\n```ds-x extra\r\na: 1\r\n```\r\nafter\r\n',
+	};
+
+	test.each(Object.entries(notes))('%s', (_name, note) => {
+		const helper = scanFences(note)
+			.filter((f) => f.lang === 'ds-x' && f.closed)
+			.map((f) => [f.start, f.end]);
+		const product = listFences(note, 'ds-x').map((b) => [b.lineStart, b.lineEnd]);
+		expect(helper).toEqual(product);
 	});
 });
