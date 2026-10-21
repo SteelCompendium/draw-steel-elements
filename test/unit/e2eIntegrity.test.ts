@@ -181,8 +181,8 @@ describe('e2e integrity: agreement with the product parser (SC-456 O1)', () => {
 			expect(f.lang).toBe(fenceAlias(matchFenceLine(line)!.rest));
 			const open = parseOpenFenceLine(line)!;
 			expect([open.prefix, open.fence]).toEqual([m.prefix, m.marker]);
-			// the product's `language` differs from the type ONLY for a space-before-language fence (SC-457)
-			if (!/^\s/.test(m.rest)) expect(f.lang).toBe(open.language);
+			// the product's `language` and the e2e scanner's type are one definition (SC-457), a space-before-language fence included
+			expect(f.lang).toBe(open.language);
 		}
 	});
 

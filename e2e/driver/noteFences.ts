@@ -12,8 +12,9 @@ import { matchFenceMarker, stripBlockPrefix } from '../../src/framework/host/blo
 
 export interface Fence {
 	/** The block TYPE: the first whitespace-delimited token of the TRIMMED info string, so
-	 *  ```` ``` ds-x ```` is `ds-x` (CommonMark / Obsidian semantics; SC-456 O2). Deliberately not the
-	 *  product's `language`, which is '' for a space-before-language fence (SC-457). '' for a bare fence. */
+	 *  ```` ``` ds-x ```` is `ds-x` (CommonMark / Obsidian semantics; SC-456 O2). The same value as the
+	 *  product's `language` (blockPrefix.ts `fenceLanguage`, SC-457), a space-before-language fence included.
+	 *  '' for a bare fence. */
 	lang: string;
 	/** The whole fence, opening line to closing line, byte for byte. */
 	text: string;
