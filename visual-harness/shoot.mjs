@@ -515,11 +515,13 @@ function captureMountSnapshotForPrintDelta(props) {
 // SC-349 — NO CAPTURE MAY COME OUT CLIPPED. The context below is 900×1200 CSS px, and under
 // Obsidian's real app.css (`html, body { height: 100% }`, `body { overflow: clip }`) the
 // document is exactly one viewport tall: whatever `#mount` has below the viewport's bottom
-// edge paints blank white in the PNG (it still comes out the element's full height). So a
-// capture whose bottom edge is below the viewport is shot with the viewport grown to cover
-// it, then restored; a capture that fits is taken at the original size, byte for byte as
-// before. The gate below fails the run if a capture was ever taken clipped, or if growing
-// the viewport changed the element's layout.
+// edge paints blank white in the PNG (it still comes out the element's full height; print
+// MEDIA, i.e. `--steel-realprint`, is never clipped). So a capture whose bottom edge is
+// below the viewport is shot with the viewport grown to cover it, then restored; a capture
+// that fits is taken at the original size, byte for byte as before. The gate below checks
+// each shot's `#mount` rect against the viewport at shot time and fails the run if a
+// capture was taken clipped, or if growing the viewport changed the element's layout; the
+// gallery is a NAMED exemption (CLIP_EXEMPTIONS) that the OK line prints.
 /** In-page: the bottom edges (CSS px from the top of the page at scroll 0) the shot must
  *  contain. NOT the viewport-relative rect: an interaction shot's click scrolls the page
  *  (the real-app cascade wraps #mount in scrollers), so a rect read after it is offset by
@@ -534,6 +536,27 @@ function measureCaptureBottoms(fullPage) {
 		? [...document.body.children].filter((n) => n.tagName !== 'SCRIPT')
 		: [document.querySelector('#mount')];
 	return nodes.filter(Boolean).map((n) => n.getBoundingClientRect().bottom + scrolled(n));
+}
+/** In-page, at shot time: where `#mount` actually sits in the viewport (the rect the shot is
+ *  cut from), and — for a full-page shot — every scrolling ancestor still hiding overflow.
+ *  Independent of `measureCaptureBottoms` on purpose (SC-349 review MED-1). */
+function measureShotVisibility() {
+	const m = document.querySelector('#mount');
+	if (!m) return null;
+	const r = m.getBoundingClientRect();
+	const hiddenOverflow = [];
+	for (let a = m.parentElement; a; a = a.parentElement) {
+		const oy = getComputedStyle(a).overflowY;
+		if (oy === 'visible') continue;
+		const hidden = a.scrollHeight - a.clientHeight - a.scrollTop;
+		if (hidden > 1) {
+			hiddenOverflow.push(
+				`${a.tagName.toLowerCase()}${a.className ? '.' + String(a.className).split(' ')[0] : ''} ` +
+					`(overflow-y ${oy}) hides ${Math.round(hidden)}px`,
+			);
+		}
+	}
+	return { top: r.top, bottom: r.bottom, innerHeight: window.innerHeight, hiddenOverflow };
 }
 /** In-page: a cheap fingerprint of `#mount`'s size + markup, to prove a viewport resize
  *  re-laid nothing the shot depends on. Deliberately NOT its top edge: that is where the
@@ -553,20 +576,35 @@ function settleFrames() {
 	return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 }
 /** SC-349 gate state: captures shot with a grown viewport, and any clip/layout problem. */
-const grownCaptures = [];
+const grownCaptures = []; // { outName, print: shot under print media }
 const clipProblems = [];
+/** Captures the gate does NOT vouch for, by `snap` query flag → why (named, and printed by
+ *  the OK line so it can never read as "everything is whole"). */
+const CLIP_EXEMPTIONS = {
+	gallery:
+		'every element family in one ~25,000 CSS px page — covering it takes a 25,000 px viewport, ' +
+		'~18 s and ~20 MB per PNG every run, and it is unfrozen; shot at the normal viewport, so it ' +
+		'shows only its first element (SC-484)',
+};
+const exemptCaptures = new Map(); // outName → reason
 function assertNoClippedCapture() {
 	if (!clipProblems.length) {
+		const screen = grownCaptures.filter((g) => !g.print).length;
+		const print = grownCaptures.length - screen;
+		const exempt = [...exemptCaptures].map(([n, why]) => `${n}.png (${why})`);
 		console.log(
-			`\ncapture clip OK (${grownCaptures.length} capture(s) taller than the viewport were shot with it ` +
-				`grown to cover them, then restored; every capture was taken with its whole element inside the ` +
-				`viewport, and growing it moved no layout)`,
+			`\ncapture clip OK (${screen} screen-media capture(s) whose element reached below the viewport ` +
+				`were shot with it grown to cover them and then restored; ${print} ` +
+				`print-media capture(s) were grown the same way as a precaution — print media is never ` +
+				`clipped, their bytes do not move; every other capture, and every grown one, was checked at ` +
+				`shot time to have #mount's whole box inside the viewport, and growing it moved no layout. ` +
+				`NOT covered — named exemption(s): ${exempt.length ? exempt.join('; ') : 'none'})`,
 		);
 		return;
 	}
 	console.error(
-		`\nCAPTURE CLIPPED — ${clipProblems.length} capture(s) came out with part of the element below ` +
-			`the viewport (painted blank) or moved when the viewport grew:\n` +
+		`\nCAPTURE CLIPPED — ${clipProblems.length} problem(s): part of a capture's element was outside ` +
+			`the viewport it was shot in (painted blank), or moved when the viewport grew:\n` +
 			clipProblems.map((p) => `  ${p}`).join('\n') +
 			`\nsnap() grows the viewport to cover a tall #mount before the shot (SC-349); if a new ` +
 			`screenshot path bypasses it, route it through the same measure-grow-shoot-restore step.`,
@@ -651,17 +689,23 @@ async function snap(page, combo, params, captureId, opts = {}) {
 		try {
 			if (fullShot) await page.screenshot({ path: file, fullPage: true });
 			else await page.locator('#mount').screenshot({ path: file });
-			const shotViewportHeight = await page.evaluate(() => window.innerHeight);
-			const bottomsAtShot = await page.evaluate(measureCaptureBottoms, fullShot);
-			for (const problem of captureClipProblems({
-				viewportHeight: shotViewportHeight,
-				bottoms: bottomsAtShot,
-				layoutBefore,
-				layoutAfter,
-			})) {
-				clipProblems.push(`${outName}: ${problem}`);
+			const exemptWhy = Object.keys(CLIP_EXEMPTIONS).find((f) => query[f]);
+			if (exemptWhy) exemptCaptures.set(outName, CLIP_EXEMPTIONS[exemptWhy]);
+			else {
+				const seen = await page.evaluate(measureShotVisibility);
+				for (const problem of captureClipProblems({
+					viewportHeight: seen.innerHeight,
+					mountTop: seen.top,
+					mountBottom: seen.bottom,
+					fullPage: fullShot,
+					hiddenOverflow: seen.hiddenOverflow,
+					layoutBefore,
+					layoutAfter,
+				})) {
+					clipProblems.push(`${outName}: ${problem}`);
+				}
+				if (grownTo !== null) grownCaptures.push({ outName, print: !!combo.realprint });
 			}
-			if (grownTo !== null) grownCaptures.push(`${outName} (${baseViewport.height}px → ${grownTo}px)`);
 		} finally {
 			if (grownTo !== null) {
 				await page.setViewportSize(baseViewport);

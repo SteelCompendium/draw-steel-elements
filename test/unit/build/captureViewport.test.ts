@@ -46,26 +46,44 @@ describe('SC-349 — enlargedViewportHeight', () => {
 
 describe('SC-349 — captureClipProblems (the in-run gate)', () => {
 	it('passes a capture whose whole element sits inside the viewport it was taken at', () => {
-		expect(run('captureClipProblems({ viewportHeight: 2110, bottoms: [2109.98] })')).toEqual([]);
+		expect(run('captureClipProblems({ viewportHeight: 2110, mountTop: 32, mountBottom: 2109.98 })')).toEqual([]);
 	});
 
 	it('fails a capture taken with part of the element below the viewport', () => {
-		const problems = run('captureClipProblems({ viewportHeight: 1200, bottoms: [2109.98] })') as string[];
+		const problems = run(
+			'captureClipProblems({ viewportHeight: 1200, mountTop: 32, mountBottom: 2109.98 })',
+		) as string[];
 		expect(problems).toHaveLength(1);
 		expect(problems[0]).toMatch(/reaches 2110px but the viewport is 1200px/);
 	});
 
-	it('fails when growing the viewport changed the element layout', () => {
+	it('fails a capture whose element starts above the viewport (the page was scrolled)', () => {
 		const problems = run(
-			`captureClipProblems({ viewportHeight: 2110, bottoms: [2000], layoutBefore: 'a', layoutAfter: 'b' })`,
+			'captureClipProblems({ viewportHeight: 1200, mountTop: -729, mountBottom: 1136 })',
+		) as string[];
+		expect(problems).toHaveLength(1);
+		expect(problems[0]).toMatch(/starts 729px above the top of the viewport/);
+	});
+
+	it('fails a full-page shot behind a scroller that hides overflow, and ignores it for an element shot', () => {
+		const hidden = `hiddenOverflow: ['div.markdown-preview-view (overflow-y auto) hides 23864px']`;
+		const problems = run(
+			`captureClipProblems({ viewportHeight: 1200, mountTop: 0, mountBottom: 1200, fullPage: true, ${hidden} })`,
+		) as string[];
+		expect(problems).toHaveLength(1);
+		expect(problems[0]).toMatch(/hides 23864px/);
+		expect(
+			run(`captureClipProblems({ viewportHeight: 1200, mountTop: 0, mountBottom: 1200, ${hidden} })`),
+		).toEqual([]);
+	});
+
+	it('fails when growing the viewport changed the element layout, and passes when it did not', () => {
+		const base = 'viewportHeight: 2110, mountTop: 32, mountBottom: 2000';
+		const problems = run(
+			`captureClipProblems({ ${base}, layoutBefore: 'a', layoutAfter: 'b' })`,
 		) as string[];
 		expect(problems).toHaveLength(1);
 		expect(problems[0]).toMatch(/changed the element's layout/);
-	});
-
-	it('passes when the layout fingerprints match', () => {
-		expect(
-			run(`captureClipProblems({ viewportHeight: 2110, bottoms: [2000], layoutBefore: 'a', layoutAfter: 'a' })`),
-		).toEqual([]);
+		expect(run(`captureClipProblems({ ${base}, layoutBefore: 'a', layoutAfter: 'a' })`)).toEqual([]);
 	});
 });

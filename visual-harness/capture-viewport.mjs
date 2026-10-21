@@ -32,19 +32,42 @@ export function enlargedViewportHeight(viewportHeight, bottoms) {
 
 /**
  * The in-run gate's verdict for ONE capture, evaluated at capture time (viewport already
- * grown if it was going to be). Returns the list of problems (empty = fine).
- * @param {{ viewportHeight: number, bottoms: number[],
+ * grown if it was going to be). Deliberately INDEPENDENT of the measurement that decided
+ * the growth: it reads where `#mount` actually sits in the viewport (the same rect the
+ * screenshot is cut from), so a wrong growth decision is caught, not repeated. Returns the
+ * list of problems (empty = fine).
+ * @param {{ viewportHeight: number, mountTop: number, mountBottom: number,
+ *           fullPage?: boolean, hiddenOverflow?: string[],
  *           layoutBefore?: string, layoutAfter?: string }} s
+ *   `mountTop`/`mountBottom`: `#mount`'s getBoundingClientRect() edges at shot time.
+ *   `hiddenOverflow`: for a full-page shot, one description per scrolling ancestor of
+ *   `#mount` that still has overflow it is hiding (a full-page shot cannot see past it).
  */
-export function captureClipProblems({ viewportHeight, bottoms, layoutBefore, layoutAfter }) {
+export function captureClipProblems({
+	viewportHeight,
+	mountTop,
+	mountBottom,
+	fullPage = false,
+	hiddenOverflow = [],
+	layoutBefore,
+	layoutAfter,
+}) {
+	const EPS = 0.5; // sub-pixel layout slack, CSS px
 	const problems = [];
-	const finite = bottoms.filter((b) => Number.isFinite(b));
-	const needed = finite.length ? Math.ceil(Math.max(...finite)) : 0;
-	if (needed > viewportHeight) {
+	if (mountBottom > viewportHeight + EPS) {
 		problems.push(
-			`captured element reaches ${needed}px but the viewport is ${viewportHeight}px tall — ` +
-				`everything below ${viewportHeight}px paints blank`,
+			`its element reaches ${Math.ceil(mountBottom)}px but the viewport is ${viewportHeight}px tall — ` +
+				`under the screen-media cascade everything below the viewport paints blank`,
 		);
+	}
+	if (mountTop < -EPS) {
+		problems.push(
+			`its element starts ${Math.ceil(-mountTop)}px above the top of the viewport (the page was scrolled) — ` +
+				`that part of the element paints blank`,
+		);
+	}
+	if (fullPage) {
+		for (const h of hiddenOverflow) problems.push(`a full-page shot cannot see past a scroller hiding overflow: ${h}`);
 	}
 	if (layoutBefore !== undefined && layoutAfter !== undefined && layoutBefore !== layoutAfter) {
 		problems.push(
