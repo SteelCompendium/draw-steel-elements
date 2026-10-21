@@ -35,6 +35,14 @@ function rowByName(container: HTMLElement, name: string): HTMLElement {
 	return row;
 }
 
+function openEditor(container: HTMLElement, name: string): void {
+	(rowByName(container, name).querySelector(`button[aria-label="Customize ${name}"]`) as HTMLElement).click();
+}
+
+function editorOf(container: HTMLElement): HTMLElement {
+	return container.querySelector('.dse-condal__editor') as HTMLElement;
+}
+
 function footerBtn(container: HTMLElement, label: string): HTMLButtonElement {
 	const el = container.querySelector<HTMLButtonElement>(`.dse-modal__footer button[aria-label="${label}"]`);
 	if (!el) throw new Error(`no footer button [aria-label="${label}"]`);
@@ -348,11 +356,80 @@ describe('SC-186: the inline row editor (cog) — Duration / Color / Effect', ()
 		expect(rowByName(container, 'Bleeding').querySelector('.dse-condal__dur')?.textContent).toBe('Save Ends');
 	});
 
-	test('SC-186 fix-round MED-3: picking a chip in the editor keeps focus on the row\'s cog', () => {
+	test('SC-468: picking a duration chip leaves focus on the chosen chip, rebuilt and now pressed', () => {
 		const { container } = makeModal(['bleeding']);
-		(rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]') as HTMLElement).click();
-		const editor = container.querySelector('.dse-condal__editor') as HTMLElement;
-		(editor.querySelector('button[aria-label="Save Ends"]') as HTMLElement).click();
+		openEditor(container, 'Bleeding');
+		const before = editorOf(container).querySelector('button[aria-label="Save Ends"]') as HTMLElement;
+		before.click();
+		const chip = editorOf(container).querySelector('button[aria-label="Save Ends"]') as HTMLElement;
+		expect(chip).not.toBe(before); // the list was rebuilt: focus was re-placed, not retained
+		expect(document.activeElement).toBe(chip);
+		expect(chip.getAttribute('aria-pressed')).toBe('true');
+	});
+
+	test('SC-468: picking "Until removed" (the preset that CLEARS the duration) also focuses its own chip', () => {
+		const { container } = makeModal([{ key: 'bleeding', duration: 'eot' }]);
+		openEditor(container, 'Bleeding');
+		(editorOf(container).querySelector('button[aria-label="Until removed"]') as HTMLElement).click();
+		const chip = editorOf(container).querySelector('button[aria-label="Until removed"]') as HTMLElement;
+		expect(document.activeElement).toBe(chip);
+		expect(chip.getAttribute('aria-pressed')).toBe('true');
+	});
+
+	test('SC-468: picking a swatch leaves focus on the chosen swatch, rebuilt and now pressed', () => {
+		const { container } = makeModal(['bleeding']);
+		openEditor(container, 'Bleeding');
+		const before = editorOf(container).querySelector('button[aria-label="Color #1e8449"]') as HTMLElement;
+		before.click();
+		const swatch = editorOf(container).querySelector('button[aria-label="Color #1e8449"]') as HTMLElement;
+		expect(swatch).not.toBe(before);
+		expect(document.activeElement).toBe(swatch);
+		expect(swatch.getAttribute('aria-pressed')).toBe('true');
+	});
+
+	test('SC-468: a custom (non-preset) color keeps focus on the custom color input, not the cog', () => {
+		const { container } = makeModal(['bleeding']);
+		openEditor(container, 'Bleeding');
+		const input = editorOf(container).querySelector('input[type="color"]') as HTMLInputElement;
+		input.value = '#00ff00';
+		input.dispatchEvent(new Event('change'));
+		const rebuilt = editorOf(container).querySelector('input[type="color"]') as HTMLInputElement;
+		expect(rebuilt).not.toBe(input);
+		expect(rebuilt.value).toBe('#00ff00');
+		expect(document.activeElement).toBe(rebuilt);
+	});
+
+	test('SC-468: picking an effect chip leaves focus on the chosen chip, rebuilt and now pressed', () => {
+		const { container } = makeModal(['bleeding']);
+		openEditor(container, 'Bleeding');
+		const before = editorOf(container).querySelector('button[aria-label="glow"]') as HTMLElement;
+		before.click();
+		const chip = editorOf(container).querySelector('button[aria-label="glow"]') as HTMLElement;
+		expect(chip).not.toBe(before);
+		expect(document.activeElement).toBe(chip);
+		expect(chip.getAttribute('aria-pressed')).toBe('true');
+	});
+
+	test('SC-468: the pick lands in its own group (a swatch/effect/duration label is never matched across groups)', () => {
+		const { container } = makeModal(['bleeding']);
+		openEditor(container, 'Bleeding');
+		(editorOf(container).querySelector('button[aria-label="static"]') as HTMLElement).click();
+		const active = document.activeElement as HTMLElement;
+		expect(active.closest('[role="group"]')?.getAttribute('aria-label')).toBe('Effect');
+	});
+
+	test('SC-468 fallback: when the picked option is not in the re-rendered row (editor closed), focus falls back to the row\'s cog', () => {
+		const { modal, container } = makeModal(['bleeding']);
+		// No editor open: nothing to find, so the setters must land on the cog, never <body>.
+		(modal as any).setColor(0, '#1e8449');
+		expect(document.activeElement).toBe(
+			rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]'),
+		);
+		(modal as any).setDuration(0, 'eot');
+		expect(document.activeElement).toBe(
+			rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]'),
+		);
+		(modal as any).setEffect(0, 'glow');
 		expect(document.activeElement).toBe(
 			rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]'),
 		);

@@ -193,10 +193,29 @@ export class ConditionsModal extends DseModal {
 	 *  mutating method below re-focuses an EQUIVALENT control afterward — the row's cog
 	 *  (its first `.dse-condal__act`) is the stable anchor for both row-level actions
 	 *  (toggle/customize) and in-editor chip picks, since the editor stays open at the
-	 *  same row across a chip click. */
+	 *  same row across a chip click. SC-468: the cog stays the anchor for ROW-level actions
+	 *  (toggle/remove) and is the FALLBACK for an in-editor pick whose own option can't be
+	 *  found; a successful pick now keeps focus on the option itself (`focusPickedOption`). */
 	private focusRowCog(index: number): void {
 		const rows = this.listEl.querySelectorAll<HTMLElement>('.dse-condal__row');
 		rows[index]?.querySelector<HTMLButtonElement>('.dse-condal__act')?.focus();
+	}
+
+	/** SC-468: after an in-editor pick, `renderList()` has rebuilt the editor, so the control
+	 *  the user just pressed is gone. Put focus on its REBUILT twin (the option that is now
+	 *  `aria-pressed`) so a keyboard user stays where they were in the group and can arrow on
+	 *  to the next option; only fall back to the row's cog (the stable MED-3 anchor) when the
+	 *  twin is not there — editor closed, or the row itself gone. The twin is found by its
+	 *  `aria-label` (derived from the picked value) scoped to its `role="group"`, the same
+	 *  re-find the icon picker does. Programmatic focus after a mouse click draws no
+	 *  `:focus-visible` ring (e2e COND-E03), so pointer picks look as they did with the cog. */
+	private focusPickedOption(index: number, group: string, label: string): void {
+		const twin = this.listEl.querySelector('.dse-condal__editor')
+			?.querySelector<HTMLElement>(`[role="group"][aria-label="${group}"]`)
+			?.querySelectorAll<HTMLElement>('button');
+		const option = twin && Array.from(twin).find((b) => b.getAttribute('aria-label') === label);
+		if (option) option.focus();
+		else this.focusRowCog(index);
 	}
 
 	private renderRow(entry: Condition, index: number): void {
@@ -369,7 +388,9 @@ export class ConditionsModal extends DseModal {
 		entry.duration = value;
 		this.emitChange();
 		this.renderList();
-		this.focusRowCog(index);
+		const preset = DURATION_PRESETS.find((p) => p.value === value);
+		if (preset) this.focusPickedOption(index, 'Duration', preset.label);
+		else this.focusRowCog(index);
 	}
 
 	private renderSwatches(parent: HTMLElement, entry: Condition, index: number): void {
@@ -398,7 +419,17 @@ export class ConditionsModal extends DseModal {
 		this.conditions[index].color = hex;
 		this.emitChange();
 		this.renderList();
-		this.focusRowCog(index);
+		// A preset hex (swatch click, or a custom pick that happens to equal one) lands on its
+		// swatch; any other hex came from the custom <input type=color>, which stays focused.
+		if (SWATCHES.some(([, h]) => h === hex)) this.focusPickedOption(index, 'Color', `Color ${hex}`);
+		else this.focusCustomColor(index);
+	}
+
+	private focusCustomColor(index: number): void {
+		const input = this.listEl.querySelector('.dse-condal__editor')
+			?.querySelector<HTMLInputElement>('.dse-swatch--custom input[type="color"]');
+		if (input) input.focus();
+		else this.focusRowCog(index);
 	}
 
 	private renderEffectChips(parent: HTMLElement, entry: Condition, index: number): void {
@@ -427,7 +458,7 @@ export class ConditionsModal extends DseModal {
 		entry.effect = fx === 'static' ? undefined : fx;
 		this.emitChange();
 		this.renderList();
-		this.focusRowCog(index);
+		this.focusPickedOption(index, 'Effect', fx);
 	}
 
 	// --------------------------------------------------------- add: button / combobox
