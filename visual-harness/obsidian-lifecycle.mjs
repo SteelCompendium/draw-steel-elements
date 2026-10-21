@@ -39,7 +39,7 @@
 // them). Obsidian counts it as a line break, so section line numbers are off against split('\n'); a Reading view click
 // and a Live Preview click, and a sidebar pin from the close fence of the second block, must still land in the right
 // block and leave every other byte (the lone CRs included) untouched. A CR-only note (only lone CRs as breaks) stays CR-only.
-// SC-326 appends G-S13 (29 total): two 20-round montage blocks in one note, one scrolled MID-way and one to its far
+// SC-326 appends G-S13: two 20-round montage blocks in one note, one scrolled MID-way and one to its far
 // end, keep their horizontal scroll across quick-trio taps and End round — the rebuild every write triggers AND the
 // later adoption move both reset a scroll container's offset (measured before the fix: 884 -> 0).
 //
