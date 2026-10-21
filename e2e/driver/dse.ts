@@ -14,9 +14,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { closeEverything, closeModals, waitWriteIdle } from './cleanup';
 import { E2E } from './env';
+import { fencesOf } from './noteFences';
 import { ev, REGISTRY, waitFor } from './page';
 import { eventsSince, mark } from './recorders';
-import { fencesOf } from './invariants';
 import { readFixture, recordDrive, state } from './state';
 import './session';
 
@@ -485,20 +485,9 @@ async function expectNoWrite(rel: string, action: () => Promise<unknown>): Promi
  *  a callout / blockquote is read without its `> ` prefix, SC-455). */
 async function readBlock(rel: string, lang: string, n: number): Promise<unknown> {
 	const text = await ev<string>(`app.vault.read(app.vault.getAbstractFileByPath(${JSON.stringify(rel)}))`);
-	const lines = text.split('\n');
-	let seen = -1;
-	for (let i = 0; i < lines.length; i++) {
-		const m = /^((?:>[ ]?)*)```(\S+)\s*$/.exec(lines[i]);
-		if (!m || m[2] !== lang) continue;
-		const depth = (m[1].match(/>/g) ?? []).length;
-		const unquote = (line: string): string => (depth === 0 ? line : line.replace(new RegExp(`^(?:>[ ]?){0,${depth}}`), ''));
-		seen++;
-		const body: string[] = [];
-		let j = i + 1;
-		for (; j < lines.length && unquote(lines[j]).trim() !== '```'; j++) body.push(unquote(lines[j]));
-		if (seen === n) return yaml.load(body.join('\n'));
-		i = j;
-	}
+	// SC-456: the product's fence grammar (``` / ~~~, any info string, a space before the type) via noteFences.
+	const fence = fencesOf(text).filter((f) => f.lang === lang)[n];
+	if (fence) return yaml.load(fence.body.join('\n'));
 	throw new Error(`${rel} has no ${n + 1}-th \`\`\`${lang} block`);
 }
 

@@ -3,6 +3,7 @@
 // outside jest (the F4 visual harness's browser shim re-exports it).
 // test/mocks/obsidian.ts re-exports this and adds the jest wrappers — tests are unchanged.
 import { parse, stringify } from 'yaml';
+import { matchFenceMarker, stripBlockPrefix } from '../../src/framework/host/blockPrefix';
 
 // ---------------------------------------------------------------- yaml
 // Obsidian's REAL parseYaml/stringifyYaml are the `yaml` npm package (eemeli/yaml v2),
@@ -1379,7 +1380,8 @@ export interface FakeContext extends MarkdownPostProcessorContext {
 /**
  * Fake MarkdownPostProcessorContext bound to a note in the vault fake.
  * getSectionInfo RE-SCANS the file's CURRENT content on every call for the
- * blockIndex-th ds-* fenced block (``` or ~~~) — modeling Obsidian re-rendering
+ * blockIndex-th ds-* fenced block (``` or ~~~, optionally inside a quote/callout, with any info
+ * string after the type - the product's fence grammar, SC-456) — modeling Obsidian re-rendering
  * after each write. Returns { text: <whole file>, lineStart, lineEnd } with the
  * fence lines inclusive, matching what the former CodeBlocks.updateMarkdownCodeBlock (deleted in SC-454) spliced.
  */
@@ -1402,22 +1404,27 @@ export function makeFakeContext(app: App, sourcePath: string, blockIndex = 0): F
 			const lines = content.split('\n');
 			let matchIndex = -1;
 			let openLine = -1;
-			let fence = '';
+			let open: { prefix: string; char: string; len: number } | null = null;
 			for (let i = 0; i < lines.length; i++) {
-				if (openLine === -1) {
-					const open = lines[i].match(/^([`~]{3,})ds-[\w-]+\s*$/);
-					if (open) {
+				if (open === null) {
+					// SC-456: the product's fence grammar - ``` / ~~~, a quote prefix, and a type that is the
+					// first token of the TRIMMED info string (so ```` ``` ds-x ```` and ```` ```ds-x extra ````
+					// are blocks; the rest of the info string stays in the note text this returns).
+					const m = matchFenceMarker(lines[i]);
+					if (m && /^ds-[\w-]+$/.test(m.rest.trim().split(/\s+/)[0])) {
 						openLine = i;
-						fence = open[1];
+						open = { prefix: m.prefix, char: m.marker[0], len: m.marker.length };
 					}
 				} else {
-					const close = lines[i].match(/^([`~]{3,})\s*$/);
-					if (close && close[1][0] === fence[0] && close[1].length >= fence.length) {
+					const inner = stripBlockPrefix(lines[i], open.prefix);
+					const close = inner === null ? null : matchFenceMarker(inner);
+					if (close && close.prefix === '' && close.rest.trim() === '' && close.marker[0] === open.char && close.marker.length >= open.len) {
 						matchIndex++;
 						if (matchIndex === blockIndex) {
 							return { text: content, lineStart: openLine, lineEnd: i };
 						}
 						openLine = -1;
+						open = null;
 					}
 				}
 			}
