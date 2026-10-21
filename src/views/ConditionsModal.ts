@@ -87,6 +87,9 @@ const EFFECT_PRESETS = ['static', ...CONDITION_EFFECTS] as const;
 
 const COLOR_INPUT_DEFAULT = '#ffffff';
 
+/** Case-insensitive colour equality: note YAML may spell a preset `#C0392B`. */
+const sameColor = (a: string | undefined, b: string): boolean => a !== undefined && a.toLowerCase() === b.toLowerCase();
+
 type Match = { kind: 'known'; config: ConditionConfig } | { kind: 'custom'; text: string };
 
 /** A labeled field row (`.dse-cond-field`) — shared grammar for Duration/Color/Effect. */
@@ -461,7 +464,7 @@ export class ConditionsModal extends DseModal {
 			sw.setAttribute('title', `${name} (${hex})`);
 			sw.setAttribute('aria-label', `Color ${hex}`);
 			stampControl(sw, 'cond.swatch');
-			setPressedState(sw, hex === entry.color);
+			setPressedState(sw, sameColor(entry.color, hex));
 			sw.style.setProperty('--dse-swatch', hex);
 			this.lifecycle.registerDomEvent(sw, 'click', () => this.setColor(index, hex));
 		}
@@ -469,7 +472,13 @@ export class ConditionsModal extends DseModal {
 		custom.setAttribute('aria-label', 'Custom color');
 		setIcon(custom, 'pipette');
 		const input = custom.createEl('input', { type: 'color' });
-		input.setAttribute('aria-label', 'Custom condition color');
+		// SC-361: a colour that is set and is not one of the presets is the custom swatch's selection. The
+		// <label> cannot carry `aria-pressed` (not valid on a label), so it takes `data-selected` (CSS fills
+		// it with the colour and draws the check) and the focusable input names the state for assistive tech.
+		const customHex = entry.color && !SWATCHES.some(([, h]) => sameColor(entry.color, h)) ? entry.color : undefined;
+		custom.toggleAttribute('data-selected', customHex !== undefined);
+		applyConditionColor(custom, customHex); // validated via CSS.supports; an invalid value clears it
+		input.setAttribute('aria-label', customHex !== undefined ? `Custom condition color ${customHex}, selected` : 'Custom condition color');
 		input.value = entry.color && /^#[0-9a-f]{6}$/i.test(entry.color) ? entry.color : COLOR_INPUT_DEFAULT;
 		this.lifecycle.registerDomEvent(input, 'change', () => this.setColor(index, input.value));
 	}
@@ -480,7 +489,7 @@ export class ConditionsModal extends DseModal {
 		this.renderList();
 		// A preset hex (swatch click, or a custom pick that happens to equal one) lands on its
 		// swatch; any other hex came from the custom <input type=color>, which stays focused.
-		if (SWATCHES.some(([, h]) => h === hex)) this.focusPickedOption(index, 'Color', `Color ${hex}`);
+		if (SWATCHES.some(([, h]) => sameColor(hex, h))) this.focusPickedOption(index, 'Color', `Color ${hex}`);
 		else this.focusCustomColor(index);
 	}
 

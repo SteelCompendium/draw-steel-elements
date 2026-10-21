@@ -1065,3 +1065,85 @@ describe('SC-277: per-condition icons', () => {
 			.toBe(key === 'bleeding' ? 'droplet' : 'circle-dashed');
 	});
 });
+
+// SC-361 — the colour swatches: SELECTED = a check inside the swatch, FOCUSED = the shared kit ring.
+describe('SC-361: swatch selection mark and focus ring', () => {
+	const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+	const stripped = sheet.replace(/\/\*[\s\S]*?\*\//g, '');
+	const ruleBody = (selector: string): string => {
+		const i = stripped.indexOf(`${selector} {`);
+		if (i < 0) throw new Error(`no rule "${selector}"`);
+		return stripped.slice(i, stripped.indexOf('}', i));
+	};
+	const customOf = (container: HTMLElement) => editorOf(container).querySelector('.dse-swatch--custom') as HTMLElement;
+	const customInput = (container: HTMLElement) => customOf(container).querySelector('input') as HTMLInputElement;
+
+	test('CSS: the pressed swatch draws a check pseudo-element and no outline / box-shadow ring', () => {
+		const pressed = ruleBody(".dse-swatch[aria-pressed='true']::after,\n.dse-swatch--custom[data-selected]::after");
+		expect(pressed).toMatch(/content:\s*''/);
+		expect(pressed).toContain('M20 6 9 17l-5-5'); // Lucide `check`
+		expect(pressed).toMatch(/stroke='%23fff'/); // white stroke over a dark under-stroke
+		expect(pressed).toMatch(/stroke='%23000'/);
+		// No bare `.dse-swatch[aria-pressed='true']` rule is left to carry a ring.
+		expect(stripped).not.toMatch(/\.dse-swatch\[aria-pressed='true'\]\s*\{/);
+		expect(pressed).not.toMatch(/outline|box-shadow/);
+	});
+
+	test('CSS: the swatch is pinned against the Obsidian button host (box-shadow, font, colour, white-space)', () => {
+		const anchor = ':is([data-dse-element], .dse-modal):not([data-dse-print="on"])';
+		// Block B of the SC-203 host re-grounding: Obsidian's plate shadow + grey focus halo are removed.
+		const flat = stripped.replace(/\s+/g, ' ');
+		expect(flat).toMatch(/\.dse-optchip, \.dse-swatch \) \{ box-shadow: none; \}/);
+		const pin = stripped.slice(stripped.indexOf(`${anchor} :where(.dse-swatch) {`));
+		const body = pin.slice(0, pin.indexOf('}'));
+		for (const decl of ['font-size: var(--font-ui-small, 13px)', 'font-family: inherit', 'white-space: inherit', 'color: inherit']) {
+			expect(body).toContain(decl);
+		}
+	});
+
+	test('preset swatches keep setPressedState: aria-pressed + data-pressed, case-insensitively', () => {
+		const { container } = makeModal([{ key: 'bleeding', color: '#1E8449' }]);
+		openEditor(container, 'Bleeding');
+		const swatches = Array.from(editorOf(container).querySelectorAll<HTMLElement>('button.dse-swatch'));
+		expect(swatches.map((s) => s.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'true', 'false', 'false']);
+		expect(swatches[2].hasAttribute('data-pressed')).toBe(true);
+		expect(swatches[0].hasAttribute('data-pressed')).toBe(false);
+		expect(customOf(container).hasAttribute('data-selected')).toBe(false); // a preset is never a custom selection
+	});
+
+	test('the pipette is unmarked with no colour, and with a preset colour', () => {
+		for (const color of [undefined, '#c0392b']) {
+			const { container } = makeModal([{ key: 'bleeding', color }]);
+			openEditor(container, 'Bleeding');
+			expect(customOf(container).hasAttribute('data-selected')).toBe(false);
+			expect(customOf(container).hasAttribute('aria-pressed')).toBe(false);
+			expect(customInput(container).getAttribute('aria-label')).toBe('Custom condition color');
+			expect(customOf(container).style.getPropertyValue('--dse-condition-color')).toBe('');
+		}
+	});
+
+	test('the pipette is marked selected, filled with the colour and named, for a non-preset colour', () => {
+		const { container } = makeModal([{ key: 'bleeding', color: '#00ff00' }]);
+		openEditor(container, 'Bleeding');
+		const custom = customOf(container);
+		expect(custom.hasAttribute('data-selected')).toBe(true);
+		expect(custom.hasAttribute('aria-pressed')).toBe(false); // invalid ARIA on a <label>
+		expect(custom.style.getPropertyValue('--dse-condition-color')).toBe('#00ff00');
+		expect(customInput(container).getAttribute('aria-label')).toBe('Custom condition color #00ff00, selected');
+		expect(editorOf(container).querySelectorAll('button.dse-swatch[aria-pressed="true"]')).toHaveLength(0);
+	});
+
+	test('picking a custom colour marks the pipette; picking a preset afterwards clears it', () => {
+		const { container } = makeModal(['bleeding']);
+		openEditor(container, 'Bleeding');
+		const input = customInput(container);
+		input.value = '#00ff00';
+		input.dispatchEvent(new Event('change'));
+		expect(customOf(container).hasAttribute('data-selected')).toBe(true);
+		expect(document.activeElement).toBe(customInput(container));
+
+		(editorOf(container).querySelector('button[aria-label="Color #2874a6"]') as HTMLElement).click();
+		expect(customOf(container).hasAttribute('data-selected')).toBe(false);
+		expect(editorOf(container).querySelector('button[aria-label="Color #2874a6"]')!.getAttribute('aria-pressed')).toBe('true');
+	});
+});

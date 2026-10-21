@@ -221,6 +221,11 @@ describe('Plan 08 Task 5: framework-default :focus-visible (D2 §4.5)', () => {
 		// SC-338: the option chip (Result/Duration/Effect + condition icon/preset
 		// choices, montage form + Conditions modal) — a bare <button>, not a kit widget.
 		'.dse-optchip:focus-visible',
+		// SC-361: the Conditions colour swatches — the selection mark is a check inside the swatch,
+		// so the shared outside ring no longer reads as selection. The pipette is a <label> around
+		// an opacity-0 colour input: the label takes the ring when the input is keyboard-focused.
+		'.dse-swatch:focus-visible',
+		'.dse-swatch--custom:has(> input:focus-visible)',
 		// SC-132: the recovery-marker row (one role="slider" stop for the whole row).
 		'.dse-stamina-rec__pips[tabindex]:focus-visible',
 		// SC-132: the undo toast's action, inside an obsidian Notice.

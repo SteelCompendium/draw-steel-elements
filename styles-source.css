@@ -2170,13 +2170,37 @@ code.dsa {
 	background: var(--dse-swatch, var(--dse-surface));
 	cursor: pointer;
 }
-.dse-swatch[aria-pressed='true'] {
-	outline: 2px solid var(--dse-accent);
-	outline-offset: 2px;
+/* SC-361 — SELECTED = a check drawn INSIDE the swatch; FOCUSED = the shared kit ring OUTSIDE it
+   (~:15409). The selection used to be this same 2px accent outline, so a focused swatch
+   (Obsidian's grey halo) could not be told from a selected one and the kit ring could not be
+   joined without making focus look like selection. A shape difference (ring vs. check), never a
+   hue one (Scott is colourblind), and the ring never shares a 0.45em gap with a second ring.
+   The glyph is Lucide's `check` path (`M20 6 9 17l-5-5`, the set Obsidian bundles; nothing is
+   hand-drawn): a dark under-stroke (black @ 70%, width 6) under a white stroke (width 2.75), so it
+   clears 3:1 on every preset fill (white alone >= 3.68:1, floor = amber) and on any custom colour.
+   Keyed on `aria-pressed` alone (SC-450); the pipette has no pressed state (a <label>, so no
+   `aria-pressed`), it carries `[data-selected]` instead. No outline / box-shadow ring may live here. */
+.dse-swatch[aria-pressed='true']::after,
+.dse-swatch--custom[data-selected]::after {
+	content: '';
+	position: absolute;
+	inset: 15%;
+	pointer-events: none;
+	background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5' stroke='%23000' stroke-opacity='0.7' stroke-width='6'/%3E%3Cpath d='M20 6 9 17l-5-5' stroke='%23fff' stroke-width='2.75'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 .dse-modal .dse-swatches .dse-swatch--custom {
 	color: var(--dse-fg-muted);
 	background: var(--dse-surface);
+}
+/* SC-361 — a custom colour (set, and not one of the five presets) fills the pipette with that
+   colour and the check replaces the pipette glyph, so it reads exactly like a selected preset.
+   The fill is `--dse-condition-color`, ConditionsModal's one validated write (an unparseable
+   YAML colour clears it, and the muted fallback keeps the white check legible). */
+.dse-modal .dse-swatches .dse-swatch--custom[data-selected] {
+	background: var(--dse-condition-color, var(--dse-fg-muted));
+}
+.dse-swatch--custom[data-selected] > svg {
+	visibility: hidden;
 }
 .dse-swatch--custom input[type='color'] {
 	position: absolute;
@@ -15412,8 +15436,12 @@ body.theme-light
    second one, per this rule's own "one rule" contract. The host's box-shadow ring is
    neutralized for both states by the SC-203 host re-grounding block, which the chip now
    also joins (~:15591) — this outline is never left to stack over a grey box-shadow.
-   `.dse-swatch` is deliberately NOT here: its pressed mark already uses this exact
-   outline, so a shared ring would make focus look like selection — see SC-361. */
+   SC-361 — `.dse-swatch` (the Conditions colour swatches) joins too: the selected mark is
+   now a check INSIDE the swatch (~:2173), so this outside ring no longer reads as selection.
+   The custom (pipette) swatch is a <label> around an opacity-0 <input type=color>, so the label
+   shows the ring when its input is keyboard-focused (this also closes SC-473). */
+.dse-swatch:focus-visible,
+.dse-swatch--custom:has(> input:focus-visible),
 .dse-optchip:focus-visible,
 /* SC-202 r1 — the eight cousin inputs (initiative malice quick-add, montage skill/
    characteristic, party award, project roll/points/characteristic) never carried a
@@ -17135,7 +17163,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 		.dse-collapse__header,
 		.dse-pr__row,
 		.dse-tabs__tab:not([aria-selected='true']),
-		.dse-optchip
+		.dse-optchip,
+		.dse-swatch
 	) {
 	box-shadow: none;
 }
@@ -17230,6 +17259,22 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 }
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-optchip:not(:hover):not([aria-pressed='true'])) {
 	color: var(--dse-fg-muted);
+}
+
+/* -- F. SC-361 — `.dse-swatch` (the Conditions colour swatches; box-shadow is in B above).
+      The swatch is an `em`-sized circle, so Obsidian's `button` font-size (13px,
+      `--font-ui-small`) vs. the browser's own 13.333px vs. the <label> pipette's INHERITED
+      15px sized the three differently (19.5 / 20 / 22.5px). Pinning the font to the host's
+      own token — with its own value as the fallback, so a bare page and a real vault agree —
+      makes every swatch, preset button and pipette label alike, 1.5em = 19.5px. `color`,
+      `font-family` and `white-space` are restated as the inherited values (no visible text
+      lives in a swatch, but `currentColor` and the em box do). Outline needs no pin: the
+      host's `outline: none` and the UA focus ring both lose to the shared kit ring. -- */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-swatch) {
+	font-size: var(--font-ui-small, 13px);
+	font-family: inherit;
+	white-space: inherit;
+	color: inherit;
 }
 
 /* ==================================================================================== */
