@@ -8,6 +8,12 @@
 // i5..i0 placeholders, a full currentArgument) so serialize(parse(src)) legitimately emits
 // fields ABSENT from src; the legacy writer does the same on its first write.
 //
+// SC-482 narrows that oracle: a key the source did NOT declare and the write did not change is no
+// longer written (current_patience / current_interest / currentArgument / i5..i0 / each
+// motivation's hasBeenAppealedTo ...), so serialize(parse(src)) now equals the legacy bytes only
+// for a source that declares every key. Such a source is built here as `legacyWriterBytes(src)`
+// itself — what the old plugin wrote into the note on the first change.
+//
 // The free-text suite exists because of Plan 05 T-2: the obsidian mock's stringifyYaml now
 // delegates to the real `yaml` package at Obsidian-bundle defaults, which FOLDS long plain
 // scalars across continuation lines (no `>-`) and emits `|-` literal blocks for embedded
@@ -37,20 +43,55 @@ describe('T-4: negotiation model parse (verbatim class reuse)', () => {
 	});
 });
 
-describe('T-4: serialize is byte-compatible with the legacy writer', () => {
-	test('serialize(parse(frodo)) equals the legacy writeback bytes exactly', () => {
-		expect(serialize(parseLikePipeline(frodoYaml))).toBe(legacyWriterBytes(frodoYaml));
+describe('T-4: serialize is byte-compatible with the legacy writer (for every key the source declared)', () => {
+	test('serialize(parse(frodo)) is the legacy writeback bytes minus the keys frodo never declared (SC-482)', () => {
+		const legacy = legacyWriterBytes(frodoYaml);
+		const undeclared = [
+			'current_patience: 3',
+			'current_interest: 3',
+			'    hasBeenAppealedTo: false',
+			'currentArgument:',
+			'  motivationsUsed: []',
+			'  pitfallsUsed: []',
+			'  lieUsed: false',
+			'  sameArgumentUsed: false',
+			'  reusedMotivation: false',
+		];
+		// The legacy bytes are the oracle: remove exactly the lines for undeclared keys.
+		const expected = legacy
+			.split('\n')
+			.filter((line) => !undeclared.includes(line))
+			.join('\n');
+		expect(serialize(parseLikePipeline(frodoYaml))).toBe(expected);
+		expect(expected.split('\n').length).toBe(legacy.split('\n').length - 10);
 	});
 
-	test('defaults materialize exactly like the legacy first write (pin: patience=5, interest=0)', () => {
+	test('a fully-declared block (the legacy writeback bytes as the source) round-trips byte-identically', () => {
+		const full = legacyWriterBytes(frodoYaml);
+		expect(serialize(parseLikePipeline(full))).toBe(full);
+	});
+
+	test('undeclared defaults are not written (pin: patience=5, interest=0 stay in the model only)', () => {
 		const src = 'name: Quick';
-		const out = serialize(parseLikePipeline(src));
-		expect(out).toBe(legacyWriterBytes(src));
-		expect(out).toContain('current_patience: 5');
-		expect(out).toContain('current_interest: 0');
-		expect(out).toContain('i5: Interest 5 result');
-		expect(out).toContain('currentArgument:');
-		expect(out).toContain('lieUsed: false');
+		const model = parseLikePipeline(src);
+		expect(model.current_patience).toBe(5);
+		expect(model.current_interest).toBe(0);
+		expect(serialize(model)).toBe('name: Quick');
+		// What the legacy first write added, now omitted:
+		const legacy = legacyWriterBytes(src);
+		expect(legacy).toContain('current_patience: 5');
+		expect(legacy).toContain('i5: Interest 5 result');
+		expect(legacy).toContain('currentArgument:');
+		expect(legacy).toContain('lieUsed: false');
+		// ...and the fully-declared form of that block is byte-identical to the legacy bytes.
+		expect(serialize(parseLikePipeline(legacy))).toBe(legacy);
+	});
+
+	test('a default the write changed is written (current_patience moved off its derived default)', () => {
+		const model = parseLikePipeline('name: Quick\ninitial_patience: 4');
+		expect(serialize(model)).toBe('name: Quick\ninitial_patience: 4');
+		model.current_patience = 2;
+		expect(serialize(model)).toBe('name: Quick\ninitial_patience: 4\ncurrent_patience: 2');
 	});
 
 	test('output is trimmed (no trailing newline), matching legacy writer + replaceSource', () => {
@@ -60,7 +101,7 @@ describe('T-4: serialize is byte-compatible with the legacy writer', () => {
 	});
 
 	test('top-level key order is the NegotiationData constructor assignment order', () => {
-		const out = serialize(parseLikePipeline(frodoYaml));
+		const out = serialize(parseLikePipeline(legacyWriterBytes(frodoYaml)));
 		const topLevelKeys = out
 			.split('\n')
 			.filter((line) => /^\S/.test(line))
@@ -143,8 +184,10 @@ describe('T-4: free-text byte-compat (yaml-pkg folding, Plan 05 T-2)', () => {
 		const m1 = parseLikePipeline(source);
 		const s1 = serialize(m1);
 
-		// s1 IS what legacy Obsidian would write for this input.
-		expect(s1).toBe(legacyWriterBytes(source));
+		// s1 IS the input (every key it declares, none it does not — SC-482), and a fully-declared
+		// form of it is byte-identical to what legacy Obsidian would write.
+		expect(s1).toBe(source.trim());
+		expect(serialize(parseLikePipeline(legacyWriterBytes(source)))).toBe(legacyWriterBytes(source));
 
 		// Prove the folding paths are actually exercised, not just short scalars:
 		// the long reason is folded onto an indented continuation line (plain scalar,

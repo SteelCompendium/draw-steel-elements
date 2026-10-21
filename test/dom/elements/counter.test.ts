@@ -42,18 +42,15 @@ import counterYaml from '../../fixtures/counter/health.yaml';
 
 const CT_ALIASES = ['ds-ct', 'ds-counter'] as const;
 
-/** The health fixture's byte-exact serialized form (Counter constructor field order:
- *  max_value, current_value, min_value, name, value_height, name_height), at `current`. */
+/** The health fixture's byte-exact serialized form at `current` (Counter constructor field order:
+ *  max_value, current_value, min_value, name). SC-482: the fixture declares `min_value` but NOT
+ *  `value_height` / `name_height`, so those parser defaults are not written back (they used to be). */
 function healthSerialized(current: number): string {
-	return [
-		'max_value: 20',
-		`current_value: ${current}`,
-		'min_value: 0',
-		'name: Health',
-		'value_height: 3',
-		'name_height: 1',
-	].join('\n');
+	return ['max_value: 20', `current_value: ${current}`, 'min_value: 0', 'name: Health'].join('\n');
 }
+
+/** What the OLD whole-instance writer added for the two heights the fixture never declared. */
+const HEALTH_UNDECLARED_DEFAULTS = '\nvalue_height: 3\nname_height: 1';
 
 function makeHost(overrides: Partial<BlockHost> = {}) {
 	const replaceSource = jest.fn(async (_newSource: string) => true);
@@ -651,19 +648,28 @@ describe('Plan 07 Task 4: registered EXACTLY ONCE — framework registry owns ds
 	});
 });
 
-describe('Plan 07 Task 4: byte-compat — serialize(parse(data)) === legacy stringifyYaml(Counter.parseYaml(yaml)).trim() (F1 §6)', () => {
+// SC-482: the legacy whole-instance writer is still the oracle for every key the source DECLARED;
+// the only difference is the parser defaults the source omitted, which are no longer written.
+describe('Plan 07 Task 4: byte-compat — serialize(parse(data)) === legacy stringifyYaml(Counter.parseYaml(yaml)).trim() (F1 §6), minus undeclared defaults (SC-482)', () => {
 	test('the health fixture', () => {
 		const legacy = stringifyYaml(Counter.parseYaml(counterYaml)).trim();
 		const model = counterElement.parse(parseYaml(counterYaml), counterYaml);
-		expect(frameworkSerialize(model)).toBe(legacy);
-		expect(legacy).toBe(healthSerialized(10));
+		expect(frameworkSerialize(model)).toBe(healthSerialized(10));
+		expect(legacy).toBe(healthSerialized(10) + HEALTH_UNDECLARED_DEFAULTS);
 	});
 
-	test('minimal block: defaults materialize; undefined max_value is OMITTED, not null', () => {
+	test('a fully-declared block is byte-identical to the legacy writer', () => {
+		const yaml = counterYaml.trimEnd() + '\nvalue_height: 3\nname_height: 1';
+		const model = counterElement.parse(parseYaml(yaml), yaml);
+		expect(frameworkSerialize(model)).toBe(stringifyYaml(Counter.parseYaml(yaml)).trim());
+		expect(frameworkSerialize(model)).toBe(healthSerialized(10) + HEALTH_UNDECLARED_DEFAULTS);
+	});
+
+	test('minimal block: undeclared defaults are not written; undefined max_value is OMITTED, not null', () => {
 		const yaml = 'name: Deaths';
 		const legacy = stringifyYaml(Counter.parseYaml(yaml)).trim();
 		const model = counterElement.parse(parseYaml(yaml), yaml);
-		expect(frameworkSerialize(model)).toBe(legacy);
+		expect(frameworkSerialize(model)).toBe('name: Deaths');
 		expect(legacy).toBe(
 			['current_value: 0', 'min_value: 0', 'name: Deaths', 'value_height: 3', 'name_height: 1'].join('\n'),
 		);
@@ -674,7 +680,8 @@ describe('Plan 07 Task 4: byte-compat — serialize(parse(data)) === legacy stri
 		model.current_value = 11;
 
 		const legacyEquivalent = new Counter(20, 11, 0, 'Health', 3, 1);
-		expect(frameworkSerialize(model)).toBe(stringifyYaml(legacyEquivalent).trim());
+		expect(frameworkSerialize(model)).toBe(healthSerialized(11));
+		expect(stringifyYaml(legacyEquivalent).trim()).toBe(healthSerialized(11) + HEALTH_UNDECLARED_DEFAULTS);
 	});
 });
 

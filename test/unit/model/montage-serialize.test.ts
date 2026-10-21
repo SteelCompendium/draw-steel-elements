@@ -348,7 +348,10 @@ describe('SC-191 §B.5: new-shape schema — key order, round-trip identity, omi
 			.split('\n')
 			.filter((line) => /^\S/.test(line))
 			.map((line) => line.split(':')[0]);
-		expect(topLevelKeys).toEqual(['rounds', 'success_limit', 'failure_limit', 'successes', 'failures', 'entries', 'current_round', '_dse_anchor']);
+		// SC-482: the source declared only rounds / current_round / _dse_anchor, so the undeclared
+		// defaults the log did not touch (the limits, failures) are not written; `successes` is,
+		// because logging a success changed it, and `entries` still lands in SCHEMA position.
+		expect(topLevelKeys).toEqual(['rounds', 'successes', 'entries', 'current_round', '_dse_anchor']);
 
 		// The round-trip stays byte-stable on pass 2 (§B.5's own oracle), which the
 		// insertion-order bug could not have satisfied either, since re-parsing puts
@@ -369,7 +372,8 @@ describe('SC-191 §B.5: new-shape schema — key order, round-trip identity, omi
 			.split('\n')
 			.filter((line) => /^\S/.test(line))
 			.map((line) => line.split(':')[0]);
-		expect(topLevelKeys).toEqual(['rounds', 'success_limit', 'failure_limit', 'successes', 'failures', 'participants', 'current_round']);
+		// SC-482: only rounds / current_round were declared; `participants` still lands in SCHEMA position.
+		expect(topLevelKeys).toEqual(['rounds', 'participants', 'current_round']);
 	});
 
 	test('skill/note are omitted per entry when empty — never serialized as null or an empty string', () => {
