@@ -103,6 +103,34 @@ describe('obsidian mock: makeFakeContext.getSectionInfo', () => {
 		expect(ctx1.getSectionInfo(ctx1.el)).toEqual({ text: NOTE, lineStart: 6, lineEnd: 8 });
 	});
 
+	// SC-456: the fake used to match only `^[`~]{3,}ds-[\w-]+\s*$`, so any write-test note with an info string,
+	// a space before the type or a quote prefix had no block at all.
+	test('recognises the product fence forms: info string, space before the type, quote prefix, 4-backtick run, CRLF', () => {
+		const note = [
+			'```ds-counter extra words', 'a: 1', '```', '',
+			'``` ds-counter', 'a: 2', '```', '',
+			'> [!note]', '> ~~~ds-counter  x', '> a: 3', '> ~~~', '',
+			'````ds-counter', '```', 'a: 4', '```', '````', '',
+			'```ds-counter\r', 'a: 5\r', '```\r',
+		].join('\n');
+		const app = new App();
+		app.vault.setFile('Note.md', note);
+		const at = (n: number) => {
+			const ctx = makeFakeContext(app, 'Note.md', n);
+			return ctx.getSectionInfo(ctx.el);
+		};
+		expect([0, 1, 2, 3, 4].map((n) => [at(n)?.lineStart, at(n)?.lineEnd])).toEqual([[0, 2], [4, 6], [9, 11], [13, 17], [19, 21]]);
+		expect(at(0)?.text).toBe(note); // the whole note, info string and all
+		expect(at(5)).toBeNull();
+	});
+
+	test('ignores a non-ds fence and an unclosed ds fence', () => {
+		const app = new App();
+		app.vault.setFile('Note.md', '```js\nx\n```\n```ds-counter\na: 1');
+		const ctx = makeFakeContext(app, 'Note.md');
+		expect(ctx.getSectionInfo(ctx.el)).toBeNull();
+	});
+
 	test('returns null when no matching block exists', () => {
 		const app = new App();
 		app.vault.setFile('Note.md', '# no blocks');
