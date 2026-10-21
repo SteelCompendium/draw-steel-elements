@@ -22,6 +22,7 @@ import type { ElementRegistry } from './registry';
 import type { ElementPipeline } from './pipeline';
 import { ReadingModeBlockHost } from './host/ReadingModeBlockHost';
 import { PreviewScrollPin } from './host/previewScrollPin';
+import { LivePreviewScrollHold } from './host/livePreviewScrollHold';
 import { ViewRegistry } from './host/viewRegistry';
 import { adoptView } from './host/adoptView';
 
@@ -56,6 +57,12 @@ export function registerFrameworkElements(
 	plugin.registerEvent(plugin.app.vault.on('modify', (file) => scrollPin.pinReadingViewsOf(plugin.app.workspace, file.path)));
 	// SC-470 r4: a popout closed while pinned never fires its TTL; release its pins on `window-close`.
 	plugin.registerEvent(plugin.app.workspace.on('window-close', (_win, window) => scrollPin.releaseWindow(window)));
+	// SC-478: Live Preview panes keep their reading position across the same writes (livePreviewScrollHold.ts):
+	// capture at `modify`, which fires before the pane's transaction; restore + hold inside the editor.
+	const lpHold = new LivePreviewScrollHold();
+	plugin.register(() => lpHold.releaseAll());
+	plugin.registerEvent(plugin.app.vault.on('modify', (file) => lpHold.captureViewsOf(plugin.app.workspace, file.path)));
+	plugin.registerEditorExtension(lpHold.extension());
 	// SC-340 §6.1: the plugin-scoped owner of every reading-mode view.
 	const registry = plugin.addChild(new ViewRegistry({ enabled: options.viewAdoption ?? false }));
 

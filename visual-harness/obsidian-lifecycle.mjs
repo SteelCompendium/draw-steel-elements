@@ -50,6 +50,8 @@
 // and every other byte untouched - LF, CRLF and lone-CR notes, and a spaced block next to an unspaced twin.
 // SC-477 appends G-S28 and widens G-S6u: an unterminated fence at EOF keeps the note's trailing newline(s) whether the write lands
 // in place (G-S28, stay on the note) or by body after navigate-away (G-S6u) - LF, two blank lines and CRLF notes.
+// SC-478 appends G-S18 (G-S16 is reserved for SC-471): a LIVE PREVIEW pane keeps its reading position when the
+// DSE block it is reading is redrawn — another pane's DSE write, an external write (in-app and on disk), and the pane's own write.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -1981,6 +1983,125 @@ const SCENARIOS = [
 				await t.reset(rel);
 			}
 			return `a fence with whitespace before the language (${cases.map((c) => c[2]).join('; ')}): after the note changed around the block, a click then navigate-away still writes it, no Notice; the opening line, line endings and every byte outside the block bodies are unchanged`;
+		},
+	},
+	{
+		// SC-478: a Live Preview pane keeps its reading position when the DSE block it is reading is redrawn by a
+		// write. Live Preview scrolls a CodeMirror `.cm-scroller`, not the Reading view's sizer (G-S8/G-S15): the
+		// redrawn block's new Obsidian widget has a constant 50px height estimate, so CodeMirror's height map and
+		// viewport land far below the block and the browser may clamp scrollTop — on stock 1.14.4 the pane parked
+		// inside a tall tracker showed lines ~100 further down (3020 -> 2556 on this note). Phases: (a) the note in
+		// Reading pane A and Live Preview pane B, a DSE write from A, B observed; (b1) an in-app `vault.process` from
+		// outside the plugin and (b2) a write on disk picked up by the file watcher, one Live Preview pane; (c) the
+		// Live Preview pane's OWN DSE write. Per phase, on the observed pane: the write landed; anti-vacuity — the
+		// tracker was redrawn (a fresh root); scrollTop never moved in any frame and the top visible line + offset is
+		// unchanged; the redrawn tracker is drawn again at its old height; `data-dse-lp-hold` (the hold that keeps the
+		// redrawn block at its old height until our view mounts) was seen on it and released; the observed pane's
+		// selection did not move. Every phase runs even after one fails.
+		id: 'G-S18',
+		async run(t) {
+			const rel = 'Lifecycle/tall.md';
+			const LP = { mode: 'source', source: false };
+			const src = (leaf) => `(${leaf}).view.containerEl.querySelector('.markdown-source-view')`;
+			const scrollerOf = (leaf) => `${src(leaf)}.querySelector('.cm-scroller')`;
+			const lpRoot = (leaf) => `Array.from(${src(leaf)}.querySelectorAll('${TRACKER}')).find((x) => x.isConnected)`;
+			const rdScroller = (leaf) => `(${leaf}).view.containerEl.querySelector('.markdown-reading-view .markdown-preview-view')`;
+			// The top visible line and the offset into it, from CodeMirror's height map (read only at rest).
+			const topLine = (leaf) => `(() => { const cm = (${leaf}).view.editor.cm; const y = cm.scrollDOM.getBoundingClientRect().top - cm.documentTop; const b = cm.lineBlockAtHeight(Math.max(0, y)); return { line: cm.state.doc.lineAt(b.from).number, off: Math.round(y - b.top) }; })()`;
+			const widgetH = (leaf) => `(() => { const r = ${lpRoot(leaf)}; const w = r && r.closest('.cm-embed-block'); return w ? Math.round(w.getBoundingClientRect().height) : null; })()`;
+			const park = async (leaf) => {
+				// CodeMirror draws only the viewport (+ a margin): step down until the tracker is drawn, then park in it.
+				for (let i = 0; i < 12 && !(await t.ev(`!!(${lpRoot(leaf)})`)); i++) {
+					await t.ev(`(() => { ${scrollerOf(leaf)}.scrollTop += 600; return true; })()`);
+					await t.sleep(250);
+				}
+				for (let i = 0; i < 4; i++) {
+					await t.ev(`(() => { const s = ${scrollerOf(leaf)}; const r = ${lpRoot(leaf)}; s.scrollTop = r.getBoundingClientRect().top - s.getBoundingClientRect().top + s.scrollTop + 1500; })()`);
+					await t.sleep(450);
+				}
+				await t.ev(`(() => { window.__gs18tag = ${lpRoot(leaf)}; return true; })()`);
+				return t.ev(`({ tl: ${topLine(leaf)}, wh: ${widgetH(leaf)}, sel: (${leaf}).view.editor.cm.state.selection.main.head })`);
+			};
+			// Per-frame scrollTop of the observed scroller + a MutationObserver for the hold attribute; resolves on
+			// window.__gs18rec once the hold was released + 10 frames (cap: first sighting + 4500 ms, 12 s; 5 s with no hold).
+			const record = (leaf) => t.ev(`(() => { window.__gs18rec = new Promise((resolve) => { const s = ${scrollerOf(leaf)}; const st0 = s.scrollTop; const samples = []; let stMin = st0; let held = 0; let holdSeen = false; let holdPx = null; let holdOnAt = 0; let released = false; let goneFrames = 0; const onScroll = () => { stMin = Math.min(stMin, s.scrollTop); }; s.addEventListener('scroll', onScroll); const count = () => s.querySelectorAll('[data-dse-lp-hold]').length; const mo = new MutationObserver(() => { const h = s.querySelector('[data-dse-lp-hold]'); if (h && !holdSeen) { holdSeen = true; holdPx = Number(h.getAttribute('data-dse-lp-hold')); holdOnAt = performance.now() - t0; } }); mo.observe(s, { attributes: true, attributeFilter: ['data-dse-lp-hold'], childList: true, subtree: true }); const t0 = performance.now(); const tick = () => { samples.push(s.scrollTop); const n = count(); if (n) { held++; released = false; goneFrames = 0; } else if (holdSeen) { released = true; goneFrames++; } if (goneFrames < 10 && performance.now() - t0 < (holdSeen ? Math.min(holdOnAt + 4500, 12000) : 5000)) requestAnimationFrame(tick); else { mo.disconnect(); s.removeEventListener('scroll', onScroll); resolve({ st0, frames: samples.length, stMin: Math.min(stMin, ...samples), stMax: Math.max(...samples), holdSeen, holdPx, heldFrames: held, released, ms: Math.round(performance.now() - t0) }); } }; requestAnimationFrame(tick); }); return true; })()`);
+			const check = async (phase, leaf, before, m, landed) => {
+				t.expect(landed, `${phase}: the write did not land`);
+				await t.sleep(600); // let the redrawn view settle before reading the top line
+				// anti-vacuity: the tracker the pane was reading was replaced (its root left the document)
+				t.expect(await t.ev(`!!window.__gs18tag && !window.__gs18tag.isConnected`), `${phase}: the observed tracker was not redrawn — the phase cannot reach the Live Preview jump`);
+				const after = await t.ev(`({ tl: ${topLine(leaf)}, wh: ${widgetH(leaf)}, sel: (${leaf}).view.editor.cm.state.selection.main.head })`);
+				const pos = `scrollTop start ${m.st0} min ${m.stMin} max ${m.stMax}; top line ${before.tl.line}+${before.tl.off} -> ${after.tl.line}+${after.tl.off}; tracker drawn ${after.wh}px (was ${before.wh}px); hold seen ${m.holdSeen}`;
+				t.expect(m.stMin === m.st0 && m.stMax === m.st0 && after.tl.line === before.tl.line && after.tl.off === before.tl.off, `${phase}: the pane lost its place: ${pos}`);
+				t.expect(after.wh !== null && Math.abs(after.wh - before.wh) <= 2, `${phase}: the redrawn tracker is ${after.wh === null ? 'not drawn' : after.wh + 'px'}, was ${before.wh}px`);
+				t.expect(m.holdSeen, `${phase}: data-dse-lp-hold was never set on the redrawn tracker (${pos})`);
+				t.expect(m.released, `${phase}: the hold was never seen released within ${m.ms}ms (held frames ${m.heldFrames})`);
+				t.expect(after.sel === before.sel, `${phase}: the selection moved ${before.sel} -> ${after.sel}`);
+				return `${phase}: scrollTop held at ${m.st0} over ${m.frames} frames, top line ${after.tl.line}+${after.tl.off}, tracker ${after.wh}px, held ${m.holdPx}px for ${m.heldFrames} frames`;
+			};
+			const out = [];
+			const fails = [];
+			const phase = async (fn) => {
+				try {
+					out.push(await fn());
+				} catch (e) {
+					fails.push(e instanceof Error ? e.message : String(e));
+				}
+			};
+			const openLP = async () => {
+				await t.open(rel);
+				await t.reset(rel);
+				await t.ev(`(async () => { window.__gs18A = app.workspace.getMostRecentLeaf(); await window.__gs18A.setViewState({ type: 'markdown', state: Object.assign({ file: ${JSON.stringify(rel)} }, ${JSON.stringify(LP)}), active: true }); window.__gs18A.view.editor.setCursor({ line: 0, ch: 0 }); return true; })()`);
+				await t.sleep(1500);
+			};
+			const A = 'window.__gs18A';
+			const B = 'window.__gs18B';
+			// (a) Reading pane A writes; Live Preview pane B observed.
+			await phase(async () => {
+				await t.open(rel);
+				await t.reset(rel);
+				try {
+					await t.ev(`(async () => { window.__gs18A = app.workspace.getMostRecentLeaf(); const b = app.workspace.getLeaf('split', 'vertical'); window.__gs18B = b; await b.setViewState({ type: 'markdown', state: Object.assign({ file: ${JSON.stringify(rel)} }, ${JSON.stringify(LP)}), active: false }); b.view.editor.setCursor({ line: 0, ch: 0 }); app.workspace.setActiveLeaf(window.__gs18A, { focus: true }); return true; })()`);
+					await t.sleep(1500);
+					await t.ev(`(() => { const s = ${rdScroller(A)}; const r = Array.from(s.querySelectorAll('${TRACKER}')).find((x) => x.isConnected); s.scrollTop = r.getBoundingClientRect().top - s.getBoundingClientRect().top + s.scrollTop + 1500; return true; })()`);
+					const before = await park(B);
+					await record(B);
+					const clicked = await t.ev(`(() => { const s = ${rdScroller(A)}; const sr = s.getBoundingClientRect(); const b = Array.from(s.querySelectorAll('button.dse-init__portrait-toggle')).find((x) => { const r = x.getBoundingClientRect(); return r.top > sr.top + 100 && r.bottom < sr.bottom - 100; }); if (!b) return false; b.click(); return true; })()`);
+					t.expect(clicked, '(a) Reading pane A: no visible portrait toggle');
+					const m = await t.ev('window.__gs18rec');
+					return await check('(a) another pane', B, before, m, /has_taken_turn: true/.test(t.read(rel)));
+				} finally {
+					await t.ev(`(() => { if (window.__gs18B) window.__gs18B.detach(); window.__gs18B = null; return true; })()`);
+				}
+			});
+			// (b) a write that is not ours, the note open in one Live Preview pane: in-app, then on disk (file watcher).
+			for (const [name, write] of [
+				['(b1) external vault.process', () => t.edit(rel, `c.replace('  value: 1', '  value: 2')`)],
+				['(b2) external write on disk', async () => fs.writeFileSync(path.join(vault, rel), FIXTURES[rel].replace('  value: 1', '  value: 2'))],
+			]) {
+				await phase(async () => {
+					await openLP();
+					const before = await park(A);
+					await record(A);
+					await write();
+					const m = await t.ev('window.__gs18rec');
+					return await check(name, A, before, m, t.read(rel).includes('  value: 2'));
+				});
+			}
+			// (c) the Live Preview pane's own DSE write.
+			await phase(async () => {
+				await openLP();
+				const before = await park(A);
+				await record(A);
+				const clicked = await t.ev(`(() => { const s = ${scrollerOf(A)}; const sr = s.getBoundingClientRect(); const b = Array.from(s.querySelectorAll('button.dse-init__portrait-toggle')).find((x) => { const r = x.getBoundingClientRect(); return r.top > sr.top + 100 && r.bottom < sr.bottom - 100; }); if (!b) return false; b.click(); return true; })()`);
+				t.expect(clicked, '(c) Live Preview pane: no visible portrait toggle');
+				const m = await t.ev('window.__gs18rec');
+				return await check('(c) own write', A, before, m, /has_taken_turn: true/.test(t.read(rel)));
+			});
+			await t.reset(rel);
+			await t.open(rel); // back to Reading for the next scenario
+			t.expect(fails.length === 0, fails.join(' | '));
+			return out.join('; ');
 		},
 	},
 ];

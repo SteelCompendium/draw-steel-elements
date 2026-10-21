@@ -59,8 +59,9 @@
 // (disabling it leaves G-S8 and G-S15 ok), but it costs nothing and would still protect the
 // writer if a future Obsidian deferred `modify` past the rebuild.
 // Only Reading views that show a DSE block are pinned: a note without one never collapses
-// (SC-459 M1), so it never gets phantom space. Live Preview / Source panes are not touched
-// (SC-478: Live Preview clamps the same way); neither is a DSE block inside an embed (SC-479).
+// (SC-459 M1), so it never gets phantom space. Live Preview / Source panes are not touched here:
+// Live Preview loses its position by a different mechanism and has its own fix
+// (livePreviewScrollHold.ts, SC-478). A DSE block inside an embed is not covered (SC-479).
 //
 // THE PIN IS A FLOOR, NOT A CAP (SC-470 r4). The rule's `!important` min-height REPLACES
 // Obsidian's own inline sizer min-height, and Obsidian's Reading view is virtualised, so the
@@ -136,7 +137,7 @@ const STYLE_ATTR = 'data-dse-scroll-pin-style';
  * slower notes (many blocks, statblock refs) take longer. Also the backstop for the case
  * where the expected rebuild never arrives at all.
  */
-const PIN_TTL_MS = 2500;
+export const PIN_TTL_MS = 2500;
 
 /**
  * Unique within one plugin load (a counter at module level, shared by every document). It
