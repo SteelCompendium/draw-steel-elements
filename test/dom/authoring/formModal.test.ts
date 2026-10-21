@@ -12,6 +12,7 @@
 //  - Minor: a select field's implicit default writes back to `working` on open (SC-483: for
 //    validation/preview only - Save omits it unless the user touched the dropdown).
 import { openFormEditor } from '../../../src/authoring/FormModal';
+import { replaceFenceBlock } from '../../../src/framework/host/fenceLine';
 import { createValidationService } from '../../../src/framework/validation';
 import { createRenderContext } from '../../../src/framework/context';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
@@ -329,7 +330,7 @@ describe('SC-483: an untouched, source-absent select is not written by Save', ()
 	test('no-serialize element (stringifyWorking path): untouched absent selects are omitted', async () => {
 		const { modal, writes } = open(selectDef().def, 'name: Goblin');
 		await modal.save();
-		expect(writes).toEqual(['name: Goblin\n']);
+		expect(writes).toEqual(['name: Goblin']);
 		modal.close();
 	});
 
@@ -338,7 +339,7 @@ describe('SC-483: an untouched, source-absent select is not written by Save', ()
 		const { cx, validation } = makeRealStaminaCx(host); // real prefs, so the prefs: map is recognised
 		const modal = openFormEditor(fakeOwner(), cx, selectDef().def, 'prefs:\n  reduceMotion: true\nname: Goblin', validation);
 		await modal.save();
-		expect(host.replaceSource.mock.calls[0][0]).toBe('prefs:\n  reduceMotion: true\nname: Goblin\n');
+		expect(host.replaceSource.mock.calls[0][0]).toBe('prefs:\n  reduceMotion: true\nname: Goblin');
 		modal.close();
 	});
 
@@ -346,7 +347,7 @@ describe('SC-483: an untouched, source-absent select is not written by Save', ()
 		const { modal, writes } = open(selectDef().def, 'name: Goblin');
 		findSetting(modal, 'Style').dropdowns[0].trigger('sheet');
 		await modal.save();
-		expect(writes).toEqual(['name: Goblin\nstyle: sheet\n']);
+		expect(writes).toEqual(['name: Goblin\nstyle: sheet']);
 		modal.close();
 	});
 
@@ -356,7 +357,7 @@ describe('SC-483: an untouched, source-absent select is not written by Save', ()
 		style.trigger('sheet');
 		style.trigger('default');
 		await modal.save();
-		expect(writes).toEqual(['name: Goblin\nstyle: default\n']);
+		expect(writes).toEqual(['name: Goblin\nstyle: default']);
 		modal.close();
 	});
 
@@ -364,21 +365,21 @@ describe('SC-483: an untouched, source-absent select is not written by Save', ()
 		const { modal, writes } = open(selectDef(TWO_SELECTS).def, 'name: Goblin');
 		findSetting(modal, 'Size').dropdowns[0].trigger('large');
 		await modal.save();
-		expect(writes).toEqual(['name: Goblin\nsize: large\n']);
+		expect(writes).toEqual(['name: Goblin\nsize: large']);
 		modal.close();
 	});
 
 	test('a source that already declares the select key is written, even at its default (byte-identical)', async () => {
 		const { modal, writes } = open(selectDef().def, 'name: Goblin\nstyle: default');
 		await modal.save();
-		expect(writes).toEqual(['name: Goblin\nstyle: default\n']);
+		expect(writes).toEqual(['name: Goblin\nstyle: default']);
 		modal.close();
 	});
 
 	test('a key present in the source with a null value is a declared key: written (as the seeded value), as before', async () => {
 		const { modal, writes } = open(selectDef().def, 'name: Goblin\nstyle:');
 		await modal.save();
-		expect(writes).toEqual(['name: Goblin\nstyle: default\n']);
+		expect(writes).toEqual(['name: Goblin\nstyle: default']);
 		modal.close();
 	});
 
@@ -396,7 +397,7 @@ describe('SC-483: an untouched, source-absent select is not written by Save', ()
 		const { modal, writes } = open(def, 'name: Goblin');
 		expect(mounted[mounted.length - 1]).toMatchObject({ style: 'default' });
 		await modal.save();
-		expect(writes).toEqual(['name: Goblin\n']);
+		expect(writes).toEqual(['name: Goblin']);
 		modal.close();
 	});
 
@@ -404,7 +405,7 @@ describe('SC-483: an untouched, source-absent select is not written by Save', ()
 		const { def } = selectDef(`${SEL_SCHEMA}\nrequired: [style]`);
 		const { modal, writes } = open(def, 'name: Goblin');
 		await modal.save();
-		expect(writes).toEqual(['name: Goblin\nstyle: default\n']);
+		expect(writes).toEqual(['name: Goblin\nstyle: default']);
 		modal.close();
 	});
 
@@ -425,6 +426,40 @@ describe('SC-483: an untouched, source-absent select is not written by Save', ()
 		expect(previewSaw).toMatchObject({ style: 'default' }); // preview: seeded
 		expect(seen[seen.length - 1]).toEqual({ name: 'Goblin' }); // Save: stripped
 		expect(writes).toEqual(['{"name":"Goblin"}']);
+		modal.close();
+	});
+
+	// SC-483 review LOW-1 / INFO-2: the stringify path writes no byte the user never typed.
+	test('an empty schema\'d block with only optional selects, saved untouched, writes an empty body (not `{}`)', async () => {
+		const { modal, writes } = open(selectDef().def, '');
+		await modal.save();
+		expect(writes).toEqual(['']);
+		modal.close();
+	});
+
+	test('an empty body keeps the prefs: map and nothing else', async () => {
+		const host = makeHost();
+		const { cx, validation } = makeRealStaminaCx(host);
+		const modal = openFormEditor(fakeOwner(), cx, selectDef().def, 'prefs:\n  reduceMotion: true', validation);
+		await modal.save();
+		expect(host.replaceSource.mock.calls[0][0]).toBe('prefs:\n  reduceMotion: true');
+		modal.close();
+	});
+
+	test('the stringify-path body has no trailing newline, so the spliced note has no blank line before the closing fence', async () => {
+		const { modal, writes } = open(selectDef().def, 'name: Goblin');
+		await modal.save();
+		expect(replaceFenceBlock('```ds-sel\nname: Goblin\n```', 0, 2, writes[0])).toBe('```ds-sel\nname: Goblin\n```');
+		modal.close();
+	});
+
+	test('with a prefs: map, exactly one line break separates it from the body', async () => {
+		const host = makeHost();
+		const { cx, validation } = makeRealStaminaCx(host);
+		const modal = openFormEditor(fakeOwner(), cx, selectDef().def, 'prefs:\n  reduceMotion: true\nname: Goblin', validation);
+		findSetting(modal, 'Style').dropdowns[0].trigger('sheet');
+		await modal.save();
+		expect(host.replaceSource.mock.calls[0][0]).toBe('prefs:\n  reduceMotion: true\nname: Goblin\nstyle: sheet');
 		modal.close();
 	});
 });
