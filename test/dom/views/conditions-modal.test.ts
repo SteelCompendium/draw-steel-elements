@@ -1096,7 +1096,7 @@ describe('SC-361: swatch selection mark and focus ring', () => {
 		expect(flat).toMatch(/\.dse-optchip, \.dse-swatch \) \{ box-shadow: none; \}/);
 		const pin = stripped.slice(stripped.indexOf(`${anchor} :where(.dse-swatch) {`));
 		const body = pin.slice(0, pin.indexOf('}'));
-		for (const decl of ['font-size: var(--font-ui-small, 13px)', 'font-family: inherit', 'white-space: inherit', 'color: inherit']) {
+		for (const decl of ['font-size: var(--dse-fs-control)', 'font-family: inherit', 'white-space: inherit', 'color: inherit']) {
 			expect(body).toContain(decl);
 		}
 	});

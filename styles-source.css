@@ -17264,14 +17264,16 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 /* -- F. SC-361 — `.dse-swatch` (the Conditions colour swatches; box-shadow is in B above).
       The swatch is an `em`-sized circle, so Obsidian's `button` font-size (13px,
       `--font-ui-small`) vs. the browser's own 13.333px vs. the <label> pipette's INHERITED
-      15px sized the three differently (19.5 / 20 / 22.5px). Pinning the font to the host's
-      own token — with its own value as the fallback, so a bare page and a real vault agree —
-      makes every swatch, preset button and pipette label alike, 1.5em = 19.5px. `color`,
-      `font-family` and `white-space` are restated as the inherited values (no visible text
-      lives in a swatch, but `currentColor` and the em box do). Outline needs no pin: the
-      host's `outline: none` and the UA focus ring both lose to the shared kit ring. -- */
+      15px sized the three differently (19.5 / 20 / 22.5px). Pinning the font to the control
+      role (`--dse-fs-control`, the size every kit control already uses; the font-size
+      contract wants role tokens, not literals) makes every swatch, preset button and
+      pipette label alike, with or without the host, and lets the swatch track the user's
+      control-text scale like the chips beside it. `color`, `font-family` and `white-space`
+      are restated as the inherited values (no visible text lives in a swatch, but
+      `currentColor` and the em box do). Outline needs no pin: the host's `outline: none`
+      and the UA focus ring both lose to the shared kit ring. -- */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-swatch) {
-	font-size: var(--font-ui-small, 13px);
+	font-size: var(--dse-fs-control);
 	font-family: inherit;
 	white-space: inherit;
 	color: inherit;
