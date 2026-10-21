@@ -198,7 +198,10 @@ describe('SC-356 host re-grounding — the option chips (.dse-optchip), Scott\'s
 
 	test('labels stay centred in that box (Obsidian\'s own display / alignment, restated)', () => {
 		const body = rule('.dse-optchip');
-		expect(body).toContain('display: flex;');
+		// `inline-flex`, Obsidian's own value (the block also overrides the icon choice's own
+		// `inline-flex`, so it must not widen to `flex`): a chip in a non-flex parent stays inline.
+		expect(body).toContain('display: inline-flex;');
+		expect(body).not.toMatch(/display:\s*flex;/);
 		expect(body).toContain('align-items: center;');
 		expect(body).toContain('justify-content: center;');
 	});
@@ -213,6 +216,29 @@ describe('SC-356 host re-grounding — the option chips (.dse-optchip), Scott\'s
 		const body = rule(".dse-optchip:not(:hover):not([aria-pressed='true'])");
 		expect(body).not.toBeNull();
 		expect(body).toContain('color: var(--dse-fg-muted);');
+	});
+
+	test('in-note negotiation chips (.dse-nt__chip also wears .dse-optchip) keep their own look: their rule is more specific and restates height, display, justify, ink and fill', () => {
+		// The block is unscoped and its `[data-dse-element]` anchor reaches `.dse-nt__chip`, so what
+		// keeps the in-note chips unchanged is `.dse-nt__chip`'s own restatement. It is nested in
+		// `[data-dse-element="negotiation"] .dse-nt { … }`, i.e. (0,3,0), against the block's (0,2,0).
+		const nestStart = rawCss.indexOf('[data-dse-element="negotiation"] .dse-nt {');
+		expect(nestStart).toBeGreaterThan(0);
+		const chipStart = rawCss.indexOf('\t.dse-nt__chip {', nestStart);
+		expect(chipStart).toBeGreaterThan(nestStart);
+		const chip = rawCss.slice(chipStart, rawCss.indexOf('}', chipStart)).replace(/\/\*[\s\S]*?\*\//g, '');
+		for (const decl of [
+			'display: inline-flex;',
+			'justify-content: flex-start;',
+			'height: auto;',
+			'color: var(--dse-fg);',
+			'background-color: var(--dse-surface);',
+		]) {
+			expect(chip).toContain(decl);
+		}
+		// …and the anchor of the SC-356 block really is (0,2,0): `:is([attr], .class)` takes its
+		// highest argument (0,1,0), `:not([attr])` adds (0,1,0), `:where()` adds nothing.
+		expect(ANCHOR).toBe(':is([data-dse-element], .dse-modal):not([data-dse-print="on"])');
 	});
 
 	test('the block never restates the pressed border / bevel or the focus ring', () => {

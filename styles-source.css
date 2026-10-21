@@ -17191,9 +17191,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 
 /* -- E. SC-356 — the option chips (`.dse-optchip`: the Conditions modal's duration / effect
       chips, its icon choices `.dse-cond-icons__choice`, and the Log-an-action form's Result
-      chips `.dse-mt__sheet-resultchip`). They are bare `<button>`s that only exist inside a
-      MODAL, so the gallery sweep never saw them (`assertModalBtnHostLeak` does). Obsidian's
-      `button` rules were painting them: a 30px `height`, the `--interactive-normal` fill
+      chips `.dse-mt__sheet-resultchip`). They are bare `<button>`s that live inside a MODAL,
+      so the gallery sweep never saw them (`assertModalBtnHostLeak` does). The class is also
+      worn by the in-note negotiation chips (`.dse-nt__chip`, which carry `.dse-optchip` too);
+      this block is deliberately UNSCOPED and reaches them through its `[data-dse-element]`
+      anchor, and they keep their own look only because `.dse-nt__chip`'s restatement of
+      height / display / justify / ink / fill (~:2761) is (0,3,0) against this block's (0,2,0)
+      — pinned in `test/dom/theme/hostRegrounding.test.ts`. Obsidian's
+      `button` rules were painting the modal chips: a 30px `height`, the `--interactive-normal` fill
       (#333 / #fff) and the `--text-normal` idle ink, none of which was the chip's own
       declared look (`.dse-optchip`, ~:2134) — that declaration is (0,1,0) and lost to the
       host's (0,1,1). Scott's ruling (SC-356, "A30"): the chips take the PLUGIN's fill and idle
@@ -17204,15 +17209,19 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
           applies where Obsidian's variable is absent — the sweep's bare pass, which has no
           host — and equals what the host gives, which is what keeps the with-vs-without-host
           comparison invariant.
-        - `display: flex` + centred alignment are Obsidian's own values for a button, restated
-          so the labels stay centred in that box exactly as today.
+        - `display: inline-flex` + centred alignment are Obsidian's own values for a button
+          (`button { display: inline-flex; align-items: center; justify-content: center }`),
+          restated so the labels stay centred in that box exactly as today. `inline-flex`, not
+          `flex`: in a flex parent (every chip's row today) both compute to `flex`, and a chip
+          in a non-flex parent stays inline as it does under the host instead of going full
+          width.
         - fill / idle ink are the tokens the chip's own rule names. `:not(:hover)` and the
           pressed exclusion keep this block from beating the two (0,2,0) state rules above
           it (`.dse-optchip:hover`, `.dse-optchip[aria-pressed='true']`); the pressed ink,
           the pressed accent border and the teal-cyan focus ring are untouched. -- */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-optchip) {
 	height: var(--input-height, 30px);
-	display: flex;
+	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 }
