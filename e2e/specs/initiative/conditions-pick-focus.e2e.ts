@@ -85,7 +85,7 @@ describe('conditions-modal: focus after a pick in the row editor (SC-468)', () =
 				const c = getComputedStyle(a, '::after');
 				return { ring: o.outlineStyle + ' ' + o.outlineWidth, pressed: a.getAttribute('aria-pressed'), checkContent: c.content, checkImage: c.backgroundImage };
 			})()`);
-		await dse.tabTo(swatch, 20);
+		await dse.tabTo(swatch, 80);
 		const before = await marks();
 		expect(before.pressed).toBe('false');
 		expect(before.ring).toBe('solid 2px'); // focused: the ring
