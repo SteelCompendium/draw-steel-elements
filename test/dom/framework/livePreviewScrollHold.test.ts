@@ -58,6 +58,8 @@ const shift = (by: number) => ({ mapPos: (p: number) => (p > 5 ? p + by : p) });
 const update = (view: View, event = 'set', changes = shift(0)) =>
 	({ view, docChanged: true, changes, transactions: [{ docChanged: true, isUserEvent: (e: string) => e === event }] }) as never;
 const flush = () => Promise.resolve().then(() => undefined);
+/** The MarkdownView that shows an editor: only its `file` is read. */
+const note = (path = 'Note.md') => ({ file: { path } as { path: string } | null });
 
 afterEach(() => {
 	document.body.innerHTML = '';
@@ -68,7 +70,7 @@ describe('SC-478: LivePreviewScrollHold capture', () => {
 	test('captures a scrolled view that shows a DSE widget; a later "set" update restores the mapped snapshot', async () => {
 		const hold = new LivePreviewScrollHold();
 		const view = fakeView(2428, [widget(7, 5230)]);
-		hold.capture(view as never);
+		hold.capture(view as never, note());
 		expect(view.scrollSnapshot).toHaveBeenCalledTimes(1);
 		hold.onUpdate(update(view));
 		expect(view.dispatch).not.toHaveBeenCalled(); // never inside the update
@@ -80,8 +82,8 @@ describe('SC-478: LivePreviewScrollHold capture', () => {
 		const hold = new LivePreviewScrollHold();
 		const atTop = fakeView(0, [widget(7, 5230)]);
 		const plain = fakeView(3000, []);
-		hold.capture(atTop as never);
-		hold.capture(plain as never);
+		hold.capture(atTop as never, note());
+		hold.capture(plain as never, note());
 		hold.onUpdate(update(atTop));
 		hold.onUpdate(update(plain));
 		await flush();
@@ -92,9 +94,19 @@ describe('SC-478: LivePreviewScrollHold capture', () => {
 	test("never engages on the user's own edit, and the edit consumes the capture", async () => {
 		const hold = new LivePreviewScrollHold();
 		const view = fakeView(2428, [widget(7, 5230)]);
-		hold.capture(view as never);
+		hold.capture(view as never, note());
 		hold.onUpdate(update(view, 'input.type'));
 		hold.onUpdate(update(view, 'set')); // a later set without a fresh capture
+		await flush();
+		expect(view.dispatch).not.toHaveBeenCalled();
+	});
+
+	test('one update that carries a "set" AND a user transaction is not a pure set: no restore', async () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(2428, [widget(7, 5230)]);
+		hold.capture(view as never, note());
+		const tr = (event: string) => ({ docChanged: true, isUserEvent: (e: string) => e === event });
+		hold.onUpdate({ view, docChanged: true, changes: shift(0), transactions: [tr('set'), tr('input.type')] } as never);
 		await flush();
 		expect(view.dispatch).not.toHaveBeenCalled();
 	});
@@ -102,9 +114,39 @@ describe('SC-478: LivePreviewScrollHold capture', () => {
 	test('the user wins: a scroll between the capture and the transaction drops the restore', async () => {
 		const hold = new LivePreviewScrollHold();
 		const view = fakeView(2428, [widget(7, 5230)]);
-		hold.capture(view as never);
+		hold.capture(view as never, note());
 		view.scrollDOM.scrollTop = 1900;
 		hold.onUpdate(update(view));
+		await flush();
+		expect(view.dispatch).not.toHaveBeenCalled();
+	});
+
+	test('a capture belongs to one note: a transaction after another file was loaded into the leaf never gets its snapshot', async () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(2428, [widget(7, 5230)]);
+		const owner = note('Tracker.md');
+		hold.capture(view as never, owner);
+		owner.file = { path: 'Other.md' }; // the leaf navigated; scrollTop happens to match, the transaction is a plain `set`
+		hold.onUpdate(update(view));
+		await flush();
+		expect(view.dispatch).not.toHaveBeenCalled();
+		// ...and the capture is gone for good: coming back to the first note does not revive it
+		owner.file = { path: 'Tracker.md' };
+		hold.onUpdate(update(view));
+		await flush();
+		expect(view.dispatch).not.toHaveBeenCalled();
+	});
+
+	test('a leaf that shows no file when the transaction arrives drops the capture; a view with no file is never captured', async () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(2428, [widget(7, 5230)]);
+		const owner = note();
+		hold.capture(view as never, owner);
+		owner.file = null;
+		hold.onUpdate(update(view));
+		const orphan = fakeView(2428, [widget(7, 5230)]);
+		hold.capture(orphan as never, { file: null });
+		expect(orphan.scrollSnapshot).not.toHaveBeenCalled();
 		await flush();
 		expect(view.dispatch).not.toHaveBeenCalled();
 	});
@@ -124,10 +166,24 @@ describe('SC-478: LivePreviewScrollHold capture', () => {
 });
 
 describe('SC-478: LivePreviewScrollHold hold', () => {
+	test('a block drawn after PIN_TTL_MS is not held (the pending entry expired)', () => {
+		jest.useFakeTimers();
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3500, [widget(637, 3039)]);
+		hold.capture(view as never, note());
+		hold.onUpdate(update(view));
+		jest.advanceTimersByTime(TTL);
+		view.contentDOM.querySelector('.cm-embed-block')!.remove();
+		const late = widget(637, 50, false);
+		view.contentDOM.appendChild(late);
+		hold.applyHolds(view as never);
+		expect(late.hasAttribute(HOLD_ATTR)).toBe(false);
+	});
+
 	test('holds the replacement widget drawn empty at the old height (position mapped through the change), released on mount', async () => {
 		const hold = new LivePreviewScrollHold();
 		const view = fakeView(3500, [widget(637, 3039)]);
-		hold.capture(view as never);
+		hold.capture(view as never, note());
 		hold.onUpdate(update(view, 'set', shift(0)));
 		// CodeMirror writes the DOM: the old widget is replaced by an empty one at the same position.
 		view.contentDOM.querySelector('.cm-embed-block')!.remove();
@@ -154,7 +210,7 @@ describe('SC-478: LivePreviewScrollHold hold', () => {
 		view.contentDOM.appendChild(elsewhere);
 		hold.applyHolds(view as never); // nothing pending
 		expect(elsewhere.hasAttribute(HOLD_ATTR)).toBe(false);
-		hold.capture(view as never);
+		hold.capture(view as never, note());
 		hold.onUpdate(update(view));
 		hold.applyHolds(view as never);
 		expect(elsewhere.hasAttribute(HOLD_ATTR)).toBe(false); // 2000 was not a captured DSE block
@@ -165,7 +221,7 @@ describe('SC-478: LivePreviewScrollHold hold', () => {
 		jest.useFakeTimers();
 		const hold = new LivePreviewScrollHold();
 		const view = fakeView(3500, [widget(637, 3039), widget(900, 800)]);
-		hold.capture(view as never);
+		hold.capture(view as never, note());
 		hold.onUpdate(update(view));
 		for (const w of Array.from(view.contentDOM.querySelectorAll('.cm-embed-block'))) w.remove();
 		const a = widget(637, 50, false);
@@ -176,9 +232,9 @@ describe('SC-478: LivePreviewScrollHold hold', () => {
 		hold.releaseAll();
 		expect(a.hasAttribute(HOLD_ATTR) || b.hasAttribute(HOLD_ATTR)).toBe(false);
 		// TTL path
-		hold.capture(fakeView(3500, [widget(637, 3039)]) as never); // unrelated view, unaffected
+		hold.capture(fakeView(3500, [widget(637, 3039)]) as never, note()); // unrelated view, unaffected
 		const view2 = fakeView(3500, [widget(637, 3039)]);
-		hold.capture(view2 as never);
+		hold.capture(view2 as never, note());
 		hold.onUpdate(update(view2));
 		view2.contentDOM.querySelector('.cm-embed-block')!.remove();
 		const c = widget(637, 50, false);
@@ -187,6 +243,64 @@ describe('SC-478: LivePreviewScrollHold hold', () => {
 		expect(c.hasAttribute(HOLD_ATTR)).toBe(true);
 		jest.advanceTimersByTime(TTL);
 		expect(c.hasAttribute(HOLD_ATTR)).toBe(false);
+	});
+});
+
+describe('SC-478: LivePreviewScrollHold CodeMirror extension', () => {
+	/** The ViewPlugin's value for a view, as CodeMirror creates it (ViewPlugin.define keeps its `create`). */
+	const pluginFor = (hold: LivePreviewScrollHold, view: View) =>
+		(hold.extension() as unknown as { create: (v: View) => { update: (u: never) => void; docViewUpdate: (v: View) => void; destroy: () => void } }).create(view);
+
+	test('update -> restore after the update; docViewUpdate -> hold the empty replacement widget', async () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3500, [widget(637, 3039)]);
+		const plugin = pluginFor(hold, view);
+		hold.capture(view as never, note());
+		plugin.update(update(view));
+		view.contentDOM.querySelector('.cm-embed-block')!.remove();
+		const fresh = widget(637, 50, false);
+		view.contentDOM.appendChild(fresh);
+		plugin.docViewUpdate(view);
+		expect(fresh.getAttribute(HOLD_ATTR)).toBe('3039');
+		await flush();
+		expect(view.dispatch).toHaveBeenCalledTimes(1);
+	});
+
+	test('destroy (CodeMirror destroys every ViewPlugin on setState, i.e. when a file is loaded into the leaf) drops the capture', async () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(2428, [widget(7, 5230)]);
+		const plugin = pluginFor(hold, view);
+		hold.capture(view as never, note());
+		plugin.destroy();
+		plugin.update(update(view));
+		await flush();
+		expect(view.dispatch).not.toHaveBeenCalled();
+	});
+
+	test('destroy drops a pending restore and releases a live hold', async () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3500, [widget(637, 3039)]);
+		const plugin = pluginFor(hold, view);
+		hold.capture(view as never, note());
+		plugin.update(update(view)); // restore queued in a microtask
+		plugin.destroy();
+		view.contentDOM.querySelector('.cm-embed-block')!.remove();
+		const fresh = widget(637, 50, false);
+		view.contentDOM.appendChild(fresh);
+		plugin.docViewUpdate(view); // nothing pending any more: no hold
+		expect(fresh.hasAttribute(HOLD_ATTR)).toBe(false);
+		await flush();
+		expect(view.dispatch).not.toHaveBeenCalled();
+		// a hold that is already on
+		hold.capture(view as never, note());
+		hold.onUpdate(update(view));
+		view.contentDOM.querySelector('.cm-embed-block')!.remove();
+		const held = widget(637, 50, false);
+		view.contentDOM.appendChild(held);
+		hold.applyHolds(view as never);
+		expect(held.hasAttribute(HOLD_ATTR)).toBe(true);
+		plugin.destroy();
+		expect(held.hasAttribute(HOLD_ATTR)).toBe(false);
 	});
 });
 
