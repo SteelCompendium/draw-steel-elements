@@ -7,7 +7,11 @@ import { ElementPipeline } from '../../../src/framework/pipeline';
 import { isExperimental } from '../../../src/framework/experimental';
 import { createElementRegistry } from '../../../src/framework/registry';
 import {
+	attachHarnessCompendium,
 	FIXTURES,
+	FIXTURE_COMPENDIUM,
+	HARNESS_COMPENDIUM,
+	harnessCompendiumModeFor,
 	makeHarnessDeps,
 	makeHarnessHost,
 	mountFromParams,
@@ -22,10 +26,11 @@ const registry = createElementRegistry();
 registerHarnessElementDefinitions(registry);
 
 // SC-149: registered elements that deliberately have NO browser fixture. `ds-scc` renders
-// nothing without a synced compendium and the harness has no `cx.compendium`, so every
-// body it could be given produces an error card — which `mountFromParams` correctly counts
-// as a failed shot. Its coverage lives in test/dom/elements/sccElement.test.ts, which has a
-// real CompendiumIndex over the md-dse fixtures.
+// nothing without a compendium, and the harness mounts with none by default, so every body
+// it could be given renders the "Compendium not installed" NOTICE (`.dse-ref-notice`, not an
+// error card) — which `mountFromParams` counts as a failed shot since SC-362. SC-469 owns
+// its fixtures; its coverage until then lives in test/dom/elements/sccElement.test.ts, which
+// has a real CompendiumIndex over the md-dse fixtures.
 const NO_FIXTURE_IDS = ['scc'];
 
 describe('F4 visual-harness fixtures', () => {
@@ -59,17 +64,143 @@ describe('F4 visual-harness fixtures', () => {
 			test(`${id}/${name} mounts with no error card`, async () => {
 				const def = registry.get(id)!;
 				const { deps } = makeHarnessDeps();
+				// SC-362: the compendium the fixture declares (none, for every pre-existing one).
+				attachHarnessCompendium(deps, FIXTURE_COMPENDIUM[`${id}/${name}`] ?? 'none');
 				const pipeline = new ElementPipeline(deps);
 				const container = document.createElement('div');
 				document.body.appendChild(container);
 				const host = makeHarnessHost(container, { readonly: false, language: def.aliases[0] });
 				await pipeline.run(def, source, host);
 				expect(container.querySelector('.dse-error-card')).toBeNull();
+				// A reference that did not resolve renders a notice, not an error card.
+				expect(container.querySelector('.dse-ref-notice')).toBeNull();
 				expect(container.firstElementChild).not.toBeNull();
 				container.remove();
 			});
 		}
 	}
+});
+
+// SC-362 — the harness compendium: by-SCC fixtures resolve to their REAL card, undeclared
+// fixtures keep the old no-compendium mount (their frozen DOM must not move), and an
+// unresolved by-SCC shot fails the gate instead of photographing a notice.
+describe('harness compendium (SC-362)', () => {
+	async function render(id: string, name: string, mode: Parameters<typeof attachHarnessCompendium>[1]) {
+		const def = registry.get(id)!;
+		const { deps } = makeHarnessDeps();
+		attachHarnessCompendium(deps, mode);
+		const container = document.createElement('div');
+		document.body.appendChild(container);
+		await new ElementPipeline(deps).run(
+			def,
+			FIXTURES[id][name],
+			makeHarnessHost(container, { readonly: false, language: def.aliases[0] }),
+		);
+		return { deps, container };
+	}
+
+	test('rule/by-scc resolves to the real card: eyebrow "Combat", title "Opportunity Attacks"', async () => {
+		const { container } = await render('rule', 'by-scc', FIXTURE_COMPENDIUM['rule/by-scc']);
+		expect(container.querySelector('.dse-error-card, .dse-ref-notice')).toBeNull();
+		expect(container.querySelector('.dse-head__eyebrow--left')?.textContent?.trim()).toBe('Combat');
+		expect(container.querySelector('.dse-head__primary--left')?.textContent?.trim()).toBe('Opportunity Attacks');
+		container.remove();
+	});
+
+	test('condition/by-scc resolves to the real Bleeding card', async () => {
+		const { container } = await render('condition', 'by-scc', FIXTURE_COMPENDIUM['condition/by-scc']);
+		expect(container.querySelector('.dse-error-card, .dse-ref-notice')).toBeNull();
+		expect(container.querySelector('.dse-head__primary--left')?.textContent?.trim()).toBe('Bleeding');
+		container.remove();
+	});
+
+	test('only the by-SCC fixtures declare a compendium; every other fixture mounts with neither service', () => {
+		expect(Object.keys(FIXTURE_COMPENDIUM).sort()).toEqual(['condition/by-scc', 'rule/by-scc']);
+		for (const [id, fixtures] of Object.entries(FIXTURES)) {
+			for (const name of Object.keys(fixtures)) {
+				if (FIXTURE_COMPENDIUM[`${id}/${name}`]) continue;
+				const { deps } = makeHarnessDeps();
+				attachHarnessCompendium(deps, harnessCompendiumModeFor([{ element: id, fixture: name }]));
+				expect(deps.compendium).toBeUndefined();
+				expect(deps.sccAnchors).toBeUndefined();
+			}
+		}
+	});
+
+	test('the mode of a stack or gallery is the shared mode, else none (an undeclared fixture is never rewired)', () => {
+		const rule = { element: 'rule', fixture: 'by-scc' };
+		expect(harnessCompendiumModeFor([rule])).toBe('fixtures');
+		expect(harnessCompendiumModeFor([rule, { element: 'condition', fixture: 'by-scc' }])).toBe('fixtures');
+		expect(harnessCompendiumModeFor([rule, { element: 'feature', fixture: 'default' }])).toBe('none');
+		expect(harnessCompendiumModeFor([])).toBe('none');
+		// A fixture name an element lacks falls back to its default (mountOne does the same).
+		expect(harnessCompendiumModeFor([{ element: 'feature', fixture: 'by-scc' }])).toBe('none');
+	});
+
+	test('anchors-only wires the resolver without the index (the SC-469 not-installed seam)', async () => {
+		const { deps, container } = await render('rule', 'by-scc', 'anchors-only');
+		expect(deps.sccAnchors).toBeDefined();
+		expect(deps.compendium).toBeUndefined();
+		expect(container.querySelector('.dse-error-card, .dse-ref-notice')).not.toBeNull();
+		container.remove();
+	});
+
+	test('the seeded set is exactly the two frozen cards', () => {
+		expect(Object.keys(HARNESS_COMPENDIUM).sort()).toEqual([
+			'condition/bleeding.md',
+			'rule/combat/opportunity-attack.md',
+		]);
+	});
+
+	describe('mountFromParams reports an unresolved reference', () => {
+		let mount: HTMLDivElement;
+		beforeEach(() => {
+			mount = document.createElement('div');
+			mount.id = 'mount';
+			document.body.appendChild(mount);
+		});
+		afterEach(() => {
+			mount.remove();
+		});
+		const params = (element: string, fixture: string) => ({
+			element,
+			fixture,
+			theme: 'steel' as const,
+			bg: 'dark' as const,
+			print: false,
+			readonly: false,
+			gallery: false,
+		});
+
+		test('a resolved by-SCC mount is clean', async () => {
+			expect((await mountFromParams(document, params('rule', 'by-scc'))).errors).toEqual([]);
+			expect((await mountFromParams(document, params('condition', 'by-scc'))).errors).toEqual([]);
+		});
+
+		test('a by-SCC code that is not seeded (web card) fails the mount', async () => {
+			const original = HARNESS_COMPENDIUM['rule/combat/opportunity-attack.md'];
+			delete HARNESS_COMPENDIUM['rule/combat/opportunity-attack.md'];
+			try {
+				const { errors } = await mountFromParams(document, params('rule', 'by-scc'));
+				expect(errors.join('\n')).toContain('reference notice');
+			} finally {
+				HARNESS_COMPENDIUM['rule/combat/opportunity-attack.md'] = original;
+			}
+		});
+
+		test('a by-SCC fixture mounted with no compendium fails the mount', async () => {
+			// A stack mixing a declared and an undeclared fixture gets mode none, so the by-SCC
+			// card cannot resolve and must read as a failure, not a green notice.
+			const { errors } = await mountFromParams(document, {
+				...params('rule', 'by-scc'),
+				stack: [
+					{ element: 'rule', fixture: 'by-scc' },
+					{ element: 'feature', fixture: 'default' },
+				],
+			});
+			expect(errors.length).toBeGreaterThan(0);
+		});
+	});
 });
 
 // shoot.mjs trusts window.__dseHarnessDone.errors (populated by mountFromParams) as its

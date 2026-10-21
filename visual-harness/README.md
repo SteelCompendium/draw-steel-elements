@@ -73,6 +73,20 @@ One-time setup: `npx playwright install chromium`.
   reflow of DOM the default sweep already photographed; three of SC-123's ports change
   the DOM itself (the characteristics split, the boxed letter, the villain band), and a
   preference nobody shoots is a preference nobody reviews.
+- The **harness compendium** (SC-362, `entry.ts`: `HARNESS_COMPENDIUM` / `FIXTURE_COMPENDIUM` /
+  `attachHarnessCompendium`). By-SCC bodies (`scc.v1:…`) need `cx.compendium` and
+  `cx.sccAnchors`, which the harness used to mount without. It now seeds REAL md-dse notes
+  (`test/fixtures/md-dse/`, via the `.md` text loader) into the mock vault at their synced
+  paths and runs the production `SccResolver` + `createCompendiumIndex` over them. Wiring is
+  **per fixture** — mode `none` (default; every pre-existing fixture, whose frozen DOM must
+  not move) | `fixtures` | `anchors-only` — declared in `FIXTURE_COMPENDIUM`, keyed
+  `<element>/<fixture>`; today `rule/by-scc` and `condition/by-scc`. **The seeded file set is
+  part of the frozen contract:** it decides whether an in-body link renders as a vault link or
+  a web link, so adding a file can move the frozen by-SCC shots. `mountFromParams` fails a
+  shot that renders a `.dse-ref-notice` (unresolved code, web card, "Compendium not
+  installed"), which no error-card check caught. SC-469 reuses the seam for the ds-scc
+  degrade cards (`fixtures` + an unseeded code → web card; `anchors-only` → not installed);
+  those fixtures are not here, and need an `expectNotice` opt-out first.
 - `shim/obsidian.ts` — browser `obsidian` module: jest-free mock core + real Lucide icons +
   `marked` markdown + toast Notice. Aliased in by `esbuild.mjs` for this bundle only.
 - `vars.css` — vendored Obsidian default-theme variables (only what `styles-source.css` uses).

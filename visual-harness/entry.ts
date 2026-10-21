@@ -26,6 +26,8 @@ import { DEFAULT_SETTINGS } from '../src/model/Settings';
 import { setExperimental } from '../src/framework/experimental';
 import { registerFrameworkElementDefinitions, FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from '../main';
 import { INTERNAL_DISPLAY_ELEMENTS } from '../src/elements/display';
+import { SccResolver } from '../src/refs/SccResolver';
+import { createCompendiumIndex } from '../src/services/CompendiumIndex';
 import { App, Plugin } from '../test/mocks/obsidian-core';
 
 // Fixtures — D9 (Plan 15 Task 2): single-sourced from each element's own
@@ -75,6 +77,12 @@ import complicationDefault from '../src/elements/display/complication/example.ya
 // D6 Task 8 (plan 16, spec §3) — genericCard()'s only instance: ds-rule (model-less,
 // reference-only, raw-markdown inline fallback per OD-D6-7).
 import ruleDefault from '../src/elements/display/rule/example.yaml';
+
+// SC-362 — the harness compendium's seed files: REAL md-dse notes (the jsdom corpus,
+// `test/fixtures/md-dse/`, byte-identical to the data-unified release for these two),
+// single-sourced the same way the statblock corpus yaml is, via the `.md` text loader.
+import mdDseRuleOpportunityAttack from '../test/fixtures/md-dse/rule/combat/opportunity-attack.md';
+import mdDseConditionBleeding from '../test/fixtures/md-dse/condition/bleeding.md';
 
 // SC-102 fix round (task-3 review M-1): the CORPUS-SHAPED villain statblock — the shape
 // steel-etl ACTUALLY emits (`cost: Villain Action N` + the lone-dash `usage: '-'` + no
@@ -361,8 +369,10 @@ effects:
 // Same ancestry/class/kit/ability refs as heroDefault to keep this an isolated
 // skills/conditions change, nothing else. SC-156 replaced that pair of ability refs — in
 // BOTH fixtures at once, so they stay identical — with the real corpus codes
-// (fury.level-1 brutal-slam + thunder-roar), which the harness compendium now carries, so
-// these rows render real ability cards instead of degrading.
+// (fury.level-1 brutal-slam + thunder-roar). The harness mounts hero with NO compendium
+// (SC-362's `HARNESS_COMPENDIUM` seeds only the by-SCC fixtures that declare it, and holds
+// neither fury ability), so these rows degrade to the "not installed" notice here; the
+// codes are real so a vault with the compendium synced resolves them.
 const heroSparse = `name: Wren Larkspur
 level: 1
 ancestry: scc.v1:mcdm.heroes.v1/ancestry/dwarf
@@ -975,7 +985,11 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	characteristics: { default: characteristicsDefault },
 	class: { default: classDefault },
 	complication: { default: complicationDefault },
-	condition: { default: conditionDefault },
+	condition: {
+		default: conditionDefault,
+		// SC-362 — the same card reached by reference; see FIXTURE_COMPENDIUM / HARNESS_COMPENDIUM.
+		'by-scc': 'scc.v1:mcdm.heroes.v1/condition/bleeding',
+	},
 	conditions: { default: conditionsDefault },
 	counter: { default: counterDefault },
 	culture: { default: cultureDefault },
@@ -1031,7 +1045,12 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	perk: { default: perkDefault, links: perkLinks, headings: perkHeadings },
 	project: { default: projectDefault },
 	roll: { default: rollDefault },
-	rule: { default: ruleDefault },
+	rule: {
+		default: ruleDefault,
+		// SC-362 — the opportunity-attack rule reached by reference (the body of `default` is
+		// byte-identical to this note's); adds the SC-272 eyebrow "Combat" and the real title.
+		'by-scc': 'scc.v1:mcdm.heroes.v1/rule.combat/opportunity-attack',
+	},
 	skills: {
 		default: skillsDefault,
 		'hero-picks': skillsHeroPicks,
@@ -1858,6 +1877,76 @@ export const HARNESS_PORTRAITS: Record<string, string> = {
 	'portraits/6.svg': harnessPortrait(268),
 };
 
+/**
+ * SC-362 — the harness compendium: REAL md-dse files at the paths a sync writes them
+ * (`<compendiumDestinationDirectory>/<rel>`), read through the production `SccResolver` +
+ * `createCompendiumIndex` over the harness's mock vault. That is what lets a by-SCC body
+ * (`scc.v1:…`) resolve to its real card in a browser shot, which it never could while the
+ * harness mounted every element with no `cx.compendium` / `cx.sccAnchors`.
+ *
+ * THE SEEDED SET IS PART OF THE FROZEN CONTRACT. It decides whether an in-body
+ * `scc.v1:` link renders as a vault link (`internal-link`, the target is seeded) or a web
+ * link (`.ds-scc-web`, it is not). Adding a file here can therefore change the bytes of
+ * every frozen by-SCC shot (`rule-by-scc--*`, `condition-by-scc--*`) — seed only what a
+ * fixture needs, and treat any change here as a freeze event. The files themselves are the
+ * jsdom suites' corpus (`test/fixtures/md-dse/`), so an edit there for another ticket moves
+ * these shots too.
+ */
+export const HARNESS_COMPENDIUM: Record<string, string> = {
+	'rule/combat/opportunity-attack.md': mdDseRuleOpportunityAttack,
+	'condition/bleeding.md': mdDseConditionBleeding,
+};
+
+/**
+ * How a mount sees the compendium:
+ *  - `none` (the default, and every pre-SC-362 fixture): no `compendium`, no `sccAnchors` —
+ *    exactly the old harness, so no existing shot's DOM moves (wiring it globally changes
+ *    the DOM of 18 fixtures, several of them frozen).
+ *  - `fixtures`: resolver + index over `HARNESS_COMPENDIUM` — a seeded code renders its
+ *    card; a code that is not seeded falls through to the web card (`sccWebFallback`).
+ *  - `anchors-only`: the resolver without the index — `RefUnwrapView` stops at "Compendium
+ *    not installed". Together with `fixtures` and an unseeded code this is the seam SC-469
+ *    reuses for the ds-scc degrade cards (no such fixture is added here).
+ */
+export type HarnessCompendiumMode = 'none' | 'fixtures' | 'anchors-only';
+
+/** `${element}/${fixture}` → mode. Absent = `none`. Only the by-SCC fixtures declare one. */
+export const FIXTURE_COMPENDIUM: Record<string, HarnessCompendiumMode> = {
+	'rule/by-scc': 'fixtures',
+	'condition/by-scc': 'fixtures',
+};
+
+/**
+ * Wire `mode` onto `deps` (mutates; call BEFORE `new ElementPipeline(deps)` so the
+ * pipeline's services pick it up, and keep `makeHarnessDeps()`'s signature untouched).
+ */
+export function attachHarnessCompendium(deps: ElementPipelineDeps, mode: HarnessCompendiumMode): void {
+	if (mode === 'none') return;
+	const app = deps.app as unknown as App;
+	for (const [rel, text] of Object.entries(HARNESS_COMPENDIUM)) {
+		app.vault.setFile(`${DEFAULT_SETTINGS.compendiumDestinationDirectory}/${rel}`, text);
+	}
+	const resolver = new SccResolver(app as never, DEFAULT_SETTINGS);
+	deps.sccAnchors = resolver;
+	if (mode === 'fixtures') deps.compendium = createCompendiumIndex(app as never, resolver);
+}
+
+/** The mode for a set of mount targets: the shared mode if every target declares the same
+ *  one (a lone fixture, or a stack of identical ones), else `none` — a mixed stack must not
+ *  change an undeclared fixture's DOM, and a by-SCC card in it then fails loudly. */
+export function harnessCompendiumModeFor(
+	targets: readonly { element: string; fixture: string }[],
+): HarnessCompendiumMode {
+	const modes = new Set(
+		targets.map(({ element, fixture }) => {
+			// mountOne falls back to the element's default fixture when `fixture` is not one of its own.
+			const effective = FIXTURES[element]?.[fixture] !== undefined ? fixture : 'default';
+			return FIXTURE_COMPENDIUM[`${element}/${effective}`] ?? 'none';
+		}),
+	);
+	return modes.size === 1 ? [...modes][0] : 'none';
+}
+
 /** Real service instances — the same convention as the dom tests' makeDeps(). */
 export function makeHarnessDeps(): { deps: ElementPipelineDeps; theme: ThemeServiceInternal } {
 	const app = new App();
@@ -1922,11 +2011,14 @@ export function makeHarnessDeps(): { deps: ElementPipelineDeps; theme: ThemeServ
  * them itself. Their ids and aliases are unchanged, which is what keeps every existing
  * shot name (and the FROZEN gallery's `<id> (<alias>)` headings) byte-identical.
  *
- * There is deliberately NO `scc` fixture: `ds-scc` renders nothing without a synced
- * compendium, and this harness has no `cx.compendium`, so every body it could be given
- * would produce an error card — which `mountFromParams` (correctly) counts as a failed
- * shot. `ds-scc`'s own coverage is the jsdom suite (test/dom/elements/sccElement.test.ts),
- * which has a real CompendiumIndex over the md-dse fixtures.
+ * There is deliberately NO `scc` fixture (SC-469 owns it). `ds-scc` renders nothing
+ * without a compendium, and by default this harness mounts with none (`HarnessCompendiumMode`
+ * `none`), so a `ds-scc` body would render the "Compendium not installed" NOTICE
+ * (`.dse-ref-notice`, friendlyErrors) — not an error card. `mountFromParams` counts a notice
+ * as a failed shot too since SC-362, unless a fixture one day declares it expected.
+ * By-SCC cards are covered through the typed keys instead (`rule/by-scc`, `condition/by-scc`).
+ * `ds-scc`'s own coverage is the jsdom suite (test/dom/elements/sccElement.test.ts), which
+ * has a real CompendiumIndex over the md-dse fixtures.
  */
 export function registerHarnessElementDefinitions(registry: ElementRegistry): void {
 	registerFrameworkElementDefinitions(registry);
@@ -2252,6 +2344,16 @@ export async function mountFromParams(
 	const { deps, theme } = makeHarnessDeps();
 	theme.setActive(params.theme);
 	const errors: string[] = [];
+	// SC-362: the target list is resolved up front (it is also what mounts, below) so the
+	// compendium mode can be attached BEFORE the pipeline is built.
+	const targets: { element: string; fixture: string }[] = params.stack
+		? params.stack
+		: params.gallery
+			? (params.galleryIds ?? Object.keys(FIXTURES))
+					.filter((id) => FIXTURES[id])
+					.map((id) => ({ element: id, fixture: params.fixture }))
+			: [{ element: params.element ?? 'feature', fixture: params.fixture }];
+	attachHarnessCompendium(deps, harnessCompendiumModeFor(targets));
 	// SC-123: pref-variant captures. Applied BEFORE the pipeline runs, so a preference
 	// that changes DOM SHAPE (the characteristics split, the villain band) is built the
 	// right way on first paint rather than through a remount — the store is per-mount
@@ -2290,13 +2392,6 @@ export async function mountFromParams(
 	// SC-169: the chrome panel overflows the element's TOP edge, and the shot is the
 	// #mount locator — without padding the camera clips the very thing under review.
 	mount.style.padding = params.pad ? `${params.pad}px` : '';
-	const targets: { element: string; fixture: string }[] = params.stack
-		? params.stack
-		: params.gallery
-			? (params.galleryIds ?? Object.keys(FIXTURES))
-					.filter((id) => FIXTURES[id])
-					.map((id) => ({ element: id, fixture: params.fixture }))
-			: [{ element: params.element ?? 'feature', fixture: params.fixture }];
 	for (const target of targets) {
 		await mountOne(pipeline, registry, mount, target.element, target.fixture, params, errors);
 	}
@@ -2320,6 +2415,16 @@ export async function mountFromParams(
 	// Error cards the pipeline rendered (parse/schema/render failures) count as failures.
 	for (const card of Array.from(mount.querySelectorAll('.dse-error-card'))) {
 		errors.push(`error card: ${(card.textContent ?? '').slice(0, 160)}`);
+	}
+	// SC-362: a reference that did not resolve to its card renders a NOTICE, not an error
+	// card — `.dse-ref-notice` ("Compendium not installed", "Unknown SCC code") or its
+	// `.dse-ref-web-card` form (a well-formed code absent from the vault falls back to the
+	// web card, even for a typed family). Neither is a pipeline failure, so without this a
+	// by-SCC shot of a typo'd or unseeded code would photograph the notice and read green.
+	// No fixture expects one today; SC-469's degrade-card fixtures are the first that will,
+	// and will need an opt-out here (do not loosen this check for them).
+	for (const notice of Array.from(mount.querySelectorAll('.dse-ref-notice'))) {
+		errors.push(`reference notice (unresolved by-SCC card): ${(notice.textContent ?? '').slice(0, 160)}`);
 	}
 	if (params.scroll !== undefined) await settleScroll(mount, params.scrollTo ?? 0, errors);
 	return { errors };
