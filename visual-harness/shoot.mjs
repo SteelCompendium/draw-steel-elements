@@ -3739,19 +3739,26 @@ function ptCentre(tag) {
 	return { x, y, hit: !!hit && (hit === el || el.contains(hit)) };
 }
 /** Runs in the page. Reads one control's paint and whether the state being sampled is genuinely active on it. */
-function ptRead({ tag, state, keys }) {
+function ptRead({ tag, state, keys, pseudo }) {
 	const el = document.querySelector(`[data-sc450-${tag}]`);
 	if (!el) return null;
 	if (state === 'focus-visible') el.focus();
 	const c = getComputedStyle(el);
 	const paint = {};
 	for (const k of keys) paint[k] = c[k];
+	// SC-361: a pressed mark drawn as a pseudo-element (the colour swatch's check) is invisible to the element's
+	// own computed style, so the pseudo's `content` + `backgroundImage` are read too, under "<pseudo> <prop>" keys.
+	for (const p of pseudo ?? []) {
+		const pc = getComputedStyle(el, p);
+		paint[`${p} content`] = pc.content;
+		paint[`${p} backgroundImage`] = pc.backgroundImage;
+	}
 	const active = state === 'hover' ? el.matches(':hover') : state === 'focus-visible' ? el.matches(':focus-visible') : true;
 	return { paint, active };
 }
 
 /** Node side: drive `state` for real on the tagged control, then read it. */
-async function ptPaintIn(page, tag, state, keys, problems, at) {
+async function ptPaintIn(page, tag, state, keys, problems, at, pseudo) {
 	// Park the pointer and drop focus first - a stale hover or a modal's auto-focus ring is not part of any state.
 	await page.mouse.move(0, 0);
 	await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
@@ -3766,7 +3773,7 @@ async function ptPaintIn(page, tag, state, keys, problems, at) {
 	} else if (state === 'focus-visible') {
 		await page.keyboard.press('Tab');
 	}
-	const r = await page.evaluate(ptRead, { tag, state, keys });
+	const r = await page.evaluate(ptRead, { tag, state, keys, pseudo });
 	if (!r) {
 		problems.push(`${at}|${tag}|${state}: the control vanished - the check would be blind`);
 		return null;
@@ -3792,9 +3799,11 @@ async function assertPressedToggleParity(page) {
 	const conditionsEditor = [
 		{ label: 'ConditionsModal duration chips', chipSel: '.dse-modal .dse-durseg[aria-label="Duration"] button.dse-optchip', mode: 'select', inPlace: false },
 		{ label: 'ConditionsModal effect chips', chipSel: '.dse-modal .dse-durseg[aria-label="Effect"] button.dse-optchip', mode: 'select', inPlace: false },
-		// Each swatch paints its own fill, so the fill is not comparable across swatches; the pressed ring is.
+		// Each swatch paints its own fill, so the fill is not comparable across swatches; the pressed mark is.
 		// The fixture's condition has no swatch colour, so nothing is rendered pressed: `prime` clicks one first.
-		{ label: 'ConditionsModal colour swatches', chipSel: '.dse-modal .dse-swatches button.dse-swatch', mode: 'select', inPlace: false, prime: true, skip: ['backgroundColor'] },
+		// SC-361: the pressed mark is a check drawn on `::after` (no outline ring any more), which the element's own
+		// computed style cannot see - `pseudo` reads it, and `pseudoMark` requires it on the pressed swatch only.
+		{ label: 'ConditionsModal colour swatches', chipSel: '.dse-modal .dse-swatches button.dse-swatch', mode: 'select', inPlace: false, prime: true, skip: ['backgroundColor'], pseudo: ['::after'], pseudoMark: '::after' },
 		{ label: 'ConditionsModal icon choices', chipSel: '.dse-modal .dse-cond-icons__choice', mode: 'select', inPlace: false },
 	];
 	const pages = [
@@ -3827,7 +3836,8 @@ async function assertPressedToggleParity(page) {
 			if (pg.open) await pg.open();
 			await page.mouse.move(0, 0);
 			for (const site of pg.sites) {
-				const keys = PRESSED_PARITY_KEYS.filter((k) => !(site.skip ?? []).includes(k));
+				const plainKeys = PRESSED_PARITY_KEYS.filter((k) => !(site.skip ?? []).includes(k));
+				const keys = [...plainKeys, ...(site.pseudo ?? []).flatMap((p) => [`${p} content`, `${p} backgroundImage`])];
 				const at = `${bg}|${site.label}`;
 				const init = await page.evaluate(ptInit, site);
 				if (init.missing) {
@@ -3838,11 +3848,25 @@ async function assertPressedToggleParity(page) {
 				// The rendered references, in every state, BEFORE any click.
 				const refs = { P: {}, I: {} };
 				for (const state of PRESSED_PARITY_STATES) {
-					refs.P[state] = await ptPaintIn(page, 'refP', state, keys, problems, at);
-					refs.I[state] = await ptPaintIn(page, 'refI', state, keys, problems, at);
+					refs.P[state] = await ptPaintIn(page, 'refP', state, plainKeys, problems, at, site.pseudo);
+					refs.I[state] = await ptPaintIn(page, 'refI', state, plainKeys, problems, at, site.pseudo);
 				}
 				if (refs.P.rest && refs.I.rest && keys.every((k) => refs.P.rest[k] === refs.I.rest[k])) {
 					problems.push(`${at}: rendered pressed and idle controls paint identically - the check would be blind`);
+				}
+				if (site.pseudoMark) {
+					// The mark is present on the pressed control (a drawn image, not 'none') and absent on the idle
+					// one, and the pressed control carries no outline ring at rest (the ring is the FOCUS mark now).
+					const m = site.pseudoMark;
+					const P = refs.P.rest;
+					const I = refs.I.rest;
+					if (P && !(P[`${m} content`] !== 'none' && /url\(/.test(P[`${m} backgroundImage`]))) {
+						problems.push(`${at}: the pressed control draws no ${m} mark (content "${P[`${m} content`]}", background "${String(P[`${m} backgroundImage`]).slice(0, 60)}")`);
+					}
+					if (I && (I[`${m} content`] !== 'none' || I[`${m} backgroundImage`] !== 'none')) {
+						problems.push(`${at}: the idle control draws a ${m} mark (content "${I[`${m} content`]}", background "${String(I[`${m} backgroundImage`]).slice(0, 60)}")`);
+					}
+					if (P && P.outlineStyle !== 'none') problems.push(`${at}: the pressed control still draws an outline ring at rest (${P.outlineStyle} ${P.outlineWidth})`);
 				}
 				const steps =
 					site.mode === 'select'
@@ -3857,7 +3881,7 @@ async function assertPressedToggleParity(page) {
 					if (!c.ok) problems.push(`${at}|${step.click}: the toggle did not reach the expected aria-pressed state`);
 					for (const [tag, ref, label] of step.reads) {
 						for (const state of PRESSED_PARITY_STATES) {
-							const got = await ptPaintIn(page, tag, state, keys, problems, at);
+							const got = await ptPaintIn(page, tag, state, plainKeys, problems, at, site.pseudo);
 							const want = refs[ref][state];
 							if (!got || !want) continue; // already reported as blind
 							compared += 1;

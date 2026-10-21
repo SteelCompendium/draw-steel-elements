@@ -2,6 +2,7 @@
 // chip) re-renders the list. Focus used to be sent to the row's cog afterwards, yanking a keyboard
 // user out of the group; it now stays on the (rebuilt) option they pressed. A pointer pick must not
 // grow a focus ring it never had (programmatic focus() after a mouse click is not :focus-visible).
+// SC-361: the picked swatch shows BOTH marks at once - the shared kit ring (focus, outside) and the check (selection, inside).
 // Initiative/tracker.md: hero Alice Alpha plus three Ogres; the first "Add Condition" button is the hero's.
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
@@ -70,6 +71,32 @@ describe('conditions-modal: focus after a pick in the row editor (SC-468)', () =
 		const modal = await openDazedEditor();
 		await dse.waitForWrite(NOTE, () => dse.click(modal.control('cond.swatch', { nth: SWATCH_GREEN })));
 		expect(await focusState()).toEqual({ ctl: 'cond.swatch', group: 'Color', label: 'Color #1e8449', pressed: 'true', ring: false });
+		await dse.closeModals();
+	});
+
+	it('[COND-E07] after a keyboard pick the focused, selected swatch shows both the focus ring and the check', async () => {
+		const modal = await openDazedEditor();
+		const swatch = modal.control('cond.swatch', { nth: SWATCH_GREEN });
+		// An unselected, unfocused swatch has neither mark.
+		const marks = () =>
+			dse.page<{ ring: string; pressed: string | null; checkContent: string; checkImage: string }>(`(() => {
+				const a = document.activeElement;
+				const o = getComputedStyle(a);
+				const c = getComputedStyle(a, '::after');
+				return { ring: o.outlineStyle + ' ' + o.outlineWidth, pressed: a.getAttribute('aria-pressed'), checkContent: c.content, checkImage: c.backgroundImage };
+			})()`);
+		await dse.tabTo(swatch, 20);
+		const before = await marks();
+		expect(before.pressed).toBe('false');
+		expect(before.ring).toBe('solid 2px'); // focused: the ring
+		expect(before.checkContent).toBe('none'); // ...but not selected: no check
+
+		await dse.waitForWrite(NOTE, () => dse.press('Enter', swatch));
+		const after = await marks();
+		expect(after.pressed).toBe('true');
+		expect(after.ring).toBe('solid 2px'); // still focused: the ring
+		expect(after.checkContent).not.toBe('none'); // ...and selected: the check
+		expect(after.checkImage).toContain('url(');
 		await dse.closeModals();
 	});
 });
