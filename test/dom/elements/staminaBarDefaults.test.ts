@@ -186,6 +186,25 @@ describe('SC-466: blocks the plugin builds itself keep the whole-instance output
 	});
 });
 
+describe('SC-466 r2: a key present with the value undefined counts as absent (FormModal clear-field)', () => {
+	// FormModal's working copy turns a cleared number field / textarea into `undefined`, not a
+	// missing key, so parse() sees `{ height: undefined }`. That must not count as declared.
+	test('a cleared number field (height: undefined) is not written back as height: 1', () => {
+		const model = staminaBarElement.parse({ max_stamina: 20, current_stamina: 15, height: undefined }, '');
+		expect(serialize(model)).toBe('max_stamina: 20\ncurrent_stamina: 15');
+	});
+
+	test('a cleared string field (style: undefined) is not written back as style: default', () => {
+		const model = staminaBarElement.parse({ max_stamina: 20, current_stamina: 15, style: undefined }, '');
+		expect(serialize(model)).toBe('max_stamina: 20\ncurrent_stamina: 15');
+	});
+
+	test('a key given a real value alongside an undefined one is still written', () => {
+		const model = staminaBarElement.parse({ max_stamina: 20, current_stamina: 15, height: undefined, style: 'sheet' }, '');
+		expect(serialize(model)).toBe('max_stamina: 20\ncurrent_stamina: 15\nstyle: sheet');
+	});
+});
+
 describe('SC-466: presence survives every writer of the block (in-place mutation of the parsed instance)', () => {
 	const RECOV = 'max_stamina: 30\ncurrent_stamina: 12\nrecoveries: 3\nrecoveries_max: 6';
 
