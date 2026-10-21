@@ -54,6 +54,8 @@ export function registerFrameworkElements(
 	plugin.register(() => scrollPin.releaseAll());
 	// SC-470: every write to a note, ours or not, pins every Reading view of it (previewScrollPin.ts).
 	plugin.registerEvent(plugin.app.vault.on('modify', (file) => scrollPin.pinReadingViewsOf(plugin.app.workspace, file.path)));
+	// SC-470 r4: a popout closed while pinned never fires its TTL; release its pins on `window-close`.
+	plugin.registerEvent(plugin.app.workspace.on('window-close', (_win, window) => scrollPin.releaseWindow(window)));
 	// SC-340 §6.1: the plugin-scoped owner of every reading-mode view.
 	const registry = plugin.addChild(new ViewRegistry({ enabled: options.viewAdoption ?? false }));
 

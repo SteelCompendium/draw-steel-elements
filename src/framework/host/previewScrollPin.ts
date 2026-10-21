@@ -62,23 +62,45 @@
 // (SC-459 M1), so it never gets phantom space. Live Preview / Source panes are not touched
 // (SC-478: Live Preview clamps the same way); neither is a DSE block inside an embed (SC-479).
 //
-// RE-PINS. A re-pin of an already-pinned scroller restarts the TTL and takes
-// max(the pinned height, the scroller's current content height), so autosave while typing (a
-// `modify` every couple of seconds, each refreshing the TTL) cannot hold a stale height as the
-// note grows, and a re-pin that lands while the sizer is collapsed (its scrollHeight at or
-// below the pinned one) can never lower it. The content height read back while pinned is the
-// scroller's scrollHeight MINUS its own vertical padding: with the sizer held at S px the
-// scroller reads S + padding (64px on 1.14.4), and re-measuring the raw scrollHeight would
-// ratchet the pin up by that padding on every re-pin (SC-198's "no ratchet" test).
+// THE PIN IS A FLOOR, NOT A CAP (SC-470 r4). The rule's `!important` min-height REPLACES
+// Obsidian's own inline sizer min-height, and Obsidian's Reading view is virtualised, so the
+// sizer's height IS that min-height: while the pin is held `scrollHeight` reads back as the
+// pinned px plus the scroller's padding no matter how large the note becomes (measured, 1.14.4:
+// Obsidian wanted 5901 / 7101px, the pin held 5565px for up to 12s while autosave kept
+// re-pinning, so new text at the end was unreachable). Reading `scrollHeight` therefore cannot
+// show growth. What can: Obsidian keeps WRITING its inline `min-height` (the style attribute
+// still changes under the rule). A MutationObserver on the pinned scroller (subtree, `style`
+// attribute + childList, so a replaced sizer is seen too; the scroller's own window's
+// MutationObserver, popout-safe; disconnected at release / TTL / `releaseAll`) raises the rule
+// to max(held px, that inline value) by rewriting the pin's `<style>` text. It never lowers: a
+// collapsed inline value (46px, 2446px) is below the held px. The observer only watches the
+// scroller's subtree; the `<style>` lives in `<head>` and the pin attribute is outside the
+// `style` filter, so our own writes cannot re-enter it.
+//
+// RE-PINS. A re-pin of an already-pinned scroller restarts the TTL and applies the same max
+// over (held px, the sizer's current inline min-height, scrollHeight MINUS the scroller's
+// vertical padding). The last term only matters when the rule was not holding the sizer; it
+// subtracts the padding because with the sizer held at S px the scroller reads S + padding
+// (64px on 1.14.4), and the raw scrollHeight would ratchet the pin up by that on every
+// re-pin. A re-pin that lands while the sizer is collapsed can never lower the height.
+//
+// POPOUTS CLOSED WHILE PINNED (SC-470 r4). A closed window's timers never fire, so its TTL would
+// never release the pin and the `pins` Map would keep the detached Reading-view DOM until
+// unload. Every pin call therefore sweeps entries whose scroller is disconnected or whose
+// window is closed, and registerFrameworkElements also releases a window's pins on the
+// workspace `window-close` event (`releaseWindow`).
 //
 // WHY `!important` VIA A STYLESHEET AND NOT AN INLINE STYLE. Obsidian owns
 // `sizer.style.minHeight` and rewrites it during the rebuild; an inline pin is simply
 // clobbered (measured — the inline variant still clamped to 0). The pin therefore lives in a
 // stylesheet rule that outranks Obsidian's inline value for exactly as long as it exists:
-//     `.markdown-preview-view[data-dse-scroll-pin="<id>"] .markdown-preview-sizer {
+//     `.markdown-preview-view[data-dse-scroll-pin="<id>"] > .markdown-preview-sizer {
 //          min-height: <px>px !important; }`
 // The attribute goes on the SCROLLER, not on the sizer, so the pin survives Obsidian
-// replacing the sizer node wholesale.
+// replacing the sizer node wholesale. The CHILD combinator is load-bearing: an embed inside the
+// note renders its own `.markdown-preview-view > .markdown-preview-sizer`, and a descendant
+// selector grew it 535 -> 4024px for the whole pin (measured, SC-470 r3), moving the visible
+// text by 3489px while scrollTop "held".
 //
 // WHY A PER-PIN `<style>` AND NOT A STATIC RULE + CUSTOM PROPERTY (SC-470). The SC-198
 // original carried the height in a custom property on the scroller
@@ -116,11 +138,23 @@ const STYLE_ATTR = 'data-dse-scroll-pin-style';
  */
 const PIN_TTL_MS = 2500;
 
-/** Unique across plugin instances and documents, so a stale rule can never match a newer pin. */
+/**
+ * Unique within one plugin load (a counter at module level, shared by every document). It
+ * restarts at 1 when the plugin is disabled and enabled again; that is safe because
+ * `releaseAll()` removes every rule at unload, so no rule from the previous load survives to
+ * match a reused id.
+ */
 let nextPinId = 0;
 
-const pinRule = (id: string, px: number): string =>
-	`.markdown-preview-view[${PIN_ATTR}="${id}"] .markdown-preview-sizer { min-height: ${px}px !important; }`;
+/** Exported for the tests, which check the selector against nested sizers. */
+export const pinRule = (id: string, px: number): string =>
+	`.markdown-preview-view[${PIN_ATTR}="${id}"] > .markdown-preview-sizer { min-height: ${px}px !important; }`;
+
+/** The scroller's own sizer (a direct child, the node the rule targets) and its inline min-height in px, or NaN. */
+function sizerInlineMinHeight(scroller: HTMLElement): number {
+	const sizer = scroller.querySelector<HTMLElement>(':scope > .markdown-preview-sizer');
+	return sizer ? parseFloat(sizer.style.minHeight) : NaN;
+}
 
 /** The scroller's own vertical padding (0 when unreadable): the part of scrollHeight the sizer's min-height does not hold. */
 function verticalPadding(el: HTMLElement, win: Window): number {
@@ -140,12 +174,14 @@ interface HeldPin {
 	 *  `ownerDocument.defaultView` for the same reason). */
 	readonly win: Window;
 	timer: number;
-	/** The height being held. Only ever raised by a re-pin — see `pinScroller()`. */
+	/** The height being held (the rule's px). Only ever raised: by a re-pin or by `observer`. */
 	px: number;
 	/** The attribute value keying this pin's rule. */
 	readonly id: string;
 	/** The rule's `<style>`, in the scroller's own document head. */
 	readonly style: HTMLStyleElement;
+	/** Keeps `px` at or above Obsidian's latest inline sizer min-height; null where the window has no MutationObserver. */
+	observer: MutationObserver | null;
 }
 
 /**
@@ -194,19 +230,15 @@ export class PreviewScrollPin {
 		const doc = scroller.ownerDocument;
 		const win = doc.defaultView;
 		if (!win || !doc.head) return;
+		this.sweep();
 
 		const existing = this.pins.get(scroller);
 		if (existing) {
 			// A re-pin (rapid clicking, autosave) restarts the TTL and never lowers the height; it
-			// raises it when the note has grown past it. While pinned, `scrollHeight` reads back as
-			// the pinned value plus the scroller's own padding, so the padding is subtracted before
-			// comparing — re-measuring the raw value would ratchet the pin up by it on every write.
+			// raises it to the sizer's current inline min-height or the content height when either
+			// is larger (see the header: RE-PINS).
 			win.clearTimeout(existing.timer);
-			const content = scroller.scrollHeight - verticalPadding(scroller, win);
-			if (Number.isFinite(content) && content > existing.px) {
-				existing.px = content;
-				existing.style.textContent = pinRule(existing.id, content);
-			}
+			this.raise(existing, Math.max(sizerInlineMinHeight(scroller), scroller.scrollHeight - verticalPadding(scroller, win)));
 			existing.timer = win.setTimeout(() => this.release(scroller), PIN_TTL_MS);
 			return;
 		}
@@ -226,7 +258,40 @@ export class PreviewScrollPin {
 		doc.head.appendChild(style); // the rule first, then the attribute that selects it
 		scroller.setAttribute(PIN_ATTR, id);
 		const timer = win.setTimeout(() => this.release(scroller), PIN_TTL_MS);
-		this.pins.set(scroller, { win, timer, px, id, style });
+		const held: HeldPin = { win, timer, px, id, style, observer: null };
+		const MO = (win as Window & { MutationObserver?: typeof MutationObserver }).MutationObserver;
+		if (MO) {
+			held.observer = new MO(() => {
+				try {
+					this.raise(held, sizerInlineMinHeight(scroller));
+				} catch (err) {
+					console.warn('[DSE] scroll pin floor update failed', err);
+				}
+			});
+			held.observer.observe(scroller, { subtree: true, childList: true, attributes: true, attributeFilter: ['style'] });
+		}
+		this.pins.set(scroller, held);
+	}
+
+	/** Raise the held height (never lower it) and rewrite the pin's rule. */
+	private raise(held: HeldPin, px: number): void {
+		if (!Number.isFinite(px) || px <= held.px) return;
+		held.px = px;
+		held.style.textContent = pinRule(held.id, px);
+	}
+
+	/** Drop pins whose scroller left the document or whose window was closed (a closed window's TTL never fires). */
+	private sweep(): void {
+		for (const [scroller, held] of [...this.pins]) {
+			if (!scroller.isConnected || held.win.closed) this.release(scroller);
+		}
+	}
+
+	/** Release every pin held in `win` (the workspace `window-close` handler). */
+	releaseWindow(win: Window): void {
+		for (const [scroller, held] of [...this.pins]) {
+			if (held.win === win) this.release(scroller);
+		}
 	}
 
 	/** Drop the pin on one scroller (idempotent). */
@@ -235,6 +300,7 @@ export class PreviewScrollPin {
 		if (!held) return;
 		this.pins.delete(scroller);
 		held.win.clearTimeout(held.timer);
+		held.observer?.disconnect();
 		scroller.removeAttribute(PIN_ATTR);
 		held.style.remove();
 	}
