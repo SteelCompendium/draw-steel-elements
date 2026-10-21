@@ -2275,18 +2275,30 @@ const CHROME_REVEAL_CSS = `
  *  (styles-source.css ~:12673 vs ~:12910). Which one got sampled was an accident of mount
  *  order: 17 families sampled the summary and never the panel, 12 the reverse, and `hero`
  *  neither. Adding the nearest chrome ancestor to the key gives each surface its own record. */
-function tagButtons() {
+function tagButtons(opts) {
+	// SC-356 — `opts.scope` restricts the sweep to buttons under one root (the MODAL pass tags
+	// only what sits inside `.dse-modal`, never the element underneath it) and `opts.prefix`
+	// namespaces the key per modal scenario so two modals' identical-looking footers stay two
+	// records. `page.evaluate(tagButtons)` passes `undefined`, i.e. the gallery's unchanged form.
+	const scope = opts && opts.scope ? opts.scope : null;
+	const prefix = opts && opts.prefix ? opts.prefix : '';
 	const keys = [];
 	const seen = new Set();
-	for (const n of document.querySelectorAll('button, .dse-btn')) {
+	for (const n of document.querySelectorAll(scope ? `${scope} button, ${scope} .dse-btn` : 'button, .dse-btn')) {
 		const root = n.closest('[data-dse-element]');
 		const surface = n.closest('.dse-chrome, .dse-chrome-summary');
 		const key =
+			prefix +
 			(root ? root.getAttribute('data-dse-element') : '(none)') +
 			'|' +
 			([...n.classList].sort().join('.') || '(no class)') +
 			(surface ? `|in:${surface.classList.contains('dse-chrome') ? 'chrome' : 'chrome-summary'}` : '') +
 			(n.hasAttribute('data-pressed') ? '|pressed' : '') +
+			// SC-356 — `aria-pressed` joins the key. `data-pressed` is only written by one family of
+			// toggles; the modal chips (`.dse-optchip`, `.dse-swatch`, the icon choices) and the
+			// negotiation chips carry `aria-pressed` and are re-grounded by SEPARATE pressed vs idle
+			// rules, so a pressed and an idle chip with the same classes are two kinds, not one.
+			(n.hasAttribute('aria-pressed') ? `|aria-pressed:${n.getAttribute('aria-pressed')}` : '') +
 			(n.getAttribute('aria-selected') === 'true' ? '|selected' : '') +
 			(n.disabled ? '|disabled' : '');
 		if (seen.has(key)) continue;
@@ -2514,12 +2526,8 @@ async function probeButtonsInState(page, state, count, props) {
 // `assertHostCopyPinnedToObsidian`. Can-fail re-proven under this formulation:
 // `sc202-r6bfix-canfail-button.log`.
 async function assertBtnHostLeak(page) {
-	const problems = [];
+	const acc = newBtnSweepAcc();
 	let kindCount = 0;
-	let comparisons = 0;
-	let exempt = 0;
-	/** reason -> count, so the sweep's coverage BOUNDARY is printed rather than implied. */
-	const exemptions = new Map();
 	for (const bg of ['dark', 'light']) {
 		const query = new URLSearchParams({
 			gallery: '1',
@@ -2528,117 +2536,392 @@ async function assertBtnHostLeak(page) {
 			prefs: 'authoringControls:true',
 			sheet: '1',
 		});
-		await page.emulateMedia({ media: 'screen' });
-		await page.goto(`${pageUrl}?${query}`);
-		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
+		await loadBtnHostLeakPage(page, query);
 		// SC-202 r6c fold (review LOW-2b): verify the requested `sheet: '1'` actually
 		// loaded (the MED-2 sentinel) before disabling it for the bare pass — this sweep
 		// used to call setHostSheetEnabled with `false` only, so an emptied real sheet
 		// went unnoticed here.
-		await setHostSheetEnabled(page, true);
-		await setHostSheetEnabled(page, false);
-		// SC-205 — Obsidian's `button:hover` sits inside `@media (hover: hover)`. If this
-		// context ever stopped reporting a hover-capable pointer, that rule would be inert and
-		// the hover pass would pin nothing while still printing OK. Assert the capability
-		// rather than assume it.
-		if (!(await page.evaluate(() => window.matchMedia('(hover: hover)').matches))) {
-			problems.push(
-				`${bg}: this browser context does not report \`(hover: hover)\`, so Obsidian's ` +
-					`\`button:hover\` rule is inert and the hover pass proves nothing`,
-			);
-			continue;
-		}
+		if (!(await bareBtnHostLeakPage(page, bg, acc.problems))) continue;
 		// SC-205 R3 — mount the authoring chrome before anything is tagged (see
 		// CHROME_REVEAL_CSS). Both passes run against this DOM.
 		await page.addStyleTag({ content: CHROME_REVEAL_CSS });
 		const keys = await page.evaluate(tagButtons);
 		if (keys.length < 20) {
-			problems.push(`${bg}: only ${keys.length} buttons found in the gallery — the sweep is blind`);
+			acc.problems.push(`${bg}: only ${keys.length} buttons found in the gallery — the sweep is blind`);
 			continue;
 		}
 		kindCount = keys.length;
+		await sweepTaggedButtons(page, bg, keys.length, acc);
+	}
+	failBtnHostLeak(acc.problems, 'BUTTON HOST-LEAK VIOLATED', `plugin's own buttons do not hold their own box or material`);
+	console.log(
+		`\nbutton host-leak OK (${kindCount} button kinds × ${BTN_STATES.length} states ` +
+			`(${BTN_STATES.join('/')}) × dark/light = ${acc.comparisons} comparisons: every sampled ` +
+			`property is identical with and without Obsidian's \`button\` rules; ` +
+			`${BTN_PROPS_EXCLUDED.join(' and ')} are excluded by design)` +
+			(acc.exempt
+				? `\n  ${acc.exempt} of those (kind,state) records sampled the node at rest because the ` +
+					`mounted DOM cannot put it into that state — each one proved per record, never ` +
+					`assumed, and the authoring chrome is MOUNTED for the sweep so this is no longer ` +
+					`a claim about controls the product merely had not revealed:\n${btnExemptionBoundary(acc.exemptions)}`
+				: ''),
+	);
+}
 
-		// PASS 1 — every state without the host. PASS 2 — the same states, same nodes, same
-		// pointer/focus order, with the host sheet in. Reading all three states before the
-		// injection (rather than injecting once per state) keeps it to one navigation per
-		// scheme; the states are re-driven for real in each pass, so nothing is read out of a
-		// state the node is not actually in.
-		const bare = {};
-		for (const state of BTN_STATES) {
-			const r = await probeButtonsInState(page, state, keys.length, BTN_PROPS);
-			bare[state] = r.records;
-			for (const p of r.problems) problems.push(`${bg}|host-absent|${state}: ${p}`);
-			for (const rec of r.records) {
-				if (rec.active) continue;
-				exempt += 1;
-				const reason = `${state}: ${rec.blocked}`;
-				exemptions.set(reason, (exemptions.get(reason) ?? 0) + 1);
-			}
-		}
-		await injectHostCss(page);
-		for (const state of BTN_STATES) {
-			const r = await probeButtonsInState(page, state, keys.length, BTN_PROPS);
-			for (const p of r.problems) problems.push(`${bg}|host-present|${state}: ${p}`);
-			const withHost = new Map(r.records.map((rec) => [rec.key, rec]));
-			for (const b of bare[state]) {
-				const h = withHost.get(b.key);
-				if (!h) {
-					problems.push(`${bg}|${state}|${b.key}: vanished when the host sheet was added`);
-					continue;
-				}
-				// SC-205 R3 / LOW-2 — both passes must have sampled the SAME state. Round 1
-				// compared the pair without checking: if a host declaration changed a node's box
-				// or its hit-testing, one pass would read the state and the other would read rest,
-				// the pair would still be counted among the advertised comparisons, and whether
-				// the result came out red or green would be an accident of direction.
-				if ((b.blocked ?? null) !== (h.blocked ?? null)) {
-					problems.push(
-						`${bg}|${state}|${b.key}: the two passes did not sample the same state — ` +
-							`without the host it was ${b.blocked ? `exempt ("${b.blocked}")` : 'in the state'}, ` +
-							`with it ${h.blocked ? `exempt ("${h.blocked}")` : 'in the state'}; ` +
-							`the host sheet is changing whether this node can reach :${state}`,
-					);
-					continue;
-				}
-				comparisons += 1;
-				for (const p of ['w', 'h', ...BTN_PROPS]) {
-					const a = typeof b[p] === 'number' ? b[p].toFixed(2) : String(b[p]);
-					const c = typeof h[p] === 'number' ? h[p].toFixed(2) : String(h[p]);
-					if (a !== c) {
-						problems.push(
-							`${bg}|${state}|${b.key}: Obsidian's \`button\` rules change ${p} — ` +
-								`"${a}" without the host, "${c}" with it`,
-						);
-					}
-				}
-			}
-		}
-	}
-	if (problems.length) {
-		const shown = problems.slice(0, 40);
-		console.error(
-			`\nBUTTON HOST-LEAK VIOLATED — with Obsidian's real \`button\` defaults present the ` +
-				`plugin's own buttons do not hold their own box or material:\n` +
-				shown.map((p) => `  ${p}`).join('\n') +
-				(problems.length > shown.length ? `\n  … and ${problems.length - shown.length} more` : '') +
-				`\nSee styles-source.css → "SC-203 — PLUGIN-WIDE HOST RE-GROUNDING" (foot of the file).`,
+// SC-356 — the helpers below were the inline body of `assertBtnHostLeak`; they are shared with
+// `assertModalBtnHostLeak` (further down) so that the gallery sweep and the modal pass compare
+// with and without the host sheet by the SAME code, not by two copies that could drift apart.
+
+/** The running tally one sweep accumulates across its navigations. */
+function newBtnSweepAcc() {
+	return {
+		problems: [],
+		comparisons: 0,
+		exempt: 0,
+		/** reason -> count, so the sweep's coverage BOUNDARY is printed rather than implied. */
+		exemptions: new Map(),
+	};
+}
+
+/** Navigate to a harness page and wait for it to finish mounting. */
+async function loadBtnHostLeakPage(page, query) {
+	await page.emulateMedia({ media: 'screen' });
+	await page.goto(`${pageUrl}?${query}`);
+	await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
+}
+
+/** Take the real host sheet off the loaded page (the "bare" starting point) after proving it
+ *  was genuinely there. Returns false (and records why) when the sweep cannot be run at all. */
+async function bareBtnHostLeakPage(page, bg, problems) {
+	await setHostSheetEnabled(page, true);
+	await setHostSheetEnabled(page, false);
+	// SC-205 — Obsidian's `button:hover` sits inside `@media (hover: hover)`. If this
+	// context ever stopped reporting a hover-capable pointer, that rule would be inert and
+	// the hover pass would pin nothing while still printing OK. Assert the capability
+	// rather than assume it.
+	if (!(await page.evaluate(() => window.matchMedia('(hover: hover)').matches))) {
+		problems.push(
+			`${bg}: this browser context does not report \`(hover: hover)\`, so Obsidian's ` +
+				`\`button:hover\` rule is inert and the hover pass proves nothing`,
 		);
-		process.exit(1);
+		return false;
 	}
-	const boundary = [...exemptions.entries()]
+	return true;
+}
+
+/** PASS 1 — every state without the host. PASS 2 — the same states, same nodes, same
+ *  pointer/focus order, with the host sheet in. Reading all three states before the
+ *  injection (rather than injecting once per state) keeps it to one navigation per
+ *  scheme; the states are re-driven for real in each pass, so nothing is read out of a
+ *  state the node is not actually in. `count` is how many nodes `tagButtons` tagged. */
+async function sweepTaggedButtons(page, bg, count, acc) {
+	const { problems, exemptions } = acc;
+	const bare = {};
+	for (const state of BTN_STATES) {
+		const r = await probeButtonsInState(page, state, count, BTN_PROPS);
+		bare[state] = r.records;
+		for (const p of r.problems) problems.push(`${bg}|host-absent|${state}: ${p}`);
+		for (const rec of r.records) {
+			if (rec.active) continue;
+			acc.exempt += 1;
+			const reason = `${state}: ${rec.blocked}`;
+			exemptions.set(reason, (exemptions.get(reason) ?? 0) + 1);
+		}
+	}
+	await injectHostCss(page);
+	for (const state of BTN_STATES) {
+		const r = await probeButtonsInState(page, state, count, BTN_PROPS);
+		for (const p of r.problems) problems.push(`${bg}|host-present|${state}: ${p}`);
+		const withHost = new Map(r.records.map((rec) => [rec.key, rec]));
+		for (const b of bare[state]) {
+			const h = withHost.get(b.key);
+			if (!h) {
+				problems.push(`${bg}|${state}|${b.key}: vanished when the host sheet was added`);
+				continue;
+			}
+			// SC-205 R3 / LOW-2 — both passes must have sampled the SAME state. Round 1
+			// compared the pair without checking: if a host declaration changed a node's box
+			// or its hit-testing, one pass would read the state and the other would read rest,
+			// the pair would still be counted among the advertised comparisons, and whether
+			// the result came out red or green would be an accident of direction.
+			if ((b.blocked ?? null) !== (h.blocked ?? null)) {
+				problems.push(
+					`${bg}|${state}|${b.key}: the two passes did not sample the same state — ` +
+						`without the host it was ${b.blocked ? `exempt ("${b.blocked}")` : 'in the state'}, ` +
+						`with it ${h.blocked ? `exempt ("${h.blocked}")` : 'in the state'}; ` +
+						`the host sheet is changing whether this node can reach :${state}`,
+				);
+				continue;
+			}
+			acc.comparisons += 1;
+			for (const p of ['w', 'h', ...BTN_PROPS]) {
+				const a = typeof b[p] === 'number' ? b[p].toFixed(2) : String(b[p]);
+				const c = typeof h[p] === 'number' ? h[p].toFixed(2) : String(h[p]);
+				if (a !== c) {
+					problems.push(
+						`${bg}|${state}|${b.key}: Obsidian's \`button\` rules change ${p} — ` +
+							`"${a}" without the host, "${c}" with it`,
+					);
+				}
+			}
+		}
+	}
+}
+
+/** Print the violation list and exit 1 — a no-op when there is nothing to report. */
+function failBtnHostLeak(problems, heading, what) {
+	if (!problems.length) return;
+	const shown = problems.slice(0, 40);
+	console.error(
+		`\n${heading} — with Obsidian's real \`button\` defaults present the ` +
+			`${what}:\n` +
+			shown.map((p) => `  ${p}`).join('\n') +
+			(problems.length > shown.length ? `\n  … and ${problems.length - shown.length} more` : '') +
+			`\nSee styles-source.css → "SC-203 — PLUGIN-WIDE HOST RE-GROUNDING" (foot of the file).`,
+	);
+	process.exit(1);
+}
+
+/** The printed exemption boundary: one `N× reason` line per distinct reason, biggest first. */
+function btnExemptionBoundary(exemptions) {
+	return [...exemptions.entries()]
 		.sort((a, b) => b[1] - a[1])
 		.map(([reason, n]) => `      ${n}× ${reason}`)
 		.join('\n');
+}
+
+// ======================================================================================
+// SC-356 — THE MODAL PASS. `assertBtnHostLeak` mounts the gallery, and a modal is never in
+// the gallery: it is opened by a click and appended to `document.body`, a sibling of `#mount`.
+// So every button that exists ONLY inside a modal was invisible to the sweep — `.dse-optchip`
+// (the Conditions duration/effect chips, the Log-an-action result chips), `.dse-swatch`, the
+// icon choices — and SC-338's review found exactly that gap: the chips took their height
+// (30px), background and unpressed text colour from Obsidian rather than from plugin tokens.
+//
+// This pass opens each plugin modal the harness can open (the same click paths
+// `assertPressedToggleParity` and the camera's MODAL_SHOTS already use), tags every button
+// under `.dse-modal`, and runs the SAME with-vs-without-host comparison at the same three
+// states x dark/light, by the same code (`sweepTaggedButtons`).
+//
+// Two things keep it from going quietly blind:
+//   * a scenario whose modal does not open, opens the WRONG modal, or opens without the
+//     controls it exists to cover FAILS ("the check would be blind") — it never skips;
+//   * `assertModalRegistry` surveys `src/` for every `Modal` subclass and fails on any that is
+//     neither swept here nor declared unreachable below, so a NEW modal cannot ship unswept.
+const HOSTLEAK_MODAL_SCENARIOS = [
+	{
+		id: 'ConditionsModal',
+		modal: 'ConditionsModal',
+		title: /^Conditions$/,
+		// The Bleeding row's editor open: the duration + effect chips, the colour swatches and the icon
+		// choices all render only here, beside the row's own act buttons and the add button.
+		mustHave: ['dse-optchip', 'dse-swatch', 'dse-cond-icons__choice', 'dse-condal__act', 'dse-condal__add'],
+		query: { element: 'conditions', fixture: 'default' },
+		open: async (page) => {
+			await page.click('.dse-cond-strip__add');
+			await page.click('.dse-modal .dse-condal__act[aria-label="Customize Bleeding"]');
+		},
+	},
+	{
+		id: 'LogActionModal (new)',
+		modal: 'LogActionModal',
+		title: / · round \d+$/,
+		mustHave: ['dse-optchip'],
+		query: { element: 'montage', fixture: 'mid' },
+		open: async (page) => {
+			await page.click('.dse-mt__actionrow button[aria-label="Log an action…"]');
+		},
+	},
+	{
+		id: 'LogActionModal (edit)',
+		modal: 'LogActionModal',
+		title: / · round \d+$/,
+		// Edit mode adds the danger "Remove" footer button on top of the chips.
+		mustHave: ['dse-optchip', 'dse-btn--danger'],
+		query: { element: 'montage', fixture: 'mid' },
+		open: async (page) => {
+			await page.click('.dse-mt__cell[role="button"][data-kind="success"]');
+		},
+	},
+	{
+		id: 'MontageAddHeroModal',
+		modal: 'MontageAddHeroModal',
+		title: /^Add a hero$/,
+		mustHave: ['dse-btn--ghost', 'dse-btn--accent'],
+		query: { element: 'montage', fixture: 'mid', prefs: 'authoringControls:true' },
+		open: async (page) => {
+			await page.evaluate(() => document.querySelector('[data-dse-chrome-item="montage-add-hero"]').click());
+		},
+	},
+	{
+		id: 'MontageSetLimitsModal',
+		modal: 'MontageSetLimitsModal',
+		title: /^Set limits…$/,
+		mustHave: ['dse-btn--ghost', 'dse-btn--accent'],
+		query: { element: 'montage', fixture: 'mid', prefs: 'authoringControls:true' },
+		open: async (page) => {
+			await page.evaluate(() => document.querySelector('[data-dse-chrome-item="montage-set-limits"]').click());
+		},
+	},
+	{
+		id: 'StaminaEditModal',
+		modal: 'StaminaEditModal',
+		title: /Stamina$/,
+		mustHave: ['dse-sedit__btn', 'dse-stepper__btn', 'dse-btn--danger', 'dse-btn--accent'],
+		query: { element: 'stamina-bar', fixture: 'default' },
+		open: async (page) => {
+			await page.click('[data-dse-element="stamina-bar"] .dse-stamina--clickable');
+		},
+	},
+	{
+		id: 'MinionStaminaPoolModal',
+		modal: 'MinionStaminaPoolModal',
+		title: / - Minion Stamina Pool$/,
+		mustHave: ['dse-stepper__btn', 'dse-btn--accent'],
+		query: { element: 'initiative', fixture: 'fight' },
+		open: async (page) => {
+			await page.dblclick('button.dse-init__cell[aria-label="Select Goblin #1"]');
+		},
+	},
+	{
+		id: 'ResetEncounterModal',
+		modal: 'ResetEncounterModal',
+		title: /^Confirm Encounter Reset$/,
+		mustHave: ['dse-btn--danger'],
+		query: { element: 'initiative', fixture: 'controls', prefs: 'authoringControls:true' },
+		open: async (page) => {
+			await page.evaluate(() => document.querySelector('[data-dse-chrome-item="initiative-reset-encounter"]').click());
+		},
+	},
+	{
+		id: 'FormModal',
+		modal: 'FormModal',
+		title: /^Edit /,
+		mustHave: ['dse-btn--accent', 'dse-btn--ghost'],
+		query: { element: 'feature', fixture: 'default', prefs: 'authoringControls:true' },
+		open: async (page) => {
+			await page.click('[data-dse-element="feature"] button[aria-label^="Edit "]');
+		},
+	},
+];
+
+/** Every `Modal` subclass in `src/` the harness CANNOT open, and why. Not a place to park a
+ *  modal that merely is awkward to open — each one needs a reason the harness cannot reach it,
+ *  and `assertModalRegistry` re-checks the one claim that makes skipping it safe (no raw
+ *  `<button>` of its own). */
+const HOSTLEAK_MODALS_UNREACHABLE = {
+	CompendiumSearchModal:
+		'a SuggestModal opened by the command palette / insert flows (compendiumInsert.ts) through ' +
+		'Obsidian\'s own command plumbing, which the harness never runs; it renders suggestion rows ' +
+		'(divs) and an input, no <button> at all',
+	LegacyCompendiumModal:
+		'opened only by main.ts onload\'s first-sync flow (needs a real vault + compendium root); ' +
+		'its controls are footer() kit buttons, whose variants the openable modals already sweep',
+	CompendiumMigrationModal:
+		'opened only by main.ts\'s 7.0.0 compendium-migration flow (needs a real migration plan); ' +
+		'its controls are footer() kit buttons, whose variants the openable modals already sweep',
+};
+/** Base classes: never opened themselves, every subclass is swept (or declared) on its own. */
+const HOSTLEAK_MODAL_BASES = ['DseModal'];
+
+/** Survey `src/` + `main.ts` for every `Modal` subclass and require each to be swept by a
+ *  scenario above, declared unreachable with a reason, or a base class. Fails loudly. */
+function assertModalRegistry() {
+	const problems = [];
+	const repo = path.join(dir, '..');
+	const files = [];
+	const walk = (d) => {
+		for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+			const f = path.join(d, e.name);
+			if (e.isDirectory()) walk(f);
+			else if (/\.ts$/.test(e.name)) files.push(f);
+		}
+	};
+	walk(path.join(repo, 'src'));
+	files.push(path.join(repo, 'main.ts'));
+	const found = new Map();
+	for (const f of files) {
+		const text = fs.readFileSync(f, 'utf8');
+		for (const m of text.matchAll(/class\s+(\w+)\s+extends\s+(DseModal|Modal|SuggestModal|FuzzySuggestModal)\b/g)) {
+			found.set(m[1], { file: f, text });
+		}
+	}
+	const swept = new Set(HOSTLEAK_MODAL_SCENARIOS.map((sc) => sc.modal));
+	for (const [name, { file, text }] of found) {
+		if (HOSTLEAK_MODAL_BASES.includes(name)) continue;
+		const rel = path.relative(repo, file);
+		if (swept.has(name)) continue;
+		if (name in HOSTLEAK_MODALS_UNREACHABLE) {
+			// The reason an unreachable modal may be skipped: it renders no button of its own.
+			if (/createEl\(\s*['"]button['"]/.test(text)) {
+				problems.push(
+					`${name} (${rel}) is declared unreachable but now creates its own <button> — the ` +
+						`sweep would be blind to it; make the harness open it or sweep it`,
+				);
+			}
+			continue;
+		}
+		problems.push(
+			`${name} (${rel}) is a Modal subclass that is neither swept by a HOSTLEAK_MODAL_SCENARIOS ` +
+				`entry nor declared in HOSTLEAK_MODALS_UNREACHABLE — the modal pass would be blind to its buttons`,
+		);
+	}
+	for (const name of [...swept, ...Object.keys(HOSTLEAK_MODALS_UNREACHABLE), ...HOSTLEAK_MODAL_BASES]) {
+		if (!found.has(name)) problems.push(`${name} is registered in the modal pass but no such Modal subclass exists in src/ — stale entry`);
+	}
+	return { problems, swept: swept.size, unreachable: Object.keys(HOSTLEAK_MODALS_UNREACHABLE) };
+}
+
+async function assertModalBtnHostLeak(page) {
+	const reg = assertModalRegistry();
+	const acc = newBtnSweepAcc();
+	acc.problems.push(...reg.problems);
+	const kinds = new Map();
+	for (const bg of ['dark', 'light']) {
+		for (const sc of HOSTLEAK_MODAL_SCENARIOS) {
+			const at = `${bg}|${sc.id}`;
+			const query = new URLSearchParams({ ...sc.query, theme: 'steel', bg, sheet: '1' });
+			await loadBtnHostLeakPage(page, query);
+			// Open the modal with the real sheet still on (the layout every other modal gate opens it
+			// in), THEN take the sheet off for the bare pass — the DOM the click built stays.
+			try {
+				await sc.open(page);
+				await page.waitForSelector('.dse-modal', { timeout: 5000 });
+			} catch (e) {
+				acc.problems.push(`${at}: the modal could not be opened (${String(e).split('\n')[0]}) — the check would be blind`);
+				continue;
+			}
+			const title = await page.evaluate(() => document.querySelector('.dse-modal .dse-modal__title-text')?.textContent ?? null);
+			if (title === null || !sc.title.test(title)) {
+				acc.problems.push(`${at}: opened a modal titled ${JSON.stringify(title)}, expected ${sc.title} — the check would be sweeping the wrong modal`);
+				continue;
+			}
+			if (!(await bareBtnHostLeakPage(page, at, acc.problems))) continue;
+			const keys = await page.evaluate(tagButtons, { scope: '.dse-modal', prefix: 'modal:' });
+			const absent = sc.mustHave.filter((c) => !keys.some((k) => k.split('|')[1]?.split('.').includes(c)));
+			if (keys.length < 2 || absent.length) {
+				acc.problems.push(
+					`${at}: ${keys.length} button kind(s) found inside the modal` +
+						(absent.length ? `, none carrying ${absent.map((c) => `.${c}`).join(', ')}` : '') +
+						` — the check would be blind`,
+				);
+				continue;
+			}
+			kinds.set(sc.id, keys.length);
+			await sweepTaggedButtons(page, at, keys.length, acc);
+		}
+	}
+	failBtnHostLeak(acc.problems, 'MODAL BUTTON HOST-LEAK VIOLATED', `plugin's own MODAL buttons do not hold their own box or material`);
+	const kindCount = [...kinds.values()].reduce((a, b) => a + b, 0);
 	console.log(
-		`\nbutton host-leak OK (${kindCount} button kinds × ${BTN_STATES.length} states ` +
-			`(${BTN_STATES.join('/')}) × dark/light = ${comparisons} comparisons: every sampled ` +
-			`property is identical with and without Obsidian's \`button\` rules; ` +
-			`${BTN_PROPS_EXCLUDED.join(' and ')} are excluded by design)` +
-			(exempt
-				? `\n  ${exempt} of those (kind,state) records sampled the node at rest because the ` +
-					`mounted DOM cannot put it into that state — each one proved per record, never ` +
-					`assumed, and the authoring chrome is MOUNTED for the sweep so this is no longer ` +
-					`a claim about controls the product merely had not revealed:\n${boundary}`
+		`\nmodal button host-leak OK (${HOSTLEAK_MODAL_SCENARIOS.length} modal scenarios over ${reg.swept} modal classes, ` +
+			`${kindCount} button kinds × ${BTN_STATES.length} states (${BTN_STATES.join('/')}) × dark/light = ` +
+			`${acc.comparisons} comparisons: every sampled property is identical with and without Obsidian's ` +
+			`\`button\` rules; ${BTN_PROPS_EXCLUDED.join(' and ')} are excluded by design)` +
+			`\n  not openable in the harness (${reg.unreachable.length}, no <button> of their own beyond the swept kit footers): ${reg.unreachable.join(', ')}` +
+			(acc.exempt
+				? `\n  ${acc.exempt} of those (kind,state) records sampled the node at rest because the ` +
+					`mounted DOM cannot put it into that state — each one proved per record, never assumed:\n${btnExemptionBoundary(acc.exemptions)}`
 				: ''),
 	);
 }
@@ -6311,6 +6594,8 @@ try {
 		// SC-203 — the same question asked of EVERY button in the plugin, not just the
 		// chrome panel's. Same shape again; same reason for the narrowed-run skip.
 		await assertBtnHostLeak(page);
+		// SC-356 — the same question asked of the buttons that exist only inside a modal.
+		await assertModalBtnHostLeak(page);
 		// SC-202 r1 — the same question asked of every numeric/text INPUT the plugin
 		// renders. Unlike the gate above it self-gates on a local Obsidian asar (see the
 		// block's own comment) rather than failing when one is absent.
