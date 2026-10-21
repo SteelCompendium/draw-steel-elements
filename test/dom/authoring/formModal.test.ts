@@ -387,14 +387,14 @@ describe('SC-483: an untouched, source-absent select is not written by Save', ()
 		const { def, mounted } = selectDef(`${SEL_SCHEMA}\nrequired: [style]`);
 		const { modal } = open(def, 'name: Goblin');
 		expect(modal.canSave()).toBe(true);
-		expect(mounted.at(-1)).toMatchObject({ name: 'Goblin', style: 'default' });
+		expect(mounted[mounted.length - 1]).toMatchObject({ name: 'Goblin', style: 'default' });
 		modal.close();
 	});
 
 	test('preview keeps the seeded value for an optional untouched select while the written body omits it', async () => {
 		const { def, mounted } = selectDef();
 		const { modal, writes } = open(def, 'name: Goblin');
-		expect(mounted.at(-1)).toMatchObject({ style: 'default' });
+		expect(mounted[mounted.length - 1]).toMatchObject({ style: 'default' });
 		await modal.save();
 		expect(writes).toEqual(['name: Goblin\n']);
 		modal.close();
@@ -420,10 +420,10 @@ describe('SC-483: an untouched, source-absent select is not written by Save', ()
 			serialize: (m: Record<string, unknown>) => JSON.stringify(m),
 		} as unknown as ElementDefinition;
 		const { modal, writes } = open(def, 'name: Goblin');
-		const previewSaw = seen.at(-1);
+		const previewSaw = seen[seen.length - 1];
 		await modal.save();
 		expect(previewSaw).toMatchObject({ style: 'default' }); // preview: seeded
-		expect(seen.at(-1)).toEqual({ name: 'Goblin' }); // Save: stripped
+		expect(seen[seen.length - 1]).toEqual({ name: 'Goblin' }); // Save: stripped
 		expect(writes).toEqual(['{"name":"Goblin"}']);
 		modal.close();
 	});
