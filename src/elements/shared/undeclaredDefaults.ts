@@ -26,6 +26,8 @@
 // instance in place, so the entry survives them all; a re-parse (external edit, sidebar echo,
 // FormModal) builds a new instance and records afresh from its new source.
 
+import { stringifyYaml } from 'obsidian';
+
 /** Per parsed object: for each key the source left absent, a JSON snapshot of the value parse filled in. */
 const filled = new WeakMap<object, ReadonlyMap<string, string>>();
 
@@ -69,4 +71,15 @@ export function omitUntouchedDefaults<T extends object>(owner: object, dto: T = 
 	return Object.fromEntries(
 		Object.entries(dto).filter(([key, value]) => !(record.has(key) && JSON.stringify(value) === record.get(key))),
 	) as Partial<T>;
+}
+
+/** The serialize() tail every element shares: `omitUntouchedDefaults`, stringified and trimmed. When
+ *  filtering left NO keys (an empty source whose values returned to their defaults), the block is
+ *  written with an empty body rather than `{}`, so it goes back to the shape the user wrote. A model
+ *  with no record (built by the plugin) is stringified whole, as before. */
+export function stringifyOmittingUntouched(owner: object, dto: object = owner): string {
+	const kept = omitUntouchedDefaults(owner, dto);
+	// yaml omits `undefined` values, so a key holding one (an unset optional field) is not content.
+	if (kept !== dto && Object.values(kept).every((value) => value === undefined)) return '';
+	return stringifyYaml(kept).trim();
 }

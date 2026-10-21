@@ -35,8 +35,7 @@
 // Every key the source declared is written (even if equal to its default); an absent key whose
 // value changed is written (Add round writes `rounds`); key ORDER is §B.5's fixed order,
 // unchanged. The record lives in src/elements/shared/undeclaredDefaults.ts.
-import { stringifyYaml } from 'obsidian';
-import { omitUntouchedDefaults, recordingDefaults } from '../shared/undeclaredDefaults';
+import { recordingDefaults, stringifyOmittingUntouched } from '../shared/undeclaredDefaults';
 
 export interface MontageParticipant {
 	name: string;
@@ -203,7 +202,7 @@ export function serialize(model: MontageModel): string {
 	ordered.current_round = model.current_round;
 	if (model._dse_anchor !== undefined) ordered._dse_anchor = model._dse_anchor;
 	// SC-482: `ordered` is a new object, so the record (keyed on `model`) filters it by `model`.
-	return stringifyYaml(omitUntouchedDefaults(model, ordered)).trim();
+	return stringifyOmittingUntouched(model, ordered);
 }
 
 export type MontageOutcome = 'pending' | 'total' | 'partial' | 'failure';

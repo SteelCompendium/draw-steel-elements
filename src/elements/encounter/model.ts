@@ -18,8 +18,7 @@
 // `_computed` and `_dse_anchor` are never parser-filled, so they are written exactly as before.
 // The record lives in src/elements/shared/undeclaredDefaults.ts. (Whether a render should write
 // `_computed` at all is a separate question — SC-486.)
-import { stringifyYaml } from 'obsidian';
-import { omitUntouchedDefaults, recordingDefaults } from '../shared/undeclaredDefaults';
+import { recordingDefaults, stringifyOmittingUntouched } from '../shared/undeclaredDefaults';
 
 /** spec §2.5 `party:` — every field optional so an unconfigured/blank block still
  *  parses (budget.ts's computeEncounter degrades gracefully on missing party info,
@@ -131,5 +130,5 @@ export const parse = recordingDefaults(parseModel, ['party', 'monsters'] as cons
  *  (view.ts's computedEqual guard) — so a re-render with unchanged inputs never rewrites
  *  identical bytes back into the note. */
 export function serialize(model: EncounterModel): string {
-	return stringifyYaml(omitUntouchedDefaults(model)).trim();
+	return stringifyOmittingUntouched(model);
 }

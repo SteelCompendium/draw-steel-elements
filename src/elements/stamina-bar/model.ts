@@ -39,9 +39,8 @@
 // it. Every writer (StaminaEditModal Apply, Catch Breath, the Recoveries strip and popover, the
 // undo toast) mutates the SAME parsed instance in place, so the entry survives them all; an
 // instance that was never parsed here simply has no entry and serializes whole.
-import { stringifyYaml } from 'obsidian';
 import { StaminaBar } from '@model/StaminaBar';
-import { omitUntouchedDefaults, recordingDefaults } from '../shared/undeclaredDefaults';
+import { recordingDefaults, stringifyOmittingUntouched } from '../shared/undeclaredDefaults';
 
 /** The keys StaminaBar.parse fills a default into when the source did not declare them (SC-466). */
 const PARSER_DEFAULT_KEYS = ['collapsible', 'collapse_default', 'current_stamina', 'temp_stamina', 'height', 'style'] as const;
@@ -49,5 +48,5 @@ const PARSER_DEFAULT_KEYS = ['collapsible', 'collapse_default', 'current_stamina
 export const parse = recordingDefaults((data: unknown, _raw: string): StaminaBar => StaminaBar.parse(data), PARSER_DEFAULT_KEYS);
 
 export function serialize(model: StaminaBar): string {
-	return stringifyYaml(omitUntouchedDefaults(model)).trim();
+	return stringifyOmittingUntouched(model);
 }

@@ -18,8 +18,7 @@
 // filled in. Every key the source declared is written (even if equal to its default); an absent
 // key whose value changed is written (a logged roll writes `accrued` and `rolls`); key ORDER is
 // unchanged. The record lives in src/elements/shared/undeclaredDefaults.ts.
-import { stringifyYaml } from 'obsidian';
-import { omitUntouchedDefaults, recordingDefaults } from '../shared/undeclaredDefaults';
+import { recordingDefaults, stringifyOmittingUntouched } from '../shared/undeclaredDefaults';
 
 export interface ProjectRoll {
 	respite: number;
@@ -70,7 +69,7 @@ const PARSER_DEFAULT_KEYS = ['accrued', 'rolls', 'current_respite'] as const;
 export const parse = recordingDefaults(parseModel, PARSER_DEFAULT_KEYS);
 
 export function serialize(model: ProjectModel): string {
-	return stringifyYaml(omitUntouchedDefaults(model)).trim();
+	return stringifyOmittingUntouched(model);
 }
 
 /** AGENT line 878: a natural 19-20 grants +20 points on top of the roll's own points,

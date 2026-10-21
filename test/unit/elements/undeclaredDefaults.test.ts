@@ -2,7 +2,7 @@
 // (src/elements/shared/undeclaredDefaults.ts), exercised on a small stand-in parser that fills
 // the same shapes the real ones do: scalars, a deep array/object default, and a derived default.
 import { stringifyYaml } from 'obsidian';
-import { omitUntouchedDefaults, recordAbsentDefaults, recordingDefaults } from '@/elements/shared/undeclaredDefaults';
+import { omitUntouchedDefaults, recordAbsentDefaults, recordingDefaults, stringifyOmittingUntouched } from '@/elements/shared/undeclaredDefaults';
 
 interface Model {
 	name?: string;
@@ -160,5 +160,24 @@ describe('SC-482 helper: recordAbsentDefaults on a nested instance', () => {
 		expect(yaml(omitUntouchedDefaults(items[1]))).toBe('name: Greed\nused: false');
 		items[0].used = true;
 		expect(yaml(omitUntouchedDefaults(items[0]))).toBe('name: Power\nused: true');
+	});
+});
+
+describe('SC-482 helper: stringifyOmittingUntouched', () => {
+	test('writes the filtered keys trimmed; an empty result (all untouched defaults) is an empty body, not `{}`', () => {
+		const model = parse({}, '');
+		expect(stringifyOmittingUntouched(model)).toBe('');
+		model.min = 2;
+		expect(stringifyOmittingUntouched(model)).toBe('min: 2');
+	});
+
+	test('keys holding undefined are not content: only-undefined remains an empty body', () => {
+		const model = parse({}, '');
+		expect(stringifyOmittingUntouched(model, { ...omitUntouchedDefaults(model), name: undefined })).toBe('');
+	});
+
+	test('a model with no record keeps the whole output, even when it is `{}`', () => {
+		expect(stringifyOmittingUntouched({})).toBe('{}');
+		expect(stringifyOmittingUntouched(parseModel({}, ''))).toContain('initial: 5');
 	});
 });

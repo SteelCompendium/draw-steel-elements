@@ -32,9 +32,8 @@
 // also required by ReadingModeBlockHost.replaceSource, which does
 // `newSource.split('\n')` — an untrimmed trailing "\n" from stringifyYaml would otherwise
 // splice a spurious blank line before the closing fence.
-import { stringifyYaml } from 'obsidian';
 import { Counter } from '@model/Counter';
-import { omitUntouchedDefaults, recordingDefaults } from '../shared/undeclaredDefaults';
+import { recordingDefaults, stringifyOmittingUntouched } from '../shared/undeclaredDefaults';
 
 /** The keys Counter.parse fills a default into when the source did not declare them (SC-482). */
 const PARSER_DEFAULT_KEYS = ['current_value', 'min_value', 'value_height', 'name_height'] as const;
@@ -42,5 +41,5 @@ const PARSER_DEFAULT_KEYS = ['current_value', 'min_value', 'value_height', 'name
 export const parse = recordingDefaults((data: unknown, _raw: string): Counter => Counter.parse(data), PARSER_DEFAULT_KEYS);
 
 export function serialize(model: Counter): string {
-	return stringifyYaml(omitUntouchedDefaults(model)).trim();
+	return stringifyOmittingUntouched(model);
 }

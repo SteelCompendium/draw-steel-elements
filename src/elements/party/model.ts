@@ -18,8 +18,7 @@
 // gained a member writes the list. Because parse fills the default INTO the incoming object,
 // whether the source declared `members` is read BEFORE that fill (recordingDefaults). The record
 // lives in src/elements/shared/undeclaredDefaults.ts.
-import { stringifyYaml } from 'obsidian';
-import { omitUntouchedDefaults, recordingDefaults } from '../shared/undeclaredDefaults';
+import { recordingDefaults, stringifyOmittingUntouched } from '../shared/undeclaredDefaults';
 
 /** spec §6.2 — one party member row. Only `name` is required; every progression field is
  *  optional so a freshly-added member (or a hand-authored minimal block) still parses. */
@@ -95,7 +94,7 @@ export const parse = recordingDefaults(parseModel, ['members'] as const);
  *  element's serialize uses (encounter/montage/project/initiative/counter), minus an untouched
  *  `members: []` default (SC-482). */
 export function serialize(model: PartyModel): string {
-	return stringifyYaml(omitUntouchedDefaults(model)).trim();
+	return stringifyOmittingUntouched(model);
 }
 
 // --------------------------------------------------------------------- derived (§6.1)
