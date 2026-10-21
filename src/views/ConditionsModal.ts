@@ -150,16 +150,23 @@ export class ConditionsModal extends DseModal {
 		// gesture. Closing on the mousedown itself shrank the modal and re-centred it between
 		// the press and the release, so the click was dispatched to whatever now sat under the
 		// pointer and missed the cog / swatch the user aimed at. The `click` listener is a
-		// CAPTURE listener so the collapse (and its focus move to "+ Add condition") runs
-		// BEFORE the target's own click handler — that handler then has the last word on
-		// focus (SC-468: a swatch keeps focus), exactly the order the old mousedown-close
-		// produced. The click's target was fixed at mouseup, so the DOM change cannot divert it.
+		// CAPTURE listener so the collapse runs BEFORE the target's own click handler —
+		// that handler then has the last word on focus (SC-468: a swatch keeps focus). The
+		// click's target was fixed at mouseup, so the DOM change cannot divert it.
+		// FOCUS (SC-474 r1): the old mousedown-close moved focus to "+ Add condition" BEFORE the
+		// press's default action focused the pressed element, so the target won. At click time
+		// that default action has already run, so an unconditional refocus would STEAL focus
+		// from a focusable target whose handler does not re-focus (the icon search, the custom
+		// colour input). The click-time close therefore refocuses "+ Add condition" only when
+		// focus is not on some other control: on <body>/nothing (a click on empty space — the
+		// pre-fix net result, but "+ Add" instead of <body>) or still inside the add control.
 		// A press that never turns into a click (a drag that ends elsewhere) is closed by the
 		// fallback timer armed on `mouseup`; a right/middle press (no click follows it) closes
 		// at once, as before; a press INSIDE the add control drops any stale armed close.
 		// activeDocument (not the global `document`) — popout-window compatibility: a
 		// modal opened while a popout window is focused must listen on THAT window's
 		// document, not always the main one (obsidianmd/prefer-active-doc).
+		const doc = activeDocument; // one document for every listener and the timer's window (popout-safe)
 		let outsideDown = false;
 		let settleTimer: { win: Window; id: number } | undefined;
 		const disarm = (): void => {
@@ -170,10 +177,12 @@ export class ConditionsModal extends DseModal {
 		const closeIfArmed = (): void => {
 			const armed = outsideDown;
 			disarm();
-			if (armed && this.addOpen) this.closeAdd();
+			if (!armed || !this.addOpen) return;
+			const focused = doc.activeElement;
+			this.closeAdd(!focused || focused === doc.body || this.addWrapEl.contains(focused));
 		};
 		this.lifecycle.register(disarm);
-		this.lifecycle.registerDomEvent(activeDocument, 'mousedown', (evt: MouseEvent) => {
+		this.lifecycle.registerDomEvent(doc, 'mousedown', (evt: MouseEvent) => {
 			disarm();
 			if (!this.addOpen) return;
 			// composedPath() (not target + .contains()) — a SUCCESSFUL pick mutates the
@@ -191,11 +200,11 @@ export class ConditionsModal extends DseModal {
 		});
 		// A click is dispatched in the same task as its mouseup, so a 0ms timer armed on mouseup
 		// fires only if no click did (drag ended off the pressed element's ancestors, or elsewhere).
-		this.lifecycle.registerDomEvent(activeDocument, 'mouseup', () => {
-			const win = activeDocument.defaultView; // the window that owns the document the press happened in
+		this.lifecycle.registerDomEvent(doc, 'mouseup', () => {
+			const win = doc.defaultView;
 			if (outsideDown && !settleTimer && win) settleTimer = { win, id: win.setTimeout(closeIfArmed, 0) };
 		});
-		this.lifecycle.registerDomEvent(activeDocument, 'click', closeIfArmed, true);
+		this.lifecycle.registerDomEvent(doc, 'click', closeIfArmed, true);
 
 		this.renderList();
 		this.renderAdd();
@@ -354,6 +363,7 @@ export class ConditionsModal extends DseModal {
 		const picker = parent.createDiv({ cls: 'dse-cond-icons' });
 		const search = picker.createEl('input', { cls: 'dse-cond-icons__search', type: 'search', placeholder: 'Search icons…' });
 		search.setAttribute('aria-label', 'Search condition icons');
+		stampControl(search, 'cond.icon-search');
 		const grid = picker.createDiv({ cls: 'dse-cond-icons__grid' });
 		grid.setAttribute('role', 'group');
 		grid.setAttribute('aria-label', 'Condition icon');
@@ -537,10 +547,13 @@ export class ConditionsModal extends DseModal {
 		this.renderCombobox();
 	}
 
-	private closeAdd(): void {
+	/** Collapses the dropdown back to "+ Add condition". `refocus` (default true) moves focus to
+	 *  that button; the click-time outside-close passes false when focus already sits on another
+	 *  control the user just clicked (SC-474 r1), so that control keeps it. */
+	private closeAdd(refocus = true): void {
 		this.addOpen = false;
 		this.renderAdd();
-		this.addWrapEl.querySelector<HTMLButtonElement>('.dse-condal__add')?.focus();
+		if (refocus) this.addWrapEl.querySelector<HTMLButtonElement>('.dse-condal__add')?.focus();
 	}
 
 	private matchesFor(query: string): Match[] {

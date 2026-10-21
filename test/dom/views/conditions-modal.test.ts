@@ -843,6 +843,55 @@ describe('SC-186: add — the real combobox (arrow keys + Enter, Escape, known +
 			expect(document.activeElement?.getAttribute('aria-label')).toBe('Color #1e8449');
 		});
 
+		// A real browser focuses a focusable pressed element in the mousedown's DEFAULT action, i.e. before the
+		// click; jsdom does not, so these tests focus the target between mousedown and click themselves.
+		test('SC-474 r1: clicking the icon search with the dropdown open closes the dropdown but leaves focus in the search field', () => {
+			const { container } = makeModal(['bleeding']);
+			openEditor(container, 'Bleeding');
+			openCombobox(container);
+			const search = editorOf(container).querySelector('.dse-cond-icons__search') as HTMLInputElement;
+
+			press(search, 'mousedown');
+			search.focus();
+			press(search, 'mouseup');
+			press(search, 'click');
+
+			expect(container.querySelector('.dse-condal__combobox')).toBeNull();
+			expect(document.activeElement).toBe(search);
+		});
+
+		test('SC-474 r1: clicking the custom colour input with the dropdown open closes the dropdown but leaves focus on it', () => {
+			const { container } = makeModal(['bleeding']);
+			openEditor(container, 'Bleeding');
+			openCombobox(container);
+			const colour = editorOf(container).querySelector('.dse-swatch--custom input') as HTMLInputElement;
+
+			press(colour, 'mousedown');
+			colour.focus();
+			press(colour, 'mouseup');
+			press(colour, 'click');
+
+			expect(container.querySelector('.dse-condal__combobox')).toBeNull();
+			expect(document.activeElement).toBe(colour);
+		});
+
+		test('SC-474 r1: a click-away onto non-focusable space (focus left on <body>) still lands focus on "+ Add condition"', () => {
+			const { container } = makeModal([]);
+			const input = openCombobox(container);
+			const outside = document.createElement('div');
+			document.body.appendChild(outside);
+
+			press(outside, 'mousedown');
+			input.blur(); // what the browser does to the input when the press lands on non-focusable space
+			expect(document.activeElement).toBe(document.body);
+			press(outside, 'mouseup');
+			press(outside, 'click');
+
+			expect(container.querySelector('.dse-condal__combobox')).toBeNull();
+			expect(document.activeElement).toBe(container.querySelector('.dse-condal__add'));
+			outside.remove();
+		});
+
 		test('a mousedown INSIDE the dropdown never closes it, even after the click', () => {
 			const { container } = makeModal([]);
 			const input = openCombobox(container);

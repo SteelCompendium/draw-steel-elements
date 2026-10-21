@@ -14,5 +14,7 @@ export default surface('conditions-modal', {
 		'cond.duration': c(['press:Enter'], ['SC-468']),
 		'cond.swatch': c(['click', 'press:Enter'], ['SC-468']),
 		'cond.effect': c(['press:Enter'], ['SC-468']),
+		// SC-474: the icon search field in the row editor (a focusable click target behind the open Add dropdown).
+		'cond.icon-search': c(['click'], ['SC-474']),
 	},
 });
