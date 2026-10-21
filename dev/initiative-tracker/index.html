@@ -2219,7 +2219,10 @@ destructive operation</strong></p>
 <ul>
 <li><strong>Kill</strong>: Sets current stamina to zero (creatures) or negative half maximum stamina (heroes), removes all temporary stamina.</li>
 <li><strong>Full Heal</strong>: Restores current stamina to maximum.</li>
-<li><strong>Spend Recovery</strong>: Increases current stamina by one-third of the maximum stamina.</li>
+<li><strong>Heal Recovery Value</strong> (heroes): Increases current stamina by one-third of the maximum stamina. The
+  tracker keeps no Recoveries pool for a hero, so this spends no Recovery; the first time you press it in
+  an editor window, you are asked to confirm that. Cancel (or Escape) leaves everything as it was.</li>
+<li><strong>Spend Recovery</strong> (creatures): Disabled — creatures have no Recoveries in Draw Steel. Hover it for the reason.</li>
 </ul>
 <h3 id="conditions">Conditions<a class="headerlink" href="#conditions" title="Permanent link">&para;</a></h3>
 <p>Conditions represent status effects affecting heroes or creatures, such as "dazed" or "slowed".</p>
