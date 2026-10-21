@@ -253,6 +253,7 @@ export class ConditionsModal extends DseModal {
 				label: `Customize ${displayName}`,
 				variant: 'ghost',
 				pressed: isOpen,
+				control: 'cond.edit',
 				onClick: () => this.toggleEditor(index),
 			},
 			this.lifecycle,
@@ -363,6 +364,7 @@ export class ConditionsModal extends DseModal {
 			chip.setAttribute('type', 'button');
 			setPressedState(chip, preset.value === active);
 			chip.setAttribute('aria-label', preset.label);
+			stampControl(chip, 'cond.duration');
 			this.lifecycle.registerDomEvent(chip, 'click', () => this.setDuration(index, preset.value));
 		}
 	}
@@ -402,6 +404,7 @@ export class ConditionsModal extends DseModal {
 			sw.setAttribute('type', 'button');
 			sw.setAttribute('title', `${name} (${hex})`);
 			sw.setAttribute('aria-label', `Color ${hex}`);
+			stampControl(sw, 'cond.swatch');
 			setPressedState(sw, hex === entry.color);
 			sw.style.setProperty('--dse-swatch', hex);
 			this.lifecycle.registerDomEvent(sw, 'click', () => this.setColor(index, hex));
@@ -443,6 +446,7 @@ export class ConditionsModal extends DseModal {
 			chip.setAttribute('type', 'button');
 			setPressedState(chip, fx === active);
 			chip.setAttribute('aria-label', fx);
+			stampControl(chip, 'cond.effect');
 			this.lifecycle.registerDomEvent(chip, 'click', () => this.setEffect(index, fx));
 		}
 	}

@@ -22,6 +22,11 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Conditions window: picking a color, duration or effect with the keyboard keeps focus where you
+  were** (SC-468). Pressing Enter or Space on a color swatch, a duration chip or an effect chip used to
+  throw focus back to the row's cog button, so you had to Tab all the way back to the next option. Focus
+  now stays on the option you just chose (a custom color stays on the custom color field), and a mouse
+  click shows no extra focus ring.
 - [FIX] **A block inside a callout or a quote now saves its changes** (SC-455). A Draw Steel block
   nested in `> [!note]`, a plain quote, or a callout inside a callout (each line starting with
   `> `) drew and took clicks but never wrote them back, and said nothing; the change was lost on the
