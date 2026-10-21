@@ -384,6 +384,7 @@ describe('SC-153: "Open in sidebar" is idempotent', () => {
 		let handedLine: number | undefined;
 		setEncounterSidebarHandoff(async (_path, _alias, line) => {
 			handedLine = line;
+			return true;
 		});
 
 		const button = await mountEncounter(plugin, 'Session.md', 'party: {}\nmonsters: []');
