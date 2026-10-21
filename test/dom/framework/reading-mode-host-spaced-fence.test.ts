@@ -233,6 +233,19 @@ describe('SC-457: the locate helpers match a spaced fence by its trimmed languag
 		expect(locateByBody(text, 'ds-counter', bodyOf(1), 0)).toEqual({ lineStart: 1, lineEnd: 3 });
 	});
 
+	test.each(['\u00a0', '\u3000', '\f', '\v'])('a fence with %j before the language is not the block: locateByBody never relocates onto it, and its host reports another language', (ws) => {
+		const impostor = ['```' + ws + 'ds-counter', 'name: A', 'current_value: 1', '```'];
+		const real = CTR(1, 'ds-counter');
+		const text = ['top', ...impostor, 'mid', ...real, 'bottom'].join('\n');
+		// the impostor is nearer the known line, but only the real block is a ds-counter block
+		expect(locateByBody(text, 'ds-counter', bodyOf(1), 1)).toEqual({ lineStart: 6, lineEnd: 9 });
+		expect(locateByBody(['top', ...impostor].join('\n'), 'ds-counter', bodyOf(1), 1)).toBeNull();
+		const app = new App();
+		app.vault.setFile('Note.md', text);
+		const host = new ReadingModeBlockHost(new Plugin(app) as any, document.createElement('div'), switchableCtx('Note.md', { current: { text, lineStart: 1, lineEnd: 4 } }) as any, 'ds-counter');
+		expect(host.getBlockInfo()?.language).toBe(ws + 'ds-counter');
+	});
+
 	test('locateInSection finds a spaced fence inside a quote/callout window', () => {
 		const text = ['top', '> [!note]', ...under('> ', CTR(1, '  ds-counter')), 'bottom'].join('\n');
 		expect(locateInSection(text, { lineStart: 1, lineEnd: 6 }, 'ds-counter', bodyOf(1), -1, null)).toEqual({ lineStart: 2, lineEnd: 5 });

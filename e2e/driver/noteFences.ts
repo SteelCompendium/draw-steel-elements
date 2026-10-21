@@ -11,10 +11,10 @@
 import { matchFenceMarker, stripBlockPrefix } from '../../src/framework/host/blockPrefix';
 
 export interface Fence {
-	/** The block TYPE: the first whitespace-delimited token of the TRIMMED info string, so
-	 *  ```` ``` ds-x ```` is `ds-x` (CommonMark / Obsidian semantics; SC-456 O2). The same value as the
-	 *  product's `language` (blockPrefix.ts `fenceLanguage`, SC-457), a space-before-language fence included.
-	 *  '' for a bare fence. */
+	/** The block TYPE: the first token of the info string after skipping leading spaces and tabs, so
+	 *  ```` ``` ds-x ```` is `ds-x` (Obsidian semantics; SC-456 O2) but a no-break space / U+3000 / form feed /
+	 *  vertical tab before it is part of the token (Obsidian does not render those as the block). The same
+	 *  value as the product's `language` (blockPrefix.ts `fenceLanguage`, SC-457). '' for a bare fence. */
 	lang: string;
 	/** The whole fence, opening line to closing line, byte for byte. */
 	text: string;
@@ -39,7 +39,7 @@ interface OpenFence {
 }
 
 /** The type of an opening fence line's info string (see `Fence.lang`). */
-const typeOf = (rest: string): string => rest.trim().split(/\s+/)[0] ?? '';
+const typeOf = (rest: string): string => /^[ \t]*([^ \t\r\n]*)/.exec(rest)![1];
 
 /** True when `line` closes the fence `open`: same character, at least as long, nothing but whitespace
  *  after the run, and in the same quote as the opener (the product's `isFenceClose`). */

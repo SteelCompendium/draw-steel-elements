@@ -324,6 +324,17 @@ describe('D8 Task 2 review fix — anchor.ts fence scanner (finding #4, CRITICAL
 			expect(fenceAlias('   ')).toBe('');
 		});
 
+		test('SC-457: only a space or a tab may precede the language - a no-break space, U+3000, form feed or vertical tab makes no ds-counter block', () => {
+			for (const ws of ['\u00a0', '\u3000', '\f', '\v']) {
+				const note = [`\`\`\`${ws}ds-counter`, 'current_value: 1', '_dse_anchor: abc123', '```'].join('\n');
+				expect(fenceAlias(`${ws}ds-counter`)).not.toBe('ds-counter');
+				expect(listFences(note, 'ds-counter')).toEqual([]);
+				expect(findAnchoredBlock(note, 'ds-counter', 'abc123')).toBeNull();
+			}
+			// ...while a trailing no-break space after a bare close fence still closes (trailing handling is unchanged)
+			expect(listFences(['``` ds-counter', 'a: 1', '```\u00a0'].join('\n'), 'ds-counter')).toHaveLength(1);
+		});
+
 		test('SC-457: a fence with a space before the language is found by its bare language token, anchored or not', () => {
 			const note = ['``` ds-counter', 'current_value: 1', '_dse_anchor: abc123', '```'].join('\n');
 

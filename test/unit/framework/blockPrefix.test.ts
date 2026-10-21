@@ -122,6 +122,20 @@ describe('SC-455: fenceLine splices with a prefix', () => {
 		]);
 	});
 
+	// Obsidian 1.14.4 does NOT render these as a ds-counter block (measured, Reading view and Live Preview): only a
+	// space or a tab may precede the language, so the language of these fences is not `ds-counter`.
+	test.each([
+		['a no-break space', '\u00a0'],
+		['U+3000', '\u3000'],
+		['a form feed', '\f'],
+		['a vertical tab', '\v'],
+	])('%s before the language is NOT skipped: the fence is not a ds-counter block', (_label, ws) => {
+		expect(parseOpenFenceLine(`\`\`\`${ws}ds-counter`)).toEqual({ prefix: '', fence: '```', language: `${ws}ds-counter`, info: `${ws}ds-counter` });
+		expect(parseOpenFenceLine(`\`\`\` ${ws}ds-counter`)?.language).toBe(`${ws}ds-counter`);
+		expect(fenceLanguage(`${ws}ds-counter`)).not.toBe('ds-counter');
+		expect(fenceLanguage(` ${ws} ds-counter`)).not.toBe('ds-counter');
+	});
+
 	test('replaceFenceBlock re-emits a spaced opening line byte for byte, in LF, CRLF and lone-CR notes', () => {
 		const lf = ['top', '``` ds-counter  extra', 'a: 1', '```', 'bottom'].join('\n');
 		expect(replaceFenceBlock(lf, 1, 3, 'a: 2')).toBe(['top', '``` ds-counter  extra', 'a: 2', '```', 'bottom'].join('\n'));

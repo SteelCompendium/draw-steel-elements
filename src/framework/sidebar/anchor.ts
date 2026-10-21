@@ -246,7 +246,7 @@ export function findFenceAtLine(content: string, alias: string, line: number): B
  *  ('' for an un-nested fence) — see host/blockPrefix.ts, the one place that defines it. */
 export function matchFenceLine(line: string): { prefix: string; marker: string; rest: string } | null {
 	const match = matchFenceMarker(line);
-	return match ? { prefix: match.prefix, marker: match.marker, rest: match.rest.trim() } : null;
+	return match ? { prefix: match.prefix, marker: match.marker, rest: match.rest.replace(/^[ \t]+/, '').trimEnd() } : null;
 }
 
 /**

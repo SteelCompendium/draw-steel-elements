@@ -164,7 +164,7 @@ describe('e2e integrity: quote-prefixed fences (SC-455) and CRLF notes (SC-453) 
 
 describe('e2e integrity: agreement with the product parser (SC-456 O1)', () => {
 	const lines = [
-		'```ds-x', '```ds-x extra', '``` ds-x', '```   ds-x   extra  ', '~~~ds-x', '~~~ ds-x k=v', '````ds-x', '```', '~~~', '````', '`````  ',
+		'```ds-x', '```ds-x extra', '``` ds-x', '```\u00a0ds-x', '```\u3000ds-x', '```\fds-x', '```\vds-x', '``` \u00a0ds-x', '```\tds-x', '```   ds-x   extra  ', '~~~ds-x', '~~~ ds-x k=v', '````ds-x', '```', '~~~', '````', '`````  ',
 		'> ```ds-x', '> > ```ds-x extra', '>```ds-x', '> ``` ds-x', '> ~~~', '>   ```ds-x', '    ```ds-x', '  ```ds-x', '``', '~~', '``ds-x', 'text', '', '```ds-x\r', '``` ds-x extra\r', '```\r', '> ```\r',
 	];
 
