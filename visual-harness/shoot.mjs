@@ -2718,8 +2718,11 @@ const HOSTLEAK_MODAL_SCENARIOS = [
 		mustHave: ['dse-optchip', 'dse-swatch', 'dse-cond-icons__choice', 'dse-condal__act', 'dse-condal__add'],
 		query: { element: 'conditions', fixture: 'default' },
 		open: async (page) => {
-			await page.click('.dse-cond-strip__add');
-			await page.click('.dse-modal .dse-condal__act[aria-label="Customize Bleeding"]');
+			await page.click('.dse-cond-strip__add', { timeout: 8000 });
+			await page.click('.dse-modal .dse-condal__act[aria-label="Customize Bleeding"]', { timeout: 8000 });
+			// The fixture's condition has no swatch colour, so no swatch renders pressed: press one so the
+			// pressed swatch (its own accent outline) is a kind in the sweep too.
+			await page.click('.dse-modal .dse-swatches .dse-swatch:not(.dse-swatch--custom)', { timeout: 8000 });
 		},
 	},
 	{
@@ -2729,7 +2732,7 @@ const HOSTLEAK_MODAL_SCENARIOS = [
 		mustHave: ['dse-optchip'],
 		query: { element: 'montage', fixture: 'mid' },
 		open: async (page) => {
-			await page.click('.dse-mt__actionrow button[aria-label="Log an action…"]');
+			await page.click('.dse-mt__actionrow button[aria-label="Log an action…"]', { timeout: 8000 });
 		},
 	},
 	{
@@ -2740,7 +2743,7 @@ const HOSTLEAK_MODAL_SCENARIOS = [
 		mustHave: ['dse-optchip', 'dse-btn--danger'],
 		query: { element: 'montage', fixture: 'mid' },
 		open: async (page) => {
-			await page.click('.dse-mt__cell[role="button"][data-kind="success"]');
+			await page.click('.dse-mt__cell[role="button"][data-kind="success"]', { timeout: 8000 });
 		},
 	},
 	{
@@ -2770,7 +2773,7 @@ const HOSTLEAK_MODAL_SCENARIOS = [
 		mustHave: ['dse-sedit__btn', 'dse-stepper__btn', 'dse-btn--danger', 'dse-btn--accent'],
 		query: { element: 'stamina-bar', fixture: 'default' },
 		open: async (page) => {
-			await page.click('[data-dse-element="stamina-bar"] .dse-stamina--clickable');
+			await page.click('[data-dse-element="stamina-bar"] .dse-stamina--clickable', { timeout: 8000 });
 		},
 	},
 	{
@@ -2780,7 +2783,7 @@ const HOSTLEAK_MODAL_SCENARIOS = [
 		mustHave: ['dse-stepper__btn', 'dse-btn--accent'],
 		query: { element: 'initiative', fixture: 'fight' },
 		open: async (page) => {
-			await page.dblclick('button.dse-init__cell[aria-label="Select Goblin #1"]');
+			await page.dblclick('button.dse-init__cell[aria-label="Select Goblin #1"]', { timeout: 8000 });
 		},
 	},
 	{
@@ -2800,7 +2803,9 @@ const HOSTLEAK_MODAL_SCENARIOS = [
 		mustHave: ['dse-btn--accent', 'dse-btn--ghost'],
 		query: { element: 'feature', fixture: 'default', prefs: 'authoringControls:true' },
 		open: async (page) => {
-			await page.click('[data-dse-element="feature"] button[aria-label^="Edit "]');
+			// The pencil is a hover-revealed chrome item (`pointer-events: none` until the card is hovered), so a
+			// DOM click, like the montage chrome items above.
+			await page.evaluate(() => document.querySelector('[data-dse-element="feature"] button[data-dse-chrome-item="edit"]').click());
 		},
 	},
 ];
