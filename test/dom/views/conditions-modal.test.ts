@@ -410,7 +410,7 @@ describe('SC-186: the inline row editor (cog) — Duration / Color / Effect', ()
 		expect(chip.getAttribute('aria-pressed')).toBe('true');
 	});
 
-	test('SC-468: the pick lands in its own group (a swatch/effect/duration label is never matched across groups)', () => {
+	test('SC-468: picking the "static" effect chip (the preset that CLEARS the effect) focuses its own chip in the Effect group', () => {
 		const { container } = makeModal(['bleeding']);
 		openEditor(container, 'Bleeding');
 		(editorOf(container).querySelector('button[aria-label="static"]') as HTMLElement).click();
@@ -432,6 +432,33 @@ describe('SC-186: the inline row editor (cog) — Duration / Color / Effect', ()
 		(modal as any).setEffect(0, 'glow');
 		expect(document.activeElement).toBe(
 			rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]'),
+		);
+		// A custom (non-preset) colour has no custom input to find either: same fallback.
+		(modal as any).setColor(0, '#00ff00');
+		expect(document.activeElement).toBe(
+			rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]'),
+		);
+	});
+
+	test('SC-468: the option is looked up in row `index`\'s OWN editor, never another row\'s open editor', () => {
+		const { modal, container } = makeModal(['bleeding', 'slowed']);
+		openEditor(container, 'Bleeding'); // the only open editor belongs to row 0
+		// A pick for row 1 must not grab row 0's identically-labelled swatch/chip/colour input.
+		(modal as any).setColor(1, '#1e8449');
+		expect(document.activeElement).toBe(
+			rowByName(container, 'Slowed').querySelector('button[aria-label="Customize Slowed"]'),
+		);
+		(modal as any).setDuration(1, 'eot');
+		expect(document.activeElement).toBe(
+			rowByName(container, 'Slowed').querySelector('button[aria-label="Customize Slowed"]'),
+		);
+		(modal as any).setEffect(1, 'glow');
+		expect(document.activeElement).toBe(
+			rowByName(container, 'Slowed').querySelector('button[aria-label="Customize Slowed"]'),
+		);
+		(modal as any).setColor(1, '#00ff00');
+		expect(document.activeElement).toBe(
+			rowByName(container, 'Slowed').querySelector('button[aria-label="Customize Slowed"]'),
 		);
 	});
 });

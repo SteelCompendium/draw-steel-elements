@@ -203,19 +203,27 @@ export class ConditionsModal extends DseModal {
 
 	/** SC-468: after an in-editor pick, `renderList()` has rebuilt the editor, so the control
 	 *  the user just pressed is gone. Put focus on its REBUILT twin (the option that is now
-	 *  `aria-pressed`) so a keyboard user stays where they were in the group and can arrow on
+	 *  `aria-pressed`) so a keyboard user stays where they were in the group and can Tab on
 	 *  to the next option; only fall back to the row's cog (the stable MED-3 anchor) when the
 	 *  twin is not there — editor closed, or the row itself gone. The twin is found by its
 	 *  `aria-label` (derived from the picked value) scoped to its `role="group"`, the same
 	 *  re-find the icon picker does. Programmatic focus after a mouse click draws no
 	 *  `:focus-visible` ring (e2e COND-E03), so pointer picks look as they did with the cog. */
 	private focusPickedOption(index: number, group: string, label: string): void {
-		const twin = this.listEl.querySelector('.dse-condal__editor')
+		const twin = this.editorEl(index)
 			?.querySelector<HTMLElement>(`[role="group"][aria-label="${group}"]`)
 			?.querySelectorAll<HTMLElement>('button');
 		const option = twin && Array.from(twin).find((b) => b.getAttribute('aria-label') === label);
 		if (option) option.focus();
 		else this.focusRowCog(index);
+	}
+
+	/** SC-468: row `index`'s own inline editor — `renderList()` puts it right after its row —
+	 *  or null when that row's editor is not open (never another row's). */
+	private editorEl(index: number): HTMLElement | null {
+		const rows = this.listEl.querySelectorAll<HTMLElement>('.dse-condal__row');
+		const next = rows[index]?.nextElementSibling;
+		return next?.classList.contains('dse-condal__editor') ? (next as HTMLElement) : null;
 	}
 
 	private renderRow(entry: Condition, index: number): void {
@@ -429,7 +437,7 @@ export class ConditionsModal extends DseModal {
 	}
 
 	private focusCustomColor(index: number): void {
-		const input = this.listEl.querySelector('.dse-condal__editor')
+		const input = this.editorEl(index)
 			?.querySelector<HTMLInputElement>('.dse-swatch--custom input[type="color"]');
 		if (input) input.focus();
 		else this.focusRowCog(index);
