@@ -520,12 +520,20 @@ function captureMountSnapshotForPrintDelta(props) {
 // it, then restored; a capture that fits is taken at the original size, byte for byte as
 // before. The gate below fails the run if a capture was ever taken clipped, or if growing
 // the viewport changed the element's layout.
-/** In-page: the bottom edges (document coords, CSS px) the shot must contain. */
+/** In-page: the bottom edges (CSS px from the top of the page at scroll 0) the shot must
+ *  contain. NOT the viewport-relative rect: an interaction shot's click scrolls the page
+ *  (the real-app cascade wraps #mount in scrollers), so a rect read after it is offset by
+ *  that scroll — every scrollTop up the ancestor chain is added back. */
 function measureCaptureBottoms(fullPage) {
+	const scrolled = (n) => {
+		let y = 0; // the walk reaches <html>, whose scrollTop IS window.scrollY (standards mode)
+		for (let a = n.parentElement; a; a = a.parentElement) y += a.scrollTop;
+		return y;
+	};
 	const nodes = fullPage
 		? [...document.body.children].filter((n) => n.tagName !== 'SCRIPT')
 		: [document.querySelector('#mount')];
-	return nodes.filter(Boolean).map((n) => n.getBoundingClientRect().bottom + window.scrollY);
+	return nodes.filter(Boolean).map((n) => n.getBoundingClientRect().bottom + scrolled(n));
 }
 /** In-page: a cheap fingerprint of `#mount`'s layout + markup, to prove a viewport resize
  *  moved nothing the shot depends on. */
