@@ -38,7 +38,7 @@
 // SC-460 appends G-S12 (28 total): a LONE CARRIAGE RETURN above a block (LF note, CRLF note, two blocks with one between
 // them). Obsidian counts it as a line break, so section line numbers are off against split('\n'); a Reading view click
 // and a Live Preview click, and a sidebar pin from the close fence of the second block, must still land in the right
-// block and leave every other byte (the lone CRs included) untouched.
+// block and leave every other byte (the lone CRs included) untouched. A CR-only note (only lone CRs as breaks) stays CR-only.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -168,6 +168,7 @@ Object.assign(FIXTURES, {
 	// SC-460: a lone CR above (and below) the block - the note is LF, CRLF, or has two blocks with one between them.
 	'Lifecycle/straycr-lf.md': `# stray\n\nA\rB\n\n${COUNTER(10)}\n\nBELOW\rX\n`,
 	'Lifecycle/straycr-crlf.md': `# stray\n\nA\rB\n\n${COUNTER(10)}\n\nBELOW\rX\n`.replace(/\n/g, '\r\n'),
+	'Lifecycle/straycr-cronly.md': `# stray\n\nA\n\n${COUNTER(10)}\n\nBELOW\n`.replace(/\n/g, '\r'), // SC-460 review MEDIUM-1: ONLY lone CRs
 	'Lifecycle/straycr-twins.md': `# stray\n\nA\rB\n\n${COUNTER(10, 'One')}\n\nMID\rDLE\n\n${COUNTER(10, 'Two')}\n\nEND\n`,
 	// SC-455: a counter inside a callout (text above and below it) and inside a callout nested in a callout.
 	'Lifecycle/callout.md': `# callout\n\nABOVE\n\n${['[!note] Camp', 'text above', ...COUNTER(10).split('\n'), 'text below'].map((l) => `> ${l}`).join('\n')}\n\nBELOW\n`,
@@ -1548,8 +1549,8 @@ const SCENARIOS = [
 		// the note's ending.
 		id: 'G-S12',
 		async run(t) {
-			const outside = (text) => text.replace(/```ds-counter[\s\S]*?\n```/g, '@@');
-			const blocks = (text) => text.match(/```ds-counter[\s\S]*?\n```/g) ?? [];
+			const outside = (text) => text.replace(/```ds-counter[\s\S]*?[\r\n]```/g, '@@');
+			const blocks = (text) => text.match(/```ds-counter[\s\S]*?[\r\n]```/g) ?? [];
 			const loneCrs = (text) => (text.match(/\r(?!\n)/g) ?? []).length;
 			const waitDisk = async (rel, pred, what) => {
 				const t0 = Date.now();
@@ -1562,7 +1563,9 @@ const SCENARIOS = [
 			const check = (rel, label, text, which) => {
 				const fx = FIXTURES[rel];
 				t.expect(outside(text) === outside(fx), `${rel} ${label}: text outside the blocks changed:\n got  ${JSON.stringify(outside(text))}\n want ${JSON.stringify(outside(fx))}`);
-				t.expect(loneCrs(text) === loneCrs(fx), `${rel} ${label}: the lone CR count changed (${loneCrs(fx)} -> ${loneCrs(text)})`);
+				const crOnly = !fx.includes('\n'); // a CR-only note: the block's own line count may change, so only the LF-free rule below applies
+				if (!crOnly) t.expect(loneCrs(text) === loneCrs(fx), `${rel} ${label}: the lone CR count changed (${loneCrs(fx)} -> ${loneCrs(text)})`);
+				else t.expect(!text.includes('\n'), `${rel} ${label}: a CR-only note picked up an LF: ${JSON.stringify(text)}`);
 				const now = blocks(text);
 				const was = blocks(fx);
 				t.expect(now.length === was.length, `${rel} ${label}: block count changed`);
@@ -1570,7 +1573,7 @@ const SCENARIOS = [
 					if (i === which) {
 						t.expect(/current_value: 11/.test(b), `${rel} ${label}: block #${i} did not get the edit: ${JSON.stringify(b)}`);
 						const crlf = fx.includes('\r\n');
-						const stray = crlf ? b.replace(/\r\n/g, '').match(/[\r\n]/) : b.match(/[\r]/);
+						const stray = crOnly ? b.match(/\n/) : crlf ? b.replace(/\r\n/g, '').match(/[\r\n]/) : b.match(/[\r]/);
 						t.expect(!stray, `${rel} ${label}: the rewritten block mixes line endings: ${JSON.stringify(b)}`);
 					} else {
 						t.expect(b === was[i], `${rel} ${label}: block #${i} was touched: ${JSON.stringify(b)}`);
@@ -1589,7 +1592,7 @@ const SCENARIOS = [
 			};
 
 			// 1. Reading view, a lone CR above and below: LF note, CRLF note, and the SECOND of two blocks.
-			for (const [rel, idx] of [['Lifecycle/straycr-lf.md', 0], ['Lifecycle/straycr-crlf.md', 0], ['Lifecycle/straycr-twins.md', 1]]) {
+			for (const [rel, idx] of [['Lifecycle/straycr-lf.md', 0], ['Lifecycle/straycr-crlf.md', 0], ['Lifecycle/straycr-cronly.md', 0], ['Lifecycle/straycr-twins.md', 1]]) {
 				t.expect(t.read(rel) === FIXTURES[rel], `${rel}: the fixture is not on disk byte for byte`);
 				await readingClick(rel, idx);
 				check(rel, 'Reading view', t.read(rel), idx);
@@ -1597,7 +1600,7 @@ const SCENARIOS = [
 			}
 
 			// 2. Live Preview, same notes (LP hands the host an LF-normalised copy of the note).
-			for (const rel of ['Lifecycle/straycr-lf.md', 'Lifecycle/straycr-crlf.md']) {
+			for (const rel of ['Lifecycle/straycr-lf.md', 'Lifecycle/straycr-crlf.md', 'Lifecycle/straycr-cronly.md']) {
 				const { rootEl } = await enterMode(t, rel, LC_MODES[1], '[data-dse-element="counter"]');
 				const m = await t.mark();
 				await t.realClick(`(${rootEl}).querySelector('button[aria-label^="Increase"]')`);
@@ -1638,7 +1641,32 @@ const SCENARIOS = [
 			t.expect(await t.ev(`!document.querySelector('[data-dse-sidebar-unavailable]')`), 'the sidebar panel degraded to the not-found card');
 			await t.ev(`(async () => { for (const l of app.workspace.getLeavesOfType('dse-sidebar')) l.detach(); })()`);
 			await t.reset(rel);
-			return 'a lone CR above (and below) a block: Reading view clicks (LF note, CRLF note, 2nd of two blocks) and Live Preview clicks land in the right block, a sidebar pin from the 2nd block\'s close fence stamps it and its panel writes it; the lone CRs and every byte outside the blocks are unchanged';
+			// 4. A CR-only note (its ONLY breaks are lone CRs) stays CR-only through a sidebar pin (the anchor stamp) and a panel write.
+			{
+				const rel = 'Lifecycle/straycr-cronly.md';
+				await t.reset(rel);
+				await t.ev(`(async () => { await (${LC_LEAF}).setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'source', source: false }, active: true }); })()`);
+				await t.sleep(1500);
+				await t.ev(`(${LC_LEAF}).view.editor.setCursor({ line: 6, ch: 0 })`); // inside the block (lines: '# stray', '', 'A', '', fence = 4, name = 5, current_value = 6)
+				await t.ev(`(() => { window.__lcRandom = Math.random; Math.random = () => 0xabcdef / 0x1000000; return true; })()`); // SC-383, as G-S10
+				try {
+					t.expect(await t.ev(`app.commands.executeCommandById('draw-steel-elements:send-block-to-sidebar')`), 'the send-block-to-sidebar command did not run');
+					await waitDisk(rel, (s) => s.includes('_dse_anchor:'), 'the anchor stamp');
+				} finally {
+					await t.ev(`(() => { if (window.__lcRandom) Math.random = window.__lcRandom; delete window.__lcRandom; return true; })()`);
+				}
+				const stamped = t.read(rel);
+				t.expect(!stamped.includes('\n') && outside(stamped) === outside(FIXTURES[rel]), `the stamp left the CR-only note mixed or changed text outside the block: ${JSON.stringify(stamped)}`);
+				const panel = `Array.from(app.workspace.getLeavesOfType('dse-sidebar')[0].view.containerEl.querySelectorAll('[data-dse-element="counter"]')).find((x) => x.isConnected)`;
+				await t.waitFor(`!!(${panel})`, 'the CR-only counter mounted in the sidebar panel');
+				await t.ev(`(${panel}).querySelector('button[aria-label^="Increase"]').click()`);
+				await waitDisk(rel, (s) => s.includes('current_value: 11'), 'the CR-only sidebar write');
+				const written = t.read(rel);
+				t.expect(!written.includes('\n') && outside(written) === outside(FIXTURES[rel]) && /_dse_anchor: [A-Za-z0-9_-]+/.test(written), `the sidebar write changed a CR-only note's endings or outside text: ${JSON.stringify(written)}`);
+				await t.ev(`(async () => { for (const l of app.workspace.getLeavesOfType('dse-sidebar')) l.detach(); })()`);
+				await t.reset(rel);
+			}
+			return 'a lone CR above (and below) a block: Reading view clicks (LF note, CRLF note, 2nd of two blocks) and Live Preview clicks land in the right block, a sidebar pin from the 2nd block\'s close fence stamps it and its panel writes it, and a CR-only note stays CR-only (Reading view, Live Preview, sidebar); the lone CRs and every byte outside the blocks are unchanged';
 		},
 	},
 ];
