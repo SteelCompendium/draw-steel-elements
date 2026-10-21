@@ -56,6 +56,9 @@ class FormModal extends DseModal {
 	 *  these; validation and the preview keep seeing the seed. A required select never enters
 	 *  the set (stripping it would write a block that fails its own schema). */
 	private readonly untouchedSeeds = new Set<string>();
+	/** Top-level + allOf `required` only (shapeFromSchemaYaml). A key made conditionally required by
+	 *  if/then, dependentRequired or oneOf is not seen here, so an untouched source-absent select
+	 *  governed that way IS stripped; no built-in schema has one (SC-483 review INFO-4). */
 	private requiredKeys: ReadonlySet<string> = new Set();
 	private rawMode = false;
 	private rawText = '';
@@ -220,8 +223,12 @@ class FormModal extends DseModal {
 	}
 
 	private stringifyWorking(data: Record<string, unknown>, overrides: Partial<DsePrefs> | undefined): string {
-		const body = stringifyYaml(data);
-		return overrides ? stringifyYaml({ prefs: overrides }) + body : body;
+		// SC-483 r2: write no byte the user never typed. An empty object is '' (not `{}`), and the
+		// trailing newline is trimmed (the host splice supplies the line break before the closing
+		// fence; stamina-bar's serialize() trims the same way). The prefs: map keeps exactly one line
+		// break between it and the body.
+		const body = Object.keys(data).length === 0 ? '' : stringifyYaml(data);
+		return (overrides ? stringifyYaml({ prefs: overrides }) + body : body).trimEnd();
 	}
 
 	private revalidate(): void {
