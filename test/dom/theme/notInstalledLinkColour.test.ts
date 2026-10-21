@@ -78,4 +78,11 @@ describe('SC-366 — the ds-scc degrade cards have no left stripe', () => {
 			expect(r.body).not.toMatch(/border-(left|inline-start)\b/);
 		}
 	});
+
+	test('no rule on the card roots draws a stripe by other means: an inset box-shadow or a ::before / ::after bar', () => {
+		for (const r of cardRules) {
+			expect(r.body).not.toMatch(/box-shadow:[^;]*\binset\b/);
+			expect(r.sel).not.toMatch(/::?(before|after)\b/);
+		}
+	});
 });
