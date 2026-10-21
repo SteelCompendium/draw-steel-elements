@@ -44,6 +44,10 @@
 // later adoption move both reset a scroll container's offset (measured before the fix: 884 -> 0).
 // SC-470 appends G-S15 (G-S13 is SC-326's; G-S14 is reserved for SC-457): the scroll pin for EVERY Reading view of the note — a second pane during a DSE write
 // from the first, and a write that is not ours (in-app vault.process, and a write on disk picked up by the file watcher).
+// SC-457 appends G-S14: a fence with whitespace between the backticks and the language (```` ``` ds-counter ````,
+// several spaces, a tab) is a DSE block in Obsidian; after the note changed around it (Reading view, the section snapshot is
+// gone when the write flushes) the write must be found again by body and land, with the info string (leading space included)
+// and every other byte untouched - LF, CRLF and lone-CR notes, and a spaced block next to an unspaced twin.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -135,6 +139,8 @@ const COUNTER = (value = 10, name = 'Health') =>
 const UNTERMINATED_COUNTER = (value = 10, name = 'Health') =>
 	['```ds-counter', `name: ${name}`, `current_value: ${value}`, 'max_value: 20', 'min_value: 0'].join('\n');
 
+const counterLines = (value = 10, name = 'Health') => [`name: ${name}`, `current_value: ${value}`, 'max_value: 20', 'min_value: 0'];
+
 const FIXTURES = {
 	'Lifecycle/twins.md': `# twins\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nMID\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`,
 	'Lifecycle/counter.md': `# counter\n\nABOVE\n\n${COUNTER(10)}\n\nBELOW\n`,
@@ -182,6 +188,15 @@ Object.assign(FIXTURES, {
 	// heroes, current round 10 (live sockets in the MIDDLE of the board). B: two heroes, current round 20 (live
 	// sockets at the far right). Distinct titles, so the blocks are not identical twins.
 	'Lifecycle/montage.md': `# montage\n\nABOVE\n\n${fence('ds-montage', ['title: March A', 'rounds: 20', 'success_limit: 40', 'failure_limit: 30', 'participants:', '  - name: Kira', '  - name: Bram', '  - name: Osric', 'current_round: 10'])}\n\nMIDDLE\n\n${fence('ds-montage', ['title: March B', 'rounds: 20', 'success_limit: 12', 'failure_limit: 6', 'participants:', '  - name: Yenna', '  - name: Talin', 'current_round: 20'])}\n\nBELOW\n`,
+	// SC-457: whitespace between the backticks and the language. Obsidian renders every one of these as the block.
+	'Lifecycle/spaced-one.md': `# spaced\n\nTOP\n\n${fence(' ds-counter', counterLines(10))}\n\nBELOW\n`,
+	'Lifecycle/spaced-three.md': `# spaced\n\nTOP\n\n${fence('   ds-counter', counterLines(10))}\n\nBELOW\n`,
+	'Lifecycle/spaced-tab.md': `# spaced\n\nTOP\n\n${fence('\tds-counter', counterLines(10))}\n\nBELOW\n`,
+	'Lifecycle/spaced-extra.md': `# spaced\n\nTOP\n\n${fence(' ds-counter  extra', counterLines(10))}\n\nBELOW\n`,
+	'Lifecycle/spaced-crlf.md': `# spaced\n\nTOP\n\n${fence(' ds-counter', counterLines(10))}\n\nBELOW\n`.replace(/\n/g, '\r\n'),
+	'Lifecycle/spaced-straycr.md': `# spaced\n\nA\rB\n\nTOP\n\n${fence(' ds-counter', counterLines(10))}\n\nBELOW\rX\n`,
+	// a spaced block and an unspaced one with the SAME body: a write for one must never land in the other.
+	'Lifecycle/spaced-twins.md': `# twins\n\nTOP\n\n${fence(' ds-counter', counterLines(5, 'Twin'))}\n\nMID\n\n${fence('ds-counter', counterLines(5, 'Twin'))}\n\nBOTTOM\n`,
 });
 
 // ------------------------------------------------------------------ note integrity
@@ -1870,6 +1885,71 @@ const SCENARIOS = [
 			await t.reset(rel);
 			t.expect(fails.length === 0, fails.join(' | '));
 			return out.join('; ');
+		},
+	},
+	{
+		// SC-457: a fence with whitespace before the language (` ``` ds-counter `). Obsidian renders it as the block, but
+		// the host read its language as '', so once the note changed around the block (Reading view: rendered, 8 blocks of
+		// text inserted above, a click, navigate away 30 ms later - the section is gone when the write flushes) the write
+		// was looked up by body under the language '' and never found: dropped, with a "not saved" Notice. It must land,
+		// and everything but the block's body must be exactly the original plus the shift (the opening line with its leading
+		// whitespace, line endings, text above and below, a lone CR included, a twin block untouched).
+		id: 'G-S14',
+		async run(t) {
+			const cases = [
+				['Lifecycle/spaced-one.md', 0, 'one space'],
+				['Lifecycle/spaced-three.md', 0, 'three spaces'],
+				['Lifecycle/spaced-tab.md', 0, 'a tab'],
+				['Lifecycle/spaced-extra.md', 0, 'a space and extra info'],
+				['Lifecycle/spaced-crlf.md', 0, 'one space, CRLF note'],
+				['Lifecycle/spaced-straycr.md', 0, 'one space, lone CR above'],
+				['Lifecycle/spaced-twins.md', 0, 'spaced twin of an unspaced block'],
+				['Lifecycle/spaced-twins.md', 1, 'unspaced twin of a spaced block'],
+			];
+			// A note with each block's body masked: the opening fence line and the close fence stay, bodies are returned apart.
+			const shape = (text) => {
+				const bodies = [];
+				const outside = text.replace(/(```[^\r\n]*)((?:\r\n|\n)[\s\S]*?)((?:\r\n|\n)```)/g, (all, open, body, close) => (bodies.push(body), `${open}@@${close}`));
+				return { outside, bodies };
+			};
+			for (const [rel, idx, label] of cases) {
+				const fx = FIXTURES[rel];
+				const eol = fx.includes('\r\n') ? '\r\n' : '\n';
+				const shift = 'TOP' + Array.from({ length: 8 }, (_, i) => `${eol}${eol}shift ${i}`).join('');
+				const shifted = fx.replace('TOP', shift); // the original plus the lines inserted above the block
+				const was = shape(shifted);
+				t.expect(t.read(rel) === fx, `${rel}: the fixture is not on disk byte for byte`);
+				await t.open(rel);
+				await t.reset(rel);
+				await t.waitFor(`${t.readingScope(LC_LEAF)}.querySelectorAll('[data-dse-element="counter"]').length === ${rel.endsWith('twins.md') ? 2 : 1}`, `${rel}: the counter(s) rendered in Reading view`);
+				await t.edit(rel, `c.replace('TOP', ${JSON.stringify(shift)})`);
+				await t.sleep(1200);
+				const m = await t.mark();
+				await t.clickIncrease(idx);
+				await t.sleep(30);
+				await t.open('Lifecycle/other.md');
+				await t.sleep(1500);
+				const got = t.read(rel);
+				const now = shape(got);
+				// Everything but the block bodies - the opening fence lines (the leading whitespace included), the close fences,
+				// the shift, the text above and below, a lone CR - is exactly the original; the element rewrites its own body.
+				t.expect(now.outside === was.outside, `${rel} (${label}): text outside the block bodies changed:\n got  ${JSON.stringify(now.outside)}\n want ${JSON.stringify(was.outside)}`);
+				t.expect(now.bodies.length === was.bodies.length, `${rel} (${label}): block count changed: ${JSON.stringify(got)}`);
+				now.bodies.forEach((b, i) => {
+					if (i === idx) {
+						const before = Number(/current_value: (\d+)/.exec(was.bodies[i])[1]);
+						t.expect(b.includes(`current_value: ${before + 1}`), `${rel} (${label}): block #${i} did not get the edit: ${JSON.stringify(b)}`);
+						t.expect(!(eol === '\r\n' ? b.replace(/\r\n/g, '') : b).match(eol === '\r\n' ? /[\r\n]/ : /\r/), `${rel} (${label}): the rewritten block mixes line endings: ${JSON.stringify(b)}`);
+					} else {
+						t.expect(b === was.bodies[i], `${rel} (${label}): block #${i} was touched: ${JSON.stringify(b)}`);
+					}
+				});
+				t.expect((await t.noticesSince(m)).length === 0, `${rel} (${label}): a Notice appeared: ${JSON.stringify(await t.noticesSince(m))}`);
+				t.expect((await t.errorsSince(m)).length === 0, `${rel} (${label}): page errors ${JSON.stringify(await t.errorsSince(m))}`);
+				t.expect(t.read('Lifecycle/other.md') === FIXTURES['Lifecycle/other.md'], 'other.md was written');
+				await t.reset(rel);
+			}
+			return `a fence with whitespace before the language (${cases.map((c) => c[2]).join('; ')}): after the note changed around the block, a click then navigate-away still writes it, no Notice; the opening line, line endings and every byte outside the block bodies are unchanged`;
 		},
 	},
 ];
