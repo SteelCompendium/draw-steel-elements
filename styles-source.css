@@ -17189,6 +17189,40 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	color: inherit;
 }
 
+/* -- E. SC-356 — the option chips (`.dse-optchip`: the Conditions modal's duration / effect
+      chips, its icon choices `.dse-cond-icons__choice`, and the Log-an-action form's Result
+      chips `.dse-mt__sheet-resultchip`). They are bare `<button>`s that only exist inside a
+      MODAL, so the gallery sweep never saw them (`assertModalBtnHostLeak` does). Obsidian's
+      `button` rules were painting them: a 30px `height`, the `--interactive-normal` fill
+      (#333 / #fff) and the `--text-normal` idle ink, none of which was the chip's own
+      declared look (`.dse-optchip`, ~:2134) — that declaration is (0,1,0) and lost to the
+      host's (0,1,1). Scott's ruling (SC-356, "A30"): the chips take the PLUGIN's fill and idle
+      ink but KEEP THE HEIGHT, so nothing gets harder to tap.
+        - `height: var(--input-height, 30px)` FOLLOWS Obsidian's control height instead of
+          fixing a pixel figure: 30px on desktop, the touch size on a phone (the host's own
+          `button` height value, so a phone's taller target is kept). The 30px fallback only
+          applies where Obsidian's variable is absent — the sweep's bare pass, which has no
+          host — and equals what the host gives, which is what keeps the with-vs-without-host
+          comparison invariant.
+        - `display: flex` + centred alignment are Obsidian's own values for a button, restated
+          so the labels stay centred in that box exactly as today.
+        - fill / idle ink are the tokens the chip's own rule names. `:not(:hover)` and the
+          pressed exclusion keep this block from beating the two (0,2,0) state rules above
+          it (`.dse-optchip:hover`, `.dse-optchip[aria-pressed='true']`); the pressed ink,
+          the pressed accent border and the teal-cyan focus ring are untouched. -- */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-optchip) {
+	height: var(--input-height, 30px);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-optchip:not(:hover)) {
+	background-color: var(--dse-surface);
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-optchip:not(:hover):not([aria-pressed='true'])) {
+	color: var(--dse-fg-muted);
+}
+
 /* ==================================================================================== */
 /*   SC-202 r1 — INPUT/STEPPER HOST RE-GROUNDING (the input family's own leak)          */
 /* ==================================================================================== */

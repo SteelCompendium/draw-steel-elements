@@ -176,6 +176,54 @@ describe('SC-203 host re-grounding — the (0,2,0) state rules it must not beat'
 	});
 });
 
+describe('SC-356 host re-grounding — the option chips (.dse-optchip), Scott\'s "A30" ruling', () => {
+	// The BEHAVIOUR is gated by `assertModalBtnHostLeak` (visual-harness/shoot.mjs), which opens
+	// every plugin modal and compares the chips with and without Obsidian's `button` rules. These
+	// source-text contracts pin the three decisions that gate cannot see: the height FOLLOWS
+	// Obsidian's control height (the gate only ever sees 30px), and the two (0,2,0) state rules
+	// the block must not beat.
+	const rule = (subject: string): string | null => {
+		const m = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(' + escape(subject) + '\\) \\{([^}]*)\\}'));
+		return m ? m[1] : null;
+	};
+
+	test('the chip height follows Obsidian\'s control height, with a 30px fallback — never a bare pixel figure', () => {
+		const body = rule('.dse-optchip');
+		expect(body).not.toBeNull();
+		// A bare `height: 30px` would pin a desktop figure and shrink every chip on a phone, where
+		// Obsidian's own `button` height is the (taller) touch size.
+		expect(body).toContain('height: var(--input-height, 30px);');
+		expect(body).not.toMatch(/height:\s*\d/);
+	});
+
+	test('labels stay centred in that box (Obsidian\'s own display / alignment, restated)', () => {
+		const body = rule('.dse-optchip');
+		expect(body).toContain('display: flex;');
+		expect(body).toContain('align-items: center;');
+		expect(body).toContain('justify-content: center;');
+	});
+
+	test('the fill is the plugin surface and is guarded against the chip\'s own :hover rule', () => {
+		const body = rule('.dse-optchip:not(:hover)');
+		expect(body).not.toBeNull();
+		expect(body).toContain('background-color: var(--dse-surface);');
+	});
+
+	test('the idle ink is the plugin muted ink and leaves the pressed chip and :hover alone', () => {
+		const body = rule(".dse-optchip:not(:hover):not([aria-pressed='true'])");
+		expect(body).not.toBeNull();
+		expect(body).toContain('color: var(--dse-fg-muted);');
+	});
+
+	test('the block never restates the pressed border / bevel or the focus ring', () => {
+		// Those are the chip's own (0,3,0)+ rules (accent border, steel bevel, kit focus outline).
+		for (const sel of ['.dse-optchip', '.dse-optchip:not(:hover)', ".dse-optchip:not(:hover):not([aria-pressed='true'])"]) {
+			const body = rule(sel) ?? '';
+			expect(body).not.toMatch(/border|outline|box-shadow|background-image/);
+		}
+	});
+});
+
 function escape(s: string): string {
 	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
