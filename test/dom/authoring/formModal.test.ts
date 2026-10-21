@@ -9,7 +9,8 @@
 //    host.replaceSource.
 //  - Important 3: openFormEditor routes through openManagedModal — owner unload closes it.
 //  - Important 4: a false host.replaceSource() shows a Notice and keeps the modal open.
-//  - Minor: a select field's implicit default writes back to `working` on open.
+//  - Minor: a select field's implicit default writes back to `working` on open (SC-483: for
+//    validation/preview only - Save omits it unless the user touched the dropdown).
 import { openFormEditor } from '../../../src/authoring/FormModal';
 import { createValidationService } from '../../../src/framework/validation';
 import { createRenderContext } from '../../../src/framework/context';
@@ -129,7 +130,7 @@ test('schemaless element → raw-YAML textarea, saved verbatim through replaceSo
 	modal.close();
 });
 
-test('Minor: a select field with no value yet writes its implicit default back to `working` on open', async () => {
+test('Minor: a select field with no value yet writes its implicit default back to `working` on open (SC-483: validation/preview see it, Save omits it)', async () => {
 	const writes: string[] = [];
 	const validation = createValidationService();
 	const def = {
@@ -141,7 +142,7 @@ test('Minor: a select field with no value yet writes its implicit default back t
 	const modal = openFormEditor(fakeOwner(), makeCx(writes), def, '', validation);
 	expect(modal.canSave()).toBe(true); // no required fields — the default alone is valid
 	await modal.save();
-	expect(writes[0]).toContain('style: default'); // matches what the dropdown SHOWED
+	expect(writes[0]).not.toContain('style'); // SC-483: the seed is display/validation-only; the user never set it
 	modal.close();
 });
 
@@ -274,6 +275,154 @@ describe('Critical 2: the live preview is not a second write path', () => {
 		bar.click(); // even if something were wired, this must never reach the real host
 		expect(host.replaceSource).not.toHaveBeenCalled();
 
+		modal.close();
+	});
+});
+
+// —— SC-483: Save writes only the fields the user set or changed ——————————————————————
+// The select widget seeds an absent key's first enum option into `working` on open (so
+// validation + preview see what the dropdown shows). That seed is display/validation-only: a
+// select whose key was ABSENT from the source and whose dropdown never fired onChange is
+// stripped from the data Save serializes. A touched select (even changed back to the first
+// option) and every key the source declared are written as before.
+describe('SC-483: an untouched, source-absent select is not written by Save', () => {
+	const SEL_SCHEMA = [
+		'type: object',
+		'properties:',
+		'  name: { type: string }',
+		'  style: { type: string, enum: [default, sheet] }',
+	].join('\n');
+	const TWO_SELECTS = `${SEL_SCHEMA}\n  size: { type: string, enum: [small, large] }`;
+
+	/** Schema'd element with NO `serialize` (the stringifyWorking path); records every model
+	 *  the preview view mounts and every `data` parse() is handed. */
+	function selectDef(schema = SEL_SCHEMA) {
+		const mounted: unknown[] = [];
+		const parsed: Record<string, unknown>[] = [];
+		const def = {
+			id: 'sel', name: 'Sel', aliases: ['ds-sel'], shape: 'static', schema,
+			parse: (d: Record<string, unknown>) => {
+				parsed.push({ ...d });
+				return { ...d };
+			},
+			createView: () => ({ mount: async (_el: HTMLElement, model: unknown) => { mounted.push(model); }, load: () => {}, unload: () => {} } as never),
+		} as unknown as ElementDefinition;
+		return { def, mounted, parsed };
+	}
+
+	function open(def: ElementDefinition, source: string) {
+		const writes: string[] = [];
+		const modal = openFormEditor(fakeOwner(), makeCx(writes), def, source, createValidationService());
+		return { modal, writes };
+	}
+
+	test('REPRO: stamina bar with only max/current stamina, Max stamina changed to 25 -> no style key written', async () => {
+		const host = makeHost();
+		const { cx, validation } = makeRealStaminaCx(host);
+		const modal = openFormEditor(fakeOwner(), cx, staminaBarElement, 'max_stamina: 20\ncurrent_stamina: 15', validation);
+		findSetting(modal, 'Max stamina').texts[0].trigger('25');
+		await modal.save();
+		expect(host.replaceSource.mock.calls[0][0]).toBe('max_stamina: 25\ncurrent_stamina: 15');
+		modal.close();
+	});
+
+	test('no-serialize element (stringifyWorking path): untouched absent selects are omitted', async () => {
+		const { modal, writes } = open(selectDef().def, 'name: Goblin');
+		await modal.save();
+		expect(writes).toEqual(['name: Goblin\n']);
+		modal.close();
+	});
+
+	test('the prefs: map still leads the body when the untouched select is stripped', async () => {
+		const { modal, writes } = open(selectDef().def, 'prefs:\n  reduceMotion: true\nname: Goblin');
+		await modal.save();
+		expect(writes).toEqual(['prefs:\n  reduceMotion: true\nname: Goblin\n']);
+		modal.close();
+	});
+
+	test('a select changed to a non-first option is written', async () => {
+		const { modal, writes } = open(selectDef().def, 'name: Goblin');
+		findSetting(modal, 'Style').dropdowns[0].trigger('sheet');
+		await modal.save();
+		expect(writes).toEqual(['name: Goblin\nstyle: sheet\n']);
+		modal.close();
+	});
+
+	test('a select changed to another option and back to the first is still written', async () => {
+		const { modal, writes } = open(selectDef().def, 'name: Goblin');
+		const style = findSetting(modal, 'Style').dropdowns[0];
+		style.trigger('sheet');
+		style.trigger('default');
+		await modal.save();
+		expect(writes).toEqual(['name: Goblin\nstyle: default\n']);
+		modal.close();
+	});
+
+	test('touching one select does not make another untouched select written', async () => {
+		const { modal, writes } = open(selectDef(TWO_SELECTS).def, 'name: Goblin');
+		findSetting(modal, 'Size').dropdowns[0].trigger('large');
+		await modal.save();
+		expect(writes).toEqual(['name: Goblin\nsize: large\n']);
+		modal.close();
+	});
+
+	test('a source that already declares the select key is written, even at its default (byte-identical)', async () => {
+		const { modal, writes } = open(selectDef().def, 'name: Goblin\nstyle: default');
+		await modal.save();
+		expect(writes).toEqual(['name: Goblin\nstyle: default\n']);
+		modal.close();
+	});
+
+	test('a key present in the source with a null value is a declared key: written (as the seeded value), as before', async () => {
+		const { modal, writes } = open(selectDef().def, 'name: Goblin\nstyle:');
+		await modal.save();
+		expect(writes).toEqual(['name: Goblin\nstyle: default\n']);
+		modal.close();
+	});
+
+	test('validation and the live preview still see the seeded value of an untouched absent select', async () => {
+		// `style` is REQUIRED here: validation only passes because the seed is in `working`.
+		const { def, mounted } = selectDef(`${SEL_SCHEMA}\nrequired: [style]`);
+		const { modal } = open(def, 'name: Goblin');
+		expect(modal.canSave()).toBe(true);
+		expect(mounted.at(-1)).toMatchObject({ name: 'Goblin', style: 'default' });
+		modal.close();
+	});
+
+	test('preview keeps the seeded value for an optional untouched select while the written body omits it', async () => {
+		const { def, mounted } = selectDef();
+		const { modal, writes } = open(def, 'name: Goblin');
+		expect(mounted.at(-1)).toMatchObject({ style: 'default' });
+		await modal.save();
+		expect(writes).toEqual(['name: Goblin\n']);
+		modal.close();
+	});
+
+	test('a REQUIRED select is never stripped (the written block must stay valid), even when untouched', async () => {
+		const { def } = selectDef(`${SEL_SCHEMA}\nrequired: [style]`);
+		const { modal, writes } = open(def, 'name: Goblin');
+		await modal.save();
+		expect(writes).toEqual(['name: Goblin\nstyle: default\n']);
+		modal.close();
+	});
+
+	test('with a serialize(): parse() is handed the stripped data, so the model records the key as undeclared', async () => {
+		const seen: Record<string, unknown>[] = [];
+		const base = selectDef().def;
+		const def = {
+			...base,
+			parse: (d: Record<string, unknown>) => {
+				seen.push({ ...d });
+				return { ...d };
+			},
+			serialize: (m: Record<string, unknown>) => JSON.stringify(m),
+		} as unknown as ElementDefinition;
+		const { modal, writes } = open(def, 'name: Goblin');
+		const previewSaw = seen.at(-1);
+		await modal.save();
+		expect(previewSaw).toMatchObject({ style: 'default' }); // preview: seeded
+		expect(seen.at(-1)).toEqual({ name: 'Goblin' }); // Save: stripped
+		expect(writes).toEqual(['{"name":"Goblin"}']);
 		modal.close();
 	});
 });
