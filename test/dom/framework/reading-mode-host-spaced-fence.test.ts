@@ -67,6 +67,7 @@ describe('SC-457: ReadingModeBlockHost with whitespace before the language', () 
 	test.each([
 		['a trailing no-break space', 'ds-counter\u00a0'],
 		['a trailing U+3000', 'ds-counter\u3000'],
+		['a no-break space right after the name, then a word (Live Preview renders it as the block)', 'ds-counter\u00a0x'],
 		['a leading space and a trailing U+3000', ' ds-counter\u3000'],
 	])('%s: the language is ds-counter and a section-gone write lands', async (_label, info) => {
 		const app = new App();

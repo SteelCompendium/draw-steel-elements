@@ -133,6 +133,7 @@ describe('D8 Task 2: SidebarBlockHost (spec §1.4)', () => {
 	test.each([
 		['two spaces then a word', 'ds-counter  extra'],
 		['a trailing U+3000 then a word', 'ds-counter\u3000 extra'],
+		['a no-break space right after the name (Live Preview renders it as the block)', 'ds-counter\u00a0x'],
 		['a leading space, a trailing no-break space, then a word', ' ds-counter\u00a0 extra'],
 	])('SC-457: replaceSource lands in a block opened with %s', async (_label, info) => {
 		const opener = `\`\`\`${info}`;

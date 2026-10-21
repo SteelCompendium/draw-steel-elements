@@ -166,10 +166,10 @@ describe('e2e integrity: agreement with the product parser (SC-456 O1)', () => {
 	// [opening line, the language it must have (null: not a fence opener)]. Every parse must EQUAL the expected
 	// language, not just agree with the others: agreement alone masked two bugs (SC-457 re-reviews).
 	const cases: [string, string | null][] = [
-		['```ds-x', 'ds-x'], ['```ds-x extra', 'ds-x'], ['``` ds-x', 'ds-x'], ['```ds-x ', 'ds-x'], ['```ds-x ', 'ds-x'], ['```ds-x　', 'ds-x'],
-		['``` ds-x ', 'ds-x'], ['``` ds-x　', 'ds-x'], ['```ds-x\f', 'ds-x'], ['```ds-x\v', 'ds-x'], ['```\tds-x\t', 'ds-x'], ['``` \tds-x  ', 'ds-x'],
-		['```ds-x  ', 'ds-x'], ['```ds-x  extra', 'ds-x'], ['```ds-x  extra', 'ds-x'], ['```ds-x　 extra', 'ds-x'], ['```ds-x \tx', 'ds-x'], ['```ds-x x', 'ds-x x'],
-		['``` ds-x', ' ds-x'], ['```　ds-x', '　ds-x'], ['```\fds-x', '\fds-x'], ['```\vds-x', '\vds-x'], ['```  ds-x', ' ds-x'],
+		['```ds-x', 'ds-x'], ['```ds-x extra', 'ds-x'], ['``` ds-x', 'ds-x'], ['```ds-x ', 'ds-x'], ['```ds-x\u00a0', 'ds-x'], ['```ds-x\u3000', 'ds-x'],
+		['``` ds-x\u00a0', 'ds-x'], ['``` ds-x\u3000', 'ds-x'], ['```ds-x\f', 'ds-x'], ['```ds-x\v', 'ds-x'], ['```\tds-x\t', 'ds-x'], ['``` \tds-x  ', 'ds-x'],
+		['```ds-x \u00a0', 'ds-x'], ['```ds-x\u00a0 extra', 'ds-x'], ['```ds-x  extra', 'ds-x'], ['```ds-x\u3000 extra', 'ds-x'], ['```ds-x\u00a0\tx', 'ds-x'], ['```ds-x\u00a0x', 'ds-x'], ['```ds-x x', 'ds-x'], ['```ds-x  x', 'ds-x'], ['```ds-x\u00a0\u00a0x', 'ds-x'], ['``` ds-x\u3000x', 'ds-x'],
+		['```\u00a0ds-x', '\u00a0ds-x'], ['```\u3000ds-x', '\u3000ds-x'], ['```\fds-x', '\fds-x'], ['```\vds-x', '\vds-x'], ['``` \u00a0ds-x', '\u00a0ds-x'],
 		['```\tds-x', 'ds-x'], ['```   ds-x   extra  ', 'ds-x'], ['~~~ds-x', 'ds-x'], ['~~~ ds-x k=v', 'ds-x'], ['````ds-x', 'ds-x'],
 		['```', ''], ['~~~', ''], ['````', ''], ['`````  ', ''],
 		['> ```ds-x', 'ds-x'], ['> > ```ds-x extra', 'ds-x'], ['>```ds-x', 'ds-x'], ['> ``` ds-x', 'ds-x'], ['> ~~~', ''], ['>   ```ds-x', 'ds-x'],

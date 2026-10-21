@@ -254,6 +254,8 @@ describe('D8 Task 2 review fix — registration.ts (finding #3)', () => {
 		test.each([
 			['two spaces then a word', 'ds-counter  extra'],
 			['a trailing U+3000 then a word', 'ds-counter\u3000 extra'],
+			['a no-break space right after the name (Live Preview renders it as the block)', 'ds-counter\u00a0x'],
+			['one space then a word', 'ds-counter x'],
 			['a leading space, a trailing no-break space, then a word', ' ds-counter\u00a0 extra'],
 		])('%s: the host reports ds-counter, and pinning that alias binds the block (anchor stamped, panel holds it)', async (_label, info) => {
 			const { app, plugin, services } = setup();

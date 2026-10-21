@@ -39,7 +39,10 @@ interface OpenFence {
 }
 
 /** The type of an opening fence line's info string (see `Fence.lang`). */
-const typeOf = (rest: string): string => /^[ \t]*([^ \t]*)/.exec(rest)![1].trimEnd();
+const typeOf = (rest: string): string => {
+	const name = /^\s*\S*/.exec(/^[ \t]*([^ \t]*)/.exec(rest)![1])![0];
+	return name.trim() === '' ? '' : name;
+};
 
 /** True when `line` closes the fence `open`: same character, at least as long, nothing but whitespace
  *  after the run, and in the same quote as the opener (the product's `isFenceClose`). */

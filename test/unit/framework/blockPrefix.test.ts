@@ -146,6 +146,13 @@ describe('SC-455: fenceLine splices with a prefix', () => {
 		}
 	});
 
+	// The name ends at the first whitespace character of ANY kind (as before SC-457): Live Preview renders
+	// ```ds-counter<NBSP>x as the block, and Pin to sidebar must find it.
+	test.each(['\u00a0x', '\u3000x', '\fx', '\vx', ' x', '  x', '\tx'])('the name ends at the whitespace in %j: the language is ds-counter', (tail) => {
+		expect(parseOpenFenceLine(`\`\`\`ds-counter${tail}`)?.language).toBe('ds-counter');
+		expect(fenceAlias(matchFenceLine(`\`\`\`ds-counter${tail}`)!.rest)).toBe('ds-counter');
+	});
+
 	test('replaceFenceBlock re-emits a spaced opening line byte for byte, in LF, CRLF and lone-CR notes', () => {
 		const lf = ['top', '``` ds-counter  extra', 'a: 1', '```', 'bottom'].join('\n');
 		expect(replaceFenceBlock(lf, 1, 3, 'a: 2')).toBe(['top', '``` ds-counter  extra', 'a: 2', '```', 'bottom'].join('\n'));

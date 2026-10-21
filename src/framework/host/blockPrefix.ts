@@ -43,20 +43,21 @@ export function matchFenceMarker(line: string): FenceMarker | null {
 }
 
 /**
- * SC-457 — the LANGUAGE of a fence: the first token of its info string (`rest` from `matchFenceMarker`, or
- * anything past the fence run). Leading spaces and tabs are skipped; the token ends at the next space or tab; and
- * the token is read WITHOUT trailing whitespace of any other kind (```` ```ds-counter\u3000 extra ```` and
- * ```` ```ds-counter\u00a0 ```` render as the block). The ONE definition every site that compares a fence's language
- * uses (the hosts' fence parse, anchor.ts' alias, the sidebar command, the autocomplete scan, the e2e scanner's
- * type). Obsidian 1.14.4 renders ```` ``` ds-counter ````, ```` ```   ds-counter ```` and ```` ```\tds-counter ```` as
- * the `ds-counter` block (Reading view and Live Preview) - so a parse that took the token at column 0 of the
- * remainder saw those blocks' language as ''. Only SPACE and TAB are skipped BEFORE the language, not every
- * Unicode space: a no-break space, U+3000, a form feed or a vertical tab before the language does NOT make a
- * `ds-counter` block in Obsidian (measured), so it must not make one here either; the token then starts with
- * that character and is no registered language. '' for a bare fence.
+ * SC-457 — the LANGUAGE of a fence (`rest` from `matchFenceMarker`, or anything past the fence run): skip leading
+ * spaces and tabs only; the name then ends at the first whitespace character of any kind. The ONE definition every
+ * site that compares a fence's language uses (the hosts' fence parse, anchor.ts' alias, the sidebar command, the
+ * autocomplete scan, the e2e scanner's type).
+ *
+ * Why: Obsidian 1.14.4 renders ```` ``` ds-counter ````, ```` ```   ds-counter ```` and ```` ```\tds-counter ```` as the
+ * `ds-counter` block (Reading view and Live Preview), so a parse that took the token at column 0 saw their language as ''.
+ * A no-break space, U+3000, form feed or vertical tab BEFORE the name is no block in Obsidian (measured), so the name then
+ * keeps that character and is no registered language. After the name any whitespace ends it, as before SC-457
+ * (```` ```ds-counter\u3000 extra ````, ```` ```ds-counter\u00a0x ```` stay `ds-counter`). '' for a bare fence.
  */
 export function fenceLanguage(info: string): string {
-	return /^[ \t]*([^ \t]*)/.exec(info)![1].trimEnd();
+	const token = /^[ \t]*([^ \t]*)/.exec(info)![1];
+	const name = /^\s*\S*/.exec(token)![0];
+	return name.trim() === '' ? '' : name; // whitespace only (a bare fence, a trailing CR / no-break space): no language
 }
 
 /** How many quote markers `prefix` holds, and how many spaces of indentation follow the last one. */
