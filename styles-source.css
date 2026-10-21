@@ -8898,7 +8898,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest:
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb a,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__body a,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card a,
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-ref-web-card__link {
+[data-dse-theme='steel']:not([data-dse-print="on"]) a.dse-ref-web-card__link {
 	color: var(--dse-accent);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature a:hover,
@@ -8906,7 +8906,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest:
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb a:hover,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__body a:hover,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card a:hover,
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-ref-web-card__link:hover {
+[data-dse-theme='steel']:not([data-dse-print="on"]) a.dse-ref-web-card__link:hover {
 	color: var(--dse-accent);
 	text-decoration: underline;
 }
