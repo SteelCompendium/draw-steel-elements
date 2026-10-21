@@ -5,6 +5,7 @@
 // know not just IF the cursor is inside a fence but WHICH ds-* language it opened with).
 // One scanner, two consumers — extracted here (rather than duplicated) to avoid drift.
 import type { Editor } from 'obsidian';
+import { fenceLanguage } from '../framework/host/blockPrefix';
 
 // A fence-marker line: an optional Obsidian callout/blockquote prefix (one or more `> `,
 // e.g. nested callouts), up to 3 leading spaces (CommonMark still treats that as
@@ -51,12 +52,12 @@ export function scanFenceState(editor: Editor, line: number): FenceState {
 			inFence = true;
 			fenceChar = marker[0];
 			fenceLen = marker.length;
-			// SC-476: the block's type is the FIRST whitespace-delimited token of the trimmed info
-			// string (```` ```ds-counter extra ```` is a ds-counter), the rule the rest of DSE
-			// uses. Mirrors SC-457's `fenceLanguage` (src/framework/host/blockPrefix.ts); swap this
-			// for that import once SC-457 lands. Case is kept: Obsidian dispatches a block to its
-			// processor by exact language, so ```` ```DS-Stamina-Bar ```` never renders.
-			lang = /^\S*/.exec(rest.trim())![0];
+			// SC-476: the block's type is the FIRST token of the info string (```` ```ds-counter extra ````
+			// is a ds-counter), by the one rule the rest of DSE uses (SC-457 `fenceLanguage`: leading
+			// spaces and tabs only are skipped, so a no-break space before the name gives no type, as
+			// in Obsidian). Case is kept: Obsidian dispatches a block to its processor by exact
+			// language, so ```` ```DS-Stamina-Bar ```` never renders.
+			lang = fenceLanguage(rest);
 		} else if (marker[0] === fenceChar && marker.length >= fenceLen && rest.trim() === '') {
 			inFence = false;
 			lang = null;
