@@ -42,6 +42,8 @@
 // SC-326 appends G-S13: two 20-round montage blocks in one note, one scrolled MID-way and one to its far
 // end, keep their horizontal scroll across quick-trio taps and End round — the rebuild every write triggers AND the
 // later adoption move both reset a scroll container's offset (measured before the fix: 884 -> 0).
+// SC-470 appends G-S15 (G-S13 is SC-326's; G-S14 is reserved for SC-457): the scroll pin for EVERY Reading view of the note — a second pane during a DSE write
+// from the first, and a write that is not ours (in-app vault.process, and a write on disk picked up by the file watcher).
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -1780,6 +1782,94 @@ const SCENARIOS = [
 			t.expect(t.integrity(rel).ok, 'note integrity');
 			await t.reset(rel);
 			return notes.join('; ');
+		},
+	},
+	{
+		// SC-470: the SC-198 pin for every Reading view of the note, not only the writer's (SC-459 F1).
+		// (a) the note in two panes, a DSE write from pane A: pane B is redrawn fresh (adoption is
+		// writer-only, G-S4) and used to clamp 2779 -> 2001. (b) a write that is not ours, with the
+		// note open: `vault.process` from outside the plugin, and a write to the file on disk picked
+		// up by Obsidian's file watcher (the Sync / git path) — both used to clamp the same way.
+		// Per phase, on the OBSERVED pane (B in (a), the only pane in (b)) and with G-S8's recorder:
+		// the write landed; anti-vacuity — the tracker was redrawn and the sizer's inline min-height
+		// fell below the scroll position; `data-dse-scroll-pin` was on that scroller at the collapse;
+		// scrollTop never moved; and the sizer was back at or above the scroll position at the release.
+		id: 'G-S15',
+		async run(t) {
+			const rel = 'Lifecycle/tall.md';
+			const A = 'window.__gs15A';
+			const B = 'window.__gs15B';
+			const scrollerOf = (leaf) => `(${leaf}).view.containerEl.querySelector('.markdown-reading-view .markdown-preview-view')`;
+			const park = async (leaves) => {
+				for (let i = 0; i < 3; i++) {
+					for (const leaf of leaves) await t.ev(`(() => { const s = ${scrollerOf(leaf)}; const r = ${t.root(TRACKER, leaf)}; s.scrollTop = r.getBoundingClientRect().top - s.getBoundingClientRect().top + s.scrollTop + 1500; })()`);
+					await t.sleep(450);
+				}
+			};
+			// Starts G-S8's recorder on `leaf`'s scroller (resolves on window.__gs15rec), returns at once.
+			const record = (leaf) => t.ev(`(() => { window.__gs15rec = new Promise((resolve) => { const s = ${scrollerOf(leaf)}; const st0 = s.scrollTop; const samples = []; let stMin = st0; let mhMin = Infinity; let pinAtCollapse = null; let pinFrames = 0; let pinSeen = false; let pinOnAt = 0; let released = false; let goneFrames = 0; let mhAtRelease = null; const sizerMh = () => { const z = s.querySelector('.markdown-preview-sizer'); return z ? parseFloat(z.style.minHeight) : NaN; }; const onScroll = () => { stMin = Math.min(stMin, s.scrollTop); }; s.addEventListener('scroll', onScroll); const mo = new MutationObserver(() => { const mh = sizerMh(); if (!Number.isNaN(mh) && mh < mhMin) { mhMin = mh; if (mh < st0 && pinAtCollapse === null) pinAtCollapse = s.hasAttribute('data-dse-scroll-pin'); } }); mo.observe(s, { attributes: true, attributeFilter: ['style'], childList: true, subtree: true }); const t0 = performance.now(); const tick = () => { samples.push(s.scrollTop); if (s.hasAttribute('data-dse-scroll-pin')) { pinFrames++; if (!pinSeen) pinOnAt = performance.now() - t0; pinSeen = true; released = false; goneFrames = 0; } else if (pinSeen) { if (!released) { released = true; mhAtRelease = sizerMh(); } goneFrames++; } if (goneFrames < 10 && performance.now() - t0 < (pinSeen ? Math.min(pinOnAt + 4500, 12000) : 5000)) requestAnimationFrame(tick); else { mo.disconnect(); s.removeEventListener('scroll', onScroll); resolve({ st0, frames: samples.length, stMin: Math.min(stMin, ...samples), stMax: Math.max(...samples), mhMin, pinAtCollapse, pinFrames, released, mhAtRelease, ms: Math.round(performance.now() - t0) }); } }; requestAnimationFrame(tick); }); return true; })()`);
+			const check = async (phase, leaf, m, landed) => {
+				t.expect(landed, `${phase}: the write did not land`);
+				t.expect(await t.ev(`!!(${t.root(TRACKER, leaf)})`), `${phase}: no tracker is rendered after the write`);
+				t.expect(!(await t.sameRoot(TRACKER, 'gs15', leaf)), `${phase}: the observed tracker was not redrawn — the phase cannot reach the SC-198 clamp`);
+				t.expect(m.mhMin < m.st0, `${phase}: the redraw never collapsed the sizer below the scroll position (inline min-height min ${m.mhMin}px, scrollTop ${m.st0}) — nothing to pin against; re-measure (SC-459, SC-470)`);
+				t.expect(m.pinAtCollapse === true, `${phase}: data-dse-scroll-pin was not on the scroller when the sizer collapsed to ${m.mhMin}px (pin frames ${m.pinFrames}, scrollTop min ${m.stMin} of start ${m.st0})`);
+				t.expect(m.stMin === m.st0 && m.stMax === m.st0, `${phase}: scrollTop moved: start ${m.st0} min ${m.stMin} max ${m.stMax} (sizer inline min-height fell to ${m.mhMin}px, pin present ${m.pinAtCollapse})`);
+				t.expect(m.released, `${phase}: the pin was never seen released within ${m.ms}ms (pin frames ${m.pinFrames}) — the release cannot be checked`);
+				t.expect(m.mhAtRelease >= m.st0, `${phase}: the sizer's inline min-height was ${m.mhAtRelease}px when the pin was released, below scrollTop ${m.st0} — the release would clamp`);
+				return `${phase}: sizer fell to ${m.mhMin}px under the pin, ${m.mhAtRelease}px at release, scrollTop held at ${m.st0} over ${m.frames} frames`;
+			};
+			// Every phase runs even after one fails, so a FAIL names every phase that clamped.
+			const out = [];
+			const fails = [];
+			const phase = async (fn) => {
+				try {
+					out.push(await fn());
+				} catch (e) {
+					fails.push(e instanceof Error ? e.message : String(e));
+				}
+			};
+			// (a) two panes, the DSE write from pane A; observe pane B.
+			await phase(async () => {
+				await t.open(rel);
+				await t.reset(rel);
+				try {
+					await t.ev(`(async () => { window.__gs15A = app.workspace.getMostRecentLeaf(); const b = app.workspace.getLeaf('split', 'vertical'); window.__gs15B = b; await b.setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'preview' }, active: false }); app.workspace.setActiveLeaf(window.__gs15A, { focus: true }); })()`);
+					await t.sleep(1500);
+					await park([A, B]);
+					await t.tag(TRACKER, 'gs15', B);
+					const a0 = await t.ev(`${scrollerOf(A)}.scrollTop`);
+					await record(B);
+					const clicked = await t.ev(`(() => { const s = ${scrollerOf(A)}; const sr = s.getBoundingClientRect(); const b = Array.from(${t.root(TRACKER, A)}.querySelectorAll('button.dse-init__portrait-toggle')).find((x) => { const r = x.getBoundingClientRect(); return r.top > sr.top + 100 && r.bottom < sr.bottom - 100; }); if (!b) return false; b.click(); return true; })()`);
+					t.expect(clicked, '(a) second pane: no visible portrait toggle in pane A');
+					const mB = await t.ev('window.__gs15rec');
+					const a1 = await t.ev(`${scrollerOf(A)}.scrollTop`);
+					t.expect(a1 === a0, `(a) second pane: the writer pane A moved: ${a0} -> ${a1}`);
+					return await check('(a) second pane', B, mB, /has_taken_turn: true/.test(t.read(rel)));
+				} finally {
+					await t.ev(`(() => { if (window.__gs15B) window.__gs15B.detach(); window.__gs15B = null; return true; })()`);
+				}
+			});
+			// (b) a write that is not ours, the note open in one pane: in-app, then on disk (file watcher).
+			for (const [name, write] of [
+				['(b) external vault.process', () => t.edit(rel, `c.replace('  value: 1', '  value: 2')`)],
+				['(b) external write on disk', async () => fs.writeFileSync(path.join(vault, rel), FIXTURES[rel].replace('  value: 1', '  value: 2'))],
+			]) {
+				await phase(async () => {
+					await t.open(rel);
+					await t.reset(rel);
+					await t.ev(`(() => { window.__gs15A = app.workspace.getMostRecentLeaf(); return true; })()`);
+					await park([A]);
+					await t.tag(TRACKER, 'gs15', A);
+					await record(A);
+					await write();
+					const m = await t.ev('window.__gs15rec');
+					return await check(name, A, m, t.read(rel).includes('  value: 2'));
+				});
+			}
+			await t.reset(rel);
+			t.expect(fails.length === 0, fails.join(' | '));
+			return out.join('; ');
 		},
 	},
 ];

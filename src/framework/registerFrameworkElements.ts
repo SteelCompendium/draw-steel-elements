@@ -52,6 +52,8 @@ export function registerFrameworkElements(
 	// its pin rather than fighting over it, and so unload can drop any pin still held.
 	const scrollPin = new PreviewScrollPin();
 	plugin.register(() => scrollPin.releaseAll());
+	// SC-470: every write to a note, ours or not, pins every Reading view of it (previewScrollPin.ts).
+	plugin.registerEvent(plugin.app.vault.on('modify', (file) => scrollPin.pinReadingViewsOf(plugin.app.workspace, file.path)));
 	// SC-340 §6.1: the plugin-scoped owner of every reading-mode view.
 	const registry = plugin.addChild(new ViewRegistry({ enabled: options.viewAdoption ?? false }));
 

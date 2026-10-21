@@ -372,3 +372,83 @@ describe('SC-198: registerFrameworkElements shares one pin and releases it on un
 		document.body.innerHTML = '';
 	});
 });
+
+// SC-470: the `modify` pin — every Reading view of the written note that shows a DSE block.
+describe('SC-470: PreviewScrollPin.pinReadingViewsOf', () => {
+	afterEach(() => {
+		document.body.innerHTML = '';
+	});
+
+	/** A markdown leaf whose view shows `path` in `mode`; its scroller sits under `.markdown-reading-view` as in 1.14.4. */
+	function makeLeaf(path: string, mode: 'preview' | 'source', { dse = true, metrics = {} as Metrics } = {}) {
+		const { scroller, el } = makeScroller(metrics);
+		if (dse) el.setAttribute('data-dse-element', 'initiative');
+		const reading = document.createElement('div');
+		reading.className = 'markdown-reading-view';
+		reading.appendChild(scroller);
+		document.body.appendChild(reading);
+		return { scroller, leaf: { view: { file: { path }, getMode: () => mode, previewMode: { containerEl: reading } } } };
+	}
+	const workspaceOf = (...leaves: Array<{ leaf: unknown }>) =>
+		({ getLeavesOfType: (type: string) => (type === 'markdown' ? leaves.map((l) => l.leaf) : []) }) as any;
+
+	test('pins every Reading view of the note that shows a DSE block, at its own current height', () => {
+		const a = makeLeaf('Note.md', 'preview');
+		const b = makeLeaf('Note.md', 'preview', { metrics: { scrollHeight: 6000 } });
+		new PreviewScrollPin().pinReadingViewsOf(workspaceOf(a, b), 'Note.md');
+		expect(pinnedPx(a.scroller)).toBe('4883px');
+		expect(pinnedPx(b.scroller)).toBe('6000px');
+	});
+
+	test('leaves alone: another note, a Live Preview/Source view, a view without a DSE block, a deferred view', () => {
+		const other = makeLeaf('Other.md', 'preview');
+		const source = makeLeaf('Note.md', 'source');
+		const plain = makeLeaf('Note.md', 'preview', { dse: false });
+		const deferred = { leaf: { view: {} } };
+		new PreviewScrollPin().pinReadingViewsOf(workspaceOf(other, source, plain, deferred), 'Note.md');
+		for (const l of [other, source, plain]) expect(isPinned(l.scroller)).toBe(false);
+	});
+
+	test('keeps every pin() fail-safe: not scrolled, or a document that does not scroll, is never pinned', () => {
+		const top = makeLeaf('Note.md', 'preview', { metrics: { scrollTop: 0 } });
+		const short = makeLeaf('Note.md', 'preview', { metrics: { scrollTop: 0, scrollHeight: 900, clientHeight: 974 } });
+		new PreviewScrollPin().pinReadingViewsOf(workspaceOf(top, short), 'Note.md');
+		expect(isPinned(top.scroller)).toBe(false);
+		expect(isPinned(short.scroller)).toBe(false);
+	});
+
+	test("the writer's view, already pinned by its write, keeps its FIRST height (never a re-measured one)", () => {
+		jest.useFakeTimers();
+		try {
+			const a = makeLeaf('Note.md', 'preview');
+			const pin = new PreviewScrollPin();
+			pin.pin(a.scroller.querySelector('[data-dse-element]') as HTMLElement);
+			Object.defineProperty(a.scroller, 'scrollHeight', { value: 300, configurable: true, writable: true });
+			pin.pinReadingViewsOf(workspaceOf(a), 'Note.md');
+			expect(pinnedPx(a.scroller)).toBe('4883px');
+			jest.advanceTimersByTime(TTL);
+			expect(isPinned(a.scroller)).toBe(false);
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	test('registerFrameworkElements registers it on the vault `modify` event', () => {
+		const app = new App();
+		const plugin = new Plugin(app);
+		plugin.load();
+		const on = jest.spyOn(app.vault, 'on');
+		const spy = jest.spyOn(PreviewScrollPin.prototype, 'pinReadingViewsOf').mockImplementation(() => {});
+		try {
+			const registry: ElementRegistry = { register: () => undefined as never, get: () => undefined, all: () => [] };
+			registerFrameworkElements(plugin as any, { registry, pipeline: {} as ElementPipeline });
+			const call = on.mock.calls.find(([name]) => name === 'modify');
+			expect(call).toBeDefined();
+			(call![1] as (file: { path: string }) => void)({ path: 'Note.md' });
+			expect(spy).toHaveBeenCalledWith(app.workspace, 'Note.md');
+		} finally {
+			spy.mockRestore();
+			on.mockRestore();
+		}
+	});
+});

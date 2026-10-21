@@ -39,10 +39,25 @@
 // the backstop for every write adoption misses (claim miss, collision, `viewAdoption: false`):
 // with adoption off, unpinned, the lifecycle G-S8 note went `scrollTop` 2779 -> 2001 (sizer
 // 5501px -> 2446px; the 2486px step is where scrollTop settles); pinned, it held. G-S8
-// asserts exactly that adoption-off case, so disabling this pin (the call in
-// ReadingModeBlockHost, or the stylesheet rule) fails it.
-// Not covered (SC-470): a second pane (the pin is taken only on the writer's scroller), or
-// an external edit (no write of ours, so the pin is never taken).
+// asserts exactly that adoption-off case, so deleting the stylesheet rule fails it. (Since
+// SC-470 the `modify` pin below also covers the writer, so disabling only the call in
+// ReadingModeBlockHost no longer fails G-S8: measured 3/3 ok. That call is kept as the
+// writer's own backstop; it is redundant on 1.14.4 timing, and re-pinning is harmless.)
+//
+// EVERY READING VIEW OF THE NOTE, ON EVERY WRITE (SC-470). Pinning only the writer's scroller
+// left two clamps (SC-459 F1): a second reading view of the same note (writer-only adoption,
+// G-S4, so that view is redrawn fresh: 3020 -> 0) and any write that is not ours (Sync, git,
+// another device or plugin: 2416 -> 0). The plugin therefore also pins from the vault
+// `modify` event (`pinReadingViewsOf`, registered in registerFrameworkElements). Measured on
+// 1.14.4 for our own write, an external `vault.process`/`vault.modify`, `adapter.write`, and a
+// write from outside the app picked up by the file watcher: `modify` fires while every view of
+// the note still shows the OLD render (the DSE root still connected, the sizer's inline
+// min-height still full), 0-3 frames before the first collapse, and a listener registered
+// after the views opened sees the same. So the height captured there is never a collapsed one.
+// The writer's view is pinned twice (its callback, then `modify` 1-2 ms later); the second
+// pin keeps the first height and only restarts the TTL.
+// Only Reading views that show a DSE block are pinned: a note without one never collapses
+// (SC-459 M1), so it never gets phantom space. Live Preview / Source panes are not touched.
 //
 // WHY `!important` VIA A STYLESHEET AND NOT AN INLINE STYLE. Obsidian owns
 // `sizer.style.minHeight` and rewrites it during the rebuild; an inline pin is simply
@@ -59,6 +74,8 @@
 // guarantees the pin is released even if the rebuild never comes. The worst case is a few
 // hundred px of phantom scroll space at the bottom of the note for at most PIN_TTL_MS.
 
+import type { Workspace } from 'obsidian';
+
 /** Present on `.markdown-preview-view` for as long as a pin is held. */
 const PIN_ATTR = 'data-dse-scroll-pin';
 /** Carries the pinned height; read by the styles-source.css rule quoted above. */
@@ -70,6 +87,13 @@ const PIN_VAR = '--dse-scroll-pin';
  * where the expected rebuild never arrives at all.
  */
 const PIN_TTL_MS = 2500;
+
+/** The slice of MarkdownView `pinReadingViewsOf` reads (duck-typed: the jest mock has no MarkdownView). */
+interface ReadingViewLike {
+	file?: { path: string } | null;
+	getMode?: () => string;
+	previewMode?: { containerEl?: HTMLElement };
+}
 
 interface HeldPin {
 	/** The window that owns `timer` — a popout preview has its own (cf. view.ts's use of
@@ -97,6 +121,32 @@ export class PreviewScrollPin {
 	pin(containerEl: HTMLElement): void {
 		const scroller = containerEl.closest<HTMLElement>('.markdown-preview-view');
 		if (!scroller) return; // sidebar / embed / canvas / LP: not a reading-view scroller
+		this.pinScroller(scroller);
+	}
+
+	/**
+	 * SC-470: hold every open Reading view of `path` that shows a DSE block. Called from the
+	 * vault `modify` event, which fires before any view of the note starts its rebuild (see the
+	 * header), for our own writes and for everyone else's. A view already pinned by the
+	 * writer keeps its first height (see `pinScroller`); the TTL restarts a few ms later.
+	 */
+	pinReadingViewsOf(workspace: Workspace, path: string): void {
+		for (const leaf of workspace.getLeavesOfType('markdown')) {
+			const view = leaf.view as unknown as ReadingViewLike;
+			if (view.file?.path !== path || view.getMode?.() !== 'preview') continue;
+			// `previewMode.containerEl` is `.markdown-reading-view`; its scroller is the child (measured, 1.14.4).
+			const scroller = view.previewMode?.containerEl?.querySelector<HTMLElement>(':scope > .markdown-preview-view');
+			if (!scroller) continue;
+			if (!scroller.querySelector('[data-dse-element]')) continue; // nothing of ours can collapse it
+			try {
+				this.pinScroller(scroller);
+			} catch (err) {
+				console.warn('[DSE] scroll pin failed for a reading view', err);
+			}
+		}
+	}
+
+	private pinScroller(scroller: HTMLElement): void {
 		const win = scroller.ownerDocument.defaultView;
 		if (!win) return;
 
