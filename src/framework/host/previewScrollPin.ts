@@ -4,12 +4,11 @@
 // THE PROBLEM, AS FIRST MEASURED (SC-198, a real Obsidian 1.13.7 over CDP; full write-up in
 // the SC-198 root-cause doc; history — the 1.14.4 re-measurement is the next section, and
 // it narrows "any write" below to "a write that draws a DSE block fresh"). Any write to
-// the open note makes Obsidian run
-// `setViewData -> previewMode.set -> renderer.set -> queueRender`, which tears the rendered
-// sections down and re-measures from scratch. This is NOT plugin-specific — a bare
-// one-character `vault.process` with the plugin uninvolved reproduces it identically — so
-// there is nothing to "stop doing" on our side. During that rebuild
-// `.markdown-preview-sizer`'s inline `min-height` collapses (measured 4331px -> 246px), the
+// the open note makes Obsidian run `setViewData -> previewMode.set -> renderer.set ->
+// queueRender`, which tears the rendered sections down and re-measures from scratch. This
+// is NOT plugin-specific — a bare one-character `vault.process` with the plugin uninvolved
+// reproduces it identically — so there is nothing to "stop doing" on our side. During that
+// rebuild `.markdown-preview-sizer`'s inline `min-height` collapses (measured 4331px -> 246px), the
 // scroller's `scrollHeight` drops to `clientHeight`, and the browser **passively clamps**
 // `scrollTop` to `scrollHeight - clientHeight` — i.e. to 0 for any note that is mostly one
 // tall element. Nothing actively scrolls: the clamp is a layout consequence.
@@ -42,8 +41,8 @@
 // 5501px -> 2446px; the 2486px step is where scrollTop settles); pinned, it held. G-S8
 // asserts exactly that adoption-off case, so disabling this pin (the call in
 // ReadingModeBlockHost, or the stylesheet rule) fails it.
-// Not covered (SC-470): a second pane, or an external edit, redraws the tracker without any
-// write of ours, so the pin is never taken — it only covers the writer's own write.
+// Not covered (SC-470): a second pane (the pin is taken only on the writer's scroller), or
+// an external edit (no write of ours, so the pin is never taken).
 //
 // WHY `!important` VIA A STYLESHEET AND NOT AN INLINE STYLE. Obsidian owns
 // `sizer.style.minHeight` and rewrites it during the rebuild; an inline pin is simply
