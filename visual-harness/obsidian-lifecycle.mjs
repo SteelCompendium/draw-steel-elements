@@ -21,7 +21,7 @@
 // pending write), G-S6d (previewMode.rerender), G-S6e (plugin disable/enable), G-S6f (embed
 // leaf detach), G-S6g (hover popovers ARE writable in Obsidian 1.14.2), G-S6h (nested
 // read-only ds-counter survives its parent's adoption), G-S6i (fast navigation, no leaks),
-// G-S8 (scrollTop pin across a tracker's own write).
+// G-S8 (scrollTop pin across a tracker's own write: view adoption on, and, SC-459, adoption off).
 // SC-377 appends 3 click-shield scenarios + a title scenario + two click-away scenarios — 25 total: G-S9a (initiative
 // Amount/Label), G-S9b (ds-counter's editable stepper input), G-S9c (ds-party's award input),
 // G-S9d (the inline encounter title), G-S9e (click away from an in-card input saves), G-S9f (click away onto another element / pane saves). Each drives a REAL
@@ -1190,10 +1190,14 @@ const SCENARIOS = [
 		// Phase 2, view adoption OFF (the SC-340 §6.6 kill switch, flipped at runtime: claim()
 		// reads `enabled` on every call): the write's rebuild draws the tracker FRESH, which is
 		// the path SC-198's clamp lives on. Measured (SC-459 r1, 1.14.4): unpinned, scrollTop
-		// 2779 -> 2001 with the sizer's inline min-height 5501px -> 2486px; pinned, held. The
-		// phase asserts the rebuild really happened (root replaced, sizer inline min-height fell
-		// below the scroll position — otherwise the scenario proves nothing), that
-		// `data-dse-scroll-pin` was on the scroller at that moment, and that scrollTop never moved.
+		// 2779 -> 2001 with the sizer's inline min-height 5501px -> 2446px; pinned, held. The
+		// phase asserts the rebuild really happened (a tracker is rendered and its root was
+		// replaced, sizer inline min-height fell below the scroll position — otherwise the
+		// scenario proves nothing), that `data-dse-scroll-pin` was on the scroller at that
+		// moment, that scrollTop never moved, and (sampling runs until the pin is released plus 10
+		// frames, cap 5 s) that the sizer's inline min-height was back at or above the scroll
+		// position when the pin came off, so the release cannot clamp unseen. Phase 1 also
+		// asserts the tracker was ADOPTED, so a change that stops adoption is visible.
 		id: 'G-S8',
 		async run(t) {
 			const rel = 'Lifecycle/tall.md';
@@ -1207,14 +1211,19 @@ const SCENARIOS = [
 				// A MutationObserver sees every inline min-height Obsidian writes on the sizer; a
 				// rAF sample alone catches the collapse in ~1 frame. The inline value is read even
 				// while pinned (the pin outranks it via !important, it does not stop the write).
-				const m = await t.ev(`new Promise((resolve) => { const s = ${scroller}; const st0 = s.scrollTop; const sr = s.getBoundingClientRect(); const b = Array.from(${t.root(TRACKER)}.querySelectorAll('button.dse-init__portrait-toggle')).find((x) => { const r = x.getBoundingClientRect(); return r.top > sr.top + 100 && r.bottom < sr.bottom - 100; }); const samples = []; let stMin = st0; let mhMin = Infinity; let pinAtCollapse = null; let pinFrames = 0; const onScroll = () => { stMin = Math.min(stMin, s.scrollTop); }; s.addEventListener('scroll', onScroll); const mo = new MutationObserver(() => { const z = s.querySelector('.markdown-preview-sizer'); const mh = z ? parseFloat(z.style.minHeight) : NaN; if (!Number.isNaN(mh) && mh < mhMin) { mhMin = mh; if (mh < st0 && pinAtCollapse === null) pinAtCollapse = s.hasAttribute('data-dse-scroll-pin'); } }); mo.observe(s, { attributes: true, attributeFilter: ['style'], childList: true, subtree: true }); const t0 = performance.now(); const tick = () => { samples.push(s.scrollTop); if (s.hasAttribute('data-dse-scroll-pin')) pinFrames++; if (performance.now() - t0 < 2400) requestAnimationFrame(tick); else { mo.disconnect(); s.removeEventListener('scroll', onScroll); resolve({ st0, frames: samples.length, stMin: Math.min(stMin, ...samples), stMax: Math.max(...samples), mhMin, pinAtCollapse, pinFrames }); } }; requestAnimationFrame(tick); b.click(); })`);
-				m.rebuilt = !(await t.sameRoot(TRACKER, 'gs8'));
+				const m = await t.ev(`new Promise((resolve) => { const s = ${scroller}; const st0 = s.scrollTop; const sr = s.getBoundingClientRect(); const b = Array.from(${t.root(TRACKER)}.querySelectorAll('button.dse-init__portrait-toggle')).find((x) => { const r = x.getBoundingClientRect(); return r.top > sr.top + 100 && r.bottom < sr.bottom - 100; }); const samples = []; let stMin = st0; let mhMin = Infinity; let pinAtCollapse = null; let pinFrames = 0; let pinSeen = false; let released = false; let goneFrames = 0; let mhAtRelease = null; const sizerMh = () => { const z = s.querySelector('.markdown-preview-sizer'); return z ? parseFloat(z.style.minHeight) : NaN; }; const onScroll = () => { stMin = Math.min(stMin, s.scrollTop); }; s.addEventListener('scroll', onScroll); const mo = new MutationObserver(() => { const z = s.querySelector('.markdown-preview-sizer'); const mh = z ? parseFloat(z.style.minHeight) : NaN; if (!Number.isNaN(mh) && mh < mhMin) { mhMin = mh; if (mh < st0 && pinAtCollapse === null) pinAtCollapse = s.hasAttribute('data-dse-scroll-pin'); } }); mo.observe(s, { attributes: true, attributeFilter: ['style'], childList: true, subtree: true }); const t0 = performance.now(); const tick = () => { samples.push(s.scrollTop); if (s.hasAttribute('data-dse-scroll-pin')) { pinFrames++; pinSeen = true; released = false; goneFrames = 0; } else if (pinSeen) { if (!released) { released = true; mhAtRelease = sizerMh(); } goneFrames++; } if (goneFrames < 10 && performance.now() - t0 < 5000) requestAnimationFrame(tick); else { mo.disconnect(); s.removeEventListener('scroll', onScroll); resolve({ st0, frames: samples.length, stMin: Math.min(stMin, ...samples), stMax: Math.max(...samples), mhMin, pinAtCollapse, pinFrames, released, mhAtRelease, ms: Math.round(performance.now() - t0) }); } }; requestAnimationFrame(tick); b.click(); })`);
+				// INFO-4: "not the same root" alone is also true when no tracker renders at all.
+				m.present = await t.ev(`!!(${t.root(TRACKER)})`);
+				m.rebuilt = m.present && !(await t.sameRoot(TRACKER, 'gs8'));
 				t.expect(/has_taken_turn: true/.test(t.read(rel)), 'write did not land');
 				await t.reset(rel);
 				return m;
 			};
 			const on = await writeOnce();
+			t.expect(on.present, 'adoption on: no tracker is rendered after the write');
+			t.expect(!on.rebuilt, 'adoption on: the tracker was rebuilt, not adopted (SC-340 adoption missed) — this phase no longer checks the default path');
 			t.expect(on.stMin === on.st0 && on.stMax === on.st0, `adoption on: scrollTop moved: start ${on.st0} min ${on.stMin} max ${on.stMax}`);
+			t.expect(!on.released || on.mhAtRelease >= on.st0, `adoption on: the sizer's inline min-height was ${on.mhAtRelease}px when the pin was released, below scrollTop ${on.st0}`);
 			const prevEnabled = await t.ev(`${t.reg}.enabled`);
 			let off;
 			try {
@@ -1223,11 +1232,14 @@ const SCENARIOS = [
 			} finally {
 				await t.ev(`${t.reg}.enabled = ${JSON.stringify(prevEnabled)}`);
 			}
+			t.expect(off.present, 'adoption off: no tracker is rendered after the write');
 			t.expect(off.rebuilt, 'adoption off: the write did not rebuild the tracker — the phase cannot reach the SC-198 clamp');
 			t.expect(off.mhMin < off.st0, `adoption off: the rebuild never collapsed the sizer below the scroll position (inline min-height min ${off.mhMin}px, scrollTop ${off.st0}) — nothing to pin against; re-measure SC-198 (SC-459)`);
-			t.expect(off.pinAtCollapse === true, `adoption off: data-dse-scroll-pin was not on the scroller when the sizer collapsed to ${off.mhMin}px (pin frames ${off.pinFrames})`);
+			t.expect(off.pinAtCollapse === true, `adoption off: data-dse-scroll-pin was not on the scroller when the sizer collapsed to ${off.mhMin}px (pin frames ${off.pinFrames}, scrollTop min ${off.stMin} of start ${off.st0})`);
 			t.expect(off.stMin === off.st0 && off.stMax === off.st0, `adoption off: scrollTop moved: start ${off.st0} min ${off.stMin} max ${off.stMax} (sizer inline min-height fell to ${off.mhMin}px, pin present ${off.pinAtCollapse})`);
-			return `adoption on: scrollTop held at ${on.st0} over ${on.frames} frames; adoption off: tracker rebuilt, sizer min-height fell to ${off.mhMin}px under the pin, scrollTop held at ${off.st0} over ${off.frames} frames`;
+			t.expect(off.released, `adoption off: the pin was never seen released within ${off.ms}ms (pin frames ${off.pinFrames}) — the release cannot be checked`);
+			t.expect(off.mhAtRelease >= off.st0, `adoption off: the sizer's inline min-height was ${off.mhAtRelease}px when the pin was released, below scrollTop ${off.st0} — the release would clamp`);
+			return `adoption on: scrollTop held at ${on.st0} over ${on.frames} frames; adoption off: tracker rebuilt, sizer min-height fell to ${off.mhMin}px under the pin and was ${off.mhAtRelease}px at its release, scrollTop held at ${off.st0} over ${off.frames} frames (${off.ms}ms)`;
 		},
 	},
 	{
