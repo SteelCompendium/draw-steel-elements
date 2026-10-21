@@ -200,6 +200,8 @@ describe('SC-476 — extra words after the fence language', () => {
 		['a tilde fence with extra words', '~~~ds-counter extra words', 'ds-counter'],
 		['a callout-prefixed fence with extra words', '> ```ds-counter extra', 'ds-counter'],
 		['the language alone (unchanged)', '```ds-counter', 'ds-counter'],
+		['SC-457: a trailing no-break space after the name (Obsidian renders it as the block)', '```ds-counter\u00a0', 'ds-counter'],
+		['SC-457: a trailing U+3000 after the name', '``` ds-counter\u3000', 'ds-counter'],
 		['SC-457: a no-break space before the name is not a ds-counter (Obsidian does not render it)', '```\u00a0ds-counter', '\u00a0ds-counter'],
 		['SC-457: U+3000 before the name is not a ds-counter', '``` \u3000ds-counter', '\u3000ds-counter'],
 		['mixed case is kept: Obsidian only renders an exact-case language', '```DS-Counter extra', 'DS-Counter'],

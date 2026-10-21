@@ -61,6 +61,34 @@ describe('SC-457: ReadingModeBlockHost with whitespace before the language', () 
 		expect(host.blockKey()).toBe('Note.md::ds-counter::4');
 	});
 
+	// Obsidian renders ```ds-counter<NBSP/U+3000> (and with a leading space) as the block and it saves on develop: the
+	// language is read without trailing whitespace of any kind. The write drops the trailing whitespace of the opening
+	// line (SC-290: `info` is the remainder minus trailing whitespace).
+	test.each([
+		['a trailing no-break space', 'ds-counter\u00a0'],
+		['a trailing U+3000', 'ds-counter\u3000'],
+		['a leading space and a trailing U+3000', ' ds-counter\u3000'],
+	])('%s: the language is ds-counter and a section-gone write lands', async (_label, info) => {
+		const app = new App();
+		const before = ['# N', '', 'TOP', '', ...CTR(1, info), '', 'BELOW'].join('\n');
+		app.vault.setFile('Note.md', before);
+		const section = sectionOf(before, 4, 7);
+		const host = hostFor(app, section, bodyOf(1));
+		expect(host.getBlockInfo()?.language).toBe('ds-counter');
+		expect(host.blockKey()).toBe('Note.md::ds-counter::4');
+		const shifted = ['# N', '', 'TOP', '', 'shift 0', '', 'shift 1', '', ...CTR(1, info), '', 'BELOW'].join('\n');
+		app.vault.setFile('Note.md', shifted);
+		section.current = sectionOf(shifted, 8, 11).current;
+		host.notePersistIntent();
+		section.current = null;
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		const opener = info.replace(/[\u00a0\u3000]$/, '');
+		expect(app.vault.getContent('Note.md')).toBe(['# N', '', 'TOP', '', 'shift 0', '', 'shift 1', '', ...CTR(2, opener), '', 'BELOW'].join('\n'));
+		expect(Notice.notices).toHaveLength(0);
+	});
+
 	test('a spaced fence inside a callout reports its language too (the SC-455 section-window path)', () => {
 		const app = new App();
 		const live = ['top', '> [!note] Title', ...under('> ', CTR(1)), '> after'].join('\n');

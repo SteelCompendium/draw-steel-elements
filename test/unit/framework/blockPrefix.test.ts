@@ -1,5 +1,6 @@
 // SC-455 — blockPrefix.ts (the one definition of a blockquote/callout prefix) and the prefix-aware
 // splices in fenceLine.ts built on it. Pure string logic.
+import { fenceAlias, matchFenceLine } from '@/framework/sidebar/anchor';
 import {
 	addBlockPrefix,
 	blankLinesAreTrimmed,
@@ -134,6 +135,15 @@ describe('SC-455: fenceLine splices with a prefix', () => {
 		expect(parseOpenFenceLine(`\`\`\` ${ws}ds-counter`)?.language).toBe(`${ws}ds-counter`);
 		expect(fenceLanguage(`${ws}ds-counter`)).not.toBe('ds-counter');
 		expect(fenceLanguage(` ${ws} ds-counter`)).not.toBe('ds-counter');
+	});
+
+	// A trailing no-break space / U+3000 / FF / VT / space does not change the language (Obsidian renders
+	// ```ds-counter<U+3000> as the block; the info string is read without its trailing whitespace).
+	test.each(['\u00a0', '\u3000', '\f', '\v', ' ', ' \u00a0 '])('trailing %j after the language leaves it ds-counter, on the host and the anchor parse alike', (ws) => {
+		for (const opener of [`\`\`\`ds-counter${ws}`, `\`\`\` ds-counter${ws}`]) {
+			expect(parseOpenFenceLine(opener)?.language).toBe('ds-counter');
+			expect(fenceAlias(matchFenceLine(opener)!.rest)).toBe('ds-counter');
+		}
 	});
 
 	test('replaceFenceBlock re-emits a spaced opening line byte for byte, in LF, CRLF and lone-CR notes', () => {
