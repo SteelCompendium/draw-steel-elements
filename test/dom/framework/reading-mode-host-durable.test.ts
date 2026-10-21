@@ -1223,6 +1223,85 @@ describe('SC-460: ReadingModeBlockHost.replaceSource in a note with lone CRs', (
 		expect(Notice.notices).toHaveLength(0);
 	});
 
+	test('a CR-only note (its only breaks are lone CRs) stays CR-only after a write; nothing outside the block moves', async () => {
+		const app = new App();
+		const live = ['# N', '', 'a', ...CTR(1), 'below', ''].join('\r');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: sectionOf(live) }, bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
+
+		const out = app.vault.getContent('Note.md')!;
+		expect(out).toBe(['# N', '', 'a', ...CTR(2), 'below', ''].join('\r'));
+		expect(out).not.toContain('\n');
+		expect(Notice.notices).toHaveLength(0);
+	});
+
+	test('an identical-content write into a CR-only note is a byte no-op', async () => {
+		const app = new App();
+		const live = ['# N', '', ...CTR(1), 'below'].join('\r');
+		app.vault.setFile('Note.md', live);
+		const host = hostFor(app, { current: sectionOf(live) }, bodyOf(1));
+
+		await expect(host.replaceSource(bodyOf(1))).resolves.toBe(true);
+
+		expect(app.vault.getContent('Note.md')).toBe(live);
+	});
+
+	// The section hint goes STALE when an external edit inserts lines above the block between the section read
+	// and the write (the SC-343 durable path): resolveWriteTarget must then see that the lines at the old numbers
+	// are not the block, and locate it again by its body - with lone CRs in the note, in Obsidian's numbering.
+	// (Review MEDIUM-2: reverting parseOpenFence / resolveWriteTarget / locateInSection to split('\n') passed
+	// every fresh-section test above; with a stale hint it spliced across the wrong range and returned true.)
+	describe('a stale section hint (lines inserted above the block after the section was read)', () => {
+		async function staleWrite(live: string, hint: { lineStart: number; lineEnd: number }, body: string, inserted: string, newBody: string) {
+			const app = new App();
+			app.vault.setFile('Note.md', live);
+			const host = hostFor(app, { current: { text: live, ...hint } }, body);
+			app.vault.setFile('Note.md', inserted + live); // the external edit, after the section was read
+			const wrote = await host.replaceSource(newBody);
+			return { wrote, out: app.vault.getContent('Note.md'), notices: Notice.notices.length };
+		}
+
+		test('LF note, two blocks below a lone CR, 2 lines inserted above: the write lands in the right block', async () => {
+			const live = ['a\rb', '', ...CTR(1, 'One'), '', ...CTR(2, 'Two'), ''].join('\n');
+			const res = await staleWrite(live, { lineStart: 8, lineEnd: 11 }, bodyOf(2, 'Two'), 'x\ry\n\n', bodyOf(9, 'Two'));
+			expect(res).toEqual({ wrote: true, notices: 0, out: 'x\ry\n\n' + ['a\rb', '', ...CTR(1, 'One'), '', ...CTR(9, 'Two'), ''].join('\n') });
+		});
+
+		test('CRLF note, lone CRs above both blocks, write the second', async () => {
+			const live = ['h', 'a\rb', ...CTR(1, 'One'), 'm\rn', ...CTR(2, 'Two'), 't'].join('\r\n');
+			const res = await staleWrite(live, { lineStart: 9, lineEnd: 12 }, bodyOf(2, 'Two'), 'z\r\n\r\n', bodyOf(9, 'Two'));
+			expect(res).toEqual({ wrote: true, notices: 0, out: 'z\r\n\r\n' + ['h', 'a\rb', ...CTR(1, 'One'), 'm\rn', ...CTR(9, 'Two'), 't'].join('\r\n') });
+		});
+
+		test('one line inserted: the old lineStart now points one line above the fence, at a lone-CR line', async () => {
+			const live = ['p\rq', ...CTR(1, 'One'), 'r', ...CTR(2, 'Two')].join('\n');
+			const res = await staleWrite(live, { lineStart: 7, lineEnd: 10 }, bodyOf(2, 'Two'), 'w\n', bodyOf(9, 'Two'));
+			expect(res).toEqual({ wrote: true, notices: 0, out: 'w\n' + ['p\rq', ...CTR(1, 'One'), 'r', ...CTR(9, 'Two')].join('\n') });
+		});
+
+		test('mixed terminators, three blocks, the last one written (the old range would have cut across two blocks)', async () => {
+			const live = '\r# head\nd\n```ds-counter\r\nname: B0\r\ncurrent_value: 15\r\nmax_value: 20\n```\rd\n- item\r\ngamma x\r\n```ds-counter\r\nname: B1\r\ncurrent_value: 41\r\nmax_value: 20\r\n```\r\n\n```ds-counter\nname: B2\r\ncurrent_value: 24\r\nmax_value: 20\r\n```\r\n- item\r\ngamma x\r\nbeta\r\n';
+			const res = await staleWrite(live, { lineStart: 17, lineEnd: 21 }, 'name: B2\ncurrent_value: 24\nmax_value: 20', 'z\n\n', 'current_value: 902\nname: N2\nmin_value: 0');
+			expect(res).toEqual({
+				wrote: true,
+				notices: 0,
+				out: 'z\n\n\r# head\nd\n```ds-counter\r\nname: B0\r\ncurrent_value: 15\r\nmax_value: 20\n```\rd\n- item\r\ngamma x\r\n```ds-counter\r\nname: B1\r\ncurrent_value: 41\r\nmax_value: 20\r\n```\r\n\n```ds-counter\r\ncurrent_value: 902\r\nname: N2\r\nmin_value: 0\r\n```\r\n- item\r\ngamma x\r\nbeta\r\n',
+			});
+		});
+
+		test('lone CRs inside the bodies and on fence lines, three blocks, the last one written', async () => {
+			const live = 'gamma x\r\nalpha\r\nalpha\r```ds-counter\rname: B0\rcurrent_value: 1\r\nmax_value: 20\r\n```\ngamma x\r\n```ds-counter\r\nname: B1\r\ncurrent_value: 41\n```\r\n- item\ngamma x\r\n- item\r\n```ds-counter\r\nname: B2\r\ncurrent_value: 49\rmax_value: 20\r\n```';
+			const res = await staleWrite(live, { lineStart: 16, lineEnd: 20 }, 'name: B2\ncurrent_value: 49\nmax_value: 20', 'z\n\n', 'current_value: 844\nname: N2\nmin_value: 0');
+			expect(res).toEqual({
+				wrote: true,
+				notices: 0,
+				out: 'z\n\ngamma x\r\nalpha\r\nalpha\r```ds-counter\rname: B0\rcurrent_value: 1\r\nmax_value: 20\r\n```\ngamma x\r\n```ds-counter\r\nname: B1\r\ncurrent_value: 41\n```\r\n- item\ngamma x\r\n- item\r\n```ds-counter\r\ncurrent_value: 844\r\nname: N2\r\nmin_value: 0\r\n```',
+			});
+		});
+	});
+
 	test('getBlockInfo reports the fence in Obsidian\'s numbering (what the chrome Pin hands the sidebar as its cursor line)', () => {
 		const app = new App();
 		const live = ['a\rb', '', ...CTR(1)].join('\n');

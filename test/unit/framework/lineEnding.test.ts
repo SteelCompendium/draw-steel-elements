@@ -26,7 +26,10 @@ describe('SC-453: detectEol', () => {
 		['LF in the majority', 'a\nb\nc\r\nd\n', '\n'],
 		['a tie goes to the FIRST line break (CRLF first)', 'a\r\nb\nc', '\r\n'],
 		['a tie goes to the FIRST line break (LF first)', 'a\nb\r\nc', '\n'],
-		['a lone CR casts no vote (SC-460: it is a line break, but a stray one never decides the note\'s ending)', 'a\rb\rc', '\n'],
+		['a note whose ONLY breaks are lone CRs is a CR-only note (SC-460: it stays CR-only, like an all-CRLF one)', 'a\rb\rc', '\r'],
+		['a CR-only note with a trailing CR', 'a\rb\r', '\r'],
+		['one LF among lone CRs: the stray CRs cast no vote, LF wins', 'a\rb\rc\nd', '\n'],
+		['one CRLF among lone CRs: CRLF wins', 'a\rb\rc\r\nd', '\r\n'],
 		['a stray lone CR in an LF note does not outvote the LF lines', 'a\rb\rc\rd\ne\nf', '\n'],
 		['a stray lone CR in a CRLF note does not outvote the CRLF lines', 'a\rb\rc\rd\r\ne\r\nf', '\r\n'],
 	])('%s', (_label, text, expected) => {
@@ -49,6 +52,11 @@ describe('SC-453: splitLines / stripCr / toEol', () => {
 		expect(toEol('a\nb', '\n')).toBe('a\nb');
 		expect(toEol('a\nb\n', '\r\n')).toBe('a\r\nb\r\n');
 		expect(toEol('a\r\nb', '\r\n')).toBe('a\r\nb');
+	});
+
+	test('toEol re-terminates every line with a lone CR for a CR-only note (SC-460), LF and CRLF both', () => {
+		expect(toEol('a\nb\n', '\r')).toBe('a\rb\r');
+		expect(toEol('a\r\nb', '\r')).toBe('a\rb');
 	});
 });
 
@@ -190,5 +198,29 @@ describe('SC-460: replaceFenceBlock / replaceFenceBody in a note holding lone CR
 	test('replaceFenceBody (the anchor stamp) lands in a note with a lone CR above and keeps both fences byte for byte', () => {
 		const note = 'A\rB\r\n```ds-counter\r\nx: 1\r\n```\r\n';
 		expect(replaceFenceBody(note, 2, 4, 'x: 1\n_dse_anchor: abc123')).toBe('A\rB\r\n```ds-counter\r\nx: 1\r\n_dse_anchor: abc123\r\n```\r\n');
+	});
+});
+
+// SC-460 (review MEDIUM-1) - a note whose only line breaks are lone CRs stays CR-only, as an all-CRLF note stays
+// all-CRLF: the block's rewritten lines take that ending, and nothing outside the block moves.
+describe('SC-460: replaceFenceBlock / replaceFenceBody in a CR-only note', () => {
+	const NOTE = '# T\r\rA\r```ds-counter\rx: 1\r```\rBELOW\r';
+	// Obsidian lines: '# T', '', 'A', ```ds-counter (3), x: 1, ``` (5), BELOW, ''
+
+	test('replaceFenceBlock writes the block with CR terminators and leaves every other byte alone', () => {
+		expect(replaceFenceBlock(NOTE, 3, 5, 'x: 2\ny: 3')).toBe('# T\r\rA\r```ds-counter\rx: 2\ry: 3\r```\rBELOW\r');
+	});
+
+	test('a block that ends the CR-only note with no terminator grows none', () => {
+		expect(replaceFenceBlock('A\r```ds-counter\rx: 1\r```', 1, 3, 'x: 2')).toBe('A\r```ds-counter\rx: 2\r```');
+	});
+
+	test('replaceFenceBody (the anchor stamp) adds its line with a CR and keeps both fences byte for byte', () => {
+		expect(replaceFenceBody(NOTE, 3, 5, 'x: 1\n_dse_anchor: abc123')).toBe('# T\r\rA\r```ds-counter\rx: 1\r_dse_anchor: abc123\r```\rBELOW\r');
+	});
+
+	test('an LF note with stray CRs is still written LF and a CRLF note CRLF (the new rule only changes a note with NO LF/CRLF)', () => {
+		expect(replaceFenceBlock('A\rB\n```ds-counter\nx: 1\n```\n', 2, 4, 'x: 2')).toBe('A\rB\n```ds-counter\nx: 2\n```\n');
+		expect(replaceFenceBlock('A\rB\r\n```ds-counter\r\nx: 1\r\n```\r\n', 2, 4, 'x: 2')).toBe('A\rB\r\n```ds-counter\r\nx: 2\r\n```\r\n');
 	});
 });

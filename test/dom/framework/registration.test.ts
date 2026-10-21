@@ -437,6 +437,17 @@ describe('SC-460: sendToSidebar on a note with lone CRs', () => {
 		expect(app.vault.getContent('Note.md')).toMatch(/^# Notes\r\na\rb\r\n```ds-counter\r\ncurrent_value: 1\r\n_dse_anchor: [A-Za-z0-9_-]+\r\n```\r\ntail$/);
 	});
 
+	test('a CR-only note is stamped with CR terminators: the note stays CR-only', async () => {
+		const { app, services } = setup();
+		app.vault.setFile('Note.md', ['# Notes', '', '```ds-counter', 'current_value: 1', '```', 'tail', ''].join('\r'));
+
+		await expect(sendToSidebar(services, 'Note.md', 'ds-counter')).resolves.toBe(true);
+
+		const out = app.vault.getContent('Note.md')!;
+		expect(out).toMatch(/^# Notes\r\r```ds-counter\rcurrent_value: 1\r_dse_anchor: [A-Za-z0-9_-]+\r```\rtail\r$/);
+		expect(out).not.toContain('\n');
+	});
+
 	test('a note with no lone CR is stamped exactly as before (regression guard)', async () => {
 		const { app, services } = setup();
 		app.vault.setFile('Note.md', twoBlocks().replace(/\r/g, '\n'));

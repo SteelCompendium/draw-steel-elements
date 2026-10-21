@@ -18,7 +18,8 @@ import { encounterElement } from '@/elements/encounter/definition';
 import { setEncounterSidebarHandoff } from '@/elements/encounter/view';
 import { VIEW_TYPE_DSE_SIDEBAR, DseSidebarView } from '@/framework/sidebar/DseSidebarView';
 import { PERSIST_DEBOUNCE_MS } from '@/framework/view';
-import { readGeneratedFrom } from '@/framework/sidebar/anchor';
+import { findFenceAtLine, readGeneratedFrom } from '@/framework/sidebar/anchor';
+import { splitLines } from '@/framework/host/lineEnding';
 import { makeCompendiumDeps } from '../elements/_refHarness';
 
 function makeHost(sourcePath: string): BlockHost & { containerEl: HTMLElement } {
@@ -369,6 +370,46 @@ describe('SC-153: "Open in sidebar" is idempotent', () => {
 		const out = app.vault.getContent('Session.md')!;
 		expect(out.startsWith('# Session\n\nSome prose.\n\n```ds-initiative\n')).toBe(true);
 		expect(out).not.toContain('\r');
+		plugin.onunload();
+	});
+
+	// SC-460 - the line number the new tracker is handed to the sidebar with is the cursor line `sendToSidebar`
+	// searches by; it is in Obsidian's numbering (a lone CR is a break), or a note with `a\rb` above would
+	// miss the new block and pin the nearest / first one instead.
+	test('SC-460: the appended tracker is handed over at its Obsidian-numbered fence line, with a lone CR above it', async () => {
+		const app = new App();
+		const plugin = makePlugin(app);
+		await plugin.onload();
+		app.vault.setFile('Session.md', '# Session\n\nsome\rprose\r\nmore\n');
+		let handedLine: number | undefined;
+		setEncounterSidebarHandoff(async (_path, _alias, line) => {
+			handedLine = line;
+		});
+
+		const button = await mountEncounter(plugin, 'Session.md', 'party: {}\nmonsters: []');
+		button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		await flushAsync();
+
+		const out = app.vault.getContent('Session.md')!;
+		expect(handedLine).toBe(splitLines(out).indexOf('```ds-initiative'));
+		expect(findFenceAtLine(out, 'ds-initiative', handedLine!)).not.toBeNull();
+		plugin.onunload();
+	});
+
+	test('SC-460: in a CR-only note the appended tracker block is CR-only too', async () => {
+		const app = new App();
+		const plugin = makePlugin(app);
+		await plugin.onload();
+		app.vault.setFile('Session.md', '# Session\r\rSome prose.\r');
+
+		const button = await mountEncounter(plugin, 'Session.md', 'party: {}\nmonsters: []');
+		button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		await flushAsync();
+
+		const out = app.vault.getContent('Session.md')!;
+		expect(out.startsWith('# Session\r\rSome prose.\r\r```ds-initiative\r')).toBe(true);
+		expect(out.endsWith('```\r')).toBe(true);
+		expect(out).not.toContain('\n');
 		plugin.onunload();
 	});
 

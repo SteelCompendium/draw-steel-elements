@@ -731,6 +731,19 @@ describe('SC-460: SidebarBlockHost on a note with lone CRs', () => {
 		expect(vault.text('Note.md')).toBe(['# Notes', 'a\rb', other, 'mid\rdle', ...blockLines(5), 'tail'].join('\n'));
 	});
 
+	test('a CR-only note stays CR-only after a sidebar write; the anchor line and the rest are untouched', async () => {
+		const crOnly = (n: number): string => ['# Notes', '', ...blockLines(n), 'tail', ''].join('\r');
+		const { vault, file, app } = setup(crOnly(1));
+		const { host } = makeHost(app, file);
+		await host.refresh();
+		expect(host.getBlockInfo()).toEqual({ language: ALIAS, lineStart: 2, lineEnd: 5 });
+
+		await expect(host.replaceSource(NEW_BODY)).resolves.toBe(true);
+
+		expect(vault.text('Note.md')).toBe(crOnly(5));
+		expect(vault.text('Note.md')).not.toContain('\n');
+	});
+
 	test('our own write is not mistaken for an external edit', async () => {
 		const { file, app } = setup(noteWith(1));
 		const onExternalChange = jest.fn();
