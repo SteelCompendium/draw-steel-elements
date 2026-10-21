@@ -214,6 +214,17 @@ describe('SC-191 slice 2: BoardView (Heroes × rounds × Tally, read from model.
 		expect(cols.match(/minmax\(var\(--dse-mt-colmin, 5\.2em\), 1fr\)/g)).toHaveLength(3);
 	});
 
+	// SC-326 r3 (review MED-1): the Tally track's floor is its content. A fixed 4.4em floor left the
+	// chips overflowing their cell, flush against the frame at full scroll, once the round columns'
+	// floors outgrew the frame (no free space for `auto` to grow into). The string is what jsdom can
+	// pin; the geometry is `assertMontageBoardScroll`'s content-inside-cell check.
+	test('the Tally track is `minmax(max-content, auto)`, never a fixed floor (SC-326 r3 MED-1)', async () => {
+		const { root } = await renderMontage(montageMidYaml);
+		const cols = (root.querySelector('.dse-mt__board') as HTMLElement).style.getPropertyValue('--dse-mt-cols');
+		expect(cols.endsWith(' minmax(max-content, auto)')).toBe(true);
+		expect(cols).not.toContain('4.4em');
+	});
+
 	test('a past round WITH an entry renders the seal glyph + skill, no note mark', async () => {
 		const { root } = await renderMontage(montageMidYaml);
 		const cell = cellFor(root, 'Kira', 1);
@@ -1937,7 +1948,7 @@ describe('SC-326 r2: the board keeps its horizontal scroll across the rebuild ev
 		expect(next.scrollLeft).toBe(1600); // the NEW far end, not the old 1300
 	});
 
-	// The second reset, measured in real Obsidian (lifecycle G-S12): once the write lands the host
+	// The second reset, measured in real Obsidian (lifecycle G-S13): once the write lands the host
 	// re-draws the section and `adoptView` moves the live root into the new section (marked
 	// `data-dse-moving` for the appendChild, detached until Obsidian inserts it) — a browser throws
 	// a scroll container's offset away when it leaves the document. jsdom keeps offsets, so the
@@ -1959,6 +1970,33 @@ describe('SC-326 r2: the board keeps its horizontal scroll across the rebuild ev
 		expect(board.isConnected).toBe(true);
 		expect(board.scrollLeft).toBe(640);
 		section.remove();
+	});
+
+	// SC-326 r3 (review MED-2): Chromium scrolls a focused element only if it is not visible AT ALL, so
+	// Tab could land on a cell with a sliver showing. Focus into a cell that is partly outside the frame
+	// brings it fully inside (horizontally); a cell already fully visible leaves the board alone. jsdom
+	// has no layout, so the frame and cell rects are stubbed.
+	describe('focus keeps the focused cell fully inside the frame (SC-326 r3 MED-2)', () => {
+		const rect = (left: number, right: number) => ({ left, right, top: 0, bottom: 10, width: right - left, height: 10, x: left, y: 0, toJSON: () => ({}) }) as DOMRect;
+		const focusWithCellAt = async (left: number, right: number) => {
+			const { root } = await renderMontage(QUICK_TRIO_FIXTURE);
+			const board = root.querySelector('.dse-mt__board') as HTMLElement;
+			board.scrollLeft = 500;
+			board.getBoundingClientRect = () => rect(100, 800); // frame: 700px wide (clientWidth stub 700, clientLeft 0)
+			const cell = cellFor(root, 'Kira', 1);
+			cell.getBoundingClientRect = () => rect(left, right);
+			cell.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+			return board.scrollLeft;
+		};
+		test('a cell sticking out past the right edge is scrolled in by exactly the hidden part (fails with no focusin handler)', async () => {
+			expect(await focusWithCellAt(760, 860)).toBe(560); // 60px of it was past 800 -> +60
+		});
+		test('a cell sticking out past the left edge is scrolled in by exactly the hidden part', async () => {
+			expect(await focusWithCellAt(70, 170)).toBe(470); // 30px of it was before 100 -> -30
+		});
+		test('a cell already fully inside the frame is not moved', async () => {
+			expect(await focusWithCellAt(300, 400)).toBe(500);
+		});
 	});
 
 	test('a board that was never scrolled is not touched (stays at 0)', async () => {

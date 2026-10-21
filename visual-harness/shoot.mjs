@@ -953,7 +953,7 @@ async function assertMontageCoarseContainment(page) {
 				const board = document.querySelector('.dse-mt__board');
 				const cols = ['minmax(6.2em, auto)'];
 				for (let r = 0; r < n; r++) cols.push('minmax(var(--dse-mt-colmin, 5.2em), 1fr)');
-				cols.push('minmax(4.4em, auto)');
+				cols.push('minmax(max-content, auto)');
 				board.style.setProperty('--dse-mt-cols', cols.join(' '));
 				const currentCol = n + 1;
 				const recordedCol = n;
@@ -1003,12 +1003,18 @@ async function assertMontageCoarseContainment(page) {
 //     AND the page into view; it is viewport-relative (re-review-2 MED-1) — resolves to that
 //     very child. A null hit is its own PROBE POINT OFF-SCREEN line, never a wrong hit.
 //
-// The 14 rounds are built IN THE PROBE (no new fixture, so shot/freeze counts do not move):
-// the `mid` fixture's real DOM is cloned out to 14 round columns (rounds 4+ clone the round-2
-// recorded cell / round-3 open-socket cell alternately, so both the widest content — the coarse
-// quick trio — and a skill-caption cell are present in the overflow) and the track list
-// rewritten by BoardView's own formula. The clones carry no listeners; this gate reads layout
-// and hit-tests only, it never clicks. Same "own navigation, captures nothing" shape.
+//  4. every board child's CONTENT stays inside the child (`scrollWidth <= clientWidth`): a track
+//     that shrank below its content (review-1 MED-1: the Tally track at its 4.4em floor, chips
+//     overflowing their own cell and flush against the frame at full scroll) fails here;
+//  5. a real Tab walk through every control of the board (`page.keyboard`) leaves each focused
+//     control FULLY inside the frame (review-1 MED-2: Chromium does not scroll a focused element
+//     that is already partly visible, so Tab landed on cells with a sliver showing).
+//
+// The 14 rounds are a GENUINE source (`?fixture=probe-rounds-14`, `probeSource` in entry.ts — five
+// heroes, an entry per hero per round, current_round 14) rendered by the real element, so the
+// SHIPPED track list and DOM are measured, not a hand-built copy (review-1 LOW-2). It is a
+// harness-side generator, NOT a `FIXTURES` entry: no shot, no manifest row, no freeze line.
+// Same "own navigation, captures nothing" shape.
 async function assertMontageBoardScroll(page) {
 	const browser = page.context().browser();
 	const VIEWPORT_HEIGHT = 2400; // see assertMontageCoarseContainment — tall, so probes stay on-screen
@@ -1024,7 +1030,7 @@ async function assertMontageBoardScroll(page) {
 		);
 		const probe = await context.newPage();
 		try {
-			const query = new URLSearchParams({ element: 'montage', fixture: 'mid', theme: 'steel', bg: 'dark' });
+			const query = new URLSearchParams({ element: 'montage', fixture: `probe-rounds-${ROUNDS}`, theme: 'steel', bg: 'dark' });
 			await probe.goto(`${pageUrl}?${query}`);
 			await probe.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
 			const isCoarse = await probe.evaluate(() => matchMedia('(pointer: coarse)').matches);
@@ -1036,38 +1042,10 @@ async function assertMontageBoardScroll(page) {
 				);
 				process.exit(1);
 			}
-			const heroCount = await probe.evaluate(
-				({ rounds, pane }) => {
-					document.getElementById('mount').style.width = `${pane}px`;
-					const board = document.querySelector('.dse-mt__board');
-					const cols = ['minmax(6.2em, auto)']; // BoardView.build's own track list
-					for (let r = 0; r < rounds; r++) cols.push('minmax(var(--dse-mt-colmin, 5.2em), 1fr)');
-					cols.push('minmax(4.4em, auto)');
-					board.style.setProperty('--dse-mt-cols', cols.join(' '));
-					const tally = board.querySelector('.dse-mt__board-thead');
-					const rhead3 = board.querySelector(".dse-mt__board-rhead[data-round='3']");
-					for (let r = 4; r <= rounds; r++) {
-						const h = rhead3.cloneNode(true);
-						h.setAttribute('data-round', String(r));
-						h.setAttribute('data-state', 'future');
-						h.querySelector('.dse-mt__rhead-n').textContent = String(r);
-						h.querySelector('.dse-mt__rhead-sub').textContent = 'to come';
-						board.insertBefore(h, tally);
-					}
-					const heroes = [...board.querySelectorAll('.dse-mt__board-total')];
-					for (const total of heroes) {
-						const hero = total.getAttribute('data-hero');
-						for (let r = 4; r <= rounds; r++) {
-							const src = board.querySelector(`.dse-mt__cell[data-hero="${hero}"][data-round='${r % 2 === 0 ? 2 : 3}']`);
-							const c = src.cloneNode(true);
-							c.setAttribute('data-round', String(r));
-							board.insertBefore(c, total);
-						}
-					}
-					return heroes.length;
-				},
-				{ rounds: ROUNDS, pane: PANE },
-			);
+			const heroCount = await probe.evaluate((pane) => {
+				document.getElementById('mount').style.width = `${pane}px`;
+				return document.querySelectorAll('.dse-mt__board-total').length;
+			}, PANE);
 			await probe.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 
 			const geo = await probe.evaluate(() => {
@@ -1145,7 +1123,26 @@ async function assertMontageBoardScroll(page) {
 				const unreachable = [];
 				const offscreen = [];
 				const wrongHit = [];
+				const contentOut = [];
 				let measured = 0;
+				// review-1 MED-1: every painted descendant of a board child lies inside that child's own
+				// border box (a descendant that an inner overflow container clips does not count; 0.1px
+				// tolerance, since the failure it guards is a sub-pixel-to-few-px spill).
+				const spill = (child) => {
+					const cr = child.getBoundingClientRect();
+					let worst = 0;
+					for (const el of child.querySelectorAll('*')) {
+						const r = el.getBoundingClientRect();
+						if (r.width === 0 || r.height === 0) continue;
+						let clipped = false;
+						for (let a = el.parentElement; a && a !== child; a = a.parentElement) {
+							if (getComputedStyle(a).overflowX !== 'visible') clipped = true;
+						}
+						if (clipped) continue;
+						worst = Math.max(worst, r.right - cr.right, cr.left - r.left);
+					}
+					return worst;
+				};
 				for (const child of board.children) {
 					child.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'instant' });
 					const fr = board.getBoundingClientRect();
@@ -1157,6 +1154,8 @@ async function assertMontageBoardScroll(page) {
 					};
 					const cr = child.getBoundingClientRect();
 					measured++;
+					const over = spill(child);
+					if (over > 0.1) contentOut.push(`${describe(child)} (content spills ${over.toFixed(2)}px past its own cell)`);
 					const outL = frame.l - cr.left;
 					const outR = cr.right - frame.r;
 					const outT = frame.t - cr.top;
@@ -1180,11 +1179,12 @@ async function assertMontageBoardScroll(page) {
 						wrongHit.push(`${describe(child)} centre hit ${hit.tagName}${hit.className ? `.${String(hit.className).split(' ')[0]}` : ''} belonging to ${owner ? describe(owner) : 'nothing in the board'}`);
 					}
 				}
-				return { measured, unreachable, offscreen, wrongHit };
+				return { measured, unreachable, offscreen, wrongHit, contentOut };
 			});
 			if (cells.measured !== expectedChildren) {
 				problems.push(`measured ${cells.measured} board children, expected ${expectedChildren}`);
 			}
+			for (const c of cells.contentOut) problems.push(`CONTENT OUTSIDE ITS CELL — ${c}`);
 			for (const u of cells.unreachable) problems.push(`CELL UNREACHABLE — ${u}`);
 			for (const o of cells.offscreen) {
 				problems.push(
@@ -1194,24 +1194,61 @@ async function assertMontageBoardScroll(page) {
 			}
 			for (const w of cells.wrongHit) problems.push(`WRONG HIT — ${w}`);
 
+			// 5. a REAL Tab walk (review-1 MED-2): every focused control is fully inside the frame.
+			await probe.evaluate(() => {
+				const board = document.querySelector('.dse-mt__board');
+				board.scrollLeft = 0;
+				board.querySelector('.dse-mt__board-addhero').focus();
+			});
+			let tabStops = 0;
+			const tabClipped = [];
+			for (let i = 0; i < 400; i++) {
+				await probe.keyboard.press('Tab');
+				await probe.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+				const st = await probe.evaluate(() => {
+					const board = document.querySelector('.dse-mt__board');
+					const a = document.activeElement;
+					if (!a || !board.contains(a)) return null;
+					const fr = board.getBoundingClientRect();
+					const l = fr.left + board.clientLeft;
+					const r = a.getBoundingClientRect();
+					const cell = a.closest('.dse-mt__board > *');
+					return {
+						name: `${(a.getAttribute('aria-label') || a.className).toString().slice(0, 60)}${cell && cell.getAttribute('data-hero') ? ` in ${cell.getAttribute('data-hero')} r${cell.getAttribute('data-round')}` : ''}`,
+						outL: l - r.left,
+						outR: r.right - (l + board.clientWidth),
+						visible: Math.max(0, Math.min(r.right, l + board.clientWidth) - Math.max(r.left, l)),
+						width: r.width,
+					};
+				});
+				if (!st) break; // focus left the board
+				tabStops++;
+				if (st.outL > 0.5 || st.outR > 0.5) tabClipped.push(`${st.name}: ${st.visible.toFixed(0)}px of ${st.width.toFixed(0)}px visible`);
+			}
+			if (tabStops < 20) {
+				problems.push(`the Tab walk made only ${tabStops} stops inside the board (expected one per control, dozens) — focus left the board early or never entered it`);
+			}
+			for (const c of tabClipped) problems.push(`TAB FOCUS NOT FULLY VISIBLE — ${c}`);
+
 			if (problems.length) {
 				console.error(`\nMONTAGE BOARD CLIPS INSTEAD OF SCROLLING — ${label}:`);
 				for (const p of problems.slice(0, 24)) console.error(`  ${p}`);
 				if (problems.length > 24) console.error(`  … and ${problems.length - 24} more`);
-				console.error(`See styles-source.css → .dse-mt__board (board frame + banding, decoration tier) — overflow-x must be auto.`);
+				console.error(`See styles-source.css → .dse-mt__board (board frame + banding, decoration tier: overflow-x must be auto) and BoardView.ts (the track list: Tally track max-content; the focusin handler that keeps a Tab-focused cell fully in view).`);
 				failed = true; // report BOTH pointer contexts before exiting
 				continue;
 			}
-			results.push(`${pointer}: ${geo.scrollWidth}px grid in a ${geo.clientWidth}px frame, ${cells.measured} cells reachable`);
+			results.push(`${pointer}: ${geo.scrollWidth}px grid in a ${geo.clientWidth}px frame, ${cells.measured} cells reachable, ${tabStops} Tab stops all fully visible`);
 		} finally {
 			await context.close();
 		}
 	}
 	if (failed) process.exit(1);
 	console.log(
-		`\nmontage board scroll OK (${ROUNDS} rounds x ${PANE}px pane, mid fixture cloned in-probe — ` +
+		`\nmontage board scroll OK (${ROUNDS} rounds x ${PANE}px pane, genuine probe-rounds-${ROUNDS} source — ` +
 			`${results.join('; ')}; overflow-x auto, real wheel reaches the far end, every board child ` +
-			`scrolls fully inside the frame and its centre hit-tests to itself, fine AND coarse pointer)`,
+			`scrolls fully inside the frame, its centre hit-tests to itself and its content stays inside it, ` +
+			`fine AND coarse pointer)`,
 	);
 }
 

@@ -1956,6 +1956,41 @@ export function makeHarnessHost(
 	} as BlockHost;
 }
 
+/**
+ * SC-326 r3 — GATE-ONLY sources, deliberately NOT in `FIXTURES` (so no shot, no manifest entry,
+ * no freeze line): `?element=montage&fixture=probe-rounds-<N>` is a genuine N-round montage —
+ * five heroes, an entry for every hero in every round before the current one (varied results,
+ * skills and notes), `current_round: N` — rendered by the real element, so the in-run
+ * `assertMontageBoardScroll` gate measures the SHIPPED board (track list included) instead of a
+ * hand-built copy of it.
+ */
+function probeSource(id: string, fixtureName: string): string | undefined {
+	const m = /^probe-rounds-(\d+)$/.exec(fixtureName);
+	if (id !== 'montage' || !m) return undefined;
+	const rounds = Math.max(2, Number(m[1]));
+	const heroes: [string, string[]][] = [
+		['Kira', ['Nature', 'Alertness']],
+		['Bram', ['Endurance', 'Lift']],
+		['Osric', ['Climb']],
+		['Yenna', ['Lead', 'Persuade']],
+		['Talin', ['Navigate', 'Track']],
+	];
+	const results = ['success', 'success', 'failure', 'assist', 'success', 'failure', 'success'];
+	const lines = [`title: Long March ${rounds}`, `rounds: ${rounds}`, 'success_limit: 90', 'failure_limit: 60', 'participants:'];
+	for (const [name, skills] of heroes) lines.push(`  - name: ${name}`, `    skills_used: [${skills.join(', ')}]`);
+	lines.push('entries:');
+	let k = 0;
+	for (let r = 1; r < rounds; r++) {
+		for (const [name, skills] of heroes) {
+			lines.push(`  - hero: ${name}`, `    round: ${r}`, `    result: ${results[k % results.length]}`, `    skill: ${skills[k % skills.length]}`);
+			if (k % 9 === 4) lines.push('    note: Took the long way round.');
+			k++;
+		}
+	}
+	lines.push(`current_round: ${rounds}`);
+	return lines.join('\n');
+}
+
 async function mountOne(
 	pipeline: ElementPipeline,
 	registry: ElementRegistry,
@@ -1968,7 +2003,7 @@ async function mountOne(
 	const def = registry.get(id);
 	// Elements with a single fixture fall back to it in gallery sweeps.
 	const fixtures = FIXTURES[id] ?? {};
-	const source = fixtures[fixtureName] ?? fixtures['default'];
+	const source = fixtures[fixtureName] ?? probeSource(id, fixtureName) ?? fixtures['default'];
 	if (!def || source === undefined) {
 		errors.push(`unknown element/fixture: ${id}/${fixtureName}`);
 		return;

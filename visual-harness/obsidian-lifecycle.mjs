@@ -39,9 +39,9 @@
 // them). Obsidian counts it as a line break, so section line numbers are off against split('\n'); a Reading view click
 // and a Live Preview click, and a sidebar pin from the close fence of the second block, must still land in the right
 // block and leave every other byte (the lone CRs included) untouched. A CR-only note (only lone CRs as breaks) stays CR-only.
-// SC-326 appends G-S13 (29 total): a 20-round montage board scrolled to its far end keeps its horizontal scroll
-// across a quick-trio tap and End round — the rebuild every write triggers AND the later adoption move both reset
-// a scroll container's offset (measured before the fix: 884 -> 0).
+// SC-326 appends G-S13 (29 total): two 20-round montage blocks in one note, one scrolled MID-way and one to its far
+// end, keep their horizontal scroll across quick-trio taps and End round — the rebuild every write triggers AND the
+// later adoption move both reset a scroll container's offset (measured before the fix: 884 -> 0).
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -176,9 +176,10 @@ Object.assign(FIXTURES, {
 	// SC-455: a counter inside a callout (text above and below it) and inside a callout nested in a callout.
 	'Lifecycle/callout.md': `# callout\n\nABOVE\n\n${['[!note] Camp', 'text above', ...COUNTER(10).split('\n'), 'text below'].map((l) => `> ${l}`).join('\n')}\n\nBELOW\n`,
 	'Lifecycle/nested.md': `# nested\n\nABOVE\n\n> [!note] Outer\n> outer text\n${['[!tip] Inner', ...COUNTER(10).split('\n'), 'inner below'].map((l) => `> > ${l}`).join('\n')}\n> outer below\n\nBELOW\n`,
-	// SC-326: a 20-round montage (wider than any pane, even at fine pointer), current round = the LAST column,
-	// so the only live sockets are at the far right of the horizontally scrolling board.
-	'Lifecycle/montage.md': `# montage\n\nABOVE\n\n${fence('ds-montage', ['title: Long March', 'rounds: 20', 'success_limit: 12', 'failure_limit: 6', 'participants:', '  - name: Kira', '  - name: Bram', 'current_round: 20'])}\n\nBELOW\n`,
+	// SC-326: TWO 20-round montage blocks in one note (wider than any pane, even at fine pointer). A: three
+	// heroes, current round 10 (live sockets in the MIDDLE of the board). B: two heroes, current round 20 (live
+	// sockets at the far right). Distinct titles, so the blocks are not identical twins.
+	'Lifecycle/montage.md': `# montage\n\nABOVE\n\n${fence('ds-montage', ['title: March A', 'rounds: 20', 'success_limit: 40', 'failure_limit: 30', 'participants:', '  - name: Kira', '  - name: Bram', '  - name: Osric', 'current_round: 10'])}\n\nMIDDLE\n\n${fence('ds-montage', ['title: March B', 'rounds: 20', 'success_limit: 12', 'failure_limit: 6', 'participants:', '  - name: Yenna', '  - name: Talin', 'current_round: 20'])}\n\nBELOW\n`,
 });
 
 // ------------------------------------------------------------------ note integrity
@@ -1726,41 +1727,56 @@ const SCENARIOS = [
 		},
 	},
 	{
-		// SC-326 r2: the montage board scrolls sideways (SC-326 r1), and every write rebuilds the whole
-		// element — so a write from a far column (the quick trio's tap; End round) must NOT snap the board
-		// back to round 1. Reading view, real Obsidian: scroll the board to its far end, click, and sample
-		// `scrollLeft` of whatever board is in the DOM on every frame for 2.5 s (covers the 400 ms persist
-		// debounce, the write, and any host re-draw / adoption).
+		// SC-326 r2/r3: the montage board scrolls sideways (SC-326 r1), and every write rebuilds the whole
+		// element AND later has the host adopt its root into the re-drawn section — each throws a scroll
+		// container's offset away — so a write from a far column must NOT snap the board back to round 1.
+		// Reading view, real Obsidian, TWO 20-round blocks in one note: A scrolled MID-way (strictly between
+		// 0 and its max), B at its far end. Each action is `.click()`ed and `scrollLeft` of BOTH boards is
+		// sampled on every frame for 2.5 s (the 400 ms persist debounce, the write, the host re-draw and
+		// adoption); both must hold their start offset on every frame — a write in one block must not move
+		// the other either. Actions: three quick-trio taps and an End round in A (mid-scroll), then a
+		// quick-trio tap and End round in B (far end).
 		id: 'G-S13',
 		async run(t) {
 			const rel = 'Lifecycle/montage.md';
 			await t.open(rel);
 			await t.reset(rel);
-			const BOARD = `(${t.root('[data-dse-element="montage"]')})?.querySelector('.dse-mt__board')`;
-			await t.waitFor(`!!(${BOARD})`, 'the montage board');
-			const geo = await t.ev(`(() => { const b = ${BOARD}; return { ox: getComputedStyle(b).overflowX, sw: b.scrollWidth, cw: b.clientWidth }; })()`);
-			t.expect(geo.sw > geo.cw + 100 && (geo.ox === 'auto' || geo.ox === 'scroll'), `the 20-round board does not scroll sideways: ${JSON.stringify(geo)}`);
-			const sampleAfter = async (clickExpr) => {
-				await t.ev(`(() => { const b = ${BOARD}; b.scrollLeft = b.scrollWidth; })()`);
-				await t.sleep(300);
-				return t.ev(`new Promise((resolve) => { const out = []; let boards = new Set(); const t0 = performance.now(); const tick = () => { const b = ${BOARD}; if (b) { out.push(Math.round(b.scrollLeft)); boards.add(b); } else out.push(null); if (performance.now() - t0 < 2500) requestAnimationFrame(tick); else resolve({ out, distinctBoards: boards.size, max: b ? b.scrollWidth - b.clientWidth : null }); }; const start = ${BOARD}.scrollLeft; const el = ${clickExpr}; if (!el) { resolve({ error: 'no control to click' }); return; } out.push(Math.round(start)); el.click(); requestAnimationFrame(tick); })`);
-			};
-			const verdict = (label, r) => {
+			const ROOT = (i) => `(Array.from(${t.readingScope(LC_LEAF)}.querySelectorAll('[data-dse-element="montage"]')).filter((r) => r.isConnected)[${i}])`;
+			const BOARD = (i) => `(${ROOT(i)})?.querySelector('.dse-mt__board')`;
+			await t.waitFor(`!!(${BOARD(0)}) && !!(${BOARD(1)})`, 'both montage boards');
+			for (const i of [0, 1]) {
+				const geo = await t.ev(`(() => { const b = ${BOARD(i)}; return { ox: getComputedStyle(b).overflowX, sw: b.scrollWidth, cw: b.clientWidth }; })()`);
+				t.expect(geo.sw > geo.cw + 100 && (geo.ox === 'auto' || geo.ox === 'scroll'), `block ${'AB'[i]}: the 20-round board does not scroll sideways: ${JSON.stringify(geo)}`);
+			}
+			// A strictly mid-way (round 10's column, 150px in from the frame's left edge), B at its far end.
+			await t.ev(`(() => { const a = ${BOARD(0)}; const c = a.querySelector('.dse-mt__cell[data-round="10"]'); a.scrollLeft = c.offsetLeft - 150; const b = ${BOARD(1)}; b.scrollLeft = b.scrollWidth; })()`);
+			await t.sleep(300);
+			const starts = await t.ev(`(() => { const a = ${BOARD(0)}; const b = ${BOARD(1)}; return { a: Math.round(a.scrollLeft), aMax: a.scrollWidth - a.clientWidth, b: Math.round(b.scrollLeft), bMax: b.scrollWidth - b.clientWidth }; })()`);
+			t.expect(starts.a > 100 && starts.a < starts.aMax - 100, `block A is not strictly mid-scroll: ${JSON.stringify(starts)}`);
+			t.expect(starts.b > 100 && Math.abs(starts.b - starts.bMax) <= 1, `block B is not at its far end: ${JSON.stringify(starts)}`);
+			const act = async (label, clickExpr) => {
+				const r = await t.ev(`new Promise((resolve) => { const startA = ${BOARD(0)}.scrollLeft; const startB = ${BOARD(1)}.scrollLeft; const out = []; const t0 = performance.now(); const tick = () => { const a = ${BOARD(0)}; const b = ${BOARD(1)}; out.push([a ? Math.round(a.scrollLeft) : null, b ? Math.round(b.scrollLeft) : null]); if (performance.now() - t0 < 2500) requestAnimationFrame(tick); else resolve({ out, startA: Math.round(startA), startB: Math.round(startB) }); }; const el = ${clickExpr}; if (!el) { resolve({ error: 'no control to click' }); return; } el.click(); requestAnimationFrame(tick); })`);
 				t.expect(!r.error, `${label}: ${r.error}`);
-				const first = r.out[0];
-				t.expect(first > 100, `${label}: the board was not scrolled to the far end before the click (scrollLeft ${first})`);
-				const bad = r.out.filter((v) => v === null || Math.abs(v - first) > 1);
-				t.expect(bad.length === 0, `${label}: scrollLeft moved after the write — start ${first}, ${bad.length}/${r.out.length} frames off (min ${Math.min(...r.out.filter((v) => v !== null))}, saw ${r.distinctBoards} board element(s))`);
-				return `${label}: scrollLeft held at ${first}/${r.max} over ${r.out.length} frames (${r.distinctBoards} board element(s) seen)`;
+				for (const [k, name, start] of [[0, 'A', r.startA], [1, 'B', r.startB]]) {
+					const bad = r.out.filter((f) => f[k] === null || Math.abs(f[k] - start) > 1);
+					t.expect(bad.length === 0, `${label}: block ${name}'s scrollLeft moved after the write — start ${start}, ${bad.length}/${r.out.length} frames off (e.g. ${JSON.stringify(bad[0])})`);
+				}
+				return `${label}: A held ${r.startA}, B held ${r.startB} over ${r.out.length} frames`;
+			};
+			const waitDisk = async (re, what) => {
+				const t0 = Date.now();
+				while (!re.test(t.read(rel)) && Date.now() - t0 < 10000) await t.sleep(100);
+				t.expect(re.test(t.read(rel)), `${what} did not land: ${t.read(rel)}`);
 			};
 			const notes = [];
-			// 1. the quick trio's tap, in the last round column.
-			notes.push(verdict('quick-trio tap', await sampleAfter(`(${t.root('[data-dse-element="montage"]')}).querySelector('.dse-mt__cell[data-hero="Kira"][data-round="20"] .dse-mt__quick[data-kind="success"]')`)));
-			const t0 = Date.now();
-			while (!/result: success/.test(t.read(rel)) && Date.now() - t0 < 10000) await t.sleep(100);
-			t.expect(/hero: Kira\n\s*round: 20\n\s*result: success/.test(t.read(rel)), `the quick-trio write did not land: ${t.read(rel)}`);
-			// 2. End round (the action bar button), still scrolled to the far end.
-			notes.push(verdict('End round', await sampleAfter(`Array.from((${t.root('[data-dse-element="montage"]')}).querySelectorAll('button')).find((b) => /^End round/.test(b.textContent.trim()))`)));
+			for (const hero of ['Kira', 'Bram', 'Osric']) {
+				notes.push(await act(`A quick-trio tap (${hero}, round 10)`, `(${ROOT(0)}).querySelector('.dse-mt__cell[data-hero="${hero}"][data-round="10"] .dse-mt__quick[data-kind="success"]')`));
+				await waitDisk(new RegExp(`hero: ${hero}\\n\\s*round: 10\\n\\s*result: success`), `${hero}'s round-10 write`);
+			}
+			notes.push(await act('A End round', `Array.from((${ROOT(0)}).querySelectorAll('button')).find((b) => /^End round/.test(b.textContent.trim()))`));
+			notes.push(await act('B quick-trio tap (Yenna, round 20, far end)', `(${ROOT(1)}).querySelector('.dse-mt__cell[data-hero="Yenna"][data-round="20"] .dse-mt__quick[data-kind="success"]')`));
+			await waitDisk(/hero: Yenna\n\s*round: 20\n\s*result: success/, "Yenna's round-20 write");
+			notes.push(await act('B End round', `Array.from((${ROOT(1)}).querySelectorAll('button')).find((b) => /^End round/.test(b.textContent.trim()))`));
 			t.expect(t.integrity(rel).ok, 'note integrity');
 			await t.reset(rel);
 			return notes.join('; ');

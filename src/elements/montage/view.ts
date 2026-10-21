@@ -474,7 +474,7 @@ export class MontageView extends ElementView<MontageModel> {
 	 *  re-draws the section and ADOPTS this live root into it (`adoptView`: `appendChild` of
 	 *  the root into the new section, detached until Obsidian inserts it) — and a scroll
 	 *  container's offset does not survive being taken out of the document. Measured in real
-	 *  Obsidian (lifecycle G-S12): 884 held through the rebuild, then 0 at the adoption ~0.55 s
+	 *  Obsidian (lifecycle G-S13): 884 held through the rebuild, then 0 at the adoption ~0.55 s
 	 *  later, with no `scroll` event and no ResizeObserver callback to react to (the root is out
 	 *  and back within one frame). The framework path is shared by every element, so this view
 	 *  undoes it locally: remember the offset from the board's `scroll` events, notice the move

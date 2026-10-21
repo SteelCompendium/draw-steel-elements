@@ -38,7 +38,7 @@ for what needs action.
 - [FIX] **The Montage board scrolls sideways instead of cutting off its right-hand columns** (SC-326).
   With many rounds (or on a touch screen, where the round columns are wider) the board grew wider than
   the card and the later rounds and the Tally were clipped with no way to reach them. The board now scrolls
-  sideways inside its frame (mouse wheel, trackpad, touch, or Tab to a control), and it stays where you
+  sideways inside its frame (Shift + mouse wheel, trackpad, touch, or Tab to a control), and it stays where you
   scrolled it when you log a result or end a round, instead of jumping back to round 1. A board that fits
   looks exactly as before, and the narrow one-column layout and printing are unchanged.
 - [FIX] **A block inside a callout or a quote now saves its changes** (SC-455). A Draw Steel block

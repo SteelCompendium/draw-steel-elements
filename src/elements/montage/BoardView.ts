@@ -98,8 +98,14 @@ export class BoardView {
 		// `.dse-mt__board`, exactly like every other custom-property-driven token here.
 		const cols = ['minmax(6.2em, auto)'];
 		for (let r = 0; r < this.model.rounds; r++) cols.push('minmax(var(--dse-mt-colmin, 5.2em), 1fr)');
-		cols.push('minmax(4.4em, auto)');
+		// SC-326 r3: the Tally track's floor is its CONTENT (`max-content`), not a fixed 4.4em. Once the
+		// round columns' floors outgrow the frame there is no free space for the `auto` max to grow into,
+		// so a 4.4em (70.4px) floor left the chips (94.8px) overflowing their own cell and flush against
+		// the frame's edge at full scroll. With the board fitting, the track is unchanged (it already
+		// sized to its content), so nothing that does not overflow moves.
+		cols.push('minmax(max-content, auto)');
 		board.style.setProperty('--dse-mt-cols', cols.join(' '));
+		this.keepFocusedCellInView(board);
 
 		this.buildHeaderRow(board);
 		if (participants.length === 0) {
@@ -109,6 +115,27 @@ export class BoardView {
 				this.buildHeroRow(board, p.name, i === participants.length - 1, complete);
 			});
 		}
+	}
+
+	/** SC-326 r3 (review MED-2): Chromium scrolls a focused element into view only when it is not
+	 *  visible AT ALL, so Tab could land on a cell with a few pixels showing (worst measured: 2px of a
+	 *  147px cell) and the next Tab then jumped the board by half a frame. Bring the focused cell
+	 *  fully inside the frame, horizontally. Done by hand rather than `scrollIntoView`, which would
+	 *  also scroll the PAGE vertically whenever a clicked control is partly below the viewport; a cell
+	 *  that is already fully visible is never moved (a click on a visible quick-trio button leaves the
+	 *  board alone). */
+	private keepFocusedCellInView(board: HTMLElement): void {
+		this.owner.registerDomEvent(board, 'focusin', (event: FocusEvent) => {
+			const target = event.target as HTMLElement | null;
+			const cell = target?.closest<HTMLElement>('.dse-mt__board > *');
+			if (!cell || board.scrollWidth <= board.clientWidth) return;
+			const frame = board.getBoundingClientRect();
+			const left = frame.left + board.clientLeft;
+			const right = left + board.clientWidth;
+			const box = cell.getBoundingClientRect();
+			if (box.left < left) board.scrollLeft -= left - box.left;
+			else if (box.right > right) board.scrollLeft += box.right - right;
+		});
 	}
 
 	private buildHeaderRow(board: HTMLElement): void {
