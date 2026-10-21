@@ -351,9 +351,13 @@ presence: 0
 			expect(written).toContain('reduceMotion: true');
 			// The element's own fields are still there, byte-identical to the
 			// non-prefs: byte-compat pin (stamina-bar.test.ts) apart from the
-			// current_stamina/temp_stamina Full Heal mutation.
-			expect(written).toContain('collapsible: true');
-			expect(written).toContain('collapse_default: false');
+			// current_stamina/temp_stamina Full Heal mutation. SC-466: and, as there, the
+			// defaults BASIC_STAM_YAML never declared (collapsible/collapse_default/height/style)
+			// are not materialised by the write.
+			expect(written).not.toContain('collapsible');
+			expect(written).not.toContain('collapse_default');
+			expect(written).not.toContain('height');
+			expect(written).not.toContain('style:');
 			expect(written).toContain('max_stamina: 20');
 			expect(written).toContain('current_stamina: 20');
 			expect(written).toContain('temp_stamina: 0');
@@ -421,13 +425,12 @@ describe('behavioral collapse-default prefs (D4 §1.3 — declared-ness read fro
 		// RENDER honors the pref: seeded closed.
 		expect(root.getAttribute('data-dse-collapsed')).toBe('on');
 
-		// BYTES stay untouched: the model materializes the same hard default
-		// (`collapse_default: false`) it always has — serialize() never sees the
-		// pref, only the chrome's render-time collapse resolution does.
+		// BYTES stay untouched: serialize() never sees the pref (only the chrome's
+		// render-time collapse resolution does), and — SC-466 — the model's materialised
+		// hard default (`collapse_default: false`) is not written for a block that never
+		// declared it.
 		const model = staminaBarElement.parse({ max_stamina: 20, current_stamina: 15, temp_stamina: 5 }, BASIC_STAM_YAML);
-		expect(staminaBarSerialize(model)).toBe(
-			['collapsible: true', 'collapse_default: false', 'max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5', 'height: 1', 'style: default'].join('\n'),
-		);
+		expect(staminaBarSerialize(model)).toBe(['max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5'].join('\n'));
 	});
 
 	test('AMENDMENT: a declared block ignores the pref (author wins, exactly today\'s behavior) — render AND bytes both reflect the declared value', async () => {
@@ -444,15 +447,14 @@ describe('behavioral collapse-default prefs (D4 §1.3 — declared-ness read fro
 		// global pref saying closed.
 		expect(root.hasAttribute('data-dse-collapsed')).toBe(false);
 
-		// BYTES: unaffected either way (declared or not, the model always materializes
-		// a concrete value) — confirms the declared branch is just as byte-stable as
-		// the undeclared one.
+		// BYTES: the declared key is written (even though it equals the default); the
+		// keys the block never declared are not (SC-466).
 		const model = staminaBarElement.parse(
 			{ max_stamina: 20, current_stamina: 15, temp_stamina: 5, collapse_default: false },
 			yaml,
 		);
 		expect(staminaBarSerialize(model)).toBe(
-			['collapsible: true', 'collapse_default: false', 'max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5', 'height: 1', 'style: default'].join('\n'),
+			['collapse_default: false', 'max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5'].join('\n'),
 		);
 	});
 });

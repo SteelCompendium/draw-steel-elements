@@ -10,6 +10,8 @@
 // fence/alias preserved") and BYTE-COMPAT of `serialize` against the legacy
 // `stringifyYaml(StaminaBar.parseYaml)` — the compatibility bar for this task is that
 // the DOM/CSS redesign changes NOTHING about the persisted YAML.
+// SC-466 narrowed that bar: a key the SOURCE never declared is no longer written (see the
+// byte-compat describe below); every key the source declared still is, byte-for-byte.
 import * as fs from 'fs';
 import * as path from 'path';
 import { ElementPipeline } from '../../../src/framework/pipeline';
@@ -447,7 +449,8 @@ describe('D2 §3.5: stamina-bar rendered through the REAL ElementPipeline', () =
 			expect(host.replaceSource).toHaveBeenCalledTimes(1);
 			const written = host.replaceSource.mock.calls[0][0] as string;
 			expect(written).toBe(
-				['collapsible: true', 'collapse_default: false', 'max_stamina: 20', 'current_stamina: 20', 'temp_stamina: 0', 'height: 1', 'style: default'].join('\n'),
+				// SC-466: BASIC_YAML declares max/current/temp only — no default keys are added.
+				['max_stamina: 20', 'current_stamina: 20', 'temp_stamina: 0'].join('\n'),
 			);
 		});
 
@@ -475,7 +478,7 @@ describe('D2 §3.5: stamina-bar rendered through the REAL ElementPipeline', () =
 
 			expect(host.replaceSource).toHaveBeenCalledTimes(1);
 			expect(host.replaceSource.mock.calls[0][0]).toBe(
-				['collapsible: true', 'collapse_default: false', 'max_stamina: 20', 'current_stamina: 16', 'temp_stamina: 5', 'height: 1', 'style: default'].join('\n'),
+				['max_stamina: 20', 'current_stamina: 16', 'temp_stamina: 5'].join('\n'),
 			);
 		});
 
@@ -571,7 +574,7 @@ describe('D1 Task 3: persisted write path through a REAL ReadingModeBlockHost + 
 		const body = updated.match(/~~~ds-stamina-bar\n([\s\S]*?)\n~~~/)?.[1];
 		// Hero (isHero:true), max 20 -> Kill floors at ceil(-0.5*20) = -10; temp -> 0.
 		expect(body).toBe(
-			['collapsible: true', 'collapse_default: false', 'max_stamina: 20', 'current_stamina: -10', 'temp_stamina: 0', 'height: 1', 'style: default'].join('\n'),
+			['max_stamina: 20', 'current_stamina: -10', 'temp_stamina: 0'].join('\n'),
 		);
 	});
 });
@@ -588,26 +591,58 @@ describe('D1 Task 3: byte-compat — serialize(parse(yaml)) === legacy stringify
 	});
 	afterAll(() => resetSchemaRegistry());
 
-	test('the documented example block', () => {
+	// SC-466: byte-compat with the legacy writer now holds for every key the SOURCE declared. A
+	// default key the source omitted is not written (the legacy writer leaked it), so the
+	// framework output is the legacy output minus exactly those lines.
+	const withoutLines = (yaml: string, keys: string[]): string =>
+		yaml
+			.split('\n')
+			.filter((line) => !keys.some((k) => line.startsWith(`${k}:`)))
+			.join('\n');
+
+	test('the documented example block (SC-466: the four keys it never declared are not written)', () => {
 		const legacy = stringifyYaml(StaminaBar.parseYaml(BASIC_YAML)).trim();
 		const model = staminaBarElement.parse(
 			{ max_stamina: 20, current_stamina: 15, temp_stamina: 5 },
 			BASIC_YAML,
 		);
-		expect(frameworkSerialize(model)).toBe(legacy);
+		expect(frameworkSerialize(model)).toBe(
+			withoutLines(legacy, ['collapsible', 'collapse_default', 'height', 'style']),
+		);
+		expect(frameworkSerialize(model)).toBe(['max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5'].join('\n'));
+		// The legacy writer's output, for the record: it leaked all four.
 		expect(legacy).toBe(
 			['collapsible: true', 'collapse_default: false', 'max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5', 'height: 1', 'style: default'].join('\n'),
 		);
 	});
 
-	test('with collapsible/collapse_default/style explicitly set', () => {
+	test('a block that declares every key (defaults included) is byte-identical to the legacy writer', () => {
+		const yaml = [
+			'collapsible: true',
+			'collapse_default: false',
+			'max_stamina: 20',
+			'current_stamina: 15',
+			'temp_stamina: 5',
+			'height: 1',
+			'style: default',
+		].join('\n');
+		const legacy = stringifyYaml(StaminaBar.parseYaml(yaml)).trim();
+		const model = staminaBarElement.parse(
+			{ collapsible: true, collapse_default: false, max_stamina: 20, current_stamina: 15, temp_stamina: 5, height: 1, style: 'default' },
+			yaml,
+		);
+		expect(frameworkSerialize(model)).toBe(legacy);
+		expect(legacy).toBe(yaml);
+	});
+
+	test('with collapsible/collapse_default/style explicitly set (current/temp_stamina never declared: not written)', () => {
 		const yaml = 'max_stamina: 12\ncollapsible: false\ncollapse_default: true\nstyle: sheet\nheight: 2';
 		const legacy = stringifyYaml(StaminaBar.parseYaml(yaml)).trim();
 		const model = staminaBarElement.parse(
 			{ max_stamina: 12, collapsible: false, collapse_default: true, style: 'sheet', height: 2 },
 			yaml,
 		);
-		expect(frameworkSerialize(model)).toBe(legacy);
+		expect(frameworkSerialize(model)).toBe(withoutLines(legacy, ['current_stamina', 'temp_stamina']));
 	});
 
 	test('after an in-place edit (mutating existing fields does not change key insertion order)', () => {
@@ -618,6 +653,10 @@ describe('D1 Task 3: byte-compat — serialize(parse(yaml)) === legacy stringify
 		const legacyEquivalent = new StaminaBar(true, false, 20, 20, 0, 1, 'default');
 		const legacy = stringifyYaml(legacyEquivalent).trim();
 
-		expect(frameworkSerialize(model)).toBe(legacy);
+		// The edited keys were declared, so they are written (temp_stamina: 0 included); the four
+		// undeclared defaults are not.
+		expect(frameworkSerialize(model)).toBe(
+			withoutLines(legacy, ['collapsible', 'collapse_default', 'height', 'style']),
+		);
 	});
 });

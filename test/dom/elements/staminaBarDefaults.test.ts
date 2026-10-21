@@ -13,6 +13,8 @@ import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlo
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
 import { App, Notice, Plugin, makeFakeContext } from '../../mocks/obsidian';
 import { staminaBarElement } from '../../../src/elements/stamina-bar/definition';
+import { serialize } from '../../../src/elements/stamina-bar/model';
+import { StaminaBar } from '@model/StaminaBar';
 import { applyBtn, lastModal, makeDeps, makeHost, lastWrite, pressDamage, tempInput, typeCommit } from '../_staminaHarness';
 
 const NOTE = 'Note.md';
@@ -175,6 +177,15 @@ describe('SC-466: a write adds no default keys the user never wrote', () => {
 	});
 });
 
+describe('SC-466: blocks the plugin builds itself keep the whole-instance output', () => {
+	test('serialize() of a StaminaBar that was never parsed from a source still writes every key', () => {
+		const built = new StaminaBar(false, false, 20, 15, 0, 1);
+		expect(serialize(built)).toBe(
+			'collapsible: false\ncollapse_default: false\nmax_stamina: 20\ncurrent_stamina: 15\ntemp_stamina: 0\nheight: 1\nstyle: default',
+		);
+	});
+});
+
 describe('SC-466: presence survives every writer of the block (in-place mutation of the parsed instance)', () => {
 	const RECOV = 'max_stamina: 30\ncurrent_stamina: 12\nrecoveries: 3\nrecoveries_max: 6';
 
@@ -208,10 +219,9 @@ describe('SC-466: presence survives every writer of the block (in-place mutation
 		const host = makeHost('ds-stamina-bar');
 		await new ElementPipeline(deps).run(staminaBarElement, RECOV, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		(root.querySelectorAll('.dse-stamina-rec__pip')[0] as HTMLElement).click();
+		(root.querySelectorAll('.dse-stamina-rec__pip')[0] as HTMLElement).click(); // opens the popover, no write
+		root.querySelector<HTMLButtonElement>('button[aria-label="Spend a recovery"]')!.click(); // 3 -> 2
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-		const written = lastWrite(host);
-		// Whatever the popover did (open, or set the count), nothing it wrote may carry a default.
-		if (written !== null) expect(written).not.toMatch(/collapsible|collapse_default|temp_stamina|height|style/);
+		expect(lastWrite(host)).toBe('max_stamina: 30\ncurrent_stamina: 12\nrecoveries: 2\nrecoveries_max: 6');
 	});
 });

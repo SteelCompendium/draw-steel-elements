@@ -185,17 +185,9 @@ describe('D7 Task 4: ds-stamina Recoveries / Winded — additive, gated on recov
 
 		expect(host.replaceSource).toHaveBeenCalledTimes(1);
 		expect(host.replaceSource.mock.calls[0][0]).toBe(
-			[
-				'collapsible: true',
-				'collapse_default: false',
-				'max_stamina: 48',
-				'current_stamina: 47',
-				'temp_stamina: 0',
-				'recoveries: 5',
-				'recoveries_max: 10',
-				'height: 1',
-				'style: default',
-			].join('\n'),
+			// SC-466: RECOVERIES_YAML declares max/current/temp/recoveries/recoveries_max and
+			// nothing else, so the write carries exactly those five keys.
+			['max_stamina: 48', 'current_stamina: 47', 'temp_stamina: 0', 'recoveries: 5', 'recoveries_max: 10'].join('\n'),
 		);
 	});
 
