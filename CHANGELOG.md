@@ -50,9 +50,9 @@ for what needs action.
   [Blocks inside callouts and quotes](docs/writing-blocks.md#blocks-inside-callouts-and-quotes).
 - [FIX] **A block with a space before its name now keeps saving** (SC-457). A block opened as
   ```` ``` ds-counter ```` (a space, several spaces or a tab between the backticks and the block name;
-  Obsidian draws it as the block) was treated as having no name once the note changed around it: a click
-  made just before leaving the note, or after editing the lines above it, was dropped with a "not saved"
-  notice, and "Pin to sidebar" could not find it. It now saves and pins like any other block, and the
+  Obsidian draws it as the block) was treated as having no name: a click made just before leaving the note
+  (switching notes or closing the tab) was dropped with a "not saved" notice, and "Pin to sidebar" could
+  not find the block. It now saves and pins like any other block, and the
   opening line is left exactly as written.
 - [FIX] **Edits in Reading view now save in notes that contain a stray carriage-return character above
   the block** (SC-460). A lone carriage return (a `\r` with no line feed after it, left behind by some
