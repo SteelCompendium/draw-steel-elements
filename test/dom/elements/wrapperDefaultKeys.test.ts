@@ -363,6 +363,45 @@ describe('SC-482: negotiation — each Motivation records its own absent keys', 
 	});
 });
 
+describe('SC-482: encounter — a party-only source does not gain `monsters: []`', () => {
+	test('render only (the _computed write): `party` stays as authored, no `monsters` line', async () => {
+		const spec = specs.find((x) => x.name === 'encounter')!;
+		const body = 'party:\n  hero_count: 4\n  hero_level: 3';
+		const app = appWith(noteOf([{ lang: spec.lang, body }]));
+		const m = await mount(app, spec, 0, body);
+		const out = bodyOf(m.note(), 0);
+		expect(out).not.toContain('monsters');
+		expect(out).toBe(`party:\n  hero_count: 4\n  hero_level: 3\n_computed:\n  spent_ev: 0\n  budget: 40\n  ratio: 0\n  band: trivial\n  victories: 1`);
+	});
+});
+
+describe('SC-482: an empty source whose values return to their defaults is written as an empty body, not `{}`', () => {
+	test.each(specs)('$name: serialize(parse({})) is empty', (spec) => {
+		expect(spec.def.serialize!(spec.def.parse({}, ''))).toBe('');
+	});
+
+	test('montage, through the real write path: End round then Back on an empty block leaves the block as it was', async () => {
+		const spec = specs.find((x) => x.name === 'montage')!;
+		const before = noteOf([{ lang: spec.lang, body: '' }]);
+		const app = appWith(before);
+		const m = await mount(app, spec, 0, '');
+		click(m.root, 'button[aria-label="End round 1"]');
+		await settle();
+		expect(bodyOf(m.note(), 0)).toBe('current_round: 2');
+		click(m.root, 'button[aria-label="Back to round 1"]');
+		await settle();
+		// Fence open + close with nothing between, the text around the fence untouched.
+		expect(bodyOf(m.note(), 0)).toBe('');
+		expect(m.note()).toBe(before);
+	});
+
+	test('a model the plugin built itself (no record) with no keys still serializes whole', () => {
+		expect(counterElement.serialize!(new Counter(undefined, 0, 0, undefined as unknown as string, 3, 1))).toBe(
+			'current_value: 0\nmin_value: 0\nvalue_height: 3\nname_height: 1',
+		);
+	});
+});
+
 describe('SC-482: blocks the plugin builds itself keep the whole-instance output', () => {
 	test('serialize() of a Counter that was never parsed from a source still writes every key', () => {
 		const built = new Counter(20, 10, 0, 'Health', 3, 1);
