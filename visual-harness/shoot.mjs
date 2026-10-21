@@ -535,8 +535,10 @@ function measureCaptureBottoms(fullPage) {
 		: [document.querySelector('#mount')];
 	return nodes.filter(Boolean).map((n) => n.getBoundingClientRect().bottom + scrolled(n));
 }
-/** In-page: a cheap fingerprint of `#mount`'s layout + markup, to prove a viewport resize
- *  moved nothing the shot depends on. */
+/** In-page: a cheap fingerprint of `#mount`'s size + markup, to prove a viewport resize
+ *  re-laid nothing the shot depends on. Deliberately NOT its top edge: that is where the
+ *  page happens to be scrolled (a click or hover scrolled it before the shot; the grown
+ *  viewport has nothing left to scroll), not a property of the element. */
 function mountLayoutFingerprint() {
 	const m = document.querySelector('#mount');
 	if (!m) return 'no #mount';
@@ -544,7 +546,7 @@ function mountLayoutFingerprint() {
 	let h = 5381;
 	const html = m.innerHTML;
 	for (let i = 0; i < html.length; i++) h = ((h * 33) ^ html.charCodeAt(i)) >>> 0;
-	return `${r.left},${r.top},${r.width},${r.height},${m.scrollHeight},html#${html.length}:${h}`;
+	return `${r.width}x${r.height},scrollH ${m.scrollHeight},html#${html.length}:${h}`;
 }
 /** In-page: two animation frames, so a resize's layout/ResizeObserver work has landed. */
 function settleFrames() {
