@@ -53,7 +53,7 @@ for what needs action.
   Obsidian draws it as the block) was treated as having no name: a click made just before leaving the note
   (switching notes or closing the tab) was dropped with a "not saved" notice, and "Pin to sidebar" could
   not find the block. It now saves and pins like any other block, and the
-  opening line is left exactly as written.
+  space before the block name is kept.
 - [FIX] **Edits in Reading view now save in notes that contain a stray carriage-return character above
   the block** (SC-460). A lone carriage return (a `\r` with no line feed after it, left behind by some
   imports and editors) anywhere above a block made clicks in Reading view do nothing, and the sidebar could
