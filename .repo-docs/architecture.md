@@ -147,8 +147,25 @@ in D1, simplest-to-most-complex by `ElementShape`; Negotiation Tracker in Plan 0
 |---------|-----------|---------|---------|-------|
 | Horizontal Rule | `horizontal-rule/` | `static` | `ds-hr`, `ds-horizontal-rule` | No model (`parse` returns `undefined`); `onMount` reuses the legacy `HorizontalRuleProcessor.build()` DOM builder verbatim (that builder also stays live for Statblock/Featureblock, which embed it directly — not yet migrated). `noClickShield: true` matches the legacy Vue element's behavior. |
 | Skills | `skills/` | `interactive` | `ds-skills` | First interactive element: per-group and whole-element collapse state lives in `SessionStore`, never written back to the note (no `serialize`, matching the legacy Vue element). `model.ts` wraps `@model/Skills` verbatim. |
-| Stamina Bar | `stamina-bar/` | `persisted` | `ds-stam`, `ds-stamina`, `ds-stamina-bar` | First (and only, in D1) persisted element: edits write back via `ElementView.persist()` → `serialize()` → `host.replaceSource()`. `serialize()` reuses `@model/StaminaBar`'s own field/order shape (`stringifyYaml(model).trim()`) to stay byte-compatible with the legacy write path for every key the block declared; since SC-466 it omits a default key (collapsible, collapse_default, current/temp_stamina, height, style) the source never declared and that is still at its parsed default. Was the last Vue element — its migration unblocked Vue removal (D1 Task 4). |
-| Negotiation Tracker | `negotiation/` | `persisted` | `ds-nt`, `ds-negotiation`, `ds-negotiation-tracker` | Plan 05 (F1 §6 step 8): `NegotiationView` re-expresses the deleted `NegotiationTrackerProcessor`'s orchestration and REUSES the four sub-views still under `src/drawSteelAdmonition/negotiation/`, which now take an injected `persist: () => void` instead of calling the former `CodeBlocks.updateNegotiationTracker` (deleted in SC-454). No schema (the legacy element never had one). Active tab is `SessionStore` state; rendering never writes (the legacy processor persisted during render — deliberately dropped). |
+| Stamina Bar | `stamina-bar/` | `persisted` | `ds-stam`, `ds-stamina`, `ds-stamina-bar` | First (and only, in D1) persisted element: edits write back via `ElementView.persist()` → `serialize()` → `host.replaceSource()`. `serialize()` reuses `@model/StaminaBar`'s own field/order shape (`stringifyYaml(model).trim()`) to stay byte-compatible with the legacy write path for every key the block declared; since SC-466 it omits a default key (collapsible, collapse_default, current/temp_stamina, height, style) the source never declared and that is still at its parsed default (SC-482 moved this onto the shared `shared/undeclaredDefaults.ts`, below). Was the last Vue element — its migration unblocked Vue removal (D1 Task 4). |
+| Negotiation Tracker | `negotiation/` | `persisted` | `ds-nt`, `ds-negotiation`, `ds-negotiation-tracker` | Plan 05 (F1 §6 step 8): `NegotiationView` re-expresses the deleted `NegotiationTrackerProcessor`'s orchestration and REUSES the four sub-views still under `src/drawSteelAdmonition/negotiation/`, which now take an injected `persist: () => void` instead of calling the former `CodeBlocks.updateNegotiationTracker` (deleted in SC-454). No schema (the legacy element never had one). Active tab is `SessionStore` state; rendering never writes (the legacy processor persisted during render — deliberately dropped). Since SC-482 `serialize()` omits every key the source never declared and that is still at its parsed default (current_patience / current_interest while unchanged, motivations / pitfalls `[]`, currentArgument, i5..i0, and each Motivation's / Pitfall's own absent name / reason / hasBeenAppealedTo); a block that declares every key serializes byte-identically to the legacy writer. |
+
+**Writes add no default keys the user never wrote (SC-466 / SC-482).** Several parsers fill
+defaults into the model (counter `min_value` / `value_height` / `name_height` / `current_value`;
+project `accrued` / `rolls` / `current_respite`; montage `rounds` / limits / `successes` /
+`failures` / `current_round`; party `members: []`; encounter `party: {}` / `monsters: []`;
+negotiation, above; stamina bar, above). `src/elements/shared/undeclaredDefaults.ts` is the one
+mechanism: `recordingDefaults(parse, keys)` reads which of `keys` the source left absent
+(a key present with value `undefined`, or a null/blank body, counts as absent) BEFORE the inner
+parse runs — party and encounter fill the incoming `data` in place — and snapshots the value the
+parse filled in; `omitUntouchedDefaults(model, dto?)` drops each recorded key whose value still
+JSON-equals its snapshot (so a derived default, or an array/object default mutated in place, is
+compared by value). The record is a module-private `WeakMap` keyed by the parsed instance (never
+an own property, so `stringifyYaml` cannot write it), and a model the plugin built itself has no
+record and serializes whole. Every key the source declared is written (even at its default),
+key order is unchanged, and a re-parse records afresh. Initiative and hero still write their
+parser defaults (SC-485; hero is deliberate). The encounter view's render-time `_computed`
+write is a separate question (SC-486).
 
 Each element directory follows the same shape: `definition.ts` (the `ElementDefinition`,
 registered in `main.ts`'s `registerFrameworkElementDefinitions`), `view.ts` (the

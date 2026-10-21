@@ -1121,8 +1121,9 @@ const SCENARIOS = [
 			t.expect(t.counterValues(rel)[0] === 11, `hover click did not write the right block: current_value=${t.counterValues(rel)[0]}`);
 			// SC-340 Task 8 review (I-2): the addendum's "the rest of the note byte-identical"
 			// checked precisely — everything OUTSIDE the fence (the write re-serializes the
-			// fenced YAML itself: field order, defaulted fields like value_height/name_height —
-			// by design, not a miss) must be byte-for-byte the fixture's.
+			// fenced YAML itself: field order and quoting — by design, not a miss; since SC-482 it no
+			// longer ADDS defaulted fields like value_height/name_height that the block never
+			// declared) must be byte-for-byte the fixture's.
 			t.expect(
 				JSON.stringify(scanOutside(t.read(rel)).outside) === JSON.stringify(scanOutside(FIXTURES[rel]).outside),
 				'text outside the fence changed',
