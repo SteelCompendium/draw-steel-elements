@@ -10,7 +10,16 @@
 // every per-member optional field (level/class/ancestry/victories/xp/renown/wealth/
 // hero_ref) survive parse -> serialize untouched — "optional fields absent on a member do
 // not materialize on round-trip" falls out for free, with no explicit passthrough code.
+//
+// SC-482 contract: that one materialized default (`members: []`) used to leak into the user's
+// note on the first write (a block with only `party: { hero_tokens: 2 }` came back with
+// `members: []`). It is now OMITTED from the written block iff it was ABSENT from the parsed
+// source AND still equals `[]` at write time; a declared `members:` is written, and a block that
+// gained a member writes the list. Because parse fills the default INTO the incoming object,
+// whether the source declared `members` is read BEFORE that fill (recordingDefaults). The record
+// lives in src/elements/shared/undeclaredDefaults.ts.
 import { stringifyYaml } from 'obsidian';
+import { omitUntouchedDefaults, recordingDefaults } from '../shared/undeclaredDefaults';
 
 /** spec §6.2 — one party member row. Only `name` is required; every progression field is
  *  optional so a freshly-added member (or a hand-authored minimal block) still parses. */
@@ -53,7 +62,7 @@ export interface PartyModel {
  * model convention) rather than building a fresh DTO, preserving every untouched key
  * (including unknown ones) byte-for-byte through serialize.
  */
-export function parse(input: unknown, _raw: string): PartyModel {
+function parseModel(input: unknown, _raw: string): PartyModel {
 	if (typeof input !== 'object' || input === null) {
 		throw new Error('The input must be a YAML object.');
 	}
@@ -80,10 +89,13 @@ export function parse(input: unknown, _raw: string): PartyModel {
 	return data;
 }
 
-/** serialize(model): `stringifyYaml(model).trim()` — the same expression every other
- *  persisted element's serialize uses (encounter/montage/project/initiative/counter). */
+export const parse = recordingDefaults(parseModel, ['members'] as const);
+
+/** serialize(model): `stringifyYaml(...).trim()` — the same expression every other persisted
+ *  element's serialize uses (encounter/montage/project/initiative/counter), minus an untouched
+ *  `members: []` default (SC-482). */
 export function serialize(model: PartyModel): string {
-	return stringifyYaml(model).trim();
+	return stringifyYaml(omitUntouchedDefaults(model)).trim();
 }
 
 // --------------------------------------------------------------------- derived (§6.1)

@@ -7,7 +7,19 @@
 // including the two passthrough fields the spec calls out by name: `_dse_anchor` (D8
 // spec §1.5 sidebar anchor) and `_computed` (spec §2.5 — a display cache the VIEW
 // rewrites on render, never something parse/serialize touch).
+//
+// SC-482 contract: those two filled defaults used to leak into the user's note — and for this
+// element on RENDER, with no user action, because the view's `_computed` write persists the whole
+// model (a block with only `monsters:` came back with `party: {}` added). A default is now
+// OMITTED from the written block iff it was ABSENT from the parsed source AND still equals what
+// parse filled in (`{}` / `[]`) at write time; a declared `party:` / `monsters:` is written, and
+// a `party` the user configured is written. Because parse fills the defaults INTO the incoming
+// object, whether the source declared them is read BEFORE the fill (recordingDefaults).
+// `_computed` and `_dse_anchor` are never parser-filled, so they are written exactly as before.
+// The record lives in src/elements/shared/undeclaredDefaults.ts. (Whether a render should write
+// `_computed` at all is a separate question — SC-486.)
 import { stringifyYaml } from 'obsidian';
+import { omitUntouchedDefaults, recordingDefaults } from '../shared/undeclaredDefaults';
 
 /** spec §2.5 `party:` — every field optional so an unconfigured/blank block still
  *  parses (budget.ts's computeEncounter degrades gracefully on missing party info,
@@ -69,7 +81,7 @@ export interface EncounterModel {
  * a fresh DTO — that is what makes an unknown top-level key (or `_dse_anchor`/
  * `_computed`) survive parse -> serialize for free, with no explicit passthrough code.
  */
-export function parse(input: unknown, _raw: string): EncounterModel {
+function parseModel(input: unknown, _raw: string): EncounterModel {
 	if (typeof input !== 'object' || input === null) {
 		throw new Error('The input must be a YAML object.');
 	}
@@ -106,8 +118,11 @@ export function parse(input: unknown, _raw: string): EncounterModel {
 	return data;
 }
 
-/** serialize(model): `stringifyYaml(model).trim()` — the same expression every other
- *  persisted element's serialize uses (initiative/counter/negotiation). `_computed`/
+export const parse = recordingDefaults(parseModel, ['party', 'monsters'] as const);
+
+/** serialize(model): `stringifyYaml(...).trim()` — the same expression every other
+ *  persisted element's serialize uses (initiative/counter/negotiation), minus an untouched
+ *  `party: {}` / `monsters: []` default (SC-482). `_computed`/
  *  `_dse_anchor` serialize ONLY when present (yaml's `keepUndefined: false` default —
  *  an absent optional field is OMITTED, never emitted as `null`), which is exactly the
  *  "derived fields serialize only when present" contract: a block that has never been
@@ -116,5 +131,5 @@ export function parse(input: unknown, _raw: string): EncounterModel {
  *  (view.ts's computedEqual guard) — so a re-render with unchanged inputs never rewrites
  *  identical bytes back into the note. */
 export function serialize(model: EncounterModel): string {
-	return stringifyYaml(model).trim();
+	return stringifyYaml(omitUntouchedDefaults(model)).trim();
 }

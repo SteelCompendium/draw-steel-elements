@@ -20,6 +20,8 @@ import { montageElement } from '../../../src/elements/montage/definition';
 import { partyElement } from '../../../src/elements/party/definition';
 import { encounterElement } from '../../../src/elements/encounter/definition';
 import { negotiationElement } from '../../../src/elements/negotiation/definition';
+import { parse as parseParty, serialize as serializeParty } from '../../../src/elements/party/model';
+import { parse as parseEncounter, serialize as serializeEncounter } from '../../../src/elements/encounter/model';
 import { Counter } from '@model/Counter';
 import { makeDeps } from '../_staminaHarness';
 import { makeCompendiumDeps, loadMdDseFixture } from './_refHarness';
@@ -317,17 +319,17 @@ describe('SC-482: counter — an absent key the user changed is written', () => 
 
 describe('SC-482: party and encounter — a default the user changed is written', () => {
 	test('party: a member added to a block with no members key writes `members`', () => {
-		const model = partyElement.parse({ party: { hero_tokens: 2 } }, '') as { members: unknown[] };
-		expect(partyElement.serialize!(model)).toBe('party:\n  hero_tokens: 2');
+		const model = parseParty({ party: { hero_tokens: 2 } }, '');
+		expect(serializeParty(model)).toBe('party:\n  hero_tokens: 2');
 		model.members.push({ name: 'Doran' });
-		expect(partyElement.serialize!(model)).toBe('party:\n  hero_tokens: 2\nmembers:\n  - name: Doran');
+		expect(serializeParty(model)).toBe('party:\n  hero_tokens: 2\nmembers:\n  - name: Doran');
 	});
 
 	test('encounter: a party configured on a block with no party key writes `party`', () => {
-		const model = encounterElement.parse({ monsters: [{ code: 'x', count: 1 }] }, '') as { party: Record<string, number> };
-		expect(encounterElement.serialize!(model)).toBe('monsters:\n  - code: x\n    count: 1');
+		const model = parseEncounter({ monsters: [{ code: 'x', count: 1 }] }, '');
+		expect(serializeEncounter(model)).toBe('monsters:\n  - code: x\n    count: 1');
 		model.party.hero_count = 4;
-		expect(encounterElement.serialize!(model)).toBe('monsters:\n  - code: x\n    count: 1\nparty:\n  hero_count: 4');
+		expect(serializeEncounter(model)).toBe('monsters:\n  - code: x\n    count: 1\nparty:\n  hero_count: 4');
 	});
 });
 

@@ -9,7 +9,17 @@
 // goal_code/goal_points/prerequisites/_dse_anchor stay absent). This makes
 // serialize(parse(x)) reproduce x's own bytes whenever x already carries the full field
 // set in schema order (project-serialize.test.ts's oracle).
+//
+// SC-482 contract (narrows that round-trip ONLY for keys absent from the source): the three
+// materialized defaults used to leak into the user's note on the first write (a block with
+// `goal_name` + `goal_points` came back with `current_respite: 1`, and `accrued: 0` / `rolls: []`
+// when the write did not touch them). A key is now OMITTED from the written block iff it was
+// ABSENT from the parsed source AND its value at write time still equals the default the parser
+// filled in. Every key the source declared is written (even if equal to its default); an absent
+// key whose value changed is written (a logged roll writes `accrued` and `rolls`); key ORDER is
+// unchanged. The record lives in src/elements/shared/undeclaredDefaults.ts.
 import { stringifyYaml } from 'obsidian';
+import { omitUntouchedDefaults, recordingDefaults } from '../shared/undeclaredDefaults';
 
 export interface ProjectRoll {
 	respite: number;
@@ -40,7 +50,7 @@ export interface ProjectModel {
 	_dse_anchor?: string;
 }
 
-export function parse(data: unknown, _raw: string): ProjectModel {
+function parseModel(data: unknown, _raw: string): ProjectModel {
 	const d = (data ?? {}) as Partial<ProjectModel>;
 	const model = {} as ProjectModel;
 	if (d.goal_name !== undefined) model.goal_name = d.goal_name;
@@ -54,8 +64,13 @@ export function parse(data: unknown, _raw: string): ProjectModel {
 	return model;
 }
 
+/** The keys parseModel fills a default into when the source did not declare them (SC-482). */
+const PARSER_DEFAULT_KEYS = ['accrued', 'rolls', 'current_respite'] as const;
+
+export const parse = recordingDefaults(parseModel, PARSER_DEFAULT_KEYS);
+
 export function serialize(model: ProjectModel): string {
-	return stringifyYaml(model).trim();
+	return stringifyYaml(omitUntouchedDefaults(model)).trim();
 }
 
 /** AGENT line 878: a natural 19-20 grants +20 points on top of the roll's own points,

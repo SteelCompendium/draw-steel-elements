@@ -31,44 +31,23 @@
 // the modal test fixtures) were never parsed from a source, have no recorded absences, and keep
 // the old whole-instance output.
 //
-// Where "which defaults did the source omit" lives: a module-private WeakMap keyed by the parsed
-// instance — NOT an own property (an own property would be stringified by stringifyYaml, and a
-// non-enumerable one would be lost by any spread/clone), and per-instance, so two blocks in one
-// note never share it. Every writer (StaminaEditModal Apply, Catch Breath, the Recoveries strip
-// and popover, the undo toast) mutates the SAME parsed instance in place, so the entry survives
-// them all; an instance that was never parsed here simply has no entry and serializes whole.
+// Where "which defaults did the source omit" lives: src/elements/shared/undeclaredDefaults.ts
+// (SC-482 moved this element onto the shared helper — one mechanism for every element whose
+// parser fills defaults). A module-private WeakMap keyed by the parsed instance — NOT an own
+// property (an own property would be stringified by stringifyYaml, and a non-enumerable one
+// would be lost by any spread/clone), and per-instance, so two blocks in one note never share
+// it. Every writer (StaminaEditModal Apply, Catch Breath, the Recoveries strip and popover, the
+// undo toast) mutates the SAME parsed instance in place, so the entry survives them all; an
+// instance that was never parsed here simply has no entry and serializes whole.
 import { stringifyYaml } from 'obsidian';
 import { StaminaBar } from '@model/StaminaBar';
+import { omitUntouchedDefaults, recordingDefaults } from '../shared/undeclaredDefaults';
 
-/** The values StaminaBar.parse fills in for a key the source did not declare. */
-const PARSER_DEFAULTS: Readonly<Record<string, unknown>> = {
-	collapsible: true,
-	collapse_default: false,
-	current_stamina: 0,
-	temp_stamina: 0,
-	height: 1,
-	style: 'default',
-};
+/** The keys StaminaBar.parse fills a default into when the source did not declare them (SC-466). */
+const PARSER_DEFAULT_KEYS = ['collapsible', 'collapse_default', 'current_stamina', 'temp_stamina', 'height', 'style'] as const;
 
-/** Per parsed instance: the defaulted keys its source did NOT declare (SC-466). */
-const undeclaredDefaults = new WeakMap<StaminaBar, ReadonlySet<string>>();
-
-export function parse(data: unknown, _raw: string): StaminaBar {
-	const model = StaminaBar.parse(data);
-	const declared = data as Record<string, unknown>;
-	undeclaredDefaults.set(
-		model,
-		new Set(Object.keys(PARSER_DEFAULTS).filter((key) => declared[key] === undefined)),
-	);
-	return model;
-}
+export const parse = recordingDefaults((data: unknown, _raw: string): StaminaBar => StaminaBar.parse(data), PARSER_DEFAULT_KEYS);
 
 export function serialize(model: StaminaBar): string {
-	const absent = undeclaredDefaults.get(model);
-	if (!absent || absent.size === 0) return stringifyYaml(model).trim();
-	// Own enumerable properties in class (insertion) order — exactly what stringifyYaml(model) walks.
-	const written = Object.fromEntries(
-		Object.entries(model).filter(([key, value]) => !(absent.has(key) && value === PARSER_DEFAULTS[key])),
-	);
-	return stringifyYaml(written).trim();
+	return stringifyYaml(omitUntouchedDefaults(model)).trim();
 }

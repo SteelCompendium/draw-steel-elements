@@ -25,7 +25,18 @@
 // block still type-checks as a plain `number`, never silently promoted into a "real"
 // limit (see montageOutcome's `> 0` guard below, which stops a 0 limit from reading as
 // perpetually "reached").
+//
+// SC-482 contract (narrows the "serialize(parse(x)) reproduces x" story ONLY for keys absent
+// from the source): the six materialized defaults (rounds 2, success_limit/failure_limit 0,
+// successes/failures 0, current_round 1) used to leak into the user's note on the first write
+// (a block with `title` + the two limits came back with `successes: 0`, `failures: 0`,
+// `current_round: 1`). A key is now OMITTED from the written block iff it was ABSENT from the
+// parsed source AND its value at write time still equals the default the parser filled in.
+// Every key the source declared is written (even if equal to its default); an absent key whose
+// value changed is written (Add round writes `rounds`); key ORDER is §B.5's fixed order,
+// unchanged. The record lives in src/elements/shared/undeclaredDefaults.ts.
 import { stringifyYaml } from 'obsidian';
+import { omitUntouchedDefaults, recordingDefaults } from '../shared/undeclaredDefaults';
 
 export interface MontageParticipant {
 	name: string;
@@ -138,7 +149,7 @@ function sanitizeEntries(raw: unknown): MontageEntry[] | undefined {
 	return entries.length > 0 ? entries : undefined;
 }
 
-export function parse(data: unknown, _raw: string): MontageModel {
+function parseModel(data: unknown, _raw: string): MontageModel {
 	const d = (data ?? {}) as Partial<MontageModel>;
 	const model = {} as MontageModel;
 	if (d.title !== undefined) model.title = d.title;
@@ -159,6 +170,11 @@ export function parse(data: unknown, _raw: string): MontageModel {
 	if (d._dse_anchor !== undefined) model._dse_anchor = d._dse_anchor;
 	return model;
 }
+
+/** The keys parseModel fills a default into when the source did not declare them (SC-482). */
+const PARSER_DEFAULT_KEYS = ['rounds', 'success_limit', 'failure_limit', 'successes', 'failures', 'current_round'] as const;
+
+export const parse = recordingDefaults(parseModel, PARSER_DEFAULT_KEYS);
 
 /**
  * FIX ROUND 3 (review-2 M-2) — reassembles into §B.5's FIXED key order before
@@ -186,7 +202,8 @@ export function serialize(model: MontageModel): string {
 	if (model.entries && model.entries.length > 0) ordered.entries = model.entries;
 	ordered.current_round = model.current_round;
 	if (model._dse_anchor !== undefined) ordered._dse_anchor = model._dse_anchor;
-	return stringifyYaml(ordered).trim();
+	// SC-482: `ordered` is a new object, so the record (keyed on `model`) filters it by `model`.
+	return stringifyYaml(omitUntouchedDefaults(model, ordered)).trim();
 }
 
 export type MontageOutcome = 'pending' | 'total' | 'partial' | 'failure';
