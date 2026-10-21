@@ -46,8 +46,26 @@
 // first doc change whatever it is, so a user's own edit (any userEvent other than "set") never
 // triggers a restore. Popouts: the MutationObserver and timers come from the widget's own window.
 // Unload: `releaseAll()` (plugin.register) and the ViewPlugin's `destroy` drop every hold.
-// Needs nothing: a DSE block CodeMirror has not drawn (far above or below the viewport) — no widget
-// in the DOM, nothing captured, and the pane was measured to hold anyway (stock and prototype).
+//
+// A CAPTURE BELONGS TO ONE NOTE. There is no TTL on a capture (the second Live Preview pane's
+// transaction was measured 2.47 s after `modify` while the main thread was busy; SC-472), so its
+// lifetime is bound by identity instead: it records the path it was taken for and is dropped if the
+// view's file is no longer that path when a transaction arrives. Measured (Obsidian 1.14.4, SC-478
+// r2; `openFile`, `setViewState`, `openLinkText`, history back, to a tracker note and to a plain
+// one): a different file loaded into a Live Preview leaf is the SAME MarkdownView and the SAME
+// EditorView — `onLoadFile` then `setViewData(data, clear=true)`, which ends in
+// `EditorView.setState(newState)`: no doc-changing transaction at all, every ViewPlugin is destroyed
+// and re-created (so `destroy` -> `forget` already drops the capture, pending restore and holds:
+// capture present before the load, absent after, 5/5 navigations), `view.file` is the new path before
+// the first update, and Obsidian resets scrollTop to 0. The explicit path check covers any
+// navigation that would arrive as a `set` transaction on the same editor instead.
+//
+// DEPENDENCY, ACCEPTED. The restore engages only on a doc-changing transaction whose every
+// userEvent is "set" — Obsidian's `setViewData` annotation (measured on every write path). That is
+// Obsidian's behaviour, not API: if a future version drops or renames it, the hold silently stops
+// engaging; lifecycle gate G-S18 fails when that happens.
+// Not touched: a DSE block CodeMirror has not drawn (far above or below the viewport) has no widget
+// in the DOM, so nothing is captured — and the pane was measured to hold anyway (stock and here).
 
 import type { Workspace } from 'obsidian';
 import { ViewPlugin } from '@codemirror/view';
@@ -65,6 +83,9 @@ interface WidgetAt {
 }
 
 interface Capture {
+	/** The note the capture was taken for, and the view whose `file` is checked against it when the transaction arrives. */
+	path: string;
+	owner: LivePreviewViewLike;
 	scrollTop: number;
 	snapshot: StateEffect<unknown>;
 	widgets: WidgetAt[];
@@ -116,21 +137,28 @@ export class LivePreviewScrollHold {
 			const cm = view.editor?.cm;
 			if (!cm) continue;
 			try {
-				this.capture(cm);
+				this.capture(cm, view);
 			} catch (err) {
 				console.warn('[DSE] Live Preview scroll capture failed', err);
 			}
 		}
 	}
 
-	/** Capture one editor (exported for the tests). Raw Source mode draws no widgets, so it never captures. */
-	capture(view: EditorView): void {
+	/**
+	 * Capture one editor (exported for the tests); `owner` is the MarkdownView that shows it, whose `file` the capture is
+	 * bound to. Raw Source mode draws no widgets, so it never captures.
+	 */
+	capture(view: EditorView, owner: LivePreviewViewLike): void {
 		this.captures.delete(view);
+		const path = owner.file?.path;
+		if (!path) return;
 		const scrollTop = view.scrollDOM.scrollTop;
 		if (scrollTop <= 0) return; // nothing to lose
 		const widgets = embedWidgets(view).filter((w) => w.querySelector('[data-dse-element]'));
 		if (!widgets.length) return; // a note without a drawn DSE block never jumps (measured)
 		this.captures.set(view, {
+			path,
+			owner,
 			scrollTop,
 			snapshot: view.scrollSnapshot(),
 			widgets: widgets.map((w) => ({ pos: view.posAtDOM(w), px: w.getBoundingClientRect().height })),
@@ -161,6 +189,7 @@ export class LivePreviewScrollHold {
 		const cap = this.captures.get(view);
 		if (!cap) return;
 		this.captures.delete(view); // consumed by the first doc change, whatever it is
+		if (cap.owner.file?.path !== cap.path) return; // another note was loaded into this leaf since: its snapshot is not ours
 		if (!u.transactions.filter((tr) => tr.docChanged).every((tr) => tr.isUserEvent('set'))) return; // the user's own edit
 		if (Math.abs(view.scrollDOM.scrollTop - cap.scrollTop) > 1) return; // the user scrolled since: the user wins
 		const win = view.scrollDOM.ownerDocument.defaultView;
