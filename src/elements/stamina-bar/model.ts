@@ -19,7 +19,8 @@
 // untrimmed trailing "\n" from stringifyYaml would otherwise splice in a spurious blank line
 // before the closing fence.
 //
-// SC-466 contract (supersedes byte-compat ONLY for keys absent from the source): StaminaBar.parse
+// SC-466 contract (supersedes byte-compat ONLY for keys absent from the source; a key present
+// with the value `undefined` — FormModal's cleared field — counts as absent): StaminaBar.parse
 // fills defaults into own properties (collapsible true, collapse_default false, current_stamina 0,
 // temp_stamina 0, height 1, style "default"), and the legacy writer leaked them into the user's
 // note on the first write. A key is now OMITTED from the written block iff it was ABSENT from the
@@ -57,7 +58,7 @@ export function parse(data: unknown, _raw: string): StaminaBar {
 	const declared = data as Record<string, unknown>;
 	undeclaredDefaults.set(
 		model,
-		new Set(Object.keys(PARSER_DEFAULTS).filter((key) => !Object.prototype.hasOwnProperty.call(declared, key))),
+		new Set(Object.keys(PARSER_DEFAULTS).filter((key) => declared[key] === undefined)),
 	);
 	return model;
 }
