@@ -770,13 +770,15 @@ describe('SC-186: add — the real combobox (arrow keys + Enter, Escape, known +
 		});
 	});
 
-	test('SC-186 fix-round HIGH-2: outside-close is a single DOCUMENT-level mousedown, not focusout', () => {
+	test('SC-186 fix-round HIGH-2: outside-close is a DOCUMENT-level mousedown/click pair, not focusout (SC-474: the close waits for the click)', () => {
 		const { container } = makeModal([]);
 		openCombobox(container);
 		const outside = document.createElement('button');
 		document.body.appendChild(outside);
 
 		outside.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+		outside.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+		outside.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
 		expect(container.querySelector('.dse-condal__combobox')).toBeNull();
 		outside.remove();
@@ -788,6 +790,116 @@ describe('SC-186: add — the real combobox (arrow keys + Enter, Escape, known +
 		const searchIcon = container.querySelector('.dse-condal__search') as HTMLElement;
 		searchIcon.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
 		expect(container.querySelector('.dse-condal__combobox')).not.toBeNull();
+	});
+
+	describe('SC-474: the outside-close waits for the click, so a click on a control behind the open dropdown still lands', () => {
+		const press = (el: HTMLElement, type: string, init: MouseEventInit = {}) =>
+			el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, ...init }));
+
+		test('a mousedown outside does NOT collapse the dropdown; the click that follows does', () => {
+			const { container } = makeModal([]);
+			openCombobox(container);
+			const outside = document.createElement('button');
+			document.body.appendChild(outside);
+
+			press(outside, 'mousedown');
+			expect(container.querySelector('.dse-condal__combobox')).not.toBeNull();
+			press(outside, 'mouseup');
+			expect(container.querySelector('.dse-condal__combobox')).not.toBeNull();
+			press(outside, 'click');
+			expect(container.querySelector('.dse-condal__combobox')).toBeNull();
+			expect(container.querySelector('.dse-condal__add')).not.toBeNull();
+			outside.remove();
+		});
+
+		test('a full mousedown/mouseup/click on a row\'s cog with the dropdown open runs the cog\'s handler, ends with the dropdown closed, and focus on the cog', () => {
+			const { container } = makeModal(['bleeding']);
+			openCombobox(container);
+			const cog = rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]') as HTMLElement;
+
+			press(cog, 'mousedown');
+			// The layout has not moved under the pointer yet: the menu is still there when the button is released.
+			expect(container.querySelector('.dse-condal__menu')).not.toBeNull();
+			press(cog, 'mouseup');
+			press(cog, 'click');
+
+			expect(editorOf(container)).not.toBeNull();
+			expect(container.querySelector('.dse-condal__combobox')).toBeNull();
+			expect(document.activeElement).toBe(rowByName(container, 'Bleeding').querySelector('.dse-condal__act'));
+		});
+
+		test('a click on a swatch with the dropdown open writes the colour, keeps focus on the swatch, and closes the dropdown', () => {
+			const { container, onChange } = makeModal(['bleeding']);
+			openEditor(container, 'Bleeding');
+			openCombobox(container);
+			const swatch = editorOf(container).querySelector('.dse-swatch[aria-label="Color #1e8449"]') as HTMLElement;
+
+			press(swatch, 'mousedown');
+			press(swatch, 'mouseup');
+			press(swatch, 'click');
+
+			expect(onChange).toHaveBeenLastCalledWith([{ key: 'bleeding', color: '#1e8449' }]);
+			expect(container.querySelector('.dse-condal__combobox')).toBeNull();
+			expect(document.activeElement?.getAttribute('aria-label')).toBe('Color #1e8449');
+		});
+
+		test('a mousedown INSIDE the dropdown never closes it, even after the click', () => {
+			const { container } = makeModal([]);
+			const input = openCombobox(container);
+
+			press(input, 'mousedown');
+			press(input, 'mouseup');
+			press(input, 'click');
+
+			expect(container.querySelector('.dse-condal__combobox')).not.toBeNull();
+		});
+
+		test('a right-click outside still closes the dropdown at once (no click follows it)', () => {
+			const { container } = makeModal([]);
+			openCombobox(container);
+			const outside = document.createElement('button');
+			document.body.appendChild(outside);
+
+			press(outside, 'mousedown', { button: 2 });
+
+			expect(container.querySelector('.dse-condal__combobox')).toBeNull();
+			outside.remove();
+		});
+
+		test('a drag that starts outside and ends with no click (mouseup elsewhere) still closes the dropdown, once the release settles', () => {
+			jest.useFakeTimers();
+			try {
+				const { container } = makeModal([]);
+				openCombobox(container);
+				const outside = document.createElement('button');
+				document.body.appendChild(outside);
+
+				press(outside, 'mousedown');
+				press(document.body, 'mouseup');
+				expect(container.querySelector('.dse-condal__combobox')).not.toBeNull();
+				jest.runOnlyPendingTimers();
+
+				expect(container.querySelector('.dse-condal__combobox')).toBeNull();
+				outside.remove();
+			} finally {
+				jest.useRealTimers();
+			}
+		});
+
+		test('a mousedown outside on a later, separate gesture does not carry a stale pending close over an inside click', () => {
+			const { container } = makeModal([]);
+			const input = openCombobox(container);
+			const outside = document.createElement('button');
+			document.body.appendChild(outside);
+
+			press(outside, 'mousedown'); // pending, but the gesture is abandoned (no mouseup/click reaches us)
+			press(input, 'mousedown'); // a new gesture starts INSIDE the add control: the pending close is dropped
+			press(input, 'mouseup');
+			press(input, 'click');
+
+			expect(container.querySelector('.dse-condal__combobox')).not.toBeNull();
+			outside.remove();
+		});
 	});
 
 	test('blank/punctuation-only custom text is a no-op (never adds an empty-key condition)', () => {

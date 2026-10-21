@@ -46,9 +46,12 @@
 //     `focusout` auto-close BEFORE the item's `click` ever ran — a mouse pick silently
 //     did nothing. Picks are now bound to the item's own `mousedown` with
 //     `preventDefault()` (keeps focus in the input, so no blur/close races the pick at
-//     all), and outside-close is a single DOCUMENT-level `mousedown` listener instead of
-//     `focusout` (belt and braces — catches a real click-away without depending on focus
-//     timing).
+//     all), and outside-close is a DOCUMENT-level pointer gesture instead of `focusout`
+//     (belt and braces — catches a real click-away without depending on focus timing).
+//     SC-474: that gesture is `mousedown` (arm) then `click` (close), not `mousedown`
+//     alone — collapsing on the mousedown shrank and re-centred the modal under the
+//     pointer, so the mouseup landed elsewhere and a click on a row's cog or a colour
+//     swatch behind the open dropdown never fired. See the outside-close block in `onOpen`.
 import type { App } from 'obsidian';
 import { getIconIds, setIcon } from 'obsidian';
 import type { Condition, ConditionHolder } from '@drawSteelAdmonition/EncounterData';
@@ -135,16 +138,43 @@ export class ConditionsModal extends DseModal {
 		this.listEl.setAttribute('aria-label', 'Active conditions');
 
 		this.addWrapEl = this.body.createDiv({ cls: 'dse-condal__addwrap' });
-		// SC-186 fix-round HIGH-2: a single DOCUMENT-level mousedown, registered once for
-		// the modal's lifetime, is the outside-close mechanism — not `focusout` (which a
-		// real browser can fire on the input from a mousedown on a non-focusable target,
-		// racing an in-progress pick). Item picks (below) preventDefault() their own
-		// mousedown so focus never leaves the input in the first place; this listener is
-		// the belt-and-braces catch for an ACTUAL click away from the whole add control.
+		// SC-186 fix-round HIGH-2 + SC-474: outside-close is a DOCUMENT-level pointer gesture,
+		// registered once for the modal's lifetime — not `focusout` (which a real browser can
+		// fire on the input from a mousedown on a non-focusable target, racing an in-progress
+		// pick). Item picks (below) preventDefault() their own mousedown so focus never leaves
+		// the input in the first place; this is the belt-and-braces catch for an ACTUAL click
+		// away from the whole add control.
+		//
+		// SC-474: the gesture is two-step. A primary-button `mousedown` outside only ARMS the
+		// close (`outsideDown`); the dropdown collapses on the `click` that completes the
+		// gesture. Closing on the mousedown itself shrank the modal and re-centred it between
+		// the press and the release, so the click was dispatched to whatever now sat under the
+		// pointer and missed the cog / swatch the user aimed at. The `click` listener is a
+		// CAPTURE listener so the collapse (and its focus move to "+ Add condition") runs
+		// BEFORE the target's own click handler — that handler then has the last word on
+		// focus (SC-468: a swatch keeps focus), exactly the order the old mousedown-close
+		// produced. The click's target was fixed at mouseup, so the DOM change cannot divert it.
+		// A press that never turns into a click (a drag that ends elsewhere) is closed by the
+		// fallback timer armed on `mouseup`; a right/middle press (no click follows it) closes
+		// at once, as before; a press INSIDE the add control drops any stale armed close.
 		// activeDocument (not the global `document`) — popout-window compatibility: a
 		// modal opened while a popout window is focused must listen on THAT window's
 		// document, not always the main one (obsidianmd/prefer-active-doc).
+		let outsideDown = false;
+		let settleTimer: { win: Window; id: number } | undefined;
+		const disarm = (): void => {
+			outsideDown = false;
+			if (settleTimer) settleTimer.win.clearTimeout(settleTimer.id);
+			settleTimer = undefined;
+		};
+		const closeIfArmed = (): void => {
+			const armed = outsideDown;
+			disarm();
+			if (armed && this.addOpen) this.closeAdd();
+		};
+		this.lifecycle.register(disarm);
 		this.lifecycle.registerDomEvent(activeDocument, 'mousedown', (evt: MouseEvent) => {
+			disarm();
 			if (!this.addOpen) return;
 			// composedPath() (not target + .contains()) — a SUCCESSFUL pick mutates the
 			// DOM (renderList()/comboReset() empty and rebuild the list/menu) during its
@@ -156,8 +186,16 @@ export class ConditionsModal extends DseModal {
 			// of DOM mutations that happen mid-bubble.
 			const path = typeof evt.composedPath === 'function' ? evt.composedPath() : [evt.target];
 			if (path.includes(this.addWrapEl)) return; // inside the add control
-			this.closeAdd();
+			if (evt.button !== 0) this.closeAdd(); // no click follows a right/middle press
+			else outsideDown = true;
 		});
+		// A click is dispatched in the same task as its mouseup, so a 0ms timer armed on mouseup
+		// fires only if no click did (drag ended off the pressed element's ancestors, or elsewhere).
+		this.lifecycle.registerDomEvent(activeDocument, 'mouseup', () => {
+			const win = activeDocument.defaultView; // the window that owns the document the press happened in
+			if (outsideDown && !settleTimer && win) settleTimer = { win, id: win.setTimeout(closeIfArmed, 0) };
+		});
+		this.lifecycle.registerDomEvent(activeDocument, 'click', closeIfArmed, true);
 
 		this.renderList();
 		this.renderAdd();
