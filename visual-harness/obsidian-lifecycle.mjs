@@ -1182,21 +1182,52 @@ const SCENARIOS = [
 		},
 	},
 	{
-		// Spec G-S8: tall scrolled tracker keeps scrollTop across its own write (pin on).
+		// Spec G-S8 (SC-198 scroll pin), made discriminating by SC-459: a tall scrolled tracker
+		// keeps scrollTop across its own write, in two phases.
+		// Phase 1, view adoption ON (the default): SC-340 adopts the writer's view, the tracker
+		// DOM is kept and the sizer never collapses, so scrollTop holds with or without the pin
+		// (SC-459 r1, Obsidian 1.14.4: pin disabled -> held 8/8). Kept as the default-path check.
+		// Phase 2, view adoption OFF (the SC-340 §6.6 kill switch, flipped at runtime: claim()
+		// reads `enabled` on every call): the write's rebuild draws the tracker FRESH, which is
+		// the path SC-198's clamp lives on. Measured (SC-459 r1, 1.14.4): unpinned, scrollTop
+		// 2779 -> 2001 with the sizer's inline min-height 5501px -> 2486px; pinned, held. The
+		// phase asserts the rebuild really happened (root replaced, sizer inline min-height fell
+		// below the scroll position — otherwise the scenario proves nothing), that
+		// `data-dse-scroll-pin` was on the scroller at that moment, and that scrollTop never moved.
 		id: 'G-S8',
 		async run(t) {
 			const rel = 'Lifecycle/tall.md';
-			await t.open(rel);
-			await t.reset(rel);
-			await t.ev(`(() => { const s = app.workspace.getMostRecentLeaf().view.containerEl.querySelector('.markdown-preview-view'); const r = ${t.root(TRACKER)}; s.scrollTop = r.getBoundingClientRect().top - s.getBoundingClientRect().top + s.scrollTop + 1500; })()`);
-			await t.sleep(900);
-			const samples = await t.ev(`new Promise((resolve) => { const s = app.workspace.getMostRecentLeaf().view.containerEl.querySelector('.markdown-preview-view'); const sr = s.getBoundingClientRect(); const b = Array.from(${t.root(TRACKER)}.querySelectorAll('button.dse-init__portrait-toggle')).find((x) => { const r = x.getBoundingClientRect(); return r.top > sr.top + 100 && r.bottom < sr.bottom - 100; }); const out = []; const t0 = performance.now(); const tick = () => { out.push(s.scrollTop); if (performance.now() - t0 < 2200) requestAnimationFrame(tick); else resolve(out); }; requestAnimationFrame(tick); b.click(); })`);
-			const min = Math.min(...samples);
-			const max = Math.max(...samples);
-			t.expect(min === samples[0] && max === samples[0], `scrollTop moved: start ${samples[0]} min ${min} max ${max}`);
-			t.expect(/has_taken_turn: true/.test(t.read(rel)), 'write did not land');
-			await t.reset(rel);
-			return `scrollTop held at ${samples[0]} over ${samples.length} frames`;
+			const scroller = `app.workspace.getMostRecentLeaf().view.containerEl.querySelector('.markdown-preview-view')`;
+			const writeOnce = async () => {
+				await t.open(rel);
+				await t.reset(rel);
+				await t.ev(`(() => { const s = ${scroller}; const r = ${t.root(TRACKER)}; s.scrollTop = r.getBoundingClientRect().top - s.getBoundingClientRect().top + s.scrollTop + 1500; })()`);
+				await t.sleep(900);
+				await t.tag(TRACKER, 'gs8');
+				// A MutationObserver sees every inline min-height Obsidian writes on the sizer; a
+				// rAF sample alone catches the collapse in ~1 frame. The inline value is read even
+				// while pinned (the pin outranks it via !important, it does not stop the write).
+				const m = await t.ev(`new Promise((resolve) => { const s = ${scroller}; const st0 = s.scrollTop; const sr = s.getBoundingClientRect(); const b = Array.from(${t.root(TRACKER)}.querySelectorAll('button.dse-init__portrait-toggle')).find((x) => { const r = x.getBoundingClientRect(); return r.top > sr.top + 100 && r.bottom < sr.bottom - 100; }); const samples = []; let stMin = st0; let mhMin = Infinity; let pinAtCollapse = null; let pinFrames = 0; const onScroll = () => { stMin = Math.min(stMin, s.scrollTop); }; s.addEventListener('scroll', onScroll); const mo = new MutationObserver(() => { const z = s.querySelector('.markdown-preview-sizer'); const mh = z ? parseFloat(z.style.minHeight) : NaN; if (!Number.isNaN(mh) && mh < mhMin) { mhMin = mh; if (mh < st0 && pinAtCollapse === null) pinAtCollapse = s.hasAttribute('data-dse-scroll-pin'); } }); mo.observe(s, { attributes: true, attributeFilter: ['style'], childList: true, subtree: true }); const t0 = performance.now(); const tick = () => { samples.push(s.scrollTop); if (s.hasAttribute('data-dse-scroll-pin')) pinFrames++; if (performance.now() - t0 < 2400) requestAnimationFrame(tick); else { mo.disconnect(); s.removeEventListener('scroll', onScroll); resolve({ st0, frames: samples.length, stMin: Math.min(stMin, ...samples), stMax: Math.max(...samples), mhMin, pinAtCollapse, pinFrames }); } }; requestAnimationFrame(tick); b.click(); })`);
+				m.rebuilt = !(await t.sameRoot(TRACKER, 'gs8'));
+				t.expect(/has_taken_turn: true/.test(t.read(rel)), 'write did not land');
+				await t.reset(rel);
+				return m;
+			};
+			const on = await writeOnce();
+			t.expect(on.stMin === on.st0 && on.stMax === on.st0, `adoption on: scrollTop moved: start ${on.st0} min ${on.stMin} max ${on.stMax}`);
+			const prevEnabled = await t.ev(`${t.reg}.enabled`);
+			let off;
+			try {
+				await t.ev(`${t.reg}.enabled = false`);
+				off = await writeOnce();
+			} finally {
+				await t.ev(`${t.reg}.enabled = ${JSON.stringify(prevEnabled)}`);
+			}
+			t.expect(off.rebuilt, 'adoption off: the write did not rebuild the tracker — the phase cannot reach the SC-198 clamp');
+			t.expect(off.mhMin < off.st0, `adoption off: the rebuild never collapsed the sizer below the scroll position (inline min-height min ${off.mhMin}px, scrollTop ${off.st0}) — nothing to pin against; re-measure SC-198 (SC-459)`);
+			t.expect(off.pinAtCollapse === true, `adoption off: data-dse-scroll-pin was not on the scroller when the sizer collapsed to ${off.mhMin}px (pin frames ${off.pinFrames})`);
+			t.expect(off.stMin === off.st0 && off.stMax === off.st0, `adoption off: scrollTop moved: start ${off.st0} min ${off.stMin} max ${off.stMax} (sizer inline min-height fell to ${off.mhMin}px, pin present ${off.pinAtCollapse})`);
+			return `adoption on: scrollTop held at ${on.st0} over ${on.frames} frames; adoption off: tracker rebuilt, sizer min-height fell to ${off.mhMin}px under the pin, scrollTop held at ${off.st0} over ${off.frames} frames`;
 		},
 	},
 	{

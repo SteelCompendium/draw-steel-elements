@@ -1,8 +1,9 @@
 // SC-198 — PreviewScrollPin: keep reading mode's scroll position across Obsidian's own
 // post-write preview rebuild.
 //
-// THE PROBLEM (measured in a real Obsidian 1.13.7 over CDP; full write-up in the SC-198
-// root-cause doc). Any write to the open note makes Obsidian run
+// THE PROBLEM, AS FIRST MEASURED (SC-198, a real Obsidian 1.13.7 over CDP; full write-up in
+// the SC-198 root-cause doc; history — the 1.14.4 re-measurement is the next section, and
+// it narrows "any write" below to "a write that draws a DSE block fresh"). Any write to the open note makes Obsidian run
 // `setViewData -> previewMode.set -> renderer.set -> queueRender`, which tears the rendered
 // sections down and re-measures from scratch. This is NOT plugin-specific — a bare
 // one-character `vault.process` with the plugin uninvolved reproduces it identically — so
@@ -21,6 +22,24 @@
 // re-mounts (which lazy rendering makes unreliable). Measured on the root-cause doc's
 // scenario C note: `scrollTop` 2596 -> 0 unpinned, 2596 -> 2596 (min == max == 2596, never
 // moved for a single frame) pinned.
+//
+// RE-MEASURED ON OBSIDIAN 1.14.4 (SC-459; the pin is still needed, but as a backstop).
+// The collapse now comes only from a DSE block that is drawn FRESH: Obsidian keeps unchanged
+// sections (edits elsewhere in the note never touch the sizer), re-renders a changed non-DSE
+// section synchronously (a 260-line code fence, a 220-row table and 220 paragraphs never
+// clamped, even when the tall element itself was edited), but a changed DSE block empties its
+// section while the view mounts asynchronously, and that is when the sizer's inline
+// `min-height` collapses. Bare one-character `vault.process` on a one-tracker note, tracker
+// text changed: `scrollTop` 2416 -> 0 and 4831 -> 0, sizer inline `min-height` 5276px -> 93px.
+// The writer's OWN write normally never reaches that path, because SC-340 view adoption
+// (viewRegistry.ts) keeps the writer's tracker DOM, so nothing is redrawn and the sizer holds
+// at full height. Hence the unpinned scrollTop held 8/8 on the default path. The pin is
+// the backstop for every write adoption misses (claim miss, collision, `viewAdoption: false`):
+// with adoption off, unpinned, the lifecycle G-S8 note went `scrollTop` 2779 -> 2001 (sizer
+// 5501px -> 2486px); pinned, it held. G-S8 asserts exactly that adoption-off case, so
+// disabling this pin (the call in ReadingModeBlockHost, or the stylesheet rule) fails it.
+// Not covered (SC-470): a second pane or an external edit redraws the tracker in a scroller
+// this pin never touched — the pin only covers the writer's own scroller.
 //
 // WHY `!important` VIA A STYLESHEET AND NOT AN INLINE STYLE. Obsidian owns
 // `sizer.style.minHeight` and rewrites it during the rebuild; an inline pin is simply
