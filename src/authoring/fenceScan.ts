@@ -17,7 +17,7 @@ export const FENCE_LINE = new RegExp(`^${BQ_PREFIX}${LEADING_WS}(\`{3,}|~{3,})(.
 export interface FenceState {
 	/** True if `line` sits inside an already-opened fence (any language). */
 	inFence: boolean;
-	/** The opening fence's language: the first whitespace-delimited token of its info string, lowercased (e.g. "ds-roll", "js", ""). Null when not inside a fence. */
+	/** The opening fence's language: the first whitespace-delimited token of its info string, case kept (e.g. "ds-roll", "js", ""; Obsidian only dispatches an exact-case match). Null when not inside a fence. */
 	lang: string | null;
 }
 
@@ -44,14 +44,19 @@ export function scanFenceState(editor: Editor, line: number): FenceState {
 		const marker = m[1];
 		const rest = m[2];
 		if (!inFence) {
+			// SC-476: CommonMark forbids a backtick in a BACKTICK fence's info string, so
+			// ```` ```ds-stamina-bar `x` ```` is paragraph text, not an opener (tilde fences
+			// may carry backticks). Treat it as literal content.
+			if (marker[0] === '`' && rest.includes('`')) continue;
 			inFence = true;
 			fenceChar = marker[0];
 			fenceLen = marker.length;
 			// SC-476: the block's type is the FIRST whitespace-delimited token of the trimmed info
 			// string (```` ```ds-counter extra ```` is a ds-counter), the rule the rest of DSE
 			// uses. Mirrors SC-457's `fenceLanguage` (src/framework/host/blockPrefix.ts); swap this
-			// for that import once SC-457 lands.
-			lang = /^\S*/.exec(rest.trim())![0].toLowerCase();
+			// for that import once SC-457 lands. Case is kept: Obsidian dispatches a block to its
+			// processor by exact language, so ```` ```DS-Stamina-Bar ```` never renders.
+			lang = /^\S*/.exec(rest.trim())![0];
 		} else if (marker[0] === fenceChar && marker.length >= fenceLen && rest.trim() === '') {
 			inFence = false;
 			lang = null;

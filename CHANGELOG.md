@@ -23,7 +23,7 @@ Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
 - [FIX] **Authoring autocomplete: a code block opened with extra words after its type now gets key and value
-  suggestions** (SC-476). In a block opened with ```` ```ds-counter extra ````, the suggester read the whole
+  suggestions** (SC-476). In a block opened with ```` ```ds-stamina-bar extra ````, the suggester read the whole
   line after the backticks as the block's type, found no such type and offered nothing. It now reads only the
   first word, as the rest of the plugin does.
 - [FIX] **Conditions window: clicking a row's cog or a color swatch while the "Add condition" dropdown is open

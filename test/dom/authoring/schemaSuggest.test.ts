@@ -200,9 +200,15 @@ describe('SC-476 — extra words after the fence language', () => {
 		['a tilde fence with extra words', '~~~ds-counter extra words', 'ds-counter'],
 		['a callout-prefixed fence with extra words', '> ```ds-counter extra', 'ds-counter'],
 		['the language alone (unchanged)', '```ds-counter', 'ds-counter'],
-		['mixed case is still lowercased (unchanged)', '```DS-Counter extra', 'ds-counter'],
+		['mixed case is kept: Obsidian only renders an exact-case language', '```DS-Counter extra', 'DS-Counter'],
+		['a tilde fence may carry a backtick in its info string', '~~~ds-counter `x`', 'ds-counter'],
 	])('scanFenceState lang: %s', (_name, opener, expected) => {
 		expect(langAt(opener)).toBe(expected);
+	});
+
+	test('a backtick fence whose info string contains a backtick is not an opener (CommonMark)', () => {
+		expect(langAt('```ds-counter `x`')).toBeNull();
+		expect(scanFenceState(new Editor('```ds-counter `x`\n```js\nbody') as never, 2).lang).toBe('js');
 	});
 
 	test('a bare fence has the empty language; outside a fence it is null', () => {
@@ -225,5 +231,32 @@ describe('SC-476 — extra words after the fence language', () => {
 		const info = s.onTrigger({ line: 1, ch: 7 }, editor as never, null);
 		expect(info).not.toBeNull();
 		expect(s.getSuggestions({ ...info!, editor: editor as never, file: null as never })).toEqual(['card', 'flat']);
+	});
+
+	// The REAL ds-stamina-bar definition, not the synthetic ds-x: guards the example the CHANGELOG gives.
+	test('a real ds-stamina-bar block opened with extra info words gets the same keys as the bare opener', () => {
+		const keysAt = (opener: string) => {
+			const s = realSuggest();
+			const editor = new Editor(opener + '\n');
+			const info = s.onTrigger({ line: 1, ch: 0 }, editor as never, null);
+			return info === null ? null : s.getSuggestions({ ...info, editor: editor as never, file: null as never });
+		};
+		const bare = keysAt('```ds-stamina-bar');
+		expect(bare).toContain('max_stamina');
+		expect(keysAt('```ds-stamina-bar extra')).toEqual(bare);
+	});
+
+	test('a language written in a different case never renders, so it gets no completions', () => {
+		const s = realSuggest();
+		for (const opener of ['```DS-Stamina-Bar', '```DS-Stamina-Bar extra']) {
+			const editor = new Editor(opener + '\n');
+			expect(s.onTrigger({ line: 1, ch: 0 }, editor as never, null)).toBeNull();
+		}
+	});
+
+	test('a backtick-in-info line is not a block opener, so it gets no completions', () => {
+		const s = realSuggest();
+		const editor = new Editor('```ds-stamina-bar `x`\n');
+		expect(s.onTrigger({ line: 1, ch: 0 }, editor as never, null)).toBeNull();
 	});
 });
