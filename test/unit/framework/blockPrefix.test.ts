@@ -3,10 +3,11 @@
 import {
 	addBlockPrefix,
 	blankLinesAreTrimmed,
+	fenceLanguage,
 	matchFenceMarker,
 	stripBlockPrefix,
 } from '@/framework/host/blockPrefix';
-import { blockBodyLines, parseOpenFenceLine, replaceFenceBlock, replaceFenceBody } from '@/framework/host/fenceLine';
+import { blockBodyLines, emitOpenFenceLine, parseOpenFenceLine, replaceFenceBlock, replaceFenceBody } from '@/framework/host/fenceLine';
 
 describe('SC-455: matchFenceMarker', () => {
 	test.each([
@@ -95,6 +96,39 @@ describe('SC-455: fenceLine splices with a prefix', () => {
 	test('parseOpenFenceLine reads the prefix; the info string keeps its spacing after the fence run', () => {
 		expect(parseOpenFenceLine('> > ```ds-counter  extra  ')).toEqual({ prefix: '> > ', fence: '```', language: 'ds-counter', info: 'ds-counter  extra' });
 		expect(parseOpenFenceLine('```ds-counter')).toEqual({ prefix: '', fence: '```', language: 'ds-counter', info: 'ds-counter' });
+	});
+
+	// SC-457: the language is the first token of the TRIMMED info string; `info` stays the verbatim remainder.
+	test.each([
+		['one space', '``` ds-counter', ' ds-counter'],
+		['three spaces', '```   ds-counter', '   ds-counter'],
+		['a tab', '```\tds-counter', '\tds-counter'],
+		['mixed whitespace and extra tokens', '``` \t ds-counter  extra', ' \t ds-counter  extra'],
+		['trailing whitespace', '``` ds-counter  ', ' ds-counter'],
+	])('parseOpenFenceLine skips whitespace before the language (%s) and keeps the info string verbatim', (_label, line, info) => {
+		expect(parseOpenFenceLine(line)).toEqual({ prefix: '', fence: '```', language: 'ds-counter', info });
+		expect(emitOpenFenceLine(parseOpenFenceLine(line)!)).toBe(`\`\`\`${info}`);
+	});
+
+	test('parseOpenFenceLine: a bare fence, and one with only whitespace after it, have the empty language; a prefix is separate', () => {
+		expect(parseOpenFenceLine('```')?.language).toBe('');
+		expect(parseOpenFenceLine('```   ')).toEqual({ prefix: '', fence: '```', language: '', info: '' });
+		expect(parseOpenFenceLine('> > ``` ds-counter')).toEqual({ prefix: '> > ', fence: '```', language: 'ds-counter', info: ' ds-counter' });
+	});
+
+	test('fenceLanguage is the one definition: first token of the trimmed info string', () => {
+		expect(['ds-counter', ' ds-counter', ' ds-counter extra', '\t ds-counter\textra', '', '   '].map(fenceLanguage)).toEqual([
+			'ds-counter', 'ds-counter', 'ds-counter', 'ds-counter', '', '',
+		]);
+	});
+
+	test('replaceFenceBlock re-emits a spaced opening line byte for byte, in LF, CRLF and lone-CR notes', () => {
+		const lf = ['top', '``` ds-counter  extra', 'a: 1', '```', 'bottom'].join('\n');
+		expect(replaceFenceBlock(lf, 1, 3, 'a: 2')).toBe(['top', '``` ds-counter  extra', 'a: 2', '```', 'bottom'].join('\n'));
+		const crlf = lf.replace(/\n/g, '\r\n');
+		expect(replaceFenceBlock(crlf, 1, 3, 'a: 2')).toBe(['top', '``` ds-counter  extra', 'a: 2', '```', 'bottom'].join('\r\n'));
+		const lone = ['top', 'x\ry', '```\tds-counter', 'a: 1', '```', 'bottom'].join('\n');
+		expect(replaceFenceBlock(lone, 3, 5, 'a: 2')).toBe(['top', 'x\ry', '```\tds-counter', 'a: 2', '```', 'bottom'].join('\n'));
 	});
 
 	test('blockBodyLines returns the body without the prefix; identity for an un-nested block', () => {

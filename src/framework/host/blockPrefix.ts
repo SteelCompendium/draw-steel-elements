@@ -42,6 +42,19 @@ export function matchFenceMarker(line: string): FenceMarker | null {
 	return m ? { prefix: m[1] ?? '', marker: m[2], rest: m[3] } : null;
 }
 
+/**
+ * SC-457 — the LANGUAGE of a fence: the first whitespace-delimited token of its TRIMMED info string
+ * (`rest` from `matchFenceMarker`, or anything past the fence run). The ONE definition every site that
+ * compares a fence's language uses (the hosts' fence parse, anchor.ts' alias, the sidebar command): CommonMark
+ * trims the info string, and Obsidian renders ```` ``` ds-counter ```` (whitespace between the fence and the
+ * language), ```` ```\tds-counter ```` and ```` ```   ds-counter ```` as the `ds-counter` block - measured in
+ * Obsidian 1.14.4, Reading view and Live Preview - so a parse that took the token at column 0 of the untrimmed
+ * remainder saw those blocks' language as ''. '' for a bare fence.
+ */
+export function fenceLanguage(info: string): string {
+	return /^\S*/.exec(info.trim())![0];
+}
+
 /** How many quote markers `prefix` holds, and how many spaces of indentation follow the last one. */
 function shapeOf(prefix: string): { depth: number; indent: number } {
 	let depth = 0;

@@ -9,7 +9,7 @@
 // alongside it.
 import { parseYaml } from 'obsidian';
 import type { BlockInfo } from '../host/BlockHost';
-import { matchFenceMarker, stripBlockPrefix } from '../host/blockPrefix';
+import { fenceLanguage, matchFenceMarker, stripBlockPrefix } from '../host/blockPrefix';
 import { blockBodyLines } from '../host/fenceLine';
 import { splitLines, stripCr } from '../host/lineEnding';
 
@@ -262,9 +262,13 @@ export function matchFenceLine(line: string): { prefix: string; marker: string; 
  * codebase: `registry.get()` (keyed by the bare language token) and the chrome pin item's
  * `getBlockInfo().language` (also first-token-only) could never match it. Exported so both
  * `iterateFences` below and registration.ts's `aliasAtLine` derive an alias the exact same
- * way — one identity, not two independently-evolving ones. */
+ * way — one identity, not two independently-evolving ones.
+ *
+ * SC-457: the definition itself now lives in blockPrefix.ts (`fenceLanguage`), shared with the hosts' own fence
+ * parse (fenceLine.ts) - the first token of the TRIMMED info string. This function trims too, so an untrimmed
+ * `rest` (` ds-counter`) is no longer read as the empty language. */
 export function fenceAlias(rest: string): string {
-	return rest.split(/\s+/)[0] ?? '';
+	return fenceLanguage(rest);
 }
 
 /** True when `line` is a valid CLOSE for a fence opened with `open` — same character,

@@ -316,6 +316,22 @@ describe('D8 Task 2 review fix — anchor.ts fence scanner (finding #4, CRITICAL
 			expect(fenceAlias('ds-counter   trailing   words')).toBe('ds-counter');
 		});
 
+		// SC-457: an UNTRIMMED rest (whitespace between the fence and the language) is the same alias.
+		test('fenceAlias skips leading whitespace: " ds-counter" is "ds-counter", not the empty language', () => {
+			expect(fenceAlias(' ds-counter')).toBe('ds-counter');
+			expect(fenceAlias('   ds-counter extra')).toBe('ds-counter');
+			expect(fenceAlias('\tds-counter')).toBe('ds-counter');
+			expect(fenceAlias('   ')).toBe('');
+		});
+
+		test('SC-457: a fence with a space before the language is found by its bare language token, anchored or not', () => {
+			const note = ['``` ds-counter', 'current_value: 1', '_dse_anchor: abc123', '```'].join('\n');
+
+			expect(listFences(note, 'ds-counter')).toEqual([{ language: 'ds-counter', lineStart: 0, lineEnd: 3 }]);
+			expect(findAnchoredBlock(note, 'ds-counter', 'abc123')).toMatchObject({ language: 'ds-counter', lineStart: 0, lineEnd: 3 });
+			expect(findFenceAtLine(note, 'ds-counter', 2)).toMatchObject({ lineStart: 0, lineEnd: 3 });
+		});
+
 		test('an info-string fence is found by its bare language token', () => {
 			const note = ['```ds-counter extra', 'current_value: 1', '_dse_anchor: abc123', '```'].join('\n');
 

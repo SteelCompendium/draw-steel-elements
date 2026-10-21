@@ -15,7 +15,7 @@
 // SC-453 — `replaceFenceBlock` is the ONE splice both hosts use to rewrite a located block, and
 // where a write picks up the note's own line ending (see lineEnding.ts for the policy).
 
-import { addBlockPrefix, blankLinesAreTrimmed, matchFenceMarker, stripBlockPrefix } from './blockPrefix';
+import { addBlockPrefix, blankLinesAreTrimmed, fenceLanguage, matchFenceMarker, stripBlockPrefix } from './blockPrefix';
 import { detectEol, joinWithEols, splitWithEols, stripCr } from './lineEnding';
 
 export interface OpenFenceLine {
@@ -23,7 +23,8 @@ export interface OpenFenceLine {
 	prefix: string;
 	/** The fence run exactly as written (e.g. "```", "~~~", "````"). */
 	fence: string;
-	/** The first whitespace-delimited token after the fence run (the block type); may be ''. */
+	/** The first whitespace-delimited token of the TRIMMED info string (the block type; SC-457: whitespace between
+	 *  the fence run and the language is skipped, as Obsidian does - `fenceLanguage`); may be ''. */
 	language: string;
 	/** Everything after the fence run, verbatim except trailing whitespace (incl. a CRLF
 	 *  `\r`) is dropped — the same trailing-whitespace treatment the old `${fence}${language}`
@@ -39,7 +40,7 @@ export function parseOpenFenceLine(line: string | undefined): OpenFenceLine | nu
 	return {
 		prefix: match.prefix,
 		fence: match.marker,
-		language: /^\S*/.exec(match.rest)![0],
+		language: fenceLanguage(match.rest),
 		info: match.rest.trimEnd(),
 	};
 }

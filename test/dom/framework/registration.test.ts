@@ -219,6 +219,33 @@ describe('D8 Task 2 review fix — registration.ts (finding #3)', () => {
 		});
 	});
 
+	// SC-457 — a fence with whitespace before the language. Its language is `ds-counter` for every entry point:
+	// the command's cursor scan (`aliasAtLine`) and the alias the chrome pin item passes (getBlockInfo().language).
+	describe('SC-457: pinning a fence with whitespace before the language', () => {
+		test.each([
+			['one space', '``` ds-counter'],
+			['a tab', '```\tds-counter'],
+		])('the "Send block to sidebar" command pins it (%s), the note otherwise unmodified', async (_label, opener) => {
+			const { app, plugin, services } = setup();
+			registerDseSidebar(plugin as any, services);
+			const note = `${opener}\ncurrent_value: 5\n\`\`\``;
+			app.vault.setFile('Note.md', note);
+			const command = plugin.commands.find((c) => c.id === 'send-block-to-sidebar');
+			const editor = new Editor(note);
+			const ctx = { file: { path: 'Note.md' } } as any;
+			editor.cursor = { line: 1, ch: 0 };
+
+			expect(command.editorCheckCallback(true, editor, ctx)).toBe(true);
+			command.editorCheckCallback(false, editor, ctx);
+			await flushAsync();
+
+			expect(Notice.notices).toHaveLength(0);
+			const view = app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0]?.view as unknown as DseSidebarView;
+			expect(view.getState()).toMatchObject({ panels: [expect.objectContaining({ filePath: 'Note.md', alias: 'ds-counter' })] });
+			expect(app.vault.getContent('Note.md')!.split('\n')[0]).toBe(opener);
+		});
+	});
+
 	// SC-453 — stamping a `_dse_anchor` into a CRLF note: the pin used to find NO fence at all
 	// (FENCE_LINE never matches `\r`), so nothing bound; once found, the stamped line must carry
 	// the note's own ending so the note does not turn mixed-ending on first pin.
