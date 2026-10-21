@@ -13,7 +13,7 @@ const SWATCH_GREEN = 2; // Red, Amber, Green, Blue, Purple
 const EFFECT_GLOW = 2; // static, blink, glow, glow-pulse, breathing, blur-pulse
 const DURATION_SAVE_ENDS = 2; // Until removed, End of Turn, Save Ends, End of Encounter
 
-/** Open the hero's Conditions window, add Dazed with the keyboard and open its inline editor. */
+/** Open the hero's Conditions window, add Dazed with the keyboard and open its inline editor with the mouse. */
 async function openDazedEditor(): Promise<Scope> {
 	await dse.openNote(NOTE);
 	await dse.click(dse.block(INIT).control('init.cond.add'));
@@ -21,10 +21,7 @@ async function openDazedEditor(): Promise<Scope> {
 	await dse.click(modal.control('cond.add'));
 	await dse.type(modal.control('cond.input'), 'daz');
 	await dse.press('Enter', modal.control('cond.input'));
-	// Close the dropdown with the key (SC-431) rather than by clicking away: a pointer mousedown outside it
-	// collapses the menu mid-click, the modal re-centres, and the click then misses the cog it aimed at.
-	await dse.press('Escape', modal.control('cond.input'));
-	await dse.settle();
+	// The Add dropdown is still open here (a pick keeps it open); the cog click closes it (SC-474).
 	await dse.click(modal.control('cond.edit'));
 	await expect(modal.control('cond.swatch', { nth: 0 })).toBeExisting();
 	return modal;
