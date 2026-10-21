@@ -4,7 +4,7 @@
 // text into an existing note has to (a) FIND its block despite the `\r` before each `\n`, and
 // (b) write its text back in the note's own ending, or the note ends up mixed-ending (the
 // SC-290 review's INFO-4). The policy, applied by every write site through this file:
-//   - an all-CRLF note stays all-CRLF; an all-LF note is byte-identical to what it was before
+//   - an all-CRLF note stays all-CRLF, and (SC-460) a CR-only note, whose only breaks are lone CRs, stays CR-only; an all-LF note is byte-identical to what it was before
 //     this ticket (the LF path is never normalised);
 //   - a mixed note follows its DOMINANT ending (a tie goes to the first line break), and only the
 //     text being written is touched — every byte outside it is left exactly as found, so a mixed
@@ -19,12 +19,13 @@
 // compared with one (anchor.ts's fence positions) is in that numbering; indexing the note with
 // `split('\n')` instead puts every line below a lone CR one off.
 
-export type Eol = '\r\n' | '\n';
+export type Eol = '\r\n' | '\n' | '\r';
 
 /** The dominant line ending of `text`: whichever of CRLF / bare LF has more occurrences, the
- *  FIRST CRLF/LF break's style on a tie, and LF when there is none. A lone `\r` IS a line break (see
- *  the header) but casts no vote here: it is almost always a stray, and a write that follows it would
- *  turn an LF/CRLF note into a mixed one. (A note whose only breaks are lone CRs is written with LF.) */
+ *  FIRST CRLF/LF break's style on a tie. A lone `\r` IS a line break (see the header) but casts no vote
+ *  while the note has any CRLF or LF: there it is a stray, and a write that followed it would turn an
+ *  LF/CRLF note into a mixed one. A note whose ONLY breaks are lone CRs is a CR-only note and stays one
+ *  (`'\r'`, as an all-CRLF note stays all-CRLF); a note with no break at all is `'\n'`. */
 export function detectEol(text: string): Eol {
 	let crlf = 0;
 	let lf = 0;
@@ -35,6 +36,7 @@ export function detectEol(text: string): Eol {
 		else lf++;
 		first ??= kind;
 	}
+	if (crlf === 0 && lf === 0) return text.includes('\r') ? '\r' : '\n';
 	if (crlf === lf) return first ?? '\n';
 	return crlf > lf ? '\r\n' : '\n';
 }
@@ -78,8 +80,8 @@ export function joinWithEols(lines: readonly string[], eols: readonly string[]):
 	return out;
 }
 
-/** LF-normalised `text` re-terminated with `eol`. The identity for LF; for CRLF, any `\r\n`
- *  already present is not doubled. */
+/** LF-normalised `text` re-terminated with `eol`. The identity for LF; for CRLF (or a lone CR), any
+ *  `\r\n` already present is not doubled. */
 export function toEol(text: string, eol: Eol): string {
-	return eol === '\n' ? text : text.replace(/\r?\n/g, '\r\n');
+	return eol === '\n' ? text : text.replace(/\r?\n/g, eol);
 }
