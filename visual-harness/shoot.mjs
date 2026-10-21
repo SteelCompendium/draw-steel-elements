@@ -2787,6 +2787,22 @@ const HOSTLEAK_MODAL_SCENARIOS = [
 		},
 	},
 	{
+		// SC-432: the first "Heal Recovery Value" press of a Stamina session, for a hero with no Recoveries
+		// pool, opens this confirmation ON TOP of the Stamina modal. `top` sweeps only that topmost dialog.
+		id: 'FreeHealConfirmModal',
+		modal: 'FreeHealConfirmModal',
+		title: /^Heal without spending a Recovery\?$/,
+		mustHave: ['dse-btn--accent'],
+		top: true,
+		query: { element: 'stamina-bar', fixture: 'default' },
+		open: async (page) => {
+			await page.click('[data-dse-element="stamina-bar"] .dse-stamina--clickable', { timeout: 8000 });
+			await page.waitForSelector('.dse-modal [data-dse-control="sedit.spend-recovery"]', { timeout: 8000 });
+			await page.evaluate(() => document.querySelector('.dse-modal [data-dse-control="sedit.spend-recovery"]').click());
+			await page.waitForFunction(() => document.querySelectorAll('.dse-modal').length >= 2, null, { timeout: 8000 });
+		},
+	},
+	{
 		id: 'MinionStaminaPoolModal',
 		modal: 'MinionStaminaPoolModal',
 		title: / - Minion Stamina Pool$/,
@@ -2847,8 +2863,9 @@ const HOSTLEAK_KNOWN_LEAKS = [
 const HOSTLEAK_MODALS_UNREACHABLE = {
 	CompendiumSearchModal:
 		'a SuggestModal opened by the command palette / insert flows (compendiumInsert.ts) through ' +
-		'Obsidian\'s own command plumbing, which the harness never runs; it renders suggestion rows ' +
-		'(divs) and an input, no <button> at all',
+		'Obsidian\'s own command plumbing, which the harness does not run (the harness can mount its result ' +
+		'rows through production code for the text-scale gates, but never opens the modal itself); it ' +
+		'renders suggestion rows (divs) and an input, no <button> at all',
 	LegacyCompendiumModal:
 		'opened only by main.ts onload\'s first-sync flow (needs a real vault + compendium root); ' +
 		'its controls are footer() kit buttons, whose variants the openable modals already sweep',
@@ -2859,8 +2876,12 @@ const HOSTLEAK_MODALS_UNREACHABLE = {
 /** Base classes: never opened themselves, every subclass is swept (or declared) on its own. */
 const HOSTLEAK_MODAL_BASES = ['DseModal'];
 
-/** Survey `src/` + `main.ts` for every `Modal` subclass and require each to be swept by a
- *  scenario above, declared unreachable with a reason, or a base class. Fails loudly. */
+/** Survey `src/` + `main.ts` for every `Modal` subclass — direct or transitive (X extends Y extends
+ *  DseModal) — and every inline `new Modal(…)`, and require each class to be swept by a scenario
+ *  above, declared unreachable with a reason, or a base class. Fails loudly. It does NOT follow
+ *  button helpers across files: the declared-unreachable modals build their buttons through
+ *  `footer()` (kit buttons, swept elsewhere), and the same-file `createEl('button'` check below
+ *  is the whole guard for them. */
 function assertModalRegistry() {
 	const problems = [];
 	const repo = path.join(dir, '..');
@@ -2874,12 +2895,32 @@ function assertModalRegistry() {
 	};
 	walk(path.join(repo, 'src'));
 	files.push(path.join(repo, 'main.ts'));
-	const found = new Map();
+	// Every class in src/ with its parent, then the transitive closure over the Modal roots, so
+	// `class X extends LogActionModal` (X -> LogActionModal -> DseModal -> Modal) is found too.
+	const MODAL_ROOTS = ['DseModal', 'Modal', 'SuggestModal', 'FuzzySuggestModal'];
+	const classes = new Map();
+	const inline = [];
 	for (const f of files) {
 		const text = fs.readFileSync(f, 'utf8');
-		for (const m of text.matchAll(/class\s+(\w+)\s+extends\s+(DseModal|Modal|SuggestModal|FuzzySuggestModal)\b/g)) {
-			found.set(m[1], { file: f, text });
-		}
+		for (const m of text.matchAll(/class\s+(\w+)\s+extends\s+(\w+)/g)) classes.set(m[1], { parent: m[2], file: f, text });
+		// An inline `new Modal(app)` has no class of its own to register; comments are stripped first.
+		const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+		if (/\bnew\s+(Modal|SuggestModal|FuzzySuggestModal)\s*[<(]/.test(code)) inline.push(path.relative(repo, f));
+	}
+	const isModal = (name, seen = new Set()) => {
+		if (MODAL_ROOTS.includes(name)) return true;
+		const c = classes.get(name);
+		if (!c || seen.has(name)) return false;
+		seen.add(name);
+		return isModal(c.parent, seen);
+	};
+	const found = new Map();
+	for (const [name, c] of classes) if (isModal(name)) found.set(name, c);
+	for (const rel of inline) {
+		problems.push(
+			`${rel} constructs a Modal inline (\`new Modal(…)\`) — it has no class to register, so the modal pass ` +
+				`would be blind to its buttons; give it a DseModal subclass and a HOSTLEAK_MODAL_SCENARIOS entry`,
+		);
 	}
 	const swept = new Set(HOSTLEAK_MODAL_SCENARIOS.map((sc) => sc.modal));
 	for (const [name, { file, text }] of found) {
@@ -2926,13 +2967,24 @@ async function assertModalBtnHostLeak(page) {
 				acc.problems.push(`${at}: the modal could not be opened (${String(e).split('\n')[0]}) — the check would be blind`);
 				continue;
 			}
-			const title = await page.evaluate(() => document.querySelector('.dse-modal .dse-modal__title-text')?.textContent ?? null);
+			// A scenario with `top` sweeps only the topmost dialog (a confirmation opened over another modal).
+			const rootSel = sc.top ? '[data-sc356-top]' : '.dse-modal';
+			if (sc.top) {
+				await page.evaluate(() => {
+					const all = document.querySelectorAll('.dse-modal');
+					all[all.length - 1].setAttribute('data-sc356-top', '');
+				});
+			}
+			const title = await page.evaluate(
+				(sel) => document.querySelector(`${sel} .dse-modal__title-text`)?.textContent ?? null,
+				rootSel,
+			);
 			if (title === null || !sc.title.test(title)) {
 				acc.problems.push(`${at}: opened a modal titled ${JSON.stringify(title)}, expected ${sc.title} — the check would be sweeping the wrong modal`);
 				continue;
 			}
 			if (!(await bareBtnHostLeakPage(page, at, acc.problems))) continue;
-			const keys = await page.evaluate(tagButtons, { scope: '.dse-modal', prefix: 'modal:' });
+			const keys = await page.evaluate(tagButtons, { scope: rootSel, prefix: 'modal:' });
 			const absent = sc.mustHave.filter((c) => !keys.some((k) => k.split('|')[1]?.split('.').includes(c)));
 			if (keys.length < 2 || absent.length) {
 				acc.problems.push(
