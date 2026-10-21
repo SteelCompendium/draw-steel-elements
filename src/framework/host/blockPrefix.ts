@@ -44,18 +44,19 @@ export function matchFenceMarker(line: string): FenceMarker | null {
 
 /**
  * SC-457 — the LANGUAGE of a fence: the first token of its info string (`rest` from `matchFenceMarker`, or
- * anything past the fence run) after skipping LEADING spaces and tabs; a token ends at a space, a tab or the end of
- * the info string, which is read WITHOUT its trailing whitespace of any kind (a trailing no-break space or U+3000
- * does not change the language: ```` ```ds-counter\u3000 ```` renders as the block and so is one here). The ONE definition every site that compares a fence's language uses (the hosts' fence parse, anchor.ts'
- * alias, the sidebar command). Obsidian 1.14.4 renders ```` ``` ds-counter ````, ```` ```   ds-counter ```` and
- * ```` ```\tds-counter ```` as the `ds-counter` block (Reading view and Live Preview) - so a parse that took the token
- * at column 0 of the remainder saw those blocks' language as ''. Only SPACE and TAB are skipped, not every
+ * anything past the fence run). Leading spaces and tabs are skipped; the token ends at the next space or tab; and
+ * the token is read WITHOUT trailing whitespace of any other kind (```` ```ds-counter\u3000 extra ```` and
+ * ```` ```ds-counter\u00a0 ```` render as the block). The ONE definition every site that compares a fence's language
+ * uses (the hosts' fence parse, anchor.ts' alias, the sidebar command, the autocomplete scan, the e2e scanner's
+ * type). Obsidian 1.14.4 renders ```` ``` ds-counter ````, ```` ```   ds-counter ```` and ```` ```\tds-counter ```` as
+ * the `ds-counter` block (Reading view and Live Preview) - so a parse that took the token at column 0 of the
+ * remainder saw those blocks' language as ''. Only SPACE and TAB are skipped BEFORE the language, not every
  * Unicode space: a no-break space, U+3000, a form feed or a vertical tab before the language does NOT make a
  * `ds-counter` block in Obsidian (measured), so it must not make one here either; the token then starts with
  * that character and is no registered language. '' for a bare fence.
  */
 export function fenceLanguage(info: string): string {
-	return /^[ \t]*([^ \t]*)/.exec(info.trimEnd())![1];
+	return /^[ \t]*([^ \t]*)/.exec(info)![1].trimEnd();
 }
 
 /** How many quote markers `prefix` holds, and how many spaces of indentation follow the last one. */

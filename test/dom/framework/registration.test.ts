@@ -12,6 +12,7 @@ import {
 	sendToSidebar,
 	unregisterDseSidebar,
 } from '@/framework/sidebar/registration';
+import { ReadingModeBlockHost } from '@/framework/host/ReadingModeBlockHost';
 import { DseSidebarView, VIEW_TYPE_DSE_SIDEBAR } from '@/framework/sidebar/DseSidebarView';
 import type { DseSidebarServices } from '@/framework/sidebar/DseSidebarView';
 
@@ -243,6 +244,37 @@ describe('D8 Task 2 review fix — registration.ts (finding #3)', () => {
 			const view = app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0]?.view as unknown as DseSidebarView;
 			expect(view.getState()).toMatchObject({ panels: [expect.objectContaining({ filePath: 'Note.md', alias: 'ds-counter' })] });
 			expect(app.vault.getContent('Note.md')!.split('\n')[0]).toBe(opener);
+		});
+	});
+
+	// SC-457 re-review r3 — the chrome "Pin to sidebar" item passes the HOST's `getBlockInfo().language` to
+	// requestPinToSidebar. For a block with extra info words after a no-break space / U+3000 that used to be
+	// `ds-counter<U+3000>`: the pin stamped an `_dse_anchor` but bound a panel that could never find its block.
+	describe('SC-457: the pin-to-sidebar path for a block with extra info words', () => {
+		test.each([
+			['two spaces then a word', 'ds-counter  extra'],
+			['a trailing U+3000 then a word', 'ds-counter\u3000 extra'],
+			['a leading space, a trailing no-break space, then a word', ' ds-counter\u00a0 extra'],
+		])('%s: the host reports ds-counter, and pinning that alias binds the block (anchor stamped, panel holds it)', async (_label, info) => {
+			const { app, plugin, services } = setup();
+			registerDseSidebar(plugin as any, services);
+			const note = ['# N', '', `\`\`\`${info}`, 'current_value: 5', '```'].join('\n');
+			app.vault.setFile('Note.md', note);
+			const ctx = { docId: 'd', sourcePath: 'Note.md', frontmatter: undefined, addChild: () => {}, getSectionInfo: () => ({ text: note, lineStart: 2, lineEnd: 4 }) };
+			const host = new ReadingModeBlockHost(plugin as any, document.createElement('div'), ctx as any, 'ds-counter');
+			const alias = host.getBlockInfo()!.language;
+			expect(alias).toBe('ds-counter');
+
+			await requestPinToSidebar('Note.md', alias, host.getBlockInfo()!.lineStart);
+			await flushAsync();
+
+			expect(Notice.notices).toHaveLength(0);
+			const stamped = app.vault.getContent('Note.md')!;
+			const id = /_dse_anchor: ([A-Za-z0-9_-]+)/.exec(stamped)?.[1];
+			expect(id).toBeDefined();
+			expect(stamped.split('\n')[2]).toBe(`\`\`\`${info}`);
+			const view = app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0]?.view as unknown as DseSidebarView;
+			expect(view.getState()).toMatchObject({ panels: [expect.objectContaining({ filePath: 'Note.md', alias: 'ds-counter', anchorId: id })] });
 		});
 	});
 

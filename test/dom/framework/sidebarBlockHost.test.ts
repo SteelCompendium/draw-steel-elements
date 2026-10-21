@@ -128,6 +128,25 @@ describe('D8 Task 2: SidebarBlockHost (spec §1.4)', () => {
 		);
 	});
 
+	// SC-457 re-review r3: the pinned block is found by its anchor and the panel's write lands when the opening line
+	// carries extra words after a no-break space / U+3000 / several spaces; the opening line is kept verbatim.
+	test.each([
+		['two spaces then a word', 'ds-counter  extra'],
+		['a trailing U+3000 then a word', 'ds-counter\u3000 extra'],
+		['a leading space, a trailing no-break space, then a word', ' ds-counter\u00a0 extra'],
+	])('SC-457: replaceSource lands in a block opened with %s', async (_label, info) => {
+		const opener = `\`\`\`${info}`;
+		const note = ['# Notes', '', opener, 'current_value: 1', `_dse_anchor: ${ANCHOR_ID}`, '```', '', 'tail'].join('\n');
+		const { vault, file, app } = setup(note);
+		const { host } = makeHost(app, file);
+		await host.refresh();
+		expect(host.getBlockInfo()).toEqual({ language: ALIAS, lineStart: 2, lineEnd: 5 });
+
+		await expect(host.replaceSource(`current_value: 5\n_dse_anchor: ${ANCHOR_ID}`)).resolves.toBe(true);
+
+		expect(vault.text('Note.md')).toBe(['# Notes', '', opener, 'current_value: 5', `_dse_anchor: ${ANCHOR_ID}`, '```', '', 'tail'].join('\n'));
+	});
+
 	test('SC-290: a language-only fence with trailing whitespace still re-emits without the trailing whitespace (as before)', async () => {
 		const note = ['# Notes', '', '```ds-counter  ', 'current_value: 1', `_dse_anchor: ${ANCHOR_ID}`, '```'].join('\n');
 		const { vault, file, app } = setup(note);

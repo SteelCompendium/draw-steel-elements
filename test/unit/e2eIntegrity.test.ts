@@ -163,26 +163,38 @@ describe('e2e integrity: quote-prefixed fences (SC-455) and CRLF notes (SC-453) 
 });
 
 describe('e2e integrity: agreement with the product parser (SC-456 O1)', () => {
-	const lines = [
-		'```ds-x', '```ds-x extra', '``` ds-x', '```ds-x ', '```ds-x\u00a0', '```ds-x\u3000', '``` ds-x\u00a0', '``` ds-x\u3000', '```ds-x\f', '```ds-x\v', '```\tds-x\t', '``` \tds-x  ', '```ds-x \u00a0', '```ds-x\u00a0 extra', '```\u00a0ds-x', '```\u3000ds-x', '```\fds-x', '```\vds-x', '``` \u00a0ds-x', '```\tds-x', '```   ds-x   extra  ', '~~~ds-x', '~~~ ds-x k=v', '````ds-x', '```', '~~~', '````', '`````  ',
-		'> ```ds-x', '> > ```ds-x extra', '>```ds-x', '> ``` ds-x', '> ~~~', '>   ```ds-x', '    ```ds-x', '  ```ds-x', '``', '~~', '``ds-x', 'text', '', '```ds-x\r', '``` ds-x extra\r', '```\r', '> ```\r',
+	// [opening line, the language it must have (null: not a fence opener)]. Every parse must EQUAL the expected
+	// language, not just agree with the others: agreement alone masked two bugs (SC-457 re-reviews).
+	const cases: [string, string | null][] = [
+		['```ds-x', 'ds-x'], ['```ds-x extra', 'ds-x'], ['``` ds-x', 'ds-x'], ['```ds-x ', 'ds-x'], ['```ds-x ', 'ds-x'], ['```ds-x　', 'ds-x'],
+		['``` ds-x ', 'ds-x'], ['``` ds-x　', 'ds-x'], ['```ds-x\f', 'ds-x'], ['```ds-x\v', 'ds-x'], ['```\tds-x\t', 'ds-x'], ['``` \tds-x  ', 'ds-x'],
+		['```ds-x  ', 'ds-x'], ['```ds-x  extra', 'ds-x'], ['```ds-x  extra', 'ds-x'], ['```ds-x　 extra', 'ds-x'], ['```ds-x \tx', 'ds-x'], ['```ds-x x', 'ds-x x'],
+		['``` ds-x', ' ds-x'], ['```　ds-x', '　ds-x'], ['```\fds-x', '\fds-x'], ['```\vds-x', '\vds-x'], ['```  ds-x', ' ds-x'],
+		['```\tds-x', 'ds-x'], ['```   ds-x   extra  ', 'ds-x'], ['~~~ds-x', 'ds-x'], ['~~~ ds-x k=v', 'ds-x'], ['````ds-x', 'ds-x'],
+		['```', ''], ['~~~', ''], ['````', ''], ['`````  ', ''],
+		['> ```ds-x', 'ds-x'], ['> > ```ds-x extra', 'ds-x'], ['>```ds-x', 'ds-x'], ['> ``` ds-x', 'ds-x'], ['> ~~~', ''], ['>   ```ds-x', 'ds-x'],
+		['    ```ds-x', null], ['  ```ds-x', null], ['``', null], ['~~', null], ['``ds-x', null], ['text', null], ['', null],
+		['```ds-x\r', 'ds-x'], ['``` ds-x extra\r', 'ds-x'], ['```\r', ''], ['> ```\r', ''],
 	];
-
+	const lines = cases.map(([line]) => line);
 	test('open-line recognition: the e2e scanner opens a fence exactly where matchFenceMarker does, with the same prefix / run / info string', () => {
-		for (const line of lines) {
+		for (const [line, expected] of cases) {
 			const note = `${line}\nbody`; // unclosed is fine: only the opening line is under test here
 			const m = matchFenceMarker(line);
 			const f = scanFences(note)[0];
 			if (!m) {
-				expect([line, f]).toEqual([line, undefined]);
+				expect([line, expected, f]).toEqual([line, null, undefined]);
 				continue;
 			}
+			expect([line, expected === null]).toEqual([line, false]);
 			expect(f.openLine).toBe(line);
-			expect(f.lang).toBe(fenceAlias(matchFenceLine(line)!.rest));
 			const open = parseOpenFenceLine(line)!;
 			expect([open.prefix, open.fence]).toEqual([m.prefix, m.marker]);
-			// the product's `language` and the e2e scanner's type are one definition (SC-457), a space-before-language fence included
-			expect(f.lang).toBe(open.language);
+			// the product's `language` (host parse), the anchor alias and the e2e scanner's type are one definition (SC-457), and each
+			// EQUALS the expected language: agreement alone is not enough (a shared bug passes it)
+			expect([line, 'host', open.language]).toEqual([line, 'host', expected]);
+			expect([line, 'anchor', fenceAlias(matchFenceLine(line)!.rest)]).toEqual([line, 'anchor', expected]);
+			expect([line, 'e2e', f.lang]).toEqual([line, 'e2e', expected]);
 		}
 	});
 
