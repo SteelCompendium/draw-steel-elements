@@ -49,4 +49,16 @@ describe('conditions-modal: a mouse click with the add dropdown open still lands
 		await expect(modal.control('cond.input')).not.toBeExisting({ message: 'the click away from the dropdown should still close it' });
 		await dse.closeModals();
 	});
+
+	it('[COND-E06] clicking the icon search field with the dropdown open closes the dropdown and leaves focus in the field', async () => {
+		const modal = await addDazedKeepDropdownOpen();
+		// The cog click closes the dropdown; reopen it so the search click is the one made with the dropdown open.
+		await dse.click(modal.control('cond.edit'));
+		await dse.click(modal.control('cond.add'));
+		await expect(modal.control('cond.input')).toBeExisting();
+		await dse.click(modal.control('cond.icon-search'));
+		await expect(modal.control('cond.input')).not.toBeExisting({ message: 'the click away from the dropdown should still close it' });
+		await expect(modal.control('cond.icon-search')).toBeFocused({ message: 'the close must not pull focus off the field the user clicked' });
+		await dse.closeModals();
+	});
 });
