@@ -7576,7 +7576,8 @@ async function assertTextScaleOnce(page, manifest) {
 	const t0 = Date.now();
 	const pages = [];
 	for (const e of manifest.elements) for (const f of e.fixtures) pages.push({ id: `${e.id}:${f}`, q: { element: e.id, fixture: f }, print: true });
-	for (const n of manifest.interactionShots ?? []) pages.push({ id: n.id, q: { element: n.element, fixture: n.fixture }, click: n.click });
+	// SC-279: an interaction shot may carry `prefs` / `width` / `thenClicks` (the roll strip's shots do) - load it the way snap() does.
+	for (const n of manifest.interactionShots ?? []) pages.push({ id: n.id, q: { element: n.element, fixture: n.fixture, ...(n.prefs ? { prefs: Object.entries(n.prefs).map(([k, v]) => `${k}:${v}`).join(',') } : {}), ...(n.width ? { width: String(n.width) } : {}) }, click: n.click, thenClicks: n.thenClicks });
 	for (const n of manifest.prefShots ?? []) pages.push({ id: n.id, q: { element: n.element, fixture: n.fixture, ...(n.prefs ? { prefs: Object.entries(n.prefs).map(([k, v]) => `${k}:${v}`).join(',') } : {}), ...(n.width ? { width: String(n.width) } : {}) } });
 	for (const n of manifest.chromeShots ?? []) pages.push({ id: n.id, q: { stack: n.stack.map((e) => `${e.element}:${e.fixture}`).join(','), ...(n.prefs ? { prefs: Object.entries(n.prefs).map(([k, v]) => `${k}:${v}`).join(',') } : {}) }, hover: n.hover });
 	// SC-422: the chrome surfaces outside every element root / DseModal (search modal, settings preview caption,
@@ -7593,7 +7594,7 @@ async function assertTextScaleOnce(page, manifest) {
 			await page.goto(`${pageUrl}?${q}`);
 			await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
 			loads += 1;
-			if (pg.click) { await page.locator(pg.click).first().click(); await page.mouse.move(0, 0); }
+			if (pg.click) { await page.locator(pg.click).first().click(); for (const next of pg.thenClicks ?? []) await page.locator(next).first().click(); await page.mouse.move(0, 0); }
 			if (pg.hover) await page.locator(pg.hover).first().hover();
 			// On paper control text must not move at all; small/large still exactly once.
 			const r = await page.evaluate(sweepKnobs, { S, knobs: ['small', 'large', 'control'], mustNotMove: surface === 'screen' ? [] : ['control'] });
