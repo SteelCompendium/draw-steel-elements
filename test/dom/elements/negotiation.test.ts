@@ -48,12 +48,42 @@ import frodoYaml from '../../fixtures/negotiation/frodo.yaml';
 
 const NT_ALIASES = ['ds-nt', 'ds-negotiation', 'ds-negotiation-tracker'] as const;
 
-/** The exact bytes the LEGACY writer (the former CodeBlocks.updateNegotiationTracker, deleted in SC-454) would put back
- *  into the note for this source after `mutate` — the byte-compat oracle. */
+/** The bytes the plugin must put back into the note for this source after `mutate` — the byte-compat
+ *  oracle. It is the LEGACY writer's output (the former CodeBlocks.updateNegotiationTracker, deleted
+ *  in SC-454: `stringifyYaml(<whole NegotiationData>)`) MINUS, per SC-482, every key the source did not
+ *  declare whose value `mutate` left equal to what a plain parse of that source fills in. Worked out
+ *  here from the raw source and a second fresh parse, independently of the element's own record. */
 function legacyBytes(source: string, mutate?: (m: NegotiationData) => void): string {
+	const declared = (parseYaml(source) ?? {}) as Record<string, unknown>;
+	const fresh = parseNegotiationData(source) as unknown as Record<string, unknown>;
 	const model = parseNegotiationData(source);
 	mutate?.(model);
-	return stringifyYaml(model).trim();
+	const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+	const nested = (items: Record<string, unknown>[], rawItems: unknown, freshItems: Record<string, unknown>[]) =>
+		items.map((item, i) => {
+			const raw = ((rawItems as Record<string, unknown>[] | undefined)?.[i] ?? {}) as Record<string, unknown>;
+			return Object.fromEntries(
+				Object.entries(item).filter(([k, v]) => raw[k] !== undefined || !same(v, freshItems[i][k])),
+			);
+		});
+	const written = Object.fromEntries(
+		Object.entries(model).filter(([k, v]) => declared[k] !== undefined || !same(v, fresh[k])),
+	);
+	if (written.motivations) {
+		written.motivations = nested(
+			model.motivations as unknown as Record<string, unknown>[],
+			declared.motivations,
+			fresh.motivations as Record<string, unknown>[],
+		);
+	}
+	if (written.pitfalls) {
+		written.pitfalls = nested(
+			model.pitfalls as unknown as Record<string, unknown>[],
+			declared.pitfalls,
+			fresh.pitfalls as Record<string, unknown>[],
+		);
+	}
+	return stringifyYaml(written).trim();
 }
 
 function makeHost(overrides: Partial<BlockHost> = {}) {
@@ -1312,11 +1342,15 @@ describe('SC-379: NO YAML shape change — the model gains methods only', () => 
 		expect(m.offerFor(-1)).toBe(m.i0);
 	});
 
-	test('after a full UI session (seals, appeal, choose, complete, reset) every write has exactly the legacy key set, in the legacy order', async () => {
+	test('after a full UI session (seals, appeal, choose, complete, reset) every write of a fully-declared block has exactly the legacy key set, in the legacy order', async () => {
+		// SC-482: a key the source did not declare is no longer written, so the "every legacy key"
+		// guarantee is about a block that declares them all (what the old plugin wrote on first change).
 		jest.useFakeTimers();
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
-		let root = await renderFrodo(pipeline, host);
+		const fullFrodo = stringifyYaml(parseNegotiationData(frodoYaml));
+		await pipeline.run(negotiationElement, fullFrodo, host);
+		let root = host.containerEl.firstElementChild as HTMLElement;
 		const keysOfLastWrite = () => Object.keys(parseYaml(lastWritten(host)) as object);
 		const flush = () => jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
@@ -1336,7 +1370,7 @@ describe('SC-379: NO YAML shape change — the model gains methods only', () => 
 		await flush();
 		root = host.containerEl.firstElementChild as HTMLElement;
 		expect(keysOfLastWrite()).toEqual(LEGACY_KEYS);
-		expect(lastWritten(host)).toBe(legacyBytes(frodoYaml));
+		expect(lastWritten(host)).toBe(legacyBytes(fullFrodo));
 	});
 
 	test('the shipped example.yaml parses and renders exactly as before (both standing tracks, the 5..0 offers)', async () => {
@@ -1463,8 +1497,9 @@ describe('SC-379: the argument tab — chips, modifiers, recompute-in-place', ()
 		expect(completeBtn(root)!.disabled).toBe(false);
 		completeBtn(root)!.click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-		// the NEW table's tier 3 was applied: Interest +1, Patience unchanged
-		const w = parseYaml(lastWritten(host)) as any;
+		// the NEW table's tier 3 was applied: Interest +1, Patience unchanged (the write may leave an
+		// unchanged default out, SC-482, so read it back through the parser)
+		const w = parseNegotiationData(lastWritten(host)) as any;
 		expect(w.current_interest).toBe(4);
 		expect(w.current_patience).toBe(3);
 	});
@@ -1589,9 +1624,10 @@ describe('SC-379: the tab is never stale after a live Complete Argument (M3)', (
 		expect(motivationChip(root, 'Higher Authority').classList.contains('is-spent')).toBe(true);
 		expect(root.querySelector('.dse-nt__dossier-count')!.textContent).toBe('1 of 2 open');
 
-		// and the model really was reset: the written YAML carries an empty current argument
+		// and the model really was reset: the written YAML carries an empty current argument (or none
+		// at all, SC-482 — an unchanged default is left out, and parses back as the empty argument)
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-		const w = parseYaml(lastWritten(host)) as any;
+		const w = parseNegotiationData(lastWritten(host)) as any;
 		expect(w.currentArgument).toEqual({
 			motivationsUsed: [],
 			pitfallsUsed: [],
@@ -1659,7 +1695,7 @@ describe('SC-379: the tab stays correct under REAL view adoption (SC-340) — no
 		expect(ctx2.el.firstElementChild).toBe(root);
 		expect(registry.stats.claims).toBeGreaterThan(0);
 
-		const model = parseYaml(bodyAt(app.vault.getContent('Note.md')!)) as any;
+		const model = parseNegotiationData(bodyAt(app.vault.getContent('Note.md')!)) as any;
 		expect(model.currentArgument).toEqual({
 			motivationsUsed: [],
 			pitfallsUsed: [],

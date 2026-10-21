@@ -23,6 +23,7 @@ import { negotiationElement } from '../../../src/elements/negotiation/definition
 import { parse as parseParty, serialize as serializeParty } from '../../../src/elements/party/model';
 import { parse as parseEncounter, serialize as serializeEncounter } from '../../../src/elements/encounter/model';
 import { Counter } from '@model/Counter';
+import type { NegotiationData } from '@model/NegotiationData';
 import { makeDeps } from '../_staminaHarness';
 import { makeCompendiumDeps, loadMdDseFixture } from './_refHarness';
 
@@ -330,6 +331,35 @@ describe('SC-482: party and encounter — a default the user changed is written'
 		expect(serializeEncounter(model)).toBe('monsters:\n  - code: x\n    count: 1');
 		model.party.hero_count = 4;
 		expect(serializeEncounter(model)).toBe('monsters:\n  - code: x\n    count: 1\nparty:\n  hero_count: 4');
+	});
+});
+
+describe('SC-482: negotiation — each Motivation records its own absent keys', () => {
+	const SRC = [
+		'name: Frodo',
+		'motivations:',
+		'  - name: Power',
+		'    reason: Wants it',
+		'    hasBeenAppealedTo: false',
+		'  - name: Peace',
+		'    reason: Shire',
+	].join('\n');
+
+	test('a Motivation that declared hasBeenAppealedTo keeps it; one that did not does not', () => {
+		const model = negotiationElement.parse(parseYaml(SRC), SRC) as NegotiationData;
+		expect(negotiationElement.serialize!(model)).toBe(SRC);
+	});
+
+	test('marking a Motivation as already appealed to writes that key on that Motivation only', () => {
+		const model = negotiationElement.parse(parseYaml(SRC), SRC) as NegotiationData;
+		model.setMotivationUsed('Peace', true);
+		expect(negotiationElement.serialize!(model)).toBe(SRC.replace('    reason: Shire', '    reason: Shire\n    hasBeenAppealedTo: true'));
+	});
+
+	test('a Motivation with no reason / a Pitfall with no name: the parser\'s empty string is not written', () => {
+		const src = 'motivations:\n  - name: Power\npitfalls:\n  - reason: Greed';
+		const model = negotiationElement.parse(parseYaml(src), src) as NegotiationData;
+		expect(negotiationElement.serialize!(model)).toBe(src);
 	});
 });
 
