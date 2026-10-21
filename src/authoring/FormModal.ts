@@ -30,6 +30,7 @@ import type { ValidationService } from '@/framework/validation';
 import { DseModal, openManagedModal } from '@/framework/kit/managedModal';
 import { extractPrefOverrides, withPrefOverrides } from '@/framework/prefOverrides';
 import { fieldsFromSchema, type FormField } from './formModel';
+import { shapeFromSchemaYaml } from './schemaShape';
 
 /** `renderField`'s non-textarea widgets (toggle/number/select/text) only ever read a
  *  scalar out of `working` -- the 'textarea' widget (array/object/$ref nodes) returns
@@ -50,6 +51,12 @@ function scalarToString(value: unknown): string {
 class FormModal extends DseModal {
 	private working: Record<string, unknown> = {};
 	private prefOverrides: Partial<DsePrefs> | undefined;
+	/** SC-483: select keys whose first enum option was SEEDED into `working` on open (the key
+	 *  was absent from the source) and whose dropdown has not fired onChange since. Save strips
+	 *  these; validation and the preview keep seeing the seed. A required select never enters
+	 *  the set (stripping it would write a block that fails its own schema). */
+	private readonly untouchedSeeds = new Set<string>();
+	private requiredKeys: ReadonlySet<string> = new Set();
 	private rawMode = false;
 	private rawText = '';
 	private saveDisabled = false;
@@ -86,6 +93,7 @@ class FormModal extends DseModal {
 			this.working = {};
 		}
 		const fields = fieldsFromSchema(this.def);
+		this.requiredKeys = new Set(this.def.schema ? (shapeFromSchemaYaml(this.def.schema)?.required ?? []) : []);
 		this.rawMode = !this.def.schema || fields.length === 0;
 
 		if (this.rawMode) {
@@ -152,14 +160,25 @@ class FormModal extends DseModal {
 			case 'select': {
 				// Minor fix: an implicit default (no value in `working` yet) is still
 				// SHOWN as the first enum option — write it back to `working` immediately
-				// so state matches display (validation/preview/Save all see what the user
-				// sees), instead of silently staying undefined until the user touches it.
+				// so state matches display (validation and the live preview see what the
+				// user sees), instead of silently staying undefined until the user touches it.
+				// SC-483: that seed is display/validation-only. A key ABSENT from the source
+				// that the user never changes is NOT something they wrote, so Save strips it
+				// (currentBody(true)); the first dropdown onChange makes it theirs. Not "equals
+				// enum[0]": the first option is not always the parser's default.
 				const fallback = field.enum?.[0];
 				const initial = current == null ? (fallback ?? '') : scalarToString(current);
-				if (current == null && fallback !== undefined) this.working[field.key] = fallback;
+				if (current == null && fallback !== undefined) {
+					const absentFromSource = !Object.prototype.hasOwnProperty.call(this.working, field.key);
+					this.working[field.key] = fallback;
+					if (absentFromSource && !this.requiredKeys.has(field.key)) this.untouchedSeeds.add(field.key);
+				}
 				setting.addDropdown((d) => {
 					for (const opt of field.enum ?? []) d.addOption(opt, opt);
-					d.setValue(initial).onChange(set);
+					d.setValue(initial).onChange((value) => {
+						this.untouchedSeeds.delete(field.key);
+						set(value);
+					});
 				});
 				break;
 			}
@@ -172,10 +191,15 @@ class FormModal extends DseModal {
 
 	/** Current body text: raw textarea verbatim, else serialize(model)/stringify(working) —
 	 *  re-emitting the popped `prefs:` map ahead of the body via the SAME withPrefOverrides
-	 *  the pipeline uses (Critical 1), when this block carried one. */
-	private currentBody(): string {
+	 *  the pipeline uses (Critical 1), when this block carried one.
+	 *
+	 *  SC-483: `forSave` strips the untouched, source-absent select seeds from the data before
+	 *  parse/serialize/stringify, so the model's serializer also sees the key as absent. Save is
+	 *  the only caller that passes true; the live preview passes false and keeps the seeded
+	 *  data, so it renders what the dropdowns show. */
+	private currentBody(forSave: boolean): string {
 		if (this.rawMode) return this.rawText;
-		const data = this.working;
+		const data = forSave ? this.withoutUntouchedSeeds() : this.working;
 		const overrides = this.prefOverrides;
 		if (this.def.serialize) {
 			const serialize = overrides ? withPrefOverrides(this.def.serialize, overrides) : this.def.serialize;
@@ -186,6 +210,13 @@ class FormModal extends DseModal {
 			}
 		}
 		return this.stringifyWorking(data, overrides);
+	}
+
+	/** `working` minus the select keys SC-483 tracks as seeded-and-untouched (key order of the
+	 *  rest is unchanged). Returns `working` itself when there is nothing to strip. */
+	private withoutUntouchedSeeds(): Record<string, unknown> {
+		if (this.untouchedSeeds.size === 0) return this.working;
+		return Object.fromEntries(Object.entries(this.working).filter(([key]) => !this.untouchedSeeds.has(key)));
 	}
 
 	private stringifyWorking(data: Record<string, unknown>, overrides: Partial<DsePrefs> | undefined): string {
@@ -222,7 +253,7 @@ class FormModal extends DseModal {
 		this.previewEl.empty();
 		if (this.saveDisabled) return;
 		try {
-			const model = this.def.parse(this.rawMode ? (parseYaml(this.rawText) ?? {}) : this.working, this.currentBody());
+			const model = this.def.parse(this.rawMode ? (parseYaml(this.rawText) ?? {}) : this.working, this.currentBody(false));
 			// Critical 2: the preview must NEVER become a second write path. Mount with a
 			// PREVIEW host — canPersist: false (most elements, e.g. stamina-bar, already
 			// gate their own click-to-edit affordance on this and simply won't attach a
@@ -262,7 +293,7 @@ class FormModal extends DseModal {
 	 *  and leaves the modal open — no silent close on a write that never happened. */
 	async save(): Promise<void> {
 		if (this.saveDisabled) return;
-		const ok = await this.cx.host.replaceSource(this.currentBody());
+		const ok = await this.cx.host.replaceSource(this.currentBody(true));
 		if (ok) this.close();
 		// SC-455: a host that already said why it could not write (its own Notice) is not repeated here.
 		else if (!this.cx.host.lastWriteReported) new Notice("Draw Steel Elements: couldn't save — the block may have moved.");

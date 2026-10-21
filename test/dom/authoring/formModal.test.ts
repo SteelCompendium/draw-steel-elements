@@ -334,9 +334,11 @@ describe('SC-483: an untouched, source-absent select is not written by Save', ()
 	});
 
 	test('the prefs: map still leads the body when the untouched select is stripped', async () => {
-		const { modal, writes } = open(selectDef().def, 'prefs:\n  reduceMotion: true\nname: Goblin');
+		const host = makeHost();
+		const { cx, validation } = makeRealStaminaCx(host); // real prefs, so the prefs: map is recognised
+		const modal = openFormEditor(fakeOwner(), cx, selectDef().def, 'prefs:\n  reduceMotion: true\nname: Goblin', validation);
 		await modal.save();
-		expect(writes).toEqual(['prefs:\n  reduceMotion: true\nname: Goblin\n']);
+		expect(host.replaceSource.mock.calls[0][0]).toBe('prefs:\n  reduceMotion: true\nname: Goblin\n');
 		modal.close();
 	});
 
