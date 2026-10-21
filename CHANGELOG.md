@@ -22,6 +22,10 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Conditions window: clicking a row's cog or a color swatch while the "Add condition" dropdown is open
+  now works** (SC-474). The dropdown used to collapse the moment the mouse button went down, which shrank and
+  re-centred the window under the pointer, so the click often landed on nothing. It now collapses when the click
+  completes, after the cog or swatch has been pressed.
 - [FIX] **Conditions window: picking a color, duration or effect with the keyboard keeps focus where you
   were** (SC-468). Pressing Enter or Space on a color swatch, a duration chip or an effect chip used to
   throw focus back to the row's cog button, so you had to Tab all the way back to the next option. Focus
