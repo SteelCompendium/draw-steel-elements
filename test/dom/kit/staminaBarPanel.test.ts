@@ -144,7 +144,26 @@ describe('D7 Task 1: kit/StaminaBarPanel — renderStaminaBar', () => {
 			onClick,
 		})!;
 
-		expect(registerSpy).toHaveBeenCalledWith(bar, 'click', onClick);
+		expect(registerSpy).toHaveBeenCalledWith(bar, 'click', expect.any(Function));
+		bar.querySelector<HTMLElement>('.dse-stamina__track')!.click();
+		expect(onClick).toHaveBeenCalledTimes(1);
+	});
+
+	// SC-492: the chrome panel is mounted inside the bar's cluster plate, so a chrome
+	// button's click bubbles to the bar. The bar's handler must leave it alone.
+	test('canPersist: true — a click that comes from inside .dse-chrome is not the bar\'s click', () => {
+		const root = document.createElement('div');
+		const onClick = jest.fn();
+		const bar = renderStaminaBar(root, { current: 1, temp: 0, max: 2 }, {
+			canPersist: true,
+			owner: fakeOwner(),
+			onClick,
+		})!;
+		const chromeBtn = bar.querySelector('.dse-stamina__cluster')!.createDiv({ cls: 'dse-chrome' }).createEl('button');
+
+		chromeBtn.click();
+
+		expect(onClick).not.toHaveBeenCalled();
 	});
 
 	// —— SC-183: the `gauge` render option (the initiative tracker's creature/pool bars) ——

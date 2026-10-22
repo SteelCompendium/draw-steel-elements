@@ -130,7 +130,16 @@ export function renderStaminaBar(
 	// dead-end click.
 	if (opts.canPersist) {
 		if (opts.owner && opts.onClick) {
-			opts.owner.registerDomEvent(bar, 'click', opts.onClick);
+			const onBarClick = opts.onClick;
+			opts.owner.registerDomEvent(bar, 'click', (evt: MouseEvent) => {
+				// SC-492: the framework chrome panel (`.dse-chrome` — the Edit pencil,
+				// collapse, pin…) is mounted inside this bar's cluster plate, so its clicks
+				// bubble here. They belong to the chrome button alone. The event is NOT
+				// stopped at the panel instead: document-level listeners (a popover's
+				// click-outside close, Obsidian's own handlers) still need to see it.
+				if ((evt.target as Element | null)?.closest?.('.dse-chrome')) return;
+				onBarClick();
+			});
 			stampControl(bar, opts.control);
 		}
 	} else if (opts.readOnlyTooltip !== undefined) {
