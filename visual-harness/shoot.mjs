@@ -2841,20 +2841,11 @@ const HOSTLEAK_MODAL_SCENARIOS = [
  *  entry when it lands; the pass also fails if an entry stops firing (a stale entry would let the
  *  leak come back unseen), and prints how many comparisons it let through.
  *
- *  SC-361 — the Conditions colour swatch (`button.dse-swatch`, idle and pressed). It is a bare
- *  `<button>` that never re-grounded Obsidian's rules: size (`1.5em` of Obsidian's 13px instead of the
- *  UA 13.33px: 19.5 vs 20), the host plate `box-shadow`, `color`, `font-size`, `font-family`,
- *  `white-space`, and (focus-visible, idle) `outline` replaced by the host's 3px box-shadow ring. The
- *  swatch's focus design is parked on Scott as SC-361 (a shared ring would make focus look like
- *  selection), and its look is not decided here. SC-361 removes this entry. */
-const HOSTLEAK_KNOWN_LEAKS = [
-	{
-		ticket: 'SC-361',
-		scenario: 'ConditionsModal',
-		classes: 'dse-swatch',
-		props: ['w', 'h', 'height', 'boxShadow', 'color', 'fontSize', 'fontFamily', 'whiteSpace', 'outlineStyle', 'outlineWidth'],
-	},
-];
+ *  Empty since SC-361 (the Conditions colour swatch, `button.dse-swatch`, was the one entry): the swatch's
+ *  size, plate `box-shadow`, ink, font and outline are now pinned in plugin CSS (the SC-203 block B list and
+ *  block F), so it holds its own look with and without Obsidian's `button` rules. The mechanism stays for the
+ *  next owned leak: add `{ ticket, scenario, classes, props }` here (the summary line then prints it). */
+const HOSTLEAK_KNOWN_LEAKS = [];
 
 /** Every `Modal` subclass in `src/` the harness CANNOT open, and why. Not a place to park a
  *  modal that merely is awkward to open — each one needs a reason the harness cannot reach it,
@@ -3020,9 +3011,11 @@ async function assertModalBtnHostLeak(page) {
 			`${kindCount} button kinds × ${BTN_STATES.length} states (${BTN_STATES.join('/')}) × dark/light = ` +
 			`${acc.comparisons} comparisons: every sampled property is identical with and without Obsidian's ` +
 			`\`button\` rules; ${BTN_PROPS_EXCLUDED.join(' and ')} are excluded by design)` +
-			`\n  ${acc.allowed} property difference(s) ALLOWLISTED as known leaks owned by another ticket ` +
-			`(${HOSTLEAK_KNOWN_LEAKS.map((k) => `${k.ticket}: .${k.classes}, ${k.props.length} properties`).join('; ')}) — ` +
-			`still sampled by the ${acc.comparisons} comparisons above, so the "identical" claim holds for everything else` +
+			(HOSTLEAK_KNOWN_LEAKS.length
+				? `\n  ${acc.allowed} property difference(s) ALLOWLISTED as known leaks owned by another ticket ` +
+					`(${HOSTLEAK_KNOWN_LEAKS.map((k) => `${k.ticket}: .${k.classes}, ${k.props.length} properties`).join('; ')}) — ` +
+					`still sampled by the ${acc.comparisons} comparisons above, so the "identical" claim holds for everything else`
+				: '') +
 			`\n  not openable in the harness (${reg.unreachable.length}, no <button> of their own beyond the swept kit footers): ${reg.unreachable.join(', ')}` +
 			(acc.exempt
 				? `\n  ${acc.exempt} of those (kind,state) records sampled the node at rest because the ` +
