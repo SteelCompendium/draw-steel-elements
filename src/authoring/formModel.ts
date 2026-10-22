@@ -15,6 +15,10 @@ export interface FormField {
 	widget: FormWidget;
 	help?: string;
 	enum?: string[];
+	/** The schema's own `default:` (stringified) -- only the REQUIRED-select seed reads it (SC-488 D6). */
+	default?: string;
+	/** In the schema's top-level/allOf `required`. A required select has no "Default" option. */
+	required: boolean;
 	order: number;
 }
 
@@ -45,6 +49,7 @@ export function fieldsFromSchema(def: ElementDefinition): FormField[] {
 	const props = shape?.properties;
 	if (!props || typeof props !== 'object') return [];
 	const overrides: Record<string, AuthoringFieldHint> = def.authoring?.fields ?? {};
+	const required = new Set(shape.required);
 
 	const fields: FormField[] = [];
 	let i = 0;
@@ -58,6 +63,8 @@ export function fieldsFromSchema(def: ElementDefinition): FormField[] {
 			widget: o.widget ?? widgetFor(node),
 			help: o.help ?? node.description,
 			enum: Array.isArray(node.enum) ? node.enum.map(String) : undefined,
+			default: typeof node.default === 'string' || typeof node.default === 'number' || typeof node.default === 'boolean' ? String(node.default) : undefined,
+			required: required.has(key),
 			order: o.order ?? i,
 		});
 		i++;

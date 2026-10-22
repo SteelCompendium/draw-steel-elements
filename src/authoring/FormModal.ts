@@ -21,7 +21,7 @@
 //    Notice and leaves the modal open instead of silently closing on a write that never
 //    happened.
 import { Notice, Setting, parseYaml, stringifyYaml } from 'obsidian';
-import type { Component } from 'obsidian';
+import type { Component, DropdownComponent } from 'obsidian';
 import type { RenderContext } from '@/framework/context';
 import type { BlockHost } from '@/framework/host/BlockHost';
 import type { ElementDefinition } from '@/framework/registry';
@@ -30,7 +30,6 @@ import type { ValidationService } from '@/framework/validation';
 import { DseModal, openManagedModal } from '@/framework/kit/managedModal';
 import { extractPrefOverrides, withPrefOverrides } from '@/framework/prefOverrides';
 import { fieldsFromSchema, type FormField } from './formModel';
-import { shapeFromSchemaYaml } from './schemaShape';
 
 /** `renderField`'s non-textarea widgets (toggle/number/select/text) only ever read a
  *  scalar out of `working` -- the 'textarea' widget (array/object/$ref nodes) returns
@@ -48,18 +47,25 @@ function scalarToString(value: unknown): string {
 	return String(scalar);
 }
 
+/** SC-488: the value of the leading "Default (…)" option of an OPTIONAL select. It means "this
+ *  key is absent" and never reaches `working` or the written block. Non-empty so it can never
+ *  collide with an enum value (same idea as SettingsTab's `__custom__` font option). */
+const UNSET = '__dse-unset__';
+
+/** An optional select's sentinel option, kept so `revalidate()` can relabel it in place. */
+interface DefaultOption {
+	field: FormField;
+	dropdown: DropdownComponent;
+	label: string;
+}
+
 class FormModal extends DseModal {
 	private working: Record<string, unknown> = {};
 	private prefOverrides: Partial<DsePrefs> | undefined;
-	/** SC-483: select keys whose first enum option was SEEDED into `working` on open (the key
-	 *  was absent from the source) and whose dropdown has not fired onChange since. Save strips
-	 *  these; validation and the preview keep seeing the seed. A required select never enters
-	 *  the set (stripping it would write a block that fails its own schema). */
-	private readonly untouchedSeeds = new Set<string>();
-	/** Top-level + allOf `required` only (shapeFromSchemaYaml). A key made conditionally required by
-	 *  if/then, dependentRequired or oneOf is not seen here, so an untouched source-absent select
-	 *  governed that way IS stripped; no built-in schema has one (SC-483 review INFO-4). */
-	private requiredKeys: ReadonlySet<string> = new Set();
+	/** SC-488: the "Default (…)" option of every optional select, relabelled on each revalidate.
+	 *  (Replaces SC-483's untouchedSeeds/requiredKeys strip machinery: an optional select is never
+	 *  seeded now, so there is nothing to strip at Save, and a required select is always written.) */
+	private readonly defaultOptions: DefaultOption[] = [];
 	private rawMode = false;
 	private rawText = '';
 	private saveDisabled = false;
@@ -96,7 +102,6 @@ class FormModal extends DseModal {
 			this.working = {};
 		}
 		const fields = fieldsFromSchema(this.def);
-		this.requiredKeys = new Set(this.def.schema ? (shapeFromSchemaYaml(this.def.schema)?.required ?? []) : []);
 		this.rawMode = !this.def.schema || fields.length === 0;
 
 		if (this.rawMode) {
@@ -161,27 +166,37 @@ class FormModal extends DseModal {
 				);
 				break;
 			case 'select': {
-				// Minor fix: an implicit default (no value in `working` yet) is still
-				// SHOWN as the first enum option — write it back to `working` immediately
-				// so state matches display (validation and the live preview see what the
-				// user sees), instead of silently staying undefined until the user touches it.
-				// SC-483: that seed is display/validation-only. A key ABSENT from the source
-				// that the user never changes is NOT something they wrote, so Save strips it
-				// (currentBody(true)); the first dropdown onChange makes it theirs. Not "equals
-				// enum[0]": the first option is not always the parser's default.
-				const fallback = field.enum?.[0];
-				const initial = current == null ? (fallback ?? '') : scalarToString(current);
-				if (current == null && fallback !== undefined) {
-					const absentFromSource = !Object.prototype.hasOwnProperty.call(this.working, field.key);
-					this.working[field.key] = fallback;
-					if (absentFromSource && !this.requiredKeys.has(field.key)) this.untouchedSeeds.add(field.key);
-				}
-				setting.addDropdown((d) => {
-					for (const opt of field.enum ?? []) d.addOption(opt, opt);
-					d.setValue(initial).onChange((value) => {
-						this.untouchedSeeds.delete(field.key);
-						set(value);
+				const options = field.enum ?? [];
+				if (field.required) {
+					// SC-488 D6: an absent REQUIRED key is invalid, so there is no "Default" option.
+					// Seed the schema `default` when it is a real option, else the first option, and
+					// write it back so validation and the preview see what the dropdown shows. A
+					// required key is always written (the saved block must stay valid).
+					const seed =
+						field.default !== undefined && options.includes(field.default) ? field.default : options[0];
+					if (current == null && seed !== undefined) this.working[field.key] = seed;
+					const initial = current == null ? (seed ?? '') : scalarToString(current);
+					setting.addDropdown((d) => {
+						for (const opt of options) d.addOption(opt, opt);
+						d.setValue(initial).onChange(set);
 					});
+					break;
+				}
+				// SC-488 D1/D4/D5: an OPTIONAL select leads with a "Default (…)" option meaning the
+				// key is absent. Nothing is seeded, so validation, the live preview and Save all see
+				// the same data. A key present with null counts as absent (rendering `key:` null is
+				// an error card); picking Default removes the key's line.
+				if (current == null) delete this.working[field.key];
+				const initial = current == null ? UNSET : scalarToString(current);
+				setting.addDropdown((d) => {
+					d.addOption(UNSET, 'Default');
+					for (const opt of options) d.addOption(opt, opt);
+					d.setValue(initial).onChange((value) => {
+						if (value === UNSET) delete this.working[field.key];
+						else this.working[field.key] = value;
+						this.revalidate();
+					});
+					this.defaultOptions.push({ field, dropdown: d, label: 'Default' });
 				});
 				break;
 			}
@@ -194,15 +209,11 @@ class FormModal extends DseModal {
 
 	/** Current body text: raw textarea verbatim, else serialize(model)/stringify(working) —
 	 *  re-emitting the popped `prefs:` map ahead of the body via the SAME withPrefOverrides
-	 *  the pipeline uses (Critical 1), when this block carried one.
-	 *
-	 *  SC-483: `forSave` strips the untouched, source-absent select seeds from the data before
-	 *  parse/serialize/stringify, so the model's serializer also sees the key as absent. Save is
-	 *  the only caller that passes true; the live preview passes false and keeps the seeded
-	 *  data, so it renders what the dropdowns show. */
-	private currentBody(forSave: boolean): string {
+	 *  the pipeline uses (Critical 1), when this block carried one. The preview and Save both
+	 *  call this on the same `working`, so the preview matches what Save writes (SC-488). */
+	private currentBody(): string {
 		if (this.rawMode) return this.rawText;
-		const data = forSave ? this.withoutUntouchedSeeds() : this.working;
+		const data = this.working;
 		const overrides = this.prefOverrides;
 		if (this.def.serialize) {
 			const serialize = overrides ? withPrefOverrides(this.def.serialize, overrides) : this.def.serialize;
@@ -213,13 +224,6 @@ class FormModal extends DseModal {
 			}
 		}
 		return this.stringifyWorking(data, overrides);
-	}
-
-	/** `working` minus the select keys SC-483 tracks as seeded-and-untouched (key order of the
-	 *  rest is unchanged). Returns `working` itself when there is nothing to strip. */
-	private withoutUntouchedSeeds(): Record<string, unknown> {
-		if (this.untouchedSeeds.size === 0) return this.working;
-		return Object.fromEntries(Object.entries(this.working).filter(([key]) => !this.untouchedSeeds.has(key)));
 	}
 
 	private stringifyWorking(data: Record<string, unknown>, overrides: Partial<DsePrefs> | undefined): string {
@@ -247,7 +251,36 @@ class FormModal extends DseModal {
 		this.saveDisabled = messages.length > 0;
 		this.saveHandle?.setDisabled(this.saveDisabled);
 		if (this.errorEl) this.errorEl.setText(messages.join('\n'));
+		// Before renderPreview's `saveDisabled` early return: an unrelated invalid field must not
+		// freeze the "Default (…)" labels (SC-488 D2).
+		this.refreshDefaultLabels();
 		this.renderPreview();
+	}
+
+	/** SC-488 D2 (generic, no per-element form code): the "Default (…)" label names the enum option
+	 *  `v` for which `def.parse({...working, key: v})` equals `def.parse(working without key)` -- i.e.
+	 *  what the block actually uses when the key is absent. Exactly one hit -> `Default (v)`; no hit ->
+	 *  `Default (none)`; several hits -> `Default`. A parse() that throws keeps the previous label. */
+	private refreshDefaultLabels(): void {
+		for (const entry of this.defaultOptions) {
+			try {
+				const key = entry.field.key;
+				const absent = { ...this.working };
+				delete absent[key];
+				const signature = (data: Record<string, unknown>): string | undefined =>
+					JSON.stringify(this.def.parse({ ...data }, stringifyYaml(data)));
+				const base = signature(absent);
+				const hits = (entry.field.enum ?? []).filter((v) => signature({ ...absent, [key]: v }) === base);
+				const label = hits.length === 1 ? `Default (${hits[0]})` : hits.length === 0 ? 'Default (none)' : 'Default';
+				if (label === entry.label) continue;
+				const option = Array.from(entry.dropdown.selectEl.options).find((o) => o.value === UNSET);
+				if (!option) continue;
+				option.textContent = label;
+				entry.label = label;
+			} catch {
+				// parse() slipped on the current data (or the dropdown is gone): keep the previous label.
+			}
+		}
 	}
 
 	private renderPreview(): void {
@@ -260,7 +293,7 @@ class FormModal extends DseModal {
 		this.previewEl.empty();
 		if (this.saveDisabled) return;
 		try {
-			const model = this.def.parse(this.rawMode ? (parseYaml(this.rawText) ?? {}) : this.working, this.currentBody(false));
+			const model = this.def.parse(this.rawMode ? (parseYaml(this.rawText) ?? {}) : this.working, this.currentBody());
 			// Critical 2: the preview must NEVER become a second write path. Mount with a
 			// PREVIEW host — canPersist: false (most elements, e.g. stamina-bar, already
 			// gate their own click-to-edit affordance on this and simply won't attach a
@@ -300,7 +333,7 @@ class FormModal extends DseModal {
 	 *  and leaves the modal open — no silent close on a write that never happened. */
 	async save(): Promise<void> {
 		if (this.saveDisabled) return;
-		const ok = await this.cx.host.replaceSource(this.currentBody(true));
+		const ok = await this.cx.host.replaceSource(this.currentBody());
 		if (ok) this.close();
 		// SC-455: a host that already said why it could not write (its own Notice) is not repeated here.
 		else if (!this.cx.host.lastWriteReported) new Notice("Draw Steel Elements: couldn't save — the block may have moved.");

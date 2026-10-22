@@ -9,8 +9,8 @@
 //    host.replaceSource.
 //  - Important 3: openFormEditor routes through openManagedModal — owner unload closes it.
 //  - Important 4: a false host.replaceSource() shows a Notice and keeps the modal open.
-//  - Minor: a select field's implicit default writes back to `working` on open (SC-483: for
-//    validation/preview only - Save omits it unless the user touched the dropdown).
+//  - Minor: an optional select field with no value stays absent (SC-488: it shows "Default (…)";
+//    nothing is seeded, so validation, the preview and Save all see the key absent).
 import { openFormEditor } from '../../../src/authoring/FormModal';
 import { replaceFenceBlock } from '../../../src/framework/host/fenceLine';
 import { createValidationService } from '../../../src/framework/validation';
@@ -135,7 +135,7 @@ test('schemaless element → raw-YAML textarea, saved verbatim through replaceSo
 	modal.close();
 });
 
-test('Minor: a select field with no value yet writes its implicit default back to `working` on open (SC-483: validation/preview see it, Save omits it)', async () => {
+test('Minor: an optional select field with no value yet stays absent (SC-488: no seed; validation and the preview see no key, Save omits it)', async () => {
 	const writes: string[] = [];
 	const validation = createValidationService();
 	const def = {
@@ -285,11 +285,10 @@ describe('Critical 2: the live preview is not a second write path', () => {
 });
 
 // —— SC-483: Save writes only the fields the user set or changed ——————————————————————
-// The select widget seeds an absent key's first enum option into `working` on open (so
-// validation + preview see what the dropdown shows). That seed is display/validation-only: a
-// select whose key was ABSENT from the source and whose dropdown never fired onChange is
-// stripped from the data Save serializes. A touched select (even changed back to the first
-// option) and every key the source declared are written as before.
+// SC-483 shipped these as a strip of a seeded first enum option; SC-488 removed the seed (an
+// optional select shows "Default (…)" and stays absent), so the cases below now pin the OUTCOMES:
+// an untouched, source-absent select is not written; a touched select (even changed back to the
+// first option) and every key the source declared are written; a required select is always written.
 describe('SC-483: an untouched, source-absent select is not written by Save', () => {
 	const SEL_SCHEMA = [
 		'type: object',
@@ -563,11 +562,15 @@ describe('SC-488: the optional select shows the default the block will use', () 
 		modal.close();
 	});
 
-	test('nothing is seeded: the key is absent from the data validation, the preview and Save all see', async () => {
-		const seen: Record<string, unknown>[] = [];
-		const def = derivedDef((d) => { seen.push({ ...d }); return { ...d }; });
+	test('nothing is seeded: the preview model has no key, the form is valid, and Save writes none', async () => {
+		const mounted: unknown[] = [];
+		const def = {
+			...derivedDef((d) => ({ ...d })),
+			createView: () => ({ mount: async (_el: HTMLElement, model: unknown) => { mounted.push(model); }, load: () => {}, unload: () => {} } as never),
+		} as ElementDefinition;
 		const { modal, writes } = openPlain(def, 'name: Goblin');
-		expect(seen.every((d) => !('style' in d))).toBe(true);
+		expect(modal.canSave()).toBe(true);
+		expect(mounted[mounted.length - 1]).toEqual({ name: 'Goblin' });
 		await modal.save();
 		expect(writes).toEqual(['name: Goblin']);
 		modal.close();

@@ -19,6 +19,7 @@ export interface RawSchemaNode {
 	$ref?: string;
 	type?: string;
 	enum?: unknown[];
+	default?: unknown;
 	description?: string;
 	properties?: Record<string, RawSchemaNode | undefined>;
 	required?: string[];
