@@ -236,6 +236,42 @@ export interface StaminaEditModalOptions {
 	recoveryValueUnknown?: boolean;
 }
 
+// ---------------------------------------------------------------------------------
+// SC-465: keep keyboard focus inside the modal when a focused button disables itself
+
+/** Tab stops, as the kit's initial-focus query reads them (managedModal FOCUSABLE) — real
+ *  `disabled` controls and `tabindex="-1"` are skipped. */
+const TAB_STOPS =
+	'button:not([disabled]), input:not([disabled]), select:not([disabled]), ' +
+	'textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+
+/**
+ * SC-465 (follows SC-428 review M1, RecoveriesStrip): a control that disables itself WHILE IT HOLDS
+ * FOCUS makes Chromium drop focus to `<body>`, so the next Tab starts at the top of the page. Hand
+ * focus to the NEXT enabled tab stop after `from` inside `root` (document order), or the previous
+ * one when nothing follows; do nothing when `root` has no enabled stop (never `<body>`, never
+ * outside `root`). `visible` carries the ring: a keyboard press shows the target's focus ring, a
+ * mouse press does not (the same `focusVisible` handoff as host/adoptView's refocus).
+ */
+export function focusNeighbourStop(root: HTMLElement, from: HTMLElement, visible: boolean): void {
+	const stops = Array.from(root.querySelectorAll<HTMLElement>(TAB_STOPS)).filter(
+		(el) => el !== from && el.getAttribute('tabindex') !== '-1' && !el.closest('[hidden]'),
+	);
+	const after = stops.find((el) => from.compareDocumentPosition(el) & from.DOCUMENT_POSITION_FOLLOWING);
+	const before = [...stops].reverse().find((el) => from.compareDocumentPosition(el) & from.DOCUMENT_POSITION_PRECEDING);
+	// `focusVisible` (Chromium 124+) is the ring state; older engines ignore the key.
+	(after ?? before)?.focus({ preventScroll: true, focusVisible: visible } as FocusOptions);
+}
+
+/** Did `el` show its focus ring (`:focus-visible`) — i.e. was it reached/pressed by keyboard? */
+function showsFocusRing(el: HTMLElement): boolean {
+	try {
+		return el.matches(':focus-visible');
+	} catch {
+		return true; // an engine without :focus-visible: treat as keyboard
+	}
+}
+
 export class StaminaEditModal extends DseModal {
 	private staminaBar: StaminaBar;
 	private isHero: boolean;
@@ -590,6 +626,9 @@ export class StaminaEditModal extends DseModal {
 					// user confirms; Cancel / Escape leave the pending state exactly as it was.
 					if (isFreeHeal && !this.freeHealConfirmed) {
 						const recoveryValue = this.opts.recoveryValueUnknown ? null : this.recoveryValueNow();
+						// SC-465: remember how the press arrived (keyboard -> ring) before the dialog takes focus.
+						const healEl = spendRecoveryBtn?.buttonEl;
+						const ring = healEl ? showsFocusRing(healEl) : false;
 						openManagedModal(this.lifecycle, () =>
 							new FreeHealConfirmModal(
 								this.app,
@@ -598,7 +637,14 @@ export class StaminaEditModal extends DseModal {
 									this.freeHealConfirmed = true;
 									stageRecovery();
 								},
-								() => spendRecoveryBtn?.buttonEl.focus(),
+								// SC-465: a Confirm that fills Stamina has disabled the button by now — hand focus to
+								// the next enabled stop in this modal instead of re-focusing a disabled control
+								// (which drops it to <body>). Cancel / Escape / a non-filling heal: back to the button.
+								() => {
+									if (!healEl) return;
+									if (healEl.disabled) focusNeighbourStop(this.modalEl ?? this.containerEl, healEl, ring);
+									else healEl.focus();
+								},
 							),
 						);
 						return;
@@ -698,6 +744,11 @@ export class StaminaEditModal extends DseModal {
 			const noGain = !(this.recoverySpendResult(currentStamina, negativeStaminaLimit, maxStamina).gain > 0);
 			// SC-428: why a zero-gain press is zero — "recovery value is 0" vs "already at max".
 			const recoveryValue = this.opts.recoveryValueUnknown ? null : this.recoveryValueNow();
+			// SC-465: a heal that disables the button while IT holds focus (keyboard Enter/Space, or a click)
+			// would drop focus to <body>; remember it, and move focus on once the state is applied below.
+			const healEl = spendRecoveryBtn?.buttonEl;
+			const healHadFocus = !!healEl && healEl.ownerDocument.activeElement === healEl;
+			const healRing = healHadFocus && showsFocusRing(healEl);
 			if (!spendRecoveryBtn) {
 				// The caller suppressed the control (SC-132 H1) — nothing to disable.
 			} else if (isCreature) {
@@ -729,6 +780,7 @@ export class StaminaEditModal extends DseModal {
 				spendRecoveryBtn.setDisabled(noGain);
 				spendRecoveryBtn.setLabel(noGain ? freeHealReasonLabel(zeroHealReason(recoveryValue)) : buttonTip);
 			}
+			if (healHadFocus && healEl.disabled) focusNeighbourStop(this.modalEl ?? this.containerEl, healEl, healRing);
 		};
 		refresh();
 	}

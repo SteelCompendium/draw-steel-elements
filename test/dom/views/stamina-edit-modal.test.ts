@@ -9,7 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { StaminaBar } from '@model/StaminaBar';
-import { StaminaEditModal } from '@views/StaminaEditModal';
+import { StaminaEditModal, focusNeighbourStop } from '@views/StaminaEditModal';
 import { FreeHealConfirmModal } from '@views/FreeHealConfirmModal';
 import { App } from '../../mocks/obsidian';
 import { styleGuardFindings } from '../kit/styleGuard';
@@ -1378,5 +1378,95 @@ describe('SC-432: Spend Recovery for creatures and heroes without a pool', () =>
 			expect(bar.current_stamina).toBe(20);
 			expect(bar.recoveries).toBe(2);
 		});
+	});
+});
+
+// SC-465 (SC-432 independent review, INFO-2): a KEYBOARD heal that reaches max Stamina disables the heal
+// button while it holds focus, and the browser then drops focus to <body> — so the next Tab starts from the
+// top of the page. Same shape as SC-428 M1 (Catch Breath). The rule: hand focus to the NEXT enabled tab stop
+// inside the modal (the previous one if none follows), never <body>, never outside the modal.
+describe('SC-465: focus stays inside the Stamina modal when the heal button disables itself', () => {
+	/** A pool hero 5 below max: one Recovery (10) tops it up and disables the button. */
+	function makePoolHeroModal() {
+		const app = new App();
+		const bar = new StaminaBar(false, false, 30, 25, 0, 1, 'default', 3, 6);
+		const modal = new StaminaEditModal(app as any, bar, true, 'Frodo', jest.fn());
+		modal.open();
+		return { modal: modal as any, content: (modal as any).contentEl as HTMLElement };
+	}
+	const insideModal = (modal: any, el: Element | null): boolean => !!el && modal.containerEl.contains(el);
+
+	test('pool hero: Spend Recovery filling Stamina moves focus to the next enabled stop (Reset), not <body>', () => {
+		const { modal, content } = makePoolHeroModal();
+		const spend = spendRecoveryBtn(content);
+		spend.focus();
+		expect(document.activeElement).toBe(spend);
+		spend.click();
+		expect(spend.disabled).toBe(true);
+		expect(document.activeElement).not.toBe(document.body);
+		expect(document.activeElement).not.toBe(spend);
+		expect(insideModal(modal, document.activeElement)).toBe(true);
+		expect(document.activeElement).toBe(btn(content, 'Reset'));
+		expect((document.activeElement as HTMLButtonElement).disabled).toBe(false);
+	});
+
+	test('no-pool hero: Heal Recovery Value + Confirm filling Stamina leaves focus on an enabled control in the Stamina modal', () => {
+		const { modal, content } = makeModal(30, 25, 0);
+		const heal = spendRecoveryBtn(content);
+		heal.focus();
+		heal.click();
+		freeHealDialog()!.confirm.click();
+		expect(freeHealDialog()).toBeNull();
+		expect(heal.disabled).toBe(true);
+		expect(document.activeElement).not.toBe(document.body);
+		expect(document.activeElement).not.toBe(heal);
+		expect(insideModal(modal, document.activeElement)).toBe(true);
+		expect(document.activeElement).toBe(btn(content, 'Reset'));
+	});
+
+	test('no-pool hero: a Confirm that leaves Stamina below max still returns focus to the (enabled) heal button', () => {
+		const { content } = makeModal(30, 10, 0);
+		const heal = spendRecoveryBtn(content);
+		heal.focus();
+		heal.click();
+		freeHealDialog()!.confirm.click();
+		expect(heal.disabled).toBe(false);
+		expect(document.activeElement).toBe(heal);
+	});
+
+	test('no-pool hero: Cancel returns focus to the heal button', () => {
+		const { content } = makeModal(30, 25, 0);
+		const heal = spendRecoveryBtn(content);
+		heal.focus();
+		heal.click();
+		freeHealDialog()!.cancel.click();
+		expect(heal.disabled).toBe(false);
+		expect(document.activeElement).toBe(heal);
+	});
+
+	test('focus is only moved when the heal button held it: another focused control keeps focus', () => {
+		const { content } = makePoolHeroModal();
+		const kill = btn(content, 'Full Heal');
+		kill.focus();
+		spendRecoveryBtn(content).click();
+		expect(spendRecoveryBtn(content).disabled).toBe(true);
+		expect(document.activeElement).toBe(kill);
+	});
+
+	test('focusNeighbourStop: next enabled stop wins, else the previous one, else nothing moves', () => {
+		const root = document.body.createDiv();
+		root.innerHTML =
+			'<button id="a">a</button><button id="from" disabled>f</button><button id="off" disabled>o</button>' +
+			'<button id="skip" tabindex="-1">s</button><button id="b">b</button>';
+		const from = root.querySelector<HTMLButtonElement>('#from')!;
+		focusNeighbourStop(root, from, true);
+		expect(document.activeElement?.id).toBe('b');
+		root.querySelector('#b')!.remove();
+		focusNeighbourStop(root, from, true);
+		expect(document.activeElement?.id).toBe('a');
+		root.querySelector('#a')!.remove();
+		(document.activeElement as HTMLElement).blur();
+		focusNeighbourStop(root, from, true);
+		expect(document.activeElement).toBe(document.body);
 	});
 });
