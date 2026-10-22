@@ -53,6 +53,10 @@
 // SC-478 appends G-S18 (G-S16 is reserved for SC-471): a LIVE PREVIEW pane keeps its reading position when the
 // DSE block it is reading is redrawn — another pane's DSE write, an external write (in-app and on disk), and the pane's own write.
 //
+// SC-492 appends G-S32 (G-S16..G-S31 are other tickets'): with the experimental authoring controls on, the Edit pencil in a
+// ds-stamina-bar's chrome panel opens only the edit form - not the Stamina modal on top of it - by real mouse click, Enter and
+// Space; a real click on the bar itself still opens the Stamina modal.
+//
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
 // Env:   XVFB_BIN, DSE_LIFECYCLE_BIN (default /usr/bin/obsidian), DSE_LIFECYCLE_PORT (9262),
@@ -149,6 +153,7 @@ const FIXTURES = {
 	'Lifecycle/twins.md': `# twins\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nMID\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`,
 	'Lifecycle/counter.md': `# counter\n\nABOVE\n\n${COUNTER(10)}\n\nBELOW\n`,
 	'Lifecycle/other.md': '# other\n\nJust another note.\n',
+	'Lifecycle/stamina.md': `# stamina\n\nABOVE\n\n${fence('ds-stamina-bar', ['max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5'])}\n\nBELOW\n`,
 	'Lifecycle/unterminated.md': `# unterminated\n\nABOVE\n\n${UNTERMINATED_COUNTER(10)}\n`,
 	// SC-477: the same note with a longer tail (two blank lines) and as a CRLF note - G-S6u (navigate away) and
 	// G-S28 (stay on the note) both prove the tail survives the write byte for byte.
@@ -2152,6 +2157,90 @@ const SCENARIOS = [
 			await t.open(rel); // back to Reading for the next scenario
 			t.expect(fails.length === 0, fails.join(' | '));
 			return out.join('; ');
+		},
+	},
+	{
+		// SC-492: with `experimental` + `authoringControls` on, the Edit pencil sits in the chrome panel INSIDE the clickable
+		// stamina bar, so its click bubbled to the bar's handler and the Stamina modal opened on top of the edit form (seen
+		// only in real Obsidian, SC-483 review INFO-1). The pencil must open the form alone - by a real mouse click, and by
+		// Enter and Space on the focused button - while a real click on the bar itself still opens the Stamina modal.
+		id: 'G-S32',
+		async run(t) {
+			const rel = 'Lifecycle/stamina.md';
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			const BAR = '[data-dse-element="stamina-bar"]';
+			const PENCIL = `${BAR} .dse-chrome button[aria-label="Edit Stamina bar"]`;
+			const modals = () => t.ev(`Array.from(document.querySelectorAll('.modal-container .dse-modal')).map((m) => (m.querySelector('.dse-form__preview') ? 'form' : m.querySelector('.dse-sedit__apply-input') ? 'stamina' : 'other'))`);
+			const closeModals = async (what) => {
+				await t.key('Escape', 'Escape', 27);
+				await t.waitFor(`document.querySelectorAll('.modal-container .dse-modal').length === 0`, `${what}: the modal closed on Escape`);
+			};
+			// A real key press with its text, so the browser's own button activation (Enter on keydown, Space on keyup) runs.
+			const press = async (key, code, vk, text) => {
+				await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key, code, text, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
+				await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
+			};
+			// The chrome panel sits ABOVE the bar's cluster and is click-through until the block is hovered, so a pointer that
+			// jumped straight onto it would find nothing there: like a person, move onto the bar first, then up to the pencil
+			// in small steps.
+			const hoverPencil = async () => {
+				const center = (sel) => t.ev(`(() => { const el = ${sel}; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+				const from = await center(`(${t.root(BAR)}).querySelector('.dse-stamina__cnums')`);
+				await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.x, y: from.y });
+				await t.waitFor(`(() => { const b = ${t.root(PENCIL)}; return !!b && b.getBoundingClientRect().width > 0; })()`, 'the Edit pencil is laid out');
+				const to = await center(t.root(PENCIL));
+				for (let i = 1; i <= 8; i++) {
+					await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.x + ((to.x - from.x) * i) / 8, y: from.y + ((to.y - from.y) * i) / 8 });
+				}
+				await t.waitFor(`getComputedStyle((${t.root(PENCIL)}).closest('.dse-chrome')).pointerEvents === 'auto'`, 'the chrome panel is revealed by the hover');
+			};
+			const m = await t.mark();
+			await t.ev(`${prefs}.set('authoringControls', true)`);
+			// Obsidian's own Notice stack (e.g. "Update available") sits over the top-right of the window, exactly where the
+			// pencil is, and would take the pointer's hover: hide it for this scenario only (a Notice is still in the DOM).
+			await t.ev(`(() => { const st = document.createElement('style'); st.id = 'lc-gs32-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); return true; })()`);
+			try {
+				await t.open(rel);
+				await t.reset(rel);
+				await t.waitFor(`!!(${t.root(BAR)})`, `${rel}: the stamina bar rendered`);
+				t.expect(await t.ev(`!!(${t.root(PENCIL)})`), 'no Edit pencil in the chrome panel - authoringControls is not taking effect');
+				t.expect(await t.ev(`!!(${t.root(BAR)}).querySelector('.dse-stamina--clickable')?.contains(${t.root(PENCIL)})`), 'the pencil is not inside the clickable bar - the scenario would be blind');
+
+				// 1. A real mouse click on the pencil.
+				await hoverPencil();
+				await t.realClick(t.root(PENCIL));
+				await t.waitFor(`document.querySelectorAll('.modal-container .dse-modal').length > 0`, 'a modal opened after the pencil click');
+				await t.sleep(800); // a stray Stamina modal would have opened by now
+				let open = await modals();
+				t.expect(JSON.stringify(open) === '["form"]', `mouse click on the Edit pencil: expected only the edit form, got ${JSON.stringify(open)}`);
+				await closeModals('mouse click');
+
+				// 2. Enter and Space on the focused pencil (the browser turns each into a click with detail 0).
+				for (const [name, key, code, vk, text] of [['Enter', 'Enter', 'Enter', 13, '\r'], ['Space', ' ', 'Space', 32, ' ']]) {
+					await t.ev(`(${t.root(PENCIL)}).focus()`); // :focus-within reveals the panel, as for a Tab user
+					t.expect(await t.ev(`document.activeElement === (${t.root(PENCIL)})`), `${name}: the pencil did not take focus`);
+					await press(key, code, vk, text);
+					await t.waitFor(`document.querySelectorAll('.modal-container .dse-modal').length > 0`, `a modal opened after ${name} on the pencil`);
+					await t.sleep(800);
+					open = await modals();
+					t.expect(JSON.stringify(open) === '["form"]', `${name} on the Edit pencil: expected only the edit form, got ${JSON.stringify(open)}`);
+					await closeModals(name);
+				}
+
+				// 3. A real click on the bar itself still opens the Stamina modal (and only that).
+				await t.realClick(`(${t.root(BAR)}).querySelector('.dse-stamina__cnums')`);
+				await t.waitFor(`document.querySelectorAll('.modal-container .dse-modal').length > 0`, 'a modal opened after a click on the bar');
+				await t.sleep(400);
+				open = await modals();
+				t.expect(JSON.stringify(open) === '["stamina"]', `click on the bar: expected only the Stamina modal, got ${JSON.stringify(open)}`);
+				await closeModals('bar click');
+			} finally {
+				await t.ev(`document.getElementById('lc-gs32-notice')?.remove()`);
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+			}
+			t.expect(t.read(rel) === FIXTURES[rel], `${rel} was written (nothing was applied, so it must be byte-identical): ${JSON.stringify(t.read(rel))}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
+			return 'the Edit pencil opens only the edit form by real click, Enter and Space; a real click on the bar still opens only the Stamina modal; the note is untouched';
 		},
 	},
 ];
