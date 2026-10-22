@@ -42,7 +42,7 @@
 // SC-326 appends G-S13: two 20-round montage blocks in one note, one scrolled MID-way and one to its far
 // end, keep their horizontal scroll across quick-trio taps and End round — the rebuild every write triggers AND the
 // later adoption move both reset a scroll container's offset (measured before the fix: 884 -> 0).
-// SC-470 appends G-S15 (G-S13 is SC-326's; G-S14 is reserved for SC-457): the scroll pin for EVERY Reading view of the note — a second pane during a DSE write
+// SC-470 appends G-S15 (G-S13 is SC-326's; G-S14 is SC-457's): the scroll pin for EVERY Reading view of the note — a second pane during a DSE write
 // from the first, and a write that is not ours (in-app vault.process, and a write on disk picked up by the file watcher).
 // SC-457 appends G-S14: a fence with whitespace between the backticks and the language (```` ``` ds-counter ````,
 // several spaces, a tab) is a DSE block in Obsidian; after the note changed around it (Reading view, the section snapshot is
