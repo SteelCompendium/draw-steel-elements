@@ -375,9 +375,49 @@ describe('SC-482: encounter — a party-only source does not gain `monsters: []`
 	});
 });
 
-describe('SC-482: an empty source whose values return to their defaults is written as an empty body, not `{}`', () => {
-	test.each(specs)('$name: serialize(parse({})) is empty', (spec) => {
-		expect(spec.def.serialize!(spec.def.parse({}, ''))).toBe('');
+describe('SC-482: an empty source whose values return to their defaults is written as an empty body only when the source body was empty', () => {
+	// A mapping source (`{}`, or keys the element does not know) is written back as `{}`: counter,
+	// negotiation, party and encounter cannot re-parse an empty body ("must be a YAML object").
+	test.each(specs)('$name: serialize(parse({})) is {}', (spec) => {
+		expect(spec.def.serialize!(spec.def.parse({}, ''))).toBe('{}');
+	});
+
+	test.each(specs.filter((x) => ['montage', 'project'].includes(x.name)))(
+		'$name: a null (blank) source body is written back as an empty body',
+		(spec) => {
+			expect(spec.def.serialize!(spec.def.parse(null, ''))).toBe('');
+		},
+	);
+
+	test('counter, through the real write path: + then - on `title: Deaths` returns it to {}, and the block re-renders (no error card)', async () => {
+		const spec = specs.find((x) => x.name === 'counter')!;
+		const body = 'title: Deaths';
+		const app = appWith(noteOf([{ lang: spec.lang, body }]));
+		const first = await mount(app, spec, 0, body);
+		increase(first.root);
+		await settle();
+		expect(bodyOf(first.note(), 0)).toBe('current_value: 1');
+		click(first.root, '.dse-stepper__btn[aria-label^="Decrease"]');
+		await settle();
+		expect(bodyOf(first.note(), 0)).toBe('{}');
+		// Reopen the note: mount() fails on an error card.
+		const again = await mount(app, spec, 0, bodyOf(app.vault.getContent(NOTE)!, 0));
+		expect(again.root.querySelector('.dse-counter')).not.toBeNull();
+	});
+
+	test('negotiation, through the real write path: slot 3 then slot 5 returns it to {}, and the block re-renders (no error card)', async () => {
+		const spec = specs.find((x) => x.name === 'negotiation')!;
+		const body = 'title: Frodo';
+		const app = appWith(noteOf([{ lang: spec.lang, body }]));
+		const first = await mount(app, spec, 0, body);
+		click(first.root, '.dse-nt__patience .dse-track__slot[data-value="3"]');
+		await settle();
+		expect(bodyOf(first.note(), 0)).toBe('current_patience: 3');
+		click(first.root, '.dse-nt__patience .dse-track__slot[data-value="5"]');
+		await settle();
+		expect(bodyOf(first.note(), 0)).toBe('{}');
+		const again = await mount(app, spec, 0, bodyOf(app.vault.getContent(NOTE)!, 0));
+		expect(again.root.querySelector('.dse-nt')).not.toBeNull();
 	});
 
 	test('montage, through the real write path: End round then Back on an empty block leaves the block as it was', async () => {

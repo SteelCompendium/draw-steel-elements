@@ -164,15 +164,20 @@ describe('SC-482 helper: recordAbsentDefaults on a nested instance', () => {
 });
 
 describe('SC-482 helper: stringifyOmittingUntouched', () => {
-	test('writes the filtered keys trimmed; an empty result (all untouched defaults) is an empty body, not `{}`', () => {
+	test('writes the filtered keys trimmed', () => {
 		const model = parse({}, '');
-		expect(stringifyOmittingUntouched(model)).toBe('');
 		model.min = 2;
 		expect(stringifyOmittingUntouched(model)).toBe('min: 2');
 	});
 
-	test('keys holding undefined are not content: only-undefined remains an empty body', () => {
-		const model = parse({}, '');
+	test('nothing left from a mapping source is `{}` (every element can re-parse it); from a null / blank source it is an empty body', () => {
+		expect(stringifyOmittingUntouched(parse({}, ''))).toBe('{}');
+		expect(stringifyOmittingUntouched(parse({ name: 'x' }, ''))).toBe('name: x');
+		for (const blank of [null, undefined]) expect(stringifyOmittingUntouched(parse(blank, ''))).toBe('');
+	});
+
+	test('keys holding undefined are not content: only-undefined from a blank source is an empty body', () => {
+		const model = parse(null, '');
 		expect(stringifyOmittingUntouched(model, { ...omitUntouchedDefaults(model), name: undefined })).toBe('');
 	});
 
