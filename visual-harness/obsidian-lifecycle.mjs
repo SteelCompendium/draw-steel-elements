@@ -1993,11 +1993,16 @@ const SCENARIOS = [
 		// inside a tall tracker showed lines ~100 further down (3020 -> 2556 on this note). Phases: (a) the note in
 		// Reading pane A and Live Preview pane B, a DSE write from A, B observed; (b1) an in-app `vault.process` from
 		// outside the plugin and (b2) a write on disk picked up by the file watcher, one Live Preview pane; (c) the
-		// Live Preview pane's OWN DSE write. Per phase, on the observed pane: the write landed; anti-vacuity — the
-		// tracker was redrawn (a fresh root); scrollTop never moved in any frame and the top visible line + offset is
-		// unchanged; the redrawn tracker is drawn again at its old height; `data-dse-lp-hold` (the hold that keeps the
-		// redrawn block at its old height until our view mounts) was seen on it and released; the observed pane's
-		// selection did not move. Every phase runs even after one fails.
+		// Live Preview pane's OWN DSE write; (d) a second pane whose `setViewData` is held back (the late `set`
+		// transaction of a pane behind a busy main thread, SC-472; held back until the wheel landed) and a REAL wheel on it in that gap: the restore must
+		// land where the user scrolled to; (e) one outside write that inserts a paragraph right at the fence AND changes
+		// the tracker. Per phase, on the observed pane: the write landed; anti-vacuity — the tracker was redrawn (a
+		// fresh root); scrollTop never moved in any frame and the top visible line + offset is unchanged (phase (e):
+		// two lines further down, the offset within the inserted paragraph's height — CodeMirror maps its own snapshot
+		// anchor before the insertion; phase (d): measured after the wheel); the redrawn tracker is drawn again at its
+		// old height; `data-dse-lp-hold` (the hold that keeps the redrawn block at its old height until our view
+		// mounts) was seen on it and released; the observed pane's selection did not move. Every phase runs even
+		// after one fails.
 		id: 'G-S18',
 		async run(t) {
 			const rel = 'Lifecycle/tall.md';
@@ -2022,17 +2027,19 @@ const SCENARIOS = [
 				await t.ev(`(() => { window.__gs18tag = ${lpRoot(leaf)}; return true; })()`);
 				return t.ev(`({ tl: ${topLine(leaf)}, wh: ${widgetH(leaf)}, sel: (${leaf}).view.editor.cm.state.selection.main.head })`);
 			};
-			// Per-frame scrollTop of the observed scroller + a MutationObserver for the hold attribute; resolves on
+			// Per-frame scrollTop of the observed scroller + a MutationObserver for the hold attribute (any change record counts: a hold set and
+			// released inside one task is gone by the time a callback could look for it); resolves on
 			// window.__gs18rec once the hold was released + 10 frames (cap: first sighting + 4500 ms, 12 s; 5 s with no hold).
-			const record = (leaf) => t.ev(`(() => { window.__gs18rec = new Promise((resolve) => { const s = ${scrollerOf(leaf)}; const st0 = s.scrollTop; const samples = []; let stMin = st0; let held = 0; let holdSeen = false; let holdPx = null; let holdOnAt = 0; let released = false; let goneFrames = 0; const onScroll = () => { stMin = Math.min(stMin, s.scrollTop); }; s.addEventListener('scroll', onScroll); const count = () => s.querySelectorAll('[data-dse-lp-hold]').length; const mo = new MutationObserver(() => { const h = s.querySelector('[data-dse-lp-hold]'); if (h && !holdSeen) { holdSeen = true; holdPx = Number(h.getAttribute('data-dse-lp-hold')); holdOnAt = performance.now() - t0; } }); mo.observe(s, { attributes: true, attributeFilter: ['data-dse-lp-hold'], childList: true, subtree: true }); const t0 = performance.now(); const tick = () => { samples.push(s.scrollTop); const n = count(); if (n) { held++; released = false; goneFrames = 0; } else if (holdSeen) { released = true; goneFrames++; } if (goneFrames < 10 && performance.now() - t0 < (holdSeen ? Math.min(holdOnAt + 4500, 12000) : 5000)) requestAnimationFrame(tick); else { mo.disconnect(); s.removeEventListener('scroll', onScroll); resolve({ st0, frames: samples.length, stMin: Math.min(stMin, ...samples), stMax: Math.max(...samples), holdSeen, holdPx, heldFrames: held, released, ms: Math.round(performance.now() - t0) }); } }; requestAnimationFrame(tick); }); return true; })()`);
-			const check = async (phase, leaf, before, m, landed) => {
+			const record = (leaf) => t.ev(`(() => { window.__gs18rec = new Promise((resolve) => { const s = ${scrollerOf(leaf)}; const st0 = s.scrollTop; const samples = []; let stMin = st0; let held = 0; let holdSeen = false; let holdPx = null; let holdOnAt = 0; let released = false; let goneFrames = 0; const onScroll = () => { stMin = Math.min(stMin, s.scrollTop); }; s.addEventListener('scroll', onScroll); const count = () => s.querySelectorAll('[data-dse-lp-hold]').length; const mo = new MutationObserver((recs) => { for (const r of recs) { if (r.type !== 'attributes') continue; if (!holdSeen) { holdSeen = true; holdOnAt = performance.now() - t0; } if (r.oldValue !== null) holdPx = Number(r.oldValue); else if (holdPx === null) holdPx = Number(r.target.getAttribute('data-dse-lp-hold')); } }); mo.observe(s, { attributes: true, attributeOldValue: true, attributeFilter: ['data-dse-lp-hold'], subtree: true }); const t0 = performance.now(); const tick = () => { samples.push(s.scrollTop); const n = count(); if (n) { held++; released = false; goneFrames = 0; } else if (holdSeen) { released = true; goneFrames++; } if (goneFrames < 10 && performance.now() - t0 < (holdSeen ? Math.min(holdOnAt + 4500, 12000) : 5000)) requestAnimationFrame(tick); else { mo.disconnect(); s.removeEventListener('scroll', onScroll); resolve({ st0, frames: samples.length, stMin: Math.min(stMin, ...samples), stMax: Math.max(...samples), holdSeen, holdPx, heldFrames: held, released, ms: Math.round(performance.now() - t0) }); } }; requestAnimationFrame(tick); }); return true; })()`);
+			// `shift`: the top line may sit `lines` further down and up to `drift` px higher into its block (phase (e) only).
+			const check = async (phase, leaf, before, m, landed, shift = { lines: 0, drift: 0 }) => {
 				t.expect(landed, `${phase}: the write did not land`);
 				await t.sleep(600); // let the redrawn view settle before reading the top line
 				// anti-vacuity: the tracker the pane was reading was replaced (its root left the document)
 				t.expect(await t.ev(`!!window.__gs18tag && !window.__gs18tag.isConnected`), `${phase}: the observed tracker was not redrawn — the phase cannot reach the Live Preview jump`);
 				const after = await t.ev(`({ tl: ${topLine(leaf)}, wh: ${widgetH(leaf)}, sel: (${leaf}).view.editor.cm.state.selection.main.head })`);
 				const pos = `scrollTop start ${m.st0} min ${m.stMin} max ${m.stMax}; top line ${before.tl.line}+${before.tl.off} -> ${after.tl.line}+${after.tl.off}; tracker drawn ${after.wh}px (was ${before.wh}px); hold seen ${m.holdSeen}`;
-				t.expect(m.stMin === m.st0 && m.stMax === m.st0 && after.tl.line === before.tl.line && after.tl.off === before.tl.off, `${phase}: the pane lost its place: ${pos}`);
+				t.expect(m.stMin === m.st0 && m.stMax === m.st0 && after.tl.line === before.tl.line + shift.lines && after.tl.off <= before.tl.off && after.tl.off >= before.tl.off - shift.drift, `${phase}: the pane lost its place: ${pos}`);
 				t.expect(after.wh !== null && Math.abs(after.wh - before.wh) <= 2, `${phase}: the redrawn tracker is ${after.wh === null ? 'not drawn' : after.wh + 'px'}, was ${before.wh}px`);
 				t.expect(m.holdSeen, `${phase}: data-dse-lp-hold was never set on the redrawn tracker (${pos})`);
 				t.expect(m.released, `${phase}: the hold was never seen released within ${m.ms}ms (held frames ${m.heldFrames})`);
@@ -2097,6 +2104,49 @@ const SCENARIOS = [
 				t.expect(clicked, '(c) Live Preview pane: no visible portrait toggle');
 				const m = await t.ev('window.__gs18rec');
 				return await check('(c) own write', A, before, m, /has_taken_turn: true/.test(t.read(rel)));
+			});
+			// (d) a late `set` transaction: pane B's setViewData is held back (forced, not timing luck), and a real wheel
+			// on B lands in that gap, after `modify` captured B and before B's transaction. B must end where the wheel left it.
+			await phase(async () => {
+				await t.open(rel);
+				await t.reset(rel);
+				try {
+					await t.ev(`(async () => { window.__gs18A = app.workspace.getMostRecentLeaf(); const b = app.workspace.getLeaf('split', 'vertical'); window.__gs18B = b; await b.setViewState({ type: 'markdown', state: Object.assign({ file: ${JSON.stringify(rel)} }, ${JSON.stringify(LP)}), active: false }); b.view.editor.setCursor({ line: 0, ch: 0 }); app.workspace.setActiveLeaf(window.__gs18A, { focus: true }); return true; })()`);
+					await t.sleep(1500);
+					await t.ev(`(() => { const s = ${rdScroller(A)}; const r = Array.from(s.querySelectorAll('${TRACKER}')).find((x) => x.isConnected); s.scrollTop = r.getBoundingClientRect().top - s.getBoundingClientRect().top + s.scrollTop + 1500; return true; })()`);
+					await park(B);
+					const parkedSt = await t.ev(`${scrollerOf(B)}.scrollTop`);
+					await t.ev(`(() => { window.__gs18go = null; const v = (${B}).view; const o = v.setViewData; v.setViewData = function (d, c) { v.setViewData = o; window.__gs18go = () => o.call(v, d, c); }; return true; })()`);
+					const clicked = await t.ev(`(() => { const s = ${rdScroller(A)}; const sr = s.getBoundingClientRect(); const b = Array.from(s.querySelectorAll('button.dse-init__portrait-toggle')).find((x) => { const r = x.getBoundingClientRect(); return r.top > sr.top + 100 && r.bottom < sr.bottom - 100; }); if (!b) return false; b.click(); return true; })()`);
+					t.expect(clicked, '(d) Reading pane A: no visible portrait toggle');
+					// B's transaction is held back until released below, so the gap is as long as the wheel needs (the main thread is busy
+					// with A's remount, so a timed gap would race the wheel). `modify` precedes `setViewData`: the capture is taken by now.
+					await t.waitFor('typeof window.__gs18go === "function"', '(d) pane B reached setViewData');
+					// the user wheels pane B up by 400px inside the gap
+					const at = await t.ev(`(() => { const r = ${scrollerOf(B)}.getBoundingClientRect(); return { x: Math.round(r.left + r.width * 0.8), y: Math.round(r.top + r.height / 2) }; })()`);
+					await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x, y: at.y });
+					await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseWheel', x: at.x, y: at.y, deltaX: 0, deltaY: -400 });
+					await t.waitFor(`${scrollerOf(B)}.scrollTop < ${parkedSt - 100}`, '(d) the wheel reached pane B');
+					await t.sleep(250);
+					const before = await t.ev(`({ tl: ${topLine(B)}, wh: ${widgetH(B)}, sel: (${B}).view.editor.cm.state.selection.main.head, st: ${scrollerOf(B)}.scrollTop })`);
+					t.expect(before.st < parkedSt - 100, `(d) the wheel did not move pane B: scrollTop ${parkedSt} -> ${before.st} (the phase cannot reach the late-transaction path)`);
+					await record(B);
+					await t.ev('(() => { window.__gs18go(); return true; })()'); // B's late `set` transaction
+					const m = await t.ev('window.__gs18rec');
+					return await check('(d) wheel before a late set', B, before, m, /has_taken_turn: true/.test(t.read(rel)));
+				} finally {
+					await t.ev(`(() => { if (window.__gs18go) window.__gs18go(); window.__gs18go = null; if (window.__gs18B) window.__gs18B.detach(); window.__gs18B = null; return true; })()`);
+				}
+			});
+			// (e) one outside write that inserts a paragraph right at the fence's first line AND changes the tracker: the
+			// diff is one replacement that starts at the old fence start, so the redrawn widget starts after the insertion.
+			await phase(async () => {
+				await openLP();
+				const before = await park(A);
+				await record(A);
+				await t.edit(rel, `c.replace('\`\`\`ds-initiative\\n', 'INSERTED LINE.\\n\\n\`\`\`ds-initiative\\n').replace('  value: 1', '  value: 2')`);
+				const m = await t.ev('window.__gs18rec');
+				return await check('(e) insert above the fence + change', A, before, m, t.read(rel).includes('INSERTED LINE.') && t.read(rel).includes('  value: 2'), { lines: 2, drift: 60 });
 			});
 			await t.reset(rel);
 			await t.open(rel); // back to Reading for the next scenario
