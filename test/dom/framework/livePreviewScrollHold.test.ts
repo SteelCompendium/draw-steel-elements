@@ -21,9 +21,9 @@ interface FakeEffect {
 }
 
 /** A DSE code-block widget as Obsidian draws it: `.cm-embed-block` > root `[data-dse-element]` (mounted = has children). */
-function widget(pos: number, px: number, mounted = true): HTMLElement {
+function widget(pos: number, px: number, mounted = true, lang = 'cm-lang-ds-initiative'): HTMLElement {
 	const w = document.createElement('div');
-	w.className = 'cm-preview-code-block cm-embed-block cm-lang-ds-initiative';
+	w.className = `cm-preview-code-block cm-embed-block ${lang}`.trim();
 	const root = document.createElement('div');
 	root.setAttribute('data-dse-element', 'initiative');
 	if (mounted) root.appendChild(document.createElement('div'));
@@ -41,11 +41,15 @@ function fakeView(scrollTop: number, widgets: HTMLElement[]) {
 	contentDOM.append(line, ...widgets);
 	document.body.appendChild(contentDOM);
 	const scrollDOM = { scrollTop, ownerDocument: document };
-	const snapshot: FakeEffect = { tag: 'snap', map: () => ({ tag: 'snap-mapped', map: () => snapshot }) };
+	// the snapshot is where the view is scrolled to when it is taken, so a re-capture after a scroll is visible
+	const snapshotAt = (top: number): FakeEffect => {
+		const mapped: FakeEffect = { tag: `snap-mapped@${top}`, map: () => mapped };
+		return { tag: `snap@${top}`, map: () => mapped };
+	};
 	return {
 		scrollDOM,
 		contentDOM,
-		scrollSnapshot: jest.fn(() => snapshot),
+		scrollSnapshot: jest.fn(() => snapshotAt(scrollDOM.scrollTop)),
 		posAtDOM: (el: HTMLElement) => (el as HTMLElement & { __pos?: number }).__pos ?? 0,
 		dispatch: jest.fn(),
 		requestMeasure: jest.fn(),
@@ -53,9 +57,24 @@ function fakeView(scrollTop: number, widgets: HTMLElement[]) {
 }
 
 type View = ReturnType<typeof fakeView>;
-const shift = (by: number) => ({ mapPos: (p: number) => (p > 5 ? p + by : p) });
+/**
+ * ChangeSet.mapPos for ONE change that replaces [from, to] with `len` characters, with CodeMirror's assoc semantics:
+ * a position at the start of the range stays before the new text for assoc <= 0, a position at the end of the range
+ * goes after it for assoc >= 0, and a position strictly inside goes to the start (assoc < 0) or the end (assoc > 0).
+ */
+const change = (from: number, to: number, len: number) => ({
+	mapPos(pos: number, assoc = -1): number {
+		if (pos < from) return pos;
+		if (pos > to) return pos + len - (to - from);
+		if (pos === from && assoc <= 0) return from;
+		if (pos === to && assoc >= 0) return from + len;
+		return assoc < 0 ? from : from + len;
+	},
+});
+/** An insertion of `by` characters at position 5 (the tests' blocks sit past it). */
+const shift = (by: number) => change(5, 5, by);
 /** A ViewUpdate: doc changed by Obsidian's setViewData (`userEvent: "set"`) unless `event` says otherwise. */
-const update = (view: View, event = 'set', changes = shift(0)) =>
+const update = (view: View, event = 'set', changes: ReturnType<typeof change> = shift(0)) =>
 	({ view, docChanged: true, changes, transactions: [{ docChanged: true, isUserEvent: (e: string) => e === event }] }) as never;
 const flush = () => Promise.resolve().then(() => undefined);
 /** The MarkdownView that shows an editor: only its `file` is read. */
@@ -75,7 +94,7 @@ describe('SC-478: LivePreviewScrollHold capture', () => {
 		hold.onUpdate(update(view));
 		expect(view.dispatch).not.toHaveBeenCalled(); // never inside the update
 		await flush();
-		expect(view.dispatch).toHaveBeenCalledWith({ effects: expect.objectContaining({ tag: 'snap-mapped' }) });
+		expect(view.dispatch).toHaveBeenCalledWith({ effects: expect.objectContaining({ tag: 'snap-mapped@2428' }) });
 	});
 
 	test('does not capture at the top, or a view without a drawn DSE widget (a plain note never jumps)', async () => {
@@ -119,6 +138,53 @@ describe('SC-478: LivePreviewScrollHold capture', () => {
 		hold.onUpdate(update(view));
 		await flush();
 		expect(view.dispatch).not.toHaveBeenCalled();
+	});
+
+	test('a scroll event moves the capture along: the late `set` transaction restores to where the user scrolled to', async () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3020, [widget(7, 3039)]);
+		hold.capture(view as never, note());
+		view.scrollDOM.scrollTop = 2620; // the user wheels up in the gap before the (late) transaction
+		hold.refresh(view as never);
+		expect(view.scrollSnapshot).toHaveBeenCalledTimes(2);
+		hold.onUpdate(update(view));
+		await flush();
+		expect(view.dispatch).toHaveBeenCalledWith({ effects: expect.objectContaining({ tag: 'snap-mapped@2620' }) });
+	});
+
+	test('a scroll to the very top, or away from every DSE block, drops the capture instead of refreshing it', async () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3020, [widget(7, 3039)]);
+		hold.capture(view as never, note());
+		view.scrollDOM.scrollTop = 0;
+		hold.refresh(view as never);
+		hold.onUpdate(update(view));
+		const away = fakeView(3020, [widget(7, 3039)]);
+		hold.capture(away as never, note());
+		away.contentDOM.querySelector('.cm-embed-block')!.remove(); // CodeMirror no longer draws the block
+		away.scrollDOM.scrollTop = 9000;
+		hold.refresh(away as never);
+		hold.onUpdate(update(away));
+		await flush();
+		expect(view.dispatch).not.toHaveBeenCalled();
+		expect(away.dispatch).not.toHaveBeenCalled();
+	});
+
+	test('nothing is refreshed once the transaction consumed the capture (the restore\'s and the clamp\'s scroll events)', async () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3020, [widget(7, 3039)]);
+		hold.capture(view as never, note());
+		hold.onUpdate(update(view)); // consumed: restore pending
+		view.scrollDOM.scrollTop = 2556; // Obsidian's clamp
+		hold.refresh(view as never);
+		hold.onUpdate(update(view)); // a later set must not find a fresh capture
+		await flush();
+		expect(view.scrollSnapshot).toHaveBeenCalledTimes(1);
+		expect(view.dispatch).toHaveBeenCalledTimes(1);
+		expect(view.dispatch).toHaveBeenCalledWith({ effects: expect.objectContaining({ tag: 'snap-mapped@3020' }) });
+		const none = fakeView(3020, [widget(7, 3039)]);
+		hold.refresh(none as never); // a view that was never captured
+		expect(none.scrollSnapshot).not.toHaveBeenCalled();
 	});
 
 	test('a capture belongs to one note: a transaction after another file was loaded into the leaf never gets its snapshot', async () => {
@@ -200,6 +266,63 @@ describe('SC-478: LivePreviewScrollHold hold', () => {
 		expect(view.requestMeasure).toHaveBeenCalled();
 	});
 
+	test('a write that inserts text right at the fence start and changes the tracker still holds the replacement (it starts after the insertion)', () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3020, [widget(637, 3039)]);
+		hold.capture(view as never, note());
+		hold.onUpdate(update(view, 'set', change(637, 637, 16))); // "INSERTED LINE.\n\n" at the old start
+		view.contentDOM.querySelector('.cm-embed-block')!.remove();
+		const fresh = widget(653, 50, false);
+		view.contentDOM.appendChild(fresh);
+		hold.applyHolds(view as never);
+		expect(fresh.getAttribute(HOLD_ATTR)).toBe('3039');
+	});
+
+	test('a replacement that starts inside the range the write rewrote is held; one past the rewritten range is not', () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3020, [widget(637, 3039)]);
+		hold.capture(view as never, note());
+		hold.onUpdate(update(view, 'set', change(600, 700, 30))); // [600,700] becomes 30 characters: the old start is inside it
+		view.contentDOM.querySelector('.cm-embed-block')!.remove();
+		const inside = widget(615, 50, false);
+		const beyond = widget(900, 50, false);
+		view.contentDOM.append(inside, beyond);
+		hold.applyHolds(view as never);
+		expect(inside.getAttribute(HOLD_ATTR)).toBe('3039');
+		expect(beyond.hasAttribute(HOLD_ATTR)).toBe(false);
+	});
+
+	test('a later doc change before the replacement is drawn moves the positions to hold along with it', () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3020, [widget(637, 3039)]);
+		hold.capture(view as never, note());
+		hold.onUpdate(update(view));
+		hold.onUpdate(update(view, 'input.type', change(0, 0, 10))); // ten characters typed above the block
+		view.contentDOM.querySelector('.cm-embed-block')!.remove();
+		const fresh = widget(647, 50, false);
+		view.contentDOM.appendChild(fresh);
+		hold.applyHolds(view as never);
+		expect(fresh.getAttribute(HOLD_ATTR)).toBe('3039');
+	});
+
+	test('only a replacement of the same language is held: a callout or another embed that slid into the slot never is', () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3020, [widget(637, 3039)]);
+		hold.capture(view as never, note());
+		hold.onUpdate(update(view)); // the tracker's fence was deleted by the write
+		view.contentDOM.querySelector('.cm-embed-block')!.remove();
+		const callout = widget(637, 90, false, ''); // an empty embed (no DSE root mounted) with no cm-lang-ds class
+		callout.className = 'cm-embed-block cm-callout';
+		const other = widget(637, 90, false, 'cm-lang-mermaid');
+		view.contentDOM.append(callout, other);
+		hold.applyHolds(view as never);
+		expect(callout.hasAttribute(HOLD_ATTR) || other.hasAttribute(HOLD_ATTR)).toBe(false);
+		const tracker = widget(637, 50, false);
+		view.contentDOM.appendChild(tracker);
+		hold.applyHolds(view as never);
+		expect(tracker.getAttribute(HOLD_ATTR)).toBe('3039');
+	});
+
 	test('does not hold a mounted widget, a widget at another position, or anything without a pending capture', () => {
 		const hold = new LivePreviewScrollHold();
 		const view = fakeView(3500, [widget(637, 3039)]);
@@ -266,6 +389,19 @@ describe('SC-478: LivePreviewScrollHold CodeMirror extension', () => {
 		expect(view.dispatch).toHaveBeenCalledTimes(1);
 	});
 
+	test('a `scroll` event observer on the plugin refreshes the capture (the user scrolled in the gap)', async () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3020, [widget(637, 3039)]);
+		const observers = (hold.extension() as unknown as { domEventObservers?: Record<string, (e: Event, v: View) => void> }).domEventObservers;
+		expect(typeof observers?.scroll).toBe('function');
+		hold.capture(view as never, note());
+		view.scrollDOM.scrollTop = 2620;
+		observers!.scroll(new Event('scroll'), view);
+		hold.onUpdate(update(view));
+		await flush();
+		expect(view.dispatch).toHaveBeenCalledWith({ effects: expect.objectContaining({ tag: 'snap-mapped@2620' }) });
+	});
+
 	test('destroy (CodeMirror destroys every ViewPlugin on setState, i.e. when a file is loaded into the leaf) drops the capture', async () => {
 		const hold = new LivePreviewScrollHold();
 		const view = fakeView(2428, [widget(7, 5230)]);
@@ -305,6 +441,22 @@ describe('SC-478: LivePreviewScrollHold CodeMirror extension', () => {
 });
 
 describe('SC-478: wiring', () => {
+	test('registerFrameworkElements releases every hold when the plugin unloads', () => {
+		const app = new App();
+		const plugin = new Plugin(app);
+		plugin.load();
+		const release = jest.spyOn(LivePreviewScrollHold.prototype, 'releaseAll');
+		try {
+			const registry: ElementRegistry = { register: () => undefined as never, get: () => undefined, all: () => [] };
+			registerFrameworkElements(plugin as any, { registry, pipeline: {} as ElementPipeline });
+			expect(release).not.toHaveBeenCalled();
+			plugin.unload();
+			expect(release).toHaveBeenCalledTimes(1);
+		} finally {
+			release.mockRestore();
+		}
+	});
+
 	test('registerFrameworkElements captures on `modify` and registers the editor extension', () => {
 		const app = new App();
 		const plugin = new Plugin(app);
