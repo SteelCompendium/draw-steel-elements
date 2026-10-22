@@ -605,6 +605,18 @@ describe('SC-488: the optional select shows the default the block will use', () 
 		modal.close();
 	});
 
+	// SC-488 review LOW-1: a declared key switched to Default and back keeps its place in the block.
+	test('a declared select key switched to Default and then to an option keeps its source position on Save', async () => {
+		const schema = 'type: object\nproperties:\n  style: { type: string, enum: [list, ledger, chips] }\n  skills: { type: array, items: { type: string } }\n';
+		const { modal, writes } = openPlain(derivedDef((d) => ({ ...d }), schema), 'style: chips\nskills:\n  - climb');
+		const dd = findSetting(modal, 'Style').dropdowns[0];
+		dd.trigger(dd.selectEl.options[0].value);
+		dd.trigger('chips');
+		await modal.save();
+		expect(writes).toEqual(['style: chips\nskills:\n  - climb']);
+		modal.close();
+	});
+
 	test('a null value selects Default (treated as absent)', () => {
 		const { modal } = openPlain(derivedDef((d) => ({ ...d })), 'name: Goblin\nstyle:');
 		const dd = findSetting(modal, 'Style').dropdowns[0];
