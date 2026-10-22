@@ -1133,6 +1133,15 @@ describe('SC-361: swatch selection mark and focus ring', () => {
 		expect(editorOf(container).querySelectorAll('button.dse-swatch[aria-pressed="true"]')).toHaveLength(0);
 	});
 
+	test('an unparseable YAML colour marks nothing: pipette unmarked and plainly named, no preset pressed', () => {
+		const { container } = makeModal([{ key: 'bleeding', color: 'notacolor' }]);
+		openEditor(container, 'Bleeding');
+		expect(customOf(container).hasAttribute('data-selected')).toBe(false);
+		expect(customOf(container).style.getPropertyValue('--dse-condition-color')).toBe('');
+		expect(customInput(container).getAttribute('aria-label')).toBe('Custom condition color');
+		expect(editorOf(container).querySelectorAll('button.dse-swatch[aria-pressed="true"]')).toHaveLength(0);
+	});
+
 	test('picking a custom colour marks the pipette; picking a preset afterwards clears it', () => {
 		const { container } = makeModal(['bleeding']);
 		openEditor(container, 'Bleeding');

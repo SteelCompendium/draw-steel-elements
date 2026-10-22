@@ -2194,8 +2194,8 @@ code.dsa {
 }
 /* SC-361 — a custom colour (set, and not one of the five presets) fills the pipette with that
    colour and the check replaces the pipette glyph, so it reads exactly like a selected preset.
-   The fill is `--dse-condition-color`, ConditionsModal's one validated write (an unparseable
-   YAML colour clears it, and the muted fallback keeps the white check legible). */
+   The fill is `--dse-condition-color`, ConditionsModal's one validated write; only a colour
+   that parses reaches `[data-selected]`, the muted fallback is belt and braces. */
 .dse-modal .dse-swatches .dse-swatch--custom[data-selected] {
 	background: var(--dse-condition-color, var(--dse-fg-muted));
 }

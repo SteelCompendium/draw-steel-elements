@@ -23,12 +23,13 @@ export const CONDITION_EFFECTS = ['blink', 'glow', 'glow-pulse', 'breathing', 'b
  * so the icon falls back to var(--dse-fg-muted) through the CSS var() default.
  */
 export function applyConditionColor(el: HTMLElement, color: string | undefined): void {
-	const valid =
-		!!color &&
-		typeof CSS !== 'undefined' &&
-		typeof CSS.supports === 'function' &&
-		CSS.supports('color', color);
-	el.style.setProperty('--dse-condition-color', valid && color ? color : '');
+	el.style.setProperty('--dse-condition-color', isConditionColor(color) ? color : '');
+}
+
+/** True when `color` is a non-empty string the browser parses as a CSS colour — the one test
+ *  `applyConditionColor` writes through, shared so the modal's swatch row agrees with it. */
+export function isConditionColor(color: string | undefined): color is string {
+	return !!color && typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('color', color);
 }
 
 /**

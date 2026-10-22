@@ -58,7 +58,7 @@ import type { Condition, ConditionHolder } from '@drawSteelAdmonition/EncounterD
 import { ConditionManager, ConditionConfig } from '@utils/Conditions';
 import { DseModal, iconButton, setPressedState, stampControl } from '@/framework/kit';
 import { registerEscapeConsumer } from '@/framework/kit/escapeConsumer';
-import { applyConditionColor, applyConditionEffect, CONDITION_EFFECTS } from '@/elements/conditionColor';
+import { applyConditionColor, applyConditionEffect, CONDITION_EFFECTS, isConditionColor } from '@/elements/conditionColor';
 import {
 	resolveDuration,
 	durationBadgeText,
@@ -472,12 +472,13 @@ export class ConditionsModal extends DseModal {
 		custom.setAttribute('aria-label', 'Custom color');
 		setIcon(custom, 'pipette');
 		const input = custom.createEl('input', { type: 'color' });
-		// SC-361: a colour that is set and is not one of the presets is the custom swatch's selection. The
+		// SC-361: a colour that parses as CSS and is not one of the presets is the custom swatch's selection
+		// (an unparseable YAML colour is no colour anywhere else, so it marks nothing here either). The
 		// <label> cannot carry `aria-pressed` (not valid on a label), so it takes `data-selected` (CSS fills
 		// it with the colour and draws the check) and the focusable input names the state for assistive tech.
-		const customHex = entry.color && !SWATCHES.some(([, h]) => sameColor(entry.color, h)) ? entry.color : undefined;
+		const customHex = isConditionColor(entry.color) && !SWATCHES.some(([, h]) => sameColor(entry.color, h)) ? entry.color : undefined;
 		custom.toggleAttribute('data-selected', customHex !== undefined);
-		applyConditionColor(custom, customHex); // validated via CSS.supports; an invalid value clears it
+		applyConditionColor(custom, customHex);
 		input.setAttribute('aria-label', customHex !== undefined ? `Custom condition color ${customHex}, selected` : 'Custom condition color');
 		input.value = entry.color && /^#[0-9a-f]{6}$/i.test(entry.color) ? entry.color : COLOR_INPUT_DEFAULT;
 		this.lifecycle.registerDomEvent(input, 'change', () => this.setColor(index, input.value));
