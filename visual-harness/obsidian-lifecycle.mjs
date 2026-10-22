@@ -48,6 +48,8 @@
 // several spaces, a tab) is a DSE block in Obsidian; after the note changed around it (Reading view, the section snapshot is
 // gone when the write flushes) the write must be found again by body and land, with the info string (leading space included)
 // and every other byte untouched - LF, CRLF and lone-CR notes, and a spaced block next to an unspaced twin.
+// SC-477 appends G-S28 and widens G-S6u: an unterminated fence at EOF keeps the note's trailing newline(s) whether the write lands
+// in place (G-S28, stay on the note) or by body after navigate-away (G-S6u) - LF, two blank lines and CRLF notes.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -146,7 +148,37 @@ const FIXTURES = {
 	'Lifecycle/counter.md': `# counter\n\nABOVE\n\n${COUNTER(10)}\n\nBELOW\n`,
 	'Lifecycle/other.md': '# other\n\nJust another note.\n',
 	'Lifecycle/unterminated.md': `# unterminated\n\nABOVE\n\n${UNTERMINATED_COUNTER(10)}\n`,
+	// SC-477: the same note with a longer tail (two blank lines) and as a CRLF note - G-S6u (navigate away) and
+	// G-S28 (stay on the note) both prove the tail survives the write byte for byte.
+	'Lifecycle/unterminated-lf3.md': `# unterminated\n\nABOVE\n\n${UNTERMINATED_COUNTER(10)}\n\n\n`,
+	'Lifecycle/unterminated-crlf.md': `# unterminated\n\nABOVE\n\n${UNTERMINATED_COUNTER(10)}\n`.replace(/\n/g, '\r\n'),
 };
+const UNTERMINATED_NOTES = ['Lifecycle/unterminated.md', 'Lifecycle/unterminated-lf3.md', 'Lifecycle/unterminated-crlf.md'];
+
+/**
+ * SC-477: click + on an unterminated-fence note and check the write kept the note's tail. `leave` = navigate away
+ * before the flush (the durable path, G-S6u); otherwise stay on the note (the in-place path, G-S28). The note must end
+ * with the close fence followed by exactly the bytes that ended the fixture (its trailing newline(s), CRLF included).
+ */
+async function unterminatedTailCase(t, rel, leave) {
+	await t.open(rel);
+	await t.reset(rel);
+	const m = await t.mark();
+	await t.clickIncrease(0);
+	if (leave) {
+		await t.sleep(30);
+		await t.open('Lifecycle/other.md');
+	}
+	await t.sleep(1500);
+	const text = t.read(rel);
+	const tail = FIXTURES[rel].match(/\s*$/)[0];
+	t.expect(t.counterValues(rel)[0] === 11, `${rel}: expected 11, got ${t.counterValues(rel)[0]}`);
+	t.expect(t.integrity(rel).ok, `${rel}: note integrity: ${JSON.stringify(t.integrity(rel))}`);
+	t.expect(text.trimEnd().endsWith('```'), `${rel}: fence was not closed`);
+	t.expect(text.endsWith('```' + tail), `${rel}: trailing newline(s) not kept: want the note to end ${JSON.stringify('```' + tail)}, got ${JSON.stringify(text.slice(-24))}`);
+	t.expect((await t.noticesSince(m)).length === 0, `${rel}: unexpected Notice`);
+	t.expect((await t.errorsSince(m)).length === 0, `${rel}: errors: ${JSON.stringify(await t.errorsSince(m))}`);
+}
 
 // SC-340 (Task 8) fixtures: the adoption scenarios (G-S1..G-S8) below.
 const HERO = (name) => [`  - name: "${name}"`, '    max_stamina: 30'];
@@ -698,24 +730,19 @@ const SCENARIOS = [
 		// an unterminated fence at all, so this scenario FAILs there).
 		id: 'G-S6u',
 		async run(t) {
-			const rel = 'Lifecycle/unterminated.md';
-			await t.open(rel);
-			await t.reset(rel);
-			const m = await t.mark();
-			await t.clickIncrease(0);
-			await t.sleep(30);
-			await t.open('Lifecycle/other.md');
-			await t.sleep(1500);
-			t.expect(t.counterValues(rel)[0] === 11, `expected 11, got ${t.counterValues(rel)[0]}`);
-			t.expect(t.integrity(rel).ok, `note integrity: ${JSON.stringify(t.integrity(rel))}`);
-			t.expect(t.read(rel).trimEnd().endsWith('```'), 'fence was not closed');
-			// SC-477: the note's trailing newline survives the durable write - the close fence goes right after
-			// the body and the "\n" that ended the note stays after it (base build: the note ended "```", no newline).
-			t.expect(t.read(rel).endsWith('```\n') && !t.read(rel).endsWith('```\n\n'), `trailing newline was not kept: ${JSON.stringify(t.read(rel).slice(-24))}`);
+			for (const rel of UNTERMINATED_NOTES) await unterminatedTailCase(t, rel, true);
 			t.expect(t.read('Lifecycle/other.md') === FIXTURES['Lifecycle/other.md'], 'other.md was written');
-			t.expect((await t.noticesSince(m)).length === 0, 'unexpected Notice');
-			t.expect((await t.errorsSince(m)).length === 0, `errors: ${JSON.stringify(await t.errorsSince(m))}`);
-			return 'current_value=11 after navigate-away, fence closed, trailing newline kept';
+			return 'current_value=11 after navigate-away, fence closed, trailing newline(s) kept (LF, two blank lines, CRLF)';
+		},
+	},
+	{
+		// SC-477 (review r1, HIGH-1): the same unterminated fence written IN PLACE - click, stay on the note. Obsidian
+		// 1.14.4 reports the section's lineEnd as the note's LAST line, blank tail included, so the write used to replace
+		// the tail and drop the note's final newline(s). Must read exactly like G-S6u: the close fence, then the tail.
+		id: 'G-S28',
+		async run(t) {
+			for (const rel of UNTERMINATED_NOTES) await unterminatedTailCase(t, rel, false);
+			return 'current_value=11 in place, fence closed, trailing newline(s) kept (LF, two blank lines, CRLF)';
 		},
 	},
 	{

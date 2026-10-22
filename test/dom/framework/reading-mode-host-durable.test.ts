@@ -4,6 +4,7 @@ import {
 	locateByBody,
 	normalizeBody,
 } from '../../../src/framework/host/ReadingModeBlockHost';
+import { splitLines } from '../../../src/framework/host/lineEnding';
 import { App, Notice, Plugin, makeFakeContext } from '../../mocks/obsidian';
 import type { MarkdownPostProcessorContext } from '../../mocks/obsidian';
 import {
@@ -240,7 +241,8 @@ describe('SC-343: guarded replaceSource', () => {
 		const app = new App();
 		const live = ['Before', '', '```ds-counter', 'name: A', 'current_value: 1'].join('\n') + '\n';
 		app.vault.setFile('Note.md', live);
-		const section = { current: { text: live, lineStart: 2, lineEnd: 4 } };
+		// SC-477: Obsidian 1.14.4 reports lineEnd = the note's LAST line for an unterminated fence, tail included.
+		const section = { current: { text: live, lineStart: 2, lineEnd: splitLines(live).length - 1 } };
 		const host = hostFor(app, 'Note.md', section, 'name: A\ncurrent_value: 1');
 
 		await expect(host.replaceSource('name: A\ncurrent_value: 2')).resolves.toBe(true);
@@ -254,7 +256,8 @@ describe('SC-343: guarded replaceSource', () => {
 		const app = new App();
 		const live = ['Before', '', '```ds-counter', 'name: A', 'current_value: 1', '', ''].join('\n');
 		app.vault.setFile('Note.md', live);
-		const section = { current: { text: live, lineStart: 2, lineEnd: 4 } };
+		// SC-477: Obsidian 1.14.4 reports lineEnd = the note's LAST line for an unterminated fence, tail included.
+		const section = { current: { text: live, lineStart: 2, lineEnd: splitLines(live).length - 1 } };
 		const host = hostFor(app, 'Note.md', section, 'name: A\ncurrent_value: 1');
 
 		await expect(host.replaceSource('name: A\ncurrent_value: 2')).resolves.toBe(true);
@@ -304,10 +307,13 @@ describe('SC-343: guarded replaceSource', () => {
 		const toCr = (s: string) => s.replace(/\n/g, '\r\n');
 
 		/** Writes NEW into a note of `live`, in place (section present) or durable (section gone); returns the note. */
-		async function writeOnce(live: string, durable: boolean): Promise<{ out: string; ok: boolean }> {
+		async function writeOnce(live: string, durable: boolean, shortRange = false): Promise<{ out: string; ok: boolean }> {
 			const app = new App();
 			app.vault.setFile('Note.md', live);
-			const section = { current: { text: live, lineStart: 2, lineEnd: 4 } as { text: string; lineStart: number; lineEnd: number } | null };
+			// Obsidian 1.14.4 (measured, SC-477 review): lineEnd = the note's last line, blank/whitespace tail included.
+			// `shortRange` is the tolerance case: a range that stops at the last body line.
+			const lineEnd = shortRange ? 4 : splitLines(live).length - 1;
+			const section = { current: { text: live, lineStart: 2, lineEnd } as { text: string; lineStart: number; lineEnd: number } | null };
 			const host = hostFor(app, 'Note.md', section, OLD);
 			if (durable) section.current = null; // navigate away before the flush
 			const ok = await host.replaceSource(NEW);
@@ -347,6 +353,15 @@ describe('SC-343: guarded replaceSource', () => {
 			expect(durable.ok).toBe(true);
 			expect(inPlace.out).toBe(expectedOf(tail, after)); // the in-place output is the target the durable one is pinned to
 			expect(durable.out).toBe(inPlace.out);
+		});
+
+		test.each(SHAPES)('in place, %s: the write lands and the tail survives byte-for-byte (real section range, and a range short of the tail)', async (_label, tail, after) => {
+			for (const shortRange of [false, true]) {
+				const { out, ok } = await writeOnce(noteOf(tail), false, shortRange);
+				expect(ok).toBe(true);
+				expect(out).toBe(expectedOf(tail, after));
+			}
+			expect(Notice.notices).toHaveLength(0);
 		});
 
 		test('CRLF note: stays all-CRLF (no bare LF is introduced) with its trailing newline(s) kept', async () => {
@@ -503,7 +518,7 @@ describe('SC-453: ReadingModeBlockHost.replaceSource on CRLF / mixed-ending note
 		const app = new App();
 		const live = toCrlf(['Before', '', '```ds-counter', 'name: A', 'current_value: 1'].join('\n') + '\n');
 		app.vault.setFile('Note.md', live);
-		const host = hostFor(app, { current: { text: live, lineStart: 2, lineEnd: 4 } }, bodyOf(1));
+		const host = hostFor(app, { current: { text: live, lineStart: 2, lineEnd: splitLines(live).length - 1 } }, bodyOf(1)); // Obsidian's real lineEnd (SC-477)
 
 		await expect(host.replaceSource(bodyOf(2))).resolves.toBe(true);
 
