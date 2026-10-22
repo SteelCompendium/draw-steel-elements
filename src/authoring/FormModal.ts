@@ -66,6 +66,9 @@ class FormModal extends DseModal {
 	 *  (Replaces SC-483's untouchedSeeds/requiredKeys strip machinery: an optional select is never
 	 *  seeded now, so there is nothing to strip at Save, and a required select is always written.) */
 	private readonly defaultOptions: DefaultOption[] = [];
+	/** Key order of the source body (prefs: popped), so a declared select key that goes Default ->
+	 *  option again returns to its source position instead of the end of the block (SC-488 LOW-1). */
+	private sourceKeyOrder: string[] = [];
 	private rawMode = false;
 	private rawText = '';
 	private saveDisabled = false;
@@ -98,6 +101,7 @@ class FormModal extends DseModal {
 			// pipeline's own extractPrefOverrides call).
 			this.prefOverrides = extractPrefOverrides(rawData, this.cx.prefs);
 			this.working = rawData;
+			this.sourceKeyOrder = Object.keys(rawData);
 		} catch {
 			this.working = {};
 		}
@@ -193,7 +197,7 @@ class FormModal extends DseModal {
 					for (const opt of options) d.addOption(opt, opt);
 					d.setValue(initial).onChange((value) => {
 						if (value === UNSET) delete this.working[field.key];
-						else this.working[field.key] = value;
+						else this.setKeyInSourceOrder(field.key, value);
 						this.revalidate();
 					});
 					this.defaultOptions.push({ field, dropdown: d, label: 'Default' });
@@ -205,6 +209,29 @@ class FormModal extends DseModal {
 				setting.addText((t) => t.setValue(current == null ? '' : scalarToString(current)).onChange(set));
 				break;
 		}
+	}
+
+	/** Set `key`, putting a key that is new to `working` back at its source position: after every
+	 *  present key that came before it in the source, before every key that came after it. A key the
+	 *  source never had goes last. (Only matters on the stringify path; serializers own their order.) */
+	private setKeyInSourceOrder(key: string, value: unknown): void {
+		if (key in this.working) {
+			this.working[key] = value;
+			return;
+		}
+		const rank = (k: string): number => {
+			const i = this.sourceKeyOrder.indexOf(k);
+			return i < 0 ? Infinity : i;
+		};
+		const at = rank(key);
+		const entries = Object.entries(this.working);
+		let insertAt = entries.length;
+		if (at !== Infinity) {
+			const later = entries.findIndex(([k]) => rank(k) > at);
+			if (later >= 0) insertAt = later;
+		}
+		entries.splice(insertAt, 0, [key, value]);
+		this.working = Object.fromEntries(entries);
 	}
 
 	/** Current body text: raw textarea verbatim, else serialize(model)/stringify(working) —

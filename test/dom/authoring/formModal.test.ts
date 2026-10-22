@@ -147,7 +147,7 @@ test('Minor: an optional select field with no value yet stays absent (SC-488: no
 	const modal = openFormEditor(fakeOwner(), makeCx(writes), def, '', validation);
 	expect(modal.canSave()).toBe(true); // no required fields — the default alone is valid
 	await modal.save();
-	expect(writes[0]).not.toContain('style'); // SC-483: the seed is display/validation-only; the user never set it
+	expect(writes[0]).not.toContain('style'); // SC-488: nothing is seeded; the user never set it
 	modal.close();
 });
 
@@ -337,7 +337,7 @@ describe('SC-483: an untouched, source-absent select is not written by Save', ()
 		modal.close();
 	});
 
-	test('the prefs: map still leads the body when the untouched select is stripped', async () => {
+	test('the prefs: map still leads the body when the untouched select is left out', async () => {
 		const host = makeHost();
 		const { cx, validation } = makeRealStaminaCx(host); // real prefs, so the prefs: map is recognised
 		const modal = openFormEditor(fakeOwner(), cx, selectDef().def, 'prefs:\n  reduceMotion: true\nname: Goblin', validation);
@@ -387,8 +387,8 @@ describe('SC-483: an untouched, source-absent select is not written by Save', ()
 		modal.close();
 	});
 
-	test('validation and the live preview still see the seeded value of an untouched absent select', async () => {
-		// `style` is REQUIRED here: validation only passes because the seed is in `working`.
+	test('a REQUIRED untouched absent select is seeded, so validation and the live preview see its value', async () => {
+		// `style` is REQUIRED here: validation only passes because its seed is in `working` (SC-488 D6).
 		const { def, mounted } = selectDef(`${SEL_SCHEMA}\nrequired: [style]`);
 		const { modal } = open(def, 'name: Goblin');
 		expect(modal.canSave()).toBe(true);
