@@ -3911,6 +3911,91 @@ async function assertPressedToggleParity(page) {
 }
 
 // ======================================================================================
+// SC-361 - THE CUSTOM-COLOUR (PIPETTE) SWATCH SHOWS ITS SELECTED LOOK AND ITS FOCUS RING.
+//
+// The preset swatches are covered by the SC-450 pressed-parity site above. The pipette is a <label> that
+// cannot carry `aria-pressed`, so it is marked `[data-selected]` and the CSS draws the look: the label fills
+// with the colour (`--dse-condition-color`), the pipette glyph is hidden and the same check as a selected preset
+// is drawn on `::after`. Jest sees only the selector text, so a specificity loss, a `content: none` from a later
+// rule, or the glyph rule losing out (the pipette drawn under the check) would pass everything else. Pick a custom
+// colour the way the real input does (value + `change`), then read the computed cascade, dark and light:
+//   idle   - no check on `::after`, the glyph is visible;
+//   picked - the check is drawn (a `url(` image), the glyph is `visibility: hidden`, the fill is the colour, and the
+//            label draws no outline at rest;
+//   Tab    - the keyboard reaches the input and the label draws the shared 2px solid ring (`:has(> input:focus-visible)`).
+const PIPETTE_PICK = '#e67e22';
+const PIPETTE_PICK_RGB = 'rgb(230, 126, 34)';
+async function assertPipetteSelectedLook(page) {
+	const problems = [];
+	const read = () =>
+		page.evaluate(() => {
+			const label = document.querySelector('.dse-modal .dse-swatches .dse-swatch--custom');
+			const svg = label.querySelector(':scope > svg');
+			const c = getComputedStyle(label);
+			const a = getComputedStyle(label, '::after');
+			return {
+				selected: label.hasAttribute('data-selected'),
+				afterContent: a.content,
+				afterImage: a.backgroundImage,
+				glyph: svg ? getComputedStyle(svg).visibility : 'missing',
+				fill: c.backgroundColor,
+				outlineStyle: c.outlineStyle,
+				outlineWidth: c.outlineWidth,
+				ring: label.matches(':has(> input:focus-visible)'),
+			};
+		});
+	for (const bg of ['dark', 'light']) {
+		await page.emulateMedia({ media: 'screen' });
+		await page.goto(`${pageUrl}?${new URLSearchParams({ element: 'conditions', fixture: 'default', theme: 'steel', bg, sheet: '1' })}`);
+		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
+		await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation: none !important; }' });
+		await page.click('.dse-cond-strip__add');
+		await page.click('.dse-modal .dse-condal__act[aria-label="Customize Bleeding"]');
+		await page.mouse.move(0, 0);
+		const idle = await read();
+		if (idle.selected || idle.afterContent !== 'none' || idle.glyph !== 'visible') {
+			problems.push(`${bg}|idle: the pipette is not plain (selected=${idle.selected}, ::after content "${idle.afterContent}", glyph ${idle.glyph}) - the check would be blind`);
+		}
+		await page.evaluate((hex) => {
+			const input = document.querySelector('.dse-modal .dse-swatches .dse-swatch--custom > input');
+			input.value = hex;
+			input.dispatchEvent(new Event('change', { bubbles: true }));
+		}, PIPETTE_PICK);
+		await page.waitForSelector('.dse-modal .dse-swatch--custom[data-selected]');
+		await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
+		await page.mouse.move(0, 0);
+		const picked = await read();
+		if (picked.afterContent === 'none' || !/url\(/.test(picked.afterImage)) {
+			problems.push(`${bg}|picked: no check is drawn on the pipette (::after content "${picked.afterContent}", background "${picked.afterImage.slice(0, 60)}")`);
+		}
+		if (picked.glyph !== 'hidden') problems.push(`${bg}|picked: the pipette glyph is ${picked.glyph}, not hidden - it would draw under the check`);
+		if (picked.fill !== PIPETTE_PICK_RGB) problems.push(`${bg}|picked: the pipette fill is ${picked.fill}, not the picked colour ${PIPETTE_PICK_RGB}`);
+		if (picked.outlineStyle !== 'none') problems.push(`${bg}|picked: the pipette draws an outline at rest (${picked.outlineStyle} ${picked.outlineWidth})`);
+		for (let i = 0; i < 200; i++) {
+			await page.keyboard.press('Tab');
+			if (await page.evaluate(() => document.activeElement === document.querySelector('.dse-modal .dse-swatches .dse-swatch--custom > input'))) break;
+		}
+		const focused = await read();
+		if (!focused.ring) problems.push(`${bg}|focus: Tab never put the pipette input in :focus-visible - the check would be blind`);
+		else if (focused.outlineStyle !== 'solid' || focused.outlineWidth !== '2px') {
+			problems.push(`${bg}|focus: the focused pipette draws "${focused.outlineStyle} ${focused.outlineWidth}", not the shared 2px solid ring`);
+		}
+	}
+	if (problems.length) {
+		console.error(
+			`\nPIPETTE SELECTED LOOK VIOLATED - the custom-colour swatch does not look selected / focused:\n` +
+				problems.map((p) => `  ${p}`).join('\n') +
+				`\nSee the SC-361 block above this gate and styles-source.css (.dse-swatch--custom[data-selected]).`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\npipette selected look OK (a custom colour fills the pipette, hides its glyph and draws the check; the kit ring shows on keyboard focus: ` +
+			`idle/picked/focused x dark/light on the computed cascade)`,
+	);
+}
+
+// ======================================================================================
 // SC-377 R2 / R2F - THE TITLE LINE DOES NOT MOVE WHEN IT IS EDITED OR SAVED.
 //
 // Scott, 2026-10-09: "I want the shift evened out when saving a title." The editor used to be a one-line
@@ -6674,6 +6759,8 @@ try {
 		await assertPortraitMarkParity(page);
 		// SC-450 - every other aria-pressed toggle paints the same toggled as rendered (see the block above).
 		await assertPressedToggleParity(page);
+		// SC-361 - the pipette's selected look and focus ring (see the block above).
+		await assertPipetteSelectedLook(page);
 		// SC-377 R2 - the title line does not move when edited or saved (see the block above).
 		await assertTitleLineStable(page);
 		// SC-191 fix-round-1 M-5 — the equal-width-track gate (see the block above). Same
