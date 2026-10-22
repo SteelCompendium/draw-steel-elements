@@ -575,6 +575,57 @@ describe('SC-433: the temp field is a direct edit — stepper and typed value se
 			.querySelector('button[aria-label="Decrease Temporary Stamina"]') as HTMLButtonElement).disabled).toBe(true);
 	});
 
+	// Review LOW-1: a hand-edited NEGATIVE stored temp counts as 0 for all the modal's math.
+	describe('a hand-edited negative stored temp (-3) counts as 0', () => {
+		const minusOf = (content: HTMLElement) => content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
+			.querySelector('button[aria-label="Decrease Temporary Stamina"]') as HTMLButtonElement;
+
+		test('the field shows 0, the minus is disabled, and opening stages nothing', () => {
+			const { modal, content, bar, updateCallback } = makeModal(20, 15, -3);
+			expect(tempInput(content).value).toBe('0');
+			expect(minusOf(content).disabled).toBe(true);
+			expect(modal.pendingTempStaminaChange).toBe(0);
+			expect(actionBtn(content).disabled).toBe(true);
+			expect(bar.temp_stamina).toBe(-3); // untouched until the user acts
+			expect(updateCallback).not.toHaveBeenCalled();
+		});
+
+		test('Damage 5 takes 5 Stamina, with no temp gain in the label; Apply writes temp 0', () => {
+			const { content, bar } = makeModal(20, 15, -3);
+			clickDamage(content, 5);
+			expect(actionBtn(content).textContent).toBe('Lose 5 Stamina');
+			apply(content);
+			expect(bar.current_stamina).toBe(10);
+			expect(bar.temp_stamina).toBe(0);
+		});
+
+		test('Full Heal labels only the Stamina gain, no temp gain', () => {
+			const { content, bar } = makeModal(20, 15, -3);
+			btn(content, 'Full Heal').click();
+			expect(actionBtn(content).textContent).toBe('Gain 5 Stamina');
+			apply(content);
+			expect(bar.current_stamina).toBe(20);
+			expect(bar.temp_stamina).toBe(0);
+		});
+
+		test('Kill labels only the Stamina loss, no temp change', () => {
+			const { content } = makeModal(20, 15, -3);
+			btn(content, 'Kill').click();
+			expect(actionBtn(content).textContent).not.toContain('Temp');
+		});
+
+		test('"+" then "-" returns to 0 with nothing staged', () => {
+			const { modal, content } = makeModal(20, 15, -3);
+			const plus = content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
+				.querySelector('button[aria-label="Increase Temporary Stamina"]') as HTMLButtonElement;
+			plus.click();
+			expect(modal.pendingTempStaminaChange).toBe(1);
+			minusOf(content).click();
+			expect(modal.pendingTempStaminaChange).toBe(0);
+			expect(actionBtn(content).disabled).toBe(true);
+		});
+	});
+
 	test('the ticket repro: temp 5, "+" twice gives 7, "-" gives 6, Apply writes 6', () => {
 		const { modal, content, bar } = makeModal(20, 20, 5);
 		const stepperEl = content.querySelectorAll<HTMLElement>('.dse-stepper')[1];

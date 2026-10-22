@@ -293,7 +293,10 @@ export class StaminaEditModal extends DseModal {
 		// verbatim; the hero floor is ceil(-0.5 × max)).
 		const maxStamina = this.staminaBar.max_stamina;
 		const currentStamina = this.staminaBar.current_stamina ?? maxStamina;
-		const currentTempStamina = this.staminaBar.temp_stamina ?? 0;
+		// SC-433 (review LOW-1): a hand-edited NEGATIVE stored temp counts as 0 for all the modal's math
+		// (field start, Damage absorption, Kill, Full Heal, labels, Apply) — never a "Gain 3 Temp Stamina"
+		// from Damage. Opening and cancelling writes nothing; an Apply writes the clamped result.
+		const currentTempStamina = Math.max(0, this.staminaBar.temp_stamina ?? 0);
 		const negativeStaminaLimit = this.isHero ? Math.ceil(-0.5 * maxStamina) : 0;
 		this.staminaFrame = { current: currentStamina, floor: negativeStaminaLimit, max: maxStamina };
 		// FOLLOWUPS #27b (fixed by #27-fix-round finding 2): gated on `recoveries_max`
