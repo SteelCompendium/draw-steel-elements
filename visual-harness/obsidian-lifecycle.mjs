@@ -709,10 +709,13 @@ const SCENARIOS = [
 			t.expect(t.counterValues(rel)[0] === 11, `expected 11, got ${t.counterValues(rel)[0]}`);
 			t.expect(t.integrity(rel).ok, `note integrity: ${JSON.stringify(t.integrity(rel))}`);
 			t.expect(t.read(rel).trimEnd().endsWith('```'), 'fence was not closed');
+			// SC-477: the note's trailing newline survives the durable write - the close fence goes right after
+			// the body and the "\n" that ended the note stays after it (base build: the note ended "```", no newline).
+			t.expect(t.read(rel).endsWith('```\n') && !t.read(rel).endsWith('```\n\n'), `trailing newline was not kept: ${JSON.stringify(t.read(rel).slice(-24))}`);
 			t.expect(t.read('Lifecycle/other.md') === FIXTURES['Lifecycle/other.md'], 'other.md was written');
 			t.expect((await t.noticesSince(m)).length === 0, 'unexpected Notice');
 			t.expect((await t.errorsSince(m)).length === 0, `errors: ${JSON.stringify(await t.errorsSince(m))}`);
-			return 'current_value=11 after navigate-away, fence closed';
+			return 'current_value=11 after navigate-away, fence closed, trailing newline kept';
 		},
 	},
 	{
