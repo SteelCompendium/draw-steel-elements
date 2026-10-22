@@ -858,8 +858,20 @@ export class FakeToggle extends FakeSettingComponent {
 export class FakeDropdown extends FakeSettingComponent {
 	value = '';
 	readonly options: { value: string; label: string }[] = [];
+	/** Real DropdownComponent exposes its <select>; SC-488's form relabels its "Default (…)"
+	 *  option in place through it, so the fake carries a real jsdom node whose <option>s
+	 *  mirror addOption (tests read the live option text from here). */
+	selectEl: HTMLSelectElement = (
+		typeof document !== 'undefined' ? document.createElement('select') : null
+	) as HTMLSelectElement;
 	addOption(value: string, label: string): this {
 		this.options.push({ value, label });
+		if (this.selectEl) {
+			const opt = document.createElement('option');
+			opt.value = value;
+			opt.textContent = label;
+			this.selectEl.appendChild(opt);
+		}
 		return this;
 	}
 	addOptions(options: Record<string, string>): this {
@@ -868,10 +880,12 @@ export class FakeDropdown extends FakeSettingComponent {
 	}
 	setValue(value: string): this {
 		this.value = value;
+		if (this.selectEl) this.selectEl.value = value;
 		return this;
 	}
 	trigger(value: string): void {
 		this.value = value;
+		if (this.selectEl) this.selectEl.value = value;
 		this.changeCb?.(value);
 	}
 }

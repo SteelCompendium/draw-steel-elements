@@ -26,10 +26,14 @@ import { DSE_PREF_DESCRIPTORS } from '../../../src/prefs/catalog';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import type { ElementDefinition } from '../../../src/framework/registry';
 import { staminaBarElement } from '../../../src/elements/stamina-bar/definition';
+import { skillsElement } from '../../../src/elements/skills/definition';
+import { rollElement } from '../../../src/elements/roll/definition';
+import { createElementRegistry } from '../../../src/framework/registry';
+import { fieldsFromSchema } from '../../../src/authoring/formModel';
 import { App, Component, Notice, Plugin, Setting } from '../../mocks/obsidian';
 // StaminaBarSchema.yaml $refs the shared component-wrapper dependency schema — same
 // convention as stamina-bar.test.ts / pref-overrides.test.ts.
-import { FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main';
+import { FRAMEWORK_V2_DEPENDENCY_SCHEMAS, registerFrameworkElementDefinitions } from 'main';
 
 const SCHEMA = `
 type: object
@@ -376,10 +380,11 @@ describe('SC-483: an untouched, source-absent select is not written by Save', ()
 		modal.close();
 	});
 
-	test('a key present in the source with a null value is a declared key: written (as the seeded value), as before', async () => {
+	// SC-488 D5: a null value is treated as absent (was: written as the seeded enum[0]).
+	test('a key present in the source with a null value is treated as absent: Save drops the valueless line', async () => {
 		const { modal, writes } = open(selectDef().def, 'name: Goblin\nstyle:');
 		await modal.save();
-		expect(writes).toEqual(['name: Goblin\nstyle: default']);
+		expect(writes).toEqual(['name: Goblin']);
 		modal.close();
 	});
 
@@ -392,10 +397,11 @@ describe('SC-483: an untouched, source-absent select is not written by Save', ()
 		modal.close();
 	});
 
-	test('preview keeps the seeded value for an optional untouched select while the written body omits it', async () => {
+	// SC-488 D1: nothing is seeded for an optional select, so the preview sees the key absent too.
+	test('the preview also sees an optional untouched select as absent, matching the written body', async () => {
 		const { def, mounted } = selectDef();
 		const { modal, writes } = open(def, 'name: Goblin');
-		expect(mounted[mounted.length - 1]).toMatchObject({ style: 'default' });
+		expect(mounted[mounted.length - 1]).not.toHaveProperty('style');
 		await modal.save();
 		expect(writes).toEqual(['name: Goblin']);
 		modal.close();
@@ -409,7 +415,7 @@ describe('SC-483: an untouched, source-absent select is not written by Save', ()
 		modal.close();
 	});
 
-	test('with a serialize(): parse() is handed the stripped data, so the model records the key as undeclared', async () => {
+	test('with a serialize(): parse() is handed the key-absent data by both the preview and Save', async () => {
 		const seen: Record<string, unknown>[] = [];
 		const base = selectDef().def;
 		const def = {
@@ -423,8 +429,8 @@ describe('SC-483: an untouched, source-absent select is not written by Save', ()
 		const { modal, writes } = open(def, 'name: Goblin');
 		const previewSaw = seen[seen.length - 1];
 		await modal.save();
-		expect(previewSaw).toMatchObject({ style: 'default' }); // preview: seeded
-		expect(seen[seen.length - 1]).toEqual({ name: 'Goblin' }); // Save: stripped
+		expect(previewSaw).toEqual({ name: 'Goblin' }); // preview: key absent (SC-488: no seed)
+		expect(seen[seen.length - 1]).toEqual({ name: 'Goblin' }); // Save: key absent
 		expect(writes).toEqual(['{"name":"Goblin"}']);
 		modal.close();
 	});
@@ -461,5 +467,234 @@ describe('SC-483: an untouched, source-absent select is not written by Save', ()
 		await modal.save();
 		expect(host.replaceSource.mock.calls[0][0]).toBe('prefs:\n  reduceMotion: true\nname: Goblin\nstyle: sheet');
 		modal.close();
+	});
+});
+
+// —— SC-488: an absent select shows the value the block will actually use ————————————————
+// An OPTIONAL select leads with a sentinel "Default (…)" option meaning "key absent": nothing is
+// seeded, choosing it deletes the key, and validation, the preview and Save all see the key absent.
+// The label comes from the element's own parse(): the enum option whose model equals the key-absent
+// model. A REQUIRED select has no sentinel (an absent required key is invalid) and keeps a seed.
+describe('SC-488: the optional select shows the default the block will use', () => {
+	const SEL_SCHEMA = [
+		'type: object',
+		'properties:',
+		'  name: { type: string }',
+		'  style: { type: string, enum: [default, sheet] }',
+	].join('\n');
+
+	/** The leading dropdown option of a Setting row: its value (the sentinel) and live text. */
+	function leadOption(modal: { body: HTMLElement }, name: string): { value: string; text: string; count: number } {
+		const sel = findSetting(modal, name).dropdowns[0].selectEl;
+		const first = sel.options[0];
+		return { value: first.value, text: first.textContent ?? '', count: sel.options.length };
+	}
+	const flush = async () => { await Promise.resolve(); await Promise.resolve(); };
+
+	function openReal(def: ElementDefinition, source: string) {
+		const host = makeHost();
+		const { cx, validation } = makeRealStaminaCx(host);
+		const modal = openFormEditor(fakeOwner(), cx, def, source, validation);
+		return { modal, host };
+	}
+	function recordingDef(base: ElementDefinition) {
+		const models: Record<string, unknown>[] = [];
+		const def = {
+			...base,
+			parse: (d: unknown, raw: string) => {
+				const m = base.parse(d, raw) as Record<string, unknown>;
+				models.push(m);
+				return m;
+			},
+		} as ElementDefinition;
+		return { def, models };
+	}
+	/** A fake element whose `mode` default is derived from `name`; `extra` customises parse. */
+	function derivedDef(parse: (d: Record<string, unknown>) => unknown, schema = SEL_SCHEMA + '\n  count: { type: integer }'): ElementDefinition {
+		return {
+			id: 'der', name: 'Der', aliases: ['ds-der'], shape: 'static', schema,
+			parse: (d: Record<string, unknown>) => parse(d),
+			createView: () => ({ mount: async () => {}, load: () => {}, unload: () => {} } as never),
+		} as unknown as ElementDefinition;
+	}
+	function openPlain(def: ElementDefinition, source: string) {
+		const writes: string[] = [];
+		const modal = openFormEditor(fakeOwner(), makeCx(writes), def, source, createValidationService());
+		return { modal, writes };
+	}
+
+	test('ds-skills with no style: shows "Default (ledger)", the preview renders the ledger layout, Save omits style', async () => {
+		const { modal, host } = openReal(skillsElement, 'skills:\n  - climb');
+		const lead = leadOption(modal, 'Style');
+		expect(lead.text).toBe('Default (ledger)');
+		expect(findSetting(modal, 'Style').dropdowns[0].value).toBe(lead.value);
+		expect(lead.count).toBe(4); // sentinel + list, ledger, chips
+		await flush();
+		const preview = modal.body.querySelector('.dse-form__preview') as HTMLElement;
+		expect(preview.querySelector('[data-skills-style="ledger"]')).not.toBeNull();
+		await modal.save();
+		expect(host.replaceSource.mock.calls[0][0]).toBe('skills:\n  - climb');
+		modal.close();
+	});
+
+	test('ds-roll "Might test": mode reads "Default (test)" and relabels live to "Default (power-roll)" as roll: is edited; the preview follows', async () => {
+		const { def, models } = recordingDef(rollElement);
+		const { modal } = openReal(def, 'roll: Might test');
+		expect(leadOption(modal, 'Mode').text).toBe('Default (test)');
+		expect(models[models.length - 1]).toMatchObject({ mode: 'test' });
+		findSetting(modal, 'Roll').texts[0].trigger('Power Roll + Might');
+		expect(leadOption(modal, 'Mode').text).toBe('Default (power-roll)');
+		expect(models[models.length - 1]).toMatchObject({ mode: 'power-roll' });
+		modal.close();
+	});
+
+	test('ds-roll difficulty reads "Default (none)" and the preview caption has no difficulty', async () => {
+		const { modal } = openReal(rollElement, 'roll: Might test');
+		expect(leadOption(modal, 'Difficulty').text).toBe('Default (none)');
+		await flush();
+		const caption = modal.body.querySelector('.dse-form__preview .dse-roll__expr') as HTMLElement;
+		expect(caption.textContent).toBe('Might test');
+		modal.close();
+	});
+
+	test('ds-stam style reads "Default (default)"', () => {
+		const { modal } = openReal(staminaBarElement, BASIC_STAM_YAML);
+		expect(leadOption(modal, 'Style').text).toBe('Default (default)');
+		modal.close();
+	});
+
+	test('nothing is seeded: the key is absent from the data validation, the preview and Save all see', async () => {
+		const seen: Record<string, unknown>[] = [];
+		const def = derivedDef((d) => { seen.push({ ...d }); return { ...d }; });
+		const { modal, writes } = openPlain(def, 'name: Goblin');
+		expect(seen.every((d) => !('style' in d))).toBe(true);
+		await modal.save();
+		expect(writes).toEqual(['name: Goblin']);
+		modal.close();
+	});
+
+	test('an explicit pick is selected from the source and written', async () => {
+		const { def } = recordingDef(derivedDef((d) => ({ ...d })));
+		const { modal, writes } = openPlain(def, 'name: Goblin\nstyle: sheet');
+		expect(findSetting(modal, 'Style').dropdowns[0].value).toBe('sheet');
+		await modal.save();
+		expect(writes).toEqual(['name: Goblin\nstyle: sheet']);
+		modal.close();
+	});
+
+	test('picking an option writes it; picking Default again removes the line', async () => {
+		const { modal, writes } = openPlain(derivedDef((d) => ({ ...d })), 'name: Goblin');
+		const dd = findSetting(modal, 'Style').dropdowns[0];
+		const sentinel = dd.selectEl.options[0].value;
+		dd.trigger('sheet');
+		dd.trigger(sentinel);
+		await modal.save();
+		expect(writes).toEqual(['name: Goblin']);
+		modal.close();
+	});
+
+	test('a source that declares the key, switched to Default, loses the line', async () => {
+		const { modal, writes } = openPlain(derivedDef((d) => ({ ...d })), 'name: Goblin\nstyle: sheet');
+		const dd = findSetting(modal, 'Style').dropdowns[0];
+		dd.trigger(dd.selectEl.options[0].value);
+		await modal.save();
+		expect(writes).toEqual(['name: Goblin']);
+		modal.close();
+	});
+
+	test('a null value selects Default (treated as absent)', () => {
+		const { modal } = openPlain(derivedDef((d) => ({ ...d })), 'name: Goblin\nstyle:');
+		const dd = findSetting(modal, 'Style').dropdowns[0];
+		expect(dd.value).toBe(dd.selectEl.options[0].value);
+		expect(modal.canSave()).toBe(true);
+		modal.close();
+	});
+
+	test('a REQUIRED select has no Default option; it seeds the schema default when that is in the enum, and is written', async () => {
+		const schema = 'type: object\nrequired: [style]\nproperties:\n  style: { type: string, enum: [list, ledger, chips], default: ledger }\n';
+		const { modal, writes } = openPlain(derivedDef((d) => ({ ...d }), schema), '');
+		const dd = findSetting(modal, 'Style').dropdowns[0];
+		expect(dd.selectEl.options).toHaveLength(3);
+		expect(dd.value).toBe('ledger');
+		await modal.save();
+		expect(writes).toEqual(['style: ledger']);
+		modal.close();
+	});
+
+	test('a REQUIRED select seeds enum[0] when the schema default is missing or not in the enum', async () => {
+		for (const def of ['', ', default: bogus']) {
+			const schema = `type: object\nrequired: [style]\nproperties:\n  style: { type: string, enum: [list, ledger]${def} }\n`;
+			const { modal, writes } = openPlain(derivedDef((d) => ({ ...d }), schema), '');
+			expect(findSetting(modal, 'Style').dropdowns[0].value).toBe('list');
+			await modal.save();
+			expect(writes).toEqual(['style: list']);
+			modal.close();
+		}
+	});
+
+	test('an option whose model equals the absent model is named; several equal -> "Default"; none -> "Default (none)"', () => {
+		const derived = openPlain(derivedDef((d) => ({ name: d.name, mode: d.style ?? (d.name === 'a' ? 'sheet' : 'default') })), 'name: a');
+		expect(leadOption(derived.modal, 'Style').text).toBe('Default (sheet)');
+		derived.modal.close();
+		const ignoring = openPlain(derivedDef(() => ({})), 'name: a'); // parse ignores style: every option "equals" absent
+		expect(leadOption(ignoring.modal, 'Style').text).toBe('Default');
+		ignoring.modal.close();
+		const none = openPlain(derivedDef((d) => ({ style: d.style })), 'name: a');
+		expect(leadOption(none.modal, 'Style').text).toBe('Default (none)');
+		none.modal.close();
+	});
+
+	test('the label also recomputes while another field is invalid, and keeps the previous label when parse throws', () => {
+		const def = derivedDef((d) => {
+			if (d.name === 'boom') throw new Error('boom');
+			return { style: d.style ?? (d.name === 'a' ? 'sheet' : 'default') };
+		}, SEL_SCHEMA + '\n  count: { type: integer }\nrequired: [count]');
+		const { modal } = openPlain(def, 'name: a\ncount: 1');
+		expect(leadOption(modal, 'Style').text).toBe('Default (sheet)');
+		findSetting(modal, 'Count').texts[0].trigger(''); // count removed -> invalid, Save disabled
+		expect(modal.canSave()).toBe(false);
+		findSetting(modal, 'Name').texts[0].trigger('b');
+		expect(leadOption(modal, 'Style').text).toBe('Default (default)'); // relabelled although invalid
+		findSetting(modal, 'Name').texts[0].trigger('boom');
+		expect(leadOption(modal, 'Style').text).toBe('Default (default)'); // parse threw: previous label kept
+		modal.close();
+	});
+
+	// Census: every OPTIONAL select on every registered element leads with the sentinel, and its
+	// label is the option whose parse() equals the key-absent parse() (or none). The table is the
+	// independent expectation: a new select fails here until someone states its default on purpose.
+	test('census: every optional select of every registered element leads with the sentinel and names the real default', () => {
+		const registry = createElementRegistry();
+		registerFrameworkElementDefinitions(registry);
+		const expected: Record<string, string> = {
+			'skills.style': 'ledger',
+			'stamina-bar.style': 'default',
+			'roll.mode': 'power-roll',
+			'roll.difficulty': 'none',
+		};
+		const seen: string[] = [];
+		for (const def of registry.all()) {
+			for (const field of fieldsFromSchema(def)) {
+				if (field.widget !== 'select' || field.required) continue;
+				const id = `${def.id}.${field.key}`;
+				seen.push(id);
+				const { modal } = openReal(def, '');
+				const lead = leadOption(modal, field.label);
+				const options = findSetting(modal, field.label).dropdowns[0].selectEl.options;
+				expect(Array.from(options).slice(1).map((o) => o.value)).toEqual(field.enum);
+				expect(field.enum).not.toContain(lead.value);
+				const want = expected[id];
+				expect(want).toBeDefined();
+				// The expectation is itself checked against the parser: `want` is the option whose
+				// model equals the absent model, or no option does.
+				const key = (v: unknown) => JSON.stringify(v);
+				const absent = key(def.parse({}, ''));
+				const hits = (field.enum ?? []).filter((v) => key(def.parse({ [field.key]: v }, '')) === absent);
+				expect(hits).toEqual(want === 'none' ? [] : [want]);
+				expect(lead.text).toBe(`Default (${want})`);
+				modal.close();
+			}
+		}
+		expect(seen.sort()).toEqual(Object.keys(expected).sort());
 	});
 });
