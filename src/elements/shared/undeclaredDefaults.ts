@@ -28,6 +28,10 @@
 
 import { stringifyYaml } from 'obsidian';
 
+/** Parsed objects whose source body was null / blank (not a mapping): only these may be written back as an
+ *  empty body. Counter, negotiation, party and encounter cannot re-parse one, so a mapping source stays `{}`. */
+const blankSource = new WeakSet<object>();
+
 /** Per parsed object: for each key the source left absent, a JSON snapshot of the value parse filled in. */
 const filled = new WeakMap<object, ReadonlyMap<string, string>>();
 
@@ -47,6 +51,7 @@ export function recordingDefaults<M extends object>(
 		const absent = keys.filter((key) => declared[key] === undefined);
 		const model = parse(data, raw);
 		recordAbsentDefaults(model, absent);
+		if (typeof data !== 'object' || data === null) blankSource.add(model);
 		return model;
 	};
 }
@@ -74,12 +79,13 @@ export function omitUntouchedDefaults<T extends object>(owner: object, dto: T = 
 }
 
 /** The serialize() tail every element shares: `omitUntouchedDefaults`, stringified and trimmed. When
- *  filtering left NO keys (an empty source whose values returned to their defaults), the block is
- *  written with an empty body rather than `{}`, so it goes back to the shape the user wrote. A model
- *  with no record (built by the plugin) is stringified whole, as before. */
+ *  filtering left NO keys AND the source body was null / blank, the block is written with an empty body,
+ *  so it goes back to the shape the user wrote. A mapping source (`{}`, or keys the element does not
+ *  know) is written as `{}`: several elements cannot re-parse an empty body. A model with no record
+ *  (built by the plugin) is stringified whole, as before. */
 export function stringifyOmittingUntouched(owner: object, dto: object = owner): string {
 	const kept = omitUntouchedDefaults(owner, dto);
 	// yaml omits `undefined` values, so a key holding one (an unset optional field) is not content.
-	if (kept !== dto && Object.values(kept).every((value) => value === undefined)) return '';
+	if (blankSource.has(owner) && kept !== dto && Object.values(kept).every((value) => value === undefined)) return '';
 	return stringifyYaml(kept).trim();
 }

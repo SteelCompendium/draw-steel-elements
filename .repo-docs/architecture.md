@@ -162,8 +162,9 @@ parse filled in; `omitUntouchedDefaults(model, dto?)` drops each recorded key wh
 JSON-equals its snapshot (so a derived default, or an array/object default mutated in place, is
 compared by value). The record is a module-private `WeakMap` keyed by the parsed instance (never
 an own property, so `stringifyYaml` cannot write it), and a model the plugin built itself has no
-record and serializes whole. When filtering leaves no keys at all (an empty source whose values
-returned to their defaults), `stringifyOmittingUntouched` writes an empty body rather than `{}`. Every key the source declared is written (even at its default),
+record and serializes whole. When filtering leaves no keys at all, `stringifyOmittingUntouched` writes an empty body only if
+the source body was null/blank (montage, project); a mapping source is written as `{}` because
+counter, negotiation, party and encounter cannot re-parse an empty body. Every key the source declared is written (even at its default),
 key order is unchanged, and a re-parse records afresh. Initiative and hero still write their
 parser defaults (SC-485; hero is deliberate). The encounter view's render-time `_computed`
 write is a separate question (SC-486).

@@ -80,10 +80,9 @@ export const parse = recordingDefaults(parseModel, PARSER_DEFAULT_KEYS);
 export function serialize(model: NegotiationData): string {
 	// A fresh object in the model's own key order, so reassigning `motivations` / `pitfalls` below
 	// keeps their position (and never touches the live model).
-	const kept = omitUntouchedDefaults(model);
-	// An empty source whose values returned to their defaults: write an empty body, not `{}`.
-	if (kept !== model && Object.values(kept).every((value) => value === undefined)) return '';
-	const written: Record<string, unknown> = { ...kept };
+	// Nothing left to write is `{}` (never an empty body: negotiation cannot re-parse one, and its
+	// parse rejects a blank source, so no instance ever came from one).
+	const written: Record<string, unknown> = { ...omitUntouchedDefaults(model) };
 	if (Array.isArray(written.motivations)) written.motivations = model.motivations.map((m) => omitUntouchedDefaults(m));
 	if (Array.isArray(written.pitfalls)) written.pitfalls = model.pitfalls.map((p) => omitUntouchedDefaults(p));
 	return stringifyYaml(written).trim();
