@@ -46,6 +46,7 @@
 // still start collapsed after SC-169 removed that element's own "Stamina Bar" header (Q3):
 // same key, same effect, new mechanism, and the byte-identical block body it always had.
 import { parseYaml, stringifyYaml } from 'obsidian';
+import { emitAhead } from '../prefOverrides';
 
 /** The canonical authored-state key. Framework-reserved: no element may declare it. */
 export const COLLAPSED_KEY = 'collapsed';
@@ -262,6 +263,7 @@ export function withCollapseKeys<M>(
 			if (!topLevelRe(key).test(body)) missing[key] = value;
 		}
 		if (Object.keys(missing).length === 0) return body;
-		return stringifyYaml(missing) + body;
+		// SC-482: a body of exactly `{}` cannot follow top-level keys (see emitAhead).
+		return emitAhead(stringifyYaml(missing), body);
 	};
 }

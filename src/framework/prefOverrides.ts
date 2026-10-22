@@ -134,6 +134,15 @@ export function applyPrefOverrides(
 	}
 }
 
+/**
+ * `head` (re-emitted keys, ending in a newline) followed by the element's serialized `body`. SC-482: a body of
+ * exactly `{}` ("nothing left to write", from a mapping source that returned to its defaults) cannot follow
+ * top-level keys (`prefs:\n  x: y\n{}` is invalid YAML), so it is dropped and the result trimmed.
+ */
+export function emitAhead(head: string, body: string): string {
+	return body === '{}' ? head.trimEnd() : head + body;
+}
+
 /** Serializer wrapper: re-emit the author's `prefs:` map ahead of the element body. */
 export function withPrefOverrides<M>(
 	serialize: (model: M) => string,
@@ -142,12 +151,12 @@ export function withPrefOverrides<M>(
 	passthrough?: PrefPassthrough,
 ): (model: M) => string {
 	const kept = passthrough && Object.keys(passthrough.values).length > 0 ? passthrough : undefined;
-	if (!kept) return (model) => stringifyYaml({ prefs: overrides ?? {} }) + serialize(model);
+	if (!kept) return (model) => emitAhead(stringifyYaml({ prefs: overrides ?? {} }), serialize(model));
 	const applied = (overrides ?? {}) as Record<string, unknown>;
 	const merged: Record<string, unknown> = {};
 	for (const key of kept.order) {
 		if (key in kept.values) merged[key] = kept.values[key];
 		else if (key in applied) merged[key] = applied[key];
 	}
-	return (model) => stringifyYaml({ prefs: merged }) + serialize(model);
+	return (model) => emitAhead(stringifyYaml({ prefs: merged }), serialize(model));
 }
