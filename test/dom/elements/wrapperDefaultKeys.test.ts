@@ -442,6 +442,72 @@ describe('SC-482: an empty source whose values return to their defaults is writt
 	});
 });
 
+describe('SC-482: a block holding a `prefs:` map / collapse key returns to its defaults without writing an invalid `{}` line', () => {
+	// The serializer wrappers (withPrefOverrides, withCollapseKeys) put the re-emitted keys in front of the
+	// element body. A body of exactly `{}` after `prefs:` lines is invalid YAML ("Implicit map keys need to be
+	// followed by map values"), so the wrappers treat it as an empty body.
+	const PREFS = 'prefs:\n  sbDensity: compact';
+	const spec = (name: string) => specs.find((x) => x.name === name)!;
+
+	test('counter `prefs:` + `title: Deaths`: + then - writes back just the prefs lines, and the block re-renders', async () => {
+		const body = `${PREFS}\ntitle: Deaths`;
+		const app = appWith(noteOf([{ lang: 'ds-counter', body }]));
+		const m = await mount(app, spec('counter'), 0, body);
+		increase(m.root);
+		await settle();
+		expect(bodyOf(m.note(), 0)).toBe(`${PREFS}\ncurrent_value: 1`);
+		click(m.root, '.dse-stepper__btn[aria-label^="Decrease"]');
+		await settle();
+		expect(bodyOf(m.note(), 0)).toBe(PREFS);
+		const again = await mount(app, spec('counter'), 0, bodyOf(app.vault.getContent(NOTE)!, 0));
+		expect(again.root.querySelector('.dse-counter')).not.toBeNull();
+	});
+
+	test('montage with only a `prefs:` map: End round then Back writes back just the prefs lines, and the block re-renders', async () => {
+		const app = appWith(noteOf([{ lang: 'ds-montage', body: PREFS }]));
+		const m = await mount(app, spec('montage'), 0, PREFS);
+		click(m.root, 'button[aria-label="End round 1"]');
+		await settle();
+		expect(bodyOf(m.note(), 0)).toBe(`${PREFS}\ncurrent_round: 2`);
+		click(m.root, 'button[aria-label="Back to round 1"]');
+		await settle();
+		expect(bodyOf(m.note(), 0)).toBe(PREFS);
+		const again = await mount(app, spec('montage'), 0, bodyOf(app.vault.getContent(NOTE)!, 0));
+		expect(again.root.querySelector('.dse-mt')).not.toBeNull();
+	});
+
+	test('montage `collapsed: false` alone: End round then Back writes back `collapsed: false`', async () => {
+		const body = 'collapsed: false';
+		const app = appWith(noteOf([{ lang: 'ds-montage', body }]));
+		const m = await mount(app, spec('montage'), 0, body);
+		click(m.root, 'button[aria-label="End round 1"]');
+		await settle();
+		click(m.root, 'button[aria-label="Back to round 1"]');
+		await settle();
+		expect(bodyOf(m.note(), 0)).toBe('collapsed: false');
+	});
+
+	test('a block with neither prefs: nor a collapse key still returns to `{}` (MEDIUM-1 unchanged)', async () => {
+		const body = 'title: Deaths';
+		const app = appWith(noteOf([{ lang: 'ds-counter', body }]));
+		const m = await mount(app, spec('counter'), 0, body);
+		increase(m.root);
+		await settle();
+		click(m.root, '.dse-stepper__btn[aria-label^="Decrease"]');
+		await settle();
+		expect(bodyOf(m.note(), 0)).toBe('{}');
+	});
+
+	test('a fully-authored counter with a prefs: map writes the same bytes as before (prefs lines, then the body)', async () => {
+		const body = `${PREFS}\n${spec('counter').full}`;
+		const app = appWith(noteOf([{ lang: 'ds-counter', body }]));
+		const m = await mount(app, spec('counter'), 0, body);
+		increase(m.root);
+		await settle();
+		expect(bodyOf(m.note(), 0)).toBe(`${PREFS}\n${spec('counter').fullOut}`);
+	});
+});
+
 describe('SC-482: blocks the plugin builds itself keep the whole-instance output', () => {
 	test('serialize() of a Counter that was never parsed from a source still writes every key', () => {
 		const built = new Counter(20, 10, 0, 'Health', 3, 1);
