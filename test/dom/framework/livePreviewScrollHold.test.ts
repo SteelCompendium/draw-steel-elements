@@ -286,6 +286,22 @@ describe('SC-478: LivePreviewScrollHold hold', () => {
 		expect(fresh.getAttribute(HOLD_ATTR)).toBe('3039');
 	});
 
+	test('a widget that is already held is not held a second time (one release, one requestMeasure)', async () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3020, [widget(637, 3039)]);
+		hold.capture(view as never, note());
+		hold.onUpdate(update(view));
+		view.contentDOM.querySelector('.cm-embed-block')!.remove();
+		const fresh = widget(637, 50, false);
+		view.contentDOM.appendChild(fresh);
+		hold.applyHolds(view as never);
+		hold.applyHolds(view as never); // the next docViewUpdate before our view mounts
+		fresh.querySelector('[data-dse-element]')!.appendChild(document.createElement('div'));
+		await flush();
+		expect(fresh.hasAttribute(HOLD_ATTR)).toBe(false);
+		expect(view.requestMeasure).toHaveBeenCalledTimes(1);
+	});
+
 	test('a write that inserts text right at the fence start still holds the replacement (it starts after the insertion)', () => {
 		const hold = new LivePreviewScrollHold();
 		const view = fakeView(3020, [widget(637, 3039)]);
