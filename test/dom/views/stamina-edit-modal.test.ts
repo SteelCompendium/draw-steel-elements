@@ -1446,11 +1446,11 @@ describe('SC-465: focus stays inside the Stamina modal when the heal button disa
 
 	test('focus is only moved when the heal button held it: another focused control keeps focus', () => {
 		const { content } = makePoolHeroModal();
-		const kill = btn(content, 'Full Heal');
-		kill.focus();
+		const fullHeal = btn(content, 'Full Heal');
+		fullHeal.focus();
 		spendRecoveryBtn(content).click();
 		expect(spendRecoveryBtn(content).disabled).toBe(true);
-		expect(document.activeElement).toBe(kill);
+		expect(document.activeElement).toBe(fullHeal);
 	});
 
 	test('focusNeighbourStop: next enabled stop wins, else the previous one, else nothing moves', () => {
@@ -1468,5 +1468,6 @@ describe('SC-465: focus stays inside the Stamina modal when the heal button disa
 		(document.activeElement as HTMLElement).blur();
 		focusNeighbourStop(root, from, true);
 		expect(document.activeElement).toBe(document.body);
+		root.remove(); // (the file-level afterEach also clears the body; this keeps the test self-contained)
 	});
 });
