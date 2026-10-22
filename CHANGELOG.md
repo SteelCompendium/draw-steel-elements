@@ -23,10 +23,10 @@ Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
 - [FIX] **A block with no closing ``` at the end of a note no longer loses the note's final newline when it
-  saves after you switch away** (SC-477). If a tracker's code block was never closed (nothing after it but the
-  end of the note) and you changed it and then moved to another note before the save went out, the save added the
-  closing ``` but deleted the newline (or blank lines) that ended the note. It now leaves them in place, exactly as
-  a save that happens while the note is still on screen already did.
+  saves** (SC-477). If a tracker's code block was never closed (nothing after it but the end of the note), saving a
+  change added the closing ``` but deleted the newline (or blank lines) that ended the note, both when you changed it
+  and stayed on the note and when you switched to another note before the save went out. Both saves now leave
+  them in place.
 - [FIX] **Conditions window: a focused color swatch no longer looks selected, and a selected one no longer looks
   focused** (SC-361, SC-473). The chosen swatch now shows a white check inside it (with a dark outline, so it reads
   on every color); keyboard focus draws the same teal-cyan ring the rest of the plugin uses, around the swatch.

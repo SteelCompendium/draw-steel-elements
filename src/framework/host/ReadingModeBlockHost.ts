@@ -92,6 +92,17 @@ export function normalizeBody(body: string): string {
 }
 
 /**
+ * SC-477: the last line in `[from, to]` that is not blank (empty or whitespace-only), floored at `from`.
+ * Where an unterminated trailing fence's replaced range stops, so the note's trailing newline(s) / blank
+ * lines survive the splice (see `locateUnterminatedTrailingFence` and `resolveWriteTarget`).
+ */
+function lastNonBlankLine(lines: string[], from: number, to: number): number {
+	let end = to;
+	while (end > from && lines[end].trim() === '') end--;
+	return end;
+}
+
+/**
  * SC-343 final review (Important-1): `listFences` (via anchor.ts's `iterateFences`) SKIPS
  * a fence that never closes, so `locateByBody` alone could never find a block by body when
  * its closing fence is missing at end-of-note — a perfectly good write then fell through
@@ -104,9 +115,9 @@ export function normalizeBody(body: string): string {
  * for an empty body). SC-477: the note's trailing newline(s) / blank / whitespace-only lines
  * are NOT part of the range - the splice replaces [lineStart, lineEnd] and the close fence
  * takes the terminator of the lineEnd line, so a range running to `lines.length - 1` swallowed
- * those bytes. This is the same range the in-place path writes (Obsidian's section ends at the
- * last block line, and `unterminatedAtEof` tolerates the blanks below it), so for the same note
- * and body both paths write byte-identical output.
+ * those bytes. The in-place path clamps the section Obsidian reports to the same line
+ * (`lastNonBlankLine`, in resolveWriteTarget), so for the same note and body both paths write
+ * byte-identical output.
  */
 function locateUnterminatedTrailingFence(
 	lines: string[],
@@ -139,9 +150,7 @@ function locateUnterminatedTrailingFence(
 			// through to EOF) and keep scanning from the very next line, so a later,
 			// better-matching trailing open can still override.
 			if (open.language === language) {
-				let lineEnd = lines.length - 1;
-				while (lineEnd > i && lines[lineEnd].trim() === '') lineEnd--;
-				candidate = { lineStart: i, lineEnd };
+				candidate = { lineStart: i, lineEnd: lastNonBlankLine(lines, i, lines.length - 1) };
 			}
 			i++;
 			continue;
@@ -679,14 +688,21 @@ export class ReadingModeBlockHost implements BlockHost {
 				});
 			// SC-343 fix round 1: "at EOF" tolerates trailing blank lines after the section's
 			// reported lineEnd (a trailing '\n' or blank lines below an unterminated fence),
-			// not only an exact match to the last line — Obsidian's own section range can land
-			// short of the note's true last line when the note ends in blank lines.
+			// not only an exact match to the last line. SC-477: measured on Obsidian 1.14.4, an
+			// unterminated fence's lineEnd IS the note's last line, blank / whitespace-only tail
+			// included (the tolerance is for a range that stops short of it).
 			const unterminatedAtEof = !closeOk && !hasCloseInRange && lines.slice(lineEnd + 1).every((l) => l.trim() === '');
 			const bodyEnd = unterminatedAtEof ? lineEnd + 1 : lineEnd;
 			const bodyOk =
 				this.knownBody === null ||
 				normalizeBody(lines.slice(lineStart + 1, bodyEnd).join('\n')) === normalizeBody(this.knownBody);
-			if (openOk && (closeOk || unterminatedAtEof) && bodyOk) return { lineStart, lineEnd };
+			if (openOk && (closeOk || unterminatedAtEof) && bodyOk) {
+				if (!unterminatedAtEof) return { lineStart, lineEnd };
+				// SC-477: the splice replaces [lineStart, lineEnd] and the close fence takes the terminator of the
+				// lineEnd line, so the range stops at the last non-blank line - the note's trailing newline(s) / blank /
+				// whitespace-only lines stay after the new close fence, exactly as on the durable path.
+				return { lineStart, lineEnd: lastNonBlankLine(lines, lineStart, lineEnd) };
+			}
 		}
 		if (!this.hasDurableIdentity) return 'abort';
 		const located = locateByBody(content, this.knownLanguage!, this.knownBody!, this.knownLineStart);
