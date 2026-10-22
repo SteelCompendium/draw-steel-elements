@@ -264,7 +264,7 @@ describe('SC-343: guarded replaceSource', () => {
 		expect(Notice.notices).toHaveLength(0);
 	});
 
-	test('unterminated fence at EOF, section gone (navigate-away): the write lands, fence closes, no Notice — trailing newline', async () => {
+	test('unterminated fence at EOF, section gone (navigate-away): the write lands, fence closes, no Notice — the trailing newline is kept (SC-477)', async () => {
 		const app = new App();
 		const live = ['Before', '', '```ds-counter', 'name: A', 'current_value: 1'].join('\n') + '\n';
 		app.vault.setFile('Note.md', live);
@@ -274,12 +274,12 @@ describe('SC-343: guarded replaceSource', () => {
 
 		await expect(host.replaceSource('name: A\ncurrent_value: 2')).resolves.toBe(true);
 		expect(app.vault.getContent('Note.md')).toBe(
-			['Before', '', '```ds-counter', 'name: A', 'current_value: 2', '```'].join('\n'),
+			['Before', '', '```ds-counter', 'name: A', 'current_value: 2', '```', ''].join('\n'),
 		);
 		expect(Notice.notices).toHaveLength(0);
 	});
 
-	test('unterminated fence at EOF, section gone (navigate-away): the write lands, fence closes, no Notice — trailing blank lines', async () => {
+	test('unterminated fence at EOF, section gone (navigate-away): the write lands, fence closes, no Notice — the trailing blank lines are kept (SC-477)', async () => {
 		const app = new App();
 		const live = ['Before', '', '```ds-counter', 'name: A', 'current_value: 1'].join('\n') + '\n\n\n';
 		app.vault.setFile('Note.md', live);
@@ -289,9 +289,83 @@ describe('SC-343: guarded replaceSource', () => {
 
 		await expect(host.replaceSource('name: A\ncurrent_value: 2')).resolves.toBe(true);
 		expect(app.vault.getContent('Note.md')).toBe(
-			['Before', '', '```ds-counter', 'name: A', 'current_value: 2', '```'].join('\n'),
+			['Before', '', '```ds-counter', 'name: A', 'current_value: 2', '```', '', '', ''].join('\n'),
 		);
 		expect(Notice.notices).toHaveLength(0);
+	});
+
+	// SC-477: the durable (relocate-by-body) write to an unterminated trailing fence must leave the note
+	// byte-identical to what the in-place (section present) write leaves: the close fence goes after the last
+	// body line and the note's trailing newline(s) / blank / whitespace-only lines survive after it.
+	describe('SC-477: unterminated trailing fence keeps the note\'s trailing newline(s) on the durable path', () => {
+		const HEAD = ['Before', '', '```ds-counter', 'name: A', 'current_value: 1'];
+		const OLD = 'name: A\ncurrent_value: 1';
+		const NEW = 'name: A\ncurrent_value: 2';
+		const toCr = (s: string) => s.replace(/\n/g, '\r\n');
+
+		/** Writes NEW into a note of `live`, in place (section present) or durable (section gone); returns the note. */
+		async function writeOnce(live: string, durable: boolean): Promise<{ out: string; ok: boolean }> {
+			const app = new App();
+			app.vault.setFile('Note.md', live);
+			const section = { current: { text: live, lineStart: 2, lineEnd: 4 } as { text: string; lineStart: number; lineEnd: number } | null };
+			const host = hostFor(app, 'Note.md', section, OLD);
+			if (durable) section.current = null; // navigate away before the flush
+			const ok = await host.replaceSource(NEW);
+			return { out: app.vault.getContent('Note.md')!, ok };
+		}
+
+		// [label, what follows the last body line, what must follow the close fence]
+		const SHAPES: Array<[string, string, string]> = [
+			['no trailing newline', '', ''],
+			['one trailing newline', '\n', '\n'],
+			['three trailing newlines (two blank lines)', '\n\n\n', '\n\n\n'],
+			['a whitespace-only line then a newline', '\n  \n', '\n  \n'],
+			['an unterminated whitespace-only (tab) last line', '\n\t', '\n\t'],
+			['blank and whitespace-only lines mixed', '\n\n  \n\t\n', '\n\n  \n\t\n'],
+			['CRLF: one trailing newline', '\r\n', '\r\n'],
+			['CRLF: a trailing blank line', '\r\n\r\n', '\r\n\r\n'],
+		];
+		const noteOf = (tail: string) => (tail.includes('\r') ? toCr(HEAD.join('\n')) : HEAD.join('\n')) + tail;
+		const expectedOf = (tail: string, after: string) => {
+			const crlf = tail.includes('\r');
+			const lines = ['Before', '', '```ds-counter', 'name: A', 'current_value: 2', '```'].join('\n');
+			return (crlf ? toCr(lines) : lines) + after;
+		};
+
+		test.each(SHAPES)('durable path, %s: the close fence lands after the body and the tail survives byte-for-byte', async (_label, tail, after) => {
+			const { out, ok } = await writeOnce(noteOf(tail), true);
+			expect(ok).toBe(true);
+			expect(out).toBe(expectedOf(tail, after));
+			expect(Notice.notices).toHaveLength(0);
+		});
+
+		test.each(SHAPES)('parity, %s: the durable output is byte-identical to the in-place output', async (_label, tail, after) => {
+			const live = noteOf(tail);
+			const inPlace = await writeOnce(live, false);
+			const durable = await writeOnce(live, true);
+			expect(inPlace.ok).toBe(true);
+			expect(durable.ok).toBe(true);
+			expect(inPlace.out).toBe(expectedOf(tail, after)); // the in-place output is the target the durable one is pinned to
+			expect(durable.out).toBe(inPlace.out);
+		});
+
+		test('CRLF note: stays all-CRLF (no bare LF is introduced) with its trailing newline(s) kept', async () => {
+			for (const tail of ['\r\n', '\r\n\r\n']) {
+				const { out } = await writeOnce(noteOf(tail), true);
+				expect(out.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
+				expect(out.endsWith('```' + tail)).toBe(true);
+			}
+		});
+
+		test('integrity: the text above survives, the new body is what lands, exactly one close fence, no Notice', async () => {
+			const { out } = await writeOnce(noteOf('\n\n'), true);
+			expect(out.startsWith('Before\n\n```ds-counter\n')).toBe(true);
+			expect(out).toContain('name: A\ncurrent_value: 2\n```');
+			expect(out).not.toContain('current_value: 1');
+			expect(out.match(/^```$/gm)).toHaveLength(1);
+			expect(out.endsWith('```\n\n')).toBe(true);
+			expect(Notice.notices).toHaveLength(0);
+		});
 	});
 
 	test('close-fence hardening: a stale range running into trailing blank lines past a real close is never treated as unterminated (no data loss)', async () => {
