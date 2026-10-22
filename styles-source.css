@@ -2171,8 +2171,8 @@ code.dsa {
 	cursor: pointer;
 }
 /* SC-361 — SELECTED = a check drawn INSIDE the swatch; FOCUSED = the shared kit ring OUTSIDE it
-   (~:15409). The selection used to be this same 2px accent outline, so a focused swatch
-   (Obsidian's grey halo) could not be told from a selected one and the kit ring could not be
+   (the shared kit `:focus-visible` rule, "the one rule"). The selection used to be this same 2px
+   accent outline, so a focused swatch (Obsidian's grey halo) could not be told from a selected one and the kit ring could not be
    joined without making focus look like selection. A shape difference (ring vs. check), never a
    hue one (Scott is colourblind), and the ring never shares a 0.45em gap with a second ring.
    The glyph is Lucide's `check` path (`M20 6 9 17l-5-5`, the set Obsidian bundles; nothing is
@@ -15437,7 +15437,7 @@ body.theme-light
    neutralized for both states by the SC-203 host re-grounding block, which the chip now
    also joins (~:15591) — this outline is never left to stack over a grey box-shadow.
    SC-361 — `.dse-swatch` (the Conditions colour swatches) joins too: the selected mark is
-   now a check INSIDE the swatch (~:2173), so this outside ring no longer reads as selection.
+   now a check INSIDE the swatch (the `.dse-swatch[aria-pressed='true']::after` rule), so this outside ring no longer reads as selection.
    The custom (pipette) swatch is a <label> around an opacity-0 <input type=color>, so the label
    shows the ring when its input is keyboard-focused (this also closes SC-473). */
 .dse-swatch:focus-visible,
