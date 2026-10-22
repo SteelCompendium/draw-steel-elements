@@ -100,8 +100,13 @@ export function normalizeBody(body: string): string {
  * matching locally — anchor.ts itself is out of scope (the sidebar depends on its current
  * skip-unterminated behaviour) — to find the trailing fence-open of `language` that never
  * finds a valid close before EOF: its body is everything from the line after it through
- * the note's last line (normalizeBody trims the trailing blank lines away for comparison);
- * its lineEnd is `lines.length - 1`.
+ * the note's last NON-BLANK line, and its lineEnd is that line (or the fence-open line itself
+ * for an empty body). SC-477: the note's trailing newline(s) / blank / whitespace-only lines
+ * are NOT part of the range - the splice replaces [lineStart, lineEnd] and the close fence
+ * takes the terminator of the lineEnd line, so a range running to `lines.length - 1` swallowed
+ * those bytes. This is the same range the in-place path writes (Obsidian's section ends at the
+ * last block line, and `unterminatedAtEof` tolerates the blanks below it), so for the same note
+ * and body both paths write byte-identical output.
  */
 function locateUnterminatedTrailingFence(
 	lines: string[],
@@ -133,7 +138,11 @@ function locateUnterminatedTrailingFence(
 			// open. Abandon it (same recovery as iterateFences: don't treat as opaque
 			// through to EOF) and keep scanning from the very next line, so a later,
 			// better-matching trailing open can still override.
-			if (open.language === language) candidate = { lineStart: i, lineEnd: lines.length - 1 };
+			if (open.language === language) {
+				let lineEnd = lines.length - 1;
+				while (lineEnd > i && lines[lineEnd].trim() === '') lineEnd--;
+				candidate = { lineStart: i, lineEnd };
+			}
 			i++;
 			continue;
 		}
