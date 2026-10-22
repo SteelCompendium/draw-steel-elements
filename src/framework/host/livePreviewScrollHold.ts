@@ -95,9 +95,9 @@ export const HOLD_ATTR = 'data-dse-lp-hold';
 
 /**
  * A DSE block's widget as CodeMirror drew it: a direct `.cm-content` child holding our root. At capture `from === to`
- * (its start position); every document change widens it, mapping `from` with assoc -1 and `to` with assoc +1, so the
- * replacement widget's start is found whether an edit inserted text right at the old start (it lands after it: inside
- * the interval) or replaced a range that contained it.
+ * (its start position); every document change carries it along (`mapWidget`), widening `to` to the end of the changed
+ * range that touches the old start, so the replacement widget's start is found whether an edit inserted text right at
+ * the old start (it lands after it: inside the interval) or replaced a range that began at or contained it.
  */
 interface WidgetAt {
 	from: number;
@@ -152,8 +152,19 @@ function unmounted(widget: HTMLElement): boolean {
 	return !root || root.childElementCount === 0;
 }
 
+/**
+ * Carry a widget's interval through a document change. `from` is the old start mapped before any insertion at it; `to`
+ * is the old start mapped the same way, widened to the end of every changed range that touches the old start. Plain
+ * `mapPos` cannot give that end: a position at the start of a replaced range maps to the start of the new text whatever
+ * its assoc, and the diff Obsidian dispatches for "paragraph inserted above the fence + tracker changed" is ONE
+ * replacement starting at the old fence start (measured: [478,1538] -> [478,1554]), with the new widget at 494.
+ */
 function mapWidget(w: WidgetAt, changes: ViewUpdate['changes']): WidgetAt {
-	return { ...w, from: changes.mapPos(w.from, -1), to: changes.mapPos(w.to, 1) };
+	let to = changes.mapPos(w.to, -1);
+	changes.iterChanges((fromA, toA, _fromB, toB) => {
+		if (fromA <= w.to && w.to <= toA) to = Math.max(to, toB);
+	});
+	return { ...w, from: changes.mapPos(w.from, -1), to };
 }
 
 /**
