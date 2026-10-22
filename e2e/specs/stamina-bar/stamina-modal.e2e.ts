@@ -7,7 +7,7 @@
 // (sc408-s1-stamina-inventory.md) is noted per test. basic.md = 15/20 Stamina, 5 temp, hero rules
 // (a standalone ds-stamina bar always opens as a hero: floor -10).
 import { expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
+import { dse } from '../../driver/dse';
 import { applyAmount, applyAndWrite, expectApplyLabel, openBarModal } from '../../driver/stamina';
 
 const NOTE = 'Stamina/basic.md';
@@ -169,60 +169,68 @@ describe('stamina-edit-modal from ds-stamina-bar: quick actions and temporary St
 	});
 
 	// T03 / S1 B6 (SC-433, ruled by Scott 2026-10-18): the temp field is a DIRECT edit like the Stamina
-	// field; "keep the higher" belongs only to gaining temp from an effect. Today a typed lower value is
-	// swallowed (the field snaps back to 5 and nothing changes).
-	knownBug(
-		'SC-433',
-		'[STAM-T03] a typed temp value lower than the current is applied as typed: 3 over 5 is a loss of 2',
-		async () => {
-			const modal = await openBarModal(NOTE);
-			await dse.type(modal.control('sedit.temp.input'), '3', { replace: true });
-			await dse.blur(modal.control('sedit.temp.input'));
-			await expectApplyLabel(modal, 'Lose 2 Temp Stamina', {
-				wait: 1500,
-				message: 'a typed temp value lower than the current should be applied as typed (Lose 2 Temp Stamina)',
-			});
-			await expect(modal.control('sedit.temp.input')).toHaveValue('3');
-			expect(await applyAndWrite(modal, NOTE)).toBe(1);
-			await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ temp_stamina: 3 });
-		},
-		{ failsWith: /a typed temp value lower than the current should be applied as typed/ },
-	);
+	// field, so a typed lower value is applied as typed ("keep the higher" belongs only to gaining temp
+	// from an effect, and the modal has no such path).
+	it('[STAM-T03] a typed temp value lower than the current is applied as typed: 3 over 5 is a loss of 2', async () => {
+		const modal = await openBarModal(NOTE);
+		await dse.type(modal.control('sedit.temp.input'), '3', { replace: true });
+		await dse.blur(modal.control('sedit.temp.input'));
+		await expectApplyLabel(modal, 'Lose 2 Temp Stamina');
+		await expect(modal.control('sedit.temp.input')).toHaveValue('3');
+		expect(await applyAndWrite(modal, NOTE)).toBe(1);
+		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ temp_stamina: 3 });
+	});
 
-	// T04 / S1 B6 (SC-433): the temp "-" is enabled but a silent no-op (it can never lower temp, not
-	// even to walk back a "+" pressed in the same session). Ruled: a direct edit, so "-" at 5 gives 4.
-	knownBug(
-		'SC-433',
-		'[STAM-T04] the temp "-" at temp 5 lowers it by one: Apply writes temp_stamina 4',
-		async () => {
-			const modal = await openBarModal(NOTE);
-			await expect(modal.control('sedit.temp.dec')).toBeEnabled();
-			await dse.click(modal.control('sedit.temp.dec'));
-			await expectApplyLabel(modal, 'Lose 1 Temp Stamina', {
-				wait: 1500,
-				message: 'the temp "-" at 5 should lower temp to 4 (Lose 1 Temp Stamina)',
-			});
-			expect(await applyAndWrite(modal, NOTE)).toBe(1);
-			await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ temp_stamina: 4 });
-		},
-		{ failsWith: /the temp "-" at 5 should lower temp to 4/ },
-	);
+	// T04 / S1 B6 (SC-433): the temp "-" lowers temp by one (a direct edit), and stays enabled above 0.
+	it('[STAM-T04] the temp "-" at temp 5 lowers it by one: Apply writes temp_stamina 4', async () => {
+		const modal = await openBarModal(NOTE);
+		await expect(modal.control('sedit.temp.dec')).toBeEnabled();
+		await dse.click(modal.control('sedit.temp.dec'));
+		await expectApplyLabel(modal, 'Lose 1 Temp Stamina');
+		await expect(modal.control('sedit.temp.input')).toHaveValue('4');
+		await expect(modal.control('sedit.temp.dec')).toBeEnabled();
+		expect(await applyAndWrite(modal, NOTE)).toBe(1);
+		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ temp_stamina: 4 });
+	});
 
-	// T11: the plain driver of `sedit.temp.dec x click` (the exercised-set gate needs a non-known-bug one).
-	// It asserts only what holds both today (where "-" does nothing, B6) and once SC-433 lands (where
-	// "-" lowers temp): after a click the Apply label always agrees with the temp field, and nothing is
-	// written until Apply.
-	it('[STAM-T11] after the temp "-" is pressed, the Apply label always agrees with the temp field, temp never rises, and nothing is written', async () => {
+	// T11: the exact effect of one temp "-" on the field and the label, and that nothing is written
+	// until Apply.
+	it('[STAM-T11] one temp "-" at 5 shows exactly 4 and "Lose 1 Temp Stamina", and nothing is written until Apply', async () => {
 		const modal = await openBarModal(NOTE);
 		await dse.expectNoWrite(NOTE, () => dse.click(modal.control('sedit.temp.dec')));
-		const shown = Number(await modal.control('sedit.temp.input').getValue());
-		// Bounds that hold today and after SC-433: a "-" press can never RAISE temp, nor take it below 0.
-		expect(shown).toBeLessThanOrEqual(5); // never raised above its starting 5
-		expect(shown).toBeGreaterThanOrEqual(0);
-		const delta = shown - 5;
-		const expected = delta === 0 ? 'No Stamina Change' : delta > 0 ? `Gain ${delta} Temp Stamina` : `Lose ${-delta} Temp Stamina`;
-		await expectApplyLabel(modal, expected);
-		await dse.click(modal.control('modal.close'));
+		await expect(modal.control('sedit.temp.input')).toHaveValue('4');
+		await expectApplyLabel(modal, 'Lose 1 Temp Stamina');
+		await dse.expectNoWrite(NOTE, () => dse.click(modal.control('modal.close')));
+	});
+
+	// T13 / SC-433 ticket repro: "+" twice then "-" in one session lands on 6, and Apply writes 6.
+	it('[STAM-T13] temp 5, "+" twice gives 7, "-" gives 6, and Apply writes temp_stamina 6', async () => {
+		const modal = await openBarModal(NOTE);
+		await dse.click(modal.control('sedit.temp.inc'));
+		await dse.click(modal.control('sedit.temp.inc'));
+		await expect(modal.control('sedit.temp.input')).toHaveValue('7');
+		await dse.click(modal.control('sedit.temp.dec'));
+		await expect(modal.control('sedit.temp.input')).toHaveValue('6');
+		await expectApplyLabel(modal, 'Gain 1 Temp Stamina');
+		expect(await applyAndWrite(modal, NOTE)).toBe(1);
+		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ current_stamina: 15, temp_stamina: 6 });
+	});
+
+	// T14 / SC-433: a mistyped 50 can be fixed after Apply by reopening the modal and typing the right value.
+	it('[STAM-T14] a mistyped 50 is fixable: Apply writes 50, reopen, type 5, Apply writes 5', async () => {
+		const first = await openBarModal(NOTE);
+		await dse.type(first.control('sedit.temp.input'), '50', { replace: true });
+		await dse.blur(first.control('sedit.temp.input'));
+		await expectApplyLabel(first, 'Gain 45 Temp Stamina');
+		expect(await applyAndWrite(first, NOTE)).toBe(1);
+		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ temp_stamina: 50 });
+		const second = await openBarModal(NOTE);
+		await expect(second.control('sedit.temp.input')).toHaveValue('50');
+		await dse.type(second.control('sedit.temp.input'), '5', { replace: true });
+		await dse.blur(second.control('sedit.temp.input'));
+		await expectApplyLabel(second, 'Lose 45 Temp Stamina');
+		expect(await applyAndWrite(second, NOTE)).toBe(1);
+		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ temp_stamina: 5 });
 	});
 
 	it('[STAM-T05] the temp "-" is really disabled at 0 temp and a click does nothing', async () => {
@@ -242,21 +250,17 @@ describe('stamina-edit-modal from ds-stamina-bar: quick actions and temporary St
 	});
 
 	// T10 / SC-433: a typed negative temp clamps to 0 and, being a direct edit, is applied as 0 (a loss
-	// of the whole 5). Today "keep the higher" swallows it and nothing changes.
-	knownBug(
-		'SC-433',
-		'[STAM-T10] a negative typed temp value clamps to 0 and is applied as typed: temp goes to 0',
-		async () => {
-			const modal = await openBarModal(NOTE);
-			await dse.type(modal.control('sedit.temp.input'), '-3', { replace: true });
-			await dse.blur(modal.control('sedit.temp.input'));
-			await expectApplyLabel(modal, 'Lose 5 Temp Stamina', {
-				wait: 1500,
-				message: 'a negative typed temp value should clamp to 0 and be applied as typed (Lose 5 Temp Stamina)',
-			});
-		},
-		{ failsWith: /a negative typed temp value should clamp to 0 and be applied as typed/ },
-	);
+	// of the whole 5).
+	it('[STAM-T10] a negative typed temp value clamps to 0 and is applied as typed: temp goes to 0', async () => {
+		const modal = await openBarModal(NOTE);
+		await dse.type(modal.control('sedit.temp.input'), '-3', { replace: true });
+		await dse.blur(modal.control('sedit.temp.input'));
+		await expectApplyLabel(modal, 'Lose 5 Temp Stamina');
+		await expect(modal.control('sedit.temp.input')).toHaveValue('0');
+		await expect(modal.control('sedit.temp.dec')).toBeDisabled();
+		expect(await applyAndWrite(modal, NOTE)).toBe(1);
+		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ temp_stamina: 0 });
+	});
 });
 
 describe('stamina-edit-modal from ds-stamina-bar: footer', () => {

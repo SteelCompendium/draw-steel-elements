@@ -505,21 +505,13 @@ describe('SC-133 RC-4: Spend Recovery never over-burns Recoveries, and the previ
 	});
 });
 
-// SC-408 / SC-433 (Scott, 2026-10-18, B6): the temp field is to become a DIRECT edit like the
-// Stamina field ("keep the higher" only for gaining temp from an effect). The tests below that pin
-// the OLD typed/minus behaviour are `test.failing` markers asserting the ruled behaviour, titled
-// "[known bug SC-433]"; the SC-433 fixer removes the `.failing` as it lands the change.
-//
-// SC-133 RC-5 (RAW reference/draw-steel-reference.md:279 — temp doesn't stack,
-// take higher) + fix-round-1 C1: granting temp through the modal must never
-// reduce it below the character's CURRENT session position — floored against
-// currentTempStamina + pendingTempStaminaChange, not the stale onOpen snapshot,
-// since Damage absorption / Kill / Full Heal all move the running position DOWN
-// mid-session (C1's "damage-then-stepper" tests below pin exactly this). Covers
-// typed grants and blocks the minus button from walking below that position.
-// I4 pins the still-open, documented gap: a run of individual "+" clicks from the
-// SAME position still walks past it one step at a time (SC-132 territory).
-describe('SC-133 RC-5: granting temp does not stack — take the higher of current vs granted (RAW)', () => {
+// SC-433 (Scott, 2026-10-18, ruling on SC-408 B6): the temp field is a DIRECT edit, like the Stamina
+// field — "+" / "-" step the running temp by one and a typed number sets it exactly (floor 0). The
+// modal has no "gain temp from an effect" path, so SC-133 RC-5's keep-the-higher (RAW: temp doesn't
+// stack) no longer applies anywhere in it. "Running" below is currentTempStamina +
+// pendingTempStaminaChange: Damage absorption / Kill / Full Heal move it DOWN mid-session, and the
+// field edits THAT position (SC-133 fix-round-1 C1's damage-then-stepper tests still hold).
+describe('SC-433: the temp field is a direct edit — stepper and typed value set temp exactly', () => {
 	function tempInput(content: HTMLElement): HTMLInputElement {
 		return content.querySelectorAll<HTMLElement>('.dse-stepper')[1].querySelector('.dse-stepper__input') as HTMLInputElement;
 	}
@@ -529,7 +521,7 @@ describe('SC-133 RC-5: granting temp does not stack — take the higher of curre
 		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
 	}
 
-	test.failing('typing a temp value lower than the current one applies it as typed: 3 over 5 is a loss of 2 [known bug SC-433]', () => {
+	test('typing a temp value lower than the current one applies it as typed: 3 over 5 is a loss of 2', () => {
 		const { modal, content, bar } = makeModal(20, 20, 5);
 		typeTemp(content, '3');
 		expect(modal.pendingTempStaminaChange).toBe(-2);
@@ -537,7 +529,7 @@ describe('SC-133 RC-5: granting temp does not stack — take the higher of curre
 		expect(bar.temp_stamina).toBe(3);
 	});
 
-	test('typing a grant higher than current temp raises temp to the granted amount', () => {
+	test('typing a value higher than current temp raises temp to it', () => {
 		const { modal, content, bar } = makeModal(20, 20, 5);
 		typeTemp(content, '9');
 		expect(modal.pendingTempStaminaChange).toBe(4);
@@ -545,37 +537,84 @@ describe('SC-133 RC-5: granting temp does not stack — take the higher of curre
 		expect(bar.temp_stamina).toBe(9);
 	});
 
-	test('typing a grant equal to current temp is a no-op', () => {
+	test('typing a value equal to current temp is a no-op', () => {
 		const { modal, content } = makeModal(20, 20, 5);
 		typeTemp(content, '5');
 		expect(modal.pendingTempStaminaChange).toBe(0);
 	});
 
-	// Bounds that hold today (where "-" does nothing) AND after SC-433 (where it lowers temp by one):
-	// the minus button can never RAISE temp. The SC-433 markers around it are `test.failing`, which
-	// passes on ANY failure, so this plain test is what would catch a "-" that goes the wrong way.
-	test('the minus button never raises the pending temp, and never takes it below 0', () => {
+	test('the minus button lowers temp by one: at temp 5 Apply writes 4, and the minus stays enabled', () => {
 		const { modal, content, bar } = makeModal(20, 20, 5);
 		const minus = content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
 			.querySelector('button[aria-label="Decrease Temporary Stamina"]') as HTMLButtonElement;
-		minus.click();
-		expect(modal.pendingTempStaminaChange).toBeLessThanOrEqual(0);
-		expect(5 + modal.pendingTempStaminaChange).toBeGreaterThanOrEqual(0);
-		if (!actionBtn(content).disabled) apply(content);
-		expect(bar.temp_stamina).toBeLessThanOrEqual(5);
-	});
-
-	test.failing('the minus button lowers temp by one: at temp 5 Apply writes 4 [known bug SC-433]', () => {
-		const { modal, content, bar } = makeModal(20, 20, 5);
-		const minus = content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
-			.querySelector('button[aria-label="Decrease Temporary Stamina"]') as HTMLButtonElement;
+		expect(minus.disabled).toBe(false);
 		minus.click();
 		expect(modal.pendingTempStaminaChange).toBe(-1);
+		expect(tempInput(content).value).toBe('4');
+		expect(minus.disabled).toBe(false);
+		expect(actionBtn(content).textContent).toContain('Lose 1 Temp Stamina');
 		apply(content);
 		expect(bar.temp_stamina).toBe(4);
 	});
 
-	test('granting from a temp of 0 is unaffected (no existing temp to take-higher against)', () => {
+	test('CB-8: the minus button is disabled exactly at temp 0 and enabled above it — never a silent no-op', () => {
+		const { modal, content, bar } = makeModal(20, 20, 1);
+		const minus = content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
+			.querySelector('button[aria-label="Decrease Temporary Stamina"]') as HTMLButtonElement;
+		expect(minus.disabled).toBe(false);
+		minus.click(); // 1 -> 0
+		expect(modal.pendingTempStaminaChange).toBe(-1);
+		expect(minus.disabled).toBe(true);
+		minus.click(); // disabled: nothing happens, and nothing was promised
+		expect(modal.pendingTempStaminaChange).toBe(-1);
+		apply(content);
+		expect(bar.temp_stamina).toBe(0);
+		// A block that opens at 0 starts with the minus already disabled.
+		const zero = makeModal(20, 20, 0);
+		expect((zero.content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
+			.querySelector('button[aria-label="Decrease Temporary Stamina"]') as HTMLButtonElement).disabled).toBe(true);
+	});
+
+	test('the ticket repro: temp 5, "+" twice gives 7, "-" gives 6, Apply writes 6', () => {
+		const { modal, content, bar } = makeModal(20, 20, 5);
+		const stepperEl = content.querySelectorAll<HTMLElement>('.dse-stepper')[1];
+		const plus = stepperEl.querySelector('button[aria-label="Increase Temporary Stamina"]') as HTMLButtonElement;
+		const minus = stepperEl.querySelector('button[aria-label="Decrease Temporary Stamina"]') as HTMLButtonElement;
+		plus.click();
+		plus.click();
+		expect(tempInput(content).value).toBe('7');
+		minus.click();
+		expect(tempInput(content).value).toBe('6');
+		expect(modal.pendingTempStaminaChange).toBe(1);
+		apply(content);
+		expect(bar.temp_stamina).toBe(6);
+	});
+
+	test('a mistyped 50 is fixable after Apply: reopen on 50, type 5, Apply writes 5', () => {
+		const first = makeModal(20, 20, 5);
+		typeTemp(first.content, '50');
+		apply(first.content);
+		expect(first.bar.temp_stamina).toBe(50);
+		const app = new App();
+		const reopened = new StaminaEditModal(app as any, first.bar, true, 'Frodo', jest.fn());
+		reopened.open();
+		const content = (reopened as any).contentEl as HTMLElement;
+		typeTemp(content, '5');
+		expect((reopened as any).pendingTempStaminaChange).toBe(-45);
+		expect(actionBtn(content).textContent).toContain('Lose 45 Temp Stamina');
+		apply(content);
+		expect(first.bar.temp_stamina).toBe(5);
+	});
+
+	test('a typed negative temp clamps to 0 and is applied as 0', () => {
+		const { modal, content, bar } = makeModal(20, 20, 5);
+		typeTemp(content, '-3');
+		expect(modal.pendingTempStaminaChange).toBe(-5);
+		apply(content);
+		expect(bar.temp_stamina).toBe(0);
+	});
+
+	test('typing a value from a temp of 0 raises it as typed', () => {
 		const { modal, content, bar } = makeModal(20, 20, 0);
 		typeTemp(content, '4');
 		expect(modal.pendingTempStaminaChange).toBe(4);
@@ -583,7 +622,7 @@ describe('SC-133 RC-5: granting temp does not stack — take the higher of curre
 		expect(bar.temp_stamina).toBe(4);
 	});
 
-	test.failing('a typed temp value after an earlier typed grant is applied as typed (9 then 3 gives 3) [known bug SC-433]', () => {
+	test('a typed temp value after an earlier typed value is applied as typed (9 then 3 gives 3)', () => {
 		const { modal, content, bar } = makeModal(20, 20, 5);
 		typeTemp(content, '9'); // 9 > 5 -> running becomes 9
 		expect(modal.pendingTempStaminaChange).toBe(4);
@@ -603,7 +642,7 @@ describe('SC-133 RC-5: granting temp does not stack — take the higher of curre
 			(content.querySelector('button[aria-label="Damage"]') as HTMLButtonElement).click();
 		}
 
-		test('A1: Damage absorbs 3 of 5 temp (running -> 2), then one "+" grants up to 3, not back to 5', () => {
+		test('A1: Damage absorbs 3 of 5 temp (running -> 2), then one "+" raises it to 3, not back to 5', () => {
 			const { modal, content, bar } = makeModal(20, 20, 5);
 			clickDamageHere(content, 3); // temp absorbs 3: running 5 -> 2
 			expect(modal.pendingTempStaminaChange).toBe(-3);
@@ -615,7 +654,7 @@ describe('SC-133 RC-5: granting temp does not stack — take the higher of curre
 			expect(bar.temp_stamina).toBe(3);
 		});
 
-		test.failing('A2: Damage absorbs 3 of 5 temp (running -> 2), then minus lowers the running position to 1 [known bug SC-433]', () => {
+		test('A2: Damage absorbs 3 of 5 temp (running -> 2), then minus lowers the running position to 1', () => {
 			const { modal, content, bar } = makeModal(20, 20, 5);
 			clickDamageHere(content, 3); // running 5 -> 2
 			const minus = content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
@@ -626,10 +665,10 @@ describe('SC-133 RC-5: granting temp does not stack — take the higher of curre
 			expect(bar.temp_stamina).toBe(1);
 		});
 
-		test('A4: Damage absorbs 3 of 5 temp (running -> 2), then typing 4 grants to 4 (RAW: take higher of running 2 vs granted 4), not the stale 5', () => {
+		test('A4: Damage absorbs 3 of 5 temp (running -> 2), then typing 4 sets it to 4, not the stale 5', () => {
 			const { modal, content, bar } = makeModal(20, 20, 5);
 			clickDamageHere(content, 3); // running 5 -> 2
-			typeTemp(content, '4'); // 4 > running 2 -> grants to 4
+			typeTemp(content, '4'); // a direct edit from the running 2 -> 4
 			expect(modal.pendingTempStaminaChange).toBe(-1);
 			apply(content);
 			expect(bar.temp_stamina).toBe(4);
@@ -637,7 +676,7 @@ describe('SC-133 RC-5: granting temp does not stack — take the higher of curre
 
 		// fix-round-2 item 4: the comment names all three down-movers (Damage, Kill,
 		// Full Heal) but only Damage was tested — Kill and Full Heal also zero temp.
-		test('Kill zeroes temp (running -> 0), then one "+" grants to 1, not back to 5', () => {
+		test('Kill zeroes temp (running -> 0), then one "+" raises it to 1, not back to 5', () => {
 			const { modal, content, bar } = makeModal(20, 20, 5);
 			btn(content, 'Kill').click(); // running 5 -> 0
 			const plus = content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
@@ -648,7 +687,7 @@ describe('SC-133 RC-5: granting temp does not stack — take the higher of curre
 			expect(bar.temp_stamina).toBe(1);
 		});
 
-		test('Full Heal zeroes temp (running -> 0), then one "+" grants to 1, not back to 5', () => {
+		test('Full Heal zeroes temp (running -> 0), then one "+" raises it to 1, not back to 5', () => {
 			const { modal, content, bar } = makeModal(20, 20, 5);
 			btn(content, 'Full Heal').click(); // running 5 -> 0
 			const plus = content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
@@ -660,12 +699,9 @@ describe('SC-133 RC-5: granting temp does not stack — take the higher of curre
 		});
 	});
 
-	// I4 (fix-round-1): pins the documented, still-open gap as a characterization
-	// test (asserted, not just narrated) — a run of individual "+" clicks from the
-	// SAME position still walks past a higher existing value one step at a time.
-	// SC-132 owns closing this (needs a "grant amount" affordance distinct from
-	// the "resulting total" display — see the block comment above).
-	test('I4 (characterization, NOT a spec — SC-132 must resolve): "+" x3 from a virgin temp of 5 still walks to 8, not 5', () => {
+	// I4 (fix-round-1) pinned a run of "+" clicks walking past a higher existing value as an open gap;
+	// under SC-433's direct edit that is simply how a stepper behaves, so it is now the spec.
+	test('I4: "+" x3 from a temp of 5 steps one at a time to 8', () => {
 		const { modal, content, bar } = makeModal(20, 20, 5);
 		const plus = content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
 			.querySelector('button[aria-label="Increase Temporary Stamina"]') as HTMLButtonElement;
@@ -1099,11 +1135,13 @@ describe('SC-430: Apply\'s label follows a half-typed Stamina / Temp draft, so n
 		expect(bar.current_stamina).toBe(15);
 	});
 
-	test('Temp Stamina: the take-higher floor (SC-133 RC-5) applies to the draft preview too', () => {
-		const { content } = makeModal(20, 15, 5);
-		typeDraft(stepperInputs(content).temp, '2'); // lower than the 5 already held: grants nothing
-		expect(actionBtn(content).disabled).toBe(true);
-		expect(actionBtn(content).textContent).toContain('No Stamina Change');
+	test('Temp Stamina: a lower typed draft previews the loss (SC-433 direct edit) and Apply persists it', () => {
+		const { content, bar } = makeModal(20, 15, 5);
+		typeDraft(stepperInputs(content).temp, '2'); // lower than the 5 held: a loss of 3
+		expect(actionBtn(content).disabled).toBe(false);
+		expect(actionBtn(content).textContent).toContain('Lose 3 Temp Stamina');
+		apply(content);
+		expect(bar.temp_stamina).toBe(2);
 	});
 
 	test('a Stamina draft and an already-committed Temp change combine in one label', () => {

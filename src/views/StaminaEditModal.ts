@@ -479,10 +479,10 @@ export class StaminaEditModal extends DseModal {
 		// min 0 IS the legacy behavior: the decrement guard refused to go below 0 and
 		// typed negatives were corrected to 0 — the stepper floor reproduces both
 		// (with a real disabled minus at the floor instead of a silent no-op, CB-8).
-		/** The pending Temp change a typed/stepped `value` stages — SC-133 RC-5's take-higher
-		 *  floor against the CURRENT session position (onChange AND the SC-430 draft preview). */
-		const stagedTemp = (value: number): number =>
-			Math.max(value, currentTempStamina + this.pendingTempStaminaChange) - currentTempStamina;
+		/** The pending Temp change a typed/stepped `value` stages (onChange AND the SC-430 draft preview).
+		 *  SC-433: a DIRECT edit, exactly like the Stamina field above — the field's value becomes temp,
+		 *  so "-" lowers it by one and a lower typed number lowers it (the stepper floors at 0). */
+		const stagedTemp = (value: number): number => value - currentTempStamina;
 		const tempStepper = stepper(
 			tempSection,
 			{
@@ -497,18 +497,13 @@ export class StaminaEditModal extends DseModal {
 					this.updateActionButton(actionBtn);
 				},
 				onChange: (value) => {
-					// SC-133 RC-5 (RAW reference/draw-steel-reference.md:279 — temp
-					// doesn't stack, take higher) + fix-round-1 C1: floor against the
-					// CURRENT session position (currentTempStamina +
-					// pendingTempStaminaChange), NOT the stale onOpen snapshot —
-					// Damage absorption (:255 above), Kill, and Full Heal all move
-					// pendingTempStaminaChange DOWN mid-session, so flooring against
-					// the snapshot let a later grant snap temp back UP to a value
-					// already spent (e.g. temp 5, Damage absorbs 3 → running 2, then a
-					// single "+" incorrectly jumped back to 5 instead of 3). Fixes
-					// typed grants and the minus button; does NOT retrofit take-higher
-					// onto a run of "+" clicks from the SAME position — I4 pins that
-					// gap as a characterization test for SC-132, not fixed here.
+					// SC-433 (Scott, 2026-10-18): the temp field is a DIRECT edit, like the Stamina field —
+					// "+" / "-" step it by one and a typed number sets it exactly (floor 0 from the stepper).
+					// This replaces SC-133 RC-5's take-the-higher on every edit, which made "-" and a lower
+					// typed value silent no-ops (CB-8). "Keep the higher" (RAW: temp doesn't stack) belongs
+					// only to GAINING temp from an effect; the modal has no such path. Damage absorption,
+					// Kill and Full Heal move pendingTempStaminaChange themselves, and the field edits the
+					// resulting running position (currentTempStamina + pendingTempStaminaChange).
 					this.pendingTempStaminaChange = stagedTemp(value);
 					refresh();
 				},
