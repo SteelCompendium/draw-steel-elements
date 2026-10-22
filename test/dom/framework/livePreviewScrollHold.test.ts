@@ -58,17 +58,25 @@ function fakeView(scrollTop: number, widgets: HTMLElement[]) {
 
 type View = ReturnType<typeof fakeView>;
 /**
- * ChangeSet.mapPos for ONE change that replaces [from, to] with `len` characters, with CodeMirror's assoc semantics:
- * a position at the start of the range stays before the new text for assoc <= 0, a position at the end of the range
- * goes after it for assoc >= 0, and a position strictly inside goes to the start (assoc < 0) or the end (assoc > 0).
+ * ChangeSet (mapPos + iterChanges) for ONE change that replaces [from, to] with `len` characters, with CodeMirror's
+ * assoc semantics: for a pure insertion (from === to) a position at it lands before the new text for assoc < 0 and
+ * after it otherwise; for a replacement a position at its start stays at the start whatever the assoc, a position
+ * strictly inside goes to the start (assoc < 0) or the end (assoc > 0), a position at its end goes after the new text.
  */
 const change = (from: number, to: number, len: number) => ({
 	mapPos(pos: number, assoc = -1): number {
 		if (pos < from) return pos;
-		if (pos > to) return pos + len - (to - from);
-		if (pos === from && assoc <= 0) return from;
-		if (pos === to && assoc >= 0) return from + len;
-		return assoc < 0 ? from : from + len;
+		if (to > from) {
+			// a replacement/deletion: a position at its start stays at the start whatever the assoc
+			if (pos < to) return pos === from || assoc < 0 ? from : from + len;
+			return pos + len - (to - from);
+		}
+		// a pure insertion at `from`: assoc decides which side of the new text a position at `from` lands on
+		if (pos === from) return assoc < 0 ? from : from + len;
+		return pos + len;
+	},
+	iterChanges(cb: (fromA: number, toA: number, fromB: number, toB: number) => void): void {
+		cb(from, to, from, from + len);
 	},
 });
 /** An insertion of `by` characters at position 5 (the tests' blocks sit past it). */
@@ -266,7 +274,19 @@ describe('SC-478: LivePreviewScrollHold hold', () => {
 		expect(view.requestMeasure).toHaveBeenCalled();
 	});
 
-	test('a write that inserts text right at the fence start and changes the tracker still holds the replacement (it starts after the insertion)', () => {
+	test('insert above the fence AND change the tracker in one write (one replacement from the old start; measured [478,1538] -> [478,1554], widget at 494)', () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3020, [widget(478, 3039)]);
+		hold.capture(view as never, note());
+		hold.onUpdate(update(view, 'set', change(478, 1538, 1076)));
+		view.contentDOM.querySelector('.cm-embed-block')!.remove();
+		const fresh = widget(494, 50, false);
+		view.contentDOM.appendChild(fresh);
+		hold.applyHolds(view as never);
+		expect(fresh.getAttribute(HOLD_ATTR)).toBe('3039');
+	});
+
+	test('a write that inserts text right at the fence start still holds the replacement (it starts after the insertion)', () => {
 		const hold = new LivePreviewScrollHold();
 		const view = fakeView(3020, [widget(637, 3039)]);
 		hold.capture(view as never, note());
