@@ -224,7 +224,9 @@ describe('stamina-edit-modal from ds-stamina-bar: quick actions and temporary St
 		await expectApplyLabel(first, 'Gain 45 Temp Stamina');
 		expect(await applyAndWrite(first, NOTE)).toBe(1);
 		await dse.expectNoteBlock(NOTE, BAR).toMatchObject({ temp_stamina: 50 });
-		const second = await openBarModal(NOTE);
+		// Reopen from the same open note (openNote would reset the fixture): click the bar again.
+		await dse.click(dse.block('ds-stamina-bar').control('stamina.bar'));
+		const second = await dse.modal('stamina-edit');
 		await expect(second.control('sedit.temp.input')).toHaveValue('50');
 		await dse.type(second.control('sedit.temp.input'), '5', { replace: true });
 		await dse.blur(second.control('sedit.temp.input'));
