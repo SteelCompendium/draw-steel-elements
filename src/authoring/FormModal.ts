@@ -47,6 +47,20 @@ function scalarToString(value: unknown): string {
 	return String(scalar);
 }
 
+/** SC-489: a copy of `v` with every array and plain object duplicated and every other value kept by
+ *  reference. Validation's `transform`s (trim, toLowerCase) assign into their parent container, so
+ *  the copy must be deep over containers -- a shallow spread would still mutate `skills[]` items and
+ *  `custom_skills[]` objects. Not `structuredClone` (undefined in the jest dom environment). */
+function cloneContainers<T>(v: T): T {
+	if (Array.isArray(v)) return v.map((item: unknown) => cloneContainers(item)) as T;
+	if (v !== null && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) {
+		const out: Record<string, unknown> = {};
+		for (const [k, item] of Object.entries(v)) out[k] = cloneContainers(item);
+		return out as T;
+	}
+	return v;
+}
+
 /** SC-488: the value of the leading "Default (…)" option of an OPTIONAL select. It means "this
  *  key is absent" and never reaches `working` or the written block. Non-empty so it can never
  *  collide with an enum value (same idea as SettingsTab's `__custom__` font option). */
@@ -60,7 +74,11 @@ interface DefaultOption {
 }
 
 class FormModal extends DseModal {
+	/** What Save writes: the source plus only what the user changed. Never handed to validation. */
 	private working: Record<string, unknown> = {};
+	/** SC-489: a validated COPY of `working` (the schema's transforms applied -- `Chips` -> `chips`).
+	 *  The preview and the "Default (…)" labels parse this, as the render pipeline does; Save does not. */
+	private checked: Record<string, unknown> = {};
 	private prefOverrides: Partial<DsePrefs> | undefined;
 	/** SC-488: the "Default (…)" option of every optional select, relabelled on each revalidate.
 	 *  (Replaces SC-483's untouchedSeeds/requiredKeys strip machinery: an optional select is never
@@ -107,6 +125,9 @@ class FormModal extends DseModal {
 		}
 		const fields = fieldsFromSchema(this.def);
 		this.rawMode = !this.def.schema || fields.length === 0;
+		// SC-489: normalise a copy BEFORE the controls render, so a select can show the option an
+		// un-normalised source value (`Chips`) normalises to.
+		if (!this.rawMode) this.normalise();
 
 		if (this.rawMode) {
 			this.rawText = this.source;
@@ -179,7 +200,7 @@ class FormModal extends DseModal {
 					const seed =
 						field.default !== undefined && options.includes(field.default) ? field.default : options[0];
 					if (current == null && seed !== undefined) this.working[field.key] = seed;
-					const initial = current == null ? (seed ?? '') : scalarToString(current);
+					const initial = current == null ? (seed ?? '') : this.displayValue(field.key, current, options);
 					setting.addDropdown((d) => {
 						for (const opt of options) d.addOption(opt, opt);
 						d.setValue(initial).onChange(set);
@@ -191,7 +212,7 @@ class FormModal extends DseModal {
 				// the same data. A key present with null counts as absent (rendering `key:` null is
 				// an error card); picking Default removes the key's line.
 				if (current == null) delete this.working[field.key];
-				const initial = current == null ? UNSET : scalarToString(current);
+				const initial = current == null ? UNSET : this.displayValue(field.key, current, options);
 				setting.addDropdown((d) => {
 					d.addOption(UNSET, 'Default');
 					for (const opt of options) d.addOption(opt, opt);
@@ -209,6 +230,17 @@ class FormModal extends DseModal {
 				setting.addText((t) => t.setValue(current == null ? '' : scalarToString(current)).onChange(set));
 				break;
 		}
+	}
+
+	/** SC-489 D4: what a select shows for a present value. The raw value when it is an option; else the
+	 *  normalised copy's value when THAT is an option (`Chips` shows `chips`); else the raw value (it
+	 *  matches nothing, so the dropdown stays blank beside the validation error). `working` is left
+	 *  alone, so an untouched `Chips` is still saved as `Chips`. */
+	private displayValue(key: string, current: unknown, options: string[]): string {
+		const raw = scalarToString(current);
+		if (options.includes(raw)) return raw;
+		const normalised = this.checked[key];
+		return typeof normalised === 'string' && options.includes(normalised) ? normalised : raw;
 	}
 
 	/** Set `key`, putting a key that is new to `working` back at its source position: after every
@@ -236,8 +268,10 @@ class FormModal extends DseModal {
 
 	/** Current body text: raw textarea verbatim, else serialize(model)/stringify(working) —
 	 *  re-emitting the popped `prefs:` map ahead of the body via the SAME withPrefOverrides
-	 *  the pipeline uses (Critical 1), when this block carried one. The preview and Save both
-	 *  call this on the same `working`, so the preview matches what Save writes (SC-488). */
+	 *  the pipeline uses (Critical 1), when this block carried one. Built from the raw `working`
+	 *  (SC-489: validation's transforms never touch it), so Save writes what the source said plus
+	 *  only what the user changed. The preview parses `checked` with this text as its body, the same
+	 *  pair the render pipeline gives parse() for the saved block (normalised data, text as written). */
 	private currentBody(): string {
 		if (this.rawMode) return this.rawText;
 		const data = this.working;
@@ -262,6 +296,15 @@ class FormModal extends DseModal {
 		return (overrides ? stringifyYaml({ prefs: overrides }) + body : body).trimEnd();
 	}
 
+	/** SC-489: validate a fresh container clone of `working` and keep it as `checked`. The transforms
+	 *  rewrite the clone only. */
+	private normalise(): string[] {
+		this.checked = cloneContainers(this.working);
+		if (!this.def.schema) return [];
+		const result = this.validation.validate(this.def.id, this.def.schema, this.checked);
+		return result.errors.map((e) => `${e.path || 'root'}: ${e.message}`);
+	}
+
 	private revalidate(): void {
 		let messages: string[] = [];
 		if (this.rawMode) {
@@ -272,8 +315,7 @@ class FormModal extends DseModal {
 				messages = [error instanceof Error ? error.message : String(error)];
 			}
 		} else if (this.def.schema) {
-			const result = this.validation.validate(this.def.id, this.def.schema, this.working);
-			messages = result.errors.map((e) => `${e.path || 'root'}: ${e.message}`);
+			messages = this.normalise();
 		}
 		this.saveDisabled = messages.length > 0;
 		this.saveHandle?.setDisabled(this.saveDisabled);
@@ -285,14 +327,14 @@ class FormModal extends DseModal {
 	}
 
 	/** SC-488 D2 (generic, no per-element form code): the "Default (…)" label names the enum option
-	 *  `v` for which `def.parse({...working, key: v})` equals `def.parse(working without key)` -- i.e.
+	 *  `v` for which `def.parse({...checked, key: v})` equals `def.parse(checked without key)` -- i.e.
 	 *  what the block actually uses when the key is absent. Exactly one hit -> `Default (v)`; no hit ->
 	 *  `Default (none)`; several hits -> `Default`. A parse() that throws keeps the previous label. */
 	private refreshDefaultLabels(): void {
 		for (const entry of this.defaultOptions) {
 			try {
 				const key = entry.field.key;
-				const absent = { ...this.working };
+				const absent = { ...this.checked };
 				delete absent[key];
 				const signature = (data: Record<string, unknown>): string | undefined =>
 					JSON.stringify(this.def.parse({ ...data }, stringifyYaml(data)));
@@ -320,7 +362,7 @@ class FormModal extends DseModal {
 		this.previewEl.empty();
 		if (this.saveDisabled) return;
 		try {
-			const model = this.def.parse(this.rawMode ? (parseYaml(this.rawText) ?? {}) : this.working, this.currentBody());
+			const model = this.def.parse(this.rawMode ? (parseYaml(this.rawText) ?? {}) : this.checked, this.currentBody());
 			// Critical 2: the preview must NEVER become a second write path. Mount with a
 			// PREVIEW host — canPersist: false (most elements, e.g. stamina-bar, already
 			// gate their own click-to-edit affordance on this and simply won't attach a
