@@ -153,6 +153,26 @@ describe('SC-455: fenceLine splices with a prefix', () => {
 		expect(fenceAlias(matchFenceLine(`\`\`\`ds-counter${tail}`)!.rest)).toBe('ds-counter');
 	});
 
+	// SC-487, measured in Obsidian 1.14.4: Live Preview ends the name at a zero-width character (renders the block), so the language
+	// is the name before it - the pin must find the block it renders. Inside the name no mode renders it (the character ends the
+	// name, it is not stripped from it), and before the name no mode renders it.
+	test.each(['\u200b', '\u200c', '\u200d', '\u2060', '\ufeff'])('a zero-width character %j ends the name: after it the language is ds-counter, inside it the name stops short, before it the fence is no ds-counter block', (z) => {
+		for (const tail of [z, `${z}x`, `${z} extra`, ` ${z}`, `${z}${z}`]) {
+			expect(parseOpenFenceLine(`\`\`\`ds-counter${tail}`)?.language).toBe('ds-counter');
+			expect(fenceAlias(matchFenceLine(`\`\`\`ds-counter${tail}`)!.rest)).toBe('ds-counter');
+		}
+		expect(fenceLanguage(`ds-co${z}unter`)).toBe('ds-co');
+		expect(fenceLanguage(`${z}ds-counter`)).toBe(`${z}ds-counter`);
+		expect(fenceLanguage(` ${z}ds-counter`)).toBe(`${z}ds-counter`);
+		expect(['', ' '].map((pad) => fenceLanguage(`${pad}${z}`))).toEqual(['', '']);
+	});
+
+	test('replaceFenceBlock re-emits an opening line that holds a zero-width character byte for byte', () => {
+		const open = '```ds-counter' + String.fromCharCode(0x200b);
+		const note = ['top', open, 'a: 1', '```', 'bottom'].join('\n');
+		expect(replaceFenceBlock(note, 1, 3, 'a: 2')).toBe(['top', open, 'a: 2', '```', 'bottom'].join('\n'));
+	});
+
 	test('replaceFenceBlock re-emits a spaced opening line byte for byte, in LF, CRLF and lone-CR notes', () => {
 		const lf = ['top', '``` ds-counter  extra', 'a: 1', '```', 'bottom'].join('\n');
 		expect(replaceFenceBlock(lf, 1, 3, 'a: 2')).toBe(['top', '``` ds-counter  extra', 'a: 2', '```', 'bottom'].join('\n'));

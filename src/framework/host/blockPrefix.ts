@@ -43,21 +43,26 @@ export function matchFenceMarker(line: string): FenceMarker | null {
 }
 
 /**
- * SC-457 — the LANGUAGE of a fence (`rest` from `matchFenceMarker`, or anything past the fence run): skip leading
- * spaces and tabs only; the name then ends at the first whitespace character of any kind. The ONE definition every
+ * SC-457 / SC-487 — the LANGUAGE of a fence (`rest` from `matchFenceMarker`, or anything past the fence run): skip leading
+ * spaces and tabs only; the name then ends at the first whitespace character of any kind, or at the first of the
+ * zero-width characters \u200b \u200c \u200d \u2060 (\ufeff is whitespace to JS already). The ONE definition every
  * site that compares a fence's language uses (the hosts' fence parse, anchor.ts' alias, the sidebar command, the
  * autocomplete scan, the e2e scanner's type).
  *
  * Why: Obsidian 1.14.4 renders ```` ``` ds-counter ````, ```` ```   ds-counter ```` and ```` ```\tds-counter ```` as the
  * `ds-counter` block (Reading view and Live Preview), so a parse that took the token at column 0 saw their language as ''.
- * A no-break space, U+3000, form feed or vertical tab BEFORE the name is no block in Obsidian (measured), so the name then
- * keeps that character and is no registered language. After the name any whitespace ends it, as before SC-457
- * (```` ```ds-counter\u3000 extra ````, ```` ```ds-counter\u00a0x ```` stay `ds-counter`). '' for a bare fence.
+ * A no-break space, U+3000, form feed, vertical tab or zero-width character BEFORE the name is no block in Obsidian
+ * (measured), so the name then keeps that character and is no registered language. After the name any whitespace ends it
+ * (```` ```ds-counter\u3000 extra ````, ```` ```ds-counter\u00a0x ```` stay `ds-counter`), and so does a zero-width
+ * character: Live Preview (the only mode that reads it so) renders ```` ```ds-counter\u200b ```` and
+ * ```` ```ds-counter\u200bx ```` as the block (SC-487, measured; Reading view shows plain code for them), while
+ * ```` ```ds-co\u200bunter ```` is no block in either mode - the character ends the name, it is not stripped from it.
+ * '' for a bare fence.
  */
 export function fenceLanguage(info: string): string {
 	const token = /^[ \t]*([^ \t]*)/.exec(info)![1];
-	const name = /^\s*\S*/.exec(token)![0];
-	return name.trim() === '' ? '' : name; // whitespace only (a bare fence, a trailing CR / no-break space): no language
+	const name = /^[\s\u200b-\u200d\u2060]*[^\s\u200b-\u200d\u2060]*/.exec(token)![0];
+	return /^[\s\u200b-\u200d\u2060]*$/.test(name) ? '' : name; // whitespace / zero-width only (a bare fence, a trailing CR / no-break space): no language
 }
 
 /** How many quote markers `prefix` holds, and how many spaces of indentation follow the last one. */

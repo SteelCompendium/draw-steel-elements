@@ -8,12 +8,13 @@
 // Notes are split on '\n' only, so a CRLF note's lines keep their '\r' and every comparison stays
 // byte-exact (SC-453).
 // blockPrefix.ts must stay dependency-free: an `obsidian` / DOM import there would stop this file loading in the wdio worker.
-import { matchFenceMarker, stripBlockPrefix } from '../../src/framework/host/blockPrefix';
+import { fenceLanguage, matchFenceMarker, stripBlockPrefix } from '../../src/framework/host/blockPrefix';
 
 export interface Fence {
 	/** The block TYPE: the first token of the info string after skipping leading spaces and tabs, so
 	 *  ```` ``` ds-x ```` is `ds-x` (Obsidian semantics; SC-456 O2) but a no-break space / U+3000 / form feed /
-	 *  vertical tab before it is part of the token (Obsidian does not render those as the block). The same
+	 *  vertical tab or zero-width character before it is part of the token (Obsidian does not render those as the block),
+	 *  and the token ends at the first whitespace or zero-width character (Live Preview, SC-487). The same
 	 *  value as the product's `language` (blockPrefix.ts `fenceLanguage`, SC-457). '' for a bare fence. */
 	lang: string;
 	/** The whole fence, opening line to closing line, byte for byte. */
@@ -38,11 +39,8 @@ interface OpenFence {
 	len: number;
 }
 
-/** The type of an opening fence line's info string (see `Fence.lang`). */
-const typeOf = (rest: string): string => {
-	const name = /^\s*\S*/.exec(/^[ \t]*([^ \t]*)/.exec(rest)![1])![0];
-	return name.trim() === '' ? '' : name;
-};
+/** The type of an opening fence line's info string (see `Fence.lang`): the product's own rule, imported not copied (SC-487). */
+const typeOf = (rest: string): string => fenceLanguage(rest);
 
 /** True when `line` closes the fence `open`: same character, at least as long, nothing but whitespace
  *  after the run, and in the same quote as the opener (the product's `isFenceClose`). */

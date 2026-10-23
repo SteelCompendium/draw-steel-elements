@@ -175,6 +175,14 @@ describe('e2e integrity: agreement with the product parser (SC-456 O1)', () => {
 		['> ```ds-x', 'ds-x'], ['> > ```ds-x extra', 'ds-x'], ['>```ds-x', 'ds-x'], ['> ``` ds-x', 'ds-x'], ['> ~~~', ''], ['>   ```ds-x', 'ds-x'],
 		['    ```ds-x', null], ['  ```ds-x', null], ['``', null], ['~~', null], ['``ds-x', null], ['text', null], ['', null],
 		['```ds-x\r', 'ds-x'], ['``` ds-x extra\r', 'ds-x'], ['```\r', ''], ['> ```\r', ''],
+		// SC-487, measured in Obsidian 1.14.4: AFTER the name Live Preview ends it at a zero-width character, so the opener is
+		// the block (Reading view shows plain code for U+200B/200C/200D/2060; U+FEFF is whitespace to JS already). INSIDE the name
+		// no mode renders it (the character ends the name, it is not stripped from it), and BEFORE the name no mode renders it.
+		...['\u200b', '\u200c', '\u200d', '\u2060', '\ufeff'].flatMap((z): [string, string | null][] => [
+			[`\`\`\`ds-x${z}`, 'ds-x'], [`\`\`\`ds-x${z}x`, 'ds-x'], [`\`\`\`ds-x${z} extra`, 'ds-x'], [`\`\`\`ds-x ${z}`, 'ds-x'], [`\`\`\` ds-x${z}`, 'ds-x'],
+			[`~~~ds-x${z}`, 'ds-x'], [`> \`\`\`ds-x${z}`, 'ds-x'], [`\`\`\`ds-x${z}${z}`, 'ds-x'],
+			[`\`\`\`ds-${z}x`, 'ds-'], [`\`\`\`${z}ds-x`, `${z}ds-x`], [`\`\`\` ${z}ds-x`, `${z}ds-x`], [`\`\`\`${z}`, ''], [`\`\`\` ${z}`, ''],
+		]),
 	];
 	const lines = cases.map(([line]) => line);
 	test('open-line recognition: the e2e scanner opens a fence exactly where matchFenceMarker does, with the same prefix / run / info string', () => {
