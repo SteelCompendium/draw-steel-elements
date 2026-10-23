@@ -650,11 +650,8 @@ describe('SC-495: focus stays inside the stepper when a ± button disables itsel
 			: handle.rootEl.querySelector('.dse-stepper__value')) as HTMLElement;
 		return { handle, dec, inc, target, onChange };
 	}
-	/** jsdom has no :focus-visible; say what Chromium would (view-adoption.test.ts does the same). */
-	function ring(el: HTMLElement, visible: boolean): void {
-		const realMatches = el.matches.bind(el);
-		el.matches = (sel: string) => (sel === ':focus-visible' ? visible : realMatches(sel));
-	}
+	/** A real pointer click carries `detail >= 1`; a keyboard-activated (or programmatic) click carries 0. */
+	const pointerClick = (el: HTMLElement): boolean => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
 
 	test.each([
 		['editable', true],
@@ -662,7 +659,6 @@ describe('SC-495: focus stays inside the stepper when a ± button disables itsel
 	])('%s: "-" reaching min moves focus to the value node, not <body>, with preventScroll and the keyboard ring', (_n, editable) => {
 		const { dec, inc, target, onChange } = mount({ value: 1, min: 0, max: 5, editable });
 		const focusSpy = jest.spyOn(target, 'focus');
-		ring(dec, true);
 		dec.focus();
 		dec.click();
 		expect(dec.disabled).toBe(true);
@@ -677,7 +673,6 @@ describe('SC-495: focus stays inside the stepper when a ± button disables itsel
 		['read-only', false],
 	])('%s: "+" reaching max moves focus to the value node', (_n, editable) => {
 		const { dec, inc, target } = mount({ value: 4, min: 0, max: 5, editable });
-		ring(inc, true);
 		inc.focus();
 		inc.click();
 		expect(inc.disabled).toBe(true);
@@ -688,13 +683,27 @@ describe('SC-495: focus stays inside the stepper when a ± button disables itsel
 	test.each([
 		['editable', true],
 		['read-only', false],
-	])('%s: a POINTER press (button not :focus-visible) moves nothing (no wheel-on-input, no soft keyboard)', (_n, editable) => {
+	])('%s: a POINTER click (detail 1) moves nothing (no wheel-on-input, no soft keyboard)', (_n, editable) => {
 		const { inc, target } = mount({ value: 4, min: 0, max: 5, editable });
 		const focusSpy = jest.spyOn(target, 'focus');
-		ring(inc, false);
 		inc.focus();
-		inc.click();
+		pointerClick(inc);
 		expect(inc.disabled).toBe(true);
+		expect(focusSpy).not.toHaveBeenCalled();
+		expect(document.activeElement).not.toBe(target);
+	});
+
+	test('a POINTER click on a button that already holds KEYBOARD focus (:focus-visible) still moves nothing', () => {
+		// A note's click shield keeps the button's earlier keyboard focus through a mouse click, so the
+		// press kind is read from the click event, never from the button's focus state.
+		const { dec, target, onChange } = mount({ value: 1, min: 0, max: 5, editable: true });
+		const realMatches = dec.matches.bind(dec);
+		dec.matches = (sel: string) => (sel === ':focus-visible' ? true : realMatches(sel));
+		const focusSpy = jest.spyOn(target, 'focus');
+		dec.focus();
+		pointerClick(dec);
+		expect(dec.disabled).toBe(true);
+		expect(onChange).toHaveBeenCalledWith(0);
 		expect(focusSpy).not.toHaveBeenCalled();
 		expect(document.activeElement).not.toBe(target);
 	});
@@ -739,7 +748,6 @@ describe('SC-495: focus stays inside the stepper when a ± button disables itsel
 		// clampInitial:false seeds an out-of-range 4 under min = max = 3; "-" steps it back and both disable.
 		const { dec, inc, target } = mount({ value: 4, min: 3, max: 3, clampInitial: false, editable });
 		expect(dec.disabled).toBe(false);
-		ring(dec, true);
 		dec.focus();
 		dec.click();
 		expect(dec.disabled).toBe(true);

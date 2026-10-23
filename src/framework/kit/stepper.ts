@@ -93,15 +93,6 @@ export interface StepperHandle {
 	commitDraft(): void;
 }
 
-/** Did `el` show its focus ring (`:focus-visible`) — i.e. was it reached/pressed by keyboard? */
-function showsFocusRing(el: HTMLElement): boolean {
-	try {
-		return el.matches(':focus-visible');
-	} catch {
-		return true; // an engine without :focus-visible: treat as keyboard
-	}
-}
-
 /** Mounts a decrement / value / increment triad into `parent` (D2 §2.2). */
 export function stepper(
 	parent: HTMLElement,
@@ -142,7 +133,7 @@ export function stepper(
 
 	const minusBtn = iconButton(
 		rootEl,
-		{ icon: 'minus', label: `Decrease ${opts.label}`, onClick: () => commit(current - step) },
+		{ icon: 'minus', label: `Decrease ${opts.label}`, onClick: (evt) => commit(current - step, evt.detail === 0) },
 		owner,
 	);
 	minusBtn.buttonEl.addClass('dse-stepper__btn');
@@ -169,14 +160,14 @@ export function stepper(
 
 	const plusBtn = iconButton(
 		rootEl,
-		{ icon: 'plus', label: `Increase ${opts.label}`, onClick: () => commit(current + step) },
+		{ icon: 'plus', label: `Increase ${opts.label}`, onClick: (evt) => commit(current + step, evt.detail === 0) },
 		owner,
 	);
 	plusBtn.buttonEl.addClass('dse-stepper__btn');
 	if (opts.control) stampControl(plusBtn.buttonEl, `${opts.control}.inc`);
 
 	/** Reflects `current` onto the DOM in place + auto-disables at the bounds (real property). */
-	function render(): void {
+	function render(keyboard = false): void {
 		if (inputEl) inputEl.value = String(current);
 		if (valueEl) {
 			if (opts.renderValue) {
@@ -186,17 +177,20 @@ export function stepper(
 		}
 		// SC-495: a ± button that disables itself WHILE IT HOLDS FOCUS makes Chromium drop focus to
 		// <body> (Enter/Space then do nothing, the focus ring is gone, a screen reader loses its place).
-		// For a KEYBOARD press (the button was :focus-visible) hand focus to the value node instead.
+		// For a KEYBOARD press hand focus to the value node instead. "Keyboard" is read from the
+		// activating click event (`detail === 0`: Enter/Space and a programmatic click; a real pointer
+		// click has `detail >= 1`), NOT from the button's :focus-visible state: a note's click shield
+		// keeps a button's earlier keyboard focus through a mouse click.
 		// Never the opposite button: a held Enter auto-repeats and would ping-pong the value.
 		// A POINTER press moves nothing (the base behaviour): a focused number field takes the mouse
-		// wheel (a scroll over it would change the pending value), and a field focused by a tap raises
-		// the soft keyboard on a phone. A disable while focus is elsewhere moves nothing either.
+		// wheel (a scroll over it would change the pending value, and a click away would write it), and
+		// a field focused by a tap raises the soft keyboard on a phone. A disable while focus is
+		// elsewhere (setValue, a typed commit) moves nothing either.
 		const active = rootEl.ownerDocument.activeElement;
-		const held = active === minusBtn.buttonEl || active === plusBtn.buttonEl ? (active as HTMLElement) : null;
-		const keyboard = held ? showsFocusRing(held) : false;
+		const held = active === minusBtn.buttonEl || active === plusBtn.buttonEl ? (active as HTMLButtonElement) : null;
 		minusBtn.setDisabled(opts.min !== undefined && current <= opts.min);
 		plusBtn.setDisabled(opts.max !== undefined && current >= opts.max);
-		if (held && keyboard && (held as HTMLButtonElement).disabled) {
+		if (held && keyboard && held.disabled) {
 			// `focusVisible` (Chromium 124+) shows the ring on the new target; older engines ignore the key.
 			(inputEl ?? valueEl)?.focus({ preventScroll: true, focusVisible: true } as FocusOptions);
 		}
@@ -210,14 +204,14 @@ export function stepper(
 	 * the typed path below pre-applies the FULL clamp, so typed commits always land
 	 * inside [min,max].
 	 */
-	function commit(next: number): void {
+	function commit(next: number, keyboard = false): void {
 		next = stepClamp(next);
 		if (next === current) {
-			render();
+			render(keyboard);
 			return;
 		}
 		current = next;
-		render();
+		render(keyboard);
 		opts.onChange(current);
 	}
 
