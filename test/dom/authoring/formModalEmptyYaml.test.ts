@@ -17,6 +17,11 @@ import { partyElement } from '@/elements/party/definition';
 import { encounterElement } from '@/elements/encounter/definition';
 import { montageElement } from '@/elements/montage/definition';
 import { projectElement } from '@/elements/project/definition';
+import { valuesRowElement } from '@/elements/values-row/definition';
+import { characteristicsElement } from '@/elements/characteristics/definition';
+import { featureElement } from '@/elements/feature/definition';
+import { featureblockElement } from '@/elements/featureblock/definition';
+import { sccElement } from '@/elements/scc/definition';
 import { FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main';
 import { makeCompendiumDeps } from '../elements/_refHarness';
 import { openFormEditor } from '@/authoring/FormModal';
@@ -39,11 +44,20 @@ interface Case {
 /** SC-493 r1b (ledger D5): shown instead of the element's own message when the box reads as no data. */
 const EMPTY_MESSAGE = "This block can't be empty. Add at least one setting, or press Cancel.";
 
+/** The element's own authoring example (a body that renders). */
+function example(def: ElementDefinition<any>): string {
+	return (def.authoring as { example: string }).example.trim();
+}
+
 const CASES: Case[] = [
 	{ name: 'counter', def: counterElement, alias: 'ds-counter', source: 'current_value: 3', acceptsEmpty: false },
 	{ name: 'negotiation', def: negotiationElement, alias: 'ds-negotiation', source: 'name: Duke', acceptsEmpty: false },
 	{ name: 'party', def: partyElement, alias: 'ds-party', source: 'heroes: []', acceptsEmpty: false, invalid: { box: 'just text', error: /^The input must be a YAML object\.$/ } },
 	{ name: 'encounter', def: encounterElement, alias: 'ds-encounter', source: 'heroes: []', acceptsEmpty: false, invalid: { box: 'just text', error: /^The input must be a YAML object\.$/ } },
+	{ name: 'values-row', def: valuesRowElement, alias: 'ds-values-row', source: example(valuesRowElement), acceptsEmpty: false },
+	{ name: 'characteristics', def: characteristicsElement, alias: 'ds-characteristics', source: example(characteristicsElement), acceptsEmpty: false },
+	{ name: 'feature', def: featureElement, alias: 'ds-feature', source: example(featureElement), acceptsEmpty: false },
+	{ name: 'featureblock', def: featureblockElement, alias: 'ds-featureblock', source: example(featureblockElement), acceptsEmpty: false },
 	{ name: 'montage', def: montageElement, alias: 'ds-montage', source: 'title: Heist', acceptsEmpty: true },
 	{ name: 'project', def: projectElement, alias: 'ds-project', source: 'name: Forge', acceptsEmpty: true },
 ];
@@ -143,6 +157,22 @@ describe.each(CASES)('SC-493: emptying the raw-YAML box of $name', (c) => {
 			await flush();
 			expect(h.app.vault.getContent(PATH)).toBe(before);
 		}
+	});
+});
+
+describe('SC-493 r2: the emptied preview drops its read-only badge', () => {
+	test('after a valid box is emptied, .dse-form__preview carries no data-dse-readonly (the badge would cover the message)', async () => {
+		const c = CASES[0];
+		const { render } = await setup(c);
+		const { el } = await render(c.source);
+		const form = openForm(el);
+		const preview = document.querySelector('.modal-container .dse-form__preview')!;
+		expect(preview.getAttribute('data-dse-readonly')).toBe('true'); // a valid box mounts the preview
+		form.type('');
+		expect(form.save.disabled).toBe(true);
+		expect(preview.hasAttribute('data-dse-readonly')).toBe(false);
+		form.type('current_value: 4');
+		expect(preview.getAttribute('data-dse-readonly')).toBe('true'); // the mount path sets it again
 	});
 });
 
@@ -278,6 +308,32 @@ describe('SC-493: the pipeline body reader, not a private copy', () => {
 		type('a: 2');
 		expect(modal.canSave()).toBe(false);
 		expect(modal.body.querySelector('.dse-form__errors')?.textContent).toBe('bad shape');
+		modal.close();
+	});
+
+	test('a model of kind "invalid" (the shared withReference shape) is a check failure that shows its own message', () => {
+		const { def } = recordingDef({ parse: (data: unknown) => (data === null ? { kind: 'invalid', message: 'Empty block.' } : { kind: 'ref', raw: 'x' }) });
+		const { modal, type } = openStub(def, 'a: 1');
+		expect(modal.canSave()).toBe(true);
+		type('');
+		expect(modal.canSave()).toBe(false);
+		expect(modal.body.querySelector('.dse-form__errors')?.textContent).toBe('Empty block.');
+		modal.close();
+	});
+
+	test('ds-scc: a body its parse refuses (inline link, empty) keeps Save off with its own message; a code saves', () => {
+		const code = (sccElement.authoring as { example: string }).example.trim();
+		const { modal, type } = openStub(sccElement, code);
+		expect(modal.canSave()).toBe(true);
+		for (const box of ['[Panther](scc.v1:mcdm.monsters.v1/statblock.monster/panther)', '']) {
+			type(box);
+			const refused = sccElement.parse(undefined, box) as { kind: string; message: string };
+			expect(refused.kind).toBe('invalid');
+			expect(modal.canSave()).toBe(false);
+			expect(modal.body.querySelector('.dse-form__errors')?.textContent).toBe(refused.message);
+		}
+		type(code);
+		expect(modal.canSave()).toBe(true);
 		modal.close();
 	});
 
