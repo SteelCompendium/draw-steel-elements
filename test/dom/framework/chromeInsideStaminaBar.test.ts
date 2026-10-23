@@ -15,6 +15,7 @@ import type { ElementPipelineDeps } from '@/framework/pipeline';
 import type { BlockHost, RenderMode } from '@/framework/host/BlockHost';
 import { staminaBarElement } from '@/elements/stamina-bar/definition';
 import * as FormModal from '@/authoring/FormModal';
+import * as SidebarRegistration from '@/framework/sidebar/registration';
 import { makeCompendiumDeps } from '../elements/_refHarness';
 import { FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main';
 
@@ -53,13 +54,16 @@ async function mountWithAuthoring(): Promise<HTMLElement> {
 const staminaModals = (): number => document.body.querySelectorAll('.dse-modal').length;
 
 let openForm: jest.SpyInstance;
+let pinToSidebar: jest.SpyInstance;
 
 beforeEach(() => {
 	openForm = jest.spyOn(FormModal, 'openFormEditor').mockImplementation(() => ({}) as never);
+	pinToSidebar = jest.spyOn(SidebarRegistration, 'requestPinToSidebar').mockResolvedValue(undefined);
 });
 
 afterEach(() => {
 	openForm.mockRestore();
+	pinToSidebar.mockRestore();
 	document.body.innerHTML = '';
 });
 
@@ -96,6 +100,17 @@ describe('SC-492 — a chrome button inside the stamina bar does not also open t
 		expect(staminaModals()).toBe(0);
 	});
 
+	test('the Pin to sidebar button (experimental) pins and does not open the Stamina modal', async () => {
+		const root = await mountWithAuthoring();
+		const pin = root.querySelector<HTMLElement>('.dse-chrome [data-dse-chrome-item="pin"]');
+		expect(pin).not.toBeNull();
+
+		pin!.click();
+
+		expect(pinToSidebar).toHaveBeenCalledTimes(1);
+		expect(staminaModals()).toBe(0);
+	});
+
 	test('a click anywhere else on the bar still opens the Stamina modal, and not the edit form', async () => {
 		const root = await mountWithAuthoring();
 		const bar = root.querySelector<HTMLElement>('.dse-stamina')!;
@@ -105,5 +120,16 @@ describe('SC-492 — a chrome button inside the stamina bar does not also open t
 		expect(staminaModals()).toBe(1);
 		expect(document.body.querySelector('.dse-modal__title')?.textContent).toBe('Stamina');
 		expect(openForm).not.toHaveBeenCalled();
+	});
+
+	test('a .dse-chrome ABOVE the bar does not swallow a click on the bar', async () => {
+		const root = await mountWithAuthoring();
+		const outer = document.createElement('div');
+		outer.className = 'dse-chrome';
+		outer.appendChild(root);
+
+		root.querySelector<HTMLElement>('.dse-stamina__track')!.click();
+
+		expect(staminaModals()).toBe(1);
 	});
 });

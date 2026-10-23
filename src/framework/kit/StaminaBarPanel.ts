@@ -137,7 +137,10 @@ export function renderStaminaBar(
 				// bubble here. They belong to the chrome button alone. The event is NOT
 				// stopped at the panel instead: document-level listeners (a popover's
 				// click-outside close, Obsidian's own handlers) still need to see it.
-				if ((evt.target as Element | null)?.closest?.('.dse-chrome')) return;
+				// Only a panel INSIDE this bar counts: a `.dse-chrome` further up the tree is some
+				// other block's panel and must not swallow a click on the bar.
+				const chrome = (evt.target as Element | null)?.closest?.('.dse-chrome');
+				if (chrome && bar.contains(chrome)) return;
 				onBarClick();
 			});
 			stampControl(bar, opts.control);
