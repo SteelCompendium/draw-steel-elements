@@ -40,7 +40,7 @@ export function parseOpenFenceLine(line: string | undefined): OpenFenceLine | nu
 	return {
 		prefix: match.prefix,
 		fence: match.marker,
-		language: fenceLanguage(match.rest),
+		language: fenceLanguage(match.rest, match.marker[0]),
 		info: match.rest.trimEnd(),
 	};
 }

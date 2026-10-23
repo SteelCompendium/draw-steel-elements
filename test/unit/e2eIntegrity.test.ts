@@ -8,6 +8,11 @@ import { parseOpenFenceLine } from '../../src/framework/host/fenceLine';
 import { fenceAlias, isFenceClose, listFences, matchFenceLine } from '../../src/framework/sidebar/anchor';
 
 const nl = (...lines: string[]): string => lines.join('\n');
+/** The anchor alias of an opening fence line, as the product reads it (the fence kind decides how a backtick in the info string reads). */
+const aliasOf = (line: string): string => {
+	const m = matchFenceLine(line)!;
+	return fenceAlias(m.rest, m.marker[0]);
+};
 const T0 = new Set([0]);
 
 describe('e2e integrity: fence forms the product accepts are not false failures', () => {
@@ -193,6 +198,9 @@ describe('e2e integrity: agreement with the product parser (SC-456 O1)', () => {
 		['```ds-xx', 'ds-xx'], ['```ds-x_x', 'ds-x_x'], ['```ds-x/x', 'ds-x/x'], ['```ds-x#', 'ds-x#'], ['```ds-x+', 'ds-x+'], ['```ds-x-', 'ds-x-'], ['```ds-x1', 'ds-x1'],
 		// SC-487 r2 review: Obsidian's fence regex ends in `[^\n`]*$`, so a backtick in the info string (either fence kind) is no opener in
 		// either mode: the language is the trimmed info string, never `ds-x`.
+		// ...but a TILDE fence may carry one (CommonMark) and Reading view draws it, reading the first space/tab word (SC-487 r3 review).
+		['~~~ds-x `x`', 'ds-x'], ['~~~ds-x x`y', 'ds-x'], ['~~~ds-x\t`x`', 'ds-x'], ['> ~~~ds-x `x`', 'ds-x'], ['~~~ ds-x `x`', 'ds-x'],
+		['~~~\u00a0ds-x `x`', '\u00a0ds-x'], ['~~~ds-x\u200b `x`', 'ds-x\u200b'], ['~~~ds-x.y `x`', 'ds-x.y'], ['~~~ `ds-x y', '`ds-x'],
 		['```ds-x`x', 'ds-x`x'], ['~~~ds-x`x', 'ds-x`x'], ['```ds-x `x', 'ds-x `x'], ['``` ds-x`', 'ds-x`'], ['> ```ds-x`x ', 'ds-x`x'],
 		['```ds-x_', 'ds-x_'], ['``` ds-x/y z', 'ds-x/y'], ['```c++ x', 'c++'], ['```c#', 'c#'],
 	];
@@ -213,7 +221,7 @@ describe('e2e integrity: agreement with the product parser (SC-456 O1)', () => {
 			// the product's `language` (host parse), the anchor alias and the e2e scanner's type are one definition (SC-457), and each
 			// EQUALS the expected language: agreement alone is not enough (a shared bug passes it)
 			expect([line, 'host', open.language]).toEqual([line, 'host', expected]);
-			expect([line, 'anchor', fenceAlias(matchFenceLine(line)!.rest)]).toEqual([line, 'anchor', expected]);
+			expect([line, 'anchor', aliasOf(line)]).toEqual([line, 'anchor', expected]);
 			expect([line, 'e2e', f.lang]).toEqual([line, 'e2e', expected]);
 		}
 	});

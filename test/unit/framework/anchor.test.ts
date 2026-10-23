@@ -310,24 +310,24 @@ describe('D8 Task 2 review fix — anchor.ts fence scanner (finding #4, CRITICAL
 	// with the bare language token — exactly what the chrome "Pin to sidebar" item passes.
 	describe('MEDIUM-2b: alias is the first info-string token, not the whole trimmed rest', () => {
 		test('fenceAlias extracts the first token; a bare language and an empty rest are unaffected', () => {
-			expect(fenceAlias('ds-counter extra')).toBe('ds-counter');
-			expect(fenceAlias('ds-counter')).toBe('ds-counter');
-			expect(fenceAlias('')).toBe('');
-			expect(fenceAlias('ds-counter   trailing   words')).toBe('ds-counter');
+			expect(fenceAlias('ds-counter extra', '`')).toBe('ds-counter');
+			expect(fenceAlias('ds-counter', '`')).toBe('ds-counter');
+			expect(fenceAlias('', '`')).toBe('');
+			expect(fenceAlias('ds-counter   trailing   words', '`')).toBe('ds-counter');
 		});
 
 		// SC-457: an UNTRIMMED rest (whitespace between the fence and the language) is the same alias.
 		test('fenceAlias skips leading whitespace: " ds-counter" is "ds-counter", not the empty language', () => {
-			expect(fenceAlias(' ds-counter')).toBe('ds-counter');
-			expect(fenceAlias('   ds-counter extra')).toBe('ds-counter');
-			expect(fenceAlias('\tds-counter')).toBe('ds-counter');
-			expect(fenceAlias('   ')).toBe('');
+			expect(fenceAlias(' ds-counter', '`')).toBe('ds-counter');
+			expect(fenceAlias('   ds-counter extra', '`')).toBe('ds-counter');
+			expect(fenceAlias('\tds-counter', '`')).toBe('ds-counter');
+			expect(fenceAlias('   ', '`')).toBe('');
 		});
 
 		test('SC-457: only a space or a tab may precede the language - a no-break space, U+3000, form feed or vertical tab makes no ds-counter block', () => {
 			for (const ws of ['\u00a0', '\u3000', '\f', '\v']) {
 				const note = [`\`\`\`${ws}ds-counter`, 'current_value: 1', '_dse_anchor: abc123', '```'].join('\n');
-				expect(fenceAlias(`${ws}ds-counter`)).not.toBe('ds-counter');
+				expect(fenceAlias(`${ws}ds-counter`, '`')).not.toBe('ds-counter');
 				expect(listFences(note, 'ds-counter')).toEqual([]);
 				expect(findAnchoredBlock(note, 'ds-counter', 'abc123')).toBeNull();
 			}

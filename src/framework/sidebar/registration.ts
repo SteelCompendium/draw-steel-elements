@@ -36,7 +36,7 @@ function aliasAtLine(editor: Editor, line: number): string | null {
 		if (open !== null && stripBlockPrefix(text, open.prefix) === null) open = null; // the quote ended, unclosed
 		if (open === null) {
 			const match = matchFenceLine(text);
-			if (match) open = { fenceChar: match.marker[0], fenceLen: match.marker.length, alias: fenceAlias(match.rest), prefix: match.prefix };
+			if (match) open = { fenceChar: match.marker[0], fenceLen: match.marker.length, alias: fenceAlias(match.rest, match.marker[0]), prefix: match.prefix };
 		} else if (isFenceClose(open, text)) {
 			open = null;
 		}

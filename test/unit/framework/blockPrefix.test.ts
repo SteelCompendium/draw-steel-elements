@@ -10,6 +10,12 @@ import {
 } from '@/framework/host/blockPrefix';
 import { blockBodyLines, emitOpenFenceLine, parseOpenFenceLine, replaceFenceBlock, replaceFenceBody } from '@/framework/host/fenceLine';
 
+/** The anchor alias of an opening fence line, as the product reads it (the fence kind decides how a backtick in the info string reads). */
+const aliasOf = (line: string): string => {
+	const m = matchFenceLine(line)!;
+	return fenceAlias(m.rest, m.marker[0]);
+};
+
 describe('SC-455: matchFenceMarker', () => {
 	test.each([
 		['```ds-counter', '', '```', 'ds-counter'],
@@ -118,7 +124,7 @@ describe('SC-455: fenceLine splices with a prefix', () => {
 	});
 
 	test('fenceLanguage is the one definition: first token of the trimmed info string', () => {
-		expect(['ds-counter', ' ds-counter', ' ds-counter extra', '\t ds-counter\textra', '', '   '].map(fenceLanguage)).toEqual([
+		expect(['ds-counter', ' ds-counter', ' ds-counter extra', '\t ds-counter\textra', '', '   '].map((i) => fenceLanguage(i, '`'))).toEqual([
 			'ds-counter', 'ds-counter', 'ds-counter', 'ds-counter', '', '',
 		]);
 	});
@@ -133,8 +139,8 @@ describe('SC-455: fenceLine splices with a prefix', () => {
 	])('%s before the language is NOT skipped: the fence is not a ds-counter block', (_label, ws) => {
 		expect(parseOpenFenceLine(`\`\`\`${ws}ds-counter`)).toEqual({ prefix: '', fence: '```', language: `${ws}ds-counter`, info: `${ws}ds-counter` });
 		expect(parseOpenFenceLine(`\`\`\` ${ws}ds-counter`)?.language).toBe(`${ws}ds-counter`);
-		expect(fenceLanguage(`${ws}ds-counter`)).not.toBe('ds-counter');
-		expect(fenceLanguage(` ${ws} ds-counter`)).not.toBe('ds-counter');
+		expect(fenceLanguage(`${ws}ds-counter`, '`')).not.toBe('ds-counter');
+		expect(fenceLanguage(` ${ws} ds-counter`, '`')).not.toBe('ds-counter');
 	});
 
 	// A trailing no-break space / U+3000 / FF / VT / space does not change the language (Obsidian renders
@@ -142,7 +148,7 @@ describe('SC-455: fenceLine splices with a prefix', () => {
 	test.each(['\u00a0', '\u3000', '\f', '\v', ' ', ' \u00a0 '])('trailing %j after the language leaves it ds-counter, on the host and the anchor parse alike', (ws) => {
 		for (const opener of [`\`\`\`ds-counter${ws}`, `\`\`\` ds-counter${ws}`]) {
 			expect(parseOpenFenceLine(opener)?.language).toBe('ds-counter');
-			expect(fenceAlias(matchFenceLine(opener)!.rest)).toBe('ds-counter');
+			expect(aliasOf(opener)).toBe('ds-counter');
 		}
 	});
 
@@ -150,7 +156,7 @@ describe('SC-455: fenceLine splices with a prefix', () => {
 	// ```ds-counter<NBSP>x as the block, and Pin to sidebar must find it.
 	test.each(['\u00a0x', '\u3000x', '\fx', '\vx', ' x', '  x', '\tx'])('the name ends at the whitespace in %j: the language is ds-counter', (tail) => {
 		expect(parseOpenFenceLine(`\`\`\`ds-counter${tail}`)?.language).toBe('ds-counter');
-		expect(fenceAlias(matchFenceLine(`\`\`\`ds-counter${tail}`)!.rest)).toBe('ds-counter');
+		expect(aliasOf(`\`\`\`ds-counter${tail}`)).toBe('ds-counter');
 	});
 
 	// SC-487, measured in Obsidian 1.14.4: Live Preview ends the name at a zero-width character (renders the block), so the language
@@ -159,12 +165,12 @@ describe('SC-455: fenceLine splices with a prefix', () => {
 	test.each(['\u200b', '\u200c', '\u200d', '\u2060', '\ufeff'])('a zero-width character %j ends the name: after it the language is ds-counter, inside it the name stops short, before it the fence is no ds-counter block', (z) => {
 		for (const tail of [z, `${z}x`, `${z} extra`, ` ${z}`, `${z}${z}`]) {
 			expect(parseOpenFenceLine(`\`\`\`ds-counter${tail}`)?.language).toBe('ds-counter');
-			expect(fenceAlias(matchFenceLine(`\`\`\`ds-counter${tail}`)!.rest)).toBe('ds-counter');
+			expect(aliasOf(`\`\`\`ds-counter${tail}`)).toBe('ds-counter');
 		}
-		expect(fenceLanguage(`ds-co${z}unter`)).toBe('ds-co');
-		expect(fenceLanguage(`${z}ds-counter`)).toBe(`${z}ds-counter`);
-		expect(fenceLanguage(` ${z}ds-counter`)).toBe(`${z}ds-counter`);
-		expect(['', ' '].map((pad) => fenceLanguage(`${pad}${z}`))).toEqual(['', '']);
+		expect(fenceLanguage(`ds-co${z}unter`, '`')).toBe('ds-co');
+		expect(fenceLanguage(`${z}ds-counter`, '`')).toBe(`${z}ds-counter`);
+		expect(fenceLanguage(` ${z}ds-counter`, '`')).toBe(`${z}ds-counter`);
+		expect(['', ' '].map((pad) => fenceLanguage(`${pad}${z}`, '`'))).toEqual(['', '']);
 	});
 
 	// SC-487 review r1: Live Preview's name is the run of `[\w\/+#-]` (ASCII) - Obsidian's own fence regex, measured on 1.14.4: every
@@ -175,27 +181,38 @@ describe('SC-455: fenceLine splices with a prefix', () => {
 	])('the name ends at %j: the language is ds-counter on the host and the anchor parse alike', (tail) => {
 		for (const opener of [`\`\`\`ds-counter${tail}`, `\`\`\` ds-counter${tail}`]) {
 			expect(parseOpenFenceLine(opener)?.language).toBe('ds-counter');
-			expect(fenceAlias(matchFenceLine(opener)!.rest)).toBe('ds-counter');
+			expect(aliasOf(opener)).toBe('ds-counter');
 		}
 	});
 
 	test.each(['x', '_x', '/x', '#', '+', '-', '9'])('%j right after the name is part of it: the fence is another type, never ds-counter', (tail) => {
-		expect(fenceLanguage(`ds-counter${tail}`)).toBe(`ds-counter${tail}`);
+		expect(fenceLanguage(`ds-counter${tail}`, '`')).toBe(`ds-counter${tail}`);
 		expect(parseOpenFenceLine(`\`\`\`ds-counter${tail}`)?.language).toBe(`ds-counter${tail}`);
 	});
 
 	test.each([['ds-counter`x', 'ds-counter`x'], ['ds-counter `x`', 'ds-counter `x`'], [' ds-counter`x  ', 'ds-counter`x'], ['ds-counter`\u200b', 'ds-counter`\u200b']])(
 		'an info string with a backtick (%j) is no fence opener to Obsidian: its language is the trimmed info string, never ds-counter',
 		(info, expected) => {
-			expect(fenceLanguage(info)).toBe(expected);
+			expect(fenceLanguage(info, '`')).toBe(expected);
 			expect(parseOpenFenceLine(`\`\`\`${info}`)?.language).toBe(expected);
-			expect(fenceAlias(matchFenceLine(`~~~${info}`)!.rest)).toBe(expected);
+			expect(aliasOf(`\`\`\`${info}`)).toBe(expected);
 		},
 	);
 
+	// A TILDE fence may carry a backtick (CommonMark): Live Preview draws nothing, but Reading view draws it as the block and reads the first
+	// word only - split on a space or a tab (SC-487 r3 review, measured on 1.14.4). With no space or tab before the backtick there is no such word.
+	test.each([
+		['~~~ds-counter `x`', 'ds-counter'], ['~~~ds-counter x`y', 'ds-counter'], ['~~~ds-counter\t`x`', 'ds-counter'], ['> ~~~ds-counter `x`', 'ds-counter'], ['~~~  ds-counter `x`', 'ds-counter'],
+		['~~~ds-counter`x', 'ds-counter`x'], ['~~~\u00a0ds-counter `x`', '\u00a0ds-counter'], ['~~~ds-counter\u200b `x`', 'ds-counter\u200b'], ['~~~ds-counter.y `x`', 'ds-counter.y'], ['~~~ `ds-counter x', '`ds-counter'],
+	])('a tilde fence with a backtick in its info string (%j): the language is the first space/tab word, %j', (line, expected) => {
+		expect(parseOpenFenceLine(line)?.language).toBe(expected);
+		expect(aliasOf(line)).toBe(expected);
+		expect(fenceLanguage(line.replace(/^(> )?~~~/, ''), '~')).toBe(expected);
+	});
+
 	test('a first character outside the name set keeps the whole token (no block in either mode); only whitespace / zero-width tokens are empty', () => {
-		expect(['\u00a0ds-counter', '.ds-counter', '\u00e9ds-counter', '\u200eds-counter'].map(fenceLanguage)).toEqual(['\u00a0ds-counter', '.ds-counter', '\u00e9ds-counter', '\u200eds-counter']);
-		expect(['', '  ', '\t', '\r', '\u00a0', '\u3000', '\u200b', '\u200b\u2060 '].map(fenceLanguage)).toEqual(['', '', '', '', '', '', '', '']);
+		expect(['\u00a0ds-counter', '.ds-counter', '\u00e9ds-counter', '\u200eds-counter'].map((i) => fenceLanguage(i, '`'))).toEqual(['\u00a0ds-counter', '.ds-counter', '\u00e9ds-counter', '\u200eds-counter']);
+		expect(['', '  ', '\t', '\r', '\u00a0', '\u3000', '\u200b', '\u200b\u2060 '].map((i) => fenceLanguage(i, '`'))).toEqual(['', '', '', '', '', '', '', '']);
 	});
 
 	test('replaceFenceBlock re-emits an opening line that holds a zero-width character byte for byte', () => {

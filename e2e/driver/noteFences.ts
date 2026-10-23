@@ -40,7 +40,7 @@ interface OpenFence {
 }
 
 /** The type of an opening fence line's info string (see `Fence.lang`): the product's own rule, imported not copied (SC-487). */
-const typeOf = (rest: string): string => fenceLanguage(rest);
+const typeOf = (rest: string, fenceChar: string): string => fenceLanguage(rest, fenceChar);
 
 /** True when `line` closes the fence `open`: same character, at least as long, nothing but whitespace
  *  after the run, and in the same quote as the opener (the product's `isFenceClose`). */
@@ -68,7 +68,7 @@ export function scanFences(note: string): Fence[] {
 		const closed = j < lines.length && closes(open, lines[j]);
 		const end = closed ? j : j - 1; // unterminated: the last line still inside the fence (the quote's last line, or the note's)
 		out.push({
-			lang: typeOf(m.rest),
+			lang: typeOf(m.rest, m.marker[0]),
 			text: lines.slice(i, end + 1).join('\n'),
 			openLine: lines[i],
 			closeLine: closed ? lines[j] : null,

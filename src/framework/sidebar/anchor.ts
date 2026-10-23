@@ -267,8 +267,8 @@ export function matchFenceLine(line: string): { prefix: string; marker: string; 
  * SC-457: the definition itself now lives in blockPrefix.ts (`fenceLanguage`), shared with the hosts' own fence
  * parse (fenceLine.ts) - the first token of the TRIMMED info string. This function trims too, so an untrimmed
  * `rest` (` ds-counter`) is no longer read as the empty language. */
-export function fenceAlias(rest: string): string {
-	return fenceLanguage(rest);
+export function fenceAlias(rest: string, fenceChar: string): string {
+	return fenceLanguage(rest, fenceChar);
 }
 
 /** True when `line` is a valid CLOSE for a fence opened with `open` — same character,
@@ -325,7 +325,7 @@ function* iterateFences(content: string, alias: string): Generator<{ info: Block
 		const open = {
 			fenceChar: openMatch.marker[0],
 			fenceLen: openMatch.marker.length,
-			alias: fenceAlias(openMatch.rest),
+			alias: fenceAlias(openMatch.rest, openMatch.marker[0]),
 			prefix: openMatch.prefix,
 		};
 		let j = i + 1;

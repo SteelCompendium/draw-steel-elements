@@ -386,6 +386,30 @@ describe('D8 Task 2 review fix — registration.ts (finding #3)', () => {
 			expect(sidebarLeaf(app)).toBeUndefined();
 		});
 
+		// Reading view draws a TILDE fence with a backtick in the info string (CommonMark allows it) as the block, reading its first word: the
+		// host reports ds-counter and the pin binds it. (A backtick FENCE with one is drawn in no mode: the test above.)
+		test('a tilde fence ~~~ds-counter `x` (Reading view draws it): the host reports ds-counter and the pin stamps the anchor and mounts the panel', async () => {
+			const { app, plugin, services } = setup();
+			registerDseSidebar(plugin as any, services);
+			const note = ['# N', '', '~~~ds-counter `x`', 'current_value: 5', '~~~', ''].join('\n');
+			app.vault.setFile('Note.md', note);
+			const ctx = { docId: 'd', sourcePath: 'Note.md', frontmatter: undefined, addChild: () => {}, getSectionInfo: () => ({ text: note, lineStart: 2, lineEnd: 4 }) };
+			const host = new ReadingModeBlockHost(plugin as any, document.createElement('div'), ctx as any, 'ds-counter');
+			const alias = host.getBlockInfo()!.language;
+			expect(alias).toBe('ds-counter');
+
+			await requestPinToSidebar('Note.md', alias, 2);
+			await flushAsync();
+
+			expect(Notice.notices).toHaveLength(0);
+			const stamped = app.vault.getContent('Note.md')!;
+			expect(stamped.split('\n')[2]).toBe('~~~ds-counter `x`');
+			const id = /_dse_anchor: ([A-Za-z0-9_-]+)/.exec(stamped)?.[1];
+			expect(id).toBeDefined();
+			expect(sidebarLeaf(app)).toBeInstanceOf(DseSidebarView);
+			expect((sidebarLeaf(app) as unknown as DseSidebarView).getState()).toMatchObject({ panels: [expect.objectContaining({ filePath: 'Note.md', alias: 'ds-counter', anchorId: id })] });
+		});
+
 		test('a registered alias is unaffected: the pin stamps an anchor and mounts the panel, no Notice', async () => {
 			const { app, plugin, services } = setup();
 			registerDseSidebar(plugin as any, services);

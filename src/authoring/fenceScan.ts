@@ -57,7 +57,7 @@ export function scanFenceState(editor: Editor, line: number): FenceState {
 			// spaces and tabs only are skipped, so a no-break space before the name gives no type, as
 			// in Obsidian). Case is kept: Obsidian dispatches a block to its processor by exact
 			// language, so ```` ```DS-Stamina-Bar ```` never renders.
-			lang = fenceLanguage(rest);
+			lang = fenceLanguage(rest, marker[0]);
 		} else if (marker[0] === fenceChar && marker.length >= fenceLen && rest.trim() === '') {
 			inFence = false;
 			lang = null;
