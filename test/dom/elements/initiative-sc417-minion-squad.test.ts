@@ -30,6 +30,7 @@ import { createSessionStore } from '../../../src/framework/session';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App, Plugin, parseYaml } from '../../mocks/obsidian';
 import { initiativeElement } from '../../../src/elements/initiative/definition';
+import { parse } from '../../../src/elements/initiative/model';
 
 // Scott's 6.0.2 screenshot, as a fixture: "Mordor Forces", a squad of 4 Orc minions at
 // 40 Stamina each (pool 160) plus a 150-Stamina captain.
@@ -98,10 +99,13 @@ async function renderInit(source: string) {
 	return { host, root };
 }
 
-/** The last write's parsed squad state (what the note would hold). */
+/** The last write's parsed squad state (what the note would hold). SC-485: read through `parse`, not the raw
+ *  YAML — an `instances` list the user never wrote and nothing changed (a heal back to full) is not in the
+ *  note, and the tracker regenerates it identically on the next load. */
 function written(host: ReturnType<typeof makeHost>) {
 	const calls = host.replaceSource.mock.calls;
-	const data = parseYaml(calls[calls.length - 1][0]) as any;
+	const text = calls[calls.length - 1][0];
+	const data = parse(parseYaml(text), text) as any;
 	const group = data.enemy_groups[0];
 	return {
 		pool: group.minion_stamina_pool as number,

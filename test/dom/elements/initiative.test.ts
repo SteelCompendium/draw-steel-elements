@@ -2911,11 +2911,20 @@ malice:
 		expect(poolText(root)).toBe('78/78 (9)');
 	});
 
-	test('M-1 regression: captain_bonus_n round-trips through YAML (serialize -> parse is a fixed point)', async () => {
+	test('M-1 regression: captain_bonus_n round-trips through YAML once the pool is written (serialize -> parse is a fixed point)', async () => {
+		// SC-485: an untouched serialize no longer writes the born-captained pool or its trio (the source
+		// never had them). A pool write brings all four out together - the pool unit - and that is the
+		// fixed point: reload re-derives nothing and applies no bonus twice.
 		const model = parse(parseYaml(SQUAD_CAPTAIN_BONUS), SQUAD_CAPTAIN_BONUS);
+		expect(serialize(model)).not.toContain('captain_bonus_n');
+		model.enemy_groups[0].minion_stamina_pool = 60; // 18 pool damage (a pool write)
 		const s1 = serialize(model);
+		expect(s1).toContain('minion_stamina_pool: 60');
+		expect(s1).toContain('minion_stamina_pool_max: 78');
+		expect(s1).toContain('captain_bonus_active: true');
 		expect(s1).toContain('captain_bonus_n: 4');
 		const reparsed = parse(parseYaml(s1), s1);
+		expect(reparsed.enemy_groups[0].creatures[0].captain_bonus_n).toBe(4);
 		expect(serialize(reparsed)).toBe(s1);
 	});
 });

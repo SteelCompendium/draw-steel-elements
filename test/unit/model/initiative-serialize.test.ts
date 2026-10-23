@@ -1,16 +1,20 @@
 // Plan 06 Task 1: initiative element model — the SYNC parse (split from the legacy async
 // parseEncounterData) + BYTE-COMPAT serialize.
 //
-// BYTE-COMPAT ORACLE: the legacy write path (the former CodeBlocks.updateInitiativeTracker ->
-// updateCodeBlock -> updateMarkdownCodeBlock, src/utils/CodeBlocks.ts —
-// deleted in SC-454) did exactly `stringifyYaml(data).trim()` on the WHOLE materialized EncounterData the legacy
-// processor holds. The fixtures (quick-start.yaml, squad.yaml) and the mid-encounter source
-// below are REF-FREE (no `statblock` strings), so the legacy async parseEncounterData never
-// touches its resolver on them and the new sync parse() must produce the IDENTICAL
-// materialized object — serialize(parse(src)) must byte-equal
-// stringifyYaml(await parseEncounterData(src, app, settings)).trim(). The legacy function is
-// called UNCHANGED as an independent oracle (its own parseYaml + materialization code path);
-// the structural pins are hand-checked so the suite is not tautological.
+// ORACLE (re-based by SC-485). The legacy writer (the former CodeBlocks.updateInitiativeTracker ->
+// updateCodeBlock -> updateMarkdownCodeBlock, src/utils/CodeBlocks.ts — deleted in SC-454) did exactly
+// `stringifyYaml(data).trim()` on the WHOLE materialized EncounterData, so it wrote every key parse had
+// filled in. serialize no longer does that for a key the source left absent (SC-466 / SC-482 contract), so
+// the byte-equality pin is split in two. The fixtures (quick-start.yaml, squad.yaml) and the mid-encounter
+// source below are REF-FREE (no `statblock` strings), so the legacy async parseEncounterData never touches
+// its resolver on them:
+//   - parse(src) must deep-equal the legacy materialization (unchanged model);
+//   - FULLY AUTHORED: with L = the legacy writer's bytes for src (every filled key now present),
+//     serialize(parse(L)) === L, byte for byte;
+//   - MINIMAL UNTOUCHED: parseYaml(serialize(parse(src))) deep-equals parseYaml(src) - an untouched
+//     serialize adds nothing (modulo the pre-existing condition normalisation `grabbed` -> {key: grabbed}).
+// The legacy function is called UNCHANGED as an independent oracle (its own parseYaml + materialization
+// code path); the structural pins are hand-checked so the suite is not tautological.
 //
 // SPLIT PINS (the subtle part of Plan 06 T-1): parse() must NOT run the validations legacy
 // ran only AFTER its inline statblock merge — hero name (EncounterData.ts:130) /
@@ -66,23 +70,46 @@ const midEncounter = [
 	'  value: 3',
 ].join('\n');
 
-describe('T-1: serialize(parse(src)) is byte-compatible with the legacy writer', () => {
-	test('quick-start: parse deep-equals legacy parse; serialize byte-equals legacy writeback', async () => {
-		const model = parseLikePipeline(quickStart);
-		expect(model).toEqual(await legacyMaterialize(quickStart));
-		expect(serialize(model)).toBe(await legacyWriterBytes(quickStart));
+/** What `parseYaml(source)` becomes once parse has normalised conditions (string -> {key}); nothing else. */
+const withNormalizedConditions = (source: string): any => {
+	const data = parseYaml(source) as any;
+	const norm = (owner: any): void => {
+		if (Array.isArray(owner.conditions)) {
+			owner.conditions = owner.conditions.map((c: any) => (typeof c === 'string' ? { key: c } : c));
+		}
+	};
+	for (const hero of data.heroes ?? []) norm(hero);
+	for (const group of data.enemy_groups ?? []) {
+		for (const creature of group.creatures ?? []) {
+			for (const instance of creature.instances ?? []) norm(instance);
+		}
+	}
+	return data;
+};
+
+/** Oracle pin (1) + (2) for one ref-free source. */
+async function expectOracle(source: string): Promise<void> {
+	const model = parseLikePipeline(source);
+	expect(model).toEqual(await legacyMaterialize(source));
+	// (1) fully authored: every key the legacy writer fills is present, so it is all written back.
+	const authored = await legacyWriterBytes(source);
+	expect(serialize(parseLikePipeline(authored))).toBe(authored);
+	// (2) minimal untouched: nothing the source never wrote comes back.
+	expect(parseYaml(serialize(model))).toEqual(withNormalizedConditions(source));
+}
+
+describe('T-1: serialize(parse(src)) against the legacy writer (SC-485 oracle)', () => {
+	test('quick-start: parse deep-equals legacy parse; fully-authored bytes are stable; untouched adds nothing', async () => {
+		await expectOracle(quickStart);
 	});
 
-	test('squad: parse deep-equals legacy parse; serialize byte-equals legacy writeback', async () => {
-		const model = parseLikePipeline(squad);
-		expect(model).toEqual(await legacyMaterialize(squad));
-		expect(serialize(model)).toBe(await legacyWriterBytes(squad));
+	test('squad: parse deep-equals legacy parse; fully-authored bytes are stable; untouched adds nothing', async () => {
+		await expectOracle(squad);
 	});
 
-	test('mid-encounter (pre-existing instances): byte-equals legacy writeback', async () => {
+	test('mid-encounter (pre-existing instances): same oracle', async () => {
+		await expectOracle(midEncounter);
 		const model = parseLikePipeline(midEncounter);
-		expect(model).toEqual(await legacyMaterialize(midEncounter));
-		expect(serialize(model)).toBe(await legacyWriterBytes(midEncounter));
 		// Hand-checked pins for the validate-existing-instances branch:
 		const wolf = model.enemy_groups[0].creatures[0];
 		expect(wolf.instances![0]).toMatchObject({ id: 1, current_stamina: 7, temp_stamina: 0 });
@@ -109,9 +136,8 @@ describe('T-1: serialize(parse(src)) is byte-compatible with the legacy writer',
 		].join('\n');
 
 		const model = parseLikePipeline(src);
-		expect(model).toEqual(await legacyMaterialize(src));
 		expect(model.heroes[0].conditions).toEqual([{ key: 'bleeding', duration: 'save-ends', effect: 'glow' }]);
-		expect(serialize(model)).toBe(await legacyWriterBytes(src));
+		await expectOracle(src);
 	});
 
 	test('output is trimmed (no trailing newline), matching legacy writer + replaceSource', () => {
@@ -120,7 +146,7 @@ describe('T-1: serialize(parse(src)) is byte-compatible with the legacy writer',
 		expect(out).not.toMatch(/^\s/);
 	});
 
-	test('serialized shape pins (hand-checked, non-tautological)', () => {
+	test('serialized shape pins (hand-checked, non-tautological)', async () => {
 		const quickOut = serialize(parseLikePipeline(quickStart));
 		// Top-level key order is the parsed-source insertion order.
 		const topLevelKeys = quickOut
@@ -128,20 +154,28 @@ describe('T-1: serialize(parse(src)) is byte-compatible with the legacy writer',
 			.filter((line) => /^\S/.test(line))
 			.map((line) => line.split(':')[0]);
 		expect(topLevelKeys).toEqual(['heroes', 'enemy_groups', 'malice']);
-		// Materialized defaults are actually written back (the legacy first-write behavior).
-		expect(quickOut).toContain('has_taken_turn: false');
-		expect(quickOut).toContain('current_stamina: 80');
-		expect(quickOut).toContain('temp_stamina: 0');
-		expect(quickOut).toContain('isHero: true');
 		expect(quickOut).toContain('value: 5');
+		// SC-485: the keys parse filled in are NOT written back when the source never had them...
+		for (const filled of ['has_taken_turn', 'current_stamina', 'temp_stamina', 'isHero', 'conditions', 'instances']) {
+			expect(quickOut).not.toContain(filled);
+		}
+		// ...but are, once the source has them (the legacy first-write bytes, now authored).
+		const authored = await legacyWriterBytes(quickStart);
+		expect(authored).toContain('has_taken_turn: false');
+		expect(authored).toContain('current_stamina: 80');
+		expect(authored).toContain('temp_stamina: 0');
+		expect(authored).toContain('isHero: true');
+		expect(serialize(parseLikePipeline(authored))).toBe(authored);
 
 		const squadOut = serialize(parseLikePipeline(squad));
-		expect(squadOut).toContain('minion_stamina_pool: 20');
+		expect(squadOut).not.toContain('minion_stamina_pool');
+		expect(squadOut).toContain('squad_role: minion');
 		// Condition objects drop their undefined color/effect keys on disk; provided
 		// values are kept (string 'grabbed' + {key: bleeding, color: crimson}).
 		expect(squadOut).toMatch(/conditions:\n\s+- key: grabbed\n\s+- key: bleeding\n\s+color: crimson/);
 		expect(squadOut).not.toContain('effect:');
 		expect(squadOut).not.toContain('color: null');
+		expect(await legacyWriterBytes(squad)).toContain('minion_stamina_pool: 20');
 	});
 });
 
@@ -370,11 +404,13 @@ describe('SC-195: byte-compat — the new fields never appear on an ordinary squ
 		expect(out).not.toContain('captain_bonus_active');
 		expect(out).not.toContain('captain_bonus_n'); // fix round: the persisted-N field
 		expect(out).not.toContain('with_captain');
-		// Still byte-equal to the legacy oracle — SC-195 added nothing observable here.
-		expect(out).toBe(await legacyWriterBytes(squad));
+		// Fully authored (the legacy writer's bytes), SC-195 added nothing observable either.
+		const authored = await legacyWriterBytes(squad);
+		expect(authored).not.toContain('captain_bonus');
+		expect(serialize(parseLikePipeline(authored))).toBe(authored);
 	});
 
-	test('a captained squad WITH a Stamina bonus round-trips: parse -> serialize -> parse is a fixed point', () => {
+	test('a captained squad WITH a Stamina bonus: an untouched serialize adds nothing; a pool write writes the pool unit and is a fixed point', () => {
 		const src = [
 			'heroes: []',
 			'enemy_groups:',
@@ -397,7 +433,17 @@ describe('SC-195: byte-compat — the new fields never appear on an ordinary squ
 		expect(minion.captain_bonus_active).toBe(true);
 		expect(minion.captain_bonus_n).toBe(4); // fix round (M-1): the persisted-N field
 
+		// SC-485: untouched, none of the four derived keys is written; the reload re-derives all of them.
+		const s0 = serialize(m1);
+		for (const key of ['minion_stamina_pool', 'minion_stamina_pool_max', 'captain_bonus_active', 'captain_bonus_n']) {
+			expect(s0).not.toContain(key);
+		}
+		expect(parseLikePipeline(s0)).toEqual(m1);
+
+		// A pool write (SC-485 pool unit): pool AND the trio come out together, so reload never re-derives the bonus.
+		group.minion_stamina_pool = 60;
 		const s1 = serialize(m1);
+		expect(s1).toContain('minion_stamina_pool: 60');
 		expect(s1).toContain('minion_stamina_pool_max: 78');
 		expect(s1).toContain('captain_bonus_active: true');
 		expect(s1).toContain('captain_bonus_n: 4');
