@@ -458,14 +458,18 @@ const noteText = (rel: string): Promise<string> =>
  * Put DSE preference overrides in force (`{}` = the shipped defaults). Prefs are read from
  * data.json at plugin load, so this writes them there and reloads the plugin. Pair it with an
  * `after(() => dse.setPrefs({}))` in the spec so a failure cannot leak the override; reopen
- * notes (`openNote`) after calling it.
+ * notes (`openNote`) after calling it. `{ experimental: true }` also turns the experimental switch on (the
+ * Pin / Unpin items exist only with it, SC-406); the shipped default is off, so pair it with the same `after`.
  */
-async function setPrefs(prefs: Record<string, unknown>): Promise<void> {
+async function setPrefs(prefs: Record<string, unknown>, opts: { experimental?: boolean } = {}): Promise<void> {
+	const data: Record<string, unknown> = {};
+	if (Object.keys(prefs).length) data.prefs = prefs;
+	if (opts.experimental) data.experimental = true;
 	await closeEverything();
 	await ev(`(async () => {
 		const id = 'draw-steel-elements';
 		const p = app.plugins.plugins[id];
-		await p.saveData(${JSON.stringify(Object.keys(prefs).length ? { prefs } : {})});
+		await p.saveData(${JSON.stringify(data)});
 		await app.plugins.disablePlugin(id);
 		await app.plugins.enablePlugin(id);
 		while (!(app.plugins.plugins[id] && app.plugins.plugins[id].viewRegistry)) await new Promise((r) => setTimeout(r, 25));

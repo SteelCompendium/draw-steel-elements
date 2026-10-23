@@ -12,8 +12,15 @@ import barManifest from '../manifest/stamina-bar';
 import modalManifest from '../manifest/stamina-edit-modal';
 import conditionsManifest from '../manifest/conditions-modal';
 import initiativeManifest from '../manifest/initiative';
+import chromeManifest from '../manifest/chrome';
 
-const ALL_IDS = new Set([...idsOf(barManifest), ...idsOf(modalManifest), ...idsOf(conditionsManifest), ...idsOf(initiativeManifest)]);
+const ALL_IDS = new Set([
+	...idsOf(barManifest),
+	...idsOf(modalManifest),
+	...idsOf(conditionsManifest),
+	...idsOf(initiativeManifest),
+	...idsOf(chromeManifest),
+]);
 const BAR_SCOPE = ['.markdown-reading-view [data-dse-element="stamina-bar"] *'];
 
 describe('real-Obsidian census (pilot surfaces)', () => {

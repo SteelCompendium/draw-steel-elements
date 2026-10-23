@@ -1,0 +1,121 @@
+// SC-505: the stamina bar's chrome panel sits INSIDE the bar, and Collapse hides the bar (panel included), so a
+// keyboard Collapse used to drop focus to <body>; Expand did the same in reverse (the collapsed one-liner
+// disappears); and Pin to sidebar writes the note and redraws the block, which also lost the button.
+// Real keys throughout: Tab to the button, Enter to press it. A MOUSE press keeps the base behaviour.
+//   basic.md  one ds-stamina-bar, 15/20 +5 temp
+import { expect } from '@wdio/globals';
+import { dse } from '../../driver/dse';
+
+const NOTE = 'Stamina/basic.md';
+const BAR = 'ds-stamina-bar';
+/** The block in the visible Reading view (Obsidian keeps a second, off-view copy of the render in the same leaf). */
+const BLOCK = '.markdown-reading-view [data-dse-element="stamina-bar"]';
+
+/** The focused element's keyboard ring, as the browser computes it (a dropped CSS rule shows up here). */
+const ring = (): Promise<{ visible: boolean; outline: string }> =>
+	dse.page(`(() => { const a = document.activeElement; return { visible: a.matches(':focus-visible'), outline: getComputedStyle(a).outlineStyle }; })()`);
+/** Where focus is, in words: a control id, or <body>. */
+const where = (): Promise<string> =>
+	dse.page<string>(`(() => { const a = document.activeElement; return a === document.body ? 'body' : a?.closest('[data-dse-control]')?.getAttribute('data-dse-control') ?? a?.tagName ?? 'none'; })()`);
+const isCollapsed = (): Promise<boolean> => dse.page<boolean>(`document.querySelector('${BLOCK}').hasAttribute('data-dse-collapsed')`);
+const waitCollapsed = (collapsed: boolean): Promise<void> =>
+	dse.waitFor(`document.querySelector('${BLOCK}').hasAttribute('data-dse-collapsed') === ${collapsed}`, collapsed ? 'the block to collapse' : 'the block to expand');
+/** Is focus inside the open note's stamina bar block? */
+const focusInBlock = (): Promise<boolean> => dse.page<boolean>(`document.querySelector('${BLOCK}').contains(document.activeElement)`);
+
+/** The collapse toggle is session state keyed by the block, so it outlives `openNote`: every test starts from an
+ *  expanded block, whatever an earlier (failed) test left behind. A script click is setup, not a driven control. */
+const startExpanded = (): Promise<void> =>
+	dse.page(`(() => { const r = document.querySelector('${BLOCK}'); if (r.hasAttribute('data-dse-collapsed')) r.querySelector('[data-dse-control="chrome.expand"]').click(); })()`);
+
+/** Resolve once nothing has been added to or removed from the page for `quietMs`: a Pin rebuilds its block several times in
+ *  the ~200 ms after the write, and focus has to be on the button after the LAST one. A state to wait for, not a sleep. */
+const waitDomQuiet = (quietMs: number): Promise<void> =>
+	dse.page(
+		`new Promise((resolve) => { let t = setTimeout(done, ${quietMs}); const mo = new MutationObserver(() => { clearTimeout(t); t = setTimeout(done, ${quietMs}); }); function done() { mo.disconnect(); resolve(true); } mo.observe(document.body, { childList: true, subtree: true }); })`,
+	);
+
+describe('stamina bar chrome: keyboard focus follows Collapse and Expand (SC-505)', () => {
+	it("[CHR-F01] Tab to Collapse + Enter: the block collapses and focus lands on the one-liner's Expand button (ring shown); Enter on it expands and focus returns to Collapse (ring shown, panel shown)", async () => {
+		await dse.openNote(NOTE);
+		await startExpanded();
+		const root = dse.block(BAR);
+		const collapse = root.control('chrome.collapse');
+		await dse.tabTo(collapse, 24);
+		await dse.press('Enter', collapse);
+		await waitCollapsed(true);
+		expect(await where()).toBe('chrome.expand');
+		expect(await ring()).toEqual({ visible: true, outline: 'solid' });
+
+		await dse.press('Enter', root.control('chrome.expand'));
+		await waitCollapsed(false);
+		expect(await where()).toBe('chrome.collapse');
+		expect(await ring()).toEqual({ visible: true, outline: 'solid' });
+		// The ring is drawn on a button the reader can actually see: the hover-revealed panel is open while it holds focus.
+		expect(await dse.page<string>(`getComputedStyle(document.activeElement.closest('.dse-chrome')).opacity`)).toBe('1');
+	});
+
+	// The Expand half on its own, so it is measurable without the Collapse fix: collapse with the mouse (no hand-off), then put
+	// keyboard focus on Expand the way a Tab user arrives there and press Enter.
+	it('[CHR-F02] Enter on Expand (reached by keyboard) expands the block and focus lands on the restored Collapse button (ring shown, panel shown)', async () => {
+		await dse.openNote(NOTE);
+		await startExpanded();
+		const root = dse.block(BAR);
+		await dse.hover(root.root);
+		await dse.click(root.control('chrome.collapse'));
+		await waitCollapsed(true);
+		const expand = root.control('chrome.expand');
+		await dse.page(`document.querySelector('${BLOCK} [data-dse-control="chrome.expand"]').focus()`);
+		await dse.press('Enter', expand);
+		await waitCollapsed(false);
+		expect(await where()).toBe('chrome.collapse');
+		expect(await ring()).toEqual({ visible: true, outline: 'solid' });
+		expect(await dse.page<string>(`getComputedStyle(document.activeElement.closest('.dse-chrome')).opacity`)).toBe('1');
+	});
+
+	it('[CHR-F03] a MOUSE click on Collapse and on Expand moves focus nowhere new (no hand-off into the block)', async () => {
+		await dse.openNote(NOTE);
+		await startExpanded();
+		const root = dse.block(BAR);
+		await dse.hover(root.root);
+		await dse.click(root.control('chrome.collapse'));
+		await waitCollapsed(true);
+		expect(await focusInBlock()).toBe(false);
+		expect(await where()).not.toBe('chrome.expand');
+		await dse.click(root.control('chrome.expand'));
+		await waitCollapsed(false);
+		expect(await isCollapsed()).toBe(false);
+		expect(await focusInBlock()).toBe(false);
+		expect(await where()).not.toBe('chrome.collapse');
+	});
+});
+
+describe('stamina bar chrome: keyboard focus stays on Pin to sidebar across the redraw (SC-505)', () => {
+	before(() => dse.setPrefs({}, { experimental: true }));
+	after(() => dse.setPrefs({}));
+
+	// After a keyboard Collapse and Expand, as a keyboard user's session goes: that order was measured to redraw the block three
+	// times, the last by Obsidian re-inserting the existing section (nothing of the plugin's runs for it), and the focus
+	// has to survive all of them.
+	it('[CHR-F04] Tab to Pin + Enter: the pin writes the note, the block redraws, and focus is on the (new) Pin button with the ring', async () => {
+		await dse.openNote(NOTE);
+		await startExpanded();
+		const root = dse.block(BAR);
+		const collapse = root.control('chrome.collapse');
+		await dse.tabTo(collapse, 24);
+		await dse.press('Enter', collapse);
+		await waitCollapsed(true);
+		await dse.press('Enter', root.control('chrome.expand'));
+		await waitCollapsed(false);
+		await dse.page(`document.activeElement.blur()`);
+		const pin = root.control('chrome.pin');
+		await dse.tabTo(pin, 24);
+		const w = await dse.waitForWrite(NOTE, () => dse.press('Enter', pin));
+		expect(w.count).toBe(1);
+		await dse.settle();
+		await waitDomQuiet(600);
+		expect(await where()).toBe('chrome.pin');
+		expect(await ring()).toEqual({ visible: true, outline: 'solid' });
+		expect(await focusInBlock()).toBe(true);
+	});
+});
