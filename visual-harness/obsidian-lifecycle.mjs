@@ -2260,7 +2260,7 @@ const SCENARIOS = [
 	},
 	{
 		// SC-498: the stamina bar opened on a mouse click only - no tab stop, Enter/Space did nothing. It is now one tab stop
-		// (role=group, named "Edit Stamina: ..."), Enter and Space open the Stamina modal like a click, and it shows the
+		// (role=group, named "Edit Stamina: ..." and described with the key cue), Enter and Space open the Stamina modal like a click, and it shows the
 		// shared focus ring when reached by keyboard. Real Tab / Enter / Space key events (CDP), as a person would press them.
 		id: 'G-S36',
 		async run(t) {
@@ -2297,9 +2297,9 @@ const SCENARIOS = [
 				facts[`tab${i + 1}`] = reached;
 			}
 			t.expect(reached === 'bar', `a real Tab never reached the stamina bar (focus went: ${JSON.stringify(facts)})`);
-			const ring = await t.ev(`(() => { const b = ${bar}; const cs = getComputedStyle(b); return { visible: b.matches(':focus-visible'), style: cs.outlineStyle, width: cs.outlineWidth, offset: cs.outlineOffset, role: b.getAttribute('role'), tab: b.getAttribute('tabindex'), name: b.getAttribute('aria-label') }; })()`);
+			const ring = await t.ev(`(() => { const b = ${bar}; const cs = getComputedStyle(b); return { visible: b.matches(':focus-visible'), style: cs.outlineStyle, width: cs.outlineWidth, offset: cs.outlineOffset, role: b.getAttribute('role'), tab: b.getAttribute('tabindex'), name: b.getAttribute('aria-label'), desc: b.getAttribute('aria-description') }; })()`);
 			t.expect(ring.visible && ring.style === 'solid' && ring.width === '2px' && ring.offset === '2px', `the Tab-focused bar shows no 2px solid kit ring: ${JSON.stringify(ring)}`);
-			t.expect(ring.role === 'group' && ring.tab === '0' && /^Edit Stamina: 15 of 20, 5 temporary$/.test(ring.name), `the bar's role/tabindex/name: ${JSON.stringify(ring)}`);
+			t.expect(ring.role === 'group' && ring.tab === '0' && /^Edit Stamina: 15 of 20, 5 temporary$/.test(ring.name) && ring.desc === 'Press Enter or Space to open the Stamina editor', `the bar's role/tabindex/name/description: ${JSON.stringify(ring)}`);
 			t.expect((await modals()).length === 0, 'Tab alone opened a modal');
 			facts.ring = `${ring.width} ${ring.style}, offset ${ring.offset}`;
 
@@ -2320,14 +2320,30 @@ const SCENARIOS = [
 			// The ring is still there after the modal round trip (Obsidian restores focus programmatically).
 			facts.ringAfter = await t.ev(`(() => { const b = ${bar}; return getComputedStyle(b).outlineStyle + ' ' + b.matches(':focus-visible'); })()`);
 
-			// 3. A real mouse click on the bar paints no ring (focus-visible, not focus), and still opens the modal.
-			await t.realClick(`(${bar}).querySelector('.dse-stamina__cnums')`);
+			// 3. A real mouse click on the bar paints no ring (focus-visible, not focus), and still opens the modal. The bar is
+			// blurred first (it still holds the keyboard focus from step 2, whose ring would otherwise stay), then the press and the
+			// release are sent separately so the ring is read while the button is down, then again after Escape closes the modal. Whether the bar takes focus at all on a mouse press is recorded, not required.
+			const ringShown = () => t.ev(`(() => { const b = ${bar}; return { focused: document.activeElement === b, visible: b.matches(':focus-visible'), outline: getComputedStyle(b).outlineStyle }; })()`);
+			const noRing = (r) => !(r.visible && r.outline !== 'none');
+			await t.ev(`(() => { document.activeElement?.blur?.(); return true; })()`);
+			const at = await t.ev(`(() => { const el = (${bar}).querySelector('.dse-stamina__cnums'); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+			const pt = { x: at.x, y: at.y, button: 'left', clickCount: 1 };
+			await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x, y: at.y });
+			await t.cdp.call('Input.dispatchMouseEvent', { type: 'mousePressed', buttons: 1, ...pt });
+			const down = await ringShown();
+			facts.mouseDown = down.focused ? 'bar focused' : 'bar not focused (the element click shield, pipeline armClickShield, cancels the mousedown focus)';
+			t.expect(noRing(down), `a mouse press on the bar draws the focus ring: ${JSON.stringify(down)}`);
+			await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseReleased', buttons: 0, ...pt });
 			await t.waitFor(`document.querySelectorAll('.modal-container .dse-modal').length > 0`, 'a modal opened after a click on the bar');
 			t.expect(JSON.stringify(await modals()) === '["stamina"]', 'a click on the bar: expected only the Stamina modal');
 			await closeModal('click');
+			await t.sleep(300);
+			const back = await ringShown();
+			facts.mouseClose = back.focused ? 'bar focused' : 'bar not focused';
+			t.expect(noRing(back), `after a mouse-opened modal closes the bar draws the focus ring: ${JSON.stringify(back)}`);
 			t.expect(t.read(rel) === FIXTURES[rel], `${rel} was written (nothing was applied, so it must be byte-identical): ${JSON.stringify(t.read(rel))}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
-			return `a real Tab reaches the bar after ${JSON.stringify([facts.tab1, facts.tab2, facts.tab3, facts.tab4].filter(Boolean))} (ring ${facts.ring}); Enter and Space each open only the Stamina modal; focus: in modal ${facts['Enter-in-modal']}, after close ${facts['Enter-after-close']} / ${facts['Space-after-close']}; ring after round trip ${facts.ringAfter}; the note is untouched`;
+			return `a real Tab reaches the bar after ${JSON.stringify([facts.tab1, facts.tab2, facts.tab3, facts.tab4].filter(Boolean))} (ring ${facts.ring}); Enter and Space each open only the Stamina modal; focus: in modal ${facts['Enter-in-modal']}, after close ${facts['Enter-after-close']} / ${facts['Space-after-close']}; ring after round trip ${facts.ringAfter}; mouse: ${facts.mouseDown}, no ring while pressed and after close (${facts.mouseClose}); the note is untouched`;
 		},
 	},
 ];
