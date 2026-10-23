@@ -89,6 +89,7 @@ export function attachRollControls(opts: AttachRollControlsOptions): void {
 			icon: 'dices',
 			label: `Roll ${opts.abilityName}`,
 			variant: 'ghost',
+			control: 'roll.launch', // SC-495 e2e id (attribute only)
 			onClick: () => void doRoll(), // first click reveals the bar AND rolls (§3.2)
 		},
 		opts.owner,

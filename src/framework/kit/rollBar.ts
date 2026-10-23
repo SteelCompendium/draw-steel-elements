@@ -23,6 +23,7 @@ import type { Component } from 'obsidian';
 import { collapsible } from './collapsible';
 import { iconButton } from './iconButton'; // sibling imports, NEVER './index' (barrel cycle)
 import type { IconButtonHandle } from './iconButton';
+import { stampControl } from './controlId';
 import { stepper } from './stepper';
 import type { StepperHandle } from './stepper';
 import type { SessionPersist } from '../session';
@@ -112,6 +113,7 @@ export function rollBar(parent: HTMLElement, opts: RollBarOptions, owner: Compon
 		owner,
 	);
 	mods.rootEl.addClass('dse-rollbar__mods');
+	stampControl(mods.headerEl, 'roll.modifiers'); // SC-495 e2e id (attribute only)
 	mods.contentEl.addClass('dse-rollbar__panel');
 	const summaryEl = mods.headerEl.createSpan({ cls: 'dse-rollbar__summary' });
 	const panelEl = mods.contentEl;
@@ -151,7 +153,7 @@ export function rollBar(parent: HTMLElement, opts: RollBarOptions, owner: Compon
 		edgeStepper = stepper(
 			field(pairEl, 'Edges'),
 			{
-				value: state.edges, min: 0, max: 9, label: 'Edges', format: capped,
+				value: state.edges, min: 0, max: 9, label: 'Edges', format: capped, control: 'roll.edges',
 				onChange: (value) => { state.edges = value; render(); },
 			},
 			owner,
@@ -159,7 +161,7 @@ export function rollBar(parent: HTMLElement, opts: RollBarOptions, owner: Compon
 		baneStepper = stepper(
 			field(pairEl, 'Banes'),
 			{
-				value: state.banes, min: 0, max: 9, label: 'Banes', format: capped,
+				value: state.banes, min: 0, max: 9, label: 'Banes', format: capped, control: 'roll.banes',
 				onChange: (value) => { state.banes = value; render(); },
 			},
 			owner,
