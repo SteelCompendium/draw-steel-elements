@@ -320,8 +320,9 @@ class FormModal extends DseModal {
 	 *  not turn a null into an object), schema validation and reference resolution. */
 	private parseRaw(): unknown {
 		const { rawData, bodySource } = readBlockBody(this.def, this.rawText);
+		let model: unknown;
 		try {
-			return this.def.parse(rawData, bodySource);
+			model = this.def.parse(rawData, bodySource);
 		} catch (error) {
 			// Only a box that reads as no data (null: empty, whitespace-only, comment-only) gets the plain
 			// message; any other parse error keeps the element's own. (`undefined` is the raw-body rescue
@@ -329,6 +330,15 @@ class FormModal extends DseModal {
 			if (rawData === null) throw new Error(FormModal.EMPTY_BOX_MESSAGE);
 			throw error;
 		}
+		// withReference's `{ kind: 'invalid', message }` model (shared/withReference.ts RefOrInline; only ds-scc
+		// returns it today): the element REFUSES the body but returns the refusal instead of throwing, so the
+		// render shows a notice card. The pipeline would save that card; the form treats it as a failed check and
+		// shows the model's own message.
+		if (model !== null && typeof model === 'object' && (model as { kind?: unknown }).kind === 'invalid') {
+			const message = (model as { message?: unknown }).message;
+			throw new Error(typeof message === 'string' ? message : 'This block can\'t be saved as written.');
+		}
+		return model;
 	}
 
 	private revalidate(): void {
@@ -386,6 +396,9 @@ class FormModal extends DseModal {
 			this.previewView = null;
 		}
 		this.previewEl.empty();
+		// The mount path below sets it again. Left on an emptied preview, the "Read-only" badge (absolutely
+		// positioned top-right of a 0-height box) would sit over the end of the error line under it (SC-493 r2).
+		this.previewEl.removeAttribute('data-dse-readonly');
 		if (this.saveDisabled) return;
 		try {
 			const model = this.rawMode ? this.parseRaw() : this.def.parse(this.checked, this.currentBody());
