@@ -17,11 +17,11 @@ async function shiftTab(): Promise<void> {
 	await browser.keys('Shift');
 }
 
-describe('roll bar: a read-only stepper keeps keyboard focus when "+" reaches its maximum (SC-495)', () => {
+describe('roll bar: a read-only stepper keeps keyboard focus when "+" or "-" reaches a bound (SC-495)', () => {
 	before(() => dse.setPrefs({ rollingEnabled: true }));
 	after(() => dse.setPrefs({}));
 
-	it('[ROLL-SF01] Edges and Banes "+" with Enter up to 9: focus goes to the value text (ring shown, not a Tab stop), and Tab / Shift+Tab continue in order', async () => {
+	it('[ROLL-SF01] Edges "+" to 9 and "-" back to 0, Banes "+" to 9, all with Enter: focus goes to the value text (ring shown, not a Tab stop), and Tab / Shift+Tab continue in order', async () => {
 		await dse.openNote(NOTE);
 		const root = dse.block('ds-feature');
 		await dse.click(root.control('roll.launch'));
@@ -39,6 +39,16 @@ describe('roll bar: a read-only stepper keeps keyboard focus when "+" reaches it
 		expect(await dse.focusedControl()).toBe('roll.banes.inc'); // Banes "-" is disabled at 0; the value text is no stop
 		await shiftTab();
 		expect(await dse.focusedControl()).toBe('roll.edges.dec'); // back past the value text, which is not a Tab stop
+
+		// The read-only "-" reaching its minimum: from the disabled-"+" end, step Edges back down to 0 with Enter.
+		const edgesDec = root.control('roll.edges.dec');
+		await dse.press('Enter', edgesDec); // 9 -> 8: "+" is enabled again
+		for (let i = 0; i < 8; i++) await dse.press('Enter', edgesDec); // 8 -> 0: the last press disables "-" while it holds focus
+		await expect(edgesDec).toBeDisabled();
+		expect(await dse.focusedControl()).toBe('roll.edges.value');
+		expect(await focusState()).toMatchObject({ tag: 'SPAN', tabindex: '-1', visible: true, outline: 'solid', width: '2px' });
+		await dse.press('Tab');
+		expect(await dse.focusedControl()).toBe('roll.edges.inc'); // the opposite button is the next stop after the value text
 
 		const banesInc = root.control('roll.banes.inc');
 		await dse.tabTo(banesInc, 10);
