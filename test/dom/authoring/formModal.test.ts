@@ -713,3 +713,167 @@ describe('SC-488: the optional select shows the default the block will use', () 
 		expect(seen.sort()).toEqual(Object.keys(expected).sort());
 	});
 });
+
+// —— SC-489: validation normalises a COPY; Save writes what the source said plus what the user changed ——
+// The schema `transform`s (trim, toLowerCase) used to run on `working` itself, so an untouched
+// `Climb` / `style: Sheet` was saved as `climb` / `style: sheet`. Validation now sees a container
+// clone (`checked`); the preview and the "Default (…)" labels parse that normalised copy (as the render
+// pipeline does), and Save writes the raw `working`.
+describe('SC-489: Save does not rewrite values the user did not change', () => {
+	const flush = async () => { await Promise.resolve(); await Promise.resolve(); };
+
+	function openReal(def: ElementDefinition, source: string, wrap?: (v: ReturnType<typeof createValidationService>) => ReturnType<typeof createValidationService>) {
+		const host = makeHost();
+		const real = makeRealStaminaCx(host);
+		const modal = openFormEditor(fakeOwner(), real.cx, def, source, wrap ? wrap(real.validation) : real.validation);
+		return { modal, host };
+	}
+	const saved = (host: { replaceSource: jest.Mock }) => host.replaceSource.mock.calls[0][0] as string;
+	/** The YAML sub-editor textarea that follows a label. */
+	function textareaFor(modal: { body: HTMLElement }, label: string): HTMLTextAreaElement {
+		const l = Array.from(modal.body.querySelectorAll('label.dse-form__label')).find((e) => e.textContent === label);
+		if (!l) throw new Error(`no textarea labelled "${label}"`);
+		return l.nextElementSibling as HTMLTextAreaElement;
+	}
+	function type(ta: HTMLTextAreaElement, value: string): void {
+		ta.value = value;
+		ta.dispatchEvent(new Event('input'));
+	}
+	const preview = (modal: { body: HTMLElement }) => modal.body.querySelector('.dse-form__preview') as HTMLElement;
+	/** A required, transform-bearing select (the real elements only have optional ones). */
+	const REQ_SCHEMA = [
+		'type: object',
+		'required: [style]',
+		'properties:',
+		'  style: { type: string, transform: [trim, toLowerCase], enum: [alpha, beta] }',
+	].join('\n');
+	function reqDef(): ElementDefinition {
+		return {
+			id: 'req', name: 'Req', aliases: ['ds-req'], shape: 'static', schema: REQ_SCHEMA,
+			parse: (d: unknown) => d,
+			createView: () => ({ mount: async () => {}, load: () => {}, unload: () => {} } as never),
+		} as ElementDefinition;
+	}
+
+	test('an untouched skills list keeps its case on Save (Climb stays Climb)', async () => {
+		const { modal, host } = openReal(skillsElement, 'skills:\n  - Climb');
+		await modal.save();
+		expect(saved(host)).toBe('skills:\n  - Climb');
+		modal.close();
+	});
+
+	test('style: Chips with only "Only show selected" toggled is saved as Chips', async () => {
+		const { modal, host } = openReal(skillsElement, 'style: Chips\nskills:\n  - Climb');
+		findSetting(modal, 'Only show selected').toggles[0].trigger(true);
+		await modal.save();
+		expect(saved(host)).toBe('style: Chips\nskills:\n  - Climb\nonly_show_selected: true');
+		modal.close();
+	});
+
+	test('a stamina bar\'s declared style: Sheet is saved as Sheet, untouched and with Max stamina changed', async () => {
+		const src = 'max_stamina: 20\ncurrent_stamina: 15\nstyle: Sheet';
+		const a = openReal(staminaBarElement, src);
+		await a.modal.save();
+		expect(saved(a.host)).toBe(src);
+		a.modal.close();
+		const b = openReal(staminaBarElement, src);
+		findSetting(b.modal, 'Max stamina').texts[0].trigger('25');
+		await b.modal.save();
+		expect(saved(b.host)).toBe('max_stamina: 25\ncurrent_stamina: 15\nstyle: Sheet');
+		b.modal.close();
+	});
+
+	test('a select whose source value differs only in case opens on the matching option (optional and required)', () => {
+		const skills = openReal(skillsElement, 'style: Chips\nskills:\n  - Climb');
+		expect(findSetting(skills.modal, 'Style').dropdowns[0].selectEl.value).toBe('chips');
+		skills.modal.close();
+		const stam = openReal(staminaBarElement, 'max_stamina: 20\ncurrent_stamina: 15\nstyle: Sheet');
+		expect(findSetting(stam.modal, 'Style').dropdowns[0].selectEl.value).toBe('sheet');
+		stam.modal.close();
+		const req = openReal(reqDef(), 'style: Alpha');
+		expect(findSetting(req.modal, 'Style').dropdowns[0].selectEl.value).toBe('alpha');
+		req.modal.close();
+	});
+
+	test('the preview renders the normalised data: Chips -> chips layout, Sheet -> the sheet notice', async () => {
+		const skills = openReal(skillsElement, 'style: Chips\nskills:\n  - Climb');
+		await flush();
+		expect(preview(skills.modal).querySelector('[data-skills-style="chips"]')).not.toBeNull();
+		expect(preview(skills.modal).querySelector('[data-skills-style="Chips"]')).toBeNull();
+		skills.modal.close();
+		const stam = openReal(staminaBarElement, 'max_stamina: 20\ncurrent_stamina: 15\nstyle: Sheet');
+		await flush();
+		expect(preview(stam.modal).querySelector('.dse-stamina__notice')).not.toBeNull();
+		stam.modal.close();
+	});
+
+	test('a typed " Climb " is saved as typed, and the preview (normalised) shows Climb as owned', async () => {
+		const { modal, host } = openReal(skillsElement, 'skills:\n  - Climb');
+		type(textareaFor(modal, 'Skills'), '- " Climb "');
+		expect(modal.canSave()).toBe(true);
+		await flush();
+		const climb = Array.from(preview(modal).querySelectorAll('.dse-skills__item')).find((li) => li.textContent === 'Climb');
+		expect(climb?.querySelector('.dse-skills__mark')?.hasAttribute('data-on')).toBe(true);
+		await modal.save();
+		expect(saved(host)).toBe('skills:\n  - " Climb "');
+		modal.close();
+	});
+
+	test('Chips -> list writes list; Chips -> Default removes the line and the label stays Default (ledger)', async () => {
+		const a = openReal(skillsElement, 'style: Chips\nskills:\n  - Climb');
+		findSetting(a.modal, 'Style').dropdowns[0].trigger('list');
+		await a.modal.save();
+		expect(saved(a.host)).toBe('style: list\nskills:\n  - Climb');
+		a.modal.close();
+		const b = openReal(skillsElement, 'style: Chips\nskills:\n  - Climb');
+		const dd = findSetting(b.modal, 'Style').dropdowns[0];
+		dd.trigger(dd.selectEl.options[0].value);
+		expect(dd.selectEl.options[0].textContent).toBe('Default (ledger)');
+		await b.modal.save();
+		expect(saved(b.host)).toBe('skills:\n  - Climb');
+		b.modal.close();
+	});
+
+	test('an untouched custom skill_group is kept as written', async () => {
+		const src = 'custom_skills:\n  - name: Foo\n    skill_group: " Exploration "';
+		const { modal, host } = openReal(skillsElement, src);
+		expect(modal.canSave()).toBe(true);
+		await modal.save();
+		expect(saved(host)).toBe(src);
+		modal.close();
+	});
+
+	test('a required select with an un-normalised value is valid and saved as written', async () => {
+		const writes: string[] = [];
+		const modal = openFormEditor(fakeOwner(), makeCx(writes), reqDef(), 'style: Alpha', createValidationService());
+		expect(modal.canSave()).toBe(true);
+		await modal.save();
+		expect(writes).toEqual(['style: Alpha']);
+		modal.close();
+	});
+
+	test('a value that normalises to no option stays blank with Save disabled', async () => {
+		const { modal, host } = openReal(skillsElement, 'style: Grid\nskills:\n  - Climb');
+		expect(findSetting(modal, 'Style').dropdowns[0].selectEl.selectedIndex).toBe(-1);
+		expect(modal.canSave()).toBe(false);
+		await modal.save();
+		expect(host.replaceSource).not.toHaveBeenCalled();
+		modal.close();
+	});
+
+	test('validation never receives the working object: every call gets a fresh, deep copy', () => {
+		const seen: Record<string, unknown>[] = [];
+		const { modal } = openReal(skillsElement, 'skills:\n  - Climb', (v) => ({
+			...v,
+			validate: (id: string, schema: string, data: unknown) => {
+				seen.push(data as Record<string, unknown>);
+				return v.validate(id, schema, data);
+			},
+		}) as never);
+		type(textareaFor(modal, 'Skills'), '- Climb\n- Swim');
+		expect(seen.length).toBeGreaterThanOrEqual(2);
+		expect(new Set(seen).size).toBe(seen.length);
+		expect(new Set(seen.map((d) => d.skills)).size).toBe(seen.length);
+		modal.close();
+	});
+});
