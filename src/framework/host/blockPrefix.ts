@@ -66,7 +66,7 @@ export function matchFenceMarker(line: string): FenceMarker | null {
 export function fenceLanguage(info: string, fenceChar: string): string {
 	// A backtick in the info string. A BACKTICK fence: Live Preview's regex ends in `[^\n`]*$` and CommonMark agrees, so no mode draws
 	// it - never a registered name, the info string trimmed (SC-487 r2 review). A TILDE fence (CommonMark allows it): Live Preview
-	// draws nothing, but Reading view draws ~~~ds-counter `x` as the block, reading the first word only (split on space / tab,
+	// draws nothing, but Reading view draws ~~~ds-counter `x` as the block, reading the first word only (split on space / tab / form feed,
 	// measured SC-487 r3 review): that word is the name - ~~~ds-counter`x` has no such word, so it stays unclaimed.
 	if (info.includes('`')) {
 		const trimmed = info.replace(/^[ \t]+/, '').replace(/\s+$/, '');
