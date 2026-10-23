@@ -861,6 +861,23 @@ describe('SC-489: Save does not rewrite values the user did not change', () => {
 		modal.close();
 	});
 
+	test('the Default (…) label is derived from the normalised copy: style: Alpha names x, not y', () => {
+		const schema = [
+			'type: object',
+			'properties:',
+			'  style: { type: string, transform: [trim, toLowerCase], enum: [alpha, beta] }',
+			'  mode: { type: string, enum: [x, y] }',
+		].join('\n');
+		const def = {
+			id: 'der', name: 'Der', aliases: ['ds-der'], shape: 'static', schema,
+			parse: (d: Record<string, unknown>) => ({ mode: d.mode ?? (d.style === 'alpha' ? 'x' : 'y') }),
+			createView: () => ({ mount: async () => {}, load: () => {}, unload: () => {} } as never),
+		} as unknown as ElementDefinition;
+		const modal = openFormEditor(fakeOwner(), makeCx([]), def, 'style: Alpha', createValidationService());
+		expect(findSetting(modal, 'Mode').dropdowns[0].selectEl.options[0].textContent).toBe('Default (x)');
+		modal.close();
+	});
+
 	test('validation never receives the working object: every call gets a fresh, deep copy', () => {
 		const seen: Record<string, unknown>[] = [];
 		const { modal } = openReal(skillsElement, 'skills:\n  - Climb', (v) => ({

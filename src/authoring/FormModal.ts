@@ -209,8 +209,9 @@ class FormModal extends DseModal {
 				}
 				// SC-488 D1/D4/D5: an OPTIONAL select leads with a "Default (…)" option meaning the
 				// key is absent. Nothing is seeded, so validation, the live preview and Save all see
-				// the same data. A key present with null counts as absent (rendering `key:` null is
-				// an error card); picking Default removes the key's line.
+				// the same keys (validation and the preview see the normalised copy). A key present with
+				// null counts as absent (rendering `key:` null is an error card); picking Default removes
+				// the key's line.
 				if (current == null) delete this.working[field.key];
 				const initial = current == null ? UNSET : this.displayValue(field.key, current, options);
 				setting.addDropdown((d) => {
