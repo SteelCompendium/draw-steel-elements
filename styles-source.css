@@ -15985,9 +15985,12 @@ body.theme-light
    FORMULAS over `var(--accent-h)`/`var(--accent-s)`/`var(--accent-l)`, never baked to the
    pinned sheet's default (258/88%/66%) — SC-127 r9 MEDIUM-B: a vault with a custom accent
    colour (Appearance → Accent color) must see ITS OWN accent in the preview, matching the
-   light twin and the real export, not Obsidian's stock purple. Pin-bump procedure: bump
-   the pin in obsidian-host-pin.mjs AND obsidian-app-css.pin.mjs, `npm run host-css` to
-   refetch, THEN `npm run gen-light-island`, commit both together. The ENFORCED check is
+   light twin and the real export, not Obsidian's stock purple. Pin-bump procedure: this
+   block derives from the app.css pinned in obsidian-app-css.pin.mjs (OBSIDIAN_APP_CSS_PIN)
+   ONLY, so it regenerates only when THAT pin moves: bump it, `npm run host-css` to
+   refetch, THEN `npm run gen-light-island`, commit the pin and the block together.
+   PINNED_OBSIDIAN in obsidian-host-pin.mjs (the floor for the hand-maintained button-rule
+   model in shoot.mjs) is an INDEPENDENT pin and needs no regeneration. The ENFORCED check is
    two in-run `npm run shots` gates against the pinned sheet, not by memory —
    `visual-harness/shoot.mjs`'s `assertSc127LightIslandPinned`: completeness (every
    differing token is restated) and correctness, run TWICE — once at the pinned sheet's
