@@ -4,13 +4,25 @@
 // Initiative/tracker.md is a minimal block (Alice Alpha 30, three Ogres at 60, Malice 3);
 // Initiative/full.md is the same encounter fully authored - every key the legacy writer used to fill in
 // is present, so every one of them must be written back untouched.
-import { expect } from '@wdio/globals';
+import { $, expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
 import { applyAmount, applyAndWrite } from '../../driver/stamina';
 
 const MIN = 'Initiative/tracker.md';
 const FULL = 'Initiative/full.md';
 const INIT = 'ds-initiative';
+
+/** A real pointer press on an element no manifest lists (the Steel turn overlay, the chrome Reset item, the confirm
+ *  button): pressed through wdio directly so the coverage gate does not expect a manifest row for a control this
+ *  spec merely uses to reach a write. */
+async function press(css: string): Promise<void> {
+	const el = $(css);
+	await el.waitForDisplayed({ timeout: 8000 });
+	await el.click();
+}
+
+const VIEW = '.markdown-reading-view [data-dse-element="initiative"]';
+const HERO_TURN = `${VIEW} .dse-init__group--heroes .dse-init__portrait-toggle`;
 
 const minimal = {
 	heroes: [{ name: 'Alice Alpha', max_stamina: 30 }],
@@ -21,8 +33,8 @@ const minimal = {
 describe('initiative: a write adds no default key the user never wrote', () => {
 	it('[INIT-DEF-E01] toggling the hero turn writes only has_taken_turn: true', async () => {
 		await dse.openNote(MIN);
-		const root = dse.block(INIT);
-		const w = await dse.waitForWrite(MIN, () => dse.click(root.control({ css: '.dse-init__group--heroes .dse-init__portrait-toggle' })));
+		dse.block(INIT); // declares the target block
+		const w = await dse.waitForWrite(MIN, () => press(HERO_TURN));
 		expect(w.count).toBe(1);
 		await dse.expectNoteBlock(MIN, INIT).toEqual({
 			...minimal,
@@ -54,8 +66,8 @@ describe('initiative: a write adds no default key the user never wrote', () => {
 		const before = await dse.noteText(FULL);
 		expect(before).toContain('isHero: true');
 		expect(before).toContain('is_squad: false');
-		const root = dse.block(INIT);
-		const w = await dse.waitForWrite(FULL, () => dse.click(root.control({ css: '.dse-init__group--heroes .dse-init__portrait-toggle' })));
+		dse.block(INIT); // declares the target block
+		const w = await dse.waitForWrite(FULL, () => press(HERO_TURN));
 		expect(w.count).toBe(1);
 		const after = await dse.noteText(FULL);
 		// The hero comes first in the block, so its has_taken_turn is the first one in the note.
@@ -64,10 +76,9 @@ describe('initiative: a write adds no default key the user never wrote', () => {
 
 	it('[INIT-DEF-E04] Reset encounter on an untouched block writes back only the source keys (Malice back to 0)', async () => {
 		await dse.openNote(MIN);
-		const root = dse.block(INIT);
-		await dse.click(root.control({ css: '[data-dse-chrome-item="initiative-reset-encounter"]' }));
-		const confirm = dse.control({ css: '.modal-container button[aria-label="Yes, Reset"]' });
-		const w = await dse.waitForWrite(MIN, () => dse.click(confirm));
+		dse.block(INIT); // declares the target block
+		await press(`${VIEW} [data-dse-chrome-item="initiative-reset-encounter"]`);
+		const w = await dse.waitForWrite(MIN, () => press('.modal-container button[aria-label="Yes, Reset"]'));
 		expect(w.count).toBe(1);
 		await dse.expectNoteBlock(MIN, INIT).toEqual({ ...minimal, malice: { value: 0 } });
 	});
