@@ -232,6 +232,8 @@ describe('Plan 08 Task 5: framework-default :focus-visible (D2 §4.5)', () => {
 		'.dse-stamina-rec__pips[tabindex]:focus-visible',
 		// SC-132: the undo toast's action, inside an obsidian Notice.
 		'.dse-undo-notice__action:focus-visible',
+		// SC-498: the clickable stamina bar (one tab stop; only when it has a handler, hence [tabindex]).
+		'.dse-stamina--clickable[tabindex]:focus-visible',
 	];
 
 	function focusRule(): { selector: string; body: string } | undefined {

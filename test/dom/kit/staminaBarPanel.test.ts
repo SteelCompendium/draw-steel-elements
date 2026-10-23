@@ -166,6 +166,131 @@ describe('D7 Task 1: kit/StaminaBarPanel — renderStaminaBar', () => {
 		expect(onClick).not.toHaveBeenCalled();
 	});
 
+	// —— SC-498: the keyboard path (the bar is one tab stop; Enter/Space open it like a click) ——
+
+	function keydown(target: Element, key: string, init: KeyboardEventInit = {}): KeyboardEvent {
+		const evt = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
+		target.dispatchEvent(evt);
+		return evt;
+	}
+
+	function keyboardBar(onClick = jest.fn(), extra: Record<string, unknown> = {}) {
+		const root = document.createElement('div');
+		document.body.appendChild(root);
+		const bar = renderStaminaBar(root, { current: 31, temp: 0, max: 48 }, {
+			canPersist: true,
+			owner: fakeOwner(),
+			onClick,
+			...extra,
+		})!;
+		return { root, bar, onClick };
+	}
+
+	afterEach(() => {
+		document.body.innerHTML = '';
+	});
+
+	test('SC-498: a clickable bar is exactly one tab stop, named for what it does, and takes focus', () => {
+		const { bar } = keyboardBar();
+
+		expect(bar.getAttribute('tabindex')).toBe('0');
+		// role="group", not "button": the chrome panel's real <button>s live inside the bar, and a
+		// role="button" ancestor would flatten them out of the accessibility tree.
+		expect(bar.getAttribute('role')).toBe('group');
+		expect(bar.getAttribute('aria-label')).toBe('Edit Stamina: 31 of 48');
+		// One stop: nothing else in the bar's own markup is focusable (the chrome panel's buttons are
+		// native <button>s mounted later by the framework, not tabindex'd here).
+		expect(bar.querySelectorAll('[tabindex]')).toHaveLength(0);
+		bar.focus();
+		expect(document.activeElement).toBe(bar);
+	});
+
+	test('SC-498: Enter on the focused bar opens it like a click, once, and is handled', () => {
+		const { bar, onClick } = keyboardBar();
+
+		const evt = keydown(bar, 'Enter');
+
+		expect(onClick).toHaveBeenCalledTimes(1);
+		expect(evt.defaultPrevented).toBe(true);
+	});
+
+	test('SC-498: Space opens it too, and preventDefault stops the page scrolling', () => {
+		const { bar, onClick } = keyboardBar();
+
+		const evt = keydown(bar, ' ');
+
+		expect(onClick).toHaveBeenCalledTimes(1);
+		expect(evt.defaultPrevented).toBe(true);
+	});
+
+	test('SC-498: other keys, modified Enter/Space and auto-repeat do nothing', () => {
+		const { bar, onClick } = keyboardBar();
+
+		keydown(bar, 'a');
+		keydown(bar, 'Tab');
+		keydown(bar, 'Enter', { ctrlKey: true });
+		keydown(bar, ' ', { metaKey: true });
+		keydown(bar, 'Enter', { repeat: true });
+
+		expect(onClick).not.toHaveBeenCalled();
+	});
+
+	test('SC-498: Enter/Space on a chrome button inside the bar are left to the button (no open, not swallowed)', () => {
+		const { bar, onClick } = keyboardBar();
+		const chromeBtn = bar.querySelector('.dse-stamina__cluster')!.createDiv({ cls: 'dse-chrome' }).createEl('button');
+
+		const enter = keydown(chromeBtn, 'Enter');
+		const space = keydown(chromeBtn, ' ');
+
+		expect(onClick).not.toHaveBeenCalled();
+		// the browser's own button activation (a click) must still happen
+		expect(enter.defaultPrevented).toBe(false);
+		expect(space.defaultPrevented).toBe(false);
+	});
+
+	test('SC-498: a mouse click elsewhere on the bar still opens it', () => {
+		const { bar, onClick } = keyboardBar();
+
+		bar.querySelector<HTMLElement>('.dse-stamina__track')!.click();
+
+		expect(onClick).toHaveBeenCalledTimes(1);
+	});
+
+	test('SC-498: no tab stop wherever a click would not open it (read-only, no handler, keyboard: false)', () => {
+		const readOnly = document.createElement('div');
+		const ro = renderStaminaBar(readOnly, { current: 1, temp: 0, max: 2 }, {
+			canPersist: false,
+			owner: fakeOwner(),
+			onClick: jest.fn(),
+			readOnlyTooltip: 'Read-only in this context',
+		})!;
+		const noHandler = renderStaminaBar(document.createElement('div'), { current: 1, temp: 0, max: 2 }, {
+			canPersist: true,
+			owner: fakeOwner(),
+		})!;
+		const optedOut = keyboardBar(jest.fn(), { keyboard: false });
+
+		for (const bar of [ro, noHandler, optedOut.bar]) {
+			expect(bar.hasAttribute('tabindex')).toBe(false);
+			expect(bar.hasAttribute('role')).toBe(false);
+		}
+		// the read-only bar keeps its tooltip as its only label
+		expect(ro.getAttribute('aria-label')).toBe('Read-only in this context');
+		// keyboard: false leaves the mouse path alone
+		optedOut.bar.querySelector<HTMLElement>('.dse-stamina__track')!.click();
+		expect(optedOut.onClick).toHaveBeenCalledTimes(1);
+		keydown(optedOut.bar, 'Enter');
+		expect(optedOut.onClick).toHaveBeenCalledTimes(1);
+	});
+
+	test('SC-498: the accessible name follows targeted updates (current / max / temp)', () => {
+		const { bar } = keyboardBar();
+
+		updateStaminaBar(bar, { current: 12, temp: 4, max: 48 });
+
+		expect(bar.getAttribute('aria-label')).toBe('Edit Stamina: 12 of 48, 4 temporary');
+	});
+
 	// —— SC-183: the `gauge` render option (the initiative tracker's creature/pool bars) ——
 
 	test('gauge: { dyingZone: false } builds the cluster gauge WITHOUT the hero dying reserve (data-zone="off"), and updateStaminaBar keeps that geometry', () => {

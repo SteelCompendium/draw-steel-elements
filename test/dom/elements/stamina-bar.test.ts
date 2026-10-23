@@ -385,6 +385,8 @@ describe('D2 §3.5: stamina-bar rendered through the REAL ElementPipeline', () =
 			// Real Obsidian's setTooltip stamps `aria-label` (FOLLOWUPS #27-fix-round
 			// finding 1), not `data-tooltip`.
 			expect(bar.getAttribute('aria-label')).toBe('Read-only in this context');
+			// SC-498: inert means not a tab stop either
+			expect(bar.hasAttribute('tabindex')).toBe(false);
 
 			document.body.appendChild(host.containerEl);
 			const childCountBefore = document.body.children.length;
@@ -417,6 +419,23 @@ describe('D2 §3.5: stamina-bar rendered through the REAL ElementPipeline', () =
 			expect(modalEl.classList.contains('dse-modal')).toBe(true); // the kit scaffold
 			expect(modalEl.querySelector('.dse-modal__title')?.textContent).toBe('Stamina');
 			expect(modalEl.querySelector('.dse-sedit__apply-input')).not.toBeNull();
+		});
+
+		test('SC-498: the bar is a keyboard tab stop; Enter on it opens the Stamina modal like a click', async () => {
+			const pipeline = new ElementPipeline(makeDeps());
+			const host = makeHost();
+
+			await pipeline.run(staminaBarElement, BASIC_YAML, host);
+
+			const bar = (host.containerEl.firstElementChild as HTMLElement).querySelector('.dse-stamina') as HTMLElement;
+			expect(bar.getAttribute('tabindex')).toBe('0');
+			expect(bar.getAttribute('aria-label')).toMatch(/^Edit Stamina: \d+ of \d+/);
+			const bodyChildrenBefore = document.body.children.length;
+
+			bar.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+
+			expect(document.body.children.length).toBe(bodyChildrenBefore + 1);
+			expect((document.body.lastElementChild as HTMLElement).querySelector('.dse-modal__title')?.textContent).toBe('Stamina');
 		});
 
 		test('applying "Full Heal" mutates the model, refreshes the bar in place, and — after the debounce — persists exactly once with the expected byte-exact YAML', async () => {
@@ -512,6 +531,23 @@ describe('D2 §3.5: stamina-bar rendered through the REAL ElementPipeline', () =
 		expect(src).not.toMatch(/mountComponentWrapper|mountCollapsibleHeading/);
 		expect(src).toMatch(/from '@\/framework\/kit'/);
 		expect(styleGuardFindings(src)).toEqual([]);
+	});
+
+	test('SC-498: the focused bar draws the shared kit ring, and the ring never prints', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+		// the shared ring rule (outline 2px solid var(--dse-focus-ring), offset 2px) lists the bar ...
+		const ring = [...sheet.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find(
+			(m) => m[1].includes('.dse-stamina--clickable[tabindex]:focus-visible') && m[2].includes('outline: 2px solid var(--dse-focus-ring)'),
+		);
+		expect(ring).toBeDefined();
+		expect(ring![2]).toMatch(/outline-offset:\s*2px/);
+		// ... and a later print rule (real print + the on-screen print twin) takes it away again.
+		const print = [...sheet.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(
+			(m) => /\.dse-stamina--clickable\[tabindex\]:focus-visible/.test(m[1]) && /outline:\s*none/.test(m[2]),
+		);
+		expect(print.length).toBeGreaterThanOrEqual(1);
+		expect(sheet.indexOf(print[0][0])).toBeGreaterThan(sheet.indexOf(ring![0]));
+		expect(print.map((m) => m[1]).join(',')).toMatch(/data-dse-print="on"/);
 	});
 
 	test('CSS contract: .dse-stamina consumes the --dse-stamina-* tokens via [data-state]; the old .ds-stamina-bar block is gone', () => {
