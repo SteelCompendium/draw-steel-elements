@@ -56,6 +56,9 @@
 // SC-492 appends G-S32 (34 scenarios in all): with the experimental authoring controls on, the Edit pencil in a
 // ds-stamina-bar's chrome panel opens only the edit form - not the Stamina modal on top of it - by real mouse click, Enter and
 // Space, and the panel's collapse button opens no modal; a real click on the bar itself still opens the Stamina modal.
+// SC-498 appends G-S36 (35 scenarios in all; the id was assigned by the ticket-owner): the stamina bar is one tab stop
+// (a real Tab reaches it and it shows the focus ring), and a real Enter or Space on it opens the Stamina modal;
+// focus is back on the bar when the modal closes.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -2251,6 +2254,77 @@ const SCENARIOS = [
 			t.expect(t.read(rel) === FIXTURES[rel], `${rel} was written (nothing was applied, so it must be byte-identical): ${JSON.stringify(t.read(rel))}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
 			return 'the Edit pencil opens only the edit form by real click, Enter and Space; the collapse button opens no modal; a real click on the bar still opens only the Stamina modal; the note is untouched';
+		},
+	},
+	{
+		// SC-498: the stamina bar opened on a mouse click only - no tab stop, Enter/Space did nothing. It is now one tab stop
+		// (role=group, named "Edit Stamina: ..."), Enter and Space open the Stamina modal like a click, and it shows the
+		// shared focus ring when reached by keyboard. Real Tab / Enter / Space key events (CDP), as a person would press them.
+		id: 'G-S36',
+		async run(t) {
+			const rel = 'Lifecycle/stamina.md';
+			const BAR = '[data-dse-element="stamina-bar"] .dse-stamina';
+			const bar = t.root(BAR);
+			const modals = () => t.ev(`Array.from(document.querySelectorAll('.modal-container .dse-modal')).map((m) => (m.querySelector('.dse-form__preview') ? 'form' : m.querySelector('.dse-sedit__apply-input') ? 'stamina' : 'other'))`);
+			// Where the keyboard focus is, in words.
+			const focusNow = () => t.ev(`(() => { const a = document.activeElement; if (!a) return 'none'; if (a === (${bar})) return 'bar'; return a.tagName.toLowerCase() + (a.className && typeof a.className === 'string' ? '.' + a.className.trim().split(/\\s+/).join('.') : ''); })()`);
+			// A real key press with its text, so the browser's own default actions (Tab moves focus, Space scrolls) run.
+			const press = async (key, code, vk, text) => {
+				await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key, code, text, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
+				await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
+			};
+			const closeModal = async (what) => {
+				await t.key('Escape', 'Escape', 27);
+				await t.waitFor(`document.querySelectorAll('.modal-container .dse-modal').length === 0`, `${what}: the modal closed on Escape`);
+			};
+			const m = await t.mark();
+			await t.open(rel);
+			await t.reset(rel);
+			await t.waitFor(`!!(${bar})`, `${rel}: the stamina bar rendered`);
+			const facts = {};
+
+			// 1. A real Tab from the start of the block reaches the bar: it is a tab stop, and it is exactly one.
+			// The sequential-focus start point is a throwaway focusable placed just before the block (a selection or a blur leaves it
+			// wherever the last interaction was, which made this flaky): a real Tab from there goes to the first tab stop after it.
+			await t.ev(`(() => { const r = (${bar}).closest('[data-dse-element]'); let s = document.getElementById('lc-gs36-start'); if (!s) { s = document.createElement('span'); s.id = 'lc-gs36-start'; s.tabIndex = -1; r.parentElement.insertBefore(s, r); } s.focus(); return document.activeElement === s; })()`);
+			let reached = '';
+			for (let i = 0; i < 4 && reached !== 'bar'; i++) {
+				await press('Tab', 'Tab', 9, undefined);
+				reached = await focusNow();
+				facts[`tab${i + 1}`] = reached;
+			}
+			t.expect(reached === 'bar', `a real Tab never reached the stamina bar (focus went: ${JSON.stringify(facts)})`);
+			const ring = await t.ev(`(() => { const b = ${bar}; const cs = getComputedStyle(b); return { visible: b.matches(':focus-visible'), style: cs.outlineStyle, width: cs.outlineWidth, offset: cs.outlineOffset, role: b.getAttribute('role'), tab: b.getAttribute('tabindex'), name: b.getAttribute('aria-label') }; })()`);
+			t.expect(ring.visible && ring.style === 'solid' && ring.width === '2px' && ring.offset === '2px', `the Tab-focused bar shows no 2px solid kit ring: ${JSON.stringify(ring)}`);
+			t.expect(ring.role === 'group' && ring.tab === '0' && /^Edit Stamina: 15 of 20, 5 temporary$/.test(ring.name), `the bar's role/tabindex/name: ${JSON.stringify(ring)}`);
+			t.expect((await modals()).length === 0, 'Tab alone opened a modal');
+			facts.ring = `${ring.width} ${ring.style}, offset ${ring.offset}`;
+
+			// 2. Enter and Space on the focused bar open the Stamina modal (and only that); Escape closes it and focus returns to the bar.
+			for (const [name, key, code, vk, text] of [['Enter', 'Enter', 'Enter', 13, '\r'], ['Space', ' ', 'Space', 32, ' ']]) {
+				t.expect((await focusNow()) === 'bar', `${name}: the bar does not hold focus before the press (${await focusNow()})`);
+				await press(key, code, vk, text);
+				await t.waitFor(`document.querySelectorAll('.modal-container .dse-modal').length > 0`, `a modal opened after ${name} on the bar`);
+				await t.sleep(600); // a doubled open (keydown + the click some browsers add on keyup) would be here by now
+				const open = await modals();
+				t.expect(JSON.stringify(open) === '["stamina"]', `${name} on the bar: expected exactly the Stamina modal, got ${JSON.stringify(open)}`);
+				facts[`${name}-in-modal`] = await focusNow();
+				await closeModal(name);
+				await t.sleep(300);
+				facts[`${name}-after-close`] = await focusNow();
+				t.expect(facts[`${name}-after-close`] === 'bar', `${name}: after the modal closed, focus is on ${facts[`${name}-after-close`]}, not back on the bar`);
+			}
+			// The ring is still there after the modal round trip (Obsidian restores focus programmatically).
+			facts.ringAfter = await t.ev(`(() => { const b = ${bar}; return getComputedStyle(b).outlineStyle + ' ' + b.matches(':focus-visible'); })()`);
+
+			// 3. A real mouse click on the bar paints no ring (focus-visible, not focus), and still opens the modal.
+			await t.realClick(`(${bar}).querySelector('.dse-stamina__cnums')`);
+			await t.waitFor(`document.querySelectorAll('.modal-container .dse-modal').length > 0`, 'a modal opened after a click on the bar');
+			t.expect(JSON.stringify(await modals()) === '["stamina"]', 'a click on the bar: expected only the Stamina modal');
+			await closeModal('click');
+			t.expect(t.read(rel) === FIXTURES[rel], `${rel} was written (nothing was applied, so it must be byte-identical): ${JSON.stringify(t.read(rel))}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
+			return `a real Tab reaches the bar after ${JSON.stringify([facts.tab1, facts.tab2, facts.tab3, facts.tab4].filter(Boolean))} (ring ${facts.ring}); Enter and Space each open only the Stamina modal; focus: in modal ${facts['Enter-in-modal']}, after close ${facts['Enter-after-close']} / ${facts['Space-after-close']}; ring after round trip ${facts.ringAfter}; the note is untouched`;
 		},
 	},
 ];
