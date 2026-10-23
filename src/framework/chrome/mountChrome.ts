@@ -37,6 +37,7 @@ import type {
 	ElementSummary,
 } from './types';
 import { isChromeMobile } from './platform';
+import { claimChromeFocus, focusControl, isKeyboardClick } from './focusHandoff';
 
 /** SessionStore slot for the user's collapse toggle. */
 export const CHROME_COLLAPSE_SLOT = 'chrome.collapsed';
@@ -113,6 +114,10 @@ export interface MountChromeOptions<M> {
 	ctx: ElementChromeContext<M>;
 	/** Session round-trip for the collapse state. Omit in contexts with no block key. */
 	persist?: SessionPersist;
+	/** SC-505: the block's key AS OF NOW (`host.blockKey()`). `persist.blockKey` is a snapshot taken at mount, and a fresh
+	 *  render mounts before Obsidian can say where the block is (its key is then the position-free fallback); a
+	 *  keyboard Pin's request for its button back is matched against the live value once the panel is in the document. */
+	blockKeyNow?: () => string;
 	/** Authored default from the reserved `collapsed:`/`collapse_default:` keys. Default
 	 *  false (expanded). */
 	collapsedDefault?: boolean;
@@ -196,7 +201,8 @@ export function mountChrome<M>(opts: MountChromeOptions<M>, owner: Component): C
 					icon: 'chevron-up',
 					label: `Collapse ${ctx.def.name}`,
 					variant: 'ghost',
-					onClick: () => apply(!collapsed, true),
+					control: 'chrome.collapse',
+					onClick: (evt) => apply(!collapsed, true, isKeyboardClick(evt)),
 				},
 				owner,
 			)
@@ -216,7 +222,8 @@ export function mountChrome<M>(opts: MountChromeOptions<M>, owner: Component): C
 					icon: 'chevron-down',
 					label: `Expand ${ctx.def.name}`,
 					variant: 'ghost',
-					onClick: () => apply(false, true),
+					control: 'chrome.expand',
+					onClick: (evt) => apply(false, true, isKeyboardClick(evt)),
 				},
 				owner,
 			)
@@ -244,7 +251,24 @@ export function mountChrome<M>(opts: MountChromeOptions<M>, owner: Component): C
 		detailEl?.setText(summary.detail ? ` (${summary.detail})` : '');
 	}
 
-	function apply(next: boolean, write: boolean): void {
+	/**
+	 * SC-505 — a KEYBOARD toggle hands focus to the control that replaces the one it just hid: Collapse hides the
+	 * panel (and the Collapse button with it), so focus goes to the one-liner's Expand button; Expand hides the
+	 * one-liner, so focus goes back to the restored Collapse button. Toggling writes no note and rebuilds nothing,
+	 * so both buttons are final by now. If the Collapse button cannot take focus (a hidden panel), the nearest tab
+	 * stop around it inside the element is the fallback (the stamina bar, whose panel sits inside it); never <body>.
+	 */
+	function handOffFocus(nowCollapsed: boolean): void {
+		if (nowCollapsed) {
+			focusControl(expand?.buttonEl);
+			return;
+		}
+		if (focusControl(toggle?.buttonEl)) return;
+		const stop = toggle?.buttonEl.closest<HTMLElement>('[tabindex]:not([tabindex="-1"])');
+		if (stop && root.contains(stop)) focusControl(stop);
+	}
+
+	function apply(next: boolean, write: boolean, keyboard = false): void {
 		if (!collapsible) return;
 		collapsed = next;
 		if (next) {
@@ -258,6 +282,7 @@ export function mountChrome<M>(opts: MountChromeOptions<M>, owner: Component): C
 		if (toggleIconEl) setIcon(toggleIconEl, next ? 'chevron-down' : 'chevron-up');
 		expand?.buttonEl.setAttribute('aria-expanded', String(!next));
 		if (write && persist) persist.session.set(persist.blockKey, CHROME_COLLAPSE_SLOT, next);
+		if (keyboard) handOffFocus(next);
 	}
 
 	for (const item of items) pushItem(item, owner);
@@ -265,6 +290,9 @@ export function mountChrome<M>(opts: MountChromeOptions<M>, owner: Component): C
 	// Initial mount writes no session value — only real state CHANGES are persisted
 	// (the kit collapsible's contract, framework/kit/collapsible.ts).
 	apply(collapsed, false);
+
+	// SC-505: a keyboard Pin rebuilt this block; if it asked for its button back, claim it (focusHandoff.ts).
+	if (opts.blockKeyNow) claimChromeFocus(opts.blockKeyNow, root);
 
 	return {
 		panelEl,

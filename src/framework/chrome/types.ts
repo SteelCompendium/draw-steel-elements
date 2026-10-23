@@ -45,7 +45,9 @@ export interface ChromeMenuItem {
 	label: string;
 	/** SC-500: optional stable `data-dse-control` id (attribute only), for an item an e2e scenario drives. */
 	control?: string;
-	onClick: () => void;
+	/** The activating click, when there is one: `evt.detail === 0` marks a keyboard (or assistive-tech)
+	 *  activation, which is how an item decides whether to hand focus on (SC-505). */
+	onClick: (evt?: MouseEvent) => void;
 }
 
 /** What `summary()` / `items()` are handed. */

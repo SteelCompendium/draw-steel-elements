@@ -30,6 +30,7 @@ import modalManifest from '../../e2e/manifest/stamina-edit-modal';
 import conditionsManifest from '../../e2e/manifest/conditions-modal';
 import initiativeManifest from '../../e2e/manifest/initiative';
 import { ResetEncounterModal } from '../../src/views/ResetEncounterModal';
+import chromeManifest from '../../e2e/manifest/chrome';
 import { idsOf } from '../../e2e/manifest/surface';
 
 const INTERACTIVE = 'button, input, select, textarea, [role="button"], [role="slider"], [tabindex], [contenteditable]';
@@ -50,7 +51,10 @@ function censusProblems(scope: Element, allowed: ReadonlySet<string>, interactiv
 	return problems;
 }
 
-const barIds = new Set(idsOf(staminaBarManifest));
+// SC-505: the framework chrome buttons carry `chrome.*` ids (the interactive-node check still skips them, but an id that is
+// stamped must be declared); every surface that mounts the standard panel may therefore see them.
+const chromeIds = idsOf(chromeManifest);
+const barIds = new Set([...idsOf(staminaBarManifest), ...chromeIds]);
 const modalIds = new Set(idsOf(modalManifest));
 
 function makeHost(language: string, sourcePath: string) {
@@ -207,7 +211,7 @@ describe('SC-408 census: initiative stamina entry points', () => {
 		// Scope: the stamina entry points only, not the whole tracker (malice, conditions, ... are
 		// other surfaces). Everything the tracker stamps with an id must still be in the manifest.
 		const entryPoints = 'button.dse-init__stamina, .dse-init__bar.dse-stamina--clickable, button.dse-init__cell';
-		expect(censusProblems(root, new Set([...idsOf(modalManifest), ...idsOf(conditionsManifest), ...idsOf(initiativeManifest)]), entryPoints)).toEqual([]);
+		expect(censusProblems(root, new Set([...idsOf(modalManifest), ...idsOf(conditionsManifest), ...idsOf(initiativeManifest), ...chromeIds]), entryPoints)).toEqual([]);
 		for (const id of ['init.hero.stamina', 'init.hero.bar', 'init.detail.stamina', 'init.detail.bar', 'init.cell.stamina']) {
 			expect(root.querySelector(`[data-dse-control="${id}"]`)).not.toBeNull();
 		}

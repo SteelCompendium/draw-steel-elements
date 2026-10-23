@@ -35,6 +35,7 @@ import {
 } from './chrome/collapsedKey';
 import type { CollapseKeys } from './chrome/collapsedKey';
 import { ensureCollapseInvariant, mountChrome } from './chrome/mountChrome';
+import { armChromeFocus, isKeyboardClick, settleChromeFocus } from './chrome/focusHandoff';
 import type { ChromeMenuItem } from './chrome/types';
 import { iconButton } from './kit/iconButton';
 import { openFormEditor } from '@/authoring/FormModal';
@@ -640,6 +641,7 @@ export class ElementPipeline {
 							chrome,
 							ctx,
 							persist: { session, blockKey: host.blockKey(), slot: 'chrome' },
+							blockKeyNow: () => host.blockKey(),
 							collapsedDefault,
 							// SC-169 fix round 1 (L-1): the author's key AND the element's own
 							// per-model veto. ANDed, so the veto can only ever remove the control
@@ -674,10 +676,21 @@ export class ElementPipeline {
 												id: 'pin',
 												icon: 'pin',
 												label: 'Pin to sidebar',
-												onClick: () => {
+												control: 'chrome.pin',
+												onClick: (evt) => {
 													const info = cx.host.getBlockInfo();
 													if (!info) return; // gated on canPersist above; defensive only
-													void requestPinToSidebar(cx.host.sourcePath, info.language, info.lineStart);
+													// SC-505: the pin rewrites the note and rebuilds this block, taking the button
+													// the keyboard user pressed with it. Ask the rebuilt panel for its Pin button back
+													// (keyboard only; a mouse press moves nothing) and put it back ourselves if
+													// nothing was rebuilt.
+													const key = cx.host.blockKey();
+													const pressed = (evt?.currentTarget ?? null) as HTMLElement | null;
+													const keyboard = isKeyboardClick(evt);
+													if (keyboard) armChromeFocus(key, 'pin');
+													void requestPinToSidebar(cx.host.sourcePath, info.language, info.lineStart).then(() => {
+														if (keyboard) settleChromeFocus(key, pressed);
+													});
 												},
 											} satisfies ChromeMenuItem,
 										]
