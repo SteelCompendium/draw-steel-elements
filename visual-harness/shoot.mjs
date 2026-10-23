@@ -1351,7 +1351,7 @@ async function assertMontageBoardScroll(page) {
 // (`~/.config/obsidian/obsidian-1.15.0.asar`, sha256
 // 0e6383301078a798f0f3bdb42bdb606d904ada77eab8c8fc89da533573979248) — the machine
 // self-updated and `npm run shots` exited 1 with HOST COPY DRIFTED on rules #3, #5 and #6.
-// 1.15.0 ships app.css MINIFIED (598,237 bytes, down from 668,206 in 1.14.4), and that is the
+// 1.15.0 ships app.css MINIFIED (598,237 bytes, down from 668,223 bytes / 668,205 characters in 1.14.4), and that is the
 // whole difference: the six button-reaching rules carry the same selectors, the same
 // declarations in the same order and the same values — only the spelling moved. What the
 // copy now spells the way 1.15.0 does, because the pin compares selector/at-rule text

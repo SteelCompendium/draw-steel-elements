@@ -60,10 +60,14 @@
 //                                                            manual-run companion)
 //
 // `npm run gen-light-island` runs this with no flag. The pin-bump procedure (README.md,
-// styles-source.css's own comment): bump PINNED_OBSIDIAN in obsidian-host-pin.mjs and the
-// pin in obsidian-app-css.pin.mjs, run `npm run host-css` to refetch, THEN
-// `npm run gen-light-island`, then commit both the pin and the regenerated block together
-// — never bump one without the other.
+// styles-source.css's own comment): the generated block is derived from the app.css pinned
+// in obsidian-app-css.pin.mjs (OBSIDIAN_APP_CSS_PIN), so it regenerates only when THAT pin
+// moves: bump the pin, run `npm run host-css` to refetch, THEN `npm run gen-light-island`,
+// then commit the pin and the regenerated block together — never move the app.css pin
+// without regenerating the block. PINNED_OBSIDIAN in obsidian-host-pin.mjs (the floor for
+// the hand-maintained button-rule model in shoot.mjs) is an INDEPENDENT pin: it moves on its
+// own schedule (SC-202, SC-497 bumped it without touching the app.css pin) and does not
+// require a regeneration here. The app.css pin's bump carries its own sanctioned rebaseline.
 
 import fs from 'fs';
 import path from 'path';
