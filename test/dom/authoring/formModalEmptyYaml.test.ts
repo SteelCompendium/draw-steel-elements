@@ -32,15 +32,18 @@ interface Case {
 	source: string;
 	/** Does the element's parse accept an empty body (null from the pipeline)? */
 	acceptsEmpty: boolean;
-	/** The element's own parse() message the form shows for a null body (no per-element wording exists). */
-	nullError?: RegExp;
+	/** A NON-empty box this element's parse() rejects, and the element's own message for it (r1b: that message is kept). */
+	invalid?: { box: string; error: RegExp };
 }
 
+/** SC-493 r1b (ledger D5): shown instead of the element's own message when the box reads as no data. */
+const EMPTY_MESSAGE = "This block can't be empty. Add at least one setting, or press Cancel.";
+
 const CASES: Case[] = [
-	{ name: 'counter', def: counterElement, alias: 'ds-counter', source: 'current_value: 3', acceptsEmpty: false, nullError: /^Cannot read properties of null \(reading 'max_value'\)$/ },
-	{ name: 'negotiation', def: negotiationElement, alias: 'ds-negotiation', source: 'name: Duke', acceptsEmpty: false, nullError: /^Cannot read properties of null \(reading 'name'\)$/ },
-	{ name: 'party', def: partyElement, alias: 'ds-party', source: 'heroes: []', acceptsEmpty: false, nullError: /^The input must be a YAML object\.$/ },
-	{ name: 'encounter', def: encounterElement, alias: 'ds-encounter', source: 'heroes: []', acceptsEmpty: false, nullError: /^The input must be a YAML object\.$/ },
+	{ name: 'counter', def: counterElement, alias: 'ds-counter', source: 'current_value: 3', acceptsEmpty: false },
+	{ name: 'negotiation', def: negotiationElement, alias: 'ds-negotiation', source: 'name: Duke', acceptsEmpty: false },
+	{ name: 'party', def: partyElement, alias: 'ds-party', source: 'heroes: []', acceptsEmpty: false, invalid: { box: 'just text', error: /^The input must be a YAML object\.$/ } },
+	{ name: 'encounter', def: encounterElement, alias: 'ds-encounter', source: 'heroes: []', acceptsEmpty: false, invalid: { box: 'just text', error: /^The input must be a YAML object\.$/ } },
 	{ name: 'montage', def: montageElement, alias: 'ds-montage', source: 'title: Heist', acceptsEmpty: true },
 	{ name: 'project', def: projectElement, alias: 'ds-project', source: 'name: Forge', acceptsEmpty: true },
 ];
@@ -135,11 +138,31 @@ describe.each(CASES)('SC-493: emptying the raw-YAML box of $name', (c) => {
 			// the element would error on null, so the form must refuse: Save disabled, the error shown,
 			// nothing written.
 			expect(saveEnabled).toBe(false);
-			expect(form.errors()).toMatch(c.nullError!);
+			expect(form.errors()).toBe(EMPTY_MESSAGE);
 			form.save.click();
 			await flush();
 			expect(h.app.vault.getContent(PATH)).toBe(before);
 		}
+	});
+});
+
+describe('SC-493 r1b: only an empty box gets the plain message; any other parse error keeps the element\'s own', () => {
+	test.each(CASES.filter((c) => c.invalid))('$name: a non-empty invalid box shows the element\'s message', async (c) => {
+		const { render } = await setup(c);
+		const { el } = await render(c.source);
+		const form = openForm(el);
+		form.type(c.invalid!.box);
+		expect(form.save.disabled).toBe(true);
+		expect(form.errors()).toMatch(c.invalid!.error);
+		expect(form.errors()).not.toBe(EMPTY_MESSAGE);
+	});
+
+	test('the footer button the message points at is called Cancel', async () => {
+		const c = CASES[0];
+		const { render } = await setup(c);
+		const { el } = await render(c.source);
+		openForm(el);
+		expect(document.querySelector('.modal-container .dse-modal__footer button[aria-label="Cancel"]')).not.toBeNull();
 	});
 });
 
@@ -238,9 +261,23 @@ describe('SC-493: the pipeline body reader, not a private copy', () => {
 		mounted.length = 0;
 		type('');
 		expect(modal.canSave()).toBe(false);
-		expect(modal.body.querySelector('.dse-form__errors')?.textContent).toBe('expected an object, got null');
+		expect(modal.body.querySelector('.dse-form__errors')?.textContent).toBe(EMPTY_MESSAGE);
 		expect(modal.body.querySelector('.dse-form__preview')?.children.length).toBe(0);
 		expect(mounted).toEqual([]);
+		modal.close();
+	});
+
+	test('a def that throws on a non-null box keeps its own message (the plain message is only for no data)', () => {
+		const { def } = recordingDef({
+			parse: (data: unknown) => {
+				if (data !== null) throw new Error('bad shape');
+				return data;
+			},
+		});
+		const { modal, type } = openStub(def, 'a: 1');
+		type('a: 2');
+		expect(modal.canSave()).toBe(false);
+		expect(modal.body.querySelector('.dse-form__errors')?.textContent).toBe('bad shape');
 		modal.close();
 	});
 
