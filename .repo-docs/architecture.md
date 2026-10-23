@@ -165,9 +165,15 @@ an own property, so `stringifyYaml` cannot write it), and a model the plugin bui
 record and serializes whole. When filtering leaves no keys at all, `stringifyOmittingUntouched` writes an empty body only if
 the source body was null/blank (montage, project); a mapping source is written as `{}` because
 counter, negotiation, party and encounter cannot re-parse an empty body. Every key the source declared is written (even at its default),
-key order is unchanged, and a re-parse records afresh. Initiative and hero still write their
-parser defaults (SC-485; hero is deliberate). The encounter view's render-time `_computed`
-write is a separate question (SC-486).
+key order is unchanged, and a re-parse records afresh. Initiative (SC-485) applies the same
+rule per nested object (top, hero, group, creature, authored instance): its `parse` reads which
+keys each object left absent before filling them, snapshots at the end of `parse` AND of
+`resolveRefs` (statblock-merged `name` / `max_stamina` / `image` / `with_captain` and the stamina
+derived from them are fills too), and `serialize` walks a nested DTO. A squad's pool and its
+captain-bonus trio (`minion_stamina_pool_max`, `captain_bonus_active`, `captain_bonus_n`) are
+written all-or-nothing, because a written pool stops re-parse from re-deriving the trio. An absent
+`instances` list is written whole once it changes. Hero still writes its parser defaults
+(deliberate). The encounter view's render-time `_computed` write is a separate question (SC-486).
 
 Each element directory follows the same shape: `definition.ts` (the `ElementDefinition`,
 registered in `main.ts`'s `registerFrameworkElementDefinitions`), `view.ts` (the
