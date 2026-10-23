@@ -201,6 +201,7 @@ export async function sendToSidebar(
 ): Promise<boolean> {
 	const result = await bindBlockToSidebar(services, filePath, alias, cursorLine);
 	if (result === 'unreadable-anchor') new Notice(UNREADABLE_ANCHOR_NOTICE);
+	else if (result === 'unregistered') new Notice(unregisteredNotice(alias));
 	return result === 'bound';
 }
 
@@ -209,7 +210,18 @@ export async function sendToSidebar(
 const UNREADABLE_ANCHOR_NOTICE =
 	'Draw Steel Elements: this block already has an `_dse_anchor` line the sidebar cannot read, so it was not sent to the sidebar. Put it on one line as `_dse_anchor: value` (no comment or tag), or delete it, then send the block again.';
 
-type BindResult = 'bound' | 'not-found' | 'unreadable-anchor';
+/** SC-487 - shown when the block's type is not one the sidebar can mount; nothing was written to the note. */
+const unregisteredNotice = (alias: string): string =>
+	`Draw Steel Elements: this block's type ("${alias}") is not one the sidebar can show, so it was not sent to the sidebar and the note was not changed.`;
+
+/** SC-487 - can the sidebar mount a block fenced as `alias`? An element registered under that ALIAS - `registry.get`
+ *  also matches element ids (`statblock`, `encounter`, `counter`), which no code-block processor is registered for. */
+function isMountableAlias(services: DseSidebarServices, alias: string): boolean {
+	const def = services.registry.get(alias);
+	return def !== undefined && def.aliases.includes(alias);
+}
+
+type BindResult = 'bound' | 'not-found' | 'unreadable-anchor' | 'unregistered';
 
 /** `sendToSidebar`'s body, reporting WHY nothing was bound so each caller can say the right thing
  *  (`requestPinToSidebar` must not answer an unreadable anchor with "couldn't find that block"). */
@@ -219,6 +231,9 @@ async function bindBlockToSidebar(
 	alias: string,
 	cursorLine?: number,
 ): Promise<BindResult> {
+	// SC-487: BEFORE any vault write - a stamp for a type the sidebar cannot mount only leaves a dead `_dse_anchor` line
+	// in the note and an "unavailable" panel. Every entry point that stamps goes through here, so all refuse alike.
+	if (!isMountableAlias(services, alias)) return 'unregistered';
 	const file = services.app.vault.getAbstractFileByPath(filePath);
 	if (!(file instanceof TFile)) return 'not-found';
 
@@ -325,6 +340,8 @@ export async function requestPinToSidebar(filePath: string, alias: string, curso
 		const result = await bindBlockToSidebar(dseSidebarPinTarget, filePath, alias, cursorLine);
 		if (result === 'unreadable-anchor') {
 			new Notice(UNREADABLE_ANCHOR_NOTICE);
+		} else if (result === 'unregistered') {
+			new Notice(unregisteredNotice(alias));
 		} else if (result !== 'bound') {
 			new Notice(`Draw Steel Elements: couldn't find that block in ${filePath}.`);
 		}

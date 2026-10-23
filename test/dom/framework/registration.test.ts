@@ -280,6 +280,81 @@ describe('D8 Task 2 review fix — registration.ts (finding #3)', () => {
 		});
 	});
 
+	// SC-487 — a block whose type the sidebar cannot mount (no element registered under that alias) must not get an
+	// `_dse_anchor` stamped into the note: the panel could only ever show "unavailable" and a save from it is lost.
+	// The check sits in the shared bind path, so every entry point that stamps refuses alike: note bytes unchanged,
+	// one Notice, nothing mounted.
+	describe('SC-487: no anchor for a type the sidebar cannot mount', () => {
+		const ZWSP = String.fromCharCode(0x200b);
+		const unmountable: Array<[string, string]> = [
+			['an unregistered name', 'ds-nonesuch'],
+			['a registered name plus a zero-width space', `ds-counter${ZWSP}`],
+			['an element ID (no code-block processor is registered under it)', 'statblock'],
+			['an unrelated language', 'js'],
+		];
+		const noteFor = (alias: string) => ['# N', '', `\`\`\`${alias}`, 'current_value: 5', '```', ''].join('\n');
+		const sidebarLeaf = (app: App) => app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0]?.view;
+
+		test.each(unmountable)('requestPinToSidebar (the chrome "Pin to sidebar" item) refuses %s: note byte-identical, one Notice, nothing mounted', async (_label, alias) => {
+			const { app, plugin, services } = setup();
+			registerDseSidebar(plugin as any, services);
+			const note = noteFor(alias);
+			app.vault.setFile('Note.md', note);
+
+			await requestPinToSidebar('Note.md', alias, 2);
+			await flushAsync();
+
+			expect(app.vault.getContent('Note.md')).toBe(note);
+			expect(Notice.notices).toHaveLength(1);
+			expect(Notice.notices[0]).toContain('sidebar can show');
+			expect(Notice.notices[0]).not.toContain("couldn't find that block");
+			expect(sidebarLeaf(app)).toBeUndefined();
+		});
+
+		test.each(unmountable)('sendToSidebar (the initiative command and the encounter hand-off call it) refuses %s: resolves false, note byte-identical, one Notice', async (_label, alias) => {
+			const { app, services } = setup();
+			const note = noteFor(alias);
+			app.vault.setFile('Note.md', note);
+
+			await expect(sendToSidebar(services, 'Note.md', alias, 2)).resolves.toBe(false);
+			await flushAsync();
+
+			expect(app.vault.getContent('Note.md')).toBe(note);
+			expect(Notice.notices).toHaveLength(1);
+			expect(sidebarLeaf(app)).toBeUndefined();
+		});
+
+		test('the "Send block to sidebar" command refuses a fence of another plugin (```js): note byte-identical, one Notice, nothing mounted', async () => {
+			const { app, plugin, services } = setup();
+			registerDseSidebar(plugin as any, services);
+			const note = noteFor('js');
+			app.vault.setFile('Note.md', note);
+			const command = plugin.commands.find((c) => c.id === 'send-block-to-sidebar');
+			const editor = new Editor(note);
+			editor.cursor = { line: 3, ch: 0 };
+
+			command.editorCheckCallback(false, editor, { file: { path: 'Note.md' } } as any);
+			await flushAsync();
+
+			expect(app.vault.getContent('Note.md')).toBe(note);
+			expect(Notice.notices).toHaveLength(1);
+			expect(sidebarLeaf(app)).toBeUndefined();
+		});
+
+		test('a registered alias is unaffected: the pin stamps an anchor and mounts the panel, no Notice', async () => {
+			const { app, plugin, services } = setup();
+			registerDseSidebar(plugin as any, services);
+			app.vault.setFile('Note.md', noteFor('ds-counter'));
+
+			await requestPinToSidebar('Note.md', 'ds-counter', 2);
+			await flushAsync();
+
+			expect(Notice.notices).toHaveLength(0);
+			expect(app.vault.getContent('Note.md')).toMatch(/_dse_anchor: [A-Za-z0-9_-]+/);
+			expect(sidebarLeaf(app)).toBeInstanceOf(DseSidebarView);
+		});
+	});
+
 	// SC-453 — stamping a `_dse_anchor` into a CRLF note: the pin used to find NO fence at all
 	// (FENCE_LINE never matches `\r`), so nothing bound; once found, the stamped line must carry
 	// the note's own ending so the note does not turn mixed-ending on first pin.
