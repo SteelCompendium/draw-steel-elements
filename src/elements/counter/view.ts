@@ -58,6 +58,7 @@ export class CounterElementView extends ElementView<Counter> {
 				// still do here).
 				clampInitial: false,
 				label: model.name || 'Counter',
+				control: 'counter', // SC-495: e2e control ids counter.dec / .input|.value / .inc (attributes only)
 				onChange: (value) => {
 					this.model.current_value = value;
 					void this.persist();

@@ -21,12 +21,12 @@ export default surface('stamina-edit-modal', {
 		'sedit.healing': c(['click'], ['A11', 'A12']),
 		// -- S. Stamina stepper
 		'sedit.stamina.dec': c(['click'], ['S01']),
-		'sedit.stamina.inc': c(['click'], ['S01']),
+		'sedit.stamina.inc': c(['click', 'press:Enter'], ['S01', 'SC-495']),
 		'sedit.stamina.input': c(['click', 'type', 'press:Enter', 'press:Escape', 'blur'], ['S02', 'S03', 'S04', 'S05', 'S06', 'S07', 'S08', 'S13', 'S14']),
 		// -- T. Temporary Stamina stepper
-		'sedit.temp.dec': c(['click', 'click-disabled'], ['T04', 'T05']),
+		'sedit.temp.dec': c(['click', 'click-disabled', 'press:Enter'], ['T04', 'T05', 'SC-495']),
 		'sedit.temp.inc': c(['click'], ['T01']),
-		'sedit.temp.input': c(['type', 'press:Escape', 'blur'], ['T02', 'T03', 'T09', 'T10', 'T12']),
+		'sedit.temp.input': c(['type', 'press:Escape', 'blur', 'press:Enter'], ['T02', 'T03', 'T09', 'T10', 'T12', 'SC-495']),
 		// -- Q. Quick actions
 		'sedit.kill': c(['click'], ['Q01']),
 		'sedit.full-heal': c(['click'], ['Q04']),
