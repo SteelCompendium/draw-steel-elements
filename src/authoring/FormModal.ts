@@ -307,6 +307,10 @@ class FormModal extends DseModal {
 		return result.errors.map((e) => `${e.path || 'root'}: ${e.message}`);
 	}
 
+	/** SC-493 r1b: what the form says when the box reads as no data and `def.parse` rejects it -- the
+	 *  element's own message there is a JavaScript internal ("Cannot read properties of null"). */
+	private static readonly EMPTY_BOX_MESSAGE = "This block can't be empty. Add at least one setting, or press Cancel.";
+
 	/** SC-493: `def.parse` on the raw-YAML box through the pipeline's own body reader
 	 *  (`readBlockBody`), so the check and the preview see exactly the data and body text the
 	 *  render pipeline hands the element after Save. An empty, whitespace-only or comment-only box
@@ -316,7 +320,15 @@ class FormModal extends DseModal {
 	 *  not turn a null into an object), schema validation and reference resolution. */
 	private parseRaw(): unknown {
 		const { rawData, bodySource } = readBlockBody(this.def, this.rawText);
-		return this.def.parse(rawData, bodySource);
+		try {
+			return this.def.parse(rawData, bodySource);
+		} catch (error) {
+			// Only a box that reads as no data (null: empty, whitespace-only, comment-only) gets the plain
+			// message; any other parse error keeps the element's own. (`undefined` is the raw-body rescue
+			// arm -- prose -- not an empty box, so it is left alone.)
+			if (rawData === null) throw new Error(FormModal.EMPTY_BOX_MESSAGE);
+			throw error;
+		}
 	}
 
 	private revalidate(): void {
