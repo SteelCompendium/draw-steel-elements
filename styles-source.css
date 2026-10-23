@@ -15572,9 +15572,26 @@ body.theme-light
    re-declares the token on itself (~:1712); the other subjects above are all inside an
    element root, where the steel scope gives the token a real value. */
 .dse-undo-notice__action:focus-visible,
+/* SC-498: the clickable stamina bar (ds-stamina-bar, the hero sheet) — one tab stop, Enter/Space
+   open the Stamina modal (kit/StaminaBarPanel.ts). `[tabindex]` for the same reason as the
+   recovery row above: a read-only bar, or one with no handler, is not focusable and must not
+   advertise a ring. The ring is an outline around the whole bar (a shape cue, not a colour
+   change); `:focus-visible` keeps it off mouse clicks. */
+.dse-stamina--clickable[tabindex]:focus-visible,
 [data-dse-theme='steel']:not([data-dse-print="on"]) input[type='checkbox']:not(.task-list-item-checkbox):focus-visible {
 	outline: 2px solid var(--dse-focus-ring);
 	outline-offset: 2px;
+}
+/* SC-498: ...and never on paper. A bar that happens to hold focus when the note is printed (or
+   shown in the on-screen print twin) draws no ring. Kept as its own later rule, not a second
+   `outline: 2px solid` ring (kit-index.test.ts allows exactly one). */
+@media print {
+	.dse-stamina--clickable[tabindex]:focus-visible {
+		outline: none;
+	}
+}
+[data-dse-print="on"] .dse-stamina--clickable[tabindex]:focus-visible {
+	outline: none;
 }
 
 /* §4.9: motion is opt-out — the chevron rotate must not animate under reduced motion. */

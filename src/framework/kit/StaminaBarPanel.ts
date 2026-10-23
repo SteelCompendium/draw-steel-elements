@@ -42,6 +42,12 @@ export interface StaminaBarRenderOptions {
 	readOnlyTooltip?: string;
 	/** SC-408: `data-dse-control` id for the clickable bar (stamped only when it is clickable). */
 	control?: string;
+	/** SC-498: make the clickable bar a keyboard tab stop (Enter/Space open it like a click).
+	 *  Default true. Only ever applies when the bar is clickable at all — a read-only bar, or one
+	 *  with no handler, is never a tab stop. A caller that already offers its own keyboard route
+	 *  to the same modal (the initiative tracker's real numeric button) passes false so a row does
+	 *  not gain a second, duplicate stop. */
+	keyboard?: boolean;
 	/** SC-132: build the Steel cluster (default true). The modal previews mount their own
 	 *  gauge directly and pass false — they are not the whole instrument. */
 	cluster?: boolean;
@@ -143,6 +149,7 @@ export function renderStaminaBar(
 				if (chrome && bar.contains(chrome)) return;
 				onBarClick();
 			});
+			if (opts.keyboard !== false) makeKeyboardOperable(bar, s, opts.owner, onBarClick);
 			stampControl(bar, opts.control);
 		}
 	} else if (opts.readOnlyTooltip !== undefined) {
@@ -150,6 +157,50 @@ export function renderStaminaBar(
 	}
 
 	return bar;
+}
+
+/** SC-498: the bar is operable from the keyboard — one tab stop, Enter or Space opens it.
+ *
+ *  Structure: the focusable thing is the `.dse-stamina` bar itself, because it is the one box
+ *  that is visible under every theme (Legacy shows the track and hides the cluster; Steel does
+ *  the reverse), so no child could carry the stop for both. But the framework chrome panel (the
+ *  Edit pencil, collapse, pin) mounts INSIDE the bar's cluster plate, so the bar cannot be
+ *  `role="button"`: ARIA makes a button's children presentational, which would delete those
+ *  real buttons from the accessibility tree (the montage board's cells ruled the same way). It
+ *  is a `role="group"` instead, named for what it does ("Edit Stamina: 31 of 48"), the same
+ *  action-then-value wording the montage cells and the initiative title use.
+ *
+ *  The key rule mirrors the click guard above: only a key pressed ON the bar itself counts.
+ *  A key from a chrome button is that button's own — it is neither acted on nor swallowed, so
+ *  the browser still turns it into the button's click. */
+function makeKeyboardOperable(
+	bar: HTMLElement,
+	s: StaminaBarValues,
+	owner: Component,
+	open: () => void,
+): void {
+	bar.setAttribute('tabindex', '0');
+	bar.setAttribute('role', 'group');
+	updateBarLabel(bar, s);
+	owner.registerDomEvent(bar, 'keydown', (evt: KeyboardEvent) => {
+		if (evt.target !== bar) return;
+		if (evt.key !== 'Enter' && evt.key !== ' ') return;
+		// Not a shortcut, and not a held key: auto-repeat would otherwise re-fire into the modal.
+		if (evt.ctrlKey || evt.metaKey || evt.altKey || evt.repeat || evt.defaultPrevented) return;
+		evt.preventDefault(); // Space would otherwise scroll the page
+		open();
+	});
+}
+
+/** The keyboard bar's accessible name, kept current by `updateStaminaBar`. Only the bars
+ *  `makeKeyboardOperable` stamped carry a `tabindex`, so that attribute is the gate. */
+function updateBarLabel(bar: HTMLElement, s: StaminaBarValues): void {
+	if (!bar.hasAttribute('tabindex')) return;
+	const temp = s.temp ?? 0;
+	bar.setAttribute(
+		'aria-label',
+		`Edit Stamina: ${s.current ?? 0} of ${s.max ?? 0}${temp > 0 ? `, ${temp} temporary` : ''}`,
+	);
 }
 
 /**
@@ -181,6 +232,7 @@ export function updateStaminaBar(bar: HTMLElement, s: StaminaBarValues): void {
 	numPillEl.setText(`(${current}/${max}${temp > 0 ? ' + ' + temp : ''})`);
 
 	updateCluster(bar, s);
+	updateBarLabel(bar, s);
 }
 
 /* ==================================================================== */

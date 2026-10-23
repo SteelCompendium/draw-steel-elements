@@ -140,6 +140,20 @@ describe('D7 Task 9: all seven regions mount', () => {
 	});
 });
 
+describe('SC-498: the hero sheet stamina bar is operable from the keyboard', () => {
+	test('it is a tab stop and Enter opens the Stamina modal (the sheet has no other write path to Stamina)', async () => {
+		const { root } = await renderHero();
+		const bar = region(root, 'stamina')!.querySelector<HTMLElement>('.dse-stamina')!;
+		expect(bar.getAttribute('tabindex')).toBe('0');
+		expect(bar.getAttribute('aria-label')).toMatch(/^Edit Stamina: 31 of 48/);
+
+		bar.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+
+		expect(document.querySelector('.dse-modal .dse-sedit__apply-input')).not.toBeNull();
+		document.body.innerHTML = '';
+	});
+});
+
 describe('D7 Task 9: a stamina change re-derives winded + refreshes conditions + persists', () => {
 	test('dropping stamina to <= 24 (windedThreshold) shows Winded and the persisted hero: region is byte-identical', async () => {
 		jest.useFakeTimers();

@@ -1114,6 +1114,9 @@ export class InitiativeView extends ElementView<EncounterData> {
 			onClick: this.canWrite && onClick ? onClick : undefined,
 			gauge: spec.gauge,
 			control,
+			// SC-498: the row already has its own keyboard route to this modal (the real numeric
+			// button, kept in the DOM for exactly that), so the bar adds no second tab stop per row.
+			keyboard: false,
 		});
 		bar?.addClass('dse-init__bar');
 		// SC-183 r2: a shared minion pool has no rules state (see the state-chip note

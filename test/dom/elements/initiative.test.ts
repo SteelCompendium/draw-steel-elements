@@ -1296,6 +1296,19 @@ malice:
   value: 0
 `;
 
+	test('SC-498: a row bar adds no tab stop and no keyboard handler - the row already has the numeric button', async () => {
+		const { root } = await renderInit(quickStart);
+		const bar = root.querySelector('.dse-init__group--heroes .dse-init__row > .dse-init__bar') as HTMLElement;
+		expect(bar.hasClass('dse-stamina--clickable')).toBe(true);
+		expect(bar.hasAttribute('tabindex')).toBe(false);
+		expect(bar.hasAttribute('role')).toBe(false);
+		const before = document.body.children.length;
+
+		bar.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+
+		expect(document.body.children.length).toBe(before); // no modal
+	});
+
 	test('every hero row mounts the REAL kit bar as its last child: cluster + hero gauge (dying reserve), numerals off the model, clickable', async () => {
 		const { root } = await renderInit(quickStart);
 		const rows = root.querySelectorAll('.dse-init__group--heroes .dse-init__row');
