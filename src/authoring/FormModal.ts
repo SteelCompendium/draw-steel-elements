@@ -28,6 +28,7 @@ import type { ElementDefinition } from '@/framework/registry';
 import type { DsePrefs } from '@/framework/seams/prefs';
 import type { ValidationService } from '@/framework/validation';
 import { DseModal, openManagedModal } from '@/framework/kit/managedModal';
+import { readBlockBody } from '@/framework/blockBody';
 import { extractPrefOverrides, withPrefOverrides } from '@/framework/prefOverrides';
 import { fieldsFromSchema, type FormField } from './formModel';
 
@@ -306,12 +307,24 @@ class FormModal extends DseModal {
 		return result.errors.map((e) => `${e.path || 'root'}: ${e.message}`);
 	}
 
+	/** SC-493: `def.parse` on the raw-YAML box through the pipeline's own body reader
+	 *  (`readBlockBody`), so the check and the preview see exactly the data and body text the
+	 *  render pipeline hands the element after Save. An empty, whitespace-only or comment-only box
+	 *  is `null` -- NOT `{}` -- so an element that cannot render a null body reports it here and
+	 *  Save stays off, while one that accepts an empty body (montage, project) stays saveable.
+	 *  Not mirrored: popping `prefs:` / the reserved collapse keys (they stay in the data; they can
+	 *  not turn a null into an object), schema validation and reference resolution. */
+	private parseRaw(): unknown {
+		const { rawData, bodySource } = readBlockBody(this.def, this.rawText);
+		return this.def.parse(rawData, bodySource);
+	}
+
 	private revalidate(): void {
 		let messages: string[] = [];
 		if (this.rawMode) {
 			// No schema: the parse() reader is the validator (SDK-backed elements).
 			try {
-				this.def.parse(parseYaml(this.rawText) ?? {}, this.rawText);
+				this.parseRaw();
 			} catch (error) {
 				messages = [error instanceof Error ? error.message : String(error)];
 			}
@@ -363,7 +376,7 @@ class FormModal extends DseModal {
 		this.previewEl.empty();
 		if (this.saveDisabled) return;
 		try {
-			const model = this.def.parse(this.rawMode ? (parseYaml(this.rawText) ?? {}) : this.checked, this.currentBody());
+			const model = this.rawMode ? this.parseRaw() : this.def.parse(this.checked, this.currentBody());
 			// Critical 2: the preview must NEVER become a second write path. Mount with a
 			// PREVIEW host — canPersist: false (most elements, e.g. stamina-bar, already
 			// gate their own click-to-edit affordance on this and simply won't attach a

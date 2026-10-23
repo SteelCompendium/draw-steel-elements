@@ -5,11 +5,12 @@
 // construction, validation, ref resolution, the click shield, theme/pref stamping,
 // lifecycle wiring, error rendering) is this file's job. Task 10 wires ElementPipeline
 // instances into Obsidian via ElementRegistry + registerMarkdownCodeBlockProcessor.
-import { Component, parseYaml } from 'obsidian';
+import { Component } from 'obsidian';
 import type { App, Plugin } from 'obsidian';
 import type { DSESettings } from '@model/Settings';
 import type { ElementDefinition } from './registry';
 import { createRenderContext } from './context';
+import { readBlockBody } from './blockBody';
 import { registerAfterRender } from './view';
 import type { BlockHost } from './host/BlockHost';
 import { ReadingModeBlockHost } from './host/ReadingModeBlockHost';
@@ -27,7 +28,6 @@ import type { PrefPassthrough } from './prefOverrides';
 import { watchPrintMedia } from './printMedia';
 import {
 	extractCollapseKeys,
-	peelLeadingCollapseKeys,
 	resolveCollapseState,
 	withCollapseKeys,
 	withPeeledKeys,
@@ -351,69 +351,10 @@ export async function prepareModel<M>(
 ): Promise<PreparedModel<M>> {
 	const { prefs, refs, validation, sourcePath } = deps;
 
-	// Step 2: parse (F1 §2.4.1). Parse failure -> propagate (tagged "parse"); the whole-
-	// block-reference rescue mirrors run()'s own comment above `parseYaml` verbatim.
-	let rawData: unknown;
-	// SC-169 fix round 1 (M-1): the body `def.parse` finally sees. Only ever differs from
-	// `source` when the collapse-key rescue below fires — i.e. for a body YAML could not
-	// parse UNTIL the framework's own leading key lines were peeled off it.
-	let bodySource = source;
-	let peeledKeys: Record<string, boolean> = {};
-	try {
-		rawData = runStage<unknown>('parse', () => parseYaml(source));
-	} catch (error) {
-		// SC-169 FIX ROUND 1 (M-1) — the PROSE/REFERENCE-body rescue, tried first because
-		// it is the only branch that can turn a hard parse failure into a normal render.
-		//
-		// `collapsed:`/`collapsible:`/`collapse_default:` are documented as "a top-level
-		// line you write in the block", and on a mapping body they are popped out of the
-		// PARSED data. A body that is not a mapping has no parsed data to pop them from:
-		// `collapsed: true` followed by prose (`ds-rule`) or by a bare SCC code (`ds-scc`,
-		// or any whole-block `scc.v1:` reference) is a mapping key followed by a scalar,
-		// which YAML rejects outright — so following the documentation error-carded the
-		// block. Peel the leading key lines off the SOURCE and re-parse what is left; the
-		// keys are recorded exactly as if they had been popped, and `def.parse` receives
-		// the body the author actually meant to write.
-		//
-		// Strictly a rescue: a body that already parses never reaches this catch, so every
-		// YAML-mapping element keeps byte-identical behaviour. If the re-parse also fails
-		// the ORIGINAL error is what propagates — the peel must never rewrite the message a
-		// user sees for an unrelated syntax mistake.
-		const peel = peelLeadingCollapseKeys(source);
-		const peeledTrimmed = peel.source.trim();
-		let rescued = false;
-		if (Object.keys(peel.peeled).length > 0) {
-			try {
-				rawData = parseYaml(peel.source);
-				rescued = true;
-			} catch {
-				/* not a collapse-key problem after all — fall through to the ladder below */
-			}
-		}
-		if (rescued) {
-			bodySource = peel.source;
-			peeledKeys = peel.peeled;
-		} else if (def.acceptsWholeBlockRef && peeledTrimmed.startsWith('@') && !peeledTrimmed.includes('\n')) {
-			// The peel applies to this arm too, so `collapsed: true` above an `@path` body
-			// behaves like `collapsed: true` above any other body.
-			rawData = peeledTrimmed;
-			bodySource = peel.source;
-			peeledKeys = peel.peeled;
-		} else if (def.parseHandlesRawBody) {
-			// SC-149 fix round (M-3): this def's parse reads `raw` and owns its own error
-			// messages, so an unparseable body is its business, not a pipeline failure.
-			// `data` is undefined — exactly what such a parse already ignores.
-			// SC-169 fix round 1: it still gets the PEELED body — the framework's own keys
-			// are never part of "the body this def owns", and `ds-scc`'s message about what
-			// a legal body looks like should describe what the author wrote, not what the
-			// author wrote plus a framework line.
-			rawData = undefined;
-			bodySource = peel.source;
-			peeledKeys = peel.peeled;
-		} else {
-			throw error;
-		}
-	}
+	// Step 2: parse (F1 §2.4.1). Parse failure -> propagate (tagged "parse"); the rescue ladder
+	// (collapse-key peel, whole-block reference, raw-body defs) lives in blockBody.ts (SC-493) so the
+	// block edit form's raw-YAML box runs the same code.
+	const { rawData, bodySource, peeledKeys } = runStage('parse', () => readBlockBody(def, source));
 
 	// D4 §1.3 (Plan 13): pop the reserved per-block `prefs:` map BEFORE schema
 	// validation (schemas never see the reserved key) and before def.parse (it never
