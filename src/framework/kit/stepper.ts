@@ -93,6 +93,15 @@ export interface StepperHandle {
 	commitDraft(): void;
 }
 
+/** Did `el` show its focus ring (`:focus-visible`) — i.e. was it reached/pressed by keyboard? */
+function showsFocusRing(el: HTMLElement): boolean {
+	try {
+		return el.matches(':focus-visible');
+	} catch {
+		return true; // an engine without :focus-visible: treat as keyboard
+	}
+}
+
 /** Mounts a decrement / value / increment triad into `parent` (D2 §2.2). */
 export function stepper(
 	parent: HTMLElement,
@@ -153,6 +162,9 @@ export function stepper(
 		valueEl = rootEl.createSpan({ cls: 'dse-stepper__value' });
 		if (opts.control) stampControl(valueEl, `${opts.control}.value`);
 		valueEl.setAttribute('aria-live', 'polite'); // §4.8 — announce changes
+		// SC-495: programmatically focusable (a ± button that disables itself at its bound hands focus
+		// here) but NOT a tab stop — the Tab order of every surface is unchanged.
+		valueEl.setAttribute('tabindex', '-1');
 	}
 
 	const plusBtn = iconButton(
@@ -172,8 +184,20 @@ export function stepper(
 				opts.renderValue(valueEl, current);
 			} else valueEl.setText(format(current));
 		}
+		// SC-495: a ± button that disables itself WHILE IT HOLDS FOCUS makes Chromium drop focus to
+		// <body> (the next Tab starts at the top of the page). Capture who holds focus (and whether it
+		// shows its ring: keyboard yes, pointer no) BEFORE the disable, then hand focus to the value
+		// node. Never the opposite button: a held Enter auto-repeats and would ping-pong the value.
+		// A disable while focus is elsewhere moves nothing.
+		const active = rootEl.ownerDocument.activeElement;
+		const held = active === minusBtn.buttonEl || active === plusBtn.buttonEl ? (active as HTMLElement) : null;
+		const visible = held ? showsFocusRing(held) : false;
 		minusBtn.setDisabled(opts.min !== undefined && current <= opts.min);
 		plusBtn.setDisabled(opts.max !== undefined && current >= opts.max);
+		if (held && (held as HTMLButtonElement).disabled) {
+			// `focusVisible` (Chromium 124+) carries the ring state; older engines ignore the key.
+			(inputEl ?? valueEl)?.focus({ preventScroll: true, focusVisible: visible } as FocusOptions);
+		}
 	}
 
 	/**

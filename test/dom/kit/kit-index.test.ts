@@ -213,6 +213,8 @@ describe('Plan 08 Task 5: framework-default :focus-visible (D2 §4.5)', () => {
 		'.dse-btn:focus-visible',
 		'.dse-stepper__btn:focus-visible',
 		'.dse-stepper__input:focus-visible',
+		// SC-495: the read-only stepper's value node (tabindex="-1") takes focus at a bound.
+		'.dse-stepper__value:focus-visible',
 		'.dse-collapse__header:focus-visible',
 		'.dse-tabs__tab:focus-visible',
 		'.dse-pr__row[aria-checked]:focus-visible',

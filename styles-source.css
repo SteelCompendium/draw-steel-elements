@@ -15504,6 +15504,9 @@ body.theme-light
 .dse-btn:focus-visible,
 .dse-stepper__btn:focus-visible,
 .dse-stepper__input:focus-visible,
+/* SC-495 — the read-only stepper's value node (tabindex="-1": never a tab stop) takes focus when
+   a ± button disables itself at its bound; it shows the same ring after a keyboard press. */
+.dse-stepper__value:focus-visible,
 .dse-collapse__header:focus-visible,
 .dse-tabs__tab:focus-visible,
 .dse-pr__row[aria-checked]:focus-visible,

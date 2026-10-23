@@ -625,3 +625,146 @@ describe('SC-340 §9.1: the adoption blur does not commit a half-typed draft', (
 		parent.remove();
 	});
 });
+
+// SC-495 (follows SC-465): a ± button that disables itself at its bound WHILE IT HOLDS FOCUS makes
+// Chromium drop focus to <body>, so the next Tab starts at the top of the page. The stepper hands
+// focus to its own value node instead — the <input> when editable, the (tabindex="-1") value span
+// when read-only — never the opposite button (a held Enter would auto-repeat into it and ping-pong
+// the value). Only when the disabling button actually held focus.
+describe('SC-495: focus stays inside the stepper when a ± button disables itself at its bound', () => {
+	let host: HTMLElement;
+	beforeEach(() => {
+		host = document.body.createDiv();
+	});
+	afterEach(() => {
+		host.remove();
+	});
+
+	function mount(opts: { value: number; min?: number; max?: number; editable?: boolean; clampInitial?: boolean }) {
+		const onChange = jest.fn();
+		const handle = stepper(host, { label: 'Temp', onChange, ...opts }, fakeOwner());
+		const [dec, inc] = Array.from(handle.rootEl.querySelectorAll<HTMLButtonElement>('button.dse-stepper__btn'));
+		const target = (opts.editable
+			? handle.rootEl.querySelector('input.dse-stepper__input')
+			: handle.rootEl.querySelector('.dse-stepper__value')) as HTMLElement;
+		return { handle, dec, inc, target, onChange };
+	}
+	/** jsdom has no :focus-visible; say what Chromium would (view-adoption.test.ts does the same). */
+	function ring(el: HTMLElement, visible: boolean): void {
+		const realMatches = el.matches.bind(el);
+		el.matches = (sel: string) => (sel === ':focus-visible' ? visible : realMatches(sel));
+	}
+
+	test.each([
+		['editable', true],
+		['read-only', false],
+	])('%s: "-" reaching min moves focus to the value node, not <body>, with preventScroll and the keyboard ring', (_n, editable) => {
+		const { dec, inc, target, onChange } = mount({ value: 1, min: 0, max: 5, editable });
+		const focusSpy = jest.spyOn(target, 'focus');
+		ring(dec, true);
+		dec.focus();
+		dec.click();
+		expect(dec.disabled).toBe(true);
+		expect(onChange).toHaveBeenCalledWith(0);
+		expect(document.activeElement).toBe(target);
+		expect(document.activeElement).not.toBe(inc);
+		expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true, focusVisible: true });
+	});
+
+	test.each([
+		['editable', true],
+		['read-only', false],
+	])('%s: "+" reaching max moves focus to the value node', (_n, editable) => {
+		const { dec, inc, target } = mount({ value: 4, min: 0, max: 5, editable });
+		ring(inc, true);
+		inc.focus();
+		inc.click();
+		expect(inc.disabled).toBe(true);
+		expect(document.activeElement).toBe(target);
+		expect(document.activeElement).not.toBe(dec);
+	});
+
+	test.each([
+		['editable', true],
+		['read-only', false],
+	])('%s: a pointer press (button not :focus-visible) hands over focus without the ring', (_n, editable) => {
+		const { inc, target } = mount({ value: 4, min: 0, max: 5, editable });
+		const focusSpy = jest.spyOn(target, 'focus');
+		ring(inc, false);
+		inc.focus();
+		inc.click();
+		expect(document.activeElement).toBe(target);
+		expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true, focusVisible: false });
+	});
+
+	test('a press that does not reach the bound leaves focus on the pressed button', () => {
+		const { inc } = mount({ value: 2, min: 0, max: 5 });
+		inc.focus();
+		inc.click();
+		expect(inc.disabled).toBe(false);
+		expect(document.activeElement).toBe(inc);
+	});
+
+	test('nothing moves when the disabling button did not hold focus (setValue, typed commit)', () => {
+		const { handle, dec, inc, target } = mount({ value: 3, min: 0, max: 5, editable: true });
+		const other = host.createEl('button', { text: 'elsewhere' });
+		other.focus();
+		const focusSpy = jest.spyOn(target, 'focus');
+		handle.setValue(0); // "-" disables, but focus is on `other`
+		expect(dec.disabled).toBe(true);
+		expect(document.activeElement).toBe(other);
+		handle.setValue(3);
+		// a typed commit to the max, with focus in the input itself
+		(target as HTMLInputElement).focus();
+		focusSpy.mockClear();
+		(target as HTMLInputElement).value = '5';
+		keydown(target, 'Enter');
+		expect(inc.disabled).toBe(true);
+		expect(document.activeElement).toBe(target);
+		expect(focusSpy).not.toHaveBeenCalled();
+		// and with focus on the OPPOSITE button when the other one disables
+		handle.setValue(3);
+		dec.focus();
+		handle.setValue(5); // "+" disables while "-" holds focus
+		expect(inc.disabled).toBe(true);
+		expect(document.activeElement).toBe(dec);
+	});
+
+	test.each([
+		['editable', true],
+		['read-only', false],
+	])('%s: min === max (both buttons disabled) still lands on the value node', (_n, editable) => {
+		// clampInitial:false seeds an out-of-range 4 under min = max = 3; "-" steps it back and both disable.
+		const { dec, inc, target } = mount({ value: 4, min: 3, max: 3, clampInitial: false, editable });
+		expect(dec.disabled).toBe(false);
+		ring(dec, true);
+		dec.focus();
+		dec.click();
+		expect(dec.disabled).toBe(true);
+		expect(inc.disabled).toBe(true);
+		expect(document.activeElement).toBe(target);
+	});
+
+	test('the read-only value node is programmatically focusable but NOT a tab stop; the input keeps its default', () => {
+		const ro = mount({ value: 3, min: 0, max: 5 });
+		expect(ro.target.getAttribute('tabindex')).toBe('-1');
+		const tabStops = Array.from(
+			ro.handle.rootEl.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'),
+		);
+		expect(tabStops).toEqual([ro.dec, ro.inc]);
+		const ed = mount({ value: 3, min: 0, max: 5, editable: true });
+		expect(ed.target.hasAttribute('tabindex')).toBe(false);
+	});
+
+	test('blurring the input after the focus move commits nothing', () => {
+		const { dec, target, onChange } = mount({ value: 1, min: 0, max: 5, editable: true });
+		dec.focus();
+		dec.click();
+		expect(document.activeElement).toBe(target);
+		expect(onChange).toHaveBeenCalledTimes(1); // the press itself
+		(target as HTMLInputElement).blur();
+		keydown(target, 'Enter');
+		expect(onChange).toHaveBeenCalledTimes(1);
+		expect((target as HTMLInputElement).value).toBe('0');
+	});
+});
