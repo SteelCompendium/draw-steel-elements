@@ -349,11 +349,11 @@ describe('T-9: kit DOM through the REAL ElementPipeline (quick-start fixture)', 
 		// Stamina numbers: real labelled buttons (open the edit modal), aria-live.
 		const heroStamina = root.querySelector('.dse-init__group--heroes .dse-init__stamina') as HTMLElement;
 		expect(heroStamina.tagName).toBe('BUTTON');
-		expect(heroStamina.getAttribute('aria-label')).toBe('Edit stamina: Frodo Baggins');
+		expect(heroStamina.getAttribute('aria-label')).toBe('Edit Stamina: Frodo Baggins');
 		expect(heroStamina.getAttribute('aria-live')).toBe('polite');
 		const detailStamina = root.querySelector('.dse-init__detail .dse-init__stamina') as HTMLElement;
 		expect(detailStamina.tagName).toBe('BUTTON');
-		expect(detailStamina.getAttribute('aria-label')).toBe('Edit stamina: Orc #1');
+		expect(detailStamina.getAttribute('aria-label')).toBe('Edit Stamina: Orc #1');
 
 		// Add-condition affordance: a real labelled kit button.
 		const add = root.querySelector('.dse-init__group--heroes .dse-cond--add') as HTMLElement;

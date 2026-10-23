@@ -107,7 +107,7 @@ describe('initiative: creatures', () => {
 		const cell = root.control('init.cell.stamina', { nth: 1 });
 		const w = await dse.waitForWrite(NOTE, () => dse.click(cell));
 		expect(w.count).toBe(1);
-		await expect(root.control('init.detail.stamina')).toHaveAttribute('aria-label', 'Edit stamina: Ogre #2');
+		await expect(root.control('init.detail.stamina')).toHaveAttribute('aria-label', 'Edit Stamina: Ogre #2');
 		await dse.expectNoteBlock(NOTE, INIT).toMatchObject({ enemy_groups: [{ selectedInstanceKey: '0-2' }] });
 	});
 

@@ -1451,7 +1451,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		};
 		const staminaEl = this.createStaminaControl(
 			healthEl,
-			`Edit stamina: ${name}`,
+			`Edit Stamina: ${name}`,
 			this.canWrite ? openHeroStamina : null,
 			owner,
 			'init.hero.stamina',
@@ -1805,7 +1805,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		};
 		const staminaEl = this.createStaminaControl(
 			healthEl,
-			`Edit stamina: ${name}`,
+			`Edit Stamina: ${name}`,
 			this.canWrite ? openDetailStamina : null,
 			owner,
 			'init.detail.stamina',
