@@ -368,6 +368,24 @@ describe('D8 Task 2 review fix — registration.ts (finding #3)', () => {
 			expect(Notice.notices[0]).toContain('("ds-caf<U+00E9><U+0020>x")');
 		});
 
+		test('a fence with a backtick in its info string (no block in either Obsidian mode) is not claimed: the pin the host reports is refused, the note is not written', async () => {
+			const { app, plugin, services } = setup();
+			registerDseSidebar(plugin as any, services);
+			const note = ['# N', '', '```ds-counter`x', 'current_value: 5', '```', ''].join('\n');
+			app.vault.setFile('Note.md', note);
+			const ctx = { docId: 'd', sourcePath: 'Note.md', frontmatter: undefined, addChild: () => {}, getSectionInfo: () => ({ text: note, lineStart: 2, lineEnd: 4 }) };
+			const host = new ReadingModeBlockHost(plugin as any, document.createElement('div'), ctx as any, 'ds-counter');
+			const alias = host.getBlockInfo()!.language;
+			expect(alias).toBe('ds-counter`x');
+
+			await requestPinToSidebar('Note.md', alias, 2);
+			await flushAsync();
+
+			expect(app.vault.getContent('Note.md')).toBe(note);
+			expect(Notice.notices).toHaveLength(1);
+			expect(sidebarLeaf(app)).toBeUndefined();
+		});
+
 		test('a registered alias is unaffected: the pin stamps an anchor and mounts the panel, no Notice', async () => {
 			const { app, plugin, services } = setup();
 			registerDseSidebar(plugin as any, services);

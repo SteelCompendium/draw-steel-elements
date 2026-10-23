@@ -191,6 +191,9 @@ describe('e2e integrity: agreement with the product parser (SC-456 O1)', () => {
 		]),
 		...['.', ':', '\u200e', '\u00ad', '\u3164', '\u00e9'].map((lead): [string, string | null] => [`\`\`\`${lead}ds-x`, `${lead}ds-x`]),
 		['```ds-xx', 'ds-xx'], ['```ds-x_x', 'ds-x_x'], ['```ds-x/x', 'ds-x/x'], ['```ds-x#', 'ds-x#'], ['```ds-x+', 'ds-x+'], ['```ds-x-', 'ds-x-'], ['```ds-x1', 'ds-x1'],
+		// SC-487 r2 review: Obsidian's fence regex ends in `[^\n`]*$`, so a backtick in the info string (either fence kind) is no opener in
+		// either mode: the language is the trimmed info string, never `ds-x`.
+		['```ds-x`x', 'ds-x`x'], ['~~~ds-x`x', 'ds-x`x'], ['```ds-x `x', 'ds-x `x'], ['``` ds-x`', 'ds-x`'], ['> ```ds-x`x ', 'ds-x`x'],
 		['```ds-x_', 'ds-x_'], ['``` ds-x/y z', 'ds-x/y'], ['```c++ x', 'c++'], ['```c#', 'c#'],
 	];
 	const lines = cases.map(([line]) => line);

@@ -58,9 +58,13 @@ export function matchFenceMarker(line: string): FenceMarker | null {
  * A token that does not START with one of those characters (a no-break space, U+3000, form feed, vertical tab, zero-width
  * character or `.` BEFORE the name) is no block in either mode (measured; Obsidian's name is empty), so it keeps its whole
  * first token: it is then never a registered language (SC-457 LOW-1). '' for a bare fence and for a token that is only
- * whitespace / zero-width characters.
+ * whitespace / zero-width characters. An info string with a backtick in it is no fence opener to Obsidian (the check at the top), so its
+ * language is the trimmed info string itself.
  */
 export function fenceLanguage(info: string): string {
+	// Obsidian's fence regex ends in `[^\n`]*$`: a backtick anywhere in the info string, in a ``` or a ~~~ fence alike, makes
+	// the line no fence opener at all, so neither mode renders it (SC-487 r2 review). Never a registered name: the info string, trimmed.
+	if (info.includes('`')) return info.replace(/^[ \t]+/, '').replace(/\s+$/, '');
 	const token = /^[ \t]*([^ \t]*)/.exec(info)![1];
 	const lp = /^[\w/+#-]+/.exec(token);
 	if (lp) return lp[0];

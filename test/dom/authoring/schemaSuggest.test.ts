@@ -208,7 +208,9 @@ describe('SC-476 — extra words after the fence language', () => {
 		['SC-457: a no-break space before the name is not a ds-counter (Obsidian does not render it)', '```\u00a0ds-counter', '\u00a0ds-counter'],
 		['SC-457: U+3000 before the name is not a ds-counter', '``` \u3000ds-counter', '\u3000ds-counter'],
 		['mixed case is kept: Obsidian only renders an exact-case language', '```DS-Counter extra', 'DS-Counter'],
-		['a tilde fence may carry a backtick in its info string', '~~~ds-counter `x`', 'ds-counter'],
+		// SC-487 r3: CommonMark lets a tilde fence carry a backtick, but Obsidian's fence regex (`[^\n`]*$`) does not render it in either
+		// mode, so it is no ds-counter: the type is the trimmed info string (was 'ds-counter')
+		['a tilde fence with a backtick in its info string is not a ds-counter block (Obsidian renders nothing)', '~~~ds-counter `x`', 'ds-counter `x`'],
 	])('scanFenceState lang: %s', (_name, opener, expected) => {
 		expect(langAt(opener)).toBe(expected);
 	});

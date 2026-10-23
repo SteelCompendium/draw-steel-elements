@@ -184,6 +184,15 @@ describe('SC-455: fenceLine splices with a prefix', () => {
 		expect(parseOpenFenceLine(`\`\`\`ds-counter${tail}`)?.language).toBe(`ds-counter${tail}`);
 	});
 
+	test.each([['ds-counter`x', 'ds-counter`x'], ['ds-counter `x`', 'ds-counter `x`'], [' ds-counter`x  ', 'ds-counter`x'], ['ds-counter`\u200b', 'ds-counter`\u200b']])(
+		'an info string with a backtick (%j) is no fence opener to Obsidian: its language is the trimmed info string, never ds-counter',
+		(info, expected) => {
+			expect(fenceLanguage(info)).toBe(expected);
+			expect(parseOpenFenceLine(`\`\`\`${info}`)?.language).toBe(expected);
+			expect(fenceAlias(matchFenceLine(`~~~${info}`)!.rest)).toBe(expected);
+		},
+	);
+
 	test('a first character outside the name set keeps the whole token (no block in either mode); only whitespace / zero-width tokens are empty', () => {
 		expect(['\u00a0ds-counter', '.ds-counter', '\u00e9ds-counter', '\u200eds-counter'].map(fenceLanguage)).toEqual(['\u00a0ds-counter', '.ds-counter', '\u00e9ds-counter', '\u200eds-counter']);
 		expect(['', '  ', '\t', '\r', '\u00a0', '\u3000', '\u200b', '\u200b\u2060 '].map(fenceLanguage)).toEqual(['', '', '', '', '', '', '', '']);
