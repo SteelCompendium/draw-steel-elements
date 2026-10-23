@@ -53,7 +53,7 @@ describe('initiative: heroes', () => {
 		await applyAmount(again, '99', 'sedit.healing');
 		await expectApplyLabel(again, 'Gain 8 Stamina');
 		await applyAndWrite(again, NOTE);
-		// SC-485: back at full Stamina, a `current_stamina` the note never had is not written (it was 25, then 30 = the default).
+		// SC-485: back at full Stamina, a `current_stamina` the note never had is not written (it was 22, then 30 = the default).
 		await dse.expectNoteBlock(NOTE, INIT).toMatchObject({ heroes: [{ name: 'Alice Alpha', max_stamina: 30 }] });
 		expect(((await dse.expectNoteBlock(NOTE, INIT).value()) as { heroes: object[] }).heroes[0]).not.toHaveProperty('current_stamina');
 		await expect(root.control({ css: '.dse-init__row > .dse-init__bar .dse-stamina__ccur' })).toHaveText('30');

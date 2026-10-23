@@ -439,4 +439,68 @@ enemy_groups:
 			expect(out).not.toContain(key);
 		}
 	});
+
+	// The pool-unit path where the pool itself is back at its parse value and only the trio changed.
+	const ATTACHED_ONLY = `heroes: []
+enemy_groups:
+  - name: Goblin Squad
+    is_squad: true
+    creatures:
+      - name: Goblin
+        max_stamina: 4
+        amount: 3
+        squad_role: minion
+        with_captain: "+2 bonus to Stamina"
+      - name: Ogre
+        max_stamina: 30
+        amount: 1
+        squad_role: attached`;
+
+	test('pool back at its parse value but the captain trio changed: promoting a captain after a pool hit still writes the whole unit, and a reload reads what the user saw', async () => {
+		const live = await drive(ATTACHED_ONLY, async (root) => {
+			// Pool 12, 4 damage + one dead minion = 8 with 2 alive; promoting the Ogre then folds in 2 x 2 = 4: 12 again,
+			// the parse-time value, while the trio (max, active, n) is new.
+			q(root, '.dse-init__group--enemies .dse-init__cell[data-squad-role="minion"]').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+			const m = lastModal();
+			const inputs = m.querySelectorAll<HTMLInputElement>('.dse-sedit__apply-input');
+			inputs[0].value = '4';
+			inputs[1].value = '1';
+			(m.querySelector('button[aria-label="Apply Damage"]') as HTMLElement).click();
+			const cb = m.querySelector('.dse-minion__check') as HTMLInputElement;
+			cb.checked = true;
+			cb.dispatchEvent(new Event('change'));
+			(m.querySelector('.dse-modal__footer .dse-btn--accent') as HTMLElement).click();
+			await settle();
+			await settle();
+			document.querySelectorAll('.modal-container, .dse-modal').forEach((el) => el.remove());
+			q(root, '.dse-init__cell[data-squad-role="attached"]').click();
+			await settle();
+			q(root, '.dse-init__detail button.dse-init__captain').click();
+		});
+		const liveReadout = readout(live.root);
+		expect(liveReadout).toContain('12/16 (6)');
+		const reloaded = await drive(lastWrite(live.writes), () => {});
+		expect(readout(reloaded.root)).toEqual(liveReadout);
+	});
+
+	test('authored minion instances: a group toggle writes no conditions: [] on them (their keys are recorded per instance)', async () => {
+		const src = `heroes: []
+enemy_groups:
+  - name: Goblin Squad
+    is_squad: true
+    creatures:
+      - name: Goblin
+        max_stamina: 4
+        amount: 3
+        squad_role: minion
+        instances:
+          - id: 1
+          - id: 2
+            conditions:
+              - prone
+          - id: 3`;
+		const { writes } = await drive(src, groupTurn);
+		// `prone` is normalised to {key: prone} (pre-existing); nothing else is added to the instances.
+		expect(lastWrite(writes)).toBe(`${src.replace('- prone', '- key: prone')}\n    has_taken_turn: true`);
+	});
 });
