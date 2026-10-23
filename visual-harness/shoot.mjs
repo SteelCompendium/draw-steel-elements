@@ -2564,6 +2564,9 @@ async function assertBtnHostLeak(page) {
 		// SC-205 R3 — mount the authoring chrome before anything is tagged (see
 		// CHROME_REVEAL_CSS). Both passes run against this DOM.
 		await page.addStyleTag({ content: CHROME_REVEAL_CSS });
+		// SC-501 — and open the roll strip's collapsed Modifiers disclosure by a real click (see
+		// `openRollModifiersForSweep`); the assertion there fails the sweep rather than skipping.
+		await openRollModifiersForSweep(page, bg, acc.problems);
 		const keys = await page.evaluate(tagButtons);
 		if (keys.length < 20) {
 			acc.problems.push(`${bg}: only ${keys.length} buttons found in the gallery — the sweep is blind`);
@@ -2582,7 +2585,7 @@ async function assertBtnHostLeak(page) {
 				? `\n  ${acc.exempt} of those (kind,state) records sampled the node at rest because the ` +
 					`mounted DOM cannot put it into that state — each one proved per record, never ` +
 					`assumed, and the authoring chrome is MOUNTED for the sweep so this is no longer ` +
-					`a claim about controls the product merely had not revealed:\n${btnExemptionBoundary(acc.exemptions)}`
+					`a claim about controls the product merely had not revealed:\n${btnExemptionBoundary(acc.exemptions, acc.exemptionKinds)}`
 				: ''),
 	);
 }
@@ -2599,12 +2602,59 @@ function newBtnSweepAcc() {
 		exempt: 0,
 		/** reason -> count, so the sweep's coverage BOUNDARY is printed rather than implied. */
 		exemptions: new Map(),
+		/** SC-501 — reason -> (kind key -> count), the same records as `exemptions` but named, so the
+		 *  printed boundary says WHICH kinds sit behind each reason (the aggregate alone hid that all
+		 *  10 new records came from one section). */
+		exemptionKinds: new Map(),
 		/** SC-356 — optional `(key, prop) => boolean` naming a KNOWN, owned leak the sweep tolerates
 		 *  (see HOSTLEAK_KNOWN_LEAKS); the gallery sweep never sets it. */
 		allow: null,
 		allowed: 0,
 		allowedByProp: new Map(),
 	};
+}
+
+/** SC-501 — open the `ds-roll` strip's "Modifiers" disclosure with a REAL click, for the host-leak
+ *  sweeps (button, input, checkbox) only. SC-279 made the disclosure collapsed by default
+ *  (`rollBar.ts:112`, `open: false`), so its region is `[hidden]` (display:none) and the steppers,
+ *  their number input, the Skill/Main-action checkboxes and Reset all have NO box in the resting
+ *  gallery. Without this the sweeps tagged them anyway and the per-state probes exempted them as
+ *  "renders a zero-sized box" / "no box at all": 8 button records at `c0e761b`..`c98bd82`, each a
+ *  control the product reveals with one click. SC-205's doctrine is "MOUNT THE CHROME, don't
+ *  exempt it" (CHROME_REVEAL_CSS above); a disclosure is chrome a user opens, so open it.
+ *
+ *  Real click, not a forced style: the only `[data-open]`-keyed rule is the chevron rotation and the
+ *  panel's layout rule is `.dse-rollbar__panel:not([hidden])`, so nothing here is a superposition;
+ *  no open/closed-keyed rule reaches a `.dse-btn`. Idempotent: it clicks only headers that report
+ *  `aria-expanded="false"`, so an already-open strip is never toggled shut. The open state lives in
+ *  the harness's in-memory session store, so each navigation starts collapsed again; call this on
+ *  EVERY page load a sweep tags (dark and light). Never call it from a screenshot capture - frozen
+ *  bytes must not move. The assertion is loud: a roll panel still `[hidden]` (or box-less) after
+ *  the click, or no roll panel at all, pushes a problem and the sweep FAILS - it never skips. */
+async function openRollModifiersForSweep(page, bg, problems) {
+	const header = page.locator(
+		'[data-dse-element="roll"] .dse-rollbar__mods > .dse-collapse__header[aria-expanded="false"]',
+	);
+	const toOpen = await header.count();
+	for (let k = 0; k < toOpen; k += 1) await header.first().click();
+	// The click leaves the pointer over the header; park it away so no sweep sample inherits :hover.
+	await page.mouse.move(0, 0);
+	const state = await page.evaluate(() => {
+		const panels = [...document.querySelectorAll('[data-dse-element="roll"] .dse-rollbar__panel')];
+		return {
+			panels: panels.length,
+			hidden: panels.filter((p) => p.hasAttribute('hidden')).length,
+			boxless: panels.filter((p) => !p.hasAttribute('hidden') && p.getClientRects().length === 0).length,
+		};
+	});
+	if (state.panels === 0) {
+		problems.push(`${bg}: no ds-roll Modifiers panel found in the gallery - the sweep would be blind to the roll strip's controls`);
+	} else if (state.hidden || state.boxless) {
+		problems.push(
+			`${bg}: the roll strip's Modifiers disclosure could not be opened (${state.hidden} of ${state.panels} panel(s) still [hidden], ` +
+				`${state.boxless} without a box after ${toOpen} click(s)) - its steppers, checkboxes and Reset would be swept with no box`,
+		);
+	}
 }
 
 /** Navigate to a harness page and wait for it to finish mounting. */
@@ -2650,6 +2700,9 @@ async function sweepTaggedButtons(page, bg, count, acc) {
 			acc.exempt += 1;
 			const reason = `${state}: ${rec.blocked}`;
 			exemptions.set(reason, (exemptions.get(reason) ?? 0) + 1);
+			const kinds = acc.exemptionKinds.get(reason) ?? new Map();
+			kinds.set(rec.key, (kinds.get(rec.key) ?? 0) + 1);
+			acc.exemptionKinds.set(reason, kinds);
 		}
 	}
 	await injectHostCss(page);
@@ -2711,11 +2764,18 @@ function failBtnHostLeak(problems, heading, what) {
 	process.exit(1);
 }
 
-/** The printed exemption boundary: one `N× reason` line per distinct reason, biggest first. */
-function btnExemptionBoundary(exemptions) {
+/** The printed exemption boundary: one `N× reason` line per distinct reason, biggest first.
+ *  SC-501 — under each, the distinct kind keys behind it (sorted, one per line, with a per-key
+ *  count; both schemes counted), so the next drift in this boundary names its kinds on sight. */
+function btnExemptionBoundary(exemptions, exemptionKinds) {
 	return [...exemptions.entries()]
 		.sort((a, b) => b[1] - a[1])
-		.map(([reason, n]) => `      ${n}× ${reason}`)
+		.map(([reason, n]) => {
+			const kinds = [...(exemptionKinds.get(reason) ?? new Map()).entries()]
+				.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+				.map(([key, k]) => `          ${key} ×${k}`);
+			return [`      ${n}× ${reason}`, ...kinds].join('\n');
+		})
 		.join('\n');
 }
 
@@ -3038,7 +3098,7 @@ async function assertModalBtnHostLeak(page) {
 			`\n  not openable in the harness (${reg.unreachable.length}, no <button> of their own beyond the swept kit footers): ${reg.unreachable.join(', ')}` +
 			(acc.exempt
 				? `\n  ${acc.exempt} of those (kind,state) records sampled the node at rest because the ` +
-					`mounted DOM cannot put it into that state — each one proved per record, never assumed:\n${btnExemptionBoundary(acc.exemptions)}`
+					`mounted DOM cannot put it into that state — each one proved per record, never assumed:\n${btnExemptionBoundary(acc.exemptions, acc.exemptionKinds)}`
 				: ''),
 	);
 }
@@ -4164,6 +4224,8 @@ async function assertInputHostLeak(page) {
 			return !!document.querySelector('[data-dse-element="initiative"] .dse-init__title-input');
 		});
 		if (!titleOpened) problems.push(`${bg}: the initiative title editor could not be opened for the sweep`);
+		// SC-501 - the roll strip's stepper input lives in its collapsed Modifiers disclosure (SC-279).
+		await openRollModifiersForSweep(page, bg, problems);
 		const keys = await page.evaluate(tagInputs);
 		if (keys.length < 5) {
 			problems.push(`${bg}: only ${keys.length} inputs found in the gallery — the sweep is blind`);
@@ -6024,6 +6086,10 @@ async function assertCheckboxHostLeak(page) {
 		await page.goto(`${pageUrl}?${query}`);
 		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
 		await setHostSheetEnabled(page, false);
+
+		// SC-501 - the roll strip's Skill / Main-action checkboxes live in its collapsed Modifiers
+		// disclosure (SC-279); open it by a real click before tagging.
+		await openRollModifiersForSweep(page, bg, problems);
 
 		// ---- (a) plugin-authored checkbox, bare ----
 		const keys = await page.evaluate(tagCheckboxes);
