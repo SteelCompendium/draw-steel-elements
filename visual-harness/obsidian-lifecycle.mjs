@@ -53,7 +53,7 @@
 // SC-478 appends G-S18 (G-S16 is reserved for SC-471): a LIVE PREVIEW pane keeps its reading position when the
 // DSE block it is reading is redrawn — another pane's DSE write, an external write (in-app and on disk), and the pane's own write.
 //
-// SC-492 appends G-S32 (33 scenarios in all): with the experimental authoring controls on, the Edit pencil in a
+// SC-492 appends G-S32 (34 scenarios in all): with the experimental authoring controls on, the Edit pencil in a
 // ds-stamina-bar's chrome panel opens only the edit form - not the Stamina modal on top of it - by real mouse click, Enter and
 // Space, and the panel's collapse button opens no modal; a real click on the bar itself still opens the Stamina modal.
 //
