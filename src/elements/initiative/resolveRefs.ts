@@ -36,7 +36,7 @@
 //      divergence on the first write-back of a ref-bearing block, accepted by Plan 06.)
 import type { ReferenceService, ResolvedRef } from '@/framework/seams/refs';
 import type { EncounterData } from './model';
-import { initMinionPool, minionPoolOf, reconcileOrphanedCaptainBonus } from './model';
+import { initMinionPool, minionPoolOf, reconcileOrphanedCaptainBonus, snapshotFilledDefaults } from './model';
 
 /** The fields the legacy merge reads off a resolved statblock payload. */
 interface StatblockFields {
@@ -239,5 +239,8 @@ Are there multiple instances of the '${creature.statblock}' file in your vault? 
 		}
 	}
 
+	// SC-485: statblock merges and the stamina fills above landed AFTER parse's snapshot; re-take it so a
+	// block that merely names a `statblock:` keeps following it instead of freezing the merged values.
+	snapshotFilledDefaults(model);
 	return model;
 }

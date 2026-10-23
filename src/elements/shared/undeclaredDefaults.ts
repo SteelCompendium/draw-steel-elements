@@ -67,14 +67,31 @@ export function recordAbsentDefaults(owner: object, absentKeys: readonly string[
 	filled.set(owner, snapshot);
 }
 
+/** True when writing `key` of `owner` would add nothing: its value is `undefined`, or it was recorded absent
+ *  from the source and still JSON-equals its parse-time snapshot. SC-485: lets a caller ask the question
+ *  per key (the initiative squad pool unit is written all-or-nothing). */
+export function isUntouchedDefault(owner: object, key: string): boolean {
+	const value = (owner as Record<string, unknown>)[key];
+	if (value === undefined) return true;
+	const record = filled.get(owner);
+	return record !== undefined && record.has(key) && JSON.stringify(value) === record.get(key);
+}
+
 /** `dto` (default: `owner` itself) as a new object in the SAME key order, minus every key recorded
  *  absent for `owner` whose value still JSON-equals its parse-time snapshot. With no record (a model
- *  the plugin built itself) or nothing recorded, `dto` is returned unchanged. */
-export function omitUntouchedDefaults<T extends object>(owner: object, dto: T = owner as T): Partial<T> {
+ *  the plugin built itself) or nothing recorded, `dto` is returned unchanged. SC-485: a key in the
+ *  optional `keep` set is written even when it is still an untouched default. */
+export function omitUntouchedDefaults<T extends object>(
+	owner: object,
+	dto: T = owner as T,
+	keep?: ReadonlySet<string>,
+): Partial<T> {
 	const record = filled.get(owner);
 	if (!record || record.size === 0) return dto;
 	return Object.fromEntries(
-		Object.entries(dto).filter(([key, value]) => !(record.has(key) && JSON.stringify(value) === record.get(key))),
+		Object.entries(dto).filter(
+			([key, value]) => !(record.has(key) && JSON.stringify(value) === record.get(key) && !keep?.has(key)),
+		),
 	) as Partial<T>;
 }
 

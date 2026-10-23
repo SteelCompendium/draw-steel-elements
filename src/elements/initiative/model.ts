@@ -33,17 +33,24 @@
 // InitiativeView, which previously held an equivalent private method for `round`/
 // `has_taken_turn` only — see advanceRound's own doc comment for the full contract).
 //
-// serialize(model): the BYTE-COMPAT boundary. The legacy write path
-// (the former CodeBlocks.updateInitiativeTracker -> updateCodeBlock -> updateMarkdownCodeBlock,
-// src/utils/CodeBlocks.ts — deleted in SC-454) did exactly `stringifyYaml(data).trim()` on the
-// WHOLE materialized EncounterData the processor holds — this is the same expression on the
-// same object shape. `.trim()` matches the legacy writer exactly and is also required by
-// ReadingModeBlockHost.replaceSource, which does `newSource.split('\n')` — an untrimmed
-// trailing "\n" from stringifyYaml would splice a spurious blank line before the closing
-// fence. Byte-compat is pinned by test/unit/model/initiative-serialize.test.ts against the
-// unchanged legacy parseEncounterData on ref-free inputs.
+// serialize(model): SC-485 — the "no default keys the user never wrote" boundary. The legacy write
+// path (the former CodeBlocks.updateInitiativeTracker -> updateCodeBlock -> updateMarkdownCodeBlock,
+// src/utils/CodeBlocks.ts — deleted in SC-454) did `stringifyYaml(data).trim()` on the WHOLE
+// materialized EncounterData, so the first click wrote every key parse had filled in (isHero,
+// `conditions: []`, per-instance stamina, `malice`, ...). serialize now follows the SC-466 / SC-482
+// contract (src/elements/shared/undeclaredDefaults.ts): a key the source left ABSENT whose value
+// still equals what parse filled in is omitted; every authored key is written; an absent key whose
+// value changed is written whole; key ORDER is unchanged, so a fully-authored block serializes
+// byte-identically to the legacy writer. Presence is read per object (top, hero, group, creature,
+// authored instance) BEFORE each fill in parse; the values are snapshotted at the end of parse AND
+// again at the end of resolveRefs (statblock merges and the stamina fills they unlock land there);
+// serialize walks a nested DTO. `.trim()` is still required by ReadingModeBlockHost.replaceSource,
+// which does `newSource.split('\n')` — an untrimmed trailing "\n" would splice a spurious blank
+// line before the closing fence. Pinned by test/unit/model/initiative-serialize.test.ts (parse
+// against the unchanged legacy parseEncounterData; the legacy writer's bytes on a fully-authored
+// source) and test/dom/elements/initiative-default-keys.test.ts (the writes through the pipeline).
 import { stringifyYaml } from 'obsidian';
-import type { Condition, EncounterData } from '@drawSteelAdmonition/EncounterData';
+import type { Condition, Creature, EncounterData, EnemyGroup } from '@drawSteelAdmonition/EncounterData';
 import {
 	EMPTY_SQUAD_ACTIONS,
 	appendMaliceLogEntry,
@@ -52,6 +59,7 @@ import {
 	reconcileOrphanedCaptainBonus,
 	validateSquad,
 } from '@drawSteelAdmonition/EncounterData';
+import { isUntouchedDefault, omitUntouchedDefaults, recordAbsentDefaults } from '../shared/undeclaredDefaults';
 
 export {
 	EMPTY_SQUAD_ACTIONS,
@@ -125,12 +133,73 @@ function normalizeConditions(
 	);
 }
 
+// ---- SC-485: which keys each parsed object left ABSENT, read before parse fills them ----
+const TOP_KEYS = ['malice'] as const;
+const HERO_KEYS = [
+	'conditions',
+	'isHero',
+	'has_taken_turn',
+	'current_stamina',
+	'temp_stamina',
+	// merged from a `statblock:` ref by resolveRefs (only-if-unset), so absent here too
+	'name',
+	'max_stamina',
+	'image',
+	'with_captain',
+] as const;
+const GROUP_KEYS = ['has_taken_turn', 'is_squad', 'minion_stamina_pool'] as const;
+const POOL_UNIT_KEYS = ['minion_stamina_pool_max', 'captain_bonus_active', 'captain_bonus_n'] as const;
+const CREATURE_KEYS = [
+	'isHero',
+	'instances',
+	'name',
+	'max_stamina',
+	'image',
+	'with_captain',
+	'minion_stamina_pool',
+	...POOL_UNIT_KEYS,
+] as const;
+const REGULAR_INSTANCE_KEYS = ['current_stamina', 'temp_stamina', 'conditions'] as const;
+const MINION_INSTANCE_KEYS = ['conditions'] as const;
+
+/** Per parsed object: the keys the source left absent (`obj[key] === undefined`, SC-466 r2). Module-private
+ *  and keyed by object, like the helper's own record — never an own property (stringifyYaml would write it). */
+const absentKeys = new WeakMap<object, readonly string[]>();
+
+/** Call BEFORE parse fills anything on `obj`. */
+function noteAbsent(obj: object, keys: readonly string[]): void {
+	absentKeys.set(
+		obj,
+		keys.filter((key) => (obj as Record<string, unknown>)[key] === undefined),
+	);
+}
+
+/** Record, on every object `noteAbsent` saw, the value it holds NOW for each key the source left absent.
+ *  Called at the end of `parse` and again at the end of `resolveRefs` (which fills statblock-sourced
+ *  keys and the stamina derived from them); the helper overwrites, so calling twice is safe. */
+export function snapshotFilledDefaults(model: EncounterData): void {
+	const snap = (obj: object): void => {
+		const keys = absentKeys.get(obj);
+		if (keys) recordAbsentDefaults(obj, keys);
+	};
+	snap(model);
+	model.heroes.forEach(snap);
+	for (const group of model.enemy_groups) {
+		snap(group);
+		for (const creature of group.creatures) {
+			snap(creature);
+			creature.instances?.forEach(snap);
+		}
+	}
+}
+
 export function parse(input: unknown, _raw: string): EncounterData {
 	// Validate that data is an object (EncounterData.ts:95-107).
 	if (typeof input !== 'object' || input === null) {
 		throw new Error('The input must be a YAML object.');
 	}
 	const data = input as EncounterData;
+	noteAbsent(data, TOP_KEYS);
 
 	// SC-377: the optional encounter title. A bare `name:` (YAML null) is "no title". An author
 	// writing `name: 1984` or `name: true` gets a number/boolean from YAML, but means the text, so
@@ -155,6 +224,7 @@ export function parse(input: unknown, _raw: string): EncounterData {
 	// `current_stamina ?? max_stamina` may leave current_stamina undefined; resolveRefs
 	// (Task 2) re-applies the same ?? fill once max_stamina is known.
 	for (const hero of data.heroes) {
+		noteAbsent(hero, HERO_KEYS);
 		hero.conditions = normalizeConditions(
 			hero.conditions,
 			() => `Invalid condition format for hero '${hero.name}'.`,
@@ -175,6 +245,7 @@ export function parse(input: unknown, _raw: string): EncounterData {
 			throw new Error(`Enemy group '${group.name}' has an invalid or missing 'creatures' field.`);
 		}
 
+		noteAbsent(group, GROUP_KEYS);
 		group.has_taken_turn = group.has_taken_turn ?? false;
 		group.is_squad = group.is_squad ?? false;
 
@@ -201,6 +272,7 @@ export function parse(input: unknown, _raw: string): EncounterData {
 				);
 			}
 
+			noteAbsent(creature, CREATURE_KEYS);
 			creature.isHero = false;
 
 			// Initialize instances (:249-343).
@@ -235,6 +307,7 @@ export function parse(input: unknown, _raw: string): EncounterData {
 				} else {
 					// Validate existing instances.
 					creature.instances.forEach((instance, instanceIndex) => {
+						noteAbsent(instance, MINION_INSTANCE_KEYS);
 						if (typeof instance.id !== 'number') {
 							throw new Error(
 								`Instance at index ${instanceIndex} of creature '${creature.name}' in group '${group.name}' is missing or has an invalid 'id' field.`,
@@ -272,6 +345,7 @@ export function parse(input: unknown, _raw: string): EncounterData {
 				} else {
 					// Validate existing instances.
 					creature.instances.forEach((instance, instanceIndex) => {
+						noteAbsent(instance, REGULAR_INSTANCE_KEYS);
 						if (typeof instance.id !== 'number') {
 							throw new Error(
 								`Instance at index ${instanceIndex} of creature '${creature.name}' in group '${group.name}' is missing or has an invalid 'id' field.`,
@@ -294,17 +368,53 @@ export function parse(input: unknown, _raw: string): EncounterData {
 		throw new Error("Invalid data: 'malice.value' must be a number.");
 	}
 
+	snapshotFilledDefaults(data);
 	return data;
 }
 
+/** A squad's shared pool and its "With Captain" bonus trio are co-derived: once the pool is written,
+ *  re-parse skips `initMinionPool` (the pool is no longer `== null`), so an omitted trio would never be
+ *  re-derived and the bonus would read 0. They are therefore written all-or-nothing: if ANY of the pool on
+ *  its live home (creature field first, else group, as `minionPoolOf`) and the three trio keys would be
+ *  written, every one of them is. A key holding `undefined` counts as untouched. */
+function poolUnitWritten(group: EnemyGroup, minion: Creature): boolean {
+	const home: object = minion.minion_stamina_pool != null ? minion : group;
+	return (
+		!isUntouchedDefault(home, 'minion_stamina_pool') || POOL_UNIT_KEYS.some((key) => !isUntouchedDefault(minion, key))
+	);
+}
+
+function groupDto(group: EnemyGroup): object {
+	const groupKeep = new Set<string>();
+	const creatures = group.creatures.map((creature) => {
+		const keep = new Set<string>();
+		if (group.is_squad && creature.squad_role === 'minion' && poolUnitWritten(group, creature)) {
+			for (const key of POOL_UNIT_KEYS) keep.add(key);
+			(creature.minion_stamina_pool != null ? keep : groupKeep).add('minion_stamina_pool');
+		}
+		// A creature whose `instances` was generated carries no per-instance record (the list is compared whole
+		// at the creature level), so filtering its instances is a no-op there; authored ones filter per key.
+		const dto = creature.instances
+			? { ...creature, instances: creature.instances.map((instance) => omitUntouchedDefaults(instance)) }
+			: creature;
+		return omitUntouchedDefaults(creature, dto, keep);
+	});
+	return omitUntouchedDefaults(group, { ...group, creatures }, groupKeep);
+}
+
 export function serialize(model: EncounterData): string {
+	// SC-485: nested DTO walk, innermost first (see the header). A model the plugin built itself has no
+	// record, so every level returns its object unchanged and the output is the whole model, as before.
+	const heroes = model.heroes.map((hero) => omitUntouchedDefaults(hero));
+	const enemy_groups = model.enemy_groups.map(groupDto);
+	const dto = omitUntouchedDefaults(model, { ...model, heroes, enemy_groups });
 	// SC-377: a title added by the in-card editor lands LAST in key-insertion order; write it
-	// first, where an author puts it. No title = the exact legacy expression, byte for byte.
-	if (model.name !== undefined) {
-		const { name, ...rest } = model;
+	// first, where an author puts it. No title = the original key order.
+	if (dto.name !== undefined) {
+		const { name, ...rest } = dto;
 		return stringifyYaml({ name, ...rest }).trim();
 	}
-	return stringifyYaml(model).trim();
+	return stringifyYaml(dto).trim();
 }
 
 /**

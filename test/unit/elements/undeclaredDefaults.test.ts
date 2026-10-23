@@ -2,7 +2,13 @@
 // (src/elements/shared/undeclaredDefaults.ts), exercised on a small stand-in parser that fills
 // the same shapes the real ones do: scalars, a deep array/object default, and a derived default.
 import { stringifyYaml } from 'obsidian';
-import { omitUntouchedDefaults, recordAbsentDefaults, recordingDefaults, stringifyOmittingUntouched } from '@/elements/shared/undeclaredDefaults';
+import {
+	isUntouchedDefault,
+	omitUntouchedDefaults,
+	recordAbsentDefaults,
+	recordingDefaults,
+	stringifyOmittingUntouched,
+} from '@/elements/shared/undeclaredDefaults';
 
 interface Model {
 	name?: string;
@@ -184,5 +190,29 @@ describe('SC-482 helper: stringifyOmittingUntouched', () => {
 	test('a model with no record keeps the whole output, even when it is `{}`', () => {
 		expect(stringifyOmittingUntouched({})).toBe('{}');
 		expect(stringifyOmittingUntouched(parseModel({}, ''))).toContain('initial: 5');
+	});
+});
+
+describe('SC-485 helper: isUntouchedDefault + the optional keep set', () => {
+	test('isUntouchedDefault: an absent key at its default is untouched; changed or authored is not', () => {
+		const model = parse({ name: 'x', min: 0 }, '');
+		expect(isUntouchedDefault(model, 'initial')).toBe(true); // absent, still the filled 5
+		expect(isUntouchedDefault(model, 'min')).toBe(false); // authored (even equal to its default)
+		model.initial = 9;
+		expect(isUntouchedDefault(model, 'initial')).toBe(false); // absent but changed
+	});
+
+	test('isUntouchedDefault: a key holding undefined is untouched, a model with no record has no untouched value', () => {
+		const model = parse({ name: 'x' }, '');
+		model.anchor = undefined;
+		expect(isUntouchedDefault(model, 'anchor')).toBe(true);
+		expect(isUntouchedDefault(parseModel({}, ''), 'initial')).toBe(false);
+	});
+
+	test('keep writes an untouched default anyway, in class order; keys outside it still drop', () => {
+		const model = parse({ name: 'x' }, '');
+		expect(yaml(omitUntouchedDefaults(model, model, new Set(['min'])))).toBe('name: x\nmin: 0');
+		expect(yaml(omitUntouchedDefaults(model, model, new Set()))).toBe('name: x');
+		expect(yaml(omitUntouchedDefaults(model))).toBe('name: x');
 	});
 });
