@@ -79,6 +79,30 @@ const change = (from: number, to: number, len: number) => ({
 		cb(from, to, from, from + len);
 	},
 });
+/**
+ * A ChangeSet of several changes, each given in ORIGINAL-document coordinates and sorted (as CodeMirror's are), e.g. a write
+ * that rewrites the tracker and, far below it, edits something else. `iterChanges` reports each change's new range too.
+ */
+const changes = (...cs: Array<[number, number, number]>): ReturnType<typeof change> => ({
+	mapPos(pos: number, assoc = -1): number {
+		let off = 0;
+		for (const [from, to, len] of cs) {
+			if (pos > to) {
+				off += len - (to - from);
+				continue;
+			}
+			return off + change(from, to, len).mapPos(pos, assoc);
+		}
+		return pos + off;
+	},
+	iterChanges(cb: (fromA: number, toA: number, fromB: number, toB: number) => void): void {
+		let off = 0;
+		for (const [from, to, len] of cs) {
+			cb(from, to, from + off, from + off + len);
+			off += len - (to - from);
+		}
+	},
+});
 /** An insertion of `by` characters at position 5 (the tests' blocks sit past it). */
 const shift = (by: number) => change(5, 5, by);
 /** A ViewUpdate: doc changed by Obsidian's setViewData (`userEvent: "set"`) unless `event` says otherwise. */
@@ -284,6 +308,21 @@ describe('SC-478: LivePreviewScrollHold hold', () => {
 		view.contentDOM.appendChild(fresh);
 		hold.applyHolds(view as never);
 		expect(fresh.getAttribute(HOLD_ATTR)).toBe('3039');
+	});
+
+	test('a second change far after the block does not widen the interval: a same-language widget down there is not held', () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3020, [widget(600, 3039)]);
+		hold.capture(view as never, note());
+		// the write rewrites [600,700] -> 30 characters (the tracker) AND inserts 20 characters at 5000, far below it
+		hold.onUpdate(update(view, 'set', changes([600, 700, 30], [5000, 5000, 20])));
+		view.contentDOM.querySelector('.cm-embed-block')!.remove();
+		const redrawn = widget(615, 50, false);
+		const farBelow = widget(1930, 50, false); // another tracker (same language), mapped start 2000 - 70, inside the WIDENED interval [600, 4950]
+		view.contentDOM.append(redrawn, farBelow);
+		hold.applyHolds(view as never);
+		expect(redrawn.getAttribute(HOLD_ATTR)).toBe('3039');
+		expect(farBelow.hasAttribute(HOLD_ATTR)).toBe(false);
 	});
 
 	test('a widget that is already held is not held a second time (one release, one requestMeasure)', async () => {
