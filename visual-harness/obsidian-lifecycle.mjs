@@ -52,11 +52,14 @@
 // in place (G-S28, stay on the note) or by body after navigate-away (G-S6u) - LF, two blank lines and CRLF notes.
 // SC-478 appends G-S18 (G-S16 is reserved for SC-471): a LIVE PREVIEW pane keeps its reading position when the
 // DSE block it is reading is redrawn — another pane's DSE write, an external write (in-app and on disk), and the pane's own write.
+// SC-487 appends G-S33: a fence whose name is followed by a zero-width space (```` ```ds-counter<U+200B> ````) is the block in Live
+// Preview only (Reading view shows plain code); "Pin to sidebar" there must stamp the anchor, mount the panel (not the
+// "unavailable" card) and land a panel write, with the opening line (U+200B included) and every other byte outside the body kept.
 //
 // SC-492 appends G-S32 (34 scenarios in all): with the experimental authoring controls on, the Edit pencil in a
 // ds-stamina-bar's chrome panel opens only the edit form - not the Stamina modal on top of it - by real mouse click, Enter and
 // Space, and the panel's collapse button opens no modal; a real click on the bar itself still opens the Stamina modal.
-// SC-498 appends G-S36 (35 scenarios in all; the id was assigned by the ticket-owner): the stamina bar is one tab stop
+// SC-498 appends G-S36 (36 scenarios in all with SC-487's G-S33; the id was assigned by the ticket-owner): the stamina bar is one tab stop
 // (a real Tab reaches it and it shows the focus ring), and a real Enter or Space on it opens the Stamina modal;
 // focus is back on the bar when the modal closes.
 //
@@ -241,6 +244,11 @@ Object.assign(FIXTURES, {
 	'Lifecycle/spaced-straycr.md': `# spaced\n\nA\rB\n\nTOP\n\n${fence(' ds-counter', counterLines(10))}\n\nBELOW\rX\n`,
 	// a spaced block and an unspaced one with the SAME body: a write for one must never land in the other.
 	'Lifecycle/spaced-twins.md': `# twins\n\nTOP\n\n${fence(' ds-counter', counterLines(5, 'Twin'))}\n\nMID\n\n${fence('ds-counter', counterLines(5, 'Twin'))}\n\nBOTTOM\n`,
+});
+// SC-487: a zero-width space right after the name. Live Preview ends the name there and renders the block; Reading view shows plain code.
+const ZWSP = String.fromCharCode(0x200b);
+Object.assign(FIXTURES, {
+	'Lifecycle/zwsp.md': `# zwsp\n\nTOP\n\n${fence('ds-counter' + ZWSP, counterLines(10))}\n\nBELOW\n`,
 });
 
 // ------------------------------------------------------------------ note integrity
@@ -2344,6 +2352,60 @@ const SCENARIOS = [
 			t.expect(t.read(rel) === FIXTURES[rel], `${rel} was written (nothing was applied, so it must be byte-identical): ${JSON.stringify(t.read(rel))}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
 			return `a real Tab reaches the bar after ${JSON.stringify([facts.tab1, facts.tab2, facts.tab3, facts.tab4].filter(Boolean))} (ring ${facts.ring}); Enter and Space each open only the Stamina modal; focus: in modal ${facts['Enter-in-modal']}, after close ${facts['Enter-after-close']} / ${facts['Space-after-close']}; ring after round trip ${facts.ringAfter}; mouse: ${facts.mouseDown}, no ring while pressed and after close (${facts.mouseClose}); the note is untouched`;
+		},
+	},
+	{
+		// SC-487: Live Preview renders ```` ```ds-counter<U+200B> ```` as the block (it ends the name at the zero-width space; Reading view
+		// shows plain code). "Pin to sidebar" there used to stamp an `_dse_anchor` into the note, then mount the "unavailable" card, and
+		// lose every save made from the panel - because DSE read the block's type as `ds-counter<U+200B>`.
+		id: 'G-S33',
+		async run(t) {
+			const rel = 'Lifecycle/zwsp.md';
+			const OPEN = '```ds-counter' + ZWSP;
+			const PREFIX = `# zwsp\n\nTOP\n\n${OPEN}\n`;
+			const SUFFIX = '\n```\n\nBELOW\n';
+			t.expect(t.read(rel) === FIXTURES[rel] && t.read(rel).includes(Buffer.from([0xe2, 0x80, 0x8b]).toString('utf8')), 'the fixture is not on disk with the zero-width space after the name');
+			await enterMode(t, rel, LC_MODES[1], '[data-dse-element="counter"]');
+			const m = await t.mark();
+			const pinBtn = `Array.from(${LC_MODES[1][2](LC_LEAF)}.querySelectorAll('[data-dse-element="counter"]')).filter((x) => x.isConnected)[0]?.querySelector('[data-dse-chrome-item="pin"]')`;
+			t.expect(await t.ev(`!!(${pinBtn})`), 'Live Preview: the block has no "Pin to sidebar" item');
+			// SC-383: pin Math.random to an id YAML cannot read as a number (as G-S10 does).
+			await t.ev(`(() => { window.__lcRandom = Math.random; Math.random = () => 0xabcdef / 0x1000000; return true; })()`);
+			try {
+				await t.ev(`(${pinBtn}).click()`);
+				const t0 = Date.now();
+				while (!t.read(rel).includes('_dse_anchor:')) {
+					if (Date.now() - t0 > 15000) throw new Error(`timed out waiting for the anchor stamp; disk is ${JSON.stringify(t.read(rel))}`);
+					await sleep(100);
+				}
+			} finally {
+				await t.ev(`(() => { if (window.__lcRandom) Math.random = window.__lcRandom; delete window.__lcRandom; return true; })()`);
+			}
+			const stamped = /_dse_anchor: ([^\n]+)\n/.exec(t.read(rel))?.[1];
+			t.expect(!!stamped, `no _dse_anchor line stamped: ${JSON.stringify(t.read(rel))}`);
+			// the panel mounts the counter (not the "unavailable" card) and holds the anchor that is on disk
+			const panelCounter = `Array.from((app.workspace.getLeavesOfType('dse-sidebar')[0]?.view.containerEl ?? document.createElement('div')).querySelectorAll('[data-dse-element="counter"]')).find((x) => x.isConnected)`;
+			await t.waitFor(`!!(${panelCounter})`, 'the counter mounted in the sidebar panel');
+			t.expect(await t.ev(`!document.querySelector('[data-dse-sidebar-unavailable]')`), 'the sidebar panel shows the "unavailable" card');
+			const held = await t.ev(`app.workspace.getLeavesOfType('dse-sidebar')[0].view.getState().panels.map((p) => p.anchorId)`);
+			t.expect(held.length === 1 && held[0] === stamped, `the panel holds ${JSON.stringify(held)} but disk has anchor ${JSON.stringify(stamped)}`);
+			// a write made from the panel lands in the note
+			await t.ev(`(${panelCounter}).querySelector('button[aria-label^="Increase"]').click()`);
+			const t1 = Date.now();
+			while (!t.read(rel).includes('current_value: 11')) {
+				if (Date.now() - t1 > 15000) throw new Error(`timed out waiting for the panel write; disk is ${JSON.stringify(t.read(rel))}`);
+				await sleep(100);
+			}
+			await t.sleep(600);
+			const text = t.read(rel);
+			t.expect(text.startsWith(PREFIX) && text.endsWith(SUFFIX), `the opening line (zero-width space included) or the text outside the block changed: ${JSON.stringify(text)}`);
+			t.expect(/_dse_anchor: [A-Za-z0-9_-]+\n```/.test(text), `the anchor did not survive the panel write: ${JSON.stringify(text)}`);
+			t.expect(text.split('_dse_anchor:').length === 2, `more than one anchor line: ${JSON.stringify(text)}`);
+			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${JSON.stringify(await t.noticesSince(m))}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
+			await t.ev(`(async () => { for (const l of app.workspace.getLeavesOfType('dse-sidebar')) l.detach(); })()`);
+			await t.reset(rel);
+			return 'Live Preview "Pin to sidebar" on a ds-counter fence with a zero-width space after the name: the anchor is stamped, the panel mounts the counter (not the unavailable card), a panel write lands; the opening line (zero-width space included) and the text above and below are byte-identical; no Notice';
 		},
 	},
 ];
