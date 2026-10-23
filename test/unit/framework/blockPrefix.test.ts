@@ -203,6 +203,7 @@ describe('SC-455: fenceLine splices with a prefix', () => {
 	// word only - split on a space or a tab (SC-487 r3 review, measured on 1.14.4). With no space or tab before the backtick there is no such word.
 	test.each([
 		['~~~ds-counter `x`', 'ds-counter'], ['~~~ds-counter x`y', 'ds-counter'], ['~~~ds-counter\t`x`', 'ds-counter'], ['> ~~~ds-counter `x`', 'ds-counter'], ['~~~  ds-counter `x`', 'ds-counter'],
+		['~~~ds-counter\f`x`', 'ds-counter'], ['> ~~~ds-counter\f`x`', 'ds-counter'], ['~~~\fds-counter `x`', '\fds-counter'], ['~~~ds-counter\v`x`', 'ds-counter\v`x`'],
 		['~~~ds-counter`x', 'ds-counter`x'], ['~~~\u00a0ds-counter `x`', '\u00a0ds-counter'], ['~~~ds-counter\u200b `x`', 'ds-counter\u200b'], ['~~~ds-counter.y `x`', 'ds-counter.y'], ['~~~ `ds-counter x', '`ds-counter'],
 	])('a tilde fence with a backtick in its info string (%j): the language is the first space/tab word, %j', (line, expected) => {
 		expect(parseOpenFenceLine(line)?.language).toBe(expected);

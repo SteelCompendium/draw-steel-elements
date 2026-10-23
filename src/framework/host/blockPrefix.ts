@@ -60,7 +60,7 @@ export function matchFenceMarker(line: string): FenceMarker | null {
  * first token: it is then never a registered language (SC-457 LOW-1). '' for a bare fence and for a token that is only
  * whitespace / zero-width characters. A backtick in the info string is
  * handled first, by fence kind (the check at the top): a backtick fence with one is no opener in any mode (the trimmed info string, never
- * a name); a tilde fence is read by Reading view only, by its first space/tab-delimited word.
+ * a name); a tilde fence is read by Reading view only, by its first word - ended by a space, a tab or a form feed (a leading form feed stays in it).
  * `fenceChar` is the fence run's first character (`marker[0]`).
  */
 export function fenceLanguage(info: string, fenceChar: string): string {
@@ -71,7 +71,7 @@ export function fenceLanguage(info: string, fenceChar: string): string {
 	if (info.includes('`')) {
 		const trimmed = info.replace(/^[ \t]+/, '').replace(/\s+$/, '');
 		if (fenceChar !== '~') return trimmed;
-		return /^[^ \t]*/.exec(trimmed)![0];
+		return /^\f*[^ \t\f]*/.exec(trimmed)![0];
 	}
 	const token = /^[ \t]*([^ \t]*)/.exec(info)![1];
 	const lp = /^[\w/+#-]+/.exec(token);

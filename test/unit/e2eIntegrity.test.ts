@@ -196,10 +196,12 @@ describe('e2e integrity: agreement with the product parser (SC-456 O1)', () => {
 		]),
 		...['.', ':', '\u200e', '\u00ad', '\u3164', '\u00e9'].map((lead): [string, string | null] => [`\`\`\`${lead}ds-x`, `${lead}ds-x`]),
 		['```ds-xx', 'ds-xx'], ['```ds-x_x', 'ds-x_x'], ['```ds-x/x', 'ds-x/x'], ['```ds-x#', 'ds-x#'], ['```ds-x+', 'ds-x+'], ['```ds-x-', 'ds-x-'], ['```ds-x1', 'ds-x1'],
-		// SC-487 r2 review: Obsidian's fence regex ends in `[^\n`]*$`, so a backtick in the info string (either fence kind) is no opener in
+		// SC-487 r2 review: Obsidian's fence regex ends in `[^\n`]*$`, so a backtick in the info string of a BACKTICK fence is no opener in
 		// either mode: the language is the trimmed info string, never `ds-x`.
-		// ...but a TILDE fence may carry one (CommonMark) and Reading view draws it, reading the first space/tab word (SC-487 r3 review).
+		// ...but a TILDE fence may carry one (CommonMark) and Reading view draws it, reading the first word: ended by a space, a tab or a
+		// form feed (SC-487 r3/r4 review).
 		['~~~ds-x `x`', 'ds-x'], ['~~~ds-x x`y', 'ds-x'], ['~~~ds-x\t`x`', 'ds-x'], ['> ~~~ds-x `x`', 'ds-x'], ['~~~ ds-x `x`', 'ds-x'],
+		['~~~ds-x\f`x`', 'ds-x'], ['> ~~~ds-x\f`x`', 'ds-x'], ['~~~\fds-x `x`', '\fds-x'], ['~~~ds-x\v`x`', 'ds-x\v`x`'],
 		['~~~\u00a0ds-x `x`', '\u00a0ds-x'], ['~~~ds-x\u200b `x`', 'ds-x\u200b'], ['~~~ds-x.y `x`', 'ds-x.y'], ['~~~ `ds-x y', '`ds-x'],
 		['```ds-x`x', 'ds-x`x'], ['~~~ds-x`x', 'ds-x`x'], ['```ds-x `x', 'ds-x `x'], ['``` ds-x`', 'ds-x`'], ['> ```ds-x`x ', 'ds-x`x'],
 		['```ds-x_', 'ds-x_'], ['``` ds-x/y z', 'ds-x/y'], ['```c++ x', 'c++'], ['```c#', 'c#'],

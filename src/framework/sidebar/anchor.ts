@@ -265,8 +265,9 @@ export function matchFenceLine(line: string): { prefix: string; marker: string; 
  * way — one identity, not two independently-evolving ones.
  *
  * SC-457: the definition itself now lives in blockPrefix.ts (`fenceLanguage`), shared with the hosts' own fence
- * parse (fenceLine.ts) - the first token of the TRIMMED info string. This function trims too, so an untrimmed
- * `rest` (` ds-counter`) is no longer read as the empty language. */
+ * parse (fenceLine.ts) - Live Preview's name run after the leading spaces/tabs (SC-487), by fence kind (`fenceChar` is the
+ * fence run's first character: a backtick in a tilde fence's info reads differently). So an untrimmed `rest` (` ds-counter`) is
+ * no longer read as the empty language. */
 export function fenceAlias(rest: string, fenceChar: string): string {
 	return fenceLanguage(rest, fenceChar);
 }

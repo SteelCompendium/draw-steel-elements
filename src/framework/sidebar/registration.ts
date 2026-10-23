@@ -20,8 +20,8 @@ import { ensureAnchor, fenceAlias, findFenceAtLine, listFences, matchFenceLine, 
  *  still typing (cursor inside an opened-but-not-yet-closed block) — a live Editor has no
  *  "rest of the note" to look ahead into for a close that may not exist yet.
  *
- *  SC-184 fix round (MEDIUM-2b): the alias is `fenceAlias(match.rest)` — the first
- *  whitespace-delimited token only, same as `iterateFences` — not the full trimmed rest.
+ *  SC-184 fix round (MEDIUM-2b): the alias is `fenceAlias(match.rest, match.marker[0])`
+ *  (the one fence-language rule, `fenceLanguage`), same as `iterateFences` - not the full trimmed rest.
  *  Before this, a fence carrying extra info-string content (e.g. ```` ```ds-counter extra
  *  ````) derived a different "alias" here than the chrome pin item's
  *  `getBlockInfo().language` did, so the two entry points disagreed about the identity of
