@@ -41,8 +41,19 @@ import path from 'path';
  * UNRELATED to SC-202's own round-1 starting pin for the real app.css (still 1.13.7, sha256
  * f612f1e8f36486fa57f3b8bd45f0c848409d5b168002e757a13c6d286a7b4c41 — that pin is this
  * ticket's own later fetch/pin round's decision to revisit, not this commit's).
+ *
+ * SC-497 pin-bump round (2026-10-23): 1.14.0 -> 1.15.0. The machine self-updated (the
+ * 1.14.4 asar is still in the config dir beside it) and `npm run shots` exited 1 with
+ * HOST COPY DRIFTED on rules #3, #5 and #6. 1.15.0 ships its app.css minified, and that was
+ * the whole difference: the six button-reaching rules and the 14 pinned tokens are
+ * semantically identical to 1.14.x. Only the spelling differs, and the comparison is text
+ * (whitespace/quote-normalized, not parsed further), so the copy was re-extracted verbatim:
+ * `@media(hover:hover)` / `@media(forced-colors:active)` (no spaces), unquoted attribute
+ * values (`[aria-disabled=true]`), `opacity:.7`. The comparator was NOT loosened — that is
+ * parser work (SC-276), not a pin bump. Zero rendered bytes moved. This pin is still
+ * UNRELATED to `OBSIDIAN_APP_CSS_PIN` (`obsidian-app-css.pin.mjs`, still 1.13.7).
  */
-export const PINNED_OBSIDIAN = '1.14.0';
+export const PINNED_OBSIDIAN = '1.15.0';
 
 const parseVersion = (v) => {
 	const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(v).trim());

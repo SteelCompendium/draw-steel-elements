@@ -133,7 +133,7 @@ export function readVerifiedSheet({ pin = OBSIDIAN_APP_CSS_PIN, distDir = DEFAUL
  * Fix round MED-3: is this a candidate this RECIPE may treat as an offline stand-in for
  * (or a drift comparison against) the pin? `findObsidianAsar`'s own `usable` flag answers a
  * DIFFERENT question — "is this new enough to validate SC-205's hand-copied button-rule
- * MODEL", gated by that module's own `PINNED_OBSIDIAN` floor (1.14.0 as of this round).
+ * MODEL", gated by that module's own `PINNED_OBSIDIAN` floor (1.14.0 when this was written; 1.15.0 as of SC-497).
  * This recipe's pin is 1.13.7: an installed 1.13.7 (or, generally, any real x.y.z Obsidian,
  * older or newer than SC-205's floor) is a perfectly good candidate for OUR purposes even
  * though `usable` would say no. The one thing still excluded is the unversioned

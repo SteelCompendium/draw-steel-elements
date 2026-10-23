@@ -1347,6 +1347,22 @@ async function assertMontageBoardScroll(page) {
 // see that file's header for the full pin history, including a same-day attempt at 1.14.0
 // that a verification step caught had no public release asset).
 //
+// SC-497 pin-bump round (2026-10-23): re-extracted from **Obsidian 1.15.0**
+// (`~/.config/obsidian/obsidian-1.15.0.asar`, sha256
+// 0e6383301078a798f0f3bdb42bdb606d904ada77eab8c8fc89da533573979248) — the machine
+// self-updated and `npm run shots` exited 1 with HOST COPY DRIFTED on rules #3, #5 and #6.
+// 1.15.0 ships app.css MINIFIED (598,237 bytes, down from 668,206 in 1.14.4), and that is the
+// whole difference: the six button-reaching rules carry the same selectors, the same
+// declarations in the same order and the same values — only the spelling moved. What the
+// copy now spells the way 1.15.0 does, because the pin compares selector/at-rule text
+// (whitespace- and quote-normalized only, deliberately not parsed any further): the at-rule
+// preludes `@media(hover:hover)` and `@media(forced-colors:active)` (no space after
+// `@media` or inside the query), the unquoted attribute values in
+// `button[disabled],button[aria-disabled=true],button[disabled=true]`, and `opacity: .7`
+// (no leading zero). The 14 pinned tokens resolve to the same values under both
+// `theme-dark` and `theme-light`. Nothing the sweep measures moved, so no frozen byte moves.
+// Still UNRELATED to `OBSIDIAN_APP_CSS_PIN` (`obsidian-app-css.pin.mjs`, a separate pin).
+//
 // DO NOT hand-edit this from memory: `assertHostCopyPinnedToObsidian` below re-extracts the
 // same rules and tokens from the installed Obsidian on every `npm run shots` and fails loudly
 // on any drift, so an edit that is not what Obsidian ships will be caught, not absorbed.
@@ -1410,7 +1426,7 @@ button:not(.clickable-icon) {
   background-color: var(--interactive-normal);
   box-shadow: var(--input-shadow);
 }
-@media (hover: hover) {
+@media(hover:hover) {
   button:hover {
     background-color: var(--interactive-hover);
     box-shadow: var(--input-shadow-hover);
@@ -1419,11 +1435,9 @@ button:not(.clickable-icon) {
 button:focus-visible {
   box-shadow: 0 0 0 3px var(--background-modifier-border-focus);
 }
-button[disabled],
-button[aria-disabled="true"],
-button[disabled="true"] {
+button[disabled],button[aria-disabled=true],button[disabled=true] {
   cursor: not-allowed;
-  opacity: 0.7;
+  opacity: .7;
 }
 /* MODELLED, DELIBERATELY NOT MEASURED — a scoping decision, not a capability limit.
    Playwright CAN emulate this: \`page.emulateMedia({ forcedColors: 'active' })\` would make
@@ -1433,7 +1447,7 @@ button[disabled="true"] {
    rule is a single border declaration, and the drift pin covers the rule's EXISTENCE either
    way. It is copied here so the pin compares Obsidian's whole reaching set — a rule left out
    of the copy is exactly how the four above went missing for two rounds. */
-@media (forced-colors: active) {
+@media(forced-colors:active) {
   button {
     border: 1px ButtonBorder solid;
   }

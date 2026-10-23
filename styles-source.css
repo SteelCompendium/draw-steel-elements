@@ -17106,10 +17106,10 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
      [SC205-HOST-RULES]
      (0,0,1)  button
      (0,1,1)  button:not(.clickable-icon)
-     (0,1,1)  @media (hover: hover) { button:hover }
+     (0,1,1)  @media(hover:hover) { button:hover }
      (0,1,1)  button:focus-visible
-     (0,1,1)  button[disabled], button[aria-disabled="true"], button[disabled="true"]
-     (0,0,1)  @media (forced-colors: active) { button }
+     (0,1,1)  button[disabled], button[aria-disabled=true], button[disabled=true]
+     (0,0,1)  @media(forced-colors:active) { button }
      [/SC205-HOST-RULES]
 
    The base rule's `height: var(--input-height)` is 30px on desktop (40px on mobile, which
