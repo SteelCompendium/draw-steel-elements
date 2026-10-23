@@ -630,7 +630,8 @@ describe('SC-340 §9.1: the adoption blur does not commit a half-typed draft', (
 // Chromium drop focus to <body>, so the next Tab starts at the top of the page. The stepper hands
 // focus to its own value node instead — the <input> when editable, the (tabindex="-1") value span
 // when read-only — never the opposite button (a held Enter would auto-repeat into it and ping-pong
-// the value). Only when the disabling button actually held focus.
+// the value). Only when the disabling button actually held focus AND the press was a keyboard one
+// (the button was :focus-visible); a pointer press moves nothing.
 describe('SC-495: focus stays inside the stepper when a ± button disables itself at its bound', () => {
 	let host: HTMLElement;
 	beforeEach(() => {
@@ -687,14 +688,15 @@ describe('SC-495: focus stays inside the stepper when a ± button disables itsel
 	test.each([
 		['editable', true],
 		['read-only', false],
-	])('%s: a pointer press (button not :focus-visible) hands over focus without the ring', (_n, editable) => {
+	])('%s: a POINTER press (button not :focus-visible) moves nothing (no wheel-on-input, no soft keyboard)', (_n, editable) => {
 		const { inc, target } = mount({ value: 4, min: 0, max: 5, editable });
 		const focusSpy = jest.spyOn(target, 'focus');
 		ring(inc, false);
 		inc.focus();
 		inc.click();
-		expect(document.activeElement).toBe(target);
-		expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true, focusVisible: false });
+		expect(inc.disabled).toBe(true);
+		expect(focusSpy).not.toHaveBeenCalled();
+		expect(document.activeElement).not.toBe(target);
 	});
 
 	test('a press that does not reach the bound leaves focus on the pressed button', () => {

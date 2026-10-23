@@ -1,8 +1,9 @@
 // SC-495 (found by the SC-465 survey): the kit stepper's "-" / "+" disable themselves at their bound. When
-// the pressed button held focus, real Chromium dropped focus to <body> and the next Tab started at the top
-// of the page. The stepper now hands focus to its own value node (the number field when editable).
+// the pressed button held focus, real Chromium dropped focus to <body> (Enter/Space then did nothing and
+// the focus ring vanished). For a KEYBOARD press the stepper now hands focus to its own value node (the number field
+// when editable); a pointer press moves nothing.
 //   basic.md  15/20 Stamina, 5 Temporary Stamina
-import { expect } from '@wdio/globals';
+import { browser, expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
 import { openBarModal } from '../../driver/stamina';
 
@@ -46,13 +47,20 @@ describe('stamina-edit-modal: a stepper keeps keyboard focus when "-" / "+" disa
 		await dse.click(modal.control('modal.close'));
 	});
 
-	it('[STAM-SF03] a MOUSE press that takes Temporary Stamina to 0 also moves focus to the number field, with no ring', async () => {
+	it('[STAM-SF03] a MOUSE press that takes Temporary Stamina to 0 moves nothing: focus does not land in the number field, so a wheel over it changes nothing', async () => {
 		const modal = await openBarModal(NOTE);
 		const dec = modal.control('sedit.temp.dec');
 		for (let i = 0; i < 5; i++) await dse.click(dec);
 		await expect(dec).toBeDisabled();
-		expect(await dse.focusedControl()).toBe('sedit.temp.input');
-		expect(await focusRing()).toBe(false);
+		const input = modal.control('sedit.temp.input');
+		await expect(input).toHaveValue('0');
+		// A pointer press never hands focus to the field (a focused number field takes the wheel, and on a
+		// phone a focused field raises the soft keyboard).
+		expect(await dse.focusedControl()).not.toBe('sedit.temp.input');
+		const label = await modal.control('sedit.apply').getText();
+		for (let i = 0; i < 3; i++) await browser.action('wheel').scroll({ deltaY: -120, origin: await input, duration: 0 }).perform();
+		await expect(input).toHaveValue('0');
+		await expect(modal.control('sedit.apply')).toHaveText(label);
 		await dse.click(modal.control('modal.close'));
 	});
 });

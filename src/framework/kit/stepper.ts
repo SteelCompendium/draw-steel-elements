@@ -185,18 +185,20 @@ export function stepper(
 			} else valueEl.setText(format(current));
 		}
 		// SC-495: a ± button that disables itself WHILE IT HOLDS FOCUS makes Chromium drop focus to
-		// <body> (the next Tab starts at the top of the page). Capture who holds focus (and whether it
-		// shows its ring: keyboard yes, pointer no) BEFORE the disable, then hand focus to the value
-		// node. Never the opposite button: a held Enter auto-repeats and would ping-pong the value.
-		// A disable while focus is elsewhere moves nothing.
+		// <body> (Enter/Space then do nothing, the focus ring is gone, a screen reader loses its place).
+		// For a KEYBOARD press (the button was :focus-visible) hand focus to the value node instead.
+		// Never the opposite button: a held Enter auto-repeats and would ping-pong the value.
+		// A POINTER press moves nothing (the base behaviour): a focused number field takes the mouse
+		// wheel (a scroll over it would change the pending value), and a field focused by a tap raises
+		// the soft keyboard on a phone. A disable while focus is elsewhere moves nothing either.
 		const active = rootEl.ownerDocument.activeElement;
 		const held = active === minusBtn.buttonEl || active === plusBtn.buttonEl ? (active as HTMLElement) : null;
-		const visible = held ? showsFocusRing(held) : false;
+		const keyboard = held ? showsFocusRing(held) : false;
 		minusBtn.setDisabled(opts.min !== undefined && current <= opts.min);
 		plusBtn.setDisabled(opts.max !== undefined && current >= opts.max);
-		if (held && (held as HTMLButtonElement).disabled) {
-			// `focusVisible` (Chromium 124+) carries the ring state; older engines ignore the key.
-			(inputEl ?? valueEl)?.focus({ preventScroll: true, focusVisible: visible } as FocusOptions);
+		if (held && keyboard && (held as HTMLButtonElement).disabled) {
+			// `focusVisible` (Chromium 124+) shows the ring on the new target; older engines ignore the key.
+			(inputEl ?? valueEl)?.focus({ preventScroll: true, focusVisible: true } as FocusOptions);
 		}
 	}
 
