@@ -157,6 +157,8 @@ const FIXTURES = {
 	'Lifecycle/counter.md': `# counter\n\nABOVE\n\n${COUNTER(10)}\n\nBELOW\n`,
 	'Lifecycle/other.md': '# other\n\nJust another note.\n',
 	'Lifecycle/stamina.md': `# stamina\n\nABOVE\n\n${fence('ds-stamina-bar', ['max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5'])}\n\nBELOW\n`,
+	// SC-498's own note: G-S32 (which runs before it) leaves its block collapsed for the session, and a collapsed bar is not a tab stop.
+	'Lifecycle/stamina-keyboard.md': `# stamina keyboard\n\nABOVE\n\n${fence('ds-stamina-bar', ['max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5'])}\n\nBELOW\n`,
 	'Lifecycle/unterminated.md': `# unterminated\n\nABOVE\n\n${UNTERMINATED_COUNTER(10)}\n`,
 	// SC-477: the same note with a longer tail (two blank lines) and as a CRLF note - G-S6u (navigate away) and
 	// G-S28 (stay on the note) both prove the tail survives the write byte for byte.
@@ -2262,7 +2264,7 @@ const SCENARIOS = [
 		// shared focus ring when reached by keyboard. Real Tab / Enter / Space key events (CDP), as a person would press them.
 		id: 'G-S36',
 		async run(t) {
-			const rel = 'Lifecycle/stamina.md';
+			const rel = 'Lifecycle/stamina-keyboard.md';
 			const BAR = '[data-dse-element="stamina-bar"] .dse-stamina';
 			const bar = t.root(BAR);
 			const modals = () => t.ev(`Array.from(document.querySelectorAll('.modal-container .dse-modal')).map((m) => (m.querySelector('.dse-form__preview') ? 'form' : m.querySelector('.dse-sedit__apply-input') ? 'stamina' : 'other'))`);
@@ -2281,6 +2283,7 @@ const SCENARIOS = [
 			await t.open(rel);
 			await t.reset(rel);
 			await t.waitFor(`!!(${bar})`, `${rel}: the stamina bar rendered`);
+			t.expect(await t.ev(`!(${bar}).closest('[data-dse-element]').hasAttribute('data-dse-collapsed')`), `${rel}: the block is collapsed, so the bar cannot be a tab stop`);
 			const facts = {};
 
 			// 1. A real Tab from the start of the block reaches the bar: it is a tab stop, and it is exactly one.
