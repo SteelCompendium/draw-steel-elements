@@ -262,6 +262,11 @@ describe('D8 Task 2 review fix — registration.ts (finding #3)', () => {
 			['a trailing zero-width space (Live Preview renders it as the block)', 'ds-counter\u200b'],
 			['a zero-width non-joiner, then a word', 'ds-counter\u200cx'],
 			['a word joiner, then a word', 'ds-counter\u2060 extra'],
+			// SC-487 review r1: Live Preview's name is the `[\w\/+#-]*` run, so punctuation and other invisibles end it too
+			['a colon', 'ds-counter:'],
+			['a dot and a word', 'ds-counter.x'],
+			['a soft hyphen', 'ds-counter\u00ad'],
+			['a left-to-right mark', 'ds-counter\u200e'],
 		])('%s: the host reports ds-counter, and pinning that alias binds the block (anchor stamped, panel holds it)', async (_label, info) => {
 			const { app, plugin, services } = setup();
 			registerDseSidebar(plugin as any, services);
@@ -344,6 +349,23 @@ describe('D8 Task 2 review fix — registration.ts (finding #3)', () => {
 			expect(app.vault.getContent('Note.md')).toBe(note);
 			expect(Notice.notices).toHaveLength(1);
 			expect(sidebarLeaf(app)).toBeUndefined();
+		});
+
+		test('the Notice shows an invisible character as <U+XXXX>, so the type never reads as a registered one', async () => {
+			const { app, plugin, services } = setup();
+			registerDseSidebar(plugin as any, services);
+			const alias = `ds-counter${ZWSP}`;
+			app.vault.setFile('Note.md', noteFor(alias));
+
+			await requestPinToSidebar('Note.md', alias, 2);
+			await flushAsync();
+
+			expect(Notice.notices).toHaveLength(1);
+			expect(Notice.notices[0]).toContain('("ds-counter<U+200B>")');
+			expect(Notice.notices[0]).not.toContain(ZWSP);
+			Notice.notices.length = 0;
+			await sendToSidebar(services, 'Note.md', 'ds-caf\u00e9 x', 2);
+			expect(Notice.notices[0]).toContain('("ds-caf<U+00E9><U+0020>x")');
 		});
 
 		test('a registered alias is unaffected: the pin stamps an anchor and mounts the panel, no Notice', async () => {

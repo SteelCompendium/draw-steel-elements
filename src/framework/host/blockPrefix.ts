@@ -44,24 +44,27 @@ export function matchFenceMarker(line: string): FenceMarker | null {
 
 /**
  * SC-457 / SC-487 — the LANGUAGE of a fence (`rest` from `matchFenceMarker`, or anything past the fence run): skip leading
- * spaces and tabs only; the name then ends at the first whitespace character of any kind, or at the first of the
- * zero-width characters \u200b \u200c \u200d \u2060 (\ufeff is whitespace to JS already). The ONE definition every
- * site that compares a fence's language uses (the hosts' fence parse, anchor.ts' alias, the sidebar command, the
- * autocomplete scan, the e2e scanner's type).
+ * spaces and tabs only, then read the name the way Live Preview does. The ONE definition every site that compares a fence's
+ * language uses (the hosts' fence parse, anchor.ts' alias, the sidebar command, the autocomplete scan, the e2e scanner's type).
  *
- * Why: Obsidian 1.14.4 renders ```` ``` ds-counter ````, ```` ```   ds-counter ```` and ```` ```\tds-counter ```` as the
- * `ds-counter` block (Reading view and Live Preview), so a parse that took the token at column 0 saw their language as ''.
- * A no-break space, U+3000, form feed, vertical tab or zero-width character BEFORE the name is no block in Obsidian
- * (measured), so the name then keeps that character and is no registered language. After the name any whitespace ends it
- * (```` ```ds-counter\u3000 extra ````, ```` ```ds-counter\u00a0x ```` stay `ds-counter`), and so does a zero-width
- * character: Live Preview (the only mode that reads it so) renders ```` ```ds-counter\u200b ```` and
- * ```` ```ds-counter\u200bx ```` as the block (SC-487, measured; Reading view shows plain code for them), while
- * ```` ```ds-co\u200bunter ```` is no block in either mode - the character ends the name, it is not stripped from it.
- * '' for a bare fence.
+ * Live Preview (Obsidian 1.14.4 and 1.15.0 alike) reads a fence opener with `/^\s*(~~~+|```+)[ \t]*([\w\/+#-]*)[^\n`]*$/`:
+ * the language is the run of ASCII letters, digits and `_ / + # -` after the spaces and tabs, and it renders the block when that
+ * run is a registered language. So the name ends at the first character outside that set - whitespace of any kind, a zero-width
+ * or other invisible character (\u200b \u200e \u00ad ...), punctuation (`.x`, `:x`, `,`, `(x)`), a non-ASCII letter -
+ * and ```` ```ds-counter\u200b ````, ```` ```ds-counter.x ```` and ```` ```ds-counter\u00a0x ```` are the `ds-counter` block
+ * (SC-487, measured; Reading view shows plain code for the zero-width and punctuation ones). Which characters end it is NOT a
+ * list to extend: it is Obsidian's own rule, mirrored (here `\w` has no `u` flag, so it is ASCII only, as there).
+ *
+ * A token that does not START with one of those characters (a no-break space, U+3000, form feed, vertical tab, zero-width
+ * character or `.` BEFORE the name) is no block in either mode (measured; Obsidian's name is empty), so it keeps its whole
+ * first token: it is then never a registered language (SC-457 LOW-1). '' for a bare fence and for a token that is only
+ * whitespace / zero-width characters.
  */
 export function fenceLanguage(info: string): string {
 	const token = /^[ \t]*([^ \t]*)/.exec(info)![1];
-	const name = /^[\s\u200b-\u200d\u2060]*[^\s\u200b-\u200d\u2060]*/.exec(token)![0];
+	const lp = /^[\w/+#-]+/.exec(token);
+	if (lp) return lp[0];
+	const name = /^\s*\S*/.exec(token)![0];
 	return /^[\s\u200b-\u200d\u2060]*$/.test(name) ? '' : name; // whitespace / zero-width only (a bare fence, a trailing CR / no-break space): no language
 }
 

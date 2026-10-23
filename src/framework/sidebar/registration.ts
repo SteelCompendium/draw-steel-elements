@@ -210,9 +210,14 @@ export async function sendToSidebar(
 const UNREADABLE_ANCHOR_NOTICE =
 	'Draw Steel Elements: this block already has an `_dse_anchor` line the sidebar cannot read, so it was not sent to the sidebar. Put it on one line as `_dse_anchor: value` (no comment or tag), or delete it, then send the block again.';
 
+/** SC-487 - the alias as the Notice prints it: anything but printable ASCII (an invisible zero-width character, a
+ *  no-break space, a non-ASCII letter) shows as `<U+XXXX>`, so the text never reads as a type that looks registered. */
+const visibleAlias = (alias: string): string =>
+	Array.from(alias, (ch) => (/[\x21-\x7e]/.test(ch) ? ch : `<U+${ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}>`)).join('');
+
 /** SC-487 - shown when the block's type is not one the sidebar can mount; nothing was written to the note. */
 const unregisteredNotice = (alias: string): string =>
-	`Draw Steel Elements: this block's type ("${alias}") is not one the sidebar can show, so it was not sent to the sidebar and the note was not changed.`;
+	`Draw Steel Elements: this block's type ("${visibleAlias(alias)}") is not one the sidebar can show, so it was not sent to the sidebar and the note was not changed.`;
 
 /** SC-487 - can the sidebar mount a block fenced as `alias`? An element registered under that ALIAS - `registry.get`
  *  also matches element ids (`statblock`, `encounter`, `counter`), which no code-block processor is registered for. */

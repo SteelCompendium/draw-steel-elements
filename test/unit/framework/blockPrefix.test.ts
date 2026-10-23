@@ -167,6 +167,28 @@ describe('SC-455: fenceLine splices with a prefix', () => {
 		expect(['', ' '].map((pad) => fenceLanguage(`${pad}${z}`))).toEqual(['', '']);
 	});
 
+	// SC-487 review r1: Live Preview's name is the run of `[\w\/+#-]` (ASCII) - Obsidian's own fence regex, measured on 1.14.4: every
+	// opener below renders as the block there, so its language is `ds-counter`; the five controls stay in the name (other types).
+	test.each([
+		'\u200e', '\u200f', '\u00ad', '\u180e', '\ufe0f', '\u2061', '\u2064', '\u034f', '\u3164', '\u2800',
+		'.x', ':x', ',', '{', '(x)', '\u00e9', '!',
+	])('the name ends at %j: the language is ds-counter on the host and the anchor parse alike', (tail) => {
+		for (const opener of [`\`\`\`ds-counter${tail}`, `\`\`\` ds-counter${tail}`]) {
+			expect(parseOpenFenceLine(opener)?.language).toBe('ds-counter');
+			expect(fenceAlias(matchFenceLine(opener)!.rest)).toBe('ds-counter');
+		}
+	});
+
+	test.each(['x', '_x', '/x', '#', '+', '-', '9'])('%j right after the name is part of it: the fence is another type, never ds-counter', (tail) => {
+		expect(fenceLanguage(`ds-counter${tail}`)).toBe(`ds-counter${tail}`);
+		expect(parseOpenFenceLine(`\`\`\`ds-counter${tail}`)?.language).toBe(`ds-counter${tail}`);
+	});
+
+	test('a first character outside the name set keeps the whole token (no block in either mode); only whitespace / zero-width tokens are empty', () => {
+		expect(['\u00a0ds-counter', '.ds-counter', '\u00e9ds-counter', '\u200eds-counter'].map(fenceLanguage)).toEqual(['\u00a0ds-counter', '.ds-counter', '\u00e9ds-counter', '\u200eds-counter']);
+		expect(['', '  ', '\t', '\r', '\u00a0', '\u3000', '\u200b', '\u200b\u2060 '].map(fenceLanguage)).toEqual(['', '', '', '', '', '', '', '']);
+	});
+
 	test('replaceFenceBlock re-emits an opening line that holds a zero-width character byte for byte', () => {
 		const open = '```ds-counter' + String.fromCharCode(0x200b);
 		const note = ['top', open, 'a: 1', '```', 'bottom'].join('\n');

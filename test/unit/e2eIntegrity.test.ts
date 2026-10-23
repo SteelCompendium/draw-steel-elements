@@ -183,6 +183,15 @@ describe('e2e integrity: agreement with the product parser (SC-456 O1)', () => {
 			[`~~~ds-x${z}`, 'ds-x'], [`> \`\`\`ds-x${z}`, 'ds-x'], [`\`\`\`ds-x${z}${z}`, 'ds-x'],
 			[`\`\`\`ds-${z}x`, 'ds-'], [`\`\`\`${z}ds-x`, `${z}ds-x`], [`\`\`\` ${z}ds-x`, `${z}ds-x`], [`\`\`\`${z}`, ''], [`\`\`\` ${z}`, ''],
 		]),
+		// SC-487 review r1: the name is Live Preview's own `[\w\/+#-]*` run, so the opener is the block (Reading view: plain code) for
+		// every one of these - invisible characters, punctuation and a non-ASCII letter right after the name - and the characters
+		// that are IN the set (`x`, `_x`, `/x`, `#`, `+`) stay part of the name, so those openers are other, unregistered types.
+		...['\u200e', '\u200f', '\u00ad', '\u180e', '\ufe0f', '\u2061', '\u2064', '\u034f', '\u3164', '\u2800', '.x', ':x', ',', '{', '(x)', '\u00e9', '!'].flatMap((tail): [string, string | null][] => [
+			[`\`\`\`ds-x${tail}`, 'ds-x'], [`\`\`\` ds-x${tail}`, 'ds-x'], [`~~~ds-x${tail}`, 'ds-x'], [`> \`\`\`ds-x${tail}`, 'ds-x'],
+		]),
+		...['.', ':', '\u200e', '\u00ad', '\u3164', '\u00e9'].map((lead): [string, string | null] => [`\`\`\`${lead}ds-x`, `${lead}ds-x`]),
+		['```ds-xx', 'ds-xx'], ['```ds-x_x', 'ds-x_x'], ['```ds-x/x', 'ds-x/x'], ['```ds-x#', 'ds-x#'], ['```ds-x+', 'ds-x+'], ['```ds-x-', 'ds-x-'], ['```ds-x1', 'ds-x1'],
+		['```ds-x_', 'ds-x_'], ['``` ds-x/y z', 'ds-x/y'], ['```c++ x', 'c++'], ['```c#', 'c#'],
 	];
 	const lines = cases.map(([line]) => line);
 	test('open-line recognition: the e2e scanner opens a fence exactly where matchFenceMarker does, with the same prefix / run / info string', () => {
