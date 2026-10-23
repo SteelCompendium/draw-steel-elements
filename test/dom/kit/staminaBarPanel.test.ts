@@ -31,7 +31,8 @@ describe('D7 Task 1: kit/StaminaBarPanel — renderStaminaBar', () => {
 
 		expect(bar).not.toBeNull();
 		expect(bar.hasClass('dse-stamina')).toBe(true);
-		expect(bar.hasClass('dse-stamina--clickable')).toBe(true);
+		// no owner/handler supplied: writable, but a click does nothing, so it is not marked clickable (SC-498)
+		expect(bar.hasClass('dse-stamina--clickable')).toBe(false);
 		expect(bar.style.getPropertyValue('--dse-bar-h')).toBe('1em');
 
 		// max=20, current=15, temp=5 -> dyingStamina=10, totalStamina=30.
@@ -198,6 +199,8 @@ describe('D7 Task 1: kit/StaminaBarPanel — renderStaminaBar', () => {
 		// role="button" ancestor would flatten them out of the accessibility tree.
 		expect(bar.getAttribute('role')).toBe('group');
 		expect(bar.getAttribute('aria-label')).toBe('Edit Stamina: 31 of 48');
+		// The key cue a role="button" would have carried (a group says nothing about being operable).
+		expect(bar.getAttribute('aria-description')).toBe('Press Enter or Space to open the Stamina editor');
 		// One stop: nothing else in the bar's own markup is focusable (the chrome panel's buttons are
 		// native <button>s mounted later by the framework, not tabindex'd here).
 		expect(bar.querySelectorAll('[tabindex]')).toHaveLength(0);
@@ -281,6 +284,16 @@ describe('D7 Task 1: kit/StaminaBarPanel — renderStaminaBar', () => {
 		expect(optedOut.onClick).toHaveBeenCalledTimes(1);
 		keydown(optedOut.bar, 'Enter');
 		expect(optedOut.onClick).toHaveBeenCalledTimes(1);
+	});
+
+	test('SC-498: the bar is marked clickable (pointer cursor) only when a handler exists', () => {
+		const make = (opts: Record<string, unknown>) =>
+			renderStaminaBar(document.createElement('div'), { current: 1, temp: 0, max: 2 }, { canPersist: true, ...opts } as never)!;
+
+		expect(make({ owner: fakeOwner(), onClick: jest.fn() }).hasClass('dse-stamina--clickable')).toBe(true);
+		expect(make({ owner: fakeOwner() }).hasClass('dse-stamina--clickable')).toBe(false); // no handler
+		expect(make({ onClick: jest.fn() }).hasClass('dse-stamina--clickable')).toBe(false); // no owner to register on
+		expect(make({ owner: fakeOwner(), onClick: jest.fn(), canPersist: false }).hasClass('dse-stamina--clickable')).toBe(false);
 	});
 
 	test('SC-498: the accessible name follows targeted updates (current / max / temp)', () => {

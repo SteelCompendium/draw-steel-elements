@@ -59,6 +59,9 @@ export interface StaminaBarRenderOptions {
 	gauge?: StaminaGaugeOptions;
 }
 
+/** SC-498: the cue a screen reader gets on the keyboard bar (see `makeKeyboardOperable`). */
+const KEYBOARD_HINT = 'Press Enter or Space to open the Stamina editor';
+
 const SHEET_STYLE_NOTICE = 'Sheet style is not implemented, use default style';
 
 /** Ports StaminaBar.vue's `calculatePercentFromStamina` 1:1, re-expressed against
@@ -106,8 +109,12 @@ export function renderStaminaBar(
 		return null;
 	}
 
+	// Clickable (pointer cursor, ring subject) exactly when a click does something: a writable host
+	// that also supplied the owner + handler. A writable bar with no handler is inert, and must not
+	// look otherwise.
+	const hasHandler = opts.canPersist && !!opts.owner && !!opts.onClick;
 	const bar = root.createDiv({
-		cls: opts.canPersist ? 'dse-stamina dse-stamina--clickable' : 'dse-stamina',
+		cls: hasHandler ? 'dse-stamina dse-stamina--clickable' : 'dse-stamina',
 	});
 	// Sanctioned --dse-* geometry (D2 §5): the height feeds the track height.
 	bar.style.setProperty('--dse-bar-h', `${opts.height ?? 1}em`);
@@ -161,14 +168,14 @@ export function renderStaminaBar(
 
 /** SC-498: the bar is operable from the keyboard — one tab stop, Enter or Space opens it.
  *
- *  Structure: the focusable thing is the `.dse-stamina` bar itself, because it is the one box
- *  that is visible under every theme (Legacy shows the track and hides the cluster; Steel does
- *  the reverse), so no child could carry the stop for both. But the framework chrome panel (the
- *  Edit pencil, collapse, pin) mounts INSIDE the bar's cluster plate, so the bar cannot be
- *  `role="button"`: ARIA makes a button's children presentational, which would delete those
- *  real buttons from the accessibility tree (the montage board's cells ruled the same way). It
- *  is a `role="group"` instead, named for what it does ("Edit Stamina: 31 of 48"), the same
- *  action-then-value wording the montage cells and the initiative title use.
+ *  Structure: the focusable thing is the `.dse-stamina` bar itself, and it cannot be
+ *  `role="button"`. The framework chrome panel (the Edit pencil, collapse, pin) mounts INSIDE
+ *  the bar's cluster plate, and ARIA makes a button's children presentational, which would
+ *  delete those real buttons from the accessibility tree (the montage board's cells ruled the
+ *  same way). The bar is a `role="group"` instead, named for what it does ("Edit Stamina: 31 of
+ *  48", the action-then-value wording the montage cells and the initiative title use) and
+ *  described with the key cue a button role would have given ("Press Enter or Space ..."): a
+ *  group says nothing about being operable, and `aria-haspopup` is not allowed on it.
  *
  *  The key rule mirrors the click guard above: only a key pressed ON the bar itself counts.
  *  A key from a chrome button is that button's own — it is neither acted on nor swallowed, so
@@ -181,6 +188,7 @@ function makeKeyboardOperable(
 ): void {
 	bar.setAttribute('tabindex', '0');
 	bar.setAttribute('role', 'group');
+	bar.setAttribute('aria-description', KEYBOARD_HINT);
 	updateBarLabel(bar, s);
 	owner.registerDomEvent(bar, 'keydown', (evt: KeyboardEvent) => {
 		if (evt.target !== bar) return;
