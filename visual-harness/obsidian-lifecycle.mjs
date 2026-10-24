@@ -81,6 +81,12 @@
 // BELOW the embed does not move when the write changes the embed's height (phase (e): adding a hero), nor does the text of a reader parked
 // INSIDE a tall embed below its tracker (phase (f): adding a hero).
 //
+// SC-518 appends G-S50 (40 scenarios in all; the id was assigned by the dispatcher): after the block edit form's Save redraws the card, keyboard focus
+// is on the redrawn card's Edit pencil (it fell to <body> once SC-509 made Save redraw). Real keys (CDP Tab / Enter): Tab to the pencil, Enter,
+// change a field, Enter on Save. Reading view (montage raw box, stamina bar typed field), the sidebar panel and Live Preview each assert the
+// pencil holds focus with the keyboard ring and the old root/pencil is gone; a real-mouse Save leaves the pencil focused with no ring; Cancel
+// leaves focus on the same pencil. Every phase's whole note is the fixture with only the edited value changed; no Notice, no page error.
+//
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
 // Env:   XVFB_BIN, DSE_LIFECYCLE_BIN (default /usr/bin/obsidian), DSE_LIFECYCLE_PORT (9262),
@@ -3158,6 +3164,188 @@ const SCENARIOS = [
 			await t.reset('Lifecycle/embtrackerlong.md');
 			t.expect(fails.length === 0, fails.join(' | '));
 			return out.join('; ');
+		},
+	},
+	{
+		// SC-518: SC-509 made the block edit form's Save redraw the card, so the root that held the Edit pencil is gone when the
+		// form closes and Obsidian's focus return lands on a detached node: keyboard focus fell to <body>. Now the redrawn card's Edit
+		// pencil takes focus once (the same hand-off SC-505 built for Pin), with the keyboard ring after a keyboard-opened form and
+		// no ring after a mouse one. Real keys throughout (CDP): Tab to the pencil, Enter, change a field, Enter on Save.
+		// Every phase records where focus ended up BEFORE asserting, so a failing build prints the whole picture, not the first miss.
+		id: 'G-S50',
+		async run(t) {
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			const m = await t.mark();
+			const kit = formKit(t);
+			const { waitText, waitDisk, FORM, SAVE, hoverTo, waitFormOpen, pinToSidebar } = kit;
+			const CANCEL = `Array.from(document.querySelectorAll('.modal-container .dse-modal button')).find((b) => b.getAttribute('aria-label') === 'Cancel')`;
+			const press = async (key, code, vk, text) => {
+				await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key, code, text, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
+				await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
+			};
+			const PENCIL = (rootExpr) => `(${rootExpr}).querySelector('.dse-chrome button[data-dse-chrome-item="edit"]')`;
+			/** Tab (a real key) from just before the block until the Edit pencil holds focus; script focus only if Tab never gets there. */
+			const reachPencil = async (label, rootExpr) => {
+				await t.ev(`(() => { const r = ${rootExpr}; document.getElementById('lc-gs50-start')?.remove(); const s = document.createElement('span'); s.id = 'lc-gs50-start'; s.tabIndex = -1; r.parentElement.insertBefore(s, r); s.focus(); return document.activeElement === s; })()`);
+				let how = '';
+				for (let i = 1; i <= 8 && !how; i++) {
+					await press('Tab', 'Tab', 9, undefined);
+					if (await t.ev(`document.activeElement === ${PENCIL(rootExpr)}`)) how = `Tab x${i}`;
+				}
+				await t.ev(`document.getElementById('lc-gs50-start')?.remove()`);
+				if (!how) {
+					await t.ev(`${PENCIL(rootExpr)}.focus({ focusVisible: true })`);
+					how = 'script focus (Tab never reached it)';
+				}
+				t.expect(await t.ev(`document.activeElement === ${PENCIL(rootExpr)}`), `${label}: the Edit pencil does not hold focus`);
+				return how;
+			};
+			const edit = async (label, e) => {
+				if (e.raw) {
+					const ok = await t.ev(`(() => { const ta = ${FORM}.querySelector('textarea.dse-form__raw'); if (!ta) return false; ta.value = ta.value.replace(${JSON.stringify(e.raw[0])}, ${JSON.stringify(e.raw[1])}); ta.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+					t.expect(ok, `${label}: the form has no raw box`);
+				} else {
+					const ok = await t.ev(`(() => { const re = new RegExp(${JSON.stringify(e.field[0])}, 'i'); const item = Array.from(${FORM}.querySelectorAll('.setting-item')).find((s) => re.test(s.querySelector('.setting-item-name')?.textContent ?? '')); const inp = item?.querySelector('input'); if (!inp) return false; inp.value = ${JSON.stringify(e.field[1])}; inp.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+					t.expect(ok, `${label}: no form field matching /${e.field[0]}/`);
+				}
+				await t.waitFor(`!!(${SAVE}) && !(${SAVE}).disabled`, `${label}: Save is enabled`);
+			};
+			const formClosed = (label) => t.waitFor(`!document.querySelector('.modal-container .dse-modal')`, `${label}: the form closed`);
+			/** Where focus is, relative to the card as it is NOW (rootExpr is evaluated fresh). */
+			const probe = (rootExpr) =>
+				t.ev(`(() => { const a = document.activeElement; const root = ${rootExpr}; const pencil = root ? root.querySelector('.dse-chrome button[data-dse-chrome-item="edit"]') : null;
+					return { active: a ? a.tagName.toLowerCase() + (a.getAttribute('aria-label') ? '[' + a.getAttribute('aria-label') + ']' : '') : 'none', body: a === document.body, pencil: !!pencil && a === pencil, inRoot: !!root && !!a && root.contains(a),
+						oldGone: !window.__gs50Old || !window.__gs50Old.isConnected, oldPencilGone: !window.__gs50OldPencil || !window.__gs50OldPencil.isConnected, ring: !!a && a.matches(':focus-visible') && getComputedStyle(a).outlineStyle !== 'none' }; })()`);
+			const tagOld = (rootExpr) => t.ev(`(() => { window.__gs50Old = ${rootExpr}; window.__gs50OldPencil = ${PENCIL(rootExpr)}; return !!window.__gs50Old && !!window.__gs50OldPencil; })()`);
+			const outcomes = [];
+			const problems = [];
+			/** Keyboard open, change one thing, keyboard Save; then wait for the card to show it and for the rebuilds to settle. */
+			// `inPlace`: the sidebar panel redraws the card into the same root (only the chrome panel and its pencil are new), the note's own card gets a new root.
+			const keyboardSave = async (label, rootExpr, e, newText, rel, want, wholeNote = FIXTURES[rel].replace(want[0], want[1]), inPlace = false) => {
+				await tagOld(rootExpr);
+				const how = await reachPencil(label, rootExpr);
+				await press('Enter', 'Enter', 13, '\r');
+				await waitFormOpen(label);
+				await edit(label, e);
+				await t.ev(`${SAVE}.focus({ focusVisible: true })`);
+				await press('Enter', 'Enter', 13, '\r');
+				await formClosed(label);
+				await waitText(rootExpr, newText, label);
+				const early = await probe(rootExpr);
+				await t.sleep(1500); // the several rebuilds a write can cause have all happened by now
+				const late = await probe(rootExpr);
+				await waitDisk(rel, want[1], label);
+				outcomes.push({ label, input: 'keyboard', pencil: how, early: early.active, late });
+				if (!late.pencil) problems.push(`${label}: focus is on ${late.active}${late.body ? ' (<body>)' : ''}, not the redrawn card's Edit pencil (early read: ${early.active})`);
+				if (!inPlace && !late.oldGone) problems.push(`${label}: the old card root is still in the document - the card was not redrawn`);
+				if (!late.oldPencilGone) problems.push(`${label}: the old Edit pencil is still in the document - the card was not redrawn`);
+				if (late.pencil && !late.ring) problems.push(`${label}: the pencil has focus but no keyboard focus ring`);
+				t.expect(t.read(rel) === wholeNote, `${label}: the note differs from the original beyond the edited value: ${JSON.stringify(t.read(rel))}`);
+			};
+			await t.ev(`(() => { const st = document.createElement('style'); st.id = 'lc-gs50-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); return true; })()`);
+			await t.ev(`${prefs}.set('authoringControls', true)`);
+			try {
+				// 1. Reading view, keyboard: a raw-box form (montage) and a typed-field form (stamina bar).
+				for (const [rel, sel, e, oldT, newT, want, name] of [
+					['Lifecycle/form-save-montage.md', '[data-dse-element="montage"]', { raw: ['The Heist', 'Other Job'] }, 'The Heist', 'Other Job', ['title: The Heist', 'title: Other Job'], 'montage'],
+					['Lifecycle/form-save-stamina.md', '[data-dse-element="stamina-bar"]', { field: ['^current stamina', '7'] }, '15/20', '7/20', ['current_stamina: 15', 'current_stamina: 7'], 'stamina bar'],
+				]) {
+					await t.open(rel);
+					await t.reset(rel);
+					const root = t.root(sel);
+					await t.waitFor(`!!(${root})`, `${name}: rendered`);
+					await waitText(root, oldT, name);
+					await keyboardSave(`Reading view ${name}`, root, e, newT, rel, want);
+				}
+
+				// 2. Reading view, mouse: base returned focus to the pencil (Obsidian's modal close); no ring for a mouse user.
+				{
+					const rel = 'Lifecycle/form-save-montage.md';
+					const sel = '[data-dse-element="montage"]';
+					await t.open(rel);
+					await t.reset(rel);
+					const root = t.root(sel);
+					await t.waitFor(`!!(${root})`, 'mouse: rendered');
+					await waitText(root, 'The Heist', 'mouse');
+					await tagOld(root);
+					await t.ev(`(() => { document.activeElement?.blur?.(); return true; })()`);
+					await hoverTo(root, PENCIL(root));
+					await t.realClick(PENCIL(root));
+					await waitFormOpen('mouse');
+					await edit('mouse', { raw: ['The Heist', 'Other Job'] });
+					await t.realClick(SAVE);
+					await formClosed('mouse');
+					await waitText(root, 'Other Job', 'mouse');
+					const early = await probe(root);
+					await t.sleep(1500);
+					const late = await probe(root);
+					await waitDisk(rel, 'title: Other Job', 'mouse');
+					outcomes.push({ label: 'Reading view montage', input: 'mouse', early: early.active, late });
+					if (!late.pencil) problems.push(`Reading view mouse Save: focus is on ${late.active}${late.body ? ' (<body>)' : ''}, not the redrawn card's Edit pencil`);
+					if (late.ring) problems.push('Reading view mouse Save: the restored pencil shows a focus ring for a mouse user');
+					t.expect(t.read(rel) === FIXTURES[rel].replace('title: The Heist', 'title: Other Job'), `mouse: the note differs from the fixture beyond the edited value: ${JSON.stringify(t.read(rel))}`);
+				}
+
+				// 3. Reading view, Cancel by keyboard: nothing is rebuilt, focus returns to the same pencil (unchanged by SC-518).
+				{
+					const rel = 'Lifecycle/form-save-montage.md';
+					const sel = '[data-dse-element="montage"]';
+					await t.open(rel);
+					await t.reset(rel);
+					const root = t.root(sel);
+					await t.waitFor(`!!(${root})`, 'cancel: rendered');
+					await waitText(root, 'The Heist', 'cancel');
+					await tagOld(root);
+					const how = await reachPencil('cancel', root);
+					await press('Enter', 'Enter', 13, '\r');
+					await waitFormOpen('cancel');
+					await edit('cancel', { raw: ['The Heist', 'Other Job'] });
+					await t.ev(`${CANCEL}.focus({ focusVisible: true })`);
+					await press('Enter', 'Enter', 13, '\r');
+					await formClosed('cancel');
+					await t.sleep(1000);
+					const late = await probe(root);
+					const same = await t.ev(`${root} === window.__gs50Old`);
+					outcomes.push({ label: 'Reading view montage', input: 'keyboard Cancel', pencil: how, late, sameRoot: same });
+					if (!late.pencil || !same) problems.push(`Reading view Cancel: focus is on ${late.active}${late.body ? ' (<body>)' : ''} (same root: ${same}), not the same card's Edit pencil`);
+					t.expect(t.read(rel) === FIXTURES[rel], `cancel: the note was written: ${JSON.stringify(t.read(rel))}`);
+				}
+
+				// 4. The sidebar panel, keyboard: pin, then Tab to the PANEL's pencil.
+				{
+					const rel = 'Lifecycle/form-save-sidebar.md';
+					const sel = '[data-dse-element="montage"]';
+					await t.open(rel);
+					await t.reset(rel);
+					const { stampedNote, panelRoot } = await pinToSidebar(rel, sel);
+					await waitText(panelRoot, 'The Heist', 'sidebar');
+					await t.ev(`(() => { document.activeElement?.blur?.(); return true; })()`);
+					// The pinned note carries the anchor line the pin stamped: the whole note is that, with only the title changed.
+					await keyboardSave('Sidebar panel montage', panelRoot, { raw: ['The Heist', 'Other Job'] }, 'Other Job', rel, ['title: The Heist', 'title: Other Job'], stampedNote.replace('title: The Heist', 'title: Other Job'), true);
+					await t.ev(`(async () => { for (const l of app.workspace.getLeavesOfType('dse-sidebar')) l.detach(); })()`);
+				}
+
+				// 5. Live Preview, keyboard (CodeMirror owns the widget's rebuild).
+				{
+					const rel = 'Lifecycle/stamina-lp.md';
+					const SB = '[data-dse-element="stamina-bar"]';
+					await enterMode(t, rel, LC_MODES[1], SB);
+					const rootOf = `Array.from(app.workspace.getMostRecentLeaf().view.containerEl.querySelectorAll('.markdown-source-view [data-dse-element]')).find((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]'))`;
+					await t.waitFor(`!!(${PENCIL(rootOf)})`, 'Live Preview: the Edit pencil rendered');
+					await waitText(rootOf, '15/20', 'Live Preview');
+					await keyboardSave('Live Preview stamina bar', rootOf, { field: ['^current stamina', '7'] }, '7/20', rel, ['current_stamina: 15', 'current_stamina: 7']);
+				}
+			} finally {
+				await t.ev(`(async () => { for (const l of app.workspace.getLeavesOfType('dse-sidebar')) l.detach(); })()`);
+				await t.ev(`document.getElementById('lc-gs50-notice')?.remove()`);
+				await t.ev(`document.getElementById('lc-gs50-start')?.remove()`);
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect(problems.length === 0, `${problems.join(' | ')} -- outcomes: ${JSON.stringify(outcomes)}`);
+			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${JSON.stringify(await t.noticesSince(m))}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
+			return `after a form Save focus is on the redrawn card's Edit pencil, old root/pencil gone (ring after a keyboard open, none after a mouse one; Cancel leaves it on the same pencil): ${outcomes.map((o) => `${o.label} by ${o.input}${o.pencil ? ` (${o.pencil})` : ''} -> ${o.late.active}${o.late.ring ? ' +ring' : ''}`).join('; ')}; the note is the fixture with only the edited value changed; no Notice, no page error`;
 		},
 	},
 ];
