@@ -73,6 +73,8 @@
 // SC-502 appends G-S44 (39 scenarios in all with SC-509's G-S40 and SC-519's G-S45): in LIVE PREVIEW the chrome panel's buttons are reached by a REAL mouse - the Edit pencil
 // opens only the edit form, Collapse collapses, the editor cursor never jumps to the line above, and a click where the HIDDEN panel
 // would be still lands on that editor line. Stamina bar (pencil, Collapse), counter and statblock (every button's centre hit-tests to it).
+// SC-502 r2 adds to it: the panel stays revealed while the pointer crosses Obsidian's own `</>` edit-block button on the way up to Collapse,
+// a real click on the collapsed one-liner's Expand expands the block, and a real click on `</>` still enters the block's source.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -2755,7 +2757,9 @@ const SCENARIOS = [
 		// REAL mouse events (CDP press + release at the button's centre), never `.click()`. Three parts: (1) the stamina bar - the Edit
 		// pencil opens only the edit form and leaves the cursor alone, Collapse collapses; (2) a click where the panel is HIDDEN still
 		// reaches the editor line above (the fix must not leave an invisible shield there); (3) counter and statblock: every panel
-		// button's centre hit-tests to that button, and a real Collapse click collapses.
+		// button's centre hit-tests to that button, and a real Collapse click collapses. (r2) Collapsed, Expand and Obsidian's `</>` button no longer
+		// overlap: a real click on Expand expands, a real click on `</>` still enters the source; and moving straight up across `</>` to
+		// Collapse keeps the panel revealed.
 		id: 'G-S44',
 		async run(t) {
 			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
@@ -2792,13 +2796,11 @@ const SCENARIOS = [
 				await mouse('mouseMoved', root.x, root.y);
 				await t.waitFor(`getComputedStyle(${panelOf()}).pointerEvents === 'auto'`, 'the chrome panel is revealed by the hover');
 				const to = await center(btnExpr);
-				// Sideways inside the block until under the panel's FIRST button, straight up onto it, then along the panel to the target. (Straight up
-				// from under the rightmost button crosses Obsidian's own `</>` edit-block button, which sits at the block's top right: the pointer is
-				// then on a sibling of the block's root, so the panel hides - a separate, existing problem.)
-				const first = await center(`(${buttonsOf()})[0]`);
-				await mouse('mouseMoved', first.x, root.y);
-				for (let i = 1; i <= 8; i++) await mouse('mouseMoved', first.x, root.y + ((first.y - root.y) * i) / 8);
-				for (let i = 1; i <= 4; i++) await mouse('mouseMoved', first.x + ((to.x - first.x) * i) / 4, first.y);
+				// Sideways inside the block until under the button, then STRAIGHT UP onto it. For Collapse (the rightmost button) that path
+				// crosses Obsidian's own `</>` edit-block button at the block's top right, which is not inside the block's root: the panel must
+				// stay revealed over it (SC-502 r2).
+				await mouse('mouseMoved', to.x, root.y);
+				for (let i = 1; i <= 8; i++) await mouse('mouseMoved', to.x, root.y + ((to.y - root.y) * i) / 8);
 				// Not fatal here: a panel clipped by its widget loses the hover on the way up, and the hit-test assertions below say so.
 				await t.sleep(150);
 				return to;
@@ -2850,11 +2852,40 @@ const SCENARIOS = [
 				t.expect((await modals()).length === 0, `Collapse opened a modal: ${JSON.stringify(await modals())}`);
 				t.expect((await cursorLine()) === PARKED, `the Collapse click moved the editor cursor to line ${await cursorLine()}`);
 				facts.push('Collapse: collapsed, cursor unmoved');
-				// back to expanded (the collapsed one-liner's Expand button is in flow, not in the hover panel)
-				// Back to expanded by a script click (setup, not under test): in Live Preview Obsidian's own `</>` edit-block button sits over the
-				// collapsed one-liner's Expand button, so a real click there enters the block's source (a separate, existing problem).
-				await t.ev(`(${rootOf()}).querySelector('[data-dse-control="chrome.expand"]').click()`);
-				await t.waitFor(`(() => { const r = ${rootOf()}; return !!r && !r.hasAttribute('data-dse-collapsed'); })()`, 'the block expanded again');
+				// The collapsed one-liner: Obsidian's own `</>` edit-block button sits at its top right, over where Expand used to be. A real click on
+				// `</>` still enters the block's source (the cursor moves into the fence), and a real click on Expand expands the block.
+				const HOST = `(${rootOf()}).closest('.cm-embed-block').querySelector('.edit-block-button')`;
+				const EXPAND = `(${rootOf()}).querySelector('[data-dse-control="chrome.expand"]')`;
+				const isCollapsed = (want) => `(() => { const r = ${rootOf()}; return !!r && r.hasAttribute('data-dse-collapsed') === ${want}; })()`;
+				await scrollToRoot();
+				const over = await center(`(${rootOf()})`);
+				await mouse('mouseMoved', over.x, over.y); // the host button shows while the block is hovered
+				await t.waitFor(`!!(${HOST}) && getComputedStyle(${HOST}).display !== 'none'`, "Obsidian's `</>` button on the collapsed block");
+				t.expect((await hitOk(EXPAND)).ok, `collapsed: elementFromPoint at the Expand button's centre is ${(await hitOk(EXPAND)).hit}, not the button (Obsidian's \`</>\` covers it)`);
+				t.expect((await hitOk(HOST)).ok, `collapsed: elementFromPoint at the \`</>\` button's centre is ${(await hitOk(HOST)).hit}, not the button`);
+				const exp = await t.ev(`(() => { const e = (${EXPAND}).getBoundingClientRect(), h = (${HOST}).getBoundingClientRect(); return { overlap: Math.min(e.right, h.right) - Math.max(e.left, h.left) }; })()`);
+				t.expect(exp.overlap <= 0, `collapsed: the Expand button overlaps Obsidian's \`</>\` button by ${exp.overlap}px`);
+				await pressAt(await center(HOST));
+				await t.sleep(500);
+				const inFence = await cursorLine();
+				t.expect(inFence > ABOVE_LINE && inFence < PARKED - 1, `a real click on \`</>\` did not enter the block's source: cursor is on line ${inFence}`);
+				facts.push('collapsed: `</>` still enters the source');
+				await setCursor(PARKED);
+				await t.waitFor(`!!(${rootOf()}) && !!(${EXPAND})`, 'the collapsed block is drawn again after the cursor left it');
+				await scrollToRoot();
+				await pressAt(await center(EXPAND));
+				await t.waitFor(isCollapsed(false), 'the block expanded after a real click on Expand (Obsidian\'s `</>` button covers it in Live Preview)');
+				t.expect((await cursorLine()) === PARKED, `the Expand click moved the editor cursor to line ${await cursorLine()}`);
+				facts.push('Expand: expands by a real click, cursor unmoved');
+				// Collapse again, this time straight up from below across `</>` (the panel must stay revealed on the way), then expand by a real click
+				const collapseAt2 = await hoverTo(COLLAPSE);
+				t.expect((await hitOk(COLLAPSE)).ok, `straight up across \`</>\`: the Collapse button's centre hit-tests to ${(await hitOk(COLLAPSE)).hit} (panel revealed: ${await t.ev(`getComputedStyle(${panelOf()}).pointerEvents === 'auto'`)})`);
+				await pressAt(collapseAt2);
+				await t.waitFor(isCollapsed(true), 'the block collapsed after a real click on Collapse reached by moving straight up');
+				facts.push('Collapse reached straight up across `</>`');
+				await t.sleep(300);
+				await pressAt(await center(EXPAND));
+				await t.waitFor(isCollapsed(false), 'the block expanded again by a real click');
 
 				// ---- 2. a click where the panel is HIDDEN reaches the editor line above
 				await scrollToRoot();
@@ -2888,10 +2919,11 @@ const SCENARIOS = [
 					await pressAt(at);
 					await t.waitFor(`(() => { const r = ${rootOf()}; return !!r && r.hasAttribute('data-dse-collapsed'); })()`, `${name}: a real click on Collapse collapsed the block`);
 					t.expect((await cursorLine()) === PARKED, `${name}: the Collapse click moved the editor cursor to line ${await cursorLine()}`);
-					await t.ev(`(${rootOf()}).querySelector('[data-dse-control="chrome.expand"]').click()`);
+					await t.sleep(300);
+					await pressAt(await center(`(${rootOf()}).querySelector('[data-dse-control="chrome.expand"]')`));
 					await t.waitFor(`(() => { const r = ${rootOf()}; return !!r && !r.hasAttribute('data-dse-collapsed'); })()`, `${name}: expanded again`);
 					t.expect(t.read(rel2) === FIXTURES[rel2], `${rel2} was written: ${JSON.stringify(t.read(rel2))}`);
-					facts.push(`${name}: ${n} buttons reachable, Collapse collapses`);
+					facts.push(`${name}: ${n} buttons reachable, Collapse collapses, Expand expands`);
 				}
 			} finally {
 				await t.ev(`document.getElementById('lc-gs44-notice')?.remove()`);

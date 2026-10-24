@@ -35,7 +35,7 @@ describe('SC-502: the Live Preview widget does not clip the chrome panel', () =>
 		const m = ruleBody(WIDGET).match(/clip-path:\s*inset\(([^)]*)\)/);
 		expect(m).not.toBeNull();
 		const [top, right, bottom, left] = m![1].trim().split(/\s+/).map((v) => Number.parseFloat(v));
-		expect(top).toBeLessThanOrEqual(-40); // room for the ~26px panel plus its upward shadow
+		expect(top).toBeLessThanOrEqual(-54); // tallest panel 40.1px (touch buttons, 140% text) + 10px shadow + 3px focus ring
 		// 1px of slack, not more, so the host's own 1px hover ring is not cut but nothing else spills sideways or down
 		for (const side of [right, bottom, left]) expect(side).toBeGreaterThanOrEqual(-1);
 		for (const side of [right, bottom, left]) expect(side).toBeLessThanOrEqual(0);
@@ -46,5 +46,22 @@ describe('SC-502: the Live Preview widget does not clip the chrome panel', () =>
 		expect(WIDGET).toContain(':has([data-dse-chrome])');
 		// It must not move the panel or change what reveals it: no placement or reveal property in the rule.
 		expect(ruleBody(WIDGET)).not.toMatch(/\b(top|bottom|right|left|margin|padding|opacity|pointer-events|z-index)\s*:/);
+	});
+
+	it('keeps the panel revealed over the whole widget (Obsidian\'s `</>` button is a sibling of the block root), screen-only Steel scope', () => {
+		const sel =
+			".markdown-source-view.mod-cm6 .cm-content > .cm-preview-code-block.cm-embed-block:hover\n\t[data-dse-theme='steel']:not([data-dse-print=\"on\"])[data-dse-chrome] .dse-chrome";
+		const body = ruleBody(sel);
+		expect(body).toMatch(/opacity:\s*1/);
+		expect(body).toMatch(/pointer-events:\s*auto/);
+		// the Reading view reveal rule is untouched: still keyed to the root's own :hover / :focus-within
+		expect(CSS).toContain("[data-dse-theme='steel']:not([data-dse-print=\"on\"])[data-dse-chrome]:hover .dse-chrome,");
+	});
+
+	it('keeps the collapsed one-liner clear of the `</>` button: 4px inset + 28px button + 4px gap = 36px, Live Preview only', () => {
+		const body = ruleBody('.markdown-source-view.mod-cm6 .cm-content > .cm-preview-code-block.cm-embed-block .dse-chrome-summary');
+		expect(body).toMatch(/padding-right:\s*36px/);
+		// nothing else about the bar changes in Live Preview
+		expect(body.match(/:/g)).toHaveLength(1);
 	});
 });
