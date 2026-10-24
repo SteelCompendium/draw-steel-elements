@@ -23,15 +23,15 @@ import type { SessionStore } from './session';
 import type { SccAnchorResolver } from '@/refs/rewriteSccAnchors';
 import type { CompendiumIndex } from '@/services/CompendiumIndex';
 import type { DsePrefs } from './seams/prefs';
-import { extractPrefOverrides, applyPrefOverrides, withPrefOverrides } from './prefOverrides';
+import { extractPrefOverrides, applyPrefOverrides } from './prefOverrides';
 import type { PrefPassthrough } from './prefOverrides';
 import { watchPrintMedia } from './printMedia';
 import {
 	claimsLegacyCollapseKeys,
 	extractCollapseKeys,
 	resolveCollapseState,
-	withCollapseKeys,
 	withPeeledKeys,
+	withReservedKeys,
 } from './chrome/collapsedKey';
 import type { CollapseKeys } from './chrome/collapsedKey';
 import { ensureCollapseInvariant, mountChrome } from './chrome/mountChrome';
@@ -548,20 +548,14 @@ export class ElementPipeline {
 			// watcher is registered before mount.
 			watchPrintMedia(root, view);
 			if (def.serialize) {
-				let serialize = def.serialize;
-				// SC-169: a block carrying a reserved collapse key must not lose it either —
-				// same round-trip hazard, same wrapper shape. Applied BEFORE the prefs
-				// wrapper, so the emitted body reads `prefs:` … `collapsed:` … body. Only the
-				// keys actually POPPED are re-emitted: a `ds-stamina` whose own model still
-				// owns `collapse_default:` serializes it itself, and re-emitting would
-				// duplicate the line.
-				if (Object.keys(collapseKeys.popped).length > 0) {
-					serialize = withCollapseKeys(serialize, collapseKeys.popped);
-				}
-				// D4: a block carrying prefs: must not lose it when replaceSource
-				// rewrites the body from serialize(model).
+				// SC-169 / D4: a block carrying a reserved collapse key or a `prefs:` map must not lose
+				// it when replaceSource rewrites the body from serialize(model). The emit order
+				// (`prefs:` ... `collapsed:` ... body) lives in withReservedKeys, shared with the block
+				// edit form. Only the keys actually POPPED are re-emitted: a `ds-stamina` whose own model
+				// still owns `collapse_default:` serializes it itself, and re-emitting would duplicate
+				// the line.
 				view.setSerializer(
-					prefOverrides || prefPassthrough ? withPrefOverrides(serialize, prefOverrides, prefPassthrough) : serialize,
+					withReservedKeys(def.serialize, { collapsePopped: collapseKeys.popped, prefOverrides, prefPassthrough }),
 				);
 			}
 			// SC-169 FIX ROUND 1 (H-1) — everything below this line is PIPELINE-owned DOM

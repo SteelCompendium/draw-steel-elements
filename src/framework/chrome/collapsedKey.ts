@@ -47,7 +47,9 @@
 // same key, same effect, new mechanism, and the byte-identical block body it always had.
 import { parseYaml, stringifyYaml } from 'obsidian';
 import type { ElementDefinition } from '../registry';
-import { emitAhead } from '../prefOverrides';
+import { emitAhead, withPrefOverrides } from '../prefOverrides';
+import type { PrefPassthrough } from '../prefOverrides';
+import type { DsePrefs } from '../seams/prefs';
 
 /** The canonical authored-state key. Framework-reserved: no element may declare it. */
 export const COLLAPSED_KEY = 'collapsed';
@@ -279,4 +281,26 @@ export function withCollapseKeys<M>(
 		// SC-482: a body of exactly `{}` cannot follow top-level keys (see emitAhead).
 		return emitAhead(stringifyYaml(missing), body);
 	};
+}
+
+/**
+ * The ONE place the reserved-key emit order is coded (SC-494): a serializer wrapped so the written
+ * body reads `prefs:` ... `collapsed:` ... body. The collapse keys wrap innermost and `prefs:`
+ * outermost; each wrapper is installed only when something was actually popped, so a block with
+ * neither is byte-untouched. The render pipeline (write-back from a persisted view) and the block
+ * edit form (Save) both call this, so they cannot drift.
+ */
+export function withReservedKeys<M>(
+	serialize: (model: M) => string,
+	reserved: {
+		/** `CollapseKeys.popped` -- only the keys actually removed from the block data. */
+		collapsePopped: Record<string, boolean>;
+		prefOverrides?: Partial<DsePrefs>;
+		prefPassthrough?: PrefPassthrough;
+	},
+): (model: M) => string {
+	let wrapped = serialize;
+	if (Object.keys(reserved.collapsePopped).length > 0) wrapped = withCollapseKeys(wrapped, reserved.collapsePopped);
+	const { prefOverrides, prefPassthrough } = reserved;
+	return prefOverrides || prefPassthrough ? withPrefOverrides(wrapped, prefOverrides, prefPassthrough) : wrapped;
 }
