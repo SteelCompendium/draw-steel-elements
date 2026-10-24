@@ -1106,13 +1106,16 @@ export interface HarnessParams {
 	 *  picture anyone puts at the top of a README. `gallery=1` is unchanged (every id), so
 	 *  the F4 sweep's frozen `gallery--steel-*` shots cannot move. */
 	galleryIds?: string[];
-	/** SC-512 / SC-513: extra sections appended AFTER every gallery section, wire format
+	/** SC-512 / SC-513 / SC-527: extra sections appended AFTER every gallery section, wire format
 	 *  `element:fixture,element:fixture` (e.g. `galleryExtra=roll`). Only the host-leak sweeps send it
 	 *  (button, input, checkbox and prose; no capture does). SC-512: a SECOND `ds-roll` strip whose
 	 *  modifier the sweep changes with a real click, so the roll Reset is compared while enabled (the
 	 *  gallery's first strip stays at its authored values, its Reset disabled). SC-513: `feature`,
 	 *  `featureblock`, `statblock` and the gate-only `hero:probe-inline-abilities`, whose click-created
-	 *  controls (ability roll strips, hero ability bodies) the sweeps mount by real click. Absent on every
+	 *  controls (ability roll strips, hero ability bodies) the sweeps mount by real click. SC-527 (button
+	 *  sweep only): six more sections, `initiative,negotiation,negotiation,montage,montage,hero` (ids may
+	 *  repeat), appended last, which the sweep clicks into states a control kind reaches only after a click
+	 *  (pressed / spent / armed / disabled); it addresses them by `data-dse-harness-index`. Absent on every
 	 *  capture URL, so `gallery=1` - and the `gallery--steel-*` shots - mount exactly the sections they
 	 *  always did. Each extra section carries `data-dse-harness-extra="<element>"` (an attribute no CSS
 	 *  keys on) so the sweep can address it. */

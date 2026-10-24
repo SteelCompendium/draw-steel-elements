@@ -3,6 +3,8 @@
 // Playwright camera is the visual gate; this one runs in CI with the suite). Importing the
 // entry under jest is safe: `obsidian` maps to the test mock, `.md` imports go through
 // rawTextTransformer, and the browser boot is guarded on a #mount element jsdom lacks.
+import fs from 'fs';
+import path from 'path';
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import { isExperimental } from '../../../src/framework/experimental';
 import { createElementRegistry } from '../../../src/framework/registry';
@@ -614,5 +616,109 @@ describe('click-mount seams for the host-leak sweeps (SC-513)', () => {
 		const p = parseParams('?element=hero&fixture=default&theme=steel&bg=dark');
 		expect(p.galleryExtra).toBeUndefined();
 		expect(p.prefs).toBeUndefined();
+	});
+});
+
+// SC-527 — the button host-leak sweep clicks six appended default-fixture sections (`SC527_EXTRA`) into
+// the states a control kind reaches only after a click. `shoot.mjs` is a Playwright run-script jest cannot
+// import, so the sweep's own literals are read out of its source text (the printTwinDeltaAllowedSet
+// convention) and checked against the REAL fixtures here: the sweep's click targets must exist, and each
+// reach-assertion must be false at load and true after the clicks, or the sweep would fail by name in a
+// browser run (or worse, pass because the state was already there).
+describe('state-only kind sections for the button host-leak sweep (SC-527)', () => {
+	const shootMjs = fs.readFileSync(path.join(__dirname, '../../../visual-harness/shoot.mjs'), 'utf8');
+	/** Evaluate a top-level `const NAME = <literal>;` out of shoot.mjs (pure literals only). */
+	const literal = (name: string): any => {
+		const m = shootMjs.match(new RegExp(`\\nconst ${name} = ([\\s\\S]*?);\\n(?=\\n|/\\*\\*)`));
+		expect(m).not.toBeNull();
+		return new Function(`return ${m![1]}`)();
+	};
+	const SC527_EXTRA: string[] = literal('SC527_EXTRA');
+	const SC527_STATES: { what: string; clicks: [string, number][]; reached: string[] }[] = literal('SC527_STATES');
+	const SC527_EXPECT: string[] = literal('SC527_EXPECT');
+	const withSc527States = new Function(
+		'SC527_EXTRA',
+		`${shootMjs.match(/\nfunction withSc527States\(params\) \{[\s\S]*?\n\}\n/)![0]}; return withSc527States;`,
+	)(SC527_EXTRA) as (p: Record<string, string>) => Record<string, string>;
+
+	const gallery: Parameters<typeof mountFromParams>[1] = { fixture: 'default', theme: 'steel', bg: 'dark', print: false, readonly: false, gallery: true, galleryIds: ['roll'] };
+	let mount: HTMLDivElement;
+
+	beforeEach(() => {
+		mount = document.createElement('div');
+		mount.id = 'mount';
+		document.body.appendChild(mount);
+	});
+
+	afterEach(() => {
+		mount.remove();
+	});
+
+	/** Mount the way the sweep's URL does: SC-513's extras first, the SC-527 sections last. */
+	const mountSc527 = async () => {
+		const q = new URLSearchParams(withSc527States({ gallery: '1', galleryExtra: 'roll,feature,hero:probe-inline-abilities' }));
+		const { errors } = await mountFromParams(document, { ...gallery, galleryExtra: parseParams(`?${q}`).galleryExtra });
+		expect(errors).toEqual([]);
+		const tail = Array.from(mount.querySelectorAll<HTMLElement>('[data-dse-harness-extra]')).slice(-SC527_EXTRA.length);
+		return tail;
+	};
+
+	test('withSc527States appends the six sections LAST, after SC-512 / SC-513 extras, and keeps them out of a capture URL', async () => {
+		expect(SC527_EXTRA).toEqual(['initiative', 'negotiation', 'negotiation', 'montage', 'montage', 'hero']);
+		expect(withSc527States({ gallery: '1', galleryExtra: 'roll,feature' }).galleryExtra).toBe(`roll,feature,${SC527_EXTRA.join(',')}`);
+		expect(withSc527States({ gallery: '1' }).galleryExtra).toBe(SC527_EXTRA.join(','));
+		const tail = await mountSc527();
+		expect(tail.map((s) => s.getAttribute('data-dse-harness-extra'))).toEqual(SC527_EXTRA);
+		// Duplicate ids (two negotiation, two montage) are told apart by their unique index.
+		const indexes = tail.map((s) => s.getAttribute('data-dse-harness-index'));
+		expect(new Set(indexes).size).toBe(SC527_EXTRA.length);
+		// And no section is the gallery's own: a capture (no galleryExtra) mounts none of them.
+		mount.replaceChildren();
+		await mountFromParams(document, { ...gallery });
+		expect(mount.querySelector('[data-dse-harness-extra]')).toBeNull();
+	});
+
+	test('only the button sweep sends the SC-527 sections: one call site, before the SC-513 mounts and the tag', () => {
+		expect(shootMjs.match(/withSc527States\(/g)).toHaveLength(2); // the declaration + the one button-sweep call site
+		const sweep = shootMjs.slice(shootMjs.indexOf('async function assertBtnHostLeak('));
+		const order = ['withSc527States(withSc513Mounts(', 'reachStateKindsForSweep(page', 'mountClickRevealedForSweep(page', 'page.evaluate(tagButtons)', 'assertSc513Tagged(', 'assertSc527Tagged('].map((s) => sweep.indexOf(s));
+		expect(order.every((i) => i > -1)).toBe(true);
+		expect([...order].sort((a, b) => a - b)).toEqual(order);
+	});
+
+	test('every click target exists in the section it is clicked in, and no reach-assertion is already true at load', async () => {
+		const tail = await mountSc527();
+		for (const [k, st] of SC527_STATES.entries()) {
+			// The sweep clicks in sequence, so a later target may only appear after an earlier click:
+			// only the first is checkable at load (the next test follows the whole sequence).
+			const [sel, nth] = st.clicks[0];
+			expect({ what: st.what, sel, nth, found: tail[k].querySelectorAll(sel).length > nth }).toEqual({ what: st.what, sel, nth, found: true });
+			for (const sel of st.reached) {
+				expect({ what: st.what, sel, present: tail[k].querySelectorAll(sel).length }).toEqual({ what: st.what, sel, present: 0 });
+			}
+		}
+	});
+
+	test('the sweep\'s click sequence reaches every asserted state in the real fixtures', async () => {
+		const tail = await mountSc527();
+		for (const [k, st] of SC527_STATES.entries()) {
+			for (const [sel, nth] of st.clicks) {
+				const target = tail[k].querySelectorAll<HTMLElement>(sel)[nth];
+				expect({ what: st.what, sel, nth, found: target !== undefined }).toEqual({ what: st.what, sel, nth, found: true });
+				target.click();
+				await new Promise((r) => setTimeout(r, 0));
+			}
+			for (const sel of st.reached) {
+				expect({ what: st.what, sel, reached: tail[k].querySelectorAll(sel).length > 0 }).toEqual({ what: st.what, sel, reached: true });
+			}
+		}
+	});
+
+	test('the expected kind keys are the 12 state-only kinds: the hero stepper (compared since SC-513) is not among them', () => {
+		expect(SC527_EXPECT).toHaveLength(12);
+		expect(new Set(SC527_EXPECT).size).toBe(12);
+		expect(SC527_EXPECT).not.toContain('hero|dse-btn.dse-btn--icon.dse-stepper__btn|disabled');
+		// Every expected key is the kind of an element the states assert (its element prefix is a SC-527 section).
+		for (const key of SC527_EXPECT) expect(SC527_EXTRA).toContain(key.split('|')[0]);
 	});
 });

@@ -2933,11 +2933,19 @@ async function mountClickRevealedForSweep(page, bg, problems) {
  *  gallery's own sections, so no existing kind's first node moves). No capture sends these sections and no
  *  capture performs these clicks, so no shot and no frozen byte moves. Every section asserts by name that
  *  its state was reached (`reached` selectors), and `assertSc527Tagged` then names every expected kind the
- *  sweep failed to tag. Only the button sweep: the survey found no input or checkbox kind that a state
- *  change creates (their keys carry no state).
+ *  sweep failed to tag.
+ *
+ *  Button sweep only: the SC-527 survey found no input or checkbox kind that a state change creates (their
+ *  keys carry no state, so a pressed / spent / disabled control is the same kind as its idle twin).
+ *  Hero stepper: `hero|dse-btn.dse-btn--icon.dse-stepper__btn|disabled` (the Surges "-" after Respite) is NOT
+ *  asserted here. It has been compared since SC-513 through another node (the probe hero's ability-body roll
+ *  strip), and the sweep keeps one node per kind; the hero section below still clicks Respite for Catch Breath.
+ *  Known gap, out of scope (SC-530): `tagButtons` does not key on `aria-checked`, so the selected negotiation
+ *  tier row shares the idle row's kind.
  *
  *  Runs BEFORE `mountClickRevealedForSweep` on purpose: SC-526 will add the Recoveries popover to the end of
- *  that helper, and the popover closes on any later document click, so it must stay the last click.
+ *  that helper, and the popover closes on any later document click, so it must stay the last click. Keep this
+ *  block self-contained (one call site per sweep) so SC-526 rebases cleanly.
  *  `beyondTicket` marks states the SC-527 r1 survey found beyond the ticket's list (owner rules on them). */
 const SC527_EXTRA = ['initiative', 'negotiation', 'negotiation', 'montage', 'montage', 'hero'];
 const SC527_STATES = [
