@@ -250,6 +250,66 @@ describe('SC-356 host re-grounding — the option chips (.dse-optchip), Scott\'s
 	});
 });
 
+describe('SC-526 host re-grounding — the Recoveries popover buttons (.dse-stamina-rec__pop-btn / __pop-cb)', () => {
+	// The BEHAVIOUR is gated by the button host-leak sweep once its mount opens the popover
+	// (`staminaRecoveryPopover` on, real click on the hero's marker row). These source-text
+	// contracts pin the decisions that gate cannot see: the height choice, the font, and the
+	// two (0,2,0) rules the block must not beat.
+	const POP = '.dse-stamina-rec__pop-btn, .dse-stamina-rec__pop-cb';
+	const rule = (subject: string): string | null => {
+		const m = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(' + escape(subject) + '\\) \\{([^}]*)\\}'));
+		return m ? m[1] : null;
+	};
+
+	test('the box: natural compact height, UA display and alignment restated over the host\'s', () => {
+		const body = rule(POP);
+		expect(body).not.toBeNull();
+		expect(body).toContain('height: auto;');
+		expect(body).toContain('display: inline-block;');
+		expect(body).toContain('align-items: normal;');
+		expect(body).toContain('justify-content: normal;');
+	});
+
+	test('the font is the card\'s family at the control-role size — never the UA default, never the `font` shorthand', () => {
+		const body = rule(POP);
+		expect(body).toContain('font-family: inherit;');
+		expect(body).toContain('font-size: var(--dse-fs-control);');
+		// `font:` would reset the authored `line-height: 1.2` and the Steel `font-weight: 700`.
+		expect(body).not.toMatch(/(^|[;\s])font:/);
+		expect(body).toContain('white-space: nowrap;');
+	});
+
+	test('the ink is the kit ink and leaves the disabled Catch breath to its own dim rule', () => {
+		const body = rule('.dse-stamina-rec__pop-btn, .dse-stamina-rec__pop-cb:not([disabled])');
+		expect(body).not.toBeNull();
+		expect(body).toContain('color: var(--dse-fg);');
+		// …and the authored disabled rule (SC-428) is still there to win for the disabled button.
+		expect(rawCss).toContain('.dse-stamina-rec__pop-cb[disabled] {');
+	});
+
+	test('box-shadow is reset by section B, and the keyboard ring joins the shared kit ring', () => {
+		const m = flat.match(new RegExp(escape(ANCHOR) + ' :where\\((.*?)\\) \\{ box-shadow: none; \\}'));
+		expect(m).not.toBeNull();
+		for (const f of ['.dse-stamina-rec__pop-btn', '.dse-stamina-rec__pop-cb']) expect(m![1]).toContain(f);
+		// The host also sets `outline: none`, so with its box-shadow ring reset the buttons would
+		// have NO ring: they must be in the shared one-rule outline list (kit-index.test.ts allows one).
+		const ring = rawCss.replace(/\/\*[\s\S]*?\*\//g, '');
+		const ringRule = ring.match(/([^{}]*\.dse-stamina-rec__pop-btn:focus-visible[^{]*)\{([^}]*)\}/);
+		expect(ringRule).not.toBeNull();
+		expect(ringRule![1]).toContain('.dse-stamina-rec__pop-cb:focus-visible');
+		expect(ringRule![2]).toContain('outline: 2px solid var(--dse-focus-ring);');
+	});
+
+	test('the block restates nothing the Steel skin or the legacy sizing owns', () => {
+		for (const sel of [POP, '.dse-stamina-rec__pop-btn, .dse-stamina-rec__pop-cb:not([disabled])']) {
+			const body = rule(sel) ?? '';
+			// Steel skin (~:12807 / ~:12820): fill, border, radius, weight, caps. Legacy sizing: padding,
+			// min-width, line-height. Disabled dimming: opacity, cursor.
+			expect(body).not.toMatch(/background|border|font-weight|font-variant|text-transform|letter-spacing|padding|min-width|line-height|opacity|cursor|box-shadow|outline/);
+		}
+	});
+});
+
 function escape(s: string): string {
 	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
