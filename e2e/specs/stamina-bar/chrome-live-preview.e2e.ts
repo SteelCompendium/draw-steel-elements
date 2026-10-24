@@ -47,7 +47,11 @@ describe('stamina bar chrome: the panel is clickable in Live Preview (SC-502)', 
 		for (let attempt = 0; attempt < 3 && !(await panelRevealed()); attempt++) await dse.hover(root.root);
 		await dse.waitFor(`getComputedStyle(document.querySelector('${BLOCK}').querySelector('.dse-chrome')).pointerEvents === 'auto'`, 'the chrome panel to be revealed by the hover');
 		await dse.hover(collapse);
-		await dse.click(collapse);
+		await dse.waitFor(`getComputedStyle(document.querySelector('${BLOCK}').querySelector('.dse-chrome')).pointerEvents === 'auto'`, 'the chrome panel to stay revealed with the pointer on Collapse');
+		// A real pointer press at the button's centre (CDP mouse events). The default click first scrolls the button into view and hit-tests
+		// it BEFORE moving the pointer: under the load of a full run that pre-check sometimes saw the panel hidden (it is click-through until
+		// the block is hovered) and failed with "element click intercepted" although the pointer was on the button.
+		await dse.click(collapse, { cdp: true });
 		await dse.waitFor(`document.querySelector('${BLOCK}').hasAttribute('data-dse-collapsed')`, 'the block to collapse after a real click on Collapse');
 		expect(await cursorLine()).toBe(0); // on the blank line above the fence (line 3) if the click had fallen through to the editor
 		// Obsidian's own `</>` edit-block button used to sit over the collapsed one-liner's Expand button (a click there entered the block's source).
