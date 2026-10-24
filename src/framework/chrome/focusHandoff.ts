@@ -146,8 +146,10 @@ function anyLive(): boolean {
 }
 
 /**
- * Called by `mountChrome` after it built a panel, and by `adoptView` after it moved an existing view into a new
- * section (an adopted view keeps its panel, so it never mounts again). If some block has a live request, watch
+ * Called by `mountChrome` after it built a panel. (Not by `adoptView`: only the view's OWN write is adopted, through
+ * a claim ticket `host.replaceSource` records, and the pin's write comes from the sidebar binder, so a pin never
+ * adopts; an adopted view keeps its panel and would not mount again, but no rebuild this request waits for is one.)
+ * If some block has a live request, watch
  * this element until its button for it is in the document (a fresh render builds it detached, and the block's
  * position is not known until then, so the key is asked for at that moment, not at mount) and focus it when
  * the block's key is the one that asked. The watch outlives the first success while the request does: one

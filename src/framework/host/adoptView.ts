@@ -8,7 +8,6 @@
 // M-5), not `el`'s.
 import type { MarkdownPostProcessorContext } from 'obsidian';
 import type { ViewRegistry, ViewRegistryEntry } from './viewRegistry';
-import { claimChromeFocus } from '../chrome/focusHandoff';
 
 export interface FocusState {
 	el: HTMLElement;
@@ -120,9 +119,6 @@ export function adoptView(
 			entry.root.removeAttribute(MOVING_ATTR);
 		}
 		if (focus) restoreFocusWhenConnected(el, focus);
-		// SC-505: an adopted view keeps its chrome panel (nothing mounts again), so a keyboard Pin's request for its
-		// button back is claimed here too, for the case the move found focus already lost and restored nothing.
-		claimChromeFocus(() => entry.host.blockKey(), entry.root);
 	} finally {
 		registry.finishClaim(entry);
 	}
