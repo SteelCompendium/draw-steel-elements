@@ -84,8 +84,9 @@
 // SC-518 appends G-S50 (40 scenarios in all; the id was assigned by the dispatcher): after the block edit form's Save redraws the card, keyboard focus
 // is on the redrawn card's Edit pencil (it fell to <body> once SC-509 made Save redraw). Real keys (CDP Tab / Enter): Tab to the pencil, Enter,
 // change a field, Enter on Save. Reading view (montage raw box, stamina bar typed field), the sidebar panel and Live Preview each assert the
-// pencil holds focus with the keyboard ring and the old root/pencil is gone; a real-mouse Save leaves the pencil focused with no ring; Cancel
-// leaves focus on the same pencil. Every phase's whole note is the fixture with only the edited value changed; no Notice, no page error.
+// pencil holds focus with the keyboard ring and the old root/pencil is gone; a real-mouse Save leaves focus where it was (a pointer press never
+// focuses the pencil) and the hover panel hides again; identical twins, upper one edited (Obsidian moves its old section to the twin's place): focus
+// is in the edited card, not the twin (r3); Cancel leaves focus on the same pencil. Every phase's whole note is the fixture with only the edited value changed; no Notice, no page error.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -3220,8 +3221,10 @@ const SCENARIOS = [
 			const outcomes = [];
 			const problems = [];
 			/** Keyboard open, change one thing, keyboard Save; then wait for the card to show it and for the rebuilds to settle. */
-			// `inPlace`: the sidebar panel redraws the card into the same root (only the chrome panel and its pencil are new), the note's own card gets a new root.
-			const keyboardSave = async (label, rootExpr, e, newText, rel, want, wholeNote = FIXTURES[rel].replace(want[0], want[1]), inPlace = false) => {
+			// `mode`: 'fresh' (default) the card gets a new root and a new pencil; 'sidebar' the panel redraws the card into the same root (only the chrome
+			// panel and its pencil are new); 'twin' Obsidian keeps the OLD section of the edited block and moves it to its identical twin's place, so the old
+			// root and pencil stay in the document (inside the twin) and the new ones are the upper card's. `wholeNote` null: the caller checks the note.
+			const keyboardSave = async (label, rootExpr, e, newText, rel, want, wholeNote = FIXTURES[rel].replace(want[0], want[1]), mode = 'fresh') => {
 				await tagOld(rootExpr);
 				const how = await reachPencil(label, rootExpr);
 				await press('Enter', 'Enter', 13, '\r');
@@ -3237,10 +3240,10 @@ const SCENARIOS = [
 				await waitDisk(rel, want[1], label);
 				outcomes.push({ label, input: 'keyboard', pencil: how, early: early.active, late });
 				if (!late.pencil) problems.push(`${label}: focus is on ${late.active}${late.body ? ' (<body>)' : ''}, not the redrawn card's Edit pencil (early read: ${early.active})`);
-				if (!inPlace && !late.oldGone) problems.push(`${label}: the old card root is still in the document - the card was not redrawn`);
-				if (!late.oldPencilGone) problems.push(`${label}: the old Edit pencil is still in the document - the card was not redrawn`);
+				if (mode === 'fresh' && !late.oldGone) problems.push(`${label}: the old card root is still in the document - the card was not redrawn`);
+				if (mode !== 'twin' && !late.oldPencilGone) problems.push(`${label}: the old Edit pencil is still in the document - the card was not redrawn`);
 				if (late.pencil && !late.ring) problems.push(`${label}: the pencil has focus but no keyboard focus ring`);
-				t.expect(t.read(rel) === wholeNote, `${label}: the note differs from the original beyond the edited value: ${JSON.stringify(t.read(rel))}`);
+				if (wholeNote !== null) t.expect(t.read(rel) === wholeNote, `${label}: the note differs from the original beyond the edited value: ${JSON.stringify(t.read(rel))}`);
 			};
 			await t.ev(`(() => { const st = document.createElement('style'); st.id = 'lc-gs50-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); return true; })()`);
 			await t.ev(`${prefs}.set('authoringControls', true)`);
@@ -3258,7 +3261,7 @@ const SCENARIOS = [
 					await keyboardSave(`Reading view ${name}`, root, e, newT, rel, want);
 				}
 
-				// 2. Reading view, mouse: base returned focus to the pencil (Obsidian's modal close); no ring for a mouse user.
+				// 2. Reading view, mouse: a pointer press never focuses the chrome pencil, so focus stays where it was (<body> here, as before SC-509); the hover panel hides again.
 				{
 					const rel = 'Lifecycle/form-save-montage.md';
 					const sel = '[data-dse-element="montage"]';
@@ -3278,11 +3281,17 @@ const SCENARIOS = [
 					await waitText(root, 'Other Job', 'mouse');
 					const early = await probe(root);
 					await t.sleep(1500);
+					// The pointer leaves the card: the hover panel hides again unless something inside the card holds focus (:focus-within).
+					await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 4, y: 4 });
+					await t.sleep(400);
 					const late = await probe(root);
+					const panel = await t.ev(`(() => { const p = (${root}).querySelector('.dse-chrome'); const cs = getComputedStyle(p); return cs.pointerEvents + '/' + cs.opacity; })()`);
 					await waitDisk(rel, 'title: Other Job', 'mouse');
-					outcomes.push({ label: 'Reading view montage', input: 'mouse', early: early.active, late });
-					if (!late.pencil) problems.push(`Reading view mouse Save: focus is on ${late.active}${late.body ? ' (<body>)' : ''}, not the redrawn card's Edit pencil`);
-					if (late.ring) problems.push('Reading view mouse Save: the restored pencil shows a focus ring for a mouse user');
+					outcomes.push({ label: 'Reading view montage', input: 'mouse', early: early.active, late, panel });
+					// Pre-SC-509 and the build before this fix leave focus where it was (a pointer press never focuses the chrome pencil): <body> here.
+					if (!late.body) problems.push(`Reading view mouse Save: focus is on ${late.active}, not where it was before the open (<body>)`);
+					if (late.pencil || late.ring) problems.push('Reading view mouse Save: the pencil was given focus (or a ring) for a mouse user');
+					if (panel !== 'none/0') problems.push(`Reading view mouse Save: the hover panel stays revealed after the pointer left (${panel}, expected none/0)`);
 					t.expect(t.read(rel) === FIXTURES[rel].replace('title: The Heist', 'title: Other Job'), `mouse: the note differs from the fixture beyond the edited value: ${JSON.stringify(t.read(rel))}`);
 				}
 
@@ -3311,6 +3320,23 @@ const SCENARIOS = [
 					t.expect(t.read(rel) === FIXTURES[rel], `cancel: the note was written: ${JSON.stringify(t.read(rel))}`);
 				}
 
+				// 3b. Identical twins, the UPPER one edited (SC-518 r3): Obsidian matches sections by text, so the old upper section is reused at the
+				// twin's position and the modal's focus return lands on ITS pencil. Focus must end on the edited (upper) card's new pencil.
+				{
+					const rel = 'Lifecycle/twins.md';
+					const sel = '[data-dse-element="counter"]';
+					await t.open(rel);
+					await t.reset(rel);
+					const upper = t.root(sel);
+					await t.waitFor(`!!(${upper})`, 'twins: rendered');
+					await waitText(upper, 'Twin', 'twins');
+					await keyboardSave('Reading view identical twins (upper edited)', upper, { raw: ['name: Twin', 'name: Upper'] }, 'Upper', rel, ['name: Twin', 'name: Upper'], null, 'twin');
+					const names = (t.read(rel).match(/^name: (\w+)$/gm) ?? []).join(',');
+					t.expect(names === 'name: Upper,name: Twin' && t.integrity(rel).ok && t.counterValues(rel).join() === '5,5', `twins: the note is not the fixture with only the upper name changed: ${JSON.stringify(t.read(rel))}`);
+					const twinFocus = await t.ev(`(() => { const roots = Array.from(${t.readingScope(LC_LEAF)}.querySelectorAll('${sel}')).filter((r) => r.isConnected); return roots.map((r) => r.contains(document.activeElement)); })()`);
+					if (JSON.stringify(twinFocus) !== '[true,false]') problems.push(`identical twins: focus is not in the edited (upper) card only (per card: ${JSON.stringify(twinFocus)})`);
+				}
+
 				// 4. The sidebar panel, keyboard: pin, then Tab to the PANEL's pencil.
 				{
 					const rel = 'Lifecycle/form-save-sidebar.md';
@@ -3321,7 +3347,7 @@ const SCENARIOS = [
 					await waitText(panelRoot, 'The Heist', 'sidebar');
 					await t.ev(`(() => { document.activeElement?.blur?.(); return true; })()`);
 					// The pinned note carries the anchor line the pin stamped: the whole note is that, with only the title changed.
-					await keyboardSave('Sidebar panel montage', panelRoot, { raw: ['The Heist', 'Other Job'] }, 'Other Job', rel, ['title: The Heist', 'title: Other Job'], stampedNote.replace('title: The Heist', 'title: Other Job'), true);
+					await keyboardSave('Sidebar panel montage', panelRoot, { raw: ['The Heist', 'Other Job'] }, 'Other Job', rel, ['title: The Heist', 'title: Other Job'], stampedNote.replace('title: The Heist', 'title: Other Job'), 'sidebar');
 					await t.ev(`(async () => { for (const l of app.workspace.getLeavesOfType('dse-sidebar')) l.detach(); })()`);
 				}
 
@@ -3345,7 +3371,7 @@ const SCENARIOS = [
 			t.expect(problems.length === 0, `${problems.join(' | ')} -- outcomes: ${JSON.stringify(outcomes)}`);
 			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${JSON.stringify(await t.noticesSince(m))}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
-			return `after a form Save focus is on the redrawn card's Edit pencil, old root/pencil gone (ring after a keyboard open, none after a mouse one; Cancel leaves it on the same pencil): ${outcomes.map((o) => `${o.label} by ${o.input}${o.pencil ? ` (${o.pencil})` : ''} -> ${o.late.active}${o.late.ring ? ' +ring' : ''}`).join('; ')}; the note is the fixture with only the edited value changed; no Notice, no page error`;
+			return `after a form Save focus is on the redrawn card's Edit pencil, old root/pencil gone (ring after a keyboard open; a mouse Save leaves focus where it was and the hover panel hides; identical twins: the edited upper card; Cancel leaves it on the same pencil): ${outcomes.map((o) => `${o.label} by ${o.input}${o.pencil ? ` (${o.pencil})` : ''} -> ${o.late.active}${o.late.ring ? ' +ring' : ''}`).join('; ')}; the note is the fixture with only the edited value changed; no Notice, no page error`;
 		},
 	},
 ];
