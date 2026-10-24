@@ -468,3 +468,40 @@ describe('SC-505 r4 LOW-C — only THIS request\'s own buttons are "ours", not e
 		expect(document.activeElement).toBe(document.body);
 	});
 });
+
+describe('SC-505 r4 LOW-D — the two settle branches, each on its own (nothing else masks them)', () => {
+	test('a Pin that wrote nothing drops the request itself: focus falling to <body> (which fires no focusin) and a rebuild do not bring it back', async () => {
+		pinToSidebar.mockResolvedValue(false);
+		const first = await render();
+		const pin = item(first.root, 'pin');
+		pin.focus();
+		keyboardClick(pin);
+		await flush();
+
+		pin.blur(); // focus to <body>: no focusin, so the guard cannot cancel anything
+		first.host.containerEl.remove();
+		focusCalls.length = 0;
+		await render();
+
+		expect(focusCalls).toEqual([]);
+		expect(document.activeElement).toBe(document.body);
+	});
+
+	test('a Pin that wrote waits only about 3 s for the rebuilds, not the full 5 s: a rebuild at 3.5 s does not move focus', async () => {
+		jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
+		const first = await render();
+		const pin = item(first.root, 'pin');
+		pin.focus();
+		keyboardClick(pin);
+		await flush(); // the pin returned: wrote -> the request now has 3 s left
+		pin.blur();
+		first.host.containerEl.remove();
+		jest.advanceTimersByTime(3500);
+		focusCalls.length = 0;
+
+		await render();
+
+		expect(focusCalls).toEqual([]);
+		expect(document.activeElement).toBe(document.body);
+	});
+});

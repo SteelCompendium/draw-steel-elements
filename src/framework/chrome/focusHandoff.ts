@@ -173,7 +173,7 @@ export function claimChromeFocus(blockKey: () => string, root: HTMLElement): voi
 		const btn = Array.from(root.querySelectorAll<HTMLElement>(`[data-dse-chrome-item="${req.item}"]`)).find(
 			(b) => b.closest('[data-dse-chrome]') === root,
 		);
-		if (!btn?.isConnected || doc.activeElement === btn) return;
+		if (!btn || doc.activeElement === btn) return; // (`focusControl` below refuses a node that is not in the document)
 		// Another pane's (or another embed's) copy of the same block, same key: not ours to claim, and its rebuild says
 		// nothing about the user.
 		if (req.scope && scopeOf(btn) !== req.scope) return;
