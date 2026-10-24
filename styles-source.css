@@ -16986,6 +16986,35 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	padding-right: 36px;
 }
 
+/* CALLOUTS (SC-520). A chrome block that is the FIRST thing inside a `> [!note]` callout has its
+   panel hanging over the callout's TITLE row: the panel sits above the block's top edge, and the
+   block starts exactly where the title ends. Obsidian's `.callout-content { overflow-x: auto }`
+   (computed overflow auto on both axes) is a scroll container, so it clips everything outside
+   its own box - the panel above it was neither painted nor hit-tested, and a real click at a
+   button's centre landed on `div.callout-title` (in Live Preview that click puts the cursor in
+   the callout and swaps the callout widget for its source; the buttons did nothing). Reading view
+   draws the same callout, so it was clipped there too (measured: `elementFromPoint` =
+   `div.callout-title` in both views); nothing here is Live Preview-only. A block with text above
+   it in the callout was never affected: its panel sits over that text, inside the content box.
+   The Live Preview widget rule above does not reach this case (the callout widget is
+   `.cm-embed-block.cm-callout`, not `.cm-preview-code-block`), and it does not need to: the panel
+   stays inside the callout box (the callout's own 12px padding is taller than the 5px by which
+   the panel overhangs the title), so only this one clip is in the way.
+   Fix: for a callout-content that holds a Steel screen chrome block, `overflow: visible` lifts
+   the clip, and `display: flow-root` keeps the box a block formatting context so the block's own
+   vertical margins (feature 24px, statblock 8px, the mobile panel's 2.1em reserve) stay INSIDE
+   it, exactly as the scroll container kept them: no pixel of the callout or the block moves, and
+   CodeMirror's height for the callout widget stays equal to its on-screen height (SC-502 HIGH-1).
+   The panel still has `pointer-events: none` until the block is hovered, so a hidden panel lets
+   a click on the title through (fold, open the source). Trade-off: a block wider than the
+   callout is now cut by the callout's own `overflow: hidden` instead of scrolling sideways; DSE
+   cards size to their container. Same screen-only Steel scope as every chrome rule, so print
+   (and the frozen print shots) never match. */
+.callout-content:has([data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome]) {
+	overflow: visible;
+	display: flow-root;
+}
+
 /* Panel buttons: OS-window-controls density. Flat, borderless, muted until hovered —
    the panel frame is the affordance, not each glyph.
 
