@@ -75,6 +75,7 @@
 // would be still lands on that editor line. Stamina bar (pencil, Collapse), counter and statblock (every button's centre hit-tests to it).
 // SC-502 r2 adds to it: the panel stays revealed while the pointer crosses Obsidian's own `</>` edit-block button on the way up to Collapse,
 // a real click on the collapsed one-liner's Expand expands the block, and a real click on `</>` still enters the block's source.
+// (r3) CodeMirror's height for the widget equals its on-screen height for a counter, a feature (margins 24px) and a statblock (8px).
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -265,6 +266,7 @@ const ZWSP = String.fromCharCode(0x200b);
 Object.assign(FIXTURES, {
 	'Lifecycle/stamina-lp.md': `# stamina lp\n\nABOVE TEXT LINE\n${fence('ds-stamina-bar', ['max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5'])}\n\nBELOW\n`,
 	'Lifecycle/counter-lp.md': `# counter lp\n\nABOVE TEXT LINE\n${COUNTER(10)}\n\nBELOW\n`,
+	'Lifecycle/feature-lp.md': `# feature lp\n\nABOVE TEXT LINE\n${fence('ds-feature', ['type: feature', 'feature_type: ability', 'name: Coverage Strike', 'cost: 5 Malice', 'usage: Main action', 'distance: Melee 1', 'target: One creature'])}\n\nBELOW\n`,
 	'Lifecycle/statblock-lp.md': `# statblock lp\n\nABOVE TEXT LINE\n${fence('ds-statblock', ['type: statblock', 'name: Bare Creature', 'stamina: "10"'])}\n\nBELOW\n`,
 });
 Object.assign(FIXTURES, {
@@ -2903,11 +2905,21 @@ const SCENARIOS = [
 				t.expect(t.read(rel) === FIXTURES[rel], `${rel} was written: ${JSON.stringify(t.read(rel))}`);
 
 				// ---- 3. counter and statblock: every panel button is reachable, and a real Collapse click collapses
-				for (const [rel2, sel, name] of [['Lifecycle/counter-lp.md', '[data-dse-element="counter"]', 'counter'], ['Lifecycle/statblock-lp.md', '[data-dse-element="statblock"]', 'statblock']]) {
+				const heightFails = []; // every block is checked before the first failure is reported
+				for (const [rel2, sel, name] of [['Lifecycle/counter-lp.md', '[data-dse-element="counter"]', 'counter'], ['Lifecycle/feature-lp.md', '[data-dse-element="feature"]', 'feature'], ['Lifecycle/statblock-lp.md', '[data-dse-element="statblock"]', 'statblock']]) {
 					await enterMode(t, rel2, LP, sel);
-					await setCursor(PARKED);
+					const parked = FIXTURES[rel2].split('\n').length - 2; // the last text line, below the fence (its length differs per fixture)
+					await setCursor(parked);
 					await t.sleep(300);
 					const COL = `(${rootOf()}).querySelector('.dse-chrome button[data-dse-chrome-item="collapse"]')`;
+					// The widget must keep its block formatting context: the block root's own vertical margins (feature 24px, statblock 8px)
+					// stay INSIDE it. If they collapse out, CodeMirror measures the widget's border box and undercounts the block (48px for a
+					// feature card), which makes Live Preview jump while scrolling and mis-land clicks. CodeMirror's height for the widget must equal
+					// the on-screen gap between the line above and the line below, and the widget must start where the line above ends.
+					await t.waitFor(`!!(${rootOf()}) && !!(${rootOf()}).closest('.cm-embed-block')?.previousElementSibling && !!(${rootOf()}).closest('.cm-embed-block')?.nextElementSibling`, `${name}: the block is drawn as a widget between two lines`);
+					const geo = await t.ev(`(() => { const w = (${rootOf()}).closest('.cm-embed-block'); const cm = app.workspace.getMostRecentLeaf().view.editor.cm; const prev = w.previousElementSibling.getBoundingClientRect(), next = w.nextElementSibling.getBoundingClientRect(), wr = w.getBoundingClientRect(); return { cmHeight: cm.lineBlockAt(cm.posAtDOM(w)).height, gap: next.top - prev.bottom, widgetTopOffset: wr.top - prev.bottom, widgetHeight: wr.height }; })()`);
+					if (Math.abs(geo.cmHeight - geo.gap) >= 1) heightFails.push(`${name}: CodeMirror's height for the widget is ${geo.cmHeight}px but the block takes ${geo.gap}px on screen (the block's margins escape the widget)`);
+					if (Math.abs(geo.widgetTopOffset) >= 1) heightFails.push(`${name}: the widget starts ${geo.widgetTopOffset}px below the line above (its margins escape the widget)`);
 					const at = await hoverTo(COL);
 					const n = await t.ev(`(${buttonsOf()}).length`);
 					t.expect(n >= 2, `${name}: the chrome panel has ${n} buttons`);
@@ -2918,13 +2930,14 @@ const SCENARIOS = [
 					}
 					await pressAt(at);
 					await t.waitFor(`(() => { const r = ${rootOf()}; return !!r && r.hasAttribute('data-dse-collapsed'); })()`, `${name}: a real click on Collapse collapsed the block`);
-					t.expect((await cursorLine()) === PARKED, `${name}: the Collapse click moved the editor cursor to line ${await cursorLine()}`);
+					t.expect((await cursorLine()) === parked, `${name}: the Collapse click moved the editor cursor to line ${await cursorLine()}`);
 					await t.sleep(300);
 					await pressAt(await center(`(${rootOf()}).querySelector('[data-dse-control="chrome.expand"]')`));
 					await t.waitFor(`(() => { const r = ${rootOf()}; return !!r && !r.hasAttribute('data-dse-collapsed'); })()`, `${name}: expanded again`);
 					t.expect(t.read(rel2) === FIXTURES[rel2], `${rel2} was written: ${JSON.stringify(t.read(rel2))}`);
-					facts.push(`${name}: ${n} buttons reachable, Collapse collapses, Expand expands`);
+					facts.push(`${name}: height map = screen, ${n} buttons reachable, Collapse collapses, Expand expands`);
 				}
+				t.expect(heightFails.length === 0, heightFails.join(' | '));
 			} finally {
 				await t.ev(`document.getElementById('lc-gs44-notice')?.remove()`);
 				await t.ev(`${prefs}.set('authoringControls', false)`);

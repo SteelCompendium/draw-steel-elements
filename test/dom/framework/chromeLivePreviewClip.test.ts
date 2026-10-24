@@ -31,11 +31,16 @@ describe('SC-502: the Live Preview widget does not clip the chrome panel', () =>
 		expect(body).toMatch(/overflow:\s*visible/);
 	});
 
+	it('keeps the widget a block formatting context, so the block root\'s margins stay inside it (CodeMirror measures the widget)', () => {
+		// Without it `contain: none` lets the margins collapse out: CodeMirror undercounts the block (48px for a feature card).
+		expect(ruleBody(WIDGET)).toMatch(/display:\s*flow-root/);
+	});
+
 	it('opens the clip only above the widget: the other three sides keep the host clip', () => {
 		const m = ruleBody(WIDGET).match(/clip-path:\s*inset\(([^)]*)\)/);
 		expect(m).not.toBeNull();
 		const [top, right, bottom, left] = m![1].trim().split(/\s+/).map((v) => Number.parseFloat(v));
-		expect(top).toBeLessThanOrEqual(-54); // tallest panel 40.1px (touch buttons, 140% text) + 10px shadow + 3px focus ring
+		expect(top).toBeLessThanOrEqual(-86); // tallest panel 73.4px (touch buttons, 140% text, Obsidian font size 30) + 10px shadow + 3px focus ring
 		// 1px of slack, not more, so the host's own 1px hover ring is not cut but nothing else spills sideways or down
 		for (const side of [right, bottom, left]) expect(side).toBeGreaterThanOrEqual(-1);
 		for (const side of [right, bottom, left]) expect(side).toBeLessThanOrEqual(0);
