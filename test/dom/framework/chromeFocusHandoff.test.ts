@@ -397,3 +397,54 @@ describe('SC-505 r3 LOW-A — two copies of one block in the SAME pane (a note t
 		expect(document.activeElement).toBe(item(c0c.root, 'pin'));
 	});
 });
+
+describe('SC-505 r3 INFO-1 — the claim\'s remaining branches', () => {
+	test('a rebuild of ANOTHER block (another key) does not claim the request', async () => {
+		const first = await render();
+		first.root.querySelector<HTMLElement>('[data-dse-chrome-item="pin"]')!.focus();
+		keyboardClick(item(first.root, 'pin'));
+		await flush();
+		first.host.containerEl.remove();
+		focusCalls.length = 0;
+
+		await render({ key: 'Note.md::ds-stamina-bar::40' });
+
+		expect(focusCalls).toEqual([]);
+		expect(document.activeElement).toBe(document.body);
+	});
+
+	test('a rebuilt copy that appears while the pressed button still holds focus does not take it; it does once the old copy is gone', async () => {
+		const first = await render();
+		const pressed = item(first.root, 'pin');
+		pressed.focus();
+		keyboardClick(pressed);
+		await flush();
+
+		const rebuilt = await render(); // inserted BEFORE the old copy is removed
+		expect(document.activeElement).toBe(pressed);
+
+		first.host.containerEl.remove();
+		await flush(); // the DOM watcher runs as a microtask
+		expect(document.activeElement).toBe(item(rebuilt.root, 'pin'));
+	});
+});
+
+describe('SC-505 r3 INFO-1 — focus on the twin\'s Pin is the user leaving', () => {
+	test('while the request waits, focusing another copy\'s Pin button (a click or Tab into the other pane) cancels it', async () => {
+		const leafA = makeLeaf();
+		const leafB = makeLeaf();
+		const a = await render({ leaf: leafA });
+		const b = await render({ leaf: leafB });
+		item(b.root, 'pin').focus();
+		keyboardClick(item(b.root, 'pin'));
+		await flush();
+
+		item(a.root, 'pin').focus(); // the user moves to the other pane's Pin button...
+		item(a.root, 'pin').blur(); // ...and on again, so focus is free when the pressed pane is rebuilt
+		b.host.containerEl.remove();
+		focusCalls.length = 0;
+		await render({ leaf: leafB });
+
+		expect(focusCalls).toEqual([]);
+	});
+});
