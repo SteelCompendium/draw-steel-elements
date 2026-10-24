@@ -77,7 +77,8 @@
 // a real click on the collapsed one-liner's Expand expands the block, and a real click on `</>` still enters the block's source.
 // (r3) CodeMirror's height for the widget equals its on-screen height for a counter, a feature (margins 24px) and a statblock (8px).
 // SC-479 appends G-S42 (40 scenarios in all with SC-502's G-S44 and SC-519's G-S45; the id was assigned by the dispatcher): a tracker in note B embedded in a Reading view of note A parked at its end keeps A's scroll position
-// when B is written (in-app, on disk, from another pane, and the embed's own write with adoption off).
+// when B is written (in-app, on disk, from another pane, and the embed's own write with adoption off), and the text on screen of a host parked
+// BELOW the embed does not move when the write changes the embed's height (phase (e): adding a hero).
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -266,6 +267,8 @@ Object.assign(FIXTURES, {
 Object.assign(FIXTURES, {
 	'Lifecycle/embtracker.md': `# embtracker\n\nS-TOP\n\n${fence('ds-initiative', ['heroes:', ...Array.from({ length: 25 }, (_, i) => HERO(`Hero ${String(i + 1).padStart(2, '0')}`)).flat(), 'enemy_groups: []', 'malice:', '  value: 1'])}\n\nS-BOTTOM\n`,
 	'Lifecycle/embhost.md': '# embhost\n\nC-TOP\n\n![[embtracker]]\n\nC-BOTTOM\n',
+	// A tall host: 30 paragraphs above and 150 below the embed (the reader parked just below the embed has the embed and text above the viewport that can change height).
+	'Lifecycle/embhosttall.md': `# embhosttall\n\n${Array.from({ length: 30 }, (_, i) => `T-PRE filler ${i}.`).join('\n\n')}\n\n![[embtracker]]\n\n${Array.from({ length: 150 }, (_, i) => `T-POST filler ${i}.`).join('\n\n')}\n`,
 });
 // SC-487: a zero-width space right after the name. Live Preview ends the name there and renders the block; Reading view shows plain code.
 const ZWSP = String.fromCharCode(0x200b);
@@ -2960,10 +2963,12 @@ const SCENARIOS = [
 		// (the embed's bottom and the text under it in view). A write to B redraws only the embed; inside that task the
 		// embed's own sizer collapses (never seen in a frame) and A's scrollTop went 2887 -> 0 on stock 7046eb0 and c2758a2 (scroll
 		// anchoring inside the collapsing embed; the passive clamp alone ends at 2375). The fix pins A's scroller as a
-		// HOST pin (its sizer, plus scroll anchoring off on it) from the `modify` event, and the writer pin inside an
-		// embed reaches A's scroller. Phases: (a) in-app vault.process of B, (b) a write on disk via the file watcher,
+		// HOST pin (its sizer, plus scroll anchoring off on the host's EMBEDS - not on the scroller) from the `modify` event,
+		// and the writer pin inside an embed reaches A's scroller. Phases: (a) in-app vault.process of B, (b) a write on disk via the file watcher,
 		// (c) the embed's own DSE write with view adoption OFF (adoption keeps the writer's DOM, so only a miss redraws
-		// it - G-S8's reason), (d) a second Reading pane showing B writes it (A a bystander). Per phase on A: the write
+		// it - G-S8's reason), (d) a second Reading pane showing B writes it (A a bystander), (e) a tall host parked BELOW the embed
+		// and a write that adds a hero (the embed grows): nothing moves on screen - with anchoring switched off on the whole scroller
+		// the visible text jumped by the embed's height change (r3 HIGH-1: 110 px). Per phase (a)-(d) on A: the write
 		// landed; a tracker is drawn in the embed; anti-vacuity - the embedded tracker was redrawn (a fresh root) and A
 		// was parked at its end; `data-dse-scroll-pin` was on A's scroller when the embedded tracker was replaced;
 		// scrollTop identical in every frame through the pin's release + 10 frames; the pin was seen released. Every
@@ -3009,8 +3014,8 @@ const SCENARIOS = [
 					fails.push(e instanceof Error ? e.message : String(e));
 				}
 			};
-			const openHost = async () => {
-				await t.open(host);
+			const openHost = async (hostRel = host) => {
+				await t.open(hostRel);
 				await t.ev(`(() => { window.__gs42A = app.workspace.getMostRecentLeaf(); return true; })()`);
 			};
 			const clickVisible = (scope, scroller) => t.ev(`(() => { const s = ${scroller}; const sr = s.getBoundingClientRect(); const all = Array.from((${scope}).querySelectorAll('button.dse-init__portrait-toggle')); const b = all.find((x) => { const r = x.getBoundingClientRect(); return r.top > sr.top && r.bottom < sr.bottom; }); if (!b) return 'none of ' + all.length + ' toggles in view; tops ' + all.slice(-3).map((x) => Math.round(x.getBoundingClientRect().top - sr.top)).join(',') + ' of a ' + Math.round(sr.height) + 'px scroller'; b.click(); return true; })()`);
@@ -3054,7 +3059,7 @@ const SCENARIOS = [
 				await openHost();
 				try {
 					await t.ev(`(async () => { const b = app.workspace.getLeaf('split', 'vertical'); window.__gs42B = b; await b.setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'preview' }, active: false }); app.workspace.setActiveLeaf(window.__gs42A, { focus: true }); return true; })()`);
-					await t.sleep(1500);
+					await t.waitFor(`!!(${t.root(TRACKER, B)})`, '(d) the tracker is drawn in the second pane');
 					for (let i = 0; i < 3; i++) {
 						await t.ev(`(() => { const s = ${scrollerOf(B)}; const r = ${t.root(TRACKER, B)}; s.scrollTop = r.getBoundingClientRect().top - s.getBoundingClientRect().top + s.scrollTop + 1500; return true; })()`);
 						await t.sleep(450);
@@ -3069,6 +3074,42 @@ const SCENARIOS = [
 				} finally {
 					await t.ev(`(() => { if (window.__gs42B) window.__gs42B.detach(); window.__gs42B = null; return true; })()`);
 				}
+			});
+			// (e) a tall host parked BELOW the embed; a write that adds a hero makes the embed taller. Chrome compensates the height
+			// change above the viewport (scrollTop moves, the text does not) unless anchoring is off for the whole scroller. The first
+			// fully visible paragraph's on-screen top is sampled every frame from before the write.
+			await phase(async () => {
+				await t.reset(rel);
+				await openHost('Lifecycle/embhosttall.md');
+				const scroller = scrollerOf(A);
+				const embedEl = `(${embRoot}).closest('.internal-embed')`;
+				// the embed is virtualised: scroll down until it is drawn
+				await t.ev(`(() => { ${scroller}.scrollTop = 0; return true; })()`);
+				for (let i = 0; i < 60 && !(await t.ev(`!!(${embRoot})`)); i++) {
+					await t.ev(`(() => { const s = ${scroller}; s.scrollTop += Math.round(s.clientHeight * 0.6); return true; })()`);
+					await t.sleep(200);
+				}
+				await t.waitFor(`!!(${embRoot})`, '(e) the embedded tracker is drawn in the tall host');
+				const diag = [];
+				for (let i = 0; i < 3; i++) {
+					diag.push(await t.ev(`(() => { const s = ${scroller}; const root = ${embRoot}; if (!root) return 'embed gone: scrollTop ' + Math.round(s.scrollTop) + ' of ' + Math.round(s.scrollHeight); const e = root.closest('.internal-embed'); s.scrollTop = e.getBoundingClientRect().bottom - s.getBoundingClientRect().top + s.scrollTop + 100; return 'scrollTop -> ' + Math.round(s.scrollTop) + ' of ' + Math.round(s.scrollHeight) + ', embed ' + Math.round(e.getBoundingClientRect().height) + ' px'; })()`));
+					await t.sleep(450);
+				}
+				t.expect(await t.ev(`!!(${embRoot})`), `(e) the embedded tracker left the document while parking below it: ${diag.join(' | ')}`);
+				await t.ev(`(() => { ${embRoot}.__lcTag = 'gs42'; return true; })()`);
+				await t.ev(`(() => { window.__gs42rec = new Promise((resolve) => { const s = ${scroller}; const top = (el) => (el && el.isConnected ? Math.round(el.getBoundingClientRect().top - s.getBoundingClientRect().top) : null); const sr0 = s.getBoundingClientRect(); const ref = Array.from(s.querySelectorAll(':scope > .markdown-preview-sizer > div > p')).find((p) => { const r = p.getBoundingClientRect(); return r.top >= sr0.top && r.bottom <= sr0.bottom; }); const emb = ${embedEl}; const tagged = Array.from(s.querySelectorAll('${TRACKER}')).find((x) => x.__lcTag === 'gs42'); const ref0 = top(ref); const h0 = Math.round(emb.getBoundingClientRect().height); const st0 = s.scrollTop; const embBottom0 = Math.round(emb.getBoundingClientRect().bottom - sr0.top); const refs = []; let hEnd = h0; let pinAtRedraw = null; let pinFrames = 0; let pinSeen = false; let pinOnAt = 0; let goneFrames = 0; let released = false; let stEnd = st0; const mo = new MutationObserver(() => { if (pinAtRedraw === null && tagged && !tagged.isConnected) pinAtRedraw = s.hasAttribute('data-dse-scroll-pin'); }); mo.observe(s, { childList: true, subtree: true }); const t0 = performance.now(); const tick = () => { refs.push(top(ref)); hEnd = Math.round(emb.getBoundingClientRect().height); stEnd = s.scrollTop; if (s.hasAttribute('data-dse-scroll-pin')) { pinFrames++; if (!pinSeen) pinOnAt = performance.now() - t0; pinSeen = true; released = false; goneFrames = 0; } else if (pinSeen) { released = true; goneFrames++; } if (goneFrames < 10 && performance.now() - t0 < (pinSeen ? Math.min(pinOnAt + 4500, 12000) : 5000)) requestAnimationFrame(tick); else { mo.disconnect(); const seen = refs.filter((x) => x !== null); resolve({ ref0, refMin: seen.length ? Math.min(...seen) : null, refMax: seen.length ? Math.max(...seen) : null, refLost: refs.some((x) => x === null), h0, hEnd, st0, stEnd, embBottom0, tagged: !!tagged, pinAtRedraw, pinFrames, released, frames: refs.length, ms: Math.round(performance.now() - t0) }); } }; requestAnimationFrame(tick); }); return true; })()`);
+				const newName = `Added ${Date.now() % 100000}`;
+				await t.edit(rel, `c.replace('enemy_groups: []', ${JSON.stringify(`  - name: "${newName}"\n    max_stamina: 30\nenemy_groups: []`)})`);
+				const m = await t.ev('window.__gs42rec');
+				t.expect(t.read(rel).includes(newName), '(e) the write did not land');
+				t.expect(await t.ev(`!!(${embRoot})`), '(e) no tracker is drawn in the embed after the write');
+				t.expect(m.tagged && !(await t.ev(`Array.from(${scroller}.querySelectorAll('${TRACKER}')).some((x) => x.isConnected && x.__lcTag === 'gs42')`)), '(e) the embedded tracker was not redrawn - the phase cannot reach the shift');
+				t.expect(m.ref0 !== null && m.embBottom0 < 0, `(e) the host was not parked below the embed (embed bottom ${m.embBottom0} px from the scroller top, reference ${m.ref0}) - not the geometry that shifts`);
+				t.expect(m.hEnd - m.h0 >= 50, `(e) the embed did not grow (${m.h0} -> ${m.hEnd} px) - the phase cannot reach the shift`);
+				t.expect(m.pinAtRedraw === true, `(e) data-dse-scroll-pin was not on the host's scroller when the embedded tracker was redrawn (pin frames ${m.pinFrames})`);
+				t.expect(!m.refLost && m.refMin === m.ref0 && m.refMax === m.ref0, `(e) the text on screen moved: the first visible paragraph was at ${m.ref0} px from the scroller top, then min ${m.refMin} max ${m.refMax}${m.refLost ? ' (and left the document)' : ''}; embed ${m.h0} -> ${m.hEnd} px, scrollTop ${m.st0} -> ${m.stEnd}`);
+				t.expect(m.released, `(e) the pin was never seen released within ${m.ms}ms (pin frames ${m.pinFrames})`);
+				return `(e) tall host below the embed: text held at ${m.ref0} px over ${m.frames} frames while the embed grew ${m.h0} -> ${m.hEnd} px (scrollTop ${m.st0} -> ${m.stEnd}), pinned ${m.pinFrames} frames`;
 			});
 			await t.reset(rel);
 			t.expect(fails.length === 0, fails.join(' | '));
