@@ -102,12 +102,23 @@
 // embed element, so the chain is read off the ancestors with one `closest` per level, memoised per scan); only a
 // link that cannot be resolved falls back to the host's path. A relative link or an ambiguous basename in the
 // middle note therefore names the file Obsidian shows.
+// THE EMBED STOP IS GATED BY WHERE THE READER IS (SC-479 r5/r6, measured at pin time; `embedStopWanted`). Excluding
+// the embeds is right when the reader would be anchored INSIDE the collapsing tracker, and wrong when the anchor
+// that keeps the text still is a paragraph inside the embed but outside its tracker: a reader parked inside a tall
+// embed BELOW its hero list (B = tracker + 25 paragraphs, 3602px, viewport 150 or 500 px under the tracker) saw
+// the text move by +110 px (add a hero) / -109 px (remove one) with the stop on; stock moved it 0 px, Chrome
+// adjusting scrollTop 4031 -> 4141 / 3922 instead. So the stop is applied when (i) a DSE root inside an embed
+// intersects the viewport (the anchor could land in the tracker: the end geometry, the viewport inside the
+// tracker), or (ii) no DSE-bearing embed intersects the viewport at all (the reader is outside the embeds, e.g.
+// below them: 0 px there, where stock moves the text 110 px), and NOT when the viewport meets a DSE-bearing embed
+// but none of its DSE roots (inside the embed's other content: anchoring compensates correctly, as on stock, 0 px).
+// The host still gets the sizer pin in that case. The decision is taken once, when the pin is set, and held for its
+// life; an existing pin is only ever upgraded to the stop, never downgraded.
 // RISK, ACCEPTED (SC-479 ruling): the pin is taken on EVERY `modify` of a note embedded in a Reading view,
 // including a write nothing redraws (an adopted own write), so such a host may carry phantom bottom space for
-// up to PIN_TTL_MS (the same trade as SC-470, TTL-bounded, it never clamps). Scroll anchoring is off for the
-// host's embeds for that long: a reader who is INSIDE a tall embed when something resizes content above their
-// viewport inside that embed is not compensated for it, and text in it can move by that amount (nothing
-// measured shows it; the embed's own collapse is sub-frame and its anchor is never needed outside it).
+// up to PIN_TTL_MS (the same trade as SC-470, TTL-bounded, it never clamps). With a DSE root on screen and the
+// viewport wholly inside a tall tracker the stop is on, so a row added ABOVE the viewport shifts the text by
+// the row height instead of being compensated (the same as a note's own pin, SC-198/SC-470).
 // NOT COVERED: a Live Preview host (`.cm-scroller`, `![[B]]` rendered by CodeMirror) is a different mechanism
 // and still jumps (6800 -> 3745 measured with the embed near the end of the note): SC-522.
 //
@@ -251,6 +262,21 @@ function embedsBlockOf(scroller: HTMLElement, path: string, hostPath: string, re
 	return false;
 }
 
+/**
+ * SC-479 r6: should this HOST pin also exclude the host's embeds from scroll anchoring? Decided at pin time from the
+ * viewport: yes when a DSE root inside an embed intersects it, or when no DSE-bearing embed does; no when it meets a
+ * DSE-bearing embed but none of that embed's DSE roots (see the header: THE EMBED STOP IS GATED BY WHERE THE READER IS).
+ */
+function embedStopWanted(scroller: HTMLElement): boolean {
+	const view = scroller.getBoundingClientRect();
+	const onScreen = (el: Element): boolean => {
+		const r = el.getBoundingClientRect();
+		return r.bottom > view.top && r.top < view.bottom;
+	};
+	if (Array.from(scroller.querySelectorAll('.internal-embed [data-dse-element]')).some(onScreen)) return true; // (i)
+	return !Array.from(scroller.querySelectorAll('.internal-embed')).some((embed) => embed.querySelector('[data-dse-element]') && onScreen(embed)); // (ii) / (iii)
+}
+
 /** The slice of MarkdownView `pinReadingViewsOf` reads (duck-typed: the jest mock has no MarkdownView). */
 interface ReadingViewLike {
 	file?: { path: string } | null;
@@ -271,7 +297,7 @@ interface HeldPin {
 	readonly style: HTMLStyleElement;
 	/** Keeps `px` at or above Obsidian's latest inline sizer min-height; null where the window has no MutationObserver. */
 	observer: MutationObserver | null;
-	/** SC-479: pinned as the host of an embed of the written note; its rule also stops the host's embeds being scroll anchors. Only ever set. */
+	/** SC-479: pinned as the host of an embed of the written note AND the viewport gate wanted the stop (`embedStopWanted`): its rule also stops the host's embeds being scroll anchors. Only ever set. */
 	host: boolean;
 }
 
@@ -336,7 +362,7 @@ export class PreviewScrollPin {
 			// raises it to the sizer's current inline min-height or the content height when either
 			// is larger (see the header: RE-PINS).
 			win.clearTimeout(existing.timer);
-			if (host && !existing.host) {
+			if (host && !existing.host && embedStopWanted(scroller)) {
 				existing.host = true; // a note's own pin that is now also a host pin: add the embed anchoring stop
 				existing.style.textContent = ruleText(existing);
 			}
@@ -352,6 +378,7 @@ export class PreviewScrollPin {
 		if (scroller.scrollTop <= 0) return;
 		if (scroller.scrollHeight <= scroller.clientHeight) return;
 
+		host = host && embedStopWanted(scroller); // the embed anchoring stop only where it does not cost the reader (header)
 		const px = scroller.scrollHeight;
 		const id = String(++nextPinId);
 		const style = doc.createElement('style');

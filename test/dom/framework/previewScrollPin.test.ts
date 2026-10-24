@@ -714,6 +714,71 @@ describe('SC-479: embeds pin the host note\'s scroller', () => {
 		expect(allPinStyles()).toBe(0);
 	});
 
+	/** jsdom has no layout: give an element the viewport-relative box the production code reads. */
+	const setBox = (el: Element, top: number, bottom: number): void => {
+		(el as HTMLElement).getBoundingClientRect = () => ({ top, bottom, left: 0, right: 100, width: 100, height: bottom - top, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+	};
+	/** A host whose viewport is 0..1000 with one DSE embed (box `embed`) holding its DSE root (box `root`). */
+	function gatedHost(embed: [number, number], root: [number, number]) {
+		const a = hostLeaf('A.md');
+		const emb = addEmbed(a.scroller, 'B');
+		setBox(a.scroller, 0, 1000);
+		setBox(emb, embed[0], embed[1]);
+		setBox(emb.querySelector('[data-dse-element]')!, root[0], root[1]);
+		new PreviewScrollPin().pinReadingViewsOf(workspaceOf(a), 'B.md', resolve);
+		return a;
+	}
+
+	test('the embed anchoring stop is applied when a DSE root inside an embed is on screen (gate branch i)', () => {
+		const a = gatedHost([-3000, 500], [200, 700]); // the viewport meets the embed and its tracker
+		expect(isPinned(a.scroller)).toBe(true);
+		expect(anchorStopped(a.scroller)).toBe(true);
+	});
+
+	test('the embed anchoring stop is applied when no DSE-bearing embed is on screen, e.g. the reader is below the embed (gate branch ii)', () => {
+		const a = gatedHost([-3190, -100], [-3000, -200]); // the embed ends 100px above the viewport
+		expect(isPinned(a.scroller)).toBe(true);
+		expect(anchorStopped(a.scroller)).toBe(true);
+	});
+
+	test('the embed anchoring stop is NOT applied when the viewport is inside a DSE-bearing embed but off its DSE roots; the sizer pin still is (gate branch iii)', () => {
+		const a = gatedHost([-3000, 1200], [-2900, -150]); // the tracker is above the viewport, the embed's other content is in it
+		expect(isPinned(a.scroller)).toBe(true);
+		expect(pinnedPx(a.scroller)).toBe('4883px');
+		expect(anchorStopped(a.scroller)).toBe(false);
+		expect(scrollerAnchorOff(a.scroller)).toBe(false);
+	});
+
+	test('the gate is only ever an upgrade: a re-pin where it says no never drops the stop an earlier pin took', () => {
+		const a = hostLeaf('A.md');
+		const emb = addEmbed(a.scroller, 'B');
+		const root = emb.querySelector('[data-dse-element]')!;
+		setBox(a.scroller, 0, 1000);
+		setBox(emb, -3000, 500);
+		setBox(root, 200, 700);
+		const pin = new PreviewScrollPin();
+		pin.pinReadingViewsOf(workspaceOf(a), 'B.md', resolve);
+		expect(anchorStopped(a.scroller)).toBe(true);
+		setBox(root, -2900, -150); // the reader has scrolled inside the embed's other content
+		setBox(emb, -3000, 1200);
+		pin.pinReadingViewsOf(workspaceOf(a), 'B.md', resolve);
+		expect(anchorStopped(a.scroller)).toBe(true);
+	});
+
+	test('an own pin that meets a host pin the gate refuses does not gain the stop either (gate on the upgrade path)', () => {
+		const { scroller, el } = makeScroller();
+		el.setAttribute('data-dse-element', 'initiative');
+		const embed = addEmbed(scroller, 'B');
+		setBox(scroller, 0, 1000);
+		setBox(embed, -3000, 1200);
+		setBox(embed.querySelector('[data-dse-element]')!, -2900, -150);
+		const pin = new PreviewScrollPin();
+		pin.pin(el);
+		pin.pin(embed.querySelector<HTMLElement>('[data-dse-element]')!); // a host pin, viewport inside the embed off its roots
+		expect(isPinned(scroller)).toBe(true);
+		expect(anchorStopped(scroller)).toBe(false);
+	});
+
 	test('a pin that is first a note\'s own and then also a host pin gains the anchoring stop, keeps its id and height, and releases on the TTL', () => {
 		jest.useFakeTimers();
 		try {
