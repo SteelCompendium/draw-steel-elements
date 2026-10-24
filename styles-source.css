@@ -16891,8 +16891,10 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    a real click on Expand went to `</>` and moved the cursor into the block's source. In Live Preview
    only, the bar keeps its right padding clear of that button (4px + 28px + a 4px gap = 36px, in px
    because it is Obsidian's px, not ours), so Expand sits just left of `</>` and both are clickable.
-   Reading view and the browser harness have no `</>` and keep the original padding. */
-.markdown-source-view.mod-cm6 .cm-content > .cm-preview-code-block.cm-embed-block .dse-chrome-summary {
+   Reading view and the browser harness have no `</>` and keep the original padding. Screen-only Steel
+   scope like every chrome rule (print contract, chrome.test.ts). */
+.markdown-source-view.mod-cm6 .cm-content > .cm-preview-code-block.cm-embed-block
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome-summary {
 	padding-right: 36px;
 }
 

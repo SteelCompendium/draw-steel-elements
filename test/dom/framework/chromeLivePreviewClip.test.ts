@@ -59,7 +59,9 @@ describe('SC-502: the Live Preview widget does not clip the chrome panel', () =>
 	});
 
 	it('keeps the collapsed one-liner clear of the `</>` button: 4px inset + 28px button + 4px gap = 36px, Live Preview only', () => {
-		const body = ruleBody('.markdown-source-view.mod-cm6 .cm-content > .cm-preview-code-block.cm-embed-block .dse-chrome-summary');
+		const body = ruleBody(
+			".markdown-source-view.mod-cm6 .cm-content > .cm-preview-code-block.cm-embed-block\n\t[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-chrome-summary",
+		);
 		expect(body).toMatch(/padding-right:\s*36px/);
 		// nothing else about the bar changes in Live Preview
 		expect(body.match(/:/g)).toHaveLength(1);
