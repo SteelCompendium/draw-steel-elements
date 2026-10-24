@@ -180,7 +180,7 @@ describe('D8 Task 2: SidebarBlockHost (spec §1.4)', () => {
 		const { host } = makeHost(app, file, onExternalChange);
 		await host.refresh();
 
-		await host.replaceSource(`current_value: 9\n_dse_anchor: ${ANCHOR_ID}`);
+		await host.replaceSource(`current_value: 9\n_dse_anchor: ${ANCHOR_ID}`, { fromView: true });
 		await flushAsync(); // let our own write's "modify" event propagate through the host
 		expect(onExternalChange).not.toHaveBeenCalled();
 
@@ -395,7 +395,7 @@ describe('SC-453: SidebarBlockHost on CRLF / mixed-ending notes', () => {
 		const { host } = makeHost(app, file, onExternalChange);
 		await host.refresh();
 
-		await host.replaceSource(NEW_BODY);
+		await host.replaceSource(NEW_BODY, { fromView: true });
 		await flushAsync();
 
 		expect(onExternalChange).not.toHaveBeenCalled();
@@ -407,7 +407,7 @@ describe('SC-453: SidebarBlockHost on CRLF / mixed-ending notes', () => {
 		const { host } = makeHost(app, file, onExternalChange);
 		await host.refresh();
 
-		await host.replaceSource(`current_value: 5\r\n_dse_anchor: ${ANCHOR_ID}`);
+		await host.replaceSource(`current_value: 5\r\n_dse_anchor: ${ANCHOR_ID}`, { fromView: true });
 		await flushAsync();
 
 		expect(onExternalChange).not.toHaveBeenCalled();
@@ -421,7 +421,7 @@ describe('SC-453: SidebarBlockHost on CRLF / mixed-ending notes', () => {
 
 		// Written as-is into the LF note; the lone CR then sits in front of the close fence's LF, so
 		// the read-back (extractBody) strips it. The self-echo record must be what is READ BACK.
-		await expect(host.replaceSource(`current_value: 5\n_dse_anchor: ${ANCHOR_ID}\r`)).resolves.toBe(true);
+		await expect(host.replaceSource(`current_value: 5\n_dse_anchor: ${ANCHOR_ID}\r`, { fromView: true })).resolves.toBe(true);
 		await flushAsync();
 
 		expect(onExternalChange).not.toHaveBeenCalled();
@@ -624,7 +624,7 @@ describe('SC-455: SidebarBlockHost on a block inside a blockquote / callout', ()
 		const onExternalChange = jest.fn();
 		const note = ['> [!note]', ...under('> ', block(1))].join('\n');
 		const { vault, host } = await mounted(note, onExternalChange);
-		await host.replaceSource(BODY(2));
+		await host.replaceSource(BODY(2), { fromView: true });
 		await flushAsync();
 		expect(onExternalChange).not.toHaveBeenCalled();
 
@@ -659,13 +659,13 @@ describe('SC-455: SidebarBlockHost on a block inside a blockquote / callout', ()
 		const note = ['>```ds-counter', ...body.split('\n').map((l) => (l.startsWith(' ') ? `> ${l}` : `>${l}`)), '>```'].join('\n');
 		const { vault, host } = await mounted(note, onExternalChange);
 
-		await expect(host.replaceSource(body)).resolves.toBe(true);
+		await expect(host.replaceSource(body, { fromView: true })).resolves.toBe(true);
 		await flushAsync();
 
 		expect(vault.text('Note.md')).toBe(note);
 		expect(onExternalChange).not.toHaveBeenCalled();
 		const next = body.replace('30', '31');
-		await expect(host.replaceSource(next)).resolves.toBe(true);
+		await expect(host.replaceSource(next, { fromView: true })).resolves.toBe(true);
 		await flushAsync();
 		expect(vault.text('Note.md')).toBe(note.replace('30', '31'));
 		expect(onExternalChange).not.toHaveBeenCalled();
@@ -788,7 +788,7 @@ describe('SC-460: SidebarBlockHost on a note with lone CRs', () => {
 		const { host } = makeHost(app, file, onExternalChange);
 		await host.refresh();
 
-		await host.replaceSource(NEW_BODY);
+		await host.replaceSource(NEW_BODY, { fromView: true });
 		await flushAsync();
 
 		expect(onExternalChange).not.toHaveBeenCalled();

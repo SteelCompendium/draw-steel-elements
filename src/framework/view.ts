@@ -320,7 +320,9 @@ export abstract class ElementView<M> extends Component {
 		// every OTHER "couldn't write" case (`!canPersist`, block not found) — this only
 		// makes the rejecting case behave the same way as those already-handled ones.
 		void this.cx.host
-			.replaceSource(yaml)
+			// SC-509: the view's own write. Marked so the host treats the rebuild/echo it causes as this
+			// view's (adopt / swallow); a write that does not carry the mark (the edit form) re-renders.
+			.replaceSource(yaml, { fromView: true })
 			.then((ok) => {
 				settle();
 				for (const resolve of waiters) resolve(ok);

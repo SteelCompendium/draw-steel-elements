@@ -56,7 +56,7 @@ export class LivePreviewBlockHost implements BlockHost {
 		throw new Error(NOT_IMPLEMENTED);
 	}
 
-	async replaceSource(_newSource: string): Promise<boolean> {
+	async replaceSource(_newSource: string, _options?: { fromView?: boolean }): Promise<boolean> {
 		throw new Error(NOT_IMPLEMENTED);
 	}
 

@@ -299,7 +299,7 @@ export class SidebarBlockHost implements BlockHost {
 		return this.reported;
 	}
 
-	async replaceSource(newSource: string): Promise<boolean> {
+	async replaceSource(newSource: string, options?: { fromView?: boolean }): Promise<boolean> {
 		this.reported = false;
 		if (!this.canPersist) return false;
 
@@ -341,6 +341,11 @@ export class SidebarBlockHost implements BlockHost {
 					lineEnd: info.lineStart + splitLines(newSource).length + 1,
 				},
 			);
+			// SC-509: the record above makes `applyFreshContent` swallow the `modify` as the view's own
+			// echo, which is only true when the VIEW wrote. The block edit form writes through this same
+			// host, but the mounted view does not hold that content: clear the record so the change
+			// reaches `SidebarPanel.handleExternalChange` and the panel redraws like for an external edit.
+			if (options?.fromView !== true) this.lastWritten = null;
 			wrote = true;
 			finalContent = next;
 			return finalContent;

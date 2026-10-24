@@ -172,7 +172,7 @@ describe('SC-340 Task 3: rebind and claim tickets', () => {
 			ticketsSeenInsideProcess = entry.tickets.length;
 			return original(file, fn);
 		}) as any;
-		await host.replaceSource('name: Health\ncurrent_value: 11\nmax_value: 20\nmin_value: 0');
+		await host.replaceSource('name: Health\ncurrent_value: 11\nmax_value: 20\nmin_value: 0', { fromView: true });
 		expect(ticketsSeenInsideProcess).toBe(1);
 		expect(entry.tickets[0].body).toBe('name: Health\ncurrent_value: 11\nmax_value: 20\nmin_value: 0');
 	});
@@ -246,14 +246,14 @@ describe('SC-340 Task 4 review (carried fix): no claim ticket for a write that c
 		const { registry, host } = await mountCounter();
 		const [entry] = registry.liveEntries();
 		expect(entry.tickets).toHaveLength(0);
-		await host.replaceSource(COUNTER_BODY); // identical to what mountCounter already wrote
+		await host.replaceSource(COUNTER_BODY, { fromView: true }); // identical to what mountCounter already wrote
 		expect(entry.tickets).toHaveLength(0);
 	});
 
 	test('a real write (the body actually changes) leaves exactly one ticket', async () => {
 		const { registry, host } = await mountCounter();
 		const [entry] = registry.liveEntries();
-		await host.replaceSource('name: Health\ncurrent_value: 11\nmax_value: 20\nmin_value: 0');
+		await host.replaceSource('name: Health\ncurrent_value: 11\nmax_value: 20\nmin_value: 0', { fromView: true });
 		expect(entry.tickets).toHaveLength(1);
 	});
 
@@ -268,7 +268,7 @@ describe('SC-340 Task 4 review (carried fix): no claim ticket for a write that c
 			throw new Error('ENOENT: file deleted mid-write');
 		}) as any;
 		await expect(
-			host.replaceSource('name: Health\ncurrent_value: 11\nmax_value: 20\nmin_value: 0'),
+			host.replaceSource('name: Health\ncurrent_value: 11\nmax_value: 20\nmin_value: 0', { fromView: true }),
 		).rejects.toThrow('ENOENT');
 		expect(entry.tickets).toHaveLength(0);
 	});

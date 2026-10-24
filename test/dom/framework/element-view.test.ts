@@ -273,7 +273,7 @@ describe('T-7 (Plan 02): ElementView<M> (F1 §3.3)', () => {
 
 			jest.advanceTimersByTime(PERSIST_DEBOUNCE_MS);
 			expect(host.replaceSource).toHaveBeenCalledTimes(1);
-			expect(host.replaceSource).toHaveBeenCalledWith('value: initial');
+			expect(host.replaceSource).toHaveBeenCalledWith('value: initial', { fromView: true });
 			await expect(result).resolves.toBe(true);
 		});
 
@@ -297,7 +297,7 @@ describe('T-7 (Plan 02): ElementView<M> (F1 §3.3)', () => {
 
 			jest.advanceTimersByTime(1);
 			expect(host.replaceSource).toHaveBeenCalledTimes(1);
-			expect(host.replaceSource).toHaveBeenCalledWith('value: v3'); // model AT FLUSH TIME
+			expect(host.replaceSource).toHaveBeenCalledWith('value: v3', { fromView: true }); // model AT FLUSH TIME
 
 			await expect(Promise.all([p1, p2, p3])).resolves.toEqual([true, true, true]);
 		});
@@ -322,7 +322,7 @@ describe('T-7 (Plan 02): ElementView<M> (F1 §3.3)', () => {
 			view.unload(); // note closed / block torn down before the 400ms timer fires
 
 			expect(host.replaceSource).toHaveBeenCalledTimes(1);
-			expect(host.replaceSource).toHaveBeenCalledWith('value: unsaved');
+			expect(host.replaceSource).toHaveBeenCalledWith('value: unsaved', { fromView: true });
 			await expect(pending).resolves.toBe(true);
 
 			// The debounce timer was cleared by the flush: advancing time must not double-write.

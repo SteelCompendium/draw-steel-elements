@@ -538,7 +538,7 @@ export class ReadingModeBlockHost implements BlockHost {
 			.some((l) => /^[ \t]*(?:[-*+]|\d+[.)])[ \t]/.test(l) || /^ {2,}[`~]{3,}/.test(l));
 	}
 
-	async replaceSource(newSource: string): Promise<boolean> {
+	async replaceSource(newSource: string, options?: { fromView?: boolean }): Promise<boolean> {
 		this.reported = false;
 		if (!this.canPersist) return false;
 
@@ -568,7 +568,15 @@ export class ReadingModeBlockHost implements BlockHost {
 		// no-op write causes no rebuild, so an uncollected ticket would otherwise linger up to
 		// CLAIM_WINDOW_MS and could let claim() hand this view to an unrelated rebuild of an
 		// identical-body TWIN block.
-		const ticket = this.entry && this.registry ? this.registry.noteWrite(this.entry, newSource) : null;
+		//
+		// SC-509: only the VIEW's own write earns a ticket. A write from anywhere else (the block
+		// edit form's Save, the hero's "Edit definition") is not content the live view holds, so
+		// adopting it on the rebuild would put the OLD root and model back and the card would keep
+		// showing the old content. Without a ticket `claim()` misses and the section is built
+		// fresh from the saved body, exactly like an external edit. (`knownBody` upkeep below and
+		// the SC-478 scroll pin do not depend on the ticket and run for both kinds of write.)
+		const ticket =
+			options?.fromView === true && this.entry && this.registry ? this.registry.noteWrite(this.entry, newSource) : null;
 		try {
 			await this.plugin.app.vault.process(abstractFile, (content) => {
 				const target = this.resolveWriteTarget(content, section);

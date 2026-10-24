@@ -235,7 +235,7 @@ describe('T-9 (Plan 02): ElementPipeline.run (F1 §2.4)', () => {
 			jest.advanceTimersByTime(PERSIST_DEBOUNCE_MS);
 
 			expect(host.replaceSource).toHaveBeenCalledTimes(1);
-			expect(host.replaceSource).toHaveBeenCalledWith(stringifyYaml({ count: 3 }));
+			expect(host.replaceSource).toHaveBeenCalledWith(stringifyYaml({ count: 3 }), { fromView: true });
 			expect(root.querySelector('.count')?.textContent).toBe('3');
 		});
 	});

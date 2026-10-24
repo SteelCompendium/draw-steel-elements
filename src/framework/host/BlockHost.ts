@@ -86,8 +86,16 @@ export interface BlockHost {
 	 * fence style/language found live in the document. Live Preview later: a CM6
 	 * transaction. Resolves false when `!canPersist` or the block cannot be located at
 	 * write time — never throws, never logs.
+	 *
+	 * SC-509 — `options.fromView`: true ONLY when the write is the mounted view's own persist
+	 * (`ElementView.flushPersist`). Such a write is the view's echo: the Reading-view host hands
+	 * the rebuilt section back to that live view (SC-340 adoption) and the sidebar host swallows
+	 * the `modify` it causes. Any other writer (the block edit form's Save, the hero's "Edit
+	 * definition") leaves it unset: the view does NOT hold that content, so the write must
+	 * re-render like an external edit instead of being adopted/swallowed. The default is
+	 * deliberately the safe one: an unmarked write costs a fresh render, never a stale card.
 	 */
-	replaceSource(newSource: string): Promise<boolean>;
+	replaceSource(newSource: string, options?: { fromView?: boolean }): Promise<boolean>;
 	/**
 	 * SC-455 — optional: true when the LAST `replaceSource` call that failed already told the user why
 	 * (the host showed its own Notice), false when it landed or failed silently. A caller that adds its
