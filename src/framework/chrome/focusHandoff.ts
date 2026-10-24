@@ -53,32 +53,31 @@ const SETTLE_MS = 1500;
 interface Request {
 	item: string;
 	expires: number;
-	/** The button the keyboard user pressed (focus still on it, while it lives, is OURS, not "the user went elsewhere"). */
-	pressed: HTMLElement | null;
-	/** The document it was pressed in (a popout has its own). */
-	doc: Document;
-	/** The pane (`.workspace-leaf`) it was pressed in. The same note open in two panes renders the same block key
-	 *  twice; only a copy in THIS pane may claim, or be taken as a sign the user left. Null: no pane known. */
-	leaf: Element | null;
+	/** Which copy of the block was pressed: its embed (`![[Note]]`) if it sits in one, else its pane (`.workspace-leaf`).
+	 *  The same note open in two panes, or embedded twice in one note, renders the same block key several times; only a
+	 *  copy in THIS scope may claim, or be taken as a sign the user left. Null: no scope known. */
+	scope: Element | null;
 }
 const requests = new Map<string, Request>();
 
 const LEAF = '.workspace-leaf';
+const EMBED = '.internal-embed, .markdown-embed';
+/** The copy a button belongs to: the innermost embed around it, else its pane. */
+const scopeOf = (el: Element): Element | null => el.closest(EMBED) ?? el.closest(LEAF);
 
-/** Ask the next chrome mount of the block `blockKey`, in the pane `pressed` sits in, to focus its `item` button
+/** Ask the next chrome mount of the block `blockKey`, in the copy `pressed` sits in, to focus its `item` button
  *  (`data-dse-chrome-item`). */
 export function armChromeFocus(blockKey: string, item: string, pressed: HTMLElement | null = null): void {
-	const doc = pressed?.ownerDocument ?? document;
-	requests.set(blockKey, { item, expires: Date.now() + REQUEST_TTL_MS, pressed, leaf: pressed?.closest(LEAF) ?? null, doc });
-	guardFocus(doc);
+	requests.set(blockKey, { item, expires: Date.now() + REQUEST_TTL_MS, scope: pressed ? scopeOf(pressed) : null });
+	guardFocus(pressed?.ownerDocument ?? document);
 }
 
 /**
- * While a request waits, focus that lands anywhere but on the pressed button or this pane's own `item` button
- * means the user moved on (a Tab, a click): the request is cancelled AT ONCE. Left to the next rebuild to notice
- * (the check in `claimChromeFocus`), a user who Tabbed to another control of the same block would have focus pulled
- * to Pin by any rebuild inside the window (an outside edit, Sync, a second pane's write). Our own focus calls land on
- * the `item` button, so they pass. One capture-phase listener per document, removed once no request is live.
+ * While a request waits, focus that lands anywhere but on this copy's own `item` button means the user moved on (a
+ * Tab, a click): the request is cancelled AT ONCE. Left to the next rebuild to notice, a user who Tabbed to another
+ * control of the same block would have focus pulled to Pin by any rebuild inside the window (an outside edit, Sync,
+ * a second pane's write). The pressed button and every Pin our own focus calls land on are `item` buttons, so they
+ * pass. One capture-phase listener per document, removed once no request is live.
  */
 const guarded = new Set<Document>();
 function guardFocus(doc: Document): void {
@@ -94,9 +93,8 @@ function onFocusIn(evt: FocusEvent): void {
 	const target = evt.target as Element | null;
 	for (const [key, req] of [...requests]) {
 		if (!liveRequest(key)) continue;
-		if (target === req.pressed) continue;
 		const isItem = target?.matches?.(`[data-dse-chrome-item="${req.item}"]`) === true;
-		if (isItem && (!req.leaf || target?.closest(LEAF) === req.leaf)) continue;
+		if (isItem && (!req.scope || scopeOf(target) === req.scope)) continue;
 		requests.delete(key); // the user (or something else) took focus elsewhere
 	}
 	if (!anyLive()) unguardFocus();
@@ -172,12 +170,12 @@ export function claimChromeFocus(blockKey: () => string, root: HTMLElement): voi
 			(b) => b.closest('[data-dse-chrome]') === root,
 		);
 		if (!btn?.isConnected || doc.activeElement === btn) return;
-		// Another pane's copy of the same block (same key): not ours to claim, and its rebuild says nothing about the user.
-		if (req.leaf && btn.closest(LEAF) !== req.leaf) return;
-		if (!focusIsFree(doc)) {
-			if (doc.activeElement !== req.pressed) disarmChromeFocus(key); // the user went elsewhere in the meantime
-			return; // (focus still on the pressed button: the pressed pane has not been rebuilt yet)
-		}
+		// Another pane's (or another embed's) copy of the same block, same key: not ours to claim, and its rebuild says
+		// nothing about the user.
+		if (req.scope && scopeOf(btn) !== req.scope) return;
+		// Something holds focus. The focusin guard has already cancelled the request if the user put it there, so it is
+		// the pressed button (this copy has not been torn down yet) or a Pin already claimed: leave it.
+		if (!focusIsFree(doc)) return;
 		// A hidden copy (Live Preview's widget) refuses focus: the request stays for the copy that can take it.
 		if (focusControl(btn)) req.expires = Date.now() + SETTLE_MS;
 	};

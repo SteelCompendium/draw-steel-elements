@@ -163,6 +163,8 @@ async function resetFixtures(): Promise<void> {
  * are mounted and the plugin is write-idle. Marks the recorders just before the open, so errors
  * while rendering the note are caught too.
  */
+// (The wait below also accepts "every root has a live registry entry": an embedded note's blocks belong to the EMBEDDED
+// file (`host.sourcePath`), so counting entries by the opened path alone never sees them.)
 async function openNote(rel: string, opts: { mode?: 'reading' | 'live-preview' } = {}): Promise<void> {
 	const mode = opts.mode ?? 'reading';
 	await closeEverything();
@@ -184,7 +186,8 @@ async function openNote(rel: string, opts: { mode?: 'reading' | 'live-preview' }
 			if (!view || view.file?.path !== ${JSON.stringify(rel)} || !view.containerEl) return false;
 			const roots = Array.from(view.containerEl.querySelectorAll('${scope} [data-dse-element]')).filter((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]'));
 			const mine = ${REGISTRY}.liveEntries().filter((e) => e.host.sourcePath === ${JSON.stringify(rel)} && e.root.isConnected);
-			return roots.length > 0 && mine.length >= roots.length;
+			const all = ${REGISTRY}.liveEntries();
+			return roots.length > 0 && (mine.length >= roots.length || roots.every((r) => all.some((e) => e.root === r)));
 		})()`,
 		`${rel} to render its blocks in ${mode === 'reading' ? 'Reading view' : 'Live Preview'}`,
 	);
@@ -193,8 +196,7 @@ async function openNote(rel: string, opts: { mode?: 'reading' | 'live-preview' }
 }
 
 /** `block()` is how a test names the block it edits: record that fence of the open note as the target. */
-function declareTarget(elementId: string, n: number): void {
-	const rel = state.currentNote;
+function declareTarget(elementId: string, n: number, rel = state.currentNote): void {
 	if (!rel) return;
 	let seen = -1;
 	fencesOf(readFixture(rel)).forEach((f, i) => {
@@ -205,6 +207,15 @@ function declareTarget(elementId: string, n: number): void {
 			state.targets.get(rel)!.add(i);
 		}
 	});
+}
+
+/**
+ * A note that EMBEDS another (`![[Other]]`) renders the other note's blocks, and a write from one of them lands in the OTHER file.
+ * Declare which of its blocks the test edits (and that the note is checked at all), the way `block()` does for the opened note.
+ */
+function embeddedTarget(rel: string, lang: string, n = 0): void {
+	state.touched.add(rel);
+	declareTarget(elementIdOf(lang), n, rel);
 }
 
 /** The n-th (0-based) block of `lang` in the visible view (Reading view, or Live Preview when `openNote` was told so). */
@@ -540,6 +551,7 @@ function expectNoteBlock(rel: string, lang: string, n = 0) {
 export const dse = {
 	openNote,
 	block,
+	embeddedTarget,
 	modal,
 	toast,
 	control,

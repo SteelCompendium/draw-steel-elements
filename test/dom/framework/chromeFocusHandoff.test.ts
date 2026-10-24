@@ -24,7 +24,7 @@ function makeDeps(): ElementPipelineDeps {
 	return deps;
 }
 
-function makeHost(): BlockHost & { containerEl: HTMLElement } {
+function makeHost(key = KEY): BlockHost & { containerEl: HTMLElement } {
 	return {
 		mode: 'reading' as RenderMode,
 		sourcePath: 'Note.md',
@@ -33,14 +33,14 @@ function makeHost(): BlockHost & { containerEl: HTMLElement } {
 		addChild: (child: unknown) => child,
 		getBlockInfo: () => ({ language: 'ds-stamina-bar', lineStart: 0, lineEnd: 4 }),
 		replaceSource: async () => true,
-		blockKey: () => KEY,
+		blockKey: () => key,
 	} as unknown as BlockHost & { containerEl: HTMLElement };
 }
 
 /** Render the block (a fresh pipeline run, i.e. a rebuild when the key repeats). `attach: false` leaves it detached,
  *  the way Obsidian builds a section before inserting it. */
-async function render(opts: { attach?: boolean; hidden?: boolean; leaf?: HTMLElement } = {}): Promise<{ root: HTMLElement; host: ReturnType<typeof makeHost> }> {
-	const host = makeHost();
+async function render(opts: { attach?: boolean; hidden?: boolean; leaf?: HTMLElement; key?: string } = {}): Promise<{ root: HTMLElement; host: ReturnType<typeof makeHost> }> {
+	const host = makeHost(opts.key);
 	if (opts.hidden) host.containerEl.setAttribute('data-test-hidden', '');
 	if (opts.attach !== false) (opts.leaf ?? document.body).appendChild(host.containerEl);
 	await new ElementPipeline(makeDeps()).run(staminaBarElement, BODY, host);
@@ -52,6 +52,13 @@ const makeLeaf = (): HTMLElement => {
 	const leaf = document.createElement('div');
 	leaf.className = 'workspace-leaf';
 	return document.body.appendChild(leaf);
+};
+
+/** An embed (`![[Note]]`) inside a pane: a note that embeds the same note twice renders the same block key twice in ONE pane. */
+const makeEmbed = (leaf: HTMLElement): HTMLElement => {
+	const embed = document.createElement('div');
+	embed.className = 'internal-embed markdown-embed';
+	return leaf.appendChild(embed);
 };
 
 const item = (root: HTMLElement, id: string): HTMLButtonElement =>
@@ -342,5 +349,51 @@ describe('SC-505 r2 MEDIUM-1 — a request nobody answered must not move focus l
 
 		expect(focusCalls).toEqual([]);
 		expect(document.activeElement).toBe(document.body);
+	});
+});
+
+describe('SC-505 r3 LOW-A — two copies of one block in the SAME pane (a note that embeds the same note twice)', () => {
+	test('pressing in the second embed: the first embed rebuilding first neither takes focus nor cancels the request', async () => {
+		const leaf = makeLeaf();
+		const e0 = makeEmbed(leaf);
+		const e1 = makeEmbed(leaf);
+		const c0 = await render({ leaf: e0 });
+		const c1 = await render({ leaf: e1 });
+		const pressed = item(c1.root, 'pin');
+		pressed.focus();
+		keyboardClick(pressed);
+		await flush();
+
+		c0.host.containerEl.remove();
+		const c0b = await render({ leaf: e0 }); // the twin rebuilds first
+		expect(document.activeElement).toBe(pressed);
+		expect(document.activeElement).not.toBe(item(c0b.root, 'pin'));
+
+		c1.host.containerEl.remove();
+		const c1b = await render({ leaf: e1 });
+		expect(document.activeElement).toBe(item(c1b.root, 'pin'));
+	});
+
+	test('pressing in the first embed: the second embed rebuilding after focus was handed over leaves it where it is, and a later rebuild of the first gets it back', async () => {
+		const leaf = makeLeaf();
+		const e0 = makeEmbed(leaf);
+		const e1 = makeEmbed(leaf);
+		const c0 = await render({ leaf: e0 });
+		const c1 = await render({ leaf: e1 });
+		item(c0.root, 'pin').focus();
+		keyboardClick(item(c0.root, 'pin'));
+		await flush();
+
+		c0.host.containerEl.remove();
+		const c0b = await render({ leaf: e0 });
+		expect(document.activeElement).toBe(item(c0b.root, 'pin')); // the pressed copy's first rebuild claimed it
+
+		c1.host.containerEl.remove();
+		await render({ leaf: e1 }); // the twin's rebuild arrives while focus sits on a Pin this request claimed
+		expect(document.activeElement).toBe(item(c0b.root, 'pin'));
+
+		c0b.host.containerEl.remove(); // the pressed copy is rebuilt again (focus drops to <body>) and must get focus again
+		const c0c = await render({ leaf: e0 });
+		expect(document.activeElement).toBe(item(c0c.root, 'pin'));
 	});
 });

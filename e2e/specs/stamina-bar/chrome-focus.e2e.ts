@@ -35,6 +35,10 @@ const waitDomQuiet = (quietMs: number): Promise<void> =>
 		`new Promise((resolve) => { let t = setTimeout(done, ${quietMs}); const mo = new MutationObserver(() => { clearTimeout(t); t = setTimeout(done, ${quietMs}); }); function done() { mo.disconnect(); resolve(true); } mo.observe(document.body, { childList: true, subtree: true }); })`,
 	);
 
+/** Which stamina bar of the open note (0-based, in document order) holds focus; -1 when none does. */
+const embedIndexOfFocus = (): Promise<number> =>
+	dse.page<number>(`Array.from(document.querySelectorAll('${BLOCK}')).findIndex((r) => r.contains(document.activeElement))`);
+
 describe('stamina bar chrome: keyboard focus follows Collapse and Expand (SC-505)', () => {
 	it("[CHR-F01] Tab to Collapse + Enter: the block collapses and focus lands on the one-liner's Expand button (ring shown); Enter on it expands and focus returns to Collapse (ring shown, panel shown)", async () => {
 		await dse.openNote(NOTE);
@@ -134,6 +138,23 @@ describe('stamina bar chrome: keyboard focus stays on Pin to sidebar across the 
 		expect(await dse.page<boolean>(`document.activeElement.closest('.workspace-leaf') === window.__paneB`)).toBe(true); // this pane, not the twin
 		expect(await ring()).toEqual({ visible: true, outline: 'solid' });
 	});
+
+	const pinInEmbed = async (n: number): Promise<void> => {
+		await dse.openNote('Stamina/embed-twice.md');
+		dse.embeddedTarget('Stamina/basic.md', BAR); // the pin stamps the EMBEDDED note's block
+		const pin = dse.block(BAR, n).control('chrome.pin');
+		await dse.tabTo(pin, 40);
+		expect(await embedIndexOfFocus()).toBe(n);
+		const w = await dse.waitForWrite('Stamina/basic.md', () => dse.press('Enter', pin));
+		expect(w.count).toBeGreaterThanOrEqual(1);
+		await dse.settle();
+		await waitDomQuiet(800);
+		expect(await where()).toBe('chrome.pin');
+		expect(await embedIndexOfFocus()).toBe(n);
+		expect(await ring()).toEqual({ visible: true, outline: 'solid' });
+	};
+	it("[CHR-F08] a note embedding the same note twice: Tab + Enter on Pin in the second embed leaves focus on that embed's Pin button, never the first's", () => pinInEmbed(1));
+	it("[CHR-F09] a note embedding the same note twice: Tab + Enter on Pin in the first embed leaves focus on that embed's Pin button (not the page)", () => pinInEmbed(0));
 
 	// After a keyboard Collapse and Expand, as a keyboard user's session goes: that order was measured to redraw the block three
 	// times, the last by Obsidian re-inserting the existing section (nothing of the plugin's runs for it), and the focus
