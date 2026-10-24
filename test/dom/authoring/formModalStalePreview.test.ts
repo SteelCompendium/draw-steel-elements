@@ -94,13 +94,20 @@ async function setup(c: { def: ElementDefinition<any>; alias: string }, noteText
 	const h = makeCompendiumDeps();
 	await h.deps.prefs.set('authoringControls', true);
 	for (const { id, schema } of FRAMEWORK_V2_DEPENDENCY_SCHEMAS) h.deps.validation.addDependencySchema(id, schema);
-	// Every view the pipeline asks the def for, in order (the first is the block's own).
-	const views: Array<{ _loaded: boolean }> = [];
+	// Every view the pipeline asks the def for, in order (the first is the block's own), with the element the
+	// host says it lives in (`cx.host.containerEl`) and the element it was actually mounted into.
+	const views: Array<{ _loaded: boolean; host: HTMLElement; root?: HTMLElement }> = [];
 	const def = {
 		...c.def,
 		createView: (cx: any) => {
-			const view = c.def.createView(cx);
-			views.push(view as never);
+			const view = c.def.createView(cx) as any;
+			const record = Object.assign(view, { host: cx.host.containerEl as HTMLElement, root: undefined as HTMLElement | undefined });
+			const mount = view.mount.bind(view);
+			view.mount = (root: HTMLElement, model: unknown) => {
+				record.root = root;
+				return mount(root, model);
+			};
+			views.push(record);
 			return view;
 		},
 	} as ElementDefinition<any>;
@@ -228,22 +235,66 @@ describe.each(CASES)('SC-510: typing @Ref.md into the $name edit form, one chara
 		const stillLoaded = views.filter((v) => v._loaded);
 		expect(stillLoaded).toEqual([views[views.length - 1]]);
 	});
+
+	test('each preview view is mounted into its own slot inside the preview box, and the host says the same slot is its container', async () => {
+		const { views, form } = await withRef();
+		views.length = 0;
+		form.typeSlowly('@Ref.md');
+		await settle();
+		for (const v of views) {
+			expect(v.host).toBe(v.root);
+			expect(v.host.classList.contains('dse-form__preview-slot')).toBe(true);
+			expect(v.host).not.toBe(form.preview);
+		}
+		expect(new Set(views.map((v) => v.host)).size).toBe(views.length);
+		const last = views[views.length - 1];
+		expect(last.host.parentElement).toBe(form.preview);
+		expect(form.preview.children.length).toBe(1);
+		// the earlier ones were dropped from the page
+		expect(views.slice(0, -1).every((v) => v.host.parentElement === null)).toBe(true);
+	});
 });
 
 describe.each(CASES)('SC-510: the $name edit form when the mount itself fails', (c) => {
 	// jest-circus fails a test on any unhandled promise rejection raised while it runs, so each test below
 	// asserts "no unhandled rejection" by finishing green.
-	test('a referenced block the element cannot read: typing its reference leaves no unhandled rejection and no stale content', async () => {
+	test('a referenced block the element cannot read: the preview shows the same error card the real card shows, with no Read-only badge over it', async () => {
 		const s = await setup(c, noteWith(c.alias, c.source));
 		s.h.app.vault.setFile('Bad.md', refNote(c.alias, c.unreadable));
 		const { el } = await s.render(c.source);
+		const real = await s.render('@Bad.md');
+		const realCard = real.el.querySelector('.dse-error-card')!;
+		expect(realCard.textContent).toContain('failed to render (render)');
 		const form = openForm(el);
 		const hold = holdLookups(s.h.deps.refs as never);
 		form.typeSlowly('@Bad.md');
 		await hold.releaseAll();
 		await settle();
 		expect(form.preview.children.length).toBe(1);
-		expect(form.preview.textContent).not.toMatch(/Reference file|Bad|Ref/);
+		const card = form.preview.querySelector('.dse-error-card')!;
+		expect(card).not.toBeNull();
+		expect(card.textContent).toBe(realCard.textContent);
+		expect(form.preview.hasAttribute('data-dse-readonly')).toBe(false); // the badge would cover the card
+	});
+
+	test('a rejection from a superseded keystroke arriving after a newer valid preview leaves the newer preview (and its badge) alone', async () => {
+		const s = await setup(c, noteWith(c.alias, c.source));
+		s.h.app.vault.setFile('Bad.md', refNote(c.alias, c.unreadable));
+		s.h.app.vault.setFile('Ref.md', refNote(c.alias, c.refBlock));
+		const { el } = await s.render(c.source);
+		const form = openForm(el);
+		const hold = holdLookups(s.h.deps.refs as never);
+		form.typeSlowly('@Bad.md');
+		form.type('@Ref.md');
+		const bad = hold.held.findIndex((x) => x.raw === '@Bad.md');
+		const latest = hold.held.length - 1;
+		expect(hold.held[latest].raw).toBe('@Ref.md');
+		await hold.release(latest);
+		expectOnlyRef(form.preview, c.refName);
+		await hold.release(bad); // its mount now rejects, late
+		expectOnlyRef(form.preview, c.refName);
+		await hold.releaseAll(hold.held.map((_x, i) => i).filter((i) => i !== bad && i !== latest));
+		expectOnlyRef(form.preview, c.refName);
 	});
 
 	test('a self-referencing @Note.md raises no unhandled rejection however the lookups finish', async () => {
