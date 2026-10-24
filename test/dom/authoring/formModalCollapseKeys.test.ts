@@ -205,6 +205,23 @@ describe('SC-494: a key the model owns is serialized by the model, never duplica
 		expect(isCollapsed((await render(body)).el)).toBe(true);
 	});
 
+	test.each([
+		['ds-stamina-bar', staminaBarElement, `collapse_default: true\n${STAMINA}`],
+		['ds-skills', skillsElement, 'collapse_default: true\nskills:\n  - Heal'],
+	])('%s: the "Collapse default" toggle opens on; flipping it off writes exactly one `collapse_default: false` line and re-renders expanded', async (alias, def, source) => {
+		const { render, note } = await setup(def, alias, source);
+		const first = await render(source);
+		expect(isCollapsed(first.el)).toBe(true);
+		const form = openForm(first.el);
+		const toggle = form.field('Collapse default').toggles[0];
+		expect(toggle.value).toBe(true);
+		toggle.trigger(false);
+		await submit(form);
+		const body = fenceBody(note(), alias);
+		expect(lines(body, 'collapse_default')).toEqual(['collapse_default: false']);
+		expect(isCollapsed((await render(body)).el)).toBe(false);
+	});
+
 	test('ds-stamina-bar: `collapsed: true` AND an owned `collapsible: false` -- each written once', async () => {
 		const source = `collapsed: true\ncollapsible: false\n${STAMINA}`;
 		const { render, note } = await setup(staminaBarElement, ALIAS, source);
