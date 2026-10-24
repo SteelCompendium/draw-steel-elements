@@ -10,6 +10,8 @@ import type { App, Plugin } from 'obsidian';
 import type { DSESettings } from '@model/Settings';
 import type { ElementDefinition } from './registry';
 import { createRenderContext } from './context';
+import { ElementStageError, renderErrorCard } from './errorCard';
+import type { ErrorStage } from './errorCard';
 import { readBlockBody } from './blockBody';
 import { registerAfterRender } from './view';
 import type { BlockHost } from './host/BlockHost';
@@ -19,7 +21,7 @@ import type { ThemeService } from './seams/theme';
 import type { PreferenceStore } from './seams/prefs';
 import type { ReferenceService } from './seams/refs';
 import type { RollService } from './roll/service';
-import type { ValidationService, ValidationResult } from './validation';
+import type { ValidationService } from './validation';
 import type { SessionStore } from './session';
 import type { SccAnchorResolver } from '@/refs/rewriteSccAnchors';
 import type { CompendiumIndex } from '@/services/CompendiumIndex';
@@ -44,29 +46,9 @@ import { ANCHOR_KEY } from './sidebar/anchor';
 import { requestPinToSidebar } from './sidebar/registration';
 import { isExperimental } from './experimental';
 
-/** The four failure stages renderErrorCard can report (F1 §3.8). */
-export type ErrorStage = 'parse' | 'schema' | 'reference' | 'render';
-
-/**
- * F1 §3.8 fixes renderErrorCard's signature at `(root, def, error)` — no separate stage
- * parameter (the spec's own comment types `error` as `Error | ValidationResult`). A
- * ValidationResult is self-describing (always stage "schema"); for the other three
- * stages the single catch site in `ElementPipeline.run` needs some way to know which
- * step actually threw. This Error subclass carries that tag on the error object itself
- * instead of widening renderErrorCard's public signature. Exported so callers other than
- * the pipeline (and tests) can construct/inspect a staged error directly.
- */
-export class ElementStageError extends Error {
-	readonly stage: ErrorStage;
-	readonly cause: unknown;
-
-	constructor(stage: ErrorStage, cause: unknown) {
-		super(cause instanceof Error ? cause.message : String(cause));
-		this.name = 'ElementStageError';
-		this.stage = stage;
-		this.cause = cause;
-	}
-}
+// Moved to ./errorCard (SC-510); re-exported so every existing import of these names is unchanged.
+export { ElementStageError, renderErrorCard };
+export type { ErrorStage };
 
 /**
  * D9 (Plan 15 Task 5): defensive read of the authoringControls pref. Production always
@@ -158,16 +140,6 @@ function dataForSchemaValidation(rawData: unknown): unknown {
 	return rest;
 }
 
-function isValidationResult(error: unknown): error is ValidationResult {
-	return (
-		typeof error === 'object' &&
-		error !== null &&
-		'valid' in error &&
-		'errors' in error &&
-		Array.isArray((error as ValidationResult).errors)
-	);
-}
-
 /**
  * What counts as an editable control for the click shield. `contenteditable="false"` is
  * explicitly NOT editable (the attribute's presence alone would match it).
@@ -239,41 +211,6 @@ function armClickShield(root: HTMLElement): void {
 	};
 	root.addEventListener('mousedown', stop, { capture: true });
 	root.addEventListener('pointerdown', stop, { capture: true });
-}
-
-/**
- * F1 §3.8 — one visual + copy standard for all elements (replaces six hand-rolled
- * try/catch error divs): element name, failure stage, message, and for a
- * ValidationResult a `path: message` list. Built with createEl only (no innerHTML);
- * styled via classes/tokens (`dse-error-card`, `data-dse-error-stage`) rather than
- * inline styles (F1 §1.4 "no inline el.style.*").
- *
- * Idempotent: always clears `root` first, so a caller never needs to remember to empty
- * it beforehand (the pipeline relies on this to guarantee a render-stage failure never
- * leaves a half-mounted element behind the error card — F1 §2.4's single error boundary).
- */
-export function renderErrorCard(root: HTMLElement, def: Pick<ElementDefinition, 'id' | 'name'>, error: unknown): void {
-	root.empty();
-
-	if (isValidationResult(error)) {
-		root.setAttribute('data-dse-error-stage', 'schema');
-		const card = root.createDiv({ cls: 'dse-error-card' });
-		card.createEl('div', { cls: 'dse-error-card-title', text: `${def.name}: failed to render (schema)` });
-		card.createEl('div', { cls: 'dse-error-card-message', text: 'The block did not match its schema:' });
-		const list = card.createEl('ul', { cls: 'dse-error-card-list' });
-		for (const e of error.errors) {
-			list.createEl('li', { cls: 'dse-error-card-list-item', text: `${e.path}: ${e.message}` });
-		}
-		return;
-	}
-
-	const stage: ErrorStage = error instanceof ElementStageError ? error.stage : 'render';
-	const message = error instanceof Error ? error.message : String(error);
-
-	root.setAttribute('data-dse-error-stage', stage);
-	const card = root.createDiv({ cls: 'dse-error-card' });
-	card.createEl('div', { cls: 'dse-error-card-title', text: `${def.name}: failed to render (${stage})` });
-	card.createEl('div', { cls: 'dse-error-card-message', text: message });
 }
 
 /**
