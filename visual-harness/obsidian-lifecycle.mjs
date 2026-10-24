@@ -62,6 +62,11 @@
 // SC-498 appends G-S36 (36 scenarios in all with SC-487's G-S33; the id was assigned by the ticket-owner): the stamina bar is one tab stop
 // (a real Tab reaches it and it shows the focus ring), and a real Enter or Space on it opens the Stamina modal;
 // focus is back on the bar when the modal closes.
+// SC-509 appends G-S40 (37 scenarios in all; the id was assigned by the dispatcher): the block edit form's Save (experimental authoring
+// controls) redraws the card with the saved content - Reading view for a montage and a counter (raw box) and a stamina bar (typed field),
+// then the sidebar panel - by a real hover and click on the pencil and on Save. Before the fix the form's write was adopted as the
+// view's own, so the card kept its old content: the claim count must not move, the old root must be gone, no Notice. A control: an
+// in-card click on a counter is still the view's own write and still adopts the same root.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -249,6 +254,13 @@ Object.assign(FIXTURES, {
 const ZWSP = String.fromCharCode(0x200b);
 Object.assign(FIXTURES, {
 	'Lifecycle/zwsp.md': `# zwsp\n\nTOP\n\n${fence('ds-counter' + ZWSP, counterLines(10))}\n\nBELOW\n`,
+});
+// SC-509 (G-S40): the block edit form's Save. One note per element kind (raw box and typed fields) plus the sidebar's.
+Object.assign(FIXTURES, {
+	'Lifecycle/form-save-montage.md': `# form save montage\n\nABOVE\n\n${fence('ds-montage', ['title: The Heist'])}\n\nBELOW\n`,
+	'Lifecycle/form-save-counter.md': `# form save counter\n\nABOVE\n\n${COUNTER(3, 'Health')}\n\nBELOW\n`,
+	'Lifecycle/form-save-stamina.md': `# form save stamina\n\nABOVE\n\n${fence('ds-stamina-bar', ['max_stamina: 20', 'current_stamina: 15'])}\n\nBELOW\n`,
+	'Lifecycle/form-save-sidebar.md': `# form save sidebar\n\nABOVE\n\n${fence('ds-montage', ['title: The Heist'])}\n\nBELOW\n`,
 });
 
 // ------------------------------------------------------------------ note integrity
@@ -2406,6 +2418,164 @@ const SCENARIOS = [
 			await t.ev(`(async () => { for (const l of app.workspace.getLeavesOfType('dse-sidebar')) l.detach(); })()`);
 			await t.reset(rel);
 			return 'Live Preview "Pin to sidebar" on a ds-counter fence with a zero-width space after the name: the anchor is stamped, the panel mounts the counter (not the unavailable card), a panel write lands; the opening line (zero-width space included) and the text above and below are byte-identical; no Notice';
+		},
+	},
+	{
+		// SC-509: the block edit form's Save wrote the note but the card kept its old content until the note was reopened. Every
+		// host write got a view-adoption claim ticket, so Obsidian's rebuild of the section adopted the OLD view (old root, old
+		// model) - and the sidebar swallowed the change as its own echo. Only the view's own persist is adopted/swallowed now.
+		// Real hover + click on the pencil and on Save; the proof is the card's text, the claim count (must not move) and the old
+		// tagged root (must be gone, so the card was really redrawn).
+		id: 'G-S40',
+		async run(t) {
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			const m = await t.mark();
+			const waitText = async (rootExpr, want, label) => {
+				const t0 = Date.now();
+				for (;;) {
+					const card = await t.ev(`(${rootExpr})?.textContent ?? '<no root>'`);
+					if (card.includes(want)) return card;
+					if (Date.now() - t0 > 8000) throw new Error(`${label}: the card still reads ${JSON.stringify(card.slice(0, 80))}, not ${JSON.stringify(want)}`);
+					await sleep(80);
+				}
+			};
+			const waitDisk = async (rel, want, label) => {
+				const t0 = Date.now();
+				while (!t.read(rel).includes(want)) {
+					if (Date.now() - t0 > 8000) throw new Error(`${label}: the note never got ${JSON.stringify(want)}: ${JSON.stringify(t.read(rel))}`);
+					await sleep(80);
+				}
+			};
+			// Move onto the card, then up to the pencil in small steps (the chrome panel is click-through until the block is hovered).
+			const hoverTo = async (rootExpr, target) => {
+				const center = (el) => t.ev(`(() => { const r = (${el}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+				const from = await center(rootExpr);
+				await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.x, y: from.y });
+				await t.waitFor(`(() => { const b = ${target}; return !!b && b.getBoundingClientRect().width > 0; })()`, `${target} is laid out`);
+				const to = await center(target);
+				// The panel is painted just OUTSIDE the card's top edge and only the card (or the panel) keeps it revealed: stay inside
+				// the card until directly under the pencil, then go straight up onto it.
+				const edge = await t.ev(`(() => { const r = (${rootExpr}).getBoundingClientRect(); return { x: Math.min(Math.max(${to.x}, r.left + 2), r.right - 2), y: r.top + 3 }; })()`);
+				for (const [a, b] of [[from, edge], [edge, to]]) {
+					for (let i = 1; i <= 8; i++) {
+						await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: a.x + ((b.x - a.x) * i) / 8, y: a.y + ((b.y - a.y) * i) / 8 });
+					}
+				}
+				try {
+					await t.waitFor(`getComputedStyle((${target}).closest('.dse-chrome')).pointerEvents === 'auto'`, 'the chrome panel is revealed by the hover', 3000);
+				} catch (e) {
+					const dbg = await t.ev(`JSON.stringify({ root: (${rootExpr}).getBoundingClientRect().toJSON(), tgt: (${target}).getBoundingClientRect().toJSON(), panel: (${target}).closest('.dse-chrome').getBoundingClientRect().toJSON(), hov: (${rootExpr}).matches(':hover'), attr: (${rootExpr}).hasAttribute('data-dse-chrome'), cls: (${rootExpr}).className, from: ${JSON.stringify(from)}, to: ${JSON.stringify(to)}, op: getComputedStyle((${target}).closest('.dse-chrome')).opacity })`);
+					throw new Error(e.message + ' ' + dbg);
+				}
+			};
+			const FORM = `document.querySelector('.modal-container .dse-modal')`;
+			const SAVE = `Array.from(document.querySelectorAll('.modal-container .dse-modal button')).find((b) => b.getAttribute('aria-label') === 'Save')`;
+			// Pencil -> edit one thing -> Save, all by the real path. `edit` = { raw: [from, to] } or { field: [nameRe source, value] }.
+			const formSave = async (label, rootExpr, edit) => {
+				const pencil = `(${rootExpr}).querySelector('.dse-chrome button[aria-label^="Edit "]')`;
+				t.expect(await t.ev(`!!(${pencil})`), `${label}: no Edit pencil - authoringControls is not taking effect`);
+				await hoverTo(rootExpr, pencil);
+				await t.realClick(pencil);
+				await t.waitFor(`!!(${FORM}) && !!${FORM}.querySelector('.dse-form__preview')`, `${label}: the edit form opened`);
+				if (edit.raw) {
+					const ok = await t.ev(`(() => { const ta = ${FORM}.querySelector('textarea.dse-form__raw'); if (!ta) return false; ta.value = ta.value.replace(${JSON.stringify(edit.raw[0])}, ${JSON.stringify(edit.raw[1])}); ta.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+					t.expect(ok, `${label}: the form has no raw box`);
+				} else {
+					const ok = await t.ev(`(() => { const re = new RegExp(${JSON.stringify(edit.field[0])}, 'i'); const item = Array.from(${FORM}.querySelectorAll('.setting-item')).find((s) => re.test(s.querySelector('.setting-item-name')?.textContent ?? '')); const inp = item?.querySelector('input'); if (!inp) return Array.from(${FORM}.querySelectorAll('.setting-item-name')).map((n) => n.textContent).join('|'); inp.value = ${JSON.stringify(edit.field[1])}; inp.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+					t.expect(ok === true, `${label}: no form field matching /${edit.field[0]}/; fields: ${ok}`);
+				}
+				await t.waitFor(`!!(${SAVE}) && !(${SAVE}).disabled`, `${label}: Save is enabled`);
+				await t.realClick(SAVE);
+				await t.waitFor(`!document.querySelector('.modal-container .dse-modal')`, `${label}: the form closed after Save`);
+			};
+			// Obsidian's Notice stack sits where the pencil is; hide it for this scenario only (a Notice is still recorded).
+			await t.ev(`(() => { const st = document.createElement('style'); st.id = 'lc-gs40-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); return true; })()`);
+			await t.ev(`${prefs}.set('authoringControls', true)`);
+			const facts = [];
+			try {
+				// 1. Reading view: the form's Save redraws the card (raw box twice, typed field once).
+				for (const [rel, sel, edit, oldT, newT, name] of [
+					['Lifecycle/form-save-montage.md', '[data-dse-element="montage"]', { raw: ['The Heist', 'Other Job'] }, 'The Heist', 'Other Job', 'montage'],
+					['Lifecycle/form-save-counter.md', '[data-dse-element="counter"]', { raw: ['Health', 'Wounds'] }, 'Health', 'Wounds', 'counter'],
+					['Lifecycle/form-save-stamina.md', '[data-dse-element="stamina-bar"]', { field: ['^current stamina', '7'] }, '15/20', '7/20', 'stamina bar'],
+				]) {
+					await t.open(rel);
+					await t.reset(rel);
+					const root = t.root(sel);
+					await t.waitFor(`!!(${root})`, `${name}: rendered`);
+					t.expect((await waitText(root, oldT, name)).includes(oldT), `${name}: the fixture does not show ${oldT}`);
+					await t.tag(sel, 'gs40');
+					const before = await t.stats();
+					await formSave(name, root, edit);
+					await waitDisk(rel, edit.raw ? edit.raw[1] : `current_stamina: ${edit.field[1]}`, name);
+					const card = await waitText(root, newT, name);
+					await sleep(500); // a late adoption would have put the old root back by now
+					const after = await t.stats();
+					t.expect(!card.includes(oldT), `${name}: the card shows both the old and the new content: ${JSON.stringify(card.slice(0, 80))}`);
+					t.expect(!(await t.sameRoot(sel, 'gs40')), `${name}: the old card root is still on screen - the card was not redrawn (adopted)`);
+					t.expect(after.claims === before.claims, `${name}: the form's write was claimed by the old view (claims ${before.claims} -> ${after.claims})`);
+					t.expect(await t.ev(`(${root}).textContent.includes(${JSON.stringify(newT)})`), `${name}: the card lost the new content`);
+					facts.push(`${name}: ${oldT} -> ${newT}`);
+				}
+
+				// 2. Control: an in-card click is still the view's own write; the rebuild adopts the SAME root (claims +1).
+				{
+					const rel = 'Lifecycle/counter.md';
+					await t.open(rel);
+					await t.reset(rel);
+					await t.waitFor(`!!(${t.root('[data-dse-element="counter"]')})`, 'control: rendered');
+					await t.tag('[data-dse-element="counter"]', 'gs40c');
+					const before = await t.stats();
+					await t.clickIncrease(0);
+					await waitDisk(rel, 'current_value: 11', 'control');
+					await sleep(1000);
+					const after = await t.stats();
+					t.expect(await t.sameRoot('[data-dse-element="counter"]', 'gs40c'), 'control: an in-card click no longer adopts the same root (the harness cannot tell a redraw from an adoption)');
+					t.expect(after.claims === before.claims + 1, `control: expected exactly one claim for the in-card click (claims ${before.claims} -> ${after.claims})`);
+					facts.push('control: in-card Increase adopted the same root, one claim');
+				}
+
+				// 3. The sidebar: pin, then Save from the PANEL's pencil; the panel (and the note's own card) show the new content.
+				{
+					const rel = 'Lifecycle/form-save-sidebar.md';
+					const sel = '[data-dse-element="montage"]';
+					await t.open(rel);
+					await t.reset(rel);
+					const noteRoot = t.root(sel);
+					await t.waitFor(`!!(${noteRoot})`, 'sidebar: the note card rendered');
+					// SC-383: pin Math.random to an id YAML cannot read as a number.
+					await t.ev(`(() => { window.__lcRandom = Math.random; Math.random = () => 0xabcdef / 0x1000000; return true; })()`);
+					try {
+						await t.ev(`(${noteRoot}).querySelector('[data-dse-chrome-item="pin"]').click()`);
+						const t0 = Date.now();
+						while (!t.read(rel).includes('_dse_anchor:')) {
+							if (Date.now() - t0 > 15000) throw new Error(`sidebar: no anchor stamp; disk is ${JSON.stringify(t.read(rel))}`);
+							await sleep(100);
+						}
+					} finally {
+						await t.ev(`(() => { if (window.__lcRandom) Math.random = window.__lcRandom; delete window.__lcRandom; return true; })()`);
+					}
+					const panelRoot = `Array.from((app.workspace.getLeavesOfType('dse-sidebar')[0]?.view.containerEl ?? document.createElement('div')).querySelectorAll('${sel}')).find((x) => x.isConnected)`;
+					await t.waitFor(`!!(${panelRoot})`, 'sidebar: the panel mounted');
+					await waitText(panelRoot, 'The Heist', 'sidebar');
+					await sleep(1000); // the stamp's own rebuild of the panel settles
+					await formSave('sidebar', panelRoot, { raw: ['The Heist', 'Other Job'] });
+					await waitDisk(rel, 'title: Other Job', 'sidebar');
+					const card = await waitText(panelRoot, 'Other Job', 'sidebar panel');
+					t.expect(!card.includes('The Heist'), `sidebar: the panel shows both the old and the new content: ${JSON.stringify(card.slice(0, 80))}`);
+					const noteCard = await waitText(t.root(sel), 'Other Job', 'sidebar: the note card');
+					t.expect(!noteCard.includes('The Heist'), 'sidebar: the note card kept the old content');
+					t.expect(/_dse_anchor: [A-Za-z0-9_-]+/.test(t.read(rel)), `sidebar: the anchor did not survive the form's Save: ${JSON.stringify(t.read(rel))}`);
+					facts.push('sidebar: The Heist -> Other Job in the panel and the note card');
+				}
+			} finally {
+				await t.ev(`(async () => { for (const l of app.workspace.getLeavesOfType('dse-sidebar')) l.detach(); })()`);
+				await t.ev(`document.getElementById('lc-gs40-notice')?.remove()`);
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+			}
+			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${JSON.stringify(await t.noticesSince(m))}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
+			return `the form's Save redraws the card by real hover and click - ${facts.join('; ')}; claims did not move for a form write; no Notice, no page error`;
 		},
 	},
 ];
