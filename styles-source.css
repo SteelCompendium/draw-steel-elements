@@ -16857,20 +16857,34 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    hit test was never a stacking problem; the panel was simply cut off.
    Fix: for a widget that holds a chrome-bearing block, drop the paint containment and the hover
    clip, and re-clip with `clip-path` so the ONLY region that opens up is the strip above the
-   widget. The strip is 64px, derived from the tallest the overhang can get: the panel is 26.2px
-   at defaults, 30.5px at the 140% text-size maximum, and 40.1px with the touch-size buttons
-   (`@media (pointer: coarse)`, min-height 2em) at 140% text; its upward shadow (`0 -3px 7px`)
-   reaches 10px above the panel and a focus ring on a panel button (2px + 2px offset, button
-   top 1px inside the panel) about 3px more: 40.1 + 10 + 3 = 53.1, rounded up to 64. (Tooltips
-   are Obsidian's, drawn on <body>, not inside the widget.) The other three sides keep the host's
-   clip exactly (1px of slack on them so the host's own 1px hover ring, a box-shadow, is not cut).
-   The panel itself is unchanged: same placement, same size, still `pointer-events: none` until
-   revealed, so a hidden panel lets a click through to the line above. Specificity beats the
-   host's `!important` rule (0,4,0). */
+   widget. Three parts, each load-bearing:
+     - `contain: none !important` + `overflow: visible`: the clip itself.
+     - `display: flow-root`: `contain: paint` also made the widget its own block formatting
+       context, which kept the block root's own vertical margins (feature 24px top and bottom,
+       statblock/featureblock 8px, every chrome root's 2.1em top margin on mobile) INSIDE the
+       widget box. Without it they collapse out through the widget, CodeMirror measures the
+       widget's border box and undercounts that block's height (48px per feature card), and a Live
+       Preview note with such blocks jumps while scrolling and mis-lands clicks by a line. flow-root
+       restores the context without clipping anything; geometry is then identical to before.
+     - `clip-path: inset(-96px -1px -1px -1px)`: the strip. 96px is derived from the tallest the
+       overhang can get. The panel is sized in em off the editor font, so Obsidian's own Appearance
+       font size (16px default, 30px maximum) scales it as well as the text-size pref (up to 140%):
+       26.2px at defaults, 30.5px at 140% text, 40.1px with touch-size buttons
+       (`@media (pointer: coarse)`, min-height 2em) at 140% text, and 73.4px with touch-size buttons
+       at 140% text and font size 30 (measured). Its upward shadow (`0 -3px 7px`) reaches 10px above
+       the panel and a focus ring on a panel button (2px + 2px offset, button top 1px inside the
+       panel) about 3px more: 73.4 + 10 + 3 = 86.4, rounded up to 96. (Tooltips are Obsidian's,
+       drawn on <body>, not inside the widget.) Only the panel lives in that strip, so a taller
+       strip costs nothing.
+   The other three sides keep the host's clip exactly (1px of slack on them so the host's own 1px
+   hover ring, a box-shadow, is not cut). The panel itself is unchanged: same placement, same
+   size, still `pointer-events: none` until revealed, so a hidden panel lets a click through to the
+   line above. Specificity beats the host's `!important` rule (0,4,0). */
 .markdown-source-view.mod-cm6 .cm-content > .cm-preview-code-block.cm-embed-block:has([data-dse-chrome]) {
 	contain: none !important;
 	overflow: visible;
-	clip-path: inset(-64px -1px -1px -1px);
+	display: flow-root;
+	clip-path: inset(-96px -1px -1px -1px);
 }
 
 /* LIVE PREVIEW (SC-502), reveal. Obsidian draws its own `</>` "Edit this block" button
