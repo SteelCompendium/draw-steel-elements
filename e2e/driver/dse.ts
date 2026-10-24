@@ -116,6 +116,8 @@ const MODAL_KINDS: Record<string, string> = {
 	conditions: '.dse-condal__addwrap',
 	// SC-432: the small confirmation OVER the stamina modal (two .dse-modal are open at once then).
 	'free-heal-confirm': '[data-dse-control="sedit.free-heal.confirm"]',
+	// SC-500: initiative's "Reset encounter state" confirmation.
+	'reset-encounter': '[data-dse-control="init.reset-encounter.confirm"]',
 };
 
 // ------------------------------------------------------------------------- note + blocks
@@ -340,6 +342,13 @@ async function type(el: El, text: string, opts: { replace?: boolean } = {}): Pro
 	recordDrive(labelOf(el), 'type');
 }
 
+/** Real pointer move onto the centre of `el` (no click, nothing recorded): reveals hover-only chrome, such as an
+ *  element's chrome panel (opacity 0 until the pointer is over the element), the way a user would before pressing it. */
+async function hover(el: El): Promise<void> {
+	await el.waitForDisplayed({ timeout: 8000 });
+	await el.moveTo();
+}
+
 /** Real double-click (two press/release pairs, so the browser fires `dblclick`). */
 async function dblclick(el: El): Promise<void> {
 	await el.waitForDisplayed({ timeout: 8000 });
@@ -531,6 +540,7 @@ export const dse = {
 	toast,
 	control,
 	click,
+	hover,
 	type,
 	dblclick,
 	blur,
