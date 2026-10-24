@@ -81,8 +81,25 @@
 // note; `pin`: the OUTERMOST Reading scroller, not the embed's inner one, which never scrolls) and,
 // for those host pins only, switches scroll anchoring off on A's scroller for the pin's lifetime (a
 // second rule in the same `<style>`). The sizer pin alone did NOT hold (2887 -> 0, anchoring still
-// moved it); both together held. Anchoring stays on for a note's own pins: there the collapse spans
-// frames and anchoring is what keeps text below a redrawn block still.
+// moved it); both together held (2887 -> 2887, second pane 3574 -> 3574). Anchoring stays on for a note's
+// own pins: there the collapse spans frames and anchoring is what keeps text below a redrawn block still.
+// Measured with the fix (1.15.0, lifecycle G-S42): a host pin costs the same 3-14 ms to set and 3-17 ms to
+// clear as a note's own pin; the embed scan that decides whether a Reading view is a host runs once per
+// Reading view on every `modify` of any note: median 0.1 ms, max 0.9 ms. `modify` fires before the embed
+// redraws, as for a note's own views, so the height captured there is never a collapsed one.
+// NESTED EMBEDS: A embeds N embeds B. The inner embed's `src` is the link as written in N, so each embed's link
+// is resolved from the path of the note that directly contains it (the DOM nests an embed's content inside its
+// embed element, so the chain is read off the ancestors with one `closest` per level, memoised per scan); only a
+// link that cannot be resolved falls back to the host's path. A relative link or an ambiguous basename in the
+// middle note therefore names the file Obsidian shows.
+// RISK, ACCEPTED (SC-479 ruling): scroll anchoring is off on a host scroller for up to PIN_TTL_MS, and
+// the pin is taken on EVERY `modify` of a note embedded in a Reading view, including a write nothing redraws
+// (an adopted own write), so such a host may carry phantom bottom space for that long (the same trade as
+// SC-470, TTL-bounded, it never clamps). Every measured collapse is sub-frame, so no frame paints in the gap;
+// if a future Obsidian spread the embed's remount across frames, text under the embed would visibly shift
+// for those frames and come back, while scrollTop would not move.
+// NOT COVERED: a Live Preview host (`.cm-scroller`, `![[B]]` rendered by CodeMirror) is a different mechanism
+// and still jumps (6800 -> 3745 measured with the embed near the end of the note): SC-522.
 //
 // THE PIN IS A FLOOR, NOT A CAP (SC-470 r4). The rule's `!important` min-height REPLACES
 // Obsidian's own inline sizer min-height, and Obsidian's Reading view is virtualised, so the
