@@ -57,6 +57,9 @@ interface Request {
 	 *  The same note open in two panes, or embedded twice in one note, renders the same block key several times; only a
 	 *  copy in THIS scope may claim, or be taken as a sign the user left. Null: no scope known. */
 	scope: Element | null;
+	/** The buttons focus may sit on without the request being cancelled: the pressed button plus every button the claim
+	 *  focused. Not "any Pin in the pane": a direct jump to ANOTHER block's Pin is the user leaving. */
+	ours: WeakSet<Element>;
 }
 const requests = new Map<string, Request>();
 
@@ -68,7 +71,9 @@ const scopeOf = (el: Element): Element | null => el.closest(EMBED) ?? el.closest
 /** Ask the next chrome mount of the block `blockKey`, in the copy `pressed` sits in, to focus its `item` button
  *  (`data-dse-chrome-item`). */
 export function armChromeFocus(blockKey: string, item: string, pressed: HTMLElement | null = null): void {
-	requests.set(blockKey, { item, expires: Date.now() + REQUEST_TTL_MS, scope: pressed ? scopeOf(pressed) : null });
+	const ours = new WeakSet<Element>();
+	if (pressed) ours.add(pressed);
+	requests.set(blockKey, { item, expires: Date.now() + REQUEST_TTL_MS, scope: pressed ? scopeOf(pressed) : null, ours });
 	guardFocus(pressed?.ownerDocument ?? document);
 }
 
@@ -76,8 +81,8 @@ export function armChromeFocus(blockKey: string, item: string, pressed: HTMLElem
  * While a request waits, focus that lands anywhere but on this copy's own `item` button means the user moved on (a
  * Tab, a click): the request is cancelled AT ONCE. Left to the next rebuild to notice, a user who Tabbed to another
  * control of the same block would have focus pulled to Pin by any rebuild inside the window (an outside edit, Sync,
- * a second pane's write). The pressed button and every Pin our own focus calls land on are `item` buttons, so they
- * pass. One capture-phase listener per document, removed once no request is live.
+ * a second pane's write). The pressed button and every button our own focus calls land on are in the request's
+ * `ours` set, so they pass. One capture-phase listener per document, removed once no request is live.
  */
 const guarded = new Set<Document>();
 function guardFocus(doc: Document): void {
@@ -93,8 +98,7 @@ function onFocusIn(evt: FocusEvent): void {
 	const target = evt.target as Element | null;
 	for (const [key, req] of [...requests]) {
 		if (!liveRequest(key)) continue;
-		const isItem = target?.matches?.(`[data-dse-chrome-item="${req.item}"]`) === true;
-		if (isItem && (!req.scope || scopeOf(target) === req.scope)) continue;
+		if (target && req.ours.has(target)) continue;
 		requests.delete(key); // the user (or something else) took focus elsewhere
 	}
 	if (!anyLive()) unguardFocus();
@@ -177,6 +181,7 @@ export function claimChromeFocus(blockKey: () => string, root: HTMLElement): voi
 		// the pressed button (this copy has not been torn down yet) or a Pin already claimed: leave it.
 		if (!focusIsFree(doc)) return;
 		// A hidden copy (Live Preview's widget) refuses focus: the request stays for the copy that can take it.
+		req.ours.add(btn); // before the focus call: its focusin goes through the guard
 		if (focusControl(btn)) req.expires = Date.now() + SETTLE_MS;
 	};
 	attempt();

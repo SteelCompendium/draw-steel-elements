@@ -448,3 +448,23 @@ describe('SC-505 r3 INFO-1 — focus on the twin\'s Pin is the user leaving', ()
 		expect(focusCalls).toEqual([]);
 	});
 });
+
+describe('SC-505 r4 LOW-C — only THIS request\'s own buttons are "ours", not every Pin in the pane', () => {
+	test('focus that jumps straight to ANOTHER block\'s Pin in the same pane cancels the request: a later rebuild of the pressed block does not pull focus back', async () => {
+		const leaf = makeLeaf();
+		const bar1 = await render({ leaf, key: KEY });
+		const bar2 = await render({ leaf, key: 'Note.md::ds-stamina-bar::40' });
+		item(bar1.root, 'pin').focus();
+		keyboardClick(item(bar1.root, 'pin'));
+		await flush();
+
+		item(bar2.root, 'pin').focus(); // a direct jump (quick-nav, a script): not a Tab through other controls
+		bar2.host.containerEl.remove(); // an outside edit rebuilds the block the user went to; focus falls to <body>
+		bar1.host.containerEl.remove();
+		focusCalls.length = 0;
+		await render({ leaf, key: KEY }); // ...and the pressed block is rebuilt too
+
+		expect(focusCalls).toEqual([]);
+		expect(document.activeElement).toBe(document.body);
+	});
+});
