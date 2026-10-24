@@ -194,6 +194,24 @@ describe('D8 Task 2: SidebarBlockHost (spec §1.4)', () => {
 		expect(onExternalChange).toHaveBeenCalledWith(`current_value: 42\n_dse_anchor: ${ANCHOR_ID}`);
 	});
 
+	// SC-509 -- only a write that comes from the mounted view is its own echo. The block edit form
+	// writes through the same host but is NOT the view: its change must reach the panel.
+	test('SC-509: a write that is not from the view (the edit form) reaches onExternalChange; a view write does not', async () => {
+		const { app, file } = setup();
+		const onExternalChange = jest.fn();
+		const { host } = makeHost(app, file, onExternalChange);
+		await host.refresh();
+
+		await host.replaceSource(`current_value: 9\n_dse_anchor: ${ANCHOR_ID}`, { fromView: true });
+		await flushAsync();
+		expect(onExternalChange).not.toHaveBeenCalled();
+
+		await host.replaceSource(`current_value: 12\n_dse_anchor: ${ANCHOR_ID}`); // the form's call shape
+		await flushAsync();
+		expect(onExternalChange).toHaveBeenCalledTimes(1);
+		expect(onExternalChange).toHaveBeenCalledWith(`current_value: 12\n_dse_anchor: ${ANCHOR_ID}`);
+	});
+
 	test('blockKey is filePath::alias::anchorId', async () => {
 		const { file, app } = setup();
 		const { host } = makeHost(app, file);
