@@ -139,6 +139,28 @@ describe('stamina bar chrome: keyboard focus stays on Pin to sidebar across the 
 		expect(await ring()).toEqual({ visible: true, outline: 'solid' });
 	});
 
+	// A user who Tabs on after the pin must not be pulled back to Pin by a later rebuild (an outside edit, Sync, a second pane's write)
+	// while the hand-off is still waiting for rebuilds: any focus move away from Pin cancels the request at once.
+	it('[CHR-F07] Tab to Pin + Enter, then Tab on to Collapse: an outside edit inside the hand-off window does not pull focus back to Pin', async () => {
+		await dse.openNote(NOTE);
+		await startExpanded();
+		const root = dse.block(BAR);
+		const pin = root.control('chrome.pin');
+		await dse.tabTo(pin, 24);
+		await dse.waitForWrite(NOTE, () => dse.press('Enter', pin));
+		await dse.settle();
+		await dse.waitFor(`document.activeElement?.closest('[data-dse-control]')?.getAttribute('data-dse-control') === 'chrome.pin'`, 'focus on the rebuilt Pin button');
+		await dse.press('Tab');
+		expect(await where()).toBe('chrome.collapse');
+		await dse.externalEdit(NOTE, `c.replace('current_stamina: 15', 'current_stamina: 14')`);
+		await dse.waitFor(`document.querySelector('${BLOCK}').textContent.includes('14')`, 'the outside edit to redraw the bar');
+		await waitDomQuiet(800);
+		expect(await where()).not.toBe('chrome.pin');
+		expect(await dse.page<boolean>(`document.activeElement?.matches('[data-dse-control="chrome.pin"]') === false`)).toBe(true);
+	});
+
+	// A note that embeds the same note twice puts two copies of the block (same block key, a Pin button each) in ONE pane. The request
+	// is scoped to the copy that was pressed: the twin's rebuild must neither take focus nor make it drop to the page.
 	const pinInEmbed = async (n: number): Promise<void> => {
 		await dse.openNote('Stamina/embed-twice.md');
 		dse.embeddedTarget('Stamina/basic.md', BAR); // the pin stamps the EMBEDDED note's block
