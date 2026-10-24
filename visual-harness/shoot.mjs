@@ -2688,7 +2688,10 @@ const ROLL_RESET_KEY = 'roll|dse-btn.dse-btn--ghost.dse-rollbar__reset';
 async function changeExtraRollModifierForSweep(page, bg, problems) {
 	const extra = '[data-dse-harness-extra="roll"]';
 	const inc = page.locator(`${extra} [data-dse-control="roll.edges.inc"]`);
-	if ((await inc.count()) === 1) await inc.click();
+	// Count the stepper first: a renamed control id (or a mode that hides Edges) must be reported as
+	// THAT, not as a Reset that did not enable. The Reset checks below still run either way.
+	const incCount = await inc.count();
+	if (incCount === 1) await inc.click();
 	// The click leaves the pointer over the stepper; park it away so no sweep sample inherits :hover.
 	await page.mouse.move(0, 0);
 	const state = await page.evaluate(
@@ -2706,6 +2709,9 @@ async function changeExtraRollModifierForSweep(page, bg, problems) {
 		},
 		{ extraSel: extra },
 	);
+	if (incCount !== 1) {
+		problems.push(`${bg}: expected exactly one Edges "+" ([data-dse-control="roll.edges.inc"]) on the extra roll strip, found ${incCount} — the click that enables its Reset could not be made`);
+	}
 	if (state.extraResets !== 1) {
 		problems.push(`${bg}: expected exactly one Reset on the extra roll strip (galleryExtra=roll), found ${state.extraResets} — the enabled roll Reset would go unchecked`);
 	} else if (state.enabled !== 1 || state.boxless) {

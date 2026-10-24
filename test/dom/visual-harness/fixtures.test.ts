@@ -489,7 +489,7 @@ describe('SC-411 docs GIF harness hooks', () => {
 // sweep so it can change a modifier on a SECOND roll strip (its Reset is then enabled) while the
 // gallery's own strip keeps a disabled Reset. Every other gallery URL must mount what it always did.
 describe('gallery extra sections (SC-512)', () => {
-	const gallery = { fixture: 'default', theme: 'steel', bg: 'dark', print: false, readonly: false, gallery: true, galleryIds: ['roll'] } as const;
+	const gallery: Parameters<typeof mountFromParams>[1] = { fixture: 'default', theme: 'steel', bg: 'dark', print: false, readonly: false, gallery: true, galleryIds: ['roll'] };
 	let mount: HTMLDivElement;
 
 	beforeEach(() => {
@@ -511,14 +511,14 @@ describe('gallery extra sections (SC-512)', () => {
 	});
 
 	test('without it the gallery mounts one roll strip and no extra section', async () => {
-		const { errors } = await mountFromParams(document, { ...gallery, galleryIds: ['roll'] });
+		const { errors } = await mountFromParams(document, { ...gallery });
 		expect(errors).toEqual([]);
 		expect(mount.querySelectorAll('[data-dse-element="roll"]')).toHaveLength(1);
 		expect(mount.querySelector('[data-dse-harness-extra]')).toBeNull();
 	});
 
 	test('with it a second roll strip follows the gallery, marked, with its own Reset', async () => {
-		const { errors } = await mountFromParams(document, { ...gallery, galleryIds: ['roll'], galleryExtra: [{ element: 'roll', fixture: 'default' }] });
+		const { errors } = await mountFromParams(document, { ...gallery, galleryExtra: [{ element: 'roll', fixture: 'default' }] });
 		expect(errors).toEqual([]);
 		const sections = Array.from(mount.children);
 		expect(sections).toHaveLength(2);
@@ -529,7 +529,7 @@ describe('gallery extra sections (SC-512)', () => {
 	});
 
 	test('an Edges "+" click on the extra strip enables only ITS Reset (the first strip keeps the disabled kind)', async () => {
-		await mountFromParams(document, { ...gallery, galleryIds: ['roll'], galleryExtra: [{ element: 'roll', fixture: 'default' }] });
+		await mountFromParams(document, { ...gallery, galleryExtra: [{ element: 'roll', fixture: 'default' }] });
 		const [first, extra] = Array.from(mount.children);
 		expect(resets(first)[0].disabled).toBe(true);
 		expect(resets(extra)[0].disabled).toBe(true);
