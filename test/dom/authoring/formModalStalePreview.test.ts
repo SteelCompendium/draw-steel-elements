@@ -274,6 +274,7 @@ describe.each(CASES)('SC-510: the $name edit form when the mount itself fails', 
 		const card = form.preview.querySelector('.dse-error-card')!;
 		expect(card).not.toBeNull();
 		expect(card.textContent).toBe(realCard.textContent);
+		expect(form.preview.querySelector(':scope > .dse-form__preview-slot > .dse-error-card')).toBe(card); // inside the current slot, not loose in the box
 		expect(form.preview.hasAttribute('data-dse-readonly')).toBe(false); // the badge would cover the card
 	});
 
