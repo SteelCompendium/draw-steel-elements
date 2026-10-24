@@ -2554,6 +2554,9 @@ async function assertBtnHostLeak(page) {
 			bg,
 			prefs: 'authoringControls:true',
 			sheet: '1',
+			// SC-512 - a SECOND roll strip, appended after every gallery section, whose modifier is
+			// changed below so its Reset is enabled. This sweep only: no capture URL sends it.
+			galleryExtra: 'roll',
 		});
 		await loadBtnHostLeakPage(page, query);
 		// SC-202 r6c fold (review LOW-2b): verify the requested `sheet: '1'` actually
@@ -2567,10 +2570,19 @@ async function assertBtnHostLeak(page) {
 		// SC-501 — and open the roll strip's collapsed Modifiers disclosure by a real click (see
 		// `openRollModifiersForSweep`); the assertion there fails the sweep rather than skipping.
 		await openRollModifiersForSweep(page, bg, acc.problems);
+		// SC-512 - and change a modifier on the extra strip by a real click, so its Reset is ENABLED.
+		await changeExtraRollModifierForSweep(page, bg, acc.problems);
 		const keys = await page.evaluate(tagButtons);
 		if (keys.length < 20) {
 			acc.problems.push(`${bg}: only ${keys.length} buttons found in the gallery — the sweep is blind`);
 			continue;
+		}
+		// SC-512 - the roll Reset must be swept BOTH ways: the first strip's stays disabled (SC-501's
+		// kind, kept) and the extra strip's is enabled (the new kind). Name a missing one; never skip it.
+		for (const want of [ROLL_RESET_KEY, `${ROLL_RESET_KEY}|disabled`]) {
+			if (!keys.includes(want)) {
+				acc.problems.push(`${bg}: the sweep tagged no \`${want}\` button — the roll Reset would go unchecked in that state`);
+			}
 		}
 		kindCount = keys.length;
 		await sweepTaggedButtons(page, bg, keys.length, acc);
@@ -2653,6 +2665,59 @@ async function openRollModifiersForSweep(page, bg, problems) {
 		problems.push(
 			`${bg}: the roll strip's Modifiers disclosure could not be opened (${state.hidden} of ${state.panels} panel(s) still [hidden], ` +
 				`${state.boxless} without a box after ${toOpen} click(s)) — its steppers, checkboxes and Reset would be swept with no box`,
+		);
+	}
+}
+
+/** SC-512 - the roll strip's Reset in the sweep's kind-key spelling (`tagButtons`: element|classes);
+ *  `|disabled` is appended while the strip sits at its authored values. */
+const ROLL_RESET_KEY = 'roll|dse-btn.dse-btn--ghost.dse-rollbar__reset';
+
+/** SC-512 - change one modifier on the gallery's EXTRA roll strip (`galleryExtra=roll`, entry.ts) with a
+ *  REAL click on its Edges "+" stepper, so that strip's Reset is enabled
+ *  (`rollBar.ts` `resetButton.setDisabled(atDefaults())`). The first strip is left alone on purpose: its
+ *  Reset stays disabled, so both kinds are swept (the owner's ruling: the enabled kind is ADDED, not
+ *  swapped in). Until now no gallery state changed a modifier, so the enabled Reset (rest, hover,
+ *  keyboard focus) was never compared and its own padding rule (`padding-inline-start: 0`) was only
+ *  checked through the disabled kind.
+ *
+ *  Call it after `openRollModifiersForSweep` (the stepper has no box while the disclosure is closed) on
+ *  EVERY page load a sweep tags, dark and light; never from a screenshot capture - frozen bytes must
+ *  not move. The assertion is loud: no extra strip, no enabled Reset on it, a Reset without a box, or
+ *  a first-strip Reset that is no longer disabled pushes a problem and the sweep FAILS - it never skips. */
+async function changeExtraRollModifierForSweep(page, bg, problems) {
+	const extra = '[data-dse-harness-extra="roll"]';
+	const inc = page.locator(`${extra} [data-dse-control="roll.edges.inc"]`);
+	if ((await inc.count()) === 1) await inc.click();
+	// The click leaves the pointer over the stepper; park it away so no sweep sample inherits :hover.
+	await page.mouse.move(0, 0);
+	const state = await page.evaluate(
+		({ extraSel }) => {
+			const resets = (scope) => [...document.querySelectorAll(`${scope} .dse-rollbar__reset`)];
+			const extraResets = resets(extraSel);
+			const firstStrip = resets('[data-dse-element="roll"]').filter((n) => !n.closest(extraSel));
+			return {
+				extraResets: extraResets.length,
+				enabled: extraResets.filter((n) => !n.disabled).length,
+				boxless: extraResets.filter((n) => n.getClientRects().length === 0).length,
+				firstStrip: firstStrip.length,
+				firstStripEnabled: firstStrip.filter((n) => !n.disabled).length,
+			};
+		},
+		{ extraSel: extra },
+	);
+	if (state.extraResets !== 1) {
+		problems.push(`${bg}: expected exactly one Reset on the extra roll strip (galleryExtra=roll), found ${state.extraResets} — the enabled roll Reset would go unchecked`);
+	} else if (state.enabled !== 1 || state.boxless) {
+		problems.push(
+			`${bg}: clicking the extra roll strip's Edges "+" did not leave an enabled Reset with a box ` +
+				`(${state.enabled} enabled, ${state.boxless} without a box) — the enabled roll Reset would go unchecked`,
+		);
+	}
+	if (state.firstStrip === 0 || state.firstStripEnabled) {
+		problems.push(
+			`${bg}: the gallery's own roll strip must keep its Reset disabled (${state.firstStrip} found, ${state.firstStripEnabled} enabled) — ` +
+				`the disabled kind has to stay swept alongside the enabled one`,
 		);
 	}
 }

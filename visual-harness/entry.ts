@@ -1106,6 +1106,14 @@ export interface HarnessParams {
 	 *  picture anyone puts at the top of a README. `gallery=1` is unchanged (every id), so
 	 *  the F4 sweep's frozen `gallery--steel-*` shots cannot move. */
 	galleryIds?: string[];
+	/** SC-512: extra sections appended AFTER every gallery section, wire format
+	 *  `element:fixture,element:fixture` (e.g. `galleryExtra=roll`). Only the button host-leak sweep
+	 *  sends it, to mount a SECOND `ds-roll` strip whose modifier it then changes with a real click, so
+	 *  the roll Reset is compared while enabled (the gallery's first strip stays at its authored values,
+	 *  its Reset disabled). Absent on every capture URL, so `gallery=1` - and the `gallery--steel-*` shots
+	 *  - mount exactly the sections they always did. Each extra section carries
+	 *  `data-dse-harness-extra="<element>"` (an attribute no CSS keys on) so the sweep can address it. */
+	galleryExtra?: { element: string; fixture: string }[];
 	/** SC-121 Batch 4: constrain #mount to this many CSS px (narrow-width coverage). */
 	width?: number;
 	/**
@@ -1262,6 +1270,7 @@ export function parseParams(search: string): HarnessParams {
 						.split(',')
 						.map((s) => s.trim())
 						.filter(Boolean),
+		galleryExtra: parseStackParam(q.get('galleryExtra')),
 		width: Number.isFinite(width) && width > 0 ? width : undefined,
 		prefs: parsePrefParam(q.get('prefs')),
 		experimental: q.get('experimental') === '0' ? false : undefined,
@@ -2193,6 +2202,7 @@ async function mountOne(
 	fixtureName: string,
 	params: HarnessParams,
 	errors: string[],
+	extra = false,
 ): Promise<void> {
 	const def = registry.get(id);
 	// Elements with a single fixture fall back to it in gallery sweeps.
@@ -2206,6 +2216,8 @@ async function mountOne(
 	// SC-169: a stable per-section address so a stacked capture can name WHICH element to
 	// hover ("the lower one"). No CSS keys on it, so it renders nothing.
 	section.setAttribute('data-dse-harness-index', String(mount.children.length - 1));
+	// SC-512: marks a `galleryExtra` section (see HarnessParams.galleryExtra); no CSS keys on it.
+	if (extra) section.setAttribute('data-dse-harness-extra', id);
 	if (params.gallery) section.createEl('h2', { text: `${id} (${def.aliases[0]})` });
 	const container = section.createDiv();
 	const host = makeHarnessHost(container, { readonly: params.readonly, language: def.aliases[0] });
@@ -2448,12 +2460,17 @@ export async function mountFromParams(
 	const errors: string[] = [];
 	// SC-362: the target list is resolved up front (it is also what mounts, below) so the
 	// compendium mode can be attached BEFORE the pipeline is built.
-	const targets: { element: string; fixture: string }[] = params.stack
+	const targets: { element: string; fixture: string; extra?: boolean }[] = params.stack
 		? params.stack
 		: params.gallery
-			? (params.galleryIds ?? Object.keys(FIXTURES))
-					.filter((id) => FIXTURES[id])
-					.map((id) => ({ element: id, fixture: params.fixture }))
+			? [
+					...(params.galleryIds ?? Object.keys(FIXTURES))
+						.filter((id) => FIXTURES[id])
+						.map((id) => ({ element: id, fixture: params.fixture })),
+					// SC-512 - appended last, so every gallery section keeps its place and the sweep's
+					// first-node-per-kind tagging still lands on the original sections.
+					...(params.galleryExtra ?? []).map((t) => ({ ...t, extra: true })),
+				]
 			: [{ element: params.element ?? 'feature', fixture: params.fixture }];
 	attachHarnessCompendium(deps, harnessCompendiumModeFor(targets));
 	// SC-123: pref-variant captures. Applied BEFORE the pipeline runs, so a preference
@@ -2500,7 +2517,7 @@ export async function mountFromParams(
 		return { errors };
 	}
 	for (const target of targets) {
-		await mountOne(pipeline, registry, mount, target.element, target.fixture, params, errors);
+		await mountOne(pipeline, registry, mount, target.element, target.fixture, params, errors, target.extra);
 	}
 	// SC-169 round 3 — `collapse=1`: fold every mounted element via its own control. Done
 	// AFTER the whole stack has mounted so the clicks cannot race a later element's async

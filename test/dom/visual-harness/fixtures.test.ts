@@ -484,3 +484,57 @@ describe('SC-411 docs GIF harness hooks', () => {
 		expect(window.__dseHarnessWrites).toBe(2);
 	});
 });
+
+// SC-512 — `galleryExtra`: sections appended AFTER the gallery, sent only by the button host-leak
+// sweep so it can change a modifier on a SECOND roll strip (its Reset is then enabled) while the
+// gallery's own strip keeps a disabled Reset. Every other gallery URL must mount what it always did.
+describe('gallery extra sections (SC-512)', () => {
+	const gallery = { fixture: 'default', theme: 'steel', bg: 'dark', print: false, readonly: false, gallery: true, galleryIds: ['roll'] } as const;
+	let mount: HTMLDivElement;
+
+	beforeEach(() => {
+		mount = document.createElement('div');
+		mount.id = 'mount';
+		document.body.appendChild(mount);
+	});
+
+	afterEach(() => {
+		mount.remove();
+	});
+
+	const resets = (scope: ParentNode): HTMLButtonElement[] =>
+		Array.from(scope.querySelectorAll<HTMLButtonElement>('.dse-rollbar__reset'));
+
+	test('galleryExtra parses like stack; absent stays undefined', () => {
+		expect(parseParams('?gallery=1').galleryExtra).toBeUndefined();
+		expect(parseParams('?gallery=1&galleryExtra=roll').galleryExtra).toEqual([{ element: 'roll', fixture: 'default' }]);
+	});
+
+	test('without it the gallery mounts one roll strip and no extra section', async () => {
+		const { errors } = await mountFromParams(document, { ...gallery, galleryIds: ['roll'] });
+		expect(errors).toEqual([]);
+		expect(mount.querySelectorAll('[data-dse-element="roll"]')).toHaveLength(1);
+		expect(mount.querySelector('[data-dse-harness-extra]')).toBeNull();
+	});
+
+	test('with it a second roll strip follows the gallery, marked, with its own Reset', async () => {
+		const { errors } = await mountFromParams(document, { ...gallery, galleryIds: ['roll'], galleryExtra: [{ element: 'roll', fixture: 'default' }] });
+		expect(errors).toEqual([]);
+		const sections = Array.from(mount.children);
+		expect(sections).toHaveLength(2);
+		expect(sections[0].hasAttribute('data-dse-harness-extra')).toBe(false);
+		expect(sections[1].getAttribute('data-dse-harness-extra')).toBe('roll');
+		expect(resets(sections[0])).toHaveLength(1);
+		expect(resets(sections[1])).toHaveLength(1);
+	});
+
+	test('an Edges "+" click on the extra strip enables only ITS Reset (the first strip keeps the disabled kind)', async () => {
+		await mountFromParams(document, { ...gallery, galleryIds: ['roll'], galleryExtra: [{ element: 'roll', fixture: 'default' }] });
+		const [first, extra] = Array.from(mount.children);
+		expect(resets(first)[0].disabled).toBe(true);
+		expect(resets(extra)[0].disabled).toBe(true);
+		extra.querySelector<HTMLElement>('[data-dse-control="roll.edges.inc"]')!.click();
+		expect(resets(extra)[0].disabled).toBe(false);
+		expect(resets(first)[0].disabled).toBe(true);
+	});
+});
