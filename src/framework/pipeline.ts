@@ -14,6 +14,7 @@ import { readBlockBody } from './blockBody';
 import { registerAfterRender } from './view';
 import type { BlockHost } from './host/BlockHost';
 import { ReadingModeBlockHost } from './host/ReadingModeBlockHost';
+import { SidebarBlockHost } from './host/SidebarBlockHost';
 import type { ThemeService } from './seams/theme';
 import type { PreferenceStore } from './seams/prefs';
 import type { ReferenceService } from './seams/refs';
@@ -575,8 +576,18 @@ export class ElementPipeline {
 
 			// SC-340 §9.2: an adopted view outlives the pipeline run that captured `source`;
 			// the form editor must start from the body on disk NOW (SC-343's lastKnownBody).
+			// SC-519: the sidebar host answers the same question (its cached note content follows its own writes),
+			// where `source` is the body the panel was first built from.
 			const currentBody = (): string =>
-				(host instanceof ReadingModeBlockHost ? host.lastKnownBody : null) ?? source;
+				(host instanceof ReadingModeBlockHost
+					? host.lastKnownBody
+					: host instanceof SidebarBlockHost
+						? host.currentBody()
+						: null) ?? source;
+			// SC-519: the form reads the body when it opens; an in-card edit still waiting out its debounce
+			// is not on disk yet. Flush it first (view.openAfterPendingWrite) so the form starts from the card.
+			const openForm = (): void =>
+				view.openAfterPendingWrite(() => openFormEditor(view, cx, def, currentBody(), this.deps.validation));
 
 			const mountPipelineChrome = (current: M): void => {
 				// One Component per (re)mount, owned by the view: unloading it detaches every
@@ -658,7 +669,7 @@ export class ElementPipeline {
 												id: 'edit',
 												icon: 'pencil',
 												label: `Edit ${def.name}`,
-												onClick: () => openFormEditor(view, cx, def, currentBody(), this.deps.validation),
+												onClick: openForm,
 											} satisfies ChromeMenuItem,
 										]
 									: []),
@@ -720,7 +731,7 @@ export class ElementPipeline {
 							icon: 'pencil',
 							label: `Edit ${def.name}`,
 							variant: 'ghost',
-							onClick: () => openFormEditor(view, cx, def, currentBody(), this.deps.validation),
+							onClick: openForm,
 						},
 						owner,
 					).buttonEl;

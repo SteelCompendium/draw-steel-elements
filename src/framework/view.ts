@@ -85,6 +85,12 @@ export abstract class ElementView<M> extends Component {
 	private persistWaiters: Array<(ok: boolean) => void> = [];
 	/** Writes handed to host.replaceSource that have not settled yet (hasPendingWrite). */
 	private persistInFlight = 0;
+	/** The same writes as `persistInFlight`, as promises that resolve to the write's result (SC-519). */
+	private readonly writesInFlight = new Set<Promise<boolean>>();
+	/** SC-519: a form open is waiting for this view's write (a second request must not queue another). */
+	private formOpenWaiting = false;
+	/** SC-519: set when this view unloads, so a form open that waited for the write does not open for a dead card. */
+	private unloaded = false;
 
 	// -- default update() "unload children" bookkeeping -------------------------------
 	// The real obsidian Component exposes no public "unload just my children" primitive
@@ -102,6 +108,9 @@ export abstract class ElementView<M> extends Component {
 		// forgets to call super.onunload(). No-ops when nothing is pending (see
 		// flushPersist's guard), so this is free for static/non-persisted elements.
 		this.register(() => this.flushPersist());
+		this.register(() => {
+			this.unloaded = true;
+		});
 	}
 
 	/** Build the DOM. createEl/createDiv only; register listeners via this.registerDomEvent. */
@@ -279,6 +288,40 @@ export abstract class ElementView<M> extends Component {
 		return this.persistScheduled || this.persistInFlight > 0;
 	}
 
+	/**
+	 * SC-519: write this view's pending edit NOW (the debounce is skipped) and resolve once it and
+	 * any write already in flight have settled. Resolves true when every one of them landed. It is the
+	 * view's own write, so the host treats it like the debounced one (SC-509 `fromView`). Resolves at
+	 * once, true, when nothing is pending.
+	 */
+	async settlePendingWrite(): Promise<boolean> {
+		this.flushPersist();
+		const results = await Promise.all([...this.writesInFlight]);
+		return results.every(Boolean);
+	}
+
+	/**
+	 * SC-519: run `open` (a form editor opening) with the card's content already on disk. The form reads
+	 * the block's body when it opens, so while an in-card edit is still waiting out its debounce the form
+	 * would start from the body before that edit and its Save would undo it. With nothing pending this
+	 * calls `open` synchronously (no delay, no write). With a write pending it flushes it, waits, then
+	 * calls `open`; a second request meanwhile is dropped (one form), and nothing opens if the view
+	 * unloaded in the meantime. If the flushed write fails the host has already said so (its own Notice);
+	 * `open` still runs and reads whatever body the host still holds.
+	 */
+	openAfterPendingWrite(open: () => void): void {
+		if (!this.hasPendingWrite()) {
+			open();
+			return;
+		}
+		if (this.formOpenWaiting) return;
+		this.formOpenWaiting = true;
+		void this.settlePendingWrite().then(() => {
+			this.formOpenWaiting = false;
+			if (!this.unloaded) open();
+		});
+	}
+
 	/** The window this view lives in (popout-safe timer/document access). */
 	protected get win(): Window {
 		return this.rootEl.ownerDocument.defaultView as Window;
@@ -319,13 +362,14 @@ export abstract class ElementView<M> extends Component {
 		// A resolved `false` here is exactly what replaceSource itself already returns for
 		// every OTHER "couldn't write" case (`!canPersist`, block not found) — this only
 		// makes the rejecting case behave the same way as those already-handled ones.
-		void this.cx.host
+		const write = this.cx.host
 			// SC-509: the view's own write. Marked so the host treats the rebuild/echo it causes as this
 			// view's (adopt / swallow); a write that does not carry the mark (the edit form) re-renders.
 			.replaceSource(yaml, { fromView: true })
 			.then((ok) => {
 				settle();
 				for (const resolve of waiters) resolve(ok);
+				return ok;
 			})
 			.catch((error: unknown) => {
 				settle();
@@ -340,7 +384,10 @@ export abstract class ElementView<M> extends Component {
 				// still resolve `false`, same as every other "couldn't write" outcome.
 				console.error('Draw Steel Elements: block write failed', error);
 				for (const resolve of waiters) resolve(false);
+				return false;
 			});
+		this.writesInFlight.add(write);
+		void write.then(() => this.writesInFlight.delete(write));
 	}
 
 	addChild<T extends Component>(child: T): T {

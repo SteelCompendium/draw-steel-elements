@@ -398,6 +398,101 @@ describe('T-7 (Plan 02): ElementView<M> (F1 §3.3)', () => {
 			expect(readOnly.notePersistIntent).not.toHaveBeenCalled();
 		});
 	});
+
+	describe('SC-519: openAfterPendingWrite(open)', () => {
+		async function mounted(host = makeHost()) {
+			const view = new TestView(makeContext(host).cx);
+			view.load();
+			await view.mount(document.createElement('div'), { value: 'x' });
+			view.injectSerializer((m) => `value: ${m.value}`);
+			return { host, view };
+		}
+
+		test('nothing pending: opens synchronously, no write', async () => {
+			jest.useFakeTimers();
+			const { host, view } = await mounted();
+			const open = jest.fn();
+			view.openAfterPendingWrite(open);
+			expect(open).toHaveBeenCalledTimes(1); // same tick
+			expect(host.replaceSource).not.toHaveBeenCalled();
+		});
+
+		test('a pending edit is written (as the view\'s own write) before open runs, without waiting out the debounce', async () => {
+			jest.useFakeTimers();
+			let settle!: (ok: boolean) => void;
+			const host = makeHost();
+			host.replaceSource.mockImplementation(() => new Promise<boolean>((resolve) => (settle = resolve)));
+			const { view } = await mounted(host);
+			void view.triggerPersist();
+			const open = jest.fn(() => expect(host.replaceSource).toHaveBeenCalledTimes(1));
+			view.openAfterPendingWrite(open);
+			expect(host.replaceSource).toHaveBeenCalledWith('value: x', { fromView: true }); // no timer advanced
+			expect(open).not.toHaveBeenCalled(); // write still in flight
+			settle(true);
+			await jest.advanceTimersByTimeAsync(0);
+			expect(open).toHaveBeenCalledTimes(1);
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+			expect(host.replaceSource).toHaveBeenCalledTimes(1); // the debounce timer was cleared: no second write
+		});
+
+		test('a write already in flight is waited for too', async () => {
+			jest.useFakeTimers();
+			let settle!: (ok: boolean) => void;
+			const host = makeHost();
+			host.replaceSource.mockImplementation(() => new Promise<boolean>((resolve) => (settle = resolve)));
+			const { view } = await mounted(host);
+			void view.triggerPersist();
+			jest.advanceTimersByTime(PERSIST_DEBOUNCE_MS); // timer fired; replaceSource pending
+			const open = jest.fn();
+			view.openAfterPendingWrite(open);
+			await jest.advanceTimersByTimeAsync(0);
+			expect(open).not.toHaveBeenCalled();
+			settle(true);
+			await jest.advanceTimersByTimeAsync(0);
+			expect(open).toHaveBeenCalledTimes(1);
+			expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		});
+
+		test('a second request while waiting is dropped: one open', async () => {
+			jest.useFakeTimers();
+			const { view } = await mounted();
+			void view.triggerPersist();
+			const open = jest.fn();
+			view.openAfterPendingWrite(open);
+			view.openAfterPendingWrite(open);
+			await jest.advanceTimersByTimeAsync(0);
+			expect(open).toHaveBeenCalledTimes(1);
+			view.openAfterPendingWrite(open); // settled: a new request is served again
+			expect(open).toHaveBeenCalledTimes(2);
+		});
+
+		test('a failed write still opens (the host reported it)', async () => {
+			jest.useFakeTimers();
+			const host = makeHost();
+			host.replaceSource.mockImplementation(async () => false);
+			const { view } = await mounted(host);
+			void view.triggerPersist();
+			const open = jest.fn();
+			view.openAfterPendingWrite(open);
+			await jest.advanceTimersByTimeAsync(0);
+			expect(open).toHaveBeenCalledTimes(1);
+		});
+
+		test('the view unloading while it waits: nothing opens', async () => {
+			jest.useFakeTimers();
+			let settle!: (ok: boolean) => void;
+			const host = makeHost();
+			host.replaceSource.mockImplementation(() => new Promise<boolean>((resolve) => (settle = resolve)));
+			const { view } = await mounted(host);
+			void view.triggerPersist();
+			const open = jest.fn();
+			view.openAfterPendingWrite(open);
+			view.unload();
+			settle(true);
+			await jest.advanceTimersByTimeAsync(0);
+			expect(open).not.toHaveBeenCalled();
+		});
+	});
 });
 
 describe('T-7 (Plan 02): HeroPanel<S> stub (D7 OD-7, additive)', () => {

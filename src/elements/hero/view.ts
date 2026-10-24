@@ -245,7 +245,8 @@ export class HeroSheetView extends ElementView<HeroModel> {
 	}
 
 	private editDefinition(): void {
-		if (this.readOnly || !this.cx.validation) return;
+		const validation = this.cx.validation;
+		if (this.readOnly || !validation) return;
 		// The FULL current source (defn + state), not just the definition text: the
 		// form's `working` object is seeded from this whole parse, and `state` — hidden
 		// from the FORM FIELDS (definition.ts's authoring.fields) but NOT stripped from
@@ -254,7 +255,10 @@ export class HeroSheetView extends ElementView<HeroModel> {
 		// original `state` value). Handing it only the defn half would instead make
 		// HeroModel.parse seed FRESH DEFAULTS for state on Save — silently resetting
 		// play state on every definition edit (task-7-review.md's flagged footgun).
-		openFormEditor(this, this.cx, this.def, this.model.serializeStateSplice(), this.cx.validation);
+		// SC-519: read the model after any pending write is flushed, so the form and that write cannot cross.
+		this.openAfterPendingWrite(() =>
+			openFormEditor(this, this.cx, this.def, this.model.serializeStateSplice(), validation),
+		);
 	}
 
 	private renderRefIssues(root: HTMLElement): void {

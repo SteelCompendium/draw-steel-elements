@@ -413,6 +413,27 @@ describe('D7 Task 9: "Edit definition" (recon delta 5) — reuses D9\'s openForm
 		expect(call[4]).toBe(deps.validation);
 	});
 
+	test('SC-519: with an in-sheet edit still waiting out its debounce, the form opens after that write lands and starts from the sheet', async () => {
+		jest.useFakeTimers();
+		try {
+			const deps = makeDeps();
+			await deps.prefs.set('authoringControls', true);
+			const { root, host } = await renderHero(HERO_SOURCE, {}, deps);
+			region(root, 'surges')!.querySelector<HTMLButtonElement>('.dse-surge__stepper button[aria-label^="Increase"]')!.click();
+
+			root.querySelector<HTMLButtonElement>('[aria-label="Edit definition"]')!.click();
+			expect(host.replaceSource).toHaveBeenCalledTimes(1); // flushed now, not after the debounce
+			await jest.advanceTimersByTimeAsync(0);
+
+			expect(openFormEditor).toHaveBeenCalledTimes(1);
+			expect(jest.mocked(openFormEditor).mock.calls[0][3]).toContain('surges: 2');
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+			expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
 	test('the schema hides `state` from the D9 form (definition.ts authoring.fields)', () => {
 		expect(heroElement.authoring?.fields?.state?.hidden).toBe(true);
 	});
