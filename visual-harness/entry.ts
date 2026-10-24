@@ -2168,6 +2168,12 @@ export function makeHarnessHost(
  * hand-built copy of it.
  */
 function probeSource(id: string, fixtureName: string): string | undefined {
+	// SC-513 - a gate-only hero whose abilities RESOLVE. The gallery's own hero (heroDefault) lists
+	// SCC codes that the harness cannot resolve (no compendium), so its rows render as issue rows with
+	// no expand toggle and the click-to-mount ability body is unreachable. Same hero, with the two
+	// refs swapped for inline abilities: the feature example (a power roll, so a rolling sweep can also
+	// launch its strip) and a signature strike. Sent only by the host-leak sweeps via `galleryExtra`.
+	if (id === 'hero' && fixtureName === 'probe-inline-abilities') return heroInlineAbilities();
 	const m = /^probe-rounds-(\d+)$/.exec(fixtureName);
 	if (id !== 'montage' || !m) return undefined;
 	const rounds = Math.max(2, Number(m[1]));
@@ -2192,6 +2198,31 @@ function probeSource(id: string, fixtureName: string): string | undefined {
 	}
 	lines.push(`current_round: ${rounds}`);
 	return lines.join('\n');
+}
+
+/** SC-513 - heroDefault with its two unresolvable SCC ability refs replaced by inline abilities. */
+function heroInlineAbilities(): string {
+	const indent = (yaml: string): string =>
+		yaml
+			.trimEnd()
+			.split('\n')
+			.map((line, i) => (i === 0 ? `  - ${line}` : `    ${line}`))
+			.join('\n');
+	const strike = [
+		'name: Brutal Strike',
+		'usage: Main action',
+		'distance: Melee 1',
+		'target: One creature',
+		'effects:',
+		'  - roll: Power Roll + Might',
+		'    tier1: 3 damage',
+		'    tier2: 6 damage',
+		'    tier3: 9 damage',
+	].join('\n');
+	const inline = `abilities:\n${indent(featureDefault)}\n${indent(strike)}\n`;
+	const out = heroDefault.replace(/^abilities:.*\n(?:\s+- scc[^\n]*\n)+/m, inline);
+	if (out === heroDefault) throw new Error('SC-513: heroDefault abilities block not found');
+	return out;
 }
 
 async function mountOne(

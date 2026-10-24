@@ -538,3 +538,81 @@ describe('gallery extra sections (SC-512)', () => {
 		expect(resets(first)[0].disabled).toBe(true);
 	});
 });
+
+// SC-513 — the host-leak sweeps mount the click-created controls (ability roll strips, hero ability
+// bodies) by a real click. Two harness seams make that possible: `galleryExtra` sections for feature /
+// featureblock / statblock, and a gate-only hero (`probe-inline-abilities`) whose abilities RESOLVE,
+// because the gallery hero's SCC refs do not in the harness and so give it no expand toggle at all.
+// Neither may reach a capture: no shot, no manifest entry, no frozen byte.
+describe('click-mount seams for the host-leak sweeps (SC-513)', () => {
+	const gallery: Parameters<typeof mountFromParams>[1] = { fixture: 'default', theme: 'steel', bg: 'dark', print: false, readonly: false, gallery: true, galleryIds: ['roll'] };
+	let mount: HTMLDivElement;
+
+	beforeEach(() => {
+		mount = document.createElement('div');
+		mount.id = 'mount';
+		document.body.appendChild(mount);
+	});
+
+	afterEach(() => {
+		mount.remove();
+	});
+
+	const extraSection = (id: string): HTMLElement | null => mount.querySelector(`[data-dse-harness-extra="${id}"]`);
+
+	test('galleryExtra carries element:fixture pairs, so the probe hero parses as hero + probe-inline-abilities', () => {
+		expect(parseParams('?gallery=1&galleryExtra=feature,hero:probe-inline-abilities').galleryExtra).toEqual([
+			{ element: 'feature', fixture: 'default' },
+			{ element: 'hero', fixture: 'probe-inline-abilities' },
+		]);
+	});
+
+	test('the probe hero is gate-only: not a FIXTURES entry, so no shot, no manifest row, no freeze line', () => {
+		expect(Object.keys(FIXTURES.hero)).not.toContain('probe-inline-abilities');
+	});
+
+	test('the probe hero mounts with inline abilities: an expand toggle per ability and no error card', async () => {
+		const { errors } = await mountFromParams(document, { ...gallery, galleryExtra: [{ element: 'hero', fixture: 'probe-inline-abilities' }] });
+		expect(errors).toEqual([]);
+		const hero = extraSection('hero')!;
+		expect(hero.querySelector('.dse-error-card, .dse-ref-notice')).toBeNull();
+		expect(hero.querySelectorAll('.dse-hero__ability-toggle')).toHaveLength(2);
+	});
+
+	test('the gallery hero\'s own SCC refs stay unresolved: no expand toggle (why the probe exists)', async () => {
+		await mountFromParams(document, { ...gallery, galleryIds: ['hero'] });
+		expect(mount.querySelector('[data-dse-element="hero"]')).not.toBeNull();
+		expect(mount.querySelector('.dse-hero__ability-toggle')).toBeNull();
+	});
+
+	test('clicking a probe-hero toggle mounts the real Feature card body, with an ability Roll button when rolling is on', async () => {
+		const { errors } = await mountFromParams(document, { ...gallery, prefs: { rollingEnabled: 'true' }, galleryExtra: [{ element: 'hero', fixture: 'probe-inline-abilities' }] });
+		expect(errors).toEqual([]);
+		const hero = extraSection('hero')!;
+		hero.querySelector<HTMLElement>('.dse-hero__ability-toggle')!.click();
+		await new Promise((r) => setTimeout(r, 0));
+		const body = hero.querySelector<HTMLElement>('.dse-hero__ability-body')!;
+		expect(body.hidden).toBe(false);
+		expect(body.querySelector('.dse-feature')).not.toBeNull();
+		expect(body.querySelector('.dse-roll-btn')).not.toBeNull();
+	});
+
+	test('feature / featureblock / statblock extras append marked sections after the gallery; none exist without galleryExtra', async () => {
+		await mountFromParams(document, { ...gallery });
+		expect(mount.querySelector('[data-dse-harness-extra]')).toBeNull();
+		mount.replaceChildren();
+		const { errors } = await mountFromParams(document, {
+			...gallery,
+			galleryExtra: ['feature', 'featureblock', 'statblock'].map((element) => ({ element, fixture: 'default' })),
+		});
+		expect(errors).toEqual([]);
+		const sections = Array.from(mount.children);
+		expect(sections.map((s) => s.getAttribute('data-dse-harness-extra'))).toEqual([null, 'feature', 'featureblock', 'statblock']);
+	});
+
+	test('a capture URL (no galleryExtra, no prefs) parses to none of it', () => {
+		const p = parseParams('?element=hero&fixture=default&theme=steel&bg=dark');
+		expect(p.galleryExtra).toBeUndefined();
+		expect(p.prefs).toBeUndefined();
+	});
+});
