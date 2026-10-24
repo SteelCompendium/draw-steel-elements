@@ -137,7 +137,10 @@ moves. Run it before a release; details in `visual-harness/README.md`.
   Read [`.repo-docs/font-sizes.md`](.repo-docs/font-sizes.md) before writing CSS that sets
   a size; `test/unit/build/fontSizeContract.test.ts` gates it (allowlist of pre-scale
   sites; it only shrinks).
-- **Reading mode only** -- no Live Preview support
+- **Reading view and Live Preview** -- blocks render and write in both. Live Preview draws each block in an Obsidian
+  CodeMirror widget (`.cm-preview-code-block.cm-embed-block`) that clips anything hanging outside its box, so the
+  hover menu panel above a block needs the Live Preview rules in the "Element chrome" section of `styles-source.css`
+  (SC-502); test Live Preview behaviour in a real Obsidian (lifecycle G-S44, e2e CHR-L01), jsdom has no layout.
 - **7.0.0 release gate (SC-406)**: an undocumented `"experimental": true` in `data.json`
   (absent = off; read once in `onload`, queried via `src/framework/experimental.ts`) is what
   keeps the deferred features out of the release. OFF: the nine `deferred` elements render

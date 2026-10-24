@@ -16857,15 +16857,43 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    hit test was never a stacking problem; the panel was simply cut off.
    Fix: for a widget that holds a chrome-bearing block, drop the paint containment and the hover
    clip, and re-clip with `clip-path` so the ONLY region that opens up is the strip above the
-   widget (80px: the panel is ~26px tall plus its ~10px upward shadow, and it scales with the
-   text-size prefs). The other three sides keep the host's clip exactly (1px of slack on them so
-   the host's own 1px hover ring, a box-shadow, is not cut). The panel itself is unchanged: same
-   placement, same size, still `pointer-events: none` until revealed, so a hidden panel lets a
-   click through to the line above. Specificity beats the host's `!important` rule (0,4,0). */
+   widget. The strip is 64px, derived from the tallest the overhang can get: the panel is 26.2px
+   at defaults, 30.5px at the 140% text-size maximum, and 40.1px with the touch-size buttons
+   (`@media (pointer: coarse)`, min-height 2em) at 140% text; its upward shadow (`0 -3px 7px`)
+   reaches 10px above the panel and a focus ring on a panel button (2px + 2px offset, button
+   top 1px inside the panel) about 3px more: 40.1 + 10 + 3 = 53.1, rounded up to 64. (Tooltips
+   are Obsidian's, drawn on <body>, not inside the widget.) The other three sides keep the host's
+   clip exactly (1px of slack on them so the host's own 1px hover ring, a box-shadow, is not cut).
+   The panel itself is unchanged: same placement, same size, still `pointer-events: none` until
+   revealed, so a hidden panel lets a click through to the line above. Specificity beats the
+   host's `!important` rule (0,4,0). */
 .markdown-source-view.mod-cm6 .cm-content > .cm-preview-code-block.cm-embed-block:has([data-dse-chrome]) {
 	contain: none !important;
 	overflow: visible;
-	clip-path: inset(-80px -1px -1px -1px);
+	clip-path: inset(-64px -1px -1px -1px);
+}
+
+/* LIVE PREVIEW (SC-502), reveal. Obsidian draws its own `</>` "Edit this block" button
+   (`.embed-actions > .edit-block-button`) in the top-right of the same widget. It is a SIBLING of
+   the element root, not inside it, so a pointer on it leaves the root's `:hover` and the panel
+   (revealed by `[data-dse-chrome]:hover`) hid again: moving up from the block to Collapse, which sits
+   right above that button, lost the panel on the way. In Live Preview the panel stays revealed
+   while the pointer is anywhere over the widget, `</>` included. Same revealed state as the rule
+   above, same screen-only Steel scope; the Reading view rule is unchanged. */
+.markdown-source-view.mod-cm6 .cm-content > .cm-preview-code-block.cm-embed-block:hover
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome] .dse-chrome {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+/* LIVE PREVIEW (SC-502), collapsed one-liner. The same `</>` button (28px wide, 4px in from the
+   widget's right edge, over the bar's top-right) sat exactly over the one-liner's Expand button, so
+   a real click on Expand went to `</>` and moved the cursor into the block's source. In Live Preview
+   only, the bar keeps its right padding clear of that button (4px + 28px + a 4px gap = 36px, in px
+   because it is Obsidian's px, not ours), so Expand sits just left of `</>` and both are clickable.
+   Reading view and the browser harness have no `</>` and keep the original padding. */
+.markdown-source-view.mod-cm6 .cm-content > .cm-preview-code-block.cm-embed-block .dse-chrome-summary {
+	padding-right: 36px;
 }
 
 /* Panel buttons: OS-window-controls density. Flat, borderless, muted until hovered —
