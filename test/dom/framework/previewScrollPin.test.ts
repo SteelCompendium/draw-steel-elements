@@ -581,9 +581,11 @@ describe('SC-479: embeds pin the host note\'s scroller', () => {
 		expect(resolve).toHaveBeenCalledWith('B', 'A.md');
 	});
 
-	test('`![[B#Section]]` and a nested embed (A embeds N embeds B) both count as B', () => {
+	test('`![[B#Section]]`, `![[B#^block]]` and a nested embed (A embeds N embeds B) all count as B', () => {
 		const heading = hostLeaf('A.md');
 		addEmbed(heading.scroller, 'B#Section');
+		const block = hostLeaf('A5.md');
+		addEmbed(block.scroller, 'B#^abc123');
 		const nested = hostLeaf('A2.md');
 		const outer = addEmbed(nested.scroller, 'N', { dse: false });
 		const innerSizer = outer.querySelector<HTMLElement>('.markdown-preview-sizer')!;
@@ -592,9 +594,48 @@ describe('SC-479: embeds pin the host note\'s scroller', () => {
 		inner.setAttribute('src', 'B');
 		inner.innerHTML = '<div class="markdown-embed-content"><div class="markdown-preview-view"><div class="markdown-preview-sizer"><div data-dse-element="initiative"></div></div></div></div>';
 		innerSizer.appendChild(inner);
-		new PreviewScrollPin().pinReadingViewsOf(workspaceOf(heading, nested), 'B.md', resolve);
+		new PreviewScrollPin().pinReadingViewsOf(workspaceOf(heading, block, nested), 'B.md', resolve);
 		expect(isPinned(heading.scroller)).toBe(true);
+		expect(isPinned(block.scroller)).toBe(true);
 		expect(isPinned(nested.scroller)).toBe(true);
+	});
+
+	/** A nested embed appended inside `outer`'s rendered content (the DOM nests an embed's content in the embed element). */
+	function addNestedEmbed(outer: HTMLElement, src: string): HTMLElement {
+		const inner = document.createElement('span');
+		inner.className = 'internal-embed markdown-embed';
+		inner.setAttribute('src', src);
+		inner.innerHTML = '<div class="markdown-embed-content"><div class="markdown-preview-view"><div class="markdown-preview-sizer"><div data-dse-element="initiative"></div></div></div></div>';
+		outer.querySelector('.markdown-preview-sizer')!.appendChild(inner);
+		return inner;
+	}
+
+	test('a nested embed\'s link is resolved from the note that writes it (the middle note), not from the host', () => {
+		// `Sib` written in Folder/Mid.md is Folder/Sib.md; the same text resolved from the host A.md would be Other/Sib.md.
+		const bySource = jest.fn((linkpath: string, source: string) => {
+			const table: Record<string, string> = { 'A.md|Mid': 'Folder/Mid.md', 'Folder/Mid.md|Sib': 'Folder/Sib.md', 'A.md|Sib': 'Other/Sib.md' };
+			return table[`${source}|${linkpath}`] ?? null;
+		});
+		const a = hostLeaf('A.md');
+		addNestedEmbed(addEmbed(a.scroller, 'Mid', { dse: false }), 'Sib');
+		const pin = new PreviewScrollPin();
+		pin.pinReadingViewsOf(workspaceOf(a), 'Other/Sib.md', bySource); // what resolving from the host would have named
+		expect(isPinned(a.scroller)).toBe(false);
+		pin.pinReadingViewsOf(workspaceOf(a), 'Folder/Sib.md', bySource);
+		expect(isPinned(a.scroller)).toBe(true);
+		expect(bySource).toHaveBeenCalledWith('Sib', 'Folder/Mid.md');
+	});
+
+	test('a nested embed whose enclosing embed cannot be resolved falls back to the host path', () => {
+		const a = hostLeaf('A.md');
+		addNestedEmbed(addEmbed(a.scroller, 'Gone', { dse: false }), 'B');
+		const seen: Array<[string, string]> = [];
+		new PreviewScrollPin().pinReadingViewsOf(workspaceOf(a), 'B.md', (linkpath, source) => {
+			seen.push([linkpath, source]);
+			return linkpath === 'B' ? 'B.md' : null;
+		});
+		expect(seen).toContainEqual(['B', 'A.md']);
+		expect(isPinned(a.scroller)).toBe(true);
 	});
 
 	test('leaves alone: an embed of another note, an embed without a DSE block, no resolver, a host that is not scrolled', () => {
@@ -634,6 +675,36 @@ describe('SC-479: embeds pin the host note\'s scroller', () => {
 		expect(isPinned(innerView)).toBe(false);
 		expect(pinnedPx(scroller)).toBe('4883px');
 		expect(anchorStopped(scroller)).toBe(true);
+	});
+
+	test('the writer pin reaches the host scroller through two levels of embeds', () => {
+		const { scroller } = makeScroller();
+		const innerDse = addNestedEmbed(addEmbed(scroller, 'N', { dse: false }), 'B').querySelector<HTMLElement>('[data-dse-element]')!;
+		new PreviewScrollPin().pin(innerDse);
+		expect(pinnedPx(scroller)).toBe('4883px');
+		expect(anchorStopped(scroller)).toBe(true);
+		expect(allPinStyles()).toBe(1);
+	});
+
+	test('a host pin\'s anchoring stop survives the floor being raised, and goes with the pin on release() and releaseAll()', async () => {
+		const first = hostLeaf('A.md');
+		addEmbed(first.scroller, 'B');
+		const pin = new PreviewScrollPin();
+		pin.pinReadingViewsOf(workspaceOf(first), 'B.md', resolve);
+		sizerOf(first.scroller).style.minHeight = '6100px'; // Obsidian writes a taller inline value while pinned
+		await flushObservers();
+		expect(pinnedPx(first.scroller)).toBe('6100px');
+		expect(anchorStopped(first.scroller)).toBe(true);
+		pin.release(first.scroller);
+		expect(isPinned(first.scroller)).toBe(false);
+		expect(allPinStyles()).toBe(0);
+		const second = hostLeaf('A2.md');
+		addEmbed(second.scroller, 'B');
+		pin.pinReadingViewsOf(workspaceOf(second), 'B.md', resolve);
+		expect(anchorStopped(second.scroller)).toBe(true);
+		pin.releaseAll();
+		expect(isPinned(second.scroller)).toBe(false);
+		expect(allPinStyles()).toBe(0);
 	});
 
 	test('a pin that is first a note\'s own and then also a host pin gains the anchoring stop, keeps its id and height, and releases on the TTL', () => {

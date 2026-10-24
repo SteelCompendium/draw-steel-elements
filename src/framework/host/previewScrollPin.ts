@@ -197,15 +197,25 @@ function verticalPadding(el: HTMLElement, win: Window): number {
 /**
  * SC-479: does `scroller` show a DSE block from an embed of `path`? Every `.internal-embed` in the rendered view is
  * checked, nested ones included (A embeds N embeds B: the inner embed's `src` names B). `src` is the link as written;
- * the subpath (`#heading`, `#^block`) is dropped, so `![[B#Section]]` counts as B. A nested embed's link is resolved
- * from the HOST note's path (the DOM does not say which note wrote it); that only differs for an ambiguous basename.
+ * the subpath (`#heading`, `#^block`) is dropped, so `![[B#Section]]` counts as B. Each link is resolved from the path
+ * of the note that WRITES it: the host's path for a top-level embed, and for a nested one the note its enclosing embed
+ * resolved to (the DOM nests an embed's content inside the embed element, so the chain is read off the ancestors, one
+ * `closest` per level). A link that cannot be resolved falls back to the host's path, which can only pin one view too
+ * many (TTL-bounded), never miss one.
  * Only embeds that contain a DSE block count: nothing else of ours can collapse them.
  */
-function embedsBlockOf(scroller: HTMLElement, path: string, sourcePath: string, resolveLink: LinkResolver): boolean {
-	for (const embed of Array.from(scroller.querySelectorAll<HTMLElement>('.internal-embed[src]'))) {
-		if (!embed.querySelector('[data-dse-element]')) continue;
+function embedsBlockOf(scroller: HTMLElement, path: string, hostPath: string, resolveLink: LinkResolver): boolean {
+	const target = new Map<Element, string | null>();
+	const resolved = (embed: Element): string | null => {
+		if (target.has(embed)) return target.get(embed) ?? null;
+		const parent = embed.parentElement?.closest('.internal-embed[src]');
 		const linkpath = (embed.getAttribute('src') ?? '').split('#')[0];
-		if (linkpath && resolveLink(linkpath, sourcePath) === path) return true;
+		const resolvedPath = linkpath ? resolveLink(linkpath, (parent && resolved(parent)) || hostPath) : null;
+		target.set(embed, resolvedPath);
+		return resolvedPath;
+	};
+	for (const embed of Array.from(scroller.querySelectorAll<HTMLElement>('.internal-embed[src]'))) {
+		if (embed.querySelector('[data-dse-element]') && resolved(embed) === path) return true;
 	}
 	return false;
 }
