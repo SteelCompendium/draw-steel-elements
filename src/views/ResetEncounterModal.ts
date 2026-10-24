@@ -31,6 +31,7 @@ export class ResetEncounterModal extends DseModal {
 			{
 				label: 'Yes, Reset',
 				text: 'Yes, Reset',
+				control: 'init.reset-encounter.confirm',
 				variant: 'danger',
 				onClick: () => {
 					this.onConfirm();

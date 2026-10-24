@@ -28,6 +28,8 @@ import { FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main';
 import staminaBarManifest from '../../e2e/manifest/stamina-bar';
 import modalManifest from '../../e2e/manifest/stamina-edit-modal';
 import conditionsManifest from '../../e2e/manifest/conditions-modal';
+import initiativeManifest from '../../e2e/manifest/initiative';
+import { ResetEncounterModal } from '../../src/views/ResetEncounterModal';
 import { idsOf } from '../../e2e/manifest/surface';
 
 const INTERACTIVE = 'button, input, select, textarea, [role="button"], [role="slider"], [tabindex], [contenteditable]';
@@ -205,10 +207,27 @@ describe('SC-408 census: initiative stamina entry points', () => {
 		// Scope: the stamina entry points only, not the whole tracker (malice, conditions, ... are
 		// other surfaces). Everything the tracker stamps with an id must still be in the manifest.
 		const entryPoints = 'button.dse-init__stamina, .dse-init__bar.dse-stamina--clickable, button.dse-init__cell';
-		expect(censusProblems(root, new Set([...idsOf(modalManifest), ...idsOf(conditionsManifest)]), entryPoints)).toEqual([]);
+		expect(censusProblems(root, new Set([...idsOf(modalManifest), ...idsOf(conditionsManifest), ...idsOf(initiativeManifest)]), entryPoints)).toEqual([]);
 		for (const id of ['init.hero.stamina', 'init.hero.bar', 'init.detail.stamina', 'init.detail.bar', 'init.cell.stamina']) {
 			expect(root.querySelector(`[data-dse-control="${id}"]`)).not.toBeNull();
 		}
 		expect(root.querySelectorAll('[data-dse-control="init.cell.stamina"]')).toHaveLength(3);
+	});
+
+	test('SC-500: the hero turn overlay, the chrome Reset encounter item and its confirm button are identified and in the initiative manifest', async () => {
+		const host = makeHost('ds-initiative', 'Encounter.md');
+		await new ElementPipeline(makeDeps()).run(initiativeElement, TRACKER, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		const turn = root.querySelectorAll('.dse-init__portrait-toggle');
+		expect(turn).toHaveLength(1); // one hero, no overlay on creature rows
+		expect(turn[0].getAttribute('data-dse-control')).toBe('init.hero.turn');
+		const reset = root.querySelector('[data-dse-chrome-item="initiative-reset-encounter"]')!;
+		expect(reset.getAttribute('data-dse-control')).toBe('init.reset-encounter');
+		const modal = new ResetEncounterModal(new App() as any, () => undefined);
+		modal.open();
+		const confirm = modal.contentEl.querySelector('button[aria-label="Yes, Reset"]')!;
+		expect(confirm.getAttribute('data-dse-control')).toBe('init.reset-encounter.confirm');
+		const declared = new Set(idsOf(initiativeManifest));
+		for (const id of ['init.hero.turn', 'init.reset-encounter', 'init.reset-encounter.confirm']) expect(declared.has(id)).toBe(true);
 	});
 });

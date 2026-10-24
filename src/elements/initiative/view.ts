@@ -217,6 +217,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				id: 'initiative-reset-encounter',
 				icon: 'eraser',
 				label: 'Reset encounter state',
+				control: 'init.reset-encounter',
 				onClick: () => {
 					this.openModal(
 						new ResetEncounterModal(this.cx.app, () => {
@@ -772,6 +773,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 			{
 				label: `Toggle turn taken: ${name}`,
 				pressed: taken,
+				control: 'init.hero.turn', // SC-500: only hero rows build this overlay
 				onClick: () => {
 					const nowTaken = toggle();
 					this.repaintTurn(portraitEl, nowTaken);

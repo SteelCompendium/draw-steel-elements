@@ -43,6 +43,8 @@ export interface ChromeMenuItem {
 	icon: string;
 	/** REQUIRED accessible name (the aria-label AND the hover tooltip). */
 	label: string;
+	/** SC-500: optional stable `data-dse-control` id (attribute only), for an item an e2e scenario drives. */
+	control?: string;
 	onClick: () => void;
 }
 

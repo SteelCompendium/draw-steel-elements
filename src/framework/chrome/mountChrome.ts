@@ -227,7 +227,7 @@ export function mountChrome<M>(opts: MountChromeOptions<M>, owner: Component): C
 	function pushItem(item: ChromeMenuItem, itemOwner: Component): void {
 		const handle = iconButton(
 			panelEl,
-			{ icon: item.icon, label: item.label, variant: 'ghost', onClick: item.onClick },
+			{ icon: item.icon, label: item.label, variant: 'ghost', control: item.control, onClick: item.onClick },
 			itemOwner,
 		);
 		handle.buttonEl.setAttribute('data-dse-chrome-item', item.id);
