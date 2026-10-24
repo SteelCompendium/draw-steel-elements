@@ -16843,6 +16843,31 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	pointer-events: auto;
 }
 
+/* LIVE PREVIEW (SC-502). The panel sits ABOVE the element's top edge, i.e. outside the box of
+   the CodeMirror widget Live Preview draws the block in (`.cm-preview-code-block.cm-embed-block`),
+   and Obsidian clips that widget on two counts:
+     - `.markdown-source-view.mod-cm6 .cm-content > [contenteditable="false"] { contain: paint
+       !important }` (new in Obsidian 1.15.0) clips every descendant to the widget's box, always;
+     - `.cm-embed-block:not(.cm-table-widget, .cm-lang-base):hover { overflow: hidden }` (1.14.x
+       and later) clips the same way, exactly while the pointer is over the block - which is when
+       this panel is revealed.
+   A clipped node is neither painted nor hit-tested, so in Live Preview the overhanging panel was
+   invisible and a click at a button's centre fell through to the editor line above (measured:
+   `elementFromPoint` returned `div.cm-line`, and the click moved the editor cursor there). The
+   hit test was never a stacking problem; the panel was simply cut off.
+   Fix: for a widget that holds a chrome-bearing block, drop the paint containment and the hover
+   clip, and re-clip with `clip-path` so the ONLY region that opens up is the strip above the
+   widget (80px: the panel is ~26px tall plus its ~10px upward shadow, and it scales with the
+   text-size prefs). The other three sides keep the host's clip exactly (1px of slack on them so
+   the host's own 1px hover ring, a box-shadow, is not cut). The panel itself is unchanged: same
+   placement, same size, still `pointer-events: none` until revealed, so a hidden panel lets a
+   click through to the line above. Specificity beats the host's `!important` rule (0,4,0). */
+.markdown-source-view.mod-cm6 .cm-content > .cm-preview-code-block.cm-embed-block:has([data-dse-chrome]) {
+	contain: none !important;
+	overflow: visible;
+	clip-path: inset(-80px -1px -1px -1px);
+}
+
 /* Panel buttons: OS-window-controls density. Flat, borderless, muted until hovered —
    the panel frame is the affordance, not each glyph.
 
