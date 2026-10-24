@@ -9,7 +9,7 @@
 //
 // jsdom has no layout, so scrollTop/scrollHeight/clientHeight are defined per-element below;
 // that is exactly the input the production code reads, so the guards are exercised for real.
-import { PreviewScrollPin, pinRule } from '../../../src/framework/host/previewScrollPin';
+import { PreviewScrollPin, anchorRule, pinRule } from '../../../src/framework/host/previewScrollPin';
 import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlockHost';
 import { registerFrameworkElements } from '../../../src/framework/registerFrameworkElements';
 import type { ElementDefinition, ElementRegistry } from '../../../src/framework/registry';
@@ -539,7 +539,8 @@ describe('SC-470: PreviewScrollPin.pinReadingViewsOf', () => {
 });
 
 // SC-479: a DSE block in note B embedded in note A. A write to B must pin A's scroller (the host), and a host pin
-// also stops scroll anchoring on it (measured: the sizer pin alone still let anchoring drive scrollTop 2887 -> 0).
+// also takes the host's EMBEDS out of scroll anchoring (measured: the sizer pin alone still let anchoring drive scrollTop
+// 2887 -> 0). The scroller itself keeps anchoring on: switching it off moved on-screen text 110 px when the embed changed height.
 describe('SC-479: embeds pin the host note\'s scroller', () => {
 	afterEach(() => {
 		document.body.innerHTML = '';
@@ -568,7 +569,10 @@ describe('SC-479: embeds pin the host note\'s scroller', () => {
 		({ getLeavesOfType: (type: string) => (type === 'markdown' ? leaves.map((l) => l.leaf) : []) }) as any;
 	const vaultOf: Record<string, string> = { B: 'B.md', N: 'N.md', Other: 'Other.md' };
 	const resolve = jest.fn((linkpath: string) => vaultOf[linkpath] ?? null);
-	const anchorStopped = (scroller: HTMLElement): boolean => /overflow-anchor: none !important/.test(pinStyle(scroller)?.textContent ?? '');
+	/** The rule that excludes the host's embeds from anchoring is in the pin's style. */
+	const anchorStopped = (scroller: HTMLElement): boolean => / \.internal-embed \{ overflow-anchor: none !important; \}/.test(pinStyle(scroller)?.textContent ?? '');
+	/** No `overflow-anchor` declaration may apply to the scroller itself (r3 HIGH-1). */
+	const scrollerAnchorOff = (scroller: HTMLElement): boolean => /\] \{ overflow-anchor/.test(pinStyle(scroller)?.textContent ?? '');
 
 	test('a Reading view of another note that embeds a DSE block from the written note is pinned, at its own height, with anchoring stopped', () => {
 		const a = hostLeaf('A.md');
@@ -577,7 +581,9 @@ describe('SC-479: embeds pin the host note\'s scroller', () => {
 		expect(pinnedPx(a.scroller)).toBe('4883px');
 		expect(anchorStopped(a.scroller)).toBe(true);
 		const id = a.scroller.getAttribute(PIN_ATTR)!;
-		expect(pinStyle(a.scroller)!.textContent).toBe(`${pinRule(id, 4883)}\n.markdown-preview-view[${PIN_ATTR}="${id}"] { overflow-anchor: none !important; }`);
+		expect(pinStyle(a.scroller)!.textContent).toBe(`${pinRule(id, 4883)}\n${anchorRule(id)}`);
+		expect(anchorRule(id)).toBe(`.markdown-preview-view[${PIN_ATTR}="${id}"] .internal-embed { overflow-anchor: none !important; }`);
+		expect(scrollerAnchorOff(a.scroller)).toBe(false); // the scroller keeps anchoring: only its embeds are excluded
 		expect(resolve).toHaveBeenCalledWith('B', 'A.md');
 	});
 
@@ -695,6 +701,7 @@ describe('SC-479: embeds pin the host note\'s scroller', () => {
 		await flushObservers();
 		expect(pinnedPx(first.scroller)).toBe('6100px');
 		expect(anchorStopped(first.scroller)).toBe(true);
+		expect(scrollerAnchorOff(first.scroller)).toBe(false);
 		pin.release(first.scroller);
 		expect(isPinned(first.scroller)).toBe(false);
 		expect(allPinStyles()).toBe(0);

@@ -79,10 +79,20 @@
 // by the same amount there), which is why only some geometries show it. The fix therefore pins A's
 // scroller (`pinReadingViewsOf`: every Reading view that shows a DSE block embedded from the modified
 // note; `pin`: the OUTERMOST Reading scroller, not the embed's inner one, which never scrolls) and,
-// for those host pins only, switches scroll anchoring off on A's scroller for the pin's lifetime (a
-// second rule in the same `<style>`). The sizer pin alone did NOT hold (2887 -> 0, anchoring still
-// moved it); both together held (2887 -> 2887, second pane 3574 -> 3574). Anchoring stays on for a note's
-// own pins: there the collapse spans frames and anchoring is what keeps text below a redrawn block still.
+// for those host pins only, takes the host's EMBEDS out of scroll anchoring's anchor candidates for the
+// pin's lifetime (a second rule in the same `<style>`: `.internal-embed { overflow-anchor: none }`
+// under the pinned scroller). The sizer pin alone did NOT hold (2887 -> 0, anchoring still moved it);
+// both together held (2887 -> 2887, second pane 3574 -> 3574, the viewport fully inside the embed too).
+// WHY THE EMBEDS AND NOT THE SCROLLER (SC-479 r3, measured). The first version switched anchoring off
+// on A's scroller. That also held the end geometry, but with anchoring off a height change ABOVE the
+// viewport moves the text on screen instead of being compensated: a write that adds or removes a
+// tracker row while the reader is below the embed shifted the text by 110 px (16 -> -94 and 16 -> 126;
+// stock: 0, Chrome adjusts scrollTop 6869 -> 6759), and so did any other content growing above the
+// viewport during the pin (+200 px -> 216). Excluding only the embeds leaves anchoring on for
+// everything else in the host: the anchor is picked outside the collapsing embed, and the embed's own
+// height change is compensated as on stock (every shift case 0 px, every end/in case held). Anchoring
+// stays on for a note's own pins too: there the collapse spans frames and anchoring is what keeps
+// text below a redrawn block still.
 // Measured with the fix (1.15.0, lifecycle G-S42): a host pin costs the same 3-14 ms to set and 3-17 ms to
 // clear as a note's own pin; the embed scan that decides whether a Reading view is a host runs once per
 // Reading view on every `modify` of any note: median 0.1 ms, max 0.9 ms. `modify` fires before the embed
@@ -92,12 +102,12 @@
 // embed element, so the chain is read off the ancestors with one `closest` per level, memoised per scan); only a
 // link that cannot be resolved falls back to the host's path. A relative link or an ambiguous basename in the
 // middle note therefore names the file Obsidian shows.
-// RISK, ACCEPTED (SC-479 ruling): scroll anchoring is off on a host scroller for up to PIN_TTL_MS, and
-// the pin is taken on EVERY `modify` of a note embedded in a Reading view, including a write nothing redraws
-// (an adopted own write), so such a host may carry phantom bottom space for that long (the same trade as
-// SC-470, TTL-bounded, it never clamps). Every measured collapse is sub-frame, so no frame paints in the gap;
-// if a future Obsidian spread the embed's remount across frames, text under the embed would visibly shift
-// for those frames and come back, while scrollTop would not move.
+// RISK, ACCEPTED (SC-479 ruling): the pin is taken on EVERY `modify` of a note embedded in a Reading view,
+// including a write nothing redraws (an adopted own write), so such a host may carry phantom bottom space for
+// up to PIN_TTL_MS (the same trade as SC-470, TTL-bounded, it never clamps). Scroll anchoring is off for the
+// host's embeds for that long: a reader who is INSIDE a tall embed when something resizes content above their
+// viewport inside that embed is not compensated for it, and text in it can move by that amount (nothing
+// measured shows it; the embed's own collapse is sub-frame and its anchor is never needed outside it).
 // NOT COVERED: a Live Preview host (`.cm-scroller`, `![[B]]` rendered by CodeMirror) is a different mechanism
 // and still jumps (6800 -> 3745 measured with the embed near the end of the note): SC-522.
 //
@@ -189,8 +199,12 @@ let nextPinId = 0;
 export const pinRule = (id: string, px: number): string =>
 	`.markdown-preview-view[${PIN_ATTR}="${id}"] > .markdown-preview-sizer { min-height: ${px}px !important; }`;
 
-/** SC-479: a host pin (the scroller of a note that EMBEDS the written note) also stops scroll anchoring on that scroller. */
-export const anchorRule = (id: string): string => `.markdown-preview-view[${PIN_ATTR}="${id}"] { overflow-anchor: none !important; }`;
+/**
+ * SC-479: a host pin (the scroller of a note that EMBEDS the written note) also excludes the host's embeds from scroll
+ * anchoring's anchor candidates, so Chrome cannot anchor inside the collapsing embed. The scroller itself keeps anchoring on
+ * (switching it off moves on-screen text whenever content above the viewport changes height during the pin: r3 HIGH-1).
+ */
+export const anchorRule = (id: string): string => `.markdown-preview-view[${PIN_ATTR}="${id}"] .internal-embed { overflow-anchor: none !important; }`;
 
 /** Resolves a link path from `sourcePath` to a vault path (`metadataCache.getFirstLinkpathDest(...)?.path`), or null. */
 export type LinkResolver = (linkpath: string, sourcePath: string) => string | null;
@@ -257,7 +271,7 @@ interface HeldPin {
 	readonly style: HTMLStyleElement;
 	/** Keeps `px` at or above Obsidian's latest inline sizer min-height; null where the window has no MutationObserver. */
 	observer: MutationObserver | null;
-	/** SC-479: pinned as the host of an embed of the written note; its rule also stops scroll anchoring. Only ever set. */
+	/** SC-479: pinned as the host of an embed of the written note; its rule also stops the host's embeds being scroll anchors. Only ever set. */
 	host: boolean;
 }
 
@@ -323,7 +337,7 @@ export class PreviewScrollPin {
 			// is larger (see the header: RE-PINS).
 			win.clearTimeout(existing.timer);
 			if (host && !existing.host) {
-				existing.host = true; // a note's own pin that is now also a host pin: add the anchoring stop
+				existing.host = true; // a note's own pin that is now also a host pin: add the embed anchoring stop
 				existing.style.textContent = ruleText(existing);
 			}
 			this.raise(existing, Math.max(sizerInlineMinHeight(scroller), scroller.scrollHeight - verticalPadding(scroller, win)));
