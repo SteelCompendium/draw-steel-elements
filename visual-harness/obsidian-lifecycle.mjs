@@ -70,6 +70,9 @@
 // SC-519 appends G-S45 (38 scenarios in all; the id was assigned by the dispatcher): the block edit form opened inside the ~400 ms write
 // debounce of an in-card click starts from what the card shows - Reading view, then the sidebar panel. The plugin's own debounce timer
 // is held at a hook (not a timed race) so the note file is provably still old when the pencil is clicked; Save unchanged must keep the click.
+// SC-502 appends G-S44 (39 scenarios in all with SC-509's G-S40 and SC-519's G-S45): in LIVE PREVIEW the chrome panel's buttons are reached by a REAL mouse - the Edit pencil
+// opens only the edit form, Collapse collapses, the editor cursor never jumps to the line above, and a click where the HIDDEN panel
+// would be still lands on that editor line. Stamina bar (pencil, Collapse), counter and statblock (every button's centre hit-tests to it).
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -255,6 +258,13 @@ Object.assign(FIXTURES, {
 });
 // SC-487: a zero-width space right after the name. Live Preview ends the name there and renders the block; Reading view shows plain code.
 const ZWSP = String.fromCharCode(0x200b);
+// SC-502: a note per element for the Live Preview chrome-panel click scenario (G-S44). The line directly above each fence is text,
+// so the panel's overhang sits over a real editor line; the last line is where the cursor is parked.
+Object.assign(FIXTURES, {
+	'Lifecycle/stamina-lp.md': `# stamina lp\n\nABOVE TEXT LINE\n${fence('ds-stamina-bar', ['max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5'])}\n\nBELOW\n`,
+	'Lifecycle/counter-lp.md': `# counter lp\n\nABOVE TEXT LINE\n${COUNTER(10)}\n\nBELOW\n`,
+	'Lifecycle/statblock-lp.md': `# statblock lp\n\nABOVE TEXT LINE\n${fence('ds-statblock', ['type: statblock', 'name: Bare Creature', 'stamina: "10"'])}\n\nBELOW\n`,
+});
 Object.assign(FIXTURES, {
 	'Lifecycle/zwsp.md': `# zwsp\n\nTOP\n\n${fence('ds-counter' + ZWSP, counterLines(10))}\n\nBELOW\n`,
 });
@@ -2735,6 +2745,161 @@ const SCENARIOS = [
 			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${JSON.stringify(await t.noticesSince(m))}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
 			return `opening the block edit form flushes a pending in-card write first (the debounce timer held, the note still old when the pencil was clicked): ${facts.join('; ')}; the note outside the block untouched; no Notice, no page error`;
+		},
+	},
+	{
+		// SC-502: in Live Preview the chrome panel sits ABOVE the block, outside the box of the CodeMirror widget Obsidian draws the block
+		// in, and Obsidian clips that widget (`contain: paint !important` on `.cm-content > [contenteditable=false]` since 1.15.0, and
+		// `overflow: hidden` on `.cm-embed-block:hover` always). So the panel was never painted and a click at a button's centre went to
+		// the editor line above: nothing opened, and the cursor jumped there (measured: elementFromPoint = `div.cm-line.cm-active`).
+		// REAL mouse events (CDP press + release at the button's centre), never `.click()`. Three parts: (1) the stamina bar - the Edit
+		// pencil opens only the edit form and leaves the cursor alone, Collapse collapses; (2) a click where the panel is HIDDEN still
+		// reaches the editor line above (the fix must not leave an invisible shield there); (3) counter and statblock: every panel
+		// button's centre hit-tests to that button, and a real Collapse click collapses.
+		id: 'G-S44',
+		async run(t) {
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			const LP = LC_MODES[1];
+			const cursorLine = () => t.ev(`app.workspace.getMostRecentLeaf().view.editor.getCursor().line`);
+			const setCursor = (line) => t.ev(`app.workspace.getMostRecentLeaf().view.editor.setCursor({ line: ${line}, ch: 0 })`);
+			const modals = () => t.ev(`Array.from(document.querySelectorAll('.modal-container .dse-modal')).map((m) => (m.querySelector('.dse-form__preview') ? 'form' : m.querySelector('.dse-sedit__apply-input') ? 'stamina' : 'other'))`);
+			const closeModals = async (what) => {
+				await t.key('Escape', 'Escape', 27);
+				await t.waitFor(`document.querySelectorAll('.modal-container .dse-modal').length === 0`, `${what}: the modal closed on Escape`);
+			};
+			const center = (sel) => t.ev(`(() => { const el = ${sel}; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+			const mouse = (type, x, y, extra = {}) => t.cdp.call('Input.dispatchMouseEvent', { type, x, y, ...extra });
+			// What a real press + release at a point does (no scrolling, no hover first).
+			const pressAt = async ({ x, y }) => {
+				await mouse('mouseMoved', x, y);
+				await mouse('mousePressed', x, y, { button: 'left', buttons: 1, clickCount: 1 });
+				await mouse('mouseReleased', x, y, { button: 'left', buttons: 0, clickCount: 1 });
+			};
+			// The block's root in Live Preview, scrolled so there is room above it for the panel.
+			const rootOf = () => `Array.from(app.workspace.getMostRecentLeaf().view.containerEl.querySelectorAll('.markdown-source-view [data-dse-element]')).find((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]'))`;
+			const panelOf = () => `(${rootOf()}).querySelector('.dse-chrome')`;
+			const buttonsOf = () => `Array.from((${panelOf()}).querySelectorAll('button'))`;
+			const hitOk = (btnExpr) => t.ev(`(() => { const b = ${btnExpr}; const r = b.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { ok: !!hit && (hit === b || b.contains(hit)), hit: hit ? hit.tagName.toLowerCase() + '.' + String(hit.className).trim().split(/\\s+/).slice(0, 3).join('.') : null }; })()`);
+			const scrollToRoot = async () => {
+				await t.ev(`(() => { const r = ${rootOf()}; r.scrollIntoView({ block: 'start' }); const sc = r.closest('.cm-scroller'); if (sc) sc.scrollTop = Math.max(0, sc.scrollTop - 220); return true; })()`);
+				await t.sleep(300);
+			};
+			// A person moves the pointer onto the block, then up onto the panel: the panel is click-through until the block is hovered.
+			const hoverTo = async (btnExpr) => {
+				await scrollToRoot();
+				const root = await t.ev(`(() => { const b = (${rootOf()}).getBoundingClientRect(); return { x: b.left + Math.min(b.width / 2, 300), y: b.top + Math.min(b.height / 2, 60) }; })()`);
+				await mouse('mouseMoved', root.x - 40, root.y + 4);
+				await mouse('mouseMoved', root.x, root.y);
+				await t.waitFor(`getComputedStyle(${panelOf()}).pointerEvents === 'auto'`, 'the chrome panel is revealed by the hover');
+				const to = await center(btnExpr);
+				// Sideways inside the block until under the panel's FIRST button, straight up onto it, then along the panel to the target. (Straight up
+				// from under the rightmost button crosses Obsidian's own `</>` edit-block button, which sits at the block's top right: the pointer is
+				// then on a sibling of the block's root, so the panel hides - a separate, existing problem.)
+				const first = await center(`(${buttonsOf()})[0]`);
+				await mouse('mouseMoved', first.x, root.y);
+				for (let i = 1; i <= 8; i++) await mouse('mouseMoved', first.x, root.y + ((first.y - root.y) * i) / 8);
+				for (let i = 1; i <= 4; i++) await mouse('mouseMoved', first.x + ((to.x - first.x) * i) / 4, first.y);
+				// Not fatal here: a panel clipped by its widget loses the hover on the way up, and the hit-test assertions below say so.
+				await t.sleep(150);
+				return to;
+			};
+			const m = await t.mark();
+			await t.ev(`${prefs}.set('authoringControls', true)`);
+			await t.ev(`(() => { const st = document.createElement('style'); st.id = 'lc-gs44-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); return true; })()`);
+			const facts = [];
+			try {
+				// ---- 1. stamina bar: pencil and Collapse by a real click
+				let rel = 'Lifecycle/stamina-lp.md';
+				const SB = '[data-dse-element="stamina-bar"]';
+				await enterMode(t, rel, LP, SB);
+				const ABOVE_LINE = 2;
+				const PARKED = 9;
+				const PENCIL = `(${rootOf()}).querySelector('.dse-chrome button[aria-label="Edit Stamina bar"]')`;
+				const COLLAPSE = `(${rootOf()}).querySelector('.dse-chrome button[data-dse-chrome-item="collapse"]')`;
+				t.expect(await t.ev(`!!(${PENCIL})`), 'no Edit pencil in the chrome panel - authoringControls is not taking effect');
+				await setCursor(PARKED);
+				await t.sleep(300);
+				t.expect((await cursorLine()) === PARKED, 'the cursor did not park on the last line');
+
+				// line above is the ACTIVE line (the ticket's `div.cm-line.cm-active` case): every button's centre must hit-test to the button
+				await setCursor(ABOVE_LINE);
+				await t.sleep(300);
+				await hoverTo(PENCIL);
+				for (const [i, label] of ['pencil', 'pin', 'collapse'].entries()) {
+					const h = await hitOk(`(${buttonsOf()})[${i}]`);
+					t.expect(h.ok, `line above active: elementFromPoint at the ${label} button's centre is ${h.hit}, not the button (panel revealed: ${await t.ev(`getComputedStyle(${panelOf()}).pointerEvents === 'auto'`)})`);
+				}
+				facts.push('active line above: every button centre hit-tests to its button');
+				await setCursor(PARKED);
+				await t.sleep(300);
+
+				const pencilAt = await hoverTo(PENCIL);
+				t.expect((await hitOk(PENCIL)).ok, `the pencil's centre hit-tests to ${(await hitOk(PENCIL)).hit}, not the pencil`);
+				await pressAt(pencilAt);
+				await t.waitFor(`document.querySelectorAll('.modal-container .dse-modal').length > 0`, 'a modal opened after a real click on the Edit pencil (in Live Preview the click fell through to the editor line above)');
+				await t.sleep(800); // a stray Stamina modal would have opened by now
+				t.expect(JSON.stringify(await modals()) === '["form"]', `real click on the Edit pencil: expected only the edit form, got ${JSON.stringify(await modals())}`);
+				t.expect((await cursorLine()) === PARKED, `the Edit pencil click moved the editor cursor to line ${await cursorLine()}`);
+				await closeModals('pencil');
+				facts.push('Edit pencil: only the edit form, cursor unmoved');
+
+				const collapseAt = await hoverTo(COLLAPSE);
+				await pressAt(collapseAt);
+				await t.waitFor(`(() => { const r = ${rootOf()}; return !!r && r.hasAttribute('data-dse-collapsed'); })()`, 'the block collapsed after a real click on Collapse');
+				await t.sleep(500);
+				t.expect((await modals()).length === 0, `Collapse opened a modal: ${JSON.stringify(await modals())}`);
+				t.expect((await cursorLine()) === PARKED, `the Collapse click moved the editor cursor to line ${await cursorLine()}`);
+				facts.push('Collapse: collapsed, cursor unmoved');
+				// back to expanded (the collapsed one-liner's Expand button is in flow, not in the hover panel)
+				// Back to expanded by a script click (setup, not under test): in Live Preview Obsidian's own `</>` edit-block button sits over the
+				// collapsed one-liner's Expand button, so a real click there enters the block's source (a separate, existing problem).
+				await t.ev(`(${rootOf()}).querySelector('[data-dse-control="chrome.expand"]').click()`);
+				await t.waitFor(`(() => { const r = ${rootOf()}; return !!r && !r.hasAttribute('data-dse-collapsed'); })()`, 'the block expanded again');
+
+				// ---- 2. a click where the panel is HIDDEN reaches the editor line above
+				await scrollToRoot();
+				await t.ev(`document.activeElement?.blur?.()`); // a closed modal hands focus back to the pencil, and :focus-within would keep the panel revealed
+				await mouse('mouseMoved', 300, 900); // far away: not over the block, so the panel is not revealed
+				await t.sleep(250);
+				const target = await center(PENCIL);
+				t.expect((await t.ev(`getComputedStyle(${panelOf()}).pointerEvents`)) === 'none', 'the panel is still revealed with the pointer away from the block');
+				const hidden = await t.ev(`(() => { const e = document.elementFromPoint(${target.x}, ${target.y}); return e ? e.className : null; })()`);
+				t.expect(/cm-line/.test(String(hidden)), `hidden panel: elementFromPoint at the pencil's place is ${hidden}, not the editor line above`);
+				await pressAt(target);
+				await t.sleep(300);
+				t.expect((await cursorLine()) === ABOVE_LINE, `a click where the hidden panel would be did not reach the editor line above: cursor is on line ${await cursorLine()}, wanted ${ABOVE_LINE}`);
+				facts.push('hidden panel: the click lands on the editor line above');
+				t.expect(t.read(rel) === FIXTURES[rel], `${rel} was written: ${JSON.stringify(t.read(rel))}`);
+
+				// ---- 3. counter and statblock: every panel button is reachable, and a real Collapse click collapses
+				for (const [rel2, sel, name] of [['Lifecycle/counter-lp.md', '[data-dse-element="counter"]', 'counter'], ['Lifecycle/statblock-lp.md', '[data-dse-element="statblock"]', 'statblock']]) {
+					await enterMode(t, rel2, LP, sel);
+					await setCursor(PARKED);
+					await t.sleep(300);
+					const COL = `(${rootOf()}).querySelector('.dse-chrome button[data-dse-chrome-item="collapse"]')`;
+					const at = await hoverTo(COL);
+					const n = await t.ev(`(${buttonsOf()}).length`);
+					t.expect(n >= 2, `${name}: the chrome panel has ${n} buttons`);
+					for (let i = 0; i < n; i++) {
+						const h = await hitOk(`(${buttonsOf()})[${i}]`);
+						const label = await t.ev(`(${buttonsOf()})[${i}].getAttribute('aria-label') || (${buttonsOf()})[${i}].getAttribute('data-dse-chrome-item')`);
+						t.expect(h.ok, `${name}: elementFromPoint at the centre of "${label}" is ${h.hit}, not the button`);
+					}
+					await pressAt(at);
+					await t.waitFor(`(() => { const r = ${rootOf()}; return !!r && r.hasAttribute('data-dse-collapsed'); })()`, `${name}: a real click on Collapse collapsed the block`);
+					t.expect((await cursorLine()) === PARKED, `${name}: the Collapse click moved the editor cursor to line ${await cursorLine()}`);
+					await t.ev(`(${rootOf()}).querySelector('[data-dse-control="chrome.expand"]').click()`);
+					await t.waitFor(`(() => { const r = ${rootOf()}; return !!r && !r.hasAttribute('data-dse-collapsed'); })()`, `${name}: expanded again`);
+					t.expect(t.read(rel2) === FIXTURES[rel2], `${rel2} was written: ${JSON.stringify(t.read(rel2))}`);
+					facts.push(`${name}: ${n} buttons reachable, Collapse collapses`);
+				}
+			} finally {
+				await t.ev(`document.getElementById('lc-gs44-notice')?.remove()`);
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
+			return `Live Preview, real mouse: ${facts.join('; ')}; no page errors`;
 		},
 	},
 ];
