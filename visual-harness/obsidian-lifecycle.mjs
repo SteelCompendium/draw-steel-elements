@@ -741,6 +741,8 @@ function formKit(t) {
 		const noteRoot = t.root(sel);
 		await t.waitFor(`!!(${noteRoot})`, 'sidebar: the note card rendered');
 		await t.ev(`(() => { window.__lcRandom = Math.random; Math.random = () => 0xabcdef / 0x1000000; return true; })()`);
+		// Count Obsidian's `modify` events for the note: the stamp's own is what the panel may rebuild itself for.
+		await t.ev(`(() => { window.__lcStampMods = 0; window.__lcStampRef = app.vault.on('modify', (f) => { if (f.path === ${JSON.stringify(rel)}) window.__lcStampMods++; }); return true; })()`);
 		try {
 			await t.ev(`(${noteRoot}).querySelector('[data-dse-chrome-item="pin"]').click()`);
 			const t0 = Date.now();
@@ -755,6 +757,27 @@ function formKit(t) {
 		t.expect(stampedNote.replace(/_dse_anchor: [^\n]+\n/, '') === FIXTURES[rel], `sidebar: the pin changed more than the anchor line: ${JSON.stringify(stampedNote)}`);
 		const panelRoot = `Array.from((app.workspace.getLeavesOfType('dse-sidebar')[0]?.view.containerEl ?? document.createElement('div')).querySelectorAll('${sel}')).find((x) => x.isConnected)`;
 		await t.waitFor(`!!(${panelRoot})`, 'sidebar: the panel mounted');
+		// The panel has caught up with the stamp (a condition, not a delay): Obsidian has delivered the stamp's `modify`, the panel's
+		// host holds exactly the note's text, and its mounted element is loaded and is the card on screen. Whatever the panel rebuilds
+		// for the stamp has then been done before a step clicks anything in it.
+		try {
+			await t.waitFor(
+				`(async () => {
+					if (window.__lcStampMods < 1) return false;
+					const panel = app.workspace.getLeavesOfType('dse-sidebar')[0]?.view.panels?.[0];
+					const host = panel?.host;
+					const root = ${panelRoot};
+					const child = host?.lastMountedChild;
+					if (!host || !root || !child || !child._loaded || !root.closest('.dse-sidebar__panel')) return false;
+					const disk = await app.vault.cachedRead(app.vault.getAbstractFileByPath(${JSON.stringify(rel)}));
+					return host.cachedContent === disk;
+				})()`,
+				'sidebar: the panel caught up with the anchor stamp',
+				15000,
+			);
+		} finally {
+			await t.ev(`(() => { if (window.__lcStampRef) app.vault.offref(window.__lcStampRef); delete window.__lcStampRef; delete window.__lcStampMods; return true; })()`);
+		}
 		return { stampedNote, panelRoot };
 	};
 	return { waitText, waitDisk, hoverTo, FORM, SAVE, clickPencil, waitFormOpen, clickSave, pinToSidebar };
@@ -2594,7 +2617,6 @@ const SCENARIOS = [
 					await t.reset(rel);
 					const { stampedNote, panelRoot } = await pinToSidebar(rel, sel);
 					await waitText(panelRoot, 'The Heist', 'sidebar');
-					await sleep(1000); // the stamp's own rebuild of the panel settles
 					await formSave('sidebar', panelRoot, { raw: ['The Heist', 'Other Job'] });
 					await waitDisk(rel, 'title: Other Job', 'sidebar');
 					const card = await waitText(panelRoot, 'Other Job', 'sidebar panel');
@@ -2699,7 +2721,6 @@ const SCENARIOS = [
 					await t.open(rel);
 					await t.reset(rel);
 					const { stampedNote, panelRoot } = await kit.pinToSidebar(rel, sel);
-					await sleep(1000); // the stamp's own rebuild of the panel settles (a window for a negative check, not a race)
 					await phase('Sidebar', rel, panelRoot, (note) => outsideBlock(stampedNote), 'Increase in the panel, pencil inside the debounce, Save unchanged -> 4 kept');
 					t.expect(/_dse_anchor: [A-Za-z0-9_-]+/.test(t.read(rel)), `Sidebar: the anchor did not survive the form's Save: ${JSON.stringify(t.read(rel))}`);
 					t.expect(outsideBlock(t.read(rel)) === outsideBlock(stampedNote), 'Sidebar: the note outside the block changed');

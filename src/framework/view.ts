@@ -306,8 +306,10 @@ export abstract class ElementView<M> extends Component {
 	 * would start from the body before that edit and its Save would undo it. With nothing pending this
 	 * calls `open` synchronously (no delay, no write). With a write pending it flushes it, waits, then
 	 * calls `open`; a second request meanwhile is dropped (one form), and nothing opens if the view
-	 * unloaded in the meantime. If the flushed write fails the host has already said so (its own Notice);
-	 * `open` still runs and reads whatever body the host still holds.
+	 * unloaded in the meantime. If the flushed write fails, `open` still runs and reads whatever body the
+	 * host still holds. A write the host drops because the block changed on disk shows the host's dropped-write
+	 * Notice; a disk failure (a read-only note) or a write rejected before it starts shows no Notice, only a
+	 * console error, and with the former the host body can already be ahead of the disk (SC-524).
 	 */
 	openAfterPendingWrite(open: () => void): void {
 		if (!this.hasPendingWrite()) {
