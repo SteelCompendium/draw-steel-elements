@@ -2619,7 +2619,7 @@ function newBtnSweepAcc() {
  *  (`rollBar.ts:112`, `open: false`), so its region is `[hidden]` (display:none) and the steppers,
  *  their number input, the Skill/Main-action checkboxes and Reset all have NO box in the resting
  *  gallery. Without this the sweeps tagged them anyway and the per-state probes exempted them as
- *  "renders a zero-sized box" / "no box at all": 8 button records at `c0e761b`..`c98bd82`, each a
+ *  "renders a zero-sized box" / "no box at all": 8 button records from `c0e761b` (SC-279) until SC-501, each a
  *  control the product reveals with one click. SC-205's doctrine is "MOUNT THE CHROME, don't
  *  exempt it" (CHROME_REVEAL_CSS above); a disclosure is chrome a user opens, so open it.
  *
