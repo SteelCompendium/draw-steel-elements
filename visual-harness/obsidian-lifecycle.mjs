@@ -76,7 +76,7 @@
 // SC-502 r2 adds to it: the panel stays revealed while the pointer crosses Obsidian's own `</>` edit-block button on the way up to Collapse,
 // a real click on the collapsed one-liner's Expand expands the block, and a real click on `</>` still enters the block's source.
 // (r3) CodeMirror's height for the widget equals its on-screen height for a counter, a feature (margins 24px) and a statblock (8px).
-// SC-479 appends G-S42 (38 scenarios in all with SC-509's G-S40): a tracker in note B embedded in a Reading view of note A parked at its end keeps A's scroll position
+// SC-479 appends G-S42 (40 scenarios in all with SC-502's G-S44 and SC-519's G-S45; the id was assigned by the dispatcher): a tracker in note B embedded in a Reading view of note A parked at its end keeps A's scroll position
 // when B is written (in-app, on disk, from another pane, and the embed's own write with adoption off).
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
@@ -2967,8 +2967,9 @@ const SCENARIOS = [
 		// landed; a tracker is drawn in the embed; anti-vacuity - the embedded tracker was redrawn (a fresh root) and A
 		// was parked at its end; `data-dse-scroll-pin` was on A's scroller when the embedded tracker was replaced;
 		// scrollTop identical in every frame through the pin's release + 10 frames; the pin was seen released. Every
-		// phase runs even after one fails. No timed delay decides anything: the redraw follows `modify` synchronously
-		// enough that no hold is needed, and the recorder samples every frame until the release.
+		// phase runs even after one fails. No timed delay decides an outcome: the recorder starts before each write
+		// and samples every frame until the pin is released, wherever Obsidian's redraw lands inside that window (it never
+		// has to win a race), and the sleeps only let the parked scroll position settle, as in G-S15.
 		id: 'G-S42',
 		async run(t) {
 			const host = 'Lifecycle/embhost.md';
