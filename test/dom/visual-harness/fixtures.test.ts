@@ -610,7 +610,7 @@ describe('click-mount seams for the host-leak sweeps (SC-513)', () => {
 		expect(sections.map((s) => s.getAttribute('data-dse-harness-extra'))).toEqual([null, 'feature', 'featureblock', 'statblock']);
 	});
 
-	test('a capture URL (no galleryExtra, no prefs) parses to none of it', () => {
+	test('absent galleryExtra and prefs keys stay undefined', () => {
 		const p = parseParams('?element=hero&fixture=default&theme=steel&bg=dark');
 		expect(p.galleryExtra).toBeUndefined();
 		expect(p.prefs).toBeUndefined();
