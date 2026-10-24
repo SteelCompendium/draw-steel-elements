@@ -94,6 +94,32 @@ describe('stamina bar chrome: keyboard focus stays on Pin to sidebar across the 
 	before(() => dse.setPrefs({}, { experimental: true }));
 	after(() => dse.setPrefs({}));
 
+	// The same note open in a second pane renders the same block twice (same block key, its own Pin button each). The press is in the
+	// later (active) pane: the first pane's rebuild must neither cancel the request nor take focus, so focus ends on THIS pane's new Pin.
+	it('[CHR-F06] the same note open in two panes: Tab + Enter on Pin in the second pane leaves focus on that pane\'s Pin button, never the first pane\'s', async () => {
+		await dse.openNote(NOTE);
+		await startExpanded();
+		await dse.page(`(async () => {
+			const a = app.workspace.getMostRecentLeaf();
+			const b = app.workspace.createLeafBySplit(a, 'vertical');
+			await b.setViewState({ type: 'markdown', state: { file: ${JSON.stringify(NOTE)}, mode: 'preview' }, active: true });
+			app.workspace.setActiveLeaf(b, { focus: true });
+			window.__paneB = b.containerEl;
+			return true;
+		})()`);
+		await dse.waitFor(`document.querySelectorAll('.markdown-reading-view [data-dse-element="stamina-bar"]').length === 2 && Array.from(document.querySelectorAll('.markdown-reading-view [data-dse-control="chrome.pin"]')).every((b) => b.isConnected)`, 'both panes to render the bar');
+		const pin = dse.block(BAR).control('chrome.pin'); // the active leaf: the second pane
+		await dse.tabTo(pin, 40);
+		expect(await dse.page<boolean>(`document.activeElement.closest('.workspace-leaf') === window.__paneB`)).toBe(true);
+		const w = await dse.waitForWrite(NOTE, () => dse.press('Enter', pin));
+		expect(w.count).toBeGreaterThanOrEqual(1);
+		await dse.settle();
+		await waitDomQuiet(800);
+		expect(await where()).toBe('chrome.pin');
+		expect(await dse.page<boolean>(`document.activeElement.closest('.workspace-leaf') === window.__paneB`)).toBe(true); // this pane, not the twin
+		expect(await ring()).toEqual({ visible: true, outline: 'solid' });
+	});
+
 	// After a keyboard Collapse and Expand, as a keyboard user's session goes: that order was measured to redraw the block three
 	// times, the last by Obsidian re-inserting the existing section (nothing of the plugin's runs for it), and the focus
 	// has to survive all of them.

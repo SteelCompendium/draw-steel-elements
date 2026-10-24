@@ -687,7 +687,7 @@ export class ElementPipeline {
 													const key = cx.host.blockKey();
 													const pressed = (evt?.currentTarget ?? null) as HTMLElement | null;
 													const keyboard = isKeyboardClick(evt);
-													if (keyboard) armChromeFocus(key, 'pin');
+													if (keyboard) armChromeFocus(key, 'pin', pressed);
 													void requestPinToSidebar(cx.host.sourcePath, info.language, info.lineStart).then(() => {
 														if (keyboard) settleChromeFocus(key, pressed);
 													});

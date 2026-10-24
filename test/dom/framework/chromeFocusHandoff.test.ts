@@ -39,13 +39,20 @@ function makeHost(): BlockHost & { containerEl: HTMLElement } {
 
 /** Render the block (a fresh pipeline run, i.e. a rebuild when the key repeats). `attach: false` leaves it detached,
  *  the way Obsidian builds a section before inserting it. */
-async function render(opts: { attach?: boolean; hidden?: boolean } = {}): Promise<{ root: HTMLElement; host: ReturnType<typeof makeHost> }> {
+async function render(opts: { attach?: boolean; hidden?: boolean; leaf?: HTMLElement } = {}): Promise<{ root: HTMLElement; host: ReturnType<typeof makeHost> }> {
 	const host = makeHost();
 	if (opts.hidden) host.containerEl.setAttribute('data-test-hidden', '');
-	if (opts.attach !== false) document.body.appendChild(host.containerEl);
+	if (opts.attach !== false) (opts.leaf ?? document.body).appendChild(host.containerEl);
 	await new ElementPipeline(makeDeps()).run(staminaBarElement, BODY, host);
 	return { root: host.containerEl.firstElementChild as HTMLElement, host };
 }
+
+/** A workspace pane (Obsidian's `.workspace-leaf`); the same note open in two panes renders the same block key twice. */
+const makeLeaf = (): HTMLElement => {
+	const leaf = document.createElement('div');
+	leaf.className = 'workspace-leaf';
+	return document.body.appendChild(leaf);
+};
 
 const item = (root: HTMLElement, id: string): HTMLButtonElement =>
 	root.querySelector<HTMLButtonElement>(`[data-dse-chrome-item="${id}"]`)!;
@@ -258,5 +265,46 @@ describe('SC-505 — Pin to sidebar keeps keyboard focus on the block\'s Pin but
 
 		expect(focusCalls).toEqual([]);
 		expect(document.activeElement).toBe(document.body);
+	});
+});
+
+describe('SC-505 r2 HIGH-1 — the same note open in two panes: the request belongs to the pane that was pressed', () => {
+	test('the OTHER pane rebuilding first neither disarms the request nor takes focus; the pressed pane then gets its button back', async () => {
+		const leafA = makeLeaf();
+		const leafB = makeLeaf();
+		const a = await render({ leaf: leafA });
+		const b = await render({ leaf: leafB });
+		const bPin = item(b.root, 'pin');
+		bPin.focus();
+		keyboardClick(bPin);
+		await flush();
+
+		a.host.containerEl.remove();
+		const a2 = await render({ leaf: leafA }); // pane A rebuilt first: same block key, its own Pin button
+		expect(document.activeElement).toBe(bPin); // focus is still on the pressed button, not A's
+		expect(document.activeElement).not.toBe(item(a2.root, 'pin'));
+
+		b.host.containerEl.remove();
+		const b2 = await render({ leaf: leafB });
+		expect(document.activeElement).toBe(item(b2.root, 'pin'));
+	});
+
+	test('with focus already free (the pressed pane torn down first), the other pane\'s rebuild still does not take it', async () => {
+		const leafA = makeLeaf();
+		const leafB = makeLeaf();
+		const a = await render({ leaf: leafA });
+		const b = await render({ leaf: leafB });
+		item(b.root, 'pin').focus();
+		keyboardClick(item(b.root, 'pin'));
+		await flush();
+
+		b.host.containerEl.remove();
+		a.host.containerEl.remove();
+		const a2 = await render({ leaf: leafA });
+		expect(document.activeElement).toBe(document.body);
+		expect(document.activeElement).not.toBe(item(a2.root, 'pin'));
+
+		const b2 = await render({ leaf: leafB });
+		expect(document.activeElement).toBe(item(b2.root, 'pin'));
 	});
 });

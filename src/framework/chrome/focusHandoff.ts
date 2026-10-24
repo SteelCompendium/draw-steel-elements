@@ -53,12 +53,20 @@ const SETTLE_MS = 1500;
 interface Request {
 	item: string;
 	expires: number;
+	/** The button the keyboard user pressed (focus still on it, while it lives, is OURS, not "the user went elsewhere"). */
+	pressed: HTMLElement | null;
+	/** The pane (`.workspace-leaf`) it was pressed in. The same note open in two panes renders the same block key
+	 *  twice; only a copy in THIS pane may claim, or be taken as a sign the user left. Null: no pane known. */
+	leaf: Element | null;
 }
 const requests = new Map<string, Request>();
 
-/** Ask the next chrome mount of the block `blockKey` to focus its `item` button (`data-dse-chrome-item`). */
-export function armChromeFocus(blockKey: string, item: string): void {
-	requests.set(blockKey, { item, expires: Date.now() + REQUEST_TTL_MS });
+const LEAF = '.workspace-leaf';
+
+/** Ask the next chrome mount of the block `blockKey`, in the pane `pressed` sits in, to focus its `item` button
+ *  (`data-dse-chrome-item`). */
+export function armChromeFocus(blockKey: string, item: string, pressed: HTMLElement | null = null): void {
+	requests.set(blockKey, { item, expires: Date.now() + REQUEST_TTL_MS, pressed, leaf: pressed?.closest(LEAF) ?? null });
 }
 
 export function disarmChromeFocus(blockKey: string): void {
@@ -123,9 +131,11 @@ export function claimChromeFocus(blockKey: () => string, root: HTMLElement): voi
 			(b) => b.closest('[data-dse-chrome]') === root,
 		);
 		if (!btn?.isConnected || doc.activeElement === btn) return;
+		// Another pane's copy of the same block (same key): not ours to claim, and its rebuild says nothing about the user.
+		if (req.leaf && btn.closest(LEAF) !== req.leaf) return;
 		if (!focusIsFree(doc)) {
-			disarmChromeFocus(key); // the user went elsewhere in the meantime
-			return;
+			if (doc.activeElement !== req.pressed) disarmChromeFocus(key); // the user went elsewhere in the meantime
+			return; // (focus still on the pressed button: the pressed pane has not been rebuilt yet)
 		}
 		// A hidden copy (Live Preview's widget) refuses focus: the request stays for the copy that can take it.
 		if (focusControl(btn)) req.expires = Date.now() + SETTLE_MS;
