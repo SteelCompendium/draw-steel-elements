@@ -416,7 +416,8 @@ describe('D7 Task 9: "Edit definition" (recon delta 5) — reuses D9\'s openForm
 	test('SC-518: the form is handed the button that opened it, and whether the press came from the keyboard', async () => {
 		const deps = makeDeps();
 		await deps.prefs.set('authoringControls', true);
-		const { root } = await renderHero(HERO_SOURCE, {}, deps);
+		const { root, host } = await renderHero(HERO_SOURCE, {}, deps);
+		document.body.appendChild(host.containerEl); // focus needs the sheet in the document
 		const btn = root.querySelector<HTMLButtonElement>('[aria-label="Edit definition"]')!;
 
 		btn.focus(); // Tab stop: the button holds focus when Enter is pressed
@@ -427,6 +428,7 @@ describe('D7 Task 9: "Edit definition" (recon delta 5) — reuses D9\'s openForm
 		const calls = jest.mocked(openFormEditor).mock.calls;
 		expect(calls[0][5]).toEqual({ pressed: btn, keyboard: true, hadFocus: true });
 		expect(calls[1][5]).toEqual({ pressed: btn, keyboard: false, hadFocus: false });
+		host.containerEl.remove();
 	});
 
 	test('SC-519: with an in-sheet edit still waiting out its debounce, the form opens after that write lands and starts from the sheet', async () => {

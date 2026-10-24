@@ -63,6 +63,9 @@ interface Request {
 	label: string | null;
 	/** SC-518: show the keyboard ring on the control that takes focus (false: the form was opened with the mouse). */
 	ring: boolean;
+	/** SC-518 r3: the control that opened the form. Obsidian can keep the old section of an identical twin and move it to the
+	 *  twin's place, so this node can stay in the document and take the modal's focus return; see `staleOpener` in the claim. */
+	opener: Element | null;
 	expires: number;
 	/** Which copy of the block was pressed: its embed (`![[Note]]`) if it sits in one, else its pane (`.workspace-leaf`).
 	 *  The same note open in two panes, or embedded twice in one note, renders the same block key several times; only a
@@ -84,7 +87,7 @@ const scopeOf = (el: Element): Element | null => el.closest(EMBED) ?? el.closest
 export function armChromeFocus(blockKey: string, item: string, pressed: HTMLElement | null = null): void {
 	const ours = new WeakSet<Element>();
 	if (pressed) ours.add(pressed);
-	requests.set(blockKey, { item, label: null, ring: true, expires: Date.now() + REQUEST_TTL_MS, scope: pressed ? scopeOf(pressed) : null, ours });
+	requests.set(blockKey, { item, label: null, ring: true, opener: null, expires: Date.now() + REQUEST_TTL_MS, scope: pressed ? scopeOf(pressed) : null, ours });
 	guardFocus(pressed?.ownerDocument ?? activeDocument);
 }
 
@@ -92,13 +95,18 @@ export function armChromeFocus(blockKey: string, item: string, pressed: HTMLElem
 export interface FormOpener {
 	pressed: HTMLElement;
 	keyboard: boolean;
+	/** SC-518 r3: the pressed control held focus when it was pressed (a Tab stop, Enter/Space). A real pointer press does not
+	 *  focus the chrome pencil, so focus was elsewhere and stays there: base, and the code before SC-509, leave it alone. */
+	hadFocus: boolean;
 }
 
 /** The opener behind a click event, read synchronously inside its handler (`currentTarget` is gone afterwards).
  *  Null when there is no control to hand focus back to (a form opened without a click). */
 export function formOpenerOf(evt: MouseEvent | undefined | null): FormOpener | null {
 	const pressed = evt?.currentTarget as HTMLElement | null | undefined;
-	return pressed?.nodeType === 1 ? { pressed, keyboard: isKeyboardClick(evt) } : null;
+	return pressed?.nodeType === 1
+		? { pressed, keyboard: isKeyboardClick(evt), hadFocus: pressed.ownerDocument.activeElement === pressed }
+		: null;
 }
 
 /**
@@ -108,11 +116,13 @@ export function formOpenerOf(evt: MouseEvent | undefined | null): FormOpener | n
  * the user moves focus anywhere else, and it lapses on its own, so a write that causes no rebuild leaves nothing behind.
  */
 export function armFormFocus(blockKey: string, opener: FormOpener): void {
+	if (!opener.hadFocus) return; // SC-518 r3 (LOW-1): focus was not on the control, so there is none to give back
 	const ours = new WeakSet<Element>([opener.pressed]);
 	requests.set(blockKey, {
 		item: 'edit',
 		label: opener.pressed.getAttribute('aria-label'),
 		ring: opener.keyboard,
+		opener: opener.pressed,
 		expires: Date.now() + REQUEST_TTL_MS,
 		scope: scopeOf(opener.pressed),
 		ours,
@@ -233,7 +243,10 @@ export function claimChromeFocus(blockKey: () => string, root: HTMLElement): voi
 		if (req.scope && scopeOf(btn) !== req.scope) return;
 		// Something holds focus. The focusin guard has already cancelled the request if the user put it there, so it is
 		// the pressed button (this copy has not been torn down yet) or a Pin already claimed: leave it.
-		if (!focusIsFree(doc)) return;
+		// SC-518 r3 (MEDIUM-1): not when it is the form's OWN opener, left in the document inside another card (the upper
+		// of two identical blocks was edited: its old section moved to the twin's place and took the modal's focus return).
+		const staleOpener = req.opener !== null && doc.activeElement === req.opener && !root.contains(req.opener);
+		if (!focusIsFree(doc) && !staleOpener) return;
 		// A hidden copy (Live Preview's widget) refuses focus: the request stays for the copy that can take it.
 		req.ours.add(btn); // before the focus call: its focusin goes through the guard
 		if (btn === root && !root.hasAttribute('tabindex')) root.tabIndex = -1; // SC-518: focusable by script, not a new tab stop

@@ -511,7 +511,7 @@ describe('SC-518: the redrawn card is searched for the control that opened the f
 	};
 	const arm = (keyboard: boolean): void => {
 		const old = el(document.body, 'button', { 'aria-label': 'Edit definition' });
-		armFormFocus(KEY, { pressed: old, keyboard });
+		armFormFocus(KEY, { pressed: old, keyboard, hadFocus: true });
 		old.remove();
 	};
 	afterEach(() => disarmChromeFocus(KEY));

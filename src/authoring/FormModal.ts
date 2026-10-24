@@ -487,7 +487,8 @@ class FormModal extends DseModal {
 		// SC-518: Save redraws the card (SC-509), so the pencil that opened this form is detached when the form closes and the
 		// focus Obsidian returns to it is lost (focus fell to <body>). Ask the rebuilt card for the opener's replacement
 		// (focusHandoff.ts). Armed before the write because the rebuild can land before it returns; a body identical to the
-		// source writes nothing and rebuilds nothing, so it arms nothing; a failed write disarms (the form stays open).
+		// source writes nothing and rebuilds nothing, so it arms nothing; a failed write disarms (the form stays open). A control that did
+		// not hold focus when pressed (a mouse press) arms nothing either (SC-518 r3).
 		const key = this.opener && body !== this.source ? this.cx.host.blockKey() : null;
 		if (this.opener && key !== null) armFormFocus(key, this.opener);
 		const ok = await this.cx.host.replaceSource(body);
