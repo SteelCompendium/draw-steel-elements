@@ -77,7 +77,7 @@ beforeEach(() => {
 		if (this.closest('[data-test-hidden]')) return; // a hidden copy refuses focus, as `display: none` does
 		return realFocus.call(this, opts);
 	});
-	pinToSidebar = jest.spyOn(SidebarRegistration, 'requestPinToSidebar').mockResolvedValue(undefined);
+	pinToSidebar = jest.spyOn(SidebarRegistration, 'requestPinToSidebar').mockResolvedValue(true); // true: the pin WROTE the note
 });
 
 afterEach(() => {
@@ -197,6 +197,7 @@ describe('SC-505 — Pin to sidebar keeps keyboard focus on the block\'s Pin but
 		pin.focus();
 		pinToSidebar.mockImplementation(async () => {
 			pin.blur(); // something (the sidebar opening) took focus away
+			return false; // and the pin wrote nothing, so nothing is going to be rebuilt
 		});
 
 		keyboardClick(pin);
@@ -306,5 +307,40 @@ describe('SC-505 r2 HIGH-1 — the same note open in two panes: the request belo
 
 		const b2 = await render({ leaf: leafB });
 		expect(document.activeElement).toBe(item(b2.root, 'pin'));
+	});
+});
+
+describe('SC-505 r2 MEDIUM-1 — a request nobody answered must not move focus later', () => {
+	test('a Pin that wrote nothing (a second press, ds-scc, a Notice) arms nothing: Tab to Collapse, a rebuild, and focus is not pulled to Pin', async () => {
+		pinToSidebar.mockResolvedValue(false);
+		const first = await render();
+		const pin = item(first.root, 'pin');
+		pin.focus();
+		keyboardClick(pin);
+		await flush();
+
+		item(first.root, 'collapse').focus(); // the user moves on within the same block
+		first.host.containerEl.remove();
+		focusCalls.length = 0;
+		await render(); // anything rebuilds the block (an outside edit, Sync, a second pane)
+
+		expect(focusCalls).toEqual([]);
+		expect(document.activeElement).toBe(document.body);
+	});
+
+	test('focus that lands anywhere but on the Pin button while the request waits cancels it', async () => {
+		const first = await render();
+		const pin = item(first.root, 'pin');
+		pin.focus();
+		keyboardClick(pin);
+		await flush(); // the pin wrote the note; the rebuild has not arrived yet
+
+		item(first.root, 'collapse').focus(); // Tab: the user is no longer waiting for the Pin button
+		first.host.containerEl.remove();
+		focusCalls.length = 0;
+		await render();
+
+		expect(focusCalls).toEqual([]);
+		expect(document.activeElement).toBe(document.body);
 	});
 });

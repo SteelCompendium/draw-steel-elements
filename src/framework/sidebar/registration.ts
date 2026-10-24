@@ -235,6 +235,8 @@ async function bindBlockToSidebar(
 	filePath: string,
 	alias: string,
 	cursorLine?: number,
+	/** SC-505: set `wrote` when the note's text really changed (the keyboard focus hand-off only waits for a rebuild then). */
+	report?: { wrote: boolean },
 ): Promise<BindResult> {
 	// SC-487: BEFORE any vault write - a stamp for a type the sidebar cannot mount only leaves a dead `_dse_anchor` line
 	// in the note and an "unavailable" panel. Every entry point that stamps goes through here, so all refuse alike.
@@ -282,7 +284,9 @@ async function bindBlockToSidebar(
 		anchorId = id;
 		if (anchoredBody === body) return content; // already anchored — no write needed
 
-		return replaceFenceBody(content, info.lineStart, info.lineEnd, anchoredBody) ?? content;
+		const next = replaceFenceBody(content, info.lineStart, info.lineEnd, anchoredBody) ?? content;
+		if (report && next !== content) report.wrote = true;
+		return next;
 	});
 	if (unreadableAnchor) return 'unreadable-anchor';
 	if (!bound) return 'not-found'; // no matching block found
@@ -333,16 +337,21 @@ export function unregisterDseSidebar(): void {
  * This is the one caller that reads the return value: every other entry point
  * (`send-block-to-sidebar`, the initiative command, the encounter builder's hand-off) keeps
  * its existing silent-no-op-on-not-found behavior unchanged.
+ *
+ * SC-505: resolves true only when the pin WROTE the note (the first press stamps `_dse_anchor`; a second press, a
+ * `strictBody` element and every Notice path write nothing). Only a write rebuilds the block, which is the one case
+ * the keyboard focus hand-off (chrome/focusHandoff.ts) has to wait for.
  */
-export async function requestPinToSidebar(filePath: string, alias: string, cursorLine?: number): Promise<void> {
+export async function requestPinToSidebar(filePath: string, alias: string, cursorLine?: number): Promise<boolean> {
 	if (!dseSidebarPinTarget) {
 		new Notice(
 			'Draw Steel Elements: sidebar not available in this build — try "send block to sidebar" from the command palette.',
 		);
-		return;
+		return false;
 	}
+	const report = { wrote: false };
 	try {
-		const result = await bindBlockToSidebar(dseSidebarPinTarget, filePath, alias, cursorLine);
+		const result = await bindBlockToSidebar(dseSidebarPinTarget, filePath, alias, cursorLine, report);
 		if (result === 'unreadable-anchor') {
 			new Notice(UNREADABLE_ANCHOR_NOTICE);
 		} else if (result === 'unregistered') {
@@ -355,4 +364,5 @@ export async function requestPinToSidebar(filePath: string, alias: string, curso
 			`Draw Steel Elements: pin to sidebar failed — ${error instanceof Error ? error.message : String(error)}`,
 		);
 	}
+	return report.wrote;
 }

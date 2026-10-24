@@ -59,7 +59,7 @@ let pinToSidebar: jest.SpyInstance;
 
 beforeEach(() => {
 	openForm = jest.spyOn(FormModal, 'openFormEditor').mockImplementation(() => ({}) as never);
-	pinToSidebar = jest.spyOn(SidebarRegistration, 'requestPinToSidebar').mockResolvedValue(undefined);
+	pinToSidebar = jest.spyOn(SidebarRegistration, 'requestPinToSidebar').mockResolvedValue(false);
 });
 
 afterEach(() => {

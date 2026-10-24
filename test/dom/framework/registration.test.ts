@@ -135,6 +135,21 @@ describe('D8 Task 2 review fix — registration.ts (finding #3)', () => {
 			await expect(sendToSidebar(services, 'Nonexistent.md', 'ds-counter')).resolves.toBe(false);
 		});
 
+		// SC-505 r2 (MEDIUM-1): the keyboard focus hand-off waits for a rebuild only when the pin REALLY wrote the note.
+		test('requestPinToSidebar resolves true only when it wrote the note: the first press writes the anchor, a second press, a missing block and a refused type write nothing', async () => {
+			const { app, plugin, services } = setup();
+			registerDseSidebar(plugin as any, services);
+			app.vault.setFile('Note.md', '```ds-counter\ncurrent_value: 1\n```');
+			app.vault.setFile('Gone.md', 'no fence here');
+			app.vault.setFile('Odd.md', '```ds-nonesuch\ncurrent_value: 1\n```');
+
+			await expect(requestPinToSidebar('Note.md', 'ds-counter')).resolves.toBe(true);
+			expect(app.vault.getContent('Note.md')).toContain('_dse_anchor');
+			await expect(requestPinToSidebar('Note.md', 'ds-counter')).resolves.toBe(false); // already anchored
+			await expect(requestPinToSidebar('Gone.md', 'ds-counter')).resolves.toBe(false);
+			await expect(requestPinToSidebar('Odd.md', 'ds-nonesuch')).resolves.toBe(false);
+		});
+
 		test('requestPinToSidebar posts an audible Notice (and mounts nothing) when the block cannot be found', async () => {
 			const { app, plugin, services } = setup();
 			registerDseSidebar(plugin as any, services);

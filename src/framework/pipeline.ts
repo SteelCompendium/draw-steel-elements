@@ -688,8 +688,8 @@ export class ElementPipeline {
 													const pressed = (evt?.currentTarget ?? null) as HTMLElement | null;
 													const keyboard = isKeyboardClick(evt);
 													if (keyboard) armChromeFocus(key, 'pin', pressed);
-													void requestPinToSidebar(cx.host.sourcePath, info.language, info.lineStart).then(() => {
-														if (keyboard) settleChromeFocus(key, pressed);
+													void requestPinToSidebar(cx.host.sourcePath, info.language, info.lineStart).then((wrote) => {
+														if (keyboard) settleChromeFocus(key, pressed, wrote);
 													});
 												},
 											} satisfies ChromeMenuItem,
