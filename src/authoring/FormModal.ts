@@ -34,6 +34,7 @@ import type { DsePrefs } from '@/framework/seams/prefs';
 import type { ValidationService } from '@/framework/validation';
 import { DseModal, openManagedModal } from '@/framework/kit/managedModal';
 import { readBlockBody } from '@/framework/blockBody';
+import { renderErrorCard } from '@/framework/errorCard';
 import { extractPrefOverrides } from '@/framework/prefOverrides';
 import { claimsLegacyCollapseKeys, extractCollapseKeys, withReservedKeys } from '@/framework/chrome/collapsedKey';
 import { fieldsFromSchema, type FormField } from './formModel';
@@ -104,6 +105,8 @@ class FormModal extends DseModal {
 	private errorEl: HTMLElement | null = null;
 	private previewEl: HTMLElement | null = null;
 	private previewView: { unload(): void } | null = null;
+	/** The slot of the preview render that is on show right now (null while the preview is empty). */
+	private previewSlot: HTMLElement | null = null;
 	private saveHandle: { setDisabled(disabled: boolean): void } | null = null;
 
 	constructor(
@@ -418,6 +421,7 @@ class FormModal extends DseModal {
 		// Drops the previous keystroke's slot from the page (SC-510). A mount of it that is still running
 		// (a reference lookup reads a file) keeps writing, but only into that slot, which nobody can see.
 		this.previewEl.empty();
+		this.previewSlot = null;
 		// The mount path below sets it again. Left on an emptied preview, the "Read-only" badge (absolutely
 		// positioned top-right of a 0-height box) would sit over the end of the error line under it (SC-493 r2).
 		this.previewEl.removeAttribute('data-dse-readonly');
@@ -436,6 +440,7 @@ class FormModal extends DseModal {
 			// SC-510: every render mounts into its OWN slot inside the preview box, and the host's containerEl is
 			// that slot too. The box keeps the badge attribute; the slot is what the next keystroke throws away.
 			const slot = this.previewEl.createDiv({ cls: 'dse-form__preview-slot' });
+			this.previewSlot = slot;
 			const previewHost: BlockHost = {
 				mode: this.cx.host.mode,
 				sourcePath: this.cx.host.sourcePath,
@@ -451,9 +456,15 @@ class FormModal extends DseModal {
 			this.lifecycle.addChild(view); // torn down with the modal / next revalidate (F1 §4.5)
 			this.previewView = view;
 			// A mount that rejects (an element that cannot read what a reference points at) must not escape as an
-			// unhandled promise rejection. The slot keeps whatever the mount drew before it failed -- usually
-			// nothing -- under the "Read-only" badge; the form itself is unaffected.
-			view.mount(slot, model).catch(() => {});
+			// unhandled promise rejection. It is drawn as the same error card the real card shows for that body, but
+			// only if this slot is still the one on show: a superseded render's late failure touches nothing. The
+			// card replaces the "Read-only" badge for as long as it is up (the badge would sit over the card's text,
+			// the SC-493 r2 lesson); the next render sets the badge again.
+			view.mount(slot, model).catch((error: unknown) => {
+				if (this.previewSlot !== slot) return;
+				renderErrorCard(slot, this.def, error);
+				this.previewEl?.removeAttribute('data-dse-readonly');
+			});
 		} catch {
 			// A parse/mount slip in the preview must never break the form.
 		}
