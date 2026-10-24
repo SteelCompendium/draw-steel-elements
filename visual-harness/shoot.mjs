@@ -2648,12 +2648,31 @@ async function openRollModifiersForSweep(page, bg, problems) {
 		};
 	});
 	if (state.panels === 0) {
-		problems.push(`${bg}: no ds-roll Modifiers panel found in the gallery - the sweep would be blind to the roll strip's controls`);
+		problems.push(`${bg}: no ds-roll Modifiers panel found in the gallery — the sweep would be blind to the roll strip's controls`);
 	} else if (state.hidden || state.boxless) {
 		problems.push(
 			`${bg}: the roll strip's Modifiers disclosure could not be opened (${state.hidden} of ${state.panels} panel(s) still [hidden], ` +
-				`${state.boxless} without a box after ${toOpen} click(s)) - its steppers, checkboxes and Reset would be swept with no box`,
+				`${state.boxless} without a box after ${toOpen} click(s)) — its steppers, checkboxes and Reset would be swept with no box`,
 		);
+	}
+}
+
+/** SC-501 FU-1 — every node an input/checkbox sweep tagged must HAVE A BOX when it is compared. The
+ *  button sweep proves each exemption per record and prints the boundary; the input and checkbox
+ *  sweeps have no exemption mechanism, so a tagged node that was hidden (a collapsed disclosure, a
+ *  display:none ancestor) was compared as 0x0 and the line still printed OK. Fail, named, never skip.
+ *  `attr` is the tag attribute (`data-dse-inputleak` / `data-dse-cbleak`). */
+async function assertTaggedHaveBox(page, attr, bg, what, problems) {
+	const boxless = await page.evaluate((a) => {
+		const out = [];
+		for (const n of document.querySelectorAll(`[${a}]`)) {
+			const r = n.getBoundingClientRect();
+			if (n.getClientRects().length === 0 || r.width <= 0 || r.height <= 0) out.push(n.getAttribute(a));
+		}
+		return out;
+	}, attr);
+	for (const key of boxless) {
+		problems.push(`${bg}: the tagged ${what} ${key} has no box at all — it would be compared as 0x0 and the sweep would prove nothing about it`);
 	}
 }
 
@@ -2701,7 +2720,10 @@ async function sweepTaggedButtons(page, bg, count, acc) {
 			const reason = `${state}: ${rec.blocked}`;
 			exemptions.set(reason, (exemptions.get(reason) ?? 0) + 1);
 			const kinds = acc.exemptionKinds.get(reason) ?? new Map();
-			kinds.set(rec.key, (kinds.get(rec.key) ?? 0) + 1);
+			// The modal pass labels each navigation `<bg>|<scenario>` and every modal key reads
+			// `modal:(none)|…`, so name the scenario too or three modals print as one kind.
+			const where = bg.includes('|') ? ` @${bg.slice(bg.indexOf('|') + 1)}` : '';
+			kinds.set(rec.key + where, (kinds.get(rec.key + where) ?? 0) + 1);
 			acc.exemptionKinds.set(reason, kinds);
 		}
 	}
@@ -3494,6 +3516,13 @@ async function probeInputsInState(page, cdp, docRootNodeId, state, count, props)
 			continue;
 		}
 		rec.blocked = res.blocked;
+		// SC-501 FU-1 - a box-less input used to be accepted here as a provable exemption and counted as a
+		// comparison without a word printed. Nothing in the gallery may be box-less (see
+		// `assertTaggedHaveBox`), so this is a failure, not an exemption.
+		if (rec.blocked && rec.blocked.startsWith('renders no box')) {
+			problems.push(`${rec.key}: has no box in the :focus-visible pass ("${rec.blocked}") — an input with no box is not an exemption, it is a sweep that proves nothing`);
+			continue;
+		}
 		if (!rec.active && !rec.blocked) {
 			problems.push(
 				`${rec.key}: could not be put into :focus-visible and is not provably unreachable — ` +
@@ -4227,6 +4256,7 @@ async function assertInputHostLeak(page) {
 		// SC-501 - the roll strip's stepper input lives in its collapsed Modifiers disclosure (SC-279).
 		await openRollModifiersForSweep(page, bg, problems);
 		const keys = await page.evaluate(tagInputs);
+		await assertTaggedHaveBox(page, 'data-dse-inputleak', bg, 'input', problems);
 		if (keys.length < 5) {
 			problems.push(`${bg}: only ${keys.length} inputs found in the gallery — the sweep is blind`);
 			continue;
@@ -6093,6 +6123,7 @@ async function assertCheckboxHostLeak(page) {
 
 		// ---- (a) plugin-authored checkbox, bare ----
 		const keys = await page.evaluate(tagCheckboxes);
+		await assertTaggedHaveBox(page, 'data-dse-cbleak', bg, 'checkbox', problems);
 		if (keys.length < 1) {
 			problems.push(`${bg}: 0 plugin-authored checkboxes found in the gallery — the sweep is blind`);
 		}
