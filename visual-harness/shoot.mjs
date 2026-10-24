@@ -2548,7 +2548,7 @@ async function assertBtnHostLeak(page) {
 	const acc = newBtnSweepAcc();
 	let kindCount = 0;
 	for (const bg of ['dark', 'light']) {
-		const query = new URLSearchParams(withSc513Mounts({
+		const query = new URLSearchParams(withSc527States(withSc513Mounts({
 			gallery: '1',
 			theme: 'steel',
 			bg,
@@ -2557,7 +2557,7 @@ async function assertBtnHostLeak(page) {
 			// SC-512 - a SECOND roll strip, appended after every gallery section, whose modifier is
 			// changed below so its Reset is enabled. This sweep only: no capture URL sends it.
 			galleryExtra: 'roll',
-		}));
+		})));
 		await loadBtnHostLeakPage(page, query);
 		// SC-202 r6c fold (review LOW-2b): verify the requested `sheet: '1'` actually
 		// loaded (the MED-2 sentinel) before disabling it for the bare pass — this sweep
@@ -2572,6 +2572,8 @@ async function assertBtnHostLeak(page) {
 		await openRollModifiersForSweep(page, bg, acc.problems);
 		// SC-512 - and change a modifier on the extra strip by a real click, so its Reset is ENABLED.
 		await changeExtraRollModifierForSweep(page, bg, acc.problems);
+		// SC-527 - and put the state-only kinds into their state by real clicks (see `reachStateKindsForSweep`).
+		await reachStateKindsForSweep(page, bg, acc.problems);
 		// SC-513 - and mount every click-created control by a real click (see `mountClickRevealedForSweep`).
 		await mountClickRevealedForSweep(page, bg, acc.problems);
 		const keys = await page.evaluate(tagButtons);
@@ -2587,6 +2589,7 @@ async function assertBtnHostLeak(page) {
 			}
 		}
 		assertSc513Tagged(keys, 'button', bg, acc.problems);
+		assertSc527Tagged(keys, bg, acc.problems);
 		kindCount = keys.length;
 		await sweepTaggedButtons(page, bg, keys.length, acc);
 	}
@@ -2913,6 +2916,156 @@ async function mountClickRevealedForSweep(page, bg, problems) {
 		() => [...document.querySelectorAll('.dse-rollbar__panel')].filter((p) => p.hasAttribute('hidden') || p.getClientRects().length === 0).length,
 	);
 	if (hidden) problems.push(`${bg}: ${hidden} roll strip Modifiers panel(s) still hidden after the SC-513 mounts — their steppers, checkboxes and Reset would be swept with no box`);
+	// The clicks leave the pointer over a control; park it away so no sweep sample inherits :hover.
+	await page.mouse.move(0, 0);
+}
+
+/** SC-527 - control kinds that EXIST in the gallery at load but reach a given STATE only after a click
+ *  (pressed initiative toggles, pressed / spent negotiation chips, an armed Complete Argument, a disabled
+ *  montage Log button, the hero's disabled Catch Breath + Surges "-" after Respite). The kind key carries
+ *  the state (`|pressed`, `|aria-pressed:…`, `|disabled`, the accent class), so the button sweep never
+ *  compared those states with vs without the host CSS. SC-450 / SC-423 / SC-377's parity gates do not
+ *  cover it: they compare a toggled control with a rendered one, both WITH the host sheet in (`sheet: '1'`),
+ *  so a host rule that leaks into the pressed state paints both sides the same and passes.
+ *
+ *  Same doctrine as SC-512 / SC-513: reach each state by a REAL Playwright click on the user's own control,
+ *  in the button sweep's own dark/light load only, on sections APPENDED by `galleryExtra` (never the
+ *  gallery's own sections, so no existing kind's first node moves). No capture sends these sections and no
+ *  capture performs these clicks, so no shot and no frozen byte moves. Every section asserts by name that
+ *  its state was reached (`reached` selectors), and `assertSc527Tagged` then names every expected kind the
+ *  sweep failed to tag. Only the button sweep: the survey found no input or checkbox kind that a state
+ *  change creates (their keys carry no state).
+ *
+ *  Runs BEFORE `mountClickRevealedForSweep` on purpose: SC-526 will add the Recoveries popover to the end of
+ *  that helper, and the popover closes on any later document click, so it must stay the last click.
+ *  `beyondTicket` marks states the SC-527 r1 survey found beyond the ticket's list (owner rules on them). */
+const SC527_EXTRA = ['initiative', 'negotiation', 'negotiation', 'montage', 'montage', 'hero'];
+const SC527_STATES = [
+	{
+		what: 'initiative: a hero turn taken (portrait), a Main action pressed, a minion cell selected',
+		clicks: [
+			['.dse-init__portrait-toggle', 0],
+			['button.dse-init__action-toggle', 0],
+			['button.dse-init__cell', 0],
+		],
+		reached: [
+			'button.dse-init__portrait-toggle[aria-pressed="true"][data-pressed]',
+			'button.dse-init__turn[aria-pressed="true"][data-pressed]',
+			'button.dse-init__action-toggle[aria-pressed="true"][data-pressed]',
+			'button.dse-init__cell[aria-pressed="true"][data-pressed]',
+		],
+	},
+	{
+		what: 'negotiation: appeal to the first Motivation, mark the second spent, pick a Power Roll tier',
+		clicks: [
+			['button.dse-nt__chip[data-kind="motivation"]', 0],
+			['button.dse-nt__chip[data-kind="spent"]', 1],
+			['.dse-pr__row', 0],
+		],
+		reached: [
+			'button.dse-nt__chip[data-kind="motivation"][aria-pressed="true"][data-pressed]:not(.is-spent)',
+			'button.dse-nt__chip[data-kind="motivation"].is-spent[aria-pressed="false"]',
+			'.dse-nt__complete button.dse-btn.dse-btn--accent:not(:disabled)',
+		],
+	},
+	{
+		beyondTicket: true,
+		what: 'negotiation: appeal to the first Motivation, then mark that same Motivation spent',
+		clicks: [
+			['button.dse-nt__chip[data-kind="motivation"]', 0],
+			['button.dse-nt__chip[data-kind="spent"]', 0],
+		],
+		reached: ['button.dse-nt__chip[data-kind="motivation"].is-spent[aria-pressed="true"][data-pressed]'],
+	},
+	{
+		what: 'montage: log a success for the only hero, so "Log an action…" stands down (every hero acted)',
+		clicks: [['button.dse-mt__quick', 0]],
+		reached: ['button.dse-btn.dse-btn--accent[aria-label="Log an action…"]:disabled'],
+	},
+	{
+		beyondTicket: true,
+		what: 'montage: End round twice, so the montage is complete (Clear all, board row actions disabled)',
+		clicks: [
+			['button[aria-label^="End round"]', 0],
+			['button[aria-label^="End round"]', 0],
+		],
+		reached: ['button.dse-btn.dse-btn--danger[aria-label="Clear all"]', 'button.dse-mt__board-rowact:disabled'],
+	},
+	{
+		// Respite also clears Surges to 0, which disables Surges "-". Its kind,
+		// `hero|dse-btn.dse-btn--icon.dse-stepper__btn|disabled`, is ALREADY compared since SC-513 (first node: the
+		// probe hero's ability-body roll strip "Decrease Edges", which comes earlier in the DOM), so it is not
+		// asserted here: one node per kind, and that node is not this one.
+		what: 'hero: Respite (full Stamina disables Catch Breath)',
+		clicks: [['button[aria-label^="Respite"]', 0]],
+		reached: ['button[aria-label^="Catch Breath"]:disabled'],
+	},
+];
+/** Kind keys the SC-527 states must add, in `tagButtons` spelling (the last three are `beyondTicket`). */
+const SC527_EXPECT = [
+	'initiative|dse-btn.dse-btn--icon.dse-init__turn|pressed|aria-pressed:true',
+	'initiative|dse-btn.dse-init__portrait-toggle|pressed|aria-pressed:true',
+	'initiative|dse-btn.dse-init__action-toggle|pressed|aria-pressed:true',
+	'initiative|dse-btn.dse-init__cell|pressed|aria-pressed:true',
+	'negotiation|dse-nt__chip.dse-optchip|pressed|aria-pressed:true',
+	'negotiation|dse-nt__chip.dse-optchip.is-spent|aria-pressed:false',
+	'negotiation|dse-btn.dse-btn--accent',
+	'montage|dse-btn.dse-btn--accent|disabled',
+	'hero|dse-btn|disabled',
+	'negotiation|dse-nt__chip.dse-optchip.is-spent|pressed|aria-pressed:true',
+	'montage|dse-btn.dse-btn--danger',
+	'montage|dse-btn.dse-btn--icon.dse-mt__board-rowact|disabled',
+];
+
+/** SC-527 - append the state sections to a sweep's query, AFTER every other extra (call it on the result of
+ *  `withSc513Mounts`), so the sections `reachStateKindsForSweep` clicks are the last `SC527_EXTRA.length`. */
+function withSc527States(params) {
+	return { ...params, galleryExtra: [params.galleryExtra, ...SC527_EXTRA].filter(Boolean).join(',') };
+}
+
+/** SC-527 - name every expected state kind the button sweep did not tag. */
+function assertSc527Tagged(keys, bg, problems) {
+	for (const want of SC527_EXPECT) {
+		if (!keys.includes(want)) {
+			problems.push(`${bg}: the sweep tagged no \`${want}\` button — a state reached only by a click (SC-527) would go unchecked`);
+		}
+	}
+}
+
+/** SC-527 - reach every SC527_STATES state by real clicks in its own appended section, and assert it. */
+async function reachStateKindsForSweep(page, bg, problems) {
+	// The SC-527 sections are the LAST extras (withSc527States). Address each by its unique
+	// `data-dse-harness-index`, after proving the tail really is SC527_EXTRA in order.
+	const tail = await page.evaluate((n) => [...document.querySelectorAll('[data-dse-harness-extra]')].slice(-n).map((s) => ({
+		id: s.getAttribute('data-dse-harness-extra'),
+		index: s.getAttribute('data-dse-harness-index'),
+	})), SC527_EXTRA.length);
+	if (tail.map((t) => t.id).join(',') !== SC527_EXTRA.join(',')) {
+		problems.push(`${bg}: the last gallery extras are [${tail.map((t) => t.id).join(',')}], not the SC-527 state sections [${SC527_EXTRA.join(',')}] — the sweep URL lacks withSc527States`);
+		return;
+	}
+	for (const [k, st] of SC527_STATES.entries()) {
+		const sec = `[data-dse-harness-index="${tail[k].index}"]`;
+		let clicked = true;
+		for (const [sel, nth] of st.clicks) {
+			const target = page.locator(`${sec} ${sel}`).nth(nth);
+			try {
+				await target.click({ timeout: 5000 });
+			} catch (e) {
+				problems.push(`${bg}: SC-527 ${st.what} — could not click \`${sel}\` #${nth} in the extra ${tail[k].id} section (${String(e).split('\n')[0]})`);
+				clicked = false;
+				break;
+			}
+		}
+		if (!clicked) continue;
+		const unmet = await page.evaluate(
+			({ s, sels }) => sels.filter((x) => document.querySelectorAll(`${s} ${x}`).length === 0),
+			{ s: sec, sels: st.reached },
+		);
+		for (const x of unmet) {
+			problems.push(`${bg}: SC-527 ${st.what} — the state was not reached: nothing in the extra ${tail[k].id} section matches \`${x}\``);
+		}
+	}
 	// The clicks leave the pointer over a control; park it away so no sweep sample inherits :hover.
 	await page.mouse.move(0, 0);
 }
