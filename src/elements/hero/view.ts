@@ -47,6 +47,7 @@ import { StaminaEditModal } from '@views/StaminaEditModal';
 import { charsAreSplit, iconButton, labelWithReason, renderCharacteristicsRow, renderRecoveriesStrip, renderStaminaBar, undoNotice, updateStaminaBar, tabs } from '@/framework/kit';
 import type { CharacteristicsValues, IconButtonHandle, RecoveriesStripHandle, StaminaBarValues } from '@/framework/kit';
 import { openFormEditor } from '@/authoring/FormModal';
+import { formOpenerOf, type FormOpener } from '@/framework/chrome/focusHandoff';
 import { FeatureConfig } from '@model/FeatureConfig';
 import { FEATURE_TYPE_RE } from '@/services/typeAdapters';
 import { actionTypeOf } from '@/elements/feature/renderFeature';
@@ -229,7 +230,7 @@ export class HeroSheetView extends ElementView<HeroModel> {
 					icon: 'settings',
 					label: 'Edit definition',
 					variant: 'ghost',
-					onClick: () => this.editDefinition(),
+					onClick: (evt) => this.editDefinition(formOpenerOf(evt)),
 				},
 				this,
 			);
@@ -244,7 +245,7 @@ export class HeroSheetView extends ElementView<HeroModel> {
 		return this.cx.prefs.get('authoringControls') === true;
 	}
 
-	private editDefinition(): void {
+	private editDefinition(opener: FormOpener | null): void {
 		const validation = this.cx.validation;
 		if (this.readOnly || !validation) return;
 		// The FULL current source (defn + state), not just the definition text: the
@@ -257,7 +258,7 @@ export class HeroSheetView extends ElementView<HeroModel> {
 		// play state on every definition edit (task-7-review.md's flagged footgun).
 		// SC-519: read the model after any pending write is flushed, so the form and that write cannot cross.
 		this.openAfterPendingWrite(() =>
-			openFormEditor(this, this.cx, this.def, this.model.serializeStateSplice(), validation),
+			openFormEditor(this, this.cx, this.def, this.model.serializeStateSplice(), validation, opener),
 		);
 	}
 

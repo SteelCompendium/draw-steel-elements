@@ -37,6 +37,7 @@ import { readBlockBody } from '@/framework/blockBody';
 import { renderErrorCard } from '@/framework/errorCard';
 import { extractPrefOverrides } from '@/framework/prefOverrides';
 import { claimsLegacyCollapseKeys, extractCollapseKeys, withReservedKeys } from '@/framework/chrome/collapsedKey';
+import { armFormFocus, settleChromeFocus, type FormOpener } from '@/framework/chrome/focusHandoff';
 import { fieldsFromSchema, type FormField } from './formModel';
 
 /** `renderField`'s non-textarea widgets (toggle/number/select/text) only ever read a
@@ -114,6 +115,8 @@ class FormModal extends DseModal {
 		private readonly def: ElementDefinition,
 		private readonly source: string,
 		private readonly validation: ValidationService,
+		/** SC-518: the control that opened the form (null: opened without a click), so Save can hand focus back to the redrawn card. */
+		private readonly opener: FormOpener | null = null,
 	) {
 		super(cx.app);
 	}
@@ -480,7 +483,15 @@ class FormModal extends DseModal {
 	 *  and leaves the modal open — no silent close on a write that never happened. */
 	async save(): Promise<void> {
 		if (this.saveDisabled) return;
-		const ok = await this.cx.host.replaceSource(this.currentBody());
+		const body = this.currentBody();
+		// SC-518: Save redraws the card (SC-509), so the pencil that opened this form is detached when the form closes and the
+		// focus Obsidian returns to it is lost (focus fell to <body>). Ask the rebuilt card for the opener's replacement
+		// (focusHandoff.ts). Armed before the write because the rebuild can land before it returns; a body identical to the
+		// source writes nothing and rebuilds nothing, so it arms nothing; a failed write disarms (the form stays open).
+		const key = this.opener && body !== this.source ? this.cx.host.blockKey() : null;
+		if (this.opener && key !== null) armFormFocus(key, this.opener);
+		const ok = await this.cx.host.replaceSource(body);
+		if (key !== null) settleChromeFocus(key, null, ok);
 		if (ok) this.close();
 		// SC-455: a host that already said why it could not write (its own Notice) is not repeated here.
 		else if (!this.cx.host.lastWriteReported) new Notice("Draw Steel Elements: couldn't save — the block may have moved.");
@@ -499,6 +510,7 @@ export function openFormEditor(
 	def: ElementDefinition,
 	source: string,
 	validation: ValidationService,
+	opener: FormOpener | null = null,
 ): FormModal {
-	return openManagedModal(owner, () => new FormModal(cx, def, source, validation));
+	return openManagedModal(owner, () => new FormModal(cx, def, source, validation, opener));
 }

@@ -14,9 +14,10 @@ import { ElementPipeline } from '../../../src/framework/pipeline';
 import { createElementRegistry, type ElementDefinition } from '../../../src/framework/registry';
 import { counterElement } from '../../../src/elements/counter/definition';
 import { montageElement } from '../../../src/elements/montage/definition';
+import { rollElement } from '../../../src/elements/roll/definition';
 import { staminaBarElement } from '../../../src/elements/stamina-bar/definition';
 import * as FormModal from '../../../src/authoring/FormModal';
-import { disarmChromeFocus } from '../../../src/framework/chrome/focusHandoff';
+import { armFormFocus, claimChromeFocus, disarmChromeFocus } from '../../../src/framework/chrome/focusHandoff';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { DseSidebarView, VIEW_TYPE_DSE_SIDEBAR } from '../../../src/framework/sidebar/DseSidebarView';
 import type { DseSidebarServices } from '../../../src/framework/sidebar/DseSidebarView';
@@ -38,7 +39,7 @@ type FormHandle = { save(): Promise<void>; close(): void; body: HTMLElement };
 type Ctx = ReturnType<typeof makeFakeContext>;
 
 const PENCIL = '.dse-btn[aria-label^="Edit "]';
-const NOTE_KEYS = ['Note.md::ds-montage::', 'Note.md::ds-counter::', 'Note.md::ds-stamina::'];
+const NOTE_KEYS = ['Note.md::ds-montage::', 'Note.md::ds-counter::', 'Note.md::ds-stamina::', 'Note.md::ds-roll::'];
 
 async function setup(note: string, defs: ElementDefinition[]) {
 	const { deps, app, plugin } = makeEnv();
@@ -146,6 +147,14 @@ const CASES: Case[] = [
 		alias: 'ds-stamina',
 		note: '# N\n\n```ds-stamina\nmax_stamina: 20\ncurrent_stamina: 15\n```\n',
 		edit: (m) => findSetting(m, 'Current stamina').texts[0].trigger('7'),
+	},
+	{
+		// No chrome panel: the pencil is the card-corner button, and the pipeline asks for the hand-back itself.
+		name: 'roll (no chrome panel, card-corner pencil)',
+		def: rollElement,
+		alias: 'ds-roll',
+		note: '# N\n\n```ds-roll\nname: Initiative\n```\n',
+		edit: (m) => findSetting(m, 'Name').texts[0].trigger('Parley'),
 	},
 ];
 
@@ -397,5 +406,54 @@ describe('SC-518: sidebar -- Save from the panel\'s pencil hands focus to the pa
 		expect(newPencil).not.toBe(oldPencil);
 		expect(who(document.activeElement)).toBe(who(newPencil));
 		expect(focused(newPencil)).toBe(true);
+	});
+});
+
+// The control that comes back is found by name inside the redrawn card, so it works for a control that is not a chrome item
+// (ds-hero's own "Edit definition" button) and never takes a nested card's same-named button.
+describe('SC-518: the redrawn card is searched for the control that opened the form', () => {
+	const KEY = 'Note.md::ds-hero::3';
+	const el = (parent: HTMLElement, tag: string, attrs: Record<string, string> = {}): HTMLElement => {
+		const node = parent.appendChild(document.createElement(tag));
+		for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+		return node;
+	};
+	/** A card root: an optional nested card (same-named button first in document order), the opener's replacement, the Edit pencil. */
+	const card = (opts: { named?: boolean; pencil?: boolean; nested?: boolean }): { root: HTMLElement; named: HTMLElement | null; pencil: HTMLElement | null; nestedBtn: HTMLElement | null } => {
+		const root = el(document.body, 'div', { 'data-dse-element': 'hero', 'data-dse-chrome': '' });
+		const nested = opts.nested ? el(root, 'div', { 'data-dse-element': 'statblock' }) : null;
+		const nestedBtn = nested ? el(nested, 'button', { 'aria-label': 'Edit definition' }) : null;
+		const named = opts.named ? el(root, 'button', { 'aria-label': 'Edit definition' }) : null;
+		const pencil = opts.pencil ? el(root, 'button', { 'aria-label': 'Edit Hero', 'data-dse-chrome-item': 'edit' }) : null;
+		return { root, named, pencil, nestedBtn };
+	};
+	const arm = (keyboard: boolean): void => {
+		const old = el(document.body, 'button', { 'aria-label': 'Edit definition' });
+		armFormFocus(KEY, { pressed: old, keyboard });
+		old.remove();
+	};
+	afterEach(() => disarmChromeFocus(KEY));
+
+	test('a control that is no chrome item is found by its name; a nested card\'s same-named button is not taken', () => {
+		arm(true);
+		const { root, named, nestedBtn } = card({ named: true, nested: true, pencil: true });
+		claimChromeFocus(() => KEY, root);
+		expect(focused(named!)).toBe(true);
+		expect(focused(nestedBtn!)).toBe(false);
+	});
+
+	test('its replacement is gone (the card has only the Edit pencil): the pencil takes focus', () => {
+		arm(true);
+		const { root, pencil } = card({ pencil: true });
+		claimChromeFocus(() => KEY, root);
+		expect(focused(pencil!)).toBe(true);
+	});
+
+	test('no control at all: the card itself takes focus (not a new tab stop), never <body>', () => {
+		arm(true);
+		const { root } = card({});
+		claimChromeFocus(() => KEY, root);
+		expect(focused(root)).toBe(true);
+		expect(root.getAttribute('tabindex')).toBe('-1');
 	});
 });

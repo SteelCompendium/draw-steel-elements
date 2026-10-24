@@ -21,6 +21,12 @@
 // Live Preview widget of the same block, `display: none`, in the same leaf) just leaves the request armed
 // for the copy that can. Requests expire (a pin that rewrites nothing must not steal focus later) and are
 // dropped the moment anything else holds focus (never fight the user for it).
+//
+// SC-518 reuses all of it for the block edit form. Save writes the note and the card is rebuilt, so the pencil that
+// opened the form is detached when the form closes and the focus Obsidian returns to it is lost (focus fell to
+// <body>). `armFormFocus` (called by the form's Save) asks the rebuilt card for the control that opened the form
+// (matched by its accessible name), else the card's Edit pencil, else the card. The ring follows how the form was
+// opened: a keyboard open gets the keyboard ring back, a mouse open gets plain focus (no ring forced).
 
 /** `focusVisible` is Chromium 124+; older engines ignore the key. */
 export const HANDOFF_FOCUS = { preventScroll: true, focusVisible: true } as FocusOptions;
@@ -32,9 +38,10 @@ export function isKeyboardClick(evt: MouseEvent | undefined | null): boolean {
 
 /** Focus `el` for a keyboard user; true when it really holds focus afterwards (a node that is
  *  detached, `display: none` or inside a hidden copy quietly refuses). */
-export function focusControl(el: HTMLElement | null | undefined): boolean {
+export function focusControl(el: HTMLElement | null | undefined, ring = true): boolean {
 	if (!el || !el.isConnected) return false;
-	el.focus(HANDOFF_FOCUS);
+	// SC-518: `ring: false` (a form opened with the mouse) keeps the engine's own rule, which draws no ring after a pointer.
+	el.focus(ring ? HANDOFF_FOCUS : { preventScroll: true });
 	return el.ownerDocument.activeElement === el;
 }
 
@@ -52,6 +59,10 @@ const SETTLE_MS = 1500;
 
 interface Request {
 	item: string;
+	/** SC-518: the accessible name (`aria-label`) of the control that opened the edit form; looked for first, then `item`. Null for a Pin request. */
+	label: string | null;
+	/** SC-518: show the keyboard ring on the control that takes focus (false: the form was opened with the mouse). */
+	ring: boolean;
 	expires: number;
 	/** Which copy of the block was pressed: its embed (`![[Note]]`) if it sits in one, else its pane (`.workspace-leaf`).
 	 *  The same note open in two panes, or embedded twice in one note, renders the same block key several times; only a
@@ -73,8 +84,40 @@ const scopeOf = (el: Element): Element | null => el.closest(EMBED) ?? el.closest
 export function armChromeFocus(blockKey: string, item: string, pressed: HTMLElement | null = null): void {
 	const ours = new WeakSet<Element>();
 	if (pressed) ours.add(pressed);
-	requests.set(blockKey, { item, expires: Date.now() + REQUEST_TTL_MS, scope: pressed ? scopeOf(pressed) : null, ours });
+	requests.set(blockKey, { item, label: null, ring: true, expires: Date.now() + REQUEST_TTL_MS, scope: pressed ? scopeOf(pressed) : null, ours });
 	guardFocus(pressed?.ownerDocument ?? activeDocument);
+}
+
+/** What opened a block edit form: the pressed control and whether the press came from the keyboard. */
+export interface FormOpener {
+	pressed: HTMLElement;
+	keyboard: boolean;
+}
+
+/** The opener behind a click event, read synchronously inside its handler (`currentTarget` is gone afterwards).
+ *  Null when there is no control to hand focus back to (a form opened without a click). */
+export function formOpenerOf(evt: MouseEvent | undefined | null): FormOpener | null {
+	const pressed = evt?.currentTarget as HTMLElement | null | undefined;
+	return pressed?.nodeType === 1 ? { pressed, keyboard: isKeyboardClick(evt) } : null;
+}
+
+/**
+ * SC-518 -- the edit form's Save is about to write the block: ask the card that is rebuilt for it to take focus back
+ * (see the file header). Armed BEFORE the write because the rebuild can land before the write call returns; the
+ * caller settles it with `settleChromeFocus` once the write has an answer. The focus guard cancels it the moment
+ * the user moves focus anywhere else, and it lapses on its own, so a write that causes no rebuild leaves nothing behind.
+ */
+export function armFormFocus(blockKey: string, opener: FormOpener): void {
+	const ours = new WeakSet<Element>([opener.pressed]);
+	requests.set(blockKey, {
+		item: 'edit',
+		label: opener.pressed.getAttribute('aria-label'),
+		ring: opener.keyboard,
+		expires: Date.now() + REQUEST_TTL_MS,
+		scope: scopeOf(opener.pressed),
+		ours,
+	});
+	guardFocus(opener.pressed.ownerDocument);
 }
 
 /**
@@ -148,7 +191,7 @@ function anyLive(): boolean {
 }
 
 /**
- * Called by `mountChrome` after it built a panel. (Not by `adoptView`: only the view's OWN write is adopted, through
+ * Called by `mountChrome` after it built a panel (and by the pipeline for an element without one, SC-518). (Not by `adoptView`: only the view's OWN write is adopted, through
  * a claim ticket `host.replaceSource` records, and the pin's write comes from the sidebar binder, so a pin never
  * adopts; an adopted view keeps its panel and would not mount again, but no rebuild this request waits for is one.)
  * If some block has a live request, watch
@@ -170,9 +213,20 @@ export function claimChromeFocus(blockKey: () => string, root: HTMLElement): voi
 		const req = liveRequest(key);
 		if (!req) return; // not this block's request (or none left)
 		// This element's own button (a nested element's panel has the same attribute, but another chrome root).
-		const btn = Array.from(root.querySelectorAll<HTMLElement>(`[data-dse-chrome-item="${req.item}"]`)).find(
+		let btn = Array.from(root.querySelectorAll<HTMLElement>(`[data-dse-chrome-item="${req.item}"]`)).find(
 			(b) => b.closest('[data-dse-chrome]') === root,
 		);
+		if (req.label !== null) {
+			// SC-518: the edit form's opener comes back by name first (the pencil, or the hero's "Edit definition", which
+			// is no chrome item), then the card's Edit pencil (`item`), then the card itself. Only this element's own
+			// controls count; a nested element's same-named button has another `[data-dse-element]` root.
+			const opener = Array.from(root.querySelectorAll<HTMLElement>('button')).find(
+				(b) => b.getAttribute('aria-label') === req.label && b.closest('[data-dse-element]') === root,
+			);
+			// (A card that is still being inserted has no controls in the document yet; `root.isConnected` keeps the card
+			// fallback for a card that is built and has none.)
+			btn = opener ?? btn ?? (root.isConnected ? root : undefined);
+		}
 		if (!btn || doc.activeElement === btn) return; // (`focusControl` below refuses a node that is not in the document)
 		// Another pane's (or another embed's) copy of the same block, same key: not ours to claim, and its rebuild says
 		// nothing about the user.
@@ -182,7 +236,8 @@ export function claimChromeFocus(blockKey: () => string, root: HTMLElement): voi
 		if (!focusIsFree(doc)) return;
 		// A hidden copy (Live Preview's widget) refuses focus: the request stays for the copy that can take it.
 		req.ours.add(btn); // before the focus call: its focusin goes through the guard
-		if (focusControl(btn)) req.expires = Date.now() + SETTLE_MS;
+		if (btn === root && !root.hasAttribute('tabindex')) root.tabIndex = -1; // SC-518: focusable by script, not a new tab stop
+		if (focusControl(btn, req.ring)) req.expires = Date.now() + SETTLE_MS;
 	};
 	attempt();
 	if (!win || !anyLive()) return;

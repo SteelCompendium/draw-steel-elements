@@ -38,7 +38,7 @@ import {
 } from './chrome/collapsedKey';
 import type { CollapseKeys } from './chrome/collapsedKey';
 import { ensureCollapseInvariant, mountChrome } from './chrome/mountChrome';
-import { armChromeFocus, isKeyboardClick, settleChromeFocus } from './chrome/focusHandoff';
+import { armChromeFocus, claimChromeFocus, formOpenerOf, isKeyboardClick, settleChromeFocus } from './chrome/focusHandoff';
 import type { ChromeMenuItem } from './chrome/types';
 import { iconButton } from './kit/iconButton';
 import { openFormEditor } from '@/authoring/FormModal';
@@ -523,8 +523,11 @@ export class ElementPipeline {
 						: null) ?? source;
 			// SC-519: the form reads the body when it opens; an in-card edit still waiting out its debounce
 			// is not on disk yet. Flush it first (view.openAfterPendingWrite) so the form starts from the card.
-			const openForm = (): void =>
-				view.openAfterPendingWrite(() => openFormEditor(view, cx, def, currentBody(), this.deps.validation));
+			// SC-518: the opener is read from the click now (its `currentTarget` is gone by the time a pending write has flushed).
+			const openForm = (evt?: MouseEvent): void => {
+				const opener = formOpenerOf(evt);
+				view.openAfterPendingWrite(() => openFormEditor(view, cx, def, currentBody(), this.deps.validation, opener));
+			};
 
 			const mountPipelineChrome = (current: M): void => {
 				// One Component per (re)mount, owned by the view: unloading it detaches every
@@ -556,6 +559,9 @@ export class ElementPipeline {
 				// the element opted into chrome.
 				const showEdit = cx.host.canPersist && !def.noAuthoringButton && isAuthoringControlsOn(prefs);
 				mountChromeFor(current, showEdit, chromeOwner);
+				// SC-518: a chrome element asks for the form's focus hand-back in mountChrome; an element without one (the card-corner
+				// pencil, or ds-hero's own "Edit definition") asks here, after its controls are built.
+				if (!def.chrome) claimChromeFocus(() => host.blockKey(), root);
 				// H-1's safety net, run after EVERY render including the first: the collapsed
 				// attribute and the one-line bar must never exist apart. See its doc comment.
 				ensureCollapseInvariant(root);
