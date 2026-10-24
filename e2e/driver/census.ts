@@ -20,10 +20,17 @@ export interface EventfulNode {
 const cdp = <T>(cmd: string, params: Record<string, unknown>): Promise<T> => browser.sendCommandAndGetResult(cmd, params) as Promise<T>;
 
 /**
+ * Framework chrome is a separate surface: its buttons (`[data-dse-chrome-item]`) and, since SC-520, the panel and the collapsed
+ * one-liner themselves, which carry one `click` listener that only marks the click handled (`defaultPrevented`, so Obsidian's
+ * callout widget does not open its source). That listener does nothing a user could drive, so it is not a control.
+ */
+export const CHROME_SURFACE = '[data-dse-chrome-item], .dse-chrome, .dse-chrome-summary';
+
+/**
  * Every element matching any of `selectors` (and not inside `excludeInside`) that has at least
  * one user-input listener, with its control id (or null).
  */
-export async function eventfulNodes(selectors: string[], excludeInside = '[data-dse-chrome-item]'): Promise<EventfulNode[]> {
+export async function eventfulNodes(selectors: string[], excludeInside = CHROME_SURFACE): Promise<EventfulNode[]> {
 	const expr = `(() => {
 		const seen = new Set();
 		for (const sel of ${JSON.stringify(selectors)}) for (const el of document.querySelectorAll(sel)) if (!el.closest(${JSON.stringify(excludeInside)})) seen.add(el);
