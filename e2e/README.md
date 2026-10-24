@@ -109,6 +109,9 @@ it('[STAM-X01] what a user sees happen', async () => {
   type is the first token of the trimmed info string). The product deliberately trims trailing whitespace on
   the fence lines it writes (SC-290), so a fixture must not carry trailing whitespace on the fence lines of a
   block a test writes.
+- **Scope page-side selectors to `.markdown-reading-view`.** A note opened in Reading view also keeps a hidden Live Preview
+  copy of every block in the same leaf (`display: none`, same block key): a bare `document.querySelector('[data-dse-element=...]')`
+  can return that copy. `dse.block()` already scopes to the active Reading view; hand-written `dse.page` expressions must too (SC-505).
 - Drive controls by id (`modal.control('sedit.damage')`); `{ css }` / `{ name }` are for READING nodes only
   (driving one is flagged by the gate). Repeated nodes: `control('recov.marker', { nth: 4 })`.
 - Negative checks: `dse.expectNoWrite(path, action)` waits for write-idle, never sleeps. Never `sleep`; wait
