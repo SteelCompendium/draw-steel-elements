@@ -74,7 +74,7 @@ export function armChromeFocus(blockKey: string, item: string, pressed: HTMLElem
 	const ours = new WeakSet<Element>();
 	if (pressed) ours.add(pressed);
 	requests.set(blockKey, { item, expires: Date.now() + REQUEST_TTL_MS, scope: pressed ? scopeOf(pressed) : null, ours });
-	guardFocus(pressed?.ownerDocument ?? document);
+	guardFocus(pressed?.ownerDocument ?? activeDocument);
 }
 
 /**
