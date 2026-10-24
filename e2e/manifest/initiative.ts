@@ -8,7 +8,9 @@ export default surface('initiative', {
 	controls: {
 		// The full-bleed button over a hero's portrait (hero rows only; creature rows have no overlay).
 		'init.hero.turn': c(['click'], ['SC-485', 'SC-500']),
-		// A chrome-panel item (the panel is also reachable by hover, but the item is always in the DOM).
+		// A chrome-panel item. The item is always in the DOM, but the panel is hidden (opacity 0, no pointer events)
+		// until the pointer is over the tracker or focus is inside it, so a scenario must call `dse.hover(root.root)`
+		// (or Tab in) before pressing it.
 		'init.reset-encounter': c(['click'], ['SC-485', 'SC-500']),
 		// The "Yes, Reset" button of ResetEncounterModal.
 		'init.reset-encounter.confirm': c(['click'], ['SC-485', 'SC-500']),
