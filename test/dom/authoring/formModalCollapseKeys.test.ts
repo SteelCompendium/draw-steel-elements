@@ -149,6 +149,18 @@ describe('SC-494: a stamina bar with `collapsed:` (serialize path)', () => {
 	});
 });
 
+describe('SC-494: a reserved key in an odd position is written where the pipeline writes it', () => {
+	test.each([
+		['`collapsed:` after the body', `${STAMINA}\ncollapsed: true`, `collapsed: true\n${STAMINA}`],
+		['`collapsed:` between body keys', 'max_stamina: 20\ncollapsed: true\ncurrent_stamina: 15', `collapsed: true\n${STAMINA}`],
+		['`collapsed:` before `prefs:`', `collapsed: true\nprefs:\n  reduceMotion: true\n${STAMINA}`, `prefs:\n  reduceMotion: true\ncollapsed: true\n${STAMINA}`],
+	])('%s (the same order the pipeline\'s own write-back emits: prefs, collapse keys, body)', async (_label, source, written) => {
+		const { render, note } = await setup(staminaBarElement, ALIAS, source);
+		await submit(openForm((await render(source)).el));
+		expect(fenceBody(note(), ALIAS)).toBe(written);
+	});
+});
+
 describe('SC-494: a chrome element WITHOUT serialize (the stringify-the-working-data path)', () => {
 	const SKILLS = 'skills:\n  - Heal\n  - Sneak';
 	test('ds-skills: `collapsed: true` survives a no-edit Save byte-identical and re-renders collapsed', async () => {
@@ -315,11 +327,17 @@ describe('SC-494: the form pops the keys the way the pipeline does (stub element
 		modal.close();
 	});
 
-	test('a def without the chrome slot is left alone: its keys stay in the data (and fail its own closed schema, as they would at render)', () => {
+	test('a def without the chrome slot: `collapsed:` is still popped (the pipeline always pops it) but `collapsible:` is not claimed -- it stays in the data and fails the closed schema, as at render', async () => {
 		const { def } = stub({ chrome: undefined });
-		const modal = open(def, 'collapsed: true\nname: A', []);
-		expect(modal.canSave()).toBe(false);
-		modal.close();
+		const writes: string[] = [];
+		const kept = open(def, 'collapsed: true\nname: A', writes);
+		expect(kept.canSave()).toBe(true);
+		await kept.save();
+		expect(writes).toEqual(['collapsed: true\nname: A']);
+		kept.close();
+		const unclaimed = open(def, 'collapsible: false\nname: A', []);
+		expect(unclaimed.canSave()).toBe(false);
+		unclaimed.close();
 	});
 
 	test('a key that is not a boolean is warned about and dropped, exactly as the pipeline drops it on a write-back', async () => {

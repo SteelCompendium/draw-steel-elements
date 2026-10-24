@@ -46,6 +46,7 @@
 // still start collapsed after SC-169 removed that element's own "Stamina Bar" header (Q3):
 // same key, same effect, new mechanism, and the byte-identical block body it always had.
 import { parseYaml, stringifyYaml } from 'obsidian';
+import type { ElementDefinition } from '../registry';
 import { emitAhead } from '../prefOverrides';
 
 /** The canonical authored-state key. Framework-reserved: no element may declare it. */
@@ -72,6 +73,18 @@ export interface CollapseKeys {
 }
 
 const EMPTY: CollapseKeys = { popped: {} };
+
+/**
+ * Does this definition CLAIM `collapsible:` / `collapse_default:` (pop them off the block data)?
+ * The one rule behind `extractCollapseKeys`'s `claimLegacyKeys` argument: a chrome-bearing element
+ * whose own model does not own the pair. The render pipeline and the block edit form (SC-494) both
+ * ask this, so they cannot disagree about which keys leave the data.
+ */
+export function claimsLegacyCollapseKeys(
+	def: Pick<ElementDefinition<unknown>, 'chrome' | 'collapseKeysOwnedByModel'>,
+): boolean {
+	return def.chrome !== undefined && def.collapseKeysOwnedByModel !== true;
+}
 
 /**
  * Reads the three reserved collapse keys off the parsed block data.

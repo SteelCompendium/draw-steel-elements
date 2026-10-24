@@ -27,6 +27,7 @@ import { extractPrefOverrides, applyPrefOverrides, withPrefOverrides } from './p
 import type { PrefPassthrough } from './prefOverrides';
 import { watchPrintMedia } from './printMedia';
 import {
+	claimsLegacyCollapseKeys,
 	extractCollapseKeys,
 	resolveCollapseState,
 	withCollapseKeys,
@@ -375,7 +376,7 @@ export async function prepareModel<M>(
 	// own model does not own them. A definition without the slot is left completely alone;
 	// `ds-stamina` and `ds-skills` have the slot AND own them, so they are read in place
 	// rather than removed.
-	const claimLegacyKeys = def.chrome !== undefined && def.collapseKeysOwnedByModel !== true;
+	const claimLegacyKeys = claimsLegacyCollapseKeys(def);
 	// SC-169 fix round 1 (M-1): fold in anything the non-mapping-body rescue above peeled
 	// off the source text. `withPeeledKeys` is a no-op for every body that parses.
 	const collapseKeys = withPeeledKeys(extractCollapseKeys(rawData, claimLegacyKeys), peeledKeys);

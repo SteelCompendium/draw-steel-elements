@@ -20,6 +20,11 @@
 //  - Important 4: a false host.replaceSource() (the block moved/vanished) now surfaces a
 //    Notice and leaves the modal open instead of silently closing on a write that never
 //    happened.
+//
+// SC-494: the three reserved collapse keys (`collapsed:` / `collapsible:` / `collapse_default:`) get
+// the same treatment as `prefs:`: popped at open through the pipeline's own extractCollapseKeys (so
+// a closed schema and `def.parse` never see them) and re-emitted on Save through its own
+// withCollapseKeys, in the pipeline's order (`prefs:` ... `collapsed:` ... body).
 import { Notice, Setting, parseYaml, stringifyYaml } from 'obsidian';
 import type { Component, DropdownComponent } from 'obsidian';
 import type { RenderContext } from '@/framework/context';
@@ -30,6 +35,7 @@ import type { ValidationService } from '@/framework/validation';
 import { DseModal, openManagedModal } from '@/framework/kit/managedModal';
 import { readBlockBody } from '@/framework/blockBody';
 import { extractPrefOverrides, withPrefOverrides } from '@/framework/prefOverrides';
+import { claimsLegacyCollapseKeys, extractCollapseKeys, withCollapseKeys } from '@/framework/chrome/collapsedKey';
 import { fieldsFromSchema, type FormField } from './formModel';
 
 /** `renderField`'s non-textarea widgets (toggle/number/select/text) only ever read a
@@ -81,11 +87,15 @@ class FormModal extends DseModal {
 	 *  The preview and the "Default (…)" labels parse this, as the render pipeline does; Save does not. */
 	private checked: Record<string, unknown> = {};
 	private prefOverrides: Partial<DsePrefs> | undefined;
+	/** SC-494: the reserved collapse keys popped out of the source at open (exactly the pipeline's
+	 *  `CollapseKeys.popped`), re-emitted ahead of the body on Save. Empty when the block had none, or
+	 *  when the model owns the key (`ds-stamina` / `ds-skills` `collapse_default:` / `collapsible:`). */
+	private collapsePopped: Record<string, boolean> = {};
 	/** SC-488: the "Default (…)" option of every optional select, relabelled on each revalidate.
 	 *  (Replaces SC-483's untouchedSeeds/requiredKeys strip machinery: an optional select is never
 	 *  seeded now, so there is nothing to strip at Save, and a required select is always written.) */
 	private readonly defaultOptions: DefaultOption[] = [];
-	/** Key order of the source body (prefs: popped), so a declared select key that goes Default ->
+	/** Key order of the source body (prefs: and the collapse keys popped), so a declared select key that goes Default ->
 	 *  option again returns to its source position instead of the end of the block (SC-488 LOW-1). */
 	private sourceKeyOrder: string[] = [];
 	private rawMode = false;
@@ -119,6 +129,8 @@ class FormModal extends DseModal {
 			// `working` (validation/def.parse never see it — same contract as the
 			// pipeline's own extractPrefOverrides call).
 			this.prefOverrides = extractPrefOverrides(rawData, this.cx.prefs);
+			// SC-494: the same for the reserved collapse keys, with the pipeline's claim rule.
+			this.collapsePopped = extractCollapseKeys(rawData, claimsLegacyCollapseKeys(this.def)).popped;
 			this.working = rawData;
 			this.sourceKeyOrder = Object.keys(rawData);
 		} catch {
@@ -268,34 +280,43 @@ class FormModal extends DseModal {
 		this.working = Object.fromEntries(entries);
 	}
 
-	/** Current body text: raw textarea verbatim, else serialize(model)/stringify(working) —
-	 *  re-emitting the popped `prefs:` map ahead of the body via the SAME withPrefOverrides
-	 *  the pipeline uses (Critical 1), when this block carried one. Built from the raw `working`
+	/** Current body text: raw textarea verbatim, else serialize(model)/stringify(working) --
+	 *  re-emitting the popped `prefs:` map and reserved collapse keys ahead of the body via the SAME
+	 *  withPrefOverrides / withCollapseKeys the pipeline uses (Critical 1, SC-494), when this block
+	 *  carried them. Built from the raw `working`
 	 *  (SC-489: validation's transforms never touch it), so Save writes what the source said plus
 	 *  only what the user changed. The preview parses `checked` with this text as its body, the same
 	 *  pair the render pipeline gives parse() for the saved block (normalised data, text as written). */
 	private currentBody(): string {
 		if (this.rawMode) return this.rawText;
 		const data = this.working;
-		const overrides = this.prefOverrides;
 		if (this.def.serialize) {
-			const serialize = overrides ? withPrefOverrides(this.def.serialize, overrides) : this.def.serialize;
+			const serialize = this.withReservedKeys(this.def.serialize);
 			try {
 				return serialize(this.def.parse(data, stringifyYaml(data)));
 			} catch {
-				return this.stringifyWorking(data, overrides);
+				return this.stringifyWorking(data);
 			}
 		}
-		return this.stringifyWorking(data, overrides);
+		return this.stringifyWorking(data);
 	}
 
-	private stringifyWorking(data: Record<string, unknown>, overrides: Partial<DsePrefs> | undefined): string {
+	/** The pipeline's wrapper order (pipeline.ts): collapse keys innermost, `prefs:` outermost, so the
+	 *  written block reads `prefs:` ... `collapsed:` ... body. Each wrapper is only installed when
+	 *  something was actually popped. */
+	private withReservedKeys<M>(serialize: (model: M) => string): (model: M) => string {
+		let wrapped = serialize;
+		if (Object.keys(this.collapsePopped).length > 0) wrapped = withCollapseKeys(wrapped, this.collapsePopped);
+		return this.prefOverrides ? withPrefOverrides(wrapped, this.prefOverrides) : wrapped;
+	}
+
+	private stringifyWorking(data: Record<string, unknown>): string {
 		// SC-483 r2: write no byte the user never typed. An empty object is '' (not `{}`), and the
 		// trailing newline is trimmed (the host splice supplies the line break before the closing
-		// fence; stamina-bar's serialize() trims the same way). The prefs: map keeps exactly one line
-		// break between it and the body.
-		const body = Object.keys(data).length === 0 ? '' : stringifyYaml(data);
-		return (overrides ? stringifyYaml({ prefs: overrides }) + body : body).trimEnd();
+		// fence; stamina-bar's serialize() trims the same way). The reserved keys keep exactly one line
+		// break between them and the body.
+		const body = (d: Record<string, unknown>): string => (Object.keys(d).length === 0 ? '' : stringifyYaml(d));
+		return this.withReservedKeys(body)(data).trimEnd();
 	}
 
 	/** SC-489: validate a fresh container clone of `working` and keep it as `checked`. The transforms
@@ -317,7 +338,9 @@ class FormModal extends DseModal {
 	 *  is `null` -- NOT `{}` -- so an element that cannot render a null body reports it here and
 	 *  Save stays off, while one that accepts an empty body (montage, project) stays saveable.
 	 *  Not mirrored: popping `prefs:` / the reserved collapse keys (they stay in the data; they can
-	 *  not turn a null into an object), schema validation and reference resolution. */
+	 *  not turn a null into an object; the field form DOES pop them at open, and the raw box is
+	 *  written back verbatim, so the lines stay either way), schema validation and reference
+	 *  resolution. */
 	private parseRaw(): unknown {
 		const { rawData, bodySource } = readBlockBody(this.def, this.rawText);
 		let model: unknown;
