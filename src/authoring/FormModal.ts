@@ -415,6 +415,8 @@ class FormModal extends DseModal {
 			this.lifecycle.removeChild(this.previewView as never);
 			this.previewView = null;
 		}
+		// Drops the previous keystroke's slot from the page (SC-510). A mount of it that is still running
+		// (a reference lookup reads a file) keeps writing, but only into that slot, which nobody can see.
 		this.previewEl.empty();
 		// The mount path below sets it again. Left on an emptied preview, the "Read-only" badge (absolutely
 		// positioned top-right of a 0-height box) would sit over the end of the error line under it (SC-493 r2).
@@ -431,10 +433,13 @@ class FormModal extends DseModal {
 			// ElementPipeline.run entirely — this IS the correct, honest affordance per
 			// the explicit-read-only-indication rule.
 			this.previewEl.setAttribute('data-dse-readonly', 'true');
+			// SC-510: every render mounts into its OWN slot inside the preview box, and the host's containerEl is
+			// that slot too. The box keeps the badge attribute; the slot is what the next keystroke throws away.
+			const slot = this.previewEl.createDiv({ cls: 'dse-form__preview-slot' });
 			const previewHost: BlockHost = {
 				mode: this.cx.host.mode,
 				sourcePath: this.cx.host.sourcePath,
-				containerEl: this.previewEl,
+				containerEl: slot,
 				canPersist: false,
 				addChild: (child) => this.lifecycle.addChild(child),
 				getBlockInfo: () => null,
@@ -445,7 +450,10 @@ class FormModal extends DseModal {
 			const view = this.def.createView(previewCx);
 			this.lifecycle.addChild(view); // torn down with the modal / next revalidate (F1 §4.5)
 			this.previewView = view;
-			void view.mount(this.previewEl, model);
+			// A mount that rejects (an element that cannot read what a reference points at) must not escape as an
+			// unhandled promise rejection. The slot keeps whatever the mount drew before it failed -- usually
+			// nothing -- under the "Read-only" badge; the form itself is unaffected.
+			view.mount(slot, model).catch(() => {});
 		} catch {
 			// A parse/mount slip in the preview must never break the form.
 		}
