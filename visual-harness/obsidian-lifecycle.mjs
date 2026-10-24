@@ -86,7 +86,8 @@
 // change a field, Enter on Save. Reading view (montage raw box, stamina bar typed field), the sidebar panel and Live Preview each assert the
 // pencil holds focus with the keyboard ring and the old root/pencil is gone; a real-mouse Save leaves focus where it was (a pointer press never
 // focuses the pencil) and the hover panel hides again; identical twins, upper one edited (Obsidian moves its old section to the twin's place): focus
-// is in the edited card, not the twin (r3); Cancel leaves focus on the same pencil. Every phase's whole note is the fixture with only the edited value changed; no Notice, no page error.
+// is in the edited card, not the twin (r3); a tall note with the card at ~60% of the pane keeps scrollTop and the card's top edge (SC-479 touched the
+// scroll pin); Cancel leaves focus on the same pencil. Every phase's whole note is the fixture with only the edited value changed; no Notice, no page error.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -299,6 +300,8 @@ Object.assign(FIXTURES, {
 	'Lifecycle/form-save-montage.md': `# form save montage\n\nABOVE\n\n${fence('ds-montage', ['title: The Heist'])}\n\nBELOW\n`,
 	'Lifecycle/form-save-counter.md': `# form save counter\n\nABOVE\n\n${COUNTER(3, 'Health')}\n\nBELOW\n`,
 	'Lifecycle/form-save-stamina.md': `# form save stamina\n\nABOVE\n\n${fence('ds-stamina-bar', ['max_stamina: 20', 'current_stamina: 15'])}\n\nBELOW\n`,
+	// SC-518 r3: a tall note with the card well below the top, so a keyboard Save can be checked not to move the reading position.
+	'Lifecycle/form-save-tall.md': `# form save tall\n\n${Array.from({ length: 70 }, (_, i) => `Filler above ${i + 1}.`).join('\n\n')}\n\n${fence('ds-montage', ['title: The Heist'])}\n\n${Array.from({ length: 70 }, (_, i) => `Filler below ${i + 1}.`).join('\n\n')}\n`,
 	'Lifecycle/form-save-sidebar.md': `# form save sidebar\n\nABOVE\n\n${fence('ds-montage', ['title: The Heist'])}\n\nBELOW\n`,
 });
 
@@ -3224,9 +3227,12 @@ const SCENARIOS = [
 			// `mode`: 'fresh' (default) the card gets a new root and a new pencil; 'sidebar' the panel redraws the card into the same root (only the chrome
 			// panel and its pencil are new); 'twin' Obsidian keeps the OLD section of the edited block and moves it to its identical twin's place, so the old
 			// root and pencil stay in the document (inside the twin) and the new ones are the upper card's. `wholeNote` null: the caller checks the note.
-			const keyboardSave = async (label, rootExpr, e, newText, rel, want, wholeNote = FIXTURES[rel].replace(want[0], want[1]), mode = 'fresh') => {
+			const keyboardSave = async (label, rootExpr, e, newText, rel, want, wholeNote = FIXTURES[rel].replace(want[0], want[1]), mode = 'fresh', scrollEl = null) => {
 				await tagOld(rootExpr);
 				const how = await reachPencil(label, rootExpr);
+				// The reading position (scrollTop and the card's top edge on screen), read with the pencil focused and again after the rebuilds settled.
+				const place = () => (scrollEl ? t.ev(`(() => ({ st: (${scrollEl}).scrollTop, top: (${rootExpr}).getBoundingClientRect().top }))()`) : null);
+				const place0 = await place();
 				await press('Enter', 'Enter', 13, '\r');
 				await waitFormOpen(label);
 				await edit(label, e);
@@ -3237,8 +3243,11 @@ const SCENARIOS = [
 				const early = await probe(rootExpr);
 				await t.sleep(1500); // the several rebuilds a write can cause have all happened by now
 				const late = await probe(rootExpr);
+				const place1 = await place();
 				await waitDisk(rel, want[1], label);
-				outcomes.push({ label, input: 'keyboard', pencil: how, early: early.active, late });
+				const moved = place0 && (Math.abs(place1.st - place0.st) > 1 || Math.abs(place1.top - place0.top) > 1);
+				outcomes.push({ label, input: 'keyboard', pencil: how, early: early.active, late, scroll: place0 ? `scrollTop ${place0.st}->${place1.st}, card top ${place0.top.toFixed(1)}->${place1.top.toFixed(1)}` : undefined });
+				if (moved) problems.push(`${label}: the reading position moved (scrollTop ${place0.st} -> ${place1.st}, card top ${place0.top.toFixed(1)} -> ${place1.top.toFixed(1)})`);
 				if (!late.pencil) problems.push(`${label}: focus is on ${late.active}${late.body ? ' (<body>)' : ''}, not the redrawn card's Edit pencil (early read: ${early.active})`);
 				if (mode === 'fresh' && !late.oldGone) problems.push(`${label}: the old card root is still in the document - the card was not redrawn`);
 				if (mode !== 'twin' && !late.oldPencilGone) problems.push(`${label}: the old Edit pencil is still in the document - the card was not redrawn`);
@@ -3320,6 +3329,29 @@ const SCENARIOS = [
 					t.expect(t.read(rel) === FIXTURES[rel], `cancel: the note was written: ${JSON.stringify(t.read(rel))}`);
 				}
 
+				// 2b. A tall note, the card at ~60% of the pane (SC-479 changed the Reading-view scroll pin): a keyboard Save keeps scrollTop and the
+				// card's top edge, and focus lands on the new pencil.
+				{
+					const rel = 'Lifecycle/form-save-tall.md';
+					const sel = '[data-dse-element="montage"]';
+					await t.open(rel);
+					await t.reset(rel);
+					const root = t.root(sel);
+					const scroller = `(${t.readingScope(LC_LEAF)}.querySelector('.markdown-preview-view') ?? ${t.readingScope(LC_LEAF)})`;
+					// Obsidian renders far sections lazily: scroll down in steps until the card exists.
+					for (let i = 0; i < 40 && !(await t.ev(`!!(${root})`)); i++) {
+						await t.ev(`(() => { const sc = ${scroller}; sc.scrollTop += sc.clientHeight * 0.8; return sc.scrollTop; })()`);
+						await t.sleep(250);
+					}
+					await t.waitFor(`!!(${root})`, 'tall: rendered');
+					await t.ev(`(() => { const sc = ${scroller}; const r = ${root}; const off = r.getBoundingClientRect().top - sc.getBoundingClientRect().top - 0.6 * sc.clientHeight; sc.scrollTop += off; return sc.scrollTop; })()`);
+					await t.sleep(600);
+					const atStart = await t.ev(`(() => ({ st: (${scroller}).scrollTop, top: (${root}).getBoundingClientRect().top, h: (${scroller}).clientHeight }))()`);
+					t.expect(atStart.st > 500 && atStart.top > 0.4 * atStart.h && atStart.top < 0.8 * atStart.h, `tall: the card is not parked well below the top: ${JSON.stringify(atStart)}`);
+					await waitText(root, 'The Heist', 'tall');
+					await keyboardSave('Reading view tall note montage', root, { raw: ['The Heist', 'Other Job'] }, 'Other Job', rel, ['title: The Heist', 'title: Other Job'], undefined, 'fresh', scroller);
+				}
+
 				// 3b. Identical twins, the UPPER one edited (SC-518 r3): Obsidian matches sections by text, so the old upper section is reused at the
 				// twin's position and the modal's focus return lands on ITS pencil. Focus must end on the edited (upper) card's new pencil.
 				{
@@ -3371,7 +3403,7 @@ const SCENARIOS = [
 			t.expect(problems.length === 0, `${problems.join(' | ')} -- outcomes: ${JSON.stringify(outcomes)}`);
 			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${JSON.stringify(await t.noticesSince(m))}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
-			return `after a form Save focus is on the redrawn card's Edit pencil, old root/pencil gone (ring after a keyboard open; a mouse Save leaves focus where it was and the hover panel hides; identical twins: the edited upper card; Cancel leaves it on the same pencil): ${outcomes.map((o) => `${o.label} by ${o.input}${o.pencil ? ` (${o.pencil})` : ''} -> ${o.late.active}${o.late.ring ? ' +ring' : ''}`).join('; ')}; the note is the fixture with only the edited value changed; no Notice, no page error`;
+			return `after a form Save focus is on the redrawn card's Edit pencil, old root/pencil gone (ring after a keyboard open; a mouse Save leaves focus where it was and the hover panel hides; identical twins: the edited upper card; Cancel leaves it on the same pencil): ${outcomes.map((o) => `${o.label} by ${o.input}${o.pencil ? ` (${o.pencil})` : ''} -> ${o.late.active}${o.late.ring ? ' +ring' : ''}${o.scroll ? ` (${o.scroll})` : ''}`).join('; ')}; the note is the fixture with only the edited value changed; no Notice, no page error`;
 		},
 	},
 ];
