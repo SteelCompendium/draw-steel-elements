@@ -522,10 +522,141 @@ describe('SC-470: PreviewScrollPin.pinReadingViewsOf', () => {
 			const call = on.mock.calls.find(([name]) => name === 'modify');
 			expect(call).toBeDefined();
 			(call![1] as (file: { path: string }) => void)({ path: 'Note.md' });
-			expect(spy).toHaveBeenCalledWith(app.workspace, 'Note.md');
+			expect(spy).toHaveBeenCalledWith(app.workspace, 'Note.md', expect.any(Function));
+			// SC-479: the resolver is the vault's link resolution
+			const resolve = spy.mock.calls[0][2] as (l: string, s: string) => string | null;
+			const lp = jest.spyOn(app.metadataCache, 'getFirstLinkpathDest').mockReturnValue({ path: 'Folder/B.md' } as any);
+			expect(resolve('B', 'A.md')).toBe('Folder/B.md');
+			expect(lp).toHaveBeenCalledWith('B', 'A.md');
+			lp.mockReturnValue(null);
+			expect(resolve('Missing', 'A.md')).toBeNull();
+			lp.mockRestore();
 		} finally {
 			spy.mockRestore();
 			on.mockRestore();
+		}
+	});
+});
+
+// SC-479: a DSE block in note B embedded in note A. A write to B must pin A's scroller (the host), and a host pin
+// also stops scroll anchoring on it (measured: the sizer pin alone still let anchoring drive scrollTop 2887 -> 0).
+describe('SC-479: embeds pin the host note\'s scroller', () => {
+	afterEach(() => {
+		document.body.innerHTML = '';
+	});
+
+	/** An embed shape as Obsidian 1.15.0 renders it, holding a DSE block, appended to the host's sizer. */
+	function addEmbed(scroller: HTMLElement, src: string, { dse = true } = {}): HTMLElement {
+		const embed = document.createElement('span');
+		embed.className = 'internal-embed markdown-embed inline-embed is-loaded';
+		embed.setAttribute('src', src);
+		embed.innerHTML = `<div class="markdown-embed-content"><div class="markdown-preview-view markdown-rendered"><div class="markdown-preview-sizer"><div class="block"></div></div></div></div>`;
+		if (dse) embed.querySelector('.block')!.setAttribute('data-dse-element', 'initiative');
+		sizerOf(scroller).appendChild(embed);
+		return embed;
+	}
+	/** A Reading leaf showing `path` with NO DSE block of its own (an embed may add one). */
+	function hostLeaf(path: string, metrics: Metrics = {}) {
+		const { scroller } = makeScroller(metrics);
+		const reading = document.createElement('div');
+		reading.className = 'markdown-reading-view';
+		reading.appendChild(scroller);
+		document.body.appendChild(reading);
+		return { scroller, leaf: { view: { file: { path }, getMode: () => 'preview', previewMode: { containerEl: reading } } } };
+	}
+	const workspaceOf = (...leaves: Array<{ leaf: unknown }>) =>
+		({ getLeavesOfType: (type: string) => (type === 'markdown' ? leaves.map((l) => l.leaf) : []) }) as any;
+	const vaultOf: Record<string, string> = { B: 'B.md', N: 'N.md', Other: 'Other.md' };
+	const resolve = jest.fn((linkpath: string) => vaultOf[linkpath] ?? null);
+	const anchorStopped = (scroller: HTMLElement): boolean => /overflow-anchor: none !important/.test(pinStyle(scroller)?.textContent ?? '');
+
+	test('a Reading view of another note that embeds a DSE block from the written note is pinned, at its own height, with anchoring stopped', () => {
+		const a = hostLeaf('A.md');
+		addEmbed(a.scroller, 'B');
+		new PreviewScrollPin().pinReadingViewsOf(workspaceOf(a), 'B.md', resolve);
+		expect(pinnedPx(a.scroller)).toBe('4883px');
+		expect(anchorStopped(a.scroller)).toBe(true);
+		const id = a.scroller.getAttribute(PIN_ATTR)!;
+		expect(pinStyle(a.scroller)!.textContent).toBe(`${pinRule(id, 4883)}\n.markdown-preview-view[${PIN_ATTR}="${id}"] { overflow-anchor: none !important; }`);
+		expect(resolve).toHaveBeenCalledWith('B', 'A.md');
+	});
+
+	test('`![[B#Section]]` and a nested embed (A embeds N embeds B) both count as B', () => {
+		const heading = hostLeaf('A.md');
+		addEmbed(heading.scroller, 'B#Section');
+		const nested = hostLeaf('A2.md');
+		const outer = addEmbed(nested.scroller, 'N', { dse: false });
+		const innerSizer = outer.querySelector<HTMLElement>('.markdown-preview-sizer')!;
+		const inner = document.createElement('span');
+		inner.className = 'internal-embed markdown-embed';
+		inner.setAttribute('src', 'B');
+		inner.innerHTML = '<div class="markdown-embed-content"><div class="markdown-preview-view"><div class="markdown-preview-sizer"><div data-dse-element="initiative"></div></div></div></div>';
+		innerSizer.appendChild(inner);
+		new PreviewScrollPin().pinReadingViewsOf(workspaceOf(heading, nested), 'B.md', resolve);
+		expect(isPinned(heading.scroller)).toBe(true);
+		expect(isPinned(nested.scroller)).toBe(true);
+	});
+
+	test('leaves alone: an embed of another note, an embed without a DSE block, no resolver, a host that is not scrolled', () => {
+		const other = hostLeaf('A.md');
+		addEmbed(other.scroller, 'Other');
+		const plain = hostLeaf('A2.md');
+		addEmbed(plain.scroller, 'B', { dse: false });
+		const top = hostLeaf('A3.md', { scrollTop: 0 });
+		addEmbed(top.scroller, 'B');
+		const pin = new PreviewScrollPin();
+		pin.pinReadingViewsOf(workspaceOf(other, plain, top), 'B.md', resolve);
+		for (const l of [other, plain, top]) expect(isPinned(l.scroller)).toBe(false);
+		const noResolver = hostLeaf('A4.md');
+		addEmbed(noResolver.scroller, 'B');
+		pin.pinReadingViewsOf(workspaceOf(noResolver), 'B.md');
+		expect(isPinned(noResolver.scroller)).toBe(false);
+	});
+
+	test("a note's own pin keeps scroll anchoring on (its rule is the SC-470 rule alone)", () => {
+		const { scroller, el } = makeScroller();
+		el.setAttribute('data-dse-element', 'initiative');
+		const reading = document.createElement('div');
+		reading.className = 'markdown-reading-view';
+		reading.appendChild(scroller);
+		document.body.appendChild(reading);
+		new PreviewScrollPin().pinReadingViewsOf(workspaceOf({ leaf: { view: { file: { path: 'B.md' }, getMode: () => 'preview', previewMode: { containerEl: reading } } } }), 'B.md', resolve);
+		expect(isPinned(scroller)).toBe(true);
+		expect(anchorStopped(scroller)).toBe(false);
+	});
+
+	test('the writer pin inside an embed pins the OUTERMOST Reading scroller (the host), as a host pin', () => {
+		const { scroller } = makeScroller();
+		const embed = addEmbed(scroller, 'B');
+		const innerView = embed.querySelector<HTMLElement>('.markdown-preview-view')!;
+		setMetric(innerView, 'scrollTop', 0); // the embed's own view never scrolls
+		new PreviewScrollPin().pin(embed.querySelector<HTMLElement>('[data-dse-element]')!);
+		expect(isPinned(innerView)).toBe(false);
+		expect(pinnedPx(scroller)).toBe('4883px');
+		expect(anchorStopped(scroller)).toBe(true);
+	});
+
+	test('a pin that is first a note\'s own and then also a host pin gains the anchoring stop, keeps its id and height, and releases on the TTL', () => {
+		jest.useFakeTimers();
+		try {
+			const { scroller, el } = makeScroller();
+			el.setAttribute('data-dse-element', 'initiative');
+			const pin = new PreviewScrollPin();
+			pin.pin(el);
+			const id = scroller.getAttribute(PIN_ATTR);
+			expect(anchorStopped(scroller)).toBe(false);
+			const embed = addEmbed(scroller, 'B');
+			setMetric(scroller, 'scrollHeight', 300);
+			pin.pin(embed.querySelector<HTMLElement>('[data-dse-element]')!);
+			expect(scroller.getAttribute(PIN_ATTR)).toBe(id);
+			expect(anchorStopped(scroller)).toBe(true);
+			expect(pinnedPx(scroller)).toBe('4883px');
+			expect(allPinStyles()).toBe(1);
+			jest.advanceTimersByTime(TTL);
+			expect(isPinned(scroller)).toBe(false);
+			expect(allPinStyles()).toBe(0);
+		} finally {
+			jest.useRealTimers();
 		}
 	});
 });

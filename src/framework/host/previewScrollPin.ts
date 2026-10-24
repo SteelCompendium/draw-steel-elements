@@ -61,7 +61,28 @@
 // Only Reading views that show a DSE block are pinned: a note without one never collapses
 // (SC-459 M1), so it never gets phantom space. Live Preview / Source panes are not touched here:
 // Live Preview loses its position by a different mechanism and has its own fix
-// (livePreviewScrollHold.ts, SC-478). A DSE block inside an embed is not covered (SC-479).
+// (livePreviewScrollHold.ts, SC-478).
+//
+// EMBEDS: THE HOST NOTE'S SCROLLER (SC-479). A DSE block in note B embedded (`![[B]]`) in note A
+// lives in the embed's OWN inner `.markdown-preview-view` (not scrollable: `.markdown-embed-content`
+// caps it at 4000px), inside A's scroller. A write to B redraws only the embed (A's own renderer and
+// its sizer are untouched), and the embed's inner sizer collapses for part of one task (measured,
+// 1.15.0: inner min-height 3165px -> 110px, the embed 3190px -> 135px, back before the next frame).
+// No frame ever shows it, yet a layout inside that task moves A's scrollTop and nothing moves it back:
+// with A parked at its end, mostly one tall embed, scrollTop 2887 -> 0 on every write that redraws
+// the embed (vault.process, a write on disk, another pane's DSE write, the embed's own write when
+// adoption misses). Two browser mechanisms do it, measured separately: scroll anchoring (Chrome's
+// `overflow-anchor: auto` picks an anchor inside the embed's collapsing content and drives scrollTop
+// to 0; with anchoring off it ends at 2375) and the passive clamp (A's sizer min-height is Obsidian's
+// estimate, 3332px, under the real 3844px content, so the collapsed scroller's max scrollTop is 2375).
+// A tall host with the embed well above or inside the viewport held (anchoring adjusts down and back up
+// by the same amount there), which is why only some geometries show it. The fix therefore pins A's
+// scroller (`pinReadingViewsOf`: every Reading view that shows a DSE block embedded from the modified
+// note; `pin`: the OUTERMOST Reading scroller, not the embed's inner one, which never scrolls) and,
+// for those host pins only, switches scroll anchoring off on A's scroller for the pin's lifetime (a
+// second rule in the same `<style>`). The sizer pin alone did NOT hold (2887 -> 0, anchoring still
+// moved it); both together held. Anchoring stays on for a note's own pins: there the collapse spans
+// frames and anchoring is what keeps text below a redrawn block still.
 //
 // THE PIN IS A FLOOR, NOT A CAP (SC-470 r4). The rule's `!important` min-height REPLACES
 // Obsidian's own inline sizer min-height, and Obsidian's Reading view is virtualised, so the
@@ -151,6 +172,16 @@ let nextPinId = 0;
 export const pinRule = (id: string, px: number): string =>
 	`.markdown-preview-view[${PIN_ATTR}="${id}"] > .markdown-preview-sizer { min-height: ${px}px !important; }`;
 
+/** SC-479: a host pin (the scroller of a note that EMBEDS the written note) also stops scroll anchoring on that scroller. */
+export const anchorRule = (id: string): string => `.markdown-preview-view[${PIN_ATTR}="${id}"] { overflow-anchor: none !important; }`;
+
+/** Resolves a link path from `sourcePath` to a vault path (`metadataCache.getFirstLinkpathDest(...)?.path`), or null. */
+export type LinkResolver = (linkpath: string, sourcePath: string) => string | null;
+
+/** The rule text a held pin needs: the sizer floor, plus the anchoring stop for a host pin. */
+const ruleText = (held: { id: string; px: number; host: boolean }): string =>
+	held.host ? `${pinRule(held.id, held.px)}\n${anchorRule(held.id)}` : pinRule(held.id, held.px);
+
 /** The scroller's own sizer (a direct child, the node the rule targets) and its inline min-height in px, or NaN. */
 function sizerInlineMinHeight(scroller: HTMLElement): number {
 	const sizer = scroller.querySelector<HTMLElement>(':scope > .markdown-preview-sizer');
@@ -161,6 +192,22 @@ function sizerInlineMinHeight(scroller: HTMLElement): number {
 function verticalPadding(el: HTMLElement, win: Window): number {
 	const cs = win.getComputedStyle(el);
 	return (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+}
+
+/**
+ * SC-479: does `scroller` show a DSE block from an embed of `path`? Every `.internal-embed` in the rendered view is
+ * checked, nested ones included (A embeds N embeds B: the inner embed's `src` names B). `src` is the link as written;
+ * the subpath (`#heading`, `#^block`) is dropped, so `![[B#Section]]` counts as B. A nested embed's link is resolved
+ * from the HOST note's path (the DOM does not say which note wrote it); that only differs for an ambiguous basename.
+ * Only embeds that contain a DSE block count: nothing else of ours can collapse them.
+ */
+function embedsBlockOf(scroller: HTMLElement, path: string, sourcePath: string, resolveLink: LinkResolver): boolean {
+	for (const embed of Array.from(scroller.querySelectorAll<HTMLElement>('.internal-embed[src]'))) {
+		if (!embed.querySelector('[data-dse-element]')) continue;
+		const linkpath = (embed.getAttribute('src') ?? '').split('#')[0];
+		if (linkpath && resolveLink(linkpath, sourcePath) === path) return true;
+	}
+	return false;
 }
 
 /** The slice of MarkdownView `pinReadingViewsOf` reads (duck-typed: the jest mock has no MarkdownView). */
@@ -183,6 +230,8 @@ interface HeldPin {
 	readonly style: HTMLStyleElement;
 	/** Keeps `px` at or above Obsidian's latest inline sizer min-height; null where the window has no MutationObserver. */
 	observer: MutationObserver | null;
+	/** SC-479: pinned as the host of an embed of the written note; its rule also stops scroll anchoring. Only ever set. */
+	host: boolean;
 }
 
 /**
@@ -200,9 +249,13 @@ export class PreviewScrollPin {
 	 * rebuild the preview; a no-op (and safe) anywhere else.
 	 */
 	pin(containerEl: HTMLElement): void {
-		const scroller = containerEl.closest<HTMLElement>('.markdown-preview-view');
-		if (!scroller) return; // sidebar / embed / canvas / LP: not a reading-view scroller
-		this.pinScroller(scroller);
+		const inner = containerEl.closest<HTMLElement>('.markdown-preview-view');
+		if (!inner) return; // sidebar / canvas / LP: not a reading-view scroller
+		// SC-479: inside an embed the nearest `.markdown-preview-view` is the embed's own (it never
+		// scrolls); the scroller that can lose its position is the OUTERMOST one, the host note's.
+		let scroller = inner;
+		for (let up = inner.parentElement?.closest<HTMLElement>('.markdown-preview-view'); up; up = up.parentElement?.closest<HTMLElement>('.markdown-preview-view')) scroller = up;
+		this.pinScroller(scroller, scroller !== inner);
 	}
 
 	/**
@@ -211,23 +264,26 @@ export class PreviewScrollPin {
 	 * header), for our own writes and for everyone else's. A view already pinned by the
 	 * writer is re-pinned, never lowered (see `pinScroller`); the TTL restarts a few ms later.
 	 */
-	pinReadingViewsOf(workspace: Workspace, path: string): void {
+	pinReadingViewsOf(workspace: Workspace, path: string, resolveLink?: LinkResolver): void {
 		for (const leaf of workspace.getLeavesOfType('markdown')) {
 			const view = leaf.view as unknown as ReadingViewLike;
-			if (view.file?.path !== path || view.getMode?.() !== 'preview') continue;
+			if (!view.file || view.getMode?.() !== 'preview') continue;
+			const own = view.file.path === path;
+			// SC-479: a view of ANOTHER note is pinned when it shows a DSE block embedded from `path`.
+			if (!own && !resolveLink) continue;
 			// `previewMode.containerEl` is `.markdown-reading-view`; its scroller is the child (measured, 1.14.4).
 			const scroller = view.previewMode?.containerEl?.querySelector<HTMLElement>(':scope > .markdown-preview-view');
 			if (!scroller) continue;
-			if (!scroller.querySelector('[data-dse-element]')) continue; // nothing of ours can collapse it
+			if (own ? !scroller.querySelector('[data-dse-element]') : !embedsBlockOf(scroller, path, view.file.path, resolveLink!)) continue; // nothing of ours can collapse it
 			try {
-				this.pinScroller(scroller);
+				this.pinScroller(scroller, !own);
 			} catch (err) {
 				console.warn('[DSE] scroll pin failed for a reading view', err);
 			}
 		}
 	}
 
-	private pinScroller(scroller: HTMLElement): void {
+	private pinScroller(scroller: HTMLElement, host = false): void {
 		const doc = scroller.ownerDocument;
 		const win = doc.defaultView;
 		if (!win || !doc.head) return;
@@ -239,6 +295,10 @@ export class PreviewScrollPin {
 			// raises it to the sizer's current inline min-height or the content height when either
 			// is larger (see the header: RE-PINS).
 			win.clearTimeout(existing.timer);
+			if (host && !existing.host) {
+				existing.host = true; // a note's own pin that is now also a host pin: add the anchoring stop
+				existing.style.textContent = ruleText(existing);
+			}
 			this.raise(existing, Math.max(sizerInlineMinHeight(scroller), scroller.scrollHeight - verticalPadding(scroller, win)));
 			existing.timer = win.setTimeout(() => this.release(scroller), PIN_TTL_MS);
 			return;
@@ -255,11 +315,11 @@ export class PreviewScrollPin {
 		const id = String(++nextPinId);
 		const style = doc.createElement('style');
 		style.setAttribute(STYLE_ATTR, id);
-		style.textContent = pinRule(id, px);
+		style.textContent = ruleText({ id, px, host });
 		doc.head.appendChild(style); // the rule first, then the attribute that selects it
 		scroller.setAttribute(PIN_ATTR, id);
 		const timer = win.setTimeout(() => this.release(scroller), PIN_TTL_MS);
-		const held: HeldPin = { win, timer, px, id, style, observer: null };
+		const held: HeldPin = { win, timer, px, id, style, observer: null, host };
 		const MO = (win as Window & { MutationObserver?: typeof MutationObserver }).MutationObserver;
 		if (MO) {
 			held.observer = new MO(() => {
@@ -278,7 +338,7 @@ export class PreviewScrollPin {
 	private raise(held: HeldPin, px: number): void {
 		if (!Number.isFinite(px) || px <= held.px) return;
 		held.px = px;
-		held.style.textContent = pinRule(held.id, px);
+		held.style.textContent = ruleText(held);
 	}
 
 	/** Drop pins whose scroller left the document or whose window was closed (a closed window's TTL never fires). */

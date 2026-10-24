@@ -76,6 +76,8 @@
 // SC-502 r2 adds to it: the panel stays revealed while the pointer crosses Obsidian's own `</>` edit-block button on the way up to Collapse,
 // a real click on the collapsed one-liner's Expand expands the block, and a real click on `</>` still enters the block's source.
 // (r3) CodeMirror's height for the widget equals its on-screen height for a counter, a feature (margins 24px) and a statblock (8px).
+// SC-479 appends G-S42 (38 scenarios in all with SC-509's G-S40): a tracker in note B embedded in a Reading view of note A parked at its end keeps A's scroll position
+// when B is written (in-app, on disk, from another pane, and the embed's own write with adoption off).
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -258,6 +260,12 @@ Object.assign(FIXTURES, {
 	'Lifecycle/spaced-straycr.md': `# spaced\n\nA\rB\n\nTOP\n\n${fence(' ds-counter', counterLines(10))}\n\nBELOW\rX\n`,
 	// a spaced block and an unspaced one with the SAME body: a write for one must never land in the other.
 	'Lifecycle/spaced-twins.md': `# twins\n\nTOP\n\n${fence(' ds-counter', counterLines(5, 'Twin'))}\n\nMID\n\n${fence('ds-counter', counterLines(5, 'Twin'))}\n\nBOTTOM\n`,
+});
+// SC-479: a 25-hero tracker note embedded in a host note that is (almost) only that embed. Parked at its end, the host
+// lost its position on every write that redrew the embed (measured, 1.15.0: scrollTop 2887 -> 0).
+Object.assign(FIXTURES, {
+	'Lifecycle/embtracker.md': `# embtracker\n\nS-TOP\n\n${fence('ds-initiative', ['heroes:', ...Array.from({ length: 25 }, (_, i) => HERO(`Hero ${String(i + 1).padStart(2, '0')}`)).flat(), 'enemy_groups: []', 'malice:', '  value: 1'])}\n\nS-BOTTOM\n`,
+	'Lifecycle/embhost.md': '# embhost\n\nC-TOP\n\n![[embtracker]]\n\nC-BOTTOM\n',
 });
 // SC-487: a zero-width space right after the name. Live Preview ends the name there and renders the block; Reading view shows plain code.
 const ZWSP = String.fromCharCode(0x200b);
@@ -2945,6 +2953,125 @@ const SCENARIOS = [
 			}
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
 			return `Live Preview, real mouse: ${facts.join('; ')}; no page errors`;
+		},
+	},
+	{
+		// SC-479: a tracker in note B embedded (`![[embtracker]]`) in note A, open in Reading view and parked at its END
+		// (the embed's bottom and the text under it in view). A write to B redraws only the embed; inside that task the
+		// embed's own sizer collapses (never seen in a frame) and A's scrollTop went 2887 -> 0 on stock 7046eb0 and c2758a2 (scroll
+		// anchoring inside the collapsing embed; the passive clamp alone ends at 2375). The fix pins A's scroller as a
+		// HOST pin (its sizer, plus scroll anchoring off on it) from the `modify` event, and the writer pin inside an
+		// embed reaches A's scroller. Phases: (a) in-app vault.process of B, (b) a write on disk via the file watcher,
+		// (c) the embed's own DSE write with view adoption OFF (adoption keeps the writer's DOM, so only a miss redraws
+		// it - G-S8's reason), (d) a second Reading pane showing B writes it (A a bystander). Per phase on A: the write
+		// landed; a tracker is drawn in the embed; anti-vacuity - the embedded tracker was redrawn (a fresh root) and A
+		// was parked at its end; `data-dse-scroll-pin` was on A's scroller when the embedded tracker was replaced;
+		// scrollTop identical in every frame through the pin's release + 10 frames; the pin was seen released. Every
+		// phase runs even after one fails. No timed delay decides anything: the redraw follows `modify` synchronously
+		// enough that no hold is needed, and the recorder samples every frame until the release.
+		id: 'G-S42',
+		async run(t) {
+			const host = 'Lifecycle/embhost.md';
+			const rel = 'Lifecycle/embtracker.md';
+			const A = 'window.__gs42A';
+			const B = 'window.__gs42B';
+			const scrollerOf = (leaf) => `(${leaf}).view.containerEl.querySelector('.markdown-reading-view > .markdown-preview-view')`;
+			const embRoot = `Array.from(${scrollerOf(A)}.querySelectorAll('.internal-embed ${TRACKER}')).find((x) => x.isConnected)`;
+			const park = async () => {
+				await t.waitFor(`!!(${embRoot})`, 'the embedded tracker is drawn in the host');
+				for (let i = 0; i < 3; i++) {
+					await t.ev(`(() => { const s = ${scrollerOf(A)}; s.scrollTop = s.scrollHeight; return true; })()`);
+					await t.sleep(450);
+				}
+				await t.ev(`(() => { ${embRoot}.__lcTag = 'gs42'; return true; })()`);
+			};
+			// Per frame: A's scrollTop; a MutationObserver notes whether the pin was on A's scroller when the tagged
+			// embedded tracker left the document. Resolves on window.__gs42rec once the pin was released + 10 frames
+			// (cap: first sighting + 4500 ms, 12 s; 5 s with no pin).
+			const record = () => t.ev(`(() => { window.__gs42rec = new Promise((resolve) => { const s = ${scrollerOf(A)}; const st0 = s.scrollTop; const max0 = s.scrollHeight - s.clientHeight; const tagged = Array.from(s.querySelectorAll('${TRACKER}')).find((x) => x.__lcTag === 'gs42'); const samples = []; let stMin = st0; let pinAtRedraw = null; let pinFrames = 0; let pinSeen = false; let pinOnAt = 0; let released = false; let goneFrames = 0; const onScroll = () => { stMin = Math.min(stMin, s.scrollTop); }; s.addEventListener('scroll', onScroll); const mo = new MutationObserver(() => { if (pinAtRedraw === null && tagged && !tagged.isConnected) pinAtRedraw = s.hasAttribute('data-dse-scroll-pin'); }); mo.observe(s, { childList: true, subtree: true }); const t0 = performance.now(); const tick = () => { samples.push(s.scrollTop); if (s.hasAttribute('data-dse-scroll-pin')) { pinFrames++; if (!pinSeen) pinOnAt = performance.now() - t0; pinSeen = true; released = false; goneFrames = 0; } else if (pinSeen) { released = true; goneFrames++; } if (goneFrames < 10 && performance.now() - t0 < (pinSeen ? Math.min(pinOnAt + 4500, 12000) : 5000)) requestAnimationFrame(tick); else { mo.disconnect(); s.removeEventListener('scroll', onScroll); resolve({ st0, max0, tagged: !!tagged, frames: samples.length, stMin: Math.min(stMin, ...samples), stMax: Math.max(...samples), pinAtRedraw, pinFrames, released, ms: Math.round(performance.now() - t0) }); } }; requestAnimationFrame(tick); }); return true; })()`);
+			const check = async (phase, m, landed) => {
+				t.expect(landed, `${phase}: the write did not land`);
+				t.expect(await t.ev(`!!(${embRoot})`), `${phase}: no tracker is drawn in the embed after the write`);
+				t.expect(m.tagged && !(await t.ev(`Array.from(${scrollerOf(A)}.querySelectorAll('${TRACKER}')).some((x) => x.isConnected && x.__lcTag === 'gs42')`)), `${phase}: the embedded tracker was not redrawn - the phase cannot reach the jump`);
+				t.expect(m.st0 > 0 && m.st0 >= m.max0 - 1, `${phase}: the host was not parked at its end (scrollTop ${m.st0} of max ${m.max0}) - not the geometry that jumps`);
+				t.expect(m.pinAtRedraw === true, `${phase}: data-dse-scroll-pin was not on the host's scroller when the embedded tracker was redrawn (pin frames ${m.pinFrames}, scrollTop min ${m.stMin} of start ${m.st0})`);
+				t.expect(m.stMin === m.st0 && m.stMax === m.st0, `${phase}: the host's scrollTop moved: start ${m.st0} min ${m.stMin} max ${m.stMax} (pin present at the redraw ${m.pinAtRedraw})`);
+				t.expect(m.released, `${phase}: the pin was never seen released within ${m.ms}ms (pin frames ${m.pinFrames})`);
+				return `${phase}: host held at ${m.st0} over ${m.frames} frames, pinned ${m.pinFrames} frames`;
+			};
+			const out = [];
+			const fails = [];
+			const phase = async (fn) => {
+				try {
+					out.push(await fn());
+				} catch (e) {
+					fails.push(e instanceof Error ? e.message : String(e));
+				}
+			};
+			const openHost = async () => {
+				await t.open(host);
+				await t.ev(`(() => { window.__gs42A = app.workspace.getMostRecentLeaf(); return true; })()`);
+			};
+			const clickVisible = (scope, scroller) => t.ev(`(() => { const s = ${scroller}; const sr = s.getBoundingClientRect(); const all = Array.from((${scope}).querySelectorAll('button.dse-init__portrait-toggle')); const b = all.find((x) => { const r = x.getBoundingClientRect(); return r.top > sr.top && r.bottom < sr.bottom; }); if (!b) return 'none of ' + all.length + ' toggles in view; tops ' + all.slice(-3).map((x) => Math.round(x.getBoundingClientRect().top - sr.top)).join(',') + ' of a ' + Math.round(sr.height) + 'px scroller'; b.click(); return true; })()`);
+			await t.reset(rel);
+			let value = 1;
+			// (a) / (b) a write that is not ours.
+			for (const [name, write] of [
+				['(a) external vault.process', (v) => t.edit(rel, `c.replace(/ {2}value: \\d+/, '  value: ${v}')`)],
+				['(b) external write on disk', async (v) => fs.writeFileSync(path.join(vault, rel), t.read(rel).replace(/ {2}value: \d+/, `  value: ${v}`))],
+			]) {
+				await phase(async () => {
+					await openHost();
+					await park();
+					await record();
+					value++;
+					await write(value);
+					const m = await t.ev('window.__gs42rec');
+					return await check(name, m, t.read(rel).includes(`  value: ${value}`));
+				});
+			}
+			// (c) the embed's own DSE write, adoption off (a miss redraws the writer). Before the split-pane phase: a narrower pane
+			// leaves the embed's inner sizer with a stale, taller min-height afterwards (blank space under the tracker).
+			await phase(async () => {
+				const prevEnabled = await t.ev(`${t.reg}.enabled`);
+				try {
+					await t.ev(`${t.reg}.enabled = false`);
+					await openHost();
+					await park();
+					const before = t.read(rel);
+					await record();
+					const cd = await clickVisible(embRoot, scrollerOf(A));
+					t.expect(cd === true, `(c) own write: no visible portrait toggle in the embedded tracker: ${cd}`);
+					const m = await t.ev('window.__gs42rec');
+					return await check('(c) the embed\'s own write, adoption off', m, t.read(rel) !== before);
+				} finally {
+					await t.ev(`${t.reg}.enabled = ${JSON.stringify(prevEnabled)}`);
+				}
+			});
+			// (d) a second Reading pane showing B makes a DSE write; A is a bystander.
+			await phase(async () => {
+				await openHost();
+				try {
+					await t.ev(`(async () => { const b = app.workspace.getLeaf('split', 'vertical'); window.__gs42B = b; await b.setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'preview' }, active: false }); app.workspace.setActiveLeaf(window.__gs42A, { focus: true }); return true; })()`);
+					await t.sleep(1500);
+					for (let i = 0; i < 3; i++) {
+						await t.ev(`(() => { const s = ${scrollerOf(B)}; const r = ${t.root(TRACKER, B)}; s.scrollTop = r.getBoundingClientRect().top - s.getBoundingClientRect().top + s.scrollTop + 1500; return true; })()`);
+						await t.sleep(450);
+					}
+					await park();
+					const before = t.read(rel);
+					await record();
+					const cc = await clickVisible(t.root(TRACKER, B), scrollerOf(B));
+					t.expect(cc === true, `(d) second pane: no visible portrait toggle in the pane showing B: ${cc}`);
+					const m = await t.ev('window.__gs42rec');
+					return await check('(d) another pane', m, t.read(rel) !== before);
+				} finally {
+					await t.ev(`(() => { if (window.__gs42B) window.__gs42B.detach(); window.__gs42B = null; return true; })()`);
+				}
+			});
+			await t.reset(rel);
+			t.expect(fails.length === 0, fails.join(' | '));
+			return out.join('; ');
 		},
 	},
 ];
