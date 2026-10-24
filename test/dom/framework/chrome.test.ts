@@ -417,3 +417,51 @@ describe('SC-169 §6 — the chrome is COMPLETELY absent from the print scheme',
 		expect(collapse.every((r) => /:not\(\[data-dse-print="on"\]\)/.test(r.selector))).toBe(true);
 	});
 });
+
+// ---------------------------------------------------------------- 7. SC-520
+// In Live Preview a block inside a `> [!note]` callout is drawn in Obsidian's callout widget, whose own `click` handler (it
+// honours defaultPrevented) moves the editor cursor into the callout - the callout turns into its source and the block is gone.
+// The element click shield only covers pointerdown/mousedown, so a chrome button's click has to say "handled" itself. Real
+// behaviour is lifecycle G-S49 (a real mouse in a real Obsidian); this pins the one contract it relies on.
+describe('SC-520 §7 — a click on a chrome control is marked handled so Obsidian\'s callout widget leaves it alone', () => {
+	const click = (el: Element): MouseEvent => {
+		const evt = new MouseEvent('click', { bubbles: true, cancelable: true });
+		el.dispatchEvent(evt);
+		return evt;
+	};
+
+	test('the panel\'s Collapse click is default-prevented, still does its job, and still reaches document listeners', async () => {
+		const { root, host } = await render(statblockElement, STATBLOCK_BODY, 'ds-statblock');
+		document.body.appendChild(host.containerEl);
+		let seenAtDocument = false;
+		const onDocClick = (): void => {
+			seenAtDocument = true;
+		};
+		document.addEventListener('click', onDocClick);
+		try {
+			const evt = click(root.querySelector('.dse-chrome [data-dse-chrome-item="collapse"]')!);
+			expect(evt.defaultPrevented).toBe(true);
+			expect(root.hasAttribute('data-dse-collapsed')).toBe(true); // the button's own handler ran first
+			// not stopPropagation: the Recoveries popover's click-outside close listens on the document
+			expect(seenAtDocument).toBe(true);
+		} finally {
+			document.removeEventListener('click', onDocClick);
+			host.containerEl.remove();
+		}
+	});
+
+	test('the collapsed one-liner\'s Expand click is default-prevented too', async () => {
+		const { root } = await render(statblockElement, STATBLOCK_BODY, 'ds-statblock');
+		click(root.querySelector('.dse-chrome [data-dse-chrome-item="collapse"]')!);
+		const evt = click(root.querySelector('.dse-chrome-summary [data-dse-chrome-item="expand"]')!);
+		expect(evt.defaultPrevented).toBe(true);
+		expect(root.hasAttribute('data-dse-collapsed')).toBe(false);
+	});
+
+	test('every other panel button is covered (the panel itself carries the handler, not just Collapse)', async () => {
+		const { root } = await render(staminaBarElement, STAMINA_BODY, 'ds-stamina-bar');
+		const buttons = Array.from(root.querySelectorAll<HTMLElement>('.dse-chrome button'));
+		expect(buttons.length).toBeGreaterThanOrEqual(2);
+		for (const b of buttons) expect(click(b).defaultPrevented).toBe(true);
+	});
+});

@@ -72,3 +72,26 @@ describe('SC-502: the Live Preview widget does not clip the chrome panel', () =>
 		expect(body.match(/:/g)).toHaveLength(1);
 	});
 });
+
+// SC-520 — a chrome block that is the FIRST thing in a callout has its panel over the callout's title row, and Obsidian's
+// `.callout-content { overflow-x: auto }` (a scroll container, so it clips on both axes) cut it off in Live Preview and Reading view alike:
+// a click at a button's centre landed on `div.callout-title`. The real gate is lifecycle G-S49; this pins the CSS it depends on.
+const CALLOUT_CONTENT =
+	".callout-content:has([data-dse-theme='steel']:not([data-dse-print=\"on\"])[data-dse-chrome])";
+
+describe('SC-520: a callout does not clip the chrome panel of a block at its top', () => {
+	it('lifts the callout content clip, and keeps the box a block formatting context so the block margins stay inside it', () => {
+		const body = ruleBody(CALLOUT_CONTENT);
+		expect(body).toMatch(/overflow:\s*visible/);
+		// Without flow-root the block's own vertical margins (feature 24px, statblock 8px, mobile 2.1em reserve) collapse out of the
+		// callout content, and CodeMirror undercounts the callout widget (SC-502 HIGH-1).
+		expect(body).toMatch(/display:\s*flow-root/);
+	});
+
+	it('is scoped to a callout that holds a Steel screen chrome block, and moves nothing', () => {
+		// screen-only Steel scope like every chrome rule: print and the frozen print shots never match
+		expect(CALLOUT_CONTENT).toContain("[data-dse-theme='steel']:not([data-dse-print=\"on\"])[data-dse-chrome]");
+		// placement, size and reveal are untouched: no property that could move or resize anything
+		expect(ruleBody(CALLOUT_CONTENT)).not.toMatch(/\b(top|bottom|right|left|margin|padding|width|height|opacity|pointer-events|z-index|clip-path|contain)\s*:/);
+	});
+});

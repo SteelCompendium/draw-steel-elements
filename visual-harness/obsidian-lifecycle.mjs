@@ -80,6 +80,11 @@
 // when B is written (in-app, on disk, from another pane, and the embed's own write with adoption off), and the text on screen of a host parked
 // BELOW the embed does not move when the write changes the embed's height (phase (e): adding a hero), nor does the text of a reader parked
 // INSIDE a tall embed below its tracker (phase (f): adding a hero).
+// SC-520 appends G-S49 (41 scenarios in all with SC-479's G-S42): the same real-mouse clicks on the chrome panel when the block is the FIRST thing inside a
+// `> [!note]` callout (the panel then hangs over the callout's title row, where Obsidian's `.callout-content` clip cut it off and the
+// click landed on `div.callout-title`), in Live Preview and Reading view. Stamina bar, foldable stamina bar, counter, feature, statblock,
+// and a block with text above it in the callout (control). The pencil opens only the edit form, Collapse collapses, the callout neither
+// opens as source nor folds, the cursor never moves; Obsidian's own title, fold chevron and `</>` stay clickable.
 //
 // SC-518 appends G-S50 (41 scenarios in all; the id was assigned by the dispatcher): after the block edit form's Save redraws the card, keyboard focus
 // is on the redrawn card's Edit pencil (it fell to <body> once SC-509 made Save redraw). Real keys (CDP Tab / Enter): Tab to the pencil, Enter,
@@ -440,6 +445,18 @@ Object.assign(FIXTURES, {
 			'# chrome frame', 'TOP', GS54_SB('SB One'), 'P1', GS54_SB('SB Two'), 'P2', GS54_SB('SB Three'), GS54_BARS[0], INIT('Init Ida'),
 			GS54_SB('SB Four'), GS54_FILL('MID', 120), GS54_SB('SB Five'), INIT('Init Two'), GS54_SB('SB Six'), GS54_BARS[1], GS54_FILL('END', 40),
 		].join('\n\n') + '\n',
+});
+// SC-520: the same blocks as the FIRST thing inside a `> [!note]` callout (G-S49), a foldable one (`+` = open), and a control with
+// text above the block inside the callout. ABOVE TEXT LINE above the callout keeps the callout's own top edge away from the title bar.
+const quoted = (text) => text.split('\n').map((l) => '> ' + l).join('\n');
+const calloutNote = (name, head, body) => `# ${name}\n\nABOVE TEXT LINE\n\n${quoted(head + '\n' + body)}\n\nBELOW\n`;
+Object.assign(FIXTURES, {
+	'Lifecycle/callout-stamina-lp.md': calloutNote('callout stamina', '[!note] Callout title', fence('ds-stamina-bar', ['max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5'])),
+	'Lifecycle/callout-fold-lp.md': calloutNote('callout fold', '[!note]+ Foldable callout', fence('ds-stamina-bar', ['max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5'])),
+	'Lifecycle/callout-counter-lp.md': calloutNote('callout counter', '[!note]', COUNTER(10)),
+	'Lifecycle/callout-feature-lp.md': calloutNote('callout feature', '[!note]', fence('ds-feature', ['type: feature', 'feature_type: ability', 'name: Coverage Strike', 'cost: 5 Malice', 'usage: Main action', 'distance: Melee 1', 'target: One creature'])),
+	'Lifecycle/callout-statblock-lp.md': calloutNote('callout statblock', '[!note]', fence('ds-statblock', ['type: statblock', 'name: Bare Creature', 'stamina: "10"'])),
+	'Lifecycle/callout-second-lp.md': calloutNote('callout second', '[!note] Callout title\ntext above the block', fence('ds-stamina-bar', ['max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5'])),
 });
 Object.assign(FIXTURES, {
 	'Lifecycle/zwsp.md': `# zwsp\n\nTOP\n\n${fence('ds-counter' + ZWSP, counterLines(10))}\n\nBELOW\n`,
@@ -6451,6 +6468,260 @@ const SCENARIOS = [
 			t.expect(problems.length === 0, `${problems.join(' | ')} -- passed: ${outcomes.join('; ')}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
 			return `${outcomes.join('; ')}; no page error`;
+		},
+	},
+	{
+		// SC-520: the chrome panel's buttons of a block that is the FIRST thing inside a `> [!note]` callout, by a REAL mouse. The panel
+		// hangs over the callout's title row (it sits above the block, and the block starts where the title ends); Obsidian's
+		// `.callout-content { overflow-x: auto }` is a scroll container, so it cut the panel off in Live Preview AND Reading view, and a
+		// click at a button's centre landed on `div.callout-title` (in Live Preview that put the cursor in the callout and swapped the callout
+		// for its source; on a foldable callout it also folded it). With the clip lifted the click reaches the button, but Obsidian's callout
+		// widget also listens for `click` and moves the cursor into the callout whatever was pressed: the chrome now marks its click handled.
+		// Why lifecycle and not e2e: it runs the newest installed Obsidian (1.15.0), the Edit pencil needs `experimental` + `authoringControls`
+		// (no e2e control id), and the checks (widget height, `</>`, fold chevron) are Live Preview geometry like G-S44's.
+		id: 'G-S49',
+		async run(t) {
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			const LP = LC_MODES[1];
+			const RV = LC_MODES[0];
+			const cursorLine = () => t.ev(`app.workspace.getMostRecentLeaf().view.editor.getCursor().line`);
+			const setCursor = (line) => t.ev(`app.workspace.getMostRecentLeaf().view.editor.setCursor({ line: ${line}, ch: 0 })`);
+			const modals = () => t.ev(`Array.from(document.querySelectorAll('.modal-container .dse-modal')).map((m) => (m.querySelector('.dse-form__preview') ? 'form' : m.querySelector('.dse-sedit__apply-input') ? 'stamina' : 'other'))`);
+			const closeModals = async (what) => {
+				await t.key('Escape', 'Escape', 27);
+				await t.waitFor(`document.querySelectorAll('.modal-container .dse-modal').length === 0`, `${what}: the modal closed on Escape`);
+			};
+			const center = (sel) => t.ev(`(() => { const el = ${sel}; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+			const mouse = (type, x, y, extra = {}) => t.cdp.call('Input.dispatchMouseEvent', { type, x, y, ...extra });
+			const pressAt = async ({ x, y }) => {
+				await mouse('mouseMoved', x, y);
+				await mouse('mousePressed', x, y, { button: 'left', buttons: 1, clickCount: 1 });
+				await mouse('mouseReleased', x, y, { button: 'left', buttons: 0, clickCount: 1 });
+			};
+			// the mode being exercised ('lp' | 'rv'); the root is the block (never one nested in another block)
+			let scopeSel = '.markdown-source-view';
+			const rootOf = () => `Array.from(app.workspace.getMostRecentLeaf().view.containerEl.querySelectorAll('${scopeSel} [data-dse-element]')).find((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]'))`;
+			const panelOf = () => `(${rootOf()}).querySelector('.dse-chrome')`;
+			const buttonsOf = () => `Array.from((${panelOf()}).querySelectorAll('button'))`;
+			const calloutOf = () => `(${rootOf()}).closest('.callout')`;
+			const titleOf = () => `(${calloutOf()}).querySelector(':scope > .callout-title')`;
+			const foldOf = () => `(${titleOf()}).querySelector('.callout-fold')`;
+			const hostBtn = () => `(${rootOf()}).closest('.cm-embed-block').querySelector('.edit-block-button')`;
+			const hitOk = (btnExpr) => t.ev(`(() => { const b = ${btnExpr}; const r = b.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { ok: !!hit && (hit === b || b.contains(hit)), hit: hit ? hit.tagName.toLowerCase() + '.' + String(hit.className).trim().split(/\\s+/).slice(0, 3).join('.') : null }; })()`);
+			const scrollToRoot = async () => {
+				await t.ev(`(() => { const r = ${rootOf()}; r.scrollIntoView({ block: 'start' }); let sc = r.parentElement; while (sc && !(sc.scrollHeight > sc.clientHeight + 4 && /(auto|scroll)/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement; if (sc) sc.scrollTop = Math.max(0, sc.scrollTop - 240); return true; })()`);
+				await t.sleep(300);
+			};
+			// A person moves the pointer onto the block, then straight up onto the panel button.
+			const hoverTo = async (btnExpr) => {
+				await scrollToRoot();
+				const root = await t.ev(`(() => { const b = (${rootOf()}).getBoundingClientRect(); return { x: b.left + Math.min(b.width / 2, 300), y: b.top + Math.min(b.height / 2, 60) }; })()`);
+				await mouse('mouseMoved', root.x - 40, root.y + 4);
+				await mouse('mouseMoved', root.x, root.y);
+				await t.waitFor(`getComputedStyle(${panelOf()}).pointerEvents === 'auto'`, 'the chrome panel is revealed by the hover');
+				const to = await center(btnExpr);
+				await mouse('mouseMoved', to.x, root.y);
+				for (let i = 1; i <= 8; i++) await mouse('mouseMoved', to.x, root.y + ((to.y - root.y) * i) / 8);
+				await t.sleep(150);
+				return to;
+			};
+			const awayFromBlock = async () => {
+				await mouse('mouseMoved', 5, 900);
+				await t.waitFor(`getComputedStyle(${panelOf()}).pointerEvents === 'none'`, 'the chrome panel hides again with the pointer away');
+			};
+			// where the callout is: still the rendered callout (Live Preview: the widget, not its source), folded or not
+			const calloutState = () => t.ev(`(() => { const r = ${rootOf()}; const c = r && r.closest('.callout'); return { drawn: !!c, folded: !!c && c.classList.contains('is-collapsed'), widget: !!(r && r.closest('.cm-callout')) }; })()`);
+			const isCollapsed = (want) => `(() => { const r = ${rootOf()}; return !!r && r.hasAttribute('data-dse-collapsed') === ${want}; })()`;
+			const buttonCount = async () => t.ev(`(${buttonsOf()}).length`);
+			const labelOf = (i) => t.ev(`(${buttonsOf()})[${i}].getAttribute('aria-label') || (${buttonsOf()})[${i}].getAttribute('data-dse-chrome-item')`);
+			const allButtonsHit = async (name) => {
+				const n = await buttonCount();
+				t.expect(n >= 2, `${name}: the chrome panel has ${n} buttons`);
+				for (let i = 0; i < n; i++) {
+					const h = await hitOk(`(${buttonsOf()})[${i}]`);
+					t.expect(h.ok, `${name}: elementFromPoint at the centre of "${await labelOf(i)}" is ${h.hit}, not the button (a callout title covers the panel; panel revealed: ${await t.ev(`getComputedStyle(${panelOf()}).pointerEvents === 'auto'`)})`);
+				}
+				return n;
+			};
+
+			const m = await t.mark();
+			await t.ev(`${prefs}.set('authoringControls', true)`);
+			await t.ev(`(() => { const st = document.createElement('style'); st.id = 'lc-gs49-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); return true; })()`);
+			const facts = [];
+			const SB = '[data-dse-element="stamina-bar"]';
+			try {
+				// ---- 1. Live Preview, stamina bar first in a default callout: pencil, Collapse, Expand by a real click
+				let rel = 'Lifecycle/callout-stamina-lp.md';
+				scopeSel = '.markdown-source-view';
+				await enterMode(t, rel, LP, SB);
+				const PARKED = FIXTURES[rel].split('\n').length - 2; // the last text line, below the callout
+				const CALLOUT_FIRST = 4; // the `> [!note]` line (0 `# title`, 1 blank, 2 text, 3 blank)
+				const PENCIL = `(${rootOf()}).querySelector('.dse-chrome button[aria-label="Edit Stamina bar"]')`;
+				const COLLAPSE = `(${rootOf()}).querySelector('.dse-chrome button[data-dse-chrome-item="collapse"]')`;
+				const EXPAND = `(${rootOf()}).querySelector('[data-dse-control="chrome.expand"]')`;
+				t.expect(await t.ev(`!!(${PENCIL})`), 'no Edit pencil in the chrome panel - authoringControls is not taking effect');
+				await setCursor(PARKED);
+				await t.sleep(300);
+				t.expect((await cursorLine()) === PARKED, 'the cursor did not park on the last line');
+				t.expect((await calloutState()).widget, 'the callout is not drawn as a widget (the cursor is inside it)');
+
+				await hoverTo(PENCIL);
+				const n1 = await allButtonsHit('Live Preview, stamina bar first in a callout');
+				facts.push(`LP callout: ${n1} buttons hit-test to themselves`);
+				// the panel is over the title row, and it is the only thing there that is not click-through while hidden
+				const pencilAt = await hoverTo(PENCIL);
+				await pressAt(pencilAt);
+				await t.waitFor(`document.querySelectorAll('.modal-container .dse-modal').length > 0`, 'a modal opened after a real click on the Edit pencil (the click landed on the callout title)');
+				await t.sleep(800);
+				t.expect(JSON.stringify(await modals()) === '["form"]', `real click on the Edit pencil: expected only the edit form, got ${JSON.stringify(await modals())}`);
+				t.expect((await cursorLine()) === PARKED, `the Edit pencil click moved the editor cursor to line ${await cursorLine()} (Obsidian's callout widget opened the callout as source)`);
+				await closeModals('pencil');
+				const afterPencil = await calloutState();
+				t.expect(afterPencil.widget && !afterPencil.folded, `after the pencil click the callout is not the drawn callout any more: ${JSON.stringify(afterPencil)}`);
+				facts.push('Edit pencil: only the edit form, cursor unmoved, callout still drawn');
+
+				const collapseAt = await hoverTo(COLLAPSE);
+				await pressAt(collapseAt);
+				await t.waitFor(isCollapsed(true), 'the block collapsed after a real click on Collapse');
+				await t.sleep(500);
+				t.expect((await modals()).length === 0, `Collapse opened a modal: ${JSON.stringify(await modals())}`);
+				t.expect((await cursorLine()) === PARKED, `the Collapse click moved the editor cursor to line ${await cursorLine()} (the callout opened as source)`);
+				const afterCollapse = await calloutState();
+				t.expect(afterCollapse.widget && !afterCollapse.folded, `after the Collapse click the callout is not the drawn, unfolded callout: ${JSON.stringify(afterCollapse)}`);
+				facts.push('Collapse: collapsed, cursor unmoved, callout still drawn');
+				// the one-liner at the top of the callout: Expand is reachable (and clear of `</>`), and a real click expands it without opening the source
+				await scrollToRoot();
+				const over = await center(`(${rootOf()})`);
+				await mouse('mouseMoved', over.x, over.y);
+				await t.waitFor(`!!(${hostBtn()}) && getComputedStyle(${hostBtn()}).display !== 'none'`, "Obsidian's `</>` button on the callout");
+				t.expect((await hitOk(EXPAND)).ok, `collapsed: elementFromPoint at the Expand button's centre is ${(await hitOk(EXPAND)).hit}, not the button`);
+				await pressAt(await center(EXPAND));
+				await t.waitFor(isCollapsed(false), 'the block expanded after a real click on Expand');
+				await t.sleep(300);
+				t.expect((await cursorLine()) === PARKED, `the Expand click moved the editor cursor to line ${await cursorLine()}`);
+				t.expect((await calloutState()).widget, 'the Expand click turned the callout into its source');
+				facts.push('Expand: expands, cursor unmoved');
+
+				// ---- 2. Obsidian's own controls on the callout stay reachable by mouse (pointer away: the panel is click-through)
+				await awayFromBlock();
+				const titleHit = await hitOk(titleOf());
+				t.expect(titleHit.ok, `the callout title's centre hit-tests to ${titleHit.hit}, not the title`);
+				await scrollToRoot();
+				const over2 = await center(`(${rootOf()})`);
+				await mouse('mouseMoved', over2.x, over2.y);
+				await t.waitFor(`!!(${hostBtn()}) && getComputedStyle(${hostBtn()}).display !== 'none'`, "Obsidian's `</>` button on the callout");
+				const hostHit = await hitOk(hostBtn());
+				t.expect(hostHit.ok, `Obsidian's \`</>\` button's centre hit-tests to ${hostHit.hit}, not the button (the chrome panel covers it)`);
+				await pressAt(await center(hostBtn()));
+				await t.sleep(500);
+				const inCallout = await cursorLine();
+				t.expect(inCallout >= CALLOUT_FIRST && inCallout < PARKED - 1, `a real click on \`</>\` did not open the callout's source: cursor is on line ${inCallout}`);
+				facts.push('`</>` still opens the callout source, the title is reachable');
+				t.expect(t.read(rel) === FIXTURES[rel], `${rel} was written: ${JSON.stringify(t.read(rel))}`);
+
+				// ---- 3. a foldable callout: pencil and Collapse do not fold it; the chevron and the title still do
+				rel = 'Lifecycle/callout-fold-lp.md';
+				await enterMode(t, rel, LP, SB);
+				const PARKED2 = FIXTURES[rel].split('\n').length - 2;
+				await setCursor(PARKED2);
+				await t.sleep(300);
+				const penAt = await hoverTo(PENCIL);
+				await pressAt(penAt);
+				await t.waitFor(`document.querySelectorAll('.modal-container .dse-modal').length > 0`, 'a modal opened after a real click on the Edit pencil of a foldable callout');
+				await t.sleep(500);
+				t.expect(JSON.stringify(await modals()) === '["form"]', `foldable callout, pencil: expected only the edit form, got ${JSON.stringify(await modals())}`);
+				await closeModals('foldable pencil');
+				let st = await calloutState();
+				t.expect(st.widget && !st.folded && (await cursorLine()) === PARKED2, `foldable callout, pencil click: ${JSON.stringify(st)}, cursor ${await cursorLine()} (the click reached the callout title)`);
+				const colAt = await hoverTo(COLLAPSE);
+				await pressAt(colAt);
+				await t.waitFor(isCollapsed(true), 'the block collapsed after a real click on Collapse in a foldable callout');
+				await t.sleep(400);
+				st = await calloutState();
+				t.expect(st.widget && !st.folded && (await cursorLine()) === PARKED2, `foldable callout, Collapse click folded or opened the callout: ${JSON.stringify(st)}, cursor ${await cursorLine()}`);
+				await scrollToRoot();
+				await pressAt(await center(EXPAND));
+				await t.waitFor(isCollapsed(false), 'the block expanded again');
+				// pointer away, then the fold chevron by a real click: the callout folds, and unfolds again
+				await awayFromBlock();
+				t.expect((await hitOk(foldOf())).ok, `the fold chevron's centre hit-tests to ${(await hitOk(foldOf())).hit}, not the chevron`);
+				await pressAt(await center(foldOf()));
+				await t.waitFor(`!!(${calloutOf()}) && (${calloutOf()}).classList.contains('is-collapsed')`, 'the callout folded after a real click on its fold chevron');
+				await pressAt(await center(foldOf()));
+				await t.waitFor(`!!(${calloutOf()}) && !(${calloutOf()}).classList.contains('is-collapsed')`, 'the callout unfolded after a second real click on its fold chevron');
+				facts.push('foldable callout: pencil and Collapse leave it unfolded, the chevron still folds it');
+				t.expect(t.read(rel) === FIXTURES[rel], `${rel} was written: ${JSON.stringify(t.read(rel))}`);
+
+				// ---- 4. counter, feature, statblock first in a callout: every button reachable, the widget keeps its height, Collapse/Expand by a real click
+				const heightFails = [];
+				for (const [rel2, sel, name] of [['Lifecycle/callout-counter-lp.md', '[data-dse-element="counter"]', 'counter'], ['Lifecycle/callout-feature-lp.md', '[data-dse-element="feature"]', 'feature'], ['Lifecycle/callout-statblock-lp.md', '[data-dse-element="statblock"]', 'statblock']]) {
+					await enterMode(t, rel2, LP, sel);
+					const parked = FIXTURES[rel2].split('\n').length - 2;
+					await setCursor(parked);
+					await t.sleep(300);
+					await t.waitFor(`!!(${rootOf()}) && !!(${rootOf()}).closest('.cm-embed-block')?.previousElementSibling && !!(${rootOf()}).closest('.cm-embed-block')?.nextElementSibling`, `${name}: the callout is drawn as a widget between two lines`);
+					// lifting the clip must not change the callout's box: CodeMirror's height for the widget equals the on-screen gap (the block's own
+					// margins - feature 24px, statblock 8px - stay inside the callout content, SC-502 HIGH-1), and the widget starts where the line above ends
+					const geo = await t.ev(`(() => { const w = (${rootOf()}).closest('.cm-embed-block'); const cm = app.workspace.getMostRecentLeaf().view.editor.cm; const prev = w.previousElementSibling.getBoundingClientRect(), next = w.nextElementSibling.getBoundingClientRect(), wr = w.getBoundingClientRect(); return { cmHeight: cm.lineBlockAt(cm.posAtDOM(w)).height, gap: next.top - prev.bottom, widgetTopOffset: wr.top - prev.bottom }; })()`);
+					if (Math.abs(geo.cmHeight - geo.gap) >= 1) heightFails.push(`${name}: CodeMirror's height for the callout widget is ${geo.cmHeight}px but it takes ${geo.gap}px on screen (the block's margins escape the callout content)`);
+					if (Math.abs(geo.widgetTopOffset) >= 1) heightFails.push(`${name}: the callout widget starts ${geo.widgetTopOffset}px below the line above`);
+					const COL = `(${rootOf()}).querySelector('.dse-chrome button[data-dse-chrome-item="collapse"]')`;
+					const at = await hoverTo(COL);
+					const n = await allButtonsHit(`Live Preview, ${name} first in a callout`);
+					await pressAt(at);
+					await t.waitFor(isCollapsed(true), `${name}: a real click on Collapse collapsed the block`);
+					await t.sleep(300);
+					t.expect((await cursorLine()) === parked, `${name}: the Collapse click moved the editor cursor to line ${await cursorLine()}`);
+					t.expect((await calloutState()).widget, `${name}: the Collapse click turned the callout into its source`);
+					await pressAt(await center(`(${rootOf()}).querySelector('[data-dse-control="chrome.expand"]')`));
+					await t.waitFor(isCollapsed(false), `${name}: expanded again`);
+					t.expect(t.read(rel2) === FIXTURES[rel2], `${rel2} was written: ${JSON.stringify(t.read(rel2))}`);
+					facts.push(`${name}: ${n} buttons reachable, height map = screen, Collapse/Expand work`);
+				}
+				t.expect(heightFails.length === 0, heightFails.join(' | '));
+
+				// ---- 5. control: text above the block in the callout (the panel sits over that text, never was clipped)
+				rel = 'Lifecycle/callout-second-lp.md';
+				await enterMode(t, rel, LP, SB);
+				const PARKED3 = FIXTURES[rel].split('\n').length - 2;
+				await setCursor(PARKED3);
+				await t.sleep(300);
+				const colAt3 = await hoverTo(COLLAPSE);
+				await allButtonsHit('Live Preview, stamina bar second in a callout');
+				await pressAt(colAt3);
+				await t.waitFor(isCollapsed(true), 'second in the callout: a real click on Collapse collapsed the block');
+				await t.sleep(300);
+				t.expect((await cursorLine()) === PARKED3 && (await calloutState()).widget, `second in the callout: Collapse moved the cursor to line ${await cursorLine()} or opened the callout as source`);
+				await pressAt(await center(EXPAND));
+				await t.waitFor(isCollapsed(false), 'second in the callout: expanded again');
+				facts.push('block second in the callout (control): unchanged');
+
+				// ---- 6. Reading view: the same callouts, the same real clicks
+				for (const [rel3, name] of [['Lifecycle/callout-stamina-lp.md', 'callout'], ['Lifecycle/callout-fold-lp.md', 'foldable callout']]) {
+					scopeSel = '.markdown-reading-view';
+					await enterMode(t, rel3, RV, SB);
+					// the button expressions name the root of the mode they are built in: rebuilt here for Reading view
+					const COLLAPSE_RV = `(${rootOf()}).querySelector('.dse-chrome button[data-dse-chrome-item="collapse"]')`;
+					const EXPAND_RV = `(${rootOf()}).querySelector('[data-dse-control="chrome.expand"]')`;
+					const at = await hoverTo(COLLAPSE_RV);
+					await allButtonsHit(`Reading view, stamina bar first in a ${name}`);
+					await pressAt(at);
+					await t.waitFor(isCollapsed(true), `Reading view, ${name}: a real click on Collapse collapsed the block`);
+					await t.sleep(300);
+					st = await calloutState();
+					t.expect(st.drawn && !st.folded, `Reading view, ${name}: the Collapse click folded the callout: ${JSON.stringify(st)}`);
+					await pressAt(await center(EXPAND_RV));
+					await t.waitFor(isCollapsed(false), `Reading view, ${name}: expanded again`);
+					t.expect(t.read(rel3) === FIXTURES[rel3], `${rel3} was written: ${JSON.stringify(t.read(rel3))}`);
+				}
+				facts.push('Reading view: both callouts reachable, Collapse/Expand work, callout not folded');
+			} finally {
+				await t.ev(`document.getElementById('lc-gs49-notice')?.remove()`);
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
+			return `real mouse, block first in a callout: ${facts.join('; ')}; no page errors`;
 		},
 	},
 ];
