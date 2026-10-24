@@ -55,8 +55,8 @@ describe('stamina bar chrome: keyboard focus follows Collapse and Expand (SC-505
 		expect(await dse.page<string>(`getComputedStyle(document.activeElement.closest('.dse-chrome')).opacity`)).toBe('1');
 	});
 
-	// The Expand half on its own, so it is measurable without the Collapse fix: collapse with the mouse (no hand-off), then put
-	// keyboard focus on Expand the way a Tab user arrives there and press Enter.
+	// The Expand half on its own, so it is measurable without the Collapse fix: collapse with the mouse (no hand-off), then Tab to
+	// Expand and press Enter.
 	it('[CHR-F02] Enter on Expand (reached by keyboard) expands the block and focus lands on the restored Collapse button (ring shown, panel shown)', async () => {
 		await dse.openNote(NOTE);
 		await startExpanded();
@@ -65,7 +65,7 @@ describe('stamina bar chrome: keyboard focus follows Collapse and Expand (SC-505
 		await dse.click(root.control('chrome.collapse'));
 		await waitCollapsed(true);
 		const expand = root.control('chrome.expand');
-		await dse.page(`document.querySelector('${BLOCK} [data-dse-control="chrome.expand"]').focus()`);
+		await dse.tabTo(expand, 40); // Tab reaches the one-liner's Expand button, as it does for a keyboard user
 		await dse.press('Enter', expand);
 		await waitCollapsed(false);
 		expect(await where()).toBe('chrome.collapse');
@@ -93,6 +93,21 @@ describe('stamina bar chrome: keyboard focus follows Collapse and Expand (SC-505
 describe('stamina bar chrome: keyboard focus stays on Pin to sidebar across the redraw (SC-505)', () => {
 	before(() => dse.setPrefs({}, { experimental: true }));
 	after(() => dse.setPrefs({}));
+
+	// Pin alone, from a fresh note: red on its own when only the Pin hand-off is missing (CHR-F04's Collapse/Expand preamble would fail first).
+	it('[CHR-F05] Tab straight to Pin + Enter on a fresh note: the pin writes the note once and focus is on the (new) Pin button with the ring', async () => {
+		await dse.openNote(NOTE);
+		await startExpanded();
+		const pin = dse.block(BAR).control('chrome.pin');
+		await dse.tabTo(pin, 24);
+		const w = await dse.waitForWrite(NOTE, () => dse.press('Enter', pin));
+		expect(w.count).toBe(1);
+		await dse.settle();
+		await waitDomQuiet(600);
+		expect(await where()).toBe('chrome.pin');
+		expect(await ring()).toEqual({ visible: true, outline: 'solid' });
+		expect(await focusInBlock()).toBe(true);
+	});
 
 	// The same note open in a second pane renders the same block twice (same block key, its own Pin button each). The press is in the
 	// later (active) pane: the first pane's rebuild must neither cancel the request nor take focus, so focus ends on THIS pane's new Pin.
