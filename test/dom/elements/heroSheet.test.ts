@@ -419,12 +419,14 @@ describe('D7 Task 9: "Edit definition" (recon delta 5) — reuses D9\'s openForm
 		const { root } = await renderHero(HERO_SOURCE, {}, deps);
 		const btn = root.querySelector<HTMLButtonElement>('[aria-label="Edit definition"]')!;
 
+		btn.focus(); // Tab stop: the button holds focus when Enter is pressed
 		btn.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
+		btn.blur(); // a pointer press does not focus it
 		btn.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
 
 		const calls = jest.mocked(openFormEditor).mock.calls;
-		expect(calls[0][5]).toEqual({ pressed: btn, keyboard: true });
-		expect(calls[1][5]).toEqual({ pressed: btn, keyboard: false });
+		expect(calls[0][5]).toEqual({ pressed: btn, keyboard: true, hadFocus: true });
+		expect(calls[1][5]).toEqual({ pressed: btn, keyboard: false, hadFocus: false });
 	});
 
 	test('SC-519: with an in-sheet edit still waiting out its debounce, the form opens after that write lands and starts from the sheet', async () => {

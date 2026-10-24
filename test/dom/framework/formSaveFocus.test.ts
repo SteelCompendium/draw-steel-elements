@@ -83,14 +83,15 @@ const focused = (el: Element): boolean => document.activeElement === el;
 const rootOf = (ctx: Ctx): HTMLElement => ctx.el.firstElementChild as HTMLElement;
 const pencilOf = (ctx: Ctx): HTMLElement => rootOf(ctx).querySelector<HTMLElement>(PENCIL)!;
 
-/** Press the real pencil the way a keyboard (`detail 0`) or a mouse (`detail 1`) does; hand back the real FormModal it opened. */
-function openForm(root: HTMLElement, how: 'keyboard' | 'mouse' = 'keyboard'): () => FormHandle {
+/** Press the real pencil the way a keyboard (`detail 0`, the button holds focus) or a mouse (`detail 1`) does; hand back the real
+ *  FormModal it opened. A pointer press does NOT focus the chrome pencil in Obsidian ('mouse'); 'mouse-focused' is a press that did. */
+function openForm(root: HTMLElement, how: 'keyboard' | 'mouse' | 'mouse-focused' = 'keyboard'): () => FormHandle {
 	let opened: FormHandle | undefined;
 	const real = jest.requireActual('../../../src/authoring/FormModal').openFormEditor;
 	jest.spyOn(FormModal, 'openFormEditor').mockImplementation((...a: any[]) => (opened = real(...a)));
 	const pencil = root.querySelector<HTMLElement>(PENCIL);
 	if (!pencil) throw new Error('no Edit pencil on the card');
-	pencil.focus(); // a Tab stop reached by key, or the focus a click gives the button
+	if (how !== 'mouse') pencil.focus(); // a Tab stop reached by key, or the focus a click gives the button
 	pencil.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: how === 'keyboard' ? 0 : 1 }));
 	return () => opened!;
 }
@@ -196,11 +197,25 @@ describe('SC-518: Reading view -- Save hands focus to the redrawn card\'s Edit p
 		expect(focused(pencilOf(ctx2))).toBe(true);
 	});
 
-	test('a mouse-opened form -> the pencil is focused WITHOUT the keyboard ring (no focusVisible)', async () => {
+	test('SC-518 r3 LOW-1: a mouse-opened form whose press never focused the pencil -> focus stays where it was (<body>), the pencil is not forced', async () => {
 		const c = CASES[0];
 		const { render, rebuild } = await setup(c.note, [c.def]);
 		const ctx1 = await render(c.alias);
 		const modal = openForm(rootOf(ctx1), 'mouse');
+		c.edit(modal());
+		await modal().save();
+		await flush();
+		const ctx2 = await rebuild(c.alias, ctx1);
+
+		expect(who(document.activeElement)).toBe('<body>');
+		expect(focusCalls.filter((f) => f.el === pencilOf(ctx2))).toEqual([]);
+	});
+
+	test('a mouse-opened form whose press did focus the pencil -> the pencil is focused WITHOUT the keyboard ring (no focusVisible)', async () => {
+		const c = CASES[0];
+		const { render, rebuild } = await setup(c.note, [c.def]);
+		const ctx1 = await render(c.alias);
+		const modal = openForm(rootOf(ctx1), 'mouse-focused');
 		c.edit(modal());
 		await modal().save();
 		await flush();
@@ -247,6 +262,69 @@ describe('SC-518: Reading view -- Save hands focus to the redrawn card\'s Edit p
 		await flush();
 		expect(focused(pencilOf(b2))).toBe(false);
 		expect(who(document.activeElement)).toBe('<body>');
+	});
+
+	test('SC-518 r3 MEDIUM-1: identical twins, the UPPER one edited, its old section reused at the twin\'s place: focus goes to the edited card, not the twin', async () => {
+		const TWINS =
+			'# N\n\n```ds-counter\nname: Twin\ncurrent_value: 5\nmax_value: 20\nmin_value: 0\n```\n\n```ds-counter\nname: Twin\ncurrent_value: 5\nmax_value: 20\nmin_value: 0\n```\n';
+		const { build, render } = await setup(TWINS, [counterElement]);
+		const a1 = await render('ds-counter', 0);
+		const b1 = await render('ds-counter', 1);
+		const modal = openForm(rootOf(a1));
+		typeRaw(modal(), 'name: Twin', 'name: Upper');
+		await modal().save();
+		await flush();
+
+		// Obsidian matches sections by their text: the old upper section (old text) is now the lower block's, so it moves to
+		// the twin's place, still in the document, and the closed form's focus return lands on its pencil.
+		b1.el.replaceWith(a1.el);
+		b1.addedChildren.forEach((c) => c.unload());
+		pencilOf(a1).focus();
+		expect(focused(pencilOf(a1))).toBe(true);
+		const a2 = await build('ds-counter', 0); // the edited block gets a fresh section, inserted above
+		a1.el.before(a2.el);
+		await flush();
+
+		expect(who(document.activeElement)).toBe(who(pencilOf(a2)));
+		expect(focused(pencilOf(a2))).toBe(true);
+		expect(rootOf(a1).contains(document.activeElement)).toBe(false);
+		expect(focusCalls.filter((f) => f.el === pencilOf(a2))).toEqual([{ el: pencilOf(a2), opts: { preventScroll: true, focusVisible: true } }]);
+	});
+
+	test('SC-518 r3 LOW-2: the form opened inside an in-card write\'s debounce (the opener is read at the click, before the flush) -> the new pencil is focused after Save', async () => {
+		jest.useFakeTimers();
+		try {
+			const COUNTER = '# N\n\n```ds-counter\nname: Health\ncurrent_value: 3\nmax_value: 20\nmin_value: 0\n```\n';
+			const { app, build, render, rebuild } = await setup(COUNTER, [counterElement]);
+			const ctx1 = await render('ds-counter');
+			const root1 = rootOf(ctx1);
+			(root1.querySelector('button[aria-label^="Increase"]') as HTMLElement).click();
+			expect(app.vault.getContent('Note.md')).toContain('current_value: 3'); // the click's write is still pending
+
+			const modal = openForm(root1); // keyboard press: the form waits for the flush, then opens
+			await jest.advanceTimersByTimeAsync(0);
+			await flush();
+			expect(modal()).toBeDefined();
+			expect(app.vault.getContent('Note.md')).toContain('current_value: 4'); // flushed first
+
+			const ctx2 = await build('ds-counter'); // Obsidian's rebuild after the flush: the view's own write, adopted
+			ctx1.el.replaceWith(ctx2.el);
+			await flush();
+			expect(rootOf(ctx2)).toBe(root1);
+
+			typeRaw(modal(), 'Health', 'Wounds');
+			await modal().save();
+			await flush();
+			const ctx3 = await rebuild('ds-counter', ctx2);
+
+			expect(rootOf(ctx3)).not.toBe(root1);
+			expect(who(document.activeElement)).toBe(who(pencilOf(ctx3)));
+			expect(focused(pencilOf(ctx3))).toBe(true);
+			expect(focusCalls.filter((f) => f.el === pencilOf(ctx3))).toEqual([{ el: pencilOf(ctx3), opts: { preventScroll: true, focusVisible: true } }]);
+			expect(app.vault.getContent('Note.md')).toContain('current_value: 4');
+		} finally {
+			jest.useRealTimers();
+		}
 	});
 
 	test('one-shot: after the focus landed and the user moved on, a later redraw of the block moves nothing', async () => {
@@ -316,20 +394,24 @@ describe('SC-518: Reading view -- Save hands focus to the redrawn card\'s Edit p
 		expect(focusCalls.filter((f) => f.el === pencilOf(ctx2))).toEqual([]);
 	});
 
-	test('a Save that cannot write (the block moved) leaves the form open and the hint disarmed', async () => {
+	test('a Save that cannot write (the block changed on disk) leaves the form open and the hint disarmed: a later rebuild takes no focus', async () => {
 		const c = CASES[0];
 		const { app, render, rebuild } = await setup(c.note, [c.def]);
 		const ctx1 = await render(c.alias);
 		const modal = openForm(rootOf(ctx1));
 		c.edit(modal());
-		app.vault.setFile('Note.md', '# N\n\nthe block is gone\n'); // an outside edit removed the fence
+		// An outside edit changed THIS block's body (the fence is still on the same line, so the block key is unchanged): the write is dropped.
+		const changed = c.note.replace('The Heist', 'Changed Elsewhere');
+		app.vault.setFile('Note.md', changed);
 		await modal().save();
 		await flush();
 		expect(document.body.querySelector('.modal-container')).not.toBeNull(); // still open: no write happened
+		expect(app.vault.getContent('Note.md')).toBe(changed);
 
 		modal().close();
-		app.vault.setFile('Note.md', c.note); // the fence is back; an outside redraw follows
-		const ctx2 = await rebuild(c.alias, ctx1);
+		expect(who(document.activeElement)).toBe('<body>');
+		const ctx2 = await rebuild(c.alias, ctx1); // the block is redrawn for that outside edit, inside the hint's would-be window
+
 		expect(who(document.activeElement)).toBe('<body>');
 		expect(focusCalls.filter((f) => f.el === pencilOf(ctx2))).toEqual([]);
 	});
