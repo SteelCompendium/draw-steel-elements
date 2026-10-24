@@ -2507,7 +2507,8 @@ const SCENARIOS = [
 					await t.tag(sel, 'gs40');
 					const before = await t.stats();
 					await formSave(name, root, edit);
-					await waitDisk(rel, edit.raw ? edit.raw[1] : `current_stamina: ${edit.field[1]}`, name);
+					const swap = edit.raw ?? ['current_stamina: 15', `current_stamina: ${edit.field[1]}`];
+					await waitDisk(rel, swap[1], name);
 					const card = await waitText(root, newT, name);
 					await sleep(500); // a late adoption would have put the old root back by now
 					const after = await t.stats();
@@ -2515,6 +2516,8 @@ const SCENARIOS = [
 					t.expect(!(await t.sameRoot(sel, 'gs40')), `${name}: the old card root is still on screen - the card was not redrawn (adopted)`);
 					t.expect(after.claims === before.claims, `${name}: the form's write was claimed by the old view (claims ${before.claims} -> ${after.claims})`);
 					t.expect(await t.ev(`(${root}).textContent.includes(${JSON.stringify(newT)})`), `${name}: the card lost the new content`);
+					// The whole note: the fixture with only the edited value changed (ABOVE / BELOW, the fences and every other line byte for byte).
+					t.expect(t.read(rel) === FIXTURES[rel].replace(swap[0], swap[1]), `${name}: the note differs from the fixture beyond the edited value: ${JSON.stringify(t.read(rel))}`);
 					facts.push(`${name}: ${oldT} -> ${newT}`);
 				}
 
@@ -2555,6 +2558,8 @@ const SCENARIOS = [
 					} finally {
 						await t.ev(`(() => { if (window.__lcRandom) Math.random = window.__lcRandom; delete window.__lcRandom; return true; })()`);
 					}
+					const stampedNote = t.read(rel); // the fixture plus the anchor line the pin stamped
+					t.expect(stampedNote.replace(/_dse_anchor: [^\n]+\n/, '') === FIXTURES[rel], `sidebar: the pin changed more than the anchor line: ${JSON.stringify(stampedNote)}`);
 					const panelRoot = `Array.from((app.workspace.getLeavesOfType('dse-sidebar')[0]?.view.containerEl ?? document.createElement('div')).querySelectorAll('${sel}')).find((x) => x.isConnected)`;
 					await t.waitFor(`!!(${panelRoot})`, 'sidebar: the panel mounted');
 					await waitText(panelRoot, 'The Heist', 'sidebar');
@@ -2566,6 +2571,8 @@ const SCENARIOS = [
 					const noteCard = await waitText(t.root(sel), 'Other Job', 'sidebar: the note card');
 					t.expect(!noteCard.includes('The Heist'), 'sidebar: the note card kept the old content');
 					t.expect(/_dse_anchor: [A-Za-z0-9_-]+/.test(t.read(rel)), `sidebar: the anchor did not survive the form's Save: ${JSON.stringify(t.read(rel))}`);
+					// The whole note: what the pin left, with only the edited value changed (anchor line, ABOVE / BELOW and the fences included).
+					t.expect(t.read(rel) === stampedNote.replace('title: The Heist', 'title: Other Job'), `sidebar: the note differs from the pinned note beyond the edited value: ${JSON.stringify(t.read(rel))}`);
 					facts.push('sidebar: The Heist -> Other Job in the panel and the note card');
 				}
 			} finally {
