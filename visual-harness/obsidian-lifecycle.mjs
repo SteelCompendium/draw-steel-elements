@@ -67,6 +67,9 @@
 // then the sidebar panel - by a real hover and click on the pencil and on Save. Before the fix the form's write was adopted as the
 // view's own, so the card kept its old content: the claim count must not move, the old root must be gone, no Notice. A control: an
 // in-card click on a counter is still the view's own write and still adopts the same root.
+// SC-519 appends G-S45 (38 scenarios in all; the id was assigned by the dispatcher): the block edit form opened inside the ~400 ms write
+// debounce of an in-card click starts from what the card shows - Reading view, then the sidebar panel. The plugin's own debounce timer
+// is held at a hook (not a timed race) so the note file is provably still old when the pencil is clicked; Save unchanged must keep the click.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -261,6 +264,12 @@ Object.assign(FIXTURES, {
 	'Lifecycle/form-save-counter.md': `# form save counter\n\nABOVE\n\n${COUNTER(3, 'Health')}\n\nBELOW\n`,
 	'Lifecycle/form-save-stamina.md': `# form save stamina\n\nABOVE\n\n${fence('ds-stamina-bar', ['max_stamina: 20', 'current_stamina: 15'])}\n\nBELOW\n`,
 	'Lifecycle/form-save-sidebar.md': `# form save sidebar\n\nABOVE\n\n${fence('ds-montage', ['title: The Heist'])}\n\nBELOW\n`,
+});
+
+// SC-519 (G-S45): a counter whose in-card write is held while the block edit form is opened; the sidebar's pinned copy.
+Object.assign(FIXTURES, {
+	'Lifecycle/form-stale-counter.md': `# form stale counter\n\nABOVE\n\n${COUNTER(3, 'Health')}\n\nBELOW\n`,
+	'Lifecycle/form-stale-sidebar.md': `# form stale sidebar\n\nABOVE\n\n${COUNTER(3, 'Health')}\n\nBELOW\n`,
 });
 
 // ------------------------------------------------------------------ note integrity
@@ -668,6 +677,87 @@ async function clickShieldScenario(t, { rel, root, inputs }) {
 	await t.reset(rel);
 	await t.open(rel);
 	return `real click focused ${inputs.map((i) => i.sel.split('.').pop()).join(' + ')} and typed text landed in ${notes.join(' + ')}; no source edit opened`;
+}
+
+// SC-509 (G-S40) / SC-519 (G-S45): the block edit form driven by real mouse input. Shared so both scenarios open the
+// pencil, wait for text and read the note the same way.
+function formKit(t) {
+	const waitText = async (rootExpr, want, label) => {
+		const t0 = Date.now();
+		for (;;) {
+			const card = await t.ev(`(${rootExpr})?.textContent ?? '<no root>'`);
+			if (card.includes(want)) return card;
+			if (Date.now() - t0 > 8000) throw new Error(`${label}: the card still reads ${JSON.stringify(card.slice(0, 80))}, not ${JSON.stringify(want)}`);
+			await sleep(80);
+		}
+	};
+	const waitDisk = async (rel, want, label) => {
+		const t0 = Date.now();
+		while (!t.read(rel).includes(want)) {
+			if (Date.now() - t0 > 8000) throw new Error(`${label}: the note never got ${JSON.stringify(want)}: ${JSON.stringify(t.read(rel))}`);
+			await sleep(80);
+		}
+	};
+	// Move onto the card, then up to the pencil in small steps (the chrome panel is click-through until the block is hovered).
+	const hoverTo = async (rootExpr, target) => {
+		const center = (el) => t.ev(`(() => { const r = (${el}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+		const from = await center(rootExpr);
+		await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.x, y: from.y });
+		await t.waitFor(`(() => { const b = ${target}; return !!b && b.getBoundingClientRect().width > 0; })()`, `${target} is laid out`);
+		const to = await center(target);
+		// The panel is painted just OUTSIDE the card's top edge and only the card (or the panel) keeps it revealed: stay inside
+		// the card until directly under the pencil, then go straight up onto it.
+		const edge = await t.ev(`(() => { const r = (${rootExpr}).getBoundingClientRect(); return { x: Math.min(Math.max(${to.x}, r.left + 2), r.right - 2), y: r.top + 3 }; })()`);
+		for (const [a, b] of [[from, edge], [edge, to]]) {
+			for (let i = 1; i <= 8; i++) {
+				await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: a.x + ((b.x - a.x) * i) / 8, y: a.y + ((b.y - a.y) * i) / 8 });
+			}
+		}
+		try {
+			await t.waitFor(`getComputedStyle((${target}).closest('.dse-chrome')).pointerEvents === 'auto'`, 'the chrome panel is revealed by the hover', 3000);
+		} catch (e) {
+			const dbg = await t.ev(`JSON.stringify({ root: (${rootExpr}).getBoundingClientRect().toJSON(), tgt: (${target}).getBoundingClientRect().toJSON(), panel: (${target}).closest('.dse-chrome').getBoundingClientRect().toJSON(), hov: (${rootExpr}).matches(':hover'), attr: (${rootExpr}).hasAttribute('data-dse-chrome'), cls: (${rootExpr}).className, from: ${JSON.stringify(from)}, to: ${JSON.stringify(to)}, op: getComputedStyle((${target}).closest('.dse-chrome')).opacity })`);
+			throw new Error(e.message + ' ' + dbg);
+		}
+	};
+	const FORM = `document.querySelector('.modal-container .dse-modal')`;
+	const SAVE = `Array.from(document.querySelectorAll('.modal-container .dse-modal button')).find((b) => b.getAttribute('aria-label') === 'Save')`;
+	/** Hover onto the card's Edit pencil and really click it (the form may not be open yet when this returns). */
+	const clickPencil = async (label, rootExpr) => {
+		const pencil = `(${rootExpr}).querySelector('.dse-chrome button[aria-label^="Edit "]')`;
+		t.expect(await t.ev(`!!(${pencil})`), `${label}: no Edit pencil - authoringControls is not taking effect`);
+		await hoverTo(rootExpr, pencil);
+		await t.realClick(pencil);
+	};
+	const waitFormOpen = (label) => t.waitFor(`!!(${FORM}) && !!${FORM}.querySelector('.dse-form__preview')`, `${label}: the edit form opened`);
+	const clickSave = async (label) => {
+		await t.waitFor(`!!(${SAVE}) && !(${SAVE}).disabled`, `${label}: Save is enabled`);
+		await t.realClick(SAVE);
+		await t.waitFor(`!document.querySelector('.modal-container .dse-modal')`, `${label}: the form closed after Save`);
+	};
+	/** Pin the note's first `sel` block to the sidebar (Math.random pinned to an id YAML cannot read as a number, SC-383);
+	 *  returns the stamped note and an expression for the panel's connected `sel` root. */
+	const pinToSidebar = async (rel, sel) => {
+		const noteRoot = t.root(sel);
+		await t.waitFor(`!!(${noteRoot})`, 'sidebar: the note card rendered');
+		await t.ev(`(() => { window.__lcRandom = Math.random; Math.random = () => 0xabcdef / 0x1000000; return true; })()`);
+		try {
+			await t.ev(`(${noteRoot}).querySelector('[data-dse-chrome-item="pin"]').click()`);
+			const t0 = Date.now();
+			while (!t.read(rel).includes('_dse_anchor:')) {
+				if (Date.now() - t0 > 15000) throw new Error(`sidebar: no anchor stamp; disk is ${JSON.stringify(t.read(rel))}`);
+				await sleep(100);
+			}
+		} finally {
+			await t.ev(`(() => { if (window.__lcRandom) Math.random = window.__lcRandom; delete window.__lcRandom; return true; })()`);
+		}
+		const stampedNote = t.read(rel); // the fixture plus the anchor line the pin stamped
+		t.expect(stampedNote.replace(/_dse_anchor: [^\n]+\n/, '') === FIXTURES[rel], `sidebar: the pin changed more than the anchor line: ${JSON.stringify(stampedNote)}`);
+		const panelRoot = `Array.from((app.workspace.getLeavesOfType('dse-sidebar')[0]?.view.containerEl ?? document.createElement('div')).querySelectorAll('${sel}')).find((x) => x.isConnected)`;
+		await t.waitFor(`!!(${panelRoot})`, 'sidebar: the panel mounted');
+		return { stampedNote, panelRoot };
+	};
+	return { waitText, waitDisk, hoverTo, FORM, SAVE, clickPencil, waitFormOpen, clickSave, pinToSidebar };
 }
 
 const SCENARIOS = [
@@ -2430,53 +2520,11 @@ const SCENARIOS = [
 		async run(t) {
 			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
 			const m = await t.mark();
-			const waitText = async (rootExpr, want, label) => {
-				const t0 = Date.now();
-				for (;;) {
-					const card = await t.ev(`(${rootExpr})?.textContent ?? '<no root>'`);
-					if (card.includes(want)) return card;
-					if (Date.now() - t0 > 8000) throw new Error(`${label}: the card still reads ${JSON.stringify(card.slice(0, 80))}, not ${JSON.stringify(want)}`);
-					await sleep(80);
-				}
-			};
-			const waitDisk = async (rel, want, label) => {
-				const t0 = Date.now();
-				while (!t.read(rel).includes(want)) {
-					if (Date.now() - t0 > 8000) throw new Error(`${label}: the note never got ${JSON.stringify(want)}: ${JSON.stringify(t.read(rel))}`);
-					await sleep(80);
-				}
-			};
-			// Move onto the card, then up to the pencil in small steps (the chrome panel is click-through until the block is hovered).
-			const hoverTo = async (rootExpr, target) => {
-				const center = (el) => t.ev(`(() => { const r = (${el}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
-				const from = await center(rootExpr);
-				await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.x, y: from.y });
-				await t.waitFor(`(() => { const b = ${target}; return !!b && b.getBoundingClientRect().width > 0; })()`, `${target} is laid out`);
-				const to = await center(target);
-				// The panel is painted just OUTSIDE the card's top edge and only the card (or the panel) keeps it revealed: stay inside
-				// the card until directly under the pencil, then go straight up onto it.
-				const edge = await t.ev(`(() => { const r = (${rootExpr}).getBoundingClientRect(); return { x: Math.min(Math.max(${to.x}, r.left + 2), r.right - 2), y: r.top + 3 }; })()`);
-				for (const [a, b] of [[from, edge], [edge, to]]) {
-					for (let i = 1; i <= 8; i++) {
-						await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: a.x + ((b.x - a.x) * i) / 8, y: a.y + ((b.y - a.y) * i) / 8 });
-					}
-				}
-				try {
-					await t.waitFor(`getComputedStyle((${target}).closest('.dse-chrome')).pointerEvents === 'auto'`, 'the chrome panel is revealed by the hover', 3000);
-				} catch (e) {
-					const dbg = await t.ev(`JSON.stringify({ root: (${rootExpr}).getBoundingClientRect().toJSON(), tgt: (${target}).getBoundingClientRect().toJSON(), panel: (${target}).closest('.dse-chrome').getBoundingClientRect().toJSON(), hov: (${rootExpr}).matches(':hover'), attr: (${rootExpr}).hasAttribute('data-dse-chrome'), cls: (${rootExpr}).className, from: ${JSON.stringify(from)}, to: ${JSON.stringify(to)}, op: getComputedStyle((${target}).closest('.dse-chrome')).opacity })`);
-					throw new Error(e.message + ' ' + dbg);
-				}
-			};
-			const FORM = `document.querySelector('.modal-container .dse-modal')`;
-			const SAVE = `Array.from(document.querySelectorAll('.modal-container .dse-modal button')).find((b) => b.getAttribute('aria-label') === 'Save')`;
+			const { waitText, waitDisk, FORM, SAVE, clickPencil, waitFormOpen, pinToSidebar } = formKit(t);
 			// Pencil -> edit one thing -> Save, all by the real path. `edit` = { raw: [from, to] } or { field: [nameRe source, value] }.
 			const formSave = async (label, rootExpr, edit) => {
-				const pencil = `(${rootExpr}).querySelector('.dse-chrome button[aria-label^="Edit "]')`;
-				t.expect(await t.ev(`!!(${pencil})`), `${label}: no Edit pencil - authoringControls is not taking effect`);
-				await hoverTo(rootExpr, pencil);
-				await t.realClick(pencil);
-				await t.waitFor(`!!(${FORM}) && !!${FORM}.querySelector('.dse-form__preview')`, `${label}: the edit form opened`);
+				await clickPencil(label, rootExpr);
+				await waitFormOpen(label);
 				if (edit.raw) {
 					const ok = await t.ev(`(() => { const ta = ${FORM}.querySelector('textarea.dse-form__raw'); if (!ta) return false; ta.value = ta.value.replace(${JSON.stringify(edit.raw[0])}, ${JSON.stringify(edit.raw[1])}); ta.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
 					t.expect(ok, `${label}: the form has no raw box`);
@@ -2544,24 +2592,7 @@ const SCENARIOS = [
 					const sel = '[data-dse-element="montage"]';
 					await t.open(rel);
 					await t.reset(rel);
-					const noteRoot = t.root(sel);
-					await t.waitFor(`!!(${noteRoot})`, 'sidebar: the note card rendered');
-					// SC-383: pin Math.random to an id YAML cannot read as a number.
-					await t.ev(`(() => { window.__lcRandom = Math.random; Math.random = () => 0xabcdef / 0x1000000; return true; })()`);
-					try {
-						await t.ev(`(${noteRoot}).querySelector('[data-dse-chrome-item="pin"]').click()`);
-						const t0 = Date.now();
-						while (!t.read(rel).includes('_dse_anchor:')) {
-							if (Date.now() - t0 > 15000) throw new Error(`sidebar: no anchor stamp; disk is ${JSON.stringify(t.read(rel))}`);
-							await sleep(100);
-						}
-					} finally {
-						await t.ev(`(() => { if (window.__lcRandom) Math.random = window.__lcRandom; delete window.__lcRandom; return true; })()`);
-					}
-					const stampedNote = t.read(rel); // the fixture plus the anchor line the pin stamped
-					t.expect(stampedNote.replace(/_dse_anchor: [^\n]+\n/, '') === FIXTURES[rel], `sidebar: the pin changed more than the anchor line: ${JSON.stringify(stampedNote)}`);
-					const panelRoot = `Array.from((app.workspace.getLeavesOfType('dse-sidebar')[0]?.view.containerEl ?? document.createElement('div')).querySelectorAll('${sel}')).find((x) => x.isConnected)`;
-					await t.waitFor(`!!(${panelRoot})`, 'sidebar: the panel mounted');
+					const { stampedNote, panelRoot } = await pinToSidebar(rel, sel);
 					await waitText(panelRoot, 'The Heist', 'sidebar');
 					await sleep(1000); // the stamp's own rebuild of the panel settles
 					await formSave('sidebar', panelRoot, { raw: ['The Heist', 'Other Job'] });
@@ -2583,6 +2614,106 @@ const SCENARIOS = [
 			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${JSON.stringify(await t.noticesSince(m))}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
 			return `the form's Save redraws the card by real hover and click - ${facts.join('; ')}; claims did not move for a form write; no Notice, no page error`;
+		},
+	},
+	{
+		// SC-519: a card's in-card write waits out a ~400 ms debounce before it reaches the note. The block edit form read the
+		// block's body when it opened, so a form opened inside that window started from the body BEFORE the click and its Save
+		// wrote that body back: the click was lost without a message. (The sidebar form was worse: it always started from the
+		// body the panel was first built from.) Now opening the form writes the pending edit first.
+		// Staying inside the window is not left to timing: the plugin's own 400 ms debounce timer is HELD at a hook (captured, not
+		// scheduled), so the click's write stays pending for as long as the real mouse needs to reach the pencil. Anti-vacuity:
+		// the note file still holds the OLD value when the pencil is clicked. Opening the form flushes the held timer through
+		// clearTimeout, so the held list is empty afterwards; a build that does not flush leaves the write held, and the
+		// scenario drops it at the end.
+		id: 'G-S45',
+		async run(t) {
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			const m = await t.mark();
+			const kit = formKit(t);
+			const valueOf = (rootExpr) => t.ev(`(${rootExpr})?.querySelector('.dse-counter__value')?.value ?? '<no counter>'`);
+			const rawBody = () => t.ev(`${kit.FORM}?.querySelector('textarea.dse-form__raw')?.value ?? '<no raw box>'`);
+			const holdOn = () =>
+				t.ev(`(() => { const w = window; const h = { held: [], next: -1, set: w.setTimeout, clear: w.clearTimeout }; w.__lcHold = h;
+					w.setTimeout = function (fn, delay, ...args) { if (delay === 400 && new Error().stack.includes('draw-steel-elements')) { const id = h.next--; h.held.push({ id, fn, args }); return id; } return h.set.call(w, fn, delay, ...args); };
+					w.clearTimeout = function (id) { const i = h.held.findIndex((x) => x.id === id); if (i >= 0) { h.held.splice(i, 1); return undefined; } return h.clear.call(w, id); };
+					return true; })()`);
+			const heldCount = () => t.ev(`window.__lcHold ? window.__lcHold.held.length : -1`);
+			const holdOff = () => t.ev(`(() => { const h = window.__lcHold; if (!h) return 0; window.setTimeout = h.set; window.clearTimeout = h.clear; const n = h.held.length; delete window.__lcHold; return n; })()`);
+			/** The block's text with its fence body cut out, for "the note outside the block is untouched". */
+			const outsideBlock = (text) => text.replace(/```ds-counter\n[\s\S]*?\n```/, '<block>');
+			// Obsidian's Notice stack sits where the pencil is; hide it for this scenario only (a Notice is still recorded).
+			await t.ev(`(() => { const st = document.createElement('style'); st.id = 'lc-gs45-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); return true; })()`);
+			await t.ev(`${prefs}.set('authoringControls', true)`);
+			const facts = [];
+			try {
+				// One phase = a counter in `rootExpr`, the note `rel`: Increase (held write) -> pencil -> form -> Save unchanged.
+				const phase = async (name, rel, rootExpr, noteOutsideExpected, openedBy) => {
+					t.expect((await valueOf(rootExpr)) === '3', `${name}: the fixture counter does not read 3: ${await valueOf(rootExpr)}`);
+					await holdOn();
+					await t.realClick(`(${rootExpr}).querySelector('button[aria-label^="Increase"]')`);
+					await t.waitFor(`(${rootExpr}).querySelector('.dse-counter__value').value === '4'`, `${name}: the card shows 4 after the click`);
+					t.expect((await heldCount()) === 1, `${name}: expected the click's write to be held (1 debounce timer), found ${await heldCount()}`);
+					// Anti-vacuity: inside the debounce, the note still holds the old value.
+					const atPencil = t.read(rel);
+					t.expect(atPencil.includes('current_value: 3') && !atPencil.includes('current_value: 4'), `${name}: the note already changed before the pencil click (not inside the debounce): ${JSON.stringify(atPencil)}`);
+					await kit.clickPencil(name, rootExpr);
+					await kit.waitFormOpen(name);
+					const rawAtOpen = await rawBody();
+					const heldAtOpen = await heldCount();
+					await kit.clickSave(name); // Save, nothing changed
+					await kit.waitDisk(rel, 'current_value: 4', `${name} (the click was lost: the form started from ${JSON.stringify(rawAtOpen.slice(0, 120))})`);
+					const note = t.read(rel);
+					t.expect(!note.includes('current_value: 3'), `${name}: the note holds both values: ${JSON.stringify(note)}`);
+					t.expect(/current_value: 4/.test(rawAtOpen), `${name}: the form opened with the body from before the click: ${JSON.stringify(rawAtOpen)}`);
+					t.expect(heldAtOpen === 0, `${name}: the write was still held when the form opened (${heldAtOpen}) - opening the form did not write it`);
+					t.expect(outsideBlock(note) === noteOutsideExpected(note), `${name}: the note outside the block changed: ${JSON.stringify(note)}`);
+					await t.waitFor(`(${rootExpr})?.querySelector('.dse-counter__value')?.value === '4'`, `${name}: the card shows 4 after Save`);
+					facts.push(`${name}: ${openedBy}`);
+				};
+
+				// 1. Reading view.
+				{
+					const rel = 'Lifecycle/form-stale-counter.md';
+					const sel = '[data-dse-element="counter"]';
+					await t.open(rel);
+					await t.reset(rel);
+					const root = t.root(sel);
+					await t.waitFor(`!!(${root})`, 'Reading view: rendered');
+					await t.tag(sel, 'gs45');
+					const before = await t.stats();
+					await phase('Reading view', rel, root, () => outsideBlock(FIXTURES[rel]), 'Increase, pencil inside the debounce, Save unchanged -> 4 kept');
+					const after = await t.stats();
+					// The flush was the view's own write, so Obsidian's rebuild of the section adopted the live view: one claim, same card root.
+					// The unchanged Save then wrote the same bytes (Obsidian skips a no-op write), so nothing rebuilt it again.
+					t.expect(after.claims === before.claims + 1, `Reading view: expected exactly one claim (the view's own flushed write); claims ${before.claims} -> ${after.claims}`);
+					t.expect(await t.sameRoot(sel, 'gs45'), 'Reading view: the flushed write did not adopt the live card (it was redrawn)');
+					t.expect((await valueOf(root)) === '4', 'Reading view: the card does not show 4');
+				}
+				t.expect((await holdOff()) === 0, 'Reading view: a debounce timer was still held when the phase ended');
+
+				// 2. The sidebar: pin, then the same through the PANEL's pencil.
+				{
+					const rel = 'Lifecycle/form-stale-sidebar.md';
+					const sel = '[data-dse-element="counter"]';
+					await t.open(rel);
+					await t.reset(rel);
+					const { stampedNote, panelRoot } = await kit.pinToSidebar(rel, sel);
+					await sleep(1000); // the stamp's own rebuild of the panel settles (a window for a negative check, not a race)
+					await phase('Sidebar', rel, panelRoot, (note) => outsideBlock(stampedNote), 'Increase in the panel, pencil inside the debounce, Save unchanged -> 4 kept');
+					t.expect(/_dse_anchor: [A-Za-z0-9_-]+/.test(t.read(rel)), `Sidebar: the anchor did not survive the form's Save: ${JSON.stringify(t.read(rel))}`);
+					t.expect(outsideBlock(t.read(rel)) === outsideBlock(stampedNote), 'Sidebar: the note outside the block changed');
+				}
+			} finally {
+				const dropped = await holdOff(); // a build that did not flush leaves its write held; drop it, never fire it
+				await t.ev(`(async () => { for (const l of app.workspace.getLeavesOfType('dse-sidebar')) l.detach(); })()`);
+				await t.ev(`document.getElementById('lc-gs45-notice')?.remove()`);
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+				if (dropped) facts.push(`(dropped ${dropped} held write(s) at cleanup)`);
+			}
+			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${JSON.stringify(await t.noticesSince(m))}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
+			return `opening the block edit form flushes a pending in-card write first (the debounce timer held, the note still old when the pencil was clicked): ${facts.join('; ')}; the note outside the block untouched; no Notice, no page error`;
 		},
 	},
 ];
