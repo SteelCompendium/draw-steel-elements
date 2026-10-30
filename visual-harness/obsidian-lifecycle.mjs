@@ -85,6 +85,8 @@
 // click landed on `div.callout-title`), in Live Preview and Reading view. Stamina bar, foldable stamina bar, counter, feature, statblock,
 // and a block with text above it in the callout (control). The pencil opens only the edit form, Collapse collapses, the callout neither
 // opens as source nor folds, the cursor never moves; Obsidian's own title, fold chevron and `</>` stay clickable.
+// (r2) Collapse hit-tests across its whole face and a real press on its right edge collapses (Obsidian's `</>` used to cover it in Live
+// Preview); a callout that also holds a table far wider than itself still scrolls sideways by a real wheel and the last column is reachable.
 //
 // SC-518 appends G-S50 (41 scenarios in all; the id was assigned by the dispatcher): after the block edit form's Save redraws the card, keyboard focus
 // is on the redrawn card's Edit pencil (it fell to <body> once SC-509 made Save redraw). Real keys (CDP Tab / Enter): Tab to the pencil, Enter,
@@ -448,6 +450,8 @@ Object.assign(FIXTURES, {
 });
 // SC-520: the same blocks as the FIRST thing inside a `> [!note]` callout (G-S49), a foldable one (`+` = open), and a control with
 // text above the block inside the callout. ABOVE TEXT LINE above the callout keeps the callout's own top edge away from the title bar.
+const WIDE_COLS = Array.from({ length: 14 }, (_, i) => `HeadingColumn${String(i + 1).padStart(2, '0')}xxxxxxxxxx`);
+const WIDE_TABLE = [`| ${WIDE_COLS.join(' | ')} |`, `|${WIDE_COLS.map(() => '---').join('|')}|`, `| ${WIDE_COLS.map((c) => c.replace('HeadingColumn', 'CellContent')).join(' | ')} |`].join('\n');
 const quoted = (text) => text.split('\n').map((l) => '> ' + l).join('\n');
 const calloutNote = (name, head, body) => `# ${name}\n\nABOVE TEXT LINE\n\n${quoted(head + '\n' + body)}\n\nBELOW\n`;
 Object.assign(FIXTURES, {
@@ -456,6 +460,10 @@ Object.assign(FIXTURES, {
 	'Lifecycle/callout-counter-lp.md': calloutNote('callout counter', '[!note]', COUNTER(10)),
 	'Lifecycle/callout-feature-lp.md': calloutNote('callout feature', '[!note]', fence('ds-feature', ['type: feature', 'feature_type: ability', 'name: Coverage Strike', 'cost: 5 Malice', 'usage: Main action', 'distance: Melee 1', 'target: One creature'])),
 	'Lifecycle/callout-statblock-lp.md': calloutNote('callout statblock', '[!note]', fence('ds-statblock', ['type: statblock', 'name: Bare Creature', 'stamina: "10"'])),
+	// SC-520 r2: a stamina bar first in the callout, then a table far wider than the callout (14 columns of one unbreakable word each). Obsidian scrolls such a
+	// callout sideways; a chrome block must not take that away from the table (the second note: the block is second, nothing changes there).
+	'Lifecycle/callout-wide-lp.md': calloutNote('callout wide', '[!note] Wide callout', fence('ds-stamina-bar', ['max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5']) + '\n\n' + WIDE_TABLE),
+	'Lifecycle/callout-wide-second-lp.md': calloutNote('callout wide second', '[!note] Wide callout\ntext above the block', fence('ds-stamina-bar', ['max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5']) + '\n\n' + WIDE_TABLE),
 	'Lifecycle/callout-second-lp.md': calloutNote('callout second', '[!note] Callout title\ntext above the block', fence('ds-stamina-bar', ['max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5'])),
 });
 Object.assign(FIXTURES, {
@@ -6508,6 +6516,8 @@ const SCENARIOS = [
 			const foldOf = () => `(${titleOf()}).querySelector('.callout-fold')`;
 			const hostBtn = () => `(${rootOf()}).closest('.cm-embed-block').querySelector('.edit-block-button')`;
 			const hitOk = (btnExpr) => t.ev(`(() => { const b = ${btnExpr}; const r = b.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { ok: !!hit && (hit === b || b.contains(hit)), hit: hit ? hit.tagName.toLowerCase() + '.' + String(hit.className).trim().split(/\\s+/).slice(0, 3).join('.') : null }; })()`);
+			// The same, over the button's WHOLE face (5 x 3 points): Obsidian's `</>` used to cover Collapse's right 8px in a Live Preview callout.
+			const hitAcross = (btnExpr) => t.ev(`(() => { const b = ${btnExpr}; const r = b.getBoundingClientRect(); for (const fx of [0.06, 0.25, 0.5, 0.75, 0.94]) for (const fy of [0.15, 0.5, 0.85]) { const hit = document.elementFromPoint(r.left + r.width * fx, r.top + r.height * fy); if (!(hit && (hit === b || b.contains(hit)))) return { ok: false, hit: hit ? hit.tagName.toLowerCase() + '.' + String(hit.className).trim().split(/\\s+/).slice(0, 3).join('.') : null, at: Math.round(r.width * fx) + 'px of ' + Math.round(r.width) + 'px across, ' + Math.round(r.height * fy) + 'px down' }; } return { ok: true }; })()`);
 			const scrollToRoot = async () => {
 				await t.ev(`(() => { const r = ${rootOf()}; r.scrollIntoView({ block: 'start' }); let sc = r.parentElement; while (sc && !(sc.scrollHeight > sc.clientHeight + 4 && /(auto|scroll)/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement; if (sc) sc.scrollTop = Math.max(0, sc.scrollTop - 240); return true; })()`);
 				await t.sleep(300);
@@ -6540,6 +6550,8 @@ const SCENARIOS = [
 				for (let i = 0; i < n; i++) {
 					const h = await hitOk(`(${buttonsOf()})[${i}]`);
 					t.expect(h.ok, `${name}: elementFromPoint at the centre of "${await labelOf(i)}" is ${h.hit}, not the button (a callout title covers the panel; panel revealed: ${await t.ev(`getComputedStyle(${panelOf()}).pointerEvents === 'auto'`)})`);
+					const w = await hitAcross(`(${buttonsOf()})[${i}]`);
+					t.expect(w.ok, `${name}: "${await labelOf(i)}" is covered ${w.at}: elementFromPoint there is ${w.hit} (Obsidian's \`</>\` button over the panel's right edge)`);
 				}
 				return n;
 			};
@@ -6601,6 +6613,17 @@ const SCENARIOS = [
 				t.expect((await cursorLine()) === PARKED, `the Expand click moved the editor cursor to line ${await cursorLine()}`);
 				t.expect((await calloutState()).widget, 'the Expand click turned the callout into its source');
 				facts.push('Expand: expands, cursor unmoved');
+				// Collapse by a real press at its RIGHT EDGE: the 8px there used to be under Obsidian's `</>` (the press opened the callout's source)
+				await hoverTo(COLLAPSE);
+				const edge = await t.ev(`(() => { const r = (${COLLAPSE}).getBoundingClientRect(); return { x: r.right - 3, y: r.top + r.height / 2 }; })()`);
+				await pressAt(edge);
+				await t.waitFor(isCollapsed(true), "a real press on Collapse's right edge collapsed the block (Obsidian's `</>` button covers that edge)");
+				await t.sleep(300);
+				t.expect((await cursorLine()) === PARKED && (await calloutState()).widget, `Collapse's right edge: the cursor moved to line ${await cursorLine()} or the callout opened as source`);
+				await scrollToRoot();
+				await pressAt(await center(EXPAND));
+				await t.waitFor(isCollapsed(false), 'expanded again after the right-edge Collapse');
+				facts.push("Collapse's right edge works");
 
 				// ---- 2. Obsidian's own controls on the callout stay reachable by mouse (pointer away: the panel is click-through)
 				await awayFromBlock();
@@ -6610,8 +6633,8 @@ const SCENARIOS = [
 				const over2 = await center(`(${rootOf()})`);
 				await mouse('mouseMoved', over2.x, over2.y);
 				await t.waitFor(`!!(${hostBtn()}) && getComputedStyle(${hostBtn()}).display !== 'none'`, "Obsidian's `</>` button on the callout");
-				const hostHit = await hitOk(hostBtn());
-				t.expect(hostHit.ok, `Obsidian's \`</>\` button's centre hit-tests to ${hostHit.hit}, not the button (the chrome panel covers it)`);
+				const hostHit = await hitAcross(hostBtn());
+				t.expect(hostHit.ok, `Obsidian's \`</>\` button hit-tests to ${hostHit.hit} ${hostHit.at}, not the button (the chrome panel covers it)`);
 				await pressAt(await center(hostBtn()));
 				await t.sleep(500);
 				const inCallout = await cursorLine();
@@ -6696,6 +6719,30 @@ const SCENARIOS = [
 				await t.waitFor(isCollapsed(false), 'second in the callout: expanded again');
 				facts.push('block second in the callout (control): unchanged');
 
+				// ---- 5b. a callout that also holds wide content (a 14-column table): it still scrolls sideways, and the last column is reachable
+				// (the callout is the scroller when the block is first, Obsidian's content box when it is second: either way, by a real wheel)
+				const wideCheck = async (name) => {
+					const info = await t.ev(`(() => { const c = ${calloutOf()}; const tbl = c.querySelector('table'); if (!tbl) return { err: 'no table' }; const cands = [c.querySelector(':scope > .callout-content'), c]; const sc = cands.find((e) => e && e.scrollWidth > e.clientWidth + 4 && /(auto|scroll)/.test(getComputedStyle(e).overflowX)); const tr = tbl.getBoundingClientRect(), cr = c.getBoundingClientRect(); return { tableOverhang: Math.round(tr.right - cr.right), scroller: sc ? sc.className.split(' ')[0] : null, y: tr.top + tr.height / 2, x: cr.left + cr.width / 2 }; })()`);
+					t.expect(!info.err, `${name}: ${info.err}`);
+					t.expect(info.tableOverhang > 200, `${name}: the fixture table is not wider than the callout (overhang ${info.tableOverhang}px)`);
+					t.expect(info.scroller, `${name}: the table sticks out ${info.tableOverhang}px past the callout but nothing scrolls sideways (the chrome block cut the callout's own scrolling)`);
+					for (let i = 0; i < 8; i++) {
+						await mouse('mouseWheel', info.x, info.y, { deltaX: 500, deltaY: 0 });
+						await t.sleep(120);
+					}
+					const last = await t.ev(`(() => { const c = ${calloutOf()}; const th = c.querySelector('table th:last-child'); const r = th.getBoundingClientRect(), cr = c.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { inside: r.right <= cr.right + 1 && r.left >= cr.left, hit: !!hit && (hit === th || th.contains(hit)), scrollLeft: [c.querySelector(':scope > .callout-content'), c].map((e) => Math.round(e.scrollLeft)) }; })()`);
+					t.expect(last.inside && last.hit, `${name}: after a real sideways wheel the last table column is not reachable inside the callout (scrollLeft ${JSON.stringify(last.scrollLeft)}, inside ${last.inside}, hit ${last.hit})`);
+					return info.scroller;
+				};
+				for (const [relW, nameW] of [['Lifecycle/callout-wide-lp.md', 'block first'], ['Lifecycle/callout-wide-second-lp.md', 'block second']]) {
+					scopeSel = '.markdown-source-view';
+					await enterMode(t, relW, LP, SB);
+					await setCursor(FIXTURES[relW].split('\n').length - 2);
+					await t.sleep(400);
+					const scr = await wideCheck(`Live Preview, wide table, ${nameW}`);
+					facts.push(`wide table (${nameW}, Live Preview): scrolls on .${scr}`);
+				}
+
 				// ---- 6. Reading view: the same callouts, the same real clicks
 				for (const [rel3, name] of [['Lifecycle/callout-stamina-lp.md', 'callout'], ['Lifecycle/callout-fold-lp.md', 'foldable callout']]) {
 					scopeSel = '.markdown-reading-view';
@@ -6714,7 +6761,10 @@ const SCENARIOS = [
 					await t.waitFor(isCollapsed(false), `Reading view, ${name}: expanded again`);
 					t.expect(t.read(rel3) === FIXTURES[rel3], `${rel3} was written: ${JSON.stringify(t.read(rel3))}`);
 				}
-				facts.push('Reading view: both callouts reachable, Collapse/Expand work, callout not folded');
+				scopeSel = '.markdown-reading-view';
+				await enterMode(t, 'Lifecycle/callout-wide-lp.md', RV, SB);
+				await wideCheck('Reading view, wide table, block first');
+				facts.push('Reading view: both callouts reachable, Collapse/Expand work, callout not folded, wide table scrolls');
 			} finally {
 				await t.ev(`document.getElementById('lc-gs49-notice')?.remove()`);
 				await t.ev(`${prefs}.set('authoringControls', false)`);

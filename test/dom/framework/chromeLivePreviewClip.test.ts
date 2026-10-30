@@ -76,22 +76,45 @@ describe('SC-502: the Live Preview widget does not clip the chrome panel', () =>
 // SC-520 — a chrome block that is the FIRST thing in a callout has its panel over the callout's title row, and Obsidian's
 // `.callout-content { overflow-x: auto }` (a scroll container, so it clips on both axes) cut it off in Live Preview and Reading view alike:
 // a click at a button's centre landed on `div.callout-title`. The real gate is lifecycle G-S49; this pins the CSS it depends on.
-const CALLOUT_CONTENT =
-	".callout-content:has([data-dse-theme='steel']:not([data-dse-print=\"on\"])[data-dse-chrome])";
+const CH = "[data-dse-theme='steel']:not([data-dse-print=\"on\"])[data-dse-chrome]";
+// Only a callout whose FIRST content child is the chrome block has the panel over its title; a block with something above it was never clipped.
+const CALLOUT_CONTENT = `.callout-content:has(> :first-child > ${CH})`;
+const CALLOUT = `.callout:has(> .callout-content > :first-child > ${CH})`;
+const CALLOUT_INSET = `.markdown-source-view.mod-cm6 .cm-callout .callout-content:has(> :first-child > ${CH}) .dse-chrome-anchor`;
 
 describe('SC-520: a callout does not clip the chrome panel of a block at its top', () => {
-	it('lifts the callout content clip, and keeps the box a block formatting context so the block margins stay inside it', () => {
+	it('lifts the callout content clip, and keeps its box a block formatting context', () => {
 		const body = ruleBody(CALLOUT_CONTENT);
 		expect(body).toMatch(/overflow:\s*visible/);
-		// Without flow-root the block's own vertical margins (feature 24px, statblock 8px, mobile 2.1em reserve) collapse out of the
-		// callout content, and CodeMirror undercounts the callout widget (SC-502 HIGH-1).
+		// flow-root keeps `.callout-content`'s own box where the scroll container had it (the block's top margin would otherwise collapse out
+		// through it and move the box down, and with it a theme's content background). It is NOT what keeps CodeMirror's widget height
+		// right: those margins stop at `.callout`'s 12px padding either way (measured, SC-520 review LOW-2).
 		expect(body).toMatch(/display:\s*flow-root/);
 	});
 
-	it('is scoped to a callout that holds a Steel screen chrome block, and moves nothing', () => {
+	it('makes the CALLOUT the sideways scroller, so wide content in the same callout (a table, a long code line) stays reachable', () => {
+		const body = ruleBody(CALLOUT);
+		expect(body).toMatch(/overflow-x:\s*auto/);
+		// y stays clipped: the callout's rounded corners, and nothing may scroll vertically inside it
+		expect(body).toMatch(/overflow-y:\s*hidden/);
+		expect(body).not.toMatch(/\b(top|bottom|right|left|margin|padding|width|height|display|position)\s*:/);
+	});
+
+	it('is scoped to a callout whose first content child is a Steel screen chrome block, and moves nothing', () => {
 		// screen-only Steel scope like every chrome rule: print and the frozen print shots never match
-		expect(CALLOUT_CONTENT).toContain("[data-dse-theme='steel']:not([data-dse-print=\"on\"])[data-dse-chrome]");
+		for (const sel of [CALLOUT_CONTENT, CALLOUT, CALLOUT_INSET]) {
+			expect(sel).toContain(CH);
+			expect(sel).toContain('> :first-child >');
+		}
 		// placement, size and reveal are untouched: no property that could move or resize anything
 		expect(ruleBody(CALLOUT_CONTENT)).not.toMatch(/\b(top|bottom|right|left|margin|padding|width|height|opacity|pointer-events|z-index|clip-path|contain)\s*:/);
+	});
+
+	it('in Live Preview only, keeps the panel 36px clear of the widget edge so Obsidian\'s `</>` button does not cover Collapse', () => {
+		// 36px = 4px (`</>`'s inset from the widget edge) + 28px (its width) + 4px gap, the SC-502 one-liner figure; the card sits 12px inside the
+		// widget (the callout's padding), so the panel's own inset from the card edge is 24px (the default is 10px)
+		expect(ruleBody(CALLOUT_INSET)).toMatch(/--dse-chrome-inset:\s*24px/);
+		expect(CALLOUT_INSET).toContain('.markdown-source-view.mod-cm6 .cm-callout');
+		expect(ruleBody(CALLOUT_INSET).match(/:/g)).toHaveLength(1); // that one declaration only
 	});
 });
