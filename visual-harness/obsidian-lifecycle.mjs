@@ -88,6 +88,10 @@
 // focuses the pencil) and the hover panel hides again; identical twins, upper one edited (Obsidian moves its old section to the twin's place): focus
 // is in the edited card, not the twin (r3); a tall note with the card at ~60% of the pane keeps scrollTop and the card's top edge (SC-479 touched the
 // scroll pin); Cancel leaves focus on the same pencil. Every phase's whole note is the fixture with only the edited value changed; no Notice, no page error.
+// SC-481 appends G-S53 (42 scenarios in all): identical blocks. After a write to one of several blocks with the same text Obsidian hands the written
+// block's old rendered element to the next identical block below it (no processor call), so the twin showed the writer's value, a click on it wrote
+// the writer's block, and its card was empty after the writer was adopted. Reading view (2 twins, 3 twins, montage twins, view adoption off, the block
+// edit form's Save on the upper twin) and Live Preview: one card per block, each showing its own block's value, a click changes only its own block.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -183,6 +187,10 @@ const counterLines = (value = 10, name = 'Health') => [`name: ${name}`, `current
 
 const FIXTURES = {
 	'Lifecycle/twins.md': `# twins\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nMID\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`,
+	// SC-481 (G-S53): identical blocks - a pair, a triplet and a pair of montages. Each scenario resets its own note.
+	'Lifecycle/twin-pair.md': `# twin pair\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nMID\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`,
+	'Lifecycle/twin-triplets.md': `# twin triplets\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nM1\n\n${COUNTER(5, 'Twin')}\n\nM2\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`,
+	'Lifecycle/twin-montage.md': `# twin montage\n\nTOP\n\n${fence('ds-montage', ['title: Twin', 'rounds: 3', 'participants:', '  - name: Kira', 'current_round: 1'])}\n\nMID\n\n${fence('ds-montage', ['title: Twin', 'rounds: 3', 'participants:', '  - name: Kira', 'current_round: 1'])}\n\nBOTTOM\n`,
 	'Lifecycle/counter.md': `# counter\n\nABOVE\n\n${COUNTER(10)}\n\nBELOW\n`,
 	'Lifecycle/other.md': '# other\n\nJust another note.\n',
 	'Lifecycle/stamina.md': `# stamina\n\nABOVE\n\n${fence('ds-stamina-bar', ['max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5'])}\n\nBELOW\n`,
@@ -3415,6 +3423,181 @@ const SCENARIOS = [
 			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${JSON.stringify(await t.noticesSince(m))}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
 			return `after a form Save focus is on the redrawn card's Edit pencil, old root/pencil gone (ring after a keyboard open; a mouse Save leaves focus where it was and the hover panel hides; identical twins: the edited upper card; Cancel leaves it on the same pencil): ${outcomes.map((o) => `${o.label} by ${o.input}${o.pencil ? ` (${o.pencil})` : ''} -> ${o.late.active}${o.late.ring ? ' +ring' : ''}${o.scroll ? ` (${o.scroll})` : ''}`).join('; ')}; the note is the fixture with only the edited value changed; no Notice, no page error`;
+		},
+	},
+	{
+		// SC-481: identical blocks. After a write to one of several blocks with the same text, Obsidian hands the written block's OLD
+		// rendered element to the next identical block below it and calls no processor for it. That element still held the writer's live
+		// view: the twin showed the writer's value, a click on it wrote the writer's block, and (after the writer was adopted into its new
+		// section) the twin's card was empty until the note was reopened. Every phase asserts: one card per block, each card shows ITS
+		// block's value (the one on disk, per position), a click changes only the block of the card clicked, and the note is the fixture
+		// with exactly the intended changes. Reading view (2 twins, 3 twins, montage twins, view adoption off, the block edit form's Save on
+		// the upper twin) and Live Preview. Every phase runs even after one fails, so a failing build prints the whole picture.
+		id: 'G-S53',
+		async run(t) {
+			const m = await t.mark();
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			const { waitFormOpen, FORM, SAVE, hoverTo } = formKit(t);
+			const problems = [];
+			const outcomes = [];
+			const KIND = { counter: '[data-dse-element="counter"]', montage: '[data-dse-element="montage"]' };
+			/** The top-level cards of `kind` in `scope`, in document order, as drawn now. */
+			const cardsIn = (scope, kind) =>
+				t.ev(`Array.from((${scope}).querySelectorAll('${KIND[kind]}')).filter((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]')).map((r) => ({
+					name: r.querySelector('.dse-counter__name')?.textContent ?? r.querySelector('h1,h2,h3,h4')?.textContent ?? '',
+					value: ${kind === 'counter' ? `Number(Array.from(r.querySelectorAll('input')).map((i) => i.value).find((v) => v !== ''))` : `Number((r.textContent.match(/round\\s*(\\d+)/i) ?? [])[1])`},
+					tag: r.__lcTag ?? null }))`);
+			const diskOf = (rel, kind) => (kind === 'montage' ? (t.read(rel).match(/current_round: (\d+)/g) ?? []).map((s) => Number(s.split(': ')[1])) : t.counterValues(rel));
+			const namesOf = (rel) => (t.read(rel).match(/^name: (\w+)$/gm) ?? []).map((s) => s.slice(6));
+			/** The counter blocks of a note as sorted-line signatures (a write re-orders a body's keys, so compare the lines, not the order). */
+			const counterBlocks = (rel) => [...t.read(rel).matchAll(/^```ds-counter\n([\s\S]*?)\n```$/gm)].map((x) => x[1].split('\n').sort().join('|'));
+			const sig = (value, name) => counterLines(value, name).sort().join('|');
+			const click = (scope, kind, idx) =>
+				t.ev(
+					kind === 'montage'
+						? `(() => { const roots = Array.from((${scope}).querySelectorAll('${KIND.montage}')).filter((r) => r.isConnected); const b = roots[${idx}] && Array.from(roots[${idx}].querySelectorAll('button')).find((x) => /^End round/.test(x.textContent.trim())); if (!b) return false; b.click(); return true; })()`
+						: `(() => { const roots = Array.from((${scope}).querySelectorAll('${KIND.counter}')).filter((r) => r.isConnected); const b = roots[${idx}]?.querySelector('button[aria-label^="Increase"]'); if (!b) return false; b.click(); return true; })()`,
+				);
+			const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+			/** Wait (bounded) for the note to read `want`, then for the several rebuilds a write can cause to have happened. */
+			const settle = async (rel, kind, want) => {
+				const t0 = Date.now();
+				while (!same(diskOf(rel, kind), want) && Date.now() - t0 < 5000) await t.sleep(80);
+				await t.sleep(1500);
+			};
+			/** One click, then check the picture: the right block changed, one card per block, each card shows its block. */
+			const step = async (label, { rel, kind, scope, idx, want, tag = null }) => {
+				const stats0 = await t.stats();
+				if (tag !== null) await t.ev(`(() => { const roots = Array.from((${scope}).querySelectorAll('${KIND[kind]}')).filter((r) => r.isConnected); roots[${idx}].__lcTag = ${JSON.stringify(tag)}; return true; })()`);
+				const clicked = await click(scope, kind, idx);
+				if (!clicked) {
+					problems.push(`${label}: there is no control on card #${idx}`);
+					return null;
+				}
+				await settle(rel, kind, want);
+				const cards = await cardsIn(scope, kind);
+				const disk = diskOf(rel, kind);
+				const stats1 = await t.stats();
+				outcomes.push(`${label}: cards ${JSON.stringify(cards.map((c) => c.value))} disk ${JSON.stringify(disk)} claims +${stats1.claims - stats0.claims} collisions +${stats1.collisions - stats0.collisions}`);
+				if (!same(disk, want)) problems.push(`${label}: the click on card #${idx} left the blocks at ${JSON.stringify(disk)}, expected ${JSON.stringify(want)} (it wrote another block)`);
+				if (cards.length !== disk.length) problems.push(`${label}: ${cards.length} card(s) for ${disk.length} blocks (a card is missing)`);
+				else if (!same(cards.map((c) => c.value), disk)) problems.push(`${label}: the cards show ${JSON.stringify(cards.map((c) => c.value))} but the blocks hold ${JSON.stringify(disk)}`);
+				if (tag !== null) {
+					if (cards[idx]?.tag !== tag) problems.push(`${label}: the clicked card's own view was not kept in place (the card at #${idx} is not the one that was clicked)`);
+					if (stats1.claims - stats0.claims !== 1) problems.push(`${label}: the rebuild adopted ${stats1.claims - stats0.claims} view(s), expected 1`);
+					if (stats1.collisions - stats0.collisions !== 0) problems.push(`${label}: the adoption was refused as a second copy of one block (collisions +${stats1.collisions - stats0.collisions})`);
+				}
+				return { cards, disk };
+			};
+			const phase = async (label, fn) => {
+				try {
+					await fn();
+				} catch (e) {
+					problems.push(`${label}: ${e.message}`);
+				}
+			};
+			const reading = () => t.readingScope(LC_LEAF);
+			// A neutral note first, so the note is drawn from scratch in every phase whatever the phase before left in the pane.
+			const openFresh = async (rel) => {
+				await t.open('Lifecycle/other.md');
+				await t.reset(rel);
+				await t.open(rel);
+				await t.waitFor(`Array.from(${reading()}.querySelectorAll('[data-dse-element]')).some((r) => r.isConnected)`, `${rel}: rendered`);
+				await t.sleep(600);
+			};
+			const wholeNoteIs = (label, rel, values, names = null) => {
+				const want = values.map((v, i) => sig(v, names ? names[i] : 'Twin'));
+				if (!same(counterBlocks(rel), want) || !t.integrity(rel).ok) problems.push(`${label}: the note is not the fixture with only the intended changes (blocks ${JSON.stringify(counterBlocks(rel))}, integrity ${JSON.stringify(t.integrity(rel))})`);
+			};
+
+			await t.ev(`(() => { if (!document.getElementById('lc-gs53-notice')) { const st = document.createElement('style'); st.id = 'lc-gs53-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
+			const adoption = await t.ev(`${t.reg}.enabled`);
+			try {
+				// 1. Reading view, two identical counters: upper click, then lower click.
+				await phase('Reading view, 2 twins', async () => {
+					const rel = 'Lifecycle/twin-pair.md';
+					await openFresh(rel);
+					await step('2 twins, click upper', { rel, kind: 'counter', scope: reading(), idx: 0, want: [6, 5], tag: 'gs53-upper' });
+					await step('2 twins, then click lower', { rel, kind: 'counter', scope: reading(), idx: 1, want: [6, 6] });
+					wholeNoteIs('2 twins', rel, [6, 6]);
+				});
+				// 2. Three identical counters: upper then middle; and middle then lower (the old middle element moves to the lower place).
+				await phase('Reading view, 3 twins', async () => {
+					const rel = 'Lifecycle/twin-triplets.md';
+					await openFresh(rel);
+					await step('3 twins, click upper', { rel, kind: 'counter', scope: reading(), idx: 0, want: [6, 5, 5], tag: 'gs53-upper' });
+					await step('3 twins, then click middle', { rel, kind: 'counter', scope: reading(), idx: 1, want: [6, 6, 5] });
+					await step('3 twins, then click lower', { rel, kind: 'counter', scope: reading(), idx: 2, want: [6, 6, 6] });
+					wholeNoteIs('3 twins (upper, middle, lower)', rel, [6, 6, 6]);
+					await openFresh(rel);
+					await step('3 twins fresh, click middle', { rel, kind: 'counter', scope: reading(), idx: 1, want: [5, 6, 5], tag: 'gs53-middle' });
+					await step('3 twins fresh, then click lower', { rel, kind: 'counter', scope: reading(), idx: 2, want: [5, 6, 6] });
+					wholeNoteIs('3 twins (middle, lower)', rel, [5, 6, 6]);
+				});
+				// 3. Two identical montages: End round on the upper, then on the lower.
+				await phase('Reading view, montage twins', async () => {
+					const rel = 'Lifecycle/twin-montage.md';
+					await openFresh(rel);
+					await step('montage twins, End round on upper', { rel, kind: 'montage', scope: reading(), idx: 0, want: [2, 1], tag: 'gs53-upper' });
+					await step('montage twins, then End round on lower', { rel, kind: 'montage', scope: reading(), idx: 1, want: [2, 2] });
+					if (!t.integrity(rel).ok) problems.push(`montage twins: the note changed outside the blocks: ${JSON.stringify(t.integrity(rel))}`);
+				});
+				// 4. View adoption off (the kill switch): the writer is not adopted, so the reused element must be redrawn by the reconcile alone.
+				await phase('Reading view, adoption off', async () => {
+					const rel = 'Lifecycle/twin-pair.md';
+					await t.ev(`${t.reg}.enabled = false`);
+					await openFresh(rel);
+					await step('adoption off, click upper', { rel, kind: 'counter', scope: reading(), idx: 0, want: [6, 5] });
+					await step('adoption off, then click lower', { rel, kind: 'counter', scope: reading(), idx: 1, want: [6, 6] });
+					wholeNoteIs('adoption off', rel, [6, 6]);
+					await t.ev(`${t.reg}.enabled = ${JSON.stringify(adoption)}`);
+				});
+				// 5. The block edit form's Save on the upper twin (not a view write, so no adoption), then a click on the lower twin: the edit survives.
+				await phase('Reading view, form Save', async () => {
+					const rel = 'Lifecycle/twin-pair.md';
+					await t.ev(`${prefs}.set('authoringControls', true)`);
+					await openFresh(rel);
+					const root = `Array.from(${reading()}.querySelectorAll('${KIND.counter}')).filter((r) => r.isConnected)[0]`;
+					const pencil = `(${root}).querySelector('.dse-chrome button[data-dse-chrome-item="edit"]')`;
+					await t.waitFor(`!!(${pencil})`, 'form: the Edit pencil rendered');
+					await hoverTo(root, pencil);
+					await t.realClick(pencil);
+					await waitFormOpen('form Save');
+					const typed = await t.ev(`(() => { const ta = ${FORM}.querySelector('textarea.dse-form__raw'); if (!ta) return false; ta.value = ta.value.replace('name: Twin', 'name: Edited'); ta.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+					t.expect(typed, 'form Save: the form has no raw box');
+					await t.waitFor(`!!(${SAVE}) && !(${SAVE}).disabled`, 'form Save: Save enabled');
+					await t.realClick(SAVE);
+					await t.waitFor(`!document.querySelector('.modal-container .dse-modal')`, 'form Save: the form closed');
+					const t0 = Date.now();
+					while (!namesOf(rel).includes('Edited') && Date.now() - t0 < 5000) await t.sleep(80);
+					await t.sleep(1500);
+					const cards = await cardsIn(reading(), 'counter');
+					outcomes.push(`form Save upper: cards ${JSON.stringify(cards.map((c) => c.name + '=' + c.value))} disk ${JSON.stringify(namesOf(rel))} ${JSON.stringify(t.counterValues(rel))}`);
+					if (!same(cards.map((c) => c.name + '=' + c.value), ['Edited=5', 'Twin=5'])) problems.push(`form Save upper: the cards read ${JSON.stringify(cards.map((c) => c.name + '=' + c.value))}, expected ["Edited=5","Twin=5"]`);
+					await step('form Save upper, then click lower', { rel, kind: 'counter', scope: reading(), idx: 1, want: [5, 6] });
+					if (!same(namesOf(rel), ['Edited', 'Twin'])) problems.push(`form Save upper, then click lower: the note's names are ${JSON.stringify(namesOf(rel))}, expected ["Edited","Twin"] (the click overwrote the edit)`);
+					wholeNoteIs('form Save upper, then lower', rel, [5, 6], ['Edited', 'Twin']);
+				});
+				// 6. Live Preview: the same bug without adoption (CodeMirror reuses the upper widget for the lower block).
+				await phase('Live Preview, 2 twins', async () => {
+					const rel = 'Lifecycle/twin-pair.md';
+					const { scope } = await enterMode(t, rel, LC_MODES[1], KIND.counter);
+					await t.waitFor(`Array.from((${scope}).querySelectorAll('${KIND.counter}')).filter((r) => r.isConnected).length === 2`, 'Live Preview: both twins drawn');
+					await step('Live Preview, click upper', { rel, kind: 'counter', scope, idx: 0, want: [6, 5] });
+					await step('Live Preview, then click lower', { rel, kind: 'counter', scope, idx: 1, want: [6, 6] });
+					wholeNoteIs('Live Preview', rel, [6, 6]);
+				});
+			} finally {
+				await t.ev(`${t.reg}.enabled = ${JSON.stringify(adoption)}`);
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+				await t.ev(`document.getElementById('lc-gs53-notice')?.remove()`);
+				for (const rel of ['Lifecycle/twin-pair.md', 'Lifecycle/twin-triplets.md', 'Lifecycle/twin-montage.md']) await t.reset(rel);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect(problems.length === 0, `${problems.join(' | ')} -- outcomes: ${outcomes.join('; ')}`);
+			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${JSON.stringify(await t.noticesSince(m))}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
+			return `identical blocks keep their own card, value and block (Reading view: 2 twins, 3 twins, montage twins, adoption off, form Save; Live Preview): ${outcomes.join('; ')}`;
 		},
 	},
 ];
