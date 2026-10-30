@@ -83,6 +83,11 @@ export function ensureCollapseInvariant(root: HTMLElement): void {
  * Border widths are not layout-dependent, so this is a style read, not a layout read, and a
  * detached node (jsdom, or a view built off-document) simply yields 0 — the pre-correction
  * geometry, never a crash.
+ *
+ * SC-533: a style read still forces a style recalc of the freshly drawn element, and a
+ * custom-property write on the anchor dirties its whole subtree again. So both borders are
+ * read once, before any write, and the two vars are published on the panel (their only
+ * consumer), so the write invalidates only the panel.
  */
 const FRAME_BORDER_VARS = {
 	Top: '--dse-chrome-frame-border-top',
@@ -163,12 +168,13 @@ export function mountChrome<M>(opts: MountChromeOptions<M>, owner: Component): C
 	// The panel is absolutely positioned against this node, so it must establish the
 	// containing block. A class (not an inline style) — F1 §1.4 bans `el.style.*`.
 	anchor.addClass('dse-chrome-anchor');
-	// …and republish the anchor's own border widths so the sheet can offset the panel from
-	// the frame's BORDER box rather than its padding box (see FRAME_BORDER_VARS). The only
-	// sanctioned `.style` use in this codebase is `setProperty('--dse-*', …)` (SC-5).
-	for (const [side, prop] of Object.entries(FRAME_BORDER_VARS) as ['Top' | 'Right', string][]) {
-		anchor.style.setProperty(prop, `${usedBorderPx(anchor, side)}px`);
-	}
+	// …and measure the anchor's own border widths so the sheet can offset the panel from
+	// the frame's BORDER box rather than its padding box (see FRAME_BORDER_VARS). Both are
+	// read here, before any custom-property write; the panel publishes them below (SC-533).
+	const frameBorderPx = {
+		Top: usedBorderPx(anchor, 'Top'),
+		Right: usedBorderPx(anchor, 'Right'),
+	};
 	if (isChromeMobile()) root.setAttribute('data-dse-chrome-mobile', 'on');
 
 	// ------------------------------------------------------------- the collapsed form
@@ -186,6 +192,10 @@ export function mountChrome<M>(opts: MountChromeOptions<M>, owner: Component): C
 	const panelEl = anchor.createDiv({ cls: 'dse-chrome' });
 	panelEl.setAttribute('role', 'toolbar');
 	panelEl.setAttribute('aria-label', `${ctx.def.name} actions`);
+	// The only sanctioned `.style` use in this codebase is `setProperty('--dse-*', …)` (SC-5).
+	for (const [side, prop] of Object.entries(FRAME_BORDER_VARS) as ['Top' | 'Right', string][]) {
+		panelEl.style.setProperty(prop, `${frameBorderPx[side]}px`);
+	}
 
 	let collapsed =
 		collapsible &&

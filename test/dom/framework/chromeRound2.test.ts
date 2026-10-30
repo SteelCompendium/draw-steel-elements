@@ -13,7 +13,7 @@
 // the CSS CONTRACT those measurements depend on — the declarations whose deletion would make
 // the geometry gate go red — so a reader of this file can see the whole rule set, and so a
 // regression is named in the suite rather than only in the camera.
-import { describe, it, test, expect, afterEach } from '@jest/globals';
+import { describe, it, test, expect, afterEach, jest } from '@jest/globals';
 import fs from 'fs';
 import path from 'path';
 import { ElementPipeline } from '@/framework/pipeline';
@@ -97,14 +97,58 @@ describe('SC-169 R2 §1 — one placement geometry for every element', () => {
 		expect(panelBlock()).toContain('margin: 0 !important;');
 	});
 
-	test('mountChrome republishes the anchor border widths CSS cannot read', async () => {
+	test('mountChrome republishes the anchor border widths CSS cannot read, on the panel (SC-533)', async () => {
 		const { root } = await render(statblockElement, STATBLOCK_BODY, 'ds-statblock');
 		const anchor = root.querySelector<HTMLElement>('.dse-chrome-anchor') ?? root;
+		const panel = anchor.querySelector<HTMLElement>(':scope > .dse-chrome')!;
 		// jsdom reports 0px borders (no UA stylesheet arithmetic), so the VALUE here is not
 		// the point — the property being written at all is: without it the panel is offset
 		// from the anchor's padding box while the reader measures its border box.
-		expect(anchor.style.getPropertyValue('--dse-chrome-frame-border-top')).toMatch(/^\d/);
-		expect(anchor.style.getPropertyValue('--dse-chrome-frame-border-right')).toMatch(/^\d/);
+		expect(panel.style.getPropertyValue('--dse-chrome-frame-border-top')).toMatch(/^\d/);
+		expect(panel.style.getPropertyValue('--dse-chrome-frame-border-right')).toMatch(/^\d/);
+	});
+
+	test('SC-533: both border reads happen before the first var write, and the anchor carries no var', async () => {
+		// A style read forces a recalc of the freshly drawn element, and a custom-property write
+		// on the anchor dirties its whole subtree again: read, write, read, write paid the full
+		// recalc twice (~190 ms each on a 25-hero tracker). Pin the ORDER (reads first) and the
+		// TARGET (the panel, the vars' only consumer — so the write dirties only the panel).
+		const log: { kind: 'read' | 'write'; el?: Element; style?: unknown; prop?: string }[] = [];
+		const realGcs = window.getComputedStyle.bind(window);
+		const gcs = jest.spyOn(window, 'getComputedStyle').mockImplementation(((el: Element, pseudo?: string | null) => {
+			log.push({ kind: 'read', el });
+			return realGcs(el, pseudo);
+		}) as typeof window.getComputedStyle);
+		const realSet = CSSStyleDeclaration.prototype.setProperty;
+		const set = jest
+			.spyOn(CSSStyleDeclaration.prototype, 'setProperty')
+			.mockImplementation(function (this: CSSStyleDeclaration, prop: string, value: string | null, prio?: string) {
+				if (prop.startsWith('--dse-chrome-frame-border-')) log.push({ kind: 'write', style: this, prop });
+				return realSet.call(this, prop, value, prio ?? '');
+			});
+		let root: HTMLElement;
+		try {
+			({ root } = await render(statblockElement, STATBLOCK_BODY, 'ds-statblock'));
+		} finally {
+			gcs.mockRestore();
+			set.mockRestore();
+		}
+		const anchor = root.querySelector<HTMLElement>('.dse-chrome-anchor') ?? root;
+		const panel = anchor.querySelector<HTMLElement>(':scope > .dse-chrome')!;
+
+		const anchorReads = log.filter((e) => e.kind === 'read' && e.el === anchor).length;
+		expect(anchorReads).toBe(2);
+		const firstWrite = log.findIndex((e) => e.kind === 'write');
+		expect(firstWrite).toBeGreaterThan(-1);
+		const lastAnchorRead = log.map((e) => e.kind === 'read' && e.el === anchor).lastIndexOf(true);
+		expect(lastAnchorRead).toBeLessThan(firstWrite);
+		const writes = log.filter((e) => e.kind === 'write');
+		expect(writes.map((e) => e.prop).sort()).toEqual(
+			['--dse-chrome-frame-border-right', '--dse-chrome-frame-border-top'],
+		);
+		expect(writes.every((e) => e.style === panel.style)).toBe(true);
+		expect(anchor.style.getPropertyValue('--dse-chrome-frame-border-top')).toBe('');
+		expect(anchor.style.getPropertyValue('--dse-chrome-frame-border-right')).toBe('');
 	});
 });
 
