@@ -17021,6 +17021,9 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
         Collapse opened the callout's source). Same remedy as the SC-502 collapsed one-liner: the panel
         keeps 36px clear of the widget's right edge (4px + 28px + 4px gap), i.e. `--dse-chrome-inset` 24px
         from the card's edge, which is 12px inside the widget. Reading view has no callout `</>` and keeps 10px.
+        Only the OUTER block's anchor: an element nested inside it (a party member's `hero_ref` or a feature effect
+        holding a `ds-counter`) is read-only and draws no panel today, but if one ever does it sits in its own
+        card, which does not touch `</>`, so it keeps the 10px default.
    The panel keeps `pointer-events: none` until the block is hovered, so a hidden panel lets a click on
    the title through (fold, open the source). Same screen-only Steel scope as every chrome rule, so print
    (and the frozen print shots) never match. */
@@ -17032,7 +17035,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	overflow-x: auto;
 	overflow-y: hidden;
 }
-.markdown-source-view.mod-cm6 .cm-callout .callout-content:has(> :first-child > [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome]) .dse-chrome-anchor {
+.markdown-source-view.mod-cm6 .cm-callout .callout-content > :first-child > [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome].dse-chrome-anchor,
+.markdown-source-view.mod-cm6 .cm-callout .callout-content > :first-child > [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome] .dse-chrome-anchor:not([data-dse-element] [data-dse-element] .dse-chrome-anchor, [data-dse-element] [data-dse-element].dse-chrome-anchor) {
 	--dse-chrome-inset: 24px;
 }
 

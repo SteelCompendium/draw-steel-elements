@@ -80,7 +80,9 @@ const CH = "[data-dse-theme='steel']:not([data-dse-print=\"on\"])[data-dse-chrom
 // Only a callout whose FIRST content child is the chrome block has the panel over its title; a block with something above it was never clipped.
 const CALLOUT_CONTENT = `.callout-content:has(> :first-child > ${CH})`;
 const CALLOUT = `.callout:has(> .callout-content > :first-child > ${CH})`;
-const CALLOUT_INSET = `.markdown-source-view.mod-cm6 .cm-callout .callout-content:has(> :first-child > ${CH}) .dse-chrome-anchor`;
+const INSET_BASE = '.markdown-source-view.mod-cm6 .cm-callout .callout-content';
+// the OUTER block's anchor only (the root itself, or a descendant that is not inside a second `[data-dse-element]`): nested chrome keeps 10px
+const CALLOUT_INSET = `${INSET_BASE} > :first-child > ${CH}.dse-chrome-anchor,\n${INSET_BASE} > :first-child > ${CH} .dse-chrome-anchor:not([data-dse-element] [data-dse-element] .dse-chrome-anchor, [data-dse-element] [data-dse-element].dse-chrome-anchor)`;
 
 describe('SC-520: a callout does not clip the chrome panel of a block at its top', () => {
 	it('lifts the callout content clip, and keeps its box a block formatting context', () => {
@@ -115,6 +117,7 @@ describe('SC-520: a callout does not clip the chrome panel of a block at its top
 		// widget (the callout's padding), so the panel's own inset from the card edge is 24px (the default is 10px)
 		expect(ruleBody(CALLOUT_INSET)).toMatch(/--dse-chrome-inset:\s*24px/);
 		expect(CALLOUT_INSET).toContain('.markdown-source-view.mod-cm6 .cm-callout');
+		expect(CALLOUT_INSET).toContain(':not([data-dse-element] [data-dse-element] .dse-chrome-anchor'); // outer block only, not nested chrome
 		expect(ruleBody(CALLOUT_INSET).match(/:/g)).toHaveLength(1); // that one declaration only
 	});
 });
