@@ -54,8 +54,16 @@ export function renderRefNotice(root: HTMLElement, opts: { message: string; hint
  * any nested rendering triggered synchronously inside it, not just the ref lookup itself) —
  * so a LATER (non-overlapping) resolution of the same key, e.g. on a subsequent onUpdate,
  * is unaffected.
+ *
+ * SC-525: the entry records its OWNING view. A reference is refused only while that owner
+ * is a different view that has not unloaded. The block edit form's preview mounts a fresh
+ * view into the SAME blockKey on every keystroke and unloads the previous one, whose lookup
+ * may still be running; a key that leaves the reference unchanged (a trailing space) used
+ * to hit the unloaded view's entry and show "Reference nesting too deep" (and kept showing
+ * it after the first lookup finished). A superseded owner no longer blocks its replacement,
+ * and releases the entry in `finally` only if it is still the owner.
  */
-const IN_FLIGHT_REFS = new Set<string>();
+const IN_FLIGHT_REFS = new Map<string, ElementView<any>>();
 
 export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 	/** Tracks the currently-mounted base view (if any) so onUpdate can tear it down before
@@ -153,14 +161,15 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 		// right shape. Guards BOTH ladders below (legacy @path/[[wikilink]] and the SCC
 		// ladder) since both ultimately resolve "this ref" and mount a base view.
 		const guardKey = `${this.cx.host.blockKey()}|${trimmed}`;
-		if (IN_FLIGHT_REFS.has(guardKey)) {
+		const owner = IN_FLIGHT_REFS.get(guardKey);
+		if (owner !== undefined && owner !== this && !owner.isUnloaded()) {
 			this.errorCard(
 				root,
 				`Reference nesting too deep — \`${trimmed}\` is already resolving in this block (spec §9 depth guard).`,
 			);
 			return;
 		}
-		IN_FLIGHT_REFS.add(guardKey);
+		IN_FLIGHT_REFS.set(guardKey, this);
 		try {
 			// `@path` / `[[wikilink]]` — the legacy forms D6 spec §1.1 says "still work" —
 			// carry no SCC code at all, so cx.sccAnchors/cx.compendium can never classify
@@ -227,7 +236,7 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 			const source: RefSource = { file: entity.file, frontmatter: entity.frontmatter, body: await entity.body() };
 			await this.mountBase(root, parsed as M, source, base);
 		} finally {
-			IN_FLIGHT_REFS.delete(guardKey);
+			if (IN_FLIGHT_REFS.get(guardKey) === this) IN_FLIGHT_REFS.delete(guardKey);
 		}
 	}
 

@@ -289,6 +289,15 @@ export abstract class ElementView<M> extends Component {
 	}
 
 	/**
+	 * SC-525: true once this view has been unloaded (superseded or torn down). Reads `unloaded`, set by a
+	 * callback registered in the constructor, NOT `_loaded`: a view the pipeline mounts under a bare host
+	 * is never `load()`ed, yet it is live and must not read as unloaded.
+	 */
+	isUnloaded(): boolean {
+		return this.unloaded;
+	}
+
+	/**
 	 * SC-519: write this view's pending edit NOW (the debounce is skipped) and resolve once it and
 	 * any write already in flight have settled. Resolves true when every one of them landed. It is the
 	 * view's own write, so the host treats it like the debounced one (SC-509 `fromView`). Resolves at
