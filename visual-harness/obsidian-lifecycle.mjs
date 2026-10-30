@@ -81,7 +81,7 @@
 // BELOW the embed does not move when the write changes the embed's height (phase (e): adding a hero), nor does the text of a reader parked
 // INSIDE a tall embed below its tracker (phase (f): adding a hero).
 //
-// SC-518 appends G-S50 (40 scenarios in all; the id was assigned by the dispatcher): after the block edit form's Save redraws the card, keyboard focus
+// SC-518 appends G-S50 (41 scenarios in all; the id was assigned by the dispatcher): after the block edit form's Save redraws the card, keyboard focus
 // is on the redrawn card's Edit pencil (it fell to <body> once SC-509 made Save redraw). Real keys (CDP Tab / Enter): Tab to the pencil, Enter,
 // change a field, Enter on Save. Reading view (montage raw box, stamina bar typed field), the sidebar panel and Live Preview each assert the
 // pencil holds focus with the keyboard ring and the old root/pencil is gone; a real-mouse Save leaves focus where it was (a pointer press never
@@ -100,6 +100,10 @@
 // card's top border. Anti-vacuity per phase: panels that were out of the document at the first animation frame after their creation exist, and every
 // anchor has a non-zero border. Controls (temporary bundles via DSE_LIFECYCLE_BUNDLE): the frame-batched build that drops such panels (this fix's first version)
 // FAILs Live Preview; the stock build that reads the border at mount FAILs Reading view; the shipped build passes both.
+//
+// SC-522 appends G-S52 (42 scenarios in all; the id was assigned by the dispatcher): a tracker in note B embedded in a LIVE PREVIEW host note A keeps
+// A's scroll position and its on-screen text when B is written (in-app and on disk with A parked at its end, from another pane, and a hero added
+// with A parked below the embed), and a real click on the embedded card does not scroll A to the embed's top.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -303,6 +307,13 @@ Object.assign(FIXTURES, {
 	'Lifecycle/embtrackerlong.md': `# embtrackerlong\n\nI-TOP\n\n${fence('ds-initiative', ['heroes:', ...Array.from({ length: 20 }, (_, i) => HERO(`Hero ${String(i + 1).padStart(2, '0')}`)).flat(), 'enemy_groups: []', 'malice:', '  value: 1'])}\n\n${Array.from({ length: 25 }, (_, i) => `I-POST filler ${i}.`).join('\n\n')}\n`,
 	'Lifecycle/embhostinside.md': `# embhostinside\n\n${Array.from({ length: 30 }, (_, i) => `H-PRE filler ${i}.`).join('\n\n')}\n\n![[embtrackerlong]]\n\n${Array.from({ length: 80 }, (_, i) => `H-POST filler ${i}.`).join('\n\n')}\n`,
 	'Lifecycle/embhosttall.md': `# embhosttall\n\n${Array.from({ length: 30 }, (_, i) => `T-PRE filler ${i}.`).join('\n\n')}\n\n![[embtracker]]\n\n${Array.from({ length: 150 }, (_, i) => `T-POST filler ${i}.`).join('\n\n')}\n`,
+});
+// SC-522: a Live Preview host whose embed of a 25-hero tracker note sits near the host's end (parked at the end the host lost its position
+// on every write that redrew the embed: 6800 -> 3745), and a tall host with the embed in the middle (parked below it, the text moved 69 px).
+Object.assign(FIXTURES, {
+	'Lifecycle/lpembtracker.md': `# lpembtracker\n\nS-TOP\n\n${fence('ds-initiative', ['heroes:', ...Array.from({ length: 25 }, (_, i) => HERO(`Hero ${String(i + 1).padStart(2, '0')}`)).flat(), 'enemy_groups: []', 'malice:', '  value: 1'])}\n\nS-BOTTOM\n`,
+	'Lifecycle/lpembhostend.md': `# lpembhostend\n\n${Array.from({ length: 80 }, (_, i) => `E-PRE filler ${i}.`).join('\n\n')}\n\n![[lpembtracker]]\n\nE-END 1.\n\nE-END 2.\n\nE-END 3.\n`,
+	'Lifecycle/lpembhosttall.md': `# lpembhosttall\n\n${Array.from({ length: 80 }, (_, i) => `L-PRE filler ${i}.`).join('\n\n')}\n\n![[lpembtracker]]\n\n${Array.from({ length: 80 }, (_, i) => `L-POST filler ${i}.`).join('\n\n')}\n`,
 });
 // SC-487: a zero-width space right after the name. Live Preview ends the name there and renders the block; Reading view shows plain code.
 const ZWSP = String.fromCharCode(0x200b);
@@ -3913,6 +3924,169 @@ const SCENARIOS = [
 			}
 			t.expect(fails.length === 0, `${fails.join(' || ')} -- ${out.join('; ')}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
+			return out.join('; ');
+		},
+	},
+	{
+		// SC-522: a LIVE PREVIEW host note A embeds B (`![[B]]`, a tracker). A write to B re-renders the embed, which is empty for part
+		// of one task: the scroller's scrollHeight drops by the tracker's height and the browser clamps A's scrollTop (measured, 1.15.0:
+		// 6800 -> 3745 with the embed near A's end and A parked at its end; 7510 -> 7441 and the text under the embed 69 px lower, parked
+		// below it). And a click in the embedded card makes Obsidian move A's selection onto the embed with scrollIntoView (5420 -> 3916).
+		id: 'G-S52',
+		async run(t) {
+			const rel = 'Lifecycle/lpembtracker.md';
+			const A = 'window.__gs52A';
+			const B = 'window.__gs52B';
+			const LP = { mode: 'source', source: false };
+			const cmOf = (leaf) => `(${leaf}).view.editor.cm`;
+			const embedOf = (leaf) => `Array.from(${cmOf(leaf)}.contentDOM.children).find((e) => e.classList.contains('internal-embed') && !!e.querySelector('${TRACKER}'))`;
+			const embRoot = `((${embedOf(A)}) || null)?.querySelector('${TRACKER}')`;
+			const openHost = async (hostRel) => {
+				await t.open(hostRel);
+				await t.ev(`(async () => { window.__gs52A = app.workspace.getMostRecentLeaf(); await window.__gs52A.setViewState({ type: 'markdown', state: Object.assign({ file: ${JSON.stringify(hostRel)} }, ${JSON.stringify(LP)}), active: true }); window.__gs52A.view.editor.setCursor({ line: 0, ch: 0 }); return true; })()`);
+				await t.sleep(1500);
+			};
+			// CodeMirror draws only the viewport (+ a margin): step down until the embedded tracker is drawn, then park.
+			const park = async (where) => {
+				const s = `${cmOf(A)}.scrollDOM`;
+				await t.ev(`(() => { ${s}.scrollTop = 0; return true; })()`);
+				for (let i = 0; i < 60 && !(await t.ev(`!!(${embRoot})`)); i++) {
+					await t.ev(`(() => { const s = ${s}; s.scrollTop += Math.round(s.clientHeight * 0.6); return true; })()`);
+					await t.sleep(200);
+				}
+				await t.waitFor(`!!(${embRoot}) && (${embRoot}).childElementCount > 0`, `the embedded tracker is drawn in the Live Preview host (${where})`);
+				for (let i = 0; i < 3; i++) {
+					await t.ev(`(() => { const s = ${s}; const e = ${embedOf(A)}; const sr = s.getBoundingClientRect(); const top = e.getBoundingClientRect().top - sr.top + s.scrollTop; const h = e.getBoundingClientRect().height; s.scrollTop = ${JSON.stringify(where)} === 'end' ? s.scrollHeight : ${JSON.stringify(where)} === 'below' ? top + h + 400 : top + 1500; return true; })()`);
+					await t.sleep(450);
+				}
+				t.expect(await t.ev(`!!(${embRoot})`), `(${where}) the embedded tracker left the document while parking`);
+				await t.ev(`(() => { (${embRoot}).__lcTag = 'gs52'; return true; })()`);
+			};
+			// Per frame: A's scrollTop and the on-screen top of a reference text (an editor line, found by its text, or a hero name inside the
+			// embed); a MutationObserver notes whether the embed's hold was on when the tagged tracker left the document. Resolves on
+			// window.__gs52rec once the hold was released + 10 frames (cap: first sighting + 4500 ms, 12 s; 5 s with no hold).
+			// `mountedHeld` counts frames where the embed already shows a mounted tracker other than the tagged one while the hold is
+			// still on: the hold must be released by the remount itself, never left to its timer.
+			const record = (ref) => t.ev(`(() => { window.__gs52rec = new Promise((resolve) => { const cm = ${cmOf(A)}; const s = cm.scrollDOM; const emb = ${embedOf(A)}; const ref = ${JSON.stringify(ref)}; const top = () => { const sr = s.getBoundingClientRect(); const pool = ref.inEmbed ? Array.from(emb.querySelectorAll('.dse-init__name')) : Array.from(cm.contentDOM.children).filter((l) => l.classList.contains('cm-line')); const el = pool.find((x) => x.isConnected && x.textContent === ref.text); return el ? Math.round(el.getBoundingClientRect().top - sr.top) : null; }; const st0 = s.scrollTop; const max0 = s.scrollHeight - s.clientHeight; const ref0 = top(); const sel0 = cm.state.selection.main.head; const tagged = emb.querySelector('${TRACKER}'); const isTagged = !!tagged && tagged.__lcTag === 'gs52'; const sts = []; const refs = []; let stMin = st0; let holdAtRedraw = null; let holdFrames = 0; let holdSeen = false; let holdOnAt = 0; let released = false; let goneFrames = 0; let mountedHeld = 0; const onScroll = () => { stMin = Math.min(stMin, s.scrollTop); }; s.addEventListener('scroll', onScroll); const mo = new MutationObserver(() => { if (holdAtRedraw === null && tagged && !tagged.isConnected) holdAtRedraw = emb.hasAttribute('data-dse-lp-embed-hold'); }); mo.observe(emb, { childList: true, subtree: true }); const t0 = performance.now(); const tick = () => { sts.push(s.scrollTop); refs.push(top()); const held = emb.hasAttribute('data-dse-lp-embed-hold'); if (held) { holdFrames++; if (!holdSeen) holdOnAt = performance.now() - t0; holdSeen = true; released = false; goneFrames = 0; if (Array.from(emb.querySelectorAll('${TRACKER}')).some((r) => r !== tagged && r.isConnected && r.childElementCount > 0)) mountedHeld++; } else if (holdSeen) { released = true; goneFrames++; } if (goneFrames < 10 && performance.now() - t0 < (holdSeen ? Math.min(holdOnAt + 4500, 12000) : 5000)) requestAnimationFrame(tick); else { mo.disconnect(); s.removeEventListener('scroll', onScroll); const known = refs.filter((v) => v !== null); resolve({ st0, max0, ref0, isTagged, redrawn: !!tagged && !tagged.isConnected, frames: sts.length, stMin: Math.min(stMin, ...sts), stMax: Math.max(...sts), stEnd: s.scrollTop, refMin: known.length ? Math.min(...known) : null, refMax: known.length ? Math.max(...known) : null, refLost: refs.some((v) => v === null), refEnd: top(), sel0, sel1: cm.state.selection.main.head, holdAtRedraw, holdFrames, mountedHeld, released, ms: Math.round(performance.now() - t0) }); } }; requestAnimationFrame(tick); }); return true; })()`);
+			const firstLineBelowEmbed = () => t.ev(`(() => { const cm = ${cmOf(A)}; const s = cm.scrollDOM; const sr = s.getBoundingClientRect(); const eb = (${embedOf(A)}).getBoundingClientRect().bottom; const l = Array.from(cm.contentDOM.children).find((x) => { const r = x.getBoundingClientRect(); return x.classList.contains('cm-line') && /\\S/.test(x.textContent) && r.top >= Math.max(sr.top, eb) && r.bottom <= sr.bottom; }); return l ? l.textContent : null; })()`);
+			const pos = (m) => `scrollTop start ${m.st0} min ${m.stMin} max ${m.stMax} end ${m.stEnd}; text at ${m.ref0} px, min ${m.refMin} max ${m.refMax} end ${m.refEnd}${m.refLost ? ' (left the screen)' : ''}; hold at the redraw ${m.holdAtRedraw}, hold frames ${m.holdFrames}`;
+			// `redraw`: the tagged tracker must have been replaced (anti-vacuity: the phase reaches Obsidian's re-render). `hold`: the embed's
+			// hold must be seen and released (off for (e): an adopted click redraws nothing, and that phase is about the click alone).
+			const check = (phase, m, landed, { redraw = true, end = false, hold = true } = {}) => {
+				t.expect(landed, `${phase}: the write did not land`);
+				t.expect(m.isTagged, `${phase}: the embedded tracker was not tagged before the write`);
+				if (redraw) t.expect(m.redrawn, `${phase}: the embedded tracker was not redrawn - the phase cannot reach the clamp`);
+				if (end) t.expect(m.st0 > 0 && m.st0 >= m.max0 - 1, `${phase}: the host was not parked at its end (scrollTop ${m.st0} of max ${m.max0}) - not the geometry that jumps`);
+				t.expect(m.ref0 !== null, `${phase}: no reference text on screen before the write`);
+				if (redraw) t.expect(m.holdAtRedraw === true, `${phase}: ${'data-dse-lp-embed-hold'} was not on the host's embed when the embedded tracker was redrawn (${pos(m)})`);
+				t.expect(m.stMin === m.st0 && m.stMax === m.st0 && m.stEnd === m.st0, `${phase}: the host's scrollTop moved: ${pos(m)}`);
+				t.expect(!m.refLost && m.refMin === m.ref0 && m.refMax === m.ref0 && m.refEnd === m.ref0, `${phase}: the text on screen moved: ${pos(m)}`);
+				if (hold) t.expect(m.released, `${phase}: the hold was never seen released within ${m.ms}ms (hold frames ${m.holdFrames})`);
+				t.expect(m.mountedHeld === 0, `${phase}: the hold outlived the remount by ${m.mountedHeld} frames - it must be released by our view mounting, not by its timer`);
+				t.expect(m.sel1 === m.sel0, `${phase}: the host's selection moved ${m.sel0} -> ${m.sel1}`);
+				return `${phase}: host held at ${m.st0} over ${m.frames} frames, text at ${m.ref0} px, held ${m.holdFrames} frames`;
+			};
+			const out = [];
+			const fails = [];
+			const phase = async (fn) => {
+				try {
+					out.push(await fn());
+				} catch (e) {
+					fails.push(e instanceof Error ? e.message : String(e));
+				}
+			};
+			await t.reset(rel);
+			let value = 1;
+			// (a) / (b) a write that is not ours; the host's embed is near its end and the host parked at its end.
+			for (const [name, write] of [
+				['(a) external vault.process', (v) => t.edit(rel, `c.replace(/ {2}value: \\d+/, '  value: ${v}')`)],
+				['(b) external write on disk', async (v) => fs.writeFileSync(path.join(vault, rel), t.read(rel).replace(/ {2}value: \d+/, `  value: ${v}`))],
+			]) {
+				await phase(async () => {
+					await openHost('Lifecycle/lpembhostend.md');
+					await park('end');
+					await record({ text: 'E-END 1.', inEmbed: false });
+					value++;
+					await write(value);
+					const m = await t.ev('window.__gs52rec');
+					return check(name, m, t.read(rel).includes(`  value: ${value}`), { end: true });
+				});
+			}
+			// (c) a second Reading pane showing B makes a DSE write; A is a bystander parked at its end.
+			await phase(async () => {
+				await openHost('Lifecycle/lpembhostend.md');
+				try {
+					await t.ev(`(async () => { const b = app.workspace.getLeaf('split', 'vertical'); window.__gs52B = b; await b.setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'preview' }, active: false }); app.workspace.setActiveLeaf(window.__gs52A, { focus: true }); return true; })()`);
+					await t.waitFor(`!!(${t.root(TRACKER, B)})`, '(c) the tracker is drawn in the second pane');
+					for (let i = 0; i < 3; i++) {
+						await t.ev(`(() => { const s = (${B}).view.containerEl.querySelector('.markdown-reading-view > .markdown-preview-view'); const r = ${t.root(TRACKER, B)}; s.scrollTop = r.getBoundingClientRect().top - s.getBoundingClientRect().top + s.scrollTop + 1200; return true; })()`);
+						await t.sleep(450);
+					}
+					await park('end');
+					const before = t.read(rel);
+					await record({ text: 'E-END 1.', inEmbed: false });
+					const clicked = await t.ev(`(() => { const s = (${B}).view.containerEl.querySelector('.markdown-reading-view > .markdown-preview-view'); const sr = s.getBoundingClientRect(); const b = Array.from(s.querySelectorAll('button.dse-init__portrait-toggle')).find((x) => { const r = x.getBoundingClientRect(); return r.top > sr.top + 20 && r.bottom < sr.bottom - 20; }); if (!b) return false; b.click(); return true; })()`);
+					t.expect(clicked, '(c) second pane: no visible portrait toggle');
+					const m = await t.ev('window.__gs52rec');
+					return check('(c) another pane', m, t.read(rel) !== before, { end: true });
+				} finally {
+					await t.ev(`(() => { if (window.__gs52B) window.__gs52B.detach(); window.__gs52B = null; return true; })()`);
+				}
+			});
+			// (d) a tall host parked BELOW the embed; a write that adds a hero makes the embed taller: the first line under the embed must
+			// stay put on screen (CodeMirror compensates the growth above the viewport once the clamp is gone; stock: +69 px).
+			await phase(async () => {
+				await t.reset(rel);
+				await openHost('Lifecycle/lpembhosttall.md');
+				await park('below');
+				const text = await firstLineBelowEmbed();
+				t.expect(!!text, '(d) no text line on screen under the embed');
+				const h0 = await t.ev(`Math.round((${embedOf(A)}).getBoundingClientRect().height)`);
+				await record({ text, inEmbed: false });
+				const newName = `Added ${Date.now() % 100000}`;
+				await t.edit(rel, `c.replace('enemy_groups: []', ${JSON.stringify(`  - name: "${newName}"\n    max_stamina: 30\nenemy_groups: []`)})`);
+				const m = await t.ev('window.__gs52rec');
+				const h1 = await t.ev(`Math.round((${embedOf(A)}).getBoundingClientRect().height)`);
+				t.expect(h1 - h0 >= 50, `(d) the embed did not grow (${h0} -> ${h1} px) - the phase cannot reach the height change`);
+				t.expect(m.stEnd - m.st0 === h1 - h0, `(d) the host's scrollTop did not take the growth above the viewport: ${m.st0} -> ${m.stEnd}, embed ${h0} -> ${h1} px`);
+				// scrollTop moves by the growth (that is how the text stays put): the text's settled position is checked, not every frame -
+				// CodeMirror compensates a widget growing above the viewport at its next measure, one frame after the growth, on stock too
+				// (measured: stock +178 px for that frame then +69 for good; with the hold 0 px for good).
+				t.expect(!m.refLost && m.refEnd === m.ref0, `(d) below the embed, a hero added: the text on screen moved: ${pos(m)}`);
+				const took = `scrollTop ${m.st0} -> ${m.stEnd} as the embed grew ${h0} -> ${h1} px`;
+				Object.assign(m, { stMin: m.st0, stMax: m.st0, stEnd: m.st0, refMin: m.ref0, refMax: m.ref0 });
+				return `${check('(d) below the embed, a hero added', m, t.read(rel).includes(newName)).replace(/host held at \d+ over/, 'text settled where it was after')}, ${took}`;
+			});
+			// (e) a real click on the embedded card (adoption on: the click is adopted, nothing is redrawn): Obsidian's embed click handler
+			// must not move the host's selection onto the embed and scroll it to the embed's top (stock: 5420 -> 3916).
+			await phase(async () => {
+				await t.reset(rel);
+				await openHost('Lifecycle/lpembhosttall.md');
+				// a write the embed has not shown yet, so the card is drawn from what is on disk now (an embed left over from the
+				// phase before would hold the old body, and its click would be refused as "changed on disk first")
+				value++;
+				await t.edit(rel, `c.replace(/ {2}value: \\d+/, '  value: ${value}')`);
+				await park('in');
+				await t.waitFor(`(() => { const m = (${embRoot})?.querySelector('.dse-init__malice-num, .dse-init__malice-value'); return !!m && m.textContent.includes('${value}'); })()`, '(e) the embedded tracker shows the latest write');
+				await t.ev(`(() => { (${embRoot}).__lcTag = 'gs52'; return true; })()`);
+				const ref = await t.ev(`(() => { const s = ${cmOf(A)}.scrollDOM; const sr = s.getBoundingClientRect(); const n = Array.from((${embedOf(A)}).querySelectorAll('.dse-init__name')).find((x) => { const r = x.getBoundingClientRect(); return r.top >= sr.top && r.bottom <= sr.bottom; }); return n ? n.textContent : null; })()`);
+				t.expect(!!ref, '(e) no hero name on screen inside the embed');
+				const at = await t.ev(`(() => { const s = ${cmOf(A)}.scrollDOM; const sr = s.getBoundingClientRect(); const b = Array.from((${embedOf(A)}).querySelectorAll('button.dse-init__portrait-toggle')).find((x) => { const r = x.getBoundingClientRect(); return r.top > sr.top + 20 && r.bottom < sr.bottom - 20; }); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+				t.expect(!!at, '(e) no visible portrait toggle in the embedded tracker');
+				const before = t.read(rel);
+				await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x, y: at.y });
+				await record({ text: ref, inEmbed: true });
+				const base = { x: at.x, y: at.y, button: 'left', clickCount: 1 };
+				await t.cdp.call('Input.dispatchMouseEvent', { type: 'mousePressed', buttons: 1, ...base });
+				await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseReleased', buttons: 0, ...base });
+				const m = await t.ev('window.__gs52rec');
+				const landed = await (async () => { for (let i = 0; i < 40 && t.read(rel) === before; i++) await t.sleep(100); return t.read(rel) !== before; })();
+				if (!landed) throw new Error(`(e) a click in the embedded card, adoption on: the write did not land (clicked at ${JSON.stringify(at)}; hit ${await t.ev(`(() => { const e = document.elementFromPoint(${at.x}, ${at.y}); const r = e && e.closest('[data-dse-element]'); return e ? e.tagName + '.' + String(e.className).slice(0, 60) + ' readonly=' + (r && r.getAttribute('data-dse-readonly')) + ' pressed=' + e.getAttribute('aria-pressed') + ' label=' + e.getAttribute('aria-label') : null; })()`)}; errors ${JSON.stringify(await t.errorsSince(0)).slice(-400)}; notices ${JSON.stringify(await t.noticesSince(0)).slice(-300)}; host has_taken_turn ${/has_taken_turn/.test(t.read('Lifecycle/lpembhosttall.md'))}; B turns ${(t.read(rel).match(/has_taken_turn: true/g) || []).length}; ${pos(m)})`);
+				return check('(e) a click in the embedded card, adoption on', m, landed, { redraw: false, hold: false });
+			});
+			await t.reset(rel);
+			await t.open('Lifecycle/other.md'); // back to Reading for the next scenario
+			t.expect(fails.length === 0, fails.join(' | '));
 			return out.join('; ');
 		},
 	},
