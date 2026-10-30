@@ -16986,33 +16986,54 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	padding-right: 36px;
 }
 
-/* CALLOUTS (SC-520). A chrome block that is the FIRST thing inside a `> [!note]` callout has its
-   panel hanging over the callout's TITLE row: the panel sits above the block's top edge, and the
-   block starts exactly where the title ends. Obsidian's `.callout-content { overflow-x: auto }`
-   (computed overflow auto on both axes) is a scroll container, so it clips everything outside
-   its own box - the panel above it was neither painted nor hit-tested, and a real click at a
-   button's centre landed on `div.callout-title` (in Live Preview that click puts the cursor in
-   the callout and swaps the callout widget for its source; the buttons did nothing). Reading view
-   draws the same callout, so it was clipped there too (measured: `elementFromPoint` =
-   `div.callout-title` in both views); nothing here is Live Preview-only. A block with text above
-   it in the callout was never affected: its panel sits over that text, inside the content box.
+/* CALLOUTS (SC-520). A chrome block that is the FIRST thing inside a `> [!note]` callout has its panel
+   hanging over the callout's TITLE row: the panel sits above the block's top edge, and the block starts
+   exactly where the title ends. Obsidian's `.callout-content { overflow-x: auto }` (computed overflow auto
+   on both axes) is a scroll container, so it clips everything outside its own box: the panel was neither
+   painted nor hit-tested, and a real click at a button's centre landed on `div.callout-title` (in Live
+   Preview that puts the cursor in the callout and swaps the callout widget for its source; on a foldable
+   callout it also folds it). Reading view draws the same callout, so it was clipped there too (measured:
+   `elementFromPoint` = `div.callout-title` in both views); nothing here is Live Preview-only. A block with
+   something above it in the callout was never affected: its panel sits over that content, inside the
+   content box. So every rule below is narrowed to a callout whose FIRST content child is the chrome block
+   (`> :first-child > [data-dse-chrome]`: the block's root is the only child of Obsidian's
+   `div.block-language-*` wrapper, which is the content's first child, in both views).
    The Live Preview widget rule above does not reach this case (the callout widget is
-   `.cm-embed-block.cm-callout`, not `.cm-preview-code-block`), and it does not need to: the panel
-   stays inside the callout box (the callout's own 12px padding is taller than the 5px by which
-   the panel overhangs the title), so only this one clip is in the way.
-   Fix: for a callout-content that holds a Steel screen chrome block, `overflow: visible` lifts
-   the clip, and `display: flow-root` keeps the box a block formatting context so the block's own
-   vertical margins (feature 24px, statblock 8px, the mobile panel's 2.1em reserve) stay INSIDE
-   it, exactly as the scroll container kept them: no pixel of the callout or the block moves, and
-   CodeMirror's height for the callout widget stays equal to its on-screen height (SC-502 HIGH-1).
-   The panel still has `pointer-events: none` until the block is hovered, so a hidden panel lets
-   a click on the title through (fold, open the source). Trade-off: a block wider than the
-   callout is now cut by the callout's own `overflow: hidden` instead of scrolling sideways; DSE
-   cards size to their container. Same screen-only Steel scope as every chrome rule, so print
+   `.cm-embed-block.cm-callout`, not `.cm-preview-code-block`), and does not need to: the panel stays
+   inside the callout box (the callout's 12px padding is taller than the ~5px by which the panel overhangs
+   the title), so only this one clip is in the way.
+   Three rules:
+     1. `.callout-content`: `overflow: visible` lifts the clip. `display: flow-root` keeps the box a
+        block formatting context, which the scroll container had been: without it a margin on the block
+        (feature 24px, statblock 8px, the mobile panel's 2.1em reserve) collapses out through the content
+        box and moves the BOX's own top down by that margin, so a theme's content background would start
+        in a different place. (CodeMirror's height for the callout widget is right either way: such a margin
+        stops at `.callout`'s own padding, so the widget never undercounts. Measured, not assumed.)
+     2. `.callout`: `overflow-x: auto; overflow-y: hidden`. Lifting the clip in rule 1 would leave
+        `.callout { overflow: hidden }` cutting anything wider than the callout, with nothing left to scroll
+        it: a wide table, a long code line or a long word in the same callout became unreachable. The
+        CALLOUT is now the sideways scroller instead (its padding box already holds the panel); `overflow-y:
+        hidden` keeps its rounded-corner clip. Trade-off, visible and accepted by the owner pending Scott:
+        when such a callout is scrolled sideways its title scrolls with the content.
+     3. Live Preview only: Obsidian draws its own `</>` "Edit this block" button in the callout widget's top
+        right (28px wide, 4px in from the widget's right edge, over the title row), where the panel's
+        Collapse button also sits. `</>` wins every click in the overlap (a press on the right 8px of
+        Collapse opened the callout's source). Same remedy as the SC-502 collapsed one-liner: the panel
+        keeps 36px clear of the widget's right edge (4px + 28px + 4px gap), i.e. `--dse-chrome-inset` 24px
+        from the card's edge, which is 12px inside the widget. Reading view has no callout `</>` and keeps 10px.
+   The panel keeps `pointer-events: none` until the block is hovered, so a hidden panel lets a click on
+   the title through (fold, open the source). Same screen-only Steel scope as every chrome rule, so print
    (and the frozen print shots) never match. */
-.callout-content:has([data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome]) {
+.callout-content:has(> :first-child > [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome]) {
 	overflow: visible;
 	display: flow-root;
+}
+.callout:has(> .callout-content > :first-child > [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome]) {
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+.markdown-source-view.mod-cm6 .cm-callout .callout-content:has(> :first-child > [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome]) .dse-chrome-anchor {
+	--dse-chrome-inset: 24px;
 }
 
 /* Panel buttons: OS-window-controls density. Flat, borderless, muted until hovered —
