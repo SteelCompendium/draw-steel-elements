@@ -83,15 +83,66 @@
 // hold — which is harmless and not worth telling apart.
 // Not touched: a DSE block CodeMirror has not drawn (far above or below the viewport) has no widget
 // in the DOM, so nothing is captured — and the pane was measured to hold anyway (stock and here).
+//
+// EMBEDS: A LIVE PREVIEW HOST NOTE (SC-522). Note A open in Live Preview embeds note B (`![[B]]`) that has a DSE
+// block. A write to B does not touch A's document, so nothing above engages (no transaction on A). Measured
+// (Obsidian 1.15.0, SC-522 r1): in Live Preview the `.internal-embed` IS CodeMirror's block widget (a direct
+// `.cm-content` child), and on every write that redraws B's block Obsidian re-renders the embed's content: for part
+// of one task, 26-108 ms after `modify`, the embed is empty (its inner sizer 3166 -> 111px, the widget 3190 -> 135px),
+// so the scroller's scrollHeight drops by the same 3055px and the browser PASSIVELY CLAMPS scrollTop to the new max
+// (6800 -> 3745 with the embed near the end of the note and the note parked at its end; 7510 -> 7441, the text under
+// the embed moving 69px, parked below the embed; 2912 -> 26 for a note that is mostly the embed). Our view mounts
+// ~40-60ms later and the widget is back at full height before any frame; nothing scrolls back. CodeMirror never sees
+// it: its height map keeps 3190px, no transaction or measure moves scrollTop, nothing in script sets it, and
+// `.cm-scroller` has `overflow-anchor: none`, so Chrome's anchoring cannot help or hurt. Hosts parked above the embed,
+// in it, or with the embed's top on screen hold on stock (the clamp only bites when scrollTop is above the shrunken max).
+// The fix (`holdEmbedsOf`, from the same `modify` event): for every Live Preview view of ANOTHER note that is scrolled,
+// each drawn embed widget that shows a DSE block of the written note (`embedsBlockOf`, SC-479's resolver: nested
+// embeds and `#heading` / `#^block` subpaths too) gets an inline `min-height` of its current height. It is released
+// when our view is back in it — a DSE root that was not there at hold time (a fresh mount), or one of the held roots
+// put back (an adopted write), and every root in the embed mounted (MutationObserver on the widget) — so a write that
+// changes the embed's real height shows that height in the same task, and CodeMirror re-measures it like any resized
+// widget (a growth above the viewport keeps the visible line, as on stock). PIN_TTL_MS is the backstop: a write
+// Obsidian never redraws in the embed (an edit outside an embedded heading) only leaves the floor at the height the
+// embed already has. Measured cost (1.15.0, SC-522 r1): the embed scan per Live Preview view per `modify` of any note,
+// 0.1 ms median (0.5 max) when nothing is held; a hold 1.3-3.4 ms to set (one layout read at `modify`, the DOM still
+// clean); the release reads no layout (CodeMirror measures at its next frame, as it would for any resized widget).
+// Measured result of the hold (1.15.0, process / watcher / second pane / popout / add or remove a hero / `#heading`):
+// 6800 held, 7486 held, text under the embed 0px (stock: 3745, +69 / +755px, 2912 -> 26 for a note that is mostly the embed).
+//
+// CLICKS IN THE EMBEDDED CARD (SC-522, Part 2; a BEHAVIOUR CHANGE, ruled acceptable): the same note also jumps when the
+// reader CLICKS a control in the embedded card. Obsidian's click handler on the embed widget (`hookClickHandler`) runs
+// `selectElement`, which dispatches the selection with `scrollIntoView: true`, and CodeMirror scrolls the HOST to the
+// embed's top - on every click in the card, written or not (parked in the tracker 5420 -> 3916, text +1528px; a note that
+// is mostly the embed 2912 -> 150 / 0). That handler skips a click whose target sits in an `.interactive-child`
+// (Obsidian's own marker), so `pipeline.ts` (`armClickShield`) puts that class on the DSE root, only when the root sits in
+// a Live Preview embed (`.cm-content .internal-embed`). USER-VISIBLE: a click inside a DSE card in a Live Preview embed no
+// longer selects the embed - the editor cursor does not move onto it and the selected-embed outline does not draw.
+// A click elsewhere in the embed (outside the card) still selects it as before; Reading view and the DSE code-block
+// widgets in Live Preview are untouched. Obsidian also tests `interactive-child` for double-click and Mod+A inside the
+// embed; those were not measured (r3 probes them).
+//
+// KNOWN LIMITS. (1) One frame of CodeMirror measure lag: when the embed's height CHANGES above the viewport (a hero added
+// or removed, host parked below it), the settled position is held (text 0px) but a sample taken after paint and before
+// CodeMirror's next measure can read +109 / -110px for one frame (the rAF sampler reads 0; stock settles +69 with
+// transients +178 / -41..+69). That is CodeMirror's own measure cycle, present on stock too; no cheap fix without
+// internal API, so it is accepted. (2) Dependence on Obsidian internals: the hold needs the `.internal-embed` to stay the
+// CodeMirror widget, a direct `.cm-content` child; the click mark needs `hookClickHandler` to keep its `.interactive-child`
+// test. If either changes, lifecycle G-S52 (a)-(e) fails. (3) TTL-bounded floor: a write to B that Obsidian does not
+// redraw in the embed leaves the floor in place for PIN_TTL_MS (unchanged, 2.5 s); the floor is the height the embed
+// already has, so it is invisible unless the embed would shrink within that window.
 
 import type { Workspace } from 'obsidian';
 import { ViewPlugin } from '@codemirror/view';
 import type { EditorView, ViewUpdate } from '@codemirror/view';
 import type { Extension, StateEffect } from '@codemirror/state';
-import { PIN_TTL_MS } from './previewScrollPin';
+import { PIN_TTL_MS, embedsBlockOf } from './previewScrollPin';
+import type { LinkResolver } from './previewScrollPin';
 
 /** On a replacement widget while its height is held; the value is the held px (tests/probes read it). */
 export const HOLD_ATTR = 'data-dse-lp-hold';
+/** SC-522: on a Live Preview host's embed widget while its height is held across a write to the embedded note; the value is the held px. */
+export const EMBED_HOLD_ATTR = 'data-dse-lp-embed-hold';
 
 /**
  * A DSE block's widget as CodeMirror drew it: a direct `.cm-content` child holding our root. At capture `from === to`
@@ -176,20 +227,90 @@ export class LivePreviewScrollHold {
 	private readonly pending = new WeakMap<EditorView, Pending>();
 	/** Every live hold's release, so `releaseAll()` can drop them at unload. */
 	private readonly holds = new Map<() => void, EditorView>();
+	/** SC-522: every held embed widget and its release (a re-hold replaces it). */
+	private readonly embedHolds = new Map<HTMLElement, { px: number; release: () => void }>();
 
-	/** Vault `modify`: capture every Live Preview view of `path` that shows a DSE widget and is scrolled. */
-	captureViewsOf(workspace: Workspace, path: string): void {
+	/**
+	 * Vault `modify`: capture every Live Preview view of `path` that shows a DSE widget and is scrolled; SC-522: and,
+	 * with `resolveLink`, hold the embeds of `path`'s DSE blocks in every Live Preview view of another note.
+	 */
+	captureViewsOf(workspace: Workspace, path: string, resolveLink?: LinkResolver): void {
 		for (const leaf of workspace.getLeavesOfType('markdown')) {
 			const view = leaf.view as unknown as LivePreviewViewLike;
-			if (view.file?.path !== path || view.getMode?.() !== 'source') continue;
+			if (!view.file || view.getMode?.() !== 'source') continue;
+			const own = view.file.path === path;
+			if (!own && !resolveLink) continue;
 			const cm = view.editor?.cm;
 			if (!cm) continue;
 			try {
-				this.capture(cm, view);
+				if (own) this.capture(cm, view);
+				else this.holdEmbedsOf(cm, path, view.file.path, resolveLink!);
 			} catch (err) {
 				console.warn('[DSE] Live Preview scroll capture failed', err);
 			}
 		}
+	}
+
+	/**
+	 * SC-522: hold every drawn embed widget of `view` (a Live Preview view of `hostPath`) that shows a DSE block of
+	 * `path` at its current height until our view is back in it (header: EMBEDS). Nothing to protect at the top.
+	 */
+	holdEmbedsOf(view: EditorView, path: string, hostPath: string, resolveLink: LinkResolver): void {
+		if (view.scrollDOM.scrollTop <= 0) return;
+		for (const el of Array.from(view.contentDOM.children) as HTMLElement[]) {
+			if (!el.classList.contains('internal-embed') || !el.querySelector('[data-dse-element]')) continue;
+			if (embedsBlockOf(el, path, hostPath, resolveLink)) this.holdEmbed(view, el);
+		}
+	}
+
+	private holdEmbed(view: EditorView, embed: HTMLElement): void {
+		const win = embed.ownerDocument.defaultView;
+		if (!win) return;
+		// min-height sizes the content box unless the theme sets border-box: hold exactly the box the embed has now
+		const cs = win.getComputedStyle(embed);
+		const edges = cs.boxSizing === 'border-box' ? 0 : ['paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth'].reduce((n, k) => n + (parseFloat(cs[k as 'paddingTop']) || 0), 0);
+		let px = embed.getBoundingClientRect().height - edges;
+		const prev = this.embedHolds.get(embed);
+		if (prev) {
+			px = Math.max(px, prev.px); // a re-hold (rapid writes) never lowers the floor
+			prev.release();
+		}
+		if (!(px > 0)) return;
+		const roots0 = new Set(Array.from(embed.querySelectorAll('[data-dse-element]')));
+		const inline = embed.style.getPropertyValue('min-height');
+		embed.style.setProperty('min-height', `${px}px`);
+		embed.setAttribute(EMBED_HOLD_ATTR, String(Math.round(px)));
+		let observer: MutationObserver | null = null;
+		const release = (): void => {
+			if (this.embedHolds.get(embed)?.release !== release) return;
+			this.embedHolds.delete(embed);
+			this.holds.delete(release);
+			observer?.disconnect();
+			win.clearTimeout(timer);
+			if (inline) embed.style.setProperty('min-height', inline);
+			else embed.style.removeProperty('min-height');
+			embed.removeAttribute(EMBED_HOLD_ATTR);
+			view.requestMeasure();
+		};
+		const timer = win.setTimeout(release, PIN_TTL_MS);
+		this.embedHolds.set(embed, { px, release });
+		this.holds.set(release, view);
+		const MO = (win as Window & { MutationObserver?: typeof MutationObserver }).MutationObserver;
+		if (!MO) return;
+		let back = false;
+		observer = new MO((records) => {
+			if (!back) {
+				for (const r of records) {
+					for (const n of Array.from(r.addedNodes)) {
+						if (n.nodeType === 1 && Array.from(roots0).some((root) => n === root || n.contains(root))) back = true; // an adopted view put back
+					}
+				}
+			}
+			const roots = Array.from(embed.querySelectorAll('[data-dse-element]'));
+			if (!back && roots.some((root) => !roots0.has(root))) back = true; // a fresh mount
+			if (back && roots.length >= roots0.size && roots.every((root) => root.childElementCount > 0)) release();
+		});
+		observer.observe(embed, { childList: true, subtree: true });
 	}
 
 	/**

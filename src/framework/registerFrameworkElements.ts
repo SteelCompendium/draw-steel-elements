@@ -64,7 +64,8 @@ export function registerFrameworkElements(
 	// capture at `modify`, which fires before the pane's transaction; restore + hold inside the editor.
 	const lpHold = new LivePreviewScrollHold();
 	plugin.register(() => lpHold.releaseAll());
-	plugin.registerEvent(plugin.app.vault.on('modify', (file) => lpHold.captureViewsOf(plugin.app.workspace, file.path)));
+	// SC-522: and every Live Preview view of another note that shows a DSE block embedded from it holds that embed's height.
+	plugin.registerEvent(plugin.app.vault.on('modify', (file) => lpHold.captureViewsOf(plugin.app.workspace, file.path, resolveLink)));
 	plugin.registerEditorExtension(lpHold.extension());
 	// SC-340 §6.1: the plugin-scoped owner of every reading-mode view.
 	const registry = plugin.addChild(new ViewRegistry({ enabled: options.viewAdoption ?? false }));

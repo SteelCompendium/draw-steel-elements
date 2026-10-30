@@ -6,7 +6,7 @@
 // The real behaviour (Obsidian's 50px widget estimate, the viewport jump, the restore) is the lifecycle gate's
 // job (G-S18); these tests pin the guards: when it captures, when it engages, that it never engages on a user's
 // own edit or after a user scroll, and that every hold is released (mount, TTL, destroy, unload).
-import { HOLD_ATTR, LivePreviewScrollHold } from '../../../src/framework/host/livePreviewScrollHold';
+import { EMBED_HOLD_ATTR, HOLD_ATTR, LivePreviewScrollHold } from '../../../src/framework/host/livePreviewScrollHold';
 import { registerFrameworkElements } from '../../../src/framework/registerFrameworkElements';
 import type { ElementRegistry } from '../../../src/framework/registry';
 import type { ElementPipeline } from '../../../src/framework/pipeline';
@@ -545,11 +545,150 @@ describe('SC-478: wiring', () => {
 			expect(ext).toHaveBeenCalledTimes(1);
 			const calls = on.mock.calls.filter(([name]) => name === 'modify');
 			for (const call of calls) (call[1] as (file: { path: string }) => void)({ path: 'Note.md' });
-			expect(spy).toHaveBeenCalledWith(app.workspace, 'Note.md');
+			// SC-522: with the link resolver, so Live Preview hosts of the note's embeds are held too
+			expect(spy).toHaveBeenCalledWith(app.workspace, 'Note.md', expect.any(Function));
 		} finally {
 			spy.mockRestore();
 			ext.mockRestore();
 			on.mockRestore();
 		}
+	});
+});
+
+describe('SC-522: a Live Preview host holds its embed of the written note', () => {
+	/** A Live Preview embed widget of `src`, as Obsidian draws it: `.internal-embed[src]`, a direct `.cm-content` child, holding a DSE root (or not). */
+	function embedWidget(src: string, px: number, opts: { dse?: boolean; nested?: string } = {}): HTMLElement {
+		const e = document.createElement('div');
+		e.className = 'internal-embed markdown-embed inline-embed';
+		e.setAttribute('src', src);
+		let at: HTMLElement = e.appendChild(document.createElement('div'));
+		at.className = 'markdown-embed-content';
+		if (opts.nested) {
+			const n = at.appendChild(document.createElement('span'));
+			n.className = 'internal-embed markdown-embed';
+			n.setAttribute('src', opts.nested);
+			at = n;
+		}
+		if (opts.dse !== false) {
+			const root = at.appendChild(document.createElement('div'));
+			root.setAttribute('data-dse-element', 'initiative');
+			root.appendChild(document.createElement('div'));
+		}
+		e.getBoundingClientRect = () => ({ height: px }) as DOMRect;
+		return e;
+	}
+	/** Resolves `link` from `from` by an exact "from|link" entry, else by `link` alone. */
+	const resolver = (map: Record<string, string>) => jest.fn((link: string, from: string) => map[`${from}|${link}`] ?? map[link] ?? null);
+	const lpLeaf = (path: string, cm: unknown, mode = 'source') => ({ view: { file: { path }, getMode: () => mode, editor: { cm } } });
+	const held = (e: HTMLElement) => e.getAttribute(EMBED_HOLD_ATTR);
+
+	test('only the drawn embed widgets that show a DSE block of the written note are held, at their height', () => {
+		const hold = new LivePreviewScrollHold();
+		const ofB = embedWidget('B', 3190);
+		const ofC = embedWidget('C', 800);
+		const plainB = embedWidget('B', 400, { dse: false });
+		const host = fakeView(6800, [ofB, ofC, plainB]);
+		const own = fakeView(2428, [widget(7, 5230)]);
+		const workspace = { getLeavesOfType: () => [lpLeaf('A.md', host), lpLeaf('B.md', own)] };
+		hold.captureViewsOf(workspace as never, 'B.md', resolver({ B: 'B.md', C: 'C.md' }));
+		expect(held(ofB)).toBe('3190');
+		expect(ofB.style.minHeight).toBe('3190px');
+		expect(held(ofC)).toBeNull();
+		expect(held(plainB)).toBeNull();
+		expect(ofC.style.minHeight).toBe('');
+		expect(own.scrollSnapshot).toHaveBeenCalledTimes(1); // the note's own Live Preview view: SC-478's capture, unchanged
+	});
+
+	test('the floor is the embed\'s content box: padding and border come off, unless the theme sets border-box', () => {
+		const hold = new LivePreviewScrollHold();
+		const content = embedWidget('B', 3190);
+		content.style.padding = '10px 0';
+		content.style.border = '2px solid';
+		const border = embedWidget('B', 3190);
+		border.style.padding = '10px 0';
+		border.style.border = '2px solid';
+		border.style.boxSizing = 'border-box';
+		hold.captureViewsOf({ getLeavesOfType: () => [lpLeaf('A.md', fakeView(6800, [content, border]))] } as never, 'B.md', resolver({ B: 'B.md' }));
+		expect(content.style.minHeight).toBe('3166px'); // 3190 - 2 * (10 + 2)
+		expect(border.style.minHeight).toBe('3190px');
+	});
+
+	test('nothing is held without a resolver, at the top of the host, or in a Reading view', () => {
+		const hold = new LivePreviewScrollHold();
+		const a = embedWidget('B', 3190);
+		const b = embedWidget('B', 3190);
+		const c = embedWidget('B', 3190);
+		hold.captureViewsOf({ getLeavesOfType: () => [lpLeaf('A.md', fakeView(6800, [a]))] } as never, 'B.md');
+		hold.captureViewsOf({ getLeavesOfType: () => [lpLeaf('A.md', fakeView(0, [b]))] } as never, 'B.md', resolver({ B: 'B.md' }));
+		hold.captureViewsOf({ getLeavesOfType: () => [lpLeaf('A.md', fakeView(6800, [c]), 'preview')] } as never, 'B.md', resolver({ B: 'B.md' }));
+		expect([held(a), held(b), held(c)]).toEqual([null, null, null]);
+	});
+
+	test('a nested embed (A -> N -> B, resolved from N) and a #heading embed count', () => {
+		const hold = new LivePreviewScrollHold();
+		const nested = embedWidget('N', 3341, { nested: 'B' });
+		const heading = embedWidget('B#Section', 3166);
+		const resolve = resolver({ 'A.md|N': 'N.md', 'N.md|B': 'B.md', 'A.md|B': 'B.md' });
+		hold.captureViewsOf({ getLeavesOfType: () => [lpLeaf('A.md', fakeView(6800, [nested, heading]))] } as never, 'B.md', resolve);
+		expect(held(nested)).toBe('3341');
+		expect(held(heading)).toBe('3166');
+		expect(resolve).toHaveBeenCalledWith('B', 'N.md'); // the inner link is resolved from the note that writes it
+	});
+
+	test('released as soon as a fresh view has mounted in the embed, not while it is still empty', async () => {
+		const hold = new LivePreviewScrollHold();
+		const e = embedWidget('B', 3190);
+		const host = fakeView(6800, [e]);
+		hold.holdEmbedsOf(host as never, 'B.md', 'A.md', resolver({ B: 'B.md' }));
+		expect(held(e)).toBe('3190');
+		const content = e.querySelector('.markdown-embed-content')!;
+		content.querySelector('[data-dse-element]')!.remove(); // Obsidian empties the embed
+		const fresh = content.appendChild(document.createElement('div'));
+		fresh.setAttribute('data-dse-element', 'initiative');
+		await flush();
+		await flush();
+		expect(held(e)).toBe('3190'); // our root is there but empty: still held
+		expect(host.requestMeasure).not.toHaveBeenCalled();
+		fresh.appendChild(document.createElement('div'));
+		await flush();
+		await flush();
+		expect(held(e)).toBeNull();
+		expect(e.style.minHeight).toBe('');
+		expect(host.requestMeasure).toHaveBeenCalledTimes(1); // CodeMirror re-measures the real height
+	});
+
+	test('released when the held view is put back (an adopted write)', async () => {
+		const hold = new LivePreviewScrollHold();
+		const e = embedWidget('B', 3190);
+		hold.holdEmbedsOf(fakeView(6800, [e]) as never, 'B.md', 'A.md', resolver({ B: 'B.md' }));
+		const root = e.querySelector('[data-dse-element]')!;
+		const section = e.querySelector('.markdown-embed-content')!.appendChild(document.createElement('div'));
+		section.appendChild(root); // moved into the new section, same element
+		await flush();
+		await flush();
+		expect(held(e)).toBeNull();
+	});
+
+	test('PIN_TTL_MS backstop, a re-hold never lowers the floor, an inline min-height is restored, unload drops every hold', () => {
+		jest.useFakeTimers();
+		const hold = new LivePreviewScrollHold();
+		const e = embedWidget('B', 3190);
+		e.style.minHeight = '20px';
+		const host = fakeView(6800, [e]);
+		hold.holdEmbedsOf(host as never, 'B.md', 'A.md', resolver({ B: 'B.md' }));
+		e.getBoundingClientRect = () => ({ height: 135 }) as DOMRect; // a second write lands while the embed is collapsed
+		hold.holdEmbedsOf(host as never, 'B.md', 'A.md', resolver({ B: 'B.md' }));
+		expect(held(e)).toBe('3190');
+		jest.advanceTimersByTime(TTL - 1);
+		expect(held(e)).toBe('3190');
+		jest.advanceTimersByTime(1);
+		expect(held(e)).toBeNull();
+		expect(e.style.minHeight).toBe('20px');
+		const f = embedWidget('B', 900);
+		hold.holdEmbedsOf(fakeView(6800, [f]) as never, 'B.md', 'A.md', resolver({ B: 'B.md' }));
+		expect(held(f)).toBe('900');
+		hold.releaseAll();
+		expect(held(f)).toBeNull();
+		expect(f.style.minHeight).toBe('');
 	});
 });

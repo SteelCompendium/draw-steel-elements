@@ -580,6 +580,61 @@ describe('T-9 (Plan 02): ElementPipeline.run (F1 §2.4)', () => {
 			});
 		});
 
+		// SC-522: inside a Live Preview embed (the `.internal-embed` is a CodeMirror widget under `.cm-content`) Obsidian's
+		// widget click handler moves the host's selection onto the embed and scrolls to it, unless the click target sits in an
+		// `.interactive-child`. The root takes the class there, on the press or the click, and nowhere else.
+		describe('SC-522 Live Preview embed: the root is an Obsidian interactive child', () => {
+			async function mountIn(wrap: (containerEl: HTMLElement) => HTMLElement): Promise<{ root: HTMLElement; cleanup: () => void }> {
+				const { deps } = makeDeps();
+				const pipeline = new ElementPipeline(deps);
+				const host = makeHost();
+				const outer = wrap(host.containerEl);
+				document.body.appendChild(outer);
+				await pipeline.run(labelDef(), 'label: x', host);
+				return { root: host.containerEl.firstElementChild as HTMLElement, cleanup: () => document.body.removeChild(outer) };
+			}
+			const lpEmbed = (el: HTMLElement): HTMLElement => {
+				const content = document.createElement('div');
+				content.className = 'cm-content';
+				const embed = content.createDiv({ cls: 'internal-embed markdown-embed' });
+				embed.appendChild(el);
+				return content;
+			};
+			test.each(['click', 'pointerdown', 'mousedown'] as const)('a %s inside a Live Preview embed marks the root', async (type) => {
+				const { root, cleanup } = await mountIn(lpEmbed);
+				try {
+					expect(root.classList.contains('interactive-child')).toBe(false);
+					(root.querySelector('.label-content') as HTMLElement).dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }));
+					expect(root.classList.contains('interactive-child')).toBe(true);
+				} finally {
+					cleanup();
+				}
+			});
+			test('a click elsewhere (a Reading view embed, or a block that is not embedded) leaves the root alone', async () => {
+				const reading = (el: HTMLElement): HTMLElement => {
+					const view = document.createElement('div');
+					view.className = 'markdown-preview-view';
+					view.createDiv({ cls: 'internal-embed markdown-embed' }).appendChild(el);
+					return view;
+				};
+				const editorBlock = (el: HTMLElement): HTMLElement => {
+					const content = document.createElement('div');
+					content.className = 'cm-content';
+					content.createDiv({ cls: 'cm-embed-block' }).appendChild(el);
+					return content;
+				};
+				for (const wrap of [reading, editorBlock]) {
+					const { root, cleanup } = await mountIn(wrap);
+					try {
+						(root.querySelector('.label-content') as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+						expect(root.classList.contains('interactive-child')).toBe(false);
+					} finally {
+						cleanup();
+					}
+				}
+			});
+		});
+
 		test('def.noClickShield === true: mousedown bubbles normally (shield not armed)', async () => {
 			const { deps } = makeDeps();
 			const pipeline = new ElementPipeline(deps);

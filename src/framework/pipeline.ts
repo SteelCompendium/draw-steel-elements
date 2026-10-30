@@ -193,7 +193,17 @@ export function isEditableControlTarget(target: EventTarget | null, root: HTMLEl
  * on the page, which are outside every root and never ours to blur.
  */
 function armClickShield(root: HTMLElement): void {
+	// SC-522: inside a Live Preview embed (`.cm-content .internal-embed`, CodeMirror's widget) Obsidian's embed click handler
+	// runs `selectElement` + `scrollIntoView`, jumping the HOST note to the embed's top on every click in the card (5420 ->
+	// 3916 measured). It skips a target inside `.interactive-child`, so the root takes that class there (the embed is then not
+	// selected by a click in the card). Reading view and DSE's own Live Preview code-block widgets are untouched. Details:
+	// livePreviewScrollHold.ts, "CLICKS IN THE EMBEDDED CARD".
+	const markInEditorEmbed = (): void => {
+		if (!root.classList.contains('interactive-child') && root.closest('.cm-content .internal-embed')) root.classList.add('interactive-child');
+	};
+	root.addEventListener('click', markInEditorEmbed, { capture: true });
 	const stop = (event: Event): void => {
+		markInEditorEmbed();
 		if (!isEditableControlTarget(event.target, root)) {
 			event.preventDefault();
 			const active = root.ownerDocument.activeElement as HTMLElement | null;

@@ -119,8 +119,9 @@
 // up to PIN_TTL_MS (the same trade as SC-470, TTL-bounded, it never clamps). With a DSE root on screen and the
 // viewport wholly inside a tall tracker the stop is on, so a row added ABOVE the viewport shifts the text by
 // the row height instead of being compensated (the same as a note's own pin, SC-198/SC-470).
-// NOT COVERED: a Live Preview host (`.cm-scroller`, `![[B]]` rendered by CodeMirror) is a different mechanism
-// and still jumps (6800 -> 3745 measured with the embed near the end of the note): SC-522.
+// NOT COVERED HERE: a Live Preview host (`.cm-scroller`, `![[B]]` rendered by CodeMirror) is a different mechanism
+// (6800 -> 3745 measured with the embed near the end of the note), fixed in livePreviewScrollHold.ts (SC-522), which
+// reuses `embedsBlockOf` to find the host's embeds of the written note.
 //
 // THE PIN IS A FLOOR, NOT A CAP (SC-470 r4). The rule's `!important` min-height REPLACES
 // Obsidian's own inline sizer min-height, and Obsidian's Reading view is virtualised, so the
@@ -245,8 +246,11 @@ function verticalPadding(el: HTMLElement, win: Window): number {
  * `closest` per level). A link that cannot be resolved falls back to the host's path, which can only pin one view too
  * many (TTL-bounded), never miss one.
  * Only embeds that contain a DSE block count: nothing else of ours can collapse them.
+ * SC-522: `scroller` may itself be an embed (a Live Preview host's embed widget, a direct `.cm-content` child, is the
+ * `.internal-embed`): it is then checked too, with its link resolved from the host's path. A Reading scroller never
+ * matches, so SC-479's behaviour is unchanged.
  */
-function embedsBlockOf(scroller: HTMLElement, path: string, hostPath: string, resolveLink: LinkResolver): boolean {
+export function embedsBlockOf(scroller: HTMLElement, path: string, hostPath: string, resolveLink: LinkResolver): boolean {
 	const target = new Map<Element, string | null>();
 	const resolved = (embed: Element): string | null => {
 		if (target.has(embed)) return target.get(embed) ?? null;
@@ -256,7 +260,9 @@ function embedsBlockOf(scroller: HTMLElement, path: string, hostPath: string, re
 		target.set(embed, resolvedPath);
 		return resolvedPath;
 	};
-	for (const embed of Array.from(scroller.querySelectorAll<HTMLElement>('.internal-embed[src]'))) {
+	const embeds = Array.from(scroller.querySelectorAll<HTMLElement>('.internal-embed[src]'));
+	if (scroller.matches('.internal-embed[src]')) embeds.unshift(scroller);
+	for (const embed of embeds) {
 		if (embed.querySelector('[data-dse-element]') && resolved(embed) === path) return true;
 	}
 	return false;
