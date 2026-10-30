@@ -472,3 +472,169 @@ describe('RefUnwrapView — legacy @path / [[wikilink]] whole-block refs (D6 spe
 		expect(rendered.getAttribute('data-test-model')).toBe('No-File Card');
 	});
 });
+
+// SC-525 -- the in-flight depth guard (IN_FLIGHT_REFS) is keyed on blockKey + reference and records the
+// view that owns the entry. A reference already resolving in the SAME block is refused only while its
+// owner is a live view: a superseded (unloaded) owner -- the block edit form's preview, which remounts a
+// fresh view into the same blockKey on every keystroke -- no longer blocks its replacement, and its late
+// `finally` no longer clears the replacement's entry. A genuine nesting cycle stays refused.
+describe('RefUnwrapView — in-flight depth guard (SC-525)', () => {
+	interface NestModel {
+		text: string;
+		next?: string;
+	}
+	const NESTING = /nesting too deep/i;
+
+	/** Base view that renders `text`, then (like a card whose body holds a whole-block ref) mounts the ref
+	 *  `next` names through a nested pipeline run on the SAME host, so it sees the same blockKey. */
+	function setup() {
+		const table: Record<string, NestModel> = {};
+		const holds: Array<() => void> = [];
+		let holding = false;
+		const views: ElementView<any>[] = [];
+		const deps = makeDeps();
+		const pipeline = new ElementPipeline(deps);
+		const host = makeHost();
+		class NestView extends ElementView<NestModel> {
+			protected async onMount(root: HTMLElement, model: NestModel): Promise<void> {
+				root.createDiv({ cls: 'test-base-view', attr: { 'data-test-model': model.text } });
+				if (model.next) await pipeline.run(def, model.next, host);
+			}
+		}
+		const nestBase: ElementDefinition<NestModel> = {
+			id: 'test-base',
+			name: 'Test Base',
+			aliases: ['ds-test-base'],
+			shape: 'static',
+			parse: (data) => data as NestModel,
+			createView: (cx) => new NestView(cx),
+		};
+		const wrapped = withReference(nestBase, { sccType: /statblock$/ });
+		const def: ElementDefinition<any> = {
+			...wrapped,
+			createView: (cx: any) => {
+				const view = wrapped.createView(cx) as ElementView<any>;
+				views.push(view);
+				return view;
+			},
+		};
+		deps.refs.register({
+			kind: 'at-path',
+			canResolve: (raw) => raw in table,
+			resolve: ({ raw }) =>
+				holding
+					? new Promise((resolve) => holds.push(() => resolve({ data: table[raw] })))
+					: Promise.resolve({ data: table[raw] }),
+		});
+		return {
+			table,
+			holds,
+			views,
+			host,
+			run: (ref: string) => pipeline.run(def, ref, host),
+			hold: (on: boolean) => {
+				holding = on;
+			},
+			roots: () => Array.from(host.containerEl.children) as HTMLElement[],
+		};
+	}
+	const tick = async () => {
+		for (let i = 0; i < 5; i++) await new Promise<void>((resolve) => setTimeout(resolve, 0));
+	};
+	const nestingErrors = (roots: HTMLElement[]) =>
+		roots.filter((r) => NESTING.test(r.querySelector('.dse-error-card-message')?.textContent ?? ''));
+	const rendered = (root: HTMLElement) => root.querySelector('.test-base-view')?.getAttribute('data-test-model');
+
+	test('a cycle A -> B -> A in one live block is refused at the second A', async () => {
+		const s = setup();
+		s.table['@A'] = { text: 'A', next: '@B' };
+		s.table['@B'] = { text: 'B', next: '@A' };
+		await s.run('@A');
+		const roots = s.roots();
+		expect(roots).toHaveLength(3);
+		expect(rendered(roots[0])).toBe('A');
+		expect(rendered(roots[1])).toBe('B');
+		expect(nestingErrors(roots)).toEqual([roots[2]]);
+		expect(roots[2].querySelector('.dse-error-card-message')?.textContent).toContain('`@A`');
+	});
+
+	test('a reference to itself (A -> A) is refused', async () => {
+		const s = setup();
+		s.table['@A'] = { text: 'A', next: '@A' };
+		await s.run('@A');
+		const roots = s.roots();
+		expect(roots).toHaveLength(2);
+		expect(rendered(roots[0])).toBe('A');
+		expect(nestingErrors(roots)).toEqual([roots[1]]);
+	});
+
+	test('two live views in one block resolving the same reference at once: the later one is refused, the earlier one still renders', async () => {
+		const s = setup();
+		s.table['@A'] = { text: 'A' };
+		s.hold(true);
+		const first = s.run('@A');
+		await tick();
+		const second = s.run('@A');
+		await tick();
+		expect(nestingErrors(s.roots())).toEqual([s.roots()[1]]);
+		s.holds.forEach((release) => release());
+		await Promise.all([first, second]);
+		expect(rendered(s.roots()[0])).toBe('A');
+		expect(nestingErrors(s.roots())).toEqual([s.roots()[1]]);
+	});
+
+	test('once a resolution settles, the same reference resolves again in that block', async () => {
+		const s = setup();
+		s.table['@A'] = { text: 'A' };
+		await s.run('@A');
+		await s.run('@A');
+		expect(s.roots().map(rendered)).toEqual(['A', 'A']);
+		expect(nestingErrors(s.roots())).toEqual([]);
+	});
+
+	test('an unloaded view\'s pending lookup does not block a new view of the same reference, and it renders once released', async () => {
+		const s = setup();
+		s.table['@A'] = { text: 'A' };
+		s.hold(true);
+		const first = s.run('@A');
+		await tick();
+		s.views[0].load();
+		s.views[0].unload(); // superseded, as the form's preview view is on the next keystroke
+		const second = s.run('@A');
+		await tick();
+		expect(nestingErrors(s.roots())).toEqual([]);
+		expect(s.holds).toHaveLength(2);
+		s.holds[1]();
+		await second;
+		expect(rendered(s.roots()[1])).toBe('A');
+		s.holds[0]();
+		await first;
+		expect(nestingErrors(s.roots())).toEqual([]);
+		expect(rendered(s.roots()[1])).toBe('A');
+	});
+
+	test('a superseded owner\'s late finally leaves the new owner\'s entry in place: a third live view is still refused', async () => {
+		const s = setup();
+		s.table['@A'] = { text: 'A' };
+		s.hold(true);
+		const first = s.run('@A');
+		await tick();
+		s.views[0].load();
+		s.views[0].unload();
+		const second = s.run('@A'); // takes the entry over
+		await tick();
+		s.holds[0](); // the superseded lookup finishes first: its finally runs while `second` is still in flight
+		await first;
+		const third = s.run('@A');
+		await tick();
+		expect(nestingErrors(s.roots())).toEqual([s.roots()[2]]);
+		await third;
+		s.holds[1]();
+		await second;
+		// the owner's own finally cleared the entry: a later run resolves normally
+		s.hold(false);
+		await s.run('@A');
+		expect(rendered(s.roots()[3])).toBe('A');
+		expect(nestingErrors(s.roots())).toEqual([s.roots()[2]]);
+	});
+});

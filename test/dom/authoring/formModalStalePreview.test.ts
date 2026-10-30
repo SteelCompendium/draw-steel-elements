@@ -339,3 +339,87 @@ describe('SC-510: a ds-scc code in the edit form', () => {
 		expect(form.preview.querySelectorAll('.dse-ref-notice').length).toBe(1);
 	});
 });
+
+// SC-525 -- retyping the SAME reference while its lookup is still running.
+//
+// The preview's blockKey is the same on every keystroke, and RefUnwrapView refused a reference already
+// "in flight" for that key. An unloaded (superseded) preview view still held its entry until its own lookup
+// finished, so a key that left the reference unchanged (a trailing space) showed "Reference nesting too deep",
+// and kept showing it after the first lookup finished, until the next keystroke.
+const NESTING = /nesting too deep/i;
+
+/** A preview that never shows the depth guard's refusal, nor any other error card. */
+function expectNoNestingError(preview: HTMLElement): void {
+	expect(preview.textContent).not.toMatch(NESTING);
+	expect(preview.querySelector('.dse-error-card')).toBeNull();
+}
+
+describe.each(CASES)('SC-525: retyping the same @Ref.md in the $name edit form while its lookup is pending', (c) => {
+	const withRef = async () => {
+		const s = await setup(c, noteWith(c.alias, c.source));
+		s.h.app.vault.setFile('Ref.md', refNote(c.alias, c.refBlock));
+		const { el } = await s.render(c.source);
+		const form = openForm(el);
+		const hold = holdLookups(s.h.deps.refs as never);
+		return { ...s, form, hold };
+	};
+
+	test('a trailing space (the same trimmed reference): no nesting error while both lookups are held, and the card once they finish (first lookup last)', async () => {
+		const { form, hold } = await withRef();
+		form.type('@Ref.md');
+		form.type('@Ref.md ');
+		expectNoNestingError(form.preview);
+		expect(hold.held.map((x) => x.raw)).toEqual(['@Ref.md', '@Ref.md']); // the current preview starts its own lookup
+		await hold.release(1); // the current preview's lookup finishes first
+		expectOnlyRef(form.preview, c.refName);
+		await hold.release(0); // then the superseded one: it must not disturb the card
+		expectOnlyRef(form.preview, c.refName);
+	});
+
+	test('the superseded lookup finishes first, then the current one: still the card, never the nesting error', async () => {
+		const { form, hold } = await withRef();
+		form.type('@Ref.md');
+		form.type('@Ref.md ');
+		await hold.release(0);
+		expectNoNestingError(form.preview);
+		await hold.release(1);
+		expectOnlyRef(form.preview, c.refName);
+	});
+
+	test('several keys that all leave the reference unchanged, lookups released in typing order: the card', async () => {
+		const { form, hold } = await withRef();
+		form.type('@Ref.md');
+		form.type('@Ref.md ');
+		form.type('@Ref.md  ');
+		form.type('@Ref.md\n');
+		expectNoNestingError(form.preview);
+		expect(hold.held.length).toBe(4);
+		await hold.releaseAll();
+		expectOnlyRef(form.preview, c.refName);
+	});
+});
+
+describe('SC-525: retyping the same ds-scc code in the edit form while its entity read is pending', () => {
+	test('a trailing space: no nesting error while held, the card after the reads finish', async () => {
+		const s = await setup({ def: sccElement, alias: 'ds-scc' }, noteWith('ds-scc', KIT_CODE));
+		loadMdDseFixture(s.h.vault, 'kit/panther.md');
+		const { el } = await s.render(KIT_CODE);
+		await settle();
+		const form = openForm(el);
+		await settle();
+		const index = s.h.deps.compendium as unknown as { getEntity: (code: string) => Promise<unknown> };
+		const real = index.getEntity.bind(index);
+		const reads: Array<() => void> = [];
+		index.getEntity = (code: string) => new Promise((resolve) => reads.push(() => resolve(real(code))));
+		form.type(KIT_CODE);
+		form.type(KIT_CODE + ' ');
+		expectNoNestingError(form.preview);
+		expect(reads.length).toBe(2);
+		for (const release of reads) {
+			release();
+			await settle();
+		}
+		expectNoNestingError(form.preview);
+		expect(form.preview.textContent).toMatch(/Panther/i);
+	});
+});
