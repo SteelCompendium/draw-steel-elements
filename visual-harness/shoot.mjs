@@ -2946,7 +2946,7 @@ async function mountClickRevealedForSweep(page, bg, problems) {
  *  Runs BEFORE `mountClickRevealedForSweep` on purpose: SC-526 will add the Recoveries popover to the end of
  *  that helper, and the popover closes on any later document click, so it must stay the last click. Keep this
  *  block self-contained (one call site per sweep) so SC-526 rebases cleanly.
- *  `beyondTicket` marks states the SC-527 r1 survey found beyond the ticket's list (owner rules on them). */
+ *  `beyondTicket` marks states the SC-527 r1 survey found beyond the ticket's list (owner ruled: fold, SC-527 r1). */
 const SC527_EXTRA = ['initiative', 'negotiation', 'negotiation', 'montage', 'montage', 'hero'];
 const SC527_STATES = [
 	{
@@ -3004,6 +3004,9 @@ const SC527_STATES = [
 		// `hero|dse-btn.dse-btn--icon.dse-stepper__btn|disabled`, is ALREADY compared since SC-513 (first node: the
 		// probe hero's ability-body roll strip "Decrease Edges", which comes earlier in the DOM), so it is not
 		// asserted here: one node per kind, and that node is not this one.
+		// This section also carries `data-dse-harness-extra="hero"`, the attribute SC-513's probe hero uses, so in the
+		// button sweep that selector matches TWO sections; this one has no ability toggles, bodies or roll strips.
+		// Address either by `data-dse-harness-index` (or the probe id), never by that attribute alone.
 		what: 'hero: Respite (full Stamina disables Catch Breath)',
 		clicks: [['button[aria-label^="Respite"]', 0]],
 		reached: ['button[aria-label^="Catch Breath"]:disabled'],
@@ -3066,10 +3069,15 @@ async function reachStateKindsForSweep(page, bg, problems) {
 			}
 		}
 		if (!clicked) continue;
-		const unmet = await page.evaluate(
-			({ s, sels }) => sels.filter((x) => document.querySelectorAll(`${s} ${x}`).length === 0),
-			{ s: sec, sels: st.reached },
-		);
+		// Wait (5 s, as SC-513's sc513WaitFor) for every reached selector, so a repaint that lands a frame late
+		// under load cannot go falsely red; on timeout name each selector still unmet (never a skip).
+		const unmetNow = ({ s, sels }) => sels.filter((x) => document.querySelectorAll(`${s} ${x}`).length === 0);
+		let unmet = [];
+		try {
+			await page.waitForFunction(({ s, sels }) => sels.every((x) => document.querySelectorAll(`${s} ${x}`).length > 0), { s: sec, sels: st.reached }, { timeout: 5000 });
+		} catch {
+			unmet = await page.evaluate(unmetNow, { s: sec, sels: st.reached });
+		}
 		for (const x of unmet) {
 			problems.push(`${bg}: SC-527 ${st.what} — the state was not reached: nothing in the extra ${tail[k].id} section matches \`${x}\``);
 		}
