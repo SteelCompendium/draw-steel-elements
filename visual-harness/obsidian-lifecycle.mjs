@@ -474,8 +474,19 @@ const PAGE_HELPERS = `(() => {
  * dropped-write Notice — plausibly because that action is Obsidian's real "leave Restricted
  * Mode" trigger and may disturb plugin-scoped state the header "X" does not touch.
  */
-const AUTO_DISMISS_TRUST_DIALOG = `(() => {
+const AUTO_DISMISS_TRUST_DIALOG = `(async () => {
   if (window.__lcTrustObserver) return true;
+  // SC-531: wait IN-PAGE (same eval) until document.body is a Node. A separate
+  // \`waitFor('!!document.body')\` eval is not enough: the harness once saw it pass and the
+  // very next eval hit \`observe(null)\` ("parameter 1 is not of type 'Node'"), the page's
+  // document having been replaced in between. Bounded, so a page that never gets a body is
+  // reported (environment failure, exit 2) instead of hanging.
+  const bodyDeadline = Date.now() + 20000;
+  while (!(document.body instanceof Node)) {
+    if (Date.now() > bodyDeadline) throw new Error('trust-dialog observer: document.body never became a Node within 20 s (SC-531)');
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  if (window.__lcTrustObserver) return true; // a concurrent install won while we waited
   const dismiss = (modal) => {
     // Probed (Task 8 review I-1 follow-up, real DOM dump): this dialog is NOT a standard
     // Modal (no .modal-close-button) -- it is mod-confirmation, with an INNER .modal
@@ -3501,6 +3512,10 @@ async function main() {
 		await t.waitFor('!!document.body', 'document.body', 20000);
 		await t.ev(AUTO_DISMISS_TRUST_DIALOG);
 		await t.waitFor('window.app?.workspace?.layoutReady === true', 'layoutReady', 45000);
+		// SC-531: install again now that the app is up -- a no-op while the observer is still
+		// there, a re-install if the page's context was replaced since the first eval (the
+		// window flag, and the observer with it, would have gone with the old context).
+		await t.ev(AUTO_DISMISS_TRUST_DIALOG);
 		if (!(await t.ev("!!app.plugins?.plugins?.['draw-steel-elements']"))) {
 			await t.ev(`(async () => { await app.plugins.setEnable(true); await app.plugins.enablePluginAndSave('draw-steel-elements'); })()`);
 		}

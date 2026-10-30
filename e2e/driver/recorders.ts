@@ -43,8 +43,16 @@ export const PAGE_HELPERS = `(() => {
  * (`.mod-trust-folder .modal-header-button`), keyed on that class first, with a
  * /trust the author/i text fallback that never touches a container holding a DSE modal.
  */
-export const AUTO_DISMISS_TRUST_DIALOG = `(() => {
+export const AUTO_DISMISS_TRUST_DIALOG = `(async () => {
   if (window.__dseTrustObserver) return true;
+  // SC-531: wait in-page until document.body is a Node before observing (a null body made
+  // the lifecycle harness's twin of this string throw "parameter 1 is not of type 'Node'").
+  const bodyDeadline = Date.now() + 20000;
+  while (!(document.body instanceof Node)) {
+    if (Date.now() > bodyDeadline) throw new Error('trust-dialog observer: document.body never became a Node within 20 s (SC-531)');
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  if (window.__dseTrustObserver) return true; // a concurrent install won while we waited
   const dismiss = (modal) => {
     const byClass = modal.querySelector('.mod-trust-folder .modal-header-button');
     if (byClass) { byClass.click(); return; }
