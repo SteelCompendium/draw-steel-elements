@@ -63,7 +63,7 @@ export function renderRefNotice(root: HTMLElement, opts: { message: string; hint
  * it after the first lookup finished). A superseded owner no longer blocks its replacement,
  * and releases the entry in `finally` only if it is still the owner.
  */
-const IN_FLIGHT_REFS = new Map<string, ElementView<any>>();
+const IN_FLIGHT_REFS = new Map<string, ElementView<unknown>>();
 
 export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 	/** Tracks the currently-mounted base view (if any) so onUpdate can tear it down before
