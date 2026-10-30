@@ -59,6 +59,7 @@ describe('SC-340 Task 4: claim and adopt', () => {
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect(app.vault.getContent('Note.md')).toContain('current_value: 11');
 
+		ctx1.getSectionInfo = () => null; // SC-481: the replaced section is discarded, so Obsidian resolves nothing for its element
 		const ctx2 = await render('ds-counter'); // Obsidian's rebuild of the changed section
 		expect(ctx2.el.firstElementChild).toBe(root); // adopted: same DOM node
 		expect(registry.stats.claims).toBe(1);

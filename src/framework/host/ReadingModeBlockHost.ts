@@ -286,6 +286,8 @@ export class ReadingModeBlockHost implements BlockHost {
 	private ownFence: { lineStart: number; lineEnd: number; language: string } | null = null;
 	/** SC-455: the block's position among the language's blocks in its callout's DOM, as of the last time it was attached. */
 	private lastOrdinal = -1;
+	/** SC-481: the fence line this host's last write landed at (null until it writes). */
+	private lastWriteLine: number | null = null;
 
 	/** SC-340: this host's registry entry (set by ViewRegistry.own). */
 	private entry: ViewRegistryEntry | null = null;
@@ -501,6 +503,47 @@ export class ReadingModeBlockHost implements BlockHost {
 		return this.knownLineStart;
 	}
 
+	/** SC-481: the fence line this host's last write landed at, or null if it has not written. */
+	get lastWriteLineStart(): number | null {
+		return this.lastWriteLine;
+	}
+
+	/**
+	 * SC-481: what a remount into this host's element needs: the element, the context Obsidian built it with and the
+	 * fence label. Obsidian reuses an old section's element for a later block with the same text and calls no
+	 * processor for it, so the element is still ours to fill.
+	 */
+	remountTarget(): { el: HTMLElement; ctx: MarkdownPostProcessorContext; alias: string } {
+		return { el: this.el, ctx: this.ctx, alias: this.alias };
+	}
+
+	/**
+	 * SC-481: the body of the plain fence this host's element sits on NOW, when that is not the block this host knows -
+	 * Obsidian moved the element to another block (an identical twin below the one this host wrote) without calling a
+	 * processor. null when the element is where its block is. Read-only: it does not refresh the durable position.
+	 *  - a section that is not a plain, closed fence (a quote/callout window, a list, an unterminated fence) is never
+	 *    judged;
+	 *  - an element still on the line this host's last write landed at is the host's own block, whose rebuild has not
+	 *    arrived yet (`knownBody` is ahead of the section on purpose): not reused.
+	 * `linesOf` lets a caller that asks many hosts about one note split its text once.
+	 */
+	reusedBlockBody(linesOf: (text: string) => readonly string[] = splitLines): string | null {
+		if (this.ctx.sourcePath === '' || this.knownBody === null) return null;
+		let section: MarkdownSectionInformation | null;
+		try {
+			section = this.ctx.getSectionInfo(this.el);
+		} catch {
+			return null;
+		}
+		if (!section || section.lineEnd <= section.lineStart) return null;
+		const lines = linesOf(section.text);
+		const open = parseOpenFenceLine(lines[section.lineStart]);
+		if (!open || open.prefix !== '' || parseCloseFence(lines[section.lineEnd]) === null) return null;
+		if (this.lastWriteLine !== null && section.lineStart === this.lastWriteLine) return null;
+		const body = blockBodyLines(lines, section.lineStart, section.lineEnd).join('\n');
+		return normalizeBody(body) === normalizeBody(this.knownBody) ? null : body;
+	}
+
 	get canPersist(): boolean {
 		if (this.ctx.sourcePath === '') return false; // canvas: quarantined, see file header
 		if (this.readSection() !== null) return true;
@@ -607,6 +650,7 @@ export class ReadingModeBlockHost implements BlockHost {
 				// locate path hunting for a body nobody has any more — a dropped write + a false
 				// Notice for two writes that both actually landed.
 				this.knownBody = newSource;
+				this.lastWriteLine = target.lineStart; // SC-481
 				changedContent = next !== content;
 				// SC-198: hold the preview's height across the rebuild this write is about to
 				// provoke (only meaningful while the block is on screen, i.e. its section

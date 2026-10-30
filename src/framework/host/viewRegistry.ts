@@ -174,7 +174,11 @@ export class ViewRegistry extends Component {
 		// that cache only refreshes when a host happens to read its own section, and under B5
 		// an edit above the block re-renders neither instance, so two hosts at the SAME true
 		// block can carry different STALE cached lines and slip past a cache-only comparison.
-		const winnerLine = entry.host.getBlockInfo()?.lineStart ?? entry.host.lastKnownLineStart;
+		// SC-481: the winner's line is where its write LANDED. Its element can already be Obsidian's reuse for an
+		// identical block below (the old element moves to the twin's line without a processor call), and a live read of
+		// that element reports the twin's line: it then equals the discarded twin's remembered line and a first write to
+		// the upper of two identical blocks looked like a second copy of one block. (No write recorded: read it live.)
+		const winnerLine = entry.host.lastWriteLineStart ?? entry.host.getBlockInfo()?.lineStart ?? entry.host.lastKnownLineStart;
 		for (const other of this.entries) {
 			if (other === entry || other.released) continue;
 			if (other.host.docId !== docId || other.host.sourcePath !== sourcePath) continue;

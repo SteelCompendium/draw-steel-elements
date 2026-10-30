@@ -25,6 +25,7 @@ import { PreviewScrollPin } from './host/previewScrollPin';
 import { LivePreviewScrollHold } from './host/livePreviewScrollHold';
 import { ViewRegistry } from './host/viewRegistry';
 import { adoptView } from './host/adoptView';
+import { ReusedElementRemounter } from './host/remountReused';
 
 /**
  * The subset of `ElementFrameworkV2` (main.ts) this wiring loop needs. A narrow structural
@@ -67,6 +68,8 @@ export function registerFrameworkElements(
 	plugin.registerEditorExtension(lpHold.extension());
 	// SC-340 §6.1: the plugin-scoped owner of every reading-mode view.
 	const registry = plugin.addChild(new ViewRegistry({ enabled: options.viewAdoption ?? false }));
+	// SC-481: redraws an element Obsidian reused for the next identical block (see remountReused.ts).
+	const remounter = new ReusedElementRemounter(plugin, framework, scrollPin, registry);
 
 	for (const def of framework.registry.all()) {
 		for (const alias of def.aliases) {
@@ -76,20 +79,33 @@ export function registerFrameworkElements(
 					// SC-340 §6.2: a rebuild caused by one of OUR writes adopts the live view.
 					const claimed = registry.claim(ctx.docId, ctx.sourcePath, source);
 					if (claimed) {
+						// SC-481: where the writer's view was drawn, read before adoption re-points its host.
+						const vacated = claimed.host.remountTarget();
+						let adopted = false;
 						try {
 							adoptView(registry, claimed, el, ctx);
-							return Promise.resolve();
+							adopted = true;
 						} catch (error) {
 							// §8: never leave the block blank — release and render fresh.
 							console.error('Draw Steel Elements: view adoption failed; rendering a fresh view.', error);
 							if (claimed.root.parentElement === el) claimed.root.remove();
 							registry.release(claimed, 'adopt-failed');
 						}
+						if (adopted) {
+							// SC-481: the adoption emptied the writer's old element; if Obsidian still uses it for a later
+							// identical block, that block gets its own view. Then any other element left on a different block.
+							return Promise.all([
+								remounter.remountVacated(vacated.el, vacated.ctx, vacated.alias),
+								remounter.reconcile(ctx.docId, ctx.sourcePath),
+							]).then(() => undefined);
+						}
 					}
 					const host = new ReadingModeBlockHost(plugin, el, ctx, alias, scrollPin, registry);
 					// SC-343: the durable identity starts from the body this view is built from.
 					host.setMountedBody(source);
-					return framework.pipeline.run(def, source, host);
+					// SC-481: a claim that missed (adoption off, an edit form's Save, a twin) can leave the writer's view in the
+					// element Obsidian reused for the twin; redraw it from the twin's own block.
+					return Promise.all([framework.pipeline.run(def, source, host), remounter.reconcile(ctx.docId, ctx.sourcePath)]).then(() => undefined);
 				},
 			);
 		}
