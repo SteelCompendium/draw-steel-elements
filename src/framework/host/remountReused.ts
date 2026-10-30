@@ -11,7 +11,7 @@
 //     vanishing until the note is reopened.
 //
 // The fix is the one public-API move that is always right: every code-block processor call is a chance to look at the
-// views already drawn for the same rendered note (docId + path) and redraw any element that now sits on a block other
+// views already drawn for the same note (path) and redraw any element that now sits on a block other
 // than its view's - a fresh view built from the block the element is on.
 //   - `remountVacated`: the adopted writer's old element, vacated by the adoption, when Obsidian still uses it.
 //   - `reconcile`: any other live view whose element now resolves to a plain fence with a body other than the one the
@@ -87,14 +87,17 @@ export class ReusedElementRemounter {
 	}
 
 	/**
-	 * Release and redraw every live view of this rendered note whose element now sits on a different block than the one
-	 * the view knows. Cheap when nothing moved: one section read per live view and no string work unless a body differs.
+	 * Release and redraw every live view of this note whose element now sits on a different block than the one the view
+	 * knows. Cheap when nothing moved: one section read per live view and no string work unless a body differs.
+	 * Scoped by path, not by docId: Live Preview gives every code-block widget its own random docId, so the writer's widget
+	 * never shares one with the new widget whose processor call this is. Each view is judged against its OWN context, so a
+	 * view in another pane or embed of the same note (its renderer may not have re-parsed yet) is judged by its own state.
 	 */
-	reconcile(docId: string, sourcePath: string): Promise<void> {
+	reconcile(sourcePath: string): Promise<void> {
 		const redraws: Promise<void>[] = [];
 		for (const entry of this.registry.liveEntries()) {
 			if (entry.released || entry.claiming) continue;
-			if (entry.host.docId !== docId || entry.host.sourcePath !== sourcePath) continue;
+			if (entry.host.sourcePath !== sourcePath) continue;
 			const body = entry.host.reusedBlockBody(this.linesOf);
 			if (body === null) continue;
 			const { el, ctx, alias } = entry.host.remountTarget();

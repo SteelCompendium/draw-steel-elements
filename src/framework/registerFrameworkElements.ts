@@ -96,7 +96,7 @@ export function registerFrameworkElements(
 							// identical block, that block gets its own view. Then any other element left on a different block.
 							return Promise.all([
 								remounter.remountVacated(vacated.el, vacated.ctx, vacated.alias),
-								remounter.reconcile(ctx.docId, ctx.sourcePath),
+								remounter.reconcile(ctx.sourcePath),
 							]).then(() => undefined);
 						}
 					}
@@ -105,7 +105,7 @@ export function registerFrameworkElements(
 					host.setMountedBody(source);
 					// SC-481: a claim that missed (adoption off, an edit form's Save, a twin) can leave the writer's view in the
 					// element Obsidian reused for the twin; redraw it from the twin's own block.
-					return Promise.all([framework.pipeline.run(def, source, host), remounter.reconcile(ctx.docId, ctx.sourcePath)]).then(() => undefined);
+					return Promise.all([framework.pipeline.run(def, source, host), remounter.reconcile(ctx.sourcePath)]).then(() => undefined);
 				},
 			);
 		}
