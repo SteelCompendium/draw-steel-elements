@@ -721,4 +721,65 @@ describe('state-only kind sections for the button host-leak sweep (SC-527)', () 
 		// Every expected key is the kind of an element the states assert (its element prefix is a SC-527 section).
 		for (const key of SC527_EXPECT) expect(SC527_EXTRA).toContain(key.split('|')[0]);
 	});
+
+	// SC-530 — `tagButtons` keys a checked radio (`|checked`) and a seal on a vertical kit track
+	// (`|in:track--vertical`) apart from their idle / horizontal twins. Its own function text is read out of
+	// shoot.mjs and run on the REAL mounted DOM, so a key that stopped being written fails here, not in a
+	// 10-minute browser run.
+	describe('checked radios and vertical-track seals in the host-leak kind key (SC-530)', () => {
+		const SC530_EXPECT: string[] = literal('SC530_EXPECT');
+		const tagButtons = new Function(`${shootMjs.match(/\nfunction tagButtons\(opts\) \{[\s\S]*?\n\}\n/)![0]}; return tagButtons;`)() as () => string[];
+
+		/** The sweep's DOM: the gallery's negotiation, then SC-527's sections last (section 38 is the first extra negotiation). */
+		const mountNegotiation = async () => {
+			const q = new URLSearchParams(withSc527States({ gallery: '1', galleryExtra: 'roll' }));
+			const { errors } = await mountFromParams(document, { ...gallery, galleryIds: ['negotiation'], galleryExtra: parseParams(`?${q}`).galleryExtra });
+			expect(errors).toEqual([]);
+			return Array.from(mount.querySelectorAll<HTMLElement>('[data-dse-harness-extra]')).slice(-SC527_EXTRA.length);
+		};
+
+		test('SC530_EXPECT is the tier row, the track seal and the two vertical-track kinds, all negotiation', () => {
+			expect(SC530_EXPECT).toEqual([
+				'negotiation|dse-pr__row|checked',
+				'negotiation|dse-track__slot|checked',
+				'negotiation|dse-track__slot|in:track--vertical',
+				'negotiation|dse-track__slot|checked|in:track--vertical',
+			]);
+			for (const key of SC530_EXPECT) expect(key.startsWith('negotiation|')).toBe(true);
+		});
+
+		test('at load the seal and both vertical kinds are keyed and the tier row is not checked; a click on tier #0 adds its kind', async () => {
+			const tail = await mountNegotiation();
+			const atLoad = tagButtons();
+			expect(atLoad).toContain('negotiation|dse-track__slot|checked');
+			expect(atLoad).toContain('negotiation|dse-track__slot|in:track--vertical');
+			expect(atLoad).toContain('negotiation|dse-track__slot|checked|in:track--vertical');
+			expect(atLoad).not.toContain('negotiation|dse-pr__row|checked');
+			tail[1].querySelectorAll<HTMLElement>('.dse-pr__row')[0].click();
+			await new Promise((r) => setTimeout(r, 0));
+			expect(tagButtons()).toContain('negotiation|dse-pr__row|checked');
+		});
+
+		test('no existing kind is renamed: the idle row and seal keep their keys, no key carries an aria-checked value, the suffix is vertical-only', async () => {
+			const tail = await mountNegotiation();
+			tail[1].querySelectorAll<HTMLElement>('.dse-pr__row')[0].click();
+			await new Promise((r) => setTimeout(r, 0));
+			const keys = tagButtons();
+			expect(keys).toContain('negotiation|dse-pr__row');
+			expect(keys).toContain('negotiation|dse-track__slot');
+			expect(keys.filter((k) => k.includes('aria-checked'))).toEqual([]);
+			const vertical = keys.filter((k) => k.includes('|in:track'));
+			expect(vertical.length).toBeGreaterThan(0);
+			for (const k of vertical) expect(k).toMatch(/^negotiation\|dse-track__slot(\|checked)?\|in:track--vertical$/);
+		});
+
+		test('assertSc530Tagged has one call site, after assertSc527Tagged in assertBtnHostLeak', () => {
+			expect(shootMjs.match(/assertSc530Tagged\(/g)).toHaveLength(2); // the declaration + the one call
+			const sweep = shootMjs.slice(shootMjs.indexOf('async function assertBtnHostLeak('));
+			const at527 = sweep.indexOf('assertSc527Tagged(');
+			const at530 = sweep.indexOf('assertSc530Tagged(');
+			expect(at527).toBeGreaterThan(-1);
+			expect(at530).toBeGreaterThan(at527);
+		});
+	});
 });
