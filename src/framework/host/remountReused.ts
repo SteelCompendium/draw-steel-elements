@@ -105,6 +105,7 @@ export class ReusedElementRemounter {
 				get text(): string {
 					return (text ??= view.state.doc.toString());
 				},
+				blocks: new Map(),
 			};
 		}
 		for (const entry of this.registry.liveEntries()) {

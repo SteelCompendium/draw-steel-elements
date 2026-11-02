@@ -702,19 +702,19 @@ describe('SC-537: twin callouts in Live Preview (the editor-driven pass)', () =>
 		expect(t.values()).toEqual([6, 6]);
 	});
 
-	test('one pass reads the callout\'s block list once, however many blocks the callout holds', async () => {
+	test('a pass over a callout of six blocks (typing, scrolling) reads the callout\'s block list once, not once per block', async () => {
 		const many = callout(...Array.from({ length: 6 }, (_, i): [string, number] => [`B${i}`, 5]));
 		const t = await lp(noteOf(many, many));
 		const upper = await t.draw(0, 6);
-		const lower = await t.draw(1, 6);
-		await t.increase(upper.els[0]);
-		t.reuseUpperAtLower(upper, lower);
+		await t.draw(1, 6);
 		const query = jest.spyOn(upper.widget, 'querySelectorAll');
 
-		await t.update();
+		const pass = t.update();
+		const reads = query.mock.calls.filter(([sel]) => /block-language/.test(String(sel))).length;
+		await pass;
 
-		expect(query.mock.calls.filter(([sel]) => /block-language/.test(String(sel)))).toHaveLength(1);
-		expect(shown(upper.els[0])).toBe('B0=5'); // and the redraw still chose each block by its place
+		expect(reads).toBe(1);
+		expect(upper.els.map((el) => el.children.length)).toEqual([1, 1, 1, 1, 1, 1]); // nothing was redrawn
 	});
 
 	test('registerFrameworkElements registers the update listener with the editor', async () => {

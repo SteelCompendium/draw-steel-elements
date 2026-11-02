@@ -539,16 +539,20 @@ describe('SC-478: wiring', () => {
 		const on = jest.spyOn(app.vault, 'on');
 		const ext = jest.spyOn(plugin, 'registerEditorExtension');
 		const spy = jest.spyOn(LivePreviewScrollHold.prototype, 'captureViewsOf').mockImplementation(() => {});
+		const holdExtension = jest.spyOn(LivePreviewScrollHold.prototype, 'extension');
 		try {
 			const registry: ElementRegistry = { register: () => undefined as never, get: () => undefined, all: () => [] };
 			registerFrameworkElements(plugin as any, { registry, pipeline: {} as ElementPipeline });
-			expect(ext).toHaveBeenCalledTimes(2); // the scroll hold's, and SC-537's update listener (livePreviewReconcile.ts)
+			// the scroll hold's extension is among the registrations (other features register theirs too: SC-537's update listener)
+			expect(holdExtension).toHaveBeenCalledTimes(1);
+			expect(ext.mock.calls.map(([e]) => e)).toContain(holdExtension.mock.results[0].value);
 			const calls = on.mock.calls.filter(([name]) => name === 'modify');
 			for (const call of calls) (call[1] as (file: { path: string }) => void)({ path: 'Note.md' });
 			// SC-522: with the link resolver, so Live Preview hosts of the note's embeds are held too
 			expect(spy).toHaveBeenCalledWith(app.workspace, 'Note.md', expect.any(Function));
 		} finally {
 			spy.mockRestore();
+			holdExtension.mockRestore();
 			ext.mockRestore();
 			on.mockRestore();
 		}

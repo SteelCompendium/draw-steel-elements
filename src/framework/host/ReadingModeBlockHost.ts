@@ -277,6 +277,8 @@ export interface CmEditorView {
 export interface LivePreviewScope {
 	readonly view: CmEditorView;
 	readonly text: string;
+	/** This pass's block list of each quote/callout (`quoteOrdinal`'s cache). */
+	readonly blocks: Map<Element, readonly Element[]>;
 }
 
 /**
@@ -296,20 +298,21 @@ function calloutWindow(cm: CmEditorView, widget: Element, getText: () => string,
 /**
  * SC-455: the position of the `alias` block drawn in `el` among the `alias` blocks of the outermost quote/callout around it,
  * in document order (the DOM's). -1 when `el` is in no quote/callout or is not found among them.
+ * `cache` (SC-537) is one pass's memory of each quote/callout's block list: a pass that asks about every block of a callout reads
+ * the list once instead of once per block (the editor pass runs on every scroll and keystroke).
  */
-export function quoteOrdinal(el: HTMLElement, alias: string): number {
+export function quoteOrdinal(el: HTMLElement, alias: string, cache?: Map<Element, readonly Element[]>): number {
 	let top: Element | null = null;
 	for (let n = el.parentElement; n; n = n.parentElement) {
 		if (n.matches('.callout, blockquote, .cm-embed-block')) top = n;
 	}
 	if (!top) return -1;
-	const blocks = Array.from(top.querySelectorAll('div, code')).filter(
-		(n) =>
-			((n.tagName === 'DIV' && n.classList.contains(`block-language-${alias}`)) ||
-				// a sibling Obsidian has not handed to its processor yet is still a bare <pre><code>
-				(n.tagName === 'CODE' && n.parentElement?.tagName === 'PRE' && n.classList.contains(`language-${alias}`))) &&
-			!n.parentElement?.closest('[data-dse-element]'),
-	);
+	let blocks = cache?.get(top);
+	if (!blocks) {
+		// a sibling Obsidian has not handed to its processor yet is still a bare <pre><code>
+		blocks = Array.from(top.querySelectorAll(`div.block-language-${alias}, pre > code.language-${alias}`)).filter((n) => !n.parentElement?.closest('[data-dse-element]'));
+		cache?.set(top, blocks);
+	}
 	return blocks.indexOf(el);
 }
 
@@ -324,7 +327,7 @@ export function quoteOrdinal(el: HTMLElement, alias: string): number {
  *  - `body` is the fence's own lines, quote prefix off, exactly what Obsidian hands a processor.
  * `linesOf` lets a caller that asks many times about one note split its text once. `sectionOf` is the section to judge when the
  * caller knows it better than the context does (SC-537: the editor's section for a Live Preview callout widget, whose
- * `getSectionInfo` is null); left out, the context is asked.
+ * `getSectionInfo` is null); left out, the context is asked. `blocksCache` is the pass's `quoteOrdinal` cache.
  */
 export function fenceOnElement(
 	ctx: MarkdownPostProcessorContext,
@@ -332,6 +335,7 @@ export function fenceOnElement(
 	alias: string,
 	linesOf: (text: string) => readonly string[] = splitLines,
 	sectionOf?: MarkdownSectionInformation | null,
+	blocksCache?: Map<Element, readonly Element[]>,
 ): { lineStart: number; lineEnd: number; body: string } | null {
 	if (ctx.sourcePath === '') return null;
 	let section: MarkdownSectionInformation | null;
@@ -352,7 +356,7 @@ export function fenceOnElement(
 		if (parseCloseFence(lines[section.lineEnd]) === null) return null;
 		fence = { lineStart: section.lineStart, lineEnd: section.lineEnd };
 	} else {
-		const found = locateInSectionLines(lines, section, alias, null, quoteOrdinal(el, alias), null);
+		const found = locateInSectionLines(lines, section, alias, null, quoteOrdinal(el, alias, blocksCache), null);
 		if (found === null || found === 'ambiguous') return null;
 		fence = found;
 	}
@@ -633,7 +637,7 @@ export class ReadingModeBlockHost implements BlockHost {
 			section ??= this.livePreviewCalloutSection(scope, linesOf);
 			if (!section) return null;
 		}
-		const fence = fenceOnElement(this.ctx, this.el, this.alias, linesOf, section);
+		const fence = fenceOnElement(this.ctx, this.el, this.alias, linesOf, section, scope?.blocks);
 		if (!fence) return null;
 		if (this.lastWriteLine !== null && fence.lineStart === this.lastWriteLine) return null;
 		return normalizeBody(fence.body) === normalizeBody(this.knownBody) ? null : fence.body;
