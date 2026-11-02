@@ -100,7 +100,7 @@
 // card's top border. Anti-vacuity per phase: panels that were out of the document at the first animation frame after their creation exist, and every
 // anchor has a non-zero border. Controls (temporary bundles via DSE_LIFECYCLE_BUNDLE): the frame-batched build that drops such panels (this fix's first version)
 // FAILs Live Preview; the stock build that reads the border at mount FAILs Reading view; the shipped build passes both.
-// SC-537 appends G-S57 (45 scenarios in all; it sits before G-S56, which runs last and detaches the other leaves): the same, for identical CALLOUTS in Live Preview
+// SC-537 appends G-S57 (46 scenarios in all; it sits before G-S56, which runs last and detaches the other leaves): the same, for identical CALLOUTS in Live Preview
 // (also twins far apart, where the lower callout is off screen at the write, and a click on the lower callout's title right after it).
 // Obsidian draws a callout as one editor widget and, after a write to the upper one, hands its OLD widget (with the writer's live view) to the lower
 // slot without calling a processor, so the lower callout showed the writer's value, a click on it wrote the UPPER block and a form Save was erased. Real
@@ -108,7 +108,7 @@
 // card per block, each showing its block, disk changed only by the clicked block; the upper widget's DOM, tagged before the click, sits in the lower
 // slot afterwards and a `reused-by-twin` release is recorded (so the scenario cannot pass without the editor-driven redraw).
 //
-// SC-522 appends G-S52 (45 scenarios in all; the id was assigned by the dispatcher): a tracker in note B embedded in a LIVE PREVIEW host note A keeps
+// SC-522 appends G-S52 (46 scenarios in all; the id was assigned by the dispatcher): a tracker in note B embedded in a LIVE PREVIEW host note A keeps
 // A's scroll position and its on-screen text when B is written (in-app and on disk with A parked at its end, from another pane, and a hero added
 // with A parked below the embed), a real click on the embedded card does not scroll A to the embed's top, and a block deleted from B (a
 // redraw that brings no fresh tracker of ours) does not keep the hold up until its timer (phase (f)).
