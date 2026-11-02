@@ -960,8 +960,6 @@ function gs56Kit(t) {
 		holdRefs: (on) => t.ev(`(() => { window.__gs56.holdRefs = ${on ? 'true' : 'false'}; return true; })()`),
 		holdPath: (p) => t.ev(`(() => { window.__gs56.holdPath = ${JSON.stringify(p)}; return true; })()`),
 		held: () => t.ev(`window.__gs56.held.length`),
-		calls: () => t.ev(`window.__gs56.calls`),
-		raws: () => t.ev(`window.__gs56.raws.slice()`),
 		/** Release one held call (FIFO or LIFO); returns how many were held before. */
 		releaseOne: (lifo) => t.ev(`(() => { const H = window.__gs56.held; if (!H.length) return 0; const n = H.length; (${lifo ? 'H.pop()' : 'H.shift()'}).go(); return n; })()`),
 		async releaseAll(lifo) {
@@ -3923,6 +3921,9 @@ const SCENARIOS = [
 		// "Reference loop" card nested inside it (Reading view and Live Preview), a chain of seven distinct references stops at five
 		// cards and a depth-cap card without making the sixth lookup, and a card that is live twice -- two panes, a plugin
 		// off/on, a double redraw -- is never refused. Lookups and file reads are held at hooks and released by hand (never a timer).
+		// It RUNS LAST and, before anything else, DETACHES every other markdown and sidebar leaf (earlier scenarios leave leaves behind whose
+		// hidden editors look up the next note's blocks too, which doubles the lookups it counts); it works in a fresh leaf of its own. A
+		// scenario added after it must set up its own leaves and not rely on the ones the earlier scenarios used.
 		id: 'G-S56',
 		async run(t) {
 			const K = gs56Kit(t);
@@ -3984,7 +3985,8 @@ const SCENARIOS = [
 					levels++;
 					await K.releaseOne(false);
 				}
-				return { levels, stopped, lookups: await K.calls(), raws: await K.raws(), tree: await K.tree(scope) };
+				const { lookups, raws } = await t.ev(`({ lookups: window.__gs56.calls, raws: window.__gs56.raws.slice() })`); // one eval: the count and the list name the same lookups
+				return { levels, stopped, lookups, raws, tree: await K.tree(scope) };
 			};
 			const cycleCase = (label, rel, mode) =>
 				phase(label, async () => {
