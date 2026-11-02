@@ -798,6 +798,34 @@ describe('RefUnwrapView — in-flight depth guard (SC-525)', () => {
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 	});
 
+	// SC-525 r3b -- every path that replaces the view's content must supersede a resolution still in flight, not only
+	// a later reference: a pending `@A` whose view is then updated to an inline (or refused) body must not draw A over it.
+	describe.each([
+		['inline body', { kind: 'inline', model: { text: 'Inline Card' } }, () => 'Inline Card'],
+		['refused body', { kind: 'invalid', message: 'Refused body message' }, () => null],
+	] as Array<[string, any, () => string | null]>)('a view updated from a pending reference to: %s', (_name, replacement, expectedCard) => {
+		test.each([
+			['the stale lookup is released after the update has drawn', 'after'],
+			['the stale lookup is released while the update is still settling', 'during'],
+		] as Array<[string, 'after' | 'during']>)('%s: only the new content, no card for A', async (_when, when) => {
+			const s = setup();
+			s.table['@A'] = { text: 'A' };
+			s.hold(true);
+			const first = s.run('@A');
+			await tick();
+			const updated = s.views[0].update(replacement);
+			if (when === 'during') s.holds[0]();
+			await updated;
+			if (when === 'after') s.holds[0]();
+			await first;
+			await tick();
+			const root = s.roots()[0];
+			expect(baseViews(root)).toEqual(expectedCard() === null ? [] : [expectedCard()]);
+			if (expectedCard() === null) expect(root.querySelector('.dse-error-card-message')?.textContent).toBe('Refused body message');
+			expect(nestingErrors(s.roots())).toEqual([]);
+		});
+	});
+
 	test('a self-reference (A -> A) still stops when its view was updated while its lookup ran', async () => {
 		const s = setup();
 		s.table['@A'] = { text: 'A', next: '@A' };
