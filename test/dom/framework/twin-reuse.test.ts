@@ -28,6 +28,30 @@ function bodyOf(text: string, index: number): string {
 	return blocks[index][2];
 }
 
+/** SC-481 r4: the quote / callout windows of a note (Reading view hands every block in one the WHOLE quote as its section). */
+function windowsOf(text: string): Array<{ lineStart: number; lineEnd: number }> {
+	const out: Array<{ lineStart: number; lineEnd: number }> = [];
+	let start = -1;
+	text.split('\n').forEach((line, i) => {
+		if (line.startsWith('>')) {
+			if (start < 0) start = i;
+		} else if (start >= 0) {
+			out.push({ lineStart: start, lineEnd: i - 1 });
+			start = -1;
+		}
+	});
+	return out;
+}
+/** The body a processor is handed for the block in the `index`-th quote window: the lines between its fences, prefix off. */
+function quotedBody(text: string, index: number): string {
+	const w = windowsOf(text)[index];
+	const lines = text.split('\n').slice(w.lineStart, w.lineEnd + 1).map((l) => l.replace(/^> ?/, ''));
+	const open = lines.findIndex((l) => /^```ds-/.test(l));
+	return lines.slice(open + 1, lines.indexOf('```', open + 1)).join('\n');
+}
+const quoted = (kind: 'callout' | 'quote', name: string, value: number): string =>
+	[...(kind === 'callout' ? ['[!note] Camp'] : []), ...counter(name, value).split('\n')].map((l) => `> ${l}`).join('\n');
+
 const INC = 'button[aria-label^="Increase"]';
 /** What a card shows: its name and its value. */
 function shown(el: HTMLElement): string {
@@ -36,7 +60,7 @@ function shown(el: HTMLElement): string {
 	return `${name}=${value}`;
 }
 
-async function setup(note: string, viewAdoption = true) {
+async function setup(note: string, viewAdoption = true, windowed = false) {
 	const { deps, app, plugin } = makeEnv();
 	app.vault.setFile('Note.md', note);
 	plugin.load();
@@ -50,7 +74,11 @@ async function setup(note: string, viewAdoption = true) {
 		const ctx = makeFakeContext(app, 'Note.md', index);
 		ctx.getSectionInfo = (el) => {
 			const i = at.get(el);
-			return i === undefined ? null : makeFakeContext(app, 'Note.md', i).getSectionInfo(el);
+			if (i === undefined) return null;
+			if (!windowed) return makeFakeContext(app, 'Note.md', i).getSectionInfo(el);
+			const text = app.vault.getContent('Note.md')!;
+			const w = windowsOf(text)[i];
+			return w ? { text, ...w } : null;
 		};
 		const addChild = ctx.addChild.bind(ctx);
 		ctx.addChild = (child) => {
@@ -62,7 +90,8 @@ async function setup(note: string, viewAdoption = true) {
 	}
 	async function build(index: number): Promise<Ctx> {
 		const ctx = ctxAt(index);
-		await plugin.registeredProcessors.get('ds-counter')!(bodyOf(app.vault.getContent('Note.md')!, index), ctx.el, ctx as any);
+		const text = app.vault.getContent('Note.md')!;
+		await plugin.registeredProcessors.get('ds-counter')!(windowed ? quotedBody(text, index) : bodyOf(text, index), ctx.el, ctx as any);
 		return ctx;
 	}
 	/** First paint of every block of the note. */
@@ -95,7 +124,7 @@ async function setup(note: string, viewAdoption = true) {
 	}
 	const values = (): number[] => [...app.vault.getContent('Note.md')!.matchAll(/current_value: (\d+)/g)].map((m) => Number(m[1]));
 	const names = (): string[] => [...app.vault.getContent('Note.md')!.matchAll(/name: (\w+)/g)].map((m) => m[1]);
-	return { app, plugin, registry, container, build, paint, rebuild, increase, values, names, ctxAt };
+	return { app, plugin, registry, container, build, paint, rebuild, increase, values, names, ctxAt, at };
 }
 
 describe('SC-481: identical twin blocks keep their own card, value and block', () => {
@@ -253,5 +282,102 @@ describe('SC-481: identical twin blocks keep their own card, value and block', (
 		expect([first.el.firstElementChild, second.el.firstElementChild]).toEqual(roots);
 		expect(first.el.children).toHaveLength(1);
 		expect(second.el.children).toHaveLength(1);
+	});
+});
+
+// SC-481 r4: the same bug for twins inside a blockquote or a callout. Reading view hands the block a section that is the WHOLE
+// quote (its first line is not the fence), so the old checks that only judged a section starting at a plain fence never saw it.
+describe.each(['callout', 'quote'] as const)('SC-481 r4: twin blocks inside a %s', (kind) => {
+	const twins = (): string => noteOf(quoted(kind, 'Twin', 5), quoted(kind, 'Twin', 5));
+	beforeEach(() => jest.useFakeTimers());
+	afterEach(() => {
+		jest.useRealTimers();
+		document.body.replaceChildren();
+		jest.restoreAllMocks();
+	});
+
+	test('the UPPER one clicked: the twin gets its own card (no error card), shows its own value and its click writes its own block', async () => {
+		const { registry, paint, rebuild, increase, values } = await setup(twins(), true, true);
+		const [upper, lower] = await paint(2);
+		const writerRoot = upper.el.firstElementChild;
+		await increase(upper.el);
+		expect(values()).toEqual([6, 5]);
+		const [top, bottom] = await rebuild(['fresh', { reuse: upper }], [lower]);
+
+		expect(top.firstElementChild).toBe(writerRoot);
+		expect(bottom.children).toHaveLength(1);
+		expect(bottom.textContent).not.toContain('failed to render'); // r3 MEDIUM-1: the callout's raw lines were parsed as the block
+		expect(shown(top)).toBe('Twin=6');
+		expect(shown(bottom)).toBe('Twin=5');
+		expect(registry.stats.claims).toBe(1);
+
+		await increase(bottom);
+		expect(values()).toEqual([6, 6]);
+		expect(shown(bottom)).toBe('Twin=6');
+	});
+
+	test('view adoption off: each card shows its own block and the lower card writes the lower block', async () => {
+		const { paint, rebuild, increase, values } = await setup(twins(), false, true);
+		const [upper, lower] = await paint(2);
+		await increase(upper.el);
+		const [top, bottom] = await rebuild(['fresh', { reuse: upper }], [lower]);
+
+		expect(bottom.children).toHaveLength(1);
+		expect(shown(top)).toBe('Twin=6');
+		expect(shown(bottom)).toBe('Twin=5');
+		await increase(bottom);
+		expect(values()).toEqual([6, 6]);
+	});
+
+	test('a write that is not the view\'s own (the edit form\'s Save) on the upper twin: a click on the lower twin does not erase the edit', async () => {
+		const { registry, paint, rebuild, increase, values, names } = await setup(twins(), true, true);
+		const [upper, lower] = await paint(2);
+		const [entry] = registry.liveEntries();
+		await entry.host.replaceSource(bodyOf(noteOf(counter('Edited', 5)), 0));
+		expect(names()).toEqual(['Edited', 'Twin']);
+		const [top, bottom] = await rebuild(['fresh', { reuse: upper }], [lower]);
+
+		expect(shown(top)).toBe('Edited=5');
+		expect(shown(bottom)).toBe('Twin=5');
+		await increase(bottom);
+		expect(names()).toEqual(['Edited', 'Twin']);
+		expect(values()).toEqual([5, 6]);
+	});
+});
+
+// SC-481 r4 (r3 LOW-1): a view that has written but whose rebuild has not arrived yet still sits on its own line, with the section
+// text from BEFORE the write. Another pane's rebuild (a different docId) can run first; it must not take that for a reused element.
+describe('SC-481 r4: a writer whose rebuild is still to come is not mistaken for a reused element', () => {
+	beforeEach(() => jest.useFakeTimers());
+	afterEach(() => {
+		jest.useRealTimers();
+		document.body.replaceChildren();
+	});
+
+	test('pane B\'s rebuild runs before pane A\'s: the writer in A keeps its view and is adopted by its own rebuild', async () => {
+		const { app, plugin, registry, increase, ctxAt, at } = await setup(noteOf(counter('Solo', 5)));
+		const draw = async (docId: string): Promise<Ctx> => {
+			const ctx = ctxAt(0);
+			(ctx as any).docId = docId;
+			await plugin.registeredProcessors.get('ds-counter')!(bodyOf(app.vault.getContent('Note.md')!, 0), ctx.el, ctx as any);
+			return ctx;
+		};
+		const paneA = await draw('doc-A');
+		const paneB = await draw('doc-B');
+		const writerRoot = paneA.el.firstElementChild;
+		const before = app.vault.getContent('Note.md')!;
+		await increase(paneA.el);
+		// A's renderer has not re-parsed yet: its section still reads the note as it was, at the line the write landed at.
+		paneA.getSectionInfo = () => ({ text: before, lineStart: 2, lineEnd: 7 });
+
+		await draw('doc-B'); // pane B's rebuild comes first
+		expect(registry.liveEntries().some((e) => e.root === writerRoot)).toBe(true);
+		expect(writerRoot!.isConnected || paneA.el.contains(writerRoot)).toBe(true);
+
+		at.delete(paneA.el);
+		const rebuiltA = await draw('doc-A'); // then A's own rebuild
+		expect(rebuiltA.el.firstElementChild).toBe(writerRoot);
+		expect(registry.stats.claims).toBe(1);
+		void paneB;
 	});
 });
