@@ -100,6 +100,12 @@
 // card's top border. Anti-vacuity per phase: panels that were out of the document at the first animation frame after their creation exist, and every
 // anchor has a non-zero border. Controls (temporary bundles via DSE_LIFECYCLE_BUNDLE): the frame-batched build that drops such panels (this fix's first version)
 // FAILs Live Preview; the stock build that reads the border at mount FAILs Reading view; the shipped build passes both.
+// SC-537 appends G-S57 (45 scenarios in all; it sits before G-S56, which runs last and detaches the other leaves): the same, for identical CALLOUTS in Live Preview.
+// Obsidian draws a callout as one editor widget and, after a write to the upper one, hands its OLD widget (with the writer's live view) to the lower
+// slot without calling a processor, so the lower callout showed the writer's value, a click on it wrote the UPPER block and a form Save was erased. Real
+// mouse clicks; the cards are read after the cursor is parked (a click in a callout opens it as source, SC-540). Per phase the picture is the note: one
+// card per block, each showing its block, disk changed only by the clicked block; the upper widget's DOM, tagged before the click, sits in the lower
+// slot afterwards and a `reused-by-twin` release is recorded (so the scenario cannot pass without the editor-driven redraw).
 //
 // SC-522 appends G-S52 (45 scenarios in all; the id was assigned by the dispatcher): a tracker in note B embedded in a LIVE PREVIEW host note A keeps
 // A's scroll position and its on-screen text when B is written (in-app and on disk with A parked at its end, from another pane, and a hero added
@@ -201,6 +207,11 @@ const counterLines = (value = 10, name = 'Health') => [`name: ${name}`, `current
 /** SC-481 r4: a counter block inside a blockquote (`head` = the lines above the fence, e.g. a callout header), every line prefixed `> `. */
 const QUOTED = (head, value = 5, name = 'Twin') => [...head, '```ds-counter', ...counterLines(value, name), '```'].map((l) => `> ${l}`).join('\n');
 
+/** SC-537: a callout holding two counters, `Twin` 5 then `Other` 3. */
+const QUOTED_XY = (head) => [...head, '```ds-counter', ...counterLines(5, 'Twin'), '```', '', '```ds-counter', ...counterLines(3, 'Other'), '```'].map((l) => `> ${l}`).join('\n');
+/** SC-537: a callout inside a callout, the counter in the inner one. */
+const QUOTED_NESTED = () => ['[!note] Outer', ...['[!tip] Inner', '```ds-counter', ...counterLines(5, 'Twin'), '```'].map((l) => `> ${l}`)].map((l) => `> ${l}`).join('\n');
+
 const FIXTURES = {
 	'Lifecycle/twins.md': `# twins\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nMID\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`,
 	// SC-481 (G-S53): identical blocks - a pair, a triplet and a pair of montages. Each scenario resets its own note.
@@ -208,6 +219,10 @@ const FIXTURES = {
 	'Lifecycle/twin-triplets.md': `# twin triplets\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nM1\n\n${COUNTER(5, 'Twin')}\n\nM2\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`,
 	// SC-481 r4: the same twins inside a callout and inside a plain blockquote (Reading view hands such a block the whole quote as its section).
 	'Lifecycle/twin-callouts.md': `# twin callouts\n\nTOP\n\n${QUOTED(['[!note] Camp'])}\n\nMID\n\n${QUOTED(['[!note] Camp'])}\n\nBOTTOM\n`,
+	// SC-537 (G-S57): the same callout twins in Live Preview - three of them, two blocks per callout (Twin 5 + Other 3), and a callout nested in a callout.
+	'Lifecycle/twin-callouts-3.md': `# twin callouts 3\n\nTOP\n\n${QUOTED(['[!note] Camp'])}\n\nM1\n\n${QUOTED(['[!note] Camp'])}\n\nM2\n\n${QUOTED(['[!note] Camp'])}\n\nBOTTOM\n`,
+	'Lifecycle/twin-callouts-xy.md': `# twin callouts xy\n\nTOP\n\n${QUOTED_XY(['[!note] Camp'])}\n\nMID\n\n${QUOTED_XY(['[!note] Camp'])}\n\nBOTTOM\n`,
+	'Lifecycle/twin-callouts-nested.md': `# twin callouts nested\n\nTOP\n\n${QUOTED_NESTED()}\n\nMID\n\n${QUOTED_NESTED()}\n\nBOTTOM\n`,
 	'Lifecycle/twin-quotes.md': `# twin quotes\n\nTOP\n\n${QUOTED([])}\n\nMID\n\n${QUOTED([])}\n\nBOTTOM\n`,
 	'Lifecycle/twin-montage.md': `# twin montage\n\nTOP\n\n${fence('ds-montage', ['title: Twin', 'rounds: 3', 'participants:', '  - name: Kira', 'current_round: 1'])}\n\nMID\n\n${fence('ds-montage', ['title: Twin', 'rounds: 3', 'participants:', '  - name: Kira', 'current_round: 1'])}\n\nBOTTOM\n`,
 	'Lifecycle/counter.md': `# counter\n\nABOVE\n\n${COUNTER(10)}\n\nBELOW\n`,
@@ -4123,6 +4138,189 @@ const SCENARIOS = [
 			await t.open('Lifecycle/other.md'); // back to Reading for the next scenario
 			t.expect(fails.length === 0, fails.join(' | '));
 			return out.join('; ');
+		},
+	},
+	{
+		// SC-537: identical callouts in Live Preview. After a write to the upper callout Obsidian gives the lower slot the upper's OLD widget (no processor call);
+		// the editor-driven pass (livePreviewReconcile.ts) must redraw it from the lower block. Real mouse clicks; cards are read with the cursor parked.
+		id: 'G-S57',
+		async run(t) {
+			const m = await t.mark();
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			const { waitFormOpen, FORM, SAVE } = formKit(t);
+			const CM = `(${LC_LEAF}).view.editor.cm`;
+			const problems = [];
+			const outcomes = [];
+			const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+			const namesOf = (rel) => (t.read(rel).match(/^(?:> ?)*name: (\w+)$/gm) ?? []).map((s) => s.replace(/^(?:> ?)*name: /, ''));
+			const outsideQuotes = (text) => text.split('\n').filter((l) => !l.startsWith('>')).join('\n');
+			const phase = async (label, fn) => {
+				try {
+					await fn();
+				} catch (e) {
+					problems.push(`${label}: ${e.message}`);
+				}
+			};
+			await t.ev(`(() => { if (!document.getElementById('lc-gs57-notice')) { const st = document.createElement('style'); st.id = 'lc-gs57-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
+			// Page side: the cards of the editor by block (a card belongs to the n-th counter fence at or after its widget's line), and a log of why views were released.
+			await t.ev(`(() => {
+				const P = (window.__gs57 = { released: [] });
+				const reg = ${t.reg};
+				reg.release = function (entry, why) { P.released.push(why); return Object.getPrototypeOf(this).release.call(this, entry, why); };
+				const lineOf = (cm, w) => { try { return cm.state.doc.lineAt(cm.posAtDOM(w)).number - 1; } catch (e) { return null; } };
+				P.lineOf = lineOf;
+				P.widgets = (cm) => Array.from(cm.contentDOM.children).filter((x) => x.classList.contains('cm-embed-block') && x.classList.contains('cm-callout'));
+				P.cards = (cm) => {
+					const fences = [];
+					cm.state.doc.toString().split('\\n').forEach((l, i) => { if (/^(?:[ ]{0,3}>[ ]?)*\`\`\`ds-counter\\s*$/.test(l)) fences.push(i); });
+					const out = [];
+					for (const w of P.widgets(cm)) {
+						const L = lineOf(cm, w);
+						if (L === null) continue;
+						const after = fences.filter((x) => x >= L);
+						Array.from(w.querySelectorAll('[data-dse-element="counter"]')).filter((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]')).forEach((r, k) => out.push({ block: fences.indexOf(after[k]), name: r.querySelector('.dse-counter__name')?.textContent ?? '', value: Number(Array.from(r.querySelectorAll('input')).map((i) => i.value).find((v) => v !== '')) }));
+					}
+					return out.sort((a, b) => a.block - b.block);
+				};
+				P.rootFor = (cm, block) => {
+					const fences = [];
+					cm.state.doc.toString().split('\\n').forEach((l, i) => { if (/^(?:[ ]{0,3}>[ ]?)*\`\`\`ds-counter\\s*$/.test(l)) fences.push(i); });
+					for (const w of P.widgets(cm)) {
+						const L = lineOf(cm, w);
+						if (L === null) continue;
+						const after = fences.filter((x) => x >= L);
+						const roots = Array.from(w.querySelectorAll('[data-dse-element="counter"]')).filter((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]'));
+						const k = roots.findIndex((_, i) => fences.indexOf(after[i]) === block);
+						if (k >= 0) return roots[k];
+					}
+					return null;
+				};
+				return true;
+			})()`);
+			const park = async () => {
+				await t.ev(`(${LC_LEAF}).view.editor.setCursor({ line: 0, ch: 0 })`);
+				await t.sleep(1200);
+			};
+			const openLP = async (rel) => {
+				await t.open('Lifecycle/other.md');
+				await t.reset(rel);
+				await t.ev(`(async () => { await (${LC_LEAF}).setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'source', source: false }, active: true }); })()`);
+				await t.waitFor(`!!window.__gs57.rootFor(${CM}, 0)`, `${rel}: the first card is drawn`);
+				await park();
+				await t.waitFor(`window.__gs57.cards(${CM}).length === ${(FIXTURES[rel].match(/```ds-counter/g) ?? []).length}`, `${rel}: every card is drawn`);
+			};
+			const cardsNow = () => t.ev(`window.__gs57.cards(${CM})`);
+			/** What the user sees with the cursor parked must be the note: one card per block, the block's own name and value. */
+			const expectPicture = async (label, rel, wantValues, wantNames) => {
+				const cards = await cardsNow();
+				const disk = t.counterValues(rel);
+				outcomes.push(`${label}: cards ${JSON.stringify(cards.map((c) => c.value))} disk ${JSON.stringify(disk)}${wantNames ? ' names ' + JSON.stringify(namesOf(rel)) : ''}`);
+				if (!same(disk, wantValues)) problems.push(`${label}: the blocks hold ${JSON.stringify(disk)}, expected ${JSON.stringify(wantValues)} (the click wrote another block)`);
+				if (cards.length !== disk.length) problems.push(`${label}: ${cards.length} card(s) for ${disk.length} blocks`);
+				else if (!same(cards.map((c) => c.value), disk)) problems.push(`${label}: the cards show ${JSON.stringify(cards.map((c) => c.value))} but the blocks hold ${JSON.stringify(disk)}`);
+				if (wantNames) {
+					if (!same(namesOf(rel), wantNames)) problems.push(`${label}: the note's names are ${JSON.stringify(namesOf(rel))}, expected ${JSON.stringify(wantNames)}`);
+					if (cards.length === wantNames.length && !same(cards.map((c) => c.name), wantNames)) problems.push(`${label}: the cards are named ${JSON.stringify(cards.map((c) => c.name))}, expected ${JSON.stringify(wantNames)}`);
+				}
+			};
+			/** A REAL click on + of the card of `block`; wait for the note, park the cursor, then compare the picture. */
+			const clickStep = async (label, rel, block, wantValues, wantNames = null) => {
+				const before = JSON.stringify([t.counterValues(rel), namesOf(rel)]);
+				const btn = `(window.__gs57.rootFor(${CM}, ${block})?.querySelector('button[aria-label^="Increase"]'))`;
+				if (!(await t.ev(`!!${btn}`))) {
+					problems.push(`${label}: there is no + on the card of block ${block}`);
+					return;
+				}
+				await t.realClick(btn);
+				const t0 = Date.now();
+				while (JSON.stringify([t.counterValues(rel), namesOf(rel)]) === before && Date.now() - t0 < 5000) await t.sleep(80);
+				await t.sleep(1500);
+				await park();
+				await expectPicture(label, rel, wantValues, wantNames);
+			};
+			const wholeNote = (label, rel, wantSigs) => {
+				const blocks = [...t.read(rel).split('\n').map((l) => l.replace(/^(?:> ?)+/, '')).join('\n').matchAll(/^```ds-counter\n([\s\S]*?)\n```$/gm)].map((x) => x[1].split('\n').sort().join('|'));
+				if (!same(blocks, wantSigs.map(([v, n]) => counterLines(v, n).sort().join('|'))) || outsideQuotes(t.read(rel)) !== outsideQuotes(FIXTURES[rel])) problems.push(`${label}: the note is not the fixture with only the intended changes (blocks ${JSON.stringify(blocks)})`);
+			};
+			const released = () => t.ev('window.__gs57.released.slice()');
+			try {
+				// (a) two callouts: upper then lower. Anti-vacuity: the upper widget's DOM, tagged before the click, sits in the lower slot afterwards.
+				await phase('(a) two callouts', async () => {
+					const rel = 'Lifecycle/twin-callouts.md';
+					await t.ev(`window.__gs57.released.length = 0`);
+					await openLP(rel);
+					const lowerLine = await t.ev(`(() => { const P = window.__gs57; const cm = ${CM}; const ws = P.widgets(cm); ws[0].__gs57 = 'upper'; return P.lineOf(cm, ws[1]); })()`);
+					await clickStep('(a) click upper', rel, 0, [6, 5]);
+					const tagged = await t.ev(`(() => { const P = window.__gs57; const cm = ${CM}; const w = P.widgets(cm).find((x) => x.__gs57 === 'upper'); return w ? P.lineOf(cm, w) : 'gone'; })()`);
+					if (tagged !== lowerLine) problems.push(`(a) the upper widget was expected in the lower slot (line ${lowerLine}) after the click, found ${JSON.stringify(tagged)}: the scenario would not exercise the reuse`);
+					const releases = await released();
+					if (!releases.includes('reused-by-twin')) problems.push(`(a) no view was released as reused-by-twin (releases: ${JSON.stringify(releases)})`);
+					await clickStep('(a) then click lower', rel, 1, [6, 6]);
+					wholeNote('(a)', rel, [[6, 'Twin'], [6, 'Twin']]);
+				});
+				// (b) the block edit form's Save on the upper callout, then a click on the lower one: the edit must survive.
+				await phase('(b) form Save', async () => {
+					const rel = 'Lifecycle/twin-callouts.md';
+					await t.ev(`${prefs}.set('authoringControls', true)`);
+					await openLP(rel);
+					const pencil = `(window.__gs57.rootFor(${CM}, 0)?.querySelector('.dse-chrome button[data-dse-chrome-item="edit"]'))`;
+					await t.waitFor(`!!${pencil}`, '(b) the Edit pencil is drawn');
+					// A callout's title sits where the hover menu is drawn, so open the form from the keyboard (as G-S53).
+					await t.ev(`${pencil}.focus({ focusVisible: true })`);
+					await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', text: '\r', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+					await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+					await waitFormOpen('(b) form Save');
+					const typed = await t.ev(`(() => { const ta = ${FORM}.querySelector('textarea.dse-form__raw'); if (!ta) return false; ta.value = ta.value.replace('name: Twin', 'name: Edited'); ta.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+					t.expect(typed, '(b) the form has no raw box');
+					await t.waitFor(`!!(${SAVE}) && !(${SAVE}).disabled`, '(b) Save enabled');
+					await t.realClick(SAVE);
+					await t.waitFor(`!document.querySelector('.modal-container .dse-modal')`, '(b) the form closed');
+					const t0 = Date.now();
+					while (!namesOf(rel).includes('Edited') && Date.now() - t0 < 5000) await t.sleep(80);
+					await t.sleep(1500);
+					await park();
+					await expectPicture('(b) form Save on upper', rel, [5, 5], ['Edited', 'Twin']);
+					await clickStep('(b) then click lower', rel, 1, [5, 6], ['Edited', 'Twin']);
+					wholeNote('(b)', rel, [[5, 'Edited'], [6, 'Twin']]);
+					await t.ev(`${prefs}.set('authoringControls', false)`);
+				});
+				// (c) three callouts: upper, then middle (the old middle widget goes to the lower slot).
+				await phase('(c) three callouts', async () => {
+					const rel = 'Lifecycle/twin-callouts-3.md';
+					await openLP(rel);
+					await clickStep('(c) click upper', rel, 0, [6, 5, 5]);
+					await clickStep('(c) then click middle', rel, 1, [6, 6, 5]);
+					await clickStep('(c) then click lower', rel, 2, [6, 6, 6]);
+					wholeNote('(c)', rel, [[6, 'Twin'], [6, 'Twin'], [6, 'Twin']]);
+				});
+				// (d) two blocks per callout (Twin, Other): upper Twin, lower Twin, lower Other.
+				await phase('(d) two blocks per callout', async () => {
+					const rel = 'Lifecycle/twin-callouts-xy.md';
+					await openLP(rel);
+					await clickStep('(d) click upper X', rel, 0, [6, 3, 5, 3]);
+					await clickStep('(d) then click lower X', rel, 2, [6, 3, 6, 3]);
+					await clickStep('(d) then click lower Y', rel, 3, [6, 3, 6, 4]);
+					wholeNote('(d)', rel, [[6, 'Twin'], [3, 'Other'], [6, 'Twin'], [4, 'Other']]);
+				});
+				// (e) a callout inside a callout.
+				await phase('(e) nested callouts', async () => {
+					const rel = 'Lifecycle/twin-callouts-nested.md';
+					await openLP(rel);
+					await clickStep('(e) click upper', rel, 0, [6, 5]);
+					await clickStep('(e) then click lower', rel, 1, [6, 6]);
+					wholeNote('(e)', rel, [[6, 'Twin'], [6, 'Twin']]);
+				});
+			} finally {
+				await t.ev(`delete ${t.reg}.release`);
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+				await t.ev(`document.getElementById('lc-gs57-notice')?.remove()`);
+				for (const rel of ['Lifecycle/twin-callouts.md', 'Lifecycle/twin-callouts-3.md', 'Lifecycle/twin-callouts-xy.md', 'Lifecycle/twin-callouts-nested.md']) await t.reset(rel);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect(problems.length === 0, `${problems.join(' | ')} -- outcomes: ${outcomes.join('; ')}`);
+			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${JSON.stringify(await t.noticesSince(m))}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
+			return `identical callouts in Live Preview keep their own card, value and block (2 callouts, form Save, 3 callouts, two blocks per callout, nested): ${outcomes.join('; ')}`;
 		},
 	},
 	{
