@@ -731,6 +731,54 @@ describe('RefUnwrapView — in-flight depth guard (SC-525)', () => {
 		});
 	});
 
+	test.each([
+		['the earlier entity read finishes first', [0, 1]],
+		['the later entity read finishes first', [1, 0]],
+	] as Array<[string, number[]]>)('an SCC code, view updated while its entity read is running (%s): one card, nothing left behind', async (_name, order) => {
+		const views: ElementView<any>[] = [];
+		const wrapped = withReference(baseDef(), { sccType: /statblock$/ });
+		const def: ElementDefinition<any> = {
+			...wrapped,
+			createView: (cx: any) => {
+				const view = wrapped.createView(cx) as ElementView<any>;
+				views.push(view);
+				return view;
+			},
+		};
+		const file = fakeTFile('DS Compendium/monster/goblin/statblock/goblin-stinker.md');
+		const reads: Array<() => void> = [];
+		const entity: CompendiumEntity = {
+			scc: CODE,
+			type: 'monster.goblin.statblock',
+			name: 'Goblin Stinker',
+			source: 'mcdm.monsters.v1',
+			file,
+			frontmatter: { type: 'monster.goblin.statblock' },
+			body: async () => 'body text',
+			model: async () => ({ text: 'Goblin Stinker Model' }),
+		};
+		const deps = makeDeps({
+			sccAnchors: fakeSccAnchors(() => ({ kind: 'vault', file, linkpath: file.path })),
+			compendium: fakeCompendium({ getEntity: () => new Promise((resolve) => reads.push(() => resolve(entity))) }),
+		});
+		const host = makeHost();
+		const blockKey = `Note.md::ds-test-base::sc525-${++setupSeq}`;
+		host.blockKey = () => blockKey;
+		const first = new ElementPipeline(deps).run(def, CODE, host);
+		await tick();
+		const updated = views[0].update(views[0].currentModel());
+		await tick();
+		expect(reads).toHaveLength(2);
+		for (const i of order) {
+			reads[i]();
+			await tick();
+		}
+		await Promise.all([first, updated]);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(baseViews(root)).toEqual(['Goblin Stinker Model']);
+		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+	});
+
 	test('a self-reference (A -> A) still stops when its view was updated while its lookup ran', async () => {
 		const s = setup();
 		s.table['@A'] = { text: 'A', next: '@A' };
