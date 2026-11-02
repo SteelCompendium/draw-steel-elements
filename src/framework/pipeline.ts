@@ -193,17 +193,28 @@ export function isEditableControlTarget(target: EventTarget | null, root: HTMLEl
  * on the page, which are outside every root and never ours to blur.
  */
 function armClickShield(root: HTMLElement): void {
-	// SC-522: inside a Live Preview embed (`.cm-content .internal-embed`, CodeMirror's widget) Obsidian's embed click handler
-	// runs `selectElement` + `scrollIntoView`, jumping the HOST note to the embed's top on every click in the card (5420 ->
-	// 3916 measured). It skips a target inside `.interactive-child`, so the root takes that class there (the embed is then not
-	// selected by a click in the card). Reading view and DSE's own Live Preview code-block widgets are untouched. Details:
-	// livePreviewScrollHold.ts, "CLICKS IN THE EMBEDDED CARD".
-	const markInEditorEmbed = (): void => {
-		if (!root.classList.contains('interactive-child') && root.closest('.cm-content .internal-embed')) root.classList.add('interactive-child');
+	// Obsidian draws two kinds of Live Preview block as one CodeMirror widget whose `click` handler (`hookClickHandler`) calls
+	// `selectElement`: the whole widget's source range becomes the editor selection, with `scrollIntoView: true`. The handler skips
+	// a click whose target sits in an `.interactive-child` (it walks from the target up to the editor's content), so the root takes
+	// that class in both places - at the press or the click, before the event reaches the widget, and nowhere else. Obsidian also
+	// tests the class for Mod+A in the editor (select the input's text, not the note) - see livePreviewScrollHold.ts, SC-522 r3.
+	//  - SC-522, an EMBED (`.cm-content .internal-embed`): the handler jumped the HOST note to the embed's top on every click in the
+	//    card (5420 -> 3916 measured). Details: livePreviewScrollHold.ts, "CLICKS IN THE EMBEDDED CARD".
+	//  - SC-540, a CALLOUT (`.cm-content .cm-embed-block.cm-callout`, Obsidian's `> [!note]` widget): the click, and the Enter that
+	//    opens the edit form from the pencil, selected the whole callout, so a press on + turned the callout into its markdown
+	//    (the cursor was inside it) and scrolled to it; a plain code block outside a callout never did. Any DSE root under the
+	//    widget qualifies - a callout inside a callout, an embed inside a callout - because the match is on the ancestor.
+	// Not done by stopping or cancelling `click`: Obsidian's link and checkbox handling for a link/checkbox inside the card runs on
+	// that same event. The callout's own controls are outside the root and untouched: its text and title still open the source,
+	// the `</>` button too, and the fold chevron folds. Reading view (no `.cm-content`) and DSE's own code-block widgets in Live
+	// Preview (a plain fence is a `.cm-embed-block` without `.cm-callout`) are untouched.
+	const markInEditorWidget = (): void => {
+		if (root.classList.contains('interactive-child')) return;
+		if (root.closest('.cm-content .internal-embed') || root.closest('.cm-content .cm-embed-block.cm-callout')) root.classList.add('interactive-child');
 	};
-	root.addEventListener('click', markInEditorEmbed, { capture: true });
+	root.addEventListener('click', markInEditorWidget, { capture: true });
 	const stop = (event: Event): void => {
-		markInEditorEmbed();
+		markInEditorWidget();
 		if (!isEditableControlTarget(event.target, root)) {
 			event.preventDefault();
 			const active = root.ownerDocument.activeElement as HTMLElement | null;
