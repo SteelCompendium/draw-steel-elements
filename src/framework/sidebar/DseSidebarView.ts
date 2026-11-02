@@ -9,6 +9,7 @@ import type { ElementPipeline } from '../pipeline';
 import type { ElementRegistry } from '../registry';
 import type { ReferenceService } from '../seams/refs';
 import type { PreferenceStore } from '../seams/prefs';
+import { focusControl, focusIsFree } from '../chrome/focusHandoff';
 import { stampTextScaleRoot } from '../kit/textScaleRoot';
 import type { ValidationService } from '../validation';
 import { SidebarPanel } from './SidebarPanel';
@@ -290,7 +291,7 @@ export class DseSidebarView extends ItemView {
 	 *  one real caller-facing removal path (SC-184 item 1's chrome "Unpin" and item 7's
 	 *  degrade-card dismiss button both land here via SidebarPanel's onRemoveRequested
 	 *  callback), where it used to have none. */
-	removePanel(panel: SidebarPanel): void {
+	removePanel(panel: SidebarPanel, opts: { keyboard?: boolean } = {}): void {
 		const index = this.panels.indexOf(panel);
 		if (index < 0) {
 			// SC-184 fix round (LOW-3) — a panel not (or no longer) in panels[] is not a
@@ -302,12 +303,28 @@ export class DseSidebarView extends ItemView {
 			this.removeChild(panel);
 			return;
 		}
+		// SC-511: read where focus is BEFORE the panel (and the Unpin / Remove button the user pressed) is torn down.
+		const doc = this.contentEl.ownerDocument;
+		const handOff = opts.keyboard === true && (panel.holdsFocus() || focusIsFree(doc));
 		this.panels.splice(index, 1);
 		this.removeChild(panel);
 		// SC-184 (item 4) — symmetric with addPanel's own requestSaveLayout: a removal is
 		// exactly as much a layout change as an addition.
 		this.services.app.workspace.requestSaveLayout();
 		this.updateEmptyState();
+		if (handOff) this.handOffFocusAfterRemoval(index);
+	}
+
+	/**
+	 * SC-511 -- a KEYBOARD removal threw away the button the user pressed, so focus fell to <body>. The standard
+	 * list-removal rule (SC-505's keyboard-only rule, see chrome/focusHandoff.ts): the panel that now sits where the
+	 * removed one was (`index`), else the panel above it, else the "No pinned blocks" message. Everything is inside this
+	 * sidebar leaf. A pointer press never gets here, and neither does a removal after the user moved focus elsewhere.
+	 */
+	private handOffFocusAfterRemoval(index: number): void {
+		const next = this.panels[index] ?? this.panels[index - 1];
+		if (next) next.focusEntry();
+		else focusControl(this.emptyStateEl);
 	}
 
 	private mountPanel(state: SidebarPanelState): SidebarPanel {
@@ -316,7 +333,7 @@ export class DseSidebarView extends ItemView {
 		// itself is never invoked synchronously during construction, only later from a user
 		// action, so the definite-assignment below is safe.
 		let panel!: SidebarPanel;
-		panel = new SidebarPanel(this.services, state, () => this.removePanel(panel));
+		panel = new SidebarPanel(this.services, state, (keyboard) => this.removePanel(panel, { keyboard }));
 		this.panels.push(panel);
 		this.addChild(panel);
 		void panel.mount(this.ensurePanelsEl());
@@ -335,7 +352,8 @@ export class DseSidebarView extends ItemView {
 			return;
 		}
 		if (this.emptyStateEl) return;
-		const el = this.ensurePanelsEl().createDiv({ cls: 'dse-sidebar__empty' });
+		// SC-511: tabindex -1 = focusable by script (a keyboard Unpin of the last panel lands here), never a Tab stop.
+		const el = this.ensurePanelsEl().createDiv({ cls: 'dse-sidebar__empty', attr: { tabindex: '-1' } });
 		el.createEl('div', { cls: 'dse-sidebar__empty-title', text: 'No pinned blocks' });
 		el.createEl('div', {
 			cls: 'dse-sidebar__empty-message',

@@ -7,6 +7,7 @@
 // views unchanged (mode-agnostic)" guardrail.
 import { Component, TFile } from 'obsidian';
 import type { App, Plugin } from 'obsidian';
+import { focusControl, isKeyboardClick } from '../chrome/focusHandoff';
 import { iconButton } from '../kit/iconButton';
 import type { ElementPipeline } from '../pipeline';
 import { prepareModel } from '../pipeline';
@@ -53,7 +54,7 @@ export class SidebarPanel extends Component {
 		 *  item (via SidebarBlockHost.requestRemoval) and the degrade card's "Remove
 		 *  panel" dismiss button (renderUnavailable) — one removal path, two entry
 		 *  points. */
-		private readonly onRemoveRequested: () => void,
+		private readonly onRemoveRequested: (keyboard?: boolean) => void,
 	) {
 		super();
 	}
@@ -73,6 +74,25 @@ export class SidebarPanel extends Component {
 	 */
 	reveal(): void {
 		this.panelEl?.scrollIntoView?.({ block: 'nearest' });
+	}
+
+	/** Is keyboard focus inside this panel right now? (SC-511: read BEFORE the panel is removed.) */
+	holdsFocus(): boolean {
+		const active = this.panelEl?.ownerDocument.activeElement;
+		return !!active && !!this.panelEl?.contains(active);
+	}
+
+	/**
+	 * SC-511 -- hand keyboard focus to this panel after a neighbour was removed: its header note link, the panel's first
+	 * always-visible control; if that is gone, the first focusable control that is not in the hover-revealed chrome panel
+	 * (`.dse-chrome`: a ring on a hidden control cannot be seen). True when focus really landed.
+	 */
+	focusEntry(): boolean {
+		if (focusControl(this.noteLinkEl)) return true;
+		const first = Array.from(
+			this.panelEl?.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])') ?? [],
+		).find((el) => !el.closest('.dse-chrome'));
+		return focusControl(first);
 	}
 
 	/**
@@ -370,7 +390,7 @@ export class SidebarPanel extends Component {
 				icon: 'x',
 				label: 'Remove panel',
 				variant: 'ghost',
-				onClick: () => this.onRemoveRequested(),
+				onClick: (evt) => this.onRemoveRequested(isKeyboardClick(evt)),
 			},
 			this,
 		);

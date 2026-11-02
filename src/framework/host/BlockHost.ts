@@ -116,6 +116,10 @@ export interface BlockHost {
 	 * DseSidebarView/SidebarPanel. Only `SidebarBlockHost` implements it (a request to
 	 * remove THIS panel); every other host omits it, so the pipeline's gate is simply
 	 * "does this host support removal" rather than a mode check duplicated in two files.
+	 *
+	 * SC-511: `keyboard` is true when the removal came from a keyboard activation (the click had
+	 * `MouseEvent.detail === 0`); the sidebar then hands focus to a neighbouring panel instead of
+	 * letting it fall to <body>. A pointer press (or no argument) moves nothing.
 	 */
-	requestRemoval?(): void;
+	requestRemoval?(keyboard?: boolean): void;
 }

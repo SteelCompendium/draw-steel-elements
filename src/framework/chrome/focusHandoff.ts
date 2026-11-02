@@ -46,7 +46,7 @@ export function focusControl(el: HTMLElement | null | undefined, ring = true): b
 }
 
 /** Focus is "free to take" when nothing holds it (body or null): a request never fights the user. */
-function focusIsFree(doc: Document): boolean {
+export function focusIsFree(doc: Document): boolean {
 	return doc.activeElement === null || doc.activeElement === doc.body;
 }
 

@@ -665,7 +665,9 @@ export class ElementPipeline {
 												id: 'unpin',
 												icon: 'pin-off',
 												label: 'Unpin from sidebar',
-												onClick: () => cx.host.requestRemoval?.(),
+												control: 'chrome.unpin',
+												// SC-511: the press kind rides along; only a keyboard Unpin hands focus to a neighbouring panel.
+												onClick: (evt) => cx.host.requestRemoval?.(isKeyboardClick(evt)),
 											} satisfies ChromeMenuItem,
 										]
 									: []),

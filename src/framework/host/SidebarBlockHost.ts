@@ -137,7 +137,7 @@ export class SidebarBlockHost implements BlockHost {
 		 *  Backs the optional `BlockHost.requestRemoval` seam so the chrome menu's
 		 *  "Unpin from sidebar" item (pipeline.ts) can remove exactly this panel without
 		 *  the pipeline knowing DseSidebarView exists. */
-		private readonly onRemoveRequested: () => void,
+		private readonly onRemoveRequested: (keyboard?: boolean) => void,
 	) {
 		this.sessionKey = `${backingFile.path}::${alias}::${anchorId}`;
 		// Deliberately does NOT register the vault listener here — see registerModifyListener,
@@ -382,8 +382,8 @@ export class SidebarBlockHost implements BlockHost {
 	/** SC-184 — BlockHost's optional removal seam; delegates straight to whatever
 	 *  SidebarPanel wired in (there is exactly one panel per host, so no identity to
 	 *  disambiguate here). */
-	requestRemoval(): void {
-		this.onRemoveRequested();
+	requestRemoval(keyboard?: boolean): void {
+		this.onRemoveRequested(keyboard);
 	}
 
 	private async handleExternalModify(): Promise<void> {
