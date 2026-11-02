@@ -29,6 +29,7 @@ beforeAll(() => {
 			'echo "$*" >> "$FAKE_ARG_LOG"',
 			'case ",$FAKE_LOST," in *",$n,"*) exit 1;; esac', // lost the race: exits, writes nothing
 			'case ",$FAKE_STUCK," in *",$n,"*) exec sleep 30;; esac', // alive, never says it listens
+			'case ",$FAKE_WRONG," in *",$n,"*) printf "9999\\n" >&3; exec sleep 30;; esac', // says a number that is not ours
 			'printf "%s\\n" "$n" >&3',
 			'exec sleep 30',
 			'',
@@ -47,31 +48,33 @@ interface Outcome {
 	childAlive?: boolean;
 	spawned: number[];
 	args: string[];
+	error: string | null;
 }
 
 /** Runs startOwnedXvfb against the fake server in a node subprocess. `options` is JS source for extra options. */
-function run(candidates: number[], fake: { lost?: number[]; stuck?: number[] }, options = ''): Outcome {
+function run(candidates: number[], fake: { lost?: number[]; stuck?: number[]; wrong?: number[] }, options = '', bin = fakeBin): Outcome {
 	fs.writeFileSync(argLog, '');
 	const code = `
 		import { startOwnedXvfb } from ${JSON.stringify(helper)};
 		const spawned = [];
-		const got = await startOwnedXvfb({
-			bin: ${JSON.stringify(fakeBin)},
+		let got = null, error = null;
+		try { got = await startOwnedXvfb({
+			bin: ${JSON.stringify(bin)},
 			candidates: ${JSON.stringify(candidates)},
 			args: ['-screen', '0', '1600x1200x24'],
 			isTaken: () => false,
 			hasSocket: () => true,
 			onSpawn: (c, n) => spawned.push(n),
 			${options}
-		});
-		const out = { display: got?.display ?? null, num: got?.num, childAlive: got ? got.child.exitCode === null : undefined, spawned };
+		}); } catch (e) { error = e.constructor.name + ': ' + e.message; }
+		const out = { display: got?.display ?? null, num: got?.num, childAlive: got ? got.child.exitCode === null : undefined, spawned, error };
 		console.log(JSON.stringify(out));
 		got?.child.kill('SIGKILL');
 	`;
 	const stdout = execFileSync('node', ['--input-type=module', '-e', code], {
 		cwd: repoRoot,
 		encoding: 'utf8',
-		env: { ...process.env, FAKE_ARG_LOG: argLog, FAKE_LOST: (fake.lost ?? []).join(','), FAKE_STUCK: (fake.stuck ?? []).join(',') },
+		env: { ...process.env, FAKE_ARG_LOG: argLog, FAKE_LOST: (fake.lost ?? []).join(','), FAKE_STUCK: (fake.stuck ?? []).join(','), FAKE_WRONG: (fake.wrong ?? []).join(',') },
 	});
 	const out = JSON.parse(stdout.trim().split('\n').pop() as string) as Outcome;
 	out.args = fs.readFileSync(argLog, 'utf8').split('\n').filter(Boolean);
@@ -116,5 +119,36 @@ describe('SC-546: startOwnedXvfb', () => {
 		const out = run([5301, 5302, 5303], { stuck: [5301, 5302, 5303] }, 'startTimeoutMs: 10000, totalTimeoutMs: 400,');
 		expect(out.display).toBeNull();
 		expect(out.spawned).toEqual([5301]);
+	});
+
+	test('a server that writes a number other than its own is not ours: the next number is tried', () => {
+		const out = run([5301, 5302], { wrong: [5301] });
+		expect(out.display).toBe(':5302');
+		expect(out.spawned).toEqual([5301, 5302]);
+	});
+
+	test('the belt: a server that wrote its number but whose socket is not there is not ours (null)', () => {
+		const out = run([5301, 5302], {}, 'hasSocket: () => false,');
+		expect(out.display).toBeNull();
+		expect(out.spawned).toEqual([5301, 5302]);
+	});
+
+	test('shouldStop is checked before every spawn: once it turns true no further number is started', () => {
+		const out = run([5301, 5302, 5303], { lost: [5301, 5302, 5303] }, 'shouldStop: () => spawned.length >= 2,');
+		expect(out.display).toBeNull();
+		expect(out.spawned).toEqual([5301, 5302]);
+	});
+
+	test('a binary that cannot be executed fails fast with an error naming it, instead of trying every number until the timeouts', () => {
+		const notExecutable = path.join(dir, 'not-executable');
+		fs.writeFileSync(notExecutable, '#!/bin/sh\n', { mode: 0o644 });
+		for (const bin of [notExecutable, path.join(dir, 'does-not-exist')]) {
+			const t0 = Date.now();
+			const out = run([5301, 5302, 5303], {}, '', bin);
+			expect(Date.now() - t0).toBeLessThan(5000);
+			expect(out.display).toBeNull();
+			expect(out.spawned).toEqual([5301]);
+			expect(out.error).toContain(`XvfbSpawnError: could not execute ${bin}: `);
+		}
 	});
 });

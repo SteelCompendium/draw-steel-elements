@@ -31,6 +31,9 @@ export const lockPath = (n) => `/tmp/.X${n}-lock`;
 export const defaultIsTaken = (n) => fs.existsSync(socketPath(n)) || fs.existsSync(lockPath(n));
 
 /** Inclusive integer range [lo, hi]. */
+/** The Xvfb binary could not be executed at all (missing, not executable): no number will ever work. */
+export class XvfbSpawnError extends Error {}
+
 export const displayRange = (lo, hi) => Array.from({ length: Math.max(0, hi - lo + 1) }, (_, i) => lo + i);
 
 /**
@@ -47,18 +50,25 @@ export const displayRange = (lo, hi) => Array.from({ length: Math.max(0, hi - lo
  *        called synchronously after every spawn, so the caller can track the child for cleanup even
  *        while the start is unconfirmed (a loser exits by itself; a hung one is killed here).
  * @param {(n:number)=>boolean} [o.hasSocket]  "its X socket is there" check for the belt (injectable for tests).
+ * @param {() => boolean} [o.shouldStop]  checked before every spawn; true ends the search (null). Callers
+ *        pass their "a signal arrived, cleanup is running" flag: without it an in-flight child that cleanup
+ *        just killed would let the loop spawn the next number after cleanup had already run (an orphan).
  * @param {number} [o.startTimeoutMs]    per-candidate wait for the server's line (default 10 s).
  * @param {number} [o.totalTimeoutMs]    overall bound across all candidates (default 30 s).
  * @returns {Promise<{display:string, num:number, child:import('node:child_process').ChildProcess}|null>}
- *          null when no candidate yielded a display we own.
+ *          null when no candidate yielded a display we own (or shouldStop turned true).
+ * @throws {XvfbSpawnError} when `bin` cannot be executed (ENOENT, EACCES, ...): trying more numbers is pointless.
  */
-export async function startOwnedXvfb({ bin, candidates, args = [], env, isTaken = defaultIsTaken, onSpawn, hasSocket = (n) => fs.existsSync(socketPath(n)), startTimeoutMs = 10000, totalTimeoutMs = 30000 }) {
+export async function startOwnedXvfb({ bin, candidates, args = [], env, isTaken = defaultIsTaken, onSpawn, shouldStop, hasSocket = (n) => fs.existsSync(socketPath(n)), startTimeoutMs = 10000, totalTimeoutMs = 30000 }) {
 	const deadline = Date.now() + totalTimeoutMs;
 	for (const n of candidates) {
-		if (Date.now() >= deadline) break;
+		if (Date.now() >= deadline || shouldStop?.()) break;
 		if (isTaken(n)) continue;
 		const child = spawn(bin, [`:${n}`, ...args, '-displayfd', '3'], { stdio: ['ignore', 'ignore', 'ignore', 'pipe'], ...(env ? { env } : {}) });
-		child.on('error', () => {});
+		let spawnError = null;
+		child.on('error', (e) => {
+			spawnError = e;
+		});
 		onSpawn?.(child, n);
 		const mine = await ownsDisplay(child, n, hasSocket, Math.min(startTimeoutMs, Math.max(0, deadline - Date.now())));
 		if (mine) return { display: `:${n}`, num: n, child };
@@ -67,6 +77,7 @@ export async function startOwnedXvfb({ bin, candidates, args = [], env, isTaken 
 		} catch {
 			/* gone */
 		}
+		if (spawnError) throw new XvfbSpawnError(`could not execute ${bin}: ${spawnError.code ?? spawnError.message}`);
 	}
 	return null;
 }
@@ -81,6 +92,7 @@ function ownsDisplay(child, n, hasSocket, timeoutMs) {
 			settled = true;
 			clearTimeout(timer);
 			child.removeListener('exit', onExit);
+			child.removeListener('error', onExit);
 			child.stdio[3]?.destroy();
 			if (ok) {
 				// Belt: the server said it listens; confirm it is still our running child with its socket.
@@ -92,6 +104,7 @@ function ownsDisplay(child, n, hasSocket, timeoutMs) {
 		const onExit = () => void finish(false);
 		const timer = setTimeout(() => void finish(false), timeoutMs);
 		child.once('exit', onExit);
+		child.once('error', onExit); // spawn failure (ENOENT/EACCES): no exit event follows, so do not wait out the timeout
 		child.stdio[3]?.on('data', (d) => {
 			buf += d.toString();
 			if (buf.includes('\n')) void finish(buf === `${n}\n`);
