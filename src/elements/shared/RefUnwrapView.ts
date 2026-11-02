@@ -86,7 +86,7 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 	 */
 	private resolved?: { model: M; def: ElementDefinition<M> };
 	/**
-	 * SC-525 r3: bumped at the start of every `resolveAndMount`. A resolution that finds, after an `await`, that
+	 * SC-525 r3: bumped at the start of every `onMount` and every `resolveAndMount`. A resolution that finds, after an `await`, that
 	 * a later one has started on this view (an `update()` while its lookup was running) returns without
 	 * drawing: only the newest resolution of a view may write into its root or mount a child, so a stale one
 	 * can neither stack a second card nor leave a loaded child the view no longer tracks.
@@ -102,6 +102,9 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 	}
 
 	protected async onMount(root: HTMLElement, model: RefOrInline<M>): Promise<void> {
+		// SC-525 r3b: whatever this mount draws replaces the content, so it supersedes any resolution of this view
+		// still in flight (see `resolveGen`) -- an inline or refused body included, not only a later reference.
+		this.resolveGen++;
 		if (model.kind === 'invalid') {
 			// SC-149 (L-1): a refused body — the def already produced the user-facing
 			// message; this view only has to present it.
