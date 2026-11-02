@@ -720,6 +720,48 @@ describe('T-9 (Plan 02): ElementPipeline.run (F1 §2.4)', () => {
 					cleanup();
 				}
 			});
+			// A control whose click handler rebuilds the card (ds-initiative's Advance round, ds-project's Add project roll) detaches
+			// its own button during the click. Obsidian's selection runs 10-150 ms later and walks up from that detached target, never
+			// meeting the root, so the root's mark alone is not enough: the top of the detached subtree takes it too.
+			const lpEmbedWrap = (el: HTMLElement): HTMLElement => {
+				const content = document.createElement('div');
+				content.className = 'cm-content';
+				content.createDiv({ cls: 'internal-embed markdown-embed' }).appendChild(el);
+				return content;
+			};
+			const rebuildOnClick = (root: HTMLElement): HTMLElement => {
+				const button = root.querySelector('.label-content') as HTMLElement;
+				button.addEventListener('click', () => root.replaceChildren(root.ownerDocument.createElement('div')));
+				return button;
+			};
+			test.each([['callout widget', lpCallout], ['embed', lpEmbedWrap]] as const)('a click that rebuilds the card in a Live Preview %s still ends Obsidian\'s walk on an interactive child', async (_name, wrap) => {
+				const { root, outer, cleanup } = await mountIn(wrap);
+				try {
+					const button = rebuildOnClick(root);
+					press(button, 'click');
+					expect(root.contains(button)).toBe(false);
+					expect(widgetWouldSelect(button, outer)).toBe(false);
+				} finally {
+					cleanup();
+				}
+			});
+			test('a rebuilt card outside a Live Preview widget (Reading view) marks nothing, not even the detached target', async () => {
+				const reading = (el: HTMLElement): HTMLElement => {
+					const view = document.createElement('div');
+					view.className = 'markdown-preview-view';
+					view.createDiv({ cls: 'callout' }).createDiv({ cls: 'callout-content' }).appendChild(el);
+					return view;
+				};
+				const { root, cleanup } = await mountIn(reading);
+				try {
+					const button = rebuildOnClick(root);
+					press(button, 'click');
+					expect(button.classList.contains('interactive-child')).toBe(false);
+					expect(root.classList.contains('interactive-child')).toBe(false);
+				} finally {
+					cleanup();
+				}
+			});
 			test('Reading view callouts, and Live Preview blocks that are not in a callout widget, are left alone', async () => {
 				const reading = (el: HTMLElement): HTMLElement => {
 					const view = document.createElement('div');
