@@ -378,6 +378,8 @@ Object.assign(FIXTURES, {
 	'Lifecycle/lpembhostend.md': `# lpembhostend\n\n${Array.from({ length: 80 }, (_, i) => `E-PRE filler ${i}.`).join('\n\n')}\n\n![[lpembtracker]]\n\nE-END 1.\n\nE-END 2.\n\nE-END 3.\n`,
 	'Lifecycle/lpembtwo.md': `# lpembtwo\n\nW-TOP\n\n${fence('ds-initiative', ['heroes:', ...Array.from({ length: 12 }, (_, i) => HERO(`First ${String(i + 1).padStart(2, '0')}`)).flat(), 'enemy_groups: []', 'malice:', '  value: 1'])}\n\nW-MID\n\n${fence('ds-initiative', ['heroes:', ...Array.from({ length: 12 }, (_, i) => HERO(`Second ${String(i + 1).padStart(2, '0')}`)).flat(), 'enemy_groups: []', 'malice:', '  value: 1'])}\n\nW-BOTTOM\n`,
 	'Lifecycle/lpembhosttwo.md': `# lpembhosttwo\n\n${Array.from({ length: 80 }, (_, i) => `E-PRE filler ${i}.`).join('\n\n')}\n\n![[lpembtwo]]\n\nE-END 1.\n\nE-END 2.\n\nE-END 3.\n`,
+	// SC-472 (G-S59 (c)): a short lead, one 25-hero tracker, a long tail - the reader scrolls far enough that Obsidian takes the tracker's section out of the document.
+	'Lifecycle/pin-virt.md': `# pin virt\n\n${Array.from({ length: 10 }, (_, i) => `VPRE filler ${i}.`).join('\n\n')}\n\n${fence('ds-initiative', ['heroes:', ...Array.from({ length: 25 }, (_, i) => HERO(`Hero ${String(i + 1).padStart(2, '0')}`)).flat(), 'enemy_groups: []', 'malice:', '  value: 1'])}\n\n${Array.from({ length: 110 }, (_, i) => `VPOST filler ${i}.`).join('\n\n')}\n`,
 	'Lifecycle/lpembhosttall.md': `# lpembhosttall\n\n${Array.from({ length: 80 }, (_, i) => `L-PRE filler ${i}.`).join('\n\n')}\n\n![[lpembtracker]]\n\n${Array.from({ length: 80 }, (_, i) => `L-POST filler ${i}.`).join('\n\n')}\n`,
 });
 // SC-487: a zero-width space right after the name. Live Preview ends the name there and renders the block; Reading view shows plain code.
@@ -5218,8 +5220,69 @@ const SCENARIOS = [
 					},
 				});
 			}
+
+			// (c) the reader SCROLLS while the redraw is late (SC-472 r3, MEDIUM-1). Obsidian's virtualisation then takes the tracker's section (the
+			// arm-time root) out of the document while the sizer is still at its arm-time height. That is not a redraw: the pin must still be on when the
+			// late redraw collapses the sizer (the first version counted the removal as "redraw started" and released at once: 7456 -> 3889). The redraw is
+			// made late by holding the pane's `setViewData` (as G-S18 (d) does), not by timing; real CDP wheel events scroll; unthrottled, no busy spin.
+			// Two scrolls: to the note's end, and down then back up. Anti-vacuity: the root left the document and the sizer was untouched until the redraw
+			// was let go; after it the sizer collapsed and came back. The reader must end where they were (or at the new end of a shorter note).
+			{
+				const rel = 'Lifecycle/pin-virt.md';
+				const A = 'window.__gs59A';
+				const RDA = RD(A);
+				const SIZER = `${RDA}.querySelector(':scope > .markdown-preview-sizer')`;
+				try {
+					await t.reset(rel);
+					await t.open(rel);
+					await t.ev(`(() => { window.__gs59A = app.workspace.getMostRecentLeaf(); return true; })()`);
+					for (const variant of ['to the end', 'down then up']) {
+						const tag = `(c) scroll ${variant}`;
+						try {
+							await t.reset(rel);
+							await t.waitFor(`!document.querySelector('[data-dse-scroll-pin]')`, `${tag}: the pin of the reset write is gone`, CAP_MS);
+							await t.ev(`(() => { ${RDA}.scrollTop = 0; return true; })()`);
+							await parkReading(A);
+							await t.tag(TRACKER, 'gs59', A);
+							await t.ev(`(() => { const s = ${RDA}; const tagged = ${t.root(TRACKER, A)}; const sz = ${SIZER}; const mh0 = parseFloat(sz.style.minHeight); const o = (${A}).view.setViewData; const v = (${A}).view; window.__gs59go = null; v.setViewData = function (d, c) { v.setViewData = o; window.__gs59go = () => o.call(v, d, c); }; const st = { mh0, st0: Math.round(s.scrollTop), tagLeft: false, goAt: null, low: null, back: null, pinAtLow: null, pinOn: false, pinOff: null, stAfterGoMin: null, frames: 0, done: false, mhNow: mh0 }; window.__gs59c = st; const mo = new MutationObserver(() => { const z = ${SIZER}; const mh = z ? parseFloat(z.style.minHeight) : NaN; st.mhNow = mh; if (!tagged.isConnected) st.tagLeft = true; if (st.goAt !== null && st.low === null && mh < mh0 - 2) { st.low = Math.round(performance.now() - st.goAt); st.pinAtLow = s.hasAttribute('data-dse-scroll-pin'); } if (st.low !== null && st.back === null && mh >= mh0 - 2) st.back = Math.round(performance.now() - st.goAt); }); mo.observe(s, { subtree: true, childList: true, attributes: true, attributeFilter: ['style'] }); const tick = () => { st.frames++; const on = s.hasAttribute('data-dse-scroll-pin'); if (on) st.pinOn = true; if (st.pinOn && !on && st.pinOff === null) st.pinOff = st.goAt === null ? -1 : Math.round(performance.now() - st.goAt); if (st.goAt !== null) { const v = Math.round(s.scrollTop); st.stAfterGoMin = st.stAfterGoMin === null ? v : Math.min(st.stAfterGoMin, v); } if (st.pinOff !== null && st.back !== null && st.pinOff >= 0) { st.afterDone = (st.afterDone || 0) + 1; } if ((st.afterDone || 0) >= 10 || performance.now() - (st.t0 ??= performance.now()) > 40000) { st.done = true; st.stEnd = Math.round(s.scrollTop); st.endMax = Math.round(s.scrollHeight - s.clientHeight); mo.disconnect(); return; } requestAnimationFrame(tick); }; requestAnimationFrame(tick); return true; })()`);
+							await t.edit(rel, `c.replace('  value: 1', '  value: 2')`);
+							await t.waitFor('typeof window.__gs59go === "function"', `${tag}: the pane reached setViewData`, CAP_MS);
+							const c = await t.ev(`(() => { const r = ${RDA}.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+							const wheel = async (dy, n) => {
+								for (let i = 0; i < n; i++) {
+									await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseWheel', x: c.x, y: c.y, deltaX: 0, deltaY: dy });
+									await t.sleep(40);
+								}
+							};
+							await wheel(300, 20);
+							if (variant === 'down then up') await wheel(-300, 6);
+							await t.waitFor('window.__gs59c.tagLeft', `${tag}: the tracker's section left the document (virtualisation)`, CAP_MS);
+							await t.sleep(300); // a pin that counted the removal as the redraw is released within a few frames: give it the time
+							const mid = await t.ev(`(() => { const s = ${RDA}; const z = ${SIZER}; return { pin: s.hasAttribute('data-dse-scroll-pin'), st: Math.round(s.scrollTop), mh: parseFloat(z.style.minHeight) }; })()`);
+							const pre = await t.ev('Object.assign({}, window.__gs59c)');
+							t.expect(pre.tagLeft && Math.abs(mid.mh - pre.mh0) <= 2, `${tag}: not the geometry under test: the root left ${pre.tagLeft}, the sizer ${pre.mh0} -> ${mid.mh} before the redraw`);
+							t.expect(mid.pin, `${tag}: the pin was released before the late redraw, when the reader's scroll took the tracker's section out of the document (scrollTop ${pre.st0} -> ${mid.st}, sizer untouched at ${mid.mh})`);
+							await t.ev(`(() => { window.__gs59c.goAt = performance.now(); window.__gs59go(); return true; })()`);
+							await t.waitFor('window.__gs59c.done', `${tag}: the redraw finished and the pin released`, CAP_MS);
+							const m = await t.ev('Object.assign({}, window.__gs59c)');
+							t.expect(m.low !== null && m.back !== null, `${tag}: the redraw never collapsed the sizer and brought it back (low ${m.low}, back ${m.back}) - it cannot reach the clamp`);
+							t.expect(m.pinAtLow === true, `${tag}: the pin was not on when the sizer collapsed`);
+							t.expect(m.pinOff !== null && m.pinOff >= 0, `${tag}: the pin was never released after the redraw`);
+							t.expect(m.stEnd >= Math.min(mid.st, m.endMax) - 2, `${tag}: the reader was moved: scrollTop ${mid.st} before the redraw, min ${m.stAfterGoMin} after it, ${m.stEnd} at the end (new end of the note ${m.endMax}); pin released ${m.pinOff} ms after the redraw was let go, sizer collapsed at ${m.low} ms and back at ${m.back} ms`);
+							out.push(`${tag}: held at ${mid.st} (end ${m.stEnd}), sizer collapsed ${m.low} ms and back ${m.back} ms after the redraw was let go, pin released at ${m.pinOff} ms`);
+						} catch (e) {
+							fails.push(e instanceof Error ? e.message : String(e));
+							await t.ev(`(() => { if (window.__gs59go) { try { window.__gs59go(); } catch {} } window.__gs59go = null; return true; })()`).catch(() => {});
+						}
+					}
+				} catch (e) {
+					fails.push(`(c): ${e instanceof Error ? e.message : String(e)}`);
+				}
+			}
+
 			await t.reset('Lifecycle/tall.md');
 			await t.reset('Lifecycle/lpembtracker.md');
+			await t.reset('Lifecycle/pin-virt.md');
 			await t.open('Lifecycle/other.md'); // back to Reading for the next scenario
 			t.expect(fails.length === 0, `${fails.join(' | ')} -- write -> redraw latencies: ${out.join('; ')}`);
 			return `${out.join('; ')}; CPU throttled ${RATE}x around ${WRITES} writes per phase`;
