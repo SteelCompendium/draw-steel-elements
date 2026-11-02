@@ -60,7 +60,7 @@ function shown(el: HTMLElement): string {
 	return `${name}=${value}`;
 }
 
-async function setup(note: string, viewAdoption = true, windowed = false) {
+async function setup(note: string, viewAdoption = true, windowed: false | 'callout' | 'quote' = false) {
 	const { deps, app, plugin } = makeEnv();
 	app.vault.setFile('Note.md', note);
 	plugin.load();
@@ -91,6 +91,13 @@ async function setup(note: string, viewAdoption = true, windowed = false) {
 	async function build(index: number): Promise<Ctx> {
 		const ctx = ctxAt(index);
 		const text = app.vault.getContent('Note.md')!;
+		if (windowed) {
+			// Obsidian draws the block in a div inside the callout / blockquote element the section is made of.
+			const wrapper = document.createElement(windowed === 'quote' ? 'blockquote' : 'div');
+			if (windowed === 'callout') wrapper.className = 'callout';
+			ctx.el.classList.add('block-language-ds-counter');
+			wrapper.appendChild(ctx.el);
+		}
 		await plugin.registeredProcessors.get('ds-counter')!(windowed ? quotedBody(text, index) : bodyOf(text, index), ctx.el, ctx as any);
 		return ctx;
 	}
@@ -99,7 +106,7 @@ async function setup(note: string, viewAdoption = true, windowed = false) {
 		const sections: Ctx[] = [];
 		for (let i = 0; i < count; i++) {
 			const ctx = await build(i);
-			container.appendChild(ctx.el);
+			container.appendChild(windowed ? ctx.el.parentElement! : ctx.el);
 			sections.push(ctx);
 		}
 		return sections;
@@ -113,7 +120,7 @@ async function setup(note: string, viewAdoption = true, windowed = false) {
 			const slot = plan[i];
 			els.push(slot === 'fresh' ? (await build(i)).el : slot.reuse.el);
 		}
-		container.replaceChildren(...els);
+		container.replaceChildren(...els.map((el) => (windowed ? el.parentElement! : el)));
 		discarded.forEach((ctx) => ctx.addedChildren.forEach((c) => c.unload()));
 		return els;
 	}
@@ -297,7 +304,9 @@ describe.each(['callout', 'quote'] as const)('SC-481 r4: twin blocks inside a %s
 	});
 
 	test('the UPPER one clicked: the twin gets its own card (no error card), shows its own value and its click writes its own block', async () => {
-		const { registry, paint, rebuild, increase, values } = await setup(twins(), true, true);
+		// (The block's div sits inside the callout / blockquote element, as in Obsidian, so the adoption path - the writer moves into the new
+		// section and the element it left is redrawn from the twin's block - is the one taken: claims 1.)
+		const { registry, paint, rebuild, increase, values } = await setup(twins(), true, kind);
 		const [upper, lower] = await paint(2);
 		const writerRoot = upper.el.firstElementChild;
 		await increase(upper.el);
@@ -317,7 +326,7 @@ describe.each(['callout', 'quote'] as const)('SC-481 r4: twin blocks inside a %s
 	});
 
 	test('view adoption off: each card shows its own block and the lower card writes the lower block', async () => {
-		const { paint, rebuild, increase, values } = await setup(twins(), false, true);
+		const { paint, rebuild, increase, values } = await setup(twins(), false, kind);
 		const [upper, lower] = await paint(2);
 		await increase(upper.el);
 		const [top, bottom] = await rebuild(['fresh', { reuse: upper }], [lower]);
@@ -330,7 +339,7 @@ describe.each(['callout', 'quote'] as const)('SC-481 r4: twin blocks inside a %s
 	});
 
 	test('a write that is not the view\'s own (the edit form\'s Save) on the upper twin: a click on the lower twin does not erase the edit', async () => {
-		const { registry, paint, rebuild, increase, values, names } = await setup(twins(), true, true);
+		const { registry, paint, rebuild, increase, values, names } = await setup(twins(), true, kind);
 		const [upper, lower] = await paint(2);
 		const [entry] = registry.liveEntries();
 		await entry.host.replaceSource(bodyOf(noteOf(counter('Edited', 5)), 0));
@@ -379,5 +388,64 @@ describe('SC-481 r4: a writer whose rebuild is still to come is not mistaken for
 		expect(rebuiltA.el.firstElementChild).toBe(writerRoot);
 		expect(registry.stats.claims).toBe(1);
 		void paneB;
+	});
+});
+
+// SC-481 r6 (r5 LOW-1): a callout that holds SEVERAL blocks. Which of them an element sits on is told by its place among the callout's blocks in
+// the DOM (`quoteOrdinal`); with no ordinal the lookup is ambiguous and nothing is drawn.
+describe.each([true, false])('SC-481 r6: two identical callouts holding two blocks each (view adoption %s)', (adoption) => {
+	const callout = (x: number, y: number): string =>
+		['[!note] Camp', ...counter('X', x).split('\n'), '', ...counter('Y', y).split('\n')].map((l) => (l === '' ? '>' : `> ${l}`)).join('\n');
+	const blockBody = (text: string, win: number, blk: number): string => {
+		const w = windowsOf(text)[win];
+		const lines = text.split('\n').slice(w.lineStart, w.lineEnd + 1).map((l) => l.replace(/^> ?/, ''));
+		let open = -1;
+		for (let n = 0; n <= blk; n++) open = lines.findIndex((l, i) => i > open && /^```ds-/.test(l));
+		return lines.slice(open + 1, lines.indexOf('```', open + 1)).join('\n');
+	};
+	beforeEach(() => jest.useFakeTimers());
+	afterEach(() => {
+		jest.useRealTimers();
+		document.body.replaceChildren();
+	});
+
+	test('X in the upper callout clicked: all four cards are drawn, each shows its own block, and later clicks write the block of the card clicked', async () => {
+		const { app, plugin, container, ctxAt, at, increase, values } = await setup(noteOf(callout(5, 3), callout(5, 3)), adoption, 'callout');
+		/** One callout section as Obsidian draws it: a `.callout` element with a div per block; the processor runs for each block in turn. */
+		const draw = async (win: number): Promise<{ box: HTMLElement; ctxs: Ctx[] }> => {
+			const box = document.createElement('div');
+			box.className = 'callout';
+			const ctxs: Ctx[] = [];
+			for (let blk = 0; blk < 2; blk++) {
+				const ctx = ctxAt(win);
+				ctx.el.classList.add('block-language-ds-counter');
+				box.appendChild(ctx.el);
+				await plugin.registeredProcessors.get('ds-counter')!(blockBody(app.vault.getContent('Note.md')!, win, blk), ctx.el, ctx as any);
+				ctxs.push(ctx);
+			}
+			return { box, ctxs };
+		};
+		const upper = await draw(0);
+		const lower = await draw(1);
+		container.replaceChildren(upper.box, lower.box);
+		await increase(upper.ctxs[0].el);
+		expect(values()).toEqual([6, 3, 5, 3]);
+
+		// The upper callout's text changed, so it is a new section; the lower callout has the upper's OLD text, so Obsidian hands it the old upper element.
+		upper.ctxs.forEach((c) => at.set(c.el, 1));
+		lower.ctxs.forEach((c) => at.delete(c.el));
+		const fresh = await draw(0);
+		container.replaceChildren(fresh.box, upper.box);
+		lower.ctxs.forEach((c) => c.addedChildren.forEach((ch) => ch.unload()));
+
+		const cards = [fresh.ctxs[0].el, fresh.ctxs[1].el, upper.ctxs[0].el, upper.ctxs[1].el];
+		expect(cards.map((el) => el.children.length)).toEqual([1, 1, 1, 1]);
+		expect(cards.map(shown)).toEqual(['X=6', 'Y=3', 'X=5', 'Y=3']);
+		expect(cards.map((el) => el.textContent).join()).not.toContain('failed to render');
+
+		await increase(cards[2]);
+		expect(values()).toEqual([6, 3, 6, 3]);
+		await increase(cards[3]);
+		expect(values()).toEqual([6, 3, 6, 4]);
 	});
 });
