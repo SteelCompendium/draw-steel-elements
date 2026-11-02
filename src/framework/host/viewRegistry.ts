@@ -103,7 +103,7 @@ export class ViewRegistry extends Component {
 	 *
 	 * Re-entrancy: a sibling's flush runs its own `replaceSource`, which calls this again. That nested call returns at once: this loop
 	 * already reaches every sibling, and a nested loop would flush the WRITER's own waiting view (`except` only guards the direct call)
-	 * and put the writes in the reverse order. So the writes are enqueued in registry order, once each. Reset in a `finally`, so a throw
+	 * and put the writes in the reverse order. So the writes are enqueued in the order the views were mounted, once each, and the writer's own write comes last. Reset in a `finally`, so a throw
 	 * from a sibling's write cannot leave the guard on.
 	 */
 	flushPendingWrites(sourcePath: string, except: ViewRegistryEntry | null): void {
