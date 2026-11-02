@@ -13,7 +13,7 @@
 // the CSS CONTRACT those measurements depend on — the declarations whose deletion would make
 // the geometry gate go red — so a reader of this file can see the whole rule set, and so a
 // regression is named in the suite rather than only in the camera.
-import { describe, it, test, expect, afterEach, jest } from '@jest/globals';
+import { describe, it, test, expect, afterEach, beforeEach, jest } from '@jest/globals';
 import fs from 'fs';
 import path from 'path';
 import { ElementPipeline } from '@/framework/pipeline';
@@ -125,17 +125,29 @@ describe('SC-169 R2 §1 — one placement geometry for every element', () => {
 // A style read forces a recalc of the freshly drawn tracker (~190 ms on 25 heroes) and a custom-property write on
 // the anchor dirties its whole subtree again. mountChrome therefore reads in the next animation frame, once for
 // every mount queued before it, all reads before any write, and writes the vars on the panel (their only consumer).
+// A panel that is out of the document at that frame (Reading view renders below-the-fold blocks off-document; Live
+// Preview detaches a widget and puts the same DOM back on scroll) waits in an IntersectionObserver on its anchor.
 describe('SC-533 — frame-border vars are published in one batched animation frame', () => {
 	const TOP = '--dse-chrome-frame-border-top';
 	const RIGHT = '--dse-chrome-frame-border-right';
 	const mounted: HTMLElement[] = [];
+	const owners: Component[] = [];
+	// The queue is module-level: let any frame a previous test (or suite section) left pending run, so this test's
+	// mounts start a frame of their own (the suite must pass in any order, e.g. jest --randomize).
+	beforeEach(async () => {
+		await nextFrame();
+	});
 	afterEach(() => {
+		while (owners.length > 0) owners.pop()!.unload();
 		while (mounted.length > 0) mounted.pop()!.remove();
 		jest.restoreAllMocks();
+		delete (window as unknown as { IntersectionObserver?: unknown }).IntersectionObserver;
 	});
 
-	/** A connected anchor with a border of `px`, chrome mounted on it with `owner`. */
+	/** A connected anchor with a border of `px`, chrome mounted on it with a loaded `owner`. */
 	function mount(px: number, owner = new Component()): { anchor: HTMLElement; panel: HTMLElement; owner: Component } {
+		owner.load();
+		owners.push(owner);
 		const root = document.body.createDiv();
 		mounted.push(root);
 		root.style.borderTopWidth = `${px}px`;
@@ -164,6 +176,42 @@ describe('SC-533 — frame-border vars are published in one batched animation fr
 			});
 		return log;
 	}
+	/** jsdom has no IntersectionObserver: a controllable one, reporting only what the test says. */
+	class FakeIO {
+		static instances: FakeIO[] = [];
+		observed = new Set<Element>();
+		disconnected = false;
+		constructor(
+			private readonly cb: (records: IntersectionObserverEntry[]) => void,
+			readonly init?: IntersectionObserverInit,
+		) {
+			FakeIO.instances.push(this);
+		}
+		observe(el: Element): void {
+			this.observed.add(el);
+		}
+		unobserve(el: Element): void {
+			this.observed.delete(el);
+		}
+		disconnect(): void {
+			this.disconnected = true;
+			this.observed.clear();
+		}
+		report(...records: [Element, boolean][]): void {
+			this.cb(records.map(([target, isIntersecting]) => ({ target, isIntersecting }) as IntersectionObserverEntry));
+		}
+	}
+	function installIO(): FakeIO[] {
+		FakeIO.instances = [];
+		(window as unknown as { IntersectionObserver?: unknown }).IntersectionObserver = FakeIO;
+		return FakeIO.instances;
+	}
+	/** The anchors the panel hand-off must have read, then written: R R R R W W W W for two entries. */
+	const order = (log: { kind: string; el?: Element }[], ...anchors: Element[]): string =>
+		log
+			.filter((e) => e.kind === 'write' || (e.el !== undefined && anchors.includes(e.el)))
+			.map((e) => (e.kind === 'read' ? 'R' : 'W'))
+			.join('');
 
 	test('mounting reads nothing and writes nothing; the next frame puts the vars on the panel, not the anchor', async () => {
 		const log = spyOrder();
@@ -185,19 +233,79 @@ describe('SC-533 — frame-border vars are published in one batched animation fr
 		const two = mount(5);
 		expect(frames).toHaveBeenCalledTimes(1);
 		await nextFrame();
-		const kinds = log.filter((e) => e.kind === 'write' || e.el === one.anchor || e.el === two.anchor).map((e) => e.kind);
-		expect(kinds).toEqual(['read', 'read', 'read', 'read', 'write', 'write', 'write', 'write']);
+		expect(order(log, one.anchor, two.anchor)).toBe('RRRRWWWW');
 		expect(one.panel.style.getPropertyValue(TOP)).toBe('2px');
 		expect(two.panel.style.getPropertyValue(RIGHT)).toBe('5px');
 	});
 
-	test('a panel that left the document, or whose owner unloaded, is skipped: no read, no write', async () => {
+	test('a panel out of the document at the frame is not read then; the observer hands it its vars once its anchor intersects', async () => {
+		const ios = installIO();
+		const kept = mount(3);
+		const out1 = mount(2);
+		const out2 = mount(5);
+		out1.anchor.remove();
+		out2.anchor.remove();
+		const log = spyOrder();
+		await nextFrame();
+		// The connected panel is published at the frame; the two detached ones are not read, not written, and parked.
+		expect(log.filter((e) => e.el === out1.anchor || e.el === out2.anchor)).toEqual([]);
+		expect(kept.panel.style.getPropertyValue(TOP)).toBe('3px');
+		expect(out1.panel.style.getPropertyValue(TOP)).toBe('');
+		expect(ios).toHaveLength(1);
+		expect([...ios[0].observed]).toEqual([out1.anchor, out2.anchor]);
+		expect(ios[0].init?.root ?? null).toBeNull();
+		// CodeMirror / Obsidian put the same DOM back; the observer reports both: all reads, then all writes, then unobserve.
+		document.body.append(out1.anchor, out2.anchor);
+		log.length = 0;
+		ios[0].report([out1.anchor, true], [out2.anchor, true]);
+		expect(order(log, out1.anchor, out2.anchor)).toBe('RRRRWWWW');
+		expect(out1.panel.style.getPropertyValue(TOP)).toBe('2px');
+		expect(out2.panel.style.getPropertyValue(RIGHT)).toBe('5px');
+		expect(out1.anchor.style.getPropertyValue(TOP)).toBe('');
+		expect([...ios[0].observed]).toEqual([]);
+		expect(ios[0].disconnected).toBe(true);
+	});
+
+	test('a parked panel stays parked while its anchor is not intersecting, or while the panel is still out of the document', async () => {
+		const ios = installIO();
+		const out = mount(4);
+		out.anchor.remove();
+		await nextFrame();
+		const log = spyOrder();
+		ios[0].report([out.anchor, false]);
+		ios[0].report([out.anchor, true]); // intersecting but the panel is not in the document: nothing to measure
+		expect(log).toEqual([]);
+		expect([...ios[0].observed]).toEqual([out.anchor]);
+		document.body.append(out.anchor);
+		ios[0].report([out.anchor, true]);
+		expect(out.panel.style.getPropertyValue(TOP)).toBe('4px');
+		expect([...ios[0].observed]).toEqual([]);
+	});
+
+	test('unloading a parked owner unobserves its anchor; a stale report then reads and writes nothing', async () => {
+		const ios = installIO();
+		const gone = mount(4);
+		const other = mount(2);
+		gone.anchor.remove();
+		other.anchor.remove();
+		await nextFrame();
+		expect([...ios[0].observed]).toEqual([gone.anchor, other.anchor]);
+		gone.owner.unload();
+		expect([...ios[0].observed]).toEqual([other.anchor]);
+		const log = spyOrder();
+		document.body.append(gone.anchor);
+		ios[0].report([gone.anchor, true]);
+		expect(log).toEqual([]);
+		expect(gone.panel.style.getPropertyValue(TOP)).toBe('');
+		other.owner.unload();
+		expect(ios[0].disconnected).toBe(true);
+	});
+
+	test('without IntersectionObserver a panel out of the document, or whose owner unloaded before the frame, gets no read and no write', async () => {
 		const gone = mount(4);
 		const unloaded = mount(4);
 		const kept = mount(4);
-		unloaded.owner.load();
 		const log = spyOrder();
-		gone.panel.remove();
 		gone.anchor.remove();
 		unloaded.owner.unload();
 		await nextFrame();
@@ -211,7 +319,6 @@ describe('SC-533 — frame-border vars are published in one batched animation fr
 		const cancel = jest.spyOn(window, 'cancelAnimationFrame');
 		const log = spyOrder();
 		const only = mount(4);
-		only.owner.load();
 		only.owner.unload();
 		expect(cancel).toHaveBeenCalledTimes(1);
 		await nextFrame();

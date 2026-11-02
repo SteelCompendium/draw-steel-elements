@@ -79,18 +79,22 @@ export function ensureCollapseInvariant(root: HTMLElement): void {
  * the border / the winded border looks cropped" report.
  *
  * There is no CSS way to read the containing block's own border width, so the framework
- * measures it ONCE at mount and republishes it as a custom property the sheet subtracts.
- * Border widths are not layout-dependent, so this is a style read, not a layout read, and a
- * detached node (jsdom, or a view built off-document) simply yields 0 — the pre-correction
- * geometry, never a crash.
+ * measures it and republishes it as a custom property the sheet subtracts. Border widths
+ * are not layout-dependent, so this is a style read, not a layout read.
  *
  * SC-533: a style read forces a style recalc of the freshly drawn element (~190 ms on a
  * 25-hero tracker), and a custom-property write on the anchor dirties its whole subtree
  * again. So the read is deferred to the next animation frame, which has to style the new
  * DOM anyway, and is batched: every pending anchor is read before any panel is written,
  * and the vars go on the panel (their only consumer) so the write invalidates only the
- * panel. Until that frame the panel uses the sheet's `0px` fallback; it is hidden unless
- * hovered, so at most a 1px offset for one frame.
+ * panel. Until the frame runs the panel uses the sheet's `0px` fallback. The panel is
+ * `opacity: 0` until hovered or revealed (always visible on mobile), so that is at most a
+ * 1px offset for one frame. A panel that is not in the document when the frame runs
+ * (Reading view renders blocks below the first screen off-document; Live Preview detaches
+ * a widget shortly after mounting it and puts the same DOM back when it scrolls into
+ * view) cannot be measured then: it waits in a per-window IntersectionObserver on its
+ * anchor and is measured, in the same reads-then-writes batch, when the anchor first
+ * intersects the viewport. A window without IntersectionObserver keeps the fallback.
  */
 const FRAME_BORDER_VARS = {
 	Top: '--dse-chrome-frame-border-top',
@@ -113,12 +117,19 @@ interface PendingFrameBorders {
 /** SC-533: per window, the panels waiting for their frame-border vars, and the one frame
  *  that will publish them all. */
 const pendingFrameBorders = new Map<Window, { entries: Set<PendingFrameBorders>; frame: number }>();
+/** SC-533: per window, the entries whose panel was not in the document at the frame, keyed
+ *  by the anchor the observer watches until it intersects the viewport. */
+const parkedFrameBorders = new Map<
+	Window,
+	{ io: IntersectionObserver; byAnchor: Map<HTMLElement, Set<PendingFrameBorders>> }
+>();
 
 /**
  * SC-533: publish the anchor's border widths on the panel in the next animation frame of the
  * anchor's OWN window (a popout has its own). One frame serves every mount queued before it
  * runs: all reads first, then all writes, so no write dirties the tree before a later read.
- * A panel that left the document by then is skipped, and unloading `owner` drops the entry.
+ * A panel that is out of the document at that frame is handed to an IntersectionObserver
+ * (see FRAME_BORDER_VARS); unloading `owner` drops the entry from the queue and the observer.
  */
 function queueFrameBorders(anchor: HTMLElement, panelEl: HTMLElement, owner: Component): void {
 	const win = anchor.ownerDocument?.defaultView;
@@ -132,13 +143,17 @@ function queueFrameBorders(anchor: HTMLElement, panelEl: HTMLElement, owner: Com
 		queue = created;
 	}
 	queue.entries.add(entry);
-	owner.register(() => {
-		const q = pendingFrameBorders.get(win);
-		if (!q) return;
-		q.entries.delete(entry);
-		if (q.entries.size === 0) {
-			win.cancelAnimationFrame(q.frame);
-			pendingFrameBorders.delete(win);
+	owner.register(() => dropFrameBorders(win, entry));
+}
+
+/** Read every entry's anchor borders first, then write every panel's vars. */
+function publishFrameBorders(entries: Iterable<PendingFrameBorders>): void {
+	const list = [...entries];
+	const widths = list.map((e) => ({ Top: usedBorderPx(e.anchor, 'Top'), Right: usedBorderPx(e.anchor, 'Right') }));
+	list.forEach((e, i) => {
+		// The only sanctioned `.style` use in this codebase is `setProperty('--dse-*', …)` (SC-5).
+		for (const [side, prop] of Object.entries(FRAME_BORDER_VARS) as ['Top' | 'Right', string][]) {
+			e.panelEl.style.setProperty(prop, `${widths[i][side]}px`);
 		}
 	});
 }
@@ -147,14 +162,69 @@ function flushFrameBorders(win: Window): void {
 	const queue = pendingFrameBorders.get(win);
 	pendingFrameBorders.delete(win);
 	if (!queue) return;
-	const live = [...queue.entries].filter((e) => e.panelEl.isConnected);
-	const widths = live.map((e) => ({ Top: usedBorderPx(e.anchor, 'Top'), Right: usedBorderPx(e.anchor, 'Right') }));
-	live.forEach((e, i) => {
-		// The only sanctioned `.style` use in this codebase is `setProperty('--dse-*', …)` (SC-5).
-		for (const [side, prop] of Object.entries(FRAME_BORDER_VARS) as ['Top' | 'Right', string][]) {
-			e.panelEl.style.setProperty(prop, `${widths[i][side]}px`);
+	const live: PendingFrameBorders[] = [];
+	for (const e of queue.entries) {
+		if (e.panelEl.isConnected) live.push(e);
+		else parkFrameBorders(win, e);
+	}
+	publishFrameBorders(live);
+}
+
+function parkFrameBorders(win: Window, entry: PendingFrameBorders): void {
+	const IO = (win as Window & { IntersectionObserver?: typeof IntersectionObserver }).IntersectionObserver;
+	if (typeof IO !== 'function') return;
+	let parked = parkedFrameBorders.get(win);
+	if (!parked) {
+		parked = {
+			// The callback runs after layout, so the style read is cheap. The vertical margin measures a
+			// little before the card scrolls into view, so the panel is right by the time it can be hovered.
+			io: new IO((records) => publishParkedFrameBorders(win, records), { rootMargin: '200px 0px' }),
+			byAnchor: new Map(),
+		};
+		parkedFrameBorders.set(win, parked);
+	}
+	let set = parked.byAnchor.get(entry.anchor);
+	if (!set) {
+		set = new Set();
+		parked.byAnchor.set(entry.anchor, set);
+	}
+	set.add(entry);
+	parked.io.observe(entry.anchor);
+}
+
+function publishParkedFrameBorders(win: Window, records: IntersectionObserverEntry[]): void {
+	const parked = parkedFrameBorders.get(win);
+	if (!parked) return;
+	const ready = new Set<PendingFrameBorders>();
+	for (const rec of records) {
+		if (!rec.isIntersecting) continue;
+		for (const e of parked.byAnchor.get(rec.target as HTMLElement) ?? []) if (e.panelEl.isConnected) ready.add(e);
+	}
+	publishFrameBorders(ready);
+	for (const e of ready) dropFrameBorders(win, e);
+}
+
+/** Remove `entry` from the frame queue and the observer (both may hold it at most once). */
+function dropFrameBorders(win: Window, entry: PendingFrameBorders): void {
+	const queue = pendingFrameBorders.get(win);
+	if (queue) {
+		queue.entries.delete(entry);
+		if (queue.entries.size === 0) {
+			win.cancelAnimationFrame(queue.frame);
+			pendingFrameBorders.delete(win);
 		}
-	});
+	}
+	const parked = parkedFrameBorders.get(win);
+	const set = parked?.byAnchor.get(entry.anchor);
+	if (!parked || !set) return;
+	set.delete(entry);
+	if (set.size > 0) return;
+	parked.byAnchor.delete(entry.anchor);
+	parked.io.unobserve(entry.anchor);
+	if (parked.byAnchor.size === 0) {
+		parked.io.disconnect();
+		parkedFrameBorders.delete(win);
+	}
 }
 
 export interface MountChromeOptions<M> {
