@@ -157,7 +157,9 @@
 // document and unmounted" (widget hold), so a view that is still mounting is never cut short; PIN_HARD_CAP_MS (20 s) ends everything.
 // A hidden window paints no frames, so only the cap runs there (20 s, invisible). KNOWN LIMIT: the SC-478 widget hold that CodeMirror
 // has replaced (it will never mount) is released by the backstop, not on mount: measured on stock in the sibling-pane runs
-// (hold set at +384 ms, released at +4441 ms); the new backstop is not shorter than the old timer there (r3 probes it).
+// (hold set at +384 ms, released at +4441 ms); the new backstop does not
+// make it longer or blank longer (measured, SC-472 r3, pane B of the sibling-pane case at 8x CPU throttle: hold 3127 / 4134 / 3265 ms vs 4047 / 3764 / 3283 ms on
+// stock, 0 painted blank frames either way, scrollTop 3020 held).
 
 import type { Workspace } from 'obsidian';
 import { ViewPlugin } from '@codemirror/view';

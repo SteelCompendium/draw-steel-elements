@@ -172,12 +172,12 @@
 // set the pin and about 235 ms to clear it, per pinned view. With the `modify` pin above that
 // cost would be paid on every write to a note with a DSE block and by every other Reading
 // view of it, and it also delays the rebuild itself (the external-write collapse moved from
-// 13-31 ms to 310-400 ms after `modify`; the popout redraw towards the TTL, SC-472). So each
+// 13-31 ms to 310-400 ms after `modify`; the popout redraw towards the backstop, SC-472). So each
 // pin injects its own `<style>` element into the scroller's OWN `ownerDocument.head` (a
 // popout window has its own document) holding the one rule above, keyed on a unique id kept
 // in the attribute's value, and no custom property is set: measured 2-4 ms to set, 2-32 ms
 // to clear. One `<style>` per pinned scroller, not one shared per document: a pin lives
-// 2.5 s, there are a handful at most, and an element owned by exactly one pin needs no
+// for a redraw or a few seconds, there are a handful at most, and an element owned by exactly one pin needs no
 // reference counting to be removed (`release`, the backstop and `releaseAll` all just remove it). The
 // attribute value is the only key; a re-pin keeps its id.
 //
@@ -194,8 +194,13 @@
 // of one note, an outside `vault.process`), and 7486 -> 3745 in 2 of 3 redrawn writes for the SC-522 embed hold. A
 // 10 s timer still clamped 1 of 4 (redraw at +11.4 s): the latency has no bound, so no timer length is right.
 // So every pin is released by the redraw it protects, and the timer is only a backstop:
-//  - The redraw STARTS when a root of ours present at the last arm is removed, replaced or put back (`redrawStarted`,
-//    from the MutationObserver's records). It is OVER (`redrawDone`, checked one animation frame after a mutation
+//  - The redraw STARTS only with evidence that Obsidian RE-RENDERED since the last arm (`redrawStarted`): (a) a protected
+//    sizer fell below its arm-time height (a collapse), (b) a root of ours that was not there at the arm was added (a fresh
+//    render), or (c) an arm-time root is back under a section it was not in at the arm (an adopted view in its new section).
+//    A root merely leaving or re-entering the document is NOT evidence: Obsidian's scroll virtualisation does that to a reader
+//    who scrolls while a redraw is late, with the sizer untouched, and counting it released the pin before the redraw that
+//    then collapsed the sizer (SC-472 r3: scrollTop 7456 -> 3889; stock holds). Without evidence the pin waits for the
+//    backstop. It is OVER (`redrawDone`, checked one animation frame after a mutation
 //    once it started) when every root of ours in the scroller is mounted again and every protected sizer is back at
 //    the height it had at the last arm, within 2 px: the scroller's own sizer (at least as high as the viewport's
 //    bottom needs, min(arm-time value, scrollTop + clientHeight - padding), so releasing cannot clamp) and the
@@ -221,13 +226,19 @@
 // padding (64px on 1.15.0), while the rule fixes the SIZER's min-height: every pin held 64px more than the note,
 // and a reader parked at the end who scrolled into that space was snapped back 64px (2887 -> 2951 -> 2887) when the
 // pin was released. The first pin now holds `scrollHeight - padding`, as re-pins already did.
+// A LEAF THAT NAVIGATES (SC-472 r4). A leaf shown another note keeps its Reading scroller. The pin records the note
+// (`view.file.path`) at the `modify` pin and is dropped as soon as its view shows another one: on the next mutation in
+// the scroller, on any pin call, and on the workspace `file-open` event (`releaseNavigated`, registerFrameworkElements).
+// Without it the old note's floor stayed for the backstop's 3.5 s on the new, short note (4544 px of empty scroll space; stock 2.5 s).
 // KNOWN LIMITS (SC-472). (1) A write that shrinks the note at its end (a block deleted) is released only after the
-// 60 quiet frames: the blank band is about 1.2-1.3 s longer than the stock 2.5 s (measured, Reading view, the last of two
-// trackers deleted, reader at the end: pin off at +3.7-3.8 s, stock +2.5 s; the settled scrollTop 3160 in both, and the band
-// has no extra 64px any more). (2) A hidden or occluded window paints no frames: its pin lasts until the 20 s cap
-// (invisible there; it fires after 30 frames once they resume). (3) A reader who scrolls during a delayed redraw
-// while Obsidian's virtualisation removes or re-inserts an arm-time root makes the redraw "start" early; the sizer check
-// still guards the release. (4) The release keys on Obsidian's own inline `min-height` writes to the sizer and on
+// 60 quiet frames: the blank band is about 1 s longer than the stock 2.5 s (measured, Reading view, the last of two
+// trackers deleted, reader at the end: pin off at +3.5-3.8 s, stock +2.5 s, +0.98 to +1.32 s over 8 runs; the settled
+// scrollTop 3160 in both, and the band has no extra 64px any more). (2) A hidden or occluded window paints no frames:
+// its pin lasts until the 20 s cap (invisible there; it fires after 30 frames once they resume). (3) Evidence (b) is any
+// root of ours that is new since the arm: a reader who scrolls a second tracker into view for the first time while a
+// redraw is late, and whose first tracker is virtualised out in the same stretch, still makes the redraw "start" early;
+// the sizer check then releases only once the sizer is back, which is the arm-time value until the redraw collapses it.
+// Not observed. (4) The release keys on Obsidian's own inline `min-height` writes to the sizer and on
 // our roots; if Obsidian stops writing the inline value, `redrawDone` never passes and the backstop releases the pin
 // (today's behaviour plus about 0.5 s). Lifecycle G-S59 covers the late-redraw case; G-S8, G-S15 and G-S42 the rest.
 
@@ -308,7 +319,7 @@ function verticalPadding(el: HTMLElement, win: Window): number {
  * of the note that WRITES it: the host's path for a top-level embed, and for a nested one the note its enclosing embed
  * resolved to (the DOM nests an embed's content inside the embed element, so the chain is read off the ancestors, one
  * `closest` per level). A link that cannot be resolved falls back to the host's path, which can only pin one view too
- * many (TTL-bounded), never miss one.
+ * many (bounded by the backstop), never miss one.
  * Only embeds that contain a DSE block count: nothing else of ours can collapse them.
  * SC-522: `scroller` may itself be an embed (a Live Preview host's embed widget, a direct `.cm-content` child, is the
  * `.internal-embed`): it is then checked too, with its link resolved from the host's path. A Reading scroller never
@@ -397,8 +408,8 @@ export class PreviewScrollPin {
 	private readonly pins = new Map<HTMLElement, HeldPin>();
 
 	/**
-	 * Hold the reading-view scroller containing `containerEl` at its current height for
-	 * PIN_TTL_MS. Call synchronously immediately before a write that will make Obsidian
+	 * Hold the reading-view scroller containing `containerEl` at its current height until
+	 * the redraw it guards is over (or the backstop, PIN_TTL_MS + 30 painted frames, gives up). Call synchronously immediately before a write that will make Obsidian
 	 * rebuild the preview; a no-op (and safe) anywhere else.
 	 */
 	pin(containerEl: HTMLElement): void {
@@ -415,7 +426,7 @@ export class PreviewScrollPin {
 	 * SC-470: hold every open Reading view of `path` that shows a DSE block. Called from the
 	 * vault `modify` event, which fires before any view of the note starts its rebuild (see the
 	 * header), for our own writes and for everyone else's. A view already pinned by the
-	 * writer is re-pinned, never lowered (see `pinScroller`); the TTL restarts a few ms later.
+	 * writer is re-pinned, never lowered (see `pinScroller`); the release is re-armed a few ms later.
 	 */
 	pinReadingViewsOf(workspace: Workspace, path: string, resolveLink?: LinkResolver): void {
 		for (const leaf of workspace.getLeavesOfType('markdown')) {
@@ -448,7 +459,7 @@ export class PreviewScrollPin {
 			existing.path = view.file?.path ?? null;
 		}
 		if (existing) {
-			// A re-pin (rapid clicking, autosave) restarts the TTL and never lowers the height; it
+			// A re-pin (rapid clicking, autosave) re-arms the release and never lowers the height; it
 			// raises it to the sizer's current inline min-height or the content height when either
 			// is larger (see the header: RE-PINS).
 			if (host && !existing.host && embedStopWanted(scroller)) {
@@ -600,7 +611,7 @@ export class PreviewScrollPin {
 		held.style.textContent = ruleText(held);
 	}
 
-	/** Drop pins whose scroller left the document or whose window was closed (a closed window's TTL never fires). */
+	/** Drop pins whose scroller left the document or whose window was closed (a closed window's backstop never fires). */
 	private sweep(): void {
 		for (const [scroller, held] of [...this.pins]) {
 			if (!scroller.isConnected || held.win.closed || this.navigatedAway(held)) this.release(scroller);
