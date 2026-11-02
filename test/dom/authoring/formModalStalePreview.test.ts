@@ -354,6 +354,14 @@ function expectNoNestingError(preview: HTMLElement): void {
 	expect(preview.querySelector('.dse-error-card')).toBeNull();
 }
 
+// SC-525 r3 (INFO-3): the depth guard's map is module-level and the preview's blockKey is the same in every test, so a
+// test that fails with a lookup still held would leave a live entry behind and turn every later test red. Each test
+// registers what it holds here and afterEach lets all of it go, pass or fail.
+const releasers: Array<() => Promise<void>> = [];
+afterEach(async () => {
+	for (const release of releasers.splice(0)) await release();
+});
+
 describe.each(CASES)('SC-525: retyping the same @Ref.md in the $name edit form while its lookup is pending', (c) => {
 	const withRef = async () => {
 		const s = await setup(c, noteWith(c.alias, c.source));
@@ -361,6 +369,10 @@ describe.each(CASES)('SC-525: retyping the same @Ref.md in the $name edit form w
 		const { el } = await s.render(c.source);
 		const form = openForm(el);
 		const hold = holdLookups(s.h.deps.refs as never);
+		releasers.push(async () => {
+			hold.stopHolding();
+			await hold.releaseAll();
+		});
 		return { ...s, form, hold };
 	};
 
@@ -411,6 +423,10 @@ describe('SC-525: retyping the same ds-scc code in the edit form while its entit
 		const real = index.getEntity.bind(index);
 		const reads: Array<() => void> = [];
 		index.getEntity = (code: string) => new Promise((resolve) => reads.push(() => resolve(real(code))));
+		releasers.push(async () => {
+			for (const release of reads) release();
+			await settle();
+		});
 		form.type(KIT_CODE);
 		form.type(KIT_CODE + ' ');
 		expectNoNestingError(form.preview);

@@ -484,6 +484,7 @@ describe('RefUnwrapView — in-flight depth guard (SC-525)', () => {
 		next?: string;
 	}
 	const NESTING = /nesting too deep/i;
+	let setupSeq = 0;
 
 	/** Base view that renders `text`, then (like a card whose body holds a whole-block ref) mounts the ref
 	 *  `next` names through a nested pipeline run on the SAME host, so it sees the same blockKey. */
@@ -495,6 +496,11 @@ describe('RefUnwrapView — in-flight depth guard (SC-525)', () => {
 		const deps = makeDeps();
 		const pipeline = new ElementPipeline(deps);
 		const host = makeHost();
+		// SC-525 r3 (INFO-3): IN_FLIGHT_REFS is module-level, so a test that fails while a lookup is held would leave
+		// a live entry behind and refuse the same reference in every later test. A key of its own per setup keeps
+		// each test's entries to itself.
+		const blockKey = `Note.md::ds-test-base::sc525-${++setupSeq}`;
+		host.blockKey = () => blockKey;
 		class NestView extends ElementView<NestModel> {
 			protected async onMount(root: HTMLElement, model: NestModel): Promise<void> {
 				root.createDiv({ cls: 'test-base-view', attr: { 'data-test-model': model.text } });
@@ -636,5 +642,107 @@ describe('RefUnwrapView — in-flight depth guard (SC-525)', () => {
 		await s.run('@A');
 		expect(rendered(s.roots()[3])).toBe('A');
 		expect(nestingErrors(s.roots())).toEqual([s.roots()[2]]);
+	});
+
+	// SC-525 r3 (LOW-1) -- the SAME view re-enters resolveAndMount while its own lookup is still running (the
+	// sidebar's `previous.update(model)` on a pinned card whose note changed again). Two resolutions of one view:
+	// only the later one may write, and no child view may be left loaded behind it.
+	const ownedChildren = (v: ElementView<any>) => (v as any).ownedChildren.length as number;
+	const baseViews = (root: HTMLElement) => Array.from(root.querySelectorAll('.test-base-view')).map((n) => n.getAttribute('data-test-model'));
+	/** ownedChildren after one uninterrupted resolution and one more update: what "nothing left behind" means. */
+	async function settledOwnedChildren(): Promise<number> {
+		const c = setup();
+		c.table['@A'] = { text: 'A' };
+		await c.run('@A');
+		await c.views[0].update(c.views[0].currentModel());
+		return ownedChildren(c.views[0]);
+	}
+
+	describe.each([
+		['the earlier lookup finishes first', [0, 1]],
+		['the later lookup finishes first', [1, 0]],
+	] as Array<[string, number[]]>)('a view updated while its own lookup is running (%s)', (_name, order) => {
+		test('same reference: one card, no nesting error, no orphan child', async () => {
+			const s = setup();
+			s.table['@A'] = { text: 'A' };
+			s.hold(true);
+			const first = s.run('@A');
+			await tick();
+			const v = s.views[0];
+			const model = v.currentModel();
+			const updated = v.update(model);
+			await tick();
+			expect(nestingErrors(s.roots())).toEqual([]);
+			expect(s.holds).toHaveLength(2);
+			for (const i of order) {
+				s.holds[i]();
+				await tick();
+			}
+			await Promise.all([first, updated]);
+			expect(nestingErrors(s.roots())).toEqual([]);
+			expect(baseViews(s.roots()[0])).toEqual(['A']);
+			s.hold(false);
+			await v.update(model);
+			expect(baseViews(s.roots()[0])).toEqual(['A']);
+			expect(ownedChildren(v)).toBe(await settledOwnedChildren());
+		});
+
+		test('a different reference (A then B): only B is drawn, nothing of A is left', async () => {
+			const s = setup();
+			s.table['@A'] = { text: 'A' };
+			s.table['@B'] = { text: 'B' };
+			s.hold(true);
+			const first = s.run('@A');
+			await tick();
+			const v = s.views[0];
+			const updated = v.update({ kind: 'ref', raw: '@B' });
+			await tick();
+			expect(s.holds).toHaveLength(2);
+			for (const i of order) {
+				s.holds[i]();
+				await tick();
+			}
+			await Promise.all([first, updated]);
+			expect(nestingErrors(s.roots())).toEqual([]);
+			expect(baseViews(s.roots()[0])).toEqual(['B']);
+			s.hold(false);
+			await v.update({ kind: 'ref', raw: '@B' });
+			expect(baseViews(s.roots()[0])).toEqual(['B']);
+			expect(ownedChildren(v)).toBe(await settledOwnedChildren());
+		});
+
+		test('a superseded resolution leaves no entry behind: a fresh view of the same reference resolves', async () => {
+			const s = setup();
+			s.table['@A'] = { text: 'A' };
+			s.hold(true);
+			const first = s.run('@A');
+			await tick();
+			const updated = s.views[0].update(s.views[0].currentModel());
+			await tick();
+			for (const i of order) {
+				s.holds[i]();
+				await tick();
+			}
+			await Promise.all([first, updated]);
+			s.hold(false);
+			await s.run('@A');
+			expect(rendered(s.roots()[s.roots().length - 1])).toBe('A');
+			expect(nestingErrors(s.roots())).toEqual([]);
+		});
+	});
+
+	test('a self-reference (A -> A) still stops when its view was updated while its lookup ran', async () => {
+		const s = setup();
+		s.table['@A'] = { text: 'A', next: '@A' };
+		s.hold(true);
+		const first = s.run('@A');
+		await tick();
+		const updated = s.views[0].update(s.views[0].currentModel());
+		await tick();
+		s.hold(false);
+		s.holds.forEach((release) => release());
+		await Promise.all([first, updated]);
+		expect(s.views.length).toBeLessThanOrEqual(6); // bounded: no endless recursion
+		expect(nestingErrors(s.roots()).length).toBeGreaterThanOrEqual(1);
 	});
 });
