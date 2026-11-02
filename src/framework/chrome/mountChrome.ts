@@ -88,13 +88,17 @@ export function ensureCollapseInvariant(root: HTMLElement): void {
  * DOM anyway, and is batched: every pending anchor is read before any panel is written,
  * and the vars go on the panel (their only consumer) so the write invalidates only the
  * panel. Until the frame runs the panel uses the sheet's `0px` fallback. The panel is
- * `opacity: 0` until hovered or revealed (always visible on mobile), so that is at most a
- * 1px offset for one frame. A panel that is not in the document when the frame runs
+ * `opacity: 0` until hovered or revealed (always visible on mobile), so for a panel that is
+ * in the document that is at most a 1px offset until the frame. A panel that is not in the
+ * document when the frame runs
  * (Reading view renders blocks below the first screen off-document; Live Preview detaches
  * a widget shortly after mounting it and puts the same DOM back when it scrolls into
  * view) cannot be measured then: it waits in a per-window IntersectionObserver on its
  * anchor and is measured, in the same reads-then-writes batch, when the anchor first
- * intersects the viewport. A window without IntersectionObserver keeps the fallback.
+ * intersects the viewport. That callback runs after the frame in which the card scrolls in
+ * is painted, so such a panel can show the fallback for a frame or two (a collapsed block
+ * expanded by a click, for a few); only a hovered panel, or any panel on mobile, shows it.
+ * A window without IntersectionObserver keeps the fallback.
  */
 const FRAME_BORDER_VARS = {
 	Top: '--dse-chrome-frame-border-top',
@@ -176,8 +180,11 @@ function parkFrameBorders(win: Window, entry: PendingFrameBorders): void {
 	let parked = parkedFrameBorders.get(win);
 	if (!parked) {
 		parked = {
-			// The callback runs after layout, so the style read is cheap. The vertical margin measures a
-			// little before the card scrolls into view, so the panel is right by the time it can be hovered.
+			// The callback runs after layout, so the style read is cheap. rootMargin only widens the window
+			// rectangle; the scroller's own clip still applies, so nothing fires before the card enters the
+			// scroller, and the callback is a task that runs after that frame is painted. A panel can
+			// therefore show the 1 px fallback for a frame or two as it scrolls in (and a collapsed block
+			// expanded by a click for a few frames). That is only visible on a hovered panel or on mobile.
 			io: new IO((records) => publishParkedFrameBorders(win, records), { rootMargin: '200px 0px' }),
 			byAnchor: new Map(),
 		};

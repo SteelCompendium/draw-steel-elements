@@ -169,11 +169,14 @@ fixed:
    SC-533 the measurement is made in the next animation frame, batched across every mount
    queued before it (all reads before any write); until then the sheet's `0px` fallback
    applies (the panel is `opacity: 0` until hovered or revealed, and always visible on
-   mobile, so at most a 1px offset for one frame). A panel that is not in the document at
-   that frame (Reading view renders blocks below the first screen off-document; Live Preview
-   detaches a widget and re-attaches the same DOM when it scrolls into view) is measured
-   when its anchor first intersects the viewport, through a per-window IntersectionObserver;
-   a window without one keeps the fallback. (A style read, not a layout read — border widths
+   mobile, so for a panel that is in the document, at most a 1px offset until that frame).
+   A panel that is not in the document at that frame (Reading view renders blocks below the
+   first screen off-document; Live Preview detaches a widget and re-attaches the same DOM
+   when it scrolls into view) is measured when its anchor first intersects the viewport,
+   through a per-window IntersectionObserver. That callback runs after the frame in which the
+   card scrolls in is painted, so such a panel can show the 1px fallback for a frame or two
+   (a collapsed block expanded by a click, for a few frames), visible only on a hovered panel
+   or on mobile; a window without an IntersectionObserver keeps the fallback. (A style read, not a layout read — border widths
    are not layout-dependent — and never a crash.)
 
 **Layering.** Round 1 pulled the panel 1px DOWN (`margin-bottom: -1px`) so panel and card
