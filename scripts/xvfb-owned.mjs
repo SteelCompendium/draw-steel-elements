@@ -7,7 +7,8 @@
 // that socket belongs to WHOEVER WON THE LOCK for :n, not to the Xvfb we just spawned. Two runners
 // that pick the same n at the same instant both pass the "is it free?" pre-check and both spawn
 // `Xvfb :n`. Measured on devbox Xvfb 21.1.24 (SC-546): the loser frequently does NOT exit - it stays
-// alive holding no socket at all (7 of 12 simultaneous pairs) - so an exit-code guard cannot catch it,
+// alive for at least ~1 s holding no socket at all (7 of 12 simultaneous pairs across processes; it
+// depends on lock-file timing) - so an exit-code guard cannot be relied on to catch it,
 // and the loser's poll sees the winner's socket and happily runs on the winner's display. When the
 // winner's run ends and kills its Xvfb, the loser's screen disappears under it.
 //
