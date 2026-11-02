@@ -3997,6 +3997,10 @@ const SCENARIOS = [
 				});
 
 			try {
+				// The scenarios before this one leave leaves behind (a leaf that was in Live Preview keeps an editor beside its Reading view,
+				// which draws -- and looks up -- the next note's blocks too; so do pinned panels). Start from one fresh Reading-view leaf.
+				await t.ev(`(async () => { const leaf = app.workspace.getLeaf('tab'); await leaf.setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); for (const type of ['markdown', 'dse-sidebar']) for (const l of app.workspace.getLeavesOfType(type)) if (l !== leaf) l.detach(); return true; })()`);
+				await t.waitFor(`(${LEAF})?.view?.file?.path === 'Lifecycle/other.md'`, 'a fresh leaf on Lifecycle/other.md');
 				await K.install();
 
 				// (a) / (a') a note whose card references itself, in Reading view and in Live Preview
