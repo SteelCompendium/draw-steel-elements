@@ -38,6 +38,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parkPointer } from './x11-pointer.mjs';
+import { displayRange, startOwnedXvfb } from '../scripts/xvfb-owned.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.dirname(here);
@@ -347,31 +348,20 @@ function resolveXvfb() {
 async function startXvfb() {
 	const bin = resolveXvfb();
 	if (!bin) throw new EnvError('Xvfb not found (set XVFB_BIN or run `devbox install` in draw-steel-elements)');
-	for (let n = XVFB_RANGE[0]; n <= XVFB_RANGE[1]; n++) {
-		if (fs.existsSync(`/tmp/.X11-unix/X${n}`) || fs.existsSync(`/tmp/.X${n}-lock`)) continue;
-		// -noreset: do not reset the server (and recentre the pointer parked by x11-pointer.mjs, SC-539) when its last client leaves.
-		// 1600x1200: Obsidian is asked for 1440x1100 and a window manager clamps to the screen.
-		const child = spawn(bin, [`:${n}`, '-screen', '0', '1600x1200x24', '-nolisten', 'tcp', '-noreset'], {
-			stdio: 'ignore',
-			env: { ...process.env, DSE_E2E_RUN_ID: runId },
-		});
-		child.on('error', () => {});
-		spawned.push(child);
-		for (let i = 0; i < 40; i++) {
-			if (child.exitCode !== null) break; // lost a race for this number; try the next
-			if (fs.existsSync(`/tmp/.X11-unix/X${n}`)) {
-				xvfbPid = child.pid;
-				return { display: `:${n}`, child };
-			}
-			await sleep(100);
-		}
-		try {
-			child.kill('SIGKILL');
-		} catch {
-			/* gone */
-		}
-	}
-	throw new EnvError(`no free X display in :${XVFB_RANGE[0]}-:${XVFB_RANGE[1]}`);
+	// SC-546: the display counts as ours only when OUR Xvfb reports it is listening (-displayfd), never
+	// because "a socket for :n exists" (that socket may be another runner's). Why: scripts/xvfb-owned.mjs.
+	// -noreset: do not reset the server (and recentre the pointer parked by x11-pointer.mjs, SC-539) when its last client leaves.
+	// 1600x1200: Obsidian is asked for 1440x1100 and a window manager clamps to the screen.
+	const got = await startOwnedXvfb({
+		bin,
+		candidates: displayRange(XVFB_RANGE[0], XVFB_RANGE[1]),
+		args: ['-screen', '0', '1600x1200x24', '-nolisten', 'tcp', '-noreset'],
+		env: { ...process.env, DSE_E2E_RUN_ID: runId },
+		onSpawn: (child) => spawned.push(child),
+	});
+	if (!got) throw new EnvError(`no free X display in :${XVFB_RANGE[0]}-:${XVFB_RANGE[1]}`);
+	xvfbPid = got.child.pid;
+	return { display: got.display, child: got.child };
 }
 
 // ----------------------------------------------------------------------------- results
