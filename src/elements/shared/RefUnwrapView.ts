@@ -61,9 +61,14 @@ export function renderRefNotice(root: HTMLElement, opts: { message: string; hint
  * may still be running; a key that leaves the reference unchanged (a trailing space) used
  * to hit the unloaded view's entry and show "Reference nesting too deep" (and kept showing
  * it after the first lookup finished). A superseded owner no longer blocks its replacement,
- * and releases the entry in `finally` only if it is still the owner.
+ * and releases the entry in `finally` only if the entry is still its own.
+ *
+ * The entry is a per-RESOLUTION token (not the view), so the SAME view resolving twice at once (an
+ * `update()` while its own lookup is still running) does not clear the later resolution's entry when the
+ * earlier one settles. Such a view is never refused by its own entry (see `resolveGen` below for what
+ * stops the earlier resolution from drawing).
  */
-const IN_FLIGHT_REFS = new Map<string, ElementView<unknown>>();
+const IN_FLIGHT_REFS = new Map<string, { view: ElementView<unknown> }>();
 
 export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 	/** Tracks the currently-mounted base view (if any) so onUpdate can tear it down before
@@ -80,6 +85,13 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 	 * summary (type name + the reference text the author typed) rather than lying.
 	 */
 	private resolved?: { model: M; def: ElementDefinition<M> };
+	/**
+	 * SC-525 r3: bumped at the start of every `resolveAndMount`. A resolution that finds, after an `await`, that
+	 * a later one has started on this view (an `update()` while its lookup was running) returns without
+	 * drawing: only the newest resolution of a view may write into its root or mount a child, so a stale one
+	 * can neither stack a second card nor leave a loaded child the view no longer tracks.
+	 */
+	private resolveGen = 0;
 
 	constructor(
 		cx: RenderContext,
@@ -154,6 +166,7 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 
 	private async resolveAndMount(root: HTMLElement, raw: string): Promise<void> {
 		const trimmed = raw.trim();
+		const gen = ++this.resolveGen;
 
 		// D6 Task 9 (spec §9 risk): refuse a ref that is already mid-resolution for this
 		// SAME block — see IN_FLIGHT_REFS's doc comment above for why this is keyed on
@@ -161,15 +174,16 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 		// right shape. Guards BOTH ladders below (legacy @path/[[wikilink]] and the SCC
 		// ladder) since both ultimately resolve "this ref" and mount a base view.
 		const guardKey = `${this.cx.host.blockKey()}|${trimmed}`;
-		const owner = IN_FLIGHT_REFS.get(guardKey);
-		if (owner !== undefined && owner !== this && !owner.isUnloaded()) {
+		const current = IN_FLIGHT_REFS.get(guardKey);
+		if (current !== undefined && current.view !== this && !current.view.isUnloaded()) {
 			this.errorCard(
 				root,
 				`Reference nesting too deep — \`${trimmed}\` is already resolving in this block (spec §9 depth guard).`,
 			);
 			return;
 		}
-		IN_FLIGHT_REFS.set(guardKey, this);
+		const token = { view: this as ElementView<unknown> };
+		IN_FLIGHT_REFS.set(guardKey, token);
 		try {
 			// `@path` / `[[wikilink]]` — the legacy forms D6 spec §1.1 says "still work" —
 			// carry no SCC code at all, so cx.sccAnchors/cx.compendium can never classify
@@ -177,7 +191,7 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 			// wikilink providers, F1 §3.7). Handled BEFORE the SCC ladder below, which stays
 			// scc-prefixed/bare-slug only (fix round 1, Critical finding).
 			if (trimmed.startsWith('@') || (trimmed.startsWith('[[') && trimmed.endsWith(']]'))) {
-				await this.resolveLegacyRef(root, trimmed);
+				await this.resolveLegacyRef(root, trimmed, gen);
 				return;
 			}
 
@@ -200,6 +214,7 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 			}
 			// vault -> typed model + source, or the "found but not renderable" degrade.
 			const entity = await index.getEntity(code);
+			if (gen !== this.resolveGen) return; // superseded by a later resolution of this view
 			if (!entity) {
 				this.errorCard(
 					root,
@@ -222,6 +237,7 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 				return;
 			}
 			const parsed = await entity.model();
+			if (gen !== this.resolveGen) return;
 			if (parsed === undefined) {
 				// Minor fix (review round 1, spec §1.5): name the file + frontmatter `type`,
 				// not just the entity's display name, so a user debugging a stale-compendium
@@ -233,10 +249,12 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 				);
 				return;
 			}
-			const source: RefSource = { file: entity.file, frontmatter: entity.frontmatter, body: await entity.body() };
+			const body = await entity.body();
+			if (gen !== this.resolveGen) return;
+			const source: RefSource = { file: entity.file, frontmatter: entity.frontmatter, body };
 			await this.mountBase(root, parsed as M, source, base);
 		} finally {
-			if (IN_FLIGHT_REFS.get(guardKey) === this) IN_FLIGHT_REFS.delete(guardKey);
+			if (IN_FLIGHT_REFS.get(guardKey) === token) IN_FLIGHT_REFS.delete(guardKey);
 		}
 	}
 
@@ -275,15 +293,18 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 	 * expected to be authored via `@path`/`[[wikilink]]` in practice (§2.3's SourceAware
 	 * threading targets real compendium hits).
 	 */
-	private async resolveLegacyRef(root: HTMLElement, raw: string): Promise<void> {
+	private async resolveLegacyRef(root: HTMLElement, raw: string, gen: number): Promise<void> {
 		let resolved: ResolvedRef;
 		try {
 			resolved = await this.cx.refs.resolve(raw, this.cx.host.sourcePath);
 		} catch (error) {
+			if (gen !== this.resolveGen) return; // superseded by a later resolution of this view
 			this.errorCard(root, error instanceof Error ? error.message : String(error));
 			return;
 		}
+		if (gen !== this.resolveGen) return;
 		const rawText = await this.legacyRefRawText(resolved);
+		if (gen !== this.resolveGen) return;
 		const model = this.base.parse(resolved.data, rawText);
 		await this.mountBase(root, model);
 	}
