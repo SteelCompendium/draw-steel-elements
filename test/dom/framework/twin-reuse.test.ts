@@ -817,8 +817,9 @@ describe('SC-544: a second click before the first block\'s write', () => {
 		const [upper, middle, lower] = t.registry.liveEntries();
 		const order: string[] = [];
 		for (const [name, entry] of [['upper', upper], ['middle', middle], ['lower', lower]] as const) {
-			const flush = entry.view.flushPendingWrite.bind(entry.view);
-			jest.spyOn(entry.view, 'flushPendingWrite').mockImplementation(() => (order.push(name), flush()));
+			const view = entry.view as unknown as { flushPendingWrite(): void };
+			const flush = view.flushPendingWrite.bind(view);
+			jest.spyOn(view, 'flushPendingWrite').mockImplementation(() => (order.push(name), flush()));
 		}
 		cards.forEach((card) => click(card.el)); // all three have an edit waiting
 		expect(t.registry.pendingWrites()).toHaveLength(3);
