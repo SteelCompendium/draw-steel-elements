@@ -195,12 +195,16 @@
 // 10 s timer still clamped 1 of 4 (redraw at +11.4 s): the latency has no bound, so no timer length is right.
 // So every pin is released by the redraw it protects, and the timer is only a backstop:
 //  - The redraw STARTS only with evidence that Obsidian RE-RENDERED since the last arm (`redrawStarted`): (a) a protected
-//    sizer fell below its arm-time height (a collapse), (b) a root of ours that was not there at the arm was added (a fresh
-//    render), or (c) an arm-time root is back under a section it was not in at the arm (an adopted view in its new section).
-//    A root merely leaving or re-entering the document is NOT evidence: Obsidian's scroll virtualisation does that to a reader
-//    who scrolls while a redraw is late, with the sizer untouched, and counting it released the pin before the redraw that
-//    then collapsed the sizer (SC-472 r3: scrollTop 7456 -> 3889; stock holds). Without evidence the pin waits for the
-//    backstop. It is OVER (`redrawDone`, checked one animation frame after a mutation
+//    sizer fell below its arm-time height (a collapse), or (c) an arm-time root is back under a section it was not in at the
+//    arm (an adopted view in its new section). A root merely leaving or re-entering the document is NOT evidence: Obsidian's
+//    scroll virtualisation does that to a reader who scrolls while a redraw is late, with the sizer untouched, and counting
+//    it released the pin before the redraw that then collapsed the sizer (SC-472 r3: scrollTop 7456 -> 3889; stock holds).
+//    Nor is a root that is new since the arm: Obsidian renders a block for the first time when the reader scrolls it into
+//    view (r5: a second tracker scrolled in during a late redraw, 10111 -> 6544; stock holds). Without (a) or (c) the pin
+//    waits for the backstop, about 3 s, which cannot clamp because the sizer was never collapsed. Every redraw of a DSE block
+//    that was measured collapses the sizer, so no redrawn write waits for the backstop: pin life of redrawn writes, with and
+//    without the old evidence (b), 0.5-1.4 s either way (adopted click, adoption-off click, outside write with a Live Preview
+//    sibling, Reading host with an embed). It is OVER (`redrawDone`, checked one animation frame after a mutation
 //    once it started) when every root of ours in the scroller is mounted again and every protected sizer is back at
 //    the height it had at the last arm, within 2 px: the scroller's own sizer (at least as high as the viewport's
 //    bottom needs, min(arm-time value, scrollTop + clientHeight - padding), so releasing cannot clamp) and the
@@ -234,11 +238,11 @@
 // 60 quiet frames: the blank band is about 1 s longer than the stock 2.5 s (measured, Reading view, the last of two
 // trackers deleted, reader at the end: pin off at +3.5-3.8 s, stock +2.5 s, +0.98 to +1.32 s over 8 runs; the settled
 // scrollTop 3160 in both, and the band has no extra 64px any more). (2) A hidden or occluded window paints no frames:
-// its pin lasts until the 20 s cap (invisible there; it fires after 30 frames once they resume). (3) Evidence (b) is any
-// root of ours that is new since the arm: a reader who scrolls a second tracker into view for the first time while a
-// redraw is late, and whose first tracker is virtualised out in the same stretch, still makes the redraw "start" early;
-// the sizer check then releases only once the sizer is back, which is the arm-time value until the redraw collapses it.
-// Not observed. (4) The release keys on Obsidian's own inline `min-height` writes to the sizer and on
+// its pin lasts until the 20 s cap (invisible there; it fires after 30 frames once they resume). (3) The floor is the arm-time sizer height and is never raised to
+// content Obsidian measures during the hold: a reader who scrolls into sections that were not measured at the arm while a
+// redraw is late (to the end of a long note) can end up to about 500 px higher once the redraw is over (measured: -512 px
+// here, -448 px on stock; the collapse clamp it protects against is 3.5k px). A block that is rendered for the first time because
+// the reader scrolled it into view does not start the redraw (see above). (4) The release keys on Obsidian's own inline `min-height` writes to the sizer and on
 // our roots; if Obsidian stops writing the inline value, `redrawDone` never passes and the backstop releases the pin
 // (today's behaviour plus about 0.5 s). Lifecycle G-S59 covers the late-redraw case; G-S8, G-S15 and G-S42 the rest.
 
@@ -501,7 +505,7 @@ export class PreviewScrollPin {
 					this.raise(held, sizerInlineMinHeight(scroller));
 					held.backstop.noteActivity();
 					if (this.navigatedAway(held)) return this.release(scroller);
-					if (!held.started) held.started = this.redrawStarted(scroller, held, records);
+					if (!held.started) held.started = this.redrawStarted(scroller, held);
 					if (held.started) this.scheduleCheck(scroller, held);
 				} catch (err) {
 					console.warn('[DSE] scroll pin floor update failed', err);
@@ -552,16 +556,18 @@ export class PreviewScrollPin {
 	}
 
 	/**
-	 * SC-472: has Obsidian RE-RENDERED since the last arm? Evidence, any of: (a) a protected sizer fell below its arm-time
-	 * height (a collapse); (b) a root of ours that was not there at the arm was added (a fresh render); (c) an arm-time
-	 * root is back under a section it was not in at the arm (an adopted view put into the new section). A root merely
-	 * leaving or re-entering the document is NOT evidence: Obsidian's scroll virtualisation does that to a reader who
-	 * scrolls, with the sizer untouched, and counting it released the pin before the late redraw (SC-472 r3).
+	 * SC-472: has Obsidian RE-RENDERED since the last arm? Evidence, either of: (a) a protected sizer fell below its arm-time
+	 * height (a collapse); (c) an arm-time root is back under a section it was not in at the arm (an adopted view put into
+	 * the new section). Nothing else counts. A root leaving or re-entering the document is NOT evidence: Obsidian's scroll
+	 * virtualisation does that to a reader who scrolls, with the sizer untouched (SC-472 r3). Neither is a root of ours that
+	 * is new since the arm: Obsidian renders a block for the first time when the reader scrolls it into view (SC-472 r5: a
+	 * second tracker scrolled in during a late redraw released the pin, 10111 -> 6544; stock holds). Every redraw Obsidian
+	 * makes of a DSE block collapses the sizer (the reason the pin exists), so waiting for (a) or (c) misses none; a redraw
+	 * with neither leaves the sizer up, and the backstop (about 3 s) cannot clamp.
 	 */
-	private redrawStarted(scroller: HTMLElement, held: HeldPin, records: MutationRecord[]): boolean {
+	private redrawStarted(scroller: HTMLElement, held: HeldPin): boolean {
+		for (const key of held.collapsed0) if (!this.collapsed(scroller, held, key)) held.collapsed0.delete(key); // back up since the arm: the next collapse is a new one
 		for (const key of held.sizers0.keys()) if (!held.collapsed0.has(key) && this.collapsed(scroller, held, key)) return true; // (a)
-		const fresh = (n: Node): boolean => n.nodeType === 1 && ((n as Element).matches(ROOT) ? !held.roots0.has(n as Element) : Array.from((n as Element).querySelectorAll(ROOT)).some((r) => !held.roots0.has(r)));
-		if (records.some((r) => r.type === 'childList' && Array.from(r.addedNodes).some(fresh))) return true; // (b)
 		for (const root of held.roots0) if (root.isConnected && root.parentElement !== held.parents0.get(root)) return true; // (c)
 		return false;
 	}

@@ -1138,16 +1138,40 @@ describe('SC-472: a Reading pin is released when the redraw is over', () => {
 		expect(isPinned(s.scroller)).toBe(false);
 	});
 
-	test('redraw-start evidence (b): a root that was not there at the arm is added (a fresh render), the sizer untouched', async () => {
+	// SC-472 r6: a root that is NEW since the arm is not evidence: Obsidian renders a block for the first time when the reader scrolls it
+	// into view (r5: a second tracker scrolled in during a late redraw released the pin, 10111 -> 6544; stock holds).
+	test('a block rendered for the first time (a second tracker scrolled into view) is NOT a redraw: the pin stays on until the redraw collapses the sizer', async () => {
+		const s = scene();
+		const second = makeRoot(false);
+		const section = document.createElement('div');
+		section.appendChild(second);
+		s.el.parentElement!.appendChild(section); // the reader scrolled the second block in: Obsidian draws it
+		await flushObservers();
+		mount(second);
+		await flushObservers();
+		frames.run(10);
+		expect(isPinned(s.scroller)).toBe(true); // sizer untouched, nothing re-rendered
+		const fresh = await redrawStart(s); // now the late redraw of the first tracker arrives: it collapses the sizer
+		frames.run(2);
+		expect(isPinned(s.scroller)).toBe(true);
+		mount(fresh);
+		setSizer(s.scroller, 4819);
+		await flushObservers();
+		frames.run(1);
+		expect(isPinned(s.scroller)).toBe(false);
+	});
+
+	test('a root replaced by a fresh one with the sizer untouched is not evidence either: the backstop ends it', async () => {
 		const s = scene();
 		const fresh = makeRoot(false);
 		s.root.replaceWith(fresh);
 		await flushObservers();
-		frames.run(2);
-		expect(isPinned(s.scroller)).toBe(true); // the new root is empty
 		mount(fresh);
 		await flushObservers();
-		frames.run(1);
+		frames.run(10);
+		expect(isPinned(s.scroller)).toBe(true);
+		jest.advanceTimersByTime(TTL);
+		frames.run(BACKSTOP_FRAMES);
 		expect(isPinned(s.scroller)).toBe(false);
 	});
 
@@ -1181,35 +1205,29 @@ describe('SC-472: a Reading pin is released when the redraw is over', () => {
 
 	test('redraw-start detection, per signal', () => {
 		const s = scene();
-		const started = (records: Array<Partial<MutationRecord>>): boolean => (s.pin as any).redrawStarted(s.scroller, s.held(), records);
-		const list = (...n: Node[]) => n as any;
-		expect(started([])).toBe(false);
-		expect(started([{ type: 'childList', removedNodes: list(s.root), addedNodes: list() }])).toBe(false); // removed
-		expect(started([{ type: 'childList', removedNodes: list(), addedNodes: list(s.root) }])).toBe(false); // re-inserted where it was
-		expect(started([{ type: 'childList', removedNodes: list(s.root.parentElement!), addedNodes: list() }])).toBe(false); // an ancestor removed
-		expect(started([{ type: 'attributes' }])).toBe(false);
-		expect(started([{ type: 'childList', removedNodes: list(), addedNodes: list(document.createElement('div')) }])).toBe(false); // not ours
+		const started = (): boolean => (s.pin as any).redrawStarted(s.scroller, s.held());
+		expect(started()).toBe(false);
 		const holder = document.createElement('div');
 		holder.appendChild(makeRoot(false));
-		expect(started([{ type: 'childList', removedNodes: list(), addedNodes: list(holder) }])).toBe(true); // (b) a fresh root inside an added node
-		expect(started([{ type: 'childList', removedNodes: list(), addedNodes: list(makeRoot(true))}])).toBe(true); // (b) the added node is the root
+		s.el.parentElement!.appendChild(holder);
+		expect(started()).toBe(false); // a root that is new since the arm
 		s.root.remove();
-		expect(started([])).toBe(false); // a root no longer in the document is not evidence (virtualisation)
+		expect(started()).toBe(false); // a root no longer in the document is not evidence (virtualisation)
 		const s2 = scene();
 		const sec = document.createElement('div');
 		s2.el.parentElement!.appendChild(sec);
 		sec.appendChild(s2.root);
-		expect((s2.pin as any).redrawStarted(s2.scroller, s2.held(), [])).toBe(true); // (c)
+		expect((s2.pin as any).redrawStarted(s2.scroller, s2.held())).toBe(true); // (c)
 		const s3 = scene();
 		setSizer(s3.scroller, 300);
-		expect((s3.pin as any).redrawStarted(s3.scroller, s3.held(), [])).toBe(true); // (a)
+		expect((s3.pin as any).redrawStarted(s3.scroller, s3.held())).toBe(true); // (a)
 	});
 
 	test('a sizer that was already collapsed at the arm is not evidence; a re-pin during a redraw does not start the next one', async () => {
 		const s = scene();
 		await redrawStart(s); // write 1 is being redrawn, the sizer is collapsed
 		s.pin.pin(s.el); // write 2 re-pins now
-		expect((s.pin as any).redrawStarted(s.scroller, s.held(), [])).toBe(false);
+		expect((s.pin as any).redrawStarted(s.scroller, s.held())).toBe(false);
 		setSizer(s.scroller, 47);
 		await flushObservers();
 		frames.run(3);
@@ -1325,12 +1343,11 @@ describe('SC-472: a Reading pin is released when the redraw is over', () => {
 		const s = embedScene();
 		s.pin.releaseAll();
 		s.pin.pin(s.dse.holder);
-		const fresh = makeRoot(false);
-		s.dse.root.replaceWith(fresh);
+		setSizer(s.scroller, 46); // the redraw collapses the scroller's sizer (evidence)
 		s.dse.innerSizer.style.minHeight = '110px';
-		s.dse.embed.remove(); // virtualised out of the document, still collapsed
+		s.dse.embed.remove(); // an embed virtualised out of the document, still collapsed
 		await flushObservers();
-		mount(fresh);
+		setSizer(s.scroller, 4819);
 		await flushObservers();
 		frames.run(1);
 		expect(isPinned(s.scroller)).toBe(false);
@@ -1340,10 +1357,9 @@ describe('SC-472: a Reading pin is released when the redraw is over', () => {
 		bare.el.appendChild(root);
 		const pin = new PreviewScrollPin();
 		pin.pin(bare.el);
-		const again = makeRoot(false);
-		root.replaceWith(again);
-		await flushObservers();
-		mount(again);
+		const section = document.createElement('div');
+		bare.el.parentElement!.appendChild(section);
+		section.appendChild(root); // an adopted view, put into a new section (evidence (c))
 		await flushObservers();
 		frames.run(1);
 		expect(isPinned(bare.scroller)).toBe(false);
@@ -1356,7 +1372,7 @@ describe('SC-472: a Reading pin is released when the redraw is over', () => {
 		const held = (s.pin as any).pins.get(s.scroller);
 		s.dse.innerSizer.style.minHeight = '110px';
 		s.dse.embed.remove();
-		expect((s.pin as any).redrawStarted(s.scroller, held, [])).toBe(false);
+		expect((s.pin as any).redrawStarted(s.scroller, held)).toBe(false);
 	});
 
 	test('re-pin re-arm: a redraw that began before the latest write does not count; the next redraw releases the re-pinned view', async () => {
@@ -1368,8 +1384,9 @@ describe('SC-472: a Reading pin is released when the redraw is over', () => {
 		await flushObservers();
 		frames.run(5);
 		expect(isPinned(s.scroller)).toBe(true); // not released by the redraw that started before the re-pin
-		const fresh2 = await redrawStart({ scroller: s.scroller, root: fresh }, 4819); // write 2's own redraw
+		const fresh2 = await redrawStart({ scroller: s.scroller, root: fresh }); // write 2's own redraw collapses the sizer again
 		mount(fresh2);
+		setSizer(s.scroller, 4819);
 		await flushObservers();
 		frames.run(1);
 		expect(isPinned(s.scroller)).toBe(false);
@@ -1396,14 +1413,20 @@ describe('SC-472: a Reading pin is released when the redraw is over', () => {
 		const s = scene();
 		const fresh = await redrawStart(s); // sizer collapsed to 46
 		s.pin.pin(s.el); // a second write's re-pin reads the collapsed 46
+		mount(fresh);
+		setSizer(s.scroller, 4819); // write 1's redraw finishes: the sizer is back (a collapse is a new one from here on)
+		await flushObservers();
+		frames.run(3);
+		expect(isPinned(s.scroller)).toBe(true);
 		const fresh2 = makeRoot(false);
-		fresh.replaceWith(fresh2); // its own redraw
+		fresh.replaceWith(fresh2); // write 2's own redraw
+		setSizer(s.scroller, 46);
 		await flushObservers();
 		mount(fresh2);
 		setSizer(s.scroller, 300); // an intermediate value, still under the viewport's 3506
 		await flushObservers();
 		frames.run(3);
-		expect(isPinned(s.scroller)).toBe(true);
+		expect(isPinned(s.scroller)).toBe(true); // 300 is not the height to restore (4819), so the pin is not released
 		setSizer(s.scroller, 4819);
 		await flushObservers();
 		frames.run(1);
