@@ -128,19 +128,23 @@
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
-// Env:   XVFB_BIN, DSE_LIFECYCLE_BIN (default /usr/bin/obsidian), DSE_LIFECYCLE_PORT (9262),
+// Env:   XVFB_BIN, DSE_LIFECYCLE_BIN (default /usr/bin/obsidian),
+//        DSE_LIFECYCLE_PORT (default: unset = an OS-assigned free CDP port, read back from OUR Obsidian, so two runs never
+//        share one - SC-551; a pinned port n still works: it must be free, and our Obsidian must report it, else exit 2),
 //        DSE_LIFECYCLE_BUNDLE (dir holding main.js/styles.css/manifest.json; default: this repo)
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CdpOwnershipError, portInUse, proveCdpOwned } from '../scripts/cdp-owned.mjs';
 import { displayRange, startOwnedXvfb, XvfbSpawnError } from '../scripts/xvfb-owned.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.dirname(dir);
 const BIN = process.env.DSE_LIFECYCLE_BIN ?? '/usr/bin/obsidian';
-const PORT = Number(process.env.DSE_LIFECYCLE_PORT ?? 9262);
+// SC-551: unset = port 0 (Chromium picks a free port; we read it back from our own Obsidian). Set = pinned.
+const REQUESTED_PORT = process.env.DSE_LIFECYCLE_PORT === undefined ? 0 : Number(process.env.DSE_LIFECYCLE_PORT);
 const ONLY = (process.argv.find((a) => a.startsWith('--only=')) ?? '').slice(7).split(',').filter(Boolean);
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'dse-obsidian-lifecycle-'));
 const vault = path.join(work, 'vault');
@@ -5220,16 +5224,12 @@ async function main() {
 			if (!fs.existsSync(path.join(bundleDir, f))) envFail(`missing built ${f} in ${bundleDir} — run \`npm run obsidian-lifecycle\` (it builds first)`);
 		}
 		if (!fs.existsSync(BIN)) envFail(`no Obsidian binary at ${BIN}`);
-		// Checked outside any try/catch that could swallow envFail's throw: a bare `catch
-		// {}` right after `envFail(...)` would otherwise treat "port busy" as "port free".
-		let portBusy = false;
-		try {
-			await fetch(`http://localhost:${PORT}/json/version`);
-			portBusy = true;
-		} catch {
-			/* free — expected: nothing answers */
-		}
-		if (portBusy) envFail(`port ${PORT} already serves CDP — another instance owns it`);
+		// SC-551: a pinned port must be free (fast, clear failure; any listener counts, not only a CDP server). Not a proof
+		// of anything: the port can be taken between this check and our Obsidian's bind, which is what proveCdpOwned
+		// below catches. Port 0 needs no pre-check - the OS hands out a free one.
+		// Checked outside any try/catch that could swallow envFail's throw (portInUse never throws).
+		if (!Number.isInteger(REQUESTED_PORT) || REQUESTED_PORT < 0 || REQUESTED_PORT > 65535) envFail(`DSE_LIFECYCLE_PORT must be a port number (1-65535) or unset, got ${JSON.stringify(process.env.DSE_LIFECYCLE_PORT)}`);
+		if (REQUESTED_PORT !== 0 && (await portInUse(REQUESTED_PORT))) envFail(`port ${REQUESTED_PORT} is already in use — another instance owns it`);
 		const cfg = path.join(os.homedir(), '.config', 'obsidian');
 		const asars = fs.existsSync(cfg) ? fs.readdirSync(cfg).filter((f) => /^obsidian-.*\.asar$/.test(f)).sort() : [];
 		if (!asars.length) envFail('no obsidian-*.asar in ~/.config/obsidian — open Obsidian once so it self-updates');
@@ -5253,7 +5253,7 @@ async function main() {
 		fs.copyFileSync(path.join(cfg, asars.at(-1)), path.join(udd, asars.at(-1)));
 
 		const x = await startXvfb();
-		const child = spawn(BIN, [`--user-data-dir=${udd}`, `--remote-debugging-port=${PORT}`, '--window-size=1440,1100'], {
+		const child = spawn(BIN, [`--user-data-dir=${udd}`, `--remote-debugging-port=${REQUESTED_PORT}`, '--window-size=1440,1100'], {
 			env: { ...process.env, DISPLAY: x.display },
 			stdio: 'ignore',
 		});
@@ -5261,13 +5261,22 @@ async function main() {
 		let alive = true;
 		child.once('exit', () => (alive = false));
 
+		// SC-551: the CDP port is ours only when OUR Obsidian reported it and the browser id on it matches (why and how:
+		// scripts/cdp-owned.mjs). Only HTTP reads happen before this resolves - never a Runtime command in a stranger.
+		let PORT;
+		try {
+			PORT = (await proveCdpOwned({ child, userDataDir: udd, expectedPort: REQUESTED_PORT })).port;
+		} catch (e) {
+			if (e instanceof CdpOwnershipError) envFail(e.message);
+			throw e;
+		}
 		let target;
 		const t0 = Date.now();
 		while (!target) {
 			if (!alive) envFail('Obsidian exited during start-up');
 			if (Date.now() - t0 > 45000) envFail('no CDP page target after 45 s');
 			try {
-				target = (await (await fetch(`http://localhost:${PORT}/json/list`)).json()).find((p) => p.type === 'page' && p.url.startsWith('app://obsidian.md'));
+				target = (await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json()).find((p) => p.type === 'page' && p.url.startsWith('app://obsidian.md'));
 			} catch {
 				/* not up yet */
 			}
