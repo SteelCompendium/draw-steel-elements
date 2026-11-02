@@ -40,7 +40,7 @@
 //     widget of the same `cm-lang-*` language is held (a callout that slid into a deleted tracker's
 //     slot is not). The hold drops as soon as our view appends its first child to the block's root
 //     (MutationObserver; measured 3-224 ms, 0 painted frames — not necessarily the full mount),
-//     or after PIN_TTL_MS. If the block's real height changed (a row added), CodeMirror re-measures it
+//     or by the backstop (THE BACKSTOP, SC-472). If the block's real height changed (a row added), CodeMirror re-measures it
 //     like any resized widget: above the viewport its anchoring keeps the visible line in place;
 //     with the viewport inside the block the pixel offset into the block is kept.
 //
@@ -108,7 +108,7 @@
 // removed and every root now in the embed is mounted, so nothing is collapsing; that release runs one task later and is
 // re-checked then (a root added empty in the meantime keeps the hold). A redraw that REPLACES a root - also one of two roots, the other
 // staying in place - adds the new root empty in the same batch as the removal, so it is not released until our view is
-// in it. PIN_TTL_MS is the backstop: a write Obsidian never redraws in the embed (an edit outside an embedded heading)
+// in it. The backstop (THE BACKSTOP, SC-472) covers a write Obsidian never redraws in the embed (an edit outside an embedded heading): it
 // only leaves the floor at the height the embed already has. Measured cost (1.15.0, SC-522 r1): the embed scan per Live Preview view per `modify` of any note,
 // 0.1 ms median (0.5 max) when nothing is held; a hold 1.3-3.4 ms to set (one layout read at `modify`, the DOM still
 // clean); the release reads no layout (CodeMirror measures at its next frame, as it would for any resized widget).
@@ -136,8 +136,8 @@
 // screenshots see it; settled 0; stock settles +69 with transients +178 / -41..+69). That is CodeMirror's own measure
 // cycle, present on stock too; no cheap fix without internal API, so it is accepted. (2) Dependence on Obsidian internals: the hold needs the `.internal-embed` to stay the
 // CodeMirror widget, a direct `.cm-content` child; the click mark needs `hookClickHandler` to keep its `.interactive-child`
-// test. If either changes, lifecycle G-S52 (a)-(f) fails. (3) TTL-bounded floor: a write to B that Obsidian does not
-// redraw in the embed leaves the floor in place for PIN_TTL_MS (unchanged, 2.5 s); the floor is the height the embed
+// test. If either changes, lifecycle G-S52 (a)-(f) fails. (3) Backstop-bounded floor: a write to B that Obsidian does not
+// redraw in the embed leaves the floor in place for the backstop (PIN_TTL_MS, 2.5 s, plus 30 painted frames: about 3 s unloaded); the floor is the height the embed
 // already has, so it is invisible unless the embed would shrink within that window. A shrink that Obsidian does redraw
 // (a block deleted from B, a paragraph removed) is released by the rule above one task after the redraw, so the host ends
 // where stock's clamp ends without a blank band. If Obsidian ever redraws an embed in two separate tasks (the removal
@@ -145,6 +145,19 @@
 // never worse. A re-hold while the previous redraw is under way (a held root removed) keeps the larger floor.
 // The release rule also fires on ANY removal outside our roots that lands in the ~20-30 ms between the write and Obsidian's
 // redraw (something else in the embed changing): that write then behaves as on stock (the clamp), never worse.
+//
+// THE BACKSTOP (SC-472). Every hold falls back on `Backstop` (redrawBackstop.ts) instead of a plain `setTimeout(PIN_TTL_MS)`. The
+// SC-478 pending entry (a block drawn later than the backstop is not held), the SC-478 widget hold and the SC-522 embed hold keep their
+// release rules (restore on the transaction, release on mount, release on the embed redraw) and differ only in the fallback. A plain 2.5 s
+// timer ran out BEFORE the redraw when another pane held the main thread: the second Live Preview pane's transaction was measured 2.47 s
+// after `modify` (SC-478), and under an 8x CPU throttle the SC-522 embed hold was dropped at +4.9-5.4 s, right after the other pane's redraw
+// and 0.5-1 s before the embed's own, so the embed collapsed unprotected (7486 -> 3745, 2 of 3 redrawn writes; release on the redraw with a
+// plain 2.5 s timer: 3 of 4; the backstop: 0 of 4 and G-S59 (b) 3 of 3 in every run). The backstop fires after PIN_TTL_MS of wall clock AND 30 painted
+// frames, 2 of them quiet; its busy rules are "a root of ours in the embed is empty" (embed hold) and "the widget is still in the
+// document and unmounted" (widget hold), so a view that is still mounting is never cut short; PIN_HARD_CAP_MS (20 s) ends everything.
+// A hidden window paints no frames, so only the cap runs there (20 s, invisible). KNOWN LIMIT: the SC-478 widget hold that CodeMirror
+// has replaced (it will never mount) is released by the backstop, not on mount: measured on stock in the sibling-pane runs
+// (hold set at +384 ms, released at +4441 ms); the new backstop is not shorter than the old timer there (r3 probes it).
 
 import type { Workspace } from 'obsidian';
 import { ViewPlugin } from '@codemirror/view';
