@@ -102,9 +102,14 @@
 // when our view is back in it — a DSE root that was not there at hold time (a fresh mount), or one of the held roots
 // put back (an adopted write), and every root in the embed mounted (MutationObserver on the widget) — so a write that
 // changes the embed's real height shows that height in the same task, and CodeMirror re-measures it like any resized
-// widget (a growth above the viewport keeps the visible line, as on stock). PIN_TTL_MS is the backstop: a write
-// Obsidian never redraws in the embed (an edit outside an embedded heading) only leaves the floor at the height the
-// embed already has. Measured cost (1.15.0, SC-522 r1): the embed scan per Live Preview view per `modify` of any note,
+// widget (a growth above the viewport keeps the visible line, as on stock). It is ALSO released when Obsidian redraws the
+// embed without bringing a fresh view of ours - a block deleted from B, a paragraph of B removed (measured: one batch
+// that removes a section and adds nothing, the other roots untouched and mounted): something outside our roots was
+// removed and every root now in the embed is mounted, so nothing is collapsing; that release runs one task later and is
+// cancelled by any batch that leaves a root empty. A redraw that REPLACES a root - also one of two roots, the other
+// staying in place - adds the new root empty in the same batch as the removal, so it is not released until our view is
+// in it. PIN_TTL_MS is the backstop: a write Obsidian never redraws in the embed (an edit outside an embedded heading)
+// only leaves the floor at the height the embed already has. Measured cost (1.15.0, SC-522 r1): the embed scan per Live Preview view per `modify` of any note,
 // 0.1 ms median (0.5 max) when nothing is held; a hold 1.3-3.4 ms to set (one layout read at `modify`, the DOM still
 // clean); the release reads no layout (CodeMirror measures at its next frame, as it would for any resized widget).
 // Measured result of the hold (1.15.0, process / watcher / second pane / popout / add or remove a hero / `#heading`):
@@ -120,17 +125,22 @@
 // longer selects the embed - the editor cursor does not move onto it and the selected-embed outline does not draw.
 // A click elsewhere in the embed (outside the card) still selects it as before; Reading view and the DSE code-block
 // widgets in Live Preview are untouched. Obsidian also tests `interactive-child` for double-click and Mod+A inside the
-// embed; those were not measured (r3 probes them).
+// embed; r3 probed them (SC-522 r3): a double-click, Mod+A in a card, a click on the embed's text outside the card and the
+// open-link icon behave as on stock, except that stock jumps (or takes focus from an opened edit form) and this does not.
 //
 // KNOWN LIMITS. (1) One frame of CodeMirror measure lag: when the embed's height CHANGES above the viewport (a hero added
 // or removed, host parked below it), the settled position is held (text 0px) but a sample taken after paint and before
-// CodeMirror's next measure can read +109 / -110px for one frame (the rAF sampler reads 0; stock settles +69 with
-// transients +178 / -41..+69). That is CodeMirror's own measure cycle, present on stock too; no cheap fix without
-// internal API, so it is accepted. (2) Dependence on Obsidian internals: the hold needs the `.internal-embed` to stay the
+// CodeMirror's next measure reads +110 / -110px for one PAINTED frame (rAF and post-paint samplers and trace
+// screenshots see it; settled 0; stock settles +69 with transients +178 / -41..+69). That is CodeMirror's own measure
+// cycle, present on stock too; no cheap fix without internal API, so it is accepted. (2) Dependence on Obsidian internals: the hold needs the `.internal-embed` to stay the
 // CodeMirror widget, a direct `.cm-content` child; the click mark needs `hookClickHandler` to keep its `.interactive-child`
-// test. If either changes, lifecycle G-S52 (a)-(e) fails. (3) TTL-bounded floor: a write to B that Obsidian does not
+// test. If either changes, lifecycle G-S52 (a)-(f) fails. (3) TTL-bounded floor: a write to B that Obsidian does not
 // redraw in the embed leaves the floor in place for PIN_TTL_MS (unchanged, 2.5 s); the floor is the height the embed
-// already has, so it is invisible unless the embed would shrink within that window.
+// already has, so it is invisible unless the embed would shrink within that window. A shrink that Obsidian does redraw
+// (a block deleted from B, a paragraph removed) is released by the rule above one task after the redraw, so the host ends
+// where stock's clamp ends without a blank band. If Obsidian ever redraws an embed in two separate tasks (the removal
+// first, the replacement later) that release fires early and the host behaves as on stock for that write (the clamp),
+// never worse. A re-hold while the previous redraw is under way (a held root removed) keeps the larger floor.
 
 import type { Workspace } from 'obsidian';
 import { ViewPlugin } from '@codemirror/view';
@@ -228,7 +238,7 @@ export class LivePreviewScrollHold {
 	/** Every live hold's release, so `releaseAll()` can drop them at unload. */
 	private readonly holds = new Map<() => void, EditorView>();
 	/** SC-522: every held embed widget and its release (a re-hold replaces it). */
-	private readonly embedHolds = new Map<HTMLElement, { px: number; release: () => void }>();
+	private readonly embedHolds = new Map<HTMLElement, { px: number; roots0: Set<Element>; release: () => void }>();
 
 	/**
 	 * Vault `modify`: capture every Live Preview view of `path` that shows a DSE widget and is scrolled; SC-522: and,
@@ -272,7 +282,9 @@ export class LivePreviewScrollHold {
 		let px = embed.getBoundingClientRect().height - edges;
 		const prev = this.embedHolds.get(embed);
 		if (prev) {
-			px = Math.max(px, prev.px); // a re-hold (rapid writes) never lowers the floor
+			// a re-hold (rapid writes) never lowers the floor while the previous redraw is still under way (a held root was
+			// removed: the embed may be collapsed right now); with every held root still in place the height read is true
+			if (Array.from(prev.roots0).some((root) => !root.isConnected)) px = Math.max(px, prev.px);
 			prev.release();
 		}
 		if (!(px > 0)) return;
@@ -281,23 +293,27 @@ export class LivePreviewScrollHold {
 		embed.style.setProperty('min-height', `${px}px`);
 		embed.setAttribute(EMBED_HOLD_ATTR, String(Math.round(px)));
 		let observer: MutationObserver | null = null;
+		let settle: number | null = null;
 		const release = (): void => {
 			if (this.embedHolds.get(embed)?.release !== release) return;
 			this.embedHolds.delete(embed);
 			this.holds.delete(release);
 			observer?.disconnect();
 			win.clearTimeout(timer);
+			if (settle !== null) win.clearTimeout(settle);
 			if (inline) embed.style.setProperty('min-height', inline);
 			else embed.style.removeProperty('min-height');
 			embed.removeAttribute(EMBED_HOLD_ATTR);
 			view.requestMeasure();
 		};
 		const timer = win.setTimeout(release, PIN_TTL_MS);
-		this.embedHolds.set(embed, { px, release });
+		this.embedHolds.set(embed, { px, roots0, release });
 		this.holds.set(release, view);
 		const MO = (win as Window & { MutationObserver?: typeof MutationObserver }).MutationObserver;
 		if (!MO) return;
 		let back = false;
+		let redrawn = false;
+		const mounted = (roots: Element[]): boolean => roots.every((root) => root.childElementCount > 0);
 		observer = new MO((records) => {
 			if (!back) {
 				for (const r of records) {
@@ -308,7 +324,23 @@ export class LivePreviewScrollHold {
 			}
 			const roots = Array.from(embed.querySelectorAll('[data-dse-element]'));
 			if (!back && roots.some((root) => !roots0.has(root))) back = true; // a fresh mount
-			if (back && roots.length >= roots0.size && roots.every((root) => root.childElementCount > 0)) release();
+			if (back && roots.length >= roots0.size && mounted(roots)) return release();
+			// Obsidian redrew the embed WITHOUT bringing a fresh view of ours (a block deleted from B, a paragraph removed:
+			// nothing of ours is coming): once something outside our roots was removed and every root now in the embed is
+			// mounted, nothing is collapsing, so release - after the current task, so a removal that is only the first half of
+			// a replacement (the new, still empty root follows in the same task) cancels it. A redraw that replaces a root
+			// (including one of two) shows the new root empty at once, so `mounted` is false until our view is in it.
+			if (!redrawn) redrawn = records.some((r) => r.removedNodes.length > 0 && !(r.target as Element).closest?.('[data-dse-element]'));
+			if (settle !== null && !mounted(roots)) {
+				win.clearTimeout(settle);
+				settle = null;
+			}
+			if (redrawn && settle === null && mounted(roots)) {
+				settle = win.setTimeout(() => {
+					settle = null;
+					if (mounted(Array.from(embed.querySelectorAll('[data-dse-element]')))) release();
+				}, 0);
+			}
 		});
 		observer.observe(embed, { childList: true, subtree: true });
 	}

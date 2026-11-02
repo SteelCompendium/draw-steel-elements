@@ -676,7 +676,8 @@ describe('SC-522: a Live Preview host holds its embed of the written note', () =
 		e.style.minHeight = '20px';
 		const host = fakeView(6800, [e]);
 		hold.holdEmbedsOf(host as never, 'B.md', 'A.md', resolver({ B: 'B.md' }));
-		e.getBoundingClientRect = () => ({ height: 135 }) as DOMRect; // a second write lands while the embed is collapsed
+		e.querySelector('[data-dse-element]')!.remove(); // the first write's redraw has removed the root: the embed is collapsed
+		e.getBoundingClientRect = () => ({ height: 135 }) as DOMRect; // a second write lands now
 		hold.holdEmbedsOf(host as never, 'B.md', 'A.md', resolver({ B: 'B.md' }));
 		expect(held(e)).toBe('3190');
 		jest.advanceTimersByTime(TTL - 1);
@@ -690,5 +691,109 @@ describe('SC-522: a Live Preview host holds its embed of the written note', () =
 		hold.releaseAll();
 		expect(held(f)).toBeNull();
 		expect(f.style.minHeight).toBe('');
+	});
+	// SC-522 r4 (LOW-1): a redraw that brings no fresh view of ours must not leave the floor up for the TTL, and a redraw that
+	// replaces ONE of two roots must not release it early. Shapes measured in Obsidian 1.15.0 (R4-MUT): a rewritten block is
+	// `el-pre` removed + `el-pre` with an EMPTY root added in one batch; a deleted block is one batch with a removal only.
+	describe('release without a fresh view', () => {
+		const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+		/** An embed of B with `n` sections, each an `.el-pre` holding one mounted root; sections[i] / roots[i]. */
+		function twoBlocks(n = 2) {
+			const e = embedWidget('B', 3437, { dse: false });
+			const content = e.querySelector('.markdown-embed-content')!;
+			const section = (): { el: HTMLElement; root: HTMLElement } => {
+				const el = document.createElement('div');
+				el.className = 'el-pre';
+				const root = el.appendChild(document.createElement('div'));
+				root.setAttribute('data-dse-element', 'initiative');
+				root.appendChild(document.createElement('div'));
+				return { el, root };
+			};
+			const parts = Array.from({ length: n }, () => section());
+			for (const p of parts) content.appendChild(p.el);
+			return { e, content, parts, section };
+		}
+		const holdIt = (e: HTMLElement) => {
+			const hold = new LivePreviewScrollHold();
+			const host = fakeView(7047, [e]);
+			hold.holdEmbedsOf(host as never, 'B.md', 'A.md', resolver({ B: 'B.md' }));
+			return { hold, host };
+		};
+
+		test('a block deleted from B (one of two sections removed, nothing added) releases one task after the redraw', async () => {
+			const { e, content, parts } = twoBlocks();
+			const { host } = holdIt(e);
+			expect(held(e)).toBe('3437');
+			content.removeChild(parts[1].el);
+			await sleep(0);
+			await flush();
+			await sleep(5);
+			expect(held(e)).toBeNull();
+			expect(e.style.minHeight).toBe('');
+			expect(host.requestMeasure).toHaveBeenCalledTimes(1);
+		});
+
+		test('a paragraph removed from B (nothing of ours touched) releases the same way', async () => {
+			const { e, content, parts } = twoBlocks(1);
+			const para = content.insertBefore(document.createElement('div'), parts[0].el);
+			para.className = 'el-p';
+			const { host } = holdIt(e);
+			content.removeChild(para);
+			await flush();
+			await sleep(5);
+			expect(held(e)).toBeNull();
+			expect(host.requestMeasure).toHaveBeenCalledTimes(1);
+		});
+
+		test('a write to ONE of two blocks is not released early: the new root is empty in the same batch as the removal', async () => {
+			const { e, content, parts, section } = twoBlocks();
+			const { host } = holdIt(e);
+			const fresh = section();
+			fresh.root.replaceChildren(); // Obsidian adds the section with our root empty; our view mounts ~40 ms later
+			content.replaceChild(fresh.el, parts[0].el);
+			await flush();
+			await sleep(5);
+			expect(held(e)).toBe('3437'); // the other root is connected and mounted, the written one is not
+			expect(host.requestMeasure).not.toHaveBeenCalled();
+			fresh.root.appendChild(document.createElement('div')); // our view is in
+			await flush();
+			await flush();
+			expect(held(e)).toBeNull();
+		});
+
+		test('a removal that is only the first half of a replacement in the same task does not release', async () => {
+			const { e, content, parts, section } = twoBlocks();
+			holdIt(e);
+			content.removeChild(parts[0].el);
+			await flush(); // the removal batch is delivered: the other root is mounted, the release is scheduled for the next task
+			const fresh = section();
+			fresh.root.replaceChildren();
+			content.insertBefore(fresh.el, parts[1].el); // the replacement follows in the same task
+			await flush();
+			await sleep(5);
+			expect(held(e)).toBe('3437');
+		});
+
+		test('mutations inside our own roots are not a redraw of the embed', async () => {
+			const { e, parts } = twoBlocks();
+			holdIt(e);
+			const inner = parts[0].root.firstElementChild as HTMLElement;
+			parts[0].root.removeChild(inner); // our own view re-rendering itself
+			parts[0].root.appendChild(document.createElement('div'));
+			await flush();
+			await sleep(5);
+			expect(held(e)).toBe('3437');
+		});
+
+		test('a re-hold lowers the floor to the true height while every held root is still in place', () => {
+			const { e } = twoBlocks();
+			const hold = new LivePreviewScrollHold();
+			const host = fakeView(7047, [e]);
+			hold.holdEmbedsOf(host as never, 'B.md', 'A.md', resolver({ B: 'B.md' }));
+			e.getBoundingClientRect = () => ({ height: 1806 }) as DOMRect; // the embed has shrunk for another reason, no root removed
+			hold.holdEmbedsOf(host as never, 'B.md', 'A.md', resolver({ B: 'B.md' }));
+			expect(held(e)).toBe('1806');
+			hold.releaseAll();
+		});
 	});
 });
