@@ -64,7 +64,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { CdpOwnershipError, clearStaleReport, portInUse, proveCdpOwned } from '../scripts/cdp-owned.mjs';
+import { CdpOwnershipError, clearStaleReport, portInUse, proveCdpOwned, servesBrowser } from '../scripts/cdp-owned.mjs';
 import { DOCS_SHOTS, DOCS_COMPENDIUM_SEED } from './docs-manifest.mjs';
 import {
 	assertValidGifEntries,
@@ -557,8 +557,7 @@ async function waitFor(cdp, expr, { timeout = 30000, poll = 250, what = expr } =
 async function jsonList() {
 	if (ownedPort === null) return null;
 	try {
-		const v = await (await fetch(`http://127.0.0.1:${ownedPort}/json/version`)).json();
-		if (!String(v.webSocketDebuggerUrl ?? '').endsWith(`/devtools/browser/${ownedGuid}`)) return null;
+		if (!(await servesBrowser(ownedPort, ownedGuid))) return null;
 		return await (await fetch(`http://127.0.0.1:${ownedPort}/json/list`)).json();
 	} catch {
 		return null;
@@ -697,7 +696,7 @@ async function main() {
 		const t0 = Date.now();
 		let target = null;
 		while (!target) {
-			if (!child.alive) throw new Error('obsidian exited before CDP came up');
+			if (!child.alive) throw new EnvFailure('obsidian exited before CDP came up'); // exit 2: e.g. a second Obsidian on a shared udd handed off and quit
 			if (Date.now() - t0 > 30000) {
 				const targets = (await jsonList()) ?? [];
 				throw new Error(

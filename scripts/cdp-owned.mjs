@@ -18,10 +18,18 @@
 // --user-data-dir once its DevTools server is listening: line 1 the port, line 2 `/devtools/browser/<guid>`
 // (measured: ~320 ms after spawn, together with the "DevTools listening on ws://127.0.0.1:<port>/devtools/browser/<guid>"
 // stderr line; we read the file because stderr needs a pipe that must then be drained for the whole run). A process
-// that failed to bind writes nothing. So the endpoint is ours exactly when
-//   (1) OUR child's file reports a port (and, for a pinned port, the port we asked for), and
-//   (2) the browser GUID that `GET http://127.0.0.1:<port>/json/version` serves equals the file's GUID.
-// Both are plain HTTP/file reads - no CDP command is ever sent to a process we have not proven. With port 0 the OS
+// that failed to bind writes nothing. So the endpoint is ours when
+//   (1) OUR child's file reports a port (and, for a pinned port, the port we asked for),
+//   (2) the LISTEN socket on that port belongs to OUR child (its inode in /proc/net/tcp{,6} is one of the sockets under
+//       /proc/<child.pid>/fd), and
+//   (3) the browser GUID that `GET http://127.0.0.1:<port>/json/version` serves equals the file's GUID.
+// PRECONDITION: the user-data-dir belongs to our child alone. (1) and (3) only prove "the file and the server agree";
+// if a second Obsidian shares the --user-data-dir (the camera's default DSE_CAMERA_TMP is one machine-wide path,
+// SC-554) it writes the SAME file, and a run can read the other process's port and GUID - they agree with each other.
+// (2) is what closes that: a socket is a process's own, a file in a shared directory is not (SC-551 r3: 10 of 10 shared-
+// udd pairs passed (1)+(3) for the other process's browser; (2) rejects them). Still give every concurrent run its own
+// udd where the runner allows it.
+// Only plain HTTP/file/procfs reads happen - no CDP command is ever sent to a process we have not proven. With port 0 the OS
 // picks a free port, so two runs cannot collide at all and the pre-check is unnecessary (the proof is still run:
 // it is also what tells us the port). The file must not predate the spawn: a PERSISTENT user-data-dir keeps the last
 // run's file after Obsidian exits (measured, SC-551 survey), so callers run clearStaleReport(udd) right before the spawn.
@@ -31,7 +39,10 @@ import path from 'node:path';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** The CDP endpoint could not be proven ours. `reason`: 'no-report' | 'exited' | 'port-mismatch' | 'guid-mismatch' | 'unreachable'. */
+/**
+ * The CDP endpoint could not be proven ours. `reason`: 'no-report' | 'exited' | 'port-mismatch' | 'foreign-listener' |
+ * 'unverifiable' (procfs unreadable: fail closed) | 'guid-mismatch' | 'unreachable'.
+ */
 export class CdpOwnershipError extends Error {
 	constructor(reason, message) {
 		super(message);
@@ -69,6 +80,59 @@ export async function portInUse(port, hosts = ['127.0.0.1', '::1'], timeoutMs = 
 	return (await Promise.all(hosts.map(probe))).some(Boolean);
 }
 
+const defaultReadProc = (p) => {
+	try {
+		return fs.readFileSync(p, 'utf8');
+	} catch {
+		return null;
+	}
+};
+/** `socket:[inode]` link targets of every open fd of `pid` (null when unreadable, e.g. the process is gone). */
+const defaultFdLinks = (pid) => {
+	try {
+		return fs.readdirSync(`/proc/${pid}/fd`).map((f) => {
+			try {
+				return fs.readlinkSync(`/proc/${pid}/fd/${f}`);
+			} catch {
+				return '';
+			}
+		});
+	} catch {
+		return null;
+	}
+};
+
+/**
+ * Inodes of the LISTEN sockets (state 0A) bound to local `port` on any address, from /proc/net/tcp and tcp6;
+ * null when neither table can be read. `readProc(path)` returns the file text or null.
+ */
+export function listenInodes(port, readProc = defaultReadProc) {
+	const inodes = new Set();
+	let readable = false;
+	for (const table of ['/proc/net/tcp', '/proc/net/tcp6']) {
+		const text = readProc(table);
+		if (text === null) continue;
+		readable = true;
+		for (const line of text.split('\n').slice(1)) {
+			const f = line.trim().split(/\s+/);
+			// sl local_address rem_address st tx_queue:rx_queue tr:tm->when retrnsmt uid timeout inode
+			if (f.length < 10 || f[3] !== '0A') continue;
+			if (parseInt(f[1].split(':')[1], 16) === port) inodes.add(f[9]);
+		}
+	}
+	return readable ? inodes : null;
+}
+
+/** True when the browser serving `http://127.0.0.1:<port>/json/version` is the one with browser id `guid` (false on any error). */
+export async function servesBrowser(port, guid, fetchImpl = fetch) {
+	try {
+		const v = await (await fetchImpl(`http://127.0.0.1:${port}/json/version`)).json();
+		return String(v.webSocketDebuggerUrl ?? '').endsWith(`/devtools/browser/${guid}`);
+	} catch {
+		return false;
+	}
+}
+
 const GUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 
 /**
@@ -97,8 +161,10 @@ export function parseActivePort(text) {
  * @param {number} [o.pollMs]      file poll interval (default 25 ms).
  * @param {(path:string)=>string|null} [o.readFile]  injectable file read (null when absent).
  * @param {typeof fetch} [o.fetchImpl]               injectable fetch.
+ * @param {(path:string)=>string|null} [o.readProc]  injectable /proc/net/tcp{,6} read (null when unreadable).
+ * @param {(pid:number)=>string[]|null} [o.fdLinks]  injectable `readlink` of every /proc/<pid>/fd entry.
  */
-export async function proveCdpOwned({ child, userDataDir, expectedPort, timeoutMs = 30000, pollMs = 25, readFile = defaultRead, fetchImpl = fetch }) {
+export async function proveCdpOwned({ child, userDataDir, expectedPort, timeoutMs = 30000, pollMs = 25, readFile = defaultRead, fetchImpl = fetch, readProc = defaultReadProc, fdLinks = defaultFdLinks }) {
 	const file = path.join(userDataDir, 'DevToolsActivePort');
 	const deadline = Date.now() + timeoutMs;
 	const pinned = expectedPort !== undefined && expectedPort !== 0;
@@ -126,7 +192,21 @@ export async function proveCdpOwned({ child, userDataDir, expectedPort, timeoutM
 		throw new CdpOwnershipError('port-mismatch', `port ${expectedPort}: our Obsidian reported port ${report.port} instead${owner}`);
 	}
 
-	// (2) the server on that port is the browser our process reported
+	// (2) the LISTEN socket on that port is OUR child's own, not another process's (a shared user-data-dir shares the file)
+	const listening = listenInodes(report.port, readProc);
+	const ourSockets = child.pid === undefined ? null : fdLinks(child.pid);
+	if (listening === null || ourSockets === null) {
+		throw new CdpOwnershipError('unverifiable', `port ${report.port}: cannot read /proc to check which process listens there (our pid ${child.pid})`);
+	}
+	const ours = new Set(ourSockets);
+	if (listening.size === 0 || [...listening].some((inode) => !ours.has(`socket:[${inode}]`))) {
+		throw new CdpOwnershipError(
+			'foreign-listener',
+			`port ${report.port}: ${listening.size === 0 ? 'nothing listens there' : 'the listening socket there is not our Obsidian\'s'} (our pid ${child.pid}) - another instance owns it`,
+		);
+	}
+
+	// (3) the server on that port is the browser our process reported
 	let served = null;
 	let lastError = '';
 	while (served === null) {

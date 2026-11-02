@@ -92,6 +92,7 @@ const obsidianShots = wanted.filter((s) => s.source === 'obsidian');
 
 fs.mkdirSync(outDir, { recursive: true });
 const failures = [];
+let cameraEnvFailure = false; // SC-551 r4: the camera exits 2 for an environment problem (port / ownership); docs-shots passes that on
 
 /** Byte budget per docs image. Docs pages are read over the network; a 2.5 MB screenshot
  *  of one statblock is not a picture, it is a download. Browser captures fall back from
@@ -315,6 +316,7 @@ async function runObsidianShots() {
 			[path.join(dir, 'obsidian-camera.mjs'), '--docs', `--out=${outDir}`, ...only],
 			{ stdio: 'inherit', env: { ...process.env, DSE_CAMERA_DISPLAY: display, DISPLAY: display } },
 		);
+		if (res.status === 2) cameraEnvFailure = true;
 		if (res.status !== 0) {
 			failures.push({ out: '(obsidian shots)', error: `obsidian-camera.mjs exited ${res.status}` });
 		}
@@ -354,7 +356,7 @@ if (!args.only && !checkStable) {
 if (failures.length) {
 	console.error(`\n${failures.length} docs image(s) failed:`);
 	for (const f of failures) console.error(`  ${f.out}: ${f.error}`);
-	process.exit(1);
+	process.exit(cameraEnvFailure && failures.length === 1 ? 2 : 1); // 2 = environment, only when the camera's exit 2 is the sole failure
 }
 console.log(
 	checkStable

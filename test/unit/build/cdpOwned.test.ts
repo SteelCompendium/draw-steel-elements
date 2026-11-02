@@ -32,16 +32,26 @@ interface Outcome {
 	[k: string]: unknown;
 }
 
-/** Runs `body` (JS source) with `proveCdpOwned`, `portInUse`, `parseActivePort`, `serve(guid)`, `child`, `ud` (a fresh user-data-dir) in scope; it assigns `extra` and may call `prove(opts)`. */
+/** Runs `body` (JS source) with the helper's exports, `serve(guid)`, a fake `child` (pid 4242) + fake procfs (`listening`, `foreign`, `procTable`), `ud` (a fresh user-data-dir) in scope; it assigns `out.*` and may call `prove(opts)`. */
 function run(body: string): Outcome {
 	const ud = fs.mkdtempSync(path.join(dir, 'ud-'));
 	const code = `
 		import http from 'node:http';
 		import fs from 'node:fs';
-		import { proveCdpOwned, portInUse, parseActivePort, clearStaleReport, CdpOwnershipError } from ${JSON.stringify(helper)};
+		import { proveCdpOwned, portInUse, parseActivePort, clearStaleReport, listenInodes, servesBrowser, CdpOwnershipError } from ${JSON.stringify(helper)};
 		const ud = ${JSON.stringify(ud)};
 		const OURS = ${JSON.stringify(OURS)}, THEIRS = ${JSON.stringify(THEIRS)};
 		const hits = [];
+		// fake procfs: every served port has a LISTEN row (inode 100000 + port); the "child" (pid 4242) holds the sockets of
+		// ports not in \`foreign\` (those belong to some other pid) plus an unrelated fd
+		const listening = [];
+		const foreign = new Set();
+		const inodeOf = (p) => 100000 + p;
+		const row = (i, port, inode, st = '0A') => ' ' + i + ': 0100007F:' + port.toString(16).toUpperCase().padStart(4, '0') + ' 00000000:0000 ' + st + ' 00000000:00000000 00:00000000 00000000  1000        0 ' + inode + ' 1 0000000000000000 100 0 0 10 0';
+		const HEAD = '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode';
+		let procTable = () => [HEAD, ...listening.map((p, i) => row(i, p, inodeOf(p)))].join('\\n') + '\\n';
+		const readProc = (p) => (p === '/proc/net/tcp' ? procTable() : p === '/proc/net/tcp6' ? HEAD + '\\n' : null);
+		const fdLinks = () => ['anon_inode:[eventpoll]', ...listening.filter((p) => !foreign.has(p)).map((p) => 'socket:[' + inodeOf(p) + ']')];
 		const servers = [];
 		/** a fake CDP browser: /json/version names browser <guid>; returns its port. */
 		const serve = async (guid) => {
@@ -52,12 +62,13 @@ function run(body: string): Outcome {
 			});
 			await new Promise((r) => s.listen(0, '127.0.0.1', r));
 			servers.push(s);
+			listening.push(s.address().port);
 			return s.address().port;
 		};
 		const writeReport = (port, guid) => fs.writeFileSync(ud + '/DevToolsActivePort', port + '\\n/devtools/browser/' + guid);
-		const child = { exitCode: null, signalCode: null, once: () => {}, removeListener: () => {} };
+		const child = { pid: 4242, exitCode: null, signalCode: null, once: () => {}, removeListener: () => {} };
 		const die = () => { child.exitCode = 1; };
-		const prove = (o) => proveCdpOwned({ child, userDataDir: ud, pollMs: 10, ...o });
+		const prove = (o) => proveCdpOwned({ child, userDataDir: ud, pollMs: 10, readProc, fdLinks, ...o });
 		const t0 = Date.now();
 		const out = { hits, servedPort: 0 };
 		try {
@@ -181,6 +192,61 @@ describe('SC-551: proveCdpOwned', () => {
 		expect([out.hadFile, out.hasFile]).toEqual([true, false]);
 		expect(out.error?.reason).toBe('no-report');
 		expect(out.hits).toEqual([]);
+	});
+
+	test('SC-551 r3 H-1: the LISTEN socket on the reported port must be our child\'s; another pid\'s socket is rejected even though the report and the served browser id agree, and nothing is requested from it', () => {
+		const out = run(`
+			const p = await serve(OURS); out.servedPort = p;
+			writeReport(p, OURS); // e.g. read from a user-data-dir shared with the process that really owns p
+			foreign.add(p);
+			await prove({ expectedPort: p });
+		`);
+		expect(out.error?.reason).toBe('foreign-listener');
+		expect(out.error?.message).toContain(`port ${out.servedPort}`);
+		expect(out.error?.message).toContain('another instance owns it');
+		expect(out.hits).toEqual([]);
+	});
+
+	test('a reported port nobody listens on is a foreign-listener failure too, and so is a /proc that cannot be read (fail closed)', () => {
+		const out = run(`
+			const p = await serve(OURS); out.servedPort = p;
+			writeReport(p, OURS);
+			listening.length = 0; // the table has no LISTEN row for p
+			try { await prove({}); } catch (e) { out.nothing = e.reason; }
+			listening.push(p);
+			try { await prove({ readProc: () => null }); } catch (e) { out.unreadable = e.reason; }
+			try { await prove({ fdLinks: () => null }); } catch (e) { out.noFds = e.reason; }
+		`);
+		expect([out.nothing, out.unreadable, out.noFds]).toEqual(['foreign-listener', 'unverifiable', 'unverifiable']);
+	});
+
+	test('with the real /proc: a listener held by this process is ours when child.pid is this process, and foreign when child.pid is its parent', () => {
+		const out = run(`
+			const p = await serve(OURS); out.servedPort = p;
+			writeReport(p, OURS);
+			const real = { readProc: undefined, fdLinks: undefined };
+			out.ok = await prove({ ...real, child: { pid: process.pid, exitCode: null, signalCode: null } });
+			try { await prove({ ...real, child: { pid: process.ppid, exitCode: null, signalCode: null } }); } catch (e) { out.parentReason = e.reason; }
+		`);
+		expect(out.ok).toEqual({ port: out.servedPort, guid: OURS });
+		expect(out.parentReason).toBe('foreign-listener');
+	});
+
+	test('listenInodes reads LISTEN rows of tcp and tcp6 for the port only (an ESTABLISHED row and another port are ignored); servesBrowser compares the served browser id', () => {
+		const out = run(`
+			const head = 'sl local_address rem_address st tx rx tr tm retr uid timeout inode';
+			const tcp = [head, '0: 0100007F:1F90 00000000:0000 0A 0:0 0:0 0 1000 0 111 1', '1: 0100007F:1F90 0100007F:D431 01 0:0 0:0 0 1000 0 222 1', '2: 0100007F:1F91 00000000:0000 0A 0:0 0:0 0 1000 0 333 1'].join('\\n');
+			const tcp6 = [head, '0: 00000000000000000000000001000000:1F90 00000000000000000000000000000000:0000 0A 0:0 0:0 0 1000 0 444 1'].join('\\n');
+			out.both = [...listenInodes(8080, (p) => (p === '/proc/net/tcp' ? tcp : tcp6))].sort();
+			out.onlyV6 = [...listenInodes(8080, (p) => (p === '/proc/net/tcp6' ? tcp6 : null))];
+			out.none = listenInodes(8080, () => null);
+			const p = await serve(OURS);
+			out.same = await servesBrowser(p, OURS);
+			out.other = await servesBrowser(p, THEIRS);
+			out.down = await servesBrowser(1, OURS);
+		`);
+		expect([out.both, out.onlyV6, out.none]).toEqual([['111', '444'], ['444'], null]);
+		expect([out.same, out.other, out.down]).toEqual([true, false, false]);
 	});
 
 	test('portInUse sees a plain TCP listener that speaks no HTTP, and a freed port reads as free', () => {

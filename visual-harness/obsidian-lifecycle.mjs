@@ -137,7 +137,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CdpOwnershipError, clearStaleReport, portInUse, proveCdpOwned } from '../scripts/cdp-owned.mjs';
+import { CdpOwnershipError, clearStaleReport, portInUse, proveCdpOwned, servesBrowser } from '../scripts/cdp-owned.mjs';
 import { displayRange, startOwnedXvfb, XvfbSpawnError } from '../scripts/xvfb-owned.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
@@ -5265,8 +5265,9 @@ async function main() {
 		// SC-551: the CDP port is ours only when OUR Obsidian reported it and the browser id on it matches (why and how:
 		// scripts/cdp-owned.mjs). Only HTTP reads happen before this resolves - never a Runtime command in a stranger.
 		let PORT;
+		let BROWSER_ID;
 		try {
-			PORT = (await proveCdpOwned({ child, userDataDir: udd, expectedPort: REQUESTED_PORT })).port;
+			({ port: PORT, guid: BROWSER_ID } = await proveCdpOwned({ child, userDataDir: udd, expectedPort: REQUESTED_PORT }));
 		} catch (e) {
 			if (e instanceof CdpOwnershipError) envFail(e.message);
 			throw e;
@@ -5283,6 +5284,8 @@ async function main() {
 			}
 			if (!target) await sleep(300);
 		}
+		// SC-551 r4: one more look at WHO serves the port right before the first connect (ours may have died and the number been taken since the proof).
+		if (!(await servesBrowser(PORT, BROWSER_ID))) envFail(`port ${PORT}: the CDP server there is no longer our Obsidian's browser — another instance owns it`);
 		const cdp = await Cdp.connect(target.webSocketDebuggerUrl);
 		const t = makeHarness(cdp);
 		// Installed as early as CDP allows (document.body exists once the page shell has
