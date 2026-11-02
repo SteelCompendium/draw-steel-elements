@@ -92,6 +92,14 @@
 // block's old rendered element to the next identical block below it (no processor call), so the twin showed the writer's value, a click on it wrote
 // the writer's block, and its card was empty after the writer was adopted. Reading view (2 twins, 3 twins, montage twins, view adoption off, the block
 // edit form's Save on the upper twin) and Live Preview: one card per block, each showing its own block's value, a click changes only its own block.
+// SC-533 appends G-S54 (43 scenarios in all; the id was reserved by the ticket-owner): the chrome panel keeps its placement against the card (right edge
+// 10 px inside it, bottom edge exactly on its top, the same measure as the shots "chrome placement" check) for framed blocks (statblocks, stamina bars,
+// trackers) that start below the first screen, in Live Preview AND Reading view, scrolled to one after the other. The panel's frame-border vars are
+// measured a frame after the mount; Live Preview detaches a widget shortly after mounting it and puts the same DOM back on scroll, and Reading view
+// renders below-the-fold blocks off-document, so a measurement that skipped a panel which was out of the document at that frame left it 1 px into the
+// card's top border. Anti-vacuity per phase: panels that were out of the document at the first animation frame after their creation exist, and every
+// anchor has a non-zero border. Controls (temporary bundles via DSE_LIFECYCLE_BUNDLE): the frame-batched build that drops such panels (this fix's first version)
+// FAILs Live Preview; the stock build that reads the border at mount FAILs Reading view; the shipped build passes both.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -305,6 +313,21 @@ Object.assign(FIXTURES, {
 	'Lifecycle/counter-lp.md': `# counter lp\n\nABOVE TEXT LINE\n${COUNTER(10)}\n\nBELOW\n`,
 	'Lifecycle/feature-lp.md': `# feature lp\n\nABOVE TEXT LINE\n${fence('ds-feature', ['type: feature', 'feature_type: ability', 'name: Coverage Strike', 'cost: 5 Malice', 'usage: Main action', 'distance: Melee 1', 'target: One creature'])}\n\nBELOW\n`,
 	'Lifecycle/statblock-lp.md': `# statblock lp\n\nABOVE TEXT LINE\n${fence('ds-statblock', ['type: statblock', 'name: Bare Creature', 'stamina: "10"'])}\n\nBELOW\n`,
+});
+// SC-533 (G-S54): framed blocks below the first screen. The three kinds that sit on a visible frame (statblock, stamina bar, tracker), a few
+// paragraphs apart near the top and again after a long stretch of text.
+const GS54_SB = (name) => fence('ds-statblock', ['type: statblock', `name: ${name}`, 'stamina: "10"']);
+const GS54_FILL = (word, n) => Array.from({ length: n }, (_, i) => `${word} filler ${i}.`).join('\n\n');
+const GS54_BARS = [
+	fence('ds-stamina-bar', ['max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5']),
+	fence('ds-stamina-bar', ['max_stamina: 24', 'current_stamina: 7', 'temp_stamina: 0']),
+];
+Object.assign(FIXTURES, {
+	'Lifecycle/chrome-frame.md':
+		[
+			'# chrome frame', 'TOP', GS54_SB('SB One'), 'P1', GS54_SB('SB Two'), 'P2', GS54_SB('SB Three'), GS54_BARS[0], INIT('Init Ida'),
+			GS54_SB('SB Four'), GS54_FILL('MID', 120), GS54_SB('SB Five'), INIT('Init Two'), GS54_SB('SB Six'), GS54_BARS[1], GS54_FILL('END', 40),
+		].join('\n\n') + '\n',
 });
 Object.assign(FIXTURES, {
 	'Lifecycle/zwsp.md': `# zwsp\n\nTOP\n\n${fence('ds-counter' + ZWSP, counterLines(10))}\n\nBELOW\n`,
@@ -3655,6 +3678,127 @@ const SCENARIOS = [
 			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${JSON.stringify(await t.noticesSince(m))}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
 			return `identical blocks keep their own card, value and block (Reading view: 2 twins, 3 twins, montage twins, adoption off, form Save; Live Preview): ${outcomes.join('; ')}`;
+		},
+	},
+	{
+		// SC-533: the chrome panel's frame-border vars are measured a frame after the mount, so a panel that is out of the document at that frame has to
+		// be measured later. Live Preview (CodeMirror) mounts the widgets just below the viewport, detaches them within ~150 ms and re-attaches the same DOM when
+		// the reader scrolls to them; Reading view builds the sections below the fold off-document. Each phase opens the note fresh, scrolls down half a
+		// screen at a time and, for every panel that is on screen, waits (frames, not a timer) until its vars are set, then measures the panel against its
+		// card: right edge 10 px inside, bottom edge on the card's top (the shots "chrome placement" check's numbers). Every block of the note must be measured.
+		// Anti-vacuity: a hook on createDiv/requestAnimationFrame records, per panel, whether it was in the document when it was created and at the first
+		// animation frame after; the phase needs panels that were NOT in the document at that frame, and every anchor needs a non-zero border (with a 0 px
+		// border a missing var is invisible).
+		id: 'G-S54',
+		async run(t) {
+			const rel = 'Lifecycle/chrome-frame.md';
+			const MARKERS = [
+				['SB One', 'statblock'], ['SB Two', 'statblock'], ['SB Three', 'statblock'], ['15/20', 'stamina-bar'], ['Init Ida', 'initiative'],
+				['SB Four', 'statblock'], ['SB Five', 'statblock'], ['Init Two', 'initiative'], ['SB Six', 'statblock'], ['7/24', 'stamina-bar'],
+			];
+			const TOP_VAR = '--dse-chrome-frame-border-top';
+			const m = await t.mark();
+			const HOOK = `(() => {
+				const G = (window.__gs54 = { created: [] });
+				G.origDiv = Node.prototype.createDiv;
+				Node.prototype.createDiv = function (o, cb) {
+					const el = G.origDiv.call(this, o, cb);
+					if (o && o.cls === 'dse-chrome') G.created.push({ el, atCreate: this.isConnected, atFrame: null });
+					return el;
+				};
+				G.origRaf = window.requestAnimationFrame;
+				window.requestAnimationFrame = function (cb) {
+					return G.origRaf.call(window, (ts) => {
+						for (const c of G.created) if (c.atFrame === null) c.atFrame = c.el.isConnected;
+						return cb(ts);
+					});
+				};
+				return true;
+			})()`;
+			const UNHOOK = `(() => { const G = window.__gs54; if (G) { Node.prototype.createDiv = G.origDiv; window.requestAnimationFrame = G.origRaf; delete window.__gs54; } return true; })()`;
+			const SCAN = (scopeSel, scrollerSel) => `(async () => {
+				const G = window.__gs54;
+				const leaf = app.workspace.getMostRecentLeaf();
+				const scope = leaf.view.containerEl.querySelector(${JSON.stringify(scopeSel)});
+				const sc = scope.querySelector(${JSON.stringify(scrollerSel)}) ?? scope;
+				const frames = (n) => new Promise((res) => { const f = () => (--n <= 0 ? res() : requestAnimationFrame(f)); requestAnimationFrame(f); });
+				const MARKERS = ${JSON.stringify(MARKERS)};
+				const measures = [];
+				let panelsSeen = 0;
+				const sample = async () => {
+					for (const p of Array.from(scope.querySelectorAll('.dse-chrome'))) {
+						if (!p.isConnected) continue;
+						const a = p.parentElement;
+						const root = p.closest('[data-dse-element]');
+						const sr = sc.getBoundingClientRect();
+						const ar = a.getBoundingClientRect();
+						if (ar.bottom <= sr.top || ar.top >= sr.bottom) continue;
+						const hit = MARKERS.find(([txt, kind]) => root.getAttribute('data-dse-element') === kind && (root.textContent || '').includes(txt));
+						if (!hit) continue;
+						panelsSeen++;
+						for (let i = 0; i < 40 && p.isConnected && p.style.getPropertyValue(${JSON.stringify(TOP_VAR)}) === ''; i++) await frames(1);
+						if (!p.isConnected) continue;
+						const pr = p.getBoundingClientRect();
+						const ar2 = a.getBoundingClientRect();
+						const c = G.created.find((x) => x.el === p);
+						measures.push({ marker: hit[0], kind: hit[1], bt: parseFloat(getComputedStyle(a).borderTopWidth) || 0, varSet: p.style.getPropertyValue(${JSON.stringify(TOP_VAR)}) !== '',
+							inset: +(ar2.right - pr.right).toFixed(2), gap: +(ar2.top - pr.bottom).toFixed(2), tracked: !!c, atCreate: c ? c.atCreate : null, atFrame: c ? c.atFrame : null });
+					}
+				};
+				sc.scrollTop = 0;
+				await frames(3);
+				let steps = 0;
+				for (; steps < 120; steps++) {
+					await sample();
+					const before = sc.scrollTop;
+					sc.scrollTop = before + Math.round(sc.clientHeight * 0.5);
+					await frames(2);
+					if (sc.scrollTop === before) { await sample(); break; }
+				}
+				return { steps, panelsSeen, measures, scrollHeight: sc.scrollHeight };
+			})()`;
+			const fails = [];
+			const out = [];
+			const phase = async (label, state, scopeSel, scrollerSel) => {
+				await t.ev(`(async () => { await app.workspace.getMostRecentLeaf().setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); })()`);
+				await t.waitFor(`app.workspace.getMostRecentLeaf()?.view?.file?.path === 'Lifecycle/other.md'`, 'park on other.md');
+				await t.ev(`(async () => { const leaf = app.workspace.getMostRecentLeaf(); await leaf.setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, ...${JSON.stringify(state)} }, active: true }); if (${JSON.stringify(state.mode)} === 'source') leaf.view.editor.setCursor({ line: 0, ch: 0 }); return true; })()`);
+				await t.waitFor(`(() => { const s = app.workspace.getMostRecentLeaf().view.containerEl.querySelector(${JSON.stringify(scopeSel)}); return !!s && !!s.querySelector('[data-dse-element="statblock"] .dse-chrome'); })()`, `${label}: the first block rendered`);
+				const r = await t.ev(SCAN(scopeSel, scrollerSel));
+				const bad = [];
+				const missing = MARKERS.filter(([txt]) => !r.measures.some((x) => x.marker === txt)).map(([txt]) => txt);
+				if (missing.length) bad.push(`blocks never measured: ${missing.join(', ')}`);
+				for (const x of r.measures) {
+					const off = [];
+					if (Math.abs(x.inset - 10) > 0.5) off.push(`inset ${x.inset} (want 10)`);
+					if (Math.abs(x.gap) > 0.5) off.push(`gap ${x.gap} (want 0)`);
+					const msg = `${x.marker}: ${off.join(', ')}${x.varSet ? '' : ', no frame-border var on the panel'}`;
+					if (off.length && !bad.includes(msg)) bad.push(msg);
+				}
+				const late = r.measures.filter((x) => x.atFrame === false);
+				const lateMarkers = [...new Set(late.map((x) => x.marker))];
+				const thin = r.measures.filter((x) => !(x.bt > 0)).map((x) => x.marker);
+				const untracked = r.measures.filter((x) => !x.tracked).length;
+				const vac = [];
+				if (late.length === 0) vac.push('no panel was out of the document at its first animation frame - the phase cannot reach the defect');
+				if (thin.length) vac.push(`anchors with a 0 px border (${[...new Set(thin)].join(', ')}) - a missing var would be invisible`);
+				if (untracked) vac.push(`${untracked} panels were not created through the hook`);
+				out.push(`${label}: ${new Set(r.measures.map((x) => x.marker)).size}/${MARKERS.length} blocks measured over ${r.steps} scroll steps, ${late.length} measurements of panels out of the document at their first frame (${lateMarkers.join(', ') || 'none'}), inset/gap ${bad.length ? 'WRONG' : 'all 10 / 0'}`);
+				if (vac.length) fails.push(`${label}: ANTI-VACUITY: ${vac.join('; ')}`);
+				if (bad.length) fails.push(`${label}: ${bad.slice(0, 6).join(' | ')}${bad.length > 6 ? ` (+${bad.length - 6} more)` : ''}`);
+			};
+			try {
+				await t.ev(HOOK);
+				await phase('Live Preview', { mode: 'source', source: false }, '.markdown-source-view', '.cm-scroller');
+				await t.ev(`window.__gs54.created.length = 0`);
+				await phase('Reading view', { mode: 'preview' }, '.markdown-reading-view', '.markdown-preview-view');
+			} finally {
+				await t.ev(UNHOOK);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect(fails.length === 0, `${fails.join(' || ')} -- ${out.join('; ')}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
+			return out.join('; ');
 		},
 	},
 ];
