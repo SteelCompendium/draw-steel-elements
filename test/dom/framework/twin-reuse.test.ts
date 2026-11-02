@@ -9,6 +9,7 @@
 // the new section list is decided first (`reuse` keeps an old element at a new position, `fresh` gets the
 // processor, a discarded element has no section any more), then the processors run, then the old render children
 // of the discarded sections unload.
+import { EditorView } from '@codemirror/view';
 import { registerFrameworkElements } from '../../../src/framework/registerFrameworkElements';
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import { createElementRegistry } from '../../../src/framework/registry';
@@ -447,5 +448,226 @@ describe.each([true, false])('SC-481 r6: two identical callouts holding two bloc
 		expect(values()).toEqual([6, 3, 6, 3]);
 		await increase(cards[3]);
 		expect(values()).toEqual([6, 3, 6, 4]);
+	});
+});
+
+// SC-537: the same bug for twin CALLOUTS in Live Preview. Obsidian draws a callout as one editor widget, hands its blocks a context whose
+// getSectionInfo is null, and after a write gives the next identical callout the written one's OLD widget without calling a processor,
+// so nothing at processor time can see it. The editor can: an update listener (livePreviewReconcile.ts) asks the editor where each widget
+// sits now. `lp` below is a small stand-in for that editor: `posAtDOM` follows the slot a widget sits in, like CodeMirror's.
+describe('SC-537: twin callouts in Live Preview (the editor-driven pass)', () => {
+	const callout = (...blocks: Array<[string, number]>): string =>
+		['[!note] Camp', ...blocks.flatMap(([n, v], i) => [...(i ? [''] : []), ...counter(n, v).split('\n')])].map((l) => (l === '' ? '>' : `> ${l}`)).join('\n');
+	/** The body a processor is handed for the `blk`-th block of the `win`-th callout of `text`. */
+	const calloutBody = (text: string, win: number, blk: number): string => {
+		const w = windowsOf(text)[win];
+		const lines = text.split('\n').slice(w.lineStart, w.lineEnd + 1).map((l) => l.replace(/^> ?/, ''));
+		let open = -1;
+		for (let n = 0; n <= blk; n++) open = lines.findIndex((l, i) => i > open && /^```ds-/.test(l));
+		return lines.slice(open + 1, lines.indexOf('```', open + 1)).join('\n');
+	};
+	type Drawn = { widget: HTMLElement; els: HTMLElement[]; unload: () => void };
+
+	async function lp(note: string) {
+		const { deps, app, plugin } = makeEnv();
+		app.vault.setFile('Note.md', note);
+		plugin.load();
+		const elements = createElementRegistry();
+		elements.register(counterElement);
+		const extensions: unknown[] = [];
+		jest.spyOn(plugin, 'registerEditorExtension').mockImplementation((ext: unknown) => void extensions.push(ext));
+		const registry = registerFrameworkElements(plugin as any, { registry: elements, pipeline: new ElementPipeline(deps) }, { viewAdoption: true });
+		const listener = extensions.find((e) => (e as { facet?: unknown }).facet === EditorView.updateListener) as { value: (u: unknown) => void } | undefined;
+
+		// The editor: its text (what the user sees; lags the note on disk between a write and the "set" transaction), the callout each widget sits in.
+		let editorText = note;
+		const slotOf = new Map<Node, number>();
+		const editorDom = document.body.appendChild(document.createElement('div'));
+		const headerOffset = (callout: number): number => {
+			const lines = editorText.split('\n');
+			const line = lines.map((l, i) => (/^> \[!/.test(l) ? i : -1)).filter((i) => i >= 0)[callout];
+			return lines.slice(0, line).reduce((off, l) => off + l.length + 1, 0);
+		};
+		const cm = {
+			dom: editorDom,
+			posAtDOM: (node: Node): number => {
+				const slot = slotOf.get(node);
+				if (slot === undefined) throw new Error('not in view');
+				return headerOffset(slot);
+			},
+			state: {
+				doc: {
+					lineAt: (pos: number) => ({ number: editorText.slice(0, pos).split('\n').length }),
+					toString: () => editorText,
+				},
+				field: () => ({ file: { path: 'Note.md' } }),
+			},
+		};
+		app.workspace.getLeavesOfType = () => [{ view: { file: { path: 'Note.md' }, editor: { cm, getValue: () => editorText } } }] as any;
+
+		let docs = 0;
+		/** Obsidian draws the `win`-th callout of the note as a widget holding `blocks` cards, one processor call each. */
+		async function draw(win: number, blocks = 1): Promise<Drawn> {
+			const widget = document.createElement('div');
+			widget.className = 'cm-embed-block cm-callout';
+			const inner = widget.appendChild(document.createElement('div'));
+			inner.className = 'callout';
+			slotOf.set(widget, win);
+			editorDom.appendChild(widget);
+			const children: Array<{ load(): void; unload(): void }> = [];
+			const ctx = {
+				docId: `lp-${docs++}`,
+				sourcePath: 'Note.md',
+				frontmatter: undefined,
+				addChild: (child: { load(): void; unload(): void }) => (children.push(child), child.load()),
+				getSectionInfo: () => null,
+				containerEl: widget,
+				el: widget,
+			};
+			const els: HTMLElement[] = [];
+			for (let blk = 0; blk < blocks; blk++) {
+				const el = inner.appendChild(document.createElement('div'));
+				el.classList.add('block-language-ds-counter');
+				await plugin.registeredProcessors.get('ds-counter')!(calloutBody(app.vault.getContent('Note.md')!, win, blk), el, ctx as any);
+				els.push(el);
+			}
+			return { widget, els, unload: () => children.forEach((c) => c.unload()) };
+		}
+		/** The editor's "set" transaction after a write: its text follows the note. */
+		const syncEditor = (): void => void (editorText = app.vault.getContent('Note.md')!);
+		/** Obsidian's rebuild after a write to the UPPER callout: the upper one is raw (the cursor is in it), the OLD upper widget is handed to the lower slot, the old lower one is discarded. */
+		function reuseUpperAtLower(upper: Drawn, lower: Drawn): void {
+			slotOf.set(upper.widget, 1);
+			slotOf.delete(lower.widget);
+			lower.unload();
+			lower.widget.remove();
+			syncEditor();
+		}
+		/** One editor update, as CodeMirror calls its listeners; then the redraws it starts finish. */
+		async function update(over: { docChanged?: boolean; view?: unknown } = {}): Promise<void> {
+			if (!listener) throw new Error('no editor update listener was registered');
+			listener.value({ docChanged: over.docChanged ?? true, view: over.view ?? cm, state: cm.state });
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		}
+		async function increase(el: HTMLElement): Promise<void> {
+			(el.querySelector(INC) as HTMLElement).click();
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		}
+		const values = (): number[] => [...app.vault.getContent('Note.md')!.matchAll(/current_value: (\d+)/g)].map((m) => Number(m[1]));
+		const names = (): string[] => [...app.vault.getContent('Note.md')!.matchAll(/name: (\w+)/g)].map((m) => m[1]);
+		return { app, plugin, registry, cm, draw, syncEditor, reuseUpperAtLower, update, increase, values, names, editorDom };
+	}
+
+	beforeEach(() => jest.useFakeTimers());
+	afterEach(() => {
+		jest.useRealTimers();
+		document.body.replaceChildren();
+		jest.restoreAllMocks();
+	});
+
+	test('the UPPER callout clicked: the editor update redraws the widget Obsidian handed to the lower slot from the lower block, and its click writes the lower block', async () => {
+		const t = await lp(noteOf(quoted('callout', 'Twin', 5), quoted('callout', 'Twin', 5)));
+		const upper = await t.draw(0);
+		const lower = await t.draw(1);
+		const [writer] = t.registry.liveEntries();
+		await t.increase(upper.els[0]);
+		expect(t.values()).toEqual([6, 5]);
+		t.reuseUpperAtLower(upper, lower);
+		expect(shown(upper.els[0])).toBe('Twin=6'); // the bug's state: the lower slot shows the writer's value
+
+		await t.update();
+
+		expect(writer.releasedBy).toBe('reused-by-twin');
+		expect(upper.els[0].children).toHaveLength(1); // a fresh card in the same element
+		expect(shown(upper.els[0])).toBe('Twin=5');
+		await t.increase(upper.els[0]);
+		expect(t.values()).toEqual([6, 6]); // not [7, 5]
+		expect(shown(upper.els[0])).toBe('Twin=6');
+	});
+
+	test('a write that is not the view\'s own (the edit form\'s Save) on the upper callout: a click on the lower one does not erase the edit', async () => {
+		const t = await lp(noteOf(quoted('callout', 'Twin', 5), quoted('callout', 'Twin', 5)));
+		const upper = await t.draw(0);
+		const lower = await t.draw(1);
+		await t.registry.liveEntries()[0].host.replaceSource(bodyOf(noteOf(counter('Edited', 5)), 0));
+		expect(t.names()).toEqual(['Edited', 'Twin']);
+		t.reuseUpperAtLower(upper, lower);
+		await t.update();
+
+		expect(shown(upper.els[0])).toBe('Twin=5');
+		await t.increase(upper.els[0]);
+		expect(t.names()).toEqual(['Edited', 'Twin']); // the edit is still there
+		expect(t.values()).toEqual([5, 6]);
+	});
+
+	test('two blocks per callout: the redraw picks each by its place in the callout, and only the block whose body differs is redrawn', async () => {
+		const both = callout(['X', 5], ['Y', 3]);
+		const t = await lp(noteOf(both, both));
+		const upper = await t.draw(0, 2);
+		const lower = await t.draw(1, 2);
+		const [writerX, writerY] = t.registry.liveEntries();
+		await t.increase(upper.els[0]);
+		expect(t.values()).toEqual([6, 3, 5, 3]);
+		t.reuseUpperAtLower(upper, lower);
+		await t.update();
+
+		expect(writerX.releasedBy).toBe('reused-by-twin');
+		expect(writerY.releasedBy).toBeNull(); // Y never changed: its view still matches the lower Y
+		expect(upper.els.map(shown)).toEqual(['X=5', 'Y=3']);
+		await t.increase(upper.els[0]);
+		expect(t.values()).toEqual([6, 3, 6, 3]);
+		await t.increase(upper.els[1]);
+		expect(t.values()).toEqual([6, 3, 6, 4]);
+	});
+
+	test('an element still on the line the view\'s last write landed at is its own block, waiting for the editor to catch up: not redrawn', async () => {
+		const t = await lp(noteOf(quoted('callout', 'Twin', 5), quoted('callout', 'Twin', 5)));
+		const upper = await t.draw(0);
+		await t.draw(1);
+		const [writer] = t.registry.liveEntries();
+		await t.increase(upper.els[0]); // the editor text is still the old [5, 5], the widget still at the upper slot
+		await t.update();
+
+		expect(writer.releasedBy).toBeNull();
+		expect(shown(upper.els[0])).toBe('Twin=6');
+	});
+
+	test('an update that changed no text, one from another editor, or one that is not for a note: nothing is redrawn', async () => {
+		const t = await lp(noteOf(quoted('callout', 'Twin', 5), quoted('callout', 'Twin', 5)));
+		const upper = await t.draw(0);
+		const lower = await t.draw(1);
+		const [writer] = t.registry.liveEntries();
+		await t.increase(upper.els[0]);
+		t.reuseUpperAtLower(upper, lower);
+
+		await t.update({ docChanged: false });
+		await t.update({ view: { ...t.cm, dom: document.createElement('div') } }); // another pane: the widget is not in its DOM
+		expect(writer.releasedBy).toBeNull();
+		expect(shown(upper.els[0])).toBe('Twin=6');
+
+		await t.update(); // the editor it is drawn in
+		expect(writer.releasedBy).toBe('reused-by-twin');
+	});
+
+	test('a plain Live Preview widget is not judged by the editor pass (the processor-time check keeps that case)', async () => {
+		const t = await lp(noteOf(counter('Twin', 5), counter('Twin', 7)));
+		const widget = t.editorDom.appendChild(document.createElement('div'));
+		widget.className = 'cm-embed-block cm-lang-ds-counter';
+		const el = widget.appendChild(document.createElement('div'));
+		el.classList.add('block-language-ds-counter');
+		// A plain widget has a section, and it is the OTHER block's (the element was handed on): the processor-time check would redraw it.
+		const ctx = { ...makeFakeContext(t.app, 'Note.md', 1), el: widget, containerEl: widget, getSectionInfo: () => makeFakeContext(t.app, 'Note.md', 1).getSectionInfo(el) };
+		await t.plugin.registeredProcessors.get('ds-counter')!(bodyOf(noteOf(counter('Twin', 5)), 0), el, ctx as any);
+		const [entry] = t.registry.liveEntries();
+
+		await t.update();
+
+		expect(entry.releasedBy).toBeNull();
+		expect(shown(el)).toBe('Twin=5');
+	});
+
+	test('registerFrameworkElements registers the update listener with the editor', async () => {
+		const t = await lp(noteOf(quoted('callout', 'Twin', 5)));
+		await expect(t.update()).resolves.toBeUndefined(); // throws when no listener was registered
 	});
 });

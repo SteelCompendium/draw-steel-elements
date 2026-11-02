@@ -784,6 +784,9 @@ export class Keymap {
 // (see the SC-135 phase 1 report), matching this module's treatment of `Keymap` above.
 export const editorLivePreviewField = {} as unknown;
 
+/** SC-537: `editorInfoField` (obsidian.d.ts) is likewise only a CM6 state-field KEY (`state.field(editorInfoField, false)?.file`). */
+export const editorInfoField = {} as unknown;
+
 export class MenuItem {
 	title = '';
 	icon = '';
