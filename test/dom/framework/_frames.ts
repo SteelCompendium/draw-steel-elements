@@ -10,20 +10,35 @@ export interface Frames {
 	restore(): void;
 }
 
+// The window's own functions, read when the module loads (before any test fakes timers): what `restore()` puts back.
+const original = new WeakMap<Window, { raf: unknown; caf: unknown }>();
+const originalOf = (win: Window): { raf: unknown; caf: unknown } => {
+	if (!original.has(win)) {
+		const w = win as unknown as { requestAnimationFrame?: unknown; cancelAnimationFrame?: unknown };
+		original.set(win, { raf: w.requestAnimationFrame, caf: w.cancelAnimationFrame });
+	}
+	return original.get(win)!;
+};
+originalOf(window);
+
 /** Replace `win.requestAnimationFrame` / `cancelAnimationFrame` with a manual queue; `restore()` undoes it. */
 export function installFrames(win: Window = window): Frames {
-	const w = win as unknown as { requestAnimationFrame?: unknown; cancelAnimationFrame?: unknown };
-	const saved = { raf: w.requestAnimationFrame, caf: w.cancelAnimationFrame };
+	const saved = originalOf(win);
 	let next = 1;
 	let queue = new Map<number, FrameRequestCallback>();
-	w.requestAnimationFrame = (cb: FrameRequestCallback): number => {
+	// Locked (assignments are ignored): jest's fake timers fake `requestAnimationFrame` too, and `jest.useFakeTimers()` may be
+	// called after this install (describe-level beforeEach) or between two phases of one test.
+	const lock = (name: 'requestAnimationFrame' | 'cancelAnimationFrame', value: unknown): void => {
+		Object.defineProperty(win, name, { configurable: true, get: () => value, set: () => undefined });
+	};
+	lock('requestAnimationFrame', (cb: FrameRequestCallback): number => {
 		const id = next++;
 		queue.set(id, cb);
 		return id;
-	};
-	w.cancelAnimationFrame = (id: number): void => {
+	});
+	lock('cancelAnimationFrame', (id: number): void => {
 		queue.delete(id);
-	};
+	});
 	return {
 		run(n = 1) {
 			for (let i = 0; i < n; i++) {
@@ -34,22 +49,21 @@ export function installFrames(win: Window = window): Frames {
 		},
 		pending: () => queue.size,
 		restore() {
-			w.requestAnimationFrame = saved.raf;
-			w.cancelAnimationFrame = saved.caf;
+			Object.defineProperty(win, 'requestAnimationFrame', { configurable: true, writable: true, value: saved.raf });
+			Object.defineProperty(win, 'cancelAnimationFrame', { configurable: true, writable: true, value: saved.caf });
 		},
 	};
 }
 
 /** Remove `requestAnimationFrame` altogether (a window that has none); `restore()` of the returned handle puts it back. */
 export function removeFrames(win: Window = window): { restore(): void } {
-	const w = win as unknown as { requestAnimationFrame?: unknown; cancelAnimationFrame?: unknown };
-	const saved = { raf: w.requestAnimationFrame, caf: w.cancelAnimationFrame };
-	w.requestAnimationFrame = undefined;
-	w.cancelAnimationFrame = undefined;
+	const saved = originalOf(win);
+	Object.defineProperty(win, 'requestAnimationFrame', { configurable: true, get: () => undefined, set: () => undefined });
+	Object.defineProperty(win, 'cancelAnimationFrame', { configurable: true, get: () => undefined, set: () => undefined });
 	return {
 		restore() {
-			w.requestAnimationFrame = saved.raf;
-			w.cancelAnimationFrame = saved.caf;
+			Object.defineProperty(win, 'requestAnimationFrame', { configurable: true, writable: true, value: saved.raf });
+			Object.defineProperty(win, 'cancelAnimationFrame', { configurable: true, writable: true, value: saved.caf });
 		},
 	};
 }

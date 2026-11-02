@@ -11,9 +11,26 @@ import { registerFrameworkElements } from '../../../src/framework/registerFramew
 import type { ElementRegistry } from '../../../src/framework/registry';
 import type { ElementPipeline } from '../../../src/framework/pipeline';
 import { App, Plugin } from '../../mocks/obsidian';
+import { installFrames } from './_frames';
+import type { Frames } from './_frames';
 
-/** Must match PIN_TTL_MS in previewScrollPin.ts. */
+/** Must match PIN_TTL_MS in redrawBackstop.ts. */
 const TTL = 2500;
+/** Must match PIN_BACKSTOP_FRAMES in redrawBackstop.ts. */
+const BACKSTOP_FRAMES = 30;
+/** Must match PIN_HARD_CAP_MS in redrawBackstop.ts. */
+const HARD_CAP = 20000;
+
+// SC-472: the holds' timer is a backstop that counts painted animation frames; every test drives them by hand.
+let frames: Frames;
+beforeEach(() => {
+	frames = installFrames();
+});
+/** The backstop's two conditions met with nothing else going on: PIN_TTL_MS of wall clock, then 30 painted frames (needs fake timers). */
+const backstopElapses = (): void => {
+	jest.advanceTimersByTime(TTL);
+	frames.run(BACKSTOP_FRAMES);
+};
 
 interface FakeEffect {
 	tag: string;
@@ -115,6 +132,7 @@ const note = (path = 'Note.md') => ({ file: { path } as { path: string } | null 
 afterEach(() => {
 	document.body.innerHTML = '';
 	jest.useRealTimers();
+	frames.restore();
 });
 
 describe('SC-478: LivePreviewScrollHold capture', () => {
@@ -264,18 +282,58 @@ describe('SC-478: LivePreviewScrollHold capture', () => {
 });
 
 describe('SC-478: LivePreviewScrollHold hold', () => {
-	test('a block drawn after PIN_TTL_MS is not held (the pending entry expired)', () => {
+	test('a block drawn after the backstop (PIN_TTL_MS and 30 painted frames) is not held (the pending entry expired)', () => {
 		jest.useFakeTimers();
 		const hold = new LivePreviewScrollHold();
 		const view = fakeView(3500, [widget(637, 3039)]);
 		hold.capture(view as never, note());
 		hold.onUpdate(update(view));
-		jest.advanceTimersByTime(TTL);
+		backstopElapses();
 		view.contentDOM.querySelector('.cm-embed-block')!.remove();
 		const late = widget(637, 50, false);
 		view.contentDOM.appendChild(late);
 		hold.applyHolds(view as never);
 		expect(late.hasAttribute(HOLD_ATTR)).toBe(false);
+	});
+
+	// SC-472: a main thread busy with another pane's redraw runs the timer without painting a frame; the block that redraw
+	// then draws (measured: 8.6-10.2 s after the write at 8x CPU throttle) must still be held.
+	test('a block drawn after PIN_TTL_MS but before 30 frames were painted is still held; the 30th frame expires the entry', () => {
+		jest.useFakeTimers();
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3500, [widget(637, 3039)]);
+		hold.capture(view as never, note());
+		hold.onUpdate(update(view));
+		jest.advanceTimersByTime(TTL * 3); // the main thread was busy: the timer ran, not one frame was painted
+		view.contentDOM.querySelector('.cm-embed-block')!.remove();
+		const late = widget(637, 50, false);
+		view.contentDOM.appendChild(late);
+		hold.applyHolds(view as never);
+		expect(late.getAttribute(HOLD_ATTR)).toBe('3039');
+		hold.releaseAll();
+
+		const view2 = fakeView(3500, [widget(637, 3039)]);
+		hold.capture(view2 as never, note());
+		hold.onUpdate(update(view2));
+		jest.advanceTimersByTime(TTL);
+		frames.run(BACKSTOP_FRAMES - 1);
+		view2.contentDOM.querySelector('.cm-embed-block')!.remove();
+		const edge = widget(637, 50, false);
+		view2.contentDOM.appendChild(edge);
+		hold.applyHolds(view2 as never);
+		expect(edge.hasAttribute(HOLD_ATTR)).toBe(true);
+		hold.releaseAll();
+
+		const view3 = fakeView(3500, [widget(637, 3039)]);
+		hold.capture(view3 as never, note());
+		hold.onUpdate(update(view3));
+		jest.advanceTimersByTime(TTL);
+		frames.run(BACKSTOP_FRAMES);
+		view3.contentDOM.querySelector('.cm-embed-block')!.remove();
+		const gone = widget(637, 50, false);
+		view3.contentDOM.appendChild(gone);
+		hold.applyHolds(view3 as never);
+		expect(gone.hasAttribute(HOLD_ATTR)).toBe(false);
 	});
 
 	test('holds the replacement widget drawn empty at the old height (position mapped through the change), released on mount', async () => {
@@ -439,8 +497,54 @@ describe('SC-478: LivePreviewScrollHold hold', () => {
 		view2.contentDOM.appendChild(c);
 		hold.applyHolds(view2 as never);
 		expect(c.hasAttribute(HOLD_ATTR)).toBe(true);
+		backstopElapses();
+		// SC-472: the widget is still in the document and still empty - its view is mounting: the backstop waits (busy)
+		expect(c.hasAttribute(HOLD_ATTR)).toBe(true);
+		jest.advanceTimersByTime(HARD_CAP - TTL - 1);
+		expect(c.hasAttribute(HOLD_ATTR)).toBe(true);
+		jest.advanceTimersByTime(1);
+		expect(c.hasAttribute(HOLD_ATTR)).toBe(false); // the 20 s cap ends it whatever busy says
+	});
+
+	test('SC-472: a held widget that CodeMirror has since dropped from the document is released by the backstop (PIN_TTL_MS + 30 frames), not held for the cap', () => {
+		jest.useFakeTimers();
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3500, [widget(637, 3039)]);
+		hold.capture(view as never, note());
+		hold.onUpdate(update(view));
+		view.contentDOM.querySelector('.cm-embed-block')!.remove();
+		const w = widget(637, 50, false);
+		view.contentDOM.appendChild(w);
+		hold.applyHolds(view as never);
+		expect(w.hasAttribute(HOLD_ATTR)).toBe(true);
+		w.remove(); // replaced by CodeMirror: it will never mount
 		jest.advanceTimersByTime(TTL);
-		expect(c.hasAttribute(HOLD_ATTR)).toBe(false);
+		frames.run(BACKSTOP_FRAMES - 1);
+		expect(w.hasAttribute(HOLD_ATTR)).toBe(true);
+		frames.run(1);
+		expect(w.hasAttribute(HOLD_ATTR)).toBe(false);
+	});
+
+	test('SC-472: a mutation in the held widget restarts the backstop\'s two quiet frames', async () => {
+		jest.useFakeTimers();
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3500, [widget(637, 3039)]);
+		hold.capture(view as never, note());
+		hold.onUpdate(update(view));
+		view.contentDOM.querySelector('.cm-embed-block')!.remove();
+		const w = widget(637, 50, false);
+		view.contentDOM.appendChild(w);
+		hold.applyHolds(view as never);
+		w.remove();
+		jest.advanceTimersByTime(TTL);
+		frames.run(BACKSTOP_FRAMES - 1);
+		w.appendChild(document.createElement('span')); // something draws in it, still not our view
+		await flush();
+		await flush();
+		frames.run(1); // the 30th frame, one quiet frame since the mutation
+		expect(w.hasAttribute(HOLD_ATTR)).toBe(true);
+		frames.run(1);
+		expect(w.hasAttribute(HOLD_ATTR)).toBe(false);
 	});
 });
 
@@ -673,7 +777,7 @@ describe('SC-522: a Live Preview host holds its embed of the written note', () =
 		expect(held(e)).toBeNull();
 	});
 
-	test('PIN_TTL_MS backstop, a re-hold never lowers the floor, an inline min-height is restored, unload drops every hold', () => {
+	test('the backstop (PIN_TTL_MS and 30 painted frames), a re-hold never lowers the floor, an inline min-height is restored, unload drops every hold', () => {
 		jest.useFakeTimers();
 		const hold = new LivePreviewScrollHold();
 		const e = embedWidget('B', 3190);
@@ -688,11 +792,24 @@ describe('SC-522: a Live Preview host holds its embed of the written note', () =
 		e.getBoundingClientRect = () => ({ height: 135 }) as DOMRect; // a second write lands now
 		hold.holdEmbedsOf(host as never, 'B.md', 'A.md', resolver({ B: 'B.md' }));
 		expect(held(e)).toBe('3190');
-		jest.advanceTimersByTime(TTL - 1);
-		expect(held(e)).toBe('3190');
-		jest.advanceTimersByTime(1);
+		hold.releaseAll();
 		expect(held(e)).toBeNull();
 		expect(e.style.minHeight).toBe('20px');
+
+		// a write nothing redraws: the roots stay in place, mounted
+		const g = embedWidget('B', 3190);
+		g.style.minHeight = '20px';
+		hold.holdEmbedsOf(fakeView(6800, [g]) as never, 'B.md', 'A.md', resolver({ B: 'B.md' }));
+		jest.advanceTimersByTime(TTL - 1);
+		frames.run(BACKSTOP_FRAMES * 2); // frames before the wall clock do not count
+		expect(held(g)).toBe('3190');
+		jest.advanceTimersByTime(1);
+		expect(held(g)).toBe('3190'); // the timer alone does not release it
+		frames.run(BACKSTOP_FRAMES - 1);
+		expect(held(g)).toBe('3190');
+		frames.run(1);
+		expect(held(g)).toBeNull();
+		expect(g.style.minHeight).toBe('20px');
 		const f = embedWidget('B', 900);
 		hold.holdEmbedsOf(fakeView(6800, [f]) as never, 'B.md', 'A.md', resolver({ B: 'B.md' }));
 		expect(held(f)).toBe('900');
@@ -700,6 +817,42 @@ describe('SC-522: a Live Preview host holds its embed of the written note', () =
 		expect(held(f)).toBeNull();
 		expect(f.style.minHeight).toBe('');
 	});
+	// SC-472: the backstop never fires while a root of ours in the embed is still empty (its view is mounting), whatever
+	// the clock says; only the 20 s cap does. A mutation in the embed restarts the backstop's two quiet frames.
+	test('SC-472: busy while a root in the embed is empty: held past PIN_TTL_MS and 30 frames, released by the 20 s cap', () => {
+		jest.useFakeTimers();
+		const hold = new LivePreviewScrollHold();
+		const e = embedWidget('B', 3190);
+		const host = fakeView(6800, [e]);
+		hold.holdEmbedsOf(host as never, 'B.md', 'A.md', resolver({ B: 'B.md' }));
+		// the redraw of the embed is under way: an empty root of ours (this very shape is what the backstop must not cut short)
+		const root = e.querySelector('[data-dse-element]')!;
+		root.replaceChildren();
+		backstopElapses();
+		frames.run(BACKSTOP_FRAMES * 3);
+		expect(held(e)).toBe('3190');
+		jest.advanceTimersByTime(HARD_CAP - TTL - 1);
+		expect(held(e)).toBe('3190');
+		jest.advanceTimersByTime(1);
+		expect(held(e)).toBeNull();
+	});
+
+	test('SC-472: a mutation in the embed restarts the backstop\'s two quiet frames', async () => {
+		jest.useFakeTimers();
+		const hold = new LivePreviewScrollHold();
+		const e = embedWidget('B', 3190);
+		hold.holdEmbedsOf(fakeView(6800, [e]) as never, 'B.md', 'A.md', resolver({ B: 'B.md' }));
+		jest.advanceTimersByTime(TTL);
+		frames.run(BACKSTOP_FRAMES - 1);
+		e.querySelector('.markdown-embed-content')!.appendChild(document.createElement('p')); // not a redraw: nothing of ours moves
+		await flush();
+		await flush();
+		frames.run(1);
+		expect(held(e)).toBe('3190');
+		frames.run(1);
+		expect(held(e)).toBeNull();
+	});
+
 	// SC-522 r4 (LOW-1): a redraw that brings no fresh view of ours must not leave the floor up for the TTL, and a redraw that
 	// replaces ONE of two roots must not release it early. Shapes measured in Obsidian 1.15.0 (R4-MUT): a rewritten block is
 	// `el-pre` removed + `el-pre` with an EMPTY root added in one batch; a deleted block is one batch with a removal only.

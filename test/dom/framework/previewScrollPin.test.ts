@@ -17,11 +17,30 @@ import type { ElementPipeline } from '../../../src/framework/pipeline';
 import type { BlockHost } from '../../../src/framework/host/BlockHost';
 import { ViewRegistry } from '../../../src/framework/host/viewRegistry';
 import { App, Component, Plugin, makeFakeContext } from '../../mocks/obsidian';
+import { installFrames, removeFrames } from './_frames';
+import type { Frames } from './_frames';
 
 const PIN_ATTR = 'data-dse-scroll-pin';
 const STYLE_ATTR = 'data-dse-scroll-pin-style';
-/** Must match PIN_TTL_MS in previewScrollPin.ts. */
+/** Must match PIN_TTL_MS in redrawBackstop.ts. */
 const TTL = 2500;
+/** Must match PIN_BACKSTOP_FRAMES in redrawBackstop.ts. */
+const BACKSTOP_FRAMES = 30;
+/** Must match BACKSTOP_REDRAW_QUIET_FRAMES in redrawBackstop.ts. */
+const REDRAW_QUIET_FRAMES = 60;
+/** Must match PIN_HARD_CAP_MS in redrawBackstop.ts. */
+const HARD_CAP = 20000;
+
+// SC-472: the backstop counts painted animation frames, so every test drives them by hand.
+let frames: Frames;
+beforeEach(() => {
+	frames = installFrames();
+});
+/** The backstop's two conditions met with nothing else going on: PIN_TTL_MS of wall clock, then 30 painted frames (needs fake timers). */
+const backstopElapses = (): void => {
+	jest.advanceTimersByTime(TTL);
+	frames.run(BACKSTOP_FRAMES);
+};
 
 interface Metrics {
 	scrollTop?: number;
@@ -73,6 +92,7 @@ const allPinStyles = (doc: Document = document): number => doc.head.querySelecto
 // Tests that pin without advancing the TTL leave their injected rule behind; start every test clean.
 afterEach(() => {
 	document.head.querySelectorAll(`style[${STYLE_ATTR}]`).forEach((n) => n.remove());
+	frames.restore();
 });
 
 describe('SC-198: PreviewScrollPin', () => {
@@ -174,18 +194,25 @@ describe('SC-198: PreviewScrollPin', () => {
 		beforeEach(() => jest.useFakeTimers());
 		afterEach(() => jest.useRealTimers());
 
-		test('the TTL drops the pin even if the expected rebuild never arrives', () => {
+		// SC-472: the timer is a backstop for a rebuild that never arrives (a write Obsidian does not redraw): PIN_TTL_MS of wall
+		// clock AND 30 painted frames, because a busy main thread runs the timer without painting anything.
+		test('the backstop drops the pin even if the expected rebuild never arrives: after PIN_TTL_MS and 30 painted frames, not before either', () => {
 			const { scroller, el } = makeScroller();
 			new PreviewScrollPin().pin(el);
 			jest.advanceTimersByTime(TTL - 1);
+			frames.run(BACKSTOP_FRAMES * 2); // frames before the wall clock do not count
 			expect(isPinned(scroller)).toBe(true);
 			jest.advanceTimersByTime(1);
+			expect(isPinned(scroller)).toBe(true); // the timer alone does not release it
+			frames.run(BACKSTOP_FRAMES - 1);
+			expect(isPinned(scroller)).toBe(true);
+			frames.run(1);
 			expect(isPinned(scroller)).toBe(false);
 			expect(pinStyle(scroller)).toBeNull();
 			expect(allPinStyles()).toBe(0); // the injected rule goes with the attribute
 		});
 
-		test('a re-pin refreshes the TTL and takes no ratchet from the scroller\'s own padding on rapid clicks', () => {
+		test('a re-pin refreshes the backstop and takes no ratchet from the scroller\'s own padding on rapid clicks', () => {
 			const { scroller, el } = makeScroller();
 			scroller.style.paddingTop = '32px';
 			scroller.style.paddingBottom = '32px';
@@ -204,10 +231,11 @@ describe('SC-198: PreviewScrollPin', () => {
 			pin.pin(el);
 			expect(pinnedPx(scroller)).toBe('4819px');
 
-			// ...and the second pin's own full TTL is now running.
+			// ...and the second pin's own full backstop is now running (the first pin's would have run out 500 ms ago).
 			jest.advanceTimersByTime(TTL - 1);
 			expect(isPinned(scroller)).toBe(true);
 			jest.advanceTimersByTime(1);
+			frames.run(BACKSTOP_FRAMES);
 			expect(isPinned(scroller)).toBe(false);
 		});
 
@@ -511,12 +539,13 @@ describe('SC-470: PreviewScrollPin.pinReadingViewsOf', () => {
 		jest.useFakeTimers();
 		try {
 			const a = makeLeaf('Note.md', 'preview');
+			a.scroller.querySelector('[data-dse-element]')!.appendChild(document.createElement('div')); // mounted: nothing is redrawing
 			const pin = new PreviewScrollPin();
 			pin.pin(a.scroller.querySelector('[data-dse-element]') as HTMLElement);
 			setMetric(a.scroller, 'scrollHeight', 300);
 			pin.pinReadingViewsOf(workspaceOf(a), 'Note.md');
 			expect(pinnedPx(a.scroller)).toBe('4883px');
-			jest.advanceTimersByTime(TTL);
+			backstopElapses();
 			expect(isPinned(a.scroller)).toBe(false);
 		} finally {
 			jest.useRealTimers();
@@ -792,23 +821,25 @@ describe('SC-479: embeds pin the host note\'s scroller', () => {
 		expect(anchorStopped(scroller)).toBe(false);
 	});
 
-	test('a pin that is first a note\'s own and then also a host pin gains the anchoring stop, keeps its id and height, and releases on the TTL', () => {
+	test('a pin that is first a note\'s own and then also a host pin gains the anchoring stop, keeps its id and height, and releases on the backstop', () => {
 		jest.useFakeTimers();
 		try {
 			const { scroller, el } = makeScroller();
 			el.setAttribute('data-dse-element', 'initiative');
+			el.appendChild(document.createElement('div')); // mounted
 			const pin = new PreviewScrollPin();
 			pin.pin(el);
 			const id = scroller.getAttribute(PIN_ATTR);
 			expect(anchorStopped(scroller)).toBe(false);
 			const embed = addEmbed(scroller, 'B');
+			embed.querySelector('[data-dse-element]')!.appendChild(document.createElement('div')); // mounted
 			setMetric(scroller, 'scrollHeight', 300);
 			pin.pin(embed.querySelector<HTMLElement>('[data-dse-element]')!);
 			expect(scroller.getAttribute(PIN_ATTR)).toBe(id);
 			expect(anchorStopped(scroller)).toBe(true);
 			expect(pinnedPx(scroller)).toBe('4883px');
 			expect(allPinStyles()).toBe(1);
-			jest.advanceTimersByTime(TTL);
+			backstopElapses();
 			expect(isPinned(scroller)).toBe(false);
 			expect(allPinStyles()).toBe(0);
 		} finally {
@@ -902,7 +933,7 @@ describe('SC-470: the pin is a floor (re-pin and observer)', () => {
 	test('the observer is disconnected at release (TTL) and by releaseAll(): later inline writes touch nothing', async () => {
 		const a = pinned();
 		const b = pinned();
-		jest.advanceTimersByTime(TTL);
+		backstopElapses();
 		expect(allPinStyles()).toBe(0);
 		sizerOf(a.scroller).style.minHeight = '9000px';
 		await flushObservers();
@@ -939,15 +970,358 @@ describe('SC-470: the pin is a floor (re-pin and observer)', () => {
 		expect(style.textContent).toBe(text);
 	});
 
-	test('a re-pin restarts the TTL (autosave keeps the pin alive) and the release still removes the rule', () => {
+	test('a re-pin restarts the backstop (autosave keeps the pin alive) and the release still removes the rule', () => {
 		const { scroller, el, pin } = pinned();
 		jest.advanceTimersByTime(TTL - 100);
 		pin.pin(el);
 		jest.advanceTimersByTime(TTL - 1);
+		frames.run(BACKSTOP_FRAMES);
 		expect(isPinned(scroller)).toBe(true);
 		jest.advanceTimersByTime(1);
+		frames.run(BACKSTOP_FRAMES);
 		expect(isPinned(scroller)).toBe(false);
 		expect(allPinStyles()).toBe(0);
+	});
+});
+
+// SC-472: the pin is released by the REDRAW it protects (the blocks of ours mounted again and every protected sizer back at its
+// height), the backstop only covers a write Obsidian never redraws. The shape of the redraw is the one measured in 1.15.0: the
+// block's root is replaced by an empty one while the sizer's inline min-height collapses, then the view mounts into the new root
+// and the sizer comes back. Each guard below is pinned by a test that fails when the guard is removed (SC-472 r2 mutation check).
+describe('SC-472: a Reading pin is released when the redraw is over', () => {
+	beforeEach(() => {
+		jest.useFakeTimers();
+	});
+	afterEach(() => {
+		jest.useRealTimers();
+		document.body.innerHTML = '';
+	});
+
+	const makeRoot = (mounted: boolean): HTMLElement => {
+		const r = document.createElement('div');
+		r.setAttribute('data-dse-element', 'tracker');
+		if (mounted) r.appendChild(document.createElement('div'));
+		return r;
+	};
+	const mount = (root: HTMLElement): void => {
+		root.appendChild(document.createElement('div'));
+	};
+	const setSizer = (scroller: HTMLElement, px: number): void => {
+		sizerOf(scroller).style.minHeight = `${px}px`;
+	};
+	/** A note parked at 2596 of 4819 (+64 padding), a mounted root of ours in it, pinned. The viewport's bottom needs 3506. */
+	function scene(metrics: Metrics = {}) {
+		const { scroller, el } = makeScroller(metrics);
+		scroller.style.paddingTop = '32px';
+		scroller.style.paddingBottom = '32px';
+		setSizer(scroller, 4819);
+		const root = makeRoot(true);
+		el.appendChild(root);
+		const pin = new PreviewScrollPin();
+		pin.pin(el);
+		expect(isPinned(scroller)).toBe(true);
+		return { scroller, el, root, pin, held: () => (pin as any).pins.get(scroller) };
+	}
+	/** Obsidian's rebuild, first half: the root is replaced by an empty one and the sizer collapses. Returns the new root. */
+	async function redrawStart(s: { scroller: HTMLElement; root: HTMLElement }, collapsed = 46): Promise<HTMLElement> {
+		const fresh = makeRoot(false);
+		s.root.replaceWith(fresh);
+		setSizer(s.scroller, collapsed);
+		await flushObservers();
+		return fresh;
+	}
+
+	test('released one painted frame after the redraw is over - view mounted, sizer back - with no timer involved', async () => {
+		const s = scene();
+		const fresh = await redrawStart(s);
+		frames.run(3);
+		expect(isPinned(s.scroller)).toBe(true); // collapsed and empty: the redraw is under way
+		mount(fresh);
+		setSizer(s.scroller, 4819);
+		await flushObservers();
+		expect(isPinned(s.scroller)).toBe(true); // the check runs on the next painted frame, not inside the mutation
+		frames.run(1);
+		expect(isPinned(s.scroller)).toBe(false);
+		expect(allPinStyles()).toBe(0);
+		expect(jest.getTimerCount()).toBe(0); // the backstop's timers went with it
+	});
+
+	test('redraw-start detection: the sizer collapsing and returning with none of our roots replaced is not a redraw, so it does not release', async () => {
+		const s = scene();
+		setSizer(s.scroller, 46);
+		await flushObservers();
+		setSizer(s.scroller, 4819);
+		await flushObservers();
+		frames.run(10);
+		expect(isPinned(s.scroller)).toBe(true);
+		const fresh = await redrawStart(s, 4819); // now a root is replaced
+		mount(fresh);
+		await flushObservers();
+		frames.run(1);
+		expect(isPinned(s.scroller)).toBe(false);
+	});
+
+	test('redraw-start detection, per signal: a root left the document, was removed, or was put back (an adopted view)', () => {
+		const s = scene();
+		const started = (records: Array<Partial<MutationRecord>>): boolean => (s.pin as any).redrawStarted(s.held(), records);
+		expect(started([])).toBe(false);
+		expect(started([{ type: 'childList', removedNodes: [document.createElement('div')] as any, addedNodes: [] as any }])).toBe(false); // not ours
+		expect(started([{ type: 'childList', removedNodes: [s.root] as any, addedNodes: [] as any }])).toBe(true);
+		expect(started([{ type: 'childList', removedNodes: [] as any, addedNodes: [s.root] as any }])).toBe(true);
+		expect(started([{ type: 'childList', removedNodes: [s.root.parentElement] as any, addedNodes: [] as any }])).toBe(true); // an ancestor of the root
+		expect(started([{ type: 'attributes' }])).toBe(false);
+		s.root.remove();
+		expect(started([])).toBe(true); // a root no longer in the document
+	});
+
+	test('redraw-done, roots: the redraw is not over while a root of ours is still empty, even with the sizer back', async () => {
+		const s = scene();
+		const fresh = await redrawStart(s);
+		setSizer(s.scroller, 4819);
+		await flushObservers();
+		frames.run(5);
+		expect(isPinned(s.scroller)).toBe(true);
+		mount(fresh);
+		await flushObservers();
+		frames.run(1);
+		expect(isPinned(s.scroller)).toBe(false);
+	});
+
+	test('redraw-done, the scroller\'s sizer: not over while it is collapsed; over at 2 px below its height, not at 3', async () => {
+		for (const [back, over] of [
+			[46, false],
+			[4816, false],
+			[4817, true],
+			[4819, true],
+			[5200, true],
+		] as const) {
+			const s = scene({ scrollTop: 4000 }); // the viewport bottom needs 4910: the sizer's own height is the bar
+			const fresh = await redrawStart(s);
+			mount(fresh);
+			setSizer(s.scroller, back);
+			await flushObservers();
+			frames.run(2);
+			expect([back, isPinned(s.scroller)]).toEqual([back, !over]);
+			s.pin.releaseAll();
+		}
+	});
+
+	test('redraw-done, the viewport: a sizer shorter than it was is enough once it still covers the viewport bottom (releasing cannot clamp)', async () => {
+		// scrollTop 2596 + clientHeight 974 - padding 64 = 3506
+		for (const [back, over] of [
+			[3400, false],
+			[3504, true],
+			[3600, true],
+		] as const) {
+			const s = scene();
+			const fresh = await redrawStart(s);
+			mount(fresh);
+			setSizer(s.scroller, back);
+			await flushObservers();
+			frames.run(2);
+			expect([back, isPinned(s.scroller)]).toEqual([back, !over]);
+			s.pin.releaseAll();
+		}
+	});
+
+	/** The scroller's sizer holding a DSE-bearing embed (inner sizer `px`) and a DSE-less one (inner sizer `plain`). */
+	function embedScene() {
+		const s = scene();
+		const mk = (inner: number, withRoot: boolean) => {
+			const embed = document.createElement('span');
+			embed.className = 'internal-embed markdown-embed is-loaded';
+			embed.setAttribute('src', 'B');
+			embed.innerHTML = '<div class="markdown-embed-content"><div class="markdown-preview-view"><div class="markdown-preview-sizer"><div class="holder"></div></div></div></div>';
+			const innerSizer = embed.querySelector<HTMLElement>('.markdown-preview-sizer')!;
+			innerSizer.style.minHeight = `${inner}px`;
+			const holder = embed.querySelector<HTMLElement>('.holder')!;
+			const root = makeRoot(true);
+			if (withRoot) holder.appendChild(root);
+			sizerOf(s.scroller).appendChild(embed);
+			return { embed, innerSizer, holder, root };
+		};
+		const dse = mk(3165, true);
+		const plain = mk(500, false);
+		return { ...s, dse, plain };
+	}
+
+	test('redraw-done, an embed\'s inner sizer (SC-479 host pin): the redraw is over only when it is back too; a DSE-less embed\'s sizer is not protected', async () => {
+		const s = embedScene();
+		s.pin.releaseAll();
+		s.pin.pin(s.dse.holder); // a host pin: re-armed here with the embed in place
+		expect(isPinned(s.scroller)).toBe(true);
+		const fresh = makeRoot(false);
+		s.dse.root.replaceWith(fresh);
+		s.dse.innerSizer.style.minHeight = '110px';
+		s.plain.innerSizer.style.minHeight = '100px'; // an unrelated embed redrawn by Obsidian: not ours to wait for
+		await flushObservers();
+		mount(fresh);
+		await flushObservers();
+		frames.run(3);
+		expect(isPinned(s.scroller)).toBe(true); // our roots are mounted, the scroller's sizer is back, the embed's inner sizer is not
+		s.dse.innerSizer.style.minHeight = '3165px';
+		await flushObservers();
+		frames.run(1);
+		expect(isPinned(s.scroller)).toBe(false);
+	});
+
+	test('re-pin re-arm: a redraw that began before the latest write does not count; the next redraw releases the re-pinned view', async () => {
+		const s = scene();
+		const fresh = await redrawStart(s); // write 1's redraw has begun: root replaced, sizer collapsed, view not mounted yet
+		s.pin.pin(s.el); // write 2 re-pins
+		mount(fresh); // write 1's redraw finishes
+		setSizer(s.scroller, 4819);
+		await flushObservers();
+		frames.run(5);
+		expect(isPinned(s.scroller)).toBe(true); // not released by the redraw that started before the re-pin
+		const fresh2 = await redrawStart({ scroller: s.scroller, root: fresh }, 4819); // write 2's own redraw
+		mount(fresh2);
+		await flushObservers();
+		frames.run(1);
+		expect(isPinned(s.scroller)).toBe(false);
+	});
+
+	test('re-pin re-arm: the sizer heights it waits for are the ones at the LATEST arm', async () => {
+		const s = scene({ scrollTop: 4000 }); // the viewport bottom needs 4910
+		setSizer(s.scroller, 5200); // the note grew (Obsidian wrote a larger inline min-height)
+		await flushObservers();
+		s.pin.pin(s.el);
+		const fresh = await redrawStart(s);
+		mount(fresh);
+		setSizer(s.scroller, 4819); // back at the OLD height only
+		await flushObservers();
+		frames.run(3);
+		expect(isPinned(s.scroller)).toBe(true);
+		setSizer(s.scroller, 5200);
+		await flushObservers();
+		frames.run(1);
+		expect(isPinned(s.scroller)).toBe(false);
+	});
+
+	test('re-pin re-arm: a re-pin that lands while the sizer is collapsed does not lower the height the redraw must restore', async () => {
+		const s = scene();
+		const fresh = await redrawStart(s); // sizer collapsed to 46
+		s.pin.pin(s.el); // a second write's re-pin reads the collapsed 46
+		const fresh2 = makeRoot(false);
+		fresh.replaceWith(fresh2); // its own redraw
+		await flushObservers();
+		mount(fresh2);
+		setSizer(s.scroller, 300); // an intermediate value, still under the viewport's 3506
+		await flushObservers();
+		frames.run(3);
+		expect(isPinned(s.scroller)).toBe(true);
+		setSizer(s.scroller, 4819);
+		await flushObservers();
+		frames.run(1);
+		expect(isPinned(s.scroller)).toBe(false);
+	});
+
+	test('a check pending when the pin is released is cancelled with it (nothing runs against a released pin)', async () => {
+		const s = scene();
+		const fresh = await redrawStart(s);
+		mount(fresh);
+		setSizer(s.scroller, 4819);
+		await flushObservers();
+		expect(frames.pending()).toBeGreaterThan(0);
+		s.pin.release(s.scroller);
+		expect(frames.pending()).toBe(0);
+	});
+
+	test('a window without requestAnimationFrame checks on a zero timer instead', async () => {
+		const none = removeFrames();
+		try {
+			const s = scene();
+			const fresh = await redrawStart(s);
+			mount(fresh);
+			setSizer(s.scroller, 4819);
+			await flushObservers();
+			expect(isPinned(s.scroller)).toBe(true);
+			jest.advanceTimersByTime(0);
+			expect(isPinned(s.scroller)).toBe(false);
+		} finally {
+			none.restore();
+		}
+	});
+
+	describe('the backstop\'s busy rules', () => {
+		test('never fires while a root of ours is still empty (the view is mounting), however long; the 20 s cap ends it', () => {
+			const { scroller, el } = makeScroller();
+			el.appendChild(makeRoot(false)); // an unmounted root: Obsidian is still drawing it
+			const pin = new PreviewScrollPin();
+			pin.pin(el);
+			jest.advanceTimersByTime(TTL);
+			frames.run(BACKSTOP_FRAMES * 4);
+			expect(isPinned(scroller)).toBe(true);
+			jest.advanceTimersByTime(HARD_CAP - TTL - 1);
+			expect(isPinned(scroller)).toBe(true);
+			jest.advanceTimersByTime(1);
+			expect(isPinned(scroller)).toBe(false);
+		});
+
+		test('once that root is mounted the backstop fires after its two quiet frames', async () => {
+			const { scroller, el } = makeScroller();
+			const root = makeRoot(false);
+			el.appendChild(root);
+			new PreviewScrollPin().pin(el);
+			jest.advanceTimersByTime(TTL);
+			frames.run(BACKSTOP_FRAMES * 2);
+			mount(root);
+			await flushObservers();
+			frames.run(1);
+			expect(isPinned(scroller)).toBe(true);
+			frames.run(1);
+			expect(isPinned(scroller)).toBe(false);
+		});
+
+		test('a redraw that started and did not finish holds the backstop until 60 frames pass without a mutation', async () => {
+			const s = scene();
+			const fresh = await redrawStart(s); // started; sizer stays collapsed
+			mount(fresh);
+			await flushObservers();
+			jest.advanceTimersByTime(TTL);
+			frames.run(REDRAW_QUIET_FRAMES - 1);
+			expect(isPinned(s.scroller)).toBe(true); // 30 frames and the quiet frames are long past
+			frames.run(1);
+			expect(isPinned(s.scroller)).toBe(false); // the shrunk note (a block deleted at its end): nothing else is coming
+		});
+
+		test('...and a mutation during that wait restarts the 60', async () => {
+			const s = scene();
+			const fresh = await redrawStart(s);
+			mount(fresh);
+			await flushObservers();
+			jest.advanceTimersByTime(TTL);
+			frames.run(REDRAW_QUIET_FRAMES - 1);
+			setSizer(s.scroller, 47); // Obsidian is still writing the sizer
+			await flushObservers();
+			frames.run(REDRAW_QUIET_FRAMES - 1);
+			expect(isPinned(s.scroller)).toBe(true);
+			frames.run(1);
+			expect(isPinned(s.scroller)).toBe(false);
+		});
+
+		test('...but a redraw that became done without a mutation (the reader scrolled up) no longer holds it', async () => {
+			const s = scene();
+			const fresh = await redrawStart(s);
+			mount(fresh);
+			setSizer(s.scroller, 3400); // under the viewport bottom's 3506
+			await flushObservers();
+			jest.advanceTimersByTime(TTL);
+			frames.run(BACKSTOP_FRAMES + 10);
+			expect(isPinned(s.scroller)).toBe(true);
+			setMetric(s.scroller, 'scrollTop', 2000); // the viewport bottom now needs 2910: the sizer covers it
+			frames.run(BACKSTOP_FRAMES);
+			expect(isPinned(s.scroller)).toBe(false);
+		});
+
+		test('a pin whose redraw never starts is released by the backstop at PIN_TTL_MS + 30 frames (nothing started: not held for the 60)', () => {
+			const s = scene();
+			jest.advanceTimersByTime(TTL);
+			frames.run(BACKSTOP_FRAMES - 1);
+			expect(isPinned(s.scroller)).toBe(true);
+			frames.run(1);
+			expect(isPinned(s.scroller)).toBe(false);
+		});
 	});
 });
 
