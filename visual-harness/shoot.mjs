@@ -2319,6 +2319,11 @@ function tagButtons(opts) {
 			// rules, so a pressed and an idle chip with the same classes are two kinds, not one.
 			(n.hasAttribute('aria-pressed') ? `|aria-pressed:${n.getAttribute('aria-pressed')}` : '') +
 			(n.getAttribute('aria-selected') === 'true' ? '|selected' : '') +
+			// SC-530 — a CHECKED radio (`role="radio" aria-checked="true"`: the negotiation Power Roll tier
+			// row, the kit track's current seal) is painted by its own `[aria-checked='true']` /
+			// `[data-current]` rules, so it is its own kind. Only `true` is keyed, like `|selected`: no rule
+			// tells `false` from an absent attribute on a swept button, so the idle kinds keep their names.
+			(n.getAttribute('aria-checked') === 'true' ? '|checked' : '') +
 			(n.disabled ? '|disabled' : '');
 		if (seen.has(key)) continue;
 		seen.add(key);
@@ -2590,6 +2595,7 @@ async function assertBtnHostLeak(page) {
 		}
 		assertSc513Tagged(keys, 'button', bg, acc.problems);
 		assertSc527Tagged(keys, bg, acc.problems);
+		assertSc530Tagged(keys, bg, acc.problems);
 		kindCount = keys.length;
 		await sweepTaggedButtons(page, bg, keys.length, acc);
 	}
@@ -2940,8 +2946,8 @@ async function mountClickRevealedForSweep(page, bg, problems) {
  *  Hero stepper: `hero|dse-btn.dse-btn--icon.dse-stepper__btn|disabled` (the Surges "-" after Respite) is NOT
  *  asserted here. It has been compared since SC-513 through another node (the probe hero's ability-body roll
  *  strip), and the sweep keeps one node per kind; the hero section below still clicks Respite for Catch Breath.
- *  Known gap, out of scope (SC-530): `tagButtons` does not key on `aria-checked`, so the selected negotiation
- *  tier row shares the idle row's kind.
+ *  SC-530: `tagButtons` keys a checked radio (`|checked`), so the tier row the negotiation section picks
+ *  below is its own kind (`SC530_EXPECT`).
  *
  *  Runs BEFORE `mountClickRevealedForSweep` on purpose: SC-526 will add the Recoveries popover to the end of
  *  that helper, and the popover closes on any later document click, so it must stay the last click. Keep this
@@ -2974,6 +2980,8 @@ const SC527_STATES = [
 			'button.dse-nt__chip[data-kind="motivation"][aria-pressed="true"][data-pressed]:not(.is-spent)',
 			'button.dse-nt__chip[data-kind="motivation"].is-spent[aria-pressed="false"]',
 			'.dse-nt__complete button.dse-btn.dse-btn--accent:not(:disabled)',
+			// SC-530 — the picked tier row is checked: `negotiation|dse-pr__row|checked` (SC530_EXPECT).
+			'button.dse-pr__row[role="radio"][aria-checked="true"]',
 		],
 	},
 	{
@@ -3039,6 +3047,24 @@ function assertSc527Tagged(keys, bg, problems) {
 	for (const want of SC527_EXPECT) {
 		if (!keys.includes(want)) {
 			problems.push(`${bg}: the sweep tagged no \`${want}\` button — a state reached only by a click (SC-527) would go unchecked`);
+		}
+	}
+}
+
+/** SC-530 - checked radios (`aria-checked="true"`), in `tagButtons` spelling, that the button sweep must tag.
+ *  No click of SC-530's own: the tier row is checked by SC-527's first negotiation section (its last click,
+ *  `.dse-pr__row` #0, asserted in that section's `reached`); the track seal is checked at load (a track always
+ *  has exactly one current seal; the first in DOM order is the gallery negotiation's Patience). */
+const SC530_EXPECT = [
+	'negotiation|dse-pr__row|checked',
+	'negotiation|dse-track__slot|checked',
+];
+
+/** SC-530 - name every expected checked kind the button sweep did not tag. */
+function assertSc530Tagged(keys, bg, problems) {
+	for (const want of SC530_EXPECT) {
+		if (!keys.includes(want)) {
+			problems.push(`${bg}: the sweep tagged no \`${want}\` button — a checked radio (SC-530) would go unchecked`);
 		}
 	}
 }
