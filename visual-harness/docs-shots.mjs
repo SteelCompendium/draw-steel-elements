@@ -31,13 +31,14 @@
 // Env: DSE_DOCS_DISPLAY  virtual display to use (default :99; an unused one is picked if
 //                        that is taken)
 //      XVFB_BIN          explicit Xvfb binary (otherwise: PATH, then the devbox profile)
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
 import { DOCS_SHOTS, DOCS_MANUAL } from './docs-manifest.mjs';
+import { displayRange, startOwnedXvfb } from '../scripts/xvfb-owned.mjs';
 import {
 	assertValidGifEntries,
 	createPageDriver,
@@ -253,34 +254,32 @@ Xvfb is unavailable, so the Obsidian half of the docs shots cannot run headlessl
   A window will open, do things by itself for a minute or two, and close again.
   Do not click in it while it runs.`;
 
-function freeDisplay(preferred) {
-	const taken = (n) => fs.existsSync(`/tmp/.X11-unix/X${n}`);
+const socketTaken = (n) => fs.existsSync(`/tmp/.X11-unix/X${n}`);
+
+/** Display numbers to try, in order: the preferred one, then :99-:129. */
+function displayCandidates(preferred) {
 	const pref = Number(String(preferred).replace(':', ''));
-	if (!taken(pref)) return pref;
-	for (let n = 99; n < 130; n++) if (!taken(n)) return n;
-	throw new Error('no free X display number between :99 and :129');
+	return [pref, ...displayRange(99, 129).filter((n) => n !== pref)];
 }
 
 async function startXvfb() {
 	const bin = resolveXvfb();
 	if (!bin) return null;
-	const num = freeDisplay(process.env.DSE_DOCS_DISPLAY ?? ':99');
+	const candidates = displayCandidates(process.env.DSE_DOCS_DISPLAY ?? ':99');
+	if (candidates.every(socketTaken)) throw new Error('no free X display number between :99 and :129');
+	// SC-546: the display is ours only when OUR Xvfb reports it is listening (-displayfd), never because
+	// "a socket for :n exists" (that socket may be another run's). Why: scripts/xvfb-owned.mjs.
 	// 1600x1200: the camera asks Obsidian for a 1440x1100 window, and the WM clamps a
 	// window to the screen — a smaller framebuffer would silently shrink every capture.
-	const child = spawn(bin, [`:${num}`, '-screen', '0', '1600x1200x24', '-nolisten', 'tcp'], {
-		stdio: 'ignore',
-		detached: false,
+	const got = await startOwnedXvfb({
+		bin,
+		candidates,
+		isTaken: socketTaken,
+		args: ['-screen', '0', '1600x1200x24', '-nolisten', 'tcp'],
 	});
-	child.on('error', () => {});
-	for (let i = 0; i < 40; i++) {
-		if (fs.existsSync(`/tmp/.X11-unix/X${num}`)) {
-			console.log(`Xvfb up on :${num} (${bin}) — your own display is not touched`);
-			return { child, display: `:${num}` };
-		}
-		await new Promise((r) => setTimeout(r, 250));
-	}
-	child.kill('SIGKILL');
-	return null;
+	if (!got) return null;
+	console.log(`Xvfb up on ${got.display} (${bin}) — your own display is not touched`);
+	return { child: got.child, display: got.display };
 }
 
 // --------------------------------------------------------------- obsidian half (CDP)
