@@ -811,6 +811,25 @@ describe('SC-544: a second click before the first block\'s write', () => {
 		expect(t.registry.pendingWrites()).toHaveLength(0);
 	});
 
+	test('a nested flush (a sibling\'s own write) does not flush the writer\'s own waiting view; the siblings are written in registry order', async () => {
+		const t = await setup(triplet());
+		const cards = await t.paint(3);
+		const [upper, middle, lower] = t.registry.liveEntries();
+		const order: string[] = [];
+		for (const [name, entry] of [['upper', upper], ['middle', middle], ['lower', lower]] as const) {
+			const flush = entry.view.flushPendingWrite.bind(entry.view);
+			jest.spyOn(entry.view, 'flushPendingWrite').mockImplementation(() => (order.push(name), flush()));
+		}
+		cards.forEach((card) => click(card.el)); // all three have an edit waiting
+		expect(t.registry.pendingWrites()).toHaveLength(3);
+		await middle.host.replaceSource(bodyOf(noteOf(counter('Edited', 5)), 0)); // the form's Save on the middle: its own view is the writer's
+		await jest.advanceTimersByTimeAsync(0); // microtasks only, well inside the debounce
+
+		expect(order).toEqual(['upper', 'lower']); // the writer's own view was not flushed by the upper's nested call, and nothing twice
+		expect(t.registry.pendingWrites().map((e) => e.host)).toEqual([middle.host]); // it is still waiting for its own debounce
+		expect(t.values()).toEqual([6, 5, 6]);
+	});
+
 	test('the sibling\'s section is read before the writer\'s Vault.process runs', async () => {
 		const t = await setup(triplet());
 		const [, middle] = await t.paint(3);
