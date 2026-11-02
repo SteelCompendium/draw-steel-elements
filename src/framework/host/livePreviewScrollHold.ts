@@ -150,7 +150,8 @@ import type { Workspace } from 'obsidian';
 import { ViewPlugin } from '@codemirror/view';
 import type { EditorView, ViewUpdate } from '@codemirror/view';
 import type { Extension, StateEffect } from '@codemirror/state';
-import { PIN_TTL_MS, embedsBlockOf } from './previewScrollPin';
+import { embedsBlockOf } from './previewScrollPin';
+import { Backstop } from './redrawBackstop';
 import type { LinkResolver } from './previewScrollPin';
 
 /** On a replacement widget while its height is held; the value is the held px (tests/probes read it). */
@@ -186,8 +187,8 @@ interface Pending {
 	restore: StateEffect<unknown> | null;
 	/** Positions (in the CURRENT document) and old heights of the blocks to hold when drawn empty. */
 	widgets: WidgetAt[];
-	/** Drops this entry after PIN_TTL_MS: a block drawn later than that is not held. */
-	timer: number;
+	/** Drops this entry (SC-472 backstop: PIN_TTL_MS plus painted frames): a block drawn later than that is not held. */
+	backstop: Backstop;
 	win: Window;
 }
 
@@ -305,14 +306,16 @@ export class LivePreviewScrollHold {
 			this.embedHolds.delete(embed);
 			this.holds.delete(release);
 			observer?.disconnect();
-			win.clearTimeout(timer);
+			backstop.cancel();
 			if (settle !== null) win.clearTimeout(settle);
 			if (inline) embed.style.setProperty('min-height', inline);
 			else embed.style.removeProperty('min-height');
 			embed.removeAttribute(EMBED_HOLD_ATTR);
 			view.requestMeasure();
 		};
-		const timer = win.setTimeout(release, PIN_TTL_MS);
+		// SC-472: the backstop waits while a root of ours in the embed is still mounting and counts painted frames (redrawBackstop.ts)
+		const backstop = new Backstop(win, release, () => Array.from(embed.querySelectorAll('[data-dse-element]')).some((r) => r.childElementCount === 0));
+		backstop.arm();
 		this.embedHolds.set(embed, { px, roots0, release });
 		this.holds.set(release, view);
 		const MO = (win as Window & { MutationObserver?: typeof MutationObserver }).MutationObserver;
@@ -321,6 +324,7 @@ export class LivePreviewScrollHold {
 		let redrawn = false;
 		const mounted = (roots: Element[]): boolean => roots.every((root) => root.childElementCount > 0);
 		observer = new MO((records) => {
+			backstop.noteActivity();
 			if (!back) {
 				for (const r of records) {
 					for (const n of Array.from(r.addedNodes)) {
@@ -421,15 +425,16 @@ export class LivePreviewScrollHold {
 		if (Math.abs(view.scrollDOM.scrollTop - cap.scrollTop) > 1) return; // the user scrolled since: the user wins
 		const win = view.scrollDOM.ownerDocument.defaultView;
 		if (!win) return;
-		if (open) win.clearTimeout(open.timer);
+		if (open) open.backstop.cancel();
 		const entry: Pending = {
 			restore: cap.snapshot.map(u.changes) ?? null,
 			widgets: cap.widgets.map((w) => mapWidget(w, u.changes)),
-			timer: win.setTimeout(() => {
+			backstop: new Backstop(win, () => {
 				if (this.pending.get(view) === entry) this.pending.delete(view);
-			}, PIN_TTL_MS),
+			}),
 			win,
 		};
+		entry.backstop.arm();
 		this.pending.set(view, entry);
 		// Never dispatch inside an update; a microtask runs before the next frame's measure and paint.
 		void Promise.resolve().then(() => {
@@ -471,16 +476,19 @@ export class LivePreviewScrollHold {
 		const release = (): void => {
 			if (!this.holds.delete(release)) return;
 			observer?.disconnect();
-			win.clearTimeout(timer);
+			backstop.cancel();
 			widget.style.removeProperty('min-height');
 			widget.removeAttribute(HOLD_ATTR);
 			view.requestMeasure(); // pick up the mounted block's real height
 		};
-		const timer = win.setTimeout(release, PIN_TTL_MS);
+		// SC-472: the backstop waits while the (still connected) widget's view is mounting and counts painted frames
+		const backstop = new Backstop(win, release, () => widget.isConnected && unmounted(widget));
+		backstop.arm();
 		this.holds.set(release, view);
 		const MO = (win as Window & { MutationObserver?: typeof MutationObserver }).MutationObserver;
 		if (MO) {
 			observer = new MO(() => {
+				backstop.noteActivity();
 				if (!unmounted(widget)) release();
 			});
 			observer.observe(widget, { childList: true, subtree: true });
@@ -489,7 +497,7 @@ export class LivePreviewScrollHold {
 
 	private forget(view: EditorView): void {
 		const entry = this.pending.get(view);
-		if (entry) entry.win.clearTimeout(entry.timer);
+		if (entry) entry.backstop.cancel();
 		this.pending.delete(view);
 		this.captures.delete(view);
 		for (const [release, v] of [...this.holds]) if (v === view) release();
