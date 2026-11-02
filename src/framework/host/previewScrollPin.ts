@@ -445,10 +445,25 @@ export class PreviewScrollPin {
 
 	/** SC-472: (re)start waiting for a redraw from now: the roots and sizer heights it must restore, and the backstop. */
 	private arm(held: HeldPin, scroller: HTMLElement): void {
+		this.cancelCheck(held); // a check queued by the redraw that began before this arm must not judge the new one
 		held.roots0 = new Set(Array.from(scroller.querySelectorAll(ROOT)));
 		held.started = false;
+		const before = held.sizers0;
 		held.sizers0 = sizersAt(scroller);
+		// A re-pin that lands while a sizer is collapsed must not lower what the redraw has to restore (the pin's own floor
+		// is never lowered either): keep the higher of the two.
+		for (const [key, v] of held.sizers0) {
+			const was = before.get(key);
+			if (was !== undefined && Number.isFinite(was) && !(v >= was)) held.sizers0.set(key, was);
+		}
 		held.backstop.arm();
+	}
+
+	private cancelCheck(held: HeldPin): void {
+		if (held.check === null) return;
+		if (typeof held.win.requestAnimationFrame === 'function') held.win.cancelAnimationFrame(held.check);
+		else held.win.clearTimeout(held.check);
+		held.check = null;
 	}
 
 	/** SC-472: did these records (or the document) show a root of `roots0` replaced, removed or put back? */
@@ -513,10 +528,7 @@ export class PreviewScrollPin {
 		if (!held) return;
 		this.pins.delete(scroller);
 		held.backstop.cancel();
-		if (held.check !== null) {
-			if (typeof held.win.requestAnimationFrame === 'function') held.win.cancelAnimationFrame(held.check);
-			else held.win.clearTimeout(held.check);
-		}
+		this.cancelCheck(held);
 		held.observer?.disconnect();
 		scroller.removeAttribute(PIN_ATTR);
 		held.style.remove();
