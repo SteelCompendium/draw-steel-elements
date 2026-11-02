@@ -30,10 +30,10 @@ export const lockPath = (n) => `/tmp/.X${n}-lock`;
 /** Default "looks taken" pre-check: somebody's socket or lock is there (also skips stale leftovers). */
 export const defaultIsTaken = (n) => fs.existsSync(socketPath(n)) || fs.existsSync(lockPath(n));
 
-/** Inclusive integer range [lo, hi]. */
 /** The Xvfb binary could not be executed at all (missing, not executable): no number will ever work. */
 export class XvfbSpawnError extends Error {}
 
+/** Inclusive integer range [lo, hi]. */
 export const displayRange = (lo, hi) => Array.from({ length: Math.max(0, hi - lo + 1) }, (_, i) => lo + i);
 
 /**

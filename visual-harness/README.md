@@ -340,8 +340,8 @@ and kills it afterwards. Consequences worth knowing:
   operational difference from `npm run obsidian-shots`, which still uses `:1` by default.)
 - It picks a free display number (`:99` upward) and only uses it once its own Xvfb reports it is listening
   (`-displayfd`, `scripts/xvfb-owned.mjs`), so parallel runs don't collide, even when started at the same instant.
-  Holds once every worktree is on SC-546 or later. Until then, an un-rebased lifecycle run started in the same
-  instant can still land on a new run's display, so rebase before running lifecycle concurrently.
+  Holds once every worktree is on SC-546 or later. Until then, an un-rebased lifecycle or docs-shots run started in the
+  same instant can still land on a new run's display, so rebase before running either concurrently.
 - If Xvfb is missing, the runner tries `devbox install` and, failing that, prints the exact
   fallback: quit Obsidian, then `DSE_DOCS_DISPLAY=:1 DSE_DOCS_NO_XVFB=1 npm run docs-shots`.
 
