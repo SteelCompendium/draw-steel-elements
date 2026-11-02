@@ -138,6 +138,12 @@
 // each land in the block clicked and each card shows its own block - Live Preview callouts and plain fences, Reading view callouts and plain fences, two panes, a form
 // Save. Before the fix the write of the first block made Obsidian hand the waiting block's element to its twin and the waiting edit was written into the twin.
 //
+// SC-545 appends G-S63 (49 scenarios in all; it sits after G-S52 and before G-S57, so it is the last scenario of the third `--only` part): turn the plugin off and on without closing the
+// note. Live Preview redraws its code-block widgets but reuses a callout or embed widget with the OLD instance's card (no processor call, its view unloaded, no live registry owns
+// it), so a click on it did nothing. Now the unloading instance leaves the card's context on its element and the new instance draws a fresh card there at layout-ready; the note is rebuilt
+// (setViewData) only if a block is still undrawn. Phases: (a) a counter in a callout, (b) in an LP embed, (c) twin callouts (clicks 1, 0, 1), (d) a stamina bar in a callout (the real
+// click opens the Stamina modal), (e) a callout mid-pane in a tall note (scrollTop and card top +-1 px), (f) a + pending at disable, (g) controls (a plain fence, Reading view).
+//
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
 // Env:   XVFB_BIN, DSE_LIFECYCLE_BIN (default /usr/bin/obsidian),
@@ -312,6 +318,18 @@ Object.assign(FIXTURES, {
 	'Lifecycle/callout-init.md': `# callout init\n\nTOP\n\n${GS62_FILL(10, 'A')}\n\n${['[!note] Init', 'Init body text', ...GS62_INIT].map((l) => `> ${l}`).join('\n')}\n\n${GS62_FILL(14, 'B')}\n`,
 	'Lifecycle/callout-init-src.md': `# callout init src\n\nSRC-TOP\n\n${GS62_INIT.join('\n')}\n\nSRC-BOTTOM\n`,
 	'Lifecycle/callout-init-host.md': `# callout init host\n\nTOP\n\n${GS62_FILL(14, 'A')}\n\n![[Lifecycle/callout-init-src]]\n\n${GS62_FILL(14, 'B')}\n`,
+});
+
+// SC-545 (G-S63): a counter in a callout; a counter in a note that an LP host embeds; a stamina bar in a callout; a callout in the middle of a tall note; a callout
+// counter next to a plain counter. (The twin callouts of G-S53/G-S57, `twin-callouts.md`, are reused.)
+const GS63_STAMINA = ['```ds-stamina-bar', 'max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5', '```'];
+Object.assign(FIXTURES, {
+	'Lifecycle/replug-callout.md': `# replug callout\n\nTOP\n\n${QUOTED(['[!note] Camp'], 5, 'Solo')}\n\nBOTTOM\n`,
+	'Lifecycle/replug-embed-src.md': `# replug embed src\n\n${COUNTER(5, 'Solo')}\n`,
+	'Lifecycle/replug-embed-host.md': `# replug embed host\n\nTOP\n\n![[Lifecycle/replug-embed-src]]\n\nBOTTOM\n`,
+	'Lifecycle/replug-stamina.md': `# replug stamina\n\nTOP\n\n${['[!note] Bar', ...GS63_STAMINA].map((l) => `> ${l}`).join('\n')}\n\nBOTTOM\n`,
+	'Lifecycle/replug-mid.md': `# replug mid\n\nTOP\n\n${GS62_FILL(60, 'Above')}\n\n${QUOTED(['[!note] Camp'], 5, 'Solo')}\n\n${GS62_FILL(100, 'Below')}\n\nBOTTOM\n`,
+	'Lifecycle/replug-mixed.md': `# replug mixed\n\nTOP\n\n${QUOTED(['[!note] Camp'], 5, 'Solo')}\n\nMID\n\n${COUNTER(3, 'Plain')}\n\nBOTTOM\n`,
 });
 
 // SC-340 (Task 8) fixtures: the adoption scenarios (G-S1..G-S8) below.
@@ -4201,6 +4219,275 @@ const SCENARIOS = [
 			await t.open('Lifecycle/other.md'); // back to Reading for the next scenario
 			t.expect(fails.length === 0, fails.join(' | '));
 			return out.join('; ');
+		},
+	},
+	{
+		// SC-545: turn the plugin off and on without closing the note. Live Preview rebuilds only its code-block widgets; a CALLOUT or EMBED widget is
+		// reused with its cached DOM, so the card in it was the OLD instance's (its view unloaded, its listeners gone, owned by no live registry) and a
+		// click on it did nothing. The unloading instance now leaves the card's widget context on its element and the new instance draws a fresh card
+		// there at layout-ready (replugRemount.ts); only a note that still holds an undrawn block is rebuilt with setViewData(.., true) (fallback).
+		// Every phase: anti-vacuity (a real click on the card writes), tag the cards, plugin off, plugin on, then: every tagged card is out of the
+		// document, the new cards are owned by the LIVE registry, a real click on the new card writes (+1) and the card shows the disk value; no
+		// page error, no Notice; and the fallback did NOT run (no setViewData(.., true) between disable and the end of the settle) - the normal off/on
+		// never rebuilds the note. (a) a counter in a callout, (b) a counter in a note embedded in Live Preview, (c) twin callouts, clicks 1, 0, 1,
+		// (d) a stamina bar in a callout (the real click opens the Stamina modal), (e) a callout mid-pane in a tall note: scrollTop and the card's
+		// top unchanged (+-1 px), (f) a + whose write is still pending when the plugin is turned off: the write lands, the callout is a card
+		// again after enable and the next + writes (this one MAY use the fallback; the number is reported), (g) controls: a plain fence in the
+		// same note and the callout's + in Reading view. Own leaf (its tab is in its keep set); the plugin is enabled again in `finally`.
+		id: 'G-S63',
+		async run(t) {
+			const m = await t.mark();
+			const ID = 'draw-steel-elements';
+			const J = JSON.stringify;
+			const problems = [];
+			const outcomes = [];
+			const G = 'window.__gs63';
+			const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+			const phase = async (label, fn) => {
+				try {
+					await fn();
+				} catch (e) {
+					problems.push(`${label}: ${e.message}`);
+				}
+			};
+			await t.ev(`(() => { if (!document.getElementById('lc-gs63-notice')) { const st = document.createElement('style'); st.id = 'lc-gs63-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
+			await t.ev(`(() => {
+				const P = (window.__gs63 = {});
+				const keep = new Set(app.workspace.getLeavesOfType('markdown'));
+				P.keep = keep;
+				P.main = app.workspace.getMostRecentLeaf();
+				keep.add(P.main); // an empty tab is not a markdown leaf yet: it becomes the scenario's own
+				P.cm = () => P.main.view.editor.cm;
+				P.reg = () => app.plugins.plugins['${ID}']?.viewRegistry ?? null;
+				P.owned = (r) => !!P.reg()?.liveEntries().some((e) => e.root === r);
+				P.roots = (kind) => Array.from(P.cm().contentDOM.querySelectorAll('[data-dse-element="' + kind + '"]')).filter((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]'));
+				P.sv = []; // every setViewData(data, true) (the fallback's call; Obsidian itself only makes it while it opens a note)
+				return true;
+			})()`);
+			// The leaf must show a note before its view class is known: the fallback is a call on MarkdownView.prototype.setViewData.
+			await t.open('Lifecycle/other.md', `${G}.main`);
+			await t.ev(`(() => {
+				const P = ${G};
+				let owner = Object.getPrototypeOf(P.main.view);
+				while (owner && !Object.prototype.hasOwnProperty.call(owner, 'setViewData')) owner = Object.getPrototypeOf(owner);
+				if (!owner) throw new Error('no setViewData on the markdown view class');
+				P.svOwner = owner;
+				P.svOrig = owner.setViewData;
+				owner.setViewData = function (data, clear) {
+					if (clear === true) P.sv.push({ path: this.file?.path ?? null });
+					return P.svOrig.apply(this, arguments);
+				};
+				return true;
+			})()`);
+			/** Open `rel` fresh in Live Preview on the scenario's leaf, the cursor on line 0, and bring the n-th `ds-<kind>` block into view (`scrollText`: the text to centre instead). */
+			const openLP = async (rel, kind, n, scrollText = null) => {
+				await t.ev(`(async () => { const keep = ${G}.keep; app.workspace.getLeavesOfType('markdown').filter((l) => !keep.has(l)).forEach((l) => l.detach()); app.workspace.setActiveLeaf(${G}.main, { focus: true }); return true; })()`);
+				await t.open('Lifecycle/other.md', `${G}.main`);
+				await t.reset(rel);
+				await t.ev(`(async () => { await ${G}.main.setViewState({ type: 'markdown', state: { file: ${J(rel)}, mode: 'source', source: false }, active: true }); ${G}.main.view.editor.setCursor({ line: 0, ch: 0 }); return true; })()`);
+				await t.waitFor(`${G}.main.view.file?.path === ${J(rel)} && ${G}.main.view.getMode() === 'source'`, `${rel} is open in Live Preview`);
+				await t.sleep(700);
+				if (scrollText) await t.ev(`(async () => { const cm = ${G}.cm(); cm.dispatch({ effects: cm.constructor.scrollIntoView(cm.state.doc.toString().indexOf(${J(scrollText)}), { y: 'center' }) }); return true; })()`);
+				else await t.ev(`(async () => { const cm = ${G}.cm(); const lines = cm.state.doc.toString().split('\\n'); const i = lines.findIndex((l) => new RegExp('^(?:[ ]{0,3}>[ ]?)*\`\`\`ds-' + ${J(kind)}).test(l)); cm.dispatch({ effects: cm.constructor.scrollIntoView(cm.state.doc.line(i + 1).from, { y: 'center' }) }); return true; })()`);
+				await t.waitFor(`${G}.roots(${J(kind)}).length > ${n} && ${G}.roots(${J(kind)}).every((r) => ${G}.owned(r))`, `${rel}: the ${kind} cards are drawn and owned`);
+				await t.sleep(700);
+			};
+			/** A REAL click at the centre of `expr` (never scrolled again: the element is already in view). */
+			const click = async (expr) => {
+				const ok = await t.ev(`(() => { const el = ${expr}; if (!el) return false; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; })()`);
+				t.expect(ok, `no visible element to click: ${expr}`);
+				const at = await t.ev(`(() => { const r = (${expr}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+				const base = { x: at.x, y: at.y, button: 'left', clickCount: 1 };
+				await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x, y: at.y });
+				await t.cdp.call('Input.dispatchMouseEvent', { type: 'mousePressed', buttons: 1, ...base });
+				await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseReleased', buttons: 0, ...base });
+			};
+			const plus = (kind, n) => `(${G}.roots(${J(kind)})[${n}])?.querySelector('button[aria-label^="Increase"]')`;
+			const shownValues = () => t.ev(`${G}.roots('counter').map((r) => Number(r.querySelector('.dse-counter__value')?.value))`);
+			/** Wait (a poll, not a sleep) until the note's counter values are `want`; false if they never are. */
+			const diskIs = async (rel, want, ms = 5000) => {
+				const t0 = Date.now();
+				while (!same(t.counterValues(rel), want)) {
+					if (Date.now() - t0 > ms) return false;
+					await t.sleep(80);
+				}
+				return true;
+			};
+			/** A real + on card `n`: the note must become `want`, and the cards must show the note's values (`cards`: the note's counters in card order). */
+			const plusWrites = async (label, rel, kind, n, want, cards = want) => {
+				await click(plus(kind, n));
+				if (!(await diskIs(rel, want))) throw new Error(`${label}: the + click did not write: want ${J(want)}, the note has ${J(t.counterValues(rel))}`);
+				if (kind === 'counter') {
+					const t0 = Date.now();
+					while (!same(await shownValues(), cards) && Date.now() - t0 < 4000) await t.sleep(80);
+					const shown = await shownValues();
+					if (!same(shown, cards)) throw new Error(`${label}: the cards show ${J(shown)}, the note has ${J(cards)}`);
+				}
+			};
+			/**
+			 * Tag the cards of `kind`, turn the plugin off and on, wait (poll) until `until` holds (default: every tagged card is out of the document and
+			 * the same number of cards is drawn and owned by the live registry), then let a late rebuild settle. `beforeDisable` runs after the tagging.
+			 * Never throws for a card that is not redrawn: the numbers come back, the phase asserts.
+			 */
+			const offOn = async (kind, { until = null, beforeDisable = null } = {}) => {
+				const pre = await t.ev(`(() => { ${G}.pre = ${G}.roots(${J(kind)}); ${G}.pre.forEach((r) => { r.__gs63 = 'pre'; }); return ${G}.pre.length; })()`);
+				t.expect(pre > 0, `no ${kind} card to tag before the plugin is turned off`);
+				if (beforeDisable) await beforeDisable();
+				const sv0 = await t.ev(`${G}.sv.length`);
+				await t.ev(`(async () => { await app.plugins.disablePlugin('${ID}'); return true; })()`);
+				await t.waitFor(`!app.plugins.plugins['${ID}']`, 'the plugin is off');
+				await t.sleep(800); // the off state itself is the scenario: Obsidian rebuilds what it rebuilds while no processor exists
+				await t.ev(`(async () => { await app.plugins.enablePlugin('${ID}'); return true; })()`);
+				await t.waitFor(`!!${G}.reg()`, 'the plugin is on');
+				const cond = until ?? `${G}.pre.every((r) => !r.isConnected) && ${G}.roots(${J(kind)}).length === ${pre} && ${G}.roots(${J(kind)}).every((r) => ${G}.owned(r))`;
+				let redrawn = true;
+				try {
+					await t.waitFor(cond, `the ${kind} cards are redrawn`, 5000);
+				} catch {
+					redrawn = false;
+				}
+				await t.sleep(700);
+				const after = await t.ev(`(() => ({
+					gone: ${G}.pre.map((r) => !r.isConnected),
+					now: ${G}.roots(${J(kind)}).length,
+					owned: ${G}.roots(${J(kind)}).map((r) => ${G}.owned(r)),
+					rebuilds: ${G}.sv.length - ${sv0},
+					modal: !!document.querySelector('.modal-container .dse-modal'),
+				}))()`);
+				return { pre, redrawn, ...after };
+			};
+			/** The checks every phase shares. `allowRebuild`: the fallback may have run (phase (f)). */
+			const expectReplugged = (label, o, { allowRebuild = false } = {}) => {
+				const bad = [];
+				if (!o.gone.every(Boolean)) bad.push(`${o.gone.filter((g) => !g).length} of ${o.gone.length} cards are still the pre-disable DOM (not redrawn)`);
+				if (o.now !== o.pre) bad.push(`${o.now} cards drawn, ${o.pre} before`);
+				if (!o.owned.every(Boolean)) bad.push(`${o.owned.filter((x) => !x).length} of ${o.owned.length} cards are owned by no live view`);
+				if (!allowRebuild && o.rebuilds !== 0) bad.push(`the fallback ran (${o.rebuilds} setViewData(.., true) call(s)): the normal off/on must not rebuild the note`);
+				if (bad.length) problems.push(`${label}: ${bad.join('; ')}`);
+				outcomes.push(`${label}: tagged ${o.pre}, out of the document ${o.gone.filter(Boolean).length}, drawn ${o.now}, owned ${o.owned.filter(Boolean).length}, rebuilds ${o.rebuilds}`);
+			};
+			const noModal = async () => {
+				if (await t.ev(`!!document.querySelector('.modal-container .dse-modal')`)) {
+					await t.key('Escape', 'Escape', 27);
+					await t.waitFor(`!document.querySelector('.modal-container .dse-modal')`, 'the modal closed');
+				}
+			};
+			try {
+				// (a) the ticket's case: a counter in a callout.
+				await phase('(a) counter in a callout', async () => {
+					const rel = 'Lifecycle/replug-callout.md';
+					await openLP(rel, 'counter', 0);
+					await plusWrites('(a) before', rel, 'counter', 0, [6]);
+					const o = await offOn('counter');
+					expectReplugged('(a) counter in a callout', o);
+					await plusWrites('(a) after off/on', rel, 'counter', 0, [7]);
+					outcomes.push(`(a) after off/on the + wrote: disk ${J(t.counterValues(rel))}`);
+				});
+				// (b) a counter in a note embedded in a Live Preview host.
+				await phase('(b) counter in an LP embed', async () => {
+					const host = 'Lifecycle/replug-embed-host.md';
+					const src = 'Lifecycle/replug-embed-src.md';
+					await t.reset(src);
+					await openLP(host, 'counter', 0, '![[Lifecycle/replug-embed-src]]');
+					t.expect(await t.ev(`!!${G}.roots('counter')[0]?.closest('.internal-embed')`), '(b) set-up: the counter is not drawn in an embed');
+					await plusWrites('(b) before', src, 'counter', 0, [6]);
+					const o = await offOn('counter');
+					expectReplugged('(b) counter in an LP embed', o);
+					await plusWrites('(b) after off/on', src, 'counter', 0, [7]);
+				});
+				// (c) twin callouts (identical text): one per block, each showing its own block, clicks 1, 0, 1.
+				await phase('(c) twin callouts', async () => {
+					const rel = 'Lifecycle/twin-callouts.md';
+					await openLP(rel, 'counter', 1);
+					await plusWrites('(c) before', rel, 'counter', 0, [6, 5]);
+					const o = await offOn('counter');
+					expectReplugged('(c) twin callouts', o);
+					await plusWrites('(c) after off/on, block 1', rel, 'counter', 1, [6, 6]);
+					await plusWrites('(c) after off/on, block 0', rel, 'counter', 0, [7, 6]);
+					await plusWrites('(c) after off/on, block 1 again', rel, 'counter', 1, [7, 7]);
+				});
+				// (d) a stamina bar in a callout: the real click opens the Stamina modal, before and after.
+				await phase('(d) stamina bar in a callout', async () => {
+					const rel = 'Lifecycle/replug-stamina.md';
+					const bar = `(${G}.roots('stamina-bar')[0])?.querySelector('.dse-stamina')`;
+					await openLP(rel, 'stamina-bar', 0);
+					await click(bar);
+					await t.waitFor(`!!document.querySelector('.modal-container .dse-modal')`, '(d) before off/on: the real click opens the Stamina modal');
+					await noModal();
+					const o = await offOn('stamina-bar');
+					expectReplugged('(d) stamina bar in a callout', o);
+					t.expect(!o.modal, '(d) a modal was open after the off/on');
+					await click(bar);
+					await t.waitFor(`!!document.querySelector('.modal-container .dse-modal')`, '(d) after off/on: the real click opens the Stamina modal', 5000);
+					outcomes.push('(d) after off/on the real click opened the Stamina modal');
+					await noModal();
+					if (t.read(rel) !== FIXTURES[rel]) problems.push('(d) the note changed although only the modal was opened');
+				});
+				// (e) a callout in the middle of a tall note: the redraw does not move the page (scrollTop and the card's top edge, +-1 px).
+				await phase('(e) callout mid-pane in a tall note', async () => {
+					const rel = 'Lifecycle/replug-mid.md';
+					await openLP(rel, 'counter', 0);
+					const metrics = () => t.ev(`(() => { const sc = ${G}.cm().scrollDOM; const r = ${G}.roots('counter')[0]; return { st: sc.scrollTop, top: r ? r.getBoundingClientRect().top - sc.getBoundingClientRect().top : null }; })()`);
+					await plusWrites('(e) before', rel, 'counter', 0, [6]);
+					await t.sleep(700);
+					const before = await metrics();
+					t.expect(before.st > 500, `(e) set-up: the editor is not scrolled into the note (scrollTop ${before.st})`);
+					const o = await offOn('counter');
+					expectReplugged('(e) callout mid-pane', o);
+					const after = await metrics();
+					const dSt = Math.abs(after.st - before.st);
+					const dTop = Math.abs(after.top - before.top);
+					outcomes.push(`(e) scrollTop ${Math.round(before.st)} -> ${Math.round(after.st)}, card top ${Math.round(before.top)} -> ${Math.round(after.top)}`);
+					if (dSt > 1 || dTop > 1) problems.push(`(e) the page moved: scrollTop ${before.st} -> ${after.st}, card top ${before.top} -> ${after.top}`);
+					await plusWrites('(e) after off/on', rel, 'counter', 0, [7]);
+				});
+				// (f) a + whose write is still pending (the 400 ms debounce) when the plugin is turned off: the unload flushes it, and the note changes under
+				// the callout while no processor exists. The write lands; the callout is a card again after enable; the next + writes.
+				await phase('(f) write pending at disable', async () => {
+					const rel = 'Lifecycle/replug-callout.md';
+					await openLP(rel, 'counter', 0);
+					await plusWrites('(f) before', rel, 'counter', 0, [6]);
+					const o = await offOn('counter', {
+						beforeDisable: async () => {
+							await t.ev(`(${plus('counter', 0)}).click()`);
+							await t.sleep(30);
+						},
+					});
+					expectReplugged('(f) write pending at disable', o, { allowRebuild: true });
+					if (!same(t.counterValues(rel), [7])) problems.push(`(f) the pending write was lost: the note has ${J(t.counterValues(rel))}, want [7]`);
+					await plusWrites('(f) after off/on', rel, 'counter', 0, [8]);
+				});
+				// (g) controls that were never broken: a plain fence in a note that also has a callout, and the callout's + in Reading view.
+				await phase('(g) controls', async () => {
+					const rel = 'Lifecycle/replug-mixed.md';
+					await openLP(rel, 'counter', 1);
+					await plusWrites('(g) before', rel, 'counter', 1, [5, 4]);
+					const o = await offOn('counter', { until: `${G}.pre[1] && !${G}.pre[1].isConnected && ${G}.roots('counter')[1] && ${G}.owned(${G}.roots('counter')[1])` });
+					const label = '(g) plain fence';
+					if (!o.gone[1]) problems.push(`${label}: the plain fence's card is still the pre-disable DOM`);
+					if (!o.owned[1]) problems.push(`${label}: the plain fence's new card is owned by no live view`);
+					if (o.rebuilds !== 0) problems.push(`${label}: the fallback ran (${o.rebuilds})`);
+					outcomes.push(`${label}: redrawn ${o.gone[1]}, owned ${o.owned[1]}, rebuilds ${o.rebuilds}`);
+					await plusWrites('(g) plain fence after off/on', rel, 'counter', 1, [5, 5]);
+					await t.ev(`(async () => { await ${G}.main.setViewState({ type: 'markdown', state: { file: ${J(rel)}, mode: 'preview' }, active: true }); return true; })()`);
+					const inView = `Array.from(${G}.main.view.containerEl.querySelectorAll('.markdown-reading-view [data-dse-element="counter"]')).filter((r) => r.isConnected)`;
+					await t.waitFor(`${inView}.length === 2 && ${inView}.every((r) => r.querySelector('button[aria-label^="Increase"]'))`, '(g) the counters are drawn in Reading view');
+					await t.realClick(`${inView}[0].querySelector('button[aria-label^="Increase"]')`);
+					if (!(await diskIs(rel, [6, 5]))) problems.push(`(g) the + in Reading view did not write: ${J(t.counterValues(rel))}`);
+					else outcomes.push('(g) Reading view + wrote [6,5]');
+				});
+			} finally {
+				await t.ev(`(async () => { if (!app.plugins.plugins['${ID}']) await app.plugins.enablePlugin('${ID}'); return true; })()`);
+				await t.ev(`(() => { const P = ${G}; if (P.svOwner) P.svOwner.setViewData = P.svOrig; return true; })()`);
+				await t.ev(`document.getElementById('lc-gs63-notice')?.remove()`);
+				await t.ev(`(() => { const keep = ${G}.keep; app.workspace.getLeavesOfType('markdown').filter((l) => !keep.has(l)).forEach((l) => l.detach()); return true; })()`);
+				for (const r of ['Lifecycle/replug-callout.md', 'Lifecycle/replug-embed-host.md', 'Lifecycle/replug-embed-src.md', 'Lifecycle/replug-stamina.md', 'Lifecycle/replug-mid.md', 'Lifecycle/replug-mixed.md', 'Lifecycle/twin-callouts.md']) await t.reset(r);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect(problems.length === 0, `${problems.join(' | ')} -- passed: ${outcomes.join('; ')}`);
+			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${J(await t.noticesSince(m))}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${J(await t.errorsSince(m))}`);
+			return `after a plugin off/on a click on a card in a Live Preview callout or embed writes and the card shows the note (the cards were drawn again, owned by the live registry, the note not rebuilt): ${outcomes.join('; ')}`;
 		},
 	},
 	{
