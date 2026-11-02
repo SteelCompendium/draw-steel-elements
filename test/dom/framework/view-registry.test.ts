@@ -376,7 +376,7 @@ describe('SC-544: flushPendingWrites re-entrancy guard', () => {
 		view.flushPendingWrite = jest.fn(flush);
 		view.hasPendingWrite = () => false;
 		const host = { sourcePath: path, attachEntry: () => {}, renderChildGone: false } as any;
-		registry.own(view, host, document.createElement('div'));
+		registry.own(view as any, host, document.createElement('div'));
 		return view;
 	}
 
