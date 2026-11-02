@@ -384,6 +384,8 @@ Object.assign(FIXTURES, {
 	'Lifecycle/lpembhosttwo.md': `# lpembhosttwo\n\n${Array.from({ length: 80 }, (_, i) => `E-PRE filler ${i}.`).join('\n\n')}\n\n![[lpembtwo]]\n\nE-END 1.\n\nE-END 2.\n\nE-END 3.\n`,
 	// SC-472 (G-S59 (c)): a short lead, one 25-hero tracker, a long tail - the reader scrolls far enough that Obsidian takes the tracker's section out of the document.
 	'Lifecycle/pin-virt.md': `# pin virt\n\n${Array.from({ length: 10 }, (_, i) => `VPRE filler ${i}.`).join('\n\n')}\n\n${fence('ds-initiative', ['heroes:', ...Array.from({ length: 25 }, (_, i) => HERO(`Hero ${String(i + 1).padStart(2, '0')}`)).flat(), 'enemy_groups: []', 'malice:', '  value: 1'])}\n\n${Array.from({ length: 110 }, (_, i) => `VPOST filler ${i}.`).join('\n\n')}\n`,
+	// SC-472 r6 (G-S59 (c), two trackers): the reader scrolls from the first tracker to the second during the late redraw of the first.
+	'Lifecycle/pin-virt2.md': `# pin virt two\n\n${Array.from({ length: 10 }, (_, i) => `TPRE filler ${i}.`).join('\n\n')}\n\n${fence('ds-initiative', ['heroes:', ...Array.from({ length: 25 }, (_, i) => HERO(`Hero ${String(i + 1).padStart(2, '0')}`)).flat(), 'enemy_groups: []', 'malice:', '  value: 1'])}\n\n${Array.from({ length: 80 }, (_, i) => `TMID filler ${i}.`).join('\n\n')}\n\n${fence('ds-initiative', ['heroes:', ...Array.from({ length: 25 }, (_, i) => HERO(`Second ${String(i + 1).padStart(2, '0')}`)).flat(), 'enemy_groups: []', 'malice:', '  value: 5'])}\n\n${Array.from({ length: 20 }, (_, i) => `TEND filler ${i}.`).join('\n\n')}\n`,
 	'Lifecycle/lpembhosttall.md': `# lpembhosttall\n\n${Array.from({ length: 80 }, (_, i) => `L-PRE filler ${i}.`).join('\n\n')}\n\n![[lpembtracker]]\n\n${Array.from({ length: 80 }, (_, i) => `L-POST filler ${i}.`).join('\n\n')}\n`,
 });
 // SC-487: a zero-width space right after the name. Live Preview ends the name there and renders the block; Reading view shows plain code.
@@ -5055,7 +5057,7 @@ const SCENARIOS = [
 			// `attrEl()`; a MutationObserver notes when the tagged tracker is replaced (milliseconds after window.__gs59t0, the write) and whether the
 			// attribute was on then. `mounted()` says a mounted tracker other than the tagged one is in the pane. Done once the attribute was seen on and is
 			// gone, the tracker was replaced and is mounted, plus 10 frames; it stops by itself after 40 s.
-			const record = (cfg) => t.ev(`(() => { const s = ${cfg.scroller}; const tagged = ${cfg.tagged}; const attrEl = ${cfg.attrEl}; const mounted = ${cfg.mounted}; const attr = ${JSON.stringify(cfg.attr)}; const other = ${cfg.other ?? 'null'}; const st = { otherAt: null, done: false, isTagged: !!tagged && tagged.__lcTag === 'gs59', st0: s.scrollTop, max0: s.scrollHeight - s.clientHeight, frames: 0, stMin: s.scrollTop, stMax: s.scrollTop, stEnd: s.scrollTop, pinSeen: false, released: false, redrawAt: null, pinAtRedraw: null, framesOn: 0, afterDone: 0, timedOut: false }; window.__gs59 = st; const mo = new MutationObserver(() => { if (st.otherAt === null && other && !other.isConnected) st.otherAt = Math.round(performance.now() - (window.__gs59t0 ?? performance.now())); if (st.redrawAt === null && tagged && !tagged.isConnected) { st.redrawAt = Math.round(performance.now() - (window.__gs59t0 ?? performance.now())); st.pinAtRedraw = !!attrEl() && attrEl().hasAttribute(attr); } }); mo.observe(other ? document.body : s, { childList: true, subtree: true }); const t0 = performance.now(); const tick = () => { const v = s.scrollTop; st.frames++; st.stMin = Math.min(st.stMin, v); st.stMax = Math.max(st.stMax, v); st.stEnd = v; const el = attrEl(); const on = !!el && el.hasAttribute(attr); if (on) { st.pinSeen = true; st.framesOn++; } else if (st.pinSeen) st.released = true; if (st.released && st.redrawAt !== null && mounted()) st.afterDone++; if (st.afterDone >= 10) { st.done = true; mo.disconnect(); return; } if (performance.now() - t0 > 40000) { st.timedOut = true; st.done = true; mo.disconnect(); return; } requestAnimationFrame(tick); }; requestAnimationFrame(tick); return true; })()`);
+			const record = (cfg) => t.ev(`(() => { const s = ${cfg.scroller}; const tagged = ${cfg.tagged}; const attrEl = ${cfg.attrEl}; const mounted = ${cfg.mounted}; const attr = ${JSON.stringify(cfg.attr)}; const other = ${cfg.other ?? 'null'}; const st = { otherAt: null, done: false, isTagged: !!tagged && tagged.__lcTag === 'gs59', st0: s.scrollTop, max0: s.scrollHeight - s.clientHeight, frames: 0, stMin: s.scrollTop, stMax: s.scrollTop, stEnd: s.scrollTop, pinSeen: false, released: false, redrawAt: null, pinAtRedraw: null, framesOn: 0, afterDone: 0, ready: false, timedOut: false }; window.__gs59 = st; const mo = new MutationObserver(() => { if (st.otherAt === null && other && !other.isConnected) st.otherAt = Math.round(performance.now() - (window.__gs59t0 ?? performance.now())); if (st.redrawAt === null && tagged && !tagged.isConnected) { st.redrawAt = Math.round(performance.now() - (window.__gs59t0 ?? performance.now())); st.pinAtRedraw = !!attrEl() && attrEl().hasAttribute(attr); } }); mo.observe(other ? document.body : s, { childList: true, subtree: true }); const t0 = performance.now(); const tick = () => { const v = s.scrollTop; st.frames++; st.stMin = Math.min(st.stMin, v); st.stMax = Math.max(st.stMax, v); st.stEnd = v; const el = attrEl(); const on = !!el && el.hasAttribute(attr); if (on) { st.pinSeen = true; st.framesOn++; } else if (st.pinSeen) st.released = true; if (st.released && st.redrawAt !== null && mounted()) { st.ready = true; st.afterDone++; } if (st.afterDone >= 10) { st.done = true; mo.disconnect(); return; } if (performance.now() - t0 > 40000) { st.timedOut = true; st.done = true; mo.disconnect(); return; } requestAnimationFrame(tick); }; requestAnimationFrame(tick); return true; })()`);
 			// One throttled write; returns the recorder's state. Throttle only around the write, reset in a finally.
 			const throttledWrite = async (rel, value) => {
 				let busyRef = null;
@@ -5067,7 +5069,11 @@ const SCENARIOS = [
 					busyRef = await t.ev(`(() => { const rel = ${JSON.stringify(rel)}; const ref = app.vault.on('modify', (f) => { if (f.path !== rel) return; setTimeout(() => { const end = performance.now() + ${BUSY_MS}; while (performance.now() < end); }, 0); }); window.__gs59busy = ref; return true; })()`);
 					await t.ev(`(async () => { window.__gs59t0 = performance.now(); await app.vault.process(app.vault.getAbstractFileByPath(${JSON.stringify(rel)}), (c) => c.replace(/ {2}value: \\d+/, '  value: ${value}')); })()`);
 					try {
-						await t.waitFor('window.__gs59 && window.__gs59.done', `the pin or hold released and the tracker redrawn (${rel}, write value ${value})`, CAP_MS);
+						// released + redrawn + mounted is the outcome; the 10 frames after it are counted unthrottled (under 8x only 15 frames were painted in
+						// 38 s on a busy machine: a false red from frame starvation, SC-472 r5)
+						await t.waitFor('window.__gs59 && (window.__gs59.ready || window.__gs59.done)', `the pin or hold released and the tracker redrawn (${rel}, write value ${value})`, CAP_MS);
+						await throttle(1);
+						await t.waitFor('window.__gs59 && window.__gs59.done', `the 10 frames after the release (${rel}, write value ${value})`, CAP_MS);
 					} catch (e) {
 						const state = await t.ev('JSON.stringify(Object.assign({ atMs: Math.round(performance.now() - (window.__gs59t0 ?? 0)) }, window.__gs59))').catch(() => 'state unreadable');
 						throw new Error(`${e instanceof Error ? e.message : String(e)}; recorder state ${state}`);
@@ -5225,31 +5231,42 @@ const SCENARIOS = [
 				});
 			}
 
-			// (c) the reader SCROLLS while the redraw is late (SC-472 r3, MEDIUM-1). Obsidian's virtualisation then takes the tracker's section (the
-			// arm-time root) out of the document while the sizer is still at its arm-time height. That is not a redraw: the pin must still be on when the
-			// late redraw collapses the sizer (the first version counted the removal as "redraw started" and released at once: 7456 -> 3889). The redraw is
-			// made late by holding the pane's `setViewData` (as G-S18 (d) does), not by timing; real CDP wheel events scroll; unthrottled, no busy spin.
-			// Two scrolls: to the note's end, and down then back up. Anti-vacuity: the root left the document and the sizer was untouched until the redraw
-			// was let go; after it the sizer collapsed and came back. The reader must end where they were (or at the new end of a shorter note).
+			// (c) the reader SCROLLS while the redraw is late (SC-472 r3 MEDIUM-1, r5 MEDIUM-1). Neither Obsidian's scroll virtualisation taking the tracker's
+			// section (the arm-time root) out of the document, nor a block being rendered for the first time because the reader scrolled it into view, is a
+			// redraw: the sizer is still at its arm-time height, and the pin must still be on when the late redraw collapses it (versions that counted
+			// them released at once: 7456 -> 3889, and 10111 -> 6544 with two trackers). The redraw is made late by holding the pane's `setViewData`
+			// (as G-S18 (d) does) and is let go at write + (PIN_TTL_MS - 300 ms), a moment the test constructs: a correct build must still be pinned
+			// then, and the scroll has ended before it (asserted), so a release at ANY earlier point - however delayed - is caught. Real CDP wheel
+			// events scroll; unthrottled, no busy spin. Three scrolls: to the note's end, down then back up (one tracker), and to the second tracker
+			// of a two-tracker note (pin-virt2.md). Anti-vacuity: the root left the document (one tracker) / a second root was drawn (two), the sizer
+			// was untouched until the redraw was let go, then collapsed and came back. The bound at the end is the floor: the page cannot be higher
+			// than the arm-time scrollHeight allows (Obsidian re-measures the sections the reader scrolled into: -512 px here, -448 px on stock).
 			{
-				const rel = 'Lifecycle/pin-virt.md';
 				const A = 'window.__gs59A';
 				const RDA = RD(A);
 				const SIZER = `${RDA}.querySelector(':scope > .markdown-preview-sizer')`;
+				const GO_AT = PIN_TTL_MS - 300;
 				try {
-					await t.reset(rel);
-					await t.open(rel);
+					await t.reset('Lifecycle/pin-virt.md');
+					await t.open('Lifecycle/pin-virt.md');
 					await t.ev(`(() => { window.__gs59A = app.workspace.getMostRecentLeaf(); return true; })()`);
-					for (const variant of ['to the end', 'down then up']) {
-						const tag = `(c) scroll ${variant}`;
+					for (const variant of [
+						{ name: 'to the end', rel: 'Lifecycle/pin-virt.md', kind: 'tagLeft' },
+						{ name: 'down then up', rel: 'Lifecycle/pin-virt.md', kind: 'tagLeft' },
+						{ name: 'to the second tracker', rel: 'Lifecycle/pin-virt2.md', kind: 'second' },
+					]) {
+						const rel = variant.rel;
+						const tag = `(c) scroll ${variant.name}`;
 						try {
 							await t.reset(rel);
+							await t.open(rel);
 							await t.waitFor(`!document.querySelector('[data-dse-scroll-pin]')`, `${tag}: the pin of the reset write is gone`, CAP_MS);
 							await t.ev(`(() => { ${RDA}.scrollTop = 0; return true; })()`);
+							await t.waitFor(`!!(${t.root(TRACKER, A)})`, `${tag}: the tracker is drawn again`, CAP_MS);
 							await parkReading(A);
 							await t.tag(TRACKER, 'gs59', A);
-							await t.ev(`(() => { const s = ${RDA}; const tagged = ${t.root(TRACKER, A)}; const sz = ${SIZER}; const mh0 = parseFloat(sz.style.minHeight); const o = (${A}).view.setViewData; const v = (${A}).view; window.__gs59go = null; v.setViewData = function (d, c) { v.setViewData = o; window.__gs59go = () => o.call(v, d, c); }; const st = { mh0, sh0: s.scrollHeight, st0: Math.round(s.scrollTop), tagLeft: false, goAt: null, low: null, back: null, pinAtLow: null, pinOn: false, pinOff: null, stAfterGoMin: null, frames: 0, done: false, mhNow: mh0 }; window.__gs59c = st; const mo = new MutationObserver(() => { const z = ${SIZER}; const mh = z ? parseFloat(z.style.minHeight) : NaN; st.mhNow = mh; if (!tagged.isConnected) st.tagLeft = true; if (st.goAt !== null && st.low === null && mh < mh0 - 2) { st.low = Math.round(performance.now() - st.goAt); st.pinAtLow = s.hasAttribute('data-dse-scroll-pin'); st.stAtLow = Math.round(s.scrollTop); st.shMin = s.scrollHeight; st.ch = s.clientHeight; } if (st.low !== null && st.back === null && mh >= mh0 - 2) st.back = Math.round(performance.now() - st.goAt); }); mo.observe(s, { subtree: true, childList: true, attributes: true, attributeFilter: ['style'] }); const tick = () => { st.frames++; const on = s.hasAttribute('data-dse-scroll-pin'); if (on) st.pinOn = true; if (st.pinOn && !on && st.pinOff === null) st.pinOff = st.goAt === null ? -1 : Math.round(performance.now() - st.goAt); if (st.goAt !== null) { const v = Math.round(s.scrollTop); st.stAfterGoMin = st.stAfterGoMin === null ? v : Math.min(st.stAfterGoMin, v); if (st.low !== null && st.back === null) st.shMin = Math.min(st.shMin, s.scrollHeight); } if (st.pinOff !== null && st.back !== null && st.pinOff >= 0) { st.afterDone = (st.afterDone || 0) + 1; } if ((st.afterDone || 0) >= 10 || performance.now() - (st.t0 ??= performance.now()) > 40000) { st.done = true; st.stEnd = Math.round(s.scrollTop); st.endMax = Math.round(s.scrollHeight - s.clientHeight); mo.disconnect(); return; } requestAnimationFrame(tick); }; requestAnimationFrame(tick); return true; })()`);
-							await t.edit(rel, `c.replace('  value: 1', '  value: 2')`);
+							await t.ev(`(() => { const s = ${RDA}; const tagged = ${t.root(TRACKER, A)}; const sz = ${SIZER}; const mh0 = parseFloat(sz.style.minHeight); const o = (${A}).view.setViewData; const v = (${A}).view; window.__gs59go = null; v.setViewData = function (d, c) { v.setViewData = o; window.__gs59go = () => o.call(v, d, c); }; const roots0 = new Set(Array.from(s.querySelectorAll('[data-dse-element]'))); const st = { mh0, sh0: s.scrollHeight, ch0: s.clientHeight, st0: Math.round(s.scrollTop), tagLeft: false, second: false, writeAt: null, goAt: null, low: null, back: null, pinAtLow: null, pinOn: false, pinOff: null, stAfterGoMin: null, frames: 0, done: false, mhNow: mh0 }; window.__gs59c = st; const mo = new MutationObserver(() => { const z = ${SIZER}; const mh = z ? parseFloat(z.style.minHeight) : NaN; st.mhNow = mh; if (!tagged.isConnected) st.tagLeft = true; if (Array.from(s.querySelectorAll('[data-dse-element]')).some((r) => r.isConnected && !roots0.has(r) && r.childElementCount > 0)) st.second = true; if (st.goAt !== null && st.low === null && mh < mh0 - 2) { st.low = Math.round(performance.now() - st.goAt); st.pinAtLow = s.hasAttribute('data-dse-scroll-pin'); st.stAtLow = Math.round(s.scrollTop); st.shMin = s.scrollHeight; st.ch = s.clientHeight; } if (st.low !== null && st.back === null && mh >= mh0 - 2) st.back = Math.round(performance.now() - st.goAt); }); mo.observe(s, { subtree: true, childList: true, attributes: true, attributeFilter: ['style'] }); const tick = () => { st.frames++; const on = s.hasAttribute('data-dse-scroll-pin'); if (on) st.pinOn = true; if (st.pinOn && !on && st.pinOff === null) st.pinOff = st.goAt === null ? -1 : Math.round(performance.now() - st.goAt); if (st.goAt !== null) { const v = Math.round(s.scrollTop); st.stAfterGoMin = st.stAfterGoMin === null ? v : Math.min(st.stAfterGoMin, v); if (st.low !== null && st.back === null) st.shMin = Math.min(st.shMin, s.scrollHeight); } if (st.pinOff !== null && st.back !== null && st.pinOff >= 0) { st.afterDone = (st.afterDone || 0) + 1; } if ((st.afterDone || 0) >= 10 || performance.now() - (st.t0 ??= performance.now()) > 40000) { st.done = true; st.stEnd = Math.round(s.scrollTop); st.endMax = Math.round(s.scrollHeight - s.clientHeight); mo.disconnect(); return; } requestAnimationFrame(tick); }; requestAnimationFrame(tick); return true; })()`);
+							await t.ev(`(async () => { window.__gs59c.writeAt = performance.now(); await app.vault.process(app.vault.getAbstractFileByPath(${JSON.stringify(rel)}), (c) => c.replace('  value: 1', '  value: 2')); })()`);
 							await t.waitFor('typeof window.__gs59go === "function"', `${tag}: the pane reached setViewData`, CAP_MS);
 							const c = await t.ev(`(() => { const r = ${RDA}.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
 							const wheel = async (dy, n) => {
@@ -5258,14 +5275,20 @@ const SCENARIOS = [
 									await t.sleep(40);
 								}
 							};
-							await wheel(300, 20);
-							if (variant === 'down then up') await wheel(-300, 6);
-							await t.waitFor('window.__gs59c.tagLeft', `${tag}: the tracker's section left the document (virtualisation)`, CAP_MS);
-							await t.sleep(300); // a pin that counted the removal as the redraw is released within a few frames: give it the time
-							const mid = await t.ev(`(() => { const s = ${RDA}; const z = ${SIZER}; return { pin: s.hasAttribute('data-dse-scroll-pin'), st: Math.round(s.scrollTop), mh: parseFloat(z.style.minHeight) }; })()`);
+							if (variant.kind === 'second') {
+								await wheel(3000, 4);
+							} else {
+								await wheel(600, 10);
+								if (variant.name === 'down then up') await wheel(-600, 3);
+							}
+							const scrolledBy = await t.ev('Math.round(performance.now() - window.__gs59c.writeAt)');
+							t.expect(scrolledBy < GO_AT, `${tag}: environment (re-run, check /proc/loadavg): the scroll took ${scrolledBy} ms, past the ${GO_AT} ms the redraw is let go at; a build that is still pinned there may legitimately let go from its backstop (${PIN_TTL_MS} ms)`);
+							await t.waitFor(variant.kind === 'second' ? 'window.__gs59c.second' : 'window.__gs59c.tagLeft', variant.kind === 'second' ? `${tag}: the second tracker was drawn` : `${tag}: the tracker's section left the document (virtualisation)`, CAP_MS);
+							await t.waitFor(`performance.now() - window.__gs59c.writeAt >= ${GO_AT}`, `${tag}: write + ${GO_AT} ms`, CAP_MS);
+							const mid = await t.ev(`(() => { const s = ${RDA}; const z = ${SIZER}; return { pin: s.hasAttribute('data-dse-scroll-pin'), st: Math.round(s.scrollTop), mh: parseFloat(z.style.minHeight), at: Math.round(performance.now() - window.__gs59c.writeAt) }; })()`);
 							const pre = await t.ev('Object.assign({}, window.__gs59c)');
-							t.expect(pre.tagLeft && Math.abs(mid.mh - pre.mh0) <= 2, `${tag}: not the geometry under test: the root left ${pre.tagLeft}, the sizer ${pre.mh0} -> ${mid.mh} before the redraw`);
-							t.expect(mid.pin, `${tag}: the pin was released before the late redraw, when the reader's scroll took the tracker's section out of the document (scrollTop ${pre.st0} -> ${mid.st}, sizer untouched at ${mid.mh})`);
+							t.expect((variant.kind === 'second' ? pre.second : pre.tagLeft) && Math.abs(mid.mh - pre.mh0) <= 2, `${tag}: not the geometry under test: the section left ${pre.tagLeft}, a second tracker drawn ${pre.second}, the sizer ${pre.mh0} -> ${mid.mh} before the redraw`);
+							t.expect(mid.pin, `${tag}: the pin was released before the late redraw (${mid.at} ms after the write), when the reader's scroll ${variant.kind === 'second' ? 'drew a second tracker' : 'took the tracker\'s section out of the document'} (scrollTop ${pre.st0} -> ${mid.st}, sizer untouched at ${mid.mh})`);
 							await t.ev(`(() => { window.__gs59c.goAt = performance.now(); window.__gs59go(); return true; })()`);
 							await t.waitFor('window.__gs59c.done', `${tag}: the redraw finished and the pin released`, CAP_MS);
 							const m = await t.ev('Object.assign({}, window.__gs59c)');
@@ -5273,12 +5296,11 @@ const SCENARIOS = [
 							t.expect(m.pinAtLow === true, `${tag}: the pin was not on when the sizer collapsed`);
 							t.expect(m.pinOff !== null && m.pinOff >= 0, `${tag}: the pin was never released after the redraw`);
 							// The clamp is the pin's job: while the sizer is collapsed the scroller must not get shorter than it was at the arm (stock, pin
-							// released early: scrollHeight 4.9k and scrollTop 7456 -> 3889). The position itself is not compared frame by frame: the reader
-							// scrolled into sections Obsidian had not measured, so the note is taller than the pinned floor and the page settles a few hundred
-							// px higher on stock too (measured -448 on stock, -512 here); it is only bounded loosely at the end.
+							// released early: scrollHeight 4.9k and scrollTop 7456 -> 3889).
 							t.expect(m.shMin >= m.sh0 - 2, `${tag}: the scroller got shorter while the sizer was collapsed (scrollHeight ${m.sh0} at the arm, ${m.shMin} then) - the pin was not holding; pin released ${m.pinOff} ms after the redraw was let go, sizer collapsed at ${m.low} ms and back at ${m.back} ms`);
-							t.expect(m.stEnd >= Math.min(mid.st, m.endMax) - 1000, `${tag}: the reader was moved: scrollTop ${mid.st} before the redraw, min ${m.stAfterGoMin} after it, ${m.stEnd} at the end (new end of the note ${m.endMax})`);
-							out.push(`${tag}: scrollHeight stayed ${m.shMin} (arm ${m.sh0}) through the collapse (reader at ${mid.st}, end ${m.stEnd}), sizer collapsed ${m.low} ms and back ${m.back} ms after the redraw was let go, pin released at ${m.pinOff} ms`);
+							// At the end the page may be higher than the reader left it, but not beyond what the arm-time height allows.
+							t.expect(m.stEnd >= Math.min(mid.st, m.sh0 - m.ch0) - 2, `${tag}: the reader was moved: scrollTop ${mid.st} before the redraw, min ${m.stAfterGoMin} after it, ${m.stEnd} at the end (the arm-time floor allows ${m.sh0 - m.ch0})`);
+							out.push(`${tag}: pin on ${mid.at} ms after the write, scrollHeight stayed ${m.shMin} (arm ${m.sh0}) through the collapse (reader at ${mid.st}, end ${m.stEnd}), sizer collapsed ${m.low} ms and back ${m.back} ms after the redraw was let go, pin released at ${m.pinOff} ms`);
 						} catch (e) {
 							fails.push(e instanceof Error ? e.message : String(e));
 							await t.ev(`(() => { if (window.__gs59go) { try { window.__gs59go(); } catch {} } window.__gs59go = null; return true; })()`).catch(() => {});
@@ -5292,6 +5314,7 @@ const SCENARIOS = [
 			await t.reset('Lifecycle/tall.md');
 			await t.reset('Lifecycle/lpembtracker.md');
 			await t.reset('Lifecycle/pin-virt.md');
+			await t.reset('Lifecycle/pin-virt2.md');
 			await t.open('Lifecycle/other.md'); // back to Reading for the next scenario
 			t.expect(fails.length === 0, `${fails.join(' | ')} -- write -> redraw latencies: ${out.join('; ')}`);
 			return `${out.join('; ')}; CPU throttled ${RATE}x around ${WRITES} writes per phase`;
