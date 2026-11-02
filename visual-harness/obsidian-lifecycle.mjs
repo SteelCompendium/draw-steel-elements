@@ -5235,7 +5235,7 @@ const SCENARIOS = [
 			// section (the arm-time root) out of the document, nor a block being rendered for the first time because the reader scrolled it into view, is a
 			// redraw: the sizer is still at its arm-time height, and the pin must still be on when the late redraw collapses it (versions that counted
 			// them released at once: 7456 -> 3889, and 10111 -> 6544 with two trackers). The redraw is made late by holding the pane's `setViewData`
-			// (as G-S18 (d) does) and is let go at write + (PIN_TTL_MS - 300 ms), a moment the test constructs: a correct build must still be pinned
+			// (as G-S18 (d) does) and is let go at write + (PIN_TTL_MS - 100 ms), a moment the test constructs: a correct build must still be pinned
 			// then, and the scroll has ended before it (asserted), so a release at ANY earlier point - however delayed - is caught. Real CDP wheel
 			// events scroll; unthrottled, no busy spin. Three scrolls: to the note's end, down then back up (one tracker), and to the second tracker
 			// of a two-tracker note (pin-virt2.md). Anti-vacuity: the root left the document (one tracker) / a second root was drawn (two), the sizer
@@ -5245,7 +5245,7 @@ const SCENARIOS = [
 				const A = 'window.__gs59A';
 				const RDA = RD(A);
 				const SIZER = `${RDA}.querySelector(':scope > .markdown-preview-sizer')`;
-				const GO_AT = PIN_TTL_MS - 300;
+				const GO_AT = PIN_TTL_MS - 100; // a correct build is pinned until at least PIN_TTL_MS + 30 painted frames
 				try {
 					await t.reset('Lifecycle/pin-virt.md');
 					await t.open('Lifecycle/pin-virt.md');
@@ -5272,7 +5272,7 @@ const SCENARIOS = [
 							const wheel = async (dy, n) => {
 								for (let i = 0; i < n; i++) {
 									await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseWheel', x: c.x, y: c.y, deltaX: 0, deltaY: dy });
-									await t.sleep(40);
+									await t.sleep(16);
 								}
 							};
 							if (variant.kind === 'second') {
