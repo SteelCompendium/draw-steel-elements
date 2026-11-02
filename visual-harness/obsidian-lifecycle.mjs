@@ -348,6 +348,23 @@ Object.assign(FIXTURES, {
 	'Lifecycle/form-stale-sidebar.md': `# form stale sidebar\n\nABOVE\n\n${COUNTER(3, 'Health')}\n\nBELOW\n`,
 });
 
+// SC-536 (G-S56): a reference that points back to itself, a chain of seven distinct references, and a card shown twice.
+// A feature whose one effect is markdown holding a `~~~ds-feature` fence: that fence is a nested block, drawn inside the card.
+const GS56_FEATURE = (name, extra = []) =>
+	fence('ds-feature', ['type: feature', 'feature_type: ability', `name: ${name}`, 'effects:', '  - name: Effect', '    effect: |-', `      ${name} text.`, ...extra.map((l) => (l ? `      ${l}` : ''))]);
+const GS56_NEST = (name, inner) => GS56_FEATURE(name, ['', '~~~ds-feature', inner, '~~~']);
+const GS56_CHAIN = {};
+for (let i = 1; i <= 7; i++) GS56_CHAIN[`Gs56Chain${i}.md`] = `# Chain${i}\n\n${i < 7 ? GS56_NEST(`Chain${i} Strike`, `@Gs56Chain${i + 1}.md`) : GS56_FEATURE('Chain7 Strike')}\n`;
+Object.assign(FIXTURES, {
+	'Gs56Ref.md': `# Ref\n\n${GS56_FEATURE('Ref Strike')}\n`,
+	'Gs56Cyc.md': `# Cyc\n\n${GS56_NEST('Cycle Strike', '@Gs56Cyc.md')}\n`,
+	...GS56_CHAIN,
+	'Lifecycle/gs56-refcard.md': `# gs56 refcard\n\nAbove.\n\n${fence('ds-feature', ['@Gs56Ref.md'])}\n\nAfter.\n`,
+	'Lifecycle/gs56-cycle.md': `# gs56 cycle\n\nAbove.\n\n${fence('ds-feature', ['@Gs56Cyc.md'])}\n\nAfter.\n`,
+	'Lifecycle/gs56-cycle-lp.md': `# gs56 cycle lp\n\nAbove.\n\n${fence('ds-feature', ['@Gs56Cyc.md'])}\n\nAfter.\n`,
+	'Lifecycle/gs56-chain.md': `# gs56 chain\n\nAbove.\n\n${fence('ds-feature', ['@Gs56Chain1.md'])}\n\nAfter.\n`,
+});
+
 // ------------------------------------------------------------------ note integrity
 /** Every fence closed, the block count unchanged, no stray text outside fences. */
 function scanOutside(text) {
@@ -868,6 +885,106 @@ function formKit(t) {
 		return { stampedNote, panelRoot };
 	};
 	return { waitText, waitDisk, hoverTo, FORM, SAVE, clickPencil, waitFormOpen, clickSave, pinToSidebar };
+}
+
+/**
+ * SC-536 (G-S56): hooks that hold lookups and file reads at the points the reference guard cares about, and a settle that is a
+ * CONDITION (nothing in flight except what we hold, then two painted frames, then the same again), never a delay.
+ * `services.refs.resolve` is hooked on the current plugin instance (hook again after a plugin re-enable); `app.vault.read` /
+ * `cachedRead` are hooked by path and survive a re-enable.
+ */
+function gs56Kit(t) {
+	const REFUSED = '/Reference loop|nesting too deep/';
+	const K = {
+		async install() {
+			await t.ev(`(() => {
+				const K = (window.__gs56 ??= { calls: 0, raws: [], pendingResolve: 0, pendingReads: 0, holdRefs: false, holdPath: null, held: [] });
+				if (!K.vaultOrig) {
+					K.vaultOrig = {};
+					for (const fn of ['cachedRead', 'read']) {
+						const orig = app.vault[fn];
+						K.vaultOrig[fn] = orig;
+						const bound = orig.bind(app.vault);
+						app.vault[fn] = (f) => {
+							K.pendingReads++;
+							const go = () => bound(f).finally(() => K.pendingReads--);
+							if (K.holdPath && f && f.path === K.holdPath) return new Promise((res, rej) => K.held.push({ kind: 'read', go: () => go().then(res, rej) }));
+							return go();
+						};
+					}
+				}
+				const refs = app.plugins.plugins['draw-steel-elements'].frameworkV2.services.refs;
+				if (!refs.__gs56) {
+					refs.__gs56 = true;
+					const real = refs.resolve;
+					K.refsOrig = { refs, resolve: real };
+					const bound = real.bind(refs);
+					refs.resolve = (raw, sp) => {
+						K.calls++;
+						K.raws.push(raw);
+						K.pendingResolve++;
+						const go = () => bound(raw, sp).finally(() => { K.pendingResolve--; });
+						if (K.holdRefs) return new Promise((res, rej) => K.held.push({ kind: 'resolve', go: () => go().then(res, rej) }));
+						return go();
+					};
+				}
+				return true;
+			})()`);
+		},
+		/** Put everything back: no holds, the original read/resolve functions. Held calls that were never released are dropped. */
+		uninstall: () =>
+			t.ev(`(() => {
+				const K = window.__gs56;
+				if (!K) return true;
+				K.holdRefs = false;
+				K.holdPath = null;
+				K.held = [];
+				for (const fn of Object.keys(K.vaultOrig ?? {})) app.vault[fn] = K.vaultOrig[fn];
+				if (K.refsOrig) { K.refsOrig.refs.resolve = K.refsOrig.resolve; delete K.refsOrig.refs.__gs56; }
+				delete window.__gs56;
+				return true;
+			})()`),
+		/** Between phases: no holds, nothing held, counters back to zero (a dropped held call never settles on its own). */
+		reset: () =>
+			t.ev(`(() => {
+				const K = window.__gs56;
+				K.holdRefs = false;
+				K.holdPath = null;
+				K.pendingResolve -= K.held.filter((h) => h.kind === 'resolve').length;
+				K.pendingReads -= K.held.filter((h) => h.kind === 'read').length;
+				K.held = [];
+				K.calls = 0;
+				K.raws = [];
+				return true;
+			})()`),
+		holdRefs: (on) => t.ev(`(() => { window.__gs56.holdRefs = ${on ? 'true' : 'false'}; return true; })()`),
+		holdPath: (p) => t.ev(`(() => { window.__gs56.holdPath = ${JSON.stringify(p)}; return true; })()`),
+		held: () => t.ev(`window.__gs56.held.length`),
+		calls: () => t.ev(`window.__gs56.calls`),
+		raws: () => t.ev(`window.__gs56.raws.slice()`),
+		/** Release one held call (FIFO or LIFO); returns how many were held before. */
+		releaseOne: (lifo) => t.ev(`(() => { const H = window.__gs56.held; if (!H.length) return 0; const n = H.length; (${lifo ? 'H.pop()' : 'H.shift()'}).go(); return n; })()`),
+		async releaseAll(lifo) {
+			for (;;) {
+				if (!(await K.releaseOne(lifo))) return;
+				await K.settle();
+			}
+		},
+		async settle(ms = 15000) {
+			const C = `(() => { const K = window.__gs56; const hr = K.held.filter((h) => h.kind === 'read').length; const hs = K.held.filter((h) => h.kind === 'resolve').length; return K.pendingReads === hr && (hr > 0 || K.pendingResolve === hs); })()`;
+			await t.waitFor(C, 'lookups/reads settled', ms);
+			await t.ev(`new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true))))`);
+			await t.waitFor(C, 'lookups/reads settled (2)', ms);
+		},
+		/** The leaf's top-level feature root in its Reading view. */
+		ROOT: (leaf) => `(Array.from(${t.readingScope(leaf)}.querySelectorAll('[data-dse-element="feature"]')).filter((x) => x.isConnected && !x.parentElement.closest('[data-dse-element]'))[0])`,
+		/** The cards a scope shows: its feature elements, and how many of those drew a card (the rest drew an error card). */
+		tree: (scopeExpr) =>
+			t.ev(`(() => { const sc = ${scopeExpr}; if (!sc) return null; const all = Array.from(sc.querySelectorAll('[data-dse-element="feature"]')).filter((x) => x.isConnected); const depth = (el) => { let d = 0; for (let p = el.parentElement; p; p = p.parentElement) if (p.matches && p.matches('[data-dse-element]')) d++; return d; }; const messages = Array.from(sc.querySelectorAll('.dse-error-card-message')).map((e) => e.textContent); return { roots: all.length, cards: all.filter((el) => !el.querySelector(':scope > .dse-error-card')).length, maxDepth: all.reduce((a, el) => Math.max(a, depth(el)), 0), messages, refused: messages.some((x) => ${REFUSED}.test(x)), text: sc.textContent.slice(0, 100) }; })()`),
+		/** The same for a leaf's Reading view. */
+		st: (leaf) => K.tree(t.readingScope(leaf)),
+	};
+	return K;
 }
 
 const SCENARIOS = [
@@ -3799,6 +3916,182 @@ const SCENARIOS = [
 			t.expect(fails.length === 0, `${fails.join(' || ')} -- ${out.join('; ')}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
 			return out.join('; ');
+		},
+	},
+	{
+		// G-S56 (SC-536): the reference guard follows the DOM, not the block's identity. A card that references itself stops at one
+		// "Reference loop" card nested inside it (Reading view and Live Preview), a chain of seven distinct references stops at five
+		// cards and a depth-cap card without making the sixth lookup, and a card that is live twice -- two panes, a plugin
+		// off/on, a double redraw -- is never refused. Lookups and file reads are held at hooks and released by hand (never a timer).
+		id: 'G-S56',
+		async run(t) {
+			const K = gs56Kit(t);
+			const m = await t.mark();
+			const problems = [];
+			const outcomes = [];
+			const LOOP_MSG = 'Reference loop: @Gs56Cyc.md is already shown by a card this one is inside.';
+			const CAP_MSG = 'Reference nesting too deep: more than 5 references inside one another.';
+			const LEAF = 'app.workspace.getMostRecentLeaf()';
+			const P1 = 'window.__gs56p1';
+			const P2 = 'window.__gs56p2';
+			const LP = 'window.__gs56lp';
+			const TEXT = (leaf) => `((${K.ROOT(leaf)})?.textContent ?? '')`;
+			const refusedOrCard = (leaf) => `(/Ref Strike|Reference loop|nesting too deep|failed/.test(${TEXT(leaf)}))`;
+			const splitP2 = (rel, active) =>
+				t.ev(`(async () => { const leaf = app.workspace.getLeaf('split', 'vertical'); ${P2} = leaf; await leaf.setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'preview' }, active: ${active} }); return true; })()`);
+			const detachExtraLeaves = () => t.ev(`(() => { for (const k of ['__gs56p2', '__gs56lp']) { try { window[k]?.detach(); } catch {} window[k] = null; } return true; })()`);
+			const rerender = (leaf) => t.ev(`(() => { ${leaf}.view.previewMode.rerender(true); return true; })()`);
+			const bothPanes = async () => ({ p1: await K.st(P1), p2: await K.st(P2) });
+			/** One card per pane, no guard card in either. */
+			const expectOneCardEach = (label, s) => {
+				for (const [pane, x] of [['pane 1', s.p1], ['pane 2', s.p2]]) {
+					t.expect(x.roots === 1 && x.cards === 1 && !x.refused && /Ref Strike/.test(x.text), `${label}: ${pane} shows ${x.cards} card(s) in ${x.roots} feature element(s)${x.refused ? ' and a guard card' : ''}: ${JSON.stringify(x.text)}`);
+				}
+			};
+			const phase = async (label, fn) => {
+				try {
+					outcomes.push(`${label}: ${await fn()}`);
+				} catch (e) {
+					problems.push(`${label}: ${e instanceof Error ? e.message : String(e)}`);
+				} finally {
+					await K.reset();
+					await detachExtraLeaves();
+					await t.open('Lifecycle/other.md');
+				}
+			};
+			/** Open `rel`, hold every lookup, release them one at a time (at most 8 levels). */
+			const stepThrough = async (rel, mode, label) => {
+				await K.reset();
+				await K.holdRefs(true);
+				if (mode === 'reading') await t.open(rel);
+				else {
+					// A leaf of its own, detached after: a leaf that has been in Live Preview keeps an editor beside its Reading view that
+					// would draw (and look up) the next note's blocks too.
+					await t.ev(`(async () => { const leaf = app.workspace.getLeaf('tab'); ${LP} = leaf; await leaf.setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'source', source: false }, active: true }); })()`);
+					await t.waitFor(`(${LP})?.view?.file?.path === ${JSON.stringify(rel)}`, `${label}: open ${rel} in Live Preview`);
+				}
+				const scope = mode === 'reading' ? t.readingScope(LEAF) : `(${LP}).view.containerEl.querySelector('.markdown-source-view')`;
+				const refusalShown = `(${scope}).querySelectorAll('.dse-error-card').length > 0`;
+				await t.waitFor(`window.__gs56.held.length >= 1 || ${refusalShown}`, `${label}: the first lookup or a refusal`);
+				let levels = 0;
+				let stopped = false;
+				for (let i = 0; i < 8; i++) {
+					await K.settle();
+					if ((await K.held()) === 0) {
+						stopped = true;
+						break;
+					}
+					levels++;
+					await K.releaseOne(false);
+				}
+				return { levels, stopped, lookups: await K.calls(), raws: await K.raws(), tree: await K.tree(scope) };
+			};
+			const cycleCase = (label, rel, mode) =>
+				phase(label, async () => {
+					const r = await stepThrough(rel, mode, label);
+					t.expect(r.stopped, `a lookup was still starting after ${r.levels} released (${r.lookups} made: ${r.raws.join(' ')}; ${r.tree.cards} card(s)): the chain does not stop`);
+					t.expect(r.lookups === 2, `${r.lookups} lookups made, want 2 (the card's, and the one nested reference's)`);
+					t.expect(r.tree.roots === 2 && r.tree.maxDepth === 1 && r.tree.cards === 1, `want one card plus one guard card nested one level inside it, got ${r.tree.roots} feature element(s), ${r.tree.cards} card(s), depth ${r.tree.maxDepth}`);
+					t.expect(r.tree.messages.length === 1 && r.tree.messages[0] === LOOP_MSG, `the nested card says ${JSON.stringify(r.tree.messages)}, want ${JSON.stringify(LOOP_MSG)}`);
+					return `${r.lookups} lookups, 1 card + 1 loop card inside it, settled`;
+				});
+
+			try {
+				await K.install();
+
+				// (a) / (a') a note whose card references itself, in Reading view and in Live Preview
+				await cycleCase('(a) cycle, Reading view', 'Lifecycle/gs56-cycle.md', 'reading');
+				await cycleCase("(a') cycle, Live Preview", 'Lifecycle/gs56-cycle-lp.md', 'live-preview');
+
+				// anti-vacuity for (a): seven DISTINCT references (no cycle) stop at the depth cap, without the sixth lookup
+				await phase('(cap) seven distinct references', async () => {
+					const r = await stepThrough('Lifecycle/gs56-chain.md', 'reading', 'cap');
+					t.expect(r.stopped, `a lookup was still starting after ${r.levels} released (${r.lookups} made: ${r.raws.join(' ')}; ${r.tree.cards} card(s))`);
+					t.expect(r.lookups === 5 && r.levels === 5, `${r.lookups} lookups made (${r.levels} released), want 5: the sixth level must not look anything up`);
+					t.expect(r.tree.roots === 6 && r.tree.cards === 5, `want 5 cards and the cap card, got ${r.tree.roots} feature element(s) and ${r.tree.cards} card(s)`);
+					t.expect(r.tree.messages.length === 1 && r.tree.messages[0] === CAP_MSG, `the cap card says ${JSON.stringify(r.tree.messages)}, want ${JSON.stringify(CAP_MSG)}`);
+					return '5 lookups, 5 cards + the depth-cap card';
+				});
+
+				const openCard = async () => {
+					await t.open('Lifecycle/gs56-refcard.md');
+					await t.ev(`(() => { ${P1} = ${LEAF}; return true; })()`);
+					await t.waitFor(`/Ref Strike/.test(${TEXT(P1)})`, 'pane 1: the card');
+					await K.settle();
+				};
+
+				// (b) one note live in two panes at once: pane 2 opens while pane 1 redraws, both reads held at the same time
+				await phase('(b) two live copies (split + redraw)', async () => {
+					await openCard();
+					const passes = [];
+					for (const lifo of [false, true]) {
+						await K.holdPath('Gs56Ref.md');
+						await splitP2('Lifecycle/gs56-refcard.md', true);
+						await t.waitFor('window.__gs56.held.length >= 1', 'pane 2: its read held');
+						await rerender(P1);
+						await t.waitFor(`window.__gs56.held.length >= 2 || /Reference loop|nesting too deep/.test(${TEXT(P1)})`, 'pane 1: its redraw held (or refused)');
+						const held = await K.held();
+						await K.holdPath(null);
+						await K.releaseAll(lifo);
+						await K.settle();
+						await t.waitFor(`${refusedOrCard(P1)} && ${refusedOrCard(P2)}`, 'both panes drawn');
+						t.expect(held === 2, `${lifo ? 'LIFO' : 'FIFO'}: ${held} read(s) held at once, want 2 (the other pane's was refused)`);
+						expectOneCardEach(lifo ? 'LIFO' : 'FIFO', await bothPanes());
+						passes.push(lifo ? 'LIFO' : 'FIFO');
+						await detachExtraLeaves();
+						await K.settle();
+					}
+					return `2 reads held at once, then one card per pane (released ${passes.join(' then ')})`;
+				});
+
+				// (c) two panes, the plugin disabled and enabled again: both panes redraw at once, both reads held
+				await phase('(c) plugin off/on with two panes', async () => {
+					await openCard();
+					await splitP2('Lifecycle/gs56-refcard.md', false);
+					await t.waitFor(`/Ref Strike/.test(${TEXT(P2)})`, 'pane 2: the card');
+					await K.settle();
+					const passes = [];
+					for (const lifo of [false, true]) {
+						await K.holdPath('Gs56Ref.md');
+						await t.ev(`(async () => { await app.plugins.disablePlugin('draw-steel-elements'); await app.plugins.enablePlugin('draw-steel-elements'); return true; })()`);
+						await t.waitFor(`window.__gs56.held.length >= 2 || ((/Reference loop|nesting too deep/.test(${TEXT(P1)}) || /Reference loop|nesting too deep/.test(${TEXT(P2)})) && window.__gs56.held.length >= 1)`, 'both reads held (or one held and one refused)');
+						const held = await K.held();
+						await K.holdPath(null);
+						await K.releaseAll(lifo);
+						await K.settle();
+						await t.waitFor(`${refusedOrCard(P1)} && ${refusedOrCard(P2)}`, 'both panes drawn after enable');
+						t.expect(held === 2, `${lifo ? 'LIFO' : 'FIFO'}: ${held} read(s) held at once, want 2`);
+						expectOneCardEach(lifo ? 'LIFO' : 'FIFO', await bothPanes());
+						passes.push(lifo ? 'LIFO' : 'FIFO');
+					}
+					return `2 reads held across the re-enable, then one card per pane (released ${passes.join(' then ')})`;
+				});
+
+				// (d) the same card redrawn twice while the first redraw's read is held
+				await phase('(d) redraw twice', async () => {
+					await openCard();
+					await K.holdPath('Gs56Ref.md');
+					await rerender(P1);
+					await t.waitFor('window.__gs56.held.length >= 1', 'the first redraw: its read held');
+					await rerender(P1);
+					await t.waitFor(`window.__gs56.held.length >= 2 || /Reference loop|nesting too deep/.test(${TEXT(P1)})`, 'the second redraw: its read held (or refused)');
+					const held = await K.held();
+					await K.holdPath(null);
+					await K.releaseAll(false);
+					await K.settle();
+					await t.waitFor(refusedOrCard(P1), 'the card drawn');
+					const s = await K.st(P1);
+					t.expect(held === 2, `${held} read(s) held at once, want 2`);
+					t.expect(s.roots === 1 && s.cards === 1 && !s.refused && /Ref Strike/.test(s.text), `the pane shows ${s.cards} card(s) in ${s.roots} feature element(s)${s.refused ? ' and a guard card' : ''}: ${JSON.stringify(s.text)}`);
+					return '2 reads held at once, then one card';
+				});
+			} finally {
+				await K.uninstall();
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect(problems.length === 0, `${problems.join(' | ')} -- passed: ${outcomes.join('; ')}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
+			return `${outcomes.join('; ')}; no page error`;
 		},
 	},
 ];
