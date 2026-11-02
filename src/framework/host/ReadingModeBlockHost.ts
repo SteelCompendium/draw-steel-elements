@@ -230,7 +230,18 @@ export function locateInSection(
 	ordinal: number,
 	near: number | null,
 ): { lineStart: number; lineEnd: number } | 'ambiguous' | null {
-	const lines = splitLines(content);
+	return locateInSectionLines(splitLines(content), section, language, body, ordinal, near);
+}
+
+/** `locateInSection` over a note already split into lines (`splitLines`), for a caller that asks about one note many times. */
+function locateInSectionLines(
+	lines: readonly string[],
+	section: { lineStart: number; lineEnd: number },
+	language: string,
+	body: string | null,
+	ordinal: number,
+	near: number | null,
+): { lineStart: number; lineEnd: number } | 'ambiguous' | null {
 	const windowLines = lines.slice(section.lineStart, section.lineEnd + 1);
 	// A section starts at a block boundary, so scanning the window on its own sees what a scan of the whole note would.
 	const fences = listFences(windowLines.join('\n'), language).map((f) => ({
@@ -257,6 +268,65 @@ interface CmEditorView {
 	dom: HTMLElement;
 	posAtDOM(node: Node, offset?: number): number;
 	state: { doc: { lineAt(pos: number): { number: number } } };
+}
+
+/**
+ * SC-455: the position of the `alias` block drawn in `el` among the `alias` blocks of the outermost quote/callout around it,
+ * in document order (the DOM's). -1 when `el` is in no quote/callout or is not found among them.
+ */
+export function quoteOrdinal(el: HTMLElement, alias: string): number {
+	let top: Element | null = null;
+	for (let n = el.parentElement; n; n = n.parentElement) {
+		if (n.matches('.callout, blockquote, .cm-embed-block')) top = n;
+	}
+	if (!top) return -1;
+	const blocks = Array.from(top.querySelectorAll('div, code')).filter(
+		(n) =>
+			((n.tagName === 'DIV' && n.classList.contains(`block-language-${alias}`)) ||
+				// a sibling Obsidian has not handed to its processor yet is still a bare <pre><code>
+				(n.tagName === 'CODE' && n.parentElement?.tagName === 'PRE' && n.classList.contains(`language-${alias}`))) &&
+			!n.parentElement?.closest('[data-dse-element]'),
+	);
+	return blocks.indexOf(el);
+}
+
+/**
+ * SC-481: the fence the element `el` is drawn on RIGHT NOW, read from the section Obsidian reports for it, or null when that
+ * cannot be told. Shared by both ways of finding an element Obsidian reused for another block (`reusedBlockBody` for a live
+ * view, `ReusedElementRemounter.remountVacated` for the element an adoption emptied), so they judge a section the same way.
+ *  - a plain section (its first line is the fence) must be a closed fence;
+ *  - a quote/callout window (SC-455) holds the fence somewhere inside it: found as the host finds its own block, by the
+ *    block's place among the `alias` blocks of the window (`quoteOrdinal`), or the window's only one. Several blocks and no
+ *    ordinal is never guessed (no `near`);
+ *  - `body` is the fence's own lines, quote prefix off, exactly what Obsidian hands a processor.
+ * `linesOf` lets a caller that asks many times about one note split its text once.
+ */
+export function fenceOnElement(
+	ctx: MarkdownPostProcessorContext,
+	el: HTMLElement,
+	alias: string,
+	linesOf: (text: string) => readonly string[] = splitLines,
+): { lineStart: number; lineEnd: number; body: string } | null {
+	if (ctx.sourcePath === '') return null;
+	let section: MarkdownSectionInformation | null;
+	try {
+		section = ctx.getSectionInfo(el);
+	} catch {
+		return null;
+	}
+	if (!section || section.lineEnd <= section.lineStart) return null;
+	const lines = linesOf(section.text);
+	const open = parseOpenFenceLine(lines[section.lineStart]);
+	let fence: { lineStart: number; lineEnd: number };
+	if (open && open.prefix === '') {
+		if (parseCloseFence(lines[section.lineEnd]) === null) return null;
+		fence = { lineStart: section.lineStart, lineEnd: section.lineEnd };
+	} else {
+		const found = locateInSectionLines(lines, section, alias, null, quoteOrdinal(el, alias), null);
+		if (found === null || found === 'ambiguous') return null;
+		fence = found;
+	}
+	return { ...fence, body: blockBodyLines(lines, fence.lineStart, fence.lineEnd).join('\n') };
 }
 
 export class ReadingModeBlockHost implements BlockHost {
@@ -457,21 +527,7 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * read (no callout, detached); the last good value is kept for a write after the section is gone.
 	 */
 	private domOrdinal(): number {
-		const el = this.containerEl;
-		let top: Element | null = null;
-		for (let n = el.parentElement; n; n = n.parentElement) {
-			if (n.matches('.callout, blockquote, .cm-embed-block')) top = n;
-		}
-		if (!top) return this.lastOrdinal;
-		const alias = this.alias;
-		const blocks = Array.from(top.querySelectorAll('div, code')).filter(
-			(n) =>
-				((n.tagName === 'DIV' && n.classList.contains(`block-language-${alias}`)) ||
-					// a sibling Obsidian has not handed to its processor yet is still a bare <pre><code>
-					(n.tagName === 'CODE' && n.parentElement?.tagName === 'PRE' && n.classList.contains(`language-${alias}`))) &&
-				!n.parentElement?.closest('[data-dse-element]'),
-		);
-		const own = blocks.indexOf(el);
+		const own = quoteOrdinal(this.containerEl, this.alias);
 		if (own >= 0) this.lastOrdinal = own;
 		return own >= 0 ? own : this.lastOrdinal;
 	}
@@ -518,30 +574,21 @@ export class ReadingModeBlockHost implements BlockHost {
 	}
 
 	/**
-	 * SC-481: the body of the plain fence this host's element sits on NOW, when that is not the block this host knows -
+	 * SC-481: the body of the fence this host's element sits on NOW, when that is not the block this host knows -
 	 * Obsidian moved the element to another block (an identical twin below the one this host wrote) without calling a
 	 * processor. null when the element is where its block is. Read-only: it does not refresh the durable position.
-	 *  - a section that is not a plain, closed fence (a quote/callout window, a list, an unterminated fence) is never
-	 *    judged;
+	 *  - the fence on the element is read by `fenceOnElement` (plain section or quote/callout window; an unterminated fence, or a
+	 *    window with several blocks and no ordinal, is never judged);
 	 *  - an element still on the line this host's last write landed at is the host's own block, whose rebuild has not
 	 *    arrived yet (`knownBody` is ahead of the section on purpose): not reused.
 	 * `linesOf` lets a caller that asks many hosts about one note split its text once.
 	 */
 	reusedBlockBody(linesOf: (text: string) => readonly string[] = splitLines): string | null {
-		if (this.ctx.sourcePath === '' || this.knownBody === null) return null;
-		let section: MarkdownSectionInformation | null;
-		try {
-			section = this.ctx.getSectionInfo(this.el);
-		} catch {
-			return null;
-		}
-		if (!section || section.lineEnd <= section.lineStart) return null;
-		const lines = linesOf(section.text);
-		const open = parseOpenFenceLine(lines[section.lineStart]);
-		if (!open || open.prefix !== '' || parseCloseFence(lines[section.lineEnd]) === null) return null;
-		if (this.lastWriteLine !== null && section.lineStart === this.lastWriteLine) return null;
-		const body = blockBodyLines(lines, section.lineStart, section.lineEnd).join('\n');
-		return normalizeBody(body) === normalizeBody(this.knownBody) ? null : body;
+		if (this.knownBody === null) return null;
+		const fence = fenceOnElement(this.ctx, this.el, this.alias, linesOf);
+		if (!fence) return null;
+		if (this.lastWriteLine !== null && fence.lineStart === this.lastWriteLine) return null;
+		return normalizeBody(fence.body) === normalizeBody(this.knownBody) ? null : fence.body;
 	}
 
 	get canPersist(): boolean {

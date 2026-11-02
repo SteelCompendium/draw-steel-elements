@@ -14,18 +14,17 @@
 // views already drawn for the same note (path) and redraw any element that now sits on a block other
 // than its view's - a fresh view built from the block the element is on.
 //   - `remountVacated`: the adopted writer's old element, vacated by the adoption, when Obsidian still uses it.
-//   - `reconcile`: any other live view whose element now resolves to a plain fence with a body other than the one the
+//   - `reconcile`: any other live view whose element now resolves to a fence (a plain section, or inside a quote/callout window) with a body other than the one the
 //     view knows (the claim missed - adoption off, the block edit form's Save, Live Preview - so the writer is still
 //     in the reused element).
 // Both build a normal view, bound to the twin's own body and lines, so the twin writes through its own section.
 import type { MarkdownPostProcessorContext, Plugin } from 'obsidian';
 import type { ElementRegistry } from '../registry';
 import type { ElementPipeline } from '../pipeline';
-import { ReadingModeBlockHost } from './ReadingModeBlockHost';
+import { ReadingModeBlockHost, fenceOnElement } from './ReadingModeBlockHost';
 import type { PreviewScrollPin } from './previewScrollPin';
 import type { ViewRegistry } from './viewRegistry';
 import { splitLines } from './lineEnding';
-import { blockBodyLines } from './fenceLine';
 
 /** What the remounter needs of the framework (the same narrow shape `registerFrameworkElements` takes). */
 interface FrameworkParts {
@@ -72,18 +71,13 @@ export class ReusedElementRemounter {
 	 * block (it still resolves to a section), that block has no card: draw it.
 	 */
 	remountVacated(prevEl: HTMLElement, prevCtx: MarkdownPostProcessorContext, alias: string): Promise<void> {
-		if (prevCtx.sourcePath === '') return Promise.resolve();
-		let section: ReturnType<MarkdownPostProcessorContext['getSectionInfo']>;
-		try {
-			section = prevCtx.getSectionInfo(prevEl);
-		} catch {
-			return Promise.resolve();
-		}
-		if (!section || section.lineEnd <= section.lineStart) return Promise.resolve();
-		const lines = this.linesOf(section.text);
-		const body = blockBodyLines(lines, section.lineStart, section.lineEnd).join('\n');
+		// (Reading view only: Live Preview never adopts. Its getSectionInfo still answers for a DESTROYED widget, so this
+		// would draw into one if adoption were ever added there.)
+		// The same section test `reconcile` uses: a quote/callout window is read for the fence inside it, never parsed whole.
+		const fence = fenceOnElement(prevCtx, prevEl, alias, this.linesOf);
+		if (!fence) return Promise.resolve();
 		prevEl.replaceChildren();
-		return this.mount(prevEl, prevCtx, alias, body);
+		return this.mount(prevEl, prevCtx, alias, fence.body);
 	}
 
 	/**
