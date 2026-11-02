@@ -122,6 +122,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { displayRange, startOwnedXvfb } from '../scripts/xvfb-owned.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.dirname(dir);
@@ -431,22 +432,19 @@ function resolveXvfb() {
 async function startXvfb() {
 	const bin = resolveXvfb();
 	if (!bin) envFail('Xvfb not found (set XVFB_BIN or run `devbox install` in draw-steel-elements)');
-	let num = -1;
-	for (let n = 160; n < 200; n++) {
-		if (!fs.existsSync(`/tmp/.X11-unix/X${n}`) && !fs.existsSync(`/tmp/.X${n}-lock`)) {
-			num = n;
-			break;
-		}
-	}
-	if (num < 0) envFail('no free X display in :160–:199');
-	const child = spawn(bin, [`:${num}`, '-screen', '0', '1600x1200x24', '-nolisten', 'tcp'], { stdio: 'ignore' });
-	child.on('error', () => {});
-	liveXvfb = child; // tracked now, not only once the display is confirmed (Important-2)
-	for (let i = 0; i < 40; i++) {
-		if (fs.existsSync(`/tmp/.X11-unix/X${num}`)) return { child, display: `:${num}` };
-		await sleep(250);
-	}
-	envFail(`Xvfb did not start on :${num}`);
+	// SC-546: the display is ours only when OUR Xvfb reports it is listening (-displayfd), tried over the
+	// whole range; a lost race for a number moves on to the next one. Why: scripts/xvfb-owned.mjs.
+	const got = await startOwnedXvfb({
+		bin,
+		candidates: displayRange(160, 199),
+		args: ['-screen', '0', '1600x1200x24', '-nolisten', 'tcp'],
+		onSpawn: (child) => {
+			liveXvfb = child; // tracked now, not only once the display is confirmed (Important-2)
+		},
+	});
+	if (!got) envFail('no Xvfb of our own could be started on a free display in :160–:199');
+	liveXvfb = got.child;
+	return { child: got.child, display: got.display };
 }
 class Cdp {
 	constructor(ws) {
