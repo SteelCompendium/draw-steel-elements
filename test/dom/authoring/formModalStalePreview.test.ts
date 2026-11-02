@@ -63,6 +63,14 @@ async function settle(): Promise<void> {
 	for (let i = 0; i < 5; i++) await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
+// SC-525 r3/r5 (INFO-3): the depth guard's map is module-level and the preview's blockKey is the same in every test, so a
+// test that fails with a lookup still held would leave a live entry behind and turn every later test red. Every hold
+// (holdLookups, and the ds-scc entity read below) registers its release here and afterEach lets all of it go, pass or fail.
+const releasers: Array<() => Promise<void>> = [];
+afterEach(async () => {
+	for (const release of releasers.splice(0)) await release();
+});
+
 /** Hold every `@path` lookup the form's preview makes until the test lets it go. */
 function holdLookups(refs: { resolve: (raw: string, sourcePath: string) => Promise<any> }) {
 	const real = refs.resolve.bind(refs);
@@ -71,10 +79,18 @@ function holdLookups(refs: { resolve: (raw: string, sourcePath: string) => Promi
 	refs.resolve = (raw: string, sourcePath: string) => {
 		if (!holding) return real(raw, sourcePath);
 		return new Promise((resolve) => {
-			held.push({ raw, release: () => resolve(real(raw, sourcePath)) });
+			let released = false; // afterEach lets every hold go again, so a release must be safe to repeat
+			held.push({
+				raw,
+				release: () => {
+					if (released) return;
+					released = true;
+					resolve(real(raw, sourcePath));
+				},
+			});
 		});
 	};
-	return {
+	const hold = {
 		held,
 		/** Let one held lookup go, then give its mount time to finish. */
 		async release(index: number): Promise<void> {
@@ -88,6 +104,11 @@ function holdLookups(refs: { resolve: (raw: string, sourcePath: string) => Promi
 			holding = false;
 		},
 	};
+	releasers.push(async () => {
+		hold.stopHolding();
+		await hold.releaseAll();
+	});
+	return hold;
 }
 
 async function setup(c: { def: ElementDefinition<any>; alias: string }, noteText: string) {
@@ -354,14 +375,6 @@ function expectNoNestingError(preview: HTMLElement): void {
 	expect(preview.querySelector('.dse-error-card')).toBeNull();
 }
 
-// SC-525 r3 (INFO-3): the depth guard's map is module-level and the preview's blockKey is the same in every test, so a
-// test that fails with a lookup still held would leave a live entry behind and turn every later test red. Each test
-// registers what it holds here and afterEach lets all of it go, pass or fail.
-const releasers: Array<() => Promise<void>> = [];
-afterEach(async () => {
-	for (const release of releasers.splice(0)) await release();
-});
-
 describe.each(CASES)('SC-525: retyping the same @Ref.md in the $name edit form while its lookup is pending', (c) => {
 	const withRef = async () => {
 		const s = await setup(c, noteWith(c.alias, c.source));
@@ -369,10 +382,6 @@ describe.each(CASES)('SC-525: retyping the same @Ref.md in the $name edit form w
 		const { el } = await s.render(c.source);
 		const form = openForm(el);
 		const hold = holdLookups(s.h.deps.refs as never);
-		releasers.push(async () => {
-			hold.stopHolding();
-			await hold.releaseAll();
-		});
 		return { ...s, form, hold };
 	};
 

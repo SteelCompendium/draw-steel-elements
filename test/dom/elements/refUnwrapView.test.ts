@@ -826,6 +826,125 @@ describe('RefUnwrapView — in-flight depth guard (SC-525)', () => {
 		});
 	});
 
+	// SC-525 r5 (r4 LOW-2) -- one test per await window of resolveAndMount / resolveLegacyRef, so that dropping any ONE
+	// `resolveGen` check is caught on its own (the tests above hold only `getEntity` and `refs.resolve`, and a later check
+	// still catches those windows). The `entity.model()` window and the `legacyRefRawText`-entry check are not pinned:
+	// the first only guards a stale "not renderable" card, the second only saves one file read.
+	describe('each await window of a resolution is guarded on its own', () => {
+		const windowTick = async () => {
+			for (let i = 0; i < 8; i++) await new Promise<void>((resolve) => setTimeout(resolve, 0));
+		};
+		function capture(def0: ElementDefinition<any>) {
+			const captured: ElementView<any>[] = [];
+			const def: ElementDefinition<any> = {
+				...def0,
+				createView: (cx: any) => {
+					const v = def0.createView(cx) as ElementView<any>;
+					captured.push(v);
+					return v;
+				},
+			};
+			return { views: captured, def };
+		}
+		function windowHost() {
+			const h = makeHost();
+			const key = `Note.md::ds-test-base::sc525-window-${++setupSeq}`;
+			h.blockKey = () => key;
+			return h;
+		}
+		/** SCC ladder with ONE of getEntity (returning null) / body held on its first call; the view is updated meanwhile. */
+		async function sccWindow(which: 'getEntity-null' | 'body') {
+			const { views: captured, def } = capture(withReference(baseDef(), { sccType: /statblock$/ }));
+			const file = fakeTFile('DS Compendium/monster/goblin/statblock/goblin-stinker.md');
+			const held: Array<() => void> = [];
+			const calls = { getEntity: 0, body: 0 };
+			const entity: CompendiumEntity = {
+				scc: CODE,
+				type: 'monster.goblin.statblock',
+				name: 'Goblin Stinker',
+				source: 'mcdm.monsters.v1',
+				file,
+				frontmatter: { type: 'monster.goblin.statblock' },
+				body: () => (which === 'body' && calls.body++ === 0 ? new Promise((r) => held.push(() => r('body text'))) : Promise.resolve('body text')),
+				model: () => Promise.resolve({ text: 'Goblin' }),
+			};
+			const deps = makeDeps({
+				sccAnchors: fakeSccAnchors(() => ({ kind: 'vault', file, linkpath: file.path })),
+				compendium: fakeCompendium({
+					getEntity: () =>
+						which === 'getEntity-null' && calls.getEntity++ === 0 ? new Promise((r) => held.push(() => r(null))) : Promise.resolve(entity),
+				}),
+			});
+			const h = windowHost();
+			const first = new ElementPipeline(deps).run(def, CODE, h);
+			await windowTick();
+			expect(held).toHaveLength(1);
+			await captured[0].update(captured[0].currentModel());
+			held[0]();
+			await first;
+			await windowTick();
+			const root = h.containerEl.firstElementChild as HTMLElement;
+			return { cards: baseViews(root), text: root.textContent ?? '' };
+		}
+		/** Legacy ladder with the first lookup rejecting, or the referenced file's block-text read held. */
+		function legacyWindow(opts: { holdRead?: boolean; reject?: boolean }) {
+			const { views: captured, def } = capture(withReference(baseDef(), { sccType: /statblock$/ }));
+			const deps = makeDeps();
+			const file = fakeTFile('A.md');
+			const held: Array<{ ok: () => void; fail: () => void }> = [];
+			let resolves = 0;
+			let reads = 0;
+			deps.refs.register({
+				kind: 'at-path',
+				canResolve: (raw) => raw === '@A',
+				resolve: () =>
+					opts.reject && resolves++ === 0
+						? new Promise((_r, rej) => held.push({ ok: () => undefined, fail: () => rej(new Error('stale lookup rejected')) }))
+						: Promise.resolve({ data: { text: 'A' }, file } as any),
+			});
+			(deps.app as any).vault.read = () =>
+				opts.holdRead && reads++ === 0
+					? new Promise((r) => held.push({ ok: () => r('```ds-test-base\ntext: A\n```'), fail: () => undefined }))
+					: Promise.resolve('```ds-test-base\ntext: A\n```');
+			return { views: captured, def, deps, h: windowHost(), held };
+		}
+
+		test('SCC: the stale entity read returns null after the view was updated: one card, no stale "not renderable" error', async () => {
+			const r = await sccWindow('getEntity-null');
+			expect(r.cards).toEqual(['Goblin']);
+			expect(r.text).not.toMatch(/not renderable/);
+		});
+
+		test('SCC: the view is updated while entity.body() is being read: one card', async () => {
+			expect((await sccWindow('body')).cards).toEqual(['Goblin']);
+		});
+
+		test('legacy: a stale lookup that REJECTS after the view was updated to an inline body: only the inline card, no error', async () => {
+			const w = legacyWindow({ reject: true });
+			const first = new ElementPipeline(w.deps).run(w.def, '@A', w.h);
+			await windowTick();
+			await w.views[0].update({ kind: 'inline', model: { text: 'Inline Card' } });
+			w.held[0].fail();
+			await first;
+			await windowTick();
+			const root = w.h.containerEl.firstElementChild as HTMLElement;
+			expect(baseViews(root)).toEqual(['Inline Card']);
+			expect(root.textContent).not.toMatch(/stale lookup rejected/);
+		});
+
+		test('legacy: the view is updated while the referenced file\'s block text is being read: one card', async () => {
+			const w = legacyWindow({ holdRead: true });
+			const first = new ElementPipeline(w.deps).run(w.def, '@A', w.h);
+			await windowTick();
+			expect(w.held).toHaveLength(1);
+			await w.views[0].update(w.views[0].currentModel());
+			w.held[0].ok();
+			await first;
+			await windowTick();
+			expect(baseViews(w.h.containerEl.firstElementChild as HTMLElement)).toEqual(['A']);
+		});
+	});
+
 	test('a self-reference (A -> A) still stops when its view was updated while its lookup ran', async () => {
 		const s = setup();
 		s.table['@A'] = { text: 'A', next: '@A' };
