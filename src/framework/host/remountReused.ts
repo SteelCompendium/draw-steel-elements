@@ -22,6 +22,7 @@ import type { MarkdownPostProcessorContext, Plugin } from 'obsidian';
 import type { ElementRegistry } from '../registry';
 import type { ElementPipeline } from '../pipeline';
 import { ReadingModeBlockHost, fenceOnElement } from './ReadingModeBlockHost';
+import type { CmEditorView, LivePreviewScope } from './ReadingModeBlockHost';
 import type { PreviewScrollPin } from './previewScrollPin';
 import type { ViewRegistry } from './viewRegistry';
 import { splitLines } from './lineEnding';
@@ -86,13 +87,31 @@ export class ReusedElementRemounter {
 	 * Scoped by path, not by docId: Live Preview gives every code-block widget its own random docId, so the writer's widget
 	 * never shares one with the new widget whose processor call this is. Each view is judged against its OWN context, so a
 	 * view in another pane or embed of the same note (its renderer may not have re-parsed yet) is judged by its own state.
+	 *
+	 * SC-537: `within` is the editor view of an editor update (livePreviewReconcile.ts). Then only the views drawn inside that
+	 * editor are judged, and a Live Preview callout widget (no section from Obsidian, no processor call when it is handed to a twin)
+	 * by the section that editor reports for it, read from the update's own document. Reading views and other panes are still
+	 * judged only at processor time.
 	 */
-	reconcile(sourcePath: string): Promise<void> {
+	reconcile(sourcePath: string, within?: CmEditorView): Promise<void> {
 		const redraws: Promise<void>[] = [];
+		let scope: LivePreviewScope | undefined;
+		if (within) {
+			// The note text is read from the update's document once, and only if a view in this editor needs it.
+			const view = within;
+			let text: string | null = null;
+			scope = {
+				view,
+				get text(): string {
+					return (text ??= view.state.doc.toString());
+				},
+			};
+		}
 		for (const entry of this.registry.liveEntries()) {
 			if (entry.released || entry.claiming) continue;
 			if (entry.host.sourcePath !== sourcePath) continue;
-			const body = entry.host.reusedBlockBody(this.linesOf);
+			if (within && !within.dom.contains(entry.root)) continue;
+			const body = entry.host.reusedBlockBody(this.linesOf, scope);
 			if (body === null) continue;
 			const { el, ctx, alias } = entry.host.remountTarget();
 			// Unloads the writer's view (its pending edit flushes first, through the body lookup that finds its own block).

@@ -542,7 +542,7 @@ describe('SC-478: wiring', () => {
 		try {
 			const registry: ElementRegistry = { register: () => undefined as never, get: () => undefined, all: () => [] };
 			registerFrameworkElements(plugin as any, { registry, pipeline: {} as ElementPipeline });
-			expect(ext).toHaveBeenCalledTimes(1);
+			expect(ext).toHaveBeenCalledTimes(2); // the scroll hold's, and SC-537's update listener (livePreviewReconcile.ts)
 			const calls = on.mock.calls.filter(([name]) => name === 'modify');
 			for (const call of calls) (call[1] as (file: { path: string }) => void)({ path: 'Note.md' });
 			// SC-522: with the link resolver, so Live Preview hosts of the note's embeds are held too

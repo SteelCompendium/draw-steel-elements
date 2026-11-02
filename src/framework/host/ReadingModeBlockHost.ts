@@ -264,10 +264,33 @@ function locateInSectionLines(
 }
 
 /** CodeMirror's EditorView, as much of it as the Live Preview callout lookup touches. */
-interface CmEditorView {
+export interface CmEditorView {
 	dom: HTMLElement;
 	posAtDOM(node: Node, offset?: number): number;
-	state: { doc: { lineAt(pos: number): { number: number } } };
+	state: { doc: { lineAt(pos: number): { number: number }; toString(): string } };
+}
+
+/**
+ * SC-537: an editor update the Live Preview pass reads the note from: the view that holds the widgets, and the note text of
+ * ITS document (not `editor.getValue()` per host). `text` is read lazily - it is only needed once a callout widget is judged.
+ */
+export interface LivePreviewScope {
+	readonly view: CmEditorView;
+	readonly text: string;
+}
+
+/**
+ * SC-455 / SC-537: the section of the Live Preview callout `widget` as `cm` draws it now: the callout's lines (a run of quote
+ * lines), starting at the document line CodeMirror reports for the widget. Throws when the widget is not in this editor's
+ * document (callers treat that as "no section").
+ */
+function calloutWindow(cm: CmEditorView, widget: Element, getText: () => string, linesOf: (text: string) => readonly string[]): MarkdownSectionInformation {
+	const lineStart = cm.state.doc.lineAt(cm.posAtDOM(widget)).number - 1;
+	const text = getText();
+	const lines = linesOf(text);
+	let lineEnd = lineStart;
+	while (lineEnd + 1 < lines.length && /^[ ]{0,3}>/.test(lines[lineEnd + 1])) lineEnd++;
+	return { text, lineStart, lineEnd };
 }
 
 /**
@@ -299,20 +322,27 @@ export function quoteOrdinal(el: HTMLElement, alias: string): number {
  *    block's place among the `alias` blocks of the window (`quoteOrdinal`), or the window's only one. Several blocks and no
  *    ordinal is never guessed (no `near`);
  *  - `body` is the fence's own lines, quote prefix off, exactly what Obsidian hands a processor.
- * `linesOf` lets a caller that asks many times about one note split its text once.
+ * `linesOf` lets a caller that asks many times about one note split its text once. `sectionOf` is the section to judge when the
+ * caller knows it better than the context does (SC-537: the editor's section for a Live Preview callout widget, whose
+ * `getSectionInfo` is null); left out, the context is asked.
  */
 export function fenceOnElement(
 	ctx: MarkdownPostProcessorContext,
 	el: HTMLElement,
 	alias: string,
 	linesOf: (text: string) => readonly string[] = splitLines,
+	sectionOf?: MarkdownSectionInformation | null,
 ): { lineStart: number; lineEnd: number; body: string } | null {
 	if (ctx.sourcePath === '') return null;
 	let section: MarkdownSectionInformation | null;
-	try {
-		section = ctx.getSectionInfo(el);
-	} catch {
-		return null;
+	if (sectionOf !== undefined) {
+		section = sectionOf;
+	} else {
+		try {
+			section = ctx.getSectionInfo(el);
+		} catch {
+			return null;
+		}
 	}
 	if (!section || section.lineEnd <= section.lineStart) return null;
 	const lines = linesOf(section.text);
@@ -499,21 +529,25 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * the section is the callout's lines, starting at the document line `cm.posAtDOM(widget)` reports.
 	 * Null while the widget is not attached to an editor yet (the host's construction) or is gone.
 	 */
-	private livePreviewCalloutSection(): MarkdownSectionInformation | null {
+	private livePreviewCalloutSection(scope?: LivePreviewScope, linesOf: (text: string) => readonly string[] = splitLines): MarkdownSectionInformation | null {
 		const widget = this.livePreviewCalloutWidget();
 		if (!widget) return null;
+		if (scope) {
+			// SC-537: the editor update names its own view and document; ask that one only.
+			if (!scope.view.dom.contains(widget)) return null;
+			try {
+				return calloutWindow(scope.view, widget, () => scope.text, linesOf);
+			} catch {
+				return null;
+			}
+		}
 		for (const leaf of this.plugin.app.workspace.getLeavesOfType('markdown')) {
 			const view = leaf.view as MarkdownView;
 			if (view.file?.path !== this.ctx.sourcePath) continue;
 			const cm = (view.editor as unknown as { cm?: CmEditorView } | undefined)?.cm;
 			if (!cm?.dom.contains(widget)) continue;
 			try {
-				const lineStart = cm.state.doc.lineAt(cm.posAtDOM(widget)).number - 1;
-				const text = view.editor.getValue();
-				const lines = splitLines(text);
-				let lineEnd = lineStart;
-				while (lineEnd + 1 < lines.length && /^[ ]{0,3}>/.test(lines[lineEnd + 1])) lineEnd++;
-				return { text, lineStart, lineEnd };
+				return calloutWindow(cm, widget, () => view.editor.getValue(), linesOf);
 			} catch {
 				continue; // the widget is not in this editor's viewport / document any more
 			}
@@ -581,11 +615,25 @@ export class ReadingModeBlockHost implements BlockHost {
 	 *    window with several blocks and no ordinal, is never judged);
 	 *  - an element still on the line this host's last write landed at is the host's own block, whose rebuild has not
 	 *    arrived yet (`knownBody` is ahead of the section on purpose): not reused.
-	 * `linesOf` lets a caller that asks many hosts about one note split its text once.
+	 * `linesOf` lets a caller that asks many hosts about one note split its text once. `scope` (SC-537) is the editor update that
+	 * asks: a callout widget in Live Preview is then judged by the section that editor reports for it.
 	 */
-	reusedBlockBody(linesOf: (text: string) => readonly string[] = splitLines): string | null {
+	reusedBlockBody(linesOf: (text: string) => readonly string[] = splitLines, scope?: LivePreviewScope): string | null {
 		if (this.knownBody === null) return null;
-		const fence = fenceOnElement(this.ctx, this.el, this.alias, linesOf);
+		let section: MarkdownSectionInformation | null | undefined;
+		if (scope) {
+			// SC-537: the editor-driven pass (livePreviewReconcile.ts) judges Live Preview CALLOUT widgets only: they get no section from
+			// Obsidian (`getSectionInfo` is null) and no processor call when their widget is handed to a twin, so the editor is asked.
+			if (!this.livePreviewCalloutWidget()) return null;
+			try {
+				section = this.ctx.getSectionInfo(this.el);
+			} catch {
+				return null;
+			}
+			section ??= this.livePreviewCalloutSection(scope, linesOf);
+			if (!section) return null;
+		}
+		const fence = fenceOnElement(this.ctx, this.el, this.alias, linesOf, section);
 		if (!fence) return null;
 		if (this.lastWriteLine !== null && fence.lineStart === this.lastWriteLine) return null;
 		return normalizeBody(fence.body) === normalizeBody(this.knownBody) ? null : fence.body;

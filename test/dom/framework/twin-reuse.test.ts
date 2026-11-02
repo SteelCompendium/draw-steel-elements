@@ -632,7 +632,7 @@ describe('SC-537: twin callouts in Live Preview (the editor-driven pass)', () =>
 		expect(shown(upper.els[0])).toBe('Twin=6');
 	});
 
-	test('an update that changed no text, one from another editor, or one that is not for a note: nothing is redrawn', async () => {
+	test('an update that changed no text, or one from another editor: nothing is redrawn', async () => {
 		const t = await lp(noteOf(quoted('callout', 'Twin', 5), quoted('callout', 'Twin', 5)));
 		const upper = await t.draw(0);
 		const lower = await t.draw(1);

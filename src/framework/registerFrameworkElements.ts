@@ -26,6 +26,7 @@ import { LivePreviewScrollHold } from './host/livePreviewScrollHold';
 import { ViewRegistry } from './host/viewRegistry';
 import { adoptView } from './host/adoptView';
 import { ReusedElementRemounter } from './host/remountReused';
+import { livePreviewReconcileExtension } from './host/livePreviewReconcile';
 
 /**
  * The subset of `ElementFrameworkV2` (main.ts) this wiring loop needs. A narrow structural
@@ -71,6 +72,8 @@ export function registerFrameworkElements(
 	const registry = plugin.addChild(new ViewRegistry({ enabled: options.viewAdoption ?? false }));
 	// SC-481: redraws an element Obsidian reused for the next identical block (see remountReused.ts).
 	const remounter = new ReusedElementRemounter(plugin, framework, scrollPin, registry);
+	// SC-537: and, for twin callouts in Live Preview (no processor call there), from the editor's own update (livePreviewReconcile.ts).
+	plugin.registerEditorExtension(livePreviewReconcileExtension(remounter));
 
 	for (const def of framework.registry.all()) {
 		for (const alias of def.aliases) {
