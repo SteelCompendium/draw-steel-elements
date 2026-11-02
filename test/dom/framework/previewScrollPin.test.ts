@@ -1349,6 +1349,16 @@ describe('SC-472: a Reading pin is released when the redraw is over', () => {
 		expect(isPinned(bare.scroller)).toBe(false);
 	});
 
+	test('evidence (a) skips an embed that left the document: its collapsed inner sizer is not a redraw', () => {
+		const s = embedScene();
+		s.pin.releaseAll();
+		s.pin.pin(s.dse.holder);
+		const held = (s.pin as any).pins.get(s.scroller);
+		s.dse.innerSizer.style.minHeight = '110px';
+		s.dse.embed.remove();
+		expect((s.pin as any).redrawStarted(s.scroller, held, [])).toBe(false);
+	});
+
 	test('re-pin re-arm: a redraw that began before the latest write does not count; the next redraw releases the re-pinned view', async () => {
 		const s = scene();
 		const fresh = await redrawStart(s); // write 1's redraw has begun: root replaced, sizer collapsed, view not mounted yet
