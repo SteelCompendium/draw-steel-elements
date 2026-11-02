@@ -3250,8 +3250,9 @@ const SCENARIOS = [
 			const problems = [];
 			/** Keyboard open, change one thing, keyboard Save; then wait for the card to show it and for the rebuilds to settle. */
 			// `mode`: 'fresh' (default) the card gets a new root and a new pencil; 'sidebar' the panel redraws the card into the same root (only the chrome
-			// panel and its pencil are new); 'twin' Obsidian keeps the OLD section of the edited block and moves it to its identical twin's place, so the old
-			// root and pencil stay in the document (inside the twin) and the new ones are the upper card's. `wholeNote` null: the caller checks the note.
+			// panel and its pencil are new); 'twin' Obsidian keeps the OLD section of the edited block and moves it to its identical twin's place without a
+			// processor call (SC-481 redraws that element from the twin's own block, so the old root and pencil are gone from the document there too) and
+			// the new ones are the upper card's. The mode only skips the old-pencil check. `wholeNote` null: the caller checks the note.
 			const keyboardSave = async (label, rootExpr, e, newText, rel, want, wholeNote = FIXTURES[rel].replace(want[0], want[1]), mode = 'fresh', scrollEl = null) => {
 				await tagOld(rootExpr);
 				const how = await reachPencil(label, rootExpr);
