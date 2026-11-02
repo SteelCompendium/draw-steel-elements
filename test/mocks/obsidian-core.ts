@@ -328,6 +328,19 @@ export class FakeWorkspace {
 		return null;
 	}
 
+	/** SC-545: real `Workspace.onLayoutReady` runs the callback at once when the layout is ready (a plugin enabled while the app runs), else at `layout-ready`. */
+	layoutReady = true;
+	private readonly layoutReadyCallbacks: Array<() => void> = [];
+	onLayoutReady(callback: () => void): void {
+		if (this.layoutReady) callback();
+		else this.layoutReadyCallbacks.push(callback);
+	}
+	/** Test hook: the app finished laying out. */
+	__fireLayoutReady(): void {
+		this.layoutReady = true;
+		for (const cb of this.layoutReadyCallbacks.splice(0)) cb();
+	}
+
 	/** D8 Task 1: test hook to force null (simulating no right sidebar available). */
 	__rightLeafUnavailable = false;
 

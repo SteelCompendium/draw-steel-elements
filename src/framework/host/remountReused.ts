@@ -54,7 +54,7 @@ export class ReusedElementRemounter {
 	};
 
 	/** Draw a fresh view for `body` into `el`, which must be empty. Never rejects: a failed draw is logged. */
-	private async mount(el: HTMLElement, ctx: MarkdownPostProcessorContext, alias: string, body: string): Promise<void> {
+	async mount(el: HTMLElement, ctx: MarkdownPostProcessorContext, alias: string, body: string): Promise<void> {
 		const def = this.framework.registry.get(alias);
 		if (!def) return;
 		try {

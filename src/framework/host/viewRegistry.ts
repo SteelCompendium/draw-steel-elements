@@ -15,6 +15,7 @@
 import { Component } from 'obsidian';
 import type { ReadingModeBlockHost } from './ReadingModeBlockHost';
 import { normalizeBody } from './ReadingModeBlockHost';
+import { stashForReplug } from './replugRemount';
 
 /** A write's claim ticket is valid this long (spec §6.2; the rebuild arrives ~5 ms after modify). */
 export const CLAIM_WINDOW_MS = 3000;
@@ -245,7 +246,10 @@ export class ViewRegistry extends Component {
 	}
 
 	onunload(): void {
-		// The children (views) were already unloaded, LIFO, before this runs.
+		// The children (views) were already unloaded, LIFO, before this runs: each flushed its pending write first.
+		// SC-545: leave the cards Obsidian will not redraw (Live Preview callout and embed widgets) for the next instance, while the
+		// entries still know their elements. Before the entries are cleared.
+		stashForReplug(this.entries);
 		for (const entry of this.entries) {
 			entry.released = true;
 			entry.releasedBy = 'registry-unload';
