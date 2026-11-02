@@ -2322,12 +2322,14 @@ function tagButtons(opts) {
 			// SC-530 — a CHECKED radio (`role="radio" aria-checked="true"`: the negotiation Power Roll tier
 			// row, the kit track's current seal) is painted by its own `[aria-checked='true']` /
 			// `[data-current]` rules, so it is its own kind. Only `true` is keyed, like `|selected`: no rule
-			// tells `false` from an absent attribute on a swept button, so the idle kinds keep their names.
+			// tells `false` from an absent attribute on a swept button (the one presence rule,
+			// `.dse-pr__row[aria-checked]:focus-visible`, matches every swept `button.dse-pr__row`, because
+			// each carries the attribute), so the idle kinds keep their names.
 			(n.getAttribute('aria-checked') === 'true' ? '|checked' : '') +
 			(n.disabled ? '|disabled' : '') +
 			// SC-530 — a seal on a VERTICAL kit track is a different box from a horizontal one with the same
 			// classes: `.dse-track--vertical .dse-track__slot` (and its `[data-current]` / steel forms) sets its own
-			// width, padding, border, colour, background and ring, none of which a horizontal seal has. Without
+			// width, padding, border, colour, background and ring, which a horizontal seal sets differently. Without
 			// this suffix Interest's seals share `negotiation|dse-track__slot[|checked]` with Patience's (first in
 			// DOM), so a host-only leak on the vertical rail was never compared. Appended LAST and only inside a
 			// vertical track, so no other key changes.

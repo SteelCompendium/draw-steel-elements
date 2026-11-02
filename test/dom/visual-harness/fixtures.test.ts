@@ -773,6 +773,44 @@ describe('state-only kind sections for the button host-leak sweep (SC-527)', () 
 			for (const k of vertical) expect(k).toMatch(/^negotiation\|dse-track__slot(\|checked)?\|in:track--vertical$/);
 		});
 
+		test('every tagged node: |checked iff aria-checked="true", |in:track--vertical iff inside a vertical track; the shared seal kind is a horizontal one', async () => {
+			const tail = await mountNegotiation();
+			tail[1].querySelectorAll<HTMLElement>('.dse-pr__row')[0].click();
+			await new Promise((r) => setTimeout(r, 0));
+			tagButtons();
+			const nodes = Array.from(mount.querySelectorAll<HTMLElement>('[data-dse-hostleak]'));
+			expect(nodes.length).toBeGreaterThan(0);
+			for (const node of nodes) {
+				const key = node.getAttribute('data-dse-hostleak')!;
+				expect({ key, checked: key.includes('|checked') }).toEqual({ key, checked: node.getAttribute('aria-checked') === 'true' });
+				expect({ key, vertical: key.endsWith('|in:track--vertical') }).toEqual({ key, vertical: !!node.closest('.dse-track--vertical') });
+			}
+			// The kind every idle seal shares is sampled from Patience's horizontal rail (first in DOM), never the vertical one.
+			const idleSeal = mount.querySelector<HTMLElement>('[data-dse-hostleak="negotiation|dse-track__slot"]');
+			expect(idleSeal).not.toBeNull();
+			expect(idleSeal!.closest('.dse-track--horizontal')).not.toBeNull();
+		});
+
+		test('assertSc530Tagged names every expected kind that is missing and nothing when all are tagged', () => {
+			const assertSc530Tagged = new Function('SC530_EXPECT', `${shootMjs.match(/\nfunction assertSc530Tagged\(keys, bg, problems\) \{[\s\S]*?\n\}\n/)![0]}; return assertSc530Tagged;`)(SC530_EXPECT) as (
+				keys: string[],
+				bg: string,
+				problems: string[],
+			) => void;
+			const none: string[] = [];
+			assertSc530Tagged([], 'dark', none);
+			expect(none).toHaveLength(4);
+			for (const key of SC530_EXPECT) expect(none.some((p) => p.startsWith('dark: ') && p.includes(`\`${key}\``))).toBe(true);
+			const all: string[] = [];
+			assertSc530Tagged(SC530_EXPECT, 'dark', all);
+			expect(all).toEqual([]);
+		});
+
+		test('SC-527\'s first negotiation section asserts the picked tier row is checked (the reach that makes the |checked tier kind)', () => {
+			expect(SC527_STATES[1].what).toMatch(/^negotiation/);
+			expect(SC527_STATES[1].reached).toContain('button.dse-pr__row[role="radio"][aria-checked="true"]');
+		});
+
 		test('assertSc530Tagged has one call site, after assertSc527Tagged in assertBtnHostLeak', () => {
 			expect(shootMjs.match(/assertSc530Tagged\(/g)).toHaveLength(2); // the declaration + the one call
 			const sweep = shootMjs.slice(shootMjs.indexOf('async function assertBtnHostLeak('));
