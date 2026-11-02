@@ -552,6 +552,84 @@ describe('SC-470: PreviewScrollPin.pinReadingViewsOf', () => {
 		}
 	});
 
+	// SC-472 r4: a leaf navigated to another note keeps its Reading scroller; the old note's floor (4544 px of empty scroll space
+	// on the short note, measured) must not outlive the navigation by the backstop's 3 s.
+	describe('a pin is dropped when its view shows another note', () => {
+		beforeEach(() => jest.useFakeTimers());
+		afterEach(() => jest.useRealTimers());
+
+		function pinnedLeaf() {
+			const a = makeLeaf('Note.md', 'preview');
+			a.scroller.querySelector('[data-dse-element]')!.appendChild(document.createElement('div')); // mounted
+			const pin = new PreviewScrollPin();
+			pin.pinReadingViewsOf(workspaceOf(a), 'Note.md');
+			expect(isPinned(a.scroller)).toBe(true);
+			return { a, pin };
+		}
+		const navigate = (a: { leaf: { view: { file: { path: string } } } }, to: string): void => {
+			a.leaf.view.file = { path: to };
+		};
+
+		test('the next mutation in the scroller (the new note drawing) releases it', async () => {
+			const { a } = pinnedLeaf();
+			navigate(a, 'Other.md');
+			sizerOf(a.scroller).style.minHeight = '86px';
+			await flushObservers();
+			expect(isPinned(a.scroller)).toBe(false);
+			expect(allPinStyles()).toBe(0);
+		});
+
+		test('releaseNavigated() (the workspace `file-open` handler) releases it without a mutation; a view still on the note is kept', () => {
+			const { a, pin } = pinnedLeaf();
+			const b = makeLeaf('Note.md', 'preview');
+			b.scroller.querySelector('[data-dse-element]')!.appendChild(document.createElement('div'));
+			pin.pinReadingViewsOf(workspaceOf(b), 'Note.md');
+			pin.releaseNavigated();
+			expect(isPinned(a.scroller)).toBe(true);
+			navigate(a, 'Other.md');
+			pin.releaseNavigated();
+			expect(isPinned(a.scroller)).toBe(false);
+			expect(isPinned(b.scroller)).toBe(true);
+		});
+
+		test('any pin call sweeps it too', () => {
+			const { a, pin } = pinnedLeaf();
+			navigate(a, 'Other.md');
+			pin.pin(makeScroller().el);
+			expect(isPinned(a.scroller)).toBe(false);
+		});
+
+		test('a writer\'s pin() knows no view: the `modify` pin that follows it attaches the note, and a later navigation releases it', () => {
+			const a = makeLeaf('Note.md', 'preview');
+			a.scroller.querySelector('[data-dse-element]')!.appendChild(document.createElement('div'));
+			const pin = new PreviewScrollPin();
+			pin.pin(a.scroller.querySelector('[data-dse-element]') as HTMLElement);
+			pin.pinReadingViewsOf(workspaceOf(a), 'Note.md');
+			navigate(a, 'Other.md');
+			pin.releaseNavigated();
+			expect(isPinned(a.scroller)).toBe(false);
+		});
+	});
+
+	test('registerFrameworkElements releases pins on the workspace `file-open` event', () => {
+		const app = new App();
+		const plugin = new Plugin(app);
+		plugin.load();
+		const on = jest.spyOn(app.workspace, 'on');
+		const spy = jest.spyOn(PreviewScrollPin.prototype, 'releaseNavigated').mockImplementation(() => {});
+		try {
+			const registry: ElementRegistry = { register: () => undefined as never, get: () => undefined, all: () => [] };
+			registerFrameworkElements(plugin as any, { registry, pipeline: {} as ElementPipeline });
+			const call = on.mock.calls.find(([name]) => name === 'file-open');
+			expect(call).toBeDefined();
+			(call![1] as () => void)();
+			expect(spy).toHaveBeenCalledTimes(1);
+		} finally {
+			spy.mockRestore();
+			on.mockRestore();
+		}
+	});
+
 	test('registerFrameworkElements registers it on the vault `modify` event', () => {
 		const app = new App();
 		const plugin = new Plugin(app);
@@ -1046,32 +1124,110 @@ describe('SC-472: a Reading pin is released when the redraw is over', () => {
 		expect(jest.getTimerCount()).toBe(0); // the backstop's timers went with it
 	});
 
-	test('redraw-start detection: the sizer collapsing and returning with none of our roots replaced is not a redraw, so it does not release', async () => {
+	// SC-472 r4: a redraw counts as started only with evidence of a RE-RENDER. Obsidian's scroll virtualisation removes and re-inserts
+	// a root of ours for a reader who scrolls (sizer untouched); counting that released the pin before the late redraw (r3: 7456 -> 3889).
+	test('redraw-start evidence (a): a sizer collapse alone starts it; the pin is released once the sizer is back', async () => {
 		const s = scene();
 		setSizer(s.scroller, 46);
 		await flushObservers();
+		frames.run(2);
+		expect(isPinned(s.scroller)).toBe(true); // collapsed: not over
 		setSizer(s.scroller, 4819);
 		await flushObservers();
-		frames.run(10);
-		expect(isPinned(s.scroller)).toBe(true);
-		const fresh = await redrawStart(s, 4819); // now a root is replaced
+		frames.run(1);
+		expect(isPinned(s.scroller)).toBe(false);
+	});
+
+	test('redraw-start evidence (b): a root that was not there at the arm is added (a fresh render), the sizer untouched', async () => {
+		const s = scene();
+		const fresh = makeRoot(false);
+		s.root.replaceWith(fresh);
+		await flushObservers();
+		frames.run(2);
+		expect(isPinned(s.scroller)).toBe(true); // the new root is empty
 		mount(fresh);
 		await flushObservers();
 		frames.run(1);
 		expect(isPinned(s.scroller)).toBe(false);
 	});
 
-	test('redraw-start detection, per signal: a root left the document, was removed, or was put back (an adopted view)', () => {
+	test('redraw-start evidence (c): an arm-time root put back under a NEW section (an adopted view) releases it one frame later', async () => {
 		const s = scene();
-		const started = (records: Array<Partial<MutationRecord>>): boolean => (s.pin as any).redrawStarted(s.held(), records);
-		expect(started([])).toBe(false);
-		expect(started([{ type: 'childList', removedNodes: [document.createElement('div')] as any, addedNodes: [] as any }])).toBe(false); // not ours
-		expect(started([{ type: 'childList', removedNodes: [s.root] as any, addedNodes: [] as any }])).toBe(true);
-		expect(started([{ type: 'childList', removedNodes: [] as any, addedNodes: [s.root] as any }])).toBe(true);
-		expect(started([{ type: 'childList', removedNodes: [s.root.parentElement] as any, addedNodes: [] as any }])).toBe(true); // an ancestor of the root
-		expect(started([{ type: 'attributes' }])).toBe(false);
+		const section = document.createElement('div');
+		s.el.parentElement!.appendChild(section);
+		section.appendChild(s.root);
+		await flushObservers();
+		frames.run(1);
+		expect(isPinned(s.scroller)).toBe(false);
+	});
+
+	test('a root that merely leaves and re-enters the document (scroll virtualisation) is NOT a redraw: the pin waits for the backstop', async () => {
+		const s = scene();
+		const parent = s.root.parentElement!;
+		s.root.remove(); // the reader scrolled away: Obsidian takes the section out of the DOM, the sizer untouched
+		await flushObservers();
+		parent.appendChild(s.root); // ...and scrolled back: the same cached section, the same root
+		await flushObservers();
+		frames.run(10);
+		expect(isPinned(s.scroller)).toBe(true);
 		s.root.remove();
-		expect(started([])).toBe(true); // a root no longer in the document
+		await flushObservers();
+		frames.run(10);
+		expect(isPinned(s.scroller)).toBe(true); // gone while the reader is far away: still not a redraw
+		jest.advanceTimersByTime(TTL);
+		frames.run(BACKSTOP_FRAMES);
+		expect(isPinned(s.scroller)).toBe(false); // the backstop ends it
+	});
+
+	test('redraw-start detection, per signal', () => {
+		const s = scene();
+		const started = (records: Array<Partial<MutationRecord>>): boolean => (s.pin as any).redrawStarted(s.scroller, s.held(), records);
+		const list = (...n: Node[]) => n as any;
+		expect(started([])).toBe(false);
+		expect(started([{ type: 'childList', removedNodes: list(s.root), addedNodes: list() }])).toBe(false); // removed
+		expect(started([{ type: 'childList', removedNodes: list(), addedNodes: list(s.root) }])).toBe(false); // re-inserted where it was
+		expect(started([{ type: 'childList', removedNodes: list(s.root.parentElement!), addedNodes: list() }])).toBe(false); // an ancestor removed
+		expect(started([{ type: 'attributes' }])).toBe(false);
+		expect(started([{ type: 'childList', removedNodes: list(), addedNodes: list(document.createElement('div')) }])).toBe(false); // not ours
+		const holder = document.createElement('div');
+		holder.appendChild(makeRoot(false));
+		expect(started([{ type: 'childList', removedNodes: list(), addedNodes: list(holder) }])).toBe(true); // (b) a fresh root inside an added node
+		expect(started([{ type: 'childList', removedNodes: list(), addedNodes: list(makeRoot(true))}])).toBe(true); // (b) the added node is the root
+		s.root.remove();
+		expect(started([])).toBe(false); // a root no longer in the document is not evidence (virtualisation)
+		const s2 = scene();
+		const sec = document.createElement('div');
+		s2.el.parentElement!.appendChild(sec);
+		sec.appendChild(s2.root);
+		expect((s2.pin as any).redrawStarted(s2.scroller, s2.held(), [])).toBe(true); // (c)
+		const s3 = scene();
+		setSizer(s3.scroller, 300);
+		expect((s3.pin as any).redrawStarted(s3.scroller, s3.held(), [])).toBe(true); // (a)
+	});
+
+	test('a sizer that was already collapsed at the arm is not evidence; a re-pin during a redraw does not start the next one', async () => {
+		const s = scene();
+		await redrawStart(s); // write 1 is being redrawn, the sizer is collapsed
+		s.pin.pin(s.el); // write 2 re-pins now
+		expect((s.pin as any).redrawStarted(s.scroller, s.held(), [])).toBe(false);
+		setSizer(s.scroller, 47);
+		await flushObservers();
+		frames.run(3);
+		expect(isPinned(s.scroller)).toBe(true);
+	});
+
+	test('a re-pin drops the records still queued by the redraw before it (the same mutation delivery)', async () => {
+		const s = scene();
+		const fresh = makeRoot(false);
+		s.root.replaceWith(fresh); // queued, not delivered yet
+		setSizer(s.scroller, 46);
+		s.pin.pin(s.el); // a re-pin in the same task
+		expect(s.held().observer.takeRecords()).toHaveLength(0);
+		mount(fresh);
+		setSizer(s.scroller, 4819);
+		await flushObservers();
+		frames.run(5);
+		expect(isPinned(s.scroller)).toBe(true); // the redraw before the re-pin does not release it
 	});
 
 	test('redraw-done, roots: the redraw is not over while a root of ours is still empty, even with the sizer back', async () => {

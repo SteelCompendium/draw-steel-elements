@@ -362,10 +362,17 @@ interface HeldPin {
 	readonly backstop: Backstop;
 	/** SC-472: the roots of ours in the scroller at the last arm; the redraw replaces or re-inserts one of them. */
 	roots0: Set<Element>;
-	/** SC-472: a root in `roots0` was removed, re-inserted or left the document since the last arm. */
+	/** SC-472: the section each root of `roots0` sat in at the last arm (an adopted view is put back under a NEW one). */
+	parents0: Map<Element, Element | null>;
+	/** SC-472: evidence of a re-render was seen since the last arm (`redrawStarted`). */
 	started: boolean;
 	/** SC-472: `sizersAt` at the last arm. */
 	sizers0: Map<Element, number>;
+	/** SC-472: the sizers of `sizers0` that were already collapsed at the last arm (a collapse seen later is the evidence, not these). */
+	collapsed0: Set<Element>;
+	/** SC-472 r4: the Reading view this pin protects and the note it showed at arm time; a pin whose view shows another note is dropped. */
+	view: ReadingViewLike | null;
+	path: string | null;
 	/** SC-472: the pending end-of-redraw check (one animation frame after a watched mutation). */
 	check: number | null;
 	/** The height being held (the rule's px). Only ever raised: by a re-pin or by `observer`. */
@@ -422,20 +429,24 @@ export class PreviewScrollPin {
 			if (!scroller) continue;
 			if (own ? !scroller.querySelector('[data-dse-element]') : !embedsBlockOf(scroller, path, view.file.path, resolveLink!)) continue; // nothing of ours can collapse it
 			try {
-				this.pinScroller(scroller, !own);
+				this.pinScroller(scroller, !own, view);
 			} catch (err) {
 				console.warn('[DSE] scroll pin failed for a reading view', err);
 			}
 		}
 	}
 
-	private pinScroller(scroller: HTMLElement, host = false): void {
+	private pinScroller(scroller: HTMLElement, host = false, view: ReadingViewLike | null = null): void {
 		const doc = scroller.ownerDocument;
 		const win = doc.defaultView;
 		if (!win || !doc.head) return;
 		this.sweep();
 
 		const existing = this.pins.get(scroller);
+		if (existing && !existing.view && view) {
+			existing.view = view; // the writer's pin() knows no view; the `modify` pin that follows it does
+			existing.path = view.file?.path ?? null;
+		}
 		if (existing) {
 			// A re-pin (rapid clicking, autosave) restarts the TTL and never lowers the height; it
 			// raises it to the sizer's current inline min-height or the content height when either
@@ -470,7 +481,7 @@ export class PreviewScrollPin {
 		// SC-472: never mid-redraw: a root of ours still mounting, or a redraw started and not over (the collapsed section can
 		// hold no root at all) until the DOM has been quiet for BACKSTOP_REDRAW_QUIET_FRAMES (a redraw that shrank the note)
 		const backstop = new Backstop(win, () => this.release(scroller), (quiet) => emptyRoot(scroller) || (held.started && quiet < BACKSTOP_REDRAW_QUIET_FRAMES && !this.redrawDone(scroller, held)));
-		const held: HeldPin = { win, backstop, roots0: new Set(), started: false, sizers0: new Map(), check: null, px, id, style, observer: null, host };
+		const held: HeldPin = { win, backstop, roots0: new Set(), parents0: new Map(), started: false, sizers0: new Map(), collapsed0: new Set(), view, path: view?.file?.path ?? null, check: null, px, id, style, observer: null, host };
 		this.arm(held, scroller);
 		const MO = (win as Window & { MutationObserver?: typeof MutationObserver }).MutationObserver;
 		if (MO) {
@@ -478,7 +489,8 @@ export class PreviewScrollPin {
 				try {
 					this.raise(held, sizerInlineMinHeight(scroller));
 					held.backstop.noteActivity();
-					if (!held.started) held.started = this.redrawStarted(held, records);
+					if (this.navigatedAway(held)) return this.release(scroller);
+					if (!held.started) held.started = this.redrawStarted(scroller, held, records);
 					if (held.started) this.scheduleCheck(scroller, held);
 				} catch (err) {
 					console.warn('[DSE] scroll pin floor update failed', err);
@@ -492,7 +504,9 @@ export class PreviewScrollPin {
 	/** SC-472: (re)start waiting for a redraw from now: the roots and sizer heights it must restore, and the backstop. */
 	private arm(held: HeldPin, scroller: HTMLElement): void {
 		this.cancelCheck(held); // a check queued by the redraw that began before this arm must not judge the new one
+		held.observer?.takeRecords(); // ...nor the records still queued from it (a re-pin dispatched inside the same delivery)
 		held.roots0 = new Set(Array.from(scroller.querySelectorAll(ROOT)));
+		held.parents0 = new Map(Array.from(held.roots0, (r) => [r, r.parentElement]));
 		held.started = false;
 		const before = held.sizers0;
 		held.sizers0 = sizersAt(scroller);
@@ -502,6 +516,7 @@ export class PreviewScrollPin {
 			const was = before.get(key);
 			if (was !== undefined && Number.isFinite(was) && !(v >= was)) held.sizers0.set(key, was);
 		}
+		held.collapsed0 = new Set(Array.from(held.sizers0.keys()).filter((key) => this.collapsed(scroller, held, key)));
 		held.backstop.arm();
 	}
 
@@ -512,12 +527,44 @@ export class PreviewScrollPin {
 		held.check = null;
 	}
 
-	/** SC-472: did these records (or the document) show a root of `roots0` replaced, removed or put back? */
-	private redrawStarted(held: HeldPin, records: MutationRecord[]): boolean {
-		const roots = Array.from(held.roots0);
-		if (roots.some((r) => !r.isConnected)) return true;
-		const touches = (n: Node): boolean => n.nodeType === 1 && roots.some((r) => n === r || n.contains(r));
-		return records.some((r) => r.type === 'childList' && (Array.from(r.removedNodes).some(touches) || Array.from(r.addedNodes).some(touches)));
+	/** SC-472: the inline min-height of the sizer `key` stands for (the scroller's own, or an embed's inner one), NaN if none. */
+	private sizerNow(scroller: HTMLElement, key: Element): number {
+		const z = key === scroller ? scroller.querySelector<HTMLElement>(':scope > .markdown-preview-sizer') : key.querySelector<HTMLElement>('.markdown-preview-sizer');
+		return z ? parseFloat(z.style.minHeight) : NaN;
+	}
+
+	/** SC-472: is the sizer `key` lower now than it was at the last arm (beyond the 2 px tolerance)? */
+	private collapsed(scroller: HTMLElement, held: HeldPin, key: Element): boolean {
+		const v0 = held.sizers0.get(key);
+		if (v0 === undefined || !Number.isFinite(v0) || !key.isConnected) return false;
+		return this.sizerNow(scroller, key) < v0 - 2;
+	}
+
+	/**
+	 * SC-472: has Obsidian RE-RENDERED since the last arm? Evidence, any of: (a) a protected sizer fell below its arm-time
+	 * height (a collapse); (b) a root of ours that was not there at the arm was added (a fresh render); (c) an arm-time
+	 * root is back under a section it was not in at the arm (an adopted view put into the new section). A root merely
+	 * leaving or re-entering the document is NOT evidence: Obsidian's scroll virtualisation does that to a reader who
+	 * scrolls, with the sizer untouched, and counting it released the pin before the late redraw (SC-472 r3).
+	 */
+	private redrawStarted(scroller: HTMLElement, held: HeldPin, records: MutationRecord[]): boolean {
+		for (const key of held.sizers0.keys()) if (!held.collapsed0.has(key) && this.collapsed(scroller, held, key)) return true; // (a)
+		const fresh = (n: Node): boolean => n.nodeType === 1 && ((n as Element).matches(ROOT) ? !held.roots0.has(n as Element) : Array.from((n as Element).querySelectorAll(ROOT)).some((r) => !held.roots0.has(r)));
+		if (records.some((r) => r.type === 'childList' && Array.from(r.addedNodes).some(fresh))) return true; // (b)
+		for (const root of held.roots0) if (root.isConnected && root.parentElement !== held.parents0.get(root)) return true; // (c)
+		return false;
+	}
+
+	/** SC-472 r4: does this pin's Reading view show another note than the one it was armed for (the leaf navigated)? */
+	private navigatedAway(held: HeldPin): boolean {
+		return !!held.view && held.path !== null && (held.view.file?.path ?? null) !== held.path;
+	}
+
+	/** SC-472 r4: drop every pin whose Reading view now shows another note (the workspace `file-open` handler; also checked on each mutation and pin call). */
+	releaseNavigated(): void {
+		for (const [scroller, held] of [...this.pins]) {
+			if (this.navigatedAway(held)) this.release(scroller);
+		}
 	}
 
 	/** SC-472: one frame after a mutation during the redraw, release if the redraw is over (`redrawDone`). */
@@ -540,8 +587,7 @@ export class PreviewScrollPin {
 		const need = scroller.scrollTop + scroller.clientHeight - verticalPadding(scroller, held.win);
 		for (const [key, v0] of held.sizers0) {
 			if (!Number.isFinite(v0) || !key.isConnected) continue;
-			const z = key === scroller ? scroller.querySelector<HTMLElement>(':scope > .markdown-preview-sizer') : key.querySelector<HTMLElement>('.markdown-preview-sizer');
-			const cur = z ? parseFloat(z.style.minHeight) : NaN;
+			const cur = this.sizerNow(scroller, key);
 			if (!(cur >= (key === scroller ? Math.min(v0, need) : v0) - 2)) return false;
 		}
 		return true;
@@ -557,7 +603,7 @@ export class PreviewScrollPin {
 	/** Drop pins whose scroller left the document or whose window was closed (a closed window's TTL never fires). */
 	private sweep(): void {
 		for (const [scroller, held] of [...this.pins]) {
-			if (!scroller.isConnected || held.win.closed) this.release(scroller);
+			if (!scroller.isConnected || held.win.closed || this.navigatedAway(held)) this.release(scroller);
 		}
 	}
 

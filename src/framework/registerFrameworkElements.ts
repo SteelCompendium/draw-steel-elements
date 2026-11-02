@@ -61,6 +61,8 @@ export function registerFrameworkElements(
 	plugin.registerEvent(plugin.app.vault.on('modify', (file) => scrollPin.pinReadingViewsOf(plugin.app.workspace, file.path, resolveLink)));
 	// SC-470 r4: a popout closed while pinned never fires its TTL; release its pins on `window-close`.
 	plugin.registerEvent(plugin.app.workspace.on('window-close', (_win, window) => scrollPin.releaseWindow(window)));
+	// SC-472: a leaf that navigated to another note keeps its scroller; drop the old note's pin at once, not at the backstop.
+	plugin.registerEvent(plugin.app.workspace.on('file-open', () => scrollPin.releaseNavigated()));
 	// SC-478: Live Preview panes keep their reading position across the same writes (livePreviewScrollHold.ts):
 	// capture at `modify`, which fires before the pane's transaction; restore + hold inside the editor.
 	const lpHold = new LivePreviewScrollHold();
