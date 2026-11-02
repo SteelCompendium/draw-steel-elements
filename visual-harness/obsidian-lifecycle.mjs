@@ -4593,6 +4593,10 @@ const SCENARIOS = [
 					const leaves0 = (await snap()).leaves;
 					await click(link, { mods: 2 });
 					await t.waitFor(`app.workspace.getLeavesOfType('markdown').length > ${leaves0}`, '(d) a Ctrl-click on the link opens a new tab', 8000).catch((e) => problems.push(e.message));
+					// Let the new tab finish loading its note before the next phase detaches it: closing a leaf whose editor is still being set up makes Obsidian log
+					// `RangeError: Field is not present in this state` (WE.saveHistory) from its own onUnloadFile - measured on 2 of 6 runs without this settle (the wait for the note plus 1.5 s).
+					await t.waitFor(`app.workspace.getLeavesOfType('markdown').filter((l) => l !== ${G}.main).every((l) => l.view.file?.path === 'Lifecycle/other.md')`, '(d) the new tab shows its note', 8000).catch((e) => problems.push(e.message));
+					await t.sleep(1500);
 					const other = await t.ev(`app.workspace.getLeavesOfType('markdown').filter((l) => l !== ${G}.main).map((l) => l.view.file?.path)`);
 					outcomes.push(`(d) Ctrl-click: new tab(s) ${JSON.stringify(other)}, this tab ${await t.ev(`${G}.main.view.file?.path`)}`);
 					if (!other.includes('Lifecycle/other.md')) problems.push(`(d) the Ctrl-click did not open Lifecycle/other.md in a new tab (tabs: ${JSON.stringify(other)})`);
