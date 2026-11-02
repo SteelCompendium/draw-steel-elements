@@ -1,4 +1,4 @@
-import { execFileSync } from 'child_process';
+import { execFileSync, spawn, ChildProcess } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -16,10 +16,13 @@ const OURS = '11111111-1111-4111-8111-111111111111';
 const THEIRS = '22222222-2222-4222-8222-222222222222';
 
 let dir: string;
+let sibling: ChildProcess; // a live process of ours that is NOT a descendant of the subprocess each case runs in
 beforeAll(() => {
 	dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dse-cdp-owned-test-'));
+	sibling = spawn('sleep', ['120'], { stdio: 'ignore' });
 });
 afterAll(() => {
+	sibling.kill('SIGKILL');
 	fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -38,7 +41,7 @@ function run(body: string): Outcome {
 	const code = `
 		import http from 'node:http';
 		import fs from 'node:fs';
-		import { proveCdpOwned, portInUse, parseActivePort, clearStaleReport, listenInodes, servesBrowser, CdpOwnershipError } from ${JSON.stringify(helper)};
+		import { proveCdpOwned, portInUse, parseActivePort, clearStaleReport, listenInodes, servesBrowser, parseStat, processTree, CdpOwnershipError } from ${JSON.stringify(helper)};
 		const ud = ${JSON.stringify(ud)};
 		const OURS = ${JSON.stringify(OURS)}, THEIRS = ${JSON.stringify(THEIRS)};
 		const hits = [];
@@ -51,6 +54,9 @@ function run(body: string): Outcome {
 		const HEAD = '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode';
 		let procTable = () => [HEAD, ...listening.map((p, i) => row(i, p, inodeOf(p)))].join('\\n') + '\\n';
 		const readProc = (p) => (p === '/proc/net/tcp' ? procTable() : p === '/proc/net/tcp6' ? HEAD + '\\n' : null);
+		const SIBLING = ${sibling.pid};
+		// fake process table: the child (4242, ppid 1) has no descendants unless a case adds some
+		const procStats = () => new Map([[1, { ppid: 0, comm: 'init' }], [4242, { ppid: 1, comm: 'obsidian' }]]);
 		const fdLinks = () => ['anon_inode:[eventpoll]', ...listening.filter((p) => !foreign.has(p)).map((p) => 'socket:[' + inodeOf(p) + ']')];
 		const servers = [];
 		/** a fake CDP browser: /json/version names browser <guid>; returns its port. */
@@ -68,7 +74,7 @@ function run(body: string): Outcome {
 		const writeReport = (port, guid) => fs.writeFileSync(ud + '/DevToolsActivePort', port + '\\n/devtools/browser/' + guid);
 		const child = { pid: 4242, exitCode: null, signalCode: null, once: () => {}, removeListener: () => {} };
 		const die = () => { child.exitCode = 1; };
-		const prove = (o) => proveCdpOwned({ child, userDataDir: ud, pollMs: 10, readProc, fdLinks, ...o });
+		const prove = (o) => proveCdpOwned({ child, userDataDir: ud, pollMs: 10, readProc, fdLinks, procStats, ...o });
 		const t0 = Date.now();
 		const out = { hits, servedPort: 0 };
 		try {
@@ -220,16 +226,77 @@ describe('SC-551: proveCdpOwned', () => {
 		expect([out.nothing, out.unreadable, out.noFds]).toEqual(['foreign-listener', 'unverifiable', 'unverifiable']);
 	});
 
-	test('with the real /proc: a listener held by this process is ours when child.pid is this process, and foreign when child.pid is its parent', () => {
+	test('with the real /proc: a listener held by this process is ours when child.pid is this process, and foreign when child.pid is a process that is not its ancestor-or-self (a sibling)', () => {
 		const out = run(`
 			const p = await serve(OURS); out.servedPort = p;
 			writeReport(p, OURS);
-			const real = { readProc: undefined, fdLinks: undefined };
+			const real = { readProc: undefined, fdLinks: undefined, procStats: undefined };
 			out.ok = await prove({ ...real, child: { pid: process.pid, exitCode: null, signalCode: null } });
-			try { await prove({ ...real, child: { pid: process.ppid, exitCode: null, signalCode: null } }); } catch (e) { out.parentReason = e.reason; }
+			try { await prove({ ...real, child: { pid: SIBLING, exitCode: null, signalCode: null } }); } catch (e) { out.siblingReason = e.reason; out.siblingMessage = e.message; }
 		`);
 		expect(out.ok).toEqual({ port: out.servedPort, guid: OURS });
-		expect(out.parentReason).toBe('foreign-listener');
+		expect(out.siblingReason).toBe('foreign-listener');
+		expect(out.siblingMessage).toMatch(/held by pid \d+ "/); // names the process that really holds the socket
+	});
+
+	test('SC-551 r5 LOW-1: a launcher wrapper that does not exec - the spawned pid is a shell, Obsidian is its child - is ours; a socket held outside the child\'s tree is still foreign', () => {
+		const out = run(`
+			const p = await serve(OURS); out.servedPort = p;
+			writeReport(p, OURS);
+			const wrapper = 4242, obsidian = 4300, stranger = 5000;
+			const stats = new Map([[1, { ppid: 0, comm: 'init' }], [wrapper, { ppid: 1, comm: 'wrapper.sh' }], [obsidian, { ppid: wrapper, comm: 'obsidian' }], [stranger, { ppid: 1, comm: 'obsidian' }]]);
+			const held = (pid) => (pid === obsidian ? ['socket:[' + inodeOf(p) + ']'] : ['anon_inode:[eventpoll]']);
+			out.ok = await prove({ procStats: () => stats, fdLinks: held });
+			const strangerHolds = (pid) => (pid === stranger ? ['socket:[' + inodeOf(p) + ']'] : ['anon_inode:[eventpoll]']);
+			try { await prove({ procStats: () => stats, fdLinks: strangerHolds }); } catch (e) { out.reason = e.reason; out.message = e.message; }
+		`);
+		expect(out.ok).toEqual({ port: out.servedPort, guid: OURS });
+		expect(out.reason).toBe('foreign-listener');
+		expect(out.message).toContain('held by pid 5000 "obsidian"');
+		expect(out.message).toContain('our pid 4242');
+	});
+
+	test('with the real /proc, a non-exec bash wrapper whose child holds the DevTools socket is accepted', () => {
+		const out = run(`
+			const { spawn } = await import('node:child_process');
+			const server = ${JSON.stringify("const http=require('http'),fs=require('fs');const s=http.createServer((q,r)=>{r.setHeader('content-type','application/json');r.end(JSON.stringify({webSocketDebuggerUrl:'ws://127.0.0.1:'+s.address().port+'/devtools/browser/' + process.argv[2]}))});s.listen(0,'127.0.0.1',()=>fs.writeFileSync(process.argv[1]+'/DevToolsActivePort',s.address().port+'\\n/devtools/browser/'+process.argv[2]));")};
+			// bash -c '"$0" -e ... ; true': the trailing command keeps bash from exec-ing node, so node is bash's child
+			const wrapper = spawn('bash', ['-c', '"$0" -e "$1" "$2" "$3"; true', process.execPath, server, ud, OURS], { stdio: 'ignore' });
+			out.ok = await prove({ child: wrapper, readProc: undefined, fdLinks: undefined, procStats: undefined, timeoutMs: 10000 });
+			wrapper.kill('SIGKILL');
+		`);
+		expect(out.error).toBeUndefined();
+		expect(out.ok?.guid).toBe(OURS);
+	});
+
+	test('two listeners on one port - ours on 127.0.0.1, a stranger\'s on [::1] - fail the proof: ANY foreign listener on the port is enough', () => {
+		const out = run(`
+			const p = await serve(OURS); out.servedPort = p;
+			writeReport(p, OURS);
+			const tcp = () => [HEAD, row(0, p, inodeOf(p))].join('\\n') + '\\n';
+			const tcp6 = () => [HEAD, ' 0: 00000000000000000000000001000000:' + p.toString(16).toUpperCase().padStart(4, '0') + ' 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 777777 1 0000000000000000 100 0 0 10 0'].join('\\n') + '\\n';
+			const two = (f) => (f === '/proc/net/tcp' ? tcp() : tcp6());
+			try { await prove({ readProc: two }); } catch (e) { out.reason = e.reason; }
+			listening.length = 0; // control: ours alone on the same two tables (no [::1] row) passes
+			listening.push(p);
+			out.alone = await prove({ readProc: (f) => (f === '/proc/net/tcp' ? tcp() : HEAD + '\\n') });
+		`);
+		expect(out.reason).toBe('foreign-listener');
+		expect(out.alone).toEqual({ port: out.servedPort, guid: OURS });
+	});
+
+	test('parseStat splits the comm on the LAST parenthesis (spaces and ")" in the name), and processTree is bounded on a ppid cycle', () => {
+		const out = run(`
+			out.plain = parseStat('123 (obsidian) S 45 123 123 0 -1');
+			out.weird = parseStat('124 (my app) (x) y) R 99 1 1 0 -1');
+			out.bad = [parseStat('garbage'), parseStat('1 (x) S notanumber')];
+			const cyc = new Map([[1, { ppid: 2, comm: 'a' }], [2, { ppid: 1, comm: 'b' }], [3, { ppid: 2, comm: 'c' }]]);
+			out.tree = [...processTree(1, cyc)].sort();
+		`);
+		expect(out.plain).toEqual({ ppid: 45, comm: 'obsidian' });
+		expect(out.weird).toEqual({ ppid: 99, comm: 'my app) (x) y' });
+		expect(out.bad).toEqual([null, null]);
+		expect(out.tree).toEqual([1, 2, 3]);
 	});
 
 	test('listenInodes reads LISTEN rows of tcp and tcp6 for the port only (an ESTABLISHED row and another port are ignored); servesBrowser compares the served browser id', () => {

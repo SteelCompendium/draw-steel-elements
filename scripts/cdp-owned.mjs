@@ -20,8 +20,8 @@
 // stderr line; we read the file because stderr needs a pipe that must then be drained for the whole run). A process
 // that failed to bind writes nothing. So the endpoint is ours when
 //   (1) OUR child's file reports a port (and, for a pinned port, the port we asked for),
-//   (2) the LISTEN socket on that port belongs to OUR child (its inode in /proc/net/tcp{,6} is one of the sockets under
-//       /proc/<child.pid>/fd), and
+//   (2) the LISTEN socket on that port belongs to OUR child or one of its descendants (its inode in /proc/net/tcp{,6} is one
+//       of the sockets under /proc/<pid>/fd; descendants because a launcher wrapper may not exec), and
 //   (3) the browser GUID that `GET http://127.0.0.1:<port>/json/version` serves equals the file's GUID.
 // PRECONDITION: the user-data-dir belongs to our child alone. (1) and (3) only prove "the file and the server agree";
 // if a second Obsidian shares the --user-data-dir (the camera's default DSE_CAMERA_TMP is one machine-wide path,
@@ -102,6 +102,54 @@ const defaultFdLinks = (pid) => {
 	}
 };
 
+/** `{ppid, comm}` from the text of /proc/<pid>/stat, or null. comm is in parentheses and may itself hold spaces and `)`: split on the LAST `)`. */
+export function parseStat(text) {
+	const open = text.indexOf('(');
+	const close = text.lastIndexOf(')');
+	if (open < 0 || close < open) return null;
+	const rest = text.slice(close + 1).trim().split(/\s+/); // state ppid pgrp ...
+	const ppid = Number(rest[1]);
+	return Number.isInteger(ppid) ? { ppid, comm: text.slice(open + 1, close) } : null;
+}
+
+/** pid -> `{ppid, comm}` of every process whose /proc/<pid>/stat can be read. */
+const defaultProcStats = () => {
+	const stats = new Map();
+	let names = [];
+	try {
+		names = fs.readdirSync('/proc');
+	} catch {
+		return stats;
+	}
+	for (const n of names) {
+		if (!/^\d+$/.test(n)) continue;
+		const text = defaultReadProc(`/proc/${n}/stat`);
+		const st = text === null ? null : parseStat(text);
+		if (st) stats.set(Number(n), st);
+	}
+	return stats;
+};
+
+/** `rootPid` plus every descendant in `stats` (ppid links). Bounded: each pid is visited once, so a ppid cycle or a race cannot loop. */
+export function processTree(rootPid, stats) {
+	const kids = new Map();
+	for (const [pid, st] of stats) {
+		if (!kids.has(st.ppid)) kids.set(st.ppid, []);
+		kids.get(st.ppid).push(pid);
+	}
+	const tree = new Set([rootPid]);
+	const stack = [rootPid];
+	while (stack.length) {
+		for (const k of kids.get(stack.pop()) ?? []) {
+			if (!tree.has(k)) {
+				tree.add(k);
+				stack.push(k);
+			}
+		}
+	}
+	return tree;
+}
+
 /**
  * Inodes of the LISTEN sockets (state 0A) bound to local `port` on any address, from /proc/net/tcp and tcp6;
  * null when neither table can be read. `readProc(path)` returns the file text or null.
@@ -163,8 +211,9 @@ export function parseActivePort(text) {
  * @param {typeof fetch} [o.fetchImpl]               injectable fetch.
  * @param {(path:string)=>string|null} [o.readProc]  injectable /proc/net/tcp{,6} read (null when unreadable).
  * @param {(pid:number)=>string[]|null} [o.fdLinks]  injectable `readlink` of every /proc/<pid>/fd entry.
+ * @param {()=>Map<number,{ppid:number,comm:string}>} [o.procStats]  injectable process table (pid -> ppid, comm) for the descendant walk.
  */
-export async function proveCdpOwned({ child, userDataDir, expectedPort, timeoutMs = 30000, pollMs = 25, readFile = defaultRead, fetchImpl = fetch, readProc = defaultReadProc, fdLinks = defaultFdLinks }) {
+export async function proveCdpOwned({ child, userDataDir, expectedPort, timeoutMs = 30000, pollMs = 25, readFile = defaultRead, fetchImpl = fetch, readProc = defaultReadProc, fdLinks = defaultFdLinks, procStats = defaultProcStats }) {
 	const file = path.join(userDataDir, 'DevToolsActivePort');
 	const deadline = Date.now() + timeoutMs;
 	const pinned = expectedPort !== undefined && expectedPort !== 0;
@@ -192,17 +241,33 @@ export async function proveCdpOwned({ child, userDataDir, expectedPort, timeoutM
 		throw new CdpOwnershipError('port-mismatch', `port ${expectedPort}: our Obsidian reported port ${report.port} instead${owner}`);
 	}
 
-	// (2) the LISTEN socket on that port is OUR child's own, not another process's (a shared user-data-dir shares the file)
+	// (2) the LISTEN socket on that port is held by OUR child or one of ITS descendants (a launcher wrapper that does not
+	// exec - a script, `flatpak run` - makes the spawned pid a shell and Obsidian its child), never by a process outside
+	// that tree (a shared user-data-dir shares the file; the other run's Obsidian is not our descendant)
 	const listening = listenInodes(report.port, readProc);
-	const ourSockets = child.pid === undefined ? null : fdLinks(child.pid);
-	if (listening === null || ourSockets === null) {
+	const ownFds = child.pid === undefined ? null : fdLinks(child.pid);
+	if (listening === null || ownFds === null) {
 		throw new CdpOwnershipError('unverifiable', `port ${report.port}: cannot read /proc to check which process listens there (our pid ${child.pid})`);
 	}
-	const ours = new Set(ourSockets);
-	if (listening.size === 0 || [...listening].some((inode) => !ours.has(`socket:[${inode}]`))) {
+	const stats = procStats();
+	const ours = new Set(ownFds);
+	for (const pid of processTree(child.pid, stats)) {
+		if (pid !== child.pid) for (const link of fdLinks(pid) ?? []) ours.add(link);
+	}
+	const foreignInode = [...listening].find((inode) => !ours.has(`socket:[${inode}]`));
+	if (listening.size === 0 || foreignInode !== undefined) {
+		let holder = '';
+		if (foreignInode !== undefined) {
+			for (const pid of stats.keys()) {
+				if ((fdLinks(pid) ?? []).includes(`socket:[${foreignInode}]`)) {
+					holder = `; held by pid ${pid} "${stats.get(pid).comm}"`;
+					break;
+				}
+			}
+		}
 		throw new CdpOwnershipError(
 			'foreign-listener',
-			`port ${report.port}: ${listening.size === 0 ? 'nothing listens there' : 'the listening socket there is not our Obsidian\'s'} (our pid ${child.pid}) - another instance owns it`,
+			`port ${report.port}: ${listening.size === 0 ? 'nothing listens there' : 'the listening socket there is not our Obsidian\'s'} (our pid ${child.pid}${holder}) - another instance owns it`,
 		);
 	}
 
