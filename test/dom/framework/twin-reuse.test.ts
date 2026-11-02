@@ -544,9 +544,9 @@ describe('SC-537: twin callouts in Live Preview (the editor-driven pass)', () =>
 			syncEditor();
 		}
 		/** One editor update, as CodeMirror calls its listeners; then the redraws it starts finish. */
-		async function update(over: { docChanged?: boolean; view?: unknown } = {}): Promise<void> {
+		async function update(over: { docChanged?: boolean; viewportChanged?: boolean; selectionSet?: boolean; view?: unknown } = {}): Promise<void> {
 			if (!listener) throw new Error('no editor update listener was registered');
-			listener.value({ docChanged: over.docChanged ?? true, view: over.view ?? cm, state: cm.state });
+			listener.value({ docChanged: over.docChanged ?? true, viewportChanged: over.viewportChanged ?? false, selectionSet: over.selectionSet ?? false, view: over.view ?? cm, state: cm.state });
 			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		}
 		async function increase(el: HTMLElement): Promise<void> {
@@ -664,6 +664,57 @@ describe('SC-537: twin callouts in Live Preview (the editor-driven pass)', () =>
 
 		expect(entry.releasedBy).toBeNull();
 		expect(shown(el)).toBe('Twin=5');
+	});
+
+	test('a twin callout that was off screen when the write landed: the update that scrolls it into the editor (no text change) redraws it', async () => {
+		const t = await lp(noteOf(quoted('callout', 'Twin', 5), quoted('callout', 'Twin', 5)));
+		const upper = await t.draw(0);
+		const lower = await t.draw(1);
+		const [writer] = t.registry.liveEntries();
+		await t.increase(upper.els[0]);
+		t.reuseUpperAtLower(upper, lower);
+		upper.widget.remove(); // the lower slot is outside the drawn area: the widget is not in the editor's DOM yet
+		await t.update(); // the "set" transaction
+		expect(writer.releasedBy).toBeNull(); // nothing to judge in this editor
+		t.editorDom.appendChild(upper.widget); // the user scrolls down: CodeMirror attaches the cached widget in a viewport update
+
+		await t.update({ docChanged: false, viewportChanged: true });
+
+		expect(writer.releasedBy).toBe('reused-by-twin');
+		expect(shown(upper.els[0])).toBe('Twin=5');
+		await t.increase(upper.els[0]);
+		expect(t.values()).toEqual([6, 6]); // not [7, 5]
+	});
+
+	test('a twin callout that was raw source (cursor inside) when the write landed: the selection-only update that draws it again redraws it', async () => {
+		const t = await lp(noteOf(quoted('callout', 'Twin', 5), quoted('callout', 'Twin', 5)));
+		const upper = await t.draw(0);
+		const lower = await t.draw(1);
+		const [writer] = t.registry.liveEntries();
+		await t.increase(upper.els[0]);
+		t.reuseUpperAtLower(upper, lower);
+
+		await t.update({ docChanged: false, selectionSet: true });
+
+		expect(writer.releasedBy).toBe('reused-by-twin');
+		expect(shown(upper.els[0])).toBe('Twin=5');
+		await t.increase(upper.els[0]);
+		expect(t.values()).toEqual([6, 6]);
+	});
+
+	test('one pass reads the callout\'s block list once, however many blocks the callout holds', async () => {
+		const many = callout(...Array.from({ length: 6 }, (_, i): [string, number] => [`B${i}`, 5]));
+		const t = await lp(noteOf(many, many));
+		const upper = await t.draw(0, 6);
+		const lower = await t.draw(1, 6);
+		await t.increase(upper.els[0]);
+		t.reuseUpperAtLower(upper, lower);
+		const query = jest.spyOn(upper.widget, 'querySelectorAll');
+
+		await t.update();
+
+		expect(query.mock.calls.filter(([sel]) => /block-language/.test(String(sel)))).toHaveLength(1);
+		expect(shown(upper.els[0])).toBe('B0=5'); // and the redraw still chose each block by its place
 	});
 
 	test('registerFrameworkElements registers the update listener with the editor', async () => {
