@@ -5113,7 +5113,8 @@ const SCENARIOS = [
 							fails.push(`${name} write ${k + 1} reset: ${e instanceof Error ? e.message : String(e)}`);
 						}
 					}
-					if (!lat.some((ms) => ms !== null && ms > PIN_TTL_MS)) {
+					// (a write that errored has no latency: its own message says why, and a vacuity verdict on the rest would only bury it)
+					if (lat.length === WRITES && !lat.some((ms) => ms !== null && ms > PIN_TTL_MS)) {
 						fails.push(`${name}: vacuous - no write was redrawn later than PIN_TTL_MS (${PIN_TTL_MS} ms); latencies ${JSON.stringify(lat)}. The race this scenario is about was not exercised`);
 					}
 				} catch (e) {
