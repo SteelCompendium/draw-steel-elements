@@ -273,7 +273,6 @@ async function beforeAction(el: El): Promise<void> {
  *  or `inset` px in from its left edge at mid-height - the control's OWN surface (its padding),
  *  which is where a disabled button's own events (and S1's B7) live. */
 export interface ClickOptions {
-	cdp?: boolean;
 	inset?: number;
 	/** Wait until the element's rect has stopped moving (toasts slide in) before pressing. */
 	stable?: boolean;
@@ -315,25 +314,22 @@ async function cdpClick(el: El, opts: ClickOptions): Promise<void> {
  * Real pointer click (wdio element.click: scroll into view, hit-test, press/release).
  * "element click intercepted" is a genuine finding (something covers the control) and is
  * never papered over; only a non-interactable-geometry error falls back to the CDP path.
- * `{ cdp: true }` forces the CDP path; `{ inset }` clicks the control's own edge, not its label.
+ * `{ inset }` clicks the control's own edge, not its label.
  */
 async function click(el: El, opts: ClickOptions = {}): Promise<void> {
 	await el.waitForDisplayed({ timeout: 8000 });
 	const enabled = await el.isEnabled();
 	await beforeAction(el);
 	if (opts.stable) await waitStable(el);
-	if (opts.cdp) await cdpClick(el, opts);
-	else {
-		try {
-			if (opts.inset !== undefined) {
-				const size = await el.getSize();
-				await el.click({ x: Math.round(opts.inset - size.width / 2), y: 0 });
-			} else await el.click();
-		} catch (e) {
-			const msg = e instanceof Error ? e.message : String(e);
-			if (/intercepted/i.test(msg) || !/not interactable|out of bounds/i.test(msg)) throw e;
-			await cdpClick(el, opts);
-		}
+	try {
+		if (opts.inset !== undefined) {
+			const size = await el.getSize();
+			await el.click({ x: Math.round(opts.inset - size.width / 2), y: 0 });
+		} else await el.click();
+	} catch (e) {
+		const msg = e instanceof Error ? e.message : String(e);
+		if (/intercepted/i.test(msg) || !/not interactable|out of bounds/i.test(msg)) throw e;
+		await cdpClick(el, opts);
 	}
 	// Recorded only once the click really happened: a click that throws drives nothing.
 	recordDrive(labelOf(el), enabled ? 'click' : 'click-disabled');

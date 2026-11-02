@@ -20,14 +20,16 @@ describe('stamina bar chrome: the panel is clickable in Live Preview (SC-502)', 
 		// The collapse toggle is session state keyed by the block and outlives openNote: start expanded whatever an earlier test left.
 		await dse.page(`(() => { const r = document.querySelector('${BLOCK}'); if (r.hasAttribute('data-dse-collapsed')) r.querySelector('[data-dse-control="chrome.expand"]').click(); })()`);
 		expect(await cursorLine()).toBe(0);
-		// One hover over the block must reveal the panel on the first try; there is no retry. Earlier flakes here were the pointer of the
-		// shared Xvfb crossing the window while other shards opened theirs (fixed by parking the pointer, SC-539), not Live Preview layout.
+		// One hover over the block must reveal the panel on the first try; there is no retry. Earlier flakes here were the shared Xvfb's
+		// real pointer, which sat at the screen centre inside every window: another shard mapping or unmapping its window there sent this
+		// one a Leave/Enter that dropped the hover (fixed by parking the pointer at 0,0, SC-539), not Live Preview layout or load.
 		const collapse = root.control('chrome.collapse');
 		await dse.hover(root.root);
 		await dse.waitFor(`getComputedStyle(document.querySelector('${BLOCK}').querySelector('.dse-chrome')).pointerEvents === 'auto'`, 'the chrome panel to be revealed by the hover');
 		await dse.hover(collapse);
 		await dse.waitFor(`getComputedStyle(document.querySelector('${BLOCK}').querySelector('.dse-chrome')).pointerEvents === 'auto'`, 'the chrome panel to stay revealed with the pointer on Collapse');
-		// The driver's default click: it hit-tests the button before pressing, so a covered Collapse fails here as "element click intercepted".
+		// The driver's default click: it waits for Collapse to be displayed and hit-tests it before pressing, so a hidden or covered Collapse
+		// fails here (not displayed / "element click intercepted") instead of the press landing on the editor line.
 		await dse.click(collapse);
 		await dse.waitFor(`document.querySelector('${BLOCK}').hasAttribute('data-dse-collapsed')`, 'the block to collapse after a real click on Collapse');
 		expect(await cursorLine()).toBe(0); // on the blank line above the fence (line 3) if the click had fallen through to the editor
