@@ -298,3 +298,74 @@ describe('SC-408: ViewRegistry.pendingWrites() (the e2e driver waits for write-i
 		expect(registry.pendingWrites()).toHaveLength(0);
 	});
 });
+
+// SC-544: a host that is about to write the note first writes every OTHER view of that note whose edit is still in its debounce.
+describe('SC-544: ViewRegistry.flushPendingWrites(sourcePath, except)', () => {
+	const bodyOfMana = 'name: Mana\ncurrent_value: 5\nmax_value: 10\nmin_value: 0';
+	const INC = 'button[aria-label^="Increase"]';
+	beforeEach(() => jest.useFakeTimers());
+	afterEach(() => jest.useRealTimers());
+
+	/** Two counters in Note.md, one in Other.md, all owned by one registry. */
+	async function mountThree() {
+		const { deps, app, plugin } = makeEnv();
+		app.vault.setFile('Note.md', TWO_BLOCK_NOTE);
+		app.vault.setFile('Other.md', NOTE);
+		const registry = new ViewRegistry({ enabled: false });
+		registry.load();
+		const pipeline = new ElementPipeline(deps);
+		const mount = async (path: string, body: string, index: number) => {
+			const ctx = makeFakeContext(app, path, index);
+			const host = new ReadingModeBlockHost(plugin as any, ctx.el, ctx as any, 'ds-counter', null, registry);
+			host.setMountedBody(body);
+			await pipeline.run(counterElement, body, host);
+			ctx.addedChildren[0].load();
+			return { ctx, host, click: () => (ctx.el.querySelector(INC) as HTMLElement).click() };
+		};
+		const a = await mount('Note.md', COUNTER_BODY, 0);
+		const b = await mount('Note.md', bodyOfMana, 1);
+		const other = await mount('Other.md', COUNTER_BODY, 0);
+		const entryOf = (host: ReadingModeBlockHost) => registry.liveEntries().find((e) => e.host === host)!;
+		return { app, registry, a, b, other, entryOf };
+	}
+
+	test('writes the other pending views of the note now, each in its own block', async () => {
+		const { app, registry, a, b, entryOf } = await mountThree();
+		a.click();
+		b.click();
+		registry.flushPendingWrites('Note.md', null);
+		await jest.advanceTimersByTimeAsync(0); // far inside the debounce
+
+		const note = app.vault.getContent('Note.md')!;
+		expect(note).toContain('name: Health\ncurrent_value: 11');
+		expect(note).toContain('name: Mana\ncurrent_value: 6');
+		expect(registry.pendingWrites()).toHaveLength(0);
+		expect(entryOf(a.host).released).toBe(false);
+	});
+
+	test('a pending view of another note is not written', async () => {
+		const { app, registry, other } = await mountThree();
+		other.click();
+		registry.flushPendingWrites('Note.md', null);
+		await jest.advanceTimersByTimeAsync(0);
+
+		expect(app.vault.getContent('Other.md')).toContain('current_value: 10');
+		expect(registry.pendingWrites().map((e) => e.host)).toEqual([other.host]);
+	});
+
+	test('the entry named as `except` is not flushed; a released entry and a view with nothing scheduled make no write', async () => {
+		const { app, registry, a, b, entryOf } = await mountThree();
+		a.click();
+		registry.flushPendingWrites('Note.md', entryOf(a.host)); // a is the writer
+		await jest.advanceTimersByTimeAsync(0);
+		expect(app.vault.modifyCalls).toHaveLength(0); // a stays on its own debounce, b has nothing scheduled
+		expect(registry.pendingWrites().map((e) => e.host)).toEqual([a.host]);
+
+		const entry = entryOf(b.host);
+		const flush = jest.spyOn(entry.view as any, 'flushPendingWrite');
+		registry.release(entry, 'render-child-unload');
+		flush.mockClear();
+		registry.flushPendingWrites('Note.md', null);
+		expect(flush).not.toHaveBeenCalled();
+	});
+});

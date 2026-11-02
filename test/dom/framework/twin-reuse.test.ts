@@ -543,6 +543,16 @@ describe('SC-537: twin callouts in Live Preview (the editor-driven pass)', () =>
 			lower.widget.remove();
 			syncEditor();
 		}
+		/** SC-544: Obsidian's rebuild after a write to the UPPER of three callouts: the upper is raw, the OLD middle widget goes to the lower slot, the old lower one is discarded. */
+		function shiftMiddleToLower(upper: Drawn, middle: Drawn, lower: Drawn): void {
+			slotOf.set(middle.widget, 2);
+			slotOf.delete(upper.widget);
+			upper.widget.remove();
+			slotOf.delete(lower.widget);
+			lower.unload();
+			lower.widget.remove();
+			syncEditor();
+		}
 		/** One editor update, as CodeMirror calls its listeners; then the redraws it starts finish. */
 		async function update(over: { docChanged?: boolean; viewportChanged?: boolean; selectionSet?: boolean; view?: unknown } = {}): Promise<void> {
 			if (!listener) throw new Error('no editor update listener was registered');
@@ -555,7 +565,8 @@ describe('SC-537: twin callouts in Live Preview (the editor-driven pass)', () =>
 		}
 		const values = (): number[] => [...app.vault.getContent('Note.md')!.matchAll(/current_value: (\d+)/g)].map((m) => Number(m[1]));
 		const names = (): string[] => [...app.vault.getContent('Note.md')!.matchAll(/name: (\w+)/g)].map((m) => m[1]);
-		return { app, plugin, registry, cm, draw, syncEditor, reuseUpperAtLower, update, increase, values, names, editorDom };
+		const click = (el: HTMLElement): void => (el.querySelector(INC) as HTMLElement).click();
+		return { app, plugin, registry, cm, draw, syncEditor, reuseUpperAtLower, shiftMiddleToLower, update, increase, click, values, names, editorDom };
 	}
 
 	beforeEach(() => jest.useFakeTimers());
@@ -717,8 +728,103 @@ describe('SC-537: twin callouts in Live Preview (the editor-driven pass)', () =>
 		expect(upper.els.map((el) => el.children.length)).toEqual([1, 1, 1, 1, 1, 1]); // nothing was redrawn
 	});
 
+	// SC-544: the click on the middle callout comes before the upper's write. Obsidian's rebuild after that write hands the middle's widget
+	// (still holding its pending +1) to the lower slot; the middle's edit must already be on disk, placed through its own block.
+	test('SC-544: three callouts, the upper then the middle clicked 120 ms apart: both clicks land in the block clicked, and the widget in the lower slot is redrawn from the lower block', async () => {
+		const t = await lp(noteOf(quoted('callout', 'Twin', 5), quoted('callout', 'Twin', 5), quoted('callout', 'Twin', 5)));
+		const upper = await t.draw(0);
+		const middle = await t.draw(1);
+		const lower = await t.draw(2);
+		t.click(upper.els[0]);
+		await jest.advanceTimersByTimeAsync(120);
+		t.click(middle.els[0]); // inside the upper's debounce
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS - 120); // the upper's write lands
+		t.shiftMiddleToLower(upper, middle, lower);
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS); // the middle's own debounce, had it still been waiting
+		expect(t.values()).toEqual([6, 6, 5]); // not [6, 5, 6]
+
+		await t.update();
+		expect(shown(middle.els[0])).toBe('Twin=5'); // the widget now in the lower slot shows the lower block
+		await t.increase(middle.els[0]);
+		expect(t.values()).toEqual([6, 6, 6]);
+	});
+
 	test('registerFrameworkElements registers the update listener with the editor', async () => {
 		const t = await lp(noteOf(quoted('callout', 'Twin', 5)));
 		await expect(t.update()).resolves.toBeUndefined(); // throws when no listener was registered
+	});
+});
+
+// SC-544: two quick clicks on identical blocks. The second click comes before the first block's write, and that write's rebuild hands the
+// element of the block still waiting (the middle one) to the next twin, so its debounced write was placed through the wrong block.
+describe('SC-544: a second click before the first block\'s write', () => {
+	beforeEach(() => jest.useFakeTimers());
+	afterEach(() => {
+		jest.useRealTimers();
+		document.body.replaceChildren();
+		jest.restoreAllMocks();
+	});
+
+	const triplet = (): string => noteOf(counter('Twin', 5), counter('Twin', 5), counter('Twin', 5));
+	/** Obsidian's rebuild matches each new block to the first unused old element with the same text. */
+	function planFor(before: number[], after: number[], old: Ctx[]): { plan: Slot[]; discarded: Ctx[] } {
+		const used = new Set<number>();
+		const plan: Slot[] = after.map((value) => {
+			const at = before.findIndex((b, i) => b === value && !used.has(i));
+			if (at < 0) return 'fresh';
+			used.add(at);
+			return { reuse: old[at] };
+		});
+		return { plan, discarded: old.filter((_, i) => !used.has(i)) };
+	}
+	const click = (el: HTMLElement): void => (el.querySelector(INC) as HTMLElement).click();
+
+	test('Reading view, three plain blocks: + upper, + middle 120 ms later: each click lands in its own block and every card shows its own block', async () => {
+		const t = await setup(triplet());
+		const old = await t.paint(3);
+		click(old[0].el);
+		await jest.advanceTimersByTimeAsync(120);
+		click(old[1].el); // inside the upper's debounce
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS - 120); // the upper's write lands
+		const { plan, discarded } = planFor([5, 5, 5], t.values(), old);
+		const els = await t.rebuild(plan, discarded);
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS); // the middle's own debounce, had it still been waiting
+
+		expect(t.values()).toEqual([6, 6, 5]); // not [6, 5, 6]
+		expect(els.map((el) => el.children.length)).toEqual([1, 1, 1]);
+		expect(els.map(shown)).toEqual(['Twin=6', 'Twin=6', 'Twin=5']);
+		await t.increase(els[2]);
+		expect(t.values()).toEqual([6, 6, 6]); // the lower card writes the lower block
+	});
+
+	test('the block edit form\'s Save on the upper while the middle\'s click is pending: the middle\'s +1 is written in the middle block in the same round', async () => {
+		const t = await setup(triplet());
+		const cards = await t.paint(3);
+		const [upperEntry] = t.registry.liveEntries();
+		click(cards[1].el);
+		expect(t.registry.pendingWrites()).toHaveLength(1);
+		await upperEntry.host.replaceSource(bodyOf(noteOf(counter('Edited', 5)), 0)); // not the view's own write
+		await jest.advanceTimersByTimeAsync(0); // microtasks only, well inside the debounce
+
+		expect(t.names()).toEqual(['Edited', 'Twin', 'Twin']);
+		expect(t.values()).toEqual([5, 6, 5]);
+		expect(t.registry.pendingWrites()).toHaveLength(0);
+	});
+
+	test('the sibling\'s section is read before the writer\'s Vault.process runs', async () => {
+		const t = await setup(triplet());
+		const [, middle] = await t.paint(3);
+		const [upperEntry] = t.registry.liveEntries();
+		click(middle.el);
+		const order: string[] = [];
+		const read = middle.getSectionInfo.bind(middle);
+		middle.getSectionInfo = (el) => (order.push('read-middle'), read(el));
+		const process = t.app.vault.process.bind(t.app.vault);
+		jest.spyOn(t.app.vault, 'process').mockImplementation((...args: Parameters<typeof process>) => (order.push('process'), process(...args)));
+		await upperEntry.host.replaceSource(bodyOf(noteOf(counter('Edited', 5)), 0));
+		await jest.advanceTimersByTimeAsync(0);
+
+		expect(order.indexOf('read-middle')).toBeGreaterThanOrEqual(0);
+		expect(order.indexOf('read-middle')).toBeLessThan(order.indexOf('process'));
 	});
 });
