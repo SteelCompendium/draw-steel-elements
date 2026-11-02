@@ -26,6 +26,9 @@ Exit 0 ok, 1 a test failed (or was skipped at runtime) or the coverage gate fail
 every wdio / chromedriver / Obsidian child; those never inherit your shell's `DISPLAY` (agent shells
 export `:1`, your real screen). Xvfb itself and the build step do inherit it, harmlessly (they open no window).
 `--headed` is the only way onto a real display: `DSE_E2E_HEADED_DISPLAY` if set, else `:1`.
+A runner only uses a display whose Xvfb it started itself: the number is accepted only when that Xvfb reports it is
+listening (`-displayfd`), and a lost race for a number moves on to the next one, so runners started at the same moment
+never share a display (SC-546; `scripts/xvfb-owned.mjs`, also used by the lifecycle gate and `docs-shots`).
 Agents: never `--headed` on `:1`; test it against a throwaway Xvfb.
 
 All shards share that one private Xvfb display (no window manager, every Obsidian window at the same
