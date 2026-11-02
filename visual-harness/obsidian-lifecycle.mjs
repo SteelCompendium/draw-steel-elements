@@ -103,7 +103,8 @@
 //
 // SC-522 appends G-S52 (42 scenarios in all; the id was assigned by the dispatcher): a tracker in note B embedded in a LIVE PREVIEW host note A keeps
 // A's scroll position and its on-screen text when B is written (in-app and on disk with A parked at its end, from another pane, and a hero added
-// with A parked below the embed), and a real click on the embedded card does not scroll A to the embed's top.
+// with A parked below the embed), a real click on the embedded card does not scroll A to the embed's top, and a block deleted from B (a
+// redraw that brings no fresh tracker of ours) does not keep the hold up until its timer (phase (f)).
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -313,6 +314,8 @@ Object.assign(FIXTURES, {
 Object.assign(FIXTURES, {
 	'Lifecycle/lpembtracker.md': `# lpembtracker\n\nS-TOP\n\n${fence('ds-initiative', ['heroes:', ...Array.from({ length: 25 }, (_, i) => HERO(`Hero ${String(i + 1).padStart(2, '0')}`)).flat(), 'enemy_groups: []', 'malice:', '  value: 1'])}\n\nS-BOTTOM\n`,
 	'Lifecycle/lpembhostend.md': `# lpembhostend\n\n${Array.from({ length: 80 }, (_, i) => `E-PRE filler ${i}.`).join('\n\n')}\n\n![[lpembtracker]]\n\nE-END 1.\n\nE-END 2.\n\nE-END 3.\n`,
+	'Lifecycle/lpembtwo.md': `# lpembtwo\n\nW-TOP\n\n${fence('ds-initiative', ['heroes:', ...Array.from({ length: 12 }, (_, i) => HERO(`First ${String(i + 1).padStart(2, '0')}`)).flat(), 'enemy_groups: []', 'malice:', '  value: 1'])}\n\nW-MID\n\n${fence('ds-initiative', ['heroes:', ...Array.from({ length: 12 }, (_, i) => HERO(`Second ${String(i + 1).padStart(2, '0')}`)).flat(), 'enemy_groups: []', 'malice:', '  value: 1'])}\n\nW-BOTTOM\n`,
+	'Lifecycle/lpembhosttwo.md': `# lpembhosttwo\n\n${Array.from({ length: 80 }, (_, i) => `E-PRE filler ${i}.`).join('\n\n')}\n\n![[lpembtwo]]\n\nE-END 1.\n\nE-END 2.\n\nE-END 3.\n`,
 	'Lifecycle/lpembhosttall.md': `# lpembhosttall\n\n${Array.from({ length: 80 }, (_, i) => `L-PRE filler ${i}.`).join('\n\n')}\n\n![[lpembtracker]]\n\n${Array.from({ length: 80 }, (_, i) => `L-POST filler ${i}.`).join('\n\n')}\n`,
 });
 // SC-487: a zero-width space right after the name. Live Preview ends the name there and renders the block; Reading view shows plain code.
@@ -3967,7 +3970,7 @@ const SCENARIOS = [
 			// window.__gs52rec once the hold was released + 10 frames (cap: first sighting + 4500 ms, 12 s; 5 s with no hold).
 			// `mountedHeld` counts frames where the embed already shows a mounted tracker other than the tagged one while the hold is
 			// still on: the hold must be released by the remount itself, never left to its timer.
-			const record = (ref) => t.ev(`(() => { window.__gs52rec = new Promise((resolve) => { const cm = ${cmOf(A)}; const s = cm.scrollDOM; const emb = ${embedOf(A)}; const ref = ${JSON.stringify(ref)}; const top = () => { const sr = s.getBoundingClientRect(); const pool = ref.inEmbed ? Array.from(emb.querySelectorAll('.dse-init__name')) : Array.from(cm.contentDOM.children).filter((l) => l.classList.contains('cm-line')); const el = pool.find((x) => x.isConnected && x.textContent === ref.text); return el ? Math.round(el.getBoundingClientRect().top - sr.top) : null; }; const st0 = s.scrollTop; const max0 = s.scrollHeight - s.clientHeight; const ref0 = top(); const sel0 = cm.state.selection.main.head; const tagged = emb.querySelector('${TRACKER}'); const isTagged = !!tagged && tagged.__lcTag === 'gs52'; const sts = []; const refs = []; let stMin = st0; let holdAtRedraw = null; let holdFrames = 0; let holdSeen = false; let holdOnAt = 0; let released = false; let goneFrames = 0; let mountedHeld = 0; const onScroll = () => { stMin = Math.min(stMin, s.scrollTop); }; s.addEventListener('scroll', onScroll); const mo = new MutationObserver(() => { if (holdAtRedraw === null && tagged && !tagged.isConnected) holdAtRedraw = emb.hasAttribute('data-dse-lp-embed-hold'); }); mo.observe(emb, { childList: true, subtree: true }); const t0 = performance.now(); const tick = () => { sts.push(s.scrollTop); refs.push(top()); const held = emb.hasAttribute('data-dse-lp-embed-hold'); if (held) { holdFrames++; if (!holdSeen) holdOnAt = performance.now() - t0; holdSeen = true; released = false; goneFrames = 0; if (Array.from(emb.querySelectorAll('${TRACKER}')).some((r) => r !== tagged && r.isConnected && r.childElementCount > 0)) mountedHeld++; } else if (holdSeen) { released = true; goneFrames++; } if (goneFrames < 10 && performance.now() - t0 < (holdSeen ? Math.min(holdOnAt + 4500, 12000) : 5000)) requestAnimationFrame(tick); else { mo.disconnect(); s.removeEventListener('scroll', onScroll); const known = refs.filter((v) => v !== null); resolve({ st0, max0, ref0, isTagged, redrawn: !!tagged && !tagged.isConnected, frames: sts.length, stMin: Math.min(stMin, ...sts), stMax: Math.max(...sts), stEnd: s.scrollTop, refMin: known.length ? Math.min(...known) : null, refMax: known.length ? Math.max(...known) : null, refLost: refs.some((v) => v === null), refEnd: top(), sel0, sel1: cm.state.selection.main.head, holdAtRedraw, holdFrames, mountedHeld, released, ms: Math.round(performance.now() - t0) }); } }; requestAnimationFrame(tick); }); return true; })()`);
+			const record = (ref) => t.ev(`(() => { window.__gs52rec = new Promise((resolve) => { const cm = ${cmOf(A)}; const s = cm.scrollDOM; const emb = ${embedOf(A)}; const ref = ${JSON.stringify(ref)}; const top = () => { const sr = s.getBoundingClientRect(); const pool = ref.inEmbed ? Array.from(emb.querySelectorAll('.dse-init__name')) : Array.from(cm.contentDOM.children).filter((l) => l.classList.contains('cm-line')); const el = pool.find((x) => x.isConnected && x.textContent === ref.text); return el ? Math.round(el.getBoundingClientRect().top - sr.top) : null; }; const st0 = s.scrollTop; const max0 = s.scrollHeight - s.clientHeight; const ref0 = top(); const sel0 = cm.state.selection.main.head; const tagged = Array.from(emb.querySelectorAll('${TRACKER}'))[ref.tagIdx || 0]; const isTagged = !!tagged && tagged.__lcTag === 'gs52'; const sts = []; const refs = []; let stMin = st0; let holdAtRedraw = null; let holdFrames = 0; let holdSeen = false; let holdOnAt = 0; let released = false; let goneFrames = 0; let mountedHeld = 0; let redrawSeen = false; let heldAfterRedraw = 0; const onScroll = () => { stMin = Math.min(stMin, s.scrollTop); }; s.addEventListener('scroll', onScroll); const mo = new MutationObserver(() => { if (holdAtRedraw === null && tagged && !tagged.isConnected) holdAtRedraw = emb.hasAttribute('data-dse-lp-embed-hold'); if (tagged && !tagged.isConnected) redrawSeen = true; }); mo.observe(emb, { childList: true, subtree: true }); const t0 = performance.now(); const tick = () => { sts.push(s.scrollTop); refs.push(top()); const held = emb.hasAttribute('data-dse-lp-embed-hold'); if (held && redrawSeen) heldAfterRedraw++; if (held) { holdFrames++; if (!holdSeen) holdOnAt = performance.now() - t0; holdSeen = true; released = false; goneFrames = 0; if (Array.from(emb.querySelectorAll('${TRACKER}')).some((r) => r !== tagged && r.isConnected && r.childElementCount > 0)) mountedHeld++; } else if (holdSeen) { released = true; goneFrames++; } if (goneFrames < 10 && performance.now() - t0 < (holdSeen ? Math.min(holdOnAt + 4500, 12000) : 5000)) requestAnimationFrame(tick); else { mo.disconnect(); s.removeEventListener('scroll', onScroll); const known = refs.filter((v) => v !== null); resolve({ st0, max0, ref0, isTagged, redrawn: !!tagged && !tagged.isConnected, frames: sts.length, stMin: Math.min(stMin, ...sts), stMax: Math.max(...sts), stEnd: s.scrollTop, refMin: known.length ? Math.min(...known) : null, refMax: known.length ? Math.max(...known) : null, refLost: refs.some((v) => v === null), refEnd: top(), sel0, sel1: cm.state.selection.main.head, holdAtRedraw, holdFrames, heldAfterRedraw, mountedHeld, released, ms: Math.round(performance.now() - t0) }); } }; requestAnimationFrame(tick); }); return true; })()`);
 			const firstLineBelowEmbed = () => t.ev(`(() => { const cm = ${cmOf(A)}; const s = cm.scrollDOM; const sr = s.getBoundingClientRect(); const eb = (${embedOf(A)}).getBoundingClientRect().bottom; const l = Array.from(cm.contentDOM.children).find((x) => { const r = x.getBoundingClientRect(); return x.classList.contains('cm-line') && /\\S/.test(x.textContent) && r.top >= Math.max(sr.top, eb) && r.bottom <= sr.bottom; }); return l ? l.textContent : null; })()`);
 			const pos = (m) => `scrollTop start ${m.st0} min ${m.stMin} max ${m.stMax} end ${m.stEnd}; text at ${m.ref0} px, min ${m.refMin} max ${m.refMax} end ${m.refEnd}${m.refLost ? ' (left the screen)' : ''}; hold at the redraw ${m.holdAtRedraw}, hold frames ${m.holdFrames}`;
 			// `redraw`: the tagged tracker must have been replaced (anti-vacuity: the phase reaches Obsidian's re-render). `hold`: the embed's
@@ -4084,7 +4087,39 @@ const SCENARIOS = [
 				if (!landed) throw new Error(`(e) a click in the embedded card, adoption on: the write did not land (clicked at ${JSON.stringify(at)}; hit ${await t.ev(`(() => { const e = document.elementFromPoint(${at.x}, ${at.y}); const r = e && e.closest('[data-dse-element]'); return e ? e.tagName + '.' + String(e.className).slice(0, 60) + ' readonly=' + (r && r.getAttribute('data-dse-readonly')) + ' pressed=' + e.getAttribute('aria-pressed') + ' label=' + e.getAttribute('aria-label') : null; })()`)}; errors ${JSON.stringify(await t.errorsSince(0)).slice(-400)}; notices ${JSON.stringify(await t.noticesSince(0)).slice(-300)}; host has_taken_turn ${/has_taken_turn/.test(t.read('Lifecycle/lpembhosttall.md'))}; B turns ${(t.read(rel).match(/has_taken_turn: true/g) || []).length}; ${pos(m)})`);
 				return check('(e) a click in the embedded card, adoption on', m, landed, { redraw: false, hold: false });
 			});
+			// (f) a redraw that brings no fresh tracker of ours: B holds two trackers and the write DELETES the second block, host parked at its
+			// end. Obsidian removes that section and adds nothing; the embed shrinks 3437 -> 1806 px and the host ends at its new end (stock: the
+			// same clamp). The hold must not keep a blank band up for its timer: it is released within a few frames of the redraw. The bound is
+			// a frame count, not a time: the timer is ~150 frames away.
+			await phase(async () => {
+				const two = 'Lifecycle/lpembtwo.md';
+				const twoDel = FIXTURES[two].replace(new RegExp('W-MID\\n\\n' + '`'.repeat(3) + 'ds-initiative[\\s\\S]*?' + '`'.repeat(3) + '\\n'), 'W-MID\n');
+				t.expect(twoDel !== FIXTURES[two] && (twoDel.match(/ds-initiative/g) || []).length === 1, '(f) the fixture edit did not delete exactly one block');
+				await t.reset(two);
+				await openHost('Lifecycle/lpembhosttwo.md');
+				await park('end');
+				await t.waitFor(`(() => { const rs = (${embedOf(A)}).querySelectorAll('${TRACKER}'); return rs.length === 2 && Array.from(rs).every((r) => r.childElementCount > 0); })()`, '(f) both trackers of the embedded note are drawn');
+				await t.ev(`(() => { (${embedOf(A)}).querySelectorAll('${TRACKER}')[1].__lcTag = 'gs52'; return true; })()`);
+				const h0 = await t.ev(`Math.round((${embedOf(A)}).getBoundingClientRect().height)`);
+				await record({ text: 'E-END 1.', inEmbed: false, tagIdx: 1 });
+				await t.ev(`app.vault.modify(app.vault.getAbstractFileByPath(${JSON.stringify(two)}), ${JSON.stringify(twoDel)})`);
+				const m = await t.ev('window.__gs52rec');
+				const h1 = await t.ev(`Math.round((${embedOf(A)}).getBoundingClientRect().height)`);
+				const max1 = await t.ev(`(() => { const s = ${cmOf(A)}.scrollDOM; return Math.round(s.scrollHeight - s.clientHeight); })()`);
+				const why = `scrollTop ${m.st0} -> ${m.stEnd} (new end ${max1}); embed ${h0} -> ${h1} px; hold at the redraw ${m.holdAtRedraw}, hold frames ${m.holdFrames}, after the redraw ${m.heldAfterRedraw}`;
+				t.expect((await t.ev(`(() => { const e = ${embedOf(A)}; return e ? e.querySelectorAll('${TRACKER}').length : -1; })()`)) === 1, '(f) the embed does not show exactly one tracker after the delete');
+				t.expect(m.isTagged && m.redrawn, `(f) the deleted block's tracker was not tagged / not removed - the phase cannot reach the redraw (${why})`);
+				t.expect(m.st0 > 0 && m.st0 >= m.max0 - 1, `(f) the host was not parked at its end (scrollTop ${m.st0} of max ${m.max0})`);
+				t.expect(h0 - h1 >= 50, `(f) the embed did not shrink (${why})`);
+				t.expect(m.holdAtRedraw === true, `(f) data-dse-lp-embed-hold was not on the host's embed when the block was removed (${why})`);
+				t.expect(m.released, `(f) the hold was never seen released within ${m.ms}ms (${why})`);
+				t.expect(m.heldAfterRedraw <= 5, `(f) the hold stayed on for ${m.heldAfterRedraw} frames after the redraw - a blank band until its timer (${why})`);
+				t.expect(Math.abs(m.stEnd - max1) <= 1, `(f) the host did not end at its new end (${why})`);
+				t.expect(m.sel1 === m.sel0, `(f) the host's selection moved ${m.sel0} -> ${m.sel1}`);
+				return `(f) a block deleted from B: hold released ${m.heldAfterRedraw} frames after the redraw, host ${m.st0} -> ${m.stEnd} (its new end), embed ${h0} -> ${h1} px`;
+			});
 			await t.reset(rel);
+			await t.reset('Lifecycle/lpembtwo.md');
 			await t.open('Lifecycle/other.md'); // back to Reading for the next scenario
 			t.expect(fails.length === 0, fails.join(' | '));
 			return out.join('; ');
