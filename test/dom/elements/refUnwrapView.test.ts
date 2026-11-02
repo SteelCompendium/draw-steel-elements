@@ -731,6 +731,25 @@ describe('RefUnwrapView — in-flight depth guard (SC-525)', () => {
 		});
 	});
 
+	test('the earlier resolution of an updated view settling leaves the later one\'s entry: another live view is still refused', async () => {
+		const s = setup();
+		s.table['@A'] = { text: 'A' };
+		s.hold(true);
+		const first = s.run('@A');
+		await tick();
+		const updated = s.views[0].update(s.views[0].currentModel());
+		await tick();
+		s.holds[0](); // the earlier resolution settles (and returns without drawing) while the later one is still running
+		await first;
+		const other = s.run('@A'); // a different live view of the same block
+		await tick();
+		expect(nestingErrors(s.roots())).toEqual([s.roots()[1]]);
+		await other;
+		s.holds[1]();
+		await updated;
+		expect(baseViews(s.roots()[0])).toEqual(['A']);
+	});
+
 	test.each([
 		['the earlier entity read finishes first', [0, 1]],
 		['the later entity read finishes first', [1, 0]],
