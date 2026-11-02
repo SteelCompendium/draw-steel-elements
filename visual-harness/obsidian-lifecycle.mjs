@@ -121,7 +121,7 @@
 // SC-540 r3 adds (g) Advance round on an initiative tracker in a callout and (h) the same in a tracker inside a Live Preview EMBED (a control whose click rebuilds the
 // card detaches its own button, and Obsidian's deferred selection walks up from that detached target, so the root's mark was not enough), and (i) Reading view: the
 // same + writes and no card carries `interactive-child`.
-// SC-472 appends G-S59 (47 scenarios in all; the id was assigned by the dispatcher): a scroll pin / hold is released by the redraw it protects, not by a 2.5 s
+// SC-472 appends G-S59 (48 scenarios in all; the id was assigned by the dispatcher): a scroll pin / hold is released by the redraw it protects, not by a 2.5 s
 // timer a busy main thread can outrun. CPU throttled 8x through CDP around the writes only (reset in a finally) and the main thread kept busy for 4 s
 // right after each write (a slow `modify` handler of some other plugin), so the redraw starts later than PIN_TTL_MS: (a) a Reading pane and a Live Preview
 // pane of tall.md, the Reading pane observed (SC-470); (b) a Live Preview host embedding a tracker note, with a Reading pane of that note (SC-522); 3 writes
