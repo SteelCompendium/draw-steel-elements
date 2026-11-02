@@ -122,7 +122,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { displayRange, startOwnedXvfb } from '../scripts/xvfb-owned.mjs';
+import { displayRange, startOwnedXvfb, XvfbSpawnError } from '../scripts/xvfb-owned.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.dirname(dir);
@@ -434,14 +434,21 @@ async function startXvfb() {
 	if (!bin) envFail('Xvfb not found (set XVFB_BIN or run `devbox install` in draw-steel-elements)');
 	// SC-546: the display is ours only when OUR Xvfb reports it is listening (-displayfd), tried over the
 	// whole range; a lost race for a number moves on to the next one. Why: scripts/xvfb-owned.mjs.
-	const got = await startOwnedXvfb({
-		bin,
-		candidates: displayRange(160, 199),
-		args: ['-screen', '0', '1600x1200x24', '-nolisten', 'tcp'],
-		onSpawn: (child) => {
-			liveXvfb = child; // tracked now, not only once the display is confirmed (Important-2)
-		},
-	});
+	let got;
+	try {
+		got = await startOwnedXvfb({
+			bin,
+			candidates: displayRange(160, 199),
+			args: ['-screen', '0', '1600x1200x24', '-nolisten', 'tcp'],
+			onSpawn: (child) => {
+				liveXvfb = child; // tracked now, not only once the display is confirmed (Important-2)
+			},
+			shouldStop: () => shuttingDownOnSignal, // set before cleanup() runs: do not spawn after that
+		});
+	} catch (e) {
+		if (e instanceof XvfbSpawnError) envFail(e.message);
+		throw e;
+	}
 	if (!got) envFail('no Xvfb of our own could be started on a free display in :160–:199');
 	liveXvfb = got.child;
 	return { child: got.child, display: got.display };

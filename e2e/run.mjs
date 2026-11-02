@@ -38,7 +38,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parkPointer } from './x11-pointer.mjs';
-import { displayRange, startOwnedXvfb } from '../scripts/xvfb-owned.mjs';
+import { displayRange, startOwnedXvfb, XvfbSpawnError } from '../scripts/xvfb-owned.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.dirname(here);
@@ -352,13 +352,20 @@ async function startXvfb() {
 	// because "a socket for :n exists" (that socket may be another runner's). Why: scripts/xvfb-owned.mjs.
 	// -noreset: do not reset the server (and recentre the pointer parked by x11-pointer.mjs, SC-539) when its last client leaves.
 	// 1600x1200: Obsidian is asked for 1440x1100 and a window manager clamps to the screen.
-	const got = await startOwnedXvfb({
-		bin,
-		candidates: displayRange(XVFB_RANGE[0], XVFB_RANGE[1]),
-		args: ['-screen', '0', '1600x1200x24', '-nolisten', 'tcp', '-noreset'],
-		env: { ...process.env, DSE_E2E_RUN_ID: runId },
-		onSpawn: (child) => spawned.push(child),
-	});
+	let got;
+	try {
+		got = await startOwnedXvfb({
+			bin,
+			candidates: displayRange(XVFB_RANGE[0], XVFB_RANGE[1]),
+			args: ['-screen', '0', '1600x1200x24', '-nolisten', 'tcp', '-noreset'],
+			env: { ...process.env, DSE_E2E_RUN_ID: runId },
+			onSpawn: (child) => spawned.push(child),
+			shouldStop: () => interrupted, // set by the signal handler before it reaps: do not spawn after that
+		});
+	} catch (e) {
+		if (e instanceof XvfbSpawnError) throw new EnvError(e.message);
+		throw e;
+	}
 	if (!got) throw new EnvError(`no free X display in :${XVFB_RANGE[0]}-:${XVFB_RANGE[1]}`);
 	xvfbPid = got.child.pid;
 	return { display: got.display, child: got.child };

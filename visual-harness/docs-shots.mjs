@@ -38,7 +38,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
 import { DOCS_SHOTS, DOCS_MANUAL } from './docs-manifest.mjs';
-import { displayRange, startOwnedXvfb } from '../scripts/xvfb-owned.mjs';
+import { displayRange, startOwnedXvfb, XvfbSpawnError } from '../scripts/xvfb-owned.mjs';
 import {
 	assertValidGifEntries,
 	createPageDriver,
@@ -271,12 +271,19 @@ async function startXvfb() {
 	// "a socket for :n exists" (that socket may be another run's). Why: scripts/xvfb-owned.mjs.
 	// 1600x1200: the camera asks Obsidian for a 1440x1100 window, and the WM clamps a
 	// window to the screen — a smaller framebuffer would silently shrink every capture.
-	const got = await startOwnedXvfb({
-		bin,
-		candidates,
-		isTaken: socketTaken,
-		args: ['-screen', '0', '1600x1200x24', '-nolisten', 'tcp'],
-	});
+	let got;
+	try {
+		got = await startOwnedXvfb({
+			bin,
+			candidates,
+			isTaken: socketTaken,
+			args: ['-screen', '0', '1600x1200x24', '-nolisten', 'tcp'],
+		});
+	} catch (e) {
+		if (!(e instanceof XvfbSpawnError)) throw e;
+		console.error(e.message); // then the usual "Xvfb is unavailable" help (null contract)
+		return null;
+	}
 	if (!got) return null;
 	console.log(`Xvfb up on ${got.display} (${bin}) — your own display is not touched`);
 	return { child: got.child, display: got.display };
