@@ -829,6 +829,7 @@ describe('SC-544: a second click before the first block\'s write', () => {
 		expect(order).toEqual(['upper', 'lower']); // the writer's own view was not flushed by the upper's nested call, and nothing twice
 		expect(t.registry.pendingWrites().map((e) => e.host)).toEqual([middle.host]); // it is still waiting for its own debounce
 		expect(t.values()).toEqual([6, 5, 6]);
+		expect(t.names()).toEqual(['Twin', 'Edited', 'Twin']); // the form's edit is in the middle block (values alone also read [6,5,6] for a misrouted or dropped form)
 	});
 
 	test('the sibling\'s section is read before the writer\'s Vault.process runs', async () => {

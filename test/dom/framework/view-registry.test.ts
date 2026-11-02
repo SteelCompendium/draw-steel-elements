@@ -368,3 +368,39 @@ describe('SC-544: ViewRegistry.flushPendingWrites(sourcePath, except)', () => {
 		expect(flush).not.toHaveBeenCalled();
 	});
 });
+
+// SC-544: the re-entrancy guard of flushPendingWrites is reset after a round and after a throw.
+describe('SC-544: flushPendingWrites re-entrancy guard', () => {
+	function fakeEntry(registry: ViewRegistry, path: string, flush: () => void) {
+		const view = new Component() as Component & { flushPendingWrite: () => void; hasPendingWrite: () => boolean };
+		view.flushPendingWrite = jest.fn(flush);
+		view.hasPendingWrite = () => false;
+		const host = { sourcePath: path, attachEntry: () => {}, renderChildGone: false } as any;
+		registry.own(view, host, document.createElement('div'));
+		return view;
+	}
+
+	test('a second round on the same registry flushes again (the guard was reset)', () => {
+		const registry = new ViewRegistry({ enabled: false });
+		registry.load();
+		const a = fakeEntry(registry, 'N.md', () => {});
+		registry.flushPendingWrites('N.md', null);
+		registry.flushPendingWrites('N.md', null);
+		expect(a.flushPendingWrite).toHaveBeenCalledTimes(2);
+	});
+
+	test('a throw from a sibling does not leave the guard on', () => {
+		const registry = new ViewRegistry({ enabled: false });
+		registry.load();
+		let boom = true;
+		const a = fakeEntry(registry, 'N.md', () => {
+			if (boom) throw new Error('boom');
+		});
+		const b = fakeEntry(registry, 'N.md', () => {});
+		expect(() => registry.flushPendingWrites('N.md', null)).toThrow('boom');
+		boom = false;
+		registry.flushPendingWrites('N.md', null); // the next round runs
+		expect(a.flushPendingWrite).toHaveBeenCalledTimes(2);
+		expect(b.flushPendingWrite).toHaveBeenCalledTimes(1);
+	});
+});
