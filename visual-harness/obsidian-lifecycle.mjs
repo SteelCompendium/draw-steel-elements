@@ -113,6 +113,12 @@
 // with A parked below the embed), a real click on the embedded card does not scroll A to the embed's top, and a block deleted from B (a
 // redraw that brings no fresh tracker of ours) does not keep the hold up until its timer (phase (f)).
 //
+// SC-540 appends G-S62 (47 scenarios in all; it sits before G-S56, which runs last and detaches the other leaves): in LIVE PREVIEW a click on a control of a
+// DSE card inside a `> [!note]` callout (+ on a counter), the Enter that opens the edit form from the pencil, and a click on the card's own text no longer
+// select the whole callout (Obsidian's callout widget does that unless the target is under `.interactive-child`), so the callout stays drawn as a card, the
+// editor selection and scroll position stay put and the click still writes. Obsidian's own callout controls still enter the source (the callout's text, its
+// title, its `</>` button), the fold chevron still folds, an internal link in a card in a callout still opens (plain and Ctrl-click) and a plain fence is as before.
+//
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
 // Env:   XVFB_BIN, DSE_LIFECYCLE_BIN (default /usr/bin/obsidian), DSE_LIFECYCLE_PORT (9262),
@@ -266,6 +272,16 @@ async function unterminatedTailCase(t, rel, leave) {
 	t.expect((await t.noticesSince(m)).length === 0, `${rel}: unexpected Notice`);
 	t.expect((await t.errorsSince(m)).length === 0, `${rel}: errors: ${JSON.stringify(await t.errorsSince(m))}`);
 }
+
+// SC-540 (G-S62): a callout holding body text + a counter (Twin 5), and a plain counter (Plain 5) below it; a foldable callout; a callout holding a feature
+// whose effect links to another note.
+const GS62_FILL = (n, tag) => Array.from({ length: n }, (_, i) => `${tag} filler ${i}.`).join('\n\n');
+const GS62_LINK_FEATURE = ['```ds-feature', 'type: feature', 'feature_type: ability', 'name: Link Strike', 'effects:', '  - name: Effect', '    effect: |-', '      See [[Lifecycle/other]] for more.', '```'];
+Object.assign(FIXTURES, {
+	'Lifecycle/callout-click.md': `# callout click\n\nTOP\n\n${GS62_FILL(14, 'A')}\n\n${QUOTED(['[!note] Camp', 'Callout body text'])}\n\n${GS62_FILL(14, 'B')}\n\n${COUNTER(5, 'Plain')}\n\n${GS62_FILL(14, 'C')}\n`,
+	'Lifecycle/callout-fold.md': `# callout fold\n\nTOP\n\n${GS62_FILL(14, 'A')}\n\n${QUOTED(['[!note]- Folded', 'Folded body text'])}\n\n${GS62_FILL(14, 'B')}\n`,
+	'Lifecycle/callout-link.md': `# callout link\n\nTOP\n\n${GS62_FILL(14, 'A')}\n\n${['[!note] Linked', 'Linked body text', ...GS62_LINK_FEATURE].map((l) => `> ${l}`).join('\n')}\n\n${GS62_FILL(14, 'B')}\n`,
+});
 
 // SC-340 (Task 8) fixtures: the adoption scenarios (G-S1..G-S8) below.
 const HERO = (name) => [`  - name: "${name}"`, '    max_stamina: 30'];
@@ -4403,6 +4419,207 @@ const SCENARIOS = [
 			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${JSON.stringify(await t.noticesSince(m))}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
 			return `identical callouts in Live Preview keep their own card, value and block (2 callouts, form Save, 3 callouts, two blocks per callout, nested, far apart, a title click right after the write): ${outcomes.join('; ')}`;
+		},
+	},
+	{
+		// SC-540: in Live Preview a click on a control of a DSE card inside a callout used to select the whole callout (Obsidian's callout widget
+		// does that for any click whose target is not under `.cm-editor, .interactive-child`): the card turned into its markdown, the cursor sat inside
+		// it, the editor scrolled to it. Real mouse clicks (CDP) and a real Enter key; every phase opens its note fresh in Live Preview (cursor on line 0).
+		// Own leaf: the scenario records the markdown leaves that exist and detaches the ones it adds (a Ctrl-clicked link opens a new tab).
+		id: 'G-S62',
+		async run(t) {
+			const m = await t.mark();
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			const problems = [];
+			const outcomes = [];
+			const G = 'window.__gs62';
+			const phase = async (label, fn) => {
+				try {
+					await fn();
+				} catch (e) {
+					problems.push(`${label}: ${e.message}`);
+				}
+			};
+			await t.ev(`(() => { if (!document.getElementById('lc-gs62-notice')) { const st = document.createElement('style'); st.id = 'lc-gs62-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
+			// Page side: the editor, the top-level DSE roots by kind, and what a user sees (raw callout source lines, callout widgets, the selection, the scroll).
+			await t.ev(`(() => {
+				const P = (window.__gs62 = {});
+				const keep = new Set(app.workspace.getLeavesOfType('markdown'));
+				P.keep = keep;
+				P.main = app.workspace.getMostRecentLeaf();
+				keep.add(P.main); // an empty tab is not a markdown leaf yet: it becomes the scenario's own
+				P.cm = () => P.main.view.editor.cm;
+				P.roots = (kind) => Array.from(P.cm().contentDOM.querySelectorAll('[data-dse-element="' + kind + '"]')).filter((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]'));
+				P.fenceLines = (kind) => { const out = []; P.cm().state.doc.toString().split('\\n').forEach((l, i) => { if (/^(?:[ ]{0,3}>[ ]?)*\`\`\`ds-/.test(l) && l.includes('ds-' + kind)) out.push(i); }); return out; };
+				P.snap = () => {
+					const cm = P.cm(); const sel = cm.state.selection.main;
+					const roots = Array.from(cm.contentDOM.querySelectorAll('[data-dse-element]')).filter((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]'));
+					return {
+						anchor: sel.anchor, head: sel.head, st: Math.round(cm.scrollDOM.scrollTop),
+						raw: Array.from(cm.contentDOM.querySelectorAll('.cm-line')).filter((l) => /^\\s*>\\s*\\[!/.test(l.textContent)).length,
+						widgets: cm.contentDOM.querySelectorAll('.cm-embed-block.cm-callout').length,
+						roots: roots.length, rootsInCallout: roots.filter((r) => r.closest('.cm-embed-block.cm-callout')).length,
+						modal: !!document.querySelector('.modal-container .dse-modal'),
+						file: P.main.view.file?.path ?? null, leaves: app.workspace.getLeavesOfType('markdown').length,
+					};
+				};
+				return true;
+			})()`);
+			const R = (kind, n) => `${G}.roots(${JSON.stringify(kind)})[${n}]`;
+			/** Open `rel` fresh in Live Preview on the scenario's leaf, the cursor on line 0, and bring the n-th `ds-<kind>` block's line into view (`clip`: then scroll `clip` px further, so the top of the callout is cut off). */
+			const openLP = async (rel, kind, n, clip = 0) => {
+				await t.ev(`(async () => { const keep = ${G}.keep; app.workspace.getLeavesOfType('markdown').filter((l) => !keep.has(l)).forEach((l) => l.detach()); app.workspace.setActiveLeaf(${G}.main, { focus: true }); return true; })()`);
+				await t.open('Lifecycle/other.md', `${G}.main`);
+				await t.reset(rel);
+				await t.ev(`(async () => { await ${G}.main.setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'source', source: false }, active: true }); ${G}.main.view.editor.setCursor({ line: 0, ch: 0 }); return true; })()`);
+				await t.sleep(1500);
+				await t.ev(`(async () => { const cm = ${G}.cm(); const line = ${G}.fenceLines(${JSON.stringify(kind)})[${n}]; cm.dispatch({ effects: cm.constructor.scrollIntoView(cm.state.doc.line(line + 1).from${clip ? ' - 2, { y: \'start\', yMargin: 0 }' : ', { y: \'center\' }'}) }); return true; })()`);
+				await t.waitFor(`${G}.roots(${JSON.stringify(kind)}).length > ${n}`, `${rel}: the ${kind} block ${n} is drawn`);
+				await t.sleep(1500);
+				if (clip) {
+					await t.ev(`(() => { ${G}.cm().scrollDOM.scrollTop += ${clip}; return true; })()`);
+					await t.sleep(800);
+				}
+			};
+			/** A REAL click at the centre of `expr` (not scrolled again when `still`), with modifier bits `mods` (Ctrl = 2). */
+			const click = async (expr, { still = false, mods = 0 } = {}) => {
+				const ok = await t.ev(`(() => { const el = ${expr}; if (!el) return false; ${still ? '' : "el.scrollIntoView({ block: 'center', inline: 'center' });"} const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; })()`);
+				t.expect(ok, `no visible element to click: ${expr}`);
+				await t.sleep(250);
+				const at = await t.ev(`(() => { const r = (${expr}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+				const base = { x: at.x, y: at.y, button: 'left', clickCount: 1, modifiers: mods };
+				await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x, y: at.y, modifiers: mods });
+				await t.cdp.call('Input.dispatchMouseEvent', { type: 'mousePressed', buttons: 1, ...base });
+				await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseReleased', buttons: 0, ...base });
+			};
+			const snap = () => t.ev(`${G}.snap()`);
+			const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+			/** What the user sees after the click must be what they saw before: the callout is a card (a DSE root in a callout widget, no raw callout line), the cursor and the scroll have not moved. */
+			const expectDrawn = (label, before, after) => {
+				const bad = [];
+				if (after.raw > 0) bad.push(`the callout is shown as markdown source (${after.raw} raw callout line(s))`);
+				if (after.rootsInCallout < 1) bad.push(`no DSE card is drawn inside a callout widget (${after.rootsInCallout} of ${after.roots} roots)`);
+				if (after.anchor !== before.anchor || after.head !== before.head) bad.push(`the editor selection moved ${before.anchor}-${before.head} -> ${after.anchor}-${after.head}`);
+				if (after.st !== before.st) bad.push(`the editor scrolled ${before.st} -> ${after.st}`);
+				if (bad.length) problems.push(`${label}: ${bad.join('; ')}`);
+				outcomes.push(`${label}: ${after.raw > 0 ? 'source' : 'card'}, selection ${after.anchor}-${after.head}, scrollTop ${after.st}`);
+			};
+			const waitDisk = async (rel, want) => {
+				const t0 = Date.now();
+				while (!same(t.counterValues(rel), want) && Date.now() - t0 < 6000) await t.sleep(80);
+				await t.sleep(1500);
+			};
+			const rel = 'Lifecycle/callout-click.md';
+			const plus = (kind, n) => `(${R(kind, n)})?.querySelector('button[aria-label^="Increase"]')`;
+			try {
+				// (a) + on the counter in the callout, the callout's top cut off so a selection would scroll it: the note is written and the callout stays a card.
+				await phase('(a) + in a callout', async () => {
+					await openLP(rel, 'counter', 0, 30);
+					const before = await snap();
+					t.expect(before.rootsInCallout === 1 && before.raw === 0, `(a) set-up: the card is not drawn in a callout widget (${JSON.stringify(before)})`);
+					await click(plus('counter', 0), { still: true });
+					await waitDisk(rel, [6, 5]);
+					const after = await snap();
+					if (!same(t.counterValues(rel), [6, 5])) problems.push(`(a) the + click did not write the block: ${JSON.stringify(t.counterValues(rel))}`);
+					expectDrawn('(a) + in a callout', before, after);
+				});
+				// (b) Enter on the focused Edit pencil opens the form (a real key); the form closes with Escape; the callout stays a card, the selection unmoved.
+				await phase('(b) Enter on the pencil', async () => {
+					await t.ev(`${prefs}.set('authoringControls', true)`);
+					await openLP(rel, 'counter', 0);
+					const before = await snap();
+					const pencil = `(${R('counter', 0)})?.querySelector('.dse-chrome button[data-dse-chrome-item="edit"]')`;
+					await t.waitFor(`!!${pencil}`, '(b) the Edit pencil is drawn');
+					await t.ev(`${pencil}.focus({ focusVisible: true })`);
+					await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', text: '\r', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+					await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+					await t.waitFor(`!!document.querySelector('.modal-container .dse-modal')`, '(b) the edit form opened');
+					await t.sleep(800);
+					expectDrawn('(b) form open', before, await snap());
+					await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
+					await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
+					await t.waitFor(`!document.querySelector('.modal-container .dse-modal')`, '(b) the form closed');
+					await t.sleep(1000);
+					expectDrawn('(b) form closed', before, await snap());
+					if (t.read(rel) !== FIXTURES[rel]) problems.push('(b) the note changed although the form was cancelled');
+					await t.ev(`${prefs}.set('authoringControls', false)`);
+				});
+				// (c) Obsidian's own callout controls are untouched: a click on the callout's text, on its title and on its `</>` button still opens the
+				// source (the cursor goes inside the callout, the card is gone: this is also what proves this scenario can see source mode), and the fold chevron folds.
+				await phase('(c) the callout\'s own controls', async () => {
+					const W = `(${R('counter', 0)})?.closest('.cm-embed-block.cm-callout')`;
+					for (const [name, target] of [['text', `(${W})?.querySelector('.callout-content > p')`], ['title', `(${W})?.querySelector('.callout-title')`], ['</> button', `(${W})?.querySelector('.edit-block-button')`]]) {
+						await openLP(rel, 'counter', 0);
+						const before = await snap();
+						await click(target);
+						await t.sleep(1500);
+						const after = await snap();
+						outcomes.push(`(c) ${name}: ${after.raw > 0 ? 'source' : 'card'}, selection ${before.anchor}-${before.head} -> ${after.anchor}-${after.head}`);
+						if (after.raw === 0 || after.anchor === before.anchor && after.head === before.head) problems.push(`(c) a click on the callout's ${name} no longer opens its source (raw lines ${after.raw}, selection ${before.anchor}-${before.head} -> ${after.anchor}-${after.head})`);
+					}
+					const frel = 'Lifecycle/callout-fold.md';
+					await openLP(frel, 'counter', 0);
+					const before = await snap();
+					const folded = () => t.ev(`(${R('counter', 0)}) ? (${R('counter', 0)}).closest('.cm-embed-block.cm-callout').querySelector('.callout').classList.contains('is-collapsed') : null`);
+					const was = await folded();
+					await click(`(${R('counter', 0)})?.closest('.cm-embed-block.cm-callout')?.querySelector('.callout-fold')`);
+					await t.sleep(1000);
+					const after = await snap();
+					const now = await folded();
+					outcomes.push(`(c) chevron: collapsed ${was} -> ${now}, ${after.raw > 0 ? 'source' : 'card'}`);
+					if (was !== true || now !== false) problems.push(`(c) the fold chevron did not unfold the callout (collapsed ${was} -> ${now})`);
+					if (after.raw > 0 || after.anchor !== before.anchor || after.head !== before.head) problems.push(`(c) the fold chevron moved the cursor or opened the source (selection ${before.anchor}-${before.head} -> ${after.anchor}-${after.head}, raw ${after.raw})`);
+				});
+				// (d) an internal link in a card in a callout still opens: a plain click in this tab, a Ctrl-click in a new one.
+				await phase('(d) an internal link in a callout', async () => {
+					const lrel = 'Lifecycle/callout-link.md';
+					const link = `(${R('feature', 0)})?.querySelector('a.internal-link')`;
+					await openLP(lrel, 'feature', 0);
+					const before = await snap();
+					t.expect(before.rootsInCallout === 1 && (await t.ev(`!!(${link})`)), `(d) set-up: no link in a card in a callout widget (${JSON.stringify(before)})`);
+					await click(link);
+					await t.waitFor(`${G}.main.view.file?.path === 'Lifecycle/other.md'`, '(d) a plain click on the link opens its note in this tab', 8000).catch((e) => problems.push(e.message));
+					outcomes.push(`(d) plain click: this tab shows ${await t.ev(`${G}.main.view.file?.path`)}`);
+					await openLP(lrel, 'feature', 0);
+					const leaves0 = (await snap()).leaves;
+					await click(link, { mods: 2 });
+					await t.waitFor(`app.workspace.getLeavesOfType('markdown').length > ${leaves0}`, '(d) a Ctrl-click on the link opens a new tab', 8000).catch((e) => problems.push(e.message));
+					const other = await t.ev(`app.workspace.getLeavesOfType('markdown').filter((l) => l !== ${G}.main).map((l) => l.view.file?.path)`);
+					outcomes.push(`(d) Ctrl-click: new tab(s) ${JSON.stringify(other)}, this tab ${await t.ev(`${G}.main.view.file?.path`)}`);
+					if (!other.includes('Lifecycle/other.md')) problems.push(`(d) the Ctrl-click did not open Lifecycle/other.md in a new tab (tabs: ${JSON.stringify(other)})`);
+					if ((await t.ev(`${G}.main.view.file?.path`)) !== lrel) problems.push('(d) the Ctrl-click navigated this tab');
+				});
+				// (e) a click on the card's own text (the counter's name, not a control) does not open the callout's source either.
+				await phase('(e) card text', async () => {
+					await openLP(rel, 'counter', 0, 30);
+					const before = await snap();
+					await click(`(${R('counter', 0)})?.querySelector('.dse-counter__name')`, { still: true });
+					await t.sleep(1500);
+					expectDrawn('(e) a click on the card text', before, await snap());
+					if (t.read(rel) !== FIXTURES[rel]) problems.push('(e) a click on the card text changed the note');
+				});
+				// (f) control: the same + on a plain fence outside any callout (already clean before this change).
+				await phase('(f) plain fence', async () => {
+					await openLP(rel, 'counter', 1);
+					const before = await snap();
+					await click(plus('counter', 1), { still: true });
+					await waitDisk(rel, [5, 6]);
+					const after = await snap();
+					if (!same(t.counterValues(rel), [5, 6])) problems.push(`(f) the + click did not write the plain block: ${JSON.stringify(t.counterValues(rel))}`);
+					if (after.anchor !== before.anchor || after.head !== before.head || after.st !== before.st) problems.push(`(f) a click on a plain fence moved the selection or the scroll (${before.anchor}-${before.head} @${before.st} -> ${after.anchor}-${after.head} @${after.st})`);
+					outcomes.push(`(f) plain fence +: selection ${after.anchor}-${after.head}, scrollTop ${after.st}`);
+				});
+			} finally {
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+				await t.ev(`document.getElementById('lc-gs62-notice')?.remove()`);
+				await t.ev(`(() => { const keep = ${G}.keep; app.workspace.getLeavesOfType('markdown').filter((l) => !keep.has(l)).forEach((l) => l.detach()); return true; })()`);
+				for (const r of ['Lifecycle/callout-click.md', 'Lifecycle/callout-fold.md', 'Lifecycle/callout-link.md']) await t.reset(r);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect(problems.length === 0, `${problems.join(' | ')} -- passed: ${outcomes.join('; ')}`);
+			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${JSON.stringify(await t.noticesSince(m))}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
+			return `a card in a Live Preview callout stays a card on a + click, the pencil's Enter and a click on its text (selection and scroll unmoved); the callout's text, title and </> still open its source, the chevron folds, an internal link opens (plain and Ctrl); a plain fence as before: ${outcomes.join('; ')}`;
 		},
 	},
 	{
