@@ -13,7 +13,7 @@
 //     Obsidian built the callout while the plugin was off and drew the fence as code), a note opened while the plugin was off, or the
 //     first update from a build that never stashed. B costs the note's undo history and re-renders the whole note, so a normal
 //     off/on must never reach it.
-import type { App, MarkdownPostProcessorContext, MarkdownView, WorkspaceLeaf } from 'obsidian';
+import type { App, MarkdownPostProcessorContext, MarkdownView } from 'obsidian';
 import type { ViewRegistryEntry } from './viewRegistry';
 
 /**
@@ -193,7 +193,7 @@ export class ReplugRemounter {
 
 	private async remountMarked(): Promise<number> {
 		const jobs: Promise<void>[] = [];
-		for (const leaf of this.app.workspace.getLeavesOfType('markdown') as WorkspaceLeaf[]) {
+		for (const leaf of this.app.workspace.getLeavesOfType('markdown')) {
 			const root = leaf.view?.containerEl;
 			if (!root) continue;
 			for (const el of Array.from(root.querySelectorAll<HTMLElement>(`[${REPLUG_ATTR}]`))) {
@@ -213,10 +213,10 @@ export class ReplugRemounter {
 	private rebuildUndrawn(): string[] {
 		const rebuilt: string[] = [];
 		const live = new Set(this.deps.liveRoots());
-		for (const leaf of this.app.workspace.getLeavesOfType('markdown') as WorkspaceLeaf[]) {
+		for (const leaf of this.app.workspace.getLeavesOfType('markdown')) {
 			const view = leaf.view as MarkdownView | undefined;
 			if (!view || view.getViewType?.() !== 'markdown' || typeof view.setViewData !== 'function') continue;
-			if (!hasUndrawnBlocks(view, this.deps.hasAlias, live)) continue;
+			if (!hasUndrawnBlocks(view, (alias) => this.deps.hasAlias(alias), live)) continue;
 			try {
 				rebuildView(view);
 				rebuilt.push(view.file?.path ?? '?');
