@@ -126,9 +126,13 @@
 // right after each write (a slow `modify` handler of some other plugin), so the redraw starts later than PIN_TTL_MS: (a) a Reading pane and a Live Preview
 // pane of tall.md, the Reading pane observed (SC-470); (b) a Live Preview host embedding a tracker note, with a Reading pane of that note (SC-522); 3 writes
 // each, event-based wait (cap 30 s), scrollTop identical every frame, the pin / hold on at the redraw and released, the tracker redrawn. A phase FAILs as
-// vacuous unless one of its writes was redrawn later than PIN_TTL_MS. Controls (temporary bundles via DSE_LIFECYCLE_BUNDLE, built from `git archive` exports):
-// the develop build before SC-472 FAILs (a) and (b); release-on-redraw with a plain 2.5 s timer instead of the load-aware backstop FAILs (b). It runs as its
-// own `--only=G-S59` part (about 3.5 min) and sits before G-S56, which stays last.
+// vacuous unless one of its writes was redrawn later than PIN_TTL_MS (by construction: the 4 s spin is longer than PIN_TTL_MS; the spin, not the throttle, is what
+// makes stock fail, and the backstop's busy rules are covered by jest, not here). (c) (unthrottled, no spin) a reader who SCROLLS while the redraw is late (the
+// pane's `setViewData` is held, as in G-S18 (d)) must not release the pin: Obsidian's virtualisation takes the tracker's section out of the document, which is not
+// a redraw (to the end of the note, and down then up; fixture pin-virt.md). Controls (temporary bundles via DSE_LIFECYCLE_BUNDLE, built from `git archive` exports):
+// the develop build before SC-472 FAILs (a) and (b); release-on-redraw with a plain 2.5 s timer instead of the load-aware backstop FAILs (a) and (b); the SC-472
+// first version (any removal of an arm-time root counts as "redraw started", b8f7fcb2) FAILs (c) only. It runs as its own `--only=G-S59` part (about 4 min) and
+// sits before G-S56, which stays last.
 //
 // SC-544 appends G-S61 (48 scenarios in all; it sits before G-S56 too, after SC-540's G-S62): two quick clicks on identical blocks (the second inside the first block's 400 ms debounce)
 // each land in the block clicked and each card shows its own block - Live Preview callouts and plain fences, Reading view callouts and plain fences, two panes, a form
