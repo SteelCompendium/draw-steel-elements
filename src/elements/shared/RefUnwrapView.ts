@@ -36,39 +36,45 @@ export function renderRefNotice(root: HTMLElement, opts: { message: string; hint
 }
 
 /**
- * D6 Task 9 (spec §9 risk) — depth guard against a by-SCC ref chain that resolves back
- * into itself. Module-level (not per-instance) because the cycle we're guarding against
- * spans MULTIPLE RefUnwrapView instances: block A resolves code C, mounts a base view
- * whose rendered markdown contains a nested whole-block ref back to C — that nested block
- * gets its OWN RefUnwrapView instance (a fresh code-block mount), not a recursive call on
- * this one. `blockKey|raw` (not `raw` alone) so two DIFFERENT blocks in the same note that
- * happen to reference the same code never collide with each other.
+ * D6 Task 9 (spec §9 risk), SC-536 — the guard against a reference chain that comes back to itself, and a hard cap on how
+ * deep references may nest. A whole-block reference whose card shows markdown holding another whole-block reference
+ * (`~~~ds-feature` / `@Self.md` / `~~~`) makes Obsidian call the code-block processor, synchronously, inside the parent's
+ * `renderMarkdown`. That nested block is a new block: its own `RenderContext`, its own host, its own `blockKey` (the
+ * `docId` fallback), and a new `RefUnwrapView`. The one thing it shares with its parent is the DOM: its element is
+ * inside the parent card's root, already connected, when the view mounts and again after its lookup.
  *
- * Deliberately a same-key REFUSAL, not a numeric depth counter: real compendium bodies
- * carry pre-resolved inline links (`[text](scc.v1:...)`), never whole-block refs — spec §9
- * itself calls practical depth "1" — so a true multi-level chain essentially can't occur
- * against real content. This is a defense-in-depth guard keyed on the raw-text form (before
- * SCC-prefix/slug normalization); it prevents obvious cycles via the same literal key in
- * the same block but is not an exhaustive resolution-cycle detector. Added at the start of
- * a resolution and removed in a `finally` once that resolution's full mount settles (covers
- * any nested rendering triggered synchronously inside it, not just the ref lookup itself) —
- * so a LATER (non-overlapping) resolution of the same key, e.g. on a subsequent onUpdate,
- * is unaffected.
+ * So the guard follows the DOM. A root that resolved a reference records, in `REF_CHAIN`, the targets of every reference
+ * it and the cards around it have resolved (`targets`) and how many references that is (`depth`, the outermost being 1).
+ * A new resolution walks `parentElement` to the nearest recorded ancestor and is refused when
+ *   - that chain already holds its target (a cycle: the card is inside a card showing the same thing), or
+ *   - the chain is already `MAX_REF_DEPTH` deep (the backstop: any target that was not recognised as the same one --
+ *     a provider without a file, two mirror files -- still stops).
+ * Cards that are not inside one another never meet: two panes showing one note, a plugin reload, a redraw, the block edit
+ * form's preview remounted on every keystroke (SC-525) each have their own DOM and are never refused.
  *
- * SC-525: the entry records its OWNING view. A reference is refused only while that owner
- * is a different view that has not unloaded. The block edit form's preview mounts a fresh
- * view into the SAME blockKey on every keystroke and unloads the previous one, whose lookup
- * may still be running; a key that leaves the reference unchanged (a trailing space) used
- * to hit the unloaded view's entry and show "Reference nesting too deep" (and kept showing
- * it after the first lookup finished). A superseded owner no longer blocks its replacement,
- * and releases the entry in `finally` only if the entry is still its own.
+ * A target is the resolved thing, not the text the author typed: `file:<path>` for `@path` / `[[wikilink]]` (so `[[Cyc]]`
+ * and `@Cyc.md  ` meet), `raw:<base id>|<text>` for a provider that resolves without a file, and for the SCC ladder both
+ * `scc:<code>` and `file:<entity file path>` (so a code and an `@path` to its file meet).
  *
- * The entry is a per-RESOLUTION token (not the view), so the SAME view resolving twice at once (an
- * `update()` while its own lookup is still running) does not clear the later resolution's entry when the
- * earlier one settles. Such a view is never refused by its own entry (see `resolveGen` below for what
- * stops the earlier resolution from drawing).
+ * Invariant this relies on: a nested block's element is inside the card that holds the markdown. Every `renderMarkdown`
+ * caller passes an element created inside its card; one that rendered into a detached element and moved it in later would
+ * defeat both checks.
  */
-const IN_FLIGHT_REFS = new Map<string, { view: ElementView<unknown> }>();
+const MAX_REF_DEPTH = 5;
+interface RefChain {
+	readonly targets: ReadonlySet<string>;
+	readonly depth: number;
+}
+const REF_CHAIN = new WeakMap<HTMLElement, RefChain>();
+
+/** The chain of the nearest enclosing reference card, if any (a root is not its own ancestor). */
+function nearestChain(root: HTMLElement): RefChain | undefined {
+	for (let n = root.parentElement; n; n = n.parentElement) {
+		const chain = REF_CHAIN.get(n);
+		if (chain) return chain;
+	}
+	return undefined;
+}
 
 export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 	/** Tracks the currently-mounted base view (if any) so onUpdate can tear it down before
@@ -105,6 +111,9 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 		// SC-525 r3b: whatever this mount draws replaces the content, so it supersedes any resolution of this view
 		// still in flight (see `resolveGen`) -- an inline or refused body included, not only a later reference.
 		this.resolveGen++;
+		// SC-536: this root is about to show something new, so what it recorded about its OLD content (a chain of
+		// references) no longer holds -- an inline body must not leave its children inside a stale chain.
+		REF_CHAIN.delete(root);
 		if (model.kind === 'invalid') {
 			// SC-149 (L-1): a refused body — the def already produced the user-facing
 			// message; this view only has to present it.
@@ -171,94 +180,82 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 		const trimmed = raw.trim();
 		const gen = ++this.resolveGen;
 
-		// D6 Task 9 (spec §9 risk): refuse a ref that is already mid-resolution for this
-		// SAME block — see IN_FLIGHT_REFS's doc comment above for why this is keyed on
-		// blockKey+raw and why a same-key refusal (not a numeric depth budget) is the
-		// right shape. Guards BOTH ladders below (legacy @path/[[wikilink]] and the SCC
-		// ladder) since both ultimately resolve "this ref" and mount a base view.
-		const guardKey = `${this.cx.host.blockKey()}|${trimmed}`;
-		const current = IN_FLIGHT_REFS.get(guardKey);
-		if (current !== undefined && current.view !== this && !current.view.isUnloaded()) {
+		// D6 Task 9 (spec §9 risk), SC-536: a card inside MAX_REF_DEPTH references shows no more. Checked before any
+		// lookup, so a refused level costs nothing. The cycle check is `claimChain`, once the target is known.
+		if ((nearestChain(root)?.depth ?? 0) >= MAX_REF_DEPTH) {
+			this.errorCard(root, `Reference nesting too deep: more than ${MAX_REF_DEPTH} references inside one another.`);
+			return;
+		}
+		// `@path` / `[[wikilink]]` — the legacy forms D6 spec §1.1 says "still work" —
+		// carry no SCC code at all, so cx.sccAnchors/cx.compendium can never classify
+		// them; they resolve entirely through cx.refs (the ReferenceService's at-path/
+		// wikilink providers, F1 §3.7). Handled BEFORE the SCC ladder below, which stays
+		// scc-prefixed/bare-slug only (fix round 1, Critical finding).
+		if (trimmed.startsWith('@') || (trimmed.startsWith('[[') && trimmed.endsWith(']]'))) {
+			await this.resolveLegacyRef(root, trimmed, gen);
+			return;
+		}
+
+		const index = this.cx.compendium;
+		if (!index || !index.available) {
+			this.errorCard(root, 'Compendium not installed — run "Sync compendium" to render references.');
+			return;
+		}
+		// Resolve to a bare code (bare slug -> scoped candidates; scc-prefixed -> SccResolver).
+		const code = this.toCode(root, raw, index);
+		if (code === null) return; // toCode already rendered the right card
+		const resolution = this.cx.sccAnchors?.resolve(`scc:${code}`);
+		if (!resolution || resolution.kind === 'unresolved') {
+			this.errorCard(root, `Unknown SCC code \`${code}\`. Try Draw Steel: Insert compendium reference.`);
+			return;
+		}
+		if (resolution.kind === 'web') {
+			this.webCard(root, code, resolution.url);
+			return;
+		}
+		// vault -> typed model + source, or the "found but not renderable" degrade.
+		const entity = await index.getEntity(code);
+		if (gen !== this.resolveGen) return; // superseded by a later resolution of this view
+		if (!entity) {
 			this.errorCard(
 				root,
-				`Reference nesting too deep — \`${trimmed}\` is already resolving in this block (spec §9 depth guard).`,
+				`"${code}" found but not renderable — this compendium predates the required block; re-sync.`,
 			);
 			return;
 		}
-		const token = { view: this as ElementView<unknown> };
-		IN_FLIGHT_REFS.set(guardKey, token);
-		try {
-			// `@path` / `[[wikilink]]` — the legacy forms D6 spec §1.1 says "still work" —
-			// carry no SCC code at all, so cx.sccAnchors/cx.compendium can never classify
-			// them; they resolve entirely through cx.refs (the ReferenceService's at-path/
-			// wikilink providers, F1 §3.7). Handled BEFORE the SCC ladder below, which stays
-			// scc-prefixed/bare-slug only (fix round 1, Critical finding).
-			if (trimmed.startsWith('@') || (trimmed.startsWith('[[') && trimmed.endsWith(']]'))) {
-				await this.resolveLegacyRef(root, trimmed, gen);
-				return;
-			}
-
-			const index = this.cx.compendium;
-			if (!index || !index.available) {
-				this.errorCard(root, 'Compendium not installed — run "Sync compendium" to render references.');
-				return;
-			}
-			// Resolve to a bare code (bare slug -> scoped candidates; scc-prefixed -> SccResolver).
-			const code = this.toCode(root, raw, index);
-			if (code === null) return; // toCode already rendered the right card
-			const resolution = this.cx.sccAnchors?.resolve(`scc:${code}`);
-			if (!resolution || resolution.kind === 'unresolved') {
-				this.errorCard(root, `Unknown SCC code \`${code}\`. Try Draw Steel: Insert compendium reference.`);
-				return;
-			}
-			if (resolution.kind === 'web') {
-				this.webCard(root, code, resolution.url);
-				return;
-			}
-			// vault -> typed model + source, or the "found but not renderable" degrade.
-			const entity = await index.getEntity(code);
-			if (gen !== this.resolveGen) return; // superseded by a later resolution of this view
-			if (!entity) {
-				this.errorCard(
-					root,
-					`"${code}" found but not renderable — this compendium predates the required block; re-sync.`,
-				);
-				return;
-			}
-			// SC-149 — which base def renders this code? For every typed element that is
-			// always its own base; `ds-scc` supplies a `baseForType` that dispatches on the
-			// resolved entity's SCC `type` (the same TYPE_ADAPTERS ordering CompendiumIndex
-			// used to build the model just below, so the two can never disagree about which
-			// family a `type` belongs to). Checked BEFORE `entity.model()` so a type this
-			// plugin cannot render says so plainly instead of blaming a stale compendium.
-			const base = this.baseForType(entity.type);
-			if (base === undefined) {
-				this.errorCard(
-					root,
-					`"${entity.name}" (type: ${entity.type || 'unknown'}) has no renderer in this plugin.`,
-				);
-				return;
-			}
-			const parsed = await entity.model();
-			if (gen !== this.resolveGen) return;
-			if (parsed === undefined) {
-				// Minor fix (review round 1, spec §1.5): name the file + frontmatter `type`,
-				// not just the entity's display name, so a user debugging a stale-compendium
-				// file can tell which file/version is stale.
-				const type = entity.type || 'unknown';
-				this.errorCard(
-					root,
-					`"${entity.name}" found but not renderable — ${entity.file.path} (type: ${type}) predates the required block; re-sync.`,
-				);
-				return;
-			}
-			const body = await entity.body();
-			if (gen !== this.resolveGen) return;
-			const source: RefSource = { file: entity.file, frontmatter: entity.frontmatter, body };
-			await this.mountBase(root, parsed as M, source, base);
-		} finally {
-			if (IN_FLIGHT_REFS.get(guardKey) === token) IN_FLIGHT_REFS.delete(guardKey);
+		// SC-149 — which base def renders this code? For every typed element that is
+		// always its own base; `ds-scc` supplies a `baseForType` that dispatches on the
+		// resolved entity's SCC `type` (the same TYPE_ADAPTERS ordering CompendiumIndex
+		// used to build the model just below, so the two can never disagree about which
+		// family a `type` belongs to). Checked BEFORE `entity.model()` so a type this
+		// plugin cannot render says so plainly instead of blaming a stale compendium.
+		const base = this.baseForType(entity.type);
+		if (base === undefined) {
+			this.errorCard(
+				root,
+				`"${entity.name}" (type: ${entity.type || 'unknown'}) has no renderer in this plugin.`,
+			);
+			return;
 		}
+		const parsed = await entity.model();
+		if (gen !== this.resolveGen) return;
+		if (parsed === undefined) {
+			// Minor fix (review round 1, spec §1.5): name the file + frontmatter `type`,
+			// not just the entity's display name, so a user debugging a stale-compendium
+			// file can tell which file/version is stale.
+			const type = entity.type || 'unknown';
+			this.errorCard(
+				root,
+				`"${entity.name}" found but not renderable — ${entity.file.path} (type: ${type}) predates the required block; re-sync.`,
+			);
+			return;
+		}
+		const body = await entity.body();
+		if (gen !== this.resolveGen) return;
+		const source: RefSource = { file: entity.file, frontmatter: entity.frontmatter, body };
+		// SC-536: the last gen check is above; from here this resolution is the one that draws, so it may record its chain.
+		if (!this.claimChain(root, trimmed, [`scc:${code}`, `file:${entity.file.path}`])) return;
+		await this.mountBase(root, parsed as M, source, base);
 	}
 
 	/**
@@ -309,7 +306,25 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 		const rawText = await this.legacyRefRawText(resolved);
 		if (gen !== this.resolveGen) return;
 		const model = this.base.parse(resolved.data, rawText);
+		// SC-536: the last gen check is above (see resolveAndMount's SCC ladder).
+		if (!this.claimChain(root, raw, [resolved.file ? `file:${resolved.file.path}` : `raw:${this.base.id}|${raw}`])) return;
 		await this.mountBase(root, model);
+	}
+
+	/**
+	 * SC-536: refuse a target the cards around this root already show; otherwise record this root's chain. Runs immediately
+	 * before each `mountBase`, after the last `resolveGen` check: only the resolution that is about to draw may stamp the
+	 * root (a superseded one never does), and the nested blocks of the base view's markdown exist only after `mountBase`,
+	 * so recording the chain here is always early enough -- even though their processors run synchronously inside it.
+	 */
+	private claimChain(root: HTMLElement, raw: string, targets: string[]): boolean {
+		const parent = nearestChain(root);
+		if (parent && targets.some((t) => parent.targets.has(t))) {
+			this.errorCard(root, `Reference loop: ${raw} is already shown by a card this one is inside.`);
+			return false;
+		}
+		REF_CHAIN.set(root, { targets: new Set([...(parent?.targets ?? []), ...targets]), depth: (parent?.depth ?? 0) + 1 });
+		return true;
 	}
 
 	/** Fix round 1 (Low, finding 3): byte-original block text over a `stringifyYaml`

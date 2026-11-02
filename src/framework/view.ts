@@ -240,6 +240,10 @@ export abstract class ElementView<M> extends Component {
 	 * in a `.dse-md-table` horizontal scroll container (mdTableWrap.ts) — the plugin's
 	 * equivalent of the site's Material `.md-typeset__table`, without which a wide book
 	 * table overflows its card unreachably at sidebar width.
+	 *
+	 * SC-536: render into an element that is ALREADY INSIDE this view's card. A whole-block reference in the markdown becomes a
+	 * nested block whose only link to its parent is the DOM, and RefUnwrapView's reference guard (cycle check and depth cap)
+	 * walks that DOM. Markdown rendered into a detached element and moved in later would escape the guard.
 	 */
 	protected async renderMarkdown(markdown: string, el: HTMLElement): Promise<void> {
 		await MarkdownRenderer.render(this.cx.app, markdown, el, this.cx.host.sourcePath, this);
@@ -286,15 +290,6 @@ export abstract class ElementView<M> extends Component {
 	 */
 	hasPendingWrite(): boolean {
 		return this.persistScheduled || this.persistInFlight > 0;
-	}
-
-	/**
-	 * SC-525: true once this view has been unloaded (superseded or torn down). Reads `unloaded`, set by a
-	 * callback registered in the constructor, NOT `_loaded`: a view the pipeline mounts under a bare host
-	 * is never `load()`ed, yet it is live and must not read as unloaded.
-	 */
-	isUnloaded(): boolean {
-		return this.unloaded;
 	}
 
 	/**
