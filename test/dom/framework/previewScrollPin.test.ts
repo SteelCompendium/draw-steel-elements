@@ -93,6 +93,19 @@ describe('SC-198: PreviewScrollPin', () => {
 
 		// SC-470: the height rides in a per-pin stylesheet rule, never in an inherited custom
 		// property on the scroller (its set/clear restyled the whole preview: ~220 ms each way).
+		// SC-472: scrollHeight includes the scroller's vertical padding (64px on 1.15.0), which the sizer's min-height does not hold;
+		// pinning scrollHeight added that much phantom space below the note and snapped a reader parked at the end back by it.
+		test('SC-472: the first pin holds the sizer height: scrollHeight less the scroller\'s vertical padding', () => {
+			const { scroller, el } = makeScroller();
+			scroller.style.paddingTop = '32px';
+			scroller.style.paddingBottom = '32px';
+			new PreviewScrollPin().pin(el);
+			expect(pinnedPx(scroller)).toBe('4819px');
+			const bare = makeScroller({ scrollHeight: 6000 }); // no padding: nothing to take off
+			new PreviewScrollPin().pin(bare.el);
+			expect(pinnedPx(bare.scroller)).toBe('6000px');
+		});
+
 		test('SC-470: the height is one injected rule keyed on the attribute value; no custom property or inline style on the scroller', () => {
 			const { scroller, el } = makeScroller();
 			new PreviewScrollPin().pin(el);
@@ -180,16 +193,16 @@ describe('SC-198: PreviewScrollPin', () => {
 			sizerOf(scroller).style.minHeight = '4819px';
 			const pin = new PreviewScrollPin();
 			pin.pin(el);
-			expect(pinnedPx(scroller)).toBe('4883px');
+			expect(pinnedPx(scroller)).toBe('4819px');
 
 			// The rule replaces the inline value, so while pinned scrollHeight reads back as the
 			// pinned value plus the scroller's padding, and the inline value is unchanged.
 			// Re-measuring either raw would ratchet the pin up on every write.
-			setMetric(scroller, 'scrollHeight', 4883 + 64);
+			setMetric(scroller, 'scrollHeight', 4819 + 64);
 			jest.advanceTimersByTime(TTL - 500);
 			pin.pin(el);
 			pin.pin(el);
-			expect(pinnedPx(scroller)).toBe('4883px');
+			expect(pinnedPx(scroller)).toBe('4819px');
 
 			// ...and the second pin's own full TTL is now running.
 			jest.advanceTimersByTime(TTL - 1);
@@ -818,7 +831,7 @@ describe('SC-470: the pin is a floor (re-pin and observer)', () => {
 		document.body.innerHTML = '';
 	});
 
-	/** Pinned at 4883 with Obsidian's inline value 4819 (= the scrollHeight less the 64px padding). */
+	/** Pinned at 4819 (= the scrollHeight less the 64px padding), Obsidian's inline value 4819 too. */
 	function pinned() {
 		const { scroller, el } = makeScroller();
 		scroller.style.paddingTop = '32px';
@@ -847,7 +860,7 @@ describe('SC-470: the pin is a floor (re-pin and observer)', () => {
 		for (const collapsed of ['2446px', '46px', '0px', '']) {
 			sizerOf(scroller).style.minHeight = collapsed;
 			await flushObservers();
-			expect(pinnedPx(scroller)).toBe('4883px');
+			expect(pinnedPx(scroller)).toBe('4819px');
 		}
 		sizerOf(scroller).style.minHeight = '5000px';
 		await flushObservers();
@@ -868,14 +881,14 @@ describe('SC-470: the pin is a floor (re-pin and observer)', () => {
 
 	test('a re-pin applies the same max: a larger inline value is taken at once; padding-inflated scrollHeight and collapses are not', () => {
 		const { scroller, el, pin } = pinned();
-		setMetric(scroller, 'scrollHeight', 4883 + 64); // the pinned px plus padding: no growth
+		setMetric(scroller, 'scrollHeight', 4819 + 64); // the pinned px plus padding: no growth
 		pin.pin(el);
-		expect(pinnedPx(scroller)).toBe('4883px');
-		for (const collapsed of [4883, 2446, 246, 0]) {
+		expect(pinnedPx(scroller)).toBe('4819px');
+		for (const collapsed of [4819, 2446, 246, 0]) {
 			setMetric(scroller, 'scrollHeight', collapsed);
 			sizerOf(scroller).style.minHeight = `${collapsed}px`;
 			pin.pin(el);
-			expect(pinnedPx(scroller)).toBe('4883px');
+			expect(pinnedPx(scroller)).toBe('4819px');
 		}
 		sizerOf(scroller).style.minHeight = '5901px'; // written, observer not yet run
 		pin.pin(el);

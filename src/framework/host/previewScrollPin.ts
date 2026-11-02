@@ -385,7 +385,10 @@ export class PreviewScrollPin {
 		if (scroller.scrollHeight <= scroller.clientHeight) return;
 
 		host = host && embedStopWanted(scroller); // the embed anchoring stop only where it does not cost the reader (header)
-		const px = scroller.scrollHeight;
+		// SC-472: the sizer's height, not the scroller's: scrollHeight includes the scroller's vertical padding (64px on 1.15.0), so
+		// the first pin added that much phantom space below the note (a reader parked at its end was snapped back by it at release).
+		// Re-pins already subtract it.
+		const px = scroller.scrollHeight - verticalPadding(scroller, win);
 		const id = String(++nextPinId);
 		const style = doc.createElement('style');
 		style.setAttribute(STYLE_ATTR, id);
