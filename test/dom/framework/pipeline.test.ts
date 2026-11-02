@@ -635,6 +635,130 @@ describe('T-9 (Plan 02): ElementPipeline.run (F1 §2.4)', () => {
 			});
 		});
 
+		// SC-540: the same lever for a DSE block inside a Live Preview CALLOUT. Obsidian draws the callout as one CodeMirror widget
+		// (`.cm-embed-block.cm-callout`) whose click handler selects the whole callout - the card turns into its markdown source and
+		// the editor scrolls to it - for a click anywhere in the widget except a target under `.cm-editor, .interactive-child`.
+		describe('SC-540 Live Preview callout: the root is an Obsidian interactive child', () => {
+			async function mountIn(wrap: (containerEl: HTMLElement) => HTMLElement): Promise<{ root: HTMLElement; outer: HTMLElement; cleanup: () => void }> {
+				const { deps } = makeDeps();
+				const pipeline = new ElementPipeline(deps);
+				const host = makeHost();
+				const outer = wrap(host.containerEl);
+				document.body.appendChild(outer);
+				await pipeline.run(labelDef(), 'label: x', host);
+				return { root: host.containerEl.firstElementChild as HTMLElement, outer, cleanup: () => document.body.removeChild(outer) };
+			}
+			/** `.cm-content > .cm-embed-block.cm-callout > .markdown-rendered > .callout > .callout-content > <the block's container>`, with a title row beside it. */
+			const lpCallout = (el: HTMLElement): HTMLElement => {
+				const content = document.createElement('div');
+				content.className = 'cm-content';
+				const widget = content.createDiv({ cls: 'cm-embed-block cm-callout' });
+				const callout = widget.createDiv({ cls: 'markdown-rendered' }).createDiv({ cls: 'callout' });
+				callout.createDiv({ cls: 'callout-title', text: 'Camp' });
+				callout.createDiv({ cls: 'callout-content' }).appendChild(el);
+				return content;
+			};
+			const press = (target: HTMLElement, type: string): void => {
+				target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }));
+			};
+			/** What Obsidian's callout widget does (app.js 1.15.0, `hookClickHandler`): select the callout unless a node from the target up to the editor's content is `.cm-editor, .interactive-child`. */
+			const widgetWouldSelect = (target: HTMLElement, contentDOM: HTMLElement): boolean => {
+				for (let n: Node | null = target; n && n !== contentDOM; n = n.parentNode) {
+					if (n instanceof HTMLElement && n.matches('.cm-editor, .interactive-child')) return false;
+				}
+				return true;
+			};
+			test.each(['click', 'pointerdown', 'mousedown'] as const)('a %s inside a Live Preview callout marks the root', async (type) => {
+				const { root, cleanup } = await mountIn(lpCallout);
+				try {
+					expect(root.classList.contains('interactive-child')).toBe(false);
+					press(root.querySelector('.label-content') as HTMLElement, type);
+					expect(root.classList.contains('interactive-child')).toBe(true);
+				} finally {
+					cleanup();
+				}
+			});
+			test('a callout inside a callout (the inner one is drawn inside the outer widget) marks the root', async () => {
+				const nested = (el: HTMLElement): HTMLElement => {
+					const outer = lpCallout(document.createElement('div'));
+					const inner = outer.querySelector('.callout-content') as HTMLElement;
+					const innerCallout = inner.createDiv({ cls: 'callout' });
+					innerCallout.createDiv({ cls: 'callout-content' }).appendChild(el);
+					return outer;
+				};
+				const { root, cleanup } = await mountIn(nested);
+				try {
+					press(root.querySelector('.label-content') as HTMLElement, 'click');
+					expect(root.classList.contains('interactive-child')).toBe(true);
+				} finally {
+					cleanup();
+				}
+			});
+			test('after the click, Obsidian\'s callout handler skips a click in the card but still selects the callout for its title', async () => {
+				const { root, outer, cleanup } = await mountIn(lpCallout);
+				try {
+					const label = root.querySelector('.label-content') as HTMLElement;
+					const title = outer.querySelector('.callout-title') as HTMLElement;
+					expect(widgetWouldSelect(label, outer)).toBe(true); // before the press: the whole callout would be selected
+					press(label, 'click');
+					expect(widgetWouldSelect(label, outer)).toBe(false);
+					expect(widgetWouldSelect(title, outer)).toBe(true); // the title, and any callout text outside the card, keep entering the source
+				} finally {
+					cleanup();
+				}
+			});
+			test('the mark does not stop the click: it still bubbles to the widget and to the document (links and checkboxes keep their handlers)', async () => {
+				const { root, outer, cleanup } = await mountIn(lpCallout);
+				try {
+					const seen: Array<{ where: string; prevented: boolean }> = [];
+					const widget = outer.querySelector('.cm-callout') as HTMLElement;
+					widget.addEventListener('click', (e) => seen.push({ where: 'widget', prevented: e.defaultPrevented }));
+					document.addEventListener('click', (e) => seen.push({ where: 'document', prevented: e.defaultPrevented }), { once: true });
+					press(root.querySelector('.label-content') as HTMLElement, 'click');
+					expect(seen).toEqual([{ where: 'widget', prevented: false }, { where: 'document', prevented: false }]);
+				} finally {
+					cleanup();
+				}
+			});
+			test('Reading view callouts, and Live Preview blocks that are not in a callout widget, are left alone', async () => {
+				const reading = (el: HTMLElement): HTMLElement => {
+					const view = document.createElement('div');
+					view.className = 'markdown-preview-view';
+					view.createDiv({ cls: 'callout' }).createDiv({ cls: 'callout-content' }).appendChild(el);
+					return view;
+				};
+				const readingCmClass = (el: HTMLElement): HTMLElement => {
+					// a `.cm-callout` that is not under the editor's content (no editor around it)
+					const view = document.createElement('div');
+					view.className = 'cm-embed-block cm-callout';
+					view.appendChild(el);
+					return view;
+				};
+				const plainWidget = (el: HTMLElement): HTMLElement => {
+					const content = document.createElement('div');
+					content.className = 'cm-content';
+					content.createDiv({ cls: 'cm-embed-block' }).appendChild(el);
+					return content;
+				};
+				const lpLine = (el: HTMLElement): HTMLElement => {
+					const content = document.createElement('div');
+					content.className = 'cm-content';
+					content.createDiv({ cls: 'cm-line' }).appendChild(el);
+					return content;
+				};
+				for (const wrap of [reading, readingCmClass, plainWidget, lpLine]) {
+					const { root, cleanup } = await mountIn(wrap);
+					try {
+						press(root.querySelector('.label-content') as HTMLElement, 'click');
+						press(root.querySelector('.label-content') as HTMLElement, 'mousedown');
+						expect(root.classList.contains('interactive-child')).toBe(false);
+					} finally {
+						cleanup();
+					}
+				}
+			});
+		});
+
 		test('def.noClickShield === true: mousedown bubbles normally (shield not armed)', async () => {
 			const { deps } = makeDeps();
 			const pipeline = new ElementPipeline(deps);
