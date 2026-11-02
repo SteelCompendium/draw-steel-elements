@@ -28,6 +28,11 @@
 // (matched by its accessible name), else the card's Edit pencil, else the card. The ring follows how the form was
 // opened: a keyboard open gets the keyboard ring back, a mouse open gets plain focus (no ring forced).
 
+// SC-511 uses only the three exports below, not the request machinery: a keyboard "Unpin from sidebar" (or the
+// degrade card's "Remove panel") removes a sidebar panel synchronously, so `DseSidebarView.removePanel` hands focus
+// straight to the panel that took its place (else the one above, else the "No pinned blocks" message) with
+// `isKeyboardClick`, `focusControl` and `focusIsFree`. Same keyboard-only rule, nothing armed, nothing to expire.
+
 /** `focusVisible` is Chromium 124+; older engines ignore the key. */
 export const HANDOFF_FOCUS = { preventScroll: true, focusVisible: true } as FocusOptions;
 
