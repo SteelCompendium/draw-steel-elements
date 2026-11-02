@@ -121,7 +121,8 @@
 // embed's top - on every click in the card, written or not (parked in the tracker 5420 -> 3916, text +1528px; a note that
 // is mostly the embed 2912 -> 150 / 0). That handler skips a click whose target sits in an `.interactive-child`
 // (Obsidian's own marker), so `pipeline.ts` (`armClickShield`) puts that class on the DSE root, only when the root sits in
-// a Live Preview embed (`.cm-content .internal-embed`). USER-VISIBLE: a click inside a DSE card in a Live Preview embed no
+// a Live Preview embed (`.cm-content .internal-embed`) - and, since SC-540, in a Live Preview callout widget (the same handler
+// selected the whole callout and turned it into source; see the comment there). USER-VISIBLE: a click inside a DSE card in a Live Preview embed no
 // longer selects the embed - the editor cursor does not move onto it and the selected-embed outline does not draw.
 // A click elsewhere in the embed (outside the card) still selects it as before; Reading view and the DSE code-block
 // widgets in Live Preview are untouched. Obsidian also tests `interactive-child` for double-click and Mod+A inside the

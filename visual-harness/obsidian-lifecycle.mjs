@@ -104,7 +104,7 @@
 // (also twins far apart, where the lower callout is off screen at the write, and a click on the lower callout's title right after it).
 // Obsidian draws a callout as one editor widget and, after a write to the upper one, hands its OLD widget (with the writer's live view) to the lower
 // slot without calling a processor, so the lower callout showed the writer's value, a click on it wrote the UPPER block and a form Save was erased. Real
-// mouse clicks; the cards are read after the cursor is parked (a click in a callout opens it as source, SC-540). Per phase the picture is the note: one
+// mouse clicks; the cards are read after the cursor is parked (written before SC-540, when a click in a callout still opened it as source; the park stays). Per phase the picture is the note: one
 // card per block, each showing its block, disk changed only by the clicked block; the upper widget's DOM, tagged before the click, sits in the lower
 // slot afterwards and a `reused-by-twin` release is recorded (so the scenario cannot pass without the editor-driven redraw).
 //
