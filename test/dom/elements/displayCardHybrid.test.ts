@@ -28,14 +28,13 @@
 //       in inline mode — the flag firing independently of the Task 7 duplicate-text guard
 //       (picked a short bonus value so the duplicate-text guard's own length floor can't be
 //       the thing doing the suppressing).
-//   (d) the depth guard (RefUnwrapView.ts's module-level `IN_FLIGHT_REFS`): a synthetic
+//   (d) the reference guard (RefUnwrapView.ts's DOM-ancestry `REF_CHAIN`): a synthetic
 //       `kit/self-ref.md` fixture whose own body whole-block-references itself. The jest
 //       MarkdownRenderer mock's inability to execute code-block processors (see (b) above)
-//       means real markdown-driven recursion can't be triggered from jest at all — so this
-//       drives the SAME reentrancy the real processor chain would (a second resolution of
-//       the identical code, in the identical block, while the first is still in flight) by
-//       wrapping `compendium.getEntity` to recursively invoke the SAME pipeline+host before
-//       resolving — the most faithful thing achievable without a real Obsidian instance.
+//       means real markdown-driven recursion can't be triggered from jest at all -- so this
+//       does by hand what Obsidian's processor does for the fixture's nested fence: once the
+//       outer card has mounted, it runs the SAME code through a fresh host whose element is
+//       INSIDE the outer card's body (a nested block exists only after its parent mounted).
 import { ElementPipeline } from '@/framework/pipeline';
 import { kitElement } from '@/elements/display';
 import { displayFamily } from '@/elements/display/displayFamily';
@@ -177,46 +176,35 @@ describe('D6 Task 9: hybrid by-SCC render — frontmatter chrome + source body (
 		expect(rowByLabel(hybridCard, 'OmitTest')).toBeNull();
 	});
 
-	test('(d) depth guard: a code already resolving in the SAME block is refused, not infinitely recursed', async () => {
+	test('(d) reference guard: a code already shown by a card this one is inside is refused, not infinitely recursed', async () => {
 		const { vault, deps } = makeCompendiumDeps();
 		loadMdDseFixture(vault, SELF_REF_REL);
 		const host = makeHost('ds-kit');
 		const pipeline = new ElementPipeline(deps);
 
-		// See file header (d): jest's MarkdownRenderer mock can't execute code-block
-		// processors, so `kit/self-ref.md`'s own nested ```ds-kit self-reference fence
-		// can never actually re-enter the pipeline from a real render in this harness.
-		// This wraps compendium.getEntity to trigger that same reentrancy directly — a
-		// second resolution of the identical code, on the identical host (so
-		// RefUnwrapView sees the identical blockKey), synchronously nested inside the
-		// first resolution's own in-flight window — the most faithful simulation of what
-		// the real code-block processor chain would do, achievable without real Obsidian.
-		const realGetEntity = deps.compendium!.getEntity.bind(deps.compendium);
-		let triggeredRecursion = false;
-		(deps.compendium as any).getEntity = async (code: string) => {
-			if (code === SELF_REF_CODE && !triggeredRecursion) {
-				triggeredRecursion = true;
-				await pipeline.run(kitElement, `scc.v1:${code}`, host);
-			}
-			return realGetEntity(code);
-		};
-
 		await pipeline.run(kitElement, `scc.v1:${SELF_REF_CODE}`, host);
 
-		expect(triggeredRecursion).toBe(true);
-		const roots = Array.from(host.containerEl.children) as HTMLElement[];
-		// Root #0: the OUTER call's root div (created before the recursive inner call),
-		// filled in only once the inner call (and the guard refusal inside it) settles —
-		// it resolves normally, proving a refused inner recursion doesn't corrupt the
-		// outer resolution.
-		expect(roots[0].querySelectorAll('.dse-error-card')).toHaveLength(0);
-		expect(cardTitleText(roots[0])).toBe('Self Ref');
+		const outer = host.containerEl.firstElementChild as HTMLElement;
+		expect(outer.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(cardTitleText(outer)).toBe('Self Ref');
 
-		// Root #1: the INNER (recursive, same blockKey + same code) call's root div —
-		// refused by the depth guard instead of recursing further.
-		const innerMessage = roots[1].querySelector('.dse-error-card-message');
-		expect(innerMessage?.textContent).toMatch(/nesting too deep/i);
-		expect(roots[1].querySelector('.dse-card')).toBeNull();
+		// See file header (d): what the real code-block processor does for the body's own
+		// ```ds-kit fence -- a new block, with a host of its own, rendered into an element
+		// inside the outer card's body.
+		const body = outer.querySelector('.dse-card__body') as HTMLElement;
+		expect(body).not.toBeNull();
+		const innerHost = makeHost('ds-kit');
+		body.appendChild(innerHost.containerEl);
+		await pipeline.run(kitElement, `scc.v1:${SELF_REF_CODE}`, innerHost);
+
+		const inner = innerHost.containerEl.firstElementChild as HTMLElement;
+		expect(inner.querySelector('.dse-error-card-message')?.textContent).toBe(
+			`Reference loop: scc.v1:${SELF_REF_CODE} is already shown by a card this one is inside.`,
+		);
+		expect(inner.querySelector('.dse-card')).toBeNull();
+		// the outer card is untouched by the refused inner one
+		expect(outer.querySelectorAll('.dse-error-card')).toHaveLength(1);
+		expect(cardTitleText(outer)).toBe('Self Ref');
 	});
 
 	test('(e) the Task 7 duplicate-text guard suppresses frontmatter flavor when it\'s a duplicate of the source body\'s lead', async () => {

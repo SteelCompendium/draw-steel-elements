@@ -63,9 +63,8 @@ async function settle(): Promise<void> {
 	for (let i = 0; i < 5; i++) await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
-// SC-525 r3/r5 (INFO-3): the depth guard's map is module-level and the preview's blockKey is the same in every test, so a
-// test that fails with a lookup still held would leave a live entry behind and turn every later test red. Every hold
-// (holdLookups, and the ds-scc entity read below) registers its release here and afterEach lets all of it go, pass or fail.
+// SC-525 r3/r5 (INFO-3): every hold (holdLookups, and the ds-scc entity read below) registers its release here and afterEach lets
+// all of it go, pass or fail, so a test that fails with a lookup still held cannot leave it pending for the next.
 const releasers: Array<() => Promise<void>> = [];
 afterEach(async () => {
 	for (const release of releasers.splice(0)) await release();
@@ -363,11 +362,13 @@ describe('SC-510: a ds-scc code in the edit form', () => {
 
 // SC-525 -- retyping the SAME reference while its lookup is still running.
 //
-// The preview's blockKey is the same on every keystroke, and RefUnwrapView refused a reference already
+// The preview's blockKey was the same on every keystroke, and RefUnwrapView refused a reference already
 // "in flight" for that key. An unloaded (superseded) preview view still held its entry until its own lookup
 // finished, so a key that left the reference unchanged (a trailing space) showed "Reference nesting too deep",
-// and kept showing it after the first lookup finished, until the next keystroke.
-const NESTING = /nesting too deep/i;
+// and kept showing it after the first lookup finished, until the next keystroke. Since SC-536 the guard
+// follows DOM ancestry and each keystroke's preview sits in a slot with no reference card around it, so neither
+// refusal (the cycle card or the depth cap) can show.
+const NESTING = /nesting too deep|Reference loop/i;
 
 /** A preview that never shows the depth guard's refusal, nor any other error card. */
 function expectNoNestingError(preview: HTMLElement): void {

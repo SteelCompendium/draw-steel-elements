@@ -473,120 +473,198 @@ describe('RefUnwrapView — legacy @path / [[wikilink]] whole-block refs (D6 spe
 	});
 });
 
-// SC-525 -- the in-flight depth guard (IN_FLIGHT_REFS) is keyed on blockKey + reference and records the
-// view that owns the entry. A reference already resolving in the SAME block is refused only while its
-// owner is a live view: a superseded (unloaded) owner -- the block edit form's preview, which remounts a
-// fresh view into the same blockKey on every keystroke -- no longer blocks its replacement, and its late
-// `finally` no longer clears the replacement's entry. A genuine nesting cycle stays refused.
-describe('RefUnwrapView — in-flight depth guard (SC-525)', () => {
-	interface NestModel {
+// SC-536 -- the reference guard follows DOM ancestry (RefUnwrapView's REF_CHAIN), not block identity. These tests model
+// REAL nesting: a base view that renders a reference inside its own card hands the nested block a FRESH host whose
+// containerEl is INSIDE the card's root and whose blockKey is its own (Obsidian's docId fallback) -- and, like
+// renderFeature's `void renderMd`, may or may not wait for it. (The old model ran the nested pipeline on the SAME host, which made
+// the nested root a sibling with the same blockKey: the shape the old block-identity guard keyed on, and not what Obsidian does.)
+interface NestModel {
+	text: string;
+	next?: string | string[];
+}
+/** Anything the guard shows in place of a card (absence assertions). */
+const REFUSED = /nesting too deep|Reference loop/;
+const LOOP = /Reference loop/;
+const CAP = /nesting too deep/;
+const loopMessage = (raw: string) => `Reference loop: ${raw} is already shown by a card this one is inside.`;
+const CAP_MESSAGE = 'Reference nesting too deep: more than 5 references inside one another.';
+/** The probe's own brake: with no guard the recursion is endless, so a red run stops here instead of running out of memory. */
+const VIEW_CAP = 30;
+let setupSeq = 0;
+
+const tick = async () => {
+	for (let i = 0; i < 5; i++) await new Promise<void>((resolve) => setTimeout(resolve, 0));
+};
+/** Long enough for a fire-and-forget chain of nested renders to finish. */
+const settle = async () => {
+	for (let i = 0; i < 40; i++) await new Promise<void>((resolve) => setTimeout(resolve, 0));
+};
+const nestingErrors = (roots: HTMLElement[]) =>
+	roots.filter((r) => REFUSED.test(r.querySelector('.dse-error-card-message')?.textContent ?? ''));
+const rendered = (root: HTMLElement) => root.querySelector('.test-base-view')?.getAttribute('data-test-model');
+/** Every card the base view drew, in document order. */
+const cards = (top: HTMLElement) => Array.from(top.querySelectorAll('.test-base-view')).map((n) => n.getAttribute('data-test-model'));
+/** How many reference roots (`data-dse-element`) enclose `el`: a message inside the refused root, inside the outer root, reads 2. */
+const depthOf = (el: Element) => {
+	let d = 0;
+	for (let p = el.parentElement; p; p = p.parentElement) if (p.hasAttribute('data-dse-element')) d++;
+	return d;
+};
+const messages = (top: HTMLElement, re: RegExp) =>
+	Array.from(top.querySelectorAll('.dse-error-card-message'))
+		.filter((n) => re.test(n.textContent ?? ''))
+		.map((n) => ({ depth: depthOf(n), text: n.textContent }));
+
+/** A host for a nested block: its element is inside the card (what the card handed to renderMarkdown). */
+function nestedHost(containerEl: HTMLElement): BlockHost & { containerEl: HTMLElement } {
+	const key = `Note.md::ds-test-base::nested-${++setupSeq}`;
+	return { ...makeHost(), containerEl, blockKey: () => key };
+}
+
+/** A reference-capable base whose view renders `text`, then (like a card whose body holds whole-block refs) gives each
+ *  `next` its own slot inside the card and runs a nested pipeline there. `views` collects every RefUnwrapView created. */
+function nestDef(deps: ElementPipelineDeps, opts: { fireAndForget?: boolean }, views: ElementView<any>[]) {
+	const pipeline = new ElementPipeline(deps);
+	let def: ElementDefinition<any>;
+	class NestView extends ElementView<NestModel> {
+		protected async onMount(root: HTMLElement, model: NestModel): Promise<void> {
+			root.createDiv({ cls: 'test-base-view', attr: { 'data-test-model': model.text } });
+			if (!model.next || views.length >= VIEW_CAP) return;
+			const runs = [model.next].flat().map((next) => {
+				const slot = root.createDiv({ cls: 'nested-slot' });
+				return pipeline.run(def, next, nestedHost(slot));
+			});
+			if (!opts.fireAndForget) await Promise.all(runs);
+		}
+	}
+	const nestBase: ElementDefinition<NestModel> = {
+		id: 'test-base',
+		name: 'Test Base',
+		aliases: ['ds-test-base'],
+		shape: 'static',
+		parse: (data) => data as NestModel,
+		createView: (cx) => new NestView(cx),
+	};
+	const wrapped = withReference(nestBase, { sccType: /statblock$/ });
+	def = {
+		...wrapped,
+		createView: (cx: any) => {
+			const view = wrapped.createView(cx) as ElementView<any>;
+			views.push(view);
+			return view;
+		},
+	};
+	return { pipeline, def };
+}
+
+/** `@ref` lookups (`table`), optionally backed by a vault file (`files`), each held on request. */
+function setup(opts: { fireAndForget?: boolean } = {}) {
+	const table: Record<string, NestModel> = {};
+	const files: Record<string, string> = {};
+	const holds: Array<() => void> = [];
+	const readHolds: Array<() => void> = [];
+	const resolved: string[] = [];
+	let holding = false;
+	let readHolding = false;
+	const views: ElementView<any>[] = [];
+	const deps = makeDeps();
+	const { pipeline, def } = nestDef(deps, opts, views);
+	const host = makeHost();
+	const blockKey = `Note.md::ds-test-base::sc536-${++setupSeq}`; // a key of its own per setup, so no test depends on another's state
+	host.blockKey = () => blockKey;
+	deps.refs.register({
+		kind: 'at-path',
+		canResolve: (raw) => raw in table,
+		resolve: ({ raw }) => {
+			resolved.push(raw);
+			const result = { data: table[raw], ...(files[raw] ? { file: fakeTFile(files[raw]) } : {}) } as any;
+			return holding ? new Promise((resolve) => holds.push(() => resolve(result))) : Promise.resolve(result);
+		},
+	});
+	(deps.app as any).vault.read = () =>
+		readHolding ? new Promise((resolve) => readHolds.push(() => resolve(''))) : Promise.resolve('');
+	return {
+		table,
+		files,
+		holds,
+		readHolds,
+		resolved,
+		views,
+		host,
+		top: host.containerEl,
+		run: (ref: string) => pipeline.run(def, ref, host),
+		hold: (on: boolean) => {
+			holding = on;
+		},
+		holdReads: (on: boolean) => {
+			readHolding = on;
+		},
+		roots: () => Array.from(host.containerEl.children) as HTMLElement[],
+	};
+}
+
+/** The same nesting over the SCC ladder (`entities`, by code) and the legacy ladder (`atPath`, by `@path`). */
+function sccSetup(opts: { fireAndForget?: boolean } = {}) {
+	interface Target {
 		text: string;
 		next?: string;
+		path: string;
 	}
-	const NESTING = /nesting too deep/i;
-	let setupSeq = 0;
-
-	/** Base view that renders `text`, then (like a card whose body holds a whole-block ref) mounts the ref
-	 *  `next` names through a nested pipeline run on the SAME host, so it sees the same blockKey. */
-	function setup() {
-		const table: Record<string, NestModel> = {};
-		const holds: Array<() => void> = [];
-		let holding = false;
-		const views: ElementView<any>[] = [];
-		const deps = makeDeps();
-		const pipeline = new ElementPipeline(deps);
-		const host = makeHost();
-		// SC-525 r3 (INFO-3): IN_FLIGHT_REFS is module-level, so a test that fails while a lookup is held would leave
-		// a live entry behind and refuse the same reference in every later test. A key of its own per setup keeps
-		// each test's entries to itself.
-		const blockKey = `Note.md::ds-test-base::sc525-${++setupSeq}`;
-		host.blockKey = () => blockKey;
-		class NestView extends ElementView<NestModel> {
-			protected async onMount(root: HTMLElement, model: NestModel): Promise<void> {
-				root.createDiv({ cls: 'test-base-view', attr: { 'data-test-model': model.text } });
-				if (model.next) await pipeline.run(def, model.next, host);
-			}
-		}
-		const nestBase: ElementDefinition<NestModel> = {
-			id: 'test-base',
-			name: 'Test Base',
-			aliases: ['ds-test-base'],
-			shape: 'static',
-			parse: (data) => data as NestModel,
-			createView: (cx) => new NestView(cx),
-		};
-		const wrapped = withReference(nestBase, { sccType: /statblock$/ });
-		const def: ElementDefinition<any> = {
-			...wrapped,
-			createView: (cx: any) => {
-				const view = wrapped.createView(cx) as ElementView<any>;
-				views.push(view);
-				return view;
+	const entities: Record<string, Target> = {};
+	const atPath: Record<string, Target> = {};
+	const views: ElementView<any>[] = [];
+	const anyFile = fakeTFile('DS Compendium/any.md');
+	const deps = makeDeps({
+		sccAnchors: fakeSccAnchors(() => ({ kind: 'vault', file: anyFile, linkpath: anyFile.path })),
+		compendium: fakeCompendium({
+			getEntity: async (code) => {
+				const e = entities[code];
+				if (!e) return null;
+				return {
+					scc: code,
+					type: 'monster.goblin.statblock',
+					name: e.text,
+					source: 'mcdm.monsters.v1',
+					file: fakeTFile(e.path),
+					frontmatter: {},
+					body: async () => '',
+					model: async () => ({ text: e.text, next: e.next }),
+				};
 			},
-		};
-		deps.refs.register({
-			kind: 'at-path',
-			canResolve: (raw) => raw in table,
-			resolve: ({ raw }) =>
-				holding
-					? new Promise((resolve) => holds.push(() => resolve({ data: table[raw] })))
-					: Promise.resolve({ data: table[raw] }),
-		});
-		return {
-			table,
-			holds,
-			views,
-			host,
-			run: (ref: string) => pipeline.run(def, ref, host),
-			hold: (on: boolean) => {
-				holding = on;
-			},
-			roots: () => Array.from(host.containerEl.children) as HTMLElement[],
-		};
-	}
-	const tick = async () => {
-		for (let i = 0; i < 5; i++) await new Promise<void>((resolve) => setTimeout(resolve, 0));
-	};
-	const nestingErrors = (roots: HTMLElement[]) =>
-		roots.filter((r) => NESTING.test(r.querySelector('.dse-error-card-message')?.textContent ?? ''));
-	const rendered = (root: HTMLElement) => root.querySelector('.test-base-view')?.getAttribute('data-test-model');
+		}),
+	});
+	deps.refs.register({
+		kind: 'at-path',
+		canResolve: (raw) => raw in atPath,
+		resolve: async ({ raw }) => ({ data: { text: atPath[raw].text, next: atPath[raw].next }, file: fakeTFile(atPath[raw].path) }) as any,
+	});
+	(deps.app as any).vault.read = async () => '';
+	const { pipeline, def } = nestDef(deps, opts, views);
+	const host = makeHost();
+	return { entities, atPath, views, top: host.containerEl, run: (ref: string) => pipeline.run(def, ref, host) };
+}
 
+// SC-525 -- a reference's resolution can be superseded (`resolveGen`): the block edit form's preview remounts a fresh view
+// into the same blockKey on every keystroke, a pinned card's view is updated while its lookup is still running. Only the newest
+// resolution of a view may draw, and a superseded one never blocks, refuses or disturbs another (SC-536 replaced the
+// block-identity guard, which refused them, with the ancestry guard).
+describe('RefUnwrapView — superseded and overlapping resolutions (SC-525)', () => {
 	test('a cycle A -> B -> A in one live block is refused at the second A', async () => {
 		const s = setup();
 		s.table['@A'] = { text: 'A', next: '@B' };
 		s.table['@B'] = { text: 'B', next: '@A' };
 		await s.run('@A');
-		const roots = s.roots();
-		expect(roots).toHaveLength(3);
-		expect(rendered(roots[0])).toBe('A');
-		expect(rendered(roots[1])).toBe('B');
-		expect(nestingErrors(roots)).toEqual([roots[2]]);
-		expect(roots[2].querySelector('.dse-error-card-message')?.textContent).toContain('`@A`');
+		expect(s.roots()).toHaveLength(1);
+		expect(cards(s.top)).toEqual(['A', 'B']);
+		expect(messages(s.top, LOOP)).toEqual([{ depth: 3, text: loopMessage('@A') }]);
 	});
 
 	test('a reference to itself (A -> A) is refused', async () => {
 		const s = setup();
 		s.table['@A'] = { text: 'A', next: '@A' };
 		await s.run('@A');
-		const roots = s.roots();
-		expect(roots).toHaveLength(2);
-		expect(rendered(roots[0])).toBe('A');
-		expect(nestingErrors(roots)).toEqual([roots[1]]);
-	});
-
-	test('two live views in one block resolving the same reference at once: the later one is refused, the earlier one still renders', async () => {
-		const s = setup();
-		s.table['@A'] = { text: 'A' };
-		s.hold(true);
-		const first = s.run('@A');
-		await tick();
-		const second = s.run('@A');
-		await tick();
-		expect(nestingErrors(s.roots())).toEqual([s.roots()[1]]);
-		s.holds.forEach((release) => release());
-		await Promise.all([first, second]);
-		expect(rendered(s.roots()[0])).toBe('A');
-		expect(nestingErrors(s.roots())).toEqual([s.roots()[1]]);
+		expect(cards(s.top)).toEqual(['A']);
+		expect(messages(s.top, LOOP)).toEqual([{ depth: 2, text: loopMessage('@A') }]);
 	});
 
 	test('once a resolution settles, the same reference resolves again in that block', async () => {
@@ -617,31 +695,6 @@ describe('RefUnwrapView — in-flight depth guard (SC-525)', () => {
 		await first;
 		expect(nestingErrors(s.roots())).toEqual([]);
 		expect(rendered(s.roots()[1])).toBe('A');
-	});
-
-	test('a superseded owner\'s late finally leaves the new owner\'s entry in place: a third live view is still refused', async () => {
-		const s = setup();
-		s.table['@A'] = { text: 'A' };
-		s.hold(true);
-		const first = s.run('@A');
-		await tick();
-		s.views[0].load();
-		s.views[0].unload();
-		const second = s.run('@A'); // takes the entry over
-		await tick();
-		s.holds[0](); // the superseded lookup finishes first: its finally runs while `second` is still in flight
-		await first;
-		const third = s.run('@A');
-		await tick();
-		expect(nestingErrors(s.roots())).toEqual([s.roots()[2]]);
-		await third;
-		s.holds[1]();
-		await second;
-		// the owner's own finally cleared the entry: a later run resolves normally
-		s.hold(false);
-		await s.run('@A');
-		expect(rendered(s.roots()[3])).toBe('A');
-		expect(nestingErrors(s.roots())).toEqual([s.roots()[2]]);
 	});
 
 	// SC-525 r3 (LOW-1) -- the SAME view re-enters resolveAndMount while its own lookup is still running (the
@@ -731,7 +784,7 @@ describe('RefUnwrapView — in-flight depth guard (SC-525)', () => {
 		});
 	});
 
-	test('the earlier resolution of an updated view settling leaves the later one\'s entry: another live view is still refused', async () => {
+	test('the earlier resolution of an updated view settling does not make another live view of the reference refused', async () => {
 		const s = setup();
 		s.table['@A'] = { text: 'A' };
 		s.hold(true);
@@ -743,11 +796,13 @@ describe('RefUnwrapView — in-flight depth guard (SC-525)', () => {
 		await first;
 		const other = s.run('@A'); // a different live view of the same block
 		await tick();
-		expect(nestingErrors(s.roots())).toEqual([s.roots()[1]]);
+		expect(nestingErrors(s.roots())).toEqual([]);
+		s.holds[2]();
 		await other;
 		s.holds[1]();
 		await updated;
 		expect(baseViews(s.roots()[0])).toEqual(['A']);
+		expect(rendered(s.roots()[1])).toBe('A');
 	});
 
 	test.each([
@@ -956,7 +1011,180 @@ describe('RefUnwrapView — in-flight depth guard (SC-525)', () => {
 		s.hold(false);
 		s.holds.forEach((release) => release());
 		await Promise.all([first, updated]);
-		expect(s.views.length).toBeLessThanOrEqual(6); // bounded: no endless recursion
-		expect(nestingErrors(s.roots()).length).toBeGreaterThanOrEqual(1);
+		expect(s.views.length).toBe(2); // the view and its one refused nested block: bounded, no endless recursion
+		expect(cards(s.top)).toEqual(['A']);
+		expect(messages(s.top, LOOP)).toEqual([{ depth: 2, text: loopMessage('@A') }]);
+	});
+});
+
+// SC-536 -- the guard follows DOM ancestry. A reference is refused when a card it is inside already shows the same target
+// (a cycle) or when more than MAX_REF_DEPTH (5) references enclose it; nothing else is refused, however many copies of
+// a block are live. Every nesting test runs twice: the nested render awaited, and fire-and-forget as renderFeature does it.
+describe.each([
+	['awaited', false],
+	['fire-and-forget', true],
+] as Array<[string, boolean]>)('RefUnwrapView — reference ancestry guard (SC-536), nested render %s', (_name, fireAndForget) => {
+	const make = () => setup({ fireAndForget });
+
+	test('A -> A: one card, one loop card one level down, bounded views, one extra lookup', async () => {
+		const s = make();
+		s.table['@A'] = { text: 'A', next: '@A' };
+		await s.run('@A');
+		await settle();
+		expect(s.views.length).toBeLessThan(VIEW_CAP);
+		expect(cards(s.top)).toEqual(['A']);
+		expect(messages(s.top, LOOP)).toEqual([{ depth: 2, text: loopMessage('@A') }]);
+		expect(s.resolved).toEqual(['@A', '@A']);
+	});
+
+	test('A -> B -> A: cards A and B, the loop card inside B', async () => {
+		const s = make();
+		s.table['@A'] = { text: 'A', next: '@B' };
+		s.table['@B'] = { text: 'B', next: '@A' };
+		await s.run('@A');
+		await settle();
+		expect(s.views.length).toBeLessThan(VIEW_CAP);
+		expect(cards(s.top)).toEqual(['A', 'B']);
+		expect(messages(s.top, LOOP)).toEqual([{ depth: 3, text: loopMessage('@A') }]);
+	});
+
+	test.each([
+		['an alias then the path', '[[A]]'],
+		['trailing spaces on the outer reference', '@A.md  '],
+	])('the same file under another spelling is the same target (%s)', async (_what, outer) => {
+		const s = make();
+		s.table['[[A]]'] = { text: 'A', next: '@A.md' };
+		s.table['@A.md'] = { text: 'A', next: '@A.md' };
+		s.files['[[A]]'] = 'A.md';
+		s.files['@A.md'] = 'A.md';
+		await s.run(outer);
+		await settle();
+		expect(s.views.length).toBeLessThan(VIEW_CAP);
+		expect(cards(s.top)).toEqual(['A']);
+		expect(messages(s.top, LOOP)).toEqual([{ depth: 2, text: loopMessage('@A.md') }]);
+	});
+
+	test('SCC: a code whose body nests the same code is refused', async () => {
+		const s = sccSetup({ fireAndForget });
+		const CODE_A = 'mcdm.heroes.v1/kit/a';
+		s.entities[CODE_A] = { text: 'A', next: CODE_A, path: 'DS Compendium/kit/a.md' };
+		await s.run(CODE_A);
+		await settle();
+		expect(s.views.length).toBeLessThan(VIEW_CAP);
+		expect(cards(s.top)).toEqual(['A']);
+		expect(messages(s.top, LOOP)).toEqual([{ depth: 2, text: loopMessage(CODE_A) }]);
+	});
+
+	test('SCC: an entity whose file is the nested @path target is the same target', async () => {
+		const s = sccSetup({ fireAndForget });
+		const CODE_A = 'mcdm.heroes.v1/kit/a';
+		s.entities[CODE_A] = { text: 'A', next: '@a.md', path: 'DS Compendium/kit/a.md' };
+		s.atPath['@a.md'] = { text: 'A again', path: 'DS Compendium/kit/a.md' };
+		await s.run(CODE_A);
+		await settle();
+		expect(cards(s.top)).toEqual(['A']);
+		expect(messages(s.top, LOOP)).toEqual([{ depth: 2, text: loopMessage('@a.md') }]);
+	});
+
+	test('depth cap: 7 distinct references show 5 cards and the cap card, and the refused level makes no lookup', async () => {
+		const s = make();
+		for (let i = 1; i <= 7; i++) s.table[`@C${i}`] = { text: `C${i}`, next: i < 7 ? `@C${i + 1}` : undefined };
+		await s.run('@C1');
+		await settle();
+		expect(cards(s.top)).toEqual(['C1', 'C2', 'C3', 'C4', 'C5']);
+		expect(messages(s.top, CAP)).toEqual([{ depth: 6, text: CAP_MESSAGE }]);
+		expect(messages(s.top, LOOP)).toEqual([]);
+		expect(s.resolved).toEqual(['@C1', '@C2', '@C3', '@C4', '@C5']);
+	});
+
+	test('legitimate nesting renders: A -> B, the same reference twice side by side, and a diamond', async () => {
+		const chain = make();
+		chain.table['@A'] = { text: 'A', next: '@B' };
+		chain.table['@B'] = { text: 'B' };
+		await chain.run('@A');
+		await settle();
+		expect(cards(chain.top)).toEqual(['A', 'B']);
+		expect(messages(chain.top, REFUSED)).toEqual([]);
+
+		const twice = make();
+		twice.table['@A'] = { text: 'A', next: ['@B', '@B'] };
+		twice.table['@B'] = { text: 'B' };
+		await twice.run('@A');
+		await settle();
+		expect(cards(twice.top)).toEqual(['A', 'B', 'B']);
+		expect(messages(twice.top, REFUSED)).toEqual([]);
+
+		const diamond = make();
+		diamond.table['@A'] = { text: 'A', next: ['@B', '@C'] };
+		diamond.table['@B'] = { text: 'B', next: '@D' };
+		diamond.table['@C'] = { text: 'C', next: '@D' };
+		diamond.table['@D'] = { text: 'D' };
+		await diamond.run('@A');
+		await settle();
+		expect(cards(diamond.top).sort()).toEqual(['A', 'B', 'C', 'D', 'D']);
+		expect(messages(diamond.top, REFUSED)).toEqual([]);
+	});
+
+	test('a card updated to an inline body starts a new chain: the reference it nests renders', async () => {
+		const s = make();
+		s.table['@A'] = { text: 'A' };
+		await s.run('@A');
+		await s.views[0].update({ kind: 'inline', model: { text: 'Inline', next: '@A' } });
+		await settle();
+		expect(cards(s.top)).toEqual(['Inline', 'A']);
+		expect(messages(s.top, REFUSED)).toEqual([]);
+	});
+
+	test('a superseded resolution never stamps a chain: the new reference\'s children see the new chain', async () => {
+		const s = make();
+		s.table['@A'] = { text: 'A' };
+		s.table['@B'] = { text: 'B', next: ['@A', '@B'] };
+		s.files['@A'] = 'A.md';
+		s.files['@B'] = 'B.md';
+		s.holdReads(true);
+		const first = s.run('@A'); // its lookup is done; it waits on the target file's text
+		await tick();
+		expect(s.readHolds).toHaveLength(1);
+		const updated = s.views[0].update({ kind: 'ref', raw: '@B' });
+		await tick();
+		expect(s.readHolds).toHaveLength(2);
+		s.hold(true); // B's nested lookups wait, so they run after the stale @A is released
+		s.holdReads(false);
+		s.readHolds[1](); // B draws
+		await tick();
+		expect(s.holds).toHaveLength(2);
+		s.readHolds[0](); // the stale @A resumes: it must neither draw nor stamp A on the card's root
+		await tick();
+		s.hold(false);
+		s.holds.forEach((release) => release());
+		await settle();
+		await Promise.all([first, updated]);
+		expect(cards(s.top)).toEqual(['B', 'A']);
+		expect(messages(s.top, LOOP)).toEqual([{ depth: 2, text: loopMessage('@B') }]);
+	});
+});
+
+describe.each([
+	['FIFO', false],
+	['LIFO', true],
+] as Array<[string, boolean]>)('RefUnwrapView — one block live twice (SC-536), lookups released %s', (_name, lifo) => {
+	test('two live copies with the same blockKey, both lookups in flight at once: both draw the card', async () => {
+		const s = setup();
+		s.table['@R'] = { text: 'R' };
+		s.hold(true);
+		const a = s.run('@R');
+		await tick();
+		const b = s.run('@R');
+		await tick();
+		expect(s.holds).toHaveLength(2);
+		expect(nestingErrors(s.roots())).toEqual([]);
+		for (const release of lifo ? [...s.holds].reverse() : [...s.holds]) {
+			release();
+			await tick();
+		}
+		await Promise.all([a, b]);
+		expect(s.roots().map(rendered)).toEqual(['R', 'R']);
+		expect(nestingErrors(s.roots())).toEqual([]);
+		expect(s.top.querySelectorAll('.dse-error-card')).toHaveLength(0);
 	});
 });
