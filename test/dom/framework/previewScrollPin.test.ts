@@ -1165,6 +1165,34 @@ describe('SC-472: a Reading pin is released when the redraw is over', () => {
 		expect(isPinned(s.scroller)).toBe(false);
 	});
 
+	test('redraw-done skips what cannot be compared: an embed that left the document, a scroller sizer with no inline min-height', async () => {
+		const s = embedScene();
+		s.pin.releaseAll();
+		s.pin.pin(s.dse.holder);
+		const fresh = makeRoot(false);
+		s.dse.root.replaceWith(fresh);
+		s.dse.innerSizer.style.minHeight = '110px';
+		s.dse.embed.remove(); // virtualised out of the document, still collapsed
+		await flushObservers();
+		mount(fresh);
+		await flushObservers();
+		frames.run(1);
+		expect(isPinned(s.scroller)).toBe(false);
+
+		const bare = makeScroller(); // Obsidian has not written a min-height on the sizer: nothing to compare against
+		const root = makeRoot(true);
+		bare.el.appendChild(root);
+		const pin = new PreviewScrollPin();
+		pin.pin(bare.el);
+		const again = makeRoot(false);
+		root.replaceWith(again);
+		await flushObservers();
+		mount(again);
+		await flushObservers();
+		frames.run(1);
+		expect(isPinned(bare.scroller)).toBe(false);
+	});
+
 	test('re-pin re-arm: a redraw that began before the latest write does not count; the next redraw releases the re-pinned view', async () => {
 		const s = scene();
 		const fresh = await redrawStart(s); // write 1's redraw has begun: root replaced, sizer collapsed, view not mounted yet
@@ -1310,7 +1338,7 @@ describe('SC-472: a Reading pin is released when the redraw is over', () => {
 			frames.run(BACKSTOP_FRAMES + 10);
 			expect(isPinned(s.scroller)).toBe(true);
 			setMetric(s.scroller, 'scrollTop', 2000); // the viewport bottom now needs 2910: the sizer covers it
-			frames.run(BACKSTOP_FRAMES);
+			frames.run(1); // not 60 quiet frames: the redraw is over, so it is not held for them
 			expect(isPinned(s.scroller)).toBe(false);
 		});
 

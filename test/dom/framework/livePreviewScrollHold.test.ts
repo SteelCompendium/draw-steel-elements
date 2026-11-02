@@ -619,6 +619,45 @@ describe('SC-478: LivePreviewScrollHold CodeMirror extension', () => {
 	});
 });
 
+describe('SC-472: the backstops are cancelled with what they guard', () => {
+	beforeEach(() => jest.useFakeTimers());
+
+	test('a second capture/transaction replaces the pending entry and its backstop; destroy drops the last one', () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3500, [widget(637, 3039)]);
+		hold.capture(view as never, note());
+		hold.onUpdate(update(view));
+		const one = jest.getTimerCount();
+		expect(one).toBeGreaterThan(0);
+		hold.capture(view as never, note());
+		hold.onUpdate(update(view));
+		expect(jest.getTimerCount()).toBe(one); // the first entry's timers were cancelled, not left running beside the new ones
+		hold.releaseAll();
+		const plugin = (hold.extension() as unknown as { create: (v: View) => { destroy: () => void } }).create(view);
+		plugin.destroy();
+		expect(jest.getTimerCount()).toBe(0);
+		expect(frames.pending()).toBe(0);
+	});
+
+	test('a widget hold released on mount leaves no timer or frame callback behind', async () => {
+		const hold = new LivePreviewScrollHold();
+		const view = fakeView(3500, [widget(637, 3039)]);
+		hold.capture(view as never, note());
+		hold.onUpdate(update(view));
+		view.contentDOM.querySelector('.cm-embed-block')!.remove();
+		const fresh = widget(637, 50, false);
+		view.contentDOM.appendChild(fresh);
+		hold.applyHolds(view as never);
+		jest.advanceTimersByTime(TTL); // the frame loops are running: the hold's and the pending entry's
+		expect(frames.pending()).toBe(2);
+		fresh.querySelector('[data-dse-element]')!.appendChild(document.createElement('div'));
+		await flush();
+		await flush();
+		expect(fresh.hasAttribute(HOLD_ATTR)).toBe(false);
+		expect(frames.pending()).toBe(1); // only the pending entry's: the hold's was cancelled with its release
+	});
+});
+
 describe('SC-478: wiring', () => {
 	test('registerFrameworkElements releases every hold when the plugin unloads', () => {
 		const app = new App();
@@ -835,6 +874,25 @@ describe('SC-522: a Live Preview host holds its embed of the written note', () =
 		expect(held(e)).toBe('3190');
 		jest.advanceTimersByTime(1);
 		expect(held(e)).toBeNull();
+	});
+
+	test('SC-472: an embed hold released on mount leaves no timer or frame callback behind', async () => {
+		jest.useFakeTimers();
+		const hold = new LivePreviewScrollHold();
+		const e = embedWidget('B', 3190);
+		hold.holdEmbedsOf(fakeView(6800, [e]) as never, 'B.md', 'A.md', resolver({ B: 'B.md' }));
+		jest.advanceTimersByTime(TTL); // the backstop's frame loop is running
+		expect(frames.pending()).toBe(1);
+		const content = e.querySelector('.markdown-embed-content')!;
+		content.querySelector('[data-dse-element]')!.remove();
+		const fresh = content.appendChild(document.createElement('div'));
+		fresh.setAttribute('data-dse-element', 'initiative');
+		fresh.appendChild(document.createElement('div'));
+		await flush();
+		await flush();
+		expect(held(e)).toBeNull();
+		expect(frames.pending()).toBe(0);
+		expect(jest.getTimerCount()).toBe(0);
 	});
 
 	test('SC-472: a mutation in the embed restarts the backstop\'s two quiet frames', async () => {
