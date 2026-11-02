@@ -185,11 +185,17 @@ const UNTERMINATED_COUNTER = (value = 10, name = 'Health') =>
 
 const counterLines = (value = 10, name = 'Health') => [`name: ${name}`, `current_value: ${value}`, 'max_value: 20', 'min_value: 0'];
 
+/** SC-481 r4: a counter block inside a blockquote (`head` = the lines above the fence, e.g. a callout header), every line prefixed `> `. */
+const QUOTED = (head, value = 5, name = 'Twin') => [...head, '```ds-counter', ...counterLines(value, name), '```'].map((l) => `> ${l}`).join('\n');
+
 const FIXTURES = {
 	'Lifecycle/twins.md': `# twins\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nMID\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`,
 	// SC-481 (G-S53): identical blocks - a pair, a triplet and a pair of montages. Each scenario resets its own note.
 	'Lifecycle/twin-pair.md': `# twin pair\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nMID\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`,
 	'Lifecycle/twin-triplets.md': `# twin triplets\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nM1\n\n${COUNTER(5, 'Twin')}\n\nM2\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`,
+	// SC-481 r4: the same twins inside a callout and inside a plain blockquote (Reading view hands such a block the whole quote as its section).
+	'Lifecycle/twin-callouts.md': `# twin callouts\n\nTOP\n\n${QUOTED(['[!note] Camp'])}\n\nMID\n\n${QUOTED(['[!note] Camp'])}\n\nBOTTOM\n`,
+	'Lifecycle/twin-quotes.md': `# twin quotes\n\nTOP\n\n${QUOTED([])}\n\nMID\n\n${QUOTED([])}\n\nBOTTOM\n`,
 	'Lifecycle/twin-montage.md': `# twin montage\n\nTOP\n\n${fence('ds-montage', ['title: Twin', 'rounds: 3', 'participants:', '  - name: Kira', 'current_round: 1'])}\n\nMID\n\n${fence('ds-montage', ['title: Twin', 'rounds: 3', 'participants:', '  - name: Kira', 'current_round: 1'])}\n\nBOTTOM\n`,
 	'Lifecycle/counter.md': `# counter\n\nABOVE\n\n${COUNTER(10)}\n\nBELOW\n`,
 	'Lifecycle/other.md': '# other\n\nJust another note.\n',
@@ -3448,9 +3454,9 @@ const SCENARIOS = [
 					value: ${kind === 'counter' ? `Number(Array.from(r.querySelectorAll('input')).map((i) => i.value).find((v) => v !== ''))` : `Number((r.textContent.match(/round\\s*(\\d+)/i) ?? [])[1])`},
 					tag: r.__lcTag ?? null }))`);
 			const diskOf = (rel, kind) => (kind === 'montage' ? (t.read(rel).match(/current_round: (\d+)/g) ?? []).map((s) => Number(s.split(': ')[1])) : t.counterValues(rel));
-			const namesOf = (rel) => (t.read(rel).match(/^name: (\w+)$/gm) ?? []).map((s) => s.slice(6));
+			const namesOf = (rel) => (t.read(rel).match(/^(?:> )?name: (\w+)$/gm) ?? []).map((s) => s.replace(/^(?:> )?name: /, ''));
 			/** The counter blocks of a note as sorted-line signatures (a write re-orders a body's keys, so compare the lines, not the order). */
-			const counterBlocks = (rel) => [...t.read(rel).matchAll(/^```ds-counter\n([\s\S]*?)\n```$/gm)].map((x) => x[1].split('\n').sort().join('|'));
+			const counterBlocks = (rel) => [...t.read(rel).split('\n').map((l) => l.replace(/^> ?/, '')).join('\n').matchAll(/^```ds-counter\n([\s\S]*?)\n```$/gm)].map((x) => x[1].split('\n').sort().join('|'));
 			const sig = (value, name) => counterLines(value, name).sort().join('|');
 			const click = (scope, kind, idx) =>
 				t.ev(
@@ -3505,9 +3511,12 @@ const SCENARIOS = [
 				await t.waitFor(`Array.from(${reading()}.querySelectorAll('[data-dse-element]')).some((r) => r.isConnected)`, `${rel}: rendered`);
 				await t.sleep(600);
 			};
-			const wholeNoteIs = (label, rel, values, names = null) => {
+			// Outside a blockquote / callout the note is checked line by line (t.integrity); inside one, the lines outside every quote must be the fixture's.
+			const outsideQuotes = (text) => text.split('\n').filter((l) => !l.startsWith('>')).join('\n');
+			const wholeNoteIs = (label, rel, values, names = null, quoted = false) => {
 				const want = values.map((v, i) => sig(v, names ? names[i] : 'Twin'));
-				if (!same(counterBlocks(rel), want) || !t.integrity(rel).ok) problems.push(`${label}: the note is not the fixture with only the intended changes (blocks ${JSON.stringify(counterBlocks(rel))}, integrity ${JSON.stringify(t.integrity(rel))})`);
+				const outsideOk = quoted ? outsideQuotes(t.read(rel)) === outsideQuotes(FIXTURES[rel]) : t.integrity(rel).ok;
+				if (!same(counterBlocks(rel), want) || !outsideOk) problems.push(`${label}: the note is not the fixture with only the intended changes (blocks ${JSON.stringify(counterBlocks(rel))}, integrity ${JSON.stringify(t.integrity(rel))})`);
 			};
 
 			await t.ev(`(() => { if (!document.getElementById('lc-gs53-notice')) { const st = document.createElement('style'); st.id = 'lc-gs53-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
@@ -3578,6 +3587,53 @@ const SCENARIOS = [
 					if (!same(namesOf(rel), ['Edited', 'Twin'])) problems.push(`form Save upper, then click lower: the note's names are ${JSON.stringify(namesOf(rel))}, expected ["Edited","Twin"] (the click overwrote the edit)`);
 					wholeNoteIs('form Save upper, then lower', rel, [5, 6], ['Edited', 'Twin']);
 				});
+				// 5b. The same twins inside a callout and inside a blockquote: Reading view hands such a block the WHOLE quote as its section, so the
+				// check that finds a reused element has to find the fence inside it. Upper click, lower click; adoption off; the edit form's Save on the upper
+				// twin and then a click on the lower one (the bug erased the edit and wrote the upper block).
+				for (const [kind, rel] of [['callout', 'Lifecycle/twin-callouts.md'], ['quote', 'Lifecycle/twin-quotes.md']]) {
+					await phase(`Reading view, ${kind} twins`, async () => {
+						await openFresh(rel);
+						await step(`${kind} twins, click upper`, { rel, kind: 'counter', scope: reading(), idx: 0, want: [6, 5], tag: `gs53-${kind}` });
+						await step(`${kind} twins, then click lower`, { rel, kind: 'counter', scope: reading(), idx: 1, want: [6, 6] });
+						wholeNoteIs(`${kind} twins`, rel, [6, 6], null, true);
+						const errorCards = await t.ev(`Array.from(${reading()}.querySelectorAll('.dse-error-card')).filter((e) => e.isConnected).length`);
+						if (errorCards !== 0) problems.push(`${kind} twins: ${errorCards} error card(s) are drawn (the block's quote lines were read as its YAML)`);
+					});
+					await phase(`Reading view, ${kind} twins, adoption off`, async () => {
+						await t.ev(`${t.reg}.enabled = false`);
+						await openFresh(rel);
+						await step(`${kind} twins adoption off, click upper`, { rel, kind: 'counter', scope: reading(), idx: 0, want: [6, 5] });
+						await step(`${kind} twins adoption off, then click lower`, { rel, kind: 'counter', scope: reading(), idx: 1, want: [6, 6] });
+						wholeNoteIs(`${kind} twins adoption off`, rel, [6, 6], null, true);
+						await t.ev(`${t.reg}.enabled = ${JSON.stringify(adoption)}`);
+					});
+					await phase(`Reading view, ${kind} twins, form Save`, async () => {
+						await t.ev(`${prefs}.set('authoringControls', true)`);
+						await openFresh(rel);
+						const root = `Array.from(${reading()}.querySelectorAll('${KIND.counter}')).filter((r) => r.isConnected)[0]`;
+						const pencil = `(${root}).querySelector('.dse-chrome button[data-dse-chrome-item="edit"]')`;
+						await t.waitFor(`!!(${pencil})`, `${kind} form: the Edit pencil rendered`);
+						// A callout's title sits where the hover menu is drawn, so the pointer never reveals it there: open the form from the keyboard.
+						await t.ev(`${pencil}.focus({ focusVisible: true })`);
+						await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', text: '\r', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+						await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+						await waitFormOpen(`${kind} form Save`);
+						const typed = await t.ev(`(() => { const ta = ${FORM}.querySelector('textarea.dse-form__raw'); if (!ta) return false; ta.value = ta.value.replace('name: Twin', 'name: Edited'); ta.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+						t.expect(typed, `${kind} form Save: the form has no raw box`);
+						await t.waitFor(`!!(${SAVE}) && !(${SAVE}).disabled`, `${kind} form Save: Save enabled`);
+						await t.realClick(SAVE);
+						await t.waitFor(`!document.querySelector('.modal-container .dse-modal')`, `${kind} form Save: the form closed`);
+						const t0 = Date.now();
+						while (!namesOf(rel).includes('Edited') && Date.now() - t0 < 5000) await t.sleep(80);
+						await t.sleep(1500);
+						const cards = await cardsIn(reading(), 'counter');
+						outcomes.push(`${kind} form Save upper: cards ${JSON.stringify(cards.map((c) => c.name + '=' + c.value))} disk ${JSON.stringify(namesOf(rel))} ${JSON.stringify(t.counterValues(rel))}`);
+						if (!same(cards.map((c) => c.name + '=' + c.value), ['Edited=5', 'Twin=5'])) problems.push(`${kind} form Save upper: the cards read ${JSON.stringify(cards.map((c) => c.name + '=' + c.value))}, expected ["Edited=5","Twin=5"]`);
+						await step(`${kind} form Save upper, then click lower`, { rel, kind: 'counter', scope: reading(), idx: 1, want: [5, 6] });
+						if (!same(namesOf(rel), ['Edited', 'Twin'])) problems.push(`${kind} form Save upper, then click lower: the note's names are ${JSON.stringify(namesOf(rel))}, expected ["Edited","Twin"] (the click overwrote the edit)`);
+						wholeNoteIs(`${kind} form Save upper, then lower`, rel, [5, 6], ['Edited', 'Twin'], true);
+					});
+				}
 				// 6. Live Preview: the same bug without adoption (CodeMirror reuses the upper widget for the lower block).
 				await phase('Live Preview, 2 twins', async () => {
 					const rel = 'Lifecycle/twin-pair.md';
@@ -3591,7 +3647,7 @@ const SCENARIOS = [
 				await t.ev(`${t.reg}.enabled = ${JSON.stringify(adoption)}`);
 				await t.ev(`${prefs}.set('authoringControls', false)`);
 				await t.ev(`document.getElementById('lc-gs53-notice')?.remove()`);
-				for (const rel of ['Lifecycle/twin-pair.md', 'Lifecycle/twin-triplets.md', 'Lifecycle/twin-montage.md']) await t.reset(rel);
+				for (const rel of ['Lifecycle/twin-pair.md', 'Lifecycle/twin-triplets.md', 'Lifecycle/twin-montage.md', 'Lifecycle/twin-callouts.md', 'Lifecycle/twin-quotes.md']) await t.reset(rel);
 				await t.open('Lifecycle/other.md');
 			}
 			t.expect(problems.length === 0, `${problems.join(' | ')} -- outcomes: ${outcomes.join('; ')}`);
