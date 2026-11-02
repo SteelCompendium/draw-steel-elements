@@ -186,18 +186,36 @@
 // hundred px of phantom scroll space at the bottom of the note for at most PIN_TTL_MS.
 
 import type { Workspace } from 'obsidian';
+import { BACKSTOP_REDRAW_QUIET_FRAMES, Backstop, PIN_TTL_MS } from './redrawBackstop';
+
+export { PIN_TTL_MS };
 
 /** Present on `.markdown-preview-view` for as long as a pin is held; its value is the pin's id. */
 const PIN_ATTR = 'data-dse-scroll-pin';
 /** Marks the injected `<style>`; its value is the pin's id (the rule's key, and how tests/probes find it). */
 const STYLE_ATTR = 'data-dse-scroll-pin-style';
+/** SC-472: a block root of ours (the redraw a pin waits for replaces or re-inserts these). */
+const ROOT = '[data-dse-element]';
+
+/** SC-472: a root of ours in `scroller` that is still empty (its view not mounted yet): a redraw is under way. */
+function emptyRoot(scroller: HTMLElement): boolean {
+	return Array.from(scroller.querySelectorAll(ROOT)).some((r) => r.childElementCount === 0);
+}
+
 /**
- * How long a pin is held. Must comfortably outlast Obsidian's rebuild — measured at
- * ~1.1-1.4s from write to the element being back at full height on a 4000px tracker, and
- * slower notes (many blocks, statblock refs) take longer. Also the backstop for the case
- * where the expected rebuild never arrives at all.
+ * SC-472: the sizers whose height the pin protects, with their inline min-height at arm time: the scroller's own (key: the
+ * scroller) and the inner sizer of every embed that shows a block of ours (key: the `.internal-embed`, which survives a
+ * redraw of its content).
  */
-export const PIN_TTL_MS = 2500;
+function sizersAt(scroller: HTMLElement): Map<Element, number> {
+	const m = new Map<Element, number>([[scroller, sizerInlineMinHeight(scroller)]]);
+	for (const e of Array.from(scroller.querySelectorAll('.internal-embed'))) {
+		if (!e.querySelector(ROOT)) continue;
+		const z = e.querySelector<HTMLElement>('.markdown-preview-sizer');
+		if (z) m.set(e, parseFloat(z.style.minHeight));
+	}
+	return m;
+}
 
 /**
  * Unique within one plugin load (a counter at module level, shared by every document). It
@@ -291,10 +309,19 @@ interface ReadingViewLike {
 }
 
 interface HeldPin {
-	/** The window that owns `timer` — a popout preview has its own (cf. view.ts's use of
+	/** The window that owns the backstop's timers — a popout preview has its own (cf. view.ts's use of
 	 *  `ownerDocument.defaultView` for the same reason). */
 	readonly win: Window;
-	timer: number;
+	/** SC-472: releases the pin when the redraw never comes (redrawBackstop.ts). */
+	readonly backstop: Backstop;
+	/** SC-472: the roots of ours in the scroller at the last arm; the redraw replaces or re-inserts one of them. */
+	roots0: Set<Element>;
+	/** SC-472: a root in `roots0` was removed, re-inserted or left the document since the last arm. */
+	started: boolean;
+	/** SC-472: `sizersAt` at the last arm. */
+	sizers0: Map<Element, number>;
+	/** SC-472: the pending end-of-redraw check (one animation frame after a watched mutation). */
+	check: number | null;
 	/** The height being held (the rule's px). Only ever raised: by a re-pin or by `observer`. */
 	px: number;
 	/** The attribute value keying this pin's rule. */
@@ -367,13 +394,12 @@ export class PreviewScrollPin {
 			// A re-pin (rapid clicking, autosave) restarts the TTL and never lowers the height; it
 			// raises it to the sizer's current inline min-height or the content height when either
 			// is larger (see the header: RE-PINS).
-			win.clearTimeout(existing.timer);
 			if (host && !existing.host && embedStopWanted(scroller)) {
 				existing.host = true; // a note's own pin that is now also a host pin: add the embed anchoring stop
 				existing.style.textContent = ruleText(existing);
 			}
 			this.raise(existing, Math.max(sizerInlineMinHeight(scroller), scroller.scrollHeight - verticalPadding(scroller, win)));
-			existing.timer = win.setTimeout(() => this.release(scroller), PIN_TTL_MS);
+			this.arm(existing, scroller); // SC-472: wait for THIS write's redraw (one that started before it does not count)
 			return;
 		}
 
@@ -395,13 +421,19 @@ export class PreviewScrollPin {
 		style.textContent = ruleText({ id, px, host });
 		doc.head.appendChild(style); // the rule first, then the attribute that selects it
 		scroller.setAttribute(PIN_ATTR, id);
-		const timer = win.setTimeout(() => this.release(scroller), PIN_TTL_MS);
-		const held: HeldPin = { win, timer, px, id, style, observer: null, host };
+		// SC-472: never mid-redraw: a root of ours still mounting, or a redraw started and not over (the collapsed section can
+		// hold no root at all) until the DOM has been quiet for BACKSTOP_REDRAW_QUIET_FRAMES (a redraw that shrank the note)
+		const backstop = new Backstop(win, () => this.release(scroller), (quiet) => emptyRoot(scroller) || (held.started && quiet < BACKSTOP_REDRAW_QUIET_FRAMES && !this.redrawDone(scroller, held)));
+		const held: HeldPin = { win, backstop, roots0: new Set(), started: false, sizers0: new Map(), check: null, px, id, style, observer: null, host };
+		this.arm(held, scroller);
 		const MO = (win as Window & { MutationObserver?: typeof MutationObserver }).MutationObserver;
 		if (MO) {
-			held.observer = new MO(() => {
+			held.observer = new MO((records) => {
 				try {
 					this.raise(held, sizerInlineMinHeight(scroller));
+					held.backstop.noteActivity();
+					if (!held.started) held.started = this.redrawStarted(held, records);
+					if (held.started) this.scheduleCheck(scroller, held);
 				} catch (err) {
 					console.warn('[DSE] scroll pin floor update failed', err);
 				}
@@ -409,6 +441,49 @@ export class PreviewScrollPin {
 			held.observer.observe(scroller, { subtree: true, childList: true, attributes: true, attributeFilter: ['style'] });
 		}
 		this.pins.set(scroller, held);
+	}
+
+	/** SC-472: (re)start waiting for a redraw from now: the roots and sizer heights it must restore, and the backstop. */
+	private arm(held: HeldPin, scroller: HTMLElement): void {
+		held.roots0 = new Set(Array.from(scroller.querySelectorAll(ROOT)));
+		held.started = false;
+		held.sizers0 = sizersAt(scroller);
+		held.backstop.arm();
+	}
+
+	/** SC-472: did these records (or the document) show a root of `roots0` replaced, removed or put back? */
+	private redrawStarted(held: HeldPin, records: MutationRecord[]): boolean {
+		const roots = Array.from(held.roots0);
+		if (roots.some((r) => !r.isConnected)) return true;
+		const touches = (n: Node): boolean => n.nodeType === 1 && roots.some((r) => n === r || n.contains(r));
+		return records.some((r) => r.type === 'childList' && (Array.from(r.removedNodes).some(touches) || Array.from(r.addedNodes).some(touches)));
+	}
+
+	/** SC-472: one frame after a mutation during the redraw, release if the redraw is over (`redrawDone`). */
+	private scheduleCheck(scroller: HTMLElement, held: HeldPin): void {
+		if (held.check !== null) return;
+		const run = (): void => {
+			held.check = null;
+			if (this.pins.get(scroller) === held && this.redrawDone(scroller, held)) this.release(scroller);
+		};
+		held.check = typeof held.win.requestAnimationFrame === 'function' ? held.win.requestAnimationFrame(run) : held.win.setTimeout(run, 0);
+	}
+
+	/**
+	 * SC-472: the redraw is over when every root of ours in the scroller is mounted and every protected sizer is back at its
+	 * arm-time inline min-height (the scroller's own: at least as high as the viewport's bottom needs, so dropping the floor
+	 * cannot clamp). A redraw that leaves a sizer lower (a block deleted) is not "over" here: the backstop releases it.
+	 */
+	private redrawDone(scroller: HTMLElement, held: HeldPin): boolean {
+		if (emptyRoot(scroller)) return false;
+		const need = scroller.scrollTop + scroller.clientHeight - verticalPadding(scroller, held.win);
+		for (const [key, v0] of held.sizers0) {
+			if (!Number.isFinite(v0) || !key.isConnected) continue;
+			const z = key === scroller ? scroller.querySelector<HTMLElement>(':scope > .markdown-preview-sizer') : key.querySelector<HTMLElement>('.markdown-preview-sizer');
+			const cur = z ? parseFloat(z.style.minHeight) : NaN;
+			if (!(cur >= (key === scroller ? Math.min(v0, need) : v0) - 2)) return false;
+		}
+		return true;
 	}
 
 	/** Raise the held height (never lower it) and rewrite the pin's rule. */
@@ -437,7 +512,11 @@ export class PreviewScrollPin {
 		const held = this.pins.get(scroller);
 		if (!held) return;
 		this.pins.delete(scroller);
-		held.win.clearTimeout(held.timer);
+		held.backstop.cancel();
+		if (held.check !== null) {
+			if (typeof held.win.requestAnimationFrame === 'function') held.win.cancelAnimationFrame(held.check);
+			else held.win.clearTimeout(held.check);
+		}
 		held.observer?.disconnect();
 		scroller.removeAttribute(PIN_ATTR);
 		held.style.remove();
