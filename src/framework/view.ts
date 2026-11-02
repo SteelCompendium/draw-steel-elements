@@ -293,6 +293,15 @@ export abstract class ElementView<M> extends Component {
 	}
 
 	/**
+	 * SC-544: start the write of an edit that is waiting out its debounce NOW (no-op when nothing waits). A host calls it, through
+	 * ViewRegistry.flushPendingWrites, on every other view of the note just before it writes the note itself: that write makes Obsidian
+	 * redraw the note's identical blocks and hand this view's element to a twin.
+	 */
+	flushPendingWrite(): void {
+		this.flushPersist();
+	}
+
+	/**
 	 * SC-519: write this view's pending edit NOW (the debounce is skipped) and resolve once it and
 	 * any write already in flight have settled. Resolves true when every one of them landed. It is the
 	 * view's own write, so the host treats it like the debounced one (SC-509 `fromView`). Resolves at

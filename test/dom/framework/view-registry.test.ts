@@ -337,8 +337,7 @@ describe('SC-544: ViewRegistry.flushPendingWrites(sourcePath, except)', () => {
 		await jest.advanceTimersByTimeAsync(0); // far inside the debounce
 
 		const note = app.vault.getContent('Note.md')!;
-		expect(note).toContain('name: Health\ncurrent_value: 11');
-		expect(note).toContain('name: Mana\ncurrent_value: 6');
+		expect([...note.matchAll(/current_value: (\d+)/g)].map((m) => Number(m[1]))).toEqual([11, 6]); // 10 -> 11 and 5 -> 6, each in its own block
 		expect(registry.pendingWrites()).toHaveLength(0);
 		expect(entryOf(a.host).released).toBe(false);
 	});

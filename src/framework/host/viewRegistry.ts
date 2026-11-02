@@ -51,6 +51,7 @@ function findLastMatchingTicketIndex(tickets: Array<{ body: string; at: number }
 /** The slice of ElementView the registry reads to answer pendingWrites(). */
 interface WriteTrackingView {
 	hasPendingWrite(): boolean;
+	flushPendingWrite(): void;
 }
 
 export interface ViewRegistryStats {
@@ -90,6 +91,19 @@ export class ViewRegistry extends Component {
 	 */
 	pendingWrites(): readonly ViewRegistryEntry[] {
 		return [...this.entries].filter((e) => (e.view as Partial<WriteTrackingView>).hasPendingWrite?.() === true);
+	}
+
+	/**
+	 * SC-544: write now every OTHER live view of `sourcePath` whose edit is still waiting out its debounce. A host calls this just
+	 * before it writes the note: the write makes Obsidian redraw the note's identical blocks and hand old elements to twins (Reading
+	 * view, Live Preview code blocks and callouts alike), so an edit flushed after that rebuild would be placed through an element
+	 * that now sits on a twin. Flushed here, each edit's section is read while its element is still on its own block.
+	 */
+	flushPendingWrites(sourcePath: string, except: ViewRegistryEntry | null): void {
+		for (const entry of [...this.entries]) {
+			if (entry === except || entry.released || entry.host.sourcePath !== sourcePath) continue;
+			(entry.view as Partial<WriteTrackingView>).flushPendingWrite?.();
+		}
 	}
 
 	/** Take ownership of a freshly mounted reading-mode view. */

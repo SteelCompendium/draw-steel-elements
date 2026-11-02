@@ -693,6 +693,13 @@ export class ReadingModeBlockHost implements BlockHost {
 			return false;
 		}
 
+		// SC-544: every other view of this note with an edit still in its debounce writes first. This write's rebuild hands Obsidian's old
+		// element of a block to an identical twin below it, and that includes the element of a view that still has an edit pending (a
+		// second click inside the first block's 400 ms window); flushed after the rebuild, that edit would be placed through the twin's
+		// block. Flushed here, each pending edit is placed while its element still sits on its own block. Synchronous: every one of
+		// them reads its section before any Vault.process of this round runs.
+		this.registry?.flushPendingWrites(this.ctx.sourcePath, this.entry);
+
 		// Captured immediately before entering Vault.process, with nothing async in between.
 		// SC-343: it is only a HINT now — resolveWriteTarget re-validates it against the live
 		// content inside the callback and falls back to the durable locate when it is stale.
