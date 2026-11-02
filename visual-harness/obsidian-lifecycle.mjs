@@ -121,6 +121,14 @@
 // SC-540 r3 adds (g) Advance round on an initiative tracker in a callout and (h) the same in a tracker inside a Live Preview EMBED (a control whose click rebuilds the
 // card detaches its own button, and Obsidian's deferred selection walks up from that detached target, so the root's mark was not enough), and (i) Reading view: the
 // same + writes and no card carries `interactive-child`.
+// SC-472 appends G-S59 (47 scenarios in all; the id was assigned by the dispatcher): a scroll pin / hold is released by the redraw it protects, not by a 2.5 s
+// timer a busy main thread can outrun. CPU throttled 8x through CDP around the writes only (reset in a finally) and the main thread kept busy for 4 s
+// right after each write (a slow `modify` handler of some other plugin), so the redraw starts later than PIN_TTL_MS: (a) a Reading pane and a Live Preview
+// pane of tall.md, the Reading pane observed (SC-470); (b) a Live Preview host embedding a tracker note, with a Reading pane of that note (SC-522); 3 writes
+// each, event-based wait (cap 30 s), scrollTop identical every frame, the pin / hold on at the redraw and released, the tracker redrawn. A phase FAILs as
+// vacuous unless one of its writes was redrawn later than PIN_TTL_MS. Controls (temporary bundles via DSE_LIFECYCLE_BUNDLE, built from `git archive` exports):
+// the develop build before SC-472 FAILs (a) and (b); release-on-redraw with a plain 2.5 s timer instead of the load-aware backstop FAILs (b). It runs as its
+// own `--only=G-S59` part (about 3.5 min) and sits before G-S56, which stays last.
 //
 // SC-544 appends G-S61 (48 scenarios in all; it sits before G-S56 too, after SC-540's G-S62): two quick clicks on identical blocks (the second inside the first block's 400 ms debounce)
 // each land in the block clicked and each card shows its own block - Live Preview callouts and plain fences, Reading view callouts and plain fences, two panes, a form
@@ -1686,7 +1694,8 @@ const SCENARIOS = [
 				// rAF sample alone catches the collapse in ~1 frame. The inline value is read even
 				// while pinned (the pin outranks it via !important, it does not stop the write).
 				// Sampling runs until the pin is released plus 10 frames. The cap counts from the pin's FIRST
-				// sighting (TTL 2500 ms + 2000 ms slack, hard cap 12 s), not from the click: under CPU load
+				// sighting (the pin's backstop, PIN_TTL_MS 2500 ms + 30 painted frames, about 3 s unloaded, + 2000 ms slack; hard cap 12 s; SC-472: a redrawn
+				// pin is released by its redraw sooner), not from the click: under CPU load
 				// the rebuild and so the release come late, and a click-relative cap flaked at 6x throttle
 				// (SC-459 r5). A pin that never appears gives up at 5 s.
 				// `mhAtRelease >= st0` is deliberately weaker than the real no-clamp bound (about st0 +
@@ -2446,7 +2455,8 @@ const SCENARIOS = [
 			};
 			// Per-frame scrollTop of the observed scroller + a MutationObserver for the hold attribute (any change record counts: a hold set and
 			// released inside one task is gone by the time a callback could look for it); resolves on
-			// window.__gs18rec once the hold was released + 10 frames (cap: first sighting + 4500 ms, 12 s; 5 s with no hold).
+			// window.__gs18rec once the hold was released + 10 frames (cap: first sighting + 4500 ms, 12 s; 5 s with no hold: the hold is released on
+			// the mount, or by its backstop - PIN_TTL_MS 2500 ms + 30 painted frames - when nothing is mounted; SC-472).
 			const record = (leaf) => t.ev(`(() => { window.__gs18rec = new Promise((resolve) => { const s = ${scrollerOf(leaf)}; const st0 = s.scrollTop; const samples = []; let stMin = st0; let held = 0; let holdSeen = false; let holdPx = null; let holdOnAt = 0; let released = false; let goneFrames = 0; const onScroll = () => { stMin = Math.min(stMin, s.scrollTop); }; s.addEventListener('scroll', onScroll); const count = () => s.querySelectorAll('[data-dse-lp-hold]').length; const mo = new MutationObserver((recs) => { for (const r of recs) { if (r.type !== 'attributes') continue; if (!holdSeen) { holdSeen = true; holdOnAt = performance.now() - t0; } if (r.oldValue !== null) holdPx = Number(r.oldValue); else if (holdPx === null) holdPx = Number(r.target.getAttribute('data-dse-lp-hold')); } }); mo.observe(s, { attributes: true, attributeOldValue: true, attributeFilter: ['data-dse-lp-hold'], subtree: true }); const t0 = performance.now(); const tick = () => { samples.push(s.scrollTop); const n = count(); if (n) { held++; released = false; goneFrames = 0; } else if (holdSeen) { released = true; goneFrames++; } if (goneFrames < 10 && performance.now() - t0 < (holdSeen ? Math.min(holdOnAt + 4500, 12000) : 5000)) requestAnimationFrame(tick); else { mo.disconnect(); s.removeEventListener('scroll', onScroll); resolve({ st0, frames: samples.length, stMin: Math.min(stMin, ...samples), stMax: Math.max(...samples), holdSeen, holdPx, heldFrames: held, released, ms: Math.round(performance.now() - t0) }); } }; requestAnimationFrame(tick); }); return true; })()`);
 			// `shift`: the top line may sit `lines` further down and up to `drift` px higher into its block (phase (e) only).
 			const check = async (phase, leaf, before, m, landed, shift = { lines: 0, drift: 0 }) => {
@@ -3245,7 +3255,8 @@ const SCENARIOS = [
 			};
 			// Per frame: A's scrollTop; a MutationObserver notes whether the pin was on A's scroller when the tagged
 			// embedded tracker left the document. Resolves on window.__gs42rec once the pin was released + 10 frames
-			// (cap: first sighting + 4500 ms, 12 s; 5 s with no pin).
+			// (cap: first sighting + 4500 ms, 12 s; 5 s with no pin: the pin is released when the redraw is over, or by its backstop - PIN_TTL_MS
+			// 2500 ms + 30 painted frames - when nothing is redrawn; SC-472).
 			const record = () => t.ev(`(() => { window.__gs42rec = new Promise((resolve) => { const s = ${scrollerOf(A)}; const st0 = s.scrollTop; const max0 = s.scrollHeight - s.clientHeight; const tagged = Array.from(s.querySelectorAll('${TRACKER}')).find((x) => x.__lcTag === 'gs42'); const samples = []; let stMin = st0; let pinAtRedraw = null; let pinFrames = 0; let pinSeen = false; let pinOnAt = 0; let released = false; let goneFrames = 0; const onScroll = () => { stMin = Math.min(stMin, s.scrollTop); }; s.addEventListener('scroll', onScroll); const mo = new MutationObserver(() => { if (pinAtRedraw === null && tagged && !tagged.isConnected) pinAtRedraw = s.hasAttribute('data-dse-scroll-pin'); }); mo.observe(s, { childList: true, subtree: true }); const t0 = performance.now(); const tick = () => { samples.push(s.scrollTop); if (s.hasAttribute('data-dse-scroll-pin')) { pinFrames++; if (!pinSeen) pinOnAt = performance.now() - t0; pinSeen = true; released = false; goneFrames = 0; } else if (pinSeen) { released = true; goneFrames++; } if (goneFrames < 10 && performance.now() - t0 < (pinSeen ? Math.min(pinOnAt + 4500, 12000) : 5000)) requestAnimationFrame(tick); else { mo.disconnect(); s.removeEventListener('scroll', onScroll); resolve({ st0, max0, tagged: !!tagged, frames: samples.length, stMin: Math.min(stMin, ...samples), stMax: Math.max(...samples), pinAtRedraw, pinFrames, released, ms: Math.round(performance.now() - t0) }); } }; requestAnimationFrame(tick); }); return true; })()`);
 			const check = async (phase, m, landed) => {
 				t.expect(landed, `${phase}: the write did not land`);
@@ -4025,7 +4036,8 @@ const SCENARIOS = [
 			};
 			// Per frame: A's scrollTop and the on-screen top of a reference text (an editor line, found by its text, or a hero name inside the
 			// embed); a MutationObserver notes whether the embed's hold was on when the tagged tracker left the document. Resolves on
-			// window.__gs52rec once the hold was released + 10 frames (cap: first sighting + 4500 ms, 12 s; 5 s with no hold).
+			// window.__gs52rec once the hold was released + 10 frames (cap: first sighting + 4500 ms, 12 s; 5 s with no hold: the hold is released by
+			// the remount, or by its backstop - PIN_TTL_MS 2500 ms + 30 painted frames - when nothing is redrawn; SC-472).
 			// `mountedHeld` counts frames where the embed already shows a mounted tracker other than the tagged one while the hold is
 			// still on: the hold must be released by the remount itself, never left to its timer.
 			const record = (ref) => t.ev(`(() => { window.__gs52rec = new Promise((resolve) => { const cm = ${cmOf(A)}; const s = cm.scrollDOM; const emb = ${embedOf(A)}; const ref = ${JSON.stringify(ref)}; const top = () => { const sr = s.getBoundingClientRect(); const pool = ref.inEmbed ? Array.from(emb.querySelectorAll('.dse-init__name')) : Array.from(cm.contentDOM.children).filter((l) => l.classList.contains('cm-line')); const el = pool.find((x) => x.isConnected && x.textContent === ref.text); return el ? Math.round(el.getBoundingClientRect().top - sr.top) : null; }; const st0 = s.scrollTop; const max0 = s.scrollHeight - s.clientHeight; const ref0 = top(); const sel0 = cm.state.selection.main.head; const tagged = Array.from(emb.querySelectorAll('${TRACKER}'))[ref.tagIdx || 0]; const isTagged = !!tagged && tagged.__lcTag === 'gs52'; const sts = []; const refs = []; let stMin = st0; let holdAtRedraw = null; let holdFrames = 0; let holdSeen = false; let holdOnAt = 0; let released = false; let goneFrames = 0; let mountedHeld = 0; let redrawSeen = false; let heldAfterRedraw = 0; const onScroll = () => { stMin = Math.min(stMin, s.scrollTop); }; s.addEventListener('scroll', onScroll); const mo = new MutationObserver(() => { if (holdAtRedraw === null && tagged && !tagged.isConnected) holdAtRedraw = emb.hasAttribute('data-dse-lp-embed-hold'); if (tagged && !tagged.isConnected) redrawSeen = true; }); mo.observe(emb, { childList: true, subtree: true }); const t0 = performance.now(); const tick = () => { sts.push(s.scrollTop); refs.push(top()); const held = emb.hasAttribute('data-dse-lp-embed-hold'); if (held && redrawSeen) heldAfterRedraw++; if (held) { holdFrames++; if (!holdSeen) holdOnAt = performance.now() - t0; holdSeen = true; released = false; goneFrames = 0; if (Array.from(emb.querySelectorAll('${TRACKER}')).some((r) => r !== tagged && r.isConnected && r.childElementCount > 0)) mountedHeld++; } else if (holdSeen) { released = true; goneFrames++; } if (goneFrames < 10 && performance.now() - t0 < (holdSeen ? Math.min(holdOnAt + 4500, 12000) : 5000)) requestAnimationFrame(tick); else { mo.disconnect(); s.removeEventListener('scroll', onScroll); const known = refs.filter((v) => v !== null); resolve({ st0, max0, ref0, isTagged, redrawn: !!tagged && !tagged.isConnected, frames: sts.length, stMin: Math.min(stMin, ...sts), stMax: Math.max(...sts), stEnd: s.scrollTop, refMin: known.length ? Math.min(...known) : null, refMax: known.length ? Math.max(...known) : null, refLost: refs.some((v) => v === null), refEnd: top(), sel0, sel1: cm.state.selection.main.head, holdAtRedraw, holdFrames, heldAfterRedraw, mountedHeld, released, ms: Math.round(performance.now() - t0) }); } }; requestAnimationFrame(tick); }); return true; })()`);
@@ -5004,6 +5016,212 @@ const SCENARIOS = [
 			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${J(await t.noticesSince(m))}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${J(await t.errorsSince(m))}`);
 			return `two quick clicks on identical blocks each land in the block clicked and every card shows its own block (Live Preview callouts: 3 and 4 callouts, a third click, two counters per callout, a form Save; Live Preview plain fences; Reading view callouts and plain fences; two panes; slow and spread-out controls): ${outcomes.join('; ')}`;
+		},
+	},
+	{
+		// G-S59 (SC-472): the scroll pin / hold is released by the REDRAW it protects, not by a timer that a busy main thread can outrun.
+		// Another pane's redraw can occupy the main thread for seconds, so the redraw of the pane we watch starts late - more than
+		// PIN_TTL_MS (2.5 s) after the write - and a pin or hold that a plain 2.5 s timer already dropped lets the browser clamp scrollTop
+		// (stock: Reading 2779 -> 2001, Live Preview host 7486 -> 3745). A real load cannot be scripted, so the CPU is throttled 8x through
+		// CDP, around the writes only (reset in a finally). Phases, 3 writes each, an outside vault.process:
+		//   (a) Reading pane A and Live Preview pane B of tall.md, both parked in the tracker, A observed (SC-470's sibling case);
+		//   (b) a Live Preview host of lpembtracker.md parked at its end (SC-522), a Reading pane showing the tracker's note parked in it.
+		// Event-based wait, no timer decides an outcome: until the pin / hold attribute was seen on and is gone AND the observed tracker was
+		// replaced and a mounted one is back (cap 30 s). Per write: scrollTop identical in every frame, the pin on when the tracker was
+		// replaced, released, the tracker redrawn. Anti-vacuity: the write -> redraw latency is recorded per write and a phase FAILS as vacuous
+		// unless at least one of its writes was redrawn later than PIN_TTL_MS (otherwise the race was not exercised).
+		id: 'G-S59',
+		async run(t) {
+			const PIN_TTL_MS = 2500; // redrawBackstop.ts
+			const RATE = 8;
+			const WRITES = 3;
+			const BUSY_MS = 4000;
+			const CAP_MS = 30000;
+			const throttle = (rate) => t.cdp.call('Emulation.setCPUThrottlingRate', { rate });
+			const RD = (leaf) => `(${leaf}).view.containerEl.querySelector('.markdown-reading-view > .markdown-preview-view')`;
+			const parkReading = async (leaf, below = 1500) => {
+				for (let i = 0; i < 3; i++) {
+					await t.ev(`(() => { const s = ${RD(leaf)}; const r = ${t.root(TRACKER, leaf)}; s.scrollTop = r.getBoundingClientRect().top - s.getBoundingClientRect().top + s.scrollTop + ${below}; return true; })()`);
+					await t.sleep(450);
+				}
+			};
+			// Starts the recorder (window.__gs59, polled through `.done`): per frame the scroller's scrollTop and whether the attribute `attr` is on
+			// `attrEl()`; a MutationObserver notes when the tagged tracker is replaced (milliseconds after window.__gs59t0, the write) and whether the
+			// attribute was on then. `mounted()` says a mounted tracker other than the tagged one is in the pane. Done once the attribute was seen on and is
+			// gone, the tracker was replaced and is mounted, plus 10 frames; it stops by itself after 40 s.
+			const record = (cfg) => t.ev(`(() => { const s = ${cfg.scroller}; const tagged = ${cfg.tagged}; const attrEl = ${cfg.attrEl}; const mounted = ${cfg.mounted}; const attr = ${JSON.stringify(cfg.attr)}; const other = ${cfg.other ?? 'null'}; const st = { otherAt: null, done: false, isTagged: !!tagged && tagged.__lcTag === 'gs59', st0: s.scrollTop, max0: s.scrollHeight - s.clientHeight, frames: 0, stMin: s.scrollTop, stMax: s.scrollTop, stEnd: s.scrollTop, pinSeen: false, released: false, redrawAt: null, pinAtRedraw: null, framesOn: 0, afterDone: 0, timedOut: false }; window.__gs59 = st; const mo = new MutationObserver(() => { if (st.otherAt === null && other && !other.isConnected) st.otherAt = Math.round(performance.now() - (window.__gs59t0 ?? performance.now())); if (st.redrawAt === null && tagged && !tagged.isConnected) { st.redrawAt = Math.round(performance.now() - (window.__gs59t0 ?? performance.now())); st.pinAtRedraw = !!attrEl() && attrEl().hasAttribute(attr); } }); mo.observe(other ? document.body : s, { childList: true, subtree: true }); const t0 = performance.now(); const tick = () => { const v = s.scrollTop; st.frames++; st.stMin = Math.min(st.stMin, v); st.stMax = Math.max(st.stMax, v); st.stEnd = v; const el = attrEl(); const on = !!el && el.hasAttribute(attr); if (on) { st.pinSeen = true; st.framesOn++; } else if (st.pinSeen) st.released = true; if (st.released && st.redrawAt !== null && mounted()) st.afterDone++; if (st.afterDone >= 10) { st.done = true; mo.disconnect(); return; } if (performance.now() - t0 > 40000) { st.timedOut = true; st.done = true; mo.disconnect(); return; } requestAnimationFrame(tick); }; requestAnimationFrame(tick); return true; })()`);
+			// One throttled write; returns the recorder's state. Throttle only around the write, reset in a finally.
+			const throttledWrite = async (rel, value) => {
+				let busyRef = null;
+				try {
+					await throttle(RATE);
+					// A slow `modify` handler of some other plugin: the main thread is busy for BUSY_MS (wall clock) right after the write, so the
+					// redraw that follows starts later than PIN_TTL_MS whatever the order in which Obsidian's panes handle the write (measured under
+					// the throttle alone, phase (b)'s embed redraw came 0.4 s after the write in some runs and 12 s in others).
+					busyRef = await t.ev(`(() => { const rel = ${JSON.stringify(rel)}; const ref = app.vault.on('modify', (f) => { if (f.path !== rel) return; setTimeout(() => { const end = performance.now() + ${BUSY_MS}; while (performance.now() < end); }, 0); }); window.__gs59busy = ref; return true; })()`);
+					await t.ev(`(async () => { window.__gs59t0 = performance.now(); await app.vault.process(app.vault.getAbstractFileByPath(${JSON.stringify(rel)}), (c) => c.replace(/ {2}value: \\d+/, '  value: ${value}')); })()`);
+					try {
+						await t.waitFor('window.__gs59 && window.__gs59.done', `the pin or hold released and the tracker redrawn (${rel}, write value ${value})`, CAP_MS);
+					} catch (e) {
+						const state = await t.ev('JSON.stringify(Object.assign({ atMs: Math.round(performance.now() - (window.__gs59t0 ?? 0)) }, window.__gs59))').catch(() => 'state unreadable');
+						throw new Error(`${e instanceof Error ? e.message : String(e)}; recorder state ${state}`);
+					}
+				} finally {
+					await throttle(1);
+					if (busyRef) await t.ev(`(() => { if (window.__gs59busy) app.vault.offref(window.__gs59busy); window.__gs59busy = null; return true; })()`);
+				}
+				return t.ev('Object.assign({}, window.__gs59)');
+			};
+			const check = (tag, m, value, rel, what) => {
+				t.expect(t.read(rel).includes(`  value: ${value}`), `${tag}: the write did not land`);
+				t.expect(!m.timedOut, `${tag}: the pin or hold was not released and the tracker redrawn within 40 s of page time (${JSON.stringify(m)})`);
+				t.expect(m.isTagged, `${tag}: the observed tracker was not tagged before the write`);
+				t.expect(m.redrawAt !== null, `${tag}: the observed tracker was never replaced - the write cannot reach the clamp`);
+				t.expect(m.st0 > 0, `${tag}: the pane was not scrolled before the write`);
+				t.expect(m.stMin === m.st0 && m.stMax === m.st0 && m.stEnd === m.st0, `${tag}: scrollTop moved: start ${m.st0}, min ${m.stMin}, max ${m.stMax}, end ${m.stEnd} over ${m.frames} frames (tracker replaced ${m.redrawAt} ms after the write, ${what} on ${m.framesOn} frames, on at the redraw: ${m.pinAtRedraw})`);
+				t.expect(m.pinSeen && m.released, `${tag}: ${what} was never seen on and then released (seen ${m.pinSeen}, released ${m.released}, ${m.framesOn} frames on)`);
+				t.expect(m.pinAtRedraw === true, `${tag}: ${what} was not on when the tracker was replaced (${m.redrawAt} ms after the write) - it was dropped before the redraw`);
+				return m.redrawAt;
+			};
+			const out = [];
+			const fails = [];
+			// A phase: setup once, then WRITES writes (park/tag, record, throttled write, check, reset); every write runs even after one fails.
+			const phase = async (name, rel, { setup, park, tagRecord, what, teardown }) => {
+				const lat = [];
+				const notes = [];
+				try {
+					await t.reset(rel);
+					await setup();
+					for (let k = 0; k < WRITES; k++) {
+						const tag = `${name} write ${k + 1}`;
+						try {
+							await park();
+							const cfg = await tagRecord();
+							await record(cfg);
+							const m = await throttledWrite(rel, k + 2);
+							lat.push(m.redrawAt);
+							notes.push(`${m.redrawAt} ms${m.otherAt !== null ? ` (other pane ${m.otherAt} ms)` : ''} (held ${m.st0})`);
+							check(tag, m, k + 2, rel, what);
+						} catch (e) {
+							fails.push(e instanceof Error ? e.message : String(e));
+						}
+						try {
+							await t.reset(rel); // unthrottled; then wait for the pin / hold of that write to go
+							await t.waitFor(`!document.querySelector('[data-dse-scroll-pin], [data-dse-lp-embed-hold], [data-dse-lp-hold]')`, 'the pin and holds of the reset write to be gone', CAP_MS);
+							await t.sleep(600); // let the layout settle before parking again
+						} catch (e) {
+							fails.push(`${name} write ${k + 1} reset: ${e instanceof Error ? e.message : String(e)}`);
+						}
+					}
+					if (!lat.some((ms) => ms !== null && ms > PIN_TTL_MS)) {
+						fails.push(`${name}: vacuous - no write was redrawn later than PIN_TTL_MS (${PIN_TTL_MS} ms); latencies ${JSON.stringify(lat)}. The race this scenario is about was not exercised`);
+					}
+				} catch (e) {
+					fails.push(`${name}: ${e instanceof Error ? e.message : String(e)}`);
+				} finally {
+					try {
+						await teardown();
+					} catch {
+						/* best effort */
+					}
+				}
+				out.push(`${name}: write -> redraw ${notes.join(', ')}`);
+			};
+
+			// (a) Reading pane A + Live Preview pane B of tall.md; an outside vault.process; A observed.
+			{
+				const rel = 'Lifecycle/tall.md';
+				const A = 'window.__gs59A';
+				const cmB = 'window.__gs59B.view.editor.cm';
+				const lpRootB = `Array.from(${cmB}.contentDOM.querySelectorAll('${TRACKER}')).find((x) => x.isConnected)`;
+				await phase('(a) Reading pane + Live Preview pane', rel, {
+					setup: async () => {
+						await t.open(rel);
+						await t.ev(`(async () => { window.__gs59A = app.workspace.getMostRecentLeaf(); const b = app.workspace.getLeaf('split', 'vertical'); window.__gs59B = b; await b.setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'source', source: false }, active: false }); app.workspace.setActiveLeaf(window.__gs59A, { focus: true }); return true; })()`);
+						await t.sleep(2000);
+					},
+					park: async () => {
+						// B (Live Preview) inside the tracker too: its widget is drawn and redrawn, which is the load on the main thread
+						for (let i = 0; i < 12 && !(await t.ev(`!!(${lpRootB})`)); i++) {
+							await t.ev(`(() => { ${cmB}.scrollDOM.scrollTop += 600; return true; })()`);
+							await t.sleep(250);
+						}
+						for (let i = 0; i < 2; i++) {
+							await t.ev(`(() => { const s = ${cmB}.scrollDOM; const r = ${lpRootB}; if (r) s.scrollTop = r.getBoundingClientRect().top - s.getBoundingClientRect().top + s.scrollTop + 1500; return true; })()`);
+							await t.sleep(300);
+						}
+						await parkReading(A);
+					},
+					tagRecord: async () => {
+						await t.tag(TRACKER, 'gs59', A);
+						return {
+							scroller: RD(A),
+							tagged: t.root(TRACKER, A),
+							attrEl: `() => ${RD(A)}`,
+							mounted: `() => Array.from(${t.readingScope(A)}.querySelectorAll('${TRACKER}')).some((x) => x.isConnected && x.__lcTag !== 'gs59' && x.childElementCount > 0)`,
+							attr: 'data-dse-scroll-pin',
+						};
+					},
+					what: 'the Reading pane\'s data-dse-scroll-pin',
+					teardown: async () => {
+						await t.ev(`(() => { if (window.__gs59B) window.__gs59B.detach(); window.__gs59B = null; return true; })()`);
+					},
+				});
+			}
+
+			// (b) a Live Preview host (lpembhostend.md) parked at its end embedding the tracker's note, a second Reading pane showing that note.
+			{
+				const rel = 'Lifecycle/lpembtracker.md';
+				const host = 'Lifecycle/lpembhostend.md';
+				const A = 'window.__gs59A';
+				const C = 'window.__gs59C';
+				const cmA = `(${A}).view.editor.cm`;
+				const embedOf = `Array.from(${cmA}.contentDOM.children).find((e) => e.classList.contains('internal-embed') && !!e.querySelector('${TRACKER}'))`;
+				const embRoot = `((${embedOf}) || null)?.querySelector('${TRACKER}')`;
+				await phase('(b) Live Preview host embedding the tracker + a Reading pane of it', rel, {
+					setup: async () => {
+						await t.open(host);
+						await t.ev(`(async () => { window.__gs59A = app.workspace.getMostRecentLeaf(); await window.__gs59A.setViewState({ type: 'markdown', state: { file: ${JSON.stringify(host)}, mode: 'source', source: false }, active: true }); window.__gs59A.view.editor.setCursor({ line: 0, ch: 0 }); const c = app.workspace.getLeaf('split', 'vertical'); window.__gs59C = c; await c.setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'preview' }, active: false }); app.workspace.setActiveLeaf(window.__gs59A, { focus: true }); return true; })()`);
+						await t.waitFor(`!!(${t.root(TRACKER, C)})`, '(b) the tracker is drawn in the second pane', 60000);
+					},
+					park: async () => {
+						await parkReading(C, 1500); // the second pane: the load
+						const s = `${cmA}.scrollDOM`;
+						await t.ev(`(() => { ${s}.scrollTop = 0; return true; })()`);
+						for (let i = 0; i < 60 && !(await t.ev(`!!(${embRoot})`)); i++) {
+							await t.ev(`(() => { const s = ${s}; s.scrollTop += Math.round(s.clientHeight * 0.6); return true; })()`);
+							await t.sleep(200);
+						}
+						await t.waitFor(`!!(${embRoot}) && (${embRoot}).childElementCount > 0`, '(b) the embedded tracker is drawn in the Live Preview host', 60000);
+						for (let i = 0; i < 3; i++) {
+							await t.ev(`(() => { const s = ${s}; s.scrollTop = s.scrollHeight; return true; })()`);
+							await t.sleep(450);
+						}
+						t.expect(await t.ev(`!!(${embRoot})`), '(b) the embedded tracker left the document while parking');
+					},
+					tagRecord: async () => {
+						await t.ev(`(() => { (${embRoot}).__lcTag = 'gs59'; return true; })()`);
+						await t.tag(TRACKER, 'gs59', C);
+						return {
+							other: t.root(TRACKER, C),
+							scroller: `${cmA}.scrollDOM`,
+							tagged: embRoot,
+							attrEl: `(() => { const e = ${embedOf}; return () => e; })()`,
+							mounted: `() => { const e = ${embedOf}; return !!e && Array.from(e.querySelectorAll('${TRACKER}')).some((x) => x.isConnected && x.__lcTag !== 'gs59' && x.childElementCount > 0); }`,
+							attr: 'data-dse-lp-embed-hold',
+						};
+					},
+					what: 'the host embed\'s data-dse-lp-embed-hold',
+					teardown: async () => {
+						await t.ev(`(() => { if (window.__gs59C) window.__gs59C.detach(); window.__gs59C = null; return true; })()`);
+					},
+				});
+			}
+			await t.reset('Lifecycle/tall.md');
+			await t.reset('Lifecycle/lpembtracker.md');
+			await t.open('Lifecycle/other.md'); // back to Reading for the next scenario
+			t.expect(fails.length === 0, `${fails.join(' | ')} -- write -> redraw latencies: ${out.join('; ')}`);
+			return `${out.join('; ')}; CPU throttled ${RATE}x around ${WRITES} writes per phase`;
 		},
 	},
 	{
