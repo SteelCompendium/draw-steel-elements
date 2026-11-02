@@ -100,7 +100,7 @@
 // card's top border. Anti-vacuity per phase: panels that were out of the document at the first animation frame after their creation exist, and every
 // anchor has a non-zero border. Controls (temporary bundles via DSE_LIFECYCLE_BUNDLE): the frame-batched build that drops such panels (this fix's first version)
 // FAILs Live Preview; the stock build that reads the border at mount FAILs Reading view; the shipped build passes both.
-// SC-537 appends G-S57 (46 scenarios in all; it sits before G-S56, which runs last and detaches the other leaves): the same, for identical CALLOUTS in Live Preview
+// SC-537 appends G-S57 (47 scenarios in all; it sits before G-S56, which runs last and detaches the other leaves): the same, for identical CALLOUTS in Live Preview
 // (also twins far apart, where the lower callout is off screen at the write, and a click on the lower callout's title right after it).
 // Obsidian draws a callout as one editor widget and, after a write to the upper one, hands its OLD widget (with the writer's live view) to the lower
 // slot without calling a processor, so the lower callout showed the writer's value, a click on it wrote the UPPER block and a form Save was erased. Real
@@ -108,7 +108,7 @@
 // card per block, each showing its block, disk changed only by the clicked block; the upper widget's DOM, tagged before the click, sits in the lower
 // slot afterwards and a `reused-by-twin` release is recorded (so the scenario cannot pass without the editor-driven redraw).
 //
-// SC-522 appends G-S52 (46 scenarios in all; the id was assigned by the dispatcher): a tracker in note B embedded in a LIVE PREVIEW host note A keeps
+// SC-522 appends G-S52 (47 scenarios in all; the id was assigned by the dispatcher): a tracker in note B embedded in a LIVE PREVIEW host note A keeps
 // A's scroll position and its on-screen text when B is written (in-app and on disk with A parked at its end, from another pane, and a hero added
 // with A parked below the embed), a real click on the embedded card does not scroll A to the embed's top, and a block deleted from B (a
 // redraw that brings no fresh tracker of ours) does not keep the hold up until its timer (phase (f)).
@@ -121,6 +121,10 @@
 // SC-540 r3 adds (g) Advance round on an initiative tracker in a callout and (h) the same in a tracker inside a Live Preview EMBED (a control whose click rebuilds the
 // card detaches its own button, and Obsidian's deferred selection walks up from that detached target, so the root's mark was not enough), and (i) Reading view: the
 // same + writes and no card carries `interactive-child`.
+//
+// SC-544 appends G-S61 (48 scenarios in all; it sits before G-S56 too, after SC-540's G-S62): two quick clicks on identical blocks (the second inside the first block's 400 ms debounce)
+// each land in the block clicked and each card shows its own block - Live Preview callouts and plain fences, Reading view callouts and plain fences, two panes, a form
+// Save. Before the fix the write of the first block made Obsidian hand the waiting block's element to its twin and the waiting edit was written into the twin.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -236,6 +240,9 @@ const FIXTURES = {
 	'Lifecycle/twin-callouts-nested.md': `# twin callouts nested\n\nTOP\n\n${QUOTED_NESTED()}\n\nMID\n\n${QUOTED_NESTED()}\n\nBOTTOM\n`,
 	// SC-537 r4: the twin callouts far apart (the lower one is off screen when the upper one is written).
 	'Lifecycle/twin-callouts-far.md': `# twin callouts far\n\nTOP\n\n${QUOTED(['[!note] Camp'])}\n\n${Array.from({ length: 150 }, (_, i) => `Paragraph between ${i}.`).join('\n\n')}\n\n${QUOTED(['[!note] Camp'])}\n\nBOTTOM\n`,
+	// SC-544 (G-S61): four callout twins, and three callouts of two counters each (blocks X0 Y0 X1 Y1 X2 Y2 = 5 3 5 3 5 3).
+	'Lifecycle/twin-callouts-4.md': `# twin callouts 4\n\nTOP\n\n${QUOTED(['[!note] Camp'])}\n\nM1\n\n${QUOTED(['[!note] Camp'])}\n\nM2\n\n${QUOTED(['[!note] Camp'])}\n\nM3\n\n${QUOTED(['[!note] Camp'])}\n\nBOTTOM\n`,
+	'Lifecycle/twin-callouts-xy3.md': `# twin callouts xy3\n\nTOP\n\n${QUOTED_XY(['[!note] Camp'])}\n\nM1\n\n${QUOTED_XY(['[!note] Camp'])}\n\nM2\n\n${QUOTED_XY(['[!note] Camp'])}\n\nBOTTOM\n`,
 	'Lifecycle/twin-quotes.md': `# twin quotes\n\nTOP\n\n${QUOTED([])}\n\nMID\n\n${QUOTED([])}\n\nBOTTOM\n`,
 	'Lifecycle/twin-montage.md': `# twin montage\n\nTOP\n\n${fence('ds-montage', ['title: Twin', 'rounds: 3', 'participants:', '  - name: Kira', 'current_round: 1'])}\n\nMID\n\n${fence('ds-montage', ['title: Twin', 'rounds: 3', 'participants:', '  - name: Kira', 'current_round: 1'])}\n\nBOTTOM\n`,
 	'Lifecycle/counter.md': `# counter\n\nABOVE\n\n${COUNTER(10)}\n\nBELOW\n`,
@@ -4688,6 +4695,311 @@ const SCENARIOS = [
 			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${JSON.stringify(await t.noticesSince(m))}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
 			return `a card in a Live Preview callout stays a card on a + click, the pencil's Enter and a click on its text (selection and scroll unmoved); the callout's text, title and </> still open its source, the chevron folds, an internal link opens (plain and Ctrl); a plain fence as before: ${outcomes.join('; ')}`;
+		},
+	},
+	{
+		// SC-544: two quick clicks on identical blocks. The second click comes before the first block's write (the 400 ms debounce), and that write makes Obsidian
+		// hand the OLD element of the block still waiting (the middle one) to the next identical twin; its debounced write was then placed through the twin's
+		// block ([6,5,6] instead of [6,6,5]). ReadingModeBlockHost.replaceSource now writes every other pending view of the note first, while its element is on its
+		// own block. Real mouse clicks, 120 ms apart (the second one is a "quick" click: one eval for the point, then press and release, no scroll, no sleep).
+		// Per phase: anti-vacuity (click 2 is logged BEFORE the first write of the note), the disk values, one card per block showing its block's value and name (read
+		// with the cursor parked; the click targets are found by block, so it does not matter whether the clicked callout turns into source), the text outside the
+		// blocks unchanged, and, in Live Preview, a per-frame recorder that no card with a pending edit sits on a block other than the one it was clicked on.
+		// (a) LP 3 callouts, upper then middle; (b) the same with a third click at ~280 ms; (c) LP 4 callouts, blocks 1 and 2; (d) LP callouts of two counters, X then Y;
+		// (e) LP: the upper's edit form open, a script + on the middle, Save 120 ms later; (f) LP plain fences; (g) Reading view callouts; (h) Reading view plain
+		// fences; (i) two panes, upper in Live Preview, middle in the Reading view pane; (j) controls that were clean before and must stay clean.
+		// It sits before G-S56, which runs last and replaces every other leaf.
+		id: 'G-S61',
+		async run(t) {
+			const m = await t.mark();
+			const J = JSON.stringify;
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			const { waitFormOpen, FORM, SAVE } = formKit(t);
+			const problems = [];
+			const outcomes = [];
+			const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+			const namesOf = (rel) => (t.read(rel).match(/^(?:> ?)*name: (\w+)$/gm) ?? []).map((s) => s.replace(/^(?:> ?)*name: /, ''));
+			const outsideBlocks = (text) => text.split('\n').map((l) => l.replace(/^(?:> ?)+/, '')).join('\n').replace(/^```ds-[\w-]+\n[\s\S]*?\n```$/gm, '');
+			const T3 = 'Lifecycle/twin-callouts-3.md';
+			const T2 = 'Lifecycle/twin-callouts.md';
+			const T4 = 'Lifecycle/twin-callouts-4.md';
+			const XY3 = 'Lifecycle/twin-callouts-xy3.md';
+			const PL3 = 'Lifecycle/twin-triplets.md';
+			const ALL = [T3, T2, T4, XY3, PL3];
+			await t.ev(`(() => { if (!document.getElementById('lc-gs61-notice')) { const st = document.createElement('style'); st.id = 'lc-gs61-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
+			// Page side: the cards by block (Live Preview: the k-th DSE root of a widget belongs to the k-th counter fence at or after the widget's line; Reading view:
+			// document order), a log of the + clicks and of the note's writes, and a per-frame recorder of wrong cards.
+			await t.ev(`(() => {
+				const reg = ${t.reg};
+				const P = (window.__gs61 = { clicks: [], mods: [], rid: 0, clickBlock: {}, rec: null });
+				const now = () => Math.round(performance.now());
+				const topRoots = (w) => Array.from(w.querySelectorAll('[data-dse-element="counter"]')).filter((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]'));
+				const valueOf = (r) => Number(Array.from(r.querySelectorAll('input')).map((i) => i.value).find((v) => v !== ''));
+				const nameOf = (r) => r.querySelector('.dse-counter__name')?.textContent ?? '';
+				const lineOf = (cm, w) => { try { return cm.state.doc.lineAt(cm.posAtDOM(w)).number - 1; } catch (e) { return null; } };
+				const fences = (cm) => { const out = []; cm.state.doc.toString().split('\\n').forEach((l, i) => { if (/^(?:[ ]{0,3}>[ ]?)*\`\`\`ds-counter\\s*$/.test(l)) out.push(i); }); return out; };
+				P.cardsRaw = (leaf) => {
+					if (leaf.view.getMode() !== 'source') {
+						const scope = leaf.view.containerEl.querySelector('.markdown-reading-view');
+						return scope ? topRoots(scope).map((root, block) => ({ block, root, name: nameOf(root), value: valueOf(root) })) : [];
+					}
+					const cm = leaf.view.editor.cm;
+					const fl = fences(cm);
+					const out = [];
+					for (const w of Array.from(cm.contentDOM.children).filter((x) => x.classList.contains('cm-embed-block'))) {
+						const L = lineOf(cm, w);
+						if (L === null) continue;
+						const after = fl.filter((x) => x >= L);
+						topRoots(w).forEach((root, k) => out.push({ block: fl.indexOf(after[k]), root, name: nameOf(root), value: valueOf(root) }));
+					}
+					return out.sort((a, b) => a.block - b.block);
+				};
+				P.cards = (leaf) => P.cardsRaw(leaf).map(({ root, ...rest }) => rest);
+				P.root = (leaf, block) => P.cardsRaw(leaf).find((c) => c.block === block)?.root ?? null;
+				document.addEventListener('click', (e) => {
+					if (!e.target.closest || !e.target.closest('button[aria-label^="Increase"]')) return;
+					const top = e.target.closest('[data-dse-element]');
+					let block = null;
+					for (const l of app.workspace.getLeavesOfType('markdown')) {
+						if (!l.view.containerEl.contains(top)) continue;
+						block = P.cardsRaw(l).find((c) => c.root === top)?.block ?? null;
+					}
+					if (top && block !== null) {
+						if (top.__gs61 === undefined) top.__gs61 = ++P.rid;
+						P.clickBlock[top.__gs61] = block;
+					}
+					P.clicks.push({ t: now(), block });
+				}, true);
+				P.modRef = app.vault.on('modify', () => P.mods.push(now()));
+				/**
+				 * Every frame, two kinds of wrong card. (1) A card whose edit is pending but which sits on a block other than the one it was clicked on: never legitimate here
+				 * (the bug showed it for 7-9 frames). (2) A card with nothing pending that shows another value than its block's in the editor: one frame of it is the editor's
+				 * document catching up with a write that just landed, so only a run of 3 frames counts.
+				 */
+				P.recStart = (leaf) => {
+					const R = (P.rec = { frames: 0, pending: 0, stale: 0, run: 0, longest: 0, samples: [], stop: false });
+					const tick = () => {
+						if (R.stop) return;
+						R.frames++;
+						const cm = leaf.view.editor.cm;
+						const dv = [];
+						cm.state.doc.toString().replace(/current_value: (\\d+)/g, (_, v) => dv.push(Number(v)));
+						const live = reg.liveEntries();
+						const pend = [];
+						const stale = [];
+						for (const c of P.cardsRaw(leaf)) {
+							if (c.block < 0) continue;
+							const e = live.find((x) => x.root === c.root);
+							if (e && e.view.hasPendingWrite && e.view.hasPendingWrite()) {
+								if (c.root.__gs61 !== undefined && P.clickBlock[c.root.__gs61] !== c.block) pend.push(c);
+							} else if (c.value !== dv[c.block]) stale.push(c);
+						}
+						if (pend.length) R.pending++;
+						if (stale.length) R.longest = Math.max(R.longest, ++R.run);
+						else R.run = 0;
+						if (stale.length) R.stale++;
+						if ((pend.length || stale.length) && R.samples.length < 4) R.samples.push([...pend.map((c) => 'pending b' + c.block + '=' + c.value + '/clicked' + P.clickBlock[c.root.__gs61]), ...stale.map((c) => 'b' + c.block + '=' + c.value + '/doc' + dv[c.block])].join(' '));
+						requestAnimationFrame(tick);
+					};
+					requestAnimationFrame(tick);
+				};
+				P.recStop = () => { const R = P.rec; if (!R) return null; R.stop = true; return { frames: R.frames, pending: R.pending, stale: R.stale, longest: R.longest, samples: R.samples }; };
+				return true;
+			})()`);
+			const A = 'window.__gs61.A';
+			const B = 'window.__gs61.B';
+			const leafOf = (k) => (k === 'B' ? B : A);
+			/** One markdown leaf (A) in `mode` ('lp' | 'rv') on `rel`, the cursor parked; the note is the fixture. */
+			const open = async (rel, mode) => {
+				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); window.__gs61.A = app.workspace.getLeavesOfType('markdown')[0] ?? app.workspace.getMostRecentLeaf(); window.__gs61.B = null; return true; })()`);
+				await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); })()`);
+				await t.sleep(400);
+				await t.reset(rel);
+				const st = mode === 'rv' ? { file: rel, mode: 'preview' } : { file: rel, mode: 'source', source: false };
+				await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: ${J(st)}, active: true }); })()`);
+				await t.waitFor(`(${A}).view?.file?.path === ${J(rel)}`, `${rel}: opened`);
+				await park();
+				const blocks = (FIXTURES[rel].match(/```ds-counter/g) ?? []).length;
+				await t.waitFor(`window.__gs61.cards(${A}).length === ${blocks}`, `${rel}: every card is drawn`);
+			};
+			const openB = async (rel, mode) => {
+				const st = mode === 'rv' ? { file: rel, mode: 'preview' } : { file: rel, mode: 'source', source: false };
+				await t.ev(`(async () => { const leaf = app.workspace.getLeaf('split', 'vertical'); window.__gs61.B = leaf; await leaf.setViewState({ type: 'markdown', state: ${J(st)}, active: true }); })()`);
+				await t.waitFor(`(${B}).view?.file?.path === ${J(rel)}`, `${rel}: pane B opened`);
+				await park();
+				const blocks = (FIXTURES[rel].match(/```ds-counter/g) ?? []).length;
+				await t.waitFor(`window.__gs61.cards(${B}).length === ${blocks}`, `${rel}: every card of pane B is drawn`);
+			};
+			async function park() {
+				for (const L of [A, B]) if (await t.ev(`!!(${L}) && (${L}).view?.getMode?.() === 'source'`)) await t.ev(`(${L}).view.editor.setCursor({ line: 0, ch: 0 })`);
+				await t.sleep(1200);
+			}
+			const btn = (leaf, block) => `(window.__gs61.root(${leaf}, ${block})?.querySelector('button[aria-label^="Increase"]'))`;
+			/** A real click with no scroll and no sleep (the card must be on screen): one eval for the point, then press and release. */
+			const quickClick = async (elExpr) => {
+				const at = await t.ev(`(() => { const el = ${elExpr}; if (!el) return null; const r = el.getBoundingClientRect(); if (!(r.width > 0 && r.height > 0)) return null; return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+				if (!at) return false;
+				const base = { x: at.x, y: at.y, button: 'left', clickCount: 1 };
+				await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x, y: at.y });
+				await t.cdp.call('Input.dispatchMouseEvent', { type: 'mousePressed', buttons: 1, ...base });
+				await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseReleased', buttons: 0, ...base });
+				return true;
+			};
+			const click = async (label, k, block, quick) => {
+				const expr = btn(leafOf(k), block);
+				if (!(await t.ev(`!!${expr}`))) {
+					problems.push(`${label}: there is no + on the card of block ${block}`);
+					return false;
+				}
+				if (quick) return quickClick(expr);
+				await t.realClick(expr);
+				return true;
+			};
+			/** Wait until the note has had `writes` more writes (or 4 s), then let the redraws finish. */
+			const settle = async (writes, mods0) => {
+				const t0 = Date.now();
+				while ((await t.ev('window.__gs61.mods.length')) < mods0 + writes && Date.now() - t0 < 4000) await t.sleep(80);
+				await t.sleep(600);
+				await park();
+			};
+			/** The picture with the cursor parked must be the note: the blocks hold `want`, one card per block shows its block's value (and name). */
+			const judge = async (label, rel, want, wantNames, modes) => {
+				const disk = t.counterValues(rel);
+				const names = namesOf(rel);
+				const shown = [];
+				if (!same(disk, want)) problems.push(`${label}: the blocks hold ${J(disk)}, expected ${J(want)} (a click was written into another block)`);
+				if (wantNames && !same(names, wantNames)) problems.push(`${label}: the note's names are ${J(names)}, expected ${J(wantNames)}`);
+				for (const [k, mode] of modes) {
+					const cards = await t.ev(`window.__gs61.cards(${leafOf(k)})`);
+					shown.push(`${k}:${mode}[${cards.map((c) => c.block + ':' + c.value).join(' ')}]`);
+					if (cards.length !== disk.length) problems.push(`${label}: pane ${k} (${mode}) draws ${cards.length} card(s) for ${disk.length} blocks`);
+					for (const c of cards) {
+						if (c.value !== disk[c.block]) problems.push(`${label}: pane ${k} (${mode}) card of block ${c.block} shows ${c.value}, the block holds ${disk[c.block]}`);
+						if (wantNames && c.name !== names[c.block]) problems.push(`${label}: pane ${k} (${mode}) card of block ${c.block} is named ${c.name}, the block is ${names[c.block]}`);
+					}
+				}
+				if (outsideBlocks(t.read(rel)) !== outsideBlocks(FIXTURES[rel])) problems.push(`${label}: the note's text outside the blocks changed`);
+				outcomes.push(`${label}: disk ${J(disk)} cards ${shown.join(' ')}`);
+			};
+			/**
+			 * One case. `steps`: [pane, block] clicks, the first a real click, the rest quick ones `gap` ms after the one before. `follow`: [block, want] a slow click afterwards
+			 * on that block (it must write the block it is on). `fast`: false for the controls (click 2 may come after the first write).
+			 */
+			const runCase = async (label, { rel, mode, steps, gap = 120, want, names = null, follow = null, panes = null, fast = true, record = mode === 'lp' && fast }) => {
+				try {
+					await open(rel, mode);
+					if (panes) await openB(rel, panes);
+					const modes = [['A', mode], ...(panes ? [['B', panes]] : [])];
+					await t.ev('(() => { window.__gs61.clicks.length = 0; window.__gs61.mods.length = 0; return true; })()');
+					if (record) await t.ev(`window.__gs61.recStart(${A})`);
+					for (let i = 0; i < steps.length; i++) {
+						if (i) await t.sleep(gap);
+						if (!(await click(label, steps[i][0], steps[i][1], i > 0))) break;
+					}
+					await settle(steps.length, 0);
+					const rec = record ? await t.ev('window.__gs61.recStop()') : null;
+					const log = await t.ev('({ clicks: window.__gs61.clicks, mods: window.__gs61.mods })');
+					if (fast) {
+						// Anti-vacuity: the second click is inside the first block's debounce, i.e. before the note's first write.
+						if (log.clicks.length !== steps.length) problems.push(`${label}: ${log.clicks.length} + click(s) were logged for ${steps.length}`);
+						else if (!(log.mods.length && log.clicks[1].t < log.mods[0])) problems.push(`${label}: click 2 (t ${log.clicks[1]?.t}) did not come before the first write (t ${log.mods[0]}): the phase would not exercise the pending edit`);
+					}
+					await judge(label, rel, want, names, modes);
+					if (rec) outcomes.push(`${label}: wrong-card frames: pending-on-another-block ${rec.pending}, stale ${rec.stale} (longest run ${rec.longest}) of ${rec.frames}`);
+					if (rec && (rec.pending > 0 || rec.longest >= 3)) problems.push(`${label}: wrong cards on screen - ${rec.pending} frame(s) of ${rec.frames} with a pending edit on a block the card was not clicked on, ${rec.stale} frame(s) (${rec.longest} in a row) with a card that did not match its block (${rec.samples.join(' | ')})`);
+					if (follow) {
+						const [block, want2] = follow;
+						const mods0 = (await t.ev('window.__gs61.mods.length'));
+						if (await click(`${label} then`, 'A', block, false)) await settle(1, mods0);
+						await judge(`${label} then click block ${block}`, rel, want2, names, modes);
+					}
+				} catch (e) {
+					problems.push(`${label}: ${e.message}`);
+				} finally {
+					await t.ev('window.__gs61.recStop()').catch(() => {});
+				}
+			};
+			const formSave = async (label, block, from, to, plus, gap) => {
+				const pencil = `(window.__gs61.root(${A}, ${block})?.querySelector('.dse-chrome button[data-dse-chrome-item="edit"]'))`;
+				await t.waitFor(`!!${pencil}`, `${label}: the Edit pencil is drawn`);
+				await t.ev(`${pencil}.focus({ focusVisible: true })`);
+				await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', text: '\r', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+				await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+				await waitFormOpen(`${label} form`);
+				t.expect(await t.ev(`(() => { const ta = ${FORM}.querySelector('textarea.dse-form__raw'); if (!ta) return false; ta.value = ta.value.replace('name: ${from}', 'name: ${to}'); ta.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`), `${label}: the form has no raw box`);
+				await t.waitFor(`!!(${SAVE}) && !(${SAVE}).disabled`, `${label}: Save is enabled`);
+				// The form is modal: the + on the other block is a script click (the card still handles it like a user's), Save follows `gap` ms later.
+				t.expect(await t.ev(`(() => { const b = ${btn(A, plus)}; if (!b) return false; b.click(); return true; })()`), `${label}: no + on block ${plus}`);
+				await t.sleep(gap);
+				await t.ev(`(${SAVE}).click()`);
+				await t.waitFor(`!document.querySelector('.modal-container .dse-modal')`, `${label}: the form closed`);
+			};
+			try {
+				// (a) LP, three callouts: + upper, + middle 120 ms later. Base: [6,5,6], the lower card shows the middle's 6 for 7-9 frames.
+				await runCase('(a) LP callouts, upper then middle', { rel: T3, mode: 'lp', steps: [['A', 0], ['A', 1]], want: [6, 6, 5], follow: [2, [6, 6, 6]] });
+				// (b) the same with a third click ~280 ms after the second. Base: [6,5,7].
+				await runCase('(b) LP callouts, upper, middle, lower', { rel: T3, mode: 'lp', steps: [['A', 0], ['A', 1], ['A', 2]], gap: 250, want: [6, 6, 6] });
+				// (c) four callouts, blocks 1 and 2. Base: [5,6,5,6].
+				await runCase('(c) LP four callouts, blocks 1 then 2', { rel: T4, mode: 'lp', steps: [['A', 1], ['A', 2]], want: [5, 6, 6, 5], follow: [3, [5, 6, 6, 6]] });
+				// (d) two counters per callout: X of the upper, Y of the middle. Base: [6,3,5,3,5,4].
+				await runCase('(d) LP callouts of two counters, X upper then Y middle', { rel: XY3, mode: 'lp', steps: [['A', 0], ['A', 3]], want: [6, 3, 5, 4, 5, 3] });
+				// (e) the upper's edit form is open, a + on the middle, Save 120 ms later. Base: [5,5,6].
+				await t.ev(`${prefs}.set('authoringControls', true)`);
+				try {
+					const label = '(e) LP callouts, form Save on the upper 120 ms after + on the middle';
+					try {
+						await open(T3, 'lp');
+						await t.ev('(() => { window.__gs61.clicks.length = 0; window.__gs61.mods.length = 0; return true; })()');
+						await t.ev(`window.__gs61.recStart(${A})`);
+						await formSave(label, 0, 'Twin', 'Edited', 1, 120);
+						await settle(2, 0);
+						const rec = await t.ev('window.__gs61.recStop()');
+						const log = await t.ev('({ clicks: window.__gs61.clicks, mods: window.__gs61.mods })');
+						if (!(log.clicks.length === 1 && log.mods.length >= 1)) problems.push(`${label}: the + click or the writes were not logged (${J(log)})`);
+						await judge(label, T3, [5, 6, 5], ['Edited', 'Twin', 'Twin'], [['A', 'lp']]);
+						if (rec) outcomes.push(`${label}: wrong-card frames: pending-on-another-block ${rec.pending}, stale ${rec.stale} (longest run ${rec.longest}) of ${rec.frames}`);
+						if (rec && (rec.pending > 0 || rec.longest >= 3)) problems.push(`${label}: wrong cards on screen - ${rec.pending} frame(s) of ${rec.frames} with a pending edit on a block the card was not clicked on, ${rec.stale} frame(s) (${rec.longest} in a row) with a card that did not match its block (${rec.samples.join(' | ')})`);
+					} catch (e) {
+						problems.push(`${label}: ${e.message}`);
+					}
+				} finally {
+					await t.ev(`${prefs}.set('authoringControls', false)`);
+				}
+				// (f) LP plain fences: + 0, + 1. Base: [6,5,6].
+				await runCase('(f) LP plain fences, first then second', { rel: PL3, mode: 'lp', steps: [['A', 0], ['A', 1]], want: [6, 6, 5], follow: [2, [6, 6, 6]] });
+				// (g) Reading view callouts. Base: [6,5,6].
+				await runCase('(g) Reading view callouts, first then second', { rel: T3, mode: 'rv', steps: [['A', 0], ['A', 1]], want: [6, 6, 5], follow: [2, [6, 6, 6]] });
+				// (h) Reading view plain fences. Base: [6,5,6].
+				await runCase('(h) Reading view plain fences, first then second', { rel: PL3, mode: 'rv', steps: [['A', 0], ['A', 1]], want: [6, 6, 5] });
+				// (i) two panes of the same note: + upper in the Live Preview pane, + middle in the Reading view pane. Base: [6,5,6].
+				await runCase('(i) two panes, upper in Live Preview, middle in Reading view', { rel: T3, mode: 'lp', panes: 'rv', steps: [['A', 0], ['B', 1]], want: [6, 6, 5], follow: [2, [6, 6, 6]] });
+				// (j) controls: these were clean before the fix and must stay clean.
+				await runCase('(j1) LP callouts, middle then lower', { rel: T3, mode: 'lp', steps: [['A', 1], ['A', 2]], want: [5, 6, 6] });
+				await runCase('(j2) LP callouts, upper then middle 700 ms apart', { rel: T3, mode: 'lp', steps: [['A', 0], ['A', 1]], gap: 700, want: [6, 6, 5], fast: false });
+				await runCase('(j3) LP two callouts, upper then lower', { rel: T2, mode: 'lp', steps: [['A', 0], ['A', 1]], want: [6, 6] });
+				try {
+					await open(T3, 'lp');
+					const label = '(j4) LP callouts, three slow clicks';
+					for (const [block, want] of [[0, [6, 5, 5]], [1, [6, 6, 5]], [2, [6, 6, 6]]]) {
+						const mods0 = await t.ev('window.__gs61.mods.length');
+						if (await click(label, 'A', block, false)) await settle(1, mods0);
+						await judge(`${label} (block ${block})`, T3, want, null, [['A', 'lp']]);
+					}
+				} catch (e) {
+					problems.push(`(j4): ${e.message}`);
+				}
+			} finally {
+				await t.ev(`(() => { const P = window.__gs61; if (P?.modRef) app.vault.offref(P.modRef); if (P?.rec) P.rec.stop = true; return true; })()`);
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+				await t.ev(`document.getElementById('lc-gs61-notice')?.remove()`);
+				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
+				for (const rel of ALL) await t.reset(rel);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect(problems.length === 0, `${problems.join(' | ')} -- outcomes: ${outcomes.join('; ')}`);
+			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${J(await t.noticesSince(m))}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${J(await t.errorsSince(m))}`);
+			return `two quick clicks on identical blocks each land in the block clicked and every card shows its own block (Live Preview callouts: 3 and 4 callouts, a third click, two counters per callout, a form Save; Live Preview plain fences; Reading view callouts and plain fences; two panes; slow and spread-out controls): ${outcomes.join('; ')}`;
 		},
 	},
 	{
