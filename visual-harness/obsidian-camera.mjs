@@ -41,12 +41,15 @@
 //        Bad flag values exit 2 naming them. Per-combo failures write an --ERROR-suffixed
 //        window shot, the sweep CONTINUES, and the run exits 1 listing every failure.
 // Env:   DSE_CAMERA_TMP     scratch root (default /tmp/claude-1000/dse-obsidian-camera)
-//        DSE_CAMERA_PORT    CDP port (default 9223)
+//        DSE_CAMERA_PORT    CDP port (default: unset = an OS-assigned free port, read back from OUR Obsidian - SC-551;
+//                           a pinned port must be free and our Obsidian must report exactly it, else exit 2)
 //        DSE_CAMERA_DISPLAY X display (default :1)
 //        DSE_CAMERA_BIN     obsidian binary (default /usr/bin/obsidian)
 //
-// SAFETY: never touches ~/.config/obsidian; refuses to start if the CDP port is already
-// serving (i.e. some other instance owns it); kills ONLY the child it spawned.
+// SAFETY: never touches ~/.config/obsidian; kills ONLY the child it spawned. SC-551: it talks CDP only to a
+// port its OWN Obsidian reported (DevToolsActivePort in the udd + the browser id on /json/version, see
+// scripts/cdp-owned.mjs) - never to whatever answers on a number it merely hoped was free: a pinned port
+// that is in use, or that our Obsidian did not get, exits 2 (environment) without a single CDP command sent.
 //
 // SC-142 phase 2a — DOCS MODE (`--docs`, written by `npm run docs-shots`): the same CDP
 // plumbing, driven from visual-harness/docs-manifest.mjs, writing PUBLISHING images into
@@ -61,6 +64,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { CdpOwnershipError, clearStaleReport, portInUse, proveCdpOwned } from '../scripts/cdp-owned.mjs';
 import { DOCS_SHOTS, DOCS_COMPENDIUM_SEED } from './docs-manifest.mjs';
 import {
 	assertValidGifEntries,
@@ -79,7 +83,13 @@ const repo = path.dirname(dir);
 const shotsDir = path.join(dir, 'shots');
 const vaultPath = path.join(repo, 'demo-vault');
 
-const PORT = Number(process.env.DSE_CAMERA_PORT ?? 9223);
+// SC-551: unset = port 0 (Chromium picks a free port; we read it back from our own Obsidian). Set = pinned.
+const REQUESTED_PORT = process.env.DSE_CAMERA_PORT === undefined ? 0 : Number(process.env.DSE_CAMERA_PORT);
+/** Environment problem (exit 2), as opposed to a capture failure (exit 1). */
+class EnvFailure extends Error {}
+/** The port and browser id of OUR Obsidian, set once proveCdpOwned has passed; every target lookup goes through them. */
+let ownedPort = null;
+let ownedGuid = null;
 const DISPLAY = process.env.DSE_CAMERA_DISPLAY ?? ':1';
 const BIN = process.env.DSE_CAMERA_BIN ?? '/usr/bin/obsidian';
 const tmpRoot = process.env.DSE_CAMERA_TMP ?? '/tmp/claude-1000/dse-obsidian-camera';
@@ -540,9 +550,16 @@ async function waitFor(cdp, expr, { timeout = 30000, poll = 250, what = expr } =
 	}
 }
 
+/**
+ * The target list of OUR Obsidian (SC-551): null until its port is proven, and null whenever the browser serving that
+ * port is no longer the one we proved (ours exited and a stranger took the number) - never a stranger's targets.
+ */
 async function jsonList() {
+	if (ownedPort === null) return null;
 	try {
-		return await (await fetch(`http://localhost:${PORT}/json/list`)).json();
+		const v = await (await fetch(`http://127.0.0.1:${ownedPort}/json/version`)).json();
+		if (!String(v.webSocketDebuggerUrl ?? '').endsWith(`/devtools/browser/${ownedGuid}`)) return null;
+		return await (await fetch(`http://127.0.0.1:${ownedPort}/json/list`)).json();
 	} catch {
 		return null;
 	}
@@ -577,10 +594,11 @@ function seedUdd() {
 	fs.rmSync(path.join(vaultPath, '.obsidian', 'workspace.json'), { force: true });
 }
 
-function spawnObsidian() {
+/** `port` null = no DevTools server at all (the warm-up launch needs no CDP). */
+function spawnObsidian(port) {
 	const child = spawn(
 		BIN,
-		[`--user-data-dir=${udd}`, `--remote-debugging-port=${PORT}`, '--window-size=1440,1100'],
+		[`--user-data-dir=${udd}`, ...(port === null ? [] : [`--remote-debugging-port=${port}`]), '--window-size=1440,1100'],
 		{ env: { ...process.env, DISPLAY }, stdio: 'ignore' },
 	);
 	child.exited = new Promise((r) => child.once('exit', r));
@@ -610,7 +628,7 @@ const hasUpdatedAsar = () =>
 async function warmUpUpdate() {
 	if (hasUpdatedAsar()) return;
 	console.log('no updated app asar in udd — warm-up launch to let Obsidian self-update…');
-	const child = spawnObsidian();
+	const child = spawnObsidian(null);
 	try {
 		const t0 = Date.now();
 		while (!hasUpdatedAsar()) {
@@ -632,8 +650,13 @@ async function main() {
 	if (!DOCS_MODE) fs.mkdirSync(shotsDir, { recursive: true });
 
 	// -- step 1: seed scratch user-data-dir + spawn --------------------------------------
-	if (await jsonList()) {
-		throw new Error(`port ${PORT} already serving CDP — another instance owns it; aborting`);
+	// SC-551: a pinned port must be free (fast, clear failure; any listener counts). Not a proof of anything - the port
+	// can be taken after this check, which is what proveCdpOwned below catches. Port 0 needs no pre-check.
+	if (!Number.isInteger(REQUESTED_PORT) || REQUESTED_PORT < 0 || REQUESTED_PORT > 65535) {
+		throw new EnvFailure(`DSE_CAMERA_PORT must be a port number (1-65535) or unset, got ${JSON.stringify(process.env.DSE_CAMERA_PORT)}`);
+	}
+	if (REQUESTED_PORT !== 0 && (await portInUse(REQUESTED_PORT))) {
+		throw new EnvFailure(`port ${REQUESTED_PORT} is already in use — another instance owns it; aborting`);
 	}
 	seedUdd();
 	// SC-406: the 7.0.0 release gate (`experimental`, absent = off) hides the deferred elements
@@ -657,14 +680,20 @@ async function main() {
 		});
 	}
 	await warmUpUpdate();
-	const child = spawnObsidian();
+	clearStaleReport(udd); // the udd persists: an earlier run's DevToolsActivePort must not pass for ours
+	const child = spawnObsidian(REQUESTED_PORT);
 	liveChild = child;
-	console.log(`spawned obsidian pid=${child.pid} (udd=${udd}, port=${PORT}, display=${DISPLAY})`);
+	console.log(`spawned obsidian pid=${child.pid} (udd=${udd}, port=${REQUESTED_PORT === 0 ? 'auto' : REQUESTED_PORT}, display=${DISPLAY})`);
 
 	const failures = [];
 	let cdp;
 	try {
-		// -- step 2: poll CDP for the workspace window target (<=30 s), attach ------------
+		// -- step 2: prove the CDP port is OUR Obsidian's, then poll it for the workspace window target (<=30 s), attach --
+		// SC-551: only HTTP reads happen before the proof resolves - never a Runtime command in a stranger.
+		const proven = await proveCdpOwned({ child, userDataDir: udd, expectedPort: REQUESTED_PORT });
+		ownedPort = proven.port;
+		ownedGuid = proven.guid;
+		console.log(`cdp: port ${ownedPort} (reported by our obsidian pid=${child.pid}, browser id verified)`);
 		const t0 = Date.now();
 		let target = null;
 		while (!target) {
@@ -2230,6 +2259,10 @@ async function main() {
 }
 
 main().catch((e) => {
+	if (e instanceof EnvFailure || e instanceof CdpOwnershipError) {
+		console.error(`OBSIDIAN-CAMERA environment: ${e.message}`);
+		process.exit(2);
+	}
 	console.error(String(e?.stack ?? e));
 	process.exit(1);
 });

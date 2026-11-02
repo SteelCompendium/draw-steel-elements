@@ -38,7 +38,7 @@ function run(body: string): Outcome {
 	const code = `
 		import http from 'node:http';
 		import fs from 'node:fs';
-		import { proveCdpOwned, portInUse, parseActivePort, CdpOwnershipError } from ${JSON.stringify(helper)};
+		import { proveCdpOwned, portInUse, parseActivePort, clearStaleReport, CdpOwnershipError } from ${JSON.stringify(helper)};
 		const ud = ${JSON.stringify(ud)};
 		const OURS = ${JSON.stringify(OURS)}, THEIRS = ${JSON.stringify(THEIRS)};
 		const hits = [];
@@ -166,6 +166,21 @@ describe('SC-551: proveCdpOwned', () => {
 			await prove({ timeoutMs: 400 });
 		`);
 		expect(out.error?.reason).toBe('unreachable');
+	});
+
+	test('a stale DevToolsActivePort from an earlier run (persistent user-data-dir) is deleted before the spawn, so it can never pass for our child\'s report; a missing file is fine', () => {
+		const out = run(`
+			const p = await serve(OURS); out.servedPort = p;
+			writeReport(p, OURS); // the last run left this behind and its Obsidian is gone; a live stranger now answers on p
+			out.hadFile = fs.existsSync(ud + '/DevToolsActivePort');
+			clearStaleReport(ud);
+			out.hasFile = fs.existsSync(ud + '/DevToolsActivePort');
+			clearStaleReport(ud); // nothing to delete: no throw
+			await prove({ expectedPort: p, timeoutMs: 300 });
+		`);
+		expect([out.hadFile, out.hasFile]).toEqual([true, false]);
+		expect(out.error?.reason).toBe('no-report');
+		expect(out.hits).toEqual([]);
 	});
 
 	test('portInUse sees a plain TCP listener that speaks no HTTP, and a freed port reads as free', () => {

@@ -23,8 +23,8 @@
 //   (2) the browser GUID that `GET http://127.0.0.1:<port>/json/version` serves equals the file's GUID.
 // Both are plain HTTP/file reads - no CDP command is ever sent to a process we have not proven. With port 0 the OS
 // picks a free port, so two runs cannot collide at all and the pre-check is unnecessary (the proof is still run:
-// it is also what tells us the port). The caller's user-data-dir must be fresh (the file must not predate the
-// spawn); the lifecycle runner makes a new scratch dir every run.
+// it is also what tells us the port). The file must not predate the spawn: a PERSISTENT user-data-dir keeps the last
+// run's file after Obsidian exits (measured, SC-551 survey), so callers run clearStaleReport(udd) right before the spawn.
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -36,6 +36,20 @@ export class CdpOwnershipError extends Error {
 	constructor(reason, message) {
 		super(message);
 		this.reason = reason;
+	}
+}
+
+/**
+ * Deletes a `DevToolsActivePort` left in `userDataDir` by an earlier Obsidian (Chromium leaves it behind after exit),
+ * so the file proveCdpOwned reads can only have been written by the child spawned after this call. Call it right
+ * before every spawn that will be proven; a missing file is fine. A runner with a PERSISTENT user-data-dir (the camera)
+ * needs it; a fresh scratch dir (lifecycle) makes it a no-op.
+ */
+export function clearStaleReport(userDataDir) {
+	try {
+		fs.unlinkSync(path.join(userDataDir, 'DevToolsActivePort'));
+	} catch (e) {
+		if (e.code !== 'ENOENT') throw e;
 	}
 }
 
@@ -72,12 +86,12 @@ export function parseActivePort(text) {
 
 /**
  * Resolves `{port, guid}` for the DevTools server of OUR `child` (spawned with --remote-debugging-port=<n>
- * --user-data-dir=<userDataDir>), once its report has been checked against the server on that port. Throws
+ * --user-data-dir=<userDataDir>; clearStaleReport() ran before the spawn), once its report has been checked against the server on that port. Throws
  * CdpOwnershipError otherwise. Sends no CDP command: only reads our own file and one `/json/version`.
  *
  * @param {object} o
  * @param {{exitCode:number|null, signalCode:string|null, once:Function, removeListener:Function}} o.child  our Obsidian.
- * @param {string} o.userDataDir   the --user-data-dir we passed it (fresh: DevToolsActivePort must not predate the spawn).
+ * @param {string} o.userDataDir   the --user-data-dir we passed it (DevToolsActivePort must not predate the spawn: clearStaleReport).
  * @param {number} [o.expectedPort] a pinned port (DSE_LIFECYCLE_PORT): the report must name exactly it. Omit for port 0.
  * @param {number} [o.timeoutMs]   overall wait for the report and the check (default 30 s; measured report: ~320 ms).
  * @param {number} [o.pollMs]      file poll interval (default 25 ms).

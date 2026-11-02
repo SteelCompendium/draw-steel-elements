@@ -137,7 +137,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CdpOwnershipError, portInUse, proveCdpOwned } from '../scripts/cdp-owned.mjs';
+import { CdpOwnershipError, clearStaleReport, portInUse, proveCdpOwned } from '../scripts/cdp-owned.mjs';
 import { displayRange, startOwnedXvfb, XvfbSpawnError } from '../scripts/xvfb-owned.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
@@ -5253,6 +5253,7 @@ async function main() {
 		fs.copyFileSync(path.join(cfg, asars.at(-1)), path.join(udd, asars.at(-1)));
 
 		const x = await startXvfb();
+		clearStaleReport(udd); // fresh scratch dir: a no-op, but the proof below must only ever read a file our child wrote
 		const child = spawn(BIN, [`--user-data-dir=${udd}`, `--remote-debugging-port=${REQUESTED_PORT}`, '--window-size=1440,1100'], {
 			env: { ...process.env, DISPLAY: x.display },
 			stdio: 'ignore',
