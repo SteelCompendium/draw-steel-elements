@@ -106,7 +106,7 @@
 // embed without bringing a fresh view of ours - a block deleted from B, a paragraph of B removed (measured: one batch
 // that removes a section and adds nothing, the other roots untouched and mounted): something outside our roots was
 // removed and every root now in the embed is mounted, so nothing is collapsing; that release runs one task later and is
-// cancelled by any batch that leaves a root empty. A redraw that REPLACES a root - also one of two roots, the other
+// re-checked then (a root added empty in the meantime keeps the hold). A redraw that REPLACES a root - also one of two roots, the other
 // staying in place - adds the new root empty in the same batch as the removal, so it is not released until our view is
 // in it. PIN_TTL_MS is the backstop: a write Obsidian never redraws in the embed (an edit outside an embedded heading)
 // only leaves the floor at the height the embed already has. Measured cost (1.15.0, SC-522 r1): the embed scan per Live Preview view per `modify` of any note,
@@ -327,14 +327,10 @@ export class LivePreviewScrollHold {
 			if (back && roots.length >= roots0.size && mounted(roots)) return release();
 			// Obsidian redrew the embed WITHOUT bringing a fresh view of ours (a block deleted from B, a paragraph removed:
 			// nothing of ours is coming): once something outside our roots was removed and every root now in the embed is
-			// mounted, nothing is collapsing, so release - after the current task, so a removal that is only the first half of
-			// a replacement (the new, still empty root follows in the same task) cancels it. A redraw that replaces a root
+			// mounted, nothing is collapsing, so release - after the current task and re-checked then, so a removal that is only
+			// the first half of a replacement (the new, still empty root follows in the same task) keeps the hold. A redraw that replaces a root
 			// (including one of two) shows the new root empty at once, so `mounted` is false until our view is in it.
 			if (!redrawn) redrawn = records.some((r) => r.removedNodes.length > 0 && !(r.target as Element).closest?.('[data-dse-element]'));
-			if (settle !== null && !mounted(roots)) {
-				win.clearTimeout(settle);
-				settle = null;
-			}
 			if (redrawn && settle === null && mounted(roots)) {
 				settle = win.setTimeout(() => {
 					settle = null;

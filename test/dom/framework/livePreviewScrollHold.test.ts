@@ -676,7 +676,11 @@ describe('SC-522: a Live Preview host holds its embed of the written note', () =
 		e.style.minHeight = '20px';
 		const host = fakeView(6800, [e]);
 		hold.holdEmbedsOf(host as never, 'B.md', 'A.md', resolver({ B: 'B.md' }));
-		e.querySelector('[data-dse-element]')!.remove(); // the first write's redraw has removed the root: the embed is collapsed
+		// the first write's redraw has replaced the root with a new, still empty one: the embed is collapsed
+		const old = e.querySelector('[data-dse-element]')!;
+		const empty = document.createElement('div');
+		empty.setAttribute('data-dse-element', 'initiative');
+		old.replaceWith(empty);
 		e.getBoundingClientRect = () => ({ height: 135 }) as DOMRect; // a second write lands now
 		hold.holdEmbedsOf(host as never, 'B.md', 'A.md', resolver({ B: 'B.md' }));
 		expect(held(e)).toBe('3190');
