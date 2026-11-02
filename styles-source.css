@@ -15578,6 +15578,12 @@ body.theme-light
    advertise a ring. The ring is an outline around the whole bar (a shape cue, not a colour
    change); `:focus-visible` keeps it off mouse clicks. */
 .dse-stamina--clickable[tabindex]:focus-visible,
+/* SC-511: the sidebar's two keyboard hand-off targets (chrome/focusHandoff.ts, DseSidebarView.removePanel): a pinned
+   panel's header note link, and the "No pinned blocks" message (tabindex="-1", focused by script after the last panel
+   is unpinned from the keyboard). Both sit OUTSIDE every element root, so they re-declare `--dse-focus-ring` on
+   themselves (the sidebar section, ~:16482 and ~:16525) the way the undo toast does. */
+.dse-sidebar__panel-note:focus-visible,
+.dse-sidebar__empty:focus-visible,
 [data-dse-theme='steel']:not([data-dse-print="on"]) input[type='checkbox']:not(.task-list-item-checkbox):focus-visible {
 	outline: 2px solid var(--dse-focus-ring);
 	outline-offset: 2px;
@@ -16487,6 +16493,10 @@ body.theme-light
 	   plugin chrome navigating within the vault, same family as any other in-app link. */
 	color: var(--link-color, var(--interactive-accent));
 	text-decoration: none;
+	/* SC-511: the header sits outside every element root, so the shared focus ring's token (declared on
+	   `:root` as `var(--interactive-accent)`, unresolvable there: Obsidian declares it on `body`) is
+	   re-declared here, the way `.dse-undo-notice__action` does. The ring itself is the shared rule's. */
+	--dse-focus-ring: var(--interactive-accent, currentcolor);
 }
 
 .dse-sidebar__panel-note:hover {
@@ -16525,6 +16535,8 @@ body.theme-light
 .dse-sidebar__empty {
 	padding: var(--size-4-4) var(--size-4-3);
 	color: var(--text-muted);
+	/* SC-511: see `.dse-sidebar__panel-note` -- outside every element root, so the shared ring's token is re-declared. */
+	--dse-focus-ring: var(--interactive-accent, currentcolor);
 }
 
 .dse-sidebar__empty-title {

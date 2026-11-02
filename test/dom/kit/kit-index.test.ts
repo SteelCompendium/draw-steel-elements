@@ -234,6 +234,9 @@ describe('Plan 08 Task 5: framework-default :focus-visible (D2 §4.5)', () => {
 		'.dse-undo-notice__action:focus-visible',
 		// SC-498: the clickable stamina bar (one tab stop; only when it has a handler, hence [tabindex]).
 		'.dse-stamina--clickable[tabindex]:focus-visible',
+		// SC-511: the sidebar's keyboard hand-off targets (a panel's note link; the "No pinned blocks" message).
+		'.dse-sidebar__panel-note:focus-visible',
+		'.dse-sidebar__empty:focus-visible',
 	];
 
 	function focusRule(): { selector: string; body: string } | undefined {
@@ -303,6 +306,14 @@ describe('Plan 08 Task 5: framework-default :focus-visible (D2 §4.5)', () => {
 		expect(base).not.toBeNull();
 		// A bare `var(--interactive-accent)` would reproduce the original bug in any theme
 		// that does not define it, so the fallback is part of the contract.
+		expect(base![1]).toMatch(/--dse-focus-ring:\s*var\(\s*--[\w-]+\s*,\s*[^;)]+\)/);
+	});
+
+	// SC-511: the same invariant for the sidebar's two out-of-root ring subjects.
+	test.each(['.dse-sidebar__panel-note', '.dse-sidebar__empty'])('the out-of-root ring subject %s declares a resolvable --dse-focus-ring', (cls) => {
+		const css = stripComments(sheet);
+		const base = new RegExp(`${cls.replace('.', '\\.')}\\s*\\{([^{}]*)\\}`).exec(css);
+		expect(base).not.toBeNull();
 		expect(base![1]).toMatch(/--dse-focus-ring:\s*var\(\s*--[\w-]+\s*,\s*[^;)]+\)/);
 	});
 });
