@@ -164,10 +164,13 @@ fixed:
 3. **Padding box vs border box.** An absolutely positioned child is offset from its
    containing block's PADDING box; what a reader measures against is the frame's BORDER box.
    The two differ by the frame's own border width for any element whose anchor IS the framed
-   card. CSS cannot read that width, so `mountChrome` measures it once at mount and
-   republishes it as `--dse-chrome-frame-border-{top,right}`, which the sheet subtracts.
-   (A style read, not a layout read — border widths are not layout-dependent — and a detached
-   node yields 0, i.e. the pre-correction geometry, never a crash.)
+   card. CSS cannot read that width, so `mountChrome` measures it and republishes it as
+   `--dse-chrome-frame-border-{top,right}` on the PANEL, which the sheet subtracts. Since
+   SC-533 the measurement is made in the next animation frame, batched across every mount
+   queued before it (all reads before any write); until then the sheet's `0px` fallback
+   applies. (A style read, not a layout read — border widths are not layout-dependent — and a
+   node that never reaches the document keeps the fallback, i.e. the pre-correction geometry,
+   never a crash.)
 
 **Layering.** Round 1 pulled the panel 1px DOWN (`margin-bottom: -1px`) so panel and card
 shared one hairline — the "seated tab" read. That is exactly what cropped `ds-stamina`'s

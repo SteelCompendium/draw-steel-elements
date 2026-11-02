@@ -22,6 +22,8 @@ import type { BlockHost, RenderMode } from '@/framework/host/BlockHost';
 import { staminaBarElement } from '@/elements/stamina-bar/definition';
 import { statblockElement } from '@/elements/statblock/definition';
 import { setChromeMobileOverride } from '@/framework/chrome';
+import { mountChrome } from '@/framework/chrome/mountChrome';
+import { Component } from 'obsidian';
 import { extractCollapseKeys, resolveCollapseState, withCollapseKeys } from '@/framework/chrome/collapsedKey';
 import {
 	makeCompendiumDeps,
@@ -72,6 +74,8 @@ async function render(
 	return { root: host.containerEl.firstElementChild as HTMLElement, deps, host };
 }
 
+const nextFrame = (): Promise<void> => new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+
 const CSS = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 /** The `.dse-chrome` declaration block that owns the panel's box. */
 const panelBlock = (): string => {
@@ -97,58 +101,121 @@ describe('SC-169 R2 §1 — one placement geometry for every element', () => {
 		expect(panelBlock()).toContain('margin: 0 !important;');
 	});
 
-	test('mountChrome republishes the anchor border widths CSS cannot read, on the panel (SC-533)', async () => {
-		const { root } = await render(statblockElement, STATBLOCK_BODY, 'ds-statblock');
-		const anchor = root.querySelector<HTMLElement>('.dse-chrome-anchor') ?? root;
-		const panel = anchor.querySelector<HTMLElement>(':scope > .dse-chrome')!;
-		// jsdom reports 0px borders (no UA stylesheet arithmetic), so the VALUE here is not
-		// the point — the property being written at all is: without it the panel is offset
-		// from the anchor's padding box while the reader measures its border box.
-		expect(panel.style.getPropertyValue('--dse-chrome-frame-border-top')).toMatch(/^\d/);
-		expect(panel.style.getPropertyValue('--dse-chrome-frame-border-right')).toMatch(/^\d/);
+	test('mountChrome republishes the anchor border widths CSS cannot read, on the panel, a frame later (SC-533)', async () => {
+		const host = makeHost('ds-statblock');
+		document.body.appendChild(host.containerEl);
+		try {
+			const { root } = await render(statblockElement, STATBLOCK_BODY, 'ds-statblock', { host });
+			const anchor = root.querySelector<HTMLElement>('.dse-chrome-anchor') ?? root;
+			const panel = anchor.querySelector<HTMLElement>(':scope > .dse-chrome')!;
+			await nextFrame();
+			// jsdom reports 0px borders (no UA stylesheet arithmetic), so the VALUE here is not
+			// the point — the property being written at all is: without it the panel is offset
+			// from the anchor's padding box while the reader measures its border box.
+			expect(panel.style.getPropertyValue('--dse-chrome-frame-border-top')).toMatch(/^\d/);
+			expect(panel.style.getPropertyValue('--dse-chrome-frame-border-right')).toMatch(/^\d/);
+			expect(anchor.style.getPropertyValue('--dse-chrome-frame-border-top')).toBe('');
+		} finally {
+			host.containerEl.remove();
+		}
+	});
+});
+
+// --------------------------------------------- SC-533: the border read is off the mount path
+// A style read forces a recalc of the freshly drawn tracker (~190 ms on 25 heroes) and a custom-property write on
+// the anchor dirties its whole subtree again. mountChrome therefore reads in the next animation frame, once for
+// every mount queued before it, all reads before any write, and writes the vars on the panel (their only consumer).
+describe('SC-533 — frame-border vars are published in one batched animation frame', () => {
+	const TOP = '--dse-chrome-frame-border-top';
+	const RIGHT = '--dse-chrome-frame-border-right';
+	const mounted: HTMLElement[] = [];
+	afterEach(() => {
+		while (mounted.length > 0) mounted.pop()!.remove();
+		jest.restoreAllMocks();
 	});
 
-	test('SC-533: both border reads happen before the first var write, and the anchor carries no var', async () => {
-		// A style read forces a recalc of the freshly drawn element, and a custom-property write
-		// on the anchor dirties its whole subtree again: read, write, read, write paid the full
-		// recalc twice (~190 ms each on a 25-hero tracker). Pin the ORDER (reads first) and the
-		// TARGET (the panel, the vars' only consumer — so the write dirties only the panel).
-		const log: { kind: 'read' | 'write'; el?: Element; style?: unknown; prop?: string }[] = [];
+	/** A connected anchor with a border of `px`, chrome mounted on it with `owner`. */
+	function mount(px: number, owner = new Component()): { anchor: HTMLElement; panel: HTMLElement; owner: Component } {
+		const root = document.body.createDiv();
+		mounted.push(root);
+		root.style.borderTopWidth = `${px}px`;
+		root.style.borderRightWidth = `${px}px`;
+		root.style.borderStyle = 'solid';
+		const handle = mountChrome(
+			{ root, chrome: { summary: () => ({ label: 'T' }) }, ctx: { model: {}, def: { id: 't', name: 'T' } } },
+			owner,
+		)!;
+		return { anchor: root, panel: handle.panelEl, owner };
+	}
+	/** Logs getComputedStyle (per element) and the frame-border setProperty calls (per style object), in call order. */
+	function spyOrder(): { kind: 'read' | 'write'; el?: Element; style?: unknown }[] {
+		const log: { kind: 'read' | 'write'; el?: Element; style?: unknown }[] = [];
 		const realGcs = window.getComputedStyle.bind(window);
-		const gcs = jest.spyOn(window, 'getComputedStyle').mockImplementation(((el: Element, pseudo?: string | null) => {
+		jest.spyOn(window, 'getComputedStyle').mockImplementation(((el: Element, pseudo?: string | null) => {
 			log.push({ kind: 'read', el });
 			return realGcs(el, pseudo);
 		}) as typeof window.getComputedStyle);
 		const realSet = CSSStyleDeclaration.prototype.setProperty;
-		const set = jest
+		jest
 			.spyOn(CSSStyleDeclaration.prototype, 'setProperty')
 			.mockImplementation(function (this: CSSStyleDeclaration, prop: string, value: string | null, prio?: string) {
-				if (prop.startsWith('--dse-chrome-frame-border-')) log.push({ kind: 'write', style: this, prop });
+				if (prop === TOP || prop === RIGHT) log.push({ kind: 'write', style: this });
 				return realSet.call(this, prop, value, prio ?? '');
 			});
-		let root: HTMLElement;
-		try {
-			({ root } = await render(statblockElement, STATBLOCK_BODY, 'ds-statblock'));
-		} finally {
-			gcs.mockRestore();
-			set.mockRestore();
-		}
-		const anchor = root.querySelector<HTMLElement>('.dse-chrome-anchor') ?? root;
-		const panel = anchor.querySelector<HTMLElement>(':scope > .dse-chrome')!;
+		return log;
+	}
 
-		const anchorReads = log.filter((e) => e.kind === 'read' && e.el === anchor).length;
-		expect(anchorReads).toBe(2);
-		const firstWrite = log.findIndex((e) => e.kind === 'write');
-		expect(firstWrite).toBeGreaterThan(-1);
-		const lastAnchorRead = log.map((e) => e.kind === 'read' && e.el === anchor).lastIndexOf(true);
-		expect(lastAnchorRead).toBeLessThan(firstWrite);
-		const writes = log.filter((e) => e.kind === 'write');
-		expect(writes.map((e) => e.prop).sort()).toEqual(
-			['--dse-chrome-frame-border-right', '--dse-chrome-frame-border-top'],
-		);
-		expect(writes.every((e) => e.style === panel.style)).toBe(true);
-		expect(anchor.style.getPropertyValue('--dse-chrome-frame-border-top')).toBe('');
-		expect(anchor.style.getPropertyValue('--dse-chrome-frame-border-right')).toBe('');
+	test('mounting reads nothing and writes nothing; the next frame puts the vars on the panel, not the anchor', async () => {
+		const log = spyOrder();
+		const { anchor, panel } = mount(3);
+		expect(log).toEqual([]);
+		expect(panel.style.getPropertyValue(TOP)).toBe('');
+		await nextFrame();
+		expect(log.filter((e) => e.kind === 'read' && e.el === anchor)).toHaveLength(2);
+		expect(panel.style.getPropertyValue(TOP)).toBe('3px');
+		expect(panel.style.getPropertyValue(RIGHT)).toBe('3px');
+		expect(anchor.style.getPropertyValue(TOP)).toBe('');
+		expect(anchor.style.getPropertyValue(RIGHT)).toBe('');
+	});
+
+	test('two mounts in one task share one frame, and every read happens before any write', async () => {
+		const frames = jest.spyOn(window, 'requestAnimationFrame');
+		const log = spyOrder();
+		const one = mount(2);
+		const two = mount(5);
+		expect(frames).toHaveBeenCalledTimes(1);
+		await nextFrame();
+		const kinds = log.filter((e) => e.kind === 'write' || e.el === one.anchor || e.el === two.anchor).map((e) => e.kind);
+		expect(kinds).toEqual(['read', 'read', 'read', 'read', 'write', 'write', 'write', 'write']);
+		expect(one.panel.style.getPropertyValue(TOP)).toBe('2px');
+		expect(two.panel.style.getPropertyValue(RIGHT)).toBe('5px');
+	});
+
+	test('a panel that left the document, or whose owner unloaded, is skipped: no read, no write', async () => {
+		const gone = mount(4);
+		const unloaded = mount(4);
+		const kept = mount(4);
+		unloaded.owner.load();
+		const log = spyOrder();
+		gone.panel.remove();
+		gone.anchor.remove();
+		unloaded.owner.unload();
+		await nextFrame();
+		expect(log.filter((e) => e.el === gone.anchor || e.el === unloaded.anchor)).toEqual([]);
+		expect(gone.panel.style.getPropertyValue(TOP)).toBe('');
+		expect(unloaded.panel.style.getPropertyValue(TOP)).toBe('');
+		expect(kept.panel.style.getPropertyValue(TOP)).toBe('4px');
+	});
+
+	test('unloading the only pending owner cancels the frame: nothing is read at all', async () => {
+		const cancel = jest.spyOn(window, 'cancelAnimationFrame');
+		const log = spyOrder();
+		const only = mount(4);
+		only.owner.load();
+		only.owner.unload();
+		expect(cancel).toHaveBeenCalledTimes(1);
+		await nextFrame();
+		expect(log).toEqual([]);
 	});
 });
 

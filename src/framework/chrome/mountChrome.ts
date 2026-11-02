@@ -84,10 +84,13 @@ export function ensureCollapseInvariant(root: HTMLElement): void {
  * detached node (jsdom, or a view built off-document) simply yields 0 — the pre-correction
  * geometry, never a crash.
  *
- * SC-533: a style read still forces a style recalc of the freshly drawn element, and a
- * custom-property write on the anchor dirties its whole subtree again. So both borders are
- * read once, before any write, and the two vars are published on the panel (their only
- * consumer), so the write invalidates only the panel.
+ * SC-533: a style read forces a style recalc of the freshly drawn element (~190 ms on a
+ * 25-hero tracker), and a custom-property write on the anchor dirties its whole subtree
+ * again. So the read is deferred to the next animation frame, which has to style the new
+ * DOM anyway, and is batched: every pending anchor is read before any panel is written,
+ * and the vars go on the panel (their only consumer) so the write invalidates only the
+ * panel. Until that frame the panel uses the sheet's `0px` fallback; it is hidden unless
+ * hovered, so at most a 1px offset for one frame.
  */
 const FRAME_BORDER_VARS = {
 	Top: '--dse-chrome-frame-border-top',
@@ -101,6 +104,57 @@ function usedBorderPx(el: HTMLElement, side: 'Top' | 'Right'): number {
 	const raw = win.getComputedStyle(el)[`border${side}Width` as 'borderTopWidth'];
 	const n = Number.parseFloat(raw ?? '');
 	return Number.isFinite(n) ? n : 0;
+}
+
+interface PendingFrameBorders {
+	anchor: HTMLElement;
+	panelEl: HTMLElement;
+}
+/** SC-533: per window, the panels waiting for their frame-border vars, and the one frame
+ *  that will publish them all. */
+const pendingFrameBorders = new Map<Window, { entries: Set<PendingFrameBorders>; frame: number }>();
+
+/**
+ * SC-533: publish the anchor's border widths on the panel in the next animation frame of the
+ * anchor's OWN window (a popout has its own). One frame serves every mount queued before it
+ * runs: all reads first, then all writes, so no write dirties the tree before a later read.
+ * A panel that left the document by then is skipped, and unloading `owner` drops the entry.
+ */
+function queueFrameBorders(anchor: HTMLElement, panelEl: HTMLElement, owner: Component): void {
+	const win = anchor.ownerDocument?.defaultView;
+	if (!win || typeof win.requestAnimationFrame !== 'function') return;
+	const entry: PendingFrameBorders = { anchor, panelEl };
+	let queue = pendingFrameBorders.get(win);
+	if (!queue) {
+		const created = { entries: new Set<PendingFrameBorders>(), frame: 0 };
+		created.frame = win.requestAnimationFrame(() => flushFrameBorders(win));
+		pendingFrameBorders.set(win, created);
+		queue = created;
+	}
+	queue.entries.add(entry);
+	owner.register(() => {
+		const q = pendingFrameBorders.get(win);
+		if (!q) return;
+		q.entries.delete(entry);
+		if (q.entries.size === 0) {
+			win.cancelAnimationFrame(q.frame);
+			pendingFrameBorders.delete(win);
+		}
+	});
+}
+
+function flushFrameBorders(win: Window): void {
+	const queue = pendingFrameBorders.get(win);
+	pendingFrameBorders.delete(win);
+	if (!queue) return;
+	const live = [...queue.entries].filter((e) => e.panelEl.isConnected);
+	const widths = live.map((e) => ({ Top: usedBorderPx(e.anchor, 'Top'), Right: usedBorderPx(e.anchor, 'Right') }));
+	live.forEach((e, i) => {
+		// The only sanctioned `.style` use in this codebase is `setProperty('--dse-*', …)` (SC-5).
+		for (const [side, prop] of Object.entries(FRAME_BORDER_VARS) as ['Top' | 'Right', string][]) {
+			e.panelEl.style.setProperty(prop, `${widths[i][side]}px`);
+		}
+	});
 }
 
 export interface MountChromeOptions<M> {
@@ -168,13 +222,6 @@ export function mountChrome<M>(opts: MountChromeOptions<M>, owner: Component): C
 	// The panel is absolutely positioned against this node, so it must establish the
 	// containing block. A class (not an inline style) — F1 §1.4 bans `el.style.*`.
 	anchor.addClass('dse-chrome-anchor');
-	// …and measure the anchor's own border widths so the sheet can offset the panel from
-	// the frame's BORDER box rather than its padding box (see FRAME_BORDER_VARS). Both are
-	// read here, before any custom-property write; the panel publishes them below (SC-533).
-	const frameBorderPx = {
-		Top: usedBorderPx(anchor, 'Top'),
-		Right: usedBorderPx(anchor, 'Right'),
-	};
 	if (isChromeMobile()) root.setAttribute('data-dse-chrome-mobile', 'on');
 
 	// ------------------------------------------------------------- the collapsed form
@@ -192,10 +239,9 @@ export function mountChrome<M>(opts: MountChromeOptions<M>, owner: Component): C
 	const panelEl = anchor.createDiv({ cls: 'dse-chrome' });
 	panelEl.setAttribute('role', 'toolbar');
 	panelEl.setAttribute('aria-label', `${ctx.def.name} actions`);
-	// The only sanctioned `.style` use in this codebase is `setProperty('--dse-*', …)` (SC-5).
-	for (const [side, prop] of Object.entries(FRAME_BORDER_VARS) as ['Top' | 'Right', string][]) {
-		panelEl.style.setProperty(prop, `${frameBorderPx[side]}px`);
-	}
+	// …and republish the anchor's own border widths on the panel, next frame, so the sheet can
+	// offset it from the frame's BORDER box rather than its padding box (SC-533, see FRAME_BORDER_VARS).
+	queueFrameBorders(anchor, panelEl, owner);
 
 	let collapsed =
 		collapsible &&
