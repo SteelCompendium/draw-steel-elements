@@ -118,6 +118,9 @@
 // select the whole callout (Obsidian's callout widget does that unless the target is under `.interactive-child`), so the callout stays drawn as a card, the
 // editor selection and scroll position stay put and the click still writes. Obsidian's own callout controls still enter the source (the callout's text, its
 // title, its `</>` button), the fold chevron still folds, an internal link in a card in a callout still opens (plain and Ctrl-click) and a plain fence is as before.
+// SC-540 r3 adds (g) Advance round on an initiative tracker in a callout and (h) the same in a tracker inside a Live Preview EMBED (a control whose click rebuilds the
+// card detaches its own button, and Obsidian's deferred selection walks up from that detached target, so the root's mark was not enough), and (i) Reading view: the
+// same + writes and no card carries `interactive-child`.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -276,11 +279,16 @@ async function unterminatedTailCase(t, rel, leave) {
 // SC-540 (G-S62): a callout holding body text + a counter (Twin 5), and a plain counter (Plain 5) below it; a foldable callout; a callout holding a feature
 // whose effect links to another note.
 const GS62_FILL = (n, tag) => Array.from({ length: n }, (_, i) => `${tag} filler ${i}.`).join('\n\n');
+const GS62_INIT = ['```ds-initiative', 'heroes:', '  - name: "Alice Alpha"', '    max_stamina: 30', 'enemy_groups: []', 'malice:', '  value: 1', '```'];
 const GS62_LINK_FEATURE = ['```ds-feature', 'type: feature', 'feature_type: ability', 'name: Link Strike', 'effects:', '  - name: Effect', '    effect: |-', '      See [[Lifecycle/other]] for more.', '```'];
 Object.assign(FIXTURES, {
 	'Lifecycle/callout-click.md': `# callout click\n\nTOP\n\n${GS62_FILL(14, 'A')}\n\n${QUOTED(['[!note] Camp', 'Callout body text'])}\n\n${GS62_FILL(14, 'B')}\n\n${COUNTER(5, 'Plain')}\n\n${GS62_FILL(14, 'C')}\n`,
 	'Lifecycle/callout-fold.md': `# callout fold\n\nTOP\n\n${GS62_FILL(14, 'A')}\n\n${QUOTED(['[!note]- Folded', 'Folded body text'])}\n\n${GS62_FILL(14, 'B')}\n`,
 	'Lifecycle/callout-link.md': `# callout link\n\nTOP\n\n${GS62_FILL(14, 'A')}\n\n${['[!note] Linked', 'Linked body text', ...GS62_LINK_FEATURE].map((l) => `> ${l}`).join('\n')}\n\n${GS62_FILL(14, 'B')}\n`,
+	// SC-540 r3: an initiative tracker (its Advance round button rebuilds the whole card inside the click) in a callout, and in a note that an LP host embeds.
+	'Lifecycle/callout-init.md': `# callout init\n\nTOP\n\n${GS62_FILL(10, 'A')}\n\n${['[!note] Init', 'Init body text', ...GS62_INIT].map((l) => `> ${l}`).join('\n')}\n\n${GS62_FILL(14, 'B')}\n`,
+	'Lifecycle/callout-init-src.md': `# callout init src\n\nSRC-TOP\n\n${GS62_INIT.join('\n')}\n\nSRC-BOTTOM\n`,
+	'Lifecycle/callout-init-host.md': `# callout init host\n\nTOP\n\n${GS62_FILL(14, 'A')}\n\n![[Lifecycle/callout-init-src]]\n\n${GS62_FILL(14, 'B')}\n`,
 });
 
 // SC-340 (Task 8) fixtures: the adoption scenarios (G-S1..G-S8) below.
@@ -4467,13 +4475,14 @@ const SCENARIOS = [
 			})()`);
 			const R = (kind, n) => `${G}.roots(${JSON.stringify(kind)})[${n}]`;
 			/** Open `rel` fresh in Live Preview on the scenario's leaf, the cursor on line 0, and bring the n-th `ds-<kind>` block's line into view (`clip`: then scroll `clip` px further, so the top of the callout is cut off). */
-			const openLP = async (rel, kind, n, clip = 0) => {
+			const openLP = async (rel, kind, n, clip = 0, scrollText = null) => {
 				await t.ev(`(async () => { const keep = ${G}.keep; app.workspace.getLeavesOfType('markdown').filter((l) => !keep.has(l)).forEach((l) => l.detach()); app.workspace.setActiveLeaf(${G}.main, { focus: true }); return true; })()`);
 				await t.open('Lifecycle/other.md', `${G}.main`);
 				await t.reset(rel);
 				await t.ev(`(async () => { await ${G}.main.setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'source', source: false }, active: true }); ${G}.main.view.editor.setCursor({ line: 0, ch: 0 }); return true; })()`);
 				await t.sleep(1500);
-				await t.ev(`(async () => { const cm = ${G}.cm(); const line = ${G}.fenceLines(${JSON.stringify(kind)})[${n}]; cm.dispatch({ effects: cm.constructor.scrollIntoView(cm.state.doc.line(line + 1).from${clip ? ' - 2, { y: \'start\', yMargin: 0 }' : ', { y: \'center\' }'}) }); return true; })()`);
+				if (scrollText) await t.ev(`(async () => { const cm = ${G}.cm(); cm.dispatch({ effects: cm.constructor.scrollIntoView(cm.state.doc.toString().indexOf(${JSON.stringify(scrollText)}), { y: 'center' }) }); return true; })()`);
+				else await t.ev(`(async () => { const cm = ${G}.cm(); const line = ${G}.fenceLines(${JSON.stringify(kind)})[${n}]; cm.dispatch({ effects: cm.constructor.scrollIntoView(cm.state.doc.line(line + 1).from${clip ? ' - 2, { y: \'start\', yMargin: 0 }' : ', { y: \'center\' }'}) }); return true; })()`);
 				await t.waitFor(`${G}.roots(${JSON.stringify(kind)}).length > ${n}`, `${rel}: the ${kind} block ${n} is drawn`);
 				await t.sleep(1500);
 				if (clip) {
@@ -4609,11 +4618,66 @@ const SCENARIOS = [
 					if (after.anchor !== before.anchor || after.head !== before.head || after.st !== before.st) problems.push(`(f) a click on a plain fence moved the selection or the scroll (${before.anchor}-${before.head} @${before.st} -> ${after.anchor}-${after.head} @${after.st})`);
 					outcomes.push(`(f) plain fence +: selection ${after.anchor}-${after.head}, scrollTop ${after.st}`);
 				});
+				// (g) a control whose click handler REBUILDS the card (an initiative tracker's Advance round) detaches its own button during the click; Obsidian's
+				// deferred selection then walks up from a detached target and never meets the marked root. The callout must stay a card, selection unmoved, the round written.
+				await phase('(g) Advance round in a callout', async () => {
+					const irel = 'Lifecycle/callout-init.md';
+					await openLP(irel, 'initiative', 0);
+					const advance = `(${R('initiative', 0)})?.querySelector('button[aria-label="Advance round"]')`;
+					t.expect(await t.ev(`!!(${advance})`), '(g) set-up: no Advance round button on the initiative in the callout');
+					await t.ev(`(${advance}).scrollIntoView({ block: 'center' })`);
+					await t.sleep(600);
+					const before = await snap();
+					t.expect(before.rootsInCallout === 1 && before.raw === 0, `(g) set-up: the tracker is not drawn in a callout widget (${JSON.stringify(before)})`);
+					await click(advance, { still: true });
+					const t0 = Date.now();
+					while (t.read(irel) === FIXTURES[irel] && Date.now() - t0 < 6000) await t.sleep(80);
+					await t.sleep(1500);
+					if (t.read(irel) === FIXTURES[irel]) problems.push('(g) Advance round did not write the note');
+					expectDrawn('(g) Advance round in a callout', before, await snap());
+				});
+				// (h) the same control in an initiative inside a Live Preview EMBED (SC-522's path, same gap): the embed is not selected, the host selection and scroll stay.
+				await phase('(h) Advance round in an LP embed', async () => {
+					const hrel = 'Lifecycle/callout-init-host.md';
+					const srel = 'Lifecycle/callout-init-src.md';
+					await openLP(hrel, 'initiative', 0, 0, '![[Lifecycle/callout-init-src]]');
+					const advance = `(${R('initiative', 0)})?.querySelector('button[aria-label="Advance round"]')`;
+					t.expect(await t.ev(`!!(${advance})`), '(h) set-up: no Advance round button on the embedded initiative');
+					await t.ev(`(${advance}).scrollIntoView({ block: 'center' })`);
+					await t.sleep(600);
+					const before = await snap();
+					await click(advance, { still: true });
+					const t0 = Date.now();
+					while (t.read(srel) === FIXTURES[srel] && Date.now() - t0 < 6000) await t.sleep(80);
+					await t.sleep(1500);
+					const after = await snap();
+					if (t.read(srel) === FIXTURES[srel]) problems.push('(h) Advance round did not write the embedded note');
+					if (after.anchor !== before.anchor || after.head !== before.head) problems.push(`(h) the host editor selection moved ${before.anchor}-${before.head} -> ${after.anchor}-${after.head} (the embed was selected)`);
+					if (after.st !== before.st) problems.push(`(h) the host editor scrolled ${before.st} -> ${after.st}`);
+					if (after.roots < 1) problems.push('(h) no DSE card is drawn in the embed afterwards');
+					outcomes.push(`(h) Advance round in an LP embed: written, selection ${after.anchor}-${after.head}, scrollTop ${after.st}`);
+					await t.reset(srel);
+				});
+				// (i) Reading view is untouched: the same + in the callout note in Reading view writes and puts no `interactive-child` on any card (the class would matter in a canvas).
+				await phase('(i) Reading view', async () => {
+					await t.open('Lifecycle/other.md', `${G}.main`);
+					await t.reset(rel);
+					await t.open(rel, `${G}.main`);
+					const inView = `Array.from(${G}.main.view.containerEl.querySelectorAll('.markdown-reading-view [data-dse-element="counter"]')).filter((r) => r.isConnected)`;
+					await t.waitFor(`${inView}.length === 2 && ${inView}.every((r) => r.querySelector('button[aria-label^="Increase"]'))`, '(i) the counters are drawn in Reading view');
+					t.expect(await t.ev(`!!${inView}[0].closest('.callout')`), '(i) set-up: the first counter is not inside a callout in Reading view');
+					await t.realClick(`${inView}[0].querySelector('button[aria-label^="Increase"]')`);
+					await waitDisk(rel, [6, 5]);
+					const marked = await t.ev(`${inView}.map((r) => r.classList.contains('interactive-child') || !!r.closest('.interactive-child'))`);
+					if (!same(t.counterValues(rel), [6, 5])) problems.push(`(i) the + click in Reading view did not write the block: ${JSON.stringify(t.counterValues(rel))}`);
+					if (marked.some(Boolean)) problems.push(`(i) a card in Reading view carries interactive-child: ${JSON.stringify(marked)}`);
+					outcomes.push(`(i) Reading view +: disk ${JSON.stringify(t.counterValues(rel))}, marked ${JSON.stringify(marked)}`);
+				});
 			} finally {
 				await t.ev(`${prefs}.set('authoringControls', false)`);
 				await t.ev(`document.getElementById('lc-gs62-notice')?.remove()`);
 				await t.ev(`(() => { const keep = ${G}.keep; app.workspace.getLeavesOfType('markdown').filter((l) => !keep.has(l)).forEach((l) => l.detach()); return true; })()`);
-				for (const r of ['Lifecycle/callout-click.md', 'Lifecycle/callout-fold.md', 'Lifecycle/callout-link.md']) await t.reset(r);
+				for (const r of ['Lifecycle/callout-click.md', 'Lifecycle/callout-fold.md', 'Lifecycle/callout-link.md', 'Lifecycle/callout-init.md', 'Lifecycle/callout-init-src.md', 'Lifecycle/callout-init-host.md']) await t.reset(r);
 				await t.open('Lifecycle/other.md');
 			}
 			t.expect(problems.length === 0, `${problems.join(' | ')} -- passed: ${outcomes.join('; ')}`);
