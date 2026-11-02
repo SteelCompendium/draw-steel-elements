@@ -101,7 +101,7 @@
 // anchor has a non-zero border. Controls (temporary bundles via DSE_LIFECYCLE_BUNDLE): the frame-batched build that drops such panels (this fix's first version)
 // FAILs Live Preview; the stock build that reads the border at mount FAILs Reading view; the shipped build passes both.
 //
-// SC-522 appends G-S52 (42 scenarios in all; the id was assigned by the dispatcher): a tracker in note B embedded in a LIVE PREVIEW host note A keeps
+// SC-522 appends G-S52 (45 scenarios in all; the id was assigned by the dispatcher): a tracker in note B embedded in a LIVE PREVIEW host note A keeps
 // A's scroll position and its on-screen text when B is written (in-app and on disk with A parked at its end, from another pane, and a hero added
 // with A parked below the embed), a real click on the embedded card does not scroll A to the embed's top, and a block deleted from B (a
 // redraw that brings no fresh tracker of ours) does not keep the hold up until its timer (phase (f)).

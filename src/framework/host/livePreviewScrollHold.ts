@@ -141,6 +141,8 @@
 // where stock's clamp ends without a blank band. If Obsidian ever redraws an embed in two separate tasks (the removal
 // first, the replacement later) that release fires early and the host behaves as on stock for that write (the clamp),
 // never worse. A re-hold while the previous redraw is under way (a held root removed) keeps the larger floor.
+// The release rule also fires on ANY removal outside our roots that lands in the ~20-30 ms between the write and Obsidian's
+// redraw (something else in the embed changing): that write then behaves as on stock (the clamp), never worse.
 
 import type { Workspace } from 'obsidian';
 import { ViewPlugin } from '@codemirror/view';
@@ -282,8 +284,10 @@ export class LivePreviewScrollHold {
 		let px = embed.getBoundingClientRect().height - edges;
 		const prev = this.embedHolds.get(embed);
 		if (prev) {
-			// a re-hold (rapid writes) never lowers the floor while the previous redraw is still under way (a held root was
-			// removed: the embed may be collapsed right now); with every held root still in place the height read is true
+			// A re-hold (rapid writes): the height read above is taken with the previous hold's min-height still applied, so it
+			// already includes the previous floor and a re-hold does not lower it before the redraw; this keeps the larger floor
+			// explicitly when a held root was removed (the embed may be collapsed right now). A shrink is not handled here: the
+			// redraw-time release (below) ends the hold, and the host ends where stock's clamp ends.
 			if (Array.from(prev.roots0).some((root) => !root.isConnected)) px = Math.max(px, prev.px);
 			prev.release();
 		}
