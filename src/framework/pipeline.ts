@@ -196,8 +196,9 @@ function armClickShield(root: HTMLElement): void {
 	// Obsidian draws two kinds of Live Preview block as one CodeMirror widget whose `click` handler (`hookClickHandler`) calls
 	// `selectElement`: the whole widget's source range becomes the editor selection, with `scrollIntoView: true`. The handler skips
 	// a click whose target sits in an `.interactive-child` (it walks from the target up to the editor's content), so the root takes
-	// that class in both places - at the press or the click, before the event reaches the widget, and nowhere else. Obsidian also
-	// tests the class for Mod+A in the editor (select the input's text, not the note) - see livePreviewScrollHold.ts, SC-522 r3.
+	// that class in both places - at the press or the click, before the event reaches the widget, and nowhere else. Obsidian's
+	// Mod+A handler also reads the class, but measured behaviour is the same with or without it (SC-540 r2: the input's text is
+	// selected either way), so nothing here depends on it.
 	//  - SC-522, an EMBED (`.cm-content .internal-embed`): the handler jumped the HOST note to the embed's top on every click in the
 	//    card (5420 -> 3916 measured). Details: livePreviewScrollHold.ts, "CLICKS IN THE EMBEDDED CARD".
 	//  - SC-540, a CALLOUT (`.cm-content .cm-embed-block.cm-callout`, Obsidian's `> [!note]` widget): the click, and the Enter that
@@ -208,11 +209,23 @@ function armClickShield(root: HTMLElement): void {
 	// that same event. The callout's own controls are outside the root and untouched: its text and title still open the source,
 	// the `</>` button too, and the fold chevron folds. Reading view (no `.cm-content`) and DSE's own code-block widgets in Live
 	// Preview (a plain fence is a `.cm-embed-block` without `.cm-callout`) are untouched.
+	//  - A control whose click handler REBUILDS the card (ds-initiative's Advance round, ds-project's Add project roll, in a callout
+	//    or in an embed) detaches its own button during the click. Obsidian runs the selection 10-150 ms later (`Ah`, app.js 1.15.0
+	//    @820778) and walks up from that detached target, which now ends at `null` without ever meeting the marked root: the
+	//    callout went to source (0-0 -> 144-309 measured) and the embed was selected (SC-522's case, same gap). So the bubble
+	//    listener below also marks the top of the detached subtree; it is garbage, and the click is neither stopped nor cancelled.
 	const markInEditorWidget = (): void => {
 		if (root.classList.contains('interactive-child')) return;
 		if (root.closest('.cm-content .internal-embed') || root.closest('.cm-content .cm-embed-block.cm-callout')) root.classList.add('interactive-child');
 	};
 	root.addEventListener('click', markInEditorWidget, { capture: true });
+	root.addEventListener('click', (event) => {
+		if (!root.classList.contains('interactive-child')) return;
+		let node = event.target as Node | null;
+		if (!node || root.contains(node)) return;
+		while (node.parentNode) node = node.parentNode;
+		if (node.nodeType === 1) (node as HTMLElement).classList.add('interactive-child');
+	});
 	const stop = (event: Event): void => {
 		markInEditorWidget();
 		if (!isEditableControlTarget(event.target, root)) {
