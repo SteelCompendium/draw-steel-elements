@@ -100,7 +100,8 @@
 // card's top border. Anti-vacuity per phase: panels that were out of the document at the first animation frame after their creation exist, and every
 // anchor has a non-zero border. Controls (temporary bundles via DSE_LIFECYCLE_BUNDLE): the frame-batched build that drops such panels (this fix's first version)
 // FAILs Live Preview; the stock build that reads the border at mount FAILs Reading view; the shipped build passes both.
-// SC-537 appends G-S57 (45 scenarios in all; it sits before G-S56, which runs last and detaches the other leaves): the same, for identical CALLOUTS in Live Preview.
+// SC-537 appends G-S57 (45 scenarios in all; it sits before G-S56, which runs last and detaches the other leaves): the same, for identical CALLOUTS in Live Preview
+// (also twins far apart, where the lower callout is off screen at the write, and a click on the lower callout's title right after it).
 // Obsidian draws a callout as one editor widget and, after a write to the upper one, hands its OLD widget (with the writer's live view) to the lower
 // slot without calling a processor, so the lower callout showed the writer's value, a click on it wrote the UPPER block and a form Save was erased. Real
 // mouse clicks; the cards are read after the cursor is parked (a click in a callout opens it as source, SC-540). Per phase the picture is the note: one
@@ -223,6 +224,8 @@ const FIXTURES = {
 	'Lifecycle/twin-callouts-3.md': `# twin callouts 3\n\nTOP\n\n${QUOTED(['[!note] Camp'])}\n\nM1\n\n${QUOTED(['[!note] Camp'])}\n\nM2\n\n${QUOTED(['[!note] Camp'])}\n\nBOTTOM\n`,
 	'Lifecycle/twin-callouts-xy.md': `# twin callouts xy\n\nTOP\n\n${QUOTED_XY(['[!note] Camp'])}\n\nMID\n\n${QUOTED_XY(['[!note] Camp'])}\n\nBOTTOM\n`,
 	'Lifecycle/twin-callouts-nested.md': `# twin callouts nested\n\nTOP\n\n${QUOTED_NESTED()}\n\nMID\n\n${QUOTED_NESTED()}\n\nBOTTOM\n`,
+	// SC-537 r4: the twin callouts far apart (the lower one is off screen when the upper one is written).
+	'Lifecycle/twin-callouts-far.md': `# twin callouts far\n\nTOP\n\n${QUOTED(['[!note] Camp'])}\n\n${Array.from({ length: 150 }, (_, i) => `Paragraph between ${i}.`).join('\n\n')}\n\n${QUOTED(['[!note] Camp'])}\n\nBOTTOM\n`,
 	'Lifecycle/twin-quotes.md': `# twin quotes\n\nTOP\n\n${QUOTED([])}\n\nMID\n\n${QUOTED([])}\n\nBOTTOM\n`,
 	'Lifecycle/twin-montage.md': `# twin montage\n\nTOP\n\n${fence('ds-montage', ['title: Twin', 'rounds: 3', 'participants:', '  - name: Kira', 'current_round: 1'])}\n\nMID\n\n${fence('ds-montage', ['title: Twin', 'rounds: 3', 'participants:', '  - name: Kira', 'current_round: 1'])}\n\nBOTTOM\n`,
 	'Lifecycle/counter.md': `# counter\n\nABOVE\n\n${COUNTER(10)}\n\nBELOW\n`,
@@ -4201,21 +4204,45 @@ const SCENARIOS = [
 				await t.ev(`(${LC_LEAF}).view.editor.setCursor({ line: 0, ch: 0 })`);
 				await t.sleep(1200);
 			};
-			const openLP = async (rel) => {
+			/** Open `rel` in Live Preview with the cursor parked; `far`: only the first card is on screen (the others are far below). */
+			const openLP = async (rel, far = false) => {
 				await t.open('Lifecycle/other.md');
 				await t.reset(rel);
 				await t.ev(`(async () => { await (${LC_LEAF}).setViewState({ type: 'markdown', state: { file: ${JSON.stringify(rel)}, mode: 'source', source: false }, active: true }); })()`);
 				await t.waitFor(`!!window.__gs57.rootFor(${CM}, 0)`, `${rel}: the first card is drawn`);
 				await park();
+				if (far) {
+					const drawn = await t.ev(`window.__gs57.cards(${CM}).length`);
+					if (drawn !== 1) problems.push(`${rel}: expected only the first card on screen, found ${drawn} (the lower twin must be off screen)`);
+					return;
+				}
 				await t.waitFor(`window.__gs57.cards(${CM}).length === ${(FIXTURES[rel].match(/```ds-counter/g) ?? []).length}`, `${rel}: every card is drawn`);
+			};
+			/** Scroll the editor so the card of `block` is in the middle of the pane, and wait until it is drawn. */
+			const scrollToBlock = async (block) => {
+				await t.ev(`(async () => { const cm = ${CM}; const fl = []; cm.state.doc.toString().split('\\n').forEach((l, i) => { if (/^(?:[ ]{0,3}>[ ]?)*\`\`\`ds-counter\\s*$/.test(l)) fl.push(i); }); cm.dispatch({ effects: cm.constructor.scrollIntoView(cm.state.doc.line(fl[${block}] + 1).from, { y: 'center' }) }); return true; })()`);
+				await t.waitFor(`!!window.__gs57.rootFor(${CM}, ${block})`, `the card of block ${block} is drawn after the scroll`);
+				await t.sleep(1200);
 			};
 			const cardsNow = () => t.ev(`window.__gs57.cards(${CM})`);
 			/** What the user sees with the cursor parked must be the note: one card per block, the block's own name and value. */
-			const expectPicture = async (label, rel, wantValues, wantNames) => {
+			const expectPicture = async (label, rel, wantValues, wantNames, partial = false) => {
 				const cards = await cardsNow();
 				const disk = t.counterValues(rel);
-				outcomes.push(`${label}: cards ${JSON.stringify(cards.map((c) => c.value))} disk ${JSON.stringify(disk)}${wantNames ? ' names ' + JSON.stringify(namesOf(rel)) : ''}`);
+				outcomes.push(`${label}: cards ${JSON.stringify(cards.map((c) => c.block + ':' + c.value))} disk ${JSON.stringify(disk)}${wantNames ? ' names ' + JSON.stringify(namesOf(rel)) : ''}`);
 				if (!same(disk, wantValues)) problems.push(`${label}: the blocks hold ${JSON.stringify(disk)}, expected ${JSON.stringify(wantValues)} (the click wrote another block)`);
+				if (partial) {
+					// Far-apart twins: only the cards on screen exist; each must show its own block.
+					const names = namesOf(rel);
+					// (Right after a click the clicked callout is source, so no card may be drawn at all; after a scroll the card scrolled to must be.)
+					if (partial === 'scrolled' && cards.length === 0) problems.push(`${label}: no card is drawn`);
+					for (const c of cards) {
+						if (c.value !== disk[c.block]) problems.push(`${label}: the card of block ${c.block} shows ${c.value} but the block holds ${disk[c.block]}`);
+						if (wantNames && c.name !== names[c.block]) problems.push(`${label}: the card of block ${c.block} is named ${c.name} but the block is ${names[c.block]}`);
+					}
+					if (wantNames && !same(names, wantNames)) problems.push(`${label}: the note's names are ${JSON.stringify(names)}, expected ${JSON.stringify(wantNames)}`);
+					return;
+				}
 				if (cards.length !== disk.length) problems.push(`${label}: ${cards.length} card(s) for ${disk.length} blocks`);
 				else if (!same(cards.map((c) => c.value), disk)) problems.push(`${label}: the cards show ${JSON.stringify(cards.map((c) => c.value))} but the blocks hold ${JSON.stringify(disk)}`);
 				if (wantNames) {
@@ -4224,7 +4251,7 @@ const SCENARIOS = [
 				}
 			};
 			/** A REAL click on + of the card of `block`; wait for the note, park the cursor, then compare the picture. */
-			const clickStep = async (label, rel, block, wantValues, wantNames = null) => {
+			const clickStep = async (label, rel, block, wantValues, wantNames = null, { stay = false } = {}) => {
 				const before = JSON.stringify([t.counterValues(rel), namesOf(rel)]);
 				const btn = `(window.__gs57.rootFor(${CM}, ${block})?.querySelector('button[aria-label^="Increase"]'))`;
 				if (!(await t.ev(`!!${btn}`))) {
@@ -4235,8 +4262,26 @@ const SCENARIOS = [
 				const t0 = Date.now();
 				while (JSON.stringify([t.counterValues(rel), namesOf(rel)]) === before && Date.now() - t0 < 5000) await t.sleep(80);
 				await t.sleep(1500);
-				await park();
-				await expectPicture(label, rel, wantValues, wantNames);
+				// `stay`: far-apart twins - parking the cursor would scroll the pane back to the top; read what is on screen instead.
+				if (!stay) await park();
+				await expectPicture(label, rel, wantValues, wantNames, stay);
+			};
+			/** The block edit form's Save on the card of `block`, opened from the keyboard (a callout's title sits where the hover menu is drawn). */
+			const formSave = async (label, block, from, to, rel) => {
+				const pencil = `(window.__gs57.rootFor(${CM}, ${block})?.querySelector('.dse-chrome button[data-dse-chrome-item="edit"]'))`;
+				await t.waitFor(`!!${pencil}`, `${label} the Edit pencil is drawn`);
+				await t.ev(`${pencil}.focus({ focusVisible: true })`);
+				await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', text: '\r', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+				await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+				await waitFormOpen(`${label} form Save`);
+				const typed = await t.ev(`(() => { const ta = ${FORM}.querySelector('textarea.dse-form__raw'); if (!ta) return false; ta.value = ta.value.replace('name: ${from}', 'name: ${to}'); ta.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+				t.expect(typed, `${label} the form has no raw box`);
+				await t.waitFor(`!!(${SAVE}) && !(${SAVE}).disabled`, `${label} Save enabled`);
+				await t.realClick(SAVE);
+				await t.waitFor(`!document.querySelector('.modal-container .dse-modal')`, `${label} the form closed`);
+				const t0 = Date.now();
+				while (!namesOf(rel).includes(to) && Date.now() - t0 < 5000) await t.sleep(80);
+				await t.sleep(1500);
 			};
 			const wholeNote = (label, rel, wantSigs) => {
 				const blocks = [...t.read(rel).split('\n').map((l) => l.replace(/^(?:> ?)+/, '')).join('\n').matchAll(/^```ds-counter\n([\s\S]*?)\n```$/gm)].map((x) => x[1].split('\n').sort().join('|'));
@@ -4263,21 +4308,7 @@ const SCENARIOS = [
 					const rel = 'Lifecycle/twin-callouts.md';
 					await t.ev(`${prefs}.set('authoringControls', true)`);
 					await openLP(rel);
-					const pencil = `(window.__gs57.rootFor(${CM}, 0)?.querySelector('.dse-chrome button[data-dse-chrome-item="edit"]'))`;
-					await t.waitFor(`!!${pencil}`, '(b) the Edit pencil is drawn');
-					// A callout's title sits where the hover menu is drawn, so open the form from the keyboard (as G-S53).
-					await t.ev(`${pencil}.focus({ focusVisible: true })`);
-					await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', text: '\r', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
-					await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
-					await waitFormOpen('(b) form Save');
-					const typed = await t.ev(`(() => { const ta = ${FORM}.querySelector('textarea.dse-form__raw'); if (!ta) return false; ta.value = ta.value.replace('name: Twin', 'name: Edited'); ta.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
-					t.expect(typed, '(b) the form has no raw box');
-					await t.waitFor(`!!(${SAVE}) && !(${SAVE}).disabled`, '(b) Save enabled');
-					await t.realClick(SAVE);
-					await t.waitFor(`!document.querySelector('.modal-container .dse-modal')`, '(b) the form closed');
-					const t0 = Date.now();
-					while (!namesOf(rel).includes('Edited') && Date.now() - t0 < 5000) await t.sleep(80);
-					await t.sleep(1500);
+					await formSave('(b)', 0, 'Twin', 'Edited', rel);
 					await park();
 					await expectPicture('(b) form Save on upper', rel, [5, 5], ['Edited', 'Twin']);
 					await clickStep('(b) then click lower', rel, 1, [5, 6], ['Edited', 'Twin']);
@@ -4310,17 +4341,63 @@ const SCENARIOS = [
 					await clickStep('(e) then click lower', rel, 1, [6, 6]);
 					wholeNote('(e)', rel, [[6, 'Twin'], [6, 'Twin']]);
 				});
+				// (f) twins far apart: the lower callout is off screen when the upper one is written, so the editor hands the writer's widget to a slot it
+				// is not drawing. The widget is attached later by a scroll (no text change, no processor call): the card must then show the lower block.
+				await phase('(f) far-apart twins', async () => {
+					const rel = 'Lifecycle/twin-callouts-far.md';
+					await openLP(rel, true);
+					await clickStep('(f) click upper', rel, 0, [6, 5], null, { stay: true });
+					await scrollToBlock(1);
+					await expectPicture('(f) scrolled to the lower', rel, [6, 5], null, 'scrolled');
+					await clickStep('(f) then click lower', rel, 1, [6, 6], null, { stay: true });
+					await scrollToBlock(0);
+					await expectPicture('(f) scrolled back to the upper', rel, [6, 6], null, 'scrolled');
+					// Form Save on the upper, then scroll down and click the lower: the edit must survive.
+					await t.ev(`${prefs}.set('authoringControls', true)`);
+					await openLP(rel, true);
+					await formSave('(f)', 0, 'Twin', 'Edited', rel);
+					await scrollToBlock(1);
+					await expectPicture('(f) form Save on upper, scrolled to the lower', rel, [5, 5], ['Edited', 'Twin'], 'scrolled');
+					await clickStep('(f) form Save, then click lower', rel, 1, [5, 6], ['Edited', 'Twin'], { stay: true });
+					await scrollToBlock(0);
+					await expectPicture('(f) form Save, scrolled back to the upper', rel, [5, 6], ['Edited', 'Twin'], 'scrolled');
+					await t.ev(`${prefs}.set('authoringControls', false)`);
+					if (outsideQuotes(t.read(rel)) !== outsideQuotes(FIXTURES[rel])) problems.push('(f) the note text outside the callouts changed');
+				});
+				// (g) a click on the lower callout's title right after + on the upper one: the lower callout is raw source when the write lands (the cursor is
+				// inside it), and Obsidian hands it the writer's widget all the same. When the cursor leaves, the update that draws it again only moves the selection.
+				await phase('(g) title click right after the write', async () => {
+					const rel = 'Lifecycle/twin-callouts.md';
+					await openLP(rel);
+					const upperPlus = `(window.__gs57.rootFor(${CM}, 0)?.querySelector('button[aria-label^="Increase"]'))`;
+					const title = `(window.__gs57.rootFor(${CM}, 1)?.closest('.cm-embed-block.cm-callout')?.querySelector('.callout-title'))`;
+					t.expect(await t.ev(`!!${upperPlus} && !!${title}`), '(g) the upper + and the lower callout title are drawn');
+					await t.realClick(upperPlus);
+					await t.sleep(100);
+					await t.realClick(title);
+					const t0 = Date.now();
+					while (!same(t.counterValues(rel), [6, 5]) && Date.now() - t0 < 5000) await t.sleep(80);
+					await t.sleep(1500);
+					// Anti-vacuity: the title click put the cursor inside the lower callout, so it is source, not a card.
+					const sel = await t.ev(`(() => { const cm = ${CM}; return cm.state.doc.lineAt(cm.state.selection.main.head).number - 1; })()`);
+					const lowerHeader = t.read(rel).split('\n').findIndex((l, i, all) => /^> \[!/.test(l) && all.slice(0, i).some((x) => /^> \[!/.test(x)));
+					if (sel < lowerHeader) problems.push(`(g) the title click did not put the cursor in the lower callout (line ${sel}, the callout starts at ${lowerHeader}): the scenario would not exercise a raw twin`);
+					await park();
+					await expectPicture('(g) after + upper, title click lower, cursor parked', rel, [6, 5], null);
+					await clickStep('(g) then click lower', rel, 1, [6, 6]);
+					wholeNote('(g)', rel, [[6, 'Twin'], [6, 'Twin']]);
+				});
 			} finally {
 				await t.ev(`delete ${t.reg}.release`);
 				await t.ev(`${prefs}.set('authoringControls', false)`);
 				await t.ev(`document.getElementById('lc-gs57-notice')?.remove()`);
-				for (const rel of ['Lifecycle/twin-callouts.md', 'Lifecycle/twin-callouts-3.md', 'Lifecycle/twin-callouts-xy.md', 'Lifecycle/twin-callouts-nested.md']) await t.reset(rel);
+				for (const rel of ['Lifecycle/twin-callouts.md', 'Lifecycle/twin-callouts-3.md', 'Lifecycle/twin-callouts-xy.md', 'Lifecycle/twin-callouts-nested.md', 'Lifecycle/twin-callouts-far.md']) await t.reset(rel);
 				await t.open('Lifecycle/other.md');
 			}
 			t.expect(problems.length === 0, `${problems.join(' | ')} -- outcomes: ${outcomes.join('; ')}`);
 			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${JSON.stringify(await t.noticesSince(m))}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
-			return `identical callouts in Live Preview keep their own card, value and block (2 callouts, form Save, 3 callouts, two blocks per callout, nested): ${outcomes.join('; ')}`;
+			return `identical callouts in Live Preview keep their own card, value and block (2 callouts, form Save, 3 callouts, two blocks per callout, nested, far apart, a title click right after the write): ${outcomes.join('; ')}`;
 		},
 	},
 	{
