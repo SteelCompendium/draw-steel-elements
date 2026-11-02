@@ -697,7 +697,8 @@ export class ReadingModeBlockHost implements BlockHost {
 		// element of a block to an identical twin below it, and that includes the element of a view that still has an edit pending (a
 		// second click inside the first block's 400 ms window); flushed after the rebuild, that edit would be placed through the twin's
 		// block. Flushed here, each pending edit is placed while its element still sits on its own block. Synchronous: every one of
-		// them reads its section before any Vault.process of this round runs.
+		// them reads its section before any Vault.process of this round runs. They are written in registry order, once each (a sibling's own
+		// nested call returns at once, so it never flushes this writer's own waiting view), and the Vault.process calls then chain.
 		this.registry?.flushPendingWrites(this.ctx.sourcePath, this.entry);
 
 		// Captured immediately before entering Vault.process, with nothing async in between.

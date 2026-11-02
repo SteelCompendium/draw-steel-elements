@@ -67,6 +67,8 @@ export class ViewRegistry extends Component {
 	enabled: boolean;
 	readonly stats: ViewRegistryStats = { claims: 0, misses: 0, releases: 0, ambiguous: 0, collisions: 0 };
 	private readonly entries = new Set<ViewRegistryEntry>();
+	/** SC-544: set while `flushPendingWrites` runs, so a sibling's nested call returns at once (see there). */
+	private flushingPendingWrites = false;
 	private readonly now: () => number;
 
 	constructor(options: { enabled: boolean; now?: () => number }) {
@@ -98,11 +100,22 @@ export class ViewRegistry extends Component {
 	 * before it writes the note: the write makes Obsidian redraw the note's identical blocks and hand old elements to twins (Reading
 	 * view, Live Preview code blocks and callouts alike), so an edit flushed after that rebuild would be placed through an element
 	 * that now sits on a twin. Flushed here, each edit's section is read while its element is still on its own block.
+	 *
+	 * Re-entrancy: a sibling's flush runs its own `replaceSource`, which calls this again. That nested call returns at once: this loop
+	 * already reaches every sibling, and a nested loop would flush the WRITER's own waiting view (`except` only guards the direct call)
+	 * and put the writes in the reverse order. So the writes are enqueued in registry order, once each. Reset in a `finally`, so a throw
+	 * from a sibling's write cannot leave the guard on.
 	 */
 	flushPendingWrites(sourcePath: string, except: ViewRegistryEntry | null): void {
-		for (const entry of [...this.entries]) {
-			if (entry === except || entry.released || entry.host.sourcePath !== sourcePath) continue;
-			(entry.view as Partial<WriteTrackingView>).flushPendingWrite?.();
+		if (this.flushingPendingWrites) return;
+		this.flushingPendingWrites = true;
+		try {
+			for (const entry of [...this.entries]) {
+				if (entry === except || entry.released || entry.host.sourcePath !== sourcePath) continue;
+				(entry.view as Partial<WriteTrackingView>).flushPendingWrite?.();
+			}
+		} finally {
+			this.flushingPendingWrites = false;
 		}
 	}
 
