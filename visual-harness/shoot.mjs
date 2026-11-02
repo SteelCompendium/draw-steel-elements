@@ -2324,7 +2324,14 @@ function tagButtons(opts) {
 			// `[data-current]` rules, so it is its own kind. Only `true` is keyed, like `|selected`: no rule
 			// tells `false` from an absent attribute on a swept button, so the idle kinds keep their names.
 			(n.getAttribute('aria-checked') === 'true' ? '|checked' : '') +
-			(n.disabled ? '|disabled' : '');
+			(n.disabled ? '|disabled' : '') +
+			// SC-530 — a seal on a VERTICAL kit track is a different box from a horizontal one with the same
+			// classes: `.dse-track--vertical .dse-track__slot` (and its `[data-current]` / steel forms) sets its own
+			// width, padding, border, colour, background and ring, none of which a horizontal seal has. Without
+			// this suffix Interest's seals share `negotiation|dse-track__slot[|checked]` with Patience's (first in
+			// DOM), so a host-only leak on the vertical rail was never compared. Appended LAST and only inside a
+			// vertical track, so no other key changes.
+			(n.closest('.dse-track--vertical') ? '|in:track--vertical' : '');
 		if (seen.has(key)) continue;
 		seen.add(key);
 		n.setAttribute('data-dse-hostleak', key);
@@ -2947,7 +2954,8 @@ async function mountClickRevealedForSweep(page, bg, problems) {
  *  asserted here. It has been compared since SC-513 through another node (the probe hero's ability-body roll
  *  strip), and the sweep keeps one node per kind; the hero section below still clicks Respite for Catch Breath.
  *  SC-530: `tagButtons` keys a checked radio (`|checked`), so the tier row the negotiation section picks
- *  below is its own kind (`SC530_EXPECT`).
+ *  below is its own kind, and a seal on a vertical track (`|in:track--vertical`) is apart from a horizontal
+ *  one (`SC530_EXPECT`).
  *
  *  Runs BEFORE `mountClickRevealedForSweep` on purpose: SC-526 will add the Recoveries popover to the end of
  *  that helper, and the popover closes on any later document click, so it must stay the last click. Keep this
@@ -3051,20 +3059,24 @@ function assertSc527Tagged(keys, bg, problems) {
 	}
 }
 
-/** SC-530 - checked radios (`aria-checked="true"`), in `tagButtons` spelling, that the button sweep must tag.
- *  No click of SC-530's own: the tier row is checked by SC-527's first negotiation section (its last click,
- *  `.dse-pr__row` #0, asserted in that section's `reached`); the track seal is checked at load (a track always
- *  has exactly one current seal; the first in DOM order is the gallery negotiation's Patience). */
+/** SC-530 - checked radios (`aria-checked="true"`) and vertical-track seals, in `tagButtons` spelling, that the
+ *  button sweep must tag. No click of SC-530's own: the tier row is checked by SC-527's first negotiation section
+ *  (its last click, `.dse-pr__row` #0, asserted in that section's `reached`); a track always has exactly one
+ *  current seal, checked at load (the first in DOM order is the gallery negotiation's horizontal Patience).
+ *  The two `|in:track--vertical` kinds are Interest's rail (idle seal; current seal), which `tagButtons` keeps
+ *  apart from Patience's because their own-box CSS differs. */
 const SC530_EXPECT = [
 	'negotiation|dse-pr__row|checked',
 	'negotiation|dse-track__slot|checked',
+	'negotiation|dse-track__slot|in:track--vertical',
+	'negotiation|dse-track__slot|checked|in:track--vertical',
 ];
 
-/** SC-530 - name every expected checked kind the button sweep did not tag. */
+/** SC-530 - name every expected checked or vertical-track kind the button sweep did not tag. */
 function assertSc530Tagged(keys, bg, problems) {
 	for (const want of SC530_EXPECT) {
 		if (!keys.includes(want)) {
-			problems.push(`${bg}: the sweep tagged no \`${want}\` button — a checked radio (SC-530) would go unchecked`);
+			problems.push(`${bg}: the sweep tagged no \`${want}\` button — a checked radio or vertical-track seal (SC-530) would go unchecked`);
 		}
 	}
 }
