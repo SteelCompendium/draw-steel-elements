@@ -349,8 +349,9 @@ async function startXvfb() {
 	if (!bin) throw new EnvError('Xvfb not found (set XVFB_BIN or run `devbox install` in draw-steel-elements)');
 	for (let n = XVFB_RANGE[0]; n <= XVFB_RANGE[1]; n++) {
 		if (fs.existsSync(`/tmp/.X11-unix/X${n}`) || fs.existsSync(`/tmp/.X${n}-lock`)) continue;
+		// -noreset: do not reset the server (and recentre the pointer parked by x11-pointer.mjs, SC-539) when its last client leaves.
 		// 1600x1200: Obsidian is asked for 1440x1100 and a window manager clamps to the screen.
-		const child = spawn(bin, [`:${n}`, '-screen', '0', '1600x1200x24', '-nolisten', 'tcp'], {
+		const child = spawn(bin, [`:${n}`, '-screen', '0', '1600x1200x24', '-nolisten', 'tcp', '-noreset'], {
 			stdio: 'ignore',
 			env: { ...process.env, DSE_E2E_RUN_ID: runId },
 		});

@@ -15,12 +15,15 @@
 // connection setup -> root window id, then CreateWindow + MapWindow (a 1x1 InputOnly "keeper"
 // at 0,0), WarpPointer to root 0,0, QueryPointer to read it back. The core protocol is frozen.
 //
-// THE KEEPER (measured, Xvfb 21.1 / this host). The warp only sticks while at least one window
-// is mapped on the display: on a bare Xvfb WarpPointer is a no-op (pointer stays 800,600), and
-// when the last mapped window goes away the pointer snaps back to the centre. Obsidian windows
-// come and go between spec files, so the returned handle keeps this connection (and its 1x1
-// window at 0,0, which no Obsidian window covers) open until `release()`. Closing the socket
-// destroys the window.
+// THE HELD CONNECTION (measured, Xvfb 21.1 / this host). Xvfb resets, and puts the pointer back at
+// the screen centre, whenever its LAST CLIENT disconnects. A one-shot warp from a short-lived
+// client (xdotool, say) is therefore lost the moment that client exits, and it would be lost
+// again whenever every Obsidian has exited between spec files. So the returned handle keeps this
+// connection open for the whole run; that open connection, not the window, is what holds the
+// pointer at 0,0. The 1x1 InputOnly window at 0,0 (which no Obsidian window covers) is only a
+// harmless marker. A side effect: with this client attached the private Xvfb no longer resets
+// between spec files. `-noreset` on the Xvfb command line (run.mjs) is a backstop for losing the
+// connection. `release()` closes it.
 //
 // Only ever call this with the runner's own private display: with --headed the pointer is a
 // person's real one.
@@ -82,14 +85,18 @@ export function parkPointer(display, { timeoutMs = 2000 } = {}) {
 				const total = 8 + buf.readUInt16LE(6) * 4;
 				if (buf.length < total) return;
 				if (status !== 1) {
-					const why = buf.subarray(8, 8 + buf[1]).toString('latin1');
+					// Failed (0): byte 1 is the reason length. Authenticate (2): byte 1 is unused and the
+					// reason is the additional data (padded with NULs).
+					const raw = status === 0 ? buf.subarray(8, 8 + buf[1]) : buf.subarray(8, total);
+					const why = raw.toString('latin1').replace(/\0+$/, '');
 					throw new Error(`X server refused the connection (${status === 2 ? 'authenticate' : 'failed'}: ${why})`);
 				}
+				if (total < 40) throw new Error('setup reply too short');
 				const base = buf.readUInt32LE(12); // resource-id-base
 				const vendorLen = buf.readUInt16LE(24);
 				const formats = buf[29];
 				const screen0 = 8 + 32 + ((vendorLen + 3) & ~3) + formats * 8;
-				if (total < screen0 + 40) throw new Error('setup reply has no screen');
+				if (total < screen0 + 40) throw new Error('setup reply too short');
 				ids = { root: buf.readUInt32LE(screen0), wid: base | 1 };
 				buf = buf.subarray(total);
 				phase = 'request';
