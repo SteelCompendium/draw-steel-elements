@@ -28,6 +28,14 @@ export `:1`, your real screen). Xvfb itself and the build step do inherit it, ha
 `--headed` is the only way onto a real display: `DSE_E2E_HEADED_DISPLAY` if set, else `:1`.
 Agents: never `--headed` on `:1`; test it against a throwaway Xvfb.
 
+All shards share that one private Xvfb display (no window manager, every Obsidian window at the same
+spot). The runner therefore parks the X pointer at 0,0 right after Xvfb starts (`x11-pointer.mjs`, a
+dependency-free X11 client; log line `OBSIDIAN-E2E pointer parked at 0,0 on :NNN (outside every window)`), so
+a window another shard maps or unmaps can never send a real Leave/Enter to the window under test and steal
+the hover a spec just set (SC-539). The park is best effort: if it fails the run continues as before, with
+`OBSIDIAN-E2E WARN pointer NOT parked: <reason> ...` printed at the start and again after the `done` line (read
+a hover-timeout red with that line in mind). Never done with `--headed`, where the pointer is yours.
+
 **Cache.** Obsidian app / installer / chromedriver downloads live in
 `${XDG_CACHE_HOME:-~/.cache}/dse-e2e-obsidian` (override `OBSIDIAN_CACHE`), shared by every
 worktree (~1 GB per version set; the first run of a new version downloads).

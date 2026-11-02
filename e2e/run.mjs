@@ -21,6 +21,8 @@
 // inherited DISPLAY/XAUTHORITY/WAYLAND_DISPLAY are dropped from their environment (Xvfb itself
 // and the build step still inherit the shell's, harmlessly: neither opens a window).
 // --headed is the only way onto a real display.
+// The shards share that one display, so the runner also parks its X pointer at 0,0 (x11-pointer.mjs,
+// SC-539): a window another shard maps over the pointer would otherwise steal a spec's hover.
 //
 // CHILD HYGIENE. Everything this spawns (Xvfb, wdio and its workers, chromedriver, Obsidian) is
 // reaped by PID on every exit path - normal, failure, SIGINT/SIGTERM, mid-startup. Descendants
@@ -35,6 +37,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parkPointer } from './x11-pointer.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.dirname(here);
@@ -45,6 +48,7 @@ const PINNED = '1.14.4';
 const TAG = 'OBSIDIAN-E2E';
 const XVFB_RANGE = [200, 239];
 
+let pointerWarn = null; // SC-539: set when the pointer park failed; repeated in the final summary
 let interrupted = false; // set by the SIGINT/SIGTERM handler below
 class UsageError extends Error {}
 class EnvError extends Error {}
@@ -491,6 +495,15 @@ async function main() {
 		console.log(`${TAG} headed on display ${display}: windows WILL appear there. Do not touch the mouse or keyboard while it runs.`);
 	} else {
 		display = (await startXvfb()).display;
+		// SC-539: park the private display's X pointer outside every Obsidian window (why and how:
+		// x11-pointer.mjs). Best effort: on failure run as before, loudly, never exit 2.
+		try {
+			await parkPointer(display);
+			console.log(`${TAG} pointer parked at 0,0 on ${display} (outside every window)`);
+		} catch (e) {
+			pointerWarn = `${TAG} WARN pointer NOT parked: ${e instanceof Error ? e.message : String(e)} — hover tests may flake (SC-539)`;
+			console.log(pointerWarn);
+		}
 	}
 
 	const wdioBin = path.join(repo, 'node_modules', '@wdio', 'cli', 'bin', 'wdio.js');
@@ -572,6 +585,7 @@ async function main() {
 	const gate = coverageGate(await loadManifests(), driven, new Set(results.filter((r) => r.knownBug).map((r) => r.id)));
 	const coverageText = `coverage: ${gate.exercised}/${gate.total} pairs${partial ? ' (partial run: gate skipped)' : ''}`;
 	console.log(`${TAG} done: ${ok}/${total} ok, ${failed} failed, ${known} known-bug, ${coverageText}`);
+	if (pointerWarn) console.log(pointerWarn);
 	console.log(`${TAG} coverage driven: ${driven.length} (control, kind) pair(s) -> ${path.join(outRoot, 'coverage.json')}`);
 	let gateFailed = false;
 	if (!partial && failed === 0 && wdioCode === 0 && (gate.missing.length || gate.knownOnly.length || gate.unmanifested.length)) {
