@@ -2009,6 +2009,165 @@ describe('SC-326 r2: the board keeps its horizontal scroll across the rebuild ev
 	});
 });
 
+describe('SC-490: the hero column is pinned while the board overflows', () => {
+	// jsdom has no layout: give every element a controllable scrollWidth / clientWidth and a fake
+	// ResizeObserver (jsdom has none), and put the real descriptors back after.
+	const layout = { scrollWidth: 2000, clientWidth: 700 };
+	const saved = ['scrollWidth', 'clientWidth'].map((k) => [k, Object.getOwnPropertyDescriptor(Element.prototype, k)] as const);
+	class FakeResizeObserver {
+		static instances: FakeResizeObserver[] = [];
+		targets: Element[] = [];
+		disconnected = false;
+		constructor(public callback: () => void) {
+			FakeResizeObserver.instances.push(this);
+		}
+		observe(target: Element) {
+			this.targets.push(target);
+		}
+		unobserve() {}
+		disconnect() {
+			this.disconnected = true;
+		}
+	}
+	beforeEach(() => {
+		Object.defineProperty(Element.prototype, 'scrollWidth', { configurable: true, get: () => layout.scrollWidth });
+		Object.defineProperty(Element.prototype, 'clientWidth', { configurable: true, get: () => layout.clientWidth });
+		layout.scrollWidth = 2000;
+		layout.clientWidth = 700;
+		FakeResizeObserver.instances = [];
+		(window as unknown as { ResizeObserver: unknown }).ResizeObserver = FakeResizeObserver;
+	});
+	afterEach(() => {
+		for (const [k, d] of saved) {
+			if (d) Object.defineProperty(Element.prototype, k, d);
+			else delete (Element.prototype as unknown as Record<string, unknown>)[k];
+		}
+		delete (window as unknown as { ResizeObserver?: unknown }).ResizeObserver;
+	});
+	const boardOf = (root: HTMLElement) => root.querySelector('.dse-mt__board') as HTMLElement;
+
+	test('the board is marked data-overflow="on" while its grid is wider than the frame, "off" when it fits (fails with no marking)', async () => {
+		const wide = await renderMontage(QUICK_TRIO_FIXTURE);
+		expect(boardOf(wide.root).getAttribute('data-overflow')).toBe('on');
+		layout.scrollWidth = 700; // nothing to scroll
+		const fits = await renderMontage(QUICK_TRIO_FIXTURE);
+		expect(boardOf(fits.root).getAttribute('data-overflow')).toBe('off');
+	});
+
+	test('the mark follows the pane: the frame and the header row are watched, a re-measure flips it, and a resize that stays overflowing re-pins it (off, then on)', async () => {
+		const { root } = await renderMontage(QUICK_TRIO_FIXTURE);
+		const board = boardOf(root);
+		const observer = FakeResizeObserver.instances[0];
+		// the frame + the track-defining header row (corner, 4 round headers, Tally header)
+		expect(observer.targets).toHaveLength(1 + 6);
+		expect(observer.targets[0]).toBe(board);
+		expect(observer.targets).toContain(board.querySelector('.dse-mt__board-corner'));
+		layout.clientWidth = 3000; // the pane grew past the grid
+		observer.callback();
+		expect(board.getAttribute('data-overflow')).toBe('off');
+		layout.clientWidth = 700;
+		observer.callback();
+		expect(board.getAttribute('data-overflow')).toBe('on');
+		const written: string[] = [];
+		const setAttribute = board.setAttribute.bind(board);
+		board.setAttribute = (name: string, value: string) => {
+			if (name === 'data-overflow') written.push(value);
+			setAttribute(name, value);
+		};
+		layout.clientWidth = 650; // resized, still overflowing: dropped and recreated in one pass
+		observer.callback();
+		expect(written).toEqual(['off', 'on']);
+		expect(board.getAttribute('data-overflow')).toBe('on');
+	});
+
+	test('the observer is released when the view unloads', async () => {
+		const addChild = jest.fn((child: unknown) => {
+			(child as { load(): void }).load();
+			return child;
+		});
+		await renderMontage(QUICK_TRIO_FIXTURE, { addChild } as unknown as Partial<BlockHost>);
+		const observer = FakeResizeObserver.instances[0];
+		expect(observer.disconnected).toBe(false);
+		(addChild.mock.calls[0][0] as { unload(): void }).unload();
+		expect(observer.disconnected).toBe(true);
+	});
+
+	// Tab and the pinned column. The frame is 700px wide at left 100, the pinned column (the corner's
+	// width) 160px, the board scrolled to 500; jsdom has no layout, so the rects are stubbed.
+	describe('focus keeps the focused cell clear of the pinned column', () => {
+		const rect = (left: number, right: number) => ({ left, right, top: 0, bottom: 10, width: right - left, height: 10, x: left, y: 0, toJSON: () => ({}) }) as DOMRect;
+		const focusCellAt = async (pick: (root: HTMLElement) => HTMLElement, left: number, right: number, mark: 'on' | 'off' = 'on') => {
+			const { root } = await renderMontage(QUICK_TRIO_FIXTURE);
+			const board = boardOf(root);
+			board.setAttribute('data-overflow', mark);
+			board.scrollLeft = 500;
+			board.getBoundingClientRect = () => rect(100, 800);
+			(board.querySelector('.dse-mt__board-corner') as HTMLElement).getBoundingClientRect = () => rect(100, 260);
+			const cell = pick(root);
+			cell.getBoundingClientRect = () => rect(left, right);
+			cell.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+			return board.scrollLeft;
+		};
+		const kiraRound1 = (root: HTMLElement) => cellFor(root, 'Kira', 1);
+		test('a round cell scrolled partly under the column is brought out by exactly the covered part (fails with the old handler)', async () => {
+			expect(await focusCellAt(kiraRound1, 200, 300)).toBe(440); // 60px of it was under 100..260
+		});
+		test('a round cell flush against the column is left alone', async () => {
+			expect(await focusCellAt(kiraRound1, 260, 360)).toBe(500);
+		});
+		test('the right edge still works with the column in place', async () => {
+			expect(await focusCellAt(kiraRound1, 760, 860)).toBe(560);
+		});
+		test('a focused name cell (pinned) never moves the board, wherever it reads', async () => {
+			expect(await focusCellAt((root) => heroRow(root, 'Kira'), 70, 170)).toBe(500);
+		});
+		test('the column only counts while it is pinned (data-overflow off: a cell inside the frame is not moved)', async () => {
+			expect(await focusCellAt(kiraRound1, 200, 300, 'off')).toBe(500);
+		});
+	});
+
+	// jsdom cannot lay the grid out, so this pins the DECLARATIONS (the in-run `assertMontageBoardScroll`
+	// gate in shoot.mjs is the real-Chromium proof). Can-fail: an unconditional sticky rule, a translucent
+	// pinned background, or a pin that reaches the ≤420px stacked layout turns it red.
+	test('CSS contract: the pin is sticky only while data-overflow is on, opaque, in the screen-only tier, and reset in the stacked layout', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+		const structural = sheet.match(/\[data-dse-element="montage"\]\s+\.dse-mt\s*\{[\s\S]*?\n\}\n\n\/\* -- Steel decoration tier/);
+		const decoration = sheet.match(
+			/\[data-dse-theme='steel'\]\[data-dse-element="montage"\]:not\(\[data-dse-print="on"\]\)\s+\.dse-mt\s*\{[\s\S]*?\n\}\n/,
+		);
+		expect(structural).not.toBeNull();
+		expect(decoration).not.toBeNull();
+		const css = decoration![0];
+		// screen-only tier: print never sees the pin (and the base tier never mentions the mark)
+		expect(structural![0]).not.toMatch(/data-overflow/);
+		// every sticky rule for the corner / name cells is scoped to the overflow mark
+		const sticky = [...css.matchAll(/([^{}]*)\{[^{}]*position:\s*sticky;[^{}]*\}/g)].map((m) => m[1]);
+		expect(sticky.length).toBeGreaterThan(0);
+		for (const selector of sticky) expect(selector).toContain(`[data-overflow='on']`);
+		expect(sticky.join(' ')).toMatch(/dse-mt__board-name/);
+		expect(sticky.join(' ')).toMatch(/dse-mt__board-corner/);
+		const pin = css.match(/\.dse-mt__board\[data-overflow='on'\] > \.dse-mt__board-corner,\s*\.dse-mt__board\[data-overflow='on'\] > \.dse-mt__board-name\s*\{([^{}]*)\}/);
+		expect(pin).not.toBeNull();
+		expect(pin![1]).toMatch(/left:\s*0;/);
+		expect(pin![1]).toMatch(/z-index:\s*2;/);
+		expect(pin![1]).toMatch(/box-shadow:\s*inset -1px 0 0 var\(--dse-metal-line\);/); // the edge rule, an existing line token
+		// opaque: each pinned background ends in a solid colour layer (dark, and the light override)
+		for (const cell of ['name', 'corner']) {
+			const rule = css.match(new RegExp(`\\}\\n\\t\\.dse-mt__board\\[data-overflow='on'\\] > \\.dse-mt__board-${cell}\\s*\\{([\\s\\S]*?)\\n\\t\\}`));
+			expect(rule).not.toBeNull();
+			const backgrounds = [...rule![1].matchAll(/background:\s*([^;]+);/g)].map((m) => m[1]);
+			expect(backgrounds).toHaveLength(2); // dark, body.theme-light
+			for (const b of backgrounds) expect(b).toMatch(/(^|,\s*)#[0-9a-f]{6}$/);
+		}
+		// the ≤420px stacked layout un-pins the name band
+		const stacked = css.match(/@container dse-mt \(max-width: 420px\)\s*\{[\s\S]*?\.dse-mt__board\[data-overflow='on'\] > \.dse-mt__board-name\s*\{([\s\S]*?)\n\t\t\}/);
+		expect(stacked).not.toBeNull();
+		expect(stacked![1]).toMatch(/position:\s*relative;/);
+		expect(stacked![1]).toMatch(/z-index:\s*auto;/);
+		expect(stacked![1]).toMatch(/box-shadow:\s*none;/);
+	});
+});
+
 describe('SC-191 fix round 4: re-review-2 finding 2c — round headers agree with a complete montage', () => {
 	// montage-done is limit-ended MID-ROUND (successes 6/6 hits success_limit before round 3
 	// finished — Yenna/Osric/Talin never got a round-3 entry). Pre-fix, `roundState()` keyed
