@@ -778,7 +778,7 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * (`mapLine`), accepted only when a fence of this host's language opens there and holds the body this host knows. A closed fence,
 	 * or the note's trailing fence that never closes (the same rule as `locateUnterminatedTrailingFence`, which `locateByBody` also
 	 * considers). Null when the line was changed or removed or no such block is there. No search by body: identical twins cannot be told
-	 * apart that way (SC-480), the position is what tells them apart. A pin is also refused when the note changed by more than `LINE_MAP_MAX_EDITS` lines (see lineMap.ts: for a form kept open past its view that is a Save that cannot succeed).
+	 * apart that way (SC-480), the position is what tells them apart. A pin is also refused when more than `LINE_MAP_MAX_EDITS` lines changed on both sides of the block (see lineMap.ts: for a form kept open past its view that is a Save that cannot succeed).
 	 */
 	private pinnedTarget(content: string, pin: BlockPin): { lineStart: number; lineEnd: number } | null {
 		const line = mapLine(pin.text, content, pin.lineStart);
