@@ -21,7 +21,7 @@
 import type { MarkdownPostProcessorContext, Plugin } from 'obsidian';
 import type { ElementRegistry } from '../registry';
 import type { ElementPipeline } from '../pipeline';
-import { ReadingModeBlockHost, fenceOnElement } from './ReadingModeBlockHost';
+import { ReadingModeBlockHost, fenceOnElement, newPassMemo } from './ReadingModeBlockHost';
 import type { CmEditorView, LivePreviewScope } from './ReadingModeBlockHost';
 import type { PreviewScrollPin } from './previewScrollPin';
 import type { ViewRegistry } from './viewRegistry';
@@ -105,7 +105,7 @@ export class ReusedElementRemounter {
 				get text(): string {
 					return (text ??= view.state.doc.toString());
 				},
-				blocks: new Map(),
+				...newPassMemo(),
 			};
 		}
 		for (const entry of this.registry.liveEntries()) {

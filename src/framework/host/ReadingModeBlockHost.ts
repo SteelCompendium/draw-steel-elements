@@ -233,6 +233,33 @@ export function locateInSection(
 	return locateInSectionLines(splitLines(content), section, language, body, ordinal, near);
 }
 
+type FenceSpan = { lineStart: number; lineEnd: number };
+
+/**
+ * The `language` fences inside `section` (document line numbers, fence lines inclusive), in document order.
+ * `cache` (SC-547) is one pass's memory of each window's list, keyed by window and language: the pass asks once per block of a callout,
+ * and without it each ask scanned every line of the callout (cost grew with the square of the blocks in one callout). It must not outlive
+ * the pass: the lines it was read from change between passes.
+ */
+function windowFences(
+	lines: readonly string[],
+	section: { lineStart: number; lineEnd: number },
+	language: string,
+	cache?: Map<string, readonly FenceSpan[]>,
+): readonly FenceSpan[] {
+	const key = `${section.lineStart}:${section.lineEnd}:${language}`;
+	const cached = cache?.get(key);
+	if (cached) return cached;
+	const windowLines = lines.slice(section.lineStart, section.lineEnd + 1);
+	// A section starts at a block boundary, so scanning the window on its own sees what a scan of the whole note would.
+	const fences = listFences(windowLines.join('\n'), language).map((f) => ({
+		lineStart: f.lineStart + section.lineStart,
+		lineEnd: f.lineEnd + section.lineStart,
+	}));
+	cache?.set(key, fences);
+	return fences;
+}
+
 /** `locateInSection` over a note already split into lines (`splitLines`), for a caller that asks about one note many times. */
 function locateInSectionLines(
 	lines: readonly string[],
@@ -241,13 +268,9 @@ function locateInSectionLines(
 	body: string | null,
 	ordinal: number,
 	near: number | null,
+	fenceCache?: Map<string, readonly FenceSpan[]>,
 ): { lineStart: number; lineEnd: number } | 'ambiguous' | null {
-	const windowLines = lines.slice(section.lineStart, section.lineEnd + 1);
-	// A section starts at a block boundary, so scanning the window on its own sees what a scan of the whole note would.
-	const fences = listFences(windowLines.join('\n'), language).map((f) => ({
-		lineStart: f.lineStart + section.lineStart,
-		lineEnd: f.lineEnd + section.lineStart,
-	}));
+	const fences = windowFences(lines, section, language, fenceCache);
 	const wanted = body === null ? null : normalizeBody(body);
 	const matches =
 		wanted === null
@@ -274,24 +297,48 @@ export interface CmEditorView {
  * SC-537: an editor update the Live Preview pass reads the note from: the view that holds the widgets, and the note text of
  * ITS document (not `editor.getValue()` per host). `text` is read lazily - it is only needed once a callout widget is judged.
  */
-export interface LivePreviewScope {
+export interface LivePreviewScope extends PassMemo {
 	readonly view: CmEditorView;
 	readonly text: string;
-	/** This pass's block list of each quote/callout (`quoteOrdinal`'s cache). */
-	readonly blocks: Map<Element, readonly Element[]>;
 }
+
+/**
+ * What ONE editor pass remembers so that asking about every block of a callout reads the callout once, not once per block
+ * (SC-537 `blocks`; SC-547 `fences`, `windowEnds`). Made fresh for each pass (`newPassMemo`) and dropped with it: the document
+ * changes between passes.
+ */
+export interface PassMemo {
+	/** The block list of each quote/callout (`quoteOrdinal`'s cache). */
+	readonly blocks: Map<Element, readonly Element[]>;
+	/** The fences of each callout window and language (`windowFences`'s cache). */
+	readonly fences: Map<string, readonly FenceSpan[]>;
+	/** The last line of the callout starting at each line (`calloutWindow`'s cache). */
+	readonly windowEnds: Map<number, number>;
+}
+
+export const newPassMemo = (): PassMemo => ({ blocks: new Map(), fences: new Map(), windowEnds: new Map() });
 
 /**
  * SC-455 / SC-537: the section of the Live Preview callout `widget` as `cm` draws it now: the callout's lines (a run of quote
  * lines), starting at the document line CodeMirror reports for the widget. Throws when the widget is not in this editor's
  * document (callers treat that as "no section").
  */
-function calloutWindow(cm: CmEditorView, widget: Element, getText: () => string, linesOf: (text: string) => readonly string[]): MarkdownSectionInformation {
+function calloutWindow(
+	cm: CmEditorView,
+	widget: Element,
+	getText: () => string,
+	linesOf: (text: string) => readonly string[],
+	windowEnds?: Map<number, number>,
+): MarkdownSectionInformation {
 	const lineStart = cm.state.doc.lineAt(cm.posAtDOM(widget)).number - 1;
 	const text = getText();
 	const lines = linesOf(text);
-	let lineEnd = lineStart;
-	while (lineEnd + 1 < lines.length && /^[ ]{0,3}>/.test(lines[lineEnd + 1])) lineEnd++;
+	// SC-547: the callout's last line is found once per callout and pass, not once per block in it.
+	let lineEnd = windowEnds?.get(lineStart) ?? lineStart;
+	if (!windowEnds?.has(lineStart)) {
+		while (lineEnd + 1 < lines.length && /^[ ]{0,3}>/.test(lines[lineEnd + 1])) lineEnd++;
+		windowEnds?.set(lineStart, lineEnd);
+	}
 	return { text, lineStart, lineEnd };
 }
 
@@ -327,7 +374,7 @@ export function quoteOrdinal(el: HTMLElement, alias: string, cache?: Map<Element
  *  - `body` is the fence's own lines, quote prefix off, exactly what Obsidian hands a processor.
  * `linesOf` lets a caller that asks many times about one note split its text once. `sectionOf` is the section to judge when the
  * caller knows it better than the context does (SC-537: the editor's section for a Live Preview callout widget, whose
- * `getSectionInfo` is null); left out, the context is asked. `blocksCache` is the pass's `quoteOrdinal` cache.
+ * `getSectionInfo` is null); left out, the context is asked. `memo` is the pass's memory (`PassMemo`); left out, nothing is remembered.
  */
 export function fenceOnElement(
 	ctx: MarkdownPostProcessorContext,
@@ -335,7 +382,7 @@ export function fenceOnElement(
 	alias: string,
 	linesOf: (text: string) => readonly string[] = splitLines,
 	sectionOf?: MarkdownSectionInformation | null,
-	blocksCache?: Map<Element, readonly Element[]>,
+	memo?: PassMemo,
 ): { lineStart: number; lineEnd: number; body: string } | null {
 	if (ctx.sourcePath === '') return null;
 	let section: MarkdownSectionInformation | null;
@@ -356,7 +403,7 @@ export function fenceOnElement(
 		if (parseCloseFence(lines[section.lineEnd]) === null) return null;
 		fence = { lineStart: section.lineStart, lineEnd: section.lineEnd };
 	} else {
-		const found = locateInSectionLines(lines, section, alias, null, quoteOrdinal(el, alias, blocksCache), null);
+		const found = locateInSectionLines(lines, section, alias, null, quoteOrdinal(el, alias, memo?.blocks), null, memo?.fences);
 		if (found === null || found === 'ambiguous') return null;
 		fence = found;
 	}
@@ -540,7 +587,7 @@ export class ReadingModeBlockHost implements BlockHost {
 			// SC-537: the editor update names its own view and document; ask that one only.
 			if (!scope.view.dom.contains(widget)) return null;
 			try {
-				return calloutWindow(scope.view, widget, () => scope.text, linesOf);
+				return calloutWindow(scope.view, widget, () => scope.text, linesOf, scope.windowEnds);
 			} catch {
 				return null;
 			}
@@ -637,7 +684,7 @@ export class ReadingModeBlockHost implements BlockHost {
 			section ??= this.livePreviewCalloutSection(scope, linesOf);
 			if (!section) return null;
 		}
-		const fence = fenceOnElement(this.ctx, this.el, this.alias, linesOf, section, scope?.blocks);
+		const fence = fenceOnElement(this.ctx, this.el, this.alias, linesOf, section, scope);
 		if (!fence) return null;
 		if (this.lastWriteLine !== null && fence.lineStart === this.lastWriteLine) return null;
 		return normalizeBody(fence.body) === normalizeBody(this.knownBody) ? null : fence.body;

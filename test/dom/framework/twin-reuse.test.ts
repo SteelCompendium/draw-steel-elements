@@ -17,6 +17,8 @@ import { counterElement } from '../../../src/elements/counter/definition';
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
 import { makeFakeContext } from '../../mocks/obsidian';
 import { makeEnv } from './_adoptionEnv';
+import * as anchor from '../../../src/framework/sidebar/anchor';
+import { fenceOnElement, newPassMemo } from '../../../src/framework/host/ReadingModeBlockHost';
 
 type Ctx = ReturnType<typeof makeFakeContext>;
 type Slot = 'fresh' | { reuse: Ctx };
@@ -728,6 +730,23 @@ describe('SC-537: twin callouts in Live Preview (the editor-driven pass)', () =>
 		expect(upper.els.map((el) => el.children.length)).toEqual([1, 1, 1, 1, 1, 1]); // nothing was redrawn
 	});
 
+	// SC-547: the pass asks once per block, and each ask used to scan every line of the callout (cost ~ blocks squared).
+	test('SC-547: a pass over a callout of 40 same-alias blocks scans the callout\'s lines for fences once, not once per block', async () => {
+		const many = callout(...Array.from({ length: 40 }, (_, i): [string, number] => [`B${i % 2}`, 5]));
+		const t = await lp(noteOf(many, many));
+		const upper = await t.draw(0, 40);
+		await t.draw(1, 40);
+		const scan = jest.spyOn(anchor, 'listFences');
+
+		await t.update();
+
+		expect(scan.mock.calls.length).toBe(2); // two callout windows x one alias, not 80
+		expect(upper.els.map((el) => el.children.length)).toEqual(Array(40).fill(1)); // nothing was redrawn
+
+		await t.update();
+		expect(scan.mock.calls.length).toBe(4); // the next pass reads the document again: nothing is kept between passes
+	});
+
 	// SC-544: the click on the middle callout comes before the upper's write. Obsidian's rebuild after that write hands the middle's widget
 	// (still holding its pending +1) to the lower slot; the middle's edit must already be on disk, placed through its own block.
 	test('SC-544: three callouts, the upper then the middle clicked 120 ms apart: both clicks land in the block clicked, and the widget in the lower slot is redrawn from the lower block', async () => {
@@ -847,5 +866,47 @@ describe('SC-544: a second click before the first block\'s write', () => {
 
 		expect(order.indexOf('read-middle')).toBeGreaterThanOrEqual(0);
 		expect(order.indexOf('read-middle')).toBeLessThan(order.indexOf('process'));
+	});
+});
+
+// SC-547: a pass remembers each callout window's fences; the answer for every block must be the one an uncached ask gives.
+describe('SC-547: the pass cache changes no answer', () => {
+	const WINDOW = [
+		'> [!note] Camp',
+		'> ```ds-counter', '> name: A', '> ```', '>',
+		'> ```ds-counter', '> name: A', '> ```', '>', // identical twin of the first
+		'> ```ds-other', '> name: Z', '> ```', '>',
+		'> ```ds-counter', '> name: B', '> ```', '>',
+		'> ```ds-counter', '> name: C', // never closed
+	];
+	const text = `# N\n\n${WINDOW.join('\n')}`;
+	const section = { text, lineStart: 2, lineEnd: 2 + WINDOW.length - 1 };
+	const ctx = { sourcePath: 'Note.md', getSectionInfo: () => null } as any;
+
+	function drawn(): { widget: HTMLElement; els: Array<[string, HTMLElement]> } {
+		const widget = document.body.appendChild(document.createElement('div'));
+		widget.className = 'cm-embed-block cm-callout';
+		const inner = widget.appendChild(document.createElement('div'));
+		inner.className = 'callout';
+		// DOM order = document order: A, A, Z, B, C
+		const els = (['ds-counter', 'ds-counter', 'ds-other', 'ds-counter', 'ds-counter'] as const).map((alias): [string, HTMLElement] => {
+			const el = inner.appendChild(document.createElement('div'));
+			el.classList.add(`block-language-${alias}`);
+			return [alias, el];
+		});
+		return { widget, els };
+	}
+	afterEach(() => document.body.replaceChildren());
+
+	test('twins, two aliases and an unterminated last fence: every block resolves to the same fence with the memo as without', () => {
+		const { els } = drawn();
+		const memo = newPassMemo();
+		const plain = els.map(([alias, el]) => fenceOnElement(ctx, el, alias, undefined, section));
+		const cached = els.map(([alias, el]) => fenceOnElement(ctx, el, alias, undefined, section, memo));
+		expect(cached).toEqual(plain);
+		// the twins told apart by place, the other alias found; the never-closed fence is not a block to Obsidian either way (null)
+		expect(plain.map((f) => f?.lineStart ?? null)).toEqual([3, 7, 11, 15, null]);
+		expect(plain.map((f) => f?.body.split('\n')[0] ?? null)).toEqual(['name: A', 'name: A', 'name: Z', 'name: B', null]);
+		expect(memo.fences.size).toBe(2); // one list per alias, however many blocks asked
 	});
 });
