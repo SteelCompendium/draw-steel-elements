@@ -4776,8 +4776,8 @@ const SCENARIOS = [
 				if (ns.length) problems.push(`${label}: a Notice appeared: ${J(ns)}`);
 			};
 			/** The form's card is kept: a forced start for the phases that need a form on the lower of two identical callouts (the view is thrown away). */
-			const keptForm = async (label, rel) => {
-				await open(rel, 'rv');
+			const keptForm = async (label, rel, mode = 'rv') => {
+				await open(rel, mode);
 				const before = t.read(rel);
 				await holdOn();
 				await t.realClick(incr(A, 0));
@@ -4896,19 +4896,28 @@ const SCENARIOS = [
 				}
 			};
 			/** (l) a kept-open form closes when the plugin is disabled; (p) its Save is strict: its block was deleted from outside, so nothing is written and the Notice says why. */
-			const keptCase = async (label, finish, rel = C2) => {
+			const keptCase = async (label, finish, rel = C2, mode = 'rv') => {
 				const mk = await t.mark();
 				try {
-					await keptForm(label, rel);
+					await keptForm(label, rel, mode);
 					await typeRename(label, 'Twin', 'Edited');
-					if (finish === 'plugin-off') {
+					if (finish === 'plugin-off' || finish === 'plugin-off-click') {
+						const beforeOff = t.read(rel);
 						await t.ev(`(async () => { await app.plugins.disablePlugin('draw-steel-elements'); })()`);
 						await t.waitFor(`!document.querySelector('.modal-container .dse-modal')`, `${label}: the form closed when the plugin was disabled`, 10000);
+						t.expect(t.read(rel) === beforeOff, `${label}: disabling the plugin with the form open changed the note: ${J(t.read(rel))}`);
 						await t.ev(`(async () => { await app.plugins.enablePlugin('draw-steel-elements'); })()`);
-						await t.waitFor(`!!app.plugins.plugins['draw-steel-elements']?.viewRegistry && window.__gs64.cards(${A}).length === 2`, `${label}: the plugin is back and both cards are drawn`);
+						await t.waitFor(`!!app.plugins.plugins['draw-steel-elements']?.viewRegistry && window.__gs64.cardsRaw(${A}).length === 2`, `${label}: the plugin is back and both cards are drawn`, 20000);
 						await t.ev(PAGE_HELPERS);
+						if (finish === 'plugin-off-click') {
+							// SC-545 together with a kept-open form: the cards are drawn again after the off/on and a click lands in the block clicked
+							await showAll(A, 2);
+							await t.realClick(incr(A, 1));
+							await waitDisk(label, rel, () => t.counterValues(rel)[1] === 6, 'the click on the redrawn card never reached the note');
+							await judge(label, rel, [6, 6], ['Twin', 'Twin'], [['A', mode]]);
+						}
 						await noNotices(label, mk);
-						outcomes.push(`${label}: closed with the plugin`);
+						outcomes.push(`${label}: closed with the plugin, the note unchanged${finish === 'plugin-off-click' ? ', the redrawn card counts in its own block' : ''}`);
 						return;
 					}
 					// the form's block (the lower one) is deleted from outside and the upper one holds the form's own body again, so a write that fell back to
@@ -5035,6 +5044,7 @@ const SCENARIOS = [
 				await formCase('(i) Reading view plain fences, form 1, outside edit of block 0 on disk', { rel: P3, mode: 'rv', how: 'disk', form: 1, want: [7, 5, 5], names: ['Twin', 'Edited', 'Twin'] });
 				await formCase('(k) LP callouts, form 1, an outside edit that also inserts a paragraph above', { rel: C3, mode: 'lp', how: 'shift', form: 1, want: [7, 5, 5], names: ['Twin', 'Edited', 'Twin'] });
 				await keptCase('(l) a kept-open form closes when the plugin is disabled', 'plugin-off');
+				await keptCase('(u) Live Preview: a kept-open form, the plugin disabled and enabled again: the form closes, the note is unchanged, the redrawn card counts in its own block', 'plugin-off-click', C2, 'lp');
 				await lateCase('(m) control: the form opened after the click\'s write landed');
 				await wideCase('(n) SC-549: + on block 1 held, an outside edit of block 0, then the write', { mode: 'lp', how: 'inapp', want: [7, 6, 5] });
 				await wideCase('(o) SC-549: + on block 1 held, a character typed in block 0\'s title, then the write', { mode: 'lp', how: 'type', want: [5, 6, 5], allowNotice: /merg/i });
