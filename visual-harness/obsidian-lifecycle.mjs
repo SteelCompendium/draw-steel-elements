@@ -1059,6 +1059,13 @@ function gs64Page() {
 		const c = P.cardsRaw(leaf).find((x) => x.root === entry.root);
 		return { block: c ? c.block : null, released: !!entry.released, connected: entry.root.isConnected };
 	};
+	/** The Components on the registry that are not live views: what a form kept open past its view leaves there. Must be 0 whenever no form is kept open. */
+	P.holders = () => {
+		const r = reg();
+		if (!r) return -1;
+		const views = new Set(r.liveEntries().map((e) => e.view));
+		return r._children.filter((c) => !views.has(c)).length;
+	};
 	return true;
 }
 
@@ -4825,7 +4832,9 @@ const SCENARIOS = [
 					await clickSave(label);
 					await waitDisk(label, rel, () => t.read(rel).includes('name: Edited'), 'the edit never reached the note');
 					await judge(label, rel, want, names, leaves, how === 'shift' ? FIXTURES[rel].replace('\n\nTOP\n\n', '\n\nTOP\n\nNEW PARAGRAPH\n\n') : FIXTURES[rel]);
-					outcomes.push(`${label}: form's card ${J(at.released ? 'released' : 'on block ' + at.block)} at Save`);
+					const holders = await t.ev('window.__gs64.holders()');
+					if (holders !== 0) problems.push(`${label}: ${holders} component(s) left on the registry after Save (a closed form was kept open)`);
+					outcomes.push(`${label}: form's card ${J(at.released ? 'released' : 'on block ' + at.block)} at Save, registry holders ${holders}`);
 					await noNotices(label, mk);
 				} catch (e) {
 					problems.push(`${label}: ${e.message}`);
@@ -4927,6 +4936,31 @@ const SCENARIOS = [
 					await cleanupForm();
 				}
 			};
+			/** (t) a form that was cancelled is not kept open when its view is thrown away later: the registry holds nothing for it. */
+			const cancelCase = async (label) => {
+				const mk = await t.mark();
+				try {
+					await open(C2, 'rv');
+					const before = t.read(C2);
+					await pressPencil(label, A, 1);
+					await t.waitFor(`!!document.querySelector('.modal-container .dse-modal .dse-form__preview')`, `${label}: the edit form opened`);
+					await t.key('Escape', 'Escape', 27);
+					await t.waitFor(`!document.querySelector('.modal-container .dse-modal')`, `${label}: the form closed on Escape`);
+					await t.edit(C2, J(before.replace(/current_value: 5/, 'current_value: 7'))); // the upper block is written: Obsidian throws the lower card's element away
+					await waitHandedOver(label, 'form', A, 1);
+					const at = await whereIs('form', A);
+					t.expect(at.released, `${label}: expected the cancelled form's view to be thrown away, found ${J(at)}`);
+					await settle(C2, [['A', 'rv']]);
+					const holders = await t.ev('window.__gs64.holders()');
+					t.expect(holders === 0, `${label}: ${holders} component(s) left on the registry for a form that was cancelled`);
+					outcomes.push(`${label}: registry holders ${holders}`);
+					await noNotices(label, mk);
+				} catch (e) {
+					problems.push(`${label}: ${e.message}`);
+				} finally {
+					await cleanupForm();
+				}
+			};
 			/**
 			 * (q) a kept-open form on the unterminated trailing fence: an outside edit adds blank lines at the end of the note, so Obsidian draws that section again
 			 * (its text changed) and throws the old element away while the note is still shown; the pin places the write in the trailing block (a strict Save).
@@ -5008,6 +5042,7 @@ const SCENARIOS = [
 				await unterminatedCase('(q) a kept-open form on the unterminated trailing fence (its section redrawn) saves into that block');
 				await leaveCase('(r) the note navigated away in its pane: the form closes with its view', 'navigate');
 				await leaveCase('(s) the pane closed: the form closes with its view', 'close');
+				await cancelCase('(t) a cancelled form is not kept open when its view is thrown away later');
 			} finally {
 				await t.ev(`${prefs}.set('authoringControls', false)`);
 				await t.ev(`document.getElementById('lc-gs64-notice')?.remove()`);
