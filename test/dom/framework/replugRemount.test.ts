@@ -13,6 +13,7 @@ import { ViewRegistry } from '../../../src/framework/host/viewRegistry';
 import type { ViewRegistryEntry } from '../../../src/framework/host/viewRegistry';
 import { REPLUG_ATTR, REPLUG_KEY, ReplugRemounter, readReplugStash, stashForReplug } from '../../../src/framework/host/replugRemount';
 import type { ReplugDeps } from '../../../src/framework/host/replugRemount';
+import { EditorView } from '@codemirror/view';
 import { Plugin, makeFakeContext } from '../../mocks/obsidian';
 import { makeEnv } from './_adoptionEnv';
 
@@ -106,21 +107,38 @@ describe('SC-545 stash: what the unloading instance leaves on the element', () =
 		expect(REPLUG_KEY).toMatch(/V1$/); // the key carries the version (cross-version contract)
 	});
 
-	test('leaves alone a card in Reading view, in a Live Preview code-block widget, a detached one, and one with no known body', () => {
+	test.each<Where>(['callout', 'embed'])('marks a card in a %s widget CodeMirror has taken out of the page (detached: no .markdown-source-view above it)', (where) => {
+		const { container, el } = widgetDom(where);
+		const root = cardIn(el);
+		const widget = (where === 'callout' ? el.closest('.cm-embed-block') : el.closest('.internal-embed')) as HTMLElement;
+		widget.remove(); // what CodeMirror does to a block far from the visible part of the note; the widget keeps its DOM
+		expect(root.isConnected).toBe(false);
+		expect(root.closest('.markdown-source-view')).toBeNull();
+		expect(container.contains(el)).toBe(false);
+		const ctx = fakeCtx();
+		expect(stashForReplug([fakeEntry(root, el, ctx)])).toBe(1);
+		expect(readReplugStash(el)).toEqual({ v: 1, ctx, alias: 'ds-counter', body: BODY });
+	});
+
+	test('leaves alone a card in Reading view, in a Live Preview code-block widget (in the page or detached), a detached one outside any widget, and one with no known body', () => {
 		const reading = widgetDom('reading').el;
 		const codeblock = widgetDom('codeblock').el;
-		const detached = widgetDom('callout').el;
+		const codeblockGone = widgetDom('codeblock').el;
+		const bare = document.createElement('div');
+		const readingGone = widgetDom('reading').el;
 		const noBody = widgetDom('callout').el;
 		const entries = [
 			fakeEntry(cardIn(reading), reading, fakeCtx()),
 			fakeEntry(cardIn(codeblock), codeblock, fakeCtx()),
-			fakeEntry(cardIn(detached), detached, fakeCtx()),
+			fakeEntry(cardIn(codeblockGone), codeblockGone, fakeCtx()),
+			fakeEntry(cardIn(bare), bare, fakeCtx()),
+			fakeEntry(cardIn(readingGone), readingGone, fakeCtx()),
 			fakeEntry(cardIn(noBody), noBody, fakeCtx(), null),
 		];
-		detached.remove(); // the whole widget left the document
-		expect(entries[2].root.isConnected).toBe(false);
+		(codeblockGone.closest('.cm-embed-block') as HTMLElement).remove();
+		(readingGone.closest('.markdown-reading-view') as HTMLElement).remove();
 		expect(stashForReplug(entries)).toBe(0);
-		for (const el of [reading, codeblock, detached, noBody]) expect(el.hasAttribute(REPLUG_ATTR)).toBe(false);
+		for (const el of [reading, codeblock, codeblockGone, bare, readingGone, noBody]) expect(el.hasAttribute(REPLUG_ATTR)).toBe(false);
 	});
 
 	test('a stash with the wrong version or shape is not read', () => {
@@ -242,6 +260,103 @@ describe('SC-545 remount: the new instance draws the stashed cards', () => {
 	});
 });
 
+describe('SC-545 remount of a card that was off the page at the toggle', () => {
+	/** A card in a callout widget that CodeMirror has taken out of the page, stashed by the old instance. */
+	function offPage() {
+		const { container, el } = widgetDom('callout');
+		const old = cardIn(el);
+		const widget = el.closest('.cm-embed-block') as HTMLElement;
+		widget.remove();
+		const ctx = fakeCtx();
+		stashForReplug([fakeEntry(old, el, ctx)]);
+		return { container, el, old, widget, ctx, editor: container.querySelector('.markdown-source-view') as HTMLElement };
+	}
+
+	test('the layout-ready run does not reach it; the editor update that puts the widget back draws it once, with the stashed context', async () => {
+		const { container, el, widget, ctx, editor } = offPage();
+		const d = deps();
+		const remounter = new ReplugRemounter(fakeApp([{ view: fakeView(container).view }]), d);
+		expect(await remounter.run()).toEqual({ remounted: 0, rebuilt: [] });
+		expect(d.mount).not.toHaveBeenCalled();
+		expect(readReplugStash(el)).not.toBeNull(); // still marked, waiting for its widget
+		editor.appendChild(widget); // CodeMirror puts the cached widget DOM back
+		remounter.remountReattached(editor);
+		await Promise.resolve();
+		expect(d.mount).toHaveBeenCalledTimes(1);
+		expect(d.mount).toHaveBeenCalledWith(el, ctx, 'ds-counter', BODY);
+		expect(readReplugStash(el)).toBeNull();
+		remounter.remountReattached(editor);
+		expect(d.mount).toHaveBeenCalledTimes(1);
+	});
+
+	test('with nothing marked an editor update costs one querySelector: no query of all marks, no draw', () => {
+		const { container } = widgetDom('callout');
+		const scope = container.firstElementChild as HTMLElement;
+		const all = jest.spyOn(scope, 'querySelectorAll');
+		const one = jest.spyOn(scope, 'querySelector');
+		const d = deps();
+		new ReplugRemounter(fakeApp([]), d).remountReattached(scope);
+		expect(all).not.toHaveBeenCalled();
+		expect(one).toHaveBeenCalledTimes(1);
+		expect(d.mount).not.toHaveBeenCalled();
+	});
+
+	test('an instance that was unloaded ignores a widget that comes back; the mark stays for the next one', () => {
+		const { container, el, widget, editor } = offPage();
+		const d = deps();
+		const remounter = new ReplugRemounter(fakeApp([{ view: fakeView(container).view }]), d);
+		remounter.dispose();
+		editor.appendChild(widget);
+		remounter.remountReattached(editor);
+		expect(d.mount).not.toHaveBeenCalled();
+		expect(readReplugStash(el)).not.toBeNull();
+	});
+});
+
+describe('SC-545 robustness: one bad stash does not stop the others; an unloaded instance never rebuilds a note', () => {
+	test('a stash whose reader throws is logged and dropped; the other card is still drawn and the run resolves (LOW-1)', async () => {
+		const log = jest.spyOn(console, 'error').mockImplementation(() => {});
+		const bad = widgetDom('callout');
+		const good = widgetDom('embed');
+		cardIn(bad.el);
+		cardIn(good.el);
+		stashForReplug([fakeEntry(bad.el.firstElementChild as HTMLElement, bad.el, fakeCtx()), fakeEntry(good.el.firstElementChild as HTMLElement, good.el, fakeCtx())]);
+		(bad.el as unknown as Record<string, unknown>)[REPLUG_KEY] = new Proxy({}, { get: () => { throw new Error('forged'); } });
+		const d = deps();
+		const result = await new ReplugRemounter(fakeApp([{ view: fakeView(bad.container).view }, { view: fakeView(good.container).view }]), d).run();
+		expect(d.mount).toHaveBeenCalledTimes(1);
+		expect(d.mount.mock.calls[0][0]).toBe(good.el);
+		expect(bad.el.hasAttribute(REPLUG_ATTR)).toBe(false);
+		expect(result.remounted).toBe(1);
+		expect(log).toHaveBeenCalled();
+	});
+
+	test('a draw that throws synchronously is logged and does not stop the run', async () => {
+		const log = jest.spyOn(console, 'error').mockImplementation(() => {});
+		const a = widgetDom('callout');
+		stashForReplug([fakeEntry(cardIn(a.el), a.el, fakeCtx())]);
+		const d = deps({ mount: jest.fn(() => { throw new Error('boom'); }) });
+		await expect(new ReplugRemounter(fakeApp([{ view: fakeView(a.container).view }]), d).run()).resolves.toEqual({ remounted: 0, rebuilt: [] });
+		expect(log).toHaveBeenCalled();
+	});
+
+	test('dispose() that lands during a slow remount, with a raw DSE fence in a callout: no setViewData after the unload (LOW-2)', async () => {
+		const marked = widgetDom('callout');
+		stashForReplug([fakeEntry(cardIn(marked.el), marked.el, fakeCtx())]);
+		const raw = widgetDom('embed');
+		raw.el.createEl('pre').createEl('code', { cls: 'language-ds-counter' });
+		let finish!: () => void;
+		const d = deps({ mount: jest.fn(() => new Promise<void>((r) => (finish = r))) });
+		const rawView = fakeView(raw.container).view;
+		const remounter = new ReplugRemounter(fakeApp([{ view: fakeView(marked.container).view }, { view: rawView }]), d);
+		const running = remounter.run();
+		remounter.dispose(); // the plugin is turned off again while the draw is still running
+		finish();
+		expect(await running).toEqual({ remounted: 1, rebuilt: [] });
+		expect(rawView.setViewData).not.toHaveBeenCalled();
+	});
+});
+
 describe('SC-545 fallback: rebuild a note only for a block that is still undrawn', () => {
 	const rawFence = (parent: HTMLElement, lang = 'ds-counter'): void => {
 		parent.createEl('pre').createEl('code', { cls: `language-${lang}` });
@@ -312,8 +427,9 @@ describe('SC-545 wiring: an off/on of the plugin with a card in a Live Preview c
 	afterEach(() => jest.useRealTimers());
 
 	/** One plugin instance of the framework over the shared `app` (the pipeline deps are reused: only their registry matters here). */
-	function boot(env: ReturnType<typeof makeEnv>, layoutReady = true) {
+	function boot(env: ReturnType<typeof makeEnv>, layoutReady = true, extensions: unknown[] = []) {
 		const plugin = new Plugin(env.app);
+		jest.spyOn(plugin, 'registerEditorExtension').mockImplementation((ext: unknown) => void extensions.push(ext));
 		plugin.load();
 		env.app.workspace.layoutReady = layoutReady;
 		const elements = createElementRegistry();
@@ -387,6 +503,42 @@ describe('SC-545 wiring: an off/on of the plugin with a card in a Live Preview c
 		expect(el.children).toHaveLength(1);
 		expect(third.registry.liveEntries().map((e) => e.root)).toEqual([root]);
 		expect(v.setViewData).not.toHaveBeenCalled();
+	});
+
+	test('a card CodeMirror had taken off the page at the toggle: stashed at unload, not drawn at layout-ready, drawn by the editor update that puts its widget back; owned, + writes, no rebuild', async () => {
+		const env = makeEnv();
+		env.app.vault.setFile('Note.md', NOTE);
+		const first = boot(env);
+		const { container, el } = await drawCallout(env, first.plugin);
+		const oldRoot = el.firstElementChild as HTMLElement;
+		const editor = container.querySelector('.markdown-source-view') as HTMLElement;
+		const widget = el.closest('.cm-embed-block') as HTMLElement;
+		widget.remove(); // scrolled far away: the widget keeps its DOM and its live view
+		first.plugin.unload();
+		expect(readReplugStash(el)?.body).toBe(BODY);
+
+		const { view: v } = fakeView(container);
+		env.app.workspace._leaves.push({ getViewState: () => ({ type: 'markdown' }), view: v } as never);
+		const extensions: unknown[] = [];
+		const second = boot(env, true, extensions);
+		await jest.advanceTimersByTimeAsync(50);
+		expect(el.firstElementChild).toBe(oldRoot); // nothing in the page to draw into
+		expect(readReplugStash(el)).not.toBeNull();
+
+		editor.appendChild(widget); // scrolled back
+		const listener = extensions.find((e) => (e as { facet?: unknown }).facet === EditorView.updateListener) as { value: (u: unknown) => void };
+		listener.value({ docChanged: false, viewportChanged: true, selectionSet: false, view: { contentDOM: editor }, state: { field: () => undefined } });
+		await jest.advanceTimersByTimeAsync(50);
+
+		const newRoot = el.firstElementChild as HTMLElement;
+		expect(el.children).toHaveLength(1);
+		expect(newRoot).not.toBe(oldRoot);
+		expect(oldRoot.isConnected).toBe(false);
+		expect(second.registry.liveEntries().map((e) => e.root)).toEqual([newRoot]);
+		expect(v.setViewData).not.toHaveBeenCalled();
+		(newRoot.querySelector(INC) as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(env.app.vault.getContent('Note.md')).toContain('current_value: 11');
 	});
 
 	test('ViewRegistry.onunload stashes the entries it is about to clear', async () => {
