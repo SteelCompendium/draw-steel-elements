@@ -146,7 +146,7 @@
 // (h) a callout CodeMirror had taken out of the page at the toggle (scrolled about a screen or more away): its widget keeps its DOM, detached, and is put back by the scroll after the
 // off/on - the card must be drawn again then (owned, + writes, no rebuild).
 //
-// SC-552 appends G-S64 (49 scenarios in all; it sits after G-S52, so in part 3 of the four `--only` parts): the block edit form opened on one of several identical blocks saves into the
+// SC-552 appends G-S64 (51 scenarios in all with SC-472's G-S59 and SC-545's G-S63; it sits after G-S63, so it ends part 3 of the five `--only` parts): the block edit form opened on one of several identical blocks saves into the
 // block it was opened on. A write above the form's block (a click inside its 400 ms debounce, an outside edit, Sync) makes Obsidian hand the form's element to the block below or throw
 // it away, and Save followed the element (the edit landed one block down; with two twins the form closed by itself with nothing saved). The form pins its block when it opens and Save
 // maps that line through whatever was written since; a form whose view Obsidian threw away stays open (and then saves strictly); SC-549 (wide): a card's own + is pinned at its first click.
