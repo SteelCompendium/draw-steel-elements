@@ -5606,8 +5606,18 @@ const SCENARIOS = [
 			const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 			const namesOf = (rel) => (t.read(rel).match(/^(?:> ?)*name: (\w+)$/gm) ?? []).map((s) => s.replace(/^(?:> ?)*name: /, ''));
 			const outsideBlocks = (text) => text.split('\n').map((l) => l.replace(/^(?:> ?)+/, '')).join('\n').replace(/^```ds-[\w-]+\n[\s\S]*?\n```$/gm, '');
-			// SC-557 measurement: how the stale frames split (cu = the editor document is behind the disk and the card shows the disk value; dd = the document already holds the disk value; x = neither).
-			const staleStats = (rec) => ` [stale cards cu ${rec.k.cu} dd ${rec.k.dd} x ${rec.k.x}; frames cu ${rec.cuFrames} hard ${rec.hardFrames}; longest any ${rec.any.max}f/${rec.any.maxMs}ms, cu ${rec.cu.max}f/${rec.cu.maxMs}ms (doc behind disk up to ${rec.cuSinceMax}ms after the write), hard ${rec.hard.max}f/${rec.hard.maxMs}ms${rec.odd.length ? '; odd: ' + rec.odd.join(', ') : ''}]`;
+			// SC-557: the longest wall time a card may be AHEAD of the editor's document (the card shows the disk value, the document has not taken it yet). Measured on the
+			// green build, 10 runs at a loadavg of 14-26 on 12 cores and 6 on a quiet machine: at most 6 frames / 117 ms (the document up to 117 ms behind the disk); 1000 ms is
+			// about eight times that, and still far below what an editor that never catches up would show.
+			const CATCH_UP_CAP_MS = 1000;
+			const staleStats = (rec) => ` [catching up: longest ${rec.catchUp.frames} frame(s) / ${rec.catchUp.ms} ms, document behind the disk up to ${rec.cuSinceMax} ms after the write; stale cards: catching up ${rec.k.cu + rec.k.u}, document had the disk value ${rec.k.dd}, neither ${rec.k.x}${rec.odd.length ? '; ' + rec.odd.join(', ') : ''}]`;
+			/** The problem the recorder found, or null. */
+			const wrongCards = (rec) => {
+				const seen = `${rec.pending} frame(s) of ${rec.frames} with a pending edit on a block the card was not clicked on, ${rec.counted} frame(s) (${rec.longest} in a row) with a card that did not match its block and was not catching up (${rec.samples.join(' | ')})`;
+				if (rec.pending > 0 || rec.longest >= 3) return `wrong cards on screen - ${seen}`;
+				if (rec.catchUp.ms > CATCH_UP_CAP_MS) return `the editor document did not catch up with the write within ${CATCH_UP_CAP_MS} ms: a card showed the note's new value for ${rec.catchUp.frames} frame(s) / ${rec.catchUp.ms} ms while the document still held the old one (${rec.samples.join(' | ')})`;
+				return null;
+			};
 			const T3 = 'Lifecycle/twin-callouts-3.md';
 			const T2 = 'Lifecycle/twin-callouts.md';
 			const T4 = 'Lifecycle/twin-callouts-4.md';
@@ -5661,44 +5671,37 @@ const SCENARIOS = [
 				P.modRef = app.vault.on('modify', () => P.mods.push(now()));
 				/**
 				 * Every frame, two kinds of wrong card. (1) A card whose edit is pending but which sits on a block other than the one it was clicked on: never legitimate here
-				 * (the bug showed it for 7-9 frames). (2) A card with nothing pending that shows another value than its block's in the editor: one frame of it is the editor's
-				 * document catching up with a write that just landed, so only a run of 3 frames counts.
+				 * (the bug showed it for 7-9 frames). (2) A card with nothing pending that shows another value than its block's in the editor's document (cm.state.doc).
+				 * Kind (2) is judged against the note on DISK, read synchronously every frame (a build with the bug leaves the disk right and the card wrong, or the other way round):
+				 *  - CATCHING UP: the document has not taken the block's disk value yet and the card shows that disk value (SC-557: under load the card, redrawn from the
+				 *    write, is up to 6 frames ahead of the editor's document; the document took the disk value up to 117 ms after the write in the measured runs). It is not counted
+				 *    as a stale frame in the run below; a run of catching-up frames is bounded in wall time instead (CATCH_UP_CAP_MS, from the page's rAF timestamps), so an
+				 *    editor that never catches up still fails. A read that landed inside Obsidian's write (the file holds fewer values than the document) is also judged
+				 *    catching up, for the same bound.
+				 *  - STALE (counted): the document already holds the disk value and the card differs, or the card matches neither the document nor the disk. A run of 3 such
+				 *    frames fails; a catching-up frame inside the run neither adds to it nor ends it, only a frame with no wrong card does.
 				 */
 				P.recStart = (leaf) => {
-					const R = (P.rec = { frames: 0, pending: 0, stale: 0, run: 0, longest: 0, samples: [], stop: false, k: { cu: 0, dd: 0, x: 0 }, cuFrames: 0, hardFrames: 0, odd: [], runs: { any: { n: 0, t0: 0, max: 0, maxMs: 0 }, cu: { n: 0, t0: 0, max: 0, maxMs: 0 }, hard: { n: 0, t0: 0, max: 0, maxMs: 0 } }, cuSinceMax: 0 });
+					const R = (P.rec = { frames: 0, pending: 0, stale: 0, hard: 0, run: 0, longest: 0, samples: [], stop: false, k: { cu: 0, u: 0, dd: 0, x: 0 }, odd: [], cuRun: { n: 0, t0: 0, max: 0, maxMs: 0 }, cuSinceMax: 0 });
 					const fs = (window.require ?? require)('fs');
 					const diskFile = app.vault.adapter.getFullPath(leaf.view.file.path);
-					const stepRun = (r, on, ts) => {
-						if (on) {
-							if (!r.n) r.t0 = ts;
-							r.n++;
-							r.max = Math.max(r.max, r.n);
-							r.maxMs = Math.max(r.maxMs, ts - r.t0);
-						} else if (r.n) {
-							r.maxMs = Math.max(r.maxMs, ts - r.t0);
-							r.n = 0;
-						}
-					};
+					const valuesOf = (text) => { const out = []; text.replace(/current_value: (\\d+)/g, (_, v) => out.push(Number(v))); return out; };
 					const tick = (ts) => {
 						if (R.stop) return;
 						R.frames++;
 						const cm = leaf.view.editor.cm;
-						const dv = [];
-						cm.state.doc.toString().replace(/current_value: (\\d+)/g, (_, v) => dv.push(Number(v)));
-						// The disk read can land inside Obsidian's write (the file then holds less than the whole note): read again until it holds as many values as the document.
+						const dv = valuesOf(cm.state.doc.toString());
 						let dk = [];
 						let since = null;
-						for (let tries = 0; tries < 4 && dk.length !== dv.length; tries++) {
-							dk = [];
-							try {
-								fs.readFileSync(diskFile, 'utf8').replace(/current_value: (\\d+)/g, (_, v) => dk.push(Number(v)));
-								since = Math.round(Date.now() - fs.statSync(diskFile).mtimeMs);
-							} catch (e) {}
-						}
+						try {
+							dk = valuesOf(fs.readFileSync(diskFile, 'utf8'));
+							since = Math.round(Date.now() - fs.statSync(diskFile).mtimeMs);
+						} catch (e) {}
+						const diskWhole = dk.length === dv.length;
 						const live = reg.liveEntries();
 						const pend = [];
 						const stale = [];
-						let hard = false;
+						let counted = false;
 						for (const c of P.cardsRaw(leaf)) {
 							if (c.block < 0) continue;
 							const e = live.find((x) => x.root === c.root);
@@ -5706,29 +5709,37 @@ const SCENARIOS = [
 								if (c.root.__gs61 !== undefined && P.clickBlock[c.root.__gs61] !== c.block) pend.push(c);
 							} else if (c.value !== dv[c.block]) {
 								stale.push(c);
-								const kind = dv[c.block] !== dk[c.block] ? (c.value === dk[c.block] ? 'cu' : 'x') : 'dd';
+								const kind = !diskWhole ? 'u' : dv[c.block] !== dk[c.block] ? (c.value === dk[c.block] ? 'cu' : 'x') : 'dd';
 								R.k[kind]++;
-								c.kind = kind;
-								if (kind !== 'cu') {
-									hard = true;
+								if (kind === 'cu' || kind === 'u') {
+									if (since !== null) R.cuSinceMax = Math.max(R.cuSinceMax, since);
+								} else {
+									counted = true;
 									if (R.odd.length < 6) R.odd.push(kind + ' b' + c.block + '=' + c.value + '/doc' + dv[c.block] + '/disk' + dk[c.block] + ' +' + since + 'ms');
-								} else if (since !== null) R.cuSinceMax = Math.max(R.cuSinceMax, since);
+								}
 							}
 						}
 						if (pend.length) R.pending++;
-						if (stale.length) R.longest = Math.max(R.longest, ++R.run);
-						else R.run = 0;
+						if (!stale.length) R.run = 0;
+						else if (counted) R.longest = Math.max(R.longest, ++R.run);
 						if (stale.length) R.stale++;
-						if (stale.length) hard ? R.hardFrames++ : R.cuFrames++;
-						stepRun(R.runs.any, stale.length > 0, ts);
-						stepRun(R.runs.cu, stale.length > 0 && !hard, ts);
-						stepRun(R.runs.hard, hard, ts);
+						if (counted) R.hard++;
+						const catching = stale.length > 0 && !counted;
+						if (catching) {
+							if (!R.cuRun.n) R.cuRun.t0 = ts;
+							R.cuRun.n++;
+							R.cuRun.max = Math.max(R.cuRun.max, R.cuRun.n);
+							R.cuRun.maxMs = Math.max(R.cuRun.maxMs, ts - R.cuRun.t0);
+						} else if (R.cuRun.n) {
+							R.cuRun.maxMs = Math.max(R.cuRun.maxMs, ts - R.cuRun.t0);
+							R.cuRun.n = 0;
+						}
 						if ((pend.length || stale.length) && R.samples.length < 4) R.samples.push([...pend.map((c) => 'pending b' + c.block + '=' + c.value + '/clicked' + P.clickBlock[c.root.__gs61]), ...stale.map((c) => 'b' + c.block + '=' + c.value + '/doc' + dv[c.block] + '/disk' + dk[c.block] + ' +' + since + 'ms')].join(' '));
 						requestAnimationFrame(tick);
 					};
 					requestAnimationFrame(tick);
 				};
-				P.recStop = () => { const R = P.rec; if (!R) return null; R.stop = true; const f = (r) => ({ max: r.max, maxMs: Math.round(r.maxMs) }); return { frames: R.frames, pending: R.pending, stale: R.stale, longest: R.longest, samples: R.samples, k: R.k, cuFrames: R.cuFrames, hardFrames: R.hardFrames, odd: R.odd, any: f(R.runs.any), cu: f(R.runs.cu), hard: f(R.runs.hard), cuSinceMax: R.cuSinceMax }; };
+				P.recStop = () => { const R = P.rec; if (!R) return null; R.stop = true; return { frames: R.frames, pending: R.pending, stale: R.stale, counted: R.hard, longest: R.longest, samples: R.samples, k: R.k, odd: R.odd, catchUp: { frames: R.cuRun.max, ms: Math.round(R.cuRun.maxMs) }, cuSinceMax: R.cuSinceMax }; };
 				return true;
 			})()`);
 			const A = 'window.__gs61.A';
@@ -5830,8 +5841,8 @@ const SCENARIOS = [
 						else if (!(log.mods.length && log.clicks[1].t < log.mods[0])) problems.push(`${label}: click 2 (t ${log.clicks[1]?.t}) did not come before the first write (t ${log.mods[0]}): the phase would not exercise the pending edit`);
 					}
 					await judge(label, rel, want, names, modes);
-					if (rec) outcomes.push(`${label}: wrong-card frames: pending-on-another-block ${rec.pending}, stale ${rec.stale} (longest run ${rec.longest}) of ${rec.frames}${staleStats(rec)}`);
-					if (rec && (rec.pending > 0 || rec.longest >= 3)) problems.push(`${label}: wrong cards on screen - ${rec.pending} frame(s) of ${rec.frames} with a pending edit on a block the card was not clicked on, ${rec.stale} frame(s) (${rec.longest} in a row) with a card that did not match its block (${rec.samples.join(' | ')})`);
+					if (rec) outcomes.push(`${label}: wrong-card frames: pending-on-another-block ${rec.pending}, stale ${rec.stale} (counted ${rec.counted}, longest counted run ${rec.longest}) of ${rec.frames}${staleStats(rec)}`);
+					if (rec && wrongCards(rec)) problems.push(`${label}: ${wrongCards(rec)}`);
 					if (follow) {
 						const [block, want2] = follow;
 						const mods0 = (await t.ev('window.__gs61.mods.length'));
@@ -5882,8 +5893,8 @@ const SCENARIOS = [
 						const log = await t.ev('({ clicks: window.__gs61.clicks, mods: window.__gs61.mods })');
 						if (!(log.clicks.length === 1 && log.mods.length >= 1)) problems.push(`${label}: the + click or the writes were not logged (${J(log)})`);
 						await judge(label, T3, [5, 6, 5], ['Edited', 'Twin', 'Twin'], [['A', 'lp']]);
-						if (rec) outcomes.push(`${label}: wrong-card frames: pending-on-another-block ${rec.pending}, stale ${rec.stale} (longest run ${rec.longest}) of ${rec.frames}${staleStats(rec)}`);
-						if (rec && (rec.pending > 0 || rec.longest >= 3)) problems.push(`${label}: wrong cards on screen - ${rec.pending} frame(s) of ${rec.frames} with a pending edit on a block the card was not clicked on, ${rec.stale} frame(s) (${rec.longest} in a row) with a card that did not match its block (${rec.samples.join(' | ')})`);
+						if (rec) outcomes.push(`${label}: wrong-card frames: pending-on-another-block ${rec.pending}, stale ${rec.stale} (counted ${rec.counted}, longest counted run ${rec.longest}) of ${rec.frames}${staleStats(rec)}`);
+						if (rec && wrongCards(rec)) problems.push(`${label}: ${wrongCards(rec)}`);
 					} catch (e) {
 						problems.push(`${label}: ${e.message}`);
 					}
