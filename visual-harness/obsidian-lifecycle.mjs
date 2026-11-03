@@ -5591,6 +5591,8 @@ const SCENARIOS = [
 		// Per phase: anti-vacuity (click 2 is logged BEFORE the first write of the note), the disk values, one card per block showing its block's value and name (read
 		// with the cursor parked; the click targets are found by block, so it does not matter whether the clicked callout turns into source), the text outside the
 		// blocks unchanged, and, in Live Preview, a per-frame recorder that no card with a pending edit sits on a block other than the one it was clicked on.
+		// SC-557: the recorder also counts cards that do not match their block in the editor's document: a card that shows the disk value while the document has not taken it
+		// yet is catching up (bounded by CATCH_UP_CAP_MS, not counted); 3 other such frames in a row fail (see the recorder's comment).
 		// (a) LP 3 callouts, upper then middle; (b) the same with a third click at ~280 ms; (c) LP 4 callouts, blocks 1 and 2; (d) LP callouts of two counters, X then Y;
 		// (e) LP: the upper's edit form open, a script + on the middle, Save 120 ms later; (f) LP plain fences; (g) Reading view callouts; (h) Reading view plain
 		// fences; (i) two panes, upper in Live Preview, middle in the Reading view pane; (j) controls that were clean before and must stay clean.
