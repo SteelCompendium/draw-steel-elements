@@ -2126,6 +2126,42 @@ describe('SC-490: the hero column is pinned while the board overflows', () => {
 		});
 	});
 
+	// LOW-1 (review 1): the pinned fills are solid literals sampled off `--dse-card-bg`, which cannot be
+	// referenced (a gradient sized to a cell is not the card's). They are coupled to the token by hand, so
+	// pin the coupling: each literal must lie, per channel, between its theme's two gradient stops.
+	test('CSS contract: each pinned-column fill literal stays inside its theme\'s --dse-card-bg gradient stops (fails if the token is retuned without them)', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+		const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+		const stops = (theme: 'dark' | 'light') => {
+			// the steel token blocks: the only two definitions that are a 160deg gradient of two solid hexes
+			const defs = [...sheet.matchAll(/--dse-card-bg:\s*linear-gradient\(160deg,\s*(#[0-9a-f]{6}),\s*(#[0-9a-f]{6})\);/g)];
+			expect(defs).toHaveLength(2);
+			const m = defs[theme === 'dark' ? 0 : 1];
+			return [rgb(m[1]), rgb(m[2])];
+		};
+		const css = sheet.match(
+			/\[data-dse-theme='steel'\]\[data-dse-element="montage"\]:not\(\[data-dse-print="on"\]\)\s+\.dse-mt\s*\{[\s\S]*?\n\}\n/,
+		)![0];
+		const rule = (cell: 'name' | 'corner') =>
+			css.match(new RegExp(`\\}\\n\\t\\.dse-mt__board\\[data-overflow='on'\\] > \\.dse-mt__board-${cell}\\s*\\{([\\s\\S]*?)\\n\\t\\}`))![1];
+		const lastHex = (decl: string) => decl.match(/(#[0-9a-f]{6});/)![1];
+		const literals = (cell: 'name' | 'corner') => {
+			const body = rule(cell);
+			const light = body.match(/body\.theme-light &\s*\{[\s\S]*?background:\s*([^;]+);/)![1];
+			const dark = body.match(/^\s*background:\s*([^;]+);/m)![1];
+			return { dark: lastHex(dark + ';'), light: lastHex(light + ';') };
+		};
+		for (const cell of ['name', 'corner'] as const) {
+			for (const theme of ['dark', 'light'] as const) {
+				const [a, b] = stops(theme);
+				const lit = rgb(literals(cell)[theme]);
+				lit.forEach((v, ch) => {
+					expect({ cell, theme, ch, ok: v >= Math.min(a[ch], b[ch]) && v <= Math.max(a[ch], b[ch]) }).toEqual({ cell, theme, ch, ok: true });
+				});
+			}
+		}
+	});
+
 	// jsdom cannot lay the grid out, so this pins the DECLARATIONS (the in-run `assertMontageBoardScroll`
 	// gate in shoot.mjs is the real-Chromium proof). Can-fail: an unconditional sticky rule, a translucent
 	// pinned background, or a pin that reaches the ≤420px stacked layout turns it red.

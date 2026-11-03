@@ -4701,7 +4701,12 @@ Shared globals
 	   #eef1f1) beside the board: the name cells over the rows, dark #20262a / light #fafbfb, with
 	   the cell's own tint already in the solid (1.5% white: dark #23292d; 1.2% black: light
 	   #f8f9f9); the corner over the card's top edge, dark #21282b / light #fcfdfd. A pinned cell
-	   therefore matches an unpinned one to within two levels per channel. The 1px right-edge rule is an inset shadow in
+	   therefore matches an unpinned one to within two levels per channel at the board's usual place
+	   on the card; a solid fill cannot follow the diagonal gradient, so on a tall card (5 heroes, a
+	   long brief above the board) it drifts a few levels more. COUPLED to the two `--dse-card-bg`
+	   definitions (~:7000 dark, ~:14310 light), which carry the reverse pointer: montage.test.ts
+	   fails if any of these four literals leaves its theme's gradient stops. No new token (DESIGN.md
+	   rule 3: not one new colour). The 1px right-edge rule is an inset shadow in
 	   the frame's own line token, so no layout moves and the rounds sliding under the column have a
 	   visible edge. z-index 2: nothing in a cell has one, so the column paints above every round
 	   cell (and wins every hit-test over them). This block is in the SCREEN, non-print tier, so print
@@ -6991,6 +6996,9 @@ Shared globals
 	--dse-chip-bevel: inset 0 1px 0 rgba(255,255,255,.08), 0 1px 3px rgba(0,0,0,.3);
 	--dse-bevel: inset 0 1px 0 rgba(255,255,255,.07);
 	--dse-emboss: 0 1px 0 rgba(0,0,0,.55), 0 -1px 0 rgba(255,255,255,.04);
+	/* SC-490: the montage board's pinned hero column paints SOLID literals sampled from this gradient
+	   (styles-source.css, `.dse-mt__board[data-overflow='on']`, search "SC-490"). Retune a stop here and
+	   re-sample them; test/dom/elements/montage.test.ts fails if a literal leaves the stops' range. */
 	--dse-card-bg: linear-gradient(160deg, #232a2e, #181c1f);
 	--dse-crest-shape: polygon(6% 0, 94% 0, 94% 58%, 50% 100%, 6% 58%);
 	--dse-rule: var(--sc-steel, #8e959a);
@@ -14303,6 +14311,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	--dse-sheen: linear-gradient(180deg, rgba(255,255,255,.9), rgba(0,0,0,.04));
 	--dse-bevel: inset 0 1px 0 rgba(255,255,255,.8);
 	--dse-emboss: none; /* site: no light emboss */
+	/* SC-490: light twin — the montage pinned column's solid literals are sampled from this gradient too
+	   (see the dark definition above); montage.test.ts guards that they stay inside its stops. */
 	--dse-card-bg: linear-gradient(160deg, #ffffff, #eef1f1);
 	--dse-rule: #5a6368;
 	/* hairline-fade is NOT re-listed: it re-keys off --dse-rule (dark block) and
