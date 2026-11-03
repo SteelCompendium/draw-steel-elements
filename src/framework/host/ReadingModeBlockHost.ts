@@ -62,7 +62,8 @@
 // RESOLVES and a click writes the correct block, same as any other reading-mode context.
 import { MarkdownRenderChild, TFile } from 'obsidian';
 import type { Component, MarkdownPostProcessorContext, MarkdownSectionInformation, MarkdownView, Plugin } from 'obsidian';
-import type { BlockHost, BlockInfo, RenderMode } from './BlockHost';
+import type { BlockHost, BlockInfo, BlockPin, BlockWriteOptions, RenderMode } from './BlockHost';
+import { mapLine } from './lineMap';
 import type { PreviewScrollPin } from './previewScrollPin';
 import { listFences } from '../sidebar/anchor';
 import { notifyDroppedWrite, notifyUnsavableWrite } from './droppedWriteNotice';
@@ -736,7 +737,43 @@ export class ReadingModeBlockHost implements BlockHost {
 			.some((l) => /^[ \t]*(?:[-*+]|\d+[.)])[ \t]/.test(l) || /^ {2,}[`~]{3,}/.test(l));
 	}
 
-	async replaceSource(newSource: string, options?: { fromView?: boolean }): Promise<boolean> {
+	/**
+	 * SC-552 (BlockHost.pinPosition): the note text this host's section was read from and the line of the block's own opening fence in
+	 * it, as the block is drawn now. Null while the block has no section or no readable fence of its own.
+	 */
+	pinPosition(): BlockPin | null {
+		const section = this.readSection();
+		if (!section || !this.ownFence) return null;
+		return { text: section.text, lineStart: this.ownFence.lineStart };
+	}
+
+	/**
+	 * SC-552: the block `pin` names, found again in `content`: the pinned fence line mapped through the changes made to the note since
+	 * (`mapLine`), accepted only when a fence of this host's language opens there and holds the body this host knows. A closed fence,
+	 * or the note's trailing fence that never closes (the same rule as `locateUnterminatedTrailingFence`, which `locateByBody` also
+	 * considers). Null when the line was changed or removed or no such block is there. No search by body: identical twins cannot be told
+	 * apart that way (SC-480), the position is what tells them apart.
+	 */
+	private pinnedTarget(content: string, pin: BlockPin): { lineStart: number; lineEnd: number } | null {
+		const line = mapLine(pin.text, content, pin.lineStart);
+		if (line === null) return null;
+		const language = this.knownLanguage ?? this.alias;
+		const lines = splitLines(content);
+		let fence: { lineStart: number; lineEnd: number } | undefined = listFences(content, language).find((f) => f.lineStart === line);
+		let body: string | null = null;
+		if (fence) {
+			body = blockBodyLines(lines, fence.lineStart, fence.lineEnd).join('\n');
+		} else {
+			const unterminated = locateUnterminatedTrailingFence(lines, language);
+			if (!unterminated || unterminated.lineStart !== line) return null;
+			fence = unterminated;
+			body = lines.slice(unterminated.lineStart + 1, unterminated.lineEnd + 1).join('\n');
+		}
+		if (this.knownBody !== null && normalizeBody(body) !== normalizeBody(this.knownBody)) return null;
+		return { lineStart: fence.lineStart, lineEnd: fence.lineEnd };
+	}
+
+	async replaceSource(newSource: string, options?: BlockWriteOptions): Promise<boolean> {
 		this.reported = false;
 		if (!this.canPersist) return false;
 
@@ -785,7 +822,11 @@ export class ReadingModeBlockHost implements BlockHost {
 			options?.fromView === true && this.entry && this.registry ? this.registry.noteWrite(this.entry, newSource) : null;
 		try {
 			await this.plugin.app.vault.process(abstractFile, (content) => {
-				const target = this.resolveWriteTarget(content, section);
+				// SC-552: a pinned write goes to the pinned block when it can still be found. If it cannot: today's placement, or - for a
+				// caller that asked for `pinOnly` - nowhere (the block changed on disk first).
+				const pinned = options?.pin ? this.pinnedTarget(content, options.pin) : null;
+				if (pinned) this.knownLineStart = pinned.lineStart;
+				const target = pinned ?? (options?.pin && options.pinOnly ? 'miss' : this.resolveWriteTarget(content, section));
 				if (target === 'abort') {
 					unplaceable = true; // SC-455: a write that cannot land is never silent
 					listShape = this.looksLikeList(content, section);

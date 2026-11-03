@@ -32,9 +32,29 @@ export interface BlockInfo {
 }
 
 /**
+ * SC-552: where a block was, at one moment: the note text a line number refers to and the block's opening-fence line in it.
+ * A later write maps the line through whatever the note has become (`mapLine`, lineMap.ts) and writes the block it lands on, so
+ * it reaches the block that was pinned even after Obsidian handed the pinned block's rendered element to an identical twin.
+ */
+export interface BlockPin {
+	readonly text: string;
+	readonly lineStart: number;
+}
+
+/**
  * The mode adapter: the single seam between an ElementView and where/how it is
  * mounted and persisted. RenderContext.host (F1 §3.2) is always one of these.
  */
+/** What a `replaceSource` call can say about the write (see BlockHost.replaceSource). */
+export interface BlockWriteOptions {
+	/** SC-509: true only for the mounted view's own debounced write. */
+	fromView?: boolean;
+	/** SC-552: place the write at this pinned block (`BlockHost.pinPosition`) when it can still be found; else as without a pin. */
+	pin?: BlockPin | null;
+	/** SC-552: with a `pin`, a pin that cannot be placed means NO write (the "changed on disk first" Notice) instead of the fallback. */
+	pinOnly?: boolean;
+}
+
 export interface BlockHost {
 	readonly mode: RenderMode;
 	/** Note path; "" for canvas text nodes (mirrors ctx.sourcePath today). */
@@ -94,8 +114,25 @@ export interface BlockHost {
 	 * definition") leaves it unset: the view does NOT hold that content, so the write must
 	 * re-render like an external edit instead of being adopted/swallowed. The default is
 	 * deliberately the safe one: an unmarked write costs a fresh render, never a stale card.
+	 *
+	 * SC-552 — `options.pin`: the block's position taken earlier (`pinPosition`). The Reading-view host maps its line through
+	 * whatever was written to the note since and writes THAT block when a block of this host's language still holds the body the host
+	 * knows there; otherwise it places the write as before (no pin). `options.pinOnly` removes that fallback.
 	 */
-	replaceSource(newSource: string, options?: { fromView?: boolean }): Promise<boolean>;
+	replaceSource(newSource: string, options?: BlockWriteOptions): Promise<boolean>;
+	/**
+	 * SC-552 — optional: where the block is drawn right now, as a pin a later `replaceSource(body, { pin })` is placed through. The
+	 * block edit form takes it when it opens (before any redraw can hand the host's element to an identical twin). Null when the
+	 * block has no addressable position. Only the Reading-view host implements it; the sidebar's panel is its own block.
+	 */
+	pinPosition?(): BlockPin | null;
+	/**
+	 * SC-552 — optional: a Component that outlives this block's rendered section, when a block edit form may stay open past its
+	 * view's unload. It is non-null only when Obsidian has thrown the block's element away (the view unloaded because an identical
+	 * twin took its text, not because the plugin is going away) and the plugin is still loaded. The form hangs its own close on it, so
+	 * unloading the plugin still closes the form. Null: the form closes with its view as it always did.
+	 */
+	keepFormOpenOn?(): Component | null;
 	/**
 	 * SC-455 — optional: true when the LAST `replaceSource` call that failed already told the user why
 	 * (the host showed its own Notice), false when it landed or failed silently. A caller that adds its

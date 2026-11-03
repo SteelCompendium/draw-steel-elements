@@ -28,7 +28,7 @@
 import { Notice, Setting, parseYaml, stringifyYaml } from 'obsidian';
 import type { Component, DropdownComponent } from 'obsidian';
 import type { RenderContext } from '@/framework/context';
-import type { BlockHost } from '@/framework/host/BlockHost';
+import type { BlockHost, BlockPin } from '@/framework/host/BlockHost';
 import type { ElementDefinition } from '@/framework/registry';
 import type { DsePrefs } from '@/framework/seams/prefs';
 import type { ValidationService } from '@/framework/validation';
@@ -110,6 +110,9 @@ class FormModal extends DseModal {
 	private previewSlot: HTMLElement | null = null;
 	private saveHandle: { setDisabled(disabled: boolean): void } | null = null;
 
+	/** SC-552: where the block was when the form opened (null: the host cannot pin, e.g. the sidebar panel). */
+	private readonly pin: BlockPin | null;
+
 	constructor(
 		private readonly cx: RenderContext,
 		private readonly def: ElementDefinition,
@@ -119,6 +122,10 @@ class FormModal extends DseModal {
 		private readonly opener: FormOpener | null = null,
 	) {
 		super(cx.app);
+		// SC-552: the block this form was opened on, pinned NOW - the constructor runs in the pencil's click handler, before any redraw
+		// can hand the host's element to an identical twin. Save writes through the pin (a click's write above this block, an outside
+		// edit or Sync can all move the element while the form is open, never the block).
+		this.pin = cx.host.pinPosition?.() ?? null;
 	}
 
 	onOpen(): void {
@@ -491,7 +498,7 @@ class FormModal extends DseModal {
 		// not hold focus when pressed (a mouse press) arms nothing either (SC-518 r3).
 		const key = this.opener && body !== this.source ? this.cx.host.blockKey() : null;
 		if (this.opener && key !== null) armFormFocus(key, this.opener);
-		const ok = await this.cx.host.replaceSource(body);
+		const ok = await (this.pin ? this.cx.host.replaceSource(body, { pin: this.pin }) : this.cx.host.replaceSource(body));
 		if (key !== null) settleChromeFocus(key, null, ok);
 		if (ok) this.close();
 		// SC-455: a host that already said why it could not write (its own Notice) is not repeated here.
