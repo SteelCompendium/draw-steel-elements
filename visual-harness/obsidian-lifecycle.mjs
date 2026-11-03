@@ -138,7 +138,7 @@
 // each land in the block clicked and each card shows its own block - Live Preview callouts and plain fences, Reading view callouts and plain fences, two panes, a form
 // Save. Before the fix the write of the first block made Obsidian hand the waiting block's element to its twin and the waiting edit was written into the twin.
 //
-// SC-545 appends G-S63 (49 scenarios in all; it sits after G-S52 and before G-S57, so it is the last scenario of the third `--only` part): turn the plugin off and on without closing the
+// SC-545 appends G-S63 (50 scenarios in all with SC-472's G-S59; it sits after G-S52 and before G-S57, so it is the last scenario of the third `--only` part): turn the plugin off and on without closing the
 // note. Live Preview redraws its code-block widgets but reuses a callout or embed widget with the OLD instance's card (no processor call, its view unloaded, no live registry owns
 // it), so a click on it did nothing. Now the unloading instance leaves the card's context on its element and the new instance draws a fresh card there at layout-ready; the note is rebuilt
 // (setViewData) only if a block is still undrawn. Phases: (a) a counter in a callout, (b) in an LP embed, (c) twin callouts (clicks 1, 0, 1), (d) a stamina bar in a callout (the real
