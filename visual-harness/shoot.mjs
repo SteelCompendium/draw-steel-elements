@@ -1043,7 +1043,24 @@ async function assertMontageCoarseContainment(page) {
 //     overflowing their own cell and flush against the frame at full scroll) fails here;
 //  5. a real Tab walk through every control of the board (`page.keyboard`) leaves each focused
 //     control FULLY inside the frame (review-1 MED-2: Chromium does not scroll a focused element
-//     that is already partly visible, so Tab landed on cells with a sliver showing).
+//     that is already partly visible, so Tab landed on cells with a sliver showing);
+//
+// SC-490 pinned the hero column (the header corner + every name cell: `position: sticky`, an opaque
+// background, an edge rule, only while the board overflows), so the gate now also asserts, for BOTH
+// pointer contexts, that:
+//  6. at rest, mid-scroll and full scroll every pinned cell sits at the frame's inner left edge, is
+//     `position: sticky` with an OPAQUE background colour and an edge rule, and its centre hit-tests
+//     to itself (a round cell really is sliding under it at mid scroll, so the z-order is proved, not
+//     assumed);
+//  7. every NON-pinned cell can be scrolled fully inside the frame AND to the right of the pinned
+//     column (the native scrollIntoView knows nothing of it), and its centre hit-tests to itself there;
+//  8. in the Tab walk, a stop in a non-pinned cell lands fully right of the pinned column, inside the
+//     frame, and not covered (the focused control's centre hit-tests to it); a stop in a pinned cell
+//     never scrolls the board;
+//  9. a board that FITS (the pane widened until it does) is not pinned (`data-overflow='off'`,
+//     `position` back to relative, translucent name-cell banding), and narrowing the pane pins it again
+//     with the cells at the frame's left edge (the measurement follows the pane, and the re-pin after a
+//     resize holds the geometry).
 //
 // The 14 rounds are a GENUINE source (`?fixture=probe-rounds-14`, `probeSource` in entry.ts — five
 // heroes, an entry per hero per round, current_round 14) rendered by the real element, so the
@@ -1160,6 +1177,10 @@ async function assertMontageBoardScroll(page) {
 				const wrongHit = [];
 				const contentOut = [];
 				let measured = 0;
+				// SC-490: the pinned column covers the frame's left edge, so a round cell is only
+				// "reachable" when it lies fully to the right of it.
+				const isPinned = (el) => el.matches('.dse-mt__board-corner, .dse-mt__board-name');
+				const pinnedW = board.querySelector('.dse-mt__board-corner').getBoundingClientRect().width;
 				// review-1 MED-1: every painted descendant of a board child lies inside that child's own
 				// border box (a descendant that an inner overflow container clips does not count; 0.1px
 				// tolerance, since the failure it guards is a sub-pixel-to-few-px spill).
@@ -1180,6 +1201,13 @@ async function assertMontageBoardScroll(page) {
 				};
 				for (const child of board.children) {
 					child.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'instant' });
+					if (!isPinned(child)) {
+						// native scrollIntoView aligns to the frame's edge, i.e. UNDER the pinned column:
+						// put the cell's left edge flush against the column's right edge (the browser clamps
+						// to the scroll range, so the last columns end at the frame's right edge instead)
+						const f0 = board.getBoundingClientRect();
+						board.scrollLeft += child.getBoundingClientRect().left - (f0.left + board.clientLeft + pinnedW);
+					}
 					const fr = board.getBoundingClientRect();
 					const frame = {
 						l: fr.left + board.clientLeft,
@@ -1191,13 +1219,13 @@ async function assertMontageBoardScroll(page) {
 					measured++;
 					const over = spill(child);
 					if (over > 0.1) contentOut.push(`${describe(child)} (content spills ${over.toFixed(2)}px past its own cell)`);
-					const outL = frame.l - cr.left;
+					const outL = (isPinned(child) ? frame.l : frame.l + pinnedW) - cr.left;
 					const outR = cr.right - frame.r;
 					const outT = frame.t - cr.top;
 					const outB = cr.bottom - frame.b;
 					if (outL > 0.5 || outR > 0.5 || outT > 0.5 || outB > 0.5) {
 						unreachable.push(
-							`${describe(child)} (left ${outL.toFixed(1)}px / right ${outR.toFixed(1)}px / top ${outT.toFixed(1)}px / bottom ${outB.toFixed(1)}px outside the frame after scrolling it into view)`,
+							`${describe(child)} (left ${outL.toFixed(1)}px / right ${outR.toFixed(1)}px / top ${outT.toFixed(1)}px / bottom ${outB.toFixed(1)}px outside the frame${isPinned(child) ? '' : ` or under the ${pinnedW.toFixed(1)}px pinned hero column`} after scrolling it into view)`,
 						);
 						continue;
 					}
@@ -1229,6 +1257,22 @@ async function assertMontageBoardScroll(page) {
 			}
 			for (const w of cells.wrongHit) problems.push(`WRONG HIT — ${w}`);
 
+			// 6. SC-490 — the hero column is pinned at rest, mid-scroll and full scroll, opaque, on top.
+			const maxLeft2 = geo.scrollWidth - geo.clientWidth;
+			for (const [stage, left] of [['at rest', 0], ['mid-scroll', Math.round(maxLeft2 / 2)], ['full scroll', maxLeft2]]) {
+				await probe.evaluate((l) => {
+					const b = document.querySelector('.dse-mt__board');
+					b.scrollIntoView({ block: 'center', behavior: 'instant' });
+					b.scrollLeft = l;
+				}, left);
+				await probe.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+				const m = await measurePinnedColumn(probe);
+				problems.push(...pinnedColumnProblems(m, stage, 1 + heroCount, true));
+				if (stage !== 'at rest' && m.underneath === 0) {
+					problems.push(`${stage}: no round cell lies under the pinned column, so the z-order / hit-test check proves nothing (scrolled to ${m.left}px)`);
+				}
+			}
+
 			// 5. a REAL Tab walk (review-1 MED-2): every focused control is fully inside the frame.
 			await probe.evaluate(() => {
 				const board = document.querySelector('.dse-mt__board');
@@ -1236,8 +1280,10 @@ async function assertMontageBoardScroll(page) {
 				board.querySelector('.dse-mt__board-addhero').focus();
 			});
 			let tabStops = 0;
+			let pinnedStops = 0;
 			const tabClipped = [];
 			for (let i = 0; i < 400; i++) {
+				const beforeLeft = await probe.evaluate(() => document.querySelector('.dse-mt__board').scrollLeft);
 				await probe.keyboard.press('Tab');
 				await probe.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 				const st = await probe.evaluate(() => {
@@ -1248,32 +1294,105 @@ async function assertMontageBoardScroll(page) {
 					const l = fr.left + board.clientLeft;
 					const r = a.getBoundingClientRect();
 					const cell = a.closest('.dse-mt__board > *');
+					const pinned = cell.matches('.dse-mt__board-corner, .dse-mt__board-name');
+					const pinnedW = board.querySelector('.dse-mt__board-corner').getBoundingClientRect().width;
+					const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
 					return {
 						name: `${(a.getAttribute('aria-label') || a.className).toString().slice(0, 60)}${cell && cell.getAttribute('data-hero') ? ` in ${cell.getAttribute('data-hero')} r${cell.getAttribute('data-round')}` : ''}`,
+						pinned,
+						pinnedW,
 						outL: l - r.left,
+						// how far the control's left edge lies inside the pinned column (0 or less: clear of it)
+						underPinned: l + pinnedW - r.left,
 						outR: r.right - (l + board.clientWidth),
 						visible: Math.max(0, Math.min(r.right, l + board.clientWidth) - Math.max(r.left, l)),
 						width: r.width,
+						covered: !hit || !a.contains(hit),
+						coveredBy: hit ? `${hit.tagName}${hit.className ? `.${String(hit.className).split(' ')[0]}` : ''}` : 'nothing',
+						afterLeft: board.scrollLeft,
 					};
 				});
 				if (!st) break; // focus left the board
 				tabStops++;
+				if (st.pinned) {
+					pinnedStops++;
+					if (Math.abs(st.afterLeft - beforeLeft) > 0.5) {
+						tabClipped.push(`${st.name}: a Tab stop in a PINNED cell moved the board (${beforeLeft.toFixed(1)}px -> ${st.afterLeft.toFixed(1)}px) — it is always on screen, so it must not`);
+					}
+					continue;
+				}
 				if (st.outL > 0.5 || st.outR > 0.5) tabClipped.push(`${st.name}: ${st.visible.toFixed(0)}px of ${st.width.toFixed(0)}px visible`);
+				else if (st.underPinned > 0.5) tabClipped.push(`${st.name}: ${st.underPinned.toFixed(1)}px of its left edge lies under the ${st.pinnedW.toFixed(1)}px pinned hero column`);
+				else if (st.covered) tabClipped.push(`${st.name}: its centre hit-tests to ${st.coveredBy}, not to the control — something is painted over it`);
 			}
 			if (tabStops < 20) {
 				problems.push(`the Tab walk made only ${tabStops} stops inside the board (expected one per control, dozens) — focus left the board early or never entered it`);
 			}
+			if (pinnedStops < heroCount) {
+				problems.push(`the Tab walk reached ${pinnedStops} controls in pinned cells, expected ${heroCount} (one row action per hero; the walk starts ON the corner's add button)`);
+			}
 			for (const c of tabClipped) problems.push(`TAB FOCUS NOT FULLY VISIBLE — ${c}`);
+
+			// 9. SC-490 — a board that FITS is not pinned; narrowing the pane pins it again.
+			const fitProblems = [];
+			// the harness caps #mount at 760px (vars.css), which is why the 900px pane above is really a
+			// 760px one; lift the cap to give the board room to fit, then put it back.
+			await probe.evaluate(() => {
+				const mount = document.getElementById('mount');
+				mount.style.maxWidth = 'none';
+				mount.style.width = '4000px';
+			});
+			await probe.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+			const fit = await probe.evaluate(() => {
+				const board = document.querySelector('.dse-mt__board');
+				const name = board.querySelector('.dse-mt__board-name');
+				const corner = board.querySelector('.dse-mt__board-corner');
+				const nameCs = getComputedStyle(name);
+				return {
+					fits: board.scrollWidth <= board.clientWidth,
+					attr: board.getAttribute('data-overflow'),
+					namePosition: nameCs.position,
+					cornerPosition: getComputedStyle(corner).position,
+					nameBg: nameCs.backgroundColor,
+					nameShadow: nameCs.boxShadow,
+				};
+			});
+			if (!fit.fits) fitProblems.push('the fixture still overflows at a 4000px pane — raise the width; this check proves nothing');
+			if (fit.attr !== 'off') fitProblems.push(`a board that fits has data-overflow='${fit.attr}' (expected 'off') — the measurement did not follow the pane`);
+			if (fit.namePosition === 'sticky' || fit.cornerPosition === 'sticky') {
+				fitProblems.push(`a board that fits still pins its hero column (name cell position ${fit.namePosition}, corner ${fit.cornerPosition}) — it must look exactly as it did before SC-490`);
+			}
+			if (/^rgb\(|^rgba\([^)]*,\s*1\)$/.test(fit.nameBg) || fit.nameShadow !== 'none') {
+				fitProblems.push(`a board that fits has pinned-column paint on its name cells (background-color ${fit.nameBg}, box-shadow ${fit.nameShadow}) — its banding must stay translucent and rule-free`);
+			}
+			await probe.evaluate((pane) => {
+				const mount = document.getElementById('mount');
+				mount.style.maxWidth = '';
+				mount.style.width = `${pane}px`;
+			}, PANE);
+			await probe.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+			await probe.evaluate(() => {
+				const b = document.querySelector('.dse-mt__board');
+				b.scrollIntoView({ block: 'center', behavior: 'instant' });
+				b.scrollLeft = Math.round((b.scrollWidth - b.clientWidth) / 2);
+			});
+			await probe.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+			fitProblems.push(...pinnedColumnProblems(await measurePinnedColumn(probe), 'narrowed back (after a resize)', 1 + heroCount, true));
+			for (const f of fitProblems) problems.push(f);
 
 			if (problems.length) {
 				console.error(`\nMONTAGE BOARD CLIPS INSTEAD OF SCROLLING — ${label}:`);
 				for (const p of problems.slice(0, 24)) console.error(`  ${p}`);
 				if (problems.length > 24) console.error(`  … and ${problems.length - 24} more`);
-				console.error(`See styles-source.css → .dse-mt__board (board frame + banding, decoration tier: overflow-x must be auto) and BoardView.ts (the track list: Tally track max-content; the focusin handler that keeps a Tab-focused cell fully in view).`);
+				console.error(`See styles-source.css → .dse-mt__board (board frame + banding, decoration tier: overflow-x must be auto; the SC-490 pinned hero column: .dse-mt__board[data-overflow='on'] > .dse-mt__board-name / -corner) and BoardView.ts (the track list: Tally track max-content; trackOverflow's data-overflow measurement; the focusin handler that keeps a Tab-focused cell fully in view and right of the pinned column).`);
 				failed = true; // report BOTH pointer contexts before exiting
 				continue;
 			}
-			results.push(`${pointer}: ${geo.scrollWidth}px grid in a ${geo.clientWidth}px frame, ${cells.measured} cells reachable, ${tabStops} Tab stops all fully visible`);
+			results.push(
+				`${pointer}: ${geo.scrollWidth}px grid in a ${geo.clientWidth}px frame, ${cells.measured} cells reachable, ` +
+					`${1 + heroCount} pinned cells at the frame's left edge at rest/mid/full scroll, ${tabStops} Tab stops ` +
+					`(${pinnedStops} in pinned cells, the rest fully visible right of the pinned column)`,
+			);
 		} finally {
 			await context.close();
 		}
@@ -1282,9 +1401,58 @@ async function assertMontageBoardScroll(page) {
 	console.log(
 		`\nmontage board scroll OK (${ROUNDS} rounds x ${PANE}px pane, genuine probe-rounds-${ROUNDS} source — ` +
 			`${results.join('; ')}; overflow-x auto, real wheel reaches the far end, every board child ` +
-			`scrolls fully inside the frame, its centre hit-tests to itself and its content stays inside it, ` +
-			`fine AND coarse pointer)`,
+			`scrolls fully inside the frame (round cells: right of the pinned hero column), its centre hit-tests to itself ` +
+			`and its content stays inside it, the pinned cells are sticky, opaque, edge-ruled and on top, a board that fits ` +
+			`is not pinned and narrowing the pane pins it again, fine AND coarse pointer)`,
 	);
+}
+
+/** SC-490 — read the pinned hero column's state at the board's CURRENT scroll position (the caller
+ *  scrolls the page and the board first). `underneath` counts round cells and round headers whose box
+ *  really lies under the pinned column, so a caller can tell a z-order check from a vacuous one. */
+async function measurePinnedColumn(probe) {
+	return probe.evaluate(() => {
+		const board = document.querySelector('.dse-mt__board');
+		const fr = board.getBoundingClientRect();
+		const l = fr.left + board.clientLeft;
+		const pinned = [...board.children].filter((c) => c.matches('.dse-mt__board-corner, .dse-mt__board-name'));
+		const opaque = (c) => /^rgb\(/.test(c) || /^rgba\([^)]*,\s*1\)$/.test(c);
+		const out = { attr: board.getAttribute('data-overflow'), left: board.scrollLeft, count: pinned.length, off: [], notSticky: [], translucent: [], noEdge: [], wrongHit: [], underneath: 0 };
+		const pinnedRight = Math.max(...pinned.map((p) => p.getBoundingClientRect().right));
+		for (const c of board.querySelectorAll('.dse-mt__cell, .dse-mt__board-rhead')) {
+			const r = c.getBoundingClientRect();
+			if (r.left < pinnedRight - 1 && r.right > l + 1) out.underneath++;
+		}
+		for (const p of pinned) {
+			const cs = getComputedStyle(p);
+			const r = p.getBoundingClientRect();
+			const d = p.classList.contains('dse-mt__board-corner') ? 'corner' : `name cell ${p.getAttribute('data-hero')}`;
+			if (Math.abs(r.left - l) > 0.5) out.off.push(`${d} is ${(r.left - l).toFixed(1)}px from the frame's left edge`);
+			if (cs.position !== 'sticky') out.notSticky.push(`${d} is position ${cs.position}`);
+			if (!opaque(cs.backgroundColor)) out.translucent.push(`${d} background-color ${cs.backgroundColor}`);
+			if (cs.boxShadow === 'none') out.noEdge.push(d);
+			const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+			let owner = hit;
+			while (owner && owner.parentElement !== board) owner = owner.parentElement;
+			if (owner !== p) {
+				out.wrongHit.push(`${d} centre hit ${hit ? `${hit.tagName}.${String(hit.className).split(' ')[0]}` : 'nothing'} belonging to ${owner ? `${owner.className.replace('dse-mt__', '')} ${owner.getAttribute('data-hero') ?? ''} ${owner.getAttribute('data-round') ? 'r' + owner.getAttribute('data-round') : ''}`.trim() : 'nothing in the board'}`);
+			}
+		}
+		return out;
+	});
+}
+
+/** SC-490 — the problem lines for one `measurePinnedColumn` reading (empty = pinned and on top). */
+function pinnedColumnProblems(m, stage, expectedCount, expectOn) {
+	const out = [];
+	if (expectOn && m.attr !== 'on') out.push(`${stage}: the board's data-overflow is '${m.attr}', expected 'on' while it overflows`);
+	if (m.count !== expectedCount) out.push(`${stage}: ${m.count} pinned cells, expected ${expectedCount} (the corner + one name cell per hero)`);
+	for (const o of m.off) out.push(`PINNED COLUMN MOVED — ${stage} (scrollLeft ${m.left}px): ${o}`);
+	for (const o of m.notSticky) out.push(`PINNED COLUMN NOT STICKY — ${stage}: ${o}`);
+	for (const o of m.translucent) out.push(`PINNED CELL NOT OPAQUE — ${stage}: ${o} (rounds would show through it)`);
+	for (const o of m.noEdge) out.push(`PINNED COLUMN HAS NO EDGE RULE — ${stage}: ${o} has no box-shadow`);
+	for (const o of m.wrongHit) out.push(`PINNED CELL COVERED — ${stage}: ${o}`);
+	return out;
 }
 
 // SC-189 ROUND 3 — the HOST-LEAK gate. Scott's four defects of 2026-08-25 all traced to one
