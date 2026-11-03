@@ -146,6 +146,12 @@
 // (h) a callout CodeMirror had taken out of the page at the toggle (scrolled about a screen or more away): its widget keeps its DOM, detached, and is put back by the scroll after the
 // off/on - the card must be drawn again then (owned, + writes, no rebuild).
 //
+// SC-552 appends G-S64 (49 scenarios in all; it sits after G-S52, so in part 3 of the four `--only` parts): the block edit form opened on one of several identical blocks saves into the
+// block it was opened on. A write above the form's block (a click inside its 400 ms debounce, an outside edit, Sync) makes Obsidian hand the form's element to the block below or throw
+// it away, and Save followed the element (the edit landed one block down; with two twins the form closed by itself with nothing saved). The form pins its block when it opens and Save
+// maps that line through whatever was written since; a form whose view Obsidian threw away stays open (and then saves strictly); SC-549 (wide): a card's own + is pinned at its first click.
+// The plugin's 400 ms debounce timer is held and fired by hand (G-S45's hook), so the ordering is forced and no step waits on a timer.
+//
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
 // Env:   XVFB_BIN, DSE_LIFECYCLE_BIN (default /usr/bin/obsidian),
@@ -452,6 +458,11 @@ Object.assign(FIXTURES, {
 Object.assign(FIXTURES, {
 	'Lifecycle/form-stale-counter.md': `# form stale counter\n\nABOVE\n\n${COUNTER(3, 'Health')}\n\nBELOW\n`,
 	'Lifecycle/form-stale-sidebar.md': `# form stale sidebar\n\nABOVE\n\n${COUNTER(3, 'Health')}\n\nBELOW\n`,
+});
+
+// SC-552 (G-S64): a closed counter and, below it, a counter whose fence never closes (identical bodies).
+Object.assign(FIXTURES, {
+	'Lifecycle/form-pin-unterminated.md': `# form pin unterminated\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nMID\n\n${UNTERMINATED_COUNTER(5, 'Twin')}\n`,
 });
 
 // SC-536 (G-S56): a reference that points back to itself, a chain of seven distinct references, and a card shown twice.
@@ -995,6 +1006,60 @@ function formKit(t) {
 		return { stampedNote, panelRoot };
 	};
 	return { waitText, waitDisk, hoverTo, FORM, SAVE, clickPencil, waitFormOpen, clickSave, pinToSidebar };
+}
+
+/**
+ * SC-552 (G-S64): the page-side helpers, installed with `(${gs64Page.toString()})()` - the cards of a pane BY BLOCK (G-S61's rule: a Live Preview card belongs to the
+ * n-th counter fence at or after its widget's line, a Reading view card is the n-th in document order), the registry entry of a card, and where that entry's element is
+ * drawn now (read-only: no host call).
+ */
+function gs64Page() {
+	const P = (window.__gs64 = { slot: {} });
+	const topRoots = (w) => Array.from(w.querySelectorAll('[data-dse-element="counter"]')).filter((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]'));
+	const valueOf = (r) => Number(Array.from(r.querySelectorAll('input')).map((i) => i.value).find((v) => v !== ''));
+	const nameOf = (r) => r.querySelector('.dse-counter__name')?.textContent ?? '';
+	const lineOf = (cm, w) => {
+		try {
+			return cm.state.doc.lineAt(cm.posAtDOM(w)).number - 1;
+		} catch (e) {
+			return null;
+		}
+	};
+	P.fences = (cm) => {
+		const out = [];
+		cm.state.doc.toString().split('\n').forEach((l, i) => {
+			if (/^(?:[ ]{0,3}>[ ]?)*```ds-counter\s*$/.test(l)) out.push(i);
+		});
+		return out;
+	};
+	P.cardsRaw = (leaf) => {
+		if (!leaf || !leaf.view) return [];
+		if (leaf.view.getMode() !== 'source') {
+			const scope = leaf.view.containerEl.querySelector('.markdown-reading-view');
+			return scope ? topRoots(scope).map((root, block) => ({ block, root, name: nameOf(root), value: valueOf(root) })) : [];
+		}
+		const cm = leaf.view.editor.cm;
+		const fl = P.fences(cm);
+		const out = [];
+		for (const w of Array.from(cm.contentDOM.children).filter((x) => x.classList.contains('cm-embed-block'))) {
+			const L = lineOf(cm, w);
+			if (L === null) continue;
+			const after = fl.filter((x) => x >= L);
+			topRoots(w).forEach((root, k) => out.push({ block: fl.indexOf(after[k]), root, name: nameOf(root), value: valueOf(root) }));
+		}
+		return out.sort((a, b) => a.block - b.block);
+	};
+	P.cards = (leaf) => P.cardsRaw(leaf).map(({ root, ...rest }) => rest);
+	P.root = (leaf, block) => P.cardsRaw(leaf).find((c) => c.block === block)?.root ?? null;
+	const reg = () => app.plugins.plugins['draw-steel-elements']?.viewRegistry;
+	P.entryOfRoot = (root) => (reg() && root ? [...reg().liveEntries()].find((e) => e.root === root) ?? null : null);
+	/** Which block of `leaf` the entry's root is drawn on now (null: not in the pane's card list), and whether the registry released the entry. */
+	P.where = (leaf, entry) => {
+		if (!entry) return { none: true, released: false, block: null };
+		const c = P.cardsRaw(leaf).find((x) => x.root === entry.root);
+		return { block: c ? c.block : null, released: !!entry.released, connected: entry.root.isConnected };
+	};
+	return true;
 }
 
 /**
@@ -4534,6 +4599,387 @@ const SCENARIOS = [
 			t.expect((await t.noticesSince(m)).length === 0, `a Notice appeared: ${J(await t.noticesSince(m))}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${J(await t.errorsSince(m))}`);
 			return `after a plugin off/on a click on a card in a Live Preview callout or embed writes and the card shows the note (the cards were drawn again, owned by the live registry, the note not rebuilt): ${outcomes.join('; ')}`;
+		},
+	},
+	{
+		// SC-552: the block edit form opened on one of several identical blocks. The pencil opens the form at once (the clicked card has nothing of its own pending), but a
+		// write above it (a click's write inside its 400 ms debounce, an outside edit, Sync) makes Obsidian hand the form's element to the block BELOW, or throw it away
+		// (two identical blocks, or the last of them), and Save followed the element: the edit was written into the twin, and with the element thrown away the form
+		// closed by itself with nothing saved. The form now pins its block when it opens (note text + fence line); Save maps that line through whatever was written since
+		// and writes the block it lands on, and a form whose view Obsidian threw away stays open (strict Save: its pin or no write; plugin unload still closes it).
+		// SC-549 (wide): the first click of a round pins the clicked card's block too, so a + followed within 400 ms by typing in the note or an outside edit above lands in
+		// the block clicked. No timed delay anywhere: the plugin's 400 ms debounce timer is HELD (G-S45's hook) and fired by hand, and every wait is a condition.
+		// Each phase: the ordering is forced by construction (the + is held; the pencil is pressed; the held write is fired), the hand-over is proved to have happened
+		// BEFORE Save (the form's registry entry is on the next block down, or released), then Save / the finish, and the disk, the names, one card per block and the text
+		// outside the blocks are checked. (a) LP callouts c3, + 0, form 1 · (b) LP plain p3 · (c) Reading view callouts c3 · (d) Reading view plain p3 · (e) two panes
+		// (+ in LP, form in Reading view) · (f) LP c4, + 0, form 2 · (g) K: RV c2, + 0, form 1 stays open through the write and Save lands · (h) residual: LP c3, form 1, an
+		// in-app outside edit of block 0 · (i) the same on disk (Reading view plain) · (k) an outside edit that also inserts text above · (l) a kept-open form closes when
+		// the plugin is disabled · (m) control: the form after the click's write has landed · (n) SC-549: + on block 1 held, an in-app outside edit of block 0, fire ·
+		// (o) SC-549 LP: + on block 1 held, 'Z' typed into block 0's title, fire · (p) K-strict: a kept-open form whose block was deleted writes nothing and says why ·
+		// (q) a kept-open form on the unterminated trailing fence saves into that block. Before the fix, (a)-(k) FAIL and (g) (p) (q) cannot even keep the form open.
+		id: 'G-S64',
+		async run(t) {
+			const m = await t.mark();
+			const J = JSON.stringify;
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			const { FORM, SAVE } = formKit(t);
+			const problems = [];
+			const outcomes = [];
+			const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+			const namesOf = (rel) => (t.read(rel).match(/^(?:> ?)*name: (\w+)$/gm) ?? []).map((s) => s.replace(/^(?:> ?)*name: /, ''));
+			const outsideBlocks = (text) => text.split('\n').map((l) => l.replace(/^(?:> ?)+/, '')).join('\n').replace(/^```ds-[\w-]+\n[\s\S]*?\n```$/gm, '');
+			const C3 = 'Lifecycle/twin-callouts-3.md';
+			const C2 = 'Lifecycle/twin-callouts.md';
+			const C4 = 'Lifecycle/twin-callouts-4.md';
+			const P3 = 'Lifecycle/twin-triplets.md';
+			const UT = 'Lifecycle/form-pin-unterminated.md';
+			const ALL = [C3, C2, C4, P3, UT];
+			await t.ev(`(() => { if (!document.getElementById('lc-gs64-notice')) { const st = document.createElement('style'); st.id = 'lc-gs64-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
+			await t.ev(`(${gs64Page.toString()})()`);
+			const A = 'window.__gs64.A';
+			const B = 'window.__gs64.B';
+			const stOf = (mode) => (mode === 'rv' ? { mode: 'preview' } : { mode: 'source', source: false });
+			const blocksOf = (rel) => (FIXTURES[rel].match(/```ds-counter/g) ?? []).length;
+			const formOpen = () => t.ev(`!!document.querySelector('.modal-container .dse-modal .dse-form__preview')`);
+			// ---- the plugin's 400 ms debounce timer, held and fired by hand (G-S45's hook)
+			const holdOn = () =>
+				t.ev(`(() => { const w = window; const h = { held: [], next: -1, set: w.setTimeout, clear: w.clearTimeout }; w.__gs64Hold = h;
+					w.setTimeout = function (fn, delay, ...args) { if (delay === 400 && new Error().stack.includes('draw-steel-elements')) { const id = h.next--; h.held.push({ id, fn, args }); return id; } return h.set.call(w, fn, delay, ...args); };
+					w.clearTimeout = function (id) { const i = h.held.findIndex((x) => x.id === id); if (i >= 0) { h.held.splice(i, 1); return undefined; } return h.clear.call(w, id); };
+					return true; })()`);
+			const heldCount = () => t.ev(`window.__gs64Hold ? window.__gs64Hold.held.length : -1`);
+			const fireHeld = () => t.ev(`(() => { const x = window.__gs64Hold.held.shift(); x.fn(...x.args); return true; })()`);
+			const holdOff = () => t.ev(`(() => { const h = window.__gs64Hold; if (!h) return 0; window.setTimeout = h.set; window.clearTimeout = h.clear; const n = h.held.length; delete window.__gs64Hold; return n; })()`);
+			async function park() {
+				for (const L of [A, B]) if (await t.ev(`!!(${L}) && !!(${L}).view && (${L}).view.getMode?.() === 'source'`)) await t.ev(`(${L}).view.editor.setCursor({ line: 0, ch: 0 })`);
+			}
+			/** Live Preview draws only the blocks near the viewport: bring every block of `leaf` into view once (never count widgets without it, SC-543). */
+			const showAll = async (leaf, n) => {
+				if (!(await t.ev(`(${leaf}).view.getMode() === 'source'`))) return;
+				for (let b = 0; b < n; b++) {
+					await t.ev(`(() => { const L = ${leaf}; const cm = L.view.editor.cm; const fl = window.__gs64.fences(cm); const pos = cm.state.doc.line(fl[${b}] + 1).from; L.view.editor.scrollIntoView({ from: L.view.editor.offsetToPos(pos), to: L.view.editor.offsetToPos(pos) }, true); return true; })()`);
+					await t.waitFor(`window.__gs64.cardsRaw(${leaf}).some((c) => c.block === ${b})`, `block ${b} is drawn`);
+				}
+			};
+			/** One markdown leaf (A) in `mode` on `rel`, every card drawn, the cursor parked; the note is the fixture. */
+			const open = async (rel, mode) => {
+				const n = blocksOf(rel);
+				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); window.__gs64.A = app.workspace.getLeavesOfType('markdown')[0] ?? app.workspace.getMostRecentLeaf(); window.__gs64.B = null; return true; })()`);
+				await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); })()`);
+				await t.reset(rel);
+				await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: ${J(rel)}, ...${J(stOf(mode))} }, active: true }); })()`);
+				await t.waitFor(`(${A}).view?.file?.path === ${J(rel)}`, `${rel}: opened`);
+				await park();
+				await showAll(A, n);
+				await t.waitFor(`window.__gs64.cards(${A}).length === ${n}`, `${rel}: every card is drawn`);
+				await park();
+			};
+			const openB = async (rel, mode) => {
+				const n = blocksOf(rel);
+				await t.ev(`(async () => { const leaf = app.workspace.getLeaf('split', 'vertical'); window.__gs64.B = leaf; await leaf.setViewState({ type: 'markdown', state: { file: ${J(rel)}, ...${J(stOf(mode))} }, active: true }); })()`);
+				await t.waitFor(`(${B}).view?.file?.path === ${J(rel)}`, `${rel}: pane B opened`);
+				await park();
+				await showAll(B, n);
+				await t.waitFor(`window.__gs64.cards(${B}).length === ${n}`, `${rel}: every card of pane B is drawn`);
+			};
+			const incr = (leaf, block) => `(window.__gs64.root(${leaf}, ${block})?.querySelector('button[aria-label^="Increase"]'))`;
+			const pencilOf = (leaf, block) => `(window.__gs64.root(${leaf}, ${block})?.querySelector('.dse-chrome button[data-dse-chrome-item="edit"], button[aria-label^="Edit "]'))`;
+			/** The registry entry of the card at `block`, remembered as `slot` (the form's, or the clicked card's). */
+			const remember = (slot, leaf, block) => t.ev(`(() => { window.__gs64.slot = window.__gs64.slot ?? {}; window.__gs64.slot[${J(slot)}] = window.__gs64.entryOfRoot(window.__gs64.root(${leaf}, ${block})); return !!window.__gs64.slot[${J(slot)}]; })()`);
+			const whereIs = (slot, leaf) => t.ev(`window.__gs64.where(${leaf}, window.__gs64.slot[${J(slot)}])`);
+			/** Press Enter on a block's pencil (the Live Preview pencil cannot be clicked with the mouse, SC-523). */
+			const pressPencil = async (label, leaf, block) => {
+				await t.waitFor(`!!${pencilOf(leaf, block)}`, `${label}: the Edit pencil is drawn`);
+				t.expect(await remember('form', leaf, block), `${label}: no registry entry for the card of block ${block}`);
+				await t.ev(`${pencilOf(leaf, block)}.focus({ focusVisible: true })`);
+				await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', text: '\r', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+				await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+			};
+			/** Proof that the hand-over happened before Save: the entry is on the next block down, or released (its element was thrown away). */
+			const waitHandedOver = (label, slot, leaf, from) =>
+				t.waitFor(`(() => { const w = window.__gs64.where(${leaf}, window.__gs64.slot[${J(slot)}]); return w.released || w.block === ${from + 1}; })()`, `${label}: Obsidian handed the card of block ${from} to the block below (or threw it away)`, 10000);
+			const waitDisk = async (label, rel, test, what) => {
+				const t0 = Date.now();
+				while (!test()) {
+					if (Date.now() - t0 > 10000) throw new Error(`${label}: ${what}; the note is ${J(t.read(rel))}`);
+					await t.sleep(60);
+				}
+			};
+			const typeRename = async (label, from, to) => {
+				t.expect(await t.ev(`(() => { const ta = ${FORM}.querySelector('textarea.dse-form__raw'); if (!ta) return false; ta.value = ta.value.replace('name: ${from}', 'name: ${to}'); ta.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`), `${label}: the form has no raw box`);
+				await t.waitFor(`!!(${SAVE}) && !(${SAVE}).disabled`, `${label}: Save is enabled`);
+			};
+			const clickSave = async (label) => {
+				await t.ev(`(${SAVE}).click()`);
+				await t.waitFor(`!document.querySelector('.modal-container .dse-modal')`, `${label}: the form closed after Save`, 10000);
+			};
+			/** Waits (a condition, max 8 s) until every card of every pane shows its block's value and name: the redraws have finished. */
+			const settle = async (rel, leaves) => {
+				const n = blocksOf(rel);
+				let shown = [];
+				const t0 = Date.now();
+				for (;;) {
+					const disk = t.counterValues(rel);
+					const names = namesOf(rel);
+					let ok = true;
+					shown = [];
+					for (const [k, mode] of leaves) {
+						const leaf = k === 'B' ? B : A;
+						await showAll(leaf, n);
+						const cards = await t.ev(`window.__gs64.cards(${leaf})`);
+						shown.push(`${k}:${mode}[${cards.map((c) => c.block + ':' + c.name + '=' + c.value).join(' ')}]`);
+						if (cards.length !== n || cards.some((c) => c.value !== disk[c.block] || c.name !== names[c.block])) ok = false;
+					}
+					if (ok || Date.now() - t0 > 8000) break;
+					await t.sleep(80);
+				}
+				return shown;
+			};
+			/** The picture must be the note: every card shows its block's value and name. */
+			const judge = async (label, rel, want, wantNames, leaves, outsideText = FIXTURES[rel]) => {
+				const n = blocksOf(rel);
+				const shown = await settle(rel, leaves);
+				await park();
+				const disk = t.counterValues(rel);
+				const names = namesOf(rel);
+				if (!same(disk, want)) problems.push(`${label}: the blocks hold ${J(disk)}, expected ${J(want)}`);
+				if (wantNames && !same(names, wantNames)) problems.push(`${label}: the note's names are ${J(names)}, expected ${J(wantNames)}`);
+				for (const [k, mode] of leaves) {
+					const cards = await t.ev(`window.__gs64.cards(${k === 'B' ? B : A})`);
+					if (cards.length !== n) problems.push(`${label}: pane ${k} (${mode}) draws ${cards.length} card(s) for ${n} blocks`);
+					for (const c of cards) {
+						if (c.value !== disk[c.block]) problems.push(`${label}: pane ${k} (${mode}) card of block ${c.block} shows ${c.value}, the block holds ${disk[c.block]}`);
+						if (c.name !== names[c.block]) problems.push(`${label}: pane ${k} (${mode}) card of block ${c.block} is named ${c.name}, the block is ${names[c.block]}`);
+					}
+				}
+				if (outsideBlocks(t.read(rel)) !== outsideBlocks(outsideText)) problems.push(`${label}: the note's text outside the blocks changed`);
+				outcomes.push(`${label}: disk ${J(disk)} names ${J(names)} cards ${shown.join(' ')}`);
+			};
+			const cleanupForm = async () => {
+				if (await formOpen()) {
+					await t.key('Escape', 'Escape', 27);
+					await t.waitFor(`!document.querySelector('.modal-container .dse-modal')`, 'the form closed on Escape').catch(() => {});
+				}
+				await holdOff();
+			};
+			const noNotices = async (label, mk, allow = null) => {
+				const ns = (await t.noticesSince(mk)).filter((x) => !(allow && allow.test(x)));
+				if (ns.length) problems.push(`${label}: a Notice appeared: ${J(ns)}`);
+			};
+			/** The form's card is kept: a forced start for the phases that need a form on the lower of two identical callouts (the view is thrown away). */
+			const keptForm = async (label) => {
+				await open(C2, 'rv');
+				const before = t.read(C2);
+				await holdOn();
+				await t.realClick(incr(A, 0));
+				await t.waitFor(`window.__gs64Hold && window.__gs64Hold.held.length === 1`, `${label}: the click's write is held (one debounce timer)`);
+				await pressPencil(label, A, 1);
+				await t.waitFor(`!!document.querySelector('.modal-container .dse-modal .dse-form__preview')`, `${label}: the edit form opened`);
+				t.expect((await heldCount()) === 1 && t.read(C2) === before, `${label}: the held write is not the only thing pending / the note already changed`);
+				await fireHeld();
+				await holdOff();
+				await waitHandedOver(label, 'form', A, 1);
+				const at = await whereIs('form', A);
+				t.expect(at.released, `${label}: expected the form's view to be thrown away, found ${J(at)}`);
+				t.expect(await formOpen(), `${label}: the form closed by itself (${J(at)})`);
+			};
+			/**
+			 * One form phase. `how`: 'click' = the + on block `plus` is held, the pencil of `form` is pressed, the held write is fired; 'inapp' / 'disk' = the form is opened
+			 * and block 0's value is set to 7 from outside (in-app vault.process / a file write); 'shift' = the same plus a paragraph inserted above the blocks.
+			 * `kept`: the form's view is thrown away by the redraw (2 twins / the last twin): the form must STAY open. `finish`: 'save' (default), 'keep' (leave it open), 'strict'.
+			 */
+			const formCase = async (label, { rel, mode, panes = null, how, plus = 0, form, want, names, kept = false }) => {
+				const leaves = [['A', mode], ...(panes ? [['B', panes]] : [])];
+				const formLeaf = panes ? B : A;
+				const mk = await t.mark();
+				try {
+					await open(rel, mode);
+					if (panes) await openB(rel, panes);
+					const before = t.read(rel);
+					if (how === 'click') {
+						await holdOn();
+						await remember('clicked', A, plus);
+						await t.realClick(incr(A, plus));
+						await t.waitFor(`window.__gs64Hold && window.__gs64Hold.held.length === 1`, `${label}: the click's write is held (one debounce timer)`);
+						t.expect(t.read(rel) === before, `${label}: the note changed before the pencil (not inside the debounce): ${J(t.read(rel))}`);
+					}
+					await pressPencil(label, formLeaf, form);
+					await t.waitFor(`!!document.querySelector('.modal-container .dse-modal .dse-form__preview')`, `${label}: the edit form opened`);
+					if (how === 'click') {
+						t.expect((await heldCount()) === 1, `${label}: ${await heldCount()} timer(s) held after the form opened, expected the click's one`);
+						await fireHeld();
+						await holdOff();
+					} else {
+						const value7 = (c) => c.replace(/current_value: 5/, 'current_value: 7');
+						if (how === 'disk') fs.writeFileSync(path.join(vault, rel), value7(before));
+						else if (how === 'shift') await t.edit(rel, J(value7(before).replace('\n\nTOP\n\n', '\n\nTOP\n\nNEW PARAGRAPH\n\n')));
+						else await t.edit(rel, J(value7(before)));
+					}
+					await waitHandedOver(label, 'form', formLeaf, form);
+					const at = await whereIs('form', formLeaf);
+					t.expect(!kept || at.released, `${label}: expected the form's view to be thrown away, found ${J(at)}`);
+					t.expect(await formOpen(), `${label}: the form closed by itself before Save (${J(at)})`);
+					await typeRename(label, 'Twin', 'Edited');
+					await clickSave(label);
+					await waitDisk(label, rel, () => t.read(rel).includes('name: Edited'), 'the edit never reached the note');
+					await judge(label, rel, want, names, leaves, how === 'shift' ? FIXTURES[rel].replace('\n\nTOP\n\n', '\n\nTOP\n\nNEW PARAGRAPH\n\n') : FIXTURES[rel]);
+					outcomes.push(`${label}: form's card ${J(at.released ? 'released' : 'on block ' + at.block)} at Save`);
+					await noNotices(label, mk);
+				} catch (e) {
+					problems.push(`${label}: ${e.message}`);
+				} finally {
+					await cleanupForm();
+				}
+			};
+			/** (m) control: the form opened AFTER the click's write has landed and the redraws have finished. */
+			const lateCase = async (label) => {
+				const mk = await t.mark();
+				try {
+					await open(C3, 'lp');
+					await t.realClick(incr(A, 0));
+					await waitDisk(label, C3, () => t.counterValues(C3)[0] === 6, 'the click never reached the note');
+					await settle(C3, [['A', 'lp']]);
+					await pressPencil(label, A, 1);
+					await t.waitFor(`!!document.querySelector('.modal-container .dse-modal .dse-form__preview')`, `${label}: the edit form opened`);
+					await typeRename(label, 'Twin', 'Edited');
+					await clickSave(label);
+					await waitDisk(label, C3, () => t.read(C3).includes('name: Edited'), 'the edit never reached the note');
+					await judge(label, C3, [6, 5, 5], ['Twin', 'Edited', 'Twin'], [['A', 'lp']]);
+					await noNotices(label, mk);
+				} catch (e) {
+					problems.push(`${label}: ${e.message}`);
+				} finally {
+					await cleanupForm();
+				}
+			};
+			/** (n), (o) SC-549: the + on block 1 is held, something above it makes Obsidian hand its card to the block below, then the held write is fired. */
+			const wideCase = async (label, { mode, how, want, allowNotice = null }) => {
+				const mk = await t.mark();
+				try {
+					await open(C3, mode);
+					const before = t.read(C3);
+					await holdOn();
+					await remember('clicked', A, 1);
+					await t.realClick(incr(A, 1));
+					await t.waitFor(`window.__gs64Hold && window.__gs64Hold.held.length === 1`, `${label}: the click's write is held (one debounce timer)`);
+					if (how === 'inapp') await t.edit(C3, J(before.replace(/current_value: 5/, 'current_value: 7')));
+					else {
+						// a typed character in the upper callout's title line (the editor changes; nothing is saved yet)
+						await t.ev(`(() => { const ed = (${A}).view.editor; const k = ed.getValue().split('\\n').findIndex((l) => /^> \\[!note\\] Camp/.test(l)); ed.replaceRange('Z', { line: k, ch: ed.getLine(k).length }); return k; })()`);
+					}
+					await waitHandedOver(label, 'clicked', A, 1);
+					await fireHeld();
+					await holdOff();
+					await waitDisk(label, C3, () => t.counterValues(C3).filter((v) => v === 6).length === 1, "the click's write never reached the note");
+					if (how === 'type') {
+						// Obsidian merges the file's change into the dirty editor on its own schedule; saving before that would write the editor's old text over the note
+						await t.waitFor(`(${A}).view.editor.getValue().includes('current_value: 6') && (${A}).view.editor.getValue().includes('CampZ')`, `${label}: the editor took the written value`, 10000);
+						await t.ev(`(async () => { await (${A}).view.save(); })()`);
+					}
+					await judge(label, C3, want, null, [['A', mode]], how === 'type' ? FIXTURES[C3].replace('[!note] Camp', '[!note] CampZ') : FIXTURES[C3]);
+					await noNotices(label, mk, allowNotice);
+				} catch (e) {
+					problems.push(`${label}: ${e.message}`);
+				} finally {
+					await cleanupForm();
+				}
+			};
+			/** (l) a kept-open form closes when the plugin is disabled; (p) its Save is strict: its block was deleted from outside, so nothing is written and the Notice says why. */
+			const keptCase = async (label, finish) => {
+				const mk = await t.mark();
+				try {
+					await keptForm(label);
+					await typeRename(label, 'Twin', 'Edited');
+					if (finish === 'plugin-off') {
+						await t.ev(`(async () => { await app.plugins.disablePlugin('draw-steel-elements'); })()`);
+						await t.waitFor(`!document.querySelector('.modal-container .dse-modal')`, `${label}: the form closed when the plugin was disabled`, 10000);
+						await t.ev(`(async () => { await app.plugins.enablePlugin('draw-steel-elements'); })()`);
+						await t.waitFor(`!!app.plugins.plugins['draw-steel-elements']?.viewRegistry && window.__gs64.cards(${A}).length === 2`, `${label}: the plugin is back and both cards are drawn`);
+						await t.ev(PAGE_HELPERS);
+						await noNotices(label, mk);
+						outcomes.push(`${label}: closed with the plugin`);
+						return;
+					}
+					// the form's block (the lower callout) is deleted from outside and the upper one goes back to the form's own body, so a write that fell back to
+					// "the block that holds this body" would land in the upper callout; the strict Save must refuse instead
+					const lines = t.read(C2).split('\n');
+					const starts = lines.flatMap((l, i) => (l === '> [!note] Camp' ? [i] : []));
+					let end = starts[1];
+					while (lines[end + 1]?.startsWith('>')) end++;
+					lines.splice(starts[1], end - starts[1] + 1);
+					const gone = lines.join('\n').replace(/current_value: 6/, 'current_value: 5');
+					await t.edit(C2, J(gone));
+					const mp = await t.mark();
+					await t.ev(`(${SAVE}).click()`);
+					await t.waitFor(`__lc.notices.some((x) => x.n > ${mp})`, `${label}: Save said nothing`, 10000);
+					const ns = await t.noticesSince(mp);
+					t.expect(ns.length === 1 && /was not saved/.test(ns[0]), `${label}: expected the one 'not saved' Notice, got ${J(ns)}`);
+					t.expect(await formOpen(), `${label}: the form closed on a Save that wrote nothing`);
+					t.expect(t.read(C2) === gone, `${label}: the note changed: ${J(t.read(C2))}`);
+					outcomes.push(`${label}: Save wrote nothing, one Notice (${ns[0].slice(0, 60)}...), the form stayed open`);
+				} catch (e) {
+					problems.push(`${label}: ${e.message}`);
+				} finally {
+					await cleanupForm();
+				}
+			};
+			/** (q) a kept-open form on the unterminated trailing fence: the pin places the write there (a strict Save). */
+			const unterminatedCase = async (label) => {
+				const mk = await t.mark();
+				try {
+					await open(UT, 'rv');
+					await pressPencil(label, A, 1);
+					await t.waitFor(`!!document.querySelector('.modal-container .dse-modal .dse-form__preview')`, `${label}: the edit form opened`);
+					// the note leaves the screen: the card's section is gone, the form (pinned) stays
+					await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); })()`);
+					await t.waitFor(`window.__gs64.slot.form.released === true`, `${label}: the card's view was released`, 10000);
+					t.expect(await formOpen(), `${label}: the form closed when its card went away`);
+					await typeRename(label, 'Twin', 'Edited');
+					await clickSave(label);
+					const fix = FIXTURES[UT];
+					const at = fix.lastIndexOf('name: Twin');
+					const want = (fix.slice(0, at) + 'name: Edited' + fix.slice(at + 'name: Twin'.length)).replace(/\n$/, '\n```\n');
+					// (the raw box of an unterminated block carries the source's trailing newline, so the written block can end with one blank line: SC-477's territory, not this ticket's)
+					await waitDisk(label, UT, () => t.read(UT).replace(/\n\n```\n$/, '\n```\n') === want, 'the note does not hold the edit in the trailing block (and only there)');
+					outcomes.push(`${label}: the unterminated block got the edit, the closed twin untouched, the final newline kept`);
+					await noNotices(label, mk);
+				} catch (e) {
+					problems.push(`${label}: ${e.message}`);
+				} finally {
+					await cleanupForm();
+				}
+			};
+			try {
+				await t.ev(`${prefs}.set('authoringControls', true)`);
+				// (a)-(f): the ticket's steps on every surface. Base: Edited lands one block down.
+				await formCase('(a) LP callouts, + 0 held, form 1', { rel: C3, mode: 'lp', how: 'click', form: 1, want: [6, 5, 5], names: ['Twin', 'Edited', 'Twin'] });
+				await formCase('(b) LP plain fences', { rel: P3, mode: 'lp', how: 'click', form: 1, want: [6, 5, 5], names: ['Twin', 'Edited', 'Twin'] });
+				await formCase('(c) Reading view callouts', { rel: C3, mode: 'rv', how: 'click', form: 1, want: [6, 5, 5], names: ['Twin', 'Edited', 'Twin'] });
+				await formCase('(d) Reading view plain fences', { rel: P3, mode: 'rv', how: 'click', form: 1, want: [6, 5, 5], names: ['Twin', 'Edited', 'Twin'] });
+				await formCase('(e) two panes: + in Live Preview, form in Reading view', { rel: C3, mode: 'lp', panes: 'rv', how: 'click', form: 1, want: [6, 5, 5], names: ['Twin', 'Edited', 'Twin'] });
+				await formCase('(f) LP four callouts, + 0 held, form 2', { rel: C4, mode: 'lp', how: 'click', form: 2, want: [6, 5, 5, 5], names: ['Twin', 'Twin', 'Edited', 'Twin'] });
+				// (g) K: two twins - the form on the lower one used to close itself with nothing saved.
+				await formCase('(g) Reading view, two callouts, form on the lower one stays open', { rel: C2, mode: 'rv', how: 'click', form: 1, kept: true, want: [6, 5], names: ['Twin', 'Edited'] });
+				// (h), (i), (k): the residual - no click at all, an outside edit while the form is open.
+				await formCase('(h) LP callouts, form 1, outside edit of block 0 (in-app)', { rel: C3, mode: 'lp', how: 'inapp', form: 1, want: [7, 5, 5], names: ['Twin', 'Edited', 'Twin'] });
+				await formCase('(i) Reading view plain fences, form 1, outside edit of block 0 on disk', { rel: P3, mode: 'rv', how: 'disk', form: 1, want: [7, 5, 5], names: ['Twin', 'Edited', 'Twin'] });
+				await formCase('(k) LP callouts, form 1, an outside edit that also inserts a paragraph above', { rel: C3, mode: 'lp', how: 'shift', form: 1, want: [7, 5, 5], names: ['Twin', 'Edited', 'Twin'] });
+				await keptCase('(l) a kept-open form closes when the plugin is disabled', 'plugin-off');
+				await lateCase('(m) control: the form opened after the click\'s write landed');
+				await wideCase('(n) SC-549: + on block 1 held, an outside edit of block 0, then the write', { mode: 'lp', how: 'inapp', want: [7, 6, 5] });
+				await wideCase('(o) SC-549: + on block 1 held, a character typed in block 0\'s title, then the write', { mode: 'lp', how: 'type', want: [5, 6, 5], allowNotice: /merg/i });
+				await keptCase('(p) K-strict: the kept-open form\'s block was deleted, Save writes nothing', 'strict');
+				await unterminatedCase('(q) a kept-open form on the unterminated trailing fence saves into that block');
+			} finally {
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+				await t.ev(`document.getElementById('lc-gs64-notice')?.remove()`);
+				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
+				for (const rel of ALL) await t.reset(rel);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect(problems.length === 0, `${problems.join(' | ')} -- outcomes: ${outcomes.join('; ')}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${J(await t.errorsSince(m))}`);
+			return `the block edit form opened on one of several identical blocks saves into the block it was opened on: ${outcomes.join('; ')}`;
 		},
 	},
 	{
