@@ -195,7 +195,8 @@ export class ReplugRemounter {
 	 */
 	dispose(): void {
 		this.disposed = true;
-		for (const [el, stash] of this.inFlight) if (el.isConnected) writeStash(el, stash);
+		// Connected or not (as on the stash side): CodeMirror may have taken the widget off the page since; `remountWithin` skips a detached element.
+		for (const [el, stash] of this.inFlight) writeStash(el, stash);
 		this.inFlight.clear();
 	}
 

@@ -205,6 +205,20 @@ describe('SC-545 remount: the new instance draws the stashed cards', () => {
 		expect(result.remounted).toBe(0);
 	});
 
+	test('off/on/off while a draw is running and CodeMirror has taken the widget off the page meanwhile: the element is marked again all the same', async () => {
+		const { container, el, ctx } = marked();
+		let finish!: () => void;
+		const d = deps({ mount: jest.fn(() => new Promise<void>((r) => (finish = r))) });
+		const remounter = new ReplugRemounter(fakeApp([{ view: fakeView(container).view }]), d);
+		const running = remounter.run();
+		container.remove(); // detached while the draw runs
+		expect(el.isConnected).toBe(false);
+		remounter.dispose();
+		expect(readReplugStash(el)).toEqual({ v: 1, ctx, alias: 'ds-counter', body: BODY });
+		finish();
+		await running;
+	});
+
 	test('a stash with the wrong shape is ignored: nothing is drawn, the card stays, and the note is left to the fallback', async () => {
 		const { container, el, old } = marked();
 		(el as unknown as Record<string, Record<string, unknown>>)[REPLUG_KEY].v = 2; // as if a newer build had written another shape
@@ -391,6 +405,25 @@ describe('SC-545 fallback: rebuild a note only for a block that is still undrawn
 		const result = await new ReplugRemounter(fakeApp(views.map((view) => ({ view }))), deps({ liveRoots: () => live })).run();
 		expect(views.map((v) => v.setViewData.mock.calls.length)).toEqual([1, 0, 0, 0]);
 		expect(stray.isConnected).toBe(true);
+		expect(result.rebuilt).toEqual(['Note.md']);
+	});
+
+	test('an OWNED DSE card in a Live Preview embed does not trigger it (the embed twin of the callout case); an unowned one does, and a nested or deferred one does not', async () => {
+		const mk = (deferred: boolean, nested: boolean) => {
+			const w = widgetDom('embed');
+			const root = cardIn(w.el);
+			if (deferred) root.setAttribute('data-dse-element', 'deferred');
+			if (nested) cardIn(root);
+			return { w, root };
+		};
+		const owned = mk(false, false);
+		const unowned = mk(false, false);
+		const deferred = mk(true, false);
+		const nested = mk(false, true);
+		const live = [owned.root, nested.root];
+		const views = [owned.w, unowned.w, deferred.w, nested.w].map((w) => fakeView(w.container).view);
+		const result = await new ReplugRemounter(fakeApp(views.map((view) => ({ view }))), deps({ liveRoots: () => live })).run();
+		expect(views.map((v) => v.setViewData.mock.calls.length)).toEqual([0, 1, 0, 0]);
 		expect(result.rebuilt).toEqual(['Note.md']);
 	});
 
