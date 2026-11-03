@@ -4233,7 +4233,7 @@ const SCENARIOS = [
 		// Every phase: anti-vacuity (a real click on the card writes), tag the cards, plugin off, plugin on, then: every tagged card is out of the
 		// document, the new cards are owned by the LIVE registry, a real click on the new card writes (+1) and the card shows the disk value; no
 		// page error, no Notice; and the fallback did NOT run (no setViewData(.., true) between disable and the end of the settle) - the normal off/on
-		// never rebuilds the note (an embed that Obsidian itself re-renders at the toggle, phase (b), may cost one rebuild). (a) a counter in a callout, (b) a counter in a note embedded in Live Preview, (c) twin callouts, clicks 1, 0, 1,
+		// never rebuilds the note (an embed whose card Obsidian itself replaced with the raw fence while the plugin was off, phase (b), may cost one rebuild). (a) a counter in a callout, (b) a counter in a note embedded in Live Preview, (c) twin callouts, clicks 1, 0, 1,
 		// (d) a stamina bar in a callout (the real click opens the Stamina modal), (e) a callout mid-pane in a tall note: scrollTop and the card's
 		// top unchanged (+-1 px), (f) a + whose write is still pending when the plugin is turned off: the write lands, the callout is a card
 		// again after enable and the next + writes (this one MAY use the fallback; the number is reported), (g) controls: a plain fence in the
@@ -4333,7 +4333,7 @@ const SCENARIOS = [
 			 * the same number of cards is drawn and owned by the live registry), then let a late rebuild settle. `beforeDisable` runs after the tagging.
 			 * Never throws for a card that is not redrawn: the numbers come back, the phase asserts.
 			 */
-			const offOn = async (kind, { until = null, beforeDisable = null } = {}) => {
+			const offOn = async (kind, { until = null, beforeDisable = null, whileOff = null } = {}) => {
 				const pre = await t.ev(`(() => { ${G}.pre = ${G}.roots(${J(kind)}); ${G}.pre.forEach((r) => { r.__gs63 = 'pre'; }); return ${G}.pre.length; })()`);
 				t.expect(pre > 0, `no ${kind} card to tag before the plugin is turned off`);
 				if (beforeDisable) await beforeDisable();
@@ -4341,6 +4341,7 @@ const SCENARIOS = [
 				await t.ev(`(async () => { await app.plugins.disablePlugin('${ID}'); return true; })()`);
 				await t.waitFor(`!app.plugins.plugins['${ID}']`, 'the plugin is off');
 				await t.sleep(800); // the off state itself is the scenario: Obsidian rebuilds what it rebuilds while no processor exists
+				const offResult = whileOff ? await whileOff() : null;
 				await t.ev(`(async () => { await app.plugins.enablePlugin('${ID}'); return true; })()`);
 				await t.waitFor(`!!${G}.reg()`, 'the plugin is on');
 				const cond = until ?? `${G}.pre.every((r) => !r.isConnected) && ${G}.roots(${J(kind)}).length === ${pre} && ${G}.roots(${J(kind)}).every((r) => ${G}.owned(r))`;
@@ -4358,7 +4359,7 @@ const SCENARIOS = [
 					rebuilds: ${G}.sv.length - ${sv0},
 					modal: !!document.querySelector('.modal-container .dse-modal'),
 				}))()`);
-				return { pre, redrawn, ...after };
+				return { pre, redrawn, offResult, ...after };
 			};
 			/** The checks every phase shares. `allowRebuild`: the fallback may have run (phase (f)). */
 			const expectReplugged = (label, o, { allowRebuild = false } = {}) => {
@@ -4395,12 +4396,14 @@ const SCENARIOS = [
 					await openLP(host, 'counter', 0, '![[Lifecycle/replug-embed-src]]');
 					t.expect(await t.ev(`!!${G}.roots('counter')[0]?.closest('.internal-embed')`), '(b) set-up: the counter is not drawn in an embed');
 					await plusWrites('(b) before', src, 'counter', 0, [6]);
-					const o = await offOn('counter');
-					// Obsidian re-renders an embed's content at the toggle on some runs (measured: about two in three): the card is then replaced by the raw fence
-					// while the plugin is off, nothing redraws it after enable, and the stash has no element to draw into. That is the fallback's case (the note is
-					// rebuilt once); on the other runs the embed keeps its old card and the remount draws the new one. Either way: one card, owned, at most one rebuild.
-					expectReplugged('(b) counter in an LP embed', o, { allowRebuild: true });
+					// Sample the embed at the end of the off dwell: did Obsidian replace its card with the raw fence while no processor existed? (Seen at SC-545 r4, not
+					// reproduced in r5's 18 toggles; the trigger is not identified.) If it did, nothing redraws the embed after enable and the stash has no element to draw
+					// into: that is the fallback's case (one rebuild). If the embed kept its card, the remount draws the new one and the note must NOT be rebuilt.
+					const o = await offOn('counter', { whileOff: () => t.ev(`${G}.cm().contentDOM.querySelectorAll('.internal-embed pre > code[class*="language-ds-"]').length`) });
+					const rawWhileOff = o.offResult;
+					expectReplugged('(b) counter in an LP embed', o, { allowRebuild: rawWhileOff > 0 });
 					if (o.rebuilds > 1) problems.push(`(b) the fallback ran ${o.rebuilds} times`);
+					outcomes.push(`(b) raw fence in the embed while off: ${rawWhileOff} (${rawWhileOff > 0 ? 'the fallback may rebuild once' : 'no rebuild allowed'})`);
 					await plusWrites('(b) after off/on', src, 'counter', 0, [7]);
 				});
 				// (c) twin callouts (identical text): one per block, each showing its own block, clicks 1, 0, 1.
