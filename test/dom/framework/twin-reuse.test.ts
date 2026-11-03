@@ -871,42 +871,85 @@ describe('SC-544: a second click before the first block\'s write', () => {
 
 // SC-547: a pass remembers each callout window's fences; the answer for every block must be the one an uncached ask gives.
 describe('SC-547: the pass cache changes no answer', () => {
+	// two blocks of each of two aliases, twins among them, and a never-closed last fence
 	const WINDOW = [
 		'> [!note] Camp',
 		'> ```ds-counter', '> name: A', '> ```', '>',
 		'> ```ds-counter', '> name: A', '> ```', '>', // identical twin of the first
+		'> ```ds-other', '> name: Y', '> ```', '>',
 		'> ```ds-other', '> name: Z', '> ```', '>',
 		'> ```ds-counter', '> name: B', '> ```', '>',
 		'> ```ds-counter', '> name: C', // never closed
 	];
-	const text = `# N\n\n${WINDOW.join('\n')}`;
+	const textOf = (lines: string[]): string => `# N\n\n${lines.join('\n')}`;
+	const text = textOf(WINDOW);
 	const section = { text, lineStart: 2, lineEnd: 2 + WINDOW.length - 1 };
 	const ctx = { sourcePath: 'Note.md', getSectionInfo: () => null } as any;
+	/** What a pass hands `fenceOnElement`: one split of each text, however many blocks ask (the remounter's `linesOf`). */
+	function splitOnce(): (t: string) => readonly string[] {
+		const seen = new Map<string, readonly string[]>();
+		return (t) => seen.get(t) ?? (seen.set(t, t.split('\n')), seen.get(t)!);
+	}
 
-	function drawn(): { widget: HTMLElement; els: Array<[string, HTMLElement]> } {
+	/** A callout widget holding one block div per alias in `aliases`, in document order. */
+	function drawn(aliases: readonly string[]): Array<[string, HTMLElement]> {
 		const widget = document.body.appendChild(document.createElement('div'));
 		widget.className = 'cm-embed-block cm-callout';
 		const inner = widget.appendChild(document.createElement('div'));
 		inner.className = 'callout';
-		// DOM order = document order: A, A, Z, B, C
-		const els = (['ds-counter', 'ds-counter', 'ds-other', 'ds-counter', 'ds-counter'] as const).map((alias): [string, HTMLElement] => {
+		return aliases.map((alias): [string, HTMLElement] => {
 			const el = inner.appendChild(document.createElement('div'));
 			el.classList.add(`block-language-${alias}`);
 			return [alias, el];
 		});
-		return { widget, els };
 	}
 	afterEach(() => document.body.replaceChildren());
 
-	test('twins, two aliases and an unterminated last fence: every block resolves to the same fence with the memo as without', () => {
-		const { els } = drawn();
+	test('twins, two blocks of each of two aliases and an unterminated last fence: every block resolves to the same fence with the memo as without', () => {
+		const els = drawn(['ds-counter', 'ds-counter', 'ds-other', 'ds-other', 'ds-counter', 'ds-counter']);
+		const linesOf = splitOnce();
 		const memo = newPassMemo();
-		const plain = els.map(([alias, el]) => fenceOnElement(ctx, el, alias, undefined, section));
-		const cached = els.map(([alias, el]) => fenceOnElement(ctx, el, alias, undefined, section, memo));
+		const plain = els.map(([alias, el]) => fenceOnElement(ctx, el, alias, linesOf, section));
+		const cached = els.map(([alias, el]) => fenceOnElement(ctx, el, alias, linesOf, section, memo));
 		expect(cached).toEqual(plain);
-		// the twins told apart by place, the other alias found; the never-closed fence is not a block to Obsidian either way (null)
-		expect(plain.map((f) => f?.lineStart ?? null)).toEqual([3, 7, 11, 15, null]);
-		expect(plain.map((f) => f?.body.split('\n')[0] ?? null)).toEqual(['name: A', 'name: A', 'name: Z', 'name: B', null]);
+		// the twins told apart by place, both blocks of the second alias found (not just the first); the never-closed fence is not a block to Obsidian either way (null)
+		expect(plain.map((f) => f?.lineStart ?? null)).toEqual([3, 7, 11, 15, 19, null]);
+		expect(plain.map((f) => f?.body.split('\n')[0] ?? null)).toEqual(['name: A', 'name: A', 'name: Y', 'name: Z', 'name: B', null]);
 		expect(memo.fences.size).toBe(2); // one list per alias, however many blocks asked
+	});
+
+	test('one memo, two sections of different text with the same window bounds (a self-embed next to the editor\'s callout): each is read from its own text', () => {
+		const OLD = ['> [!note] Camp', '> ```ds-counter', '> name: A', '> ```', '>', '> ```ds-counter', '> name: B', '> ```', '>', '> tail'];
+		const NEW = ['> [!note] Camp', '> ```ds-counter', '> name: A', '> ```', '>', '> text', '> ```ds-counter', '> name: B', '> ```', '>'];
+		const win = { lineStart: 2, lineEnd: 2 + OLD.length - 1 };
+		const old = { text: textOf(OLD), ...win };
+		const fresh = { text: textOf(NEW), ...win };
+		const [, second] = drawn(['ds-counter', 'ds-counter'])[1];
+		const linesOf = splitOnce();
+		const memo = newPassMemo();
+		const first = fenceOnElement(ctx, second, 'ds-counter', linesOf, old, memo); // the host judged first, by one text
+		const viaMemo = fenceOnElement(ctx, second, 'ds-counter', linesOf, fresh, memo); // the next, by another
+		expect(viaMemo).toEqual(fenceOnElement(ctx, second, 'ds-counter', linesOf, fresh));
+		expect(viaMemo).not.toEqual(first); // the two texts do put the block on different lines
+		expect(viaMemo?.body).toBe('name: B');
+	});
+
+	test('the memo keys a window by both its bounds: a shorter window from the same first line is not answered from the longer one\'s list', () => {
+		const linesOf = splitOnce();
+		const [, second] = drawn(['ds-counter', 'ds-counter'])[1];
+		const memo = newPassMemo();
+		const long = { ...section, lineEnd: 2 + 12 }; // holds both A blocks and both ds-other ones
+		const short = { ...section, lineEnd: 2 + 4 }; // holds the first A block only
+		expect(fenceOnElement(ctx, second, 'ds-counter', linesOf, long, memo)?.lineStart).toBe(7);
+		expect(fenceOnElement(ctx, second, 'ds-counter', linesOf, short, memo)).toEqual(fenceOnElement(ctx, second, 'ds-counter', linesOf, short));
+		expect(fenceOnElement(ctx, second, 'ds-counter', linesOf, short, memo)?.lineStart).toBe(3);
+	});
+
+	test('each pass gets memory of its own: nothing a pass remembers is shared with the next', () => {
+		const a = newPassMemo();
+		const b = newPassMemo();
+		expect(a.blocks).not.toBe(b.blocks);
+		expect(a.fences).not.toBe(b.fences);
+		expect(a.windowEnds).not.toBe(b.windowEnds);
 	});
 });

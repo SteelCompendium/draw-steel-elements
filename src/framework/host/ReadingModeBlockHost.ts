@@ -234,6 +234,8 @@ export function locateInSection(
 }
 
 type FenceSpan = { lineStart: number; lineEnd: number };
+/** A window's fences, with the `lines` they were read from: a list is only reused for the text it came from. */
+type WindowFences = { lines: readonly string[]; spans: readonly FenceSpan[] };
 
 /**
  * The `language` fences inside `section` (document line numbers, fence lines inclusive), in document order.
@@ -245,18 +247,20 @@ function windowFences(
 	lines: readonly string[],
 	section: { lineStart: number; lineEnd: number },
 	language: string,
-	cache?: Map<string, readonly FenceSpan[]>,
+	cache?: Map<string, WindowFences>,
 ): readonly FenceSpan[] {
 	const key = `${section.lineStart}:${section.lineEnd}:${language}`;
+	// Two hosts of one pass can hold sections of different texts with the same bounds (a callout that embeds a section of its own
+	// note: Obsidian's `getSectionInfo` answers with the embed's text, the editor with the document's), so a hit must be the same lines.
 	const cached = cache?.get(key);
-	if (cached) return cached;
+	if (cached && cached.lines === lines) return cached.spans;
 	const windowLines = lines.slice(section.lineStart, section.lineEnd + 1);
 	// A section starts at a block boundary, so scanning the window on its own sees what a scan of the whole note would.
 	const fences = listFences(windowLines.join('\n'), language).map((f) => ({
 		lineStart: f.lineStart + section.lineStart,
 		lineEnd: f.lineEnd + section.lineStart,
 	}));
-	cache?.set(key, fences);
+	cache?.set(key, { lines, spans: fences });
 	return fences;
 }
 
@@ -268,7 +272,7 @@ function locateInSectionLines(
 	body: string | null,
 	ordinal: number,
 	near: number | null,
-	fenceCache?: Map<string, readonly FenceSpan[]>,
+	fenceCache?: Map<string, WindowFences>,
 ): { lineStart: number; lineEnd: number } | 'ambiguous' | null {
 	const fences = windowFences(lines, section, language, fenceCache);
 	const wanted = body === null ? null : normalizeBody(body);
@@ -308,11 +312,11 @@ export interface LivePreviewScope extends PassMemo {
  * changes between passes.
  */
 export interface PassMemo {
-	/** The block list of each quote/callout (`quoteOrdinal`'s cache). */
-	readonly blocks: Map<Element, readonly Element[]>;
-	/** The fences of each callout window and language (`windowFences`'s cache). */
-	readonly fences: Map<string, readonly FenceSpan[]>;
-	/** The last line of the callout starting at each line (`calloutWindow`'s cache). */
+	/** The block list of each quote/callout and alias (`quoteOrdinal`'s cache). */
+	readonly blocks: Map<Element, Map<string, readonly Element[]>>;
+	/** The fences of each callout window and language, with the text they were read from (`windowFences`'s cache). */
+	readonly fences: Map<string, WindowFences>;
+	/** The last line of the callout starting at each line (`calloutWindow`'s cache). Filled only from the editor's own text (`scope.text`), one text per pass. */
 	readonly windowEnds: Map<number, number>;
 }
 
@@ -345,20 +349,25 @@ function calloutWindow(
 /**
  * SC-455: the position of the `alias` block drawn in `el` among the `alias` blocks of the outermost quote/callout around it,
  * in document order (the DOM's). -1 when `el` is in no quote/callout or is not found among them.
- * `cache` (SC-537) is one pass's memory of each quote/callout's block list: a pass that asks about every block of a callout reads
- * the list once instead of once per block (the editor pass runs on every scroll and keystroke).
+ * `cache` (SC-537) is one pass's memory of each quote/callout's block list per alias: a pass that asks about every block of a callout
+ * reads the list once instead of once per block (the editor pass runs on every scroll and keystroke). The list is per alias: a callout
+ * holding blocks of two aliases has two lists, and a block is never looked up in the other alias's.
  */
-export function quoteOrdinal(el: HTMLElement, alias: string, cache?: Map<Element, readonly Element[]>): number {
+export function quoteOrdinal(el: HTMLElement, alias: string, cache?: Map<Element, Map<string, readonly Element[]>>): number {
 	let top: Element | null = null;
 	for (let n = el.parentElement; n; n = n.parentElement) {
 		if (n.matches('.callout, blockquote, .cm-embed-block')) top = n;
 	}
 	if (!top) return -1;
-	let blocks = cache?.get(top);
+	let perAlias = cache?.get(top);
+	let blocks = perAlias?.get(alias);
 	if (!blocks) {
 		// a sibling Obsidian has not handed to its processor yet is still a bare <pre><code>
 		blocks = Array.from(top.querySelectorAll(`div.block-language-${alias}, pre > code.language-${alias}`)).filter((n) => !n.parentElement?.closest('[data-dse-element]'));
-		cache?.set(top, blocks);
+		if (cache) {
+			if (!perAlias) cache.set(top, (perAlias = new Map<string, readonly Element[]>()));
+			perAlias.set(alias, blocks);
+		}
 	}
 	return blocks.indexOf(el);
 }
