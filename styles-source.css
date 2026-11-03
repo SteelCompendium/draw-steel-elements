@@ -4689,6 +4689,44 @@ Shared globals
 	[data-lastrow='on'] {
 		border-bottom: none;
 	}
+	/* SC-490 — while the board scrolls sideways (BoardView.ts sets `data-overflow='on'` from a
+	   measurement; a board that fits never gets the attribute, so it is drawn exactly as before) the
+	   hero column stays at the frame's left edge and the round columns slide under it: the header
+	   corner ("Hero" + the add button) and every name cell, with the row-action button inside it.
+	   Round headers, cells and the Tally scroll. There is no vertical pinning (the frame never
+	   scrolls vertically).
+	   Opaque, or the rounds would show through the translucent banding. Each cell keeps its own
+	   banding layers and sits on a solid base standing in for the card behind it, read off the
+	   rendered card (`--dse-card-bg`, a 160deg gradient: dark #232a2e -> #181c1f, light #ffffff ->
+	   #eef1f1) beside the board: the name cells over the rows, dark #20262a / light #fafbfb, with
+	   the cell's own tint already in the solid (1.5% white: dark #23292d; 1.2% black: light
+	   #f8f9f9); the corner over the card's top edge, dark #21282b / light #fcfdfd. A pinned cell
+	   therefore matches an unpinned one to within two levels per channel. The 1px right-edge rule is an inset shadow in
+	   the frame's own line token, so no layout moves and the rounds sliding under the column have a
+	   visible edge. z-index 2: nothing in a cell has one, so the column paints above every round
+	   cell (and wins every hit-test over them). This block is in the SCREEN, non-print tier, so print
+	   never pins. The ≤420px stacked layout resets it (the `@container` block further down). */
+	.dse-mt__board[data-overflow='on'] > .dse-mt__board-corner,
+	.dse-mt__board[data-overflow='on'] > .dse-mt__board-name {
+		position: sticky;
+		left: 0;
+		z-index: 2;
+		box-shadow: inset -1px 0 0 var(--dse-metal-line);
+	}
+	.dse-mt__board[data-overflow='on'] > .dse-mt__board-name {
+		background: var(--dse-sheen-soft), #23292d;
+
+		body.theme-light & {
+			background: #f8f9f9;
+		}
+	}
+	.dse-mt__board[data-overflow='on'] > .dse-mt__board-corner {
+		background: linear-gradient(180deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.26)), #21282b;
+
+		body.theme-light & {
+			background: linear-gradient(180deg, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.05)), #fcfdfd;
+		}
+	}
 	.dse-mt__board-who {
 		/* `, inherit` fallback (never resolved — the theme-agnostic routing block, ~:6489,
 		   already owns this element's real title-font consumer): the "widened slot" gate
@@ -5436,6 +5474,20 @@ Shared globals
 		}
 		.dse-mt__board-name {
 			border-top: 1px solid var(--dse-metal-line);
+			background: rgba(0, 0, 0, 0.3);
+
+			body.theme-light & {
+				background: rgba(0, 0, 0, 0.07);
+			}
+		}
+		/* SC-490 — no pinned column in the stacked layout (one band per hero, the name cell is a
+		   full-width row; the corner is display: none here). The board cannot normally overflow
+		   at this width, but if a cell's content ever pushed it to, the name band must not turn
+		   sticky/opaque: same selector (and specificity) as the pin above, later in the file. */
+		.dse-mt__board[data-overflow='on'] > .dse-mt__board-name {
+			position: relative;
+			z-index: auto;
+			box-shadow: none;
 			background: rgba(0, 0, 0, 0.3);
 
 			body.theme-light & {

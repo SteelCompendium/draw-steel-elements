@@ -50,6 +50,12 @@ const QUICK_ARTICLE: Record<MontageResult, string> = {
 
 type RoundState = 'past' | 'current' | 'future';
 
+/** SC-490 — set on the board by `trackOverflow`: `on` while the grid is wider than the frame. */
+const OVERFLOW_ATTR = 'data-overflow';
+
+/** SC-490 — the cells the board pins to its left edge while it overflows. */
+const PINNED_CELLS = '.dse-mt__board-corner, .dse-mt__board-name';
+
 /** A read-only-host control never fires — the whole point is `disabled` suppresses it
  *  (see file header) — but iconButton's `onClick` is mandatory, so every stub site
  *  shares this no-op. */
@@ -115,6 +121,47 @@ export class BoardView {
 				this.buildHeroRow(board, p.name, i === participants.length - 1, complete);
 			});
 		}
+		this.trackOverflow(board);
+	}
+
+	/** SC-490 — keep `data-overflow="on|off"` on the board in step with whether its grid is wider
+	 *  than the frame. The pinned hero column (corner + name cells: sticky, an opaque background, an
+	 *  edge rule — styles-source.css, the board frame block) applies only while it is `on`, so a board
+	 *  that fits is drawn exactly as before and an overflowing one is the only thing that changes.
+	 *  Measured here rather than asked of CSS: `scroll-state()` container queries are not in the
+	 *  Electron floor every installed Obsidian is guaranteed to have. Re-measured whenever the frame or
+	 *  a track changes size (the pane resizes, a font or UI-scale change, the root is adopted into a
+	 *  new section after a write — it is detached, hence 0 wide, for a moment); the observer is
+	 *  registered through the owner, so it dies with this mount. The attribute is also set once
+	 *  synchronously, so the board a write rebuilds is right on its first frame, before any callback.
+	 *
+	 *  A resize that leaves the board overflowing re-pins it: attribute off, one forced layout, on
+	 *  again. Measured in Chromium (1x and 2x, fine and coarse): a sticky cell that was already pinned
+	 *  when its row heights changed keeps painting its edges at the OLD sub-pixel offset, so its row
+	 *  divider sat a pixel above the round cells' and left a one-pixel hole of card colour under it
+	 *  (a fresh pin, or any change that drops and recreates the sticky box, is exact). */
+	private trackOverflow(board: HTMLElement): void {
+		const sync = (repin: boolean): void => {
+			const value = board.scrollWidth > board.clientWidth ? 'on' : 'off';
+			if (board.getAttribute(OVERFLOW_ATTR) === value) {
+				if (repin && value === 'on') {
+					board.setAttribute(OVERFLOW_ATTR, 'off');
+					void board.offsetWidth; // the layout in between is the point: it drops the stale sticky box
+					board.setAttribute(OVERFLOW_ATTR, 'on');
+				}
+				return;
+			}
+			board.setAttribute(OVERFLOW_ATTR, value);
+		};
+		sync(false);
+		const win = board.ownerDocument.defaultView;
+		if (!win || typeof win.ResizeObserver !== 'function') return;
+		const observer = new win.ResizeObserver(() => sync(true));
+		// the frame, and every track-defining cell (the header row): a round added or a column
+		// widened moves the grid's width without moving the frame's
+		observer.observe(board);
+		for (const cell of Array.from(board.children).slice(0, this.model.rounds + 2)) observer.observe(cell);
+		this.owner.register(() => observer.disconnect());
 	}
 
 	/** SC-326 r3 (review MED-2): Chromium scrolls a focused element into view only when it is not
@@ -123,17 +170,28 @@ export class BoardView {
 	 *  fully inside the frame, horizontally. Done by hand rather than `scrollIntoView`, which would
 	 *  also scroll the PAGE vertically whenever a clicked control is partly below the viewport; a cell
 	 *  that is already fully visible is never moved (a click on a visible quick-trio button leaves the
-	 *  board alone). */
+	 *  board alone).
+	 *
+	 *  SC-490: while the board overflows, the hero column (corner + name cells) is pinned over the left
+	 *  of the frame, so what a round cell can really show starts at the frame's left edge PLUS that
+	 *  column's width — a cell scrolled just under it is "inside the frame" yet covered, and Chromium
+	 *  would leave it there. The pinned cells themselves never move the board (they are always on
+	 *  screen). */
 	private keepFocusedCellInView(board: HTMLElement): void {
 		this.owner.registerDomEvent(board, 'focusin', (event: FocusEvent) => {
 			const target = event.target as HTMLElement | null;
 			const cell = target?.closest<HTMLElement>('.dse-mt__board > *');
 			if (!cell || board.scrollWidth <= board.clientWidth) return;
+			if (cell.matches(PINNED_CELLS)) return;
+			const pinned =
+				board.getAttribute(OVERFLOW_ATTR) === 'on'
+					? (board.querySelector('.dse-mt__board-corner')?.getBoundingClientRect().width ?? 0)
+					: 0;
 			const frame = board.getBoundingClientRect();
 			const left = frame.left + board.clientLeft;
 			const right = left + board.clientWidth;
 			const box = cell.getBoundingClientRect();
-			if (box.left < left) board.scrollLeft -= left - box.left;
+			if (box.left < left + pinned) board.scrollLeft -= left + pinned - box.left;
 			else if (box.right > right) board.scrollLeft += box.right - right;
 		});
 	}
