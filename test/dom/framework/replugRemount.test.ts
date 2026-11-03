@@ -527,7 +527,7 @@ describe('SC-545 wiring: an off/on of the plugin with a card in a Live Preview c
 
 		editor.appendChild(widget); // scrolled back
 		const listener = extensions.find((e) => (e as { facet?: unknown }).facet === EditorView.updateListener) as { value: (u: unknown) => void };
-		listener.value({ docChanged: false, viewportChanged: true, selectionSet: false, view: { contentDOM: editor }, state: { field: () => undefined } });
+		listener.value({ docChanged: false, viewportChanged: true, selectionSet: false, view: { dom: editor }, state: { field: () => undefined } });
 		await jest.advanceTimersByTimeAsync(50);
 
 		const newRoot = el.firstElementChild as HTMLElement;

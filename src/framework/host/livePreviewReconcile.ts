@@ -31,7 +31,7 @@ export function livePreviewReconcileExtension(remounter: ReusedElementRemounter,
 		// CodeMirror attaches the cached widget later, in a viewport (scroll) or selection update with no text change and no processor
 		// call. So those updates are judged too.
 		if (!update.docChanged && !update.viewportChanged && !update.selectionSet) return;
-		replug?.remountReattached(update.view.contentDOM);
+		replug?.remountReattached(update.view.dom);
 		const path = update.state.field(editorInfoField, false)?.file?.path;
 		if (!path) return;
 		// Cheap when this editor holds no DSE card of the note: one pass over the live views, no note text read.
