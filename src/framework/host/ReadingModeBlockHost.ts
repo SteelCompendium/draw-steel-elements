@@ -519,14 +519,20 @@ export class ReadingModeBlockHost implements BlockHost {
 	}
 
 	/**
-	 * SC-552 (BlockHost.keepFormOpenOn): the registry, when this host's section has been thrown away (its render child unloaded) and the
-	 * plugin is still loaded - a block edit form of this host may then outlive its view and hang its close on the registry. Null when
-	 * the section is still there or the plugin is going away (the registry has unloaded or is unloading), and for a host with no registry.
+	 * SC-552 (BlockHost.keepFormOpenOn): the registry, when this host's section has been thrown away (its render child unloaded) while the
+	 * note is still shown in some pane and the plugin is still loaded - a block edit form of this host may then outlive its view and hang its
+	 * close on the registry. That is the redraw case (an identical twin took the block's text; the block is still in the note on screen). Null
+	 * when the note is no longer shown in any pane (the leaf was closed or navigated away: the form closes with its view as it always did,
+	 * F1 section 4.5), when the plugin is going away (the registry has unloaded or is unloading), and for a host with no registry.
 	 */
 	keepFormOpenOn(): Component | null {
 		const registry = this.registry;
 		if (!registry || !this._renderChildGone) return null;
-		return (registry as unknown as { _loaded: boolean })._loaded ? registry : null;
+		if (!(registry as unknown as { _loaded: boolean })._loaded) return null;
+		const shown = this.plugin.app.workspace
+			.getLeavesOfType('markdown')
+			.some((leaf) => (leaf.view as MarkdownView).file?.path === this.ctx.sourcePath);
+		return shown ? registry : null;
 	}
 
 	attachEntry(entry: ViewRegistryEntry): void {

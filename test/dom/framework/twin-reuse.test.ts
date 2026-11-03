@@ -980,6 +980,7 @@ describe('SC-552: a block edit form (and, wide, a card click) on one of several 
 	async function start(count: number) {
 		const t = await setup(twins(count));
 		await t.deps.prefs.set('authoringControls', true); // the Edit pencil
+		showNote(t.app, true);
 		return { ...t, old: await t.paint(count) };
 	}
 	/** Press the real pencil of a card; hands back the real FormModal it opened. */
@@ -995,6 +996,10 @@ describe('SC-552: a block edit form (and, wide, a card click) on one of several 
 		box.value = box.value.replace('Twin', to);
 		box.dispatchEvent(new Event('input'));
 	}
+	/** Whether a pane shows Note.md (a form is only kept open past its view while the note is still on screen). */
+	const showNote = (app: { workspace: { getLeavesOfType: unknown } }, shown: boolean): void => {
+		jest.spyOn(app.workspace as { getLeavesOfType(type: string): unknown[] }, 'getLeavesOfType').mockReturnValue(shown ? [{ view: { file: { path: 'Note.md' } } }] : []);
+	};
 	const isOpen = (form: Form): boolean => document.body.contains(form.containerEl);
 	const childCount = (component: object): number => (component as unknown as { _children: unknown[] })._children.length;
 
@@ -1041,7 +1046,7 @@ describe('SC-552: a block edit form (and, wide, a card click) on one of several 
 	});
 
 	/** Two twins: + on the upper, the pencil of the LOWER, the upper's write lands and Obsidian throws the lower's element away. */
-	async function lowerFormAfterTheUppersWrite() {
+	async function lowerFormAfterTheUppersWrite(noteStillShown = true) {
 		const t = await start(2);
 		const registryChildren = childCount(t.registry);
 		click(t.old[0].el);
@@ -1049,6 +1054,7 @@ describe('SC-552: a block edit form (and, wide, a card click) on one of several 
 		rename(form(), 'Edited');
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		const { plan, discarded } = planFor([5, 5], t.values(), t.old);
+		showNote(t.app, noteStillShown); // the pane is still on the note - or was closed / navigated away just before the redraw
 		await t.rebuild(plan, discarded);
 		return { ...t, form, registryChildren };
 	}
@@ -1086,6 +1092,13 @@ describe('SC-552: a block edit form (and, wide, a card click) on one of several 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		expect(t.values()).toEqual([7, 6, 5]); // not [7, 5, 6]
+	});
+
+	test('the note is no longer shown when the view goes (leaf closed, navigated away): the form closes with its view, as it always did, and nothing is written for it', async () => {
+		const t = await lowerFormAfterTheUppersWrite(false);
+		expect(isOpen(t.form())).toBe(false);
+		expect(t.names()).toEqual(['Twin', 'Twin']);
+		expect(t.values()).toEqual([6, 5]);
 	});
 
 	test('a kept-open form closes when the plugin unloads', async () => {

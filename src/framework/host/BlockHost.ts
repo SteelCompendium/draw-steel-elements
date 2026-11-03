@@ -129,8 +129,9 @@ export interface BlockHost {
 	/**
 	 * SC-552 — optional: a Component that outlives this block's rendered section, when a block edit form may stay open past its
 	 * view's unload. It is non-null only when Obsidian has thrown the block's element away (the view unloaded because an identical
-	 * twin took its text, not because the plugin is going away) and the plugin is still loaded. The form hangs its own close on it, so
-	 * unloading the plugin still closes the form. Null: the form closes with its view as it always did.
+	 * twin took its text) while the block's note is still shown in some pane, and the plugin is still loaded. The form hangs its own close
+	 * on it, so unloading the plugin still closes the form. Null (the note is no longer shown: leaf closed or navigated away; the plugin
+	 * is going away): the form closes with its view as it always did.
 	 */
 	keepFormOpenOn?(): Component | null;
 	/**

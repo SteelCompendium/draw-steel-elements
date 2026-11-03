@@ -248,7 +248,11 @@ describe('SC-552: ReadingModeBlockHost.keepFormOpenOn', () => {
 		registry.load();
 		const ctx = makeFakeContext(app, 'Note.md', 0);
 		const host = new ReadingModeBlockHost(plugin as never, ctx.el, ctx as never, 'ds-counter', null, registry);
-		return { registry, host, renderChild: ctx.addedChildren[0] };
+		/** The panes that show a note: `shownIn(['Note.md'])` puts one pane on it, `shownIn([])` closes every pane. */
+		const shownIn = (paths: string[]): void => {
+			jest.spyOn(app.workspace, 'getLeavesOfType').mockReturnValue(paths.map((path) => ({ view: { file: { path } } })) as never);
+		};
+		return { registry, host, renderChild: ctx.addedChildren[0], shownIn };
 	}
 
 	test('the section is still there: no holder (the form closes with its view as it always did)', () => {
@@ -257,15 +261,25 @@ describe('SC-552: ReadingModeBlockHost.keepFormOpenOn', () => {
 		expect(host.keepFormOpenOn()).toBeNull();
 	});
 
-	test('the section was thrown away and the plugin is loaded: the registry', () => {
-		const { host, registry, renderChild } = hostWithRegistry();
+	test('the section was thrown away, the note is still shown in a pane and the plugin is loaded: the registry', () => {
+		const { host, registry, renderChild, shownIn } = hostWithRegistry();
+		shownIn(['Other.md', 'Note.md']);
 		renderChild.load();
 		renderChild.unload();
 		expect(host.keepFormOpenOn()).toBe(registry);
 	});
 
+	test('the note is no longer shown in any pane (leaf closed or navigated away): no holder, the form closes with its view', () => {
+		const { host, renderChild, shownIn } = hostWithRegistry();
+		shownIn(['Other.md']);
+		renderChild.load();
+		renderChild.unload();
+		expect(host.keepFormOpenOn()).toBeNull();
+	});
+
 	test('the plugin is unloading (the registry is not loaded): no holder', () => {
-		const { host, registry, renderChild } = hostWithRegistry();
+		const { host, registry, renderChild, shownIn } = hostWithRegistry();
+		shownIn(['Note.md']);
 		renderChild.load();
 		renderChild.unload();
 		registry.unload();
