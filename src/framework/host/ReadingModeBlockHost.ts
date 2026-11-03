@@ -654,8 +654,17 @@ export class ReadingModeBlockHost implements BlockHost {
 
 	/** SC-343 (BlockHost.notePersistIntent): refresh the durable position while live. */
 	notePersistIntent(): void {
-		this.readSection();
+		// SC-552: the FIRST intent of a pending round (a click, then more clicks inside the debounce) also pins the block where it is
+		// drawn at that moment - the click on the card that is on its own block. The view's debounced write, ~400 ms later, goes
+		// through that pin: another block's write, an outside edit or typing in the note can make Obsidian redraw the identical
+		// blocks meanwhile and hand this card's element to a twin, and the write would follow the element (SC-549). Later intents of
+		// the round do not re-pin: they come after such a redraw may have happened.
+		const pin = this.pinPosition();
+		if (pin && !this.pendingPin) this.pendingPin = pin;
 	}
+
+	/** SC-552: the pin of the view's pending edit, taken at its first persist intent; consumed (and cleared) by the view's write. */
+	private pendingPin: BlockPin | null = null;
 
 	get lastKnownBody(): string | null {
 		return this.knownBody;
@@ -786,6 +795,9 @@ export class ReadingModeBlockHost implements BlockHost {
 
 	async replaceSource(newSource: string, options?: BlockWriteOptions): Promise<boolean> {
 		this.reported = false;
+		// SC-552: the view's own write is placed through the pin its round's first click took (a form's Save brings its own).
+		const pin = options?.pin ?? (options?.fromView === true ? this.pendingPin : null);
+		if (options?.fromView === true) this.pendingPin = null;
 		if (!this.canPersist) return false;
 
 		const abstractFile = this.plugin.app.vault.getAbstractFileByPath(this.ctx.sourcePath);
@@ -835,9 +847,9 @@ export class ReadingModeBlockHost implements BlockHost {
 			await this.plugin.app.vault.process(abstractFile, (content) => {
 				// SC-552: a pinned write goes to the pinned block when it can still be found. If it cannot: today's placement, or - for a
 				// caller that asked for `pinOnly` - nowhere (the block changed on disk first).
-				const pinned = options?.pin ? this.pinnedTarget(content, options.pin) : null;
+				const pinned = pin ? this.pinnedTarget(content, pin) : null;
 				if (pinned) this.knownLineStart = pinned.lineStart;
-				const target = pinned ?? (options?.pin && options.pinOnly ? 'miss' : this.resolveWriteTarget(content, section));
+				const target = pinned ?? (pin && options?.pinOnly ? 'miss' : this.resolveWriteTarget(content, section));
 				if (target === 'abort') {
 					unplaceable = true; // SC-455: a write that cannot land is never silent
 					listShape = this.looksLikeList(content, section);

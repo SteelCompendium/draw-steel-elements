@@ -160,3 +160,79 @@ describe('SC-552: ReadingModeBlockHost pinned writes', () => {
 		expect(app.vault.getContent('Note.md')).toBe(`# N\n\n${closed}\n\`\`\`ds-counter\nname: Edited\ncurrent_value: 5\n\`\`\`\n`);
 	});
 });
+
+// SC-549 / SC-552 (wide): the view's own debounced write is pinned too. The first click of a round (notePersistIntent) takes the pin,
+// while the card is on its own block; a redraw inside the 400 ms (another block's write, an outside edit, typing) can hand the card's
+// element to a twin before the write runs.
+describe('SC-552: a view\'s own write is placed through the pin its round\'s first click took', () => {
+	let warn: jest.SpyInstance;
+	beforeEach(() => {
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => warn.mockRestore());
+
+	/** Three twins, the host on the middle one; `handOver()` is the redraw that puts its element on the lower one (the upper written). */
+	function setup() {
+		const app = new App();
+		const text = noteOf([5, 5, 5]);
+		app.vault.setFile('Note.md', text);
+		const section: Section = { current: sectionAt(text, fencesOf(text)[1]) };
+		const host = new ReadingModeBlockHost(new Plugin(app) as never, document.createElement('div'), switchableCtx(section) as never, 'ds-counter');
+		host.setMountedBody(bodyOf(5));
+		const handOver = (): void => {
+			const after = noteOf([7, 5, 5]);
+			app.vault.setFile('Note.md', after);
+			section.current = sectionAt(after, fencesOf(after)[2]);
+		};
+		return { app, section, host, handOver };
+	}
+	const own = { fromView: true };
+
+	test('the first click pins: after the redraw the view\'s write still lands in the block that was clicked', async () => {
+		const { app, host, handOver } = setup();
+		host.notePersistIntent();
+		handOver();
+
+		expect(await host.replaceSource(bodyOf(6), own)).toBe(true);
+		expect(values(app)).toEqual([7, 6, 5]);
+	});
+
+	test('a later click of the same round does not pin again (it may come after the redraw)', async () => {
+		const { app, host, handOver } = setup();
+		host.notePersistIntent();
+		handOver();
+		host.notePersistIntent(); // the second click, on the element that is now on the lower block
+
+		expect(await host.replaceSource(bodyOf(7), own)).toBe(true);
+		expect(values(app)).toEqual([7, 7, 5]);
+	});
+
+	test('the write uses the pin up: the next write, with no click before it, follows the element as it always did', async () => {
+		const { app, host, handOver } = setup();
+		host.notePersistIntent();
+		expect(await host.replaceSource(bodyOf(5), own)).toBe(true); // the middle block; the pin is used up
+		handOver();
+
+		expect(await host.replaceSource(bodyOf(8), own)).toBe(true);
+		expect(values(app)).toEqual([7, 5, 8]); // the lower block, where the element is
+	});
+
+	test('a write that is not the view\'s own (the form\'s Save) does not use the pin', async () => {
+		const { app, host, handOver } = setup();
+		host.notePersistIntent();
+		handOver();
+
+		expect(await host.replaceSource(bodyOf(5, 'Edited'))).toBe(true);
+		expect(names(app)).toEqual(['Twin', 'Twin', 'Edited']); // follows the element, as before
+	});
+
+	test('a write that is not the view\'s own does not use up the pin either', async () => {
+		const { app, host, handOver } = setup();
+		host.notePersistIntent();
+		handOver();
+		await host.replaceSource(bodyOf(5)); // the form\'s Save of an unchanged body
+
+		expect(await host.replaceSource(bodyOf(6), own)).toBe(true);
+		expect(values(app)).toEqual([7, 6, 5]); // the pin was still there for the view\'s own write
+	});
+});

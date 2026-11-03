@@ -961,7 +961,7 @@ describe('SC-547: the pass cache changes no answer', () => {
 // of its own pending), but the upper block's write (a click inside its debounce, or an outside edit) makes Obsidian hand the form's
 // element to the block below, and Save then followed the element. The form pins its block when it opens and Save writes through
 // the pin; a form whose view Obsidian threw away stays open and then saves strictly.
-describe('SC-552: a block edit form opened on one of several identical blocks', () => {
+describe('SC-552: a block edit form (and, wide, a card click) on one of several identical blocks', () => {
 	beforeEach(() => {
 		jest.useFakeTimers();
 		resetDroppedWriteNotices();
@@ -1073,6 +1073,19 @@ describe('SC-552: a block edit form opened on one of several identical blocks', 
 		expect(t.app.vault.getContent('Note.md')).toBe(gone);
 		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
 		expect(isOpen(t.form())).toBe(true);
+	});
+
+	// SC-549, wide: the card's own write is pinned by its first click, not only the form's.
+	test('+ on the middle block, then an outside edit of the upper inside the debounce: the +1 is written in the middle block', async () => {
+		const t = await start(3);
+		click(t.old[1].el);
+		await jest.advanceTimersByTimeAsync(120);
+		t.app.vault.setFile('Note.md', twins(3, 7)); // Sync, or a hand edit of the upper block
+		const { plan, discarded } = planFor([5, 5, 5], t.values(), t.old);
+		await t.rebuild(plan, discarded); // the middle card's element is now on the lower block
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		expect(t.values()).toEqual([7, 6, 5]); // not [7, 5, 6]
 	});
 
 	test('a kept-open form closes when the plugin unloads', async () => {
