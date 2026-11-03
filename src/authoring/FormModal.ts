@@ -14,9 +14,9 @@
 //    replaceSource stubbed to resolve false) so it can never become a second write path.
 //    The pipeline's own data-dse-readonly badge is stamped manually here because the
 //    preview bypasses ElementPipeline.run entirely.
-//  - Important 3: openFormEditor now routes through openManagedModal(owner, factory), so
-//    the form closes automatically when the opening view unloads (F1 §4.5), like every
-//    other DseModal consumer.
+//  - Important 3: openFormEditor closes the form automatically when the opening view unloads
+//    (F1 §4.5, the openManagedModal contract), like every other DseModal consumer. SC-552 narrows
+//    that for ONE case: see openFormEditor.
 //  - Important 4: a false host.replaceSource() (the block moved/vanished) now surfaces a
 //    Notice and leaves the modal open instead of silently closing on a write that never
 //    happened.
@@ -25,14 +25,14 @@
 // the same treatment as `prefs:`: popped at open through the pipeline's own extractCollapseKeys (so
 // a closed schema and `def.parse` never see them) and re-emitted on Save through the pipeline's own
 // withReservedKeys, in the pipeline's order (`prefs:` ... `collapsed:` ... body).
-import { Notice, Setting, parseYaml, stringifyYaml } from 'obsidian';
-import type { Component, DropdownComponent } from 'obsidian';
+import { Component, Notice, Setting, parseYaml, stringifyYaml } from 'obsidian';
+import type { DropdownComponent } from 'obsidian';
 import type { RenderContext } from '@/framework/context';
 import type { BlockHost, BlockPin } from '@/framework/host/BlockHost';
 import type { ElementDefinition } from '@/framework/registry';
 import type { DsePrefs } from '@/framework/seams/prefs';
 import type { ValidationService } from '@/framework/validation';
-import { DseModal, openManagedModal } from '@/framework/kit/managedModal';
+import { DseModal } from '@/framework/kit/managedModal';
 import { readBlockBody } from '@/framework/blockBody';
 import { renderErrorCard } from '@/framework/errorCard';
 import { extractPrefOverrides } from '@/framework/prefOverrides';
@@ -112,6 +112,8 @@ class FormModal extends DseModal {
 
 	/** SC-552: where the block was when the form opened (null: the host cannot pin, e.g. the sidebar panel). */
 	private readonly pin: BlockPin | null;
+	/** SC-552: set once the form was kept open past its view's unload (see `keepOpenOn`): the component it hangs its close on. */
+	private kept: { parent: Component; holder: Component } | null = null;
 
 	constructor(
 		private readonly cx: RenderContext,
@@ -480,6 +482,38 @@ class FormModal extends DseModal {
 		}
 	}
 
+	/** True when the form holds a pin of its block (SC-552), i.e. its host could say where the block was when the form opened. */
+	hasPin(): boolean {
+		return this.pin !== null;
+	}
+
+	/** True once the form was kept open past its view's unload (SC-552). */
+	isKeptOpen(): boolean {
+		return this.kept !== null;
+	}
+
+	/**
+	 * SC-552: keep this form open although its view has unloaded. The view's section was thrown away by Obsidian's redraw (an
+	 * identical twin took its text), but the block is still in the note and Save places the write through the pin. The form's close
+	 * is hung on a child Component of `parent` (the plugin-scoped registry), so unloading the plugin still closes it; the child is
+	 * removed again when the form closes, so nothing builds up on `parent` across forms.
+	 */
+	keepOpenOn(parent: Component): void {
+		if (this.kept) return;
+		const holder = new Component();
+		holder.register(() => this.close());
+		this.kept = { parent, holder };
+		parent.addChild(holder);
+	}
+
+	close(): void {
+		super.close();
+		const kept = this.kept;
+		if (!kept) return;
+		this.kept = null; // holder.unload() below runs the registered close again: a no-op by then
+		kept.parent.removeChild(kept.holder);
+	}
+
 	/** Test/entry surface: is Save currently allowed? */
 	canSave(): boolean {
 		return !this.saveDisabled;
@@ -498,7 +532,11 @@ class FormModal extends DseModal {
 		// not hold focus when pressed (a mouse press) arms nothing either (SC-518 r3).
 		const key = this.opener && body !== this.source ? this.cx.host.blockKey() : null;
 		if (this.opener && key !== null) armFormFocus(key, this.opener);
-		const ok = await (this.pin ? this.cx.host.replaceSource(body, { pin: this.pin }) : this.cx.host.replaceSource(body));
+		// SC-552: a form kept open past its view writes strictly - its pin or nowhere. The block may be gone (deleted from outside while
+		// the form stayed open), and the durable fallback would then write the identical block that is left.
+		const ok = await (this.pin
+			? this.cx.host.replaceSource(body, this.kept ? { pin: this.pin, pinOnly: true } : { pin: this.pin })
+			: this.cx.host.replaceSource(body));
 		if (key !== null) settleChromeFocus(key, null, ok);
 		if (ok) this.close();
 		// SC-455: a host that already said why it could not write (its own Notice) is not repeated here.
@@ -507,10 +545,12 @@ class FormModal extends DseModal {
 }
 
 /**
- * Open the form editor for a block. Routes through openManagedModal(owner, factory) —
- * Important 3 — so the form closes automatically when `owner` (the view that opened it)
- * unloads (F1 §4.5), the same contract every other DseModal consumer honors. Returns the
- * modal (tests drive save()/canSave()).
+ * Open the form editor for a block. The form closes automatically when `owner` (the view that opened it) unloads (F1 §4.5), the
+ * same contract every other DseModal consumer honors - with ONE exception (SC-552): a form that holds a pin and whose host names a
+ * `keepFormOpenOn` component stays open. That is the case where Obsidian's redraw of identical blocks threw the view's section
+ * away (two identical blocks, the form on the lower one, the upper written); the block is still in the note, the form only ever
+ * writes through its pin, and closing it would lose what the user typed. Plugin unload still closes it, and so does Save or Cancel.
+ * Returns the modal (tests drive save()/canSave()).
  */
 export function openFormEditor(
 	owner: Component,
@@ -520,5 +560,12 @@ export function openFormEditor(
 	validation: ValidationService,
 	opener: FormOpener | null = null,
 ): FormModal {
-	return openManagedModal(owner, () => new FormModal(cx, def, source, validation, opener));
+	const modal = new FormModal(cx, def, source, validation, opener);
+	owner.register(() => {
+		const keeper = modal.hasPin() ? (cx.host.keepFormOpenOn?.() ?? null) : null;
+		if (keeper) modal.keepOpenOn(keeper);
+		else modal.close();
+	});
+	modal.open();
+	return modal;
 }

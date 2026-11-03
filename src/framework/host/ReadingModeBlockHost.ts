@@ -518,6 +518,17 @@ export class ReadingModeBlockHost implements BlockHost {
 		return (this.renderChild as unknown as { _loaded: boolean })._loaded;
 	}
 
+	/**
+	 * SC-552 (BlockHost.keepFormOpenOn): the registry, when this host's section has been thrown away (its render child unloaded) and the
+	 * plugin is still loaded - a block edit form of this host may then outlive its view and hang its close on the registry. Null when
+	 * the section is still there or the plugin is going away (the registry has unloaded or is unloading), and for a host with no registry.
+	 */
+	keepFormOpenOn(): Component | null {
+		const registry = this.registry;
+		if (!registry || !this._renderChildGone) return null;
+		return (registry as unknown as { _loaded: boolean })._loaded ? registry : null;
+	}
+
 	attachEntry(entry: ViewRegistryEntry): void {
 		this.entry = entry;
 	}
