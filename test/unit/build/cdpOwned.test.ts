@@ -87,7 +87,8 @@ function run(body: string): Outcome {
 		for (const s of servers) s.close();
 		process.exit(0);
 	`;
-	const stdout = execFileSync('node', ['--input-type=module', '-e', code], { cwd: repoRoot, encoding: 'utf8' });
+	// timeout: a regression that loops (say, an unbounded process-tree walk) fails the test instead of hanging jest
+	const stdout = execFileSync('node', ['--input-type=module', '-e', code], { cwd: repoRoot, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
 	return JSON.parse(stdout.trim().split('\n').pop() as string) as Outcome;
 }
 
@@ -249,21 +250,30 @@ describe('SC-551: proveCdpOwned', () => {
 			out.ok = await prove({ procStats: () => stats, fdLinks: held });
 			const strangerHolds = (pid) => (pid === stranger ? ['socket:[' + inodeOf(p) + ']'] : ['anon_inode:[eventpoll]']);
 			try { await prove({ procStats: () => stats, fdLinks: strangerHolds }); } catch (e) { out.reason = e.reason; out.message = e.message; }
+			// a descendant whose fd list cannot be read (it holds the socket, but we cannot see that) must NOT count as ours: fail closed
+			const unreadable = (pid) => (pid === obsidian ? null : ['anon_inode:[eventpoll]']);
+			try { await prove({ procStats: () => stats, fdLinks: unreadable }); } catch (e) { out.unreadableReason = e.reason; }
 		`);
 		expect(out.ok).toEqual({ port: out.servedPort, guid: OURS });
 		expect(out.reason).toBe('foreign-listener');
 		expect(out.message).toContain('held by pid 5000 "obsidian"');
 		expect(out.message).toContain('our pid 4242');
+		expect(out.unreadableReason).toBe('foreign-listener');
 	});
 
 	test('with the real /proc, a non-exec bash wrapper whose child holds the DevTools socket is accepted', () => {
 		const out = run(`
 			const { spawn } = await import('node:child_process');
-			const server = ${JSON.stringify("const http=require('http'),fs=require('fs');const s=http.createServer((q,r)=>{r.setHeader('content-type','application/json');r.end(JSON.stringify({webSocketDebuggerUrl:'ws://127.0.0.1:'+s.address().port+'/devtools/browser/' + process.argv[2]}))});s.listen(0,'127.0.0.1',()=>fs.writeFileSync(process.argv[1]+'/DevToolsActivePort',s.address().port+'\\n/devtools/browser/'+process.argv[2]));")};
+			const server = ${JSON.stringify("const http=require('http'),fs=require('fs');const s=http.createServer((q,r)=>{r.setHeader('content-type','application/json');r.end(JSON.stringify({webSocketDebuggerUrl:'ws://127.0.0.1:'+s.address().port+'/devtools/browser/' + process.argv[2]}))});setTimeout(()=>process.exit(0),60000);s.listen(0,'127.0.0.1',()=>fs.writeFileSync(process.argv[1]+'/DevToolsActivePort',s.address().port+'\\n/devtools/browser/'+process.argv[2]));")};
 			// bash -c '"$0" -e ... ; true': the trailing command keeps bash from exec-ing node, so node is bash's child
-			const wrapper = spawn('bash', ['-c', '"$0" -e "$1" "$2" "$3"; true', process.execPath, server, ud, OURS], { stdio: 'ignore' });
-			out.ok = await prove({ child: wrapper, readProc: undefined, fdLinks: undefined, procStats: undefined, timeoutMs: 10000 });
-			wrapper.kill('SIGKILL');
+			// detached: the wrapper leads its own process group, so the WHOLE tree (bash + the node server it started) can be
+			// killed in the finally below - killing only the bash would orphan the server on every run (SC-551 r7 LOW-1)
+			const wrapper = spawn('bash', ['-c', '"$0" -e "$1" "$2" "$3"; true', process.execPath, server, ud, OURS], { stdio: 'ignore', detached: true });
+			try {
+				out.ok = await prove({ child: wrapper, readProc: undefined, fdLinks: undefined, procStats: undefined, timeoutMs: 10000 });
+			} finally {
+				try { process.kill(-wrapper.pid, 'SIGKILL'); } catch {}
+			}
 		`);
 		expect(out.error).toBeUndefined();
 		expect(out.ok?.guid).toBe(OURS);
