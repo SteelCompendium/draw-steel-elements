@@ -4233,7 +4233,7 @@ const SCENARIOS = [
 		// Every phase: anti-vacuity (a real click on the card writes), tag the cards, plugin off, plugin on, then: every tagged card is out of the
 		// document, the new cards are owned by the LIVE registry, a real click on the new card writes (+1) and the card shows the disk value; no
 		// page error, no Notice; and the fallback did NOT run (no setViewData(.., true) between disable and the end of the settle) - the normal off/on
-		// never rebuilds the note. (a) a counter in a callout, (b) a counter in a note embedded in Live Preview, (c) twin callouts, clicks 1, 0, 1,
+		// never rebuilds the note (an embed that Obsidian itself re-renders at the toggle, phase (b), may cost one rebuild). (a) a counter in a callout, (b) a counter in a note embedded in Live Preview, (c) twin callouts, clicks 1, 0, 1,
 		// (d) a stamina bar in a callout (the real click opens the Stamina modal), (e) a callout mid-pane in a tall note: scrollTop and the card's
 		// top unchanged (+-1 px), (f) a + whose write is still pending when the plugin is turned off: the write lands, the callout is a card
 		// again after enable and the next + writes (this one MAY use the fallback; the number is reported), (g) controls: a plain fence in the
