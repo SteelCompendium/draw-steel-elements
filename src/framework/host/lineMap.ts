@@ -4,7 +4,12 @@
 // apart by their text (SC-480), but a line that was not touched keeps its place in a line diff.
 import { splitLines } from './lineEnding';
 
-/** Edit distance above which the map gives up (null): a rewrite of most of the note is not something to place a block through. */
+/**
+ * Edit distance above which the map gives up (null): a rewrite of most of the note is not something to place a block through.
+ * Known limit: a block edit form that was kept open past its view (strict Save) after an outside edit of more than this many lines can
+ * never be saved - the pin is refused and the Notice says "the block changed on disk first" although it did not. No data is at risk
+ * (nothing is written; without the keep-open the form would have closed by itself, as it did before SC-552).
+ */
 export const LINE_MAP_MAX_EDITS = 400;
 
 /**

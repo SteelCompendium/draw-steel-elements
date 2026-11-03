@@ -114,6 +114,8 @@ class FormModal extends DseModal {
 	private readonly pin: BlockPin | null;
 	/** SC-552: set once the form was kept open past its view's unload (see `keepOpenOn`): the component it hangs its close on. */
 	private kept: { parent: Component; holder: Component } | null = null;
+	/** SC-552: set by close(). A form that already closed (Save, Cancel) is never kept open: its view unloads LATER too (Save redraws the block). */
+	private closed = false;
 
 	constructor(
 		private readonly cx: RenderContext,
@@ -499,7 +501,7 @@ class FormModal extends DseModal {
 	 * removed again when the form closes, so nothing builds up on `parent` across forms.
 	 */
 	keepOpenOn(parent: Component): void {
-		if (this.kept) return;
+		if (this.kept || this.closed) return;
 		const holder = new Component();
 		holder.register(() => this.close());
 		this.kept = { parent, holder };
@@ -507,6 +509,7 @@ class FormModal extends DseModal {
 	}
 
 	close(): void {
+		this.closed = true;
 		super.close();
 		const kept = this.kept;
 		if (!kept) return;

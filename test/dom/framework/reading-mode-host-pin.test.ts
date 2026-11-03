@@ -256,7 +256,8 @@ describe('SC-552: ReadingModeBlockHost.keepFormOpenOn', () => {
 	}
 
 	test('the section is still there: no holder (the form closes with its view as it always did)', () => {
-		const { host, renderChild } = hostWithRegistry();
+		const { host, renderChild, shownIn } = hostWithRegistry();
+		shownIn(['Note.md']); // the note is on screen, so only the live section says no
 		renderChild.load();
 		expect(host.keepFormOpenOn()).toBeNull();
 	});

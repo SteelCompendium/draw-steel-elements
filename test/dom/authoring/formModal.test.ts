@@ -962,6 +962,21 @@ describe('SC-552: the form pins its block', () => {
 		}
 	});
 
+	test('a form that already closed (Save, Cancel) is never kept open when its view unloads later: no holder is left on the registry', async () => {
+		const holder = new Component();
+		holder.load();
+		const { cx } = pinningCx({ pinPosition: () => PIN, keepFormOpenOn: () => holder });
+		for (let i = 0; i < 5; i++) {
+			const owner = fakeOwner();
+			const modal = openFormEditor(owner, cx, schemaDef(), 'name: Goblin', createValidationService());
+			if (i % 2 === 0) await modal.save();
+			else modal.close();
+			owner.unload(); // the Save redraws the block (or an outside edit does): the view unloads after the form closed
+			expect(modal.isKeptOpen()).toBe(false);
+			expect(holder._children).toHaveLength(0);
+		}
+	});
+
 	test('the form closes with its view when the host names no holder, or the form holds no pin', () => {
 		const holder = new Component();
 		holder.load();
@@ -982,11 +997,12 @@ describe('SC-552: the form pins its block', () => {
 		const holder = new Component();
 		holder.load();
 		const { cx, replaceSource } = pinningCx({ pinPosition: () => PIN, keepFormOpenOn: () => holder });
-		const owner = fakeOwner();
-		const modal = openFormEditor(owner, cx, schemaDef(), 'name: Goblin', createValidationService());
-		await modal.save();
+		const first = openFormEditor(fakeOwner(), cx, schemaDef(), 'name: Goblin', createValidationService());
+		await first.save();
 		expect(replaceSource).toHaveBeenLastCalledWith(expect.any(String), { pin: PIN });
 
+		const owner = fakeOwner();
+		const modal = openFormEditor(owner, cx, schemaDef(), 'name: Goblin', createValidationService());
 		owner.unload(); // kept open
 		await modal.save();
 		expect(replaceSource).toHaveBeenLastCalledWith(expect.any(String), { pin: PIN, pinOnly: true });
