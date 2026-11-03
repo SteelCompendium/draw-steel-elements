@@ -142,7 +142,9 @@
 // note. Live Preview redraws its code-block widgets but reuses a callout or embed widget with the OLD instance's card (no processor call, its view unloaded, no live registry owns
 // it), so a click on it did nothing. Now the unloading instance leaves the card's context on its element and the new instance draws a fresh card there at layout-ready; the note is rebuilt
 // (setViewData) only if a block is still undrawn. Phases: (a) a counter in a callout, (b) in an LP embed, (c) twin callouts (clicks 1, 0, 1), (d) a stamina bar in a callout (the real
-// click opens the Stamina modal), (e) a callout mid-pane in a tall note (scrollTop and card top +-1 px), (f) a + pending at disable, (g) controls (a plain fence, Reading view).
+// click opens the Stamina modal), (e) a callout mid-pane in a tall note (scrollTop and card top +-1 px), (f) a + pending at disable, (g) controls (a plain fence, Reading view),
+// (h) a callout CodeMirror had taken out of the page at the toggle (scrolled about a screen or more away): its widget keeps its DOM, detached, and is put back by the scroll after the
+// off/on - the card must be drawn again then (owned, + writes, no rebuild).
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
@@ -329,6 +331,8 @@ Object.assign(FIXTURES, {
 	'Lifecycle/replug-embed-host.md': `# replug embed host\n\nTOP\n\n![[Lifecycle/replug-embed-src]]\n\nBOTTOM\n`,
 	'Lifecycle/replug-stamina.md': `# replug stamina\n\nTOP\n\n${['[!note] Bar', ...GS63_STAMINA].map((l) => `> ${l}`).join('\n')}\n\nBOTTOM\n`,
 	'Lifecycle/replug-mid.md': `# replug mid\n\nTOP\n\n${GS62_FILL(60, 'Above')}\n\n${QUOTED(['[!note] Camp'], 5, 'Solo')}\n\n${GS62_FILL(100, 'Below')}\n\nBOTTOM\n`,
+	// (h): a callout at the top of a note with 200 paragraphs below it: scrolled to the end, CodeMirror takes its widget out of the document.
+	'Lifecycle/replug-far.md': `# replug far\n\nTOP\n\n${QUOTED(['[!note] Camp'], 5, 'Solo')}\n\n${GS62_FILL(200, 'Below')}\n\nBOTTOM\n`,
 	'Lifecycle/replug-mixed.md': `# replug mixed\n\nTOP\n\n${QUOTED(['[!note] Camp'], 5, 'Solo')}\n\nMID\n\n${COUNTER(3, 'Plain')}\n\nBOTTOM\n`,
 });
 
@@ -4233,7 +4237,7 @@ const SCENARIOS = [
 		// (d) a stamina bar in a callout (the real click opens the Stamina modal), (e) a callout mid-pane in a tall note: scrollTop and the card's
 		// top unchanged (+-1 px), (f) a + whose write is still pending when the plugin is turned off: the write lands, the callout is a card
 		// again after enable and the next + writes (this one MAY use the fallback; the number is reported), (g) controls: a plain fence in the
-		// same note and the callout's + in Reading view. Own leaf (its tab is in its keep set); the plugin is enabled again in `finally`.
+		// same note and the callout's + in Reading view, (h) a callout that CodeMirror has taken out of the page at the toggle (scrolled away, then scrolled back). Own leaf (its tab is in its keep set); the plugin is enabled again in `finally`.
 		id: 'G-S63',
 		async run(t) {
 			const m = await t.mark();
@@ -4476,12 +4480,47 @@ const SCENARIOS = [
 					if (!(await diskIs(rel, [6, 5]))) problems.push(`(g) the + in Reading view did not write: ${J(t.counterValues(rel))}`);
 					else outcomes.push('(g) Reading view + wrote [6,5]');
 				});
+				// (h) a callout that CodeMirror has taken out of the page when the plugin is turned off (scrolled well past it: the widget keeps its DOM, detached, and its card is
+				// still held by the registry). Nothing in the page to redraw at layout-ready; the editor update that puts the widget back when the note is scrolled back
+				// must draw the card: a fresh root owned by the live registry, a real + writes, and the note was not rebuilt.
+				await phase('(h) callout off the page at the toggle', async () => {
+					const rel = 'Lifecycle/replug-far.md';
+					await openLP(rel, 'counter', 0);
+					await plusWrites('(h) before', rel, 'counter', 0, [6]);
+					const toEnd = `(async () => { const cm = ${G}.cm(); cm.dispatch({ effects: cm.constructor.scrollIntoView(cm.state.doc.length, { y: 'end' }) }); return true; })()`;
+					const toBlock = `(async () => { const cm = ${G}.cm(); const lines = cm.state.doc.toString().split('\\n'); const i = lines.findIndex((l) => /^(?:[ ]{0,3}>[ ]?)*\`\`\`ds-counter/.test(l)); cm.dispatch({ effects: cm.constructor.scrollIntoView(cm.state.doc.line(i + 1).from, { y: 'center' }) }); return true; })()`;
+					let off = null;
+					const sv0 = await t.ev(`${G}.sv.length`);
+					const o = await offOn('counter', {
+						until: 'true',
+						beforeDisable: async () => {
+							await t.ev(toEnd);
+							await t.waitFor(`${G}.pre.every((r) => !r.isConnected)`, '(h) CodeMirror took the callout out of the page', 8000);
+							off = await t.ev(`({ detached: ${G}.pre.map((r) => !r.isConnected), held: ${G}.pre.map((r) => !!${G}.reg()?.liveEntries().some((e) => e.root === r)), st: ${G}.cm().scrollDOM.scrollTop })`);
+						},
+					});
+					t.expect(off && off.detached.every(Boolean) && off.held.every(Boolean), `(h) set-up: the callout's card must be out of the page and still held by the registry at the toggle (${J(off)})`);
+					outcomes.push(`(h) at the toggle: card out of the page ${J(off.detached)}, held by the registry ${J(off.held)}, scrollTop ${Math.round(off.st)}; after enable (still off the page): rebuilds ${o.rebuilds}`);
+					await t.ev(toBlock);
+					let back = true;
+					try {
+						await t.waitFor(`${G}.roots('counter').length === 1 && ${G}.pre.every((r) => !r.isConnected) && ${G}.roots('counter').every((r) => ${G}.owned(r))`, '(h) the card is drawn again when scrolled back', 6000);
+					} catch {
+						back = false;
+					}
+					const st = await t.ev(`({ roots: ${G}.roots('counter').length, sameOld: ${G}.roots('counter').map((r) => ${G}.pre.includes(r)), owned: ${G}.roots('counter').map((r) => ${G}.owned(r)) })`);
+					if (!back) problems.push(`(h) scrolled back: the card on screen is not a redrawn, owned card (${J(st)})`);
+					await plusWrites('(h) after off/on and scroll back', rel, 'counter', 0, [7]);
+					const rebuilds = (await t.ev(`${G}.sv.length`)) - sv0;
+					if (rebuilds !== 0) problems.push(`(h) the fallback ran (${rebuilds} setViewData(.., true) call(s)) between the toggle and the click`);
+					outcomes.push(`(h) scrolled back: cards ${st.roots}, old root on screen ${J(st.sameOld)}, owned ${J(st.owned)}, + wrote [7], rebuilds ${rebuilds}`);
+				});
 			} finally {
 				await t.ev(`(async () => { if (!app.plugins.plugins['${ID}']) await app.plugins.enablePlugin('${ID}'); return true; })()`);
 				await t.ev(`(() => { const P = ${G}; if (P.svOwner) P.svOwner.setViewData = P.svOrig; return true; })()`);
 				await t.ev(`document.getElementById('lc-gs63-notice')?.remove()`);
 				await t.ev(`(() => { const keep = ${G}.keep; app.workspace.getLeavesOfType('markdown').filter((l) => !keep.has(l)).forEach((l) => l.detach()); return true; })()`);
-				for (const r of ['Lifecycle/replug-callout.md', 'Lifecycle/replug-embed-host.md', 'Lifecycle/replug-embed-src.md', 'Lifecycle/replug-stamina.md', 'Lifecycle/replug-mid.md', 'Lifecycle/replug-mixed.md', 'Lifecycle/twin-callouts.md']) await t.reset(r);
+				for (const r of ['Lifecycle/replug-callout.md', 'Lifecycle/replug-embed-host.md', 'Lifecycle/replug-embed-src.md', 'Lifecycle/replug-stamina.md', 'Lifecycle/replug-mid.md', 'Lifecycle/replug-mixed.md', 'Lifecycle/replug-far.md', 'Lifecycle/twin-callouts.md']) await t.reset(r);
 				await t.open('Lifecycle/other.md');
 			}
 			t.expect(problems.length === 0, `${problems.join(' | ')} -- passed: ${outcomes.join('; ')}`);
