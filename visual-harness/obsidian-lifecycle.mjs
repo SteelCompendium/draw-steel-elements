@@ -4631,9 +4631,10 @@ const SCENARIOS = [
 			const C3 = 'Lifecycle/twin-callouts-3.md';
 			const C2 = 'Lifecycle/twin-callouts.md';
 			const C4 = 'Lifecycle/twin-callouts-4.md';
+			const P2 = 'Lifecycle/twin-pair.md';
 			const P3 = 'Lifecycle/twin-triplets.md';
 			const UT = 'Lifecycle/form-pin-unterminated.md';
-			const ALL = [C3, C2, C4, P3, UT];
+			const ALL = [C3, C2, C4, P2, P3, UT];
 			await t.ev(`(() => { if (!document.getElementById('lc-gs64-notice')) { const st = document.createElement('style'); st.id = 'lc-gs64-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
 			await t.ev(`(${gs64Page.toString()})()`);
 			const A = 'window.__gs64.A';
@@ -4756,6 +4757,7 @@ const SCENARIOS = [
 				outcomes.push(`${label}: disk ${J(disk)} names ${J(names)} cards ${shown.join(' ')}`);
 			};
 			const cleanupForm = async () => {
+				await t.ev(`(async () => { if (!app.plugins.plugins['draw-steel-elements']) await app.plugins.enablePlugin('draw-steel-elements'); return true; })()`);
 				if (await formOpen()) {
 					await t.key('Escape', 'Escape', 27);
 					await t.waitFor(`!document.querySelector('.modal-container .dse-modal')`, 'the form closed on Escape').catch(() => {});
@@ -4767,15 +4769,15 @@ const SCENARIOS = [
 				if (ns.length) problems.push(`${label}: a Notice appeared: ${J(ns)}`);
 			};
 			/** The form's card is kept: a forced start for the phases that need a form on the lower of two identical callouts (the view is thrown away). */
-			const keptForm = async (label) => {
-				await open(C2, 'rv');
-				const before = t.read(C2);
+			const keptForm = async (label, rel) => {
+				await open(rel, 'rv');
+				const before = t.read(rel);
 				await holdOn();
 				await t.realClick(incr(A, 0));
 				await t.waitFor(`window.__gs64Hold && window.__gs64Hold.held.length === 1`, `${label}: the click's write is held (one debounce timer)`);
 				await pressPencil(label, A, 1);
 				await t.waitFor(`!!document.querySelector('.modal-container .dse-modal .dse-form__preview')`, `${label}: the edit form opened`);
-				t.expect((await heldCount()) === 1 && t.read(C2) === before, `${label}: the held write is not the only thing pending / the note already changed`);
+				t.expect((await heldCount()) === 1 && t.read(rel) === before, `${label}: the held write is not the only thing pending / the note already changed`);
 				await fireHeld();
 				await holdOff();
 				await waitHandedOver(label, 'form', A, 1);
@@ -4885,10 +4887,10 @@ const SCENARIOS = [
 				}
 			};
 			/** (l) a kept-open form closes when the plugin is disabled; (p) its Save is strict: its block was deleted from outside, so nothing is written and the Notice says why. */
-			const keptCase = async (label, finish) => {
+			const keptCase = async (label, finish, rel = C2) => {
 				const mk = await t.mark();
 				try {
-					await keptForm(label);
+					await keptForm(label, rel);
 					await typeRename(label, 'Twin', 'Edited');
 					if (finish === 'plugin-off') {
 						await t.ev(`(async () => { await app.plugins.disablePlugin('draw-steel-elements'); })()`);
@@ -4900,22 +4902,24 @@ const SCENARIOS = [
 						outcomes.push(`${label}: closed with the plugin`);
 						return;
 					}
-					// the form's block (the lower callout) is deleted from outside and the upper one goes back to the form's own body, so a write that fell back to
-					// "the block that holds this body" would land in the upper callout; the strict Save must refuse instead
-					const lines = t.read(C2).split('\n');
-					const starts = lines.flatMap((l, i) => (l === '> [!note] Camp' ? [i] : []));
+					// the form's block (the lower one) is deleted from outside and the upper one holds the form's own body again, so a write that fell back to
+					// "the block that holds this body" would land in the upper block; the strict Save must refuse instead
+					// back to the fixture's text (the click rewrote the upper block's keys, and it would no longer hold the form's body), minus the lower block
+					const lines = FIXTURES[rel].split('\n');
+					const starts = lines.flatMap((l, i) => (l === '> [!note] Camp' || l === '```ds-counter' ? [i] : []));
 					let end = starts[1];
-					while (lines[end + 1]?.startsWith('>')) end++;
+					if (lines[end].startsWith('>')) while (lines[end + 1]?.startsWith('>')) end++;
+					else end = lines.indexOf('```', end + 1);
 					lines.splice(starts[1], end - starts[1] + 1);
-					const gone = lines.join('\n').replace(/current_value: 6/, 'current_value: 5');
-					await t.edit(C2, J(gone));
+					const gone = lines.join('\n');
+					await t.edit(rel, J(gone));
 					const mp = await t.mark();
 					await t.ev(`(${SAVE}).click()`);
 					await t.waitFor(`__lc.notices.some((x) => x.n > ${mp})`, `${label}: Save said nothing`, 10000);
 					const ns = await t.noticesSince(mp);
 					t.expect(ns.length === 1 && /was not saved/.test(ns[0]), `${label}: expected the one 'not saved' Notice, got ${J(ns)}`);
 					t.expect(await formOpen(), `${label}: the form closed on a Save that wrote nothing`);
-					t.expect(t.read(C2) === gone, `${label}: the note changed: ${J(t.read(C2))}`);
+					t.expect(t.read(rel) === gone, `${label}: the note changed: ${J(t.read(rel))}`);
 					outcomes.push(`${label}: Save wrote nothing, one Notice (${ns[0].slice(0, 60)}...), the form stayed open`);
 				} catch (e) {
 					problems.push(`${label}: ${e.message}`);
@@ -4968,7 +4972,7 @@ const SCENARIOS = [
 				await lateCase('(m) control: the form opened after the click\'s write landed');
 				await wideCase('(n) SC-549: + on block 1 held, an outside edit of block 0, then the write', { mode: 'lp', how: 'inapp', want: [7, 6, 5] });
 				await wideCase('(o) SC-549: + on block 1 held, a character typed in block 0\'s title, then the write', { mode: 'lp', how: 'type', want: [5, 6, 5], allowNotice: /merg/i });
-				await keptCase('(p) K-strict: the kept-open form\'s block was deleted, Save writes nothing', 'strict');
+				await keptCase('(p) K-strict: the kept-open form\'s block was deleted, Save writes nothing', 'strict', P2);
 				await unterminatedCase('(q) a kept-open form on the unterminated trailing fence saves into that block');
 			} finally {
 				await t.ev(`${prefs}.set('authoringControls', false)`);

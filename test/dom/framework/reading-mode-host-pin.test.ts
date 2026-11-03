@@ -4,8 +4,9 @@
 // in whatever the note has become (a line diff, lineMap.ts) and writes there; a pin that cannot be placed falls back to the
 // element's section as before, unless the caller asked for `pinOnly` (a form kept open past its view, SC-552 K-strict).
 import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlockHost';
+import { ViewRegistry } from '../../../src/framework/host/viewRegistry';
 import { droppedWriteMessage, resetDroppedWriteNotices } from '../../../src/framework/host/droppedWriteNotice';
-import { App, Notice, Plugin } from '../../mocks/obsidian';
+import { App, Notice, Plugin, makeFakeContext } from '../../mocks/obsidian';
 import type { MarkdownPostProcessorContext } from '../../mocks/obsidian';
 
 type Section = { current: { text: string; lineStart: number; lineEnd: number } | null };
@@ -234,5 +235,50 @@ describe('SC-552: a view\'s own write is placed through the pin its round\'s fir
 
 		expect(await host.replaceSource(bodyOf(6), own)).toBe(true);
 		expect(values(app)).toEqual([7, 6, 5]); // the pin was still there for the view\'s own write
+	});
+});
+
+// SC-552 (K): what the Reading-view host offers a block edit form that wants to outlive its view.
+describe('SC-552: ReadingModeBlockHost.keepFormOpenOn', () => {
+	function hostWithRegistry() {
+		const app = new App();
+		app.vault.setFile('Note.md', noteOf([5, 5]));
+		const plugin = new Plugin(app);
+		const registry = new ViewRegistry({ enabled: true });
+		registry.load();
+		const ctx = makeFakeContext(app, 'Note.md', 0);
+		const host = new ReadingModeBlockHost(plugin as never, ctx.el, ctx as never, 'ds-counter', null, registry);
+		return { registry, host, renderChild: ctx.addedChildren[0] };
+	}
+
+	test('the section is still there: no holder (the form closes with its view as it always did)', () => {
+		const { host, renderChild } = hostWithRegistry();
+		renderChild.load();
+		expect(host.keepFormOpenOn()).toBeNull();
+	});
+
+	test('the section was thrown away and the plugin is loaded: the registry', () => {
+		const { host, registry, renderChild } = hostWithRegistry();
+		renderChild.load();
+		renderChild.unload();
+		expect(host.keepFormOpenOn()).toBe(registry);
+	});
+
+	test('the plugin is unloading (the registry is not loaded): no holder', () => {
+		const { host, registry, renderChild } = hostWithRegistry();
+		renderChild.load();
+		renderChild.unload();
+		registry.unload();
+		expect(host.keepFormOpenOn()).toBeNull();
+	});
+
+	test('a host with no registry has nothing to hold a form on', () => {
+		const app = new App();
+		app.vault.setFile('Note.md', noteOf([5, 5]));
+		const ctx = makeFakeContext(app, 'Note.md', 0);
+		const host = new ReadingModeBlockHost(new Plugin(app) as never, ctx.el, ctx as never, 'ds-counter');
+		ctx.addedChildren[0].load();
+		ctx.addedChildren[0].unload();
+		expect(host.keepFormOpenOn()).toBeNull();
 	});
 });
