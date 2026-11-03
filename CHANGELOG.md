@@ -52,6 +52,11 @@ for what needs action.
   sideways inside its frame (Shift + mouse wheel, trackpad, touch, or Tab to a control), and it stays where you
   scrolled it when you log a result or end a round, instead of jumping back to round 1. A board that fits
   looks exactly as before, and the narrow one-column layout and printing are unchanged.
+- [FIX] **A long Montage board keeps the hero names in view while it scrolls sideways** (SC-490). While the
+  board is wider than its card, the "Hero" corner and every hero's name (with its row action button) stay
+  pinned at the left edge, on a solid background with a thin edge line, and the round columns and the Tally
+  slide under them. Tab (and Shift + Tab) never lands on a control hidden under the pinned column. A board that
+  fits looks exactly as before, and the narrow one-column layout and printing are unchanged.
 - [FIX] **A block inside a callout or a quote now saves its changes** (SC-455). A Draw Steel block
   nested in `> [!note]`, a plain quote, or a callout inside a callout (each line starting with
   `> `) drew and took clicks but never wrote them back, and said nothing; the change was lost on the
