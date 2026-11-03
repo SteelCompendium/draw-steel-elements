@@ -1047,7 +1047,7 @@ async function assertMontageCoarseContainment(page) {
 //
 // SC-490 pinned the hero column (the header corner + every name cell: `position: sticky`, an opaque
 // background, an edge rule, only while the board overflows), so the gate now also asserts, for BOTH
-// pointer contexts, that:
+// pointer contexts and BOTH themes (dark, light: the pinned fills are per-theme literals), that:
 //  6. at rest, mid-scroll and full scroll every pinned cell sits at the frame's inner left edge, is
 //     `position: sticky` with an OPAQUE background colour and an edge rule, and its centre hit-tests
 //     to itself (a round cell really is sliding under it at mid scroll, so the z-order is proved, not
@@ -1075,7 +1075,9 @@ async function assertMontageBoardScroll(page) {
 	const PANE = 900;
 	const results = [];
 	let failed = false;
-	for (const pointer of ['fine', 'coarse']) {
+	// SC-490: both themes — the pinned fills are per-theme literals, so a translucent or mis-scoped light fill
+	// would pass a dark-only gate.
+	for (const [pointer, bg] of [['fine', 'dark'], ['coarse', 'dark'], ['fine', 'light'], ['coarse', 'light']]) {
 		const context = await browser.newContext(
 			pointer === 'coarse'
 				? { hasTouch: true, isMobile: true, viewport: { width: 1000, height: VIEWPORT_HEIGHT } }
@@ -1083,7 +1085,7 @@ async function assertMontageBoardScroll(page) {
 		);
 		const probe = await context.newPage();
 		try {
-			const query = new URLSearchParams({ element: 'montage', fixture: `probe-rounds-${ROUNDS}`, theme: 'steel', bg: 'dark' });
+			const query = new URLSearchParams({ element: 'montage', fixture: `probe-rounds-${ROUNDS}`, theme: 'steel', bg });
 			await probe.goto(`${pageUrl}?${query}`);
 			await probe.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
 			const isCoarse = await probe.evaluate(() => matchMedia('(pointer: coarse)').matches);
@@ -1116,7 +1118,7 @@ async function assertMontageBoardScroll(page) {
 				};
 			});
 			const problems = [];
-			const label = `${pointer} pointer, ${ROUNDS} rounds, ${PANE}px pane`;
+			const label = `${pointer} pointer, ${bg} theme, ${ROUNDS} rounds, ${PANE}px pane`;
 			if (geo.scrollWidth <= geo.clientWidth) {
 				problems.push(
 					`the fixture does not overflow (scrollWidth ${geo.scrollWidth} <= clientWidth ${geo.clientWidth}) — ` +
@@ -1407,7 +1409,7 @@ async function assertMontageBoardScroll(page) {
 				continue;
 			}
 			results.push(
-				`${pointer}: ${geo.scrollWidth}px grid in a ${geo.clientWidth}px frame, ${cells.measured} cells reachable, ` +
+				`${pointer}/${bg}: ${geo.scrollWidth}px grid in a ${geo.clientWidth}px frame, ${cells.measured} cells reachable, ` +
 					`${1 + heroCount} pinned cells at the frame's left edge at rest/mid/full scroll, ${tabStops} Tab + ${backStops} Shift+Tab stops ` +
 					`(${pinnedStops} + ${pinnedBackStops} in pinned cells, the rest fully visible right of the pinned column and uncovered)`,
 			);
@@ -1421,7 +1423,7 @@ async function assertMontageBoardScroll(page) {
 			`${results.join('; ')}; overflow-x auto, real wheel reaches the far end, every board child ` +
 			`scrolls fully inside the frame (round cells: right of the pinned hero column), its centre hit-tests to itself ` +
 			`and its content stays inside it, the pinned cells are sticky, opaque, edge-ruled and on top, a board that fits ` +
-			`is not pinned and narrowing the pane pins it again, fine AND coarse pointer)`,
+			`is not pinned and narrowing the pane pins it again, fine AND coarse pointer, dark AND light theme)`,
 	);
 }
 
