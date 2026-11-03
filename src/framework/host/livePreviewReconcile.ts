@@ -17,15 +17,21 @@ import { editorInfoField } from 'obsidian';
 import { EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
 import type { ReusedElementRemounter } from './remountReused';
+import type { ReplugRemounter } from './replugRemount';
 
-/** The CodeMirror extension to pass to `plugin.registerEditorExtension`. Runs on every doc, scroll and selection update of every editor. */
-export function livePreviewReconcileExtension(remounter: ReusedElementRemounter): Extension {
+/**
+ * The CodeMirror extension to pass to `plugin.registerEditorExtension`. Runs on every doc, scroll and selection update of every editor.
+ * SC-545: `replug` is told of the same updates, because a card that was off the page when the plugin was turned off and on has its
+ * widget's DOM put back by exactly such an update (replugRemount.ts, `remountReattached`).
+ */
+export function livePreviewReconcileExtension(remounter: ReusedElementRemounter, replug?: ReplugRemounter): Extension {
 	return EditorView.updateListener.of((update) => {
 		// A write moves a callout widget in the update that changes the text. But a twin whose widget is not in the editor's DOM at that
 		// moment (scrolled far off, or raw source because the cursor is inside it) is handed the writer's widget all the same, and
 		// CodeMirror attaches the cached widget later, in a viewport (scroll) or selection update with no text change and no processor
 		// call. So those updates are judged too.
 		if (!update.docChanged && !update.viewportChanged && !update.selectionSet) return;
+		replug?.remountReattached(update.view.contentDOM);
 		const path = update.state.field(editorInfoField, false)?.file?.path;
 		if (!path) return;
 		// Cheap when this editor holds no DSE card of the note: one pass over the live views, no note text read.

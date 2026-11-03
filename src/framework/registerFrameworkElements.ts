@@ -75,8 +75,6 @@ export function registerFrameworkElements(
 	const registry = plugin.addChild(new ViewRegistry({ enabled: options.viewAdoption ?? false }));
 	// SC-481: redraws an element Obsidian reused for the next identical block (see remountReused.ts).
 	const remounter = new ReusedElementRemounter(plugin, framework, scrollPin, registry);
-	// SC-537: and, for twin callouts in Live Preview (no processor call there), from the editor's own update (livePreviewReconcile.ts).
-	plugin.registerEditorExtension(livePreviewReconcileExtension(remounter));
 	// SC-545: after a plugin off/on, Live Preview keeps its callout and embed widgets with the OLD instance's cards (no processor runs for
 	// them, and their view is unloaded). The old instance left each card's context on its element (ViewRegistry.onunload); draw them
 	// again once the layout is ready, then rebuild any note that still holds an undrawn or unowned block (replugRemount.ts).
@@ -86,7 +84,12 @@ export function registerFrameworkElements(
 		liveRoots: () => registry.liveEntries().map((e) => e.root),
 	});
 	plugin.register(() => replug.dispose());
-	plugin.app.workspace.onLayoutReady(() => void replug.run());
+	plugin.app.workspace.onLayoutReady(() => {
+		replug.run().catch((error) => console.error('Draw Steel Elements: redrawing the cards after the plugin was turned on failed.', error));
+	});
+	// SC-537: for twin callouts in Live Preview (no processor call there), the redraw is driven by the editor's own update (livePreviewReconcile.ts);
+	// SC-545: the same update draws a card whose widget CodeMirror had taken off the page at the toggle once it puts it back.
+	plugin.registerEditorExtension(livePreviewReconcileExtension(remounter, replug));
 
 	for (const def of framework.registry.all()) {
 		for (const alias of def.aliases) {

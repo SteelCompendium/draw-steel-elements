@@ -8,11 +8,15 @@
 // Fix (option "AB" of the SC-545 diagnosis):
 //  A. (normal path) The unloading instance leaves each such card's widget context on its element (`stashForReplug`, called from
 //     `ViewRegistry.onunload`). The new instance draws a fresh card there once the layout is ready (`ReplugRemounter.run`).
+//     A card CodeMirror had taken out of the page at the toggle (its widget keeps its cached DOM, detached, about a screen or more away
+//     from the visible part of the note) is stashed too and drawn when the editor puts that DOM back, from the editor's own update
+//     (`remountReattached`, called by the listener in livePreviewReconcile.ts).
 //  B. (fallback, rare) A view that STILL holds a raw DSE fence or a DSE card nobody owns in such a widget after A settled is
-//     rebuilt through `setViewData` (`rebuildViewsWithUndrawnBlocks`): a write that was pending at disable (the note changed, so
+//     rebuilt through `setViewData` (`ReplugRemounter.rebuildUndrawn`): a write that was pending at disable (the note changed, so
 //     Obsidian built the callout while the plugin was off and drew the fence as code), a note opened while the plugin was off, or the
 //     first update from a build that never stashed. B costs the note's undo history and re-renders the whole note, so a normal
-//     off/on must never reach it.
+//     off/on must never reach it. B looks only at what is in the page: a card that was off the page during the one-time update from a
+//     build that never stashed is not seen, and stays dead until the note is reopened.
 import type { App, MarkdownPostProcessorContext, MarkdownView } from 'obsidian';
 import type { ViewRegistryEntry } from './viewRegistry';
 
@@ -42,9 +46,13 @@ export interface ReplugStash {
 
 type Stashable = HTMLElement & { [REPLUG_KEY]?: unknown };
 
-/** True for a root inside a Live Preview widget that Obsidian does not redraw on `post-processor-change`. */
+/**
+ * True for a root inside a Live Preview widget that Obsidian does not redraw on `post-processor-change`. A root CodeMirror has taken
+ * out of the page sits in a detached widget subtree that has no `.markdown-source-view` above it: there the widget classes alone decide
+ * (a Reading view embed that is detached is stashed too, which is harmless: nothing reads that mark unless the element is put back).
+ */
 function inStickyWidget(root: HTMLElement): boolean {
-	if (!root.closest('.markdown-source-view')) return false;
+	if (root.isConnected && !root.closest('.markdown-source-view')) return false;
 	return !!(root.closest('.cm-embed-block.cm-callout') || root.closest('.internal-embed'));
 }
 
@@ -73,13 +81,13 @@ export function readReplugStash(el: HTMLElement): ReplugStash | null {
 
 /**
  * At unload (`ViewRegistry.onunload`, after every view has unloaded and flushed its pending write): mark each live card that sits in
- * such a widget with the context a fresh card needs. Returns how many were marked. Never throws - an unload must finish.
+ * such a widget (in the page, or in a widget CodeMirror has taken out of it) with the context a fresh card needs. Returns how many were marked. Never throws - an unload must finish.
  */
 export function stashForReplug(entries: Iterable<ViewRegistryEntry>): number {
 	let n = 0;
 	for (const entry of entries) {
 		try {
-			if (!entry.root.isConnected || !inStickyWidget(entry.root)) continue;
+			if (!inStickyWidget(entry.root)) continue;
 			const body = entry.host.lastKnownBody;
 			if (body === null) continue;
 			const { el, ctx, alias } = entry.host.remountTarget();
@@ -191,12 +199,32 @@ export class ReplugRemounter {
 		this.inFlight.clear();
 	}
 
+	/**
+	 * The editor put DOM back (a scroll, a text change, a selection move): draw the marked cards in it. A card that was off the page at
+	 * the toggle is marked on its detached widget, which no query from the leaf can reach; CodeMirror attaches that DOM again when the
+	 * block comes near the visible part of the note. Called from every editor update, so the common case (nothing marked) is one
+	 * `querySelector` and no work.
+	 */
+	remountReattached(scope: ParentNode): void {
+		if (this.disposed) return;
+		if (scope.querySelector(`[${REPLUG_ATTR}]`) === null) return;
+		this.remountWithin(scope).catch((error) => console.error('Draw Steel Elements: redrawing a card after it came back into view failed.', error));
+	}
+
 	private async remountMarked(): Promise<number> {
-		const jobs: Promise<void>[] = [];
+		const runs: Promise<number>[] = [];
 		for (const leaf of this.app.workspace.getLeavesOfType('markdown')) {
 			const root = leaf.view?.containerEl;
-			if (!root) continue;
-			for (const el of Array.from(root.querySelectorAll<HTMLElement>(`[${REPLUG_ATTR}]`))) {
+			if (root) runs.push(this.remountWithin(root));
+		}
+		return (await Promise.all(runs)).reduce((sum, n) => sum + n, 0);
+	}
+
+	/** Draw a fresh card into every marked element under `scope` that is in the document; one that throws is logged and left, the rest go on. */
+	private async remountWithin(scope: ParentNode): Promise<number> {
+		const jobs: Promise<void>[] = [];
+		for (const el of Array.from(scope.querySelectorAll<HTMLElement>(`[${REPLUG_ATTR}]`))) {
+			try {
 				const stash = readReplugStash(el);
 				clearStash(el);
 				if (!stash || !el.isConnected || !this.deps.hasAlias(stash.alias)) continue;
@@ -204,6 +232,10 @@ export class ReplugRemounter {
 				el.replaceChildren();
 				this.inFlight.set(el, stash);
 				jobs.push(this.deps.mount(el, stash.ctx, stash.alias, stash.body).finally(() => this.inFlight.delete(el)));
+			} catch (error) {
+				this.inFlight.delete(el);
+				clearStash(el);
+				console.error('Draw Steel Elements: could not redraw a card after the plugin was turned on.', error);
 			}
 		}
 		await Promise.all(jobs);
@@ -216,8 +248,8 @@ export class ReplugRemounter {
 		for (const leaf of this.app.workspace.getLeavesOfType('markdown')) {
 			const view = leaf.view as MarkdownView | undefined;
 			if (!view || view.getViewType?.() !== 'markdown' || typeof view.setViewData !== 'function') continue;
-			if (!hasUndrawnBlocks(view, (alias) => this.deps.hasAlias(alias), live)) continue;
 			try {
+				if (!hasUndrawnBlocks(view, (alias) => this.deps.hasAlias(alias), live)) continue;
 				rebuildView(view);
 				rebuilt.push(view.file?.path ?? '?');
 			} catch (error) {
