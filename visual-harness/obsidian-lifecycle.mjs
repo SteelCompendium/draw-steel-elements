@@ -2314,6 +2314,11 @@ const SCENARIOS = [
 		// adoption); both must hold their start offset on every frame — a write in one block must not move
 		// the other either. Actions: three quick-trio taps and an End round in A (mid-scroll), then a
 		// quick-trio tap and End round in B (far end).
+		// SC-490 adds the pinned hero column to the same sampling: while a board overflows it is marked
+		// `data-overflow="on"` and its name cells are `position: sticky` at the frame's left edge; the mark is
+		// set by BoardView from a measurement and the board is rebuilt AND adopted into a re-drawn section by every
+		// write, so every sampled frame (and the start, scrolled mid-way / to the far end) must show both boards
+		// marked on with their name cell flush against the frame's left edge.
 		id: 'G-S13',
 		async run(t) {
 			const rel = 'Lifecycle/montage.md';
@@ -2332,14 +2337,24 @@ const SCENARIOS = [
 			const starts = await t.ev(`(() => { const a = ${BOARD(0)}; const b = ${BOARD(1)}; return { a: Math.round(a.scrollLeft), aMax: a.scrollWidth - a.clientWidth, b: Math.round(b.scrollLeft), bMax: b.scrollWidth - b.clientWidth }; })()`);
 			t.expect(starts.a > 100 && starts.a < starts.aMax - 100, `block A is not strictly mid-scroll: ${JSON.stringify(starts)}`);
 			t.expect(starts.b > 100 && Math.abs(starts.b - starts.bMax) <= 1, `block B is not at its far end: ${JSON.stringify(starts)}`);
+			// SC-490: the pinned hero column of one board, as the page shows it right now: the overflow mark, the name cell's
+			// `position`, and how far (px) the name cell lies from the frame's inner left edge.
+			const PIN = (expr) => `(() => { const b = ${expr}; if (!b) return null; const n = b.querySelector('.dse-mt__board-name'); if (!n) return null; const fr = b.getBoundingClientRect(); return { attr: b.getAttribute('data-overflow'), pos: getComputedStyle(n).position, off: Math.round((n.getBoundingClientRect().left - (fr.left + b.clientLeft)) * 10) / 10 }; })()`;
+			const pinBad = (p) => !p || p.attr !== 'on' || p.pos !== 'sticky' || Math.abs(p.off) > 0.5;
+			for (const [i, name] of [[0, 'A (mid-scroll)'], [1, 'B (far end)']]) {
+				const p = await t.ev(PIN(BOARD(i)));
+				t.expect(!pinBad(p), `block ${name}: the hero column is not pinned at the frame's left edge before any write: ${JSON.stringify(p)}`);
+			}
 			const act = async (label, clickExpr) => {
-				const r = await t.ev(`new Promise((resolve) => { const startA = ${BOARD(0)}.scrollLeft; const startB = ${BOARD(1)}.scrollLeft; const out = []; const t0 = performance.now(); const tick = () => { const a = ${BOARD(0)}; const b = ${BOARD(1)}; out.push([a ? Math.round(a.scrollLeft) : null, b ? Math.round(b.scrollLeft) : null]); if (performance.now() - t0 < 2500) requestAnimationFrame(tick); else resolve({ out, startA: Math.round(startA), startB: Math.round(startB) }); }; const el = ${clickExpr}; if (!el) { resolve({ error: 'no control to click' }); return; } el.click(); requestAnimationFrame(tick); })`);
+				const r = await t.ev(`new Promise((resolve) => { const startA = ${BOARD(0)}.scrollLeft; const startB = ${BOARD(1)}.scrollLeft; const out = []; const pins = []; const pinOf = (b) => { if (!b) return null; const n = b.querySelector('.dse-mt__board-name'); if (!n) return null; const fr = b.getBoundingClientRect(); return { attr: b.getAttribute('data-overflow'), pos: getComputedStyle(n).position, off: Math.round((n.getBoundingClientRect().left - (fr.left + b.clientLeft)) * 10) / 10 }; }; const t0 = performance.now(); const tick = () => { const a = ${BOARD(0)}; const b = ${BOARD(1)}; out.push([a ? Math.round(a.scrollLeft) : null, b ? Math.round(b.scrollLeft) : null]); pins.push([pinOf(a), pinOf(b)]); if (performance.now() - t0 < 2500) requestAnimationFrame(tick); else resolve({ out, pins, startA: Math.round(startA), startB: Math.round(startB) }); }; const el = ${clickExpr}; if (!el) { resolve({ error: 'no control to click' }); return; } el.click(); requestAnimationFrame(tick); })`);
 				t.expect(!r.error, `${label}: ${r.error}`);
 				for (const [k, name, start] of [[0, 'A', r.startA], [1, 'B', r.startB]]) {
 					const bad = r.out.filter((f) => f[k] === null || Math.abs(f[k] - start) > 1);
 					t.expect(bad.length === 0, `${label}: block ${name}'s scrollLeft moved after the write — start ${start}, ${bad.length}/${r.out.length} frames off (e.g. ${JSON.stringify(bad[0])})`);
+					const unpinned = r.pins.map((f, n) => [n, f[k]]).filter(([, p]) => pinBad(p));
+					t.expect(unpinned.length === 0, `${label}: block ${name}'s hero column was not pinned at the frame's left edge on ${unpinned.length}/${r.pins.length} frames after the write (e.g. frame ${unpinned[0]?.[0]}: ${JSON.stringify(unpinned[0]?.[1])})`);
 				}
-				return `${label}: A held ${r.startA}, B held ${r.startB} over ${r.out.length} frames`;
+				return `${label}: A held ${r.startA}, B held ${r.startB}, both hero columns pinned, over ${r.out.length} frames`;
 			};
 			const waitDisk = async (re, what) => {
 				const t0 = Date.now();
