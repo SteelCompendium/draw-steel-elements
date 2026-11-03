@@ -541,6 +541,15 @@ describe('SC-545 wiring: an off/on of the plugin with a card in a Live Preview c
 		expect(env.app.vault.getContent('Note.md')).toContain('current_value: 11');
 	});
 
+	test('a layout-ready run that rejects is logged, not left as an unhandled rejection (LOW-1)', async () => {
+		const log = jest.spyOn(console, 'error').mockImplementation(() => {});
+		jest.spyOn(ReplugRemounter.prototype, 'run').mockRejectedValue(new Error('boom'));
+		const env = makeEnv();
+		boot(env);
+		await jest.advanceTimersByTimeAsync(0);
+		expect(log).toHaveBeenCalledWith(expect.stringContaining('redrawing the cards after the plugin was turned on failed'), expect.any(Error));
+	});
+
 	test('ViewRegistry.onunload stashes the entries it is about to clear', async () => {
 		const registry = new ViewRegistry({ enabled: false });
 		registry.load();
