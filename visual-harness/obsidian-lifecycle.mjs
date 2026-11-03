@@ -5613,7 +5613,7 @@ const SCENARIOS = [
 			// the disk); 10 runs after it at 0.8-13.9: at most 4 frames / 83 ms (71 ms behind); 6 more at 0.5-18.2: 4 frames / 67 ms; quiet machine: 1 frame / 17 ms. 1000 ms
 			// is about eight times the worst of them, and still far below what an editor that never catches up would show.
 			const CATCH_UP_CAP_MS = 1000;
-			const staleStats = (rec) => ` [catching up: longest ${rec.catchUp.frames} frame(s) / ${rec.catchUp.ms} ms, document behind the disk up to ${rec.cuSinceMax} ms after the write; stale cards: catching up ${rec.k.cu}, document had the disk value ${rec.k.dd}, neither ${rec.k.x}; disk reads: torn ${rec.torn} frame(s) (read again), still torn ${rec.tornLeft}, failed ${rec.readErr}${rec.odd.length ? '; counted: ' + rec.odd.join(', ') : ''}]`;
+			const staleStats = (rec) => ` [catching up: longest ${rec.catchUp.frames} frame(s) / ${rec.catchUp.ms} ms, document behind the disk up to ${rec.cuSinceMax} ms after the write; stale cards: catching up ${rec.k.cu}, on a torn disk read ${rec.k.u}, document had the disk value ${rec.k.dd}, neither ${rec.k.x}; disk reads: torn in ${rec.torn} frame(s), failed in ${rec.readErr}${rec.odd.length ? '; counted: ' + rec.odd.join(', ') : ''}]`;
 			/** The problem the recorder found, or null. */
 			const wrongCards = (rec) => {
 				// The counted frames come first in the message: the first samples of the run are usually catching-up frames.
@@ -5685,13 +5685,15 @@ const SCENARIOS = [
 				 *    editor that never catches up still fails.
 				 *  - STALE (counted): the document already holds the disk value and the card differs, or the card matches neither the document nor the disk. A run of 3 such
 				 *    frames fails; a catching-up frame inside the run neither adds to it nor ends it, only a frame with no wrong card does.
-				 * A disk read that lands inside Obsidian's write holds fewer values than the document (torn): it is read again (up to 8 times, 1 ms apart; the write finishes on
-				 * another thread). A read that is still torn, or that throws, leaves the card judged against nothing: it is COUNTED (never exempt, so it can not lower the
-				 * count), and a read that throws fails the phase (the check would otherwise be silently off). Judging a torn frame against the last whole read instead would count
-				 * a card that is merely ahead of the document: measured, 2 such frames in a row under load.
+				 * A disk read can land inside Obsidian's write: the file is opened (emptied) and written only when the main thread gets to it, so under load it can hold fewer
+				 * values than the document for a frame or two, and reading it again in the same frame does not help (the write needs this thread). Such a TORN frame can not be
+				 * judged against the disk: it adds to a counted run that is already going (so a torn frame can not lower the count of a wrong card) and is otherwise judged
+				 * catching up (bounded by the cap like any other). Judging it against the last whole read instead counted a card that is merely ahead of the document (measured:
+				 * 2 such frames in a row under load). A read that THROWS leaves every stale card judged against nothing: they are counted, and the phase fails
+				 * (readErr), because the check would otherwise be silently off.
 				 */
 				P.recStart = (leaf) => {
-					const R = (P.rec = { frames: 0, pending: 0, stale: 0, hard: 0, run: 0, longest: 0, samples: [], stop: false, k: { cu: 0, dd: 0, x: 0 }, torn: 0, tornLeft: 0, readErr: 0, odd: [], cuRun: { n: 0, t0: 0, max: 0, maxMs: 0 }, cuSinceMax: 0 });
+					const R = (P.rec = { frames: 0, pending: 0, stale: 0, hard: 0, run: 0, longest: 0, samples: [], stop: false, k: { cu: 0, u: 0, dd: 0, x: 0 }, torn: 0, readErr: 0, odd: [], cuRun: { n: 0, t0: 0, max: 0, maxMs: 0 }, cuSinceMax: 0 });
 					const fs = (window.require ?? require)('fs');
 					const diskFile = app.vault.adapter.getFullPath(leaf.view.file.path);
 					const valuesOf = (text) => { const out = []; text.replace(/current_value: (\\d+)/g, (_, v) => out.push(Number(v))); return out; };
@@ -5702,21 +5704,18 @@ const SCENARIOS = [
 						const dv = valuesOf(cm.state.doc.toString());
 						let since = null;
 						let ref = null;
-						let failed = false;
-						for (let tries = 0; tries < 9 && ref === null; tries++) {
-							if (tries) for (const t1 = performance.now(); performance.now() - t1 < 1; ) { /* wait 1 ms */ }
-							try {
-								const read = valuesOf(fs.readFileSync(diskFile, 'utf8'));
-								since = Math.round(Date.now() - fs.statSync(diskFile).mtimeMs);
-								if (read.length === dv.length) ref = read;
-								else if (!tries) R.torn++;
-							} catch (e) {
-								R.readErr++;
-								failed = true;
-								break;
+						let torn = false;
+						try {
+							const read = valuesOf(fs.readFileSync(diskFile, 'utf8'));
+							since = Math.round(Date.now() - fs.statSync(diskFile).mtimeMs);
+							if (read.length === dv.length) ref = read;
+							else {
+								torn = true;
+								R.torn++;
 							}
+						} catch (e) {
+							R.readErr++;
 						}
-						if (ref === null && !failed) R.tornLeft++;
 						const live = reg.liveEntries();
 						const pend = [];
 						const stale = [];
@@ -5728,9 +5727,9 @@ const SCENARIOS = [
 								if (c.root.__gs61 !== undefined && P.clickBlock[c.root.__gs61] !== c.block) pend.push(c);
 							} else if (c.value !== dv[c.block]) {
 								stale.push(c);
-								const kind = ref === null ? 'x' : dv[c.block] !== ref[c.block] ? (c.value === ref[c.block] ? 'cu' : 'x') : 'dd';
+								const kind = torn ? (R.run > 0 ? 'x' : 'u') : ref === null ? 'x' : dv[c.block] !== ref[c.block] ? (c.value === ref[c.block] ? 'cu' : 'x') : 'dd';
 								R.k[kind]++;
-								if (kind === 'cu') {
+								if (kind === 'cu' || kind === 'u') {
 									if (since !== null) R.cuSinceMax = Math.max(R.cuSinceMax, since);
 								} else {
 									counted = true;
@@ -5758,7 +5757,7 @@ const SCENARIOS = [
 					};
 					requestAnimationFrame(tick);
 				};
-				P.recStop = () => { const R = P.rec; if (!R) return null; R.stop = true; return { frames: R.frames, pending: R.pending, stale: R.stale, counted: R.hard, longest: R.longest, samples: R.samples, k: R.k, torn: R.torn, tornLeft: R.tornLeft, readErr: R.readErr, odd: R.odd, catchUp: { frames: R.cuRun.max, ms: Math.round(R.cuRun.maxMs) }, cuSinceMax: R.cuSinceMax }; };
+				P.recStop = () => { const R = P.rec; if (!R) return null; R.stop = true; return { frames: R.frames, pending: R.pending, stale: R.stale, counted: R.hard, longest: R.longest, samples: R.samples, k: R.k, torn: R.torn, readErr: R.readErr, odd: R.odd, catchUp: { frames: R.cuRun.max, ms: Math.round(R.cuRun.maxMs) }, cuSinceMax: R.cuSinceMax }; };
 				return true;
 			})()`);
 			const A = 'window.__gs61.A';
