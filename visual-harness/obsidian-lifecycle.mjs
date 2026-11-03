@@ -5613,7 +5613,7 @@ const SCENARIOS = [
 			// the disk); 10 runs after it at 0.8-13.9: at most 4 frames / 83 ms (71 ms behind); 6 more at 0.5-18.2: 4 frames / 67 ms; quiet machine: 1 frame / 17 ms. 1000 ms
 			// is about eight times the worst of them, and still far below what an editor that never catches up would show.
 			const CATCH_UP_CAP_MS = 1000;
-			const staleStats = (rec) => ` [catching up: longest ${rec.catchUp.frames} frame(s) / ${rec.catchUp.ms} ms, document behind the disk up to ${rec.cuSinceMax} ms after the write; stale cards: catching up ${rec.k.cu}, on a torn disk read ${rec.k.u}, document had the disk value ${rec.k.dd}, neither ${rec.k.x}; disk reads: torn in ${rec.torn} frame(s), failed in ${rec.readErr}${rec.odd.length ? '; counted: ' + rec.odd.join(', ') : ''}]`;
+			const staleStats = (rec) => ` [catching up: longest ${rec.catchUp.frames} frame(s) / ${rec.catchUp.ms} ms, document behind the disk up to ${rec.cuSinceMax} ms after the write; stale cards: catching up ${rec.k.cu}, on a torn disk read ${rec.k.u}, document had the disk value ${rec.k.dd}, neither ${rec.k.x}; disk reads: torn in ${rec.torn} frame(s) (longest run ${rec.tornLongest}), failed in ${rec.readErr}${rec.odd.length ? '; counted: ' + rec.odd.join(', ') : ''}]`;
 			/** The problem the recorder found, or null. */
 			const wrongCards = (rec) => {
 				// The counted frames come first in the message: the first samples of the run are usually catching-up frames.
@@ -5621,6 +5621,7 @@ const SCENARIOS = [
 				// A recorder that cannot read the note cannot tell a card that is ahead from a card that is wrong: it fails the phase rather than judge without the disk.
 				if (rec.readErr > 0) return `the recorder could not read the note from disk in ${rec.readErr} frame(s), so its stale-frame check did not run (${seen})`;
 				if (rec.pending > 0 || rec.longest >= 3) return `wrong cards on screen - ${seen}`;
+				if (rec.tornLongest >= 3) return `the recorder's disk read was torn in ${rec.tornLongest} frames in a row, so its stale-frame check did not run (${seen})`;
 				if (rec.catchUp.ms > CATCH_UP_CAP_MS) return `the editor document did not catch up with the write within ${CATCH_UP_CAP_MS} ms: a card showed the note's new value for ${rec.catchUp.frames} frame(s) / ${rec.catchUp.ms} ms while the document still held the old one (${rec.samples.join(' | ')})`;
 				return null;
 			};
@@ -5690,10 +5691,11 @@ const SCENARIOS = [
 				 * judged against the disk: it adds to a counted run that is already going (so a torn frame can not lower the count of a wrong card) and is otherwise judged
 				 * catching up (bounded by the cap like any other). Judging it against the last whole read instead counted a card that is merely ahead of the document (measured:
 				 * 2 such frames in a row under load). A read that THROWS leaves every stale card judged against nothing: they are counted, and the phase fails
-				 * (readErr), because the check would otherwise be silently off.
+				 * (readErr), because the check would otherwise be silently off. Likewise a read that is torn in 3 frames in a row (green: at most 2) fails the phase:
+				 * every frame would be judged catching up and the check would be off.
 				 */
 				P.recStart = (leaf) => {
-					const R = (P.rec = { frames: 0, pending: 0, stale: 0, hard: 0, run: 0, longest: 0, samples: [], stop: false, k: { cu: 0, u: 0, dd: 0, x: 0 }, torn: 0, readErr: 0, odd: [], cuRun: { n: 0, t0: 0, max: 0, maxMs: 0 }, cuSinceMax: 0 });
+					const R = (P.rec = { frames: 0, pending: 0, stale: 0, hard: 0, run: 0, longest: 0, samples: [], stop: false, k: { cu: 0, u: 0, dd: 0, x: 0 }, torn: 0, tornRun: 0, tornLongest: 0, readErr: 0, odd: [], cuRun: { n: 0, t0: 0, max: 0, maxMs: 0 }, cuSinceMax: 0 });
 					const fs = (window.require ?? require)('fs');
 					const diskFile = app.vault.adapter.getFullPath(leaf.view.file.path);
 					const valuesOf = (text) => { const out = []; text.replace(/current_value: (\\d+)/g, (_, v) => out.push(Number(v))); return out; };
@@ -5716,6 +5718,8 @@ const SCENARIOS = [
 						} catch (e) {
 							R.readErr++;
 						}
+						R.tornRun = torn ? R.tornRun + 1 : 0;
+						R.tornLongest = Math.max(R.tornLongest, R.tornRun);
 						const live = reg.liveEntries();
 						const pend = [];
 						const stale = [];
@@ -5757,7 +5761,7 @@ const SCENARIOS = [
 					};
 					requestAnimationFrame(tick);
 				};
-				P.recStop = () => { const R = P.rec; if (!R) return null; R.stop = true; return { frames: R.frames, pending: R.pending, stale: R.stale, counted: R.hard, longest: R.longest, samples: R.samples, k: R.k, torn: R.torn, readErr: R.readErr, odd: R.odd, catchUp: { frames: R.cuRun.max, ms: Math.round(R.cuRun.maxMs) }, cuSinceMax: R.cuSinceMax }; };
+				P.recStop = () => { const R = P.rec; if (!R) return null; R.stop = true; return { frames: R.frames, pending: R.pending, stale: R.stale, counted: R.hard, longest: R.longest, samples: R.samples, k: R.k, torn: R.torn, tornLongest: R.tornLongest, readErr: R.readErr, odd: R.odd, catchUp: { frames: R.cuRun.max, ms: Math.round(R.cuRun.maxMs) }, cuSinceMax: R.cuSinceMax }; };
 				return true;
 			})()`);
 			const A = 'window.__gs61.A';
