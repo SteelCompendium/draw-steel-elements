@@ -4396,7 +4396,11 @@ const SCENARIOS = [
 					t.expect(await t.ev(`!!${G}.roots('counter')[0]?.closest('.internal-embed')`), '(b) set-up: the counter is not drawn in an embed');
 					await plusWrites('(b) before', src, 'counter', 0, [6]);
 					const o = await offOn('counter');
-					expectReplugged('(b) counter in an LP embed', o);
+					// Obsidian re-renders an embed's content at the toggle on some runs (measured: about two in three): the card is then replaced by the raw fence
+					// while the plugin is off, nothing redraws it after enable, and the stash has no element to draw into. That is the fallback's case (the note is
+					// rebuilt once); on the other runs the embed keeps its old card and the remount draws the new one. Either way: one card, owned, at most one rebuild.
+					expectReplugged('(b) counter in an LP embed', o, { allowRebuild: true });
+					if (o.rebuilds > 1) problems.push(`(b) the fallback ran ${o.rebuilds} times`);
 					await plusWrites('(b) after off/on', src, 'counter', 0, [7]);
 				});
 				// (c) twin callouts (identical text): one per block, each showing its own block, clicks 1, 0, 1.
