@@ -894,3 +894,102 @@ describe('SC-489: Save does not rewrite values the user did not change', () => {
 		modal.close();
 	});
 });
+
+// SC-552 -- the form pins its block when it opens (before any redraw can hand the host's element to an identical twin), Save writes
+// through that pin, and a pinned form outlives its view when the host names something that outlives it (Obsidian threw the view's
+// element away because a twin took its text); such a kept-open form's Save is strict: its pin or no write.
+describe('SC-552: the form pins its block', () => {
+	const PIN = { text: 'note text', lineStart: 3 };
+
+	function pinningCx(extra: Record<string, unknown> = {}) {
+		const replaceSource = jest.fn(async (_body: string, _options?: unknown) => true);
+		const cx = {
+			app: new App(),
+			host: {
+				mode: 'reading', sourcePath: 'N.md', containerEl: document.createElement('div'), canPersist: true,
+				addChild: <T,>(c: T) => c, getBlockInfo: () => null, blockKey: () => 'k', replaceSource, ...extra,
+			},
+			prefs: { descriptors: () => [] },
+		} as never;
+		return { cx, replaceSource };
+	}
+
+	test('pinPosition is read once, when the form is constructed, and Save passes that pin', async () => {
+		const pinPosition = jest.fn(() => PIN);
+		const { cx, replaceSource } = pinningCx({ pinPosition });
+		const modal = openFormEditor(fakeOwner(), cx, schemaDef(), 'name: Goblin', createValidationService());
+		expect(pinPosition).toHaveBeenCalledTimes(1);
+
+		await modal.save();
+		await modal.save();
+		expect(pinPosition).toHaveBeenCalledTimes(1);
+		expect(replaceSource).toHaveBeenCalledWith(expect.stringContaining('name: Goblin'), { pin: PIN });
+		modal.close();
+	});
+
+	test('a host with no pinPosition (the sidebar) is written as before: the body alone', async () => {
+		const { cx, replaceSource } = pinningCx();
+		const modal = openFormEditor(fakeOwner(), cx, schemaDef(), 'name: Goblin', createValidationService());
+		await modal.save();
+		expect(replaceSource.mock.calls[0]).toHaveLength(1);
+		modal.close();
+	});
+
+	test('a pinned form whose host names a holder stays open when its view unloads, and closes with the holder', () => {
+		const holder = new Component();
+		holder.load();
+		const { cx } = pinningCx({ pinPosition: () => PIN, keepFormOpenOn: () => holder });
+		const owner = fakeOwner();
+		const modal = openFormEditor(owner, cx, schemaDef(), 'name: Goblin', createValidationService());
+
+		owner.unload();
+		expect(document.body.contains(modal.containerEl)).toBe(true);
+		holder.unload();
+		expect(document.body.contains(modal.containerEl)).toBe(false);
+	});
+
+	test('closing a kept-open form lets go of the holder: nothing builds up on it across forms', () => {
+		const holder = new Component();
+		holder.load();
+		const { cx } = pinningCx({ pinPosition: () => PIN, keepFormOpenOn: () => holder });
+		for (let i = 0; i < 3; i++) {
+			const owner = fakeOwner();
+			const modal = openFormEditor(owner, cx, schemaDef(), 'name: Goblin', createValidationService());
+			owner.unload();
+			expect(holder._children).toHaveLength(1);
+			modal.close();
+			expect(holder._children).toHaveLength(0);
+		}
+	});
+
+	test('the form closes with its view when the host names no holder, or the form holds no pin', () => {
+		const holder = new Component();
+		holder.load();
+		const cases: Array<Record<string, unknown>> = [
+			{ pinPosition: () => PIN, keepFormOpenOn: () => null },
+			{ keepFormOpenOn: () => holder },
+			{ pinPosition: () => null, keepFormOpenOn: () => holder },
+		];
+		for (const extra of cases) {
+			const owner = fakeOwner();
+			const modal = openFormEditor(owner, pinningCx(extra).cx, schemaDef(), 'name: Goblin', createValidationService());
+			owner.unload();
+			expect(document.body.contains(modal.containerEl)).toBe(false);
+		}
+	});
+
+	test('a kept-open form saves strictly (its pin or no write); a form that was not kept open does not', async () => {
+		const holder = new Component();
+		holder.load();
+		const { cx, replaceSource } = pinningCx({ pinPosition: () => PIN, keepFormOpenOn: () => holder });
+		const owner = fakeOwner();
+		const modal = openFormEditor(owner, cx, schemaDef(), 'name: Goblin', createValidationService());
+		await modal.save();
+		expect(replaceSource).toHaveBeenLastCalledWith(expect.any(String), { pin: PIN });
+
+		owner.unload(); // kept open
+		await modal.save();
+		expect(replaceSource).toHaveBeenLastCalledWith(expect.any(String), { pin: PIN, pinOnly: true });
+		modal.close();
+	});
+});

@@ -15,7 +15,9 @@ import { ElementPipeline } from '../../../src/framework/pipeline';
 import { createElementRegistry } from '../../../src/framework/registry';
 import { counterElement } from '../../../src/elements/counter/definition';
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
-import { makeFakeContext } from '../../mocks/obsidian';
+import * as FormModal from '../../../src/authoring/FormModal';
+import { droppedWriteMessage, resetDroppedWriteNotices } from '../../../src/framework/host/droppedWriteNotice';
+import { Notice, makeFakeContext } from '../../mocks/obsidian';
 import { makeEnv } from './_adoptionEnv';
 import * as anchor from '../../../src/framework/sidebar/anchor';
 import { fenceOnElement, newPassMemo } from '../../../src/framework/host/ReadingModeBlockHost';
@@ -134,7 +136,7 @@ async function setup(note: string, viewAdoption = true, windowed: false | 'callo
 	}
 	const values = (): number[] => [...app.vault.getContent('Note.md')!.matchAll(/current_value: (\d+)/g)].map((m) => Number(m[1]));
 	const names = (): string[] => [...app.vault.getContent('Note.md')!.matchAll(/name: (\w+)/g)].map((m) => m[1]);
-	return { app, plugin, registry, container, build, paint, rebuild, increase, values, names, ctxAt, at };
+	return { app, plugin, registry, container, build, paint, rebuild, increase, values, names, ctxAt, at, deps };
 }
 
 describe('SC-481: identical twin blocks keep their own card, value and block', () => {
@@ -774,6 +776,19 @@ describe('SC-537: twin callouts in Live Preview (the editor-driven pass)', () =>
 	});
 });
 
+/** Obsidian's rebuild matches each new block to the first unused old element with the same text. */
+function planFor(before: number[], after: number[], old: Ctx[]): { plan: Slot[]; discarded: Ctx[] } {
+	const used = new Set<number>();
+	const plan: Slot[] = after.map((value) => {
+		const at = before.findIndex((b, i) => b === value && !used.has(i));
+		if (at < 0) return 'fresh';
+		used.add(at);
+		return { reuse: old[at] };
+	});
+	return { plan, discarded: old.filter((_, i) => !used.has(i)) };
+}
+const click = (el: HTMLElement): void => (el.querySelector(INC) as HTMLElement).click();
+
 // SC-544: two quick clicks on identical blocks. The second click comes before the first block's write, and that write's rebuild hands the
 // element of the block still waiting (the middle one) to the next twin, so its debounced write was placed through the wrong block.
 describe('SC-544: a second click before the first block\'s write', () => {
@@ -785,18 +800,6 @@ describe('SC-544: a second click before the first block\'s write', () => {
 	});
 
 	const triplet = (): string => noteOf(counter('Twin', 5), counter('Twin', 5), counter('Twin', 5));
-	/** Obsidian's rebuild matches each new block to the first unused old element with the same text. */
-	function planFor(before: number[], after: number[], old: Ctx[]): { plan: Slot[]; discarded: Ctx[] } {
-		const used = new Set<number>();
-		const plan: Slot[] = after.map((value) => {
-			const at = before.findIndex((b, i) => b === value && !used.has(i));
-			if (at < 0) return 'fresh';
-			used.add(at);
-			return { reuse: old[at] };
-		});
-		return { plan, discarded: old.filter((_, i) => !used.has(i)) };
-	}
-	const click = (el: HTMLElement): void => (el.querySelector(INC) as HTMLElement).click();
 
 	test('Reading view, three plain blocks: + upper, + middle 120 ms later: each click lands in its own block and every card shows its own block', async () => {
 		const t = await setup(triplet());
@@ -951,5 +954,131 @@ describe('SC-547: the pass cache changes no answer', () => {
 		expect(a.blocks).not.toBe(b.blocks);
 		expect(a.fences).not.toBe(b.fences);
 		expect(a.windowEnds).not.toBe(b.windowEnds);
+	});
+});
+
+// SC-552: the block edit form opened on one of several identical blocks. The pencil opens it at once (the clicked card has nothing
+// of its own pending), but the upper block's write (a click inside its debounce, or an outside edit) makes Obsidian hand the form's
+// element to the block below, and Save then followed the element. The form pins its block when it opens and Save writes through
+// the pin; a form whose view Obsidian threw away stays open and then saves strictly.
+describe('SC-552: a block edit form opened on one of several identical blocks', () => {
+	beforeEach(() => {
+		jest.useFakeTimers();
+		resetDroppedWriteNotices();
+		Notice.notices.length = 0;
+		jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => {
+		jest.useRealTimers();
+		document.body.replaceChildren();
+		jest.restoreAllMocks();
+	});
+
+	type Form = { save(): Promise<void>; body: HTMLElement; containerEl: HTMLElement; close(): void };
+	const twins = (count: number, upper = 5): string => noteOf(...Array.from({ length: count }, (_, i) => counter('Twin', i === 0 ? upper : 5)));
+
+	async function start(count: number) {
+		const t = await setup(twins(count));
+		await t.deps.prefs.set('authoringControls', true); // the Edit pencil
+		return { ...t, old: await t.paint(count) };
+	}
+	/** Press the real pencil of a card; hands back the real FormModal it opened. */
+	function openForm(card: HTMLElement): () => Form {
+		let opened: Form | undefined;
+		const real = jest.requireActual('../../../src/authoring/FormModal').openFormEditor;
+		jest.spyOn(FormModal, 'openFormEditor').mockImplementation((...a: unknown[]) => (opened = real(...a)));
+		card.querySelector<HTMLElement>('.dse-btn[aria-label^="Edit "]')!.click();
+		return () => opened!;
+	}
+	function rename(form: Form, to: string): void {
+		const box = form.body.querySelector<HTMLTextAreaElement>('textarea.dse-form__raw')!;
+		box.value = box.value.replace('Twin', to);
+		box.dispatchEvent(new Event('input'));
+	}
+	const isOpen = (form: Form): boolean => document.body.contains(form.containerEl);
+	const childCount = (component: object): number => (component as unknown as { _children: unknown[] })._children.length;
+
+	test.each([3, 4])('%i twins, + on the upper then the pencil of the second block: Save writes the second block, not the one its element is handed to', async (count) => {
+		const t = await start(count);
+		const same = Array<number>(count).fill(5);
+		click(t.old[0].el); // the upper's write waits out its debounce
+		const form = openForm(t.old[1].el);
+		rename(form(), 'Edited');
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS); // the upper's write lands...
+		const { plan, discarded } = planFor(same, t.values(), t.old);
+		await t.rebuild(plan, discarded); // ...and Obsidian puts the form's element on the next block down
+
+		await form().save();
+		expect(t.names()).toEqual(['Twin', 'Edited', ...Array<string>(count - 2).fill('Twin')]);
+		expect(t.values()).toEqual([6, ...Array<number>(count - 1).fill(5)]);
+		expect(isOpen(form())).toBe(false);
+	});
+
+	test('no click at all: an outside edit of the upper block while the form is open does not move the form\'s Save', async () => {
+		const t = await start(3);
+		const form = openForm(t.old[1].el);
+		rename(form(), 'Edited');
+		t.app.vault.setFile('Note.md', twins(3, 7)); // Sync, or a hand edit
+		const { plan, discarded } = planFor([5, 5, 5], t.values(), t.old);
+		await t.rebuild(plan, discarded);
+
+		await form().save();
+		expect(t.names()).toEqual(['Twin', 'Edited', 'Twin']);
+		expect(t.values()).toEqual([7, 5, 5]);
+	});
+
+	test('an outside edit that also inserts text above the blocks: the form still writes its own block', async () => {
+		const t = await start(3);
+		const form = openForm(t.old[1].el);
+		rename(form(), 'Edited');
+		t.app.vault.setFile('Note.md', twins(3, 7).replace('# N\n\n', '# N\n\nINSERTED\n\n'));
+		const { plan, discarded } = planFor([5, 5, 5], t.values(), t.old);
+		await t.rebuild(plan, discarded);
+
+		await form().save();
+		expect(t.names()).toEqual(['Twin', 'Edited', 'Twin']);
+		expect(t.app.vault.getContent('Note.md')).toContain('INSERTED');
+	});
+
+	/** Two twins: + on the upper, the pencil of the LOWER, the upper's write lands and Obsidian throws the lower's element away. */
+	async function lowerFormAfterTheUppersWrite() {
+		const t = await start(2);
+		const registryChildren = childCount(t.registry);
+		click(t.old[0].el);
+		const form = openForm(t.old[1].el);
+		rename(form(), 'Edited');
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const { plan, discarded } = planFor([5, 5], t.values(), t.old);
+		await t.rebuild(plan, discarded);
+		return { ...t, form, registryChildren };
+	}
+
+	test('two twins: the form on the lower one stays open when Obsidian throws its view away, and Save writes the lower block', async () => {
+		const t = await lowerFormAfterTheUppersWrite();
+		expect(isOpen(t.form())).toBe(true);
+
+		await t.form().save();
+		expect(t.names()).toEqual(['Twin', 'Edited']);
+		expect(t.values()).toEqual([6, 5]);
+		expect(isOpen(t.form())).toBe(false);
+		expect(childCount(t.registry)).toBe(t.registryChildren); // nothing was left on the registry
+	});
+
+	test('a form kept open saves strictly: its block is gone, so nothing is written (not into a twin), the Notice is shown and the form stays open', async () => {
+		const t = await lowerFormAfterTheUppersWrite();
+		const gone = noteOf(counter('Twin', 6)); // the form\'s block was deleted from outside
+		t.app.vault.setFile('Note.md', gone);
+
+		await t.form().save();
+		expect(t.app.vault.getContent('Note.md')).toBe(gone);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		expect(isOpen(t.form())).toBe(true);
+	});
+
+	test('a kept-open form closes when the plugin unloads', async () => {
+		const t = await lowerFormAfterTheUppersWrite();
+		expect(isOpen(t.form())).toBe(true);
+		t.registry.unload();
+		expect(isOpen(t.form())).toBe(false);
 	});
 });
