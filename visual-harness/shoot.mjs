@@ -1054,9 +1054,10 @@ async function assertMontageCoarseContainment(page) {
 //     assumed);
 //  7. every NON-pinned cell can be scrolled fully inside the frame AND to the right of the pinned
 //     column (the native scrollIntoView knows nothing of it), and its centre hit-tests to itself there;
-//  8. in the Tab walk, a stop in a non-pinned cell lands fully right of the pinned column, inside the
-//     frame, and not covered (the focused control's centre hit-tests to it); a stop in a pinned cell
-//     never scrolls the board;
+//  8. in the Tab walk, forward AND backward (Shift+Tab, the walk that brings a cell in from under the
+//     column), a stop in a non-pinned cell lands fully right of the pinned column, inside the frame, and
+//     not covered (the focused control's centre hit-tests to it); a stop in a pinned cell never scrolls
+//     the board;
 //  9. a board that FITS (the pane widened until it does) is not pinned (`data-overflow='off'`,
 //     `position` back to relative, translucent name-cell banding), and narrowing the pane pins it again
 //     with the cells at the frame's left edge (the measurement follows the pane, and the re-pin after a
@@ -1274,62 +1275,79 @@ async function assertMontageBoardScroll(page) {
 			}
 
 			// 5. a REAL Tab walk (review-1 MED-2): every focused control is fully inside the frame.
-			await probe.evaluate(() => {
-				const board = document.querySelector('.dse-mt__board');
-				board.scrollLeft = 0;
-				board.querySelector('.dse-mt__board-addhero').focus();
-			});
+			// SC-490: and clear of the pinned hero column, uncovered, in BOTH directions. A forward walk
+			// only ever lands a cell it is entering from the right; Shift+Tab is the walk that brings a
+			// cell in from UNDER the column (the native scroll aligns it with the frame's left edge, which
+			// is behind the pinned cells).
 			let tabStops = 0;
+			let backStops = 0;
 			let pinnedStops = 0;
+			let pinnedBackStops = 0;
 			const tabClipped = [];
-			for (let i = 0; i < 400; i++) {
-				const beforeLeft = await probe.evaluate(() => document.querySelector('.dse-mt__board').scrollLeft);
-				await probe.keyboard.press('Tab');
-				await probe.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-				const st = await probe.evaluate(() => {
+			for (const dir of ['Tab', 'Shift+Tab']) {
+				await probe.evaluate((d) => {
 					const board = document.querySelector('.dse-mt__board');
-					const a = document.activeElement;
-					if (!a || !board.contains(a)) return null;
-					const fr = board.getBoundingClientRect();
-					const l = fr.left + board.clientLeft;
-					const r = a.getBoundingClientRect();
-					const cell = a.closest('.dse-mt__board > *');
-					const pinned = cell.matches('.dse-mt__board-corner, .dse-mt__board-name');
-					const pinnedW = board.querySelector('.dse-mt__board-corner').getBoundingClientRect().width;
-					const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-					return {
-						name: `${(a.getAttribute('aria-label') || a.className).toString().slice(0, 60)}${cell && cell.getAttribute('data-hero') ? ` in ${cell.getAttribute('data-hero')} r${cell.getAttribute('data-round')}` : ''}`,
-						pinned,
-						pinnedW,
-						outL: l - r.left,
-						// how far the control's left edge lies inside the pinned column (0 or less: clear of it)
-						underPinned: l + pinnedW - r.left,
-						outR: r.right - (l + board.clientWidth),
-						visible: Math.max(0, Math.min(r.right, l + board.clientWidth) - Math.max(r.left, l)),
-						width: r.width,
-						covered: !hit || !a.contains(hit),
-						coveredBy: hit ? `${hit.tagName}${hit.className ? `.${String(hit.className).split(' ')[0]}` : ''}` : 'nothing',
-						afterLeft: board.scrollLeft,
-					};
-				});
-				if (!st) break; // focus left the board
-				tabStops++;
-				if (st.pinned) {
-					pinnedStops++;
-					if (Math.abs(st.afterLeft - beforeLeft) > 0.5) {
-						tabClipped.push(`${st.name}: a Tab stop in a PINNED cell moved the board (${beforeLeft.toFixed(1)}px -> ${st.afterLeft.toFixed(1)}px) — it is always on screen, so it must not`);
+					if (d === 'Tab') {
+						board.scrollLeft = 0;
+						board.querySelector('.dse-mt__board-addhero').focus();
+					} else {
+						board.scrollLeft = board.scrollWidth;
+						const all = [...board.querySelectorAll('button:not([disabled]), [tabindex="0"]')];
+						all[all.length - 1].focus();
 					}
-					continue;
+				}, dir);
+				for (let i = 0; i < 400; i++) {
+					const beforeLeft = await probe.evaluate(() => document.querySelector('.dse-mt__board').scrollLeft);
+					await probe.keyboard.press(dir);
+					await probe.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+					const st = await probe.evaluate(() => {
+						const board = document.querySelector('.dse-mt__board');
+						const a = document.activeElement;
+						if (!a || !board.contains(a)) return null;
+						const fr = board.getBoundingClientRect();
+						const l = fr.left + board.clientLeft;
+						const r = a.getBoundingClientRect();
+						const cell = a.closest('.dse-mt__board > *');
+						const pinned = cell.matches('.dse-mt__board-corner, .dse-mt__board-name');
+						const pinnedW = board.querySelector('.dse-mt__board-corner').getBoundingClientRect().width;
+						const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+						return {
+							name: `${(a.getAttribute('aria-label') || a.className).toString().slice(0, 60)}${cell && cell.getAttribute('data-hero') ? ` in ${cell.getAttribute('data-hero')} r${cell.getAttribute('data-round')}` : ''}`,
+							pinned,
+							pinnedW,
+							outL: l - r.left,
+							// how far the control's left edge lies inside the pinned column (0 or less: clear of it)
+							underPinned: l + pinnedW - r.left,
+							outR: r.right - (l + board.clientWidth),
+							visible: Math.max(0, Math.min(r.right, l + board.clientWidth) - Math.max(r.left, l)),
+							width: r.width,
+							covered: !hit || !a.contains(hit),
+							coveredBy: hit ? `${hit.tagName}${hit.className ? `.${String(hit.className).split(' ')[0]}` : ''}` : 'nothing',
+							afterLeft: board.scrollLeft,
+						};
+					});
+					if (!st) break; // focus left the board
+					if (dir === 'Tab') tabStops++;
+					else backStops++;
+					const where = `${dir}: ${st.name}`;
+					if (st.pinned) {
+						if (dir === 'Tab') pinnedStops++;
+						else pinnedBackStops++;
+						if (Math.abs(st.afterLeft - beforeLeft) > 0.5) {
+							tabClipped.push(`${where}: a stop in a PINNED cell moved the board (${beforeLeft.toFixed(1)}px -> ${st.afterLeft.toFixed(1)}px) — it is always on screen, so it must not`);
+						}
+						continue;
+					}
+					if (st.outL > 0.5 || st.outR > 0.5) tabClipped.push(`${where}: ${st.visible.toFixed(0)}px of ${st.width.toFixed(0)}px visible`);
+					else if (st.underPinned > 0.5) tabClipped.push(`${where}: ${st.underPinned.toFixed(1)}px of its left edge lies under the ${st.pinnedW.toFixed(1)}px pinned hero column`);
+					else if (st.covered) tabClipped.push(`${where}: its centre hit-tests to ${st.coveredBy}, not to the control — something is painted over it`);
 				}
-				if (st.outL > 0.5 || st.outR > 0.5) tabClipped.push(`${st.name}: ${st.visible.toFixed(0)}px of ${st.width.toFixed(0)}px visible`);
-				else if (st.underPinned > 0.5) tabClipped.push(`${st.name}: ${st.underPinned.toFixed(1)}px of its left edge lies under the ${st.pinnedW.toFixed(1)}px pinned hero column`);
-				else if (st.covered) tabClipped.push(`${st.name}: its centre hit-tests to ${st.coveredBy}, not to the control — something is painted over it`);
 			}
-			if (tabStops < 20) {
-				problems.push(`the Tab walk made only ${tabStops} stops inside the board (expected one per control, dozens) — focus left the board early or never entered it`);
+			if (tabStops < 20 || backStops < 20) {
+				problems.push(`the Tab walks made only ${tabStops} (Tab) / ${backStops} (Shift+Tab) stops inside the board (expected one per control, dozens) — focus left the board early or never entered it`);
 			}
-			if (pinnedStops < heroCount) {
-				problems.push(`the Tab walk reached ${pinnedStops} controls in pinned cells, expected ${heroCount} (one row action per hero; the walk starts ON the corner's add button)`);
+			if (pinnedStops < heroCount || pinnedBackStops < heroCount) {
+				problems.push(`the Tab walks reached ${pinnedStops} (Tab) / ${pinnedBackStops} (Shift+Tab) controls in pinned cells, expected at least ${heroCount} each (one row action per hero)`);
 			}
 			for (const c of tabClipped) problems.push(`TAB FOCUS NOT FULLY VISIBLE — ${c}`);
 
@@ -1390,8 +1408,8 @@ async function assertMontageBoardScroll(page) {
 			}
 			results.push(
 				`${pointer}: ${geo.scrollWidth}px grid in a ${geo.clientWidth}px frame, ${cells.measured} cells reachable, ` +
-					`${1 + heroCount} pinned cells at the frame's left edge at rest/mid/full scroll, ${tabStops} Tab stops ` +
-					`(${pinnedStops} in pinned cells, the rest fully visible right of the pinned column)`,
+					`${1 + heroCount} pinned cells at the frame's left edge at rest/mid/full scroll, ${tabStops} Tab + ${backStops} Shift+Tab stops ` +
+					`(${pinnedStops} + ${pinnedBackStops} in pinned cells, the rest fully visible right of the pinned column and uncovered)`,
 			);
 		} finally {
 			await context.close();
