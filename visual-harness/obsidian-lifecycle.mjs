@@ -4616,7 +4616,7 @@ const SCENARIOS = [
 		// in-app outside edit of block 0 · (i) the same on disk (Reading view plain) · (k) an outside edit that also inserts text above · (l) a kept-open form closes when
 		// the plugin is disabled · (m) control: the form after the click's write has landed · (n) SC-549: + on block 1 held, an in-app outside edit of block 0, fire ·
 		// (o) SC-549 LP: + on block 1 held, 'Z' typed into block 0's title, fire · (p) K-strict: a kept-open form whose block was deleted writes nothing and says why ·
-		// (q) a kept-open form on the unterminated trailing fence saves into that block. Before the fix, (a)-(k) FAIL and (g) (p) (q) cannot even keep the form open.
+		// (q) a kept-open form on the unterminated trailing fence (its section redrawn by blank lines added at the end of the note) saves into that block · (r) the note navigated away in its pane, (s) its pane closed, with a pinned form open: the form closes with its view and nothing is written (a form is kept open only while its note is still shown). Before the fix, (a)-(k) FAIL and (g) (p) (q) cannot even keep the form open.
 		id: 'G-S64',
 		async run(t) {
 			const m = await t.mark();
@@ -4927,25 +4927,57 @@ const SCENARIOS = [
 					await cleanupForm();
 				}
 			};
-			/** (q) a kept-open form on the unterminated trailing fence: the pin places the write there (a strict Save). */
+			/**
+			 * (q) a kept-open form on the unterminated trailing fence: an outside edit adds blank lines at the end of the note, so Obsidian draws that section again
+			 * (its text changed) and throws the old element away while the note is still shown; the pin places the write in the trailing block (a strict Save).
+			 */
 			const unterminatedCase = async (label) => {
 				const mk = await t.mark();
 				try {
 					await open(UT, 'rv');
+					const before = t.read(UT);
 					await pressPencil(label, A, 1);
 					await t.waitFor(`!!document.querySelector('.modal-container .dse-modal .dse-form__preview')`, `${label}: the edit form opened`);
-					// the note leaves the screen: the card's section is gone, the form (pinned) stays
-					await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); })()`);
-					await t.waitFor(`window.__gs64.slot.form.released === true`, `${label}: the card's view was released`, 10000);
-					t.expect(await formOpen(), `${label}: the form closed when its card went away`);
+					await t.edit(UT, J(before + '\n\n'));
+					await t.waitFor(`window.__gs64.slot.form.released === true`, `${label}: the card's view was thrown away by the redraw`, 10000);
+					t.expect(await formOpen(), `${label}: the form closed when its card was redrawn`);
 					await typeRename(label, 'Twin', 'Edited');
 					await clickSave(label);
 					const fix = FIXTURES[UT];
-					const at = fix.lastIndexOf('name: Twin');
-					const want = (fix.slice(0, at) + 'name: Edited' + fix.slice(at + 'name: Twin'.length)).replace(/\n$/, '\n```\n');
-					// (the raw box of an unterminated block carries the source's trailing newline, so the written block can end with one blank line: SC-477's territory, not this ticket's)
-					await waitDisk(label, UT, () => t.read(UT).replace(/\n\n```\n$/, '\n```\n') === want, 'the note does not hold the edit in the trailing block (and only there)');
-					outcomes.push(`${label}: the unterminated block got the edit, the closed twin untouched, the final newline kept`);
+					const at = fix.lastIndexOf('```ds-counter');
+					await waitDisk(label, UT, () => t.read(UT).includes('name: Edited'), 'the edit never reached the note');
+					const now = t.read(UT);
+					// (the raw box of an unterminated block carries the source's trailing newline, so the written block can end with one blank line - the same on the base build, not this ticket's)
+					t.expect(now.startsWith(fix.slice(0, at)) && /^```ds-counter\nname: Edited\ncurrent_value: 5\nmax_value: 20\nmin_value: 0\n\n?```\n+$/.test(now.slice(at)), `${label}: the note is not the closed twin untouched + the edited trailing block: ${J(now)}`);
+					outcomes.push(`${label}: the trailing block got the edit, the closed twin untouched`);
+					await noNotices(label, mk);
+				} catch (e) {
+					problems.push(`${label}: ${e.message}`);
+				} finally {
+					await cleanupForm();
+				}
+			};
+			/** (r) the note leaves the screen with a pinned form open - navigated away in its pane, or its pane closed (a second pane): the form closes with its view, nothing is written. */
+			const leaveCase = async (label, how) => {
+				const mk = await t.mark();
+				try {
+					await open(C3, 'rv');
+					const before = t.read(C3);
+					if (how === 'close') {
+						await openB(C3, 'rv');
+						await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); })()`);
+						await t.waitFor(`(${A}).view?.file?.path === 'Lifecycle/other.md'`, `${label}: pane A left the note`);
+					}
+					const leaf = how === 'close' ? B : A;
+					await pressPencil(label, leaf, 1);
+					await t.waitFor(`!!document.querySelector('.modal-container .dse-modal .dse-form__preview')`, `${label}: the edit form opened`);
+					await typeRename(label, 'Twin', 'Edited');
+					if (how === 'close') await t.ev(`(${leaf}).detach()`);
+					else await t.ev(`(async () => { await (${leaf}).setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); })()`);
+					await t.waitFor(`window.__gs64.slot.form.released === true`, `${label}: the card's view was released`, 10000);
+					await t.waitFor(`!document.querySelector('.modal-container .dse-modal')`, `${label}: the form closed with its view (the note is no longer shown)`, 5000);
+					t.expect(t.read(C3) === before, `${label}: the note changed: ${J(t.read(C3))}`);
+					outcomes.push(`${label}: the form closed with its view, the note unchanged`);
 					await noNotices(label, mk);
 				} catch (e) {
 					problems.push(`${label}: ${e.message}`);
@@ -4973,7 +5005,9 @@ const SCENARIOS = [
 				await wideCase('(n) SC-549: + on block 1 held, an outside edit of block 0, then the write', { mode: 'lp', how: 'inapp', want: [7, 6, 5] });
 				await wideCase('(o) SC-549: + on block 1 held, a character typed in block 0\'s title, then the write', { mode: 'lp', how: 'type', want: [5, 6, 5], allowNotice: /merg/i });
 				await keptCase('(p) K-strict: the kept-open form\'s block was deleted, Save writes nothing', 'strict', P2);
-				await unterminatedCase('(q) a kept-open form on the unterminated trailing fence saves into that block');
+				await unterminatedCase('(q) a kept-open form on the unterminated trailing fence (its section redrawn) saves into that block');
+				await leaveCase('(r) the note navigated away in its pane: the form closes with its view', 'navigate');
+				await leaveCase('(s) the pane closed: the form closes with its view', 'close');
 			} finally {
 				await t.ev(`${prefs}.set('authoringControls', false)`);
 				await t.ev(`document.getElementById('lc-gs64-notice')?.remove()`);
