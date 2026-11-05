@@ -80,7 +80,7 @@
 // when B is written (in-app, on disk, from another pane, and the embed's own write with adoption off), and the text on screen of a host parked
 // BELOW the embed does not move when the write changes the embed's height (phase (e): adding a hero), nor does the text of a reader parked
 // INSIDE a tall embed below its tracker (phase (f): adding a hero).
-// SC-520 appends G-S49 (42 scenarios in all with SC-479's G-S42 and SC-518's G-S50): the same real-mouse clicks on the chrome panel when the block is the FIRST thing inside a
+// SC-520 appends G-S49 (52 scenarios in all with the others listed above): the same real-mouse clicks on the chrome panel when the block is the FIRST thing inside a
 // `> [!note]` callout (the panel then hangs over the callout's title row, where Obsidian's `.callout-content` clip cut it off and the
 // click landed on `div.callout-title`), in Live Preview and Reading view. Stamina bar, foldable stamina bar, counter, feature, statblock,
 // and a block with text above it in the callout (control). The pencil opens only the edit form, Collapse collapses, the callout neither
