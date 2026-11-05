@@ -821,3 +821,83 @@ describe('state-only kind sections for the button host-leak sweep (SC-527)', () 
 		});
 	});
 });
+
+// SC-526 — the button host-leak sweep opens the Recoveries popover by a real click on the gallery hero's marker
+// row (pref `staminaRecoveryPopover`), LAST, and names its two kinds. `shoot.mjs` cannot be imported under jest,
+// so its own text is read (the SC-527 convention) and its click target is checked against the REAL fixtures.
+describe('Recoveries popover mount for the button host-leak sweep (SC-526)', () => {
+	const shootMjs = fs.readFileSync(path.join(__dirname, '../../../visual-harness/shoot.mjs'), 'utf8');
+	const SC526_EXPECT: string[] = new Function(`return ${shootMjs.match(/\nconst SC526_EXPECT = ([\s\S]*?);\n/)![1]}`)();
+	const tagButtons = new Function(`${shootMjs.match(/\nfunction tagButtons\(opts\) \{[\s\S]*?\n\}\n/)![0]}; return tagButtons;`)() as () => string[];
+	/** The click target `openRecoveriesPopoverForSweep` uses, read out of its source. */
+	const PIPS = shootMjs.match(/async function openRecoveriesPopoverForSweep[\s\S]*?const sel = '([^']+)'/)![1];
+	const gallery: Parameters<typeof mountFromParams>[1] = { fixture: 'default', theme: 'steel', bg: 'dark', print: false, readonly: false, gallery: true, galleryIds: ['hero'] };
+	let mount: HTMLDivElement;
+
+	beforeEach(() => {
+		mount = document.createElement('div');
+		mount.id = 'mount';
+		document.body.appendChild(mount);
+	});
+
+	afterEach(() => {
+		mount.remove();
+	});
+
+	test('only the button sweep turns the pref and the popover mount on, and the mount is the last click of the shared helper', () => {
+		expect(shootMjs.match(/staminaRecoveryPopover:true/g)).toHaveLength(1);
+		expect(shootMjs.match(/mountClickRevealedForSweep\(page, bg, [\w.]+, \{ recoveriesPopover: true \}\)/g)).toHaveLength(1); // one call site
+		const btn = shootMjs.slice(shootMjs.indexOf('async function assertBtnHostLeak('));
+		expect(btn.indexOf("prefs: 'authoringControls:true,staminaRecoveryPopover:true'")).toBeGreaterThan(-1);
+		expect(btn.indexOf('mountClickRevealedForSweep(page, bg, acc.problems, { recoveriesPopover: true })')).toBeGreaterThan(btn.indexOf('reachStateKindsForSweep(page'));
+		expect(btn.indexOf('assertSc526Tagged(keys')).toBeGreaterThan(btn.indexOf('page.evaluate(tagButtons)'));
+		const helper = shootMjs.slice(shootMjs.indexOf('async function mountClickRevealedForSweep('), shootMjs.indexOf('const SC526_EXPECT'));
+		const popover = helper.indexOf('openRecoveriesPopoverForSweep(page');
+		expect(popover).toBeGreaterThan(helper.lastIndexOf('.click()')); // after the last click of A, B, C
+		expect(popover).toBeGreaterThan(helper.lastIndexOf('header.first().click()'));
+		expect(helper.indexOf('page.mouse.move(0, 0)')).toBeGreaterThan(popover); // a move, not a click
+	});
+
+	test('the gallery hero has exactly one marker row at the sweep\'s selector; with the pref a click opens a popover with its three buttons, without it none', async () => {
+		await mountFromParams(document, { ...gallery });
+		expect(mount.querySelectorAll(PIPS)).toHaveLength(1);
+		mount.querySelector<HTMLElement>(PIPS)!.click();
+		await new Promise((r) => setTimeout(r, 0));
+		expect(mount.querySelectorAll('.dse-stamina-rec__pop')).toHaveLength(0);
+		mount.replaceChildren();
+		const { errors } = await mountFromParams(document, { ...gallery, prefs: { staminaRecoveryPopover: 'true' } });
+		expect(errors).toEqual([]);
+		expect(mount.querySelectorAll('.dse-stamina-rec__pop')).toHaveLength(0);
+		mount.querySelector<HTMLElement>(PIPS)!.click();
+		await new Promise((r) => setTimeout(r, 0));
+		const pop = mount.querySelectorAll('.dse-stamina-rec__pop');
+		expect(pop).toHaveLength(1);
+		expect(pop[0].querySelectorAll('button')).toHaveLength(3);
+	});
+
+	test('the open popover adds exactly the two expected kinds to the sweep\'s kind keys', async () => {
+		expect(SC526_EXPECT).toEqual(['hero|dse-stamina-rec__pop-btn', 'hero|dse-stamina-rec__pop-cb']);
+		await mountFromParams(document, { ...gallery, prefs: { staminaRecoveryPopover: 'true' } });
+		const before = tagButtons();
+		expect(before.filter((k) => k.includes('dse-stamina-rec__pop'))).toEqual([]);
+		mount.querySelector<HTMLElement>(PIPS)!.click();
+		await new Promise((r) => setTimeout(r, 0));
+		const added = tagButtons().filter((k) => !before.includes(k));
+		expect(added.sort()).toEqual([...SC526_EXPECT].sort());
+	});
+
+	test('assertSc526Tagged names every popover kind that is missing and nothing when both are tagged', () => {
+		const assertSc526Tagged = new Function('SC526_EXPECT', `${shootMjs.match(/\nfunction assertSc526Tagged\(keys, bg, problems\) \{[\s\S]*?\n\}\n/)![0]}; return assertSc526Tagged;`)(SC526_EXPECT) as (
+			keys: string[],
+			bg: string,
+			problems: string[],
+		) => void;
+		const none: string[] = [];
+		assertSc526Tagged([], 'dark', none);
+		expect(none).toHaveLength(2);
+		for (const key of SC526_EXPECT) expect(none.some((p) => p.startsWith('dark: ') && p.includes(`\`${key}\``))).toBe(true);
+		const all: string[] = [];
+		assertSc526Tagged(SC526_EXPECT, 'dark', all);
+		expect(all).toEqual([]);
+	});
+});

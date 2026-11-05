@@ -2894,7 +2894,9 @@ async function assertBtnHostLeak(page) {
 			gallery: '1',
 			theme: 'steel',
 			bg,
-			prefs: 'authoringControls:true',
+			// SC-526 - `staminaRecoveryPopover` so the hero's Recoveries markers open the popover (mounted last in
+			// `mountClickRevealedForSweep`). Button sweep only: the popover holds no input or checkbox.
+			prefs: 'authoringControls:true,staminaRecoveryPopover:true',
 			sheet: '1',
 			// SC-512 - a SECOND roll strip, appended after every gallery section, whose modifier is
 			// changed below so its Reset is enabled. This sweep only: no capture URL sends it.
@@ -2917,7 +2919,8 @@ async function assertBtnHostLeak(page) {
 		// SC-527 - and put the state-only kinds into their state by real clicks (see `reachStateKindsForSweep`).
 		await reachStateKindsForSweep(page, bg, acc.problems);
 		// SC-513 - and mount every click-created control by a real click (see `mountClickRevealedForSweep`).
-		await mountClickRevealedForSweep(page, bg, acc.problems);
+		// SC-526 - its last click opens the Recoveries popover (button sweep only), so nothing may click after it.
+		await mountClickRevealedForSweep(page, bg, acc.problems, { recoveriesPopover: true });
 		const keys = await page.evaluate(tagButtons);
 		if (keys.length < 20) {
 			acc.problems.push(`${bg}: only ${keys.length} buttons found in the gallery — the sweep is blind`);
@@ -2933,6 +2936,7 @@ async function assertBtnHostLeak(page) {
 		assertSc513Tagged(keys, 'button', bg, acc.problems);
 		assertSc527Tagged(keys, bg, acc.problems);
 		assertSc530Tagged(keys, bg, acc.problems);
+		assertSc526Tagged(keys, bg, acc.problems);
 		kindCount = keys.length;
 		await sweepTaggedButtons(page, bg, keys.length, acc);
 	}
@@ -3100,13 +3104,12 @@ async function changeExtraRollModifierForSweep(page, bg, problems) {
  *  Every mount asserts it produced what it should (a named problem, never a skip), and
  *  `assertSc513Tagged` then names every expected kind the sweep failed to tag.
  *
- *  NOT mounted, on purpose: D, the Recoveries ALT popover (`.dse-stamina-rec__pips` click with the
- *  `staminaRecoveryPopover` pref). Its `.dse-stamina-rec__pop-btn` / `__pop-cb` are plain `<button>`s outside
- *  the SC-203 re-grounding family and leak Obsidian's host button CSS (measured: height 17.98 -> 30px,
- *  plate box-shadow, colour, font), so mounting it turns this sweep red until the product CSS is fixed.
- *  That is SC-526, which also turns on the D mount and the pref here. This is an open gap, NOT an
- *  exemption: do not "complete" the mount with a skip-list entry - fix the CSS. State-only kinds (pressed
- *  toggles, enabled Complete Argument, disabled-after-Respite) are SC-527. */
+ *  D. The Recoveries ALT popover is mounted by SC-526 at the END of `mountClickRevealedForSweep`, for the button
+ *  sweep only (`{ recoveriesPopover: true }`; its URL carries the `staminaRecoveryPopover` pref): a real click
+ *  on the gallery hero's `.dse-stamina-rec__pips`, LAST because the popover closes on any later click outside
+ *  it. Its `.dse-stamina-rec__pop-btn` / `__pop-cb` leaked Obsidian's host button CSS until SC-526 re-grounded
+ *  them in the SC-203 family (styles-source.css, block G); there is no exemption or skip-list entry for them.
+ *  State-only kinds (pressed toggles, enabled Complete Argument, disabled-after-Respite) are SC-527. */
 const SC513_EXTRA = ['feature', 'featureblock', 'statblock', 'hero:probe-inline-abilities'];
 const SC513_PREFS = ['rollingEnabled:true'];
 
@@ -3196,7 +3199,7 @@ async function expandHeroAbilityBodiesForSweep(page, bg, problems) {
 /** SC-513 - mount every click-created control (A, B, C above) by a real click. Call after
  *  `openRollModifiersForSweep` on EVERY sweep load that tags buttons / inputs / checkboxes; never from a
  *  capture. The sweep's URL must carry `withSc513Mounts` and the SC-512 `galleryExtra=roll` section. */
-async function mountClickRevealedForSweep(page, bg, problems) {
+async function mountClickRevealedForSweep(page, bg, problems, { recoveriesPopover = false } = {}) {
 	const sec = (id) => `[data-dse-harness-extra="${id}"]`;
 	// Pin the dice (the same `Math.random = () => 0.5` the captures' `fixedDice` applies after load, here in
 	// the sweep's own load only), so the result cards read the same tier every run.
@@ -3259,8 +3262,50 @@ async function mountClickRevealedForSweep(page, bg, problems) {
 		() => [...document.querySelectorAll('.dse-rollbar__panel')].filter((p) => p.hasAttribute('hidden') || p.getClientRects().length === 0).length,
 	);
 	if (hidden) problems.push(`${bg}: ${hidden} roll strip Modifiers panel(s) still hidden after the SC-513 mounts — their steppers, checkboxes and Reset would be swept with no box`);
+	// D. (SC-526, button sweep only) the Recoveries popover: a real click on the gallery hero's marker row. It
+	//    MUST be the last click here and in the caller: the popover closes on any later click outside it.
+	if (recoveriesPopover) await openRecoveriesPopoverForSweep(page, bg, problems);
 	// The clicks leave the pointer over a control; park it away so no sweep sample inherits :hover.
 	await page.mouse.move(0, 0);
+}
+
+/** SC-526 - kind keys the Recoveries popover must add to the button sweep, in `tagButtons` spelling: the
+ *  - / + steppers (`__pop-btn`) and Catch breath (`__pop-cb`). */
+const SC526_EXPECT = ['hero|dse-stamina-rec__pop-btn', 'hero|dse-stamina-rec__pop-cb'];
+
+/** SC-526 - name every expected popover kind the button sweep did not tag. */
+function assertSc526Tagged(keys, bg, problems) {
+	for (const want of SC526_EXPECT) {
+		if (!keys.includes(want)) {
+			problems.push(`${bg}: the sweep tagged no \`${want}\` button — the Recoveries popover (SC-526) would go unchecked`);
+		}
+	}
+}
+
+/** SC-526 - open the Recoveries popover by a REAL click on the gallery hero's marker row (the pref
+ *  `staminaRecoveryPopover` is in the button sweep's URL) and assert it holds its three visible buttons
+ *  (-, +, Catch breath). Scoped to the gallery's own hero (an appended hero section is
+ *  `[data-dse-harness-extra]`). A named problem, never a skip. Call it LAST (see `mountClickRevealedForSweep`). */
+async function openRecoveriesPopoverForSweep(page, bg, problems) {
+	const sel = '.dse-harness-section:not([data-dse-harness-extra]) [data-dse-element="hero"] .dse-stamina-rec__pips';
+	const pips = page.locator(sel);
+	const n = await pips.count();
+	if (n !== 1) {
+		problems.push(`${bg}: expected one Recoveries marker row at \`${sel}\`, found ${n} — its popover cannot be mounted`);
+		return;
+	}
+	await pips.click();
+	await sc513WaitFor(
+		page,
+		bg,
+		problems,
+		() => {
+			const p = document.querySelectorAll('.dse-stamina-rec__pop');
+			return p.length === 1 && [...p[0].querySelectorAll('button')].filter((b) => b.getClientRects().length > 0).length === 3;
+		},
+		null,
+		'clicking the hero Recoveries markers (staminaRecoveryPopover on) opened no popover holding its three visible buttons (SC-526)',
+	);
 }
 
 /** SC-527 - control kinds that EXIST in the gallery at load but reach a given STATE only after a click
@@ -3287,9 +3332,8 @@ async function mountClickRevealedForSweep(page, bg, problems) {
  *  below is its own kind, and a seal on a vertical track (`|in:track--vertical`) is apart from a horizontal
  *  one (`SC530_EXPECT`).
  *
- *  Runs BEFORE `mountClickRevealedForSweep` on purpose: SC-526 will add the Recoveries popover to the end of
- *  that helper, and the popover closes on any later document click, so it must stay the last click. Keep this
- *  block self-contained (one call site per sweep) so SC-526 rebases cleanly.
+ *  Runs BEFORE `mountClickRevealedForSweep` on purpose: SC-526 adds the Recoveries popover to the end of
+ *  that helper, and the popover closes on any later document click, so it must stay the last click.
  *  `beyondTicket` marks states the SC-527 r1 survey found beyond the ticket's list (owner ruled: fold, SC-527 r1). */
 const SC527_EXTRA = ['initiative', 'negotiation', 'negotiation', 'montage', 'montage', 'hero'];
 const SC527_STATES = [
