@@ -301,14 +301,6 @@ export function mountChrome<M>(opts: MountChromeOptions<M>, owner: Component): C
 	anchor.addClass('dse-chrome-anchor');
 	if (isChromeMobile()) root.setAttribute('data-dse-chrome-mobile', 'on');
 
-	// SC-520: in Live Preview a block inside a `> [!note]` callout is drawn in Obsidian's callout widget, and that widget's own
-	// `click` handler (bubble phase; it honours defaultPrevented) moves the editor cursor into the callout: the callout turns into
-	// its source and the block is gone, whichever chrome button was pressed. The element click shield (pipeline.ts armClickShield)
-	// only covers pointerdown/mousedown, which is all Obsidian's code-block widgets listen to. A chrome button's own handler runs
-	// first (it is the target), so cancelling the click's default here costs it nothing; the click still bubbles on, so
-	// document-level listeners (the Recoveries popover's click-outside close) are untouched.
-	const keepClickOutOfObsidian = (evt: MouseEvent): void => evt.preventDefault();
-
 	// ------------------------------------------------------------- the collapsed form
 	// Appended before the panel so the panel stays the root's last child (the pipeline's
 	// own pencil convention). Both are display:none until collapse/hover reveals them.
@@ -319,7 +311,6 @@ export function mountChrome<M>(opts: MountChromeOptions<M>, owner: Component): C
 	const labelEl = summaryTextEl?.createSpan({ cls: 'dse-chrome-summary__label' });
 	const nameEl = summaryTextEl?.createSpan({ cls: 'dse-chrome-summary__name' });
 	const detailEl = summaryTextEl?.createSpan({ cls: 'dse-chrome-summary__detail' });
-	if (summaryEl) owner.registerDomEvent(summaryEl, 'click', keepClickOutOfObsidian);
 
 	// ------------------------------------------------------------- the panel
 	const panelEl = anchor.createDiv({ cls: 'dse-chrome' });
@@ -328,8 +319,6 @@ export function mountChrome<M>(opts: MountChromeOptions<M>, owner: Component): C
 	// …and republish the anchor's own border widths on the panel, next frame, so the sheet can
 	// offset it from the frame's BORDER box rather than its padding box (SC-533, see FRAME_BORDER_VARS).
 	queueFrameBorders(anchor, panelEl, owner);
-
-	owner.registerDomEvent(panelEl, 'click', keepClickOutOfObsidian);
 
 	let collapsed =
 		collapsible &&

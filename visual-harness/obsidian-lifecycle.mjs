@@ -6484,7 +6484,8 @@ const SCENARIOS = [
 		// `.callout-content { overflow-x: auto }` is a scroll container, so it cut the panel off in Live Preview AND Reading view, and a
 		// click at a button's centre landed on `div.callout-title` (in Live Preview that put the cursor in the callout and swapped the callout
 		// for its source; on a foldable callout it also folded it). With the clip lifted the click reaches the button, but Obsidian's callout
-		// widget also listens for `click` and moves the cursor into the callout whatever was pressed: the chrome now marks its click handled.
+		// widget also listens for `click` and would move the cursor into the callout whatever was pressed; SC-540's interactive-child mark on the
+		// DSE root (armClickShield) keeps that handler off every click inside the root, the panel included, so nothing extra is needed for the buttons.
 		// Why lifecycle and not e2e: it runs the newest installed Obsidian (1.15.0), the Edit pencil needs `experimental` + `authoringControls`
 		// (no e2e control id), and the checks (widget height, `</>`, fold chevron) are Live Preview geometry like G-S44's.
 		id: 'G-S49',

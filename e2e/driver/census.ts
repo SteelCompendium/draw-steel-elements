@@ -20,21 +20,13 @@ export interface EventfulNode {
 const cdp = <T>(cmd: string, params: Record<string, unknown>): Promise<T> => browser.sendCommandAndGetResult(cmd, params) as Promise<T>;
 
 /**
- * Framework chrome is a separate surface: its buttons (`[data-dse-chrome-item]`, and anything inside one) are excluded. Since SC-520 the
- * panel and the collapsed one-liner CONTAINERS carry one `click` listener each that only marks the click handled (`defaultPrevented`, so
- * Obsidian's callout widget does not open its source); that listener does nothing a user could drive, so the two container elements
- * themselves are excluded too, while anything else placed inside them is still censused.
- */
-const CHROME_CONTAINERS = '.dse-chrome, .dse-chrome-summary';
-
-/**
- * Every element matching any of `selectors` (and not inside `excludeInside`, and not itself a chrome container) that has at least
+ * Every element matching any of `selectors` (and not inside `excludeInside`) that has at least
  * one user-input listener, with its control id (or null).
  */
 export async function eventfulNodes(selectors: string[], excludeInside = '[data-dse-chrome-item]'): Promise<EventfulNode[]> {
 	const expr = `(() => {
 		const seen = new Set();
-		for (const sel of ${JSON.stringify(selectors)}) for (const el of document.querySelectorAll(sel)) if (!el.closest(${JSON.stringify(excludeInside)}) && !el.matches(${JSON.stringify(CHROME_CONTAINERS)})) seen.add(el);
+		for (const sel of ${JSON.stringify(selectors)}) for (const el of document.querySelectorAll(sel)) if (!el.closest(${JSON.stringify(excludeInside)})) seen.add(el);
 		return Array.from(seen);
 	})()`;
 	const arr = await cdp<{ result: { objectId: string } }>('Runtime.evaluate', { expression: expr });
