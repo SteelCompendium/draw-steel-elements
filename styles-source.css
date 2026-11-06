@@ -15594,7 +15594,7 @@ body.theme-light
 .dse-swatch--custom:has(> input:focus-visible),
 .dse-optchip:focus-visible,
 /* SC-526 -- the Recoveries popover's own buttons (`-`, `+`, Catch breath; the tracker hero's
-   popover and the Stamina modal's). They had no ring of their own: the host's
+   popover and the ds-stamina-bar element's). They had no ring of their own: the host's
    `button:focus-visible` box-shadow ring was their only one (the host also sets `outline: none`),
    and the box-shadow reset in section B of the SC-203 block now removes it, so they join the
    kit ring here instead, like the option chips above. */
@@ -17610,7 +17610,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
       steppers; `.dse-stamina-rec__pop-cb`: Catch breath). Option A: the popover's own authored
       look (the Steel skin ~:12807 / ~:12820, the base sizing ~:1778) at its NATURAL compact
       height. They are plain `<button>`s that opened only with the `staminaRecoveryPopover`
-      setting on, so the gallery sweep never mounted them, and Obsidian's `button` rules painted
+      setting on, so until SC-526 the gallery sweep never mounted them, and Obsidian's `button` rules painted
       them: a 30px `height` (the popover's own look is ~18px), the host's plate `box-shadow`,
       its `--text-normal` ink, its 13px UI font and `display: flex`; without a host they fell
       back to the browser's own Arial 13.33px. Same fix as E / F above, one control over; the
