@@ -4,7 +4,7 @@
 // The pilot specs (conditions-pick-focus, conditions-dropdown-click) cover focus after a pick and the click-away close.
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
-import { CONDITIONS, INIT, focusedOption, iconChoices, modalRows, noteCondition, openConditionsModal, openFrom, pressedIn } from '../../driver/conditions';
+import { CONDITIONS, INIT, focusedOption, iconChoices, modalRows, noteCondition, openConditionsModal, openFrom, pressedIn, pressedSwatches } from '../../driver/conditions';
 import type { Row } from '../../driver/conditions';
 
 const [BLEEDING, DAZED, HEXED, SLOWED] = [0, 1, 2, 3];
@@ -34,13 +34,13 @@ describe('conditions-modal: the editor shows each condition\'s current settings'
 			const modal = await openFrom(root, 'hero');
 			await dse.click(modal.control('cond.edit', { nth: DAZED }));
 			expect(await pressedIn('Duration')).toEqual(['End of Turn']);
-			expect(await pressedIn('Color')).toEqual(['Color #c0392b']);
+			expect(await pressedSwatches()).toEqual(['#c0392b']);
 			expect(await pressedIn('Effect')).toEqual(['glow']);
 			expect(await pressedIn('Condition icon')).toEqual(['Use default condition icon']);
 			await dse.click(modal.control('cond.edit', { nth: SLOWED }));
 			expect(await pressedIn('Duration')).toEqual(['Save Ends']); // the legacy text "save ends" still reads as a duration
 			expect(await pressedIn('Effect')).toEqual(['static']);
-			expect(await pressedIn('Color')).toEqual([]);
+			expect(await pressedSwatches()).toEqual([]);
 			await dse.click(modal.control('modal.close'));
 		});
 	});
@@ -145,10 +145,10 @@ describe('conditions-modal: the colour swatches', () => {
 		const modal = await openEditor(DAZED);
 		await pickOnce(modal, 'cond.swatch', SWATCH.blue);
 		expect(await noteCondition(CONDITIONS, 'hero', DAZED)).toEqual({ key: 'dazed', duration: 'eot', color: '#2874a6', effect: 'glow' });
-		expect(await pressedIn('Color')).toEqual(['Color #2874a6']);
+		expect(await pressedSwatches()).toEqual(['#2874a6']);
 		await pickOnce(modal, 'cond.swatch', SWATCH.purple);
 		expect((await noteCondition(CONDITIONS, 'hero', DAZED)).color).toBe('#7d3c98');
-		expect(await pressedIn('Color')).toEqual(['Color #7d3c98']);
+		expect(await pressedSwatches()).toEqual(['#7d3c98']);
 		await dse.closeModals();
 	});
 
@@ -167,6 +167,28 @@ describe('conditions-modal: the colour swatches', () => {
 		await dse.expectNoWrite(CONDITIONS, () => dse.press('Enter', custom));
 		await expect(modal.root).toBeExisting();
 		expect(await noteCondition(CONDITIONS, 'hero', HEXED)).toEqual({ key: 'hexed' });
+		await dse.closeModals();
+	});
+
+	// Not a manifest drive: the input is never clicked or pressed through `dse`, so nothing is recorded for `cond.color-custom`.
+	it('[COND-D17] the colour chooser\'s commit (the chooser itself is out of CDP\'s reach, so its input + change events are dispatched page-side) writes the colour once, marks the pipette and leaves focus on the input', async () => {
+		const modal = await openEditor(HEXED);
+		await dse.tabTo(modal.control('cond.color-custom'), 60);
+		const w = await dse.waitForWrite(CONDITIONS, () =>
+			dse.page(`(() => {
+				const el = document.activeElement;
+				el.value = '#123456';
+				el.dispatchEvent(new Event('input', { bubbles: true }));
+				el.dispatchEvent(new Event('change', { bubbles: true }));
+				return true;
+			})()`),
+		);
+		expect(w.count).toBe(1);
+		expect(await noteCondition(CONDITIONS, 'hero', HEXED)).toEqual({ key: 'hexed', color: '#123456' });
+		expect(await dse.page<boolean>(`document.querySelector('.modal-container .dse-swatch--custom').hasAttribute('data-selected')`)).toBe(true);
+		expect(await dse.page<string>(`document.activeElement.getAttribute('aria-label')`)).toBe('Custom condition color #123456, selected');
+		expect(await focusedOption()).toEqual({ ctl: 'cond.color-custom', label: 'Custom condition color #123456, selected' });
+		expect(await pressedSwatches()).toEqual([]);
 		await dse.closeModals();
 	});
 });

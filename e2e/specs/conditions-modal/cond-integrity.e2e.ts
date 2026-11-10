@@ -4,7 +4,7 @@
 // (Live Preview) and SC-355 (the dialog role).
 import { expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
-import { INIT, TRACKER, TWO, addByKeyboard, modalNames, modalRows, noteCondition, openConditionsModal, openFrom, pressedIn, trackerIcons } from '../../driver/conditions';
+import { INIT, TRACKER, TWO, addByKeyboard, modalNames, modalRows, noteCondition, openConditionsModal, openFrom, pressedIn, pressedSwatches, trackerIcons } from '../../driver/conditions';
 
 const FIRST_BLOCK =
 	'```ds-initiative\nheroes:\n  - name: Alice Alpha\n    max_stamina: 30\nenemy_groups:\n  - name: Ogres\n    creatures:\n      - name: Ogre\n        max_stamina: 60\n        amount: 1\nmalice:\n  value: 1\n```\n';
@@ -87,7 +87,7 @@ describe('conditions-modal: what it writes is what the tracker reads back', () =
 		await dse.click(again.control('cond.edit'));
 		expect(await pressedIn('Condition icon')).toEqual(['Icon: skull']);
 		expect(await pressedIn('Duration')).toEqual(['Save Ends']);
-		expect(await pressedIn('Color')).toEqual(['Color #2874a6']);
+		expect(await pressedSwatches()).toEqual(['#2874a6']);
 		expect(await pressedIn('Effect')).toEqual(['glow-pulse']);
 		await dse.closeModals();
 	});
@@ -102,6 +102,14 @@ describe('conditions-modal: tickets that reach it from outside', () => {
 		await expect(modal.root).toBeExisting({ message: 'the Conditions window closed when its own write landed' });
 		await dse.closeModals();
 	}, { failsWith: /closed when its own write landed/ });
+
+	knownBug('SC-580', '[COND-N07] typing a letter with focus on "+ Add condition" opens the dropdown, as the docs say ("or just start typing")', async () => {
+		const { modal } = await openConditionsModal(TRACKER, 'hero');
+		await expect(modal.control('cond.add')).toBeFocused();
+		await dse.press('d', modal.control('cond.add'));
+		await expect(modal.control('cond.input')).toBeExisting();
+		await dse.closeModals();
+	}, { failsWith: /cond\.input.*to be existing/s });
 
 	knownBug('SC-355', '[COND-N05] the Conditions window is exposed to assistive technology as a dialog', async () => {
 		const { modal } = await openConditionsModal(TRACKER, 'hero');

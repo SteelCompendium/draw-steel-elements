@@ -126,7 +126,7 @@ describe('conditions-modal: leaving it', () => {
 		});
 	});
 
-	it('[COND-X07] Escape in the icon search field of an open editor closes the whole window and writes nothing', async () => {
+	it('[COND-X07] Escape in the icon search field of an open editor closes the whole window and writes nothing [current behaviour — SC-587 may change this]', async () => {
 		await noWriteAround(CONDITIONS, async (root) => {
 			const modal = await openFrom(root, 'hero');
 			await dse.click(modal.control('cond.edit', { nth: 2 }));
@@ -136,7 +136,7 @@ describe('conditions-modal: leaving it', () => {
 		});
 	});
 
-	it('[COND-X08] after a write, Done closes without a second write and the tracker row shows the new condition', async () => {
+	it('[COND-X08] after a write, Done closes the window with no further write and the tracker row shows the new condition', async () => {
 		await dse.openNote(TRACKER);
 		const root = dse.block(INIT);
 		const modal = await openFrom(root, 'hero');

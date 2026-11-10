@@ -39,6 +39,16 @@ const openEditor = (c: HTMLElement, index: number): void => {
 const pick = (c: HTMLElement, group: string, label: string): void => qs(c, `[role="group"][aria-label="${group}"] button[aria-label="${label}"]`).click();
 const pressedIn = (c: HTMLElement, group: string): string[] =>
 	Array.from(c.querySelectorAll(`[role="group"][aria-label="${group}"] [aria-pressed="true"]`)).map((b) => b.getAttribute('aria-label') ?? '');
+/** The preset swatches are found by their hex (read from the `title`, "Red (#c0392b)"), not by `aria-label`: SC-582 will rename the label. */
+const swatchHex = (el: Element): string => /\((#[0-9a-f]{6})\)/i.exec(el.getAttribute('title') ?? '')?.[1].toLowerCase() ?? '';
+const swatch = (c: HTMLElement, hex: string): HTMLElement => {
+	const found = Array.from(c.querySelectorAll<HTMLElement>('[data-dse-control="cond.swatch"]')).find((b) => swatchHex(b) === hex);
+	if (!found) throw new Error(`no swatch for ${hex}`);
+	return found;
+};
+const pickSwatch = (c: HTMLElement, hex: string): void => swatch(c, hex).click();
+const pressedSwatches = (c: HTMLElement): string[] =>
+	Array.from(c.querySelectorAll('[data-dse-control="cond.swatch"][aria-pressed="true"]')).map(swatchHex);
 const lastEmit = (o: Open): Condition[] => o.onChange.mock.calls[o.onChange.mock.calls.length - 1][0];
 
 function openAdd(c: HTMLElement): HTMLInputElement {
@@ -160,17 +170,11 @@ describe('SC-436 matrix: the effect chips (start shape x effect x host)', () => 
 
 // ----------------------------------------------------------------------------------------------- colour
 
-const SWATCHES: Array<[label: string, hex: string]> = [
-	['Color #c0392b', '#c0392b'],
-	['Color #b9770e', '#b9770e'],
-	['Color #1e8449', '#1e8449'],
-	['Color #2874a6', '#2874a6'],
-	['Color #7d3c98', '#7d3c98'],
-];
+const SWATCHES = ['#c0392b', '#b9770e', '#1e8449', '#2874a6', '#7d3c98'];
 const COLOR_STARTS: Array<{ name: string; color: string | undefined; pressed: string[]; custom: boolean }> = [
 	{ name: 'no colour', color: undefined, pressed: [], custom: false },
-	{ name: 'a preset', color: '#c0392b', pressed: ['Color #c0392b'], custom: false },
-	{ name: 'a preset spelled in upper case', color: '#C0392B', pressed: ['Color #c0392b'], custom: false },
+	{ name: 'a preset', color: '#c0392b', pressed: ['#c0392b'], custom: false },
+	{ name: 'a preset spelled in upper case', color: '#C0392B', pressed: ['#c0392b'], custom: false },
 	{ name: 'a custom hex', color: '#123456', pressed: [], custom: true },
 	{ name: 'a CSS colour name', color: 'teal', pressed: [], custom: true },
 	{ name: 'a colour that does not parse', color: 'not-a-colour', pressed: [], custom: false },
@@ -181,27 +185,40 @@ describe('SC-436 matrix: the colour swatches and the custom colour (start colour
 	test.each(COLOR_STARTS)('opening the editor on $name presses $pressed and marks the pipette selected: $custom', ({ color, pressed, custom }) => {
 		const o = open([{ key: 'prone', color }]);
 		openEditor(o.container, 0);
-		expect(pressedIn(o.container, 'Color')).toEqual(pressed);
+		expect(pressedSwatches(o.container)).toEqual(pressed);
 		expect(customSelected(o.container)).toBe(custom);
 		expect(o.onChange).not.toHaveBeenCalled();
 	});
 
 	for (const { name, color } of COLOR_STARTS) {
-		test.each(SWATCHES)(`from ${name}: the swatch "%s" writes %s, presses only itself and unmarks the pipette`, (label, hex) => {
+		// Re-pressing the swatch that is already selected is its own row below (SC-581 may change what it does).
+		const others = SWATCHES.filter((hex) => color?.toLowerCase() !== hex);
+		test.each(others)(`from ${name}: the swatch %s writes it, presses only itself and unmarks the pipette`, (hex) => {
 			const o = open([{ key: 'prone', color }]);
 			openEditor(o.container, 0);
-			pick(o.container, 'Color', label);
+			pickSwatch(o.container, hex);
 			expect(o.onChange).toHaveBeenCalledTimes(1);
 			expect(lastEmit(o)).toEqual([{ key: 'prone', color: hex }]);
-			expect(pressedIn(o.container, 'Color')).toEqual([label]);
+			expect(pressedSwatches(o.container)).toEqual([hex]);
 			expect(customSelected(o.container)).toBe(false);
 		});
 	}
 
 	test.each([
+		['a preset', '#c0392b'],
+		['a preset spelled in upper case', '#C0392B'],
+	])('from %s: pressing the swatch that is already selected writes that colour again and keeps it pressed [current behaviour — SC-581 may change this]', (_n, color) => {
+		const o = open([{ key: 'prone', color }]);
+		openEditor(o.container, 0);
+		pickSwatch(o.container, '#c0392b');
+		expect(lastEmit(o)).toEqual([{ key: 'prone', color: '#c0392b' }]);
+		expect(pressedSwatches(o.container)).toEqual(['#c0392b']);
+	});
+
+	test.each([
 		['a custom hex', '#123456', true, []],
 		['white (the input\'s own default)', '#ffffff', true, []],
-		['a hex equal to a preset', '#2874a6', false, ['Color #2874a6']],
+		['a hex equal to a preset', '#2874a6', false, ['#2874a6']],
 	] as Array<[string, string, boolean, string[]]>)('the custom colour input picking %s writes it, and the pipette is selected: %s', (_n, hex, custom, pressed) => {
 		const o = open(['prone']);
 		openEditor(o.container, 0);
@@ -211,7 +228,7 @@ describe('SC-436 matrix: the colour swatches and the custom colour (start colour
 		expect(o.onChange).toHaveBeenCalledTimes(1);
 		expect(lastEmit(o)).toEqual([{ key: 'prone', color: hex }]);
 		expect(customSelected(o.container)).toBe(custom);
-		expect(pressedIn(o.container, 'Color')).toEqual(pressed);
+		expect(pressedSwatches(o.container)).toEqual(pressed);
 	});
 });
 
@@ -373,7 +390,7 @@ describe('SC-436 matrix: custom conditions (typed text -> key)', () => {
 		pickOption(o.container, 'Fire Aura', 'Add custom:');
 		openEditor(o.container, 0);
 		pick(o.container, 'Duration', 'Save Ends');
-		pick(o.container, 'Color', 'Color #b9770e');
+		pickSwatch(o.container, '#b9770e');
 		pick(o.container, 'Effect', 'glow-pulse');
 		expect(o.onChange).toHaveBeenCalledTimes(4);
 		expect(lastEmit(o)).toEqual([{ key: 'fire-aura', duration: 'save-ends', color: '#b9770e', effect: 'glow-pulse' }]);
@@ -467,7 +484,7 @@ describe('SC-436 matrix: which interactions emit a change (every interaction x e
 		['the trash button', (o) => qs(o.container, '[data-dse-control="cond.remove"]').click()],
 		['a duration chip', (o) => { openEditor(o.container, 0); pick(o.container, 'Duration', 'End of Turn'); }],
 		['an effect chip', (o) => { openEditor(o.container, 0); pick(o.container, 'Effect', 'glow'); }],
-		['a swatch', (o) => { openEditor(o.container, 0); pick(o.container, 'Color', 'Color #1e8449'); }],
+		['a swatch', (o) => { openEditor(o.container, 0); pickSwatch(o.container, '#1e8449'); }],
 		['an icon', (o) => { openEditor(o.container, 0); qs(o.container, 'button[aria-label="Icon: skull"]').click(); }],
 		['the default icon choice', (o) => { openEditor(o.container, 0); qs(o.container, 'button[aria-label="Use default condition icon"]').click(); }],
 		['the custom colour input', (o) => {
@@ -549,14 +566,7 @@ describe('SC-436 matrix: the icon picker caps its matches at 24', () => {
 // ------------------------------------------------------------------------------------------ known bugs
 
 describe('SC-436 matrix: known bugs (each marker encodes the correct behaviour and fails today)', () => {
-	// SC-580: docs/initiative-tracker.md says "Click "+ Add condition" (or just start typing) to open the type-ahead search".
-	test.failing('SC-580: typing a letter with focus on "+ Add condition" opens the dropdown', () => {
-		const o = open([]);
-		const add = qs(o.container, '[data-dse-control="cond.add"]');
-		expect(o.container.querySelector('.dse-condal__input')).toBeNull(); // setup: the dropdown starts closed
-		add.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', bubbles: true, cancelable: true }));
-		expect(o.container.querySelector('.dse-condal__input')).not.toBeNull();
-	});
+	// (SC-580, "just start typing" opens the Add search, needs Obsidian's real keymap: its marker is the e2e knownBug COND-N07.)
 
 	// SC-581: Icon has "Use default", Duration "Until removed", Effect "static"; a colour, once set, cannot be taken off.
 	// Fix-agnostic: passes if ANY single interaction in the Color group (a default/none option, or re-activating the
@@ -595,5 +605,34 @@ describe('SC-436 matrix: known bugs (each marker encodes the correct behaviour a
 		pickOption(o.container, 'Dazed', 'Dazed');
 		const keys = (o.onChange.mock.calls.length ? lastEmit(o) : (o.holder.conditions as Condition[])).map((c) => c.key.toLowerCase());
 		expect(keys.filter((k) => k === 'dazed')).toHaveLength(1);
+	});
+
+	// SC-585: removeAt focuses "+ Add condition" when the list empties, but that button does not exist while the Add dropdown is open.
+	test.failing('SC-585: keyboard-removing the last condition with the Add dropdown open leaves focus inside the window, not on <body>', () => {
+		const o = open(['prone']);
+		openAdd(o.container);
+		expect(o.container.querySelector('.dse-condal__input')).not.toBeNull(); // setup: the dropdown is open
+		const trash = qs<HTMLElement>(o.container, '[data-dse-control="cond.remove"]');
+		trash.focus();
+		trash.click(); // a keyboard activation sends a click and no mousedown, so the dropdown stays open
+		expect(rowNames(o.container)).toEqual([]);
+		expect(document.activeElement).not.toBe(document.body);
+		expect(o.container.contains(document.activeElement)).toBe(true);
+	});
+
+	// SC-586 (a): a CSS-named colour marks the pipette selected, but the colour input is only ever given a #rrggbb value.
+	test.failing('SC-586: for `color: teal` the custom colour input starts at teal\'s hex', () => {
+		const o = open([{ key: 'prone', color: 'teal' }]);
+		openEditor(o.container, 0);
+		expect(customSelected(o.container)).toBe(true); // setup: the pipette treats teal as the selected custom colour
+		expect(qs<HTMLInputElement>(o.container, '[data-dse-control="cond.color-custom"]').value).toBe('#008080');
+	});
+
+	// SC-586 (b): `icon: ""` draws the default glyph but "Use default" is not pressed.
+	test.failing('SC-586: for `icon: ""` the "Use default condition icon" choice is the pressed one', () => {
+		const o = open([{ key: 'hexed', icon: '' }]);
+		expect(qs(o.container, '.dse-condal__glyph').getAttribute('data-icon')).toBe('circle-dashed'); // setup: the row shows the default glyph
+		openEditor(o.container, 0);
+		expect(pressedIn(o.container, 'Condition icon')).toEqual(['Use default condition icon']);
 	});
 });
