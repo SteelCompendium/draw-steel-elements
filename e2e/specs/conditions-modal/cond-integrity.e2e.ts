@@ -4,7 +4,7 @@
 // (Live Preview) and SC-355 (the dialog role).
 import { expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
-import { INIT, TRACKER, TWO, addByKeyboard, modalNames, noteCondition, openConditionsModal, openFrom, trackerIcons } from '../../driver/conditions';
+import { INIT, TRACKER, TWO, addByKeyboard, modalNames, modalRows, noteCondition, openConditionsModal, openFrom, pressedIn, trackerIcons } from '../../driver/conditions';
 
 const FIRST_BLOCK =
 	'```ds-initiative\nheroes:\n  - name: Alice Alpha\n    max_stamina: 30\nenemy_groups:\n  - name: Ogres\n    creatures:\n      - name: Ogre\n        max_stamina: 60\n        amount: 1\nmalice:\n  value: 1\n```\n';
@@ -60,6 +60,36 @@ describe('conditions-modal: a second tracker in the same note', () => {
 		expect(text.endsWith('```\n\nBELOW\n')).toBe(true);
 		expect(text.match(/```/g)).toHaveLength(2);
 		expect(await trackerIcons('hero')).toEqual([]);
+	});
+});
+
+describe('conditions-modal: what it writes is what the tracker reads back', () => {
+	it('[COND-N06] a condition set up in the window (icon, duration, colour, effect) survives a re-render from the note: reopened, it shows every setting', async () => {
+		const { modal } = await openConditionsModal(TRACKER, 'creature');
+		await addByKeyboard(modal, 'Fire Aura');
+		await dse.settle();
+		await dse.click(modal.control('cond.edit'));
+		await dse.type(modal.control('cond.icon-search'), 'skull');
+		await dse.waitForWrite(TRACKER, () => dse.click(modal.control('cond.icon', { nth: 1 })));
+		await dse.waitForWrite(TRACKER, () => dse.click(modal.control('cond.duration', { nth: 2 })));
+		await dse.waitForWrite(TRACKER, () => dse.click(modal.control('cond.swatch', { nth: 3 })));
+		await dse.waitForWrite(TRACKER, () => dse.click(modal.control('cond.effect', { nth: 3 })));
+		await dse.closeModals();
+		const entry = { key: 'fire-aura', icon: 'skull', duration: 'save-ends', color: '#2874a6', effect: 'glow-pulse' };
+		expect(await noteCondition(TRACKER, 'creature', 0)).toEqual(entry);
+		// Draw the tracker again from the note's text (not from the objects the window handed over) and reopen the window.
+		await dse.page(`(() => { for (const r of document.querySelectorAll('.markdown-reading-view [data-dse-element]')) r.__old = true; return true; })()`);
+		await dse.page(`(app.workspace.getMostRecentLeaf().view.previewMode.rerender(true), true)`);
+		await dse.waitFor(`Array.from(document.querySelectorAll('.markdown-reading-view [data-dse-element]')).some((r) => !r.__old)`, 'the tracker to draw again');
+		await dse.settle();
+		const again = await openFrom(dse.block(INIT), 'creature');
+		expect(await modalRows()).toEqual([{ name: 'Fire Aura', custom: true, badges: ['Save Ends', 'glow-pulse'], editorOpen: false }]);
+		await dse.click(again.control('cond.edit'));
+		expect(await pressedIn('Condition icon')).toEqual(['Icon: skull']);
+		expect(await pressedIn('Duration')).toEqual(['Save Ends']);
+		expect(await pressedIn('Color')).toEqual(['Color #2874a6']);
+		expect(await pressedIn('Effect')).toEqual(['glow-pulse']);
+		await dse.closeModals();
 	});
 });
 

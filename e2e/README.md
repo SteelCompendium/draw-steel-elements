@@ -117,6 +117,8 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Initiative/hurt.md` | `ds-initiative`: hero Alice Alpha 30/30, Ogre #1 at 20/60 and Ogre #2 at 60/60 (a hurt creature, for Spend Recovery) |
   | `Initiative/rich.md` | `ds-initiative` with every variant (SC-437): a title ("Warren Ambush"), round 2, heroes Alice (grabbed) and Bruno (turn taken), Ogres #1-#3 (#1 dazed) in a grid group, a single-creature "Troll Boss" group, Malice 4 with `round_gain: 2` and one log entry |
   | `Initiative/captain.md` | `ds-initiative`: a captained minion squad (three Goblins, the Goblin Captain selected, an attached Warg Rider; SC-437) |
+  | `Initiative/conditions.md` | `ds-initiative` with conditions in every form (SC-436): hero Alice Alpha has `bleeding` (a plain string), Dazed (`duration: eot`, red `#c0392b`, `effect: glow`), Hexed (a custom key) and Slowed (legacy `effect: save ends` text); Ogre #1 has `grabbed` and Prone (`duration: save-ends`), Ogre #2 none |
+  | `Initiative/two-trackers.md` | TWO `ds-initiative` blocks in one note with prose above, between and below (SC-436): Alice Alpha + an Ogre, then Bob Beta (`grabbed`, Hexed to `eoe`) + a Goblin |
 
 - Edits are checked per fence: a click / type / double-click / press on an element inside `dse.block(lang, n)` declares that block
   as one the test edits (taking the scope and reading it declares nothing, SC-435), and
