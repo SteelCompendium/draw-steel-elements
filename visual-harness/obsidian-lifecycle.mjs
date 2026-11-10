@@ -158,7 +158,7 @@
 // SC-552 appends G-S64 (51 scenarios in all with SC-472's G-S59 and SC-545's G-S63; it sits after G-S63, so it ends part 3 of the five `--only` parts): the block edit form opened on one of several identical blocks saves into the
 // block it was opened on. A write above the form's block (a click inside its 400 ms debounce, an outside edit, Sync) makes Obsidian hand the form's element to the block below or throw
 // it away, and Save followed the element (the edit landed one block down; with two twins the form closed by itself with nothing saved). The form pins its block when it opens and Save
-// maps that line through whatever was written since; a form whose view Obsidian threw away stays open (and then saves strictly); SC-549 (wide): a card's own + is pinned at its first click.
+// maps that line through whatever was written since; a form whose view Obsidian threw away stays open (and then saves strictly); SC-549 (wide): a card's own + is pinned at its first click. SC-556 makes every form's Save strict (its pin or no write): phases (v) and (w) edit / delete the form's own block from outside while the form is open and expect no write, the Notice and an open form.
 // The plugin's 400 ms debounce timer is held and fired by hand (G-S45's hook), so the ordering is forced and no step waits on a timer.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
@@ -490,6 +490,8 @@ Object.assign(FIXTURES, {
 // SC-552 (G-S64): a closed counter and, below it, a counter whose fence never closes (identical bodies).
 Object.assign(FIXTURES, {
 	'Lifecycle/form-pin-unterminated.md': `# form pin unterminated\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nMID\n\n${UNTERMINATED_COUNTER(5, 'Twin')}\n`,
+	// SC-556 (G-S64 (w)): three plain twins with prose between them, a note of its own (a dropped write's Notice is shown once per note per 5 s, so (v) and (w) need two notes).
+	'Lifecycle/form-strict-triplets.md': `# form strict triplets\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nM1\n\n${COUNTER(5, 'Twin')}\n\nM2\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`,
 });
 
 // SC-536 (G-S56): a reference that points back to itself, a chain of seven distinct references, and a card shown twice.
@@ -4665,7 +4667,7 @@ const SCENARIOS = [
 		// in-app outside edit of block 0 · (i) the same on disk (Reading view plain) · (k) an outside edit that also inserts text above · (l) a kept-open form closes when
 		// the plugin is disabled · (m) control: the form after the click's write has landed · (n) SC-549: + on block 1 held, an in-app outside edit of block 0, fire ·
 		// (o) SC-549 LP: + on block 1 held, 'Z' typed into block 0's title, fire · (p) K-strict: a kept-open form whose block was deleted writes nothing and says why ·
-		// (q) a kept-open form on the unterminated trailing fence (its section redrawn by blank lines added at the end of the note) saves into that block · (r) the note navigated away in its pane, (s) its pane closed, with a pinned form open: the form closes with its view and nothing is written (a form is kept open only while its note is still shown). Before the fix, (a)-(k) FAIL and (g) (p) (q) cannot even keep the form open.
+		// (q) a kept-open form on the unterminated trailing fence (its section redrawn by blank lines added at the end of the note) saves into that block · (r) the note navigated away in its pane, (s) its pane closed, with a pinned form open: the form closes with its view and nothing is written (a form is kept open only while its note is still shown). Before the fix, (a)-(k) FAIL and (g) (p) (q) cannot even keep the form open. SC-556: (v) a form that is not kept open (three plain twins, Reading view) whose own block is edited from outside while it is open, (w) the same with the block deleted: Save writes nothing, one Notice, the form stays open, the outside change is kept (base: the edit lands in the identical twin that is left).
 		id: 'G-S64',
 		async run(t) {
 			const m = await t.mark();
@@ -4683,7 +4685,8 @@ const SCENARIOS = [
 			const P2 = 'Lifecycle/twin-pair.md';
 			const P3 = 'Lifecycle/twin-triplets.md';
 			const UT = 'Lifecycle/form-pin-unterminated.md';
-			const ALL = [C3, C2, C4, P2, P3, UT];
+			const P3D = 'Lifecycle/form-strict-triplets.md';
+			const ALL = [C3, C2, C4, P2, P3, UT, P3D];
 			await t.ev(`(() => { if (!document.getElementById('lc-gs64-notice')) { const st = document.createElement('style'); st.id = 'lc-gs64-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
 			await t.ev(`(${gs64Page.toString()})()`);
 			const A = 'window.__gs64.A';
@@ -5042,6 +5045,53 @@ const SCENARIOS = [
 					await cleanupForm();
 				}
 			};
+			/**
+			 * (v), (w) SC-556 (`rel`: a note of its own per phase, since a dropped write's Notice is shown once per note per 5 s): a form whose card is NOT kept open (three plain twins, Reading view; Obsidian reuses the card's element for a block further down) and whose OWN block
+			 * is edited ('edit', on disk) or deleted ('delete', in-app) from outside while it is open: Save writes nothing, the one Notice says so, the form stays open and the
+			 * outside change is kept. Base: Save follows the element / searches by body and writes the identical twin that is left (the note then holds an `Edited` block nobody opened).
+			 */
+			const strictCase = async (label, how, rel) => {
+				const mk = await t.mark();
+				try {
+					await open(rel, 'rv');
+					const before = t.read(rel);
+					await pressPencil(label, A, 1);
+					await t.waitFor(`!!document.querySelector('.modal-container .dse-modal .dse-form__preview')`, `${label}: the edit form opened`);
+					await typeRename(label, 'Twin', 'Edited');
+					let outside;
+					if (how === 'edit') {
+						const parts = before.split('current_value: 5');
+						outside = parts[0] + 'current_value: 5' + parts[1] + 'current_value: 9' + parts.slice(2).join('current_value: 5');
+						fs.writeFileSync(path.join(vault, rel), outside);
+					} else {
+						const lines = before.split('\n');
+						const starts = lines.flatMap((l, i) => (l === '```ds-counter' ? [i] : []));
+						lines.splice(starts[1], lines.indexOf('```', starts[1] + 1) - starts[1] + 2); // the middle block and the blank line after it
+						outside = lines.join('\n');
+						await t.edit(rel, J(outside));
+					}
+					const want = t.counterValues(rel);
+					await t.waitFor(`(() => { const c = window.__gs64.cards(${A}); return c.length === ${want.length} && JSON.stringify(c.map((x) => x.value)) === ${J(JSON.stringify(want))}; })()`, `${label}: every card shows the outside change`, 10000);
+					const at = await whereIs('form', A);
+					t.expect(await formOpen(), `${label}: the form closed by itself before Save (${J(at)})`);
+					const mp = await t.mark();
+					await t.ev(`(${SAVE}).click()`);
+					await t.waitFor(`__lc.notices.some((x) => x.n > ${mp})`, `${label}: Save said nothing`, 10000).catch(async (e) => {
+						throw new Error(`${e.message} | the form is ${(await formOpen()) ? 'open' : 'closed'}, the note is ${J(t.read(rel))}, the outside text was ${J(outside)}`);
+					});
+					const ns = await t.noticesSince(mp);
+					const text = `Draw Steel Elements: a change to a block in ${rel.split('/').pop().replace(/\.md$/, '')} was not saved \u2014 the block changed on disk first.`;
+					t.expect(ns.length === 1 && ns[0] === text, `${label}: expected the one Notice ${J(text)}, got ${J(ns)}`);
+					t.expect(await formOpen(), `${label}: the form closed on a Save that wrote nothing`);
+					t.expect(t.read(rel) === outside, `${label}: the note changed on Save: ${J(t.read(rel))}`);
+					const holders = await t.ev('window.__gs64.holders()');
+					outcomes.push(`${label}: the form's card ${J(at.released ? 'released (kept open)' : 'on block ' + at.block)} at Save, Save wrote nothing, one Notice, the form stayed open, the note is the outside text, registry holders ${holders}`);
+				} catch (e) {
+					problems.push(`${label}: ${e.message}`);
+				} finally {
+					await cleanupForm();
+				}
+			};
 			/** (r) the note leaves the screen with a pinned form open - navigated away in its pane, or its pane closed (a second pane): the form closes with its view, nothing is written. */
 			const leaveCase = async (label, how) => {
 				const mk = await t.mark();
@@ -5095,6 +5145,9 @@ const SCENARIOS = [
 				await leaveCase('(r) the note navigated away in its pane: the form closes with its view', 'navigate');
 				await leaveCase('(s) the pane closed: the form closes with its view', 'close');
 				await cancelCase('(t) a cancelled form is not kept open when its view is thrown away later');
+				// (v), (w) SC-556: a form that is NOT kept open is strict too.
+				await strictCase('(v) SC-556: three plain twins, Reading view, form 1, its own block edited from outside: Save writes nothing', 'edit', P3);
+				await strictCase('(w) SC-556: three plain twins, Reading view, form 1, its own block deleted from outside: Save writes nothing', 'delete', P3D);
 			} finally {
 				await t.ev(`${prefs}.set('authoringControls', false)`);
 				await t.ev(`document.getElementById('lc-gs64-notice')?.remove()`);
