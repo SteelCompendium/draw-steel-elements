@@ -129,6 +129,8 @@ function elementIdOf(lang: string): string {
 const MODAL_KINDS: Record<string, string> = {
 	'stamina-edit': '.dse-sedit__row',
 	conditions: '.dse-condal__addwrap',
+	// SC-435: the minion squad's stamina pool modal (it has no `.dse-sedit__row`, so match its own stepper).
+	'minion-pool': '[data-dse-control="pool.stamina.input"]',
 	// SC-432: the small confirmation OVER the stamina modal (two .dse-modal are open at once then).
 	'free-heal-confirm': '[data-dse-control="sedit.free-heal.confirm"]',
 	// SC-500: initiative's "Reset encounter state" confirmation.

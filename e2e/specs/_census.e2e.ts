@@ -7,10 +7,12 @@ import { expect } from '@wdio/globals';
 import { dse } from '../driver/dse';
 import { censusFindings, eventfulNodes } from '../driver/census';
 import { openBarModal } from '../driver/stamina';
+import { HURT, openPoolModal } from '../driver/pool';
 import { idsOf } from '../manifest/surface';
 import barManifest from '../manifest/stamina-bar';
 import modalManifest from '../manifest/stamina-edit-modal';
 import conditionsManifest from '../manifest/conditions-modal';
+import poolManifest from '../manifest/minion-pool-modal';
 import initiativeManifest from '../manifest/initiative';
 import chromeManifest from '../manifest/chrome';
 
@@ -18,6 +20,7 @@ const ALL_IDS = new Set([
 	...idsOf(barManifest),
 	...idsOf(modalManifest),
 	...idsOf(conditionsManifest),
+	...idsOf(poolManifest),
 	...idsOf(initiativeManifest),
 	...idsOf(chromeManifest),
 ]);
@@ -69,6 +72,22 @@ describe('real-Obsidian census (pilot surfaces)', () => {
 		for (const id of ['init.hero.stamina', 'init.hero.bar', 'init.detail.stamina', 'init.detail.bar', 'init.cell.stamina']) {
 			expect(ids).toContain(id);
 		}
+	});
+});
+
+describe('real-Obsidian census: the minion stamina pool modal', () => {
+	it('[CENSUS-06] the open pool modal (a hurt squad with conditions): every node that listens for input is an identified control', async () => {
+		const { modal } = await openPoolModal(HURT);
+		await dse.settle();
+		const nodes = await eventfulNodes(['.modal-container .dse-modal .modal-content *']);
+		expect(censusFindings(nodes, ALL_IDS)).toEqual([]);
+		const ids = nodes.map((n) => n.id);
+		// The probe sees every kind of control: the stepper's buttons and field, the Apply Damage button, the name
+		// labels (div-with-a-listener controls jsdom cannot tell apart) and the condition icons.
+		for (const id of ['pool.stamina.dec', 'pool.stamina.input', 'pool.stamina.inc', 'pool.apply-damage', 'pool.minion-name', 'pool.condition', 'pool.reset', 'pool.apply']) {
+			expect(ids).toContain(id);
+		}
+		await dse.click(modal.control('modal.close'));
 	});
 });
 
