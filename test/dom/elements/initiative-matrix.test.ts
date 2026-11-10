@@ -664,3 +664,60 @@ describe('[X] Reset encounter state: what a confirm clears, what every other way
 		expect(has(root, 'init.reset-encounter') || has(root, 'init.reset-turns')).toBe(false);
 	});
 });
+
+// ----------------------------------------------------------------------------------------------------- known bugs
+// Each of these encodes the CORRECT behaviour and fails today (`test.failing`): the moment the bug is fixed the test passes, jest
+// reports it, and the marker comes off. The e2e twins (e2e/specs/initiative/) carry `knownBug` markers for the same tickets.
+
+describe('known bugs: the tracker after Reset encounter, and Malice below 0', () => {
+	const confirmReset = (root: Element): void => {
+		ctl(root, 'init.reset-encounter').click();
+		ctl(document.body.lastElementChild as HTMLElement, 'init.reset-encounter.confirm').click();
+	};
+
+	test.failing('[X07] after Reset a minion squad\'s shared action pips are cleared [known bug SC-575]', async () => {
+		const squad = src(HEROES, ['enemy_groups:', '  - name: "Goblins"', '    is_squad: true', '    creatures:', '      - { name: Goblin, max_stamina: 4, amount: 3, squad_role: minion }']);
+		const { root, flush, last } = await mount(squad);
+		ctl(root, 'init.detail.squad-action', 0).click(); // Move
+		await flush();
+		confirmReset(root);
+		await flush();
+		const actions = last().enemy_groups[0].creatures[0].actions;
+		expect(Object.values(actions ?? {}).some(Boolean)).toBe(false);
+	});
+
+	test.failing('[X05] after Reset the tracker still shows the enemy roster and the heroes at full stamina [known bug SC-576]', async () => {
+		const { root, flush } = await mount(TRACKER);
+		confirmReset(root);
+		await flush();
+		const view = document.querySelector('.dse-init') as HTMLElement;
+		expect(view.querySelectorAll('[data-dse-control="init.cell.stamina"]')).toHaveLength(3);
+		expect(ctl(view, 'init.hero.stamina', 0).textContent).toBe('30/30');
+	});
+
+	test.failing('[M07] the Malice stepper stops at 0 [known bug SC-577]', async () => {
+		const { root, flush, last } = await mount(src(HEROES, OGRES, ['malice:', '  value: 0']));
+		ctl(root, 'init.malice.dec').click();
+		await flush();
+		expect(last().malice.value).toBe(0);
+	});
+
+	test.failing('[R01] a negative round_gain never takes Malice below 0, and the Advance label reads "-3" not "+-3" [known bug SC-577]', async () => {
+		const { root, flush, last } = await mount(src(HEROES, OGRES, ['malice:', '  value: 1', '  round_gain: -3']));
+		expect(ctl(root, 'init.round.advance').getAttribute('aria-label')).not.toContain('+-');
+		ctl(root, 'init.round.advance').click();
+		await flush();
+		expect(last().malice.value).toBeGreaterThanOrEqual(0);
+	});
+
+	test.failing('[M09] a quick-add the pool clamps logs what it did: the entry matches the change in Malice, or says it was capped [known bug SC-578]', async () => {
+		const { root, flush, last } = await mount(src(HEROES, OGRES, ['malice:', '  value: 2']));
+		ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = '-9';
+		ctl<HTMLInputElement>(root, 'init.malice.quickadd.label').value = 'Spend';
+		ctl(root, 'init.malice.quickadd.add').click();
+		await flush();
+		const entry = last().malice.log[0];
+		expect(last().malice.value).toBe(0);
+		expect(entry.amount === last().malice.value - 2 || entry.label !== 'Spend').toBe(true);
+	});
+});

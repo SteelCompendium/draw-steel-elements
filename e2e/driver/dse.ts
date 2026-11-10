@@ -402,13 +402,15 @@ async function dblclick(el: El): Promise<void> {
 
 /**
  * Move focus off `el` the way a user does: a real click on neutral modal chrome (the title).
- * This is the "click away" half of the blur-commit scenarios (S1 S03/S14). Recorded as kind
+ * This is the "click away" half of the blur-commit scenarios (S1 S03/S14); `awayTarget` names another neutral
+ * node to click when there is no modal (SC-437). Recorded as kind
  * `blur` on the control being left.
  */
-async function blur(el: El): Promise<void> {
+async function blur(el: El, awayTarget?: El): Promise<void> {
 	// "Blur" of a control that was never focused would record a pair nothing exercised.
 	if (!(await hasFocusWithin(el))) throw new Error(`blur(${labelOf(el)}): the control does not have focus, so there is nothing to blur`);
-	const away = $('.modal-container .dse-modal__title');
+	// SC-437: outside a modal (the tracker's title editor) the caller names the neutral spot to click: `awayTarget`.
+	const away = awayTarget ?? $('.modal-container .dse-modal__title');
 	await away.waitForDisplayed({ timeout: 8000 });
 	await away.click();
 	recordDrive(labelOf(el), 'blur');
