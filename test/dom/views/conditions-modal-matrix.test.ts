@@ -1,0 +1,488 @@
+// SC-436 — the combinatorial logic of the ConditionsModal (values x start states x holder kinds x entry forms), as jsdom
+// tables. The e2e specs (e2e/specs/conditions-modal/) drive each control once through real input; the cases that only vary
+// by value live here. Existing single-behaviour tests stay in conditions-modal.test.ts. Expectations are literals.
+import { ConditionsModal } from '@views/ConditionsModal';
+import type { Condition, ConditionHolder } from '@drawSteelAdmonition/EncounterData';
+import { ConditionManager } from '@utils/Conditions';
+import { App } from '../../mocks/obsidian';
+
+type Entry = string | Condition;
+type HostKind = 'hero' | 'creature';
+
+/** A holder shaped like what the initiative tracker hands over: a Hero row or a CreatureInstance row. */
+function holderFor(kind: HostKind, conditions: Entry[]): ConditionHolder {
+	return kind === 'hero'
+		? ({ name: 'Alice Alpha', max_stamina: 30, current_stamina: 21, isHero: true, conditions } as ConditionHolder)
+		: ({ id: 2, current_stamina: 40, temp_stamina: 0, conditions } as ConditionHolder);
+}
+
+function open(conditions: Entry[], kind: HostKind = 'hero') {
+	const onChange = jest.fn();
+	const holder = holderFor(kind, conditions);
+	const modal = new ConditionsModal(new App() as any, holder, new ConditionManager(), onChange);
+	modal.open();
+	const container = (modal as any).containerEl as HTMLElement;
+	return { modal, holder, onChange, container };
+}
+type Open = ReturnType<typeof open>;
+
+const qs = <T extends HTMLElement>(root: ParentNode, sel: string): T => {
+	const el = root.querySelector<T>(sel);
+	if (!el) throw new Error(`no element for ${sel}`);
+	return el;
+};
+const rowNames = (c: HTMLElement): string[] => Array.from(c.querySelectorAll('.dse-condal__name')).map((n) => n.textContent ?? '');
+const openEditor = (c: HTMLElement, index: number): void => {
+	c.querySelectorAll<HTMLElement>('.dse-condal__row')[index].querySelector<HTMLElement>('button[aria-label^="Customize"]')!.click();
+};
+const pick = (c: HTMLElement, group: string, label: string): void => qs(c, `[role="group"][aria-label="${group}"] button[aria-label="${label}"]`).click();
+const pressedIn = (c: HTMLElement, group: string): string[] =>
+	Array.from(c.querySelectorAll(`[role="group"][aria-label="${group}"] [aria-pressed="true"]`)).map((b) => b.getAttribute('aria-label') ?? '');
+const lastEmit = (o: Open): Condition[] => o.onChange.mock.calls[o.onChange.mock.calls.length - 1][0];
+
+function openAdd(c: HTMLElement): HTMLInputElement {
+	qs(c, 'button[aria-label="Add condition"]').click();
+	return qs<HTMLInputElement>(c, '.dse-condal__input');
+}
+function typeQuery(input: HTMLInputElement, text: string): void {
+	input.value = text;
+	input.dispatchEvent(new Event('input'));
+}
+const mousedown = (el: HTMLElement): void => {
+	el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+};
+const menuItems = (c: HTMLElement): HTMLElement[] => Array.from(c.querySelectorAll<HTMLElement>('[data-dse-control="cond.option"]'));
+/** Type `text` and pick the option whose label starts with `label` (the custom row's reads `Add custom: "..."`). */
+function pickOption(c: HTMLElement, text: string, label: string): void {
+	const input = c.querySelector<HTMLInputElement>('.dse-condal__input') ?? openAdd(c);
+	typeQuery(input, text);
+	const item = menuItems(c).find((i) => (i.textContent ?? '').startsWith(label));
+	if (!item) throw new Error(`no option "${label}" for "${text}": ${menuItems(c).map((i) => i.textContent).join(' | ')}`);
+	mousedown(item);
+}
+
+afterEach(() => {
+	document.body.innerHTML = '';
+});
+
+// ------------------------------------------------------------------------------------------ duration
+
+/** The five start shapes a condition can arrive in (note YAML spells durations three ways) and what each duration pick must leave. */
+const DURATION_STARTS: Array<{ name: string; start: Entry; after: Record<string, Condition> }> = [
+	{
+		name: 'a plain string',
+		start: 'bleeding',
+		after: { 'Until removed': { key: 'bleeding' }, 'End of Turn': { key: 'bleeding', duration: 'eot' }, 'Save Ends': { key: 'bleeding', duration: 'save-ends' }, 'End of Encounter': { key: 'bleeding', duration: 'eoe' } },
+	},
+	{
+		name: 'an object with a first-class duration',
+		start: { key: 'bleeding', duration: 'eot' },
+		after: { 'Until removed': { key: 'bleeding' }, 'End of Turn': { key: 'bleeding', duration: 'eot' }, 'Save Ends': { key: 'bleeding', duration: 'save-ends' }, 'End of Encounter': { key: 'bleeding', duration: 'eoe' } },
+	},
+	{
+		name: 'a legacy effect-text duration',
+		start: { key: 'bleeding', effect: 'save ends' },
+		after: { 'Until removed': { key: 'bleeding' }, 'End of Turn': { key: 'bleeding', duration: 'eot' }, 'Save Ends': { key: 'bleeding', duration: 'save-ends' }, 'End of Encounter': { key: 'bleeding', duration: 'eoe' } },
+	},
+	{
+		name: 'a real effect and a colour (neither is a duration)',
+		start: { key: 'bleeding', effect: 'glow', color: '#2874a6' },
+		after: {
+			'Until removed': { key: 'bleeding', effect: 'glow', color: '#2874a6' },
+			'End of Turn': { key: 'bleeding', effect: 'glow', color: '#2874a6', duration: 'eot' },
+			'Save Ends': { key: 'bleeding', effect: 'glow', color: '#2874a6', duration: 'save-ends' },
+			'End of Encounter': { key: 'bleeding', effect: 'glow', color: '#2874a6', duration: 'eoe' },
+		},
+	},
+	{
+		name: 'a first-class duration with a dead legacy effect text riding along',
+		start: { key: 'bleeding', duration: 'eot', effect: 'save ends' },
+		after: { 'Until removed': { key: 'bleeding' }, 'End of Turn': { key: 'bleeding', duration: 'eot' }, 'Save Ends': { key: 'bleeding', duration: 'save-ends' }, 'End of Encounter': { key: 'bleeding', duration: 'eoe' } },
+	},
+];
+const DURATION_LABELS = ['Until removed', 'End of Turn', 'Save Ends', 'End of Encounter'];
+const DURATION_PRESSED: Record<string, string> = { 'Until removed': 'Until removed', 'End of Turn': 'End of Turn', 'Save Ends': 'Save Ends', 'End of Encounter': 'End of Encounter' };
+
+describe('SC-436 matrix: the duration chips (start shape x preset x host)', () => {
+	for (const kind of ['hero', 'creature'] as HostKind[]) {
+		for (const { name, start, after } of DURATION_STARTS) {
+			test.each(DURATION_LABELS)(`${kind}, ${name}: "%s" writes one change with exactly the expected entry and presses only that chip`, (label) => {
+				const o = open([start], kind);
+				openEditor(o.container, 0);
+				pick(o.container, 'Duration', label);
+				expect(o.onChange).toHaveBeenCalledTimes(1);
+				expect(lastEmit(o)).toEqual([after[label]]);
+				expect(o.holder.conditions).toEqual([after[label]]);
+				expect(pressedIn(o.container, 'Duration')).toEqual([DURATION_PRESSED[label]]);
+			});
+		}
+	}
+});
+
+// ----------------------------------------------------------------------------------------------- effect
+
+const EFFECT_STARTS: Array<{ name: string; start: Entry; duration: string | undefined }> = [
+	{ name: 'a plain string', start: 'dazed', duration: undefined },
+	{ name: 'nothing but a key', start: { key: 'dazed' }, duration: undefined },
+	{ name: 'a first-class duration', start: { key: 'dazed', duration: 'eoe' }, duration: 'eoe' },
+	{ name: 'a legacy "save ends" effect text', start: { key: 'dazed', effect: 'save ends' }, duration: 'save-ends' },
+	{ name: 'a legacy "EoT" effect text', start: { key: 'dazed', effect: 'EoT' }, duration: 'eot' },
+	{ name: 'a first-class duration AND a legacy effect text (the explicit duration wins)', start: { key: 'dazed', duration: 'eoe', effect: 'save ends' }, duration: 'eoe' },
+	{ name: 'a real effect already set', start: { key: 'dazed', effect: 'blink' }, duration: undefined },
+];
+const EFFECTS: Array<[chip: string, effect: string | undefined]> = [
+	['static', undefined],
+	['blink', 'blink'],
+	['glow', 'glow'],
+	['glow-pulse', 'glow-pulse'],
+	['breathing', 'breathing'],
+	['blur-pulse', 'blur-pulse'],
+];
+
+describe('SC-436 matrix: the effect chips (start shape x effect x host)', () => {
+	for (const kind of ['hero', 'creature'] as HostKind[]) {
+		for (const { name, start, duration } of EFFECT_STARTS) {
+			test.each(EFFECTS)(`${kind}, ${name}: "%s" writes effect %s and keeps or migrates the duration`, (chip, effect) => {
+				const o = open([start], kind);
+				openEditor(o.container, 0);
+				pick(o.container, 'Effect', chip);
+				const expected: Condition = { key: 'dazed' };
+				if (duration) expected.duration = duration as Condition['duration'];
+				if (effect) expected.effect = effect;
+				expect(o.onChange).toHaveBeenCalledTimes(1);
+				expect(lastEmit(o)).toEqual([expected]);
+				expect(pressedIn(o.container, 'Effect')).toEqual([chip]);
+			});
+		}
+	}
+});
+
+// ----------------------------------------------------------------------------------------------- colour
+
+const SWATCHES: Array<[label: string, hex: string]> = [
+	['Color #c0392b', '#c0392b'],
+	['Color #b9770e', '#b9770e'],
+	['Color #1e8449', '#1e8449'],
+	['Color #2874a6', '#2874a6'],
+	['Color #7d3c98', '#7d3c98'],
+];
+const COLOR_STARTS: Array<{ name: string; color: string | undefined; pressed: string[]; custom: boolean }> = [
+	{ name: 'no colour', color: undefined, pressed: [], custom: false },
+	{ name: 'a preset', color: '#c0392b', pressed: ['Color #c0392b'], custom: false },
+	{ name: 'a preset spelled in upper case', color: '#C0392B', pressed: ['Color #c0392b'], custom: false },
+	{ name: 'a custom hex', color: '#123456', pressed: [], custom: true },
+	{ name: 'a CSS colour name', color: 'teal', pressed: [], custom: true },
+	{ name: 'a colour that does not parse', color: 'not-a-colour', pressed: [], custom: false },
+];
+const customSelected = (c: HTMLElement): boolean => qs(c, '.dse-swatch--custom').hasAttribute('data-selected');
+
+describe('SC-436 matrix: the colour swatches and the custom colour (start colour x pick)', () => {
+	test.each(COLOR_STARTS)('opening the editor on $name presses $pressed and marks the pipette selected: $custom', ({ color, pressed, custom }) => {
+		const o = open([{ key: 'prone', color }]);
+		openEditor(o.container, 0);
+		expect(pressedIn(o.container, 'Color')).toEqual(pressed);
+		expect(customSelected(o.container)).toBe(custom);
+		expect(o.onChange).not.toHaveBeenCalled();
+	});
+
+	for (const { name, color } of COLOR_STARTS) {
+		test.each(SWATCHES)(`from ${name}: the swatch "%s" writes %s, presses only itself and unmarks the pipette`, (label, hex) => {
+			const o = open([{ key: 'prone', color }]);
+			openEditor(o.container, 0);
+			pick(o.container, 'Color', label);
+			expect(o.onChange).toHaveBeenCalledTimes(1);
+			expect(lastEmit(o)).toEqual([{ key: 'prone', color: hex }]);
+			expect(pressedIn(o.container, 'Color')).toEqual([label]);
+			expect(customSelected(o.container)).toBe(false);
+		});
+	}
+
+	test.each([
+		['a custom hex', '#123456', true, []],
+		['white (the input\'s own default)', '#ffffff', true, []],
+		['a hex equal to a preset', '#2874a6', false, ['Color #2874a6']],
+	] as Array<[string, string, boolean, string[]]>)('the custom colour input picking %s writes it, and the pipette is selected: %s', (_n, hex, custom, pressed) => {
+		const o = open(['prone']);
+		openEditor(o.container, 0);
+		const input = qs<HTMLInputElement>(o.container, '[data-dse-control="cond.color-custom"]');
+		input.value = hex;
+		input.dispatchEvent(new Event('change'));
+		expect(o.onChange).toHaveBeenCalledTimes(1);
+		expect(lastEmit(o)).toEqual([{ key: 'prone', color: hex }]);
+		expect(customSelected(o.container)).toBe(custom);
+		expect(pressedIn(o.container, 'Color')).toEqual(pressed);
+	});
+});
+
+// --------------------------------------------------------------------------------------------------- icon
+
+describe('SC-436 matrix: the icon picker (start icon x pick)', () => {
+	const choices = (c: HTMLElement): string[] => Array.from(c.querySelectorAll('[data-dse-control="cond.icon"]')).map((b) => b.getAttribute('aria-label') ?? '');
+
+	test.each([
+		['a known condition with no icon', { key: 'bleeding' }, ['Use default condition icon']],
+		['a custom condition with no icon', { key: 'hexed' }, ['Use default condition icon']],
+		['an icon the catalogue lists', { key: 'hexed', icon: 'skull' }, ['Icon: skull']],
+		['an icon outside the suggested set', { key: 'hexed', icon: 'sparkles' }, ['Icon: sparkles']],
+	] as Array<[string, Condition, string[]]>)('on %s the pressed choice is %j', (_n, entry, pressed) => {
+		const o = open([entry]);
+		openEditor(o.container, 0);
+		expect(pressedIn(o.container, 'Condition icon')).toEqual(pressed);
+		expect(o.onChange).not.toHaveBeenCalled();
+	});
+
+	test('a pick writes only `icon`, the default choice removes it, and neither moves the other fields', () => {
+		const entry: Condition = { key: 'hexed', duration: 'eoe', color: '#b9770e', effect: 'glow' };
+		const o = open([entry], 'creature');
+		openEditor(o.container, 0);
+		qs(o.container, 'button[aria-label="Icon: skull"]').click();
+		expect(lastEmit(o)).toEqual([{ ...entry, icon: 'skull' }]);
+		qs(o.container, 'button[aria-label="Use default condition icon"]').click();
+		expect(lastEmit(o)).toEqual([entry]);
+		expect(o.onChange).toHaveBeenCalledTimes(2);
+	});
+
+	test.each([
+		['sk', ['Use default condition icon', 'Icon: skull']],
+		['SPARK', ['Use default condition icon', 'Icon: sparkles']],
+		['  shield ', ['Use default condition icon', 'Icon: shield']],
+		['zzzz', ['Use default condition icon']],
+	] as Array<[string, string[]]>)('typing "%s" in the search leaves the choices %j and writes nothing', (query, expected) => {
+		const o = open([{ key: 'hexed' }]);
+		openEditor(o.container, 0);
+		typeQuery(qs<HTMLInputElement>(o.container, '[data-dse-control="cond.icon-search"]'), query);
+		expect(choices(o.container)).toEqual(expected);
+		expect(o.onChange).not.toHaveBeenCalled();
+	});
+});
+
+// ----------------------------------------------------------------------------------------------- adding
+
+const STANDARD_KEYS = ['Bleeding', 'Dazed', 'Frightened', 'Grabbed', 'Prone', 'Restrained', 'Slowed', 'Taunted', 'Weakened'];
+const PSEUDO_NAMES = ['Marked', 'Triggered Action Used', 'Covered', 'Concealed', 'Dead', 'Defending', 'Dying', 'Falling', 'Flanking', 'Hidden', 'High Ground', 'Invisible', 'Sneaking', 'Unconscious', 'Winded'];
+const KEY_OF: Record<string, string> = { 'Triggered Action Used': 'used-triggered-action', 'High Ground': 'high-ground' };
+const keyOf = (name: string): string => KEY_OF[name] ?? name.toLowerCase();
+
+describe('SC-436 matrix: picking a known condition (every catalogue entry x host x existing entry forms)', () => {
+	// The existing conditions arrive in both forms; neither is among the names picked below.
+	const EXISTING: Entry[] = [{ key: 'restrained', duration: 'save-ends' }, 'sneaking'];
+	const names = [...STANDARD_KEYS, ...PSEUDO_NAMES].filter((n) => !['Restrained', 'Sneaking'].includes(n));
+
+	for (const kind of ['hero', 'creature'] as HostKind[]) {
+		test.each(names)(`${kind}: "%s" appends {key} once, normalises the string entry and clones the object, and leaves the rest of the actor alone`, (name) => {
+			const o = open(EXISTING.map((e) => (typeof e === 'string' ? e : { ...e })), kind);
+			const before = JSON.stringify({ ...o.holder, conditions: undefined });
+			pickOption(o.container, name, name);
+			expect(o.onChange).toHaveBeenCalledTimes(1);
+			expect(lastEmit(o)).toEqual([{ key: 'restrained', duration: 'save-ends' }, { key: 'sneaking' }, { key: keyOf(name) }]);
+			expect(o.holder.conditions).toEqual(lastEmit(o));
+			expect(JSON.stringify({ ...o.holder, conditions: undefined })).toBe(before);
+			expect(rowNames(o.container)).toHaveLength(3);
+		});
+	}
+
+	test.each(['Restrained', 'Sneaking'])('a condition the actor already has ("%s", in either entry form) is a no-op: no change event, still one row of it', (name) => {
+		const o = open([{ key: 'restrained', duration: 'save-ends' }, 'sneaking']);
+		pickOption(o.container, name, name);
+		expect(o.onChange).not.toHaveBeenCalled();
+		expect(rowNames(o.container)).toHaveLength(2);
+	});
+
+	test('the emitted array and its entries are fresh copies: editing them cannot reach the window\'s own state', () => {
+		const o = open([{ key: 'prone', duration: 'eot' }]);
+		pickOption(o.container, 'Dazed', 'Dazed');
+		const emitted = lastEmit(o);
+		emitted[0].duration = 'eoe';
+		emitted.push({ key: 'injected' });
+		pickOption(o.container, 'Bleeding', 'Bleeding');
+		expect(lastEmit(o)).toEqual([{ key: 'prone', duration: 'eot' }, { key: 'dazed' }, { key: 'bleeding' }]);
+	});
+
+	test('the window never mutates the holder\'s own entries before the first change (a string stays a string, an object keeps its identity)', () => {
+		const obj: Condition = { key: 'prone' };
+		const o = open(['bleeding', obj]);
+		expect(o.holder.conditions).toEqual(['bleeding', { key: 'prone' }]);
+		openEditor(o.container, 1);
+		pick(o.container, 'Duration', 'Save Ends');
+		expect(obj).toEqual({ key: 'prone' }); // the clone took the change, not the holder's object
+	});
+});
+
+// ------------------------------------------------------------------------------------------- custom names
+
+const SLUGS: Array<[text: string, key: string]> = [
+	['Fire Aura', 'fire-aura'],
+	['Fire Aura!', 'fire-aura'],
+	['  spaced   out  ', 'spaced-out'],
+	['ALL CAPS', 'all-caps'],
+	['snake_case_name', 'snake-case-name'],
+	['Ünholy', 'unholy'],
+	['Mixed 9 Lives', 'mixed-9-lives'],
+	['a'.repeat(80), 'a'.repeat(64)],
+	[`${'ab '.repeat(30)}end`, `${'ab-'.repeat(21)}a`],
+];
+
+describe('SC-436 matrix: custom conditions (typed text -> key)', () => {
+	test.each(SLUGS)('"%s" adds { key: "%s" } through the "Add custom" row, tagged custom, with the fallback glyph', (text, key) => {
+		const o = open([]);
+		pickOption(o.container, text, 'Add custom:');
+		expect(lastEmit(o)).toEqual([{ key }]);
+		const row = qs(o.container, '.dse-condal__row');
+		expect(row.querySelector('.dse-condal__tag')?.textContent).toBe('custom');
+		expect(row.querySelector('.dse-condal__glyph')?.getAttribute('data-icon')).toBe('circle-dashed');
+	});
+
+	test.each(['!!!', '---', '???  ...'])('"%s" slugs to nothing: no row, no change event, the dropdown stays open', (text) => {
+		const o = open([]);
+		const input = openAdd(o.container);
+		typeQuery(input, text);
+		const custom = menuItems(o.container).find((i) => (i.textContent ?? '').startsWith('Add custom:'));
+		expect(custom).toBeDefined();
+		mousedown(custom!); // punctuation offers a custom row, and the pick is dropped
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+		expect(o.onChange).not.toHaveBeenCalled();
+		expect(rowNames(o.container)).toEqual([]);
+		expect(o.container.querySelector('.dse-condal__input')).not.toBeNull();
+	});
+
+	test('whitespace-only text is the same as an empty query: the whole catalogue, no "Add custom" row', () => {
+		const o = open([]);
+		typeQuery(openAdd(o.container), '    ');
+		expect(menuItems(o.container).length).toBe(STANDARD_KEYS.length + PSEUDO_NAMES.length);
+		expect(menuItems(o.container).some((i) => (i.textContent ?? '').startsWith('Add custom:'))).toBe(false);
+	});
+
+	test('a custom name that slugs to a key the actor already has is a no-op (Hexed typed twice, two spellings)', () => {
+		const o = open([]);
+		pickOption(o.container, 'Hexed', 'Add custom:');
+		pickOption(o.container, 'HEXED!!', 'Add custom:');
+		expect(o.onChange).toHaveBeenCalledTimes(1);
+		expect(rowNames(o.container)).toEqual(['Hexed']);
+	});
+
+	test('a custom name that slugs to a catalogue key lands on that catalogue condition (no CUSTOM tag)', () => {
+		const o = open([]);
+		pickOption(o.container, 'Dazed!', 'Add custom:');
+		expect(lastEmit(o)).toEqual([{ key: 'dazed' }]);
+		expect(o.container.querySelector('.dse-condal__tag')).toBeNull();
+	});
+
+	test.each(['hero', 'creature'] as HostKind[])('%s: a custom condition then a duration, colour and effect all land on the same entry, in order, one change each', (kind) => {
+		const o = open([], kind);
+		pickOption(o.container, 'Fire Aura', 'Add custom:');
+		openEditor(o.container, 0);
+		pick(o.container, 'Duration', 'Save Ends');
+		pick(o.container, 'Color', 'Color #b9770e');
+		pick(o.container, 'Effect', 'glow-pulse');
+		expect(o.onChange).toHaveBeenCalledTimes(4);
+		expect(lastEmit(o)).toEqual([{ key: 'fire-aura', duration: 'save-ends', color: '#b9770e', effect: 'glow-pulse' }]);
+	});
+
+	// SC-257 (open): a non-Latin custom name slugs to an empty key, and the pick is silently dropped.
+	test.failing('SC-257: a custom condition named in a non-Latin script is added (it slugs to nothing today)', () => {
+		const o = open([]);
+		pickOption(o.container, '火', 'Add custom:');
+		expect(o.onChange).toHaveBeenCalledTimes(1);
+	});
+});
+
+// --------------------------------------------------------------------------------------------- removal
+
+describe('SC-436 matrix: removing a row (rows x open editor x removed row)', () => {
+	const NAMES = ['bleeding', 'dazed', 'prone'];
+	const focusLabel = (): string | null => document.activeElement?.getAttribute('aria-label') ?? null;
+	// [open editor row | null, removed row, remaining names, editor row after | null, focus]
+	const CASES: Array<[number | null, number, string[], string | null, string]> = [
+		[null, 0, ['Dazed', 'Prone'], null, 'Customize Dazed'],
+		[null, 1, ['Bleeding', 'Prone'], null, 'Customize Prone'],
+		[null, 2, ['Bleeding', 'Dazed'], null, 'Customize Dazed'],
+		[0, 1, ['Bleeding', 'Prone'], 'Bleeding', 'Customize Prone'],
+		[2, 0, ['Dazed', 'Prone'], 'Prone', 'Customize Dazed'],
+		[1, 0, ['Dazed', 'Prone'], 'Dazed', 'Customize Dazed'],
+		[1, 1, ['Bleeding', 'Prone'], null, 'Customize Prone'],
+		[2, 2, ['Bleeding', 'Dazed'], null, 'Customize Dazed'],
+		[0, 2, ['Bleeding', 'Dazed'], 'Bleeding', 'Customize Dazed'],
+	];
+
+	test.each(CASES)('editor on row %s, remove row %s -> rows %j, editor on %s, focus on "%s"', (editor, removed, remaining, editorAfter, focus) => {
+		const o = open([...NAMES]);
+		if (editor !== null) openEditor(o.container, editor);
+		o.container.querySelectorAll<HTMLElement>('[data-dse-control="cond.remove"]')[removed].click();
+		expect(rowNames(o.container)).toEqual(remaining);
+		expect(o.onChange).toHaveBeenCalledTimes(1);
+		expect(lastEmit(o).map((c) => c.key)).toEqual(remaining.map((n) => n.toLowerCase()));
+		const openRows = Array.from(o.container.querySelectorAll('.dse-condal__row--open .dse-condal__name')).map((n) => n.textContent);
+		expect(openRows).toEqual(editorAfter ? [editorAfter] : []);
+		expect(focusLabel()).toBe(focus);
+	});
+
+	test('removing the only row empties the list and focuses "+ Add condition"', () => {
+		const o = open([{ key: 'prone', duration: 'eot' }], 'creature');
+		o.container.querySelector<HTMLElement>('[data-dse-control="cond.remove"]')!.click();
+		expect(lastEmit(o)).toEqual([]);
+		expect(o.holder.conditions).toEqual([]);
+		expect(document.activeElement).toBe(o.container.querySelector('[data-dse-control="cond.add"]'));
+	});
+
+	test.each(['hero', 'creature'] as HostKind[])('%s: removing a row that has a duration and colour drops the whole entry and leaves the others\' settings', (kind) => {
+		const keep: Condition = { key: 'dazed', duration: 'save-ends', color: '#1e8449', effect: 'blink' };
+		const o = open([{ key: 'prone', duration: 'eot' }, keep], kind);
+		o.container.querySelectorAll<HTMLElement>('[data-dse-control="cond.remove"]')[0].click();
+		expect(lastEmit(o)).toEqual([keep]);
+	});
+});
+
+// ------------------------------------------------------------------------------- what writes, what does not
+
+describe('SC-436 matrix: which interactions emit a change (every interaction x emits)', () => {
+	const NO_WRITE: Array<[string, (o: Open) => void]> = [
+		['opening the window', () => undefined],
+		['opening a row editor', (o) => openEditor(o.container, 0)],
+		['opening then closing a row editor', (o) => { openEditor(o.container, 0); openEditor(o.container, 0); }],
+		['moving the editor from one row to another', (o) => { openEditor(o.container, 0); openEditor(o.container, 1); }],
+		['opening the Add dropdown', (o) => { openAdd(o.container); }],
+		['typing in the dropdown', (o) => typeQuery(openAdd(o.container), 'da')],
+		['arrow keys in the dropdown', (o) => {
+			const input = openAdd(o.container);
+			input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+			input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }));
+		}],
+		['Escape in the dropdown', (o) => openAdd(o.container).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))],
+		['picking a condition the actor already has', (o) => pickOption(o.container, 'Prone', 'Prone')],
+		['typing in the icon search', (o) => { openEditor(o.container, 0); typeQuery(qs<HTMLInputElement>(o.container, '[data-dse-control="cond.icon-search"]'), 'sk'); }],
+		['Done', (o) => qs(o.container, '[data-dse-control="cond.done"]').click()],
+	];
+	test.each(NO_WRITE)('%s emits nothing', (_name, act) => {
+		const o = open(['prone', { key: 'dazed', duration: 'eot' }]);
+		act(o);
+		expect(o.onChange).not.toHaveBeenCalled();
+		expect(o.holder.conditions).toEqual(['prone', { key: 'dazed', duration: 'eot' }]);
+	});
+
+	const WRITES: Array<[string, (o: Open) => void]> = [
+		['picking a known condition', (o) => pickOption(o.container, 'Slowed', 'Slowed')],
+		['picking a custom condition', (o) => pickOption(o.container, 'Hexed', 'Add custom:')],
+		['Enter in the dropdown', (o) => openAdd(o.container).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))],
+		['the trash button', (o) => qs(o.container, '[data-dse-control="cond.remove"]').click()],
+		['a duration chip', (o) => { openEditor(o.container, 0); pick(o.container, 'Duration', 'End of Turn'); }],
+		['an effect chip', (o) => { openEditor(o.container, 0); pick(o.container, 'Effect', 'glow'); }],
+		['a swatch', (o) => { openEditor(o.container, 0); pick(o.container, 'Color', 'Color #1e8449'); }],
+		['an icon', (o) => { openEditor(o.container, 0); qs(o.container, 'button[aria-label="Icon: skull"]').click(); }],
+		['the default icon choice', (o) => { openEditor(o.container, 0); qs(o.container, 'button[aria-label="Use default condition icon"]').click(); }],
+		['the custom colour input', (o) => {
+			openEditor(o.container, 0);
+			const input = qs<HTMLInputElement>(o.container, '[data-dse-control="cond.color-custom"]');
+			input.value = '#010203';
+			input.dispatchEvent(new Event('change'));
+		}],
+	];
+	test.each(WRITES)('%s emits exactly one change, with a list that is not the holder\'s own array', (_name, act) => {
+		const o = open(['prone', { key: 'dazed', duration: 'eot' }]);
+		const original = o.holder.conditions;
+		act(o);
+		expect(o.onChange).toHaveBeenCalledTimes(1);
+		expect(lastEmit(o)).not.toBe(o.holder.conditions);
+		expect(o.holder.conditions).not.toBe(original); // the window hands its own list back to the holder
+		expect(o.holder.conditions).toEqual(lastEmit(o));
+	});
+});
