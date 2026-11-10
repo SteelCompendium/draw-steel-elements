@@ -149,7 +149,7 @@ describe('real-Obsidian census: the minion stamina pool modal', () => {
 });
 
 describe('real-Obsidian census: the Conditions window', () => {
-	it('[CENSUS-07] the open Conditions window (rows, one editor open, then the Add dropdown): every node that listens for input is an identified control', async () => {
+	it('[CENSUS-09] the open Conditions window (rows, one editor open, then the Add dropdown): every node that listens for input is an identified control', async () => {
 		const { modal } = await openConditionsModal(CONDITIONS, 'hero');
 		await dse.click(modal.control('cond.edit', { nth: 1 }));
 		await dse.settle();
