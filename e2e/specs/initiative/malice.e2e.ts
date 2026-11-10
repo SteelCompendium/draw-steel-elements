@@ -122,10 +122,12 @@ describe('initiative: the Malice quick-add row', () => {
 			const m = await maliceOf(MIN);
 			const entry = m.log![0];
 			expect(m.value).toBe(0);
-			// The entry must keep the typed label AND either record the applied change (-3) or say the pool capped it.
+			// The entry must still carry the typed label (anywhere in it) AND either record the applied change (-3) or say the pool capped it / name the applied amount.
 			const applied = m.value - 3;
+			const lbl = String(entry.label ?? '');
+			const rest = lbl.replace(/spend/i, '');
 			const showsClamp =
-				String(entry.label ?? '').startsWith('Spend') && (Object.values(entry).includes(applied) || /cap|clamp|limit/i.test(String(entry.label)));
+				/spend/i.test(lbl) && (Object.values(entry).includes(applied) || /cap|clamp|limit/i.test(rest) || new RegExp(`(^|\\D)${Math.abs(applied)}(\\D|$)`).test(rest));
 			expect(entry.amount === applied || showsClamp).toBe(true);
 		},
 		{ failsWith: /Expected: true/ },

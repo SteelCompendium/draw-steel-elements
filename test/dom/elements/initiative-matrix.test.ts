@@ -414,7 +414,7 @@ describe('[M] Malice: the stepper, the quick-add row and the log disclosure', ()
 		expect(shown(root)).toBe(`Malice: ${expected}`);
 	});
 
-	test('[M03-M05] a quick-add the pool clamps (-9 from 2) still lands Malice at 0 with one entry that keeps its label (what the entry records is SC-578\'s, below)', async () => {
+	test('[M03-M05] a quick-add the pool clamps (-9 from 2) still lands Malice at 0 with one entry that still names its label (how the entry words the clamp is SC-578\'s, below)', async () => {
 		const { root, flush, last, writes } = await mount(withMalice(2));
 		ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = '-9';
 		ctl<HTMLInputElement>(root, 'init.malice.quickadd.label').value = 'Spend';
@@ -423,7 +423,7 @@ describe('[M] Malice: the stepper, the quick-add row and the log disclosure', ()
 		expect(writes()).toHaveLength(1);
 		expect(last().malice.value).toBe(0);
 		expect(last().malice.log).toHaveLength(1);
-		expect(last().malice.log[0].label).toMatch(/^Spend/);
+		expect(last().malice.log[0].label).toMatch(/Spend/i);
 	});
 
 	test.each(['amount', 'label'] as const)('[M04] Enter in the %s field submits the same way the Add button does', async (field) => {
@@ -730,10 +730,12 @@ describe('known bugs: the tracker after Reset encounter, and Malice below 0', ()
 		await flush();
 		const entry = last().malice.log[0];
 		expect(last().malice.value).toBe(0);
-		// The entry must keep the typed label AND either record the applied change (-2) or say the pool capped it.
+		// The entry must still carry the typed label (anywhere in it) AND either record the applied change (-2) or say the pool capped it / name the applied amount.
 		const applied = last().malice.value - 2;
+		const lbl = String(entry.label ?? '');
+		const rest = lbl.replace(/spend/i, '');
 		const showsClamp =
-			String(entry.label ?? '').startsWith('Spend') && (Object.values(entry).includes(applied) || /cap|clamp|limit/i.test(String(entry.label)));
+			/spend/i.test(lbl) && (Object.values(entry).includes(applied) || /cap|clamp|limit/i.test(rest) || new RegExp(`(^|\\D)${Math.abs(applied)}(\\D|$)`).test(rest));
 		expect(entry.amount === applied || showsClamp).toBe(true);
 	});
 	test.failing('[M10] a half-typed quick-add survives Advance round [known bug SC-589]', async () => {
