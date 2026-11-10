@@ -1,0 +1,81 @@
+// SC-436: note integrity around the Conditions window's live writes. The text above, between and below the tracker
+// blocks survives byte for byte, and a second tracker in the same note is never touched (the driver also fails any test
+// that writes into a block it did not edit). Plus the two open tickets that reach this window from outside: SC-384
+// (Live Preview) and SC-355 (the dialog role).
+import { expect } from '@wdio/globals';
+import { dse, knownBug } from '../../driver/dse';
+import { INIT, TRACKER, TWO, addByKeyboard, modalNames, noteCondition, openConditionsModal, openFrom, trackerIcons } from '../../driver/conditions';
+
+const FIRST_BLOCK =
+	'```ds-initiative\nheroes:\n  - name: Alice Alpha\n    max_stamina: 30\nenemy_groups:\n  - name: Ogres\n    creatures:\n      - name: Ogre\n        max_stamina: 60\n        amount: 1\nmalice:\n  value: 1\n```\n';
+const SECOND_BLOCK =
+	'```ds-initiative\nheroes:\n  - name: Bob Beta\n    max_stamina: 25\n    conditions:\n      - grabbed\n      - key: hexed\n        duration: eoe\nenemy_groups:\n  - name: Goblins\n    creatures:\n      - name: Goblin\n        max_stamina: 10\n        amount: 1\nmalice:\n  value: 2\n```\n';
+const HEAD = '# Two trackers\n\nABOVE\n\n';
+const BETWEEN = '\nBETWEEN\n\n';
+const TAIL = '\nBELOW\n';
+
+describe('conditions-modal: a second tracker in the same note', () => {
+	it('[COND-N01] edits through the SECOND tracker\'s window (add, duration, remove) leave the first tracker and the prose byte-identical', async () => {
+		const { modal } = await openConditionsModal(TWO, 'hero', 1);
+		expect(await modalNames()).toEqual(['Grabbed', 'Hexed']);
+		await addByKeyboard(modal, 'daz');
+		await dse.settle();
+		await dse.click(modal.control('cond.edit', { nth: 2 }));
+		await dse.waitForWrite(TWO, () => dse.click(modal.control('cond.duration', { nth: 1 }))); // Dazed -> End of Turn
+		await dse.waitForWrite(TWO, () => dse.click(modal.control('cond.remove', { nth: 0 }))); // Grabbed
+		expect(await modalNames()).toEqual(['Hexed', 'Dazed']);
+		await dse.closeModals();
+		const text = await dse.noteText(TWO);
+		expect(text.startsWith(HEAD + FIRST_BLOCK + BETWEEN)).toBe(true);
+		expect(text.endsWith('```\n' + TAIL)).toBe(true);
+		await dse.expectNoteBlock(TWO, INIT, 1).toMatchObject({
+			heroes: [{ name: 'Bob Beta', conditions: [{ key: 'hexed', duration: 'eoe' }, { key: 'dazed', duration: 'eot' }] }],
+		});
+		await dse.expectNoteBlock(TWO, INIT, 0).toMatchObject({ heroes: [{ name: 'Alice Alpha', max_stamina: 30 }], malice: { value: 1 } });
+	});
+
+	it('[COND-N02] edits through the FIRST tracker\'s window leave the second tracker (its conditions, spelling and all) and the prose byte-identical', async () => {
+		const { modal } = await openConditionsModal(TWO, 'hero', 0);
+		await addByKeyboard(modal, 'hexed');
+		await dse.settle();
+		await dse.closeModals();
+		const text = await dse.noteText(TWO);
+		expect(text.startsWith(HEAD + '```ds-initiative\n')).toBe(true);
+		expect(text.endsWith(BETWEEN + SECOND_BLOCK + TAIL)).toBe(true);
+		await dse.expectNoteBlock(TWO, INIT, 0).toMatchObject({ heroes: [{ name: 'Alice Alpha', conditions: [{ key: 'hexed' }] }] });
+		expect(await trackerIcons('hero', 1)).toEqual(['Grabbed', 'Hexed']);
+	});
+
+	it('[COND-N03] a whole session on one tracker (custom add, Save Ends, removal) rewrites only the block body: the fence lines and the prose stay', async () => {
+		const { modal } = await openConditionsModal(TRACKER, 'hero');
+		await addByKeyboard(modal, 'Fire Aura');
+		await dse.settle();
+		await dse.click(modal.control('cond.edit', { nth: 0 }));
+		await dse.waitForWrite(TRACKER, () => dse.click(modal.control('cond.duration', { nth: 2 })));
+		expect(await noteCondition(TRACKER, 'hero', 0)).toEqual({ key: 'fire-aura', duration: 'save-ends' });
+		await dse.waitForWrite(TRACKER, () => dse.click(modal.control('cond.remove', { nth: 0 })));
+		await dse.closeModals();
+		const text = await dse.noteText(TRACKER);
+		expect(text.startsWith('# Initiative tracker\n\nABOVE\n\n```ds-initiative\nheroes:\n')).toBe(true);
+		expect(text.endsWith('```\n\nBELOW\n')).toBe(true);
+		expect(text.match(/```/g)).toHaveLength(2);
+		expect(await trackerIcons('hero')).toEqual([]);
+	});
+});
+
+describe('conditions-modal: tickets that reach it from outside', () => {
+	knownBug('SC-384', '[COND-N04] in Live Preview the window stays open when the write it caused lands', async () => {
+		await dse.openNote(TRACKER, { mode: 'live-preview' });
+		const modal = await openFrom(dse.block(INIT), 'hero');
+		await addByKeyboard(modal, 'daz');
+		await dse.settle();
+		await expect(modal.root).toBeExisting({ message: 'the Conditions window closed when its own write landed' });
+		await dse.closeModals();
+	}, { failsWith: /closed when its own write landed/ });
+
+	knownBug('SC-355', '[COND-N05] the Conditions window is exposed to assistive technology as a dialog', async () => {
+		const { modal } = await openConditionsModal(TRACKER, 'hero');
+		expect(await modal.root.getComputedRole()).toBe('dialog');
+		await dse.closeModals();
+	}, { failsWith: /Received: "generic"/ });
+});

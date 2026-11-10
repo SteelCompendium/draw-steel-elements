@@ -22,7 +22,7 @@ export default surface('conditions-modal', {
 		'cond.edit': c(['click', 'press:Enter', 'press:Escape'], ['SC-468', 'R01', 'R02', 'X05']),
 		'cond.remove': c(['click', 'press:Enter'], ['R03', 'R04']),
 		// -- E. The inline editor (repeated nodes: nth). SC-468: the pick options; SC-474: the icon search field.
-		'cond.icon-search': c(['click', 'type'], ['SC-474', 'E01']),
+		'cond.icon-search': c(['click', 'type', 'press:Escape'], ['SC-474', 'E01', 'X07']),
 		'cond.icon': c(['click', 'press:Enter'], ['E02', 'E03']),
 		'cond.duration': c(['click', 'press:Enter'], ['SC-468', 'E04', 'E05']),
 		'cond.swatch': c(['click', 'press:Enter'], ['SC-468', 'E06']),
