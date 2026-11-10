@@ -6271,7 +6271,7 @@ const SCENARIOS = [
 								if (scrolledBy >= GO_AT) {
 									if (attempt >= ENV_RETRIES) throw new Error(`${tag}: environment (re-run, check /proc/loadavg): the scroll took ${scrolledBy} ms, past the ${GO_AT} ms the redraw is let go at; a build that is still pinned there may legitimately let go from its backstop (${PIN_TTL_MS} ms)`);
 									envRetries.push(`${tag} attempt ${attempt + 1}: ${scrolledBy} ms`);
-									await t.ev(`(() => { if (window.__gs59go) { try { window.__gs59go(); } catch {} } window.__gs59go = null; return true; })()`);
+									await t.ev(`(() => { window.__gs59c.goAt = performance.now(); if (window.__gs59go) { try { window.__gs59go(); } catch {} } window.__gs59go = null; return true; })()`);
 									await t.waitFor('window.__gs59c.done', `${tag}: the discarded attempt ${attempt + 1} finished`, CAP_MS);
 									continue;
 								}
