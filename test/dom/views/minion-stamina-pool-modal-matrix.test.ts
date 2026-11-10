@@ -639,3 +639,32 @@ describe('a group holding two minion squads: each modal reads and writes ITS squ
 		expect(persist).toHaveBeenCalledTimes(1);
 	});
 });
+
+// ------------------------------------------------------------------------------------ known bugs
+
+describe('known bugs (test.failing: each FAILS once its ticket is fixed, then drop the marker)', () => {
+	// SC-566: overkill through the Apply Damage row. The pool cannot lose more than it holds, so the label and the
+	// info line should state the 20 damage Apply will write, as StaminaEditModal's label does (SC-427 R3-F5).
+	test.failing('SC-566: 99 damage x 5 minions on a pool of 20 labels and explains the clamped 20 damage, not 495', async () => {
+		const { content } = await open();
+		dealDamage(content, '99', '5');
+		expect(poolInput(content).value).toBe('0'); // setup: the stepper already shows the clamp
+		expect(apply(content).textContent).toBe('Deal 20 damage, kill 5 minion(s)');
+		expect(info(content).textContent).toBe(`20 damage will kill 5 minion(s).${SEL(5)}`);
+	});
+
+	// SC-567: owed kills drop from 2 to 1 with 2 boxes ticked. Either fix satisfies this: trim the surplus ticks
+	// (Apply enables, no title) or keep them and reword the tooltip. What may never happen is a disabled Apply whose
+	// tooltip says "Select N minion(s) to kill" with N not above the number already ticked.
+	test.failing('SC-567: a disabled Apply never asks for fewer kills than are already ticked', async () => {
+		const { content } = await open();
+		typePool(content, '12'); // 2 owed
+		tick(content, 0);
+		tick(content, 1);
+		expect(apply(content).disabled).toBe(false); // setup: 2 owed, 2 ticked
+		typePool(content, '16'); // 1 owed
+		const ticked = all<HTMLInputElement>(content, 'pool.kill').filter((b) => b.checked).length;
+		const asked = /^Select (\d+) minion\(s\) to kill$/.exec(apply(content).getAttribute('title') ?? '');
+		if (apply(content).disabled && asked) expect(Number(asked[1])).toBeGreaterThan(ticked);
+	});
+});
