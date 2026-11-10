@@ -140,7 +140,7 @@
 // pane's `setViewData` is held, as in G-S18 (d)) must not release the pin: Obsidian's virtualisation takes the tracker's section out of the document, which is not
 // a redraw (to the end of the note, and down then up; fixture pin-virt.md). Controls (temporary bundles via DSE_LIFECYCLE_BUNDLE, built from `git archive` exports):
 // the develop build before SC-472 FAILs (a) and (b); release-on-redraw with a plain 2.5 s timer instead of the load-aware backstop FAILs (a) and (b); the SC-472
-// first version (any removal of an arm-time root counts as "redraw started", b8f7fcb2) FAILs (c) only. It runs as its own `--only=G-S59` part (about 4 min) and
+// first version (any removal of an arm-time root counts as "redraw started", b8f7fcb2) FAILs (c) only. It runs as its own `--only=G-S59` part (about 2 min, 2.7 min at load 20-50, SC-561) and
 // sits before G-S56, which stays last.
 //
 // SC-544 appends G-S61 (48 scenarios in all; it sits before G-S56 too, after SC-540's G-S62): two quick clicks on identical blocks (the second inside the first block's 400 ms debounce)
