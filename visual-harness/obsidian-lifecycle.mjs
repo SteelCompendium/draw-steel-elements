@@ -130,12 +130,13 @@
 // card detaches its own button, and Obsidian's deferred selection walks up from that detached target, so the root's mark was not enough), and (i) Reading view: the
 // same + writes and no card carries `interactive-child`.
 // SC-472 appends G-S59 (49 scenarios in all; the id was assigned by the dispatcher): a scroll pin / hold is released by the redraw it protects, not by a 2.5 s
-// timer a busy main thread can outrun. CPU throttled 8x through CDP around the writes only (reset in a finally) and the main thread kept busy for 4 s
-// right after each write (a slow `modify` handler of some other plugin), so the redraw starts later than PIN_TTL_MS: (a) a Reading pane and a Live Preview
+// timer a busy main thread can outrun. The main thread is kept busy for 4 s right after each write (a slow `modify` handler of some other plugin), so the
+// redraw starts later than PIN_TTL_MS (no CPU throttle: SC-561 took out the 8x CDP throttle, it stretched a write's ~2 s of real style and layout work to
+// 14-20 s at idle and past the 30 s cap under load; do not add one back): (a) a Reading pane and a Live Preview
 // pane of tall.md, the Reading pane observed (SC-470); (b) a Live Preview host embedding a tracker note, with a Reading pane of that note (SC-522); 3 writes
 // each, event-based wait (cap 30 s), scrollTop identical every frame, the pin / hold on at the redraw and released, the tracker redrawn. A phase FAILs as
-// vacuous unless one of its writes was redrawn later than PIN_TTL_MS (by construction: the 4 s spin is longer than PIN_TTL_MS; the spin, not the throttle, is what
-// makes stock fail, and the backstop's busy rules are covered by jest, not here). (c) (unthrottled, no spin) a reader who SCROLLS while the redraw is late (the
+// vacuous unless one of its writes was redrawn later than PIN_TTL_MS (by construction: the 4 s spin is longer than PIN_TTL_MS; the spin is what
+// makes stock fail, and the backstop's busy rules are covered by jest, not here). (c) (no spin) a reader who SCROLLS while the redraw is late (the
 // pane's `setViewData` is held, as in G-S18 (d)) must not release the pin: Obsidian's virtualisation takes the tracker's section out of the document, which is not
 // a redraw (to the end of the note, and down then up; fixture pin-virt.md). Controls (temporary bundles via DSE_LIFECYCLE_BUNDLE, built from `git archive` exports):
 // the develop build before SC-472 FAILs (a) and (b); release-on-redraw with a plain 2.5 s timer instead of the load-aware backstop FAILs (a) and (b); the SC-472
@@ -6005,8 +6006,11 @@ const SCENARIOS = [
 		// G-S59 (SC-472): the scroll pin / hold is released by the REDRAW it protects, not by a timer that a busy main thread can outrun.
 		// Another pane's redraw can occupy the main thread for seconds, so the redraw of the pane we watch starts late - more than
 		// PIN_TTL_MS (2.5 s) after the write - and a pin or hold that a plain 2.5 s timer already dropped lets the browser clamp scrollTop
-		// (stock: Reading 2779 -> 2001, Live Preview host 7486 -> 3745). A real load cannot be scripted, so the CPU is throttled 8x through
-		// CDP, around the writes only (reset in a finally). Phases, 3 writes each, an outside vault.process:
+		// (stock: Reading 2779 -> 2001, Live Preview host 7486 -> 3745). A real load cannot be scripted, so the main thread is kept busy for
+		// BUSY_MS (4 s) right after each write, which is what makes the redraw late. There is no CPU throttle (SC-561): under CDP's 8x throttle a
+		// write's ~2 s of style and layout work took 14-20 s at idle against the 30 s cap and failed under load; without it the wait is 5.5-9.4 s at
+		// load 6-35 and the two SC-472 controls (the develop build before SC-472, a plain 2.5 s timer) still FAIL (a) and (b) on every write.
+		// Phases, 3 writes each, an outside vault.process:
 		//   (a) Reading pane A and Live Preview pane B of tall.md, both parked in the tracker, A observed (SC-470's sibling case);
 		//   (b) a Live Preview host of lpembtracker.md parked at its end (SC-522), a Reading pane showing the tracker's note parked in it.
 		// Event-based wait, no timer decides an outcome: until the pin / hold attribute was seen on and is gone AND the observed tracker was
@@ -6016,11 +6020,9 @@ const SCENARIOS = [
 		id: 'G-S59',
 		async run(t) {
 			const PIN_TTL_MS = 2500; // redrawBackstop.ts
-			const RATE = 8;
 			const WRITES = 3;
 			const BUSY_MS = 4000;
 			const CAP_MS = 30000;
-			const throttle = (rate) => t.cdp.call('Emulation.setCPUThrottlingRate', { rate });
 			const RD = (leaf) => `(${leaf}).view.containerEl.querySelector('.markdown-reading-view > .markdown-preview-view')`;
 			const parkReading = async (leaf, below = 1500) => {
 				for (let i = 0; i < 3; i++) {
@@ -6033,28 +6035,24 @@ const SCENARIOS = [
 			// attribute was on then. `mounted()` says a mounted tracker other than the tagged one is in the pane. Done once the attribute was seen on and is
 			// gone, the tracker was replaced and is mounted, plus 10 frames; it stops by itself after 40 s.
 			const record = (cfg) => t.ev(`(() => { const s = ${cfg.scroller}; const tagged = ${cfg.tagged}; const attrEl = ${cfg.attrEl}; const mounted = ${cfg.mounted}; const attr = ${JSON.stringify(cfg.attr)}; const other = ${cfg.other ?? 'null'}; const st = { otherAt: null, done: false, isTagged: !!tagged && tagged.__lcTag === 'gs59', st0: s.scrollTop, max0: s.scrollHeight - s.clientHeight, frames: 0, stMin: s.scrollTop, stMax: s.scrollTop, stEnd: s.scrollTop, pinSeen: false, released: false, redrawAt: null, pinAtRedraw: null, framesOn: 0, afterDone: 0, ready: false, timedOut: false }; window.__gs59 = st; const mo = new MutationObserver(() => { if (st.otherAt === null && other && !other.isConnected) st.otherAt = Math.round(performance.now() - (window.__gs59t0 ?? performance.now())); if (st.redrawAt === null && tagged && !tagged.isConnected) { st.redrawAt = Math.round(performance.now() - (window.__gs59t0 ?? performance.now())); st.pinAtRedraw = !!attrEl() && attrEl().hasAttribute(attr); } }); mo.observe(other ? document.body : s, { childList: true, subtree: true }); const t0 = performance.now(); const tick = () => { const v = s.scrollTop; st.frames++; st.stMin = Math.min(st.stMin, v); st.stMax = Math.max(st.stMax, v); st.stEnd = v; const el = attrEl(); const on = !!el && el.hasAttribute(attr); if (on) { st.pinSeen = true; st.framesOn++; } else if (st.pinSeen) st.released = true; if (st.released && st.redrawAt !== null && mounted()) { st.ready = true; st.afterDone++; } if (st.afterDone >= 10) { st.done = true; mo.disconnect(); return; } if (performance.now() - t0 > 40000) { st.timedOut = true; st.done = true; mo.disconnect(); return; } requestAnimationFrame(tick); }; requestAnimationFrame(tick); return true; })()`);
-			// One throttled write; returns the recorder's state. Throttle only around the write, reset in a finally.
-			const throttledWrite = async (rel, value) => {
+			// One write with the main thread kept busy after it; returns the recorder's state. The spin is the only source of lateness (SC-561: no throttle).
+			const busyWrite = async (rel, value) => {
 				let busyRef = null;
 				try {
-					await throttle(RATE);
 					// A slow `modify` handler of some other plugin: the main thread is busy for BUSY_MS (wall clock) right after the write, so the
 					// redraw that follows starts later than PIN_TTL_MS whatever the order in which Obsidian's panes handle the write (measured under
-					// the throttle alone, phase (b)'s embed redraw came 0.4 s after the write in some runs and 12 s in others).
+					// a throttle alone, phase (b)'s embed redraw came 0.4 s after the write in some runs and 12 s in others).
 					busyRef = await t.ev(`(() => { const rel = ${JSON.stringify(rel)}; const ref = app.vault.on('modify', (f) => { if (f.path !== rel) return; setTimeout(() => { const end = performance.now() + ${BUSY_MS}; while (performance.now() < end); }, 0); }); window.__gs59busy = ref; return true; })()`);
 					await t.ev(`(async () => { window.__gs59t0 = performance.now(); await app.vault.process(app.vault.getAbstractFileByPath(${JSON.stringify(rel)}), (c) => c.replace(/ {2}value: \\d+/, '  value: ${value}')); })()`);
 					try {
-						// released + redrawn + mounted is the outcome; the 10 frames after it are counted unthrottled (under 8x only 15 frames were painted in
-						// 38 s on a busy machine: a false red from frame starvation, SC-472 r5)
+						// released + redrawn + mounted is the outcome, then the 10 frames after it
 						await t.waitFor('window.__gs59 && (window.__gs59.ready || window.__gs59.done)', `the pin or hold released and the tracker redrawn (${rel}, write value ${value})`, CAP_MS);
-						await throttle(1);
 						await t.waitFor('window.__gs59 && window.__gs59.done', `the 10 frames after the release (${rel}, write value ${value})`, CAP_MS);
 					} catch (e) {
 						const state = await t.ev('JSON.stringify(Object.assign({ atMs: Math.round(performance.now() - (window.__gs59t0 ?? 0)) }, window.__gs59))').catch(() => 'state unreadable');
 						throw new Error(`${e instanceof Error ? e.message : String(e)}; recorder state ${state}`);
 					}
 				} finally {
-					await throttle(1);
 					if (busyRef) await t.ev(`(() => { if (window.__gs59busy) app.vault.offref(window.__gs59busy); window.__gs59busy = null; return true; })()`);
 				}
 				return t.ev('Object.assign({}, window.__gs59)');
@@ -6072,7 +6070,7 @@ const SCENARIOS = [
 			};
 			const out = [];
 			const fails = [];
-			// A phase: setup once, then WRITES writes (park/tag, record, throttled write, check, reset); every write runs even after one fails.
+			// A phase: setup once, then WRITES writes (park/tag, record, busy write, check, reset); every write runs even after one fails.
 			const phase = async (name, rel, { setup, park, tagRecord, what, teardown }) => {
 				const lat = [];
 				const notes = [];
@@ -6085,7 +6083,7 @@ const SCENARIOS = [
 							await park();
 							const cfg = await tagRecord();
 							await record(cfg);
-							const m = await throttledWrite(rel, k + 2);
+							const m = await busyWrite(rel, k + 2);
 							lat.push(m.redrawAt);
 							notes.push(`${m.redrawAt} ms${m.otherAt !== null ? ` (other pane ${m.otherAt} ms)` : ''} (held ${m.st0})`);
 							check(tag, m, k + 2, rel, what);
@@ -6093,7 +6091,7 @@ const SCENARIOS = [
 							fails.push(e instanceof Error ? e.message : String(e));
 						}
 						try {
-							await t.reset(rel); // unthrottled; then wait for the pin / hold of that write to go
+							await t.reset(rel); // then wait for the pin / hold of that write to go
 							await t.waitFor(`!document.querySelector('[data-dse-scroll-pin], [data-dse-lp-embed-hold], [data-dse-lp-hold]')`, 'the pin and holds of the reset write to be gone', CAP_MS);
 							await t.sleep(600); // let the layout settle before parking again
 						} catch (e) {
@@ -6212,15 +6210,20 @@ const SCENARIOS = [
 			// them released at once: 7456 -> 3889, and 10111 -> 6544 with two trackers). The redraw is made late by holding the pane's `setViewData`
 			// (as G-S18 (d) does) and is let go at write + (PIN_TTL_MS - 100 ms), a moment the test constructs: a correct build must still be pinned
 			// then, and the scroll has ended before it (asserted), so a release at ANY earlier point - however delayed - is caught. Real CDP wheel
-			// events scroll; unthrottled, no busy spin. Three scrolls: to the note's end, down then back up (one tracker), and to the second tracker
+			// events scroll; no busy spin. Three scrolls: to the note's end, down then back up (one tracker), and to the second tracker
 			// of a two-tracker note (pin-virt2.md). Anti-vacuity: the root left the document (one tracker) / a second root was drawn (two), the sizer
 			// was untouched until the redraw was let go, then collapsed and came back. The bound at the end is the floor: the page cannot be higher
 			// than the arm-time scrollHeight allows (Obsidian re-measures the sections the reader scrolled into: -512 px here, -448 px on stock).
+			// SC-561: the scroll must end before GO_AT (asserted) and that is the only part of (c) that load can break, because each wheel step makes Obsidian
+			// render the sections it passes and the second tracker's first mount costs 1-2.5 s of main thread by itself. So the scrolls are two large wheel steps
+			// (2 x 3000; down then up 2 x 3000, -1800; second tracker 2 x 6000) instead of 10 x 600 and an attempt whose scroll still ended after GO_AT is discarded
+			// and the variant re-run (ENV_RETRIES = 2): only that environment check can trigger a re-run, the product assertions run on the valid attempt.
 			{
 				const A = 'window.__gs59A';
 				const RDA = RD(A);
 				const SIZER = `${RDA}.querySelector(':scope > .markdown-preview-sizer')`;
-				const GO_AT = PIN_TTL_MS - 100; // a correct build is pinned until at least PIN_TTL_MS + 30 painted frames
+				const GO_AT = PIN_TTL_MS - 100; // a correct build is pinned until at least PIN_TTL_MS + 30 painted frames; it must stay below PIN_TTL_MS
+				const ENV_RETRIES = 2; // re-runs of a variant whose scroll was too slow (environment only), SC-561
 				try {
 					await t.reset('Lifecycle/pin-virt.md');
 					await t.open('Lifecycle/pin-virt.md');
@@ -6233,31 +6236,44 @@ const SCENARIOS = [
 						const rel = variant.rel;
 						const tag = `(c) scroll ${variant.name}`;
 						try {
-							await t.reset(rel);
-							await t.open(rel);
-							await t.waitFor(`!document.querySelector('[data-dse-scroll-pin]')`, `${tag}: the pin of the reset write is gone`, CAP_MS);
-							await t.ev(`(() => { ${RDA}.scrollTop = 0; return true; })()`);
-							await t.waitFor(`!!(${t.root(TRACKER, A)})`, `${tag}: the tracker is drawn again`, CAP_MS);
-							await parkReading(A);
-							await t.tag(TRACKER, 'gs59', A);
-							await t.ev(`(() => { const s = ${RDA}; const tagged = ${t.root(TRACKER, A)}; const sz = ${SIZER}; const mh0 = parseFloat(sz.style.minHeight); const o = (${A}).view.setViewData; const v = (${A}).view; window.__gs59go = null; v.setViewData = function (d, c) { v.setViewData = o; window.__gs59go = () => o.call(v, d, c); }; const roots0 = new Set(Array.from(s.querySelectorAll('[data-dse-element]'))); const st = { mh0, sh0: s.scrollHeight, ch0: s.clientHeight, st0: Math.round(s.scrollTop), tagLeft: false, second: false, writeAt: null, goAt: null, low: null, back: null, pinAtLow: null, pinOn: false, pinOff: null, stAfterGoMin: null, frames: 0, done: false, mhNow: mh0 }; window.__gs59c = st; const mo = new MutationObserver(() => { const z = ${SIZER}; const mh = z ? parseFloat(z.style.minHeight) : NaN; st.mhNow = mh; if (!tagged.isConnected) st.tagLeft = true; if (Array.from(s.querySelectorAll('[data-dse-element]')).some((r) => r.isConnected && !roots0.has(r) && r.childElementCount > 0)) st.second = true; if (st.goAt !== null && st.low === null && mh < mh0 - 2) { st.low = Math.round(performance.now() - st.goAt); st.pinAtLow = s.hasAttribute('data-dse-scroll-pin'); st.stAtLow = Math.round(s.scrollTop); st.shMin = s.scrollHeight; st.ch = s.clientHeight; } if (st.low !== null && st.back === null && mh >= mh0 - 2) st.back = Math.round(performance.now() - st.goAt); }); mo.observe(s, { subtree: true, childList: true, attributes: true, attributeFilter: ['style'] }); const tick = () => { st.frames++; const on = s.hasAttribute('data-dse-scroll-pin'); if (on) st.pinOn = true; if (st.pinOn && !on && st.pinOff === null) st.pinOff = st.goAt === null ? -1 : Math.round(performance.now() - st.goAt); if (st.goAt !== null) { const v = Math.round(s.scrollTop); st.stAfterGoMin = st.stAfterGoMin === null ? v : Math.min(st.stAfterGoMin, v); if (st.low !== null && st.back === null) st.shMin = Math.min(st.shMin, s.scrollHeight); } if (st.pinOff !== null && st.back !== null && st.pinOff >= 0) { st.afterDone = (st.afterDone || 0) + 1; } if ((st.afterDone || 0) >= 10 || performance.now() - (st.t0 ??= performance.now()) > 40000) { st.done = true; st.stEnd = Math.round(s.scrollTop); st.endMax = Math.round(s.scrollHeight - s.clientHeight); mo.disconnect(); return; } requestAnimationFrame(tick); }; requestAnimationFrame(tick); return true; })()`);
-							await t.ev(`(async () => { window.__gs59c.writeAt = performance.now(); await app.vault.process(app.vault.getAbstractFileByPath(${JSON.stringify(rel)}), (c) => c.replace('  value: 1', '  value: 2')); })()`);
-							await t.waitFor('typeof window.__gs59go === "function"', `${tag}: the pane reached setViewData`, CAP_MS);
-							const c = await t.ev(`(() => { const r = ${RDA}.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
-							const wheel = async (dy, n) => {
-								for (let i = 0; i < n; i++) {
-									await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseWheel', x: c.x, y: c.y, deltaX: 0, deltaY: dy });
-									await t.sleep(16);
+							// A scroll that ends after GO_AT is an environment problem (the machine is loaded), not a verdict on the pin: re-run the variant, at most ENV_RETRIES times,
+							// and only when this check alone failed. The product assertions below run on the attempt whose environment was valid (SC-561).
+							let scrolledBy = 0;
+							const envRetries = [];
+							for (let attempt = 0; ; attempt++) {
+								await t.reset(rel);
+								await t.open(rel);
+								await t.waitFor(`!document.querySelector('[data-dse-scroll-pin]')`, `${tag}: the pin of the reset write is gone`, CAP_MS);
+								await t.ev(`(() => { ${RDA}.scrollTop = 0; return true; })()`);
+								await t.waitFor(`!!(${t.root(TRACKER, A)})`, `${tag}: the tracker is drawn again`, CAP_MS);
+								await parkReading(A);
+								await t.tag(TRACKER, 'gs59', A);
+								await t.ev(`(() => { const s = ${RDA}; const tagged = ${t.root(TRACKER, A)}; const sz = ${SIZER}; const mh0 = parseFloat(sz.style.minHeight); const o = (${A}).view.setViewData; const v = (${A}).view; window.__gs59go = null; v.setViewData = function (d, c) { v.setViewData = o; window.__gs59go = () => o.call(v, d, c); }; const roots0 = new Set(Array.from(s.querySelectorAll('[data-dse-element]'))); const st = { mh0, sh0: s.scrollHeight, ch0: s.clientHeight, st0: Math.round(s.scrollTop), tagLeft: false, second: false, writeAt: null, goAt: null, low: null, back: null, pinAtLow: null, pinOn: false, pinOff: null, stAfterGoMin: null, frames: 0, done: false, mhNow: mh0 }; window.__gs59c = st; const mo = new MutationObserver(() => { const z = ${SIZER}; const mh = z ? parseFloat(z.style.minHeight) : NaN; st.mhNow = mh; if (!tagged.isConnected) st.tagLeft = true; if (Array.from(s.querySelectorAll('[data-dse-element]')).some((r) => r.isConnected && !roots0.has(r) && r.childElementCount > 0)) st.second = true; if (st.goAt !== null && st.low === null && mh < mh0 - 2) { st.low = Math.round(performance.now() - st.goAt); st.pinAtLow = s.hasAttribute('data-dse-scroll-pin'); st.stAtLow = Math.round(s.scrollTop); st.shMin = s.scrollHeight; st.ch = s.clientHeight; } if (st.low !== null && st.back === null && mh >= mh0 - 2) st.back = Math.round(performance.now() - st.goAt); }); mo.observe(s, { subtree: true, childList: true, attributes: true, attributeFilter: ['style'] }); const tick = () => { st.frames++; const on = s.hasAttribute('data-dse-scroll-pin'); if (on) st.pinOn = true; if (st.pinOn && !on && st.pinOff === null) st.pinOff = st.goAt === null ? -1 : Math.round(performance.now() - st.goAt); if (st.goAt !== null) { const v = Math.round(s.scrollTop); st.stAfterGoMin = st.stAfterGoMin === null ? v : Math.min(st.stAfterGoMin, v); if (st.low !== null && st.back === null) st.shMin = Math.min(st.shMin, s.scrollHeight); } if (st.pinOff !== null && st.back !== null && st.pinOff >= 0) { st.afterDone = (st.afterDone || 0) + 1; } if ((st.afterDone || 0) >= 10 || performance.now() - (st.t0 ??= performance.now()) > 40000) { st.done = true; st.stEnd = Math.round(s.scrollTop); st.endMax = Math.round(s.scrollHeight - s.clientHeight); mo.disconnect(); return; } requestAnimationFrame(tick); }; requestAnimationFrame(tick); return true; })()`);
+								await t.ev(`(async () => { window.__gs59c.writeAt = performance.now(); await app.vault.process(app.vault.getAbstractFileByPath(${JSON.stringify(rel)}), (c) => c.replace('  value: 1', '  value: 2')); })()`);
+								await t.waitFor('typeof window.__gs59go === "function"', `${tag}: the pane reached setViewData`, CAP_MS);
+								const c = await t.ev(`(() => { const r = ${RDA}.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+								const wheel = async (dy, n) => {
+									for (let i = 0; i < n; i++) {
+										await t.cdp.call('Input.dispatchMouseEvent', { type: 'mouseWheel', x: c.x, y: c.y, deltaX: 0, deltaY: dy });
+										await t.sleep(16);
+									}
+								};
+								if (variant.kind === 'second') {
+									await wheel(6000, 2);
+								} else {
+									await wheel(3000, 2);
+									if (variant.name === 'down then up') await wheel(-1800, 1);
 								}
-							};
-							if (variant.kind === 'second') {
-								await wheel(3000, 4);
-							} else {
-								await wheel(600, 10);
-								if (variant.name === 'down then up') await wheel(-600, 3);
+								scrolledBy = await t.ev('Math.round(performance.now() - window.__gs59c.writeAt)');
+								if (scrolledBy >= GO_AT) {
+									if (attempt >= ENV_RETRIES) throw new Error(`${tag}: environment (re-run, check /proc/loadavg): the scroll took ${scrolledBy} ms, past the ${GO_AT} ms the redraw is let go at; a build that is still pinned there may legitimately let go from its backstop (${PIN_TTL_MS} ms)`);
+									envRetries.push(`${tag} attempt ${attempt + 1}: ${scrolledBy} ms`);
+									await t.ev(`(() => { if (window.__gs59go) { try { window.__gs59go(); } catch {} } window.__gs59go = null; return true; })()`);
+									await t.waitFor('window.__gs59c.done', `${tag}: the discarded attempt ${attempt + 1} finished`, CAP_MS);
+									continue;
+								}
+								break;
 							}
-							const scrolledBy = await t.ev('Math.round(performance.now() - window.__gs59c.writeAt)');
-							t.expect(scrolledBy < GO_AT, `${tag}: environment (re-run, check /proc/loadavg): the scroll took ${scrolledBy} ms, past the ${GO_AT} ms the redraw is let go at; a build that is still pinned there may legitimately let go from its backstop (${PIN_TTL_MS} ms)`);
 							await t.waitFor(variant.kind === 'second' ? 'window.__gs59c.second' : 'window.__gs59c.tagLeft', variant.kind === 'second' ? `${tag}: the second tracker was drawn` : `${tag}: the tracker's section left the document (virtualisation)`, CAP_MS);
 							await t.waitFor(`performance.now() - window.__gs59c.writeAt >= ${GO_AT}`, `${tag}: write + ${GO_AT} ms`, CAP_MS);
 							const mid = await t.ev(`(() => { const s = ${RDA}; const z = ${SIZER}; return { pin: s.hasAttribute('data-dse-scroll-pin'), st: Math.round(s.scrollTop), mh: parseFloat(z.style.minHeight), at: Math.round(performance.now() - window.__gs59c.writeAt) }; })()`);
@@ -6275,7 +6291,7 @@ const SCENARIOS = [
 							t.expect(m.shMin >= m.sh0 - 2, `${tag}: the scroller got shorter while the sizer was collapsed (scrollHeight ${m.sh0} at the arm, ${m.shMin} then) - the pin was not holding; pin released ${m.pinOff} ms after the redraw was let go, sizer collapsed at ${m.low} ms and back at ${m.back} ms`);
 							// At the end the page may be higher than the reader left it, but not beyond what the arm-time height allows.
 							t.expect(m.stEnd >= Math.min(mid.st, m.sh0 - m.ch0) - 2, `${tag}: the reader was moved: scrollTop ${mid.st} before the redraw, min ${m.stAfterGoMin} after it, ${m.stEnd} at the end (the arm-time floor allows ${m.sh0 - m.ch0})`);
-							out.push(`${tag}: pin on ${mid.at} ms after the write, scrollHeight stayed ${m.shMin} (arm ${m.sh0}) through the collapse (reader at ${mid.st}, end ${m.stEnd}), sizer collapsed ${m.low} ms and back ${m.back} ms after the redraw was let go, pin released at ${m.pinOff} ms`);
+							out.push(`${tag}: pin on ${mid.at} ms after the write, scrollHeight stayed ${m.shMin} (arm ${m.sh0}) through the collapse (reader at ${mid.st}, end ${m.stEnd}), sizer collapsed ${m.low} ms and back ${m.back} ms after the redraw was let go, pin released at ${m.pinOff} ms, scroll ended ${scrolledBy} ms after the write${envRetries.length ? ` (after ${envRetries.length} discarded attempt(s) whose scroll was too slow: ${envRetries.join(', ')})` : ''}`);
 						} catch (e) {
 							fails.push(e instanceof Error ? e.message : String(e));
 							await t.ev(`(() => { if (window.__gs59go) { try { window.__gs59go(); } catch {} } window.__gs59go = null; return true; })()`).catch(() => {});
@@ -6292,7 +6308,7 @@ const SCENARIOS = [
 			await t.reset('Lifecycle/pin-virt2.md');
 			await t.open('Lifecycle/other.md'); // back to Reading for the next scenario
 			t.expect(fails.length === 0, `${fails.join(' | ')} -- write -> redraw latencies: ${out.join('; ')}`);
-			return `${out.join('; ')}; CPU throttled ${RATE}x around ${WRITES} writes per phase`;
+			return `${out.join('; ')}; main thread busy ${BUSY_MS} ms after each of ${WRITES} writes per phase, no CPU throttle`;
 		},
 	},
 	{
