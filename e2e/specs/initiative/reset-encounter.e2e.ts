@@ -78,33 +78,21 @@ describe('initiative: Reset encounter state', () => {
 });
 
 describe('initiative: what the screen shows after a reset', () => {
-	// The note is written correctly (INIT-X01); the rebuilt tracker is not: resetEncounter drops every instance and clears the heroes'
-	// stamina, and the view repaints from that model without a re-parse (see SC-576).
-	knownBug(
-		'SC-576',
-		'[INIT-X05] after Yes, Reset the enemy groups still show their roster and detail row, back at full stamina',
-		async () => {
-			const { root, modal } = await openReset();
-			await dse.waitForWrite(RICH, () => dse.click(modal.control('init.reset-encounter.confirm')));
-			await dse.settle();
-			await expect(root.control('init.cell.stamina', { nth: 0 })).toBeDisplayed();
-			// the numeric button is visually stood down on the Steel screen, so read its text, not WebDriver's visible text
-			await expect(root.control('init.detail.stamina', { nth: 0 })).toHaveElementProperty('textContent', '60/60');
-		},
-		{ failsWith: /Index out of bounds/ },
-	);
+	it('[INIT-X05] after Yes, Reset the enemy groups still show their roster and detail row, back at full stamina', async () => {
+		const { root, modal } = await openReset();
+		await dse.waitForWrite(RICH, () => dse.click(modal.control('init.reset-encounter.confirm')));
+		await dse.settle();
+		await expect(root.control('init.cell.stamina', { nth: 0 })).toBeDisplayed();
+		// the numeric button is visually stood down on the Steel screen, so read its text, not WebDriver's visible text
+		await expect(root.control('init.detail.stamina', { nth: 0 })).toHaveElementProperty('textContent', '60/60');
+	});
 
-	knownBug(
-		'SC-576',
-		'[INIT-X06] after Yes, Reset the heroes show full stamina, not "0 / 30" Dying',
-		async () => {
-			const { root, modal } = await openReset();
-			await dse.waitForWrite(RICH, () => dse.click(modal.control('init.reset-encounter.confirm')));
-			await dse.settle();
-			await expect(root.control('init.hero.stamina', { nth: 0 })).toHaveElementProperty('textContent', '30/30');
-		},
-		{ failsWith: /30\/30/ },
-	);
+	it('[INIT-X06] after Yes, Reset the heroes show full stamina, not "0 / 30" Dying', async () => {
+		const { root, modal } = await openReset();
+		await dse.waitForWrite(RICH, () => dse.click(modal.control('init.reset-encounter.confirm')));
+		await dse.settle();
+		await expect(root.control('init.hero.stamina', { nth: 0 })).toHaveElementProperty('textContent', '30/30');
+	});
 
 	knownBug(
 		'SC-575',
