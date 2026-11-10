@@ -22,13 +22,14 @@ export default surface('conditions-modal', {
 		// -- R. A condition row: its cog (opens the inline editor under it) and its trash button
 		'cond.edit': c(['click', 'press:Enter', 'press:Escape'], ['SC-468', 'R01', 'R02', 'X05']),
 		'cond.remove': c(['click', 'press:Enter'], ['R03', 'R04']),
-		// -- E. The inline editor (repeated nodes: nth). SC-468: the pick options; SC-474: the icon search field.
+		// -- D. The inline editor (repeated nodes: nth). SC-468: the pick options; SC-474: the icon search field.
 		'cond.icon-search': c(['click', 'type', 'press:Escape'], ['SC-474', 'D02', 'X07']),
 		'cond.icon': c(['click', 'press:Enter'], ['D02', 'D04']),
 		'cond.duration': c(['click', 'press:Enter'], ['SC-468', 'D05', 'D08']),
 		'cond.swatch': c(['click', 'press:Enter'], ['SC-468', 'D09', 'D10']),
 		// The custom colour <input type="color">: transparent over the pipette swatch. Enter opens the browser's own colour
-		// chooser, which CDP cannot reach, so the change -> write path is a jsdom test (conditions-modal-matrix).
+		// chooser, which CDP cannot reach: D11 drives that Enter. The chooser's commit (input + change) is dispatched page-side by
+		// D17 (a real-Obsidian write test, credited with no pair), and the value matrix is jsdom (conditions-modal-matrix).
 		'cond.color-custom': c(['press:Enter'], ['D11']),
 		'cond.effect': c(['click', 'press:Enter'], ['SC-468', 'D12', 'D16']),
 		// -- X. Close paths

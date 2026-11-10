@@ -621,11 +621,26 @@ describe('SC-436 matrix: known bugs (each marker encodes the correct behaviour a
 	});
 
 	// SC-586 (a): a CSS-named colour marks the pipette selected, but the colour input is only ever given a #rrggbb value.
+	// jsdom has no canvas, so the test stubs a minimal 2D context whose `fillStyle` resolves `teal` to `#008080` (as a real
+	// browser does): a lookup-table fix and a canvas-based fix then both flip this marker.
 	test.failing('SC-586: for `color: teal` the custom colour input starts at teal\'s hex', () => {
-		const o = open([{ key: 'prone', color: 'teal' }]);
-		openEditor(o.container, 0);
-		expect(customSelected(o.container)).toBe(true); // setup: the pipette treats teal as the selected custom colour
-		expect(qs<HTMLInputElement>(o.container, '[data-dse-control="cond.color-custom"]').value).toBe('#008080');
+		let fill = '#000000';
+		const getContext = jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation((() => ({
+			get fillStyle(): string {
+				return fill;
+			},
+			set fillStyle(v: string) {
+				fill = v === 'teal' ? '#008080' : v;
+			},
+		})) as unknown as HTMLCanvasElement['getContext']);
+		try {
+			const o = open([{ key: 'prone', color: 'teal' }]);
+			openEditor(o.container, 0);
+			expect(customSelected(o.container)).toBe(true); // setup: the pipette treats teal as the selected custom colour
+			expect(qs<HTMLInputElement>(o.container, '[data-dse-control="cond.color-custom"]').value).toBe('#008080');
+		} finally {
+			getContext.mockRestore();
+		}
 	});
 
 	// SC-586 (b): `icon: ""` draws the default glyph but "Use default" is not pressed.
