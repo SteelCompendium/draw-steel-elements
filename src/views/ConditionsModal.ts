@@ -212,7 +212,7 @@ export class ConditionsModal extends DseModal {
 		this.renderList();
 		this.renderAdd();
 
-		this.footer([{ label: 'Done', text: 'Done', variant: 'accent', onClick: () => this.close() }]);
+		this.footer([{ label: 'Done', text: 'Done', variant: 'accent', control: 'cond.done', onClick: () => this.close() }]);
 	}
 
 	// ---------------------------------------------------------------- change emission
@@ -323,6 +323,7 @@ export class ConditionsModal extends DseModal {
 				icon: 'trash-2',
 				label: `Remove ${displayName}`,
 				variant: 'ghost',
+				control: 'cond.remove',
 				onClick: () => this.removeAt(index),
 			},
 			this.lifecycle,
@@ -381,6 +382,7 @@ export class ConditionsModal extends DseModal {
 				button.type = 'button';
 				button.setAttribute('aria-label', label);
 				button.setAttribute('title', label);
+				stampControl(button, 'cond.icon');
 				setPressedState(button, value === entry.icon);
 				setIcon(button.createSpan(), icon);
 				if (value === undefined) button.createSpan({ text: 'Default' });
@@ -472,6 +474,7 @@ export class ConditionsModal extends DseModal {
 		custom.setAttribute('aria-label', 'Custom color');
 		setIcon(custom, 'pipette');
 		const input = custom.createEl('input', { type: 'color' });
+		stampControl(input, 'cond.color-custom');
 		// SC-361: a colour that parses as CSS and is not one of the presets is the custom swatch's selection
 		// (an unparseable YAML colour is no colour anywhere else, so it marks nothing here either). The
 		// <label> cannot carry `aria-pressed` (not valid on a label), so it takes `data-selected` (CSS fills
@@ -617,6 +620,7 @@ export class ConditionsModal extends DseModal {
 					cls: `dse-condal__menu-item${match.kind === 'custom' ? ' dse-condal__menu-custom' : ''}`,
 				});
 				item.id = itemId;
+				stampControl(item, 'cond.option');
 				item.setAttribute('role', 'option');
 				const active = i === activeIndex;
 				item.setAttribute('aria-selected', String(active));
