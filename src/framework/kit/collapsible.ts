@@ -19,6 +19,7 @@
 import type { Component } from 'obsidian';
 import { setIcon } from 'obsidian';
 import type { SessionPersist } from '../session';
+import { stampControl } from './controlId';
 
 export interface CollapsibleOptions {
 	/** Plain-text title rendered in the header. */
@@ -31,6 +32,8 @@ export interface CollapsibleOptions {
 	persist?: SessionPersist;
 	/** Fired with the NEW open state on USER toggles only — never by setOpen(). */
 	onToggle?: (open: boolean) => void;
+	/** SC-437: stable `data-dse-control` id for the header button (attribute only). */
+	control?: string;
 }
 
 export interface CollapsibleHandle {
@@ -55,6 +58,7 @@ export function collapsible(
 
 	const headerEl = rootEl.createEl('button', { cls: 'dse-collapse__header' });
 	headerEl.setAttribute('type', 'button'); // never an implicit form submit
+	stampControl(headerEl, opts.control);
 
 	const chevronEl = headerEl.createSpan({ cls: 'dse-collapse__chevron' });
 	setIcon(chevronEl, 'chevron-right'); // rotation is CSS-only, keyed to [data-open]

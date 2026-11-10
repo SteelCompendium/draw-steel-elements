@@ -43,6 +43,8 @@ export interface ConditionIconsOptions {
 	canRemove: boolean;
 	/** Called with the exact entry that was clicked to remove (write mode only). */
 	onRemove?: (entry: ConditionIconInput) => void;
+	/** SC-437: stable `data-dse-control` id stamped on every remove button (write mode; attribute only). */
+	control?: string;
 }
 
 const CONDITION_EFFECTS = ['blink', 'glow', 'glow-pulse', 'breathing', 'blur-pulse'] as const;
@@ -125,6 +127,7 @@ export function buildConditionIcons(
 				{
 					icon: iconName,
 					label: `Remove condition: ${displayName}`,
+					control: opts.control,
 					onClick: () => opts.onRemove?.(conditionEntry),
 				},
 				opts.owner,

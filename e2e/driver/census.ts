@@ -20,13 +20,14 @@ export interface EventfulNode {
 const cdp = <T>(cmd: string, params: Record<string, unknown>): Promise<T> => browser.sendCommandAndGetResult(cmd, params) as Promise<T>;
 
 /**
- * Every element matching any of `selectors` (and not inside `excludeInside`) that has at least
- * one user-input listener, with its control id (or null).
+ * Every element matching any of `selectors` (and not inside `excludeInside`; `null` excludes nothing, SC-437:
+ * the tracker's census covers its own chrome-panel items) that has at least one user-input listener, with its
+ * control id (or null).
  */
-export async function eventfulNodes(selectors: string[], excludeInside = '[data-dse-chrome-item]'): Promise<EventfulNode[]> {
+export async function eventfulNodes(selectors: string[], excludeInside: string | null = '[data-dse-chrome-item]'): Promise<EventfulNode[]> {
 	const expr = `(() => {
 		const seen = new Set();
-		for (const sel of ${JSON.stringify(selectors)}) for (const el of document.querySelectorAll(sel)) if (!el.closest(${JSON.stringify(excludeInside)})) seen.add(el);
+		for (const sel of ${JSON.stringify(selectors)}) for (const el of document.querySelectorAll(sel)) if (!${JSON.stringify(excludeInside)} || !el.closest(${JSON.stringify(excludeInside)})) seen.add(el);
 		return Array.from(seen);
 	})()`;
 	const arr = await cdp<{ result: { objectId: string } }>('Runtime.evaluate', { expression: expr });

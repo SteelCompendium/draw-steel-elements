@@ -27,7 +27,7 @@ export class ResetEncounterModal extends DseModal {
 		});
 
 		this.footer([
-			{ label: 'Cancel', text: 'Cancel', onClick: () => this.close() },
+			{ label: 'Cancel', text: 'Cancel', control: 'init.reset-encounter.cancel', onClick: () => this.close() },
 			{
 				label: 'Yes, Reset',
 				text: 'Yes, Reset',

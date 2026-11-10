@@ -63,6 +63,7 @@ import {
 	renderStaminaGauge,
 	setPressedState,
 	staminaState,
+	stampControl,
 	stepper,
 	updateStaminaBar,
 	updateStaminaGauge,
@@ -208,6 +209,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				id: 'initiative-reset-turns',
 				icon: 'rotate-ccw',
 				label: 'Reset turns (this round)',
+				control: 'init.reset-turns',
 				onClick: () => {
 					new Notice('Turns reset for this round');
 					this.resetRound();
@@ -298,6 +300,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		const textEl = heading.createSpan({ cls: 'dse-init__title-text' });
 		textEl.setAttribute('role', 'button');
 		textEl.setAttribute('tabindex', '0');
+		stampControl(textEl, 'init.title');
 		const paint = (): void => {
 			const name = titled();
 			heading.toggleAttribute('data-empty', name === '');
@@ -345,6 +348,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				attr: { placeholder: 'Untitled encounter', rows: '1', spellcheck: 'false' }, // proper nouns: no red squiggle
 			});
 			el.setAttribute('aria-label', 'Encounter name');
+			stampControl(el, 'init.title.input');
 			el.value = titled();
 			input = el;
 			textEl.hidden = true;
@@ -415,6 +419,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 					value: data.malice.value,
 					integer: true,
 					label: 'Malice',
+					control: 'init.malice',
 					renderValue: (el, v) => this.renderMaliceValue(el, v),
 					onChange: (v) => {
 						data.malice.value = v;
@@ -455,6 +460,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				{
 					icon: 'skip-forward',
 					text: 'Advance round',
+					control: 'init.round.advance',
 					label:
 						typeof gain === 'number' && gain !== 0
 							? `Advance round (+${gain} Malice)`
@@ -494,6 +500,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 			container,
 			{
 				title: `Malice log · ${count}`,
+				control: 'init.malice.log',
 				open: false,
 				persist: {
 					session: this.cx.session,
@@ -540,12 +547,14 @@ export class InitiativeView extends ElementView<EncounterData> {
 				attr: { step: '1', placeholder: 'Amount' },
 			});
 			amountInput.setAttribute('aria-label', 'Quick-add malice amount');
+			stampControl(amountInput, 'init.malice.quickadd.amount');
 			const labelInput = quickAdd.createEl('input', {
 				cls: 'dse-init__malice-quickadd-label',
 				type: 'text',
 				attr: { placeholder: 'E.g. Feytouched' },
 			});
 			labelInput.setAttribute('aria-label', 'Quick-add malice label');
+			stampControl(labelInput, 'init.malice.quickadd.label');
 			// SC-377: ONE submit path for the Add button and Enter in either field. A rejected
 			// submit is never silent: the offending field takes focus, gets aria-invalid (the
 			// stylesheet draws a heavier edge), swaps its placeholder for a short reason when it is
@@ -612,6 +621,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 					icon: 'plus-circle',
 					text: 'Add',
 					label: 'Add Malice log entry',
+					control: 'init.malice.quickadd.add',
 					onClick: submit,
 				},
 				owner,
@@ -701,6 +711,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		taken: boolean,
 		toggle: (() => boolean) | null,
 		owner: Component,
+		control?: string,
 	): { repaint: (taken: boolean) => void } {
 		const box = parent.createDiv({ cls: 'dse-init__turnbox' });
 		if (toggle) {
@@ -709,6 +720,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				{
 					icon: taken ? 'check' : 'dot',
 					label: `Toggle turn taken: ${name}`,
+					control,
 					pressed: taken,
 					onClick: () => {
 						const nowTaken = toggle();
@@ -836,6 +848,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		actor: Hero | CreatureInstance,
 		name: string,
 		owner: Component,
+		control?: string,
 	): void {
 		InitiativeView.ACTION_SLOTS.forEach(({ key, label, icon }) => {
 			const pressed = actor.actions?.[key] ?? false;
@@ -852,6 +865,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 					{
 						text: label,
 						label: `Toggle ${label} action: ${name}`,
+						control,
 						pressed,
 						onClick: () => {
 							actor.actions = actor.actions ?? {
@@ -926,6 +940,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 					{
 						text: label,
 						label: `Toggle ${label} action: ${name}`,
+						control: 'init.detail.squad-action',
 						pressed,
 						onClick: () => {
 							const actions = (creature.actions = creature.actions ?? EMPTY_SQUAD_ACTIONS());
@@ -1292,6 +1307,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 					? `Relieve ${creature.name} as captain`
 					: `Make ${creature.name} captain of ${target.name}`,
 				pressed: isCaptain,
+				control: isCaptain ? 'init.captain.relieve' : 'init.captain.make',
 				onClick: () => {
 					if (isCaptain) relieveCaptain(creature);
 					else promoteCaptain(group, creature, target);
@@ -1414,7 +1430,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 					return character.has_taken_turn;
 				}
 			: null;
-		this.buildTurnIndicator(rowEl, name, character.has_taken_turn ?? false, toggleTurn, owner);
+		this.buildTurnIndicator(rowEl, name, character.has_taken_turn ?? false, toggleTurn, owner, 'init.hero.turnbox');
 
 		// Character Image — SC-183 r3: also THE turn control on the Steel screen (see
 		// buildPortraitToggle's note). The overlay is the portrait wrapper's last child so
@@ -1428,7 +1444,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		infoEl.createDiv({ cls: 'dse-init__name', text: character.name });
 		const conditionsEl = infoEl.createDiv({ cls: 'dse-init__conditions' });
 		this.buildConditionRow(conditionsEl, rowEl, character, owner);
-		this.buildActionChecklist(infoEl.createDiv({ cls: 'dse-init__actions' }), character, name, owner);
+		this.buildActionChecklist(infoEl.createDiv({ cls: 'dse-init__actions' }), character, name, owner, 'init.hero.action');
 
 		// Right: Health Info. ONE modal-open closure shared by the numeric control and
 		// the SC-183 row bar, so the two affordances cannot drift; its apply callback
@@ -1538,6 +1554,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 					}
 				: null,
 			owner,
+			'init.group.turn',
 		);
 		groupHeader.createEl('h4', { text: group.name });
 
@@ -1762,7 +1779,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		if (isSquadMinion) {
 			this.buildSquadActionChecklist(infoEl.createDiv({ cls: 'dse-init__actions' }), creature, owner);
 		} else {
-			this.buildActionChecklist(infoEl.createDiv({ cls: 'dse-init__actions' }), instance, name, owner);
+			this.buildActionChecklist(infoEl.createDiv({ cls: 'dse-init__actions' }), instance, name, owner, 'init.detail.action');
 		}
 
 		// Right: Health Info
@@ -2043,6 +2060,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		kitBuildConditionIcons(container, conditions, this.conditionManager, {
 			owner,
 			canRemove: this.canWrite,
+			control: 'init.cond.remove',
 			onRemove: (conditionEntry) => {
 				// SC-186 fix-round INFO-2: filter `character.conditions` FRESH here,
 				// never the `conditions` closure snapshot captured when this row was

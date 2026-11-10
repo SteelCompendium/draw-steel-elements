@@ -6,7 +6,8 @@
 //   - any `data-dse-control` id is not declared in the surface's e2e manifest
 //     (e2e/manifest/*.ts, the same files the e2e exercised-set gate reads).
 // Framework chrome (the collapse / authoring toolbar, `[data-dse-chrome-item]`) is a separate
-// surface and is excluded. Initiative is scoped to its stamina entry points, not the whole tracker.
+// surface and is excluded, except for the initiative tracker (SC-437), whose scope is the whole tracker root
+// (rows, grid and its own chrome-panel items, no CSS-class lookup).
 // A new control added to a pilot surface without an id and a manifest row fails HERE first.
 import { ElementPipeline } from '../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../src/framework/pipeline';
@@ -19,6 +20,8 @@ import { createReferenceService } from '../../src/framework/seams/refs';
 import { createValidationService } from '../../src/framework/validation';
 import { createSessionStore } from '../../src/framework/session';
 import { DEFAULT_SETTINGS } from '@model/Settings';
+import * as fs from 'fs';
+import * as path from 'path';
 import { App, Notice, Plugin } from '../mocks/obsidian';
 import { staminaBarElement } from '../../src/elements/stamina-bar/definition';
 import { initiativeElement } from '../../src/elements/initiative/definition';
@@ -35,17 +38,18 @@ import { MinionStaminaPoolModal } from '../../src/views/MinionStaminaPoolModal';
 import { parseEncounterData } from '../../src/drawSteelAdmonition/EncounterData';
 import squadYaml from '../fixtures/initiative/squad.yaml';
 import chromeManifest from '../../e2e/manifest/chrome';
+import resetManifest from '../../e2e/manifest/reset-encounter-modal';
 import { idsOf } from '../../e2e/manifest/surface';
 
 const INTERACTIVE = 'button, input, select, textarea, [role="button"], [role="slider"], [tabindex], [contenteditable]';
 const CHROME = '[data-dse-chrome-item]';
 
 /** Problems found under `scope`: un-id'd interactive nodes and ids the manifest does not declare. */
-function censusProblems(scope: Element, allowed: ReadonlySet<string>, interactive = INTERACTIVE): string[] {
+function censusProblems(scope: Element, allowed: ReadonlySet<string>, interactive = INTERACTIVE, skipChrome = true): string[] {
 	const problems: string[] = [];
 	const describe = (el: Element): string => `<${el.tagName.toLowerCase()} class="${el.className}"> ${(el.textContent ?? '').trim().slice(0, 30)}`;
 	scope.querySelectorAll(interactive).forEach((el) => {
-		if (el.closest(CHROME)) return;
+		if (skipChrome && el.closest(CHROME)) return;
 		if (!el.hasAttribute('data-dse-control')) problems.push(`no data-dse-control: ${describe(el)}`);
 	});
 	scope.querySelectorAll('[data-dse-control]').forEach((el) => {
@@ -208,25 +212,104 @@ describe('SC-408 census: the StaminaEditModal', () => {
 	});
 });
 
-describe('SC-408 census: initiative stamina entry points', () => {
-	test('hero numeric control + row bar, creature detail control + bar, and every roster cell are identified', async () => {
+describe('SC-437 census: the initiative tracker, scoped by container', () => {
+	/** Mount `source` through the real pipeline; `canPersist` false is the read-only (canvas) host. */
+	async function mountTracker(source: string, canPersist = true): Promise<HTMLElement> {
 		const host = makeHost('ds-initiative', 'Encounter.md');
-		await new ElementPipeline(makeDeps()).run(initiativeElement, TRACKER, host);
-		const root = host.containerEl.firstElementChild as HTMLElement;
-		// Scope: the stamina entry points only, not the whole tracker (malice, conditions, ... are
-		// other surfaces). Everything the tracker stamps with an id must still be in the manifest.
-		const entryPoints = 'button.dse-init__stamina, .dse-init__bar.dse-stamina--clickable, button.dse-init__cell';
-		expect(censusProblems(root, new Set([...idsOf(modalManifest), ...idsOf(conditionsManifest), ...idsOf(initiativeManifest), ...chromeIds]), entryPoints)).toEqual([]);
-		for (const id of ['init.hero.stamina', 'init.hero.bar', 'init.detail.stamina', 'init.detail.bar', 'init.cell.stamina']) {
+		(host as any).canPersist = canPersist;
+		await new ElementPipeline(makeDeps()).run(initiativeElement, source, host);
+		return host.containerEl.firstElementChild as HTMLElement;
+	}
+
+	// SC-437 (R1 L-4): the scope is the tracker's root (every row, the grid, the chrome panel inside it), not a CSS class
+	// per entry point, so a new control anywhere in the tracker needs an id from the initiative manifest or one of the
+	// other surfaces' reach rows (stamina, pool, conditions).
+	const reachFromInitiative = (...ms: Array<{ reach: readonly { host: string; control: string }[] }>): string[] =>
+		ms.flatMap((m) => m.reach.filter((r) => r.host === 'initiative').map((r) => r.control));
+	const trackerIds = new Set([
+		...idsOf(initiativeManifest),
+		...idsOf(resetManifest),
+		...reachFromInitiative(modalManifest, conditionsManifest, poolManifest),
+		...chromeIds,
+	]);
+	const census = (root: Element): string[] => censusProblems(root, trackerIds, INTERACTIVE, false);
+
+	const initFixture = (name: string): string => {
+		const text = fs.readFileSync(path.join(__dirname, '../../e2e/vaults/shipped/Initiative', `${name}.md`), 'utf8');
+		return /```ds-initiative\n([\s\S]*?)\n```/.exec(text)![1];
+	};
+	const idsIn = (root: Element): Set<string> =>
+		new Set(Array.from(root.querySelectorAll('[data-dse-control]')).map((el) => el.getAttribute('data-dse-control') as string));
+
+	test('the census itself bites: an un-id\'d button injected into a row, the grid or the root is a finding, as is an id outside the manifest', async () => {
+		const root = await mountTracker(TRACKER);
+		expect(census(root)).toEqual([]);
+		for (const host of ['.dse-init__row', '.dse-init__grid', '.dse-init__detail']) {
+			const rogue = document.createElement('button');
+			rogue.textContent = 'Rogue';
+			root.querySelector(host)!.appendChild(rogue);
+			expect(census(root)).toEqual([expect.stringMatching(/^no data-dse-control: <button/)]);
+			rogue.remove();
+		}
+		const div = document.createElement('div');
+		div.setAttribute('tabindex', '0');
+		root.querySelector('.dse-init__group--enemies')!.appendChild(div);
+		expect(census(root)).toHaveLength(1);
+		div.remove();
+		const stray = root.querySelector('.dse-init__cell')!;
+		stray.setAttribute('data-dse-control', 'init.not-a-control');
+		expect(census(root)).toEqual([expect.stringMatching(/id "init\.not-a-control" is not in the manifest/)]);
+	});
+
+	test('the chrome panel is inside the scope: its items and the framework chrome buttons are identified too', async () => {
+		const root = await mountTracker(TRACKER);
+		const items = Array.from(root.querySelectorAll('[data-dse-chrome-item]'));
+		expect(items.length).toBeGreaterThan(0);
+		for (const id of ['init.reset-turns', 'init.reset-encounter']) expect(root.querySelector(`[data-dse-control="${id}"]`)).not.toBeNull();
+		const rogue = document.createElement('button');
+		root.querySelector('[data-dse-chrome-item]')!.parentElement!.appendChild(rogue);
+		expect(census(root)).toEqual([expect.stringMatching(/^no data-dse-control: <button/)]);
+	});
+
+	test.each([
+		['the quick-start tracker (a hero, three Ogres, Malice)', () => TRACKER],
+		['every variant: a title, two heroes, conditions, round gain + log, a grid group and a single-creature group', () => initFixture('rich')],
+		['a captained minion squad with an attached creature', () => initFixture('captain')],
+		['a hurt minion squad (dead minions, conditions)', () => initFixture('squad-hurt')],
+		['the squad fixture of the stamina suites (a captain, minions)', () => squadYaml],
+	])('%s: every interactive node carries an id the manifests declare', async (_name, source) => {
+		expect(census(await mountTracker(source()))).toEqual([]);
+	});
+
+	test('every control the initiative and reset manifests declare is stamped by SOME tracker variant (no dead manifest row)', async () => {
+		const seen = new Set<string>();
+		for (const source of [initFixture('rich'), initFixture('captain'), initFixture('squad-hurt'), TRACKER]) {
+			const root = await mountTracker(source);
+			idsIn(root).forEach((id) => seen.add(id));
+			// Open the title editor (the textarea exists only while editing) and select every cell (a squad's
+			// other creatures make the detail row offer "Make captain").
+			root.querySelector<HTMLElement>('[data-dse-control="init.title"]')?.click();
+			root.querySelectorAll<HTMLElement>('.dse-init__cell').forEach((cell) => cell.click());
+			idsIn(root).forEach((id) => seen.add(id));
+			document.body.innerHTML = '';
+		}
+		const modal = new ResetEncounterModal(new App() as any, () => undefined);
+		modal.open();
+		idsIn(modal.contentEl).forEach((id) => seen.add(id));
+		const declared = [...Object.keys(initiativeManifest.controls), ...Object.keys(resetManifest.controls)].filter((id) => !id.startsWith('modal.'));
+		expect(declared.filter((id) => !seen.has(id))).toEqual([]);
+	});
+
+	test('the stamina entry points and the roster cells are identified (hero numeric + bar, creature numeric + bar, one id per cell)', async () => {
+		const root = await mountTracker(TRACKER);
+		for (const id of ['init.hero.stamina', 'init.hero.bar', 'init.detail.stamina', 'init.detail.bar', 'init.cell.stamina', 'init.cond.add']) {
 			expect(root.querySelector(`[data-dse-control="${id}"]`)).not.toBeNull();
 		}
 		expect(root.querySelectorAll('[data-dse-control="init.cell.stamina"]')).toHaveLength(3);
 	});
 
-	test('SC-500: the hero turn overlay, the chrome Reset encounter item and its confirm button are identified and in the initiative manifest', async () => {
-		const host = makeHost('ds-initiative', 'Encounter.md');
-		await new ElementPipeline(makeDeps()).run(initiativeElement, TRACKER, host);
-		const root = host.containerEl.firstElementChild as HTMLElement;
+	test('SC-500: the hero turn overlay (hero rows only), the chrome Reset encounter item and the modal buttons are identified and in their manifests', async () => {
+		const root = await mountTracker(TRACKER);
 		const turn = root.querySelectorAll('.dse-init__portrait-toggle');
 		expect(turn).toHaveLength(1); // one hero, no overlay on creature rows
 		expect(turn[0].getAttribute('data-dse-control')).toBe('init.hero.turn');
@@ -234,10 +317,22 @@ describe('SC-408 census: initiative stamina entry points', () => {
 		expect(reset.getAttribute('data-dse-control')).toBe('init.reset-encounter');
 		const modal = new ResetEncounterModal(new App() as any, () => undefined);
 		modal.open();
-		const confirm = modal.contentEl.querySelector('button[aria-label="Yes, Reset"]')!;
-		expect(confirm.getAttribute('data-dse-control')).toBe('init.reset-encounter.confirm');
+		expect(modal.contentEl.querySelector('button[aria-label="Yes, Reset"]')!.getAttribute('data-dse-control')).toBe('init.reset-encounter.confirm');
+		expect(modal.contentEl.querySelector('button[aria-label="Cancel"]')!.getAttribute('data-dse-control')).toBe('init.reset-encounter.cancel');
+		expect(censusProblems(modal.contentEl, new Set(idsOf(resetManifest)))).toEqual([]);
 		const declared = new Set(idsOf(initiativeManifest));
-		for (const id of ['init.hero.turn', 'init.reset-encounter', 'init.reset-encounter.confirm']) expect(declared.has(id)).toBe(true);
+		for (const id of ['init.hero.turn', 'init.reset-encounter']) expect(declared.has(id)).toBe(true);
+	});
+
+	test('a read-only host (canvas) offers no write control: the only interactive nodes are the Malice log disclosure and the framework chrome', async () => {
+		for (const source of [initFixture('rich'), initFixture('captain')]) {
+			const root = await mountTracker(source, false);
+			const ids = Array.from(root.querySelectorAll(INTERACTIVE)).map((el) => el.getAttribute('data-dse-control'));
+			expect(ids.filter((id) => id !== 'init.malice.log' && !chromeIds.includes(id as string))).toEqual([]);
+			expect(ids).toContain('init.malice.log');
+			expect(census(root)).toEqual([]);
+			document.body.innerHTML = '';
+		}
 	});
 });
 

@@ -1,8 +1,9 @@
 // SC-408 coverage check (b): the real-Obsidian census over the pilot surfaces. Complements the
 // jsdom census (test/dom/e2eCensus.test.ts): here the browser reports which nodes actually have
 // click / pointer / key listeners (CDP DOMDebugger.getEventListeners), so a div-with-a-listener
-// control with no `data-dse-control` id cannot hide. Scoped to the stamina surfaces; framework
-// chrome (the collapse toolbar, `[data-dse-chrome-item]`) is a separate surface and is excluded.
+// control with no `data-dse-control` id cannot hide. Scoped to the stamina surfaces and the initiative tracker
+// (SC-437: by its root container, chrome panel included); on the other surfaces the framework chrome
+// (the collapse toolbar, `[data-dse-chrome-item]`) is a separate surface and is excluded.
 import { expect } from '@wdio/globals';
 import { dse } from '../driver/dse';
 import { censusFindings, eventfulNodes } from '../driver/census';
@@ -14,6 +15,7 @@ import modalManifest from '../manifest/stamina-edit-modal';
 import conditionsManifest from '../manifest/conditions-modal';
 import poolManifest from '../manifest/minion-pool-modal';
 import initiativeManifest from '../manifest/initiative';
+import resetManifest from '../manifest/reset-encounter-modal';
 import chromeManifest from '../manifest/chrome';
 
 const ALL_IDS = new Set([
@@ -22,9 +24,20 @@ const ALL_IDS = new Set([
 	...idsOf(conditionsManifest),
 	...idsOf(poolManifest),
 	...idsOf(initiativeManifest),
+	...idsOf(resetManifest),
 	...idsOf(chromeManifest),
 ]);
 const BAR_SCOPE = ['.markdown-reading-view [data-dse-element="stamina-bar"] *'];
+// SC-437 (R1 L-4): the tracker is scanned by its root container, not by a CSS class per entry point. The ids a node there may
+// carry: the initiative and reset-modal manifests, the other surfaces' reach rows into the tracker (stamina, pool, conditions)
+// and the framework chrome's.
+const TRACKER_SCOPE = '.markdown-reading-view [data-dse-element="initiative"] *';
+const TRACKER_IDS = new Set([
+	...idsOf(initiativeManifest),
+	...idsOf(resetManifest),
+	...[modalManifest, conditionsManifest, poolManifest].flatMap((m) => m.reach.filter((r) => r.host === 'initiative').map((r) => r.control)),
+	...idsOf(chromeManifest),
+]);
 
 describe('real-Obsidian census (pilot surfaces)', () => {
 	it('[CENSUS-01] ds-stamina-bar with Recoveries: every node that listens for input is an identified control', async () => {
@@ -59,19 +72,48 @@ describe('real-Obsidian census (pilot surfaces)', () => {
 		await dse.settle();
 	});
 
-	it('[CENSUS-04] initiative stamina entry points: the hero / detail numeric controls, the row bars and the roster cells', async () => {
-		await dse.openNote('Initiative/tracker.md');
-		const nodes = await eventfulNodes([
-			'.markdown-reading-view [data-dse-element="initiative"] .dse-init__health *',
-			'.markdown-reading-view [data-dse-element="initiative"] .dse-init__bar',
-			'.markdown-reading-view [data-dse-element="initiative"] .dse-init__bar *',
-			'.markdown-reading-view [data-dse-element="initiative"] .dse-init__cell',
-		]);
-		expect(censusFindings(nodes, ALL_IDS)).toEqual([]);
+	it('[CENSUS-04] the whole initiative tracker (SC-437, scoped by its root, chrome panel included): every node that listens for input is an identified control', async () => {
+		await dse.openNote('Initiative/rich.md');
+		const nodes = await eventfulNodes([TRACKER_SCOPE], null);
+		expect(censusFindings(nodes, TRACKER_IDS)).toEqual([]);
 		const ids = nodes.map((n) => n.id);
-		for (const id of ['init.hero.stamina', 'init.hero.bar', 'init.detail.stamina', 'init.detail.bar', 'init.cell.stamina']) {
+		// Sanity that the probe sees every part of the tracker: title, round, Malice, both turn controls, the action
+		// checklist, a condition, the roster cells and the stamina entry points, and the chrome panel's two items.
+		for (const id of [
+			'init.title', 'init.round.advance', 'init.malice.dec', 'init.malice.inc', 'init.malice.quickadd.amount',
+			'init.malice.quickadd.label', 'init.malice.quickadd.add', 'init.malice.log', 'init.hero.turn', 'init.hero.turnbox',
+			'init.group.turn', 'init.hero.action', 'init.detail.action', 'init.cond.add', 'init.cond.remove', 'init.cell.stamina',
+			'init.hero.stamina', 'init.hero.bar', 'init.detail.stamina', 'init.detail.bar', 'init.reset-turns', 'init.reset-encounter',
+		]) {
 			expect(ids).toContain(id);
 		}
+	});
+
+	it('[CENSUS-07] the open title editor and a captained squad (SC-437): the textarea, the squad checklist and both captain buttons are identified controls', async () => {
+		await dse.openNote('Initiative/rich.md');
+		await dse.click(dse.block('ds-initiative').control('init.title'));
+		await dse.waitFor(`!!document.querySelector('.markdown-reading-view [data-dse-control="init.title.input"]')`, 'the title editor');
+		expect(censusFindings(await eventfulNodes([TRACKER_SCOPE], null), TRACKER_IDS)).toEqual([]);
+		expect((await eventfulNodes([TRACKER_SCOPE], null)).map((n) => n.id)).toContain('init.title.input');
+		await dse.openNote('Initiative/captain.md');
+		const nodes = await eventfulNodes([TRACKER_SCOPE], null);
+		expect(censusFindings(nodes, TRACKER_IDS)).toEqual([]);
+		const ids = nodes.map((n) => n.id);
+		for (const id of ['init.captain.relieve', 'init.detail.action']) expect(ids).toContain(id);
+	});
+
+	it('[CENSUS-08] the open ResetEncounterModal (SC-437): every node that listens for input is an identified control', async () => {
+		await dse.openNote('Initiative/tracker.md');
+		const root = dse.block('ds-initiative');
+		await dse.hover(root.root);
+		await dse.click(root.control('init.reset-encounter'));
+		const modal = await dse.modal('reset-encounter');
+		await dse.settle();
+		const nodes = await eventfulNodes(['.modal-container .dse-modal .modal-content *']);
+		expect(censusFindings(nodes, ALL_IDS)).toEqual([]);
+		const ids = nodes.map((n) => n.id);
+		for (const id of ['init.reset-encounter.cancel', 'init.reset-encounter.confirm']) expect(ids).toContain(id);
+		await dse.click(modal.control('modal.close'));
 	});
 });
 
