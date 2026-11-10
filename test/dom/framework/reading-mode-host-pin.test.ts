@@ -579,6 +579,81 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 		expect(app.vault.getContent('Note.md')).toBe(full.replace('name: Twin', 'name: Edited'));
 	});
 
+	/** A hover preview of a block or heading link: Obsidian draws the card under `.popover.hover-popover > .markdown-embed`, which has no `src`. */
+	const hoverEl = (): HTMLElement => {
+		const popover = document.createElement('div');
+		popover.className = 'popover hover-popover';
+		const embed = popover.appendChild(document.createElement('div'));
+		embed.className = 'markdown-embed';
+		return embed.appendChild(document.createElement('div'));
+	};
+	const BLK = (extra = ''): string[] => [...CTR(5), `^blk${extra}`];
+
+	test.each([
+		['a short note', 3],
+		['a long note', 300],
+	])('a cache that lags the note, so its ^blk line is now an identical block\'s fence (%s): the marker is not there, nothing verifies, Save writes nothing', async (_name, filler) => {
+		// the cache was built before 7 lines were inserted above the twin: its `blk` is at line 9, which is now the TWIN's fence
+		const full = ['# N', '', ...para(7, 'ins'), ...CTR(5), '', 'p', '', ...BLK(), '', ...para(filler, 'below'), 'END'].join('\n');
+		const lagging = { headings: [], blocks: { blk: { id: 'blk', position: pos(9) } } };
+		const { app, host } = embedded(full, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, 'Note#^blk', bodyOf(5), lagging);
+		const pin = host.pinPosition()!;
+
+		expect(await save(host, pin)).toBe(false); // before: the position verified on the twin and the twin was written
+		expect(app.vault.getContent('Note.md')).toBe(full);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+	});
+
+	test('a hover preview (no src) of a block link, an identical block above it in a short note: the text is not unique, so nothing can place the pin: Save writes nothing, never the block above', async () => {
+		const full = ['# N', '', ...CTR(5), '', 'p', '', ...BLK(), '', 'END'].join('\n');
+		const { app, host } = embedded(full, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, 'x', bodyOf(5), full, hoverEl());
+		const pin = host.pinPosition()!;
+
+		expect(await save(host, pin)).toBe(false); // before: the partial pin was mapped against the note and landed on the block above
+		expect(app.vault.getContent('Note.md')).toBe(full);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+	});
+
+	test('a hover preview (no src) of a block whose text is unique in the note: the text search places the pin and Save lands', async () => {
+		const other = ['```ds-counter', 'name: Other', 'current_value: 1', 'max_value: 20', 'min_value: 0', '```'];
+		const full = ['# N', '', ...other, '', 'p', '', ...BLK(), '', 'END'].join('\n');
+		const { app, host } = embedded(full, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, 'x', bodyOf(5), full, hoverEl());
+		const pin = host.pinPosition()!;
+
+		expect(await save(host, pin)).toBe(true);
+		expect(names(app)).toEqual(['Other', 'Edited']);
+	});
+
+	test('a heading embed whose block was edited from outside BEFORE the form opened, while the embed still shows the old section, a twin above holding the old body: Save writes nothing', async () => {
+		const disk = ['# N', '', ...CTR(5), '', 'x', '', '## Tracker', '', ...CTR(9), '', '## After', '', 'END'].join('\n');
+		const { app, host } = embedded(disk, part(SUB, 2), 'Note#Tracker');
+		const pin = host.pinPosition()!;
+
+		expect(await save(host, pin)).toBe(false); // before: the partial pin was mapped against the note and the twin above was written
+		expect(app.vault.getContent('Note.md')).toBe(disk);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+	});
+
+	test('an embed of a WHOLE note (a link with no #) is not a part: its pin is the note\'s own, so Save lands even when the note changed since it was drawn', async () => {
+		const drawn = ['# N', '', ...CTR(5), '', 'END'].join('\n');
+		const now = ['# N', 'inserted', '', ...CTR(5), '', 'END'].join('\n');
+		const { app, host } = embedded(now, { text: drawn, lineStart: 2, lineEnd: 5 }, 'Note');
+		const pin = host.pinPosition()!;
+
+		expect(await save(host, pin)).toBe(true);
+		expect(app.vault.getContent('Note.md')).toBe(now.replace('name: Twin', 'name: Edited'));
+	});
+
+	test('a link that resolves to ANOTHER note is not used, even when this note has a section that would verify (two identical sections: the text cannot decide): Save writes nothing', async () => {
+		const full = ['# N', '', ...SUB, '## After', '', 'mid', '', ...SUB, '## End'].join('\n');
+		const { app, host } = embedded(full, part(SUB, 2), 'Other#Tracker');
+		app.vault.setFile('Other.md', '# Other');
+		const pin = host.pinPosition()!;
+
+		expect(await save(host, pin)).toBe(false); // the link names Other.md: with this note's cache it would have verified on the FIRST section
+		expect(app.vault.getContent('Note.md')).toBe(full);
+	});
+
 	test('no metadata cache for the note: the text search places the pin', async () => {
 		const full = ['# N', '', ...para(500, 'above'), '', ...SUB, '## After', '', ...para(500, 'below'), 'END'].join('\n');
 		const { app, host } = embedded(full, part(SUB, 2), 'Note#Tracker');

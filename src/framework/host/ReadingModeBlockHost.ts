@@ -375,6 +375,13 @@ export function quoteOrdinal(el: HTMLElement, alias: string, cache?: Map<Element
 
 /** SC-556: the rebase (`ReadingModeBlockHost.rebasePin`) a pin made by `pinPosition` is waiting for; a pin made elsewhere has none. */
 const pinRebased = new WeakMap<object, Promise<void>>();
+/**
+ * SC-556: pins of blocks drawn inside an embed of PART of a note (or a hover preview, which has no `src`) that are still in the PART's
+ * coordinates (text and line numbers of the part, not of the note). `rebasePin` takes a pin out of the set when it has put it into the
+ * note's coordinates. A pin still in the set must never be mapped against the whole note (`pinnedTarget` refuses it): the map would treat
+ * the part's lines as the note's and can land on an identical block elsewhere.
+ */
+const partialPins = new WeakSet<object>();
 
 /**
  * SC-481: the fence the element `el` is drawn on RIGHT NOW, read from the section Obsidian reports for it, or null when that
@@ -775,7 +782,13 @@ export class ReadingModeBlockHost implements BlockHost {
 		if (!section || !this.ownFence) return null;
 		const pin = { text: section.text, lineStart: this.ownFence.lineStart };
 		// SC-556: only a block drawn inside an embed can be given a part of the note (see rebasePin); every other pin is taken as before.
-		if (this.containerEl.closest('.markdown-embed, .internal-embed')) pinRebased.set(pin, this.rebasePin(pin, section.text));
+		if (this.containerEl.closest('.markdown-embed, .internal-embed')) {
+			// An embed of a WHOLE note (`![[note]]`: a link with no `#`) is given the note's own text and lines, so its pin is already a pin of the
+			// note. Any other embed, and a hover preview (no `src` to tell), may be given a part: partial until `rebasePin` has placed it.
+			const link = this.containerEl.closest('.internal-embed[src], .markdown-embed[src]')?.getAttribute('src');
+			if (typeof link !== 'string' || link.includes('#')) partialPins.add(pin);
+			pinRebased.set(pin, this.rebasePin(pin, section.text));
+		}
 		return pin;
 	}
 
@@ -791,7 +804,7 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * against the note text just read. When the link gives nothing that verifies (no `src` on the element, a link that does not point at
 	 * this note, an unresolved subpath, no metadata cache, a cache that lags the note), the part's lines are looked for in the note
 	 * (`searchedPinLine`): used only when they occur EXACTLY once, never a choice between identical runs. Nothing verifies: the pin is
-	 * left as it was. A block that is not inside an embed (its section text IS the note) is not looked at. Asynchronous (`cachedRead`);
+	 * left in the part's coordinates and marked partial: its Save writes nothing (`pinnedTarget`) rather than guess. A block that is not inside an embed (its section text IS the note) is not looked at. Asynchronous (`cachedRead`);
 	 * `replaceSource` waits for it.
 	 */
 	private async rebasePin(pin: { text: string; lineStart: number }, sectionText: string): Promise<void> {
@@ -799,11 +812,15 @@ export class ReadingModeBlockHost implements BlockHost {
 			const file = this.plugin.app.vault.getAbstractFileByPath(this.ctx.sourcePath);
 			if (!(file instanceof TFile)) return;
 			const whole = await this.plugin.app.vault.cachedRead(file);
-			if (whole === sectionText) return;
+			if (whole === sectionText) {
+				partialPins.delete(pin); // the part IS the note
+				return;
+			}
 			const line = this.verifiedPinLine(file, whole, sectionText, pin.lineStart) ?? this.searchedPinLine(whole, sectionText, pin.lineStart);
-			if (line === null) return;
+			if (line === null) return; // stays partial: Save refuses it (pinnedTarget)
 			pin.text = whole;
 			pin.lineStart = line;
+			partialPins.delete(pin);
 		} catch {
 			// no readable note: the pin stays as it was
 		}
@@ -816,7 +833,7 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * case that cannot be answered: no `src` / no `#`, no cache, a link whose note is not this note, a subpath that does not resolve.
 	 * The answer is NOT trusted yet: the cache can lag a write (`verifiedPinLine`).
 	 */
-	private embedStartLine(file: TFile): number | null {
+	private embedStartLine(file: TFile): { line: number; blockId: string | null } | null {
 		const src = this.containerEl.closest('.internal-embed[src], .markdown-embed[src]')?.getAttribute('src');
 		if (!src) return null;
 		const hash = src.indexOf('#');
@@ -826,9 +843,11 @@ export class ReadingModeBlockHost implements BlockHost {
 		if (!meta) return null;
 		const dest = cache.getFirstLinkpathDest(src.slice(0, hash), this.ctx.sourcePath);
 		if (!dest || dest.path !== file.path) return null;
-		const sub = resolveSubpath(meta, src.slice(hash));
+		const subpath = src.slice(hash);
+		const sub = resolveSubpath(meta, subpath);
 		const line = sub?.start?.line;
-		return typeof line === 'number' && line >= 0 ? line : null;
+		if (typeof line !== 'number' || line < 0) return null;
+		return { line, blockId: subpath.startsWith('#^') ? subpath.slice(2) : null };
 	}
 
 	/**
@@ -839,14 +858,22 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * then point at any line, but never at a block that merely looks like this one.
 	 */
 	private verifiedPinLine(file: TFile, whole: string, sectionText: string, relLine: number): number | null {
-		const start = this.embedStartLine(file);
-		if (start === null) return null;
+		const at = this.embedStartLine(file);
+		if (at === null) return null;
+		const start = at.line;
 		const sectionLines = splitLines(sectionText);
 		const lines = splitLines(whole);
 		if (start >= lines.length || lines[start] !== sectionLines[0]) return null;
 		const line = start + relLine;
 		const found = this.fenceAt(whole, line);
 		if (!found) return null;
+		if (at.blockId !== null) {
+			// A block embed: the section's first line is the block's own fence, which an identical block elsewhere has too, so the anchor line
+			// proves nothing. What belongs to THIS block is its marker: the first non-blank line after the closing fence is `^id`.
+			let next = found.lineEnd + 1;
+			while (next < lines.length && lines[next].trim() === '') next++;
+			if (next >= lines.length || lines[next].trim().toLowerCase() !== `^${at.blockId.toLowerCase()}`) return null;
+		}
 		const own = blockBodyLines(sectionLines, relLine, relLine + (found.lineEnd - found.lineStart)).join('\n');
 		const expected = this.knownBody ?? own;
 		return normalizeBody(found.body) === normalizeBody(expected) ? line : null;
@@ -896,6 +923,7 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * A pin is also refused when more than `LINE_MAP_MAX_EDITS` lines changed on both sides of the block (see lineMap.ts).
 	 */
 	private pinnedTarget(content: string, pin: BlockPin): { lineStart: number; lineEnd: number } | null {
+		if (partialPins.has(pin)) return null; // SC-556: a pin in an embedded part's coordinates is not a place in the note
 		const line = mapLine(pin.text, content, pin.lineStart);
 		if (line === null) return null;
 		const fence = this.fenceAt(content, line);

@@ -504,6 +504,8 @@ Object.assign(FIXTURES, {
 		// a block embed (`![[note#^id]]`) of the LOWER of two identical counters in a short note
 		'Lifecycle/gs64-embb-src.md': `# gs64 embb src\n\n${COUNTER(5, 'Twin')}\n\nmid\n\n${COUNTER(5, 'Twin')}\n^gs64blk\n\nend\n`,
 		'Lifecycle/gs64-embb-host.md': `# gs64 embb host\n\n![[gs64-embb-src#^gs64blk]]\n\nafter\n`,
+		// a note with a LINK to that block (not an embed): Ctrl-hover opens a preview of the block, whose card is drawn under `.popover.hover-popover > .markdown-embed` (no `src`)
+		'Lifecycle/gs64-hov-host.md': `# gs64 hov host\n\nsee [[gs64-embb-src#^gs64blk]]\n`,
 	});
 }
 
@@ -4680,7 +4682,7 @@ const SCENARIOS = [
 		// in-app outside edit of block 0 · (i) the same on disk (Reading view plain) · (k) an outside edit that also inserts text above · (l) a kept-open form closes when
 		// the plugin is disabled · (m) control: the form after the click's write has landed · (n) SC-549: + on block 1 held, an in-app outside edit of block 0, fire ·
 		// (o) SC-549 LP: + on block 1 held, 'Z' typed into block 0's title, fire · (p) K-strict: a kept-open form whose block was deleted writes nothing and says why ·
-		// (q) a kept-open form on the unterminated trailing fence (its section redrawn by blank lines added at the end of the note) saves into that block · (r) the note navigated away in its pane, (s) its pane closed, with a pinned form open: the form closes with its view and nothing is written (a form is kept open only while its note is still shown). Before the fix, (a)-(k) FAIL and (g) (p) (q) cannot even keep the form open. SC-556: (x) (y) (xa) (ya) (xb) (z) a form on a card in a heading embed or a block embed (`![[src#Tracker]]`) of a long note: Save lands in the embedded block, not in an identical block outside the section (Reading view, Live Preview), and an outside edit of the embedded block writes nothing. SC-556: (v) a form that is not kept open (three plain twins, Reading view) whose own block is edited from outside while it is open, (w) the same with the block deleted: Save writes nothing, one Notice, the form stays open, the outside change is kept (base: the edit lands in the identical twin that is left).
+		// (q) a kept-open form on the unterminated trailing fence (its section redrawn by blank lines added at the end of the note) saves into that block · (r) the note navigated away in its pane, (s) its pane closed, with a pinned form open: the form closes with its view and nothing is written (a form is kept open only while its note is still shown). Before the fix, (a)-(k) FAIL and (g) (p) (q) cannot even keep the form open. SC-556: (x) (y) (xa) (ya) (xb) (zh) (z) a form on a card in a heading embed, a block embed or a hover preview (`![[src#Tracker]]`) of a long note: Save lands in the embedded block, not in an identical block outside the section (Reading view, Live Preview), and an outside edit of the embedded block writes nothing. SC-556: (v) a form that is not kept open (three plain twins, Reading view) whose own block is edited from outside while it is open, (w) the same with the block deleted: Save writes nothing, one Notice, the form stays open, the outside change is kept (base: the edit lands in the identical twin that is left).
 		id: 'G-S64',
 		async run(t) {
 			const m = await t.mark();
@@ -4699,7 +4701,7 @@ const SCENARIOS = [
 			const P3 = 'Lifecycle/twin-triplets.md';
 			const UT = 'Lifecycle/form-pin-unterminated.md';
 			const P3D = 'Lifecycle/form-strict-triplets.md';
-			const ALL = [C3, C2, C4, P2, P3, UT, P3D, 'Lifecycle/gs64-emb-src.md', 'Lifecycle/gs64-emb-host.md', 'Lifecycle/gs64-embb-src.md', 'Lifecycle/gs64-embb-host.md'];
+			const ALL = [C3, C2, C4, P2, P3, UT, P3D, 'Lifecycle/gs64-emb-src.md', 'Lifecycle/gs64-emb-host.md', 'Lifecycle/gs64-embb-src.md', 'Lifecycle/gs64-embb-host.md', 'Lifecycle/gs64-hov-host.md'];
 			await t.ev(`(() => { if (!document.getElementById('lc-gs64-notice')) { const st = document.createElement('style'); st.id = 'lc-gs64-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
 			await t.ev(`(${gs64Page.toString()})()`);
 			const A = 'window.__gs64.A';
@@ -5176,6 +5178,50 @@ const SCENARIOS = [
 					await cleanupForm();
 				}
 			};
+			/**
+			 * (zh) SC-556: a form on the card of a HOVER PREVIEW of a block link (`[[note#^id]]`) of a short note with an identical block above the linked one. The preview card has no
+			 * `src` and is given only the block's text (which occurs twice), so nothing can say which block it shows: Save writes NOTHING (the note stays byte for byte as it was, the
+			 * block above is never written), the one Notice says so and the form stays open. Before r8 the part's pin was mapped against the whole note and landed on the block ABOVE.
+			 */
+			const hoverCase = async (label) => {
+				const SRC = 'Lifecycle/gs64-embb-src.md';
+				const HOST = 'Lifecycle/gs64-hov-host.md';
+				const mk = await t.mark();
+				try {
+					await t.reset(SRC);
+					await t.reset(HOST);
+					await t.ev(`(async () => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); window.__gs64.A = app.workspace.getLeavesOfType('markdown')[0] ?? app.workspace.getMostRecentLeaf(); window.__gs64.B = null; return true; })()`);
+					await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); })()`);
+					await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: ${J(HOST)}, mode: 'preview' }, active: true }); })()`);
+					await t.waitFor(`!!document.querySelector('.workspace-leaf.mod-active a.internal-link')`, `${label}: the link is drawn`);
+					await t.ev(`(() => { const a = document.querySelector('.workspace-leaf.mod-active a.internal-link'); const leaf = app.workspace.getMostRecentLeaf(); app.workspace.trigger('hover-link', { event: new MouseEvent('mouseover', { ctrlKey: true, metaKey: true, clientX: 200, clientY: 200 }), source: 'preview', hoverParent: leaf.view, targetEl: a, linktext: a.getAttribute('data-href'), sourcePath: ${J(HOST)} }); return true; })()`);
+					const E = `app.plugins.plugins['draw-steel-elements'].viewRegistry.liveEntries().filter((e) => e.host.sourcePath === ${J(SRC)} && e.root.isConnected && e.root.closest('.hover-popover'))`;
+					await t.waitFor(`${E}.length >= 1`, `${label}: a card in the hover preview`, 15000);
+					t.expect(await t.ev(`!${E}[0].host.containerEl.closest('.internal-embed[src], .markdown-embed[src]')`), `${label}: the preview card has a src after all (this phase is about the shape that has none)`);
+					const pencil = `(${E}[0].root.querySelector('.dse-chrome button[data-dse-chrome-item="edit"], button[aria-label^="Edit "]'))`;
+					await t.waitFor(`!!${pencil}`, `${label}: the Edit pencil is drawn in the preview`);
+					await t.ev(`${pencil}.click()`);
+					await t.waitFor(`!!document.querySelector('.modal-container .dse-modal .dse-form__preview')`, `${label}: the edit form opened`, 10000);
+					await t.sleep(300);
+					await typeRename(label, 'Twin', 'Edited');
+					const before = t.read(SRC);
+					const mp = await t.mark();
+					await t.ev(`(${SAVE}).click()`);
+					await t.waitFor(`__lc.notices.some((x) => x.n > ${mp})`, `${label}: Save said nothing`, 10000);
+					const ns = await t.noticesSince(mp);
+					const text = 'Draw Steel Elements: a change to a block in gs64-embb-src was not saved \u2014 the block changed on disk first.';
+					t.expect(ns.length === 1 && ns[0] === text, `${label}: expected the one Notice ${J(text)}, got ${J(ns)}`);
+					// (a hover preview closes when the pointer leaves it, and its form closes with that view: the form may be gone by now, which is not what is asserted)
+					const stillOpen = await formOpen();
+					t.expect(t.read(SRC) === before, `${label}: the note changed on Save (the block above must never be written): ${J(t.read(SRC))}`);
+					outcomes.push(`${label}: the hover card has no src; Save wrote nothing (the block above untouched), one Notice, the form ${stillOpen ? 'stayed open' : 'closed with its preview'}`);
+				} catch (e) {
+					problems.push(`${label}: ${e.message}`);
+				} finally {
+					await cleanupForm();
+					await t.ev(`(() => { document.querySelectorAll('.popover.hover-popover').forEach((p) => p.remove()); return true; })()`);
+				}
+			};
 			/** (r) the note leaves the screen with a pinned form open - navigated away in its pane, or its pane closed (a second pane): the form closes with its view, nothing is written. */
 			const leaveCase = async (label, how) => {
 				const mk = await t.mark();
@@ -5237,6 +5283,7 @@ const SCENARIOS = [
 				await embedCase('(xa) SC-556: + on the card then at once its pencil (the section text is stale when the form opens), a heading embed of a long note, Reading view: Save lands in the embedded block', 'plus', 'rv');
 				await embedCase('(ya) SC-556: the same in Live Preview', 'plus', 'lp');
 				await embedCase('(xb) SC-556: a block embed (![[note#^id]]) of the lower of two identical blocks of a short note: Save writes the embedded block, not the one above', 'save', 'rv', 'block');
+				await hoverCase('(zh) SC-556: a hover preview ([[note#^id]]) of a block with an identical block above it: Save writes nothing and never the block above');
 				await embedCase('(z) SC-556: the embedded block is edited from outside while its form is open: nothing is written into the twin', 'edit', 'rv');
 			} finally {
 				await t.ev(`${prefs}.set('authoringControls', false)`);
