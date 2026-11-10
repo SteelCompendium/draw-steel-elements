@@ -41,11 +41,14 @@ export const poolBoxes = (): Promise<string> =>
 		.map((b) => (b.checked ? (b.disabled ? 'x' : 'o') : b.disabled ? '-' : '.')).join('')`);
 
 /** The info line above the footer (`.dse-sedit__info`): its text and whether it is hidden. */
-export const poolInfo = (): Promise<{ text: string; hidden: boolean }> =>
-	dse.page<{ text: string; hidden: boolean }>(`(() => {
+export async function poolInfo(): Promise<{ text: string; hidden: boolean }> {
+	const info = await dse.page<{ text: string; hidden: boolean } | null>(`(() => {
 		const el = document.querySelector('.modal-container .dse-modal .dse-sedit__info');
-		return { text: el.textContent, hidden: el.hidden };
+		return el ? { text: el.textContent, hidden: el.hidden } : null;
 	})()`);
+	if (!info) throw new Error('poolInfo(): no pool modal with an info line is open');
+	return info;
+}
 
 /** Click Apply and wait for the single resulting write; the modal closes. Returns the write count. */
 export async function applyPoolAndWrite(modal: Modal, note: string): Promise<number> {

@@ -69,12 +69,17 @@ describe('minion pool: leaving without a write', () => {
 
 	it('[POOL-F04] the X and a click on the backdrop each discard the staged edit: no write, the modal closes', async () => {
 		const first = await openPoolModal(SQUAD, 'bar');
-		await stage(first.modal);
-		await dse.expectNoWrite(SQUAD, () => dse.click(first.modal.control('modal.close')));
+		// Staging AND cancelling sit inside the no-write window: a tick or a typed value that saved early would show here.
+		await dse.expectNoWrite(SQUAD, async () => {
+			await stage(first.modal);
+			await dse.click(first.modal.control('modal.close'));
+		});
 		await expect(first.modal.root).not.toBeExisting();
 		const again = await openPoolModal(SQUAD, 'bar');
-		await stage(again.modal);
-		await dse.expectNoWrite(SQUAD, () => dse.click(again.modal.control('modal.backdrop'), { inset: 5 }));
+		await dse.expectNoWrite(SQUAD, async () => {
+			await stage(again.modal);
+			await dse.click(again.modal.control('modal.backdrop'), { inset: 5 });
+		});
 		await expect(again.modal.root).not.toBeExisting();
 		expect(await dse.noteText(SQUAD)).toContain('amount: 5'); // the note still holds the fixture's squad, nothing staged landed
 		await dse.expectNoteBlock(SQUAD, INIT).toMatchObject({ enemy_groups: [{ name: 'Goblin Squad' }] });
@@ -82,9 +87,11 @@ describe('minion pool: leaving without a write', () => {
 
 	it('[POOL-F05] Escape closes the modal from the Apply box and writes nothing', async () => {
 		const { modal } = await openPoolModal(SQUAD, 'bar');
-		await stage(modal);
-		await dse.type(modal.control('pool.damage-amount'), '0', { replace: true }); // focus moves to a field that holds no draft
-		await dse.expectNoWrite(SQUAD, () => dse.press('Escape', dse.aimedAt('modal.close')));
+		await dse.expectNoWrite(SQUAD, async () => {
+			await stage(modal);
+			await dse.type(modal.control('pool.damage-amount'), '0', { replace: true }); // focus moves to a field that holds no draft
+			await dse.press('Escape', dse.aimedAt('modal.close'));
+		});
 		await expect(modal.root).not.toBeExisting();
 	});
 });

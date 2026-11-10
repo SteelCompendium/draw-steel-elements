@@ -138,3 +138,19 @@ describe('minion pool: heals', () => {
 		await dse.expectNoWrite(HURT, () => dse.click(modal.control('modal.close')));
 	});
 });
+
+describe('minion pool: a keyboard press that disables the focused button', () => {
+	it('[POOL-S08] Enter on Decrease at pool 1 steps to 0, and focus moves to the pool field instead of falling to the page (SC-495 class)', async () => {
+		const { modal } = await openPoolModal(SQUAD);
+		const input = modal.control('pool.stamina.input');
+		await dse.type(input, '1', { replace: true });
+		await dse.press('Enter', input);
+		const dec = modal.control('pool.stamina.dec');
+		await dse.tabTo(dec, 40);
+		await dse.press('Enter', dec);
+		await expect(input).toHaveValue('0');
+		await expect(dec).toBeDisabled();
+		expect(await dse.focusedControl()).toBe('pool.stamina.input');
+		await dse.expectNoWrite(SQUAD, () => dse.click(modal.control('modal.close')));
+	});
+});

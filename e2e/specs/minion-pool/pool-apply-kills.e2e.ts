@@ -49,6 +49,16 @@ describe('minion pool: the Apply Damage row', () => {
 		await dse.expectNoWrite(HURT, () => dse.click(modal.control('modal.close')));
 	});
 
+	it('[POOL-A05] ArrowDown in the damage box steps down and stops at 0 (its min), nothing is staged', async () => {
+		const { modal } = await openPoolModal(SQUAD);
+		const damage = modal.control('pool.damage-amount');
+		await dse.type(damage, '2', { replace: true });
+		for (let i = 0; i < 4; i++) await dse.press('ArrowDown', damage);
+		await expect(damage).toHaveValue('0');
+		await expectPoolApply(modal, 'No Stamina Change');
+		await dse.expectNoWrite(SQUAD, () => dse.click(modal.control('modal.close')));
+	});
+
 	it('[POOL-A04] at rest the info line is hidden (no "0 damage will kill 0 minion(s)", SC-429); damage shows it; Reset hides it again', async () => {
 		const { modal } = await openPoolModal(SQUAD);
 		expect(await poolInfo()).toEqual({ text: '', hidden: true });
@@ -131,6 +141,25 @@ describe('minion pool: the kill boxes', () => {
 		);
 		for (const key of ['0-1', '0-2', '0-3', '0-4', '0-5']) expect(await cellText(root, key)).toBe('DEAD');
 		await expect(root.control({ css: '.dse-init__detail .dse-init__stamina' })).toHaveElementProperty('textContent', 'DEAD');
+	});
+
+	it('[POOL-K05] the whole job by keyboard: Tab to a kill box, Space ticks it, Tab to Apply, Enter writes once', async () => {
+		const { modal } = await openPoolModal(SQUAD);
+		await dse.type(modal.control('pool.stamina.input'), '16', { replace: true });
+		await dse.press('Enter', modal.control('pool.stamina.input'));
+		const box = modal.control('pool.kill', { nth: 0 });
+		await dse.tabTo(box, 40);
+		await dse.press('Space', box);
+		expect(await poolBoxes()).toBe('o----'); // one owed, one ticked: the rest lock
+		const applyBtn = modal.control('pool.apply');
+		await expect(applyBtn).toBeEnabled();
+		await dse.tabTo(applyBtn, 40);
+		const w = await dse.waitForWrite(SQUAD, () => dse.press('Enter', applyBtn));
+		expect(w.count).toBe(1);
+		await expect(modal.root).not.toBeExisting();
+		await dse.expectNoteBlock(SQUAD, INIT).toMatchObject(
+			group({ minion_stamina_pool: 16, creatures: [{ instances: [{ id: 1, isDead: true }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }] }] }),
+		);
 	});
 });
 

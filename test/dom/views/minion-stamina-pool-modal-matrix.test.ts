@@ -288,7 +288,8 @@ describe('the Apply Damage row: damage per minion x minions hit', () => {
 		pool: string;
 		/** What the minion-count box reads after the press. */
 		count: string;
-		label: string;
+		/** The Apply label; left out where a known bug owns it (SC-566). */
+		label?: string;
 	}
 	const rows: Hit[] = [
 		{ name: '3 damage x 1 minion', spec: {}, damage: '3', minions: '1', pool: '17', count: '1', label: 'Deal 3 damage' },
@@ -301,14 +302,14 @@ describe('the Apply Damage row: damage per minion x minions hit', () => {
 		{ name: 'a negative damage is the same as 0', spec: {}, damage: '-4', minions: '2', pool: '20', count: '2', label: 'No Stamina Change' },
 		{ name: 'exponent form reads as a number: 1e1 x 1 = 10', spec: {}, damage: '1e1', minions: '1', pool: '10', count: '1', label: 'Deal 10 damage, kill 2 minion(s)' },
 		{ name: 'decimals truncate: 2.9 x 2 = 4', spec: {}, damage: '2.9', minions: '2', pool: '16', count: '2', label: 'Deal 4 damage, kill 1 minion(s)' },
-		{ name: 'overkill: 99 x 5 empties the pool, kills everyone', spec: {}, damage: '99', minions: '5', pool: '0', count: '5', label: 'Deal 495 damage, kill 5 minion(s)' },
+		{ name: 'overkill: 99 x 5 empties the pool, kills everyone', spec: {}, damage: '99', minions: '5', pool: '0', count: '5' }, // (its label is SC-566's: the marker at the end of this file owns it)
 	];
 	test.each(rows)('$name', async (r) => {
 		const { content } = await open(r.spec);
 		dealDamage(content, r.damage, r.minions);
 		expect(poolInput(content).value).toBe(r.pool);
 		expect(ctl<HTMLInputElement>(content, 'pool.minion-count').value).toBe(r.count);
-		expect(apply(content).textContent).toBe(r.label);
+		if (r.label !== undefined) expect(apply(content).textContent).toBe(r.label);
 	});
 
 	test('two presses add up: 3 x 1 then 2 x 2 is 7 damage', async () => {
@@ -656,15 +657,56 @@ describe('known bugs (test.failing: each FAILS once its ticket is fixed, then dr
 	// SC-567: owed kills drop from 2 to 1 with 2 boxes ticked. Either fix satisfies this: trim the surplus ticks
 	// (Apply enables, no title) or keep them and reword the tooltip. What may never happen is a disabled Apply whose
 	// tooltip says "Select N minion(s) to kill" with N not above the number already ticked.
-	test.failing('SC-567: a disabled Apply never asks for fewer kills than are already ticked', async () => {
+	test.failing('SC-567: neither a disabled Apply nor the info line asks for fewer kills than are already ticked', async () => {
 		const { content } = await open();
 		typePool(content, '12'); // 2 owed
 		tick(content, 0);
 		tick(content, 1);
 		expect(apply(content).disabled).toBe(false); // setup: 2 owed, 2 ticked
 		typePool(content, '16'); // 1 owed
+		expect(apply(content).textContent).toBe('Deal 4 damage, kill 1 minion(s)'); // setup: the second commit happened (true under either fix)
 		const ticked = all<HTMLInputElement>(content, 'pool.kill').filter((b) => b.checked).length;
 		const asked = /^Select (\d+) minion\(s\) to kill$/.exec(apply(content).getAttribute('title') ?? '');
 		if (apply(content).disabled && asked) expect(Number(asked[1])).toBeGreaterThan(ticked);
+		const told = /Select (\d+) minion\(s\) to kill\./.exec(info(content).textContent ?? '');
+		if (told) expect(Number(told[1])).toBeGreaterThanOrEqual(ticked); // the info line says "Select 1" with 2 ticked today
+	});
+
+	// SC-572 (a11y): the icon is a click-only <div>. The keyboard half (Tab reaches it, Enter removes) is the e2e
+	// marker POOL-C04; here the DOM facts a screen reader needs.
+	test.failing('SC-572: a condition icon is a focusable control with an accessible name', async () => {
+		const { content } = await open({ conditions: { 0: ['grabbed'] } });
+		const icon = ctl(content, 'pool.condition');
+		expect(icon.title).toBe('Grabbed'); // setup: the icon is there
+		const focusable = icon.tagName === 'BUTTON' || icon.getAttribute('role') === 'button' || icon.hasAttribute('tabindex');
+		expect(focusable).toBe(true);
+		expect(icon.getAttribute('tabindex')).not.toBe('-1');
+		expect((icon.getAttribute('aria-label') ?? '').length).toBeGreaterThan(0);
+	});
+
+	// SC-573: a pool at 0 with a minion still alive (reachable: a relieved captain's bonus comes off the pool, clamped at 0).
+	test.failing('SC-573: a pool at 0 with living minions leaves Apply reachable so they can be killed', async () => {
+		const { content } = await open({ pool: 0 });
+		expect(poolInput(content).value).toBe('0'); // setup
+		expect(all(content, 'pool.kill')).toHaveLength(5); // setup: five living minions
+		expect(apply(content).disabled).toBe(false);
+	});
+
+	// SC-574 (a): a condition the registry does not know ("on-fire") is on the minion but not shown here.
+	test.failing('SC-574 (a): a custom condition is shown in the modal and a click removes it', async () => {
+		const { content, minion, persist } = await open({ conditions: { 0: ['on-fire'] } });
+		expect(minion.instances![0].conditions).toHaveLength(1); // setup: the minion carries it
+		expect(all(content, 'pool.condition')).toHaveLength(1);
+		click(content, 'pool.condition');
+		expect(minion.instances![0].conditions).toEqual([]);
+		expect(persist).toHaveBeenCalledTimes(1);
+	});
+
+	// SC-574 (b): `filter((entry) => entry !== clicked)` compares strings by value.
+	test.failing('SC-574 (b): one click on a duplicated string condition removes one copy', async () => {
+		const { content, minion } = await open({ conditions: { 0: ['grabbed', 'grabbed', 'dazed'] } });
+		expect(all(content, 'pool.condition').map((i) => i.title)).toEqual(['Grabbed', 'Grabbed', 'Dazed']); // setup
+		click(content, 'pool.condition', 0);
+		expect(minion.instances![0].conditions).toEqual(['grabbed', 'dazed']);
 	});
 });

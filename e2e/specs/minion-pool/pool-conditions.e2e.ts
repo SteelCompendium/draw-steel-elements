@@ -2,7 +2,7 @@
 // modal stays open), and later damage in the same session saves again (DC-6). Initiative/squad-hurt.md: Goblin #3
 // is grabbed and dazed; pool 10 with #1 and #2 dead.
 import { expect } from '@wdio/globals';
-import { dse } from '../../driver/dse';
+import { dse, knownBug } from '../../driver/dse';
 import { applyPoolAndWrite, conditionTitles, expectPoolApply, HURT, INIT, openPoolModal } from '../../driver/pool';
 
 const instance3 = (extra: Record<string, unknown>) => ({ enemy_groups: [{ name: 'Goblin Squad', creatures: [{ instances: [{ id: 1 }, { id: 2 }, { id: 3, ...extra }, { id: 4 }, { id: 5 }] }] }] });
@@ -20,7 +20,7 @@ describe('minion pool: condition icons', () => {
 		await dse.expectNoWrite(HURT, () => dse.click(modal.control('modal.close')));
 	});
 
-	it('[POOL-C02] DC-6: a condition removed and then damage applied in one session both land, and the pool edit survives the rebuild in between', async () => {
+	it('[POOL-C02] DC-6: a condition removed and then damage applied in one session both land (the rebuild after the removal leaves the modal usable)', async () => {
 		const { root, modal } = await openPoolModal(HURT);
 		const first = await dse.waitForWrite(HURT, () => dse.click(modal.control('pool.condition', { nth: 0 })));
 		expect(first.count).toBe(1);
@@ -46,4 +46,19 @@ describe('minion pool: condition icons', () => {
 		await dse.expectNoteBlock(HURT, INIT).toMatchObject(instance3({ conditions: [] }));
 		await dse.expectNoWrite(HURT, () => dse.click(modal.control('modal.close')));
 	});
+});
+
+// SC-572 (MEDIUM, a11y): the condition icon is a click-only <div> with no tabindex, role or name, so a keyboard user
+// can never remove a condition here. The marker states the CORRECT behaviour; when SC-572 is fixed it goes red
+// ("appears fixed"): remove it, add `press:Enter` (and the icon's name) to manifest/minion-pool-modal.ts, and keep a plain driver.
+describe('minion pool: condition icons by keyboard', () => {
+	knownBug('SC-572', '[POOL-C04] Tab reaches a condition icon and Enter removes that condition', async () => {
+		const { modal } = await openPoolModal(HURT);
+		expect(await conditionTitles()).toEqual(['Grabbed', 'Dazed']); // setup: both icons are drawn
+		const icon = modal.control('pool.condition', { nth: 0 });
+		await dse.tabTo(icon, 40);
+		await dse.press('Enter', icon);
+		await dse.settle();
+		expect(await conditionTitles()).toEqual(['Dazed']);
+	}, { failsWith: /Tab did not reach the control/ });
 });
