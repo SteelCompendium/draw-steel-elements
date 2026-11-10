@@ -35,6 +35,8 @@ import poolManifest from '../../e2e/manifest/minion-pool-modal';
 import initiativeManifest from '../../e2e/manifest/initiative';
 import { ResetEncounterModal } from '../../src/views/ResetEncounterModal';
 import { MinionStaminaPoolModal } from '../../src/views/MinionStaminaPoolModal';
+import { ConditionsModal } from '../../src/views/ConditionsModal';
+import { ConditionManager } from '../../src/utils/Conditions';
 import { parseEncounterData } from '../../src/drawSteelAdmonition/EncounterData';
 import squadYaml from '../fixtures/initiative/squad.yaml';
 import chromeManifest from '../../e2e/manifest/chrome';
@@ -65,6 +67,7 @@ const chromeIds = idsOf(chromeManifest);
 const barIds = new Set([...idsOf(staminaBarManifest), ...chromeIds]);
 const modalIds = new Set(idsOf(modalManifest));
 const poolIds = new Set(idsOf(poolManifest));
+const conditionIds = new Set(idsOf(conditionsManifest));
 
 function makeHost(language: string, sourcePath: string) {
 	const replaceSource = jest.fn(async (_s: string) => true);
@@ -372,5 +375,61 @@ describe('SC-435 census: the MinionStaminaPoolModal', () => {
 
 	test('the three initiative entry points are declared by the manifest as reach rows', () => {
 		expect(poolManifest.reach.map((r) => r.control).sort()).toEqual(['init.cell.stamina', 'init.detail.bar', 'init.detail.stamina']);
+	});
+});
+
+describe('SC-436 census: the ConditionsModal', () => {
+	/** The window over a hero with a registered condition, a custom one and a plain string, so every row control exists. */
+	function openConditions(): { content: HTMLElement; modal: ConditionsModal } {
+		const holder = { conditions: ['bleeding', { key: 'dazed', duration: 'eot' as const }, { key: 'hexed' }] };
+		const modal = new ConditionsModal(new App() as any, holder, new ConditionManager(), jest.fn());
+		modal.open();
+		return { content: (modal as any).contentEl as HTMLElement, modal };
+	}
+	const ids = (scope: Element, id: string): number => scope.querySelectorAll(`[data-dse-control="${id}"]`).length;
+
+	test('at rest: each row has a cog and a trash button, then "+ Add condition" and Done, all identified and in the manifest', () => {
+		const { content } = openConditions();
+		expect(censusProblems(content, conditionIds)).toEqual([]);
+		expect(ids(content, 'cond.edit')).toBe(3);
+		expect(ids(content, 'cond.remove')).toBe(3);
+		for (const id of ['cond.add', 'cond.done']) expect(ids(content, id)).toBe(1);
+	});
+
+	test('with a row editor open: the icon search, every icon choice, every duration chip, swatch, the custom colour input and every effect chip are identified', () => {
+		const { content } = openConditions();
+		content.querySelectorAll<HTMLElement>('[data-dse-control="cond.edit"]')[1].click();
+		expect(censusProblems(content, conditionIds)).toEqual([]);
+		expect(ids(content, 'cond.icon-search')).toBe(1);
+		expect(ids(content, 'cond.icon')).toBeGreaterThan(1); // "Use default" plus the suggested icons
+		expect(ids(content, 'cond.duration')).toBe(4);
+		expect(ids(content, 'cond.swatch')).toBe(5);
+		expect(ids(content, 'cond.color-custom')).toBe(1);
+		expect(ids(content, 'cond.effect')).toBe(6);
+		expect(content.querySelector('[data-dse-control="cond.color-custom"]')!.getAttribute('type')).toBe('color');
+	});
+
+	test('with the Add dropdown open: the combobox input and every option (known conditions and the custom row) are identified', () => {
+		const { content } = openConditions();
+		content.querySelector<HTMLElement>('[data-dse-control="cond.add"]')!.click();
+		expect(censusProblems(content, conditionIds)).toEqual([]);
+		expect(ids(content, 'cond.add')).toBe(0); // the button is swapped out while the dropdown is open
+		expect(ids(content, 'cond.input')).toBe(1);
+		const input = content.querySelector<HTMLInputElement>('[data-dse-control="cond.input"]')!;
+		const known = ids(content, 'cond.option');
+		expect(known).toBeGreaterThan(5);
+		input.value = 'nothing like it';
+		input.dispatchEvent(new Event('input'));
+		expect(ids(content, 'cond.option')).toBe(1); // filtered to the "Add custom" row, which is an option too
+	});
+
+	test('the tracker\'s "Add Condition" buttons (the window\'s reach row) carry init.cond.add: one on the hero row, one on the selected creature row', async () => {
+		const host = makeHost('ds-initiative', 'Encounter.md');
+		await new ElementPipeline(makeDeps()).run(initiativeElement, TRACKER, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(ids(root, 'init.cond.add')).toBe(2);
+		expect(root.querySelector('.dse-init__conditions [data-dse-control="init.cond.add"]')).not.toBeNull();
+		expect(conditionsManifest.reach.map((r) => r.control)).toEqual(['init.cond.add']);
+		expect(conditionsManifest.reach[0].host).toBe('initiative');
 	});
 });

@@ -9,6 +9,7 @@ import { dse } from '../driver/dse';
 import { censusFindings, eventfulNodes } from '../driver/census';
 import { openBarModal } from '../driver/stamina';
 import { HURT, openPoolModal } from '../driver/pool';
+import { CONDITIONS, openConditionsModal } from '../driver/conditions';
 import { idsOf } from '../manifest/surface';
 import barManifest from '../manifest/stamina-bar';
 import modalManifest from '../manifest/stamina-edit-modal';
@@ -143,6 +144,26 @@ describe('real-Obsidian census: the minion stamina pool modal', () => {
 		for (const id of ['pool.stamina.dec', 'pool.stamina.input', 'pool.stamina.inc', 'pool.apply-damage', 'pool.minion-name', 'pool.condition', 'pool.reset', 'pool.apply']) {
 			expect(ids).toContain(id);
 		}
+		await dse.click(modal.control('modal.close'));
+	});
+});
+
+describe('real-Obsidian census: the Conditions window', () => {
+	it('[CENSUS-07] the open Conditions window (rows, one editor open, then the Add dropdown): every node that listens for input is an identified control', async () => {
+		const { modal } = await openConditionsModal(CONDITIONS, 'hero');
+		await dse.click(modal.control('cond.edit', { nth: 1 }));
+		await dse.settle();
+		const scope = ['.modal-container .dse-modal .modal-content *'];
+		const rest = await eventfulNodes(scope);
+		expect(censusFindings(rest, ALL_IDS)).toEqual([]);
+		for (const id of ['cond.edit', 'cond.remove', 'cond.icon-search', 'cond.icon', 'cond.duration', 'cond.swatch', 'cond.effect', 'cond.add', 'cond.done']) {
+			expect(rest.map((n) => n.id)).toContain(id);
+		}
+		// The dropdown's options are divs with a mousedown listener: only the browser can tell they are controls.
+		await dse.click(modal.control('cond.add'));
+		const open = await eventfulNodes(scope);
+		expect(censusFindings(open, ALL_IDS)).toEqual([]);
+		for (const id of ['cond.input', 'cond.option']) expect(open.map((n) => n.id)).toContain(id);
 		await dse.click(modal.control('modal.close'));
 	});
 });
