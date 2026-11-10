@@ -12,6 +12,8 @@ import { splitLines } from './lineEnding';
  * in the stretch around its block can never be saved - the pin is refused and the Notice says "the block changed on disk first"
  * although it did not. No data is at risk (nothing is written, the form stays open and the typed text can be copied out); before
  * SC-556 only a form kept open past its view had this limit, any other form fell back to the element's section or a search by body.
+ * Only real changes count: a block in a heading embed is given just its section's text, and its pin is rebased onto the whole note
+ * before it is mapped (ReadingModeBlockHost.rebasePin), so the lines outside the section are not read as edits.
  */
 export const LINE_MAP_MAX_EDITS = 400;
 
@@ -19,8 +21,9 @@ export const LINE_MAP_MAX_EDITS = 400;
  * The line of `after` that is line `line` of `before`, by a minimal line diff (the common head and tail lines first, a Myers diff
  * over what is left between them). Lines are numbered the way Obsidian numbers them (`splitLines`). Null when that line was changed
  * or removed, when `line` is not a line of `before`, or when the notes differ by more than LINE_MAP_MAX_EDITS lines. Known limit (SC-556):
- * deleting one of several identical blocks that have identical surroundings cannot be told apart by a line diff, and the note that is
- * left is the same whichever one was deleted, so a form on a surviving twin can still place its pin.
+ * of two identical blocks with identical surroundings, deleting one cannot be told from deleting the other (the note that is left is
+ * the same). The common head is trimmed first, so the diff always reads the LOWER one as deleted: a pin on the upper block then maps
+ * to the surviving block, and a pin on the lower block maps to null (a false "changed on disk first" refusal; nothing is written).
  */
 export function mapLine(before: string, after: string, line: number): number | null {
 	if (before === after) return line;

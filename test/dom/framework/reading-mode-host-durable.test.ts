@@ -970,6 +970,44 @@ describe('SC-455: a write that cannot be placed never guesses (and reports)', ()
 	});
 });
 
+// SC-556: a form's Save that cannot land says so every time (the "unsavable" Notice too), the view's own card writes keep the 5 s limit.
+describe('SC-556: the unsavable Notice is not rate limited for a form Save', () => {
+	let warn: jest.SpyInstance;
+	beforeEach(() => {
+		resetDroppedWriteNotices();
+		Notice.notices.length = 0;
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => warn.mockRestore());
+
+	function onNote(missing: boolean) {
+		const app = new App();
+		// a note whose block sits in a list item: the shape that cannot be written (the 'unplaceable' path); or no note at all (the 'note is gone' path)
+		const live = ['# N', '', '- item', '  ```ds-counter', '  name: A', '  current_value: 1', '  ```', '', 'below'].join('\n');
+		if (!missing) app.vault.setFile('Note.md', live);
+		const section = { current: { text: live, lineStart: 2, lineEnd: 6 } };
+		const host = new ReadingModeBlockHost(new Plugin(app) as any, document.createElement('div'), switchableCtx('Note.md', section) as any, 'ds-counter');
+		host.setMountedBody('name: A\ncurrent_value: 1');
+		return host;
+	}
+
+	test.each([
+		['an unplaceable block (in a list item)', false],
+		['the note is gone', true],
+	])('%s: three form Saves within 5 s show three Notices; three card writes show one', async (_name, missing) => {
+		const form = onNote(missing);
+		for (let i = 0; i < 3; i++) await expect(form.replaceSource('name: B')).resolves.toBe(false);
+		expect(Notice.notices).toEqual(Array<string>(3).fill(unsavableWriteMessage('Note', !missing)));
+
+		resetDroppedWriteNotices();
+		Notice.notices.length = 0;
+		const card = onNote(missing);
+		for (let i = 0; i < 3; i++) await expect(card.replaceSource('name: B', { fromView: true })).resolves.toBe(false);
+		expect(Notice.notices).toEqual([unsavableWriteMessage('Note', !missing)]);
+		expect(card.lastWriteReported).toBe(true);
+	});
+});
+
 // Live Preview draws a callout as ONE CodeMirror widget and (measured, Obsidian 1.14.4) hands its
 // code-block processors a context whose getSectionInfo is null for every node — so the block used to
 // be read-only there. The host finds the callout through the editor instead (cm.posAtDOM).

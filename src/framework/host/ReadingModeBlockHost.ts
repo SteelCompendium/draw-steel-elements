@@ -373,6 +373,9 @@ export function quoteOrdinal(el: HTMLElement, alias: string, cache?: Map<Element
 	return blocks.indexOf(el);
 }
 
+/** SC-556: the rebase (`ReadingModeBlockHost.rebasePin`) a pin made by `pinPosition` is waiting for; a pin made elsewhere has none. */
+const pinRebased = new WeakMap<object, Promise<void>>();
+
 /**
  * SC-481: the fence the element `el` is drawn on RIGHT NOW, read from the section Obsidian reports for it, or null when that
  * cannot be told. Shared by both ways of finding an element Obsidian reused for another block (`reusedBlockBody` for a live
@@ -770,7 +773,45 @@ export class ReadingModeBlockHost implements BlockHost {
 	pinPosition(): BlockPin | null {
 		const section = this.readSection();
 		if (!section || !this.ownFence) return null;
-		return { text: section.text, lineStart: this.ownFence.lineStart };
+		const pin = { text: section.text, lineStart: this.ownFence.lineStart };
+		// SC-556: only a block drawn inside an embed can be given a part of the note (see rebasePin); every other pin is taken as before.
+		if (this.containerEl.closest('.markdown-embed, .internal-embed')) pinRebased.set(pin, this.rebasePin(pin, section.text));
+		return pin;
+	}
+
+	/**
+	 * SC-556: a block inside a heading embed (`![[note#Heading]]`, Reading view or Live Preview) is given only that section's text, with
+	 * line numbers counted from the section's first line. A pin made of that is not a position in the note: mapped against the whole
+	 * note every line outside the section looks like an insertion, and a long note exceeds `LINE_MAP_MAX_EDITS` with nothing changed
+	 * at all (a Save that could never land, now that a form's Save is pin-only). So the pin is rebased onto the whole note as the vault
+	 * holds it now: when the section's lines are found in it exactly once, the pin becomes the note's text and the section's offset is
+	 * added to its line. Found twice (two identical sections) or not at all: the pin is left as it was (no worse than before). A
+	 * block that is not inside an embed (its section text IS the note) is not looked at. Asynchronous (`cachedRead`); `replaceSource` waits for it.
+	 */
+	private async rebasePin(pin: { text: string; lineStart: number }, sectionText: string): Promise<void> {
+		try {
+			const file = this.plugin.app.vault.getAbstractFileByPath(this.ctx.sourcePath);
+			if (!(file instanceof TFile)) return;
+			const whole = await this.plugin.app.vault.cachedRead(file);
+			if (whole === sectionText) return;
+			const section = splitLines(sectionText);
+			while (section.length > 0 && section[section.length - 1] === '') section.pop(); // the section's own trailing blank lines
+			if (section.length === 0) return;
+			const lines = splitLines(whole);
+			let found = -1;
+			for (let k = 0; k + section.length <= lines.length; k++) {
+				let same = true;
+				for (let i = 0; i < section.length && same; i++) same = lines[k + i] === section[i];
+				if (!same) continue;
+				if (found >= 0) return; // two identical sections: which one is ours is not decidable here
+				found = k;
+			}
+			if (found < 0) return;
+			pin.text = whole;
+			pin.lineStart += found;
+		} catch {
+			// no readable note: the pin stays as it was
+		}
 	}
 
 	/**
@@ -778,7 +819,11 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * (`mapLine`), accepted only when a fence of this host's language opens there and holds the body this host knows. A closed fence,
 	 * or the note's trailing fence that never closes (the same rule as `locateUnterminatedTrailingFence`, which `locateByBody` also
 	 * considers). Null when the line was changed or removed or no such block is there. No search by body: identical twins cannot be told
-	 * apart that way (SC-480), the position is what tells them apart. Known limit: deleting one of several identical blocks that have identical surroundings cannot be told apart by a line diff (the note is the same whichever one was deleted), so a pin on a surviving twin still places. A pin is also refused when more than `LINE_MAP_MAX_EDITS` lines changed on both sides of the block (see lineMap.ts: for a block edit form's Save, which is pin-only, that is a Save that cannot succeed).
+	 * apart that way (SC-480), the position is what tells them apart.
+	 * Known limit (SC-556): of two identical blocks with identical surroundings (separated only by blank lines), a deletion of one cannot be told from a deletion of the other
+	 * - the note that is left is the same. The line diff trims the common head first, so it always reads the LOWER one as deleted: a form on the upper block then places its pin on the
+	 * surviving block and writes it (the note comes out the same whichever was meant), and a form on the lower block is refused (a Notice, nothing written, the form stays open).
+	 * A pin is also refused when more than `LINE_MAP_MAX_EDITS` lines changed on both sides of the block (see lineMap.ts).
 	 */
 	private pinnedTarget(content: string, pin: BlockPin): { lineStart: number; lineEnd: number } | null {
 		const line = mapLine(pin.text, content, pin.lineStart);
@@ -801,6 +846,7 @@ export class ReadingModeBlockHost implements BlockHost {
 
 	async replaceSource(newSource: string, options?: BlockWriteOptions): Promise<boolean> {
 		this.reported = false;
+		if (options?.pin) await pinRebased.get(options.pin); // SC-556: a section pin is rebased onto the whole note first (rebasePin)
 		// SC-552: the view's own write is placed through the pin its round's first click took (a form's Save brings its own).
 		const pin = options?.pin ?? (options?.fromView === true ? this.pendingPin : null);
 		if (options?.fromView === true) this.pendingPin = null;

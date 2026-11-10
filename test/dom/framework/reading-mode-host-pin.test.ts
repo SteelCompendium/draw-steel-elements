@@ -334,6 +334,102 @@ describe('SC-556: a dropped form Save is never silent (the rate limit is for car
 	});
 });
 
+// SC-556: a block inside a heading embed (`![[note#Heading]]`) is given just that section's text, lines counted from the section's first line.
+// Its pin is rebased onto the whole note when it is taken, so a form's Save (pin-only) lands however long the rest of the note is.
+describe('SC-556: a block edit form in a heading embed', () => {
+	let warn: jest.SpyInstance;
+	beforeEach(() => {
+		resetDroppedWriteNotices();
+		Notice.notices.length = 0;
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => warn.mockRestore());
+
+	const para = (n: number, tag: string): string[] => Array.from({ length: n }, (_, i) => `${tag} ${i}`);
+	const SUB = ['## Tracker', '', ...CTR(5), '']; // the embedded section: what Obsidian reports as the section's text
+	/** The element a block of an embed is mounted in (Obsidian wraps an embed in `.markdown-embed`). */
+	const inEmbed = (): HTMLElement => {
+		const embed = document.createElement('div');
+		embed.className = 'internal-embed markdown-embed';
+		return embed.appendChild(document.createElement('div'));
+	};
+	/** The source note: `above` lines, the embedded section, `below` lines; the host is on the section's block. */
+	function embedded(above: string[], below: string[]) {
+		const app = new App();
+		const full = ['# N', '', ...above, '', ...SUB, '## After', '', ...below, 'END'].join('\n');
+		app.vault.setFile('Note.md', full);
+		const section: Section = { current: { text: SUB.join('\n'), lineStart: 2, lineEnd: 5 } }; // relative to the section, like Obsidian's
+		const host = new ReadingModeBlockHost(new Plugin(app) as never, inEmbed(), switchableCtx(section) as never, 'ds-counter');
+		host.setMountedBody(bodyOf(5));
+		return { app, host, full };
+	}
+	const save = (host: ReadingModeBlockHost, pin: ReturnType<ReadingModeBlockHost['pinPosition']>) => host.replaceSource(bodyOf(5, 'Edited'), { pin, pinOnly: true });
+
+	test('a long note (500 lines on each side of the section), nothing changed: Save lands in the embedded block and the rest is byte for byte', async () => {
+		const { app, host, full } = embedded(para(500, 'above'), para(500, 'below'));
+		const pin = host.pinPosition()!;
+
+		expect(await save(host, pin)).toBe(true); // before the fix: false and the "changed on disk first" Notice
+		expect(app.vault.getContent('Note.md')).toBe(full.replace('name: Twin', 'name: Edited'));
+		expect(Notice.notices).toEqual([]);
+	});
+
+	test('an identical block outside the embedded section (above it): Save writes the embedded block, never the twin', async () => {
+		const { app, host, full } = embedded([...CTR(5), '', 'x'], para(500, 'below'));
+		const pin = host.pinPosition()!;
+
+		expect(await save(host, pin)).toBe(true);
+		const note = app.vault.getContent('Note.md')!;
+		expect(names(app)).toEqual(['Twin', 'Edited']);
+		expect(note).toBe(full.replace(/(## Tracker\n\n```ds-counter\nname: )Twin/, '$1Edited'));
+	});
+
+	test('the embedded block itself edited from outside while the form is open, an identical block outside it holding the old body: Save writes nothing', async () => {
+		const { app, host } = embedded([...CTR(5), '', 'x'], para(20, 'below'));
+		const pin = host.pinPosition()!;
+		const outside = app.vault.getContent('Note.md')!.replace(/(## Tracker\n\n```ds-counter\nname: Twin\ncurrent_value: )5/, '$19');
+		app.vault.setFile('Note.md', outside);
+
+		expect(await save(host, pin)).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(outside); // not written into the twin above
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+	});
+
+	test('the embedded block deleted from outside, a long note: Save writes nothing', async () => {
+		const { app, host } = embedded(para(300, 'above'), para(300, 'below'));
+		const pin = host.pinPosition()!;
+		const outside = app.vault.getContent('Note.md')!.replace(CTR(5).join('\n') + '\n', '');
+		app.vault.setFile('Note.md', outside);
+
+		expect(await save(host, pin)).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(outside);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+	});
+
+	test('an outside edit elsewhere in the source note (above and below the section) while the form is open: Save still lands in the embedded block', async () => {
+		const { app, host, full } = embedded(para(100, 'above'), para(100, 'below'));
+		const pin = host.pinPosition()!;
+		const outside = full.replace('above 0', 'above 0, edited\nand a new line').replace('below 99', 'below 99, edited');
+		app.vault.setFile('Note.md', outside);
+
+		expect(await save(host, pin)).toBe(true);
+		expect(app.vault.getContent('Note.md')).toBe(outside.replace('name: Twin', 'name: Edited'));
+	});
+
+	test('a section that appears twice in the note (identical sections) keeps its pin as it was: no rebase, no guess', async () => {
+		const app = new App();
+		const full = ['# N', '', ...SUB, '## After', '', ...SUB, 'END'].join('\n');
+		app.vault.setFile('Note.md', full);
+		const section: Section = { current: { text: SUB.join('\n'), lineStart: 2, lineEnd: 5 } };
+		const host = new ReadingModeBlockHost(new Plugin(app) as never, inEmbed(), switchableCtx(section) as never, 'ds-counter');
+		host.setMountedBody(bodyOf(5));
+		const pin = host.pinPosition()!;
+		await save(host, pin); // settles the rebase attempt
+
+		expect(pin).toEqual({ text: SUB.join('\n'), lineStart: 2 });
+	});
+});
+
 // SC-552 (K): what the Reading-view host offers a block edit form that wants to outlive its view.
 describe('SC-552: ReadingModeBlockHost.keepFormOpenOn', () => {
 	function hostWithRegistry() {

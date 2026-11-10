@@ -494,6 +494,16 @@ Object.assign(FIXTURES, {
 	'Lifecycle/form-strict-triplets.md': `# form strict triplets\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nM1\n\n${COUNTER(5, 'Twin')}\n\nM2\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`,
 });
 
+// SC-556 (G-S64 (x)-(z)): a long source note (300 paragraphs on each side of the embedded section, and an identical counter above the section
+// that is NOT embedded) and a note that embeds only its `## Tracker` section.
+{
+	const fill = (n, p) => Array.from({ length: n }, (_, i) => `${p} ${i}`).join('\n\n');
+	Object.assign(FIXTURES, {
+		'Lifecycle/gs64-emb-src.md': `# gs64 emb src\n\n${COUNTER(5, 'Twin')}\n\n${fill(300, 'above')}\n\n## Tracker\n\n${COUNTER(5, 'Twin')}\n\n## After\n\n${fill(300, 'below')}\n`,
+		'Lifecycle/gs64-emb-host.md': `# gs64 emb host\n\n![[gs64-emb-src#Tracker]]\n\nafter\n`,
+	});
+}
+
 // SC-536 (G-S56): a reference that points back to itself, a chain of seven distinct references, and a card shown twice.
 // A feature whose one effect is markdown holding a `~~~ds-feature` fence: that fence is a nested block, drawn inside the card.
 const GS56_FEATURE = (name, extra = []) =>
@@ -4667,7 +4677,7 @@ const SCENARIOS = [
 		// in-app outside edit of block 0 · (i) the same on disk (Reading view plain) · (k) an outside edit that also inserts text above · (l) a kept-open form closes when
 		// the plugin is disabled · (m) control: the form after the click's write has landed · (n) SC-549: + on block 1 held, an in-app outside edit of block 0, fire ·
 		// (o) SC-549 LP: + on block 1 held, 'Z' typed into block 0's title, fire · (p) K-strict: a kept-open form whose block was deleted writes nothing and says why ·
-		// (q) a kept-open form on the unterminated trailing fence (its section redrawn by blank lines added at the end of the note) saves into that block · (r) the note navigated away in its pane, (s) its pane closed, with a pinned form open: the form closes with its view and nothing is written (a form is kept open only while its note is still shown). Before the fix, (a)-(k) FAIL and (g) (p) (q) cannot even keep the form open. SC-556: (v) a form that is not kept open (three plain twins, Reading view) whose own block is edited from outside while it is open, (w) the same with the block deleted: Save writes nothing, one Notice, the form stays open, the outside change is kept (base: the edit lands in the identical twin that is left).
+		// (q) a kept-open form on the unterminated trailing fence (its section redrawn by blank lines added at the end of the note) saves into that block · (r) the note navigated away in its pane, (s) its pane closed, with a pinned form open: the form closes with its view and nothing is written (a form is kept open only while its note is still shown). Before the fix, (a)-(k) FAIL and (g) (p) (q) cannot even keep the form open. SC-556: (x) (y) (z) a form on a card in a heading embed (`![[src#Tracker]]`) of a long note: Save lands in the embedded block, not in an identical block outside the section (Reading view, Live Preview), and an outside edit of the embedded block writes nothing. SC-556: (v) a form that is not kept open (three plain twins, Reading view) whose own block is edited from outside while it is open, (w) the same with the block deleted: Save writes nothing, one Notice, the form stays open, the outside change is kept (base: the edit lands in the identical twin that is left).
 		id: 'G-S64',
 		async run(t) {
 			const m = await t.mark();
@@ -4686,7 +4696,7 @@ const SCENARIOS = [
 			const P3 = 'Lifecycle/twin-triplets.md';
 			const UT = 'Lifecycle/form-pin-unterminated.md';
 			const P3D = 'Lifecycle/form-strict-triplets.md';
-			const ALL = [C3, C2, C4, P2, P3, UT, P3D];
+			const ALL = [C3, C2, C4, P2, P3, UT, P3D, 'Lifecycle/gs64-emb-src.md', 'Lifecycle/gs64-emb-host.md'];
 			await t.ev(`(() => { if (!document.getElementById('lc-gs64-notice')) { const st = document.createElement('style'); st.id = 'lc-gs64-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
 			await t.ev(`(${gs64Page.toString()})()`);
 			const A = 'window.__gs64.A';
@@ -5092,6 +5102,70 @@ const SCENARIOS = [
 					await cleanupForm();
 				}
 			};
+			/**
+			 * (x), (y), (z) SC-556: a block edit form on a card inside a HEADING EMBED (`![[src#Tracker]]`) of a long note. Obsidian gives such a block only the section's text, so its
+			 * pin is rebased onto the whole note (ReadingModeBlockHost.rebasePin); without that every Save of a note over ~400 lines outside the section was refused ("changed on disk first")
+			 * although nothing had changed. `how`: 'save' = Save lands in the embedded block (an identical counter outside the section, above it, is untouched, every other byte too);
+			 * 'edit' = the embedded block is edited from outside while the form is open: nothing is written into the twin, and if the form is still open Save writes nothing and says why.
+			 */
+			const embedCase = async (label, how, mode) => {
+				const SRC = 'Lifecycle/gs64-emb-src.md';
+				const HOST = 'Lifecycle/gs64-emb-host.md';
+				const mk = await t.mark();
+				try {
+					await t.reset(SRC);
+					await t.reset(HOST);
+					await t.ev(`(async () => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); window.__gs64.A = app.workspace.getLeavesOfType('markdown')[0] ?? app.workspace.getMostRecentLeaf(); window.__gs64.B = null; return true; })()`);
+					await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); })()`);
+					await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: ${J(HOST)}, ...${J(stOf(mode))} }, active: true }); })()`);
+					await t.waitFor(`(${A}).view?.file?.path === ${J(HOST)}`, `${label}: the host note opened`);
+					const E = `app.plugins.plugins['draw-steel-elements'].viewRegistry.liveEntries().filter((e) => e.host.sourcePath === ${J(SRC)} && e.root.isConnected)`;
+					await t.waitFor(`${E}.length === 1`, `${label}: one live card of the embedded section`, 15000);
+					t.expect(await t.ev(`!!${E}[0].root.closest('.internal-embed, .markdown-embed')`), `${label}: the card is not inside an embed element (the pin rebase is keyed on it)`);
+					const pencil = `(${E}[0].root.querySelector('.dse-chrome button[data-dse-chrome-item="edit"], button[aria-label^="Edit "]'))`;
+					await t.waitFor(`!!${pencil}`, `${label}: the Edit pencil is drawn`);
+					await t.ev(`${pencil}.focus({ focusVisible: true })`);
+					await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', text: '\r', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+					await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+					await t.waitFor(`!!document.querySelector('.modal-container .dse-modal .dse-form__preview')`, `${label}: the edit form opened`);
+					await t.sleep(300); // the pin's rebase (one cachedRead) is long done
+					await typeRename(label, 'Twin', 'Edited');
+					const before = t.read(SRC);
+					const tracker = before.indexOf('## Tracker');
+					if (how === 'save') {
+						await clickSave(label);
+						await waitDisk(label, SRC, () => t.read(SRC).includes('name: Edited'), 'the edit never reached the note (Save refused or written elsewhere)');
+						const now = t.read(SRC);
+						const want = before.slice(0, tracker) + before.slice(tracker).replace('name: Twin', 'name: Edited');
+						t.expect(now === want, `${label}: the note is not "the embedded block edited, every other byte untouched": ${J(now.slice(0, 80))}...`);
+						t.expect((now.match(/name: Twin/g) ?? []).length === 1 && (now.match(/name: Edited/g) ?? []).length === 1, `${label}: the identical block outside the section was touched`);
+						await noNotices(label, mk);
+						outcomes.push(`${label}: Save landed in the embedded block (${before.split('\n').length} lines in the note), the twin above and every other byte untouched, no Notice`);
+					} else {
+						const outside = before.slice(0, tracker) + before.slice(tracker).replace('current_value: 5', 'current_value: 9');
+						fs.writeFileSync(path.join(vault, SRC), outside);
+						await waitDisk(label, SRC, () => t.read(SRC) === outside, 'the outside edit is not on disk');
+						await t.waitFor(`(() => { const e = ${E}; return e.length === 0 || e.some((x) => Array.from(x.root.querySelectorAll('input')).some((i) => i.value === '9')); })() || !document.querySelector('.modal-container .dse-modal')`, `${label}: the embed shows the outside change (or the form closed with its view)`, 10000);
+						if (await formOpen()) {
+							const mp = await t.mark();
+							await t.ev(`(${SAVE}).click()`);
+							await t.waitFor(`__lc.notices.some((x) => x.n > ${mp})`, `${label}: Save said nothing`, 10000);
+							const ns = await t.noticesSince(mp);
+							t.expect(ns.length === 1 && /was not saved/.test(ns[0]), `${label}: expected the one 'not saved' Notice, got ${J(ns)}`);
+							t.expect(await formOpen(), `${label}: the form closed on a Save that wrote nothing`);
+							outcomes.push(`${label}: the form stayed open; Save wrote nothing, one Notice`);
+						} else {
+							outcomes.push(`${label}: the form closed with its embed's redraw; nothing was written`);
+						}
+						t.expect(t.read(SRC) === outside, `${label}: the note changed after the outside edit: ${J(t.read(SRC).slice(0, 80))}`);
+						t.expect(!t.read(SRC).includes('name: Edited'), `${label}: the edit was written into a block of the note`);
+					}
+				} catch (e) {
+					problems.push(`${label}: ${e.message}`);
+				} finally {
+					await cleanupForm();
+				}
+			};
 			/** (r) the note leaves the screen with a pinned form open - navigated away in its pane, or its pane closed (a second pane): the form closes with its view, nothing is written. */
 			const leaveCase = async (label, how) => {
 				const mk = await t.mark();
@@ -5148,6 +5222,9 @@ const SCENARIOS = [
 				// (v), (w) SC-556: a form that is NOT kept open is strict too.
 				await strictCase('(v) SC-556: three plain twins, Reading view, form 1, its own block edited from outside: Save writes nothing', 'edit', P3);
 				await strictCase('(w) SC-556: three plain twins, Reading view, form 1, its own block deleted from outside: Save writes nothing', 'delete', P3D);
+				await embedCase('(x) SC-556: a form in a heading embed of a 600-paragraph note, Reading view: Save lands in the embedded block, not the identical block outside it', 'save', 'rv');
+				await embedCase('(y) SC-556: the same in Live Preview', 'save', 'lp');
+				await embedCase('(z) SC-556: the embedded block is edited from outside while its form is open: nothing is written into the twin', 'edit', 'rv');
 			} finally {
 				await t.ev(`${prefs}.set('authoringControls', false)`);
 				await t.ev(`document.getElementById('lc-gs64-notice')?.remove()`);

@@ -31,14 +31,17 @@ for what needs action.
   in its own recessed panel. On paper (print and PDF export) the action-type bar is gone from statblocks,
   featureblocks and kits, and the violet bar Obsidian draws beside a class or perk quote is gone too.
 - [FIX] **Saving a block's edit form after that same block was changed or deleted elsewhere no longer writes your edit
-  into an identical block** (SC-556). If a note has two or more blocks that read the same and the block you had the edit
+  into another block** (SC-556). If a note has two or more blocks that read the same and the block you had the edit
   form open on was edited or deleted from outside (Sync, another editor, a hand edit) while the form was open, Save could
   write your edit into one of the identical blocks that was left, one you never opened. Now nothing is saved, a Notice says
   so ("a change to a block in <note> was not saved — the block changed on disk first"), the form stays open, and the
   outside change is kept. The Notice shows on every such Save, also when you press Save again within a few seconds. A
-  card's own + and − are not affected, and neither is a form whose block is only moved by an edit above or below it. If the
-  note changed by more than about 400 lines around the block while the form was open, Save is refused the same way even
-  though the block itself is unchanged: copy your text out and reopen the form.
+  card's own + and − are not affected, and neither is a form whose block only moved because of an edit above or below it,
+  or a form opened on a card in an embed of one heading of a note (`![[note#Heading]]`), however long that note is. Two
+  limits. Two identical blocks with only blank lines between them: if one is deleted from outside, the plugin cannot tell
+  which, so the form on the upper block saves into the block that is left, and the form on the lower block is refused
+  with the same Notice. And if hundreds of lines changed both above and below the block while the form was open, Save is
+  refused the same way even though the block itself is unchanged: copy your text out and reopen the form.
 - [FIX] **A block with no closing ``` at the end of a note no longer loses the note's final newline when it
   saves** (SC-477). If a tracker's code block was never closed (nothing after it but the end of the note), saving a
   change added the closing ``` but deleted the newline (or blank lines) that ended the note, both when you changed it
