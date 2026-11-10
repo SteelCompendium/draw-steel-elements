@@ -624,6 +624,45 @@ describe('[X] Reset encounter state: what a confirm clears, what every other way
 		expect(root.querySelector('.dse-init__round-value')!.textContent).toBe('Round 1');
 	});
 
+	const confirmReset = (root: Element): void => {
+		ctl(open(root), 'init.reset-encounter.confirm').click();
+	};
+
+	test('[X05] after Reset the tracker still shows the enemy roster and the heroes at full stamina, as a fresh parse of the written note would [SC-576]', async () => {
+		const { root, flush, last } = await mount(src(
+			['heroes:', '  - name: "Alice"', '    max_stamina: 30', '    current_stamina: -4', '  - name: "Bruno"', '    max_stamina: 40', '    current_stamina: 12'],
+			OGRES,
+		));
+		confirmReset(root);
+		await flush();
+		const view = document.querySelector('.dse-init') as HTMLElement;
+		const cells = (): HTMLElement[] => Array.from(view.querySelectorAll<HTMLElement>('[data-dse-control="init.cell.stamina"]'));
+		expect(cells()).toHaveLength(3);
+		expect(ctl(view, 'init.detail.stamina', 0).textContent).toBe('60/60');
+		expect(ctl(view, 'init.hero.stamina', 0).textContent).toBe('30/30');
+		expect(ctl(view, 'init.hero.stamina', 1).textContent).toBe('40/40');
+		expect(view.querySelector('.dse-init__stamina[data-state="dying"]')).toBeNull();
+		expect(view.querySelector('.dse-init__state[data-state="dying"]')).toBeNull();
+		expect(view.querySelector('.dse-init__state[data-state="dead"]')).toBeNull();
+		// What was written is the reset model as it stood when Reset ran: no stamina, no instances.
+		expect(last().heroes[0]).toEqual({ name: 'Alice', max_stamina: 30 });
+		expect(last().enemy_groups[0].creatures[0].instances).toBeUndefined();
+		// The rebuilt tracker is live: a click on the rebuilt cells writes the new selection onto a full roster.
+		cells()[1].click();
+		await flush();
+		expect(last().enemy_groups[0].selectedInstanceKey).toBe('0-2');
+	});
+
+	test('[X05] after Reset a minion squad is back at its full shared pool, with all of its cells [SC-576]', async () => {
+		const squad = src(HEROES, ['enemy_groups:', '  - name: "Goblins"', '    is_squad: true', '    minion_stamina_pool: 5', '    creatures:', '      - { name: Goblin, max_stamina: 4, amount: 3, squad_role: minion }']);
+		const { root, flush } = await mount(squad);
+		confirmReset(root);
+		await flush();
+		const view = document.querySelector('.dse-init') as HTMLElement;
+		expect(view.querySelectorAll('[data-dse-control="init.cell.stamina"]')).toHaveLength(3);
+		expect(ctl(view, 'init.detail.stamina', 0).textContent).toMatch(/^12\/12/); // "12/12 (4)": the pool, then the effective per-minion Stamina
+	});
+
 	/** Open the modal through the tracker's chrome item and keep the instance, so a test can close it the way Obsidian does. */
 	function openCapturing(root: Element): { modal: ResetEncounterModal; el: HTMLElement } {
 		const opened: ResetEncounterModal[] = [];
@@ -694,15 +733,6 @@ describe('known bugs: the tracker after Reset encounter, and Malice below 0', ()
 		await flush();
 		const actions = last().enemy_groups[0].creatures[0].actions;
 		expect(Object.values(actions ?? {}).some(Boolean)).toBe(false);
-	});
-
-	test.failing('[X05] after Reset the tracker still shows the enemy roster and the heroes at full stamina [known bug SC-576]', async () => {
-		const { root, flush } = await mount(TRACKER);
-		confirmReset(root);
-		await flush();
-		const view = document.querySelector('.dse-init') as HTMLElement;
-		expect(view.querySelectorAll('[data-dse-control="init.cell.stamina"]')).toHaveLength(3);
-		expect(ctl(view, 'init.hero.stamina', 0).textContent).toBe('30/30');
 	});
 
 	test.failing('[M07] the Malice stepper stops at 0 [known bug SC-577]', async () => {

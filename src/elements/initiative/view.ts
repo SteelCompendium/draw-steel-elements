@@ -40,17 +40,18 @@
 //    just saves;
 //  - mid-level: instance-cell select rebuilds only the detail-row sub-container and
 //    repaints cell selection through the kit handles;
-//  - coarse rebuilds (Reset Round / Reset Encounter / squad-pool edits from the
-//    grid or the detail row) go through rebuildAndPersist(): framework default update() (unload owned children
+//  - coarse rebuilds (Reset Round / squad-pool edits from the grid or the detail row) go
+//    through rebuildAndPersist(): framework default update() (unload owned children
 //    + onMount against this.model), then persist — the negotiation resetNegotiation
-//    shape.
+//    shape. Reset Encounter is the exception (SC-576): it writes first, then rebuilds from a
+//    fresh parse of what it wrote (rebuildFromWrittenReset()).
 //
 // READ-ONLY (F1 §4.4 — cx.host.canPersist === false, e.g. canvas): the tracker renders
 // inert. No write-triggering handler is wired and no dead-end write affordance is built
 // — the chrome reset items, malice stepper, add-condition and remove-condition buttons are
 // omitted, and turn indicators / cells / stamina render as static state displays (spans,
 // not buttons). The pipeline stamps data-dse-readonly + the CSS badge shows "Read-only".
-import { Component, Notice, setIcon } from 'obsidian';
+import { Component, Notice, parseYaml, setIcon } from 'obsidian';
 import type { Modal } from 'obsidian';
 import { ElementView } from '@/framework/view';
 import { MOVING_ATTR } from '@/framework/host/adoptView';
@@ -97,10 +98,13 @@ import {
 	relieveCaptain,
 	resetEncounter,
 	resetRound as resetRoundModel,
+	parse as parseModel,
+	serialize as serializeModel,
 	squadOfCaptain,
 	withCaptainStaminaN,
 } from './model';
 import type { ActorActions, MaliceLogEntry, SquadActions } from './model';
+import { resolveInitiativeRefs } from './resolveRefs';
 
 export class InitiativeView extends ElementView<EncounterData> {
 	/** Same construction site as the legacy processor's constructor (:31). */
@@ -169,6 +173,34 @@ export class InitiativeView extends ElementView<EncounterData> {
 		}
 	}
 
+	/** SC-576 — the Reset encounter rebuild. `resetEncounter` leaves the model un-normalised
+	 *  (instances and heroes' current_stamina are dropped; `parse()` re-derives them on the next
+	 *  load), and the view paints `?? 0` from it, so rebuilding straight from that model showed
+	 *  empty enemy groups and 0-Stamina Dying heroes while the note on disk was right. So: write
+	 *  first (serialize runs synchronously inside the flush, so the bytes are exactly the reset
+	 *  model's), then rebuild from a fresh parse of those bytes through the same parse +
+	 *  resolveRefs the pipeline runs on load. The screen is what a reload would show, and later
+	 *  writes serialize that model like any freshly loaded one. */
+	private async rebuildFromWrittenReset(): Promise<void> {
+		try {
+			const yaml = serializeModel(this.model);
+			void this.persist();
+			this.flushPendingWrite();
+			let fresh: EncounterData;
+			try {
+				fresh = await resolveInitiativeRefs(parseModel(parseYaml(yaml), yaml), this.cx.refs);
+			} catch (error) {
+				// The written note would not load either (the pipeline would show its error card); keep
+				// the reset model on screen rather than blanking the tracker.
+				console.error('Draw Steel Elements: initiative tracker re-parse after reset failed', error);
+				fresh = this.model;
+			}
+			await this.update(fresh);
+		} catch (error) {
+			console.error('Draw Steel Elements: initiative tracker rebuild failed', error);
+		}
+	}
+
 	/** "Advance round" (D8 spec §7.2/§3.1, Task 9) — the control shared by the round
 	 *  display, the Malice panel's auto-gain, and the per-actor `actions` checklist reset,
 	 *  so none of the three surfaces can diverge. The transition itself lives in the model
@@ -224,7 +256,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 					this.openModal(
 						new ResetEncounterModal(this.cx.app, () => {
 							resetEncounter(this.model);
-							void this.rebuildAndPersist();
+							void this.rebuildFromWrittenReset();
 						}),
 					);
 				},
