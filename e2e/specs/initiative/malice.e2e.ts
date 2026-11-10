@@ -108,6 +108,8 @@ describe('initiative: the Malice quick-add row', () => {
 		await fill(root, '+3', 'Feytouched');
 		await dse.waitForWrite(MIN, () => dse.click(root.control('init.malice.quickadd.add')));
 		expect((await maliceOf(MIN)).value).toBe(6);
+		await expect(shown(root)).toHaveElementProperty('textContent', 'Malice: 6');
+		await expect(root.control('init.malice.log')).toHaveText('Malice log · 1 entry');
 	});
 
 	knownBug(
@@ -120,7 +122,30 @@ describe('initiative: the Malice quick-add row', () => {
 			const m = await maliceOf(MIN);
 			const entry = m.log![0];
 			expect(m.value).toBe(0);
-			expect(entry.amount === m.value - 3 || entry.label !== 'Spend').toBe(true);
+			// The entry must keep the typed label AND either record the applied change (-3) or say the pool capped it.
+			const applied = m.value - 3;
+			const showsClamp =
+				String(entry.label ?? '').startsWith('Spend') && (Object.values(entry).includes(applied) || /cap|clamp|limit/i.test(String(entry.label)));
+			expect(entry.amount === applied || showsClamp).toBe(true);
+		},
+		{ failsWith: /Expected: true/ },
+	);
+});
+
+describe('initiative: keyboard focus after a rebuild', () => {
+	// Enter in the quick-add label field adds the entry through a whole-tracker rebuild (rebuildAndPersist), which empties the root and
+	// mounts again; nothing hands focus back, so a keyboard user lands on <body> and has to Tab from the top of the note (SC-588).
+	knownBug(
+		'SC-588',
+		'[INIT-F01] after Enter in the quick-add label field, keyboard focus is still inside the tracker',
+		async () => {
+			const root = await open();
+			await dse.type(root.control('init.malice.quickadd.amount'), '2', { replace: true });
+			await dse.type(root.control('init.malice.quickadd.label'), 'Kbd', { replace: true });
+			await dse.waitForWrite(MIN, () => dse.press('Enter', root.control('init.malice.quickadd.label')));
+			await dse.settle();
+			const inTracker = await dse.page<boolean>(`!!document.activeElement?.closest('.markdown-reading-view [data-dse-element="initiative"]')`);
+			expect(inTracker).toBe(true);
 		},
 		{ failsWith: /Expected: true/ },
 	);

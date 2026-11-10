@@ -81,5 +81,7 @@ describe('initiative: removing a condition', () => {
 		const data = (await dse.expectNoteBlock(RICH, INIT).value()) as { heroes: Array<{ conditions: unknown[] }>; enemy_groups: Array<{ creatures: Array<{ instances: Array<{ conditions: unknown[] }> }> }> };
 		expect(data.enemy_groups[0].creatures[0].instances[0].conditions).toEqual([]);
 		expect(data.heroes[0].conditions).toHaveLength(1); // Alice keeps Grabbed
+		await expect(root.control({ css: '.dse-init__detail [data-dse-control="init.cond.remove"]' })).not.toBeExisting(); // the Dazed icon is gone from the row
+		await expect(root.control('init.cond.remove', { nth: 0 })).toHaveAttribute('aria-label', 'Remove condition: Grabbed'); // Alice's stays
 	});
 });

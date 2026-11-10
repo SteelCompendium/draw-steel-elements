@@ -115,8 +115,8 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Initiative/squad.md` | `ds-initiative`: hero Alice Alpha 30/30, one minion squad "Goblin Squad" of five Goblins with 4 Stamina each (pool 20, cells `0-1`..`0-5`; SC-435) |
   | `Initiative/squad-hurt.md` | the same squad at pool 10 with Goblins #1 and #2 dead, #3 (selected) grabbed and dazed (`- grabbed` is rewritten as `{ key: grabbed }` on the first write; SC-435) |
   | `Initiative/hurt.md` | `ds-initiative`: hero Alice Alpha 30/30, Ogre #1 at 20/60 and Ogre #2 at 60/60 (a hurt creature, for Spend Recovery) |
-| `Initiative/rich.md` | `ds-initiative` with every variant (SC-437): a title ("Warren Ambush"), round 2, heroes Alice (grabbed) and Bruno (turn taken), Ogres #1-#3 (#1 dazed) in a grid group, a single-creature "Troll Boss" group, Malice 4 with `round_gain: 2` and one log entry |
-| `Initiative/captain.md` | `ds-initiative`: a captained minion squad (three Goblins, the Goblin Captain selected, an attached Warg Rider; SC-437) |
+  | `Initiative/rich.md` | `ds-initiative` with every variant (SC-437): a title ("Warren Ambush"), round 2, heroes Alice (grabbed) and Bruno (turn taken), Ogres #1-#3 (#1 dazed) in a grid group, a single-creature "Troll Boss" group, Malice 4 with `round_gain: 2` and one log entry |
+  | `Initiative/captain.md` | `ds-initiative`: a captained minion squad (three Goblins, the Goblin Captain selected, an attached Warg Rider; SC-437) |
 
 - Edits are checked per fence: a click / type / double-click / press on an element inside `dse.block(lang, n)` declares that block
   as one the test edits (taking the scope and reading it declares nothing, SC-435), and

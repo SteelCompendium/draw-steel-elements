@@ -88,7 +88,8 @@ describe('initiative: what the screen shows after a reset', () => {
 			await dse.waitForWrite(RICH, () => dse.click(modal.control('init.reset-encounter.confirm')));
 			await dse.settle();
 			await expect(root.control('init.cell.stamina', { nth: 0 })).toBeDisplayed();
-			await expect(root.control('init.detail.stamina', { nth: 0 })).toHaveText('60/60');
+			// the numeric button is visually stood down on the Steel screen, so read its text, not WebDriver's visible text
+			await expect(root.control('init.detail.stamina', { nth: 0 })).toHaveElementProperty('textContent', '60/60');
 		},
 		{ failsWith: /Index out of bounds/ },
 	);

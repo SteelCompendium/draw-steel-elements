@@ -49,13 +49,17 @@ export async function eventfulNodes(selectors: string[], excludeInside: string |
 	return out;
 }
 
-/** Problems: eventful nodes with no id, or an id the manifest does not declare. */
-export function censusFindings(nodes: EventfulNode[], allowed: ReadonlySet<string>): string[] {
+/**
+ * Problems: eventful nodes with no id, or an id the manifest does not declare. `inert` (SC-437) names ids the manifest declares with
+ * NO interaction (a focus target nothing clicks): a node carrying one that now listens for input is a control nobody declared kinds for.
+ */
+export function censusFindings(nodes: EventfulNode[], allowed: ReadonlySet<string>, inert: ReadonlySet<string> = new Set()): string[] {
 	const problems: string[] = [];
 	for (const n of nodes) {
 		const where = `<${n.tag} class="${n.cls}"> "${n.text}" listens for ${n.events.join(',')}`;
 		if (!n.id) problems.push(`no data-dse-control: ${where}`);
 		else if (!allowed.has(n.id)) problems.push(`id "${n.id}" is not in the manifest: ${where}`);
+		else if (inert.has(n.id)) problems.push(`id "${n.id}" is declared with no interaction but listens for input: ${where}`);
 	}
 	return problems;
 }

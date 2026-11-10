@@ -402,7 +402,6 @@ describe('[M] Malice: the stepper, the quick-add row and the log disclosure', ()
 		['007', 'Gain', 3, 10],
 		['-2', 'Spend', 5, 3],
 		['-5', 'Spend', 5, 0],
-		['-9', 'Spend', 2, 0], // the pool is clamped at 0; the log keeps what was typed
 	] as const)('[M03-M05] a valid quick-add (amount %j, label %j) from Malice %i gives Malice %i and one log entry', async (amount, label, start, expected) => {
 		const { root, flush, last, writes } = await mount(withMalice(start));
 		ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = amount;
@@ -413,6 +412,18 @@ describe('[M] Malice: the stepper, the quick-add row and the log disclosure', ()
 		expect(last().malice.value).toBe(expected);
 		expect(last().malice.log).toEqual([{ round: 1, amount: Number(amount), label }]);
 		expect(shown(root)).toBe(`Malice: ${expected}`);
+	});
+
+	test('[M03-M05] a quick-add the pool clamps (-9 from 2) still lands Malice at 0 with one entry that keeps its label (what the entry records is SC-578\'s, below)', async () => {
+		const { root, flush, last, writes } = await mount(withMalice(2));
+		ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = '-9';
+		ctl<HTMLInputElement>(root, 'init.malice.quickadd.label').value = 'Spend';
+		ctl(root, 'init.malice.quickadd.add').click();
+		await flush();
+		expect(writes()).toHaveLength(1);
+		expect(last().malice.value).toBe(0);
+		expect(last().malice.log).toHaveLength(1);
+		expect(last().malice.log[0].label).toMatch(/^Spend/);
 	});
 
 	test.each(['amount', 'label'] as const)('[M04] Enter in the %s field submits the same way the Add button does', async (field) => {
@@ -568,8 +579,7 @@ describe('[K] the captain badge: who it offers, what a click does', () => {
 		await flush();
 		expect(roles(last())).toEqual(expected);
 		expect(writes().length).toBeGreaterThanOrEqual(1);
-		// the whole tracker was rebuilt: the badge now offers the opposite change on the same creature
-		select(root, key);
+		// the whole tracker was rebuilt: the badge now offers the opposite change on the same creature (no re-select: the persisted selection is shown)
 		expect(has(root, clicked === 'init.captain.make' ? 'init.captain.relieve' : 'init.captain.make')).toBe(true);
 	});
 
@@ -696,10 +706,12 @@ describe('known bugs: the tracker after Reset encounter, and Malice below 0', ()
 	});
 
 	test.failing('[M07] the Malice stepper stops at 0 [known bug SC-577]', async () => {
-		const { root, flush, last } = await mount(src(HEROES, OGRES, ['malice:', '  value: 0']));
+		const { root, flush, writes } = await mount(src(HEROES, OGRES, ['malice:', '  value: 0']));
 		ctl(root, 'init.malice.dec').click();
 		await flush();
-		expect(last().malice.value).toBe(0);
+		// Under a `min: 0` fix the button is disabled and no write lands, so assert the screen and "nothing negative is ever written".
+		expect(root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 0');
+		expect(writes().every((w) => parseYaml(w).malice.value >= 0)).toBe(true);
 	});
 
 	test.failing('[R01] a negative round_gain never takes Malice below 0, and the Advance label reads "-3" not "+-3" [known bug SC-577]', async () => {
@@ -718,6 +730,31 @@ describe('known bugs: the tracker after Reset encounter, and Malice below 0', ()
 		await flush();
 		const entry = last().malice.log[0];
 		expect(last().malice.value).toBe(0);
-		expect(entry.amount === last().malice.value - 2 || entry.label !== 'Spend').toBe(true);
+		// The entry must keep the typed label AND either record the applied change (-2) or say the pool capped it.
+		const applied = last().malice.value - 2;
+		const showsClamp =
+			String(entry.label ?? '').startsWith('Spend') && (Object.values(entry).includes(applied) || /cap|clamp|limit/i.test(String(entry.label)));
+		expect(entry.amount === applied || showsClamp).toBe(true);
+	});
+	test.failing('[M10] a half-typed quick-add survives Advance round [known bug SC-589]', async () => {
+		const { root, flush } = await mount(TRACKER);
+		ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = '2';
+		ctl<HTMLInputElement>(root, 'init.malice.quickadd.label').value = 'Feyt';
+		ctl(root, 'init.round.advance').click();
+		await flush();
+		expect(ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value).toBe('2');
+		expect(ctl<HTMLInputElement>(root, 'init.malice.quickadd.label').value).toBe('Feyt');
+	});
+
+	test.failing('[M04] keyboard focus stays inside the tracker after a quick-add Enter rebuilds it [known bug SC-588]', async () => {
+		const { root, flush } = await mount(TRACKER);
+		ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = '2';
+		const label = ctl<HTMLInputElement>(root, 'init.malice.quickadd.label');
+		label.value = 'Kbd';
+		label.focus();
+		expect(root.contains(document.activeElement)).toBe(true);
+		press(label, 'Enter');
+		await flush();
+		expect(root.contains(document.activeElement)).toBe(true);
 	});
 });

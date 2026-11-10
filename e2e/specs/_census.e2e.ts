@@ -38,6 +38,8 @@ const TRACKER_IDS = new Set([
 	...[modalManifest, conditionsManifest, poolManifest].flatMap((m) => m.reach.filter((r) => r.host === 'initiative').map((r) => r.control)),
 	...idsOf(chromeManifest),
 ]);
+// Ids the initiative manifest declares with no interaction (a programmatic focus target): nothing may listen for input on them.
+const INERT_IDS = new Set(Object.entries(initiativeManifest.controls).filter(([, spec]) => spec.kinds.length === 0).map(([id]) => id));
 
 describe('real-Obsidian census (pilot surfaces)', () => {
 	it('[CENSUS-01] ds-stamina-bar with Recoveries: every node that listens for input is an identified control', async () => {
@@ -75,7 +77,7 @@ describe('real-Obsidian census (pilot surfaces)', () => {
 	it('[CENSUS-04] the whole initiative tracker (SC-437, scoped by its root, chrome panel included): every node that listens for input is an identified control', async () => {
 		await dse.openNote('Initiative/rich.md');
 		const nodes = await eventfulNodes([TRACKER_SCOPE], null);
-		expect(censusFindings(nodes, TRACKER_IDS)).toEqual([]);
+		expect(censusFindings(nodes, TRACKER_IDS, INERT_IDS)).toEqual([]);
 		const ids = nodes.map((n) => n.id);
 		// Sanity that the probe sees every part of the tracker: title, round, Malice, both turn controls, the action
 		// checklist, a condition, the roster cells and the stamina entry points, and the chrome panel's two items.
@@ -89,17 +91,29 @@ describe('real-Obsidian census (pilot surfaces)', () => {
 		}
 	});
 
-	it('[CENSUS-07] the open title editor and a captained squad (SC-437): the textarea, the squad checklist and both captain buttons are identified controls', async () => {
+	it('[CENSUS-07] the open title editor and a captained squad (SC-437): the textarea, the squad checklist and both captain buttons are identified controls (each rescanned with its row selected)', async () => {
 		await dse.openNote('Initiative/rich.md');
 		await dse.click(dse.block('ds-initiative').control('init.title'));
 		await dse.waitFor(`!!document.querySelector('.markdown-reading-view [data-dse-control="init.title.input"]')`, 'the title editor');
-		expect(censusFindings(await eventfulNodes([TRACKER_SCOPE], null), TRACKER_IDS)).toEqual([]);
+		expect(censusFindings(await eventfulNodes([TRACKER_SCOPE], null), TRACKER_IDS, INERT_IDS)).toEqual([]);
 		expect((await eventfulNodes([TRACKER_SCOPE], null)).map((n) => n.id)).toContain('init.title.input');
 		await dse.openNote('Initiative/captain.md');
 		const nodes = await eventfulNodes([TRACKER_SCOPE], null);
-		expect(censusFindings(nodes, TRACKER_IDS)).toEqual([]);
+		expect(censusFindings(nodes, TRACKER_IDS, INERT_IDS)).toEqual([]);
 		const ids = nodes.map((n) => n.id);
 		for (const id of ['init.captain.relieve', 'init.detail.action']) expect(ids).toContain(id);
+		// A minion's detail row carries the squad checklist, and an attached creature's carries "Make captain": select each and rescan.
+		const root = dse.block('ds-initiative');
+		await dse.click(root.control('init.cell.stamina', { nth: 0 }));
+		await dse.waitFor(`!!document.querySelector('.markdown-reading-view [data-dse-control="init.detail.squad-action"]')`, 'the squad checklist');
+		const squad = await eventfulNodes([TRACKER_SCOPE], null);
+		expect(censusFindings(squad, TRACKER_IDS, INERT_IDS)).toEqual([]);
+		expect(squad.map((n) => n.id)).toContain('init.detail.squad-action');
+		await dse.click(root.control('init.cell.stamina', { nth: 4 }));
+		await dse.waitFor(`!!document.querySelector('.markdown-reading-view [data-dse-control="init.captain.make"]')`, 'the Make captain button');
+		const rider = await eventfulNodes([TRACKER_SCOPE], null);
+		expect(censusFindings(rider, TRACKER_IDS, INERT_IDS)).toEqual([]);
+		expect(rider.map((n) => n.id)).toContain('init.captain.make');
 	});
 
 	it('[CENSUS-08] the open ResetEncounterModal (SC-437): every node that listens for input is an identified control', async () => {
