@@ -6038,6 +6038,7 @@ const SCENARIOS = [
 			// One write with the main thread kept busy after it; returns the recorder's state. The spin is the only source of lateness (SC-561: no throttle).
 			const busyWrite = async (rel, value) => {
 				let busyRef = null;
+				let waitedMs = 0;
 				try {
 					// A slow `modify` handler of some other plugin: the main thread is busy for BUSY_MS (wall clock) right after the write, so the
 					// redraw that follows starts later than PIN_TTL_MS whatever the order in which Obsidian's panes handle the write (measured under
@@ -6045,9 +6046,11 @@ const SCENARIOS = [
 					busyRef = await t.ev(`(() => { const rel = ${JSON.stringify(rel)}; const ref = app.vault.on('modify', (f) => { if (f.path !== rel) return; setTimeout(() => { const end = performance.now() + ${BUSY_MS}; while (performance.now() < end); }, 0); }); window.__gs59busy = ref; return true; })()`);
 					await t.ev(`(async () => { window.__gs59t0 = performance.now(); await app.vault.process(app.vault.getAbstractFileByPath(${JSON.stringify(rel)}), (c) => c.replace(/ {2}value: \\d+/, '  value: ${value}')); })()`);
 					try {
-						// released + redrawn + mounted is the outcome, then the 10 frames after it
+						// released + redrawn + mounted is the outcome, then the 10 frames after it (waitedMs: the wait after the write call, to be read against CAP_MS)
+						const w0 = Date.now();
 						await t.waitFor('window.__gs59 && (window.__gs59.ready || window.__gs59.done)', `the pin or hold released and the tracker redrawn (${rel}, write value ${value})`, CAP_MS);
 						await t.waitFor('window.__gs59 && window.__gs59.done', `the 10 frames after the release (${rel}, write value ${value})`, CAP_MS);
+						waitedMs = Date.now() - w0;
 					} catch (e) {
 						const state = await t.ev('JSON.stringify(Object.assign({ atMs: Math.round(performance.now() - (window.__gs59t0 ?? 0)) }, window.__gs59))').catch(() => 'state unreadable');
 						throw new Error(`${e instanceof Error ? e.message : String(e)}; recorder state ${state}`);
@@ -6055,7 +6058,7 @@ const SCENARIOS = [
 				} finally {
 					if (busyRef) await t.ev(`(() => { if (window.__gs59busy) app.vault.offref(window.__gs59busy); window.__gs59busy = null; return true; })()`);
 				}
-				return t.ev('Object.assign({}, window.__gs59)');
+				return t.ev(`Object.assign({ waitedMs: ${waitedMs} }, window.__gs59)`);
 			};
 			const check = (tag, m, value, rel, what) => {
 				t.expect(t.read(rel).includes(`  value: ${value}`), `${tag}: the write did not land`);
@@ -6085,7 +6088,7 @@ const SCENARIOS = [
 							await record(cfg);
 							const m = await busyWrite(rel, k + 2);
 							lat.push(m.redrawAt);
-							notes.push(`${m.redrawAt} ms${m.otherAt !== null ? ` (other pane ${m.otherAt} ms)` : ''} (held ${m.st0})`);
+							notes.push(`${m.redrawAt} ms${m.otherAt !== null ? ` (other pane ${m.otherAt} ms)` : ''} (held ${m.st0}, waited ${m.waitedMs} ms)`);
 							check(tag, m, k + 2, rel, what);
 						} catch (e) {
 							fails.push(e instanceof Error ? e.message : String(e));
