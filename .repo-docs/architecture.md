@@ -272,7 +272,7 @@ draws, and the plugin's mirror of it:
 |---|---|---|---|
 | standalone ability/feature card | `.sc-ability` (no `border-left` anywhere; `--act` only tints the crest + eyebrow) | `[data-dse-theme='steel'][data-dse-element='feature']` (top-level card; its NESTED cards get a screen-only arm, SC-168) | top-level card: no frame |
 | nested in a statblock or featureblock list | `[data-sb-featstyle="card"] .sb__feat` / `[data-fb-featstyle="card"] .fb__feat` (byte-identical recipe in both sheets; the site still draws its `border-left` there, SC-564) | `[data-dse-theme='steel'] :is(.dse-sb, .dse-fb) .dse-feature__nested > .dse-feature` (ONE shared rule, not a per-family fork) | a full per-option card (fill, `9px` radius, real list `gap`, `.85rem` left padding) |
-| kit / display-card family (`CardLayout`'s `.dse-card`) | — | untouched by the rules above (anchored on `.dse-sb`/`.dse-fb`/`[data-dse-element='feature']`, none of which `.dse-card` carries) | unchanged (no frame) — verified structurally, and pinned by `kit--steel-print.png` staying in the freeze OK set |
+| kit / display-card family (`CardLayout`'s `.dse-card`) | — | untouched by the rules above (anchored on `.dse-sb`/`.dse-fb`/`[data-dse-element='feature']`, none of which `.dse-card` carries) | no frame — the frame rules cannot match `.dse-card` (pinned structurally in `steelMaterial.test.ts`). The kit's print shots did move in SC-558, but only because its unframed signature ability lost the old spine and its padding lane, not because a frame reached it |
 
 The frame is **structure tier** (`[data-dse-theme='steel']`, no print exclusion — "print follows
 structure"; only the nested card's *fill* is `:not([data-dse-print="on"])`, matching the site's own

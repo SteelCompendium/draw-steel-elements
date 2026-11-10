@@ -1299,13 +1299,29 @@ describe('Steel material contract', () => {
 	 * stripe comes back, or if the two "C" surfaces lose their border all around.
 	 */
 	describe('no coloured left stripes (SC-558)', () => {
-		it('no rule paints a left border or edge from a hue token (tier, role, act, error stage)', () => {
-			const stripes = rules.filter((r) =>
-				/border-left(?:-color)?\s*:[^;]*var\(--(?:t|dse-role[\w-]*|dse-act[\w-]*|dse-tier[\w-]*|text-error|color-(?:orange|blue|red))\b/.test(
-					r.body,
-				),
-			);
+		it('no rule paints a left border, inline-start border or inset left shadow from a hue token (tier, role, act, error stage)', () => {
+			const HUE = '--(?:t|dse-role[\\w-]*|dse-act[\\w-]*|dse-tier[\\w-]*|text-error|color-(?:orange|blue|red))\\b';
+			// border-left / border-inline-start (and their -color longhands) keyed to a hue token
+			const edge = new RegExp(`border-(?:left|inline-start)(?:-color)?\\s*:[^;]*var\\(${HUE}`);
+			// an INSET box-shadow with a non-zero offset (a stripe drawn as a shadow) keyed to a hue token
+			const shadow = new RegExp(`box-shadow\\s*:[^;]*\\binset\\s+-?[1-9][^;]*var\\(${HUE}`);
+			const stripes = rules.filter((r) => edge.test(r.body) || shadow.test(r.body));
+			// Deliberate exemptions, by name: none today (the sticky-chars 1px divider uses
+			// --dse-metal-line and the stamina all-round frames use --dse-danger / --dse-warn,
+			// neither is a hue token in HUE above).
 			expect(stripes.map((r) => r.selector.replace(/\s+/g, ' ').trim())).toEqual([]);
+			// can-fail controls: the widened shapes are caught by the same patterns
+			for (const body of [
+				'border-left: 3px solid var(--t)',
+				'border-inline-start: 3px solid var(--t)',
+				'border-inline-start-color: var(--dse-role)',
+				'box-shadow: inset 3px 0 0 var(--t)',
+				'box-shadow: 0 1px 2px #000, inset 3px 0 0 var(--dse-act)',
+			]) {
+				expect(edge.test(body) || shadow.test(body)).toBe(true);
+			}
+			expect(edge.test('border-left: 1px solid var(--dse-metal-line)')).toBe(false);
+			expect(shadow.test('box-shadow: inset 0 0 0 1px var(--t)')).toBe(false);
 		});
 
 		it('the error card is framed ALL ROUND in its stage hue (1px, 60% toward the hairline), gated for the floor engine', () => {
@@ -1330,8 +1346,14 @@ describe('Steel material contract', () => {
 				expect(r.body).not.toMatch(/border/);
 			}
 			// the title ink follows the stage
-			const title = rules.find((r) => r.selector.trim() === '.dse-error-card-title')!;
-			expect(title.body).toMatch(/color:\s*var\(--dse-ec\)/);
+			const title = rules.find((r) => !r.gated && r.selector.trim() === '.dse-error-card-title')!;
+			expect(title.body).toMatch(/color:\s*var\(--dse-ec\)\s*;/);
+			// …made legible by a gated mix toward the body ink (SC-558 r4: the raw hue is < 3:1 on
+			// some grounds), with the static twin outside the gate for floor engines
+			const gatedTitle = rules.find((r) => r.gated && r.selector.trim() === '.dse-error-card-title')!;
+			expect(gatedTitle.body).toMatch(
+				/color:\s*color-mix\(in srgb, var\(--dse-ec\) 65%, var\(--text-normal\)\)\s*;/,
+			);
 		});
 
 		it('the "Level N Advancement" group is a sunken WELL with a 1px frame all round, screen only; print has no rail and no indent', () => {

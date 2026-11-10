@@ -22,6 +22,14 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **No more coloured left stripes on cards** (SC-558). The thick coloured bar down the left edge of ability
+  cards (red, blue, green and so on by action type), of power-roll and Montage "Test tiers" rows, of a
+  featureblock's "Level N Advancement" options and of the error card is gone. An ability's action type shows in its
+  icon and its usage text, and a row's tier in its badge (the colour wash behind the row stays). The error card is
+  framed all the way round in its stage colour (orange for parse and schema, blue for reference, red for render),
+  and its title is that colour toned toward the body text so it stays easy to read. A "Level N Advancement" group sits
+  in its own recessed panel. On paper (print and PDF export) the action-type bar is gone from statblocks,
+  featureblocks and kits, and the violet bar Obsidian draws beside a class or perk quote is gone too.
 - [FIX] **A block with no closing ``` at the end of a note no longer loses the note's final newline when it
   saves** (SC-477). If a tracker's code block was never closed (nothing after it but the end of the note), saving a
   change added the closing ``` but deleted the newline (or blank lines) that ended the note, both when you changed it
@@ -561,8 +569,8 @@ for what needs action.
   standalone ability/feature card (an `effect.features` sub-feature) rendered flush
   against its parent card's left and right edges with no frame of its own. It now
   wears the same nested-card treatment statblock and featureblock sub-features have
-  had since 7.0.0's structural pass — its own rounded plate, proper insets, and the
-  action-type spine as the card's left edge. Print is unchanged.
+  had since 7.0.0's structural pass — its own rounded plate and proper insets.
+  Print is unchanged.
 - **A standard menu panel on every card element, and a one-line collapsed form** (SC-169).
   Hover any element that draws a card — statblocks, ability cards, featureblocks, compendium
   references, the Stamina bar, every tracker — and a small panel appears at its

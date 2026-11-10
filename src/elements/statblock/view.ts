@@ -343,7 +343,7 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 		// statblockHeaderParts extraction — shared by the role tint and cardHead fill.
 		const header = statblockHeaderParts(sb);
 
-		// Role spine + header tint from the SDK combat role (fails-safe unmapped).
+		// Role header tint from the SDK combat role (fails-safe unmapped).
 		const role = applyRoleTint(card, header.role);
 		// The mini-header lives OUTSIDE the card, so it does not inherit the card's
 		// `--dse-role` alias — tint it from the same call, on the same fails-safe terms

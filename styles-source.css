@@ -417,20 +417,26 @@ code.dsa {
 	padding: var(--size-4-3);
 	margin: var(--size-4-2) 0;
 }
-/* The stage-hued frame is the ENHANCEMENT: gated, never bare (Chromium 106 floor — see the
-   SUPPORT FLOOR note at the tier-row wash). A floor engine keeps the neutral hairline above;
-   the title ink still follows the stage there. */
+.dse-error-card-title {
+	color: var(--dse-ec);
+	font-weight: var(--font-semibold);
+	margin-bottom: var(--size-4-1);
+}
+/* The stage-hued frame and the legible title ink are the ENHANCEMENT: gated, never bare
+   (Chromium 106 floor — see the SUPPORT FLOOR note at the tier-row wash). A floor engine
+   keeps the neutral hairline above and the raw stage hue on the title.
+   Title ink (SC-558 r4): the raw stage hue is below WCAG 3:1 for 16px/600 text on some
+   grounds (orange on the light card, blue on the dark card), so the title is the stage hue
+   mixed 65% toward the body ink: it still follows the stage, and stays legible. */
 @supports (background: color-mix(in srgb, red 14%, blue)) {
 	.dse-error-card {
 		border-color: var(--background-modifier-border);
 		border-color: color-mix(in srgb, var(--dse-ec) 60%, var(--background-modifier-border));
 	}
-}
-
-.dse-error-card-title {
-	color: var(--dse-ec);
-	font-weight: var(--font-semibold);
-	margin-bottom: var(--size-4-1);
+	.dse-error-card-title {
+		color: var(--dse-ec);
+		color: color-mix(in srgb, var(--dse-ec) 65%, var(--text-normal));
+	}
 }
 
 .dse-error-card-message {
@@ -15795,8 +15801,10 @@ body.theme-light
 	--dse-danger: #a11;
 }
 
-/* -- STEEL-composed print semantics: act hues darken (the crest glyph tints from them);
-      role hues keep the Steel hue (= Steel exact, so no override). Scoped to Steel so a
+/* -- STEEL-composed print semantics: act hues darken. In print the crest glyph is hidden and
+      its tint rule is screen-only, so only `--dse-act-villain` is consumed there (the
+      villain band crest, `.dse-sb__band--villain .dse-sb__band-crest`); the rest are kept
+      for parity with the screen set. Role hues keep the Steel hue (= Steel exact, so no override). Scoped to Steel so a
       Legacy print never gains a colored hue (map caveat). SC-102: act-villain's
       #b03a2e is the ONE print twin with no site value behind it (the site's
       villain red is scheme-invariant) — a deliberate ink-economy darkening for

@@ -7,7 +7,7 @@
 // The emitted DOM (all classes GLOBAL, like the legacy .ds-feature-* block, because
 // statblock/featureblock will embed them with no [data-dse-element="feature"] ancestor):
 //
-//   .dse-feature[data-dse-act]           ← the action-type spine root (+ .indent-N)
+//   .dse-feature[data-dse-act]           ← the feature card root (+ .indent-N); carries the action-type alias
 //     .dse-head                          ← kit cardHead: crest · Ability/Trait eyebrow ·
 //                                            name(heading) · cost · ability_type
 //     .dse-feature__flavor               ← italic flavor
@@ -21,8 +21,8 @@
 //                 .dse-feature__nested > .dse-feature… (recursion, heading level +1)
 //
 // [data-dse-act] + the --dse-act ELEMENT-SET ALIAS (--dse-act: var(--dse-act-<type>))
-// carry the Steel-only action accent: the Legacy base maps every --dse-act-* token to
-// `none` and the CSS consumes the alias as a background, so the accent fails safe to
+// carry the Steel-only action-type tint (the crest glyph; SC-558 removed the 3px left spine):
+// the Legacy base maps every --dse-act-* token to `none`, so the tint fails safe to
 // monochrome — and an unmappable action type sets neither attribute nor alias.
 //
 // SC-10 Task 2: cardHead's crest + left-eyebrow slots are THEME-AGNOSTIC DOM — the
@@ -584,7 +584,7 @@ export function renderFeature(
 	// Nested-ability indentation: F1 preserves the legacy .indent-N contract.
 	if (config.indent) rootEl.addClass(`indent-${config.indent}`);
 
-	// The action-type spine (Steel-only accent; see the file header).
+	// The action type (Steel-only crest tint; see the file header).
 	const act = actionTypeOf(config);
 	// D5: per-feature ordinal of rolling effects — keys the session slots.
 	let rollableIndex = 0;
