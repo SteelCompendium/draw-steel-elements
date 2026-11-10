@@ -1105,14 +1105,13 @@ describe('Plan 09 Task 5: reusable-renderer + CSS hygiene (the grammar Task 6 co
 		expect(statblock).not.toMatch(/from '@drawSteelAdmonition/);
 	});
 
-	test('CSS contract: .dse-feature grammar in styles-source.css — token-only spine via var(--dse-act), .dse-section title on --dse-heading; the legacy .ds-feature-* block is EVICTED (Task 10)', () => {
+	test('CSS contract: .dse-feature grammar in styles-source.css — no action-type spine (SC-558), .dse-section title on --dse-heading; the legacy .ds-feature-* block is EVICTED (Task 10)', () => {
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 
-		// The action spine consumes the element-set alias, background-keyed so the
-		// Legacy `none` token value fails safe to invisible.
-		const spine = sheet.match(/\.dse-feature\[data-dse-act\]::before\s*\{[\s\S]*?\n\}/);
-		expect(spine).not.toBeNull();
-		expect(spine![0]).toMatch(/background:\s*var\(--dse-act/);
+		// SC-558: the action-type spine (`.dse-feature[data-dse-act]::before`) is gone for good.
+		// The `--dse-act` alias stays (the crest glyph tints from it), so the attribute does too.
+		// (comment-stripped: the sheet's own prose names the removed selector)
+		expect(sheet.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(/\.dse-feature\[data-dse-act\][^{]*::before/);
 
 		const sectionTitle = sheet.match(/\.dse-section__title\s*\{[\s\S]*?\n\}/);
 		expect(sectionTitle).not.toBeNull();

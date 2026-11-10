@@ -24,17 +24,18 @@
 /* ================================================================== */
 /*
    The REUSABLE ability/feature grammar (kit cardHead + powerRollPanel + titled
-   .dse-section panels + the [data-dse-act] action spine) emitted by
+   .dse-section panels + the [data-dse-act] action-type alias) emitted by
    src/elements/feature/renderFeature.ts. Statblock/Featureblock re-embed this
    grammar (Task 6), so these classes are GLOBAL, not scoped under
    [data-dse-element="feature"]. (The legacy .ds-feature-* block that lived
    above was evicted in Task 10 with the legacy FeatureView.)
 
-   Legacy = today's look: monochrome, no spine (every --dse-act-* token is
-   `none` in the Legacy base and the spine consumes it as a background, so it
-   fails safe to invisible), meta labels hidden, .dse-section rendering as
-   today's inline "Title: body" lines. D3's Steel layer lights the spine,
-   reveals the labels, and boxes the sections. Tokens only (D2 §5).
+   Legacy = today's look: monochrome (every --dse-act-* token is `none` in the
+   Legacy base, so the crest glyph that tints from it fails safe to no tint),
+   meta labels hidden, .dse-section rendering as today's inline "Title: body"
+   lines. D3's Steel layer tints the crest, reveals the labels, and boxes the
+   sections. SC-558: there is no action-type left stripe any more — the crest's
+   silhouette and the usage text carry the type. Tokens only (D2 §5).
 */
 .dse-feature {
 	position: relative;
@@ -66,18 +67,10 @@
 .dse-feature .dse-head__deck--left {
 	display: none;
 }
-/* Action-type spine: --dse-act is the ELEMENT-SET alias
-   (--dse-act: var(--dse-act-<type>), set beside [data-dse-act]). Keyed as a
-   background (not a border-color) so Legacy's `none` value is a valid no-op. */
-.dse-feature[data-dse-act]::before {
-	content: '';
-	position: absolute;
-	top: 0;
-	bottom: 0;
-	left: 0;
-	width: 3px;
-	background: var(--dse-act, none);
-}
+/* Action type: --dse-act is the ELEMENT-SET alias (--dse-act: var(--dse-act-<type>), set
+   beside [data-dse-act]); the crest glyph tints from it. SC-558: it no longer paints a
+   3px left stripe (the old `.dse-feature[data-dse-act]::before`), so nothing here needs a
+   lane reserved for one. */
 
 /* The standalone Feature ELEMENT's panel chrome (the legacy
    .ds-feature-ele-container + .ds-container look) sits on the pipeline root —
@@ -241,7 +234,7 @@
    every by-SCC display card through (ten small CardLayout<M> objects, not ten
    view classes — Tasks 6-9 wire real elements onto this). Deliberately its own
    minimal grammar, not a reuse of .dse-head/.dse-feature — those grammars carry
-   ability/statblock-specific slots (action spine, power-roll rows) this frame
+   ability/statblock-specific slots (action-type crest, power-roll rows) this frame
    doesn't need. Tokens only (D2 §5); no new --dse-* definitions (framework/tokens.ts's
    DSE_TOKEN_NAMES pins the count — token-coverage.test.ts).
 */
@@ -411,16 +404,31 @@ code.dsa {
    PARENT (the pipeline root), hence the `[…] > .dse-error-card` stage selectors. */
 
 .dse-error-card {
+	/* SC-558: the stage hue (`--dse-ec`, re-pointed per stage below) frames the card on all four
+	   sides (1px, mixed toward the neutral hairline in the @supports block below) and inks the
+	   title. It replaced a 3px left stripe; the stage is still said in words in the title. */
+	--dse-ec: var(--text-error);
 	background-color: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border);
-	border-left: 3px solid var(--text-error);
+	border-width: 1px;
+	border-style: solid;
+	/* Static twin of the gated color-mix() line below (floor engines keep this one). */
+	border-color: var(--background-modifier-border);
 	border-radius: var(--radius-m);
 	padding: var(--size-4-3);
 	margin: var(--size-4-2) 0;
 }
+/* The stage-hued frame is the ENHANCEMENT: gated, never bare (Chromium 106 floor — see the
+   SUPPORT FLOOR note at the tier-row wash). A floor engine keeps the neutral hairline above;
+   the title ink still follows the stage there. */
+@supports (background: color-mix(in srgb, red 14%, blue)) {
+	.dse-error-card {
+		border-color: var(--background-modifier-border);
+		border-color: color-mix(in srgb, var(--dse-ec) 60%, var(--background-modifier-border));
+	}
+}
 
 .dse-error-card-title {
-	color: var(--text-error);
+	color: var(--dse-ec);
 	font-weight: var(--font-semibold);
 	margin-bottom: var(--size-4-1);
 }
@@ -453,15 +461,16 @@ code.dsa {
 
 /* Stage accents: user-fixable input problems (parse/schema) read as warnings;
    missing reference data reads informational; render (plugin bug) keeps the
-   default --text-error accent from .dse-error-card above. */
+   default --text-error accent from .dse-error-card above. The accent is the
+   `--dse-ec` alias: it tints the card's frame and the title ink (SC-558). */
 
 [data-dse-error-stage="parse"] > .dse-error-card,
 [data-dse-error-stage="schema"] > .dse-error-card {
-	border-left-color: var(--color-orange);
+	--dse-ec: var(--color-orange);
 }
 
 [data-dse-error-stage="reference"] > .dse-error-card {
-	border-left-color: var(--color-blue);
+	--dse-ec: var(--color-blue);
 }
 
 /* SC-406 — the inert stand-in for an element deferred out of 7.0.0 (renderDeferredCard,
@@ -3008,8 +3017,9 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
    builders themselves and their .ds-header- / .ds-bkv- CSS blocks).
 
    Role tint (§3.8): the element sets [data-dse-role="<role>"] + the --dse-role
-   ELEMENT-SET ALIAS on .dse-sb (shared roleTint helper); the spine below and
-   the kit .dse-head__primary--right consume var(--dse-role, <fallback>), so an
+   ELEMENT-SET ALIAS on .dse-sb (shared roleTint helper); the kit
+   .dse-head__primary--right and the role-tinted head band consume
+   var(--dse-role, <fallback>), so an
    unmapped role (no alias) and the Legacy base (every --dse-role-* token = the
    muted grey) both fail safe to monochrome (OD-2: the accent is Steel-only).
 
@@ -3031,13 +3041,6 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 	padding: var(--dse-pad);
 	padding-top: 0.5rem;
 }
-/* The combat-role spine: only a mapped role draws it (the attribute and the
-   alias are always set together), so the token fallback never actually paints —
-   it exists to keep the rule valid, not as a second code path. */
-.dse-sb[data-dse-role] {
-	border-left: 3px solid var(--dse-role, var(--dse-rule));
-}
-
 /* -- .dse-sb__meta: the info grid -- */
 .dse-sb__meta {
 	margin-top: 0.5em;
@@ -3545,12 +3548,12 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 	content: ': ';
 }
 
-/* -- Level>0 advancement band (mirrors the site's fb__band--adv): a role-tinted
-   left rail + the "Level N Advancement" sub-head -- */
+/* -- Level>0 advancement band: the group of options under one "Level N Advancement"
+   sub-head. SC-558: no coloured left rail. On screen the Steel layer draws the group as a
+   sunken well (see "Level>0 advancement well" below); in print the group is simply the
+   sub-head and its options, with no rail and no indent. -- */
 .dse-fb__band--adv {
 	margin-top: 0.75em;
-	padding-left: 0.75em;
-	border-left: 2px solid var(--dse-role, var(--dse-rule));
 }
 .dse-fb__adv-head {
 	font-weight: bold;
@@ -5241,8 +5244,8 @@ Shared globals
 	}
 	/* §1 of round 6's own note: `.dse-pr`'s own treatment — a sunken well with a hairline,
 	   a radius and `overflow: hidden` (styles-source.css ~:7116) — is what lets the tier
-	   washes and the 3px tier edges below run to the row's full bleed and be cut off
-	   square at the well's corners, exactly as they are in a real Power Roll panel. */
+	   washes below run to the row's full bleed and be cut off square at the well's
+	   corners, exactly as they are in a real Power Roll panel. */
 	.dse-mt__strip-well {
 		margin-bottom: 0.45rem;
 		padding: 0.5rem 0.8rem 0.5rem;
@@ -5254,13 +5257,15 @@ Shared globals
 		overflow: hidden;
 	}
 	/* THE ROW — the shipped `.dse-pr__row` tier wash, quoted (spec §D), not approximated:
-	   `--t` per tier, a 3px `--t` left edge, a hairline top rule, and a `--tw` gradient.
-	   `data-tierstyle='edge'` (ledger 2026-08-30, spec §A) fades the wash at 12% of the
+	   `--t` per tier, a hairline top rule, and a `--tw` gradient. SC-558: no 3px `--t`
+	   left stripe any more (Scott's pick A: the badge's text and silhouette name the
+	   tier; the wash keeps the hue). `data-tierstyle='edge'` (ledger 2026-08-30, spec §A)
+	   fades the wash at 12% of the
 	   row instead of the Power Roll's own 60% — this strip's row is a LATTICE of three
 	   cells being compared to each other, and a 60% fade would tint Easy, half of Medium
 	   and none of Hard, which reads as a difference between the columns that does not
-	   exist. `edge` keeps every channel of the rhyme (same hue, same 3px edge, same
-	   direction, same token) and moves the fade's end inside the badge gutter instead, so
+	   exist. `edge` keeps every channel of the rhyme (same hue, same direction, same
+	   token) and moves the fade's end inside the badge gutter instead, so
 	   the wash tints the row's KEY — which is what the hue names — and every cell sits on
 	   one common ground. `color-mix()` is forbidden here (Chromium 106 floor, SC-160/
 	   SC-171): the static `--tw` twins, copied verbatim from styles-source.css's
@@ -5280,7 +5285,6 @@ Shared globals
 		align-items: center;
 		column-gap: 0.7em;
 		padding: 0.3em 0.7em;
-		border-left: 3px solid var(--t, var(--dse-tier-low));
 		border-top: 1px solid var(--dse-metal-faint);
 		background-image: linear-gradient(90deg, var(--tw), transparent 12%);
 	}
@@ -5316,7 +5320,6 @@ Shared globals
 		}
 	}
 	.dse-mt__tier-row--head {
-		border-left-color: transparent;
 		border-top: none;
 		padding-top: 0.42em;
 		padding-bottom: 0.36em;
@@ -6588,7 +6591,7 @@ Shared globals
 	--dse-role-minion: var(--dse-fg-muted);
 
 	/* -- Ability action-type accents (set via data-dse-act) -- */
-	/* OD-2 (Steel-only): the action spine does not render in Legacy — none.
+	/* OD-2 (Steel-only): the action-type tint does not render in Legacy — none.
 	   Steel = --sc-act-* parity (D3). */
 	--dse-act-main: none;
 	--dse-act-maneuver: none;
@@ -7007,7 +7010,7 @@ Shared globals
 	--dse-tier-low: var(--sc-tier-low, #e74c3c);
 	--dse-tier-mid: var(--sc-tier-mid, #f0b429);
 	--dse-tier-high: var(--sc-tier-high, #4caf6a);
-	--dse-tier-crit: #e0b050; /* RESOLVED (SC-106, 2026-08-03): adopted verbatim from the site's own crit-highlight gold (v2/docs/stylesheets/steel-dice.css:11, `.sc-dice-pop .crit`) — the site DOES style crits with a specific gold, so no invented hue was needed. SC-196 CORRECTION (2026-08-28): this line used to claim a single value served both Steel dark and light because crit is "a fill, not text — no contrast pressure". It is not a fill: it is the crit row's 3px spine and its badge FRAME, i.e. a non-text mark, and it measured 1.75:1 on the light plate against the 3.0 bar. Light now carries its own value in the Steel-light block, and it is still the same gold `--dse-vp` carries (see that token). Dark is unchanged. */
+	--dse-tier-crit: #e0b050; /* RESOLVED (SC-106, 2026-08-03): adopted verbatim from the site's own crit-highlight gold (v2/docs/stylesheets/steel-dice.css:11, `.sc-dice-pop .crit`) — the site DOES style crits with a specific gold, so no invented hue was needed. SC-196 CORRECTION (2026-08-28): this line used to claim a single value served both Steel dark and light because crit is "a fill, not text — no contrast pressure". It is not a fill: it was the crit row's 3px spine (SC-558 removed the spine) and is still its badge FRAME, i.e. a non-text mark, and it measured 1.75:1 on the light plate against the 3.0 bar. Light now carries its own value in the Steel-light block, and it is still the same gold `--dse-vp` carries (see that token). Dark is unchanged. */
 
 	/* -- Semantic: stamina / HP -- */
 	--dse-stamina-healthy: var(--sc-role-hexer, #5cc98a);
@@ -7023,7 +7026,7 @@ Shared globals
 	--dse-warn: #e8954a;
 	--dse-danger: #e74c3c;
 
-	/* -- Combat-role accents (data-dse-role spine; --sc-role-* verbatim) -- */
+	/* -- Combat-role accents (data-dse-role; --sc-role-* verbatim) -- */
 	--dse-role-ambusher: var(--sc-role-ambusher, #e3c14a);
 	--dse-role-harrier: var(--sc-role-harrier, #e07ba8);
 	--dse-role-artillery: var(--sc-role-artillery, #a87cd6);
@@ -7037,7 +7040,7 @@ Shared globals
 	--dse-role-solo: var(--sc-role-solo, #9aa2a8);
 	--dse-role-minion: var(--sc-role-minion, #9aa2a8);
 
-	/* -- Ability action-type accents (data-dse-act spine; --sc-ability-* slots) -- */
+	/* -- Ability action-type accents (data-dse-act; --sc-ability-* slots) -- */
 	/* SC-10 realignment: chained to the site's CANONICAL action-type tokens
 	   (--sc-act-* in steel-ability-cards.css — Main red / Maneuver blue /
 	   Triggered green / Move orange / None white / Trait purple). The D3 draft
@@ -7067,46 +7070,19 @@ Shared globals
 }
 
 /* -- Steel STRUCTURAL rules (SC-10): layout the skin needs beyond token values -- */
-/* The act spine (.dse-feature[data-dse-act]::before, 3px at left:0) is invisible
-   in Legacy (--dse-act-* = none) but PAINTS in Steel — and nested feature cards
-   are chromeless (no padding), so without this the spine overlaps the first
-   character of flush-left text (ground-truth-confirmed in real Obsidian,
-   Plan 12). Reserve the spine's lane whenever a spine can draw. */
-[data-dse-theme='steel'] .dse-feature[data-dse-act] {
-	padding-left: calc(3px + 0.55em);
-}
-
-/* SC-102 part 2 (D3): the spine is a NESTED-CARD FRAME, not a standalone ornament.
-   The site draws the identical .sb__feat/.fb__feat border-left ONLY inside a
-   statblock/featureblock feature list — .sc-ability (the standalone ability page) has
-   NO border-left anywhere; --act there only tints the crest glyph and the eyebrow
-   text (steel-ability-cards.css:87,94). The plugin's standalone/top-level card is the
-   ONLY .dse-feature whose ancestor chain includes the pipeline root
-   [data-dse-element='feature'] (mounted by FeatureElementView — see renderFeature.ts's
-   header comment); a nested card is always `.dse-feature__nested > .dse-feature` under
-   .dse-sb/.dse-fb, which never carries that attribute anywhere in its ancestry.
-   COMPOUND, no space, on the first selector segment: the pipeline stamps
-   data-dse-theme AND data-dse-element on the SAME root node (pipeline.ts), not on
-   ancestor/descendant nodes — a space there would ask for [data-dse-element='feature']
-   to be its own descendant and never match (same trap the pre-existing lift-shadow
-   rule at :6679 already avoids). Structure tier (S-1(a): reaches print, matching S-1's
-   "print follows structure" — the standalone card loses its spine in print too).
-   Suppresses the bar AND its reserved lane; the --dse-act alias itself is left
-   untouched so any consumer that DOES tint off it (today: the crest glyph,
-   styles-source.css:4112) keeps working. GAP (not invented here, D3's remaining
-   half): the standalone card's eyebrow text does not yet consume --dse-act the way
-   the site's does (steel-ability-cards.css:94) — filed for Task 6/FOLLOWUPS, not
-   fixed in this rule. */
-[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]::before {
-	display: none;
-}
-[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act] {
-	padding-left: 0;
-}
+/* SC-558: the action-type spine (a 3px `.dse-feature[data-dse-act]::before` bar, with the
+   `calc(3px + …)` padding lane it reserved, a standalone-card suppression, rounded-end
+   rules and flat-mode `display: none` arms) is gone, in screen AND print. History (SC-102
+   part 2, SC-188): the site draws its identical `border-left` only inside a statblock /
+   featureblock feature list, and the standalone ability card never had one. The action type
+   is carried by the crest glyph's silhouette (renderFeature.ts crestIconFor) and the usage
+   text; `data-dse-act` and the `--dse-act` alias stay because the crest glyph tints from
+   them (styles-source.css, the crest rules). */
 
 /* ── SC-101 / D3 / S-4: THE NESTED-CARD FRAME — ONE mechanism, BOTH families ──
-   The other half of SC-102's finding. The site's spine is not an ornament, it is
-   the left edge of a per-feature CARD, and the site draws that card with ONE
+   The other half of SC-102's finding. The site's spine is the left edge of a
+   per-feature CARD (SC-558 dropped the plugin's copy of that edge — the card keeps
+   its fill, radius, gap and padding), and the site draws that card with ONE
    byte-identical recipe in two sheets:
        [data-sb-featstyle="card"] .sb__feat   (steel-statblock.css:301-306)
        [data-fb-featstyle="card"] .fb__feat   (steel-featureblock.css:161-162)
@@ -7118,7 +7094,8 @@ Shared globals
    statblock AND featureblock look, not an opt-in.
 
    The plugin drew only the bar and separated the options with padding, so N
-   discrete cards fused into one continuous rail. S-4 (Scott, recommended) =
+   discrete cards fused into one continuous rail (then; the bar is gone since
+   SC-558, and the frame below is what separates the options). S-4 (Scott, recommended) =
    SHARED: implement the frame ONCE for both families rather than forking a
    per-family copy that would drift. `:is(.dse-sb, .dse-fb)` is that single
    mechanism; test/dom/theme/steelMaterial.test.ts pins the shape so a future
@@ -7137,19 +7114,14 @@ Shared globals
    block inside Angulotl Daybringer's villain action — site capture
    evidence-task1/site-refs/monster-statblock--dark.png).
 
-   FAIL-SAFE. The FRAME keys on `.dse-feature`; the BAR keys on `[data-dse-act]`
+   FAIL-SAFE. The FRAME keys on `.dse-feature`, not on `[data-dse-act]`
    (renderFeature.ts:240 sets neither attribute nor --dse-act alias when the
-   action type does not map). So an unmapped option still gets its card, just with
-   no coloured edge — matching the site, which always frames and lets `--act` fall
-   back. The bar stays the existing ::before (background: var(--dse-act, none)),
-   which is Legacy-safe by construction; it only gains the card's left radius so
-   each bar reads as a discrete rounded edge instead of a square nub poking out of
-   the rounded corner.
+   action type does not map), so an unmapped option still gets its card.
 
-   TIERS. Structure (gap / radius / padding / bar radius) carries NO print
+   TIERS. Structure (gap / radius / padding) carries NO print
    exclusion — S-1(a) "print follows structure", and the site agrees: its own
    @media print block kills only the background (`.fb__feat { background: none
-   !important }`, steel-featureblock.css:236) and keeps the border-left, the 9px
+   !important }`, steel-featureblock.css:236) and keeps the 9px
    radius and the padding. The fill is the material tier and is screen-only. */
 [data-dse-theme='steel'] :is(.dse-sb, .dse-fb) .dse-feature__nested {
 	display: flex;
@@ -7158,25 +7130,13 @@ Shared globals
 }
 [data-dse-theme='steel'] :is(.dse-sb, .dse-fb) .dse-feature__nested > .dse-feature {
 	border-radius: 9px;
-	/* Longhands, not the `padding` shorthand: the act-lane rule below and the
-	   `flat` mode rules further down each override ONE side, and a shorthand
-	   here would make those overrides order-fragile. Site: .7rem .85rem .78rem. */
+	/* Longhands, not the `padding` shorthand: the `flat` mode rules further down each
+	   override ONE side, and a shorthand here would make those overrides order-fragile.
+	   Site: .7rem .85rem .78rem. */
 	padding-top: 0.7rem;
 	padding-right: 0.85rem;
 	padding-bottom: 0.78rem;
 	padding-left: 0.85rem;
-}
-/* The bar is INSIDE the padding box here (an absolutely-positioned ::before at
-   left:0) where the site's is an outside border-left, so the option's left inset
-   is the site's .85rem PLUS the 3px the bar occupies — same optical result. This
-   supersedes the general nested-lane reservation (`calc(3px + 0.55em)`, ~:3403)
-   for framed cards only; unframed contexts keep it. */
-[data-dse-theme='steel'] :is(.dse-sb, .dse-fb) .dse-feature__nested > .dse-feature[data-dse-act] {
-	padding-left: calc(3px + 0.85rem);
-}
-[data-dse-theme='steel'] :is(.dse-sb, .dse-fb) .dse-feature__nested > .dse-feature[data-dse-act]::before {
-	border-top-left-radius: 9px;
-	border-bottom-left-radius: 9px;
 }
 /* Material tier — the fill. HARDCODED translucent black, NOT
    `var(--dse-surface-sunken)`: this is the same dark-mode material finding SC-100
@@ -7200,25 +7160,23 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-sb
    The SC-102 comment above ("a nested card is always … under .dse-sb/.dse-fb") had a
    false premise: the standalone Feature element recurses too (effect.features →
    renderFeatureList → .dse-feature__nested), and those nested cards fell through every
-   crack at once — the SC-101 frame anchors on .dse-sb/.dse-fb (misses them), the
-   standalone suppression's `padding-left: 0` REACHES them (its selector is
-   `.dse-feature[data-dse-act]`, not top-level-only), and nothing ever sets a right
-   inset. Net: an inner feature rendered flush against its parent card's content edges
+   crack at once — the SC-101 frame anchors on .dse-sb/.dse-fb (misses them), a
+   standalone-card `padding-left: 0` suppression (removed by SC-558 with the spine it
+   served) REACHED them, and nothing ever sets a right inset. Net: an inner feature rendered flush against its parent card's content edges
    (Scott's SC-168 screenshot; live computed probe: padding-left 0 / padding-right 0 /
    no fill).
 
    Fix = JOIN the S-4 convention, not a new margin: same recipe, value for value (list
    gap .65rem; radius 9px; padding .7/.85/.78/.85rem; translucent-black fill + light
-   twin; act lane calc(3px + .85rem) with the spine as the card's rounded left edge).
+   twin; SC-558 dropped the act lane and the spine that was the card's rounded left edge).
    A SEPARATE arm rather than a third member of the :is() anchor because the TIER
    differs: the sb/fb geometry is structure (reaches print, S-1(a)), while this arm is
    deliberately screen-only — the feature-family `*--steel-print.png` bytes are frozen,
    the reported defect is a screen one, and print keeps today's flush look until a
    sanctioned rebaseline says otherwise. steelMaterial.test.ts pins the recipe identity
    so the two arms cannot drift, and pins the whole set to `.dse-feature__nested >` so
-   the TOP-LEVEL standalone card stays frameless/spineless (SC-102 part 2, the site's
-   .sc-ability look — those suppressions above are untouched and still win on the
-   top-level card, which the SC-168 arms never match).
+   the TOP-LEVEL standalone card stays frameless (SC-102 part 2, the site's
+   .sc-ability look; the SC-168 arms never match it).
    COMPOUND anchor, no space: theme + print-guard + element attrs all sit on the ONE
    pipeline root node (pipeline.ts) — the same descendant-form trap SC-102's tests
    document. Multi-level recursion (a nested card's own nested list) frames each level,
@@ -7239,23 +7197,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-sb
 body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='feature'] .dse-feature__nested > .dse-feature {
 	background: rgba(0, 0, 0, 0.022);
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='feature'] .dse-feature__nested > .dse-feature[data-dse-act] {
-	padding-left: calc(3px + 0.85rem);
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='feature'] .dse-feature__nested > .dse-feature[data-dse-act]::before {
-	display: block;
-	border-top-left-radius: 9px;
-	border-bottom-left-radius: 9px;
-}
 /* …and the statblock `flat` FEATURE-STYLE mode keeps its dense, frameless run.
    The site has the identical hazard and solves it by ordering ("Keep ALL featstyle
    mode rules AFTER this block", steel-statblock.css:258) — here the mode rules win
    on SPECIFICITY instead, so they cannot be broken by a later insertion. Only the
    sb pref exists (catalog.ts:231; there is no fb twin), and per the sheet's
    default-value convention the `card` value is never named in a selector
-   (pref-reflection.test.ts asserts that). The act lane reverts to the general
-   unframed reservation, and the light twin is restated because the frame's own
-   light rule out-specifies the plain mode rule.
+   (pref-reflection.test.ts asserts that). The light twin is restated because the
+   frame's own light rule out-specifies the plain mode rule.
 
    `:not(.dse-fb *)` (SC-101 fix round, L-2): the frame's own descendant combinator is
    deliberate — it lets an fb NESTED inside a statblock feature frame its options too
@@ -7280,27 +7229,13 @@ body.theme-light [data-dse-theme='steel'][data-dse-element='statblock'][data-dse
 	padding-bottom: 0.25rem;
 	padding-left: 0;
 }
-/* SC-188 (Scott, ticket screenshots: "Flat List… without left-borders" on the site vs.
-   still bordered on the plugin) — the site's flat mode draws NO left-border/spine at
-   all. Confirmed straight from the generated site CSS, not assumed:
-   v2 docs/stylesheets/steel-statblock.css:301-306 / steel-featureblock.css:161 put
-   `border-left: 3px solid var(--act)` behind a `[data-*-featstyle="card"]` qualifier —
-   flat mode never sets `border-left` anywhere, so a flat feature renders against the
-   shared kill block instead (`.sb .sb__feat { border: none; … }`,
-   steel-statblock.css:260-263). The SC-101 fix round below (superseded — kept, corrected,
-   rather than deleted, so the wrong assumption stays legible for the next reader) believed
-   the site kept a SQUARED spine in flat mode and only cancelled the bar's border-radius,
-   which left a colored square bar the site never draws. Fix: hide the bar outright
-   (`display: none`) instead of squaring it. Its act-lane padding reservation goes with it,
-   unneeded now — `[data-dse-act]` features fall through to the same `padding-left: 0` the
-   general flat arm above already gives every OTHER feature, matching the site, whose own
-   flat padding rule never special-cases `[data-action]` either. No `body.theme-light` twin
-   needed: `display` carries no light/dark divergence. */
-[data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act]:not(.dse-fb *)::before {
-	display: none;
-}
-/* SC-123 — the FEATUREBLOCK twin of the arm above (the site's `data-fb-featstyle`,
-   settings-panel.js:44-45); same SC-188 fix, same rationale. No `:not(.dse-fb *)` guard
+/* SC-188 / SC-558 — the site's flat mode draws NO left-border at all (its `border-left:
+   3px solid var(--act)` sits behind a `[data-*-featstyle="card"]` qualifier,
+   steel-statblock.css:301-306 / steel-featureblock.css:161). The plugin's own action-type
+   bar was hidden in flat mode by two `display: none` arms here; SC-558 removed the bar
+   everywhere, so those arms went with it. */
+/* SC-123 — the FEATUREBLOCK twin of the statblock flat arm above (the site's `data-fb-featstyle`,
+   settings-panel.js:44-45). No `:not(.dse-fb *)` guard
    because here the options are SUPPOSED to be the ones inside `.dse-fb` — this is
    the pref that owns them. Default `card` is never named (default-value
    convention), so nothing below is reachable until a user opts in.
@@ -7319,18 +7254,14 @@ body.theme-light [data-dse-theme='steel'][data-dse-element='featureblock'][data-
 	padding-bottom: 0.25rem;
 	padding-left: 0;
 }
-[data-dse-theme='steel'][data-dse-element='featureblock'][data-dse-fb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act]::before {
-	display: none;
-}
 
 /* SC-146 fix 6 (audit judgment C2, Scott-approved) — ◆ diamond separator
    between consecutive flat-mode features, matching the site's
    `[data-sb-featstyle="flat"] .sb__feat + .sb__feat::after`
    (steel-statblock.css:344): without one, 'flat' reads as an unstructured
-   run. `::before` is already the action-type spine bar on `.dse-feature`
-   (~60; still drawn in flat mode above), so the separator takes `::after`
-   instead — free on this class — and reuses the plugin's own halo'd-diamond
-   recipe (`.dse-hr__diamond`, ~5772) rather than porting the site's
+   run. The separator takes `::after` (`.dse-feature` carried the action-type
+   spine bar on `::before` when this was written; SC-558 removed it) and reuses
+   the plugin's own halo'd-diamond recipe (`.dse-hr__diamond`, ~5772) rather than porting the site's
    line+dots gradient, for visual consistency with the rest of the sheet.
    Steel + screen-only: Legacy draws no ornaments (OD-2, the accent is
    Steel-only) and print never draws it either.
@@ -7360,14 +7291,11 @@ body.theme-light [data-dse-theme='steel'][data-dse-element='featureblock'][data-
    and whose `::after` carries the diamond). Without the lines the mode reads as a stray
    bead in whitespace, which is what Scott saw.
    WHY THE LAYERS LIVE ON THE ELEMENT'S OWN BACKGROUND and not on a `::before` like the
-   site's: `.dse-feature`'s `::before` is the ACTION-TYPE SPINE BAR (~:60, a 3px full-height
-   absolutely-positioned bar) and flat mode keeps it (SC-101/102 made the spine a
-   nested-card frame, not a card-mode ornament — unlike the site, whose spine is
-   `[data-sb-featstyle="card"]`-only and whose `::before` is therefore free). The diamond
-   already owns `::after`. Rather than refactor a structural SC-101/102 mechanism for an
-   ornament, the four gradient layers go on the feature's own `background-image` — flat
-   mode already blanks its background, and background layers place to the same precision a
-   pseudo does.
+   site's: when this was written `.dse-feature`'s `::before` was the ACTION-TYPE SPINE BAR
+   (a 3px full-height absolutely-positioned bar, removed by SC-558), and the diamond
+   already owns `::after`. The four gradient layers stayed on the feature's own
+   `background-image` — flat mode already blanks its background, and background layers
+   place to the same precision a pseudo does.
    GEOMETRY, ported verbatim from the site and re-expressed against the feature's own box
    (the site's strip is inset 5% each side, so its `calc(50% - 30px)` line is `calc(45% -
    30px)` of the feature, and its dots at `calc(50% ± 24px)` are unchanged — both boxes
@@ -9892,7 +9820,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kw
 
      --t: var(--sc-tier-low);                      → --dse-tier-low (default)
      padding: .55rem .9rem;                        → verbatim
-     border-left: 3px solid var(--t);              → verbatim
+     border-left: 3px solid var(--t);              → NOT ported (SC-558, Scott's pick A)
      border-top: 1px solid var(--fx-metal-faint);  → --dse-metal-faint
      background: linear-gradient(90deg,
        color-mix(in srgb, var(--t) 8%, transparent), transparent 60%);
@@ -9983,7 +9911,6 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kw
 	   Geometry only: no parity-measured property (padding/font/line-height/ink)
 	   moves on this pair. */
 	align-items: center;
-	border-left: 3px solid var(--t);
 	border-top: 1px solid var(--dse-metal-faint);
 	/* SUPPORT-FLOOR FALLBACK — see the SUPPORT FLOOR note just above.
 	   `--tw` is the STATIC precomputed twin of the color-mix() line in the @supports
@@ -10512,19 +10439,26 @@ body.theme-light
 	}
 }
 
-/* -- Level>0 advancement rail: same fallback correction as the band above.
-   The BASE rule (~1963) falls back to --dse-rule, which in Steel drifts away
-   from the head band's neutral (--dse-rule is #8e959a dark / #5a6368 light,
-   ~3180/~4109) — so a malice/named-feature block with Level>0 features paints a
-   grey rail that visibly disagrees with the #9aa2a8 band directly above it
-   inside the SAME card. --dse-role-leader is the site-exact, light/dark-stable
-   grey (var(--sc-role-leader, #9aa2a8), ~3206; site source
-   v2/docs/stylesheets/palette.css --sc-role-malice/#9aa2a8 "grey — malice &
-   named feature blocks"). Steel/screen-scoped: the base rule is shared with
-   Legacy (where --dse-role-leader is deliberately fg-muted monochrome) and the
-   print layer is frozen. */
+/* -- Level>0 advancement well (SC-558, Scott's pick C; replaces the 2px role-hued left
+   rail). The level group is one recessed panel — the `.dse-pr` / `.dse-section` frame
+   recipe: 1px --dse-metal-faint all round, --dse-radius, --dse-surface-sunken — and the
+   "Level N Advancement" strip is its head band, the way a power-roll panel opens.
+   Containment says "these options belong to Level N" by shape, with no hue on an edge.
+   The head keeps its role-ink title (`.dse-fb__adv-head`, base rule). SCREEN ONLY: print
+   draws no well (the group is just the sub-head and its options). */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb__band--adv {
-	border-left-color: var(--dse-role, var(--dse-role-leader));
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: var(--dse-radius);
+	background: var(--dse-surface-sunken);
+	overflow: hidden;
+	padding-bottom: 0.65rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb__band--adv > .dse-fb__adv-head {
+	margin-bottom: 0.65rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb__band--adv > :not(.dse-fb__adv-head) {
+	margin-left: 0.65rem;
+	margin-right: 0.65rem;
 }
 
 /* ==================================================================== */
@@ -14409,7 +14343,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	   is a flagged colourblind finding awaiting a ruling, not this round's business. */
 	--dse-select: #bd392c;
 
-	/* -- Ability action-type spines (darkened light-column hues) -- */
+	/* -- Ability action-type hues (darkened light-column hues) -- */
 	--dse-act-main: #c0392b;
 	--dse-act-maneuver: #2874a6;
 	--dse-act-triggered: #1e8449;
@@ -14813,7 +14747,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 /* Role accent hook: the right mini-title tints by --dse-role INHERITED from the
    card root (the element maps data-dse-role="<x>" → --dse-role: var(--dse-role-<x>)).
    Legacy roots define no bare --dse-role, so the fallback = today's monochrome.
-   --dse-act is the same kind of inherited hook (the action spine), consumed by
+   --dse-act is the same kind of inherited hook (the action-type tint), consumed by
    element sheets rather than the head itself. */
 .dse-head__primary--right {
 	font-weight: 600;
@@ -15695,8 +15629,8 @@ body.theme-light
    Print-layer scoping caveat (map): the NEUTRAL block (surfaces to white, fg to
    near-black, ornament off, borders to grey hairlines, radius 0, plus the always-
    rendered semantics tier / stamina / encounter) applies to BOTH themes. The
-   role and act spines are meaning Steel ADDS (Legacy draws grey role spines and
-   NO act spine), so their print values are SCOPED to [data-dse-theme="steel"] —
+   role and act hues are meaning Steel ADDS (Legacy draws grey role hues and
+   NO act hue), so their print values are SCOPED to [data-dse-theme="steel"] —
    a Legacy print stays monochrome. Lives OUTSIDE the kit banner→END markers
    because it carries intentional color literals (like the theme blocks above).
 
@@ -15861,16 +15795,16 @@ body.theme-light
 	--dse-danger: #a11;
 }
 
-/* -- STEEL-composed print semantics: act spines darken; role spines keep the
-      Steel hue (= Steel exact, so no override). Scoped to Steel so a Legacy
-      print never gains a colored spine (map caveat). SC-102: act-villain's
+/* -- STEEL-composed print semantics: act hues darken (the crest glyph tints from them);
+      role hues keep the Steel hue (= Steel exact, so no override). Scoped to Steel so a
+      Legacy print never gains a colored hue (map caveat). SC-102: act-villain's
       #b03a2e is the ONE print twin with no site value behind it (the site's
       villain red is scheme-invariant) — a deliberate ink-economy darkening for
       paper, which is why it appears here but NOT in the Steel light block. -- */
 @media print {
 	/* SC-170: padded to (0,4,0) — the light Steel block re-declares six of these
 	   seven act hues at (0,3,0), so at the former (0,2,0) a light-vault PDF kept
-	   the screen act spines. */
+	   the screen act hues. */
 	:is([data-dse-element], .dse-modal)[data-dse-theme="steel"][data-dse-theme][data-dse-theme] {
 		--dse-act-main: #c0392b;
 		--dse-act-maneuver: #2874a6;
@@ -15964,8 +15898,9 @@ body.theme-light
 		-webkit-print-color-adjust: exact;
 		print-color-adjust: exact;
 	}
-	/* …and the role/act spines print exactly ONLY under Steel (Legacy = mono). */
-	[data-dse-theme="steel"] .dse-feature[data-dse-act]::before,
+	/* …and the featureblock's role-tinted head band prints exactly ONLY under Steel
+	   (Legacy = mono). SC-558: the action-type spine (`.dse-feature[data-dse-act]::before`)
+	   that used to share this rule is gone. */
 	[data-dse-theme="steel"] .dse-fb {
 		-webkit-print-color-adjust: exact;
 		print-color-adjust: exact;
@@ -16022,7 +15957,6 @@ body.theme-light
 	-webkit-print-color-adjust: exact;
 	print-color-adjust: exact;
 }
-[data-dse-theme="steel"][data-dse-print="on"] .dse-feature[data-dse-act]::before,
 [data-dse-theme="steel"][data-dse-print="on"] .dse-fb {
 	-webkit-print-color-adjust: exact;
 	print-color-adjust: exact;
@@ -18821,6 +18755,23 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 }
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(blockquote) > :last-child {
 	margin-bottom: 1em;
+}
+/* GROUP 5, PRINT arm (SC-558, Scott: "Obsidian's left border on quotes should be
+   removed"). The re-grounding above is screen-only (`:not([data-dse-print="on"])`), so on
+   paper a plugin blockquote (class, perk, perk headings) still drew Obsidian's own 2px
+   `--blockquote-border-color` violet `border-inline-start` (`.markdown-rendered blockquote`,
+   (0,1,1)). This removes ONLY that edge, ONLY for blockquotes inside a plugin root
+   or modal — never Obsidian's own quotes outside DSE output. Border only: the padding and
+   margin restatements stay screen-only, so print layout keeps every other byte. The twin
+   (`[data-dse-print="on"]`) and real print (`@media print`) each get an arm; the doubled
+   `:is()` pads both to (0,2,0) so they out-rank Obsidian's (0,1,1) on the class column. */
+:is([data-dse-element], .dse-modal)[data-dse-print="on"] :where(blockquote) {
+	border-inline-start: none;
+}
+@media print {
+	:is([data-dse-element], .dse-modal):is([data-dse-element], .dse-modal) :where(blockquote) {
+		border-inline-start: none;
+	}
 }
 
 /* GROUP 6 — FIX ROUND (HIGH-1a, MED-3): the nested-list tier. LIVE in shipped content

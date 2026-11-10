@@ -1082,17 +1082,17 @@ describe('Plan 09 Task 6b: source + CSS hygiene', () => {
 		}
 	});
 
-	test('CSS contract: .dse-sb grammar in styles-source.css (meta/chars/kv colon/role spine/pref hooks); the old .ds-sb-* block is evicted', () => {
+	test('CSS contract: .dse-sb grammar in styles-source.css (meta/chars/kv colon/pref hooks; no role spine, SC-558); the old .ds-sb-* block is evicted', () => {
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 
 		expect(sheet).toMatch(/\.dse-sb__meta\s*\{/);
 		expect(sheet).toMatch(/\.dse-sb__items\s*\{/);
 		expect(sheet).toMatch(/\.dse-sb__chars\s*\{/);
 		expect(sheet).toMatch(/\.dse-sb__kv-l::after\s*\{/); // the CSS-owned ": " colon
-		// The role spine consumes the inherited --dse-role alias, token fallback only.
-		const spine = sheet.match(/\.dse-sb\[data-dse-role\]\s*\{[\s\S]*?\n\}/);
-		expect(spine).not.toBeNull();
-		expect(spine![0]).toMatch(/var\(--dse-role,\s*var\(--dse-rule\)\)/);
+		// SC-558: the dead role spine rule (`.dse-sb[data-dse-role] { border-left: 3px … }`,
+		// always overridden by the Steel `.dse-sb` border) is deleted. A bare `.dse-sb[data-dse-role]`
+		// rule block may not come back: the role band's selectors all continue with `> .dse-head`.
+		expect(sheet.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(/\.dse-sb\[data-dse-role\]\s*\{/);
 		// D4 pref hooks have CSS keyed off the reflected attributes.
 		expect(sheet).toMatch(/\[data-dse-density='compact'\]/);
 		expect(sheet).toMatch(/\[data-dse-sb-featstyle='flat'\]/);

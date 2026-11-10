@@ -734,7 +734,7 @@ describe('SC-121: above-floor CSS features carry a static fallback (Chromium 106
 	it('CAN-FAIL PROOF: neutering the sheet’s own gates makes the scan report every declaration', () => {
 		// The assertion above is only meaningful if the scan would fire on THIS file. Rewrite
 		// every real gate prelude to one that does not test color-mix and re-run: each of the
-		// sheet's 10 declarations must now be reported by name. This is the live proof, run on
+		// sheet's 11 declarations must now be reported by name. This is the live proof, run on
 		// the shipped stylesheet on every jest run — not a synthetic sample.
 		//
 		// The inventory is a COUNT OF THE SHEET, so it moves whenever the sheet grows a
@@ -742,6 +742,7 @@ describe('SC-121: above-floor CSS features carry a static fallback (Chromium 106
 		// re-mixed each head band's gradient, `crown` the chrome panel's fill and edge on both
 		// headered families) and back to 10 in round 5, when Scott ruled the whole A/B out and
 		// those branches were deleted — the deletion plan that comment promised, executed.
+		// SC-558 then took it 10 → 11: the error card's stage-hued frame (`border-color`).
 		//
 		// SC-171 review L-4: neuter by the SAME predicate the scan uses, not by string-replacing
 		// the canonical literal — otherwise a declaration behind a differently-worded but valid
@@ -757,7 +758,7 @@ describe('SC-121: above-floor CSS features carry a static fallback (Chromium 106
 		);
 		expect(stillGates).toEqual([]);
 		const violations = findUngatedColorMixViolations(ungated);
-		expect(violations.length).toBe(10);
+		expect(violations.length).toBe(11);
 		expect(violations.every((v) => v.kind === 'ungated')).toBe(true);
 		// …and they are the surfaces SC-171 measured, by property.
 		const byProp = violations.reduce<Record<string, number>>((acc, v) => {
@@ -768,6 +769,7 @@ describe('SC-121: above-floor CSS features carry a static fallback (Chromium 106
 			background: 5,
 			'background-image': 1,
 			'border-bottom': 2,
+			'border-color': 1,
 			'box-shadow': 2,
 		});
 	});

@@ -373,15 +373,16 @@ describe('D3 Task 5: print RULES (real kit class names, verified by grep)', () =
 		expect(breakRule).toMatch(/\.dse-feature|\.dse-pr|\.dse-statgrid/);
 	});
 
-	test('meaning-bearing color prints exactly (tier badges + stamina fills + steel spines)', () => {
+	test('meaning-bearing color prints exactly (tier badges + stamina fills + the steel featureblock band)', () => {
 		expect(sheet).toMatch(/print-color-adjust:\s*exact/);
 		// tier badges + stamina fills in the neutral exact rule
 		const exactRules = sheet.match(/[^}]*print-color-adjust:\s*exact[^}]*\}/g)?.join('\n') ?? '';
 		expect(exactRules).toContain('.dse-pr__badge');
 		expect(exactRules).toContain('.dse-stamina__fill');
-		// act/role spines print exactly ONLY under Steel (scoping caveat)
+		// the role-tinted featureblock band prints exactly ONLY under Steel (scoping caveat);
+		// SC-558 removed the action-type spine arm (steelMaterial.test.ts pins it gone)
 		expect(exactRules).toContain('[data-dse-theme="steel"]');
-		expect(exactRules).toMatch(/\.dse-feature\[data-dse-act\]::before|\.dse-fb/);
+		expect(exactRules).toMatch(/\.dse-fb/);
 	});
 });
 

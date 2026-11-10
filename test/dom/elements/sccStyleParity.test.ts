@@ -10,8 +10,7 @@
 // Since SC-141 landed, the feature rows run twice: once on a hand-shaped `feature.*` code
 // and once on a REAL corpus ability file (`type: ability`), the shape 621 corpus files
 // carry and the one users will actually reference. So the card came out with no
-// gradient, no block rhythm, no hairline, plan 25's standalone action-spine removal
-// silently reverted, and EVERY SC-123/SC-146 statblock/featureblock preference a no-op
+// gradient, no block rhythm, no hairline, and EVERY SC-123/SC-146 statblock/featureblock preference a no-op
 // (a pref selector pairs its `data-dse-*` attribute WITH the element id). Identical DOM,
 // unstyled output — invisible to any DOM-shape assertion, which is exactly why the first
 // round shipped it.
@@ -147,18 +146,18 @@ describe('SC-149 H-1 — a ds-scc render is styled identically to the typed elem
 		expect(matching(viaScc, selectors)).toEqual(typedHits);
 	});
 
-	// The sharpest single rule: plan 25's standalone action-spine removal, a Scott-approved
-	// change that cost a sanctioned five-line freeze rebaseline. Through ds-scc it used to
-	// revert silently — a standalone feature rendered with the nested/embedded spine indent.
+	// The sharpest single rule: the standalone card's own plate. (It used to be plan 25's
+	// standalone action-spine removal, until SC-558 removed the spine itself.) Through ds-scc
+	// it used to revert silently — a standalone feature rendered with no card plate at all.
 	test.each([
 		['a hand-shaped feature.* code', FEATURE_CODE, FEATURE_REL],
 		['a real corpus ability file', ABILITY_CODE, ABILITY_REL],
-	])('feature: plan 25\'s standalone action-spine rule reaches ds-scc — %s', async (_label, code, rel) => {
-		const SPINE = "[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]";
-		expect(elementScopedSelectors('feature')).toContain(SPINE);
+	])('feature: the standalone card plate rule reaches ds-scc — %s', async (_label, code, rel) => {
+		const PLATE = "[data-dse-theme='steel'][data-dse-element='feature']:not([data-dse-error-stage])";
+		expect(elementScopedSelectors('feature')).toContain(PLATE);
 		const { viaTyped, viaScc } = await renderBoth(featureElement as ElementDefinition<unknown>, code, rel);
-		expect(viaTyped.querySelector(SPINE)).not.toBeNull();
-		expect(viaScc.querySelector(SPINE)).not.toBeNull();
+		expect(viaTyped.matches(PLATE)).toBe(true);
+		expect(viaScc.matches(PLATE)).toBe(true);
 	});
 
 	// A PREFERENCE, the other half of H-1: pref selectors pair a `data-dse-*` attribute with

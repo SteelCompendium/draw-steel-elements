@@ -724,55 +724,38 @@ describe('Steel material contract', () => {
 		});
 	});
 
-	describe('standalone spine removed (SC-102 part 2)', () => {
-		// D3: the site draws the accent spine ONLY inside a nested statblock/featureblock
-		// feature list (.sb__feat / .fb__feat) — the standalone ability page (.sc-ability)
-		// has NO border-left anywhere. The plugin's discriminator is the pipeline-root
-		// attribute [data-dse-element='feature'], present ONLY on the standalone Feature
-		// element's mount and never on a card nested under .dse-sb/.dse-fb (those pipeline
-		// roots carry data-dse-element="statblock"/"featureblock" instead — see
-		// renderFeature.ts's header comment and statblock/featureblock view.ts's
-		// renderFeatureList calls).
+	describe('no action-type spine anywhere (SC-558; formerly SC-102 part 2, the standalone-only removal)', () => {
+		// History: the site draws the accent spine ONLY inside a nested statblock/featureblock
+		// feature list (.sb__feat / .fb__feat); the plugin once drew a 3px `::before` bar on
+		// every `.dse-feature[data-dse-act]` and suppressed it (plus its padding lane) under the
+		// standalone pipeline root [data-dse-element='feature']. Scott's SC-558 ruling (2026-11-10,
+		// "A") removed the bar everywhere, screen AND print, with every lane / radius /
+		// suppression / flat-mode rule that existed only for it. These pins fail if any of it
+		// comes back; the crest glyph and the usage text carry the action type.
 
-		it('suppresses the spine bar under the standalone pipeline root — and, since SC-188, at exactly two other legitimate places', () => {
-			// A whole-file scan (not merely Steel-scoped), so a stray suppression that
-			// ALSO reached the nested/nested-list context — which would break Task 3's
-			// villain statblock spines — fails this test too, not just the wrong one.
-			// SC-188 legitimately adds two more matches here: the sb/fb `flat` feature-style
-			// modes now hide the bar outright too (own test above pins those two by name),
-			// because the site's flat mode never draws a border-left at all. Anything beyond
-			// these three is a stray suppression reaching a context it shouldn't.
-			// Loosened from a literal `.dse-feature[data-dse-act]::before` substring match
-			// (SC-188): the two flat-mode hides insert `:not(.dse-fb *)`/nothing between
-			// `[data-dse-act]` and `::before`, so match on selector SHAPE (ends in
-			// `::before`, carries the act attribute) instead of exact adjacency.
-			const suppressions = rules.filter(
-				(r) =>
-					/display:\s*none\s*;/.test(r.body) &&
-					r.selector.includes('[data-dse-act]') &&
-					r.selector.trim().endsWith('::before'),
+		it('no rule paints a pseudo-element on a [data-dse-act] feature', () => {
+			const bars = rules.filter(
+				(r) => r.selector.includes('[data-dse-act]') && /::(before|after)\s*$/.test(r.selector.trim()),
 			);
-			expect(suppressions).toHaveLength(3);
-			const standalone = suppressions.find(
+			expect(bars.map((r) => r.selector.trim())).toEqual([]);
+		});
+
+		it('no feature rule reserves an act lane (padding-left keyed on [data-dse-act] or calc(3px + …))', () => {
+			const lanes = rules.filter(
 				(r) =>
-					r.selector.replace(/\s+/g, ' ').trim() ===
-					"[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]::before",
+					/padding-left:\s*calc\(3px/.test(r.body) ||
+					(/\.dse-feature\[data-dse-act\]\s*$/.test(r.selector.trim()) && /padding-left/.test(r.body)),
 			);
-			expect(standalone).toBeDefined();
-			// COMPOUND, no space, between the theme and element attribute selectors — the
-			// pipeline stamps data-dse-theme AND data-dse-element on the SAME root node
-			// (pipeline.ts), never on ancestor/descendant nodes. A descendant-combinator
-			// form (a space there) asks the root to be its own descendant and matches
-			// NOTHING — a real regression this repo hit once already (ground-truth
-			// verified with a live Playwright DOM dump, not assumed).
-			expect(STEEL_SCOPE.test(standalone!.selector)).toBe(true);
-			// …and the other two are exactly the SC-188 flat-mode bar-hides (statblock +
-			// featureblock), never a third stray context.
-			const flatHides = suppressions.filter((r) => r !== standalone);
-			expect(flatHides).toHaveLength(2);
-			for (const r of flatHides) {
-				expect(r.selector).toMatch(/\[data-dse-(sb|fb)-featstyle='flat'\]/);
-			}
+			expect(lanes.map((r) => r.selector.trim())).toEqual([]);
+		});
+
+		it('no 3px left-edge border or an act-coloured background survives on a feature card', () => {
+			const edges = rules.filter(
+				(r) =>
+					/\.dse-feature\b/.test(r.selector) &&
+					(/border-left:\s*3px/.test(r.body) || /background:\s*var\(--dse-act/.test(r.body)),
+			);
+			expect(edges.map((r) => r.selector.trim())).toEqual([]);
 		});
 
 		it('never regresses to the descendant-combinator form (theme/element attrs share ONE node, not two)', () => {
@@ -790,52 +773,9 @@ describe('Steel material contract', () => {
 			expect(broken).toHaveLength(0);
 		});
 
-		it('leaves the shared spine base rule alone — nested cards (statblock/featureblock) still draw it', () => {
-			const base = rules.find(
-				(r) => r.selector.trim() === '.dse-feature[data-dse-act]::before',
-			);
-			expect(base).toBeDefined();
-			expect(base!.body).toMatch(/background:\s*var\(--dse-act,\s*none\)\s*;/);
-			// The base rule itself carries no display suppression — only the
-			// standalone-scoped twin (asserted above) does.
-			expect(base!.body).not.toMatch(/display:\s*none/);
-		});
-
-		it('drops the reserved lane for the standalone card ONLY — the general nested-lane rule is untouched', () => {
-			const nestedLane = rules.find(
-				(r) => r.selector.trim() === "[data-dse-theme='steel'] .dse-feature[data-dse-act]",
-			);
-			expect(nestedLane).toBeDefined();
-			expect(nestedLane!.body).toMatch(/padding-left:\s*calc\(3px \+ 0\.55em\)\s*;/);
-
-			const standaloneLane = rules.find(
-				(r) =>
-					r.selector.trim() ===
-					"[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]",
-			);
-			expect(standaloneLane).toBeDefined();
-			expect(standaloneLane!.body).toMatch(/padding-left:\s*0\s*;/);
-		});
-
-		it('is structure tier — no print exclusion, so it reaches print (S-1(a))', () => {
-			// SC-168 carve-out: the NESTED-card restore rules (`.dse-feature__nested > …`)
-			// are deliberately screen-only (they keep feature print shots frozen), so this
-			// structure-tier pin covers only the top-level suppression rules.
-			const standalone = rules.filter(
-				(r) =>
-					r.selector.includes("[data-dse-element='feature']") &&
-					/\.dse-feature\[data-dse-act\]/.test(r.selector) &&
-					!r.selector.includes('.dse-feature__nested'),
-			);
-			expect(standalone.length).toBeGreaterThan(0);
-			for (const r of standalone) {
-				expect(r.selector).not.toMatch(/:not\(\[data-dse-print="on"\]\)/);
-			}
-		});
-
 		it('the --dse-act alias itself is untouched — only the bar is removed, not the tint', () => {
-			// Nothing in this change may set --dse-act to none/unset under the standalone
-			// scope; the crest glyph (styles-source.css ~4112) still keys off it.
+			// Nothing may set --dse-act to none/unset under the standalone scope; the crest
+			// glyph (styles-source.css, the crest rules) still keys off it.
 			const standaloneRules = rules.filter((r) =>
 				r.selector.includes("[data-dse-element='feature']"),
 			);
@@ -881,8 +821,8 @@ describe('Steel material contract', () => {
 			);
 			expect(frame).toHaveLength(1);
 			expect(frame[0].selector).toContain(':is(.dse-sb, .dse-fb)');
-			// site: padding .7rem .85rem .78rem (written as longhands here so the act-lane
-			// and flat-mode overrides can each move one side without order fragility).
+			// site: padding .7rem .85rem .78rem (written as longhands here so the flat-mode
+			// overrides can each move one side without order fragility).
 			expect(frame[0].body).toMatch(/padding-top:\s*0\.7rem/);
 			expect(frame[0].body).toMatch(/padding-right:\s*0\.85rem/);
 			expect(frame[0].body).toMatch(/padding-bottom:\s*0\.78rem/);
@@ -918,7 +858,7 @@ describe('Steel material contract', () => {
 			expect(list[0].body).toMatch(/gap:\s*0\.65rem/); // site .sb__features/.fb__feats
 		});
 
-		it('frames on .dse-feature but bars on [data-dse-act] — an unmapped option still gets its card', () => {
+		it('frames on .dse-feature, never on [data-dse-act] — an unmapped option still gets its card', () => {
 			// renderFeature.ts sets neither attribute nor --dse-act alias when the action type
 			// does not map, so keying the FRAME on [data-dse-act] would silently un-card those
 			// options. The site always frames and lets --act fall back.
@@ -928,16 +868,13 @@ describe('Steel material contract', () => {
 					r.selector.includes(FRAME_ANCHOR) &&
 					/border-radius:\s*9px/.test(r.body),
 			);
-			expect(frame!.selector).not.toContain('.dse-feature[data-dse-act]');
-			// …while the bar's own radius (so it hugs the rounded corner) IS act-keyed.
-			const bar = rules.find(
-				(r) =>
-					STEEL_SCOPE.test(r.selector) &&
-					r.selector.includes('.dse-feature[data-dse-act]::before') &&
-					/border-top-left-radius:\s*9px/.test(r.body),
-			);
-			expect(bar).toBeDefined();
-			expect(bar!.selector).toContain(':is(.dse-sb, .dse-fb)');
+			expect(frame!.selector).not.toContain('[data-dse-act]');
+			// …and (SC-558) the framed card takes its left inset from the frame's own
+			// `padding-left: 0.85rem`, with no act-keyed rule adding to it.
+			expect(frame!.body).toMatch(/padding-left:\s*0\.85rem/);
+			expect(
+				nestedOptionRules.filter((r) => r.selector.includes('[data-dse-act]')).map((r) => r.selector),
+			).toEqual([]);
 		});
 
 		it('fills with translucent BLACK (the bleed-through material), never --dse-surface-sunken', () => {
@@ -1011,38 +948,38 @@ describe('Steel material contract', () => {
 			// …and the light twin is restated, because the frame's own light rule
 			// out-specifies a plain mode rule.
 			expect(card!.selector).toContain('body.theme-light');
-			// SC-188: no act-lane padding reservation survives — the bar it used to reserve
-			// space for is now hidden outright (see the test below), so a
-			// `[data-dse-act]` feature takes the SAME `padding-left: 0` as every other flat
-			// feature. A reservation reappearing here would mean the bar-hide regressed.
+			// SC-188 / SC-558: no act-lane padding reservation survives — the bar it used to
+			// reserve space for is gone — so a `[data-dse-act]` feature takes the SAME
+			// `padding-left: 0` as every other flat feature (see the test below).
 			expect(flat.some((r) => /padding-left:\s*calc\(3px/.test(r.body))).toBe(false);
 			// Sheet convention (pref-reflection.test.ts): the DEFAULT value is never named.
 			expect(css).not.toContain("data-dse-sb-featstyle='card'");
 		});
 
-		it("SC-188: flat mode hides the act-colored bar outright — the site's flat mode draws NO left-border at all", () => {
+		it("SC-188 / SC-558: flat mode draws no left-border and needs no bar-hide — an act feature takes the same padding-left 0 as every flat feature", () => {
 			// Ground truth, read from the generated site CSS itself (not assumed): flat mode
 			// never sets `border-left` anywhere — only `[data-sb-featstyle="card"] .sb__feat`
 			// does (v2 docs/stylesheets/steel-statblock.css:301-306 /
-			// steel-featureblock.css:161) — so a flat feature renders against the shared kill
-			// block's `border: none` instead. The plugin's SC-101 fix round previously only
-			// cancelled the bar's border-radius (leaving a squared but still-COLORED bar) on
-			// the wrong assumption that the site kept a square spine in flat mode; SC-188
-			// (Scott's ticket screenshot) is that gap made visible. Same fix, both families.
+			// steel-featureblock.css:161). The plugin used to hide its own action-type bar in
+			// flat mode with two `display: none` arms (SC-188); the bar is gone (SC-558), so
+			// those arms are too. The flat arms must still zero the left padding, both families.
 			for (const style of ['sb-featstyle', 'fb-featstyle']) {
-				const barHide = rules.find(
+				const flatCard = rules.find(
 					(r) =>
 						STEEL_SCOPE.test(r.selector) &&
 						r.selector.includes(`[data-dse-${style}='flat']`) &&
-						r.selector.includes('[data-dse-act]') &&
-						r.selector.trim().endsWith('::before'),
+						r.selector.includes('.dse-feature__nested > .dse-feature') &&
+						/padding-left:\s*0\s*;/.test(r.body),
 				);
-				expect(barHide).toBeDefined();
-				expect(barHide!.body).toMatch(/display:\s*none\s*;/);
-				// The old radius-only cancel must not survive alongside/instead of the hide —
-				// a regression back to "squared but visible" would still pass a bare
-				// `display: none` substring check if the radius lines were merely re-added.
-				expect(barHide!.body).not.toMatch(/border-(top|bottom)-left-radius/);
+				expect(flatCard).toBeDefined();
+				expect(flatCard!.body).not.toMatch(/border-left/);
+				expect(
+					rules.filter(
+						(r) =>
+							r.selector.includes(`[data-dse-${style}='flat']`) &&
+							r.selector.includes('[data-dse-act]'),
+					),
+				).toEqual([]);
 			}
 		});
 
@@ -1194,14 +1131,14 @@ describe('Steel material contract', () => {
 	 * The defect: a `.dse-feature__nested > .dse-feature` under the standalone pipeline
 	 * root ([data-dse-element='feature'] — the effect.features recursion) got NO frame
 	 * (the SC-101 anchor names only .dse-sb/.dse-fb), no fill, and 0 left/right padding —
-	 * SC-102's standalone suppression (`padding-left: 0` on `.dse-feature[data-dse-act]`)
-	 * reaches nested cards too, because its comment's premise ("a nested card is always
+	 * SC-102's standalone suppression (`padding-left: 0` on `.dse-feature[data-dse-act]`,
+	 * removed by SC-558 with the spine) reached nested cards too, because its comment's premise ("a nested card is always
 	 * under .dse-sb/.dse-fb") was wrong. Result: the inner feature rendered flush against
 	 * its parent card's content edges (Scott's screenshot on the ticket).
 	 *
 	 * The fix joins the existing nested-card convention instead of inventing a margin:
 	 * the same recipe as the sb/fb frame (gap / 9px radius / .7 .85 .78 .85rem padding /
-	 * translucent-black fill / act lane + spine as the card's left edge), as a SEPARATE
+	 * translucent-black fill), as a SEPARATE
 	 * screen-only arm — it cannot share the :is() block because the sb/fb geometry is
 	 * structure tier (reaches print) while this arm is print-guarded on purpose: the
 	 * feature-family `*--steel-print.png` bytes are frozen, and the report is a screen
@@ -1222,10 +1159,6 @@ describe('Steel material contract', () => {
 			exactRule(`${NESTED_ANCHOR} .dse-feature__nested > .dse-feature`);
 		const lightRule = () =>
 			exactRule(`body.theme-light ${NESTED_ANCHOR} .dse-feature__nested > .dse-feature`);
-		const laneRule = () =>
-			exactRule(`${NESTED_ANCHOR} .dse-feature__nested > .dse-feature[data-dse-act]`);
-		const barRule = () =>
-			exactRule(`${NESTED_ANCHOR} .dse-feature__nested > .dse-feature[data-dse-act]::before`);
 
 		it('separates nested cards with the real list gap (flex column, not padding rhythm)', () => {
 			const r = listRule();
@@ -1261,16 +1194,18 @@ describe('Steel material contract', () => {
 			expect(lightRule().body).toMatch(/background:\s*rgba\(0,\s*0,\s*0,\s*0\.022\)/);
 		});
 
-		it('restores the act lane and the spine as the card\'s rounded left edge (sb/fb values)', () => {
-			expect(laneRule().body).toMatch(/padding-left:\s*calc\(3px \+ 0\.85rem\)/);
-			const bar = barRule();
-			expect(bar.body).toMatch(/display:\s*block/);
-			expect(bar.body).toMatch(/border-top-left-radius:\s*9px/);
-			expect(bar.body).toMatch(/border-bottom-left-radius:\s*9px/);
+		it('has no act lane and no spine arm (SC-558) — the frame\'s own 0.85rem is the left inset', () => {
+			const actArms = rules.filter(
+				(r) =>
+					r.selector.replace(/\s+/g, ' ').includes(`${NESTED_ANCHOR} .dse-feature__nested`) &&
+					r.selector.includes('[data-dse-act]'),
+			);
+			expect(actArms.map((r) => r.selector.trim())).toEqual([]);
+			expect(frameRule().body).toMatch(/padding-left:\s*0\.85rem/);
 		});
 
 		it('every arm is screen-only AND compound on the pipeline root (no descendant-form footgun)', () => {
-			for (const r of [listRule(), frameRule(), lightRule(), laneRule(), barRule()]) {
+			for (const r of [listRule(), frameRule(), lightRule()]) {
 				// The guard is what keeps feature-family *--steel-print.png bytes frozen.
 				expect(r.selector).toMatch(/:not\(\[data-dse-print="on"\]\)/);
 				// theme + print-guard + element attrs share ONE root node (pipeline.ts) —
@@ -1282,12 +1217,18 @@ describe('Steel material contract', () => {
 		});
 
 		it('leaves the TOP-LEVEL standalone card frameless — SC-102 part 2 is untouched', () => {
-			// The suppression pair must survive verbatim (the standalone ability card has no
-			// spine and no lane, matching the site's .sc-ability)…
-			exactRule("[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]::before");
-			exactRule("[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]");
+			// The standalone ability card has no spine and no lane (matching the site's
+			// .sc-ability): since SC-558 that is true for every card, so no rule may key the
+			// standalone root's `.dse-feature[data-dse-act]` for padding or a bar…
+			expect(
+				rules.filter(
+					(r) =>
+						r.selector.replace(/\s+/g, ' ').trim() ===
+						"[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]",
+				),
+			).toEqual([]);
 			// …and every SC-168 arm reaches ONLY nested cards.
-			for (const r of [frameRule(), lightRule(), laneRule(), barRule()]) {
+			for (const r of [frameRule(), lightRule()]) {
 				expect(r.selector).toContain('.dse-feature__nested > .dse-feature');
 			}
 		});
@@ -1296,32 +1237,17 @@ describe('Steel material contract', () => {
 		 * CAN-FAIL PROOF, in a real cascade rather than in rule text: feed jsdom the REAL
 		 * extracted rule bodies and assert a nested card under the standalone root computes
 		 * the frame's insets — and that WITHOUT the SC-168 arms the same DOM computes
-		 * padding-left 0 (the SC-102 suppression reaching the nested card) and no
-		 * padding-right at all. That flush state IS the shipped defect.
+		 * no padding-left and no padding-right at all. That flush state IS the shipped defect.
 		 */
 		describe('cascade proof (jsdom)', () => {
 			function computePadding(withFix: boolean): { left: string; right: string } {
 				const baseNested = rules.find(
 					(r) => r.selector.trim() === '.dse-feature__nested > .dse-feature',
 				)!;
-				const steelLane = rules.find(
-					(r) =>
-						r.selector.trim() === "[data-dse-theme='steel'] .dse-feature[data-dse-act]",
-				)!;
-				const suppression = rules.find(
-					(r) =>
-						r.selector.replace(/\s+/g, ' ').trim() ===
-						"[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]",
-				)!;
 				const style = document.createElement('style');
 				style.textContent =
 					`${baseNested.selector}{${baseNested.body}}` +
-					`${steelLane.selector}{${steelLane.body}}` +
-					`${suppression.selector}{${suppression.body}}` +
-					(withFix
-						? `${frameRule().selector}{${frameRule().body}}` +
-							`${laneRule().selector}{${laneRule().body}}`
-						: '');
+					(withFix ? `${frameRule().selector}{${frameRule().body}}` : '');
 				const root = document.createElement('div');
 				root.setAttribute('data-dse-theme', 'steel');
 				root.setAttribute('data-dse-element', 'feature');
@@ -1349,17 +1275,130 @@ describe('Steel material contract', () => {
 				}
 			}
 
-			it('with the fix, the nested card computes the lane + frame insets', () => {
+			it('with the fix, the nested card computes the frame insets', () => {
 				const { left, right } = computePadding(true);
-				expect(left).toBe('calc(3px + 0.85rem)');
+				expect(left).toBe('0.85rem');
 				expect(right).toBe('0.85rem');
 			});
 
 			it('without the fix, the same DOM computes flush insets (the shipped defect)', () => {
 				const { left, right } = computePadding(false);
-				expect(left).toMatch(/^0(px)?$/);
+				expect(['', '0', '0px']).toContain(left);
 				expect(['', '0', '0px']).toContain(right);
 			});
+		});
+	});
+
+	/**
+	 * SC-558 — no decorative coloured LEFT STRIPES (DESIGN.md rule 7). Scott's picks,
+	 * 2026-11-10: error card C (a 1px frame all round in the stage hue), featureblock
+	 * "Level N Advancement" C (a sunken well, 1px frame all round, screen only), power-roll
+	 * and montage tier rows A (stripe gone, wash and badge kept), action-type spine A (gone,
+	 * screen and print), the dead statblock role rule deleted, and Obsidian's own violet
+	 * `border-inline-start` on plugin blockquotes removed in print. These pins fail if any
+	 * stripe comes back, or if the two "C" surfaces lose their border all around.
+	 */
+	describe('no coloured left stripes (SC-558)', () => {
+		it('no rule paints a left border or edge from a hue token (tier, role, act, error stage)', () => {
+			const stripes = rules.filter((r) =>
+				/border-left(?:-color)?\s*:[^;]*var\(--(?:t|dse-role[\w-]*|dse-act[\w-]*|dse-tier[\w-]*|text-error|color-(?:orange|blue|red))\b/.test(
+					r.body,
+				),
+			);
+			expect(stripes.map((r) => r.selector.replace(/\s+/g, ' ').trim())).toEqual([]);
+		});
+
+		it('the error card is framed ALL ROUND in its stage hue (1px, 60% toward the hairline), gated for the floor engine', () => {
+			const base = rules.find((r) => !r.gated && r.selector.trim() === '.dse-error-card')!;
+			expect(base).toBeDefined();
+			expect(base.body).toMatch(/border-width:\s*1px\s*;/);
+			expect(base.body).toMatch(/border-style:\s*solid\s*;/);
+			expect(base.body).not.toMatch(/border-left/);
+			// static twin outside the gate (the floor engine keeps the neutral hairline)
+			expect(base.body).toMatch(/border-color:\s*var\(--background-modifier-border\)\s*;/);
+			// the enhancement: ONE border-color for all four sides, inside an @supports color-mix gate
+			const gated = rules.find((r) => r.gated && r.selector.trim() === '.dse-error-card')!;
+			expect(gated).toBeDefined();
+			expect(gated.body).toMatch(
+				/border-color:\s*color-mix\(in srgb, var\(--dse-ec\) 60%, var\(--background-modifier-border\)\)\s*;/,
+			);
+			// the stage re-points the hue alias, never a left edge
+			const stages = rules.filter((r) => /data-dse-error-stage="[a-z]+"\] > \.dse-error-card/.test(r.selector));
+			expect(stages.length).toBeGreaterThanOrEqual(2);
+			for (const r of stages) {
+				expect(r.body).toMatch(/--dse-ec:\s*var\(--color-(orange|blue)\)/);
+				expect(r.body).not.toMatch(/border/);
+			}
+			// the title ink follows the stage
+			const title = rules.find((r) => r.selector.trim() === '.dse-error-card-title')!;
+			expect(title.body).toMatch(/color:\s*var\(--dse-ec\)/);
+		});
+
+		it('the "Level N Advancement" group is a sunken WELL with a 1px frame all round, screen only; print has no rail and no indent', () => {
+			const WELL = "[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-fb__band--adv";
+			const norm = (x: string) => x.replace(/\s+/g, ' ').trim();
+			const well = rules.find((r) => norm(r.selector) === WELL)!;
+			expect(well).toBeDefined();
+			expect(well.body).toMatch(/border:\s*1px solid var\(--dse-metal-faint\)/);
+			expect(well.body).toMatch(/background:\s*var\(--dse-surface-sunken\)/);
+			expect(well.body).toMatch(/border-radius:\s*var\(--dse-radius\)/);
+			expect(well.body).not.toMatch(/border-left/);
+			// the strip is the well's head band
+			expect(rules.find((r) => norm(r.selector) === `${WELL} > .dse-fb__adv-head`)).toBeDefined();
+			// every rule that frames or fills the group carries the print guard…
+			const paints = rules.filter(
+				(r) =>
+					r.selector.includes('.dse-fb__band--adv') &&
+					/(^|[;\s])(border|background|border-radius)\s*:/.test(r.body),
+			);
+			expect(paints.length).toBeGreaterThan(0);
+			for (const r of paints) expect(r.selector).toMatch(/:not\(\[data-dse-print="on"\]\)/);
+			// …and the BASE rule (which reaches print) draws no rail and no indent
+			const base = rules.find((r) => r.selector.trim() === '.dse-fb__band--adv')!;
+			expect(base.body).not.toMatch(/border|padding-left/);
+		});
+
+		it('power-roll and montage tier rows keep their wash and badge but draw no left edge', () => {
+			const rows = rules.filter((r) => /\.dse-pr__row\b|\.dse-mt__tier-row\b/.test(r.selector));
+			expect(rows.length).toBeGreaterThan(4);
+			for (const r of rows) expect(r.body).not.toMatch(/border-left/);
+			// the wash survives on both (the gated enhancement carries the power-roll's color-mix)
+			const prWash = rules.filter(
+				(r) => r.selector.includes('.dse-pr__row') && /background-image:\s*linear-gradient\(90deg,/.test(r.body),
+			);
+			expect(prWash.length).toBeGreaterThanOrEqual(2); // static twin + gated enhancement
+			const mtWash = rules.find(
+				(r) => r.selector.trim() === '.dse-mt__tier-row' && /background-image:\s*linear-gradient\(90deg, var\(--tw\)/.test(r.body),
+			);
+			expect(mtWash).toBeDefined();
+			// the hairline between rows stays
+			expect(rules.find((r) => r.selector.trim() === '.dse-mt__tier-row')!.body).toMatch(
+				/border-top:\s*1px solid var\(--dse-metal-faint\)/,
+			);
+		});
+
+		it('the dead statblock role rule is gone (it never painted: the Steel .dse-sb border always won)', () => {
+			expect(rules.filter((r) => /^\.dse-sb\[data-dse-role\]$/.test(r.selector.trim()))).toEqual([]);
+		});
+
+		it('print strips Obsidian\'s violet blockquote edge for PLUGIN blockquotes only (twin and real print)', () => {
+			const ANCHOR = ':is([data-dse-element], .dse-modal)';
+			const edgeRules = rules.filter(
+				(r) => r.selector.includes('blockquote') && /border-inline-start/.test(r.body),
+			);
+			// the screen re-grounding (existing), the print twin, and the @media print arm
+			expect(edgeRules).toHaveLength(3);
+			for (const r of edgeRules) {
+				// never reaches Obsidian's own quotes outside a DSE root or modal
+				expect(r.selector.replace(/\s+/g, ' ').trim().startsWith(ANCHOR)).toBe(true);
+				expect(r.body).toMatch(/border-inline-start:\s*none\s*;/);
+			}
+			const twin = edgeRules.filter((r) => r.selector.includes('[data-dse-print="on"]') && !r.selector.includes(':not('));
+			expect(twin).toHaveLength(1);
+			expect(twin[0].body).not.toMatch(/padding|margin/); // border only: print layout keeps its other bytes
+			const printArm = edgeRules.filter((r) => !r.selector.includes('[data-dse-print'));
+			expect(printArm).toHaveLength(1);
+			expect(css).toMatch(/@media print\s*\{\s*:is\(\[data-dse-element\], \.dse-modal\):is\(\[data-dse-element\], \.dse-modal\) :where\(blockquote\)/);
 		});
 	});
 

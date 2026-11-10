@@ -185,7 +185,7 @@ const STEEL_DARK: Record<string, string> = {
 	'role-hexer': 'var(--sc-role-hexer, #5cc98a)',
 	'role-defender': 'var(--sc-role-defender, #c7a173)',
 	'role-leader': 'var(--sc-role-leader, #9aa2a8)',
-	// action-type spines (--sc-ability-* slots)
+	// action-type hues (--sc-ability-* slots; the crest glyph tints from them)
 	// SC-10 realignment: the site's CANONICAL --sc-act-* action-type tokens
 	// (steel-ability-cards.css), not the --sc-ability-* classification hues.
 	'act-main': 'var(--sc-act-main, #e74c3c)',
@@ -386,7 +386,7 @@ const STEEL_LIGHT: Record<string, string> = {
 	'tier-high': '#1e8449',
 	// stamina bar track
 	'stamina-track': '#eaeeef',
-	// action-type spines (darkened light-column hues)
+	// action-type hues (darkened light-column hues)
 	// SC-10 realignment: the site's light --sc-act-* values.
 	'act-main': '#c0392b',
 	'act-maneuver': '#2874a6',
@@ -439,7 +439,7 @@ const STEEL_LIGHT_STABLE = [
 	'role-ambusher', 'role-harrier', 'role-artillery', 'role-brute', 'role-controller',
 	'role-hexer', 'role-mount', 'role-support', 'role-defender', 'role-leader',
 	'role-solo', 'role-minion',
-	// SC-102: the seventh act spine is the one act token that does NOT shift for
+	// SC-102: the seventh act hue is the one act token that does NOT shift for
 	// light — the act family's light column is a verbatim copy of the site's light
 	// --sc-act-* values, and the site has no light villain value to copy: its
 	// villain red is the scheme-invariant literal #e0584b, the same hue (and the
@@ -448,8 +448,8 @@ const STEEL_LIGHT_STABLE = [
 	// SC-196: the eleven stamina/encounter/crit/select hues that USED to sit on this
 	// list are ALL light-overridden now — see STEEL_LIGHT above. Nothing from the old
 	// "fills, no contrast pressure" group survives here; the role hues and act-villain
-	// remain because the site locks them scheme-invariant and they are spine/crest
-	// ornament that never states a fact by colour alone.
+	// remain because the site locks them scheme-invariant and they are crest/head-band
+	// tint that never states a fact by colour alone.
 	// geometry / typography carried from dark (radius, crest-shape, the SC-105
 	// font slots …)
 	'radius', 'crest-shape', 'hairline-fade',

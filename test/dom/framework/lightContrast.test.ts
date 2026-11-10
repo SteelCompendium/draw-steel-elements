@@ -160,7 +160,10 @@ const PINS: Pin[] = [
 		opacity: 1,
 		threshold: 3.0,
 		measured: 7.57,
-		surface: ".dse-pr__row[data-tier='crit'] spine — negotiation",
+		// SC-558: the row's 3px left spine is gone (Scott's pick A); the crit tier's non-text
+		// mark is now its badge FRAME (`.dse-pr__badge--crit::before`, filled with the same
+		// token), sitting on the same row ground the spine used to be sampled on.
+		surface: ".dse-pr__badge--crit frame, on the crit row — negotiation",
 		wasDark: '#e0b050',
 	},
 	{
@@ -275,7 +278,7 @@ const FILL_INK = [
 /**
  * INTER-TOKEN separation. Round 1 solved every token against its own ground in isolation
  * and three families of CO-LOCATED tokens collapsed into each other as a result — the
- * four tier spines came within 1.5:1, and `vp`/`warn` (which paint the same element
+ * four tier marks (badge frames; row spines before SC-558) came within 1.5:1, and `vp`/`warn` (which paint the same element
  * class) within 1.02:1. Meaning survived, because each of those surfaces also carries a
  * word, but the colour channel that told them apart did not, and lightness is the channel
  * that survives for a colourblind reader. These pins are the constraint round 1 lacked.
@@ -286,7 +289,7 @@ const SEPARATION: { a: string; b: string; min: number; measured: number; why: st
 		b: 'tier-mid',
 		min: 1.6,
 		measured: 2.36,
-		why: 'four tier spines stack in one power-roll panel; crit must read as the exceptional row',
+		why: 'four tier badges stack in one power-roll panel; crit must read as the exceptional row',
 	},
 	{ a: 'tier-crit', b: 'tier-low', min: 1.5, measured: 1.6, why: 'same stack' },
 	{ a: 'tier-crit', b: 'tier-high', min: 1.5, measured: 1.84, why: 'same stack' },
@@ -390,7 +393,7 @@ describe('SC-196: the Steel LIGHT state palette clears WCAG on its measured grou
 	test('the light tier wash twin exists for ALL FOUR tiers, crit included (SC-196)', () => {
 		// `--tw` is the static, pre-`color-mix()` twin of each tier row's 8% wash. crit
 		// had no light twin because crit had no light value; now it has both, and the
-		// twin must carry crit's LIGHT rgb or the wash and the spine disagree.
+		// twin must carry crit's LIGHT rgb or the wash and the badge frame disagree.
 		const crit = hexToRgb(lightValue('tier-crit'));
 		const want = `rgba(${crit[0]}, ${crit[1]}, ${crit[2]}, 0.08)`;
 		const m = sheet.match(
