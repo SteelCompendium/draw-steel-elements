@@ -28,8 +28,12 @@ import { FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main';
 import staminaBarManifest from '../../e2e/manifest/stamina-bar';
 import modalManifest from '../../e2e/manifest/stamina-edit-modal';
 import conditionsManifest from '../../e2e/manifest/conditions-modal';
+import poolManifest from '../../e2e/manifest/minion-pool-modal';
 import initiativeManifest from '../../e2e/manifest/initiative';
 import { ResetEncounterModal } from '../../src/views/ResetEncounterModal';
+import { MinionStaminaPoolModal } from '../../src/views/MinionStaminaPoolModal';
+import { parseEncounterData } from '../../src/drawSteelAdmonition/EncounterData';
+import squadYaml from '../fixtures/initiative/squad.yaml';
 import chromeManifest from '../../e2e/manifest/chrome';
 import { idsOf } from '../../e2e/manifest/surface';
 
@@ -56,6 +60,7 @@ function censusProblems(scope: Element, allowed: ReadonlySet<string>, interactiv
 const chromeIds = idsOf(chromeManifest);
 const barIds = new Set([...idsOf(staminaBarManifest), ...chromeIds]);
 const modalIds = new Set(idsOf(modalManifest));
+const poolIds = new Set(idsOf(poolManifest));
 
 function makeHost(language: string, sourcePath: string) {
 	const replaceSource = jest.fn(async (_s: string) => true);
@@ -233,5 +238,44 @@ describe('SC-408 census: initiative stamina entry points', () => {
 		expect(confirm.getAttribute('data-dse-control')).toBe('init.reset-encounter.confirm');
 		const declared = new Set(idsOf(initiativeManifest));
 		for (const id of ['init.hero.turn', 'init.reset-encounter', 'init.reset-encounter.confirm']) expect(declared.has(id)).toBe(true);
+	});
+});
+
+describe('SC-435 census: the MinionStaminaPoolModal', () => {
+	/** The pool modal over the 5-goblin squad fixture (minion #1 dead, #2 grabbed, so every control kind exists). */
+	async function openPool(): Promise<HTMLElement> {
+		const app = new App();
+		const data = await parseEncounterData(squadYaml, app as any, DEFAULT_SETTINGS);
+		const group = data.enemy_groups[0];
+		const minion = group.creatures[0];
+		minion.instances![0].isDead = true;
+		minion.instances![1].conditions = [{ key: 'grabbed' }];
+		const modal = new MinionStaminaPoolModal(app as any, group, minion, jest.fn());
+		modal.open();
+		return (modal as any).contentEl as HTMLElement;
+	}
+
+	test('every control (stepper, Apply Damage row, kill boxes + names, condition icon, footer) is identified and in the manifest', async () => {
+		const content = await openPool();
+		expect(censusProblems(content, poolIds)).toEqual([]);
+		for (const id of [
+			'pool.stamina.dec', 'pool.stamina.input', 'pool.stamina.inc',
+			'pool.damage-amount', 'pool.minion-count', 'pool.apply-damage',
+			'pool.kill', 'pool.minion-name', 'pool.condition',
+			'pool.reset', 'pool.apply',
+		]) {
+			expect(content.querySelector(`[data-dse-control="${id}"]`)).not.toBeNull();
+		}
+	});
+
+	test('the kill checkbox and name label repeat once per LIVING minion (the dead one has no row)', async () => {
+		const content = await openPool();
+		expect(content.querySelectorAll('[data-dse-control="pool.kill"]')).toHaveLength(4);
+		expect(content.querySelectorAll('[data-dse-control="pool.minion-name"]')).toHaveLength(4);
+		expect(content.querySelectorAll('[data-dse-control="pool.condition"]')).toHaveLength(1);
+	});
+
+	test('the three initiative entry points are declared by the manifest as reach rows', () => {
+		expect(poolManifest.reach.map((r) => r.control).sort()).toEqual(['init.cell.stamina', 'init.detail.bar', 'init.detail.stamina']);
 	});
 });

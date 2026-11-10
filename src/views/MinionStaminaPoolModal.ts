@@ -27,7 +27,7 @@ import { Creature, CreatureInstance, EnemyGroup, Condition } from '@drawSteelAdm
 import { foldedCaptainStaminaBonus, minionPoolMaxOf, minionPoolOf, setMinionPool } from '@drawSteelAdmonition/EncounterData';
 import { ConditionManager } from '@utils/Conditions';
 import { applyConditionColor, applyConditionEffect } from '@/elements/conditionColor';
-import { DseModal, iconButton } from '@/framework/kit';
+import { DseModal, iconButton, stampControl } from '@/framework/kit';
 import type { IconButtonHandle, StepperHandle } from '@/framework/kit';
 import { readAmount, staminaPreviewBar, staminaStepperRow, setButtonText } from './StaminaEditModal';
 import type { StaminaPreviewBarHandle } from './StaminaEditModal';
@@ -123,6 +123,7 @@ export class MinionStaminaPoolModal extends DseModal {
 				min: 0,
 				max: poolMaxStamina,
 				label: 'Stamina pool',
+				control: 'pool.stamina', // SC-435: pool.stamina.dec / .input / .inc
 				displayMax: poolMaxStamina,
 				onChange: (value) => {
 					this.pendingStaminaChange = value - poolCurrentStamina;
@@ -150,6 +151,7 @@ export class MinionStaminaPoolModal extends DseModal {
 		this.damageInput = damageInput;
 		damageInput.value = '0';
 		damageInput.setAttribute('aria-label', 'Damage per minion');
+		stampControl(damageInput, 'pool.damage-amount'); // SC-435
 		// SC-241: the Apply box is a MAGNITUDE, not a signed delta — `min="0"` mirrors
 		// the exact idiom SC-133 RC-3 already uses for StaminaEditModal's Apply box.
 		damageInput.setAttribute('min', '0');
@@ -166,6 +168,7 @@ export class MinionStaminaPoolModal extends DseModal {
 			this.creature.instances?.filter((inst) => !inst.isDead).length.toString() ?? '';
 		minionCountInput.min = '0';
 		minionCountInput.setAttribute('aria-label', 'Number of minions hit');
+		stampControl(minionCountInput, 'pool.minion-count'); // SC-435
 		applyRow.createSpan({ text: 'minions' });
 
 		iconButton(
@@ -174,6 +177,7 @@ export class MinionStaminaPoolModal extends DseModal {
 				icon: 'sword',
 				label: 'Apply Damage',
 				text: 'Apply Damage',
+				control: 'pool.apply-damage', // SC-435
 				onClick: () => {
 					// SC-427: readAmount (Number + trunc), not parseInt — a number input may hold
 					// "1e3" (= 1000), which parseInt read as 1.
@@ -214,6 +218,7 @@ export class MinionStaminaPoolModal extends DseModal {
 			// crimson, evicted — SC-5).
 			const checkbox = minionRow.createEl('input', { type: 'checkbox', cls: 'dse-minion__check' });
 			checkbox.setAttribute('aria-label', `Kill ${this.creature.name} #${instance.id}`);
+			stampControl(checkbox, 'pool.kill'); // SC-435 (one per living minion: nth)
 			const entry = { instance, checkbox, auto: false };
 			this.lifecycle.registerDomEvent(checkbox, 'change', () => {
 				entry.auto = false; // a hand toggle always makes the box the user's own (SC-429)
@@ -226,6 +231,7 @@ export class MinionStaminaPoolModal extends DseModal {
 				text: `${this.creature.name} #${instance.id}`,
 				cls: 'dse-minion__name',
 			});
+			stampControl(minionName, 'pool.minion-name'); // SC-435 (a click toggles the checkbox)
 			// Toggle the checkbox when clicking the minion's name (legacy affordance).
 			this.lifecycle.registerDomEvent(minionName, 'click', () => {
 				if (!checkbox.disabled) {
@@ -246,6 +252,7 @@ export class MinionStaminaPoolModal extends DseModal {
 				icon: 'undo',
 				label: 'Reset',
 				text: 'Reset',
+				control: 'pool.reset', // SC-435
 				onClick: () => {
 					this.pendingStaminaChange = 0;
 					damageInput.value = '0';
@@ -262,6 +269,7 @@ export class MinionStaminaPoolModal extends DseModal {
 			{
 				label: 'No Stamina Change',
 				text: 'No Stamina Change',
+				control: 'pool.apply', // SC-435
 				variant: 'accent',
 				disabled: true,
 				onClick: () => {
@@ -548,6 +556,7 @@ export class MinionStaminaPoolModal extends DseModal {
 				const iconEl = container.createDiv({ cls: 'condition-icon' });
 				setIcon(iconEl, conditionData?.icon?.trim() || condition.iconName);
 				iconEl.title = condition.displayName;
+				stampControl(iconEl, 'pool.condition'); // SC-435 (a click removes the condition)
 
 				// Apply color and effect customizations through the SHARED Task 8
 				// helpers (SC-5/SD-2): the user-supplied color rides the sanctioned
