@@ -106,7 +106,7 @@ describe('conditions-modal: tickets that reach it from outside', () => {
 	knownBug('SC-580', '[COND-N07] typing a letter with focus on "+ Add condition" opens the dropdown, as the docs say ("or just start typing")', async () => {
 		const { modal } = await openConditionsModal(TRACKER, 'hero');
 		await expect(modal.control('cond.add')).toBeFocused();
-		await dse.press('d', modal.control('cond.add'));
+		await dse.press('d'); // a page-level key (focus is asserted above): not a manifest pair, since no control is meant to handle it yet
 		await expect(modal.control('cond.input')).toBeExisting();
 		await dse.closeModals();
 	}, { failsWith: /cond\.input.*to be existing/s });
