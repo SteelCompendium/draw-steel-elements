@@ -255,29 +255,31 @@ and the tear-down/re-render path are gone.
   surface inside a Steel card: reach for the token, and only hardcode a literal when the
   site measurably uses a different step of its ladder.
 
-### The action spine: a nested-card frame, not a standalone ornament (plan 25 / SC-101–103)
+### The action-type accent: crest glyph + usage text, no spine; the nested-card frame stays (SC-558; was plan 25 / SC-101–103)
 
-The Steel action-type accent (the coloured left bar on an ability/feature card, keyed off
-`[data-dse-act]`) had drifted from the site's actual rule for years — read this before
-touching `.dse-feature[data-dse-act]`, `renderFeature.ts`'s `actionTypeOf`, or the statblock/
-featureblock head band. **The rule the site actually draws:** the spine is not a standalone
-card ornament, it is the left edge of a per-option **card** inside a nested feature list, and
-the site paints the *identical* declaration in two sheets and *nothing* in the third:
+The plugin used to draw a coloured 3px left bar on every ability/feature card, keyed off
+`[data-dse-act]`. **SC-558 (Scott's pick A, 2026-11-10) removed it everywhere, screen and print**,
+together with its padding lane, its rounded-end rules, the standalone suppression, the flat-mode
+hides and the print `print-color-adjust` arms (the same ticket removed the tier-row, montage-strip,
+featureblock-advancement, error-card and dead statblock-role stripes; DESIGN.md rule 7). The action
+type is now carried by the crest glyph's silhouette (`crestIconFor`) and the usage text. **Kept:**
+`data-dse-act` and the `--dse-act` alias (the crest glyph tints from them), and the nested-card
+**frame** the bar used to be the left edge of. Read this before touching `.dse-feature[data-dse-act]`,
+`renderFeature.ts`'s `actionTypeOf`, or the statblock/featureblock head band. The frame the site
+draws, and the plugin's mirror of it:
 
-| context | selector (site) | selector (plugin, Steel) | spine? |
+| context | selector (site) | selector (plugin, Steel) | frame? |
 |---|---|---|---|
-| standalone ability/feature card | `.sc-ability` (no `border-left` anywhere; `--act` only tints the crest + eyebrow) | `[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]` | **no** — bar `display: none`, lane collapsed to 0 |
-| nested in a statblock or featureblock list | `[data-sb-featstyle="card"] .sb__feat` / `[data-fb-featstyle="card"] .fb__feat` (byte-identical recipe in both sheets) | `[data-dse-theme='steel'] :is(.dse-sb, .dse-fb) .dse-feature__nested > .dse-feature` (ONE shared rule, not a per-family fork) | **yes** — a full per-option card (fill, `9px` radius, real list `gap`) with the bar as its rounded left edge |
-| kit / display-card family (`CardLayout`'s `.dse-card`) | — | untouched by either rule above (anchored on `.dse-sb`/`.dse-fb`/`[data-dse-element='feature']`, none of which `.dse-card` carries) | unchanged (plain bar, no frame) — verified structurally, not assumed, and pinned by `kit--steel-print.png` staying in the freeze OK set |
+| standalone ability/feature card | `.sc-ability` (no `border-left` anywhere; `--act` only tints the crest + eyebrow) | `[data-dse-theme='steel'][data-dse-element='feature']` (top-level card; its NESTED cards get a screen-only arm, SC-168) | top-level card: no frame |
+| nested in a statblock or featureblock list | `[data-sb-featstyle="card"] .sb__feat` / `[data-fb-featstyle="card"] .fb__feat` (byte-identical recipe in both sheets; the site still draws its `border-left` there, SC-564) | `[data-dse-theme='steel'] :is(.dse-sb, .dse-fb) .dse-feature__nested > .dse-feature` (ONE shared rule, not a per-family fork) | a full per-option card (fill, `9px` radius, real list `gap`, `.85rem` left padding) |
+| kit / display-card family (`CardLayout`'s `.dse-card`) | — | untouched by the rules above (anchored on `.dse-sb`/`.dse-fb`/`[data-dse-element='feature']`, none of which `.dse-card` carries) | unchanged (no frame) — verified structurally, and pinned by `kit--steel-print.png` staying in the freeze OK set |
 
-Both rules are **structure tier** (`[data-dse-theme='steel']`, no print exclusion — "print
-follows structure"; only the nested card's *fill* is `:not([data-dse-print="on"])`, matching
-the site's own `@media print` which keeps the border/radius/padding and drops only the
-background). The fail-safe: the **frame** keys on `.dse-feature`, the **bar** keys on
-`[data-dse-act]`, so an option whose action type doesn't map still gets a card, just with no
-coloured edge — matching the site, which always frames and lets `--act` fall back. Full
-selectors, fixture-shaped fill values and the flat-mode interaction: `styles-source.css`
-`~3408–3610` (inline comments there are the authoritative reference, this section is the map).
+The frame is **structure tier** (`[data-dse-theme='steel']`, no print exclusion — "print follows
+structure"; only the nested card's *fill* is `:not([data-dse-print="on"])`, matching the site's own
+`@media print` which keeps the radius/padding and drops only the background). The fail-safe: the
+frame keys on `.dse-feature`, never on `[data-dse-act]`, so an option whose action type doesn't map
+still gets its card. Full selectors, fixture-shaped fill values and the flat-mode interaction:
+`styles-source.css` (inline comments there are the authoritative reference, this section is the map).
 
 **A future contributor's most likely mistake:** styling only the featureblock (or only the
 statblock) when a new nested-card concern comes up. Don't — it's one mechanism for both

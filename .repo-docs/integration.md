@@ -80,7 +80,7 @@ mountBase`). 84 rules in `styles-source.css` require `[data-dse-element='statblo
 |'feature'|'featureblock']`, and every SC-123/SC-146 preference selector pairs a
 `data-dse-*` pref attribute WITH that element id — so without the re-stamp a statblock
 rendered through `ds-scc` matched none of them (no block rhythm, every pref a no-op) and a
-feature regained plan 25's removed action spine. The error/notice paths keep the block's
+feature lost its standalone card plate. The error/notice paths keep the block's
 own `scc` id. `test/dom/elements/sccStyleParity.test.ts` pins this by parsing the real
 stylesheet: the set of element-scoped selectors matching a `ds-scc` render must equal the
 set matching the same code through the typed element.
