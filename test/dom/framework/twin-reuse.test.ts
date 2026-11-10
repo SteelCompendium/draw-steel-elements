@@ -1139,6 +1139,23 @@ describe('SC-552: a block edit form (and, wide, a card click) on one of several 
 		expect(t.app.vault.getContent('Note.md')).toBe(outside);
 	});
 
+	test('SC-556: the form\'s Save pressed again within 5 s (twice more) shows the Notice every time: exactly one per Save, none of the form\'s own, the form stays open', async () => {
+		const t = await start(3);
+		const form = openForm(t.old[1].el);
+		rename(form(), 'Edited');
+		const outside = noteOf(counter('Twin', 5), counter('Twin', 9), counter('Twin', 5));
+		t.app.vault.setFile('Note.md', outside);
+		const { plan, discarded } = planFor([5, 5, 5], t.values(), t.old);
+		await t.rebuild(plan, discarded);
+
+		for (let n = 1; n <= 3; n++) {
+			await form().save();
+			expect(Notice.notices).toEqual(Array<string>(n).fill(droppedWriteMessage('Note')));
+		}
+		expect(t.app.vault.getContent('Note.md')).toBe(outside);
+		expect(isOpen(form())).toBe(true);
+	});
+
 	test('SC-556 control: a twin ABOVE the form\'s block deleted from outside: Save still writes the form\'s own block, and the text around it and the twins survive byte for byte', async () => {
 		const before = noteOf(counter('Twin', 5), 'one', counter('Twin', 5), 'two', counter('Twin', 5), 'three');
 		const t = await setup(before);

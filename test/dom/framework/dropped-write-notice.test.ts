@@ -39,6 +39,18 @@ describe('SC-343: dropped-write Notice', () => {
 		expect(warn).toHaveBeenCalledTimes(2);
 	});
 
+	test('SC-556 force: a user\'s own Save inside the 5 s still shows its Notice (dropped and unsavable), and restarts the note\'s clock', () => {
+		notifyDroppedWrite('A.md', 'A', 1_000);
+		expect(notifyDroppedWrite('A.md', 'A', 1_001, true)).toBe(true);
+		expect(Notice.notices).toHaveLength(2);
+		expect(notifyDroppedWrite('A.md', 'A', 1_002)).toBe(false); // a card write right behind the Save: folded into it
+		expect(notifyDroppedWrite('A.md', 'A', 1_001 + DROPPED_WRITE_NOTICE_INTERVAL_MS)).toBe(true);
+
+		notifyUnsavableWrite('B.md', 'B', false, 1_000);
+		expect(notifyUnsavableWrite('B.md', 'B', false, 1_001)).toBe(false);
+		expect(notifyUnsavableWrite('B.md', 'B', false, 1_002, true)).toBe(true);
+	});
+
 	test('a miss on the same note at exactly 5 s later shows a new Notice', () => {
 		notifyDroppedWrite('A.md', 'A', 1_000);
 		expect(notifyDroppedWrite('A.md', 'A', 1_000 + DROPPED_WRITE_NOTICE_INTERVAL_MS)).toBe(true);

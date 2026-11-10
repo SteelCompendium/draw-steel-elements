@@ -778,7 +778,7 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * (`mapLine`), accepted only when a fence of this host's language opens there and holds the body this host knows. A closed fence,
 	 * or the note's trailing fence that never closes (the same rule as `locateUnterminatedTrailingFence`, which `locateByBody` also
 	 * considers). Null when the line was changed or removed or no such block is there. No search by body: identical twins cannot be told
-	 * apart that way (SC-480), the position is what tells them apart. A pin is also refused when more than `LINE_MAP_MAX_EDITS` lines changed on both sides of the block (see lineMap.ts: for a block edit form's Save, which is pin-only, that is a Save that cannot succeed).
+	 * apart that way (SC-480), the position is what tells them apart. Known limit: deleting one of several identical blocks that have identical surroundings cannot be told apart by a line diff (the note is the same whichever one was deleted), so a pin on a surviving twin still places. A pin is also refused when more than `LINE_MAP_MAX_EDITS` lines changed on both sides of the block (see lineMap.ts: for a block edit form's Save, which is pin-only, that is a Save that cannot succeed).
 	 */
 	private pinnedTarget(content: string, pin: BlockPin): { lineStart: number; lineEnd: number } | null {
 		const line = mapLine(pin.text, content, pin.lineStart);
@@ -810,7 +810,7 @@ export class ReadingModeBlockHost implements BlockHost {
 		if (!(abstractFile instanceof TFile)) {
 			// SC-455: the note is gone (deleted / renamed mid-write): never a silent false.
 			const name = this.ctx.sourcePath.split('/').pop()?.replace(/\.md$/, '') ?? this.ctx.sourcePath;
-			notifyUnsavableWrite(this.ctx.sourcePath, name);
+			notifyUnsavableWrite(this.ctx.sourcePath, name, false, Date.now(), options?.fromView !== true);
 			this.reported = true;
 			return false;
 		}
@@ -916,8 +916,11 @@ export class ReadingModeBlockHost implements BlockHost {
 				this.registry.dropTicket(this.entry, ticket);
 			}
 		}
-		if (dropped) notifyDroppedWrite(this.ctx.sourcePath, abstractFile.basename);
-		if (unplaceable) notifyUnsavableWrite(this.ctx.sourcePath, abstractFile.basename, listShape);
+		// SC-556: only the view's own (card) write is rate limited; a form's Save always says why it wrote nothing - exactly one
+		// Notice, and `reported` tells the form not to add its own.
+		const userSave = options?.fromView !== true;
+		if (dropped) notifyDroppedWrite(this.ctx.sourcePath, abstractFile.basename, Date.now(), userSave);
+		if (unplaceable) notifyUnsavableWrite(this.ctx.sourcePath, abstractFile.basename, listShape, Date.now(), userSave);
 		this.reported = dropped || unplaceable;
 		return wrote;
 	}

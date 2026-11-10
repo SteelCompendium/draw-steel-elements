@@ -30,13 +30,18 @@ const lastUnsavableAt = new Map<string, number>();
 /**
  * Report one dropped write. Always warns; shows the Notice unless one was shown for the same
  * note less than DROPPED_WRITE_NOTICE_INTERVAL_MS ago. Returns whether a Notice was shown.
+ *
+ * SC-556 `force`: a user's own Save (the block edit form) is never rate limited. The limit exists to fold a burst of card
+ * writes into one message; a form Save that writes nothing and says nothing (a second Save within 5 s, or one right after a
+ * card write on the note was dropped) would leave the user with an open form and no explanation. A forced Notice also
+ * restarts the note's clock, so the card writes right behind it do not repeat the message.
  */
-export function notifyDroppedWrite(sourcePath: string, noteName: string, now: number = Date.now()): boolean {
+export function notifyDroppedWrite(sourcePath: string, noteName: string, now: number = Date.now(), force = false): boolean {
 	console.warn(
 		`Draw Steel Elements: dropped a write to ${sourcePath} — the block was not found by its last known body.`,
 	);
 	const previous = lastShownAt.get(sourcePath);
-	if (previous !== undefined && now - previous < DROPPED_WRITE_NOTICE_INTERVAL_MS) return false;
+	if (!force && previous !== undefined && now - previous < DROPPED_WRITE_NOTICE_INTERVAL_MS) return false;
 	lastShownAt.set(sourcePath, now);
 	new Notice(droppedWriteMessage(noteName));
 	return true;
@@ -45,12 +50,18 @@ export function notifyDroppedWrite(sourcePath: string, noteName: string, now: nu
 /**
  * SC-455: report one write that could not be placed at all (the block's position cannot be worked
  * out, or its shape is not supported). Always warns; shows the Notice unless one was shown for the same
- * note less than DROPPED_WRITE_NOTICE_INTERVAL_MS ago. Returns whether a Notice was shown.
+ * note less than DROPPED_WRITE_NOTICE_INTERVAL_MS ago (`force`: SC-556, as for `notifyDroppedWrite`). Returns whether a Notice was shown.
  */
-export function notifyUnsavableWrite(sourcePath: string, noteName: string, listShape = false, now: number = Date.now()): boolean {
+export function notifyUnsavableWrite(
+	sourcePath: string,
+	noteName: string,
+	listShape = false,
+	now: number = Date.now(),
+	force = false,
+): boolean {
 	console.warn(`Draw Steel Elements: could not save a write to ${sourcePath} — the block's location is not one the plugin can edit.`);
 	const previous = lastUnsavableAt.get(sourcePath);
-	if (previous !== undefined && now - previous < DROPPED_WRITE_NOTICE_INTERVAL_MS) return false;
+	if (!force && previous !== undefined && now - previous < DROPPED_WRITE_NOTICE_INTERVAL_MS) return false;
 	lastUnsavableAt.set(sourcePath, now);
 	new Notice(unsavableWriteMessage(noteName, listShape));
 	return true;

@@ -18,7 +18,9 @@ export const LINE_MAP_MAX_EDITS = 400;
 /**
  * The line of `after` that is line `line` of `before`, by a minimal line diff (the common head and tail lines first, a Myers diff
  * over what is left between them). Lines are numbered the way Obsidian numbers them (`splitLines`). Null when that line was changed
- * or removed, when `line` is not a line of `before`, or when the notes differ by more than LINE_MAP_MAX_EDITS lines.
+ * or removed, when `line` is not a line of `before`, or when the notes differ by more than LINE_MAP_MAX_EDITS lines. Known limit (SC-556):
+ * deleting one of several identical blocks that have identical surroundings cannot be told apart by a line diff, and the note that is
+ * left is the same whichever one was deleted, so a form on a surviving twin can still place its pin.
  */
 export function mapLine(before: string, after: string, line: number): number | null {
 	if (before === after) return line;

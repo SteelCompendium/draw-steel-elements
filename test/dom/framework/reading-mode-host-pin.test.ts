@@ -270,6 +270,70 @@ describe('SC-552: a view\'s own write is placed through the pin its round\'s fir
 	});
 });
 
+// SC-556: a form's Save that writes nothing always says why. The dropped-write Notice is rate limited to one per note per 5 s so that a
+// burst of card writes is one message; a form Save is the user's own act and is never folded into that limit.
+describe('SC-556: a dropped form Save is never silent (the rate limit is for card writes)', () => {
+	let warn: jest.SpyInstance;
+	beforeEach(() => {
+		resetDroppedWriteNotices();
+		Notice.notices.length = 0;
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => warn.mockRestore());
+
+	/** Three twins, the host on the middle one, its block then edited from outside: both a form Save (pinned) and a card write cannot land. */
+	function edited() {
+		const app = new App();
+		const text = noteOf([5, 5, 5]);
+		app.vault.setFile('Note.md', text);
+		const section: Section = { current: sectionAt(text, fencesOf(text)[1]) };
+		const host = new ReadingModeBlockHost(new Plugin(app) as never, document.createElement('div'), switchableCtx(section) as never, 'ds-counter');
+		host.setMountedBody(bodyOf(5));
+		const pin = host.pinPosition()!;
+		const after = noteOf([9, 9, 9]); // no block holds the body the host knows any more
+		app.vault.setFile('Note.md', after);
+		section.current = sectionAt(after, fencesOf(after)[1]);
+		return { app, host, pin, after };
+	}
+	const save = (host: ReadingModeBlockHost, pin: { text: string; lineStart: number }) => host.replaceSource(bodyOf(5, 'Edited'), { pin, pinOnly: true });
+
+	test('two dropped form Saves within 5 s each show the Notice, one per Save, and the note is untouched', async () => {
+		const { app, host, pin, after } = edited();
+		expect(await save(host, pin)).toBe(false);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		expect(host.lastWriteReported).toBe(true); // the form adds none of its own
+
+		expect(await save(host, pin)).toBe(false);
+		expect(await save(host, pin)).toBe(false);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note'), droppedWriteMessage('Note'), droppedWriteMessage('Note')]);
+		expect(app.vault.getContent('Note.md')).toBe(after);
+	});
+
+	test('a dropped card write, then a dropped form Save within 5 s: the Save still gets its Notice', async () => {
+		const { host, pin } = edited();
+		expect(await host.replaceSource(bodyOf(6), { fromView: true })).toBe(false);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]); // the card write's own
+
+		expect(await save(host, pin)).toBe(false);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note'), droppedWriteMessage('Note')]);
+		expect(host.lastWriteReported).toBe(true);
+	});
+
+	test('card writes keep the rate limit: a burst of dropped card writes is one Notice', async () => {
+		const { host } = edited();
+		for (let i = 0; i < 3; i++) expect(await host.replaceSource(bodyOf(6 + i), { fromView: true })).toBe(false);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		expect(host.lastWriteReported).toBe(true);
+	});
+
+	test('a form Save restarts the clock: the card writes right behind it do not repeat the message', async () => {
+		const { host, pin } = edited();
+		expect(await save(host, pin)).toBe(false);
+		expect(await host.replaceSource(bodyOf(6), { fromView: true })).toBe(false);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+	});
+});
+
 // SC-552 (K): what the Reading-view host offers a block edit form that wants to outlive its view.
 describe('SC-552: ReadingModeBlockHost.keepFormOpenOn', () => {
 	function hostWithRegistry() {

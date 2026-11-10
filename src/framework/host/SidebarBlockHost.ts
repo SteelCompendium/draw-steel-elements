@@ -369,7 +369,7 @@ export class SidebarBlockHost implements BlockHost {
 		// SC-455: a write that could not land is never silent — the same "not saved" Notice the
 		// reading-mode host shows when its block changed on disk first.
 		if (lost) {
-			notifyDroppedWrite(this.backingFile.path, this.backingFile.basename);
+			notifyDroppedWrite(this.backingFile.path, this.backingFile.basename, Date.now(), options?.fromView !== true); // SC-556: a form's Save is never rate limited
 			this.reported = true;
 		}
 		return wrote;

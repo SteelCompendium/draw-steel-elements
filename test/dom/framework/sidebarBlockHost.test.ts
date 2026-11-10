@@ -706,6 +706,30 @@ describe('SC-455: SidebarBlockHost on a block inside a blockquote / callout', ()
 		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
 	});
 
+	test('SC-556: a form Save (not the view\'s own write) whose block has vanished is not rate limited behind a card write\'s Notice; the view\'s own writes still are', async () => {
+		const note = ['> [!note]', ...under('> ', block(1))].join('\n');
+		const { vault, host } = await mounted(note);
+		const vanish = (): void => vault.setText('Note.md', '> [!note]\n> the block was deleted'); // the host's cache has not seen it yet
+		const restore = async (): Promise<void> => {
+			vault.setText('Note.md', note);
+			vault.emit('modify', fakeTFile('Note.md'));
+			await flushAsync();
+		};
+
+		vanish();
+		await host.replaceSource(BODY(2), { fromView: true });
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		await restore();
+		vanish();
+		await host.replaceSource(BODY(3), { fromView: true }); // another card write within 5 s: folded into the first message
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		await restore();
+		vanish();
+		await host.replaceSource(BODY(4)); // the form's Save: its own message
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note'), droppedWriteMessage('Note')]);
+		expect(host.lastWriteReported).toBe(true);
+	});
+
 	test('an identical-content write is a no-op without a Notice', async () => {
 		const note = ['> [!note]', ...under('> ', block(1))].join('\n');
 		const { vault, host } = await mounted(note);
