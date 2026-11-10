@@ -161,6 +161,12 @@
 // maps that line through whatever was written since; a form whose view Obsidian threw away stays open (and then saves strictly); SC-549 (wide): a card's own + is pinned at its first click. SC-556 makes every form's Save strict (its pin or no write): phases (v) and (w) edit / delete the form's own block from outside while the form is open and expect no write, the Notice and an open form.
 // The plugin's 400 ms debounce timer is held and fired by hand (G-S45's hook), so the ordering is forced and no step waits on a timer.
 //
+// SC-480 appends G-S73 (53 scenarios in all; it sits after G-S49 and before G-S56, which stays last, and runs in the fifth `--only` part with G-S59 and G-S49): a card write whose pin
+// cannot be placed because its block was DELETED from outside is never written into an identical twin. Click + on one of two identical counters (Reading view and Live Preview),
+// delete that block from outside at once, then leave the note (the unload flush) or wait out the 400 ms debounce: nothing is written, the note stays as the outside edit left it, and
+// exactly one "changed on disk first" Notice shows (a note of its own per trial: card Notices are shown once per note per 5 s). Base: the + lands in the twin and no Notice shows.
+// Controls: the same deletion with no twin (one Notice, as before), and the race (the outside edit only MOVES the clicked block, the twin above or below it): the + lands in the clicked block.
+//
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
 //        node visual-harness/obsidian-lifecycle.mjs [--only=G-S7a,G-S6a]
 // Env:   XVFB_BIN, DSE_LIFECYCLE_BIN (default /usr/bin/obsidian),
@@ -508,6 +514,29 @@ Object.assign(FIXTURES, {
 		'Lifecycle/gs64-hov-host.md': `# gs64 hov host\n\nsee [[gs64-embb-src#^gs64blk]]\n`,
 	});
 }
+
+// SC-480 (G-S73): two identical counters (or, for the no-twin control, a counter and a different one) with prose between them (never only blank lines: the line diff cannot tell which of
+// two twins separated by blank lines was deleted, SC-556). One note per trial. `x` is the clicked counter's value, `ed` the note after the outside edit.
+const GS73_PAR = (tag, n) => Array.from({ length: n }, (_, i) => `${tag} ${i}`).join('\n\n');
+const GS73_BUILD = {
+	// the clicked block (the lower) is deleted, its twin is above it
+	'del-above': (x, ed) => `# gs73 del above\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nGAP\n\n${ed ? '' : COUNTER(x, 'Twin') + '\n\n'}BOTTOM\n`,
+	// the clicked block (the upper) is deleted, its twin is below it
+	'del-below': (x, ed) => `# gs73 del below\n\nTOP\n\n${ed ? '' : COUNTER(x, 'Twin') + '\n\n'}GAP\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`,
+	// control: the neighbour is another block, the clicked block (the lower) is deleted
+	'del-solo': (x, ed) => `# gs73 del solo\n\nTOP\n\n${COUNTER(3, 'Other')}\n\nGAP\n\n${ed ? '' : COUNTER(x, 'Twin') + '\n\n'}BOTTOM\n`,
+	// race: the outside edit moves the clicked block (the lower) down by 20 lines, its twin stays above
+	'race-above': (x, ed) => `# gs73 race above\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nGAP\n\n${ed ? GS73_PAR('ins', 10) + '\n\n' : ''}${COUNTER(x, 'Twin')}\n\nBOTTOM\n`,
+	// race: the outside edit moves the clicked block (the upper) up by 20 lines, its twin stays below
+	'race-below': (x, ed) => `# gs73 race below\n\nTOP\n\n${ed ? '' : GS73_PAR('fill', 10) + '\n\n'}${COUNTER(x, 'Twin')}\n\nGAP\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`,
+};
+// the trials: [id, build, mode, variant, the clicked block's index, outcome]
+const GS73_TRIALS = [];
+for (const mode of ['rv', 'lp']) {
+	GS73_TRIALS.push(['del-above', 'del-above', mode, 'leave', 1, 'refused'], ['del-below', 'del-below', mode, 'leave', 0, 'refused'], ['del-below-stay', 'del-below', mode, 'stay', 0, 'refused']);
+	GS73_TRIALS.push(['del-solo', 'del-solo', mode, 'leave', 1, 'refused'], ['race-above', 'race-above', mode, 'leave', 1, 'lands'], ['race-below', 'race-below', mode, 'leave', 0, 'lands']);
+}
+for (const [id, build, mode] of GS73_TRIALS.map((x) => [x[0], x[1], x[2]])) FIXTURES[`Lifecycle/gs73-${id}-${mode}.md`] = GS73_BUILD[build](5, false);
 
 // SC-536 (G-S56): a reference that points back to itself, a chain of seven distinct references, and a card shown twice.
 // A feature whose one effect is markdown holding a `~~~ds-feature` fence: that fence is a nested block, drawn inside the card.
@@ -6799,6 +6828,78 @@ const SCENARIOS = [
 			}
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${JSON.stringify(await t.errorsSince(m))}`);
 			return `real mouse, block first in a callout: ${facts.join('; ')}; no page errors`;
+		},
+	},
+	{
+		// G-S73 (SC-480): a card write whose pin cannot be placed (its block was deleted from outside) is never written into an identical twin. See the header.
+		// It sits before G-S56, which runs last and replaces every other leaf.
+		id: 'G-S73',
+		async run(t) {
+			const m = await t.mark();
+			const J = JSON.stringify;
+			await t.ev(`(() => { if (!document.getElementById('lc-gs73-notice')) { const st = document.createElement('style'); st.id = 'lc-gs73-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
+			await t.ev(`(${gs64Page.toString()})()`);
+			const A = 'window.__gs64.A';
+			const stOf = (mode) => (mode === 'rv' ? { mode: 'preview' } : { mode: 'source', source: false });
+			const problems = [];
+			const outcomes = [];
+			const dropped = (rel) => `Draw Steel Elements: a change to a block in ${rel.split('/').pop().replace(/\.md$/, '')} was not saved \u2014 the block changed on disk first.`;
+			async function trial([id, build, mode, variant, xIdx, outcome]) {
+				const rel = `Lifecycle/gs73-${id}-${mode}.md`;
+				const label = `${id} (${mode === 'rv' ? 'Reading view' : 'Live Preview'}, ${variant})`;
+				const mk = await t.mark();
+				try {
+					await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); window.__gs64.A = app.workspace.getLeavesOfType('markdown')[0] ?? app.workspace.getMostRecentLeaf(); window.__gs64.B = null; return true; })()`);
+					await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); })()`);
+					await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: ${J(rel)}, ...${J(stOf(mode))} }, active: true }); })()`);
+					await t.waitFor(`(${A}).view?.file?.path === ${J(rel)}`, `${label}: opened`);
+					if (mode === 'lp') await t.ev(`(${A}).view.editor.setCursor({ line: 0, ch: 0 })`);
+					// Live Preview draws only the blocks near the viewport: bring every block into view once (SC-543).
+					if (mode === 'lp') {
+						for (let b = 0; b < 2; b++) {
+							await t.ev(`(() => { const L = ${A}; const cm = L.view.editor.cm; const fl = window.__gs64.fences(cm); const pos = cm.state.doc.line(fl[${b}] + 1).from; L.view.editor.scrollIntoView({ from: L.view.editor.offsetToPos(pos), to: L.view.editor.offsetToPos(pos) }, true); return true; })()`);
+							await t.waitFor(`window.__gs64.cardsRaw(${A}).some((c) => c.block === ${b})`, `${label}: block ${b} is drawn`);
+						}
+					}
+					await t.waitFor(`window.__gs64.cards(${A}).length === 2`, `${label}: both cards are drawn`);
+					await t.sleep(500);
+					const before = t.read(rel);
+					t.expect(before === GS73_BUILD[build](5, false), `${label}: the note is not the fixture: ${J(before)}`);
+					const ok = await t.ev(`(() => { const b = window.__gs64.root(${A}, ${xIdx})?.querySelector('button[aria-label^="Increase"]'); if (!b) return false; b.click(); return true; })()`);
+					t.expect(ok, `${label}: no Increase button on block ${xIdx}`);
+					// the outside edit, at once: the + is still inside its 400 ms debounce
+					const after = GS73_BUILD[build](5, true);
+					await t.edit(rel, J(after));
+					if (variant === 'stay') await t.sleep(2500);
+					else {
+						await t.sleep(30);
+						await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); })()`);
+						await t.sleep(1500);
+					}
+					const got = t.read(rel);
+					const ns = (await t.noticesSince(mk)).filter((x) => /changed on disk first|can't tell where/.test(x));
+					if (outcome === 'refused') {
+						t.expect(got === after, `${label}: the note is not what the outside edit left (a + was written into a block that was never clicked): ${J(got)}`);
+						t.expect(ns.length === 1 && ns[0] === dropped(rel), `${label}: expected the one Notice ${J(dropped(rel))}, got ${J(ns)}`);
+						outcomes.push(`${id}/${mode}/${variant}: nothing written, one Notice`);
+					} else {
+						// the plugin writes the block's YAML in its own key order, so compare the counters' values and every byte outside the blocks
+						const want = GS73_BUILD[build](6, true);
+						const vals = (text) => (text.match(/current_value: (\d+)/g) ?? []).map((x) => Number(x.split(': ')[1]));
+						const outside = (text) => text.replace(/^```ds-counter\n[\s\S]*?\n```$/gm, '```');
+						t.expect(J(vals(got)) === J(vals(want)) && outside(got) === outside(want), `${label}: the + did not land in the clicked block (want ${J(vals(want))}): ${J(got)}`);
+						t.expect(ns.length === 0, `${label}: unexpected Notice ${J(ns)}`);
+						outcomes.push(`${id}/${mode}: landed in the clicked block, no Notice`);
+					}
+				} catch (e) {
+					problems.push(e.message.startsWith(label) ? e.message : `${label}: ${e.message}`);
+				}
+			}
+			for (const tr of GS73_TRIALS) await trial(tr);
+			t.expect(problems.length === 0, problems.join(' || '));
+			const errs = await t.errorsSince(m);
+			t.expect(errs.length === 0, `page errors: ${errs.join(' | ')}`);
+			return `${outcomes.length} trials: ${outcomes.slice(0, 3).join('; ')}; ...; no page error`;
 		},
 	},
 	{
