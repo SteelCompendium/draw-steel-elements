@@ -61,6 +61,14 @@ const LIVE_PREVIEW = '.workspace-leaf.mod-active .markdown-source-view';
 /** The view `block()` looks in: where `openNote` last opened the note (SC-455). */
 const viewSelector = (): string => (state.viewMode === 'live-preview' ? LIVE_PREVIEW : READING);
 const controlLabels = new WeakMap<object, string>();
+/** A fence of a note a `block()` scope was taken from (SC-435). */
+interface BlockRef {
+	elementId: string;
+	n: number;
+	rel: string;
+}
+/** Elements handed out by a `block()` scope -> the block they live in (see `scopeOf`, `markEdited`). */
+const blockOf = new WeakMap<object, BlockRef>();
 
 export function selectorOf(ref: ControlRef): string {
 	if (typeof ref === 'string') return HOST_CONTROLS[ref] ?? `[data-dse-control="${ref}"]`;
@@ -86,7 +94,14 @@ const withinContainer = (sel: string): string => sel.replace(/\.modal-container 
  * modal, `dialog.control('modal.close')` must hit the confirmation's X, not the one underneath.
  * Other scopes (a block, a toast) keep the page-wide lookup.
  */
-function scopeOf(root: El, isModal = false): Scope {
+function scopeOf(root: El, isModal = false, owner?: BlockRef): Scope {
+	// SC-435 (R2 LOW-1): an element handed out by a block's scope remembers its block, so a click / type / press on
+	// it (and only that) declares the block as edited. Reading it (text, attribute, state) declares nothing.
+	const tag = (el: El): El => {
+		if (owner) blockOf.set(el, owner);
+		return el;
+	};
+	tag(root);
 	return {
 		root,
 		control(ref, opts) {
@@ -94,11 +109,11 @@ function scopeOf(root: El, isModal = false): Scope {
 			if (typeof ref === 'string' && HOST_CONTROLS[ref]) {
 				if (isModal) {
 					const container = root.parentElement();
-					return pick({ $: (sel) => container.$(withinContainer(sel)), $$: (sel) => container.$$(withinContainer(sel)) }, ref, opts);
+					return tag(pick({ $: (sel) => container.$(withinContainer(sel)), $$: (sel) => container.$$(withinContainer(sel)) }, ref, opts));
 				}
-				return pick({ $: (sel) => $(sel), $$: (sel) => $$(sel) }, ref, opts);
+				return tag(pick({ $: (sel) => $(sel), $$: (sel) => $$(sel) }, ref, opts));
 			}
-			return pick(root, ref, opts);
+			return tag(pick(root, ref, opts));
 		},
 	};
 }
@@ -195,7 +210,7 @@ async function openNote(rel: string, opts: { mode?: 'reading' | 'live-preview' }
 	await waitWriteIdle();
 }
 
-/** `block()` is how a test names the block it edits: record that fence of the open note as the target. */
+/** Record that fence of `rel` (default: the open note) as a block the test edits (see `markEdited`; the review R1 L-3 invariant). */
 function declareTarget(elementId: string, n: number, rel = state.currentNote): void {
 	if (!rel) return;
 	let seen = -1;
@@ -209,19 +224,35 @@ function declareTarget(elementId: string, n: number, rel = state.currentNote): v
 	});
 }
 
+/** A real input (click, type, press, dblclick) on an element inside a `block()` scope: that block is now one the test edits. */
+function markEdited(el: El): void {
+	const b = blockOf.get(el);
+	if (b) declareTarget(b.elementId, b.n, b.rel);
+}
+
+/** The fence indexes of `rel` the test has declared it edits so far (read-only; for the driver's own self-test). */
+const editedFences = (rel: string): number[] => [...(state.targets.get(rel) ?? [])].sort((a, b) => a - b);
+
 /**
  * A note that EMBEDS another (`![[Other]]`) renders the other note's blocks, and a write from one of them lands in the OTHER file.
- * Declare which of its blocks the test edits (and that the note is checked at all), the way `block()` does for the opened note.
+ * Declare which of its blocks the test edits (and that the note is checked at all), the way a click inside a `block()` does for the opened note.
  */
 function embeddedTarget(rel: string, lang: string, n = 0): void {
 	state.touched.add(rel);
 	declareTarget(elementIdOf(lang), n, rel);
 }
 
-/** The n-th (0-based) block of `lang` in the visible view (Reading view, or Live Preview when `openNote` was told so). */
+/**
+ * The n-th (0-based) block of `lang` in the visible view (Reading view, or Live Preview when `openNote` was told so).
+ * Taking the scope declares nothing (SC-435, SC-408 R2 LOW-1): only a click / type / dblclick / press on one of its
+ * elements marks the block as edited, so a test that merely reads a block cannot hide a stray write to it.
+ */
 function block(lang: string, n = 0): Scope {
-	declareTarget(elementIdOf(lang), n);
-	return scopeOf($$(`${viewSelector()} [data-dse-element="${elementIdOf(lang)}"]`)[n]);
+	return scopeOf($$(`${viewSelector()} [data-dse-element="${elementIdOf(lang)}"]`)[n], false, {
+		elementId: elementIdOf(lang),
+		n,
+		rel: state.currentNote,
+	});
 }
 
 /** The single open DSE modal of `kind` (matched by what it contains, so a confirmation open over
@@ -317,6 +348,7 @@ async function cdpClick(el: El, opts: ClickOptions): Promise<void> {
  * `{ inset }` clicks the control's own edge, not its label.
  */
 async function click(el: El, opts: ClickOptions = {}): Promise<void> {
+	markEdited(el);
 	await el.waitForDisplayed({ timeout: 8000 });
 	const enabled = await el.isEnabled();
 	await beforeAction(el);
@@ -341,6 +373,7 @@ async function click(el: El, opts: ClickOptions = {}): Promise<void> {
  * is exactly the state S1's B7 / the blur-commit scenarios need.
  */
 async function type(el: El, text: string, opts: { replace?: boolean } = {}): Promise<void> {
+	markEdited(el);
 	await el.waitForDisplayed({ timeout: 8000 });
 	await beforeAction(el);
 	await el.click();
@@ -358,6 +391,7 @@ async function hover(el: El): Promise<void> {
 
 /** Real double-click (two press/release pairs, so the browser fires `dblclick`). */
 async function dblclick(el: El): Promise<void> {
+	markEdited(el);
 	await el.waitForDisplayed({ timeout: 8000 });
 	await beforeAction(el);
 	await el.doubleClick();
@@ -429,6 +463,7 @@ async function press(key: string, target?: El | AimedAt): Promise<void> {
 		label = labelOf(el);
 		if (HOST_CONTROLS[label]) throw new Error(`press(${key}, ${label}): host controls never hold focus; use dse.aimedAt('${label}')`);
 		if (!(await hasFocusWithin(el))) throw new Error(`press(${key}, ${label}): the control does not have focus (focus is on ${await focusedControl()})`);
+		markEdited(el);
 		await beforeAction(el);
 	}
 	await browser.keys(key.includes('+') && key.length > 1 ? key.split('+') : key);
@@ -548,6 +583,7 @@ export const dse = {
 	openNote,
 	block,
 	embeddedTarget,
+	editedFences,
 	modal,
 	toast,
 	control,

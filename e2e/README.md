@@ -114,7 +114,8 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Initiative/tracker.md` | `ds-initiative`: hero Alice Alpha 30/30, three Ogres 60/60 (cells `0-1`..`0-3`) |
   | `Initiative/hurt.md` | `ds-initiative`: hero Alice Alpha 30/30, Ogre #1 at 20/60 and Ogre #2 at 60/60 (a hurt creature, for Spend Recovery) |
 
-- Edits are checked per fence: `dse.block(lang, n)` declares which block of the open note a test edits, and
+- Edits are checked per fence: a click / type / double-click / press on an element inside `dse.block(lang, n)` declares that block
+  as one the test edits (taking the scope and reading it declares nothing, SC-435), and
   after the test every OTHER fence must be byte-identical to the fixture (a write into a sibling block fails).
   The edited block's own opening and closing fence lines must stay byte-identical too (only its body may
   change), so a write that rewrites an info string, the fence run or the closing line fails (SC-456). Fences
