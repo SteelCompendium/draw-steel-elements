@@ -156,9 +156,10 @@ describe('real-Obsidian census: the Conditions window', () => {
 		const scope = ['.modal-container .dse-modal .modal-content *'];
 		const rest = await eventfulNodes(scope);
 		expect(censusFindings(rest, ALL_IDS)).toEqual([]);
-		for (const id of ['cond.edit', 'cond.remove', 'cond.icon-search', 'cond.icon', 'cond.duration', 'cond.swatch', 'cond.effect', 'cond.add', 'cond.done']) {
+		for (const id of ['cond.edit', 'cond.remove', 'cond.icon', 'cond.duration', 'cond.swatch', 'cond.effect', 'cond.add', 'cond.done']) {
 			expect(rest.map((n) => n.id)).toContain(id);
 		}
+		// (The icon search and the custom colour input listen only for input / change, so the jsdom census owns those two.)
 		// The dropdown's options are divs with a mousedown listener: only the browser can tell they are controls.
 		await dse.click(modal.control('cond.add'));
 		const open = await eventfulNodes(scope);
