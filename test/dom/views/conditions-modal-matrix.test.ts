@@ -5,6 +5,7 @@ import { ConditionsModal } from '@views/ConditionsModal';
 import type { Condition, ConditionHolder } from '@drawSteelAdmonition/EncounterData';
 import { ConditionManager } from '@utils/Conditions';
 import { App } from '../../mocks/obsidian';
+import * as obsidianCore from '../../mocks/obsidian-core';
 
 type Entry = string | Condition;
 type HostKind = 'hero' | 'creature';
@@ -484,5 +485,115 @@ describe('SC-436 matrix: which interactions emit a change (every interaction x e
 		expect(lastEmit(o)).not.toBe(o.holder.conditions);
 		expect(o.holder.conditions).not.toBe(original); // the window hands its own list back to the holder
 		expect(o.holder.conditions).toEqual(lastEmit(o));
+	});
+});
+
+// ------------------------------------------------------------------------------ the icon picker's 24-icon cap
+
+describe('SC-436 matrix: the icon picker caps its matches at 24', () => {
+	afterEach(() => jest.restoreAllMocks());
+	const choices = (c: HTMLElement): string[] => Array.from(c.querySelectorAll('[data-dse-control="cond.icon"]')).map((b) => b.getAttribute('aria-label') ?? '');
+	const gridText = (c: HTMLElement): string => qs(c, '.dse-cond-icons__grid').textContent ?? '';
+	/** A host offering 30 icons (`lucide-icon-00` .. `lucide-icon-29`), the way Obsidian offers hundreds. */
+	const withThirtyIcons = (): void => {
+		jest.spyOn(obsidianCore, 'getIconIds').mockReturnValue(Array.from({ length: 30 }, (_, i) => `lucide-icon-${String(i).padStart(2, '0')}`));
+	};
+	const search = (o: Open, query: string): void => {
+		openEditor(o.container, 0);
+		typeQuery(qs<HTMLInputElement>(o.container, '[data-dse-control="cond.icon-search"]'), query);
+	};
+
+	test('30 matches show the first 24 (after "Use default") and say so', () => {
+		withThirtyIcons();
+		const o = open([{ key: 'hexed' }]);
+		search(o, 'icon');
+		const labels = choices(o.container);
+		expect(labels).toHaveLength(25);
+		expect(labels[1]).toBe('Icon: icon-00');
+		expect(labels[24]).toBe('Icon: icon-23');
+		expect(gridText(o.container)).toContain('Showing the first 24 matches. Refine your search for more.');
+	});
+
+	test('a query matching fewer than 24 shows all of them with no note; broadening it to 30 matches caps it again', () => {
+		withThirtyIcons();
+		const o = open([{ key: 'hexed' }]);
+		search(o, 'icon-0'); // icon-00 .. icon-09
+		expect(choices(o.container)).toHaveLength(11);
+		expect(gridText(o.container)).not.toContain('Showing the first 24');
+		typeQuery(qs<HTMLInputElement>(o.container, '[data-dse-control="cond.icon-search"]'), 'icon-');
+		expect(choices(o.container)).toHaveLength(25); // 30 match, capped
+	});
+
+	test('narrowing the query below the cap drops the note; a query that matches nothing says so', () => {
+		withThirtyIcons();
+		const o = open([{ key: 'hexed' }]);
+		search(o, 'icon-2');
+		expect(choices(o.container)).toHaveLength(11); // icon-20 .. icon-29
+		expect(gridText(o.container)).not.toContain('Showing the first 24');
+		typeQuery(qs<HTMLInputElement>(o.container, '[data-dse-control="cond.icon-search"]'), 'nothing');
+		expect(choices(o.container)).toEqual(['Use default condition icon']);
+		expect(gridText(o.container)).toContain('No matching icons.');
+	});
+
+	test('a pick among the capped matches writes that icon and leaves the search text and the cap note in place', () => {
+		withThirtyIcons();
+		const o = open([{ key: 'hexed' }]);
+		search(o, 'icon');
+		qs(o.container, 'button[aria-label="Icon: icon-05"]').click();
+		expect(lastEmit(o)).toEqual([{ key: 'hexed', icon: 'icon-05' }]);
+		expect(qs<HTMLInputElement>(o.container, '[data-dse-control="cond.icon-search"]').value).toBe('icon');
+		expect(gridText(o.container)).toContain('Showing the first 24 matches');
+	});
+});
+
+// ------------------------------------------------------------------------------------------ known bugs
+
+describe('SC-436 matrix: known bugs (each marker encodes the correct behaviour and fails today)', () => {
+	// SC-580: docs/initiative-tracker.md says "Click "+ Add condition" (or just start typing) to open the type-ahead search".
+	test.failing('SC-580: typing a letter with focus on "+ Add condition" opens the dropdown', () => {
+		const o = open([]);
+		const add = qs(o.container, '[data-dse-control="cond.add"]');
+		expect(o.container.querySelector('.dse-condal__input')).toBeNull(); // setup: the dropdown starts closed
+		add.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', bubbles: true, cancelable: true }));
+		expect(o.container.querySelector('.dse-condal__input')).not.toBeNull();
+	});
+
+	// SC-581: Icon has "Use default", Duration "Until removed", Effect "static"; a colour, once set, cannot be taken off.
+	// Fix-agnostic: passes if ANY single interaction in the Color group (a default/none option, or re-activating the
+	// selected swatch) removes `color` from the written condition.
+	test.failing('SC-581: some control in the Color group removes a colour that was set', () => {
+		const start = (): Open => {
+			const o = open([{ key: 'prone', color: '#c0392b' }]);
+			openEditor(o.container, 0);
+			return o;
+		};
+		const buttons = (o: Open): HTMLElement[] => Array.from(o.container.querySelectorAll<HTMLElement>('[role="group"][aria-label="Color"] button'));
+		expect(buttons(start()).length).toBeGreaterThanOrEqual(5); // setup: the five swatches are there
+		let cleared = false;
+		for (let i = 0; i < buttons(start()).length; i++) {
+			const o = start();
+			buttons(o)[i].click();
+			if (o.onChange.mock.calls.length && lastEmit(o)[0].color === undefined) cleared = true;
+		}
+		expect(cleared).toBe(true);
+	});
+
+	// SC-582: the swatch's aria-label is its hex, so a screen reader (or a colourblind user reading tooltips) never gets the name.
+	test.failing('SC-582: each preset swatch\'s aria-label contains the colour name its title shows', () => {
+		const o = open(['prone']);
+		openEditor(o.container, 0);
+		const swatches = Array.from(o.container.querySelectorAll<HTMLElement>('[data-dse-control="cond.swatch"]'));
+		expect(swatches).toHaveLength(5);
+		const names = swatches.map((s) => (s.getAttribute('title') ?? '').split(' (')[0]);
+		expect(names).toEqual(['Red', 'Amber', 'Green', 'Blue', 'Purple']); // setup: the titles name the colours
+		swatches.forEach((s, i) => expect(s.getAttribute('aria-label')).toContain(names[i]));
+	});
+
+	// SC-583: condition keys are case-sensitive, so a hand-written `key: Dazed` is a custom condition and picking the real Dazed adds a second.
+	test.failing('SC-583: with `key: Dazed` already on the actor, picking Dazed leaves exactly one dazed condition', () => {
+		const o = open([{ key: 'Dazed' }]);
+		pickOption(o.container, 'Dazed', 'Dazed');
+		const keys = (o.onChange.mock.calls.length ? lastEmit(o) : (o.holder.conditions as Condition[])).map((c) => c.key.toLowerCase());
+		expect(keys.filter((k) => k === 'dazed')).toHaveLength(1);
 	});
 });
