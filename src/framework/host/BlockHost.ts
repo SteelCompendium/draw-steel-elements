@@ -51,7 +51,9 @@ export interface BlockWriteOptions {
 	fromView?: boolean;
 	/** SC-552: place the write at this pinned block (`BlockHost.pinPosition`) when it can still be found; else as without a pin. */
 	pin?: BlockPin | null;
-	/** SC-552: with a `pin`, a pin that cannot be placed means NO write (the "changed on disk first" Notice) instead of the fallback. */
+	/** SC-552: with a `pin`, a pin that cannot be placed means NO write (the "changed on disk first" Notice) instead of the fallback.
+	 *  SC-556: every block edit form's Save passes it (the form's own block was edited or deleted from outside while it was open);
+	 *  the view's own debounced write does not (it keeps the fallback). */
 	pinOnly?: boolean;
 }
 
@@ -117,7 +119,7 @@ export interface BlockHost {
 	 *
 	 * SC-552 — `options.pin`: the block's position taken earlier (`pinPosition`). The Reading-view host maps its line through
 	 * whatever was written to the note since and writes THAT block when a block of this host's language still holds the body the host
-	 * knows there; otherwise it places the write as before (no pin). `options.pinOnly` removes that fallback.
+	 * knows there; otherwise it places the write as before (no pin). `options.pinOnly` removes that fallback (SC-556: the block edit form's Save always does).
 	 */
 	replaceSource(newSource: string, options?: BlockWriteOptions): Promise<boolean>;
 	/**

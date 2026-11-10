@@ -778,7 +778,7 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * (`mapLine`), accepted only when a fence of this host's language opens there and holds the body this host knows. A closed fence,
 	 * or the note's trailing fence that never closes (the same rule as `locateUnterminatedTrailingFence`, which `locateByBody` also
 	 * considers). Null when the line was changed or removed or no such block is there. No search by body: identical twins cannot be told
-	 * apart that way (SC-480), the position is what tells them apart. A pin is also refused when more than `LINE_MAP_MAX_EDITS` lines changed on both sides of the block (see lineMap.ts: for a form kept open past its view that is a Save that cannot succeed).
+	 * apart that way (SC-480), the position is what tells them apart. A pin is also refused when more than `LINE_MAP_MAX_EDITS` lines changed on both sides of the block (see lineMap.ts: for a block edit form's Save, which is pin-only, that is a Save that cannot succeed).
 	 */
 	private pinnedTarget(content: string, pin: BlockPin): { lineStart: number; lineEnd: number } | null {
 		const line = mapLine(pin.text, content, pin.lineStart);
@@ -851,8 +851,9 @@ export class ReadingModeBlockHost implements BlockHost {
 			options?.fromView === true && this.entry && this.registry ? this.registry.noteWrite(this.entry, newSource) : null;
 		try {
 			await this.plugin.app.vault.process(abstractFile, (content) => {
-				// SC-552: a pinned write goes to the pinned block when it can still be found. If it cannot: today's placement, or - for a
-				// caller that asked for `pinOnly` - nowhere (the block changed on disk first).
+				// SC-552: a pinned write goes to the pinned block when it can still be found. If it cannot: today's placement (the view's
+				// own debounced write, which has a card behind it), or - for a caller that asked for `pinOnly`, which every block edit
+				// form's Save does (SC-556) - nowhere (the block changed on disk first).
 				const pinned = pin ? this.pinnedTarget(content, pin) : null;
 				if (pinned) this.knownLineStart = pinned.lineStart;
 				const target = pinned ?? (pin && options?.pinOnly ? 'miss' : this.resolveWriteTarget(content, section));

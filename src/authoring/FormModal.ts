@@ -128,7 +128,8 @@ class FormModal extends DseModal {
 		super(cx.app);
 		// SC-552: the block this form was opened on, pinned NOW - the constructor runs in the pencil's click handler, before any redraw
 		// can hand the host's element to an identical twin. Save writes through the pin (a click's write above this block, an outside
-		// edit or Sync can all move the element while the form is open, never the block).
+		// edit or Sync can all move the element while the form is open, never the block). SC-556: and Save writes ONLY through it -
+		// if the block itself was edited or deleted meanwhile, nothing is written (see save()).
 		this.pin = cx.host.pinPosition?.() ?? null;
 	}
 
@@ -535,10 +536,12 @@ class FormModal extends DseModal {
 		// not hold focus when pressed (a mouse press) arms nothing either (SC-518 r3).
 		const key = this.opener && body !== this.source ? this.cx.host.blockKey() : null;
 		if (this.opener && key !== null) armFormFocus(key, this.opener);
-		// SC-552: a form kept open past its view writes strictly - its pin or nowhere. The block may be gone (deleted from outside while
-		// the form stayed open), and the durable fallback would then write the identical block that is left.
+		// SC-556: every form's Save writes strictly - its pin or nowhere (SC-552 did that for a form kept open past its view only).
+		// The form's own block may have been edited or deleted from outside while the form was open, and the fallback (the element's
+		// section, then a search by body) would then write the identical twin that is left: the user's edit lands in a block they
+		// never opened. A form without a pin (the sidebar's panel is its own block) writes as before.
 		const ok = await (this.pin
-			? this.cx.host.replaceSource(body, this.kept ? { pin: this.pin, pinOnly: true } : { pin: this.pin })
+			? this.cx.host.replaceSource(body, { pin: this.pin, pinOnly: true })
 			: this.cx.host.replaceSource(body));
 		if (key !== null) settleChromeFocus(key, null, ok);
 		if (ok) this.close();

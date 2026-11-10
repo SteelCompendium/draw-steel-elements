@@ -8,9 +8,10 @@ import { splitLines } from './lineEnding';
  * Edit distance above which the map gives up (null): a rewrite of most of the note is not something to place a block through.
  * It only matters when the note changed on BOTH sides of the pinned line: the common head and tail lines are trimmed first, so a block
  * with every change on one side of it (above or below) is found at once, however many lines changed there. Known limit: a block edit
- * form that was kept open past its view (strict Save) after an outside edit that changed more than this many lines in the stretch
- * around its block can never be saved - the pin is refused and the Notice says "the block changed on disk first" although it did not.
- * No data is at risk (nothing is written; without the keep-open the form would have closed by itself, as it did before SC-552).
+ * form's Save (every form's, strict since SC-556: its pin or no write) after an outside edit that changed more than this many lines
+ * in the stretch around its block can never be saved - the pin is refused and the Notice says "the block changed on disk first"
+ * although it did not. No data is at risk (nothing is written, the form stays open and the typed text can be copied out); before
+ * SC-556 only a form kept open past its view had this limit, any other form fell back to the element's section or a search by body.
  */
 export const LINE_MAP_MAX_EDITS = 400;
 

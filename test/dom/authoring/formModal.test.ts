@@ -897,7 +897,7 @@ describe('SC-489: Save does not rewrite values the user did not change', () => {
 
 // SC-552 -- the form pins its block when it opens (before any redraw can hand the host's element to an identical twin), Save writes
 // through that pin, and a pinned form outlives its view when the host names something that outlives it (Obsidian threw the view's
-// element away because a twin took its text); such a kept-open form's Save is strict: its pin or no write.
+// element away because a twin took its text). SC-556: every pinned form's Save is strict: its pin or no write.
 describe('SC-552: the form pins its block', () => {
 	const PIN = { text: 'note text', lineStart: 3 };
 
@@ -923,7 +923,7 @@ describe('SC-552: the form pins its block', () => {
 		await modal.save();
 		await modal.save();
 		expect(pinPosition).toHaveBeenCalledTimes(1);
-		expect(replaceSource).toHaveBeenCalledWith(expect.stringContaining('name: Goblin'), { pin: PIN });
+		expect(replaceSource).toHaveBeenCalledWith(expect.stringContaining('name: Goblin'), { pin: PIN, pinOnly: true });
 		modal.close();
 	});
 
@@ -993,13 +993,13 @@ describe('SC-552: the form pins its block', () => {
 		}
 	});
 
-	test('a kept-open form saves strictly (its pin or no write); a form that was not kept open does not', async () => {
+	test('SC-556: every form with a pin saves strictly (its pin or no write), kept open or not', async () => {
 		const holder = new Component();
 		holder.load();
 		const { cx, replaceSource } = pinningCx({ pinPosition: () => PIN, keepFormOpenOn: () => holder });
 		const first = openFormEditor(fakeOwner(), cx, schemaDef(), 'name: Goblin', createValidationService());
 		await first.save();
-		expect(replaceSource).toHaveBeenLastCalledWith(expect.any(String), { pin: PIN });
+		expect(replaceSource).toHaveBeenLastCalledWith(expect.any(String), { pin: PIN, pinOnly: true });
 
 		const owner = fakeOwner();
 		const modal = openFormEditor(owner, cx, schemaDef(), 'name: Goblin', createValidationService());

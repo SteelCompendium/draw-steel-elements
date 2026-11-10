@@ -2,7 +2,7 @@
 // opens; Obsidian's redraw of identical blocks can then hand the form's element to a twin, and a write that follows the element
 // lands in the twin. `pinPosition()` reads where the block is drawn now, `replaceSource(body, { pin })` finds that block again
 // in whatever the note has become (a line diff, lineMap.ts) and writes there; a pin that cannot be placed falls back to the
-// element's section as before, unless the caller asked for `pinOnly` (a form kept open past its view, SC-552 K-strict).
+// element's section as before, unless the caller asked for `pinOnly` (every block edit form's Save, SC-556; the view's own write does not).
 import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlockHost';
 import { ViewRegistry } from '../../../src/framework/host/viewRegistry';
 import { droppedWriteMessage, resetDroppedWriteNotices } from '../../../src/framework/host/droppedWriteNotice';
@@ -160,6 +160,25 @@ describe('SC-552: ReadingModeBlockHost pinned writes', () => {
 		expect(await host.replaceSource(bodyOf(5, 'Edited'), { pin, pinOnly: true })).toBe(true);
 		expect(app.vault.getContent('Note.md')).toBe(`# N\n\n${closed}\n\`\`\`ds-counter\nname: Edited\ncurrent_value: 5\n\`\`\`\n`);
 	});
+
+	test('SC-556 control: a form on the note\'s unterminated trailing fence, lines inserted above it from outside: the pin-only Save still lands in that fence, the final newline stays', async () => {
+		const app = new App();
+		const closed = [...CTR(5), ''].join('\n');
+		const tail = '```ds-counter\nname: Twin\ncurrent_value: 5\n'; // the last block never closes
+		const text = `# N\n\n${closed}\n${tail}`;
+		app.vault.setFile('Note.md', text);
+		const lines = text.split('\n');
+		const unterminated = lines.indexOf('```ds-counter', 5);
+		const section: Section = { current: { text, lineStart: unterminated, lineEnd: lines.length - 1 } };
+		const host = hostOn(app, section);
+		const pin = host.pinPosition()!;
+
+		const after = `# N\n\nINSERTED\n\n${closed}\n${tail}`; // an outside edit above both blocks
+		app.vault.setFile('Note.md', after);
+		section.current = { text: after, lineStart: 4, lineEnd: 7 }; // the element was handed to the closed twin
+		expect(await host.replaceSource(bodyOf(5, 'Edited'), { pin, pinOnly: true })).toBe(true);
+		expect(app.vault.getContent('Note.md')).toBe(`# N\n\nINSERTED\n\n${closed}\n\`\`\`ds-counter\nname: Edited\ncurrent_value: 5\n\`\`\`\n`);
+	});
 });
 
 // SC-549 / SC-552 (wide): the view's own debounced write is pinned too. The first click of a round (notePersistIntent) takes the pin,
@@ -225,6 +244,19 @@ describe('SC-552: a view\'s own write is placed through the pin its round\'s fir
 
 		expect(await host.replaceSource(bodyOf(5, 'Edited'))).toBe(true);
 		expect(names(app)).toEqual(['Twin', 'Twin', 'Edited']); // follows the element, as before
+	});
+
+	test('SC-556: the view\'s own write is not pin-only: a pin that cannot be placed (its block edited from outside) still falls back and writes', async () => {
+		Notice.notices.length = 0;
+		const { app, host, section } = setup();
+		host.notePersistIntent();
+		const after = noteOf([5, 9, 5]); // the clicked (middle) block was edited from outside
+		app.vault.setFile('Note.md', after);
+		section.current = sectionAt(after, fencesOf(after)[1]);
+
+		expect(await host.replaceSource(bodyOf(6), own)).toBe(true); // not dropped: only a form's Save is pin-only
+		expect(Notice.notices).toEqual([]);
+		expect(values(app)).toContain(9); // the outside edit is still in the note
 	});
 
 	test('a write that is not the view\'s own does not use up the pin either', async () => {

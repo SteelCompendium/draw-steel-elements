@@ -369,7 +369,7 @@ describe('SC-481 r4: a writer whose rebuild is still to come is not mistaken for
 	});
 
 	test('pane B\'s rebuild runs before pane A\'s: the writer in A keeps its view and is adopted by its own rebuild', async () => {
-		const { app, plugin, registry, increase, ctxAt, at } = await setup(noteOf(counter('Solo', 5)));
+		const { app, plugin, registry, increase, ctxAt, at } = await setup(noteOf(counter('Twin', 5)));
 		const draw = async (docId: string): Promise<Ctx> => {
 			const ctx = ctxAt(0);
 			(ctx as any).docId = docId;
@@ -1079,6 +1079,115 @@ describe('SC-552: a block edit form (and, wide, a card click) on one of several 
 		expect(t.app.vault.getContent('Note.md')).toBe(gone);
 		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
 		expect(isOpen(t.form())).toBe(true);
+	});
+
+	// SC-556: Save is strict for EVERY form (not only a kept-open one): its own block edited or deleted from outside while the form was
+	// open means nothing is written, the Notice says so, the form stays open and the outside change is kept. The card is NOT thrown away
+	// in these (Obsidian reuses its element for a block further down), so none of these forms is kept open.
+	const edited = (name: string): string => counter(name, 5);
+
+	test('SC-556: three twins, the form on the middle one, the middle block\'s body edited from outside: Save writes nothing, shows the Notice, the form stays open', async () => {
+		const t = await start(3);
+		const form = openForm(t.old[1].el);
+		rename(form(), 'Edited');
+		const outside = noteOf(counter('Twin', 5), counter('Twin', 9), counter('Twin', 5)); // Sync, or a hand edit of the middle block
+		t.app.vault.setFile('Note.md', outside);
+		const { plan, discarded } = planFor([5, 5, 5], t.values(), t.old);
+		await t.rebuild(plan, discarded); // the form's card now sits on the lower block
+
+		await form().save();
+		expect(t.app.vault.getContent('Note.md')).toBe(outside); // byte-identical: the lower twin was not written
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		expect(isOpen(form())).toBe(true);
+	});
+
+	test('SC-556: three twins, the form on the middle one, the middle block deleted from outside: Save writes nothing, shows the Notice, the form stays open', async () => {
+		const t = await setup(noteOf(counter('Twin', 5), 'one', counter('Twin', 5), 'two', counter('Twin', 5), 'three'));
+		await t.deps.prefs.set('authoringControls', true);
+		showNote(t.app, true);
+		const old = await t.paint(3);
+		const form = openForm(old[1].el);
+		rename(form(), 'Edited');
+		const outside = noteOf(counter('Twin', 5), 'one', 'two', counter('Twin', 5), 'three'); // the middle block is gone, its prose stays
+		t.app.vault.setFile('Note.md', outside);
+		const { plan, discarded } = planFor([5, 5, 5], t.values(), old);
+		await t.rebuild(plan, discarded); // the form's card is reused for the block that is now second
+
+		await form().save();
+		expect(t.app.vault.getContent('Note.md')).toBe(outside);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		expect(isOpen(form())).toBe(true);
+	});
+
+	test('SC-556: two twins, the form on the upper one, the upper block\'s body edited from outside: Save writes nothing (not into the lower twin), the Notice is shown, the form stays open', async () => {
+		const t = await start(2);
+		const form = openForm(t.old[0].el);
+		rename(form(), 'Edited');
+		const outside = twins(2, 9);
+		t.app.vault.setFile('Note.md', outside);
+		const { plan, discarded } = planFor([5, 5], t.values(), t.old);
+		await t.rebuild(plan, discarded); // the form's card is handed to the lower block
+
+		await form().save();
+		expect(t.app.vault.getContent('Note.md')).toBe(outside);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		expect(isOpen(form())).toBe(true);
+
+		// the form is still usable: the user can close it, and nothing was left half-done
+		form().close();
+		expect(isOpen(form())).toBe(false);
+		expect(t.app.vault.getContent('Note.md')).toBe(outside);
+	});
+
+	test('SC-556 control: a twin ABOVE the form\'s block deleted from outside: Save still writes the form\'s own block, and the text around it and the twins survive byte for byte', async () => {
+		const before = noteOf(counter('Twin', 5), 'one', counter('Twin', 5), 'two', counter('Twin', 5), 'three');
+		const t = await setup(before);
+		await t.deps.prefs.set('authoringControls', true);
+		showNote(t.app, true);
+		const old = await t.paint(3);
+		const form = openForm(old[1].el);
+		rename(form(), 'Edited');
+		const outside = noteOf('one', counter('Twin', 5), 'two', counter('Twin', 5), 'three'); // the upper block is gone
+		t.app.vault.setFile('Note.md', outside);
+		const { plan, discarded } = planFor([5, 5, 5], t.values(), old);
+		await t.rebuild(plan, discarded);
+
+		await form().save();
+		expect(t.app.vault.getContent('Note.md')).toBe(noteOf('one', edited('Edited'), 'two', counter('Twin', 5), 'three'));
+		expect(Notice.notices).toEqual([]);
+		expect(isOpen(form())).toBe(false);
+	});
+
+	test('SC-556 control: lines inserted above AND below the block while the form is open: Save writes its own block, the rest is untouched', async () => {
+		const t = await start(3);
+		const form = openForm(t.old[1].el);
+		rename(form(), 'Edited');
+		const outside = twins(3).replace('# N\n\n', '# N\n\nABOVE one\nABOVE two\n\n') + '\nBELOW one\nBELOW two\n';
+		t.app.vault.setFile('Note.md', outside);
+		const { plan, discarded } = planFor([5, 5, 5], t.values(), t.old);
+		await t.rebuild(plan, discarded);
+
+		await form().save();
+		expect(t.app.vault.getContent('Note.md')).toBe(
+			noteOf(counter('Twin', 5), edited('Edited'), counter('Twin', 5)).replace('# N\n\n', '# N\n\nABOVE one\nABOVE two\n\n') + '\nBELOW one\nBELOW two\n',
+		);
+		expect(Notice.notices).toEqual([]);
+		expect(isOpen(form())).toBe(false);
+	});
+
+	test('SC-556 control: a unique block, an edit elsewhere in the note: Save writes the block (not a refusal)', async () => {
+		const t = await setup(noteOf('top', counter('Twin', 5), 'bottom'));
+		await t.deps.prefs.set('authoringControls', true);
+		showNote(t.app, true);
+		const [card] = await t.paint(1);
+		const form = openForm(card.el);
+		rename(form(), 'Edited');
+		t.app.vault.setFile('Note.md', noteOf('top, edited elsewhere', counter('Twin', 5), 'bottom\nand a new last line'));
+
+		await form().save();
+		expect(t.app.vault.getContent('Note.md')).toBe(noteOf('top, edited elsewhere', edited('Edited'), 'bottom\nand a new last line'));
+		expect(Notice.notices).toEqual([]);
+		expect(isOpen(form())).toBe(false);
 	});
 
 	// SC-549, wide: the card's own write is pinned by its first click, not only the form's.
