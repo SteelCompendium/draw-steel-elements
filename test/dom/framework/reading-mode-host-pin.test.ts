@@ -430,6 +430,183 @@ describe('SC-556: a block edit form in a heading embed', () => {
 	});
 });
 
+// SC-556 r6: the pin of a block in an embed is rebased by the EMBED'S OWN LINK (its `src`, resolved with Obsidian's `resolveSubpath` over
+// the metadata cache), not by searching for the section's text: that text can be stale when the form opens (a + just before the pencil)
+// and an identical block or section elsewhere in the note cannot be told apart by text. The cache's answer is verified against the note.
+describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', () => {
+	let warn: jest.SpyInstance;
+	beforeEach(() => {
+		resetDroppedWriteNotices();
+		Notice.notices.length = 0;
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => warn.mockRestore());
+
+	const para = (n: number, tag: string): string[] => Array.from({ length: n }, (_, i) => `${tag} ${i}`);
+	const pos = (line: number) => ({ start: { line, col: 0, offset: 0 }, end: { line, col: 0, offset: 0 } });
+	/** What Obsidian's metadata cache holds for `text`: its headings, and its `^id` blocks (the id on its own line under the block). */
+	function cacheOf(text: string) {
+		const lines = text.split('\n');
+		const headings: Array<{ heading: string; level: number; position: unknown }> = [];
+		const blocks: Record<string, { id: string; position: unknown }> = {};
+		let fenced = false;
+		lines.forEach((l, i) => {
+			if (/^```/.test(l)) fenced = !fenced;
+			const h = !fenced && /^(#{1,6})\s+(.*)$/.exec(l);
+			if (h) headings.push({ heading: h[2], level: h[1].length, position: pos(i) });
+			const id = /^\^(\w+)$/.exec(l);
+			if (id) {
+				let end = i - 1;
+				while (end >= 0 && lines[end] === '') end--;
+				let start = end;
+				if (lines[end] === '```') for (start = end - 1; start >= 0 && !/^```\w/.test(lines[start]); start--);
+				blocks[id[1]] = { id: id[1], position: pos(start) };
+			}
+		});
+		return { headings, blocks };
+	}
+	const embedEl = (src: string): HTMLElement => {
+		const embed = document.createElement('div');
+		embed.className = 'internal-embed markdown-embed';
+		embed.setAttribute('src', src);
+		return embed.appendChild(document.createElement('div'));
+	};
+	/** The host of the block `section` describes (relative to the embedded part), in an embed with link `src`; the metadata cache answers for the note as it is now. */
+	function embedded(full: string, section: { text: string; lineStart: number; lineEnd: number }, src: string, body = bodyOf(5), cacheText: string | object = full, el: HTMLElement = embedEl(src)) {
+		const app = new App();
+		app.vault.setFile('Note.md', full);
+		jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => (typeof cacheText === 'string' ? cacheOf(cacheText) : cacheText) as never);
+		const sec: Section = { current: section };
+		const host = new ReadingModeBlockHost(new Plugin(app) as never, el, switchableCtx(sec) as never, 'ds-counter');
+		host.setMountedBody(body);
+		return { app, host };
+	}
+	const save = (host: ReadingModeBlockHost, pin: ReturnType<ReadingModeBlockHost['pinPosition']>, body = bodyOf(5, 'Edited')) => host.replaceSource(body, { pin, pinOnly: true });
+	const SUB = ['## Tracker', '', ...CTR(5), ''];
+	const part = (lines: string[], lineStart: number) => ({ text: lines.join('\n'), lineStart, lineEnd: lineStart + 3 });
+
+	test('+ then the pencil: the section text is stale (old value) when the form opens, a long note: Save lands in the embedded block', async () => {
+		const live = ['## Tracker', '', ...CTR(6), ''];
+		const full = ['# N', '', ...para(500, 'above'), '', ...live, '## After', '', ...para(500, 'below'), 'END'].join('\n');
+		const { app, host } = embedded(full, part(SUB, 2), 'Note#Tracker', bodyOf(6)); // Obsidian still reports the section with value 5; the host wrote 6
+		const pin = host.pinPosition()!;
+
+		expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true); // before: the section text was not found, the partial pin was refused
+		expect(app.vault.getContent('Note.md')).toBe(full.replace('name: Twin', 'name: Edited'));
+		expect(Notice.notices).toEqual([]);
+	});
+
+	test.each([
+		['a short note', 3],
+		['a long note', 400],
+	])('a block embed (![[note#^id]]) of the lower of two identical blocks, %s: Save writes the embedded block, never the other', async (_name, filler) => {
+		const full = ['# N', '', ...CTR(5), '', ...para(filler, 'between'), '', ...CTR(5), '^blk', '', ...para(filler, 'below'), 'END'].join('\n');
+		const second = full.split('\n').lastIndexOf('```ds-counter');
+		const { app, host } = embedded(full, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, 'Note#^blk');
+		const pin = host.pinPosition()!;
+
+		expect(await save(host, pin)).toBe(true);
+		expect(names(app)).toEqual(['Twin', 'Edited']);
+		expect(app.vault.getContent('Note.md')).toBe(full.split('\n').map((l, i) => (i === second + 1 ? 'name: Edited' : l)).join('\n'));
+	});
+
+	test('a heading embed of a note with two identical sections: Save writes the section Obsidian embeds (the first heading of that name)', async () => {
+		const full = ['# N', '', ...para(300, 'above'), '', ...SUB, '## After', '', ...para(300, 'mid'), '', ...SUB, '## End', ...para(300, 'below')].join('\n');
+		const { app, host } = embedded(full, part(SUB, 2), 'Note#Tracker');
+		const pin = host.pinPosition()!;
+
+		expect(await save(host, pin)).toBe(true);
+		expect(names(app)).toEqual(['Edited', 'Twin']);
+	});
+
+	test('a cache that lags the note (its position verifies nothing): the pin is not taken from it, and nothing is written into the identical block it points at', async () => {
+		// the note now has two lines more above the section than the cache knows; the cache's heading line is where the TWIN's heading-less block sits
+		const twin = ['## Other', '', ...CTR(5), ''];
+		const now = ['# N', '', 'inserted 1', 'inserted 2', ...twin, ...SUB, '## After', '', 'tail'].join('\n');
+		const before = ['# N', '', ...twin, ...SUB, '## After', '', 'tail'].join('\n'); // what the cache was built from
+		const { app, host } = embedded(now, part(SUB, 2), 'Note#Tracker', bodyOf(5), before);
+		const pin = host.pinPosition()!;
+
+		expect(await save(host, pin)).toBe(true); // the text search (one run) places it: the embedded block, not the twin
+		expect(names(app)).toEqual(['Twin', 'Edited']);
+	});
+
+	test('a cache whose heading line is a line that is NOT the heading (it points at the identical block above the section): not taken, the text search places the pin, the twin is not written', async () => {
+		const twin = ['## Other', '', ...CTR(5), ''];
+		const full = ['# N', '', ...twin, ...SUB, '## After', '', 'tail'].join('\n');
+		// "Tracker" is said to start on the twin's heading line, so that its line + 2 is the twin's fence
+		const lagging = { headings: [{ heading: 'Tracker', level: 2, position: pos(2) }], blocks: {} };
+		const { app, host } = embedded(full, part(SUB, 2), 'Note#Tracker', bodyOf(5), lagging);
+		const pin = host.pinPosition()!;
+
+		expect(await save(host, pin)).toBe(true);
+		expect(names(app)).toEqual(['Twin', 'Edited']);
+	});
+
+	test('the block at the cache\'s position holds another body than the host knows: the pin is not rebased', async () => {
+		const full = ['# N', '', ...para(500, 'above'), '', '## Tracker', '', ...CTR(9), '', '## After', ...para(500, 'below')].join('\n');
+		const { app, host } = embedded(full, part(SUB, 2), 'Note#Tracker');
+		const pin = host.pinPosition()!;
+
+		expect(await save(host, pin)).toBe(false); // the block was changed from outside before the form opened: nothing to place the write on
+		expect(pin).toEqual({ text: SUB.join('\n'), lineStart: 2 });
+		expect(app.vault.getContent('Note.md')).toBe(full);
+	});
+
+	test('a cache that lags AND a section text that is stale, a long note: the pin stays as it was, Save is refused and nothing is written', async () => {
+		const live = ['## Tracker', '', ...CTR(6), ''];
+		const now = ['# N', '', 'inserted', ...para(500, 'above'), '', ...CTR(5), '', ...live, '## After', ...para(500, 'below')].join('\n');
+		const before = ['# N', '', ...para(500, 'above'), '', ...CTR(5), '', ...live, '## After', ...para(500, 'below')].join('\n');
+		const { app, host } = embedded(now, part(SUB, 2), 'Note#Tracker', bodyOf(6), before);
+		const pin = host.pinPosition()!;
+
+		expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(now);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+	});
+
+	test.each([
+		['no src on the embed', (): HTMLElement => { const e = embedEl('x'); e.parentElement!.removeAttribute('src'); return e; }],
+		['a link without a subpath', () => embedEl('Note')],
+		['a link to another note', () => embedEl('Elsewhere#Tracker')],
+		['a subpath that does not resolve', () => embedEl('Note#Nope')],
+	])('%s: the text search places the pin (one run), as before', async (_name, el) => {
+		const full = ['# N', '', ...para(500, 'above'), '', ...SUB, '## After', '', ...para(500, 'below'), 'END'].join('\n');
+		const { app, host } = embedded(full, part(SUB, 2), 'Note#Tracker', bodyOf(5), full, el());
+		const pin = host.pinPosition()!;
+
+		expect(await save(host, pin)).toBe(true);
+		expect(app.vault.getContent('Note.md')).toBe(full.replace('name: Twin', 'name: Edited'));
+	});
+
+	test('no metadata cache for the note: the text search places the pin', async () => {
+		const full = ['# N', '', ...para(500, 'above'), '', ...SUB, '## After', '', ...para(500, 'below'), 'END'].join('\n');
+		const { app, host } = embedded(full, part(SUB, 2), 'Note#Tracker');
+		jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => null);
+		const pin = host.pinPosition()!;
+
+		expect(await save(host, pin)).toBe(true);
+		expect(app.vault.getContent('Note.md')).toBe(full.replace('name: Twin', 'name: Edited'));
+	});
+
+	test('the text search drops the part\'s own trailing blank lines (Obsidian can report more of them than the note has)', async () => {
+		// the embedded section is the last of the note: its reported text ends with two blank lines the file does not have
+		const full = ['# N', '', ...para(500, 'above'), '', '## Tracker', '', ...CTR(5)].join('\n') + '\n';
+		const app = new App();
+		app.vault.setFile('Note.md', full);
+		const text = ['## Tracker', '', ...CTR(5), '', ''].join('\n');
+		const sec: Section = { current: { text, lineStart: 2, lineEnd: 5 } };
+		const el = document.createElement('div');
+		el.className = 'internal-embed markdown-embed';
+		const host = new ReadingModeBlockHost(new Plugin(app) as never, el.appendChild(document.createElement('div')), switchableCtx(sec) as never, 'ds-counter');
+		host.setMountedBody(bodyOf(5));
+		const pin = host.pinPosition()!;
+
+		expect(await save(host, pin)).toBe(true);
+		expect(app.vault.getContent('Note.md')).toBe(full.replace('name: Twin', 'name: Edited'));
+	});
+});
+
 // SC-552 (K): what the Reading-view host offers a block edit form that wants to outlive its view.
 describe('SC-552: ReadingModeBlockHost.keepFormOpenOn', () => {
 	function hostWithRegistry() {

@@ -501,6 +501,9 @@ Object.assign(FIXTURES, {
 	Object.assign(FIXTURES, {
 		'Lifecycle/gs64-emb-src.md': `# gs64 emb src\n\n${COUNTER(5, 'Twin')}\n\n${fill(300, 'above')}\n\n## Tracker\n\n${COUNTER(5, 'Twin')}\n\n## After\n\n${fill(300, 'below')}\n`,
 		'Lifecycle/gs64-emb-host.md': `# gs64 emb host\n\n![[gs64-emb-src#Tracker]]\n\nafter\n`,
+		// a block embed (`![[note#^id]]`) of the LOWER of two identical counters in a short note
+		'Lifecycle/gs64-embb-src.md': `# gs64 embb src\n\n${COUNTER(5, 'Twin')}\n\nmid\n\n${COUNTER(5, 'Twin')}\n^gs64blk\n\nend\n`,
+		'Lifecycle/gs64-embb-host.md': `# gs64 embb host\n\n![[gs64-embb-src#^gs64blk]]\n\nafter\n`,
 	});
 }
 
@@ -4677,7 +4680,7 @@ const SCENARIOS = [
 		// in-app outside edit of block 0 · (i) the same on disk (Reading view plain) · (k) an outside edit that also inserts text above · (l) a kept-open form closes when
 		// the plugin is disabled · (m) control: the form after the click's write has landed · (n) SC-549: + on block 1 held, an in-app outside edit of block 0, fire ·
 		// (o) SC-549 LP: + on block 1 held, 'Z' typed into block 0's title, fire · (p) K-strict: a kept-open form whose block was deleted writes nothing and says why ·
-		// (q) a kept-open form on the unterminated trailing fence (its section redrawn by blank lines added at the end of the note) saves into that block · (r) the note navigated away in its pane, (s) its pane closed, with a pinned form open: the form closes with its view and nothing is written (a form is kept open only while its note is still shown). Before the fix, (a)-(k) FAIL and (g) (p) (q) cannot even keep the form open. SC-556: (x) (y) (z) a form on a card in a heading embed (`![[src#Tracker]]`) of a long note: Save lands in the embedded block, not in an identical block outside the section (Reading view, Live Preview), and an outside edit of the embedded block writes nothing. SC-556: (v) a form that is not kept open (three plain twins, Reading view) whose own block is edited from outside while it is open, (w) the same with the block deleted: Save writes nothing, one Notice, the form stays open, the outside change is kept (base: the edit lands in the identical twin that is left).
+		// (q) a kept-open form on the unterminated trailing fence (its section redrawn by blank lines added at the end of the note) saves into that block · (r) the note navigated away in its pane, (s) its pane closed, with a pinned form open: the form closes with its view and nothing is written (a form is kept open only while its note is still shown). Before the fix, (a)-(k) FAIL and (g) (p) (q) cannot even keep the form open. SC-556: (x) (y) (xa) (ya) (xb) (z) a form on a card in a heading embed or a block embed (`![[src#Tracker]]`) of a long note: Save lands in the embedded block, not in an identical block outside the section (Reading view, Live Preview), and an outside edit of the embedded block writes nothing. SC-556: (v) a form that is not kept open (three plain twins, Reading view) whose own block is edited from outside while it is open, (w) the same with the block deleted: Save writes nothing, one Notice, the form stays open, the outside change is kept (base: the edit lands in the identical twin that is left).
 		id: 'G-S64',
 		async run(t) {
 			const m = await t.mark();
@@ -4696,7 +4699,7 @@ const SCENARIOS = [
 			const P3 = 'Lifecycle/twin-triplets.md';
 			const UT = 'Lifecycle/form-pin-unterminated.md';
 			const P3D = 'Lifecycle/form-strict-triplets.md';
-			const ALL = [C3, C2, C4, P2, P3, UT, P3D, 'Lifecycle/gs64-emb-src.md', 'Lifecycle/gs64-emb-host.md'];
+			const ALL = [C3, C2, C4, P2, P3, UT, P3D, 'Lifecycle/gs64-emb-src.md', 'Lifecycle/gs64-emb-host.md', 'Lifecycle/gs64-embb-src.md', 'Lifecycle/gs64-embb-host.md'];
 			await t.ev(`(() => { if (!document.getElementById('lc-gs64-notice')) { const st = document.createElement('style'); st.id = 'lc-gs64-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
 			await t.ev(`(${gs64Page.toString()})()`);
 			const A = 'window.__gs64.A';
@@ -5103,14 +5106,15 @@ const SCENARIOS = [
 				}
 			};
 			/**
-			 * (x), (y), (z) SC-556: a block edit form on a card inside a HEADING EMBED (`![[src#Tracker]]`) of a long note. Obsidian gives such a block only the section's text, so its
+			 * (x), (y), (xa), (ya), (xb), (z) SC-556: a block edit form on a card inside an EMBED of part of a note: a HEADING embed (`![[src#Tracker]]`) of a long note, or (kind 'block') a BLOCK embed (`![[src#^id]]`) of the lower of two identical blocks. Obsidian gives such a block only the section's text, so its
 			 * pin is rebased onto the whole note (ReadingModeBlockHost.rebasePin); without that every Save of a note over ~400 lines outside the section was refused ("changed on disk first")
-			 * although nothing had changed. `how`: 'save' = Save lands in the embedded block (an identical counter outside the section, above it, is untouched, every other byte too);
+			 * although nothing had changed (r6: the pin is now rebased by the embed's own link, verified against the note; a block embed with an identical block elsewhere used to write the OTHER block;
+			 * 'plus' = the + on the card and at once its pencil: the section text Obsidian reports is stale when the form opens). `how`: 'save' = Save lands in the embedded block (an identical counter outside the section, above it, is untouched, every other byte too);
 			 * 'edit' = the embedded block is edited from outside while the form is open: nothing is written into the twin, and if the form is still open Save writes nothing and says why.
 			 */
-			const embedCase = async (label, how, mode) => {
-				const SRC = 'Lifecycle/gs64-emb-src.md';
-				const HOST = 'Lifecycle/gs64-emb-host.md';
+			const embedCase = async (label, how, mode, kind = 'heading') => {
+				const SRC = kind === 'block' ? 'Lifecycle/gs64-embb-src.md' : 'Lifecycle/gs64-emb-src.md';
+				const HOST = kind === 'block' ? 'Lifecycle/gs64-embb-host.md' : 'Lifecycle/gs64-emb-host.md';
 				const mk = await t.mark();
 				try {
 					await t.reset(SRC);
@@ -5124,6 +5128,9 @@ const SCENARIOS = [
 					t.expect(await t.ev(`!!${E}[0].root.closest('.internal-embed, .markdown-embed')`), `${label}: the card is not inside an embed element (the pin rebase is keyed on it)`);
 					const pencil = `(${E}[0].root.querySelector('.dse-chrome button[data-dse-chrome-item="edit"], button[aria-label^="Edit "]'))`;
 					await t.waitFor(`!!${pencil}`, `${label}: the Edit pencil is drawn`);
+					// 'plus': the + on the card and, at once, its pencil: the + is written first (SC-519) and the embed has not been redrawn yet when the form opens,
+					// so the section text Obsidian reports for the block is still the old one (value 5) while the note holds 6
+					if (how === 'plus') await t.ev(`${E}[0].root.querySelector('button[aria-label^="Increase"]').click()`);
 					await t.ev(`${pencil}.focus({ focusVisible: true })`);
 					await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', text: '\r', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
 					await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
@@ -5131,13 +5138,16 @@ const SCENARIOS = [
 					await t.sleep(300); // the pin's rebase (one cachedRead) is long done
 					await typeRename(label, 'Twin', 'Edited');
 					const before = t.read(SRC);
-					const tracker = before.indexOf('## Tracker');
-					if (how === 'save') {
+					const tracker = kind === 'block' ? before.lastIndexOf('name: Twin') : before.indexOf('name: Twin', before.indexOf('## Tracker')); // the embedded block's name line
+					const blockEnd = before.indexOf('```', tracker);
+					if (how === 'save' || how === 'plus') {
 						await clickSave(label);
 						await waitDisk(label, SRC, () => t.read(SRC).includes('name: Edited'), 'the edit never reached the note (Save refused or written elsewhere)');
 						const now = t.read(SRC);
-						const want = before.slice(0, tracker) + before.slice(tracker).replace('name: Twin', 'name: Edited');
-						t.expect(now === want, `${label}: the note is not "the embedded block edited, every other byte untouched": ${J(now.slice(0, 80))}...`);
+						let block = before.slice(tracker, blockEnd).replace('name: Twin', 'name: Edited');
+						if (how === 'plus') block = block.replace('current_value: 5', 'current_value: 6');
+						const want = before.slice(0, tracker) + block + before.slice(blockEnd);
+						t.expect(now === want, `${label}: the note is not "the embedded block edited, every other byte untouched": ${J(now.slice(0, 80))}... (the other block ${kind === 'block' ? 'above' : 'above the section'} is the twin)`);
 						t.expect((now.match(/name: Twin/g) ?? []).length === 1 && (now.match(/name: Edited/g) ?? []).length === 1, `${label}: the identical block outside the section was touched`);
 						await noNotices(label, mk);
 						outcomes.push(`${label}: Save landed in the embedded block (${before.split('\n').length} lines in the note), the twin above and every other byte untouched, no Notice`);
@@ -5224,6 +5234,9 @@ const SCENARIOS = [
 				await strictCase('(w) SC-556: three plain twins, Reading view, form 1, its own block deleted from outside: Save writes nothing', 'delete', P3D);
 				await embedCase('(x) SC-556: a form in a heading embed of a 600-paragraph note, Reading view: Save lands in the embedded block, not the identical block outside it', 'save', 'rv');
 				await embedCase('(y) SC-556: the same in Live Preview', 'save', 'lp');
+				await embedCase('(xa) SC-556: + on the card then at once its pencil (the section text is stale when the form opens), a heading embed of a long note, Reading view: Save lands in the embedded block', 'plus', 'rv');
+				await embedCase('(ya) SC-556: the same in Live Preview', 'plus', 'lp');
+				await embedCase('(xb) SC-556: a block embed (![[note#^id]]) of the lower of two identical blocks of a short note: Save writes the embedded block, not the one above', 'save', 'rv', 'block');
 				await embedCase('(z) SC-556: the embedded block is edited from outside while its form is open: nothing is written into the twin', 'edit', 'rv');
 			} finally {
 				await t.ev(`${prefs}.set('authoringControls', false)`);

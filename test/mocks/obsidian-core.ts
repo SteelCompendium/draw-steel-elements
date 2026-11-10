@@ -76,6 +76,29 @@ export class TFolder extends TAbstractFile {
 // mirrors the real implementation's observable behavior (unify separators, collapse
 // duplicate slashes, drop a leading "./", trim leading/trailing slashes) without
 // pulling in Obsidian's actual (Electron-only) implementation.
+/**
+ * SC-556: Obsidian's `resolveSubpath(cache, '#Heading' | '#^id')` over a metadata cache's `headings` / `blocks` (the first heading of that
+ * name, case-insensitive; the block with that id). `start` is the heading line / the block's first line. The mock vault's `getFileCache`
+ * does not build these; a test that wants them gives the cache (`jest.spyOn(app.metadataCache, 'getFileCache')`).
+ */
+export function resolveSubpath(
+	cache: { headings?: Array<{ heading: string; position: any }>; blocks?: Record<string, { position: any }> } | null,
+	subpath: string,
+): any {
+	if (!cache) return null;
+	const path = subpath.replace(/^#/, '');
+	if (path.startsWith('^')) {
+		const block = cache.blocks?.[path.slice(1).toLowerCase()] ?? cache.blocks?.[path.slice(1)];
+		return block ? { type: 'block', block, list: undefined, start: block.position.start, end: block.position.end } : null;
+	}
+	const name = path.split('#').pop() ?? '';
+	const headings = cache.headings ?? [];
+	const index = headings.findIndex((h) => h.heading.toLowerCase() === name.toLowerCase());
+	if (index < 0) return null;
+	const current = headings[index];
+	return { type: 'heading', current, next: headings[index + 1] ?? null, start: current.position.start, end: headings[index + 1]?.position.start ?? null };
+}
+
 export function normalizePath(path: string): string {
 	let p = path.replace(/\\/g, '/').replace(/\/{2,}/g, '/');
 	if (p.startsWith('./')) p = p.slice(2);

@@ -60,7 +60,7 @@
 // than returning false silently. Hover popovers are NOT in that list —
 // measured on Obsidian 1.14.2 (base and head alike, 2026-09-24), a hover popover's section
 // RESOLVES and a click writes the correct block, same as any other reading-mode context.
-import { MarkdownRenderChild, TFile } from 'obsidian';
+import { MarkdownRenderChild, TFile, resolveSubpath } from 'obsidian';
 import type { Component, MarkdownPostProcessorContext, MarkdownSectionInformation, MarkdownView, Plugin } from 'obsidian';
 import type { BlockHost, BlockInfo, BlockPin, BlockWriteOptions, RenderMode } from './BlockHost';
 import { mapLine } from './lineMap';
@@ -780,13 +780,19 @@ export class ReadingModeBlockHost implements BlockHost {
 	}
 
 	/**
-	 * SC-556: a block inside a heading embed (`![[note#Heading]]`, Reading view or Live Preview) is given only that section's text, with
-	 * line numbers counted from the section's first line. A pin made of that is not a position in the note: mapped against the whole
-	 * note every line outside the section looks like an insertion, and a long note exceeds `LINE_MAP_MAX_EDITS` with nothing changed
-	 * at all (a Save that could never land, now that a form's Save is pin-only). So the pin is rebased onto the whole note as the vault
-	 * holds it now: when the section's lines are found in it exactly once, the pin becomes the note's text and the section's offset is
-	 * added to its line. Found twice (two identical sections) or not at all: the pin is left as it was (no worse than before). A
-	 * block that is not inside an embed (its section text IS the note) is not looked at. Asynchronous (`cachedRead`); `replaceSource` waits for it.
+	 * SC-556: a block inside an embed of PART of a note (`![[note#Heading]]`, `![[note#^id]]`; Reading view, Live Preview, hover preview) is
+	 * given only that part's text, with line numbers counted from its first line. A pin made of that is not a position in the note: mapped
+	 * against the whole note every line outside the part looks like an insertion (a long note exceeds `LINE_MAP_MAX_EDITS` with nothing changed
+	 * at all: a Save that could never land, now that a form's Save is pin-only), and an identical block elsewhere in the note can be taken
+	 * for it. So the pin is rebased onto the whole note as the vault holds it now: `pin.text` becomes the note's text and the pin's line
+	 * moves by where the part starts. Where it starts comes from the EMBED'S OWN LINK, not from searching for the part's text (that text
+	 * can be stale when the form opens, e.g. right after a + on the card, and an identical part elsewhere cannot be told apart by text):
+	 * `embedStartLine` (the link's subpath through Obsidian's `resolveSubpath`), accepted only after `verifiedPinLine` has checked it
+	 * against the note text just read. When the link gives nothing that verifies (no `src` on the element, a link that does not point at
+	 * this note, an unresolved subpath, no metadata cache, a cache that lags the note), the part's lines are looked for in the note
+	 * (`searchedPinLine`): used only when they occur EXACTLY once, never a choice between identical runs. Nothing verifies: the pin is
+	 * left as it was. A block that is not inside an embed (its section text IS the note) is not looked at. Asynchronous (`cachedRead`);
+	 * `replaceSource` waits for it.
 	 */
 	private async rebasePin(pin: { text: string; lineStart: number }, sectionText: string): Promise<void> {
 		try {
@@ -794,24 +800,88 @@ export class ReadingModeBlockHost implements BlockHost {
 			if (!(file instanceof TFile)) return;
 			const whole = await this.plugin.app.vault.cachedRead(file);
 			if (whole === sectionText) return;
-			const section = splitLines(sectionText);
-			while (section.length > 0 && section[section.length - 1] === '') section.pop(); // the section's own trailing blank lines
-			if (section.length === 0) return;
-			const lines = splitLines(whole);
-			let found = -1;
-			for (let k = 0; k + section.length <= lines.length; k++) {
-				let same = true;
-				for (let i = 0; i < section.length && same; i++) same = lines[k + i] === section[i];
-				if (!same) continue;
-				if (found >= 0) return; // two identical sections: which one is ours is not decidable here
-				found = k;
-			}
-			if (found < 0) return;
+			const line = this.verifiedPinLine(file, whole, sectionText, pin.lineStart) ?? this.searchedPinLine(whole, sectionText, pin.lineStart);
+			if (line === null) return;
 			pin.text = whole;
-			pin.lineStart += found;
+			pin.lineStart = line;
 		} catch {
 			// no readable note: the pin stays as it was
 		}
+	}
+
+	/**
+	 * SC-556: where the embedded part starts in the note, from the embed element's `src` (`Note#Heading`, `Note#^id`, `Note#H1#H2`) resolved
+	 * with Obsidian's `resolveSubpath` over the note's metadata cache (`start.line` of the heading or of the block). The pin's own line is
+	 * counted from there. The embed that matters is the nearest one around this block, so a nested embed uses its own link. Null for every
+	 * case that cannot be answered: no `src` / no `#`, no cache, a link whose note is not this note, a subpath that does not resolve.
+	 * The answer is NOT trusted yet: the cache can lag a write (`verifiedPinLine`).
+	 */
+	private embedStartLine(file: TFile): number | null {
+		const src = this.containerEl.closest('.internal-embed[src], .markdown-embed[src]')?.getAttribute('src');
+		if (!src) return null;
+		const hash = src.indexOf('#');
+		if (hash < 0) return null;
+		const cache = this.plugin.app.metadataCache;
+		const meta = cache.getFileCache(file);
+		if (!meta) return null;
+		const dest = cache.getFirstLinkpathDest(src.slice(0, hash), this.ctx.sourcePath);
+		if (!dest || dest.path !== file.path) return null;
+		const sub = resolveSubpath(meta, src.slice(hash));
+		const line = sub?.start?.line;
+		return typeof line === 'number' && line >= 0 ? line : null;
+	}
+
+	/**
+	 * SC-556: the pin's line in `whole` through the embed's link, or null. The metadata cache can lag a write, so the position is never taken
+	 * on trust: the line the part starts on must read exactly like the first line of the text Obsidian gave this block (the heading as
+	 * drawn, or the block's opening fence), and a fence of this host's language must open at the pin's line with the body this host knows
+	 * (or, with none, the body of the block as the section shows it). A position that does not verify is no position: a stale cache can
+	 * then point at any line, but never at a block that merely looks like this one.
+	 */
+	private verifiedPinLine(file: TFile, whole: string, sectionText: string, relLine: number): number | null {
+		const start = this.embedStartLine(file);
+		if (start === null) return null;
+		const sectionLines = splitLines(sectionText);
+		const lines = splitLines(whole);
+		if (start >= lines.length || lines[start] !== sectionLines[0]) return null;
+		const line = start + relLine;
+		const found = this.fenceAt(whole, line);
+		if (!found) return null;
+		const own = blockBodyLines(sectionLines, relLine, relLine + (found.lineEnd - found.lineStart)).join('\n');
+		const expected = this.knownBody ?? own;
+		return normalizeBody(found.body) === normalizeBody(expected) ? line : null;
+	}
+
+	/**
+	 * SC-556: the fallback of `verifiedPinLine`: the part's lines (its own trailing blank lines dropped: Obsidian can report more of them than
+	 * the file has) as ONE run of lines in `whole`. Null when there is no such run or when there are two (identical parts: which one is this
+	 * block's is not decidable by text).
+	 */
+	private searchedPinLine(whole: string, sectionText: string, relLine: number): number | null {
+		const section = splitLines(sectionText);
+		while (section.length > 0 && section[section.length - 1] === '') section.pop();
+		if (section.length === 0) return null;
+		const lines = splitLines(whole);
+		let found = -1;
+		for (let k = 0; k + section.length <= lines.length; k++) {
+			let same = true;
+			for (let i = 0; i < section.length && same; i++) same = lines[k + i] === section[i];
+			if (!same) continue;
+			if (found >= 0) return null;
+			found = k;
+		}
+		return found < 0 ? null : found + relLine;
+	}
+
+	/** The fence of this host's language that opens at `line` of `content` (a closed fence, or the note's trailing fence that never closes), with its body; else null. */
+	private fenceAt(content: string, line: number): { lineStart: number; lineEnd: number; body: string } | null {
+		const language = this.knownLanguage ?? this.alias;
+		const lines = splitLines(content);
+		const fence = listFences(content, language).find((f) => f.lineStart === line);
+		if (fence) return { ...fence, body: blockBodyLines(lines, fence.lineStart, fence.lineEnd).join('\n') };
+		const unterminated = locateUnterminatedTrailingFence(lines, language);
+		if (!unterminated || unterminated.lineStart !== line) return null;
+		return { ...unterminated, body: lines.slice(unterminated.lineStart + 1, unterminated.lineEnd + 1).join('\n') };
 	}
 
 	/**
@@ -828,19 +898,9 @@ export class ReadingModeBlockHost implements BlockHost {
 	private pinnedTarget(content: string, pin: BlockPin): { lineStart: number; lineEnd: number } | null {
 		const line = mapLine(pin.text, content, pin.lineStart);
 		if (line === null) return null;
-		const language = this.knownLanguage ?? this.alias;
-		const lines = splitLines(content);
-		let fence: { lineStart: number; lineEnd: number } | undefined = listFences(content, language).find((f) => f.lineStart === line);
-		let body: string | null = null;
-		if (fence) {
-			body = blockBodyLines(lines, fence.lineStart, fence.lineEnd).join('\n');
-		} else {
-			const unterminated = locateUnterminatedTrailingFence(lines, language);
-			if (!unterminated || unterminated.lineStart !== line) return null;
-			fence = unterminated;
-			body = lines.slice(unterminated.lineStart + 1, unterminated.lineEnd + 1).join('\n');
-		}
-		if (this.knownBody !== null && normalizeBody(body) !== normalizeBody(this.knownBody)) return null;
+		const fence = this.fenceAt(content, line);
+		if (!fence) return null;
+		if (this.knownBody !== null && normalizeBody(fence.body) !== normalizeBody(this.knownBody)) return null;
 		return { lineStart: fence.lineStart, lineEnd: fence.lineEnd };
 	}
 

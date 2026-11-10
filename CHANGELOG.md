@@ -37,8 +37,7 @@ for what needs action.
   so ("a change to a block in <note> was not saved — the block changed on disk first"), the form stays open, and the
   outside change is kept. The Notice shows on every such Save, also when you press Save again within a few seconds. A
   card's own + and − are not affected, and neither is a form whose block only moved because of an edit above or below it,
-  or a form opened on a card in an embed of one heading of a note (`![[note#Heading]]`), however long that note is. Two
-  limits. Two identical blocks with only blank lines between them: if one is deleted from outside, the plugin cannot tell
+  or a form opened on a card in an embed of one heading or one block of a note (`![[note#Heading]]`, `![[note#^id]]`), also right after pressing + on the card. A form in an embed finds its block by the embed's own link; in a hover preview, or when Obsidian's index of the note is behind a change, it finds the embedded part by its text instead, and if that text is not unique in a long note Save is refused with the same Notice. Limits. Two identical blocks with only blank lines between them: if one is deleted from outside, the plugin cannot tell
   which, so the form on the upper block saves into the block that is left, and the form on the lower block is refused
   with the same Notice. And if hundreds of lines changed both above and below the block while the form was open, Save is
   refused the same way even though the block itself is unchanged: copy your text out and reopen the form.
