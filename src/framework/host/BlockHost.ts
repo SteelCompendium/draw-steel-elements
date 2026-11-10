@@ -53,7 +53,7 @@ export interface BlockWriteOptions {
 	pin?: BlockPin | null;
 	/** SC-552: with a `pin`, a pin that cannot be placed means NO write (the "changed on disk first" Notice) instead of the fallback.
 	 *  SC-556: every block edit form's Save passes it (the form's own block was edited or deleted from outside while it was open);
-	 *  the view's own debounced write does not (it keeps the fallback). */
+	 *  the view's own debounced write does not (it keeps the fallback, except SC-480: not into a block with an identical twin). */
 	pinOnly?: boolean;
 }
 

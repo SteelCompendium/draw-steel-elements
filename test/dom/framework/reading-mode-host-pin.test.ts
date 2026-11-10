@@ -2,8 +2,9 @@
 // opens; Obsidian's redraw of identical blocks can then hand the form's element to a twin, and a write that follows the element
 // lands in the twin. `pinPosition()` reads where the block is drawn now, `replaceSource(body, { pin })` finds that block again
 // in whatever the note has become (a line diff, lineMap.ts) and writes there; a pin that cannot be placed falls back to the
-// element's section as before, unless the caller asked for `pinOnly` (every block edit form's Save, SC-556; the view's own write does not).
-import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlockHost';
+// element's section as before, unless the caller asked for `pinOnly` (every block edit form's Save, SC-556; the view's own write does not)
+// or the block has an identical twin (SC-480: nothing is written, the dropped-write Notice shows).
+import { ReadingModeBlockHost, countByBody } from '../../../src/framework/host/ReadingModeBlockHost';
 import { ViewRegistry } from '../../../src/framework/host/viewRegistry';
 import { droppedWriteMessage, resetDroppedWriteNotices } from '../../../src/framework/host/droppedWriteNotice';
 import { App, Notice, Plugin, makeFakeContext } from '../../mocks/obsidian';
@@ -107,13 +108,28 @@ describe('SC-552: ReadingModeBlockHost pinned writes', () => {
 		expect(app.vault.getContent('Note.md')).toContain('NEW PARAGRAPH');
 	});
 
-	test('a pin that cannot be placed falls back to the element\'s section: no new refusal, the write lands', async () => {
+	test('SC-480: a pin that cannot be placed, with identical twins in the note: nothing is written (the dropped-write Notice), not the element\'s section', async () => {
 		const { app, host } = triplet();
-		const stale = { text: app.vault.getContent('Note.md')!, lineStart: 0 }; // line 0 is the heading, not a fence
+		const before = app.vault.getContent('Note.md')!;
+		const stale = { text: before, lineStart: 0 }; // line 0 is the heading, not a fence
+
+		expect(await host.replaceSource(bodyOf(5, 'Edited'), { pin: stale })).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(before);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		expect(host.lastWriteReported).toBe(true);
+	});
+
+	test('a pin that cannot be placed, no twin anywhere: falls back to the element\'s section, no new refusal, the write lands', async () => {
+		const app = new App();
+		const text = noteOf([5]);
+		app.vault.setFile('Note.md', text);
+		const host = hostOn(app, { current: sectionAt(text, fencesOf(text)[0]) });
+		const stale = { text, lineStart: 0 };
 
 		expect(await host.replaceSource(bodyOf(5, 'Edited'), { pin: stale })).toBe(true);
-		expect(names(app)).toEqual(['Twin', 'Edited', 'Twin']); // the section the element sits on
+		expect(names(app)).toEqual(['Edited']);
 		expect(host.lastWriteReported).toBe(false);
+		expect(Notice.notices).toEqual([]);
 	});
 
 	test('the pinned block is only written while it still holds the body the host knows', async () => {
@@ -246,17 +262,18 @@ describe('SC-552: a view\'s own write is placed through the pin its round\'s fir
 		expect(names(app)).toEqual(['Twin', 'Twin', 'Edited']); // follows the element, as before
 	});
 
-	test('SC-556: the view\'s own write is not pin-only: a pin that cannot be placed (its block edited from outside) still falls back and writes', async () => {
+	test('SC-556 / SC-480: the view\'s own write is not pin-only, but a pin that cannot be placed (its block edited from outside) with identical twins in the note writes nothing', async () => {
 		Notice.notices.length = 0;
+		resetDroppedWriteNotices();
 		const { app, host, section } = setup();
 		host.notePersistIntent();
 		const after = noteOf([5, 9, 5]); // the clicked (middle) block was edited from outside
 		app.vault.setFile('Note.md', after);
 		section.current = sectionAt(after, fencesOf(after)[1]);
 
-		expect(await host.replaceSource(bodyOf(6), own)).toBe(true); // not dropped: only a form's Save is pin-only
-		expect(Notice.notices).toEqual([]);
-		expect(values(app)).toContain(9); // the outside edit is still in the note
+		expect(await host.replaceSource(bodyOf(6), own)).toBe(false); // twins: the pin was the only identity (before SC-480 the write landed in a twin)
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		expect(app.vault.getContent('Note.md')).toBe(after); // the outside edit is kept, nothing else touched
 	});
 
 	test('a write that is not the view\'s own does not use up the pin either', async () => {
@@ -267,6 +284,151 @@ describe('SC-552: a view\'s own write is placed through the pin its round\'s fir
 
 		expect(await host.replaceSource(bodyOf(6), own)).toBe(true);
 		expect(values(app)).toEqual([7, 6, 5]); // the pin was still there for the view\'s own write
+	});
+});
+
+// SC-480: a card write whose pin cannot be placed (its block was deleted or edited, or the note changed too much to map) falls back to
+// today's placement only when its block's body was unique in the note as clicked (pin.text) and is unique now. With an identical twin the
+// pin was the only identity: nothing is written and the dropped-write Notice shows, never a click landing in a block the user never touched.
+describe('SC-480: a card write whose pin misses is never written into an identical twin', () => {
+	let warn: jest.SpyInstance;
+	beforeEach(() => {
+		resetDroppedWriteNotices();
+		Notice.notices.length = 0;
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => warn.mockRestore());
+	const own = { fromView: true };
+
+	/** A note of counters, one per value (null = no block there), each after its own prose line (P0, P1, ...: twins are never told apart by blank lines only). */
+	const build = (blocks: (number | null)[], above: string[] = [], below: string[] = []): string =>
+		['# N', '', ...above, ...blocks.flatMap((v, i) => [`P${i}`, '', ...(v === null ? [] : [...CTR(v), ''])]), ...below, 'END'].join('\n');
+	/** The host sits on block `at` of `blocks`, clicked (the round's pin taken); then the note becomes `after` and the element's section is `sectionOf(after)`. */
+	function clicked(blocks: (number | null)[], at: number, after: string, sectionOf: (text: string) => Section['current'], opts: { above?: string[]; below?: string[] } = {}) {
+		const app = new App();
+		const text = build(blocks, opts.above, opts.below);
+		app.vault.setFile('Note.md', text);
+		const section: Section = { current: sectionAt(text, fencesOf(text)[at]) };
+		const host = new ReadingModeBlockHost(new Plugin(app) as never, document.createElement('div'), switchableCtx(section) as never, 'ds-counter');
+		host.setMountedBody(bodyOf(blocks[at]!));
+		host.notePersistIntent();
+		app.vault.setFile('Note.md', after);
+		section.current = sectionOf(after);
+		return { app, host, section, after };
+	}
+
+	test.each([
+		['above', 2, [5, 5, null], 1], // the lowest of three deleted: the element is handed to the twin just above it
+		['below', 0, [null, 5, 5], 0], // the highest of three deleted: the element is handed to the twin just below it
+	])('the clicked block deleted, its twins %s it (the element handed to a twin): nothing is written, one Notice, the note is untouched', async (_where, at, afterBlocks, handedTo) => {
+		const after = build(afterBlocks as (number | null)[]);
+		const { app, host } = clicked([5, 5, 5], at, after, (t) => sectionAt(t, fencesOf(t)[handedTo]));
+
+		expect(await host.replaceSource(bodyOf(6), own)).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(after);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		expect(host.lastWriteReported).toBe(true);
+	});
+
+	test('the clicked block deleted, the element has no section any more (the body search): nothing is written', async () => {
+		const after = build([5, 5, null]);
+		const { app, host } = clicked([5, 5, 5], 2, after, () => null);
+
+		expect(await host.replaceSource(bodyOf(6), own)).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(after);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+	});
+
+	test('two identical blocks, one deleted: the twin was there when the block was clicked (pin.text), though the body is unique now: nothing is written', async () => {
+		const after = build([5, null]);
+		const { app, host } = clicked([5, 5], 1, after, (t) => sectionAt(t, fencesOf(t)[0]));
+		expect(countByBody(after, 'ds-counter', bodyOf(5))).toBe(1);
+
+		expect(await host.replaceSource(bodyOf(6), own)).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(after);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+	});
+
+	test('a unique block whose body now appears twice (an outside edit pasted copies): the twin is there now, nothing is written', async () => {
+		const after = build([7, null, 7]); // the clicked block (7, unique when clicked) is gone; two others now hold 7
+		const { app, host } = clicked([5, 7, 5], 1, after, (t) => sectionAt(t, fencesOf(t)[0]));
+
+		expect(await host.replaceSource(bodyOf(8), own)).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(after);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+	});
+
+	test('the clicked block deleted, no twin anywhere: one Notice, the note is untouched (as before)', async () => {
+		const after = build([null, 7]);
+		const { app, host } = clicked([5, 7], 0, after, (t) => sectionAt(t, fencesOf(t)[0]));
+
+		expect(await host.replaceSource(bodyOf(6), own)).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(after);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+	});
+
+	const lines = (n: number, tag: string): string[] => Array.from({ length: n }, (_, i) => `${tag} ${i}`);
+	// more than LINE_MAP_MAX_EDITS (400) lines changed on both sides of the block: the pin cannot be mapped
+	const longAround = (blocks: (number | null)[], tagA: string, tagB: string): string => build(blocks, lines(210, tagA), lines(210, tagB));
+
+	test('no twin, the note changed by more than 400 lines around the block while the write waited: the pin misses and the write still lands (as before)', async () => {
+		const after = longAround([5], 'c', 'd');
+		const { app, host } = clicked([5], 0, after, (t) => sectionAt(t, fencesOf(t)[0]), { above: lines(210, 'a'), below: lines(210, 'b') });
+
+		expect(await host.replaceSource(bodyOf(6), own)).toBe(true);
+		expect(values(app)).toEqual([6]);
+		expect(Notice.notices).toEqual([]);
+	});
+
+	test('the same long change with an identical twin above the block: refused (the pin was the only identity)', async () => {
+		const after = longAround([5, 5], 'c', 'd');
+		const { app, host } = clicked([5, 5], 1, after, (t) => sectionAt(t, fencesOf(t)[1]), { above: lines(210, 'a'), below: lines(210, 'b') });
+
+		expect(await host.replaceSource(bodyOf(6), own)).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(after);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+	});
+
+	test('a card write that carries no pin (its block had no section at the click) keeps today\'s placement, twins or not', async () => {
+		const app = new App();
+		const text = build([5, 5, 5]);
+		app.vault.setFile('Note.md', text);
+		const section: Section = { current: null }; // no section when the round's first click comes
+		const host = new ReadingModeBlockHost(new Plugin(app) as never, document.createElement('div'), switchableCtx(section) as never, 'ds-counter');
+		host.setMountedBody(bodyOf(5));
+		host.notePersistIntent(); // pinPosition() is null: nothing to pin
+		section.current = sectionAt(text, fencesOf(text)[1]);
+
+		expect(await host.replaceSource(bodyOf(6), own)).toBe(true);
+		expect(values(app)).toEqual([5, 6, 5]);
+		expect(Notice.notices).toEqual([]);
+	});
+
+	test('a pin that places still writes there with identical twins around (the race: the note moved the block, nothing was deleted)', async () => {
+		const after = build([5, 5, 5], ['NEW', '']);
+		const { app, host } = clicked([5, 5, 5], 1, after, (t) => sectionAt(t, fencesOf(t)[2])); // the element was handed to the lower twin
+
+		expect(await host.replaceSource(bodyOf(6), own)).toBe(true);
+		expect(values(app)).toEqual([5, 6, 5]);
+		expect(Notice.notices).toEqual([]);
+	});
+});
+
+describe('SC-480: countByBody counts the blocks locateByBody searches', () => {
+	const blk = (n: number, lang = 'ds-counter'): string => ['```' + lang, `name: Twin`, `current_value: ${n}`, '```'].join('\n');
+	test('closed blocks of the language holding the body (the language and the body both count)', () => {
+		const text = [blk(5), 'x', blk(5), 'x', blk(6), 'x', blk(5, 'ds-stamina')].join('\n');
+		expect(countByBody(text, 'ds-counter', bodyOf(5))).toBe(2);
+		expect(countByBody(text, 'ds-counter', bodyOf(6))).toBe(1);
+		expect(countByBody(text, 'ds-counter', bodyOf(9))).toBe(0);
+	});
+
+	test('the note\'s trailing fence that never closes counts, quoted blocks and CRLF notes too', () => {
+		const open = ['```ds-counter', 'name: Twin', 'current_value: 5', ''].join('\n');
+		expect(countByBody([blk(5), 'x', open].join('\n'), 'ds-counter', bodyOf(5))).toBe(2);
+		const quoted = blk(5).split('\n').map((l) => `> ${l}`).join('\n');
+		expect(countByBody([quoted, 'x', blk(5)].join('\n'), 'ds-counter', bodyOf(5))).toBe(2);
+		expect(countByBody([blk(5), 'x', blk(5)].join('\r\n'), 'ds-counter', bodyOf(5))).toBe(2);
 	});
 });
 

@@ -214,6 +214,22 @@ export function locateByBody(
 }
 
 /**
+ * SC-480: how many blocks of `language` in `content` hold `body` - the same scope as `locateByBody` (closed fences, quoted ones
+ * included, and the note's trailing fence that never closes).
+ */
+export function countByBody(content: string, language: string, body: string): number {
+	const wanted = normalizeBody(body);
+	const lines = splitLines(content);
+	let n = 0;
+	for (const info of listFences(content, language)) {
+		if (normalizeBody(blockBodyLines(lines, info.lineStart, info.lineEnd).join('\n')) === wanted) n++;
+	}
+	const open = locateUnterminatedTrailingFence(lines, language);
+	if (open && normalizeBody(lines.slice(open.lineStart + 1, open.lineEnd + 1).join('\n')) === wanted) n++;
+	return n;
+}
+
+/**
  * SC-455: the `language` block inside a Reading-view / Live Preview SECTION WINDOW
  * `[section.lineStart, section.lineEnd]` of `content` — the whole quote or callout Obsidian reports
  * for a block nested in one, where the section's first line is NOT the fence. Fence lines inclusive.
@@ -932,6 +948,12 @@ export class ReadingModeBlockHost implements BlockHost {
 		return { lineStart: fence.lineStart, lineEnd: fence.lineEnd };
 	}
 
+	/** SC-480: another block holds this block's body, in the note as the pin was taken (`pin.text`) or in `content` now. */
+	private twinned(content: string, pin: BlockPin): boolean {
+		if (this.knownBody === null || this.knownLanguage === null) return false;
+		return countByBody(pin.text, this.knownLanguage, this.knownBody) > 1 || countByBody(content, this.knownLanguage, this.knownBody) > 1;
+	}
+
 	async replaceSource(newSource: string, options?: BlockWriteOptions): Promise<boolean> {
 		this.reported = false;
 		if (options?.pin) await pinRebased.get(options.pin); // SC-556: a section pin is rebased onto the whole note first (rebasePin)
@@ -990,7 +1012,12 @@ export class ReadingModeBlockHost implements BlockHost {
 				// form's Save does (SC-556) - nowhere (the block changed on disk first).
 				const pinned = pin ? this.pinnedTarget(content, pin) : null;
 				if (pinned) this.knownLineStart = pinned.lineStart;
-				const target = pinned ?? (pin && options?.pinOnly ? 'miss' : this.resolveWriteTarget(content, section));
+				// SC-480: a card write whose pin missed falls back to today's placement only when its block's body was unique in the note as
+				// clicked (pin.text) and is unique now; with an identical twin the pin was the only identity, so nothing is written (the
+				// dropped-write Notice) rather than a click landing in a block the user never touched. Evaluated on a miss only; a write
+				// with no pin at all keeps today's path.
+				const twinned = !pinned && pin !== null && !options?.pinOnly && this.twinned(content, pin);
+				const target = pinned ?? (pin && (options?.pinOnly || twinned) ? 'miss' : this.resolveWriteTarget(content, section));
 				if (target === 'abort') {
 					unplaceable = true; // SC-455: a write that cannot land is never silent
 					listShape = this.looksLikeList(content, section);
