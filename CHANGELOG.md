@@ -28,6 +28,17 @@ for what needs action.
   empty. They now keep what you typed, with the caret where it was if you were still in one of them, and the sidebar tracker keeps
   your place in a box when the note changes from outside. Only a successful Add (the button or Enter) empties them, and what you
   have typed is never written to the note. In Live Preview the boxes are still emptied when the note saves a moment later (SC-605).
+- [FIX] **+ and - in a hover preview of a heading or block link save when an identical counter sits elsewhere in the note** (SC-594).
+  Hover over a link such as `[[long note#Tracker]]` or `[[note#^id]]` and press + or - on a counter in the preview: if the note
+  held a counter with the same contents elsewhere, the click was not saved and the "changed on disk first" Notice showed,
+  although nothing had changed. The click is now saved into the counter you hovered and the identical one is left alone (also
+  for a second click in the same preview, a counter in a callout, Reading view and Live Preview, and `![[note#Heading]]` and
+  `![[note#^id]]` embeds). The same fix closes a wrong write: if the hovered counter was edited from outside (Sync, another
+  app) a moment before your click, the click could be written into the identical counter. It is now not saved and the Notice
+  shows. Still not saved, with the Notice: a counter in a list item or a footnote; a counter that was edited or removed from
+  outside before the click; a preview that did not come from hovering a link, or that was already open when the plugin loaded;
+  a link that names two places (two headings of that name) while the counter's contents also occur twice. The Edit form opened
+  from a preview is unchanged (SC-596).
 - [FIX] **Keyboard focus stays in the initiative tracker after Advance round, Make/Relieve captain, Reset turns, Reset encounter
   and the Malice quick-add, in Reading view** (SC-588). Each of these rebuilds the whole tracker, and focus used to fall to the
   top of the page, so a keyboard user had to Tab back in from the top of the note after every press. The control that replaced
