@@ -793,17 +793,16 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 		expect(app.vault.getContent('Note.md')).toBe(full);
 	});
 
-	test('a cache that lags AND a section text that is stale, a long note (+ then the pencil): the pin is placed by the only block with the known body, Save lands in it (SC-584; before, it was refused)', async () => {
+	test('a cache that lags AND a section text that is stale, a long note: the pin stays as it was, Save is refused and nothing is written', async () => {
 		const live = ['## Tracker', '', ...CTR(6), ''];
 		const now = ['# N', '', 'inserted', ...para(500, 'above'), '', ...CTR(5), '', ...live, '## After', ...para(500, 'below')].join('\n');
 		const before = ['# N', '', ...para(500, 'above'), '', ...CTR(5), '', ...live, '## After', ...para(500, 'below')].join('\n');
 		const { app, host } = embedded(now, part(SUB, 2), 'Note#Tracker', bodyOf(6), before);
 		const pin = host.pinPosition()!;
 
-		expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true);
-		expect(app.vault.getContent('Note.md')).toBe(now.replace(/(## Tracker\n\n```ds-counter\nname: )Twin/, '$1Edited'));
-		expect(names(app)).toEqual(['Twin', 'Edited']); // the identical-looking block above (value 5) is untouched
-		expect(Notice.notices).toEqual([]);
+		expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(now);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
 	});
 
 
@@ -923,119 +922,251 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 		expect(app.vault.getContent('Note.md')).toBe(full.replace('name: Twin', 'name: Edited'));
 	});
 
-	// SC-584 case 1: a hover preview (no `src`) opened right after a + on its card. The + is on disk (value 6, the host knows that body) but the
-	// section text Obsidian reports is still the old one (5), so neither the link nor the text search can place the pin. It is placed by the
-	// block's body only when exactly one block of the note holds it WHEN THE FORM OPENS, and then it is an ordinary pin of the note.
-	describe('SC-584: a hover preview or an embed whose pin only the known body can place', () => {
+	// SC-584 case 1: a form opened right after a + on a card in a hover preview (no `src`) or an embed. The + is this host's own write: it is on disk
+	// (the host knows the new body) but the part Obsidian reports for the card is still the one from before the +, so neither the link nor the part's
+	// text finds the block. The form's pin is then the position of that very write, in the note as the write left it, and every outside edit since is
+	// judged by the usual pin rules (`mapLine`, the body check): it never searches the note for a body, so an identical block cannot be chosen.
+	describe('SC-584: a form opened right after the + on a card in a hover preview or an embed', () => {
 		const settle = () => new Promise((resolve) => setTimeout(resolve, 25)); // the open-time note read (one cachedRead) is done
+		/** The + on the card: the view's own write (a persist intent takes the card's pin, the debounced write follows it). */
+		async function plus(host: ReadingModeBlockHost, to = bodyOf(6)): Promise<boolean> {
+			host.notePersistIntent();
+			await settle();
+			return host.replaceSource(to, { fromView: true });
+		}
 		const NOTE = (n: number, mid: string[] = []): string[] => ['# N', '', 'TOP', '', ...CTR(n), '', ...mid, 'END'];
-		/** The hover preview's host on the counter at line 4 of `full`: the note holds 6 (the + landed), the section Obsidian reports still says 5. */
-		function hover(full: string, fence = 4, known = bodyOf(6)) {
-			const stale = full.split('\n').map((l, i) => (i === fence + 2 ? l.replace('current_value: 6', 'current_value: 5') : l)).join('\n'); // only the block the + was pressed on
-			return embedded(full, { text: stale, lineStart: fence, lineEnd: fence + 3 }, 'x', known, full, hoverEl());
+		/** A hover preview (no `src`) of the whole note `pre`, the card on the counter at `fence`; its section is the note as drawn, before any +. */
+		function hover(pre: string[], fence = 4) {
+			const text = pre.join('\n');
+			return embedded(text, { text, lineStart: fence, lineEnd: fence + 3 }, 'x', bodyOf(5), text, hoverEl());
 		}
 		const edited = (full: string): string => full.replace('name: Twin', 'name: Edited');
+		const noteOf6 = (app: App): string => app.vault.getContent('Note.md')!;
+		const refused = (app: App, note: string) => {
+			expect(app.vault.getContent('Note.md')).toBe(note);
+			expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		};
 
-		test('the + landed, the section text is stale, the block is the only one with that body: Save lands in it (a short note)', async () => {
-			const full = NOTE(6).join('\n');
-			const { app, host } = hover(full);
+		test('a short note, the only counter: + then the form, Save lands in it', async () => {
+			const { app, host } = hover(NOTE(5));
+			expect(await plus(host)).toBe(true);
 			const pin = host.pinPosition()!;
 
-			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true); // before: the pin stayed partial and every Save was refused
-			expect(app.vault.getContent('Note.md')).toBe(edited(full));
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true); // before: the part still said 5, the pin stayed partial and every Save was refused
+			expect(app.vault.getContent('Note.md')).toBe(edited(NOTE(6).join('\n')));
 			expect(Notice.notices).toEqual([]);
 		});
 
-		test('the same with a long note and a heading hover: the section is the part, the block is the only one with that body', async () => {
-			const full = ['# N', '', ...para(300, 'above'), '', '## Tracker', '', ...CTR(6), '', '## After', '', ...para(300, 'below')].join('\n');
-			const lines = full.split('\n');
-			const head = lines.indexOf('## Tracker');
-			const section = { text: ['## Tracker', '', ...CTR(5), ''].join('\n'), lineStart: 2, lineEnd: 5 };
-			const { app, host } = embedded(full, section, 'x', bodyOf(6), full, hoverEl());
-			expect(head).toBeGreaterThan(300);
+		test('a heading hover of a long note: + then the form, Save lands in the Tracker counter', async () => {
+			const pre = ['# N', '', ...para(300, 'above'), '', ...SUB, '## After', '', ...para(300, 'below')];
+			const text = pre.join('\n');
+			const { app, host } = embedded(text, part(SUB, 2), 'x', bodyOf(5), text, hoverEl());
+			expect(await plus(host)).toBe(true);
 			const pin = host.pinPosition()!;
 
 			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true);
-			expect(app.vault.getContent('Note.md')).toBe(edited(full));
+			expect(app.vault.getContent('Note.md')).toBe(edited(text.replace('current_value: 5', 'current_value: 6')));
 		});
 
-		test('another block of the note holds the same body when the form opens: nothing places the pin, Save writes nothing', async () => {
-			const full = ['# N', '', 'TOP', '', ...CTR(6), '', 'p', '', ...CTR(6), '', 'END'].join('\n');
-			const { app, host } = hover(full, 11); // the lower one
+		test('a hover of a whole LONG note scrolled to the card (its section is the whole note): + then the form, Save lands', async () => {
+			const pre = ['# N', '', ...para(300, 'above'), '', ...CTR(5), '', ...para(300, 'below'), 'END'];
+			const fence = pre.indexOf('```ds-counter');
+			const { app, host } = hover(pre, fence);
+			expect(await plus(host)).toBe(true);
 			const pin = host.pinPosition()!;
 
-			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false);
-			expect(app.vault.getContent('Note.md')).toBe(full);
-			expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true);
+			expect(app.vault.getContent('Note.md')).toBe(edited(pre.join('\n').replace('current_value: 5', 'current_value: 6')));
 		});
 
-		test('the form\'s own block is edited from outside after it opened and the twin that is left is the only block with the old body: Save writes nothing, never the twin (the SC-556 hazard)', async () => {
-			const full = NOTE(6).join('\n');
-			const { app, host } = hover(full);
+		test('the + made the block read like another block of the note: Save still lands in the block the + was pressed on (the position, not a search for the body)', async () => {
+			const pre = ['# N', '', 'TOP', '', ...CTR(6), '', 'p', '', ...CTR(5), '', 'END'];
+			const { app, host } = hover(pre, 11); // the lower one; the upper already holds what the + makes of it
+			expect(await plus(host)).toBe(true);
+			const pin = host.pinPosition()!;
+
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true);
+			expect(names(app)).toEqual(['Twin', 'Edited']);
+		});
+
+		test('the form\'s own block is edited from outside after the form opened and a block with the + body is added in the same write: Save writes nothing, never that block (the SC-556 hazard)', async () => {
+			const { app, host } = hover(NOTE(5));
+			await plus(host);
 			const pin = host.pinPosition()!;
 			await settle();
-			// one outside edit: the block the form is on gets another value, and a block with the old body appears further down
 			const outside = ['# N', '', 'TOP', '', ...CTR(9), '', 'p', '', ...CTR(6), '', 'END'].join('\n');
 			app.vault.setFile('Note.md', outside);
 
 			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false); // a search for the body at Save time would write the block at the bottom
-			expect(app.vault.getContent('Note.md')).toBe(outside);
-			expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
-		});
-
-		test('the open-time read of the note holds another body than the host knows (it lags the + write by more than the section text does): the body is not there, nothing places the pin, Save writes nothing', async () => {
-			const full = NOTE(6).join('\n');
-			const { app, host } = hover(full);
-			jest.spyOn(app.vault, 'cachedRead').mockResolvedValueOnce(NOTE(4).join('\n'));
-			const pin = host.pinPosition()!;
-
-			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false); // text and body must agree: the read has no block with the known body
-			expect(app.vault.getContent('Note.md')).toBe(full);
-			expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
-		});
-
-		test('the open-time read predates the + (it is the section\'s own text): that is a coherent pin of the note, Save lands in the block (the body rule is not involved)', async () => {
-			const full = NOTE(6).join('\n');
-			const { app, host } = hover(full);
-			jest.spyOn(app.vault, 'cachedRead').mockResolvedValueOnce(NOTE(5).join('\n'));
-			const pin = host.pinPosition()!;
-
-			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true);
-			expect(app.vault.getContent('Note.md')).toBe(edited(full));
+			refused(app, outside);
 		});
 
 		test('an identical block is added to the note after the form opened: Save still lands in the block the form was opened on', async () => {
-			const full = NOTE(6).join('\n');
-			const { app, host } = hover(full);
+			const { app, host } = hover(NOTE(5));
+			await plus(host);
 			const pin = host.pinPosition()!;
 			await settle();
 			const outside = ['# N', '', 'TOP', '', ...CTR(6), '', 'p', '', ...CTR(6), '', 'END'].join('\n');
 			app.vault.setFile('Note.md', outside);
 
-			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true); // a count at Save time would see two blocks and refuse
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true);
 			expect(names(app)).toEqual(['Edited', 'Twin']);
-			expect(app.vault.getContent('Note.md')).toBe(edited(outside));
 		});
 
-		test('the form\'s own block was edited from outside BEFORE it opened (the preview still shows the old text), a twin holding the old body: nothing places the pin, Save writes nothing', async () => {
-			// the preview's text says "5, then the block" at lines 4-7; the note has 9 there and an identical block with the old body further down
+		test('no + by this host (the note changed from outside under a stale part, the host knows the new body): nothing places the pin, Save writes nothing', async () => {
+			const disk = NOTE(6).join('\n');
+			const { app, host } = embedded(disk, { text: NOTE(5).join('\n'), lineStart: 4, lineEnd: 7 }, 'x', bodyOf(6), disk, hoverEl());
+			const pin = host.pinPosition()!;
+
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false);
+			refused(app, disk);
+		});
+
+		test('the form\'s own block was edited from outside BEFORE it opened (the preview still shows the old text), a twin holding the old body, no + by this host: Save writes nothing', async () => {
 			const disk = ['# N', '', 'TOP', '', ...CTR(9), '', 'p', '', ...CTR(5), '', 'END'].join('\n');
 			const { app, host } = embedded(disk, { text: NOTE(5).join('\n'), lineStart: 4, lineEnd: 7 }, 'x', bodyOf(5), disk, hoverEl());
 			const pin = host.pinPosition()!;
 
-			expect(await save(host, pin, bodyOf(5, 'Edited'))).toBe(false); // the block's body is unique in the note, but not where the preview drew it
-			expect(app.vault.getContent('Note.md')).toBe(disk);
-			expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+			expect(await save(host, pin, bodyOf(5, 'Edited'))).toBe(false);
+			refused(app, disk);
 		});
 
-		test('a card write (not a form Save) with a partial pin and a twin in the note is refused as before: the rule is for a form\'s open', async () => {
-			const full = ['# N', '', 'TOP', '', ...CTR(6), '', 'p', '', ...CTR(6), '', 'END'].join('\n');
-			const { app, host } = hover(full, 11);
+		test('the open-time read of the note predates the + (it is the section\'s own text): a coherent pin of the note, Save lands in the block', async () => {
+			const { app, host } = hover(NOTE(5));
+			await plus(host);
+			jest.spyOn(app.vault, 'cachedRead').mockResolvedValueOnce(NOTE(5).join('\n'));
 			const pin = host.pinPosition()!;
 
-			expect(await host.replaceSource(bodyOf(7), { pin, fromView: true })).toBe(false);
-			expect(app.vault.getContent('Note.md')).toBe(full);
-			expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true);
+			expect(app.vault.getContent('Note.md')).toBe(edited(NOTE(6).join('\n')));
+		});
+
+		test('the pin is the position of the write the host had when the form opened, not of a write that lands while the note is read', async () => {
+			const { app, host } = hover(NOTE(5));
+			await plus(host);
+			const first = noteOf6(app);
+			const pin = host.pinPosition()!;
+			expect(await host.replaceSource(bodyOf(7), { fromView: true })).toBe(true); // lands before the open-time read comes back
+
+			expect(await save(host, pin, bodyOf(7, 'Edited'))).toBe(true);
+			expect(pin.text).toBe(first);
+			expect(app.vault.getContent('Note.md')).toBe(edited(first.replace('current_value: 6', 'current_value: 7')));
+		});
+
+		describe('outside edits between the + and the form, an identical block holding the + body (r2 HIGH-1: nothing may be written into that block)', () => {
+			const A5 = (id: string): string[] => [...CTR(5), `^${id}`];
+			const after6 = (app: App, to: string): string => noteOf6(app).replace('current_value: 6', `current_value: ${to}`); // block A is the first one
+			const asked = async (app: App, host: ReadingModeBlockHost, outside: string) => {
+				app.vault.setFile('Note.md', outside);
+				const pin = host.pinPosition()!;
+				expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false);
+				refused(app, outside);
+			};
+
+			test('P1 a hover of a block link: A edited to 9', async () => {
+				const pre = ['# N', '', ...A5('a'), '', 'p', '', ...CTR(6), '^b', '', 'END'].join('\n');
+				const { app, host } = embedded(pre, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, 'x', bodyOf(5), pre, hoverEl());
+				expect(await plus(host)).toBe(true);
+				await asked(app, host, after6(app, '9'));
+			});
+
+			test('P1d a hover of a block link: A deleted', async () => {
+				const pre = ['# N', '', ...A5('a'), '', 'p', '', ...CTR(6), '^b', '', 'END'].join('\n');
+				const { app, host } = embedded(pre, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, 'x', bodyOf(5), pre, hoverEl());
+				expect(await plus(host)).toBe(true);
+				await asked(app, host, ['# N', '', 'p', '', ...CTR(6), '^b', '', 'END'].join('\n'));
+			});
+
+			test('P2 a Reading-view block embed ![[Note#^a]] (the cache is fresh): A edited to 9', async () => {
+				const pre = ['# N', '', ...A5('a'), '', 'p', '', ...CTR(6), '^b', '', 'END'].join('\n');
+				const { app, host } = embedded(pre, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, 'Note#^a', bodyOf(5), pre);
+				expect(await plus(host)).toBe(true);
+				await asked(app, host, after6(app, '9'));
+			});
+
+			test('P2n the same, the identical block has no id', async () => {
+				const pre = ['# N', '', ...A5('a'), '', 'p', '', ...CTR(6), '', 'END'].join('\n');
+				const { app, host } = embedded(pre, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, 'Note#^a', bodyOf(5), pre);
+				expect(await plus(host)).toBe(true);
+				await asked(app, host, after6(app, '9'));
+			});
+
+			test('P3 a heading hover with two sections of the same name: the first one\'s block edited to 9', async () => {
+				const pre = ['# N', '', '## Tracker', '', ...CTR(5), '', '## Mid', '', 'x', '', '## Tracker', '', ...CTR(6), '', 'END'].join('\n');
+				const { app, host } = embedded(pre, part(SUB, 2), 'x', bodyOf(5), pre, hoverEl());
+				expect(await plus(host)).toBe(true);
+				await asked(app, host, after6(app, '9'));
+			});
+
+			test('the same shape with no outside edit: Save lands in the block the + was pressed on, not in the one that reads the same', async () => {
+				const pre = ['# N', '', ...A5('a'), '', 'p', '', ...CTR(6), '^b', '', 'END'].join('\n');
+				const { app, host } = embedded(pre, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, 'x', bodyOf(5), pre, hoverEl());
+				expect(await plus(host)).toBe(true);
+				const pin = host.pinPosition()!;
+
+				expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true);
+				expect(names(app)).toEqual(['Edited', 'Twin']);
+			});
+		});
+
+		test('a card (+/-) write\'s pin never uses the host\'s last write: a second + with the part still stale and an identical block in the note is refused as before (SC-480)', async () => {
+			const pre = ['# N', '', 'TOP', '', ...CTR(6), '', 'p', '', ...CTR(5), '', 'END'];
+			const { app, host } = hover(pre, 11);
+			await plus(host); // the lower block now reads like the upper
+			const both = noteOf6(app);
+			host.notePersistIntent();
+			await settle();
+
+			expect(await host.replaceSource(bodyOf(7), { fromView: true })).toBe(false);
+			refused(app, both);
+		});
+
+		test('a write by ANOTHER host of the block (a second pane) is not this host\'s position: nothing is found for this host\'s form', async () => {
+			const { app, host } = hover(NOTE(5));
+			const text = NOTE(5).join('\n');
+			const other = new ReadingModeBlockHost(new Plugin(app) as never, document.createElement('div'), switchableCtx({ current: { text, lineStart: 4, lineEnd: 7 } }) as never, 'ds-counter');
+			other.setMountedBody(bodyOf(5));
+			expect(await other.replaceSource(bodyOf(6), { fromView: true })).toBe(true);
+			host.setMountedBody(bodyOf(6)); // this host also holds the new body, but never wrote it
+			const pin = host.pinPosition()!;
+
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false);
+			refused(app, noteOf6(app));
+		});
+
+		describe('a callout in an embed (its part is stale after the +, so its own fence is not found in it)', () => {
+			const CAL = (n: number): string[] => ['> [!note] Camp', ...CTR(n).map((l) => `> ${l}`), '> after text'];
+			const pre = ['# N', '', 'TOP', '', ...CAL(6), '', 'mid', '', ...CAL(5), '', '^cal', '', 'END'].join('\n');
+			const lower = pre.split('\n').lastIndexOf('> [!note] Camp');
+			const calCache = { headings: [], blocks: { cal: { id: 'cal', position: { start: { line: lower, col: 0, offset: 0 }, end: { line: lower + 5, col: 12, offset: 0 } } } } };
+			const section = { text: CAL(5).join('\n'), lineStart: 0, lineEnd: 5 };
+			const setup = async () => {
+				const made = embedded(pre, section, 'Note#^cal', bodyOf(5), calCache);
+				expect(await plus(made.host)).toBe(true); // the lower callout now reads like the upper
+				return made;
+			};
+			const renamedAt = (full: string, header: number): string => full.split('\n').map((l, i) => (i === header + 2 ? '> name: Edited' : l)).join('\n');
+
+			test('+ then the form: the form has a pin (the host\'s own write) and Save lands in the lower callout, never the upper', async () => {
+				const { app, host } = await setup();
+				const afterPlus = noteOf6(app);
+				const pin = host.pinPosition();
+				expect(pin).not.toBeNull(); // before: no block with the known body in the stale callout, so no pin and the form saved without pinOnly
+
+				expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true);
+				expect(app.vault.getContent('Note.md')).toBe(renamedAt(afterPlus, lower));
+				expect(names(app)).toEqual(['Twin', 'Edited']);
+			});
+
+			test('the lower callout edited from outside after the +, the upper one holding the + body: Save writes nothing, never the upper (control with teeth for the callout embed)', async () => {
+				const { app, host } = await setup();
+				const outside = noteOf6(app).split('\n').map((l, i) => (i === lower + 3 ? '> current_value: 9' : l)).join('\n');
+				app.vault.setFile('Note.md', outside);
+				const pin = host.pinPosition();
+
+				expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false);
+				refused(app, outside);
+			});
 		});
 	});
 
@@ -1072,6 +1203,26 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 			expect(await save(host, pin)).toBe(false);
 			expect(app.vault.getContent('Note.md')).toBe(full);
 			expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		});
+
+		test('the id is not the next line after the callout (a paragraph stands between): the marker is not the callout\'s, nothing places the pin, Save writes nothing', async () => {
+			const full = noteWith(['x', '', '^cal']).join('\n');
+			const { app, host } = embedded(full, section, 'Note#^cal', bodyOf(5), calCache(lowerOf(full)));
+			const pin = host.pinPosition()!;
+
+			expect(await save(host, pin)).toBe(false);
+			expect(app.vault.getContent('Note.md')).toBe(full);
+			expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		});
+
+		test('a plain fenced block embed (not in a callout) keeps its rule, the id under the closing fence, whatever the length of the stale part: a part one line longer than the block, a twin above: Save lands in the embedded block (SC-584 r3, r2 LOW-1)', async () => {
+			const disk = ['# N', '', ...CTR(5), '', 'p', '', ...CTR(5), '^a', '', 'END'].join('\n');
+			const stale = ['```ds-counter', 'name: Twin', 'current_value: 5', 'max_value: 9', '```'].join('\n'); // a field was removed; the embed is not redrawn yet
+			const { app, host } = embedded(disk, { text: stale, lineStart: 0, lineEnd: 4 }, 'Note#^a', bodyOf(5), disk);
+			const pin = host.pinPosition()!;
+
+			expect(await save(host, pin)).toBe(true); // before r3: refused (the marker was looked for after the part's last line, which is the id itself)
+			expect(names(app)).toEqual(['Twin', 'Edited']);
 		});
 
 		test('a cache that lags the note so that its callout is the identical one ABOVE: the id is not under it, so it is not taken and nothing is written', async () => {

@@ -475,6 +475,15 @@ export class ReadingModeBlockHost implements BlockHost {
 	private lastOrdinal = -1;
 	/** SC-481: the fence line this host's last write landed at (null until it writes). */
 	private lastWriteLine: number | null = null;
+	/**
+	 * SC-584: this host's own last write to its block while it was drawn inside an embed or a hover preview: the body it wrote, the note
+	 * as that write left it, and the line of the block's fence in it. A form opened right after a + on the card (the card's own write)
+	 * finds its block from this when the part Obsidian reports for the card is still the one from before the +. It is only ever a
+	 * position the host itself wrote, so every outside edit since then is judged by the usual pin rules (`mapLine`, the body check in
+	 * `pinnedTarget`). Replaced by the next write of this host; dropped when the host is given a new mounted body. A write by
+	 * ANOTHER host of the same block (a second pane) is not recorded here.
+	 */
+	private lastWrite: { body: string; text: string; lineStart: number } | null = null;
 
 	/** SC-340: this host's registry entry (set by ViewRegistry.own). */
 	private entry: ViewRegistryEntry | null = null;
@@ -682,6 +691,7 @@ export class ReadingModeBlockHost implements BlockHost {
 	/** SC-343: registerFrameworkElements seeds the body the view is built from. */
 	setMountedBody(source: string): void {
 		this.knownBody = source;
+		this.lastWrite = null;
 	}
 
 	/** SC-343 (BlockHost.notePersistIntent): refresh the durable position while live. */
@@ -691,7 +701,7 @@ export class ReadingModeBlockHost implements BlockHost {
 		// through that pin: another block's write, an outside edit or typing in the note can make Obsidian redraw the identical
 		// blocks meanwhile and hand this card's element to a twin, and the write would follow the element (SC-549). Later intents of
 		// the round do not re-pin: they come after such a redraw may have happened.
-		const pin = this.pinPosition();
+		const pin = this.takePin(false);
 		if (pin && !this.pendingPin) this.pendingPin = pin;
 	}
 
@@ -794,18 +804,39 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * it, as the block is drawn now. Null while the block has no section or no readable fence of its own.
 	 */
 	pinPosition(): BlockPin | null {
+		return this.takePin(true);
+	}
+
+	/**
+	 * `pinPosition`'s body. `forForm` is a block edit form's pin (the only caller that may be given the position of this host's own last
+	 * write, SC-584); a card write's pin (`notePersistIntent`) is made exactly as before SC-584.
+	 */
+	private takePin(forForm: boolean): BlockPin | null {
 		const section = this.readSection();
-		if (!section || !this.ownFence) return null;
+		if (!section) return null;
+		const embedded = this.containerEl.closest('.markdown-embed, .internal-embed') !== null;
+		if (!this.ownFence) {
+			// SC-584: a callout in an embed or hover preview whose part is stale (right after a + on its card) holds no block with the body this
+			// host knows, so its own fence cannot be found in it; the host's own last write still says where the block is.
+			return forForm && embedded ? this.pinFromLastWrite() : null;
+		}
 		const pin = { text: section.text, lineStart: this.ownFence.lineStart };
 		// SC-556: only a block drawn inside an embed can be given a part of the note (see rebasePin); every other pin is taken as before.
-		if (this.containerEl.closest('.markdown-embed, .internal-embed')) {
+		if (embedded) {
 			// An embed of a WHOLE note (`![[note]]`: a link with no `#`) is given the note's own text and lines, so its pin is already a pin of the
 			// note. Any other embed, and a hover preview (no `src` to tell), may be given a part: partial until `rebasePin` has placed it.
 			const link = this.containerEl.closest('.internal-embed[src], .markdown-embed[src]')?.getAttribute('src');
 			if (typeof link !== 'string' || link.includes('#')) partialPins.add(pin);
-			pinRebased.set(pin, this.rebasePin(pin, section.text));
+			pinRebased.set(pin, this.rebasePin(pin, section.text, forForm ? this.lastWrite : null));
 		}
 		return pin;
+	}
+
+	/** SC-584: a pin of the note as this host's own last write left it, when that write is of the body this host knows now; else null. */
+	private pinFromLastWrite(): BlockPin | null {
+		const w = this.lastWrite;
+		if (w === null || this.knownBody === null || normalizeBody(w.body) !== normalizeBody(this.knownBody)) return null;
+		return { text: w.text, lineStart: w.lineStart };
 	}
 
 	/**
@@ -819,14 +850,14 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * `embedStartLine` (the link's subpath through Obsidian's `resolveSubpath`), accepted only after `verifiedPinLine` has checked it
 	 * against the note text just read. When the link gives nothing that verifies (no `src` on the element, a link that does not point at
 	 * this note, an unresolved subpath, no metadata cache, a cache that lags the note), the part's lines are looked for in the note
-	 * (`searchedPinLine`): used only when they occur EXACTLY once, never a choice between identical runs. Last (SC-584), when the part's text is
-	 * stale (a + just before the pencil changed the block's body on disk): `openTimeBodyLine`, which places the pin by the body the host knows
-	 * when the form opens, only if exactly one block of the note holds it. Nothing verifies: the pin is
+	 * (`searchedPinLine`): used only when they occur EXACTLY once, never a choice between identical runs. Last (SC-584, a block edit form's pin only), when the part's text is
+	 * stale (a + on the card just before the pencil changed the block's body): the position of this host's own last write (`lastWrite`).
+	 * Nothing verifies: the pin is
 	 * left in the part's coordinates and marked partial: its Save writes nothing (`pinnedTarget`) rather than guess. A block that is not inside an embed (its section text IS the note) is not looked at. Asynchronous (`cachedRead`);
 	 * `replaceSource` waits for it.
 	 */
-	private async rebasePin(pin: { text: string; lineStart: number }, sectionText: string): Promise<void> {
-		// SC-584: the body this host knows NOW, when the form opens - before the note is read (a write landing during the read must not change what is counted).
+	private async rebasePin(pin: { text: string; lineStart: number }, sectionText: string, write: { body: string; text: string; lineStart: number } | null): Promise<void> {
+		// SC-584: the body this host knows NOW, when the form opens - before the note is read.
 		const knownAtOpen = this.knownBody;
 		try {
 			const file = this.plugin.app.vault.getAbstractFileByPath(this.ctx.sourcePath);
@@ -836,14 +867,24 @@ export class ReadingModeBlockHost implements BlockHost {
 				partialPins.delete(pin); // the part IS the note
 				return;
 			}
-			const line =
-				this.verifiedPinLine(file, whole, sectionText, pin.lineStart) ??
-				this.searchedPinLine(whole, sectionText, pin.lineStart) ??
-				this.openTimeBodyLine(whole, sectionText, pin.lineStart, knownAtOpen);
-			if (line === null) return; // stays partial: Save refuses it (pinnedTarget)
-			pin.text = whole;
-			pin.lineStart = line;
-			partialPins.delete(pin);
+			const line = this.verifiedPinLine(file, whole, sectionText, pin.lineStart) ?? this.searchedPinLine(whole, sectionText, pin.lineStart);
+			if (line !== null) {
+				pin.text = whole;
+				pin.lineStart = line;
+				partialPins.delete(pin);
+				return;
+			}
+			// SC-584: the part is stale: a + on this card changed its block after Obsidian drew the part, so neither the link nor the part's
+			// text finds it. The pin is then the position of that very write (`lastWrite`, taken when the pin was made, never a later one),
+			// accepted only when the body this host knew at open is the body that write wrote. It is the note as the write left it, so
+			// `pinnedTarget` judges every outside edit since: the block edited or deleted there writes nothing, an identical block elsewhere
+			// is never chosen (nothing here searches the note for a body).
+			if (write !== null && knownAtOpen !== null && normalizeBody(write.body) === normalizeBody(knownAtOpen)) {
+				pin.text = write.text;
+				pin.lineStart = write.lineStart;
+				partialPins.delete(pin);
+			}
+			// else: stays partial: Save refuses it (pinnedTarget)
 		} catch {
 			// no readable note: the pin stays as it was
 		}
@@ -893,50 +934,18 @@ export class ReadingModeBlockHost implements BlockHost {
 		if (at.blockId !== null) {
 			// A block embed: the section's first line is the block's own fence, which an identical block elsewhere has too, so the anchor line
 			// proves nothing. What belongs to THIS block is its marker: the first non-blank line after the embedded part's last line is `^id`.
-			// SC-584: the marker follows the END OF THE PART, not the counter's fence: an id on a callout names the whole callout, whose text can
-			// go on after the fence (for a plain fenced block the part ends at its closing fence, so the two are the same line).
+			// SC-584: for a block inside a callout / quote the marker follows the END OF THE PART, not the counter's fence: an id on a callout names
+			// the whole callout, whose text can go on after the fence. A plain fenced block keeps the rule above (its closing fence), whatever the
+			// length of the part Obsidian reports for it (a stale part can be longer or shorter than the block is now).
+			const quoted = (parseOpenFenceLine(lines[found.lineStart])?.prefix ?? '') !== '';
 			const partEnd = start + lastNonBlankLine(sectionLines, 0, sectionLines.length - 1);
-			let next = Math.max(found.lineEnd, partEnd) + 1;
+			let next = (quoted ? Math.max(found.lineEnd, partEnd) : found.lineEnd) + 1;
 			while (next < lines.length && lines[next].trim() === '') next++;
 			if (next >= lines.length || lines[next].trim().toLowerCase() !== `^${at.blockId.toLowerCase()}`) return null;
 		}
 		const own = blockBodyLines(sectionLines, relLine, relLine + (found.lineEnd - found.lineStart)).join('\n');
 		const expected = this.knownBody ?? own;
 		return normalizeBody(found.body) === normalizeBody(expected) ? line : null;
-	}
-
-	/**
-	 * SC-584: where this block is in `whole` when neither the embed's link nor the part's text can say (a hover preview has no `src`; right after
-	 * a + the part's text still has the old body while the note and the host hold the new one). `known` is the body the host knew when the form
-	 * opened; the line is returned only when ALL of this hold, else null (the pin stays partial and Save writes nothing):
-	 *  - exactly one block of this host's language in the note holds `known` (a count taken now, at open - never at Save: the pin placed from it
-	 *    is an ordinary pin of the note, so every later outside edit is judged by `pinnedTarget` and a twin that appears later changes nothing);
-	 *  - the text around it agrees: the part's lines before the block's fence and after its end (trailing blank lines dropped) are the note's
-	 *    lines there, once, and the fence line itself is the same. Only the block's own body may differ (that is what the + changed). A note
-	 *    that was edited around the block before the form opened therefore places nothing, and neither does a twin that took the old body.
-	 */
-	private openTimeBodyLine(whole: string, sectionText: string, relLine: number, known: string | null): number | null {
-		if (known === null) return null;
-		const language = this.knownLanguage ?? this.alias;
-		if (countByBody(whole, language, known) !== 1) return null;
-		const own = this.fenceAt(sectionText, relLine);
-		if (!own) return null;
-		const section = splitLines(sectionText);
-		const openLine = section[own.lineStart];
-		const before = section.slice(0, own.lineStart);
-		const after = section.slice(own.lineEnd + 1);
-		while (after.length > 0 && after[after.length - 1].trim() === '') after.pop();
-		const lines = splitLines(whole);
-		const sameAt = (at: number, run: string[]): boolean => at >= 0 && at + run.length <= lines.length && run.every((l, i) => lines[at + i] === l);
-		let found = -1;
-		for (let k = 0; k + before.length < lines.length; k++) {
-			if (!sameAt(k, before) || lines[k + before.length] !== openLine) continue;
-			const fence = this.fenceAt(whole, k + before.length);
-			if (!fence || normalizeBody(fence.body) !== normalizeBody(known) || !sameAt(fence.lineEnd + 1, after)) continue;
-			if (found >= 0) return null;
-			found = fence.lineStart;
-		}
-		return found < 0 ? null : found;
 	}
 
 	/**
@@ -1048,6 +1057,7 @@ export class ReadingModeBlockHost implements BlockHost {
 		// content inside the callback and falls back to the durable locate when it is stale.
 		const section = this.readSection();
 
+		const inEmbed = this.containerEl.closest('.markdown-embed, .internal-embed') !== null;
 		let wrote = false;
 		let dropped = false;
 		let unplaceable = false;
@@ -1113,6 +1123,9 @@ export class ReadingModeBlockHost implements BlockHost {
 				// Notice for two writes that both actually landed.
 				this.knownBody = newSource;
 				this.lastWriteLine = target.lineStart; // SC-481
+				// SC-584: where this write put the block, in the note as it leaves (only a host drawn in an embed or hover preview needs it).
+				this.lastWrite = null;
+				if (inEmbed && this.fenceAt(next, target.lineStart) !== null) this.lastWrite = { body: newSource, text: next, lineStart: target.lineStart };
 				changedContent = next !== content;
 				// SC-198: hold the preview's height across the rebuild this write is about to
 				// provoke (only meaningful while the block is on screen, i.e. its section
