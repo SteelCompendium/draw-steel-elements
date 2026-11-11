@@ -213,7 +213,7 @@ describe('[R] Advance round vs Reset turns: starting round x round_gain x what i
 		[1, 2, 2, 5, 1],
 		[4, 3, 5, 6, 1],
 		[1, -2, 2, 1, 1], // a negative gain still applies...
-		[1, -5, 2, 0, 1], // ...and stops at 0 (the log keeps the configured amount)
+		[1, -5, 2, 0, 1], // ...and stops at 0 (the log shows the -3 it applied, and the -5 asked for: SC-578)
 	] as const)('[R01] Advance round from round %s with round_gain %s -> round %i, Malice %i, %i log entr(ies); every turn mark and checklist cleared', async (round, gain, nextRound, malice, logLen) => {
 		const { root, flush, last, writes } = await mount(marked(round, gain));
 		advance(root);
@@ -223,7 +223,11 @@ describe('[R] Advance round vs Reset turns: starting round x round_gain x what i
 		expect(data.round).toBe(nextRound);
 		expect(data.malice.value).toBe(malice);
 		expect(data.malice.log ?? []).toHaveLength(logLen);
-		if (logLen) expect(data.malice.log[0]).toEqual({ round: nextRound, amount: gain, label: 'Round gain' });
+		if (logLen) {
+			// SC-578: `amount` is what the pool did (Malice went from 3 to `malice`); `requested` appears only when that differs from the gain.
+			const applied = malice - 3;
+			expect(data.malice.log[0]).toEqual({ round: nextRound, amount: applied, label: 'Round gain', ...(applied === gain ? {} : { requested: gain }) });
+		}
 		expect(data.heroes[0].has_taken_turn).toBe(false);
 		expect(data.heroes[0].actions).toEqual({ main: false, maneuver: false, move: false, triggered: false });
 		expect(data.heroes[1].actions).toBeUndefined(); // never toggled: nothing is fabricated
@@ -366,6 +370,7 @@ describe('[A] action checklists: which slots end up pressed after a sequence of 
 describe('[M] Malice: the stepper, the quick-add row and the log disclosure', () => {
 	const withMalice = (value: number, extra: string[] = []): string => src(HEROES, OGRES, ['malice:', `  value: ${value}`, ...extra]);
 	const shown = (root: Element): string => root.querySelector('.dse-init__malice-value')!.textContent as string;
+	const logLines = (root: Element): string[] => [...root.querySelectorAll('.dse-init__malice-log-entry')].map((e) => e.textContent as string);
 
 	test.each([
 		[3, ['inc'], 4],
@@ -423,7 +428,7 @@ describe('[M] Malice: the stepper, the quick-add row and the log disclosure', ()
 		expect(shown(root)).toBe(`Malice: ${expected}`);
 	});
 
-	test('[M03-M05] a quick-add the pool clamps (-9 from 2) still lands Malice at 0 with one entry that still names its label (how the entry words the clamp is SC-578\'s, below)', async () => {
+	test('[M03-M05] a quick-add the pool clamps (-9 from 2) still lands Malice at 0 with one entry that still names its label', async () => {
 		const { root, flush, last, writes } = await mount(withMalice(2));
 		ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = '-9';
 		ctl<HTMLInputElement>(root, 'init.malice.quickadd.label').value = 'Spend';
@@ -452,6 +457,74 @@ describe('[M] Malice: the stepper, the quick-add row and the log disclosure', ()
 		amountEl.dispatchEvent(new Event('input'));
 		expect(amountEl.hasAttribute('aria-invalid')).toBe(false);
 		expect(root.querySelector('.dse-init__malice-quickadd-hint')!.textContent).toBe('');
+	});
+
+	test('[M09] a quick-add the pool clamps logs what it did: -5 from 2 is an entry of -2 that records the -5 asked for', async () => {
+		const { root, flush, last } = await mount(withMalice(2));
+		ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = '-5';
+		ctl<HTMLInputElement>(root, 'init.malice.quickadd.label').value = 'Spend';
+		ctl(root, 'init.malice.quickadd.add').click();
+		await flush();
+		expect(last().malice.value).toBe(0);
+		expect(last().malice.log).toEqual([{ round: 1, amount: -2, requested: -5, label: 'Spend' }]);
+		expect(logLines(root)).toEqual(['R1: -2 — Spend (-5, capped at 0)']);
+	});
+
+	test('[M09] a quick-add that applies nothing (-5 from 0) is still logged: amount 0 shows as "0", not "+0"', async () => {
+		const { root, flush, last } = await mount(withMalice(0));
+		ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = '-5';
+		ctl<HTMLInputElement>(root, 'init.malice.quickadd.label').value = 'Spend';
+		ctl(root, 'init.malice.quickadd.add').click();
+		await flush();
+		expect(last().malice.value).toBe(0);
+		expect(last().malice.log).toEqual([{ round: 1, amount: 0, requested: -5, label: 'Spend' }]);
+		expect(logLines(root)).toEqual(['R1: 0 — Spend (-5, capped at 0)']);
+	});
+
+	test('[M09] an uncapped spend and gain carry no `requested` key and read as before', async () => {
+		const { root, flush, last } = await mount(withMalice(5));
+		const add = async (amount: string, label: string): Promise<void> => {
+			ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = amount;
+			ctl<HTMLInputElement>(root, 'init.malice.quickadd.label').value = label;
+			ctl(root, 'init.malice.quickadd.add').click();
+			await flush();
+		};
+		await add('-2', 'Spend');
+		await add('3', 'Gain');
+		const log = last().malice.log;
+		expect(log).toEqual([
+			{ round: 1, amount: -2, label: 'Spend' },
+			{ round: 1, amount: 3, label: 'Gain' },
+		]);
+		log.forEach((entry: object) => expect('requested' in entry).toBe(false));
+		expect(logLines(root)).toEqual(['R1: -2 — Spend', 'R1: +3 — Gain']);
+	});
+
+	test('[M09] Advance round with round_gain -3 from Malice 0 still logs the gain: amount 0, requested -3', async () => {
+		const { root, flush, last } = await mount(src(HEROES, OGRES, ['malice:', '  value: 0', '  round_gain: -3'], ['round: 2']));
+		ctl(root, 'init.round.advance').click();
+		await flush();
+		expect(last().malice.value).toBe(0);
+		expect(last().malice.log).toEqual([{ round: 3, amount: 0, requested: -3, label: 'Round gain' }]);
+		expect(logLines(root)).toEqual(['R3: 0 — Round gain (-3, capped at 0)']);
+	});
+
+	test('[M09] Advance round with round_gain -3 from Malice 1 logs the -1 it applied and the -3 asked for', async () => {
+		const { root, flush, last } = await mount(src(HEROES, OGRES, ['malice:', '  value: 1', '  round_gain: -3']));
+		ctl(root, 'init.round.advance').click();
+		await flush();
+		expect(last().malice.value).toBe(0);
+		expect(last().malice.log).toEqual([{ round: 2, amount: -1, requested: -3, label: 'Round gain' }]);
+		expect(logLines(root)).toEqual(['R2: -1 — Round gain (-3, capped at 0)']);
+	});
+
+	test('[M09] a positive round_gain logs as before: +2, no `requested` key', async () => {
+		const { root, flush, last } = await mount(src(HEROES, OGRES, ['malice:', '  value: 1', '  round_gain: 2']));
+		ctl(root, 'init.round.advance').click();
+		await flush();
+		expect(last().malice.log).toEqual([{ round: 2, amount: 2, label: 'Round gain' }]);
+		expect('requested' in last().malice.log[0]).toBe(false);
+		expect(logLines(root)).toEqual(['R2: +2 — Round gain']);
 	});
 
 	const log = (n: number): string[] => Array.from({ length: n }, (_, i) => `    - { round: ${i + 1}, amount: 1, label: "Entry ${i + 1}" }`);
@@ -910,23 +983,7 @@ describe('Malice never goes below 0 (SC-577)', () => {
 // Each of these encodes the CORRECT behaviour and fails today (`test.failing`): the moment the bug is fixed the test passes, jest
 // reports it, and the marker comes off. The e2e twins (e2e/specs/initiative/) carry `knownBug` markers for the same tickets.
 
-describe('known bugs: the quick-add (SC-578, SC-588, SC-589)', () => {
-	test.failing('[M09] a quick-add the pool clamps logs what it did: the entry matches the change in Malice, or says it was capped [known bug SC-578]', async () => {
-		const { root, flush, last } = await mount(src(HEROES, OGRES, ['malice:', '  value: 2']));
-		ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = '-9';
-		ctl<HTMLInputElement>(root, 'init.malice.quickadd.label').value = 'Spend';
-		ctl(root, 'init.malice.quickadd.add').click();
-		await flush();
-		const entry = last().malice.log[0];
-		expect(last().malice.value).toBe(0);
-		// The entry must still carry the typed label (anywhere in it) AND either record the applied change (-2) or say the pool capped it / name the applied amount.
-		const applied = last().malice.value - 2;
-		const lbl = String(entry.label ?? '');
-		const rest = lbl.replace(/spend/i, '');
-		const showsClamp =
-			/spend/i.test(lbl) && (Object.values(entry).includes(applied) || /cap|clamp|limit/i.test(rest) || new RegExp(`(^|\\D)${Math.abs(applied)}(\\D|$)`).test(rest));
-		expect(entry.amount === applied || showsClamp).toBe(true);
-	});
+describe('known bugs: the quick-add (SC-588, SC-589)', () => {
 	test.failing('[M10] a half-typed quick-add survives Advance round [known bug SC-589]', async () => {
 		const { root, flush } = await mount(TRACKER);
 		ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = '2';

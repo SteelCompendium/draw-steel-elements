@@ -14,7 +14,7 @@
 // `round_gain`/`log`, and it stays green UNMODIFIED as the load-bearing proof that parse()/
 // serialize() needed zero changes for this feature.
 import { parseYaml } from '../../mocks/obsidian';
-import { addToMalicePool, advanceRound, maliceValueOf, parse, serialize } from '../../../src/elements/initiative/model';
+import { addToMalicePool, advanceRound, applyMaliceChange, maliceValueOf, parse, serialize } from '../../../src/elements/initiative/model';
 import type { EncounterData } from '../../../src/elements/initiative/model';
 import { MALICE_LOG_MAX_ENTRIES, appendMaliceLogEntry } from '@drawSteelAdmonition/EncounterData';
 import type { Malice } from '@drawSteelAdmonition/EncounterData';
@@ -201,18 +201,25 @@ describe('T-9: advanceRound()', () => {
 		expect(zeroGain.malice.log).toBeUndefined();
 	});
 
-	test('a negative round_gain is applied but floors Malice at 0 (SC-577); the log keeps the configured amount', () => {
+	test('a negative round_gain is applied but floors Malice at 0 (SC-577); the log records the applied change and the gain asked for (SC-578)', () => {
 		const source = (value: number, gain: number) =>
 			['heroes: []', 'enemy_groups: []', 'malice:', `  value: ${value}`, `  round_gain: ${gain}`].join('\n');
 
 		const floored = parseLikePipeline(source(1, -3));
 		advanceRound(floored);
 		expect(floored.malice.value).toBe(0); // 1 + -3 would be -2
-		expect(floored.malice.log).toEqual([{ round: 2, amount: -3, label: 'Round gain' }]);
+		expect(floored.malice.log).toEqual([{ round: 2, amount: -1, label: 'Round gain', requested: -3 }]);
 
 		const reduced = parseLikePipeline(source(5, -3));
 		advanceRound(reduced);
 		expect(reduced.malice.value).toBe(2); // a negative gain still applies when the pool can take it
+		expect(reduced.malice.log).toEqual([{ round: 2, amount: -3, label: 'Round gain' }]); // not capped: no `requested` key
+		expect('requested' in reduced.malice.log![0]).toBe(false);
+
+		const fromZero = parseLikePipeline(source(0, -3));
+		advanceRound(fromZero);
+		expect(fromZero.malice.value).toBe(0);
+		expect(fromZero.malice.log).toEqual([{ round: 2, amount: 0, label: 'Round gain', requested: -3 }]); // the gain happened: still logged
 	});
 
 	test('a stored negative Malice counts as 0 (SC-577, O6): -2 + round_gain 3 writes 3, and the quick-add helper agrees', () => {
@@ -223,13 +230,49 @@ describe('T-9: advanceRound()', () => {
 
 		advanceRound(model);
 		expect(model.malice.value).toBe(3); // not 1
-		expect(model.malice.log).toEqual([{ round: 2, amount: 3, label: 'Round gain' }]); // the configured amount, unchanged
+		expect(model.malice.log).toEqual([{ round: 2, amount: 3, label: 'Round gain' }]); // +3 from the floored 0: applied in full, not capped
 
 		const quick = parseLikePipeline(['heroes: []', 'enemy_groups: []', 'malice:', '  value: -2'].join('\n'));
 		addToMalicePool(quick.malice, 3);
 		expect(quick.malice.value).toBe(3);
 		addToMalicePool(quick.malice, -9);
 		expect(quick.malice.value).toBe(0);
+	});
+
+	test('applyMaliceChange (SC-578): the entry holds the applied change, `requested` only when capped, in the order round, amount, label, requested', () => {
+		const malice: Malice = { value: 2 };
+		const capped = applyMaliceChange(malice, -5, { round: 4, label: 'Spend' });
+		expect(capped).toEqual({ round: 4, amount: -2, label: 'Spend', requested: -5 });
+		expect(Object.keys(capped)).toEqual(['round', 'amount', 'label', 'requested']);
+		expect(malice.value).toBe(0);
+		const uncapped = applyMaliceChange(malice, 3, { round: 4, label: 'Gain' });
+		expect(Object.keys(uncapped)).toEqual(['round', 'amount', 'label']);
+		expect(malice.log).toEqual([capped, uncapped]);
+		// the log adds up to the pool's movement (2 -> 0 -> 3)
+		expect(malice.log!.reduce((sum, e) => sum + e.amount, 2)).toBe(malice.value);
+	});
+
+	test('a log entry with `requested` survives parse -> serialize unchanged, key order round, amount, label, requested (SC-578)', () => {
+		const source = [
+			'heroes: []',
+			'enemy_groups: []',
+			'malice:',
+			'  value: 0',
+			'  log:',
+			'    - round: 2',
+			'      amount: -2',
+			'      label: Spend',
+			'      requested: -5',
+			'    - round: 3',
+			'      amount: 1',
+			'      label: Gain',
+		].join('\n');
+		const model = parseLikePipeline(source);
+		expect(model.malice.log).toEqual([
+			{ round: 2, amount: -2, label: 'Spend', requested: -5 },
+			{ round: 3, amount: 1, label: 'Gain' },
+		]);
+		expect(serialize(model)).toBe(source);
 	});
 
 	test('round_gain applied on top of an existing log preserves earlier entries', () => {
