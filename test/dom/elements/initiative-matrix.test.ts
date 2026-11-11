@@ -568,6 +568,16 @@ describe('[M] Malice: the stepper, the quick-add row and the log disclosure', ()
 		expect(ctl(root, 'init.malice.log').getAttribute('aria-expanded')).toBe('true');
 		expect(ctl(root, 'init.malice.log').textContent).toBe('Malice log · 1 entry');
 	});
+
+	test('[M10] a half-typed quick-add survives Advance round', async () => {
+		const { root, flush } = await mount(TRACKER);
+		ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = '2';
+		ctl<HTMLInputElement>(root, 'init.malice.quickadd.label').value = 'Feyt';
+		ctl(root, 'init.round.advance').click();
+		await flush();
+		expect(ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value).toBe('2');
+		expect(ctl<HTMLInputElement>(root, 'init.malice.quickadd.label').value).toBe('Feyt');
+	});
 });
 
 // ----------------------------------------------------------------------------------------- S. selection, K. captain
@@ -1111,19 +1121,186 @@ describe('Malice never goes below 0 (SC-577)', () => {
 	});
 });
 
-// ----------------------------------------------------------------------------------------------------- known bugs
-// Each of these encodes the CORRECT behaviour and fails today (`test.failing`): the moment the bug is fixed the test passes, jest
-// reports it, and the marker comes off. The e2e twins (e2e/specs/initiative/) carry `knownBug` markers for the same tickets.
-// (SC-588, focus after a rebuild, was fixed: its tests are the [F] group above.)
+// ------------------------------------------------------------------------------- Q. the quick-add draft across a rebuild (SC-589)
 
-describe('known bugs: the quick-add (SC-589)', () => {
-	test.failing('[M10] a half-typed quick-add survives Advance round [known bug SC-589]', async () => {
+describe('[Q] a half-typed quick-add is a per-view draft: it survives every rebuild, and only a successful Add clears it (SC-589)', () => {
+	const AMOUNT = 'init.malice.quickadd.amount';
+	const LABEL = 'init.malice.quickadd.label';
+	const CAPTAINED = src(HEROES, [
+		'enemy_groups:', '  - name: "Patrol"', '    is_squad: true', '    creatures:',
+		'      - { name: Goblin, max_stamina: 4, amount: 2, squad_role: minion }',
+		'      - { name: Cap, max_stamina: 20, amount: 1, squad_role: captain }',
+		'      - { name: Rider, max_stamina: 30, amount: 1, squad_role: attached }',
+	]);
+	const type = (root: Element, amount: string, label: string): void => {
+		// Through the real `input` event, as typing does (the M10 case below sets .value alone, the way a script would).
+		for (const [id, value] of [[AMOUNT, amount], [LABEL, label]] as const) {
+			const el = ctl<HTMLInputElement>(root, id);
+			el.value = value;
+			el.dispatchEvent(new Event('input', { bubbles: true }));
+		}
+	};
+	const draft = (root: Element): [string, string] => [ctl<HTMLInputElement>(root, AMOUNT).value, ctl<HTMLInputElement>(root, LABEL).value];
+
+	test('[Q01] Advance round (the Malice pool changes too): both boxes still hold what was typed', async () => {
 		const { root, flush } = await mount(TRACKER);
-		ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = '2';
-		ctl<HTMLInputElement>(root, 'init.malice.quickadd.label').value = 'Feyt';
+		const before = ctl(root, AMOUNT);
+		type(root, '2', 'Feyt');
 		ctl(root, 'init.round.advance').click();
 		await flush();
-		expect(ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value).toBe('2');
-		expect(ctl<HTMLInputElement>(root, 'init.malice.quickadd.label').value).toBe('Feyt');
+		expect(ctl(root, AMOUNT)).not.toBe(before); // the tracker really was rebuilt
+		expect(draft(root)).toEqual(['2', 'Feyt']);
+	});
+
+	test('[Q02] Reset turns (a chrome item) keeps the draft', async () => {
+		const { root, flush } = await mount(TRACKER);
+		type(root, '-4', 'Spent');
+		ctl(root, 'init.reset-turns').click();
+		await flush();
+		expect(draft(root)).toEqual(['-4', 'Spent']);
+	});
+
+	test.each([
+		['Make captain', '2-1', 'init.captain.make'],
+		['Relieve captain', '1-1', 'init.captain.relieve'],
+	])('[Q03] %s keeps the draft', async (_name, key, control) => {
+		const { root, flush } = await mount(CAPTAINED);
+		(root.querySelector(`[data-instance-key="${key}"]`) as HTMLElement).click();
+		type(root, '5', 'Captain');
+		const before = ctl(root, AMOUNT);
+		ctl(root, control).click();
+		await flush();
+		expect(ctl(root, AMOUNT)).not.toBe(before);
+		expect(draft(root)).toEqual(['5', 'Captain']);
+	});
+
+	test('[Q04] Reset encounter -> Yes, Reset (the tracker is rebuilt from a re-parse of the written note) keeps the draft', async () => {
+		const { root, flush } = await mount(TRACKER);
+		type(root, '3', 'Pending');
+		const before = ctl(root, AMOUNT);
+		ctl(root, 'init.reset-encounter').click();
+		ctl(document.body.lastElementChild as HTMLElement, 'init.reset-encounter.confirm').click();
+		await flush();
+		expect(ctl(root, AMOUNT)).not.toBe(before);
+		expect(draft(root)).toEqual(['3', 'Pending']);
+	});
+
+	test('[Q05] Reset encounter -> Cancel changes nothing: the boxes are the very same nodes, still holding the draft', async () => {
+		const { root, flush } = await mount(TRACKER);
+		type(root, '3', 'Pending');
+		const before = ctl(root, AMOUNT);
+		ctl(root, 'init.reset-encounter').click();
+		ctl(document.body.lastElementChild as HTMLElement, 'init.reset-encounter.cancel').click();
+		await flush();
+		expect(ctl(root, AMOUNT)).toBe(before);
+		expect(draft(root)).toEqual(['3', 'Pending']);
+	});
+
+	test.each([
+		['the - stepper', 'init.malice.dec'],
+		['the + stepper', 'init.malice.inc'],
+		['the Malice log disclosure (collapsed, then expanded)', 'init.malice.log'],
+	])('[Q06] %s leaves the draft in the boxes (whether or not it rebuilds the tracker)', async (_name, control) => {
+		const { root, flush } = await mount(TRACKER);
+		type(root, '2', 'Feyt');
+		ctl(root, control).click();
+		ctl(root, control).click();
+		await flush();
+		expect(draft(root)).toEqual(['2', 'Feyt']);
+	});
+
+	test('[Q07] a rebuild from outside (the sidebar / a note change calls update() with a freshly parsed model) keeps the draft', async () => {
+		const views: any[] = [];
+		const { root } = await mount(TRACKER, { addChild: (c: unknown) => (views.push(c), c) } as Partial<BlockHost>);
+		type(root, '7', 'Outside');
+		const view = views.find((v) => typeof v.currentModel === 'function' && typeof v.chromeItems === 'function');
+		const before = ctl(root, AMOUNT);
+		await view.update({ ...view.currentModel(), round: 9 });
+		expect(ctl(root, AMOUNT)).not.toBe(before);
+		expect(root.querySelector('.dse-init__round-value')!.textContent).toBe('Round 9');
+		expect(draft(root)).toEqual(['7', 'Outside']);
+	});
+
+	test('[Q08] two rebuilds in a row keep it (the restored boxes are captured again)', async () => {
+		const { root, flush } = await mount(TRACKER);
+		type(root, '2', 'Twice');
+		ctl(root, 'init.round.advance').click();
+		await flush();
+		ctl(root, 'init.round.advance').click();
+		await flush();
+		expect(draft(root)).toEqual(['2', 'Twice']);
+	});
+
+	test('[Q09] a rebuild that was not typed into leaves the boxes empty', async () => {
+		const { root, flush } = await mount(TRACKER);
+		ctl(root, 'init.round.advance').click();
+		await flush();
+		expect(draft(root)).toEqual(['', '']);
+	});
+
+	test.each([
+		['the Add button', (root: Element) => ctl(root, 'init.malice.quickadd.add').click()],
+		['Enter in the amount box', (root: Element) => press(ctl(root, AMOUNT), 'Enter')],
+		['Enter in the label box', (root: Element) => press(ctl(root, LABEL), 'Enter')],
+	])('[Q10] a successful Add (%s) clears the draft, and it stays cleared across the next rebuild', async (_how, add) => {
+		const { root, flush, last } = await mount(TRACKER);
+		type(root, '2', 'Feyt');
+		add(root);
+		await flush();
+		expect(last().malice.log).toEqual([{ round: 1, amount: 2, label: 'Feyt' }]);
+		expect(draft(root)).toEqual(['', '']);
+		ctl(root, 'init.round.advance').click();
+		await flush();
+		expect(draft(root)).toEqual(['', '']);
+	});
+
+	test('[Q11] a rejected Add keeps the draft (nothing was committed), through the next rebuild too, and it is not written to the note', async () => {
+		const { root, flush, writes } = await mount(TRACKER);
+		type(root, '1.5', 'Feyt');
+		ctl(root, 'init.malice.quickadd.add').click(); // "Whole numbers only"
+		expect(root.querySelector('.dse-init__malice-quickadd-hint')!.textContent).toBe('Whole numbers only');
+		ctl(root, 'init.round.advance').click();
+		await flush();
+		expect(draft(root)).toEqual(['1.5', 'Feyt']);
+		expect(writes().join('\n')).not.toContain('Feyt'); // a draft is view state, never note content
+		// Everything derived from the boxes is what typing leaves: no stale flag, no reason text, the normal placeholders.
+		const amount = ctl<HTMLInputElement>(root, AMOUNT);
+		expect(amount.hasAttribute('aria-invalid')).toBe(false);
+		expect(amount.getAttribute('placeholder')).toBe('Amount');
+		expect(root.querySelector('.dse-init__malice-quickadd-hint')!.textContent).toBe('');
+	});
+
+	test('[Q12] the caret / selection of the focused box is restored with the focus', async () => {
+		const { root, flush } = await mount(TRACKER);
+		type(root, '2', 'Feytouched');
+		const label = ctl<HTMLInputElement>(root, LABEL);
+		label.focus();
+		label.setSelectionRange(2, 5, 'backward');
+		ctl(root, 'init.round.advance').click();
+		await flush();
+		const after = ctl<HTMLInputElement>(root, LABEL);
+		expect(after).not.toBe(label);
+		expect(document.activeElement).toBe(after);
+		expect([after.selectionStart, after.selectionEnd, after.selectionDirection]).toEqual([2, 5, 'backward']);
+	});
+
+	test('[Q13] a draft in the amount box and an empty label box come back as typed (only the amount is restored)', async () => {
+		const { root, flush } = await mount(TRACKER);
+		type(root, '6', '');
+		ctl(root, 'init.round.advance').click();
+		await flush();
+		expect(draft(root)).toEqual(['6', '']);
+	});
+
+	test('[Q14] a new view instance (a remount) starts with empty boxes: the draft is not saved anywhere', async () => {
+		const first = await mount(TRACKER);
+		type(first.root, '2', 'Feyt');
+		ctl(first.root, 'init.round.advance').click();
+		await first.flush();
+		expect(first.writes().join('\n')).not.toContain('Feyt');
+		document.body.innerHTML = '';
+		jest.useRealTimers();
+		const second = await mount(TRACKER);
+		expect(draft(second.root)).toEqual(['', '']);
 	});
 });
