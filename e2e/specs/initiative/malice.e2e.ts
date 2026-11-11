@@ -119,6 +119,26 @@ describe('initiative: the Malice quick-add row', () => {
 		await dse.click(root.control('init.malice.log'));
 		await expect(root.control({ css: '.dse-init__malice-log-entry' })).toHaveText('R1: -3 — Spend (-5, capped at 0)');
 	});
+
+	// Advance round rebuilds the whole tracker, which used to bring both boxes back empty. What is typed is a draft of the view: it
+	// survives the rebuild (and the stepper), is never written to the note, and only a successful Add clears it.
+	it('[INIT-M10] a half-typed quick-add survives Advance round and the stepper; Add then commits it and empties the boxes', async () => {
+		const root = await open(); // Malice 3, round 1
+		await fill(root, '2', 'Feytouched');
+		await dse.waitForWrite(MIN, () => dse.click(root.control('init.round.advance')));
+		await expect(root.control({ css: '.dse-init__round-value' })).toHaveText('Round 2'); // the tracker was rebuilt
+		await expect(root.control('init.malice.quickadd.amount')).toHaveValue('2');
+		await expect(root.control('init.malice.quickadd.label')).toHaveValue('Feytouched');
+		await dse.waitForWrite(MIN, () => dse.click(root.control('init.malice.inc')));
+		await expect(root.control('init.malice.quickadd.amount')).toHaveValue('2');
+		await expect(root.control('init.malice.quickadd.label')).toHaveValue('Feytouched');
+		await dse.settle();
+		expect(JSON.stringify(await dse.expectNoteBlock(MIN, INIT).value())).not.toContain('Feytouched'); // a draft is not note content
+		await dse.waitForWrite(MIN, () => dse.click(root.control('init.malice.quickadd.add')));
+		expect((await maliceOf(MIN)).log).toEqual([{ round: 2, amount: 2, label: 'Feytouched' }]);
+		await expect(root.control('init.malice.quickadd.amount')).toHaveValue('');
+		await expect(root.control('init.malice.quickadd.label')).toHaveValue('');
+	});
 });
 
 describe('initiative: keyboard focus after a rebuild', () => {

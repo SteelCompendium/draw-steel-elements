@@ -21,7 +21,7 @@ export default surface('initiative', {
 
 		// -- R. Round. "Advance round" sits on the Heroes heading line; "Reset turns (this round)" is a chrome-panel item
 		//    (hidden, opacity 0, until the pointer is over the tracker or focus is inside it: `dse.hover(root.root)` first).
-		'init.round.advance': c(['click', 'press:Enter'], ['R01', 'F02']),
+		'init.round.advance': c(['click', 'press:Enter'], ['R01', 'F02', 'M10']),
 		'init.reset-turns': c(['click', 'press:Enter'], ['R02', 'F03']),
 		// A chrome-panel item that opens ResetEncounterModal (see manifest/reset-encounter-modal.ts).
 		'init.reset-encounter': c(['click', 'press:Enter'], ['SC-485', 'SC-500', 'X01', 'F05']),
@@ -30,10 +30,10 @@ export default surface('initiative', {
 		//    a programmatic focus target (tabindex -1) that nothing clicks, so it lists no interaction.
 		'init.malice.dec': c(['click', 'click-disabled'], ['M01', 'M07']),
 		'init.malice.value': c([]),
-		'init.malice.inc': c(['click'], ['M01', 'M02']),
-		'init.malice.quickadd.amount': c(['type', 'press:Enter'], ['M03', 'M04']),
-		'init.malice.quickadd.label': c(['type', 'press:Enter'], ['M03', 'M04']),
-		'init.malice.quickadd.add': c(['click'], ['M03', 'M05']),
+		'init.malice.inc': c(['click'], ['M01', 'M02', 'M10']),
+		'init.malice.quickadd.amount': c(['type', 'press:Enter'], ['M03', 'M04', 'M10']),
+		'init.malice.quickadd.label': c(['type', 'press:Enter'], ['M03', 'M04', 'M10']),
+		'init.malice.quickadd.add': c(['click'], ['M03', 'M05', 'M10']),
 		'init.malice.log': c(['click'], ['M06']),
 
 		// -- N. Turn taken. The hero's portrait overlay is the Steel screen's control (the SC-485 pilot id); the checkbox
