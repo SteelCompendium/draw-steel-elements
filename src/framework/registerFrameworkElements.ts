@@ -21,6 +21,7 @@ import type { Plugin, MarkdownPostProcessorContext } from 'obsidian';
 import type { ElementRegistry } from './registry';
 import type { ElementPipeline } from './pipeline';
 import { ReadingModeBlockHost } from './host/ReadingModeBlockHost';
+import { registerHoverLinks } from './host/hoverLinks';
 import { PreviewScrollPin } from './host/previewScrollPin';
 import { LivePreviewScrollHold } from './host/livePreviewScrollHold';
 import { ViewRegistry } from './host/viewRegistry';
@@ -71,6 +72,9 @@ export function registerFrameworkElements(
 	// SC-522: and every Live Preview view of another note that shows a DSE block embedded from it holds that embed's height.
 	plugin.registerEvent(plugin.app.vault.on('modify', (file) => lpHold.captureViewsOf(plugin.app.workspace, file.path, resolveLink)));
 	plugin.registerEditorExtension(lpHold.extension());
+	// SC-594: the link each hover preview was opened for (`hover-link`), which names where the card in a heading / block hover sits in the note.
+	// Registered here, at load, not when the first card is drawn: that hover's event is already past by then.
+	registerHoverLinks(plugin);
 	// SC-340 §6.1: the plugin-scoped owner of every reading-mode view.
 	const registry = plugin.addChild(new ViewRegistry({ enabled: options.viewAdoption ?? false }));
 	// SC-481: redraws an element Obsidian reused for the next identical block (see remountReused.ts).

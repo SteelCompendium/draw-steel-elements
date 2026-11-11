@@ -68,6 +68,7 @@ import type { PreviewScrollPin } from './previewScrollPin';
 import { listFences } from '../sidebar/anchor';
 import { notifyDroppedWrite, notifyUnsavableWrite } from './droppedWriteNotice';
 import { splitLines } from './lineEnding';
+import { hoverLinkOf } from './hoverLinks';
 import { blockBodyLines, parseOpenFenceLine, replaceFenceBlock } from './fenceLine';
 import type { ViewRegistry, ViewRegistryEntry } from './viewRegistry';
 
@@ -809,8 +810,9 @@ export class ReadingModeBlockHost implements BlockHost {
 	}
 
 	/**
-	 * `pinPosition`'s body. `forForm` is a block edit form's pin (the only caller that may be given the position of this host's own last
-	 * write, SC-584); a card write's pin (`notePersistIntent`) is made exactly as before SC-584.
+	 * `pinPosition`'s body. `forForm` is a block edit form's pin; a card write's pin (`notePersistIntent`) is made exactly as before SC-584
+	 * outside an embed or hover preview. SC-594: inside one, a card's pin is placed like a form's (the host's own last write, the r7 guard below)
+	 * and then by `rebaseCardPin` (the link, never a search for the body).
 	 */
 	private takePin(forForm: boolean): BlockPin | null {
 		const section = this.readSection();
@@ -819,7 +821,8 @@ export class ReadingModeBlockHost implements BlockHost {
 		if (!this.ownFence) {
 			// SC-584: a callout in an embed or hover preview whose part is stale (right after a + on its card) holds no block with the body this
 			// host knows, so its own fence cannot be found in it; the host's own last write still says where the block is.
-			return forForm && embedded ? this.pinFromLastWrite() : null;
+			// SC-594: a card write takes it too (the same stale window right after its own +).
+			return embedded ? this.pinFromLastWrite() : null;
 		}
 		// SC-584 r7 (r5 had it as "the fence is not the window's first line", which a quote whose FIRST line is the twin's fence defeats): unless the
 		// card's section window IS its own plain fenced block (its first line is an un-prefixed fence - `findOwnFence`'s shortcut, nothing is searched),
@@ -829,7 +832,8 @@ export class ReadingModeBlockHost implements BlockHost {
 		// host's own last write is of the body it knows, that write is the exact position of its block, so a form takes it instead. Record-first for
 		// EVERY form was tried and refuses a CURRENT plain block after hundreds of lines changed since the + (the diff gives up; the link finds it fine),
 		// hence the plain-block exception; a form in a multi-block window with an old record can refuse that way (a Notice, never a twin).
-		if (forForm && embedded) {
+		// SC-594: a card write (a second + in a stale callout window) is pinned the same way, so it can never be written into the twin callout.
+		if (embedded) {
 			const first = parseOpenFence(section.text, section.lineStart);
 			if (!(first && first.prefix === '')) {
 				const w = this.pinFromLastWrite();
@@ -841,9 +845,12 @@ export class ReadingModeBlockHost implements BlockHost {
 		if (embedded) {
 			// An embed of a WHOLE note (`![[note]]`: a link with no `#`) is given the note's own text and lines, so its pin is already a pin of the
 			// note. Any other embed, and a hover preview (no `src` to tell), may be given a part: partial until `rebasePin` has placed it.
-			const link = this.containerEl.closest('.internal-embed[src], .markdown-embed[src]')?.getAttribute('src');
+			// SC-594: a hover preview of a WHOLE note is known by its recorded link (no `#`): the note as drawn, a pin of the note (`mapLine` judges every
+			// edit since, so an identical block added from outside is never taken for it). Only a card asks: a form's hover pin is SC-596.
+			const src = this.embedSrc();
+			const link = src ?? (forForm ? undefined : hoverLinkOf(this.plugin.app, this.containerEl)?.linktext);
 			if (typeof link !== 'string' || link.includes('#')) partialPins.add(pin);
-			pinRebased.set(pin, this.rebasePin(pin, section.text, forForm ? this.lastWrite : null));
+			pinRebased.set(pin, forForm ? this.rebasePin(pin, section.text, this.lastWrite) : this.rebaseCardPin(pin, section.text, this.lastWrite));
 		}
 		return pin;
 	}
@@ -904,6 +911,106 @@ export class ReadingModeBlockHost implements BlockHost {
 		} catch {
 			// no readable note: the pin stays as it was
 		}
+	}
+
+	/** The `src` of the embed this block is drawn in (the nearest one), or null: no embed element with a `src` (a hover preview has none). */
+	private embedSrc(): string | null {
+		return this.containerEl.closest('.internal-embed[src], .markdown-embed[src]')?.getAttribute('src') ?? null;
+	}
+
+	/**
+	 * SC-594: `rebasePin` for a CARD write's pin in an embed or hover preview. The same part-to-note placement, with two differences: the note is
+	 * never searched for the part's text (`searchedPinLine`: in a long note a heading hover's part is the heading's BODY, which an identical
+	 * counter under another heading repeats, so a search either refuses or picks the twin), and the link that places it is checked over the whole
+	 * part (`cardLinkLine`). Order: the part IS the note; the link; this host's own last write (taken when the pin was made) when it is of the body
+	 * known at click; else the pin stays partial and `replaceSource` writes nothing (today's dropped-write Notice).
+	 */
+	private async rebaseCardPin(pin: { text: string; lineStart: number }, sectionText: string, write: { body: string; text: string; lineStart: number } | null): Promise<void> {
+		const known = this.knownBody;
+		try {
+			const file = this.plugin.app.vault.getAbstractFileByPath(this.ctx.sourcePath);
+			if (!(file instanceof TFile)) return;
+			const whole = await this.plugin.app.vault.cachedRead(file);
+			if (whole === sectionText) {
+				partialPins.delete(pin); // the part IS the note
+				return;
+			}
+			const line = this.cardLinkLine(file, whole, sectionText, pin.lineStart, known);
+			if (line !== null) {
+				pin.text = whole;
+				pin.lineStart = line;
+				partialPins.delete(pin);
+				return;
+			}
+			if (write !== null && known !== null && normalizeBody(write.body) === normalizeBody(known)) {
+				pin.text = write.text;
+				pin.lineStart = write.lineStart;
+				partialPins.delete(pin);
+			}
+			// else: stays partial: the write is refused (replaceSource)
+		} catch {
+			// no readable note: the pin stays partial
+		}
+	}
+
+	/**
+	 * SC-594: the card's line in `whole` through the link of the part it is drawn in: the embed's `src`, or for a hover preview the link it was
+	 * opened for (`hoverLinkOf`). Nothing is trusted that the note does not confirm (the metadata cache can lag):
+	 *  - the link must resolve to this note, and name exactly ONE heading / block id while the known body occurs more than once in the note
+	 *    (a section of the same name pasted above the clicked one would otherwise be taken); a unique body needs no such check;
+	 *  - the part's first line must be where the link starts (an embed's part includes the heading) or, for a heading link, on the line after it
+	 *    (measured: the part Obsidian gives a hover card is the heading's BODY, no heading line, `lineStart` 1);
+	 *  - EVERY line of the part (trailing blank lines dropped) must equal the note's lines from there: a part that differs anywhere (a block
+	 *    deleted above the card, another moved onto its line) is stale and is not placed;
+	 *  - a counter fence of this language must open at the card's line, holding the known body, and a `#^id` link needs its `^id` marker after it.
+	 */
+	private cardLinkLine(file: TFile, whole: string, sectionText: string, relLine: number, known: string | null): number | null {
+		const src = this.embedSrc();
+		const hovered = src === null ? hoverLinkOf(this.plugin.app, this.containerEl) : null;
+		const link = src ?? hovered?.linktext ?? null;
+		if (!link) return null;
+		const hash = link.indexOf('#');
+		if (hash < 0) return null;
+		const cache = this.plugin.app.metadataCache;
+		const meta = cache.getFileCache(file);
+		if (!meta) return null;
+		const dest = cache.getFirstLinkpathDest(link.slice(0, hash), hovered ? hovered.sourcePath : this.ctx.sourcePath);
+		if (!dest || dest.path !== file.path) return null;
+		const subpath = link.slice(hash);
+		const start = resolveSubpath(meta, subpath)?.start?.line;
+		if (typeof start !== 'number' || start < 0) return null;
+		const lines = splitLines(whole);
+		const blockId = subpath.startsWith('#^') ? subpath.slice(2) : null;
+		if (known !== null && countByBody(whole, this.knownLanguage ?? this.alias, known) > 1) {
+			if (blockId !== null) {
+				const marker = new RegExp(`(^|\\s)\\^${blockId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
+				if (lines.filter((l) => marker.test(l)).length !== 1) return null;
+			} else {
+				const name = (subpath.split('#').pop() ?? '').toLowerCase();
+				if ((meta.headings ?? []).filter((h) => h.heading.toLowerCase() === name).length !== 1) return null;
+			}
+		}
+		const part = splitLines(sectionText);
+		const wholePart = part.slice();
+		while (wholePart.length > 0 && wholePart[wholePart.length - 1].trim() === '') wholePart.pop();
+		if (wholePart.length === 0) return null;
+		let partStart: number | null = null;
+		if (lines[start] === part[0]) partStart = start;
+		else if (blockId === null && lines[start + 1] === part[0]) partStart = start + 1;
+		if (partStart === null) return null;
+		for (let i = 0; i < wholePart.length; i++) if (lines[partStart + i] !== wholePart[i]) return null;
+		const line = partStart + relLine;
+		const found = this.fenceAt(whole, line);
+		if (!found) return null;
+		if (blockId !== null) {
+			const quoted = (parseOpenFenceLine(lines[found.lineStart])?.prefix ?? '') !== '';
+			const partEnd = partStart + wholePart.length - 1;
+			let next = (quoted ? Math.max(found.lineEnd, partEnd) : found.lineEnd) + 1;
+			while (next < lines.length && lines[next].trim() === '') next++;
+			if (next >= lines.length || lines[next].trim().toLowerCase() !== `^${blockId.toLowerCase()}`) return null;
+		}
+		const own = blockBodyLines(part, relLine, relLine + (found.lineEnd - found.lineStart)).join('\n');
+		return normalizeBody(found.body) === normalizeBody(known ?? own) ? line : null;
 	}
 
 	/**
@@ -1049,6 +1156,10 @@ export class ReadingModeBlockHost implements BlockHost {
 		// SC-552: the view's own write is placed through the pin its round's first click took (a form's Save brings its own).
 		const pin = options?.pin ?? (options?.fromView === true ? this.pendingPin : null);
 		if (options?.fromView === true) this.pendingPin = null;
+		// SC-594: a card's pin is rebased onto the note (rebaseCardPin) before the write, awaited only when there is one: an unconditional
+		// await moves every other write a tick later (it broke the SC-340 / SC-544 ordering of a view's write against its siblings').
+		const cardRebase = pin && !options?.pin ? pinRebased.get(pin) : undefined;
+		if (cardRebase) await cardRebase;
 		if (!this.canPersist) return false;
 
 		const abstractFile = this.plugin.app.vault.getAbstractFileByPath(this.ctx.sourcePath);
@@ -1107,7 +1218,10 @@ export class ReadingModeBlockHost implements BlockHost {
 				// dropped-write Notice) rather than a click landing in a block the user never touched. Evaluated on a miss only; a write
 				// with no pin at all keeps today's path.
 				const twinned = !pinned && pin !== null && !options?.pinOnly && this.twinned(content, pin);
-				let target = pinned ?? (pin && (options?.pinOnly || twinned) ? 'miss' : this.resolveWriteTarget(content, section));
+				// SC-594: a card write whose pin is still in the part's coordinates has no place in the note: refused, never `twinned` /
+				// `resolveWriteTarget` (a search by body that picks the twin when the part's text occurs twice).
+				const partialCard = !pinned && pin !== null && partialPins.has(pin);
+				let target = pinned ?? (pin && (options?.pinOnly || twinned || partialCard) ? 'miss' : this.resolveWriteTarget(content, section));
 				// SC-480: the same refusal when the fallback lands in a block that was already a different block in the note as clicked (one
 				// outside edit deleted the clicked block and made a neighbour read the same: the counts above see one block each time).
 				if (!pinned && pin !== null && !options?.pinOnly && typeof target === 'object' && this.landsOnOtherBlock(content, pin, target)) target = 'miss';
