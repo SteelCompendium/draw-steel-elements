@@ -36,6 +36,7 @@ describe('minion pool: the Apply Damage row', () => {
 		await expectPoolApply(modal, 'Deal 5 damage, kill 1 minion(s)');
 		await hit(modal, '99', '5');
 		await expect(modal.control('pool.stamina.input')).toHaveValue('0');
+		await expectPoolApply(modal, 'Deal 20 damage, kill 5 minion(s)'); // the clamped 20, not 495 (SC-566)
 		expect(await poolBoxes()).toBe('xxxxx'); // an empty pool ticks and locks every living minion
 		await dse.expectNoWrite(SQUAD, () => dse.click(modal.control('modal.close')));
 	});

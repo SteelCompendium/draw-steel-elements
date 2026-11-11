@@ -376,6 +376,21 @@ export class MinionStaminaPoolModal extends DseModal {
 		return this.draftStaminaChange ?? this.pendingStaminaChange;
 	}
 
+	/**
+	 * SC-566: the pool change Apply will actually WRITE for a raw staged change, the ONE copy of
+	 * this math (the SC-427 `appliedStaminaChange` shape, StaminaEditModal): damage never takes
+	 * more than the pool holds (99 x 5 on a pool of 20 is 20, not 495) and a heal never
+	 * lifts it past the max. The Apply label and the info line both read it, so they cannot
+	 * disagree with each other or with what Apply writes. The sign never flips (a hand-edited
+	 * pool already outside [0, max] still reads as the direction the user staged), and the
+	 * preview bar deliberately keeps the raw damage (updateStaminaBar).
+	 */
+	private appliedPoolChange(raw: number): number {
+		const { poolMaxStamina, poolCurrentStamina } = this.poolNumbers();
+		if (raw < 0) return Math.max(raw, -poolCurrentStamina);
+		return Math.min(raw, Math.max(0, poolMaxStamina - poolCurrentStamina));
+	}
+
 	private clampedNewStamina(): number {
 		const { poolMaxStamina, poolCurrentStamina } = this.poolNumbers();
 		return Math.min(poolMaxStamina, Math.max(0, poolCurrentStamina + this.pendingStaminaChange));
@@ -419,13 +434,14 @@ export class MinionStaminaPoolModal extends DseModal {
 			// negative count.
 			this.infoTextEl.textContent = `A heal can't raise the pool above the living minions' share (${healCeiling} stamina).`;
 		} else if (pending > 0) {
-			this.infoTextEl.textContent = `Heal ${pending} stamina; dead minions stay dead.`;
+			this.infoTextEl.textContent = `Heal ${this.appliedPoolChange(pending)} stamina; dead minions stay dead.`;
 		} else if (pending === 0) {
 			// SC-429: nothing pending (no damage, so no kills to select) — hide the line rather
 			// than read "0 damage will kill 0 minion(s). Select 0 minion(s) to kill."
 			this.infoTextEl.textContent = '';
 		} else {
-			const totalPendingDamage = -pending;
+			// SC-566: the damage the pool actually loses, not the raw staged sum.
+			const totalPendingDamage = -this.appliedPoolChange(pending);
 			// SC-429: with no kills owed there is nothing to select, so drop that sentence.
 			this.infoTextEl.textContent =
 				`${totalPendingDamage} damage will kill ${minionsToKill} minion(s).` +
@@ -436,6 +452,9 @@ export class MinionStaminaPoolModal extends DseModal {
 	/** Legacy wording verbatim; the disabled state is the REAL property (CB-8). */
 	private updateActionButton(): void {
 		const staminaChange = this.effectivePending();
+		// SC-566: the label states the change Apply writes (the clamped one); the enabled state
+		// keeps reading the raw staged change.
+		const appliedChange = this.appliedPoolChange(staminaChange);
 		const { newStamina, minionsToKill, healCeiling } = this.poolNumbers();
 
 		// Count the number of minions selected
@@ -456,12 +475,12 @@ export class MinionStaminaPoolModal extends DseModal {
 
 		let actionText = '';
 		if (staminaChange < 0) {
-			actionText += `Deal ${Math.abs(staminaChange)} damage`;
+			actionText += `Deal ${Math.abs(appliedChange)} damage`;
 			if (minionsToKill > 0) {
 				actionText += `, kill ${minionsToKill} minion(s)`;
 			}
 		} else if (staminaChange > 0) {
-			actionText += `Heal ${staminaChange} stamina`;
+			actionText += `Heal ${appliedChange} stamina`;
 		} else {
 			actionText = 'No Stamina Change';
 		}

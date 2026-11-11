@@ -77,6 +77,11 @@ for what needs action.
   suggestions** (SC-476). In a block opened with ```` ```ds-stamina-bar extra ````, the suggester read the whole
   line after the backticks as the block's type, found no such type and offered nothing. It now reads only the
   first word, as the rest of the plugin does.
+- [FIX] **Minion pool window: the Apply button and the line above it state the damage the pool actually loses**
+  (SC-566). Hitting a squad with more damage than its pool holds (99 damage to 5 minions on a pool of 20) used to
+  read "Deal 495 damage, kill 5 minion(s)" and "495 damage will kill 5 minion(s)". They now read "Deal 20 damage,
+  kill 5 minion(s)" and "20 damage will kill 5 minion(s)", the same as the Stamina window's button. The bar still
+  shows the full damage, and Apply writes the same pool as before.
 - [FIX] **Minion pool window: a minion's condition icons can be removed from the keyboard** (SC-572). Each
   icon is now a real button, named "Remove Bleeding" (and so on) for screen readers: Tab reaches it and
   Enter or Space removes that condition, like a click, and focus moves to the next icon (never out of the

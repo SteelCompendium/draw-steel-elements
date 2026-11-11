@@ -290,8 +290,8 @@ describe('the Apply Damage row: damage per minion x minions hit', () => {
 		pool: string;
 		/** What the minion-count box reads after the press. */
 		count: string;
-		/** The Apply label; left out where a known bug owns it (SC-566). */
-		label?: string;
+		/** The Apply label. */
+		label: string;
 	}
 	const rows: Hit[] = [
 		{ name: '3 damage x 1 minion', spec: {}, damage: '3', minions: '1', pool: '17', count: '1', label: 'Deal 3 damage' },
@@ -304,14 +304,14 @@ describe('the Apply Damage row: damage per minion x minions hit', () => {
 		{ name: 'a negative damage is the same as 0', spec: {}, damage: '-4', minions: '2', pool: '20', count: '2', label: 'No Stamina Change' },
 		{ name: 'exponent form reads as a number: 1e1 x 1 = 10', spec: {}, damage: '1e1', minions: '1', pool: '10', count: '1', label: 'Deal 10 damage, kill 2 minion(s)' },
 		{ name: 'decimals truncate: 2.9 x 2 = 4', spec: {}, damage: '2.9', minions: '2', pool: '16', count: '2', label: 'Deal 4 damage, kill 1 minion(s)' },
-		{ name: 'overkill: 99 x 5 empties the pool, kills everyone', spec: {}, damage: '99', minions: '5', pool: '0', count: '5' }, // (its label is SC-566's: the marker at the end of this file owns it)
+		{ name: 'overkill: 99 x 5 empties the pool, kills everyone', spec: {}, damage: '99', minions: '5', pool: '0', count: '5', label: 'Deal 20 damage, kill 5 minion(s)' },
 	];
 	test.each(rows)('$name', async (r) => {
 		const { content } = await open(r.spec);
 		dealDamage(content, r.damage, r.minions);
 		expect(poolInput(content).value).toBe(r.pool);
 		expect(ctl<HTMLInputElement>(content, 'pool.minion-count').value).toBe(r.count);
-		if (r.label !== undefined) expect(apply(content).textContent).toBe(r.label);
+		expect(apply(content).textContent).toBe(r.label);
 	});
 
 	test('two presses add up: 3 x 1 then 2 x 2 is 7 damage', async () => {
@@ -330,6 +330,44 @@ describe('the Apply Damage row: damage per minion x minions hit', () => {
 		document.body.innerHTML = '';
 		const hurt = await open({ pool: 8, dead: 3 });
 		expect(ctl<HTMLInputElement>(hurt.content, 'pool.minion-count').max).toBe('2');
+	});
+
+	// SC-566: overkill through the Apply Damage row. The pool cannot lose more than it holds, so the label and the
+	// info line should state the 20 damage Apply will write, as StaminaEditModal's label does (SC-427 R3-F5).
+	test('SC-566: 99 damage x 5 minions on a pool of 20 labels and explains the clamped 20 damage, not 495', async () => {
+		const { content } = await open();
+		dealDamage(content, '99', '5');
+		expect(poolInput(content).value).toBe('0'); // setup: the stepper already shows the clamp
+		expect(apply(content).textContent).toBe('Deal 20 damage, kill 5 minion(s)');
+		expect(info(content).textContent).toBe(`20 damage will kill 5 minion(s).${SEL(5)}`);
+	});
+
+	// SC-566: the same clamp on a squad that already lost minions: the pool holds 6, so 99 x 2 loses 6, not 198.
+	test('SC-566: overkill on a hurt squad (pool 6, 2 alive) labels the 6 damage the pool holds', async () => {
+		const { content, group } = await open({ pool: 6, dead: 3 });
+		dealDamage(content, '99', '2');
+		expect(apply(content).textContent).toBe('Deal 6 damage, kill 2 minion(s)');
+		expect(info(content).textContent).toBe(`6 damage will kill 2 minion(s).${SEL(2)}`);
+		apply(content).click(); // Apply's written result is unchanged
+		expect(group.minion_stamina_pool).toBe(0);
+	});
+
+	// SC-566 (heal side, the same label/info builders): a heal cannot be staged past the pool max either, so its label
+	// already states the change Apply writes. A typed draft past the max is clamped by the stepper before the label sees it.
+	test('SC-566: a heal label and info line state the change Apply writes, also for a typed draft past the max', async () => {
+		const { content, group } = await open({ pool: 14, dead: 1 }); // 16 is the top of the living minions' share
+		typePool(content, '15');
+		expect(apply(content).textContent).toBe('Heal 1 stamina');
+		expect(info(content).textContent).toBe('Heal 1 stamina; dead minions stay dead.');
+		const el = poolInput(content);
+		el.value = '99'; // a half-typed draft, not yet committed
+		el.dispatchEvent(new Event('input', { bubbles: true }));
+		expect(apply(content).textContent).toBe('Heal 6 stamina'); // 14 -> the max 20, never 85
+		expect(info(content).textContent).toContain("(16 stamina)"); // refused past the share: the reason, not a count
+		typePool(content, '16');
+		expect(apply(content).textContent).toBe('Heal 2 stamina');
+		apply(content).click();
+		expect(group.minion_stamina_pool).toBe(16);
 	});
 
 	test('damage then a typed pool value: the typed value wins (the pending is rebuilt from the stepper)', async () => {
@@ -710,16 +748,6 @@ describe('a group holding two minion squads: each modal reads and writes ITS squ
 // ------------------------------------------------------------------------------------ known bugs
 
 describe('known bugs (test.failing: each FAILS once its ticket is fixed, then drop the marker)', () => {
-	// SC-566: overkill through the Apply Damage row. The pool cannot lose more than it holds, so the label and the
-	// info line should state the 20 damage Apply will write, as StaminaEditModal's label does (SC-427 R3-F5).
-	test.failing('SC-566: 99 damage x 5 minions on a pool of 20 labels and explains the clamped 20 damage, not 495', async () => {
-		const { content } = await open();
-		dealDamage(content, '99', '5');
-		expect(poolInput(content).value).toBe('0'); // setup: the stepper already shows the clamp
-		expect(apply(content).textContent).toBe('Deal 20 damage, kill 5 minion(s)');
-		expect(info(content).textContent).toBe(`20 damage will kill 5 minion(s).${SEL(5)}`);
-	});
-
 	// SC-567: owed kills drop from 2 to 1 with 2 boxes ticked. Either fix satisfies this: trim the surplus ticks
 	// (Apply enables, no title) or keep them and reword the tooltip. What may never happen is a disabled Apply whose
 	// tooltip says "Select N minion(s) to kill" with N not above the number already ticked.
