@@ -32,7 +32,7 @@ for what needs action.
   editor, another pane), the click was saved into a different block of the note: an identical one that was left, or a
   neighbour that the same outside edit had changed to read the same. You never touched that block. Now nothing is saved
   and a Notice says so ("a change to a block in <note> was not saved — the block changed on disk first"); the outside
-  change is kept. A note with no identical block behaves as before. Limits. If the block was cut and pasted somewhere
+  change is kept. A note with no identical block behaves as before, except that if the same outside edit deleted another block and moved this one into its place, the click is refused with the same Notice. Limits. If the block was cut and pasted somewhere
   else in the note in that same moment and the note has another block that reads the same, the click is refused with the
   same Notice although the block still exists. If hundreds of lines changed around the block in that moment and an
   identical block exists, the click is refused the same way. Two identical blocks with only blank lines between them: if
