@@ -22,11 +22,13 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
-- [FIX] **Keyboard focus stays in the initiative tracker after Advance round, Make/Relieve captain, Reset turns, Reset encounter and the Malice quick-add** (SC-588). Each of these rebuilds the whole
-  tracker, and focus used to fall to the top of the page, so a keyboard user had to Tab back in from the top of the note after every press. The
-  control that replaced the one you pressed now takes focus: the same button (Advance round, Reset turns, the Malice amount or label field,
-  the Reset encounter item once its confirm window has closed), or, for a captain badge, Make captain and Relieve captain trade places on the same creature. A mouse click
-  moves no focus, and neither does a rebuild that starts while focus is somewhere else.
+- [FIX] **Keyboard focus stays in the initiative tracker after Advance round, Make/Relieve captain, Reset turns, Reset encounter
+  and the Malice quick-add, in Reading view** (SC-588). Each of these rebuilds the whole tracker, and focus used to fall to the
+  top of the page, so a keyboard user had to Tab back in from the top of the note after every press. The control that replaced
+  the one you pressed now takes focus: the same button (Advance round, Reset turns, the Malice amount or label field, the Reset
+  encounter item once its confirm window has closed), or, for a captain badge, Make captain and Relieve captain trade places on
+  the same creature. A mouse click never pulls focus into the tracker, and neither does a rebuild that starts while focus is
+  somewhere else. In Live Preview focus is still lost when the note saves a moment later (SC-602).
 - [FIX] **The Malice log records what the pool actually did** (SC-578). With Malice at 2, quick-adding -5 sets Malice to 0 but the
   log said -5, so the log no longer added up to the pool; Advance round with a negative `round_gain` had the same gap. Now a
   log entry's amount is the change the pool really made, and when the pool stopped at 0 the entry also keeps what was asked
