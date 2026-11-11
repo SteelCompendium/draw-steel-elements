@@ -28,6 +28,17 @@ for what needs action.
   (the Malice log shows the configured amount, as the quick-add does), and the button reads "Advance round (-3 Malice)".
   A hand-edited negative `value` counts as 0 everywhere (it shows as 0, and Advance round or a quick-add of +3 from a
   stored -2 gives 3); the note is not rewritten until you change Malice.
+- [FIX] **A block's edit form saves again in two cases that SC-556 refused although nothing was unclear** (SC-584).
+  (1) You hover over a link to a note holding a counter, press + in the preview and then its Edit pencil right away:
+  Save was refused ("a change to a block in <note> was not saved — the block changed on disk first") even when that
+  counter was the only one of its kind in the note, in a short note too. It now saves into that counter. It still
+  writes nothing, with the same Notice, when another block of the note reads the same as the form opens, when the
+  note around the block was edited before the form opened, or when the block itself is edited or deleted from outside
+  while the form is open (an identical block added to the note after the form opened changes nothing). (2) A block
+  embed of a callout (`![[note#^id]]`) whose callout has more text after the counter, in a note with an identical
+  callout elsewhere: Save was refused. It now saves into the embedded callout and never into the other one. An
+  embed whose `^id` line is not under the callout it names, or whose position Obsidian's index of the note has wrong,
+  is still refused with the same Notice.
 - [FIX] **The initiative tracker repaints correctly after "Reset encounter state"** (SC-576). After Reset encounter -> Yes
   the tracker used to show every enemy group empty and every hero at 0 Stamina with a red Dying chip, although the note
   was reset correctly. It now shows the enemy rows and the heroes at full Stamina, as a reload of the note does. It also
