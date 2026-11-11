@@ -1481,6 +1481,7 @@ async function gs83FormTrial(t, mode) {
 		await K.click(K.RAW);
 		await t.sleep(400);
 		rec.afterRawClick = await K.state();
+		if (!(rec.afterRawClick.popover && rec.afterRawClick.modal)) return rec; // the click closed it (the bug): nothing below can be driven
 		await t.ev(`(() => { const ta = ${K.RAW}; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); return true; })()`);
 		await t.cdp.call('Input.insertText', { text: '\nnote: sc595' });
 		await t.sleep(200);
@@ -7380,13 +7381,15 @@ const SCENARIOS = [
 					if (r.error) bad.push(`error: ${r.error}`);
 					else {
 						if (!(r.opened.popover && r.opened.modal)) bad.push(`not open together after the pencil ${J(r.opened)}`);
-						if (!(r.afterRawClick.popover && r.afterRawClick.modal)) bad.push(`a real click in the raw box closed ${J(r.afterRawClick)}`);
-						if (!r.typedKept) bad.push('the typed text did not survive the clicks');
-						if (!r.saved) bad.push('a real click on Save did not put the edit in the note');
-						if (r.notices.length) bad.push(`Notice(s) after Save ${J(r.notices)}`);
-						if (!(r.afterSave.popover && !r.afterSave.modal)) bad.push(`after Save the form must be closed and the preview shown ${J(r.afterSave)}`);
-						if (!(r.afterEscape.popover && !r.afterEscape.modal)) bad.push(`Escape must close the form and leave the preview ${J(r.afterEscape)}`);
-						if (r.afterOutside.popover) bad.push('a real click outside did not close the preview');
+						if (!(r.afterRawClick.popover && r.afterRawClick.modal)) bad.push(`a real click in the raw box closed ${J(r.afterRawClick)} (preview and form must both stay)`);
+						else if (!r.typedKept) bad.push('the typed text did not survive the clicks');
+						if (r.afterSave) {
+							if (!r.saved) bad.push('a real click on Save did not put the edit in the note');
+							if (r.notices.length) bad.push(`Notice(s) after Save ${J(r.notices)}`);
+							if (!(r.afterSave.popover && !r.afterSave.modal)) bad.push(`after Save the form must be closed and the preview shown ${J(r.afterSave)}`);
+							if (!(r.afterEscape.popover && !r.afterEscape.modal)) bad.push(`Escape must close the form and leave the preview ${J(r.afterEscape)}`);
+							if (r.afterOutside.popover) bad.push('a real click outside did not close the preview');
+						}
 					}
 					if (bad.length) problems.push(`${label}: ${bad.join('; ')}`);
 					else outcomes.push(`${label} (${r.hover}): press+release in the raw box left preview and form open, typed text kept, Save landed (no Notice, preview shown), Escape closed a new form (preview shown), a click outside closed the preview`);
