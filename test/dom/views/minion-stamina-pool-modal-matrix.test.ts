@@ -1100,11 +1100,12 @@ describe('a group holding two minion squads: each modal reads and writes ITS squ
 	});
 });
 
-// ------------------------------------------------------------------------------------ known bugs
+// -------------------------------------------------------------- custom conditions and duplicate entries (SC-574)
 
-describe('known bugs (test.failing: each FAILS once its ticket is fixed, then drop the marker)', () => {
-	// SC-574 (a): a condition the registry does not know ("on-fire") is on the minion but not shown here.
-	test.failing('SC-574 (a): a custom condition is shown in the modal and a click removes it', async () => {
+describe('condition icons: a custom condition shows the tracker\'s fallback icon; a click removes one entry by position', () => {
+	const icon = (el: HTMLElement) => el.getAttribute('data-icon');
+
+	test('SC-574 (a): a custom condition is shown in the modal and a click removes it', async () => {
 		const { content, minion, persist } = await open({ conditions: { 0: ['on-fire'] } });
 		expect(minion.instances![0].conditions).toHaveLength(1); // setup: the minion carries it
 		expect(all(content, 'pool.condition')).toHaveLength(1);
@@ -1113,11 +1114,68 @@ describe('known bugs (test.failing: each FAILS once its ticket is fixed, then dr
 		expect(persist).toHaveBeenCalledTimes(1);
 	});
 
-	// SC-574 (b): `filter((entry) => entry !== clicked)` compares strings by value.
-	test.failing('SC-574 (b): one click on a duplicated string condition removes one copy', async () => {
+	test('SC-574: a custom string condition is a keyboard button with the fallback glyph and a title-cased name', async () => {
+		const { content } = await open({ conditions: { 0: ['on-fire', 'grabbed'] } });
+		const [custom, known] = all<HTMLButtonElement>(content, 'pool.condition');
+		expect(custom.tagName).toBe('BUTTON');
+		expect(custom.classList.contains('condition-icon')).toBe(true);
+		expect(custom.getAttribute('aria-label')).toBe('Remove On Fire');
+		expect(icon(custom)).toBe('circle-dashed'); // the tracker's SC-186 fallback
+		expect(icon(known)).not.toBe('circle-dashed'); // a built-in keeps its own glyph
+	});
+
+	test('SC-574: an object-form custom condition with its own icon shows that icon, not the fallback', async () => {
+		const { content } = await open({ conditions: { 0: [{ key: 'hexed', icon: 'skull' } as Condition, { key: 'cursed' } as Condition] } });
+		const [own, plain] = all(content, 'pool.condition');
+		expect(icon(own)).toBe('skull');
+		expect(icon(plain)).toBe('circle-dashed');
+	});
+
+	test('SC-574: a custom condition\'s color and effect reach its icon', async () => {
+		const { content } = await open({ conditions: { 0: [{ key: 'hexed', color: 'crimson', effect: 'glow' } as Condition] } });
+		const el = ctl(content, 'pool.condition');
+		expect(el.style.getPropertyValue('--dse-condition-color')).toBe('crimson');
+		expect(el.classList.contains('condition-effect-glow')).toBe(true);
+	});
+
+	test('SC-574: a keyboard removal of a custom condition hands focus to the icon that took its slot', async () => {
+		const { content, minion } = await open({ conditions: { 0: ['grabbed', 'on-fire', 'dazed'] } });
+		ctl(content, 'pool.condition', 1).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 0 }));
+		expect(minion.instances![0].conditions).toEqual(['grabbed', 'dazed']);
+		expect(document.activeElement).toBe(ctl(content, 'pool.condition', 1));
+	});
+
+	test('SC-574 (b): one click on a duplicated string condition removes one copy', async () => {
 		const { content, minion } = await open({ conditions: { 0: ['grabbed', 'grabbed', 'dazed'] } });
 		expect(all(content, 'pool.condition').map(conditionName)).toEqual(['Grabbed', 'Grabbed', 'Dazed']); // setup
 		click(content, 'pool.condition', 0);
 		expect(minion.instances![0].conditions).toEqual(['grabbed', 'dazed']);
+		expect(all(content, 'pool.condition').map(conditionName)).toEqual(['Grabbed', 'Dazed']);
+	});
+
+	test('SC-574: clicking the SECOND of two duplicates removes the second (by position), and a custom duplicate behaves the same', async () => {
+		const { content, minion } = await open({ conditions: { 0: ['dazed', 'grabbed', 'grabbed', 'on-fire', 'on-fire'] } });
+		click(content, 'pool.condition', 2); // the second "grabbed"
+		expect(minion.instances![0].conditions).toEqual(['dazed', 'grabbed', 'on-fire', 'on-fire']);
+		click(content, 'pool.condition', 3); // the second "on-fire"
+		expect(minion.instances![0].conditions).toEqual(['dazed', 'grabbed', 'on-fire']);
+		expect(all(content, 'pool.condition').map(conditionName)).toEqual(['Dazed', 'Grabbed', 'On Fire']);
+	});
+
+	test('SC-574: two equal-looking object entries are removed one at a time, the clicked one first', async () => {
+		const first = { key: 'bleeding', color: 'crimson' } as Condition;
+		const second = { key: 'bleeding', color: 'crimson' } as Condition; // equal by value, a different entry
+		const { content, minion } = await open({ conditions: { 0: [first, second] } });
+		click(content, 'pool.condition', 1);
+		expect(minion.instances![0].conditions).toHaveLength(1);
+		expect(minion.instances![0].conditions![0]).toBe(first);
+	});
+
+	test('SC-574: keyboard focus after removing the second of two duplicates lands on the previous icon', async () => {
+		const { content, minion } = await open({ conditions: { 0: ['grabbed', 'grabbed'] } });
+		ctl(content, 'pool.condition', 1).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 0 }));
+		expect(minion.instances![0].conditions).toEqual(['grabbed']);
+		expect(document.activeElement).toBe(ctl(content, 'pool.condition', 0));
 	});
 });
+

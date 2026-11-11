@@ -27,6 +27,7 @@ import { Creature, CreatureInstance, EnemyGroup, Condition } from '@drawSteelAdm
 import { foldedCaptainStaminaBonus, minionPoolMaxOf, minionPoolOf, setMinionPool } from '@drawSteelAdmonition/EncounterData';
 import { ConditionManager } from '@utils/Conditions';
 import { applyConditionColor, applyConditionEffect } from '@/elements/conditionColor';
+import { FALLBACK_CONDITION_ICON, titleCaseConditionKey } from '@/elements/conditionDisplay';
 import { focusControl, isKeyboardClick } from '@/framework/chrome/focusHandoff';
 import { DseModal, iconButton, stampControl } from '@/framework/kit';
 import type { IconButtonHandle, StepperHandle } from '@/framework/kit';
@@ -627,7 +628,7 @@ export class MinionStaminaPoolModal extends DseModal {
 
 		const conditionManager = new ConditionManager();
 
-		conditions.forEach((conditionEntry) => {
+		conditions.forEach((conditionEntry, entryIndex) => {
 			let conditionKey: string;
 			let conditionData: Condition | null = null;
 			if (typeof conditionEntry === 'string') {
@@ -639,45 +640,49 @@ export class MinionStaminaPoolModal extends DseModal {
 				return;
 			}
 
+			// SC-574: a key the registry does not know (a custom condition) still gets its button, with
+			// the tracker's fallback glyph and title-cased name (SC-186; same as ConditionsModal), so it
+			// can be seen and removed here.
 			const condition = conditionManager.getAnyConditionByKey(conditionKey);
-			if (condition) {
-				// SC-572: a REAL <button> (Tab stop; Enter and Space activate it natively), named
-				// "Remove <condition>" — the same name the Conditions modal's remove button carries.
-				// aria-label is also the hover tooltip (Obsidian reads it), so there is no `title`:
-				// a second, native tooltip would double it. Bare <button>, not a kit `.dse-btn`: the
-				// icon keeps its legacy chrome-free look (the reset lives with `.condition-icon`).
-				const iconEl = container.createEl('button', { cls: 'condition-icon' });
-				iconEl.setAttribute('type', 'button'); // never an implicit form submit
-				iconEl.setAttribute('aria-label', `Remove ${condition.displayName}`);
-				setIcon(iconEl, conditionData?.icon?.trim() || condition.iconName);
-				stampControl(iconEl, 'pool.condition'); // SC-435 (a click removes the condition)
+			const displayName = condition?.displayName ?? titleCaseConditionKey(conditionKey);
+			// SC-572: a REAL <button> (Tab stop; Enter and Space activate it natively), named
+			// "Remove <condition>" — the same name the Conditions modal's remove button carries.
+			// aria-label is also the hover tooltip (Obsidian reads it), so there is no `title`:
+			// a second, native tooltip would double it. Bare <button>, not a kit `.dse-btn`: the
+			// icon keeps its legacy chrome-free look (the reset lives with `.condition-icon`).
+			const iconEl = container.createEl('button', { cls: 'condition-icon' });
+			iconEl.setAttribute('type', 'button'); // never an implicit form submit
+			iconEl.setAttribute('aria-label', `Remove ${displayName}`);
+			setIcon(iconEl, conditionData?.icon?.trim() || condition?.iconName || FALLBACK_CONDITION_ICON);
+			stampControl(iconEl, 'pool.condition'); // SC-435 (a click removes the condition)
 
-				// Apply color and effect customizations through the SHARED Task 8
-				// helpers (SC-5/SD-2): the user-supplied color rides the sanctioned
-				// --dse-condition-color custom property only after CSS.supports
-				// validation, and the effect class only toggles for the known
-				// vocabulary (raw classList.add throws on whitespace).
-				if (conditionData) {
-					applyConditionColor(iconEl, conditionData.color);
-					applyConditionEffect(iconEl, conditionData.effect);
-				}
-
-				this.lifecycle.registerDomEvent(iconEl, 'click', (evt: MouseEvent) => {
-					// Where this icon sits among its siblings, read before the rebuild destroys it.
-					const index = Array.from(container.querySelectorAll('.condition-icon')).indexOf(iconEl);
-					character.conditions = conditions.filter((entry) => entry !== conditionEntry);
-					container.empty();
-					this.buildConditionIcons(container, character);
-					// SC-572 r3: a keyboard removal must not strand focus on <body> (the rebuild destroyed
-					// the focused button). Same rule as ConditionsModal.removeAt (MED-3); a pointer click
-					// keeps today's behaviour (SC-518: no focus move, no ring).
-					if (isKeyboardClick(evt)) this.handOffConditionFocus(container, index);
-					// Route through the injected callback — never a direct vault write.
-					// The old direct CodeBlocks.updateCodeBlock(app, data, ctx, "") call (src/utils/CodeBlocks.ts, deleted in SC-454)
-					// rewrote the fence with an EMPTY language, corrupting the block (CB-2).
-					this.persist();
-				});
+			// Apply color and effect customizations through the SHARED Task 8
+			// helpers (SC-5/SD-2): the user-supplied color rides the sanctioned
+			// --dse-condition-color custom property only after CSS.supports
+			// validation, and the effect class only toggles for the known
+			// vocabulary (raw classList.add throws on whitespace).
+			if (conditionData) {
+				applyConditionColor(iconEl, conditionData.color);
+				applyConditionEffect(iconEl, conditionData.effect);
 			}
+
+			this.lifecycle.registerDomEvent(iconEl, 'click', (evt: MouseEvent) => {
+				// Where this icon sits among its siblings, read before the rebuild destroys it.
+				const index = Array.from(container.querySelectorAll('.condition-icon')).indexOf(iconEl);
+				// SC-574: remove THIS entry by position — a value filter would drop every identical
+				// string ("grabbed", "grabbed") with one click.
+				character.conditions = conditions.filter((_, i) => i !== entryIndex);
+				container.empty();
+				this.buildConditionIcons(container, character);
+				// SC-572 r3: a keyboard removal must not strand focus on <body> (the rebuild destroyed
+				// the focused button). Same rule as ConditionsModal.removeAt (MED-3); a pointer click
+				// keeps today's behaviour (SC-518: no focus move, no ring).
+				if (isKeyboardClick(evt)) this.handOffConditionFocus(container, index);
+				// Route through the injected callback — never a direct vault write.
+				// The old direct CodeBlocks.updateCodeBlock(app, data, ctx, "") call (src/utils/CodeBlocks.ts, deleted in SC-454)
+				// rewrote the fence with an EMPTY language, corrupting the block (CB-2).
+				this.persist();
+			});
 		});
 
 		// TODO - Add-condition UI stayed disabled after the original "saving condition
