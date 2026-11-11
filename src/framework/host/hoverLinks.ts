@@ -6,6 +6,7 @@
 // hoverParent }; named in the public docs, its payload is untyped), and the popover it opens is `hoverParent.hoverPopover`. The log below
 // keeps the last events; `hoverLinkOf` hands a card the link of ITS popover, bound once (see there). No event, no link: the caller refuses.
 import type { App, Plugin } from 'obsidian';
+import { normalizeHeadingName } from './headingNames';
 
 export type HoverLink = { linktext: string; sourcePath: string };
 
@@ -29,9 +30,20 @@ function logOf(app: object): HoverLinkLog {
 	return log;
 }
 
-/** The plugin's `onload` side: record every `hover-link` event the workspace fires (removed with the plugin by `registerEvent`). */
+/**
+ * The plugin's `onload` side: record every `hover-link` event the workspace fires (removed with the plugin by `registerEvent`).
+ * SC-594: a preview that is already open now was opened by an event this log never saw, so it is bound to NO link (a later event of its parent
+ * would otherwise be taken for the event that opened it). Turning the plugin off and on closes such a preview in Obsidian 1.15.1; this makes
+ * that true by construction.
+ */
 export function registerHoverLinks(plugin: Plugin): void {
 	const app: App = plugin.app;
+	const log = logOf(app);
+	const docs = new Set<Document>();
+	if (typeof document !== 'undefined') docs.add(document);
+	const active = (globalThis as { activeDocument?: Document }).activeDocument;
+	if (active) docs.add(active);
+	for (const doc of docs) doc.querySelectorAll('.hover-popover').forEach((open) => log.bound.set(open, null));
 	plugin.registerEvent(app.workspace.on('hover-link' as never, ((ev: HoverLinkEvent) => noteHoverLink(app, ev)) as never));
 }
 
@@ -61,15 +73,36 @@ const linkOfEvent = (ev: HoverLinkEvent): HoverLink => ({ linktext: ev.linktext 
  * event (`noteHoverLink`), whichever comes first, and every later lookup in that popover (a redraw of its card, a second +) gets the same link:
  * while preview X is open the pointer can pass over another link Y on the same parent whose preview never opens, and Y's event would otherwise
  * become "the newest event of X's parent" and name Y's place for X's card (two headings whose bodies are the same counter: X's + would be written
- * at Y; measured in Obsidian 1.15.1, the click wrote the other counter).
+ * at Y; measured in Obsidian 1.15.1, the click wrote the other counter). The bound link is also checked against the preview's own DOM (`popoverShows`).
  */
 export function hoverLinkOf(app: object, el: Element): HoverLink | null {
 	const popover = el.closest('.hover-popover');
 	if (!popover) return null;
 	const log = logOf(app);
-	if (log.bound.has(popover)) return log.bound.get(popover) ?? null;
-	let link: HoverLink | null = null;
-	for (let i = log.events.length - 1; i >= 0 && link === null; i--) if (log.events[i].hoverParent?.hoverPopover?.hoverEl === popover) link = linkOfEvent(log.events[i]);
-	log.bound.set(popover, link);
-	return link;
+	let link: HoverLink | null;
+	if (log.bound.has(popover)) link = log.bound.get(popover) ?? null;
+	else {
+		link = null;
+		for (let i = log.events.length - 1; i >= 0 && link === null; i--) if (log.events[i].hoverParent?.hoverPopover?.hoverEl === popover) link = linkOfEvent(log.events[i]);
+		log.bound.set(popover, link);
+	}
+	// the preview must show what the bound link names (`popoverShows`): a link another event bound here is refused
+	return link !== null && popoverShows(popover, link.linktext) ? link : null;
+}
+
+/**
+ * SC-594: whether the hover preview `popover` shows what `linktext` names, read from the preview's own DOM (measured, Obsidian 1.15.1, Reading view and
+ * Live Preview): a heading link draws `.markdown-embed[data-type=heading]` whose first heading carries `data-heading` = the heading's name, a block link
+ * `data-type=block`, a link to a whole note neither. A link bound to the wrong preview (another link's event named this popover) fails this and the
+ * card's write is refused.
+ */
+export function popoverShows(popover: Element, linktext: string): boolean {
+	const type = popover.querySelector('.markdown-embed')?.getAttribute('data-type') ?? null;
+	const hash = linktext.indexOf('#');
+	if (hash < 0) return type !== 'heading' && type !== 'block';
+	const subpath = linktext.slice(hash);
+	if (subpath.startsWith('#^')) return type === 'block';
+	if (type !== 'heading') return false;
+	const shown = popover.querySelector('.markdown-embed [data-heading]')?.getAttribute('data-heading');
+	return typeof shown === 'string' && normalizeHeadingName(shown) === normalizeHeadingName(subpath.split('#').pop() ?? '');
 }

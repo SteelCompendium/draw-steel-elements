@@ -69,6 +69,7 @@ import { listFences } from '../sidebar/anchor';
 import { notifyDroppedWrite, notifyUnsavableWrite } from './droppedWriteNotice';
 import { splitLines } from './lineEnding';
 import { hoverLinkOf } from './hoverLinks';
+import { atxHeadings, normalizeHeadingName } from './headingNames';
 import { blockBodyLines, parseOpenFenceLine, replaceFenceBlock } from './fenceLine';
 import type { ViewRegistry, ViewRegistryEntry } from './viewRegistry';
 
@@ -832,7 +833,8 @@ export class ReadingModeBlockHost implements BlockHost {
 		// host's own last write is of the body it knows, that write is the exact position of its block, so a form takes it instead. Record-first for
 		// EVERY form was tried and refuses a CURRENT plain block after hundreds of lines changed since the + (the diff gives up; the link finds it fine),
 		// hence the plain-block exception; a form in a multi-block window with an old record can refuse that way (a Notice, never a twin).
-		// SC-594: a card write (a second + in a stale callout window) is pinned the same way, so it can never be written into the twin callout.
+		// SC-594: a card write (a second + in a stale callout window) is pinned the same way, so it can never be written into the twin callout. LOAD-BEARING
+		// (jest J19): with it gone, a second + after an outside edit that put the first block back to the old value writes the SIBLING counter of the callout.
 		if (embedded) {
 			const first = parseOpenFence(section.text, section.lineStart);
 			if (!(first && first.prefix === '')) {
@@ -956,8 +958,10 @@ export class ReadingModeBlockHost implements BlockHost {
 	/**
 	 * SC-594: the card's line in `whole` through the link of the part it is drawn in: the embed's `src`, or for a hover preview the link it was
 	 * opened for (`hoverLinkOf`). Nothing is trusted that the note does not confirm (the metadata cache can lag):
-	 *  - the link must resolve to this note, and name exactly ONE heading / block id while the known body occurs more than once in the note
-	 *    (a section of the same name pasted above the clicked one would otherwise be taken); a unique body needs no such check;
+	 *  - the link must resolve to this note; a HEADING link is placed from the note's TEXT, never from the metadata cache alone (the cache lags an
+	 *    outside edit by a moment): for a hover (the part hangs from the line above it) the line the cache says the heading is on must be, in the text,
+	 *    an ATX heading line of that name (no such line: refused), and while the known body occurs more than once the text must hold exactly ONE heading of that name; a `^id` link needs exactly
+	 *    ONE `^id` marker line in the text while the known body occurs more than once; a unique body needs no count;
 	 *  - the part's first line must be where the link starts (an embed's part includes the heading) or, for a heading link, on the line after it
 	 *    (measured: the part Obsidian gives a hover card is the heading's BODY, no heading line, `lineStart` 1);
 	 *  - EVERY line of the part (trailing blank lines dropped) must equal the note's lines from there: a part that differs anywhere (a block
@@ -981,14 +985,18 @@ export class ReadingModeBlockHost implements BlockHost {
 		if (typeof start !== 'number' || start < 0) return null;
 		const lines = splitLines(whole);
 		const blockId = subpath.startsWith('#^') ? subpath.slice(2) : null;
-		if (known !== null && countByBody(whole, this.knownLanguage ?? this.alias, known) > 1) {
+		const twin = known !== null && countByBody(whole, this.knownLanguage ?? this.alias, known) > 1;
+		let named: number[] = [];
+		if (blockId === null) {
+			// the heading lines of that name in the note TEXT; the cache's line must be one of them (it is the line the part hangs from)
+			const name = normalizeHeadingName(subpath.split('#').pop() ?? '');
+			named = atxHeadings(lines).filter((h) => normalizeHeadingName(h.name) === name).map((h) => h.line);
+		}
+		if (twin) {
 			if (blockId !== null) {
 				const marker = new RegExp(`(^|\\s)\\^${blockId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
 				if (lines.filter((l) => marker.test(l)).length !== 1) return null;
-			} else {
-				const name = (subpath.split('#').pop() ?? '').toLowerCase();
-				if ((meta.headings ?? []).filter((h) => h.heading.toLowerCase() === name).length !== 1) return null;
-			}
+			} else if (named.length !== 1) return null;
 		}
 		const part = splitLines(sectionText);
 		const wholePart = part.slice();
@@ -996,7 +1004,12 @@ export class ReadingModeBlockHost implements BlockHost {
 		if (wholePart.length === 0) return null;
 		let partStart: number | null = null;
 		if (lines[start] === part[0]) partStart = start;
-		else if (blockId === null && lines[start + 1] === part[0]) partStart = start + 1;
+		else if (blockId === null && lines[start + 1] === part[0]) {
+			// a hover's part is the heading's BODY: the line it hangs from (`start`) was never compared with anything, so it must be the heading's
+			// own line in the note text (a cache that lags a moved, pasted or deleted section points at another section's heading or a blank line)
+			if (!named.includes(start)) return null;
+			partStart = start + 1;
+		}
 		if (partStart === null) return null;
 		for (let i = 0; i < wholePart.length; i++) if (lines[partStart + i] !== wholePart[i]) return null;
 		const line = partStart + relLine;
