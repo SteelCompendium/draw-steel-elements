@@ -465,7 +465,8 @@ function clearTurnState(data: EncounterData): void {
  * - `malice.round_gain`, when configured (non-zero), is added to the pool and logged
  *   (`{round, amount, label: 'Round gain'}`) at the NEW round number — same log shape as
  *   the quick-add (spec §3.1/§3.3). Absent/0 stays manual-only (OD-3: never a fabricated
- *   default).
+ *   default). A NEGATIVE gain is still applied but floors the pool at 0 (SC-577: Malice
+ *   never goes below 0, matching the quick-add); the log entry keeps the configured amount.
  */
 export function advanceRound(data: EncounterData): void {
 	data.round = (data.round ?? 1) + 1;
@@ -473,7 +474,7 @@ export function advanceRound(data: EncounterData): void {
 
 	const gain = data.malice.round_gain;
 	if (typeof gain === 'number' && gain !== 0) {
-		data.malice.value += gain;
+		data.malice.value = Math.max(0, data.malice.value + gain); // SC-577: the pool never goes below 0
 		appendMaliceLogEntry(data.malice, { round: data.round, amount: gain, label: 'Round gain' });
 	}
 }

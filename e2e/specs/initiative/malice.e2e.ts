@@ -49,16 +49,13 @@ describe('initiative: the Malice stepper', () => {
 		expect((await maliceOf(RICH)).value).toBe(5);
 	});
 
-	knownBug(
-		'SC-577',
-		'[INIT-M07] the Malice stepper stops at 0: pressing - four times from 3 leaves "Malice: 0" (never negative)',
-		async () => {
-			const root = await open();
-			for (let i = 0; i < 4; i++) await dse.click(root.control('init.malice.dec'));
-			await expect(shown(root)).toHaveElementProperty('textContent', 'Malice: 0');
-		},
-		{ failsWith: /Malice: 0/ },
-	);
+	it('[INIT-M07] the Malice stepper stops at 0: pressing - four times from 3 leaves "Malice: 0" (never negative)', async () => {
+		const root = await open();
+		for (let i = 0; i < 4; i++) await dse.click(root.control('init.malice.dec'));
+		await expect(shown(root)).toHaveElementProperty('textContent', 'Malice: 0');
+		await dse.settle();
+		expect((await maliceOf(MIN)).value).toBe(0); // the three real steps landed; the fourth press was disabled and wrote nothing negative
+	});
 });
 
 describe('initiative: the Malice quick-add row', () => {

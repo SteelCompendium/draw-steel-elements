@@ -49,6 +49,20 @@ describe('initiative: round and turns', () => {
 		await expect(root.control('init.hero.turn', { nth: 1 })).toHaveAttribute('aria-pressed', 'false');
 	});
 
+	it('[INIT-R03] a negative round_gain: the button reads "-9" (never "+-9"), Advance round floors Malice at 0 and logs the configured amount [SC-577]', async () => {
+		await dse.externalEdit(RICH, "c.replace('round_gain: 2', 'round_gain: -9')"); // Malice 4 + -9 would be -5
+		const root = await openRich();
+		await expect(root.control('init.round.advance')).toHaveAttribute('aria-label', 'Advance round (-9 Malice)');
+		const w = await dse.waitForWrite(RICH, () => dse.click(root.control('init.round.advance')));
+		expect(w.count).toBe(1);
+		await dse.expectNoteBlock(RICH, INIT).toMatchObject({
+			round: 3,
+			malice: { value: 0, round_gain: -9, log: [{ round: 1, amount: 3, label: 'Opening Malice' }, { round: 3, amount: -9, label: 'Round gain' }] },
+		});
+		await expect(malice(root)).toHaveElementProperty('textContent', 'Malice: 0');
+		await expect(root.control('init.malice.dec')).toBeDisabled();
+	});
+
 	it('[INIT-N01] the hero portrait overlay toggles the turn both ways and the two heroes keep their own state', async () => {
 		const root = await openRich();
 		const alice = root.control('init.hero.turn', { nth: 0 });

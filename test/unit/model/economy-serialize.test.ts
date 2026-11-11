@@ -201,6 +201,20 @@ describe('T-9: advanceRound()', () => {
 		expect(zeroGain.malice.log).toBeUndefined();
 	});
 
+	test('a negative round_gain is applied but floors Malice at 0 (SC-577); the log keeps the configured amount', () => {
+		const source = (value: number, gain: number) =>
+			['heroes: []', 'enemy_groups: []', 'malice:', `  value: ${value}`, `  round_gain: ${gain}`].join('\n');
+
+		const floored = parseLikePipeline(source(1, -3));
+		advanceRound(floored);
+		expect(floored.malice.value).toBe(0); // 1 + -3 would be -2
+		expect(floored.malice.log).toEqual([{ round: 2, amount: -3, label: 'Round gain' }]);
+
+		const reduced = parseLikePipeline(source(5, -3));
+		advanceRound(reduced);
+		expect(reduced.malice.value).toBe(2); // a negative gain still applies when the pool can take it
+	});
+
 	test('round_gain applied on top of an existing log preserves earlier entries', () => {
 		const model = parseLikePipeline(
 			[

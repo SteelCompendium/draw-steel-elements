@@ -490,6 +490,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				{
 					value: data.malice.value,
 					integer: true,
+					min: 0, // SC-577: the pool never goes below 0 (the quick-add and Advance round floor it too)
 					label: 'Malice',
 					control: 'init.malice',
 					renderValue: (el, v) => this.renderMaliceValue(el, v),
@@ -535,7 +536,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 					control: 'init.round.advance',
 					label:
 						typeof gain === 'number' && gain !== 0
-							? `Advance round (+${gain} Malice)`
+							? `Advance round (${gain >= 0 ? '+' : ''}${gain} Malice)` // the Malice log's sign rule: never "+-3"
 							: 'Advance round',
 					onClick: () => this.advanceRound(),
 				},

@@ -860,9 +860,10 @@ describe('[X] Reset encounter state: what a confirm clears, what every other way
 // ----------------------------------------------------------------------------------------------------- known bugs
 // Each of these encodes the CORRECT behaviour and fails today (`test.failing`): the moment the bug is fixed the test passes, jest
 // reports it, and the marker comes off. The e2e twins (e2e/specs/initiative/) carry `knownBug` markers for the same tickets.
+// [M07] and [R01] (SC-577, Malice never below 0) are fixed and plain tests now; [M09] (SC-578) is still open.
 
 describe('known bugs: Malice below 0 and the quick-add clamp', () => {
-	test.failing('[M07] the Malice stepper stops at 0 [known bug SC-577]', async () => {
+	test('[M07] the Malice stepper stops at 0', async () => {
 		const { root, flush, writes } = await mount(src(HEROES, OGRES, ['malice:', '  value: 0']));
 		ctl(root, 'init.malice.dec').click();
 		await flush();
@@ -871,7 +872,7 @@ describe('known bugs: Malice below 0 and the quick-add clamp', () => {
 		expect(writes().every((w) => parseYaml(w).malice.value >= 0)).toBe(true);
 	});
 
-	test.failing('[R01] a negative round_gain never takes Malice below 0, and the Advance label reads "-3" not "+-3" [known bug SC-577]', async () => {
+	test('[R01] a negative round_gain never takes Malice below 0, and the Advance label reads "-3" not "+-3"', async () => {
 		const { root, flush, last } = await mount(src(HEROES, OGRES, ['malice:', '  value: 1', '  round_gain: -3']));
 		expect(ctl(root, 'init.round.advance').getAttribute('aria-label')).not.toContain('+-');
 		ctl(root, 'init.round.advance').click();
