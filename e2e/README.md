@@ -113,7 +113,7 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Callout/list.md`, `Callout/list-lp.md` | the block's fence indented inside a list item: not supported yet, so a click shows the "not saved" Notice (two copies: the Notice is rate-limited per note) |
   | `Initiative/tracker.md` | `ds-initiative`: hero Alice Alpha 30/30, three Ogres 60/60 (cells `0-1`..`0-3`) |
   | `Initiative/squad.md` | `ds-initiative`: hero Alice Alpha 30/30, one minion squad "Goblin Squad" of five Goblins with 4 Stamina each (pool 20, cells `0-1`..`0-5`; SC-435) |
-  | `Initiative/squad-hurt.md` | the same squad at pool 10 with Goblins #1 and #2 dead, #3 (selected) grabbed and dazed (`- grabbed` is rewritten as `{ key: grabbed }` on the first write; SC-435) |
+  | `Initiative/squad-hurt.md` | the same squad at pool 10 with Goblins #1 and #2 dead, #3 (selected) grabbed and dazed (`- grabbed` stays a plain name on every write, SC-592; SC-435) |
   | `Initiative/squad-custom.md` | the `squad-hurt.md` squad, but Goblin #3 carries `on-fire` (a custom key) twice, with `grabbed` between the copies and `dazed` last, all plain strings (SC-574) |
   | `Initiative/squad-empty.md` | the same squad with its pool at 0 and all five Goblins still alive (a relieved captain or a hand-edited pool; SC-573) |
   | `Initiative/hurt.md` | `ds-initiative`: hero Alice Alpha 30/30, Ogre #1 at 20/60 and Ogre #2 at 60/60 (a hurt creature, for Spend Recovery) |

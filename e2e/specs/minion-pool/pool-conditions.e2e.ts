@@ -16,8 +16,8 @@ describe('minion pool: condition icons', () => {
 		await expect(modal.root).toBeExisting();
 		expect(await conditionNames()).toEqual(['Dazed']);
 		expect(await focusOnConditionIcon()).toBe(false); // a mouse click hands focus to nothing (the SC-572 hand-off is keyboard-only)
-		// (the tracker writes a condition back in its object form, `{ key }`)
-		await dse.expectNoteBlock(HURT, INIT).toMatchObject(instance3({ conditions: [{ key: 'dazed' }] }));
+		// (a condition the note wrote as a plain name stays a plain name)
+		await dse.expectNoteBlock(HURT, INIT).toMatchObject(instance3({ conditions: ['dazed'] }));
 		await dse.expectNoWrite(HURT, () => dse.click(modal.control('modal.close')));
 	});
 
@@ -30,7 +30,7 @@ describe('minion pool: condition icons', () => {
 		await expectPoolApply(modal, 'Deal 1 damage');
 		expect(await applyPoolAndWrite(modal, HURT)).toBe(1);
 		await dse.expectNoteBlock(HURT, INIT).toMatchObject({
-			enemy_groups: [{ name: 'Goblin Squad', minion_stamina_pool: 9, creatures: [{ instances: [{ id: 1 }, { id: 2 }, { id: 3, conditions: [{ key: 'dazed' }] }, { id: 4 }, { id: 5 }] }] }],
+			enemy_groups: [{ name: 'Goblin Squad', minion_stamina_pool: 9, creatures: [{ instances: [{ id: 1 }, { id: 2 }, { id: 3, conditions: ['dazed'] }, { id: 4 }, { id: 5 }] }] }],
 		});
 		await expect(root.control('init.detail.stamina')).toHaveElementProperty('textContent', '9/20 (4)');
 	});
@@ -65,7 +65,7 @@ describe('minion pool: custom and repeated conditions', () => {
 		expect(w.count).toBe(1);
 		await expect(modal.root).toBeExisting();
 		expect(await conditionNames()).toEqual(['Grabbed', 'On Fire', 'Dazed']);
-		await dse.expectNoteBlock(CUSTOM, INIT).toMatchObject(instance3({ conditions: [{ key: 'grabbed' }, { key: 'on-fire' }, { key: 'dazed' }] }));
+		await dse.expectNoteBlock(CUSTOM, INIT).toMatchObject(instance3({ conditions: ['grabbed', 'on-fire', 'dazed'] }));
 		await dse.expectNoWrite(CUSTOM, () => dse.click(modal.control('modal.close')));
 	});
 
@@ -75,12 +75,51 @@ describe('minion pool: custom and repeated conditions', () => {
 		const first = await dse.waitForWrite(CUSTOM, () => dse.click(modal.control('pool.condition', { nth: 2 }))); // the SECOND on-fire
 		expect(first.count).toBe(1);
 		expect(await conditionNames()).toEqual(['On Fire', 'Grabbed', 'Dazed']);
-		await dse.expectNoteBlock(CUSTOM, INIT).toMatchObject(instance3({ conditions: [{ key: 'on-fire' }, { key: 'grabbed' }, { key: 'dazed' }] }));
+		await dse.expectNoteBlock(CUSTOM, INIT).toMatchObject(instance3({ conditions: ['on-fire', 'grabbed', 'dazed'] }));
 		const second = await dse.waitForWrite(CUSTOM, () => dse.click(modal.control('pool.condition', { nth: 0 }))); // the remaining on-fire
 		expect(second.count).toBe(1);
 		expect(await conditionNames()).toEqual(['Grabbed', 'Dazed']);
-		await dse.expectNoteBlock(CUSTOM, INIT).toMatchObject(instance3({ conditions: [{ key: 'grabbed' }, { key: 'dazed' }] }));
+		await dse.expectNoteBlock(CUSTOM, INIT).toMatchObject(instance3({ conditions: ['grabbed', 'dazed'] }));
 		await dse.expectNoWrite(CUSTOM, () => dse.click(modal.control('modal.close')));
+	});
+});
+
+// SC-592: a write changes only what the action touched. A condition the note wrote as a plain name (`- dazed`) is
+// written back as a plain name, not as `- key: dazed`: after a removal in the pool modal, and after a tracker write that
+// touches no condition. The note TEXT is read here (the parsed block cannot tell `dazed` from `{ key: dazed }` apart
+// from the shape, but the lines are what the user sees). Initiative/squad-custom.md: Goblin #3 has on-fire, grabbed,
+// on-fire, dazed, all plain names.
+const goblin3Conditions = async (note: string): Promise<string[]> => {
+	const text = await dse.noteText(note);
+	const lines = text.split('\n');
+	const start = lines.findIndex((l, i) => /^\s+conditions:$/.test(l) && /^\s+- id: 3$/.test(lines[i - 1] ?? ''));
+	expect(start).toBeGreaterThan(0);
+	const indent = (line: string): number => line.length - line.trimStart().length;
+	const out: string[] = [];
+	for (let i = start + 1; i < lines.length && /^\s+- /.test(lines[i]) && indent(lines[i]) > indent(lines[start]); i++) out.push(lines[i].trim());
+	return out;
+};
+
+describe('minion pool: plain-name conditions stay plain names in the note', () => {
+	it('[POOL-C09] removing one condition leaves the other conditions of that minion written as plain names', async () => {
+		const { modal } = await openPoolModal(CUSTOM);
+		expect(await goblin3Conditions(CUSTOM)).toEqual(['- on-fire', '- grabbed', '- on-fire', '- dazed']); // the fixture as authored
+		const w = await dse.waitForWrite(CUSTOM, () => dse.click(modal.control('pool.condition', { nth: 1 }))); // Grabbed
+		expect(w.count).toBe(1);
+		expect(await conditionNames()).toEqual(['On Fire', 'On Fire', 'Dazed']);
+		expect(await goblin3Conditions(CUSTOM)).toEqual(['- on-fire', '- on-fire', '- dazed']);
+		expect(await dse.noteText(CUSTOM)).not.toContain('key:');
+		await dse.expectNoWrite(CUSTOM, () => dse.click(modal.control('modal.close')));
+	});
+
+	it('[POOL-C10] a tracker write that touches no condition (a Malice click) leaves the plain-name conditions as written', async () => {
+		await dse.openNote(CUSTOM);
+		const root = dse.block(INIT);
+		const w = await dse.waitForWrite(CUSTOM, () => dse.click(root.control('init.malice.inc')));
+		expect(w.count).toBe(1);
+		await dse.expectNoteBlock(CUSTOM, INIT).toMatchObject({ malice: { value: 4 } }); // the write landed
+		expect(await goblin3Conditions(CUSTOM)).toEqual(['- on-fire', '- grabbed', '- on-fire', '- dazed']);
+		expect(await dse.noteText(CUSTOM)).not.toContain('key:');
 	});
 });
 
@@ -116,7 +155,7 @@ describe('minion pool: condition icons by keyboard', () => {
 			expect(await conditionNames()).toEqual(['Dazed']);
 			expect(await dse.focusedControl()).toBe('pool.condition'); // focus followed the shifted icon: not <body>
 			expect(await focusedName()).toBe('Remove Dazed');
-			await dse.expectNoteBlock(HURT, INIT).toMatchObject(instance3({ conditions: [{ key: 'dazed' }] }));
+			await dse.expectNoteBlock(HURT, INIT).toMatchObject(instance3({ conditions: ['dazed'] }));
 			await dse.expectNoWrite(HURT, () => dse.click(modal.control('modal.close')));
 		});
 	}

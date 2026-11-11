@@ -86,10 +86,10 @@ export const focusedOption = (): Promise<{ ctl: string | null; label: string | n
 	dse.page(`({ ctl: document.activeElement?.getAttribute('data-dse-control') ?? null, label: document.activeElement?.getAttribute('aria-label') ?? null })`);
 
 /** One condition of the hero (or of Ogre #1, `creature`) as the note holds it: the parsed YAML entry at `index`. */
-export async function noteCondition(note: string, row: Row, index: number): Promise<Record<string, unknown>> {
+export async function noteCondition(note: string, row: Row, index: number): Promise<Record<string, unknown> | string> {
 	const block = (await dse.expectNoteBlock(note, INIT).value()) as {
-		heroes: Array<{ conditions?: Array<Record<string, unknown>> }>;
-		enemy_groups: Array<{ creatures: Array<{ instances: Array<{ conditions?: Array<Record<string, unknown>> }> }> }>;
+		heroes: Array<{ conditions?: Array<Record<string, unknown> | string> }>;
+		enemy_groups: Array<{ creatures: Array<{ instances: Array<{ conditions?: Array<Record<string, unknown> | string> }> }> }>;
 	};
 	const list = row === 'hero' ? block.heroes[0].conditions : block.enemy_groups[0].creatures[0].instances[0].conditions;
 	return list![index];

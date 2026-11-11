@@ -135,7 +135,7 @@ describe('conditions-modal: the duration chips', () => {
 		expect(await pressedIn('Duration')).toEqual(['Save Ends']);
 		await pickOnce(modal, 'cond.duration', DURATION.eoe);
 		expect(await noteCondition(CONDITIONS, 'creature', 1)).toEqual({ key: 'prone', duration: 'eoe' });
-		expect(await noteCondition(CONDITIONS, 'creature', 0)).toEqual({ key: 'grabbed' });
+		expect(await noteCondition(CONDITIONS, 'creature', 0)).toEqual('grabbed'); // written as a plain name, still one
 		await dse.closeModals();
 	});
 });

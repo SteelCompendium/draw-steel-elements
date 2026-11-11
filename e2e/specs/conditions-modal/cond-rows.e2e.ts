@@ -50,8 +50,8 @@ describe('conditions-modal: removing a condition', () => {
 		expect(await modalNames()).toEqual(['Bleeding', 'Hexed', 'Slowed']);
 		expect(await focusedOption()).toEqual({ ctl: 'cond.edit', label: 'Customize Hexed' });
 		await dse.expectNoteBlock(CONDITIONS, INIT).toMatchObject({
-			heroes: [{ name: 'Alice Alpha', conditions: [{ key: 'bleeding' }, { key: 'hexed' }, { key: 'slowed', effect: 'save ends' }] }],
-			enemy_groups: [{ creatures: [{ instances: [{ conditions: [{ key: 'grabbed' }, { key: 'prone', duration: 'save-ends' }] }, { id: 2 }] }] }],
+			heroes: [{ name: 'Alice Alpha', conditions: ['bleeding', { key: 'hexed' }, { key: 'slowed', effect: 'save ends' }] }],
+			enemy_groups: [{ creatures: [{ instances: [{ conditions: ['grabbed', { key: 'prone', duration: 'save-ends' }] }, { id: 2 }] }] }],
 		});
 		expect(await trackerIcons('hero')).toEqual(['Bleeding', 'Hexed', 'Slowed']);
 		await dse.closeModals();
