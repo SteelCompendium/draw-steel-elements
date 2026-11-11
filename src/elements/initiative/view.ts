@@ -72,6 +72,7 @@ import {
 	buildConditionIcons as kitBuildConditionIcons,
 } from '@/framework/kit';
 import type { DseModal, IconButtonHandle, StaminaBarValues, StaminaGaugeOptions } from '@/framework/kit';
+import { CONTROL_ATTR } from '@/framework/kit/controlId';
 import { captureControlFocus, restoreControlFocus } from '@/framework/kit/controlFocus';
 import type { ControlFocus, ControlFamilies } from '@/framework/kit/controlFocus';
 import { ConditionManager } from '@utils/Conditions';
@@ -114,6 +115,17 @@ import { resolveInitiativeRefs } from './resolveRefs';
  *  a keyboard user's focus follows the badge of the same place, not the id it had. */
 const FOCUS_FAMILIES: ControlFamilies = { 'init.captain.make': 'init.captain', 'init.captain.relieve': 'init.captain' };
 
+/** SC-589: what is typed in the Malice quick-add boxes. A per-VIEW draft (never written to the note): `update()` reads it off the live
+ *  boxes before the root is emptied, and `buildMaliceQuickAdd` puts it back. `caret` is only set for the box that held focus. */
+interface QuickAddDraft {
+	amount: string;
+	label: string;
+	caret?: { field: 'amount' | 'label'; start: number; end: number; direction: 'forward' | 'backward' | 'none' };
+}
+
+const QUICKADD_AMOUNT = 'init.malice.quickadd.amount';
+const QUICKADD_LABEL = 'init.malice.quickadd.label';
+
 export class InitiativeView extends ElementView<EncounterData> {
 	/** Same construction site as the legacy processor's constructor (:31). */
 	private readonly conditionManager = new ConditionManager();
@@ -127,6 +139,10 @@ export class InitiativeView extends ElementView<EncounterData> {
 	/** SC-576 — set when the re-parse after Reset Encounter threw: the next `onMount` draws the
 	 *  pipeline's error card with it (what a reload of that note draws) instead of the tracker. */
 	private loadError: ElementStageError | undefined;
+
+	/** SC-589 — the quick-add draft. On the VIEW, not the per-mount `owner` (released with every rebuild) and not in the model (a
+	 *  draft is not note content): it outlives every `update()`, and dies with the view (a remount starts empty). */
+	private quickAddDraft: QuickAddDraft = { amount: '', label: '' };
 
 	constructor(cx: RenderContext) {
 		super(cx);
@@ -142,7 +158,28 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *  The same model (this view's own rebuilds) leaves it up. */
 	async update(model: EncounterData): Promise<void> {
 		if (model !== this.model) this.loadError = undefined;
+		this.captureQuickAddDraft(); // SC-589: before the default update() empties the root with the boxes in it
 		await super.update(model);
+	}
+
+	/** SC-589 — read the draft off the boxes that are on screen. Read at rebuild time (not kept current on `input`), so it is right
+	 *  whatever set the value (typing, autofill, a script) and whatever raised the rebuild (a click elsewhere, an external note write,
+	 *  Reset encounter's re-parse). When the tracker is not on screen (an error card, before the first mount) there are no boxes and
+	 *  the draft is left as it was. A successful Add empties the boxes first, so the draft is cleared by the same read. */
+	private captureQuickAddDraft(): void {
+		const root = this.rootEl as HTMLElement | undefined;
+		const box = (id: string): HTMLInputElement | null => root?.querySelector<HTMLInputElement>(`input[${CONTROL_ATTR}="${id}"]`) ?? null;
+		const amount = box(QUICKADD_AMOUNT);
+		const label = box(QUICKADD_LABEL);
+		if (!amount || !label) return;
+		const draft: QuickAddDraft = { amount: amount.value, label: label.value };
+		for (const [field, input] of [['amount', amount], ['label', label]] as const) {
+			if (input.ownerDocument.activeElement !== input) continue;
+			// A number input has no caret to read (selectionStart is null): nothing to restore for it.
+			const { selectionStart: start, selectionEnd: end, selectionDirection: direction } = input;
+			if (start !== null && end !== null) draft.caret = { field, start, end, direction: direction ?? 'none' };
+		}
+		this.quickAddDraft = draft;
 	}
 
 	protected onMount(root: HTMLElement, model: EncounterData): void {
@@ -643,14 +680,27 @@ export class InitiativeView extends ElementView<EncounterData> {
 				attr: { step: '1', placeholder: 'Amount' },
 			});
 			amountInput.setAttribute('aria-label', 'Quick-add malice amount');
-			stampControl(amountInput, 'init.malice.quickadd.amount');
+			stampControl(amountInput, QUICKADD_AMOUNT);
 			const labelInput = quickAdd.createEl('input', {
 				cls: 'dse-init__malice-quickadd-label',
 				type: 'text',
 				attr: { placeholder: 'E.g. Feytouched' },
 			});
 			labelInput.setAttribute('aria-label', 'Quick-add malice label');
-			stampControl(labelInput, 'init.malice.quickadd.label');
+			stampControl(labelInput, QUICKADD_LABEL);
+			// SC-589: what was typed before a rebuild is put back. Everything derived from the boxes is built from the empty state and
+			// that is what typing leaves too: the flag, the reason text and the reason placeholders are cleared by the first keystroke,
+			// the hint line is empty and Add is always enabled, so a restored draft looks exactly like one just typed.
+			amountInput.value = this.quickAddDraft.amount;
+			labelInput.value = this.quickAddDraft.label;
+			const caret = this.quickAddDraft.caret;
+			if (caret) {
+				try {
+					(caret.field === 'amount' ? amountInput : labelInput).setSelectionRange(caret.start, caret.end, caret.direction);
+				} catch {
+					/* an input type without a caret (number): the focus is restored, the caret is the browser's */
+				}
+			}
 			// SC-377: ONE submit path for the Add button and Enter in either field. A rejected
 			// submit is never silent: the offending field takes focus, gets aria-invalid (the
 			// stylesheet draws a heavier edge), swaps its placeholder for a short reason when it is
@@ -701,6 +751,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				applyMaliceChange(data.malice, amount, { round: data.round ?? 1, label });
 				amountInput.value = '';
 				labelInput.value = '';
+				this.quickAddDraft = { amount: '', label: '' }; // SC-589: a successful Add is the one thing that clears the draft
 				void this.rebuildAndPersist();
 			};
 			for (const input of [amountInput, labelInput]) {
