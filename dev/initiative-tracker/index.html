@@ -2079,7 +2079,7 @@ malice:
     each time you press "Advance round". Leave unset for no auto-gain — there's no
     built-in default, since the amount depends on your table/adventure. Trigger-based
     gains (e.g. a monster feature that grants +3 Malice) stay manual via the quick-add
-    below instead.</li>
+    below instead. A negative <code>round_gain</code> is applied too, but the pool never goes below 0.</li>
 <li><code>log</code> (list, managed): The spend/gain log (<code>{round, amount, label}</code>, oldest first).
     Managed by the tracker — populated by "Advance round" (when <code>round_gain</code> is set) and
     the quick-add control. Capped at the 50 most recent entries; older entries drop off
@@ -2161,7 +2161,9 @@ and the log's drawer opening full-width beneath the bar. In a narrow pane (a spl
 the bar stacks into a single column. The round counter and <em>Advance round</em>
 live on the Heroes heading line instead (see below).</p>
 <p><strong>Adjusting the pool</strong>: the pool is a stepper — a <strong>−</strong> and a <strong>+</strong> button always shown on
-either side of the current Malice value.</p>
+either side of the current Malice value.
+Malice never goes below 0: <strong>−</strong> is disabled at 0, a spend (or a negative <code>round_gain</code>) stops
+at 0, and a hand-edited negative <code>value</code> counts as 0.</p>
 <p><strong>Malice log</strong>: Click "Malice log · N entries" to open a small read-only list of every
 gain/spend (<code>R&lt;round&gt;: +/-&lt;amount&gt; — &lt;label&gt;</code>), most recent additions preserved, oldest
 entries dropped once the log exceeds 50 entries. Printed handouts always show the log
