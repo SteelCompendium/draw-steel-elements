@@ -61,6 +61,6 @@ export async function applyPoolAndWrite(modal: Modal, note: string): Promise<num
 export const cellText = (root: Scope, key: string): Promise<string> =>
 	root.control({ css: `.dse-init__cell[data-instance-key="${key}"] .dse-init__cell-stamina` }).getProperty('textContent') as Promise<string>;
 
-/** The titles of the condition icons the open pool modal shows, top to bottom ("Grabbed", "Dazed"). */
+/** The conditions the open pool modal's icons remove, top to bottom ("Grabbed", "Dazed"): each icon's accessible name is "Remove <condition>" (SC-572). */
 export const conditionTitles = (): Promise<string[]> =>
-	dse.page<string[]>(`Array.from(document.querySelectorAll('.modal-container .dse-modal [data-dse-control="pool.condition"]')).map((i) => i.title)`);
+	dse.page<string[]>(`Array.from(document.querySelectorAll('.modal-container .dse-modal [data-dse-control="pool.condition"]')).map((i) => (i.getAttribute('aria-label') ?? '').replace(/^Remove /, ''))`);

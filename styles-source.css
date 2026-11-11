@@ -1981,6 +1981,21 @@ code.dsa {
 	margin-right: 5px;
 	cursor: pointer; /* still click-to-remove */
 	color: var(--dse-condition-color, inherit);
+	/* SC-572: the icon is a real <button>. This is (0,2,0), above Obsidian's own `button` rules
+	   ((0,0,1) / (0,1,1), incl. :hover and :focus-visible), so the chrome they and the UA add is
+	   put back to the old <div>'s: no plate, border, shadow, padding, font or nowrap, in every
+	   state. The kit focus ring (the shared :focus-visible rule) is the only addition. */
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: content-box;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+	font: inherit;
+	white-space: inherit;
 }
 .dse-sedit__minions .condition-icon svg {
 	width: 100%;
@@ -15560,6 +15575,10 @@ body.theme-light
    none`, with nothing standing in for it). Same "pre-existing a11y gap, not a host
    leak" reasoning as the eight cousins above. */
 .dse-sedit__apply-input:focus-visible,
+/* SC-572 — the minion pool modal's condition icons are real <button>s now (click, Enter or Space
+   removes the condition); a bare <button> has no plugin ring, and the host's box-shadow ring
+   is reset by the icon's own rule (~:1978), so it joins here. */
+.condition-icon:focus-visible,
 .dse-condal__input:focus-visible,
 .dse-form__raw:focus-visible,
 /* SC-202 r4-resume Step A — `.dse-cond-icons__search` had NO focus ring at all before

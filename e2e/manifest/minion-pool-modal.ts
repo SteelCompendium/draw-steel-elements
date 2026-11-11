@@ -23,8 +23,8 @@ export default surface('minion-pool-modal', {
 		// -- K. The living minions' kill checkboxes (a repeated node: nth) and their name labels
 		'pool.kill': c(['click', 'click-disabled', 'press:Space'], ['K01', 'K02', 'K03', 'K05']),
 		'pool.minion-name': c(['click'], ['K04']),
-		// -- C. A minion's condition icon (a click removes the condition and saves at once)
-		'pool.condition': c(['click'], ['C01']),
+		// -- C. A minion's condition icon (a button: a click, Enter or Space removes the condition and saves at once)
+		'pool.condition': c(['click', 'press:Enter', 'press:Space'], ['C01', 'C04', 'C05']),
 		// -- F. Footer
 		'pool.reset': c(['click'], ['F01']),
 		'pool.apply': c(['click', 'click-disabled', 'press:Enter'], ['F02', 'F03', 'K05']),

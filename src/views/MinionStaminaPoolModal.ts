@@ -553,9 +553,15 @@ export class MinionStaminaPoolModal extends DseModal {
 
 			const condition = conditionManager.getAnyConditionByKey(conditionKey);
 			if (condition) {
-				const iconEl = container.createDiv({ cls: 'condition-icon' });
+				// SC-572: a REAL <button> (Tab stop; Enter and Space activate it natively), named
+				// "Remove <condition>" — the same name the Conditions modal's remove button carries.
+				// aria-label is also the hover tooltip (Obsidian reads it), so there is no `title`:
+				// a second, native tooltip would double it. Bare <button>, not a kit `.dse-btn`: the
+				// icon keeps its legacy chrome-free look (the reset lives with `.condition-icon`).
+				const iconEl = container.createEl('button', { cls: 'condition-icon' });
+				iconEl.setAttribute('type', 'button'); // never an implicit form submit
+				iconEl.setAttribute('aria-label', `Remove ${condition.displayName}`);
 				setIcon(iconEl, conditionData?.icon?.trim() || condition.iconName);
-				iconEl.title = condition.displayName;
 				stampControl(iconEl, 'pool.condition'); // SC-435 (a click removes the condition)
 
 				// Apply color and effect customizations through the SHARED Task 8

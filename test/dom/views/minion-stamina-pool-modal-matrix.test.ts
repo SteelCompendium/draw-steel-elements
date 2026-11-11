@@ -78,6 +78,8 @@ const apply = (c: Content) => ctl<HTMLButtonElement>(c, 'pool.apply');
 const info = (c: Content) => c.querySelector<HTMLElement>('.dse-sedit__info')!;
 const warn = (c: Content) => c.querySelector<HTMLElement>('.dse-sedit__warn')!;
 const click = (c: Content, id: string, nth = 0) => ctl(c, id, nth).click();
+/** The condition an icon removes, read off its accessible name ("Remove Grabbed" -> "Grabbed"). */
+const conditionName = (icon: HTMLElement): string => (icon.getAttribute('aria-label') ?? '').replace(/^Remove /, '');
 
 /** Type a pool value and commit it with Enter (what a user does), no blur. */
 function typePool(c: Content, v: string): void {
@@ -549,17 +551,17 @@ describe('condition icons: a click removes that condition and saves at once', ()
 	const grabbed = 'grabbed';
 	const bleeding: Condition = { key: 'bleeding', color: 'crimson' };
 
-	test('one icon per known condition, titled with its display name', async () => {
+	test('one icon per known condition, named "Remove <display name>"', async () => {
 		const { content } = await open({ conditions: { 1: [grabbed, bleeding], 2: ['dazed'] } });
 		const icons = all(content, 'pool.condition');
-		expect(icons.map((i) => i.title)).toEqual(['Grabbed', 'Bleeding', 'Dazed']);
+		expect(icons.map(conditionName)).toEqual(['Grabbed', 'Bleeding', 'Dazed']);
 	});
 
 	test('removing the first of two conditions keeps the other, rebuilds the row, persists once', async () => {
 		const { content, minion, persist } = await open({ conditions: { 0: [grabbed, bleeding] } });
 		click(content, 'pool.condition', 0);
 		expect(minion.instances![0].conditions).toEqual([bleeding]);
-		expect(all(content, 'pool.condition').map((i) => i.title)).toEqual(['Bleeding']);
+		expect(all(content, 'pool.condition').map(conditionName)).toEqual(['Bleeding']);
 		expect(persist).toHaveBeenCalledTimes(1);
 	});
 
@@ -592,7 +594,21 @@ describe('condition icons: a click removes that condition and saves at once', ()
 
 	test('a dead minion has no row, so its conditions have no icon', async () => {
 		const { content } = await open({ dead: 1, conditions: { 0: [grabbed], 1: ['dazed'] } });
-		expect(all(content, 'pool.condition').map((i) => i.title)).toEqual(['Dazed']);
+		expect(all(content, 'pool.condition').map(conditionName)).toEqual(['Dazed']);
+	});
+
+	// SC-572 (a11y): the icon is a real <button>. The keyboard half (Tab reaches it, Enter and Space remove it) is
+	// the e2e scenario POOL-C04 / POOL-C05 (jsdom does not turn a key into a click on a button); here the DOM facts
+	// a screen reader needs, and that a native button is what carries Enter and Space.
+	test('SC-572: a condition icon is a native, focusable button named "Remove <condition>"', async () => {
+		const { content } = await open({ conditions: { 0: ['grabbed', { key: 'bleeding', color: 'crimson' } as Condition] } });
+		const icons = all<HTMLButtonElement>(content, 'pool.condition');
+		expect(icons.map((i) => i.tagName)).toEqual(['BUTTON', 'BUTTON']);
+		expect(icons.map((i) => i.type)).toEqual(['button', 'button']);
+		expect(icons.map((i) => i.getAttribute('aria-label'))).toEqual(['Remove Grabbed', 'Remove Bleeding']);
+		expect(icons.map((i) => i.hasAttribute('title'))).toEqual([false, false]); // aria-label is the hover tooltip: no second one
+		expect(icons.map((i) => i.disabled || i.getAttribute('tabindex') === '-1')).toEqual([false, false]);
+		expect(icons.map((i) => i.classList.contains('condition-icon'))).toEqual([true, true]);
 	});
 });
 
@@ -672,18 +688,6 @@ describe('known bugs (test.failing: each FAILS once its ticket is fixed, then dr
 		if (told) expect(Number(told[1])).toBeGreaterThanOrEqual(ticked); // the info line says "Select 1" with 2 ticked today
 	});
 
-	// SC-572 (a11y): the icon is a click-only <div>. The keyboard half (Tab reaches it, Enter removes) is the e2e
-	// marker POOL-C04; here the DOM facts a screen reader needs.
-	test.failing('SC-572: a condition icon is a focusable control with an accessible name', async () => {
-		const { content } = await open({ conditions: { 0: ['grabbed'] } });
-		const icon = ctl(content, 'pool.condition');
-		expect(icon.title).toBe('Grabbed'); // setup: the icon is there
-		const focusable = icon.tagName === 'BUTTON' || icon.getAttribute('role') === 'button' || icon.hasAttribute('tabindex');
-		expect(focusable).toBe(true);
-		expect(icon.getAttribute('tabindex')).not.toBe('-1');
-		expect((icon.getAttribute('aria-label') ?? '').length).toBeGreaterThan(0);
-	});
-
 	// SC-573: a pool at 0 with a minion still alive (reachable: a relieved captain's bonus comes off the pool, clamped at 0).
 	test.failing('SC-573: a pool at 0 with living minions leaves Apply reachable so they can be killed', async () => {
 		const { content } = await open({ pool: 0 });
@@ -705,7 +709,7 @@ describe('known bugs (test.failing: each FAILS once its ticket is fixed, then dr
 	// SC-574 (b): `filter((entry) => entry !== clicked)` compares strings by value.
 	test.failing('SC-574 (b): one click on a duplicated string condition removes one copy', async () => {
 		const { content, minion } = await open({ conditions: { 0: ['grabbed', 'grabbed', 'dazed'] } });
-		expect(all(content, 'pool.condition').map((i) => i.title)).toEqual(['Grabbed', 'Grabbed', 'Dazed']); // setup
+		expect(all(content, 'pool.condition').map(conditionName)).toEqual(['Grabbed', 'Grabbed', 'Dazed']); // setup
 		click(content, 'pool.condition', 0);
 		expect(minion.instances![0].conditions).toEqual(['grabbed', 'dazed']);
 	});
