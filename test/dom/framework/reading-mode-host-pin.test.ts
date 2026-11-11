@@ -1181,6 +1181,109 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 				refused(app, outside);
 			});
 		});
+
+		// SC-584 r4 CRITICAL-1: a callout holding TWO counters. After the + on the lower one both read the same, and the stale callout window
+		// holds the known body only in the UPPER one, so the own fence found in it by body is the sibling: the form must be pinned at the + write.
+		describe('two counters in one callout, + on the lower one, then the form (r4 CRITICAL-1: never the upper one)', () => {
+			const q = (l: string): string => `> ${l}`;
+			const C2 = (a: number, b: number): string[] => ['> [!note] Camp', ...CTR(a).map(q), '> mid', ...CTR(b).map(q)];
+			const lpEl = (src: string): HTMLElement => {
+				const el = embedEl(src);
+				const wrap = document.createElement('div');
+				wrap.className = 'cm-embed-block';
+				wrap.appendChild(el.closest('.internal-embed')!);
+				return el;
+			};
+			type Kind = 'block' | 'heading';
+			function setup(kind: Kind, host: 'rv' | 'lp') {
+				const calLines = C2(6, 5);
+				const pre = kind === 'block' ? ['# N', '', ...calLines, '', '^cal', '', 'END'] : ['# N', '', '## Tracker', '', ...calLines, '', '## After', 'END'];
+				const text = pre.join('\n');
+				const head = pre.indexOf('> [!note] Camp');
+				const src = kind === 'block' ? 'Note#^cal' : 'Note#Tracker';
+				const cache = kind === 'block' ? { headings: [], blocks: { cal: { id: 'cal', position: { start: { line: head, col: 0, offset: 0 }, end: { line: head + 9, col: 0, offset: 0 } } } } } : text;
+				const sectionText = kind === 'block' ? calLines : ['## Tracker', '', ...calLines, ''];
+				const section = kind === 'block' ? { text: sectionText.join('\n'), lineStart: 0, lineEnd: 9 } : { text: sectionText.join('\n'), lineStart: 2, lineEnd: 11 };
+				const el = host === 'lp' ? lpEl(src) : embedEl(src);
+				return { ...embedded(text, section, src, bodyOf(5), cache, el), head };
+			}
+			const lowerRenamed = (note: string, head: number): string => note.split('\n').map((l, i) => (i === head + 7 ? '> name: Edited' : l)).join('\n');
+
+			test.each([
+				['a block embed (![[note#^id]]) in Reading view', 'block', 'rv'],
+				['a block embed in Live Preview', 'block', 'lp'],
+				['a heading embed (![[note#Tracker]]) in Reading view (the same write on base)', 'heading', 'rv'],
+				['a heading embed in Live Preview', 'heading', 'lp'],
+			] as const)('%s: Save lands in the lower counter, the upper one is untouched', async (_name, kind, hostKind) => {
+				const { app, host, head } = setup(kind, hostKind);
+				expect(await plus(host)).toBe(true); // the lower counter now reads like the upper
+				const afterPlus = noteOf6(app);
+				const pin = host.pinPosition()!;
+
+				expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true); // before: the upper counter was written, no Notice
+				expect(names(app)).toEqual(['Twin', 'Edited']);
+				expect(app.vault.getContent('Note.md')).toBe(lowerRenamed(afterPlus, head));
+				expect(Notice.notices).toEqual([]);
+			});
+
+			test('the lower counter edited from outside after the +: Save writes nothing, never the upper one', async () => {
+				const { app, host, head } = setup('block', 'rv');
+				await plus(host);
+				const outside = noteOf6(app).split('\n').map((l, i) => (i === head + 8 ? '> current_value: 9' : l)).join('\n');
+				app.vault.setFile('Note.md', outside);
+				const pin = host.pinPosition()!;
+
+				expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false);
+				refused(app, outside);
+			});
+
+			test('probe (r5): two IDENTICAL counters, NO + first, the form on the lower one: it is told from the upper by its place in the callout and Save writes the lower (same on base)', async () => {
+				const calLines = C2(5, 5);
+				const pre = ['# N', '', ...calLines, '', '^cal', '', 'END'];
+				const head = pre.indexOf('> [!note] Camp');
+				const cache = { headings: [], blocks: { cal: { id: 'cal', position: { start: { line: head, col: 0, offset: 0 }, end: { line: head + 9, col: 0, offset: 0 } } } } };
+				const outer = embedEl('Note#^cal').closest('.internal-embed') as HTMLElement;
+				const callout = outer.appendChild(document.createElement('div'));
+				callout.className = 'callout';
+				callout.appendChild(document.createElement('div')).className = 'block-language-ds-counter';
+				const lower = callout.appendChild(document.createElement('div'));
+				lower.className = 'block-language-ds-counter';
+				document.body.appendChild(outer);
+				const { app, host } = embedded(pre.join('\n'), { text: calLines.join('\n'), lineStart: 0, lineEnd: 9 }, 'Note#^cal', bodyOf(5), cache, lower);
+				const pin = host.pinPosition();
+
+				expect(await save(host, pin, bodyOf(5, 'Edited'))).toBe(true);
+				expect(names(app)).toEqual(['Twin', 'Edited']);
+				outer.remove();
+			});
+		});
+
+		test('the host is given a new mounted body (Obsidian hands its element to another block with the same body, remountReused): the old record is dropped, a form on the re-mounted card is refused, never pinned at the old block', async () => {
+			const { app, host } = hover(NOTE(5));
+			await plus(host);
+			host.setMountedBody(bodyOf(6)); // what remountReused does: the same body, another block
+			const pin = host.pinPosition()!;
+
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false);
+			refused(app, noteOf6(app));
+		});
+
+		test('the record is dropped when the section the host was drawn for unloads', async () => {
+			const text = NOTE(5).join('\n');
+			const children: Array<{ load(): void; unload(): void }> = [];
+			const ctx = { ...switchableCtx({ current: { text, lineStart: 4, lineEnd: 7 } }), addChild: (c: never) => { children.push(c); return c; } };
+			const app = new App();
+			app.vault.setFile('Note.md', text);
+			const host = new ReadingModeBlockHost(new Plugin(app) as never, hoverEl(), ctx as never, 'ds-counter');
+			host.setMountedBody(bodyOf(5));
+			children[0].load();
+			expect(await plus(host)).toBe(true);
+			children[0].unload();
+			const pin = host.pinPosition()!;
+
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false);
+			refused(app, noteOf6(app));
+		});
 	});
 
 	// SC-584 case 2: a block embed (`![[note#^id]]`) of a CALLOUT. The id names the callout, so its line follows the callout's last line, not the

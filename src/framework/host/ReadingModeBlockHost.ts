@@ -529,6 +529,7 @@ export class ReadingModeBlockHost implements BlockHost {
 	 */
 	private onRenderChildUnload(renderChild: MarkdownRenderChild): void {
 		if (renderChild !== this.renderChild) return;
+		this.lastWrite = null; // SC-584: the record of this host's own write (a whole note's text) is not kept past the section it was made for
 		// SC-340 fix round 1 (Important-1): recorded whether or not an entry exists yet — the
 		// pipeline can still be awaiting prepareModel (refs) when the section is torn down, so
 		// ViewRegistry.own() would otherwise hand the view to a host whose render child has
@@ -819,6 +820,16 @@ export class ReadingModeBlockHost implements BlockHost {
 			// SC-584: a callout in an embed or hover preview whose part is stale (right after a + on its card) holds no block with the body this
 			// host knows, so its own fence cannot be found in it; the host's own last write still says where the block is.
 			return forForm && embedded ? this.pinFromLastWrite() : null;
+		}
+		// SC-584 r5: a block inside a quote/callout window (its fence is not the window's first line) was found in that window BY BODY. Right after a +
+		// on this card the window is stale (old body), so the only block holding the body this host knows can be a SIBLING in the same callout
+		// (two identical counters, the + made the lower one read like the upper): the form would then be pinned on the sibling. When this host's
+		// own last write is of the body it knows, that write is the exact position of its block, so a form takes it instead. (Not for a plain
+		// block - its window is the block itself. Record-first for every form was tried and refuses a CURRENT part after hundreds of lines
+		// changed since the + (the diff gives up), which the link finds fine; a callout window with an old record can still refuse that way.)
+		if (forForm && embedded && this.ownFence.lineStart !== section.lineStart) {
+			const w = this.pinFromLastWrite();
+			if (w) return w;
 		}
 		const pin = { text: section.text, lineStart: this.ownFence.lineStart };
 		// SC-556: only a block drawn inside an embed can be given a part of the note (see rebasePin); every other pin is taken as before.
