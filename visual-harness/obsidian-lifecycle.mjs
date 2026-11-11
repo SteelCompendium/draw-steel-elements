@@ -165,6 +165,7 @@
 // cannot be placed because its block was DELETED from outside is never written into an identical twin. Click + on one of two identical counters (Reading view and Live Preview),
 // delete that block from outside at once, then leave the note (the unload flush) or wait out the 400 ms debounce: nothing is written, the note stays as the outside edit left it, and
 // exactly one "changed on disk first" Notice shows (a note of its own per trial: card Notices are shown once per note per 5 s). Base: the + lands in the twin and no Notice shows.
+// SC-480 r4: a deletion that also makes the neighbour read the same (one outside edit: sync-del-bump), and a block cut and pasted twice (dup-move): nothing written, one Notice too.
 // Controls: the same deletion with no twin (one Notice, as before), and the race (the outside edit only MOVES the clicked block, the twin above or below it): the + lands in the clicked block.
 //
 // Usage: npm run obsidian-lifecycle   (builds the plugin first)
@@ -525,6 +526,10 @@ const GS73_BUILD = {
 	'del-below': (x, ed) => `# gs73 del below\n\nTOP\n\n${ed ? '' : COUNTER(x, 'Twin') + '\n\n'}GAP\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`,
 	// control: the neighbour is another block, the clicked block (the lower) is deleted
 	'del-solo': (x, ed) => `# gs73 del solo\n\nTOP\n\n${COUNTER(3, 'Other')}\n\nGAP\n\n${ed ? '' : COUNTER(x, 'Twin') + '\n\n'}BOTTOM\n`,
+	// ONE outside edit deletes the clicked block (the lower) AND makes the other block read the same (4 -> 5): the block is unique before and after, so only the line diff can tell the fallback is a different block
+	'sync-del-bump': (x, ed) => `# gs73 sync del bump\n\nTOP\n\n${COUNTER(ed ? 5 : 4, 'Twin')}\n\nGAP\n\n${ed ? '' : COUNTER(x, 'Twin') + '\n\n'}BOTTOM\n`,
+	// the clicked block is cut and pasted TWICE (further down) by one outside edit: unique before, two copies now (the `now` count)
+	'dup-move': (x, ed) => `# gs73 dup move\n\nTOP\n\n${COUNTER(3, 'Other')}\n\nGAP\n\n${ed ? '' : COUNTER(x, 'Solo') + '\n\n'}${GS73_PAR('p', 8)}\n\n${ed ? COUNTER(x, 'Solo') + '\n\nMID\n\n' + COUNTER(x, 'Solo') + '\n\n' : ''}BOTTOM\n`,
 	// race: the outside edit moves the clicked block (the lower) down by 20 lines, its twin stays above
 	'race-above': (x, ed) => `# gs73 race above\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nGAP\n\n${ed ? GS73_PAR('ins', 10) + '\n\n' : ''}${COUNTER(x, 'Twin')}\n\nBOTTOM\n`,
 	// race: the outside edit moves the clicked block (the upper) up by 20 lines, its twin stays below
@@ -535,6 +540,7 @@ const GS73_TRIALS = [];
 for (const mode of ['rv', 'lp']) {
 	GS73_TRIALS.push(['del-above', 'del-above', mode, 'leave', 1, 'refused'], ['del-below', 'del-below', mode, 'leave', 0, 'refused'], ['del-below-stay', 'del-below', mode, 'stay', 0, 'refused']);
 	GS73_TRIALS.push(['del-solo', 'del-solo', mode, 'leave', 1, 'refused'], ['race-above', 'race-above', mode, 'leave', 1, 'lands'], ['race-below', 'race-below', mode, 'leave', 0, 'lands']);
+	GS73_TRIALS.push(['sync-del-bump', 'sync-del-bump', mode, 'leave', 1, 'refused'], ['dup-move', 'dup-move', mode, 'leave', 1, 'refused']);
 }
 for (const [id, build, mode] of GS73_TRIALS.map((x) => [x[0], x[1], x[2]])) FIXTURES[`Lifecycle/gs73-${id}-${mode}.md`] = GS73_BUILD[build](5, false);
 
