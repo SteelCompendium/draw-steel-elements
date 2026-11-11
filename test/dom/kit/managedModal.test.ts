@@ -802,17 +802,22 @@ describe('SC-595: a modal opened from a hover preview', () => {
 			expect(app.keymap.top).toBe(popover);
 		});
 
-		test('a child opened from the parent before the re-push runs stays on top: the parent does not bury it', async () => {
-			const { app, modal: parent } = openFrom(openerEl(true));
-			app.keymap.pushScope(new Scope());
-			let child!: DseModal;
-			openManagedModal(parent.lifecycle, () => (child = makeModal(app)), parent.anchor);
+		test('a child opened from the parent while the parent\'s re-pushes are still due stays on top: the parent does not bury it', () => {
+			jest.useFakeTimers();
+			try {
+				const { app, modal: parent } = openFrom(openerEl(true));
+				jest.advanceTimersByTime(100); // the parent's 10 ms re-push is done, its 150 ms one is still due
+				let child!: DseModal;
+				openManagedModal(parent.lifecycle, () => (child = makeModal(app)), parent.anchor);
 
-			await pastRepush();
+				jest.advanceTimersByTime(100); // t = 200: the parent's 150 ms re-push fired, the child's own 150 ms one (t = 250) has not
 
-			expect(app.keymap.top).toBe(child.scope);
-			child.close();
-			parent.close();
+				expect(app.keymap.top).toBe(child.scope);
+				child.close();
+				parent.close();
+			} finally {
+				jest.useRealTimers();
+			}
 		});
 
 		test('the modal\'s window is not the active one when the re-push is due: nothing is pushed onto the other window\'s stack', async () => {
