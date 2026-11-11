@@ -931,7 +931,7 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 		const NOTE = (n: number, mid: string[] = []): string[] => ['# N', '', 'TOP', '', ...CTR(n), '', ...mid, 'END'];
 		/** The hover preview's host on the counter at line 4 of `full`: the note holds 6 (the + landed), the section Obsidian reports still says 5. */
 		function hover(full: string, fence = 4, known = bodyOf(6)) {
-			const stale = full.replace(/current_value: 6/, 'current_value: 5');
+			const stale = full.split('\n').map((l, i) => (i === fence + 2 ? l.replace('current_value: 6', 'current_value: 5') : l)).join('\n'); // only the block the + was pressed on
 			return embedded(full, { text: stale, lineStart: fence, lineEnd: fence + 3 }, 'x', known, full, hoverEl());
 		}
 		const edited = (full: string): string => full.replace('name: Twin', 'name: Edited');
@@ -981,6 +981,27 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false); // a search for the body at Save time would write the block at the bottom
 			expect(app.vault.getContent('Note.md')).toBe(outside);
 			expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		});
+
+		test('the open-time read of the note holds another body than the host knows (it lags the + write by more than the section text does): the body is not there, nothing places the pin, Save writes nothing', async () => {
+			const full = NOTE(6).join('\n');
+			const { app, host } = hover(full);
+			jest.spyOn(app.vault, 'cachedRead').mockResolvedValueOnce(NOTE(4).join('\n'));
+			const pin = host.pinPosition()!;
+
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false); // text and body must agree: the read has no block with the known body
+			expect(app.vault.getContent('Note.md')).toBe(full);
+			expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		});
+
+		test('the open-time read predates the + (it is the section\'s own text): that is a coherent pin of the note, Save lands in the block (the body rule is not involved)', async () => {
+			const full = NOTE(6).join('\n');
+			const { app, host } = hover(full);
+			jest.spyOn(app.vault, 'cachedRead').mockResolvedValueOnce(NOTE(5).join('\n'));
+			const pin = host.pinPosition()!;
+
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true);
+			expect(app.vault.getContent('Note.md')).toBe(edited(full));
 		});
 
 		test('an identical block is added to the note after the form opened: Save still lands in the block the form was opened on', async () => {
