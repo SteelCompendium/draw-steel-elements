@@ -98,6 +98,29 @@ export type {
 export { resetEncounter } from '@drawSteelAdmonition/EncounterData';
 
 /**
+ * SC-592 — what each holder's source wrote as a plain-string condition. `normalizeConditions` turns every
+ * string into a `{key}` object (the in-memory shape the views read), and serialize used to write that object
+ * back: the user's `- grabbed` became `- key: grabbed` on EVERY write, even one that touched no condition.
+ * Per holder (hero, squad-minion instance, regular instance — the object that owns the `conditions` list) this
+ * records how many entries of each key were authored as plain strings, and which keys were authored BOTH ways.
+ * Module-private and keyed by the holder, like `absentKeys` below and SC-466's helper — never an own property
+ * (stringifyYaml would write it), and not keyed by entry: the Conditions modal clones every entry when it
+ * opens and hands the clones back, while the holder object survives every writer. A re-parse of the written
+ * block builds new holders and records afresh from what was written.
+ */
+interface PlainConditions {
+	/** key -> how many entries of it the source wrote as plain strings. */
+	readonly plain: ReadonlyMap<string, number>;
+	/** Keys the source also wrote as an object in this holder: a key-only entry cannot be told apart by key
+	 *  alone, so these fall back to `bornPlain` (entry identity). */
+	readonly mixed: ReadonlySet<string>;
+}
+const plainConditions = new WeakMap<object, PlainConditions>();
+/** The entries that were plain strings at parse. Identity only survives a position-based removal (the pool
+ *  modal's), which is all `mixed` keys need; it is never the primary signal. */
+const bornPlain = new WeakSet<object>();
+
+/**
  * Legacy condition normalization: strings become {key} and objects are re-built as
  * key/color/effect/duration. Transcribed once — the three legacy inline copies
  * (EncounterData.ts:137-154 hero, :276-295 minion instance, :321-340 regular instance)
@@ -105,22 +128,34 @@ export { resetEncounter } from '@drawSteelAdmonition/EncounterData';
  * is additive and passed through the same way as `color`/`effect` (present-or-undefined,
  * never fabricated) — both EncounterData.ts's three legacy copies and this one carry it
  * so the async oracle (`parseEncounterData`) and this sync split stay byte-compat.
+ * SC-592: an authored object keeps the keys the plugin does not know (`source: trap`) and the order the
+ * user wrote its keys in (the spread comes first, so known keys already present keep their place and
+ * absent ones are appended as `undefined`, which yaml omits); and the holder's plain-string conditions
+ * are recorded (see `plainConditions`).
  */
 function normalizeConditions(
 	conditions: (string | Condition)[] | undefined,
 	invalidMessage: () => string,
+	holder: object,
 ): Condition[] {
-	return (
+	const plain = new Map<string, number>();
+	const objectKeys = new Set<string>();
+	const normalized =
 		conditions?.map((cond) => {
 			if (typeof cond === 'string') {
-				return {
+				plain.set(cond, (plain.get(cond) ?? 0) + 1);
+				const entry: Condition = {
 					key: cond,
 					color: undefined,
 					effect: undefined,
 					duration: undefined,
 				};
+				bornPlain.add(entry);
+				return entry;
 			} else if (typeof cond === 'object' && cond.key) {
+				objectKeys.add(cond.key);
 				return {
+					...cond,
 					key: cond.key,
 					icon: cond.icon ?? undefined,
 					color: cond.color ?? undefined,
@@ -130,8 +165,47 @@ function normalizeConditions(
 			} else {
 				throw new Error(invalidMessage());
 			}
-		}) ?? []
-	);
+		}) ?? [];
+	if (plain.size > 0) {
+		plainConditions.set(holder, { plain, mixed: new Set([...plain.keys()].filter((key) => objectKeys.has(key))) });
+	} else {
+		plainConditions.delete(holder);
+	}
+	return normalized;
+}
+
+/** True when the entry holds nothing a plain string cannot (every field but `key` is `undefined` — SC-466 r2:
+ *  a present-but-`undefined` field counts as absent). Any other value, an unknown key included, is data. */
+function carriesOnlyKey(entry: Condition): boolean {
+	return Object.entries(entry).every(([field, value]) => field === 'key' || value === undefined);
+}
+
+/** `holder` as its DTO: the same object when it has nothing to re-shape, else a copy (same key order) whose
+ *  `conditions` write back the user's plain strings as plain strings. An entry is a string when it carries
+ *  only `key` AND the holder's source wrote that key as a plain string (the n-th key-only entry of a key
+ *  is a string while the source's count of plain entries for it lasts; a key the source wrote both ways
+ *  falls back to the entry having been a string at parse). Anything else — an object the user wrote, an
+ *  entry that gained an icon/colour/effect/duration, a condition the plugin added — is written as before. */
+function withConditionShape<T extends { conditions?: (string | Condition)[] }>(holder: T): T {
+	const memory = plainConditions.get(holder);
+	if (!memory || !holder.conditions?.length) return holder;
+	const left = new Map(memory.plain);
+	let changed = false;
+	const conditions = holder.conditions.map((entry) => {
+		if (typeof entry === 'string' || !carriesOnlyKey(entry)) return entry;
+		let plain: boolean;
+		if (memory.mixed.has(entry.key)) {
+			plain = bornPlain.has(entry);
+		} else {
+			const remaining = left.get(entry.key) ?? 0;
+			plain = remaining > 0;
+			if (plain) left.set(entry.key, remaining - 1);
+		}
+		if (!plain) return entry;
+		changed = true;
+		return entry.key;
+	});
+	return changed ? { ...holder, conditions } : holder;
 }
 
 // ---- SC-485: which keys each parsed object left ABSENT, read before parse fills them ----
@@ -229,6 +303,7 @@ export function parse(input: unknown, _raw: string): EncounterData {
 		hero.conditions = normalizeConditions(
 			hero.conditions,
 			() => `Invalid condition format for hero '${hero.name}'.`,
+			hero,
 		);
 
 		hero.isHero = true;
@@ -318,6 +393,7 @@ export function parse(input: unknown, _raw: string): EncounterData {
 						instance.conditions = normalizeConditions(
 							instance.conditions,
 							() => `Invalid condition format for instance '${instance.id}' of creature '${creature.name}'.`,
+							instance,
 						);
 					});
 				}
@@ -357,6 +433,7 @@ export function parse(input: unknown, _raw: string): EncounterData {
 						instance.conditions = normalizeConditions(
 							instance.conditions,
 							() => `Invalid condition format for instance '${instance.id}' of creature '${creature.name}'.`,
+							instance,
 						);
 					});
 				}
@@ -396,7 +473,7 @@ function groupDto(group: EnemyGroup): object {
 		// A creature whose `instances` was generated carries no per-instance record (the list is compared whole
 		// at the creature level), so filtering its instances is a no-op there; authored ones filter per key.
 		const dto = creature.instances
-			? { ...creature, instances: creature.instances.map((instance) => omitUntouchedDefaults(instance)) }
+			? { ...creature, instances: creature.instances.map((instance) => omitUntouchedDefaults(instance, withConditionShape(instance))) }
 			: creature;
 		return omitUntouchedDefaults(creature, dto, keep);
 	});
@@ -406,7 +483,7 @@ function groupDto(group: EnemyGroup): object {
 export function serialize(model: EncounterData): string {
 	// SC-485: nested DTO walk, innermost first (see the header). A model the plugin built itself has no
 	// record, so every level returns its object unchanged and the output is the whole model, as before.
-	const heroes = model.heroes.map((hero) => omitUntouchedDefaults(hero));
+	const heroes = model.heroes.map((hero) => omitUntouchedDefaults(hero, withConditionShape(hero)));
 	const enemy_groups = model.enemy_groups.map(groupDto);
 	const dto = omitUntouchedDefaults(model, { ...model, heroes, enemy_groups });
 	// SC-377: a title added by the in-card editor lands LAST in key-insertion order; write it

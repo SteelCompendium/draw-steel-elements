@@ -500,7 +500,7 @@ enemy_groups:
               - prone
           - id: 3`;
 		const { writes } = await drive(src, groupTurn);
-		// `prone` is normalised to {key: prone} (pre-existing); nothing else is added to the instances.
-		expect(lastWrite(writes)).toBe(`${src.replace('- prone', '- key: prone')}\n    has_taken_turn: true`);
+		// `prone` stays a plain name (SC-592) and nothing else is added to the instances.
+		expect(lastWrite(writes)).toBe(`${src}\n    has_taken_turn: true`);
 	});
 });

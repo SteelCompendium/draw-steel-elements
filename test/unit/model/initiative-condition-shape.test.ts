@@ -53,6 +53,9 @@ const SOURCE = [
 	'  value: 0',
 ].join('\n');
 
+type Holder = { conditions?: (string | Condition)[] };
+/** The holder's conditions with the optional `undefined` of the instance type ruled out. */
+const list = (holder: Holder): (string | Condition)[] => holder.conditions ?? [];
 const hero = (m: EncounterData) => m.heroes[0];
 const minion = (m: EncounterData, i: number) => m.enemy_groups[0].creatures[0].instances![i];
 const ogre = (m: EncounterData) => m.enemy_groups[1].creatures[0].instances![0];
@@ -70,8 +73,8 @@ function written(out: string): { hero: unknown; m1: unknown; m2: unknown; ogre: 
 }
 
 /** What the Conditions modal does when it opens (ConditionsModal.ts:130) and hands back (view.ts:2177). */
-const modalClones = (conditions: (string | Condition)[]): Condition[] =>
-	conditions.map((entry) => (typeof entry === 'string' ? { key: entry } : { ...entry }));
+const modalClones = (conditions: (string | Condition)[] | undefined): Condition[] =>
+	(conditions ?? []).map((entry) => (typeof entry === 'string' ? { key: entry } : { ...entry }));
 
 describe('plain-string conditions stay plain strings on write', () => {
 	test('a write that changes nothing leaves every holder\'s condition list as written', () => {
@@ -92,17 +95,17 @@ describe('plain-string conditions stay plain strings on write', () => {
 		const model = parseLikePipeline(SOURCE);
 		const before = serialize(model);
 		const inst = minion(model, 0);
-		inst.conditions = inst.conditions.filter((_, i) => i !== 1); // MinionStaminaPoolModal.ts:674
+		inst.conditions = list(inst).filter((_, i) => i !== 1); // MinionStaminaPoolModal.ts:674
 		const after = serialize(model);
 		expect(written(after).m1).toEqual(['grabbed', 'bleeding']);
-		expect(before.split('\n').filter((l) => !after.split('\n').includes(l))).toEqual(['          - prone']);
+		expect(before.split('\n').filter((l) => !after.split('\n').includes(l))).toEqual(['              - prone']);
 		expect(after.split('\n').filter((l) => !before.split('\n').includes(l))).toEqual([]);
 	});
 
 	test('removing a hero\'s and a regular instance\'s condition leaves their siblings as strings', () => {
 		const model = parseLikePipeline(SOURCE);
-		hero(model).conditions = hero(model).conditions.filter((_, i) => i !== 0);
-		ogre(model).conditions = ogre(model).conditions.filter((_, i) => i !== 1);
+		hero(model).conditions = list(hero(model)).filter((_, i) => i !== 0);
+		ogre(model).conditions = list(ogre(model)).filter((_, i) => i !== 1);
 		const w = written(serialize(model));
 		expect(w.hero).toEqual(['dazed', { key: 'hexed' }]);
 		expect(w.ogre).toEqual(['restrained']);
@@ -122,11 +125,11 @@ describe('plain-string conditions stay plain strings on write', () => {
 	test('a re-parse of the written block records the strings afresh, so the next write keeps them', () => {
 		const model = parseLikePipeline(SOURCE);
 		const inst = minion(model, 0);
-		inst.conditions = inst.conditions.filter((_, i) => i !== 0);
+		inst.conditions = list(inst).filter((_, i) => i !== 0);
 		const first = serialize(model);
 		const reparsed = parseLikePipeline(first);
 		expect(serialize(reparsed)).toBe(first);
-		minion(reparsed, 0).conditions = minion(reparsed, 0).conditions.filter((_, i) => i !== 0);
+		minion(reparsed, 0).conditions = list(minion(reparsed, 0)).filter((_, i) => i !== 0);
 		expect(written(serialize(reparsed)).m1).toEqual(['bleeding']);
 	});
 
@@ -218,7 +221,7 @@ describe('everything the plugin or the user wrote as an object stays an object',
 		const model = parseLikePipeline(src);
 		expect((parseYaml(serialize(model)) as any).heroes[0].conditions).toEqual(['prone', { key: 'prone' }, 'dazed']);
 		// the pool modal's removal keeps the entry objects, so each survivor keeps its shape
-		hero(model).conditions = hero(model).conditions.filter((_, i) => i !== 0);
+		hero(model).conditions = list(hero(model)).filter((_, i) => i !== 0);
 		expect((parseYaml(serialize(model)) as any).heroes[0].conditions).toEqual([{ key: 'prone' }, 'dazed']);
 	});
 });
@@ -228,7 +231,7 @@ describe('duplicates', () => {
 		const model = parseLikePipeline(SOURCE);
 		expect(written(serialize(model)).m2).toEqual(['grabbed', 'grabbed']);
 		const inst = minion(model, 1);
-		inst.conditions = inst.conditions.filter((_, i) => i !== 0);
+		inst.conditions = list(inst).filter((_, i) => i !== 0);
 		expect(written(serialize(model)).m2).toEqual(['grabbed']);
 	});
 });

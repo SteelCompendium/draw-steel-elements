@@ -12,7 +12,8 @@
 //   - FULLY AUTHORED: with L = the legacy writer's bytes for src (every filled key now present),
 //     serialize(parse(L)) === L, byte for byte;
 //   - MINIMAL UNTOUCHED: parseYaml(serialize(parse(src))) deep-equals parseYaml(src) - an untouched
-//     serialize adds nothing (modulo the pre-existing condition normalisation `grabbed` -> {key: grabbed}).
+//     serialize adds nothing (SC-592: a condition written as a plain name stays a plain name; before it
+//     came back as {key: grabbed}).
 // The legacy function is called UNCHANGED as an independent oracle (its own parseYaml + materialization
 // code path); the structural pins are hand-checked so the suite is not tautological.
 //
@@ -70,23 +71,6 @@ const midEncounter = [
 	'  value: 3',
 ].join('\n');
 
-/** What `parseYaml(source)` becomes once parse has normalised conditions (string -> {key}); nothing else. */
-const withNormalizedConditions = (source: string): any => {
-	const data = parseYaml(source) as any;
-	const norm = (owner: any): void => {
-		if (Array.isArray(owner.conditions)) {
-			owner.conditions = owner.conditions.map((c: any) => (typeof c === 'string' ? { key: c } : c));
-		}
-	};
-	for (const hero of data.heroes ?? []) norm(hero);
-	for (const group of data.enemy_groups ?? []) {
-		for (const creature of group.creatures ?? []) {
-			for (const instance of creature.instances ?? []) norm(instance);
-		}
-	}
-	return data;
-};
-
 /** Oracle pin (1) + (2) for one ref-free source. */
 async function expectOracle(source: string): Promise<void> {
 	const model = parseLikePipeline(source);
@@ -95,7 +79,7 @@ async function expectOracle(source: string): Promise<void> {
 	const authored = await legacyWriterBytes(source);
 	expect(serialize(parseLikePipeline(authored))).toBe(authored);
 	// (2) minimal untouched: nothing the source never wrote comes back.
-	expect(parseYaml(serialize(model))).toEqual(withNormalizedConditions(source));
+	expect(parseYaml(serialize(model))).toEqual(parseYaml(source));
 }
 
 describe('T-1: serialize(parse(src)) against the legacy writer (SC-485 oracle)', () => {
@@ -171,8 +155,8 @@ describe('T-1: serialize(parse(src)) against the legacy writer (SC-485 oracle)',
 		expect(squadOut).not.toContain('minion_stamina_pool');
 		expect(squadOut).toContain('squad_role: minion');
 		// Condition objects drop their undefined color/effect keys on disk; provided
-		// values are kept (string 'grabbed' + {key: bleeding, color: crimson}).
-		expect(squadOut).toMatch(/conditions:\n\s+- key: grabbed\n\s+- key: bleeding\n\s+color: crimson/);
+		// values are kept (string 'grabbed' stays a string + {key: bleeding, color: crimson}, SC-592).
+		expect(squadOut).toMatch(/conditions:\n\s+- grabbed\n\s+- key: bleeding\n\s+color: crimson/);
 		expect(squadOut).not.toContain('effect:');
 		expect(squadOut).not.toContain('color: null');
 		expect(await legacyWriterBytes(squad)).toContain('minion_stamina_pool: 20');
