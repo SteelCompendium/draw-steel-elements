@@ -252,7 +252,8 @@ To define a minion group, set the `is_squad` field to `true` in the enemy group 
 	Managed by the tracker — populated by "Advance round" (when `round_gain` is set) and
 	the quick-add control. Capped at the 50 most recent entries; older entries drop off
 	automatically. `amount` is the change the pool actually made (negative for a spend), so
-	the log adds up to the pool. When the pool stopped at 0 and made a smaller change than was
+	each entry records what the pool really did (the −/+ stepper changes Malice without a log
+	entry, so the log is not a running total). When the pool stopped at 0 and made a smaller change than was
 	asked for (the typed amount, or `round_gain`), the entry also has `requested`, the amount
 	asked for (`{round, amount, label, requested}`); an entry that was not capped has no
 	`requested` key.
