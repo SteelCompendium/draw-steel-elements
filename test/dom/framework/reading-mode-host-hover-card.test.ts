@@ -296,6 +296,25 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 		expect(valuesOf(app)).toEqual([6, 7]);
 	});
 
+	// A callout holding TWO counters, the + on the lower one: both read the same and the stale window holds the known body only in the UPPER one,
+	// so the card's own fence found in it by body is the sibling: the second + is placed by the host's own write, never at the upper counter.
+	test.each([
+		['block hover', 'Note#^cal', false],
+		['heading hover', 'Note#Tracker', true],
+	] as const)('J18 two counters in one callout, + on the lower one, then a second + (%s): it lands in the lower counter, the upper one is untouched', async (_name, link, byHeading) => {
+		const C2 = (a: number, b: number): string[] => ['> [!note] Camp', ...CTR(a).map(q), '> mid', ...CTR(b).map(q)];
+		const cal = C2(6, 5);
+		const lines = byHeading ? ['# N', '', '## Tracker', '', ...cal, '', '## After', 'END'] : ['# N', '', ...cal, '', '^cal', '', 'END'];
+		const head = lines.indexOf('> [!note] Camp');
+		const sec: Sec = byHeading ? { text: ['', ...cal, '', ''].join('\n'), lineStart: 1, lineEnd: 10 } : { text: cal.join('\n'), lineStart: 0, lineEnd: 9 };
+		const { app, host } = hovered(lines.join('\n'), sec, link, bodyOf(5), { cal: [head, head + 9] });
+
+		expect(await plus(host, bodyOf(6))).toBe(true); // the lower counter now reads like the upper
+		expect(await plus(host, bodyOf(7))).toBe(true);
+		expect(valuesOf(app)).toEqual([6, 7]);
+		expect(Notice.notices).toEqual([]);
+	});
+
 	describe('the link is bound to the preview once', () => {
 		// Two headings that each hold only the identical counter: the part of either is the same text.
 		const TWO = ['# N', '', '## Tracker', '', ...CTR(5), '', '## Other', '', ...CTR(5), '', 'END'].join('\n');
@@ -319,6 +338,15 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 
 			expect(await plus(host, bodyOf(7))).toBe(true);
 			expect(valuesOf(app)).toEqual([7, 6]);
+		});
+
+		test('J17 a preview no event named when it was first looked up (opened some other way) keeps no link when a later event names its popover: nothing is written', async () => {
+			const { app, host, popover } = hovered(TWO, heading, null);
+			expect(await plus(host, bodyOf(6))).toBe(false); // the first lookup: no link
+			noteHoverLink(app, hoverEvent('Note#Other', popover));
+
+			expect(await plus(host, bodyOf(6))).toBe(false);
+			expect(app.vault.getContent('Note.md')).toBe(TWO);
 		});
 
 		test('an event for a preview that was never opened (its parent shows no popover) names no card\'s preview', () => {
