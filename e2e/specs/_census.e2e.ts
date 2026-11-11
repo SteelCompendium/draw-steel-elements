@@ -96,8 +96,10 @@ describe('real-Obsidian census (pilot surfaces)', () => {
 		await dse.openNote('Initiative/rich.md');
 		await dse.click(dse.block('ds-initiative').control('init.title'));
 		await dse.waitFor(`!!document.querySelector('.markdown-reading-view [data-dse-control="init.title.input"]')`, 'the title editor');
-		expect(censusFindings(await eventfulNodes([TRACKER_SCOPE], null), TRACKER_IDS, INERT_IDS)).toEqual([]);
-		expect((await eventfulNodes([TRACKER_SCOPE], null)).map((n) => n.id)).toContain('init.title.input');
+		// One scan feeds both assertions (SC-593: the page does not change between them, so a second scan only costs time under load).
+		const editing = await eventfulNodes([TRACKER_SCOPE], null);
+		expect(censusFindings(editing, TRACKER_IDS, INERT_IDS)).toEqual([]);
+		expect(editing.map((n) => n.id)).toContain('init.title.input');
 		await dse.openNote('Initiative/captain.md');
 		const nodes = await eventfulNodes([TRACKER_SCOPE], null);
 		expect(censusFindings(nodes, TRACKER_IDS, INERT_IDS)).toEqual([]);
