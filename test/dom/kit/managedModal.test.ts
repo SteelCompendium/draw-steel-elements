@@ -837,21 +837,26 @@ describe('SC-595: a modal opened from a hover preview', () => {
 		});
 
 
-		test('after the opening event the popover has pushed its scope above the modal\'s: the modal\'s goes back on top, and the popover\'s is on top again after close', async () => {
-			const { app, modal } = openFrom(openerEl(true));
-			const popover = new Scope();
-			app.keymap.pushScope(popover); // Obsidian's popover pushes this while the opening click is still being dispatched
-			expect(app.keymap.top).toBe(popover);
+		test('after the opening event the popover has pushed its scope above the modal\'s: the modal\'s goes back on top, and the popover\'s is on top again after close', () => {
+			jest.useFakeTimers();
+			try {
+				const { app, modal } = openFrom(openerEl(true));
+				const popover = new Scope();
+				app.keymap.pushScope(popover); // Obsidian's popover pushes this 10 or 150 ms after the opening click
+				expect(app.keymap.top).toBe(popover);
 
-			await settle();
-			expect(app.keymap.top).toBe(popover); // not before the popover has had its 150 ms
+				jest.advanceTimersByTime(5);
+				expect(app.keymap.top).toBe(popover); // not before the first re-push
 
-			await pastRepush();
+				jest.advanceTimersByTime(Math.max(...HOVER_HELPER_DELAYS_MS));
 
-			expect(app.keymap.top).toBe(modal.scope);
-			modal.close();
-			expect(app.keymap.top).toBe(popover);
-			expect(app.keymap.scopes).toEqual([popover]);
+				expect(app.keymap.top).toBe(modal.scope);
+				modal.close();
+				expect(app.keymap.top).toBe(popover);
+				expect(app.keymap.scopes).toEqual([popover]);
+			} finally {
+				jest.useRealTimers();
+			}
 		});
 
 		test('closed before the deferred re-push runs: nothing is pushed back for the closed modal', async () => {
