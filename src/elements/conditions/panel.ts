@@ -172,6 +172,7 @@ export class ConditionsPanel extends HeroPanel<Condition[]> {
 					pendingList = updated;
 					this.updatePanel(updated);
 				}),
+			this.cx.host.containerEl, // SC-595: keeps a hover preview alive while the modal is open
 		);
 		const inheritedOnClose = modal.onClose.bind(modal) as () => void;
 		modal.onClose = () => {

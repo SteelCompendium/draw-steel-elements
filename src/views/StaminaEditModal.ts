@@ -629,6 +629,7 @@ export class StaminaEditModal extends DseModal {
 						// SC-465: remember how the press arrived (keyboard -> ring) before the dialog takes focus.
 						const healEl = spendRecoveryBtn?.buttonEl;
 						const ring = healEl ? showsFocusRing(healEl) : false;
+						// SC-595: inherits this modal's anchor, so the confirmation keeps a hover preview alive too.
 						openManagedModal(this.lifecycle, () =>
 							new FreeHealConfirmModal(
 								this.app,
@@ -646,6 +647,7 @@ export class StaminaEditModal extends DseModal {
 									else healEl.focus();
 								},
 							),
+							this.anchor,
 						);
 						return;
 					}

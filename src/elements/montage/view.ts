@@ -360,7 +360,7 @@ export class MontageView extends ElementView<MontageModel> {
 	 * different reason — deferring a persist to modal close). */
 	private openTrackedModal<T extends DseModal>(factory: () => T): T {
 		const modalOwner = this.addChild(new Component());
-		const modal = openManagedModal(modalOwner, factory);
+		const modal = openManagedModal(modalOwner, factory, this.cx.host.containerEl); // SC-595: anchor, see DseModal.anchorTo
 		const inheritedOnClose = modal.onClose.bind(modal) as () => void;
 		modal.onClose = () => {
 			inheritedOnClose();

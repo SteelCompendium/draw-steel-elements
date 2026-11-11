@@ -52,7 +52,6 @@
 // omitted, and turn indicators / cells / stamina render as static state displays (spans,
 // not buttons). The pipeline stamps data-dse-readonly + the CSS badge shows "Read-only".
 import { Component, Notice, parseYaml, setIcon } from 'obsidian';
-import type { Modal } from 'obsidian';
 import { ElementView } from '@/framework/view';
 import { ElementStageError, renderErrorCard } from '@/framework/errorCard';
 import type { ErrorStage } from '@/framework/errorCard';
@@ -72,7 +71,7 @@ import {
 	updateStaminaGauge,
 	buildConditionIcons as kitBuildConditionIcons,
 } from '@/framework/kit';
-import type { IconButtonHandle, StaminaBarValues, StaminaGaugeOptions } from '@/framework/kit';
+import type { DseModal, IconButtonHandle, StaminaBarValues, StaminaGaugeOptions } from '@/framework/kit';
 import { ConditionManager } from '@utils/Conditions';
 import { Images } from '@utils/Images';
 import { StaminaBar } from '@model/StaminaBar';
@@ -117,7 +116,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *  REPLACED (not accumulated) on every open and nulled on close — the view holds
 	 *  exactly one pending closer regardless of how many modals were opened
 	 *  (stamina-bar's activeModal pattern; never register() per open). */
-	private activeModal: Modal | null = null;
+	private activeModal: DseModal | null = null;
 
 	/** SC-576 — set when the re-parse after Reset Encounter threw: the next `onMount` draws the
 	 *  pipeline's error card with it (what a reload of that note draws) instead of the tracker. */
@@ -162,7 +161,9 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *  single registration; the wrapped onClose nulls the reference when the modal
 	 *  actually closes (identity-guarded so an older modal can't null a newer one) while
 	 *  still running the modal's own inherited onClose behavior. */
-	private openModal(modal: Modal): void {
+	private openModal(modal: DseModal): void {
+		// SC-595: the anchor keeps a hover preview alive while the modal is open (see DseModal.anchorTo).
+		modal.anchorTo(this.cx.host.containerEl);
 		// `.bind(modal)` (not a plain `modal.onClose` reference, which would trip
 		// `@typescript-eslint/unbound-method`) snapshots the ORIGINAL bound function
 		// at definition time -- immune to `modal.onClose` being reassigned two lines

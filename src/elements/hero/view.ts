@@ -400,6 +400,7 @@ export class HeroSheetView extends ElementView<HeroModel> {
 					spendRecovery: tracked,
 				},
 			),
+			this.cx.host.containerEl, // SC-595: keeps a hover preview alive while the modal is open
 		);
 	}
 

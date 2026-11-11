@@ -42,6 +42,7 @@ export class DseModal extends Modal {
 
 	private footerEl: HTMLElement | null = null;
 	private dseOpen = false;
+	private anchorEl: HTMLElement | null = null;
 
 	constructor(app: App) {
 		super(app);
@@ -56,6 +57,22 @@ export class DseModal extends Modal {
 	 */
 	private dialogEl(): HTMLElement {
 		return this.modalEl ?? this.containerEl;
+	}
+
+	/**
+	 * SC-595: records the element this modal was opened from (the opener's block host element, `cx.host.containerEl`). When that
+	 * element sits inside a hover preview (`.hover-popover`), open() keeps the preview alive for as long as the modal is open (see
+	 * `keepHoverPreviewAlive`). Outside a preview nothing changes. Call before open(); `openManagedModal` takes it as its third
+	 * argument.
+	 */
+	anchorTo(el: HTMLElement | null | undefined): this {
+		this.anchorEl = el ?? null;
+		return this;
+	}
+
+	/** The element passed to `anchorTo`, so a modal opened from this one (FreeHealConfirmModal) can inherit it. */
+	get anchor(): HTMLElement | null {
+		return this.anchorEl;
 	}
 
 	/**
@@ -149,9 +166,46 @@ export class DseModal extends Modal {
 		const prefs = prefsForApp(this.app);
 		if (prefs) prefs.reflectCss(this.dialogEl(), this.lifecycle);
 		super.open();
+		if (this.anchorEl?.closest('.hover-popover')) this.keepHoverPreviewAlive();
 		// §2.6: initial focus to the first control. Escape + the focus trap stay
 		// Obsidian Modal defaults — only the entry focus is DSE's.
 		this.contentEl.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+	}
+
+	/**
+	 * SC-595: this modal was opened from a hover preview. Obsidian's page-preview popover hides itself (and unloads the block the
+	 * modal's owner view lives in, which closes the modal and loses what the user typed) on ANY `click` that reaches its window
+	 * and is neither default-prevented nor inside the popover; the modal sits in `body`, so the first click inside it did that.
+	 * Two things keep the preview, and so the modal, alive:
+	 *
+	 * 1. A click guard on the modal's own document, BUBBLE phase, stopping propagation of a click whose target is inside this
+	 *    modal. Every document-level listener still sees the click (RecoveriesStrip's click-outside, ConditionsModal's and
+	 *    sccLinkClickHandler's capture listeners all run before or at the document); only window-level bubble listeners (the
+	 *    popover's, an Obsidian Menu's click-outside) never get it. NEVER `preventDefault` instead: that is the popover's own
+	 *    "belongs to me" convention, but it also cancels label and checkbox activation, so an Obsidian toggle
+	 *    (`label.checkbox-container > input`) would stop toggling. Registered on `lifecycle`, so it is gone after close.
+	 * 2. The popover pushed its own keymap scope above this modal's on the click that opened the modal, so Escape went to the
+	 *    popover (and, in Live Preview, moved focus into the note behind the form). Once the opening event has finished, put
+	 *    this modal's scope back on top. Deferred (setTimeout 0): the popover pushes its scope while the opening click is still
+	 *    being dispatched, possibly after open(), so an immediate re-push would be buried again. After close, Modal.close's own
+	 *    popScope leaves the popover's scope on top, which is right: the preview is still showing.
+	 *
+	 * Only for a modal opened from inside `.hover-popover`: nothing else needs it, and outside a preview a click inside a modal
+	 * must reach the window as it always did.
+	 */
+	private keepHoverPreviewAlive(): void {
+		const doc = this.containerEl.ownerDocument;
+		this.lifecycle.registerDomEvent(doc, 'click', (evt: MouseEvent) => {
+			const target = evt.target as Node | null;
+			if (target && this.containerEl.contains(target)) evt.stopPropagation();
+		});
+		const win = doc.defaultView ?? window;
+		const timer = win.setTimeout(() => {
+			if (!this.dseOpen) return;
+			this.app.keymap.popScope(this.scope);
+			this.app.keymap.pushScope(this.scope);
+		}, 0);
+		this.lifecycle.register(() => win.clearTimeout(timer));
 	}
 
 	close(): void {
@@ -167,8 +221,9 @@ export class DseModal extends Modal {
  * `owner.register(() => modal.close())` — when the opening view unloads (file
  * closed, plugin unload, echo-rebuild teardown), the modal closes with it.
  */
-export function openManagedModal<T extends DseModal>(owner: Component, factory: () => T): T {
+export function openManagedModal<T extends DseModal>(owner: Component, factory: () => T, anchor?: HTMLElement | null): T {
 	const modal = factory();
+	if (anchor !== undefined) modal.anchorTo(anchor);
 	owner.register(() => modal.close());
 	modal.open();
 	return modal;

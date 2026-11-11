@@ -410,10 +410,28 @@ export class FakeWorkspace {
 	}
 }
 
+/** SC-595: the real `app.keymap`'s scope stack (obsidian.d.ts `Keymap.pushScope` / `popScope`): the top scope gets the keys.
+ *  `Modal.open` pushes the modal's scope and `Modal.close` pops it, so a test can model a hover popover pushing its own scope
+ *  later (`app.keymap.pushScope(popoverScope)`) and assert which scope is on top. */
+export class FakeKeymap {
+	scopes: Scope[] = [];
+	pushScope(scope: Scope): void {
+		this.scopes.push(scope);
+	}
+	popScope(scope: Scope): void {
+		const i = this.scopes.lastIndexOf(scope);
+		if (i >= 0) this.scopes.splice(i, 1);
+	}
+	get top(): Scope | undefined {
+		return this.scopes[this.scopes.length - 1];
+	}
+}
+
 export class App {
 	vault = new FakeVault();
 	metadataCache = new FakeMetadataCache(this.vault);
 	workspace = new FakeWorkspace();
+	keymap = new FakeKeymap();
 }
 
 // ---------------------------------------------------------------- components
@@ -688,10 +706,13 @@ export class Modal {
 		this.close();
 	}
 	open(): void {
+		// Real Modal.open pushes the modal's scope on the app's keymap (SC-595); a bare fake `app` has none.
+		(this.app as { keymap?: FakeKeymap } | undefined)?.keymap?.pushScope(this.scope);
 		document.body.appendChild(this.containerEl);
 		this.onOpen();
 	}
 	close(): void {
+		(this.app as { keymap?: FakeKeymap } | undefined)?.keymap?.popScope(this.scope);
 		this.containerEl.remove();
 		this.onClose();
 	}

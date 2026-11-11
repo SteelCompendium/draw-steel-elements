@@ -566,7 +566,8 @@ export function openFormEditor(
 	validation: ValidationService,
 	opener: FormOpener | null = null,
 ): FormModal {
-	const modal = new FormModal(cx, def, source, validation, opener);
+	// SC-595: the anchor keeps a hover preview alive while this form is open (a click inside the form would otherwise hide it).
+	const modal = new FormModal(cx, def, source, validation, opener).anchorTo(cx.host.containerEl);
 	owner.register(() => {
 		const keeper = modal.hasPin() ? (cx.host.keepFormOpenOn?.() ?? null) : null;
 		if (keeper) modal.keepOpenOn(keeper);

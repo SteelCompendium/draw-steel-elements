@@ -155,11 +155,15 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 		// open; DseModal.close() is idempotent, so the old hand-rolled activeModal
 		// bookkeeping (needed when StaminaEditModal was a raw, non-idempotent Modal)
 		// is gone.
-		openManagedModal(this, () =>
-			new StaminaEditModal(this.cx.app, this.model, true, '', () => {
-				this.updateBarDisplay(this.model);
-				void this.persist();
-			}),
+		// SC-595: the anchor keeps a hover preview alive while the modal is open.
+		openManagedModal(
+			this,
+			() =>
+				new StaminaEditModal(this.cx.app, this.model, true, '', () => {
+					this.updateBarDisplay(this.model);
+					void this.persist();
+				}),
+			this.cx.host.containerEl,
 		);
 	}
 
