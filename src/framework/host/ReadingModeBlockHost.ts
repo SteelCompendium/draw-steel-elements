@@ -958,12 +958,20 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * SC-480: whether `target` (a block of `content`, the note now) is a block that already existed in the note as the pin was taken
 	 * (`pin.text`) at another line than the pinned one: the line diff carries its fence line back to a different, unchanged line. A
 	 * block that was moved or is new maps to nothing (null) and stays allowed; so does a pin line that is no fence in `pin.text`
-	 * (nothing to compare with), a partial (embed) pin, and a note changed past the diff's limit (the count rule decides there).
+	 * (nothing to compare with), a partial (embed) pin, a note changed past the diff's limit (the count rule decides there), and a
+	 * neighbour that is still in the note somewhere (swapped / reordered blocks).
 	 */
 	private landsOnOtherBlock(content: string, pin: BlockPin, target: { lineStart: number }): boolean {
 		if (partialPins.has(pin) || this.fenceAt(pin.text, pin.lineStart) === null) return false;
 		const back = mapLine(content, pin.text, target.lineStart);
-		return back !== null && back !== pin.lineStart;
+		if (back === null || back === pin.lineStart) return false;
+		// The diff pairs identical fence lines, so a block that was moved or swapped can map back onto a neighbour's old line. The target is
+		// that neighbour only when the neighbour as clicked (the block that stood at `back`) is no longer anywhere in the note. Known
+		// corner case, accepted: a bumped neighbour whose old body still exists elsewhere in the note lets the write through; and a
+		// block moved into the place of a deleted neighbour reads the same as "deleted, neighbour rewritten to match", so it is refused.
+		const other = this.fenceAt(pin.text, back);
+		if (!other || this.knownLanguage === null) return true;
+		return countByBody(content, this.knownLanguage, other.body) === 0;
 	}
 
 	async replaceSource(newSource: string, options?: BlockWriteOptions): Promise<boolean> {

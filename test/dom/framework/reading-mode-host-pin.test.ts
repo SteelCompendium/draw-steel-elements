@@ -422,6 +422,66 @@ describe('SC-480: a card write whose pin misses is never written into an identic
 		expect(Notice.notices).toEqual([]);
 	});
 
+	// SC-480 r6: no identical block anywhere, the clicked block (X) only changes place with another block: the diff pairs identical fence lines,
+	// so X's fence can map back onto the neighbour's old line. The click must still land in X.
+	const SOLO = (v: number): string[] => CTR(v, 'Solo');
+	const raw = (...parts: string[][]): string => ['# N', '', ...parts.flatMap((b) => [...b, '']), 'END'].join('\n');
+	/** X (`Solo`, 5) clicked in `before`; the note becomes `after`; the element's section is X's new place or none (the body search). */
+	function movedSolo(before: string, after: string) {
+		const app = new App();
+		app.vault.setFile('Note.md', before);
+		const at = before.split('\n').indexOf('name: Solo') - 1;
+		const section: Section = { current: sectionAt(before, at) };
+		const host = new ReadingModeBlockHost(new Plugin(app) as never, document.createElement('div'), switchableCtx(section) as never, 'ds-counter');
+		host.setMountedBody(bodyOf(5, 'Solo'));
+		host.notePersistIntent();
+		app.vault.setFile('Note.md', after);
+		return { app, host, section };
+	}
+	const soloValue = (app: App): number => Number(/name: Solo\ncurrent_value: (\d+)/.exec(app.vault.getContent('Note.md')!)![1]);
+
+	test.each(['its new place', 'no section (the body search)'])('X swaps places with a different block, no twin (%s): the click lands in X', async (mode) => {
+		const before = raw(SOLO(5), ['MID'], CTR(3, 'Zed'));
+		const after = raw(CTR(3, 'Zed'), ['MID'], SOLO(5));
+		const { app, host, section } = movedSolo(before, after);
+		section.current = mode === 'its new place' ? sectionAt(after, after.split('\n').indexOf('name: Solo') - 1) : null;
+
+		expect(await host.replaceSource(bodyOf(6, 'Solo'), own)).toBe(true);
+		expect(soloValue(app)).toBe(6);
+		expect(Notice.notices).toEqual([]);
+	});
+
+	test.each(['its new place', 'no section (the body search)'])('X moves from last to first of three different blocks (%s): the click lands in X', async (mode) => {
+		const before = raw(CTR(1, 'Aa'), CTR(2, 'Bb'), SOLO(5));
+		const after = raw(SOLO(5), CTR(1, 'Aa'), CTR(2, 'Bb'));
+		const { app, host, section } = movedSolo(before, after);
+		section.current = mode === 'its new place' ? sectionAt(after, after.split('\n').indexOf('name: Solo') - 1) : null;
+
+		expect(await host.replaceSource(bodyOf(6, 'Solo'), own)).toBe(true);
+		expect(soloValue(app)).toBe(6);
+		expect(Notice.notices).toEqual([]);
+	});
+
+	test('X moved into the place of a block the same edit deleted: the text is the same as "X deleted, the neighbour rewritten to match", so the click is refused (by design)', async () => {
+		const before = raw(CTR(3, 'Zed'), ['P'], SOLO(5));
+		const after = raw(SOLO(5), ['P']);
+		const { app, host, section } = movedSolo(before, after);
+		section.current = sectionAt(after, after.split('\n').indexOf('name: Solo') - 1);
+
+		expect(await host.replaceSource(bodyOf(6, 'Solo'), own)).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(after);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+	});
+
+	test('the bumped neighbour with a paragraph inserted above it (the map back and the map forward disagree): still refused', async () => {
+		const after = build([5, null], ['ONE MORE LINE', '']); // the clicked block (5) deleted, the block above (was 4) now reads 5 and sits two lines lower
+		const { app, host } = clicked([4, 5], 1, after, (t) => sectionAt(t, fencesOf(t)[0]));
+
+		expect(await host.replaceSource(bodyOf(6), own)).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(after);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+	});
+
 	test('a pin that places still writes there with identical twins around (the race: the note moved the block, nothing was deleted)', async () => {
 		const after = build([5, 5, 5], ['NEW', '']);
 		const { app, host } = clicked([5, 5, 5], 1, after, (t) => sectionAt(t, fencesOf(t)[2])); // the element was handed to the lower twin
