@@ -23,6 +23,10 @@ import { consumeEscapeAt } from './escapeConsumer';
 
 let titleCounter = 0;
 
+/** SC-595: how long after open() a modal opened from a hover preview puts its keymap scope back on top: longer than the 150 ms
+ *  Obsidian's page-preview popover waits (click-to-edit helper, a click on text) before pushing its own scope. */
+export const HOVER_SCOPE_REPUSH_MS = 200;
+
 /** First-control query for initial focus (§2.6): skips disabled + tabindex="-1". */
 const FOCUSABLE =
 	'button:not([disabled]), input:not([disabled]), select:not([disabled]), ' +
@@ -184,11 +188,13 @@ export class DseModal extends Modal {
 	 *    popover's, an Obsidian Menu's click-outside) never get it. NEVER `preventDefault` instead: that is the popover's own
 	 *    "belongs to me" convention, but it also cancels label and checkbox activation, so an Obsidian toggle
 	 *    (`label.checkbox-container > input`) would stop toggling. Registered on `lifecycle`, so it is gone after close.
-	 * 2. The popover pushed its own keymap scope above this modal's on the click that opened the modal, so Escape went to the
-	 *    popover (and, in Live Preview, moved focus into the note behind the form). Once the opening event has finished, put
-	 *    this modal's scope back on top. Deferred (setTimeout 0): the popover pushes its scope while the opening click is still
-	 *    being dispatched, possibly after open(), so an immediate re-push would be buried again. After close, Modal.close's own
-	 *    popScope leaves the popover's scope on top, which is right: the preview is still showing.
+	 * 2. The popover pushes its own keymap scope above this modal's for the click that opened the modal, so Escape went to the
+	 *    popover (and, in Live Preview, moved focus into the note behind the form). Put this modal's scope back on top. The
+	 *    popover does not push it during the click: its click-to-edit helper waits 10 ms (150 ms when the click lands on text)
+	 *    and pushes then, which can be after open() (measured in Obsidian 1.15.1: with a re-push at 0 ms Escape stayed dead in every G-S83 trial). A timer
+	 *    that fires after those 150 ms fires after the popover's (timers run in due-time order, so load cannot reorder them).
+	 *    A modal opened later than that is on top already (Modal.open pushes its scope), the re-push is then a no-op. After close,
+	 *    Modal.close's own popScope leaves the popover's scope on top, which is right: the preview is still showing.
 	 *
 	 * Only for a modal opened from inside `.hover-popover`: nothing else needs it, and outside a preview a click inside a modal
 	 * must reach the window as it always did.
@@ -204,7 +210,7 @@ export class DseModal extends Modal {
 			if (!this.dseOpen) return;
 			this.app.keymap.popScope(this.scope);
 			this.app.keymap.pushScope(this.scope);
-		}, 0);
+		}, HOVER_SCOPE_REPUSH_MS);
 		this.lifecycle.register(() => win.clearTimeout(timer));
 	}
 

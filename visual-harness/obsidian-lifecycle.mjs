@@ -166,6 +166,11 @@
 // the callout Obsidian reports for the card is still the one from before the +, so the form's own block must come from the card's own + write: Save lands in the LOWER counter, never the upper
 // one (the 3e81f9a5 bundle wrote the upper counter for the block embed, the b4e7b4f4 base for the heading embed, both with no Notice).
 //
+// SC-595 appends G-S83 (55 scenarios in all; it sits after G-S77 and before G-S56, and runs in the fifth `--only` part): a hover preview of a note, the REAL mouse (`Input.dispatchMouseEvent`,
+// never a scripted `.click()`): a block edit form opened from the preview by + and the pencil survives a press and release inside it (Obsidian's page-preview popover used to hide itself, and the
+// form with it, on the click that ends the press), typed text and a real click on Save land in the note with no Notice and the preview still shown, a real click outside closes the preview,
+// Escape on a new form closes the form and leaves the preview; the stamina modal and the initiative tracker's Conditions modal opened from a preview stay open under a real click on their title.
+//
 // SC-480 appends G-S73 (53 scenarios before G-S77; it sits after G-S49 and before G-S56, which stays last, and runs in the fifth `--only` part with G-S59 and G-S49): a card write whose pin
 // cannot be placed because its block was DELETED from outside is never written into an identical twin. Click + on one of two identical counters (Reading view and Live Preview),
 // delete that block from outside at once, then leave the note (the unload flush) or wait out the 400 ms debounce: nothing is written, the note stays as the outside edit left it, and
@@ -551,6 +556,14 @@ Object.assign(FIXTURES, {
 		'> mid',
 		...['```ds-counter', 'name: Twin', 'current_value: 5', 'max_value: 20', 'min_value: 0', '```'].map((l) => `> ${l}`),
 	].join('\n');
+	// SC-595 (G-S83): a note with one counter (the form's block), its host that links to it, a stamina bar note and its host, the tracker's host.
+	Object.assign(FIXTURES, {
+		'Lifecycle/gs83-src.md': `# gs83 src\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`,
+		'Lifecycle/gs83-host.md': `# gs83 host\n\nsee [[gs83-src]] here\n\nfiller one\n\nfiller two\n`,
+		'Lifecycle/gs83-stam.md': `# gs83 stam\n\nABOVE\n\n${fence('ds-stamina-bar', ['max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5'])}\n\nBELOW\n`,
+		'Lifecycle/gs83-stam-host.md': `# gs83 stam host\n\nsee [[gs83-stam]] here\n\nfiller\n`,
+		'Lifecycle/gs83-trk-host.md': `# gs83 trk host\n\nsee [[tracker]] here\n\nfiller\n`,
+	});
 	Object.assign(FIXTURES, {
 		'Lifecycle/gs77-cal-src.md': `# gs77 cal src\n\n${CAL2()}\n\n^gs77cal\n\nend\n`,
 		'Lifecycle/gs77-cal-host.md': `# gs77 cal host\n\n![[gs77-cal-src#^gs77cal]]\n\nafter\n`,
@@ -1346,6 +1359,193 @@ async function gs77Trial(t, { SRC, HOST, mode, plus, from = 'Twin', to = 'Edited
 	rec.notices = await t.noticesSince(mp);
 	rec.formOpen = await t.ev(`!!document.querySelector('.modal-container .dse-modal')`);
 	if (rec.formOpen) await t.key('Escape', 'Escape', 27).catch(() => {});
+	return rec;
+}
+
+/**
+ * SC-595 (G-S83): one hover-preview trial with a REAL mouse (`Input.dispatchMouseEvent` for every move, press and release; the only
+ * scripted input is `Input.insertText` for typing). `kind`: 'form' (a counter note: hover the link, + then the pencil, ...), 'stamina'
+ * (the stamina bar note) or 'conditions' (the tracker note). Returns a record; asserts nothing but "the thing I need is there".
+ *
+ * Footguns (measured, SC-595 r1): the pencil sits in the chrome panel above the card, click-through until the card is hovered, so the
+ * pointer goes onto the card's top edge directly under the pencil and then straight up (a diagonal leaves the card's box and the panel
+ * hides again); a click on the empty spot where the panel was lands on the preview body and turns the preview into a source editor.
+ * A card taller than the preview (the tracker) is aimed at its visible top. Obsidian's own "Update Available" Notice is not in the way
+ * here (no sidebar clicks). `authoringControls` must be on or there is no pencil. The popover instance is at `view.previewMode.hoverPopover`
+ * (Reading view) or `view.hoverPopover` (Live Preview), so cleanup looks in both.
+ */
+function gs83Kit(t) {
+	const J = JSON.stringify;
+	const mouse = (type, x, y, extra = {}) => t.cdp.call('Input.dispatchMouseEvent', { type, x, y, ...extra });
+	const center = (expr) =>
+		t.ev(`(() => { const el = ${expr}; if (!el) return null; if (el.closest('.hover-popover') && !el.matches('[data-dse-element]')) el.scrollIntoView({ block: 'nearest' }); const r0 = el.getBoundingClientRect(); const pop = el.closest('.hover-popover'); let r = r0; if (el.matches('[data-dse-element]') && pop) { const pr = pop.getBoundingClientRect(); const top = Math.max(r0.top, pr.top) + 12; r = { left: r0.left, top, width: r0.width, height: 12 }; } return { x: Math.round(r.left + Math.min(r.width / 2, 40)), y: Math.round(r.top + r.height / 2), w: r.width, h: r.height }; })()`);
+	const moveTo = async (expr, mods = 0) => {
+		const p = await center(expr);
+		t.expect(p && p.w > 0, `nothing to move to: ${expr}`);
+		for (let i = 1; i <= 6; i++) await mouse('mouseMoved', p.x - 30 + i * 5, p.y, { modifiers: mods });
+		return p;
+	};
+	const press = async (p) => {
+		const base = { button: 'left', clickCount: 1 };
+		await mouse('mousePressed', p.x, p.y, { buttons: 1, ...base });
+		await mouse('mouseReleased', p.x, p.y, { buttons: 0, ...base });
+	};
+	const click = async (expr) => press(await moveTo(expr));
+	/** a chrome control (the pencil) is revealed by the pointer hovering the card: onto the card's top edge, then straight up to the control, wait until the point hits it, then press and release */
+	const clickRevealed = async (expr) => {
+		const p = await center(expr);
+		const from = await t.ev(`(() => { const r = (${expr}).closest('[data-dse-element]').getBoundingClientRect(); return { x: ${p ? p.x : 0}, y: Math.round(r.top + 10) }; })()`);
+		t.expect(from && p, `clickRevealed: nothing at ${expr}`);
+		await mouse('mouseMoved', from.x, from.y);
+		await t.sleep(120);
+		for (let i = 1; i <= 8; i++) {
+			await mouse('mouseMoved', from.x + ((p.x - from.x) * i) / 8, from.y + ((p.y - from.y) * i) / 8);
+			await t.sleep(30);
+		}
+		const t0 = Date.now();
+		for (;;) {
+			if (await t.ev(`(() => { const el = ${expr}; const h = document.elementFromPoint(${p.x}, ${p.y}); return !!(el && h && (el === h || el.contains(h))); })()`)) break;
+			if (Date.now() - t0 > 4000) throw new Error(`the pointer never hits ${expr} at ${J(p)}`);
+			await mouse('mouseMoved', p.x + ((Date.now() / 100) % 2), p.y);
+			await t.sleep(100);
+		}
+		await press(p);
+	};
+	const E = (src) => `app.plugins.plugins['draw-steel-elements'].viewRegistry.liveEntries().filter((e) => e.host.sourcePath === ${J(src)} && e.root.isConnected && e.root.closest('.hover-popover'))`;
+	const ENTRY = (src) => `(${E(src)})[0]`;
+	const POPOVER = `document.querySelector('.popover.hover-popover')`;
+	const FORM = `document.querySelector('.modal-container .dse-modal')`;
+	const RAW = `${FORM}.querySelector('textarea.dse-form__raw')`;
+	const SAVE = `Array.from(document.querySelectorAll('.modal-container .dse-modal button')).find((b) => b.getAttribute('aria-label') === 'Save')`;
+	const state = () => t.ev(`({ popover: !!${POPOVER}, modal: !!document.querySelector('.modal-container .dse-modal, .modal-container .dse-condal-modal') })`);
+	const openHost = async (host, mode) => {
+		await t.ev(`(async () => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); const leaf = app.workspace.getLeavesOfType('markdown')[0] ?? app.workspace.getMostRecentLeaf(); await leaf.setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); await leaf.setViewState({ type: 'markdown', state: { file: ${J(host)}, mode: ${J(mode === 'lp' ? 'source' : 'preview')}, source: false }, active: true }); app.workspace.setActiveLeaf(leaf, { focus: true }); return true; })()`);
+		if (mode === 'lp') await t.ev(`(() => { app.workspace.getMostRecentLeaf().view.editor.setCursor({ line: 0, ch: 0 }); return true; })()`);
+		const LINK = mode === 'lp' ? `document.querySelector('.workspace-leaf.mod-active .cm-content .cm-hmd-internal-link')` : `document.querySelector('.workspace-leaf.mod-active .markdown-reading-view a.internal-link')`;
+		await t.waitFor(`!!${LINK}`, `${mode}: the link to the previewed note is drawn`, 10000);
+		await t.sleep(500);
+		return LINK;
+	};
+	const hover = async (link, src) => {
+		await mouse('mouseMoved', 5, 5);
+		await t.sleep(200);
+		await moveTo(link, 2); // Ctrl held: page preview in Live Preview needs it
+		const t0 = Date.now();
+		let triggered = false;
+		while (!(await t.ev(`(${E(src)}).length > 0`))) {
+			if (Date.now() - t0 > 4000 && !triggered) {
+				triggered = true; // the real hover gave no popover in 4 s: ask for it the way a hover does (the mouse path below is unchanged)
+				await t.ev(`(() => { const a = ${link}; const leaf = app.workspace.getMostRecentLeaf(); app.workspace.trigger('hover-link', { event: new MouseEvent('mouseover', { ctrlKey: true, clientX: 200, clientY: 200 }), source: 'preview', hoverParent: leaf.view, targetEl: a, linktext: a.getAttribute('data-href') || a.textContent, sourcePath: leaf.view.file.path }); return true; })()`);
+			}
+			if (Date.now() - t0 > 12000) throw new Error('no preview card');
+			await t.sleep(80);
+		}
+		return triggered ? 'hover-link trigger' : 'real hover';
+	};
+	/** Close every modal and hover preview this trial left, and park the pointer away from everything. */
+	const cleanup = async () => {
+		await mouse('mouseMoved', 5, 5);
+		await t.ev(`(() => { document.querySelectorAll('.modal-container').forEach((c) => c.querySelector('.modal-close-button')?.click()); return true; })()`);
+		await t.sleep(200);
+		await t.ev(`(() => { const v = app.workspace.getMostRecentLeaf().view; for (const o of [v, v.previewMode, v.editMode]) { try { o?.hoverPopover?.hide(); } catch (e) {} } document.querySelectorAll('.popover.hover-popover').forEach((p) => p.remove()); return true; })()`);
+		await t.sleep(300);
+	};
+	return { J, mouse, moveTo, press, click, clickRevealed, E, ENTRY, POPOVER, FORM, RAW, SAVE, state, openHost, hover, cleanup };
+}
+
+/**
+ * SC-595 (G-S83): the block edit form opened from a hover preview with the real mouse. Returns the record; the scenario judges it.
+ * + then the pencil; a press and release in the raw box; typed text; a real click on Save; a new form closed by Escape; a real click outside.
+ */
+async function gs83FormTrial(t, mode) {
+	const K = gs83Kit(t);
+	const SRC = 'Lifecycle/gs83-src.md';
+	const HOST = 'Lifecycle/gs83-host.md';
+	const rec = { mode };
+	try {
+		await t.reset(SRC);
+		await t.reset(HOST);
+		const link = await K.openHost(HOST, mode);
+		rec.hover = await K.hover(link, SRC);
+		await K.moveTo(`${K.ENTRY(SRC)}.root`);
+		await t.sleep(250);
+		const pencil = `(${K.ENTRY(SRC)}.root.querySelector('.dse-chrome button[data-dse-chrome-item="edit"], button[aria-label^="Edit "]'))`;
+		await t.waitFor(`!!${pencil}`, `${mode}: the preview card has an Edit pencil`, 8000);
+		await K.click(`${K.ENTRY(SRC)}.root.querySelector('button[aria-label^="Increase"]')`);
+		await t.sleep(250);
+		await K.clickRevealed(pencil);
+		await t.waitFor(`!!${K.FORM}`, `${mode}: the edit form opened`, 10000);
+		await t.sleep(300);
+		rec.opened = await K.state();
+		// the click that used to hide the preview (and the form): a real press and release inside the raw box
+		await K.click(K.RAW);
+		await t.sleep(400);
+		rec.afterRawClick = await K.state();
+		await t.ev(`(() => { const ta = ${K.RAW}; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); return true; })()`);
+		await t.cdp.call('Input.insertText', { text: '\nnote: sc595' });
+		await t.sleep(200);
+		await K.click(K.RAW);
+		await t.sleep(300);
+		rec.typedKept = await t.ev(`!!${K.FORM} && ${K.RAW}.value.includes('note: sc595')`);
+		const mp = await t.mark();
+		await K.click(K.SAVE);
+		const t0 = Date.now();
+		while (Date.now() - t0 < 4000 && !t.read(SRC).includes('note: sc595')) await t.sleep(50);
+		await t.sleep(400);
+		rec.saved = t.read(SRC).includes('note: sc595');
+		rec.notices = await t.noticesSince(mp);
+		rec.afterSave = await K.state();
+		// a new form on the same preview: Escape closes the form, the preview stays
+		await t.waitFor(`!!(${K.ENTRY(SRC)})?.root.querySelector('.dse-chrome button[data-dse-chrome-item="edit"], button[aria-label^="Edit "]')`, `${mode}: the preview card was redrawn with its pencil`, 8000);
+		await K.clickRevealed(`(${K.ENTRY(SRC)}.root.querySelector('.dse-chrome button[data-dse-chrome-item="edit"], button[aria-label^="Edit "]'))`);
+		await t.waitFor(`!!${K.FORM}`, `${mode}: the second edit form opened`, 10000);
+		await t.sleep(400);
+		await t.key('Escape', 'Escape', 27);
+		await t.sleep(500);
+		rec.afterEscape = await K.state();
+		// a real click outside the preview closes it, as Obsidian always did
+		await K.click(`document.querySelector('.workspace-leaf.mod-active .view-header-title, .workspace-leaf.mod-active .view-header')`);
+		const t1 = Date.now();
+		while (Date.now() - t1 < 3000 && (await K.state()).popover) await t.sleep(100);
+		rec.afterOutside = await K.state();
+	} catch (e) {
+		rec.error = e.message;
+	} finally {
+		await K.cleanup();
+	}
+	return rec;
+}
+
+/** SC-595 (G-S83): the stamina modal ('stamina') or the tracker's Conditions modal ('conditions') opened from a preview by a real click: a real click on the title leaves it open, Escape closes it. */
+async function gs83ModalTrial(t, mode, kind) {
+	const K = gs83Kit(t);
+	const [src, host] = kind === 'stamina' ? ['Lifecycle/gs83-stam.md', 'Lifecycle/gs83-stam-host.md'] : ['Lifecycle/tracker.md', 'Lifecycle/gs83-trk-host.md'];
+	const MODAL = kind === 'stamina' ? `document.querySelector('.modal-container .dse-modal')` : `document.querySelector('.modal-container .dse-condal-modal')`;
+	const rec = { mode, kind };
+	try {
+		await t.reset(src);
+		await t.reset(host);
+		const link = await K.openHost(host, mode);
+		rec.hover = await K.hover(link, src);
+		await K.moveTo(`${K.ENTRY(src)}.root`);
+		await t.sleep(250);
+		const opener = kind === 'stamina' ? `${K.ENTRY(src)}.root.querySelector('[data-dse-control="stamina.bar"]')` : `${K.ENTRY(src)}.root.querySelectorAll('.dse-cond--add')[0]`;
+		await t.waitFor(`!!(${opener})`, `${mode} ${kind}: the opener is drawn`, 8000);
+		await K.clickRevealed(opener);
+		await t.waitFor(`!!${MODAL}`, `${mode} ${kind}: the modal opened`, 8000);
+		await t.sleep(300);
+		rec.opened = await K.state();
+		await K.click(`(${MODAL}).closest('.modal').querySelector('.modal-title') || (${MODAL})`);
+		await t.sleep(500);
+		rec.afterTitleClick = await K.state();
+		await t.key('Escape', 'Escape', 27);
+		await t.sleep(500);
+		rec.afterEscape = await K.state();
+	} catch (e) {
+		rec.error = e.message;
+	} finally {
+		await K.cleanup();
+	}
 	return rec;
 }
 
@@ -7147,6 +7347,66 @@ const SCENARIOS = [
 			} finally {
 				await t.ev(`${prefs}.set('authoringControls', false)`);
 				await t.ev(`document.getElementById('lc-gs77-notice')?.remove()`);
+				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
+				for (const rel of files) await t.reset(rel);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect(problems.length === 0, `${problems.join(' | ')} -- passed: ${outcomes.join('; ')}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${J(await t.errorsSince(m))}`);
+			return outcomes.join('; ');
+		},
+	},
+	{
+		// G-S83 (SC-595): a hover preview, the REAL mouse. A block edit form opened from it (+, then the pencil) survives a press and release inside it, typed text and a real click on Save land
+		// in the note (no Notice, the preview still shown), a real click outside closes the preview, Escape on a new form closes the form and leaves the preview; the stamina modal and the
+		// tracker's Conditions modal opened from a preview stay open under a real click on their title and close on Escape. Obsidian's page-preview popover hides itself on any click that
+		// reaches its window and is not inside it; a DseModal opened from a preview now stops its own clicks at its document (and puts its keymap scope back on top). It sits before G-S56,
+		// which runs last. The form and the stamina modal are tried in Reading view and Live Preview, the Conditions modal in Reading view.
+		id: 'G-S83',
+		async run(t) {
+			const m = await t.mark();
+			const J = JSON.stringify;
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			const problems = [];
+			const outcomes = [];
+			const files = ['Lifecycle/gs83-src.md', 'Lifecycle/gs83-host.md', 'Lifecycle/gs83-stam.md', 'Lifecycle/gs83-stam-host.md', 'Lifecycle/gs83-trk-host.md', 'Lifecycle/tracker.md'];
+			await t.ev(`(() => { if (!document.getElementById('lc-gs83-notice')) { const st = document.createElement('style'); st.id = 'lc-gs83-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
+			await t.ev(`${prefs}.set('authoringControls', true)`);
+			try {
+				for (const mode of ['rv', 'lp']) {
+					const r = await gs83FormTrial(t, mode);
+					const label = `form ${mode}`;
+					const bad = [];
+					if (r.error) bad.push(`error: ${r.error}`);
+					else {
+						if (!(r.opened.popover && r.opened.modal)) bad.push(`not open together after the pencil ${J(r.opened)}`);
+						if (!(r.afterRawClick.popover && r.afterRawClick.modal)) bad.push(`a real click in the raw box closed ${J(r.afterRawClick)}`);
+						if (!r.typedKept) bad.push('the typed text did not survive the clicks');
+						if (!r.saved) bad.push('a real click on Save did not put the edit in the note');
+						if (r.notices.length) bad.push(`Notice(s) after Save ${J(r.notices)}`);
+						if (!(r.afterSave.popover && !r.afterSave.modal)) bad.push(`after Save the form must be closed and the preview shown ${J(r.afterSave)}`);
+						if (!(r.afterEscape.popover && !r.afterEscape.modal)) bad.push(`Escape must close the form and leave the preview ${J(r.afterEscape)}`);
+						if (r.afterOutside.popover) bad.push('a real click outside did not close the preview');
+					}
+					if (bad.length) problems.push(`${label}: ${bad.join('; ')}`);
+					else outcomes.push(`${label} (${r.hover}): press+release in the raw box left preview and form open, typed text kept, Save landed (no Notice, preview shown), Escape closed a new form (preview shown), a click outside closed the preview`);
+				}
+				for (const [mode, kind] of [['rv', 'stamina'], ['lp', 'stamina'], ['rv', 'conditions']]) {
+					const r = await gs83ModalTrial(t, mode, kind);
+					const label = `${kind} modal ${mode}`;
+					const bad = [];
+					if (r.error) bad.push(`error: ${r.error}`);
+					else {
+						if (!(r.opened.popover && r.opened.modal)) bad.push(`not open together ${J(r.opened)}`);
+						if (!(r.afterTitleClick.popover && r.afterTitleClick.modal)) bad.push(`a real click on the title closed ${J(r.afterTitleClick)}`);
+						if (!(r.afterEscape.popover && !r.afterEscape.modal)) bad.push(`Escape must close the modal and leave the preview ${J(r.afterEscape)}`);
+					}
+					if (bad.length) problems.push(`${label}: ${bad.join('; ')}`);
+					else outcomes.push(`${label} (${r.hover}): a real click on the title left preview and modal open, Escape closed the modal (preview shown)`);
+				}
+			} finally {
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+				await t.ev(`document.getElementById('lc-gs83-notice')?.remove()`);
 				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
 				for (const rel of files) await t.reset(rel);
 				await t.open('Lifecycle/other.md');

@@ -4,7 +4,7 @@
 // initial focus to the first control; plus openManagedModal(owner, factory) which
 // registers the F1 §4.5 view-unload-closes-modal contract via owner.register().
 // Escape-close + focus trap stay Obsidian Modal defaults (not reimplemented here).
-import { DseModal, openManagedModal } from '../../../src/framework/kit/managedModal';
+import { DseModal, HOVER_SCOPE_REPUSH_MS, openManagedModal } from '../../../src/framework/kit/managedModal';
 import { stepper } from '../../../src/framework/kit/stepper';
 import { consumeEscapeAt } from '../../../src/framework/kit/escapeConsumer';
 import { attachObsidianKeymap, pressEscape } from '../_obsidianKeymap';
@@ -646,6 +646,8 @@ describe('SC-595: a modal opened from a hover preview', () => {
 	}
 
 	const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5));
+	/** Past the re-push deadline: the popover's own scope push (10-150 ms after the click) has happened by then. */
+	const pastRepush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, HOVER_SCOPE_REPUSH_MS + 50));
 
 	test('a click inside never reaches a window bubble listener (the popover\'s hide), a document listener still sees it', () => {
 		const { textarea, save } = openFrom(openerEl(true));
@@ -687,7 +689,7 @@ describe('SC-595: a modal opened from a hover preview', () => {
 		app.keymap.pushScope(later);
 
 		textarea.click();
-		await settle();
+		await pastRepush();
 
 		expect(windowClicks).toHaveBeenCalledTimes(1);
 		expect(app.keymap.top).toBe(later);
@@ -729,6 +731,9 @@ describe('SC-595: a modal opened from a hover preview', () => {
 			expect(app.keymap.top).toBe(popover);
 
 			await settle();
+			expect(app.keymap.top).toBe(popover); // not before the popover has had its 150 ms
+
+			await pastRepush();
 
 			expect(app.keymap.top).toBe(modal.scope);
 			modal.close();
@@ -742,7 +747,7 @@ describe('SC-595: a modal opened from a hover preview', () => {
 			app.keymap.pushScope(popover);
 
 			modal.close();
-			await settle();
+			await pastRepush();
 
 			expect(app.keymap.scopes).toEqual([popover]);
 		});
