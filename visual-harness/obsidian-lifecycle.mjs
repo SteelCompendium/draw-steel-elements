@@ -180,7 +180,7 @@
 // SC-598 appends G-S91 (57 scenarios in all; it sits after G-S87 and before G-S56, and runs in the fifth `--only` part): the stamina modal opened from a hover preview by a REAL press on the bar's "15" (the helper's 150 ms path), then a second real
 // press inside the modal within the helper's 150 ms: on the modal title, on the Apply input, or a double-click whose second press is queued while the modal is still opening (it lands on the backdrop). Obsidian's window-capture click listener used to
 // hide the preview 5 ms after that second press, and the modal with it. Now the preview stays in every trial (Reading view and Live Preview), never turns into a source editor, a title or input press keeps the modal as well, Escape closes only the
-// modal, Healing 3 + Apply writes `current_stamina: 18` with no Notice, with the pointer away for 1.2 s the preview is still shown and a real click outside closes it. The double-click's backdrop press closes the modal (as in a pane) and leaves the preview.
+// modal, Healing 3 + Apply writes `current_stamina: 18` with no Notice, with the pointer away for 1.2 s the preview is still shown and a real click outside closes it. The double-click's backdrop press closes the modal (as in a pane) and leaves the preview. A sixth trial opens the modal a SECOND time from the same, now focused, preview (open, Escape, open again) and presses the title within 150 ms: no source editor, the keyboard focus stays out of the preview, Escape closes only the modal (r3 measured the base switching the preview to source here).
 //
 // SC-480 appends G-S73 (53 scenarios before G-S77; it sits after G-S49 and before G-S56, which stays last, and runs in the fifth `--only` part with G-S59 and G-S49): a card write whose pin
 // cannot be placed because its block was DELETED from outside is never written into an identical twin. Click + on one of two identical counters (Reading view and Live Preview),
@@ -1697,7 +1697,7 @@ async function gs87Trial(t, mode, opener) {
 /**
  * SC-598 (G-S91): the stamina modal opened from a hover preview by a REAL press on the bar's number text (the click-to-edit helper then waits 150 ms before it focuses the preview), then a second real press inside the modal soon after.
  * `target`: 'title' (a press on the modal title), 'dblq' (a double-click whose second press is sent 10 ms after the first release, without waiting for it: it is queued while the modal opens, and lands on the backdrop) or 'apply' (a press on the
- * Apply input, then Healing 3 + a real click on Apply). The in-page gap between the two trusted clicks is recorded (`gap`). Returns a record; the scenario judges it.
+ * Apply input, then Healing 3 + a real click on Apply) or 'reopen' (open, wait past the helper's 150 ms, Escape, then open AGAIN from the now focused preview with the same press and press the title: the base turned the preview into a source editor, keyboard focus inside it behind the open window). The in-page gap between the two trusted clicks is recorded (`gap`). Returns a record; the scenario judges it.
  * Footguns (measured, SC-598 r1): the second press must come within 150 ms of the opening click, so it is sent as soon as its point is known (no sleep); the press point must hit the number's own element (G-S83 `stamtext`).
  */
 async function gs91Trial(t, mode, target) {
@@ -1708,7 +1708,7 @@ async function gs91Trial(t, mode, target) {
 	const OPENER = `(${K.ENTRY(src)}).root.querySelector('[data-dse-control="stamina.bar"]')`;
 	const rec = { mode, target };
 	const st = () =>
-		t.ev(`(() => { const pop = document.querySelector('.popover.hover-popover'); return { popover: !!pop, modal: !!${MODAL}, editor: !!pop && !!Array.from(pop.querySelectorAll('.markdown-source-view, .cm-editor')).find((e) => e.offsetParent !== null) }; })()`);
+		t.ev(`(() => { const pop = document.querySelector('.popover.hover-popover'); const a = document.activeElement; return { popover: !!pop, modal: !!${MODAL}, editor: !!pop && !!Array.from(pop.querySelectorAll('.markdown-source-view, .cm-editor')).find((e) => e.offsetParent !== null), focusInPreview: !!(a && a.closest('.hover-popover')) }; })()`);
 	try {
 		await t.reset(src);
 		await t.reset(host);
@@ -1724,6 +1724,18 @@ async function gs91Trial(t, mode, target) {
 		rec.hit = `"${pt.text}" on ${pt.hit}`;
 		await K.mouse('mouseMoved', pt.x, pt.y);
 		await t.sleep(200);
+		if (target === 'reopen') {
+			// the first open: a real press on the number, past the helper's 150 ms (the preview is focused, `.is-editing`), then Escape closes only the modal
+			await K.press(pt);
+			await t.waitFor(`!!${MODAL}`, `${mode} ${target}: the first open did not open the modal`, 8000);
+			await t.sleep(450);
+			rec.firstOpen = await st();
+			await t.key('Escape', 'Escape', 27);
+			await t.sleep(500);
+			rec.afterFirstClose = await st();
+			await K.mouse('mouseMoved', pt.x, pt.y);
+			await t.sleep(200);
+		}
 		// every click at the window, to measure the gap between the two trusted ones in the page's own clock
 		await t.ev(`(() => { window.__gs91 = []; if (!window.__gs91l) { window.__gs91l = true; window.addEventListener('click', (e) => window.__gs91?.push({ t: performance.now(), trusted: e.isTrusted }), true); } return true; })()`);
 		const b1 = { button: 'left', clickCount: 1 };
@@ -1741,7 +1753,7 @@ async function gs91Trial(t, mode, target) {
 		} else {
 			await K.press(pt);
 			const p2 = await t.ev(
-				target === 'title'
+				target === 'title' || target === 'reopen'
 					? `(() => { const el = document.querySelector('.modal-container .modal-title'); if (!el) return null; const r = el.getBoundingClientRect(); return { x: Math.round(r.left + Math.min(r.width / 2, 40)), y: Math.round(r.top + r.height / 2) }; })()`
 					: `(() => { const el = document.querySelector('.modal-container [data-dse-control="sedit.apply-amount"]'); if (!el) return null; const r = el.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`,
 			);
@@ -1766,7 +1778,7 @@ async function gs91Trial(t, mode, target) {
 			rec.saved = /current_stamina: 18/.test(t.read(src));
 			rec.notices = await t.noticesSince(m);
 			rec.afterApply = await st();
-		} else if (target === 'title' && rec.at700.modal) {
+		} else if ((target === 'title' || target === 'reopen') && rec.at700.modal) {
 			await t.key('Escape', 'Escape', 27);
 			await t.sleep(500);
 			rec.afterEscape = await st();
@@ -7717,8 +7729,8 @@ const SCENARIOS = [
 		// G-S91 (SC-598): a hover preview, the stamina modal opened from it by a REAL press on the bar's "15", then a second real press inside the modal within the 150 ms Obsidian's click-to-edit helper waits before it focuses the preview. Obsidian's window-capture click listener hid
 		// the preview 5 ms after that second press (a press on the title, on the Apply input, the second press of a double-click) and the modal closed with it. The opening click is now default-prevented and the preview gets one synthetic click from the anchor, so it is focused after 10 ms.
 		// Per trial: the preview is still shown 700 ms after the second press and is never a source editor; title: the modal is open too, Escape closes only the modal; apply: Healing 3 + Apply writes current_stamina: 18 with no Notice (modal closed, preview shown); dblq: the
-		// backdrop press closes the modal and leaves the preview (the window closes on a double-click, as in a pane). Then the pointer away for 1.2 s keeps the preview and a real click outside closes it. Five trials: Reading view and Live Preview title, Reading view and Live Preview
-		// double-click, Reading view apply. Never put a bracketed ticket id in a title here. It sits before G-S56, which runs last.
+		// backdrop press closes the modal and leaves the preview (the window closes on a double-click, as in a pane). Then the pointer away for 1.2 s keeps the preview and a real click outside closes it. Six trials: Reading view and Live Preview title, Reading view and Live Preview
+		// double-click, Reading view apply, and Reading view reopen (open, Escape, open again from the focused preview, title press within 150 ms: no source editor, focus not in the preview, Escape closes only the modal). Never put a bracketed ticket id in a title here. It sits before G-S56, which runs last.
 		id: 'G-S91',
 		async run(t) {
 			const m = await t.mark();
@@ -7730,7 +7742,7 @@ const SCENARIOS = [
 			await t.ev(`(() => { if (!document.getElementById('lc-gs83-notice')) { const st = document.createElement('style'); st.id = 'lc-gs83-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
 			await t.ev(`${prefs}.set('authoringControls', true)`);
 			try {
-				for (const [mode, target] of [['rv', 'title'], ['lp', 'title'], ['rv', 'dblq'], ['lp', 'dblq'], ['rv', 'apply']]) {
+				for (const [mode, target] of [['rv', 'title'], ['lp', 'title'], ['rv', 'dblq'], ['lp', 'dblq'], ['rv', 'apply'], ['rv', 'reopen']]) {
 					const r = await gs91Trial(t, mode, target);
 					const label = `${target} ${mode}`;
 					const bad = [];
@@ -7741,7 +7753,12 @@ const SCENARIOS = [
 						else {
 							if (r.at700.editor) bad.push(`the preview turned into a source editor ${J(r.at700)}`);
 							if (target !== 'dblq' && !r.at700.modal) bad.push(`700 ms after the second press the modal was gone ${J(r.at700)}`);
-							if (target === 'title' && !(r.afterEscape.popover && !r.afterEscape.modal)) bad.push(`Escape must close only the modal ${J(r.afterEscape)}`);
+							if ((target === 'title' || target === 'reopen') && !(r.afterEscape.popover && !r.afterEscape.modal)) bad.push(`Escape must close only the modal ${J(r.afterEscape)}`);
+							if (target === 'reopen') {
+								if (!(r.firstOpen.popover && r.firstOpen.modal)) bad.push(`the first open must leave the preview and the modal open ${J(r.firstOpen)}`);
+								if (!(r.afterFirstClose.popover && !r.afterFirstClose.modal)) bad.push(`Escape after the first open must close only the modal ${J(r.afterFirstClose)}`);
+								if (r.at700.focusInPreview) bad.push(`the keyboard focus moved into the preview behind the open modal ${J(r.at700)}`);
+							}
 							if (target === 'dblq' && r.at700.modal) bad.push(`the backdrop press of the double-click should have closed the modal ${J(r.at700)}`);
 							if (target === 'apply') {
 								if (!r.saved) bad.push('Healing 3 + a real click on Apply did not put current_stamina: 18 in the note');
@@ -7756,7 +7773,7 @@ const SCENARIOS = [
 					else
 						outcomes.push(
 							`${label} (${r.hover}; press on ${r.hit}, second press ${r.gap} ms later${r.p2Hit ? ` on ${r.p2Hit}` : ''}): the preview stayed, no source editor` +
-								(target === 'title' ? ', the modal stayed, Escape closed only the modal' : target === 'apply' ? ', Healing 3 + Apply wrote current_stamina: 18 (no Notice)' : ', the backdrop press closed the modal and left the preview') +
+								(target === 'title' ? ', the modal stayed, Escape closed only the modal' : target === 'reopen' ? ', opened a second time from the focused preview (open, Escape, open again) the modal stayed, the focus stayed out of the preview, Escape closed only the modal' : target === 'apply' ? ', Healing 3 + Apply wrote current_stamina: 18 (no Notice)' : ', the backdrop press closed the modal and left the preview') +
 								', the preview stayed with the pointer away, a click outside closed it',
 						);
 				}
