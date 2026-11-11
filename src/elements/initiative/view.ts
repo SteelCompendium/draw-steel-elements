@@ -598,7 +598,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				// SC-578: `amount` is the change the pool made (0 reads "0", not "+0"); `requested` is
 				// only there when the pool capped the change at 0.
 				const sign = entry.amount > 0 ? '+' : '';
-				const capped = typeof entry.requested === 'number' ? ` (${entry.requested}, capped at 0)` : '';
+				const capped = typeof entry.requested === 'number' && entry.requested < entry.amount ? ` (${entry.requested}, capped at 0)` : '';
 				list.createEl('li', {
 					cls: 'dse-init__malice-log-entry',
 					text: `R${entry.round}: ${sign}${entry.amount} — ${entry.label}${capped}`,

@@ -504,8 +504,8 @@ export function addToMalicePool(malice: Malice, amount: number): void {
  * SC-578: the ONE path for a Malice change that is logged — Advance round's `round_gain` and the
  * quick-add both call this, so the two cannot drift. Adds `requested` to the pool (floored at 0, via
  * `addToMalicePool`) and appends a log entry whose `amount` is the change the pool ACTUALLY made
- * (`maliceValueOf` after - before; so the log always adds up to the pool's movement). When that
- * differs from `requested` (the pool stopped at 0), the entry also stores `requested`; an entry that
+ * (`maliceValueOf` after - before; so each logged entry records what the pool actually did). When
+ * the pool stopped at 0 (`before + requested < 0`), the entry also stores `requested`; an entry that
  * was not capped has NO `requested` key. Key order is `round, amount, label, requested` (the order
  * the note is written in). A change that applies 0 (e.g. -5 from 0) is still logged, so the log says
  * why the pool did not move. Returns the entry it appended.
@@ -519,7 +519,8 @@ export function applyMaliceChange(
 	addToMalicePool(malice, requested);
 	const amount = maliceValueOf(malice) - before;
 	const entry: MaliceLogEntry = { round: event.round, amount, label: event.label };
-	if (amount !== requested) entry.requested = requested;
+	// Capped = the pool really stopped at 0 (a fractional amount that merely differs by float noise is not).
+	if (before + requested < 0) entry.requested = requested;
 	appendMaliceLogEntry(malice, entry);
 	return entry;
 }

@@ -526,10 +526,11 @@ export function validateSquad(group: EnemyGroup): void {
  *  trigger-based gain (quick-add, spec §3.3) — so the table can see where Malice went.
  *  `amount` is SIGNED and is the change the pool ACTUALLY made (a spend is negative, a gain
  *  positive; the pool never goes below 0, so a spend from a low pool is smaller than asked,
- *  and one from 0 is 0): the log always adds up to the pool's movement (SC-578).
+ *  and one from 0 is 0), so each logged entry records what the pool actually did (SC-578).
+ *  The −/+ stepper changes Malice without a log entry, so the log is not a running total.
  *  `requested` is the amount that was asked for (the typed quick-add amount, or the
- *  configured `round_gain`), and is present ONLY when it differs from `amount` — i.e. the
- *  pool capped the change at 0. An entry that was not capped has no `requested` key. */
+ *  configured `round_gain`), and is present ONLY when the pool stopped at 0 and applied
+ *  less than that. An entry that was not capped has no `requested` key. */
 export interface MaliceLogEntry {
     round: number;
     amount: number;
