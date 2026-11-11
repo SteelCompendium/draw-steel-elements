@@ -765,11 +765,11 @@ describe('SC-597: the Stamina modal opened by the keyboard from a bar in a hover
 		const containerEl = popover.appendChild(document.createElement('div'));
 		containerEl.addEventListener('click', (evt) => {
 			clicks.push(evt);
-			setTimeout(() => (deps.app as App).keymap.pushScope(popoverScope), 10);
+			setTimeout(() => (deps.app as unknown as App).keymap.pushScope(popoverScope), 10);
 		});
 		await new ElementPipeline(deps).run(staminaBarElement, BASIC_YAML, makeHost({ containerEl }));
 		const bar = containerEl.querySelector('.dse-stamina') as HTMLElement;
-		return { app: deps.app as App, containerEl, bar };
+		return { app: deps.app as unknown as App, containerEl, bar };
 	}
 	const press = (el: HTMLElement, key: string, init: KeyboardEventInit = {}) => {
 		const evt = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
