@@ -85,12 +85,20 @@ export const iconChoices = (): Promise<string[]> =>
 export const focusedOption = (): Promise<{ ctl: string | null; label: string | null }> =>
 	dse.page(`({ ctl: document.activeElement?.getAttribute('data-dse-control') ?? null, label: document.activeElement?.getAttribute('aria-label') ?? null })`);
 
-/** One condition of the hero (or of Ogre #1, `creature`) as the note holds it: the parsed YAML entry at `index`. */
-export async function noteCondition(note: string, row: Row, index: number): Promise<Record<string, unknown> | string> {
+/** One condition of the hero (or of Ogre #1, `creature`) exactly as the note holds it: the parsed YAML entry at `index`, an
+ *  object, or a plain string when the note writes the condition as a plain name (SC-592). */
+export async function noteConditionRaw(note: string, row: Row, index: number): Promise<Record<string, unknown> | string> {
 	const block = (await dse.expectNoteBlock(note, INIT).value()) as {
 		heroes: Array<{ conditions?: Array<Record<string, unknown> | string> }>;
 		enemy_groups: Array<{ creatures: Array<{ instances: Array<{ conditions?: Array<Record<string, unknown> | string> }> }> }>;
 	};
 	const list = row === 'hero' ? block.heroes[0].conditions : block.enemy_groups[0].creatures[0].instances[0].conditions;
 	return list![index];
+}
+
+/** `noteConditionRaw` for a condition the note writes as an object (it throws on a plain name). */
+export async function noteCondition(note: string, row: Row, index: number): Promise<Record<string, unknown>> {
+	const entry = await noteConditionRaw(note, row, index);
+	if (typeof entry === 'string') throw new Error(`noteCondition(${note}, ${row}, ${index}): the note writes "${entry}" as a plain name, not an object`);
+	return entry;
 }

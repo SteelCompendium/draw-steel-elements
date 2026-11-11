@@ -4,7 +4,7 @@
 // The pilot specs (conditions-pick-focus, conditions-dropdown-click) cover focus after a pick and the click-away close.
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
-import { CONDITIONS, INIT, focusedOption, iconChoices, modalRows, noteCondition, openConditionsModal, openFrom, pressedIn, pressedSwatches } from '../../driver/conditions';
+import { CONDITIONS, INIT, focusedOption, iconChoices, modalRows, noteCondition, noteConditionRaw, openConditionsModal, openFrom, pressedIn, pressedSwatches } from '../../driver/conditions';
 import type { Row } from '../../driver/conditions';
 
 const [BLEEDING, DAZED, HEXED, SLOWED] = [0, 1, 2, 3];
@@ -135,7 +135,7 @@ describe('conditions-modal: the duration chips', () => {
 		expect(await pressedIn('Duration')).toEqual(['Save Ends']);
 		await pickOnce(modal, 'cond.duration', DURATION.eoe);
 		expect(await noteCondition(CONDITIONS, 'creature', 1)).toEqual({ key: 'prone', duration: 'eoe' });
-		expect(await noteCondition(CONDITIONS, 'creature', 0)).toEqual('grabbed'); // written as a plain name, still one
+		expect(await noteConditionRaw(CONDITIONS, 'creature', 0)).toEqual('grabbed'); // written as a plain name, still one
 		await dse.closeModals();
 	});
 });
