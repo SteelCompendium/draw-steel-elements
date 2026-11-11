@@ -5,6 +5,7 @@ import { dse } from './dse';
 
 export const SQUAD = 'Initiative/squad.md'; // five Goblins of 4 Stamina (pool 20), nobody hurt
 export const HURT = 'Initiative/squad-hurt.md'; // pool 10, Goblins #1 and #2 dead, #3 grabbed + dazed (selected)
+export const CUSTOM = 'Initiative/squad-custom.md'; // the HURT squad, #3 carrying a custom condition and a duplicate (SC-574)
 export const EMPTY = 'Initiative/squad-empty.md'; // pool 0 with all five Goblins still alive (SC-573)
 export const INIT = 'ds-initiative';
 
@@ -65,3 +66,7 @@ export const cellText = (root: Scope, key: string): Promise<string> =>
 /** The conditions the open pool modal's icons remove, top to bottom ("Grabbed", "Dazed"): each icon's accessible name is "Remove <condition>" (SC-572). */
 export const conditionNames = (): Promise<string[]> =>
 	dse.page<string[]>(`Array.from(document.querySelectorAll('.modal-container .dse-modal [data-dse-control="pool.condition"]')).map((i) => (i.getAttribute('aria-label') ?? '').replace(/^Remove /, ''))`);
+
+/** The Lucide glyph each open pool modal condition icon draws, top to bottom ("circle-dashed" for a custom condition; SC-574): the `lucide-<name>` class Obsidian's `setIcon` puts on the icon's svg. */
+export const conditionGlyphs = (): Promise<string[]> =>
+	dse.page<string[]>(`Array.from(document.querySelectorAll('.modal-container .dse-modal [data-dse-control="pool.condition"]')).map((i) => Array.from(i.querySelector('svg')?.classList ?? []).find((c) => c.startsWith('lucide-'))?.slice(7) ?? '')`);

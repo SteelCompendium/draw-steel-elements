@@ -114,6 +114,7 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Initiative/tracker.md` | `ds-initiative`: hero Alice Alpha 30/30, three Ogres 60/60 (cells `0-1`..`0-3`) |
   | `Initiative/squad.md` | `ds-initiative`: hero Alice Alpha 30/30, one minion squad "Goblin Squad" of five Goblins with 4 Stamina each (pool 20, cells `0-1`..`0-5`; SC-435) |
   | `Initiative/squad-hurt.md` | the same squad at pool 10 with Goblins #1 and #2 dead, #3 (selected) grabbed and dazed (`- grabbed` is rewritten as `{ key: grabbed }` on the first write; SC-435) |
+  | `Initiative/squad-custom.md` | the `squad-hurt.md` squad, but Goblin #3 carries `on-fire` (a custom key), `grabbed` twice and `dazed`, all plain strings (SC-574) |
   | `Initiative/squad-empty.md` | the same squad with its pool at 0 and all five Goblins still alive (a relieved captain or a hand-edited pool; SC-573) |
   | `Initiative/hurt.md` | `ds-initiative`: hero Alice Alpha 30/30, Ogre #1 at 20/60 and Ogre #2 at 60/60 (a hurt creature, for Spend Recovery) |
   | `Initiative/rich.md` | `ds-initiative` with every variant (SC-437): a title ("Warren Ambush"), round 2, heroes Alice (grabbed) and Bruno (turn taken), Ogres #1-#3 (#1 dazed) in a grid group, a single-creature "Troll Boss" group, Malice 4 with `round_gain: 2` and one log entry |

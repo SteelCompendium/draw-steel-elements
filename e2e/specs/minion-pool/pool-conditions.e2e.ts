@@ -3,7 +3,7 @@
 // is grabbed and dazed; pool 10 with #1 and #2 dead.
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
-import { applyPoolAndWrite, conditionNames, expectPoolApply, HURT, INIT, openPoolModal } from '../../driver/pool';
+import { applyPoolAndWrite, conditionGlyphs, conditionNames, CUSTOM, expectPoolApply, HURT, INIT, openPoolModal } from '../../driver/pool';
 
 const instance3 = (extra: Record<string, unknown>) => ({ enemy_groups: [{ name: 'Goblin Squad', creatures: [{ instances: [{ id: 1 }, { id: 2 }, { id: 3, ...extra }, { id: 4 }, { id: 5 }] }] }] });
 
@@ -46,6 +46,40 @@ describe('minion pool: condition icons', () => {
 		await expectPoolApply(modal, 'Deal 1 damage'); // nothing staged was lost
 		await dse.expectNoteBlock(HURT, INIT).toMatchObject(instance3({ conditions: [] }));
 		await dse.expectNoWrite(HURT, () => dse.click(modal.control('modal.close')));
+	});
+});
+
+// SC-574: a custom condition (a key Draw Steel does not know) is drawn like any other, with the initiative tracker's
+// fallback glyph, so it can be seen and removed here; and a click removes the ONE entry it is on, not every copy of a
+// repeated plain-text condition. Initiative/squad-custom.md: Goblin #3 has on-fire, grabbed, grabbed, dazed.
+describe('minion pool: custom and repeated conditions', () => {
+	it('[POOL-C07] a custom condition shows the fallback glyph under a readable name, and a click removes it and saves at once', async () => {
+		const { modal } = await openPoolModal(CUSTOM);
+		expect(await conditionNames()).toEqual(['On Fire', 'Grabbed', 'Grabbed', 'Dazed']);
+		const glyphs = await conditionGlyphs();
+		expect(glyphs[0]).toBe('circle-dashed'); // the tracker's fallback for a key it does not know
+		expect(glyphs[1]).not.toBe('circle-dashed'); // a built-in condition keeps its own glyph
+		await expect(modal.control('pool.condition', { nth: 0 })).toHaveElementProperty('tagName', 'BUTTON');
+		const w = await dse.waitForWrite(CUSTOM, () => dse.click(modal.control('pool.condition', { nth: 0 })));
+		expect(w.count).toBe(1);
+		await expect(modal.root).toBeExisting();
+		expect(await conditionNames()).toEqual(['Grabbed', 'Grabbed', 'Dazed']);
+		await dse.expectNoteBlock(CUSTOM, INIT).toMatchObject(instance3({ conditions: [{ key: 'grabbed' }, { key: 'grabbed' }, { key: 'dazed' }] }));
+		await dse.expectNoWrite(CUSTOM, () => dse.click(modal.control('modal.close')));
+	});
+
+	it('[POOL-C08] one click on a condition that appears twice as plain text removes that one copy, and the second copy removes the second', async () => {
+		const { modal } = await openPoolModal(CUSTOM);
+		expect(await conditionNames()).toEqual(['On Fire', 'Grabbed', 'Grabbed', 'Dazed']);
+		const first = await dse.waitForWrite(CUSTOM, () => dse.click(modal.control('pool.condition', { nth: 2 }))); // the SECOND grabbed
+		expect(first.count).toBe(1);
+		expect(await conditionNames()).toEqual(['On Fire', 'Grabbed', 'Dazed']);
+		await dse.expectNoteBlock(CUSTOM, INIT).toMatchObject(instance3({ conditions: [{ key: 'on-fire' }, { key: 'grabbed' }, { key: 'dazed' }] }));
+		const second = await dse.waitForWrite(CUSTOM, () => dse.click(modal.control('pool.condition', { nth: 1 }))); // the remaining grabbed
+		expect(second.count).toBe(1);
+		expect(await conditionNames()).toEqual(['On Fire', 'Dazed']);
+		await dse.expectNoteBlock(CUSTOM, INIT).toMatchObject(instance3({ conditions: [{ key: 'on-fire' }, { key: 'dazed' }] }));
+		await dse.expectNoWrite(CUSTOM, () => dse.click(modal.control('modal.close')));
 	});
 });
 
