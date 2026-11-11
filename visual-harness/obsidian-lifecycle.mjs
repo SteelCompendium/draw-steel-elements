@@ -517,6 +517,26 @@ Object.assign(FIXTURES, {
 	});
 }
 
+// SC-584 (G-S64 (zk)-(zn), (xc)-(zc)): hover previews opened right after a + on their card (a short note with ONE counter; a long note with a different counter above its `## Tracker`;
+// a short note whose upper counter already holds, in the order the plugin writes its keys (a + re-serializes the block that way), the body the lower one gets from the +), and a block
+// embed of a CALLOUT that has text after its counter and an identical callout above it (its `^id` stands after a blank line, under the callout's last line, not under the counter's fence).
+{
+	const fillN = (n, p) => Array.from({ length: n }, (_, i) => `${p} ${i}`).join('\n\n');
+	const CAL_AFTER = (value, name) => `${QUOTED(['[!note] Camp'], value, name)}\n> after text`;
+	Object.assign(FIXTURES, {
+		'Lifecycle/gs584-hov-short.md': `# gs584 hov short\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nEND\n`,
+		'Lifecycle/gs584-hov-short-host.md': `# gs584 hov short host\n\nsee [[gs584-hov-short]]\n`,
+		// a long note whose `## Tracker` is hovered; the counter above it holds another value, so it is no twin of the Tracker's before or after the +
+		'Lifecycle/gs584-hov-head-src.md': `# gs584 hov head src\n\n${COUNTER(3, 'Twin')}\n\n${fillN(120, 'above')}\n\n## Tracker\n\n${COUNTER(5, 'Twin')}\n\n## After\n\n${fillN(120, 'below')}\n`,
+		'Lifecycle/gs584-hov-head-host.md': `# gs584 hov head host\n\nsee [[gs584-hov-head-src#Tracker]]\n`,
+		// the upper counter already holds 6, its keys in the plugin's own order: after the + on the lower one (re-serialized in that order) both blocks read the same
+		'Lifecycle/gs584-hov-twin.md': `# gs584 hov twin\n\nTOP\n\n${fence('ds-counter', ['max_value: 20', 'current_value: 6', 'min_value: 0', 'name: Twin'])}\n\nGAP\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`,
+		'Lifecycle/gs584-hov-twin-host.md': `# gs584 hov twin host\n\nsee [[gs584-hov-twin]]\n`,
+		'Lifecycle/gs584-cal-src.md': `# gs584 cal src\n\nTOP\n\n${CAL_AFTER(5, 'Twin')}\n\nmid\n\n${CAL_AFTER(5, 'Twin')}\n\n^gs584cal\n\nend\n`,
+		'Lifecycle/gs584-cal-host.md': `# gs584 cal host\n\n![[gs584-cal-src#^gs584cal]]\n\nafter\n`,
+	});
+}
+
 // SC-480 (G-S73): two identical counters (or, for the no-twin control, a counter and a different one) with prose between them (never only blank lines: the line diff cannot tell which of
 // two twins separated by blank lines was deleted, SC-556). One note per trial. `x` is the clicked counter's value, `ed` the note after the outside edit.
 const GS73_PAR = (tag, n) => Array.from({ length: n }, (_, i) => `${tag} ${i}`).join('\n\n');
@@ -4740,7 +4760,7 @@ const SCENARIOS = [
 			const P3 = 'Lifecycle/twin-triplets.md';
 			const UT = 'Lifecycle/form-pin-unterminated.md';
 			const P3D = 'Lifecycle/form-strict-triplets.md';
-			const ALL = [C3, C2, C4, P2, P3, UT, P3D, 'Lifecycle/gs64-emb-src.md', 'Lifecycle/gs64-emb-host.md', 'Lifecycle/gs64-embb-src.md', 'Lifecycle/gs64-embb-host.md', 'Lifecycle/gs64-hov-host.md'];
+			const ALL = [C3, C2, C4, P2, P3, UT, P3D, 'Lifecycle/gs64-emb-src.md', 'Lifecycle/gs64-emb-host.md', 'Lifecycle/gs64-embb-src.md', 'Lifecycle/gs64-embb-host.md', 'Lifecycle/gs64-hov-host.md', 'Lifecycle/gs584-hov-short.md', 'Lifecycle/gs584-hov-short-host.md', 'Lifecycle/gs584-hov-head-host.md', 'Lifecycle/gs584-hov-head-src.md', 'Lifecycle/gs584-hov-twin.md', 'Lifecycle/gs584-hov-twin-host.md', 'Lifecycle/gs584-cal-src.md', 'Lifecycle/gs584-cal-host.md'];
 			await t.ev(`(() => { if (!document.getElementById('lc-gs64-notice')) { const st = document.createElement('style'); st.id = 'lc-gs64-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
 			await t.ev(`(${gs64Page.toString()})()`);
 			const A = 'window.__gs64.A';
@@ -5154,8 +5174,8 @@ const SCENARIOS = [
 			 * 'edit' = the embedded block is edited from outside while the form is open: nothing is written into the twin, and if the form is still open Save writes nothing and says why.
 			 */
 			const embedCase = async (label, how, mode, kind = 'heading') => {
-				const SRC = kind === 'block' ? 'Lifecycle/gs64-embb-src.md' : 'Lifecycle/gs64-emb-src.md';
-				const HOST = kind === 'block' ? 'Lifecycle/gs64-embb-host.md' : 'Lifecycle/gs64-emb-host.md';
+				const SRC = kind === 'callout' ? 'Lifecycle/gs584-cal-src.md' : kind === 'block' ? 'Lifecycle/gs64-embb-src.md' : 'Lifecycle/gs64-emb-src.md';
+				const HOST = kind === 'callout' ? 'Lifecycle/gs584-cal-host.md' : kind === 'block' ? 'Lifecycle/gs64-embb-host.md' : 'Lifecycle/gs64-emb-host.md';
 				const mk = await t.mark();
 				try {
 					await t.reset(SRC);
@@ -5179,7 +5199,7 @@ const SCENARIOS = [
 					await t.sleep(300); // the pin's rebase (one cachedRead) is long done
 					await typeRename(label, 'Twin', 'Edited');
 					const before = t.read(SRC);
-					const tracker = kind === 'block' ? before.lastIndexOf('name: Twin') : before.indexOf('name: Twin', before.indexOf('## Tracker')); // the embedded block's name line
+					const tracker = kind !== 'heading' ? before.lastIndexOf('name: Twin') : before.indexOf('name: Twin', before.indexOf('## Tracker')); // the embedded block's name line
 					const blockEnd = before.indexOf('```', tracker);
 					if (how === 'save' || how === 'plus') {
 						await clickSave(label);
@@ -5261,6 +5281,89 @@ const SCENARIOS = [
 					await t.ev(`(() => { document.querySelectorAll('.popover.hover-popover').forEach((p) => p.remove()); return true; })()`);
 				}
 			};
+			/**
+			 * (zk)-(zn) SC-584: a form on the card of a HOVER PREVIEW (no `src`, so its pin starts partial) opened with + on the card and at once its pencil. The + is on disk when the form opens
+			 * (value 6) but the section text Obsidian reports for the preview is still the old one (5), so neither the link nor the text can place the pin: only the body the host knows, and
+			 * only when exactly one block of the note holds it as the form opens. `kind`: 'short' = a note with ONE counter: Save lands in it and nothing else changes; 'heading' = a hover of
+			 * `[[long note#Tracker]]` whose note has another counter (value 3) above the section: Save lands in the Tracker counter, the other is untouched; 'twin' = the upper counter
+			 * already holds 6, so after the + on the LOWER one two blocks hold the body when the form opens: Save writes nothing and shows the Notice (the note keeps the +); 'edit' = as
+			 * 'short', then ONE outside write edits the form's own block AND appends a block with the old body: a Save that searched the note for the body would write that block; here nothing is
+			 * written into it (if the preview and its form are still there, Save writes nothing and shows the Notice).
+			 */
+			const hoverPlusCase = async (label, kind) => {
+				const SRC = kind === 'heading' ? 'Lifecycle/gs584-hov-head-src.md' : kind === 'twin' ? 'Lifecycle/gs584-hov-twin.md' : 'Lifecycle/gs584-hov-short.md';
+				const HOST = kind === 'heading' ? 'Lifecycle/gs584-hov-head-host.md' : kind === 'twin' ? 'Lifecycle/gs584-hov-twin-host.md' : 'Lifecycle/gs584-hov-short-host.md';
+				const base = SRC.replace(/^Lifecycle\//, '').replace(/\.md$/, '');
+				const valuesOf = (rel) => (t.read(rel).match(/^current_value: (\d+)$/gm) ?? []).map((x) => Number(x.replace('current_value: ', '')));
+				const noticeText = `Draw Steel Elements: a change to a block in ${base} was not saved — the block changed on disk first.`;
+				const mk = await t.mark();
+				try {
+					await t.reset(SRC);
+					await t.reset(HOST);
+					await t.ev(`(async () => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); window.__gs64.A = app.workspace.getLeavesOfType('markdown')[0] ?? app.workspace.getMostRecentLeaf(); window.__gs64.B = null; return true; })()`);
+					await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); })()`);
+					await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: ${J(HOST)}, mode: 'preview' }, active: true }); })()`);
+					await t.waitFor(`!!document.querySelector('.workspace-leaf.mod-active a.internal-link')`, `${label}: the link is drawn`);
+					await t.ev(`(() => { const a = document.querySelector('.workspace-leaf.mod-active a.internal-link'); const leaf = app.workspace.getMostRecentLeaf(); app.workspace.trigger('hover-link', { event: new MouseEvent('mouseover', { ctrlKey: true, metaKey: true, clientX: 200, clientY: 200 }), source: 'preview', hoverParent: leaf.view, targetEl: a, linktext: a.getAttribute('data-href'), sourcePath: ${J(HOST)} }); return true; })()`);
+					const E = `app.plugins.plugins['draw-steel-elements'].viewRegistry.liveEntries().filter((e) => e.host.sourcePath === ${J(SRC)} && e.root.isConnected && e.root.closest('.hover-popover'))`;
+					await t.waitFor(`${E}.length >= ${kind === 'twin' ? 2 : 1}`, `${label}: every card of the hover preview is drawn`, 15000);
+					// a hover preview hides itself about half a second after the pointer left it (measured: 3 samples in 750 ms), and its form closes with it: hold it open (restored in the cleanup below)
+					await t.ev(`(() => { const hp = app.workspace.getMostRecentLeaf().view.hoverPopover; window.__gs584Hide = hp.hide; hp.hide = () => {}; return true; })()`);
+					// the card the + is pressed on: the lowest one on screen (the only one, except in 'twin')
+					const ENTRY = `(() => { const es = ${E}; return es.reduce((a, b) => (a.root.getBoundingClientRect().top > b.root.getBoundingClientRect().top ? a : b)); })()`;
+					t.expect(await t.ev(`!(${ENTRY}).host.containerEl.closest('.internal-embed[src], .markdown-embed[src]')`), `${label}: the preview card has a src after all (this phase is about the shape that has none)`);
+					const pencil = `((${ENTRY}).root.querySelector('.dse-chrome button[data-dse-chrome-item="edit"], button[aria-label^="Edit "]'))`;
+					await t.waitFor(`!!${pencil}`, `${label}: the Edit pencil is drawn in the preview`);
+					const before = t.read(SRC);
+					await t.ev(`(${ENTRY}).root.querySelector('button[aria-label^="Increase"]').click()`);
+					await t.ev(`${pencil}.click()`);
+					await t.waitFor(`!!document.querySelector('.modal-container .dse-modal .dse-form__preview')`, `${label}: the edit form opened`, 10000);
+					await t.sleep(300); // the pin's open-time read of the note (one cachedRead) is long done
+					const afterPlus = t.read(SRC);
+					t.expect(afterPlus !== before && valuesOf(SRC).includes(6), `${label}: the + is not in the note when the form opened: ${J(valuesOf(SRC))}`);
+					await typeRename(label, 'Twin', 'Edited');
+					if (kind === 'short' || kind === 'heading') {
+						await clickSave(label);
+						await waitDisk(label, SRC, () => t.read(SRC).includes('name: Edited'), 'the edit never reached the note (Save refused or written elsewhere)');
+						t.expect(valuesOf(SRC).join() === (kind === 'short' ? '6' : '3,6'), `${label}: the counters hold ${J(valuesOf(SRC))}`);
+						t.expect(namesOf(SRC).join() === (kind === 'short' ? 'Edited' : 'Twin,Edited'), `${label}: the names are ${J(namesOf(SRC))} (the block outside the hover must stay Twin)`);
+						t.expect(outsideBlocks(t.read(SRC)) === outsideBlocks(before), `${label}: the note's text outside the blocks changed`);
+						await noNotices(label, mk);
+						outcomes.push(`${label}: the hover card has no src; after + and the pencil (section text stale, the note holds the +) Save landed in its block (values ${J(valuesOf(SRC))}, names ${J(namesOf(SRC))}), no Notice`);
+					} else if (kind === 'twin') {
+						const mp = await t.mark();
+						await t.ev(`(${SAVE}).click()`);
+						await t.waitFor(`__lc.notices.some((x) => x.n > ${mp})`, `${label}: Save said nothing`, 10000);
+						const ns = await t.noticesSince(mp);
+						t.expect(ns.length === 1 && ns[0] === noticeText, `${label}: expected the one Notice ${J(noticeText)}, got ${J(ns)}`);
+						t.expect(t.read(SRC) === afterPlus && !t.read(SRC).includes('name: Edited'), `${label}: Save changed the note: ${J(t.read(SRC))}`);
+						outcomes.push(`${label}: two blocks held the body when the form opened; Save wrote nothing (the note keeps the +), one Notice`);
+					} else {
+						const block = afterPlus.match(/```ds-counter\n[\s\S]*?\n```/)[0]; // the block as the + left it
+						const outside = `${afterPlus.replace('current_value: 6', 'current_value: 9')}\nGAP\n\n${block}\n`;
+						fs.writeFileSync(path.join(vault, SRC), outside);
+						await waitDisk(label, SRC, () => t.read(SRC) === outside, 'the outside edit is not on disk');
+						await t.waitFor(`(() => { const e = ${E}; return e.length === 0 || e.some((x) => Array.from(x.root.querySelectorAll('input')).some((i) => i.value === '9')); })() || !document.querySelector('.modal-container .dse-modal')`, `${label}: the preview shows the outside change (or the form closed with it)`, 10000);
+						if (await formOpen()) {
+							const mp = await t.mark();
+							await t.ev(`(${SAVE}).click()`);
+							await t.waitFor(`__lc.notices.some((x) => x.n > ${mp})`, `${label}: Save said nothing`, 10000);
+							const ns = await t.noticesSince(mp);
+							t.expect(ns.length === 1 && ns[0] === noticeText, `${label}: expected the one Notice ${J(noticeText)}, got ${J(ns)}`);
+							t.expect(await formOpen(), `${label}: the form closed on a Save that wrote nothing`);
+							outcomes.push(`${label}: the form stayed open; Save wrote nothing into the block with the old body, one Notice`);
+						} else {
+							outcomes.push(`${label}: the form closed with its preview's redraw; nothing was written`);
+						}
+						t.expect(t.read(SRC) === outside, `${label}: the note changed after the outside edit: ${J(t.read(SRC))}`);
+					}
+				} catch (e) {
+					problems.push(`${label}: ${e.message}`);
+				} finally {
+					await cleanupForm();
+					await t.ev(`(() => { const hp = app.workspace.getMostRecentLeaf().view.hoverPopover; if (hp && window.__gs584Hide) { hp.hide = window.__gs584Hide; hp.hide(); } delete window.__gs584Hide; document.querySelectorAll('.popover.hover-popover').forEach((p) => p.remove()); return true; })()`);
+				}
+			};
 			/** (r) the note leaves the screen with a pinned form open - navigated away in its pane, or its pane closed (a second pane): the form closes with its view, nothing is written. */
 			const leaveCase = async (label, how) => {
 				const mk = await t.mark();
@@ -5323,6 +5426,14 @@ const SCENARIOS = [
 				await embedCase('(ya) SC-556: the same in Live Preview', 'plus', 'lp');
 				await embedCase('(xb) SC-556: a block embed (![[note#^id]]) of the lower of two identical blocks of a short note: Save writes the embedded block, not the one above', 'save', 'rv', 'block');
 				await hoverCase('(zh) SC-556: a hover preview ([[note#^id]]) of a block with an identical block above it: Save writes nothing and never the block above');
+				// SC-584: the two shapes SC-556 refused although nothing was ambiguous.
+				await hoverPlusCase('(zk) SC-584: a hover preview of a short note with ONE counter, + then at once its pencil: Save lands in the counter', 'short');
+				await hoverPlusCase('(zl) SC-584: a hover preview of [[long note#Tracker]], + then the pencil: Save lands in the Tracker counter, the other counter above the section is untouched', 'heading');
+				await hoverPlusCase('(zm) SC-584: + then the pencil, but another block holds the same body when the form opens: Save writes nothing and says so', 'twin');
+				await hoverPlusCase('(zn) SC-584 control: + then the pencil, the form\'s own block edited from outside and a block with the old body added: nothing is written into it', 'edit');
+				await embedCase('(xc) SC-584: a block embed (![[note#^id]]) of the lower of two identical callouts with text after the counter, Reading view: Save lands in the embedded callout', 'save', 'rv', 'callout');
+				await embedCase('(yc) SC-584: the same in Live Preview', 'save', 'lp', 'callout');
+				await embedCase('(zc) SC-584 control: the embedded callout\'s counter is edited from outside while its form is open: nothing is written into the identical callout', 'edit', 'rv', 'callout');
 				await embedCase('(z) SC-556: the embedded block is edited from outside while its form is open: nothing is written into the twin', 'edit', 'rv');
 			} finally {
 				await t.ev(`${prefs}.set('authoringControls', false)`);
