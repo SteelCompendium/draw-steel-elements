@@ -5283,10 +5283,10 @@ const SCENARIOS = [
 			};
 			/**
 			 * (zk)-(zn) SC-584: a form on the card of a HOVER PREVIEW (no `src`, so its pin starts partial) opened with + on the card and at once its pencil. The + is on disk when the form opens
-			 * (value 6) but the section text Obsidian reports for the preview is still the old one (5), so neither the link nor the text can place the pin: only the body the host knows, and
-			 * only when exactly one block of the note holds it as the form opens. `kind`: 'short' = a note with ONE counter: Save lands in it and nothing else changes; 'heading' = a hover of
+			 * (value 6) but the section text Obsidian reports for the preview is still the old one (5), so neither the link nor the text can place the pin: the pin is the position of the
+			 * card's own + write (ReadingModeBlockHost `lastWrite`, SC-584 r3), judged against the note by the usual pin rules. `kind`: 'short' = a note with ONE counter: Save lands in it and nothing else changes; 'heading' = a hover of
 			 * `[[long note#Tracker]]` whose note has another counter (value 3) above the section: Save lands in the Tracker counter, the other is untouched; 'twin' = the upper counter
-			 * already holds 6, so after the + on the LOWER one two blocks hold the body when the form opens: Save writes nothing and shows the Notice (the note keeps the +); 'edit' = as
+			 * already holds 6, so after the + on the LOWER one two blocks read the same when the form opens: Save still lands in the LOWER one (the position, not a search for the body), the upper is untouched; 'edit' = as
 			 * 'short', then ONE outside write edits the form's own block AND appends a block with the old body: a Save that searched the note for the body would write that block; here nothing is
 			 * written into it (if the preview and its form are still there, Save writes nothing and shows the Notice).
 			 */
@@ -5331,13 +5331,12 @@ const SCENARIOS = [
 						await noNotices(label, mk);
 						outcomes.push(`${label}: the hover card has no src; after + and the pencil (section text stale, the note holds the +) Save landed in its block (values ${J(valuesOf(SRC))}, names ${J(namesOf(SRC))}), no Notice`);
 					} else if (kind === 'twin') {
-						const mp = await t.mark();
-						await t.ev(`(${SAVE}).click()`);
-						await t.waitFor(`__lc.notices.some((x) => x.n > ${mp})`, `${label}: Save said nothing`, 10000);
-						const ns = await t.noticesSince(mp);
-						t.expect(ns.length === 1 && ns[0] === noticeText, `${label}: expected the one Notice ${J(noticeText)}, got ${J(ns)}`);
-						t.expect(t.read(SRC) === afterPlus && !t.read(SRC).includes('name: Edited'), `${label}: Save changed the note: ${J(t.read(SRC))}`);
-						outcomes.push(`${label}: two blocks held the body when the form opened; Save wrote nothing (the note keeps the +), one Notice`);
+						await clickSave(label);
+						await waitDisk(label, SRC, () => t.read(SRC).includes('name: Edited'), 'the edit never reached the note (Save refused or written elsewhere)');
+						t.expect(valuesOf(SRC).join() === '6,6' && namesOf(SRC).join() === 'Twin,Edited', `${label}: counters ${J(valuesOf(SRC))}, names ${J(namesOf(SRC))} (the lower block must be the edited one)`);
+						t.expect(outsideBlocks(t.read(SRC)) === outsideBlocks(before), `${label}: the note's text outside the blocks changed`);
+						await noNotices(label, mk);
+						outcomes.push(`${label}: two blocks read the same when the form opened; Save landed in the lower one (the + block), the upper untouched, no Notice`);
 					} else {
 						const block = afterPlus.match(/```ds-counter\n[\s\S]*?\n```/)[0]; // the block as the + left it
 						const outside = `${afterPlus.replace('current_value: 6', 'current_value: 9')}\nGAP\n\n${block}\n`;
@@ -5429,11 +5428,15 @@ const SCENARIOS = [
 				// SC-584: the two shapes SC-556 refused although nothing was ambiguous.
 				await hoverPlusCase('(zk) SC-584: a hover preview of a short note with ONE counter, + then at once its pencil: Save lands in the counter', 'short');
 				await hoverPlusCase('(zl) SC-584: a hover preview of [[long note#Tracker]], + then the pencil: Save lands in the Tracker counter, the other counter above the section is untouched', 'heading');
-				await hoverPlusCase('(zm) SC-584: + then the pencil, but another block holds the same body when the form opens: Save writes nothing and says so', 'twin');
+				await hoverPlusCase('(zm) SC-584: + then the pencil, the + made the block read like the one above it: Save lands in the lower (the + block), never the upper', 'twin');
 				await hoverPlusCase('(zn) SC-584 control: + then the pencil, the form\'s own block edited from outside and a block with the old body added: nothing is written into it', 'edit');
 				await embedCase('(xc) SC-584: a block embed (![[note#^id]]) of the lower of two identical callouts with text after the counter, Reading view: Save lands in the embedded callout', 'save', 'rv', 'callout');
 				await embedCase('(yc) SC-584: the same in Live Preview', 'save', 'lp', 'callout');
-				await embedCase('(zc) SC-584 control: the embedded callout\'s counter is edited from outside while its form is open: nothing is written into the identical callout', 'edit', 'rv', 'callout');
+				await embedCase('(xd) SC-584: + on the card of a block embed of a callout, then at once its pencil, Reading view: Save lands in the embedded callout', 'plus', 'rv', 'callout');
+				await embedCase('(yd) SC-584: the same in Live Preview', 'plus', 'lp', 'callout');
+				// (zc) and (z) are NOT controls: the outside edit's redraw of the embed closes the form (measured at SC-584 r2), so "nothing is written" holds whatever the code does. They are no-write smoke checks.
+				// The control with teeth for a block embed of a callout / of a block is the jest host suite (reading-mode-host-pin.test.ts: the lower callout edited from outside after the +, P1-P3).
+				await embedCase('(zc) SC-584 smoke check (not a control, see above): the embedded callout\'s counter is edited from outside while its form is open: nothing is written into the identical callout', 'edit', 'rv', 'callout');
 				await embedCase('(z) SC-556: the embedded block is edited from outside while its form is open: nothing is written into the twin', 'edit', 'rv');
 			} finally {
 				await t.ev(`${prefs}.set('authoringControls', false)`);

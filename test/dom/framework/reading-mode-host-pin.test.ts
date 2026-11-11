@@ -719,7 +719,7 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 		const sec: Section = { current: section };
 		const host = new ReadingModeBlockHost(new Plugin(app) as never, el, switchableCtx(sec) as never, 'ds-counter');
 		host.setMountedBody(body);
-		return { app, host };
+		return { app, host, sec };
 	}
 	const save = (host: ReadingModeBlockHost, pin: ReturnType<ReadingModeBlockHost['pinPosition']>, body = bodyOf(5, 'Edited')) => host.replaceSource(body, { pin, pinOnly: true });
 	const SUB = ['## Tracker', '', ...CTR(5), ''];
@@ -1109,6 +1109,19 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 			});
 		});
 
+		test('the embed was redrawn after the +, so its part is current: the pin comes from the embed\'s own link, not from the + write, and a note changed by hundreds of lines since still saves', async () => {
+			const pre = ['# N', '', ...para(300, 'above'), '', ...SUB, '## After', '', ...para(300, 'below')].join('\n');
+			const { app, host, sec } = embedded(pre, part(SUB, 2), 'Note#Tracker', bodyOf(5));
+			expect(await plus(host)).toBe(true);
+			sec.current = part(['## Tracker', '', ...CTR(6), ''], 2); // Obsidian redrew the embed from the note as the + left it
+			const outside = ['# N', '', ...para(500, 'inserted above'), ...noteOf6(app).split('\n').slice(1), ...para(500, 'inserted below')].join('\n');
+			app.vault.setFile('Note.md', outside);
+			const pin = host.pinPosition()!;
+
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true); // the + write's position would be 1000 lines from the note now (the line diff gives up beyond 400 on both sides)
+			expect(app.vault.getContent('Note.md')).toBe(edited(outside));
+		});
+
 		test('a card (+/-) write\'s pin never uses the host\'s last write: a second + with the part still stale and an identical block in the note is refused as before (SC-480)', async () => {
 			const pre = ['# N', '', 'TOP', '', ...CTR(6), '', 'p', '', ...CTR(5), '', 'END'];
 			const { app, host } = hover(pre, 11);
@@ -1124,10 +1137,10 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 		test('a write by ANOTHER host of the block (a second pane) is not this host\'s position: nothing is found for this host\'s form', async () => {
 			const { app, host } = hover(NOTE(5));
 			const text = NOTE(5).join('\n');
-			const other = new ReadingModeBlockHost(new Plugin(app) as never, document.createElement('div'), switchableCtx({ current: { text, lineStart: 4, lineEnd: 7 } }) as never, 'ds-counter');
+			const other = new ReadingModeBlockHost(new Plugin(app) as never, hoverEl(), switchableCtx({ current: { text, lineStart: 4, lineEnd: 7 } }) as never, 'ds-counter');
 			other.setMountedBody(bodyOf(5));
+			host.setMountedBody(bodyOf(6)); // this host holds the new body too (say it was drawn from it), but never wrote it
 			expect(await other.replaceSource(bodyOf(6), { fromView: true })).toBe(true);
-			host.setMountedBody(bodyOf(6)); // this host also holds the new body, but never wrote it
 			const pin = host.pinPosition()!;
 
 			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false);
