@@ -353,12 +353,13 @@ describe('the Apply Damage row: damage per minion x minions hit', () => {
 	});
 
 	// SC-566 r3 (LOW-1): a hand-edited NEGATIVE pool (no write path produces one) must not flip the sign: the label and
-	// info line never show a negative or a heal-shaped amount for damage.
+	// info line never show a negative or a heal-shaped amount for damage. SC-573: with the damage 0 and the deaths owed,
+	// the label and info line now state the deaths instead ("Kill 5 minion(s)" / "The pool is at 0, so 5 minion(s) die.").
 	test('SC-566: a hand-edited pool of -5 labels damage as 0, never a negative or sign-flipped amount', async () => {
 		const { content } = await open({ pool: -5 });
 		dealDamage(content, '3', '1');
-		expect(apply(content).textContent).toBe('Deal 0 damage, kill 5 minion(s)');
-		expect(info(content).textContent).toBe(`0 damage will kill 5 minion(s).${SEL(5)}`);
+		expect(apply(content).textContent).toBe('Kill 5 minion(s)');
+		expect(info(content).textContent).toBe('The pool is at 0, so 5 minion(s) die.');
 	});
 
 	// SC-566 (heal side, the same label/info builders): a heal cannot be staged past the pool max either, so its label
@@ -746,6 +747,177 @@ describe('Apply: what it persists, once, then closes', () => {
 	});
 });
 
+// ----------------------------------------------------------------- a pool already at 0 (SC-573)
+
+describe('SC-573: a pool at 0 with living minions: Apply records their deaths', () => {
+	const REASON = "Minions can't regain Stamina past a dead minion's share (at most 0)";
+	const SENTENCE = (n: number) => `The pool is at 0, so ${n} minion(s) die.`;
+
+	// The SC-435 marker, moved out of the known bugs: reachable by relieving a captain (SC-421) or a hand-edited pool.
+	test('a pool at 0 with living minions leaves Apply reachable so they can be killed', async () => {
+		const { content } = await open({ pool: 0 });
+		expect(poolInput(content).value).toBe('0'); // setup
+		expect(all(content, 'pool.kill')).toHaveLength(5); // setup: five living minions
+		expect(apply(content).disabled).toBe(false);
+	});
+
+	test('nothing staged: "Kill 5 minion(s)", enabled, no tooltip, the info line says why, the boxes are ticked and locked', async () => {
+		const { content } = await open({ pool: 0 });
+		expect(apply(content).textContent).toBe('Kill 5 minion(s)');
+		expect(apply(content).disabled).toBe(false);
+		expect(apply(content).hasAttribute('title')).toBe(false);
+		expect(info(content).hidden).toBe(false);
+		expect(info(content).textContent).toBe(SENTENCE(5));
+		expect(warn(content).hidden).toBe(true);
+		expect(boxes(content)).toBe('xxxxx');
+	});
+
+	test('Apply: all five die, the pool stays 0, one persist, the modal closes', async () => {
+		const { content, group, minion, persist } = await open({ pool: 0 });
+		apply(content).click();
+		expect(group.minion_stamina_pool).toBe(0);
+		expect(minion.instances!.every((i) => i.isDead)).toBe(true);
+		expect(persist).toHaveBeenCalledTimes(1);
+		expect(document.querySelector('.dse-modal')).toBeNull();
+	});
+
+	test('damage staged on the empty pool reads the same: "Kill 5 minion(s)", never "Deal 0 damage" / "0 damage will kill"', async () => {
+		const { content, group, minion, persist } = await open({ pool: 0 });
+		dealDamage(content, '3', '2');
+		expect(apply(content).textContent).toBe('Kill 5 minion(s)');
+		expect(apply(content).disabled).toBe(false);
+		expect(apply(content).hasAttribute('title')).toBe(false);
+		expect(info(content).hidden).toBe(false);
+		expect(info(content).textContent).toBe(SENTENCE(5));
+		expect(boxes(content)).toBe('xxxxx');
+		apply(content).click();
+		expect(group.minion_stamina_pool).toBe(0);
+		expect(minion.instances!.every((i) => i.isDead)).toBe(true);
+		expect(persist).toHaveBeenCalledTimes(1);
+	});
+
+	test('with 3 already dead: "Kill 2 minion(s)", and Apply kills exactly the two living', async () => {
+		const { content, group, minion, persist } = await open({ pool: 0, dead: 3 });
+		expect(all(content, 'pool.kill')).toHaveLength(2);
+		expect(apply(content).textContent).toBe('Kill 2 minion(s)');
+		expect(apply(content).disabled).toBe(false);
+		expect(info(content).textContent).toBe(SENTENCE(2));
+		apply(content).click();
+		expect(group.minion_stamina_pool).toBe(0);
+		expect(minion.instances!.map((i) => !!i.isDead)).toEqual([true, true, true, true, true]);
+		expect(persist).toHaveBeenCalledTimes(1);
+	});
+
+	test('a staged heal is still refused, with its old reason, and the nothing-staged enable does not leak into it', async () => {
+		const { content, group, persist } = await open({ pool: 0 });
+		click(content, 'pool.stamina.inc'); // 0 -> 1
+		expect(apply(content).querySelector('.dse-btn__text')!.textContent).toBe('Heal 1 stamina');
+		expect(apply(content).disabled).toBe(true);
+		expect(apply(content).getAttribute('title')).toBe(REASON);
+		expect(apply(content).getAttribute('aria-label')).toBe(`Heal 1 stamina — ${REASON}`);
+		expect(info(content).textContent).toBe("A heal can't raise the pool above the living minions' share (0 stamina).");
+		expect(boxes(content)).toBe('-----');
+		apply(content).click();
+		expect(persist).not.toHaveBeenCalled();
+		expect(group.minion_stamina_pool).toBe(0);
+		click(content, 'pool.stamina.dec'); // back to nothing staged: the kill state returns
+		expect(apply(content).textContent).toBe('Kill 5 minion(s)');
+		expect(apply(content).disabled).toBe(false);
+		expect(apply(content).hasAttribute('title')).toBe(false);
+	});
+
+	test('no minion left alive at pool 0: nothing to record, Apply stays disabled, no info line', async () => {
+		const { content, persist } = await open({ pool: 0, dead: 5 });
+		expect(all(content, 'pool.kill')).toHaveLength(0);
+		expect(apply(content).textContent).toBe('No Stamina Change');
+		expect(apply(content).disabled).toBe(true);
+		expect(apply(content).hasAttribute('title')).toBe(false);
+		expect(info(content).hidden).toBe(true);
+		apply(content).click();
+		expect(persist).not.toHaveBeenCalled();
+	});
+
+	test('a hand-edited negative pool behaves as pool 0 and is written as 0', async () => {
+		const { content, group, minion, persist } = await open({ pool: -3 });
+		expect(poolInput(content).value).toBe('0');
+		expect(apply(content).textContent).toBe('Kill 5 minion(s)');
+		expect(apply(content).disabled).toBe(false);
+		expect(info(content).textContent).toBe(SENTENCE(5));
+		apply(content).click();
+		expect(group.minion_stamina_pool).toBe(0);
+		expect(minion.instances!.every((i) => i.isDead)).toBe(true);
+		expect(persist).toHaveBeenCalledTimes(1);
+	});
+
+	describe('the typed-draft prediction (SC-430) agrees with what the commit shows', () => {
+		const draft = (c: Content, v: string): void => {
+			poolInput(c).value = v;
+			poolInput(c).dispatchEvent(new Event('input', { bubbles: true })); // typed, no Enter, no blur
+		};
+		const state = (c: Content) => ({ label: apply(c).textContent, disabled: apply(c).disabled, info: info(c).textContent, infoHidden: info(c).hidden });
+
+		test('a heal draft is refused before and after the commit', async () => {
+			const { content } = await open({ pool: 0 });
+			draft(content, '3');
+			const predicted = state(content);
+			expect(predicted.disabled).toBe(true);
+			expect(predicted.label).toBe('Heal 3 stamina');
+			typePool(content, '3');
+			expect(state(content)).toEqual(predicted);
+		});
+
+		test('a draft of 0 (the pool as it stands) stages nothing: still the enabled kill state, before and after the commit', async () => {
+			const { content, group, minion } = await open({ pool: 0 });
+			draft(content, '0');
+			const predicted = state(content);
+			expect(predicted).toEqual({ label: 'Kill 5 minion(s)', disabled: false, info: SENTENCE(5), infoHidden: false });
+			typePool(content, '0');
+			expect(state(content)).toEqual(predicted);
+			apply(content).click();
+			expect(group.minion_stamina_pool).toBe(0);
+			expect(minion.instances!.every((i) => i.isDead)).toBe(true);
+		});
+
+		test('a negative pool and a draft of 0 agree too', async () => {
+			const { content } = await open({ pool: -3 });
+			draft(content, '0');
+			const predicted = state(content);
+			expect(predicted.label).toBe('Kill 5 minion(s)');
+			expect(predicted.disabled).toBe(false);
+			typePool(content, '0');
+			expect(state(content)).toEqual(predicted);
+		});
+	});
+
+	test('Reset after a staged heal or damage returns to the nothing-staged state: "Kill 5 minion(s)", enabled', async () => {
+		const { content, modal } = await open({ pool: 0 });
+		click(content, 'pool.stamina.inc');
+		expect(apply(content).disabled).toBe(true);
+		click(content, 'pool.reset');
+		dealDamage(content, '2', '1');
+		click(content, 'pool.reset');
+		expect(apply(content).textContent).toBe('Kill 5 minion(s)');
+		expect(apply(content).disabled).toBe(false);
+		expect(apply(content).hasAttribute('title')).toBe(false);
+		expect(info(content).textContent).toBe(SENTENCE(5));
+		expect(boxes(content)).toBe('xxxxx');
+		expect(poolInput(content).value).toBe('0');
+		expect(ctl<HTMLInputElement>(content, 'pool.damage-amount').value).toBe('0');
+		expect((modal as any).pendingStaminaChange).toBe(0);
+	});
+
+	test('regression pin: a pool above 0 with nothing staged is unchanged (No Stamina Change, disabled, no info)', async () => {
+		for (const spec of [{}, { pool: 12, dead: 2 }, { pool: 1 }] as Squad[]) {
+			const { content } = await open(spec);
+			expect(apply(content).textContent).toBe('No Stamina Change');
+			expect(apply(content).disabled).toBe(true);
+			expect(apply(content).hasAttribute('title')).toBe(false);
+			expect(info(content).hidden).toBe(true);
+			document.body.innerHTML = '';
+		}
+	});
+});
+
 // --------------------------------------------------------------------------- condition removal
 
 describe('condition icons: a click removes that condition and saves at once', () => {
@@ -911,14 +1083,6 @@ describe('a group holding two minion squads: each modal reads and writes ITS squ
 // ------------------------------------------------------------------------------------ known bugs
 
 describe('known bugs (test.failing: each FAILS once its ticket is fixed, then drop the marker)', () => {
-	// SC-573: a pool at 0 with a minion still alive (reachable: a relieved captain's bonus comes off the pool, clamped at 0).
-	test.failing('SC-573: a pool at 0 with living minions leaves Apply reachable so they can be killed', async () => {
-		const { content } = await open({ pool: 0 });
-		expect(poolInput(content).value).toBe('0'); // setup
-		expect(all(content, 'pool.kill')).toHaveLength(5); // setup: five living minions
-		expect(apply(content).disabled).toBe(false);
-	});
-
 	// SC-574 (a): a condition the registry does not know ("on-fire") is on the minion but not shown here.
 	test.failing('SC-574 (a): a custom condition is shown in the modal and a click removes it', async () => {
 		const { content, minion, persist } = await open({ conditions: { 0: ['on-fire'] } });

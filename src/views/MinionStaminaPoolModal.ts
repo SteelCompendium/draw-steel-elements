@@ -368,7 +368,10 @@ export class MinionStaminaPoolModal extends DseModal {
 		let minionsToKill = finalMinionsKilled - initialMinionsKilled;
 		if (pending > 0) {
 			minionsToKill = Math.min(0, minionsToKill);
-		} else if (pending < 0 && newStamina <= 0) {
+		} else if (pending <= 0 && newStamina <= 0) {
+			// SC-573: `pending === 0` counts too. A pool already at 0 (or hand-edited below it) with minions still
+			// alive owes their deaths with NOTHING staged, so Apply stays reachable. (A pool above 0 never has
+			// `pending === 0 && newStamina <= 0`: no behaviour change there.)
 			minionsToKill = aliveMinions;
 		} else {
 			minionsToKill = Math.min(aliveMinions, minionsToKill);
@@ -379,7 +382,10 @@ export class MinionStaminaPoolModal extends DseModal {
 		// disagree. It equals the living minions' worth (`alive * per`) on a consistent squad,
 		// and sits below it when the pool is underfunded (captain relieved, 6.0.2 damage).
 		const healCeiling = poolMaxStamina - initialMinionsKilled * effectivePerMinion;
-		return { minionMaxStamina, aliveMinions, poolMaxStamina, poolCurrentStamina, newStamina, minionsToKill, healCeiling };
+		// SC-573: the kills owed by a pool that is ALREADY empty (nothing staged, or damage staged on it, which
+		// loses nothing): the label, info line and enable state all read this one value. 0 for any pool above 0.
+		const emptyPoolKills = pending <= 0 && poolCurrentStamina <= 0 ? minionsToKill : 0;
+		return { minionMaxStamina, aliveMinions, poolMaxStamina, poolCurrentStamina, newStamina, minionsToKill, healCeiling, emptyPoolKills };
 	}
 
 	/** SC-430: the committed pending change, or the one a dirty typed draft would stage. */
@@ -437,10 +443,16 @@ export class MinionStaminaPoolModal extends DseModal {
 	}
 
 	private updateInfoText(): void {
-		const { minionsToKill, healCeiling } = this.poolNumbers();
+		const { minionsToKill, healCeiling, emptyPoolKills } = this.poolNumbers();
 		const pending = this.effectivePending(); // SC-430: follows a typed draft (see the field comment)
-		this.infoTextEl.hidden = pending === 0; // SC-429: the `hidden` attribute, never inline display
-		if (minionsToKill < 0) {
+		// SC-429: the `hidden` attribute, never inline display. SC-573: an empty pool with living minions has
+		// something to say even with nothing staged.
+		this.infoTextEl.hidden = pending === 0 && emptyPoolKills === 0;
+		if (emptyPoolKills > 0) {
+			// SC-573: the pool is empty, so the squad is dead; staged damage on it would lose nothing, so it is not
+			// worded as "0 damage will kill N". The boxes are already ticked and locked: nothing to select.
+			this.infoTextEl.textContent = `The pool is at 0, so ${emptyPoolKills} minion(s) die.`;
+		} else if (minionsToKill < 0) {
 			// A heal past a dead minion's share (SC-417 LOW-1): say the rule, never a
 			// negative count.
 			this.infoTextEl.textContent = `A heal can't raise the pool above the living minions' share (${healCeiling} stamina).`;
@@ -466,7 +478,7 @@ export class MinionStaminaPoolModal extends DseModal {
 		// SC-566: the label states the change Apply writes (the clamped one); the enabled state
 		// keeps reading the raw staged change.
 		const appliedChange = this.appliedPoolChange(staminaChange);
-		const { newStamina, minionsToKill, healCeiling } = this.poolNumbers();
+		const { newStamina, minionsToKill, healCeiling, emptyPoolKills } = this.poolNumbers();
 
 		// Count the number of minions selected
 		let selectedMinions = this.minionCheckboxes.filter((item) => item.checkbox.checked).length;
@@ -489,7 +501,10 @@ export class MinionStaminaPoolModal extends DseModal {
 		const disableActionButton = minionsToKill !== selectedMinions;
 
 		let actionText = '';
-		if (staminaChange < 0) {
+		if (emptyPoolKills > 0) {
+			// SC-573: the applied damage is 0 and the deaths are owed — say the deaths, not "Deal 0 damage".
+			actionText = `Kill ${emptyPoolKills} minion(s)`;
+		} else if (staminaChange < 0) {
 			actionText += `Deal ${Math.abs(appliedChange)} damage`;
 			if (minionsToKill > 0) {
 				actionText += `, kill ${minionsToKill} minion(s)`;
@@ -502,7 +517,8 @@ export class MinionStaminaPoolModal extends DseModal {
 		setButtonText(this.actionBtn, actionText);
 
 		// Disable the button if no change or kills not accounted for — REAL disabled (CB-8).
-		this.actionBtn.setDisabled(staminaChange === 0 || disableActionButton);
+		// SC-573: "no change" also needs no kills owed — an empty pool with living minions has something to apply.
+		this.actionBtn.setDisabled((staminaChange === 0 && minionsToKill === 0) || disableActionButton);
 
 		// Explain the disabled state (legacy tooltip preserved).
 		if (disableActionButton && minionsToKill > 0) {
