@@ -1530,8 +1530,8 @@ async function gs83FormTrial(t, mode) {
 /** SC-595 (G-S83): the stamina modal ('stamina') or the tracker's Conditions modal ('conditions') opened from a preview by a real click: a real click on the title leaves it open, Escape closes it. */
 async function gs83ModalTrial(t, mode, kind) {
 	const K = gs83Kit(t);
-	const [src, host] = kind === 'stamina' ? ['Lifecycle/gs83-stam.md', 'Lifecycle/gs83-stam-host.md'] : ['Lifecycle/tracker.md', 'Lifecycle/gs83-trk-host.md'];
-	const MODAL = kind === 'stamina' ? `document.querySelector('.modal-container .dse-modal')` : `document.querySelector('.modal-container .dse-condal-modal')`;
+	const [src, host] = kind !== 'conditions' ? ['Lifecycle/gs83-stam.md', 'Lifecycle/gs83-stam-host.md'] : ['Lifecycle/tracker.md', 'Lifecycle/gs83-trk-host.md'];
+	const MODAL = kind !== 'conditions' ? `document.querySelector('.modal-container .dse-modal')` : `document.querySelector('.modal-container .dse-condal-modal')`;
 	const rec = { mode, kind };
 	try {
 		await t.reset(src);
@@ -1540,8 +1540,23 @@ async function gs83ModalTrial(t, mode, kind) {
 		rec.hover = await K.hover(link, src);
 		await K.moveTo(`${K.ENTRY(src)}.root`);
 		await t.sleep(250);
-		const opener = kind === 'stamina' ? `${K.ENTRY(src)}.root.querySelector('[data-dse-control="stamina.bar"]')` : `${K.ENTRY(src)}.root.querySelectorAll('.dse-cond--add')[0]`;
+		const opener = kind !== 'conditions' ? `${K.ENTRY(src)}.root.querySelector('[data-dse-control="stamina.bar"]')` : `${K.ENTRY(src)}.root.querySelectorAll('.dse-cond--add')[0]`;
 		await t.waitFor(`!!(${opener})`, `${mode} ${kind}: the opener is drawn`, 8000);
+		if (kind === 'stamtext') {
+			// a real press ON a text node inside the bar (the "15"): Obsidian's click-to-edit helper then waits 150 ms, not 10, before it pushes its keymap scope
+			const pt = await t.ev(`(() => { const op = ${opener}; const w = document.createTreeWalker(op, NodeFilter.SHOW_TEXT); let n; while ((n = w.nextNode())) { if (!n.textContent.trim()) continue; const r = new Range(); r.selectNodeContents(n); const q = r.getClientRects()[0]; if (q && q.width > 2) return { x: Math.round(q.left + q.width / 2), y: Math.round(q.top + q.height / 2) }; } return null; })()`);
+			t.expect(!!pt, `${mode} ${kind}: no text node to press in the stamina bar`);
+			await K.mouse('mouseMoved', pt.x, pt.y);
+			await t.sleep(200);
+			await K.press(pt);
+			await t.waitFor(`!!${MODAL}`, `${mode} ${kind}: the modal opened`, 8000);
+			await t.sleep(450); // past the helper's 150 ms push: Escape now must reach the modal's scope
+			rec.opened = await K.state();
+			await t.key('Escape', 'Escape', 27);
+			await t.sleep(500);
+			rec.afterEscape = await K.state();
+			return rec;
+		}
 		await K.clickRevealed(opener);
 		await t.waitFor(`!!${MODAL}`, `${mode} ${kind}: the modal opened`, 8000);
 		await t.sleep(300);
@@ -7393,7 +7408,7 @@ const SCENARIOS = [
 		// in the note (no Notice, the preview still shown), a real click outside closes the preview, Escape on a new form closes the form and leaves the preview; the stamina modal and the
 		// tracker's Conditions modal opened from a preview stay open under a real click on their title and close on Escape. Obsidian's page-preview popover hides itself on any click that
 		// reaches its window and is not inside it; a DseModal opened from a preview now stops its own clicks at its document (and puts its keymap scope back on top). It sits before G-S56,
-		// which runs last. The form, the stamina modal and the Conditions modal are each tried in Reading view and Live Preview.
+		// which runs last. The form, the stamina modal and the Conditions modal are each tried in Reading view and Live Preview; the stamina modal is also opened by a press on the bar's number text (Obsidian then waits 150 ms before it pushes its keymap scope) and closed by Escape 450 ms later.
 		id: 'G-S83',
 		async run(t) {
 			const m = await t.mark();
@@ -7426,19 +7441,20 @@ const SCENARIOS = [
 					if (bad.length) problems.push(`${label}: ${bad.join('; ')}`);
 					else outcomes.push(`${label} (${r.hover}): press+release in the raw box left preview and form open, typed text kept, Save landed (no Notice, preview shown), Escape closed a new form and Cancel another (preview shown both times), a click outside closed the preview`);
 				}
-				for (const [mode, kind] of [['rv', 'stamina'], ['lp', 'stamina'], ['rv', 'conditions'], ['lp', 'conditions']]) {
+				for (const [mode, kind] of [['rv', 'stamina'], ['lp', 'stamina'], ['rv', 'stamtext'], ['rv', 'conditions'], ['lp', 'conditions']]) {
 					const r = await gs83ModalTrial(t, mode, kind);
 					const label = `${kind} modal ${mode}`;
 					const bad = [];
 					if (r.error) bad.push(`error: ${r.error}`);
 					else {
 						if (!(r.opened.popover && r.opened.modal)) bad.push(`not open together ${J(r.opened)}`);
-						if (!(r.afterTitleClick.popover && r.afterTitleClick.modal)) bad.push(`a real click on the title closed ${J(r.afterTitleClick)}`);
+						if (kind !== 'stamtext' && !(r.afterTitleClick.popover && r.afterTitleClick.modal)) bad.push(`a real click on the title closed ${J(r.afterTitleClick)}`);
 						else if (kind === 'conditions' && !(r.afterAdd.popover && r.afterAdd.modal)) bad.push(`a real click on "Add condition" closed ${J(r.afterAdd)}`);
 						else if (kind === 'stamina' && !(r.afterConfirm.popover && r.afterConfirm.modals === 1 && /Gain/.test(r.healStaged))) bad.push(`free-heal Confirm must close only the confirmation and keep the Stamina modal with its staged heal ${J(r.afterConfirm)} footer ${J(r.healStaged)}`);
 						if (r.afterEscape && !(r.afterEscape.popover && !r.afterEscape.modal)) bad.push(`Escape must close the modal and leave the preview ${J(r.afterEscape)}`);
 					}
 					if (bad.length) problems.push(`${label}: ${bad.join('; ')}`);
+					else if (kind === 'stamtext') outcomes.push(`${label} (${r.hover}): opened by a real press on the bar's text, Escape 450 ms later closed the modal (preview shown)`);
 					else outcomes.push(`${label} (${r.hover}): a real click on the title ${kind === 'conditions' ? 'and on "Add condition"' : 'and free-heal Confirm'} left preview and modal open, Escape closed the modal (preview shown)`);
 				}
 			} finally {
