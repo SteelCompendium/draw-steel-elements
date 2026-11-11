@@ -251,7 +251,11 @@ To define a minion group, set the `is_squad` field to `true` in the enemy group 
 - `log` (list, managed): The spend/gain log (`{round, amount, label}`, oldest first).
 	Managed by the tracker — populated by "Advance round" (when `round_gain` is set) and
 	the quick-add control. Capped at the 50 most recent entries; older entries drop off
-	automatically.
+	automatically. `amount` is the change the pool actually made (negative for a spend), so
+	the log adds up to the pool. When the pool stopped at 0 and made a smaller change than was
+	asked for (the typed amount, or `round_gain`), the entry also has `requested`, the amount
+	asked for (`{round, amount, label, requested}`); an entry that was not capped has no
+	`requested` key.
 
 #### Example
 
@@ -344,12 +348,16 @@ live on the Heroes heading line instead (see below).
 **Adjusting the pool**: the pool is a stepper — a **−** and a **+** button always shown on
 either side of the current Malice value.
 Malice never goes below 0: **−** is disabled at 0, a spend (or a negative `round_gain`) stops
-at 0, and a hand-edited negative `value` counts as 0.
+at 0, and a hand-edited negative `value` counts as 0. The log records the change that really
+happened (see below).
 
 **Malice log**: Click "Malice log · N entries" to open a small read-only list of every
 gain/spend (`R<round>: +/-<amount> — <label>`), most recent additions preserved, oldest
 entries dropped once the log exceeds 50 entries. Printed handouts always show the log
-open.
+open. The amount is what the pool actually did, and a line the pool capped at 0 also shows
+what was asked for: from Malice 2, a quick-add of −5 reads `R2: -2 — Spend (-5, capped at 0)`,
+and from 0 a negative `round_gain` of −3 reads `R3: 0 — Round gain (-3, capped at 0)` (a change
+of zero reads `0`, not `+0`).
 
 **Quick-add**: Enter an amount and a label (e.g. "3" / "Feytouched") and click "Add" — or
 press **Enter** in either field — to log a manual, trigger-based Malice gain (or spend,

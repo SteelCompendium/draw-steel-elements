@@ -240,8 +240,11 @@ four ADDITIVE-OPTIONAL fields (never emitted unless set, never materialized by `
   sub-view, OD-6: no standalone `ds-malice` element) adds a keyboard-accessible pool
   stepper, the round display + its two controls above (since SC-377: the round label and
   Advance round sit on the Heroes heading line; Reset turns is a chrome-panel item), a read-only spend/gain log
-  (`{ round, amount, label }`, oldest-first), and a labeled quick-add for manual
-  trigger-based gains (spec §3.3). `round_gain` absent means no configured auto-gain
+  (`{ round, amount, label[, requested] }`, oldest-first; `amount` is the SIGNED change the
+  pool actually made, `requested` is present only when the pool capped it at 0, SC-578), and a labeled quick-add for manual
+  trigger-based gains (spec §3.3). Advance round's gain and the quick-add both go through
+  `applyMaliceChange` (initiative `model.ts`), which adds to the pool, works out the applied
+  change and appends the entry. `round_gain` absent means no configured auto-gain
   (OD-3 — never a fabricated Director's-guide default). **The log is capped** at
   `MALICE_LOG_MAX_ENTRIES` (50, `EncounterData.ts`) via the single sanctioned
   `appendMaliceLogEntry` helper — both the round-gain and quick-add call sites use it, so
