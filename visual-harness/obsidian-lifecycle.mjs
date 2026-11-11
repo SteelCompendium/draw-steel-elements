@@ -1549,6 +1549,7 @@ async function gs83ModalTrial(t, mode, kind) {
 		await K.click(`(${MODAL}).closest('.modal').querySelector('.modal-title') || (${MODAL})`);
 		await t.sleep(500);
 		rec.afterTitleClick = await K.state();
+		if (!(rec.afterTitleClick.popover && rec.afterTitleClick.modal)) return rec; // the click closed it (the bug): nothing below can be driven
 		if (kind === 'conditions') {
 			// "Add condition" redraws its own control inside the click: the target is detached when the click reaches the document
 			await K.click(`(${MODAL}).closest('.modal-container').querySelector('button[aria-label="Add condition"]')`);
@@ -7435,7 +7436,7 @@ const SCENARIOS = [
 						if (!(r.afterTitleClick.popover && r.afterTitleClick.modal)) bad.push(`a real click on the title closed ${J(r.afterTitleClick)}`);
 						else if (kind === 'conditions' && !(r.afterAdd.popover && r.afterAdd.modal)) bad.push(`a real click on "Add condition" closed ${J(r.afterAdd)}`);
 						else if (kind === 'stamina' && !(r.afterConfirm.popover && r.afterConfirm.modals === 1 && /Gain/.test(r.healStaged))) bad.push(`free-heal Confirm must close only the confirmation and keep the Stamina modal with its staged heal ${J(r.afterConfirm)} footer ${J(r.healStaged)}`);
-						if (!(r.afterEscape.popover && !r.afterEscape.modal)) bad.push(`Escape must close the modal and leave the preview ${J(r.afterEscape)}`);
+						if (r.afterEscape && !(r.afterEscape.popover && !r.afterEscape.modal)) bad.push(`Escape must close the modal and leave the preview ${J(r.afterEscape)}`);
 					}
 					if (bad.length) problems.push(`${label}: ${bad.join('; ')}`);
 					else outcomes.push(`${label} (${r.hover}): a real click on the title ${kind === 'conditions' ? 'and on "Add condition"' : 'and free-heal Confirm'} left preview and modal open, Escape closed the modal (preview shown)`);
