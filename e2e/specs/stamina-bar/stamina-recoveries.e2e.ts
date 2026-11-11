@@ -351,6 +351,10 @@ describe('ds-stamina-bar: the optional Recoveries popover editor (preference on)
 		await dse.click(bar.control('recov.pop.inc'));
 		await dse.click(bar.control('recov.pop.inc'));
 		expect(await sliderNow()).toBe('4');
+		// The − / + presses write through the view's 400 ms debounce (ElementView.persist). Let that write land, and pin what it
+		// wrote, before marking for Catch breath: on a slow host it would otherwise flush after the mark and count as Catch breath's.
+		await dse.settle();
+		await dse.expectNoteBlock(REC, BAR).toMatchObject({ current_stamina: 12, recoveries: 4 }); // the steppers committed
 		const w = await dse.waitForWrite(REC, () => dse.click(bar.control('recov.pop.catch-breath')));
 		expect(w.count).toBe(1);
 		await dse.expectNoteBlock(REC, BAR).toMatchObject({ current_stamina: 22, recoveries: 3 }); // 4 - 1 spent by Catch Breath
