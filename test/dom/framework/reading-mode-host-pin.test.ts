@@ -5,6 +5,7 @@
 // element's section as before, unless the caller asked for `pinOnly` (every block edit form's Save, SC-556; the view's own write does not)
 // or the block has an identical twin (SC-480: nothing is written, the dropped-write Notice shows).
 import { ReadingModeBlockHost, countByBody } from '../../../src/framework/host/ReadingModeBlockHost';
+import { noteHoverLink } from '../../../src/framework/host/hoverLinks';
 import { ViewRegistry } from '../../../src/framework/host/viewRegistry';
 import { droppedWriteMessage, resetDroppedWriteNotices } from '../../../src/framework/host/droppedWriteNotice';
 import { App, Notice, Plugin, makeFakeContext } from '../../mocks/obsidian';
@@ -705,6 +706,8 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 		});
 		return { headings, blocks };
 	}
+	/** SC-594: the link a hover preview element was opened for (see `hoverEl`), noted for the app `embedded` makes. */
+	const hoverLinked = new WeakMap<HTMLElement, { link: string; popover: HTMLElement }>();
 	const embedEl = (src: string): HTMLElement => {
 		const embed = document.createElement('div');
 		embed.className = 'internal-embed markdown-embed';
@@ -715,6 +718,9 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 	function embedded(full: string, section: { text: string; lineStart: number; lineEnd: number }, src: string, body = bodyOf(5), cacheText: string | object = full, el: HTMLElement = embedEl(src)) {
 		const app = new App();
 		app.vault.setFile('Note.md', full);
+		// SC-594: Obsidian announces every hover (`hover-link`) before it draws the preview: the link the preview was opened for
+		const linked = hoverLinked.get(el);
+		if (linked) noteHoverLink(app, { linktext: linked.link, sourcePath: 'Host.md', hoverParent: { hoverPopover: { hoverEl: linked.popover } } });
 		jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => (typeof cacheText === 'string' ? cacheOf(cacheText) : cacheText) as never);
 		const sec: Section = { current: section };
 		const host = new ReadingModeBlockHost(new Plugin(app) as never, el, switchableCtx(sec) as never, 'ds-counter');
@@ -821,12 +827,14 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 	});
 
 	/** A hover preview of a block or heading link: Obsidian draws the card under `.popover.hover-popover > .markdown-embed`, which has no `src`. */
-	const hoverEl = (): HTMLElement => {
+	const hoverEl = (link: string | null = null): HTMLElement => {
 		const popover = document.createElement('div');
 		popover.className = 'popover hover-popover';
 		const embed = popover.appendChild(document.createElement('div'));
 		embed.className = 'markdown-embed';
-		return embed.appendChild(document.createElement('div'));
+		const el = embed.appendChild(document.createElement('div'));
+		if (link) hoverLinked.set(el, { link, popover });
+		return el;
 	};
 	const BLK = (extra = ''): string[] => [...CTR(5), `^blk${extra}`];
 
@@ -960,7 +968,8 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 		test('a heading hover of a long note: + then the form, Save lands in the Tracker counter', async () => {
 			const pre = ['# N', '', ...para(300, 'above'), '', ...SUB, '## After', '', ...para(300, 'below')];
 			const text = pre.join('\n');
-			const { app, host } = embedded(text, part(SUB, 2), 'x', bodyOf(5), text, hoverEl());
+			// Obsidian gives a heading hover the heading's BODY (no heading line, `lineStart` 1), and announces the link first (`hover-link`)
+			const { app, host } = embedded(text, { text: ['', ...CTR(5), '', ''].join('\n'), lineStart: 1, lineEnd: 4 }, 'x', bodyOf(5), text, hoverEl('Note#Tracker'));
 			expect(await plus(host)).toBe(true);
 			const pin = host.pinPosition()!;
 
@@ -1065,14 +1074,14 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 
 			test('P1 a hover of a block link: A edited to 9', async () => {
 				const pre = ['# N', '', ...A5('a'), '', 'p', '', ...CTR(6), '^b', '', 'END'].join('\n');
-				const { app, host } = embedded(pre, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, 'x', bodyOf(5), pre, hoverEl());
+				const { app, host } = embedded(pre, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, 'x', bodyOf(5), pre, hoverEl('Note#^a'));
 				expect(await plus(host)).toBe(true);
 				await asked(app, host, after6(app, '9'));
 			});
 
 			test('P1d a hover of a block link: A deleted', async () => {
 				const pre = ['# N', '', ...A5('a'), '', 'p', '', ...CTR(6), '^b', '', 'END'].join('\n');
-				const { app, host } = embedded(pre, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, 'x', bodyOf(5), pre, hoverEl());
+				const { app, host } = embedded(pre, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, 'x', bodyOf(5), pre, hoverEl('Note#^a'));
 				expect(await plus(host)).toBe(true);
 				await asked(app, host, ['# N', '', 'p', '', ...CTR(6), '^b', '', 'END'].join('\n'));
 			});
@@ -1093,14 +1102,14 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 
 			test('P3 a heading hover with two sections of the same name: the first one\'s block edited to 9', async () => {
 				const pre = ['# N', '', '## Tracker', '', ...CTR(5), '', '## Mid', '', 'x', '', '## Tracker', '', ...CTR(6), '', 'END'].join('\n');
-				const { app, host } = embedded(pre, part(SUB, 2), 'x', bodyOf(5), pre, hoverEl());
+				const { app, host } = embedded(pre, { text: ['', ...CTR(5), '', ''].join('\n'), lineStart: 1, lineEnd: 4 }, 'x', bodyOf(5), pre, hoverEl('Note#Tracker'));
 				expect(await plus(host)).toBe(true);
 				await asked(app, host, after6(app, '9'));
 			});
 
 			test('the same shape with no outside edit: Save lands in the block the + was pressed on, not in the one that reads the same', async () => {
 				const pre = ['# N', '', ...A5('a'), '', 'p', '', ...CTR(6), '^b', '', 'END'].join('\n');
-				const { app, host } = embedded(pre, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, 'x', bodyOf(5), pre, hoverEl());
+				const { app, host } = embedded(pre, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, 'x', bodyOf(5), pre, hoverEl('Note#^a'));
 				expect(await plus(host)).toBe(true);
 				const pin = host.pinPosition()!;
 
@@ -1122,16 +1131,16 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 			expect(app.vault.getContent('Note.md')).toBe(edited(outside));
 		});
 
-		test('a card (+/-) write\'s pin never uses the host\'s last write: a second + with the part still stale and an identical block in the note is refused as before (SC-480)', async () => {
+		test('a card (+/-) write\'s pin uses the host\'s last write when the part is stale: a second + lands in the block the first + was pressed on, never in the block that now reads the same', async () => {
 			const pre = ['# N', '', 'TOP', '', ...CTR(6), '', 'p', '', ...CTR(5), '', 'END'];
 			const { app, host } = hover(pre, 11);
 			await plus(host); // the lower block now reads like the upper
-			const both = noteOf6(app);
 			host.notePersistIntent();
 			await settle();
 
-			expect(await host.replaceSource(bodyOf(7), { fromView: true })).toBe(false);
-			refused(app, both);
+			expect(await host.replaceSource(bodyOf(7), { fromView: true })).toBe(true); // before the card write never used the record and was refused
+			expect(values(app)).toEqual([6, 7]);
+			expect(Notice.notices).toEqual([]);
 		});
 
 		test('a write by ANOTHER host of the block (a second pane) is not this host\'s position: nothing is found for this host\'s form', async () => {

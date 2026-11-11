@@ -24,6 +24,7 @@ import DrawSteelAdmonitionPlugin, {
 	FRAMEWORK_V2_DEPENDENCY_SCHEMAS,
 } from 'main';
 import { registerElements } from '@/utils/RegisterElements';
+import { hoverLinkOf } from '@/framework/host/hoverLinks';
 import { App, Notice } from '../../mocks/obsidian';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { ElementPipeline } from '@/framework/pipeline';
@@ -140,6 +141,25 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 		// And the registry's aliases are exactly what got wired into Obsidian.
 		const frameworkAliases = plugin.frameworkV2!.registry.all().flatMap((def) => [...def.aliases]);
 		expect(registered.sort()).toEqual(frameworkAliases.sort());
+	});
+
+	// SC-594: a hover preview's card learns which link its preview was opened for from Obsidian's `hover-link` event, which comes BEFORE the card
+	// is drawn: the listener is registered at load, not when the first card is built.
+	test('onload() registers a hover-link listener that records the link of the preview a card is drawn in', async () => {
+		const app = new App();
+		const on = jest.spyOn(app.workspace, 'on');
+		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
+
+		await plugin.onload();
+
+		const registered = on.mock.calls.find((call) => call[0] === 'hover-link');
+		expect(registered).toBeDefined();
+		const popover = document.createElement('div');
+		popover.className = 'popover hover-popover';
+		const card = popover.appendChild(document.createElement('div'));
+		registered![1]({ linktext: 'Note#Tracker', sourcePath: 'Host.md', hoverParent: { hoverPopover: { hoverEl: popover } } });
+		expect(hoverLinkOf(app, card)).toEqual({ linktext: 'Note#Tracker', sourcePath: 'Host.md' });
+		on.mockRestore();
 	});
 
 	test('onunload clears the SessionStore and drops the framework v2 bundle', async () => {
