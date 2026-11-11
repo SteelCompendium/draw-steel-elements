@@ -130,11 +130,21 @@ export class InitiativeView extends ElementView<EncounterData> {
 		this.register(() => this.activeModal?.close());
 	}
 
+	/** SC-576 — an `update()` with a model other than the one on screen comes from outside (the
+	 *  sidebar's refresh path re-prepares the block and calls `previous.update(model)` on this same
+	 *  view), so it is a freshly loaded model and ends any error card drawn after a failed re-parse.
+	 *  The same model (this view's own rebuilds) leaves it up. */
+	async update(model: EncounterData): Promise<void> {
+		if (model !== this.model) this.loadError = undefined;
+		await super.update(model);
+	}
+
 	protected onMount(root: HTMLElement, model: EncounterData): void {
 		if (this.loadError) {
 			renderErrorCard(root, { id: 'initiative', name: 'Initiative tracker' }, this.loadError);
 			return;
 		}
+		root.removeAttribute('data-dse-error-stage'); // set by a previous error card; the tracker is not one
 		// Per-mount listener owner: coarse rebuilds go through the framework default
 		// update(), whose unloadOwnedChildren() releases every registration bound here
 		// before onMount runs again — nothing accumulates on the view across rebuilds.

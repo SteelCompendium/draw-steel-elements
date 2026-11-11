@@ -3,7 +3,7 @@
 // host is asked to write. The e2e specs (e2e/specs/initiative/) then drive one plain scenario per manifest pair; this file
 // holds the permutations that do not need a real browser. Scenario groups follow e2e/manifest/initiative.ts:
 // T title edit, R round, M Malice, N turn, A action checklist, K captain, S selection, X reset.
-import { ElementPipeline } from '../../../src/framework/pipeline';
+import { ElementPipeline, prepareModel } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
@@ -723,6 +723,61 @@ describe('[X] Reset encounter state: what a confirm clears, what every other way
 		expect(root.querySelector('[data-state="dying"]')).toBeNull();
 		expect(has(root, 'init.hero.stamina')).toBe(false);
 		expect(root.hasAttribute('inert')).toBe(false);
+		// Reset acts on the model, and on the card's note the model is the stale one: neither reset action is offered
+		expect(has(root, 'init.reset-encounter')).toBe(false);
+		expect(has(root, 'init.reset-turns')).toBe(false);
+	});
+
+	/** Mount REFS, break the Orc note, Reset (so the error card is up), and hand back the same view for an outside update(). */
+	async function brokenThenReset() {
+		const created: Array<{ update(model: unknown): Promise<void>; currentModel(): unknown }> = [];
+		const createView = initiativeElement.createView;
+		const spy = jest.spyOn(initiativeElement, 'createView').mockImplementation((cx) => {
+			const view = createView(cx);
+			created.push(view);
+			return view;
+		});
+		const env = await mount(REFS, {}, VAULT);
+		spy.mockRestore();
+		const vault = (env.deps.app as unknown as App).vault;
+		vault.setFile('Bestiary/Orc Warrior.md', 'no statblock here any more');
+		const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+		try {
+			confirmReset(env.root);
+			await env.flush();
+		} finally {
+			errors.mockRestore();
+		}
+		expect(env.root.querySelector('.dse-error-card')).not.toBeNull();
+		const restore = (): void => {
+			vault.setFile('Bestiary/Orc Warrior.md', VAULT['Bestiary/Orc Warrior.md']);
+		};
+		return { ...env, view: created[0], restore };
+	}
+
+	test('[X05] the error card after a failed re-parse ends when the same view is given a freshly prepared model (the sidebar refresh) [SC-576]', async () => {
+		const { root, view, restore, deps } = await brokenThenReset();
+		restore();
+		const prepared = await prepareModel(initiativeElement, REFS, {
+			prefs: deps.prefs,
+			refs: deps.refs,
+			validation: deps.validation,
+			sourcePath: 'Encounter.md',
+		});
+		await view.update(prepared.model);
+		expect(root.querySelector('.dse-error-card')).toBeNull();
+		expect(root.hasAttribute('data-dse-error-stage')).toBe(false);
+		expect(root.querySelectorAll('[data-dse-control="init.cell.stamina"]')).toHaveLength(2);
+		expect(has(root, 'init.reset-encounter')).toBe(true);
+		expect(has(root, 'init.reset-turns')).toBe(true);
+	});
+
+	test('[X05] an update with the model already on screen leaves the error card up [SC-576]', async () => {
+		const { root, view } = await brokenThenReset();
+		await view.update(view.currentModel());
+		expect(root.querySelector('.dse-error-card')).not.toBeNull();
+		expect(root.querySelector('[data-dse-control="init.cell.stamina"]')).toBeNull();
+		expect(has(root, 'init.reset-encounter')).toBe(false);
 	});
 
 	test('[X05] while Reset re-reads the statblock notes the tracker is inert and busy, and is live again once it has rebuilt [SC-576]', async () => {

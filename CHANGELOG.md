@@ -25,8 +25,8 @@ for what needs action.
 - [FIX] **The initiative tracker repaints correctly after "Reset encounter state"** (SC-576). After Reset encounter -> Yes
   the tracker used to show every enemy group empty and every hero at 0 Stamina with a red Dying chip, although the note
   was reset correctly. It now shows the enemy rows and the heroes at full Stamina, as a reload of the note does. It also
-  stops the next action after a Reset from writing a wrong value into the note: damaging a hero by 5 right after a Reset
-  wrote `current_stamina: -5` instead of 25.
+  stops the next action after a Reset from writing a wrong value into the note: damaging a 30-Stamina hero by 5 right after a
+  Reset wrote `current_stamina: -5` instead of 25.
 - [FIX] **No more coloured left stripes on cards** (SC-558). The thick coloured bar down the left edge of ability
   cards (red, blue, green and so on by action type), of power-roll and Montage "Test tiers" rows, of a
   featureblock's "Level N Advancement" options and of the error card is gone. An ability's action type shows in its
