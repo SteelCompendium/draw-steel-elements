@@ -271,6 +271,11 @@ export class DseModal extends Modal {
 	 * 2. Send the helper ONE synthetic click from the anchor (bubbling, no coordinates, so never "on text"): it focuses the
 	 *    preview 10 ms later. The anchor carries Obsidian's `interactive-child` class until then, so the helper's "open the
 	 *    editor?" test says no whatever has the focus; the class comes off from a timer armed after the helper's.
+	 * A preview that is already focused (`.is-editing`: it was opened from before, the window closed, the same control pressed again)
+	 * cannot be hidden by that window-capture listener, so it needs no synthetic click, but the opening click is still
+	 * `preventDefault()`ed and nothing else is done. Left alone, the helper's timer for a re-open's click (150 ms on text) re-ran the
+	 * focus step and its "open the editor?" test after a second press had moved the focus to `body`, and switched the preview into a
+	 * source editor with the keyboard focus inside it behind the open window (SC-598 r3 MEDIUM-1; the base did the same).
 	 * Called before `arm()`: the re-pushes (same delay, armed later) then fire after the helper's push, so this modal's scope
 	 * stays above the preview's. Public API only: nothing private of the popover is touched.
 	 * Residual (measured): a second press queued in full (down AND up) while the modal is still opening on a slow renderer is
@@ -280,7 +285,11 @@ export class DseModal extends Modal {
 	private focusHoverPreviewNow(opening: Event, win: typeof window): void {
 		const anchor = this.anchorEl;
 		const pop = anchor?.closest('.hover-popover');
-		if (!anchor || !pop || pop.classList.contains('is-editing')) return;
+		if (!anchor || !pop) return;
+		if (pop.classList.contains('is-editing')) {
+			opening.preventDefault();
+			return;
+		}
 		opening.preventDefault();
 		const anchorWin = anchor.ownerDocument.defaultView ?? win;
 		const added = !anchor.classList.contains('interactive-child');

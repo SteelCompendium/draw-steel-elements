@@ -894,7 +894,10 @@ describe('SC-598: a click inside a modal opened from a hover preview, right afte
 		const owner = fakeOwner();
 		const popoverScope = new Scope();
 		const preview = previewStandIn({ app, scope: popoverScope, inPreview: opts.inPreview, onHide: () => owner.unload() });
-		if (opts.isEditing) preview.popover.classList.add('is-editing');
+		if (opts.isEditing) {
+			preview.popover.classList.add('is-editing');
+			preview.state.isFocused = true;
+		}
 		const anchor = preview.embed.appendChild(document.createElement('div'));
 		if (opts.anchorClass) anchor.classList.add('interactive-child');
 		const opener = anchor.appendChild(document.createElement('button'));
@@ -985,13 +988,20 @@ describe('SC-598: a click inside a modal opened from a hover preview, right afte
 		expect(modalCount()).toBe(1);
 	});
 
-	test('a preview that is already focused (.is-editing) gets only the opening click, which is not default-prevented', () => {
+	test('a preview that is already focused (.is-editing) gets only the opening click, default-prevented: no synthetic click, no class, and the helper does nothing for it even when a press moved the focus', () => {
 		const s = setup({ isEditing: true });
 
 		const opening = s.open();
-
+		expect(opening.defaultPrevented).toBe(true); // read at once: the helper's own timer would default-prevent it later too
 		expect(s.preview.clicks).toEqual([opening]);
-		expect(opening.defaultPrevented).toBe(false);
+		expect(s.anchor.classList.contains('interactive-child')).toBe(false);
+		jest.advanceTimersByTime(5);
+		(document.activeElement as HTMLElement).blur(); // the second press, before the helper's 150 ms timer
+		jest.advanceTimersByTime(200);
+
+		expect(s.preview.state.editor).toBe(false);
+		expect(s.app.keymap.scopes).toEqual([s.modal.scope]); // the helper pushed nothing
+		expect(s.preview.state.hidden).toBe(false);
 		expect(modalCount()).toBe(1);
 	});
 
