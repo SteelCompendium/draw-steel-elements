@@ -37,7 +37,9 @@ for what needs action.
   same Notice although the block still exists. If hundreds of lines changed around the block in that moment and an
   identical block exists, the click is refused the same way. Two identical blocks with only blank lines between them: if
   one is deleted from outside the plugin cannot tell which, so a click on the upper block is saved into the block that
-  is left.
+  is left. When a click is refused but its block is still in the note (the cut and paste case and the
+  hundreds-of-lines case above), the card keeps showing the click: the next click on that card saves it together with
+  the new one, and leaving the note first drops it.
 - [FIX] **No more coloured left stripes on cards** (SC-558). The thick coloured bar down the left edge of ability
   cards (red, blue, green and so on by action type), of power-roll and Montage "Test tiers" rows, of a
   featureblock's "Level N Advancement" options and of the error card is gone. An ability's action type shows in its
