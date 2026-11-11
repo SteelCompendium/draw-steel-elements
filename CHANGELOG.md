@@ -76,7 +76,8 @@ for what needs action.
   first word, as the rest of the plugin does.
 - [FIX] **Minion pool window: a minion's condition icons can be removed from the keyboard** (SC-572). Each
   icon is now a real button, named "Remove Bleeding" (and so on) for screen readers: Tab reaches it and
-  Enter or Space removes that condition, like a click. A keyboard focus ring shows on it. The look is
+  Enter or Space removes that condition, like a click, and focus moves to the next icon (never out of the
+  window). A keyboard focus ring shows on it. The look is
   unchanged, but the hover tip now reads "Remove Bleeding" instead of "Bleeding".
 - [FIX] **Conditions window: clicking a row's cog or a color swatch while the "Add condition" dropdown is open
   now works** (SC-474). The dropdown used to collapse the moment the mouse button went down, which shrank and
