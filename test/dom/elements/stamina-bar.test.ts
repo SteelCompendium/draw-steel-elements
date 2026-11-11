@@ -799,9 +799,10 @@ describe('SC-597: the Stamina modal opened by the keyboard from a bar in a hover
 		window.addEventListener('keydown', onKey, true);
 		try {
 			press(bar, 'Enter');
-			jest.advanceTimersByTime(200); // past the popover's 10 ms push and the modal's 150 ms re-push
-
+			jest.advanceTimersByTime(20); // the popover's 10 ms push, then the modal's 10 ms re-push after it, are done
 			expect(app.keymap.scopes[0]).toBe(popoverScope);
+			expect(app.keymap.top).not.toBe(popoverScope);
+			jest.advanceTimersByTime(200); // the 150 ms re-push too
 			expect(app.keymap.top).not.toBe(popoverScope);
 			press(document.body, 'Escape');
 

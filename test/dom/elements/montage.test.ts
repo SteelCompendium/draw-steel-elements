@@ -2347,9 +2347,10 @@ describe('SC-597: the Montage sheet opened by the keyboard from a board cell in 
 		window.addEventListener('keydown', onKey, true);
 		try {
 			press(cellFor(root, 'Kira', 2), 'Enter');
-			jest.advanceTimersByTime(200); // past the popover's 10 ms push and the sheet's 150 ms re-push
-
+			jest.advanceTimersByTime(20); // the popover's 10 ms push, then the sheet's 10 ms re-push after it, are done
 			expect(app.keymap.scopes[0]).toBe(popoverScope);
+			expect(app.keymap.top).not.toBe(popoverScope);
+			jest.advanceTimersByTime(200); // the 150 ms re-push too
 			expect(app.keymap.top).not.toBe(popoverScope);
 			press(document.body, 'Escape');
 
