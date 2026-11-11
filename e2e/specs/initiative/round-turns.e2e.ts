@@ -49,7 +49,7 @@ describe('initiative: round and turns', () => {
 		await expect(root.control('init.hero.turn', { nth: 1 })).toHaveAttribute('aria-pressed', 'false');
 	});
 
-	it('[INIT-R03] a negative round_gain: the button reads "-9" (never "+-9"), Advance round floors Malice at 0 and logs the configured amount', async () => {
+	it('[INIT-R03] a negative round_gain: the button reads "-9" (never "+-9"), Advance round floors Malice at 0 and logs the -4 it applied with the -9 asked for', async () => {
 		const root = await openRich();
 		await dse.externalEdit(RICH, "c.replace('round_gain: 2', 'round_gain: -9')"); // Malice 4 + -9 would be -5; opening the note restores the fixture, so edit after
 		await expect(root.control('init.round.advance')).toHaveAttribute('aria-label', 'Advance round (-9 Malice)');
@@ -57,7 +57,7 @@ describe('initiative: round and turns', () => {
 		expect(w.count).toBe(1);
 		await dse.expectNoteBlock(RICH, INIT).toMatchObject({
 			round: 3,
-			malice: { value: 0, round_gain: -9, log: [{ round: 1, amount: 3, label: 'Opening Malice' }, { round: 3, amount: -9, label: 'Round gain' }] },
+			malice: { value: 0, round_gain: -9, log: [{ round: 1, amount: 3, label: 'Opening Malice' }, { round: 3, amount: -4, label: 'Round gain', requested: -9 }] },
 		});
 		await expect(malice(root)).toHaveElementProperty('textContent', 'Malice: 0');
 		await expect(root.control('init.malice.dec')).toBeDisabled();

@@ -24,8 +24,8 @@ async function fill(root: Scope, amount: string, label: string): Promise<void> {
 	await dse.type(root.control('init.malice.quickadd.label'), label, { replace: true });
 }
 
-const maliceOf = async (note: string): Promise<{ value: number; log?: Array<{ round: number; amount: number; label: string }> }> =>
-	((await dse.expectNoteBlock(note, INIT).value()) as { malice: { value: number; log?: Array<{ round: number; amount: number; label: string }> } }).malice;
+const maliceOf = async (note: string): Promise<{ value: number; log?: Array<{ round: number; amount: number; label: string; requested?: number }> }> =>
+	((await dse.expectNoteBlock(note, INIT).value()) as { malice: { value: number; log?: Array<{ round: number; amount: number; label: string; requested?: number }> } }).malice;
 
 describe('initiative: the Malice stepper', () => {
 	it('[INIT-M01] - - + from 3 gives 2: the screen follows at once and the note holds the final value', async () => {
@@ -109,26 +109,16 @@ describe('initiative: the Malice quick-add row', () => {
 		await expect(root.control('init.malice.log')).toHaveText('Malice log · 1 entry');
 	});
 
-	knownBug(
-		'SC-578',
-		'[INIT-M09] a quick-add that the pool clamps logs what it did: the entry matches the change in Malice, or says it was capped',
-		async () => {
-			const root = await open(); // Malice 3
-			await fill(root, '-5', 'Spend');
-			await dse.waitForWrite(MIN, () => dse.click(root.control('init.malice.quickadd.add')));
-			const m = await maliceOf(MIN);
-			const entry = m.log![0];
-			expect(m.value).toBe(0);
-			// The entry must still carry the typed label (anywhere in it) AND either record the applied change (-3) or say the pool capped it / name the applied amount.
-			const applied = m.value - 3;
-			const lbl = String(entry.label ?? '');
-			const rest = lbl.replace(/spend/i, '');
-			const showsClamp =
-				/spend/i.test(lbl) && (Object.values(entry).includes(applied) || /cap|clamp|limit/i.test(rest) || new RegExp(`(^|\\D)${Math.abs(applied)}(\\D|$)`).test(rest));
-			expect(entry.amount === applied || showsClamp).toBe(true);
-		},
-		{ failsWith: /Expected: true/ },
-	);
+	it('[INIT-M09] a quick-add that the pool clamps logs what it did: -5 from Malice 3 is an entry of -3 that records the -5 asked for', async () => {
+		const root = await open(); // Malice 3
+		await fill(root, '-5', 'Spend');
+		await dse.waitForWrite(MIN, () => dse.click(root.control('init.malice.quickadd.add')));
+		const m = await maliceOf(MIN);
+		expect(m.value).toBe(0);
+		expect(m.log).toEqual([{ round: 1, amount: -3, label: 'Spend', requested: -5 }]);
+		await dse.click(root.control('init.malice.log'));
+		await expect(root.control({ css: '.dse-init__malice-log-entry' })).toHaveText('R1: -3 — Spend (-5, capped at 0)');
+	});
 });
 
 describe('initiative: keyboard focus after a rebuild', () => {
