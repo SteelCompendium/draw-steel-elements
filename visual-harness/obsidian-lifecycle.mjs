@@ -171,6 +171,12 @@
 // form with it, on the click that ends the press), typed text and a real click on Save land in the note with no Notice and the preview still shown, a real click outside closes the preview,
 // Escape on a new form closes the form and Cancel on another one closes only the form (the preview stays both times); the stamina modal and the initiative tracker's Conditions modal opened from a preview stay open under a real click on their title, the Conditions modal also under "Add condition" (a control it redraws in its own click), and the Stamina modal under free-heal Confirm (the click that closes a second modal over it).
 //
+// SC-597 appends G-S87 (56 scenarios in all; it sits after G-S83 and before G-S56, and runs in the fifth `--only` part): the same hover preview, but the modal is opened by the KEYBOARD. A real Ctrl-hover shows the preview, the pointer rests on
+// the card, the opener is focused with a script `.focus()` and a real CDP key is sent: Enter on the stamina bar (Reading view and Live Preview), Space on it (Reading view), Enter on a montage board cell (Reading view). The key used to call the
+// opener directly, so no click went through the preview, Obsidian's hover timer found the pointer outside the preview about 300 ms later and hid it, and the modal closed with it. Now the key clicks the element the mouse clicks. Each trial: at 1.5 s the
+// preview AND the modal are open; a real click on the modal's title keeps both; stamina: Healing 3 and a real click on Apply put `current_stamina: 18` in the note with no Notice (modal closed, preview shown), a reopen by the same key and Escape 450 ms
+// later close only the modal; montage: Escape closes the sheet (preview shown); with the pointer away for 1.2 s the preview is still shown; a real click outside closes it.
+//
 // SC-480 appends G-S73 (53 scenarios before G-S77; it sits after G-S49 and before G-S56, which stays last, and runs in the fifth `--only` part with G-S59 and G-S49): a card write whose pin
 // cannot be placed because its block was DELETED from outside is never written into an identical twin. Click + on one of two identical counters (Reading view and Live Preview),
 // delete that block from outside at once, then leave the note (the unload flush) or wait out the 400 ms debounce: nothing is written, the note stays as the outside edit left it, and
@@ -563,6 +569,11 @@ Object.assign(FIXTURES, {
 		'Lifecycle/gs83-stam.md': `# gs83 stam\n\nABOVE\n\n${fence('ds-stamina-bar', ['max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5'])}\n\nBELOW\n`,
 		'Lifecycle/gs83-stam-host.md': `# gs83 stam host\n\nsee [[gs83-stam]] here\n\nfiller\n`,
 		'Lifecycle/gs83-trk-host.md': `# gs83 trk host\n\nsee [[tracker]] here\n\nfiller\n`,
+	});
+	// SC-597 (G-S87): a montage note (one hero, round 2 of 3, nothing logged: its round-1 cell is a past empty cell, which has role=button and opens the sheet) and its host.
+	Object.assign(FIXTURES, {
+		'Lifecycle/gs87-mont.md': `# gs87 mont\n\nABOVE\n\n${fence('ds-montage', ['title: Probe', 'rounds: 3', 'participants:', '  - name: Kira', 'current_round: 2'])}\n\nBELOW\n`,
+		'Lifecycle/gs87-mont-host.md': `# gs87 mont host\n\nsee [[gs87-mont]] here\n\nfiller\n`,
 	});
 	Object.assign(FIXTURES, {
 		'Lifecycle/gs77-cal-src.md': `# gs77 cal src\n\n${CAL2()}\n\n^gs77cal\n\nend\n`,
@@ -1591,6 +1602,85 @@ async function gs83ModalTrial(t, mode, kind) {
 			await t.sleep(500);
 		}
 		rec.afterEscape = await K.state();
+	} catch (e) {
+		rec.error = e.message;
+	} finally {
+		await K.cleanup();
+	}
+	return rec;
+}
+
+/**
+ * SC-597 (G-S87): a modal opened from a hover preview by the KEYBOARD. `opener`: 'stam-enter' / 'stam-space' (Enter / Space on the stamina bar) or 'mont-enter' (Enter on a montage board cell).
+ * Real mouse for the hover and every click (gs83Kit), a script `.focus()` on the opener and a real CDP key (Input.dispatchKeyEvent) for the key; the pointer rests on the card inside the preview. Returns a record; the scenario judges it.
+ * Footgun (measured, SC-597 r1): a CDP `keyDown` with no `text` does NOT activate a real `<button>` (no keypress), so a trial whose opener is a real button must send `text: '\r'`; the two openers here are `div`s with a keydown handler, which a
+ * bare keyDown reaches.
+ */
+async function gs87Trial(t, mode, opener) {
+	const K = gs83Kit(t);
+	const isMont = opener.startsWith('mont');
+	const [src, host] = isMont ? ['Lifecycle/gs87-mont.md', 'Lifecycle/gs87-mont-host.md'] : ['Lifecycle/gs83-stam.md', 'Lifecycle/gs83-stam-host.md'];
+	const MODAL = `document.querySelector('.modal-container .dse-modal')`;
+	const OPENER = isMont ? `(${K.ENTRY(src)}).root.querySelector('.dse-mt__cell[role="button"][tabindex="0"]')` : `(${K.ENTRY(src)}).root.querySelector('[data-dse-control="stamina.bar"]')`;
+	const rec = { mode, opener };
+	const pressKey = async () => {
+		await t.ev(`(() => { (${OPENER}).focus(); return true; })()`); // keyboard focus on the opener; no click anywhere
+		if (opener.endsWith('space')) await t.key(' ', 'Space', 32);
+		else await t.key('Enter', 'Enter', 13);
+	};
+	try {
+		await t.reset(src);
+		await t.reset(host);
+		const link = await K.openHost(host, mode);
+		rec.hover = await K.hover(link, src);
+		await t.waitFor(`!!(${OPENER})`, `${mode} ${opener}: the opener is drawn`, 8000);
+		await K.moveTo(`${K.ENTRY(src)}.root`); // the pointer rests on the card, inside the preview
+		await t.sleep(400);
+		await pressKey();
+		await t.sleep(1500); // the bug: the preview and the modal were both gone ~300 ms after the key, with the pointer resting and no input
+		rec.at1500 = await K.state();
+		if (!(rec.at1500.popover && rec.at1500.modal)) return rec;
+		await K.click(`(${MODAL}).closest('.modal').querySelector('.modal-title') || (${MODAL})`);
+		await t.sleep(500);
+		rec.afterTitleClick = await K.state();
+		if (!(rec.afterTitleClick.popover && rec.afterTitleClick.modal)) return rec;
+		if (!isMont) {
+			// an Apply write: Healing 3, then a real click on Apply (15 -> 18)
+			await t.ev(`(() => { const i = document.querySelector('.modal-container [data-dse-control="sedit.apply-amount"]'); i.focus(); i.select(); return true; })()`);
+			await t.cdp.call('Input.insertText', { text: '3' });
+			await K.click(`document.querySelector('.modal-container [data-dse-control="sedit.healing"]')`);
+			await t.sleep(250);
+			const m = await t.mark();
+			await K.click(`document.querySelector('.modal-container [data-dse-control="sedit.apply"]')`);
+			const t0 = Date.now();
+			while (Date.now() - t0 < 4000 && !/current_stamina: 18/.test(t.read(src))) await t.sleep(50);
+			await t.sleep(400);
+			rec.saved = /current_stamina: 18/.test(t.read(src));
+			rec.notices = await t.noticesSince(m);
+			rec.afterApply = await K.state();
+			// the same key again, then Escape 450 ms later (past the popover's 150 ms helper): only the modal closes
+			await t.waitFor(`!!(${OPENER})`, `${mode} ${opener}: the bar is redrawn`, 8000);
+			await pressKey();
+			await t.sleep(450);
+			rec.reopened = await K.state();
+			await t.key('Escape', 'Escape', 27);
+			await t.sleep(500);
+			rec.afterEscape = await K.state();
+		} else {
+			await t.key('Escape', 'Escape', 27);
+			await t.sleep(500);
+			rec.afterEscape = await K.state();
+		}
+		// the pointer leaves the preview and rests 1.2 s: it stays (the preview is focused, as after a click)
+		await K.mouse('mouseMoved', 700, 700);
+		await K.mouse('mouseMoved', 5, 300);
+		await t.sleep(1200);
+		rec.afterRest = await K.state();
+		// a real click outside closes it: the popover's own window click listener
+		await K.click(`document.querySelector('.workspace-leaf.mod-active .view-header-title, .workspace-leaf.mod-active .view-header')`);
+		const t1 = Date.now();
+		while (Date.now() - t1 < 3000 && (await K.state()).popover) await t.sleep(100);
+		rec.afterOutside = await K.state();
 	} catch (e) {
 		rec.error = e.message;
 	} finally {
@@ -7459,6 +7549,56 @@ const SCENARIOS = [
 					if (bad.length) problems.push(`${label}: ${bad.join('; ')}`);
 					else if (kind === 'stamtext') outcomes.push(`${label} (${r.hover}): opened by a real press on the bar's number text (${r.hit}), Escape 450 ms later closed the modal (preview shown)`);
 					else outcomes.push(`${label} (${r.hover}): a real click on the title ${kind === 'conditions' ? 'and on "Add condition"' : 'and free-heal Confirm'} left preview and modal open, Escape closed the modal (preview shown)`);
+				}
+			} finally {
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+				await t.ev(`document.getElementById('lc-gs83-notice')?.remove()`);
+				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
+				for (const rel of files) await t.reset(rel);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect(problems.length === 0, `${problems.join(' | ')} -- passed: ${outcomes.join('; ')}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${J(await t.errorsSince(m))}`);
+			return outcomes.join('; ');
+		},
+	},
+	{
+		// G-S87 (SC-597): a hover preview, a modal opened from it by the KEYBOARD. Enter / Space on the stamina bar and Enter on a montage board cell used to call the opener directly: no click went through the preview, Obsidian's
+		// hover timer hid the preview about 300 ms later and the modal closed with it. The key now clicks the element the mouse clicks, so the keyboard path does what the mouse path does: at 1.5 s the preview and the modal are
+		// both open, a real click on the title keeps both, Apply writes the note with no Notice, Escape (also 450 ms after a reopen by the same key) closes only the modal, the preview stays with the pointer away and a real click
+		// outside closes it. Trials: stamina Enter in Reading view and Live Preview, stamina Space (Reading view), montage Enter (Reading view). It sits before G-S56, which runs last.
+		id: 'G-S87',
+		async run(t) {
+			const m = await t.mark();
+			const J = JSON.stringify;
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			const problems = [];
+			const outcomes = [];
+			const files = ['Lifecycle/gs83-stam.md', 'Lifecycle/gs83-stam-host.md', 'Lifecycle/gs87-mont.md', 'Lifecycle/gs87-mont-host.md'];
+			await t.ev(`(() => { if (!document.getElementById('lc-gs83-notice')) { const st = document.createElement('style'); st.id = 'lc-gs83-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
+			await t.ev(`${prefs}.set('authoringControls', true)`);
+			try {
+				for (const [mode, opener] of [['rv', 'stam-enter'], ['lp', 'stam-enter'], ['rv', 'stam-space'], ['rv', 'mont-enter']]) {
+					const r = await gs87Trial(t, mode, opener);
+					const label = `${opener} ${mode}`;
+					const isMont = opener.startsWith('mont');
+					const bad = [];
+					if (r.error) bad.push(`error: ${r.error}`);
+					else if (!(r.at1500.popover && r.at1500.modal)) bad.push(`1.5 s after the key the preview and the ${isMont ? 'sheet' : 'modal'} must both be open ${J(r.at1500)}`);
+					else if (!(r.afterTitleClick.popover && r.afterTitleClick.modal)) bad.push(`a real click on the title closed ${J(r.afterTitleClick)}`);
+					else {
+						if (!isMont) {
+							if (!r.saved) bad.push('Healing 3 + a real click on Apply did not put current_stamina: 18 in the note');
+							if (r.notices.length) bad.push(`Notice(s) after Apply ${J(r.notices)}`);
+							if (!(r.afterApply.popover && !r.afterApply.modal)) bad.push(`after Apply the modal must be closed and the preview shown ${J(r.afterApply)}`);
+							if (!(r.reopened.popover && r.reopened.modal)) bad.push(`the same key must reopen the modal and keep it open 450 ms later ${J(r.reopened)}`);
+						}
+						if (!(r.afterEscape.popover && !r.afterEscape.modal)) bad.push(`Escape must close the ${isMont ? 'sheet' : 'modal'} and leave the preview ${J(r.afterEscape)}`);
+						if (!r.afterRest.popover) bad.push('with the pointer away for 1.2 s the preview closed');
+						if (r.afterOutside.popover) bad.push('a real click outside did not close the preview');
+					}
+					if (bad.length) problems.push(`${label}: ${bad.join('; ')}`);
+					else outcomes.push(`${label} (${r.hover}): the key opened the ${isMont ? 'sheet' : 'modal'} and 1.5 s later preview and ${isMont ? 'sheet' : 'modal'} were both open, a real click on the title kept both, ${isMont ? 'Escape closed the sheet' : 'Healing 3 + Apply wrote current_stamina: 18 (no Notice), a reopen by the same key and Escape 450 ms later closed only the modal'} (preview shown), the preview stayed with the pointer away, a click outside closed it`);
 				}
 			} finally {
 				await t.ev(`${prefs}.set('authoringControls', false)`);
