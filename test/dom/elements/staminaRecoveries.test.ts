@@ -555,3 +555,77 @@ describe('SC-132: the ALT stepper popover is a SETTING, off by default', () => {
 		expect(root.querySelector('.dse-stamina-rec__pop')).toBeNull();
 	});
 });
+
+/* ==================================================================== */
+/*  SC-570 — the popover's − / + presses and Catch breath share ONE       */
+/*  debounced write path                                                 */
+/* ==================================================================== */
+/*
+   The e2e RECOV-R07 settles the stepper write before it presses Catch breath (a slow host puts the
+   two presses on either side of the 400 ms window, and a write-counting wait cannot tell whose write
+   it is counting). These pin the three timings the e2e no longer exercises, asserting each write's
+   CONTENT: the model is serialized at flush time, so the last write is always the Catch-breath result
+   and one press spends exactly one Recovery whichever side of the window it lands on.
+*/
+describe('SC-570: popover steppers then Catch breath — write count and content by timing', () => {
+	/** The e2e fixture (e2e/vaults/shipped/Stamina/recoveries.md): 12 / 30 Stamina, 3 of 6 Recoveries (Catch breath heals 10). */
+	const E2E_REC_YAML = ['max_stamina: 30', 'current_stamina: 12', 'temp_stamina: 0', 'recoveries: 3', 'recoveries_max: 6'].join('\n');
+	const field = (src: string, key: string) => Number(new RegExp(`^${key}: (\\d+)$`, 'm').exec(src)?.[1]);
+	/** `[recoveries, current_stamina]` of every recorded write, in order. */
+	const written = (writes: string[]) => writes.map((src) => [field(src, 'recoveries'), field(src, 'current_stamina')]);
+
+	/** Open the popover and press − + +, as RECOV-R07 does (3 -> 2 -> 3 -> 4). `hold`: each write stays in flight until released. */
+	async function pressSteppers(hold = false) {
+		const writes: string[] = [];
+		const releases: Array<() => void> = [];
+		const replaceSource = jest.fn((src: string) => {
+			writes.push(src);
+			return hold ? new Promise<boolean>((resolve) => releases.push(() => resolve(true))) : Promise.resolve(true);
+		});
+		const deps = makeDeps();
+		await deps.prefs.set('staminaRecoveryPopover', true);
+		const host = makeHost({ replaceSource });
+		await new ElementPipeline(deps).run(staminaBarElement, E2E_REC_YAML, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		const control = (id: string) => root.querySelector<HTMLElement>(`[data-dse-control="${id}"]`)!;
+		pips(root)[3].click();
+		control('recov.pop.dec').click();
+		control('recov.pop.inc').click();
+		control('recov.pop.inc').click();
+		expect(writes).toHaveLength(0); // nothing is written until the debounce fires
+		return { control, writes, releases };
+	}
+
+	test('Catch breath inside the window supersedes the stepper write: ONE write, recoveries 3 / Stamina 22', async () => {
+		jest.useFakeTimers();
+		const { control, writes } = await pressSteppers();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS - 1);
+		control('recov.pop.catch-breath').click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 3);
+		expect(written(writes)).toEqual([[3, 22]]);
+	});
+
+	test('Catch breath after the window: TWO writes, the steppers (4, 12) then Catch breath (3, 22)', async () => {
+		jest.useFakeTimers();
+		const { control, writes } = await pressSteppers();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(written(writes)).toEqual([[4, 12]]);
+		control('recov.pop.catch-breath').click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 3);
+		expect(written(writes)).toEqual([[4, 12], [3, 22]]);
+	});
+
+	test('stepper write still in flight across the Catch breath press and its write: no stale re-write, last write is (3, 22)', async () => {
+		jest.useFakeTimers();
+		const { control, writes, releases } = await pressSteppers(true);
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS); // the stepper write starts and is held
+		expect(written(writes)).toEqual([[4, 12]]);
+		control('recov.pop.catch-breath').click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 3); // Catch breath's own write starts while #1 is in flight
+		expect(written(writes)).toEqual([[4, 12], [3, 22]]);
+		releases[1]();
+		releases[0](); // settling out of order must not trigger another write
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 3);
+		expect(written(writes)).toEqual([[4, 12], [3, 22]]);
+	});
+});
