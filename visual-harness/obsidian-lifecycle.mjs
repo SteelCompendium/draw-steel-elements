@@ -1544,8 +1544,11 @@ async function gs83ModalTrial(t, mode, kind) {
 		await t.waitFor(`!!(${opener})`, `${mode} ${kind}: the opener is drawn`, 8000);
 		if (kind === 'stamtext') {
 			// a real press ON a text node inside the bar (the "15"): Obsidian's click-to-edit helper then waits 150 ms, not 10, before it pushes its keymap scope
-			const pt = await t.ev(`(() => { const op = ${opener}; const w = document.createTreeWalker(op, NodeFilter.SHOW_TEXT); let n; while ((n = w.nextNode())) { if (!n.textContent.trim()) continue; const r = new Range(); r.selectNodeContents(n); const q = r.getClientRects()[0]; if (q && q.width > 2) return { x: Math.round(q.left + q.width / 2), y: Math.round(q.top + q.height / 2) }; } return null; })()`);
+			const pt = await t.ev(`(() => { const op = ${opener}; const w = document.createTreeWalker(op, NodeFilter.SHOW_TEXT); let n; while ((n = w.nextNode())) { if (!n.textContent.trim()) continue; const r = new Range(); r.selectNodeContents(n); const q = r.getClientRects()[0]; if (q && q.width > 2) { const x = Math.round(q.left + q.width / 2); const y = Math.round(q.top + q.height / 2); const h = document.elementFromPoint(x, y); return { x, y, text: n.textContent.trim().slice(0, 20), digit: /\\d/.test(n.textContent), onText: !!h && h.contains(n), inBar: !!h && op.contains(h), hit: h ? (h.className || h.nodeName).toString().slice(0, 40) : null }; } } return null; })()`);
 			t.expect(!!pt, `${mode} ${kind}: no text node to press in the stamina bar`);
+			// the press must land ON the bar's number text (the 150 ms helper path), not beside it: check what is under the point, and say so in the outcome line
+			t.expect(pt.digit && pt.onText && pt.inBar, `${mode} ${kind}: the press point is not on the bar's number text: ${JSON.stringify(pt)}`);
+			rec.hit = `"${pt.text}" on ${pt.hit}`;
 			await K.mouse('mouseMoved', pt.x, pt.y);
 			await t.sleep(200);
 			await K.press(pt);
@@ -7454,7 +7457,7 @@ const SCENARIOS = [
 						if (r.afterEscape && !(r.afterEscape.popover && !r.afterEscape.modal)) bad.push(`Escape must close the modal and leave the preview ${J(r.afterEscape)}`);
 					}
 					if (bad.length) problems.push(`${label}: ${bad.join('; ')}`);
-					else if (kind === 'stamtext') outcomes.push(`${label} (${r.hover}): opened by a real press on the bar's text, Escape 450 ms later closed the modal (preview shown)`);
+					else if (kind === 'stamtext') outcomes.push(`${label} (${r.hover}): opened by a real press on the bar's number text (${r.hit}), Escape 450 ms later closed the modal (preview shown)`);
 					else outcomes.push(`${label} (${r.hover}): a real click on the title ${kind === 'conditions' ? 'and on "Add condition"' : 'and free-heal Confirm'} left preview and modal open, Escape closed the modal (preview shown)`);
 				}
 			} finally {
