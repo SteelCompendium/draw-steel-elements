@@ -99,7 +99,7 @@ export class MinionStaminaPoolModal extends DseModal {
 		// recomputed from the alive count — that was the pre-existing divergence from the
 		// row bar/print readout, which always used the original `amount`).
 		const poolMaxStamina = minionPoolMaxOf(this.creature);
-		const poolCurrentStamina = minionPoolOf(this.group, this.creature) ?? poolMaxStamina;
+		const poolCurrentStamina = this.currentPool();
 
 		// -- The preview bar (shared template) with a tick at each minion death point --
 		// Evenly divides the bar into `amount` segments (the ORIGINAL squad size, C1)
@@ -351,7 +351,7 @@ export class MinionStaminaPoolModal extends DseModal {
 		const minionMaxStamina = this.creature.max_stamina;
 		const aliveMinions = this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0;
 		const poolMaxStamina = minionPoolMaxOf(this.creature);
-		const poolCurrentStamina = minionPoolOf(this.group, this.creature) ?? poolMaxStamina;
+		const poolCurrentStamina = this.currentPool();
 		const pending = this.effectivePending();
 		const newStamina = poolCurrentStamina + pending;
 		const effectivePerMinion = minionMaxStamina + foldedCaptainStaminaBonus(this.creature);
@@ -368,10 +368,10 @@ export class MinionStaminaPoolModal extends DseModal {
 		let minionsToKill = finalMinionsKilled - initialMinionsKilled;
 		if (pending > 0) {
 			minionsToKill = Math.min(0, minionsToKill);
-		} else if (pending <= 0 && newStamina <= 0) {
-			// SC-573: `pending === 0` counts too. A pool already at 0 (or hand-edited below it) with minions still
-			// alive owes their deaths with NOTHING staged, so Apply stays reachable. (A pool above 0 never has
-			// `pending === 0 && newStamina <= 0`: no behaviour change there.)
+		} else if (newStamina <= 0) {
+			// Here `pending <= 0` (a heal took the branch above). SC-573: `pending === 0` counts: a pool already
+			// at 0 with minions still alive owes their deaths with NOTHING staged, so Apply stays reachable.
+			// (A pool above 0 never has `pending === 0 && newStamina <= 0`: no behaviour change there.)
 			minionsToKill = aliveMinions;
 		} else {
 			minionsToKill = Math.min(aliveMinions, minionsToKill);
@@ -388,6 +388,16 @@ export class MinionStaminaPoolModal extends DseModal {
 		return { minionMaxStamina, aliveMinions, poolMaxStamina, poolCurrentStamina, newStamina, minionsToKill, healCeiling, emptyPoolKills };
 	}
 
+	/**
+	 * SC-573 r2: the squad's current pool, floored at 0. A hand-edited negative pool (no write path produces one)
+	 * is an empty pool: the stepper shows 0, so every staged change must be measured from 0 too (a +/- press from
+	 * -3 used to stage a +3 "heal" against a stepper reading 0). Apply writes the floored value. One read for the
+	 * stepper base, `poolNumbers()` and the Apply handler; a pool above 0 is unchanged.
+	 */
+	private currentPool(): number {
+		return Math.max(0, minionPoolOf(this.group, this.creature) ?? minionPoolMaxOf(this.creature));
+	}
+
 	/** SC-430: the committed pending change, or the one a dirty typed draft would stage. */
 	private effectivePending(): number {
 		return this.draftStaminaChange ?? this.pendingStaminaChange;
@@ -398,13 +408,13 @@ export class MinionStaminaPoolModal extends DseModal {
 	 * info line state it (the SC-427 `appliedStaminaChange` shape, StaminaEditModal). It is the one
 	 * copy the label and info line share; Apply and the stepper keep their own [0, max] clamp.
 	 * Damage never takes more than the pool holds (99 x 5 on a pool of 20 is 20, not 495) and a
-	 * heal never lifts it past the max. The sign never flips: a hand-edited pool already outside
-	 * [0, max] still reads as the direction the user staged (a negative pool reads as 0 damage).
+	 * heal never lifts it past the max. The sign never flips. The current pool is never negative
+	 * here (`currentPool` floors a hand-edited negative at 0), so damage on an empty pool is 0.
 	 * The preview bar deliberately keeps the raw damage (updateStaminaBar).
 	 */
 	private appliedPoolChange(raw: number): number {
 		const { poolMaxStamina, poolCurrentStamina } = this.poolNumbers();
-		if (raw < 0) return Math.max(raw, -Math.max(0, poolCurrentStamina));
+		if (raw < 0) return Math.max(raw, -poolCurrentStamina);
 		return Math.min(raw, Math.max(0, poolMaxStamina - poolCurrentStamina));
 	}
 

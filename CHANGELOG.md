@@ -114,7 +114,8 @@ for what needs action.
   (SC-573). The window ticked every living minion but left Apply disabled ("No Stamina Change"), so the deaths
   could not be recorded. Apply now reads "Kill 5 minion(s)" and the line above it says "The pool is at 0, so 5
   minion(s) die." (also after staging damage on the empty pool, where the button used to read "Deal 0 damage,
-  kill 5 minion(s)"). Apply marks them dead and leaves the pool at 0. A heal at pool 0 is still refused.
+  kill 5 minion(s)"). Apply marks them dead and leaves the pool at 0. Heals are unchanged. A pool edited by hand
+  to below 0 now counts as 0 in the window, so pressing + then - no longer leaves Apply disabled.
 - [FIX] **Minion pool window: a minion's condition icons can be removed from the keyboard** (SC-572). Each
   icon is now a real button, named "Remove Bleeding" (and so on) for screen readers: Tab reaches it and
   Enter or Space removes that condition, like a click, and focus moves to the next icon (never out of the

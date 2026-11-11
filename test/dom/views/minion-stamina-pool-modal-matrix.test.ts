@@ -849,6 +849,25 @@ describe('SC-573: a pool at 0 with living minions: Apply records their deaths', 
 		expect(persist).toHaveBeenCalledTimes(1);
 	});
 
+	test('a hand-edited negative pool: + then - lands back on the nothing-staged kill state (r2), and Apply writes 0', async () => {
+		const { content, group, minion, persist } = await open({ pool: -3 });
+		click(content, 'pool.stamina.inc');
+		expect(poolInput(content).value).toBe('1');
+		expect(apply(content).textContent).toBe('Heal 1 stamina'); // measured from 0, not "Heal 4"
+		click(content, 'pool.stamina.dec');
+		expect(poolInput(content).value).toBe('0');
+		expect(apply(content).textContent).toBe('Kill 5 minion(s)');
+		expect(apply(content).disabled).toBe(false);
+		expect(apply(content).hasAttribute('title')).toBe(false);
+		expect(info(content).textContent).toBe(SENTENCE(5));
+		expect(warn(content).hidden).toBe(true);
+		expect(boxes(content)).toBe('xxxxx');
+		apply(content).click();
+		expect(group.minion_stamina_pool).toBe(0);
+		expect(minion.instances!.every((i) => i.isDead)).toBe(true);
+		expect(persist).toHaveBeenCalledTimes(1);
+	});
+
 	describe('the typed-draft prediction (SC-430) agrees with what the commit shows', () => {
 		const draft = (c: Content, v: string): void => {
 			poolInput(c).value = v;
@@ -856,7 +875,8 @@ describe('SC-573: a pool at 0 with living minions: Apply records their deaths', 
 		};
 		const state = (c: Content) => ({ label: apply(c).textContent, disabled: apply(c).disabled, info: info(c).textContent, infoHidden: info(c).hidden });
 
-		test('a heal draft is refused before and after the commit', async () => {
+		// Regression pin: the heal path did not change with SC-573; this pins that it stays refused at pool 0.
+		test('(pin) a heal draft is refused before and after the commit', async () => {
 			const { content } = await open({ pool: 0 });
 			draft(content, '3');
 			const predicted = state(content);
