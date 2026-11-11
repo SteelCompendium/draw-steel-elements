@@ -94,8 +94,9 @@ describe('conditions-modal: removing a condition', () => {
 		await dse.waitForWrite(CONDITIONS, () => dse.click(modal.control('cond.remove', { nth: 2 })));
 		expect((await modalRows()).map((r) => r.editorOpen)).toEqual([false, false, false]);
 		expect(await modalNames()).toEqual(['Bleeding', 'Dazed', 'Slowed']);
-		const hero = ((await dse.expectNoteBlock(CONDITIONS, INIT).value()) as { heroes: Array<{ conditions: Array<{ key: string } | string> }> }).heroes[0];
-		expect(hero.conditions.map((c) => (typeof c === 'string' ? c : c.key))).toEqual(['bleeding', 'dazed', 'slowed']); // `bleeding` is written as a plain name
+		// `bleeding` was written as a plain name and stays one; the objects the user wrote stay objects
+		const hero = ((await dse.expectNoteBlock(CONDITIONS, INIT).value()) as { heroes: Array<{ conditions: unknown[] }> }).heroes[0];
+		expect(hero.conditions).toEqual(['bleeding', { key: 'dazed', duration: 'eot', color: '#c0392b', effect: 'glow' }, { key: 'slowed', effect: 'save ends' }]);
 		await dse.closeModals();
 	});
 });

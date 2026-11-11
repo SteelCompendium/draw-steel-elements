@@ -226,6 +226,33 @@ describe('everything the plugin or the user wrote as an object stays an object',
 	});
 });
 
+describe('the per-key count of plain strings', () => {
+	test('the user wrote `- grabbed` once; a `grabbed` the plugin adds is an object, not a second string', () => {
+		const model = parseLikePipeline(SOURCE);
+		const inst = minion(model, 0); // grabbed, prone, bleeding
+		inst.conditions = [...modalClones(inst.conditions), { key: 'grabbed' }];
+		const out = serialize(model);
+		expect(written(out).m1).toEqual(['grabbed', 'prone', 'bleeding', { key: 'grabbed' }]);
+		expect(out).toContain('- key: grabbed');
+	});
+
+	test('the user wrote `- grabbed` twice; a third one the plugin adds is an object', () => {
+		const model = parseLikePipeline(SOURCE);
+		const inst = minion(model, 1); // grabbed, grabbed
+		inst.conditions = [...modalClones(inst.conditions), { key: 'grabbed' }];
+		expect(written(serialize(model)).m2).toEqual(['grabbed', 'grabbed', { key: 'grabbed' }]);
+	});
+});
+
+describe('an empty plain string', () => {
+	test('`- ""` is written back as `""`, not as `key: ""` (which the next parse would reject)', () => {
+		const src = ['heroes:', '  - name: Ash', '    max_stamina: 30', '    conditions:', '      - ""', '      - dazed', 'enemy_groups: []'].join('\n');
+		const out = serialize(parseLikePipeline(src));
+		expect((parseYaml(out) as any).heroes[0].conditions).toEqual(['', 'dazed']);
+		expect(() => parseLikePipeline(out)).not.toThrow();
+	});
+});
+
 describe('duplicates', () => {
 	test('two identical strings both stay strings, and removing one leaves the other a string', () => {
 		const model = parseLikePipeline(SOURCE);

@@ -127,8 +127,10 @@ const bornPlain = new WeakSet<object>();
  * differ only in the throw message, injected here as a lazy closure. SC-186: `duration`
  * is additive and passed through the same way as `color`/`effect` (present-or-undefined,
  * never fabricated) — both EncounterData.ts's three legacy copies and this one carry it
- * so the async oracle (`parseEncounterData`) and this sync split stay byte-compat.
- * SC-592: an authored object keeps the keys the plugin does not know (`source: trap`) and the order the
+ * so the async oracle (`parseEncounterData`) and this sync split stay byte-compat for every
+ * condition the legacy shape can hold (key/icon/color/effect/duration).
+ * SC-592: they now differ, on purpose, for an authored object carrying other keys: the oracle drops them,
+ * this keeps them. An authored object keeps the keys the plugin does not know (`source: trap`) and the order the
  * user wrote its keys in (the spread comes first, so known keys already present keep their place and
  * absent ones are appended as `undefined`, which yaml omits); and the holder's plain-string conditions
  * are recorded (see `plainConditions`).
