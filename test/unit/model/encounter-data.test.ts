@@ -17,7 +17,7 @@ import {
 	promoteCaptain,
 	relieveCaptain,
 } from '@drawSteelAdmonition/EncounterData';
-import type { Creature, EnemyGroup } from '@drawSteelAdmonition/EncounterData';
+import type { Creature, EnemyGroup, Hero } from '@drawSteelAdmonition/EncounterData';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App } from '../../mocks/obsidian';
 import quickStart from '../../fixtures/initiative/quick-start.yaml';
@@ -663,6 +663,51 @@ describe('T-3 (SC-195): the "With Captain" Stamina bonus — pure helpers', () =
 			expect(applyCaptainBonusTransition(group, minion)).toBe(true);
 			expect(minionPoolOf(group, minion)).toBe(35); // 25 + (2 x 5 alive)
 			expect(minionPoolMaxOf(minion)).toBe(35);
+		});
+	});
+
+	describe('resetEncounter — SC-575 (a squad\'s shared action pips are runtime state too)', () => {
+		const pressed = { move: true, main: true, maneuver: false, second_move: false, triggered: true };
+
+		test('a minion squad\'s shared `actions` is cleared; authored squad fields survive', () => {
+			const { group, minion, captain } = makeSquad({ withCaptainStamina: 2, perMinion: 5, amount: 4 });
+			minion.actions = { ...pressed };
+			captain.actions = undefined;
+			const data = { heroes: [], enemy_groups: [group], malice: { value: 0 } };
+			resetEncounter(data);
+			expect(minion.actions).toBeUndefined();
+			expect(minion).toMatchObject({ name: 'Goblin', max_stamina: 5, amount: 4, squad_role: 'minion', with_captain_stamina: 2 });
+			expect(captain).toMatchObject({ name: 'Goblin Captain', max_stamina: 40, squad_role: 'captain' });
+		});
+
+		test('every squad in a multi-squad group is cleared, not just the first', () => {
+			const a = makeSquad();
+			const b = makeSquad();
+			b.minion.name = 'Archer';
+			a.minion.actions = { ...pressed };
+			b.minion.actions = { ...pressed };
+			const group: EnemyGroup = { name: 'Two squads', is_squad: true, creatures: [a.minion, b.minion] };
+			resetEncounter({ heroes: [], enemy_groups: [group], malice: { value: 0 } });
+			expect(a.minion.actions).toBeUndefined();
+			expect(b.minion.actions).toBeUndefined();
+		});
+
+		test('a hero\'s actions and a plain (non-squad) creature are handled as before', () => {
+			const hero: Hero = {
+				name: 'Ash',
+				max_stamina: 30,
+				isHero: true,
+				current_stamina: 12,
+				actions: { main: true, maneuver: false, move: true, triggered: false },
+				conditions: [],
+			};
+			const ogre: Creature = { name: 'Ogre', max_stamina: 60, amount: 1, isHero: false, instances: [{ id: 1, current_stamina: 3, conditions: [] }] };
+			resetEncounter({ heroes: [hero], enemy_groups: [{ name: 'Ogres', creatures: [ogre] }], malice: { value: 3 } });
+			expect(hero.actions).toBeUndefined();
+			expect(hero.current_stamina).toBeUndefined();
+			expect(ogre.instances).toBeUndefined();
+			expect(ogre).toMatchObject({ name: 'Ogre', max_stamina: 60, amount: 1 });
+			expect('actions' in ogre).toBe(false); // nothing is fabricated on a non-squad creature
 		});
 	});
 });

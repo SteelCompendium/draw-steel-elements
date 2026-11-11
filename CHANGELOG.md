@@ -40,6 +40,9 @@ for what needs action.
   is left. When a click is refused but its block is still in the note (the cut and paste case and the
   hundreds-of-lines case above), the card keeps showing the click: the next click on that card saves it together with
   the new one, and leaving the note first drops it.
+- [FIX] **"Reset encounter state" clears a minion squad's action pips** (SC-575). A squad whose Move (or Main,
+  Maneuver, second Move or Triggered) pip was pressed kept it pressed after Reset encounter -> Yes, in the note and after
+  a reload. Reset now clears the squad's shared pips along with every other creature's.
 - [FIX] **No more coloured left stripes on cards** (SC-558). The thick coloured bar down the left edge of ability
   cards (red, blue, green and so on by action type), of power-roll and Montage "Test tiers" rows, of a
   featureblock's "Level N Advancement" options and of the error card is gone. An ability's action type shows in its

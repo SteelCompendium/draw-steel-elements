@@ -839,6 +839,18 @@ describe('[X] Reset encounter state: what a confirm clears, what every other way
 		expect(buttons[1].classList.contains('dse-btn--danger')).toBe(true);
 	});
 
+	test('[X07] after Reset a minion squad\'s shared action pips are cleared', async () => {
+		const squad = src(HEROES, ['enemy_groups:', '  - name: "Goblins"', '    is_squad: true', '    creatures:', '      - { name: Goblin, max_stamina: 4, amount: 3, squad_role: minion }']);
+		const { root, flush, last } = await mount(squad);
+		ctl(root, 'init.detail.squad-action', 0).click(); // Move
+		await flush();
+		confirmReset(root);
+		await flush();
+		const goblin = last().enemy_groups[0].creatures[0];
+		expect(Object.values(goblin.actions ?? {}).some(Boolean)).toBe(false);
+		expect(goblin).toMatchObject({ name: 'Goblin', max_stamina: 4, amount: 3, squad_role: 'minion' }); // authored setup survives
+	});
+
 	test('[X01] a read-only host offers neither chrome item', async () => {
 		const { root } = await mount(LIVE, { canPersist: false });
 		expect(has(root, 'init.reset-encounter') || has(root, 'init.reset-turns')).toBe(false);
@@ -849,23 +861,7 @@ describe('[X] Reset encounter state: what a confirm clears, what every other way
 // Each of these encodes the CORRECT behaviour and fails today (`test.failing`): the moment the bug is fixed the test passes, jest
 // reports it, and the marker comes off. The e2e twins (e2e/specs/initiative/) carry `knownBug` markers for the same tickets.
 
-describe('known bugs: the tracker after Reset encounter, and Malice below 0', () => {
-	const confirmReset = (root: Element): void => {
-		ctl(root, 'init.reset-encounter').click();
-		ctl(document.body.lastElementChild as HTMLElement, 'init.reset-encounter.confirm').click();
-	};
-
-	test.failing('[X07] after Reset a minion squad\'s shared action pips are cleared [known bug SC-575]', async () => {
-		const squad = src(HEROES, ['enemy_groups:', '  - name: "Goblins"', '    is_squad: true', '    creatures:', '      - { name: Goblin, max_stamina: 4, amount: 3, squad_role: minion }']);
-		const { root, flush, last } = await mount(squad);
-		ctl(root, 'init.detail.squad-action', 0).click(); // Move
-		await flush();
-		confirmReset(root);
-		await flush();
-		const actions = last().enemy_groups[0].creatures[0].actions;
-		expect(Object.values(actions ?? {}).some(Boolean)).toBe(false);
-	});
-
+describe('known bugs: Malice below 0 and the quick-add clamp', () => {
 	test.failing('[M07] the Malice stepper stops at 0 [known bug SC-577]', async () => {
 		const { root, flush, writes } = await mount(src(HEROES, OGRES, ['malice:', '  value: 0']));
 		ctl(root, 'init.malice.dec').click();

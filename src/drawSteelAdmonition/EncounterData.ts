@@ -646,6 +646,12 @@ export function resetEncounter(data: EncounterData) {
                     creatureType.minion_stamina_pool_max = undefined;
                     creatureType.captain_bonus_active = undefined;
                     creatureType.captain_bonus_n = undefined;
+                    // SC-575 — the squad's shared action pips (`SquadActions`, SC-278) live on
+                    // this creature entry, not on its instances, so dropping the instances
+                    // below never reached them: a Move pip pressed before a reset stayed
+                    // pressed in the note. Same absent-until-first-toggle contract as
+                    // `Hero.actions` above.
+                    creatureType.actions = undefined;
                 }
             });
         }

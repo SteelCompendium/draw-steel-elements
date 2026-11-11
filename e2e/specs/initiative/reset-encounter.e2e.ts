@@ -3,7 +3,7 @@
 // (test/dom/elements/initiative-matrix.test.ts). Initiative/rich.md is a live encounter: title, round 2, a condition, a spent hero, Malice 4
 // with round_gain 2 and a log. Initiative/squad.md: five Goblins.
 import { expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
+import { dse } from '../../driver/dse';
 
 const RICH = 'Initiative/rich.md';
 const SQUAD = 'Initiative/squad.md';
@@ -99,20 +99,15 @@ describe('initiative: what the screen shows after a reset', () => {
 		await expect(root.control('init.hero.stamina', { nth: 0 })).toHaveElementProperty('textContent', '30/30');
 	});
 
-	knownBug(
-		'SC-575',
-		'[INIT-X07] after Yes, Reset a minion squad\'s shared action pips are cleared in the note',
-		async () => {
-			await dse.openNote(SQUAD);
-			const root = dse.block(INIT);
-			await dse.waitForWrite(SQUAD, () => dse.click(root.control('init.detail.squad-action', { nth: 0 }))); // Move
-			await dse.hover(root.root);
-			await dse.click(root.control('init.reset-encounter'));
-			const modal = await dse.modal('reset-encounter');
-			await dse.waitForWrite(SQUAD, () => dse.click(modal.control('init.reset-encounter.confirm')));
-			const data = (await dse.expectNoteBlock(SQUAD, INIT).value()) as { enemy_groups: Array<{ creatures: Array<{ actions?: Record<string, boolean> }> }> };
-			expect(Object.values(data.enemy_groups[0].creatures[0].actions ?? {}).some(Boolean)).toBe(false);
-		},
-		{ failsWith: /Expected: false/ },
-	);
+	it('[INIT-X07] after Yes, Reset a minion squad\'s shared action pips are cleared in the note', async () => {
+		await dse.openNote(SQUAD);
+		const root = dse.block(INIT);
+		await dse.waitForWrite(SQUAD, () => dse.click(root.control('init.detail.squad-action', { nth: 0 }))); // Move
+		await dse.hover(root.root);
+		await dse.click(root.control('init.reset-encounter'));
+		const modal = await dse.modal('reset-encounter');
+		await dse.waitForWrite(SQUAD, () => dse.click(modal.control('init.reset-encounter.confirm')));
+		const data = (await dse.expectNoteBlock(SQUAD, INIT).value()) as { enemy_groups: Array<{ creatures: Array<{ actions?: Record<string, boolean> }> }> };
+		expect(Object.values(data.enemy_groups[0].creatures[0].actions ?? {}).some(Boolean)).toBe(false);
+	});
 });
