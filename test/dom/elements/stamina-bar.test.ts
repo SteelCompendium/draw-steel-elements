@@ -30,7 +30,7 @@ import { DEFAULT_SETTINGS } from '@model/Settings';
 import { StaminaBar } from '@model/StaminaBar';
 import { initializeSchemaRegistry, resetSchemaRegistry } from '@utils/JsonSchemaValidator';
 import componentWrapperSchemaLegacy from '@model/schemas/ComponentWrapperSchema.yaml';
-import { App, Plugin, stringifyYaml, makeFakeContext } from '../../mocks/obsidian';
+import { App, Plugin, Scope, stringifyYaml, makeFakeContext } from '../../mocks/obsidian';
 import { staminaBarElement } from '../../../src/elements/stamina-bar/definition';
 import { StaminaBarView } from '../../../src/elements/stamina-bar/view';
 import { serialize as frameworkSerialize } from '../../../src/elements/stamina-bar/model';
@@ -736,5 +736,117 @@ describe('SC-595: the Stamina modal opened from a bar in a hover preview', () =>
 		(modalEl.querySelector('.dse-modal__title') as HTMLElement).click();
 
 		expect(windowClicks).toHaveBeenCalledTimes(1);
+	});
+});
+
+// SC-597: Enter / Space on the bar in a hover preview. Obsidian's popover keeps itself (and the modal it holds) open only when a
+// `click` goes through the preview: its click-to-edit helper, a bubble listener on the embed container, marks the preview focused
+// and arms a timer that pushes the preview's keymap scope. With no click the preview closed ~300 ms after the key. The stand-in
+// here is that listener on the `.hover-popover`'s container: it records the click and arms its push (10 ms, written as a literal).
+describe('SC-597: the Stamina modal opened by the keyboard from a bar in a hover preview', () => {
+	let clicks: MouseEvent[];
+	let windowClicks: jest.Mock;
+	const popoverScope = new Scope();
+	beforeEach(() => {
+		jest.useFakeTimers();
+		clicks = [];
+		windowClicks = jest.fn();
+		window.addEventListener('click', windowClicks);
+	});
+	afterEach(() => {
+		window.removeEventListener('click', windowClicks);
+		jest.useRealTimers();
+	});
+
+	async function render(inPreview: boolean) {
+		const deps = makeDeps();
+		const popover = document.body.appendChild(document.createElement('div'));
+		if (inPreview) popover.className = 'popover hover-popover';
+		const containerEl = popover.appendChild(document.createElement('div'));
+		containerEl.addEventListener('click', (evt) => {
+			clicks.push(evt);
+			setTimeout(() => (deps.app as App).keymap.pushScope(popoverScope), 10);
+		});
+		await new ElementPipeline(deps).run(staminaBarElement, BASIC_YAML, makeHost({ containerEl }));
+		const bar = containerEl.querySelector('.dse-stamina') as HTMLElement;
+		return { app: deps.app as App, containerEl, bar };
+	}
+	const press = (el: HTMLElement, key: string, init: KeyboardEventInit = {}) => {
+		const evt = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
+		el.dispatchEvent(evt);
+		return evt;
+	};
+	const modalCount = () => document.querySelectorAll('.modal-container').length;
+
+	test.each([['Enter'], [' ']])('%j on the bar sends one click through the preview to the bar, and the modal is open at once', async (key) => {
+		const { bar } = await render(true);
+
+		const evt = press(bar, key);
+
+		expect(clicks).toHaveLength(1);
+		expect(clicks[0].target).toBe(bar);
+		expect(clicks[0].bubbles).toBe(true);
+		expect(modalCount()).toBe(1);
+		expect(evt.defaultPrevented).toBe(true);
+	});
+
+	test('Escape closes the modal and leaves the preview: the modal is back on top of the preview\'s own scope push', async () => {
+		const { app, bar } = await render(true);
+		const onKey = (e: KeyboardEvent) => {
+			const mods = [e.ctrlKey && 'Ctrl', e.metaKey && 'Meta', e.altKey && 'Alt', e.shiftKey && 'Shift'].filter(Boolean).join(',');
+			if (app.keymap.top?.handleKey(e, { modifiers: mods, key: e.key, vkey: e.code }) === false) e.preventDefault();
+		};
+		window.addEventListener('keydown', onKey, true);
+		try {
+			press(bar, 'Enter');
+			jest.advanceTimersByTime(200); // past the popover's 10 ms push and the modal's 150 ms re-push
+
+			expect(app.keymap.scopes[0]).toBe(popoverScope);
+			expect(app.keymap.top).not.toBe(popoverScope);
+			press(document.body, 'Escape');
+
+			expect(modalCount()).toBe(0);
+			expect(app.keymap.top).toBe(popoverScope);
+		} finally {
+			window.removeEventListener('keydown', onKey, true);
+		}
+	});
+
+	test('control: outside a hover preview, Enter opens one modal from one click', async () => {
+		const { bar } = await render(false);
+
+		press(bar, 'Enter');
+
+		expect(clicks).toHaveLength(1);
+		expect(windowClicks).toHaveBeenCalledTimes(1);
+		expect(modalCount()).toBe(1);
+	});
+
+	test.each([
+		['Ctrl+Enter', 'Enter', { ctrlKey: true }],
+		['Meta+Enter', 'Enter', { metaKey: true }],
+		['Alt+Enter', 'Enter', { altKey: true }],
+		['a held Enter', 'Enter', { repeat: true }],
+		['another key', 'a', {}],
+	])('%s on the bar sends no click and opens no modal', async (_name, key, init) => {
+		const { bar } = await render(true);
+
+		const evt = press(bar, key, init);
+
+		expect(clicks).toHaveLength(0);
+		expect(modalCount()).toBe(0);
+		expect(evt.defaultPrevented).toBe(false);
+	});
+
+	test('an Enter that something else already handled sends no click, and one from a child of the bar is not the bar\'s', async () => {
+		const { containerEl, bar } = await render(true);
+		containerEl.addEventListener('keydown', (e) => e.preventDefault(), true);
+		press(bar, 'Enter');
+		expect(clicks).toHaveLength(0);
+
+		const fresh = await render(true);
+		press(fresh.bar.querySelector('.dse-stamina__track') as HTMLElement, 'Enter');
+		expect(clicks).toHaveLength(0);
+		expect(modalCount()).toBe(0);
 	});
 });

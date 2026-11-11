@@ -29,7 +29,7 @@ import { createSessionStore } from '../../../src/framework/session';
 import { createElementRegistry } from '../../../src/framework/registry';
 import type { RollService } from '../../../src/framework/roll/service';
 import { DEFAULT_SETTINGS } from '@model/Settings';
-import { App, Plugin, Notice, makeFakeContext, parseYaml } from '../../mocks/obsidian';
+import { App, Plugin, Notice, Scope, makeFakeContext, parseYaml } from '../../mocks/obsidian';
 import { montageElement } from '../../../src/elements/montage/definition';
 import { MontageView } from '../../../src/elements/montage/view';
 import { parse, nextHeroToAct } from '../../../src/elements/montage/model';
@@ -2277,5 +2277,124 @@ describe('SC-595: the Montage sheet opened from a board in a hover preview', () 
 		(modalEl.querySelector('.dse-modal__title') as HTMLElement).click();
 
 		expect(windowClicks).toHaveBeenCalledTimes(1);
+	});
+});
+
+// SC-597: Enter / Space on a board cell in a hover preview. Obsidian's popover keeps itself (and the sheet it holds) open only when a
+// `click` goes through the preview (see stamina-bar.test.ts's SC-597 suite); the key now clicks the cell. The stand-in for the popover
+// is its click-to-edit helper on the `.hover-popover`'s container: it records the click and arms its keymap push (10 ms, a literal).
+describe('SC-597: the Montage sheet opened by the keyboard from a board cell in a hover preview', () => {
+	let clicks: MouseEvent[];
+	let windowClicks: jest.Mock;
+	const popoverScope = new Scope();
+	// Kira's rounds 1-2 are logged (an edit cell); an empty past round is a new-entry cell.
+	const PAST_EMPTY_YAML = ['title: Probe', 'rounds: 3', 'participants:', '  - name: Kira', 'current_round: 3'].join('\n');
+	beforeEach(() => {
+		jest.useFakeTimers();
+		clicks = [];
+		windowClicks = jest.fn();
+		window.addEventListener('click', windowClicks);
+	});
+	afterEach(() => {
+		window.removeEventListener('click', windowClicks);
+		jest.useRealTimers();
+		document.body.innerHTML = '';
+	});
+
+	async function render(inPreview: boolean, yaml: string = montageMidYaml) {
+		const app = new App();
+		const popover = document.body.appendChild(document.createElement('div'));
+		if (inPreview) popover.className = 'popover hover-popover';
+		const containerEl = popover.appendChild(document.createElement('div'));
+		containerEl.addEventListener('click', (evt) => {
+			clicks.push(evt);
+			setTimeout(() => app.keymap.pushScope(popoverScope), 10);
+		});
+		const { root } = await renderMontage(yaml, { containerEl }, { app: app as any });
+		return { app, containerEl, root };
+	}
+	const press = (el: HTMLElement, key: string, init: KeyboardEventInit = {}) => {
+		const evt = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
+		el.dispatchEvent(evt);
+		return evt;
+	};
+	const sheets = () => document.querySelectorAll('.dse-mt__sheet').length;
+
+	test.each([
+		['Enter on a logged cell', 'Enter', montageMidYaml, 'Kira', 2],
+		['Space on a logged cell', ' ', montageMidYaml, 'Kira', 2],
+		['Enter on an empty past-round cell', 'Enter', PAST_EMPTY_YAML, 'Kira', 1],
+		['Space on an empty past-round cell', ' ', PAST_EMPTY_YAML, 'Kira', 1],
+	])('%s sends one click through the preview to the cell, and the sheet is open at once', async (_name, key, yaml, hero, round) => {
+		const { root } = await render(true, yaml);
+		const cell = cellFor(root, hero, round);
+
+		const evt = press(cell, key);
+
+		expect(clicks).toHaveLength(1);
+		expect(clicks[0].target).toBe(cell);
+		expect(clicks[0].bubbles).toBe(true);
+		expect(sheets()).toBe(1);
+		expect(evt.defaultPrevented).toBe(true);
+	});
+
+	test('Escape closes the sheet and leaves the preview: the sheet is back on top of the preview\'s own scope push', async () => {
+		const { app, root } = await render(true);
+		const onKey = (e: KeyboardEvent) => {
+			const mods = [e.ctrlKey && 'Ctrl', e.metaKey && 'Meta', e.altKey && 'Alt', e.shiftKey && 'Shift'].filter(Boolean).join(',');
+			if (app.keymap.top?.handleKey(e, { modifiers: mods, key: e.key, vkey: e.code }) === false) e.preventDefault();
+		};
+		window.addEventListener('keydown', onKey, true);
+		try {
+			press(cellFor(root, 'Kira', 2), 'Enter');
+			jest.advanceTimersByTime(200); // past the popover's 10 ms push and the sheet's 150 ms re-push
+
+			expect(app.keymap.scopes[0]).toBe(popoverScope);
+			expect(app.keymap.top).not.toBe(popoverScope);
+			press(document.body, 'Escape');
+
+			expect(sheets()).toBe(0);
+			expect(app.keymap.top).toBe(popoverScope);
+		} finally {
+			window.removeEventListener('keydown', onKey, true);
+		}
+	});
+
+	test('control: outside a hover preview, Enter opens one sheet from one click', async () => {
+		const { root } = await render(false);
+
+		press(cellFor(root, 'Kira', 2), 'Enter');
+
+		expect(clicks).toHaveLength(1);
+		expect(windowClicks).toHaveBeenCalledTimes(1);
+		expect(sheets()).toBe(1);
+	});
+
+	test.each([
+		['Ctrl+Enter', 'Enter', { ctrlKey: true }],
+		['Meta+Enter', 'Enter', { metaKey: true }],
+		['Alt+Enter', 'Enter', { altKey: true }],
+		['a held Enter', 'Enter', { repeat: true }],
+		['another key', 'a', {}],
+	])('%s on a cell sends no click and opens no sheet', async (_name, key, init) => {
+		const { root } = await render(true);
+
+		const evt = press(cellFor(root, 'Kira', 2), key, init);
+
+		expect(clicks).toHaveLength(0);
+		expect(sheets()).toBe(0);
+		expect(evt.defaultPrevented).toBe(false);
+	});
+
+	test('an Enter that something else already handled sends no click, and one from a child of the cell is not the cell\'s', async () => {
+		const { containerEl, root } = await render(true);
+		containerEl.addEventListener('keydown', (e) => e.preventDefault(), true);
+		press(cellFor(root, 'Kira', 2), 'Enter');
+		expect(clicks).toHaveLength(0);
+
+		const fresh = await render(true);
+		press(cellFor(fresh.root, 'Kira', 2).querySelector('.dse-mt__cell-face') as HTMLElement, 'Enter');
+		expect(clicks).toHaveLength(0);
+		expect(sheets()).toBe(0);
 	});
 });

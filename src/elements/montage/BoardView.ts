@@ -376,9 +376,15 @@ export class BoardView {
 					this.onOpenSheet(entry !== undefined ? { kind: 'edit', entry } : { kind: 'new', hero, round });
 				this.owner.registerDomEvent(cell, 'click', openThisCell);
 				this.owner.registerDomEvent(cell, 'keydown', (evt: KeyboardEvent) => {
+					// The stamina bar's guards (StaminaBarPanel.makeKeyboardOperable): only a key pressed ON the cell, no shortcut, no
+					// held key (the key now dispatches a click, so a repeat would dispatch another), nothing already handled.
+					if (evt.target !== cell) return;
 					if (evt.key !== 'Enter' && evt.key !== ' ') return;
+					if (evt.ctrlKey || evt.metaKey || evt.altKey || evt.repeat || evt.defaultPrevented) return;
 					evt.preventDefault();
-					openThisCell();
+					// SC-597: activate with a click on the cell (its click listener opens the sheet), as Enter / Space does on a
+					// real button: in a hover preview only a click makes Obsidian keep the preview, and so the sheet, open.
+					cell.click();
 				});
 			}
 		} else if (isEmptyCurrentCell && this.canPersist) {

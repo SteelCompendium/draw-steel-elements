@@ -156,7 +156,7 @@ export function renderStaminaBar(
 				if (chrome && bar.contains(chrome)) return;
 				onBarClick();
 			});
-			if (opts.keyboard !== false) makeKeyboardOperable(bar, s, opts.owner, onBarClick);
+			if (opts.keyboard !== false) makeKeyboardOperable(bar, s, opts.owner);
 			stampControl(bar, opts.control);
 		}
 	} else if (opts.readOnlyTooltip !== undefined) {
@@ -179,13 +179,15 @@ export function renderStaminaBar(
  *
  *  The key rule mirrors the click guard above: only a key pressed ON the bar itself counts.
  *  A key from a chrome button is that button's own — it is neither acted on nor swallowed, so
- *  the browser still turns it into the button's click. */
-function makeKeyboardOperable(
-	bar: HTMLElement,
-	s: StaminaBarValues,
-	owner: Component,
-	open: () => void,
-): void {
+ *  the browser still turns it into the button's click.
+ *
+ *  SC-597: the key ACTIVATES the bar with a click (`bar.click()`), the way a browser turns Enter or Space on a real
+ *  `<button>` into one, and the bar's own click listener above opens the modal. Calling the opener directly is not the
+ *  same thing: in a hover preview, Obsidian marks the preview focused (so its hover timer stops closing it) only when a
+ *  click goes through the preview, and with no click the preview, and the modal with it, closed about 300 ms after
+ *  the key. A click also lets DseModal's SC-595 keymap re-push order itself after the preview's own (it arms from
+ *  the opening click's window bubble phase). */
+function makeKeyboardOperable(bar: HTMLElement, s: StaminaBarValues, owner: Component): void {
 	bar.setAttribute('tabindex', '0');
 	bar.setAttribute('role', 'group');
 	bar.setAttribute('aria-description', KEYBOARD_HINT);
@@ -196,7 +198,7 @@ function makeKeyboardOperable(
 		// Not a shortcut, and not a held key: auto-repeat would otherwise re-fire into the modal.
 		if (evt.ctrlKey || evt.metaKey || evt.altKey || evt.repeat || evt.defaultPrevented) return;
 		evt.preventDefault(); // Space would otherwise scroll the page
-		open();
+		bar.click(); // SC-597: the click listener opens the modal; see the doc above
 	});
 }
 
