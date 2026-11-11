@@ -49,9 +49,9 @@ describe('initiative: round and turns', () => {
 		await expect(root.control('init.hero.turn', { nth: 1 })).toHaveAttribute('aria-pressed', 'false');
 	});
 
-	it('[INIT-R03] a negative round_gain: the button reads "-9" (never "+-9"), Advance round floors Malice at 0 and logs the configured amount [SC-577]', async () => {
-		await dse.externalEdit(RICH, "c.replace('round_gain: 2', 'round_gain: -9')"); // Malice 4 + -9 would be -5
+	it('[INIT-R03] a negative round_gain: the button reads "-9" (never "+-9"), Advance round floors Malice at 0 and logs the configured amount', async () => {
 		const root = await openRich();
+		await dse.externalEdit(RICH, "c.replace('round_gain: 2', 'round_gain: -9')"); // Malice 4 + -9 would be -5; opening the note restores the fixture, so edit after
 		await expect(root.control('init.round.advance')).toHaveAttribute('aria-label', 'Advance round (-9 Malice)');
 		const w = await dse.waitForWrite(RICH, () => dse.click(root.control('init.round.advance')));
 		expect(w.count).toBe(1);
