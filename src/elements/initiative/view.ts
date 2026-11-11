@@ -54,6 +54,8 @@
 import { Component, Notice, parseYaml, setIcon } from 'obsidian';
 import type { Modal } from 'obsidian';
 import { ElementView } from '@/framework/view';
+import { ElementStageError, renderErrorCard } from '@/framework/errorCard';
+import type { ErrorStage } from '@/framework/errorCard';
 import { MOVING_ATTR } from '@/framework/host/adoptView';
 import type { RenderContext } from '@/framework/context';
 import type { ChromeMenuItem } from '@/framework/chrome/types';
@@ -116,6 +118,10 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *  (stamina-bar's activeModal pattern; never register() per open). */
 	private activeModal: Modal | null = null;
 
+	/** SC-576 — set when the re-parse after Reset Encounter threw: the next `onMount` draws the
+	 *  pipeline's error card with it (what a reload of that note draws) instead of the tracker. */
+	private loadError: ElementStageError | undefined;
+
 	constructor(cx: RenderContext) {
 		super(cx);
 		// F1 §4.5: a modal opened by the view must close on view unload. ONE
@@ -125,6 +131,10 @@ export class InitiativeView extends ElementView<EncounterData> {
 	}
 
 	protected onMount(root: HTMLElement, model: EncounterData): void {
+		if (this.loadError) {
+			renderErrorCard(root, { id: 'initiative', name: 'Initiative tracker' }, this.loadError);
+			return;
+		}
 		// Per-mount listener owner: coarse rebuilds go through the framework default
 		// update(), whose unloadOwnedChildren() releases every registration bound here
 		// before onMount runs again — nothing accumulates on the view across rebuilds.
@@ -159,9 +169,10 @@ export class InitiativeView extends ElementView<EncounterData> {
 		modal.open();
 	}
 
-	/** The one whole-model change path (Reset Round / Reset Encounter / squad-pool edits
-	 *  from the grid or the detail row): this.model was already mutated; rebuild through
-	 *  the framework default update() (unload owned children + onMount), then persist. Failures are
+	/** The one whole-model change path (Reset Round / squad-pool edits from the grid or the
+	 *  detail row, Malice quick-add, captain changes): this.model was already mutated; rebuild
+	 *  through the framework default update() (unload owned children + onMount), then persist.
+	 *  Reset Encounter does NOT use it (see `rebuildFromWrittenReset`). Failures are
 	 *  caught and logged — never left as unhandled rejections (negotiation's
 	 *  resetNegotiation pattern). */
 	private async rebuildAndPersist(): Promise<void> {
@@ -180,24 +191,43 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *  first (serialize runs synchronously inside the flush, so the bytes are exactly the reset
 	 *  model's), then rebuild from a fresh parse of those bytes through the same parse +
 	 *  resolveRefs the pipeline runs on load. The screen is what a reload would show, and later
-	 *  writes serialize that model like any freshly loaded one. */
+	 *  writes serialize that model like any freshly loaded one.
+	 *
+	 *  If that parse or ref resolution throws (a `statblock:` note that stopped resolving since
+	 *  the block loaded), a reload would draw the pipeline's error card, so that is what is drawn
+	 *  here: never the un-normalised model, which is the screen this ticket removes. (Re-parsing a
+	 *  clone of the reset model instead was rejected: its merged `name`/`max_stamina` would read as
+	 *  authored and could be written into the note by a later edit.)
+	 *
+	 *  The ref resolution reads the vault, so the old DOM is made inert for the await: a click on it
+	 *  would mutate the model that `update(fresh)` is about to replace, and be lost. */
 	private async rebuildFromWrittenReset(): Promise<void> {
+		const root = this.rootEl;
+		root.setAttribute('inert', '');
+		root.setAttribute('aria-busy', 'true');
 		try {
 			const yaml = serializeModel(this.model);
 			void this.persist();
 			this.flushPendingWrite();
-			let fresh: EncounterData;
+			let fresh = this.model;
+			let stage: ErrorStage = 'render';
 			try {
-				fresh = await resolveInitiativeRefs(parseModel(parseYaml(yaml), yaml), this.cx.refs);
+				const parsed = parseModel(parseYaml(yaml), yaml);
+				stage = 'reference';
+				fresh = await resolveInitiativeRefs(parsed, this.cx.refs);
+				this.loadError = undefined;
 			} catch (error) {
-				// The written note would not load either (the pipeline would show its error card); keep
-				// the reset model on screen rather than blanking the tracker.
 				console.error('Draw Steel Elements: initiative tracker re-parse after reset failed', error);
-				fresh = this.model;
+				this.loadError = new ElementStageError(stage, error);
 			}
 			await this.update(fresh);
 		} catch (error) {
 			console.error('Draw Steel Elements: initiative tracker rebuild failed', error);
+		} finally {
+			for (const el of new Set([root, this.rootEl])) {
+				el.removeAttribute('inert');
+				el.removeAttribute('aria-busy');
+			}
 		}
 	}
 
@@ -235,7 +265,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *   - Reset encounter state: keeps the `ResetEncounterModal` confirm.
 	 *  Omitted entirely on a read-only host (F1 §4.4), like montage's. */
 	chromeItems(): ChromeMenuItem[] {
-		if (!this.model || !this.canWrite) return [];
+		if (!this.model || !this.canWrite || this.loadError) return [];
 		return [
 			{
 				id: 'initiative-reset-turns',

@@ -39,9 +39,10 @@ function makeHost(overrides: Partial<BlockHost> = {}) {
 	return host as unknown as BlockHost & { containerEl: HTMLElement; replaceSource: jest.Mock };
 }
 
-function makeDeps(): ElementPipelineDeps {
+function makeDeps(vault: Record<string, string> = {}): ElementPipelineDeps {
 	const app = new App();
 	app.vault.setFile('Media/token_1.png', '');
+	for (const [path, text] of Object.entries(vault)) app.vault.setFile(path, text);
 	const plugin = new Plugin(app);
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
@@ -59,18 +60,23 @@ function makeDeps(): ElementPipelineDeps {
 	};
 }
 
-/** Mount `src` and hand back the root plus readers for what was written. Fake timers: `flush()` lands the debounced write. */
-async function mount(src: string, overrides: Partial<BlockHost> = {}) {
-	jest.useFakeTimers();
+/** Mount `src` and hand back the root plus readers for what was written. Fake timers: `flush()` lands the debounced write.
+ *  A `vault` (notes the block's `statblock:` refs read) makes the mount use REAL timers instead: the vault read does not
+ *  settle under fake ones, and `flush()` then waits the debounce out for real. */
+async function mount(src: string, overrides: Partial<BlockHost> = {}, vault: Record<string, string> = {}) {
+	const real = Object.keys(vault).length > 0;
+	if (!real) jest.useFakeTimers();
 	const host = makeHost(overrides);
-	await new ElementPipeline(makeDeps()).run(initiativeElement, src, host);
+	const deps = makeDeps(vault);
+	await new ElementPipeline(deps).run(initiativeElement, src, host);
 	const root = host.containerEl.firstElementChild as HTMLElement;
 	const flush = async (): Promise<void> => {
-		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS + 50);
+		if (real) await new Promise((resolve) => setTimeout(resolve, PERSIST_DEBOUNCE_MS + 60));
+		else await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS + 50);
 	};
 	const writes = (): string[] => host.replaceSource.mock.calls.map((c) => c[0] as string);
 	const last = (): any => parseYaml(writes()[writes().length - 1]);
-	return { host, root, flush, writes, last };
+	return { host, root, flush, writes, last, deps };
 }
 
 /** The n-th node carrying a control id (throws when absent, so a missing control is a failure, not a silent no-op). */
@@ -661,6 +667,76 @@ describe('[X] Reset encounter state: what a confirm clears, what every other way
 		const view = document.querySelector('.dse-init') as HTMLElement;
 		expect(view.querySelectorAll('[data-dse-control="init.cell.stamina"]')).toHaveLength(3);
 		expect(ctl(view, 'init.detail.stamina', 0).textContent).toMatch(/^12\/12/); // "12/12 (4)": the pool, then the effective per-minion Stamina
+	});
+
+	// A tracker whose creatures and heroes come from `statblock:` notes (name and max Stamina are merged in on load).
+	const dsNote = (...lines: string[]): string => ['```ds-statblock', ...lines, '```'].join('\n');
+	const VAULT = {
+		'Bestiary/Orc Warrior.md': dsNote('name: Orc Warrior', 'stamina: "40"'),
+		'Frodo Baggins.md': dsNote('name: Frodo Baggins', 'stamina: "80"'),
+	};
+	const REFS = src(
+		['heroes:', '  - statblock: "Frodo Baggins"', '    current_stamina: 33'],
+		['enemy_groups:', '  - name: "Orcs"', '    creatures:', '      - statblock: "Orc Warrior"', '        amount: 2'],
+	);
+	const gateResolve = (deps: ElementPipelineDeps): (() => void) => {
+		const refs = deps.refs as unknown as { resolveBarePath: (p: string) => Promise<unknown> };
+		const original = refs.resolveBarePath.bind(refs);
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		refs.resolveBarePath = async (p: string) => {
+			await gate;
+			return original(p);
+		};
+		return release;
+	};
+
+	test('[X05] after Reset a tracker built from statblock notes shows the merged names and full stamina, as a reload does [SC-576]', async () => {
+		const { root, flush, last } = await mount(REFS, {}, VAULT);
+		confirmReset(root);
+		await flush();
+		const view = document.querySelector('.dse-init') as HTMLElement;
+		expect(view.querySelectorAll('[data-dse-control="init.cell.stamina"]')).toHaveLength(2);
+		expect(ctl(view, 'init.hero.stamina', 0).textContent).toBe('80/80');
+		expect(ctl(view, 'init.detail.stamina', 0).textContent).toBe('40/40');
+		// the merged `name` / `max_stamina` are not authored keys, and Reset must not start writing them
+		expect(last().heroes[0]).toEqual({ statblock: 'Frodo Baggins' });
+	});
+
+	test('[X05] if the statblock note stopped resolving before Reset, the card shows the error a reload would, not the empty tracker [SC-576]', async () => {
+		const { root, flush, deps, writes } = await mount(REFS, {}, VAULT);
+		(deps.app as unknown as App).vault.setFile('Bestiary/Orc Warrior.md', 'no statblock here any more');
+		const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+		try {
+			confirmReset(root);
+			await flush();
+		} finally {
+			errors.mockRestore();
+		}
+		expect(writes()).toHaveLength(1); // the note was still reset
+		const card = root.querySelector('.dse-error-card') as HTMLElement;
+		expect(card).not.toBeNull();
+		expect(root.getAttribute('data-dse-error-stage')).toBe('reference');
+		expect(card.textContent).toContain('Orc Warrior');
+		// never the screen this bug painted: no roster cells, no 0-Stamina Dying heroes, no controls that would edit a stale model
+		expect(root.querySelector('[data-dse-control="init.cell.stamina"]')).toBeNull();
+		expect(root.querySelector('[data-state="dying"]')).toBeNull();
+		expect(has(root, 'init.hero.stamina')).toBe(false);
+		expect(root.hasAttribute('inert')).toBe(false);
+	});
+
+	test('[X05] while Reset re-reads the statblock notes the tracker is inert and busy, and is live again once it has rebuilt [SC-576]', async () => {
+		const { root, flush, deps } = await mount(REFS, {}, VAULT);
+		const release = gateResolve(deps);
+		confirmReset(root);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(root.hasAttribute('inert')).toBe(true);
+		expect(root.getAttribute('aria-busy')).toBe('true');
+		release();
+		await flush();
+		expect(root.hasAttribute('inert')).toBe(false);
+		expect(root.hasAttribute('aria-busy')).toBe(false);
+		expect(root.querySelectorAll('[data-dse-control="init.cell.stamina"]')).toHaveLength(2);
 	});
 
 	/** Open the modal through the tracker's chrome item and keep the instance, so a test can close it the way Obsidian does. */
