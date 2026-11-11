@@ -27,13 +27,17 @@ for what needs action.
   was reset correctly. It now shows the enemy rows and the heroes at full Stamina, as a reload of the note does. It also
   stops the next action after a Reset from writing a wrong value into the note: damaging a 30-Stamina hero by 5 right after a
   Reset wrote `current_stamina: -5` instead of 25.
-- [FIX] **Deleting a block right after clicking it no longer sends the click into an identical block** (SC-480). If a
-  note has two or more blocks that read the same, and you pressed + or − on one of them and that block was deleted from
-  outside (Sync, another editor, another pane) before the click had been saved, the click was saved into one of the
-  identical blocks that was left, one you never touched. Now nothing is saved and a Notice says so ("a change to a block
-  in <note> was not saved — the block changed on disk first"); the outside change is kept. A note with no identical
-  block behaves as before. Limit: if the note also changed by hundreds of lines around the block within that same
-  moment, and an identical block exists, the click is refused with the same Notice even though its own block did not change.
+- [FIX] **Deleting a block right after clicking it no longer sends the click into another block** (SC-480). If you
+  pressed + or − on a block and, before the click had been saved, that block was deleted from outside (Sync, another
+  editor, another pane), the click was saved into a different block of the note: an identical one that was left, or a
+  neighbour that the same outside edit had changed to read the same. You never touched that block. Now nothing is saved
+  and a Notice says so ("a change to a block in <note> was not saved — the block changed on disk first"); the outside
+  change is kept. A note with no identical block behaves as before. Limits. If the block was cut and pasted somewhere
+  else in the note in that same moment and the note has another block that reads the same, the click is refused with the
+  same Notice although the block still exists. If hundreds of lines changed around the block in that moment and an
+  identical block exists, the click is refused the same way. Two identical blocks with only blank lines between them: if
+  one is deleted from outside the plugin cannot tell which, so a click on the upper block is saved into the block that
+  is left.
 - [FIX] **No more coloured left stripes on cards** (SC-558). The thick coloured bar down the left edge of ability
   cards (red, blue, green and so on by action type), of power-roll and Montage "Test tiers" rows, of a
   featureblock's "Level N Advancement" options and of the error card is gone. An ability's action type shows in its
