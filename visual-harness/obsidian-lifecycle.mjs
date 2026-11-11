@@ -557,6 +557,21 @@ Object.assign(FIXTURES, {
 		'Lifecycle/gs77-calh-src.md': `# gs77 calh src\n\n## Tracker\n\n${CAL2()}\n\n## After\n\nend\n`,
 		'Lifecycle/gs77-calh-host.md': `# gs77 calh host\n\n![[gs77-calh-src#Tracker]]\n\nafter\n`,
 	});
+	// SC-584 r7: the same two counters in the other containers a section can hold (a header-less quote whose FIRST line is the upper counter's fence, a list item).
+	const UP = (indent) => ['```ds-counter', 'max_value: 20', 'current_value: 6', 'min_value: 0', 'name: Twin', '```'].map((l) => `${indent}${l}`);
+	const LO = (indent) => ['```ds-counter', 'name: Twin', 'current_value: 5', 'max_value: 20', 'min_value: 0', '```'].map((l) => `${indent}${l}`);
+	const HQ = () => [...UP('> '), '> mid', ...LO('> ')].join('\n');
+	const LI = (id) => ['- item' + id, ...UP('  '), '  mid', ...LO('  ')].join('\n');
+	Object.assign(FIXTURES, {
+		'Lifecycle/gs77-hq-src.md': `# gs77 hq src\n\n${HQ()}\n\n^gs77hq\n\nend\n`,
+		'Lifecycle/gs77-hq-host.md': `# gs77 hq host\n\n![[gs77-hq-src#^gs77hq]]\n\nafter\n`,
+		'Lifecycle/gs77-hqh-src.md': `# gs77 hqh src\n\n## Tracker\n\n${HQ()}\n\n## After\n\nend\n`,
+		'Lifecycle/gs77-hqh-host.md': `# gs77 hqh host\n\n![[gs77-hqh-src#Tracker]]\n\nafter\n`,
+		'Lifecycle/gs77-li-src.md': `# gs77 li src\n\n${LI(' ^gs77li')}\n\nend\n`,
+		'Lifecycle/gs77-li-host.md': `# gs77 li host\n\n![[gs77-li-src#^gs77li]]\n\nafter\n`,
+		'Lifecycle/gs77-lih-src.md': `# gs77 lih src\n\n## Tracker\n\n${LI('')}\n\n## After\n\nend\n`,
+		'Lifecycle/gs77-lih-host.md': `# gs77 lih host\n\n![[gs77-lih-src#Tracker]]\n\nafter\n`,
+	});
 }
 
 // SC-480 (G-S73): two identical counters (or, for the no-twin control, a counter and a different one) with prose between them (never only blank lines: the line diff cannot tell which of
@@ -1300,8 +1315,8 @@ async function gs77Trial(t, { SRC, HOST, mode, plus, from = 'Twin', to = 'Edited
 	const J = JSON.stringify;
 	const { FORM, SAVE } = formKit(t);
 	const rec = { SRC, mode, plus };
-	const valuesOf = () => (t.read(SRC).match(/^> current_value: (\d+)$/gm) ?? []).map((x) => Number(x.replace('> current_value: ', '')));
-	const namesOf = () => (t.read(SRC).match(/^> name: (\w+)$/gm) ?? []).map((x) => x.replace('> name: ', ''));
+	const valuesOf = () => (t.read(SRC).match(/^[> ]*current_value: (\d+)$/gm) ?? []).map((x) => Number(x.replace(/^[> ]*current_value: /, '')));
+	const namesOf = () => (t.read(SRC).match(/^[> ]*name: (\w+)$/gm) ?? []).map((x) => x.replace(/^[> ]*name: /, ''));
 	await t.reset(SRC);
 	await t.reset(HOST);
 	const st = mode === 'rv' ? { mode: 'preview' } : { mode: 'source', source: false };
@@ -7101,21 +7116,30 @@ const SCENARIOS = [
 			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
 			const problems = [];
 			const outcomes = [];
-			const files = ['Lifecycle/gs77-cal-src.md', 'Lifecycle/gs77-cal-host.md', 'Lifecycle/gs77-calh-src.md', 'Lifecycle/gs77-calh-host.md'];
+			const files = ['cal', 'calh', 'hq', 'hqh', 'li', 'lih'].flatMap((k) => [`Lifecycle/gs77-${k}-src.md`, `Lifecycle/gs77-${k}-host.md`]);
 			await t.ev(`(() => { if (!document.getElementById('lc-gs77-notice')) { const st = document.createElement('style'); st.id = 'lc-gs77-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
 			await t.ev(`${prefs}.set('authoringControls', true)`);
 			try {
-				for (const [label, kind, mode] of [
-					['(a) block embed (![[note#^id]]), Reading view', 'cal', 'rv'],
-					['(b) block embed, Live Preview', 'cal', 'lp'],
-					['(c) heading embed (![[note#Tracker]]), Reading view', 'calh', 'rv'],
-					['(d) heading embed, Live Preview', 'calh', 'lp'],
+				// 'lower': Save must write the LOWER counter (the + was written, so both read the same). 'safe': a list item - what Save does there is whatever it did before (the write
+				// is refused in a list shape), the claim is only that the UPPER counter is never written.
+				for (const [label, kind, mode, want] of [
+					['(a) callout, block embed (![[note#^id]]), Reading view', 'cal', 'rv', 'lower'],
+					['(b) callout, block embed, Live Preview', 'cal', 'lp', 'lower'],
+					['(c) callout, heading embed (![[note#Tracker]]), Reading view', 'calh', 'rv', 'lower'],
+					['(d) callout, heading embed, Live Preview', 'calh', 'lp', 'lower'],
+					['(e) header-less quote whose first line is the upper fence, block embed, Reading view', 'hq', 'rv', 'lower'],
+					['(f) header-less quote, block embed, Live Preview', 'hq', 'lp', 'lower'],
+					['(g) header-less quote, heading embed, Reading view', 'hqh', 'rv', 'lower'],
+					['(h) header-less quote, heading embed, Live Preview', 'hqh', 'lp', 'lower'],
+					['(i) list item holding two counters, block embed, Reading view', 'li', 'rv', 'safe'],
+					['(j) list item, heading embed, Reading view', 'lih', 'rv', 'safe'],
 				]) {
 					try {
 						const r = await gs77Trial(t, { SRC: `Lifecycle/gs77-${kind}-src.md`, HOST: `Lifecycle/gs77-${kind}-host.md`, mode, plus: true });
-						const ok = J(r.afterOpen) === J([6, 6]) && J(r.values) === J([6, 6]) && J(r.names) === J(['Twin', 'Edited']) && r.notices.length === 0;
-						if (!ok) problems.push(`${label}: before ${J(r.before)}, with the form open ${J(r.afterOpen)}, after Save values ${J(r.values)} names ${J(r.names)} (the LOWER counter must be the edited one), notices ${J(r.notices)}`);
-						else outcomes.push(`${label}: + on the lower counter and the pencil: Save wrote the lower counter (names ${J(r.names)}, values ${J(r.values)}), the upper untouched, no Notice`);
+						const upperUntouched = r.names[0] === 'Twin';
+						const ok = want === 'lower' ? J(r.afterOpen) === J([6, 6]) && J(r.values) === J([6, 6]) && J(r.names) === J(['Twin', 'Edited']) && r.notices.length === 0 : upperUntouched;
+						if (!ok) problems.push(`${label}: before ${J(r.before)}, with the form open ${J(r.afterOpen)}, after Save values ${J(r.values)} names ${J(r.names)} (${want === 'lower' ? 'the LOWER counter must be the edited one' : 'the UPPER counter must stay Twin'}), notices ${J(r.notices)}`);
+						else outcomes.push(`${label}: + on the lower counter and the pencil: Save ${upperUntouched && J(r.names) === J(['Twin', 'Edited']) ? 'wrote the lower counter' : 'wrote nothing'} (names ${J(r.names)}, values ${J(r.values)}), the upper untouched, notices ${J(r.notices.length)}`);
 					} catch (e) {
 						problems.push(`${label}: ${e.message}`);
 					}
