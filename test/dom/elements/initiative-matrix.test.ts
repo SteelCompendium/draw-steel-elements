@@ -500,6 +500,20 @@ describe('[M] Malice: the stepper, the quick-add row and the log disclosure', ()
 		expect(logLines(root)).toEqual(['R1: -2 — Spend', 'R1: +3 — Gain']);
 	});
 
+	test('[M09] a hand-edited entry whose `requested` equals its amount reads as an uncapped line, with no suffix', async () => {
+		const { root } = await mount(withMalice(3, ['  log:', '    - { round: 1, amount: 1, label: "Same", requested: 1 }', '    - { round: 1, amount: -2, label: "Capped", requested: -5 }']));
+		expect(logLines(root)).toEqual(['R1: +1 — Same', 'R1: -2 — Capped (-5, capped at 0)']);
+	});
+
+	test('[M09] a fractional gain the pool takes in full writes no `requested` key (0.2 + round_gain 0.1)', async () => {
+		const { root, flush, last } = await mount(src(HEROES, OGRES, ['malice:', '  value: 0.2', '  round_gain: 0.1']));
+		ctl(root, 'init.round.advance').click();
+		await flush();
+		expect(last().malice.log).toHaveLength(1);
+		expect('requested' in last().malice.log[0]).toBe(false);
+		expect(logLines(root)[0]).not.toContain('capped');
+	});
+
 	test('[M09] Advance round with round_gain -3 from Malice 0 still logs the gain: amount 0, requested -3', async () => {
 		const { root, flush, last } = await mount(src(HEROES, OGRES, ['malice:', '  value: 0', '  round_gain: -3'], ['round: 2']));
 		ctl(root, 'init.round.advance').click();
