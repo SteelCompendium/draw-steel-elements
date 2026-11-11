@@ -689,6 +689,124 @@ describe('[K] the captain badge: who it offers, what a click does', () => {
 	});
 });
 
+// ------------------------------------------------------------------------------- F. focus after a whole-tracker rebuild (SC-588)
+
+describe('[F] keyboard focus survives the actions that rebuild the whole tracker (SC-588)', () => {
+	/** The control holding focus, by id (null when focus is on <body> or on a node with none). */
+	const focused = (): string | null => document.activeElement?.getAttribute('data-dse-control') ?? null;
+	const CAPTAINED = src(HEROES, [
+		'enemy_groups:', '  - name: "Patrol"', '    is_squad: true', '    creatures:',
+		'      - { name: Goblin, max_stamina: 4, amount: 2, squad_role: minion }',
+		'      - { name: Cap, max_stamina: 20, amount: 1, squad_role: captain }',
+		'      - { name: Rider, max_stamina: 30, amount: 1, squad_role: attached }',
+	]);
+
+	test('[F01] Advance round: the rebuilt Advance round button holds focus, not <body>', async () => {
+		const { root, flush } = await mount(TRACKER);
+		const before = ctl(root, 'init.round.advance');
+		before.focus();
+		before.click();
+		await flush();
+		const after = ctl(root, 'init.round.advance');
+		expect(after).not.toBe(before); // the tracker really was rebuilt
+		expect(document.activeElement).toBe(after);
+	});
+
+	test('[F02] Reset turns (a chrome item): the rebuilt chrome item holds focus', async () => {
+		const { root, flush } = await mount(TRACKER);
+		const before = ctl(root, 'init.reset-turns');
+		before.focus();
+		before.click();
+		await flush();
+		expect(ctl(root, 'init.reset-turns')).not.toBe(before);
+		expect(focused()).toBe('init.reset-turns');
+		expect(document.activeElement).toBe(ctl(root, 'init.reset-turns'));
+	});
+
+	test.each([
+		['amount', 'init.malice.quickadd.amount'],
+		['label', 'init.malice.quickadd.label'],
+	])('[F03] Enter in the quick-add %s box: the rebuilt box holds focus (and, as before, comes back empty)', async (_which, id) => {
+		const { root, flush } = await mount(TRACKER);
+		ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = '2';
+		ctl<HTMLInputElement>(root, 'init.malice.quickadd.label').value = 'Kbd';
+		const field = ctl<HTMLInputElement>(root, id);
+		field.focus();
+		press(field, 'Enter');
+		await flush();
+		expect(ctl(root, 'init.malice.log').textContent).toBe('Malice log · 1 entry'); // the add happened
+		expect(document.activeElement).toBe(ctl(root, id));
+		expect(ctl<HTMLInputElement>(root, id).value).toBe('');
+	});
+
+	test.each([
+		['Make captain', '2-1', 'init.captain.make', 'init.captain.relieve'],
+		['Relieve captain', '1-1', 'init.captain.relieve', 'init.captain.make'],
+	])('[F04] %s: focus moves to the badge that replaced it, on the same creature', async (_name, key, from, to) => {
+		const { root, flush } = await mount(CAPTAINED);
+		(root.querySelector(`[data-instance-key="${key}"]`) as HTMLElement).click();
+		const before = ctl(root, from);
+		before.focus();
+		before.click();
+		await flush();
+		expect(has(root, from)).toBe(false);
+		expect(focused()).toBe(to);
+		expect(document.activeElement).toBe(ctl(root, to));
+	});
+
+	test('[F05] Reset encounter -> Yes, Reset: the confirm modal closes and the rebuilt Reset encounter item holds focus', async () => {
+		const { root, flush } = await mount(TRACKER);
+		const item = ctl(root, 'init.reset-encounter');
+		item.focus();
+		item.click();
+		const modal = document.body.lastElementChild as HTMLElement;
+		expect(root.contains(document.activeElement)).toBe(false); // the modal took focus
+		ctl(modal, 'init.reset-encounter.confirm').click();
+		await flush();
+		expect(document.querySelector('.dse-modal')).toBeNull();
+		expect(ctl(root, 'init.reset-encounter')).not.toBe(item);
+		expect(document.activeElement).toBe(ctl(root, 'init.reset-encounter'));
+	});
+
+	test('[F05] Reset encounter -> Cancel rebuilds nothing and moves nothing', async () => {
+		const { root, flush } = await mount(TRACKER);
+		const item = ctl(root, 'init.reset-encounter');
+		item.focus();
+		item.click();
+		ctl(document.body.lastElementChild as HTMLElement, 'init.reset-encounter.cancel').click();
+		await flush();
+		expect(ctl(root, 'init.reset-encounter')).toBe(item);
+	});
+
+	test('[F06] focus that was not inside the tracker is left where it is: a rebuild raised from elsewhere never steals it', async () => {
+		const { root, flush } = await mount(TRACKER);
+		const other = document.createElement('input');
+		document.body.appendChild(other);
+		other.focus();
+		ctl(root, 'init.round.advance').click(); // a click with focus elsewhere (e.g. scripted, or another pane's input)
+		await flush();
+		expect(document.activeElement).toBe(other);
+		other.blur();
+		ctl(root, 'init.round.advance').click();
+		await flush();
+		expect(document.activeElement).toBe(document.body);
+	});
+
+	test('[F07] a mouse press on Advance round restores focus WITHOUT forcing a keyboard ring', async () => {
+		const { root, flush } = await mount(TRACKER);
+		const before = ctl(root, 'init.round.advance');
+		before.focus();
+		const matches = jest.spyOn(Element.prototype, 'matches').mockReturnValue(false); // a pointer focus is not :focus-visible
+		before.click();
+		matches.mockRestore();
+		const focusSpy = jest.spyOn(HTMLElement.prototype, 'focus');
+		await flush();
+		expect(document.activeElement).toBe(ctl(root, 'init.round.advance'));
+		expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+		focusSpy.mockRestore();
+	});
+});
+
 // ------------------------------------------------------------------------------------------ X. Reset encounter
 
 describe('[X] Reset encounter state: what a confirm clears, what every other way out leaves', () => {
@@ -996,8 +1114,9 @@ describe('Malice never goes below 0 (SC-577)', () => {
 // ----------------------------------------------------------------------------------------------------- known bugs
 // Each of these encodes the CORRECT behaviour and fails today (`test.failing`): the moment the bug is fixed the test passes, jest
 // reports it, and the marker comes off. The e2e twins (e2e/specs/initiative/) carry `knownBug` markers for the same tickets.
+// (SC-588, focus after a rebuild, was fixed: its tests are the [F] group above.)
 
-describe('known bugs: the quick-add (SC-588, SC-589)', () => {
+describe('known bugs: the quick-add (SC-589)', () => {
 	test.failing('[M10] a half-typed quick-add survives Advance round [known bug SC-589]', async () => {
 		const { root, flush } = await mount(TRACKER);
 		ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = '2';
@@ -1006,17 +1125,5 @@ describe('known bugs: the quick-add (SC-588, SC-589)', () => {
 		await flush();
 		expect(ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value).toBe('2');
 		expect(ctl<HTMLInputElement>(root, 'init.malice.quickadd.label').value).toBe('Feyt');
-	});
-
-	test.failing('[M04] keyboard focus stays inside the tracker after a quick-add Enter rebuilds it [known bug SC-588]', async () => {
-		const { root, flush } = await mount(TRACKER);
-		ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = '2';
-		const label = ctl<HTMLInputElement>(root, 'init.malice.quickadd.label');
-		label.value = 'Kbd';
-		label.focus();
-		expect(root.contains(document.activeElement)).toBe(true);
-		press(label, 'Enter');
-		await flush();
-		expect(root.contains(document.activeElement)).toBe(true);
 	});
 });

@@ -72,6 +72,8 @@ import {
 	buildConditionIcons as kitBuildConditionIcons,
 } from '@/framework/kit';
 import type { DseModal, IconButtonHandle, StaminaBarValues, StaminaGaugeOptions } from '@/framework/kit';
+import { captureControlFocus, restoreControlFocus } from '@/framework/kit/controlFocus';
+import type { ControlFocus, ControlFamilies } from '@/framework/kit/controlFocus';
 import { ConditionManager } from '@utils/Conditions';
 import { Images } from '@utils/Images';
 import { StaminaBar } from '@model/StaminaBar';
@@ -107,6 +109,10 @@ import {
 } from './model';
 import type { ActorActions, MaliceLogEntry, SquadActions } from './model';
 import { resolveInitiativeRefs } from './resolveRefs';
+
+/** SC-588: the one control of the tracker that changes id when pressed. Make captain is rebuilt as Relieve captain (and back), so
+ *  a keyboard user's focus follows the badge of the same place, not the id it had. */
+const FOCUS_FAMILIES: ControlFamilies = { 'init.captain.make': 'init.captain', 'init.captain.relieve': 'init.captain' };
 
 export class InitiativeView extends ElementView<EncounterData> {
 	/** Same construction site as the legacy processor's constructor (:31). */
@@ -186,10 +192,16 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *  through the framework default update() (unload owned children + onMount), then persist.
 	 *  Reset Encounter does NOT use it (see `rebuildFromWrittenReset`). Failures are
 	 *  caught and logged — never left as unhandled rejections (negotiation's
-	 *  resetNegotiation pattern). */
+	 *  resetNegotiation pattern).
+	 *
+	 *  SC-588: the rebuild empties the root, so the control a keyboard user pressed (Advance round, a captain badge, a chrome reset
+	 *  item, Enter in the Malice quick-add) is thrown away and focus fell to <body>. Its successor is focused once the rebuild
+	 *  is done (only when focus was inside the tracker; see `framework/kit/controlFocus.ts`). */
 	private async rebuildAndPersist(): Promise<void> {
+		const focus = captureControlFocus(this.rootEl, FOCUS_FAMILIES);
 		try {
 			await this.update(this.model);
+			restoreControlFocus(this.rootEl, focus, FOCUS_FAMILIES);
 			await this.persist();
 		} catch (error) {
 			console.error('Draw Steel Elements: initiative tracker rebuild failed', error);
@@ -212,8 +224,12 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *  authored and could be written into the note by a later edit.)
 	 *
 	 *  The ref resolution reads the vault, so the old DOM is made inert for the await: a click on it
-	 *  would mutate the model that `update(fresh)` is about to replace, and be lost. */
-	private async rebuildFromWrittenReset(): Promise<void> {
+	 *  would mutate the model that `update(fresh)` is about to replace, and be lost.
+	 *
+	 *  SC-588: `focus` is what held focus when the Reset encounter item was pressed (the confirm modal has focus by the time
+	 *  this runs, and Obsidian's own focus return lands on the old item, which is inert and about to be replaced). It is given back
+	 *  AFTER the `inert` is lifted: an inert node cannot take focus. */
+	private async rebuildFromWrittenReset(focus: ControlFocus | null): Promise<void> {
 		const root = this.rootEl;
 		root.setAttribute('inert', '');
 		root.setAttribute('aria-busy', 'true');
@@ -241,6 +257,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				el.removeAttribute('aria-busy');
 			}
 		}
+		restoreControlFocus(this.rootEl, focus, FOCUS_FAMILIES);
 	}
 
 	/** "Advance round" (D8 spec §7.2/§3.1, Task 9) — the control shared by the round
@@ -295,10 +312,11 @@ export class InitiativeView extends ElementView<EncounterData> {
 				label: 'Reset encounter state',
 				control: 'init.reset-encounter',
 				onClick: () => {
+					const focus = captureControlFocus(this.rootEl, FOCUS_FAMILIES); // SC-588: before the modal takes focus
 					this.openModal(
 						new ResetEncounterModal(this.cx.app, () => {
 							resetEncounter(this.model);
-							void this.rebuildFromWrittenReset();
+							void this.rebuildFromWrittenReset(focus);
 						}),
 					);
 				},
