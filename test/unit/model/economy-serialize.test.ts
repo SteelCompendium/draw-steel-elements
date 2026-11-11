@@ -14,7 +14,7 @@
 // `round_gain`/`log`, and it stays green UNMODIFIED as the load-bearing proof that parse()/
 // serialize() needed zero changes for this feature.
 import { parseYaml } from '../../mocks/obsidian';
-import { advanceRound, parse, serialize } from '../../../src/elements/initiative/model';
+import { addToMalicePool, advanceRound, maliceValueOf, parse, serialize } from '../../../src/elements/initiative/model';
 import type { EncounterData } from '../../../src/elements/initiative/model';
 import { MALICE_LOG_MAX_ENTRIES, appendMaliceLogEntry } from '@drawSteelAdmonition/EncounterData';
 import type { Malice } from '@drawSteelAdmonition/EncounterData';
@@ -213,6 +213,23 @@ describe('T-9: advanceRound()', () => {
 		const reduced = parseLikePipeline(source(5, -3));
 		advanceRound(reduced);
 		expect(reduced.malice.value).toBe(2); // a negative gain still applies when the pool can take it
+	});
+
+	test('a stored negative Malice counts as 0 (SC-577, O6): -2 + round_gain 3 writes 3, and the quick-add helper agrees', () => {
+		const source = ['heroes: []', 'enemy_groups: []', 'malice:', '  value: -2', '  round_gain: 3'].join('\n');
+		const model = parseLikePipeline(source);
+		expect(model.malice.value).toBe(-2); // parse does not coerce
+		expect(maliceValueOf(model.malice)).toBe(0);
+
+		advanceRound(model);
+		expect(model.malice.value).toBe(3); // not 1
+		expect(model.malice.log).toEqual([{ round: 2, amount: 3, label: 'Round gain' }]); // the configured amount, unchanged
+
+		const quick = parseLikePipeline(['heroes: []', 'enemy_groups: []', 'malice:', '  value: -2'].join('\n'));
+		addToMalicePool(quick.malice, 3);
+		expect(quick.malice.value).toBe(3);
+		addToMalicePool(quick.malice, -9);
+		expect(quick.malice.value).toBe(0);
 	});
 
 	test('round_gain applied on top of an existing log preserves earlier entries', () => {

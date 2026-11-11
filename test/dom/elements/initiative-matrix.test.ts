@@ -212,6 +212,8 @@ describe('[R] Advance round vs Reset turns: starting round x round_gain x what i
 		[1, 0, 2, 3, 0],
 		[1, 2, 2, 5, 1],
 		[4, 3, 5, 6, 1],
+		[1, -2, 2, 1, 1], // a negative gain still applies...
+		[1, -5, 2, 0, 1], // ...and stops at 0 (the log keeps the configured amount)
 	] as const)('[R01] Advance round from round %s with round_gain %s -> round %i, Malice %i, %i log entr(ies); every turn mark and checklist cleared', async (round, gain, nextRound, malice, logLen) => {
 		const { root, flush, last, writes } = await mount(marked(round, gain));
 		advance(root);
@@ -247,6 +249,7 @@ describe('[R] Advance round vs Reset turns: starting round x round_gain x what i
 		[undefined, 'Advance round'],
 		[0, 'Advance round'],
 		[2, 'Advance round (+2 Malice)'],
+		[-3, 'Advance round (-3 Malice)'],
 	])('[R01] round_gain %s labels the Advance round button %j', async (gain, label) => {
 		const { root } = await mount(marked(undefined, gain));
 		expect(ctl(root, 'init.round.advance').getAttribute('aria-label')).toBe(label);
@@ -857,12 +860,9 @@ describe('[X] Reset encounter state: what a confirm clears, what every other way
 	});
 });
 
-// ----------------------------------------------------------------------------------------------------- known bugs
-// Each of these encodes the CORRECT behaviour and fails today (`test.failing`): the moment the bug is fixed the test passes, jest
-// reports it, and the marker comes off. The e2e twins (e2e/specs/initiative/) carry `knownBug` markers for the same tickets.
-// [M07] and [R01] (SC-577, Malice never below 0) are fixed and plain tests now; [M09] (SC-578) is still open.
+// ------------------------------------------------------------------------------- Malice never goes below 0 (SC-577)
 
-describe('known bugs: Malice below 0 and the quick-add clamp', () => {
+describe('Malice never goes below 0 (SC-577)', () => {
 	test('[M07] the Malice stepper stops at 0', async () => {
 		const { root, flush, writes } = await mount(src(HEROES, OGRES, ['malice:', '  value: 0']));
 		ctl(root, 'init.malice.dec').click();
@@ -880,6 +880,37 @@ describe('known bugs: Malice below 0 and the quick-add clamp', () => {
 		expect(last().malice.value).toBeGreaterThanOrEqual(0);
 	});
 
+	test('[M07] a hand-edited negative value counts as 0: the read-only tracker shows "Malice: 0", like the stepper', async () => {
+		const { root } = await mount(src(HEROES, OGRES, ['malice:', '  value: -2']), { canPersist: false });
+		expect(root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 0');
+		const writable = await mount(src(HEROES, OGRES, ['malice:', '  value: -2']));
+		expect(writable.root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 0');
+	});
+
+	test('[R01] a hand-edited -2 with round_gain 3 writes 3 (the stored negative counts as 0), logging +3', async () => {
+		const { root, flush, last } = await mount(src(HEROES, OGRES, ['malice:', '  value: -2', '  round_gain: 3']));
+		ctl(root, 'init.round.advance').click();
+		await flush();
+		expect(last().malice.value).toBe(3);
+		expect(last().malice.log).toEqual([{ round: 2, amount: 3, label: 'Round gain' }]);
+	});
+
+	test('[M05] a hand-edited -2 with a quick-add of +3 writes 3, logging +3', async () => {
+		const { root, flush, last } = await mount(src(HEROES, OGRES, ['malice:', '  value: -2']));
+		ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = '3';
+		ctl<HTMLInputElement>(root, 'init.malice.quickadd.label').value = 'Gain';
+		ctl(root, 'init.malice.quickadd.add').click();
+		await flush();
+		expect(last().malice.value).toBe(3);
+		expect(last().malice.log).toEqual([{ round: 1, amount: 3, label: 'Gain' }]);
+	});
+});
+
+// ----------------------------------------------------------------------------------------------------- known bugs
+// Each of these encodes the CORRECT behaviour and fails today (`test.failing`): the moment the bug is fixed the test passes, jest
+// reports it, and the marker comes off. The e2e twins (e2e/specs/initiative/) carry `knownBug` markers for the same tickets.
+
+describe('known bugs: the quick-add (SC-578, SC-588, SC-589)', () => {
 	test.failing('[M09] a quick-add the pool clamps logs what it did: the entry matches the change in Malice, or says it was capped [known bug SC-578]', async () => {
 		const { root, flush, last } = await mount(src(HEROES, OGRES, ['malice:', '  value: 2']));
 		ctl<HTMLInputElement>(root, 'init.malice.quickadd.amount').value = '-9';

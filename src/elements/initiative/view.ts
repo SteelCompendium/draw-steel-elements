@@ -87,12 +87,14 @@ import {
 	EncounterData,
 	EnemyGroup,
 	Hero,
+	addToMalicePool,
 	advanceRound as advanceRoundModel,
 	applyCaptainBonusTransition,
 	captainOfSquad,
 	EMPTY_SQUAD_ACTIONS,
 	foldedCaptainStaminaBonus,
 	isCaptainDown,
+	maliceValueOf,
 	minionCreatures,
 	minionPoolMaxOf,
 	minionPoolOf,
@@ -505,7 +507,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				.querySelector<HTMLElement>('.dse-stepper__value')
 				?.addClass('dse-init__malice-value');
 		} else {
-			this.renderMaliceValue(malice.createDiv({ cls: 'dse-init__malice-value' }), data.malice.value);
+			this.renderMaliceValue(malice.createDiv({ cls: 'dse-init__malice-value' }), maliceValueOf(data.malice));
 		}
 		return malice;
 	}
@@ -675,7 +677,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 					flag(labelInput, 'Label required');
 					return;
 				}
-				data.malice.value = Math.max(0, data.malice.value + amount);
+				addToMalicePool(data.malice, amount);
 				appendMaliceLogEntry(data.malice, { round: data.round ?? 1, amount, label });
 				amountInput.value = '';
 				labelInput.value = '';

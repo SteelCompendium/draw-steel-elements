@@ -51,7 +51,7 @@
 // against the unchanged legacy parseEncounterData; the legacy writer's bytes on a fully-authored
 // source) and test/dom/elements/initiative-default-keys.test.ts (the writes through the pipeline).
 import { stringifyYaml } from 'obsidian';
-import type { Condition, Creature, EncounterData, EnemyGroup } from '@drawSteelAdmonition/EncounterData';
+import type { Condition, Creature, EncounterData, EnemyGroup, Malice } from '@drawSteelAdmonition/EncounterData';
 import {
 	EMPTY_SQUAD_ACTIONS,
 	appendMaliceLogEntry,
@@ -466,7 +466,8 @@ function clearTurnState(data: EncounterData): void {
  *   (`{round, amount, label: 'Round gain'}`) at the NEW round number — same log shape as
  *   the quick-add (spec §3.1/§3.3). Absent/0 stays manual-only (OD-3: never a fabricated
  *   default). A NEGATIVE gain is still applied but floors the pool at 0 (SC-577: Malice
- *   never goes below 0, matching the quick-add); the log entry keeps the configured amount.
+ *   never goes below 0, matching the quick-add), computed from the floored stored value
+ *   (`maliceValueOf`); the log entry keeps the configured amount.
  */
 export function advanceRound(data: EncounterData): void {
 	data.round = (data.round ?? 1) + 1;
@@ -474,9 +475,27 @@ export function advanceRound(data: EncounterData): void {
 
 	const gain = data.malice.round_gain;
 	if (typeof gain === 'number' && gain !== 0) {
-		data.malice.value = Math.max(0, data.malice.value + gain); // SC-577: the pool never goes below 0
+		addToMalicePool(data.malice, gain);
 		appendMaliceLogEntry(data.malice, { round: data.round, amount: gain, label: 'Round gain' });
 	}
+}
+
+/**
+ * SC-577: the Malice pool never goes below 0. A stored negative value (hand-edited `value: -2`;
+ * `parse` does not coerce it, so the file is untouched until the user changes Malice) COUNTS AS 0
+ * in every computation and on every display.
+ */
+export function maliceValueOf(malice: Malice): number {
+	return Math.max(0, malice.value);
+}
+
+/**
+ * Add `amount` (negative to spend) to the pool, floored at 0, computed from `maliceValueOf` (so
+ * `-2` stored + 3 writes 3, not 1). The ONE helper behind both Advance round and the quick-add.
+ * It does not log: what a clamped change logs is the caller's (and SC-578's) concern.
+ */
+export function addToMalicePool(malice: Malice, amount: number): void {
+	malice.value = Math.max(0, maliceValueOf(malice) + amount);
 }
 
 /**
