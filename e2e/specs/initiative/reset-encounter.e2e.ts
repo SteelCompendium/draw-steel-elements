@@ -109,5 +109,7 @@ describe('initiative: what the screen shows after a reset', () => {
 		await dse.waitForWrite(SQUAD, () => dse.click(modal.control('init.reset-encounter.confirm')));
 		const data = (await dse.expectNoteBlock(SQUAD, INIT).value()) as { enemy_groups: Array<{ creatures: Array<{ actions?: Record<string, boolean> }> }> };
 		expect(Object.values(data.enemy_groups[0].creatures[0].actions ?? {}).some(Boolean)).toBe(false);
+		// and on screen: none of the squad's five pips (Move, Main, Maneuver, Second move, Triggered) is still pressed
+		for (const nth of [0, 1, 2, 3, 4]) await expect(root.control('init.detail.squad-action', { nth })).toHaveAttribute('aria-pressed', 'false');
 	});
 });

@@ -25,7 +25,8 @@
 // `round`/`log` — `round_gain` is a configured default and survives a reset); Task 9 (turn/
 // round economy, spec §7) added `ActorActions` + `Hero.actions`/`CreatureInstance.actions`
 // the same way, and taught resetEncounter to clear `Hero.actions` (enemy-side `actions`
-// dies with the instances it lives on). parse()/serialize() below needed NO changes for
+// dies with the instances it lives on — except a minion squad's shared `Creature.actions`
+// (SC-278), cleared explicitly (SC-575)). parse()/serialize() below needed NO changes for
 // either: unset optional fields simply pass through untouched — the additive contract holds
 // because nothing here ever reads or writes `round`/`actions`/`malice.round_gain`/`.log`.
 // Task 9 DOES add one new export below: `advanceRound()`, the round-boundary transition
