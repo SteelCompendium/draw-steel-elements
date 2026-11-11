@@ -610,6 +610,57 @@ describe('condition icons: a click removes that condition and saves at once', ()
 		expect(icons.map((i) => i.disabled || i.getAttribute('tabindex') === '-1')).toEqual([false, false]);
 		expect(icons.map((i) => i.classList.contains('condition-icon'))).toEqual([true, true]);
 	});
+
+	// SC-572 r3: jsdom does not turn a key into a click on a native button (the real Enter/Space removal is e2e
+	// POOL-C04/C05), so what is checked here is the other half: a key that is not Enter or Space does nothing.
+	test('SC-572: keys that are not Enter or Space leave the condition alone', async () => {
+		const { content, minion, persist } = await open({ conditions: { 0: ['grabbed', 'dazed'] } });
+		const icon = ctl(content, 'pool.condition');
+		for (const key of ['a', 'Delete', 'Backspace', 'ArrowRight', 'Tab']) {
+			icon.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+			icon.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true, cancelable: true }));
+		}
+		expect(minion.instances![0].conditions).toEqual(['grabbed', 'dazed']);
+		expect(persist).not.toHaveBeenCalled();
+	});
+
+	// SC-572 r3: a keyboard removal rebuilds the row, which destroys the focused button; focus must not fall to <body>
+	// (the Conditions modal's MED-3 rule). A keyboard click has `detail === 0`; a pointer click has `detail >= 1`.
+	describe('focus after a removal', () => {
+		const press = (el: HTMLElement) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 0 }));
+		const tap = (el: HTMLElement) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+
+		test('keyboard: focus lands on the icon that took the removed one\'s slot', async () => {
+			const { content } = await open({ conditions: { 0: ['grabbed', bleeding, 'dazed'] } });
+			press(ctl(content, 'pool.condition', 1)); // the middle one: the next one shifts into slot 1
+			expect(all(content, 'pool.condition').map(conditionName)).toEqual(['Grabbed', 'Dazed']);
+			expect(document.activeElement).toBe(ctl(content, 'pool.condition', 1));
+		});
+
+		test('keyboard: removing the last icon of the row focuses the one before it', async () => {
+			const { content } = await open({ conditions: { 0: ['grabbed', 'dazed'] } });
+			press(ctl(content, 'pool.condition', 1));
+			expect(document.activeElement).toBe(ctl(content, 'pool.condition', 0));
+		});
+
+		test('keyboard: removing the only icon focuses a control in the modal, never <body>', async () => {
+			const { content } = await open({ conditions: { 0: ['grabbed'] } });
+			press(ctl(content, 'pool.condition'));
+			expect(all(content, 'pool.condition')).toHaveLength(0);
+			expect(document.activeElement).not.toBe(document.body);
+			expect(content.contains(document.activeElement)).toBe(true);
+			expect((document.activeElement as HTMLElement).matches('button, input')).toBe(true);
+		});
+
+		test('pointer: a mouse click moves focus nowhere (unchanged behaviour)', async () => {
+			const { content } = await open({ conditions: { 0: ['grabbed', 'dazed'] } });
+			const before = document.activeElement; // wherever the modal put focus on open (a click does not focus the button in jsdom)
+			tap(ctl(content, 'pool.condition', 0));
+			expect(all(content, 'pool.condition')).toHaveLength(1);
+			expect(document.activeElement).toBe(before);
+			expect((document.activeElement as HTMLElement).matches('.condition-icon')).toBe(false);
+		});
+	});
 });
 
 // ----------------------------------------------------------------------- several squads in one group

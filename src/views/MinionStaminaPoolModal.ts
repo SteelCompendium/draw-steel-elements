@@ -27,6 +27,7 @@ import { Creature, CreatureInstance, EnemyGroup, Condition } from '@drawSteelAdm
 import { foldedCaptainStaminaBonus, minionPoolMaxOf, minionPoolOf, setMinionPool } from '@drawSteelAdmonition/EncounterData';
 import { ConditionManager } from '@utils/Conditions';
 import { applyConditionColor, applyConditionEffect } from '@/elements/conditionColor';
+import { focusControl, isKeyboardClick } from '@/framework/chrome/focusHandoff';
 import { DseModal, iconButton, stampControl } from '@/framework/kit';
 import type { IconButtonHandle, StepperHandle } from '@/framework/kit';
 import { readAmount, staminaPreviewBar, staminaStepperRow, setButtonText } from './StaminaEditModal';
@@ -534,6 +535,19 @@ export class MinionStaminaPoolModal extends DseModal {
 		}
 	}
 
+	/** SC-572 r3: after a keyboard removal, focus the icon that shifted into the removed one's slot (the previous
+	 *  one if it was last); with none left, the next focusable control after the row, else the first one in the
+	 *  modal — never <body>. */
+	private handOffConditionFocus(container: HTMLElement, index: number): void {
+		const icons = Array.from(container.querySelectorAll<HTMLElement>('.condition-icon'));
+		if (icons.length > 0 && focusControl(icons[Math.min(index, icons.length - 1)])) return;
+		const focusable = Array.from(
+			this.contentEl.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'),
+		).filter((el) => !container.contains(el));
+		const after = focusable.find((el) => container.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
+		focusControl(after ?? focusable[0]);
+	}
+
 	private buildConditionIcons(container: HTMLElement, character: CreatureInstance): void {
 		const conditions = character.conditions || [];
 
@@ -574,10 +588,16 @@ export class MinionStaminaPoolModal extends DseModal {
 					applyConditionEffect(iconEl, conditionData.effect);
 				}
 
-				this.lifecycle.registerDomEvent(iconEl, 'click', () => {
+				this.lifecycle.registerDomEvent(iconEl, 'click', (evt: MouseEvent) => {
+					// Where this icon sits among its siblings, read before the rebuild destroys it.
+					const index = Array.from(container.querySelectorAll('.condition-icon')).indexOf(iconEl);
 					character.conditions = conditions.filter((entry) => entry !== conditionEntry);
 					container.empty();
 					this.buildConditionIcons(container, character);
+					// SC-572 r3: a keyboard removal must not strand focus on <body> (the rebuild destroyed
+					// the focused button). Same rule as ConditionsModal.removeAt (MED-3); a pointer click
+					// keeps today's behaviour (SC-518: no focus move, no ring).
+					if (isKeyboardClick(evt)) this.handOffConditionFocus(container, index);
 					// Route through the injected callback — never a direct vault write.
 					// The old direct CodeBlocks.updateCodeBlock(app, data, ctx, "") call (src/utils/CodeBlocks.ts, deleted in SC-454)
 					// rewrote the fence with an EMPTY language, corrupting the block (CB-2).

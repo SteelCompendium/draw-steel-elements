@@ -592,6 +592,10 @@ const skillsChipsHidden = `style: chips\nonly_show_selected: true\n${skillsPicks
 //     thing under review (does the word crowd the icons?);
 //   - `actions` part-spent on Frodo — the action pips' pressed state is half of what the
 //     candidates are being judged on.
+//
+// SC-572: Goblin #4 carries a (coloured) condition so the minion pool modal's host-leak sweep mounts a
+// `.condition-icon` button. It must stay on #4: #1 is the default-selected instance, so a condition there
+// would draw in the tracker's detail row and move the frozen `initiative-fight*` print PNGs.
 const initiativeFight = `heroes:
   - name: "Frodo Baggins"
     max_stamina: 80
@@ -651,6 +655,9 @@ enemy_groups:
             isDead: true
           - id: 3
           - id: 4
+            conditions:
+              - key: "bleeding"
+                color: "crimson"
           - id: 5
       - name: "Goblin Captain"
         max_stamina: 40

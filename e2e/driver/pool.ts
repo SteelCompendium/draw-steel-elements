@@ -62,5 +62,5 @@ export const cellText = (root: Scope, key: string): Promise<string> =>
 	root.control({ css: `.dse-init__cell[data-instance-key="${key}"] .dse-init__cell-stamina` }).getProperty('textContent') as Promise<string>;
 
 /** The conditions the open pool modal's icons remove, top to bottom ("Grabbed", "Dazed"): each icon's accessible name is "Remove <condition>" (SC-572). */
-export const conditionTitles = (): Promise<string[]> =>
+export const conditionNames = (): Promise<string[]> =>
 	dse.page<string[]>(`Array.from(document.querySelectorAll('.modal-container .dse-modal [data-dse-control="pool.condition"]')).map((i) => (i.getAttribute('aria-label') ?? '').replace(/^Remove /, ''))`);
