@@ -821,15 +821,20 @@ export class ReadingModeBlockHost implements BlockHost {
 			// host knows, so its own fence cannot be found in it; the host's own last write still says where the block is.
 			return forForm && embedded ? this.pinFromLastWrite() : null;
 		}
-		// SC-584 r5: a block inside a quote/callout window (its fence is not the window's first line) was found in that window BY BODY. Right after a +
-		// on this card the window is stale (old body), so the only block holding the body this host knows can be a SIBLING in the same callout
-		// (two identical counters, the + made the lower one read like the upper): the form would then be pinned on the sibling. When this host's
-		// own last write is of the body it knows, that write is the exact position of its block, so a form takes it instead. (Not for a plain
-		// block - its window is the block itself. Record-first for every form was tried and refuses a CURRENT part after hundreds of lines
-		// changed since the + (the diff gives up), which the link finds fine; a callout window with an old record can still refuse that way.)
-		if (forForm && embedded && this.ownFence.lineStart !== section.lineStart) {
-			const w = this.pinFromLastWrite();
-			if (w) return w;
+		// SC-584 r7 (r5 had it as "the fence is not the window's first line", which a quote whose FIRST line is the twin's fence defeats): unless the
+		// card's section window IS its own plain fenced block (its first line is an un-prefixed fence - `findOwnFence`'s shortcut, nothing is searched),
+		// the own fence above was found in the window BY BODY. A window that holds other content (callout, header-less quote, nested quote, list item,
+		// footnote, ...) can hold a twin of the block, and right after a + on this card it is stale (old body), so the only block holding the body this
+		// host knows can be the TWIN (two identical counters, the + made the lower one read like the upper): the form would be pinned on it. When this
+		// host's own last write is of the body it knows, that write is the exact position of its block, so a form takes it instead. Record-first for
+		// EVERY form was tried and refuses a CURRENT plain block after hundreds of lines changed since the + (the diff gives up; the link finds it fine),
+		// hence the plain-block exception; a form in a multi-block window with an old record can refuse that way (a Notice, never a twin).
+		if (forForm && embedded) {
+			const first = parseOpenFence(section.text, section.lineStart);
+			if (!(first && first.prefix === '')) {
+				const w = this.pinFromLastWrite();
+				if (w) return w;
+			}
 		}
 		const pin = { text: section.text, lineStart: this.ownFence.lineStart };
 		// SC-556: only a block drawn inside an embed can be given a part of the note (see rebasePin); every other pin is taken as before.

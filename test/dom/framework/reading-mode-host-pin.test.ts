@@ -1284,6 +1284,56 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false);
 			refused(app, noteOf6(app));
 		});
+
+		// SC-584 r7: the sweep. A card's section window is exactly its own plain fenced block, or it holds the block among other content (a callout, a
+		// quote, a list item, a footnote ...). In the second kind the own fence is found in the window BY BODY, which right after a + (stale window)
+		// can only be the twin: so a form takes the host's own + write there. Every construct that can hold a fence together with other content, with
+		// two identical counters in it, + on the lower one, the form, Save: the upper one is never written.
+		describe('SC-584 r7: every container that holds a fence and other content, two counters, + on the lower one, then the form', () => {
+			const q = (l: string): string => `> ${l}`;
+			const qq = (l: string): string => `> > ${l}`;
+			const ind = (n: number) => (l: string): string => `${' '.repeat(n)}${l}`;
+			const containers: Array<[string, (a: number, b: number) => string[], boolean]> = [
+				['callout', (a, b) => ['> [!note] Camp', ...CTR(a).map(q), '> mid', ...CTR(b).map(q)], true],
+				['header-less quote, first line is the upper fence', (a, b) => [...CTR(a).map(q), '> mid', ...CTR(b).map(q)], true],
+				['header-less quote, text first', (a, b) => ['> intro', ...CTR(a).map(q), '> mid', ...CTR(b).map(q)], true],
+				['nested callout', (a, b) => ['> [!note] Outer', '> > [!tip] Inner', ...CTR(a).map(qq), '> > mid', ...CTR(b).map(qq)], true],
+				['nested quote, first line is the upper fence', (a, b) => [...CTR(a).map(qq), '> > mid', ...CTR(b).map(qq)], true],
+				['list item, two fences', (a, b) => ['- item', ...CTR(a).map(ind(2)), '  mid', ...CTR(b).map(ind(2))], false],
+				['ordered list item, two fences', (a, b) => ['1. item', ...CTR(a).map(ind(3)), '   mid', ...CTR(b).map(ind(3))], false],
+				['quote inside a list item', (a, b) => ['- item', ...CTR(a).map((l) => `  > ${l}`), '  > mid', ...CTR(b).map((l) => `  > ${l}`)], true],
+				['footnote, two fences', (a, b) => ['[^1]: note', ...CTR(a).map(ind(4)), '    mid', ...CTR(b).map(ind(4))], false],
+			];
+			const lpEl = (src: string): HTMLElement => {
+				const el = embedEl(src);
+				const wrap = document.createElement('div');
+				wrap.className = 'cm-embed-block';
+				wrap.appendChild(el.closest('.internal-embed')!);
+				return el;
+			};
+			const cases = containers.flatMap(([cname, build, lands]) =>
+				(['block', 'heading'] as const).flatMap((kind) => (['rv', 'lp'] as const).map((host) => ({ name: `${cname} | ${kind} embed | ${host}`, build, lands, kind, host }))),
+			);
+
+			test.each(cases)('$name', async ({ build, lands, kind, host: hostKind }) => {
+				const lines = build(6, 5);
+				const pre = kind === 'block' ? ['# N', '', ...lines, '', '^cal', '', 'END'] : ['# N', '', '## Tracker', '', ...lines, '', '## After', 'END'];
+				const text = pre.join('\n');
+				const head = pre.indexOf(lines[0]);
+				const src = kind === 'block' ? 'Note#^cal' : 'Note#Tracker';
+				const cache = kind === 'block' ? { headings: [], blocks: { cal: { id: 'cal', position: { start: { line: head, col: 0, offset: 0 }, end: { line: head + lines.length - 1, col: 0, offset: 0 } } } } } : text;
+				const section = kind === 'block' ? { text: lines.join('\n'), lineStart: 0, lineEnd: lines.length - 1 } : { text: ['## Tracker', '', ...lines, ''].join('\n'), lineStart: 2, lineEnd: 2 + lines.length - 1 };
+				const el = hostKind === 'lp' ? lpEl(src) : embedEl(src);
+				const { app, host } = embedded(text, section, src, bodyOf(5), cache, el);
+				await plus(host);
+				const pin = host.pinPosition();
+				if (pin) await save(host, pin, bodyOf(6, 'Edited'));
+				else await host.replaceSource(bodyOf(6, 'Edited'));
+
+				// never the upper one; a container whose + cannot be written (a list item or a footnote: `looksLikeList`, the write is refused) saves nothing at all
+				expect(names(app)).toEqual(lands ? ['Twin', 'Edited'] : ['Twin', 'Twin']);
+			});
+		});
 	});
 
 	// SC-584 case 2: a block embed (`![[note#^id]]`) of a CALLOUT. The id names the callout, so its line follows the callout's last line, not the
