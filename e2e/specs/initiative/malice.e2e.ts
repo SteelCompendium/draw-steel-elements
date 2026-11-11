@@ -3,7 +3,7 @@
 // each control and the note + screen are read. Initiative/tracker.md: Malice 3, no log. Initiative/rich.md: Malice 4, round_gain 2,
 // one log entry ("Opening Malice", +3, round 1).
 import { expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
+import { dse } from '../../driver/dse';
 
 const MIN = 'Initiative/tracker.md';
 const RICH = 'Initiative/rich.md';
@@ -123,21 +123,19 @@ describe('initiative: the Malice quick-add row', () => {
 
 describe('initiative: keyboard focus after a rebuild', () => {
 	// Enter in the quick-add label field adds the entry through a whole-tracker rebuild (rebuildAndPersist), which empties the root and
-	// mounts again; nothing hands focus back, so a keyboard user lands on <body> and has to Tab from the top of the note (SC-588).
-	knownBug(
-		'SC-588',
-		'[INIT-F01] after Enter in the quick-add label field, keyboard focus is still inside the tracker',
-		async () => {
-			const root = await open();
-			await dse.type(root.control('init.malice.quickadd.amount'), '2', { replace: true });
-			await dse.type(root.control('init.malice.quickadd.label'), 'Kbd', { replace: true });
-			await dse.waitForWrite(MIN, () => dse.press('Enter', root.control('init.malice.quickadd.label')));
-			await dse.settle();
-			const inTracker = await dse.page<boolean>(`!!document.activeElement?.closest('.markdown-reading-view [data-dse-element="initiative"]')`);
-			expect(inTracker).toBe(true);
-		},
-		{ failsWith: /Expected: true/ },
-	);
+	// mounts again; the rebuilt tracker hands focus back to the same field, so a keyboard user does not have to Tab in from the top of
+	// the note. The other four actions that rebuild the tracker are in focus-after-rebuild.e2e.ts.
+	it('[INIT-F01] after Enter in the quick-add label field, keyboard focus is on the rebuilt label field', async () => {
+		const root = await open();
+		await dse.type(root.control('init.malice.quickadd.amount'), '2', { replace: true });
+		await dse.type(root.control('init.malice.quickadd.label'), 'Kbd', { replace: true });
+		await dse.waitForWrite(MIN, () => dse.press('Enter', root.control('init.malice.quickadd.label')));
+		await dse.settle();
+		const inTracker = await dse.page<boolean>(`!!document.activeElement?.closest('.markdown-reading-view [data-dse-element="initiative"]')`);
+		expect(inTracker).toBe(true);
+		expect(await dse.focusedControl()).toBe('init.malice.quickadd.label');
+		await expect(root.control('init.malice.quickadd.label')).toHaveValue(''); // the add happened and the rebuilt field is empty
+	});
 });
 
 describe('initiative: the Malice log disclosure', () => {

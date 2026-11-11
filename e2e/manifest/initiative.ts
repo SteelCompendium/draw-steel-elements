@@ -9,7 +9,7 @@
 //   - the "Add Condition" button `init.cond.add` (hero and creature rows): manifest/conditions-modal.ts;
 //   - ResetEncounterModal's own buttons: manifest/reset-encounter-modal.ts.
 // `rows` cite the SC-437 scenario groups: T title edit, R round, M Malice, N turn, A action checklist,
-// C conditions, K captain, S selection, X reset. A repeated control is driven through `nth`.
+// C conditions, K captain, S selection, X reset, F keyboard focus after a rebuild. A repeated control is driven through `nth`.
 import { c, surface } from './surface';
 
 export default surface('initiative', {
@@ -21,10 +21,10 @@ export default surface('initiative', {
 
 		// -- R. Round. "Advance round" sits on the Heroes heading line; "Reset turns (this round)" is a chrome-panel item
 		//    (hidden, opacity 0, until the pointer is over the tracker or focus is inside it: `dse.hover(root.root)` first).
-		'init.round.advance': c(['click'], ['R01']),
-		'init.reset-turns': c(['click'], ['R02']),
+		'init.round.advance': c(['click', 'press:Enter'], ['R01', 'F02']),
+		'init.reset-turns': c(['click', 'press:Enter'], ['R02', 'F03']),
 		// A chrome-panel item that opens ResetEncounterModal (see manifest/reset-encounter-modal.ts).
-		'init.reset-encounter': c(['click'], ['SC-485', 'SC-500', 'X01']),
+		'init.reset-encounter': c(['click', 'press:Enter'], ['SC-485', 'SC-500', 'X01', 'F05']),
 
 		// -- M. Malice: the kit stepper (min 0 since SC-577: the - button disables at 0), the quick-add row and the log disclosure. The stepper's value node is
 		//    a programmatic focus target (tabindex -1) that nothing clicks, so it lists no interaction.
@@ -54,8 +54,8 @@ export default surface('initiative', {
 		'init.cond.remove': c(['click'], ['C01']),
 
 		// -- K. The captain badge on the open creature's name line: "Make captain" (promote) or "Captain" (relieve).
-		'init.captain.make': c(['click'], ['K01']),
-		'init.captain.relieve': c(['click'], ['K02']),
+		'init.captain.make': c(['click', 'press:Enter'], ['K01', 'F04']),
+		'init.captain.relieve': c(['click', 'press:Enter'], ['K02', 'F04']),
 
 		// -- S. A roster cell (repeated: nth) selects its instance. The id kept its SC-408 name, `init.cell.stamina`, because
 		//    the cell's double-click was the first thing driven (the stamina modals' reach row); a click is selection.
