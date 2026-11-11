@@ -977,6 +977,8 @@ describe('SC-598: a click inside a modal opened from a hover preview, right afte
 		expect(opening.defaultPrevented).toBe(true);
 		expect(clicks[1].target).toBe(s.anchor);
 		expect(clicks[1].bubbles).toBe(true);
+		expect(clicks[1].cancelable).toBe(true); // like a real click: the helper default-prevents it from its timer
+		expect(clicks[1].view).toBe(window);
 		expect(clicks[1].clientX).toBe(0);
 		expect(clicks[1].clientY).toBe(0);
 		expect(classAtEachClick).toEqual([false, true]);
