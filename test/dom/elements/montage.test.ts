@@ -2325,13 +2325,15 @@ describe('SC-597: the Montage sheet opened by the keyboard from a board cell in 
 		['Space on a logged cell', ' ', montageMidYaml, 'Kira', 2],
 		['Enter on an empty past-round cell', 'Enter', PAST_EMPTY_YAML, 'Kira', 1],
 		['Space on an empty past-round cell', ' ', PAST_EMPTY_YAML, 'Kira', 1],
-	])('%s sends one click through the preview to the cell, and the sheet is open at once', async (_name, key, yaml, hero, round) => {
-		const { root } = await render(true, yaml);
+	])('%s sends one click through the preview to the cell (and the sheet\'s own synthetic click from the anchor, SC-598), and the sheet is open at once', async (_name, key, yaml, hero, round) => {
+		const { containerEl, root } = await render(true, yaml);
 		const cell = cellFor(root, hero, round);
 
 		const evt = press(cell, key);
 
-		expect(clicks).toHaveLength(1);
+		expect(clicks).toHaveLength(2);
+		expect(clicks.filter((c) => c.target === cell)).toHaveLength(1); // the key's click
+		expect(clicks.filter((c) => c.target === containerEl)).toHaveLength(1); // SC-598's synthetic click, from the anchor
 		expect(clicks[0].target).toBe(cell);
 		expect(clicks[0].bubbles).toBe(true);
 		expect(sheets()).toBe(1);

@@ -8,6 +8,7 @@ import { DseModal, openManagedModal } from '../../../src/framework/kit/managedMo
 import { stepper } from '../../../src/framework/kit/stepper';
 import { consumeEscapeAt } from '../../../src/framework/kit/escapeConsumer';
 import { attachObsidianKeymap, pressEscape } from '../_obsidianKeymap';
+import { previewStandIn } from '../_hoverPreviewStandIn';
 import { createPreferenceStore, registerPrefsForApp } from '../../../src/framework/seams/prefs';
 import type { PrefDescriptor, PreferenceStore, PrefsStorage } from '../../../src/framework/seams/prefs';
 import { DSE_PREF_DESCRIPTORS } from '../../../src/prefs/catalog';
@@ -874,5 +875,155 @@ describe('SC-595: a modal opened from a hover preview', () => {
 
 			expect(app.keymap.scopes).toEqual([popover]);
 		});
+	});
+});
+
+// SC-598: a click inside a modal opened from a hover preview soon after the click that opened it. Obsidian's window-CAPTURE click
+// listener hides a preview that is not "focused" yet, and the click-to-edit helper focuses it only 150 ms after a click on text (10 ms
+// elsewhere). The stand-in (test/dom/_hoverPreviewStandIn.ts) is that listener and that helper, with Obsidian's delays as literals.
+describe('SC-598: a click inside a modal opened from a hover preview, right after the click that opened it', () => {
+	beforeEach(() => jest.useFakeTimers());
+	afterEach(() => {
+		jest.useRealTimers();
+		document.body.innerHTML = '';
+	});
+
+	/** A preview holding an anchor, an opener button in it (text span inside) that opens a modal anchored to the anchor. */
+	function setup(opts: { inPreview?: boolean; isEditing?: boolean; anchorClass?: boolean } = {}) {
+		const app: any = new App();
+		const owner = fakeOwner();
+		const popoverScope = new Scope();
+		const preview = previewStandIn({ app, scope: popoverScope, inPreview: opts.inPreview, onHide: () => owner.unload() });
+		if (opts.isEditing) preview.popover.classList.add('is-editing');
+		const anchor = preview.embed.appendChild(document.createElement('div'));
+		if (opts.anchorClass) anchor.classList.add('interactive-child');
+		const opener = anchor.appendChild(document.createElement('button'));
+		const text = opener.appendChild(document.createElement('span'));
+		text.textContent = 'Fifteen';
+		let modal!: DseModal;
+		opener.addEventListener('click', () => {
+			modal = openManagedModal(
+				owner,
+				() => {
+					const m = makeModal(app);
+					m.setDseTitle('Edit Stamina');
+					m.body.createEl('input');
+					return m;
+				},
+				anchor,
+			);
+		});
+		/** A click on the text (non-zero coordinates stand for "on text": the helper waits 150 ms). */
+		const open = (): MouseEvent => {
+			const evt = new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 });
+			text.dispatchEvent(evt);
+			return evt;
+		};
+		return { app, preview, popoverScope, anchor, text, open, get modal() { return modal; } };
+	}
+	const modalCount = (): number => document.querySelectorAll('.modal-container').length;
+
+	test.each([[20], [100]])('a click on the modal title %i ms after the opening click (before the helper\'s 150 ms) closes neither the modal nor the preview', (ms) => {
+		const s = setup();
+		s.open();
+
+		jest.advanceTimersByTime(ms);
+		s.modal.titleEl.click();
+		jest.advanceTimersByTime(200);
+
+		expect(s.preview.state.hidden).toBe(false);
+		expect(s.preview.state.isFocused).toBe(true);
+		expect(s.modal.containerEl.isConnected).toBe(true);
+	});
+
+	test('a press that moves the focus off the modal\'s input before the helper\'s timer does not turn the preview into a source editor', () => {
+		const s = setup();
+		s.open();
+
+		jest.advanceTimersByTime(5);
+		(document.activeElement as HTMLElement).blur(); // what the second press does on a title or the backdrop
+		expect(document.activeElement).toBe(document.body);
+		jest.advanceTimersByTime(200);
+
+		expect(s.preview.state.isFocused).toBe(true);
+		expect(s.preview.state.editor).toBe(false);
+		expect(s.preview.state.hidden).toBe(false);
+	});
+
+	test('the modal\'s scope is on top of the preview\'s 20 ms and 200 ms after the opening click, and the preview\'s is back on top after close', () => {
+		const s = setup();
+		s.open();
+
+		jest.advanceTimersByTime(20); // the helper's 10 ms push, then the modal's 10 ms re-push after it, are done
+		expect(s.app.keymap.scopes).toEqual([s.popoverScope, s.modal.scope]);
+		jest.advanceTimersByTime(180);
+		expect(s.app.keymap.top).toBe(s.modal.scope);
+		s.modal.close();
+
+		expect(s.app.keymap.scopes).toEqual([s.popoverScope]);
+	});
+
+	test('exactly two clicks reach the preview: the opening click, default-prevented, then one synthetic bubbling click from the anchor that carries interactive-child; one modal', () => {
+		const s = setup();
+		const classAtEachClick: boolean[] = [];
+		s.preview.embed.addEventListener('click', () => classAtEachClick.push(s.anchor.classList.contains('interactive-child')));
+
+		const opening = s.open();
+
+		const { clicks } = s.preview;
+		expect(clicks).toHaveLength(2);
+		expect(clicks[0]).toBe(opening);
+		expect(clicks[0].target).toBe(s.text);
+		expect(opening.defaultPrevented).toBe(true);
+		expect(clicks[1].target).toBe(s.anchor);
+		expect(clicks[1].bubbles).toBe(true);
+		expect(clicks[1].clientX).toBe(0);
+		expect(clicks[1].clientY).toBe(0);
+		expect(classAtEachClick).toEqual([false, true]);
+		expect(modalCount()).toBe(1);
+	});
+
+	test('a preview that is already focused (.is-editing) gets only the opening click, which is not default-prevented', () => {
+		const s = setup({ isEditing: true });
+
+		const opening = s.open();
+
+		expect(s.preview.clicks).toEqual([opening]);
+		expect(opening.defaultPrevented).toBe(false);
+		expect(modalCount()).toBe(1);
+	});
+
+	test('control: opened from outside a hover preview, only the opening click happens and it is not default-prevented', () => {
+		const s = setup({ inPreview: false });
+
+		const opening = s.open();
+
+		expect(s.preview.clicks).toEqual([opening]);
+		expect(opening.defaultPrevented).toBe(false);
+		expect(s.anchor.classList.contains('interactive-child')).toBe(false);
+		expect(modalCount()).toBe(1);
+	});
+
+	test('a modal opened from a preview outside any click (a delayed open) sends no click through the preview', () => {
+		const s = setup();
+		jest.advanceTimersByTime(1); // not inside a dispatch: `window.event` is undefined here
+		openManagedModal(fakeOwner(), () => makeModal(s.app), s.anchor);
+
+		jest.advanceTimersByTime(200);
+
+		expect(s.preview.clicks).toHaveLength(0);
+		expect(s.anchor.classList.contains('interactive-child')).toBe(false);
+		expect(modalCount()).toBe(1);
+	});
+
+	test.each([[false], [true]])('the anchor\'s interactive-child class (already there: %s) is the one it had before the open, from 10 ms on, and not earlier', (already) => {
+		const s = setup({ anchorClass: already });
+		s.open();
+
+		jest.advanceTimersByTime(9);
+		expect(s.anchor.classList.contains('interactive-child')).toBe(true); // present while the helper's 10 ms timer is still due
+		jest.advanceTimersByTime(11);
+
+		expect(s.anchor.classList.contains('interactive-child')).toBe(already);
 	});
 });

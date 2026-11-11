@@ -206,7 +206,8 @@ export class DseModal extends Modal {
 	 *    container, so it runs after the opener's own handler, which is what opened this modal) arms a 10 ms timer (150 ms when
 	 *    the click lands on text) and pushes from it. Timers with the same delay fire in the order they were armed, so the
 	 *    re-pushes are armed from a window-bubble listener for the opening click (it runs after the container's), one per delay:
-	 *    the order holds by construction at any load, no margin. A modal opened outside a click (a delayed open, such as the
+	 *    the order holds by construction at any load, no margin (SC-598's `focusHoverPreviewNow` adds a 10 ms helper timer of its
+	 *    own from the same listener, BEFORE `arm()`, so the order holds for it too). A modal opened outside a click (a delayed open, such as the
 	 *    block edit form after a pending write) arms them at once: any helper timer was armed earlier. (Enter / Space on the
 	 *    stamina bar and on a montage cell are not such opens: they click the opener, SC-597, so they take the branch above.) Skipped when a newer preview-opened modal is open (a parent
 	 *    must not bury its child) or when this modal's window is not the active one (`pushScope` pushes onto the active
@@ -248,11 +249,44 @@ export class DseModal extends Modal {
 		const opening = (win as unknown as { event?: Event }).event;
 		if (opening?.type === 'click') {
 			const onWindowBubble = (evt: Event): void => {
-				if (evt === opening) arm();
+				if (evt !== opening) return;
+				this.focusHoverPreviewNow(opening, win); // before arm(): the helper's timer, armed inside this dispatch, must precede the re-pushes
+				arm();
 			};
 			win.addEventListener('click', onWindowBubble);
 			this.lifecycle.register(() => win.removeEventListener('click', onWindowBubble));
 		} else arm();
+	}
+
+	/**
+	 * SC-598: a second click inside this modal soon after the click that opened it (a fast double-click on the stamina bar's
+	 * numbers) closed the modal and the preview. Obsidian's window-CAPTURE click listener hides, 5 ms later, every shown preview
+	 * that is not "focused" and does not contain the click; the document guard above cannot reach a window capture listener. A
+	 * preview only becomes focused when its click-to-edit helper's timer runs: 10 ms after the opening click, 150 ms when that
+	 * click landed on text. So, for a preview that is not focused yet (`.is-editing` absent), from the opening click's window
+	 * BUBBLE phase (the helper has seen the click by then):
+	 * 1. `preventDefault()` the opening click: the helper's timer for it then does nothing (its callback skips a default-prevented
+	 *    event). Left alone it ran the preview's focus step at 150 ms and, if a second click had moved the focus off a button or
+	 *    input by then, switched the preview into a source editor.
+	 * 2. Send the helper ONE synthetic click from the anchor (bubbling, no coordinates, so never "on text"): it focuses the
+	 *    preview 10 ms later. The anchor carries Obsidian's `interactive-child` class until then, so the helper's "open the
+	 *    editor?" test says no whatever has the focus; the class comes off from a timer armed after the helper's.
+	 * Called before `arm()`: the re-pushes (same delay, armed later) then fire after the helper's push, so this modal's scope
+	 * stays above the preview's. Public API only: nothing private of the popover is touched.
+	 * Residual (measured): a second press queued in full (down AND up) while the modal is still opening on a slow renderer is
+	 * handled before the helper's timer and still closes everything, as it did before. A click that is not the opening click (a
+	 * modal opened outside a click) is not touched.
+	 */
+	private focusHoverPreviewNow(opening: Event, win: typeof window): void {
+		const anchor = this.anchorEl;
+		const pop = anchor?.closest('.hover-popover');
+		if (!anchor || !pop || pop.classList.contains('is-editing')) return;
+		opening.preventDefault();
+		const anchorWin = anchor.ownerDocument.defaultView ?? win;
+		const added = !anchor.classList.contains('interactive-child');
+		if (added) anchor.classList.add('interactive-child');
+		anchor.dispatchEvent(new anchorWin.MouseEvent('click', { bubbles: true, cancelable: true, view: anchorWin }));
+		if (added) win.setTimeout(() => anchor.classList.remove('interactive-child'), 10);
 	}
 
 	close(): void {

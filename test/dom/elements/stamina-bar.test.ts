@@ -13,6 +13,7 @@
 // SC-466 narrowed that bar: a key the SOURCE never declared is no longer written (see the
 // byte-compat describe below); every key the source declared still is, byte-for-byte.
 import * as fs from 'fs';
+import type { Component } from 'obsidian';
 import * as path from 'path';
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
@@ -35,6 +36,7 @@ import { staminaBarElement } from '../../../src/elements/stamina-bar/definition'
 import { StaminaBarView } from '../../../src/elements/stamina-bar/view';
 import { serialize as frameworkSerialize } from '../../../src/elements/stamina-bar/model';
 import { styleGuardFindings } from '../kit/styleGuard';
+import { previewStandIn } from '../_hoverPreviewStandIn';
 import { DSE_PREF_DESCRIPTORS } from '../../../src/prefs/catalog';
 // StaminaBarSchema.yaml $refs the shared component-wrapper dependency schema (F1 §5) — same
 // convention as skills.test.ts.
@@ -778,12 +780,14 @@ describe('SC-597: the Stamina modal opened by the keyboard from a bar in a hover
 	};
 	const modalCount = () => document.querySelectorAll('.modal-container').length;
 
-	test.each([['Enter'], [' ']])('%j on the bar sends one click through the preview to the bar, and the modal is open at once', async (key) => {
-		const { bar } = await render(true);
+	test.each([['Enter'], [' ']])('%j on the bar sends one click through the preview to the bar (and the modal\'s own synthetic click from the anchor, SC-598), and the modal is open at once', async (key) => {
+		const { containerEl, bar } = await render(true);
 
 		const evt = press(bar, key);
 
-		expect(clicks).toHaveLength(1);
+		expect(clicks).toHaveLength(2);
+		expect(clicks.filter((c) => c.target === bar)).toHaveLength(1); // the key's click
+		expect(clicks.filter((c) => c.target === containerEl)).toHaveLength(1); // SC-598's synthetic click, from the anchor
 		expect(clicks[0].target).toBe(bar);
 		expect(clicks[0].bubbles).toBe(true);
 		expect(modalCount()).toBe(1);
@@ -849,5 +853,61 @@ describe('SC-597: the Stamina modal opened by the keyboard from a bar in a hover
 		press(fresh.bar.querySelector('.dse-stamina__track') as HTMLElement, 'Enter');
 		expect(clicks).toHaveLength(0);
 		expect(modalCount()).toBe(0);
+	});
+});
+
+// SC-598: a click inside the Stamina modal soon after the click on the bar's numbers that opened it, from a bar in a hover preview. The
+// popover's window-capture click listener hides a preview that is not focused yet, and its click-to-edit helper focuses it 150 ms after
+// a click on text (stand-in: test/dom/_hoverPreviewStandIn.ts, Obsidian's delays as literals). Hiding unloads the bar's view, which
+// closes the modal.
+describe('SC-598: the Stamina modal opened by a click on the bar\'s numbers in a hover preview', () => {
+	beforeEach(() => jest.useFakeTimers());
+	afterEach(() => {
+		jest.useRealTimers();
+		document.body.innerHTML = '';
+	});
+
+	async function openFromNumbers() {
+		const deps = makeDeps();
+		const views: Component[] = [];
+		const preview = previewStandIn({ app: deps.app as unknown as App, scope: new Scope(), onHide: () => views.forEach((v) => v.unload()) });
+		const containerEl = preview.embed.appendChild(document.createElement('div'));
+		const host = makeHost({
+			containerEl,
+			addChild: <T extends Component>(child: T): T => {
+				child.load();
+				views.push(child);
+				return child;
+			},
+		});
+		await new ElementPipeline(deps).run(staminaBarElement, BASIC_YAML, host);
+		const numbers = containerEl.querySelector('.dse-stamina__ccur') as HTMLElement;
+		numbers.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 })); // on text: the helper waits 150 ms
+		const modalEl = document.querySelector('.modal-container') as HTMLElement;
+		expect(modalEl).not.toBeNull();
+		return { preview, modalEl };
+	}
+
+	test.each([['title', '.dse-modal__title'], ['Apply input', '.dse-sedit__apply-input']])('a click on the %s 20 ms after the opening click closes neither the modal nor the preview', async (_name, selector) => {
+		const { preview, modalEl } = await openFromNumbers();
+
+		jest.advanceTimersByTime(20);
+		(modalEl.querySelector(selector) as HTMLElement).click();
+		jest.advanceTimersByTime(200);
+
+		expect(preview.state.hidden).toBe(false);
+		expect(modalEl.isConnected).toBe(true);
+	});
+
+	test('a press that moves the focus off the modal\'s input before the helper\'s timer does not turn the preview into a source editor', async () => {
+		const { preview, modalEl } = await openFromNumbers();
+
+		jest.advanceTimersByTime(5);
+		(document.activeElement as HTMLElement).blur();
+		jest.advanceTimersByTime(200);
+
+		expect(preview.state.isFocused).toBe(true);
+		expect(preview.state.editor).toBe(false);
+		expect(modalEl.isConnected).toBe(true);
 	});
 });
