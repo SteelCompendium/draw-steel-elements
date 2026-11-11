@@ -643,13 +643,12 @@ describe('condition icons: a click removes that condition and saves at once', ()
 			expect(document.activeElement).toBe(ctl(content, 'pool.condition', 0));
 		});
 
-		test('keyboard: removing the only icon focuses a control in the modal, never <body>', async () => {
+		test('keyboard: removing the only icon focuses the damage field — not <body>, not a footer button', async () => {
 			const { content } = await open({ conditions: { 0: ['grabbed'] } });
 			press(ctl(content, 'pool.condition'));
 			expect(all(content, 'pool.condition')).toHaveLength(0);
-			expect(document.activeElement).not.toBe(document.body);
-			expect(content.contains(document.activeElement)).toBe(true);
-			expect((document.activeElement as HTMLElement).matches('button, input')).toBe(true);
+			expect(document.activeElement).toBe(ctl(content, 'pool.damage-amount'));
+			expect((document.activeElement as HTMLElement).closest('.dse-sedit__footer')).toBeNull();
 		});
 
 		test('pointer: a mouse click moves focus nowhere (unchanged behaviour)', async () => {

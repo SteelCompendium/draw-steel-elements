@@ -86,7 +86,7 @@ describe('minion pool: condition icons by keyboard', () => {
 		});
 	}
 
-	it('[POOL-C06] removing the last condition by keyboard leaves focus inside the modal, not on <body>', async () => {
+	it('[POOL-C06] removing the last condition by keyboard moves focus to the damage field (inside the modal, not <body>, not a footer button)', async () => {
 		const { modal } = await openPoolModal(HURT);
 		await dse.tabTo(modal.control('pool.condition', { nth: 0 }), 40);
 		await dse.waitForWrite(HURT, () => dse.press('Enter', modal.control('pool.condition', { nth: 0 })));
@@ -96,6 +96,7 @@ describe('minion pool: condition icons by keyboard', () => {
 		await dse.settle();
 		expect(await conditionNames()).toEqual([]);
 		expect(await focusInsideModal()).toBe(true);
+		expect(await dse.focusedControl()).toBe('pool.damage-amount'); // never Reset/Apply: a second Enter there would throw away staged input
 		await dse.expectNoteBlock(HURT, INIT).toMatchObject(instance3({ conditions: [] }));
 		await dse.expectNoWrite(HURT, () => dse.click(modal.control('modal.close')));
 	});

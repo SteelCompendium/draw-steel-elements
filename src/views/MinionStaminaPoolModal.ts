@@ -536,14 +536,17 @@ export class MinionStaminaPoolModal extends DseModal {
 	}
 
 	/** SC-572 r3: after a keyboard removal, focus the icon that shifted into the removed one's slot (the previous
-	 *  one if it was last); with none left, the next focusable control after the row, else the first one in the
-	 *  modal — never <body>. */
+	 *  one if it was last). With none left (r5, INFO-1): the damage field, a harmless place to land (a footer button
+	 *  would let a second Enter throw away the staged damage and ticks); failing that, the next focusable control
+	 *  after the row that is not a footer action, else the first such control — never <body>. */
 	private handOffConditionFocus(container: HTMLElement, index: number): void {
 		const icons = Array.from(container.querySelectorAll<HTMLElement>('.condition-icon'));
 		if (icons.length > 0 && focusControl(icons[Math.min(index, icons.length - 1)])) return;
+		const damage = this.contentEl.querySelector<HTMLInputElement>('[data-dse-control="pool.damage-amount"]');
+		if (damage && !damage.disabled && focusControl(damage)) return;
 		const focusable = Array.from(
 			this.contentEl.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'),
-		).filter((el) => !container.contains(el));
+		).filter((el) => !container.contains(el) && !el.closest('.dse-sedit__footer'));
 		const after = focusable.find((el) => container.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
 		focusControl(after ?? focusable[0]);
 	}
