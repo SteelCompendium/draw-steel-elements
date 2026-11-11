@@ -819,11 +819,15 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * `embedStartLine` (the link's subpath through Obsidian's `resolveSubpath`), accepted only after `verifiedPinLine` has checked it
 	 * against the note text just read. When the link gives nothing that verifies (no `src` on the element, a link that does not point at
 	 * this note, an unresolved subpath, no metadata cache, a cache that lags the note), the part's lines are looked for in the note
-	 * (`searchedPinLine`): used only when they occur EXACTLY once, never a choice between identical runs. Nothing verifies: the pin is
+	 * (`searchedPinLine`): used only when they occur EXACTLY once, never a choice between identical runs. Last (SC-584), when the part's text is
+	 * stale (a + just before the pencil changed the block's body on disk): `openTimeBodyLine`, which places the pin by the body the host knows
+	 * when the form opens, only if exactly one block of the note holds it. Nothing verifies: the pin is
 	 * left in the part's coordinates and marked partial: its Save writes nothing (`pinnedTarget`) rather than guess. A block that is not inside an embed (its section text IS the note) is not looked at. Asynchronous (`cachedRead`);
 	 * `replaceSource` waits for it.
 	 */
 	private async rebasePin(pin: { text: string; lineStart: number }, sectionText: string): Promise<void> {
+		// SC-584: the body this host knows NOW, when the form opens - before the note is read (a write landing during the read must not change what is counted).
+		const knownAtOpen = this.knownBody;
 		try {
 			const file = this.plugin.app.vault.getAbstractFileByPath(this.ctx.sourcePath);
 			if (!(file instanceof TFile)) return;
@@ -832,7 +836,10 @@ export class ReadingModeBlockHost implements BlockHost {
 				partialPins.delete(pin); // the part IS the note
 				return;
 			}
-			const line = this.verifiedPinLine(file, whole, sectionText, pin.lineStart) ?? this.searchedPinLine(whole, sectionText, pin.lineStart);
+			const line =
+				this.verifiedPinLine(file, whole, sectionText, pin.lineStart) ??
+				this.searchedPinLine(whole, sectionText, pin.lineStart) ??
+				this.openTimeBodyLine(whole, sectionText, pin.lineStart, knownAtOpen);
 			if (line === null) return; // stays partial: Save refuses it (pinnedTarget)
 			pin.text = whole;
 			pin.lineStart = line;
@@ -885,14 +892,51 @@ export class ReadingModeBlockHost implements BlockHost {
 		if (!found) return null;
 		if (at.blockId !== null) {
 			// A block embed: the section's first line is the block's own fence, which an identical block elsewhere has too, so the anchor line
-			// proves nothing. What belongs to THIS block is its marker: the first non-blank line after the closing fence is `^id`.
-			let next = found.lineEnd + 1;
+			// proves nothing. What belongs to THIS block is its marker: the first non-blank line after the embedded part's last line is `^id`.
+			// SC-584: the marker follows the END OF THE PART, not the counter's fence: an id on a callout names the whole callout, whose text can
+			// go on after the fence (for a plain fenced block the part ends at its closing fence, so the two are the same line).
+			const partEnd = start + lastNonBlankLine(sectionLines, 0, sectionLines.length - 1);
+			let next = Math.max(found.lineEnd, partEnd) + 1;
 			while (next < lines.length && lines[next].trim() === '') next++;
 			if (next >= lines.length || lines[next].trim().toLowerCase() !== `^${at.blockId.toLowerCase()}`) return null;
 		}
 		const own = blockBodyLines(sectionLines, relLine, relLine + (found.lineEnd - found.lineStart)).join('\n');
 		const expected = this.knownBody ?? own;
 		return normalizeBody(found.body) === normalizeBody(expected) ? line : null;
+	}
+
+	/**
+	 * SC-584: where this block is in `whole` when neither the embed's link nor the part's text can say (a hover preview has no `src`; right after
+	 * a + the part's text still has the old body while the note and the host hold the new one). `known` is the body the host knew when the form
+	 * opened; the line is returned only when ALL of this hold, else null (the pin stays partial and Save writes nothing):
+	 *  - exactly one block of this host's language in the note holds `known` (a count taken now, at open - never at Save: the pin placed from it
+	 *    is an ordinary pin of the note, so every later outside edit is judged by `pinnedTarget` and a twin that appears later changes nothing);
+	 *  - the text around it agrees: the part's lines before the block's fence and after its end (trailing blank lines dropped) are the note's
+	 *    lines there, once, and the fence line itself is the same. Only the block's own body may differ (that is what the + changed). A note
+	 *    that was edited around the block before the form opened therefore places nothing, and neither does a twin that took the old body.
+	 */
+	private openTimeBodyLine(whole: string, sectionText: string, relLine: number, known: string | null): number | null {
+		if (known === null) return null;
+		const language = this.knownLanguage ?? this.alias;
+		if (countByBody(whole, language, known) !== 1) return null;
+		const own = this.fenceAt(sectionText, relLine);
+		if (!own) return null;
+		const section = splitLines(sectionText);
+		const openLine = section[own.lineStart];
+		const before = section.slice(0, own.lineStart);
+		const after = section.slice(own.lineEnd + 1);
+		while (after.length > 0 && after[after.length - 1].trim() === '') after.pop();
+		const lines = splitLines(whole);
+		const sameAt = (at: number, run: string[]): boolean => at >= 0 && at + run.length <= lines.length && run.every((l, i) => lines[at + i] === l);
+		let found = -1;
+		for (let k = 0; k + before.length < lines.length; k++) {
+			if (!sameAt(k, before) || lines[k + before.length] !== openLine) continue;
+			const fence = this.fenceAt(whole, k + before.length);
+			if (!fence || normalizeBody(fence.body) !== normalizeBody(known) || !sameAt(fence.lineEnd + 1, after)) continue;
+			if (found >= 0) return null;
+			found = fence.lineStart;
+		}
+		return found < 0 ? null : found;
 	}
 
 	/**
