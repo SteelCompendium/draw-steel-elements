@@ -299,17 +299,20 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 	// A callout holding TWO counters, the + on the lower one: both read the same and the stale window holds the known body only in the UPPER one,
 	// so the card's own fence found in it by body is the sibling: the second + is placed by the host's own write, never at the upper counter.
 	test.each([
-		['block hover', 'Note#^cal', false],
-		['heading hover', 'Note#Tracker', true],
-	] as const)('J18 two counters in one callout, + on the lower one, then a second + (%s): it lands in the lower counter, the upper one is untouched', async (_name, link, byHeading) => {
+		['block hover, window stale', 'Note#^cal', false, false],
+		['heading hover, window stale', 'Note#Tracker', true, false],
+		['block hover, window redrawn (both counters read 6)', 'Note#^cal', false, true],
+		['heading hover, window redrawn (both counters read 6)', 'Note#Tracker', true, true],
+	] as const)('J18 two counters in one callout, + on the lower one, then a second + (%s): it lands in the lower counter, the upper one is untouched', async (_name, link, byHeading, redrawn) => {
 		const C2 = (a: number, b: number): string[] => ['> [!note] Camp', ...CTR(a).map(q), '> mid', ...CTR(b).map(q)];
 		const cal = C2(6, 5);
 		const lines = byHeading ? ['# N', '', '## Tracker', '', ...cal, '', '## After', 'END'] : ['# N', '', ...cal, '', '^cal', '', 'END'];
 		const head = lines.indexOf('> [!note] Camp');
 		const sec: Sec = byHeading ? { text: ['', ...cal, '', ''].join('\n'), lineStart: 1, lineEnd: 10 } : { text: cal.join('\n'), lineStart: 0, lineEnd: 9 };
-		const { app, host } = hovered(lines.join('\n'), sec, link, bodyOf(5), { cal: [head, head + 9] });
+		const { app, host, section } = hovered(lines.join('\n'), sec, link, bodyOf(5), { cal: [head, head + 9] });
 
 		expect(await plus(host, bodyOf(6))).toBe(true); // the lower counter now reads like the upper
+		if (redrawn) section.current = byHeading ? { text: ['', ...C2(6, 6), '', ''].join('\n'), lineStart: 1, lineEnd: 10 } : { text: C2(6, 6).join('\n'), lineStart: 0, lineEnd: 9 };
 		expect(await plus(host, bodyOf(7))).toBe(true);
 		expect(valuesOf(app)).toEqual([6, 7]);
 		expect(Notice.notices).toEqual([]);
