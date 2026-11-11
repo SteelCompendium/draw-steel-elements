@@ -3013,6 +3013,16 @@ describe('SC-595: the Conditions modal opened from a tracker in a hover preview'
 		expect(document.body.contains(modalEl)).toBe(true);
 	});
 
+	test('"Add condition" redraws its own control inside the click: that click still never reaches the window and the modal stays open', async () => {
+		const modalEl = await openFrom(true);
+
+		(modalEl.querySelector('button[aria-label="Add condition"]') as HTMLElement).click();
+
+		expect(modalEl.querySelector('.dse-condal__input')).not.toBeNull(); // the add row was redrawn as the combobox
+		expect(windowClicks).not.toHaveBeenCalled();
+		expect(document.body.contains(modalEl)).toBe(true);
+	});
+
 	test('control: opened from a tracker that is not in a hover preview, a click on the modal reaches the window', async () => {
 		const modalEl = await openFrom(false);
 

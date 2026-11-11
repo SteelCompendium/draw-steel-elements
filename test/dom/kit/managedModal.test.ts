@@ -4,7 +4,7 @@
 // initial focus to the first control; plus openManagedModal(owner, factory) which
 // registers the F1 §4.5 view-unload-closes-modal contract via owner.register().
 // Escape-close + focus trap stay Obsidian Modal defaults (not reimplemented here).
-import { DseModal, HOVER_SCOPE_REPUSH_MS, openManagedModal } from '../../../src/framework/kit/managedModal';
+import { DseModal, HOVER_HELPER_DELAYS_MS, openManagedModal } from '../../../src/framework/kit/managedModal';
 import { stepper } from '../../../src/framework/kit/stepper';
 import { consumeEscapeAt } from '../../../src/framework/kit/escapeConsumer';
 import { attachObsidianKeymap, pressEscape } from '../_obsidianKeymap';
@@ -646,8 +646,8 @@ describe('SC-595: a modal opened from a hover preview', () => {
 	}
 
 	const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5));
-	/** Past the re-push deadline: the popover's own scope push (10-150 ms after the click) has happened by then. */
-	const pastRepush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, HOVER_SCOPE_REPUSH_MS + 50));
+	/** Past the last re-push (the popover's own scope push comes 10 or 150 ms after the click). */
+	const pastRepush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, Math.max(...HOVER_HELPER_DELAYS_MS) + 50));
 
 	test('a click inside never reaches a window bubble listener (the popover\'s hide), a document listener still sees it', () => {
 		const { textarea, save } = openFrom(openerEl(true));
@@ -702,9 +702,10 @@ describe('SC-595: a modal opened from a hover preview', () => {
 		expect(windowClicks).toHaveBeenCalledTimes(1);
 	});
 
-	test('after close the guard is gone: the same container, attached again, lets a click through', () => {
+	test('after close (and the one task the guard outlives it) the guard is gone: the same container, attached again, lets a click through', async () => {
 		const { modal, textarea } = openFrom(openerEl(true));
 		modal.close();
+		await settle(); // the guard outlives close() by one task (the closing click), then it goes
 		document.body.appendChild(modal.containerEl);
 
 		textarea.click();
@@ -723,7 +724,114 @@ describe('SC-595: a modal opened from a hover preview', () => {
 		expect(windowClicks).not.toHaveBeenCalled();
 	});
 
+	test('a click on a control the modal REDRAWS in its own click handler (the target is detached when the click reaches the document) never reaches the window', () => {
+		const owner = fakeOwner();
+		const modal = openManagedModal(
+			owner,
+			() => {
+				const m = makeModal();
+				const list = m.body.createDiv();
+				const draw = (): void => {
+					list.empty();
+					list.createEl('button', { text: 'cog' }).addEventListener('click', draw);
+				};
+				draw();
+				return m;
+			},
+			openerEl(true),
+		);
+
+		modal.body.querySelector('button')!.click();
+
+		expect(modal.containerEl.isConnected).toBe(true);
+		expect(windowClicks).not.toHaveBeenCalled();
+	});
+
+	test('the click that CLOSES the modal (Cancel, backdrop shape) never reaches the window; once the guard is gone a click outside does, so the preview can be dismissed', async () => {
+		const anchor = openerEl(true);
+		const owner = fakeOwner();
+		let modal!: DseModal;
+		openManagedModal(owner, () => (modal = makeModal()), anchor);
+		modal.footer([{ label: 'Cancel', text: 'Cancel', onClick: () => modal.close() }]);
+
+		modal.containerEl.querySelector<HTMLButtonElement>('button[aria-label="Cancel"]')!.click();
+		expect(document.body.contains(modal.containerEl)).toBe(false);
+		expect(windowClicks).not.toHaveBeenCalled();
+
+		await settle();
+		anchor.click(); // a later click elsewhere is Obsidian's to handle again
+		expect(windowClicks).toHaveBeenCalledTimes(1);
+	});
+
+	test('a nested confirmation: Confirm closes the child; the click never reaches the window and the parent stays open', () => {
+		const { modal: parent } = openFrom(openerEl(true));
+		let child!: DseModal;
+		openManagedModal(parent.lifecycle, () => (child = makeModal()), parent.anchor);
+		child.footer([{ label: 'Confirm', text: 'Confirm', onClick: () => child.close() }]);
+
+		child.containerEl.querySelector<HTMLButtonElement>('button[aria-label="Confirm"]')!.click();
+
+		expect(document.body.contains(child.containerEl)).toBe(false);
+		expect(document.body.contains(parent.containerEl)).toBe(true);
+		expect(windowClicks).not.toHaveBeenCalled();
+	});
+
 	describe('keymap scope', () => {
+		/** The popover as Obsidian draws it: its click-to-edit helper is a bubble listener on the embed container (so it runs AFTER the
+		 *  opener's own handler) and pushes the popover's scope from a timer it arms there, 10 ms or 150 ms later. */
+		test.each(HOVER_HELPER_DELAYS_MS.map((ms) => [ms]))('opened from a click, the popover arms its %i ms push after the opener has opened the modal: the modal is on top whatever the order of the two re-pushes', async (ms) => {
+			const app: any = new App();
+			const anchor = openerEl(true);
+			const popover = new Scope();
+			const button = anchor.appendChild(document.createElement('button'));
+			let modal!: DseModal;
+			button.addEventListener('click', () => {
+				modal = openManagedModal(fakeOwner(), () => makeModal(app), anchor);
+			});
+			anchor.addEventListener('click', () => {
+				setTimeout(() => app.keymap.pushScope(popover), ms);
+			});
+
+			button.click();
+			await new Promise((resolve) => setTimeout(resolve, ms + 40));
+			if (ms < Math.max(...HOVER_HELPER_DELAYS_MS)) expect(app.keymap.top).toBe(modal.scope);
+			await pastRepush();
+
+			expect(app.keymap.top).toBe(modal.scope);
+			modal.close();
+			expect(app.keymap.top).toBe(popover);
+		});
+
+		test('a child opened from the parent before the re-push runs stays on top: the parent does not bury it', async () => {
+			const { app, modal: parent } = openFrom(openerEl(true));
+			app.keymap.pushScope(new Scope());
+			let child!: DseModal;
+			openManagedModal(parent.lifecycle, () => (child = makeModal(app)), parent.anchor);
+
+			await pastRepush();
+
+			expect(app.keymap.top).toBe(child.scope);
+			child.close();
+			parent.close();
+		});
+
+		test('the modal\'s window is not the active one when the re-push is due: nothing is pushed onto the other window\'s stack', async () => {
+			const { app, modal } = openFrom(openerEl(true));
+			const popover = new Scope();
+			app.keymap.pushScope(popover);
+			const real = (globalThis as any).activeWindow;
+			(globalThis as any).activeWindow = {};
+			try {
+				await pastRepush();
+			} finally {
+				(globalThis as any).activeWindow = real;
+			}
+
+			expect(app.keymap.top).toBe(popover);
+			modal.close();
+		});
+
+
 		test('after the opening event the popover has pushed its scope above the modal\'s: the modal\'s goes back on top, and the popover\'s is on top again after close', async () => {
 			const { app, modal } = openFrom(openerEl(true));
 			const popover = new Scope();

@@ -23,9 +23,13 @@ import { consumeEscapeAt } from './escapeConsumer';
 
 let titleCounter = 0;
 
-/** SC-595: how long after open() a modal opened from a hover preview puts its keymap scope back on top: longer than the 150 ms
- *  Obsidian's page-preview popover waits (click-to-edit helper, a click on text) before pushing its own scope. */
-export const HOVER_SCOPE_REPUSH_MS = 200;
+/** SC-595: the two delays Obsidian's page-preview popover waits (its click-to-edit helper: 10 ms, 150 ms when the click lands on text)
+ *  before it pushes its own keymap scope. A modal opened from a hover preview re-pushes its scope after each, armed AFTER the helper's
+ *  timer (see `keepHoverPreviewAlive`). */
+export const HOVER_HELPER_DELAYS_MS: readonly number[] = [10, 150];
+
+/** SC-595: the open modals that were opened from a hover preview, oldest first; only the newest re-pushes its keymap scope. */
+const previewModals: DseModal[] = [];
 
 /** First-control query for initial focus (§2.6): skips disabled + tabindex="-1". */
 const FOCUSABLE =
@@ -182,36 +186,72 @@ export class DseModal extends Modal {
 	 * and is neither default-prevented nor inside the popover; the modal sits in `body`, so the first click inside it did that.
 	 * Two things keep the preview, and so the modal, alive:
 	 *
-	 * 1. A click guard on the modal's own document, BUBBLE phase, stopping propagation of a click whose target is inside this
-	 *    modal. Every document-level listener still sees the click (RecoveriesStrip's click-outside, ConditionsModal's and
+	 * 1. A click guard on the modal's own document, BUBBLE phase, stopping propagation of a click that went through this modal.
+	 *    Every document-level listener still sees the click (RecoveriesStrip's click-outside, ConditionsModal's and
 	 *    sccLinkClickHandler's capture listeners all run before or at the document); only window-level bubble listeners (the
 	 *    popover's, an Obsidian Menu's click-outside) never get it. NEVER `preventDefault` instead: that is the popover's own
 	 *    "belongs to me" convention, but it also cancels label and checkbox activation, so an Obsidian toggle
-	 *    (`label.checkbox-container > input`) would stop toggling. Registered on `lifecycle`, so it is gone after close.
+	 *    (`label.checkbox-container > input`) would stop toggling.
+	 *    - `composedPath()`, not `target` + `contains()`: a control the modal redraws inside its own click handler
+	 *      (ConditionsModal's "Add condition" and row controls, the pool's condition icons) is detached by the time the click
+	 *      reaches the document, so `contains()` says no; the path is fixed when the event is dispatched. (ConditionsModal's own
+	 *      click-outside listener has the same footgun and the same fix.)
+	 *    - The guard outlives `close()` by one task. A click that CLOSES the modal (Cancel, Confirm, Apply, the backdrop, a nested
+	 *      confirmation's buttons) runs `close()` at target phase, before the click reaches the document; with the guard gone at
+	 *      once it reached the window, hid the preview and closed the parent modal (a free-heal Confirm lost the staged heal).
+	 *      Only the guard is kept; every other listener of the modal still dies synchronously with `lifecycle`.
 	 * 2. The popover pushes its own keymap scope above this modal's for the click that opened the modal, so Escape went to the
-	 *    popover (and, in Live Preview, moved focus into the note behind the form). Put this modal's scope back on top. The
-	 *    popover does not push it during the click: its click-to-edit helper waits 10 ms (150 ms when the click lands on text)
-	 *    and pushes then, which can be after open() (measured in Obsidian 1.15.1: with a re-push at 0 ms Escape stayed dead in every G-S83 trial). A timer
-	 *    that fires after those 150 ms fires after the popover's (timers run in due-time order, so load cannot reorder them).
-	 *    A modal opened later than that is on top already (Modal.open pushes its scope), the re-push is then a no-op. After close,
-	 *    Modal.close's own popScope leaves the popover's scope on top, which is right: the preview is still showing.
+	 *    popover (and, in Live Preview, moved focus into the note behind the form). Put this modal's scope back on top, AFTER the
+	 *    popover's push. The push is not made during the click: Obsidian's click-to-edit helper (a bubble listener on the embed
+	 *    container, so it runs after the opener's own handler, which is what opened this modal) arms a 10 ms timer (150 ms when
+	 *    the click lands on text) and pushes from it. Timers with the same delay fire in the order they were armed, so the
+	 *    re-pushes are armed from a window-bubble listener for the opening click (it runs after the container's), one per delay:
+	 *    the order holds by construction at any load, no margin. A modal opened outside a click (a delayed or keyboard open)
+	 *    arms them at once: any helper timer was armed earlier. Skipped when a newer preview-opened modal is open (a parent
+	 *    must not bury its child) or when this modal's window is not the active one (`pushScope` pushes onto the active
+	 *    window's stack). After close, Modal.close's own popScope leaves the popover's scope on top, which is right: the
+	 *    preview is still showing.
 	 *
 	 * Only for a modal opened from inside `.hover-popover`: nothing else needs it, and outside a preview a click inside a modal
 	 * must reach the window as it always did.
 	 */
 	private keepHoverPreviewAlive(): void {
 		const doc = this.containerEl.ownerDocument;
-		this.lifecycle.registerDomEvent(doc, 'click', (evt: MouseEvent) => {
-			const target = evt.target as Node | null;
-			if (target && this.containerEl.contains(target)) evt.stopPropagation();
-		});
 		const win = doc.defaultView ?? window;
-		const timer = win.setTimeout(() => {
-			if (!this.dseOpen) return;
+		const guard = (evt: MouseEvent): void => {
+			if (evt.composedPath().includes(this.containerEl)) evt.stopPropagation();
+		};
+		doc.addEventListener('click', guard);
+		this.lifecycle.register(() => {
+			win.setTimeout(() => doc.removeEventListener('click', guard), 0);
+		});
+
+		previewModals.push(this);
+		this.lifecycle.register(() => {
+			const i = previewModals.indexOf(this);
+			if (i >= 0) previewModals.splice(i, 1);
+		});
+		const repush = (): void => {
+			if (!this.dseOpen || previewModals[previewModals.length - 1] !== this || activeWindow !== win) return;
 			this.app.keymap.popScope(this.scope);
 			this.app.keymap.pushScope(this.scope);
-		}, HOVER_SCOPE_REPUSH_MS);
-		this.lifecycle.register(() => win.clearTimeout(timer));
+		};
+		const arm = (): void => {
+			for (const ms of HOVER_HELPER_DELAYS_MS) {
+				const id = win.setTimeout(repush, ms);
+				this.lifecycle.register(() => win.clearTimeout(id));
+			}
+		};
+		// `window.event` is the click being dispatched while a handler runs (deprecated in lib.dom, still how a modal learns it
+		// was opened from one; a modal opened outside any event sees undefined).
+		const opening = (win as unknown as { event?: Event }).event;
+		if (opening?.type === 'click') {
+			const onWindowBubble = (evt: Event): void => {
+				if (evt === opening) arm();
+			};
+			win.addEventListener('click', onWindowBubble);
+			this.lifecycle.register(() => win.removeEventListener('click', onWindowBubble));
+		} else arm();
 	}
 
 	close(): void {

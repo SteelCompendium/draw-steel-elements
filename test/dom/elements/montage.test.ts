@@ -2238,3 +2238,44 @@ describe('SC-191 fix round 4: re-review-2 finding 2c — round headers agree wit
 		expect(past.querySelector('.dse-mt__rhead-sub')?.textContent).toBe('done');
 	});
 });
+
+// SC-595: the Montage sheet opened (`openTrackedModal`) from a board in a hover preview. Obsidian's popover hides itself on a `click`
+// that reaches its window (stand-in: a `window` bubble spy), which unloads the board and closes the sheet.
+describe('SC-595: the Montage sheet opened from a board in a hover preview', () => {
+	let windowClicks: jest.Mock;
+	beforeEach(() => {
+		windowClicks = jest.fn();
+		window.addEventListener('click', windowClicks);
+	});
+	afterEach(() => {
+		window.removeEventListener('click', windowClicks);
+		document.body.innerHTML = '';
+	});
+
+	async function openFrom(inPreview: boolean) {
+		const popover = document.body.appendChild(document.createElement('div'));
+		if (inPreview) popover.className = 'popover hover-popover';
+		const containerEl = popover.appendChild(document.createElement('div'));
+		const { root } = await renderMontage(montageMidYaml, { containerEl });
+		cellFor(root, 'Kira', 3).click();
+		windowClicks.mockClear(); // the cell's own click is the opening event
+		return document.body.lastElementChild as HTMLElement;
+	}
+
+	test('a click on the sheet never reaches the window', async () => {
+		const modalEl = await openFrom(true);
+		expect(modalEl.classList.contains('dse-mt__sheet')).toBe(true);
+
+		(modalEl.querySelector('.dse-modal__title') as HTMLElement).click();
+
+		expect(windowClicks).not.toHaveBeenCalled();
+	});
+
+	test('control: opened from a board that is not in a hover preview, a click on the sheet reaches the window', async () => {
+		const modalEl = await openFrom(false);
+
+		(modalEl.querySelector('.dse-modal__title') as HTMLElement).click();
+
+		expect(windowClicks).toHaveBeenCalledTimes(1);
+	});
+});

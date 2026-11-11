@@ -1471,3 +1471,40 @@ describe('SC-465: focus stays inside the Stamina modal when the heal button disa
 		root.remove(); // (the file-level afterEach also clears the body; this keeps the test self-contained)
 	});
 });
+
+// SC-595: the free-heal confirmation opened from a Stamina modal that was opened from a hover preview. Obsidian's popover hides itself
+// on a `click` that reaches its window (stand-in: a `window` bubble spy) and the hide unloads the view, which closes the Stamina modal
+// and with it the heal the user was just staging.
+describe('SC-595: the free-heal confirmation opened from a Stamina modal in a hover preview', () => {
+	let windowClicks: jest.Mock;
+	beforeEach(() => {
+		windowClicks = jest.fn();
+		window.addEventListener('click', windowClicks);
+	});
+	afterEach(() => {
+		window.removeEventListener('click', windowClicks);
+	});
+
+	function openFromPreview() {
+		const popover = document.body.appendChild(document.createElement('div'));
+		popover.className = 'popover hover-popover';
+		const anchor = popover.appendChild(document.createElement('div'));
+		const modal = new StaminaEditModal(new App() as any, new StaminaBar(false, false, 30, 10, 0, 1), true, 'Frodo', jest.fn());
+		modal.anchorTo(anchor);
+		modal.open();
+		return { modal, content: modal.contentEl };
+	}
+
+	test.each(['confirm', 'cancel'] as const)('%s closes only the confirmation: the click never reaches the window and the Stamina modal stays open', (which) => {
+		const { modal, content } = openFromPreview();
+		spendRecoveryBtn(content).click();
+		const dialog = freeHealDialog()!;
+		expect(dialog).not.toBeNull();
+
+		dialog[which].click();
+
+		expect(freeHealDialog()).toBeNull();
+		expect(document.body.contains(modal.containerEl)).toBe(true);
+		expect(windowClicks).not.toHaveBeenCalled();
+	});
+});

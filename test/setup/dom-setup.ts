@@ -81,6 +81,8 @@ proto.hasClass = function (cls: string): boolean {
 // window/document, so aliasing it directly is a faithful single-window stand-in; a real
 // popout-aware mock would need its own harness if that ever becomes test-relevant.
 (globalThis as any).activeDocument = document;
+// Obsidian's `activeWindow` global (obsidian.d.ts), same single-window stand-in (SC-595: DseModal checks its window is the active one).
+(globalThis as any).activeWindow = window;
 
 // Obsidian also provides bare globals (used by e.g. src/elements/counter/view.ts).
 (globalThis as any).createEl = (
