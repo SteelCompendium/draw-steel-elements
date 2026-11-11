@@ -5,7 +5,8 @@
 // note, or through the host's own last write; otherwise nothing is written (the dropped-write Notice). It is never placed by searching the note
 // for the part's text or for the body, so the twin is never written, whatever an outside edit did before the click.
 import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlockHost';
-import { hoverLinkOf, noteHoverLink } from '../../../src/framework/host/hoverLinks';
+import { hoverLinkOf, noteHoverLink, registerHoverLinks } from '../../../src/framework/host/hoverLinks';
+import { atxHeadings, normalizeHeadingName } from '../../../src/framework/host/headingNames';
 import { droppedWriteMessage, resetDroppedWriteNotices } from '../../../src/framework/host/droppedWriteNotice';
 import { App, Notice, Plugin } from '../../mocks/obsidian';
 import type { MarkdownPostProcessorContext } from '../../mocks/obsidian';
@@ -36,13 +37,24 @@ function cacheFor(lines: string[], blocks: Record<string, [number, number]> = {}
 	for (const [id, [s, e]] of Object.entries(blocks)) bl[id] = { id, position: { start: pos(s), end: pos(e) } };
 	return { headings, blocks: bl };
 }
-/** A hover popover as Obsidian draws it: `.popover.hover-popover > .markdown-embed > card element`, no `src` anywhere. */
-function popoverEl(): { popover: HTMLElement; el: HTMLElement } {
+/**
+ * A hover popover as Obsidian draws it (measured, 1.15.1): `.popover.hover-popover > .markdown-embed > card element`, no `src` anywhere. For a heading link
+ * `.markdown-embed[data-type=heading]` holds the heading (`data-heading`) before the card, for a block link `data-type=block`, for a whole note neither.
+ */
+function popoverEl(link: string | null = null): { popover: HTMLElement; el: HTMLElement } {
 	const popover = document.createElement('div');
 	popover.className = 'popover hover-popover';
 	const embed = popover.appendChild(document.createElement('div'));
 	embed.className = 'markdown-embed';
 	const el = embed.appendChild(document.createElement('div'));
+	const sub = link !== null && link.includes('#') ? link.slice(link.indexOf('#')) : null;
+	if (sub !== null && sub.startsWith('#^')) embed.setAttribute('data-type', 'block');
+	else if (sub !== null) {
+		embed.setAttribute('data-type', 'heading');
+		const h = document.createElement('h2');
+		h.setAttribute('data-heading', sub.split('#').pop()!);
+		embed.insertBefore(h, el);
+	}
 	document.body.appendChild(popover);
 	return { popover, el };
 }
@@ -85,11 +97,12 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 	};
 
 	/** A hover preview card: `linktext` is the link its preview was opened for (null: Obsidian announced none), `sec` the part it was given, `disk` the note. */
-	function hovered(disk: string, sec: Sec, linktext: string | null, known = bodyOf(5), blocks: Record<string, [number, number]> = {}) {
+	function hovered(disk: string, sec: Sec, linktext: string | null, known = bodyOf(5), blocks: Record<string, [number, number]> = {}, cachedNote: string | null = null) {
 		const app = new App();
 		app.vault.setFile('Note.md', disk);
-		jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheFor(app.vault.getContent('Note.md')!.split('\n'), blocks) as never);
-		const { popover, el } = popoverEl();
+		// `cachedNote`: the note the metadata cache was built from (a cache that lags an outside edit); else the note as it is now
+		jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheFor((cachedNote ?? app.vault.getContent('Note.md')!).split('\n'), blocks) as never);
+		const { popover, el } = popoverEl(linktext);
 		popovers.push(popover);
 		if (linktext) noteHoverLink(app, hoverEvent(linktext, popover));
 		const section: Section = { current: sec };
@@ -212,13 +225,13 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 	});
 
 	test('J9 two previews open, the card in the second, the newest event is the first one\'s: the card uses its own preview\'s link', async () => {
-		const other = popoverEl();
+		const other = popoverEl('Note#Other');
 		popovers.push(other.popover);
 		const app = new App();
 		app.vault.setFile('Note.md', LONG(5, 5));
 		jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheFor(app.vault.getContent('Note.md')!.split('\n')) as never);
 		noteHoverLink(app, hoverEvent('Note#Other', other.popover));
-		const mine = popoverEl();
+		const mine = popoverEl('Note#Tracker');
 		popovers.push(mine.popover);
 		noteHoverLink(app, hoverEvent('Note#Tracker', mine.popover));
 		noteHoverLink(app, hoverEvent('Note#Other', other.popover)); // the newest event is for the OTHER preview
@@ -316,6 +329,194 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 		expect(await plus(host, bodyOf(7))).toBe(true);
 		expect(valuesOf(app)).toEqual([6, 7]);
 		expect(Notice.notices).toEqual([]);
+	});
+
+	// A callout holding two counters (upper 5, lower 6) under the heading / with an id; + on the UPPER one (it becomes 6 and now reads like the lower one). Before the
+	// preview redraws, an outside edit puts the upper one back to 5: the note reads exactly like the stale part again. The second +: the host knows body 6, the stale
+	// window holds body 6 only in the LOWER counter, so the card's own fence found by body is the sibling. The host's own last write (the guard in `takePin`) says the
+	// upper counter, which now holds 5: refused. Without the guard the whole-part check passes and the LOWER counter is written.
+	test.each([
+		['heading hover', 'Note#Tracker', true],
+		['block hover', 'Note#^cal', false],
+	] as const)('J19 a second + after an outside edit put the first + back, in a stale two-counter callout window (%s): the sibling counter is never written', async (_name, link, byHeading) => {
+		const C2 = (a: number, b: number): string[] => ['> [!note] Camp', ...CTR(a).map(q), '> mid', ...CTR(b).map(q)];
+		const lines = byHeading ? ['# N', '', '## Tracker', '', ...C2(5, 6), '', '## After', 'END'] : ['# N', '', ...C2(5, 6), '', '^cal', '', 'END'];
+		const head = lines.indexOf('> [!note] Camp');
+		const sec: Sec = byHeading ? { text: ['', ...C2(5, 6), '', ''].join('\n'), lineStart: 1, lineEnd: 10 } : { text: C2(5, 6).join('\n'), lineStart: 0, lineEnd: 9 };
+		const { app, host } = hovered(lines.join('\n'), sec, link, bodyOf(5), { cal: [head, head + 9] });
+
+		expect(await plus(host, bodyOf(6))).toBe(true);
+		expect(valuesOf(app)).toEqual([6, 6]);
+		const reverted = app.vault.getContent('Note.md')!.replace('current_value: 6', 'current_value: 5'); // the upper counter back to 5
+		app.vault.setFile('Note.md', reverted);
+
+		expect(await plus(host, bodyOf(7))).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(reverted);
+	});
+
+	// A heading hover's section is the heading's BODY: nothing in it says which heading it hangs from, so the place is the LINE the metadata cache gives the heading,
+	// and the cache lags an outside edit by a moment. The note TEXT must confirm it: that line is an ATX heading of the link's name, and while the counter's body occurs
+	// twice the text holds exactly one such heading.
+	describe('a heading hover whose metadata cache lags an outside edit', () => {
+		const ORIG = ['# N', '', 'TOP', '', '## Tracker', '', ...CTR(5), '', '## Other', '', ...CTR(5), '', 'END'].join('\n');
+		const lagging = (disk: string) => hovered(disk, heading, 'Note#Tracker', bodyOf(5), {}, ORIG);
+
+		test('J20 the hovered section deleted from outside (the cache still has it): nothing is written, never the counter under the next heading', async () => {
+			const disk = ['# N', '', 'TOP', '', '## Other', '', ...CTR(5), '', 'END'].join('\n');
+			const { app, host } = lagging(disk);
+
+			expect(await plus(host, bodyOf(6))).toBe(false);
+			refused(app, disk);
+		});
+
+		test('J20 the next section moved ABOVE the hovered one from outside: nothing is written, never the counter that is now under the old line', async () => {
+			const disk = ['# N', '', 'TOP', '', '## Other', '', ...CTR(5), '', '## Tracker', '', ...CTR(5), '', 'END'].join('\n');
+			const { app, host } = lagging(disk);
+
+			expect(await plus(host, bodyOf(6))).toBe(false);
+			refused(app, disk);
+		});
+
+		test('J20 an identical section of the same name pasted ABOVE from outside (the cache has one): nothing is written (the text names two places)', async () => {
+			const disk = ['# N', '', 'TOP', '', '## Tracker', '', ...CTR(5), '', '## Pasted', '', '## Tracker', '', ...CTR(5), '', '## Other', '', ...CTR(5), '', 'END'].join('\n');
+			const { app, host } = lagging(disk);
+
+			expect(await plus(host, bodyOf(6))).toBe(false);
+			refused(app, disk);
+		});
+
+		test('J20 the cache points at a blank line (lines were inserted above): nothing is written', async () => {
+			const disk = ['# N', '', 'TOP', '', 'inserted', '## Tracker', '', ...CTR(5), '', '## Other', '', ...CTR(5), '', 'END'].join('\n');
+			const { app, host } = lagging(disk);
+
+			expect(await plus(host, bodyOf(6))).toBe(false);
+			refused(app, disk);
+		});
+
+		test('J20 a heading-looking line inside a code fence is no heading: the one real heading of that name still places the +', async () => {
+			const disk = ['# N', '', '## Tracker', '', ...CTR(5), '', '```md', '## Tracker', '```', '', '## Other', '', ...CTR(5), '', 'END'].join('\n');
+			const { app, host } = hovered(disk, heading, 'Note#Tracker');
+
+			expect(await plus(host, bodyOf(6))).toBe(true);
+			expect(valuesOf(app)).toEqual([6, 5]);
+		});
+
+		test('J20 a heading whose name has a colon, linked without it ([[Note#Tracker one]] for "## Tracker: one"), with an identical counter elsewhere: refused (unchanged)', async () => {
+			const disk = ['# N', '', '## Tracker: one', '', ...CTR(5), '', '## Other', '', ...CTR(5), '', 'END'].join('\n');
+			const { app, host } = hovered(disk, heading, 'Note#Tracker one');
+
+			expect(await plus(host, bodyOf(6))).toBe(false);
+			refused(app, disk);
+		});
+	});
+
+	test('the heading lines of a note text: ATX only, up to three spaces of indent, an optional closing run of #, none inside a fence, quote or list item', () => {
+		const lines = ['# One', '  ## Two ##', '    # indented code', '> # quoted', '- # listed', 'Setext', '======', '```md', '# fenced', '```', '~~~~', '## tilde fenced', '~~~', '## still fenced', '~~~~', '### Three  '];
+
+		expect(atxHeadings(lines)).toEqual([
+			{ line: 0, name: 'One' },
+			{ line: 1, name: 'Two' },
+			{ line: 15, name: 'Three' },
+		]);
+		expect(normalizeHeadingName('  Tracker   ONE ')).toBe('tracker one');
+	});
+
+	// A link another event bound to this preview is refused when the preview's own DOM does not show it (heading name, block / heading / whole note).
+	describe('the bound link must be what the preview shows', () => {
+		const TWO = ['# N', '', '## Tracker', '', ...CTR(5), '', '## Other', '', ...CTR(5), '', 'END'].join('\n');
+		const LONGA = ['# N', '', 'TOP', '', '## Other', '', ...CTR(5), '', '## Tracker', '', ...CTR(5), '', 'END'].join('\n'); // the identical counter ABOVE
+
+		/** The preview shows `shows` (a link) but the event that is bound to it names `named`. */
+		function mismatched(disk: string, shows: string, named: string, sec: Sec = heading) {
+			const app = new App();
+			app.vault.setFile('Note.md', disk);
+			jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheFor(disk.split('\n'), { a: [4, 7] }) as never);
+			const { popover, el } = popoverEl(shows);
+			popovers.push(popover);
+			noteHoverLink(app, hoverEvent(named, popover));
+			const host = new ReadingModeBlockHost(new Plugin(app) as never, el, switchableCtx({ current: sec }) as never, 'ds-counter');
+			host.setMountedBody(bodyOf(5));
+			return { app, host };
+		}
+
+		test('J21 a preview of ## Tracker bound to the link of ## Other (an identical-body heading): nothing is written', async () => {
+			const { app, host } = mismatched(TWO, 'Note#Tracker', 'Note#Other');
+
+			expect(await plus(host, bodyOf(6))).toBe(false);
+			refused(app, TWO);
+		});
+
+		test('J21 a preview of a heading bound to a whole-note link ([[Note]]), the identical counter above: nothing is written (a whole-note pin would be mapped against the note)', async () => {
+			const { app, host } = mismatched(LONGA, 'Note#Tracker', 'Note');
+
+			expect(await plus(host, bodyOf(6))).toBe(false);
+			refused(app, LONGA);
+		});
+
+		test('J21 a preview of a heading bound to a block link, and a preview of a block bound to a heading link: nothing is written', async () => {
+			const blk = ['# N', '', ...CTR(5), '^a', '', 'p', '', ...CTR(5), '^b', '', 'END'].join('\n');
+			const one = mismatched(blk, 'Note#Tracker', 'Note#^a', { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 });
+			expect(await plus(one.host, bodyOf(6))).toBe(false);
+			refused(one.app, blk);
+			Notice.notices.length = 0;
+			resetDroppedWriteNotices();
+			const two = mismatched(TWO, 'Note#^a', 'Note#Tracker');
+			expect(await plus(two.host, bodyOf(6))).toBe(false);
+			refused(two.app, TWO);
+		});
+
+		test('J21 a preview of a whole note bound to a heading link: nothing is written', async () => {
+			const pre = ['# N', '', 'TOP', '', ...CTR(5), '', 'END'];
+			const outside = ['# N', '', ...CTR(5), '', 'added', '', 'TOP', '', ...CTR(5), '', 'END'].join('\n');
+			const { app, host } = mismatched(outside, 'Note', 'Note#Tracker', { text: pre.join('\n'), lineStart: 4, lineEnd: 7 });
+
+			expect(await plus(host, bodyOf(6))).toBe(false);
+			refused(app, outside);
+		});
+
+		test('J21 the residual: another link\'s event before the preview exists, then the preview of ## Tracker opens (the parent names it): the card is not placed at the other link', async () => {
+			const app = new App();
+			app.vault.setFile('Note.md', TWO);
+			jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheFor(TWO.split('\n')) as never);
+			const { popover, el } = popoverEl('Note#Tracker');
+			popovers.push(popover);
+			const parent: { hoverPopover: { hoverEl: HTMLElement } | null } = { hoverPopover: null };
+			noteHoverLink(app, hoverEvent('Note#Other', popover, parent));
+			parent.hoverPopover = { hoverEl: popover };
+			const host = new ReadingModeBlockHost(new Plugin(app) as never, el, switchableCtx({ current: heading }) as never, 'ds-counter');
+			host.setMountedBody(bodyOf(5));
+
+			expect(await plus(host, bodyOf(6))).toBe(false);
+			refused(app, TWO);
+		});
+
+		test('J21 a preview that is already open when the listener registers gets no link, even from a later event that names it the way its DOM shows', () => {
+			const app = new App();
+			const open = popoverEl('Note#Tracker');
+			popovers.push(open.popover); // in the document before the plugin registers
+			registerHoverLinks(new Plugin(app) as never);
+			noteHoverLink(app, hoverEvent('Note#Tracker', open.popover));
+
+			expect(hoverLinkOf(app, open.el)).toBeNull();
+		});
+	});
+
+	test('J22 a hover link that names another note (the card is in this note): nothing is written', async () => {
+		const TWO = ['# N', '', '## Tracker', '', ...CTR(5), '', '## Other', '', ...CTR(5), '', 'END'].join('\n');
+		const { app, host } = hovered(TWO, heading, 'Other#Tracker');
+		app.vault.setFile('Other.md', '# Other');
+
+		expect(await plus(host, bodyOf(6))).toBe(false);
+		refused(app, TWO);
+	});
+
+	test('J22 a block hover whose id sits on two blocks after a paste from outside, the cache still on the old line: nothing is written (the text names two places)', async () => {
+		// the cache was built before an identical block with the same id was pasted above: its `a` is on line 2, which is now the pasted block
+		const disk = ['# N', '', ...CTR(5), '^a', '', 'p', '', ...CTR(5), '^a', '', 'END'].join('\n');
+		const { app, host } = hovered(disk, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, 'Note#^a', bodyOf(5), { a: [2, 5] });
+
+		expect(await plus(host, bodyOf(6))).toBe(false);
+		refused(app, disk);
 	});
 
 	describe('the link is bound to the preview once', () => {
@@ -451,7 +652,7 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 		}
 		let el: HTMLElement;
 		if (shape.endsWith('hover')) {
-			const p = popoverEl();
+			const p = popoverEl(linktext);
 			popovers.push(p.popover);
 			el = p.el;
 			noteHoverLink(app, hoverEvent(linktext!, p.popover));

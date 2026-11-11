@@ -156,7 +156,11 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 		expect(registered).toBeDefined();
 		const popover = document.createElement('div');
 		popover.className = 'popover hover-popover';
-		const card = popover.appendChild(document.createElement('div'));
+		const embed = popover.appendChild(document.createElement('div'));
+		embed.className = 'markdown-embed';
+		embed.setAttribute('data-type', 'heading');
+		embed.appendChild(document.createElement('h2')).setAttribute('data-heading', 'Tracker');
+		const card = embed.appendChild(document.createElement('div'));
 		registered![1]({ linktext: 'Note#Tracker', sourcePath: 'Host.md', hoverParent: { hoverPopover: { hoverEl: popover } } });
 		expect(hoverLinkOf(app, card)).toEqual({ linktext: 'Note#Tracker', sourcePath: 'Host.md' });
 		on.mockRestore();

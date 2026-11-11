@@ -834,6 +834,15 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 		embed.className = 'markdown-embed';
 		const el = embed.appendChild(document.createElement('div'));
 		if (link) hoverLinked.set(el, { link, popover });
+		// what the preview draws for that link (measured, 1.15.1; the host checks the bound link against it)
+		const sub = link !== null && link.includes('#') ? link.slice(link.indexOf('#')) : null;
+		if (sub !== null && sub.startsWith('#^')) embed.setAttribute('data-type', 'block');
+		else if (sub !== null) {
+			embed.setAttribute('data-type', 'heading');
+			const h = document.createElement('h2');
+			h.setAttribute('data-heading', sub.split('#').pop()!);
+			embed.insertBefore(h, el);
+		}
 		return el;
 	};
 	const BLK = (extra = ''): string[] => [...CTR(5), `^blk${extra}`];
