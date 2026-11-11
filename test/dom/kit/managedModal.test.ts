@@ -13,7 +13,7 @@ import type { PrefDescriptor, PreferenceStore, PrefsStorage } from '../../../src
 import { DSE_PREF_DESCRIPTORS } from '../../../src/prefs/catalog';
 import { createThemeService, registerThemeServiceForApp } from '../../../src/framework/seams/theme';
 import type { ThemeServiceInternal } from '../../../src/framework/seams/theme';
-import { App, Component } from '../../mocks/obsidian';
+import { App, Component, Scope } from '../../mocks/obsidian';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -589,5 +589,162 @@ describe('SC-431: Escape backs out of a draft first inside a DseModal', () => {
 		expect(second.inputEl.value).toBe('15');
 		expect(second.onClose).not.toHaveBeenCalled();
 		second.modal.close();
+	});
+});
+
+// SC-595: a modal opened from a hover preview keeps the preview (and so itself) alive. Obsidian's page-preview popover hides
+// itself on any non-default-prevented `click` that reaches its window and is not inside the popover; the stand-in here is a
+// `window` bubble spy. `app.keymap` is the jest mock's scope stack (`FakeKeymap`).
+describe('SC-595: a modal opened from a hover preview', () => {
+	let windowClicks: jest.Mock;
+	let documentClicks: jest.Mock;
+
+	beforeEach(() => {
+		windowClicks = jest.fn();
+		documentClicks = jest.fn();
+		window.addEventListener('click', windowClicks);
+		document.addEventListener('click', documentClicks);
+	});
+	afterEach(() => {
+		window.removeEventListener('click', windowClicks);
+		document.removeEventListener('click', documentClicks);
+		document.body.innerHTML = '';
+	});
+
+	/** The opener's element, inside a `.popover.hover-popover` (or not). */
+	function openerEl(inPreview: boolean): HTMLElement {
+		const el = document.createElement('div');
+		if (inPreview) {
+			const popover = document.body.appendChild(document.createElement('div'));
+			popover.className = 'popover hover-popover';
+			popover.appendChild(el);
+		} else {
+			document.body.appendChild(el);
+		}
+		return el;
+	}
+
+	/** A modal with a textarea, an Obsidian-shaped toggle (`ToggleComponent`'s DOM) and a Save button, opened from `anchor`. */
+	function openFrom(anchor: HTMLElement | undefined, app: any = new App()) {
+		const owner = fakeOwner();
+		let textarea!: HTMLTextAreaElement;
+		let checkbox!: HTMLInputElement;
+		const modal = openManagedModal(
+			owner,
+			() => {
+				const m = makeModal(app);
+				textarea = m.body.createEl('textarea');
+				const label = m.body.createEl('label', { cls: 'checkbox-container' });
+				checkbox = label.createEl('input', { type: 'checkbox' }) as HTMLInputElement;
+				m.footer([{ label: 'Save', text: 'Save', onClick: () => {} }]);
+				return m;
+			},
+			anchor,
+		);
+		const save = modal.containerEl.querySelector<HTMLButtonElement>('button[aria-label="Save"]')!;
+		return { owner, modal, textarea, checkbox, save, app };
+	}
+
+	const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5));
+
+	test('a click inside never reaches a window bubble listener (the popover\'s hide), a document listener still sees it', () => {
+		const { textarea, save } = openFrom(openerEl(true));
+
+		textarea.click();
+		save.click();
+
+		expect(windowClicks).not.toHaveBeenCalled();
+		expect(documentClicks).toHaveBeenCalledTimes(2);
+	});
+
+	test('the click is stopped, never default-prevented: an Obsidian-shaped label.checkbox-container > input still toggles and fires change', () => {
+		const { checkbox } = openFrom(openerEl(true));
+		const changed = jest.fn();
+		checkbox.addEventListener('change', changed);
+		let prevented: boolean | null = null;
+		document.addEventListener('click', (e) => (prevented = e.defaultPrevented));
+
+		checkbox.click();
+
+		expect(prevented).toBe(false);
+		expect(checkbox.checked).toBe(true);
+		expect(changed).toHaveBeenCalledTimes(1);
+		expect(windowClicks).not.toHaveBeenCalled();
+	});
+
+	test('a click OUTSIDE the modal (the popover itself, another element) still reaches the window', () => {
+		const anchor = openerEl(true);
+		openFrom(anchor);
+
+		anchor.click();
+
+		expect(windowClicks).toHaveBeenCalledTimes(1);
+	});
+
+	test('control: opened from an element that is not in a hover preview, nothing changes: the click reaches the window and no scope is re-pushed', async () => {
+		const { app, modal, textarea } = openFrom(openerEl(false));
+		const later = new Scope();
+		app.keymap.pushScope(later);
+
+		textarea.click();
+		await settle();
+
+		expect(windowClicks).toHaveBeenCalledTimes(1);
+		expect(app.keymap.top).toBe(later);
+		modal.close();
+	});
+
+	test('control: no anchor at all behaves like a modal outside a preview', () => {
+		const { textarea } = openFrom(undefined);
+		textarea.click();
+		expect(windowClicks).toHaveBeenCalledTimes(1);
+	});
+
+	test('after close the guard is gone: the same container, attached again, lets a click through', () => {
+		const { modal, textarea } = openFrom(openerEl(true));
+		modal.close();
+		document.body.appendChild(modal.containerEl);
+
+		textarea.click();
+
+		expect(windowClicks).toHaveBeenCalledTimes(1);
+	});
+
+	test('a modal opened from a modal that is anchored in a preview inherits the anchor (FreeHealConfirmModal)', () => {
+		const { modal } = openFrom(openerEl(true));
+		expect(modal.anchor?.closest('.hover-popover')).not.toBeNull();
+		const child = openManagedModal(modal.lifecycle, () => makeModal(), modal.anchor);
+		const textarea = child.body.createEl('textarea');
+
+		textarea.click();
+
+		expect(windowClicks).not.toHaveBeenCalled();
+	});
+
+	describe('keymap scope', () => {
+		test('after the opening event the popover has pushed its scope above the modal\'s: the modal\'s goes back on top, and the popover\'s is on top again after close', async () => {
+			const { app, modal } = openFrom(openerEl(true));
+			const popover = new Scope();
+			app.keymap.pushScope(popover); // Obsidian's popover pushes this while the opening click is still being dispatched
+			expect(app.keymap.top).toBe(popover);
+
+			await settle();
+
+			expect(app.keymap.top).toBe(modal.scope);
+			modal.close();
+			expect(app.keymap.top).toBe(popover);
+			expect(app.keymap.scopes).toEqual([popover]);
+		});
+
+		test('closed before the deferred re-push runs: nothing is pushed back for the closed modal', async () => {
+			const { app, modal } = openFrom(openerEl(true));
+			const popover = new Scope();
+			app.keymap.pushScope(popover);
+
+			modal.close();
+			await settle();
+
+			expect(app.keymap.scopes).toEqual([popover]);
+		});
 	});
 });

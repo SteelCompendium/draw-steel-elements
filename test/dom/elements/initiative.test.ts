@@ -2981,3 +2981,43 @@ describe('SC-406: deferring ds-conditions does not touch the initiative tracker\
 		}
 	});
 });
+
+// SC-595: a modal opened from a tracker in a hover preview (InitiativeView.openModal). Obsidian's popover hides itself on a
+// `click` that reaches its window (stand-in: a `window` bubble spy), which unloads the tracker's view and closes the modal.
+describe('SC-595: the Conditions modal opened from a tracker in a hover preview', () => {
+	let windowClicks: jest.Mock;
+	beforeEach(() => {
+		windowClicks = jest.fn();
+		window.addEventListener('click', windowClicks);
+	});
+	afterEach(() => {
+		window.removeEventListener('click', windowClicks);
+	});
+
+	async function openFrom(inPreview: boolean) {
+		const popover = document.body.appendChild(document.createElement('div'));
+		if (inPreview) popover.className = 'popover hover-popover';
+		const containerEl = popover.appendChild(document.createElement('div'));
+		const { root } = await renderInit(quickStart, { containerEl });
+		(root.querySelector('.dse-init__group--heroes .dse-cond--add') as HTMLElement).click();
+		windowClicks.mockClear(); // the + button's own click is the opening event
+		return lastModal();
+	}
+
+	test('a click on the modal never reaches the window and the modal stays open', async () => {
+		const modalEl = await openFrom(true);
+
+		(modalEl.querySelector('.dse-modal__title') as HTMLElement).click();
+
+		expect(windowClicks).not.toHaveBeenCalled();
+		expect(document.body.contains(modalEl)).toBe(true);
+	});
+
+	test('control: opened from a tracker that is not in a hover preview, a click on the modal reaches the window', async () => {
+		const modalEl = await openFrom(false);
+
+		(modalEl.querySelector('.dse-modal__title') as HTMLElement).click();
+
+		expect(windowClicks).toHaveBeenCalledTimes(1);
+	});
+});

@@ -696,3 +696,45 @@ describe('D1 Task 3: byte-compat — serialize(parse(yaml)) === legacy stringify
 		);
 	});
 });
+
+// SC-595: the Stamina modal opened from a bar in a hover preview. Obsidian's popover hides itself on a `click` that reaches its
+// window (stand-in: a `window` bubble spy) and the hide unloads the bar's view, which closes the modal and loses the draft.
+describe('SC-595: the Stamina modal opened from a bar in a hover preview', () => {
+	let windowClicks: jest.Mock;
+	beforeEach(() => {
+		windowClicks = jest.fn();
+		window.addEventListener('click', windowClicks);
+	});
+	afterEach(() => {
+		window.removeEventListener('click', windowClicks);
+	});
+
+	async function openFrom(inPreview: boolean) {
+		const popover = document.body.appendChild(document.createElement('div'));
+		if (inPreview) popover.className = 'popover hover-popover';
+		const containerEl = popover.appendChild(document.createElement('div'));
+		const host = makeHost({ containerEl });
+		await new ElementPipeline(makeDeps()).run(staminaBarElement, BASIC_YAML, host);
+		(containerEl.querySelector('.dse-stamina') as HTMLElement).click();
+		windowClicks.mockClear(); // the bar's own click is the opening event
+		return document.body.lastElementChild as HTMLElement;
+	}
+
+	test('a click on the modal never reaches the window', async () => {
+		const modalEl = await openFrom(true);
+
+		(modalEl.querySelector('.dse-modal__title') as HTMLElement).click();
+		(modalEl.querySelector('.dse-sedit__apply-input') as HTMLElement).click();
+
+		expect(windowClicks).not.toHaveBeenCalled();
+		expect(document.body.contains(modalEl)).toBe(true);
+	});
+
+	test('control: opened from a bar that is not in a hover preview, a click on the modal reaches the window', async () => {
+		const modalEl = await openFrom(false);
+
+		(modalEl.querySelector('.dse-modal__title') as HTMLElement).click();
+
+		expect(windowClicks).toHaveBeenCalledTimes(1);
+	});
+});
