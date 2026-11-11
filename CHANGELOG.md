@@ -74,6 +74,10 @@ for what needs action.
   suggestions** (SC-476). In a block opened with ```` ```ds-stamina-bar extra ````, the suggester read the whole
   line after the backticks as the block's type, found no such type and offered nothing. It now reads only the
   first word, as the rest of the plugin does.
+- [FIX] **Minion pool window: a minion's condition icons can be removed from the keyboard** (SC-572). Each
+  icon is now a real button, named "Remove Bleeding" (and so on) for screen readers: Tab reaches it and
+  Enter or Space removes that condition, like a click. A keyboard focus ring shows on it. The look is
+  unchanged, but the hover tip now reads "Remove Bleeding" instead of "Bleeding".
 - [FIX] **Conditions window: clicking a row's cog or a color swatch while the "Add condition" dropdown is open
   now works** (SC-474). The dropdown used to collapse the moment the mouse button went down, which shrank and
   re-centred the window under the pointer, so the click often landed on nothing. It now collapses when the click
