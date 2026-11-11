@@ -161,7 +161,12 @@
 // maps that line through whatever was written since; a form whose view Obsidian threw away stays open (and then saves strictly); SC-549 (wide): a card's own + is pinned at its first click. SC-556 makes every form's Save strict (its pin or no write): phases (v) and (w) edit / delete the form's own block from outside while the form is open and expect no write, the Notice and an open form.
 // The plugin's 400 ms debounce timer is held and fired by hand (G-S45's hook), so the ordering is forced and no step waits on a timer.
 //
-// SC-480 appends G-S73 (53 scenarios in all; it sits after G-S49 and before G-S56, which stays last, and runs in the fifth `--only` part with G-S59 and G-S49): a card write whose pin
+// SC-584 r5 appends G-S77 (54 scenarios in all; it sits after G-S73 and before G-S56, and runs in the fifth `--only` part): a callout that holds TWO counters, embedded as a BLOCK
+// (`![[note#^id]]`) or by its HEADING (`![[note#Heading]]`), Reading view and Live Preview: + on the LOWER counter and at once its pencil. The + makes the lower counter read like the upper one while
+// the callout Obsidian reports for the card is still the one from before the +, so the form's own block must come from the card's own + write: Save lands in the LOWER counter, never the upper
+// one (the 3e81f9a5 bundle wrote the upper counter for the block embed, the b4e7b4f4 base for the heading embed, both with no Notice).
+//
+// SC-480 appends G-S73 (53 scenarios before G-S77; it sits after G-S49 and before G-S56, which stays last, and runs in the fifth `--only` part with G-S59 and G-S49): a card write whose pin
 // cannot be placed because its block was DELETED from outside is never written into an identical twin. Click + on one of two identical counters (Reading view and Live Preview),
 // delete that block from outside at once, then leave the note (the unload flush) or wait out the 400 ms debounce: nothing is written, the note stays as the outside edit left it, and
 // exactly one "changed on disk first" Notice shows (a note of its own per trial: card Notices are shown once per note per 5 s). Base: the + lands in the twin and no Notice shows.
@@ -534,6 +539,23 @@ Object.assign(FIXTURES, {
 		'Lifecycle/gs584-hov-twin-host.md': `# gs584 hov twin host\n\nsee [[gs584-hov-twin]]\n`,
 		'Lifecycle/gs584-cal-src.md': `# gs584 cal src\n\nTOP\n\n${CAL_AFTER(5, 'Twin')}\n\nmid\n\n${CAL_AFTER(5, 'Twin')}\n\n^gs584cal\n\nend\n`,
 		'Lifecycle/gs584-cal-host.md': `# gs584 cal host\n\n![[gs584-cal-src#^gs584cal]]\n\nafter\n`,
+	});
+}
+
+// SC-584 r5 (G-S77): a callout holding two counters, the upper already in the order the plugin writes its keys (a + re-serializes the block that way) with the value the + gives the lower one; the
+// lower one is the fixture's own order, value 5. Embedded as a block (the `^id` stands under the callout after a blank line) and by its `## Tracker` heading.
+{
+	const CAL2 = () => [
+		'> [!note] Camp',
+		...['```ds-counter', 'max_value: 20', 'current_value: 6', 'min_value: 0', 'name: Twin', '```'].map((l) => `> ${l}`),
+		'> mid',
+		...['```ds-counter', 'name: Twin', 'current_value: 5', 'max_value: 20', 'min_value: 0', '```'].map((l) => `> ${l}`),
+	].join('\n');
+	Object.assign(FIXTURES, {
+		'Lifecycle/gs77-cal-src.md': `# gs77 cal src\n\n${CAL2()}\n\n^gs77cal\n\nend\n`,
+		'Lifecycle/gs77-cal-host.md': `# gs77 cal host\n\n![[gs77-cal-src#^gs77cal]]\n\nafter\n`,
+		'Lifecycle/gs77-calh-src.md': `# gs77 calh src\n\n## Tracker\n\n${CAL2()}\n\n## After\n\nend\n`,
+		'Lifecycle/gs77-calh-host.md': `# gs77 calh host\n\n![[gs77-calh-src#Tracker]]\n\nafter\n`,
 	});
 }
 
@@ -1268,6 +1290,48 @@ function gs56Kit(t) {
 		st: (leaf) => K.tree(t.readingScope(leaf)),
 	};
 	return K;
+}
+
+/**
+ * SC-584 r5 (G-S77): one trial on a callout holding two counters (`SRC`, embedded by `HOST`) in `mode` ('rv' | 'lp'): the form on the LOWER counter's card, opened from the keyboard,
+ * after `plus` (the + on that card, at once) or without it; its raw box is renamed (`from` -> `to`) and Save pressed. Returns what the note and the screen say; asserts nothing.
+ */
+async function gs77Trial(t, { SRC, HOST, mode, plus, from = 'Twin', to = 'Edited' }) {
+	const J = JSON.stringify;
+	const { FORM, SAVE } = formKit(t);
+	const rec = { SRC, mode, plus };
+	const valuesOf = () => (t.read(SRC).match(/^> current_value: (\d+)$/gm) ?? []).map((x) => Number(x.replace('> current_value: ', '')));
+	const namesOf = () => (t.read(SRC).match(/^> name: (\w+)$/gm) ?? []).map((x) => x.replace('> name: ', ''));
+	await t.reset(SRC);
+	await t.reset(HOST);
+	const st = mode === 'rv' ? { mode: 'preview' } : { mode: 'source', source: false };
+	await t.ev(`(async () => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); const leaf = app.workspace.getLeavesOfType('markdown')[0] ?? app.workspace.getMostRecentLeaf(); await leaf.setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); await leaf.setViewState({ type: 'markdown', state: { file: ${J(HOST)}, ...${J(st)} }, active: true }); return true; })()`);
+	const E = `app.plugins.plugins['draw-steel-elements'].viewRegistry.liveEntries().filter((e) => e.host.sourcePath === ${J(SRC)} && e.root.isConnected)`;
+	await t.waitFor(`${E}.length === 2`, `${SRC} ${mode}: both counters of the embedded callout are drawn`, 15000);
+	const ENTRY = `(() => { const es = ${E}; return es.reduce((a, b) => (a.root.getBoundingClientRect().top > b.root.getBoundingClientRect().top ? a : b)); })()`;
+	t.expect(await t.ev(`!!(${ENTRY}).root.closest('.internal-embed, .markdown-embed')`), `${SRC} ${mode}: the card is not inside an embed element`);
+	const pencil = `((${ENTRY}).root.querySelector('.dse-chrome button[data-dse-chrome-item="edit"], button[aria-label^="Edit "]'))`;
+	await t.waitFor(`!!${pencil}`, `${SRC} ${mode}: the Edit pencil is drawn`);
+	rec.before = valuesOf();
+	if (plus) await t.ev(`(${ENTRY}).root.querySelector('button[aria-label^="Increase"]').click()`);
+	await t.ev(`${pencil}.focus({ focusVisible: true })`);
+	await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', text: '\r', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+	await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+	await t.waitFor(`!!document.querySelector('.modal-container .dse-modal .dse-form__preview')`, `${SRC} ${mode}: the edit form opened`, 10000);
+	await t.sleep(300); // the pin's open-time read of the note is long done
+	rec.afterOpen = valuesOf();
+	t.expect(await t.ev(`(() => { const ta = ${FORM}.querySelector('textarea.dse-form__raw'); if (!ta) return false; ta.value = ta.value.replace('name: ${from}', 'name: ${to}'); ta.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`), `${SRC} ${mode}: the form has no raw box`);
+	await t.waitFor(`!!(${SAVE}) && !(${SAVE}).disabled`, `${SRC} ${mode}: Save is enabled`);
+	const mp = await t.mark();
+	await t.ev(`(${SAVE}).click()`);
+	const t0 = Date.now();
+	while (Date.now() - t0 < 4000 && !t.read(SRC).includes(`name: ${to}`) && !(await t.noticesSince(mp)).length) await t.sleep(50);
+	rec.values = valuesOf();
+	rec.names = namesOf();
+	rec.notices = await t.noticesSince(mp);
+	rec.formOpen = await t.ev(`!!document.querySelector('.modal-container .dse-modal')`);
+	if (rec.formOpen) await t.key('Escape', 'Escape', 27).catch(() => {});
+	return rec;
 }
 
 const SCENARIOS = [
@@ -7024,6 +7088,48 @@ const SCENARIOS = [
 			const errs = await t.errorsSince(m);
 			t.expect(errs.length === 0, `page errors: ${errs.join(' | ')}`);
 			return `${outcomes.length} trials: ${outcomes.slice(0, 3).join('; ')}; ...; no page error`;
+		},
+	},
+	{
+		// G-S77 (SC-584 r5): a callout holding two counters, embedded as a block or by its heading (Reading view and Live Preview): + on the lower counter, then at once its pencil: Save lands in the
+		// LOWER counter, the upper one is untouched, no Notice. See the header. It sits before G-S56, which runs last and replaces every other leaf. (Not a control for "an outside edit is refused":
+		// the redraw such an edit causes closes the form, so that is covered by the jest host suite, reading-mode-host-pin.test.ts.)
+		id: 'G-S77',
+		async run(t) {
+			const m = await t.mark();
+			const J = JSON.stringify;
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			const problems = [];
+			const outcomes = [];
+			const files = ['Lifecycle/gs77-cal-src.md', 'Lifecycle/gs77-cal-host.md', 'Lifecycle/gs77-calh-src.md', 'Lifecycle/gs77-calh-host.md'];
+			await t.ev(`(() => { if (!document.getElementById('lc-gs77-notice')) { const st = document.createElement('style'); st.id = 'lc-gs77-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
+			await t.ev(`${prefs}.set('authoringControls', true)`);
+			try {
+				for (const [label, kind, mode] of [
+					['(a) block embed (![[note#^id]]), Reading view', 'cal', 'rv'],
+					['(b) block embed, Live Preview', 'cal', 'lp'],
+					['(c) heading embed (![[note#Tracker]]), Reading view', 'calh', 'rv'],
+					['(d) heading embed, Live Preview', 'calh', 'lp'],
+				]) {
+					try {
+						const r = await gs77Trial(t, { SRC: `Lifecycle/gs77-${kind}-src.md`, HOST: `Lifecycle/gs77-${kind}-host.md`, mode, plus: true });
+						const ok = J(r.afterOpen) === J([6, 6]) && J(r.values) === J([6, 6]) && J(r.names) === J(['Twin', 'Edited']) && r.notices.length === 0;
+						if (!ok) problems.push(`${label}: before ${J(r.before)}, with the form open ${J(r.afterOpen)}, after Save values ${J(r.values)} names ${J(r.names)} (the LOWER counter must be the edited one), notices ${J(r.notices)}`);
+						else outcomes.push(`${label}: + on the lower counter and the pencil: Save wrote the lower counter (names ${J(r.names)}, values ${J(r.values)}), the upper untouched, no Notice`);
+					} catch (e) {
+						problems.push(`${label}: ${e.message}`);
+					}
+				}
+			} finally {
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+				await t.ev(`document.getElementById('lc-gs77-notice')?.remove()`);
+				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
+				for (const rel of files) await t.reset(rel);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect(problems.length === 0, `${problems.join(' | ')} -- passed: ${outcomes.join('; ')}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${J(await t.errorsSince(m))}`);
+			return outcomes.join('; ');
 		},
 	},
 	{
