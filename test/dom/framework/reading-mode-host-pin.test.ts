@@ -793,17 +793,19 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 		expect(app.vault.getContent('Note.md')).toBe(full);
 	});
 
-	test('a cache that lags AND a section text that is stale, a long note: the pin stays as it was, Save is refused and nothing is written', async () => {
+	test('a cache that lags AND a section text that is stale, a long note (+ then the pencil): the pin is placed by the only block with the known body, Save lands in it (SC-584; before, it was refused)', async () => {
 		const live = ['## Tracker', '', ...CTR(6), ''];
 		const now = ['# N', '', 'inserted', ...para(500, 'above'), '', ...CTR(5), '', ...live, '## After', ...para(500, 'below')].join('\n');
 		const before = ['# N', '', ...para(500, 'above'), '', ...CTR(5), '', ...live, '## After', ...para(500, 'below')].join('\n');
 		const { app, host } = embedded(now, part(SUB, 2), 'Note#Tracker', bodyOf(6), before);
 		const pin = host.pinPosition()!;
 
-		expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false);
-		expect(app.vault.getContent('Note.md')).toBe(now);
-		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true);
+		expect(app.vault.getContent('Note.md')).toBe(now.replace(/(## Tracker\n\n```ds-counter\nname: )Twin/, '$1Edited'));
+		expect(names(app)).toEqual(['Twin', 'Edited']); // the identical-looking block above (value 5) is untouched
+		expect(Notice.notices).toEqual([]);
 	});
+
 
 	test.each([
 		['no src on the embed', (): HTMLElement => { const e = embedEl('x'); e.parentElement!.removeAttribute('src'); return e; }],
@@ -919,6 +921,148 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 
 		expect(await save(host, pin)).toBe(true);
 		expect(app.vault.getContent('Note.md')).toBe(full.replace('name: Twin', 'name: Edited'));
+	});
+
+	// SC-584 case 1: a hover preview (no `src`) opened right after a + on its card. The + is on disk (value 6, the host knows that body) but the
+	// section text Obsidian reports is still the old one (5), so neither the link nor the text search can place the pin. It is placed by the
+	// block's body only when exactly one block of the note holds it WHEN THE FORM OPENS, and then it is an ordinary pin of the note.
+	describe('SC-584: a hover preview or an embed whose pin only the known body can place', () => {
+		const settle = () => new Promise((resolve) => setTimeout(resolve, 25)); // the open-time note read (one cachedRead) is done
+		const NOTE = (n: number, mid: string[] = []): string[] => ['# N', '', 'TOP', '', ...CTR(n), '', ...mid, 'END'];
+		/** The hover preview's host on the counter at line 4 of `full`: the note holds 6 (the + landed), the section Obsidian reports still says 5. */
+		function hover(full: string, fence = 4, known = bodyOf(6)) {
+			const stale = full.replace(/current_value: 6/, 'current_value: 5');
+			return embedded(full, { text: stale, lineStart: fence, lineEnd: fence + 3 }, 'x', known, full, hoverEl());
+		}
+		const edited = (full: string): string => full.replace('name: Twin', 'name: Edited');
+
+		test('the + landed, the section text is stale, the block is the only one with that body: Save lands in it (a short note)', async () => {
+			const full = NOTE(6).join('\n');
+			const { app, host } = hover(full);
+			const pin = host.pinPosition()!;
+
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true); // before: the pin stayed partial and every Save was refused
+			expect(app.vault.getContent('Note.md')).toBe(edited(full));
+			expect(Notice.notices).toEqual([]);
+		});
+
+		test('the same with a long note and a heading hover: the section is the part, the block is the only one with that body', async () => {
+			const full = ['# N', '', ...para(300, 'above'), '', '## Tracker', '', ...CTR(6), '', '## After', '', ...para(300, 'below')].join('\n');
+			const lines = full.split('\n');
+			const head = lines.indexOf('## Tracker');
+			const section = { text: ['## Tracker', '', ...CTR(5), ''].join('\n'), lineStart: 2, lineEnd: 5 };
+			const { app, host } = embedded(full, section, 'x', bodyOf(6), full, hoverEl());
+			expect(head).toBeGreaterThan(300);
+			const pin = host.pinPosition()!;
+
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true);
+			expect(app.vault.getContent('Note.md')).toBe(edited(full));
+		});
+
+		test('another block of the note holds the same body when the form opens: nothing places the pin, Save writes nothing', async () => {
+			const full = ['# N', '', 'TOP', '', ...CTR(6), '', 'p', '', ...CTR(6), '', 'END'].join('\n');
+			const { app, host } = hover(full, 11); // the lower one
+			const pin = host.pinPosition()!;
+
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false);
+			expect(app.vault.getContent('Note.md')).toBe(full);
+			expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		});
+
+		test('the form\'s own block is edited from outside after it opened and the twin that is left is the only block with the old body: Save writes nothing, never the twin (the SC-556 hazard)', async () => {
+			const full = NOTE(6).join('\n');
+			const { app, host } = hover(full);
+			const pin = host.pinPosition()!;
+			await settle();
+			// one outside edit: the block the form is on gets another value, and a block with the old body appears further down
+			const outside = ['# N', '', 'TOP', '', ...CTR(9), '', 'p', '', ...CTR(6), '', 'END'].join('\n');
+			app.vault.setFile('Note.md', outside);
+
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false); // a search for the body at Save time would write the block at the bottom
+			expect(app.vault.getContent('Note.md')).toBe(outside);
+			expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		});
+
+		test('an identical block is added to the note after the form opened: Save still lands in the block the form was opened on', async () => {
+			const full = NOTE(6).join('\n');
+			const { app, host } = hover(full);
+			const pin = host.pinPosition()!;
+			await settle();
+			const outside = ['# N', '', 'TOP', '', ...CTR(6), '', 'p', '', ...CTR(6), '', 'END'].join('\n');
+			app.vault.setFile('Note.md', outside);
+
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true); // a count at Save time would see two blocks and refuse
+			expect(names(app)).toEqual(['Edited', 'Twin']);
+			expect(app.vault.getContent('Note.md')).toBe(edited(outside));
+		});
+
+		test('the form\'s own block was edited from outside BEFORE it opened (the preview still shows the old text), a twin holding the old body: nothing places the pin, Save writes nothing', async () => {
+			// the preview's text says "5, then the block" at lines 4-7; the note has 9 there and an identical block with the old body further down
+			const disk = ['# N', '', 'TOP', '', ...CTR(9), '', 'p', '', ...CTR(5), '', 'END'].join('\n');
+			const { app, host } = embedded(disk, { text: NOTE(5).join('\n'), lineStart: 4, lineEnd: 7 }, 'x', bodyOf(5), disk, hoverEl());
+			const pin = host.pinPosition()!;
+
+			expect(await save(host, pin, bodyOf(5, 'Edited'))).toBe(false); // the block's body is unique in the note, but not where the preview drew it
+			expect(app.vault.getContent('Note.md')).toBe(disk);
+			expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		});
+
+		test('a card write (not a form Save) with a partial pin and a twin in the note is refused as before: the rule is for a form\'s open', async () => {
+			const full = ['# N', '', 'TOP', '', ...CTR(6), '', 'p', '', ...CTR(6), '', 'END'].join('\n');
+			const { app, host } = hover(full, 11);
+			const pin = host.pinPosition()!;
+
+			expect(await host.replaceSource(bodyOf(7), { pin, fromView: true })).toBe(false);
+			expect(app.vault.getContent('Note.md')).toBe(full);
+			expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		});
+	});
+
+	// SC-584 case 2: a block embed (`![[note#^id]]`) of a CALLOUT. The id names the callout, so its line follows the callout's last line, not the
+	// counter's closing fence (the callout has more text after the counter).
+	describe('SC-584: a block embed of a callout that holds the counter', () => {
+		const CAL = (n: number): string[] => ['> [!note] Camp', ...CTR(n).map((l) => `> ${l}`), '> after text'];
+		const noteWith = (marker: string[]): string[] => ['# N', '', 'TOP', '', ...CAL(5), '', 'mid', '', ...CAL(5), '', ...marker, '', 'END'];
+		const calCache = (start: number) => ({ headings: [], blocks: { cal: { id: 'cal', position: { start: { line: start, col: 0, offset: 0 }, end: { line: start + 5, col: 12, offset: 0 } } } } });
+		const section = { text: CAL(5).join('\n'), lineStart: 0, lineEnd: 5 }; // Reading view: the whole callout, the fence is inside it
+		const lowerOf = (full: string): number => full.split('\n').lastIndexOf('> [!note] Camp');
+		const renamedAt = (full: string, header: number): string => full.split('\n').map((l, i) => (i === header + 2 ? '> name: Edited' : l)).join('\n');
+
+		test('an identical callout above: Save lands in the embedded (lower) callout, never the other', async () => {
+			const full = noteWith(['^cal']).join('\n');
+			const lower = lowerOf(full);
+			const { app, host } = embedded(full, section, 'Note#^cal', bodyOf(5), calCache(lower));
+			const pin = host.pinPosition()!;
+
+			expect(await save(host, pin)).toBe(true); // before: the marker was looked for under the counter's fence ("> after text"), nothing verified
+			expect(app.vault.getContent('Note.md')).toBe(renamedAt(full, lower));
+			expect(names(app)).toEqual(['Twin', 'Edited']);
+			expect(Notice.notices).toEqual([]);
+		});
+
+		test.each([
+			['the id line names another block', ['^other']],
+			['there is no id line at all', []],
+		])('%s: the marker is not there, nothing places the pin, Save writes nothing', async (_name, marker) => {
+			const full = noteWith(marker).join('\n');
+			const { app, host } = embedded(full, section, 'Note#^cal', bodyOf(5), calCache(lowerOf(full)));
+			const pin = host.pinPosition()!;
+
+			expect(await save(host, pin)).toBe(false);
+			expect(app.vault.getContent('Note.md')).toBe(full);
+			expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		});
+
+		test('a cache that lags the note so that its callout is the identical one ABOVE: the id is not under it, so it is not taken and nothing is written', async () => {
+			const full = noteWith(['^cal']).join('\n');
+			const upper = full.split('\n').indexOf('> [!note] Camp');
+			const { app, host } = embedded(full, section, 'Note#^cal', bodyOf(5), calCache(upper));
+			const pin = host.pinPosition()!;
+
+			expect(await save(host, pin)).toBe(false);
+			expect(app.vault.getContent('Note.md')).toBe(full);
+			expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+		});
 	});
 });
 
