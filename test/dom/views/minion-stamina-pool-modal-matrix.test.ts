@@ -352,6 +352,15 @@ describe('the Apply Damage row: damage per minion x minions hit', () => {
 		expect(group.minion_stamina_pool).toBe(0);
 	});
 
+	// SC-566 r3 (LOW-1): a hand-edited NEGATIVE pool (no write path produces one) must not flip the sign: the label and
+	// info line never show a negative or a heal-shaped amount for damage.
+	test('SC-566: a hand-edited pool of -5 labels damage as 0, never a negative or sign-flipped amount', async () => {
+		const { content } = await open({ pool: -5 });
+		dealDamage(content, '3', '1');
+		expect(apply(content).textContent).toBe('Deal 0 damage, kill 5 minion(s)');
+		expect(info(content).textContent).toBe(`0 damage will kill 5 minion(s).${SEL(5)}`);
+	});
+
 	// SC-566 (heal side, the same label/info builders): a heal cannot be staged past the pool max either, so its label
 	// already states the change Apply writes. A typed draft past the max is clamped by the stepper before the label sees it.
 	test('SC-566: a heal label and info line state the change Apply writes, also for a typed draft past the max', async () => {

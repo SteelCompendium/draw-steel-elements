@@ -377,17 +377,17 @@ export class MinionStaminaPoolModal extends DseModal {
 	}
 
 	/**
-	 * SC-566: the pool change Apply will actually WRITE for a raw staged change, the ONE copy of
-	 * this math (the SC-427 `appliedStaminaChange` shape, StaminaEditModal): damage never takes
-	 * more than the pool holds (99 x 5 on a pool of 20 is 20, not 495) and a heal never
-	 * lifts it past the max. The Apply label and the info line both read it, so they cannot
-	 * disagree with each other or with what Apply writes. The sign never flips (a hand-edited
-	 * pool already outside [0, max] still reads as the direction the user staged), and the
-	 * preview bar deliberately keeps the raw damage (updateStaminaBar).
+	 * SC-566: the pool change Apply will actually WRITE for a raw staged change, as the label and
+	 * info line state it (the SC-427 `appliedStaminaChange` shape, StaminaEditModal). It is the one
+	 * copy the label and info line share; Apply and the stepper keep their own [0, max] clamp.
+	 * Damage never takes more than the pool holds (99 x 5 on a pool of 20 is 20, not 495) and a
+	 * heal never lifts it past the max. The sign never flips: a hand-edited pool already outside
+	 * [0, max] still reads as the direction the user staged (a negative pool reads as 0 damage).
+	 * The preview bar deliberately keeps the raw damage (updateStaminaBar).
 	 */
 	private appliedPoolChange(raw: number): number {
 		const { poolMaxStamina, poolCurrentStamina } = this.poolNumbers();
-		if (raw < 0) return Math.max(raw, -poolCurrentStamina);
+		if (raw < 0) return Math.max(raw, -Math.max(0, poolCurrentStamina));
 		return Math.min(raw, Math.max(0, poolMaxStamina - poolCurrentStamina));
 	}
 
