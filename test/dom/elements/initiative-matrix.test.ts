@@ -1209,7 +1209,7 @@ describe('[Q] a half-typed quick-add is a per-view draft: it survives every rebu
 		expect(draft(root)).toEqual(['2', 'Feyt']);
 	});
 
-	test('[Q07] a rebuild from outside (the sidebar / a note change calls update() with a freshly parsed model) keeps the draft', async () => {
+	test('[Q07] a rebuild from outside (update() called with another model, as the sidebar\'s refresh does) keeps the draft', async () => {
 		const views: any[] = [];
 		const { root } = await mount(TRACKER, { addChild: (c: unknown) => (views.push(c), c) } as Partial<BlockHost>);
 		type(root, '7', 'Outside');
@@ -1275,13 +1275,56 @@ describe('[Q] a half-typed quick-add is a per-view draft: it survives every rebu
 		type(root, '2', 'Feytouched');
 		const label = ctl<HTMLInputElement>(root, LABEL);
 		label.focus();
-		label.setSelectionRange(2, 5, 'backward');
+		label.setSelectionRange(2, 5);
 		ctl(root, 'init.round.advance').click();
 		await flush();
 		const after = ctl<HTMLInputElement>(root, LABEL);
 		expect(after).not.toBe(label);
 		expect(document.activeElement).toBe(after);
-		expect([after.selectionStart, after.selectionEnd, after.selectionDirection]).toEqual([2, 5, 'backward']);
+		expect([after.selectionStart, after.selectionEnd]).toEqual([2, 5]); // start and end only: Chromium does not restore the direction
+	});
+
+	/** The view and its tracker's model, for the outside path (`SidebarPanel` calls `previous.update(model)` on the same view). */
+	const outside = async (src: string) => {
+		const views: any[] = [];
+		const m = await mount(src, { addChild: (c: unknown) => (views.push(c), c) } as Partial<BlockHost>);
+		const view = views.find((v) => typeof v.currentModel === 'function' && typeof v.chromeItems === 'function');
+		return { ...m, view, refresh: () => view.update({ ...view.currentModel(), round: 9 }) as Promise<void> };
+	};
+
+	test('[Q15] a rebuild from outside while the label box has focus: the rebuilt box holds focus, with the caret and the draft', async () => {
+		const { root, refresh } = await outside(TRACKER);
+		type(root, '7', 'Feytouched');
+		const label = ctl<HTMLInputElement>(root, LABEL);
+		label.focus();
+		label.setSelectionRange(2, 5);
+		await refresh();
+		const after = ctl<HTMLInputElement>(root, LABEL);
+		expect(after).not.toBe(label); // the tracker really was rebuilt
+		expect(document.activeElement).toBe(after);
+		expect([after.selectionStart, after.selectionEnd]).toEqual([2, 5]);
+		expect(draft(root)).toEqual(['7', 'Feytouched']);
+	});
+
+	test('[Q15] a rebuild from outside while the Advance round button has focus hands focus to the rebuilt button', async () => {
+		const { root, refresh } = await outside(TRACKER);
+		ctl(root, 'init.round.advance').focus();
+		await refresh();
+		expect(document.activeElement).toBe(ctl(root, 'init.round.advance'));
+	});
+
+	test('[Q16] a rebuild from outside never takes focus: with focus elsewhere it stays there, and with none it stays on <body>', async () => {
+		const { root, refresh } = await outside(TRACKER);
+		type(root, '7', 'Feytouched');
+		const other = document.createElement('input');
+		document.body.appendChild(other);
+		other.focus();
+		await refresh();
+		expect(document.activeElement).toBe(other);
+		other.blur();
+		await refresh();
+		expect(document.activeElement).toBe(document.body);
+		expect(draft(root)).toEqual(['7', 'Feytouched']);
 	});
 
 	test('[Q13] a draft in the amount box and an empty label box come back as typed (only the amount is restored)', async () => {
