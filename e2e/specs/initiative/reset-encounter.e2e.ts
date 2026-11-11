@@ -78,10 +78,15 @@ describe('initiative: Reset encounter state', () => {
 });
 
 describe('initiative: what the screen shows after a reset', () => {
-	it('[INIT-X05] after Yes, Reset the enemy groups still show their roster and detail row, back at full stamina', async () => {
+	it('[INIT-X05] after Yes, Reset the tracker is repainted (round, Malice and turn cleared) and the enemy groups show their roster and detail row, back at full stamina', async () => {
 		const { root, modal } = await openReset();
+		// the rich note's enemies and heroes are already at full stamina, so only what Reset changes can tell a repaint from the old screen
+		await expect(root.control('init.hero.turn', { nth: 1 })).toHaveAttribute('aria-pressed', 'true');
 		await dse.waitForWrite(RICH, () => dse.click(modal.control('init.reset-encounter.confirm')));
 		await dse.settle();
+		await expect(root.control({ css: '.dse-init__round-value' })).toHaveText('Round 1');
+		await expect(root.control({ css: '.dse-init__malice-value' })).toHaveElementProperty('textContent', 'Malice: 0');
+		await expect(root.control('init.hero.turn', { nth: 1 })).toHaveAttribute('aria-pressed', 'false');
 		await expect(root.control('init.cell.stamina', { nth: 0 })).toBeDisplayed();
 		// the numeric button is visually stood down on the Steel screen, so read its text, not WebDriver's visible text
 		await expect(root.control('init.detail.stamina', { nth: 0 })).toHaveElementProperty('textContent', '60/60');
