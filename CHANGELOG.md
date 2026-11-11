@@ -32,17 +32,20 @@ for what needs action.
   (1) You hover over a link to a note holding a counter (or the counter is shown in an embed of part of a note), press +
   on it and then its Edit pencil right away: Save was refused ("a change to a block in <note> was not saved — the block
   changed on disk first") even when that counter was the only one in the note, in a short note too. It now saves into the
-  counter you pressed + on: the form is placed at the spot where the plugin wrote that +, and an identical counter
-  elsewhere is not chosen by searching the note for it. A callout that holds two counters is covered too: after a + on
-  the lower one, which then reads like the upper one, Save writes the lower one (before, in a block embed it wrote the
-  upper one with no Notice, and in a heading embed it already did). If that counter is edited or deleted from outside
-  (Sync, another editor) between the + and Save, Save still writes nothing and shows the same Notice. A form opened on a
-  hover preview or an embed without a + on that card first is unchanged: when the plugin cannot tell which block the
-  preview shows, Save is refused with the same Notice. (2) A block embed of a callout (`![[note#^id]]`) whose callout has
-  more text after the counter, in a note with an identical callout elsewhere: Save was refused. It now saves into the
-  embedded callout and never into the other one. A callout embed whose `^id` line is not directly under the callout, or
-  whose position Obsidian's index of the note has wrong, is still refused with the same Notice, and so is a form in a
-  callout when hundreds of lines changed on both sides of it between the + and Save.
+  counter you pressed + on. How the form finds its block: when the card is a block on its own, by the embed's link or the
+  block's text, and failing that by the spot where the plugin wrote that +; when the card is a callout, a quote or another
+  container holding several blocks, always by the spot where the plugin wrote that +, because the container Obsidian shows
+  is still the one from before the +. So two counters in one callout or quote that read the same after the + save the lower
+  one (a heading embed used to write the upper one). If the counter is edited or deleted from outside (Sync, another
+  editor) between the + and Save, Save still writes nothing and shows the same Notice. A form opened on a hover preview or
+  an embed without a + on that card first is unchanged: when the plugin cannot tell which block the preview shows, Save is
+  refused with the same Notice. A counter inside a list item or a footnote is unchanged too: the + is not written there
+  (a Notice says so), and so Save writes nothing. (2) A block embed of a callout
+  (`![[note#^id]]`) whose callout has more text after the counter, in a note with an identical callout elsewhere: Save was
+  refused. It now saves into the embedded callout and never into the other one. A callout embed whose `^id` line is not
+  directly under the callout, or whose position Obsidian's index of the note has wrong, is still refused with the same
+  Notice, and so is a form in a container holding several blocks when hundreds of lines changed on both sides of it
+  between the + and Save.
 - [FIX] **The initiative tracker repaints correctly after "Reset encounter state"** (SC-576). After Reset encounter -> Yes
   the tracker used to show every enemy group empty and every hero at 0 Stamina with a red Dying chip, although the note
   was reset correctly. It now shows the enemy rows and the heroes at full Stamina, as a reload of the note does. It also
