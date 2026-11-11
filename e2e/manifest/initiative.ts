@@ -26,9 +26,9 @@ export default surface('initiative', {
 		// A chrome-panel item that opens ResetEncounterModal (see manifest/reset-encounter-modal.ts).
 		'init.reset-encounter': c(['click'], ['SC-485', 'SC-500', 'X01']),
 
-		// -- M. Malice: the kit stepper (no bounds), the quick-add row and the log disclosure. The stepper's value node is
+		// -- M. Malice: the kit stepper (min 0 since SC-577: the - button disables at 0), the quick-add row and the log disclosure. The stepper's value node is
 		//    a programmatic focus target (tabindex -1) that nothing clicks, so it lists no interaction.
-		'init.malice.dec': c(['click'], ['M01']),
+		'init.malice.dec': c(['click', 'click-disabled'], ['M01', 'M07']),
 		'init.malice.value': c([]),
 		'init.malice.inc': c(['click'], ['M01', 'M02']),
 		'init.malice.quickadd.amount': c(['type', 'press:Enter'], ['M03', 'M04']),
