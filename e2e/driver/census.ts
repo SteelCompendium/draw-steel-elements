@@ -58,7 +58,9 @@ export async function eventfulNodes(selectors: string[], excludeInside: string |
 		const eventsOf = new Map<number, string[]>();
 		for (const { listeners } of replies) {
 			for (const l of listeners) {
-				if (l.backendNodeId === undefined || !INPUT_EVENTS.has(l.type)) continue;
+				if (!INPUT_EVENTS.has(l.type)) continue;
+				// The per-node walk never needed this field; a listener we cannot attribute must fail the census, not shrink it.
+				if (l.backendNodeId === undefined) throw new Error(`census: a "${l.type}" listener came back without a backendNodeId, so it cannot be attributed to a node`);
 				const list = eventsOf.get(l.backendNodeId) ?? [];
 				if (!list.includes(l.type)) list.push(l.type);
 				eventsOf.set(l.backendNodeId, list);
@@ -81,7 +83,8 @@ export async function eventfulNodes(selectors: string[], excludeInside: string |
 		});
 		return read.result.value.map((r) => ({ ...r.d, events: eventsOf.get(backendIds[r.k])! }));
 	} finally {
-		await cdp('Runtime.releaseObjectGroup', { objectGroup });
+		// If the session died, a failing release must not replace the error that got us here.
+		await cdp('Runtime.releaseObjectGroup', { objectGroup }).catch(() => {});
 	}
 }
 
