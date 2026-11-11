@@ -120,7 +120,7 @@ const FOCUS_FAMILIES: ControlFamilies = { 'init.captain.make': 'init.captain', '
 interface QuickAddDraft {
 	amount: string;
 	label: string;
-	caret?: { field: 'amount' | 'label'; start: number; end: number; direction: 'forward' | 'backward' | 'none' };
+	caret?: { field: 'amount' | 'label'; start: number; end: number };
 }
 
 const QUICKADD_AMOUNT = 'init.malice.quickadd.amount';
@@ -157,10 +157,19 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *  view), so it is a freshly loaded model and ends any error card drawn after a failed re-parse.
 	 *  The same model (this view's own rebuilds) leaves it up. */
 	async update(model: EncounterData): Promise<void> {
+		const outside = model !== this.model && !this.resetRebuild;
 		if (model !== this.model) this.loadError = undefined;
 		this.captureQuickAddDraft(); // SC-589: before the default update() empties the root with the boxes in it
+		// SC-589: an outside refresh (the sidebar's `previous.update(model)`) rebuilds the tracker like any other, but no caller of it
+		// hands focus back (`rebuildAndPersist` and the Reset encounter rebuild do their own, above), so a user typing in a quick-add
+		// box lost focus and caret in mid-word. Same capture / restore, and the same no-op when focus was not inside the tracker.
+		const focus = outside ? captureControlFocus(this.rootEl, FOCUS_FAMILIES) : null;
 		await super.update(model);
+		if (outside) restoreControlFocus(this.rootEl, focus, FOCUS_FAMILIES);
 	}
+
+	/** True while `rebuildFromWrittenReset` runs its `update(fresh)`: that path hands focus back itself, once its `inert` is lifted. */
+	private resetRebuild = false;
 
 	/** SC-589 — read the draft off the boxes that are on screen. Read at rebuild time (not kept current on `input`), so it is right
 	 *  whatever set the value (typing, autofill, a script) and whatever raised the rebuild (a click elsewhere, an external note write,
@@ -176,8 +185,9 @@ export class InitiativeView extends ElementView<EncounterData> {
 		for (const [field, input] of [['amount', amount], ['label', label]] as const) {
 			if (input.ownerDocument.activeElement !== input) continue;
 			// A number input has no caret to read (selectionStart is null): nothing to restore for it.
-			const { selectionStart: start, selectionEnd: end, selectionDirection: direction } = input;
-			if (start !== null && end !== null) draft.caret = { field, start, end, direction: direction ?? 'none' };
+			// Start and end only: Chromium does not restore a selection's direction on a fresh input, so none is kept.
+			const { selectionStart: start, selectionEnd: end } = input;
+			if (start !== null && end !== null) draft.caret = { field, start, end };
 		}
 		this.quickAddDraft = draft;
 	}
@@ -285,10 +295,12 @@ export class InitiativeView extends ElementView<EncounterData> {
 				console.error('Draw Steel Elements: initiative tracker re-parse after reset failed', error);
 				this.loadError = new ElementStageError(stage, error);
 			}
+			this.resetRebuild = true;
 			await this.update(fresh);
 		} catch (error) {
 			console.error('Draw Steel Elements: initiative tracker rebuild failed', error);
 		} finally {
+			this.resetRebuild = false;
 			for (const el of new Set([root, this.rootEl])) {
 				el.removeAttribute('inert');
 				el.removeAttribute('aria-busy');
@@ -696,7 +708,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 			const caret = this.quickAddDraft.caret;
 			if (caret) {
 				try {
-					(caret.field === 'amount' ? amountInput : labelInput).setSelectionRange(caret.start, caret.end, caret.direction);
+					(caret.field === 'amount' ? amountInput : labelInput).setSelectionRange(caret.start, caret.end);
 				} catch {
 					/* an input type without a caret (number): the focus is restored, the caret is the browser's */
 				}
