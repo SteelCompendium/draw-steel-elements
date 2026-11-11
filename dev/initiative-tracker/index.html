@@ -2083,7 +2083,12 @@ malice:
 <li><code>log</code> (list, managed): The spend/gain log (<code>{round, amount, label}</code>, oldest first).
     Managed by the tracker — populated by "Advance round" (when <code>round_gain</code> is set) and
     the quick-add control. Capped at the 50 most recent entries; older entries drop off
-    automatically.</li>
+    automatically. <code>amount</code> is the change the pool actually made (negative for a spend), so
+    each entry records what the pool really did (the −/+ stepper changes Malice without a log
+    entry, so the log is not a running total). When the pool stopped at 0 and made a smaller change than was
+    asked for (the typed amount, or <code>round_gain</code>), the entry also has <code>requested</code>, the amount
+    asked for (<code>{round, amount, label, requested}</code>); an entry that was not capped has no
+    <code>requested</code> key.</li>
 </ul>
 <h4 id="example_2">Example<a class="headerlink" href="#example_2" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code><span class="nt">malice</span><span class="p">:</span>
@@ -2163,11 +2168,15 @@ live on the Heroes heading line instead (see below).</p>
 <p><strong>Adjusting the pool</strong>: the pool is a stepper — a <strong>−</strong> and a <strong>+</strong> button always shown on
 either side of the current Malice value.
 Malice never goes below 0: <strong>−</strong> is disabled at 0, a spend (or a negative <code>round_gain</code>) stops
-at 0, and a hand-edited negative <code>value</code> counts as 0.</p>
+at 0, and a hand-edited negative <code>value</code> counts as 0. The log records the change that really
+happened (see below).</p>
 <p><strong>Malice log</strong>: Click "Malice log · N entries" to open a small read-only list of every
 gain/spend (<code>R&lt;round&gt;: +/-&lt;amount&gt; — &lt;label&gt;</code>), most recent additions preserved, oldest
 entries dropped once the log exceeds 50 entries. Printed handouts always show the log
-open.</p>
+open. The amount is what the pool actually did, and a line the pool capped at 0 also shows
+what was asked for: from Malice 2, a quick-add of −5 reads <code>R2: -2 — Spend (-5, capped at 0)</code>,
+and from 0 a negative <code>round_gain</code> of −3 reads <code>R3: 0 — Round gain (-3, capped at 0)</code> (a change
+of zero reads <code>0</code>, not <code>+0</code>).</p>
 <p><strong>Quick-add</strong>: Enter an amount and a label (e.g. "3" / "Feytouched") and click "Add" — or
 press <strong>Enter</strong> in either field — to log a manual, trigger-based Malice gain (or spend,
 using a negative amount) without waiting for a round to advance. Amounts are whole numbers.
