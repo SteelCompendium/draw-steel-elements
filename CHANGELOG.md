@@ -22,11 +22,12 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
-- [FIX] **What you have typed in the initiative tracker's Malice quick-add boxes is no longer lost when the tracker rebuilds**
-  (SC-589). Type an amount and a label, then press Advance round (or Make/Relieve captain, Reset turns, Reset encounter, or
-  any other action that rebuilds the whole tracker), and both boxes used to come back empty. They now keep what you typed, with
-  the caret where it was if you were still in one of them. Only a successful Add (the button or Enter) empties them, and what
-  you have typed is never written to the note.
+- [FIX] **What you have typed in the initiative tracker's Malice quick-add boxes is no longer lost when the tracker rebuilds, in
+  Reading view and in the pinned sidebar tracker** (SC-589). Type an amount and a label, then press Advance round (or Make/Relieve
+  captain, Reset turns, Reset encounter, or any other action that rebuilds the whole tracker), and both boxes used to come back
+  empty. They now keep what you typed, with the caret where it was if you were still in one of them, and the sidebar tracker keeps
+  your place in a box when the note changes from outside. Only a successful Add (the button or Enter) empties them, and what you
+  have typed is never written to the note. In Live Preview the boxes are still emptied when the note saves a moment later (SC-605).
 - [FIX] **Keyboard focus stays in the initiative tracker after Advance round, Make/Relieve captain, Reset turns, Reset encounter
   and the Malice quick-add, in Reading view** (SC-588). Each of these rebuilds the whole tracker, and focus used to fall to the
   top of the page, so a keyboard user had to Tab back in from the top of the note after every press. The control that replaced
