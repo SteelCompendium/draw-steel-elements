@@ -122,11 +122,11 @@ for what needs action.
   minion(s) die." (also after staging damage on the empty pool, where the button used to read "Deal 0 damage,
   kill 5 minion(s)"). Apply marks them dead and leaves the pool at 0. Heals are unchanged. A pool edited by hand
   to below 0 now counts as 0 in the window, so pressing + then - no longer leaves Apply disabled.
-- [FIX] **Minion pool window: custom conditions show an icon, and a click removes one copy** (SC-574). A
-  condition that is not one of Draw Steel's built-in ones (for example "on-fire") used to have no icon in the
-  window, so it could not be seen or removed there. It now shows the same dashed-circle icon as the initiative
-  tracker, named "Remove On Fire", and an icon you set on it still wins. A condition written twice as plain text
-  in the note used to vanish from both places with one click; now one click removes the one you clicked.
+- [FIX] **Minion pool window: custom conditions show an icon** (SC-574). A condition that is not one of Draw
+  Steel's built-in ones (for example "on-fire") used to have no icon in the window, so it could not be seen or
+  removed there. It now shows the same dashed-circle icon as the initiative tracker, named "Remove On Fire", and
+  an icon you set on it still wins. A condition listed twice shows two icons, and a click removes only the one
+  you clicked.
 - [FIX] **Minion pool window: a minion's condition icons can be removed from the keyboard** (SC-572). Each
   icon is now a real button, named "Remove Bleeding" (and so on) for screen readers: Tab reaches it and
   Enter or Space removes that condition, like a click, and focus moves to the next icon (never out of the

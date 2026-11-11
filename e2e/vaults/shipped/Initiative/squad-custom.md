@@ -1,4 +1,4 @@
-# Initiative tracker with a minion squad whose Goblin #3 carries a custom condition and a duplicate
+# Initiative tracker with a minion squad whose Goblin #3 carries a custom condition twice
 
 ABOVE
 
@@ -25,7 +25,7 @@ enemy_groups:
             conditions:
               - on-fire
               - grabbed
-              - grabbed
+              - on-fire
               - dazed
           - id: 4
           - id: 5

@@ -1145,6 +1145,8 @@ describe('condition icons: a custom condition shows the tracker\'s fallback icon
 		expect(document.activeElement).toBe(ctl(content, 'pool.condition', 1));
 	});
 
+	// Strings reach the modal only when a caller bypasses parsing (both parsers turn every plain-text condition into a
+	// fresh `{ key }` object), so the position-based removal below is a defensive guard, not a fix for a user-visible bug.
 	test('SC-574 (b): one click on a duplicated string condition removes one copy', async () => {
 		const { content, minion } = await open({ conditions: { 0: ['grabbed', 'grabbed', 'dazed'] } });
 		expect(all(content, 'pool.condition').map(conditionName)).toEqual(['Grabbed', 'Grabbed', 'Dazed']); // setup
@@ -1162,13 +1164,12 @@ describe('condition icons: a custom condition shows the tracker\'s fallback icon
 		expect(all(content, 'pool.condition').map(conditionName)).toEqual(['Dazed', 'Grabbed', 'On Fire']);
 	});
 
-	test('SC-574: two equal-looking object entries are removed one at a time, the clicked one first', async () => {
-		const first = { key: 'bleeding', color: 'crimson' } as Condition;
-		const second = { key: 'bleeding', color: 'crimson' } as Condition; // equal by value, a different entry
-		const { content, minion } = await open({ conditions: { 0: [first, second] } });
+	test('SC-574: the same object entry twice is removed one at a time (a value or identity filter would drop both)', async () => {
+		const entry = { key: 'bleeding', color: 'crimson' } as Condition;
+		const { content, minion } = await open({ conditions: { 0: [entry, entry] } });
 		click(content, 'pool.condition', 1);
-		expect(minion.instances![0].conditions).toHaveLength(1);
-		expect(minion.instances![0].conditions![0]).toBe(first);
+		expect(minion.instances![0].conditions).toEqual([entry]);
+		expect(all(content, 'pool.condition').map(conditionName)).toEqual(['Bleeding']);
 	});
 
 	test('SC-574: keyboard focus after removing the second of two duplicates lands on the previous icon', async () => {
