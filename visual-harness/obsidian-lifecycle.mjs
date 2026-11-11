@@ -182,6 +182,13 @@
 // hide the preview 5 ms after that second press, and the modal with it. Now the preview stays in every trial (Reading view and Live Preview), never turns into a source editor, a title or input press keeps the modal as well, Escape closes only the
 // modal, Healing 3 + Apply writes `current_stamina: 18` with no Notice, with the pointer away for 1.2 s the preview is still shown and a real click outside closes it. The double-click's backdrop press closes the modal (as in a pane) and leaves the preview. A sixth trial opens the modal a SECOND time from the same, now focused, preview (open, Escape, open again) and presses the title within 150 ms: no source editor, the keyboard focus stays out of the preview, Escape closes only the modal (r3 measured the base switching the preview to source here).
 //
+// SC-594 appends G-S92 (57 scenarios in all; it sits after G-S87 and before G-S56, and runs in the fifth `--only` part): a card's + / - in a hover preview of a HEADING or a BLOCK link (`[[note#Tracker]]`,
+// `[[note#^id]]`) of a note that holds an identical counter elsewhere. Obsidian gives that card the heading's BODY (no heading line) or the block's own lines, which the identical counter repeats, so the
+// click used to be refused ("changed on disk first") although nothing had changed. A real Ctrl-hover and a real click on + now save into the hovered counter and leave the identical one alone: a long note
+// in Reading view and Live Preview, a short note, a block link, a second + 450 ms after the first (the part is still the old one), a callout. Two trials with teeth: the hovered counter is edited from outside
+// and the + clicked by a script in the SAME page task (inside the 17-44 ms before the preview redraws; a real mouse click cannot land in it): nothing is written, one Notice, never the identical counter (the
+// pre-fix bundle wrote it); and a whole-note hover where an identical block was added above before the click writes the hovered block, not the added one.
+//
 // SC-480 appends G-S73 (53 scenarios before G-S77; it sits after G-S49 and before G-S56, which stays last, and runs in the fifth `--only` part with G-S59 and G-S49): a card write whose pin
 // cannot be placed because its block was DELETED from outside is never written into an identical twin. Click + on one of two identical counters (Reading view and Live Preview),
 // delete that block from outside at once, then leave the note (the unload flush) or wait out the 400 ms debounce: nothing is written, the note stays as the outside edit left it, and
@@ -580,6 +587,33 @@ Object.assign(FIXTURES, {
 		'Lifecycle/gs87-mont.md': `# gs87 mont\n\nABOVE\n\n${fence('ds-montage', ['title: Probe', 'rounds: 3', 'participants:', '  - name: Kira', 'current_round: 2'])}\n\nBELOW\n`,
 		'Lifecycle/gs87-mont-host.md': `# gs87 mont host\n\nsee [[gs87-mont]] here\n\nfiller\n`,
 	});
+	// SC-594 (G-S92): one note per trial (a card Notice is rate limited per note): the source (a counter under `## Tracker` and an identical one elsewhere, or a block pair, a callout pair, a single counter) and its host.
+	{
+		const fl = (n, p) => Array.from({ length: n }, (_, i) => `${p} ${i}`).join('\n\n');
+		const LONG = `# gs92 long\n\nTOP\n\n${fl(120, 'above')}\n\n## Tracker\n\n${COUNTER(5, 'Twin')}\n\n## After\n\n${fl(40, 'mid')}\n\n## Other\n\n${COUNTER(5, 'Twin')}\n\n${fl(80, 'below')}\n`;
+		const SHORT = `# gs92 short\n\nTOP\n\n## Tracker\n\n${COUNTER(5, 'Twin')}\n\n## Other\n\nmid prose\n\n${COUNTER(5, 'Twin')}\n\nEND\n`;
+		const BLK = `# gs92 blk\n\nTOP\n\n${COUNTER(5, 'Twin')}\n^gs92a\n\nmid prose\n\n${COUNTER(5, 'Twin')}\n^gs92b\n\nEND\n`;
+		const CAL = `# gs92 cal\n\nTOP\n\n${QUOTED(['[!note] Camp'], 5, 'Twin')}\n\nmid prose\n\n## Tracker\n\n${QUOTED(['[!note] Camp'], 5, 'Twin')}\n\n## After\n\nEND\n`;
+		const WSH = `# gs92 wsh\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\nEND\n`;
+		const TWO = `# gs92 two\n\nTOP\n\n## Tracker\n\n${COUNTER(5, 'Twin')}\n\n## Other\n\n${COUNTER(5, 'Twin')}\n\nEND\n`;
+		for (const [id, name, text, link] of [
+			['a', 'long', LONG, 'gs92-a-src#Tracker'],
+			['b', 'long', LONG, 'gs92-b-src#Tracker'],
+			['c', 'short', SHORT, 'gs92-c-src#Tracker'],
+			['d', 'blk', BLK, 'gs92-d-src#^gs92a'],
+			['e', 'long', LONG, 'gs92-e-src#Tracker'],
+			['f', 'cal', CAL, 'gs92-f-src#Tracker'],
+			['g', 'blk', BLK, 'gs92-g-src#^gs92a'],
+			['h', 'long', LONG, 'gs92-h-src#Tracker'],
+			['i', 'wsh', WSH, 'gs92-i-src'],
+			['j', 'two', TWO, 'gs92-j-src#Tracker'],
+			// the host of (k) links both headings: `[[...#Tracker]] and [[...#Other]]`
+			['k', 'two', TWO, 'gs92-k-src#Tracker]] and [[gs92-k-src#Other'],
+		]) {
+			FIXTURES[`Lifecycle/gs92-${id}-src.md`] = text.replace(`# gs92 ${name}`, `# gs92 ${id}`);
+			FIXTURES[`Lifecycle/gs92-${id}-host.md`] = `# gs92 ${id} host\n\nsee [[${link}]] here\n\nfiller\n`;
+		}
+	}
 	Object.assign(FIXTURES, {
 		'Lifecycle/gs77-cal-src.md': `# gs77 cal src\n\n${CAL2()}\n\n^gs77cal\n\nend\n`,
 		'Lifecycle/gs77-cal-host.md': `# gs77 cal host\n\n![[gs77-cal-src#^gs77cal]]\n\nafter\n`,
@@ -1795,6 +1829,78 @@ async function gs91Trial(t, mode, target) {
 			while (Date.now() - t1 < 3000 && (await st()).popover) await t.sleep(100);
 			rec.afterOutside = await st();
 		}
+	} catch (e) {
+		rec.error = e.message;
+	} finally {
+		await K.cleanup();
+	}
+	return rec;
+}
+
+/**
+ * SC-594 (G-S92): one card write from a hover preview of a heading / block / whole-note link. A real Ctrl-hover shows the preview (gs83Kit), the pointer rests on the card, then `how`:
+ *  - 'click': a real mouse click on + (`second` > 0: a second real click that many ms later, once the card is redrawn);
+ *  - 'x-then-y': the pointer goes from the first link's preview onto the second link (T1 shape: both previews are real, the second opens with the first still the parent's popover), then a real click on + in the SECOND preview;
+ *  - 'edit-script': the hovered counter is edited from outside (`vault.process`, A -> 9, or an identical counter added above the first counter when `add`, or the `## Other` section moved above `## Tracker` when `swap`: the metadata cache then lags and the hovered heading's old line holds `## Other`) and + is clicked by a SCRIPT in the SAME page task,
+ *    inside the 17-44 ms before the preview redraws (measured, SC-594 r1: a real mouse click sent after the edit lands after the redraw and writes nothing).
+ * Returns the record; the scenario judges it. Footgun: the + button is looked up AFTER the edit resolved, inside the same task (the old card is still on screen then).
+ */
+async function gs92Trial(t, { id, mode, how = 'click', second = 0, add = false, swap = false }) {
+	const K = gs83Kit(t);
+	const J = JSON.stringify;
+	const SRC = `Lifecycle/gs92-${id}-src.md`;
+	const HOST = `Lifecycle/gs92-${id}-host.md`;
+	const valuesOf = () => (t.read(SRC).match(/^[> ]*current_value: (\d+)$/gm) ?? []).map((x) => Number(x.replace(/^[> ]*current_value: /, '')));
+	const BTN = `(${K.E(SRC)})[0].root.querySelector('button[aria-label^="Increase"]')`;
+	const rec = { id, mode, how };
+	try {
+		await t.reset(SRC);
+		await t.reset(HOST);
+		const link = await K.openHost(HOST, mode);
+		rec.hover = await K.hover(link, SRC);
+		await t.sleep(400);
+		if (how === 'x-then-y') {
+			const Y = `document.querySelectorAll('.workspace-leaf.mod-active .markdown-reading-view a.internal-link')[1]`;
+			await K.moveTo(Y, 2);
+			const ty = Date.now();
+			while (!(await t.ev(`Array.from(document.querySelectorAll('.hover-popover h2')).some((h) => h.textContent === 'Other') && (${K.E(SRC)}).length > 0`))) {
+				if (Date.now() - ty > 8000) throw new Error('the second preview never opened');
+				const r = await t.ev(`(() => { const b = (${Y}).getBoundingClientRect(); return [Math.round(b.left + 10 + (Date.now() / 50) % 3), Math.round(b.top + b.height / 2)]; })()`);
+				await K.mouse('mouseMoved', r[0], r[1], { modifiers: 2 });
+				await t.sleep(100);
+			}
+			await t.sleep(500);
+		}
+		await K.moveTo(`(${K.E(SRC)})[0].root`);
+		await t.sleep(300);
+		rec.before = valuesOf();
+		const before = t.read(SRC);
+		const mk = await t.mark();
+		if (how === 'edit-script') {
+			const EDIT = swap
+				? String.raw`(c) => c.replace(/(## Tracker\n\n\x60\x60\x60ds-counter[\s\S]*?\x60\x60\x60\n\n)(## Other\n\n\x60\x60\x60ds-counter[\s\S]*?\x60\x60\x60\n\n)/, '$2$1')`
+				: add
+				? `(c) => c.replace('TOP\\n', '\x60\x60\x60ds-counter\\nname: Twin\\ncurrent_value: 5\\nmax_value: 20\\nmin_value: 0\\n\x60\x60\x60\\n\\nadded\\n\\nTOP\\n')`
+				: `(c) => c.replace('current_value: 5', 'current_value: 9')`;
+			rec.clicked = await t.ev(`(async () => { await app.vault.process(app.vault.getAbstractFileByPath(${J(SRC)}), ${EDIT}); const b = ${BTN}; if (!b) return false; b.click(); return true; })()`);
+			rec.edited = t.read(SRC);
+		} else {
+			await K.click(BTN);
+			if (second > 0) {
+				await t.sleep(second);
+				rec.beforeSecond = valuesOf();
+				await t.waitFor(`!!(${K.E(SRC)})[0]`, 'the card for the second click', 5000);
+				await K.click(BTN);
+			}
+		}
+		// a real click: wait for the write (or the Notice), at most 3.5 s; a scripted one is judged after the same settle time
+		const landed = () => (how === 'edit-script' ? false : second > 0 ? valuesOf().includes(7) : t.read(SRC) !== before);
+		const t0 = Date.now();
+		while (Date.now() - t0 < 3500 && !landed() && !(await t.noticesSince(mk)).length) await t.sleep(50);
+		await t.sleep(1500);
+		rec.after = valuesOf();
+		rec.note = t.read(SRC);
+		rec.notices = (await t.noticesSince(mk)).filter((x) => /changed on disk first|can't tell where/.test(x));
 	} catch (e) {
 		rec.error = e.message;
 	} finally {
@@ -7782,6 +7888,66 @@ const SCENARIOS = [
 			} finally {
 				await t.ev(`${prefs}.set('authoringControls', false)`);
 				await t.ev(`document.getElementById('lc-gs83-notice')?.remove()`);
+				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
+				for (const rel of files) await t.reset(rel);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect(problems.length === 0, `${problems.join(' | ')} -- passed: ${outcomes.join('; ')}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${J(await t.errorsSince(m))}`);
+			return outcomes.join('; ');
+		},
+	},
+	{
+		// G-S92 (SC-594): a card's + in a hover preview of a heading / block link, an identical counter elsewhere in the note: the + is saved into the HOVERED counter (a real Ctrl-hover and a real click), the identical counter is
+		// untouched, no Notice. (a) `[[long#Tracker]]`, Reading view; (b) the same, Live Preview; (c) a short note; (d) `[[note#^id]]` with an identical block carrying another id; (e) a second real + 450 ms after the first (the
+		// ticket's shape: the preview's part is still the old one); (f) a callout under the heading, an identical callout elsewhere. With teeth: (g) a block hover and (h) a heading hover whose counter is edited from outside and
+		// + is clicked by a script in the SAME page task (inside the 17-44 ms before the preview redraws): nothing is written, one dropped-write Notice, never the identical counter; (i) a whole-note hover, an identical block added
+		// above from outside, + by script: the hovered block is written, not the added one; (j) a heading hover, the identical `## Other` section moved ABOVE `## Tracker` from outside and + by script in the same task (the metadata cache still
+		// has the old lines): nothing is written, one Notice, never the counter that now sits under the old line (the 0bf5989d bundle wrote it, no Notice); (k) hover `[[#Tracker]]`, then `[[#Other]]` with the first preview open: a real + in the
+		// second preview lands in ITS counter. Each trial has its own note (a card Notice is rate limited per note). It sits before G-S56, which runs last.
+		id: 'G-S92',
+		async run(t) {
+			const m = await t.mark();
+			const J = JSON.stringify;
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			const problems = [];
+			const outcomes = [];
+			const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k'].flatMap((k) => [`Lifecycle/gs92-${k}-src.md`, `Lifecycle/gs92-${k}-host.md`]);
+			const dropped = (id) => `Draw Steel Elements: a change to a block in gs92-${id}-src was not saved \u2014 the block changed on disk first.`;
+			await t.ev(`(() => { if (!document.getElementById('lc-gs92-notice')) { const st = document.createElement('style'); st.id = 'lc-gs92-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
+			await t.ev(`${prefs}.set('authoringControls', true)`);
+			try {
+				for (const [label, spec, want] of [
+					['(a) [[long#Tracker]], Reading view', { id: 'a', mode: 'rv' }, { after: [6, 5] }],
+					['(b) [[long#Tracker]], Live Preview', { id: 'b', mode: 'lp' }, { after: [6, 5] }],
+					['(c) a short note, Reading view', { id: 'c', mode: 'rv' }, { after: [6, 5] }],
+					['(d) [[note#^id]], an identical block with another id, Reading view', { id: 'd', mode: 'rv' }, { after: [6, 5] }],
+					['(e) a second real + 450 ms after the first, Reading view', { id: 'e', mode: 'rv', second: 450 }, { after: [7, 5] }],
+					['(f) a callout under the heading, an identical callout elsewhere, Reading view', { id: 'f', mode: 'rv' }, { after: [5, 6] }],
+					['(g) block hover, the counter edited from outside, scripted + in the same task', { id: 'g', mode: 'rv', how: 'edit-script' }, { refused: true }],
+					['(h) heading hover, the counter edited from outside, scripted + in the same task', { id: 'h', mode: 'rv', how: 'edit-script' }, { refused: true }],
+					['(i) whole-note hover, an identical block added above, scripted + in the same task', { id: 'i', mode: 'rv', how: 'edit-script', add: true }, { after: [5, 6] }],
+					['(j) heading hover, the identical section moved above it from outside (the metadata cache lags), scripted + in the same task', { id: 'j', mode: 'rv', how: 'edit-script', swap: true }, { refused: true }],
+					['(k) hover [[#Tracker]], then [[#Other]] while the first preview is open, real + in the second preview, Reading view', { id: 'k', mode: 'rv', how: 'x-then-y' }, { after: [5, 6] }],
+				]) {
+					const r = await gs92Trial(t, spec);
+					const bad = [];
+					if (r.error) bad.push(`error: ${r.error}`);
+					else if (r.how === 'edit-script' && r.clicked !== true) bad.push(`the scripted click found no + button (the preview was redrawn first): ${J(r.clicked)}`);
+					else if (want.refused) {
+						const wantNote = r.edited;
+						if (r.note !== wantNote) bad.push(`the note is not what the outside edit left (a + was written into a counter, values ${J(r.after)})`);
+						if (!(r.notices.length === 1 && r.notices[0] === dropped(spec.id))) bad.push(`expected the one Notice ${J(dropped(spec.id))}, got ${J(r.notices)}`);
+					} else {
+						if (J(r.after) !== J(want.after)) bad.push(`values ${J(r.after)}, want ${J(want.after)} (before ${J(r.before)})`);
+						if (r.notices.length) bad.push(`unexpected Notice ${J(r.notices)}`);
+					}
+					if (bad.length) problems.push(`${label} (${r.hover}): ${bad.join('; ')}`);
+					else outcomes.push(`${label} (${r.hover}): ${want.refused ? 'nothing written, one Notice' : `values ${J(r.after)}, no Notice`}`);
+				}
+			} finally {
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+				await t.ev(`document.getElementById('lc-gs92-notice')?.remove()`);
 				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
 				for (const rel of files) await t.reset(rel);
 				await t.open('Lifecycle/other.md');
