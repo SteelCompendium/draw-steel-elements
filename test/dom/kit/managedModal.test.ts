@@ -4,7 +4,7 @@
 // initial focus to the first control; plus openManagedModal(owner, factory) which
 // registers the F1 §4.5 view-unload-closes-modal contract via owner.register().
 // Escape-close + focus trap stay Obsidian Modal defaults (not reimplemented here).
-import { DseModal, HOVER_HELPER_DELAYS_MS, openManagedModal } from '../../../src/framework/kit/managedModal';
+import { DseModal, openManagedModal } from '../../../src/framework/kit/managedModal';
 import { stepper } from '../../../src/framework/kit/stepper';
 import { consumeEscapeAt } from '../../../src/framework/kit/escapeConsumer';
 import { attachObsidianKeymap, pressEscape } from '../_obsidianKeymap';
@@ -646,8 +646,11 @@ describe('SC-595: a modal opened from a hover preview', () => {
 	}
 
 	const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5));
-	/** Past the last re-push (the popover's own scope push comes 10 or 150 ms after the click). */
-	const pastRepush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, Math.max(...HOVER_HELPER_DELAYS_MS) + 50));
+	/** The delays Obsidian 1.15.1's page-preview popover waits before it pushes its scope (its click-to-edit helper: 10 ms, 150 ms on text).
+	 *  LITERALS on purpose: a test built from the production constant would shrink with it (r5 MEDIUM-1: `[10]` alone passed every test). */
+	const POPOVER_PUSH_DELAYS_MS = [10, 150];
+	/** Past the popover's last push and the modal's last re-push (150 ms), with margin. */
+	const pastRepush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 200));
 
 	test('a click inside never reaches a window bubble listener (the popover\'s hide), a document listener still sees it', () => {
 		const { textarea, save } = openFrom(openerEl(true));
@@ -779,7 +782,7 @@ describe('SC-595: a modal opened from a hover preview', () => {
 	describe('keymap scope', () => {
 		/** The popover as Obsidian draws it: its click-to-edit helper is a bubble listener on the embed container (so it runs AFTER the
 		 *  opener's own handler) and pushes the popover's scope from a timer it arms there, 10 ms or 150 ms later. */
-		test.each(HOVER_HELPER_DELAYS_MS.map((ms) => [ms]))('opened from a click, the popover arms its %i ms push after the opener has opened the modal: the modal is on top whatever the order of the two re-pushes', async (ms) => {
+		test.each(POPOVER_PUSH_DELAYS_MS.map((ms) => [ms]))('opened from a click, the popover arms its %i ms push after the opener has opened the modal: the modal is on top whatever the order of the two re-pushes', async (ms) => {
 			const app: any = new App();
 			const anchor = openerEl(true);
 			const popover = new Scope();
@@ -794,7 +797,7 @@ describe('SC-595: a modal opened from a hover preview', () => {
 
 			button.click();
 			await new Promise((resolve) => setTimeout(resolve, ms + 40));
-			if (ms < Math.max(...HOVER_HELPER_DELAYS_MS)) expect(app.keymap.top).toBe(modal.scope);
+			if (ms < 150) expect(app.keymap.top).toBe(modal.scope);
 			await pastRepush();
 
 			expect(app.keymap.top).toBe(modal.scope);
@@ -837,20 +840,22 @@ describe('SC-595: a modal opened from a hover preview', () => {
 		});
 
 
-		test('after the opening event the popover has pushed its scope above the modal\'s: the modal\'s goes back on top, and the popover\'s is on top again after close', () => {
+		/** The popover's helper timer was armed BEFORE the modal opened (a modal opened outside a click, or later than the click): its push is
+		 *  due at `ms`, the modal's re-pushes are armed after it, so the one at the same delay fires after the popover's push. */
+		test.each(POPOVER_PUSH_DELAYS_MS.map((ms) => [ms]))('the popover pushes its scope above the modal\'s at %i ms: the modal\'s goes back on top at that same tick, and the popover\'s is on top again after close', (ms) => {
 			jest.useFakeTimers();
 			try {
-				const { app, modal } = openFrom(openerEl(true));
+				const app: any = new App();
 				const popover = new Scope();
-				app.keymap.pushScope(popover); // Obsidian's popover pushes this 10 or 150 ms after the opening click
-				expect(app.keymap.top).toBe(popover);
+				setTimeout(() => app.keymap.pushScope(popover), ms);
+				const { modal } = openFrom(openerEl(true), app);
 
-				jest.advanceTimersByTime(5);
-				expect(app.keymap.top).toBe(popover); // not before the first re-push
-
-				jest.advanceTimersByTime(Math.max(...HOVER_HELPER_DELAYS_MS));
+				jest.advanceTimersByTime(ms - 1);
+				expect(app.keymap.top).toBe(modal.scope); // the popover has not pushed yet
+				jest.advanceTimersByTime(1);
 
 				expect(app.keymap.top).toBe(modal.scope);
+				expect(app.keymap.scopes).toEqual([popover, modal.scope]);
 				modal.close();
 				expect(app.keymap.top).toBe(popover);
 				expect(app.keymap.scopes).toEqual([popover]);

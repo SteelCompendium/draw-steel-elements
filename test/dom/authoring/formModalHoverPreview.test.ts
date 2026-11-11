@@ -5,7 +5,6 @@
 // form must not reach it. Everything else is the real path: the real pencil opens the real FormModal on a block drawn through the
 // real pipeline and ReadingModeBlockHost inside a `.popover.hover-popover`, and Save goes through the real replaceSource.
 import { ElementPipeline } from '@/framework/pipeline';
-import { HOVER_HELPER_DELAYS_MS } from '@/framework/kit/managedModal';
 import { ReadingModeBlockHost } from '@/framework/host/ReadingModeBlockHost';
 import { featureElement } from '@/elements/feature/definition';
 import featureExample from '@/elements/feature/example.yaml';
@@ -99,7 +98,7 @@ describe('SC-595: the block edit form opened from a hover preview', () => {
 	test('Escape closes the form: the popover\'s keymap scope was pushed above the form\'s by the opening click, and the form\'s is put back on top', async () => {
 		const { h, raw, formOpen } = await setup(true);
 		h.app.keymap.pushScope(new Scope()); // the popover's, pushed 10-150 ms after the pencil click
-		await new Promise<void>((resolve) => setTimeout(resolve, Math.max(...HOVER_HELPER_DELAYS_MS) + 50));
+		await new Promise<void>((resolve) => setTimeout(resolve, 200));
 		// Obsidian's Keymap runs the TOP scope from a window keydown capture listener
 		const onKey = (e: KeyboardEvent): void => {
 			const result = h.app.keymap.top!.handleKey(e, { modifiers: '', key: e.key, vkey: e.code });
