@@ -22,6 +22,12 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Malice in the initiative tracker never goes below 0** (SC-577). Pressing - on Malice at 0 used to write
+  `value: -1` into the note, and a negative `round_gain` took Malice below 0 on Advance round and labelled the button
+  "Advance round (+-3 Malice)". Now the - button is disabled at 0, a negative `round_gain` is still applied but stops at 0
+  (the Malice log shows the configured amount, as the quick-add does), and the button reads "Advance round (-3 Malice)".
+  A hand-edited negative `value` counts as 0 everywhere (it shows as 0, and Advance round or a quick-add of +3 from a
+  stored -2 gives 3); the note is not rewritten until you change Malice.
 - [FIX] **The initiative tracker repaints correctly after "Reset encounter state"** (SC-576). After Reset encounter -> Yes
   the tracker used to show every enemy group empty and every hero at 0 Stamina with a red Dying chip, although the note
   was reset correctly. It now shows the enemy rows and the heroes at full Stamina, as a reload of the note does. It also

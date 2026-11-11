@@ -247,7 +247,7 @@ To define a minion group, set the `is_squad` field to `true` in the enemy group 
 	each time you press "Advance round". Leave unset for no auto-gain — there's no
 	built-in default, since the amount depends on your table/adventure. Trigger-based
 	gains (e.g. a monster feature that grants +3 Malice) stay manual via the quick-add
-	below instead.
+	below instead. A negative `round_gain` is applied too, but the pool never goes below 0.
 - `log` (list, managed): The spend/gain log (`{round, amount, label}`, oldest first).
 	Managed by the tracker — populated by "Advance round" (when `round_gain` is set) and
 	the quick-add control. Capped at the 50 most recent entries; older entries drop off
@@ -343,6 +343,8 @@ live on the Heroes heading line instead (see below).
 
 **Adjusting the pool**: the pool is a stepper — a **−** and a **+** button always shown on
 either side of the current Malice value.
+Malice never goes below 0: **−** is disabled at 0, a spend (or a negative `round_gain`) stops
+at 0, and a hand-edited negative `value` counts as 0.
 
 **Malice log**: Click "Malice log · N entries" to open a small read-only list of every
 gain/spend (`R<round>: +/-<amount> — <label>`), most recent additions preserved, oldest
