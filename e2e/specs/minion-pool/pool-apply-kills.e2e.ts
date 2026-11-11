@@ -4,7 +4,7 @@
 // #3 selected. The kill arithmetic itself is the jsdom matrix's job; each case here drives it with real input.
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
-import { applyPoolAndWrite, cellText, expectPoolApply, HURT, INIT, openPoolModal, poolBoxes, poolInfo, SQUAD } from '../../driver/pool';
+import { applyPoolAndWrite, cellText, EMPTY, expectPoolApply, HURT, INIT, openPoolModal, poolBoxes, poolInfo, SQUAD } from '../../driver/pool';
 
 type Modal = Awaited<ReturnType<typeof dse.modal>>;
 const group = (extra: Record<string, unknown>) => ({ enemy_groups: [{ name: 'Goblin Squad', ...extra }] });
@@ -163,6 +163,21 @@ describe('minion pool: the kill boxes', () => {
 		);
 		for (const key of ['0-1', '0-2', '0-3', '0-4', '0-5']) expect(await cellText(root, key)).toBe('DEAD');
 		await expect(root.control({ css: '.dse-init__detail .dse-init__stamina' })).toHaveElementProperty('textContent', 'DEAD');
+	});
+
+	it('[POOL-K07] SC-573: a pool already at 0 with five minions alive: Apply reads "Kill 5 minion(s)", is enabled, and kills them all', async () => {
+		const { root, modal } = await openPoolModal(EMPTY);
+		await expect(modal.control('pool.stamina.input')).toHaveValue('0');
+		expect(await poolBoxes()).toBe('xxxxx');
+		await expectPoolApply(modal, 'Kill 5 minion(s)');
+		await expect(modal.control('pool.apply')).toBeEnabled();
+		await expect(modal.control('pool.apply')).not.toHaveAttribute('title');
+		expect(await poolInfo()).toEqual({ text: 'The pool is at 0, so 5 minion(s) die.', hidden: false });
+		expect(await applyPoolAndWrite(modal, EMPTY)).toBe(1);
+		await dse.expectNoteBlock(EMPTY, INIT).toMatchObject(
+			group({ minion_stamina_pool: 0, creatures: [{ instances: [{ isDead: true }, { isDead: true }, { isDead: true }, { isDead: true }, { isDead: true }] }] }),
+		);
+		for (const key of ['0-1', '0-2', '0-3', '0-4', '0-5']) expect(await cellText(root, key)).toBe('DEAD');
 	});
 
 	it('[POOL-K05] the whole job by keyboard: Tab to a kill box, Space ticks it, Tab to Apply, Enter writes once', async () => {

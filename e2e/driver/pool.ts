@@ -5,6 +5,7 @@ import { dse } from './dse';
 
 export const SQUAD = 'Initiative/squad.md'; // five Goblins of 4 Stamina (pool 20), nobody hurt
 export const HURT = 'Initiative/squad-hurt.md'; // pool 10, Goblins #1 and #2 dead, #3 grabbed + dazed (selected)
+export const EMPTY = 'Initiative/squad-empty.md'; // pool 0 with all five Goblins still alive (SC-573)
 export const INIT = 'ds-initiative';
 
 type Scope = ReturnType<typeof dse.block>;
