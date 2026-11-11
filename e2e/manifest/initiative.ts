@@ -32,7 +32,7 @@ export default surface('initiative', {
 		'init.malice.value': c([]),
 		'init.malice.inc': c(['click'], ['M01', 'M02', 'M10']),
 		'init.malice.quickadd.amount': c(['type', 'press:Enter'], ['M03', 'M04', 'M10']),
-		'init.malice.quickadd.label': c(['type', 'press:Enter'], ['M03', 'M04', 'M10']),
+		'init.malice.quickadd.label': c(['type', 'press:Enter'], ['M03', 'M04', 'M10', 'M11']),
 		'init.malice.quickadd.add': c(['click'], ['M03', 'M05', 'M10']),
 		'init.malice.log': c(['click'], ['M06']),
 
