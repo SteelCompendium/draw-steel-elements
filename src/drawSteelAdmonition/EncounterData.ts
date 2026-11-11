@@ -524,12 +524,17 @@ export function validateSquad(group: EnemyGroup): void {
 
 /** A single Malice pool event — a spend (Deliverable 2, D8 spec §3.2) or a manual
  *  trigger-based gain (quick-add, spec §3.3) — so the table can see where Malice went.
- *  `amount` is always the event's magnitude (never signed to mean "spend"); the label
- *  carries the meaning. */
+ *  `amount` is SIGNED and is the change the pool ACTUALLY made (a spend is negative, a gain
+ *  positive; the pool never goes below 0, so a spend from a low pool is smaller than asked,
+ *  and one from 0 is 0): the log always adds up to the pool's movement (SC-578).
+ *  `requested` is the amount that was asked for (the typed quick-add amount, or the
+ *  configured `round_gain`), and is present ONLY when it differs from `amount` — i.e. the
+ *  pool capped the change at 0. An entry that was not capped has no `requested` key. */
 export interface MaliceLogEntry {
     round: number;
     amount: number;
     label: string;
+    requested?: number;
 }
 
 export interface Malice {
@@ -540,7 +545,7 @@ export interface Malice {
      *  gains (e.g. Feytouched +3) stay manual via the quick-add instead. Never
      *  fabricated (reference-math honesty note, D8 spec header). */
     round_gain?: number;
-    /** Spend/gain log ({round, amount, label}), oldest-first. Absent/empty until the
+    /** Spend/gain log ({round, amount, label[, requested]}), oldest-first. Absent/empty until the
      *  first quick-add or malice-feature spend (D8 spec §3.1/§3.2). Capped at
      *  `MALICE_LOG_MAX_ENTRIES` — see `appendMaliceLogEntry`, the ONLY sanctioned way to
      *  push onto this array (D8 Task 5 review carry-forward: an unbounded log grows the

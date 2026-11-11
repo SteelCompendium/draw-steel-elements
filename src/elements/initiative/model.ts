@@ -51,7 +51,7 @@
 // against the unchanged legacy parseEncounterData; the legacy writer's bytes on a fully-authored
 // source) and test/dom/elements/initiative-default-keys.test.ts (the writes through the pipeline).
 import { stringifyYaml } from 'obsidian';
-import type { Condition, Creature, EncounterData, EnemyGroup, Malice } from '@drawSteelAdmonition/EncounterData';
+import type { Condition, Creature, EncounterData, EnemyGroup, Malice, MaliceLogEntry } from '@drawSteelAdmonition/EncounterData';
 import {
 	EMPTY_SQUAD_ACTIONS,
 	appendMaliceLogEntry,
@@ -464,10 +464,13 @@ function clearTurnState(data: EncounterData): void {
  *   where it resets — not on turn end.
  * - `malice.round_gain`, when configured (non-zero), is added to the pool and logged
  *   (`{round, amount, label: 'Round gain'}`) at the NEW round number — same log shape as
- *   the quick-add (spec §3.1/§3.3). Absent/0 stays manual-only (OD-3: never a fabricated
- *   default). A NEGATIVE gain is still applied but floors the pool at 0 (SC-577: Malice
- *   never goes below 0, matching the quick-add), computed from the floored stored value
- *   (`maliceValueOf`); the log entry keeps the configured amount.
+ *   the quick-add (spec §3.1/§3.3), through the same helper (`applyMaliceChange`).
+ *   Absent/0 stays manual-only (OD-3: never a fabricated default). A NEGATIVE gain is still
+ *   applied but floors the pool at 0 (SC-577: Malice never goes below 0, matching the
+ *   quick-add), computed from the floored stored value (`maliceValueOf`). SC-578: the log
+ *   entry's `amount` is the change the pool actually made, and when that differs from the
+ *   configured gain the entry also carries `requested` (the gain). From Malice 0 with
+ *   `round_gain: -3` the entry is still written: `{amount: 0, requested: -3}`.
  */
 export function advanceRound(data: EncounterData): void {
 	data.round = (data.round ?? 1) + 1;
@@ -475,8 +478,7 @@ export function advanceRound(data: EncounterData): void {
 
 	const gain = data.malice.round_gain;
 	if (typeof gain === 'number' && gain !== 0) {
-		addToMalicePool(data.malice, gain);
-		appendMaliceLogEntry(data.malice, { round: data.round, amount: gain, label: 'Round gain' });
+		applyMaliceChange(data.malice, gain, { round: data.round, label: 'Round gain' });
 	}
 }
 
@@ -492,10 +494,34 @@ export function maliceValueOf(malice: Malice): number {
 /**
  * Add `amount` (negative to spend) to the pool, floored at 0, computed from `maliceValueOf` (so
  * `-2` stored + 3 writes 3, not 1). The ONE helper behind both Advance round and the quick-add.
- * It does not log: what a clamped change logs is the caller's (and SC-578's) concern.
+ * It does not log: callers go through `applyMaliceChange`, which adds AND logs.
  */
 export function addToMalicePool(malice: Malice, amount: number): void {
 	malice.value = Math.max(0, maliceValueOf(malice) + amount);
+}
+
+/**
+ * SC-578: the ONE path for a Malice change that is logged — Advance round's `round_gain` and the
+ * quick-add both call this, so the two cannot drift. Adds `requested` to the pool (floored at 0, via
+ * `addToMalicePool`) and appends a log entry whose `amount` is the change the pool ACTUALLY made
+ * (`maliceValueOf` after - before; so the log always adds up to the pool's movement). When that
+ * differs from `requested` (the pool stopped at 0), the entry also stores `requested`; an entry that
+ * was not capped has NO `requested` key. Key order is `round, amount, label, requested` (the order
+ * the note is written in). A change that applies 0 (e.g. -5 from 0) is still logged, so the log says
+ * why the pool did not move. Returns the entry it appended.
+ */
+export function applyMaliceChange(
+	malice: Malice,
+	requested: number,
+	event: { round: number; label: string },
+): MaliceLogEntry {
+	const before = maliceValueOf(malice);
+	addToMalicePool(malice, requested);
+	const amount = maliceValueOf(malice) - before;
+	const entry: MaliceLogEntry = { round: event.round, amount, label: event.label };
+	if (amount !== requested) entry.requested = requested;
+	appendMaliceLogEntry(malice, entry);
+	return entry;
 }
 
 /**

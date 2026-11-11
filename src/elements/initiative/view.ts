@@ -80,16 +80,15 @@ import { StaminaEditModal } from '@views/StaminaEditModal';
 import { ResetEncounterModal } from '@views/ResetEncounterModal';
 import { ConditionsModal } from '@views/ConditionsModal';
 import { MinionStaminaPoolModal } from '@views/MinionStaminaPoolModal';
-import { appendMaliceLogEntry } from '@drawSteelAdmonition/EncounterData';
 import {
 	Creature,
 	CreatureInstance,
 	EncounterData,
 	EnemyGroup,
 	Hero,
-	addToMalicePool,
 	advanceRound as advanceRoundModel,
 	applyCaptainBonusTransition,
+	applyMaliceChange,
 	captainOfSquad,
 	EMPTY_SQUAD_ACTIONS,
 	foldedCaptainStaminaBonus,
@@ -596,10 +595,13 @@ export class InitiativeView extends ElementView<EncounterData> {
 		} else {
 			const list = body.createEl('ul', { cls: 'dse-init__malice-log-list' });
 			entries.forEach((entry) => {
-				const sign = entry.amount >= 0 ? '+' : '';
+				// SC-578: `amount` is the change the pool made (0 reads "0", not "+0"); `requested` is
+				// only there when the pool capped the change at 0.
+				const sign = entry.amount > 0 ? '+' : '';
+				const capped = typeof entry.requested === 'number' ? ` (${entry.requested}, capped at 0)` : '';
 				list.createEl('li', {
 					cls: 'dse-init__malice-log-entry',
-					text: `R${entry.round}: ${sign}${entry.amount} — ${entry.label}`,
+					text: `R${entry.round}: ${sign}${entry.amount} — ${entry.label}${capped}`,
 				});
 			});
 		}
@@ -677,8 +679,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 					flag(labelInput, 'Label required');
 					return;
 				}
-				addToMalicePool(data.malice, amount);
-				appendMaliceLogEntry(data.malice, { round: data.round ?? 1, amount, label });
+				applyMaliceChange(data.malice, amount, { round: data.round ?? 1, label });
 				amountInput.value = '';
 				labelInput.value = '';
 				void this.rebuildAndPersist();
