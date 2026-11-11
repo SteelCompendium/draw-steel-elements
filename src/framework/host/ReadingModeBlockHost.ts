@@ -954,6 +954,18 @@ export class ReadingModeBlockHost implements BlockHost {
 		return countByBody(pin.text, this.knownLanguage, this.knownBody) > 1 || countByBody(content, this.knownLanguage, this.knownBody) > 1;
 	}
 
+	/**
+	 * SC-480: whether `target` (a block of `content`, the note now) is a block that already existed in the note as the pin was taken
+	 * (`pin.text`) at another line than the pinned one: the line diff carries its fence line back to a different, unchanged line. A
+	 * block that was moved or is new maps to nothing (null) and stays allowed; so does a pin line that is no fence in `pin.text`
+	 * (nothing to compare with), a partial (embed) pin, and a note changed past the diff's limit (the count rule decides there).
+	 */
+	private landsOnOtherBlock(content: string, pin: BlockPin, target: { lineStart: number }): boolean {
+		if (partialPins.has(pin) || this.fenceAt(pin.text, pin.lineStart) === null) return false;
+		const back = mapLine(content, pin.text, target.lineStart);
+		return back !== null && back !== pin.lineStart;
+	}
+
 	async replaceSource(newSource: string, options?: BlockWriteOptions): Promise<boolean> {
 		this.reported = false;
 		if (options?.pin) await pinRebased.get(options.pin); // SC-556: a section pin is rebased onto the whole note first (rebasePin)
@@ -1017,7 +1029,10 @@ export class ReadingModeBlockHost implements BlockHost {
 				// dropped-write Notice) rather than a click landing in a block the user never touched. Evaluated on a miss only; a write
 				// with no pin at all keeps today's path.
 				const twinned = !pinned && pin !== null && !options?.pinOnly && this.twinned(content, pin);
-				const target = pinned ?? (pin && (options?.pinOnly || twinned) ? 'miss' : this.resolveWriteTarget(content, section));
+				let target = pinned ?? (pin && (options?.pinOnly || twinned) ? 'miss' : this.resolveWriteTarget(content, section));
+				// SC-480: the same refusal when the fallback lands in a block that was already a different block in the note as clicked (one
+				// outside edit deleted the clicked block and made a neighbour read the same: the counts above see one block each time).
+				if (!pinned && pin !== null && !options?.pinOnly && typeof target === 'object' && this.landsOnOtherBlock(content, pin, target)) target = 'miss';
 				if (target === 'abort') {
 					unplaceable = true; // SC-455: a write that cannot land is never silent
 					listShape = this.looksLikeList(content, section);

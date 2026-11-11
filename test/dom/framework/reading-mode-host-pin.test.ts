@@ -404,6 +404,24 @@ describe('SC-480: a card write whose pin misses is never written into an identic
 		expect(Notice.notices).toEqual([]);
 	});
 
+	test('one outside edit deletes the clicked block AND makes its neighbour read the same (no twin before or after): the fallback would land in the neighbour, so nothing is written', async () => {
+		const after = build([5, null]); // the clicked block (5) is gone; the block above it (was 4) now reads 5
+		const { app, host } = clicked([4, 5], 1, after, (t) => sectionAt(t, fencesOf(t)[0]));
+
+		expect(await host.replaceSource(bodyOf(6), own)).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(after);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
+	});
+
+	test('a no-twin block cut and pasted elsewhere in the note while the write waited: the fallback finds it in its new place and the write lands', async () => {
+		const after = build([4, null]).replace('END', `${CTR(5).join('\n')}\n\nEND`);
+		const { app, host } = clicked([4, 5], 1, after, (t) => sectionAt(t, fencesOf(t)[1]));
+
+		expect(await host.replaceSource(bodyOf(6), own)).toBe(true);
+		expect(values(app)).toEqual([4, 6]);
+		expect(Notice.notices).toEqual([]);
+	});
+
 	test('a pin that places still writes there with identical twins around (the race: the note moved the block, nothing was deleted)', async () => {
 		const after = build([5, 5, 5], ['NEW', '']);
 		const { app, host } = clicked([5, 5, 5], 1, after, (t) => sectionAt(t, fencesOf(t)[2])); // the element was handed to the lower twin
