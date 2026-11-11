@@ -82,6 +82,10 @@ for what needs action.
   read "Deal 495 damage, kill 5 minion(s)" and "495 damage will kill 5 minion(s)". They now read "Deal 20 damage,
   kill 5 minion(s)" and "20 damage will kill 5 minion(s)", the same as the Stamina window's button. The bar still
   shows the full damage, and Apply writes the same pool as before.
+- [FIX] **Minion pool window: lowering the damage after ticking minions to kill unticks the extra boxes**
+  (SC-567). It used to leave every box ticked and Apply disabled, with a tip asking for fewer kills than were
+  ticked. It now unticks the most recent pick first and keeps your earlier ones, so Apply is ready and kills
+  those. Raising the damage again does not tick them back.
 - [FIX] **Minion pool window: a minion's condition icons can be removed from the keyboard** (SC-572). Each
   icon is now a real button, named "Remove Bleeding" (and so on) for screen readers: Tab reaches it and
   Enter or Space removes that condition, like a click, and focus moves to the next icon (never out of the

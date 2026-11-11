@@ -595,7 +595,7 @@ describe('the kill boxes: ticks, name clicks, locks and the auto-check at a 0 po
 			expect(persist).toHaveBeenCalledTimes(1);
 		});
 
-	test('the invariant: neither a disabled Apply nor the info line asks for fewer kills than are already ticked', async () => {
+		test('the invariant: neither a disabled Apply nor the info line asks for fewer kills than are already ticked', async () => {
 			const { content } = await open();
 			typePool(content, '12'); // 2 owed
 			tick(content, 0);

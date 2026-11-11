@@ -109,23 +109,25 @@ describe('minion pool: the kill boxes', () => {
 		await dse.expectNoWrite(SQUAD, () => dse.click(modal.control('modal.close')));
 	});
 
-	it('[POOL-K06] SC-567: two kills owed and two boxes ticked, then the damage lowered to one kill: the later pick is unticked, Apply enables and kills the earlier pick only', async () => {
-		const { modal } = await openPoolModal(SQUAD);
+	it('[POOL-K06] SC-567: two kills owed and two boxes ticked, then the damage lowered to one kill: the later pick (not the lower row) is unticked, Apply enables and kills the earlier pick only', async () => {
+		const { root, modal } = await openPoolModal(SQUAD);
 		await dse.type(modal.control('pool.stamina.input'), '12', { replace: true });
 		await dse.press('Enter', modal.control('pool.stamina.input'));
+		await dse.click(modal.control('pool.kill', { nth: 1 })); // #2 first, then #1: pick order differs from row order
 		await dse.click(modal.control('pool.kill', { nth: 0 }));
-		await dse.click(modal.control('pool.kill', { nth: 1 }));
 		expect(await poolBoxes()).toBe('oo---');
 		await dse.type(modal.control('pool.stamina.input'), '16', { replace: true });
 		await dse.press('Enter', modal.control('pool.stamina.input'));
-		expect(await poolBoxes()).toBe('o----'); // #2 was ticked last, so it goes
+		expect(await poolBoxes()).toBe('-o---'); // #1 was ticked last, so it goes; the earlier pick #2 stays
 		await expectPoolApply(modal, 'Deal 4 damage, kill 1 minion(s)');
 		await expect(modal.control('pool.apply')).toBeEnabled();
 		await expect(modal.control('pool.apply')).not.toHaveAttribute('title');
 		expect(await applyPoolAndWrite(modal, SQUAD)).toBe(1);
 		await dse.expectNoteBlock(SQUAD, INIT).toMatchObject(
-			group({ minion_stamina_pool: 16, creatures: [{ instances: [{ id: 1, isDead: true }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }] }] }),
+			group({ minion_stamina_pool: 16, creatures: [{ instances: [{ id: 1 }, { id: 2, isDead: true }, { id: 3 }, { id: 4 }, { id: 5 }] }] }),
 		);
+		expect(await cellText(root, '0-2')).toBe('DEAD'); // the earlier pick died, the trimmed one did not
+		expect(await cellText(root, '0-1')).toBe('16/20 (4)');
 	});
 
 	it('[POOL-K03] SC-429 item 1: a pool lowered to 0 ticks and locks every box; raising it to 1 un-ticks them, and Apply is reachable by ticking 4', async () => {
