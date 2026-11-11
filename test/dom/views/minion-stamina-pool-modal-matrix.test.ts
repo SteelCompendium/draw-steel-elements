@@ -468,6 +468,160 @@ describe('the kill boxes: ticks, name clicks, locks and the auto-check at a 0 po
 		click(content, 'pool.stamina.dec'); // 11: still floor(9/4) = 2 owed
 		expect(boxes(content)).toBe('o....');
 	});
+
+	// SC-567 (owner: trim, not reword): the modal never shows more ticks than owed kills. At 0 owed every tick
+	// clears; at 1+ owed the surplus ticks are unticked, the LATEST pick first, the user's earlier picks stay.
+	describe('SC-567: fewer owed kills than ticks trims the latest picks', () => {
+		test('2 owed, tick #1 then #2, drop to 1 owed: #2 is unticked, #1 stays, Apply is enabled with no "Select" tooltip', async () => {
+			const { content } = await open();
+			typePool(content, '12'); // 2 owed
+			tick(content, 0);
+			tick(content, 1);
+			expect(boxes(content)).toBe('oo---');
+			typePool(content, '16'); // 1 owed
+			expect(boxes(content)).toBe('o----');
+			expect(apply(content).disabled).toBe(false);
+			expect(apply(content).textContent).toBe('Deal 4 damage, kill 1 minion(s)');
+			expect(apply(content).getAttribute('title')).toBeNull();
+			expect(info(content).textContent).toBe(`4 damage will kill 1 minion(s).${SEL(1)}`);
+		});
+
+		test('tick order, not row order: #4 then #1, drop to 1 owed: #4 (the first pick) stays, #1 goes', async () => {
+			const { content } = await open();
+			typePool(content, '12');
+			tick(content, 3);
+			tick(content, 0);
+			expect(boxes(content)).toBe('o--o-');
+			typePool(content, '16');
+			expect(boxes(content)).toBe('---o-');
+			expect(apply(content).disabled).toBe(false);
+		});
+
+		test('a name click is a pick too, and a re-tick after an untick is the LATEST pick', async () => {
+			const { content } = await open();
+			typePool(content, '12');
+			tick(content, 0);
+			click(content, 'pool.minion-name', 1); // #2 by name
+			tick(content, 0); // untick #1
+			tick(content, 0); // tick #1 again: now the latest, after #2
+			expect(boxes(content)).toBe('oo---');
+			typePool(content, '16');
+			expect(boxes(content)).toBe('-o---'); // #2 was picked before #1's second tick
+		});
+
+		test('3 owed, 3 ticked, drop to 1 owed: only the earliest pick stays', async () => {
+			const { content } = await open();
+			typePool(content, '8'); // 3 owed
+			tick(content, 2);
+			tick(content, 0);
+			tick(content, 4);
+			expect(boxes(content)).toBe('o-o-o');
+			typePool(content, '16'); // 1 owed
+			expect(boxes(content)).toBe('--o--');
+			expect(apply(content).disabled).toBe(false);
+		});
+
+		test('the Apply Damage row and the stepper trim the same way as typing', async () => {
+			const { content } = await open();
+			dealDamage(content, '4', '2'); // -8: pool 12, 2 owed
+			tick(content, 0);
+			tick(content, 1);
+			expect(boxes(content)).toBe('oo---');
+			click(content, 'pool.stamina.inc'); // pool 13: 1 owed
+			expect(boxes(content)).toBe('o----');
+			expect(apply(content).disabled).toBe(false);
+		});
+
+		test('draft: while the new pool value is still only typed, Apply already shows the post-commit state', async () => {
+			const { content } = await open();
+			typePool(content, '12'); // 2 owed
+			tick(content, 0);
+			tick(content, 1);
+			const el = poolInput(content);
+			el.value = '16'; // 1 owed once it lands; typed, not committed
+			el.dispatchEvent(new Event('input', { bubbles: true }));
+			expect(boxes(content)).toBe('oo---'); // the boxes are only re-derived at commit
+			const draftState = { disabled: apply(content).disabled, label: apply(content).textContent, title: apply(content).getAttribute('title') };
+			expect(draftState).toEqual({ disabled: false, label: 'Deal 4 damage, kill 1 minion(s)', title: null });
+			el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); // commit
+			expect(boxes(content)).toBe('o----');
+			expect({ disabled: apply(content).disabled, label: apply(content).textContent, title: apply(content).getAttribute('title') }).toEqual(draftState);
+		});
+
+		test('raising the owed kills again does NOT re-tick a trimmed box', async () => {
+			const { content } = await open();
+			typePool(content, '12');
+			tick(content, 0);
+			tick(content, 1);
+			typePool(content, '16'); // trims #2
+			expect(boxes(content)).toBe('o----');
+			typePool(content, '12'); // 2 owed again
+			expect(boxes(content)).toBe('o....');
+			expect(apply(content).disabled).toBe(true);
+			expect(apply(content).getAttribute('title')).toBe('Select 2 minion(s) to kill');
+		});
+
+		test('0-pool auto ticks revert first, then the user\'s own ticks are trimmed to the new owed count', async () => {
+			const { content } = await open();
+			typePool(content, '12'); // 2 owed
+			tick(content, 0);
+			tick(content, 1);
+			typePool(content, '0'); // the squad dies: everything ticks and locks
+			expect(boxes(content)).toBe('xxxxx');
+			typePool(content, '16'); // 1 owed: the modal's ticks revert, the user's two are trimmed to one
+			expect(boxes(content)).toBe('o----');
+			expect(apply(content).disabled).toBe(false);
+		});
+
+		test('0-pool round trip with fewer user ticks than owed: exactly the user\'s tick comes back', async () => {
+			const { content } = await open();
+			typePool(content, '12'); // 2 owed
+			tick(content, 3);
+			typePool(content, '0');
+			typePool(content, '12');
+			expect(boxes(content)).toBe('...o.');
+			expect(apply(content).disabled).toBe(true);
+		});
+
+		test('Apply after a trim kills the earlier pick (#1) and writes the pool, not #2', async () => {
+			const { content, minion, group, persist } = await open();
+			typePool(content, '12');
+			tick(content, 0);
+			tick(content, 1);
+			typePool(content, '16');
+			apply(content).click();
+			expect(minion.instances!.map((i) => i.isDead ?? false)).toEqual([true, false, false, false, false]);
+			expect(group.minion_stamina_pool).toBe(16);
+			expect(persist).toHaveBeenCalledTimes(1);
+		});
+
+	test('the invariant: neither a disabled Apply nor the info line asks for fewer kills than are already ticked', async () => {
+			const { content } = await open();
+			typePool(content, '12'); // 2 owed
+			tick(content, 0);
+			tick(content, 1);
+			expect(apply(content).disabled).toBe(false); // setup: 2 owed, 2 ticked
+			typePool(content, '16'); // 1 owed
+			expect(apply(content).textContent).toBe('Deal 4 damage, kill 1 minion(s)'); // setup: the second commit happened (true under either fix)
+			const ticked = all<HTMLInputElement>(content, 'pool.kill').filter((b) => b.checked).length;
+			const asked = /^Select (\d+) minion\(s\) to kill$/.exec(apply(content).getAttribute('title') ?? '');
+			if (apply(content).disabled && asked) expect(Number(asked[1])).toBeGreaterThan(ticked);
+			const told = /Select (\d+) minion\(s\) to kill\./.exec(info(content).textContent ?? '');
+			if (told) expect(Number(told[1])).toBeGreaterThanOrEqual(ticked); // the info line says "Select 1" with 2 ticked today
+		});
+
+		test('Reset clears the pick order: ticks after a Reset are the first picks of the new session', async () => {
+			const { content } = await open();
+			typePool(content, '12');
+			tick(content, 3);
+			click(content, 'pool.reset');
+			typePool(content, '12');
+			tick(content, 0);
+			tick(content, 1);
+			typePool(content, '16');
+			expect(boxes(content)).toBe('o----');
+		});
+	});
 });
 
 // ----------------------------------------------------------------------------------------- Reset
@@ -757,24 +911,6 @@ describe('a group holding two minion squads: each modal reads and writes ITS squ
 // ------------------------------------------------------------------------------------ known bugs
 
 describe('known bugs (test.failing: each FAILS once its ticket is fixed, then drop the marker)', () => {
-	// SC-567: owed kills drop from 2 to 1 with 2 boxes ticked. Either fix satisfies this: trim the surplus ticks
-	// (Apply enables, no title) or keep them and reword the tooltip. What may never happen is a disabled Apply whose
-	// tooltip says "Select N minion(s) to kill" with N not above the number already ticked.
-	test.failing('SC-567: neither a disabled Apply nor the info line asks for fewer kills than are already ticked', async () => {
-		const { content } = await open();
-		typePool(content, '12'); // 2 owed
-		tick(content, 0);
-		tick(content, 1);
-		expect(apply(content).disabled).toBe(false); // setup: 2 owed, 2 ticked
-		typePool(content, '16'); // 1 owed
-		expect(apply(content).textContent).toBe('Deal 4 damage, kill 1 minion(s)'); // setup: the second commit happened (true under either fix)
-		const ticked = all<HTMLInputElement>(content, 'pool.kill').filter((b) => b.checked).length;
-		const asked = /^Select (\d+) minion\(s\) to kill$/.exec(apply(content).getAttribute('title') ?? '');
-		if (apply(content).disabled && asked) expect(Number(asked[1])).toBeGreaterThan(ticked);
-		const told = /Select (\d+) minion\(s\) to kill\./.exec(info(content).textContent ?? '');
-		if (told) expect(Number(told[1])).toBeGreaterThanOrEqual(ticked); // the info line says "Select 1" with 2 ticked today
-	});
-
 	// SC-573: a pool at 0 with a minion still alive (reachable: a relieved captain's bonus comes off the pool, clamped at 0).
 	test.failing('SC-573: a pool at 0 with living minions leaves Apply reachable so they can be killed', async () => {
 		const { content } = await open({ pool: 0 });

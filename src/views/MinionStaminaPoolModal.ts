@@ -55,7 +55,11 @@ export class MinionStaminaPoolModal extends DseModal {
 	// SC-429: `auto` marks a box the MODAL checked (the "pool at 0 -> every remaining minion
 	// dies" rule), as opposed to one the USER ticked. When that rule stops applying, only the
 	// auto boxes revert; the user's own ticks keep their state.
-	private minionCheckboxes: { instance: CreatureInstance; checkbox: HTMLInputElement; auto: boolean }[] = [];
+	// SC-567: `tick` is the order the USER ticked the box in (a later tick has a larger number; 0 = not a user
+	// pick). When the owed kills drop below the ticks, the latest picks are unticked first (updateCheckboxes), so
+	// the modal never shows more ticks than owed kills. A modal (auto) tick never carries a number.
+	private minionCheckboxes: { instance: CreatureInstance; checkbox: HTMLInputElement; auto: boolean; tick: number }[] = [];
+	private tickSeq = 0;
 
 	private bar!: StaminaPreviewBarHandle;
 	private poolStepper!: StepperHandle;
@@ -220,9 +224,15 @@ export class MinionStaminaPoolModal extends DseModal {
 			const checkbox = minionRow.createEl('input', { type: 'checkbox', cls: 'dse-minion__check' });
 			checkbox.setAttribute('aria-label', `Kill ${this.creature.name} #${instance.id}`);
 			stampControl(checkbox, 'pool.kill'); // SC-435 (one per living minion: nth)
-			const entry = { instance, checkbox, auto: false };
+			const entry = { instance, checkbox, auto: false, tick: 0 };
+			// A hand toggle always makes the box the user's own (SC-429); a fresh tick is the latest pick
+			// (SC-567), an untick drops the box out of the order (a re-tick later gets a later number).
+			const handToggled = () => {
+				entry.auto = false;
+				entry.tick = checkbox.checked ? ++this.tickSeq : 0;
+			};
 			this.lifecycle.registerDomEvent(checkbox, 'change', () => {
-				entry.auto = false; // a hand toggle always makes the box the user's own (SC-429)
+				handToggled();
 				this.updateCheckboxes();
 				this.updateActionButton();
 			});
@@ -237,7 +247,7 @@ export class MinionStaminaPoolModal extends DseModal {
 			this.lifecycle.registerDomEvent(minionName, 'click', () => {
 				if (!checkbox.disabled) {
 					checkbox.checked = !checkbox.checked;
-					entry.auto = false; // SC-429: as the change handler above
+					handToggled(); // SC-429 / SC-567: as the change handler above
 					this.updateCheckboxes();
 					this.updateActionButton();
 				}
@@ -263,6 +273,7 @@ export class MinionStaminaPoolModal extends DseModal {
 						item.checkbox.checked = false;
 						item.checkbox.disabled = true;
 						item.auto = false;
+						item.tick = 0;
 					});
 					this.refresh();
 				},
@@ -467,7 +478,11 @@ export class MinionStaminaPoolModal extends DseModal {
 			if (newStamina <= 0) selectedMinions = this.minionCheckboxes.length;
 			else if (minionsToKill <= 0) selectedMinions = 0;
 			// The commit reverts the boxes the modal ticked itself (SC-429), leaving the user's.
-			else selectedMinions = this.minionCheckboxes.filter((item) => item.checkbox.checked && !item.auto).length;
+			// SC-567: and trims the user's ticks down to the owed kills (the latest picks go first).
+			else {
+				const userTicks = this.minionCheckboxes.filter((item) => item.checkbox.checked && !item.auto).length;
+				selectedMinions = Math.min(userTicks, minionsToKill);
+			}
 		}
 
 		// Disable the apply button if the number of selected minions doesn't match minionsToKill
@@ -539,9 +554,20 @@ export class MinionStaminaPoolModal extends DseModal {
 		if (minionsToKill <= 0) {
 			this.minionCheckboxes.forEach((item) => {
 				item.checkbox.checked = false;
+				item.tick = 0;
 				item.checkbox.disabled = true;
 			});
 		} else {
+			// SC-567: never more ticks than owed kills. Lowering the damage after ticking can leave surplus
+			// ticks; undo the latest picks first, so the user's earlier picks stay (a tie keeps DOM order).
+			this.minionCheckboxes
+				.filter((item) => item.checkbox.checked)
+				.sort((a, b) => a.tick - b.tick)
+				.slice(minionsToKill)
+				.forEach((item) => {
+					item.checkbox.checked = false;
+					item.tick = 0;
+				});
 			// Enable checkboxes up to minionsToKill
 			const selectedCount = this.minionCheckboxes.filter((item) => item.checkbox.checked).length;
 			this.minionCheckboxes.forEach((item) => {
