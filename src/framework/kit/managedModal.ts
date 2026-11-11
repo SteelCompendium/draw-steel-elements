@@ -206,8 +206,9 @@ export class DseModal extends Modal {
 	 *    container, so it runs after the opener's own handler, which is what opened this modal) arms a 10 ms timer (150 ms when
 	 *    the click lands on text) and pushes from it. Timers with the same delay fire in the order they were armed, so the
 	 *    re-pushes are armed from a window-bubble listener for the opening click (it runs after the container's), one per delay:
-	 *    the order holds by construction at any load, no margin. A modal opened outside a click (a delayed or keyboard open)
-	 *    arms them at once: any helper timer was armed earlier. Skipped when a newer preview-opened modal is open (a parent
+	 *    the order holds by construction at any load, no margin. A modal opened outside a click (a delayed open, such as the
+	 *    block edit form after a pending write) arms them at once: any helper timer was armed earlier. (Enter / Space on the
+	 *    stamina bar and on a montage cell are not such opens: they click the opener, SC-597, so they take the branch above.) Skipped when a newer preview-opened modal is open (a parent
 	 *    must not bury its child) or when this modal's window is not the active one (`pushScope` pushes onto the active
 	 *    window's stack). After close, Modal.close's own popScope leaves the popover's scope on top, which is right: the
 	 *    preview is still showing.
