@@ -110,6 +110,11 @@ for what needs action.
   (SC-567). It used to leave all those boxes ticked and Apply disabled, with a tip asking for fewer kills than were
   ticked. It now unticks the most recent pick first and keeps your earlier ones, so Apply is ready and kills
   those. Raising the damage again does not tick them back.
+- [FIX] **Minion pool window: a squad whose pool is at 0 with minions still alive can now have them marked dead**
+  (SC-573). The window ticked every living minion but left Apply disabled ("No Stamina Change"), so the deaths
+  could not be recorded. Apply now reads "Kill 5 minion(s)" and the line above it says "The pool is at 0, so 5
+  minion(s) die." (also after staging damage on the empty pool, where the button used to read "Deal 0 damage,
+  kill 5 minion(s)"). Apply marks them dead and leaves the pool at 0. A heal at pool 0 is still refused.
 - [FIX] **Minion pool window: a minion's condition icons can be removed from the keyboard** (SC-572). Each
   icon is now a real button, named "Remove Bleeding" (and so on) for screen readers: Tab reaches it and
   Enter or Space removes that condition, like a click, and focus moves to the next icon (never out of the
