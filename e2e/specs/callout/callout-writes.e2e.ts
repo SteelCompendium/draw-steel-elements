@@ -94,4 +94,20 @@ describe('a block in a shape DSE cannot edit yet says so', () => {
 			expect(await dse.noteText(note)).toBe(readFixture(note));
 		});
 	}
+
+	// SC-602: a block in a callout is redrawn on its own save in Live Preview too; the pressed control keeps keyboard focus (the SC-455 note bytes are CALL-L01).
+	it('[CALL-L04] Live Preview, callout: Enter on Catch Breath keeps keyboard focus on Catch Breath (with the ring) after the save', async () => {
+		await dse.openNote('Callout/callout.md', { mode: 'live-preview' });
+		const bar = dse.block(BAR);
+		await dse.focusByScript(bar.control('recov.catch-breath'));
+		const w = await dse.waitForWrite('Callout/callout.md', () => dse.press('Enter', bar.control('recov.catch-breath')));
+		expect(w.count).toBe(1);
+		await dse.settle();
+		expect(
+			await dse.page<{ ctl: string | null; inBar: boolean; ring: boolean }>(`(() => {
+				const a = document.activeElement;
+				return { ctl: a?.closest('[data-dse-control]')?.getAttribute('data-dse-control') ?? null, inBar: !!a?.closest('.markdown-source-view [data-dse-element="stamina-bar"]'), ring: !!a && a.matches(':focus-visible') };
+			})()`),
+		).toEqual({ ctl: 'recov.catch-breath', inBar: true, ring: true });
+	});
 });

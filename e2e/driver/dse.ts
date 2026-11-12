@@ -438,6 +438,16 @@ async function tabTo(el: El, max = 10): Promise<void> {
 }
 
 /**
+ * Give `el` keyboard focus by script (`focus({ focusVisible: true })`, so the ring shows), then check it holds it. For Live Preview, where a real
+ * Tab from the editor would indent the note (a write) instead of reaching a widget (SC-602). `press` still refuses a control that lacks focus, so
+ * the key is real and credited as usual. Records no coverage (it drives no control).
+ */
+async function focusByScript(el: El): Promise<void> {
+	const held = await browser.execute('arguments[0].focus({ focusVisible: true }); return document.activeElement === arguments[0];', await el);
+	if (!held) throw new Error(`focusByScript(${labelOf(el)}): the control did not take focus`);
+}
+
+/**
  * A host control the key is "aimed at" without it holding focus: Obsidian's own X / backdrop
  * (`modal.close`), which Escape reaches through the modal's Scope while focus is in a field.
  * Explicit, so a DSE control id can never be credited for a key that went somewhere else.
@@ -599,6 +609,7 @@ export const dse = {
 	press,
 	aimedAt,
 	tabTo,
+	focusByScript,
 	settle,
 	page,
 	waitFor,
