@@ -139,6 +139,16 @@ Guides: [Getting started](./docs/getting-started.md) ·
   compendium file you linked to. [Reference entries by code](./docs/compendium-sync.md#referencing-a-compendium-entry-in-your-notes)
   if you want links that survive that.
 
+## Third-party fonts
+
+The Steel look bundles two fonts inside the plugin's stylesheet. Their licences are in
+[`assets/fonts/`](./assets/fonts/).
+
+- **Source Serif 4**, (c) Adobe, [SIL Open Font License 1.1](./assets/fonts/OFL.txt).
+- **Draw Steel Glyphs**, (c) 2025 MCDM Productions, licensed
+  [CC BY-SA 4.0](./assets/fonts/DrawSteelGlyphs-LICENSE.txt). Included unmodified; the action
+  icons on ability-card crests are drawn from it.
+
 ## Development
 
 See the [changelog](CHANGELOG.md) for changes.
