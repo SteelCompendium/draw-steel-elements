@@ -22,18 +22,28 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **In Live Preview, a half-typed Malice quick-add (amount and label) now survives the initiative tracker's own save** (SC-605).
+  Type an amount and a label, then press Advance round, the Malice - / + stepper, or any other tracker action that saves, and in Live
+  Preview both boxes used to keep your text for a moment and then empty about half a second later when the note was written. They now
+  keep it, with the caret where it was if you were still in one of them, and the hint, the Add button and the validation styling
+  follow from it as in Reading view. Only a successful Add (the button or Enter) empties them, and what you have typed is
+  never written to the note. A mouse click still never pulls focus into the tracker. Only the tracker that saved gets its draft back:
+  an edit made to the note from outside (another window, a sync) starts the boxes empty as before. Not covered: another copy of the
+  same tracker (an identical twin block, or the same note open in a second pane) still loses its own draft when this one saves (SC-620).
+  Reading view and the sidebar tracker are unchanged.
+
 - [FIX] **A colour swatch in the Conditions window is now announced by its colour name** (SC-582). A screen reader said "Color
   #1e8449" for the green swatch; it now says "Green", and likewise Red, Amber, Blue and Purple, inside the Color group. The hover
   tooltip is unchanged ("Green (#1e8449)"). After you pick a swatch, keyboard focus stays on it as before. The custom colour
   picker's labels are unchanged, since a custom colour has no name.
+
 - [FIX] **In Live Preview, keyboard focus now stays on the button you pressed when the element saves and Obsidian redraws it** (SC-602).
   Press Enter on a counter's + (or Advance round, Make captain, Catch Breath, and so on) and the element saves its change to the note;
   before, focus fell to the page about half a second later, so a keyboard user had to Tab in again from the top of the note. Focus now
   stays on the pressed button, or on the control that replaced it (else on the element itself), with the keyboard ring when you were
   using the keyboard. This is done once for every element, not per element.
   A mouse click still never pulls focus into an element, and focus you moved away before the save lands stays where you put it.
-  Reading view is unchanged. Not covered: the half-typed Malice quick-add draft is still lost when the tracker saves (SC-605), and the
-  Conditions window still closes when a write lands (SC-384).
+  Reading view is unchanged. Not covered: the Conditions window still closes when a write lands (SC-384).
 
 - [FIX] **Clicking another creature in the initiative roster while using the keyboard keeps focus in the tracker, on the creature you
   clicked, in Reading view** (SC-609). With focus on the detail row's Stamina control (or any other control of the detail row), a
@@ -69,7 +79,7 @@ for what needs action.
   captain, Reset turns, Reset encounter, or any other action that rebuilds the whole tracker), and both boxes used to come back
   empty. They now keep what you typed, with the caret where it was if you were still in one of them, and the sidebar tracker keeps
   your place in a box when the note changes from outside. Only a successful Add (the button or Enter) empties them, and what you
-  have typed is never written to the note. In Live Preview the boxes are still emptied when the note saves a moment later (SC-605).
+  have typed is never written to the note. Since SC-605 this holds in Live Preview too.
 - [FIX] **+ and - in a hover preview of a heading or block link save when an identical counter sits elsewhere in the note** (SC-594).
   Hover over a link such as `[[long note#Tracker]]` or `[[note#^id]]` and press + or - on a counter in the preview: if the note
   held a counter with the same contents elsewhere, the click was not saved and the "changed on disk first" Notice showed,
