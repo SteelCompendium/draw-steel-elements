@@ -305,14 +305,54 @@ export function dispatchReferenceChoice(
 	editor: Editor,
 	entry: CompendiumEntry,
 	evt: Partial<MouseEvent & KeyboardEvent>,
+	isOpen: () => boolean = () => true,
 ): void {
-	if (evt.shiftKey) {
-		insertInlineLink(editor, entry);
-	} else if (evt.ctrlKey || evt.metaKey) {
-		void copyCode(entry);
-	} else {
-		insertReferenceBlock(editor, entry);
+	if (!evt.shiftKey && (evt.ctrlKey || evt.metaKey)) {
+		void copyCode(entry); // never touches the editor, so it needs no live editor
+		return;
 	}
+	if (!refuseClosedEditor(isOpen)) return;
+	if (evt.shiftKey) insertInlineLink(editor, entry);
+	else insertReferenceBlock(editor, entry);
+}
+
+/** SC-601 — what the user is told when the editor the search was opened for went away while the search was open. */
+export const CLOSED_EDITOR_NOTICE = 'The note you were editing was closed, so nothing was inserted.';
+
+/**
+ * SC-601 — the choose-time backstop. The commands capture their `Editor` when they run; if its note was closed while the search
+ * was open (a hover preview Obsidian hid, a pane closed), `replaceSelection` on that editor writes into a detached buffer without
+ * throwing, so the pick vanished with no sign. Returns true when the write may go ahead; otherwise shows a Notice and returns
+ * false. It never re-targets `app.workspace.activeEditor`: Obsidian's own Insert template does, and lands the text in the HOST note.
+ */
+function refuseClosedEditor(isOpen: () => boolean): boolean {
+	if (isOpen()) return true;
+	new Notice(CLOSED_EDITOR_NOTICE);
+	return false;
+}
+
+/** SC-601 — what a command knows about the editor it was run for: the element it lives in (the search guards a hover preview with
+ *  it) and whether it is still on screen. */
+export interface EditorTarget {
+	anchor: HTMLElement | null;
+	isOpen: () => boolean;
+}
+
+const isElement = (v: unknown): v is HTMLElement =>
+	typeof v === 'object' && v !== null && typeof (v as { closest?: unknown }).closest === 'function';
+
+/**
+ * SC-601 — resolves the `EditorTarget` of an `editorCallback`'s arguments. Public API where there is any: `ctx.containerEl` is typed
+ * on `MarkdownView` (every pane) but only exists at runtime on the other `MarkdownFileInfo`, the page-preview embed a hover preview's
+ * editor belongs to (measured in Obsidian 1.15.1: it sits inside `.hover-popover`); nothing typed gives an `Editor` its DOM, so
+ * `editor.cm.dom` (the CodeMirror 6 view, undeclared) is the fallback anchor and the connection test. Each element that is found
+ * must be connected; with neither (a test double) the editor counts as open.
+ */
+export function editorTarget(editor: Editor, ctx?: unknown): EditorTarget {
+	const containerEl = (ctx as { containerEl?: unknown } | null | undefined)?.containerEl;
+	const cmDom = (editor as unknown as { cm?: { dom?: unknown } }).cm?.dom;
+	const els = [containerEl, cmDom].filter(isElement);
+	return { anchor: els[0] ?? null, isOpen: () => els.every((el) => el.isConnected) };
 }
 
 /** The `insert-compendium-block` command's `onChoose` body: resolves the chosen entry to
@@ -324,7 +364,9 @@ export async function dispatchBlockChoice(
 	editor: Editor,
 	index: CompendiumIndex,
 	entry: CompendiumEntry,
+	isOpen: () => boolean = () => true,
 ): Promise<void> {
+	if (!refuseClosedEditor(isOpen)) return;
 	const entity = await index.getEntity(entry.scc);
 	if (entity) await insertFullBlock(editor, entity);
 }
@@ -355,12 +397,13 @@ export function registerCompendiumInsertCommands(
 	plugin.addCommand({
 		id: 'insert-compendium-reference',
 		name: 'Insert Draw Steel: compendium reference',
-		editorCallback: (editor: Editor) => {
+		editorCallback: (editor: Editor, ctx: unknown) => {
+			const target = editorTarget(editor, ctx);
 			new CompendiumSearchModal(
 				plugin.app,
 				index,
-				(entry, evt) => dispatchReferenceChoice(editor, entry, evt),
-				{ onSyncRequested },
+				(entry, evt) => dispatchReferenceChoice(editor, entry, evt, target.isOpen),
+				{ onSyncRequested, anchor: target.anchor },
 			).open();
 		},
 	});
@@ -368,13 +411,15 @@ export function registerCompendiumInsertCommands(
 	plugin.addCommand({
 		id: 'insert-compendium-block',
 		name: 'Insert Draw Steel: compendium block (snapshot)',
-		editorCallback: (editor: Editor) => {
+		editorCallback: (editor: Editor, ctx: unknown) => {
+			const target = editorTarget(editor, ctx);
 			new CompendiumSearchModal(
 				plugin.app,
 				index,
-				(entry) => void dispatchBlockChoice(editor, index, entry),
+				(entry) => void dispatchBlockChoice(editor, index, entry, target.isOpen),
 				{
 					onSyncRequested,
+					anchor: target.anchor,
 					placeholder: 'Search statblocks, features and featureblocks… (inserts a full snapshot)',
 					// SC-149: only the three snapshottable families are offered at all —
 					// a user should never pick a kit here and get a Notice instead of a block.

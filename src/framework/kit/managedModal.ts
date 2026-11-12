@@ -20,6 +20,7 @@ import type { IconButtonHandle, IconButtonOptions } from './iconButton';
 import { themeServiceForApp } from '../seams/theme';
 import { prefsForApp } from '../seams/prefs';
 import { consumeEscapeAt } from './escapeConsumer';
+import { guardHoverPreviewClicks } from './hoverPreviewGuard';
 
 let titleCounter = 0;
 
@@ -186,20 +187,9 @@ export class DseModal extends Modal {
 	 * and is neither default-prevented nor inside the popover; the modal sits in `body`, so the first click inside it did that.
 	 * Two things keep the preview, and so the modal, alive:
 	 *
-	 * 1. A click guard on the modal's own document, BUBBLE phase, stopping propagation of a click that went through this modal.
-	 *    Every document-level listener still sees the click (RecoveriesStrip's click-outside, ConditionsModal's and
-	 *    sccLinkClickHandler's capture listeners all run before or at the document); only window-level bubble listeners (the
-	 *    popover's, an Obsidian Menu's click-outside) never get it. NEVER `preventDefault` instead: that is the popover's own
-	 *    "belongs to me" convention, but it also cancels label and checkbox activation, so an Obsidian toggle
-	 *    (`label.checkbox-container > input`) would stop toggling.
-	 *    - `composedPath()`, not `target` + `contains()`: a control the modal redraws inside its own click handler
-	 *      (ConditionsModal's "Add condition" and row controls, the pool's condition icons) is detached by the time the click
-	 *      reaches the document, so `contains()` says no; the path is fixed when the event is dispatched. (ConditionsModal's own
-	 *      click-outside listener has the same footgun and the same fix.)
-	 *    - The guard outlives `close()` by one task. A click that CLOSES the modal (Cancel, Confirm, Apply, the backdrop, a nested
-	 *      confirmation's buttons) runs `close()` at target phase, before the click reaches the document; with the guard gone at
-	 *      once it reached the window, hid the preview and closed the parent modal (a free-heal Confirm lost the staged heal).
-	 *      Only the guard is kept; every other listener of the modal still dies synchronously with `lifecycle`.
+	 * 1. A click guard on the modal's own document, BUBBLE phase, stopping propagation of a click that went through this modal
+	 *    (`guardHoverPreviewClicks`, shared with the compendium search, SC-601; its doc comment holds the design: why `composedPath()`,
+	 *    why never `preventDefault`, why the guard outlives `close()` by one task).
 	 * 2. The popover pushes its own keymap scope above this modal's for the click that opened the modal, so Escape went to the
 	 *    popover (and, in Live Preview, moved focus into the note behind the form). Put this modal's scope back on top, AFTER the
 	 *    popover's push. The push is not made during the click: Obsidian's click-to-edit helper (a bubble listener on the embed
@@ -218,15 +208,8 @@ export class DseModal extends Modal {
 	 * must reach the window as it always did.
 	 */
 	private keepHoverPreviewAlive(): void {
-		const doc = this.containerEl.ownerDocument;
-		const win = doc.defaultView ?? window;
-		const guard = (evt: MouseEvent): void => {
-			if (evt.composedPath().includes(this.containerEl)) evt.stopPropagation();
-		};
-		doc.addEventListener('click', guard);
-		this.lifecycle.register(() => {
-			win.setTimeout(() => doc.removeEventListener('click', guard), 0);
-		});
+		const win = this.containerEl.ownerDocument.defaultView ?? window;
+		guardHoverPreviewClicks(this.containerEl, this.lifecycle);
 
 		previewModals.push(this);
 		this.lifecycle.register(() => {

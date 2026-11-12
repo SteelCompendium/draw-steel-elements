@@ -8,6 +8,7 @@
 // editor command with no pipeline/element machinery in scope.
 import { Component, SuggestModal } from 'obsidian';
 import type { App, TFile } from 'obsidian';
+import { guardHoverPreviewClicks } from '@/framework/kit/hoverPreviewGuard';
 import { stampTextScaleRoot } from '@/framework/kit/textScaleRoot';
 import { prefsForApp } from '@/framework/seams/prefs';
 import type { CompendiumEntry, CompendiumIndex } from '@/services/CompendiumIndex';
@@ -50,6 +51,11 @@ export interface CompendiumSearchModalOptions {
 	 *  snapshot command uses it to list only the three snapshottable families; omit it
 	 *  and every indexed entry is offered, as before. */
 	filter?: (entry: CompendiumEntry) => boolean;
+	/** SC-601 — the element the target editor lives in (the commands pass the editor's container). When it sits inside a hover preview
+	 *  (`.hover-popover`) the modal keeps that preview open for as long as it is open: Obsidian's popover hides itself on the first
+	 *  click that reaches its window outside it, which closed the editing preview and sent the later pick into a dead editor. Outside a
+	 *  preview nothing changes. See `guardHoverPreviewClicks` (the SC-595 guard `DseModal` uses). */
+	anchor?: HTMLElement | null;
 }
 
 /** `type:<value>` / `source:<value>` prefix tokens are stripped from the query text and
@@ -100,6 +106,10 @@ export class CompendiumSearchModal extends SuggestModal<CompendiumEntry> {
 		// `modalEl` is the dialog box that holds the input AND the suggestion list; the F3
 		// test mock only builds `containerEl`, so fall back to it (same as DseModal.dialogEl).
 		stampTextScaleRoot(this.modalEl ?? this.containerEl, prefsForApp(this.app), this.prefsOwner);
+		// SC-601: no keymap re-push and no `focusHoverPreviewNow` here, unlike DseModal: this modal is opened by a command or a key with
+		// the preview already focused (measured in Obsidian 1.15.1: the popover's capture listener never fires for it), not by a click
+		// inside the preview, so the click guard is all it needs.
+		if (this.opts.anchor?.closest('.hover-popover')) guardHoverPreviewClicks(this.containerEl, this.prefsOwner);
 	}
 
 	onClose(): void {
