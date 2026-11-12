@@ -36,10 +36,14 @@ describe('initiative: keyboard focus after a mouse press on a roster cell', () =
 
 	// SC-458 may later make a press focus its roving target from anywhere (the click shield today stops the press from focusing the
 	// cell, and the tracker only hands focus back when it already held it). That ticket flips this test: after the press, focus would
-	// be on the cell that was pressed. Until then focus must stay where it was, outside the tracker.
-	it('[INIT-F14] focus on the note body, then a mouse press on a roster cell: no focus is pulled into the tracker (SC-458 flips this)', async () => {
+	// be on the cell that was pressed. Until then focus must stay where it was, outside the tracker. Focus is put on <body> first: after
+	// `openNote` it sits on the note's own scroller, and a hand-over to the cell is refused whenever something holds focus, so that start
+	// state would pass even if the tracker took focus it had never held.
+	it('[INIT-F14] focus on <body>, then a mouse press on a roster cell: no focus is pulled into the tracker (SC-458 flips this)', async () => {
 		await dse.openNote(TRACKER);
 		const root = dse.block(INIT);
+		await dse.page(`(() => { document.activeElement?.blur(); return true; })()`);
+		expect(await dse.page<boolean>('document.activeElement === document.body')).toBe(true);
 		const before = await focusState();
 		expect(before.inTracker).toBe(false);
 		await dse.waitForWrite(TRACKER, () => dse.click(root.control('init.cell.stamina', { nth: 2 })));
