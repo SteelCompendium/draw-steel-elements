@@ -222,6 +222,19 @@ describe('SC-608: an outside edit redraws the tracker while a window is open (Re
 		expect(document.activeElement).toBe(ctl(fresh.root, 'init.reset-encounter'));
 	});
 
+	test('[O16] Live Preview order with the Reset encounter item: the hand-off waits for the chrome panel the pipeline adds after the root', async () => {
+		const old = await mount(TRACKER);
+		const item = ctl(old.root, 'init.reset-encounter');
+		item.focus();
+		item.click();
+		old.view.unload();
+		old.root.remove();
+		await later(5);
+		const fresh = await mount(TRACKER_EDITED, old.pane);
+		await later();
+		expect(document.activeElement).toBe(ctl(fresh.root, 'init.reset-encounter')); // not the root: the item exists by then
+	});
+
 	test('[O07] opened with the mouse (focus was not inside the tracker): the Notice shows, nothing is focused', async () => {
 		const old = await mount(SQUAD);
 		ctl(old.root, 'init.detail.stamina').click(); // nothing held focus
@@ -287,9 +300,10 @@ describe('SC-608: an outside edit redraws the tracker while a window is open (Re
 		const fresh = await mount(SQUAD_EDITED, old.pane);
 		old.view.unload();
 		old.root.remove();
-		other.focus(); // the user clicked into another field before the hand-off ran
+		other.focus(); // the user clicked into another field before the hand-off ran...
+		other.blur(); // ...and out of it again: focus is free once more, but it is no longer ours to give
 		await later();
-		expect(document.activeElement).toBe(other);
+		expect(document.activeElement).toBe(document.body);
 		expect(notices()).toHaveLength(1);
 		expect(fresh.root.contains(document.activeElement)).toBe(false);
 	});
@@ -299,8 +313,7 @@ describe('SC-608: an outside edit redraws the tracker while a window is open (Re
 		const opener = openPool(old.root);
 		old.view.unload(); // closes the window; the mock's focus return lands on the still-connected opener
 		expect(document.activeElement).toBe(opener);
-		const fresh = await mount(SQUAD_EDITED, old.pane);
-		old.root.remove();
+		const fresh = await mount(SQUAD_EDITED, old.pane); // the old root is still in the document, still holding focus, while the new one is built
 		await later();
 		expect(document.activeElement).toBe(ctl(fresh.root, 'init.detail.stamina'));
 	});
@@ -334,6 +347,21 @@ describe('SC-608: an outside edit redraws the tracker while a window is open (Re
 		expect(notices()).toHaveLength(1);
 		expect(document.activeElement).toBe(ctl(fresh.root, 'init.detail.stamina'));
 		expect(first.root.contains(document.activeElement)).toBe(false);
+	});
+
+	test('[O17] a pane that holds trackers of several notes (the sidebar): another note\'s tracker that lands at the same position is not the successor', async () => {
+		const leaf = document.body.appendChild(document.createElement('div'));
+		leaf.className = 'workspace-leaf'; // no reading / source view inside: the leaf is the scope, as in the sidebar
+		await mount(TRACKER, leaf, 'Other.md');
+		const mine = await mount(SQUAD, leaf, 'Encounter.md');
+		openPool(mine.root);
+		mine.view.unload(); // the panel was removed...
+		mine.root.remove();
+		const third = await mount(SQUAD_EDITED, leaf, 'Third.md'); // ...and another note's tracker took its place
+		await later(60);
+		expect(notices()).toHaveLength(0);
+		expect(document.activeElement).toBe(document.body);
+		expect(third.root.contains(document.activeElement)).toBe(false);
 	});
 
 	test('[O14] the tracker\'s own Apply shows no Notice and keeps its focus hand-back', async () => {
