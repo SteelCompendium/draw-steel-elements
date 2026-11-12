@@ -170,7 +170,10 @@ describe('initiative: a half-typed Malice quick-add across the tracker\'s own sa
 		expect(await boxes()).toEqual([shows('', '')]);
 	});
 
-	it('[INIT-L17] the same note in two panes: the draft comes back only in the pane it was typed in', async () => {
+	// What this proves is the mount order: Obsidian redraws the saving pane first, so the saving pane gets the draft and the other pane's
+	// own boxes stay empty. The pane/embed scope guard itself (a mount in another pane must not take the carry) is pinned by jest S09
+	// (livePreviewStateCarry.test.ts), not here: with the scope check removed this test still passes.
+	it('[INIT-L17] the same note in two panes: the saving pane gets the draft back and the other pane starts empty', async () => {
 		await dse.openNote(MIN, { mode: 'live-preview' });
 		await dse.page(`(async () => { const leaf = app.workspace.getLeaf('split', 'vertical'); await leaf.setViewState({ type: 'markdown', state: { file: '${MIN}', mode: 'source', source: false }, active: true }); app.workspace.setActiveLeaf(leaf, { focus: true }); leaf.view.editor.setCursor({ line: 0, ch: 0 }); return true; })()`);
 		try {
