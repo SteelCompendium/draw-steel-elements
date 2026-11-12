@@ -16,9 +16,10 @@ import { createReferenceService } from '../../../src/framework/seams/refs';
 import { createValidationService } from '../../../src/framework/validation';
 import { createSessionStore } from '../../../src/framework/session';
 import { DEFAULT_SETTINGS } from '@model/Settings';
-import { App, Plugin, parseYaml } from '../../mocks/obsidian';
+import { App, Modal, Plugin, parseYaml } from '../../mocks/obsidian';
 import { initiativeElement } from '../../../src/elements/initiative/definition';
 import { ResetEncounterModal } from '../../../src/views/ResetEncounterModal';
+import { DseModal } from '../../../src/framework/kit/managedModal';
 import { attachObsidianKeymap, pressEscape } from '../_obsidianKeymap';
 
 function makeHost(overrides: Partial<BlockHost> = {}) {
@@ -814,6 +815,200 @@ describe('[F] keyboard focus survives the actions that rebuild the whole tracker
 		expect(document.activeElement).toBe(ctl(root, 'init.round.advance'));
 		expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
 		focusSpy.mockRestore();
+	});
+
+	// SC-603: a modal takes focus when it opens and Obsidian hands it back to the opener on close, but a save that replaces the
+	// opener (the pool modal's Apply rebuilds the whole tracker, a condition edit rebuilds the conditions row) leaves nothing to
+	// hand it to. The tracker remembers the focused control when the modal opens and gives it to the rebuilt successor.
+	describe('after a modal whose save replaces its opener (SC-603)', () => {
+		const SQUAD = src(HEROES, [
+			'enemy_groups:', '  - name: "Goblin Squad"', '    is_squad: true', '    creatures:',
+			'      - { name: Goblin, max_stamina: 4, amount: 5, squad_role: minion }',
+		]);
+		// Real Obsidian hands focus back to the control that held it when the modal opened, synchronously inside `close()`, and only
+		// when that control is still in the document (measured in 1.14.4: a detached opener gets no focus call, and focus ends on
+		// <body>). The shared Modal mock does no such thing, so the two ends of it are stood in for here.
+		const openers = new WeakMap<object, Element | null>();
+		let spies: jest.SpyInstance[] = [];
+		beforeEach(() => {
+			const open = Modal.prototype.open;
+			const close = Modal.prototype.close;
+			spies = [
+				jest.spyOn(Modal.prototype, 'open').mockImplementation(function (this: Modal) {
+					openers.set(this, document.activeElement);
+					open.call(this);
+				}),
+				jest.spyOn(Modal.prototype, 'close').mockImplementation(function (this: Modal) {
+					close.call(this);
+					const opener = openers.get(this) as HTMLElement | null | undefined;
+					if (opener && opener !== document.body && opener.isConnected) opener.focus();
+				}),
+			];
+		});
+		afterEach(() => spies.forEach((spy) => spy.mockRestore()));
+		const modalOf = (): HTMLElement => document.body.lastElementChild as HTMLElement;
+		const cellKey = (): string | null => document.activeElement?.closest('.dse-init__cell')?.getAttribute('data-instance-key') ?? null;
+		/** Stage 3 damage on one minion in the open pool modal and press Apply (a keyboard press: click() on a focused button). */
+		const applyPool = (modal: HTMLElement): void => {
+			ctl<HTMLInputElement>(modal, 'pool.damage-amount').value = '3';
+			ctl<HTMLInputElement>(modal, 'pool.minion-count').value = '1';
+			ctl(modal, 'pool.apply-damage').click();
+			ctl(modal, 'pool.apply').click();
+		};
+
+		test('[F08] pool modal opened from the detail row control: Apply gives focus to the rebuilt detail row Stamina control', async () => {
+			const { root, flush } = await mount(SQUAD);
+			const opener = ctl(root, 'init.detail.stamina');
+			opener.focus();
+			opener.click();
+			applyPool(modalOf());
+			await flush();
+			expect(document.querySelector('.dse-modal')).toBeNull();
+			expect(ctl(root, 'init.detail.stamina')).not.toBe(opener); // the tracker really was rebuilt
+			expect(document.activeElement).toBe(ctl(root, 'init.detail.stamina'));
+		});
+
+		test('[F09] pool modal opened by double-clicking a keyboard-focused roster cell: Apply gives focus to the rebuilt cell of the same minion', async () => {
+			const { root, flush } = await mount(SQUAD);
+			const opener = ctl(root, 'init.cell.stamina', 2);
+			opener.focus();
+			opener.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+			applyPool(modalOf());
+			await flush();
+			expect(ctl(root, 'init.cell.stamina', 2)).not.toBe(opener);
+			expect(document.activeElement).toBe(ctl(root, 'init.cell.stamina', 2));
+			expect(cellKey()).toBe('0-3');
+		});
+
+		/** Run `open` and hand back the modal it opened, so a test can close it the way Obsidian does. */
+		function opening(open: () => void): DseModal {
+			const opened: DseModal[] = [];
+			const original = DseModal.prototype.open;
+			const spy = jest.spyOn(DseModal.prototype, 'open').mockImplementation(function (this: DseModal) {
+				opened.push(this);
+				original.call(this);
+			});
+			try {
+				open();
+			} finally {
+				spy.mockRestore();
+			}
+			return opened[0];
+		}
+
+		test.each([
+			['the X (close())', (m: DseModal) => m.close()],
+			['Escape through the modal Scope', (m: DseModal) => {
+				const detach = attachObsidianKeymap(m);
+				pressEscape(document.body);
+				detach();
+			}],
+		])('[F10] pool modal closed with %s: no rebuild, and focus lands on the opener as before', async (_how, leave) => {
+			const { root, flush } = await mount(SQUAD);
+			const opener = ctl(root, 'init.detail.stamina');
+			opener.focus();
+			const modal = opening(() => opener.click());
+			expect(document.querySelector('.dse-modal')).not.toBeNull();
+			leave(modal);
+			await flush();
+			expect(document.querySelector('.dse-modal')).toBeNull();
+			expect(ctl(root, 'init.detail.stamina')).toBe(opener);
+			expect(document.activeElement).toBe(opener);
+		});
+
+		test('[F11] focus that was not inside the tracker when the pool modal opened is not taken by the rebuild', async () => {
+			const { root, flush } = await mount(SQUAD);
+			const other = document.createElement('input');
+			document.body.appendChild(other);
+			other.focus();
+			ctl(root, 'init.detail.stamina').click(); // opened by a scripted / pointer click: the tracker never held focus
+			applyPool(modalOf());
+			await flush();
+			expect(ctl(root, 'init.detail.stamina').isConnected).toBe(true);
+			expect(root.contains(document.activeElement)).toBe(false);
+			expect(document.activeElement).toBe(other); // Obsidian's own return, untouched
+		});
+
+		test('[F12] focus the user has already put somewhere else by the time the modal has closed is left alone', async () => {
+			const { root, flush } = await mount(SQUAD);
+			const other = document.createElement('input');
+			document.body.appendChild(other);
+			const opener = ctl(root, 'init.detail.stamina');
+			opener.focus();
+			opener.click();
+			const modal = modalOf();
+			applyPool(modal);
+			other.focus(); // between the close and the hand-back
+			await flush();
+			expect(document.activeElement).toBe(other);
+		});
+
+		test('[F13] the Conditions window: closing it after an edit gives focus to the rebuilt Add Condition button', async () => {
+			const { root, flush } = await mount(TRACKER);
+			const opener = ctl(root, 'init.cond.add');
+			opener.focus();
+			const opened = opening(() => opener.click());
+			const modal = modalOf();
+			ctl(modal, 'cond.add').click();
+			const input = ctl<HTMLInputElement>(modal, 'cond.input');
+			input.value = 'daz';
+			input.dispatchEvent(new Event('input', { bubbles: true }));
+			press(input, 'Enter');
+			expect(ctl(root, 'init.cond.add')).not.toBe(opener); // the conditions row was rebuilt behind the window
+			opened.close();
+			await flush();
+			expect(document.querySelector('.dse-modal')).toBeNull();
+			expect(document.activeElement).toBe(ctl(root, 'init.cond.add'));
+		});
+
+		test.each([
+			['the hero Stamina control', 'init.hero.stamina'],
+			['the detail row Stamina control of an Ogre', 'init.detail.stamina'],
+		])('[F14] the Stamina modal opened from %s repaints in place: Apply leaves focus on the opener', async (_name, id) => {
+			const { root, flush } = await mount(TRACKER);
+			const opener = ctl(root, id);
+			opener.focus();
+			opener.click();
+			const modal = modalOf();
+			ctl<HTMLInputElement>(modal, 'sedit.apply-amount').value = '5';
+			ctl(modal, 'sedit.damage').click();
+			ctl(modal, 'sedit.apply').click();
+			await flush();
+			expect(document.querySelector('.dse-modal')).toBeNull();
+			expect(ctl(root, id)).toBe(opener);
+			expect(document.activeElement).toBe(opener);
+		});
+
+		test('[F15] the Stamina modal opened by double-clicking a keyboard-focused roster cell: Apply leaves focus on that cell', async () => {
+			const { root, flush } = await mount(TRACKER);
+			const opener = ctl(root, 'init.cell.stamina', 1);
+			opener.focus();
+			opener.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+			const modal = modalOf();
+			ctl<HTMLInputElement>(modal, 'sedit.apply-amount').value = '5';
+			ctl(modal, 'sedit.damage').click();
+			ctl(modal, 'sedit.apply').click();
+			await flush();
+			expect(document.querySelector('.dse-modal')).toBeNull();
+			expect(cellKey()).toBe('0-2');
+			expect(document.activeElement).toBe(opener);
+		});
+
+		test('[F16] a captain\'s Stamina edit that flips its squad\'s bonus rebuilds the tracker: focus goes to the rebuilt detail row Stamina control', async () => {
+			const { root, flush } = await mount(CAPTAINED.replace('squad_role: minion }', 'squad_role: minion, with_captain_stamina: 2 }'));
+			(root.querySelector('[data-instance-key="1-1"]') as HTMLElement).click(); // select the Cap
+			const opener = ctl(root, 'init.detail.stamina');
+			opener.focus();
+			opener.click();
+			const modal = modalOf();
+			ctl<HTMLInputElement>(modal, 'sedit.apply-amount').value = '20';
+			ctl(modal, 'sedit.damage').click();
+			ctl(modal, 'sedit.apply').click();
+			await flush();
+			expect(document.querySelector('.dse-modal')).toBeNull();
+			expect(ctl(root, 'init.detail.stamina')).not.toBe(opener); // the coarse rebuild of the bonus crossing
+			expect(document.activeElement).toBe(ctl(root, 'init.detail.stamina'));
+		});
 	});
 });
 

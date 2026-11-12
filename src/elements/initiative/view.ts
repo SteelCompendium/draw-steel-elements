@@ -149,8 +149,14 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// F1 §4.5: a modal opened by the view must close on view unload. ONE
 		// view-lifetime registration over the replaced-on-open reference above;
 		// registered here (not in onMount, which the default update() path re-runs).
-		this.register(() => this.activeModal?.close());
+		this.register(() => {
+			this.unloading = true; // SC-603: the close this causes must not hand focus into a tracker that is going away
+			this.activeModal?.close();
+		});
 	}
+
+	/** SC-603 — set once the view is unloading; see the registration in the constructor. */
+	private unloading = false;
 
 	/** SC-576 — an `update()` with a model other than the one on screen comes from outside (the
 	 *  sidebar's refresh path re-prepares the block and calls `previous.update(model)` on this same
@@ -213,8 +219,16 @@ export class InitiativeView extends ElementView<EncounterData> {
 	/** Open `modal` tracked as THE active modal: close-on-unload via the constructor's
 	 *  single registration; the wrapped onClose nulls the reference when the modal
 	 *  actually closes (identity-guarded so an older modal can't null a newer one) while
-	 *  still running the modal's own inherited onClose behavior. */
-	private openModal(modal: DseModal): void {
+	 *  still running the modal's own inherited onClose behavior.
+	 *
+	 *  SC-603: a modal takes focus when it opens and Obsidian hands it back to whatever held it, on close. The pool modal's Apply,
+	 *  the Conditions window's edits and the like REPLACE the control that opened them (the whole tracker is rebuilt, or the
+	 *  conditions row is), so there is nothing left to hand it to and focus fell to <body>: a keyboard user pressed Enter on
+	 *  Apply and had to Tab in again from the top of the note. So the focused control is remembered HERE, before the modal opens
+	 *  (`captureControlFocus`, as the Reset encounter item does), and given to its rebuilt successor once the modal has closed
+	 *  (`restoreControlFocus`; see `giveFocusBack`). `restoreFocus: false` is for a caller that does it itself. */
+	private openModal(modal: DseModal, restoreFocus = true): void {
+		const focus = restoreFocus ? captureControlFocus(this.rootEl, FOCUS_FAMILIES) : null;
 		// SC-595: the anchor keeps a hover preview alive while the modal is open (see DseModal.anchorTo).
 		modal.anchorTo(this.cx.host.containerEl);
 		// `.bind(modal)` (not a plain `modal.onClose` reference, which would trip
@@ -229,9 +243,22 @@ export class InitiativeView extends ElementView<EncounterData> {
 		modal.onClose = () => {
 			inheritedOnClose();
 			if (this.activeModal === modal) this.activeModal = null;
+			if (focus) this.giveFocusBack(focus);
 		};
 		this.activeModal = modal;
 		modal.open();
+	}
+
+	/** SC-603 — hand focus to the rebuilt successor of the control that opened a modal, once the modal is gone. Obsidian's own
+	 *  focus return runs synchronously inside `close()` and lands on the opener when it is still in the document (Cancel, Escape,
+	 *  a save that only repaints in place), so this waits one microtask, until `close()` has returned and the modal's DOM is out:
+	 *  by then focus is either on the opener (not free: left alone, exactly as before) or on <body> because the opener was
+	 *  replaced. An Apply rebuilds the tracker synchronously inside the modal's save callback, so the successor already exists.
+	 *  `restoreControlFocus` also refuses when something else holds focus by then (the user, another pane). */
+	private giveFocusBack(focus: ControlFocus): void {
+		void Promise.resolve().then(() => {
+			if (!this.unloading && this.rootEl?.isConnected) restoreControlFocus(this.rootEl, focus, FOCUS_FAMILIES);
+		});
 	}
 
 	/** The one whole-model change path (Reset Round / squad-pool edits from the grid or the
@@ -367,6 +394,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 							resetEncounter(this.model);
 							void this.rebuildFromWrittenReset(focus);
 						}),
+						false, // SC-603: hands focus back itself, once its async re-parse has rebuilt (and un-inerted) the tracker
 					);
 				},
 			},
