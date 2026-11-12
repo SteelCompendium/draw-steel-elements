@@ -51,7 +51,15 @@
 // against the unchanged legacy parseEncounterData; the legacy writer's bytes on a fully-authored
 // source) and test/dom/elements/initiative-default-keys.test.ts (the writes through the pipeline).
 import { stringifyYaml } from 'obsidian';
-import type { Condition, Creature, EncounterData, EnemyGroup, Malice, MaliceLogEntry } from '@drawSteelAdmonition/EncounterData';
+import type {
+	Condition,
+	Creature,
+	CreatureInstance,
+	EncounterData,
+	EnemyGroup,
+	Malice,
+	MaliceLogEntry,
+} from '@drawSteelAdmonition/EncounterData';
 import {
 	EMPTY_SQUAD_ACTIONS,
 	appendMaliceLogEntry,
@@ -255,6 +263,34 @@ function noteAbsent(obj: object, keys: readonly string[]): void {
 	);
 }
 
+/** SC-600: make `creature.instances` match `creature.amount` WITHOUT throwing away the instances a hand
+ *  edit of `amount` left alone. Before this, any length mismatch replaced the whole list, so growing a
+ *  group from 3 to 4 reset every creature's conditions and stamina.
+ *  - `instances` missing (or not a list): a fresh list, ids 1..amount (as before);
+ *  - longer than `amount`: the first `amount` are kept, the rest dropped from the END (trimmed BEFORE
+ *    validation, so a malformed entry that is cut off never throws);
+ *  - shorter: every existing entry is kept and `makeFresh(id)` entries are appended at the end. Ids are
+ *    max existing id + 1, + 2, ... so they may not be sequential and an id is never reused;
+ *  - the kept entries go through `validateKept` (the same checks and fills as ever). Appended entries
+ *    are NOT validated and are never `noteAbsent`-ed, exactly like a fresh list's entries: they are
+ *    written whole, and `validateKept` has already run on every entry that came from the note.
+ *  A squad's shared stamina pool is a creature/group field and is not touched here. */
+function adjustInstances(
+	creature: Creature,
+	validateKept: (instance: CreatureInstance, index: number) => void,
+	makeFresh: (id: number) => CreatureInstance,
+): void {
+	// `amount` is a number here (checked by the caller); the fresh loop has always run `i < amount`.
+	const want = creature.amount > 0 ? Math.ceil(creature.amount) : 0;
+	let kept: CreatureInstance[] = Array.isArray(creature.instances) ? creature.instances : [];
+	if (kept.length > want) kept = kept.slice(0, want);
+	kept.forEach(validateKept);
+	let lastId = 0;
+	for (const instance of kept) if (Number.isFinite(instance.id)) lastId = Math.max(lastId, instance.id);
+	while (kept.length < want) kept.push(makeFresh(++lastId));
+	creature.instances = kept;
+}
+
 /** Record, on every object `noteAbsent` saw, the value it holds NOW for each key the source left absent.
  *  Called at the end of `parse` and again at the end of `resolveRefs` (which fills statblock-sourced
  *  keys and the stamina derived from them); the helper overwrites, so calling twice is safe. */
@@ -376,19 +412,12 @@ export function parse(input: unknown, _raw: string): EncounterData {
 					// (SC-195).
 					initMinionPool(group, creature);
 				}
-				// Initialize instances for minions (for conditions only).
-				if (!creature.instances || creature.instances.length !== creature.amount) {
-					creature.instances = [];
-					for (let i = 0; i < creature.amount; i++) {
-						creature.instances.push({
-							id: i + 1,
-							conditions: [],
-							// current_stamina and temp_stamina are not used for minions in squads
-						});
-					}
-				} else {
-					// Validate existing instances.
-					creature.instances.forEach((instance, instanceIndex) => {
+				// Initialize instances for minions (for conditions only). SC-600: an `amount` that no
+				// longer matches the list keeps the instances it can (see `adjustInstances`).
+				adjustInstances(
+					creature,
+					(instance, instanceIndex) => {
+						// Validate existing instances.
 						noteAbsent(instance, MINION_INSTANCE_KEYS);
 						if (typeof instance.id !== 'number') {
 							throw new Error(
@@ -401,8 +430,13 @@ export function parse(input: unknown, _raw: string): EncounterData {
 							() => `Invalid condition format for instance '${instance.id}' of creature '${creature.name}'.`,
 							instance,
 						);
-					});
-				}
+					},
+					(id) => ({
+						id,
+						conditions: [],
+						// current_stamina and temp_stamina are not used for minions in squads
+					}),
+				);
 				// SC-195 fix round (MEDIUM-1) — for EVERY squad, not only a freshly
 				// initialized one: reconcile a persisted bonus flag that has been orphaned
 				// by the captain leaving the group through a non-badge route (e.g. a hand
@@ -415,19 +449,10 @@ export function parse(input: unknown, _raw: string): EncounterData {
 				// Regular creatures and captains. A statblock-sourced max_stamina is unset
 				// here, so current_stamina may be materialized as undefined — resolveRefs
 				// (Task 2) re-applies the same `?? max_stamina` fill after the merge.
-				if (!creature.instances || creature.instances.length !== creature.amount) {
-					creature.instances = [];
-					for (let i = 0; i < creature.amount; i++) {
-						creature.instances.push({
-							id: i + 1,
-							current_stamina: creature.max_stamina,
-							temp_stamina: 0,
-							conditions: [],
-						});
-					}
-				} else {
-					// Validate existing instances.
-					creature.instances.forEach((instance, instanceIndex) => {
+				adjustInstances(
+					creature,
+					(instance, instanceIndex) => {
+						// Validate existing instances.
 						noteAbsent(instance, REGULAR_INSTANCE_KEYS);
 						if (typeof instance.id !== 'number') {
 							throw new Error(
@@ -441,8 +466,14 @@ export function parse(input: unknown, _raw: string): EncounterData {
 							() => `Invalid condition format for instance '${instance.id}' of creature '${creature.name}'.`,
 							instance,
 						);
-					});
-				}
+					},
+					(id) => ({
+						id,
+						current_stamina: creature.max_stamina,
+						temp_stamina: 0,
+						conditions: [],
+					}),
+				);
 			}
 		}
 	}
