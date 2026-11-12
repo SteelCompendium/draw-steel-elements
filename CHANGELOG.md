@@ -22,6 +22,14 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **In Live Preview, keyboard focus now stays on the button you pressed when the element saves and Obsidian redraws it** (SC-602).
+  Press Enter on a counter's + (or Advance round, Make captain, Catch Breath, and so on) and the element saves its change to the note;
+  before, focus fell to the page about half a second later, so a keyboard user had to Tab in again from the top of the note. Focus now
+  stays on the pressed button, or on the control that replaced it, with the keyboard ring. This holds for every element that saves.
+  A mouse click still never pulls focus into an element, and focus you moved away before the save lands stays where you put it.
+  Reading view is unchanged. Not covered: the half-typed Malice quick-add draft is still lost when the tracker saves (SC-605), and the
+  Conditions window still closes when a write lands (SC-384).
+
 - [FIX] **Clicking another creature in the initiative roster while using the keyboard keeps focus in the tracker, on the creature you
   clicked, in Reading view** (SC-609). With focus on the detail row's Stamina control (or any other control of the detail row), a
   mouse click on a roster cell switched the detail row and focus fell to the top of the page. Focus now moves to the cell you
