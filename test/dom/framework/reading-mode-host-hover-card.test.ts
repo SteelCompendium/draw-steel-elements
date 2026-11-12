@@ -114,7 +114,13 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 		const section: Section = { current: sec };
 		const host = new ReadingModeBlockHost(new Plugin(app) as never, el, switchableCtx(section) as never, 'ds-counter');
 		host.setMountedBody(known);
-		return { app, host, section, popover };
+		/** Obsidian redrew the part and the view is adopted into the redraw (`rebind`: the card takes a new snapshot of the note as drawn, SC-607). */
+		const redraw = async (next: Sec) => {
+			section.current = next;
+			host.rebind(host.containerEl, switchableCtx(section) as never);
+			await settle();
+		};
+		return { app, host, section, popover, redraw };
 	}
 	/** The + on the card: a persist intent takes the card's pin, the debounced write follows it. */
 	async function plus(host: ReadingModeBlockHost, to: string): Promise<boolean> {
@@ -188,9 +194,9 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 	});
 
 	test('J5 the second + after the preview was redrawn (its part shows the new value): it lands in the hovered counter', async () => {
-		const { app, host, section } = hovered(LONG(5, 5), heading, 'Note#Tracker');
+		const { app, host, redraw } = hovered(LONG(5, 5), heading, 'Note#Tracker');
 		await plus(host, bodyOf(6));
-		section.current = { text: ['', ...CTR(6), '', ''].join('\n'), lineStart: 1, lineEnd: 4 };
+		await redraw({ text: ['', ...CTR(6), '', ''].join('\n'), lineStart: 1, lineEnd: 4 });
 
 		expect(await plus(host, bodyOf(7))).toBe(true);
 		expect(valuesOf(app)).toEqual([7, 5]);
@@ -329,10 +335,10 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 		const lines = byHeading ? ['# N', '', '## Tracker', '', ...cal, '', '## After', 'END'] : ['# N', '', ...cal, '', '^cal', '', 'END'];
 		const head = lines.indexOf('> [!note] Camp');
 		const sec: Sec = byHeading ? { text: ['', ...cal, '', ''].join('\n'), lineStart: 1, lineEnd: 10 } : { text: cal.join('\n'), lineStart: 0, lineEnd: 9 };
-		const { app, host, section } = hovered(lines.join('\n'), sec, link, bodyOf(5), { cal: [head, head + 9] });
+		const { app, host, redraw } = hovered(lines.join('\n'), sec, link, bodyOf(5), { cal: [head, head + 9] });
 
 		expect(await plus(host, bodyOf(6))).toBe(true); // the lower counter now reads like the upper
-		if (redrawn) section.current = byHeading ? { text: ['', ...C2(6, 6), '', ''].join('\n'), lineStart: 1, lineEnd: 10 } : { text: C2(6, 6).join('\n'), lineStart: 0, lineEnd: 9 };
+		if (redrawn) await redraw(byHeading ? { text: ['', ...C2(6, 6), '', ''].join('\n'), lineStart: 1, lineEnd: 10 } : { text: C2(6, 6).join('\n'), lineStart: 0, lineEnd: 9 });
 		expect(await plus(host, bodyOf(7))).toBe(true);
 		expect(valuesOf(app)).toEqual([6, 7]);
 		expect(Notice.notices).toEqual([]);
@@ -552,9 +558,9 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 
 		test('J17 the same pass-over after the first + (its link already looked up), the part redrawn with the new value, the identical counter holding it too: the second + lands in the hovered counter', async () => {
 			const disk = ['# N', '', '## Tracker', '', ...CTR(5), '', '## Other', '', ...CTR(6), '', 'END'].join('\n');
-			const { app, host, section, popover } = hovered(disk, heading, 'Note#Tracker');
+			const { app, host, redraw, popover } = hovered(disk, heading, 'Note#Tracker');
 			expect(await plus(host, bodyOf(6))).toBe(true); // both counters read 6 now (the hovered one was 5)
-			section.current = { text: ['', ...CTR(6), '', ''].join('\n'), lineStart: 1, lineEnd: 4 };
+			await redraw({ text: ['', ...CTR(6), '', ''].join('\n'), lineStart: 1, lineEnd: 4 });
 			noteHoverLink(app, hoverEvent('Note#Other', popover));
 
 			expect(await plus(host, bodyOf(7))).toBe(true);

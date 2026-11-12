@@ -167,7 +167,12 @@ async function cell(c: Construct, shape: Shape, hostKind: 'rv' | 'lp', edit: Edi
 		if (plusLanded) known = 6;
 		const post = noteOf(build, plain, known, 6, ids, layout);
 		cacheNote = post;
-		if (plus === '+ (part redrawn after +)') section.current = partOf(shape, post, build(known), off, plain);
+		if (plus === '+ (part redrawn after +)') {
+			// Obsidian redrew the part from the note as the + left it and the view is adopted into the redraw (`rebind`: a new snapshot of the note as drawn, SC-607)
+			section.current = partOf(shape, post, build(known), off, plain);
+			host.rebind(el, switchableCtx(section) as never);
+			await settle();
+		}
 		Notice.notices.length = 0;
 		resetDroppedWriteNotices();
 	}

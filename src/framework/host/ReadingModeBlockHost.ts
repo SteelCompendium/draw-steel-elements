@@ -575,7 +575,9 @@ export class ReadingModeBlockHost implements BlockHost {
 	private onRenderChildUnload(renderChild: MarkdownRenderChild): void {
 		if (renderChild !== this.renderChild) return;
 		this.lastWrite = null; // SC-584: the record of this host's own write (a whole note's text) is not kept past the section it was made for
-		this.drawn = null; // SC-607: nor the note as drawn
+		this.drawn = null; // SC-607: nor the note as drawn,
+		this.drawnRead = null; // nor a read of it still in flight (it must not fill `drawn` of an unloaded host)
+		this.drawnToken = null;
 		// SC-340 fix round 1 (Important-1): recorded whether or not an entry exists yet — the
 		// pipeline can still be awaiting prepareModel (refs) when the section is torn down, so
 		// ViewRegistry.own() would otherwise hand the view to a host whose render child has

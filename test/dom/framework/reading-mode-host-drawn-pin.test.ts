@@ -576,4 +576,151 @@ describe('SC-607: a preview that stayed open while the note changed never writes
 			expect(judge(app, now.lines.join('\n'), now.U, now.L)).toEqual({ outcome: 'A', kinds: [] });
 		});
 	});
+
+	// --- notes the card's own click is judged on, built from parts ---
+	const H = (name: string, n: number): string[] => [`## ${name}`, '', ...CTR(n), ''];
+	const B = (n: number, id: string): string[] => [...CTR(n), `^${id}`, ''];
+	const note = (...parts: string[][]): string[] => ['# N', '', 'TOP', '', ...parts.flat(), '## After', '', 'END'];
+	const hoverSec = (n: number): Sec => ({ text: ['', ...CTR(n), ''].join('\n'), lineStart: 1, lineEnd: 4 });
+	const embedSec = (name: string, n: number): Sec => ({ text: [`## ${name}`, '', ...CTR(n), ''].join('\n'), lineStart: 2, lineEnd: 5 });
+	const blkSec = (n: number): Sec => ({ text: CTR(n).join('\n'), lineStart: 0, lineEnd: 3 });
+	/** A card on `sec` in a hover (`data` = the note as drawn, like Obsidian) or an embed, the note `drawn` on disk with a cache that follows it. */
+	function cardOn(shape: Shape, link: string, sec: Sec, drawn: string[]) {
+		const app = new App();
+		app.vault.setFile('Note.md', drawn.join('\n'));
+		let cacheLines = drawn;
+		jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheOf(cacheLines) as never);
+		const section: Section = { current: sec };
+		const hover = shape === 'hover' ? popoverEl(app, link, drawn.join('\n')) : null;
+		const el = hover ? hover.el : embedEl(link, false);
+		const children: Array<{ load(): void; unload(): void }> = [];
+		const ctx = { ...(ctxOf(section) as object), addChild: (c: never) => { children.push(c); return c; } };
+		const host = new ReadingModeBlockHost(new Plugin(app) as never, el, ctx as never, 'ds-counter');
+		host.setMountedBody(bodyOf(5));
+		return {
+			app,
+			host,
+			children,
+			outside: (lines: string[]) => {
+				app.vault.setFile('Note.md', lines.join('\n'));
+				cacheLines = lines;
+			},
+			done: () => el.closest('.hover-popover')?.remove(),
+		};
+	}
+	const plusOn = async (host: ReadingModeBlockHost, to = 6): Promise<void> => {
+		host.notePersistIntent();
+		await settle();
+		await host.replaceSource(bodyOf(to), { fromView: true });
+	};
+
+	// A section MOVED (cut and pasted: Sync, an outline drag) while its preview stays open: the preview is not redrawn (its part's text is unchanged), the line map cannot
+	// tell a moved block from a deleted one with another block pasted (the fence lines are the same text in every counter), so the click is refused until the preview is
+	// redrawn (reopened). A documented refusal where base saved: the only narrower rule (a give-up-like fallback for 'deleted') writes a different counter in three shapes.
+	describe('a moved section whose preview stays open is refused, never written', () => {
+		const cases: Array<[string, Shape, 'heading' | 'block', 'to the end' | 'below another section']> = [];
+		for (const shape of ['hover', 'embed'] as Shape[]) for (const kind of ['heading', 'block'] as const) for (const where of ['to the end', 'below another section'] as const) cases.push([`${shape} ${kind} link, moved ${where}`, shape, kind, where]);
+		test.each(cases)('%s', async (_name, shape, kind, where) => {
+			let drawn: string[];
+			let moved: string[];
+			if (kind === 'heading') {
+				drawn = note(H('Tracker', 5), H('Other', 9));
+				moved = where === 'to the end' ? ['# N', '', 'TOP', '', ...H('Other', 9), '## After', '', 'END', '', ...H('Tracker', 5)] : note(H('Other', 9), H('Tracker', 5));
+			} else {
+				drawn = ['# N', '', 'TOP', '', ...B(5, 'pa'), 'mid', '', ...B(9, 'pb'), 'END'];
+				moved = where === 'to the end' ? ['# N', '', 'TOP', '', 'mid', '', ...B(9, 'pb'), 'END', '', ...B(5, 'pa')] : ['# N', '', 'TOP', '', 'mid', '', ...B(9, 'pb'), ...B(5, 'pa'), 'END'];
+			}
+			const sec = kind === 'block' ? blkSec(5) : shape === 'hover' ? hoverSec(5) : embedSec('Tracker', 5);
+			const c = cardOn(shape, kind === 'block' ? 'Note#^pa' : 'Note#Tracker', sec, drawn);
+			await settle();
+			c.outside(moved);
+			await plusOn(c.host);
+			c.done();
+
+			expect(c.app.vault.getContent('Note.md')).toBe(moved.join('\n'));
+			expect(Notice.notices).toEqual(dropped);
+		});
+	});
+
+	// A block form opened on the upper of two ADJACENT identical blocks (its pin is placed through the link and made strict), then that block deleted from outside: Save is
+	// refused. The head-first line map alone maps the upper block onto the survivor (the twin); only the strict check at write time refuses it.
+	test.each([['hover'], ['embed']] as Array<[Shape]>)('a block form opened on the upper of two adjacent identical blocks (%s), the upper deleted from outside, Save: refused, the twin is not written', async (shape) => {
+		const drawn = ['# N', '', 'TOP', '', ...B(5, 'pa'), ...B(5, 'pb'), 'END'];
+		const now = ['# N', '', 'TOP', '', ...B(5, 'pb'), 'END'];
+		const c = cardOn(shape, 'Note#^pa', blkSec(5), drawn);
+		await settle();
+		const pin = c.host.pinPosition();
+		await settle();
+		c.outside(now);
+		expect(await c.host.replaceSource(bodyOf(5, 'Edited'), { pin: pin!, pinOnly: true })).toBe(false);
+		c.done();
+
+		expect(c.app.vault.getContent('Note.md')).toBe(now.join('\n'));
+		expect(Notice.notices).toEqual(dropped);
+	});
+
+	// The same strictness for a pin of a part that IS the whole note (an embed of the only section of a note): a form on the upper of two adjacent identical blocks, the
+	// upper deleted from outside, Save: refused (head-first alone would write the survivor).
+	test('a form in an embed whose part is the whole note, on the upper of two adjacent identical blocks, the upper deleted, Save: refused', async () => {
+		const drawn = ['## Tracker', '', ...CTR(5), ...CTR(5), ''];
+		const now = ['## Tracker', '', ...CTR(5), ''];
+		const c = cardOn('embed', 'Note#Tracker', { text: drawn.join('\n'), lineStart: 2, lineEnd: 5 }, drawn);
+		await settle();
+		const pin = c.host.pinPosition();
+		await settle();
+		c.outside(now);
+		expect(await c.host.replaceSource(bodyOf(5, 'Edited'), { pin: pin!, pinOnly: true })).toBe(false);
+
+		expect(c.app.vault.getContent('Note.md')).toBe(now.join('\n'));
+		expect(Notice.notices).toEqual(dropped);
+	});
+
+	// The part the card was given was the WHOLE note when it was drawn (a note that is only that section); the note then grows. The card's drawn-from text is that part.
+	test('the part was the whole note when the card was drawn, a paragraph is added from outside: the + is saved (the drawn-from text is the part)', async () => {
+		const drawn = ['## Tracker', '', ...CTR(5)];
+		const grown = [...drawn, '', 'added from outside'];
+		const c = cardOn('embed', 'Note#Tracker', { text: drawn.join('\n'), lineStart: 2, lineEnd: 5 }, drawn);
+		await settle();
+		c.outside(grown);
+		await plusOn(c.host);
+
+		expect(values(c.app)).toEqual([6]);
+		expect(Notice.notices).toEqual([]);
+	});
+
+	// The snapshot is kept only when the metadata cache describes the text that was read: the last section must end where the text ends. The cache here ends before a
+	// paragraph that was appended (all headings are still on their lines), so the snapshot is not trusted and the click is refused, though the cache has caught up by then.
+	test('the cache the card\'s read was taken with ends before the text it read (a paragraph appended, every heading on its line): the snapshot is dropped and the click refused', async () => {
+		const t0 = note(H('Tracker', 5), H('Other', 9));
+		const t1 = [...t0, '', 'appended from outside'];
+		const app = new App();
+		app.vault.setFile('Note.md', t1.join('\n')); // the card's read sees the appended paragraph
+		const withSections = (lines: string[]) => ({ ...cacheOf(lines), sections: [{ position: { start: pos(0), end: { line: lines.length - 1, col: 0, offset: lines.join('\n').length } } }] });
+		let cacheNow: unknown = withSections(t0); // the cache does not yet
+		jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheNow as never);
+		const { el } = popoverEl(app, 'Note#Tracker', t0.join('\n'));
+		const host = new ReadingModeBlockHost(new Plugin(app) as never, el, ctxOf({ current: hoverSec(5) }), 'ds-counter');
+		host.setMountedBody(bodyOf(5));
+		await settle();
+		cacheNow = cacheOf(t1); // caught up before the click
+		await plusOn(host);
+		el.closest('.hover-popover')?.remove();
+
+		expect(app.vault.getContent('Note.md')).toBe(t1.join('\n'));
+		expect(Notice.notices).toEqual(dropped);
+	});
+
+	// F7: a card unloaded while its note read is still in flight keeps nothing when the read resolves.
+	test('a card unloaded before its note read resolved holds no snapshot afterwards', async () => {
+		const drawn = note(H('Tracker', 5), H('Other', 9));
+		const c = cardOn('embed', 'Note#Tracker', embedSec('Tracker', 5), drawn);
+		c.children[0].load();
+		c.children[0].unload(); // before the (macrotask) read of the mock vault resolves
+		await settle();
+		const held = c.host as unknown as { drawn: unknown; drawnRead: unknown; drawnToken: unknown };
+
+		expect(held.drawn).toBeNull();
+		expect(held.drawnRead).toBeNull();
+		expect(held.drawnToken).toBeNull();
+	});
 });
