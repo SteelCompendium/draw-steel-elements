@@ -59,6 +59,22 @@ describe('D7 Task 1: kit/conditionIcons — buildConditionIcons', () => {
 		expect(iconOf(icons[1])).toBe('hand'); // grabbed, unaffected
 	});
 
+	test('SC-583: a key in another casing is the standard condition (registry icon + name), and the entry handed to onRemove is the one written', () => {
+		const root = document.createElement('div');
+		const onRemove = jest.fn();
+		const entry = { key: 'Dazed' };
+
+		buildConditionIcons(root, [entry, 'GRABBED'], new ConditionManager(), { owner: fakeOwner(), canRemove: true, onRemove });
+
+		const icons = root.querySelectorAll('.dse-cond');
+		expect(iconOf(icons[0])).toBe('waves'); // dazed, not the custom fallback
+		expect(icons[0].getAttribute('aria-label')).toBe('Remove condition: Dazed');
+		expect(iconOf(icons[1])).toBe('hand');
+		expect(icons[1].getAttribute('aria-label')).toBe('Remove condition: Grabbed');
+		(icons[0] as HTMLButtonElement).click();
+		expect(onRemove).toHaveBeenCalledWith(entry);
+	});
+
 	test('canRemove: true — real iconButtons; click invokes onRemove with the exact entry', () => {
 		const root = document.createElement('div');
 		const mgr = new ConditionManager();

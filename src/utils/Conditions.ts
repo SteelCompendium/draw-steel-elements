@@ -4,6 +4,14 @@ export interface ConditionConfig {
 	iconName: string;
 }
 
+/** SC-583: THE condition-key equality rule. A condition key matches regardless of case, so a hand-written `key: Dazed` is
+ *  the standard `dazed` and a hand-written custom `Hexed` is the same condition as an added custom "hexed". Every place that
+ *  compares or looks up a condition key goes through this (the registry lookups below, the Conditions window's duplicate
+ *  check). It is a comparison only: what the user wrote is never rewritten to match (SC-592 keeps their spelling on write). */
+export function conditionKeysEqual(a: string, b: string): boolean {
+	return a.toLowerCase() === b.toLowerCase();
+}
+
 export class ConditionManager {
 	private conditions: ConditionConfig[] = [
 		{ key: 'bleeding', displayName: 'Bleeding', iconName: 'droplet' },
@@ -56,7 +64,7 @@ export class ConditionManager {
 	}
 
 	public getConditionByKey(key: string): ConditionConfig | undefined {
-		return this.conditions.find(c => c.key === key);
+		return this.conditions.find(c => conditionKeysEqual(c.key, key));
 	}
 
 	public getPseudoConditions(): ConditionConfig[] {
@@ -64,6 +72,6 @@ export class ConditionManager {
 	}
 
 	public getPseudoConditionByKey(key: string): ConditionConfig | undefined {
-		return this.pseudoConditions.find(c => c.key === key);
+		return this.pseudoConditions.find(c => conditionKeysEqual(c.key, key));
 	}
 }

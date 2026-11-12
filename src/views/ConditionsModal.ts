@@ -55,7 +55,7 @@
 import type { App } from 'obsidian';
 import { getIconIds, setIcon } from 'obsidian';
 import type { Condition, ConditionHolder } from '@drawSteelAdmonition/EncounterData';
-import { ConditionManager, ConditionConfig } from '@utils/Conditions';
+import { ConditionManager, ConditionConfig, conditionKeysEqual } from '@utils/Conditions';
 import { DseModal, iconButton, setPressedState, stampControl } from '@/framework/kit';
 import { registerEscapeConsumer } from '@/framework/kit/escapeConsumer';
 import { applyConditionColor, applyConditionEffect, CONDITION_EFFECTS, isConditionColor } from '@/elements/conditionColor';
@@ -769,7 +769,7 @@ export class ConditionsModal extends DseModal {
 	private pickMatch(match: Match): void {
 		const key = match.kind === 'known' ? match.config.key : slugConditionKey(match.text);
 		if (!key) return; // blank/punctuation-only custom text is a no-op
-		const existingIndex = this.conditions.findIndex((c) => c.key === key);
+		const existingIndex = this.conditions.findIndex((c) => conditionKeysEqual(c.key, key)); // SC-583: any casing is the same condition
 		if (existingIndex !== -1) {
 			const rows = this.listEl.querySelectorAll<HTMLElement>('.dse-condal__row');
 			rows[existingIndex]?.scrollIntoView?.({ block: 'nearest' }); // guarded, see above

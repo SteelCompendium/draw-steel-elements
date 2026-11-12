@@ -49,7 +49,7 @@ async function persistBlock(app: App, ctx: FakeContext, data: EncounterData): Pr
 
 async function setup(
 	options: {
-		condition?: boolean | { color?: string; effect?: string };
+		condition?: boolean | { key?: string; color?: string; effect?: string };
 		persist?: boolean;
 		pool?: number;
 		/** SC-195 / C1: mark this many of the squad's 5 instances dead BEFORE the modal
@@ -77,7 +77,7 @@ async function setup(
 	}
 	if (options.condition) {
 		const custom = typeof options.condition === 'object' ? options.condition : {};
-		minion.instances![0].conditions = [{ key: 'grabbed', color: custom.color, effect: custom.effect }];
+		minion.instances![0].conditions = [{ key: custom.key ?? 'grabbed', color: custom.color, effect: custom.effect }];
 	}
 	const updateCallback = options.persist
 		? (jest.fn(() => { void persistBlock(app, ctx, data); }) as jest.Mock)
@@ -304,6 +304,14 @@ describe('D2 §3.5b: the pool modal on the unified template (optional minion sec
 		const icon = content.querySelector('.condition-icon') as HTMLElement;
 		expect(icon.style.getPropertyValue('--dse-condition-color')).toBe('red');
 		expect(icon.classList.contains('condition-effect-glow')).toBe(true);
+	});
+
+	// SC-583: a hand-written `Grabbed` is the standard grabbed condition here too (registry icon and name, not the custom fallback).
+	test('a condition key in another casing is the standard condition (registry icon + name)', async () => {
+		const { content } = await setup({ condition: { key: 'Grabbed' } });
+		const icon = content.querySelector('.condition-icon') as HTMLElement;
+		expect(icon.getAttribute('aria-label')).toBe('Remove Grabbed');
+		expect(icon.querySelector('[data-icon]')?.getAttribute('data-icon') ?? icon.getAttribute('data-icon')).toBe('hand');
 	});
 
 	test('SD-2: an INVALID condition color is rejected — no property, no inline style at all', async () => {

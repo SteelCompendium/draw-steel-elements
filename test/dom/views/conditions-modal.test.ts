@@ -682,6 +682,77 @@ describe('SC-186: add — the real combobox (arrow keys + Enter, Escape, known +
 		expect((container.querySelector('.dse-condal__input') as HTMLInputElement).value).toBe('Bleeding');
 	});
 
+	// SC-583: a condition key matches regardless of case (the note keeps the spelling the user wrote).
+	const pickByName = (container: HTMLElement, query: string, name: string): void => {
+		// (a pick keeps the dropdown open, so a second pick reuses it)
+		const input = container.querySelector<HTMLInputElement>('.dse-condal__input') ?? openCombobox(container);
+		typeQuery(input, query);
+		const item = Array.from(container.querySelectorAll('.dse-condal__menu-item')).find(
+			(i) => i.querySelector('.dse-condal__menu-name')?.textContent === name,
+		) as HTMLElement;
+		mousedownPick(item);
+	};
+
+	test('SC-583: a hand-written `Dazed` is the standard Dazed row (registry glyph, no CUSTOM tag)', () => {
+		const { container } = makeModal([{ key: 'Dazed' }]);
+		const row = rowByName(container, 'Dazed');
+		expect(row.querySelector('.dse-condal__glyph')?.getAttribute('data-icon')).toBe('waves');
+		expect(row.querySelector('.dse-condal__tag')).toBeNull();
+	});
+
+	test('SC-583: picking Dazed while `Dazed` is present adds nothing, writes nothing, and the entry keeps its spelling', () => {
+		const onChange = jest.fn();
+		const { container, holder } = makeModal([{ key: 'Dazed' }], onChange);
+		pickByName(container, 'daz', 'Dazed');
+		expect(onChange).not.toHaveBeenCalled();
+		expect(rows(container)).toHaveLength(1);
+		expect(holder.conditions).toEqual([{ key: 'Dazed' }]);
+		// A later, unrelated pick writes the list with the hand-written spelling untouched.
+		pickByName(container, 'Grabbed', 'Grabbed');
+		expect(onChange).toHaveBeenLastCalledWith([{ key: 'Dazed' }, { key: 'grabbed' }]);
+	});
+
+	test('SC-583: a plain-string `DAZED` counts as present too', () => {
+		const onChange = jest.fn();
+		const { container } = makeModal(['DAZED'], onChange);
+		pickByName(container, 'Dazed', 'Dazed');
+		expect(onChange).not.toHaveBeenCalled();
+		expect(rows(container)).toHaveLength(1);
+	});
+
+	test('SC-583: a hand-written custom `Hexed` and an added custom "hexed" are one condition', () => {
+		const onChange = jest.fn();
+		const { container } = makeModal([{ key: 'Hexed' }], onChange);
+		pickByName(container, 'hexed', 'Add custom: "hexed"');
+		expect(onChange).not.toHaveBeenCalled();
+		expect(rows(container)).toHaveLength(1);
+		expect(rowByName(container, 'Hexed').querySelector('.dse-condal__tag')?.textContent).toBe('custom');
+	});
+
+	test('SC-583: duration edit and removal act on the hand-written `Dazed` entry, spelling kept', () => {
+		const onChange = jest.fn();
+		const { container } = makeModal([{ key: 'Dazed' }, { key: 'grabbed' }], onChange);
+		openEditor(container, 'Dazed');
+		(editorOf(container).querySelector('button[aria-label="Save Ends"]') as HTMLElement).click();
+		expect(onChange).toHaveBeenLastCalledWith([{ key: 'Dazed', duration: 'save-ends' }, { key: 'grabbed' }]);
+		(rowByName(container, 'Grabbed').querySelector('button[aria-label="Remove Grabbed"]') as HTMLElement).click();
+		(rowByName(container, 'Dazed').querySelector('button[aria-label="Remove Dazed"]') as HTMLElement).click();
+		expect(onChange).toHaveBeenLastCalledWith([]);
+	});
+
+	test('SC-583 (existing duplicates): a note already holding `Dazed` and `dazed` opens as two standard rows, nothing merged or written; removing one leaves the other', () => {
+		const onChange = jest.fn();
+		const { container, holder } = makeModal([{ key: 'Dazed' }, { key: 'dazed', duration: 'eot' }], onChange);
+		expect(rows(container).map((r) => r.querySelector('.dse-condal__name')?.textContent)).toEqual(['Dazed', 'Dazed']);
+		expect(container.querySelector('.dse-condal__tag')).toBeNull();
+		expect(onChange).not.toHaveBeenCalled();
+		pickByName(container, 'Dazed', 'Dazed'); // already present: still a no-op
+		expect(onChange).not.toHaveBeenCalled();
+		(rows(container)[0].querySelector('button[aria-label="Remove Dazed"]') as HTMLElement).click();
+		expect(onChange).toHaveBeenLastCalledWith([{ key: 'dazed', duration: 'eot' }]);
+		expect(holder.conditions).toEqual([{ key: 'dazed', duration: 'eot' }]);
+	});
+
 	test('rapid multi-add: two picks in a row without reopening produce two rows', () => {
 		const onChange = jest.fn();
 		const { container } = makeModal([], onChange);

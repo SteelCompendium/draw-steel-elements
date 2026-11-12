@@ -311,3 +311,35 @@ describe('holders that never wrote conditions', () => {
 		expect((parseYaml(serialize(model)) as any).enemy_groups[0].creatures[0].instances[2].conditions).toEqual([{ key: 'grabbed' }]);
 	});
 });
+
+// SC-583: a condition key matches regardless of case (the registry lookups); the model never normalises what was written.
+describe('condition key casing survives a write', () => {
+	const CASED = [
+		'heroes:',
+		'  - name: Ash',
+		'    max_stamina: 30',
+		'    conditions:',
+		'      - key: Dazed',
+		'      - Grabbed',
+		'      - key: Hexed',
+		'        duration: eot',
+		'      - key: dazed',
+		'enemy_groups: []',
+		'malice:',
+		'  value: 0',
+	].join('\n');
+
+	test('a write that changes nothing keeps every hand-written spelling (object or plain), duplicates included', () => {
+		const out = serialize(parseLikePipeline(CASED));
+		const conditions = (parseYaml(out) as any).heroes[0].conditions;
+		expect(conditions).toEqual([{ key: 'Dazed' }, 'Grabbed', { key: 'Hexed', duration: 'eot' }, { key: 'dazed' }]);
+	});
+
+	test('an unrelated edit (adding a condition, removing another) leaves the rest as spelled', () => {
+		const model = parseLikePipeline(CASED);
+		const conds = list(hero(model));
+		hero(model).conditions = [...conds.slice(0, 3), { key: 'bleeding' }]; // the `dazed` copy removed, `bleeding` added
+		const after = (parseYaml(serialize(model)) as any).heroes[0].conditions;
+		expect(after).toEqual([{ key: 'Dazed' }, 'Grabbed', { key: 'Hexed', duration: 'eot' }, { key: 'bleeding' }]);
+	});
+});
