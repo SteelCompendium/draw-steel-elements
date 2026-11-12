@@ -10,7 +10,7 @@ import { normalizeHeadingName } from './headingNames';
 
 export type HoverLink = { linktext: string; sourcePath: string };
 
-type HoverLinkEvent = { linktext?: unknown; sourcePath?: unknown; hoverParent?: { hoverPopover?: { hoverEl?: unknown } | null } | null };
+type HoverLinkEvent = { linktext?: unknown; sourcePath?: unknown; hoverParent?: { hoverPopover?: { hoverEl?: unknown; embed?: { data?: unknown } | null } | null } | null };
 
 /** The log is bounded: the last 16 events are far more than the hovers that can be open at once. */
 const LOG_SIZE = 16;
@@ -85,6 +85,29 @@ export function hoverLinkOf(app: object, el: Element): HoverLink | null {
 	}
 	// the preview must show what the bound link names (`popoverShows`): a link another event bound here is refused
 	return link !== null && popoverShows(popover, link.linktext) ? link : null;
+}
+
+/**
+ * SC-607: the text of the note the hover preview `el` is drawn in was DRAWN from, read from Obsidian's own popover (`hoverPopover.embed.data`: the
+ * whole note as it was read for the preview; measured in Obsidian 1.15.1, it equals the note at the draw and keeps the old text after an outside edit
+ * that does not redraw the preview). Internal API, untyped: null when `el` is not in a hover preview, no logged event names its popover (the log is
+ * bounded), or the popover has no `embed.data` string (a version without it). Callers skip their check on null; they never refuse on it.
+ */
+export function hoverDrawnText(app: object, el: Element): string | null {
+	const popover = el.closest('.hover-popover');
+	if (!popover) return null;
+	const events = logOf(app).events;
+	try {
+		for (let i = events.length - 1; i >= 0; i--) {
+			const hoverPopover = events[i].hoverParent?.hoverPopover;
+			if (hoverPopover?.hoverEl !== popover) continue;
+			const data = hoverPopover.embed?.data;
+			return typeof data === 'string' ? data : null;
+		}
+	} catch {
+		// an internal object that throws on access is an absent API
+	}
+	return null;
 }
 
 /**

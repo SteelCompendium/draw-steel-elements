@@ -17,6 +17,9 @@ import { splitLines } from './lineEnding';
  */
 export const LINE_MAP_MAX_EDITS = 400;
 
+/** SC-607: the answer of the line diff when it met more than LINE_MAP_MAX_EDITS edits (it has none; `mapLine` and `mapLineFromTail` return null for it as before). */
+const GAVE_UP = 'gave up';
+
 /**
  * The line of `after` that is line `line` of `before`, by a minimal line diff (the common head and tail lines first, a Myers diff
  * over what is left between them). Lines are numbered the way Obsidian numbers them (`splitLines`). Null when that line was changed
@@ -27,8 +30,49 @@ export const LINE_MAP_MAX_EDITS = 400;
  */
 export function mapLine(before: string, after: string, line: number): number | null {
 	if (before === after) return line;
+	const r = mapLineOf(splitLines(before), splitLines(after), line);
+	return r === GAVE_UP ? null : r;
+}
+
+/**
+ * SC-607: `mapLine` with the opposite alignment - the common TAIL is trimmed first and the diff runs over the reversed lines, so every tie the
+ * head-first map breaks one way (two identical blocks with identical surroundings, one deleted: head-first reads the LOWER as deleted) this
+ * breaks the other way. Where the two maps agree on a line, no such tie decided it.
+ */
+export function mapLineFromTail(before: string, after: string, line: number): number | null {
+	if (before === after) return line;
+	const r = fromTail(splitLines(before), splitLines(after), line);
+	return r === GAVE_UP ? null : r;
+}
+
+/** What `mapLineStrict` says: the line (both alignments agree), or why there is none. */
+export type StrictLine = { line: number } | 'deleted' | 'disagree' | 'gave up';
+
+/**
+ * SC-607: the line of `after` that is line `line` of `before`, only when the head-first and the tail-first map (`mapLine`, `mapLineFromTail`) agree on
+ * it; otherwise why not: 'deleted' (both say the line was changed or removed, or it is not a line of `before`), 'disagree' (one says deleted or they say
+ * different lines: a tie between identical blocks decided it), or 'gave up' (either map met more than LINE_MAP_MAX_EDITS edits and has no answer; this
+ * says nothing about the block, unlike the other two).
+ */
+export function mapLineStrict(before: string, after: string, line: number): StrictLine {
+	if (before === after) return { line };
 	const a = splitLines(before);
 	const b = splitLines(after);
+	if (line < 0 || line >= a.length) return 'deleted';
+	const head = mapLineOf(a, b, line);
+	const tail = fromTail(a, b, line);
+	if (head === GAVE_UP || tail === GAVE_UP) return 'gave up';
+	if (head === null && tail === null) return 'deleted';
+	return head !== null && head === tail ? { line: head } : 'disagree';
+}
+
+function fromTail(a: readonly string[], b: readonly string[], line: number): number | null | typeof GAVE_UP {
+	if (line < 0 || line >= a.length) return null;
+	const r = mapLineOf(a.slice().reverse(), b.slice().reverse(), a.length - 1 - line);
+	return r === null || r === GAVE_UP ? r : b.length - 1 - r;
+}
+
+function mapLineOf(a: readonly string[], b: readonly string[], line: number): number | null | typeof GAVE_UP {
 	if (line < 0 || line >= a.length) return null;
 	let head = 0;
 	while (head < a.length && head < b.length && a[head] === b[head]) head++;
@@ -62,7 +106,7 @@ export function mapLine(before: string, after: string, line: number): number | n
 			}
 		}
 	}
-	if (found < 0) return null;
+	if (found < 0) return GAVE_UP;
 	// Walk back from the end: every diagonal run is a run of kept lines, A[x] -> B[x - k].
 	const target = line - head;
 	let x = n;

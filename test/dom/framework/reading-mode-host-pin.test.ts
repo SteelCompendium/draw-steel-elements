@@ -1034,7 +1034,21 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 			refused(app, outside);
 		});
 
-		test('an identical block is added to the note after the form opened: Save still lands in the block the form was opened on', async () => {
+		test('an identical block is added to the note after the form opened, with another line between it and the block: Save still lands in the block the form was opened on', async () => {
+			const { app, host } = hover(NOTE(5, ['mid', '']));
+			await plus(host);
+			const pin = host.pinPosition()!;
+			await settle();
+			const outside = ['# N', '', 'TOP', '', ...CTR(6), '', 'mid', '', 'p', '', ...CTR(6), '', 'END'].join('\n');
+			app.vault.setFile('Note.md', outside);
+
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true);
+			expect(names(app)).toEqual(['Edited', 'Twin']);
+		});
+
+		// SC-607: the same block added right beside the form's block cannot be told from one added ABOVE it (inserting `p` + the block below the block
+		// and inserting the block + `p` above it leave the same note): the line maps disagree and Save writes nothing rather than guess (it wrote the upper one)
+		test('an identical block is added right beside the form\'s block (nothing but one line between): Save writes nothing and says why, never a guess', async () => {
 			const { app, host } = hover(NOTE(5));
 			await plus(host);
 			const pin = host.pinPosition()!;
@@ -1042,8 +1056,8 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 			const outside = ['# N', '', 'TOP', '', ...CTR(6), '', 'p', '', ...CTR(6), '', 'END'].join('\n');
 			app.vault.setFile('Note.md', outside);
 
-			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true);
-			expect(names(app)).toEqual(['Edited', 'Twin']);
+			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(false);
+			refused(app, outside);
 		});
 
 		test('no + by this host (the note changed from outside under a stale part, the host knows the new body): nothing places the pin, Save writes nothing', async () => {
@@ -1146,7 +1160,9 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 			const pre = ['# N', '', ...para(300, 'above'), '', ...SUB, '## After', '', ...para(300, 'below')].join('\n');
 			const { app, host, sec } = embedded(pre, part(SUB, 2), 'Note#Tracker', bodyOf(5));
 			expect(await plus(host)).toBe(true);
-			sec.current = part(['## Tracker', '', ...CTR(6), ''], 2); // Obsidian redrew the embed from the note as the + left it
+			sec.current = part(['## Tracker', '', ...CTR(6), ''], 2); // Obsidian redrew the embed from the note as the + left it, and the view is adopted into the redraw
+			host.rebind(host.containerEl, switchableCtx(sec)); // SC-607: a redraw takes a new snapshot of the note as drawn
+			await settle();
 			const outside = ['# N', '', ...para(500, 'inserted above'), ...noteOf6(app).split('\n').slice(1), ...para(500, 'inserted below')].join('\n');
 			app.vault.setFile('Note.md', outside);
 			// SC-596: Obsidian re-reads the note within ~45 ms of an outside edit; the link places the pin from the cache of the note as it is now

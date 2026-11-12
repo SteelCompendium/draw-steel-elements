@@ -233,9 +233,9 @@ describe('SC-607: a preview that stayed open while the note changed never writes
 	const blockHover = (app: App, lines: string[], link: string, sec: Sec, data?: unknown) => {
 		app.vault.setFile('Note.md', lines.join('\n'));
 		const section: Section = { current: sec };
-		const { el } = popoverEl(app, link, data);
+		const { el, popover } = popoverEl(app, link, data);
 		const host = new ReadingModeBlockHost(new Plugin(app) as never, el, ctxOf(section), 'ds-counter');
-		return { host, el, section };
+		return { host, el, section, popover };
 	};
 	const q = (l: string) => `> ${l}`;
 	const CAL = (n: number): string[] => ['> [!note] Camp', ...CTR(n).map(q)];
@@ -316,7 +316,7 @@ describe('SC-607: a preview that stayed open while the note changed never writes
 		const app = new App();
 		let cacheLines = pre;
 		jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheOf(cacheLines) as never);
-		const { host, el, section } = blockHover(app, pre, 'Note#^pb', { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, pre.join('\n'));
+		const { host, el, section, popover } = blockHover(app, pre, 'Note#^pb', { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, pre.join('\n'));
 		host.setMountedBody(bodyOf(5));
 		await settle();
 		host.notePersistIntent();
@@ -325,6 +325,7 @@ describe('SC-607: a preview that stayed open while the note changed never writes
 		app.vault.setFile('Note.md', now.join('\n'));
 		cacheLines = now;
 		section.current = { text: CTR(6).join('\n'), lineStart: 0, lineEnd: 3 };
+		popover.embed!.data = now.join('\n'); // Obsidian redrew the preview from the note as it is now
 		host.rebind(el, ctxOf(section));
 		await settle();
 		Notice.notices.length = 0;

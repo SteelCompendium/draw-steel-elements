@@ -61,14 +61,14 @@
 // measured on Obsidian 1.14.2 (base and head alike, 2026-09-24), a hover popover's section
 // RESOLVES and a click writes the correct block, same as any other reading-mode context.
 import { MarkdownRenderChild, TFile, resolveSubpath } from 'obsidian';
-import type { Component, MarkdownPostProcessorContext, MarkdownSectionInformation, MarkdownView, Plugin } from 'obsidian';
+import type { CachedMetadata, Component, MarkdownPostProcessorContext, MarkdownSectionInformation, MarkdownView, Plugin } from 'obsidian';
 import type { BlockHost, BlockInfo, BlockPin, BlockWriteOptions, RenderMode } from './BlockHost';
-import { mapLine } from './lineMap';
+import { mapLine, mapLineFromTail, mapLineStrict } from './lineMap';
 import type { PreviewScrollPin } from './previewScrollPin';
 import { listFences } from '../sidebar/anchor';
 import { notifyDroppedWrite, notifyUnsavableWrite } from './droppedWriteNotice';
 import { splitLines } from './lineEnding';
-import { hoverLinkOf } from './hoverLinks';
+import { hoverDrawnText, hoverLinkOf } from './hoverLinks';
 import { atxHeadings, normalizeHeadingName } from './headingNames';
 import { blockBodyLines, parseOpenFenceLine, replaceFenceBlock } from './fenceLine';
 import type { ViewRegistry, ViewRegistryEntry } from './viewRegistry';
@@ -407,6 +407,32 @@ const partialPins = new WeakSet<object>();
  * when the block was edited from outside. A refusing pin writes nothing and says so (the "can't tell where" Notice, as an unplaceable write).
  */
 const refusingPins = new WeakSet<object>();
+/**
+ * SC-607: pins of blocks drawn in an embed or hover preview of PART of a note, placed in the note as the card was DRAWN (the snapshot taken when
+ * it was mounted, or this host's own last write), never where the link points now. Mapped strictly: the head-first and the tail-first line map
+ * (`mapLine`, `mapLineFromTail`) must agree on the line (two identical blocks with identical surroundings, one deleted, read either way: refused),
+ * and a miss is never given the fallback placement (`twinned` / `resolveWriteTarget`).
+ */
+const strictPins = new WeakSet<object>();
+
+/**
+ * SC-607: whether the metadata cache `meta` describes `text` (taken together when a card is mounted; the cache lags an outside edit by 6-45 ms, and
+ * a snapshot whose cache is not of its text is not kept). Every heading is on its line and the last section ends where the text ends.
+ */
+function metaMatchesText(meta: CachedMetadata | null, text: string): boolean {
+	if (!meta) return false;
+	const lines = splitLines(text);
+	for (const h of meta.headings ?? []) {
+		const l = lines[h.position.start.line];
+		if (l === undefined || !l.includes(h.heading)) return false;
+	}
+	const sections = meta.sections;
+	if (sections && sections.length > 0) {
+		const end = sections[sections.length - 1].position.end;
+		if (end.line >= lines.length || text.slice(end.offset).trim() !== '') return false;
+	}
+	return true;
+}
 
 /**
  * SC-481: the fence the element `el` is drawn on RIGHT NOW, read from the section Obsidian reports for it, or null when that
@@ -492,7 +518,17 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * `pinnedTarget`). Replaced by the next write of this host; dropped when the host is given a new mounted body. A write by
 	 * ANOTHER host of the same block (a second pane) is not recorded here.
 	 */
-	private lastWrite: { body: string; text: string; lineStart: number } | null = null;
+	private lastWrite: { body: string; text: string; lineStart: number; seq: number } | null = null;
+	/**
+	 * SC-607: the note as this card was DRAWN, read when it was mounted (`setMountedBody`) or re-bound (`rebind`), with the metadata cache of that
+	 * moment; `text: null` when the card's section was the whole note (nothing to keep: a pin of it is already a pin of the note). Null when the
+	 * read was not consistent with its cache (an outside edit landed then), when there is no note, or after the section unloads. `seq` orders it
+	 * against `lastWrite` (the newer one places a pin first).
+	 */
+	private drawn: { text: string | null; meta: CachedMetadata | null; seq: number } | null = null;
+	private drawnRead: Promise<void> | null = null;
+	private drawnToken: object | null = null;
+	private drawnSeq = 0;
 
 	/** SC-340: this host's registry entry (set by ViewRegistry.own). */
 	private entry: ViewRegistryEntry | null = null;
@@ -539,6 +575,7 @@ export class ReadingModeBlockHost implements BlockHost {
 	private onRenderChildUnload(renderChild: MarkdownRenderChild): void {
 		if (renderChild !== this.renderChild) return;
 		this.lastWrite = null; // SC-584: the record of this host's own write (a whole note's text) is not kept past the section it was made for
+		this.drawn = null; // SC-607: nor the note as drawn
 		// SC-340 fix round 1 (Important-1): recorded whether or not an entry exists yet — the
 		// pipeline can still be awaiting prepareModel (refs) when the section is torn down, so
 		// ViewRegistry.own() would otherwise hand the view to a host whose render child has
@@ -601,6 +638,41 @@ export class ReadingModeBlockHost implements BlockHost {
 		this.ctx = ctx;
 		this.renderChild = this.makeRenderChild(el, ctx);
 		this.readSection();
+		this.snapshotDrawn(); // SC-607: drawn again
+	}
+
+	/**
+	 * SC-607: read the note this card is drawn from, now (it is being mounted or re-bound), with the metadata cache of this moment. Kept only for a
+	 * card whose section is a PART of the note (an embed or hover preview of a heading or block) and only when the cache describes the text read.
+	 */
+	private snapshotDrawn(): void {
+		this.drawn = null;
+		this.drawnRead = null;
+		const seq = ++this.drawnSeq;
+		const token = {};
+		this.drawnToken = token;
+		if (this.ctx.sourcePath === '') return;
+		const file = this.plugin.app.vault.getAbstractFileByPath(this.ctx.sourcePath);
+		if (!(file instanceof TFile)) return;
+		let partText: string | null = null;
+		try {
+			partText = this.ctx.getSectionInfo(this.containerEl)?.text ?? null;
+		} catch {
+			partText = null;
+		}
+		const meta = this.plugin.app.metadataCache.getFileCache(file);
+		this.drawnRead = this.plugin.app.vault.cachedRead(file).then(
+			(text) => {
+				if (this.drawnToken !== token) return;
+				if (partText !== null && text === partText) {
+					this.drawn = { text: null, meta: null, seq };
+					return;
+				}
+				if (!metaMatchesText(meta, text)) return;
+				this.drawn = { text, meta, seq };
+			},
+			() => undefined,
+		);
 	}
 
 	/** SC-343: every section read goes through here so the durable position stays fresh. */
@@ -702,6 +774,7 @@ export class ReadingModeBlockHost implements BlockHost {
 	setMountedBody(source: string): void {
 		this.knownBody = source;
 		this.lastWrite = null;
+		this.snapshotDrawn(); // SC-607: the note as this card is drawn
 	}
 
 	/** SC-343 (BlockHost.notePersistIntent): refresh the durable position while live. */
@@ -832,7 +905,7 @@ export class ReadingModeBlockHost implements BlockHost {
 			// SC-594: a card write takes it too (the same stale window right after its own +).
 			// SC-596: with neither (a block written by another pane, or this host's record dropped) the pin refuses: never no pin, which wrote the
 			// part's line numbers and the body against the whole note and found the twin (see `refusingPins`).
-			return embedded ? (this.pinFromLastWrite() ?? this.refusingPin()) : null;
+			return embedded ? (this.strictIfPart(this.pinFromLastWrite()) ?? this.refusingPin()) : null;
 		}
 		// SC-584 r7 (r5 had it as "the fence is not the window's first line", which a quote whose FIRST line is the twin's fence defeats): unless the
 		// card's section window IS its own plain fenced block (its first line is an un-prefixed fence - `findOwnFence`'s shortcut, nothing is searched),
@@ -848,7 +921,7 @@ export class ReadingModeBlockHost implements BlockHost {
 			const first = parseOpenFence(section.text, section.lineStart);
 			if (!(first && first.prefix === '')) {
 				const w = this.pinFromLastWrite();
-				if (w) return w;
+				if (w) return this.strictIfPart(w);
 			}
 		}
 		const pin = { text: section.text, lineStart: this.ownFence.lineStart };
@@ -865,6 +938,14 @@ export class ReadingModeBlockHost implements BlockHost {
 			// lines when the form's own block was edited from outside before the form opened.
 			pinRebased.set(pin, this.rebaseCardPin(pin, section.text, this.lastWrite));
 		}
+		return pin;
+	}
+
+	/** SC-607: a pin of this host's own write in an embed or hover preview of PART of a note is mapped strictly (`strictPins`). */
+	private strictIfPart(pin: BlockPin | null): BlockPin | null {
+		if (pin === null) return null;
+		const link = this.embedSrc() ?? hoverLinkOf(this.plugin.app, this.containerEl)?.linktext;
+		if (typeof link !== 'string' || link.includes('#')) strictPins.add(pin);
 		return pin;
 	}
 
@@ -900,27 +981,78 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * made) when it is of the body known at click; else the pin stays partial and `replaceSource` writes nothing (the dropped-write Notice).
 	 * Asynchronous (`cachedRead`); `replaceSource` waits for it.
 	 */
-	private async rebaseCardPin(pin: { text: string; lineStart: number }, sectionText: string, write: { body: string; text: string; lineStart: number } | null): Promise<void> {
+	private async rebaseCardPin(pin: { text: string; lineStart: number }, sectionText: string, write: { body: string; text: string; lineStart: number; seq: number } | null): Promise<void> {
 		const known = this.knownBody;
+		const seqAtPin = this.drawnSeq;
+		const reading = this.drawnRead;
 		try {
 			const file = this.plugin.app.vault.getAbstractFileByPath(this.ctx.sourcePath);
 			if (!(file instanceof TFile)) return;
+			if (!partialPins.has(pin)) {
+				// a pin of a WHOLE note (an embed / hover of a link with no `#`): placed as before SC-607
+				const whole = await this.plugin.app.vault.cachedRead(file);
+				if (whole === sectionText) return;
+				if (write !== null && known !== null && normalizeBody(write.body) === normalizeBody(known)) {
+					pin.text = write.text;
+					pin.lineStart = write.lineStart;
+				}
+				return;
+			}
+			// SC-607: a pin of PART of a note is placed through the link as before (`cardLinkLine` on the note as it is now), and only when the block the
+			// card was DRAWN from - the note read when it was mounted, or this host's own last write, whichever is newer - mapped strictly to the note as
+			// it is now, is that same block. A preview whose part's text did not change is not redrawn, so the link can name another, identical block (the
+			// hovered one of two identical sections deleted, two heading names swapped): refused. With no link placement (the part is stale right after
+			// this host's own +), the own write alone places it, as before.
+			if (reading) await reading;
+			const drawn = this.drawn !== null && this.drawn.seq <= seqAtPin ? this.drawn : null;
+			const own = write !== null && known !== null && normalizeBody(write.body) === normalizeBody(known) ? write : null;
 			const whole = await this.plugin.app.vault.cachedRead(file);
 			if (whole === sectionText) {
 				partialPins.delete(pin); // the part IS the note
+				strictPins.add(pin);
 				return;
 			}
-			const line = this.cardLinkLine(file, whole, sectionText, pin.lineStart, known);
-			if (line !== null) {
+			const linkLine = this.cardLinkLine(file, whole, sectionText, pin.lineStart, known, this.plugin.app.metadataCache.getFileCache(file));
+			const drawnFrom = (): { text: string; line: number } | null => {
+				if (drawn === null) return null;
+				if (drawn.text === null) return { text: sectionText, line: pin.lineStart }; // the part was the whole note as drawn
+				const line = this.cardLinkLine(file, drawn.text, sectionText, pin.lineStart, known, drawn.meta);
+				return line === null ? null : { text: drawn.text, line };
+			};
+			const ownFrom = (): { text: string; line: number } | null => (own === null ? null : { text: own.text, line: own.lineStart });
+			const ownFirst = own !== null && (drawn === null || own.seq > drawn.seq);
+			if (linkLine !== null) {
+				const fromOwn = ownFirst ? ownFrom() : null;
+				const fromDrawn = fromOwn === null ? drawnFrom() : null;
+				const from = fromOwn ?? fromDrawn ?? ownFrom();
+				if (from === null) return; // nothing says which block the card was drawn from: refused
+				// A hover preview's own record of the note it was drawn from (`hoverDrawnText`, internal API: skipped when absent) must be the note this card
+				// read: the card's read comes ~100 ms after Obsidian's, and an outside edit between the two would make the card "drawn from" a note the preview
+				// never showed. Only the mount / re-bind snapshot has that window (a position taken from this host's own write has none); an embed has no popover.
+				if (fromDrawn !== null && drawn?.text != null && this.embedSrc() === null) {
+					const shown = hoverDrawnText(this.plugin.app, this.containerEl);
+					if (shown !== null && shown !== drawn.text) return;
+				}
+				const at = mapLineStrict(from.text, whole, from.line);
+				if (at === 'gave up') {
+					// The line map has no answer (more than LINE_MAP_MAX_EDITS lines changed around the block): that says nothing about the block. The link
+					// places it, as before SC-607, only while no identical block exists to confuse it with: the known body occurs exactly once in the note
+					// the card was drawn from and exactly once in the note now.
+					const language = this.knownLanguage ?? this.alias;
+					if (known === null || countByBody(from.text, language, known) !== 1 || countByBody(whole, language, known) !== 1) return;
+				} else if (typeof at === 'string' || at.line !== linkLine) return; // deleted, a tie between identical blocks, or the link names another block: refused
 				pin.text = whole;
-				pin.lineStart = line;
+				pin.lineStart = linkLine;
 				partialPins.delete(pin);
+				strictPins.add(pin);
 				return;
 			}
-			if (write !== null && known !== null && normalizeBody(write.body) === normalizeBody(known)) {
-				pin.text = write.text;
-				pin.lineStart = write.lineStart;
+			const o = ownFrom();
+			if (o !== null) {
+				pin.text = o.text;
+				pin.lineStart = o.line;
 				partialPins.delete(pin);
+				strictPins.add(pin);
 			}
 			// else: stays partial: the write is refused (replaceSource)
 		} catch {
@@ -941,7 +1073,7 @@ export class ReadingModeBlockHost implements BlockHost {
 	 *    deleted above the card, another moved onto its line) is stale and is not placed;
 	 *  - a counter fence of this language must open at the card's line, holding the known body, and a `#^id` link needs its `^id` marker after it.
 	 */
-	private cardLinkLine(file: TFile, whole: string, sectionText: string, relLine: number, known: string | null): number | null {
+	private cardLinkLine(file: TFile, whole: string, sectionText: string, relLine: number, known: string | null, meta: CachedMetadata | null): number | null {
 		const src = this.embedSrc();
 		const hovered = src === null ? hoverLinkOf(this.plugin.app, this.containerEl) : null;
 		const link = src ?? hovered?.linktext ?? null;
@@ -949,7 +1081,6 @@ export class ReadingModeBlockHost implements BlockHost {
 		const hash = link.indexOf('#');
 		if (hash < 0) return null;
 		const cache = this.plugin.app.metadataCache;
-		const meta = cache.getFileCache(file);
 		if (!meta) return null;
 		const dest = cache.getFirstLinkpathDest(link.slice(0, hash), hovered ? hovered.sourcePath : this.ctx.sourcePath);
 		if (!dest || dest.path !== file.path) return null;
@@ -1025,6 +1156,8 @@ export class ReadingModeBlockHost implements BlockHost {
 		if (partialPins.has(pin)) return null; // SC-556: a pin in an embedded part's coordinates is not a place in the note
 		const line = mapLine(pin.text, content, pin.lineStart);
 		if (line === null) return null;
+		// SC-607: the head-first map reads the LOWER of two identical blocks as deleted; a pin placed in the note as drawn must not depend on that tie
+		if (strictPins.has(pin) && mapLineFromTail(pin.text, content, pin.lineStart) !== line) return null;
 		const fence = this.fenceAt(content, line);
 		if (!fence) return null;
 		if (this.knownBody !== null && normalizeBody(fence.body) !== normalizeBody(this.knownBody)) return null;
@@ -1132,7 +1265,7 @@ export class ReadingModeBlockHost implements BlockHost {
 				const twinned = !pinned && pin !== null && !options?.pinOnly && this.twinned(content, pin);
 				// SC-594: a card write whose pin is still in the part's coordinates has no place in the note: refused, never `twinned` /
 				// `resolveWriteTarget` (a search by body that picks the twin when the part's text occurs twice).
-				const partialCard = !pinned && pin !== null && partialPins.has(pin);
+				const partialCard = !pinned && pin !== null && (partialPins.has(pin) || strictPins.has(pin));
 				let target = pinned ?? (pin && (options?.pinOnly || twinned || partialCard) ? 'miss' : this.resolveWriteTarget(content, section));
 				// SC-480: the same refusal when the fallback lands in a block that was already a different block in the note as clicked (one
 				// outside edit deleted the clicked block and made a neighbour read the same: the counts above see one block each time).
@@ -1167,7 +1300,7 @@ export class ReadingModeBlockHost implements BlockHost {
 				this.lastWriteLine = target.lineStart; // SC-481
 				// SC-584: where this write put the block, in the note as it leaves (only a host drawn in an embed or hover preview needs it).
 				this.lastWrite = null;
-				if (inEmbed && this.fenceAt(next, target.lineStart) !== null) this.lastWrite = { body: newSource, text: next, lineStart: target.lineStart };
+				if (inEmbed && this.fenceAt(next, target.lineStart) !== null) this.lastWrite = { body: newSource, text: next, lineStart: target.lineStart, seq: ++this.drawnSeq };
 				changedContent = next !== content;
 				// SC-198: hold the preview's height across the rebuild this write is about to
 				// provoke (only meaningful while the block is on screen, i.e. its section

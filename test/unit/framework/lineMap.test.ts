@@ -1,6 +1,6 @@
 // SC-552 -- mapLine: where a line of one version of a note is in a later version. The block edit form pins its block's fence line
 // when it opens; its Save maps that line through whatever was written to the note since (a click's write, an outside edit, Sync).
-import { LINE_MAP_MAX_EDITS, mapLine } from '@/framework/host/lineMap';
+import { LINE_MAP_MAX_EDITS, mapLine, mapLineFromTail, mapLineStrict } from '@/framework/host/lineMap';
 
 const twin = (v: number) => ['```ds-counter', 'name: Twin', `current_value: ${v}`, '```'];
 const note = (vals: number[], extra: Record<number, string[]> = {}) =>
@@ -68,5 +68,66 @@ describe('SC-552: mapLine', () => {
 		const a = Array.from({ length: n }, (_, i) => `a${i}`).join('\n');
 		const b = Array.from({ length: n }, (_, i) => `b${i}`).join('\n');
 		expect(mapLine(a, b, Math.floor(n / 2))).toBeNull();
+	});
+});
+
+// SC-607 -- mapLineStrict: the line only when the head-first and the tail-first map agree, and WHY NOT otherwise (a deleted block and a tie between
+// identical blocks say something about the block; a give-up at LINE_MAP_MAX_EDITS says nothing).
+describe('SC-607: mapLineStrict', () => {
+	const adjacent = (vals: number[]) => ['# t', '', 'TOP', '', ...vals.flatMap((v) => [...twin(v), '']), 'BOTTOM'].join('\n');
+
+	it('the identity for identical texts, and the line where both alignments put it', () => {
+		const a = note([5, 5, 5]);
+		expect(mapLineStrict(a, a, 12)).toEqual({ line: 12 });
+		const f = fencesOf(a);
+		expect(mapLineStrict(a, note([6, 5, 5]), f[1])).toEqual({ line: f[1] });
+		expect(mapLineStrict(a, ['added', ...a.split('\n')].join('\n'), f[1])).toEqual({ line: f[1] + 1 });
+	});
+
+	it('a changed line is deleted (both alignments), and so is a line that is not in the old text', () => {
+		const a = note([5, 6, 7]);
+		const f = fencesOf(a);
+		expect(mapLineStrict(a, note([5, 8, 7]), f[1] + 2)).toBe('deleted');
+		expect(mapLineStrict('a\nb', 'a\nb\nc', 5)).toBe('deleted');
+		expect(mapLineStrict('a\nb', 'a\nb\nc', -1)).toBe('deleted');
+	});
+
+	it('two adjacent identical blocks, one deleted: the lower is deleted head-first and kept tail-first, so it is a tie ("disagree"), and the upper maps to the survivor head-first only', () => {
+		const a = adjacent([5, 5]);
+		const b = adjacent([5]);
+		const [upper, lower] = fencesOf(a);
+		expect(mapLine(a, b, upper)).toBe(upper);
+		expect(mapLineFromTail(a, b, upper)).toBeNull();
+		expect(mapLineStrict(a, b, upper)).toBe('disagree');
+		expect(mapLine(a, b, lower)).toBeNull();
+		expect(mapLineFromTail(a, b, lower)).toBe(upper);
+		expect(mapLineStrict(a, b, lower)).toBe('disagree');
+	});
+
+	it('the same deletion with something between the blocks is no tie: the lower maps to the survivor, the upper is deleted', () => {
+		const withMid = (twins: number) => ['# t', '', 'TOP', '', ...(twins > 1 ? [...twin(5), '', 'mid', ''] : ['mid', '']), ...twin(5), '', 'BOTTOM'].join('\n');
+		const a = withMid(2);
+		const b = withMid(1); // the upper block deleted
+		const [upper, lower] = fencesOf(a);
+		expect(mapLineStrict(a, b, lower)).toEqual({ line: fencesOf(b)[0] });
+		expect(mapLineStrict(a, b, upper)).toBe('deleted');
+	});
+
+	it('"gave up" when more than LINE_MAP_MAX_EDITS lines changed around the line; mapLine and mapLineFromTail still say null for it', () => {
+		const n = LINE_MAP_MAX_EDITS + 50;
+		const a = Array.from({ length: n }, (_, i) => `a${i}`).join('\n');
+		const b = Array.from({ length: n }, (_, i) => `b${i}`).join('\n');
+		expect(mapLineStrict(a, b, Math.floor(n / 2))).toBe('gave up');
+		expect(mapLine(a, b, Math.floor(n / 2))).toBeNull();
+		expect(mapLineFromTail(a, b, Math.floor(n / 2))).toBeNull();
+	});
+
+	it('a line in the common head or tail is placed however much changed in between (no give-up)', () => {
+		const n = LINE_MAP_MAX_EDITS + 50;
+		const mid = (tag: string) => Array.from({ length: n }, (_, i) => `${tag}${i}`);
+		const a = ['top', ...mid('a'), 'bottom'].join('\n');
+		const b = ['top', ...mid('b'), 'bottom'].join('\n');
+		expect(mapLineStrict(a, b, 0)).toEqual({ line: 0 });
+		expect(mapLineStrict(a, b, n + 1)).toEqual({ line: n + 1 });
 	});
 });
