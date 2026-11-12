@@ -525,7 +525,7 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * read was not consistent with its cache (an outside edit landed then), when there is no note, or after the section unloads. `seq` orders it
 	 * against `lastWrite` (the newer one places a pin first).
 	 */
-	private drawn: { text: string | null; meta: CachedMetadata | null; seq: number } | null = null;
+	private drawn: { text: string | null; meta: CachedMetadata | null; seq: number; rebound: boolean } | null = null;
 	private drawnRead: Promise<void> | null = null;
 	private drawnToken: object | null = null;
 	private drawnSeq = 0;
@@ -638,14 +638,14 @@ export class ReadingModeBlockHost implements BlockHost {
 		this.ctx = ctx;
 		this.renderChild = this.makeRenderChild(el, ctx);
 		this.readSection();
-		this.snapshotDrawn(); // SC-607: drawn again
+		this.snapshotDrawn(true); // SC-607: drawn again
 	}
 
 	/**
 	 * SC-607: read the note this card is drawn from, now (it is being mounted or re-bound), with the metadata cache of this moment. Kept only for a
 	 * card whose section is a PART of the note (an embed or hover preview of a heading or block) and only when the cache describes the text read.
 	 */
-	private snapshotDrawn(): void {
+	private snapshotDrawn(rebound: boolean): void {
 		this.drawn = null;
 		this.drawnRead = null;
 		const seq = ++this.drawnSeq;
@@ -665,11 +665,11 @@ export class ReadingModeBlockHost implements BlockHost {
 			(text) => {
 				if (this.drawnToken !== token) return;
 				if (partText !== null && text === partText) {
-					this.drawn = { text: null, meta: null, seq };
+					this.drawn = { text: null, meta: null, seq, rebound };
 					return;
 				}
 				if (!metaMatchesText(meta, text)) return;
-				this.drawn = { text, meta, seq };
+				this.drawn = { text, meta, seq, rebound };
 			},
 			() => undefined,
 		);
@@ -774,7 +774,7 @@ export class ReadingModeBlockHost implements BlockHost {
 	setMountedBody(source: string): void {
 		this.knownBody = source;
 		this.lastWrite = null;
-		this.snapshotDrawn(); // SC-607: the note as this card is drawn
+		this.snapshotDrawn(false); // SC-607: the note as this card is drawn
 	}
 
 	/** SC-343 (BlockHost.notePersistIntent): refresh the durable position while live. */
@@ -1030,10 +1030,14 @@ export class ReadingModeBlockHost implements BlockHost {
 				if (from === null) return; // nothing says which block the card was drawn from: refused
 				// A hover preview's own record of the note it was drawn from (`hoverDrawnText`, internal API: skipped when absent) must be the note this card
 				// read: the card's read comes ~100 ms after Obsidian's, and an outside edit between the two would make the card "drawn from" a note the preview
-				// never showed. Only the mount / re-bind snapshot has that window (a position taken from this host's own write has none); an embed has no popover.
-				if (fromDrawn !== null && drawn?.text != null && this.embedSrc() === null) {
+				// never showed. Only a card's MOUNT snapshot is checked (a position taken from this host's own write has no such window, an embed has no
+				// popover, and a re-bind follows this host's own redraw). Measured (G-S92 (e), Obsidian 1.15.1): the record is NOT refreshed when the preview
+				// is redrawn from a changed part (after a + it still holds the note as first drawn), so it is compared only while it still contains the part
+				// this card was given: a part that is not in it was drawn from a newer note, which the card's own read (taken at that redraw) is.
+				if (fromDrawn !== null && drawn?.text != null && !drawn.rebound && this.embedSrc() === null) {
 					const shown = hoverDrawnText(this.plugin.app, this.containerEl);
-					if (shown !== null && shown !== drawn.text) return;
+					const part = sectionText.trim();
+					if (shown !== null && shown !== drawn.text && part !== '' && shown.includes(part)) return;
 				}
 				const at = mapLineStrict(from.text, whole, from.line);
 				if (at === 'gave up') {

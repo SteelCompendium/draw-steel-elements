@@ -42,6 +42,16 @@ for what needs action.
   does not replace (Advance round, say) stays where it was. Since SC-602 this holds in Live Preview too.
   Not covered: a click while the cursor is in a Malice quick-add box (SC-615) and a click that removes a condition from
   the row focus was in (SC-614).
+
+- [FIX] **A + / - or a form Save in a hover preview or an embed that stayed open while the note changed no longer writes a different, identical counter** (SC-607).
+  Open a hover preview or an embed of part of a note (`[[note#Tracker]]`, `![[note#^id]]`) and leave it open while something else
+  changes the note (Sync, another app, the other pane): the first of two identical `## Tracker` sections deleted, two heading names or
+  two `^id` markers swapped. Obsidian does not redraw such a preview, so a click on its + (or a Save in its edit form) used to be
+  saved into the other counter, with no message. It is now saved into the counter the preview shows, or refused with the
+  "changed on disk first" Notice and nothing written. Rare new refusals, all safe (a Notice, nothing written): an identical block
+  added or deleted right next to the block you are editing, and a preview that could not be placed when it was drawn.
+  Hover previews of whole notes and plain (non-embedded) blocks are unchanged.
+
 - [FIX] **Keyboard focus stays in the initiative tracker after Apply in the minion Stamina pool window, and after closing the
   Conditions window, in Reading view and in the pinned sidebar tracker** (SC-603). Apply in the pool window rebuilds the whole
   tracker (and so does a captain's Stamina edit that turns its squad's bonus on or off), and an edit in the Conditions window

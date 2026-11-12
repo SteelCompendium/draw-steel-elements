@@ -110,6 +110,7 @@ function embedEl(src: string, lp: boolean): HTMLElement {
 	return el;
 }
 const noticeKind = (n: string): string => (n.includes('changed on disk first') ? 'dropped' : n.includes("can't tell where") ? 'unsavable' : 'other');
+const values = (app: App): number[] => [...app.vault.getContent('Note.md')!.matchAll(/current_value: (\d+)/g)].map((m) => Number(m[1]));
 const kindsNow = (): string[] => (Notice.notices as unknown[]).map((n) => noticeKind(String(n)));
 /** What the click did: nothing ('refused'), the hovered counter (A: the one the card was drawn from), the other counter (TWIN), or neither (OTHER). */
 function judge(app: App, nowText: string, A: number, B: number): { outcome: string; kinds: string[] } {
@@ -134,7 +135,8 @@ async function run(c: Cell): Promise<{ outcome: string; kinds: string[] }> {
 	jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheOf(cacheLines) as never);
 	const p = partOf(c.kind, c.shape, c.edit, c.upper, hovV);
 	const section: Section = { current: p.sec };
-	// a hover preview holds the note it was drawn from in `hoverPopover.embed.data` (Obsidian's lastSavedData); an outside edit that does not redraw it leaves it as it was
+	// a hover preview holds the note it was drawn from in `hoverPopover.embed.data` (Obsidian's lastSavedData); neither an outside edit that does not redraw it nor a redraw from a changed part
+	// (after this card's own +) refreshes it (measured, Obsidian 1.15.1): it stays the note as FIRST drawn
 	const hover = c.shape === 'hover' ? popoverEl(app, p.link, mount.lines.join('\n')) : null;
 	const el = hover ? hover.el : embedEl(p.link, c.mode === 'lp');
 	const host = new ReadingModeBlockHost(new Plugin(app) as never, el, ctxOf(section), 'ds-counter');
@@ -148,7 +150,6 @@ async function run(c: Cell): Promise<{ outcome: string; kinds: string[] }> {
 		if (ok) known = 6;
 		const post = noteOf(c.kind, c.edit, false, c.upper ? known : twinV, c.upper ? twinV : known);
 		cacheLines = post.lines;
-		if (hover) hover.popover.embed!.data = post.lines.join('\n'); // Obsidian re-read the note the + wrote
 		if (c.plus === '+ redrawn' && ok) {
 			// Obsidian redraws the part from the note as the + left it and the view is adopted into it
 			section.current = partOf(c.kind, c.shape, c.edit, c.upper, known).sec;
@@ -325,7 +326,6 @@ describe('SC-607: a preview that stayed open while the note changed never writes
 		app.vault.setFile('Note.md', now.join('\n'));
 		cacheLines = now;
 		section.current = { text: CTR(6).join('\n'), lineStart: 0, lineEnd: 3 };
-		popover.embed!.data = now.join('\n'); // Obsidian redrew the preview from the note as it is now
 		host.rebind(el, ctxOf(section));
 		await settle();
 		Notice.notices.length = 0;
@@ -483,6 +483,54 @@ describe('SC-607: a preview that stayed open while the note changed never writes
 			const { app } = await swappedBeforeTheCardRead(now.lines.join('\n'));
 
 			expect(judge(app, now.lines.join('\n'), now.L, now.U)).toEqual({ outcome: 'A', kinds: [] }); // the counter the link names (the lower: the swapped names)
+		});
+
+		test('a second + after the first, the preview redrawn from the note the first + wrote while its popover data still holds the note as first drawn: saved (a re-bind is not checked)', async () => {
+			const pre = noteOf('heading', 'none', false, 5, 5);
+			const app = new App();
+			app.vault.setFile('Note.md', pre.lines.join('\n'));
+			let cacheLines = pre.lines;
+			jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheOf(cacheLines) as never);
+			const p = partOf('heading', 'hover', 'none', true, 5);
+			const section: Section = { current: p.sec };
+			const { el } = popoverEl(app, p.link, pre.lines.join('\n'));
+			const host = new ReadingModeBlockHost(new Plugin(app) as never, el, ctxOf(section), 'ds-counter');
+			host.setMountedBody(bodyOf(5));
+			await settle();
+			host.notePersistIntent();
+			await settle();
+			expect(await host.replaceSource(bodyOf(6), { fromView: true })).toBe(true);
+			cacheLines = noteOf('heading', 'none', false, 6, 5).lines;
+			section.current = partOf('heading', 'hover', 'none', true, 6).sec; // Obsidian redrew the part from the note as the + left it (its popover data is not refreshed)
+			host.rebind(el, ctxOf(section));
+			await settle();
+			host.notePersistIntent();
+			await settle();
+			await host.replaceSource(bodyOf(7), { fromView: true });
+			el.closest('.hover-popover')?.remove();
+
+			expect(values(app)).toEqual([7, 5]);
+			expect(Notice.notices).toEqual([]);
+		});
+
+		test('the preview was redrawn from a note an outside edit changed (a NEW card, mounted after the edit) while its popover data still holds the note as first drawn: the + is saved', async () => {
+			const pre = noteOf('heading', 'none', false, 5, 5);
+			const now = noteOf('heading', 'none', false, 9, 5); // the hovered counter edited from outside: the part changes, so Obsidian redraws it
+			const app = new App();
+			app.vault.setFile('Note.md', now.lines.join('\n'));
+			jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheOf(now.lines) as never);
+			const p = partOf('heading', 'hover', 'none', true, 9);
+			const { el } = popoverEl(app, p.link, pre.lines.join('\n'));
+			const host = new ReadingModeBlockHost(new Plugin(app) as never, el, ctxOf({ current: p.sec }), 'ds-counter');
+			host.setMountedBody(bodyOf(9));
+			await settle();
+			host.notePersistIntent();
+			await settle();
+			await host.replaceSource(bodyOf(10), { fromView: true });
+			el.closest('.hover-popover')?.remove();
+
+			expect(values(app)).toEqual([10, 5]);
+			expect(Notice.notices).toEqual([]);
 		});
 
 		test('an embed drawn INSIDE a hover preview of another note: the popover\'s data is that other note\'s text, so the check does not apply to the embed\'s card (it saves)', async () => {
