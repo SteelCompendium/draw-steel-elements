@@ -22,6 +22,14 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Keyboard focus stays in the initiative tracker after Apply in the minion Stamina pool window, and after closing the
+  Conditions window, in Reading view and in the pinned sidebar tracker** (SC-603). Apply in the pool window rebuilds the whole
+  tracker (and so does a captain's Stamina edit that turns its squad's bonus on or off), and an edit in the Conditions window
+  rebuilds that conditions row, so the button you had used to open the window was gone and focus fell to the top of the page.
+  The window now gives focus back to the control that replaced it: the detail row's Stamina control, the roster cell of the same
+  minion, or the Add Condition button. Cancel and Escape still return to the button you pressed. A mouse click never pulls
+  focus into the tracker, and neither does a window opened while focus was somewhere else. In Live Preview focus is still lost
+  when the note saves a moment later (SC-602).
 - [FIX] **What you have typed in the initiative tracker's Malice quick-add boxes is no longer lost when the tracker rebuilds, in
   Reading view and in the pinned sidebar tracker** (SC-589). Type an amount and a label, then press Advance round (or Make/Relieve
   captain, Reset turns, Reset encounter, or any other action that rebuilds the whole tracker), and both boxes used to come back
