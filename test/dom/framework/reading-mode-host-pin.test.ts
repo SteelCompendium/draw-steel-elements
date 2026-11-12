@@ -26,6 +26,28 @@ const noteOf = (values: number[], head: string[] = []): string =>
 const fencesOf = (text: string): number[] => text.split('\n').map((l, i) => (l === '```ds-counter' ? i : -1)).filter((i) => i >= 0);
 const sectionAt = (text: string, fence: number): NonNullable<Section['current']> => ({ text, lineStart: fence, lineEnd: fence + 3 });
 const names = (app: App): string[] => [...app.vault.getContent('Note.md')!.matchAll(/name: (\w+)/g)].map((m) => m[1]);
+const pos = (line: number) => ({ start: { line, col: 0, offset: 0 }, end: { line, col: 0, offset: 0 } });
+/** What Obsidian's metadata cache holds for `text`: its headings, and its `^id` blocks (the id on its own line under the block). */
+function cacheOf(text: string) {
+	const lines = text.split('\n');
+	const headings: Array<{ heading: string; level: number; position: unknown }> = [];
+	const blocks: Record<string, { id: string; position: unknown }> = {};
+	let fenced = false;
+	lines.forEach((l, i) => {
+		if (/^```/.test(l)) fenced = !fenced;
+		const h = !fenced && /^(#{1,6})\s+(.*)$/.exec(l);
+		if (h) headings.push({ heading: h[2], level: h[1].length, position: pos(i) });
+		const id = /^\^(\w+)$/.exec(l);
+		if (id) {
+			let end = i - 1;
+			while (end >= 0 && lines[end] === '') end--;
+			let start = end;
+			if (lines[end] === '```') for (start = end - 1; start >= 0 && !/^```\w/.test(lines[start]); start--);
+			blocks[id[1]] = { id: id[1], position: pos(start) };
+		}
+	});
+	return { headings, blocks };
+}
 const values = (app: App): number[] => [...app.vault.getContent('Note.md')!.matchAll(/current_value: (\d+)/g)].map((m) => Number(m[1]));
 
 describe('SC-552: ReadingModeBlockHost pinned writes', () => {
@@ -588,10 +610,11 @@ describe('SC-556: a block edit form in a heading embed', () => {
 
 	const para = (n: number, tag: string): string[] => Array.from({ length: n }, (_, i) => `${tag} ${i}`);
 	const SUB = ['## Tracker', '', ...CTR(5), '']; // the embedded section: what Obsidian reports as the section's text
-	/** The element a block of an embed is mounted in (Obsidian wraps an embed in `.markdown-embed`). */
+	/** The element a block of an embed is mounted in (Obsidian wraps an embed in `.markdown-embed` and always gives it its `src`, SC-596). */
 	const inEmbed = (): HTMLElement => {
 		const embed = document.createElement('div');
 		embed.className = 'internal-embed markdown-embed';
+		embed.setAttribute('src', 'Note#Tracker');
 		return embed.appendChild(document.createElement('div'));
 	};
 	/** The source note: `above` lines, the embedded section, `below` lines; the host is on the section's block. */
@@ -599,6 +622,8 @@ describe('SC-556: a block edit form in a heading embed', () => {
 		const app = new App();
 		const full = ['# N', '', ...above, '', ...SUB, '## After', '', ...below, 'END'].join('\n');
 		app.vault.setFile('Note.md', full);
+		// SC-596: a form's pin is placed by the embed's link (a card's is since SC-594): the metadata cache answers for the note as it is now
+		jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheOf(app.vault.getContent('Note.md')!) as never);
 		const section: Section = { current: { text: SUB.join('\n'), lineStart: 2, lineEnd: 5 } }; // relative to the section, like Obsidian's
 		const host = new ReadingModeBlockHost(new Plugin(app) as never, inEmbed(), switchableCtx(section) as never, 'ds-counter');
 		host.setMountedBody(bodyOf(5));
@@ -650,6 +675,7 @@ describe('SC-556: a block edit form in a heading embed', () => {
 	test('an outside edit elsewhere in the source note (above and below the section) while the form is open: Save still lands in the embedded block', async () => {
 		const { app, host, full } = embedded(para(100, 'above'), para(100, 'below'));
 		const pin = host.pinPosition()!;
+		await new Promise((resolve) => setTimeout(resolve, 25)); // the open-time rebase (one cachedRead) is done before the outside edit
 		const outside = full.replace('above 0', 'above 0, edited\nand a new line').replace('below 99', 'below 99, edited');
 		app.vault.setFile('Note.md', outside);
 
@@ -684,28 +710,6 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 	afterEach(() => warn.mockRestore());
 
 	const para = (n: number, tag: string): string[] => Array.from({ length: n }, (_, i) => `${tag} ${i}`);
-	const pos = (line: number) => ({ start: { line, col: 0, offset: 0 }, end: { line, col: 0, offset: 0 } });
-	/** What Obsidian's metadata cache holds for `text`: its headings, and its `^id` blocks (the id on its own line under the block). */
-	function cacheOf(text: string) {
-		const lines = text.split('\n');
-		const headings: Array<{ heading: string; level: number; position: unknown }> = [];
-		const blocks: Record<string, { id: string; position: unknown }> = {};
-		let fenced = false;
-		lines.forEach((l, i) => {
-			if (/^```/.test(l)) fenced = !fenced;
-			const h = !fenced && /^(#{1,6})\s+(.*)$/.exec(l);
-			if (h) headings.push({ heading: h[2], level: h[1].length, position: pos(i) });
-			const id = /^\^(\w+)$/.exec(l);
-			if (id) {
-				let end = i - 1;
-				while (end >= 0 && lines[end] === '') end--;
-				let start = end;
-				if (lines[end] === '```') for (start = end - 1; start >= 0 && !/^```\w/.test(lines[start]); start--);
-				blocks[id[1]] = { id: id[1], position: pos(start) };
-			}
-		});
-		return { headings, blocks };
-	}
 	/** SC-594: the link a hover preview element was opened for (see `hoverEl`), noted for the app `embedded` makes. */
 	const hoverLinked = new WeakMap<HTMLElement, { link: string; popover: HTMLElement }>();
 	const embedEl = (src: string): HTMLElement => {
@@ -732,13 +736,17 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 	const part = (lines: string[], lineStart: number) => ({ text: lines.join('\n'), lineStart, lineEnd: lineStart + 3 });
 
 	test('+ then the pencil: the section text is stale (old value) when the form opens, a long note: Save lands in the embedded block', async () => {
-		const live = ['## Tracker', '', ...CTR(6), ''];
-		const full = ['# N', '', ...para(500, 'above'), '', ...live, '## After', '', ...para(500, 'below'), 'END'].join('\n');
-		const { app, host } = embedded(full, part(SUB, 2), 'Note#Tracker', bodyOf(6)); // Obsidian still reports the section with value 5; the host wrote 6
+		// SC-596: a REAL + by this host (its own write is the record that places the pin: the link names the block, the part is the old one) - a
+		// note whose host knows 6 while it holds 5 was never what Obsidian draws
+		const full = ['# N', '', ...para(500, 'above'), '', ...SUB, '## After', '', ...para(500, 'below'), 'END'].join('\n');
+		const { app, host } = embedded(full, part(SUB, 2), 'Note#Tracker', bodyOf(5)); // Obsidian reports the section with value 5
+		host.notePersistIntent();
+		await new Promise((resolve) => setTimeout(resolve, 25)); // the open-time note read (one cachedRead) is done
+		expect(await host.replaceSource(bodyOf(6), { fromView: true })).toBe(true);
 		const pin = host.pinPosition()!;
 
 		expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true); // before: the section text was not found, the partial pin was refused
-		expect(app.vault.getContent('Note.md')).toBe(full.replace('name: Twin', 'name: Edited'));
+		expect(app.vault.getContent('Note.md')).toBe(full.replace('name: Twin', 'name: Edited').replace('current_value: 5', 'current_value: 6'));
 		expect(Notice.notices).toEqual([]);
 	});
 
@@ -756,16 +764,20 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 		expect(app.vault.getContent('Note.md')).toBe(full.split('\n').map((l, i) => (i === second + 1 ? 'name: Edited' : l)).join('\n'));
 	});
 
-	test('a heading embed of a note with two identical sections: Save writes the section Obsidian embeds (the first heading of that name)', async () => {
+	// SC-596: the link names TWO places while the block's body occurs twice, so it places nothing (a card is refused there since SC-594). It used to
+	// write the first section: a guess no check separates from the same shape after an outside edit (an identical section pasted next to the own one,
+	// the cache lagging).
+	test('a heading embed of a note with two identical sections: the link names two places, so Save writes nothing and says why', async () => {
 		const full = ['# N', '', ...para(300, 'above'), '', ...SUB, '## After', '', ...para(300, 'mid'), '', ...SUB, '## End', ...para(300, 'below')].join('\n');
 		const { app, host } = embedded(full, part(SUB, 2), 'Note#Tracker');
 		const pin = host.pinPosition()!;
 
-		expect(await save(host, pin)).toBe(true);
-		expect(names(app)).toEqual(['Edited', 'Twin']);
+		expect(await save(host, pin)).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(full);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
 	});
 
-	test('a cache that lags the note (its position verifies nothing): the pin is not taken from it, and nothing is written into the identical block it points at', async () => {
+	test('a cache that lags the note (its position verifies nothing): the pin is not taken from it, nothing is written into the identical block it points at, and nothing is written at all', async () => {
 		// the note now has two lines more above the section than the cache knows; the cache's heading line is where the TWIN's heading-less block sits
 		const twin = ['## Other', '', ...CTR(5), ''];
 		const now = ['# N', '', 'inserted 1', 'inserted 2', ...twin, ...SUB, '## After', '', 'tail'].join('\n');
@@ -773,11 +785,14 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 		const { app, host } = embedded(now, part(SUB, 2), 'Note#Tracker', bodyOf(5), before);
 		const pin = host.pinPosition()!;
 
-		expect(await save(host, pin)).toBe(true); // the text search (one run) places it: the embedded block, not the twin
-		expect(names(app)).toEqual(['Twin', 'Edited']);
+		// SC-596: the cache's heading line is not the heading's line in the note text, so the link places nothing (the text search used to find the
+		// part's one run). Obsidian catches up with an outside edit within ~45 ms; until then a form is refused, a Notice says so, and the form stays open.
+		expect(await save(host, pin)).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(now);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
 	});
 
-	test('a cache whose heading line is a line that is NOT the heading (it points at the identical block above the section): not taken, the text search places the pin, the twin is not written', async () => {
+	test('a cache whose heading line is a line that is NOT the heading (it points at the identical block above the section): not taken, nothing places the pin, nothing is written', async () => {
 		const twin = ['## Other', '', ...CTR(5), ''];
 		const full = ['# N', '', ...twin, ...SUB, '## After', '', 'tail'].join('\n');
 		// "Tracker" is said to start on the twin's heading line, so that its line + 2 is the twin's fence
@@ -785,8 +800,9 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 		const { app, host } = embedded(full, part(SUB, 2), 'Note#Tracker', bodyOf(5), lagging);
 		const pin = host.pinPosition()!;
 
-		expect(await save(host, pin)).toBe(true);
-		expect(names(app)).toEqual(['Twin', 'Edited']);
+		expect(await save(host, pin)).toBe(false); // SC-596: refused (the text search used to find the one run); the cache catches up within ms
+		expect(app.vault.getContent('Note.md')).toBe(full);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
 	});
 
 	test('the block at the cache\'s position holds another body than the host knows: the pin is not rebased', async () => {
@@ -812,18 +828,22 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 	});
 
 
+	// SC-596: nothing places the pin of a form here (the text search used to). Three of the four are shapes Obsidian does not produce (an embed without
+	// its `src`, a link without `#` on a part of the note, a link to another note: its `sourcePath` is the linked note); the fourth is a cache lag or a
+	// renamed heading. Each is refused with the Notice, never a guess.
 	test.each([
 		['no src on the embed', (): HTMLElement => { const e = embedEl('x'); e.parentElement!.removeAttribute('src'); return e; }],
 		['a link without a subpath', () => embedEl('Note')],
 		['a link to another note', () => embedEl('Elsewhere#Tracker')],
 		['a subpath that does not resolve', () => embedEl('Note#Nope')],
-	])('%s: the text search places the pin (one run), as before', async (_name, el) => {
+	])('%s: the link places nothing: Save writes nothing and says why', async (_name, el) => {
 		const full = ['# N', '', ...para(500, 'above'), '', ...SUB, '## After', '', ...para(500, 'below'), 'END'].join('\n');
 		const { app, host } = embedded(full, part(SUB, 2), 'Note#Tracker', bodyOf(5), full, el());
 		const pin = host.pinPosition()!;
 
-		expect(await save(host, pin)).toBe(true);
-		expect(app.vault.getContent('Note.md')).toBe(full.replace('name: Twin', 'name: Edited'));
+		expect(await save(host, pin)).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(full);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
 	});
 
 	/** A hover preview of a block or heading link: Obsidian draws the card under `.popover.hover-popover > .markdown-embed`, which has no `src`. */
@@ -872,10 +892,10 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
 	});
 
-	test('a hover preview (no src) of a block whose text is unique in the note: the text search places the pin and Save lands', async () => {
+	test('a hover preview (no src) of a block whose text is unique in the note: the hover\'s link (hover-link, sent before every preview) places the pin and Save lands', async () => {
 		const other = ['```ds-counter', 'name: Other', 'current_value: 1', 'max_value: 20', 'min_value: 0', '```'];
 		const full = ['# N', '', ...other, '', 'p', '', ...BLK(), '', 'END'].join('\n');
-		const { app, host } = embedded(full, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, 'x', bodyOf(5), full, hoverEl());
+		const { app, host } = embedded(full, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, 'x', bodyOf(5), full, hoverEl('Note#^blk'));
 		const pin = host.pinPosition()!;
 
 		expect(await save(host, pin)).toBe(true);
@@ -912,27 +932,22 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 		expect(app.vault.getContent('Note.md')).toBe(full);
 	});
 
-	test('no metadata cache for the note: the text search places the pin', async () => {
+	test('no metadata cache for the note (a note Obsidian has not indexed yet): nothing places the pin, Save writes nothing and says why', async () => {
 		const full = ['# N', '', ...para(500, 'above'), '', ...SUB, '## After', '', ...para(500, 'below'), 'END'].join('\n');
 		const { app, host } = embedded(full, part(SUB, 2), 'Note#Tracker');
 		jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => null);
 		const pin = host.pinPosition()!;
 
-		expect(await save(host, pin)).toBe(true);
-		expect(app.vault.getContent('Note.md')).toBe(full.replace('name: Twin', 'name: Edited'));
+		expect(await save(host, pin)).toBe(false); // SC-596: the text search used to place it
+		expect(app.vault.getContent('Note.md')).toBe(full);
+		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
 	});
 
-	test('the text search drops the part\'s own trailing blank lines (Obsidian can report more of them than the note has)', async () => {
+	test('the link\'s check drops the part\'s own trailing blank lines (Obsidian can report more of them than the note has)', async () => {
 		// the embedded section is the last of the note: its reported text ends with two blank lines the file does not have
 		const full = ['# N', '', ...para(500, 'above'), '', '## Tracker', '', ...CTR(5)].join('\n') + '\n';
-		const app = new App();
-		app.vault.setFile('Note.md', full);
 		const text = ['## Tracker', '', ...CTR(5), '', ''].join('\n');
-		const sec: Section = { current: { text, lineStart: 2, lineEnd: 5 } };
-		const el = document.createElement('div');
-		el.className = 'internal-embed markdown-embed';
-		const host = new ReadingModeBlockHost(new Plugin(app) as never, el.appendChild(document.createElement('div')), switchableCtx(sec) as never, 'ds-counter');
-		host.setMountedBody(bodyOf(5));
+		const { app, host } = embedded(full, { text, lineStart: 2, lineEnd: 5 }, 'Note#Tracker');
 		const pin = host.pinPosition()!;
 
 		expect(await save(host, pin)).toBe(true);
@@ -1134,6 +1149,8 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 			sec.current = part(['## Tracker', '', ...CTR(6), ''], 2); // Obsidian redrew the embed from the note as the + left it
 			const outside = ['# N', '', ...para(500, 'inserted above'), ...noteOf6(app).split('\n').slice(1), ...para(500, 'inserted below')].join('\n');
 			app.vault.setFile('Note.md', outside);
+			// SC-596: Obsidian re-reads the note within ~45 ms of an outside edit; the link places the pin from the cache of the note as it is now
+			jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheOf(outside) as never);
 			const pin = host.pinPosition()!;
 
 			expect(await save(host, pin, bodyOf(6, 'Edited'))).toBe(true); // the + write's position would be 1000 lines from the note now (the line diff gives up beyond 400 on both sides)
@@ -1399,14 +1416,19 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 			expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
 		});
 
-		test('a plain fenced block embed (not in a callout) keeps its rule, the id under the closing fence, whatever the length of the stale part: a part one line longer than the block, a twin above: Save lands in the embedded block (SC-584 r3, r2 LOW-1)', async () => {
+		// SC-596: a form there is refused. The block lost a field from outside after the embed drew it (the embed is not redrawn yet): the part no longer
+		// equals the note where the link starts, so nothing says the part is still what is drawn, and the block changed before the form opened - the ticket's
+		// own class (a card is refused here the same way since SC-594). SC-584 r3's rule (the id under the closing fence, whatever the part's length) is
+		// the marker check of `cardLinkLine`: a part that is current still saves (the block embed of the lower of two identical blocks, above).
+		test('a plain fenced block embed whose block lost a field from outside while the embed still shows the old part, a twin above: Save writes nothing and says why', async () => {
 			const disk = ['# N', '', ...CTR(5), '', 'p', '', ...CTR(5), '^a', '', 'END'].join('\n');
 			const stale = ['```ds-counter', 'name: Twin', 'current_value: 5', 'max_value: 9', '```'].join('\n'); // a field was removed; the embed is not redrawn yet
 			const { app, host } = embedded(disk, { text: stale, lineStart: 0, lineEnd: 4 }, 'Note#^a', bodyOf(5), disk);
 			const pin = host.pinPosition()!;
 
-			expect(await save(host, pin)).toBe(true); // before r3: refused (the marker was looked for after the part's last line, which is the id itself)
-			expect(names(app)).toEqual(['Twin', 'Edited']);
+			expect(await save(host, pin)).toBe(false);
+			expect(app.vault.getContent('Note.md')).toBe(disk);
+			expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
 		});
 
 		test('a cache that lags the note so that its callout is the identical one ABOVE: the id is not under it, so it is not taken and nothing is written', async () => {

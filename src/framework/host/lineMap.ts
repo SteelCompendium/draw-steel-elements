@@ -13,7 +13,7 @@ import { splitLines } from './lineEnding';
  * although it did not. No data is at risk (nothing is written, the form stays open and the typed text can be copied out); before
  * SC-556 only a form kept open past its view had this limit, any other form fell back to the element's section or a search by body.
  * Only real changes count: a block in a heading embed is given just its section's text, and its pin is rebased onto the whole note
- * before it is mapped (ReadingModeBlockHost.rebasePin), so the lines outside the section are not read as edits.
+ * before it is mapped (ReadingModeBlockHost.rebaseCardPin), so the lines outside the section are not read as edits.
  */
 export const LINE_MAP_MAX_EDITS = 400;
 
