@@ -5,7 +5,7 @@
 // A real Tab from the editor would indent the note, so a control is focused by script (dse.focusByScript) and its Enter is a real key press; the quick-add
 // fields are typed into with real clicks and keys.
 // Initiative/rich.md: round 2, Malice 4. Initiative/captain.md: the captain case. Initiative/tracker.md: Malice 3. Initiative/two-trackers.md: two trackers.
-import { expect } from '@wdio/globals';
+import { browser, expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
 
 const RICH = 'Initiative/rich.md';
@@ -37,6 +37,7 @@ describe('initiative: keyboard focus after the tracker saves, in Live Preview', 
 		await dse.type(root.control('init.malice.quickadd.label'), 'Kbd', { replace: true });
 		await dse.waitForWrite(MIN, () => dse.press('Enter', root.control('init.malice.quickadd.label')));
 		await dse.settle();
+		await browser.pause(1000); // the carry is one-shot: the end state must hold a second after write-idle, not only at it
 		expect(await focusState()).toEqual({ ctl: 'init.malice.quickadd.label', tracker: 0, editor: false, ring: true });
 		await expect(root.control('init.malice.quickadd.label')).toHaveValue(''); // the add happened and the redrawn field is empty
 	});
@@ -47,6 +48,7 @@ describe('initiative: keyboard focus after the tracker saves, in Live Preview', 
 		await dse.focusByScript(root.control('init.round.advance'));
 		await dse.waitForWrite(RICH, () => dse.press('Enter', root.control('init.round.advance')));
 		await dse.settle();
+		await browser.pause(1000); // the carry is one-shot: the end state must hold a second after write-idle, not only at it
 		await expect(root.control({ css: '.dse-init__round-value' })).toHaveText('Round 3');
 		expect(await focusState()).toEqual({ ctl: 'init.round.advance', tracker: 0, editor: false, ring: true });
 	});
@@ -57,6 +59,7 @@ describe('initiative: keyboard focus after the tracker saves, in Live Preview', 
 		await dse.focusByScript(root.control('init.reset-turns'));
 		await dse.waitForWrite(RICH, () => dse.press('Enter', root.control('init.reset-turns')));
 		await dse.settle();
+		await browser.pause(1000); // the carry is one-shot: the end state must hold a second after write-idle, not only at it
 		await expect(root.control('init.hero.turn', { nth: 1 })).toHaveAttribute('aria-pressed', 'false'); // Bruno's turn mark cleared: the tracker was redrawn
 		expect(await focusState()).toEqual({ ctl: 'init.reset-turns', tracker: 0, editor: false, ring: true });
 	});
@@ -67,10 +70,12 @@ describe('initiative: keyboard focus after the tracker saves, in Live Preview', 
 		await dse.focusByScript(root.control('init.captain.relieve')); // the selected Goblin Captain
 		await dse.waitForWrite(CAP, () => dse.press('Enter', root.control('init.captain.relieve')));
 		await dse.settle();
+		await browser.pause(1000); // the carry is one-shot: the end state must hold a second after write-idle, not only at it
 		await expect(root.control('init.captain.make')).toHaveAttribute('aria-label', 'Make Goblin Captain captain of Goblin');
 		expect(await focusState()).toEqual({ ctl: 'init.captain.make', tracker: 0, editor: false, ring: true });
 		await dse.waitForWrite(CAP, () => dse.press('Enter', root.control('init.captain.make')));
 		await dse.settle();
+		await browser.pause(1000); // the carry is one-shot: the end state must hold a second after write-idle, not only at it
 		await expect(root.control('init.captain.relieve')).toHaveAttribute('aria-label', 'Relieve Goblin Captain as captain');
 		expect(await focusState()).toEqual({ ctl: 'init.captain.relieve', tracker: 0, editor: false, ring: true });
 	});
@@ -86,6 +91,7 @@ describe('initiative: keyboard focus after the tracker saves, in Live Preview', 
 		await dse.waitForWrite(RICH, () => dse.press('Enter', confirm));
 		await expect(modal.root).not.toBeExisting();
 		await dse.settle();
+		await browser.pause(1000); // the carry is one-shot: the end state must hold a second after write-idle, not only at it
 		await expect(root.control({ css: '.dse-init__round-value' })).toHaveText('Round 1');
 		expect(await focusState()).toEqual({ ctl: 'init.reset-encounter', tracker: 0, editor: false, ring: true });
 	});
@@ -106,6 +112,7 @@ describe('initiative: keyboard focus after the tracker saves, in Live Preview', 
 		await dse.focusByScript(root.control('init.round.advance'));
 		await dse.waitForWrite(TWO, () => dse.press('Enter', root.control('init.round.advance')));
 		await dse.settle();
+		await browser.pause(1000); // the carry is one-shot: the end state must hold a second after write-idle, not only at it
 		expect(await focusState()).toEqual({ ctl: 'init.round.advance', tracker: 1, editor: false, ring: true });
 	});
 

@@ -3,7 +3,7 @@
 // focus on the control that replaces the pressed one, with the ring. A mouse press never pulls focus in; an outside edit and a twin never take it.
 // A real Tab from the editor would indent the note, so the control is focused by script (dse.focusByScript) and the Enter is a real key press.
 // Counter/counter.md: Health 1, min 0, max 3. Counter/twins.md: two identical counters (Health 1).
-import { expect } from '@wdio/globals';
+import { browser, expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
 
 const NOTE = 'Counter/counter.md';
@@ -32,6 +32,7 @@ describe('counter: keyboard focus across the note save in Live Preview', () => {
 		expect(w.count).toBe(1);
 		await dse.expectNoteBlock(NOTE, COUNTER).toMatchObject({ current_value: 2 });
 		await dse.settle();
+		await browser.pause(1000); // the carry is one-shot: the end state must hold a second after write-idle, not only at it
 		expect(await focusState()).toEqual({ ctl: 'counter.inc', counter: 0, ring: true });
 	});
 
@@ -53,6 +54,7 @@ describe('counter: keyboard focus across the note save in Live Preview', () => {
 		const w = await dse.waitForWrite(TWINS, () => dse.press('Enter', inc));
 		expect(w.count).toBe(1);
 		await dse.settle();
+		await browser.pause(1000); // the carry is one-shot: the end state must hold a second after write-idle, not only at it
 		await dse.expectNoteBlock(TWINS, COUNTER, 0).toMatchObject({ current_value: 2 });
 		await dse.expectNoteBlock(TWINS, COUNTER, 1).toMatchObject({ current_value: 1 });
 		expect(await focusState()).toEqual({ ctl: 'counter.inc', counter: 0, ring: true });
@@ -75,6 +77,7 @@ describe('counter: keyboard focus across the note save in Live Preview', () => {
 		expect(w.count).toBe(1);
 		await dse.expectNoteBlock(NOTE, COUNTER).toMatchObject({ current_value: 0 });
 		await dse.settle();
+		await browser.pause(1000); // the carry is one-shot: the end state must hold a second after write-idle, not only at it
 		expect(await focusState()).toEqual({ ctl: 'counter.input', counter: 0, ring: true });
 	});
 });

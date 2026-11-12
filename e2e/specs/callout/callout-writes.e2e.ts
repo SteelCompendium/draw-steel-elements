@@ -10,7 +10,7 @@
 //   Callout/twins.md    two IDENTICAL blocks in one callout
 //   Callout/list.md     the block's fence indented inside a list item (unsupported shape); list-lp.md is the same
 //                       note for the Live Preview test (the "not saved" Notice is rate-limited per note, 5 s)
-import { expect } from '@wdio/globals';
+import { browser, expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
 import { fencesOf, skeletonOf } from '../../driver/invariants';
 import { readFixture } from '../../driver/state';
@@ -103,6 +103,7 @@ describe('a block in a shape DSE cannot edit yet says so', () => {
 		const w = await dse.waitForWrite('Callout/callout.md', () => dse.press('Enter', bar.control('recov.catch-breath')));
 		expect(w.count).toBe(1);
 		await dse.settle();
+		await browser.pause(1000); // the carry is one-shot: the end state must hold a second after write-idle, not only at it
 		expect(
 			await dse.page<{ ctl: string | null; inBar: boolean; ring: boolean }>(`(() => {
 				const a = document.activeElement;
