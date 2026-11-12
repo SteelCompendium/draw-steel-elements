@@ -13,7 +13,7 @@
 import type { Component } from 'obsidian';
 import { cardHead } from '@/framework/kit';
 import type { MontageModel } from './model';
-import { montageOutcome, montageTallies } from './model';
+import { montageOutcome, montageRoster, montageTallies } from './model';
 
 export class HeadView {
 	constructor(
@@ -26,7 +26,7 @@ export class HeadView {
 
 		const title = this.model.title?.trim() ?? '';
 		const complete = montageTallies(this.model).complete;
-		const party = this.model.participants?.length ?? 0;
+		const party = montageRoster(this.model).length;
 
 		cardHead(
 			head,

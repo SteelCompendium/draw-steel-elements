@@ -47,6 +47,33 @@ export interface MontageParticipant {
 	skills_used?: string[];
 }
 
+/** True for an item that is a hero: an object with a non-empty string `name`. */
+function isHero(item: unknown): item is MontageParticipant {
+	if (item === null || typeof item !== 'object' || Array.isArray(item)) return false;
+	const name = (item as Record<string, unknown>).name;
+	return typeof name === 'string' && name.length > 0;
+}
+
+/** True for a hand-typed item that carries nothing at all (`- `, `- {}`, `- ''`, `- []`), which
+ *  `parse` does not keep and a write therefore does not write back (§B.5: nothing to say). */
+function isEmptyItem(item: unknown): boolean {
+	if (item === null || item === undefined || item === '') return true;
+	if (Array.isArray(item)) return item.length === 0;
+	return typeof item === 'object' && Object.keys(item).length === 0;
+}
+
+/**
+ * SC-610 — the heroes on the board, in roster order. `model.participants` is the list AS TYPED:
+ * a hand-written block can hold an item that is not a hero (`- 7`, `- Ash`, `- nmae: Ash`,
+ * `name: ''`, `name: 7`), and a write must give it back untouched, in its place (the same
+ * no-churn rule as `MontageEntry`'s L-2), so `parse` cannot filter it out of the list. Every
+ * place that READS a hero goes through this instead of `model.participants` — never `.name`
+ * on a raw item. The returned objects are the list's own, so a write to one lands in the note.
+ */
+export function montageRoster(m: MontageModel): MontageParticipant[] {
+	return (m.participants ?? []).filter(isHero);
+}
+
 /** The hero's skills used so far — empty for a missing or `null` list; a hand-typed scalar
  *  (`skills_used: Climb`) reads as a one-item list. A read only: callers must not mutate the
  *  result (it may be a shared frozen empty array, or a fresh one-item array). */
@@ -106,6 +133,7 @@ export interface MontageModel {
 	failure_limit: number;
 	successes: number;
 	failures: number;
+	/** The list as typed — its items may not be heroes (see `montageRoster`); read it through that. */
 	participants?: MontageParticipant[];
 	entries?: MontageEntry[];
 	current_round: number;
@@ -170,6 +198,32 @@ function sanitizeEntries(raw: unknown): MontageEntry[] | undefined {
 	return entries.length > 0 ? entries : undefined;
 }
 
+/**
+ * SC-610 — the `participants` list as typed, minus the items that carry nothing. An item that is
+ * not a hero (no `name`, an empty or non-string `name`, a bare number or word) is KEPT here so a
+ * write gives it back as typed and in place — it is `montageRoster` that leaves it off the board.
+ * Only an item with nothing in it (`- `, `- {}`) is not kept, so it is not written back (§B.5 omit
+ * empty; it would otherwise come back as `- null`). A list that is not a list is dropped, as a
+ * non-list `participants` always was. One `console.warn` per parse names what the board skips;
+ * an all-dropped list comes back `undefined` so no bare `[]` is written (L-3).
+ */
+function sanitizeParticipants(raw: unknown): MontageParticipant[] | undefined {
+	if (raw === undefined || raw === null) return undefined;
+	if (!Array.isArray(raw)) {
+		console.warn('Draw Steel Elements: montage ignored participants, which is not a list', raw);
+		return undefined;
+	}
+	const skipped = raw.filter((item) => !isHero(item));
+	if (skipped.length > 0) {
+		console.warn(
+			'Draw Steel Elements: montage skipped participants[] item(s) that are not a hero with a name — left off the board; one with anything in it is written back as typed, an empty one is not',
+			skipped,
+		);
+	}
+	const kept = raw.filter((item) => !isEmptyItem(item));
+	return kept.length > 0 ? (kept as MontageParticipant[]) : undefined;
+}
+
 function parseModel(data: unknown, _raw: string): MontageModel {
 	const d = (data ?? {}) as Partial<MontageModel>;
 	const model = {} as MontageModel;
@@ -184,7 +238,8 @@ function parseModel(data: unknown, _raw: string): MontageModel {
 	// `participants` among the omit-when-absent keys ("never emit `null`, `''` or `[]`"),
 	// and the board already has its own `No heroes yet` fallback (BoardView.ts), so a bare
 	// `[]` on disk carries no information an omitted key doesn't already carry.
-	if (d.participants !== undefined && d.participants.length > 0) model.participants = d.participants;
+	const participants = sanitizeParticipants(d.participants);
+	if (participants !== undefined) model.participants = participants;
 	const entries = sanitizeEntries(d.entries);
 	if (entries !== undefined) model.entries = entries;
 	model.current_round = d.current_round ?? 1;
@@ -351,7 +406,7 @@ function applyTallyDelta(m: MontageModel, result: string, sign: 1 | -1): void {
 }
 
 function findParticipant(m: MontageModel, hero: string): MontageParticipant | undefined {
-	return (m.participants ?? []).find((p) => p.name === hero);
+	return montageRoster(m).find((p) => p.name === hero);
 }
 
 /** Removes ONE occurrence of `skill` from `hero`'s `skills_used` (§B.3: "removing an
@@ -407,7 +462,7 @@ export function wouldReuseSkill(
  *  acted in it"). `undefined` when every roster hero has already acted (or the roster
  *  is empty). */
 export function nextHeroToAct(m: MontageModel): string | undefined {
-	const participants = m.participants ?? [];
+	const participants = montageRoster(m);
 	const actedThisRound = new Set((m.entries ?? []).filter((e) => e.round === m.current_round).map((e) => e.hero));
 	return participants.find((p) => !actedThisRound.has(p.name))?.name;
 }
@@ -492,7 +547,7 @@ export function resetMontageProgress(m: MontageModel): void {
 	m.failures = 0;
 	m.current_round = 1;
 	m.entries = undefined;
-	for (const participant of m.participants ?? []) {
+	for (const participant of montageRoster(m)) {
 		// A hero with no list stays without one: resetting changes nothing for them.
 		if (skillsOf(participant).length > 0 || Array.isArray(participant.skills_used)) participant.skills_used = [];
 	}

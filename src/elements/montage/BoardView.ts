@@ -28,7 +28,7 @@ import type { Component } from 'obsidian';
 import { setIcon } from 'obsidian';
 import { iconButton } from '@/framework/kit';
 import type { MontageModel, MontageEntry, MontageResult } from './model';
-import { montageTallies, isKnownMontageResult } from './model';
+import { montageTallies, montageRoster, isKnownMontageResult } from './model';
 import type { SheetMode } from './LogActionModal';
 
 const RESULT_ICON: Record<MontageResult, string> = {
@@ -83,7 +83,7 @@ export class BoardView {
 	) {}
 
 	public build(parent: HTMLElement): void {
-		const participants = this.model.participants ?? [];
+		const participants = montageRoster(this.model);
 		const wrap = parent.createDiv({ cls: 'dse-mt__board-wrap' });
 		const board = wrap.createDiv({ cls: 'dse-mt__board' });
 		const complete = montageTallies(this.model).complete;

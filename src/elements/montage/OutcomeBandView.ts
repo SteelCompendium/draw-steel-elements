@@ -12,7 +12,7 @@
 // "Not started" rather than reading as a Total Failure.
 import { setIcon } from 'obsidian';
 import type { MontageModel, MontageOutcome } from './model';
-import { montageOutcome, montageTallies, montageBandCopy, isKnownMontageResult } from './model';
+import { montageOutcome, montageTallies, montageRoster, montageBandCopy, isKnownMontageResult } from './model';
 
 const BAND_ICON: Record<MontageOutcome, string> = {
 	pending: 'hourglass',
@@ -29,7 +29,7 @@ export class OutcomeBandView {
 		const band = montageOutcome(m);
 		const tallies = montageTallies(m);
 		const copy = montageBandCopy(m);
-		const party = m.participants?.length ?? 0;
+		const party = montageRoster(m).length;
 		const entries = m.entries ?? [];
 		const roundsLeft = Math.max(0, m.rounds - m.current_round + 1);
 		// SC-334 review-1 LOW-1: the slots already taken are every DISTINCT roster
@@ -39,7 +39,7 @@ export class OutcomeBandView {
 		// the actions left by exactly those entries, and the brink alert below reads the
 		// same number. Distinct pairs, roster heroes only, `rounds` as the ceiling: the
 		// same "first entry per cell" and "no column, no slot" rules the board draws by.
-		const roster = new Set((m.participants ?? []).map((p) => p.name));
+		const roster = new Set(montageRoster(m).map((p) => p.name));
 		const taken = new Set(
 			entries
 				.filter((e) => e.round >= m.current_round && e.round <= m.rounds && roster.has(e.hero))
@@ -172,7 +172,7 @@ export class OutcomeBandView {
 		// found in `participants` (a hand-authored orphan, spec's own edge case) sorts after
 		// the whole roster; ties among orphans fall back to their original `entries[]`
 		// array order via `Array.prototype.sort`'s guaranteed stability.
-		const participants = this.model.participants ?? [];
+		const participants = montageRoster(this.model);
 		const rosterIndex = (hero: string): number => {
 			const i = participants.findIndex((p) => p.name === hero);
 			return i === -1 ? participants.length : i;
