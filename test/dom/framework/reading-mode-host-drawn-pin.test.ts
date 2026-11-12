@@ -538,7 +538,7 @@ describe('SC-607: a preview that stayed open while the note changed never writes
 			const app = new App();
 			app.vault.setFile('Note.md', now.lines.join('\n'));
 			jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheOf(now.lines) as never);
-			const outer = popoverEl(app, 'Outer#Host', 'the text of the note the preview shows, which embeds Note.md');
+			const outer = popoverEl(app, 'Outer#Host', `${now.lines.join('\n')}\nthe rest of the note the preview shows, which embeds Note.md`); // holds the embedded part, and is not the text the card read
 			const embed = outer.el.appendChild(document.createElement('div'));
 			embed.className = 'internal-embed markdown-embed';
 			embed.setAttribute('src', 'Note#Tracker');
