@@ -40,7 +40,7 @@ const openEditor = (c: HTMLElement, index: number): void => {
 const pick = (c: HTMLElement, group: string, label: string): void => qs(c, `[role="group"][aria-label="${group}"] button[aria-label="${label}"]`).click();
 const pressedIn = (c: HTMLElement, group: string): string[] =>
 	Array.from(c.querySelectorAll(`[role="group"][aria-label="${group}"] [aria-pressed="true"]`)).map((b) => b.getAttribute('aria-label') ?? '');
-/** The preset swatches are found by their hex (read from the `title`, "Red (#c0392b)"), not by `aria-label`: SC-582 will rename the label. */
+/** The preset swatches are found by their hex (read from the `title`, "Red (#c0392b)"); their `aria-label` is the colour name alone (SC-582). */
 const swatchHex = (el: Element): string => /\((#[0-9a-f]{6})\)/i.exec(el.getAttribute('title') ?? '')?.[1].toLowerCase() ?? '';
 const swatch = (c: HTMLElement, hex: string): HTMLElement => {
 	const found = Array.from(c.querySelectorAll<HTMLElement>('[data-dse-control="cond.swatch"]')).find((b) => swatchHex(b) === hex);
@@ -230,6 +230,17 @@ describe('SC-436 matrix: the colour swatches and the custom colour (start colour
 		expect(lastEmit(o)).toEqual([{ key: 'prone', color: hex }]);
 		expect(customSelected(o.container)).toBe(custom);
 		expect(pressedSwatches(o.container)).toEqual(pressed);
+	});
+
+	// SC-582: the swatch's accessible name is its colour name (the title shows "Name (#hex)"), so a screen reader never gets a hex code.
+	test('SC-582: each preset swatch\'s aria-label is the colour name its title shows', () => {
+		const o = open(['prone']);
+		openEditor(o.container, 0);
+		const swatches = Array.from(o.container.querySelectorAll<HTMLElement>('[data-dse-control="cond.swatch"]'));
+		expect(swatches).toHaveLength(5);
+		const names = swatches.map((s) => (s.getAttribute('title') ?? '').split(' (')[0]);
+		expect(names).toEqual(['Red', 'Amber', 'Green', 'Blue', 'Purple']); // setup: the titles name the colours
+		swatches.forEach((s, i) => expect(s.getAttribute('aria-label')).toBe(names[i]));
 	});
 });
 
@@ -873,17 +884,6 @@ describe('SC-436 matrix: known bugs (each marker encodes the correct behaviour a
 			if (o.onChange.mock.calls.length && lastEmit(o)[0].color === undefined) cleared = true;
 		}
 		expect(cleared).toBe(true);
-	});
-
-	// SC-582: the swatch's aria-label is its hex, so a screen reader (or a colourblind user reading tooltips) never gets the name.
-	test.failing('SC-582: each preset swatch\'s aria-label contains the colour name its title shows', () => {
-		const o = open(['prone']);
-		openEditor(o.container, 0);
-		const swatches = Array.from(o.container.querySelectorAll<HTMLElement>('[data-dse-control="cond.swatch"]'));
-		expect(swatches).toHaveLength(5);
-		const names = swatches.map((s) => (s.getAttribute('title') ?? '').split(' (')[0]);
-		expect(names).toEqual(['Red', 'Amber', 'Green', 'Blue', 'Purple']); // setup: the titles name the colours
-		swatches.forEach((s, i) => expect(s.getAttribute('aria-label')).toContain(names[i]));
 	});
 
 	// SC-585: removeAt focuses "+ Add condition" when the list empties, but that button does not exist while the Add dropdown is open.

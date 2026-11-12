@@ -473,7 +473,8 @@ export class ConditionsModal extends DseModal {
 			const sw = row.createEl('button', { cls: 'dse-swatch' });
 			sw.setAttribute('type', 'button');
 			sw.setAttribute('title', `${name} (${hex})`);
-			sw.setAttribute('aria-label', `Color ${hex}`);
+			// SC-582: the accessible name is the colour's name alone (the group already says "Color"; the hex stays in the tooltip).
+			sw.setAttribute('aria-label', name);
 			stampControl(sw, 'cond.swatch');
 			setPressedState(sw, sameColor(entry.color, hex));
 			sw.style.setProperty('--dse-swatch', hex);
@@ -502,7 +503,9 @@ export class ConditionsModal extends DseModal {
 		this.renderList();
 		// A preset hex (swatch click, or a custom pick that happens to equal one) lands on its
 		// swatch; any other hex came from the custom <input type=color>, which stays focused.
-		if (SWATCHES.some(([, h]) => sameColor(hex, h))) this.focusPickedOption(index, 'Color', `Color ${hex}`);
+		// The swatch is found by its accessible name, the matching SWATCHES entry's colour name (SC-582).
+		const preset = SWATCHES.find(([, h]) => sameColor(hex, h));
+		if (preset) this.focusPickedOption(index, 'Color', preset[0]);
 		else this.focusCustomColor(index);
 	}
 

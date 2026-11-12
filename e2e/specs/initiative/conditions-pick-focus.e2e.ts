@@ -53,7 +53,7 @@ describe('conditions-modal: focus after a pick in the row editor (SC-468)', () =
 		const swatch = modal.control('cond.swatch', { nth: SWATCH_GREEN });
 		await dse.tabTo(swatch, 20);
 		await dse.waitForWrite(NOTE, () => dse.press('Enter', swatch));
-		expect(await focusState()).toEqual({ ctl: 'cond.swatch', group: 'Color', label: 'Color #1e8449', pressed: 'true', ring: true });
+		expect(await focusState()).toEqual({ ctl: 'cond.swatch', group: 'Color', label: 'Green', pressed: 'true', ring: true });
 
 		const effect = modal.control('cond.effect', { nth: EFFECT_GLOW });
 		await dse.tabTo(effect, 20);
@@ -70,7 +70,7 @@ describe('conditions-modal: focus after a pick in the row editor (SC-468)', () =
 	it('[COND-E03] a mouse click on a swatch also leaves focus on that swatch, and draws no focus ring', async () => {
 		const modal = await openDazedEditor();
 		await dse.waitForWrite(NOTE, () => dse.click(modal.control('cond.swatch', { nth: SWATCH_GREEN })));
-		expect(await focusState()).toEqual({ ctl: 'cond.swatch', group: 'Color', label: 'Color #1e8449', pressed: 'true', ring: false });
+		expect(await focusState()).toEqual({ ctl: 'cond.swatch', group: 'Color', label: 'Green', pressed: 'true', ring: false });
 		await dse.closeModals();
 	});
 

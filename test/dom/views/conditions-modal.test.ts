@@ -306,7 +306,7 @@ describe('SC-186: the inline row editor (cog) — Duration / Color / Effect', ()
 		const { container } = makeModal(['bleeding'], onChange);
 		(rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]') as HTMLElement).click();
 		const editor = container.querySelector('.dse-condal__editor') as HTMLElement;
-		(editor.querySelector('button[aria-label="Color #c0392b"]') as HTMLElement).click();
+		(editor.querySelector('button[aria-label="Red"]') as HTMLElement).click();
 
 		expect(onChange).toHaveBeenLastCalledWith([{ key: 'bleeding', color: '#c0392b' }]);
 		const glyph = rowByName(container, 'Bleeding').querySelector('.dse-condal__glyph') as HTMLElement;
@@ -379,12 +379,32 @@ describe('SC-186: the inline row editor (cog) — Duration / Color / Effect', ()
 	test('SC-468: picking a swatch leaves focus on the chosen swatch, rebuilt and now pressed', () => {
 		const { container } = makeModal(['bleeding']);
 		openEditor(container, 'Bleeding');
-		const before = editorOf(container).querySelector('button[aria-label="Color #1e8449"]') as HTMLElement;
+		const before = editorOf(container).querySelector('button[aria-label="Green"]') as HTMLElement;
 		before.click();
-		const swatch = editorOf(container).querySelector('button[aria-label="Color #1e8449"]') as HTMLElement;
+		const swatch = editorOf(container).querySelector('button[aria-label="Green"]') as HTMLElement;
 		expect(swatch).not.toBe(before);
 		expect(document.activeElement).toBe(swatch);
 		expect(swatch.getAttribute('aria-pressed')).toBe('true');
+	});
+
+	test('SC-582: each preset swatch is announced by its colour name alone; its tooltip keeps the name and the hex', () => {
+		const { container } = makeModal(['bleeding']);
+		openEditor(container, 'Bleeding');
+		const swatches = Array.from(editorOf(container).querySelectorAll<HTMLElement>('[role="group"][aria-label="Color"] [data-dse-control="cond.swatch"]'));
+		expect(swatches.map((s) => s.getAttribute('aria-label'))).toEqual(['Red', 'Amber', 'Green', 'Blue', 'Purple']);
+		expect(swatches.map((s) => s.getAttribute('title'))).toEqual([
+			'Red (#c0392b)', 'Amber (#b9770e)', 'Green (#1e8449)', 'Blue (#2874a6)', 'Purple (#7d3c98)',
+		]);
+	});
+
+	test('SC-582: after a swatch click the focus is on the rebuilt swatch, found and announced by its colour name', () => {
+		const { container } = makeModal(['bleeding']);
+		openEditor(container, 'Bleeding');
+		(editorOf(container).querySelector('[role="group"][aria-label="Color"] button[aria-label="Amber"]') as HTMLElement).click();
+		const focused = document.activeElement as HTMLElement;
+		expect(focused.getAttribute('aria-label')).toBe('Amber');
+		expect(focused.getAttribute('title')).toBe('Amber (#b9770e)');
+		expect(focused.getAttribute('aria-pressed')).toBe('true');
 	});
 
 	test('SC-468: a custom (non-preset) color keeps focus on the custom color input, not the cog', () => {
@@ -903,7 +923,7 @@ describe('SC-186: add — the real combobox (arrow keys + Enter, Escape, known +
 			const { container, onChange } = makeModal(['bleeding']);
 			openEditor(container, 'Bleeding');
 			openCombobox(container);
-			const swatch = editorOf(container).querySelector('.dse-swatch[aria-label="Color #1e8449"]') as HTMLElement;
+			const swatch = editorOf(container).querySelector('.dse-swatch[aria-label="Green"]') as HTMLElement;
 
 			press(swatch, 'mousedown');
 			press(swatch, 'mouseup');
@@ -911,7 +931,7 @@ describe('SC-186: add — the real combobox (arrow keys + Enter, Escape, known +
 
 			expect(onChange).toHaveBeenLastCalledWith([{ key: 'bleeding', color: '#1e8449' }]);
 			expect(container.querySelector('.dse-condal__combobox')).toBeNull();
-			expect(document.activeElement?.getAttribute('aria-label')).toBe('Color #1e8449');
+			expect(document.activeElement?.getAttribute('aria-label')).toBe('Green');
 		});
 
 		// A real browser focuses a focusable pressed element in the mousedown's DEFAULT action, i.e. before the
@@ -1213,6 +1233,20 @@ describe('SC-361: swatch selection mark and focus ring', () => {
 		expect(editorOf(container).querySelectorAll('button.dse-swatch[aria-pressed="true"]')).toHaveLength(0);
 	});
 
+	test('SC-582: a custom pick equal to a preset (any case) marks and focuses the named swatch, not the custom input', () => {
+		const onChange = jest.fn();
+		const { container } = makeModal(['bleeding'], onChange);
+		openEditor(container, 'Bleeding');
+		const input = customInput(container);
+		input.value = '#1E8449';
+		input.dispatchEvent(new Event('change'));
+
+		const swatch = editorOf(container).querySelector('[role="group"][aria-label="Color"] button[aria-label="Green"]') as HTMLElement;
+		expect(swatch.getAttribute('aria-pressed')).toBe('true');
+		expect(document.activeElement).toBe(swatch);
+		expect(customOf(container).hasAttribute('data-selected')).toBe(false);
+	});
+
 	test('picking a custom colour marks the pipette; picking a preset afterwards clears it', () => {
 		const { container } = makeModal(['bleeding']);
 		openEditor(container, 'Bleeding');
@@ -1222,8 +1256,8 @@ describe('SC-361: swatch selection mark and focus ring', () => {
 		expect(customOf(container).hasAttribute('data-selected')).toBe(true);
 		expect(document.activeElement).toBe(customInput(container));
 
-		(editorOf(container).querySelector('button[aria-label="Color #2874a6"]') as HTMLElement).click();
+		(editorOf(container).querySelector('button[aria-label="Blue"]') as HTMLElement).click();
 		expect(customOf(container).hasAttribute('data-selected')).toBe(false);
-		expect(editorOf(container).querySelector('button[aria-label="Color #2874a6"]')!.getAttribute('aria-pressed')).toBe('true');
+		expect(editorOf(container).querySelector('button[aria-label="Blue"]')!.getAttribute('aria-pressed')).toBe('true');
 	});
 });

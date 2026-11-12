@@ -129,7 +129,8 @@ const DURATIONS = [
 ];
 
 /** Preset swatches: the Steel action-type hues (semantic saturated color). */
-const SWATCHES = ['#c0392b', '#b9770e', '#1e8449', '#2874a6', '#7d3c98'];
+// [name, hex] like src/views/ConditionsModal.ts SWATCHES; a preset swatch's aria-label is its name (SC-582).
+const SWATCHES = [['Red', '#c0392b'], ['Amber', '#b9770e'], ['Green', '#1e8449'], ['Blue', '#2874a6'], ['Purple', '#7d3c98']];
 
 const EFFECTS = ['static', 'blink', 'glow', 'glow-pulse', 'breathing', 'blur-pulse'];
 
@@ -172,10 +173,10 @@ function swatchRow(parent, { active }) {
 	const row = el(parent, 'div', 'dse-swatches');
 	row.setAttribute('role', 'group');
 	row.setAttribute('aria-label', 'Color');
-	for (const hex of SWATCHES) {
+	for (const [name, hex] of SWATCHES) {
 		const sw = el(row, 'button', 'dse-swatch');
 		sw.setAttribute('type', 'button');
-		sw.setAttribute('aria-label', `Color ${hex}`);
+		sw.setAttribute('aria-label', name);
 		sw.setAttribute('aria-pressed', String(hex === active));
 		sw.style.setProperty('--dse-swatch', hex);
 	}

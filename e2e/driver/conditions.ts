@@ -74,7 +74,7 @@ export const trackerIcons = (row: Row, block = 0): Promise<string[]> =>
 		return Array.from(rows[${ROW_NTH[row]}].querySelectorAll('.dse-cond')).map((i) => i.getAttribute('aria-label').replace('Remove condition: ', ''));
 	})()`);
 
-/** The hexes of the pressed preset swatches, read from each swatch's `title` ("Red (#c0392b)"), not its aria-label (SC-582 will rename that). */
+/** The hexes of the pressed preset swatches, read from each swatch's `title` ("Red (#c0392b)"), whose aria-label is the colour name alone (SC-582). */
 export const pressedSwatches = (): Promise<string[]> =>
 	dse.page<string[]>(`Array.from(document.querySelectorAll('.modal-container [data-dse-control="cond.swatch"][aria-pressed="true"]')).map((b) => (/\\((#[0-9a-f]{6})\\)/i.exec(b.getAttribute('title') || '') || [])[1])`);
 
