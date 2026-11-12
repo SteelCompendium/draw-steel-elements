@@ -479,3 +479,79 @@ describe('SC-334: montagePreviousRound / backMontageRound — "Back to round N"'
 		expect(serialize(m)).toBe(serialize(parseLikePipeline(source)));
 	});
 });
+
+// A participant whose entry in the block has no `skills_used` list (a hand-written roster
+// that only names its heroes) must work at every site the model reads or writes the list,
+// and a write that does not change a hero's skills must not add the key to the note.
+describe('a participant with no skills_used key works at every read/write site', () => {
+	const keyless = (): MontageModel => ({
+		...base,
+		participants: [{ name: 'Kira' }, { name: 'Bram', skills_used: ['Climb'] }],
+	});
+	const entryFor = (skill?: string): MontageEntry => ({ hero: 'Kira', round: 1, result: 'success', ...(skill ? { skill } : {}) });
+
+	test('wouldReuseSkill: false for the key-less hero, with and without the entry being edited', () => {
+		const m = keyless();
+		expect(wouldReuseSkill(m, 'Kira', 'Nature')).toBe(false);
+		expect(wouldReuseSkill(m, 'Kira', 'Nature', entryFor('Nature'))).toBe(false);
+	});
+
+	test('wouldReuseSkill: a `skills_used:` left empty in the YAML (null) reads as no skills', () => {
+		const m = parseLikePipeline('participants:\n  - name: Kira\n    skills_used:\n');
+		expect(wouldReuseSkill(m, 'Kira', 'Nature', entryFor('Nature'))).toBe(false);
+		logMontageEntry(m, entryFor('Nature'));
+		expect(m.participants![0].skills_used).toEqual(['Nature']);
+	});
+
+	test('removeMontageEntry on an entry with a skill leaves the key-less hero key-less', () => {
+		const m = keyless();
+		const e = entryFor('Nature');
+		m.entries = [e];
+		m.successes = 1;
+		expect(() => removeMontageEntry(m, e)).not.toThrow();
+		expect(m.successes).toBe(0);
+		expect(m.entries).toBeUndefined();
+		expect('skills_used' in m.participants![0]).toBe(false);
+	});
+
+	test('correctMontageEntry: the old skill leaves nothing to undo, the new skill creates the key with just that skill', () => {
+		const m = keyless();
+		const e = entryFor('Nature');
+		m.entries = [e];
+		m.successes = 1;
+		expect(() => correctMontageEntry(m, e, entryFor('Insight'))).not.toThrow();
+		expect(m.participants![0].skills_used).toEqual(['Insight']);
+		expect(e.skill).toBe('Insight');
+	});
+
+	test('correctMontageEntry that clears the skill leaves the key-less hero key-less', () => {
+		const m = keyless();
+		const e = entryFor('Nature');
+		m.entries = [e];
+		m.successes = 1;
+		correctMontageEntry(m, e, entryFor());
+		expect('skills_used' in m.participants![0]).toBe(false);
+		expect(e.skill).toBeUndefined();
+	});
+
+	test('logMontageEntry with a skill gives the key-less hero the key with that skill', () => {
+		const m = keyless();
+		expect(() => logMontageEntry(m, entryFor('Nature'))).not.toThrow();
+		expect(m.participants![0].skills_used).toEqual(['Nature']);
+		expect(m.entries).toHaveLength(1);
+		expect(m.successes).toBe(1);
+	});
+
+	test('logMontageEntry without a skill adds no key', () => {
+		const m = keyless();
+		logMontageEntry(m, entryFor());
+		expect('skills_used' in m.participants![0]).toBe(false);
+	});
+
+	test('resetMontageProgress empties a present list but does not give a key-less hero one', () => {
+		const m = keyless();
+		resetMontageProgress(m);
+		expect('skills_used' in m.participants![0]).toBe(false);
+		expect(m.participants![1].skills_used).toEqual([]);
+	});
+});

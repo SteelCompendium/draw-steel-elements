@@ -2401,3 +2401,92 @@ describe('SC-597: the Montage sheet opened by the keyboard from a board cell in 
 		expect(sheets()).toBe(0);
 	});
 });
+
+// A hand-written roster that only names its heroes: the hero's entry in the block has no
+// `skills_used` list. The sheet used to throw part-way through onOpen and stay half-built.
+describe('the Montage sheet for a hero whose entry has no skills_used list', () => {
+	const KEYLESS = [
+		'rounds: 3',
+		'success_limit: 6',
+		'failure_limit: 3',
+		'successes: 1',
+		'failures: 0',
+		'participants:',
+		'  - name: Kira',
+		'entries:',
+		'  - hero: Kira',
+		'    round: 1',
+		'    result: success',
+		'    skill: Nature',
+		'current_round: 2',
+	].join('\n');
+	let pageErrors: ErrorEvent[];
+	const onError = (e: ErrorEvent) => {
+		pageErrors.push(e);
+		e.preventDefault();
+	};
+	beforeEach(() => {
+		pageErrors = [];
+		window.addEventListener('error', onError);
+	});
+	afterEach(() => {
+		window.removeEventListener('error', onError);
+		document.body.innerHTML = '';
+	});
+
+	test('editing a logged action opens a fully built sheet, with no reuse warning, and throws nothing', async () => {
+		const { root } = await renderMontage(KEYLESS);
+		cellFor(root, 'Kira', 1).click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		expect(modalEl.classList.contains('dse-mt__sheet')).toBe(true);
+		expect(sheetFieldLabels(modalEl)).toEqual(['Result', 'Skill', 'Note']);
+		expect(modalEl.querySelector('.dse-mt__sheet-sub')?.textContent).toBe('recorded as a success with Nature');
+		expect((modalEl.querySelector('input[aria-label="Skill used"]') as HTMLInputElement).value).toBe('Nature');
+		expect(modalEl.querySelector('button[aria-label="Save"]')).not.toBeNull();
+		expect(modalEl.querySelector('button[aria-label="Remove this action"]')).not.toBeNull();
+		const warn = modalEl.querySelector('.dse-mt__sheet-warn') as HTMLElement;
+		expect(warn.hidden).toBe(true);
+		expect(warn.textContent).toBe('');
+		expect(pageErrors).toEqual([]);
+	});
+
+	test('typing a skill in the open sheet shows no reuse warning and throws nothing', async () => {
+		const { root } = await renderMontage(KEYLESS);
+		cellFor(root, 'Kira', 1).click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		const skillInput = modalEl.querySelector('input[aria-label="Skill used"]') as HTMLInputElement;
+		skillInput.value = 'Insight';
+		skillInput.dispatchEvent(new Event('input'));
+		expect((modalEl.querySelector('.dse-mt__sheet-warn') as HTMLElement).hidden).toBe(true);
+		expect(pageErrors).toEqual([]);
+	});
+
+	test('saving a corrected skill writes the key with that skill', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(KEYLESS);
+		cellFor(root, 'Kira', 1).click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		const skillInput = modalEl.querySelector('input[aria-label="Skill used"]') as HTMLInputElement;
+		skillInput.value = 'Insight';
+		skillInput.dispatchEvent(new Event('input'));
+		(modalEl.querySelector('button[aria-label="Save"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect((host.replaceSource as jest.Mock).mock.calls[0][0]).toContain('  - name: Kira\n    skills_used:\n      - Insight');
+		expect(pageErrors).toEqual([]);
+		jest.useRealTimers();
+	});
+
+	test('removing the logged action writes no skills_used key into the hero\'s entry', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(KEYLESS);
+		cellFor(root, 'Kira', 1).click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		(modalEl.querySelector('button[aria-label="Remove this action"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(written).toContain('  - name: Kira\ncurrent_round');
+		expect(written).not.toContain('skills_used');
+		expect(pageErrors).toEqual([]);
+		jest.useRealTimers();
+	});
+});

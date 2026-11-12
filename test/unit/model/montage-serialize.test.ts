@@ -458,3 +458,39 @@ describe('SC-191 §B.5: new-shape schema — key order, round-trip identity, omi
 		});
 	});
 });
+
+describe('a participant with no skills_used key: no file churn (the note keeps what the Director wrote)', () => {
+	const source = [
+		'rounds: 2',
+		'success_limit: 5',
+		'failure_limit: 3',
+		'successes: 0',
+		'failures: 0',
+		'participants:',
+		'  - name: Kira',
+		'  - name: Bram',
+		'    skills_used: []',
+		'current_round: 1',
+	].join('\n');
+
+	test('logging an action for ANOTHER hero leaves the key-less hero\'s entry byte-identical', () => {
+		const m = parseLikePipeline(source);
+		logMontageEntry(m, { hero: 'Bram', round: 1, result: 'success', skill: 'Climb' });
+		const out = serialize(m);
+		expect(out).toContain('  - name: Kira\n  - name: Bram\n    skills_used:\n      - Climb');
+		expect(out).not.toMatch(/name: Kira\n\s+skills_used/);
+	});
+
+	test('an unrelated write with no skill change adds no skills_used key to anyone', () => {
+		const m = parseLikePipeline(source);
+		logMontageEntry(m, { hero: 'Kira', round: 1, result: 'failure' });
+		const out = serialize(m);
+		expect(out).toContain('  - name: Kira\n  - name: Bram\n    skills_used: []\nentries:');
+	});
+
+	test('a key-less hero who logs a skill gets the key right after `name`, with that skill', () => {
+		const m = parseLikePipeline(source);
+		logMontageEntry(m, { hero: 'Kira', round: 1, result: 'success', skill: 'Nature' });
+		expect(serialize(m)).toContain('  - name: Kira\n    skills_used:\n      - Nature\n  - name: Bram');
+	});
+});
