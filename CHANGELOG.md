@@ -22,6 +22,10 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **A colour swatch in the Conditions window is now announced by its colour name** (SC-582). A screen reader said "Color
+  #1e8449" for the green swatch; it now says "Green", and likewise Red, Amber, Blue and Purple, inside the Color group. The hover
+  tooltip is unchanged ("Green (#1e8449)"). After you pick a swatch, keyboard focus stays on it as before. The custom colour
+  picker's labels are unchanged, since a custom colour has no name.
 - [FIX] **In Live Preview, keyboard focus now stays on the button you pressed when the element saves and Obsidian redraws it** (SC-602).
   Press Enter on a counter's + (or Advance round, Make captain, Catch Breath, and so on) and the element saves its change to the note;
   before, focus fell to the page about half a second later, so a keyboard user had to Tab in again from the top of the note. Focus now
