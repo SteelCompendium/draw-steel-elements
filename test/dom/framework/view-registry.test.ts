@@ -113,6 +113,27 @@ describe('SC-340 Task 2: ViewRegistry ownership and release', () => {
 		expect(entry.releasedBy).toBe('first');
 	});
 
+	test('SC-602: beforeRelease is told once, before `released` flips and the view unloads, with (entry, reason); a throwing hook does not stop the release; a released entry is not announced again', async () => {
+		const { registry, renderChild } = await mountCounter();
+		const [entry] = registry.liveEntries();
+		const calls: Array<{ entry: unknown; reason: string; released: boolean; loaded: boolean }> = [];
+		registry.beforeRelease = (e, reason) => {
+			calls.push({ entry: e, reason, released: e.released, loaded: (e.view as any)._loaded });
+			throw new Error('boom');
+		};
+		const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+		renderChild.unload();
+		registry.release(entry, 'again');
+
+		expect(calls).toEqual([{ entry, reason: 'render-child-unload', released: false, loaded: true }]);
+		expect(entry.released).toBe(true);
+		expect(entry.releasedBy).toBe('render-child-unload');
+		expect((entry.view as any)._loaded).toBe(false);
+		expect(warn).toHaveBeenCalledTimes(1);
+		warn.mockRestore();
+	});
+
 	test('plugin unload (the registry unloads) unloads every owned view', async () => {
 		const { registry } = await mountCounter();
 		const [entry] = registry.liveEntries();

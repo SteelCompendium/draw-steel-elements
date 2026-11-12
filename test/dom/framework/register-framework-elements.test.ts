@@ -14,6 +14,7 @@ import type { ElementDefinition, ElementRegistry } from '../../../src/framework/
 import type { ElementPipeline } from '../../../src/framework/pipeline';
 import type { BlockHost } from '../../../src/framework/host/BlockHost';
 import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlockHost';
+import * as FocusCarry from '../../../src/framework/host/livePreviewFocusCarry';
 import { App, Plugin, makeFakeContext } from '../../mocks/obsidian';
 
 /**
@@ -150,5 +151,24 @@ describe('D1 Task 1: registerFrameworkElements (F1 §2.3 "incremental migration 
 		const host = run.mock.calls[0][2] as ReadingModeBlockHost;
 		expect(host).toBeInstanceOf(ReadingModeBlockHost);
 		expect(host.lastKnownBody).toBe('name: A');
+	});
+});
+
+describe('SC-602: the Live Preview focus carry is wired', () => {
+	test('its editor extension is registered with the plugin, built on the registry the wiring returns, and the registry has the release hook', () => {
+		const ext = [{ sc602: 'extension' }] as any;
+		const build = jest.spyOn(FocusCarry, 'livePreviewFocusCarryExtension').mockReturnValue(ext);
+		try {
+			const plugin = new Plugin(new App());
+			const registered = jest.spyOn(plugin, 'registerEditorExtension');
+
+			const registry = registerFrameworkElements(plugin as any, { registry: fakeRegistry([]), pipeline: { run: jest.fn() } as unknown as ElementPipeline });
+
+			expect(build).toHaveBeenCalledWith(registry);
+			expect(registered).toHaveBeenCalledWith(ext);
+			expect(typeof registry.beforeRelease).toBe('function');
+		} finally {
+			build.mockRestore();
+		}
 	});
 });

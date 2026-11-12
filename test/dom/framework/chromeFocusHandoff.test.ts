@@ -11,7 +11,7 @@ import type { ElementPipelineDeps } from '@/framework/pipeline';
 import type { BlockHost, RenderMode } from '@/framework/host/BlockHost';
 import { staminaBarElement } from '@/elements/stamina-bar/definition';
 import * as SidebarRegistration from '@/framework/sidebar/registration';
-import { disarmChromeFocus } from '@/framework/chrome/focusHandoff';
+import { disarmChromeFocus, armSuccessorFocus } from '@/framework/chrome/focusHandoff';
 import { makeCompendiumDeps } from '../elements/_refHarness';
 import { FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main';
 
@@ -503,5 +503,43 @@ describe('SC-505 r4 LOW-D — the two settle branches, each on its own (nothing 
 
 		expect(focusCalls).toEqual([]);
 		expect(document.activeElement).toBe(document.body);
+	});
+});
+
+describe('SC-602 — armSuccessorFocus: a request for the successor of the control that held focus (Live Preview own-save redraw)', () => {
+	test('the rebuilt block takes focus on find(root), not on a chrome item; the request is then spent, where a Pin request outlives its first success', async () => {
+		const first = await render();
+		const oldCollapse = item(first.root, 'collapse');
+		oldCollapse.focus();
+		armSuccessorFocus(KEY, (r) => item(r, 'collapse'), true, oldCollapse);
+		first.host.containerEl.remove();
+
+		const second = await render();
+		expect(document.activeElement).toBe(item(second.root, 'collapse'));
+
+		// spent: with focus back on <body>, the next rebuild of the same block takes nothing (SETTLE_MS would have claimed it again)
+		(document.activeElement as HTMLElement).blur();
+		second.host.containerEl.remove();
+		focusCalls.length = 0;
+		await render();
+		expect(focusCalls).toEqual([]);
+		expect(document.activeElement).toBe(document.body);
+	});
+
+	test('a find that hands back the root, while the root is still detached, claims nothing yet', async () => {
+		const first = await render();
+		const old = item(first.root, 'collapse');
+		old.focus();
+		armSuccessorFocus(KEY, (r) => r, true, old);
+		first.host.containerEl.remove();
+
+		const second = await render({ attach: false });
+		expect(document.activeElement).toBe(document.body);
+		expect(second.root.hasAttribute('tabindex')).toBe(false);
+
+		document.body.appendChild(second.host.containerEl);
+		await flush();
+		expect(document.activeElement).toBe(second.root);
+		expect(second.root.getAttribute('tabindex')).toBe('-1');
 	});
 });

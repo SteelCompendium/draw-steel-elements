@@ -1,7 +1,7 @@
 // SC-588 — captureControlFocus / restoreControlFocus: keyboard focus survives a rebuild that empties the root.
 // The helper's own rules (where focus lands, when it is left alone); the initiative tracker's five actions are in
 // test/dom/elements/initiative-matrix.test.ts ([F]).
-import { captureControlFocus, restoreControlFocus } from '../../../src/framework/kit/controlFocus';
+import { captureControlFocus, restoreControlFocus, controlSuccessor } from '../../../src/framework/kit/controlFocus';
 
 let root: HTMLElement;
 
@@ -115,6 +115,42 @@ describe('controlFocus (SC-588)', () => {
 				restoreControlFocus(root, focus);
 				expect(spy).toHaveBeenCalledWith(ring ? { preventScroll: true, focusVisible: true } : { preventScroll: true });
 			}
+		} finally {
+			spy.mockRestore();
+		}
+	});
+});
+
+describe('controlSuccessor (SC-602): the lookup restoreControlFocus uses, without focusing anything', () => {
+	test('the nth control of the family, the last when the list shrank, the root when there is none; it follows the family map', () => {
+		const families = { 'x.make': 'x.captain', 'x.relieve': 'x.captain' };
+		const [, second] = render(['a.row', 'a.row', 'a.row']);
+		second.focus();
+		const focus = captureControlFocus(root)!;
+		const rows = render(['a.row', 'a.row', 'a.row']);
+		expect(controlSuccessor(root, focus)).toBe(rows[1]);
+		const [only] = render(['a.row']);
+		expect(controlSuccessor(root, focus)).toBe(only);
+		render(['b.other']);
+		expect(controlSuccessor(root, focus)).toBe(root);
+
+		render(['x.make'])[0].focus();
+		const family = captureControlFocus(root, families)!;
+		const [relieve] = render(['x.relieve']);
+		expect(controlSuccessor(root, family, families)).toBe(relieve);
+		expect(controlSuccessor(root, { family: null, nth: 0, ring: true })).toBe(root); // a focused node that carried no control id
+	});
+
+	test('it never focuses and never sets tabindex (the caller decides)', () => {
+		render(['a.row'])[0].focus();
+		const focus = captureControlFocus(root)!;
+		render(['b.other']);
+		(document.activeElement as HTMLElement).blur();
+		const spy = jest.spyOn(HTMLElement.prototype, 'focus');
+		try {
+			expect(controlSuccessor(root, focus)).toBe(root);
+			expect(spy).not.toHaveBeenCalled();
+			expect(root.hasAttribute('tabindex')).toBe(false);
 		} finally {
 			spy.mockRestore();
 		}
