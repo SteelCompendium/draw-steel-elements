@@ -1987,7 +1987,7 @@ malice:
 <li><code>name</code> (string, required): The name of the creature.</li>
 <li><code>max_stamina</code> (number, required): The maximum health points of the creature.</li>
 <li><code>statblock</code> (string or object, optional): A reference to a statblock file or an inline statblock object. If provided, <code>name</code>, <code>max_stamina</code>, and <code>image</code> will be populated from the referenced statblock if they are not explicitly set.</li>
-<li><code>amount</code> (number, required): The number of instances of this creature.</li>
+<li><code>amount</code> (number, required): The number of instances of this creature. If you change it by hand in a block that already tracks instances, the existing creatures keep their stamina and conditions: raising it adds new creatures at the end (full stamina, no conditions) and lowering it removes creatures from the end of the list. A squad's shared minion stamina pool is not changed.</li>
 <li><code>instances</code> (list of CreatureInstance, managed): List of creature instances. Managed by the tracker.</li>
 <li><code>image</code> (string, optional): Path to the creature's image.</li>
 <li><code>squad_role</code> (string, optional): If this Enemy Group is a squad, the creature's role in it — <code>minion</code> (a squad sharing one stamina pool), <code>captain</code> (attached to one squad), or <code>attached</code> (travelling with the squad, not currently its captain). Every creature in a squad group must declare one.</li>
