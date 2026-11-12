@@ -485,6 +485,28 @@ describe('SC-607: a preview that stayed open while the note changed never writes
 			expect(judge(app, now.lines.join('\n'), now.L, now.U)).toEqual({ outcome: 'A', kinds: [] }); // the counter the link names (the lower: the swapped names)
 		});
 
+		test('an embed drawn INSIDE a hover preview of another note: the popover\'s data is that other note\'s text, so the check does not apply to the embed\'s card (it saves)', async () => {
+			const now = noteOf('heading', 'none', false, 5, 5);
+			const app = new App();
+			app.vault.setFile('Note.md', now.lines.join('\n'));
+			jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheOf(now.lines) as never);
+			const outer = popoverEl(app, 'Outer#Host', 'the text of the note the preview shows, which embeds Note.md');
+			const embed = outer.el.appendChild(document.createElement('div'));
+			embed.className = 'internal-embed markdown-embed';
+			embed.setAttribute('src', 'Note#Tracker');
+			const el = embed.appendChild(document.createElement('div'));
+			const p = partOf('heading', 'embed', 'none', true, 5);
+			const host = new ReadingModeBlockHost(new Plugin(app) as never, el, ctxOf({ current: p.sec }), 'ds-counter');
+			host.setMountedBody(bodyOf(5));
+			await settle();
+			host.notePersistIntent();
+			await settle();
+			await host.replaceSource(bodyOf(6), { fromView: true });
+			outer.el.closest('.hover-popover')?.remove();
+
+			expect(judge(app, now.lines.join('\n'), now.U, now.L)).toEqual({ outcome: 'A', kinds: [] });
+		});
+
 		test.each([
 			['no embed on the popover (the internal API is absent)', undefined],
 			['embed.data is not a string', 12345],
