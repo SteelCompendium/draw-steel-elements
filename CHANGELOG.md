@@ -33,14 +33,18 @@ for what needs action.
   held a counter with the same contents elsewhere, the click was not saved and the "changed on disk first" Notice showed,
   although nothing had changed. The click is now saved into the counter you hovered, and the identical one is left alone (also
   for a second click in the same preview, a counter in a callout, Reading view and Live Preview, and `![[note#Heading]]` and
-  `![[note#^id]]` embeds). A click is also no longer written into a counter you did not hover when the note was edited from outside
-  (Sync, another app) a moment before your click. The click is saved only when the note itself confirms where the hovered counter
-  is; otherwise nothing is written and the Notice shows. That happens for: a counter in a list item or a footnote; a counter whose
-  section was edited, moved, pasted over or removed from outside before the click; a preview that Obsidian did not open from a link
-  hover, one already open when the plugin loaded, or one that does not show the link it was opened for; a link that names two places
-  (two headings of that name, or two `^id` lines) while the counter's contents also occur twice; a heading hover where the heading
-  is written with an underline (`Tracker` over `=====`) or differs from the link's name (formatting, a colon); and a whole-note
-  hover whose counter was edited from outside. The Edit form opened from a preview is unchanged (SC-596).
+  `![[note#^id]]` embeds). The click is saved only when the note itself confirms where the hovered counter is; otherwise nothing
+  is written and the Notice shows. So a click is no longer written into a counter you did not hover when the note was edited
+  from outside (Sync, another app) just before your click. Not saved, with the Notice: a counter in a list item or a footnote; a
+  counter edited from outside just before the click (the preview still shows its old value); a hovered section moved, pasted
+  over or removed from outside just before the click, before Obsidian has re-read the note; a preview Obsidian did not open from
+  a link hover, one already open when the plugin loaded, or (heading links) one that shows another heading than its link names;
+  a link that names two places (two headings of that name, or two `^id` lines) while the counter's contents also occur twice; a
+  heading hover where the heading is written with an underline (`Tracker` over `=====`) or differs from the link's name
+  (formatting, a colon); and a whole-note hover whose counter was edited from outside. Known limit (SC-607, as before this
+  fix): a preview left open after the section it shows was deleted or renamed from outside follows what its link names now, so
+  with two sections of the same name and identical counters the click can be saved in the other one. The Edit form opened from
+  a preview is unchanged (SC-596).
 - [FIX] **Keyboard focus stays in the initiative tracker after Advance round, Make/Relieve captain, Reset turns, Reset encounter
   and the Malice quick-add, in Reading view** (SC-588). Each of these rebuilds the whole tracker, and focus used to fall to the
   top of the page, so a keyboard user had to Tab back in from the top of the note after every press. The control that replaced
