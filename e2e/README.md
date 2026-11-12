@@ -125,6 +125,7 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Initiative/key-case.md` | `ds-initiative` with condition keys in other casings (SC-583): hero Alice Alpha has `key: Dazed` (a standard condition) and `key: Hexed` (a custom one); Ogre #1 already holds both `Dazed` (a plain name) and `dazed` (`duration: eot`), Ogre #2 none |
   | `Initiative/two-trackers.md` | TWO `ds-initiative` blocks in one note with prose above, between and below (SC-436): Alice Alpha + an Ogre, then Bob Beta (`grabbed`, Hexed to `eoe`) + a Goblin |
   | `Initiative/amount-edit.md` | `ds-initiative`: hero Alice Alpha, three Ogres with Ogre #2 grabbed (a plain name) at 25/60; a spec edits `amount` by hand (SC-600) |
+  | `Initiative/twins.md` | TWO IDENTICAL `ds-initiative` blocks (Alice Alpha 30/30 + an Ogre, Malice 3) with prose above, between and below (SC-605: a Live Preview save of the upper tracker keeps its own half-typed quick-add and never gives it to the twin below) |
 
 - Edits are checked per fence: a click / type / double-click / press on an element inside `dse.block(lang, n)` declares that block
   as one the test edits (taking the scope and reading it declares nothing, SC-435), and
