@@ -408,6 +408,14 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 			expect(valuesOf(app)).toEqual([6, 5]);
 		});
 
+		test('J20 a heading written with an underline (setext) is not placed from the text: refused, even with a unique body', async () => {
+			const disk = ['# N', '', 'Tracker', '-------', '', ...CTR(5), '', 'END'].join('\n');
+			const { app, host } = hovered(disk, heading, 'Note#Tracker');
+
+			expect(await plus(host, bodyOf(6))).toBe(false);
+			refused(app, disk);
+		});
+
 		test('J20 a heading whose name has a colon, linked without it ([[Note#Tracker one]] for "## Tracker: one"), with an identical counter elsewhere: refused (unchanged)', async () => {
 			const disk = ['# N', '', '## Tracker: one', '', ...CTR(5), '', '## Other', '', ...CTR(5), '', 'END'].join('\n');
 			const { app, host } = hovered(disk, heading, 'Note#Tracker one');
