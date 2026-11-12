@@ -5929,7 +5929,7 @@ const SCENARIOS = [
 			};
 			/**
 			 * (x), (y), (xa), (ya), (xb), (z) SC-556: a block edit form on a card inside an EMBED of part of a note: a HEADING embed (`![[src#Tracker]]`) of a long note, or (kind 'block') a BLOCK embed (`![[src#^id]]`) of the lower of two identical blocks. Obsidian gives such a block only the section's text, so its
-			 * pin is rebased onto the whole note (ReadingModeBlockHost.rebasePin); without that every Save of a note over ~400 lines outside the section was refused ("changed on disk first")
+			 * pin is rebased onto the whole note (ReadingModeBlockHost.rebaseCardPin); without that every Save of a note over ~400 lines outside the section was refused ("changed on disk first")
 			 * although nothing had changed (r6: the pin is now rebased by the embed's own link, verified against the note; a block embed with an identical block elsewhere used to write the OTHER block;
 			 * 'plus' = the + on the card and at once its pencil: the section text Obsidian reports is stale when the form opens). `how`: 'save' = Save lands in the embedded block (an identical counter outside the section, above it, is untouched, every other byte too);
 			 * 'edit' = the embedded block is edited from outside while the form is open: nothing is written into the twin, and if the form is still open Save writes nothing and says why.
