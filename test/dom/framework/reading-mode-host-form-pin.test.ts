@@ -572,7 +572,7 @@ describe('SC-596: named shapes of a form in an embed or hover preview', () => {
 // A card (+ / -) write goes through the same pin, so it has the same twin hazard where nothing could pin it. Measured at the base of SC-596: the 2880-cell
 // sweep above, run for a card's write, writes the twin in none of its cells; these five shapes (a stale callout window with no own-write record of
 // this host, the section gone at the click) write the twin, so a card there gets the same refusing pin. A card write is rate limited (one Notice per
-// note per window), so the first of them shows.
+// note per window), so the first of them shows (the "can't tell where" wording: no place was found for the card at all).
 describe('SC-596: a card write in an embed or hover preview that cannot be pinned is refused, never written into an identical twin', () => {
 	let warn: jest.SpyInstance;
 	beforeEach(() => {
@@ -613,14 +613,14 @@ describe('SC-596: a card write in an embed or hover preview that cannot be pinne
 		const { app, host } = make(full, { text: CAL(5).join('\n'), lineStart: 1, lineEnd: 4 }, embedEl('Note#^cal', false), bodyOf(6), calCache(full));
 		expect(await cardWrite(host, to)).toBe(false);
 		expect(app.vault.getContent('Note.md')).toBe(full);
-		expect(Notice.notices).toHaveLength(1);
+		expect((Notice.notices as unknown[]).map((n) => noticeKind(String(n)))).toEqual(['unsavable']); // the "can't tell where" Notice: nothing could place the card
 	});
 	test('a card + on a callout embed whose block another pane wrote (no own-write record), part stale, a twin callout holding the known body: nothing is written', async () => {
 		const full = ['# N', '', 'TOP', '', ...CAL(6), '', 'mid', '', ...CAL(6), '', '^cal', '', 'END'].join('\n');
 		const { app, host } = make(full, { text: CAL(5).join('\n'), lineStart: 0, lineEnd: 5 }, embedEl('Note#^cal', false), bodyOf(6), calCache(full));
 		expect(await cardWrite(host, 7)).toBe(false);
 		expect(values(app)).toEqual(['6', '6']);
-		expect(Notice.notices).toHaveLength(1);
+		expect((Notice.notices as unknown[]).map((n) => noticeKind(String(n)))).toEqual(['unsavable']); // the "can't tell where" Notice: nothing could place the card
 	});
 	test('a card + on a heading hover callout, stale part, no own-write record, a twin callout holding the known body: nothing is written', async () => {
 		const disk = ['# N', '', ...CAL(6, '> after'), '', 'p', '', '## Tracker', '', ...CAL(9, '> after'), '', '## After', 'END'].join('\n');
@@ -629,7 +629,7 @@ describe('SC-596: a card write in an embed or hover preview that cannot be pinne
 		noteHoverLink(app, { linktext: 'Note#Tracker', sourcePath: 'Host.md', hoverParent: { hoverPopover: { hoverEl: el.closest('.hover-popover')! } } });
 		expect(await cardWrite(host, 7)).toBe(false);
 		expect(app.vault.getContent('Note.md')).toBe(disk);
-		expect(Notice.notices).toHaveLength(1);
+		expect((Notice.notices as unknown[]).map((n) => noticeKind(String(n)))).toEqual(['unsavable']); // the "can't tell where" Notice: nothing could place the card
 	});
 	test('a card + on a block embed whose section resolved when it was built and is gone at the click, the block edited from outside, a twin elsewhere: nothing is written', async () => {
 		const drawn = ['# N', '', ...CTR(5), '', 'p', '', ...CTR(5), '^a', '', 'END'].join('\n');
@@ -643,7 +643,7 @@ describe('SC-596: a card write in an embed or hover preview that cannot be pinne
 		section.current = null;
 		expect(await cardWrite(host, 7)).toBe(false);
 		expect(app.vault.getContent('Note.md')).toBe(disk);
-		expect(Notice.notices).toHaveLength(1);
+		expect((Notice.notices as unknown[]).map((n) => noticeKind(String(n)))).toEqual(['unsavable']); // the "can't tell where" Notice: nothing could place the card
 	});
 	// the control: a card in an embed that CAN be placed (the link names its block, the part is current) still writes, and a card that is not in an
 	// embed is untouched
