@@ -33,14 +33,13 @@ const focusState = () =>
 
 type Modal = Awaited<ReturnType<typeof dse.modal>>;
 
-/** Stage 3 damage on one minion in the open pool modal, then reach Apply with Tab. */
-async function stagePoolAndReachApply(modal: Modal): Promise<ReturnType<Modal['control']>> {
+/** Stage 3 damage on one minion in the open pool modal, then reach Apply with Tab. (Returns nothing: a control handle that came back
+ *  through an `async` function would lose the id the coverage gate reads, so the caller asks the modal for Apply itself.) */
+async function stagePoolAndReachApply(modal: Modal): Promise<void> {
 	await dse.type(modal.control('pool.damage-amount'), '3', { replace: true });
 	await dse.type(modal.control('pool.minion-count'), '1', { replace: true });
 	await dse.click(modal.control('pool.apply-damage'));
-	const apply = modal.control('pool.apply');
-	await dse.tabTo(apply, 30);
-	return apply;
+	await dse.tabTo(modal.control('pool.apply'), 30);
 }
 
 describe('initiative: keyboard focus after a modal whose save replaces its opener', () => {
@@ -51,8 +50,8 @@ describe('initiative: keyboard focus after a modal whose save replaces its opene
 		await dse.tabTo(numeric, TABS);
 		await dse.press('Enter', numeric);
 		const modal = await dse.modal('minion-pool');
-		const apply = await stagePoolAndReachApply(modal);
-		await dse.waitForWrite(SQUAD, () => dse.press('Enter', apply));
+		await stagePoolAndReachApply(modal);
+		await dse.waitForWrite(SQUAD, () => dse.press('Enter', modal.control('pool.apply')));
 		await expect(modal.root).not.toBeExisting();
 		await dse.settle();
 		await expect(root.control('init.detail.stamina')).toHaveElementProperty('textContent', '17/20 (4)'); // the tracker was rebuilt from the edit
@@ -66,8 +65,8 @@ describe('initiative: keyboard focus after a modal whose save replaces its opene
 		await dse.tabTo(cell, TABS);
 		await dse.dblclick(cell);
 		const modal = await dse.modal('minion-pool');
-		const apply = await stagePoolAndReachApply(modal);
-		await dse.waitForWrite(SQUAD, () => dse.press('Enter', apply));
+		await stagePoolAndReachApply(modal);
+		await dse.waitForWrite(SQUAD, () => dse.press('Enter', modal.control('pool.apply')));
 		await expect(modal.root).not.toBeExisting();
 		await dse.settle();
 		await expect(root.control('init.detail.stamina')).toHaveElementProperty('textContent', '17/20 (4)');
