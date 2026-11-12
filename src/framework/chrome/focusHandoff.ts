@@ -255,9 +255,10 @@ export function claimChromeFocus(blockKey: () => string, root: HTMLElement): voi
 		const req = liveRequest(key);
 		if (!req) return; // not this block's request (or none left)
 		// This element's own button (a nested element's panel has the same attribute, but another chrome root).
-		let btn = Array.from(root.querySelectorAll<HTMLElement>(`[data-dse-chrome-item="${req.item}"]`)).find(
-			(b) => b.closest('[data-dse-chrome]') === root,
-		);
+		// (A `find` request names no chrome item (SC-602), so it skips the query.)
+		let btn = req.find
+			? undefined
+			: Array.from(root.querySelectorAll<HTMLElement>(`[data-dse-chrome-item="${req.item}"]`)).find((b) => b.closest('[data-dse-chrome]') === root);
 		if (req.find) {
 			// SC-602: the successor of the focused control, else the root (only once it is in the document: a fresh widget is built detached).
 			// A successor that is disabled (a counter's + at its max) refuses focus, so the request would linger to its TTL: the root instead.
