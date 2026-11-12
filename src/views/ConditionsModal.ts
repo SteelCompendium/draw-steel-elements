@@ -116,6 +116,10 @@ export class ConditionsModal extends DseModal {
 	/** Set while the combobox is open: clears + refocuses the SAME input/menu after a
 	 *  pick, so rapid multi-add never tears down and rebuilds the `<input>`. */
 	private comboReset: (() => void) | null = null;
+	/** SC-580 r3: the control that had focus when a routed key opened the Add search (not set by a click on "+ Add condition", whose
+	 *  button is gone by then anyway). Escape with nothing picked hands focus back to it while it is still connected. Cleared by
+	 *  any close and by a pick (a pick re-renders the rows, and a later Escape is the usual one: focus to "+ Add condition"). */
+	private returnFocusEl: HTMLElement | null = null;
 
 	constructor(
 		app: App,
@@ -576,6 +580,7 @@ export class ConditionsModal extends DseModal {
 		if (target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
 		if (!this.addOpen) {
 			this.addOpen = true;
+			this.returnFocusEl = typeof (target as HTMLElement | null)?.focus === 'function' ? (target as HTMLElement) : null;
 			this.renderAdd();
 		}
 		const input = this.addWrapEl.querySelector<HTMLInputElement>('.dse-condal__input');
@@ -591,10 +596,14 @@ export class ConditionsModal extends DseModal {
 	/** Collapses the dropdown back to "+ Add condition". `refocus` (default true) moves focus to
 	 *  that button; the click-time outside-close passes false when focus already sits on another
 	 *  control the user just clicked (SC-474 r1), so that control keeps it. */
-	private closeAdd(refocus = true): void {
+	private closeAdd(refocus = true, escape = false): void {
+		const back = this.returnFocusEl;
+		this.returnFocusEl = null;
 		this.addOpen = false;
 		this.renderAdd();
-		if (refocus) this.addWrapEl.querySelector<HTMLButtonElement>('.dse-condal__add')?.focus();
+		// SC-580 r3: Escape on a search a routed key opened (nothing picked) returns focus to the control that had it, if it is still there.
+		if (refocus && escape && back?.isConnected) back.focus();
+		else if (refocus) this.addWrapEl.querySelector<HTMLButtonElement>('.dse-condal__add')?.focus();
 	}
 
 	private matchesFor(query: string): Match[] {
@@ -700,7 +709,7 @@ export class ConditionsModal extends DseModal {
 			input,
 			() => {
 				if (!this.addOpen) return false;
-				this.closeAdd();
+				this.closeAdd(true, true); // Escape
 				return true;
 			},
 			this.lifecycle,
@@ -726,7 +735,7 @@ export class ConditionsModal extends DseModal {
 				// modal on an unhandled Escape reaching it (precedent:
 				// kit/stepper.ts's own draft-revert Escape handler).
 				evt.stopPropagation();
-				this.closeAdd();
+				this.closeAdd(true, true); // Escape
 			}
 		});
 
@@ -767,6 +776,7 @@ export class ConditionsModal extends DseModal {
 			return;
 		}
 		this.conditions.push({ key });
+		this.returnFocusEl = null; // a pick: Escape afterwards is the usual one (focus to "+ Add condition")
 		this.emitChange();
 		this.renderList();
 		this.comboReset?.();

@@ -140,6 +140,26 @@ describe('conditions-modal: "or just start typing" opens the Add search (SC-580)
 		expect((await menuOptions()).names).toEqual(['Dazed', 'Add custom: "daz"']);
 		await dse.closeModals();
 	});
+
+	it('[COND-N11] a letter on a focused Duration chip opens the search over the open editor, and Escape closes just the search and gives focus back to the chip; a second Escape closes the window', async () => {
+		const { modal } = await openConditionsModal(TRACKER, 'hero');
+		await addByKeyboard(modal, 'daz');
+		await dse.settle();
+		await dse.press('Escape', modal.control('cond.input')); // the dropdown a pick keeps open
+		await dse.click(modal.control('cond.edit', { nth: 0 }));
+		await dse.waitForWrite(TRACKER, () => dse.click(modal.control('cond.duration', { nth: 1 }))); // End of Turn: the chip keeps focus
+		await expect(modal.control('cond.duration', { nth: 1 })).toBeFocused();
+		await dse.press('d'); // page-level: the chip is the recipient, and it is not a manifest pair
+		await expect(modal.control('cond.input')).toBeFocused();
+		await expect(modal.control('cond.input')).toHaveValue('d');
+		await expect(modal.control('cond.duration', { nth: 1 })).toBeExisting(); // the editor stays open under the search
+		await dse.press('Escape', modal.control('cond.input'));
+		await expect(modal.control('cond.input')).not.toBeExisting();
+		await expect(modal.root).toBeExisting();
+		await expect(modal.control('cond.duration', { nth: 1 })).toBeFocused();
+		await dse.press('Escape'); // the window is second
+		await expect(modal.root).not.toBeExisting();
+	});
 });
 
 describe('conditions-modal: tickets that reach it from outside', () => {

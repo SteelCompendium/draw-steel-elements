@@ -6,6 +6,7 @@ import type { Condition, ConditionHolder } from '@drawSteelAdmonition/EncounterD
 import { ConditionManager } from '@utils/Conditions';
 import { App } from '../../mocks/obsidian';
 import * as obsidianCore from '../../mocks/obsidian-core';
+import { attachObsidianKeymap, pressEscape } from '../_obsidianKeymap';
 
 type Entry = string | Condition;
 type HostKind = 'hero' | 'creature';
@@ -663,6 +664,111 @@ describe('SC-580: a printable key in the window opens the Add search with that k
 		expect(searchInput(o.container)).toBeNull();
 		expect(evt.defaultPrevented).toBe(false);
 		expect(addButton(o.container)).toBe(btn);
+	});
+
+	// SC-580 r3: a letter on an editor chip opens the search over the open editor. Escape (nothing picked) puts focus back on the chip.
+	describe('Escape on a search a routed key opened returns focus to the control that had it', () => {
+		const durationChip = (c: HTMLElement): HTMLElement => qs(c, '[role="group"][aria-label="Duration"] button[aria-label="End of Turn"]');
+		const withEditor = () => {
+			const o = open(['prone']);
+			attachObsidianKeymap(o.modal as any); // Obsidian's Scope runs first, as in the app (SC-431)
+			openEditor(o.container, 0);
+			return o;
+		};
+
+		test('a Duration chip: the letter opens the search, the editor stays open, Escape closes just the search and focuses the same chip', () => {
+			const o = withEditor();
+			const chip = durationChip(o.container);
+			chip.focus();
+			keydown(chip, 'd');
+			expect(searchInput(o.container)!.value).toBe('d');
+			expect(o.container.querySelector('.dse-condal__row--open')).not.toBeNull();
+			const onClose = jest.spyOn(o.modal, 'onClose');
+			pressEscape(searchInput(o.container)!);
+			expect(searchInput(o.container)).toBeNull();
+			expect(document.activeElement).toBe(chip);
+			expect(durationChip(o.container)).toBe(chip); // not re-rendered
+			expect(o.container.querySelector('.dse-condal__row--open')).not.toBeNull();
+			expect(onClose).not.toHaveBeenCalled(); // the dropdown first, the window second (SC-431)
+			expect(o.onChange).not.toHaveBeenCalled();
+		});
+
+		test('the input\'s own Escape handler (no Scope in front of it) does the same', () => {
+			const o = open(['prone']);
+			openEditor(o.container, 0);
+			const chip = durationChip(o.container);
+			chip.focus();
+			keydown(chip, 'd');
+			keydown(searchInput(o.container)!, 'Escape');
+			expect(document.activeElement).toBe(chip);
+		});
+
+		test('an icon choice in the icon picker', () => {
+			const o = withEditor();
+			const choice = qs(o.container, '[role="group"][aria-label="Condition icon"] button');
+			choice.focus();
+			keydown(choice, 'x');
+			expect(searchInput(o.container)!.value).toBe('x');
+			pressEscape(searchInput(o.container)!);
+			expect(document.activeElement).toBe(choice);
+		});
+
+		test('a second Escape (search closed) closes the window', () => {
+			const o = withEditor();
+			durationChip(o.container).focus();
+			keydown(durationChip(o.container), 'd');
+			pressEscape(searchInput(o.container)!);
+			const onClose = jest.spyOn(o.modal, 'onClose');
+			pressEscape(document.activeElement as HTMLElement);
+			expect(onClose).toHaveBeenCalledTimes(1);
+		});
+
+		test('after a pick, Escape is the usual one: focus goes to "+ Add condition"', () => {
+			const o = withEditor();
+			durationChip(o.container).focus();
+			keydown(durationChip(o.container), 'd');
+			typeQuery(searchInput(o.container)!, 'daz');
+			mousedown(menuItems(o.container)[0]);
+			expect(lastEmit(o).map((c) => c.key)).toEqual(['prone', 'dazed']);
+			pressEscape(searchInput(o.container)!);
+			expect(document.activeElement).toBe(addButton(o.container));
+		});
+
+		test('the control is gone by Escape: focus goes to "+ Add condition"', () => {
+			const o = withEditor();
+			const chip = durationChip(o.container);
+			chip.focus();
+			keydown(chip, 'd');
+			chip.remove();
+			pressEscape(searchInput(o.container)!);
+			expect(document.activeElement).toBe(addButton(o.container));
+		});
+
+		test('opened from "+ Add condition" itself (its button is replaced), or by a click: "+ Add condition" as today', () => {
+			const o = withEditor();
+			keydown(addButton(o.container), 'd');
+			pressEscape(searchInput(o.container)!);
+			expect(document.activeElement).toBe(addButton(o.container));
+			const o2 = withEditor();
+			openAdd(o2.container); // by click
+			const chip = durationChip(o2.container);
+			chip.focus();
+			keydown(chip, 'd'); // already open: the key is routed in, but the search was not opened by it
+			pressEscape(searchInput(o2.container)!);
+			expect(document.activeElement).toBe(addButton(o2.container));
+		});
+
+		test('a stale return target does not outlive a close: the next search opened by click returns to "+ Add condition"', () => {
+			const o = withEditor();
+			const chip = durationChip(o.container);
+			chip.focus();
+			keydown(chip, 'd');
+			pressEscape(searchInput(o.container)!);
+			expect(document.activeElement).toBe(chip);
+			openAdd(o.container);
+			pressEscape(searchInput(o.container)!);
+			expect(document.activeElement).toBe(addButton(o.container));
+		});
 	});
 
 	test('a key something else already handled (defaultPrevented before it reaches the window) is left alone', () => {
