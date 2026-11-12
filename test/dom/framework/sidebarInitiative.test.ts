@@ -19,7 +19,7 @@
 // mock changed. `test/fakes/fakeObsidian.ts` was considered instead (it DOES have real
 // event delivery) but its `makeFakeApp()` has no `workspace` at all, so it can't host
 // DseSidebarView/WorkspaceLeaf — the monkey-patch is the smaller, more targeted fix.
-import { App, Notice, Plugin, TFile, flushAsync, parseYaml } from '../../mocks/obsidian';
+import { App, Modal, Notice, Plugin, TFile, flushAsync, parseYaml } from '../../mocks/obsidian';
 // Real ambient `obsidian` types (type-only, erased at runtime) — same convention
 // registration.ts itself uses; the mock module has no MarkdownFileInfo/MarkdownView.
 import type { Editor, MarkdownFileInfo, MarkdownView } from 'obsidian';
@@ -660,5 +660,155 @@ describe('D8 Task 3: initiative-in-sidebar end-to-end (spec §1 canonical use)',
 
 		const { view } = await openSidebarLeaf(app);
 		expect(panelElOf(view).querySelector('[data-dse-element="initiative"]')).not.toBeNull();
+	});
+});
+
+// SC-608 — an outside edit while a tracker window (a modal the tracker opened) is open, in the pinned sidebar. The sidebar does not
+// redraw the section: `previous.update(model)` runs on the SAME view, so the window stayed open with callbacks bound to the OLD model
+// and its Apply / Add was silently lost (the new model is what the panel serializes). Now: the block changed -> the window closes with
+// a Notice and focus goes to the rebuilt control; the block did NOT change (an edit elsewhere in the note) -> the window stays and
+// its Apply writes.
+describe('SC-608: an outside edit while a tracker window is open (pinned sidebar)', () => {
+	const NOTICE = 'The note changed outside, so this window closed without saving';
+	const squadNote = (): string =>
+		[
+			'# Session', '', '```ds-initiative', 'heroes:', '  - name: "Alice"', '    max_stamina: 30', 'enemy_groups:', '  - name: "Goblin Squad"',
+			'    is_squad: true', '    creatures:', '      - { name: Goblin, max_stamina: 4, amount: 5, squad_role: minion }', 'malice:', '  value: 3', '```', '',
+			'Prose after the block.',
+		].join('\n');
+	const ctl = <T extends HTMLElement = HTMLElement>(root: Element, id: string, n = 0): T => {
+		const el = root.querySelectorAll<T>(`[data-dse-control="${id}"]`)[n];
+		if (!el) throw new Error(`no [data-dse-control="${id}"][${n}]`);
+		return el;
+	};
+	const modalEl = (): HTMLElement | null => document.querySelector('.dse-modal');
+	const notices = (): string[] => Notice.notices.filter((n) => n === NOTICE);
+
+	beforeEach(() => {
+		Notice.notices.length = 0;
+		// Obsidian hands focus back to what held it when a modal opened, inside close(), while that control is still in the document.
+		const openers = new WeakMap<object, Element | null>();
+		const open = Modal.prototype.open;
+		const close = Modal.prototype.close;
+		jest.spyOn(Modal.prototype, 'open').mockImplementation(function (this: Modal) {
+			openers.set(this, document.activeElement);
+			open.call(this);
+		});
+		jest.spyOn(Modal.prototype, 'close').mockImplementation(function (this: Modal) {
+			close.call(this);
+			const opener = openers.get(this) as HTMLElement | null | undefined;
+			if (opener && opener !== document.body && opener.isConnected) opener.focus();
+		});
+	});
+	afterEach(() => {
+		jest.restoreAllMocks();
+		document.body.innerHTML = '';
+	});
+
+	async function pinned(note: string) {
+		const env = setup();
+		env.app.vault.setFile('Session.md', note);
+		await sendToSidebar(env.services, 'Session.md', 'ds-initiative');
+		await flushAsync();
+		const { view } = await openSidebarLeaf(env.app);
+		document.body.appendChild(view.contentEl); // focus needs the panel in the document
+		return { ...env, view, panel: panelElOf(view) };
+	}
+	/** Another device / Sync / the user changes the note: `edit` maps its text, then the vault announces the modify. */
+	async function outsideEdit(env: Awaited<ReturnType<typeof pinned>>, edit: (text: string) => string): Promise<void> {
+		env.app.vault.setFile('Session.md', edit(env.app.vault.getContent('Session.md')!));
+		env.fireModify(env.app.vault.getAbstractFileByPath('Session.md') as TFile);
+		await flushAsync();
+		await new Promise((resolve) => setTimeout(resolve, 20));
+	}
+	/** Open the pool window from the keyboard-focused Stamina control and stage 3 damage on one minion. */
+	function stagePool(panel: HTMLElement): void {
+		const opener = ctl(panel, 'init.detail.stamina');
+		opener.focus();
+		opener.click();
+		const modal = modalEl()!;
+		ctl<HTMLInputElement>(modal, 'pool.damage-amount').value = '3';
+		ctl<HTMLInputElement>(modal, 'pool.minion-count').value = '1';
+		ctl(modal, 'pool.apply-damage').click();
+	}
+	const poolOf = (app: App): unknown => parseYaml(splitOnBlock(app.vault.getContent('Session.md')!).body).enemy_groups?.[0]?.minion_stamina_pool;
+	const MALICE = (text: string): string => text.replace('value: 3', 'value: 9');
+
+	test('[S01] the block changed: the window closes, one Notice, focus on the sidebar\'s rebuilt Stamina control', async () => {
+		const env = await pinned(squadNote());
+		stagePool(env.panel);
+		await outsideEdit(env, MALICE);
+		expect(modalEl()).toBeNull();
+		expect(notices()).toHaveLength(1);
+		expect(env.panel.querySelector('.dse-init__malice-value')?.textContent).toBe('Malice: 9'); // the outside change is on screen
+		expect(document.activeElement).toBe(ctl(env.panel, 'init.detail.stamina'));
+		expect(poolOf(env.app)).toBeUndefined(); // nothing was staged into the note
+	});
+
+	test('[S02] the block did NOT change (an edit elsewhere in the note): the window stays open and its Apply writes the pool', async () => {
+		const env = await pinned(squadNote());
+		stagePool(env.panel);
+		await outsideEdit(env, (t) => t.replace('Prose after the block.', 'Prose after the block, and more.'));
+		expect(modalEl()).not.toBeNull();
+		expect(notices()).toHaveLength(0);
+		ctl(modalEl()!, 'pool.apply').click();
+		await waitUntil(() => poolOf(env.app) !== undefined, 'the pool value to be written to the note');
+		expect(poolOf(env.app)).toBe(17); // 5 goblins of 4 = 20, minus the 3 staged
+		expect(env.app.vault.getContent('Session.md')).toContain('Prose after the block, and more.'); // the outside edit survived
+	});
+
+	test('[S03] the Conditions window: the block changed -> closed with a Notice and focus on the rebuilt Add Condition button', async () => {
+		const env = await pinned(squadNote());
+		const opener = ctl(env.panel, 'init.cond.add');
+		opener.focus();
+		opener.click();
+		ctl(modalEl()!, 'cond.add').click();
+		ctl<HTMLInputElement>(modalEl()!, 'cond.input').value = 'daz'; // half typed
+		await outsideEdit(env, MALICE);
+		expect(modalEl()).toBeNull();
+		expect(notices()).toHaveLength(1);
+		expect(document.activeElement).toBe(ctl(env.panel, 'init.cond.add'));
+	});
+
+	test('[S04] the Conditions window with the block unchanged: a condition added after the outside edit is written to the note', async () => {
+		const env = await pinned(squadNote());
+		ctl(env.panel, 'init.cond.add').click();
+		await outsideEdit(env, (t) => t.replace('Prose after the block.', 'Elsewhere.'));
+		expect(modalEl()).not.toBeNull();
+		ctl(modalEl()!, 'cond.add').click();
+		const input = ctl<HTMLInputElement>(modalEl()!, 'cond.input');
+		input.value = 'daz';
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+		await waitUntil(() => /dazed/i.test(env.app.vault.getContent('Session.md')!), 'the condition to be written to the note');
+		expect(env.panel.querySelectorAll('[data-dse-control="init.cond.remove"]').length).toBeGreaterThan(0); // and the sidebar shows it
+	});
+
+	test('[S05] opened with the mouse (focus was not inside the tracker): the Notice shows, nothing is focused', async () => {
+		const env = await pinned(squadNote());
+		ctl(env.panel, 'init.detail.stamina').click();
+		expect(modalEl()).not.toBeNull();
+		await outsideEdit(env, MALICE);
+		expect(modalEl()).toBeNull();
+		expect(notices()).toHaveLength(1);
+		expect(document.activeElement).toBe(document.body);
+	});
+
+	test('[S06] the tracker\'s own Apply shows no Notice and keeps its focus hand-back', async () => {
+		const env = await pinned(squadNote());
+		stagePool(env.panel);
+		ctl(modalEl()!, 'pool.apply').click();
+		await waitUntil(() => poolOf(env.app) !== undefined, 'the pool value to be written to the note');
+		await flushAsync();
+		expect(modalEl()).toBeNull();
+		expect(notices()).toHaveLength(0);
+		expect(document.activeElement).toBe(ctl(env.panel, 'init.detail.stamina'));
+	});
+
+	test('[S07] an outside edit with no window open still refreshes the tracker in place (no Notice)', async () => {
+		const env = await pinned(squadNote());
+		await outsideEdit(env, MALICE);
+		expect(notices()).toHaveLength(0);
+		expect(env.panel.querySelector('.dse-init__malice-value')?.textContent).toBe('Malice: 9');
 	});
 });
