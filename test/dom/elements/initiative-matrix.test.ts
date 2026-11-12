@@ -1658,4 +1658,72 @@ describe('[Q] a half-typed quick-add is a per-view draft: it survives every rebu
 		const second = await mount(TRACKER);
 		expect(draft(second.root)).toEqual(['', '']);
 	});
+
+	// SC-605: the Live Preview hand-off seam (ElementView.carryState / receiveCarriedState). The pipeline calls `host.addChild(view)` just
+	// before `view.mount`, so a host whose addChild hands the view a state stands for the pipeline's take-before-mount.
+	type Seam = { carryState(): unknown; receiveCarriedState(s: unknown): void };
+	const mountSeam = async (receive?: unknown) => {
+		let view: Seam | undefined;
+		const m = await mount(TRACKER, {
+			addChild: (c: unknown) => {
+				view = c as Seam;
+				if (receive !== undefined) view.receiveCarriedState(receive);
+				return c;
+			},
+		} as never);
+		return { ...m, view: view! };
+	};
+
+	test('[Q19] carryState reads the boxes as they are now (amount and label, no caret without focus); empty boxes carry nothing', async () => {
+		const { root, view } = await mountSeam();
+		expect(view.carryState()).toBeUndefined();
+		type(root, '2', 'Feyt');
+		expect(view.carryState()).toEqual({ amount: '2', label: 'Feyt' });
+		ctl<HTMLInputElement>(root, LABEL).value = 'FeytX'; // typed after a press, before the save lands: read at removal, not cached
+		expect(view.carryState()).toEqual({ amount: '2', label: 'FeytX' });
+		type(root, '', '6');
+		expect(view.carryState()).toEqual({ amount: '', label: '6' });
+	});
+
+	test('[Q20] carryState keeps the caret of the box that holds focus', async () => {
+		const { root, view } = await mountSeam();
+		type(root, '2', 'Feytouched');
+		const label = ctl<HTMLInputElement>(root, LABEL);
+		label.focus();
+		label.setSelectionRange(3, 5);
+		expect(view.carryState()).toEqual({ amount: '2', label: 'Feytouched', caret: { field: 'label', start: 3, end: 5 } });
+	});
+
+	test('[Q21] a state received before mount is in the boxes; the hint, Add and the validation styling are the empty state\'s', async () => {
+		const { root } = await mountSeam({ amount: '2', label: 'Feytouched', caret: { field: 'label', start: 3, end: 3 } });
+		expect(draft(root)).toEqual(['2', 'Feytouched']);
+		const label = ctl<HTMLInputElement>(root, LABEL);
+		expect([label.selectionStart, label.selectionEnd]).toEqual([3, 3]);
+		expect(root.querySelector('.dse-init__malice-quickadd-hint')?.textContent).toBe('');
+		expect(root.querySelector('[aria-invalid]')).toBeNull();
+		expect(ctl<HTMLButtonElement>(root, 'init.malice.quickadd.add').disabled).toBe(false);
+	});
+
+	test.each([
+		['null', null],
+		['a string', 'Feyt'],
+		['a missing label', { amount: '2' }],
+		['a number amount', { amount: 2, label: 'x' }],
+		['a bad caret', { amount: '2', label: 'x', caret: { field: 'name', start: 0, end: 0 } }],
+	])('[Q22] a received state of the wrong shape (%s) is ignored: empty boxes', async (_name, state) => {
+		const { root } = await mountSeam(state);
+		expect(draft(root)).toEqual(['', '']);
+	});
+
+	test('[Q23] a received draft is still cleared only by a successful Add, and never written to the note', async () => {
+		const { root, flush, writes, last } = await mountSeam({ amount: '2', label: 'Feyt' });
+		ctl(root, 'init.round.advance').click();
+		await flush();
+		expect(draft(root)).toEqual(['2', 'Feyt']);
+		expect(writes().join('\n')).not.toContain('Feyt');
+		ctl(root, 'init.malice.quickadd.add').click();
+		await flush();
+		expect(last().malice.log).toEqual([{ round: 2, amount: 2, label: 'Feyt' }]);
+		expect(draft(root)).toEqual(['', '']);
+	});
 });
