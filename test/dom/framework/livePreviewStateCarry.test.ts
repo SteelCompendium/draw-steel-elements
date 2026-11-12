@@ -9,7 +9,7 @@ import {
 	carryOwnSaveState,
 	onEditorUpdateState,
 	takeCarriedState,
-	resetCarriedStateForTests,
+	clearCarriedState,
 	CARRY_TTL_MS,
 } from '@/framework/host/livePreviewStateCarry';
 import { CLAIM_WINDOW_MS } from '@/framework/host/viewRegistry';
@@ -65,7 +65,7 @@ function makeEntry(
 }
 
 beforeEach(() => {
-	resetCarriedStateForTests();
+	clearCarriedState();
 	document.body.innerHTML = '';
 });
 
@@ -108,6 +108,16 @@ describe('capture (carryOwnSaveState): only a Live Preview root whose own save i
 		expect(carryOwnSaveState(makeEntry(makeRoot(pane.content)))).toBe(true);
 		expect(carryOwnSaveState(makeEntry(makeRoot(pane.content), { state: undefined }))).toBe(false);
 		expect(takeCarriedState(() => KEY, makeRoot(pane.content))).toBeUndefined();
+	});
+
+	test('S16 a new capture sweeps carries whose time is up (a redraw that never mounted must not pin its pane element)', () => {
+		const pane = makePane();
+		carryOwnSaveState(makeEntry(makeRoot(pane.content), { key: 'Old.md::ds-initiative::4' }));
+		const later = Date.now() + CARRY_TTL_MS + 10;
+		carryOwnSaveState(makeEntry(makeRoot(pane.content), { ticketAge: -(CARRY_TTL_MS + 10) }), later);
+		// asked as of a moment BEFORE the old carry's expiry: only the sweep can have removed it
+		expect(takeCarriedState(() => 'Old.md::ds-initiative::4', makeRoot(pane.content), Date.now() + 1)).toBeUndefined();
+		expect(takeCarriedState(() => KEY, makeRoot(pane.content), later + 1)).toEqual(DRAFT); // the new one is untouched
 	});
 
 	test('S07 a detached old root (already gone from the page): nothing captured', () => {

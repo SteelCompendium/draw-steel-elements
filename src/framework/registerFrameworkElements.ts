@@ -30,7 +30,7 @@ import { ReusedElementRemounter } from './host/remountReused';
 import { livePreviewReconcileExtension } from './host/livePreviewReconcile';
 import { ReplugRemounter } from './host/replugRemount';
 import { carryOwnSaveFocus, livePreviewFocusCarryExtension } from './host/livePreviewFocusCarry';
-import { carryOwnSaveState, livePreviewStateCarryExtension } from './host/livePreviewStateCarry';
+import { carryOwnSaveState, clearCarriedState, livePreviewStateCarryExtension } from './host/livePreviewStateCarry';
 
 /**
  * The subset of `ElementFrameworkV2` (main.ts) this wiring loop needs. A narrow structural
@@ -100,10 +100,20 @@ export function registerFrameworkElements(
 	plugin.registerEditorExtension(livePreviewFocusCarryExtension(registry));
 	// SC-605: and a view's opt-in session state (the initiative tracker's quick-add draft) across the same redraw.
 	plugin.registerEditorExtension(livePreviewStateCarryExtension(registry));
+	// Each carry in its own try/catch: a throw in one must not skip the other (ViewRegistry.release would catch and warn, but only once).
 	registry.beforeRelease = (entry) => {
-		carryOwnSaveFocus(entry);
-		carryOwnSaveState(entry);
+		try {
+			carryOwnSaveFocus(entry);
+		} catch (err) {
+			console.warn('[DSE] Live Preview focus carry failed', err);
+		}
+		try {
+			carryOwnSaveState(entry);
+		} catch (err) {
+			console.warn('[DSE] Live Preview state carry failed', err);
+		}
 	};
+	plugin.register(() => clearCarriedState());
 
 	for (const def of framework.registry.all()) {
 		for (const alias of def.aliases) {

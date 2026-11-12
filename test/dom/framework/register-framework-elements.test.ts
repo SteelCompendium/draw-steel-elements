@@ -174,6 +174,47 @@ describe('SC-602: the Live Preview focus carry is wired', () => {
 	});
 });
 
+describe('SC-605: the release hook keeps the two carries independent, and unload clears the state carry', () => {
+	test('a focus carry that throws does not skip the state carry, and a throwing state carry does not skip the focus carry', () => {
+		const focus = jest.spyOn(FocusCarry, 'carryOwnSaveFocus').mockImplementation(() => {
+			throw new Error('focus boom');
+		});
+		const state = jest.spyOn(StateCarry, 'carryOwnSaveState').mockReturnValue(false);
+		const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			const registry = registerFrameworkElements(new Plugin(new App()) as any, { registry: fakeRegistry([]), pipeline: { run: jest.fn() } as unknown as ElementPipeline });
+			const entry = { sc605: 'entry' } as any;
+			registry.beforeRelease!(entry, 'render-child-unload');
+			expect(state).toHaveBeenCalledWith(entry);
+
+			focus.mockReturnValue(false).mockImplementation(() => false);
+			state.mockImplementation(() => {
+				throw new Error('state boom');
+			});
+			registry.beforeRelease!(entry, 'render-child-unload');
+			expect(focus).toHaveBeenCalledTimes(2);
+			expect(warn).toHaveBeenCalledTimes(2);
+		} finally {
+			focus.mockRestore();
+			state.mockRestore();
+			warn.mockRestore();
+		}
+	});
+
+	test('plugin unload forgets every armed carry', () => {
+		const plugin = new Plugin(new App());
+		const unload = jest.spyOn(plugin, 'register');
+		const clear = jest.spyOn(StateCarry, 'clearCarriedState');
+		try {
+			registerFrameworkElements(plugin as any, { registry: fakeRegistry([]), pipeline: { run: jest.fn() } as unknown as ElementPipeline });
+			for (const [cb] of unload.mock.calls) (cb as () => void)();
+			expect(clear).toHaveBeenCalled();
+		} finally {
+			clear.mockRestore();
+		}
+	});
+});
+
 describe('SC-605: the Live Preview state carry is wired', () => {
 	test('its editor extension is registered on the registry the wiring returns, and the release hook runs both carries for the released entry', () => {
 		const ext = [{ sc605: 'extension' }] as any;

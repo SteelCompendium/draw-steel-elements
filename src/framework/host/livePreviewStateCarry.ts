@@ -33,6 +33,11 @@
 // One-shot (taken = deleted) and bounded by CARRY_TTL_MS, so a later redraw (an outside edit, a second pane) never gets it. Only a
 // root in `.cm-content`, in the same pane / embed, with the same block key, may take it.
 //
+// A RELEASE INSIDE THE TICKET-TO-REDRAW WINDOW IS TREATED AS THE SAVE'S REDRAW: capture runs on any `beforeRelease` with a fresh ticket,
+// whatever caused the release. If a leaf navigates away inside the save's ~10 ms vault `modify` window and back within CARRY_TTL_MS,
+// the new mount takes the draft (measured, SC-605 r3 probe ZZR3-11; base shows empty). No person can time that; pressing then
+// navigating inside the debounce, and close/reopen, both start empty.
+//
 // KNOWN RISK, not observed: Obsidian can keep a `display:none` copy of a widget in the same leaf (see `focusHandoff.ts`). If such a
 // hidden copy of the WRITTEN block were mounted before the visible one it would take the one-shot carry and the visible tracker would
 // start empty. It cannot be filtered here: the root is empty and its visibility unknowable before mount. Every measured redraw gave the
@@ -80,6 +85,7 @@ export function carryOwnSaveState(entry: ViewRegistryEntry, now = Date.now()): b
 	const fresh = entry.tickets.filter((t) => now - t.at < CLAIM_WINDOW_MS && !used.has(t));
 	if (fresh.length === 0) return false;
 	for (const t of entry.tickets) used.add(t);
+	for (const [k, c] of carries) if (c.expires <= now) carries.delete(k); // sweep: a carry whose redraw never mounted must not pin its pane element
 	const key = writtenBlockKey(entry);
 	const state = view.carryState();
 	if (state === undefined) {
@@ -132,7 +138,7 @@ export function takeCarriedState(blockKey: () => string, root: HTMLElement, now 
 	return c.state;
 }
 
-/** jest only: forget every carry. */
-export function resetCarriedStateForTests(): void {
+/** Forget every carry: plugin unload (registerFrameworkElements) and jest. */
+export function clearCarriedState(): void {
 	carries.clear();
 }
