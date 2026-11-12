@@ -11,6 +11,8 @@
 //      after the merge: hero name (:130), hero max_stamina (:133), creature name (:230),
 //      creature max_stamina (:240). Deferred to Task 2 so a statblock-sourced name /
 //      max_stamina is filled before it is validated.
+// Exception (SC-600): instance materialization deliberately differs from the oracle at
+// EncounterData.ts:836 / :882 - see `adjustInstances`: a changed `amount` keeps the instances it can.
 // Everything else is transcribed VERBATIM and in the same statement order — key INSERTION
 // order is the serialized YAML key order, so reordering assignments would break byte-compat.
 // `statblock` strings are left in place (legacy kept them on the object after merging too);
@@ -270,7 +272,8 @@ function noteAbsent(obj: object, keys: readonly string[]): void {
  *  - longer than `amount`: the first `amount` are kept, the rest dropped from the END (trimmed BEFORE
  *    validation, so a malformed entry that is cut off never throws);
  *  - shorter: every existing entry is kept and `makeFresh(id)` entries are appended at the end. Ids are
- *    max existing id + 1, + 2, ... so they may not be sequential and an id is never reused;
+ *    max existing id + 1, + 2, ... so they may not be sequential. An id is unique within the list only: ids
+ *    that an earlier shrink trimmed away can come back after a later grow (3 -> 4 -> 2 -> 5 gives 1..5 again);
  *  - the kept entries go through `validateKept` (the same checks and fills as ever). Appended entries
  *    are NOT validated and are never `noteAbsent`-ed, exactly like a fresh list's entries: they are
  *    written whole, and `validateKept` has already run on every entry that came from the note.
@@ -384,7 +387,8 @@ export function parse(input: unknown, _raw: string): EncounterData {
 			// materialization below depends on it being numeric. (Known edge: a creature
 			// with a statblock AND a missing amount interpolates creature.name below as
 			// undefined where legacy showed the merged name — accepted, doubly-broken input.)
-			if (typeof creature.amount !== 'number') {
+			// SC-600: a non-finite amount (`.inf`, `-.inf`, `.nan`) is invalid too - the instance loop would never end.
+			if (typeof creature.amount !== 'number' || !Number.isFinite(creature.amount)) {
 				throw new Error(
 					`Creature '${creature.name}' in group '${group.name}' is missing or has an invalid 'amount' field.`,
 				);

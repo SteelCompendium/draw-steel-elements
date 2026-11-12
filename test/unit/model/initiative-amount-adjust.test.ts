@@ -207,6 +207,26 @@ describe('SC-600: validation order — trim first, then validate the kept', () =
 	});
 });
 
+describe('SC-600: a non-finite amount is an invalid amount (it used to hang the instance loop)', () => {
+	const msg = "Creature 'Wolf' in group 'Pack' is missing or has an invalid 'amount' field.";
+
+	test.each(['.inf', '-.inf', '.nan'])('YAML amount: %s throws the existing invalid-amount error', (literal) => {
+		const src = wolfBlock(3).replace('amount: 3', `amount: ${literal}`);
+		expect(() => parseLike(src)).toThrow(msg);
+	});
+
+	test.each([Infinity, -Infinity, NaN])('a parsed object with amount %s throws the same error', (amount) => {
+		const input = parseYaml(wolfBlock(3));
+		input.enemy_groups[0].creatures[0].amount = amount;
+		expect(() => parse(input, '')).toThrow(msg);
+	});
+
+	test('finite amounts behave as before: fractional rounds up, negative gives no instances', () => {
+		expect(idsOf(parseLike(wolfBlock(2.5)))).toEqual([1, 2, 3]);
+		expect(wolfOf(parseLike(wolfBlock(-1))).instances).toEqual([]);
+	});
+});
+
 describe('SC-600: integrity — what a hand edit of one group writes back', () => {
 	const twoGroups = (alphaAmount: number, alphaInstances: string[]): string =>
 		[
