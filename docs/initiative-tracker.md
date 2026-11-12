@@ -135,7 +135,7 @@ Each creature in the creatures list has the following fields:
 - `name` (string, required): The name of the creature.
 - `max_stamina` (number, required): The maximum health points of the creature.
 - `statblock` (string or object, optional): A reference to a statblock file or an inline statblock object. If provided, `name`, `max_stamina`, and `image` will be populated from the referenced statblock if they are not explicitly set.
-- `amount` (number, required): The number of instances of this creature.
+- `amount` (number, required): The number of instances of this creature. If you change it by hand in a block that already tracks instances, the existing creatures keep their stamina and conditions: raising it adds new creatures at the end (full stamina, no conditions) and lowering it removes creatures from the end of the list. A squad's shared minion stamina pool is not changed.
 - `instances` (list of CreatureInstance, managed): List of creature instances. Managed by the tracker.
 - `image` (string, optional): Path to the creature's image.
 - `squad_role` (string, optional): If this Enemy Group is a squad, the creature's role in it — `minion` (a squad sharing one stamina pool), `captain` (attached to one squad), or `attached` (travelling with the squad, not currently its captain). Every creature in a squad group must declare one.
