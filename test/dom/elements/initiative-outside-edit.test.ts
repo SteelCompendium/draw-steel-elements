@@ -91,7 +91,7 @@ async function mount(source: string, pane: HTMLElement = newPane(), sourcePath =
 		blockKey: () => `${sourcePath}::ds-initiative::0`,
 	} as unknown as BlockHost;
 	await new ElementPipeline(deps).run(initiativeElement, source, host);
-	return { view: views[0] as InitiativeView, root: containerEl.firstElementChild as HTMLElement, pane };
+	return { view: views[0] as unknown as InitiativeView, root: containerEl.firstElementChild as HTMLElement, pane };
 }
 
 const ctl = <T extends HTMLElement = HTMLElement>(root: Element, id: string, n = 0): T => {
@@ -321,6 +321,19 @@ describe('SC-608: an outside edit redraws the tracker while a window is open (Re
 		await later();
 		expect(document.activeElement).toBe(ctl(mine.root, 'init.detail.stamina'));
 		expect([otherPane.root, otherNote.root].some((r) => r.contains(document.activeElement))).toBe(false);
+	});
+
+	test('[O15] two trackers in one note: the window of the SECOND one hands focus to the second, not to the first', async () => {
+		const first = await mount(TRACKER);
+		const second = await mount(SQUAD, first.pane); // the same pane, below the first
+		openPool(second.root);
+		const fresh = await mount(SQUAD_EDITED, first.pane); // only the second block was edited: the first section is not redrawn
+		second.view.unload();
+		second.root.remove();
+		await later();
+		expect(notices()).toHaveLength(1);
+		expect(document.activeElement).toBe(ctl(fresh.root, 'init.detail.stamina'));
+		expect(first.root.contains(document.activeElement)).toBe(false);
 	});
 
 	test('[O14] the tracker\'s own Apply shows no Notice and keeps its focus hand-back', async () => {
