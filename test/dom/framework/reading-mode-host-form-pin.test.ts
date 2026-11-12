@@ -1,6 +1,6 @@
 // SC-596 -- a block edit form drawn in an embed or hover preview of PART of a note (`![[note#^a]]`, `![[note#Heading]]`, a hover of a block or heading
 // link) is placed exactly like a card's (SC-594 `rebaseCardPin`: the link, checked by `cardLinkLine`, else this host's own last write, else
-// refused), never by a search for the part's text (`searchedPinLine`), and a form there that cannot be pinned gets a REFUSING pin: Save writes
+// refused), never by a search for the part's text, and a form there that cannot be pinned gets a REFUSING pin: Save writes
 // nothing and shows a Notice, it never falls back to a write without `pinOnly` (the part's line numbers and the body against the whole
 // note, which finds an identical twin when the form's block was edited from outside before the form opened).
 // The sweep runs a form Save through every construct x link shape x host x outside edit x + x cache lag x twin layout; the named tests are the
@@ -568,3 +568,94 @@ describe('SC-596: named shapes of a form in an embed or hover preview', () => {
 		expectRefused(app, now, 'dropped');
 	});
 });
+
+// A card (+ / -) write goes through the same pin, so it has the same twin hazard where nothing could pin it. Measured at the base of SC-596: the 2880-cell
+// sweep above, run for a card's write, writes the twin in none of its cells; these five shapes (a stale callout window with no own-write record of
+// this host, the section gone at the click) write the twin, so a card there gets the same refusing pin. A card write is rate limited (one Notice per
+// note per window), so the first of them shows.
+describe('SC-596: a card write in an embed or hover preview that cannot be pinned is refused, never written into an identical twin', () => {
+	let warn: jest.SpyInstance;
+	beforeEach(() => {
+		resetDroppedWriteNotices();
+		Notice.notices.length = 0;
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => {
+		warn.mockRestore();
+		jest.restoreAllMocks();
+	});
+	const CAL = (n: number, tail = '> after text'): string[] => ['> [!note] Camp', ...CTR(n).map((l) => `> ${l}`), tail];
+	const values = (app: App): string[] => [...app.vault.getContent('Note.md')!.matchAll(/current_value: (\d+)/g)].map((m) => m[1]);
+	function make(full: string, sec: Sec | null, el: HTMLElement, body: string, cache: object) {
+		const app = new App();
+		app.vault.setFile('Note.md', full);
+		jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cache as never);
+		const section: Section = { current: sec };
+		const host = new ReadingModeBlockHost(new Plugin(app) as never, el, switchableCtx(section) as never, 'ds-counter');
+		host.setMountedBody(body);
+		return { app, host, section };
+	}
+	/** The card write: the persist intent takes the pin, the view's debounced write follows it. */
+	async function cardWrite(host: ReadingModeBlockHost, value: number): Promise<boolean> {
+		host.notePersistIntent();
+		return host.replaceSource(bodyOf(value), { fromView: true });
+	}
+	const calCache = (full: string) => {
+		const lower = full.split('\n').lastIndexOf('> [!note] Camp');
+		return { headings: [], blocks: { cal: { id: 'cal', position: { start: pos(lower), end: pos(lower + 5) } } } };
+	};
+
+	test.each([
+		['+', 7],
+		['-', 5],
+	])('a card %s on a callout embed whose host knows 6 while the part shows 5, no own-write record, the lower callout edited to 9, the upper holding 6: nothing is written', async (_sign, to) => {
+		const full = ['# N', '', 'TOP', '', ...CAL(6), '', 'mid', '', ...CAL(9), '', '^cal', '', 'END'].join('\n');
+		const { app, host } = make(full, { text: CAL(5).join('\n'), lineStart: 1, lineEnd: 4 }, embedEl('Note#^cal', false), bodyOf(6), calCache(full));
+		expect(await cardWrite(host, to)).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(full);
+		expect(Notice.notices).toHaveLength(1);
+	});
+	test('a card + on a callout embed whose block another pane wrote (no own-write record), part stale, a twin callout holding the known body: nothing is written', async () => {
+		const full = ['# N', '', 'TOP', '', ...CAL(6), '', 'mid', '', ...CAL(6), '', '^cal', '', 'END'].join('\n');
+		const { app, host } = make(full, { text: CAL(5).join('\n'), lineStart: 0, lineEnd: 5 }, embedEl('Note#^cal', false), bodyOf(6), calCache(full));
+		expect(await cardWrite(host, 7)).toBe(false);
+		expect(values(app)).toEqual(['6', '6']);
+		expect(Notice.notices).toHaveLength(1);
+	});
+	test('a card + on a heading hover callout, stale part, no own-write record, a twin callout holding the known body: nothing is written', async () => {
+		const disk = ['# N', '', ...CAL(6, '> after'), '', 'p', '', '## Tracker', '', ...CAL(9, '> after'), '', '## After', 'END'].join('\n');
+		const el = popoverEl(new App(), null).el;
+		const { app, host } = make(disk, { text: ['', ...CAL(5, '> after'), '', ''].join('\n'), lineStart: 1, lineEnd: 6 }, el, bodyOf(6), cacheFor(disk.split('\n'), -1, -1, 4));
+		noteHoverLink(app, { linktext: 'Note#Tracker', sourcePath: 'Host.md', hoverParent: { hoverPopover: { hoverEl: el.closest('.hover-popover')! } } });
+		expect(await cardWrite(host, 7)).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(disk);
+		expect(Notice.notices).toHaveLength(1);
+	});
+	test('a card + on a block embed whose section resolved when it was built and is gone at the click, the block edited from outside, a twin elsewhere: nothing is written', async () => {
+		const drawn = ['# N', '', ...CTR(5), '', 'p', '', ...CTR(5), '^a', '', 'END'].join('\n');
+		const disk = ['# N', '', ...CTR(5), '', 'p', '', ...CTR(9), '^a', '', 'END'].join('\n');
+		const app = new App();
+		app.vault.setFile('Note.md', drawn);
+		const section: Section = { current: { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 } };
+		const host = new ReadingModeBlockHost(new Plugin(app) as never, embedEl('Note#^a', false), switchableCtx(section) as never, 'ds-counter');
+		host.setMountedBody(bodyOf(5));
+		app.vault.setFile('Note.md', disk);
+		section.current = null;
+		expect(await cardWrite(host, 7)).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(disk);
+		expect(Notice.notices).toHaveLength(1);
+	});
+	// the control: a card in an embed that CAN be placed (the link names its block, the part is current) still writes, and a card that is not in an
+	// embed is untouched
+	test('a card + on a block embed whose link places it still writes, and a card outside any embed with no section is as before (no pin)', async () => {
+		const full = ['# N', '', ...CTR(5), '^a', '', 'p', '', ...CTR(5), '^b', '', 'END'].join('\n');
+		const cache = { headings: [], blocks: { a: { id: 'a', position: { start: pos(2), end: pos(5) } }, b: { id: 'b', position: { start: pos(10), end: pos(13) } } } };
+		const placed = make(full, { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, embedEl('Note#^b', false), bodyOf(5), cache);
+		expect(await cardWrite(placed.host, 7)).toBe(true);
+		expect(values(placed.app)).toEqual(['5', '7']);
+		const loose = make(full, null, document.createElement('div'), bodyOf(5), cache);
+		loose.host.notePersistIntent();
+		expect((loose.host as unknown as { pendingPin: unknown }).pendingPin).toBeNull();
+	});
+});
+

@@ -401,10 +401,10 @@ const pinRebased = new WeakMap<object, Promise<void>>();
  */
 const partialPins = new WeakSet<object>();
 /**
- * SC-596: the pin of a block edit form drawn inside an embed or hover preview whose block could not be pinned at all (no section, or no own
- * fence in the part and no own write to stand in). Before, such a form had NO pin and its Save wrote without `pinOnly`: the part's line numbers
- * and the body against the whole note (`resolveWriteTarget` -> `locateByBody`), which finds the identical twin when the form's block was edited
- * from outside. A refusing pin writes nothing and says so (the "can't tell where" Notice, as an unplaceable write).
+ * SC-596: the pin of a block (a block edit form's, or a card write's) drawn inside an embed or hover preview whose position could not be found at
+ * all (no section, or no own fence in the part and no own write to stand in). Before, such a block had NO pin and its write went without
+ * `pinOnly`: the part's line numbers and the body against the whole note (`resolveWriteTarget` -> `locateByBody`), which finds the identical twin
+ * when the block was edited from outside. A refusing pin writes nothing and says so (the "can't tell where" Notice, as an unplaceable write).
  */
 const refusingPins = new WeakSet<object>();
 
@@ -711,7 +711,7 @@ export class ReadingModeBlockHost implements BlockHost {
 		// through that pin: another block's write, an outside edit or typing in the note can make Obsidian redraw the identical
 		// blocks meanwhile and hand this card's element to a twin, and the write would follow the element (SC-549). Later intents of
 		// the round do not re-pin: they come after such a redraw may have happened.
-		const pin = this.takePin(false);
+		const pin = this.takePin();
 		if (pin && !this.pendingPin) this.pendingPin = pin;
 	}
 
@@ -814,25 +814,25 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * it, as the block is drawn now. Null while the block has no section or no readable fence of its own.
 	 */
 	pinPosition(): BlockPin | null {
-		return this.takePin(true);
+		return this.takePin();
 	}
 
 	/**
-	 * `pinPosition`'s body. `forForm` is a block edit form's pin; a card write's pin (`notePersistIntent`) is made exactly as before SC-584
-	 * outside an embed or hover preview. SC-594 / SC-596: inside one, a card's pin and a form's pin are made the same way (the host's own last
-	 * write, the r7 guard below) and placed by `rebaseCardPin` (the link, never a search for the body). A form there that cannot be pinned gets a
-	 * refusing pin (`refusingPins`).
+	 * The pin of a block edit form (`pinPosition`) and of a card write (`notePersistIntent`): made exactly as before SC-584 outside an embed or
+	 * hover preview. SC-594 / SC-596: inside one, both are made the same way (the host's own last write, the r7 guard below) and placed by
+	 * `rebaseCardPin` (the link, never a search for the body); one that cannot be pinned at all is a refusing pin (`refusingPins`).
 	 */
-	private takePin(forForm: boolean): BlockPin | null {
+	private takePin(): BlockPin | null {
 		const section = this.readSection();
 		const embedded = this.containerEl.closest('.markdown-embed, .internal-embed') !== null;
-		if (!section) return forForm && embedded ? this.refusingPin() : null;
+		if (!section) return embedded ? this.refusingPin() : null;
 		if (!this.ownFence) {
 			// SC-584: a callout in an embed or hover preview whose part is stale (right after a + on its card) holds no block with the body this
 			// host knows, so its own fence cannot be found in it; the host's own last write still says where the block is.
 			// SC-594: a card write takes it too (the same stale window right after its own +).
-			// SC-596: a FORM with neither is given a refusing pin (never no pin: see `refusingPins`).
-			return embedded ? (this.pinFromLastWrite() ?? (forForm ? this.refusingPin() : null)) : null;
+			// SC-596: with neither (a block written by another pane, or this host's record dropped) the pin refuses: never no pin, which wrote the
+			// part's line numbers and the body against the whole note and found the twin (see `refusingPins`).
+			return embedded ? (this.pinFromLastWrite() ?? this.refusingPin()) : null;
 		}
 		// SC-584 r7 (r5 had it as "the fence is not the window's first line", which a quote whose FIRST line is the twin's fence defeats): unless the
 		// card's section window IS its own plain fenced block (its first line is an un-prefixed fence - `findOwnFence`'s shortcut, nothing is searched),
@@ -1119,7 +1119,7 @@ export class ReadingModeBlockHost implements BlockHost {
 				// own debounced write, which has a card behind it), or - for a caller that asked for `pinOnly`, which every block edit
 				// form's Save does (SC-556) - nowhere (the block changed on disk first).
 				if (pin !== null && refusingPins.has(pin)) {
-					unplaceable = true; // SC-596: a form in an embed / hover preview that could not be pinned writes nothing
+					unplaceable = true; // SC-596: a block in an embed / hover preview that could not be pinned writes nothing
 					listShape = this.looksLikeList(content, section);
 					return content;
 				}
