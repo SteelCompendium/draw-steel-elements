@@ -427,12 +427,14 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 		const LONGA = ['# N', '', 'TOP', '', '## Other', '', ...CTR(5), '', '## Tracker', '', ...CTR(5), '', 'END'].join('\n'); // the identical counter ABOVE
 
 		/** The preview shows `shows` (a link) but the event that is bound to it names `named`. */
-		function mismatched(disk: string, shows: string, named: string, sec: Sec = heading) {
+		function mismatched(disk: string, shows: string, named: string, sec: Sec = heading, blocks: Record<string, [number, number]> = { a: [4, 7] }, withHeading: string | null = null) {
 			const app = new App();
 			app.vault.setFile('Note.md', disk);
-			jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheFor(disk.split('\n'), { a: [4, 7] }) as never);
+			jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheFor(disk.split('\n'), blocks) as never);
 			const { popover, el } = popoverEl(shows);
 			popovers.push(popover);
+			// a block preview that also draws a heading of the named link (its callout holds one): the heading alone must not make it a heading preview
+			if (withHeading) el.parentElement!.insertBefore(Object.assign(document.createElement('h2'), { textContent: withHeading }), el).setAttribute('data-heading', withHeading);
 			noteHoverLink(app, hoverEvent(named, popover));
 			const host = new ReadingModeBlockHost(new Plugin(app) as never, el, switchableCtx({ current: sec }) as never, 'ds-counter');
 			host.setMountedBody(bodyOf(5));
@@ -455,12 +457,12 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 
 		test('J21 a preview of a heading bound to a block link, and a preview of a block bound to a heading link: nothing is written', async () => {
 			const blk = ['# N', '', ...CTR(5), '^a', '', 'p', '', ...CTR(5), '^b', '', 'END'].join('\n');
-			const one = mismatched(blk, 'Note#Tracker', 'Note#^a', { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 });
+			const one = mismatched(blk, 'Note#Tracker', 'Note#^a', { text: CTR(5).join('\n'), lineStart: 0, lineEnd: 3 }, { a: [2, 5], b: [10, 13] });
 			expect(await plus(one.host, bodyOf(6))).toBe(false);
 			refused(one.app, blk);
 			Notice.notices.length = 0;
 			resetDroppedWriteNotices();
-			const two = mismatched(TWO, 'Note#^a', 'Note#Tracker');
+			const two = mismatched(TWO, 'Note#^a', 'Note#Tracker', heading, {}, 'Tracker');
 			expect(await plus(two.host, bodyOf(6))).toBe(false);
 			refused(two.app, TWO);
 		});
