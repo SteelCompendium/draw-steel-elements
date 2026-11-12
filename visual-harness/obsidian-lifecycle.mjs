@@ -195,6 +195,10 @@
 // twin) sits elsewhere. Save used to write the twin with no Notice (the text search found the part's lines in the twin; a form with no pin saved without `pinOnly`). Now nothing is written, exactly one Notice, the form stays open, the outside edit is kept.
 // Seven pane cells (block embed RV and LP, heading embed RV with two `## Tracker` sections, block hover RV and LP, heading hover RV and LP) and a control without the second pane (the form closes with its card, nothing written).
 //
+// SC-601 appends G-S97 (60 scenarios in all with SC-596's G-S96; it sits after G-S96 and before G-S56, which stays last, and runs in the sixth `--only` part with G-S92 and G-S96): the compendium search opened while a hover preview is a
+// source editor. Nine real-input trials: a press in its input, box or backdrop no longer closes the editing preview, the pick lands in the hovered note (reference and snapshot commands, command palette
+// opener), a suggestion press and a note in a pane (controls), and a pick after the preview was hidden behind the open search shows a Notice and writes nothing, also when the preview closes inside the block command's `getEntity` (after the choose-time check).
+//
 // SC-480 appends G-S73 (53 scenarios before G-S77; it sits after G-S49 and before G-S56, which stays last, and runs in the fifth `--only` part with G-S59 and G-S49): a card write whose pin
 // cannot be placed because its block was DELETED from outside is never written into an identical twin. Click + on one of two identical counters (Reading view and Live Preview),
 // delete that block from outside at once, then leave the note (the unload flush) or wait out the 400 ms debounce: nothing is written, the note stays as the outside edit left it, and
@@ -2028,6 +2032,211 @@ async function gs96Cell(t, { id, mode, kind, pane, last }) {
 		await K.cleanup();
 		await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
 	}
+	return rec;
+}
+
+// SC-601 (G-S97): the compendium search (an Obsidian SuggestModal, not a DseModal) opened while a hover preview is a source editor. Two compendium
+// entries for the search to offer, both real statblocks (the goblin fixture of the jest suite, renamed) so the snapshot command can resolve either.
+const gs97Statblock = (slug, title) =>
+	fs
+		.readFileSync(path.join(dir, '..', 'test', 'fixtures', 'md-dse', 'monster', 'goblin', 'statblock', 'goblin-stinker.md'), 'utf8')
+		.replace(/goblin-stinker/g, slug)
+		.replace(/Goblin Stinker/g, title)
+		.replace('monster.goblin.statblock', 'monster.statblock');
+Object.assign(FIXTURES, {
+	'Compendium/gs97/gsprobe-goblin.md': gs97Statblock('gsprobe-goblin', 'Gsprobe Goblin'),
+	'Compendium/gs97/gsprobe-kobold.md': gs97Statblock('gsprobe-kobold', 'Gsprobe Kobold'),
+});
+const GS97_CMD = 'draw-steel-elements:insert-compendium-reference';
+const GS97_BLOCK_CMD = 'draw-steel-elements:insert-compendium-block';
+const GS97_SRC_TEXT = (k) => `# gs97 ${k}\n\nalpha line one of the note\n\nbeta line two of the note body\n\nEND\n`;
+let gs97Seq = 0;
+
+/**
+ * One trial of G-S97. `where` 'hover': a real Ctrl-hover on a link, then a real press on the preview's prose (Obsidian's click-to-edit helper turns the preview into a
+ * source editor and sets `workspace.activeEditor` to the embed); 'pane': the same note in a pane (source mode). `open`: 'cmd' (executeCommandById, what a hotkey runs),
+ * 'block' (the snapshot command), 'palette' (a real Ctrl+P, the typed name, Enter). `press`: a real press at 'input' | 'box' | 'bg' (the backdrop) | 'suggestion' | null.
+ * `pick`: 'click' (a real press on the first suggestion) | 'keys' (ArrowDown + Enter) | null. `hide`: the preview is hidden by script (Obsidian's own `hide()`) while the
+ * search is open (the choose-time backstop); `hideDuring`: the preview is hidden by script from inside `compendiumIndex.getEntity` (a one-shot page-side wrapper), i.e. AFTER the
+ * choose-time check and before the snapshot is written (the block command's late re-check). All real CDP input. Returns what it measured and the list of broken expectations.
+ */
+async function gs97Trial(t, { name, where = 'hover', open = 'cmd', press = null, pick = null, hide = false, hideDuring = false }) {
+	const K = gs83Kit(t);
+	const J = JSON.stringify;
+	const bad = [];
+	const rec = { name };
+	const OURS = `Array.from(document.querySelectorAll('.modal-container .prompt')).find((p) => (p.querySelector('input.prompt-input')?.placeholder ?? '').startsWith('Search '))`;
+	const ANY_PROMPT = `document.querySelector('.modal-container .prompt')`;
+	const desc = `(h) => h ? h.tagName + '.' + String(h.className).replace(/\\s+/g, '.').slice(0, 48) : null`;
+	const state = () =>
+		t.ev(`(() => { const pop = document.querySelector('.popover.hover-popover'); const ae = app.workspace.activeEditor;
+			return { shown: !!pop && pop.isConnected && getComputedStyle(pop).display !== 'none' && pop.getBoundingClientRect().width > 0, editing: !!pop && pop.classList.contains('is-editing'),
+				editor: !!pop && !!Array.from(pop.querySelectorAll('.cm-editor')).find((e) => e.offsetParent !== null), search: !!(${OURS}), inPreview: !!ae && !!ae.containerEl?.closest?.('.hover-popover') }; })()`);
+	const point = (expr, xFrac = 0.5) =>
+		t.ev(`(() => { const d = ${desc}; const el = ${expr}; if (!el) return null; const r = el.getBoundingClientRect(); if (!(r.width > 0)) return null; const x = Math.round(r.left + Math.min(r.width * ${xFrac}, 80)); const y = Math.round(r.top + r.height / 2); return { x, y, hit: d(document.elementFromPoint(x, y)) }; })()`);
+	/** a point inside the prompt box that is not its input nor a suggestion (padding, the results' empty area) */
+	const BOX_PT = `(() => { const d = ${desc}; const pr = ${ANY_PROMPT}; if (!pr) return null; const r = pr.getBoundingClientRect(); const bad = (h) => !h || !pr.contains(h) || h.matches('input') || !!h.closest('.suggestion-item'); const c = [];
+		for (let dy = 2; dy < r.height; dy += 3) c.push([r.left + 3, r.top + dy], [r.right - 3, r.top + dy]); for (let dx = 6; dx < r.width; dx += 20) c.push([r.left + dx, r.bottom - 3], [r.left + dx, r.top + 2]);
+		for (const [x0, y0] of c) { const x = Math.round(x0), y = Math.round(y0); const h = document.elementFromPoint(x, y); if (!bad(h)) return { x, y, hit: d(h) }; } return null; })()`;
+	const BG_PT = `(() => { const bg = document.querySelector('.modal-container .modal-bg'); if (!bg) return null; const pop = document.querySelector('.popover.hover-popover'); const pr = pop ? pop.getBoundingClientRect() : null; const iw = innerWidth, ih = innerHeight;
+		for (const [x, y] of [[20, ih - 20], [iw - 20, ih - 20], [iw - 20, 60], [20, 60], [Math.round(iw / 2), ih - 20]]) { if (pr && x >= pr.left && x <= pr.right && y >= pr.top && y <= pr.bottom) continue; if (document.elementFromPoint(x, y) === bg) return { x, y, hit: 'DIV.modal-bg' }; } return null; })()`;
+	const pressAt = async (p) => {
+		await K.mouse('mouseMoved', p.x, p.y);
+		await K.press(p);
+	};
+	const key = async (k, code, vk, modifiers = 0, text) => {
+		await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: k, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers, ...(text ? { text } : {}) });
+		await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers });
+	};
+	const k = `${++gs97Seq}`;
+	const src = `Lifecycle/gs97-${k}-src.md`;
+	const host = `Lifecycle/gs97-${k}-host.md`;
+	const marker = open === 'block' ? 'Gsprobe ' : 'gsprobe-';
+	const landed = (rel) => t.read(rel).includes(marker);
+	const chooses = !!pick || press === 'suggestion'; // a press on a suggestion IS the choice
+	try {
+		await t.ev(`(async () => { await app.vault.create(${J(src)}, ${J(GS97_SRC_TEXT(k))}); await app.vault.create(${J(host)}, ${J(`# gs97 ${k} host\n\nsee [[gs97-${k}-src]] here\n\nfiller\n`)}); return true; })()`);
+		await t.waitFor(`!!app.metadataCache.resolvedLinks[${J(host)}]?.[${J(src)}]`, `gs97 ${name}: the host's link resolves`, 8000);
+		if (where === 'pane') {
+			await t.ev(`(async () => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); const leaf = app.workspace.getLeavesOfType('markdown')[0] ?? app.workspace.getMostRecentLeaf(); await leaf.setViewState({ type: 'markdown', state: { file: ${J(src)}, mode: 'source', source: true }, active: true }); app.workspace.setActiveLeaf(leaf, { focus: true }); return true; })()`);
+			await t.waitFor(`app.workspace.getMostRecentLeaf()?.view?.file?.path === ${J(src)} && !!app.workspace.getMostRecentLeaf().view.editor`, 'pane: the note is open in source mode', 8000);
+			await t.sleep(400);
+			const p = await point(`Array.from(document.querySelectorAll('.workspace-leaf.mod-active .cm-line')).find((l) => l.textContent.includes('beta line two'))`, 0.4);
+			t.expect(!!p, 'pane: no prose line to press');
+			await pressAt(p);
+			await t.sleep(300);
+		} else {
+			const link = await K.openHost(host, 'rv');
+			await K.mouse('mouseMoved', 5, 5);
+			await t.sleep(200);
+			await K.moveTo(link, 2);
+			const has = `Array.from(document.querySelectorAll('.popover.hover-popover')).some((p) => p.textContent.includes('beta line two'))`;
+			const t0 = Date.now();
+			let triggered = false;
+			while (!(await t.ev(has))) {
+				if (Date.now() - t0 > 4000 && !triggered) {
+					triggered = true;
+					await t.ev(`(() => { const a = ${link}; const leaf = app.workspace.getMostRecentLeaf(); app.workspace.trigger('hover-link', { event: new MouseEvent('mouseover', { ctrlKey: true, clientX: 200, clientY: 200 }), source: 'preview', hoverParent: leaf.view, targetEl: a, linktext: a.getAttribute('data-href') || a.textContent, sourcePath: leaf.view.file.path }); return true; })()`);
+				}
+				if (Date.now() - t0 > 12000) throw new Error('no hover preview');
+				await t.sleep(80);
+			}
+			await t.sleep(300);
+			rec.hover = triggered ? 'hover-link trigger' : 'real hover';
+			// a real press on the prose "beta line two" inside the preview: the helper turns it into a source editor (150 ms after a click on text)
+			const p = await t.ev(`(() => { const pop = document.querySelector('.popover.hover-popover'); if (!pop) return null; const w = document.createTreeWalker(pop, NodeFilter.SHOW_TEXT); let n; while ((n = w.nextNode())) { if (!n.textContent.includes('beta line two')) continue; const r = new Range(); r.selectNodeContents(n); const q = r.getClientRects()[0]; if (!q) return null; const x = Math.round(q.left + q.width * 0.6); const y = Math.round(q.top + q.height / 2); const h = document.elementFromPoint(x, y); return { x, y, inPop: !!h && pop.contains(h) }; } return null; })()`);
+			t.expect(p && p.inPop, `no prose to press in the preview: ${J(p)}`);
+			await K.mouse('mouseMoved', p.x - 15, p.y);
+			await t.sleep(80);
+			await K.mouse('mouseMoved', p.x, p.y);
+			await t.sleep(150);
+			await K.press(p);
+			await t.waitFor(`(() => { const pop = document.querySelector('.popover.hover-popover'); return !!pop && !!Array.from(pop.querySelectorAll('.cm-editor')).find((e) => e.offsetParent !== null); })()`, 'the preview became a source editor', 5000);
+			await t.sleep(500);
+			// anti-vacuity: this is the state the ticket is about (an editing preview that owns the active editor)
+			const s0 = await state();
+			if (!(s0.shown && s0.editing && s0.editor && s0.inPreview)) bad.push(`setup: the preview is not an editing preview owning activeEditor ${J(s0)}`);
+		}
+		const mark = await t.mark();
+		// ---- open the search (the compendium commands are editor commands: with the focus in the preview's editor they run against the embed)
+		if (open === 'palette') {
+			await key('p', 'KeyP', 80, 2);
+			await t.waitFor(`!!${ANY_PROMPT}`, 'Ctrl+P opened the command palette', 5000);
+			await t.sleep(300);
+			await t.cdp.call('Input.insertText', { text: 'compendium reference' });
+			await t.sleep(400);
+			await key('Enter', 'Enter', 13, 0, '\r');
+		} else rec.cmdResult = await t.ev(`app.commands.executeCommandById(${J(open === 'block' ? GS97_BLOCK_CMD : GS97_CMD)})`);
+		await t.waitFor(`!!(${OURS})`, `${name}: the compendium search opened`, 5000);
+		await t.sleep(400);
+		// ---- the press
+		if (press) {
+			const p =
+				press === 'box' ? await t.ev(BOX_PT) : press === 'bg' ? await t.ev(BG_PT) : await point(press === 'input' ? `(${OURS})?.querySelector('input.prompt-input')` : `(${OURS})?.querySelector('.suggestion-item')`);
+			t.expect(!!p, `${name}: no point for the ${press} press`);
+			rec.pressHit = p.hit;
+			await pressAt(p);
+			await t.sleep(900); // Obsidian's popover hid itself 0-41 ms after such a press on the base (measured, SC-601 r1)
+			const s1 = await state();
+			rec.afterPress = s1;
+			if (where === 'hover' && !(s1.shown && s1.editing)) bad.push(`the ${press} press closed the preview ${J(s1)}`);
+			if (press === 'bg' && s1.search) bad.push('the backdrop press did not close the search');
+			if (press === 'input' && !s1.search) bad.push('the input press closed the search');
+		}
+		if (hide) {
+			// Obsidian hides the preview by some route the guard does not cover: the editor the search captured is gone
+			const gone = await t.ev(`(() => { const v = app.workspace.getMostRecentLeaf().view; const hp = v.previewMode?.hoverPopover ?? v.hoverPopover; if (!hp) return 'no popover instance'; hp.hide(); return 'hidden'; })()`);
+			rec.hide = gone;
+			await t.waitFor(`!document.querySelector('.popover.hover-popover')`, `${name}: the preview was hidden`, 4000);
+			await t.sleep(300);
+			const s2 = await state();
+			if (!s2.search) bad.push('hiding the preview closed the search');
+		}
+		if (hideDuring) {
+			rec.hookInstalled = await t.ev(`(() => { const idx = app.plugins.plugins['draw-steel-elements'].compendiumIndex; const real = idx.getEntity; window.__gs97hook = { fired: 0, hid: false };
+				idx.getEntity = function (code) { idx.getEntity = real; window.__gs97hook.fired++; const v = app.workspace.getMostRecentLeaf().view; const hp = v.previewMode?.hoverPopover ?? v.hoverPopover; window.__gs97hook.hid = !!hp; hp?.hide(); return real.call(this, code); }; return true; })()`);
+		}
+		// ---- the pick
+		const searchOpen = await t.ev(`!!(${OURS})`);
+		if (pick && searchOpen) {
+			if (pick === 'click') {
+				const p = await point(`(${OURS})?.querySelector('.suggestion-item')`);
+				t.expect(!!p, `${name}: no suggestion to press`);
+				await pressAt(p);
+			} else {
+				await key('ArrowDown', 'ArrowDown', 40);
+				await t.sleep(150);
+				await key('Enter', 'Enter', 13, 0, '\r');
+			}
+			if (hide || hideDuring) await t.sleep(1500);
+			else {
+				const t0 = Date.now();
+				while (Date.now() - t0 < 6000 && !landed(src) && !landed(host)) await t.sleep(100);
+				await t.sleep(400);
+			}
+		} else if (pick) bad.push('the search was already closed before the pick');
+		if (press === 'suggestion') {
+			const t0 = Date.now();
+			while (Date.now() - t0 < 6000 && !landed(src) && !landed(host)) await t.sleep(100);
+			await t.sleep(400);
+		}
+		if (chooses) {
+			const sFinal = await state();
+			rec.final = sFinal;
+			rec.landed = { src: landed(src), host: landed(host) };
+			if (hide || hideDuring) {
+				if (landed(src) || landed(host)) bad.push('a pick into the closed preview wrote somewhere');
+				const notices = await t.noticesSince(mark);
+				rec.notices = notices;
+				if (notices.filter((n) => /was closed, so nothing was inserted/.test(n)).length !== 1) bad.push(`not exactly one "closed" Notice ${J(notices)}`);
+				if (hideDuring) {
+					rec.hook = await t.ev(`window.__gs97hook`);
+					if (!(rec.hook && rec.hook.fired === 1 && rec.hook.hid)) bad.push(`the getEntity hook did not hide the preview ${J(rec.hook)}`);
+				}
+			} else {
+				if (!landed(src)) bad.push('the pick did not land in the edited note');
+				if (landed(host)) bad.push('the pick landed in the host note');
+				if (where === 'hover' && !(sFinal.shown && sFinal.editing)) bad.push(`the preview did not stay after the pick ${J(sFinal)}`);
+				if (open === 'block' && !/```ds-/.test(t.read(src))) bad.push('the snapshot has no ds- fence');
+			}
+		}
+		const errs = await t.errorsSince(mark);
+		if (errs.length) bad.push(`page errors ${J(errs)}`);
+	} catch (e) {
+		bad.push(`harness: ${e.message}`);
+	} finally {
+		try {
+			await t.ev(`(() => { const idx = app.plugins.plugins['draw-steel-elements']?.compendiumIndex; if (idx && Object.prototype.hasOwnProperty.call(idx, 'getEntity')) delete idx.getEntity; delete window.__gs97hook; return true; })()`);
+			for (let i = 0; i < 4 && (await t.ev(`!!document.querySelector('.modal-container')`)); i++) {
+				await key('Escape', 'Escape', 27);
+				await t.sleep(200);
+			}
+			await K.cleanup();
+		} catch (e) {
+			bad.push(`cleanup: ${e.message}`);
+		}
+	}
+	rec.bad = bad;
 	return rec;
 }
 
@@ -8134,6 +8343,50 @@ const SCENARIOS = [
 			}
 			t.expect(problems.length === 0, `${problems.join(' | ')} -- passed: ${outcomes.join('; ')}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${J(await t.errorsSince(m))}`);
+			return `${outcomes.join('; ')}; no page error`;
+		},
+	},
+	{
+		// G-S97 (SC-601): the compendium search (`CompendiumSearchModal`, an Obsidian SuggestModal, not a DseModal) opened by its editor command while a hover preview is a source editor
+		// (a real Ctrl-hover, a real press on the preview's prose). Obsidian's popover hid the preview on the first press in the search (input, box, backdrop; app.js 1.15.1, its window
+		// BUBBLE click listener) and the pick that followed went into the closed preview's detached editor, nothing written, no Notice. Now the search guards its clicks at its document
+		// (the SC-595 guard) and a pick into an editor that is gone shows a Notice and writes nothing. Nine trials, real CDP input, assertions on outcomes: (1) command, press in the input,
+		// press a suggestion; (2) command, press the box, ArrowDown + Enter; (3) command, press the backdrop (the search closes, the preview stays); (4) the command palette (real Ctrl+P, typed
+		// name, Enter), press in the input, press a suggestion; (5) the snapshot command, press in the input, press a suggestion (a ds- block lands); (6) command, press a suggestion at once (control,
+		// green on the base too); (7) the note in a pane, press in the input, press a suggestion (control, green on the base too); (8) the preview hidden by script behind the open search, then a pick:
+		// one Notice, nothing written; (9) the snapshot command, press in the input, the preview hidden from inside `compendiumIndex.getEntity` (a page-side wrapper: after the choose-time check, before the
+		// write), then a press on a suggestion: exactly one Notice, nothing written (red on the bundle without the late re-check). In every hover trial the preview must still be shown and `.is-editing`, and the reference lands in the hovered note on disk, never the host. Sits after G-S92
+		// (after G-S96) and before G-S56, which runs last. The r1 probe (114 trials, about 19 min) is preserved in the SC-601 sdd folder.
+		id: 'G-S97',
+		async run(t) {
+			const J = JSON.stringify;
+			const trials = [
+				{ name: 'cmd input click', press: 'input', pick: 'click' },
+				{ name: 'cmd box keys', press: 'box', pick: 'keys' },
+				{ name: 'cmd backdrop', press: 'bg' },
+				{ name: 'palette input click', open: 'palette', press: 'input', pick: 'click' },
+				{ name: 'block input click', open: 'block', press: 'input', pick: 'click' },
+				{ name: 'cmd suggestion', press: 'suggestion' },
+				{ name: 'pane input click', where: 'pane', press: 'input', pick: 'click' },
+				{ name: 'cmd preview hidden then keys', hide: true, pick: 'keys' },
+				{ name: 'block preview hidden while the snapshot resolves', open: 'block', press: 'input', pick: 'click', hideDuring: true },
+			];
+			const failures = [];
+			const outcomes = [];
+			await t.ev(`(() => { if (!document.getElementById('lc-gs97-notice')) { const st = document.createElement('style'); st.id = 'lc-gs97-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
+			try {
+				for (const spec of trials) {
+					const r = await gs97Trial(t, spec);
+					console.log(`G-S97-REC ${J(r)}`);
+					outcomes.push(`${spec.name}: ${r.bad.length ? 'FAIL' : 'ok'}`);
+					for (const b of r.bad) failures.push(`${spec.name}: ${b}`);
+				}
+			} finally {
+				await t.ev(`document.getElementById('lc-gs97-notice')?.remove()`);
+				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect(failures.length === 0, `${failures.length} broken expectations: ${failures.join(' | ')}`);
 			return outcomes.join('; ');
 		},
 	},
