@@ -91,6 +91,12 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 	/** A heading hover's section: the heading's body, the way Obsidian measured it. */
 	const heading: Sec = { text: HPART.join('\n'), lineStart: 1, lineEnd: 4 };
 	const LONG = (a: number, b: number) => ['# N', '', ...para(120, 'above'), '', '## Tracker', '', ...CTR(a), '', '## After', '', ...para(40, 'mid'), '', '## Other', '', ...CTR(b), '', ...para(80, 'below')].join('\n');
+	/** Make a popover draw a heading preview of `name` (what Obsidian draws for `[[note#name]]`). */
+	const showsHeading = (popover: HTMLElement, name: string) => {
+		const embed = popover.querySelector('.markdown-embed')!;
+		embed.setAttribute('data-type', 'heading');
+		embed.insertBefore(document.createElement('h2'), embed.firstChild).setAttribute('data-heading', name);
+	};
 	const refused = (app: App, note: string) => {
 		expect(app.vault.getContent('Note.md')).toBe(note);
 		expect(Notice.notices).toEqual([droppedWriteMessage('Note')]);
@@ -243,8 +249,9 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 	});
 
 	test('J10 the only event names another preview (the card\'s preview was opened some other way): nothing is written', async () => {
-		const { app, host } = hovered(LONG(5, 5), heading, null);
-		const elsewhere = popoverEl();
+		const { app, host, popover } = hovered(LONG(5, 5), heading, null);
+		showsHeading(popover, 'Tracker'); // so the DOM check alone would not refuse the link of the other preview
+		const elsewhere = popoverEl('Note#Tracker');
 		popovers.push(elsewhere.popover);
 		noteHoverLink(app, hoverEvent('Note#Tracker', elsewhere.popover));
 
@@ -548,8 +555,9 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 
 		test('J17 a preview no event named when it was first looked up (opened some other way) keeps no link when a later event names its popover: nothing is written', async () => {
 			const { app, host, popover } = hovered(TWO, heading, null);
+			showsHeading(popover, 'Tracker');
 			expect(await plus(host, bodyOf(6))).toBe(false); // the first lookup: no link
-			noteHoverLink(app, hoverEvent('Note#Other', popover));
+			noteHoverLink(app, hoverEvent('Note#Tracker', popover)); // an event that names it the way its DOM shows: still no link, the preview was bound once
 
 			expect(await plus(host, bodyOf(6))).toBe(false);
 			expect(app.vault.getContent('Note.md')).toBe(TWO);
@@ -577,7 +585,7 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 
 		test('the log keeps the newest 16 events: the link of a preview whose event was dropped before its first lookup is gone, never another event\'s', () => {
 			const app = new App();
-			const first = popoverEl();
+			const first = popoverEl('Note#First');
 			popovers.push(first.popover);
 			const parent: { hoverPopover: { hoverEl: HTMLElement } | null } = { hoverPopover: null };
 			noteHoverLink(app, { linktext: 'Note#First', sourcePath: 'Host.md', hoverParent: parent });
