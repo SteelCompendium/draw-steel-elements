@@ -307,11 +307,13 @@ describe('SC-601: a pick into an editor that is gone writes nothing and says so'
 		const hostEditor = new Editor('host note');
 		(app.workspace as any).activeEditor = { editor: hostEditor };
 		const row = addRow(modal, entryOf(index, GOBLIN));
+		const resolve = jest.spyOn(index, 'getEntity');
 		p.popover.remove();
 
 		row.click();
 		await flush();
 
+		expect(resolve).not.toHaveBeenCalled(); // the early check refuses before any vault read
 		expect(editor.writes).toHaveLength(0);
 		expect(hostEditor.writes).toHaveLength(0);
 		expect(Notice.notices).toEqual([CLOSED_EDITOR_NOTICE]);
