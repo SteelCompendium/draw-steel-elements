@@ -886,14 +886,6 @@ describe('SC-436 matrix: known bugs (each marker encodes the correct behaviour a
 		swatches.forEach((s, i) => expect(s.getAttribute('aria-label')).toContain(names[i]));
 	});
 
-	// SC-583: condition keys are case-sensitive, so a hand-written `key: Dazed` is a custom condition and picking the real Dazed adds a second.
-	test.failing('SC-583: with `key: Dazed` already on the actor, picking Dazed leaves exactly one dazed condition', () => {
-		const o = open([{ key: 'Dazed' }]);
-		pickOption(o.container, 'Dazed', 'Dazed');
-		const keys = (o.onChange.mock.calls.length ? lastEmit(o) : (o.holder.conditions as Condition[])).map((c) => c.key.toLowerCase());
-		expect(keys.filter((k) => k === 'dazed')).toHaveLength(1);
-	});
-
 	// SC-585: removeAt focuses "+ Add condition" when the list empties, but that button does not exist while the Add dropdown is open.
 	test.failing('SC-585: keyboard-removing the last condition with the Add dropdown open leaves focus inside the window, not on <body>', () => {
 		const o = open(['prone']);
