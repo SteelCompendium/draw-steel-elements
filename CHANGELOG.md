@@ -23,12 +23,12 @@ Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
 - [FIX] **Clicking another creature in the initiative roster while using the keyboard keeps focus in the tracker, on the creature you
-  clicked** (SC-609). With focus on the detail row's Stamina control (or any
-  other control of the detail row), a mouse click on a roster cell switched the detail row and focus fell to the top of the page.
-  Focus now moves to the cell you clicked. A mouse click when focus was not already in the tracker still does not pull focus in,
-  and focus on a control the click does not replace (Advance round, say) stays where it was. Not covered: a click while the
-  cursor is in a Malice quick-add box (the click saves and leaves the box, as before) and a click that removes a condition from
-  the row focus was in.
+  clicked, in Reading view** (SC-609). With focus on the detail row's Stamina control (or any other control of the detail row), a
+  mouse click on a roster cell switched the detail row and focus fell to the top of the page. Focus now moves to the cell you
+  clicked. A mouse click when focus was not already in the tracker still does not pull focus in, and focus on a control the click
+  does not replace (Advance round, say) stays where it was. In Live Preview focus is still lost when the note saves a moment later
+  (SC-602). Not covered: a click while the cursor is in a Malice quick-add box (SC-615) and a click that removes a condition from
+  the row focus was in (SC-614).
 - [FIX] **Keyboard focus stays in the initiative tracker after Apply in the minion Stamina pool window, and after closing the
   Conditions window, in Reading view and in the pinned sidebar tracker** (SC-603). Apply in the pool window rebuilds the whole
   tracker (and so does a captain's Stamina edit that turns its squad's bonus on or off), and an edit in the Conditions window
