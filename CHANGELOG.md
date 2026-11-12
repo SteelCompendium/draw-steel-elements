@@ -25,7 +25,8 @@ for what needs action.
 - [FIX] **In Live Preview, keyboard focus now stays on the button you pressed when the element saves and Obsidian redraws it** (SC-602).
   Press Enter on a counter's + (or Advance round, Make captain, Catch Breath, and so on) and the element saves its change to the note;
   before, focus fell to the page about half a second later, so a keyboard user had to Tab in again from the top of the note. Focus now
-  stays on the pressed button, or on the control that replaced it, with the keyboard ring. This holds for every element that saves.
+  stays on the pressed button, or on the control that replaced it (else on the element itself), with the keyboard ring when you were
+  using the keyboard. This is done once for every element, not per element.
   A mouse click still never pulls focus into an element, and focus you moved away before the save lands stays where you put it.
   Reading view is unchanged. Not covered: the half-typed Malice quick-add draft is still lost when the tracker saves (SC-605), and the
   Conditions window still closes when a write lands (SC-384).
@@ -34,8 +35,8 @@ for what needs action.
   clicked, in Reading view** (SC-609). With focus on the detail row's Stamina control (or any other control of the detail row), a
   mouse click on a roster cell switched the detail row and focus fell to the top of the page. Focus now moves to the cell you
   clicked. A mouse click when focus was not already in the tracker still does not pull focus in, and focus on a control the click
-  does not replace (Advance round, say) stays where it was. In Live Preview focus is still lost when the note saves a moment later
-  (SC-602). Not covered: a click while the cursor is in a Malice quick-add box (SC-615) and a click that removes a condition from
+  does not replace (Advance round, say) stays where it was. Since SC-602 this holds in Live Preview too.
+  Not covered: a click while the cursor is in a Malice quick-add box (SC-615) and a click that removes a condition from
   the row focus was in (SC-614).
 - [FIX] **Keyboard focus stays in the initiative tracker after Apply in the minion Stamina pool window, and after closing the
   Conditions window, in Reading view and in the pinned sidebar tracker** (SC-603). Apply in the pool window rebuilds the whole
@@ -43,8 +44,8 @@ for what needs action.
   rebuilds that conditions row, so the button you had used to open the window was gone and focus fell to the top of the page.
   The window now gives focus back to the control that replaced it: the detail row's Stamina control, the roster cell of the same
   minion, or the Add Condition button. Cancel and Escape still return to the button you pressed. A mouse click never pulls
-  focus into the tracker, and neither does a window opened while focus was somewhere else. In Live Preview focus is still lost
-  when the note saves a moment later (SC-602).
+  focus into the tracker, and neither does a window opened while focus was somewhere else. Since SC-602 the pool window's Apply keeps focus in
+  Live Preview too (the Conditions window route there is not covered: it closes when the write lands, SC-384).
 - [FIX] **What you have typed in the initiative tracker's Malice quick-add boxes is no longer lost when the tracker rebuilds, in
   Reading view and in the pinned sidebar tracker** (SC-589). Type an amount and a label, then press Advance round (or Make/Relieve
   captain, Reset turns, Reset encounter, or any other action that rebuilds the whole tracker), and both boxes used to come back
@@ -74,7 +75,7 @@ for what needs action.
   the one you pressed now takes focus: the same button (Advance round, Reset turns, the Malice amount or label field, the Reset
   encounter item once its confirm window has closed), or, for a captain badge, Make captain and Relieve captain trade places on
   the same creature. A mouse click never pulls focus into the tracker, and neither does a rebuild that starts while focus is
-  somewhere else. In Live Preview focus is still lost when the note saves a moment later (SC-602).
+  somewhere else. Since SC-602 this holds in Live Preview too.
 - [FIX] **The Malice log records what the pool actually did** (SC-578). With Malice at 2, quick-adding -5 sets Malice to 0 but the
   log said -5, so the log no longer added up to the pool; Advance round with a negative `round_gain` had the same gap. Now a
   log entry's amount is the change the pool really made, and when the pool stopped at 0 the entry also keeps what was asked
