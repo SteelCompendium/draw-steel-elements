@@ -1859,7 +1859,8 @@ export class InitiativeView extends ElementView<EncounterData> {
 								);
 
 								// The cell persists (only the detail row was replaced), so it takes focus itself; a keyboard press had focus
-								// on it already, a mouse press gets plain focus with no ring (the engine's own rule after a pointer).
+								// on it already. A mouse press does not force the keyboard ring (no `focusVisible`), though Chromium may
+								// still draw it when the user was using the keyboard just before.
 								if (focusWasInside && focusIsFree(handle.buttonEl.ownerDocument)) focusControl(handle.buttonEl, isKeyboardClick(evt));
 
 								group.selectedInstanceKey = instanceKey;

@@ -837,7 +837,7 @@ describe('[F] keyboard focus survives the actions that rebuild the whole tracker
 		expect(document.activeElement).toBe(cell);
 	});
 
-	test('[F20] the mouse press gives the cell plain focus, without forcing a keyboard ring', async () => {
+	test('[F20] the mouse press does not force the keyboard ring onto the cell (no focusVisible; Chromium may still draw it after a keyboard session)', async () => {
 		const { root } = await mount(TRACKER);
 		ctl(root, 'init.detail.stamina').focus();
 		const focusSpy = jest.spyOn(HTMLElement.prototype, 'focus');
@@ -856,13 +856,15 @@ describe('[F] keyboard focus survives the actions that rebuild the whole tracker
 		expect(detailKey(root)).toBe('0-2');
 		expect(document.activeElement).toBe(other);
 		other.blur();
-		mouseClick(ctl(root, 'init.cell.stamina', 2)); // nothing held focus: still nothing does
+		// SC-458 will flip this half (a press may then focus its cell from anywhere); until then nothing held focus, so nothing does
+		mouseClick(ctl(root, 'init.cell.stamina', 2));
 		await flush();
 		expect(detailKey(root)).toBe('0-3');
 		expect(document.activeElement).toBe(document.body);
 	});
 
 	test('[F22] focus on a control that the selection does not replace stays where it is', async () => {
+		// SC-458 will flip this (a press may then move focus to its cell even from another tracker control).
 		const { root } = await mount(TRACKER);
 		const advance = ctl(root, 'init.round.advance');
 		advance.focus();
