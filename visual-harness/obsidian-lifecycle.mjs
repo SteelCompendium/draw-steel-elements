@@ -8343,7 +8343,7 @@ const SCENARIOS = [
 			}
 			t.expect(problems.length === 0, `${problems.join(' | ')} -- passed: ${outcomes.join('; ')}`);
 			t.expect((await t.errorsSince(m)).length === 0, `page errors ${J(await t.errorsSince(m))}`);
-			return `${outcomes.join('; ')}; no page error`;
+			return outcomes.join('; ');
 		},
 	},
 	{
