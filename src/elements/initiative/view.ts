@@ -76,6 +76,8 @@ import { CONTROL_ATTR } from '@/framework/kit/controlId';
 import { captureControlFocus, restoreControlFocus } from '@/framework/kit/controlFocus';
 import type { ControlFocus, ControlFamilies } from '@/framework/kit/controlFocus';
 import { focusControl, focusIsFree, isKeyboardClick } from '@/framework/chrome/focusHandoff';
+import { OUTSIDE_CLOSE_NOTICE, handOffAfterOutsideClose, publishWindowRoot, slotOf } from '@/framework/chrome/windowHandoff';
+import type { WindowRootRecord, WindowSlot } from '@/framework/chrome/windowHandoff';
 import { ConditionManager } from '@utils/Conditions';
 import { Images } from '@utils/Images';
 import { StaminaBar } from '@model/StaminaBar';
@@ -162,8 +164,57 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// registered here (not in onMount, which the default update() path re-runs).
 		this.register(() => {
 			this.unloading = true; // SC-603: the close this causes must not hand focus into a tracker that is going away
-			this.activeModal?.close();
+			this.closeWindowWithView();
 		});
+	}
+
+	/** SC-608 — what the window that is open now was opened from: the control that held focus (null: none did) and where the tracker sat. */
+	private activeWindow: { focus: ControlFocus | null; slot: WindowSlot | null } | null = null;
+
+	/** SC-608 — set while `closeForOutsideEdit` closes the window, so `giveFocusBack` leaves the hand-off to the redraw. */
+	private outsideClose = false;
+
+	/** SC-608 — this view's mark on its root, read by a predecessor's window hand-off (framework/chrome/windowHandoff.ts). */
+	private readonly windowRecord: WindowRootRecord = {
+		sourcePath: () => this.cx.host.sourcePath,
+		content: () => serializeModel(this.model),
+	};
+
+	/** SC-608 — the view unloads (an outside edit redrew the block, the note was closed, ...): close the window with it, and when the
+	 *  block that comes back differs from this one, say why and hand focus to its replacement of the control that opened the window. */
+	private closeWindowWithView(): void {
+		const win = this.activeWindow;
+		let ownContent: string | null = null;
+		try {
+			if (win) ownContent = serializeModel(this.model);
+		} catch {
+			/* a model that cannot be serialized has nothing to compare: the window just closes */
+		}
+		this.activeModal?.close();
+		const slot = (this.rootEl?.isConnected ? slotOf(this.rootEl, 'initiative') : null) ?? win?.slot;
+		if (!win || ownContent === null || !slot) return;
+		handOffAfterOutsideClose({
+			slot,
+			own: this.windowRecord,
+			ownContent,
+			oldRoot: this.rootEl,
+			focus: win.focus,
+			families: FOCUS_FAMILIES,
+			notice: OUTSIDE_CLOSE_NOTICE,
+		});
+	}
+
+	/** SC-608 — the pinned sidebar's outside refresh with a window open: close it (nothing staged in it can be written to the model
+	 *  that is about to be replaced). Returns what opened it. */
+	private closeForOutsideEdit(): { focus: ControlFocus | null } {
+		const focus = this.activeWindow?.focus ?? null;
+		this.outsideClose = true;
+		try {
+			this.activeModal?.close();
+		} finally {
+			this.outsideClose = false;
+		}
+		return { focus };
 	}
 
 	/** SC-603 — set once the view is unloading; see the registration in the constructor. */
@@ -175,14 +226,21 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *  The same model (this view's own rebuilds) leaves it up. */
 	async update(model: EncounterData): Promise<void> {
 		const outside = model !== this.model && !this.resetRebuild;
+		// SC-608: a window is open and the pinned sidebar refreshed this view. Its callbacks hold THIS model's objects, and `update()`
+		// replaces the model, so whatever the window then wrote went into a model nobody serializes (an Apply was silently lost).
+		// Block unchanged (an edit elsewhere in the note, a Sync that left it alone): nothing to refresh, the window stays and writes.
+		// Block changed: the window closes (it is staged against the old block) with a Notice, and focus follows below.
+		if (outside && this.activeModal && serializeModel(model) === serializeModel(this.model)) return;
+		const closed = outside && this.activeModal ? this.closeForOutsideEdit() : null;
 		if (model !== this.model) this.loadError = undefined;
 		this.captureQuickAddDraft(); // SC-589: before the default update() empties the root with the boxes in it
 		// SC-589: an outside refresh (the sidebar's `previous.update(model)`) rebuilds the tracker like any other, but no caller of it
 		// hands focus back (`rebuildAndPersist` and the Reset encounter rebuild do their own, above), so a user typing in a quick-add
 		// box lost focus and caret in mid-word. Same capture / restore, and the same no-op when focus was not inside the tracker.
-		const focus = outside ? captureControlFocus(this.rootEl, FOCUS_FAMILIES) : null;
+		const focus = closed ? closed.focus : outside ? captureControlFocus(this.rootEl, FOCUS_FAMILIES) : null;
 		await super.update(model);
 		if (outside) restoreControlFocus(this.rootEl, focus, FOCUS_FAMILIES);
+		if (closed) new Notice(OUTSIDE_CLOSE_NOTICE);
 	}
 
 	/** True while `rebuildFromWrittenReset` runs its `update(fresh)`: that path hands focus back itself, once its `inert` is lifted. */
@@ -236,6 +294,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		const owner = this.addChild(new Component());
 		const container = root.createDiv({ cls: 'dse-init' });
 		this.buildUI(container, owner, model);
+		publishWindowRoot(root, this.windowRecord); // SC-608
 	}
 
 	private get canWrite(): boolean {
@@ -253,8 +312,10 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *  Apply and had to Tab in again from the top of the note. So the focused control is remembered HERE, before the modal opens
 	 *  (`captureControlFocus`, as the Reset encounter item does), and given to its rebuilt successor once the modal has closed
 	 *  (`restoreControlFocus`; see `giveFocusBack`). `restoreFocus: false` is for a caller that does it itself. */
-	private openModal(modal: DseModal, restoreFocus = true): void {
+	private openModal(modal: DseModal, restoreFocus = true, resetFocus: ControlFocus | null = null): void {
 		const focus = restoreFocus ? captureControlFocus(this.rootEl, FOCUS_FAMILIES) : null;
+		// SC-608: the same token, for a window that closes because an outside edit redrew the tracker (`resetFocus`: the caller took its own).
+		this.activeWindow = { focus: focus ?? resetFocus, slot: slotOf(this.rootEl, 'initiative') };
 		// SC-595: the anchor keeps a hover preview alive while the modal is open (see DseModal.anchorTo).
 		modal.anchorTo(this.cx.host.containerEl);
 		// `.bind(modal)` (not a plain `modal.onClose` reference, which would trip
@@ -268,8 +329,11 @@ export class InitiativeView extends ElementView<EncounterData> {
 		const inheritedOnClose = modal.onClose.bind(modal) as () => void;
 		modal.onClose = () => {
 			inheritedOnClose();
-			if (this.activeModal === modal) this.activeModal = null;
-			if (focus) this.giveFocusBack(focus);
+			if (this.activeModal === modal) {
+				this.activeModal = null;
+				this.activeWindow = null;
+			}
+			if (focus && !this.outsideClose) this.giveFocusBack(focus);
 		};
 		this.activeModal = modal;
 		modal.open();
@@ -421,6 +485,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 							void this.rebuildFromWrittenReset(focus);
 						}),
 						false, // SC-603: hands focus back itself, once its async re-parse has rebuilt (and un-inerted) the tracker
+						focus, // SC-608: and this is what an outside edit's redraw hands back
 					);
 				},
 			},
