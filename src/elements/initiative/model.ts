@@ -168,6 +168,9 @@ function normalizeConditions(
 				throw new Error(invalidMessage());
 			}
 		}) ?? [];
+	// SC-583: `plain` / `mixed` compare keys by EXACT spelling on purpose. They decide whether an entry was written as a plain
+	// string, so `Dazed` and `dazed` are different entries here; folding case (conditionKeysEqual) would break "a write never
+	// changes a condition the user did not edit". Recognition of a key's case-insensitive meaning lives in the Conditions registry.
 	if (plain.size > 0) {
 		plainConditions.set(holder, { plain, mixed: new Set([...plain.keys()].filter((key) => objectKeys.has(key))) });
 	} else {
@@ -196,6 +199,7 @@ function withConditionShape<T extends { conditions?: (string | Condition)[] }>(h
 	const conditions = holder.conditions.map((entry) => {
 		if (typeof entry === 'string' || !carriesOnlyKey(entry)) return entry;
 		let plain: boolean;
+		// (exact-spelling key lookups below: see the SC-583 note in normalizeConditions)
 		if (memory.mixed.has(entry.key)) {
 			plain = bornPlain.has(entry);
 		} else {

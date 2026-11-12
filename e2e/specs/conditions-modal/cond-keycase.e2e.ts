@@ -3,7 +3,7 @@
 // reads `Dazed` as the standard Dazed, picking Dazed (or typing "hexed") adds nothing, and what the user wrote keeps its spelling.
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
-import { INIT, KEYCASE, addByKeyboard, menuOptions, modalRows, noteCondition, openConditionsModal, trackerIcons } from '../../driver/conditions';
+import { INIT, KEYCASE, menuOptions, modalNames, modalRows, noteCondition, openConditionsModal, trackerIcons } from '../../driver/conditions';
 
 describe('conditions-modal: condition keys in any case', () => {
 	it('[COND-K01] a hand-written `Dazed` is the standard Dazed row (no CUSTOM tag) and `Hexed` stays custom; opening the window writes nothing', async () => {
@@ -80,10 +80,17 @@ describe('conditions-modal: condition keys in any case', () => {
 			await dse.click(modal.control('modal.close'));
 		});
 		const { modal } = await openConditionsModal(KEYCASE, 'creature');
-		await addByKeyboard(modal, 'Dazed'); // already present twice: still a no-op
-		await dse.settle();
+		// Already present twice: picking Dazed is a no-op (no write, still exactly two rows).
+		await dse.click(modal.control('cond.add'));
+		await dse.type(modal.control('cond.input'), 'Dazed');
+		await dse.expectNoWrite(KEYCASE, () => dse.press('Enter', modal.control('cond.input')));
+		expect(await modalNames()).toEqual(['Dazed', 'Dazed']);
 		await dse.waitForWrite(KEYCASE, () => dse.click(modal.control('cond.remove', { nth: 0 })));
+		expect(await modalNames()).toEqual(['Dazed']);
 		await dse.closeModals();
-		expect(await noteCondition(KEYCASE, 'creature', 0)).toEqual({ key: 'dazed', duration: 'eot' });
+		// The whole list: exactly the surviving `dazed`, nothing added, nothing merged.
+		await dse.expectNoteBlock(KEYCASE, INIT).toMatchObject({
+			enemy_groups: [{ creatures: [{ instances: [{ id: 1, conditions: [{ key: 'dazed', duration: 'eot' }] }, { id: 2 }] }] }],
+		});
 	});
 });
