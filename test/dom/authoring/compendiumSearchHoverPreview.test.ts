@@ -384,6 +384,23 @@ describe('SC-601: a pick into an editor that is gone writes nothing and says so'
 		expect(Notice.notices).toEqual([]);
 	});
 
+	test('block command: a live preview editor and a different live active editor: the snapshot lands in the captured editor only', async () => {
+		const p = previewStandIn();
+		const { modal, editor, index, app } = runCommand('insert-compendium-block', { containerEl: p.embed });
+		const host = new Editor('host');
+		const hostEl = document.body.appendChild(document.createElement('div'));
+		(host as any).cm = { dom: hostEl };
+		(app.workspace as any).activeEditor = { editor: host, containerEl: hostEl };
+
+		addRow(modal, entryOf(index, GOBLIN)).click();
+		await flush(); // the block command's dispatch is async (getEntity, model, body)
+		await until(() => editor.writes.length > 0);
+
+		expect(editor.writes).toHaveLength(1);
+		expect(host.writes).toHaveLength(0);
+		expect(Notice.notices).toEqual([]);
+	});
+
 	test('a closed pane editor (no preview involved) is refused too: a Notice, nothing written', () => {
 		const pane = document.body.appendChild(document.createElement('div'));
 		const { modal, editor, index } = runCommand('insert-compendium-reference', { containerEl: pane });
