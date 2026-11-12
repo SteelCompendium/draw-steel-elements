@@ -916,6 +916,38 @@ describe('[F] keyboard focus survives the actions that rebuild the whole tracker
 			expect(document.activeElement).toBe(opener);
 		});
 
+		test.each([
+			['the X (close())', (m: DseModal) => m.close()],
+			['Escape through the modal Scope', (m: DseModal) => {
+				const detach = attachObsidianKeymap(m);
+				pressEscape(document.body);
+				detach();
+			}],
+		])('[F17] removing a condition inside the open pool modal rebuilds the tracker behind it; closing with %s gives focus to the rebuilt Stamina control', async (_how, leave) => {
+			const CONDITIONED = SQUAD.replace('squad_role: minion }', 'squad_role: minion, instances: [{ id: 1, conditions: [grabbed] }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }] }');
+			const { root, flush } = await mount(CONDITIONED);
+			const opener = ctl(root, 'init.detail.stamina');
+			opener.focus();
+			const modal = opening(() => opener.click());
+			ctl(modalOf(), 'pool.condition').click(); // the pool modal's condition icon: the tracker is rebuilt while the window is open
+			expect(ctl(root, 'init.detail.stamina')).not.toBe(opener);
+			leave(modal);
+			await flush();
+			expect(document.querySelector('.dse-modal')).toBeNull();
+			expect(document.activeElement).toBe(ctl(root, 'init.detail.stamina'));
+		});
+
+		test('[F18] focus on <body> when the pool modal opened (no control of the tracker held it): Apply leaves it on <body>, the tracker root is not focused', async () => {
+			const { root, flush } = await mount(SQUAD);
+			expect(document.activeElement).toBe(document.body);
+			ctl(root, 'init.detail.stamina').click(); // a mouse open from the sidebar or a hover preview: nothing was focused
+			applyPool(modalOf());
+			await flush();
+			expect(document.querySelector('.dse-modal')).toBeNull();
+			expect(document.activeElement).toBe(document.body);
+			expect(root.hasAttribute('tabindex')).toBe(false);
+		});
+
 		test('[F11] focus that was not inside the tracker when the pool modal opened is not taken by the rebuild', async () => {
 			const { root, flush } = await mount(SQUAD);
 			const other = document.createElement('input');
