@@ -66,6 +66,16 @@ for what needs action.
   reopened); and a preview that could not be placed when it was drawn.
   Hover previews of whole notes and plain (non-embedded) blocks are unchanged.
 
+- [FIX] **When the note changes from outside while an initiative tracker window is open, the window closes with a Notice and keyboard
+  focus returns to the tracker, in Reading view, Live Preview and the pinned sidebar tracker** (SC-608). The windows are the minion
+  Stamina pool, hero and creature Stamina, Conditions and the Reset encounter confirm. A change from outside (Sync, another device) that
+  alters the tracker redraws it, and the window used to vanish without a word while focus fell to the top of the page. It now closes, a
+  Notice says "The note changed outside, so this window closed without saving" (anything typed or staged in the window is dropped, so
+  it cannot overwrite the outside change), and focus goes to the same control in the reloaded tracker, the one you opened the window from.
+  A window opened with the mouse gets the Notice but no focus move, and a change elsewhere in the note that leaves the tracker alone
+  keeps the window open. The tracker's own Apply, Done and Escape are unchanged (no Notice). In the pinned sidebar, the window used to
+  stay open after such a change and its Apply was silently lost (nothing was written, no Notice); it now closes the same way when the
+  tracker changed, and stays open and writes when the change was elsewhere in the note.
 - [FIX] **Keyboard focus stays in the initiative tracker after Apply in the minion Stamina pool window, and after closing the
   Conditions window, in Reading view and in the pinned sidebar tracker** (SC-603). Apply in the pool window rebuilds the whole
   tracker (and so does a captain's Stamina edit that turns its squad's bonus on or off), and an edit in the Conditions window
