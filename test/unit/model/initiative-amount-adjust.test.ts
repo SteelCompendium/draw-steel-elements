@@ -5,7 +5,7 @@
 // A squad's shared stamina pool is not touched by this change.
 import { parseYaml, App } from '../../mocks/obsidian';
 import { parseEncounterData } from '@drawSteelAdmonition/EncounterData';
-import type { EncounterData } from '@drawSteelAdmonition/EncounterData';
+import type { CreatureInstance, EncounterData } from '@drawSteelAdmonition/EncounterData';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { parse, serialize } from '../../../src/elements/initiative/model';
 
@@ -47,6 +47,8 @@ const defaultWolfInstances = [
 	'            conditions: []',
 ];
 
+/** The keys of an instance's conditions (parse turns plain names into `{ key }` objects). */
+const keysOf = (instance: CreatureInstance) => (instance.conditions ?? []).map((c) => (typeof c === 'string' ? c : c.key));
 const wolfOf = (model: EncounterData) => model.enemy_groups[0].creatures[0];
 const idsOf = (model: EncounterData) => wolfOf(model).instances!.map((i) => i.id);
 
@@ -90,7 +92,7 @@ describe('SC-600: regular creatures — amount edited, instances kept', () => {
 		const wolf = wolfOf(parseLike(wolfBlock(4)));
 		expect(wolf.instances).toHaveLength(4);
 		expect(wolf.instances![0]).toMatchObject({ id: 1, current_stamina: 7, temp_stamina: 0 });
-		expect(wolf.instances![0].conditions!.map((c) => c.key)).toEqual(['bleeding']);
+		expect(keysOf(wolf.instances![0])).toEqual(['bleeding']);
 		expect(wolf.instances![1]).toMatchObject({ id: 2, current_stamina: 5, temp_stamina: 3 });
 		expect(wolf.instances![1].conditions).toMatchObject([{ key: 'dazed', duration: 'save-ends' }]);
 		expect(wolf.instances![3]).toEqual({ id: 4, current_stamina: 20, temp_stamina: 0, conditions: [] });
@@ -102,7 +104,7 @@ describe('SC-600: regular creatures — amount edited, instances kept', () => {
 		const wolf = wolfOf(parseLike(wolfBlock(2)));
 		expect(wolf.instances!.map((i) => i.id)).toEqual([1, 2]);
 		expect(wolf.instances![0]).toMatchObject({ current_stamina: 7 });
-		expect(wolf.instances![0].conditions!.map((c) => c.key)).toEqual(['bleeding']);
+		expect(keysOf(wolf.instances![0])).toEqual(['bleeding']);
 		expect(wolf.instances![1]).toMatchObject({ current_stamina: 5, temp_stamina: 3 });
 	});
 
@@ -143,7 +145,7 @@ describe('SC-600: regular creatures — amount edited, instances kept', () => {
 		const grown = parseLike(squadBlock(3, minionInstances, 2, cap)).enemy_groups[0].creatures[1];
 		expect(grown.instances!.map((i) => i.id)).toEqual([1, 2]);
 		expect(grown.instances![0]).toMatchObject({ current_stamina: 12 });
-		expect(grown.instances![0].conditions!.map((c) => c.key)).toEqual(['weakened']);
+		expect(keysOf(grown.instances![0])).toEqual(['weakened']);
 		expect(grown.instances![1]).toEqual({ id: 2, current_stamina: 40, temp_stamina: 0, conditions: [] });
 		const two = [...cap, '          - id: 2', '            current_stamina: 3'];
 		const shrunk = parseLike(squadBlock(3, minionInstances, 1, two)).enemy_groups[0].creatures[1];
@@ -158,7 +160,7 @@ describe('SC-600: squad minions — conditions kept per minion, the shared pool 
 	test('grow 3 -> 5: kept minions keep conditions; new ones are { id, conditions: [] } appended at the end', () => {
 		const minions = minionsOf(parseLike(squadBlock(5, minionInstances))).instances!;
 		expect(minions.map((i) => i.id)).toEqual([1, 2, 3, 4, 5]);
-		expect(minions[0].conditions!.map((c) => c.key)).toEqual(['grabbed']);
+		expect(keysOf(minions[0])).toEqual(['grabbed']);
 		expect(minions[1].conditions).toMatchObject([{ key: 'slowed', duration: 'eot' }]);
 		expect(minions[4]).toEqual({ id: 5, conditions: [] });
 		expect(Object.keys(minions[4])).toEqual(['id', 'conditions']);
@@ -167,7 +169,7 @@ describe('SC-600: squad minions — conditions kept per minion, the shared pool 
 	test('shrink 3 -> 2: the first two keep their conditions, the last is gone', () => {
 		const minions = minionsOf(parseLike(squadBlock(2, minionInstances))).instances!;
 		expect(minions.map((i) => i.id)).toEqual([1, 2]);
-		expect(minions[0].conditions!.map((c) => c.key)).toEqual(['grabbed']);
+		expect(keysOf(minions[0])).toEqual(['grabbed']);
 		expect(minions[1].conditions).toMatchObject([{ key: 'slowed' }]);
 	});
 
