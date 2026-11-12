@@ -2506,3 +2506,134 @@ describe('the Montage sheet for a hero whose entry has no skills_used list', () 
 		expect(pageErrors).toEqual([]);
 	});
 });
+
+// A hand-typed `participants` list with items that are not a hero with a name (an empty item, a
+// bare number or word, a misspelt key, an empty or numeric name). The board used to fail to draw;
+// now it skips them, and a write leaves whatever they carry as typed.
+describe('a Montage block whose participants list holds items that are not a hero with a name', () => {
+	const MESSY = [
+		'rounds: 3',
+		'success_limit: 6',
+		'failure_limit: 3',
+		'successes: 1',
+		'failures: 0',
+		'participants:',
+		'  - ',
+		'  - name: Kira',
+		'  - 7',
+		'  - Ash',
+		'  - nmae: Ash',
+		'  - name: Vex',
+		'  - skills_used: [Climb]',
+		"  - name: ''",
+		'  - name: 7',
+		'  - {}',
+		'entries:',
+		'  - hero: Kira',
+		'    round: 1',
+		'    result: success',
+		'    skill: Nature',
+		'  - hero: Kira',
+		'    round: 2',
+		'    result: failure',
+		'current_round: 2',
+	].join('\n');
+	/** What each item with content reads after a write: in the order typed, with the heroes among them. */
+	const keptItems = (written: string): unknown[] => parseYaml(written).participants;
+	const KEPT = (kira: unknown, vex: unknown, zed?: unknown): unknown[] => [
+		kira,
+		7,
+		'Ash',
+		{ nmae: 'Ash' },
+		vex,
+		{ skills_used: ['Climb'] },
+		{ name: '' },
+		{ name: 7 },
+		...(zed === undefined ? [] : [zed]),
+	];
+	let pageErrors: ErrorEvent[];
+	let warn: jest.SpyInstance;
+	const onError = (e: ErrorEvent) => {
+		pageErrors.push(e);
+		e.preventDefault();
+	};
+	beforeEach(() => {
+		pageErrors = [];
+		window.addEventListener('error', onError);
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => {
+		window.removeEventListener('error', onError);
+		warn.mockRestore();
+		jest.useRealTimers();
+		document.body.innerHTML = '';
+	});
+
+	test('the board draws a row for each real hero only, counts only them, and throws nothing', async () => {
+		const { root } = await renderMontage(MESSY);
+		expect(root.querySelector('.dse-mt__board')).not.toBeNull();
+		expect(root.textContent).not.toContain('failed to render');
+		expect(heroRows(root).map((el) => el.getAttribute('data-hero'))).toEqual(['Kira', 'Vex']);
+		expect(root.querySelector('.dse-mt__head')?.textContent).toContain('2 heroes');
+		expect(root.querySelector('.dse-mt__board-empty')).toBeNull();
+		expect(pageErrors).toEqual([]);
+	});
+
+	test('the bottom "Log an action…" opens the sheet for the next real hero, never one of the skipped items', async () => {
+		const { root } = await renderMontage(MESSY); // Kira has acted in round 2; Vex has not
+		(root.querySelector('.dse-mt__actionrow button[aria-label="Log an action…"]') as HTMLButtonElement).click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		expect(modalEl.querySelector('.dse-modal__title')?.textContent).toBe('Vex · round 2');
+		expect(pageErrors).toEqual([]);
+	});
+
+	test('logging an action for a real hero writes the entry and leaves every skipped item as typed, in place', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(MESSY);
+		cellFor(root, 'Vex', 2).click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		const skillInput = modalEl.querySelector('input[aria-label="Skill used"]') as HTMLInputElement;
+		skillInput.value = 'Insight';
+		skillInput.dispatchEvent(new Event('input'));
+		(modalEl.querySelector('button[aria-label="Log"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(written).toContain('successes: 2');
+		expect(keptItems(written)).toEqual(KEPT({ name: 'Kira' }, { name: 'Vex', skills_used: ['Insight'] }));
+		expect(written).toContain('  - 7\n  - Ash\n  - nmae: Ash\n  - name: Vex\n');
+		expect(heroRows(host.containerEl.firstElementChild as HTMLElement).map((el) => el.getAttribute('data-hero'))).toEqual(['Kira', 'Vex']);
+		expect(pageErrors).toEqual([]);
+	});
+
+	test('editing and removing a real hero\'s logged action leaves every skipped item as typed, in place', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(MESSY);
+		cellFor(root, 'Kira', 1).click();
+		const editEl = document.body.lastElementChild as HTMLElement;
+		const noteInput = editEl.querySelector('textarea[aria-label="Note"]') as HTMLTextAreaElement;
+		noteInput.value = 'Found a handhold.';
+		noteInput.dispatchEvent(new Event('input'));
+		(editEl.querySelector('button[aria-label="Save"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const afterEdit = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(afterEdit).toContain('note: Found a handhold.');
+		expect(keptItems(afterEdit)).toEqual(KEPT({ name: 'Kira' }, { name: 'Vex' }));
+
+		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+		cellFor(rebuilt, 'Kira', 2).click();
+		const removeEl = document.body.lastElementChild as HTMLElement;
+		(removeEl.querySelector('button[aria-label="Remove this action"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const afterRemove = (host.replaceSource as jest.Mock).mock.calls[1][0] as string;
+		expect(keptItems(afterRemove)).toEqual(KEPT({ name: 'Kira' }, { name: 'Vex' }));
+		expect(afterRemove).toContain('  - 7\n  - Ash\n  - nmae: Ash\n  - name: Vex\n');
+		expect(pageErrors).toEqual([]);
+	});
+
+	test('a block whose list holds only skipped items draws the "No heroes yet" row', async () => {
+		const { root } = await renderMontage('rounds: 2\nparticipants:\n  - \n  - nmae: Ash\n');
+		expect(heroRows(root)).toEqual([]);
+		expect(root.querySelector('.dse-mt__board-empty')?.textContent).toContain('No heroes yet');
+		expect(pageErrors).toEqual([]);
+	});
+});

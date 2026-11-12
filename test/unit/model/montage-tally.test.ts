@@ -25,6 +25,7 @@ import {
 	montageReopenable,
 	montagePreviousRound,
 	backMontageRound,
+	montageRoster,
 } from '../../../src/elements/montage/model';
 import type { MontageModel, MontageEntry } from '../../../src/elements/montage/model';
 import { parseYaml } from '../../mocks/obsidian';
@@ -606,5 +607,114 @@ describe('a participant with no skills_used key works at every read/write site',
 		resetMontageProgress(m);
 		expect('skills_used' in m.participants![0]).toBe(false);
 		expect(m.participants![1].skills_used).toEqual([]);
+	});
+});
+
+// A hand-typed `participants` list can hold an item that is not a hero with a name. It must be
+// skipped (never thrown on) and, when it carries anything, written back as the user typed it.
+describe('a participants item that is not a hero with a name works at every read/write site', () => {
+	// [label, the item as typed, its parsed value, whether it carries nothing (and so may be dropped on a write)]
+	const BAD: Array<[string, string, unknown, boolean]> = [
+		['an empty item (`- `)', '  - ', null, true],
+		['an empty mapping (`- {}`)', '  - {}', {}, true],
+		['a bare number (`- 7`)', '  - 7', 7, false],
+		['a bare string (`- Ash`)', '  - Ash', 'Ash', false],
+		['a mapping with a misspelt key (`- nmae: Ash`)', '  - nmae: Ash', { nmae: 'Ash' }, false],
+		['a mapping with only skills_used', '  - skills_used: [Climb]', { skills_used: ['Climb'] }, false],
+		["an empty name (`name: ''`)", "  - name: ''", { name: '' }, false],
+		['a numeric name (`name: 7`)', '  - name: 7', { name: 7 }, false],
+	];
+	const source = (item: string): string =>
+		[
+			'rounds: 3',
+			'success_limit: 6',
+			'failure_limit: 3',
+			'successes: 1',
+			'failures: 0',
+			'participants:',
+			item,
+			'  - name: Kira',
+			'    skills_used: [Nature]',
+			'  - name: Vex',
+			'entries:',
+			'  - hero: Kira',
+			'    round: 2',
+			'    result: success',
+			'    skill: Nature',
+			'current_round: 2',
+		].join('\n');
+	const load = (item: string): MontageModel => parseLikePipeline(source(item));
+	/** The participants list of a serialized block, re-parsed (so quoting style never matters). */
+	const writtenParticipants = (m: MontageModel): unknown[] => parseYaml(serialize(m)).participants;
+	/** What the list should read after a write: the typed item (unless empty), then the heroes. */
+	const expectedList = (raw: unknown, empty: boolean, ...heroes: unknown[]): unknown[] =>
+		empty ? heroes : [raw, ...heroes];
+	const KIRA = { name: 'Kira', skills_used: ['Nature'] };
+	const VEX = { name: 'Vex' };
+
+	test.each(BAD)('%s: parsing warns once and leaves only the real heroes in the roster', (_l, item) => {
+		const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			const m = load(item);
+			expect(montageRoster(m).map((p) => p.name)).toEqual(['Kira', 'Vex']);
+			expect(warn).toHaveBeenCalledTimes(1);
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	test.each(BAD)('%s: nextHeroToAct and wouldReuseSkill read past it', (_l, item) => {
+		const m = load(item);
+		expect(nextHeroToAct(m)).toBe('Vex');
+		expect(wouldReuseSkill(m, 'Kira', 'Nature')).toBe(true);
+		expect(wouldReuseSkill(m, 'Vex', 'Nature')).toBe(false);
+	});
+
+	test.each(BAD)('%s: log, correct, remove and undo work and leave the item as typed', (_l, item, raw, empty) => {
+		const m = load(item);
+		logMontageEntry(m, { hero: 'Vex', round: 2, result: 'failure', skill: 'Climb' });
+		correctMontageEntry(m, m.entries![1], { hero: 'Vex', round: 2, result: 'success', skill: 'Insight', note: 'x' });
+		expect(m.successes).toBe(2);
+		expect(writtenParticipants(m)).toEqual(
+			expectedList(raw, empty, KIRA, { name: 'Vex', skills_used: ['Insight'] }),
+		);
+		removeMontageEntry(m, m.entries![1]);
+		undoLastMontageEntry(m);
+		expect(m.entries).toBeUndefined();
+		expect(m.successes).toBe(0);
+		expect(writtenParticipants(m)).toEqual(expectedList(raw, empty, { name: 'Kira', skills_used: [] }, { name: 'Vex', skills_used: [] }));
+	});
+
+	test.each(BAD)('%s: reset and add a hero work and leave the item as typed, in place', (_l, item, raw, empty) => {
+		const m = load(item);
+		resetMontageProgress(m);
+		addMontageHero(m, 'Zed');
+		expect(montageRoster(m).map((p) => p.name)).toEqual(['Kira', 'Vex', 'Zed']);
+		expect(writtenParticipants(m)).toEqual(
+			expectedList(raw, empty, { name: 'Kira', skills_used: [] }, VEX, { name: 'Zed', skills_used: [] }),
+		);
+	});
+
+	test('an item with nothing in it is not written back as `null`; one with content keeps its place between the heroes', () => {
+		const m = parseLikePipeline('participants:\n  - name: Kira\n  - \n  - nmae: Ash\n  - name: Vex\n  - {}\n');
+		addMontageHero(m, 'Zed');
+		expect(serialize(m)).not.toContain('null');
+		expect(writtenParticipants(m)).toEqual([{ name: 'Kira' }, { nmae: 'Ash' }, { name: 'Vex' }, { name: 'Zed', skills_used: [] }]);
+	});
+
+	test('a list with no real hero at all has an empty roster, keeps what the user typed, and still takes a new hero', () => {
+		const m = parseLikePipeline('participants:\n  - nmae: Ash\n  - 7\n');
+		expect(montageRoster(m)).toEqual([]);
+		expect(nextHeroToAct(m)).toBeUndefined();
+		expect(writtenParticipants(m)).toEqual([{ nmae: 'Ash' }, 7]);
+		addMontageHero(m, 'Zed');
+		expect(writtenParticipants(m)).toEqual([{ nmae: 'Ash' }, 7, { name: 'Zed', skills_used: [] }]);
+	});
+
+	test('a list of only empty items reads as no participants and is not written back', () => {
+		const m = parseLikePipeline('rounds: 2\nparticipants:\n  - \n  - {}\n');
+		expect(montageRoster(m)).toEqual([]);
+		expect(m.participants).toBeUndefined();
+		expect(serialize(m)).not.toContain('participants');
 	});
 });
