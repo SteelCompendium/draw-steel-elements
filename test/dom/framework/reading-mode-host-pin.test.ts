@@ -1161,7 +1161,7 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 			const { app, host, sec } = embedded(pre, part(SUB, 2), 'Note#Tracker', bodyOf(5));
 			expect(await plus(host)).toBe(true);
 			sec.current = part(['## Tracker', '', ...CTR(6), ''], 2); // Obsidian redrew the embed from the note as the + left it, and the view is adopted into the redraw
-			host.rebind(host.containerEl, switchableCtx(sec)); // SC-607: a redraw takes a new snapshot of the note as drawn
+			host.rebind(host.containerEl, switchableCtx(sec) as never); // SC-607: a redraw takes a new snapshot of the note as drawn
 			await settle();
 			const outside = ['# N', '', ...para(500, 'inserted above'), ...noteOf6(app).split('\n').slice(1), ...para(500, 'inserted below')].join('\n');
 			app.vault.setFile('Note.md', outside);
