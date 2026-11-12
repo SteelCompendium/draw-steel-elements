@@ -1708,7 +1708,7 @@ async function gs91Trial(t, mode, target) {
 	const OPENER = `(${K.ENTRY(src)}).root.querySelector('[data-dse-control="stamina.bar"]')`;
 	const rec = { mode, target };
 	const st = () =>
-		t.ev(`(() => { const pop = document.querySelector('.popover.hover-popover'); const a = document.activeElement; return { popover: !!pop, modal: !!${MODAL}, editor: !!pop && !!Array.from(pop.querySelectorAll('.markdown-source-view, .cm-editor')).find((e) => e.offsetParent !== null), focusInPreview: !!(a && a.closest('.hover-popover')) }; })()`);
+		t.ev(`(() => { const pop = document.querySelector('.popover.hover-popover'); const a = document.activeElement; return { popover: !!pop, modal: !!${MODAL}, editing: !!pop && pop.classList.contains('is-editing'), editor: !!pop && !!Array.from(pop.querySelectorAll('.markdown-source-view, .cm-editor')).find((e) => e.offsetParent !== null), focusInPreview: !!(a && a.closest('.hover-popover')) }; })()`);
 	try {
 		await t.reset(src);
 		await t.reset(host);
@@ -1752,13 +1752,14 @@ async function gs91Trial(t, mode, target) {
 			await K.mouse('mouseReleased', pt.x, pt.y, { buttons: 0, ...b2 });
 		} else {
 			await K.press(pt);
+			// ONE evaluation gives the point and what it hits (the vacuity gate below measures this lead)
 			const p2 = await t.ev(
 				target === 'title' || target === 'reopen'
-					? `(() => { const el = document.querySelector('.modal-container .modal-title'); if (!el) return null; const r = el.getBoundingClientRect(); return { x: Math.round(r.left + Math.min(r.width / 2, 40)), y: Math.round(r.top + r.height / 2) }; })()`
-					: `(() => { const el = document.querySelector('.modal-container [data-dse-control="sedit.apply-amount"]'); if (!el) return null; const r = el.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`,
+					? `(() => { const el = document.querySelector('.modal-container .modal-title'); if (!el) return null; const r = el.getBoundingClientRect(); const x = Math.round(r.left + Math.min(r.width / 2, 40)); const y = Math.round(r.top + r.height / 2); const h = document.elementFromPoint(x, y); return { x, y, hit: h ? String(h.className || h.nodeName).slice(0, 40) : null }; })()`
+					: `(() => { const el = document.querySelector('.modal-container [data-dse-control="sedit.apply-amount"]'); if (!el) return null; const r = el.getBoundingClientRect(); const x = Math.round(r.left + r.width / 2); const y = Math.round(r.top + r.height / 2); const h = document.elementFromPoint(x, y); return { x, y, hit: h ? String(h.className || h.nodeName).slice(0, 40) : null }; })()`,
 			);
 			t.expect(!!p2, `${mode} ${target}: the modal did not open from the press on the number`);
-			rec.p2Hit = await t.ev(`(() => { const h = document.elementFromPoint(${p2.x}, ${p2.y}); return h ? String(h.className || h.nodeName).slice(0, 40) : null; })()`);
+			rec.p2Hit = p2.hit;
 			await K.mouse('mouseMoved', p2.x, p2.y);
 			await K.press(p2);
 		}
@@ -7749,7 +7750,7 @@ const SCENARIOS = [
 					if (r.error) bad.push(`error: ${r.error}`);
 					else {
 						if (r.gap === null || (target !== 'dblq' && r.gap >= 140)) bad.push(`the second click came ${r.gap} ms after the opening click: it must come inside the helper's 150 ms or the trial proves nothing (a loaded host?)`); // the queued double-click is red on the base at any gap: its second mousedown clears the helper's timer
-						if (!r.at700.popover) bad.push(`700 ms after the second press the preview was gone ${J(r.at700)}`);
+						if (!r.at700.popover) bad.push(`700 ms after the second press the preview was gone (second click ${r.gap} ms after the opening click) ${J(r.at700)}`);
 						else {
 							if (r.at700.editor) bad.push(`the preview turned into a source editor ${J(r.at700)}`);
 							if (target !== 'dblq' && !r.at700.modal) bad.push(`700 ms after the second press the modal was gone ${J(r.at700)}`);
@@ -7757,6 +7758,7 @@ const SCENARIOS = [
 							if (target === 'reopen') {
 								if (!(r.firstOpen.popover && r.firstOpen.modal)) bad.push(`the first open must leave the preview and the modal open ${J(r.firstOpen)}`);
 								if (!(r.afterFirstClose.popover && !r.afterFirstClose.modal)) bad.push(`Escape after the first open must close only the modal ${J(r.afterFirstClose)}`);
+								if (!r.afterFirstClose.editing) bad.push(`the preview must be focused (.is-editing) before the second open, or this trial does not test a re-open ${J(r.afterFirstClose)}`);
 								if (r.at700.focusInPreview) bad.push(`the keyboard focus moved into the preview behind the open modal ${J(r.at700)}`);
 							}
 							if (target === 'dblq' && r.at700.modal) bad.push(`the backdrop press of the double-click should have closed the modal ${J(r.at700)}`);
