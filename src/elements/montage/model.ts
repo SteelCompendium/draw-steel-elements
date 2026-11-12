@@ -47,11 +47,21 @@ export interface MontageParticipant {
 	skills_used?: string[];
 }
 
-/** The hero's skills used so far — empty for a missing or `null` list. A read only: callers
- *  must not mutate the result (it is a shared frozen empty array when the list is absent). */
+/** The hero's skills used so far — empty for a missing or `null` list; a hand-typed scalar
+ *  (`skills_used: Climb`) reads as a one-item list. A read only: callers must not mutate the
+ *  result (it may be a shared frozen empty array, or a fresh one-item array). */
 const NO_SKILLS: readonly string[] = Object.freeze([]);
 function skillsOf(p: MontageParticipant): readonly string[] {
-	return Array.isArray(p.skills_used) ? p.skills_used : NO_SKILLS;
+	const v: unknown = p.skills_used;
+	if (Array.isArray(v)) return v as string[];
+	return typeof v === 'string' && v !== '' ? [v] : NO_SKILLS;
+}
+
+/** Turns a hand-typed scalar into a real list in place. Only called on the way to a write
+ *  that changes the hero's skills, so a write that changes nothing leaves the scalar as typed. */
+function listifyScalarSkills(p: MontageParticipant): void {
+	const v: unknown = p.skills_used;
+	if (typeof v === 'string' && v !== '') p.skills_used = [v];
 }
 
 /** §B.2 — one logged test on the board. `skill`/`note` are omitted when empty, never
@@ -350,10 +360,11 @@ function removeSkillOccurrence(m: MontageModel, hero: string, skill: string | un
 	if (!skill) return;
 	const p = findParticipant(m, hero);
 	if (!p) return;
-	// Nothing to remove (and no key to create) when the hero has no list.
-	if (!Array.isArray(p.skills_used)) return;
-	const idx = p.skills_used.indexOf(skill);
-	if (idx !== -1) p.skills_used.splice(idx, 1);
+	// Nothing to remove (and no key to create, no scalar to rewrite) unless the hero has the skill.
+	if (!skillsOf(p).includes(skill)) return;
+	listifyScalarSkills(p);
+	const list = p.skills_used as string[];
+	list.splice(list.indexOf(skill), 1);
 }
 
 function addSkillOccurrence(m: MontageModel, hero: string, skill: string | undefined): void {
@@ -361,6 +372,7 @@ function addSkillOccurrence(m: MontageModel, hero: string, skill: string | undef
 	const p = findParticipant(m, hero);
 	if (!p) return;
 	// The first skill logged for a hero with no list creates the key (SC-606).
+	listifyScalarSkills(p);
 	if (Array.isArray(p.skills_used)) p.skills_used.push(skill);
 	else p.skills_used = [skill];
 }
@@ -418,8 +430,11 @@ export function logMontageEntry(m: MontageModel, entry: MontageEntry): void {
  *  applies the new one: the same "remove + log" shape §B.3 prescribes, never a
  *  recount. */
 export function correctMontageEntry(m: MontageModel, existing: MontageEntry, next: MontageEntry): void {
+	// An edit that leaves hero and skill as they were changes nobody's skills: skip the undo and
+	// the re-apply, so a key-less hero gains no key and a keyed hero's list keeps its order.
+	const sameSkill = existing.hero === next.hero && existing.skill === next.skill;
 	applyTallyDelta(m, existing.result, -1);
-	removeSkillOccurrence(m, existing.hero, existing.skill);
+	if (!sameSkill) removeSkillOccurrence(m, existing.hero, existing.skill);
 	existing.hero = next.hero;
 	existing.round = next.round;
 	existing.result = next.result;
@@ -428,7 +443,7 @@ export function correctMontageEntry(m: MontageModel, existing: MontageEntry, nex
 	if (next.note) existing.note = next.note;
 	else delete existing.note;
 	applyTallyDelta(m, next.result, 1);
-	addSkillOccurrence(m, next.hero, next.skill);
+	if (!sameSkill) addSkillOccurrence(m, next.hero, next.skill);
 }
 
 /** Removes an entry entirely: undoes its tally/skill contribution and splices it out
@@ -479,7 +494,7 @@ export function resetMontageProgress(m: MontageModel): void {
 	m.entries = undefined;
 	for (const participant of m.participants ?? []) {
 		// A hero with no list stays without one: resetting changes nothing for them.
-		if (Array.isArray(participant.skills_used)) participant.skills_used = [];
+		if (skillsOf(participant).length > 0 || Array.isArray(participant.skills_used)) participant.skills_used = [];
 	}
 }
 

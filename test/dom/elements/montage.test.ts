@@ -2431,6 +2431,7 @@ describe('the Montage sheet for a hero whose entry has no skills_used list', () 
 	});
 	afterEach(() => {
 		window.removeEventListener('error', onError);
+		jest.useRealTimers();
 		document.body.innerHTML = '';
 	});
 
@@ -2473,7 +2474,23 @@ describe('the Montage sheet for a hero whose entry has no skills_used list', () 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect((host.replaceSource as jest.Mock).mock.calls[0][0]).toContain('  - name: Kira\n    skills_used:\n      - Insight');
 		expect(pageErrors).toEqual([]);
-		jest.useRealTimers();
+	});
+
+	test('saving an edit that changes only the note writes no skills_used key into the hero\'s entry', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(KEYLESS);
+		cellFor(root, 'Kira', 1).click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		const noteInput = modalEl.querySelector('textarea[aria-label="Note"]') as HTMLTextAreaElement;
+		noteInput.value = 'Found a handhold.';
+		noteInput.dispatchEvent(new Event('input'));
+		(modalEl.querySelector('button[aria-label="Save"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(written).toContain('note: Found a handhold.');
+		expect(written).toContain('  - name: Kira\nentries:');
+		expect(written).not.toContain('skills_used');
+		expect(pageErrors).toEqual([]);
 	});
 
 	test('removing the logged action writes no skills_used key into the hero\'s entry', async () => {
@@ -2487,6 +2504,5 @@ describe('the Montage sheet for a hero whose entry has no skills_used list', () 
 		expect(written).toContain('  - name: Kira\ncurrent_round');
 		expect(written).not.toContain('skills_used');
 		expect(pageErrors).toEqual([]);
-		jest.useRealTimers();
 	});
 });

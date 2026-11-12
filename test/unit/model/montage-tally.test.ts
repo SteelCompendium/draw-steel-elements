@@ -548,6 +548,59 @@ describe('a participant with no skills_used key works at every read/write site',
 		expect('skills_used' in m.participants![0]).toBe(false);
 	});
 
+	test('correctMontageEntry that changes only the note or result leaves a key-less hero key-less', () => {
+		const m = keyless();
+		const e = entryFor('Nature');
+		m.entries = [e];
+		m.successes = 1;
+		correctMontageEntry(m, e, { ...entryFor('Nature'), note: 'a typo fixed' });
+		correctMontageEntry(m, e, { ...entryFor('Nature'), result: 'failure', note: 'a typo fixed' });
+		expect('skills_used' in m.participants![0]).toBe(false);
+		expect(e).toMatchObject({ skill: 'Nature', note: 'a typo fixed', result: 'failure' });
+		expect([m.successes, m.failures]).toEqual([0, 1]);
+	});
+
+	test('correctMontageEntry that changes only the note keeps a keyed hero\'s list in its order', () => {
+		const m: MontageModel = { ...base, participants: [{ name: 'Kira', skills_used: ['Nature', 'Alertness'] }] };
+		const e = entryFor('Nature');
+		m.entries = [e];
+		m.successes = 1;
+		correctMontageEntry(m, e, { ...entryFor('Nature'), note: 'a typo fixed' });
+		expect(m.participants![0].skills_used).toEqual(['Nature', 'Alertness']);
+	});
+
+	test('a hand-typed scalar skills_used reads as a one-item list: the reuse warning fires', () => {
+		const m = parseLikePipeline('participants:\n  - name: Kira\n    skills_used: Climb\n');
+		expect(wouldReuseSkill(m, 'Kira', 'Climb')).toBe(true);
+		expect(wouldReuseSkill(m, 'Kira', 'Nature')).toBe(false);
+	});
+
+	test('logging a skill for a hero with a scalar skills_used keeps it: [Climb, Insight]', () => {
+		const m = parseLikePipeline('participants:\n  - name: Kira\n    skills_used: Climb\n');
+		logMontageEntry(m, entryFor('Insight'));
+		expect(m.participants![0].skills_used).toEqual(['Climb', 'Insight']);
+	});
+
+	test('removing the scalar skill\'s entry empties the list; removing another skill leaves the scalar as typed', () => {
+		const m = parseLikePipeline('participants:\n  - name: Kira\n    skills_used: Climb\n');
+		const other = entryFor('Nature');
+		m.entries = [other];
+		m.successes = 1;
+		removeMontageEntry(m, other);
+		expect(m.participants![0].skills_used).toBe('Climb' as unknown);
+		const mine = entryFor('Climb');
+		m.entries = [mine];
+		m.successes = 1;
+		removeMontageEntry(m, mine);
+		expect(m.participants![0].skills_used).toEqual([]);
+	});
+
+	test('resetMontageProgress empties a scalar skills_used', () => {
+		const m = parseLikePipeline('participants:\n  - name: Kira\n    skills_used: Climb\n');
+		resetMontageProgress(m);
+		expect(m.participants![0].skills_used).toEqual([]);
+	});
+
 	test('resetMontageProgress empties a present list but does not give a key-less hero one', () => {
 		const m = keyless();
 		resetMontageProgress(m);
