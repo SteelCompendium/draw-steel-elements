@@ -1327,6 +1327,35 @@ describe('[Q] a half-typed quick-add is a per-view draft: it survives every rebu
 		expect(draft(root)).toEqual(['7', 'Feytouched']);
 	});
 
+	test('[Q17] after a Reset encounter, an outside refresh still hands focus and caret back (the reset rebuild leaves no state behind)', async () => {
+		const { root, flush, refresh } = await outside(TRACKER);
+		ctl(root, 'init.reset-encounter').click();
+		ctl(document.body.lastElementChild as HTMLElement, 'init.reset-encounter.confirm').click();
+		await flush();
+		type(root, '7', 'Feytouched');
+		const label = ctl<HTMLInputElement>(root, LABEL);
+		label.focus();
+		label.setSelectionRange(2, 5);
+		await refresh();
+		const after = ctl<HTMLInputElement>(root, LABEL);
+		expect(after).not.toBe(label); // the tracker really was rebuilt
+		expect(document.activeElement).toBe(after);
+		expect([after.selectionStart, after.selectionEnd]).toEqual([2, 5]);
+		expect(draft(root)).toEqual(['7', 'Feytouched']);
+	});
+
+	test('[Q18] Reset encounter hands focus back itself: focus that landed on a quick-add box while it re-parses ends on the rebuilt Reset encounter item', async () => {
+		const { root, flush } = await mount(TRACKER);
+		const item = ctl(root, 'init.reset-encounter');
+		item.focus();
+		item.click();
+		ctl(document.body.lastElementChild as HTMLElement, 'init.reset-encounter.confirm').click();
+		ctl<HTMLInputElement>(root, LABEL).focus(); // the re-parse is still running (it is async); focus has moved into the old tracker
+		await flush();
+		expect(ctl(root, 'init.reset-encounter')).not.toBe(item);
+		expect(document.activeElement).toBe(ctl(root, 'init.reset-encounter'));
+	});
+
 	test('[Q13] a draft in the amount box and an empty label box come back as typed (only the amount is restored)', async () => {
 		const { root, flush } = await mount(TRACKER);
 		type(root, '6', '');
