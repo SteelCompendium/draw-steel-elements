@@ -37,9 +37,21 @@
 // unchanged. The record lives in src/elements/shared/undeclaredDefaults.ts.
 import { recordingDefaults, stringifyOmittingUntouched } from '../shared/undeclaredDefaults';
 
+/** `skills_used` is OPTIONAL: a hand-written roster may only name its heroes. A hero with no
+ *  key (or an empty `skills_used:`, which YAML parses to `null`) has used no skills, and a
+ *  write that does not change the hero's skills must not add the key to the note — only the
+ *  first skill actually logged for the hero creates it (see `addSkillOccurrence`). Read it
+ *  through `skillsOf`, never `p.skills_used` directly. */
 export interface MontageParticipant {
 	name: string;
-	skills_used: string[];
+	skills_used?: string[];
+}
+
+/** The hero's skills used so far — empty for a missing or `null` list. A read only: callers
+ *  must not mutate the result (it is a shared frozen empty array when the list is absent). */
+const NO_SKILLS: readonly string[] = Object.freeze([]);
+function skillsOf(p: MontageParticipant): readonly string[] {
+	return Array.isArray(p.skills_used) ? p.skills_used : NO_SKILLS;
 }
 
 /** §B.2 — one logged test on the board. `skill`/`note` are omitted when empty, never
@@ -338,6 +350,8 @@ function removeSkillOccurrence(m: MontageModel, hero: string, skill: string | un
 	if (!skill) return;
 	const p = findParticipant(m, hero);
 	if (!p) return;
+	// Nothing to remove (and no key to create) when the hero has no list.
+	if (!Array.isArray(p.skills_used)) return;
 	const idx = p.skills_used.indexOf(skill);
 	if (idx !== -1) p.skills_used.splice(idx, 1);
 }
@@ -345,7 +359,10 @@ function removeSkillOccurrence(m: MontageModel, hero: string, skill: string | un
 function addSkillOccurrence(m: MontageModel, hero: string, skill: string | undefined): void {
 	if (!skill) return;
 	const p = findParticipant(m, hero);
-	if (p) p.skills_used.push(skill);
+	if (!p) return;
+	// The first skill logged for a hero with no list creates the key (SC-606).
+	if (Array.isArray(p.skills_used)) p.skills_used.push(skill);
+	else p.skills_used = [skill];
 }
 
 /**
@@ -364,7 +381,7 @@ export function wouldReuseSkill(
 ): boolean {
 	const p = findParticipant(m, hero);
 	if (!p) return false;
-	const used = p.skills_used.slice();
+	const used = skillsOf(p).slice();
 	if (excluding && excluding.hero === hero && excluding.skill) {
 		const idx = used.indexOf(excluding.skill);
 		if (idx !== -1) used.splice(idx, 1);
@@ -461,7 +478,8 @@ export function resetMontageProgress(m: MontageModel): void {
 	m.current_round = 1;
 	m.entries = undefined;
 	for (const participant of m.participants ?? []) {
-		participant.skills_used = [];
+		// A hero with no list stays without one: resetting changes nothing for them.
+		if (Array.isArray(participant.skills_used)) participant.skills_used = [];
 	}
 }
 
