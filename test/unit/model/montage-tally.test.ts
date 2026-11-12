@@ -186,7 +186,7 @@ describe('SC-191 slice 4: logMontageEntry/correctMontageEntry/removeMontageEntry
 		expect(m.entries).toEqual([{ hero: 'Bram', round: 1, result: 'success', skill: 'Endurance' }]);
 		expect(m.successes).toBe(1);
 		expect(m.failures).toBe(0);
-		expect(m.participants![1].skills_used).toEqual(['Endurance']);
+		expect(montageRoster(m)[1].skills_used).toEqual(['Endurance']);
 	});
 
 	test('logMontageEntry on an OLD-SHAPE model (successes: 4, no entries) — §C integrity probe 5: reads successes: 5 with a one-item entries list, never successes: 1', () => {
@@ -210,13 +210,13 @@ describe('SC-191 slice 4: logMontageEntry/correctMontageEntry/removeMontageEntry
 		m.entries = [entry];
 		m.successes = 0;
 		m.failures = 1;
-		m.participants![0].skills_used = ['Nature', 'Climb'];
+		montageRoster(m)[0].skills_used = ['Nature', 'Climb'];
 		correctMontageEntry(m, entry, { hero: 'Kira', round: 1, result: 'success', skill: 'Climb' });
 		expect(m.successes).toBe(1);
 		expect(m.failures).toBe(0);
 		// The skill is UNCHANGED across the correction — removed once, re-added once, net
 		// one occurrence, not two and not zero.
-		expect(m.participants![0].skills_used).toEqual(['Nature', 'Climb']);
+		expect(montageRoster(m)[0].skills_used).toEqual(['Nature', 'Climb']);
 		expect(m.entries).toEqual([{ hero: 'Kira', round: 1, result: 'success', skill: 'Climb' }]);
 	});
 
@@ -227,8 +227,8 @@ describe('SC-191 slice 4: logMontageEntry/correctMontageEntry/removeMontageEntry
 		m.successes = 1;
 		correctMontageEntry(m, entry, { hero: 'Bram', round: 1, result: 'success', skill: 'Endurance' });
 		expect(m.successes).toBe(1); // success -> success, no tally change
-		expect(m.participants![0].skills_used).toEqual([]); // Nature removed from Kira
-		expect(m.participants![1].skills_used).toEqual(['Endurance']); // added to Bram
+		expect(montageRoster(m)[0].skills_used).toEqual([]); // Nature removed from Kira
+		expect(montageRoster(m)[1].skills_used).toEqual(['Endurance']); // added to Bram
 		expect(m.entries).toEqual([{ hero: 'Bram', round: 1, result: 'success', skill: 'Endurance' }]);
 	});
 
@@ -240,7 +240,7 @@ describe('SC-191 slice 4: logMontageEntry/correctMontageEntry/removeMontageEntry
 		removeMontageEntry(m, entry);
 		expect(m.failures).toBe(0);
 		expect(m.entries).toBeUndefined();
-		expect(m.participants![0].skills_used).toEqual([]);
+		expect(montageRoster(m)[0].skills_used).toEqual([]);
 	});
 
 	test('a tally never goes negative when undoing a stale/hand-edited scalar', () => {
@@ -309,7 +309,7 @@ describe('SC-191 slice 4: the ⋯ chrome item config helpers', () => {
 		addMontageHero(m, 'Osric');
 		expect(m.participants).toEqual([{ name: 'Osric', skills_used: [] }]);
 		addMontageHero(m, 'Yenna');
-		expect(m.participants!.map((p) => p.name)).toEqual(['Osric', 'Yenna']);
+		expect(montageRoster(m).map((p) => p.name)).toEqual(['Osric', 'Yenna']);
 	});
 
 	test('setMontageLimits sets both limits, clamping a negative input to 0', () => {
@@ -501,7 +501,7 @@ describe('a participant with no skills_used key works at every read/write site',
 		const m = parseLikePipeline('participants:\n  - name: Kira\n    skills_used:\n');
 		expect(wouldReuseSkill(m, 'Kira', 'Nature', entryFor('Nature'))).toBe(false);
 		logMontageEntry(m, entryFor('Nature'));
-		expect(m.participants![0].skills_used).toEqual(['Nature']);
+		expect(montageRoster(m)[0].skills_used).toEqual(['Nature']);
 	});
 
 	test('removeMontageEntry on an entry with a skill leaves the key-less hero key-less', () => {
@@ -512,7 +512,7 @@ describe('a participant with no skills_used key works at every read/write site',
 		expect(() => removeMontageEntry(m, e)).not.toThrow();
 		expect(m.successes).toBe(0);
 		expect(m.entries).toBeUndefined();
-		expect('skills_used' in m.participants![0]).toBe(false);
+		expect('skills_used' in montageRoster(m)[0]).toBe(false);
 	});
 
 	test('correctMontageEntry: the old skill leaves nothing to undo, the new skill creates the key with just that skill', () => {
@@ -521,7 +521,7 @@ describe('a participant with no skills_used key works at every read/write site',
 		m.entries = [e];
 		m.successes = 1;
 		expect(() => correctMontageEntry(m, e, entryFor('Insight'))).not.toThrow();
-		expect(m.participants![0].skills_used).toEqual(['Insight']);
+		expect(montageRoster(m)[0].skills_used).toEqual(['Insight']);
 		expect(e.skill).toBe('Insight');
 	});
 
@@ -531,14 +531,14 @@ describe('a participant with no skills_used key works at every read/write site',
 		m.entries = [e];
 		m.successes = 1;
 		correctMontageEntry(m, e, entryFor());
-		expect('skills_used' in m.participants![0]).toBe(false);
+		expect('skills_used' in montageRoster(m)[0]).toBe(false);
 		expect(e.skill).toBeUndefined();
 	});
 
 	test('logMontageEntry with a skill gives the key-less hero the key with that skill', () => {
 		const m = keyless();
 		expect(() => logMontageEntry(m, entryFor('Nature'))).not.toThrow();
-		expect(m.participants![0].skills_used).toEqual(['Nature']);
+		expect(montageRoster(m)[0].skills_used).toEqual(['Nature']);
 		expect(m.entries).toHaveLength(1);
 		expect(m.successes).toBe(1);
 	});
@@ -546,7 +546,7 @@ describe('a participant with no skills_used key works at every read/write site',
 	test('logMontageEntry without a skill adds no key', () => {
 		const m = keyless();
 		logMontageEntry(m, entryFor());
-		expect('skills_used' in m.participants![0]).toBe(false);
+		expect('skills_used' in montageRoster(m)[0]).toBe(false);
 	});
 
 	test('correctMontageEntry that changes only the note or result leaves a key-less hero key-less', () => {
@@ -556,7 +556,7 @@ describe('a participant with no skills_used key works at every read/write site',
 		m.successes = 1;
 		correctMontageEntry(m, e, { ...entryFor('Nature'), note: 'a typo fixed' });
 		correctMontageEntry(m, e, { ...entryFor('Nature'), result: 'failure', note: 'a typo fixed' });
-		expect('skills_used' in m.participants![0]).toBe(false);
+		expect('skills_used' in montageRoster(m)[0]).toBe(false);
 		expect(e).toMatchObject({ skill: 'Nature', note: 'a typo fixed', result: 'failure' });
 		expect([m.successes, m.failures]).toEqual([0, 1]);
 	});
@@ -567,7 +567,7 @@ describe('a participant with no skills_used key works at every read/write site',
 		m.entries = [e];
 		m.successes = 1;
 		correctMontageEntry(m, e, { ...entryFor('Nature'), note: 'a typo fixed' });
-		expect(m.participants![0].skills_used).toEqual(['Nature', 'Alertness']);
+		expect(montageRoster(m)[0].skills_used).toEqual(['Nature', 'Alertness']);
 	});
 
 	test('a hand-typed scalar skills_used reads as a one-item list: the reuse warning fires', () => {
@@ -579,7 +579,7 @@ describe('a participant with no skills_used key works at every read/write site',
 	test('logging a skill for a hero with a scalar skills_used keeps it: [Climb, Insight]', () => {
 		const m = parseLikePipeline('participants:\n  - name: Kira\n    skills_used: Climb\n');
 		logMontageEntry(m, entryFor('Insight'));
-		expect(m.participants![0].skills_used).toEqual(['Climb', 'Insight']);
+		expect(montageRoster(m)[0].skills_used).toEqual(['Climb', 'Insight']);
 	});
 
 	test('removing the scalar skill\'s entry empties the list; removing another skill leaves the scalar as typed', () => {
@@ -588,25 +588,25 @@ describe('a participant with no skills_used key works at every read/write site',
 		m.entries = [other];
 		m.successes = 1;
 		removeMontageEntry(m, other);
-		expect(m.participants![0].skills_used).toBe('Climb' as unknown);
+		expect(montageRoster(m)[0].skills_used).toBe('Climb' as unknown);
 		const mine = entryFor('Climb');
 		m.entries = [mine];
 		m.successes = 1;
 		removeMontageEntry(m, mine);
-		expect(m.participants![0].skills_used).toEqual([]);
+		expect(montageRoster(m)[0].skills_used).toEqual([]);
 	});
 
 	test('resetMontageProgress empties a scalar skills_used', () => {
 		const m = parseLikePipeline('participants:\n  - name: Kira\n    skills_used: Climb\n');
 		resetMontageProgress(m);
-		expect(m.participants![0].skills_used).toEqual([]);
+		expect(montageRoster(m)[0].skills_used).toEqual([]);
 	});
 
 	test('resetMontageProgress empties a present list but does not give a key-less hero one', () => {
 		const m = keyless();
 		resetMontageProgress(m);
-		expect('skills_used' in m.participants![0]).toBe(false);
-		expect(m.participants![1].skills_used).toEqual([]);
+		expect('skills_used' in montageRoster(m)[0]).toBe(false);
+		expect(montageRoster(m)[1].skills_used).toEqual([]);
 	});
 });
 
@@ -716,5 +716,59 @@ describe('a participants item that is not a hero with a name works at every read
 		expect(montageRoster(m)).toEqual([]);
 		expect(m.participants).toBeUndefined();
 		expect(serialize(m)).not.toContain('participants');
+	});
+
+	// A `participants` value that is not a list at all (the dash forgotten, a one-hero roster typed as a scalar).
+	const NON_LIST: Array<[string, string, unknown]> = [
+		['a string (`participants: Kira`)', 'participants: Kira', 'Kira'],
+		['a mapping (`name: Kira` with no dash)', 'participants:\n  name: Kira', { name: 'Kira' }],
+		['a number (`participants: 7`)', 'participants: 7', 7],
+	];
+
+	test.each(NON_LIST)('%s: no heroes on the board, and an unrelated write gives it back as typed', (_l, text, raw) => {
+		const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			const m = parseLikePipeline(`rounds: 2\n${text}\n`);
+			expect(montageRoster(m)).toEqual([]);
+			expect(nextHeroToAct(m)).toBeUndefined();
+			expect(warn).toHaveBeenCalledTimes(1);
+			addMontageRound(m);
+			setMontageLimits(m, 4, 2);
+			resetMontageProgress(m);
+			expect(parseYaml(serialize(m)).participants).toEqual(raw);
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	test.each(NON_LIST)('%s: add a hero wraps it as the first item of the list', (_l, text, raw) => {
+		const m = parseLikePipeline(`rounds: 2\n${text}\n`);
+		addMontageHero(m, 'Zed');
+		expect(writtenParticipants(m)).toEqual([raw, { name: 'Zed', skills_used: [] }]);
+		// a typed `{name: Kira}` thereby becomes a real hero; a bare `Kira` / `7` stays a skipped item
+		expect(montageRoster(m).map((p) => p.name)).toEqual(typeof raw === 'object' ? ['Kira', 'Zed'] : ['Zed']);
+	});
+
+	// An item whose every value is null carries nothing: it is dropped on a write, like `{}`, never written as `null`.
+	const ALL_NULL: Array<[string, string]> = [
+		['a mapping with a key and no value (`- name:`)', '  - name:'],
+		['a mapping with a `~` value (`- name: ~`)', '  - name: ~'],
+		['a flow mapping with no value (`- {name: }`)', '  - {name: }'],
+		['a mapping with only an empty skills_used', '  - skills_used:'],
+		['a list holding only a null (`- [~]`)', '  - [~]'],
+	];
+
+	test.each(ALL_NULL)('%s: dropped on a write, and no `null` is written', (_l, item) => {
+		const m = parseLikePipeline(`participants:\n  - name: Kira\n${item}\n  - name: Vex\n`);
+		expect(montageRoster(m).map((p) => p.name)).toEqual(['Kira', 'Vex']);
+		addMontageHero(m, 'Zed');
+		expect(serialize(m)).not.toContain('null');
+		expect(writtenParticipants(m)).toEqual([{ name: 'Kira' }, { name: 'Vex' }, { name: 'Zed', skills_used: [] }]);
+	});
+
+	test('an item holding any non-null value is never dropped: `0`, `false`, a space, a value under a misspelt key', () => {
+		const m = parseLikePipeline('participants:\n  - name: Kira\n  - 0\n  - false\n  - " "\n  - {nmae: 0}\n  - [~, 1]\n');
+		addMontageHero(m, 'Zed');
+		expect(writtenParticipants(m)).toEqual([{ name: 'Kira' }, 0, false, ' ', { nmae: 0 }, [null, 1], { name: 'Zed', skills_used: [] }]);
 	});
 });
