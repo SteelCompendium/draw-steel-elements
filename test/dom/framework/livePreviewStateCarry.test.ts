@@ -14,6 +14,12 @@ import {
 } from '@/framework/host/livePreviewStateCarry';
 import { CLAIM_WINDOW_MS } from '@/framework/host/viewRegistry';
 import type { ViewRegistry, ViewRegistryEntry } from '@/framework/host/viewRegistry';
+import { ElementPipeline } from '@/framework/pipeline';
+import { ElementView } from '@/framework/view';
+import type { ElementDefinition } from '@/framework/registry';
+import { ReadingModeBlockHost } from '@/framework/host/ReadingModeBlockHost';
+import { makeCompendiumDeps } from '../elements/_refHarness';
+import { App, Plugin, makeFakeContext } from '../../mocks/obsidian';
 
 const KEY = 'Note.md::ds-initiative::13';
 const WRITTEN = 'Note.md::ds-initiative::4';
@@ -176,5 +182,67 @@ describe('the editor update (identical-twin hand-off: the writer\'s entry is sti
 		onEditorUpdateState(update(pane.content, true, true) as never, registryOf(makeEntry(makeRoot(other.content))));
 		expect(takeCarriedState(() => KEY, makeRoot(pane.content))).toBeUndefined();
 		expect(takeCarriedState(() => KEY, makeRoot(other.content))).toBeUndefined();
+	});
+});
+
+describe('the pipeline claim: a Live Preview mount takes the carry BEFORE mount, only for a view that opts in', () => {
+	/** A view that records what it held when `onMount` ran (so "before mount" is observable) and whether it was handed anything. */
+	class SeamView extends ElementView<{ n: number }> {
+		static seen: unknown[] = [];
+		receiveCarriedState(state: unknown): void {
+			this.got = state;
+		}
+		private got: unknown;
+		protected onMount(root: HTMLElement): void {
+			SeamView.seen.push(this.got);
+			root.createEl('span', { text: 'x' });
+		}
+	}
+	class PlainView extends ElementView<{ n: number }> {
+		protected onMount(root: HTMLElement): void {
+			root.createEl('span', { text: 'x' });
+		}
+	}
+	const defOf = (View: typeof SeamView | typeof PlainView): ElementDefinition<{ n: number }> => ({
+		id: 'seam',
+		name: 'Seam',
+		aliases: ['ds-counter'],
+		shape: 'static',
+		parse: () => ({ n: 1 }),
+		createView: (cx) => new View(cx),
+	});
+	/** A real ReadingModeBlockHost for the note's first block, its container in a pane (or not). */
+	const hostIn = (parent: HTMLElement | null): ReadingModeBlockHost => {
+		const app = new App();
+		app.vault.setFile('Note.md', '```ds-counter\nname: A\n```');
+		const ctx = makeFakeContext(app, 'Note.md');
+		parent?.appendChild(ctx.el);
+		return new ReadingModeBlockHost(new Plugin(app) as any, ctx.el, ctx as any, 'ds-counter');
+	};
+	const run = (def: ElementDefinition<{ n: number }>, host: ReadingModeBlockHost) => new ElementPipeline(makeCompendiumDeps().deps).run(def, 'n: 1', host);
+	/** Arm a carry for `host`'s block, as the old widget's release would. */
+	const arm = (pane: HTMLElement, key: string, state: unknown = DRAFT) => carryOwnSaveState(makeEntry(makeRoot(pane), { key, state }));
+
+	beforeEach(() => {
+		SeamView.seen = [];
+	});
+
+	test('P01 a view that implements receiveCarriedState is handed the carry before onMount, and it is spent', async () => {
+		const pane = makePane();
+		const host = hostIn(pane.content);
+		arm(pane.content, host.blockKey());
+		await run(defOf(SeamView), host);
+		expect(SeamView.seen).toEqual([DRAFT]);
+		expect(takeCarriedState(() => host.blockKey(), makeRoot(pane.content))).toBeUndefined();
+	});
+
+	test('P02 a view that does not implement it leaves the carry alone; a root outside a CodeMirror editor takes nothing', async () => {
+		const pane = makePane();
+		const host = hostIn(pane.content);
+		arm(pane.content, host.blockKey());
+		await run(defOf(PlainView), host);
+		expect(takeCarriedState(() => host.blockKey(), makeRoot(pane.content))).toEqual(DRAFT); // still armed for the real redraw
+		await run(defOf(SeamView), hostIn(makePane(false).content));
+		expect(SeamView.seen).toEqual([undefined]);
 	});
 });
