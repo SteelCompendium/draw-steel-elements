@@ -979,6 +979,8 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * identical counter under another heading repeats, and a block edited from outside leaves its twin as the only block the text matches): the link
 	 * is checked over the whole part (`cardLinkLine`). Order: the part IS the note; the link; this host's own last write (taken when the pin was
 	 * made) when it is of the body known at click; else the pin stays partial and `replaceSource` writes nothing (the dropped-write Notice).
+	 * SC-607: the link is not trusted alone either: the note as it is now can have another, identical block at the link (a preview whose part's text
+	 * did not change is not redrawn), so the link's line is accepted only when the block the card was DRAWN from maps strictly to it (see below).
 	 * Asynchronous (`cachedRead`); `replaceSource` waits for it.
 	 */
 	private async rebaseCardPin(pin: { text: string; lineStart: number }, sectionText: string, write: { body: string; text: string; lineStart: number; seq: number } | null): Promise<void> {
