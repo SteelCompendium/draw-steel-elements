@@ -1238,8 +1238,11 @@ describe('SC-361: swatch selection mark and focus ring', () => {
 		const { container } = makeModal(['bleeding'], onChange);
 		openEditor(container, 'Bleeding');
 		const input = customInput(container);
-		input.value = '#1E8449';
+		// jsdom lower-cases a colour input's value, so setting '#1E8449' would never reach setColor in capitals; pin the
+		// getter so the case-insensitive lookup in setColor is what finds the Green swatch (an exact-match lookup would not).
+		Object.defineProperty(input, 'value', { configurable: true, get: () => '#1E8449', set: () => undefined });
 		input.dispatchEvent(new Event('change'));
+		expect(onChange).toHaveBeenLastCalledWith([{ key: 'bleeding', color: '#1E8449' }]); // setup: the capitals reached setColor
 
 		const swatch = editorOf(container).querySelector('[role="group"][aria-label="Color"] button[aria-label="Green"]') as HTMLElement;
 		expect(swatch.getAttribute('aria-pressed')).toBe('true');

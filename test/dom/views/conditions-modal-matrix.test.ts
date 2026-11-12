@@ -232,7 +232,8 @@ describe('SC-436 matrix: the colour swatches and the custom colour (start colour
 		expect(pressedSwatches(o.container)).toEqual(pressed);
 	});
 
-	// SC-582: the swatch's accessible name is its colour name (the title shows "Name (#hex)"), so a screen reader never gets a hex code.
+	// SC-582: the swatch's accessible name is its colour name; the hex is only in the tooltip (the `title`, "Name (#hex)"), which a
+	// screen reader may still read after the name as the description.
 	test('SC-582: each preset swatch\'s aria-label is the colour name its title shows', () => {
 		const o = open(['prone']);
 		openEditor(o.container, 0);
