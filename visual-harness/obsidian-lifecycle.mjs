@@ -5999,9 +5999,10 @@ const SCENARIOS = [
 				}
 			};
 			/**
-			 * (zh) SC-556: a form on the card of a HOVER PREVIEW of a block link (`[[note#^id]]`) of a short note with an identical block above the linked one. The preview card has no
-			 * `src` and is given only the block's text (which occurs twice), so nothing can say which block it shows: Save writes NOTHING (the note stays byte for byte as it was, the
-			 * block above is never written), the one Notice says so and the form stays open. Before r8 the part's pin was mapped against the whole note and landed on the block ABOVE.
+			 * (zh) SC-556 / SC-596: a form on the card of a HOVER PREVIEW of a block link (`[[note#^id]]`) of a short note with an identical block above the linked one. The preview card has no
+			 * `src` and is given only the block's text (which occurs twice), so the text cannot say which block it shows. SC-596: the hover's own link does (the `hover-link` record, `^id` under the
+			 * lower block, checked by `cardLinkLine` exactly as a card's + is since SC-594): Save lands in the LINKED block, the block above is never written, no Notice. (Before SC-596 the form's pin was
+			 * placed by a text search that cannot tell the two apart and Save wrote NOTHING with a Notice; before r8 the part's pin was mapped against the whole note and landed on the block ABOVE.)
 			 */
 			const hoverCase = async (label) => {
 				const SRC = 'Lifecycle/gs64-embb-src.md';
@@ -6025,16 +6026,13 @@ const SCENARIOS = [
 					await t.sleep(300);
 					await typeRename(label, 'Twin', 'Edited');
 					const before = t.read(SRC);
-					const mp = await t.mark();
-					await t.ev(`(${SAVE}).click()`);
-					await t.waitFor(`__lc.notices.some((x) => x.n > ${mp})`, `${label}: Save said nothing`, 10000);
-					const ns = await t.noticesSince(mp);
-					const text = 'Draw Steel Elements: a change to a block in gs64-embb-src was not saved \u2014 the block changed on disk first.';
-					t.expect(ns.length === 1 && ns[0] === text, `${label}: expected the one Notice ${J(text)}, got ${J(ns)}`);
-					// (a hover preview closes when the pointer leaves it, and its form closes with that view: the form may be gone by now, which is not what is asserted)
-					const stillOpen = await formOpen();
-					t.expect(t.read(SRC) === before, `${label}: the note changed on Save (the block above must never be written): ${J(t.read(SRC))}`);
-					outcomes.push(`${label}: the hover card has no src; Save wrote nothing (the block above untouched), one Notice, the form ${stillOpen ? 'stayed open' : 'closed with its preview'}`);
+					await clickSave(label);
+					await waitDisk(label, SRC, () => t.read(SRC).includes('name: Edited'), 'the edit never reached the note (Save refused or written elsewhere)');
+					const now = t.read(SRC);
+					const at = before.lastIndexOf('name: Twin'); // the linked block is the lower one (it carries the ^id)
+					t.expect(now === before.slice(0, at) + 'name: Edited' + before.slice(at + 'name: Twin'.length), `${label}: the note is not "the linked block edited, every other byte untouched": ${J(now)}`);
+					await noNotices(label, mk);
+					outcomes.push(`${label}: the hover card has no src; Save landed in the linked block (the hover's link places it), the block above untouched, no Notice`);
 				} catch (e) {
 					problems.push(`${label}: ${e.message}`);
 				} finally {
@@ -6185,7 +6183,7 @@ const SCENARIOS = [
 				await embedCase('(xa) SC-556: + on the card then at once its pencil (the section text is stale when the form opens), a heading embed of a long note, Reading view: Save lands in the embedded block', 'plus', 'rv');
 				await embedCase('(ya) SC-556: the same in Live Preview', 'plus', 'lp');
 				await embedCase('(xb) SC-556: a block embed (![[note#^id]]) of the lower of two identical blocks of a short note: Save writes the embedded block, not the one above', 'save', 'rv', 'block');
-				await hoverCase('(zh) SC-556: a hover preview ([[note#^id]]) of a block with an identical block above it: Save writes nothing and never the block above');
+				await hoverCase('(zh) SC-556: a hover preview ([[note#^id]]) of a block with an identical block above it: Save lands in the linked block and never in the block above (SC-596)');
 				// SC-584: the two shapes SC-556 refused although nothing was ambiguous.
 				await hoverPlusCase('(zk) SC-584: a hover preview of a short note with ONE counter, + then at once its pencil: Save lands in the counter', 'short');
 				await hoverPlusCase('(zl) SC-584: a hover preview of [[long note#Tracker]], + then the pencil: Save lands in the Tracker counter, the other counter above the section is untouched', 'heading');

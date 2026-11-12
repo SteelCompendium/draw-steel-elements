@@ -231,6 +231,10 @@ describe('SC-596: a block edit form in an embed or hover preview of part of a no
 		const got = await cell(c, shape, hostKind, edit, plus, cache, layout);
 		const want = expected(cname, shape, edit, plus, layout, got.listWindow);
 		expect(got.outcome).not.toBe('TWIN');
+		// a form here is ALWAYS given a pin (a refusing one when nothing places it), never none: a pin is what keeps a form open past its card when the
+		// note is shown in another pane (`FormModal.hasPin`, SC-552), so this is the list of shapes whose close-on-redraw changed - every shape, list items
+		// and footnotes included: the pin of a list item / footnote is refusing, and its Save says "can't be edited yet inside lists"
+		expect(got.pin).toBe('pin');
 		expect(got.outcome).toBe(want.outcome);
 		expect(got.kinds).toEqual(want.kind === null ? [] : [want.kind]);
 	});
