@@ -698,13 +698,11 @@ describe('SC-607: a preview that stayed open while the note changed never writes
 		const withSections = (lines: string[]) => ({ ...cacheOf(lines), sections: [{ position: { start: pos(0), end: { line: lines.length - 1, col: 0, offset: lines.join('\n').length } } }] });
 		let cacheNow: unknown = withSections(t0); // the cache does not yet
 		jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheNow as never);
-		const { el } = popoverEl(app, 'Note#Tracker', t0.join('\n'));
-		const host = new ReadingModeBlockHost(new Plugin(app) as never, el, ctxOf({ current: hoverSec(5) }), 'ds-counter');
+		const host = new ReadingModeBlockHost(new Plugin(app) as never, embedEl('Note#Tracker', false), ctxOf({ current: embedSec('Tracker', 5) }), 'ds-counter'); // an embed: no popover data to refuse it first
 		host.setMountedBody(bodyOf(5));
 		await settle();
 		cacheNow = cacheOf(t1); // caught up before the click
 		await plusOn(host);
-		el.closest('.hover-popover')?.remove();
 
 		expect(app.vault.getContent('Note.md')).toBe(t1.join('\n'));
 		expect(Notice.notices).toEqual(dropped);
