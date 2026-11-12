@@ -425,13 +425,13 @@ describe('a hover preview card write with an identical counter elsewhere in the 
 		});
 	});
 
-	test('the heading lines of a note text: ATX only, up to three spaces of indent, an optional closing run of #, none inside a fence, quote or list item', () => {
-		const lines = ['# One', '  ## Two ##', '    # indented code', '> # quoted', '- # listed', 'Setext', '======', '```md', '# fenced', '```', '~~~~', '## tilde fenced', '~~~', '## still fenced', '~~~~', '### Three  '];
+	test('the heading lines of a note text: ATX only (a #tag line is none), up to three spaces of indent, an optional closing run of #, none inside a fence, quote or list item', () => {
+		const lines = ['# One', '  ## Two ##', '    # indented code', '> # quoted', '- # listed', '#Tracker', '#tag more', 'Setext', '======', '```md', '# fenced', '```', '~~~~', '## tilde fenced', '~~~', '## still fenced', '~~~~', '### Three  '];
 
 		expect(atxHeadings(lines)).toEqual([
 			{ line: 0, name: 'One' },
 			{ line: 1, name: 'Two' },
-			{ line: 15, name: 'Three' },
+			{ line: 17, name: 'Three' },
 		]);
 		expect(normalizeHeadingName('  Tracker   ONE ')).toBe('tracker one');
 	});
