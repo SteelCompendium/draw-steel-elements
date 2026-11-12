@@ -36,7 +36,7 @@ export default surface('stamina-edit-modal', {
 		'sedit.free-heal.confirm': c(['click', 'press:Enter'], ['Q13']),
 		// -- F. Footer
 		'sedit.reset': c(['click', 'press:Tab'], ['F05', 'F06']),
-		'sedit.apply': c(['click', 'click-disabled'], ['F01', 'F02', 'F03', 'F04', 'M07', 'W01']),
+		'sedit.apply': c(['click', 'click-disabled', 'press:Enter'], ['F01', 'F02', 'F03', 'F04', 'M07', 'W01', 'SC-603']),
 		// -- Obsidian host controls (resolved by the driver from Obsidian's selectors)
 		'modal.close': c(['click', 'press:Escape'], ['F07', 'K03']),
 		'modal.backdrop': c(['click'], ['F07']),

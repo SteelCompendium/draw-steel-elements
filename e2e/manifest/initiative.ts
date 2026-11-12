@@ -59,6 +59,6 @@ export default surface('initiative', {
 
 		// -- S. A roster cell (repeated: nth) selects its instance. The id kept its SC-408 name, `init.cell.stamina`, because
 		//    the cell's double-click was the first thing driven (the stamina modals' reach row); a click is selection.
-		'init.cell.stamina': c(['click'], ['S01']),
+		'init.cell.stamina': c(['click', 'press:Enter'], ['S01', 'SC-603']),
 	},
 });
