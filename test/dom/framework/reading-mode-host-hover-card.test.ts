@@ -59,7 +59,7 @@ function popoverEl(link: string | null = null): { popover: HTMLElement; el: HTML
 	return { popover, el };
 }
 /** A `hover-link` event the way Obsidian fires it: the link, the note it was hovered in, the parent whose popover is shown. */
-const hoverEvent = (linktext: string, popover: HTMLElement, parent: { hoverPopover: { hoverEl: HTMLElement } } = { hoverPopover: { hoverEl: popover } }) => ({
+const hoverEvent = (linktext: string, popover: HTMLElement, parent: { hoverPopover: { hoverEl: HTMLElement } | null } = { hoverPopover: { hoverEl: popover } }) => ({
 	linktext,
 	sourcePath: 'Host.md',
 	hoverParent: parent,

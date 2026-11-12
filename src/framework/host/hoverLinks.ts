@@ -39,11 +39,8 @@ function logOf(app: object): HoverLinkLog {
 export function registerHoverLinks(plugin: Plugin): void {
 	const app: App = plugin.app;
 	const log = logOf(app);
-	const docs = new Set<Document>();
-	if (typeof document !== 'undefined') docs.add(document);
-	const active = (globalThis as { activeDocument?: Document }).activeDocument;
-	if (active) docs.add(active);
-	for (const doc of docs) doc.querySelectorAll('.hover-popover').forEach((open) => log.bound.set(open, null));
+	// the window the user is in (a preview can also be open in a popout; Obsidian's `activeDocument` is the one in front)
+	if (typeof activeDocument !== 'undefined') activeDocument.querySelectorAll('.hover-popover').forEach((open) => log.bound.set(open, null));
 	plugin.registerEvent(app.workspace.on('hover-link' as never, ((ev: HoverLinkEvent) => noteHoverLink(app, ev)) as never));
 }
 
