@@ -734,6 +734,31 @@ describe('SC-580: a printable key in the window opens the Add search with that k
 			expect(document.activeElement).toBe(addButton(o.container));
 		});
 
+		test('after a pick, Escape is the usual one even when the remembered control is still there (Done is never re-rendered)', () => {
+			const o = withEditor();
+			const done = qs<HTMLElement>(o.container, '[data-dse-control="cond.done"]');
+			done.focus();
+			keydown(done, 'd');
+			typeQuery(searchInput(o.container)!, 'daz');
+			mousedown(menuItems(o.container)[0]);
+			expect(lastEmit(o).map((c) => c.key)).toEqual(['prone', 'dazed']);
+			expect(done.isConnected).toBe(true);
+			pressEscape(searchInput(o.container)!);
+			expect(document.activeElement).toBe(addButton(o.container));
+		});
+
+		test('only Escape hands focus back: a click away (on the title) closes the search and focus goes to "+ Add condition"', () => {
+			const o = withEditor();
+			const chip = durationChip(o.container);
+			chip.focus();
+			keydown(chip, 'd');
+			const title = (o.modal as any).titleEl as HTMLElement;
+			title.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
+			title.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+			expect(searchInput(o.container)).toBeNull();
+			expect(document.activeElement).toBe(addButton(o.container));
+		});
+
 		test('the control is gone by Escape: focus goes to "+ Add condition"', () => {
 			const o = withEditor();
 			const chip = durationChip(o.container);
