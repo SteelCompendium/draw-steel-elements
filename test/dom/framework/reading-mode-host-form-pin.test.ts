@@ -661,5 +661,37 @@ describe('SC-596: a card write in an embed or hover preview that cannot be pinne
 		loose.host.notePersistIntent();
 		expect((loose.host as unknown as { pendingPin: unknown }).pendingPin).toBeNull();
 	});
-});
 
+	// NOT embedded (the host's section is the note's own): nothing changed. A card in a callout of the note itself has no pin when its window holds no
+	// block with the known body (a second + while the callout still shows the text from before the first +); the view's write is placed by today's path
+	// once the window is fresh and LANDS. A refusing pin there (the `embedded ?` guard of `takePin` dropped) loses the click with a Notice.
+	test('a card in a callout of a note that is not an embed: a second + while the callout still shows the text from before the first + lands', async () => {
+		const note = (n: number) => ['# N', '', 'TOP', '', ...CAL(n, '> after'), '', 'END'];
+		const app = new App();
+		app.vault.setFile('Note.md', note(5).join('\n'));
+		const win = (n: number): Sec => ({ text: note(n).join('\n'), lineStart: 4, lineEnd: 9 });
+		const section: Section = { current: win(5) };
+		const callout = document.createElement('div');
+		callout.className = 'callout';
+		const el = callout.appendChild(document.createElement('div'));
+		el.className = 'block-language-ds-counter';
+		document.body.appendChild(callout);
+		const host = new ReadingModeBlockHost(new Plugin(app) as never, el, switchableCtx(section) as never, 'ds-counter');
+		host.setMountedBody(bodyOf(5));
+		expect(await cardWrite(host, 6)).toBe(true);
+		// the window is still the one drawn before the + (5); the second + comes now
+		host.notePersistIntent();
+		expect((host as unknown as { pendingPin: unknown }).pendingPin).toBeNull(); // no own fence in the stale window, not embedded: no pin
+		await settle();
+		section.current = win(6); // the redraw: the window is fresh by the time the debounced write runs
+		expect(await host.replaceSource(bodyOf(7), { fromView: true })).toBe(true);
+		expect(values(app)).toEqual(['7']);
+		expect(Notice.notices).toHaveLength(0);
+		callout.remove();
+	});
+	test('a block edit form on a list item of a note that is not an embed has no pin (as before): only a host in an embed or hover preview gets a refusing pin', () => {
+		const full = ['# N', '', '- item', ...CTR(5).map((l) => `  ${l}`), '', 'END'].join('\n');
+		const { host } = make(full, { text: full, lineStart: 2, lineEnd: 6 }, document.createElement('div'), bodyOf(5), { headings: [], blocks: {} });
+		expect(host.pinPosition()).toBeNull();
+	});
+});
