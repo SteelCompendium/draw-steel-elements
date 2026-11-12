@@ -16,6 +16,7 @@ import {
 	CLOSED_EDITOR_NOTICE,
 	dispatchBlockChoice,
 	dispatchReferenceChoice,
+	insertFullBlock,
 	registerCompendiumInsertCommands,
 } from '@/authoring/compendiumInsert';
 import type { CompendiumSyncService } from '@/data/CompendiumSyncService';
@@ -35,10 +36,11 @@ function setup(): { app: App; index: CompendiumIndex } {
 
 /** Obsidian's page-preview popover, as far as this fix is concerned: `popover` (`.popover.hover-popover`) holds `embed`, the editor's
  *  container (what `editorCallback` hands the command as its context). `state.hidden` once a click reached the window bubble. */
-function previewStandIn(inPreview = true) {
-	const popover = document.body.appendChild(document.createElement('div'));
+function previewStandIn(inPreview = true, doc: Document = document) {
+	const win = doc.defaultView!;
+	const popover = doc.body.appendChild(doc.createElement('div'));
 	if (inPreview) popover.className = 'popover hover-popover';
-	const embed = popover.appendChild(document.createElement('div'));
+	const embed = popover.appendChild(doc.createElement('div'));
 	embed.className = 'markdown-embed';
 	const state = { hidden: false };
 	const closer = (e: Event): void => {
@@ -46,8 +48,8 @@ function previewStandIn(inPreview = true) {
 		state.hidden = true;
 		popover.remove();
 	};
-	window.addEventListener('click', closer);
-	live.push(() => window.removeEventListener('click', closer));
+	win.addEventListener('click', closer);
+	live.push(() => win.removeEventListener('click', closer));
 	return { popover, embed, state };
 }
 const live: Array<() => void> = [];
@@ -216,6 +218,29 @@ describe('SC-601: a click in the compendium search keeps the hover preview open'
 		expect(Notice.notices).toEqual([]);
 	});
 
+	test('the guard binds to the modal\'s own document: a press in the search inside a popout window keeps the popout\'s preview', () => {
+		// A popout window has its own document (a jsdom iframe stands in); Obsidian's Modal.open appends the container to
+		// activeWindow.document.body BEFORE onOpen, and the popover's hide listener is on that window.
+		const frame = document.body.appendChild(document.createElement('iframe'));
+		const pdoc = frame.contentDocument!;
+		const p = previewStandIn(true, pdoc);
+		const realAppend = document.body.appendChild.bind(document.body);
+		const append = jest.spyOn(document.body, 'appendChild').mockImplementation(<T extends Node>(n: T): T => {
+			if (n instanceof HTMLElement && n.classList.contains('modal-container')) return pdoc.body.appendChild(n);
+			return realAppend(n);
+		});
+		try {
+			const { modal } = runCommand('insert-compendium-reference', { containerEl: p.embed });
+			expect(modal.containerEl.ownerDocument).toBe(pdoc);
+
+			modal.inputEl.click();
+
+			expect(p.state.hidden).toBe(false);
+		} finally {
+			append.mockRestore();
+		}
+	});
+
 	test('the guard is gone one task after the search closes, and not before', async () => {
 		const p = previewStandIn();
 		const added: EventListenerOrEventListenerObject[] = [];
@@ -342,6 +367,48 @@ describe('SC-601: a pick into an editor that is gone writes nothing and says so'
 		expect(open.writes).toHaveLength(1);
 	});
 
+	test('a live preview editor and a different live active editor: the pick lands in the captured editor only', () => {
+		const p = previewStandIn();
+		const { modal, editor, index, app } = runCommand('insert-compendium-reference', { containerEl: p.embed });
+		const host = new Editor('host');
+		const hostEl = document.body.appendChild(document.createElement('div'));
+		(host as any).cm = { dom: hostEl };
+		(app.workspace as any).activeEditor = { editor: host, containerEl: hostEl };
+
+		addRow(modal, kitEntry(index)).click();
+
+		expect(editor.writes).toHaveLength(1);
+		expect(host.writes).toHaveLength(0);
+		expect(Notice.notices).toEqual([]);
+	});
+
+	test('a closed pane editor (no preview involved) is refused too: a Notice, nothing written', () => {
+		const pane = document.body.appendChild(document.createElement('div'));
+		const { modal, editor, index } = runCommand('insert-compendium-reference', { containerEl: pane });
+		const row = addRow(modal, kitEntry(index));
+		pane.remove();
+
+		row.click();
+
+		expect(editor.writes).toHaveLength(0);
+		expect(Notice.notices).toEqual([CLOSED_EDITOR_NOTICE]);
+	});
+
+	test('the container is still there but the CodeMirror element is gone: refused (every element found must be connected)', () => {
+		const p = previewStandIn();
+		const cmEl = p.embed.appendChild(document.createElement('div'));
+		const editor = new Editor('');
+		(editor as any).cm = { dom: cmEl };
+		const { modal, index } = runCommand('insert-compendium-reference', { containerEl: p.embed }, editor);
+		const row = addRow(modal, kitEntry(index));
+		cmEl.remove();
+
+		row.click();
+
+		expect(editor.writes).toHaveLength(0);
+		expect(Notice.notices).toEqual([CLOSED_EDITOR_NOTICE]);
+	});
+
 	test('the connection test also reads the CodeMirror element when the context carries none', () => {
 		const p = previewStandIn();
 		const editor = new Editor('');
@@ -354,5 +421,73 @@ describe('SC-601: a pick into an editor that is gone writes nothing and says so'
 
 		expect(editor.writes).toHaveLength(0);
 		expect(Notice.notices).toEqual([CLOSED_EDITOR_NOTICE]);
+	});
+});
+
+describe('SC-601: the block command re-checks the editor after its awaits, right before it writes', () => {
+	const settle = async (): Promise<void> => {
+		for (let i = 0; i < 20; i++) await new Promise((resolve) => setTimeout(resolve, 5));
+	};
+
+	test('the preview closes while the entity is being resolved (after the early check): nothing written, one Notice', async () => {
+		const p = previewStandIn();
+		const { modal, editor, index } = runCommand('insert-compendium-block', { containerEl: p.embed });
+		const real = index.getEntity.bind(index);
+		const spy = jest.spyOn(index, 'getEntity').mockImplementation(async (code: string) => {
+			p.popover.remove(); // Obsidian hid the preview while the snapshot was being resolved
+			return real(code);
+		});
+		try {
+			addRow(modal, entryOf(index, GOBLIN)).click();
+			await settle();
+
+			expect(editor.writes).toHaveLength(0);
+			expect(Notice.notices).toEqual([CLOSED_EDITOR_NOTICE]);
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
+	test('the preview closes while the model is being read (the last await before the write): nothing written, one Notice', async () => {
+		const p = previewStandIn();
+		const { modal, editor, index } = runCommand('insert-compendium-block', { containerEl: p.embed });
+		const real = index.getEntity.bind(index);
+		const spy = jest.spyOn(index, 'getEntity').mockImplementation(async (code: string) => {
+			const ent = await real(code);
+			if (!ent) return ent;
+			const model = ent.model;
+			return {
+				...ent,
+				model: async () => {
+					const m = await model();
+					p.popover.remove();
+					return m;
+				},
+			};
+		});
+		try {
+			addRow(modal, entryOf(index, GOBLIN)).click();
+			await settle();
+
+			expect(editor.writes).toHaveLength(0);
+			expect(Notice.notices).toEqual([CLOSED_EDITOR_NOTICE]);
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
+	test('insertFullBlock on its own with a closed editor: nothing written, one Notice, false; with an open one it writes', async () => {
+		const { index } = setup();
+		const entity = (await index.getEntity(GOBLIN))!;
+		const closed = new Editor('');
+
+		expect(await insertFullBlock(closed as any, entity, () => false)).toBe(false);
+		expect(closed.writes).toHaveLength(0);
+		expect(Notice.notices).toEqual([CLOSED_EDITOR_NOTICE]);
+
+		const open = new Editor('');
+		expect(await insertFullBlock(open as any, entity, () => true)).toBe(true);
+		expect(open.writes).toHaveLength(1);
+		expect(Notice.notices).toEqual([CLOSED_EDITOR_NOTICE]); // no second Notice
 	});
 });

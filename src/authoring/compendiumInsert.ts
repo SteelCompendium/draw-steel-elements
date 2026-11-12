@@ -257,9 +257,15 @@ function narrowMetadata(
  * pins an unstable shape that then silently goes stale — exactly what Scott's ruling
  * removes. The command's own modal already filters those entries out (see
  * `registerCompendiumInsertCommands`); this guard covers every other caller.
+ * SC-601: `isOpen` is re-checked right before the write, after every await above (the model and body can be a real vault read);
+ * a closed editor gets the Notice and nothing is written. `dispatchBlockChoice` checks early too, so the user sees at most one.
  * Returns true when something was inserted.
  */
-export async function insertFullBlock(editor: Editor, entity: CompendiumEntity): Promise<boolean> {
+export async function insertFullBlock(
+	editor: Editor,
+	entity: CompendiumEntity,
+	isOpen: () => boolean = () => true,
+): Promise<boolean> {
 	const alias = snapshotAliasForType(entity.type);
 	if (alias === null) {
 		new Notice(
@@ -270,6 +276,7 @@ export async function insertFullBlock(editor: Editor, entity: CompendiumEntity):
 	const model = await entity.model();
 	const dto = trimSnapshotDTO(extractDTO(model), model);
 	const body = dto === undefined ? (await entity.body()).trim() : stringifyYaml(dto).trimEnd();
+	if (!refuseClosedEditor(isOpen)) return false;
 	editor.replaceSelection(wrapFence(alias, body) + '\n');
 	return true;
 }
@@ -368,7 +375,7 @@ export async function dispatchBlockChoice(
 ): Promise<void> {
 	if (!refuseClosedEditor(isOpen)) return;
 	const entity = await index.getEntity(entry.scc);
-	if (entity) await insertFullBlock(editor, entity);
+	if (entity) await insertFullBlock(editor, entity, isOpen);
 }
 
 /**
