@@ -1,10 +1,10 @@
 // SC-436: note integrity around the Conditions window's live writes. The text above, between and below the tracker
 // blocks survives byte for byte, and a second tracker in the same note is never touched (the driver also fails any test
-// that writes into a block it did not edit). Plus the two open tickets that reach this window from outside: SC-384
-// (Live Preview) and SC-355 (the dialog role).
+// that writes into a block it did not edit). Plus "or just start typing" (SC-580: a printable key opens the Add search) and the
+// two open tickets that reach this window from outside: SC-384 (Live Preview) and SC-355 (the dialog role).
 import { expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
-import { INIT, TRACKER, TWO, addByKeyboard, modalNames, modalRows, noteCondition, openConditionsModal, openFrom, pressedIn, pressedSwatches, trackerIcons } from '../../driver/conditions';
+import { INIT, TRACKER, TWO, addByKeyboard, menuOptions, modalNames, modalRows, noteCondition, openConditionsModal, openFrom, pressedIn, pressedSwatches, trackerIcons } from '../../driver/conditions';
 
 const FIRST_BLOCK =
 	'```ds-initiative\nheroes:\n  - name: Alice Alpha\n    max_stamina: 30\nenemy_groups:\n  - name: Ogres\n    creatures:\n      - name: Ogre\n        max_stamina: 60\n        amount: 1\nmalice:\n  value: 1\n```\n';
@@ -93,6 +93,55 @@ describe('conditions-modal: what it writes is what the tracker reads back', () =
 	});
 });
 
+describe('conditions-modal: "or just start typing" opens the Add search (SC-580)', () => {
+	it('[COND-N07] typing "daz" with focus on "+ Add condition" opens the dropdown with it typed, as the docs say ("or just start typing"): nothing lost, nothing doubled, Dazed offered', async () => {
+		const { modal } = await openConditionsModal(TRACKER, 'hero');
+		await expect(modal.control('cond.add')).toBeFocused();
+		await dse.expectNoWrite(TRACKER, async () => {
+			await dse.press('daz'); // a page-level key (focus is asserted above): three quick keys, the first opens, the next two are the input's own
+			await expect(modal.control('cond.input')).toBeFocused();
+			await expect(modal.control('cond.input')).toHaveValue('daz');
+			expect((await menuOptions()).names).toEqual(['Dazed', 'Add custom: "daz"']);
+		});
+		await dse.waitForWrite(TRACKER, () => dse.press('Enter', modal.control('cond.input')));
+		expect(await modalNames()).toEqual(['Dazed']);
+		await expect(modal.control('cond.input')).toHaveValue('');
+		await dse.closeModals();
+	});
+
+	it('[COND-N08] Space on the focused "+ Add condition" activates the button as it always did: the dropdown opens empty, no space is typed', async () => {
+		const { modal } = await openConditionsModal(TRACKER, 'hero');
+		await dse.press('Space', modal.control('cond.add'));
+		await expect(modal.control('cond.input')).toBeFocused();
+		expect(await dse.page<string>(`JSON.stringify(document.querySelector('.modal-container .dse-condal__input').value)`)).toBe('""'); // the raw value: toHaveValue trims, so it would not see a typed space
+		await dse.closeModals();
+	});
+
+	it('[COND-N09] a Ctrl or Meta chord with focus on "+ Add condition" is not typing: the dropdown stays closed, focus stays, nothing is written', async () => {
+		const { modal } = await openConditionsModal(TRACKER, 'hero');
+		await dse.expectNoWrite(TRACKER, async () => {
+			await dse.press('Control+d'); // (page-level keys: no target, so not a manifest pair)
+			await dse.press('Meta+d');
+			await expect(modal.control('cond.input')).not.toBeExisting();
+			await expect(modal.control('cond.add')).toBeFocused();
+		});
+		await dse.closeModals();
+	});
+
+	it('[COND-N10] with the dropdown already open and focus elsewhere in the window, a letter goes to the end of the typed text and focus returns to the input', async () => {
+		const { modal } = await openConditionsModal(TRACKER, 'hero');
+		await dse.click(modal.control('cond.add'));
+		await dse.type(modal.control('cond.input'), 'da');
+		await dse.press('Tab'); // out of the input (page-level: not a manifest pair)
+		await expect(modal.control('cond.input')).not.toBeFocused();
+		await dse.press('z');
+		await expect(modal.control('cond.input')).toBeFocused();
+		await expect(modal.control('cond.input')).toHaveValue('daz');
+		expect((await menuOptions()).names).toEqual(['Dazed', 'Add custom: "daz"']);
+		await dse.closeModals();
+	});
+});
+
 describe('conditions-modal: tickets that reach it from outside', () => {
 	knownBug('SC-384', '[COND-N04] in Live Preview the window stays open when the write it caused lands', async () => {
 		await dse.openNote(TRACKER, { mode: 'live-preview' });
@@ -102,14 +151,6 @@ describe('conditions-modal: tickets that reach it from outside', () => {
 		await expect(modal.root).toBeExisting({ message: 'the Conditions window closed when its own write landed' });
 		await dse.closeModals();
 	}, { failsWith: /closed when its own write landed/ });
-
-	knownBug('SC-580', '[COND-N07] typing a letter with focus on "+ Add condition" opens the dropdown, as the docs say ("or just start typing")', async () => {
-		const { modal } = await openConditionsModal(TRACKER, 'hero');
-		await expect(modal.control('cond.add')).toBeFocused();
-		await dse.press('d'); // a page-level key (focus is asserted above): not a manifest pair, since no control is meant to handle it yet
-		await expect(modal.control('cond.input')).toBeExisting();
-		await dse.closeModals();
-	}, { failsWith: /cond\.input.*to be existing/s });
 
 	knownBug('SC-355', '[COND-N05] the Conditions window is exposed to assistive technology as a dialog', async () => {
 		const { modal } = await openConditionsModal(TRACKER, 'hero');

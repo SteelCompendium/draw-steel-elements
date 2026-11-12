@@ -584,7 +584,8 @@ export class ConditionsModal extends DseModal {
 		input.focus();
 		input.value += evt.key;
 		input.setSelectionRange?.(input.value.length, input.value.length);
-		input.dispatchEvent(new (input.ownerDocument.defaultView ?? activeWindow).Event('input', { bubbles: true }));
+		const win = input.ownerDocument.defaultView; // the input's own window (popout-safe), as managedModal's synthetic click
+		input.dispatchEvent(win ? new win.Event('input', { bubbles: true }) : new Event('input', { bubbles: true }));
 	}
 
 	/** Collapses the dropdown back to "+ Add condition". `refocus` (default true) moves focus to

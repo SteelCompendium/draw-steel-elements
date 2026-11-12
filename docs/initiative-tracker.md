@@ -437,7 +437,7 @@ from:
 
 Adding a Condition:
 
-- Click "+ Add condition" (or just start typing) to open the type-ahead search.
+- Click "+ Add condition" (or just start typing a condition's name) to open the type-ahead search.
 - Type to filter the known conditions, then press ↑/↓ and Enter (or click a match) to
 	add it.
 - If nothing matches — a bespoke condition from a homebrew statblock, for example — the

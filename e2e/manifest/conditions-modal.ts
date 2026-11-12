@@ -13,7 +13,8 @@ export default surface('conditions-modal', {
 	reach: [{ host: 'initiative', control: 'init.cond.add', ...c(['click', 'press:Enter'], ['SC-431', 'O01', 'O02', 'O03']) }],
 	controls: {
 		// -- A. The "+ Add condition" button, which swaps in place for the combobox
-		'cond.add': c(['click', 'press:Enter', 'press:Escape'], ['SC-431', 'A01', 'O04']),
+		// Space (SC-580): the button's own activation; a printable letter is NOT its key (the window routes it to the dropdown, COND-N07).
+		'cond.add': c(['click', 'press:Enter', 'press:Space', 'press:Escape'], ['SC-431', 'A01', 'O04', 'N08']),
 		// The combobox input: type filters the catalogue, Enter picks the active option, ArrowUp / ArrowDown move it,
 		// Escape closes just the dropdown, a click away (the title) closes it too.
 		'cond.input': c(['type', 'press:Escape', 'press:Enter', 'press:ArrowDown', 'press:ArrowUp', 'blur'], ['SC-431', 'SC-468', 'A02', 'A03', 'A05', 'C01']),
