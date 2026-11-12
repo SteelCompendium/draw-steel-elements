@@ -189,6 +189,12 @@
 // and the + clicked by a script in the SAME page task (inside the 17-44 ms before the preview redraws; a real mouse click cannot land in it): nothing is written, one Notice, never the identical counter (the
 // pre-fix bundle wrote it); and a whole-note hover where an identical block was added above before the click writes the hovered block, not the added one.
 //
+// SC-596 appends G-S96 (59 scenarios in all; it sits after G-S92 and before G-S56, and runs with G-S92 in the sixth `--only` part): the Edit FORM of a counter drawn in an embed (`![[note#^id]]`, `![[note#Heading]]`) or a hover preview of a block /
+// heading link, opened in the 36-114 ms between an outside write landing (Sync, another app, the other pane) and the redraw the write causes (the pencil is pressed by a script in the SAME page task as the write; a real press lands there only by chance), with the
+// source note ALSO open in a second pane: the form is then kept open past its card (SC-552 `keepFormOpenOn`, which only needs the note shown in some markdown leaf). Its part is still the one drawn before the edit, the counter is edited (9), an identical counter (the
+// twin) sits elsewhere. Save used to write the twin with no Notice (the text search found the part's lines in the twin; a form with no pin saved without `pinOnly`). Now nothing is written, exactly one Notice, the form stays open, the outside edit is kept.
+// Seven pane cells (block embed RV and LP, heading embed RV with two `## Tracker` sections, block hover RV and LP, heading hover RV and LP) and a control without the second pane (the form closes with its card, nothing written).
+//
 // SC-480 appends G-S73 (53 scenarios before G-S77; it sits after G-S49 and before G-S56, which stays last, and runs in the fifth `--only` part with G-S59 and G-S49): a card write whose pin
 // cannot be placed because its block was DELETED from outside is never written into an identical twin. Click + on one of two identical counters (Reading view and Live Preview),
 // delete that block from outside at once, then leave the note (the unload flush) or wait out the 400 ms debounce: nothing is written, the note stays as the outside edit left it, and
@@ -612,6 +618,27 @@ Object.assign(FIXTURES, {
 		]) {
 			FIXTURES[`Lifecycle/gs92-${id}-src.md`] = text.replace(`# gs92 ${name}`, `# gs92 ${id}`);
 			FIXTURES[`Lifecycle/gs92-${id}-host.md`] = `# gs92 ${id} host\n\nsee [[${link}]] here\n\nfiller\n`;
+		}
+	}
+	// SC-596 (G-S96): one note per cell. The counter A is the form's; the twin B is identical. A block pair (B above under ^b<id>, A below under ^a<id>), a heading hover (B under `## Other`, A under `## Tracker`, followed by `## After` so that the part
+	// reads exactly like B's body: a last section carries trailing text B's does not), and a heading embed of two `## Tracker` sections (A under the FIRST, the one the embed shows).
+	{
+		const ID = (id) => id.replace(/\W/g, '');
+		const blk = (id) => `# gs96 ${id}\n\nTOP\n\n${COUNTER(5, 'Twin')}\n^b${ID(id)}\n\nmid\n\n${COUNTER(5, 'Twin')}\n^a${ID(id)}\n\nEND\n`;
+		const hd = (id) => `# gs96 ${id}\n\nTOP\n\n## Other\n\n${COUNTER(5, 'Twin')}\n\n## Tracker\n\n${COUNTER(5, 'Twin')}\n\n## After\n\nEND\n`;
+		const hd2 = (id) => `# gs96 ${id}\n\nTOP\n\n## Tracker\n\n${COUNTER(5, 'Twin')}\n\n## Mid\n\nmid\n\n## Tracker\n\n${COUNTER(5, 'Twin')}\n\nEND\n`;
+		for (const [id, text, link, embed] of [
+			['be-rv', blk, (i) => `#^a${ID(i)}`, true],
+			['be-rv-pane', blk, (i) => `#^a${ID(i)}`, true],
+			['be-lp-pane', blk, (i) => `#^a${ID(i)}`, true],
+			['he-rv-pane', hd2, () => '#Tracker', true],
+			['bh-rv-pane', blk, (i) => `#^a${ID(i)}`, false],
+			['bh-lp-pane', blk, (i) => `#^a${ID(i)}`, false],
+			['hh-rv-pane', hd, () => '#Tracker', false],
+			['hh-lp-pane', hd, () => '#Tracker', false],
+		]) {
+			FIXTURES[`Lifecycle/gs96-${id}-src.md`] = text(id);
+			FIXTURES[`Lifecycle/gs96-${id}-host.md`] = embed ? `# gs96 ${id} host\n\n![[gs96-${id}-src${link(id)}]]\n\nafter\n` : `# gs96 ${id} host\n\nsee [[gs96-${id}-src${link(id)}]] here\n\nfiller\n`;
 		}
 	}
 	Object.assign(FIXTURES, {
@@ -1905,6 +1932,101 @@ async function gs92Trial(t, { id, mode, how = 'click', second = 0, add = false, 
 		rec.error = e.message;
 	} finally {
 		await K.cleanup();
+	}
+	return rec;
+}
+
+/**
+ * SC-596 (G-S96): one Edit form opened from an embed (`kind` 'embed') or a hover preview ('hover') of part of SRC in the moment between an outside write and the redraw it causes, then Save. In ONE page task: the vault write resolves (A -> 9), then a script
+ * clicks A's pencil (the part is still the one drawn before the edit: `staleAtOpen`; a real press lands in that 36-114 ms window only by chance). `pane`: SRC is also open in a second pane (Reading view), so the form is kept open past its card
+ * (SC-552 `keepFormOpenOn`). The raw box's name is changed and Save pressed; the record has the note after the outside edit (`edited`), the note after Save (`note`), the Notices, whether the form is still open. Judged by the scenario.
+ * `last`: A is the LAST `current_value: 5` of SRC (else the first).
+ */
+async function gs96Cell(t, { id, mode, kind, pane, last }) {
+	const K = gs83Kit(t);
+	const J = JSON.stringify;
+	const SRC = `Lifecycle/gs96-${id}-src.md`;
+	const HOST = `Lifecycle/gs96-${id}-host.md`;
+	const rec = { id, kind, mode, pane };
+	const valuesOf = () => (t.read(SRC).match(/^[> ]*current_value: (\d+)$/gm) ?? []).map((x) => Number(x.replace(/^[> ]*current_value: /, '')));
+	const namesOf = () => (t.read(SRC).match(/^[> ]*name: (\w+)$/gm) ?? []).map((x) => x.replace(/^[> ]*name: /, ''));
+	const FORM = `document.querySelector('.modal-container .dse-modal')`;
+	try {
+		await t.reset(SRC);
+		await t.reset(HOST);
+		const inPart = kind === 'hover' ? `e.root.closest('.hover-popover')` : `e.root.closest('.internal-embed, .markdown-embed')`;
+		const ES = `app.plugins.plugins['draw-steel-elements'].viewRegistry.liveEntries().filter((e) => e.host.sourcePath === ${J(SRC)} && e.root.isConnected && ${inPart})`;
+		const splitPane = async () => {
+			await t.ev(`(async () => { const leaf = app.workspace.getLeaf('split'); await leaf.setViewState({ type: 'markdown', state: { file: ${J(SRC)}, mode: 'preview' }, active: false }); return true; })()`);
+			await t.sleep(600);
+		};
+		if (kind === 'hover') {
+			const link = await K.openHost(HOST, mode);
+			if (pane) {
+				await splitPane();
+				await t.ev(`(() => { const l = app.workspace.getLeavesOfType('markdown').find((x) => x.view.file?.path === ${J(HOST)}); app.workspace.setActiveLeaf(l, { focus: true }); return true; })()`);
+				await t.sleep(300);
+			}
+			rec.hover = await K.hover(link, SRC);
+			await t.sleep(400);
+			await K.moveTo(`(${ES})[0].root`);
+			await t.sleep(300);
+		} else {
+			const st = mode === 'rv' ? { mode: 'preview' } : { mode: 'source', source: false };
+			await t.ev(`(async () => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); const leaf = app.workspace.getLeavesOfType('markdown')[0] ?? app.workspace.getMostRecentLeaf(); await leaf.setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); await leaf.setViewState({ type: 'markdown', state: { file: ${J(HOST)}, ...${J(st)} }, active: true }); return true; })()`);
+			if (mode === 'lp') await t.ev(`(() => { app.workspace.getMostRecentLeaf().view.editor.setCursor({ line: 0, ch: 0 }); return true; })()`);
+			if (pane) await splitPane();
+			await t.waitFor(`(${ES}).length === 1`, `${id}: the embedded card is drawn`, 15000);
+		}
+		const PENCIL = `((${ES})[0].root.querySelector('.dse-chrome button[data-dse-chrome-item="edit"], button[aria-label^="Edit "]'))`;
+		await t.waitFor(`!!${PENCIL}`, `${id}: the pencil is drawn`, 8000);
+		rec.before = valuesOf();
+		const mk = await t.mark();
+		const EDIT = last
+			? `(c) => { const i = c.lastIndexOf('current_value: 5'); return c.slice(0, i) + 'current_value: 9' + c.slice(i + 'current_value: 5'.length); }`
+			: `(c) => c.replace('current_value: 5', 'current_value: 9')`;
+		rec.open = await t.ev(`(async () => {
+			const e = (${ES})[0];
+			const host = e.host;
+			await app.vault.process(app.vault.getAbstractFileByPath(${J(SRC)}), ${EDIT});
+			const b = ${PENCIL};
+			if (!b) return { clicked: false };
+			const sec = (() => { try { return host.ctx.getSectionInfo(host.containerEl); } catch (err) { return null; } })();
+			b.click();
+			return { clicked: true, opened: !!${FORM}, staleAtOpen: !!sec && sec.text.includes('current_value: 5') && !sec.text.includes('current_value: 9') };
+		})()`);
+		rec.edited = t.read(SRC);
+		await t.sleep(1500);
+		rec.formOpenBeforeSave = await t.ev(`!!${FORM}`);
+		if (rec.formOpenBeforeSave) {
+			const SAVE = `Array.from(document.querySelectorAll('.modal-container .dse-modal button')).find((b) => b.getAttribute('aria-label') === 'Save')`;
+			rec.renamed = await t.ev(`(() => { const ta = ${FORM}.querySelector('textarea.dse-form__raw'); if (!ta) return false; ta.value = ta.value.replace('name: Twin', 'name: Edited'); ta.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+			await t.waitFor(`!!(${SAVE}) && !(${SAVE}).disabled`, `${id}: Save is enabled`, 5000);
+			await t.ev(`(${SAVE}).click()`);
+			const t0 = Date.now();
+			while (Date.now() - t0 < 3000 && !t.read(SRC).includes('name: Edited') && !(await t.noticesSince(mk)).length) await t.sleep(50);
+			await t.sleep(400);
+			rec.formOpenAfterSave = await t.ev(`!!${FORM}`);
+		}
+		rec.note = t.read(SRC);
+		rec.values = valuesOf();
+		rec.names = namesOf();
+		const aIdx = last ? rec.names.length - 1 : 0;
+		rec.wrote = !rec.names.includes('Edited') ? 'nothing' : rec.names.indexOf('Edited') === aIdx ? 'A (own)' : 'TWIN';
+		rec.notices = (await t.noticesSince(mk)).filter((x) => /Draw Steel Elements/.test(x));
+	} catch (e) {
+		rec.error = e.message;
+	} finally {
+		// a refused Save leaves the form open (and a kept-open form outlives its card): Cancel it, then Escape, until no modal is left
+		for (let i = 0; i < 5 && (await t.ev(`!!document.querySelector('.modal-container')`)); i++) {
+			await t.ev(`(() => { const b = Array.from(document.querySelectorAll('.modal-container .dse-modal button')).find((x) => x.getAttribute('aria-label') === 'Cancel'); if (b) b.click(); return true; })()`);
+			await t.sleep(200);
+			if (await t.ev(`!!document.querySelector('.modal-container')`)) await t.key('Escape', 'Escape', 27).catch(() => {});
+			await t.sleep(200);
+		}
+		rec.modalsLeft = await t.ev(`document.querySelectorAll('.modal-container').length`);
+		await K.cleanup();
+		await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
 	}
 	return rec;
 }
@@ -7948,6 +8070,66 @@ const SCENARIOS = [
 			} finally {
 				await t.ev(`${prefs}.set('authoringControls', false)`);
 				await t.ev(`document.getElementById('lc-gs92-notice')?.remove()`);
+				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
+				for (const rel of files) await t.reset(rel);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect(problems.length === 0, `${problems.join(' | ')} -- passed: ${outcomes.join('; ')}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${J(await t.errorsSince(m))}`);
+			return outcomes.join('; ');
+		},
+	},
+	{
+		// G-S96 (SC-596): the Edit FORM of a counter in an embed / hover preview of part of a note, pressed between an outside write and the redraw, the source note also open in a second pane (the form stays open past its card): Save must not write the
+		// identical counter (the twin). Each pane cell: nothing is written (the note is what the outside edit left), exactly one "changed on disk first" Notice, the form still open, the outside edit kept (9). The pre-fix bundle wrote the twin
+		// with no Notice in these cells. The control without the second pane: the form closes with its card (nothing to Save). It sits before G-S56, which runs last.
+		id: 'G-S96',
+		async run(t) {
+			const m = await t.mark();
+			const J = JSON.stringify;
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			const problems = [];
+			const outcomes = [];
+			const cells = [
+				{ id: 'be-rv', label: 'block embed, Reading view, no second pane (control)', kind: 'embed', mode: 'rv', pane: false, last: true },
+				{ id: 'be-rv-pane', label: 'block embed, Reading view', kind: 'embed', mode: 'rv', pane: true, last: true },
+				{ id: 'be-lp-pane', label: 'block embed, Live Preview', kind: 'embed', mode: 'lp', pane: true, last: true },
+				{ id: 'he-rv-pane', label: 'heading embed of two `## Tracker` sections, Reading view', kind: 'embed', mode: 'rv', pane: true, last: false },
+				{ id: 'bh-rv-pane', label: 'block hover, Reading view', kind: 'hover', mode: 'rv', pane: true, last: true },
+				{ id: 'bh-lp-pane', label: 'block hover, Live Preview', kind: 'hover', mode: 'lp', pane: true, last: true },
+				{ id: 'hh-rv-pane', label: 'heading hover, Reading view', kind: 'hover', mode: 'rv', pane: true, last: true },
+				{ id: 'hh-lp-pane', label: 'heading hover, Live Preview', kind: 'hover', mode: 'lp', pane: true, last: true },
+			];
+			const files = cells.flatMap((c) => [`Lifecycle/gs96-${c.id}-src.md`, `Lifecycle/gs96-${c.id}-host.md`]);
+			const dropped = (id) => `Draw Steel Elements: a change to a block in gs96-${id}-src was not saved — the block changed on disk first.`;
+			await t.ev(`(() => { if (!document.getElementById('lc-gs96-notice')) { const st = document.createElement('style'); st.id = 'lc-gs96-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
+			await t.ev(`${prefs}.set('authoringControls', true)`);
+			try {
+				for (const c of cells) {
+					const r = await gs96Cell(t, c);
+					const bad = [];
+					if (r.error) bad.push(`error: ${r.error}`);
+					else if (!r.open || r.open.clicked !== true) bad.push(`the pencil was not found after the outside edit (the card was redrawn first): ${J(r.open)}`);
+					else if (!r.open.opened) bad.push('the form did not open');
+					else if (r.wrote === 'TWIN') bad.push(`Save wrote the TWIN (values ${J(r.values)}, Notices ${J(r.notices)})`);
+					else if (c.pane) {
+						if (!r.open.staleAtOpen) bad.push('the part was not the stale one at open (the shape is not reached)');
+						if (!r.formOpenBeforeSave) bad.push('the form closed before Save (the second pane did not keep it open)');
+						if (r.note !== r.edited) bad.push(`the note is not what the outside edit left (values ${J(r.values)})`);
+						if (!(r.notices.length === 1 && r.notices[0] === dropped(c.id))) bad.push(`expected the one Notice ${J(dropped(c.id))}, got ${J(r.notices)}`);
+						if (!r.formOpenAfterSave) bad.push('the form closed after the refused Save (it must stay open)');
+						if (!r.values.includes(9)) bad.push(`the outside edit is gone (values ${J(r.values)})`);
+					} else {
+						if (r.note !== r.edited) bad.push(`the note is not what the outside edit left (values ${J(r.values)})`);
+						if (r.formOpenBeforeSave) bad.push('the control form stayed open (the card unloading should have closed it)');
+					}
+					if (r.modalsLeft) bad.push(`${r.modalsLeft} modal(s) left open`);
+					if (bad.length) problems.push(`${c.label}: ${bad.join('; ')}`);
+					else outcomes.push(`${c.label}: ${c.pane ? 'form kept open, Save wrote nothing, one Notice, outside edit kept' : 'form closed with its card, nothing written'}`);
+				}
+			} finally {
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+				await t.ev(`document.getElementById('lc-gs96-notice')?.remove()`);
 				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
 				for (const rel of files) await t.reset(rel);
 				await t.open('Lifecycle/other.md');
