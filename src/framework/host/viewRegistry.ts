@@ -234,9 +234,17 @@ export class ViewRegistry extends Component {
 		entry.claiming = false;
 	}
 
+	/** SC-602: told of every release while the entry's root is still in place (livePreviewFocusCarry.ts). Must not throw. */
+	beforeRelease: ((entry: ViewRegistryEntry, reason: string) => void) | null = null;
+
 	/** Unload a view for real. Idempotent. Its registered flush-on-unload writes first. */
 	release(entry: ViewRegistryEntry, reason: string): void {
 		if (entry.released) return;
+		try {
+			this.beforeRelease?.(entry, reason);
+		} catch (err) {
+			console.warn('[DSE] beforeRelease hook failed', err);
+		}
 		entry.released = true;
 		entry.releasedBy = reason;
 		entry.claiming = false;

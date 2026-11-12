@@ -60,8 +60,14 @@ export function captureControlFocus(root: HTMLElement, families: ControlFamilies
  *  token, and when focus is already somewhere (the user, or a modal, put it there). Call it once the root is no longer `inert`. */
 export function restoreControlFocus(root: HTMLElement, focus: ControlFocus | null, families: ControlFamilies = {}): boolean {
 	if (!focus || !focusIsFree(root.ownerDocument)) return false;
-	const successors = focus.family === null ? [] : controlsOf(root, focus.family, families);
-	const target = successors[Math.min(focus.nth, successors.length - 1)] ?? root;
+	const target = controlSuccessor(root, focus, families);
 	if (target === root && !root.hasAttribute('tabindex')) root.tabIndex = -1;
 	return focusControl(target, focus.ring);
+}
+
+/** SC-602: the node in `root` that stands for what `captureControlFocus` saw (the nth control of the family, else the family's last,
+ *  else `root` itself). Pure lookup: never focuses, never sets `tabindex`. */
+export function controlSuccessor(root: HTMLElement, focus: ControlFocus, families: ControlFamilies = {}): HTMLElement {
+	const successors = focus.family === null ? [] : controlsOf(root, focus.family, families);
+	return successors[Math.min(focus.nth, successors.length - 1)] ?? root;
 }

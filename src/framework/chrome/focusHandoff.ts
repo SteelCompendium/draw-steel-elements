@@ -79,8 +79,14 @@ interface Request {
 	/** The buttons focus may sit on without the request being cancelled: the pressed button plus every button the claim
 	 *  focused. Not "any Pin in the pane": a direct jump to ANOTHER block's Pin is the user leaving. */
 	ours: WeakSet<Element>;
+	/** SC-602: a Live Preview own-save redraw: the rebuilt root's successor of the control that held focus (controlFocus.ts). When set,
+	 *  it replaces the `item` / `label` lookup. */
+	find: ((root: HTMLElement) => HTMLElement) | null;
 }
 const requests = new Map<string, Request>();
+
+/** SC-602: a `find` request names no chrome item: `find(root)` replaces the `item` lookup (and is mutually exclusive with `label`). */
+const NO_CHROME_ITEM = '';
 
 const LEAF = '.workspace-leaf';
 const EMBED = '.internal-embed, .markdown-embed';
@@ -92,8 +98,28 @@ const scopeOf = (el: Element): Element | null => el.closest(EMBED) ?? el.closest
 export function armChromeFocus(blockKey: string, item: string, pressed: HTMLElement | null = null): void {
 	const ours = new WeakSet<Element>();
 	if (pressed) ours.add(pressed);
-	requests.set(blockKey, { item, label: null, ring: true, opener: null, expires: Date.now() + REQUEST_TTL_MS, scope: pressed ? scopeOf(pressed) : null, ours });
+	requests.set(blockKey, { item, label: null, ring: true, opener: null, expires: Date.now() + REQUEST_TTL_MS, scope: pressed ? scopeOf(pressed) : null, ours, find: null });
 	guardFocus(pressed?.ownerDocument ?? activeDocument);
+}
+
+/**
+ * SC-602 -- Live Preview: an element's own save is about to redraw its CodeMirror widget with a NEW root (and a new view), so the
+ * focused control is thrown away. Ask the next mount of the block for `find(root)` (the control's successor), in the copy `focused`
+ * sits in. Same request machinery as Pin / the edit form: keyed by block, scoped to the pane or embed, cancelled by any focusin
+ * elsewhere, lapses on its own.
+ */
+export function armSuccessorFocus(blockKey: string, find: (root: HTMLElement) => HTMLElement, ring: boolean, focused: HTMLElement): void {
+	requests.set(blockKey, {
+		item: NO_CHROME_ITEM,
+		label: null,
+		ring,
+		opener: null,
+		expires: Date.now() + REQUEST_TTL_MS,
+		scope: scopeOf(focused),
+		ours: new WeakSet<Element>([focused]),
+		find,
+	});
+	guardFocus(focused.ownerDocument);
 }
 
 /** What opened a block edit form: the pressed control and whether the press came from the keyboard. */
@@ -131,6 +157,7 @@ export function armFormFocus(blockKey: string, opener: FormOpener): void {
 		expires: Date.now() + REQUEST_TTL_MS,
 		scope: scopeOf(opener.pressed),
 		ours,
+		find: null,
 	});
 	guardFocus(opener.pressed.ownerDocument);
 }
@@ -231,7 +258,13 @@ export function claimChromeFocus(blockKey: () => string, root: HTMLElement): voi
 		let btn = Array.from(root.querySelectorAll<HTMLElement>(`[data-dse-chrome-item="${req.item}"]`)).find(
 			(b) => b.closest('[data-dse-chrome]') === root,
 		);
-		if (req.label !== null) {
+		if (req.find) {
+			// SC-602: the successor of the focused control, else the root (only once it is in the document: a fresh widget is built detached).
+			// A successor that is disabled (a counter's + at its max) refuses focus, so the request would linger to its TTL: the root instead.
+			let found = req.find(root);
+			if (found !== root && found.matches(':disabled')) found = root;
+			btn = found !== root || root.isConnected ? found : undefined;
+		} else if (req.label !== null) {
 			// SC-518: the edit form's opener comes back by name first (the pencil, or the hero's "Edit definition", which
 			// is no chrome item), then the card's Edit pencil (`item`), then the card itself. Only this element's own
 			// controls count; a nested element's same-named button has another `[data-dse-element]` root.
@@ -255,7 +288,12 @@ export function claimChromeFocus(blockKey: () => string, root: HTMLElement): voi
 		// A hidden copy (Live Preview's widget) refuses focus: the request stays for the copy that can take it.
 		req.ours.add(btn); // before the focus call: its focusin goes through the guard
 		if (btn === root && !root.hasAttribute('tabindex')) root.tabIndex = -1; // SC-518: focusable by script, not a new tab stop
-		if (focusControl(btn, req.ring)) req.expires = Date.now() + SETTLE_MS;
+		if (!focusControl(btn, req.ring)) return;
+		// SC-602: a Live Preview own-save carry is one-shot. Its redraw is one transaction, and a request left armed would claim on the
+		// next rebuild of the same block: an outside edit (never ours to follow) or the view's own in-place rebuild, where it took focus
+		// to the root before the view's own hand-back (SC-588) could run.
+		if (req.find) disarmChromeFocus(key);
+		else req.expires = Date.now() + SETTLE_MS;
 	};
 	attempt();
 	if (!win || !anyLive()) return;

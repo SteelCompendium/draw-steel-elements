@@ -29,6 +29,7 @@ import { adoptView } from './host/adoptView';
 import { ReusedElementRemounter } from './host/remountReused';
 import { livePreviewReconcileExtension } from './host/livePreviewReconcile';
 import { ReplugRemounter } from './host/replugRemount';
+import { carryOwnSaveFocus, livePreviewFocusCarryExtension } from './host/livePreviewFocusCarry';
 
 /**
  * The subset of `ElementFrameworkV2` (main.ts) this wiring loop needs. A narrow structural
@@ -94,6 +95,11 @@ export function registerFrameworkElements(
 	// SC-537: for twin callouts in Live Preview (no processor call there), the redraw is driven by the editor's own update (livePreviewReconcile.ts);
 	// SC-545: the same update draws a card whose widget CodeMirror had taken off the page at the toggle once it puts it back.
 	plugin.registerEditorExtension(livePreviewReconcileExtension(remounter, replug));
+	// SC-602: keyboard focus across an element's own save, which redraws its Live Preview widget with a new root.
+	plugin.registerEditorExtension(livePreviewFocusCarryExtension(registry));
+	registry.beforeRelease = (entry) => {
+		carryOwnSaveFocus(entry);
+	};
 
 	for (const def of framework.registry.all()) {
 		for (const alias of def.aliases) {
