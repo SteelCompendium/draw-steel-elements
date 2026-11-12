@@ -209,6 +209,11 @@ export class ConditionsModal extends DseModal {
 		});
 		this.lifecycle.registerDomEvent(doc, 'click', closeIfArmed, true);
 
+		// SC-580: "or just start typing" (docs/initiative-tracker.md). A printable key pressed while focus is on some
+		// non-text control of this window opens the Add search with that key typed in. Registered on this modal's own
+		// dialog element, so it dies with `lifecycle` and never sees a key that originates in a modal stacked above.
+		this.lifecycle.registerDomEvent(this.modalEl ?? this.containerEl, 'keydown', (evt: KeyboardEvent) => this.typeToSearch(evt));
+
 		this.renderList();
 		this.renderAdd();
 
@@ -558,6 +563,28 @@ export class ConditionsModal extends DseModal {
 			return;
 		}
 		this.renderCombobox();
+	}
+
+	/** SC-580: routes a printable key to the Add search. Not a text-entry control's key, not a modified key (Obsidian's hotkeys
+	 *  and the OS's chords), not Space / Enter / Tab / arrows / Escape (a focused button, a select and SC-431's Escape consumer
+	 *  keep theirs), not an IME composition, and not a key something else already handled. The key is typed in here and its
+	 *  default action cancelled: the browser would otherwise type it AGAIN into the input that just took focus. */
+	private typeToSearch(evt: KeyboardEvent): void {
+		if (evt.defaultPrevented || evt.isComposing || evt.ctrlKey || evt.metaKey || evt.altKey) return;
+		if (evt.key.length !== 1 || evt.key === ' ') return;
+		const target = evt.target as Element | null;
+		if (target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
+		if (!this.addOpen) {
+			this.addOpen = true;
+			this.renderAdd();
+		}
+		const input = this.addWrapEl.querySelector<HTMLInputElement>('.dse-condal__input');
+		if (!input) return;
+		evt.preventDefault();
+		input.focus();
+		input.value += evt.key;
+		input.setSelectionRange?.(input.value.length, input.value.length);
+		input.dispatchEvent(new (input.ownerDocument.defaultView ?? activeWindow).Event('input', { bubbles: true }));
 	}
 
 	/** Collapses the dropdown back to "+ Add condition". `refocus` (default true) moves focus to

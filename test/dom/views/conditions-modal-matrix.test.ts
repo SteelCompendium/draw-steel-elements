@@ -563,10 +563,166 @@ describe('SC-436 matrix: the icon picker caps its matches at 24', () => {
 	});
 });
 
+// ------------------------------------------------------------------------------------------ type to search
+
+/** Dispatches a keydown on `el` the way the browser does (bubbling, cancelable) and returns it, so a test can read `defaultPrevented`. */
+function keydown(el: Element, key: string, init: KeyboardEventInit = {}): KeyboardEvent {
+	const evt = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
+	el.dispatchEvent(evt);
+	return evt;
+}
+const addButton = (c: HTMLElement): HTMLElement => qs(c, 'button[aria-label="Add condition"]');
+const searchInput = (c: HTMLElement): HTMLInputElement | null => c.querySelector<HTMLInputElement>('.dse-condal__input');
+
+// SC-580: docs/initiative-tracker.md says "Click '+ Add condition' (or just start typing)". The routing rules are jsdom; that Obsidian's
+// real keymap delivers the key to the window's listener is the e2e COND-N07 (jsdom has no keymap, and a key sent to a focused button
+// is only typed into the input it hands focus to by a real browser).
+describe('SC-580: a printable key in the window opens the Add search with that key typed', () => {
+	test('a letter on the focused "+ Add condition" opens the search by the click path: letter typed, input focused, dropdown filtered, key swallowed', () => {
+		const o = open([]);
+		addButton(o.container).focus();
+		const evt = keydown(addButton(o.container), 'd');
+		const input = searchInput(o.container)!;
+		expect(input.value).toBe('d');
+		expect(document.activeElement).toBe(input);
+		expect(evt.defaultPrevented).toBe(true); // the browser must not type the letter a second time into the input that took focus
+		expect(o.container.querySelector('button[aria-label="Add condition"]')).toBeNull();
+		expect(menuItems(o.container).map((i) => i.textContent)).toEqual(expect.arrayContaining(['Dazed']));
+		expect(menuItems(o.container)[menuItems(o.container).length - 1].textContent).toContain('Add custom: "d"');
+		expect(o.onChange).not.toHaveBeenCalled();
+	});
+
+	test('typing "daz" fast: the first key opens, the next two are the input\'s own (not routed, not lost, not doubled) and Dazed is offered', () => {
+		const o = open([]);
+		addButton(o.container).focus();
+		keydown(addButton(o.container), 'd');
+		const input = searchInput(o.container)!;
+		for (const k of ['a', 'z']) {
+			expect(keydown(input, k).defaultPrevented).toBe(false); // the browser types these into the focused input
+			input.value += k; // ...which is what the browser does
+			input.dispatchEvent(new Event('input'));
+		}
+		expect(input.value).toBe('daz');
+		expect(menuItems(o.container).map((i) => i.textContent)).toEqual(['Dazed', 'Add custom: "daz"']);
+		mousedown(menuItems(o.container)[0]);
+		expect(lastEmit(o)).toEqual([{ key: 'dazed' }]);
+	});
+
+	test('Shift is fine: a capital letter opens with the capital, and the filter ignores case', () => {
+		const o = open([]);
+		keydown(addButton(o.container), 'Z', { shiftKey: true });
+		expect(searchInput(o.container)!.value).toBe('Z');
+		expect(menuItems(o.container).map((i) => i.textContent)).toEqual(['Dazed', 'Add custom: "Z"']);
+	});
+
+	test('a digit and a punctuation key are printable too', () => {
+		const o = open([]);
+		keydown(addButton(o.container), '-');
+		expect(searchInput(o.container)!.value).toBe('-');
+	});
+
+	test('from any other control of the window (a row\'s remove button, Done), not just "+ Add condition"', () => {
+		const o = open(['prone']);
+		const evt = keydown(qs(o.container, '[data-dse-control="cond.remove"]'), 'f');
+		expect(searchInput(o.container)!.value).toBe('f');
+		expect(evt.defaultPrevented).toBe(true);
+		const o2 = open(['prone']);
+		keydown(qs(o2.container, '[data-dse-control="cond.done"]'), 'g');
+		expect(searchInput(o2.container)!.value).toBe('g');
+	});
+
+	test('the search is already open and focus is elsewhere: the key goes to the END of the typed text and focus moves to the input', () => {
+		const o = open(['prone']);
+		const input = openAdd(o.container);
+		typeQuery(input, 'da');
+		qs<HTMLElement>(o.container, '[data-dse-control="cond.done"]').focus();
+		expect(document.activeElement).not.toBe(input);
+		const evt = keydown(document.activeElement!, 'z');
+		expect(searchInput(o.container)).toBe(input); // the same input: nothing rebuilt
+		expect(input.value).toBe('daz');
+		expect(document.activeElement).toBe(input);
+		expect(evt.defaultPrevented).toBe(true);
+		expect(menuItems(o.container).map((i) => i.textContent)).toEqual(['Dazed', 'Add custom: "daz"']);
+	});
+
+	test.each([
+		['Space (a focused button\'s own activation)', ' ', {}],
+		['Enter', 'Enter', {}],
+		['Tab', 'Tab', {}],
+		['an arrow', 'ArrowDown', {}],
+		['Escape', 'Escape', {}],
+		['Backspace', 'Backspace', {}],
+		['Ctrl+letter', 'd', { ctrlKey: true }],
+		['Meta+letter', 'd', { metaKey: true }],
+		['Alt+letter', 'd', { altKey: true }],
+		['a key inside an IME composition', 'd', { isComposing: true }],
+	])('%s opens nothing and is not swallowed', (_name, key, init) => {
+		const o = open([]);
+		const btn = addButton(o.container);
+		const evt = keydown(btn, key, init);
+		expect(searchInput(o.container)).toBeNull();
+		expect(evt.defaultPrevented).toBe(false);
+		expect(addButton(o.container)).toBe(btn);
+	});
+
+	test('a key something else already handled (defaultPrevented before it reaches the window) is left alone', () => {
+		const o = open([]);
+		const btn = addButton(o.container);
+		btn.addEventListener('keydown', (e) => e.preventDefault());
+		keydown(btn, 'd');
+		expect(searchInput(o.container)).toBeNull();
+	});
+
+	test('a text-entry control keeps its keys: the editor\'s icon search input, a select, a textarea, a contenteditable', () => {
+		const o = open(['prone']);
+		openEditor(o.container, 0);
+		const iconSearch = qs<HTMLInputElement>(o.container, '[data-dse-control="cond.icon-search"]');
+		expect(keydown(iconSearch, 'k').defaultPrevented).toBe(false);
+		const extras = ['select', 'textarea', 'div'].map((tag) => {
+			const el = qs(o.container, '.dse-condal__list').appendChild(document.createElement(tag));
+			if (tag === 'div') el.setAttribute('contenteditable', 'true');
+			return el;
+		});
+		for (const el of extras) expect(keydown(el, 's').defaultPrevented).toBe(false);
+		const inside = extras[2].appendChild(document.createElement('span'));
+		expect(keydown(inside, 's').defaultPrevented).toBe(false); // a child of a contenteditable
+		expect(searchInput(o.container)).toBeNull();
+	});
+
+	test('contenteditable="false" is not text entry: a key from it routes', () => {
+		const o = open(['prone']);
+		const el = qs(o.container, '.dse-condal__list').appendChild(document.createElement('div'));
+		el.setAttribute('contenteditable', 'false');
+		keydown(el, 'q');
+		expect(searchInput(o.container)!.value).toBe('q');
+	});
+
+	test('a key that starts in a modal stacked above this one is not this window\'s (its container is a sibling, not a descendant)', () => {
+		const o = open([]);
+		const above = document.body.appendChild(document.createElement('div'));
+		above.className = 'modal-container';
+		const btn = above.appendChild(document.createElement('button'));
+		keydown(btn, 'd');
+		expect(searchInput(o.container)).toBeNull();
+		expect(addButton(o.container)).toBeTruthy();
+	});
+
+	test('the listener lives on the window\'s own element and dies with it: after close a key is no longer routed, and nothing is on the document', () => {
+		const docAdd = jest.spyOn(document, 'addEventListener');
+		const o = open([]);
+		expect(docAdd.mock.calls.filter(([type]) => type === 'keydown')).toEqual([]);
+		docAdd.mockRestore();
+		const btn = addButton(o.container);
+		o.modal.close();
+		document.body.appendChild(o.container);
+		keydown(btn, 'd');
+		expect(searchInput(o.container)).toBeNull();
+	});
+});
+
 // ------------------------------------------------------------------------------------------ known bugs
 
 describe('SC-436 matrix: known bugs (each marker encodes the correct behaviour and fails today)', () => {
-	// (SC-580, "just start typing" opens the Add search, needs Obsidian's real keymap: its marker is the e2e knownBug COND-N07.)
 
 	// SC-581: Icon has "Use default", Duration "Until removed", Effect "static"; a colour, once set, cannot be taken off.
 	// Fix-agnostic: passes if ANY single interaction in the Color group (a default/none option, or re-activating the
