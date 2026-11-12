@@ -817,6 +817,60 @@ describe('[F] keyboard focus survives the actions that rebuild the whole tracker
 		focusSpy.mockRestore();
 	});
 
+	// SC-609: pressing a roster cell swaps the detail row in place (the cell itself stays), so a control of the detail row that held
+	// focus was thrown away and focus fell to <body>. The note's click shield keeps a mouse press from focusing the cell, so the
+	// tracker gives it focus when focus was inside the tracker. A real pointer click has `detail >= 1` (jsdom's `.click()` has 0).
+	const mouseClick = (el: HTMLElement): void => {
+		el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+	};
+	const detailKey = (root: HTMLElement): string | null => root.querySelector('.dse-init__detail')!.getAttribute('data-detail-key');
+
+	test('[F19] focus on the detail row Stamina control, then a mouse press on another roster cell: the cell that was pressed holds focus', async () => {
+		const { root, flush } = await mount(TRACKER);
+		const opener = ctl(root, 'init.detail.stamina');
+		opener.focus();
+		const cell = ctl(root, 'init.cell.stamina', 2);
+		mouseClick(cell);
+		await flush();
+		expect(detailKey(root)).toBe('0-3'); // the selection happened, and threw the old Stamina control away
+		expect(opener.isConnected).toBe(false);
+		expect(document.activeElement).toBe(cell);
+	});
+
+	test('[F20] the mouse press gives the cell plain focus, without forcing a keyboard ring', async () => {
+		const { root } = await mount(TRACKER);
+		ctl(root, 'init.detail.stamina').focus();
+		const focusSpy = jest.spyOn(HTMLElement.prototype, 'focus');
+		mouseClick(ctl(root, 'init.cell.stamina', 1));
+		expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+		expect(focusSpy).not.toHaveBeenCalledWith(expect.objectContaining({ focusVisible: true }));
+		focusSpy.mockRestore();
+	});
+
+	test('[F21] focus that was not inside the tracker is not taken by a mouse press on a roster cell', async () => {
+		const { root, flush } = await mount(TRACKER);
+		const other = document.createElement('input');
+		document.body.appendChild(other);
+		other.focus();
+		mouseClick(ctl(root, 'init.cell.stamina', 1));
+		expect(detailKey(root)).toBe('0-2');
+		expect(document.activeElement).toBe(other);
+		other.blur();
+		mouseClick(ctl(root, 'init.cell.stamina', 2)); // nothing held focus: still nothing does
+		await flush();
+		expect(detailKey(root)).toBe('0-3');
+		expect(document.activeElement).toBe(document.body);
+	});
+
+	test('[F22] focus on a control that the selection does not replace stays where it is', async () => {
+		const { root } = await mount(TRACKER);
+		const advance = ctl(root, 'init.round.advance');
+		advance.focus();
+		mouseClick(ctl(root, 'init.cell.stamina', 1));
+		expect(detailKey(root)).toBe('0-2');
+		expect(document.activeElement).toBe(advance);
+	});
+
 	// SC-603: a modal takes focus when it opens and Obsidian hands it back to the opener on close, but a save that replaces the
 	// opener (the pool modal's Apply rebuilds the whole tracker, a condition edit rebuilds the conditions row) leaves nothing to
 	// hand it to. The tracker remembers the focused control when the modal opens and gives it to the rebuilt successor.

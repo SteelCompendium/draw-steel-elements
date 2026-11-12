@@ -75,6 +75,7 @@ import type { DseModal, IconButtonHandle, StaminaBarValues, StaminaGaugeOptions 
 import { CONTROL_ATTR } from '@/framework/kit/controlId';
 import { captureControlFocus, restoreControlFocus } from '@/framework/kit/controlFocus';
 import type { ControlFocus, ControlFamilies } from '@/framework/kit/controlFocus';
+import { focusControl, focusIsFree, isKeyboardClick } from '@/framework/chrome/focusHandoff';
 import { ConditionManager } from '@utils/Conditions';
 import { Images } from '@utils/Images';
 import { StaminaBar } from '@model/StaminaBar';
@@ -1827,7 +1828,12 @@ export class InitiativeView extends ElementView<EncounterData> {
 							label: selected ? selectedLabel : label,
 							control: 'init.cell.stamina',
 							pressed: selected,
-							onClick: () => {
+							onClick: (evt) => {
+								// SC-609: the detail row is emptied and rebuilt below, so a control of it that held focus is thrown away and
+								// focus falls to <body> (the note's click shield keeps the press itself from focusing this cell). Remember
+								// whether focus was inside the tracker (nothing is handed over when it was not: SC-588, a click never pulls
+								// focus in), and give it to the cell that was pressed once the rebuild is done.
+								const focusWasInside = captureControlFocus(this.rootEl, FOCUS_FAMILIES) !== null;
 								// Repaint selection in place: kit handles own aria-pressed;
 								// [data-selected] carries the --dse-select ring; setLabel is
 								// the one update that reaches BOTH the accessible name and
@@ -1851,6 +1857,10 @@ export class InitiativeView extends ElementView<EncounterData> {
 									groupEl,
 									owner,
 								);
+
+								// The cell persists (only the detail row was replaced), so it takes focus itself; a keyboard press had focus
+								// on it already, a mouse press gets plain focus with no ring (the engine's own rule after a pointer).
+								if (focusWasInside && focusIsFree(handle.buttonEl.ownerDocument)) focusControl(handle.buttonEl, isKeyboardClick(evt));
 
 								group.selectedInstanceKey = instanceKey;
 								void this.persist();
