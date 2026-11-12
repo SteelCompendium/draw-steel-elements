@@ -30,6 +30,7 @@ import { ReusedElementRemounter } from './host/remountReused';
 import { livePreviewReconcileExtension } from './host/livePreviewReconcile';
 import { ReplugRemounter } from './host/replugRemount';
 import { carryOwnSaveFocus, livePreviewFocusCarryExtension } from './host/livePreviewFocusCarry';
+import { carryOwnSaveState, livePreviewStateCarryExtension } from './host/livePreviewStateCarry';
 
 /**
  * The subset of `ElementFrameworkV2` (main.ts) this wiring loop needs. A narrow structural
@@ -97,8 +98,11 @@ export function registerFrameworkElements(
 	plugin.registerEditorExtension(livePreviewReconcileExtension(remounter, replug));
 	// SC-602: keyboard focus across an element's own save, which redraws its Live Preview widget with a new root.
 	plugin.registerEditorExtension(livePreviewFocusCarryExtension(registry));
+	// SC-605: and a view's opt-in session state (the initiative tracker's quick-add draft) across the same redraw.
+	plugin.registerEditorExtension(livePreviewStateCarryExtension(registry));
 	registry.beforeRelease = (entry) => {
 		carryOwnSaveFocus(entry);
+		carryOwnSaveState(entry);
 	};
 
 	for (const def of framework.registry.all()) {

@@ -177,6 +177,20 @@ export abstract class ElementView<M> extends Component {
 	}
 
 	/**
+	 * SC-605 — opt-in: session state (never note content) that should survive this view's OWN save in Live Preview, where the
+	 * save redraws the block with a NEW view (`host/livePreviewStateCarry.ts`). Read at the moment the old view is removed, while
+	 * its DOM is still in place. `undefined` (or not implemented): nothing to carry. First implementer: the initiative tracker's
+	 * Malice quick-add draft.
+	 */
+	carryState?(): unknown;
+
+	/**
+	 * SC-605 — the next view of the same block, in the same pane, receives what `carryState` returned, BEFORE `mount()` (so
+	 * `onMount` builds with it). Validate `state`: it is `unknown`.
+	 */
+	receiveCarriedState?(state: unknown): void;
+
+	/**
 	 * Inject the model → YAML serializer persist() uses on write-back. Wired by the
 	 * pipeline from `def.serialize` (Task 9) — see the file header design note. Required
 	 * before the first persist() call (persist() throws a clear error otherwise, rather

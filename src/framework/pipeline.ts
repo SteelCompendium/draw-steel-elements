@@ -39,6 +39,7 @@ import {
 import type { CollapseKeys } from './chrome/collapsedKey';
 import { ensureCollapseInvariant, mountChrome } from './chrome/mountChrome';
 import { armChromeFocus, claimChromeFocus, formOpenerOf, isKeyboardClick, settleChromeFocus } from './chrome/focusHandoff';
+import { takeCarriedState } from './host/livePreviewStateCarry';
 import type { ChromeMenuItem } from './chrome/types';
 import { iconButton } from './kit/iconButton';
 import { openFormEditor } from '@/authoring/FormModal';
@@ -728,6 +729,14 @@ export class ElementPipeline {
 				host.registry.own(view, host, root);
 			} else {
 				host.addChild(view);
+			}
+			// SC-605: a Live Preview own save hands the old view's opt-in state (carryState) to this one, BEFORE mount, so the first
+			// render already shows it. Safe here because the root is in the document by now (after prepareModel's awaits); if it ever
+			// is not, nothing is taken and the view mounts empty, as before SC-605. Only a framework host's view in a CodeMirror
+			// editor ever takes anything (host/livePreviewStateCarry.ts has the rules).
+			if (host instanceof ReadingModeBlockHost && view.receiveCarriedState) {
+				const carried = takeCarriedState(() => host.blockKey(), root);
+				if (carried !== undefined) view.receiveCarriedState(carried);
 			}
 			await runStageAsync('render', () => view.mount(root, model));
 			// The first render's leg. `update()` runs the hook itself from here on.

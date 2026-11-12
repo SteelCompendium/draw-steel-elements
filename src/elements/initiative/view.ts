@@ -124,6 +124,16 @@ interface QuickAddDraft {
 	caret?: { field: 'amount' | 'label'; start: number; end: number };
 }
 
+/** SC-605: a carried state is `unknown`; this is the only shape the tracker takes. */
+function isQuickAddDraft(s: unknown): s is QuickAddDraft {
+	if (typeof s !== 'object' || s === null) return false;
+	const d = s as Record<string, unknown>;
+	if (typeof d.amount !== 'string' || typeof d.label !== 'string') return false;
+	if (d.caret === undefined) return true;
+	const c = d.caret as Record<string, unknown> | null;
+	return !!c && (c.field === 'amount' || c.field === 'label') && typeof c.start === 'number' && typeof c.end === 'number';
+}
+
 const QUICKADD_AMOUNT = 'init.malice.quickadd.amount';
 const QUICKADD_LABEL = 'init.malice.quickadd.label';
 
@@ -197,6 +207,21 @@ export class InitiativeView extends ElementView<EncounterData> {
 			if (start !== null && end !== null) draft.caret = { field, start, end };
 		}
 		this.quickAddDraft = draft;
+	}
+
+	/** SC-605 — Live Preview: the tracker's own save redraws the block with a NEW view, so the draft is handed to it
+	 *  (framework/host/livePreviewStateCarry.ts). Read off the boxes now: this runs as the old tracker is removed. Empty: nothing. */
+	carryState(): QuickAddDraft | undefined {
+		this.captureQuickAddDraft();
+		const { amount, label, caret } = this.quickAddDraft;
+		if (amount === '' && label === '') return undefined;
+		return caret ? { amount, label, caret: { ...caret } } : { amount, label };
+	}
+
+	/** SC-605 — the draft the previous view of this block held, given before mount: `buildMaliceQuickAdd` puts it (and its caret)
+	 *  in the boxes exactly as after any rebuild, so the hint, Add and the validation styling start from the same empty state. */
+	receiveCarriedState(state: unknown): void {
+		if (isQuickAddDraft(state)) this.quickAddDraft = state;
 	}
 
 	protected onMount(root: HTMLElement, model: EncounterData): void {

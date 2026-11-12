@@ -40,8 +40,8 @@ import type { ClaimTicket, ViewRegistry, ViewRegistryEntry } from './viewRegistr
 /** Tickets that already armed a carry: one own write arms one carry (a later outside edit inside the window must not). */
 const used = new WeakSet<ClaimTicket>();
 
-/** The block key of the block `entry`'s last write landed in (its live key otherwise). */
-function writtenBlockKey(entry: ViewRegistryEntry): string {
+/** The block key of the block `entry`'s last write landed in (its live key otherwise). Also SC-605's key (livePreviewStateCarry.ts). */
+export function writtenBlockKey(entry: ViewRegistryEntry): string {
 	const key = entry.host.blockKey();
 	const line = entry.host.lastWriteLineStart;
 	return line === null ? key : key.replace(/::\d+$/, `::${line}`);
