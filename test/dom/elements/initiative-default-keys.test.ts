@@ -77,11 +77,22 @@ function makeHost() {
 	} as unknown as BlockHost & { containerEl: HTMLElement; replaceSource: typeof replaceSource };
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// SC-568: the persist debounce runs on a FAKE clock. Each case used to wait `PERSIST_DEBOUNCE_MS + 60` of REAL time three times
+// (about 1.4 s per case, 25 cases, and a case near jest's 5 s limit on a loaded host); the same debounce now elapses by advancing the
+// fake clock, so a case takes a few ms and no longer depends on how fast the host runs.
 const settle = async () => {
 	for (let i = 0; i < 6; i++) await Promise.resolve();
-	await sleep(PERSIST_DEBOUNCE_MS + 60);
+	await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS + 60);
 };
+/** Await `p` while the fake clock ticks 1 ms at a time: the mock vault's reads take a `setTimeout(0)` hop each (`obsidian-core.ts`), which a frozen clock never delivers. */
+async function pump<T>(p: Promise<T>): Promise<T> {
+	let done = false;
+	const finished = p.finally(() => {
+		done = true;
+	});
+	while (!done) await jest.advanceTimersByTimeAsync(1);
+	return finished;
+}
 const lastModal = (): HTMLElement => document.body.lastElementChild as HTMLElement;
 const q = (root: HTMLElement, sel: string, n = 0): HTMLElement => {
 	const el = root.querySelectorAll<HTMLElement>(sel)[n];
@@ -108,7 +119,7 @@ async function drive(
 	const { deps, app } = makeEnv();
 	if (opts.refs) seedStatblockNotes(app);
 	const host = makeHost();
-	await new ElementPipeline(deps).run(initiativeElement, src, host);
+	await pump(new ElementPipeline(deps).run(initiativeElement, src, host));
 	await settle();
 	const root = host.containerEl.firstElementChild as HTMLElement;
 	const err = root.querySelector('.dse-error-card');
@@ -146,7 +157,11 @@ enemy_groups:
 const legacyBytes = async (src: string): Promise<string> =>
 	stringifyYaml(await parseEncounterData(src, new App() as any, DEFAULT_SETTINGS)).trim();
 
+beforeEach(() => {
+	jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
+});
 afterEach(() => {
+	jest.useRealTimers();
 	document.body.innerHTML = '';
 });
 
@@ -337,7 +352,7 @@ describe('SC-485: statblock-merged fields follow the statblock (D1 omit)', () =>
 		const { deps, app } = makeEnv();
 		seedStatblockNotes(app);
 		const src = 'heroes:\n  - statblock: "Frodo Baggins"\nenemy_groups: []';
-		const model = await resolveInitiativeRefs(parse(parseYaml(src), src), deps.refs);
+		const model = await pump(resolveInitiativeRefs(parse(parseYaml(src), src), deps.refs));
 		expect(model.heroes[0]).toMatchObject({ name: 'Frodo Baggins', max_stamina: 80, current_stamina: 80 });
 		expect(serialize(model)).toBe('heroes:\n  - statblock: Frodo Baggins\nenemy_groups: []');
 	});
