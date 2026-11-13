@@ -8374,40 +8374,51 @@ const SCENARIOS = [
 			await t.ev(`${prefs}.set('authoringControls', true)`);
 			try {
 				for (const [mode, target] of [['rv', 'title'], ['lp', 'title'], ['rv', 'dblq'], ['lp', 'dblq'], ['rv', 'apply'], ['rv', 'reopen']]) {
-					const r = await gs91Trial(t, mode, target);
 					const label = `${target} ${mode}`;
-					const bad = [];
-					if (r.error) bad.push(`error: ${r.error}`);
-					else {
-						if (r.gap === null || (target !== 'dblq' && (r.gapEnd === null || r.gapEnd >= 140))) bad.push(`the second click came ${r.gapEnd} ms after the opening click's dispatch ended (${r.gap} ms after it started): it must come inside the helper's 150 ms or the trial proves nothing (a loaded host?)`); // the queued double-click is red on the base at any gap: its second mousedown clears the helper's timer
-						if (!r.at700.popover) bad.push(`700 ms after the second press the preview was gone (second click ${r.gap} ms after the opening click) ${J(r.at700)}`);
+					const gaps = []; // gapEnd of each attempt the host was too slow to prove anything with
+					for (;;) {
+						const r = await gs91Trial(t, mode, target);
+						const bad = [];
+						if (r.error) bad.push(`error: ${r.error}`);
 						else {
-							if (r.at700.editor) bad.push(`the preview turned into a source editor ${J(r.at700)}`);
-							if (target !== 'dblq' && !r.at700.modal) bad.push(`700 ms after the second press the modal was gone ${J(r.at700)}`);
-							if ((target === 'title' || target === 'reopen') && !(r.afterEscape.popover && !r.afterEscape.modal)) bad.push(`Escape must close only the modal ${J(r.afterEscape)}`);
-							if (target === 'reopen') {
-								if (!(r.firstOpen.popover && r.firstOpen.modal)) bad.push(`the first open must leave the preview and the modal open ${J(r.firstOpen)}`);
-								if (!(r.afterFirstClose.popover && !r.afterFirstClose.modal)) bad.push(`Escape after the first open must close only the modal ${J(r.afterFirstClose)}`);
-								if (!r.afterFirstClose.editing) bad.push(`the preview must be focused (.is-editing) before the second open, or this trial does not test a re-open ${J(r.afterFirstClose)}`);
-								if (r.at700.focusInPreview) bad.push(`the keyboard focus moved into the preview behind the open modal ${J(r.at700)}`);
+							if (r.gap === null || (target !== 'dblq' && (r.gapEnd === null || r.gapEnd >= 140))) bad.push(`the second click came ${r.gapEnd} ms after the opening click's dispatch ended (${r.gap} ms after it started): it must come inside the helper's 150 ms or the trial proves nothing (a loaded host?)`); // the queued double-click is red on the base at any gap: its second mousedown clears the helper's timer
+							if (!r.at700.popover) bad.push(`700 ms after the second press the preview was gone (second click ${r.gap} ms after the opening click) ${J(r.at700)}`);
+							else {
+								if (r.at700.editor) bad.push(`the preview turned into a source editor ${J(r.at700)}`);
+								if (target !== 'dblq' && !r.at700.modal) bad.push(`700 ms after the second press the modal was gone ${J(r.at700)}`);
+								if ((target === 'title' || target === 'reopen') && !(r.afterEscape.popover && !r.afterEscape.modal)) bad.push(`Escape must close only the modal ${J(r.afterEscape)}`);
+								if (target === 'reopen') {
+									if (!(r.firstOpen.popover && r.firstOpen.modal)) bad.push(`the first open must leave the preview and the modal open ${J(r.firstOpen)}`);
+									if (!(r.afterFirstClose.popover && !r.afterFirstClose.modal)) bad.push(`Escape after the first open must close only the modal ${J(r.afterFirstClose)}`);
+									if (!r.afterFirstClose.editing) bad.push(`the preview must be focused (.is-editing) before the second open, or this trial does not test a re-open ${J(r.afterFirstClose)}`);
+									if (r.at700.focusInPreview) bad.push(`the keyboard focus moved into the preview behind the open modal ${J(r.at700)}`);
+								}
+								if (target === 'dblq' && r.at700.modal) bad.push(`the backdrop press of the double-click should have closed the modal ${J(r.at700)}`);
+								if (target === 'apply') {
+									if (!r.saved) bad.push('Healing 3 + a real click on Apply did not put current_stamina: 18 in the note');
+									if (r.notices.length) bad.push(`Notice(s) after Apply ${J(r.notices)}`);
+									if (!(r.afterApply.popover && !r.afterApply.modal)) bad.push(`after Apply the modal must be closed and the preview shown ${J(r.afterApply)}`);
+								}
+								if (!r.afterRest?.popover) bad.push('with the pointer away for 1.2 s the preview closed');
+								if (r.afterOutside?.popover) bad.push('a real click outside did not close the preview');
 							}
-							if (target === 'dblq' && r.at700.modal) bad.push(`the backdrop press of the double-click should have closed the modal ${J(r.at700)}`);
-							if (target === 'apply') {
-								if (!r.saved) bad.push('Healing 3 + a real click on Apply did not put current_stamina: 18 in the note');
-								if (r.notices.length) bad.push(`Notice(s) after Apply ${J(r.notices)}`);
-								if (!(r.afterApply.popover && !r.afterApply.modal)) bad.push(`after Apply the modal must be closed and the preview shown ${J(r.afterApply)}`);
-							}
-							if (!r.afterRest?.popover) bad.push('with the pointer away for 1.2 s the preview closed');
-							if (r.afterOutside?.popover) bad.push('a real click outside did not close the preview');
 						}
+						// a trial whose ONLY problem is the inconclusive-gap gate (the host was too slow to prove anything) is re-run, from fresh state (gs91Trial rewrites both fixtures, reopens the host and redoes the hover), up to twice;
+						// a product failure (preview or modal gone, editor, focus) is never re-run: the gate message is pushed first, so one message means it was the only one
+						if (!r.error && target !== 'dblq' && r.gap !== null && r.gapEnd !== null && r.gapEnd >= 140 && bad.length === 1 && gaps.length < 2) {
+							gaps.push(r.gapEnd);
+							continue;
+						}
+						const retried = gaps.length ? ` (re-run ${gaps.length}x, the host was too slow to prove anything: ${gaps.join(', ')} ms from the end of the opening dispatch)` : '';
+						if (bad.length) problems.push(`${label}${retried}: ${bad.join('; ')}`);
+						else
+							outcomes.push(
+								`${label}${retried} (${r.hover}; press on ${r.hit}, second press ${r.gap} ms later${target !== 'dblq' ? ` (${r.gapEnd} ms after the opening click's dispatch ended)` : ''}${r.p2Hit ? ` on ${r.p2Hit}` : ''}): the preview stayed, no source editor` +
+									(target === 'title' ? ', the modal stayed, Escape closed only the modal' : target === 'reopen' ? ', opened a second time from the focused preview (open, Escape, open again) the modal stayed, the focus stayed out of the preview, Escape closed only the modal' : target === 'apply' ? ', Healing 3 + Apply wrote current_stamina: 18 (no Notice)' : ', the backdrop press closed the modal and left the preview') +
+									', the preview stayed with the pointer away, a click outside closed it',
+							);
+						break;
 					}
-					if (bad.length) problems.push(`${label}: ${bad.join('; ')}`);
-					else
-						outcomes.push(
-							`${label} (${r.hover}; press on ${r.hit}, second press ${r.gap} ms later${target !== 'dblq' ? ` (${r.gapEnd} ms after the opening click's dispatch ended)` : ''}${r.p2Hit ? ` on ${r.p2Hit}` : ''}): the preview stayed, no source editor` +
-								(target === 'title' ? ', the modal stayed, Escape closed only the modal' : target === 'reopen' ? ', opened a second time from the focused preview (open, Escape, open again) the modal stayed, the focus stayed out of the preview, Escape closed only the modal' : target === 'apply' ? ', Healing 3 + Apply wrote current_stamina: 18 (no Notice)' : ', the backdrop press closed the modal and left the preview') +
-								', the preview stayed with the pointer away, a click outside closed it',
-						);
 				}
 			} finally {
 				await t.ev(`${prefs}.set('authoringControls', false)`);
