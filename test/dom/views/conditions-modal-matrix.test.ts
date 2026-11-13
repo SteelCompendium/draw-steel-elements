@@ -18,10 +18,14 @@ function holderFor(kind: HostKind, conditions: Entry[]): ConditionHolder {
 		: ({ id: 2, current_stamina: 40, temp_stamina: 0, conditions } as ConditionHolder);
 }
 
+/** Every window `open()` makes, closed after each test: a window left open keeps its document-level key listener (SC-613) alive for the next test. */
+const opened: ConditionsModal[] = [];
+
 function open(conditions: Entry[], kind: HostKind = 'hero') {
 	const onChange = jest.fn();
 	const holder = holderFor(kind, conditions);
 	const modal = new ConditionsModal(new App() as any, holder, new ConditionManager(), onChange);
+	opened.push(modal);
 	modal.open();
 	const container = (modal as any).containerEl as HTMLElement;
 	return { modal, holder, onChange, container };
@@ -74,6 +78,7 @@ function pickOption(c: HTMLElement, text: string, label: string): void {
 }
 
 afterEach(() => {
+	for (const modal of opened.splice(0)) modal.close(); // idempotent: a test that closed its window itself is not closed twice
 	document.body.innerHTML = '';
 });
 
@@ -1166,6 +1171,42 @@ describe('SC-613: a printable key after a click on the title or on empty space (
 		expect(route).toHaveBeenCalledTimes(1);
 		route.mockRestore();
 		expect(searchInput(o.container)!.value).toBe('dx');
+	});
+
+	test('a popout window: the listener is on the window\'s own document, so a body key of THAT document opens the search and one of the main document does not; after close neither does', () => {
+		// A popout window has its own document (a jsdom iframe stands in); Obsidian's Modal.open appends the container to the
+		// active window's body BEFORE onOpen, so the container's ownerDocument is the popout's.
+		const frame = document.body.appendChild(document.createElement('iframe'));
+		const pdoc = frame.contentDocument!;
+		// Obsidian puts its element helpers (createDiv, empty, addClass ...) on every window's HTMLElement; the jsdom setup does it for the main one only.
+		const pproto = (frame.contentWindow as any).HTMLElement.prototype;
+		for (const name of ['createEl', 'createDiv', 'createSpan', 'empty', 'setText', 'appendText', 'addClass', 'removeClass', 'toggleClass', 'hasClass']) pproto[name] = (HTMLElement.prototype as any)[name];
+		const realAppend = document.body.appendChild.bind(document.body);
+		const append = jest.spyOn(document.body, 'appendChild').mockImplementation(<T extends Node>(n: T): T => {
+			if (n instanceof HTMLElement && n.classList.contains('modal-container')) return pdoc.body.appendChild(n);
+			return realAppend(n);
+		});
+		let o: Open;
+		try {
+			o = open([]);
+		} finally {
+			append.mockRestore();
+		}
+		expect(o.container.ownerDocument).toBe(pdoc);
+		(pdoc.activeElement as HTMLElement | null)?.blur(); // what a click on the popout window's title does: focus falls to its <body>
+		expect(pdoc.activeElement).toBe(pdoc.body);
+		expect(keydown(document.body, 'd').defaultPrevented).toBe(false); // the main window's page: not this window's
+		expect(searchInput(o.container)).toBeNull();
+		const evt = keydown(pdoc.body, 'd');
+		expect(searchInput(o.container)!.value).toBe('d');
+		expect(evt.defaultPrevented).toBe(true);
+		o.modal.close();
+		pdoc.body.appendChild(o.container); // put the window back so only a live listener could route
+		const route = jest.spyOn(ConditionsModal.prototype as any, 'typeToSearch');
+		keydown(pdoc.body, 'x');
+		keydown(document.body, 'x');
+		expect(route).not.toHaveBeenCalled();
+		route.mockRestore();
 	});
 
 	test('the listener is on the document, registered through the window\'s lifecycle: removed on close, after which a body key is not routed and nothing leaks', () => {
