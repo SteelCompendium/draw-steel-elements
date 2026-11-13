@@ -222,6 +222,13 @@
 // the upper (hovered) one deleted from outside, a real +: each is refused as in an LF note (nothing written, exactly one Notice). (g) the fence right under the heading (no blank line), a real +: saved. Red at the 1f1ae442 bundle: (a)-(d)
 // and (g); (e) and (f) pass there too (everything is refused) and hold the fix. A phase's note is rewritten by `t.reset` (CRLF bytes), and the checks compare values and names, not fixture text.
 //
+// SC-621 appends G-S115 (64 scenarios in all; it sits after G-S112 and before G-S56, which stays last, and runs with G-S108 and G-S112 in the seventh `--only` part): a counter in a hover preview / an embed of PART of a note (`#Tracker`,
+// `#^p`) while ONE outside write deletes the counter the card was drawn from AND edits a line on one side of the pair (the part's own text is unchanged, so Obsidian does not redraw the preview). A scripted + (or the pencil, then Save) on the OLD
+// card must write nothing and show exactly one "changed on disk first" Notice, never the other, identical counter (a bundle without SC-621's rule at the rebase wrote the OTHER counter in (a)-(f)). (a)-(d): two sections `## Tracker` / `## Other`
+// with identical counters, the Tracker section deleted, `## Other` renamed `## Tracker`, END edited (hover Reading view card, hover Live Preview form, embed Reading view card, embed Live Preview form); (e), (f): two identical counters separated
+// by a blank line, `^p` under the lower one, the lower one deleted with its `^p` line left under the upper one, TOP edited (hover card, embed Reading view form); (g) control: TOP edited only, a real + saved into the hovered counter;
+// (h) control: no edit, a real + saved into the lower counter; (i) the deletion with TOP edited instead of END: refused on both bundles. One note per cell (a card Notice is rate limited per note).
+//
 // SC-480 appends G-S73 (53 scenarios before G-S77; it sits after G-S49 and before G-S56, which stays last, and runs in the fifth `--only` part with G-S59 and G-S49): a card write whose pin
 // cannot be placed because its block was DELETED from outside is never written into an identical twin. Click + on one of two identical counters (Reading view and Live Preview),
 // delete that block from outside at once, then leave the note (the unload flush) or wait out the 400 ms debounce: nothing is written, the note stays as the outside edit left it, and
@@ -2452,6 +2459,160 @@ async function gs99Cell(t, { id, kind, mode, how, pane, edit }) {
 		rec.error = e.message;
 	} finally {
 		// a refused Save leaves the form open (and a kept-open form outlives its card): Cancel it, then Escape, until no modal is left
+		for (let i = 0; i < 5 && (await t.ev(`!!document.querySelector('.modal-container')`)); i++) {
+			await t.ev(`(() => { const b = Array.from(document.querySelectorAll('.modal-container .dse-modal button')).find((x) => x.getAttribute('aria-label') === 'Cancel'); if (b) b.click(); return true; })()`);
+			await t.sleep(200);
+			if (await t.ev(`!!document.querySelector('.modal-container')`)) await t.key('Escape', 'Escape', 27).catch(() => {});
+			await t.sleep(200);
+		}
+		rec.modalsLeft = await t.ev(`document.querySelectorAll('.modal-container').length`);
+		await K.cleanup();
+		await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
+	}
+	return rec;
+}
+
+// ---- G-S115 (SC-621) fixtures and cell: insert before `const SCENARIOS = [` ----
+const GS115_C5 = COUNTER(5, 'Twin');
+const GS115_C6 = COUNTER(6, 'Twin');
+const GS115_NOTE = {
+	// two sections, different names, identical counters (a heading link names `Tracker`)
+	named: (id) => `# gs115 ${id}\n\nTOP\n\n## Tracker\n\n${GS115_C5}\n\n## Other\n\n${GS115_C5}\n\n## After\n\nEND\n`,
+	// two adjacent `## Tracker` sections; the lower already reads like the upper will after its +
+	twin: (id) => `# gs115 ${id}\n\nTOP\n\n## Tracker\n\n${GS115_C5}\n\n## Tracker\n\n${GS115_C6}\n\n## After\n\nEND\n`,
+	// two identical counters separated by a blank line, `^p` under the LOWER one (a block link names it)
+	low: (id) => `# gs115 ${id}\n\nTOP\n\n${GS115_C5}\n\n${GS115_C5}\n^p\n\nEND\n`,
+};
+const GS115_RX_SEC = (name) => String.raw`new RegExp('## ${name}\\n\\n\x60\x60\x60ds-counter[\\s\\S]*?\x60\x60\x60\\n\\n')`;
+const GS115_EDITS = {
+	// the Tracker section deleted, `## Other` renamed `## Tracker`, END edited (one write)
+	'del-P-rename+end': String.raw`(c) => c.replace(${GS115_RX_SEC('Tracker')}, '').replace('## Other\n', '## Tracker\n').replace('\nEND\n', '\nEND edited\n')`,
+	'del-P-rename+top': String.raw`(c) => c.replace(${GS115_RX_SEC('Tracker')}, '').replace('## Other\n', '## Tracker\n').replace('\nTOP\n', '\nTOP edited\n')`,
+	// the FIRST of two adjacent `## Tracker` sections deleted, END edited
+	'del-first+end': String.raw`(c) => c.replace(${GS115_RX_SEC('Tracker')}, '').replace('\nEND\n', '\nEND edited\n')`,
+	'del-first+top': String.raw`(c) => c.replace(${GS115_RX_SEC('Tracker')}, '').replace('\nTOP\n', '\nTOP edited\n')`,
+	// the LOWER counter (the one `^p` names) deleted with the blank line above it, its `^p` line left (now under the upper), TOP edited
+	'del-low-keepmark+top': `(c) => c.replace(${JSON.stringify(`${GS115_C5}\n\n${GS115_C5}\n^p`)}, ${JSON.stringify(`${GS115_C5}\n^p`)}).replace('\\nTOP\\n', '\\nTOP edited\\n')`,
+	'del-low-keepmark+end': `(c) => c.replace(${JSON.stringify(`${GS115_C5}\n\n${GS115_C5}\n^p`)}, ${JSON.stringify(`${GS115_C5}\n^p`)}).replace('\\nEND\\n', '\\nEND edited\\n')`,
+	top: String.raw`(c) => c.replace('\nTOP\n', '\nTOP edited\n')`,
+	none: null,
+};
+// G-S115 cells: [id, shape, note, link, kind, mode, how, edit, want]; one note per cell (a card Notice is rate limited per note)
+const GS115_CELLS = [
+	['a', 'named', '#Tracker', 'hover', 'rv', 'card', 'del-P-rename+end', 'refused'],
+	['b', 'named', '#Tracker', 'hover', 'lp', 'form', 'del-P-rename+end', 'refused'],
+	['c', 'named', '#Tracker', 'embed', 'rv', 'card', 'del-P-rename+end', 'refused'],
+	['d', 'named', '#Tracker', 'embed', 'lp', 'form', 'del-P-rename+end', 'refused'],
+	['e', 'low', '#^p', 'hover', 'rv', 'card', 'del-low-keepmark+top', 'refused'],
+	['f', 'low', '#^p', 'embed', 'rv', 'form', 'del-low-keepmark+top', 'refused'],
+	['g', 'named', '#Tracker', 'hover', 'rv', 'card', 'top', { values: [6, 5] }],
+	['h', 'low', '#^p', 'embed', 'rv', 'card', 'none', { values: [5, 6] }],
+	['i', 'named', '#Tracker', 'embed', 'rv', 'card', 'del-P-rename+top', 'refused'],
+];
+for (const [id, note, link, kind] of GS115_CELLS) {
+	FIXTURES[`Lifecycle/gs115-${id}-src.md`] = GS115_NOTE[note](id);
+	FIXTURES[`Lifecycle/gs115-${id}-host.md`] = kind === 'embed' ? `# gs115 ${id} host\n\n![[gs115-${id}-src${link}]]\n\nafter\n` : `# gs115 ${id} host\n\nsee [[gs115-${id}-src${link}]] here\n\nfiller\n`;
+}
+
+async function gs115Cell(t, { id, kind, mode, how, edit, plus }) {
+	const K = gs83Kit(t);
+	const J = JSON.stringify;
+	const SRC = `Lifecycle/gs115-${id}-src.md`;
+	const HOST = `Lifecycle/gs115-${id}-host.md`;
+	const rec = { id, kind, mode, how, edit, plus };
+	const valuesOf = () => (t.read(SRC).match(/^[> ]*current_value: (\d+)$/gm) ?? []).map((x) => Number(x.replace(/^[> ]*current_value: /, '')));
+	const namesOf = () => (t.read(SRC).match(/^[> ]*name: (\w+)$/gm) ?? []).map((x) => x.replace(/^[> ]*name: /, ''));
+	const SIG = `(() => { const f = app.vault.getAbstractFileByPath(${J(SRC)}); const m = app.metadataCache.getFileCache(f) ?? {}; return (m.headings ?? []).map((h) => h.heading + '@' + h.position.start.line).join(',') + '|' + Object.entries(m.blocks ?? {}).map(([k, v]) => k + '@' + v.position.start.line).join(',') + '|' + (m.sections ?? []).length; })()`;
+	const inPart = kind === 'hover' ? `e.root.closest('.hover-popover')` : `e.root.closest('.internal-embed, .markdown-embed')`;
+	const ES = `app.plugins.plugins['draw-steel-elements'].viewRegistry.liveEntries().filter((e) => e.host.sourcePath === ${J(SRC)} && e.root.isConnected && ${inPart})`;
+	const BTN = `(${ES})[0].root.querySelector('button[aria-label^="Increase"]')`;
+	const PENCIL = `((${ES})[0].root.querySelector('.dse-chrome button[data-dse-chrome-item="edit"], button[aria-label^="Edit "]'))`;
+	const FORM = `document.querySelector('.modal-container .dse-modal')`;
+	try {
+		await t.reset(SRC);
+		await t.reset(HOST);
+		rec.fixture = t.read(SRC);
+		if (kind === 'hover') {
+			const link = await K.openHost(HOST, mode);
+			rec.hover = await K.hover(link, SRC);
+			await t.sleep(400);
+			await K.moveTo(`(${ES})[0].root`);
+			await t.sleep(300);
+		} else {
+			const st = mode === 'rv' ? { mode: 'preview' } : { mode: 'source', source: false };
+			await t.ev(`(async () => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); const leaf = app.workspace.getLeavesOfType('markdown')[0] ?? app.workspace.getMostRecentLeaf(); await leaf.setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); await leaf.setViewState({ type: 'markdown', state: { file: ${J(HOST)}, ...${J(st)} }, active: true }); return true; })()`);
+			if (mode === 'lp') await t.ev(`(() => { app.workspace.getMostRecentLeaf().view.editor.setCursor({ line: 0, ch: 0 }); return true; })()`);
+			await t.waitFor(`(${ES}).length === 1`, `${id}: the embedded card is drawn`, 15000);
+			await t.sleep(600);
+		}
+		rec.cards = await t.ev(`(${ES}).length`);
+		rec.mountValues = valuesOf();
+		if (plus) {
+			// the card's own +, a real click; Obsidian redraws the part (value 5 -> 6) and the view is adopted into it
+			const before = t.read(SRC);
+			await t.ev(`(() => { window.__gs115host = (${ES})[0].host; return true; })()`);
+			await K.click(BTN);
+			const t0 = Date.now();
+			while (Date.now() - t0 < 3500 && t.read(SRC) === before) await t.sleep(50);
+			await t.sleep(1500);
+			rec.afterPlus = valuesOf();
+			rec.cardsAfterPlus = await t.ev(`(${ES}).length`);
+			rec.sameHostAfterPlus = await t.ev(`(${ES})[0]?.host === window.__gs115host`);
+			if (kind === 'hover') {
+				await K.moveTo(`(${ES})[0].root`);
+				await t.sleep(300);
+			}
+		}
+		rec.before = t.read(SRC);
+		const mk = await t.mark();
+		const OUTSIDE = `await app.vault.process(app.vault.getAbstractFileByPath(${J(SRC)}), ${GS115_EDITS[edit] ?? '(c) => c'});`;
+		const target = how === 'card' ? BTN : PENCIL;
+		if (how === 'form') await t.waitFor(`!!${PENCIL}`, `${id}: the pencil is drawn`, 8000);
+		if (edit === 'none') {
+			if (how === 'card') await K.click(BTN);
+			else await t.ev(`(${PENCIL}).click()`);
+			rec.run = { clicked: true, real: how === 'card' };
+		} else {
+			rec.run = await t.ev(`(async () => {
+  const sig = () => ${SIG};
+  const b = ${target}; const before = sig(); const t0 = performance.now();
+  ${OUTSIDE}
+  let tCache = null, clicked = false;
+  while (performance.now() - t0 < 1500 && !clicked) {
+    if (tCache === null && sig() !== before) tCache = performance.now() - t0;
+    if ((tCache !== null || performance.now() - t0 > 250) && b.isConnected) { b.click(); clicked = true; }
+    if (!b.isConnected) break;
+    await new Promise((r) => setTimeout(r, 0));
+  }
+  return { tCache: tCache === null ? null : Math.round(tCache), clicked, oldCardGone: !b.isConnected };
+})()`);
+		}
+		rec.edited = edit === 'none' ? rec.before : t.read(SRC);
+		if (how === 'card') {
+			const t0 = Date.now();
+			while (Date.now() - t0 < 3500 && t.read(SRC) === rec.edited && !(await t.noticesSince(mk)).length) await t.sleep(50);
+			await t.sleep(1200);
+		} else {
+			await t.sleep(400);
+			rec.formOpenBeforeSave = await t.ev(`!!${FORM}`);
+			if (rec.formOpenBeforeSave) {
+				const SAVE = `Array.from(document.querySelectorAll('.modal-container .dse-modal button')).find((b) => b.getAttribute('aria-label') === 'Save')`;
+				rec.renamed = await t.ev(`(() => { const ta = ${FORM}.querySelector('textarea.dse-form__raw'); if (!ta) return false; ta.value = ta.value.replace('name: Twin', 'name: Edited'); ta.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+				await t.waitFor(`!!(${SAVE}) && !(${SAVE}).disabled`, `${id}: Save is enabled`, 5000);
+				await t.ev(`(${SAVE}).click()`);
+				const t0 = Date.now();
+				while (Date.now() - t0 < 3000 && !t.read(SRC).includes('name: Edited') && !(await t.noticesSince(mk)).length) await t.sleep(50);
+				await t.sleep(400);
+				rec.formOpenAfterSave = await t.ev(`!!${FORM}`);
+			}
+		}
+		rec.note = t.read(SRC);
+		rec.values = valuesOf();
+		rec.names = namesOf();
+		rec.notices = (await t.noticesSince(mk)).filter((x) => /Draw Steel Elements/.test(x));
+	} catch (e) {
+		rec.error = e.message;
+	} finally {
 		for (let i = 0; i < 5 && (await t.ev(`!!document.querySelector('.modal-container')`)); i++) {
 			await t.ev(`(() => { const b = Array.from(document.querySelectorAll('.modal-container .dse-modal button')).find((x) => x.getAttribute('aria-label') === 'Cancel'); if (b) b.click(); return true; })()`);
 			await t.sleep(200);
@@ -8988,6 +9149,56 @@ const SCENARIOS = [
 				await t.ev(`document.getElementById('lc-gs112-notice')?.remove()`);
 				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
 				for (const rel of files) await t.reset(rel);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect(problems.length === 0, `${problems.join(' | ')} -- passed: ${outcomes.join('; ')}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${J(await t.errorsSince(m))}`);
+			return outcomes.join('; ');
+		},
+	},
+	{
+		// G-S115 (SC-621): a counter drawn in a hover preview / an embed of PART of a note (`#Tracker`, `#^p`); one outside write deletes the counter the
+		// card was drawn from AND edits a line on one side of the pair (the part's text is unchanged: no redraw), then a scripted + (or the pencil + Save)
+		// on the OLD card once the metadata cache caught up. (a)-(f): nothing written, exactly one "changed on disk first" Notice (df92a3f6 wrote the
+		// OTHER counter in every one); (g)-(h) controls saved into the hovered counter; (i) the same deletion with TOP edited instead (refused on both).
+		// One note per cell. It sits before G-S56, which runs last.
+		id: 'G-S115',
+		async run(t) {
+			const m = await t.mark();
+			const J = JSON.stringify;
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			const problems = [];
+			const outcomes = [];
+			const dropped = (id) => `Draw Steel Elements: a change to a block in gs115-${id}-src was not saved \u2014 the block changed on disk first.`;
+			await t.ev(`(() => { if (!document.getElementById('lc-gs115-notice')) { const st = document.createElement('style'); st.id = 'lc-gs115-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
+			await t.ev(`${prefs}.set('authoringControls', true)`);
+			try {
+				for (const [id, , , kind, mode, how, edit, want] of GS115_CELLS) {
+					const r = await gs115Cell(t, { id, kind, mode, how, edit, plus: false });
+					const label = `(${id}) ${kind} ${mode} ${how} ${edit}`;
+					const bad = [];
+					if (r.error) bad.push(`error: ${r.error}`);
+					else if (!(r.run && r.run.clicked === true)) bad.push(`the OLD card was not clicked (${J(r.run)}): the shape was not reached`);
+					else if (want === 'refused') {
+						if (how === 'form' && !r.formOpenBeforeSave) bad.push('the form was not open before Save (the shape was not reached)');
+						if (r.note !== r.edited) bad.push(`a counter was written (values ${J(r.values)}, names ${J(r.names)})`);
+						if (!(r.notices.length === 1 && r.notices[0] === dropped(id))) bad.push(`expected the one Notice ${J(dropped(id))}, got ${J(r.notices)}`);
+					} else {
+						if (J(r.values) !== J(want.values)) bad.push(`values ${J(r.values)}, want ${J(want.values)}`);
+						if (r.notices.length) bad.push(`unexpected Notice ${J(r.notices)}`);
+					}
+					if (r.modalsLeft) bad.push(`${r.modalsLeft} modal(s) left open`);
+					if (bad.length) problems.push(`${label}: ${bad.join('; ')}`);
+					else outcomes.push(`${label}: ${want === 'refused' ? 'nothing written, one Notice' : `values ${J(r.values)}, no Notice`}`);
+				}
+			} finally {
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+				await t.ev(`document.getElementById('lc-gs115-notice')?.remove()`);
+				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
+				for (const [id] of GS115_CELLS) {
+					await t.reset(`Lifecycle/gs115-${id}-src.md`);
+					await t.reset(`Lifecycle/gs115-${id}-host.md`);
+				}
 				await t.open('Lifecycle/other.md');
 			}
 			t.expect(problems.length === 0, `${problems.join(' | ')} -- passed: ${outcomes.join('; ')}`);
