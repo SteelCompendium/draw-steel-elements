@@ -448,8 +448,8 @@ Customizing a Condition:
 
 - Click the "cog" icon on a condition's row to open its Icon / Duration / Color / Effect editor
 	inline, under the row.
-- **Icon:** choose a suggested icon or search Obsidian’s available icons by name. This works for both standard and custom conditions. **Default** restores the original icon (a dashed circle for custom conditions). The choice applies only to this condition on this actor and is saved with the note.
-- **Color:** choose a red, amber, green, blue, or purple swatch, or use the eyedropper for a custom color. Hover a swatch to see its color name; a check mark marks the selected swatch. **Default** (the first choice) takes the color off again, so the condition goes back to no color; it is the selected choice whenever the condition has no color.
+- **Icon:** choose a suggested icon or search Obsidian’s available icons by name. This works for both standard and custom conditions. **Default** restores the original icon (a dashed circle for custom conditions); it is the selected choice whenever the condition shows its default icon, including a note that has a blank `icon:`. The choice applies only to this condition on this actor and is saved with the note.
+- **Color:** choose a red, amber, green, blue, or purple swatch, or use the eyedropper for a custom color. A color you wrote by hand in the note (a name like `teal`, `#abc`, `rgb(0 128 128)`) is the selected custom color, and the eyedropper's chooser opens at it. Hover a swatch to see its color name; a check mark marks the selected swatch. **Default** (the first choice) takes the color off again, so the condition goes back to no color; it is the selected choice whenever the condition has no color.
 - Duration is End of Turn, Save Ends, End of Encounter, or Until Removed (the default).
 - Changes apply immediately — there's no separate Save button.
 
