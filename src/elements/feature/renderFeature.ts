@@ -295,8 +295,11 @@ export function actionTypeOf(config: FeatureConfig): ActionType | undefined {
 /**
  * SC-10 Task 2: the cardHead crest's glyph, keyed to the SAME action-type spine
  * `actionTypeOf` already computes (person/sword/etc — Lucide thin-line per
- * DESIGN.md Iconography "Material thin-line second"; glyph-font-parity with the
- * site's DrawSteelGlyphs codepoints is explicitly NOT required, plan Task 2).
+ * DESIGN.md Iconography "Material thin-line second"). SC-563: this Lucide icon is
+ * still mounted for every act, but under Steel an action crest whose act is main,
+ * maneuver, triggered, move, none or trait hides it and draws the site's
+ * DrawSteelGlyphs codepoint instead (styles-source.css, the SC-563 block); villain,
+ * or an act outside those six, keeps the Lucide icon shown.
  * Undefined (unmappable action type) -> kit/crest.ts degrades to no crest at all,
  * in EVERY theme — the same fail-safe the act spine itself already follows.
  */

@@ -23,9 +23,8 @@ Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
 - [STEEL] **Ability-card crests now use the site's solid action icons** (SC-563). In the Steel look, the shield on an
-  ability, trait or kit signature card shows the same filled glyph the site draws (from MCDM's Draw Steel Glyphs font)
-  instead of a thin outline: a main action, maneuver, triggered action, move, no action or trait each get their own
-  glyph in the action colour. A villain action keeps its skull outline, and printing is unchanged (crests are not printed).
+  ability card (including the abilities inside a statblock), a trait card or a kit signature card shows the same filled glyph
+  the site draws (from MCDM's Draw Steel Glyphs font) instead of a thin outline, in the action colour. A villain action keeps its skull outline, and printing is unchanged (crests are not printed).
   As on the site, "no action" and "trait" share one star, and a few of the glyphs are placeholders until MCDM ships
   official action icons. The font is bundled unmodified under its CC BY-SA 4.0 licence (see the README).
 - [FIX] **In Live Preview, a half-typed Malice quick-add (amount and label) now survives the initiative tracker's own save** (SC-605).

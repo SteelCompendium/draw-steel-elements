@@ -95,8 +95,8 @@ function crestGlyphProblems(css: string): string[] {
 	const rules = glyphRules(css);
 
 	// @font-face: present, the right family, display:block, embedded as a data: URI.
-	const face = /@font-face\s*\{([^{}]*font-family:\s*"DrawSteelGlyphs"[^{}]*)\}/.exec(stripComments(css));
-	if (!face) problems.push('no @font-face for "DrawSteelGlyphs"');
+	const face = /@font-face\s*\{([^{}]*font-family:\s*"DSE DrawSteelGlyphs"[^{}]*)\}/.exec(stripComments(css));
+	if (!face) problems.push('no @font-face for "DSE DrawSteelGlyphs"');
 	else {
 		if (!/font-display:\s*block/.test(face[1])) problems.push('@font-face is not font-display: block');
 		if (!/src:\s*url\("data:font\/otf;base64,[A-Za-z0-9+/=]+"\)/.test(face[1]))
@@ -108,6 +108,9 @@ function crestGlyphProblems(css: string): string[] {
 		if (!STEEL_SCOPE.test(r.selector)) problems.push(`not Steel-scoped: ${r.selector.slice(0, 80)}`);
 		if (!SCREEN_ONLY.test(r.selector)) problems.push(`not screen-only: ${r.selector.slice(0, 80)}`);
 		if (/villain/.test(r.selector)) problems.push(`names villain: ${r.selector.slice(0, 80)}`);
+		// The crest of the feature ROOT only: a loosened (descendant) selector would also reach nested crests.
+		if (!r.selector.includes('> .dse-head > .dse-crest'))
+			problems.push(`not anchored to the root's own crest: ${r.selector.slice(0, 80)}`);
 	}
 
 	// Exactly the six site codepoints, each with empty alt text.
@@ -129,7 +132,7 @@ function crestGlyphProblems(css: string): string[] {
 	}
 
 	// The glyph face rule: DrawSteelGlyphs, 1.25em-of-the-crest size, line-height 1, same six acts.
-	const face2 = rules.filter((r) => /font-family\s*:\s*"DrawSteelGlyphs"/.test(r.body));
+	const face2 = rules.filter((r) => /font-family\s*:\s*"DSE DrawSteelGlyphs"/.test(r.body));
 	if (face2.length !== 1) problems.push(`expected one glyph font-family rule, found ${face2.length}`);
 	else {
 		if (!/font-size\s*:\s*calc\(\s*var\(--dse-fs-body\)\s*\*\s*1\.25\s*\)/.test(face2[0].body))
@@ -149,7 +152,39 @@ const sameMap = (a: Record<string, string>, b: Record<string, string>): boolean 
 	return ka.length === kb.length && ka.every((k, i) => k === kb[i] && a[k] === b[k]);
 };
 
+/**
+ * The production minifier (esbuild, `minify: prod`) drops every plain CSS comment and keeps only
+ * legal ones (the bang form), and a release ships just main.js, manifest.json and styles.css. So each
+ * bundled font's licence notice has to be a bang-form legal comment in the source, or the released
+ * plugin carries none.
+ */
+const legalComments = (css: string): string[] => css.match(/\/\*![\s\S]*?\*\//g) ?? [];
+function legalNoticeProblems(css: string): string[] {
+	const out: string[] = [];
+	const legal = legalComments(css);
+	const has = (...needles: string[]): boolean => legal.some((c) => needles.every((n) => c.includes(n)));
+	if (!has('Draw Steel Glyphs', 'MCDM Productions', 'CC BY-SA 4.0', 'https://creativecommons.org/licenses/by-sa/4.0/'))
+		out.push('no /*! notice for Draw Steel Glyphs (MCDM, CC BY-SA 4.0, licence URI)');
+	if (!has('Source Serif 4', 'Adobe', 'SIL Open Font License', 'http://scripts.sil.org/OFL'))
+		out.push('no /*! notice for Source Serif 4 (Adobe, SIL OFL 1.1, licence URI)');
+	return out;
+}
+
 describe('SC-563: Steel action crests draw DrawSteelGlyphs', () => {
+	it('both bundled fonts carry a /*! legal notice the production minifier keeps', () => {
+		expect(legalNoticeProblems(rawCss)).toEqual([]);
+		expect(legalComments(rawCss).length).toBeGreaterThanOrEqual(2);
+	});
+
+	it('legal-notice gate HAS TEETH: a plain comment (which the minifier drops) is reported', () => {
+		const plainGlyphs = rawCss.replace('/*! Draw Steel Glyphs Font', '/* Draw Steel Glyphs Font');
+		expect(plainGlyphs).not.toBe(rawCss);
+		expect(legalNoticeProblems(plainGlyphs).join('\n')).toMatch(/Draw Steel Glyphs/);
+		const plainSerif = rawCss.replace('/*! Source Serif 4 (', '/* Source Serif 4 (');
+		expect(plainSerif).not.toBe(rawCss);
+		expect(legalNoticeProblems(plainSerif).join('\n')).toMatch(/Source Serif 4/);
+	});
+
 	it('the shipped stylesheet satisfies the whole contract', () => {
 		expect(crestGlyphProblems(rawCss)).toEqual([]);
 	});
@@ -184,7 +219,7 @@ describe('SC-563: Steel action crests draw DrawSteelGlyphs', () => {
 	});
 
 	it('embeds the full, unmodified font as a font-display:block data: URI @font-face', () => {
-		const face = /@font-face\s*\{([^{}]*font-family:\s*"DrawSteelGlyphs"[^{}]*)\}/.exec(stripComments(rawCss));
+		const face = /@font-face\s*\{([^{}]*font-family:\s*"DSE DrawSteelGlyphs"[^{}]*)\}/.exec(stripComments(rawCss));
 		expect(face).not.toBeNull();
 		expect((face as RegExpExecArray)[1]).toMatch(/font-display:\s*block/);
 		const b64 = /url\("data:font\/otf;base64,([A-Za-z0-9+/=]+)"\)/.exec((face as RegExpExecArray)[1])?.[1];
@@ -218,6 +253,12 @@ describe('SC-563: Steel action crests draw DrawSteelGlyphs', () => {
 			".dse-feature:is([data-dse-act='villain'], [data-dse-act='main'], [data-dse-act='maneuver']",
 		);
 		expect(crestGlyphProblems(villain).join('\n')).toMatch(/villain/);
+		// Loosens the hide rule to a descendant selector (reaches nested crests too).
+		const loose = mutate(
+			/(\.dse-feature:is\([^)]*\)) > \.dse-head > \.dse-crest (\.dse-crest__glyph svg)/,
+			'$1 $2',
+		);
+		expect(crestGlyphProblems(loose).join('\n')).toMatch(/not anchored/);
 		// Loses the alt text on one glyph.
 		const noAlt = mutate('content: "o" / "";', 'content: "o";');
 		expect(crestGlyphProblems(noAlt).join('\n')).toMatch(/no empty alt text/);
@@ -225,7 +266,7 @@ describe('SC-563: Steel action crests draw DrawSteelGlyphs', () => {
 		const wrongCp = mutate('content: "f" / "";', 'content: "g" / "";');
 		expect(crestGlyphProblems(wrongCp).join('\n')).toMatch(/codepoints/);
 		// Loses the font-face.
-		const noFace = mutate('font-family: "DrawSteelGlyphs";\n\tfont-weight: 400;', 'font-family: "Other";\n\tfont-weight: 400;');
+		const noFace = mutate('font-family: "DSE DrawSteelGlyphs";\n\tfont-weight: 400;', 'font-family: "Other";\n\tfont-weight: 400;');
 		expect(crestGlyphProblems(noFace).join('\n')).toMatch(/no @font-face/);
 	});
 });

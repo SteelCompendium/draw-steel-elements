@@ -6872,6 +6872,7 @@ Shared globals
    committed under assets/fonts/ as the compliance record even though the
    bytes below are the copy that actually ships (single-file styles.css).
 */
+/*! Source Serif 4 (Regular 400, SemiBold 600, Bold 700; Latin subset), Copyright 2014-2023 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'. Licensed under the SIL Open Font License, Version 1.1: http://scripts.sil.org/OFL (SC-563: this is a legal comment on purpose, the minifier keeps it, so the built styles.css carries the notice). */
 @font-face {
 	font-family: "Source Serif 4";
 	font-weight: 600;
@@ -6910,9 +6911,17 @@ Shared globals
    committed beside it as the compliance record. font-display: block, so a
    crest never flashes a letter before the face is ready. Only the one SC-563
    rule below references this family; nothing else is set in it.
+   The family is namespaced ("DSE DrawSteelGlyphs", not the site's bare name) so another
+   sheet's own "DrawSteelGlyphs" @font-face (a theme, a snippet, a later MCDM release with
+   different codepoints) can never replace this one, or the reverse.
+   The notice below is a LEGAL comment (the bang form) on purpose: the production minifier
+   drops every plain comment but keeps that one (moved to the end of the built styles.css),
+   and the released plugin ships only main.js, manifest.json and styles.css, so this is the
+   only place the licence notice can travel with the font. jest checks both legal notices.
 */
+/*! Draw Steel Glyphs Font (DrawSteelGlyphs-Regular.otf, embedded unmodified), (c) 2025 MCDM Productions, licensed under Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0): https://creativecommons.org/licenses/by-sa/4.0/ */
 @font-face {
-	font-family: "DrawSteelGlyphs";
+	font-family: "DSE DrawSteelGlyphs";
 	font-weight: 400;
 	font-style: normal;
 	font-display: block;
@@ -8841,7 +8850,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest:
    codepoint, change the matching rule here to follow.
    Hidden only where a glyph replaces it: a data-dse-act NOT in the six below keeps its
    Lucide svg (never a blank crest), and VILLAIN keeps its Lucide skull (the site has no
-   villain crest; the font's own villain glyph `d` is deliberately not shipped here).
+   villain crest on ability cards; its statblock villain glyph is the same `*` placeholder;
+   the font's own villain glyph `d` is deliberately not shipped here).
    No other crest icon changes (stamina, kit head, role crests carry no data-dse-act on
    the head's parent). Decorative: `content: "x" / ""` gives the glyph empty alt text, so
    a screen reader skips it (the crest is aria-hidden already, crest.ts).
@@ -8855,7 +8865,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest:
 	display: none;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature:is([data-dse-act='main'], [data-dse-act='maneuver'], [data-dse-act='triggered'], [data-dse-act='move'], [data-dse-act='none'], [data-dse-act='trait']) > .dse-head > .dse-crest .dse-crest__glyph::before {
-	font-family: "DrawSteelGlyphs", sans-serif;
+	font-family: "DSE DrawSteelGlyphs", sans-serif;
 	font-size: calc(var(--dse-fs-body) * 1.25);
 	line-height: 1;
 }
