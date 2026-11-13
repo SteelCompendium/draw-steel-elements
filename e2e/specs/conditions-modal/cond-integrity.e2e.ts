@@ -2,7 +2,7 @@
 // blocks survives byte for byte, and a second tracker in the same note is never touched (the driver also fails any test
 // that writes into a block it did not edit). Plus "or just start typing" (SC-580: a printable key opens the Add search) and the
 // two open tickets that reach this window from outside: SC-384 (Live Preview) and SC-355 (the dialog role).
-import { expect } from '@wdio/globals';
+import { $, expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
 import { INIT, TRACKER, TWO, addByKeyboard, menuOptions, modalNames, modalRows, noteCondition, openConditionsModal, openFrom, pressedIn, pressedSwatches, trackerIcons } from '../../driver/conditions';
 
@@ -159,6 +159,75 @@ describe('conditions-modal: "or just start typing" opens the Add search (SC-580)
 		await expect(modal.control('cond.duration', { nth: 1 })).toBeFocused();
 		await dse.press('Escape'); // the window is second
 		await expect(modal.root).not.toBeExisting();
+	});
+});
+
+// SC-613: "or just start typing" also after a click on the window's title or on empty space. Such a click moves focus out of the
+// window to the page (<body>), where the window's own key listener never sees the next letter; a listener on the document does.
+// The two clicks are real pointer clicks on neutral chrome (no control: nothing to credit, so no manifest pair).
+const bodyHasFocus = (): Promise<boolean> => dse.page<boolean>(`document.activeElement === document.body`);
+const clickTitle = (): Promise<void> => $('.modal-container .dse-modal__title').click();
+/** Empty space: the footer's left end, 24 px in (the footer's only control, Done, sits at the right). wdio offsets are from the element's centre. */
+async function clickEmptySpace(): Promise<void> {
+	const footer = $('.modal-container .dse-modal__footer');
+	await footer.waitForDisplayed({ timeout: 8000 });
+	const { width } = await footer.getSize();
+	await footer.click({ x: Math.round(24 - width / 2), y: 0 });
+}
+
+describe('conditions-modal: typing after a click on the title or on empty space (SC-613)', () => {
+	it('[COND-N12] click the window\'s title, type "daz": the Add search opens with "daz" typed, as the docs say; Escape closes just the search and focus lands on "+ Add condition"', async () => {
+		const { modal } = await openConditionsModal(TRACKER, 'hero');
+		await expect(modal.control('cond.add')).toBeFocused();
+		await clickTitle();
+		expect(await bodyHasFocus()).toBe(true); // the premise: the click took focus out of the window
+		await dse.expectNoWrite(TRACKER, async () => {
+			await dse.press('daz'); // page-level: focus is on <body>
+			await expect(modal.control('cond.input')).toBeFocused();
+			await expect(modal.control('cond.input')).toHaveValue('daz');
+			expect((await menuOptions()).names).toEqual(['Dazed', 'Add custom: "daz"']);
+		});
+		await dse.press('Escape', modal.control('cond.input'));
+		await expect(modal.control('cond.input')).not.toBeExisting();
+		await expect(modal.control('cond.add')).toBeFocused();
+		await expect(modal.root).toBeExisting();
+		await dse.closeModals();
+	});
+
+	it('[COND-N13] click an empty part of the window, type "daz": the same; Enter then adds Dazed', async () => {
+		const { modal } = await openConditionsModal(TRACKER, 'hero');
+		await clickEmptySpace();
+		expect(await bodyHasFocus()).toBe(true);
+		await dse.expectNoWrite(TRACKER, async () => {
+			await dse.press('daz');
+			await expect(modal.control('cond.input')).toBeFocused();
+			await expect(modal.control('cond.input')).toHaveValue('daz');
+			expect((await menuOptions()).names).toEqual(['Dazed', 'Add custom: "daz"']);
+		});
+		await dse.waitForWrite(TRACKER, () => dse.press('Enter', modal.control('cond.input')));
+		expect(await modalNames()).toEqual(['Dazed']);
+		await dse.closeModals();
+	});
+
+	it('[COND-N14] a menu Obsidian has open over the page keeps its keys: with focus on <body> and a menu showing, a letter opens nothing; after the menu is closed the next letters open the search', async () => {
+		const { modal } = await openConditionsModal(TRACKER, 'hero');
+		await clickTitle();
+		expect(await bodyHasFocus()).toBe(true);
+		// A real right-click cannot reach the page behind the window, so the file explorer's context menu is asked for the way the app asks (a contextmenu event).
+		expect(await dse.page<boolean>(`(() => { const item = document.querySelector('.nav-file-title, .tree-item-self'); if (!item) return false; item.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 50, clientY: 50, button: 2 })); return true; })()`)).toBe(true);
+		await dse.waitFor(`document.querySelectorAll('.menu').length === 1`, 'the context menu to open');
+		await dse.expectNoWrite(TRACKER, async () => {
+			await dse.press('d'); // the menu has the page's keys: Obsidian does not cancel a letter, so only the window's own guard keeps it
+			expect(await dse.page<boolean>(`document.querySelectorAll('.menu').length === 1`)).toBe(true);
+			await expect(modal.control('cond.input')).not.toBeExisting();
+			await dse.press('Escape'); // the menu's own scope closes just the menu
+			await dse.waitFor(`document.querySelectorAll('.menu').length === 0`, 'the menu to close');
+			await expect(modal.root).toBeExisting();
+			await dse.press('daz');
+			await expect(modal.control('cond.input')).toBeFocused();
+			await expect(modal.control('cond.input')).toHaveValue('daz');
+		});
+		await dse.closeModals();
 	});
 });
 
