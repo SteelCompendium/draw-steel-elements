@@ -1020,7 +1020,7 @@ describe('SC-580: a printable key in the window opens the Add search with that k
 
 // ------------------------------------------------------------------------------------------ known bugs
 
-describe('SC-436 matrix: fixed bugs (SC-581, SC-585) and the open known-bug markers (SC-586: each encodes the correct behaviour and fails today)', () => {
+describe('SC-436 matrix: fixed bugs (SC-581, SC-585, SC-586)', () => {
 
 	// SC-581: Icon has "Use default", Duration "Until removed", Effect "static"; the Color group has its own "Default" option.
 	// Fix-agnostic: passes if ANY single interaction in the Color group (a default/none option, or re-activating the
@@ -1056,34 +1056,88 @@ describe('SC-436 matrix: fixed bugs (SC-581, SC-585) and the open known-bug mark
 		expect(o.container.contains(document.activeElement)).toBe(true);
 	});
 
-	// SC-586 (a): a CSS-named colour marks the pipette selected, but the colour input is only ever given a #rrggbb value.
-	// jsdom has no canvas, so the test stubs a minimal 2D context whose `fillStyle` resolves `teal` to `#008080` (as a real
-	// browser does): a lookup-table fix and a canvas-based fix then both flip this marker.
-	test.failing('SC-586: for `color: teal` the custom colour input starts at teal\'s hex', () => {
-		let fill = '#000000';
-		const getContext = jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation((() => ({
-			get fillStyle(): string {
-				return fill;
-			},
-			set fillStyle(v: string) {
-				fill = v === 'teal' ? '#008080' : v;
-			},
-		})) as unknown as HTMLCanvasElement['getContext']);
-		try {
-			const o = open([{ key: 'prone', color: 'teal' }]);
-			openEditor(o.container, 0);
-			expect(customSelected(o.container)).toBe(true); // setup: the pipette treats teal as the selected custom colour
-			expect(qs<HTMLInputElement>(o.container, '[data-dse-control="cond.color-custom"]').value).toBe('#008080');
-		} finally {
-			getContext.mockRestore();
-		}
+	// SC-586: the colour chooser opens at the colour the row shows, whatever way the note spells it. The browser does the parsing
+	// (computed style); jsdom's cssstyle resolves names and `rgb()`/`hsl()`/short hex itself, so this runs the real code path. Real
+	// Obsidian (Electron) resolving the same inputs is proved by the e2e spec (conditions-modal/cond-handwritten).
+	const customInput = (c: HTMLElement): HTMLInputElement => qs<HTMLInputElement>(c, '[data-dse-control="cond.color-custom"]');
+
+	test.each([
+		['a CSS name', 'teal', '#008080'],
+		['a CSS name in capitals', 'TEAL', '#008080'],
+		['short hex', '#0a8', '#00aa88'],
+		['upper-case hex', '#00AA88', '#00aa88'],
+		['rgb()', 'rgb(0, 170, 136)', '#00aa88'],
+		['space-separated rgb()', 'rgb(0 170 136)', '#00aa88'],
+		['hsl()', 'hsl(180 100% 25%)', '#008080'],
+		['a colour with alpha (the alpha is dropped)', 'rgba(0, 128, 128, 0.5)', '#008080'],
+	])('for a colour written as %s the custom colour input starts at its #rrggbb (%s -> %s) and opening the editor writes nothing', (_name, color, hex) => {
+		const o = open([{ key: 'prone', color }]);
+		openEditor(o.container, 0);
+		expect(customSelected(o.container)).toBe(true); // setup: the pipette treats it as the selected custom colour
+		expect(customInput(o.container).value).toBe(hex);
+		expect(o.onChange).not.toHaveBeenCalled();
+		expect((o.holder.conditions as Condition[])[0].color).toBe(color);
 	});
 
-	// SC-586 (b): `icon: ""` draws the default glyph but "Use default" is not pressed.
-	test.failing('SC-586: for `icon: ""` the "Use default condition icon" choice is the pressed one', () => {
-		const o = open([{ key: 'hexed', icon: '' }]);
+	test('opening the chooser and dismissing it without a pick (focus, then an input event but no change) writes nothing; picking writes once', () => {
+		const o = open([{ key: 'prone', color: 'teal' }]);
+		openEditor(o.container, 0);
+		const input = customInput(o.container);
+		input.focus();
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+		input.blur();
+		expect(o.onChange).not.toHaveBeenCalled();
+		expect((o.holder.conditions as Condition[])[0].color).toBe('teal');
+		const again = customInput(o.container);
+		again.value = '#123456';
+		again.dispatchEvent(new Event('change', { bubbles: true }));
+		expect(o.onChange).toHaveBeenCalledTimes(1);
+		expect(lastEmit(o)[0].color).toBe('#123456');
+	});
+
+	test.each([
+		['an unparseable colour', 'not-a-colour'],
+		['no colour', undefined],
+	])('with %s the custom colour input stays at its white default', (_name, color) => {
+		const o = open([{ key: 'prone', color }]);
+		openEditor(o.container, 0);
+		expect(customInput(o.container).value).toBe('#ffffff');
+	});
+
+	// SC-586: the icon row draws `entry.icon?.trim() ||` the default, and the picker agrees with it.
+	test.each([
+		['an empty string', ''],
+		['whitespace only', '   '],
+	])('for `icon:` %s the "Use default condition icon" choice is the pressed one and no blank Icon chip is added', (_name, icon) => {
+		const o = open([{ key: 'hexed', icon }]);
 		expect(qs(o.container, '.dse-condal__glyph').getAttribute('data-icon')).toBe('circle-dashed'); // setup: the row shows the default glyph
 		openEditor(o.container, 0);
 		expect(pressedIn(o.container, 'Condition icon')).toEqual(['Use default condition icon']);
+		const labels = (c: HTMLElement): string[] => Array.from(c.querySelectorAll('[data-dse-control="cond.icon"]')).map((b) => b.getAttribute('aria-label') ?? '');
+		const bare = open([{ key: 'hexed' }]);
+		openEditor(bare.container, 0);
+		expect(labels(o.container)).toEqual(labels(bare.container)); // the same choices as with no `icon:` at all
+		expect(labels(o.container).filter((l) => l.trim() === 'Icon:')).toEqual([]);
+		expect(o.onChange).not.toHaveBeenCalled();
+		expect((o.holder.conditions as Condition[])[0].icon).toBe(icon); // the note keeps what was written
 	});
+
+	test('for `icon: "skull "` (a trailing space) the skull choice is the pressed one, once, and "Use default" is not', () => {
+		const o = open([{ key: 'hexed', icon: 'skull ' }]);
+		openEditor(o.container, 0);
+		expect(pressedIn(o.container, 'Condition icon')).toEqual(['Icon: skull']);
+		expect(o.onChange).not.toHaveBeenCalled();
+	});
+
+	test('picking an icon on an `icon: ""` entry presses it and writes it; "Use default" then removes the key', () => {
+		const o = open([{ key: 'hexed', icon: '' }]);
+		openEditor(o.container, 0);
+		pick(o.container, 'Condition icon', 'Icon: skull');
+		expect(lastEmit(o)[0].icon).toBe('skull');
+		expect(pressedIn(o.container, 'Condition icon')).toEqual(['Icon: skull']);
+		pick(o.container, 'Condition icon', 'Use default condition icon');
+		expect(Object.keys(lastEmit(o)[0])).not.toContain('icon');
+		expect(pressedIn(o.container, 'Condition icon')).toEqual(['Use default condition icon']);
+	});
+});
 });
