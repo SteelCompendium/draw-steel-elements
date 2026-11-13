@@ -72,7 +72,7 @@ describe('D7 Task 1: kit/conditionIcons — buildConditionIcons', () => {
 		expect(iconOf(icons[1])).toBe('hand');
 		expect(icons[1].getAttribute('aria-label')).toBe('Remove condition: Grabbed');
 		(icons[0] as HTMLButtonElement).click();
-		expect(onRemove).toHaveBeenCalledWith(entry);
+		expect(onRemove).toHaveBeenCalledWith(entry, icons[0]); // SC-614: and the button that was pressed
 	});
 
 	test('canRemove: true — real iconButtons; click invokes onRemove with the exact entry', () => {
@@ -85,7 +85,7 @@ describe('D7 Task 1: kit/conditionIcons — buildConditionIcons', () => {
 		const icon = root.querySelector('.dse-cond') as HTMLButtonElement;
 		expect(icon.tagName).toBe('BUTTON');
 		icon.click();
-		expect(onRemove).toHaveBeenCalledWith('grabbed');
+		expect(onRemove).toHaveBeenCalledWith('grabbed', icon); // SC-614: the second argument is the pressed button
 	});
 
 	test('canRemove: false — static, non-interactive spans; onRemove never called even if clicked', () => {
