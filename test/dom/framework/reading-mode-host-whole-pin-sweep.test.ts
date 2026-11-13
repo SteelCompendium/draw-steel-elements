@@ -1,6 +1,6 @@
 // SC-612 -- the sweep behind reading-mode-host-whole-pin.test.ts: a host on a counter of a note open in its own pane (a whole-note pin, no embed, no hover),
-// ten layouts (single counter, twins separated by one blank line / two / none / prose / at the end of the note, a triple, two different counters, identical
-// and different headed sections) x every counter x ~140 outside edits (none, unrelated edits, a twin added or deleted next to the pinned block, a sibling's
+// 14 layouts (single counter, twins separated by one blank line / two / none / prose / at the end of the note, a triple, two different counters, identical
+// and different headed sections, and four with a counter of ANOTHER value next to the twins) x every counter x ~140 outside edits (none, unrelated edits, a twin added or deleted next to the pinned block, a sibling's
 // write, the pinned block moved or edited, >400 changed lines, each alone and with TOP / END edited in the same write) x the form and three card section
 // modes (the section at the block's identity, at the same ordinal as Obsidian's hand-over, null), plus the user's own rounds with no outside edit.
 // The oracle does not use lineMap: a cell is AMBIGUOUS when more than one placement of the pinned block (paired with an identical block of the note now,

@@ -27,7 +27,7 @@ const GAVE_UP = 'gave up';
  * of two identical blocks with identical surroundings, deleting one cannot be told from deleting the other (the note that is left is
  * the same). The common head is trimmed first, so the diff always reads the LOWER one as deleted: a pin on the upper block then maps
  * to the surviving block, and a pin on the lower block maps to null. That tie is this map's alone; a caller that must not write on it
- * (a whole-note pin whose body is twinned, SC-612; a strict pin, SC-607) asks `mapLineFromTail` and `mapLineGreedy` too.
+ * (a whole-note pin whose body is twinned, SC-612; a strict pin, SC-607) asks `mapLineFromTail` (SC-607) or prices the placements with `editDistance` (SC-612, `ReadingModeBlockHost.placedUniquely`).
  */
 export function mapLine(before: string, after: string, line: number): number | null {
 	if (before === after) return line;

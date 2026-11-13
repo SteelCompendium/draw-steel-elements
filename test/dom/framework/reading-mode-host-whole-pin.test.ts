@@ -1,11 +1,11 @@
 // SC-612 -- a block edit form's Save or a card's + / - on a counter of a note open in its OWN pane (a whole-note pin, not an embed or a hover preview), when the
 // note holds two identical counters separated only by blank lines and one of them is deleted from outside (Sync, another app) while the form is open / the click
 // is in its 400 ms round. The note that is left is the same whichever counter was deleted, so the head-first line map's guess (it always reads the LOWER one as
-// deleted) must not place a write: the form or card would land in a block that only looks like its own. Rule: while the known body occurs twice (in the note as
-// pinned, or now), `pinnedTarget` accepts a place only when the tail-first map agrees AND neither greedy map (`mapLineGreedy`) puts the block elsewhere. Otherwise
-// nothing is written and the "changed on disk first" Notice shows (the form stays open; the next round, on the note as it is now, saves).
-// The named tests (T1-T13) are the shapes that matter on their own; the sweep runs ten layouts x every counter x ~140 outside edits x form / three card section
-// modes against an oracle that is independent of lineMap: in a cell where more than one placement of the block costs the same, nothing is written.
+// deleted) must not place a write: the form or card would land in a block that only looks like its own. Rule P: while the known body occurs twice (in the note as
+// pinned, or now), `pinnedTarget` accepts the head-first place only when it is the UNIQUE cheapest placement of the block (`placedUniquely`: paired with a line-identical
+// block of the note now, or deleted, priced by `editDistance`). Otherwise nothing is written and the "changed on disk first" Notice shows (the form stays open; the next
+// round, on the note as it is now, saves). The named tests (T1-T14, H1-H1c, M1-M6) are the shapes that matter on their own; reading-mode-host-whole-pin-sweep.test.ts and
+// reading-mode-host-whole-pin-fuzz.test.ts run layouts / random notes x outside edits against an oracle that is independent of lineMap.
 import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlockHost';
 import { droppedWriteMessage, resetDroppedWriteNotices } from '../../../src/framework/host/droppedWriteNotice';
 import { App, Notice, Plugin } from '../../mocks/obsidian';
