@@ -50,13 +50,19 @@ for what needs action.
   A mouse click still never pulls focus into an element, and focus you moved away before the save lands stays where you put it.
   Reading view is unchanged. Not covered: the Conditions window still closes when a write lands (SC-384).
 
+- [FIX] **Removing a condition with the mouse while using the keyboard keeps focus in the initiative tracker's conditions row, in Reading
+  view and the pinned sidebar tracker** (SC-614). With focus on a row's Add Condition button (or on another condition's icon), a mouse click on a
+  condition icon removed it and focus fell to the top of the page. Focus now stays on the Add Condition button, or on the same
+  condition's icon, and moves to the next control in the row when the icon you had focus on is the one removed. Removing a condition with Enter or
+  Space does the same. A click when focus was not already in the tracker still does not pull focus in, and focus on a control outside the conditions row
+  stays where it was.
+
 - [FIX] **Clicking another creature in the initiative roster while using the keyboard keeps focus in the tracker, on the creature you
   clicked, in Reading view** (SC-609). With focus on the detail row's Stamina control (or any other control of the detail row), a
   mouse click on a roster cell switched the detail row and focus fell to the top of the page. Focus now moves to the cell you
   clicked. A mouse click when focus was not already in the tracker still does not pull focus in, and focus on a control the click
   does not replace (Advance round, say) stays where it was. Since SC-602 this holds in Live Preview too.
-  Not covered: a click while the cursor is in a Malice quick-add box (SC-615) and a click that removes a condition from
-  the row focus was in (SC-614).
+  Not covered: a click while the cursor is in a Malice quick-add box (SC-615).
 
 - [FIX] **A + / - or a form Save in a hover preview or an embed that stayed open while the note changed no longer writes into a different, identical counter in the shapes below** (SC-607).
   Open a hover preview or an embed of part of a note (`[[note#Tracker]]`, `![[note#^id]]`) and leave it open while something else
