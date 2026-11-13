@@ -1112,7 +1112,8 @@ export class ReadingModeBlockHost implements BlockHost {
 		}
 		// SC-619: Obsidian cuts a heading HOVER's part from one character after the heading line's content (measured, 1.15.1): the LF of an LF note,
 		// but only the CR of a CRLF note, so the part starts with that note's stray LF and every line sits one lower. Drop it: the part is then
-		// compared line for line exactly as the same LF note's part.
+		// compared line for line exactly as the same LF note's part. Residual (accepted, safe): a CRLF note converted to LF from outside while its hover
+		// is open is read here from the card's CRLF snapshot, so + is refused with the Notice until the preview is reopened.
 		const crlfHover = hovered !== null && blockId === null && sectionText.startsWith('\n') && splitWithEols(whole).eols[start] === '\r\n';
 		const part = splitLines(crlfHover ? sectionText.slice(1) : sectionText);
 		const rel = crlfHover ? relLine - 1 : relLine;

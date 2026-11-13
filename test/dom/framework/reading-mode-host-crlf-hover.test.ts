@@ -359,4 +359,74 @@ describe('SC-619: a hover preview of a heading of a note saved with Windows line
 		expect(await host.replaceSource(bodyOf(6), { fromView: true })).toBe(true);
 		expect(app.vault.getContent('Note.md')).toBe(text.replace('current_value: 5', 'current_value: 6'));
 	});
+
+	test('SC-619: a CRLF heading line over an LF-only blank line (the part starts "\\n\\n```"; the terminator read is the HEADING line\'s, not the next line\'s): saved', async () => {
+		const text = join(TWIN(), '\r\n').replace('## Tracker\r\n\r\n', '## Tracker\r\n\n');
+		const app = new App();
+		app.vault.setFile('Note.md', text);
+		jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheOf(app.vault.getContent('Note.md')!) as never);
+		const sec = hoverPart(text, '## Tracker');
+		expect(sec.text.startsWith('\n\n```ds-counter\r\n')).toBe(true);
+		const el = popoverEl(app, 'Note#Tracker', text);
+		const host = new ReadingModeBlockHost(new Plugin(app) as never, el, ctxOf({ current: sec }), 'ds-counter');
+		host.setMountedBody(bodyOf(5));
+		await settle();
+		host.notePersistIntent();
+		await settle();
+
+		expect(await host.replaceSource(bodyOf(6), { fromView: true })).toBe(true);
+		expect(app.vault.getContent('Note.md')).toBe(text.replace('current_value: 5', 'current_value: 6'));
+		expect(Notice.notices).toEqual([]);
+	});
+
+	// --- a known residual (ruled acceptable, SC-619 r3 LOW-1): a note whose line endings are converted from outside while its heading hover is open ---
+
+	/** A CRLF note drawn in a hover of `[[Note#Tracker]]`, converted to LF from outside, the preview redrawn with the LF part (measured); returns the app, the card's host and its element. */
+	async function convertedWhileOpen() {
+		const app = new App();
+		const drawn = join(TWIN(), '\r\n');
+		app.vault.setFile('Note.md', drawn);
+		jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheOf(app.vault.getContent('Note.md')!) as never);
+		const el = popoverEl(app, 'Note#Tracker', drawn);
+		const section: Section = { current: hoverPart(drawn, '## Tracker') };
+		const host = new ReadingModeBlockHost(new Plugin(app) as never, el, ctxOf(section), 'ds-counter');
+		host.setMountedBody(bodyOf(5));
+		await settle();
+		const now = join(TWIN(), '\n');
+		app.vault.setFile('Note.md', now);
+		section.current = hoverPart(now, '## Tracker'); // the card keeps the note it was mounted on (measured, SC-619 r3): no rebind
+		await settle();
+		return { app, host, el, now };
+	}
+
+	test('SC-619 residual: the CRLF note converted to LF while its heading hover is open: + is refused (nothing written, the "changed on disk first" Notice), not written into the wrong counter', async () => {
+		const { app, host, now } = await convertedWhileOpen();
+		host.notePersistIntent();
+		await settle();
+
+		expect(await host.replaceSource(bodyOf(6), { fromView: true })).toBe(false);
+		expect(app.vault.getContent('Note.md')).toBe(now);
+		expect(Notice.notices.map(String)).toEqual(dropped);
+	});
+
+	test('SC-619 residual is not persistent: after the refusal the preview reopened on the LF note (a new card) saves into the hovered counter', async () => {
+		const { app, host, el, now } = await convertedWhileOpen();
+		host.notePersistIntent();
+		await settle();
+		expect(await host.replaceSource(bodyOf(6), { fromView: true })).toBe(false);
+		el.closest('.hover-popover')?.remove();
+		Notice.notices.length = 0;
+		resetDroppedWriteNotices();
+
+		const el2 = popoverEl(app, 'Note#Tracker', now);
+		const host2 = new ReadingModeBlockHost(new Plugin(app) as never, el2, ctxOf({ current: hoverPart(now, '## Tracker') }), 'ds-counter');
+		host2.setMountedBody(bodyOf(5));
+		await settle();
+		host2.notePersistIntent();
+		await settle();
+
+		expect(await host2.replaceSource(bodyOf(6), { fromView: true })).toBe(true);
+		expect(app.vault.getContent('Note.md')).toBe(join(edited(TWIN(), fenceUnder(TWIN(), '## Tracker'), 6), '\n'));
+		expect(Notice.notices).toEqual([]);
+	});
 });
