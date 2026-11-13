@@ -3,7 +3,7 @@
 // writes the note at once; opening, closing and focus moves write nothing. SC-431 / SC-468 / SC-474 piloted it
 // (Escape in the dropdown, keyboard picks in the row editor, the click-away close); SC-436 inventoried the rest.
 // `rows` cite the scenario groups: O open + reach, A the Add dropdown, C a custom condition, R a row (cog, remove),
-// D the row editor (icon, duration, colour, effect; COND-D01..D17), X the close paths. The ids are the COND-<group><nn>
+// D the row editor (icon, duration, colour, effect; COND-D01..D19), X the close paths. The ids are the COND-<group><nn>
 // scenarios of e2e/specs/conditions-modal/ (the pilot's COND-E01..E07 sit in e2e/specs/initiative/).
 // The ConditionsPanel host (src/elements/conditions/panel.ts, ds-conditions) opens the same modal; it is another host
 // and has no reach row here.
@@ -27,6 +27,8 @@ export default surface('conditions-modal', {
 		'cond.icon-search': c(['click', 'type', 'press:Escape'], ['SC-474', 'D02', 'X07']),
 		'cond.icon': c(['click', 'press:Enter'], ['D02', 'D04']),
 		'cond.duration': c(['click', 'press:Enter'], ['SC-468', 'D05', 'D08']),
+		// SC-581: the Color group's first option, "Default": removes `color` from the note (the key is gone, not empty).
+		'cond.color-default': c(['click', 'press:Enter'], ['D18', 'D19']),
 		'cond.swatch': c(['click', 'press:Enter'], ['SC-468', 'D09', 'D10']),
 		// The custom colour <input type="color">: transparent over the pipette swatch. Enter opens the browser's own colour
 		// chooser, which CDP cannot reach: D11 drives that Enter. The chooser's commit (input + change) is dispatched page-side by

@@ -193,6 +193,36 @@ describe('conditions-modal: the colour swatches', () => {
 	});
 });
 
+describe('conditions-modal: the Default colour option', () => {
+	it('[COND-D18] "Default" removes the colour from the note (Dazed: red -> none), unpresses the swatch, uncolours the row\'s glyph and keeps the duration and effect; a swatch sets one again', async () => {
+		const modal = await openEditor(DAZED);
+		expect(await pressedIn('Color')).toEqual(['Red']);
+		await pickOnce(modal, 'cond.color-default', 0);
+		const after = await noteCondition(CONDITIONS, 'hero', DAZED);
+		expect(after).toEqual({ key: 'dazed', duration: 'eot', effect: 'glow' });
+		expect(Object.keys(after)).not.toContain('color'); // the key is gone, not written empty
+		expect(await pressedIn('Color')).toEqual(['Default']);
+		expect(await pressedSwatches()).toEqual([]);
+		expect(await dse.page<string>(`document.querySelector('.modal-container .dse-condal__row:nth-child(2) .dse-condal__glyph').style.getPropertyValue('--dse-condition-color')`)).toBe('');
+		await pickOnce(modal, 'cond.swatch', SWATCH.green);
+		expect((await noteCondition(CONDITIONS, 'hero', DAZED)).color).toBe('#1e8449');
+		expect(await pressedIn('Color')).toEqual(['Green']);
+		await dse.closeModals();
+	});
+
+	it('[COND-D19] Tab to "Default" and Enter removes the colour once, and focus stays on it, now pressed', async () => {
+		const modal = await openEditor(DAZED);
+		const reset = modal.control('cond.color-default');
+		await dse.tabTo(reset, 40);
+		const w = await dse.waitForWrite(CONDITIONS, () => dse.press('Enter', reset));
+		expect(w.count).toBe(1);
+		expect(Object.keys(await noteCondition(CONDITIONS, 'hero', DAZED))).not.toContain('color');
+		expect(await focusedOption()).toEqual({ ctl: 'cond.color-default', label: 'Default' });
+		expect(await pressedIn('Color')).toEqual(['Default']);
+		await dse.closeModals();
+	});
+});
+
 describe('conditions-modal: the effect chips', () => {
 	it('[COND-D12] an effect chip writes its effect and a badge; "static" clears it; the glyph carries the effect class (Hexed)', async () => {
 		const modal = await openEditor(HEXED);
