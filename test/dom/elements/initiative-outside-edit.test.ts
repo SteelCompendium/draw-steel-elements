@@ -22,6 +22,7 @@ import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App, Component, Modal, Notice, Plugin } from '../../mocks/obsidian';
 import { initiativeElement } from '../../../src/elements/initiative/definition';
 import type { InitiativeView } from '../../../src/elements/initiative/view';
+import { HANDOFF_SETTLE_MS } from '../../../src/framework/chrome/windowHandoff';
 
 const HEROES = ['heroes:', '  - name: "Alice"', '    max_stamina: 30'];
 const OGRES = ['enemy_groups:', '  - name: "Ogres"', '    creatures:', '      - name: "Ogre"', '        max_stamina: 60', '        amount: 3'];
@@ -42,6 +43,8 @@ interface Mounted {
 	root: HTMLElement;
 	pane: HTMLElement;
 	plugin: Plugin;
+	/** What the view asked its host to write (the debounced flush), oldest first. */
+	writes: string[];
 }
 
 function makeDeps(): ElementPipelineDeps {
@@ -79,6 +82,7 @@ async function mount(source: string, pane: HTMLElement = newPane(), sourcePath =
 	(deps.plugin as unknown as Plugin).load(); // the hand-off is owned by the plugin: a plugin that is not loaded starts none
 	const containerEl = pane.appendChild(document.createElement('div'));
 	const views: Component[] = [];
+	const writes: string[] = [];
 	const host = {
 		mode: 'reading' as RenderMode,
 		sourcePath,
@@ -90,12 +94,12 @@ async function mount(source: string, pane: HTMLElement = newPane(), sourcePath =
 			return child;
 		},
 		getBlockInfo: () => ({ language: 'ds-initiative', lineStart: 0, lineEnd: 40 }),
-		replaceSource: jest.fn(async () => true),
+		replaceSource: jest.fn(async (body: string) => (writes.push(body), true)),
 		blockKey: () => `${sourcePath}::ds-initiative::0`,
 		lastKnownBody: raw ? source : null,
 	} as unknown as BlockHost;
 	await new ElementPipeline(deps).run(initiativeElement, source, host);
-	return { view: views[0] as unknown as InitiativeView, root: containerEl.firstElementChild as HTMLElement, pane, plugin: deps.plugin as unknown as Plugin };
+	return { view: views[0] as unknown as InitiativeView, root: containerEl.firstElementChild as HTMLElement, pane, plugin: deps.plugin as unknown as Plugin, writes };
 }
 
 const ctl = <T extends HTMLElement = HTMLElement>(root: Element, id: string, n = 0): T => {
@@ -473,6 +477,42 @@ describe('SC-608: an outside edit redraws the tracker while a window is open (Re
 		expect(notices()).toHaveLength(0);
 		expect(document.activeElement).toBe(document.body);
 		expect(fresh.root.contains(document.activeElement)).toBe(false);
+	});
+
+	test('[O25] the view wrote while its window was open (a condition added), then Live Preview redraws it from that write: same disk content, no Notice, focus comes back', async () => {
+		const old = await mount(TRACKER, undefined, 'Encounter.md', true);
+		const opener = ctl(old.root, 'init.cond.add');
+		opener.focus();
+		opener.click();
+		ctl(modalEl()!, 'cond.add').click();
+		const input = ctl<HTMLInputElement>(modalEl()!, 'cond.input');
+		input.value = 'daz';
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+		await later(500); // the 400 ms write
+		expect(old.writes).toHaveLength(1);
+		const fresh = await mount(old.writes[0], old.pane, 'Encounter.md', true); // the widget Live Preview draws for that write
+		old.view.unload();
+		old.root.remove();
+		await later();
+		expect(notices()).toHaveLength(0);
+		expect(document.activeElement).toBe(ctl(fresh.root, 'init.cond.add', 0));
+	});
+
+	test('[O26] the watch does not outlive its settle period: a redraw long after the burst is not claimed', async () => {
+		const old = await mount(SQUAD);
+		openPool(old.root);
+		const first = await mount(SQUAD_EDITED, old.pane);
+		old.view.unload();
+		old.root.remove();
+		await later(HANDOFF_SETTLE_MS + 300);
+		expect(document.activeElement).toBe(ctl(first.root, 'init.detail.stamina'));
+		const next = await mount(SQUAD_EDITED.replace('value: 9', 'value: 4'), old.pane);
+		first.view.unload();
+		first.root.remove();
+		await later();
+		expect(document.activeElement).toBe(document.body);
+		expect(next.root.contains(document.activeElement)).toBe(false);
 	});
 
 	test('[O14] the tracker\'s own Apply shows no Notice and keeps its focus hand-back', async () => {
