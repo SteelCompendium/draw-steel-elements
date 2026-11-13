@@ -7,6 +7,7 @@ export const TRACKER = 'Initiative/tracker.md'; // hero Alice Alpha, three Ogres
 export const CONDITIONS = 'Initiative/conditions.md'; // hero: bleeding, dazed (eot, red, glow), hexed (custom), slowed (legacy effect text); Ogre #1: grabbed, prone (save ends)
 export const TWO = 'Initiative/two-trackers.md'; // two trackers: Alice Alpha, then Bob Beta (grabbed, hexed to end of encounter)
 export const KEYCASE = 'Initiative/key-case.md'; // hero: `key: Dazed`, `key: Hexed` (hand-written casing); Ogre #1: `Dazed` and `dazed` both (SC-583)
+export const HANDWRITTEN = 'Initiative/hand-written.md'; // hero: Dazed with `color: teal`, Hexed with `icon: ""` (hand-written YAML, SC-586)
 export const INIT = 'ds-initiative';
 
 type Scope = ReturnType<typeof dse.block>;
