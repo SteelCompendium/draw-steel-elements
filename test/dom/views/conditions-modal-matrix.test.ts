@@ -534,6 +534,81 @@ describe('SC-436 matrix: removing a row (rows x open editor x removed row)', () 
 		expect(document.activeElement).toBe(o.container.querySelector('[data-dse-control="cond.add"]'));
 	});
 
+	// SC-585: with the Add search open there is no "+ Add condition" button; the search's input takes focus instead.
+	describe('removing a row while the Add search is open', () => {
+		const removeButtons = (c: HTMLElement): HTMLElement[] => Array.from(c.querySelectorAll<HTMLElement>('[data-dse-control="cond.remove"]'));
+		const press = (el: HTMLElement): void => {
+			el.focus();
+			el.click(); // a keyboard activation: a click, no mousedown
+		};
+
+		test('SC-585: the last row: the search stays open and its input, exactly, has focus', () => {
+			const o = open(['prone']);
+			const input = openAdd(o.container);
+			press(removeButtons(o.container)[0]);
+			expect(rowNames(o.container)).toEqual([]);
+			expect(lastEmit(o)).toEqual([]);
+			expect(searchInput(o.container)).toBe(input); // the same input: the search was not rebuilt or closed
+			expect(document.activeElement).toBe(input);
+			expect(o.container.querySelector('[data-dse-control="cond.add"]')).toBeNull();
+		});
+
+		test('SC-585: the typed query survives and the menu still matches it', () => {
+			const o = open(['prone']);
+			const input = openAdd(o.container);
+			typeQuery(input, 'daz');
+			press(removeButtons(o.container)[0]);
+			expect(input.value).toBe('daz');
+			expect(document.activeElement).toBe(input);
+			expect(menuItems(o.container).map((m) => m.textContent)).toEqual(expect.arrayContaining([expect.stringContaining('Dazed')]));
+		});
+
+		test('SC-585: the combobox\'s aria-activedescendant names a live option after the list empties', () => {
+			const o = open(['prone']);
+			const input = openAdd(o.container);
+			press(removeButtons(o.container)[0]);
+			const active = input.getAttribute('aria-activedescendant');
+			expect(active).toBeTruthy();
+			expect(o.container.querySelector(`[id="${active}"]`)).not.toBeNull();
+			expect(input.getAttribute('aria-controls')).toBe(o.container.querySelector('.dse-condal__menu')!.id);
+		});
+
+		test('SC-585: a non-last row: focus goes to the row that shifted in, as before, and the search stays open', () => {
+			const o = open(['bleeding', 'dazed']);
+			const input = openAdd(o.container);
+			typeQuery(input, 'x');
+			press(removeButtons(o.container)[0]);
+			expect(rowNames(o.container)).toEqual(['Dazed']);
+			expect(document.activeElement?.getAttribute('aria-label')).toBe('Customize Dazed');
+			expect(searchInput(o.container)).toBe(input);
+			expect(input.value).toBe('x');
+		});
+
+		test('SC-585: Escape afterwards closes just the search and lands on "+ Add condition" (a routed key opened it from the removed trash button)', () => {
+			const o = open(['prone']);
+			attachObsidianKeymap(o.modal as any);
+			const trash = removeButtons(o.container)[0];
+			trash.focus();
+			keydown(trash, 'd'); // SC-580: the search opens over the focused trash button, which is remembered as the Escape target
+			expect(searchInput(o.container)!.value).toBe('d');
+			press(trash); // Shift+Tab back to it and Enter: removes it
+			expect(trash.isConnected).toBe(false);
+			expect(document.activeElement).toBe(searchInput(o.container));
+			pressEscape(searchInput(o.container)!);
+			expect(searchInput(o.container)).toBeNull();
+			expect(document.activeElement).toBe(addButton(o.container));
+		});
+
+		test('SC-585: Escape after removing the last row with a normally opened search lands on "+ Add condition"', () => {
+			const o = open(['prone']);
+			openAdd(o.container);
+			press(removeButtons(o.container)[0]);
+			keydown(searchInput(o.container)!, 'Escape');
+			expect(searchInput(o.container)).toBeNull();
+			expect(document.activeElement).toBe(addButton(o.container));
+		});
+	});
+
 	test.each(['hero', 'creature'] as HostKind[])('%s: removing a row that has a duration and colour drops the whole entry and leaves the others\' settings', (kind) => {
 		const keep: Condition = { key: 'dazed', duration: 'save-ends', color: '#1e8449', effect: 'blink' };
 		const o = open([{ key: 'prone', duration: 'eot' }, keep], kind);
@@ -966,8 +1041,9 @@ describe('SC-436 matrix: known bugs (each marker encodes the correct behaviour a
 		expect(cleared).toBe(true);
 	});
 
-	// SC-585: removeAt focuses "+ Add condition" when the list empties, but that button does not exist while the Add dropdown is open.
-	test.failing('SC-585: keyboard-removing the last condition with the Add dropdown open leaves focus inside the window, not on <body>', () => {
+	// SC-585: removeAt used to focus "+ Add condition" when the list empties, but that button does not exist while the Add
+	// dropdown is open; it now focuses the dropdown's input instead (the dropdown stays open).
+	test('SC-585: keyboard-removing the last condition with the Add dropdown open leaves focus inside the window, not on <body>', () => {
 		const o = open(['prone']);
 		openAdd(o.container);
 		expect(o.container.querySelector('.dse-condal__input')).not.toBeNull(); // setup: the dropdown is open

@@ -354,12 +354,20 @@ export class ConditionsModal extends DseModal {
 		this.emitChange();
 		this.renderList();
 		// MED-3: focus the row that shifted into this slot; the previous row if this was
-		// the last one; the add button if the list is now empty — never <body>.
+		// the last one; the add control if the list is now empty — never <body>. SC-585: with the
+		// Add search open that control is its input (there is no "+ Add condition" button then).
 		if (this.conditions.length === 0) {
-			this.addWrapEl.querySelector<HTMLButtonElement>('.dse-condal__add')?.focus();
+			this.focusAddControl();
 		} else {
 			this.focusRowCog(Math.min(index, this.conditions.length - 1));
 		}
+	}
+
+	/** SC-585: focus the Add control that is on screen — the search's input while the Add search is open (its typed text is
+	 *  kept and the search stays open), else the "+ Add condition" button. */
+	private focusAddControl(): void {
+		const input = this.addOpen ? this.addWrapEl.querySelector<HTMLInputElement>('.dse-condal__input') : null;
+		(input ?? this.addWrapEl.querySelector<HTMLButtonElement>('.dse-condal__add'))?.focus();
 	}
 
 	// ------------------------------------------------------------- inline row editor
