@@ -114,6 +114,10 @@ import {
 import type { ActorActions, MaliceLogEntry, SquadActions } from './model';
 import { resolveInitiativeRefs } from './resolveRefs';
 
+/** SC-608: bodies compare equal across CRLF and trailing whitespace (the host's own rule, `normalizeBody`); null when the host knows none. */
+const normalizeBlockText = (text: string | null | undefined): string | null =>
+	typeof text === 'string' ? text.replace(/\r\n?/g, '\n').replace(/\s+$/, '') : null;
+
 /** SC-588: the one control of the tracker that changes id when pressed. Make captain is rebuilt as Relieve captain (and back), so
  *  a keyboard user's focus follows the badge of the same place, not the id it had. */
 const FOCUS_FAMILIES: ControlFamilies = { 'init.captain.make': 'init.captain', 'init.captain.relieve': 'init.captain' };
@@ -177,8 +181,28 @@ export class InitiativeView extends ElementView<EncounterData> {
 	/** SC-608 — this view's mark on its root, read by a predecessor's window hand-off (framework/chrome/windowHandoff.ts). */
 	private readonly windowRecord: WindowRootRecord = {
 		sourcePath: () => this.cx.host.sourcePath,
-		content: () => serializeModel(this.model),
+		content: () => this.diskContent(),
+		live: () => !this.unloading,
 	};
+
+	/** SC-608 — the block as this view last loaded it from, or wrote to, the note; never the live model, which can be ahead of the disk
+	 *  by an edit still waiting out its 400 ms write (a condition added in the Conditions window). `raw` is the note's own text of the
+	 *  block when the host can tell (Reading view, Live Preview: `lastKnownBody`; the sidebar's cannot), `ser` the model's serialization of
+	 *  the same moment. Two views of one block that hold the same content saw the same disk. */
+	private disk: { raw: string | null; ser: string | null } = { raw: normalizeBlockText((this.cx.host as { lastKnownBody?: string | null }).lastKnownBody), ser: null };
+
+	private diskContent(): string {
+		return this.disk.raw !== null ? `raw:${this.disk.raw}` : `ser:${this.disk.ser ?? serializeModel(this.model)}`;
+	}
+
+	/** The serializer the pipeline wires runs at every flush: what it returns is what is about to be written, so it is the disk's content. */
+	setSerializer(serialize: (model: EncounterData) => string): void {
+		super.setSerializer((model) => {
+			const out = serialize(model);
+			this.disk = { raw: normalizeBlockText(out), ser: out };
+			return out;
+		});
+	}
 
 	/** SC-608 — the view unloads (an outside edit redrew the block, the note was closed, ...): close the window with it, and when the
 	 *  block that comes back differs from this one, say why and hand focus to its replacement of the control that opened the window. */
@@ -186,21 +210,22 @@ export class InitiativeView extends ElementView<EncounterData> {
 		const win = this.activeWindow;
 		let ownContent: string | null = null;
 		try {
-			if (win) ownContent = serializeModel(this.model);
+			if (win) ownContent = this.diskContent();
 		} catch {
 			/* a model that cannot be serialized has nothing to compare: the window just closes */
 		}
 		this.activeModal?.close();
-		const slot = (this.rootEl?.isConnected ? slotOf(this.rootEl, 'initiative') : null) ?? win?.slot;
-		if (!win || ownContent === null || !slot) return;
+		if (!win || ownContent === null || !win.slot) return;
+		// (The slot is the one taken when the window opened: at unload the new section may already be in the pane, so a fresh count would include it.)
 		handOffAfterOutsideClose({
-			slot,
+			slot: win.slot,
 			own: this.windowRecord,
 			ownContent,
 			oldRoot: this.rootEl,
 			focus: win.focus,
 			families: FOCUS_FAMILIES,
 			notice: OUTSIDE_CLOSE_NOTICE,
+			owner: this.cx.plugin, // unloading the plugin cancels the watch
 		});
 	}
 
@@ -230,7 +255,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// replaces the model, so whatever the window then wrote went into a model nobody serializes (an Apply was silently lost).
 		// Block unchanged (an edit elsewhere in the note, a Sync that left it alone): nothing to refresh, the window stays and writes.
 		// Block changed: the window closes (it is staged against the old block) with a Notice, and focus follows below.
-		if (outside && this.activeModal && serializeModel(model) === serializeModel(this.model)) return;
+		if (outside && this.activeModal && serializeModel(model) === this.disk.ser) return; // vs what is on disk, not the live model (an unwritten edit is ahead of it)
 		const closed = outside && this.activeModal ? this.closeForOutsideEdit() : null;
 		if (model !== this.model) this.loadError = undefined;
 		this.captureQuickAddDraft(); // SC-589: before the default update() empties the root with the boxes in it
@@ -239,6 +264,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// box lost focus and caret in mid-word. Same capture / restore, and the same no-op when focus was not inside the tracker.
 		const focus = closed ? closed.focus : outside ? captureControlFocus(this.rootEl, FOCUS_FAMILIES) : null;
 		await super.update(model);
+		if (outside) this.disk = { raw: null, ser: serializeModel(model) }; // the block as the note has it now
 		if (outside) restoreControlFocus(this.rootEl, focus, FOCUS_FAMILIES);
 		if (closed) new Notice(OUTSIDE_CLOSE_NOTICE);
 	}
@@ -295,6 +321,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		const container = root.createDiv({ cls: 'dse-init' });
 		this.buildUI(container, owner, model);
 		publishWindowRoot(root, this.windowRecord); // SC-608
+		this.disk.ser ??= serializeModel(model); // the model as loaded: the disk's content until the first write
 	}
 
 	private get canWrite(): boolean {
