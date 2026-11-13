@@ -1095,6 +1095,57 @@ describe('SC-436 matrix: fixed bugs (SC-581, SC-585, SC-586)', () => {
 		expect(lastEmit(o)[0].color).toBe('#123456');
 	});
 
+	// SC-586: `oklch()`, `lab()`, `lch()`, `color()` and `color-mix()` pass CSS.supports and keep their own syntax when computed (jsdom
+	// does the same), so the helper paints the computed string on a 1x1 canvas and reads the sRGB pixel back. jsdom has no canvas, so
+	// these tests stand in a 2D context that returns a fixed pixel and records what was painted; the real pixel (`#239382` for this
+	// oklch) is proved by the e2e spec in real Obsidian.
+	const withCanvas = (ctx: unknown, run: (getContext: jest.SpyInstance) => void): void => {
+		const getContext = jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation((() => ctx) as unknown as HTMLCanvasElement['getContext']);
+		try {
+			run(getContext);
+		} finally {
+			getContext.mockRestore();
+		}
+	};
+
+	test('a CSS Color 4 colour (oklch) seeds the pixel the canvas paints for its computed value, and writes nothing', () => {
+		const painted: string[] = [];
+		const ctx = {
+			set fillStyle(v: string) {
+				painted.push(v);
+			},
+			fillRect: jest.fn(),
+			getImageData: () => ({ data: [35, 147, 130, 255] }),
+		};
+		withCanvas(ctx, () => {
+			const o = open([{ key: 'prone', color: 'oklch(0.6 0.1 180)' }]);
+			openEditor(o.container, 0);
+			expect(customSelected(o.container)).toBe(true); // setup: the pipette treats it as the selected custom colour
+			expect(customInput(o.container).value).toBe('#239382');
+			expect(painted).toEqual(['oklch(0.6 0.1 180)']);
+			expect(o.onChange).not.toHaveBeenCalled();
+			expect((o.holder.conditions as Condition[])[0].color).toBe('oklch(0.6 0.1 180)');
+		});
+	});
+
+	test('an rgb-resolving colour never reaches the canvas', () => {
+		withCanvas(null, (getContext) => {
+			const o = open([{ key: 'prone', color: 'teal' }]);
+			openEditor(o.container, 0);
+			expect(customInput(o.container).value).toBe('#008080');
+			expect(getContext).not.toHaveBeenCalled();
+		});
+	});
+
+	test('a CSS Color 4 colour with no 2D canvas context (jsdom without canvas) keeps the white default', () => {
+		withCanvas(null, () => {
+			const o = open([{ key: 'prone', color: 'oklch(0.6 0.1 180)' }]);
+			openEditor(o.container, 0);
+			expect(customSelected(o.container)).toBe(true);
+			expect(customInput(o.container).value).toBe('#ffffff');
+		});
+	});
+
 	test.each([
 		['an unparseable colour', 'not-a-colour'],
 		['no colour', undefined],
@@ -1126,6 +1177,8 @@ describe('SC-436 matrix: fixed bugs (SC-581, SC-585, SC-586)', () => {
 		const o = open([{ key: 'hexed', icon: 'skull ' }]);
 		openEditor(o.container, 0);
 		expect(pressedIn(o.container, 'Condition icon')).toEqual(['Icon: skull']);
+		const skulls = Array.from(o.container.querySelectorAll('[data-dse-control="cond.icon"]')).filter((b) => b.getAttribute('aria-label')?.trim() === 'Icon: skull');
+		expect(skulls).toHaveLength(1); // no second, unpressed chip for the untrimmed spelling
 		expect(o.onChange).not.toHaveBeenCalled();
 	});
 
