@@ -218,6 +218,10 @@ export class ConditionsModal extends DseModal {
 		// non-text control of this window opens the Add search with that key typed in. Registered on this modal's own
 		// dialog element, so it dies with `lifecycle` and never sees a key that originates in a modal stacked above.
 		this.lifecycle.registerDomEvent(this.modalEl ?? this.containerEl, 'keydown', (evt: KeyboardEvent) => this.typeToSearch(evt));
+		// SC-613: a click on the title or on blank space moves focus to <body> (neither is focusable), outside the listener above, so the
+		// next letter went nowhere. This second listener, on the window's own document (popout-safe), takes only such keys.
+		const keyDoc = this.containerEl.ownerDocument;
+		this.lifecycle.registerDomEvent(keyDoc, 'keydown', (evt: KeyboardEvent) => this.typeToSearchFromPage(evt, keyDoc));
 
 		this.renderList();
 		this.renderAdd();
@@ -604,6 +608,17 @@ export class ConditionsModal extends DseModal {
 		this.renderCombobox();
 	}
 
+	/** SC-613: a key whose target is the page itself (focus fell to <body>: a click on this window's title or empty space) is this
+	 *  window's when it is the top-most modal of its document; a modal stacked above keeps its keys, as does anything Obsidian has
+	 *  open over the page (a menu, a suggestion popover). Everything else about the key is `typeToSearch`'s rule, not a second copy. */
+	private typeToSearchFromPage(evt: KeyboardEvent, doc: Document): void {
+		if (evt.defaultPrevented || (evt.target !== doc.body && evt.target !== doc.documentElement)) return;
+		if (doc.querySelector('.menu, .suggestion-container')) return;
+		const modals = doc.querySelectorAll('.modal-container');
+		if (modals[modals.length - 1] !== this.containerEl) return;
+		this.typeToSearch(evt);
+	}
+
 	/** SC-580: routes a printable key to the Add search. Not a text-entry control's key, not a modified key (Obsidian's hotkeys
 	 *  and the OS's chords), not Space / Enter / Tab / arrows / Escape (a focused button, a select and SC-431's Escape consumer
 	 *  keep theirs), not an IME composition, and not a key something else already handled. The key is typed in here and its
@@ -615,7 +630,9 @@ export class ConditionsModal extends DseModal {
 		if (target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
 		if (!this.addOpen) {
 			this.addOpen = true;
-			this.returnFocusEl = typeof (target as HTMLElement | null)?.focus === 'function' ? (target as HTMLElement) : null;
+			// (<body> is not a control to give focus back to: SC-613's page-level keys leave it null, so Escape lands on "+ Add condition")
+			const page = target === target?.ownerDocument.body || target === target?.ownerDocument.documentElement;
+			this.returnFocusEl = !page && typeof (target as HTMLElement | null)?.focus === 'function' ? (target as HTMLElement) : null;
 			this.renderAdd();
 		}
 		const input = this.addWrapEl.querySelector<HTMLInputElement>('.dse-condal__input');
