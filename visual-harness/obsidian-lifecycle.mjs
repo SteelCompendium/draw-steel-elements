@@ -205,6 +205,13 @@
 // embed; (d) block hover, `^id` markers swapped; (e2) a block hover's Edit form kept open by a second pane, the upper of two adjacent identical blocks deleted, Save; (e3) a heading hover's form opened AFTER the swap (the metadata cache caught up), Save; and a
 // control without an outside edit whose real + is saved. A scripted click is used where the card must be the OLD one (the cache has caught up, the preview is still the old part), as in G-S92 / G-S96. One note per cell (a card Notice is rate limited per note).
 //
+// SC-612 appends G-S108 (62 scenarios in all; it sits after G-S99 and before G-S56, and runs ALONE in a seventh `--only` part, about 60 s with the build and the start-up): a note open in its OWN pane (a whole-note pin, no embed, no hover)
+// with two identical counters separated only by a blank line. One of them is deleted from outside (Sync, another app) while the Edit form is open / inside the + click's 400 ms round: the note that is left reads the same whichever one was
+// deleted, so the line map's guess must not place the write. It used to be written into the surviving counter with no Notice (the upper deleted; the lower deleted together with TOP edited). Now nothing is written, exactly one "changed on disk first"
+// Notice, the outside edit is kept, and the form stays open. Cells (one note each): (a) form on the upper twin, the upper deleted, Reading view; (b) the same in Live Preview; (c) card + on the upper twin, the upper deleted inside the round, RV; (d) LP;
+// (e) form on the lower twin, the lower deleted and TOP edited in the same write, RV; (f) card, the same, LP; (g) the cost: an identical counter added right below the form's block: refused, then Cancel, reopen, Save lands (RV). Controls: (h) a form with
+// no outside edit (RV); (i) a card + with none (LP); (j) + twice on one card, the second after the first write (RV); (k) a sibling twin's + and then this card's + inside the sibling's round (LP). Red at 63e00d7e: (a)-(g); (h)-(k) are green there too.
+//
 // SC-480 appends G-S73 (53 scenarios before G-S77; it sits after G-S49 and before G-S56, which stays last, and runs in the fifth `--only` part with G-S59 and G-S49): a card write whose pin
 // cannot be placed because its block was DELETED from outside is never written into an identical twin. Click + on one of two identical counters (Reading view and Live Preview),
 // delete that block from outside at once, then leave the note (the unload flush) or wait out the 400 ms debounce: nothing is written, the note stays as the outside edit left it, and
@@ -674,6 +681,10 @@ Object.assign(FIXTURES, {
 			FIXTURES[`Lifecycle/gs99-${id}-src.md`] = note[shape](id);
 			FIXTURES[`Lifecycle/gs99-${id}-host.md`] = embed ? `# gs99 ${id} host\n\n![[gs99-${id}-src${link}]]\n\nafter\n` : `# gs99 ${id} host\n\nsee [[gs99-${id}-src${link}]] here\n\nfiller\n`;
 		}
+	}
+	// SC-612 (G-S108): one note per cell, a note open in its OWN pane (no embed, no hover): two identical counters separated only by a blank line, TOP / BOTTOM prose around them.
+	for (const id of ['a-rv', 'b-lp', 'c-rv', 'd-lp', 'e-rv', 'f-lp', 'g-rv', 'h-rv', 'i-lp', 'j-rv', 'k-lp']) {
+		FIXTURES[`Lifecycle/gs108-${id}.md`] = `# gs108 ${id}\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`;
 	}
 	Object.assign(FIXTURES, {
 		'Lifecycle/gs77-cal-src.md': `# gs77 cal src\n\n${CAL2()}\n\n^gs77cal\n\nend\n`,
@@ -8607,6 +8618,187 @@ const SCENARIOS = [
 			} finally {
 				await t.ev(`${prefs}.set('authoringControls', false)`);
 				await t.ev(`document.getElementById('lc-gs99-notice')?.remove()`);
+				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
+				for (const rel of files) await t.reset(rel);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect(problems.length === 0, `${problems.join(' | ')} -- passed: ${outcomes.join('; ')}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${J(await t.errorsSince(m))}`);
+			return outcomes.join('; ');
+		},
+	},
+	{
+		// G-S108 (SC-612): a whole-note pin of one of two identical blank-line twins, the other (or the pinned one) deleted from outside while the form is open / inside the click's round. See the header.
+		// It sits before G-S56, which runs last and replaces every other leaf. One note per cell (a card Notice is rate limited per note).
+		id: 'G-S108',
+		async run(t) {
+			const m = await t.mark();
+			const J = JSON.stringify;
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			const { FORM, SAVE } = formKit(t);
+			const problems = [];
+			const outcomes = [];
+			const C5 = COUNTER(5, 'Twin');
+			const EDIT = {
+				// the upper twin deleted
+				del0: (s) => s.replace(`${C5}\n\n`, ''),
+				// the lower twin deleted and TOP edited in the same write
+				del1top: (s) => {
+					const i = s.lastIndexOf(`${C5}\n\n`);
+					return (s.slice(0, i) + s.slice(i + C5.length + 2)).replace('TOP\n', 'TOP edited\n');
+				},
+				// an identical counter added right below the first
+				add: (s) => s.replace(`${C5}\n\n`, `${C5}\n\n${C5}\n\n`),
+			};
+			// [id, mode, how, target block, outside edit]
+			const cells = [
+				['a-rv', 'rv', 'form', 0, 'del0', '(a) form on the upper twin, the upper deleted, Reading view'],
+				['b-lp', 'lp', 'form', 0, 'del0', '(b) form on the upper twin, the upper deleted, Live Preview'],
+				['c-rv', 'rv', 'card', 0, 'del0', '(c) + on the upper twin, the upper deleted inside the round, Reading view'],
+				['d-lp', 'lp', 'card', 0, 'del0', '(d) + on the upper twin, the upper deleted inside the round, Live Preview'],
+				['e-rv', 'rv', 'form', 1, 'del1top', '(e) form on the lower twin, the lower deleted and TOP edited, Reading view'],
+				['f-lp', 'lp', 'card', 1, 'del1top', '(f) + on the lower twin, the lower deleted and TOP edited, Live Preview'],
+				['g-rv', 'rv', 'form-cost', 0, 'add', '(g) form on the upper twin, an identical counter added right below it: refused, then reopened and saved, Reading view'],
+				['h-rv', 'rv', 'form', 0, null, 'control (h): form with no outside edit, Reading view'],
+				['i-lp', 'lp', 'card', 0, null, 'control (i): + with no outside edit, Live Preview'],
+				['j-rv', 'rv', 'card-twice', 0, null, 'control (j): + twice on one card, Reading view'],
+				['k-lp', 'lp', 'sibling', 0, null, "control (k): a sibling twin's + then this card's + inside the sibling's round, Live Preview"],
+			];
+			const files = cells.map(([id]) => `Lifecycle/gs108-${id}.md`);
+			const A = 'window.__gs64.A';
+			const stOf = (mode) => (mode === 'rv' ? { mode: 'preview' } : { mode: 'source', source: false });
+			const incr = (block) => `(window.__gs64.root(${A}, ${block})?.querySelector('button[aria-label^="Increase"]'))`;
+			const pencilOf = (block) => `(window.__gs64.root(${A}, ${block})?.querySelector('.dse-chrome button[data-dse-chrome-item="edit"], button[aria-label^="Edit "]'))`;
+			const formOpen = () => t.ev(`!!document.querySelector('.modal-container .dse-modal .dse-form__preview')`);
+			const press = async (expr, label) => t.expect(await t.ev(`(() => { const b = ${expr}; if (!b) return false; b.click(); return true; })()`), label);
+			const names = (text) => (text.match(/^name: (\w+)$/gm) ?? []).map((x) => x.slice(6));
+			/** The pencil of `block` focused and Enter pressed (the form opens), the raw box's name renamed to Edited. */
+			const openAndRename = async (rel, block) => {
+				await t.waitFor(`!!${pencilOf(block)}`, `${rel}: the pencil of block ${block} is drawn`);
+				await t.ev(`${pencilOf(block)}.focus({ focusVisible: true })`);
+				await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', text: '\r', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+				await t.cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+				await t.waitFor(`!!document.querySelector('.modal-container .dse-modal .dse-form__preview')`, `${rel}: the edit form opened`);
+				t.expect(await t.ev(`(() => { const ta = ${FORM}.querySelector('textarea.dse-form__raw'); if (!ta) return false; ta.value = ta.value.replace('name: Twin', 'name: Edited'); ta.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`), `${rel}: no raw box`);
+				await t.waitFor(`!!(${SAVE}) && !(${SAVE}).disabled`, `${rel}: Save is enabled`);
+			};
+			const saveAndWait = async (rel, want) => {
+				const mp = await t.mark();
+				await t.ev(`(${SAVE}).click()`);
+				const t0 = Date.now();
+				while (Date.now() - t0 < 3000 && t.read(rel) === want && !(await t.noticesSince(mp)).length) await t.sleep(50);
+				await t.sleep(400);
+			};
+			const cancelForm = async () => {
+				for (let i = 0; i < 5 && (await t.ev(`!!document.querySelector('.modal-container')`)); i++) {
+					await t.ev(`(() => { const b = Array.from(document.querySelectorAll('.modal-container .dse-modal button')).find((x) => x.getAttribute('aria-label') === 'Cancel'); if (b) b.click(); return true; })()`);
+					await t.sleep(200);
+					if (await t.ev(`!!document.querySelector('.modal-container')`)) await t.key('Escape', 'Escape', 27).catch(() => {});
+					await t.sleep(200);
+				}
+			};
+			await t.ev(`(() => { if (!document.getElementById('lc-gs108-notice')) { const st = document.createElement('style'); st.id = 'lc-gs108-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
+			await t.ev(`${prefs}.set('authoringControls', true)`);
+			await t.ev(`(${gs64Page.toString()})()`);
+			try {
+				for (const [id, mode, how, target, editName, label] of cells) {
+					const rel = `Lifecycle/gs108-${id}.md`;
+					const dropped = NOTICE_TEXT(`gs108-${id}`);
+					const mk = await t.mark();
+					const bad = [];
+					let note = '';
+					try {
+						await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); window.__gs64.A = app.workspace.getLeavesOfType('markdown')[0] ?? app.workspace.getMostRecentLeaf(); window.__gs64.B = null; return true; })()`);
+						await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); })()`);
+						await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: ${J(rel)}, ...${J(stOf(mode))} }, active: true }); })()`);
+						await t.waitFor(`(${A}).view?.file?.path === ${J(rel)}`, `${label}: opened`);
+						if (mode === 'lp') {
+							await t.ev(`(${A}).view.editor.setCursor({ line: 0, ch: 0 })`);
+							// Live Preview draws only the blocks near the viewport: bring each block into view once (SC-543).
+							for (let b = 0; b < 2; b++) {
+								await t.ev(`(() => { const L = ${A}; const cm = L.view.editor.cm; const fl = window.__gs64.fences(cm); const pos = cm.state.doc.line(fl[${b}] + 1).from; L.view.editor.scrollIntoView({ from: L.view.editor.offsetToPos(pos), to: L.view.editor.offsetToPos(pos) }, true); return true; })()`);
+								await t.waitFor(`window.__gs64.cardsRaw(${A}).some((c) => c.block === ${b})`, `${label}: block ${b} is drawn`);
+							}
+							await t.ev(`(${A}).view.editor.setCursor({ line: 0, ch: 0 })`);
+						}
+						await t.waitFor(`window.__gs64.cards(${A}).length === 2`, `${label}: both cards are drawn`);
+						await t.sleep(500);
+						const before = t.read(rel);
+						t.expect(before === FIXTURES[rel], `${label}: the note is not the fixture: ${J(before)}`);
+						const edited = editName ? EDIT[editName](before) : null;
+						t.expect(edited === null || edited !== before, `${label}: the outside edit changed nothing`);
+						if (how === 'form' || how === 'form-cost') {
+							await openAndRename(rel, target);
+							if (edited !== null) {
+								await t.edit(rel, J(edited));
+								await t.sleep(1500); // the redraw of the outside edit
+							}
+							const openAtSave = await formOpen();
+							if (!openAtSave) bad.push('the form was not open at Save (the shape was not reached)');
+							else await saveAndWait(rel, edited ?? before);
+							const openAfter = await formOpen();
+							if (edited === null) {
+								if (!(names(t.read(rel)).join() === 'Edited,Twin') || (await t.noticesSince(mk)).filter((x) => /Draw Steel Elements/.test(x)).length) bad.push(`control: the Save did not land in the upper counter without a Notice (names ${J(names(t.read(rel)))})`);
+								if (openAfter) bad.push('control: the form is still open after a successful Save');
+							} else {
+								if (t.read(rel) !== edited) bad.push(`the note is not what the outside edit left: a counter was written (names ${J(names(t.read(rel)))}, note ${J(t.read(rel))})`);
+								const ns = (await t.noticesSince(mk)).filter((x) => /changed on disk first|can't tell where/.test(x));
+								if (!(ns.length === 1 && ns[0] === dropped)) bad.push(`expected the one Notice ${J(dropped)}, got ${J(ns)}`);
+								if (!openAfter) bad.push('the form closed after the refused Save (it must stay open)');
+							}
+							if (how === 'form-cost' && bad.length === 0) {
+								// the form closed and opened again, on the note as it is now: it saves into the block it was opened on
+								await cancelForm();
+								await t.waitFor(`window.__gs64.cards(${A}).length === 3`, `${label}: three cards are drawn`);
+								await t.sleep(500);
+								const mp = await t.mark();
+								await openAndRename(rel, target);
+								await saveAndWait(rel, edited);
+								const after = t.read(rel);
+								if (names(after).join() !== 'Edited,Twin,Twin') bad.push(`the reopened form did not save into the upper counter (names ${J(names(after))})`);
+								if ((await t.noticesSince(mp)).filter((x) => /Draw Steel Elements/.test(x)).length) bad.push('the reopened form showed a Notice');
+								if (await formOpen()) bad.push('the reopened form is still open after Save');
+							}
+						} else if (how === 'card') {
+							await press(incr(target), `${label}: no Increase button on block ${target}`);
+							if (edited !== null) await t.edit(rel, J(edited)); // at once: the + is still inside its 400 ms debounce
+							await t.sleep(2500);
+							if (edited !== null) {
+								if (t.read(rel) !== edited) bad.push(`the note is not what the outside edit left: a counter was written (values ${J(t.counterValues(rel))}, note ${J(t.read(rel))})`);
+								const ns = (await t.noticesSince(mk)).filter((x) => /changed on disk first|can't tell where/.test(x));
+								if (!(ns.length === 1 && ns[0] === dropped)) bad.push(`expected the one Notice ${J(dropped)}, got ${J(ns)}`);
+							} else if (J(t.counterValues(rel)) !== J([6, 5]) || (await t.noticesSince(mk)).filter((x) => /Draw Steel Elements/.test(x)).length) {
+								bad.push(`control: values ${J(t.counterValues(rel))}, want [6,5], no Notice`);
+							}
+						} else if (how === 'card-twice') {
+							// the user's own rounds, no outside edit: + on the target, the write, and a second + right after it (the section may still be the old note)
+							await press(incr(target), `${label}: no Increase button`);
+							const t0 = Date.now();
+							while (Date.now() - t0 < 2000 && t.read(rel) === before) await t.sleep(5);
+							await press(incr(target), `${label}: no Increase button for the second +`);
+							await t.sleep(2500);
+							if (J(t.counterValues(rel)) !== J([7, 5]) || (await t.noticesSince(mk)).filter((x) => /Draw Steel Elements/.test(x)).length) bad.push(`control: values ${J(t.counterValues(rel))}, want [7,5], no Notice`);
+						} else if (how === 'sibling') {
+							// + on the OTHER twin, then + on the target inside the other's 400 ms round (the flush writes the sibling first)
+							await press(incr(1 - target), `${label}: no Increase button on the other block`);
+							await t.sleep(100);
+							await press(incr(target), `${label}: no Increase button on the target`);
+							await t.sleep(2500);
+							if (J(t.counterValues(rel)) !== J([6, 6]) || (await t.noticesSince(mk)).filter((x) => /Draw Steel Elements/.test(x)).length) bad.push(`control: values ${J(t.counterValues(rel))}, want [6,6], no Notice`);
+						}
+						note = t.read(rel);
+					} catch (e) {
+						bad.push(`error: ${e.message}`);
+					} finally {
+						await cancelForm();
+					}
+					if (await t.ev(`!!document.querySelector('.modal-container')`)) bad.push('a modal is left open');
+					if (bad.length) problems.push(`${label}: ${bad.join('; ')} (note ${J(note)})`);
+					else outcomes.push(`${label}: ${editName === null ? 'saved, no Notice' : how === 'form-cost' ? 'refused with one Notice, then the reopened form saved' : 'nothing written, one Notice, the outside edit kept'}`);
+				}
+			} finally {
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+				await t.ev(`document.getElementById('lc-gs108-notice')?.remove()`);
 				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
 				for (const rel of files) await t.reset(rel);
 				await t.open('Lifecycle/other.md');
