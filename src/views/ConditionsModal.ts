@@ -475,7 +475,7 @@ export class ConditionsModal extends DseModal {
 		const reset = row.createEl('button', { cls: 'dse-optchip dse-swatches__default', text: 'Default' });
 		reset.setAttribute('type', 'button');
 		reset.setAttribute('aria-label', 'Default');
-		reset.setAttribute('title', 'Default (no colour)');
+		reset.setAttribute('title', 'Default (no color)');
 		stampControl(reset, 'cond.color-default');
 		setPressedState(reset, !isConditionColor(entry.color));
 		this.lifecycle.registerDomEvent(reset, 'click', () => this.clearColor(index));

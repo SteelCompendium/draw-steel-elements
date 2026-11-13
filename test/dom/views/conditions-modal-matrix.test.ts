@@ -254,7 +254,7 @@ describe('SC-436 matrix: the colour swatches and the custom colour (start colour
 			expect(first).toBe(defaultBtn(o.container));
 			expect(first.getAttribute('type')).toBe('button');
 			expect(first.textContent).toBe('Default'); // visible text, so it reads without hue
-			expect(first.getAttribute('title')).toBe('Default (no colour)');
+			expect(first.getAttribute('title')).toBe('Default (no color)');
 			expect(first.getAttribute('data-dse-control')).toBe('cond.color-default');
 		});
 
