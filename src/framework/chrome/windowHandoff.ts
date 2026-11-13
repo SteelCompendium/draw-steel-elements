@@ -23,12 +23,15 @@
 import { focusControl, focusIsFree } from './focusHandoff';
 import { controlSuccessor } from '../kit/controlFocus';
 import type { ControlFamilies, ControlFocus } from '../kit/controlFocus';
-import { Notice } from 'obsidian';
+import { Component, Notice } from 'obsidian';
 
-/** What a mounted element publishes on its root so a closing predecessor can recognise it. Lazy: nothing is serialized until asked. */
+/** What a mounted element publishes on its root so a closing predecessor can recognise it. Lazy: nothing is computed until asked. */
 export interface WindowRootRecord {
 	sourcePath: () => string;
+	/** The view's idea of the block as it is on disk (see `InitiativeView.diskContent`): equal to a predecessor's = nobody edited it. */
 	content: () => string;
+	/** False once the view is unloading: its root may still sit in the document for a moment but is not a successor and not a sibling. */
+	live: () => boolean;
 }
 
 const mounted = new WeakMap<HTMLElement, WindowRootRecord>();
@@ -38,21 +41,24 @@ export function publishWindowRoot(root: HTMLElement, record: WindowRootRecord): 
 	mounted.set(root, record);
 }
 
-/** Where an element sits: stable across the redraw that replaces its root. */
+/** Where an element sat when its window opened: stable across the redraw that replaces its root. `count` is how many roots of the
+ *  element the pane held then; a different count at hand-off time means a tracker was inserted or removed, and the position no longer
+ *  says which tracker is ours (the Notice still shows, focus is not moved). */
 export interface WindowSlot {
 	elementId: string;
 	scope: Element;
 	index: number;
+	count: number;
 }
 
 /** The pane or embed a root is drawn in. Reading view and Live Preview are separate scopes (a leaf keeps a hidden copy of the other). */
 const SCOPE = '.internal-embed, .markdown-embed, .markdown-reading-view, .markdown-source-view, .workspace-leaf';
 const scopeFor = (root: Element): Element => root.closest(SCOPE) ?? root.ownerDocument.body;
 
-/** Connected roots of `elementId` in `scope`, in document order, leaving out the ones whose record is `except` (the closing view's own). */
-function rootsIn(scope: Element, elementId: string, except: WindowRootRecord | null): HTMLElement[] {
+/** Connected roots of `elementId` in `scope`, in document order, leaving out the ones of views that are unloading. */
+function rootsIn(scope: Element, elementId: string): HTMLElement[] {
 	return Array.from(scope.querySelectorAll<HTMLElement>(`[data-dse-element="${elementId}"]`)).filter(
-		(r) => r.isConnected && scopeFor(r) === scope && (except === null || mounted.get(r) !== except),
+		(r) => r.isConnected && scopeFor(r) === scope && mounted.get(r)?.live() !== false,
 	);
 }
 
@@ -60,15 +66,19 @@ function rootsIn(scope: Element, elementId: string, except: WindowRootRecord | n
 export function slotOf(root: HTMLElement, elementId: string): WindowSlot | null {
 	if (!root.isConnected) return null;
 	const scope = scopeFor(root);
-	return { elementId, scope, index: Math.max(0, rootsIn(scope, elementId, null).indexOf(root)) };
+	const roots = rootsIn(scope, elementId);
+	return { elementId, scope, index: Math.max(0, roots.indexOf(root)), count: roots.length };
 }
 
 /** How long the watch for the successor lasts. Live Preview's arrives ~10-45 ms after the close; the rest is slack for a loaded host. */
 export const HANDOFF_TTL_MS = 3000;
+/** After the successor was found, how long the hand-off stays armed for the NEXT redraw (a Sync burst redraws the block several times in
+ *  a row, each discarding the control that was focused). Each success extends it. SC-505's `SETTLE_MS`, for the same reason. */
+export const HANDOFF_SETTLE_MS = 1500;
 
 export interface OutsideCloseHandoff {
 	slot: WindowSlot;
-	/** The closing view's own record, and the content it held when it unloaded. */
+	/** The closing view's own record, and what it held on disk when it unloaded. */
 	own: WindowRootRecord;
 	ownContent: string;
 	/** The root being replaced; focus on it still counts as free. */
@@ -77,28 +87,35 @@ export interface OutsideCloseHandoff {
 	focus: ControlFocus | null;
 	families: ControlFamilies;
 	notice: string;
+	/** A long-lived Component (the plugin): unloading it cancels the watch. A hand-off for an owner that is not loaded is not started. */
+	owner: Component;
 }
 
-/** Call once the window has closed. Returns a cancel function (tests, teardown). */
+/** Call once the window has closed. Returns a cancel function. */
 export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 	const doc = o.oldRoot.ownerDocument;
 	const win = doc.defaultView;
-	if (!win) return () => undefined;
+	if (!win || !(o.owner as unknown as { _loaded: boolean })._loaded) return () => undefined;
 	const sourcePath = o.own.sourcePath();
+	const holder = o.owner.addChild(new Component());
+	holder.register(() => finish());
 	let wantFocus = o.focus !== null;
 	let focusing = false;
 	let settling = false;
 	let finished = false;
+	let claimed: HTMLElement | null = null; // the successor the Notice and focus were given for
 	let timer = 0;
 	let settle = 0;
 	let observer: MutationObserver | null = null;
 
 	const finish = (): void => {
+		if (finished) return;
 		finished = true;
 		observer?.disconnect();
 		win.clearTimeout(timer);
 		win.clearTimeout(settle);
 		doc.removeEventListener('focusin', onFocusIn, true);
+		o.owner.removeChild(holder);
 	};
 	/** The user (or another pane) took focus: the focus part is off, the Notice still follows the redraw. */
 	const onFocusIn = (evt: FocusEvent): void => {
@@ -106,22 +123,16 @@ export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 		if (focusing || (target && o.oldRoot.contains(target))) return;
 		wantFocus = false;
 	};
+	/** The root at the slot, or null while it is not built yet. An error card (no record) at a slot whose count changed counts as found. */
 	const find = (): HTMLElement | null => {
-		const root = rootsIn(o.slot.scope, o.slot.elementId, o.own)[o.slot.index];
+		const roots = rootsIn(o.slot.scope, o.slot.elementId);
+		const root = roots[o.slot.index];
 		const record = root ? mounted.get(root) : undefined;
+		if (root && !record && roots.length !== o.slot.count && root.hasAttribute('data-dse-error-stage')) return root;
 		return root && record && record.sourcePath() === sourcePath ? root : null;
 	};
-	const act = (): void => {
-		if (finished) return;
-		const root = find();
-		if (!root) {
-			settling = false; // rebuilt again while settling: wait for the next one
-			return;
-		}
-		finish();
-		if (mounted.get(root)?.content() === o.ownContent) return; // not an outside edit: as before
-		new Notice(o.notice);
-		if (!wantFocus || !o.focus) return;
+	const focusSuccessor = (root: HTMLElement): void => {
+		if (!wantFocus || !o.focus || !root.isConnected) return;
 		if (!focusIsFree(doc) && !o.oldRoot.contains(doc.activeElement)) return;
 		const target = controlSuccessor(root, o.focus, o.families);
 		if (target === root && !root.hasAttribute('tabindex')) root.tabIndex = -1; // focusable by script, not a new Tab stop
@@ -132,8 +143,24 @@ export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 			focusing = false;
 		}
 	};
+	const act = (): void => {
+		settling = false;
+		const root = find();
+		if (finished || !root || root === claimed) return;
+		if (claimed === null) {
+			// First successor. Same disk content = the view's own save or a re-render: no Notice. Focus follows either way.
+			if (mounted.get(root)?.content() !== o.ownContent) new Notice(o.notice);
+			if (o.slot.count !== rootsIn(o.slot.scope, o.slot.elementId).length) wantFocus = false; // a tracker came or went: not ours to pick
+		}
+		claimed = root;
+		focusSuccessor(root); // (a later redraw of a burst: only while focus is free, i.e. on <body>)
+		win.clearTimeout(timer);
+		timer = win.setTimeout(finish, HANDOFF_SETTLE_MS);
+	};
 	const attempt = (): void => {
-		if (finished || settling || !find()) return;
+		if (finished || settling) return;
+		const root = find();
+		if (!root || root === claimed) return;
 		// The root is built, but the pipeline adds its chrome panel right after (the Reset encounter item lives there): act one task later.
 		settling = true;
 		settle = win.setTimeout(act, 0);
