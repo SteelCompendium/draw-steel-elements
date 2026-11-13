@@ -122,6 +122,11 @@ const normalizeBlockText = (text: string | null | undefined): string | null =>
  *  a keyboard user's focus follows the badge of the same place, not the id it had. */
 const FOCUS_FAMILIES: ControlFamilies = { 'init.captain.make': 'init.captain', 'init.captain.relieve': 'init.captain' };
 
+/** SC-614: inside ONE conditions row the remove buttons and the Add Condition button are a single family, in that order (the removes,
+ *  then Add). A removal then hands focus to the control that took the focused one's place, and when the last remove button goes, to
+ *  Add Condition, the next control of the row, never to <body>. */
+const CONDITION_ROW_FAMILIES: ControlFamilies = { 'init.cond.remove': 'init.cond', 'init.cond.add': 'init.cond' };
+
 /** SC-589: what is typed in the Malice quick-add boxes. A per-VIEW draft (never written to the note): `update()` reads it off the live
  *  boxes before the root is emptied, and `buildMaliceQuickAdd` puts it back. `caret` is only set for the box that held focus. */
 interface QuickAddDraft {
@@ -2378,7 +2383,15 @@ export class InitiativeView extends ElementView<EncounterData> {
 			owner,
 			canRemove: this.canWrite,
 			control: 'init.cond.remove',
-			onRemove: (conditionEntry) => {
+			onRemove: (conditionEntry, pressed) => {
+				// SC-614: the redraw below throws away every button of the row, and the note's click shield keeps the press from
+				// focusing the button it presses, so focus was on whatever held it before (Add Condition, another chip) and fell to
+				// <body>. Remember it (only when focus was inside THIS row: a press never pulls focus into the tracker, SC-588, and a
+				// control elsewhere is not touched by the redraw), and give it to its rebuilt successor. A control that sat after the
+				// removed chip is one place earlier now; the removed chip itself (a keyboard press) hands over to the next control.
+				const held = captureControlFocus(container, CONDITION_ROW_FAMILIES);
+				const removedAt = Array.from(container.querySelectorAll(`[${CONTROL_ATTR}="init.cond.remove"]`)).indexOf(pressed);
+				const focus = held && held.nth > removedAt && removedAt >= 0 ? { ...held, nth: held.nth - 1 } : held;
 				// SC-186 fix-round INFO-2: filter `character.conditions` FRESH here,
 				// never the `conditions` closure snapshot captured when this row was
 				// built. Two remove clicks fired in quick succession both rebuild this
@@ -2400,6 +2413,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				// SC-183 r2: `rerender` (the whole conditions row when the tracker rows pass
 				// one) rather than a bare icons rebuild, so the state chip survives a removal.
 				rerender();
+				restoreControlFocus(container, focus, CONDITION_ROW_FAMILIES);
 				void this.persist();
 			},
 		});

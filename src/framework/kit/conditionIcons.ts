@@ -41,8 +41,9 @@ export interface ConditionIconsOptions {
 	owner: Component;
 	/** When false, icons render as static, non-interactive glyphs (read-only). */
 	canRemove: boolean;
-	/** Called with the exact entry that was clicked to remove (write mode only). */
-	onRemove?: (entry: ConditionIconInput) => void;
+	/** Called with the exact entry that was clicked to remove (write mode only), and the button that was pressed (SC-614: a caller that
+	 *  redraws the row needs to know which of its buttons went, to keep keyboard focus in place). */
+	onRemove?: (entry: ConditionIconInput, button: HTMLElement) => void;
 	/** SC-437: stable `data-dse-control` id stamped on every remove button (write mode; attribute only). */
 	control?: string;
 }
@@ -128,7 +129,7 @@ export function buildConditionIcons(
 					icon: iconName,
 					label: `Remove condition: ${displayName}`,
 					control: opts.control,
-					onClick: () => opts.onRemove?.(conditionEntry),
+					onClick: () => opts.onRemove?.(conditionEntry, iconEl),
 				},
 				opts.owner,
 			).buttonEl;

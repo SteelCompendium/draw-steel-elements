@@ -873,6 +873,97 @@ describe('[F] keyboard focus survives the actions that rebuild the whole tracker
 		expect(document.activeElement).toBe(advance);
 	});
 
+	// SC-614: removing a condition redraws the conditions row (`conditionsEl.empty()` + rebuild), so the Add Condition button, or another
+	// condition's remove button, that held focus is thrown away and focus fell to <body>. The note's click shield keeps the mouse press
+	// from focusing the chip it presses, so focus is still where it was when the row is redrawn; it goes to the rebuilt control.
+	describe('after a mouse press on a condition\'s remove button redraws the conditions row (SC-614)', () => {
+		const CONDITIONED = TRACKER.replace('    max_stamina: 30', '    max_stamina: 30\n    conditions: [grabbed, slowed]');
+		const OGRE_CONDITIONED = TRACKER.replace('        amount: 3', '        amount: 3\n        instances: [{ id: 1, conditions: [grabbed, slowed] }]');
+		const remove = (root: Element, n: number): HTMLElement => ctl(root, 'init.cond.remove', n);
+		const names = (root: Element): string[] => Array.from(root.querySelectorAll('[data-dse-control="init.cond.remove"]')).map((el) => el.getAttribute('aria-label') ?? '');
+
+		test('[F23] focus on Add Condition: the rebuilt Add Condition button holds focus', async () => {
+			const { root, flush } = await mount(CONDITIONED);
+			const add = ctl(root, 'init.cond.add');
+			add.focus();
+			mouseClick(remove(root, 0));
+			await flush();
+			expect(names(root).slice(0, 1)).toEqual(['Remove condition: Slowed']); // the condition is gone, the row was redrawn
+			expect(add.isConnected).toBe(false);
+			expect(document.activeElement).toBe(ctl(root, 'init.cond.add'));
+		});
+
+		test('[F24] focus on another condition\'s remove button: that condition\'s rebuilt remove button holds focus', async () => {
+			const { root, flush } = await mount(CONDITIONED);
+			const slowed = remove(root, 1);
+			expect(slowed.getAttribute('aria-label')).toBe('Remove condition: Slowed');
+			slowed.focus();
+			mouseClick(remove(root, 0)); // remove Grabbed: Slowed moves to the first place
+			await flush();
+			expect(names(root).slice(0, 1)).toEqual(['Remove condition: Slowed']);
+			expect(slowed.isConnected).toBe(false);
+			expect(document.activeElement).toBe(remove(root, 0));
+			expect(document.activeElement!.getAttribute('aria-label')).toBe('Remove condition: Slowed');
+		});
+
+		test('[F25] the creature rows\' detail row: focus on its Add Condition button is handed to the rebuilt one', async () => {
+			const { root, flush } = await mount(OGRE_CONDITIONED);
+			const detail = root.querySelector<HTMLElement>('.dse-init__detail')!;
+			const add = ctl(detail, 'init.cond.add');
+			add.focus();
+			mouseClick(ctl(detail, 'init.cond.remove', 0));
+			await flush();
+			expect(names(detail)).toEqual(['Remove condition: Slowed']);
+			expect(document.activeElement).toBe(ctl(detail, 'init.cond.add'));
+		});
+
+		test('[F26] focus on the remove button that was pressed (a condition that no longer exists): focus goes to its successor, the Add Condition button for the last one', async () => {
+			const { root, flush } = await mount(CONDITIONED);
+			const last = remove(root, 1);
+			last.focus();
+			mouseClick(last);
+			await flush();
+			expect(names(root).slice(0, 2)).toEqual(['Remove condition: Grabbed']);
+			expect(document.activeElement).toBe(ctl(root, 'init.cond.add'));
+		});
+
+		test('[F27] focus that was not inside the tracker (on <body>, or in another field) is not pulled in by the removal', async () => {
+			const { root, flush } = await mount(CONDITIONED);
+			expect(document.activeElement).toBe(document.body);
+			mouseClick(remove(root, 0));
+			await flush();
+			expect(names(root).slice(0, 1)).toEqual(['Remove condition: Slowed']);
+			expect(document.activeElement).toBe(document.body);
+			const other = document.createElement('input');
+			document.body.appendChild(other);
+			other.focus();
+			mouseClick(remove(root, 0));
+			await flush();
+			expect(names(root).slice(0, 1)).not.toEqual(['Remove condition: Slowed']);
+			expect(document.activeElement).toBe(other);
+		});
+
+		test('[F28] focus on a tracker control outside the conditions row stays where it is', async () => {
+			const { root, flush } = await mount(CONDITIONED);
+			const advance = ctl(root, 'init.round.advance');
+			advance.focus();
+			mouseClick(remove(root, 0));
+			await flush();
+			expect(names(root).slice(0, 1)).toEqual(['Remove condition: Slowed']);
+			expect(document.activeElement).toBe(advance);
+		});
+
+		test('[F29] a keyboard press on a remove button keeps focus in the row too (the successor control, with the keyboard ring)', async () => {
+			const { root, flush } = await mount(CONDITIONED);
+			const grabbed = remove(root, 0);
+			grabbed.focus();
+			grabbed.click(); // detail 0: Enter / Space
+			await flush();
+			expect(names(root).slice(0, 1)).toEqual(['Remove condition: Slowed']);
+			expect(document.activeElement).toBe(remove(root, 0));
+		});
+	});
+
 	// SC-603: a modal takes focus when it opens and Obsidian hands it back to the opener on close, but a save that replaces the
 	// opener (the pool modal's Apply rebuilds the whole tracker, a condition edit rebuilds the conditions row) leaves nothing to
 	// hand it to. The tracker remembers the focused control when the modal opens and gives it to the rebuilt successor.
