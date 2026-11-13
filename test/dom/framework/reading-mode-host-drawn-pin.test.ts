@@ -675,6 +675,22 @@ describe('SC-607: a preview that stayed open while the note changed never writes
 		expect(Notice.notices).toEqual(dropped);
 	});
 
+	// SC-612: the strict pin is also checked against the greedy line maps at write time. Blank-line twins, the upper deleted AND the note's last line edited in the same
+	// write: the head-first and the tail-first map both place the upper block (the edit stops one trim), only the tail-greedy map reads it as deleted.
+	test('a form in an embed whose part is the whole note, on the upper of two blank-line twins, the upper deleted and the last line edited, Save: refused (the greedy maps)', async () => {
+		const drawn = ['## Tracker', '', ...CTR(5), '', ...CTR(5), '', 'BOTTOM'];
+		const now = ['## Tracker', '', ...CTR(5), '', 'BOTTOM edited'];
+		const c = cardOn('embed', 'Note#Tracker', { text: drawn.join('\n'), lineStart: 2, lineEnd: 5 }, drawn);
+		await settle();
+		const pin = c.host.pinPosition();
+		await settle();
+		c.outside(now);
+		expect(await c.host.replaceSource(bodyOf(5, 'Edited'), { pin: pin!, pinOnly: true })).toBe(false);
+
+		expect(c.app.vault.getContent('Note.md')).toBe(now.join('\n'));
+		expect(Notice.notices).toEqual(dropped);
+	});
+
 	// The part the card was given was the WHOLE note when it was drawn (a note that is only that section); the note then grows. The card's drawn-from text is that part.
 	test('the part was the whole note when the card was drawn, a paragraph is added from outside: the + is saved (the drawn-from text is the part)', async () => {
 		const drawn = ['## Tracker', '', ...CTR(5)];
