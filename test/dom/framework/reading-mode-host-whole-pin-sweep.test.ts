@@ -8,6 +8,7 @@
 // every refusal shows exactly one "changed on disk first" Notice and a save none; the next round of a refused cell (the form reopened / the next click, on the
 // note as it is now) saves; a cell with no outside edit or an unrelated one saves. The totals are pinned as a regression fence.
 import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlockHost';
+import { mapLine } from '../../../src/framework/host/lineMap';
 import { droppedWriteMessage, resetDroppedWriteNotices } from '../../../src/framework/host/droppedWriteNotice';
 import { App, Notice, Plugin } from '../../mocks/obsidian';
 
@@ -52,6 +53,11 @@ const LAYOUTS: Record<string, Tok[]> = {
 	'uniq-blank': [...HEAD, C('a', 5), B, C('b', 9), ...TAIL],
 	'twin-headed': [...HEAD, L('## T'), B, C('a'), B, L('## T'), B, C('b'), ...TAIL],
 	'twin-headed-diff': [...HEAD, L('## T1'), B, C('a'), B, L('## T2'), B, C('b'), ...TAIL],
+	// a counter of ANOTHER value next to the run of twins (SC-612 review: the layouts above had none)
+	'twin-blank+diff-below': [...HEAD, C('a'), B, C('b'), B, C('d', 9), ...TAIL],
+	'twin-blank+diff-above': [...HEAD, C('d', 9), B, C('a'), B, C('b'), ...TAIL],
+	'tight-diff-neighbour': [...HEAD, C('d', 7), C('a'), B, L('P2'), B, C('b'), ...TAIL],
+	'triple+diff': [...HEAD, C('a'), B, C('b'), B, C('c'), B, C('d', 9), ...TAIL],
 };
 const lines = (n: number, tag: string): Tok[] => Array.from({ length: n }, (_, i) => L(`${tag} ${i}`));
 const idxOf = (toks: Tok[], id: string) => toks.findIndex((k) => k.t === 'ctr' && k.id === id);
@@ -99,7 +105,7 @@ function editsFor(toks: Tok[], P: string): Record<string, Tok[] | null> {
 		'ins-twin-bottom': beforeEnd(toks, [C('N', pv)]),
 		'ins-diff-above-adj': insAt(toks, pi, [C('N', 7), B]),
 		'ins-diff-below-adj': insAt(toks, pi + 1, [B, C('N', 7)]),
-		'edit-pinned': setV(toks, P, 8),
+		'edit-pinned': setV(toks, P, pv + 3),
 		'move-pinned-end': beforeEnd(del(toks, P), [ctrOf(toks, P)]),
 		'del-pinned-paste-end': beforeEnd(del(toks, P), [C('N', pv)]),
 		big: big(toks),
@@ -189,6 +195,7 @@ type Rec = {
 	bt?: string;
 	at?: string;
 	pB?: number;
+	pA?: number;
 	own?: boolean;
 };
 const records: Rec[] = [];
@@ -223,7 +230,7 @@ async function cell(layout: string, P: string, editName: string, afterToks: Tok[
 	const w = written(after, final);
 	const outcome = w === '' ? 'refused' : w === P ? 'A' : w === 'CORRUPT' ? 'CORRUPT' : `OTHER:${w}`;
 	const rec: Rec = { layout, pinned: P, edit: editName, cons: cons.name, outcome, ok, notice: noticeKind(Notice.notices.slice()) };
-	if (!editName.startsWith('big')) Object.assign(rec, { bt: before.text, at: after.text, pB: before.fence.get(P) });
+	if (!editName.startsWith('big')) Object.assign(rec, { bt: before.text, at: after.text, pB: before.fence.get(P), pA: after.fence.get(P) });
 	// the next round (the form closed and reopened / the next click) on the note as it is now, the block where it is now: must save
 	if (outcome === 'refused' && after.fence.has(P)) {
 		resetDroppedWriteNotices();
@@ -377,6 +384,11 @@ describe('SC-612: whole-note pin sweep', () => {
 			if (opts.length > 1) {
 				ambiguous++;
 				if (r.outcome !== 'refused') bad.push(`written in an ambiguous cell: ${key(r)} -> ${r.outcome}`);
+			} else if (r.outcome === 'refused' && opts[0] === r.pA && r.pA !== undefined && mapLine(r.bt, r.at, r.pB) === r.pA) {
+				// a NEW refusal needs a tie, or a pinned block that is gone or changed: here the one cheapest placement IS the pinned block and the head-first line map (which
+				// the base writes through) puts it there too. (Where the head-first map itself puts the block on another block, e.g. a counter of another value pasted right
+				// above it, the base refuses as well: a known false refusal, not this rule's.)
+				bad.push(`refused although the block's one cheapest placement is the block: ${key(r)}`);
 			}
 		}
 		expect(bad.slice(0, 20)).toEqual([]);
@@ -389,6 +401,6 @@ describe('SC-612: whole-note pin sweep', () => {
 			saved: count((r) => r.outcome === 'A'),
 			refused: count((r) => r.outcome === 'refused'),
 			other: count((r) => r.outcome.startsWith('OTHER')),
-		}).toEqual({ cells: 5771, checked: 5384, ambiguous: 1376, saved: 2977, refused: 2326, other: 468 });
+		}).toEqual({ cells: 10966, checked: 10264, ambiguous: 2288, saved: 6003, refused: 4029, other: 934 });
 	}, 600000);
 });

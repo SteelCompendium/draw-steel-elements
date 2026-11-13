@@ -63,7 +63,7 @@
 import { MarkdownRenderChild, TFile, resolveSubpath } from 'obsidian';
 import type { CachedMetadata, Component, MarkdownPostProcessorContext, MarkdownSectionInformation, MarkdownView, Plugin } from 'obsidian';
 import type { BlockHost, BlockInfo, BlockPin, BlockWriteOptions, RenderMode } from './BlockHost';
-import { mapLine, mapLineFromTail, mapLineGreedy, mapLineStrict } from './lineMap';
+import { editDistance, mapLine, mapLineFromTail, mapLineStrict, LINE_MAP_MAX_EDITS } from './lineMap';
 import type { PreviewScrollPin } from './previewScrollPin';
 import { listFences } from '../sidebar/anchor';
 import { notifyDroppedWrite, notifyUnsavableWrite } from './droppedWriteNotice';
@@ -1155,15 +1155,16 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * or the note's trailing fence that never closes (the same rule as `locateUnterminatedTrailingFence`, which `locateByBody` also
 	 * considers). Null when the line was changed or removed or no such block is there. No search by body: identical twins cannot be told
 	 * apart that way (SC-480), the position is what tells them apart.
-	 * Two identical blocks with identical surroundings (separated only by blank lines): a deletion of one cannot be told from a deletion of the other - the note that is left is the
-	 * same. The head-first line diff always reads the LOWER one as deleted, so (SC-556) a form on the upper block used to place its pin on the surviving block and write it, which is a
-	 * different block that only looks the same (SC-612). Now, while the known body occurs twice (in the note as the pin was taken, or now), a whole-note pin is placed only when no
-	 * alignment of the note disagrees: the tail-first map (`mapLineFromTail`) must give the same line, and neither greedy map (`mapLineGreedy`, one side trimmed only: they still see
-	 * the tie when an unrelated edit next to the run stopped one trim for both full maps) may put the block elsewhere (`greedyDissents`). Otherwise the pin is refused (a Notice,
-	 * nothing written, the form stays open): the form's block, or the card, may have been the one deleted. The cost, accepted: an identical block added or removed next to the
-	 * pinned one by an outside edit inside the form / click round is refused too. A note without identical blocks pays nothing and is never refused by this rule. Residuals:
-	 * a move or paste within identical blocks leaves the note text unchanged, and an ambiguous twin edit combined with a one-sided edit of more than `LINE_MAP_MAX_EDITS` lines
-	 * (the greedy maps give up) places as the head-first map says.
+	 * Identical twins (SC-612): two identical blocks with identical surroundings (separated only by blank lines): a deletion of one cannot be told from a deletion of the other - the note
+	 * that is left is the same. The head-first line diff always reads the LOWER one as deleted, so (SC-556) a form on the upper block used to place its pin on the surviving block and
+	 * write it, which is a different block that only looks the same. Now, while the known body occurs twice (in the note as the pin was taken, or now), the head-first answer is
+	 * accepted only when it is the UNIQUE cheapest placement of the pinned block (`placedUniquely`): paired with each block of the note now whose lines are identical to it, or deleted,
+	 * priced by the line edits of everything around it. A tie (or a cheaper placement elsewhere) is refused (a Notice, nothing written, the form stays open): the form's block, or the
+	 * card, may have been the one deleted. The cost, accepted: an identical block added or removed next to the pinned one by an outside edit inside the form / click round is refused
+	 * when the note cannot tell which was meant. Every pinned write counts the known body in two scans of the note (`twinned`); a note without identical blocks is never refused by this
+	 * rule and runs no placement. Measured guarantee: on the sweep's layouts and the seeded fuzz of `reading-mode-host-whole-pin*.test.ts`, no write in a cell the oracle calls ambiguous
+	 * and no refusal in one it calls unambiguous (where the pinned block still exists unedited). Residuals: a move or paste within identical blocks leaves the note text unchanged
+	 * (no line map can see it), and a placement the capped diff cannot price (more than `LINE_MAP_MAX_EDITS` lines changed around the block) keeps the head-first answer.
 	 * A pin is also refused when more than `LINE_MAP_MAX_EDITS` lines changed on both sides of the block (see lineMap.ts).
 	 */
 	private pinnedTarget(content: string, pin: BlockPin): { lineStart: number; lineEnd: number } | null {
@@ -1171,29 +1172,60 @@ export class ReadingModeBlockHost implements BlockHost {
 		const line = mapLine(pin.text, content, pin.lineStart);
 		if (line === null) return null;
 		// SC-607: the head-first map reads the LOWER of two identical blocks as deleted; a pin placed in the note as drawn must not depend on that tie
-		// SC-612: a whole-note pin is strict too while the known body occurs twice (in the note as pinned or now): of two identical blocks separated only
-		// by blank lines, a deletion of one reads exactly like a deletion of the other, and the head-first map's guess must not place a write (the form or
-		// card would land in a block that only looks like its own). The greedy maps see the same tie when an unrelated edit elsewhere fixed the trims.
-		const twin = this.twinned(content, pin);
-		if ((strictPins.has(pin) || twin) && mapLineFromTail(pin.text, content, pin.lineStart) !== line) return null;
-		if (twin && (this.greedyDissents(content, pin, line, 'head') || this.greedyDissents(content, pin, line, 'tail'))) return null;
+		if (strictPins.has(pin) && mapLineFromTail(pin.text, content, pin.lineStart) !== line) return null;
+		// SC-612: a pin of a block that has an identical twin (in the note as pinned or now) is placed only on the unique cheapest placement
+		if (this.twinned(content, pin) && !this.placedUniquely(content, pin, line)) return null;
 		const fence = this.fenceAt(content, line);
 		if (!fence) return null;
 		if (this.knownBody !== null && normalizeBody(fence.body) !== normalizeBody(this.knownBody)) return null;
 		return { lineStart: fence.lineStart, lineEnd: fence.lineEnd };
 	}
 
+	/** The closed fences of this host's language in `text`, and the note's trailing fence that never closes (as `fenceAt` reads them), as [first line, last line]. */
+	private blockSpans(text: string): Array<[number, number]> {
+		const language = this.knownLanguage ?? this.alias;
+		const out: Array<[number, number]> = listFences(text, language).map((f) => [f.lineStart, f.lineEnd]);
+		const unterminated = locateUnterminatedTrailingFence(splitLines(text), language);
+		if (unterminated) out.push([unterminated.lineStart, unterminated.lineEnd]);
+		return out;
+	}
+
 	/**
-	 * SC-612: whether the greedy alignment `from` (`mapLineGreedy`) puts the pinned block anywhere but `line`: deleted, or on another block that holds the
-	 * known body (an identical twin). Not counted: an alignment that pairs the fence line with the fence of a block of ANOTHER body (every fence line reads
-	 * the same, so a block of another kind inserted right above reads that way; it says nothing about twins), and one that gave up.
+	 * SC-612: whether `line` (where the head-first map put the pinned block) is the one cheapest placement of that block in `content`. A placement is the block paired with a block of
+	 * `content` whose lines are identical to it, or the block deleted; its cost is the line edits (`editDistance`) of everything before the block plus everything after it, plus the block's
+	 * own lines when deleted. False when another placement costs the same or less (a tie: the note reads the same whichever block was meant) or `line` is no such block. True when the
+	 * block is not a fence of the note as pinned, or the capped diff cannot price `line` (more than LINE_MAP_MAX_EDITS lines changed around it): the head-first answer stands. A placement
+	 * that cannot cost at most the cost of `line` is dropped without pricing it (its distance is capped there, and the line counts between the block and the ends bound it from below).
 	 */
-	private greedyDissents(content: string, pin: BlockPin, line: number, from: 'head' | 'tail'): boolean {
-		const at = mapLineGreedy(pin.text, content, pin.lineStart, from);
-		if (at === line || at === 'gave up') return false;
-		if (at === null || this.knownBody === null) return true;
-		const fence = this.fenceAt(content, at);
-		return !(fence && normalizeBody(fence.body) !== normalizeBody(this.knownBody));
+	private placedUniquely(content: string, pin: BlockPin, line: number): boolean {
+		const A = splitLines(pin.text);
+		const B = splitLines(content);
+		const own = this.blockSpans(pin.text).find(([first]) => first === pin.lineStart);
+		if (!own) return true;
+		const [s, e] = own;
+		const blk = A.slice(s, e + 1);
+		const pre = A.slice(0, s);
+		const suf = A.slice(e + 1);
+		const same = this.blockSpans(content).filter(([q, qe]) => qe - q === e - s && blk.every((l, i) => B[q + i] === l));
+		const here = same.find(([q]) => q === line);
+		if (!here) return false;
+		const around = ([q, qe]: [number, number], cap: number): number | null => {
+			const before = editDistance(pre, B.slice(0, q), cap);
+			if (before === null) return null;
+			const after = editDistance(suf, B.slice(qe + 1), cap - before);
+			return after === null ? null : before + after;
+		};
+		const best = around(here, LINE_MAP_MAX_EDITS);
+		if (best === null) return true;
+		for (const span of same) {
+			if (span === here) continue;
+			if (Math.abs(span[0] - s) + Math.abs(B.length - 1 - span[1] - (A.length - 1 - e)) > best) continue;
+			const cost = around(span, best);
+			if (cost !== null && cost <= best) return false;
+		}
+		if (blk.length > best) return true;
+		const gone = editDistance([...pre, ...suf], B, best - blk.length);
+		return gone === null || gone + blk.length > best;
 	}
 
 	/** SC-480: another block holds this block's body, in the note as the pin was taken (`pin.text`) or in `content` now. */

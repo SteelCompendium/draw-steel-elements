@@ -68,21 +68,21 @@ export function mapLineStrict(before: string, after: string, line: number): Stri
 }
 
 /**
- * SC-612: the line of `after` that is line `line` of `before` by one GREEDY alignment: 'head' trims only the common head and runs the forward diff over
- * everything after it (no common-tail trim), so a run of identical lines is paired as EARLY as the diff allows; 'tail' is the mirror (only the common
- * tail trimmed, the diff over the reversed rest: as LATE as it allows). `mapLine` and `mapLineFromTail` trim BOTH ends, so an unrelated edit on one
- * side of a run of identical blocks (a heading above them edited) stops one trim at the same place for both, and both read a deletion in the run the
- * same way; these two still see the tie. Null when the line was changed or removed (or is not a line of `before`); 'gave up' past LINE_MAP_MAX_EDITS
- * (with no trim on one side a large one-sided edit counts in full).
+ * SC-612: the number of lines to delete and insert to turn `a` into `b` (the line-edit distance: the common head and tail lines are trimmed, a Myers diff
+ * runs over the rest), or null when it is more than `cap` (default LINE_MAP_MAX_EDITS). The cost of a placement of a block between two versions of a note
+ * (`ReadingModeBlockHost.pinnedTarget` compares the placements of a block that has an identical twin).
  */
-export function mapLineGreedy(before: string, after: string, line: number, from: 'head' | 'tail'): number | null | typeof GAVE_UP {
-	if (before === after) return line;
-	const a = splitLines(before);
-	const b = splitLines(after);
-	if (line < 0 || line >= a.length) return null;
-	if (from === 'head') return mapLineOf(a, b, line, false);
-	const r = mapLineOf(a.slice().reverse(), b.slice().reverse(), a.length - 1 - line, false);
-	return r === null || r === GAVE_UP ? r : b.length - 1 - r;
+export function editDistance(a: readonly string[], b: readonly string[], cap = LINE_MAP_MAX_EDITS): number | null {
+	let head = 0;
+	while (head < a.length && head < b.length && a[head] === b[head]) head++;
+	let tail = 0;
+	while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
+	const n = a.length - head - tail;
+	const m = b.length - head - tail;
+	if (Math.abs(n - m) > cap) return null;
+	if (n === 0 || m === 0) return n + m;
+	const r = myers(a.slice(head, a.length - tail), b.slice(head, b.length - tail), cap, false);
+	return r === null ? null : r.d;
 }
 
 function fromTail(a: readonly string[], b: readonly string[], line: number): number | null | typeof GAVE_UP {
@@ -91,42 +91,22 @@ function fromTail(a: readonly string[], b: readonly string[], line: number): num
 	return r === null || r === GAVE_UP ? r : b.length - 1 - r;
 }
 
-function mapLineOf(a: readonly string[], b: readonly string[], line: number, trimTail = true): number | null | typeof GAVE_UP {
+function mapLineOf(a: readonly string[], b: readonly string[], line: number): number | null | typeof GAVE_UP {
 	if (line < 0 || line >= a.length) return null;
 	let head = 0;
 	while (head < a.length && head < b.length && a[head] === b[head]) head++;
 	if (line < head) return line;
 	let tail = 0;
-	// SC-612: a greedy map (`mapLineGreedy`) trims only its own side
-	while (trimTail && tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
+	while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
 	if (line >= a.length - tail) return line + (b.length - a.length);
 	// Myers over the changed middle a[head, a.length - tail) / b[head, b.length - tail).
 	const A = a.slice(head, a.length - tail);
 	const B = b.slice(head, b.length - tail);
 	const n = A.length;
 	const m = B.length;
-	const max = Math.min(n + m, LINE_MAP_MAX_EDITS);
-	const off = max + 1;
-	const v = new Int32Array(2 * max + 3);
-	const trace: Int32Array[] = [];
-	let found = -1;
-	for (let d = 0; d <= max && found < 0; d++) {
-		trace.push(v.slice());
-		for (let k = -d; k <= d; k += 2) {
-			let x = k === -d || (k !== d && v[off + k - 1] < v[off + k + 1]) ? v[off + k + 1] : v[off + k - 1] + 1;
-			let y = x - k;
-			while (x < n && y < m && A[x] === B[y]) {
-				x++;
-				y++;
-			}
-			v[off + k] = x;
-			if (x >= n && y >= m) {
-				found = d;
-				break;
-			}
-		}
-	}
-	if (found < 0) return GAVE_UP;
+	const r = myers(A, B, LINE_MAP_MAX_EDITS, true);
+	if (r === null) return GAVE_UP;
+	const { d: found, trace, off } = r;
 	// Walk back from the end: every diagonal run is a run of kept lines, A[x] -> B[x - k].
 	const target = line - head;
 	let x = n;
@@ -147,4 +127,35 @@ function mapLineOf(a: readonly string[], b: readonly string[], line: number, tri
 		if (target === x && prevK === k - 1) return null; // that line was deleted at this step
 	}
 	return null;
+}
+
+/**
+ * The forward Myers pass over `A` / `B`: the edit distance `d` (insertions + deletions) when it is at most `cap`, else null. `trace` (the V array at the start of
+ * every step, for the walk back in `mapLineOf`) is kept only when asked: a distance alone needs none.
+ */
+function myers(A: readonly string[], B: readonly string[], cap: number, keepTrace: boolean): { d: number; trace: Int32Array[]; off: number } | null {
+	const n = A.length;
+	const m = B.length;
+	const max = Math.min(n + m, cap);
+	const off = max + 1;
+	const v = new Int32Array(2 * max + 3);
+	const trace: Int32Array[] = [];
+	let found = -1;
+	for (let d = 0; d <= max && found < 0; d++) {
+		if (keepTrace) trace.push(v.slice());
+		for (let k = -d; k <= d; k += 2) {
+			let x = k === -d || (k !== d && v[off + k - 1] < v[off + k + 1]) ? v[off + k + 1] : v[off + k - 1] + 1;
+			let y = x - k;
+			while (x < n && y < m && A[x] === B[y]) {
+				x++;
+				y++;
+			}
+			v[off + k] = x;
+			if (x >= n && y >= m) {
+				found = d;
+				break;
+			}
+		}
+	}
+	return found < 0 ? null : { d: found, trace, off };
 }

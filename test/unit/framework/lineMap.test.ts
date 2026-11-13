@@ -1,6 +1,6 @@
 // SC-552 -- mapLine: where a line of one version of a note is in a later version. The block edit form pins its block's fence line
 // when it opens; its Save maps that line through whatever was written to the note since (a click's write, an outside edit, Sync).
-import { LINE_MAP_MAX_EDITS, mapLine, mapLineFromTail, mapLineGreedy, mapLineStrict } from '@/framework/host/lineMap';
+import { LINE_MAP_MAX_EDITS, editDistance, mapLine, mapLineFromTail, mapLineStrict } from '@/framework/host/lineMap';
 
 const twin = (v: number) => ['```ds-counter', 'name: Twin', `current_value: ${v}`, '```'];
 const note = (vals: number[], extra: Record<number, string[]> = {}) =>
@@ -132,85 +132,56 @@ describe('SC-607: mapLineStrict', () => {
 	});
 });
 
-// SC-612 -- mapLineGreedy: one side trimmed only. `mapLine` and `mapLineFromTail` trim BOTH ends, so an unrelated edit next to a run of identical blocks stops
-// one trim for both and they agree on a guess; the greedy maps keep the tie visible.
-describe('SC-612: mapLineGreedy', () => {
-	// `# t / TOP / twin / '' / twin / BOTTOM`: two identical counters separated only by a blank line
-	const pair = (top = 'TOP', bottom = 'BOTTOM', twins = 2) =>
-		['# t', '', top, '', ...Array.from({ length: twins }, () => twin(5)).flatMap((t, i) => (i === 0 ? t : ['', ...t])), '', bottom].join('\n');
-	const [UPPER, LOWER] = fencesOf(pair());
+// SC-612 -- editDistance: the line-edit cost (lines deleted + inserted) of turning one version into another, null past a cap. It prices the placements of a block
+// that has an identical twin (ReadingModeBlockHost.placedUniquely).
+describe('SC-612: editDistance', () => {
+	const L = (s: string) => (s === '' ? [] : s.split(' '));
 
-	it('the identity for identical texts', () => {
-		const a = pair();
-		expect(mapLineGreedy(a, a, LOWER, 'head')).toBe(LOWER);
-		expect(mapLineGreedy(a, a, LOWER, 'tail')).toBe(LOWER);
+	it('is 0 for equal lines and the number of lines for an insertion or a deletion', () => {
+		expect(editDistance(L('a b c'), L('a b c'))).toBe(0);
+		expect(editDistance([], [])).toBe(0);
+		expect(editDistance(L('a b c'), L('a x b c'))).toBe(1);
+		expect(editDistance(L('a x y b'), L('a b'))).toBe(2);
+		expect(editDistance([], L('a b c'))).toBe(3);
+		expect(editDistance(L('a b c'), [])).toBe(3);
 	});
 
-	it('a line outside the old text maps to null, in both directions', () => {
-		const a = pair();
-		const b = pair('TOP edited');
-		expect(mapLineGreedy(a, b, 500, 'head')).toBeNull();
-		expect(mapLineGreedy(a, b, -1, 'head')).toBeNull();
-		expect(mapLineGreedy(a, b, 500, 'tail')).toBeNull();
-		expect(mapLineGreedy(a, b, -1, 'tail')).toBeNull();
+	it('a changed line costs a deletion and an insertion', () => {
+		expect(editDistance(L('a b c'), L('a X c'))).toBe(2);
 	});
 
-	it('the pure tie (one of two blocks deleted): head pairs the upper twin with the survivor, tail pairs the lower one', () => {
-		const a = pair();
-		const b = pair('TOP', 'BOTTOM', 1);
-		expect(mapLineGreedy(a, b, UPPER, 'head')).toBe(UPPER);
-		expect(mapLineGreedy(a, b, LOWER, 'head')).toBeNull();
-		expect(mapLineGreedy(a, b, UPPER, 'tail')).toBeNull();
-		expect(mapLineGreedy(a, b, LOWER, 'tail')).toBe(UPPER);
+	it('is symmetric and counts the minimal diff, not the first one found (a repeated line)', () => {
+		expect(editDistance(L('a a a b'), L('a b'))).toBe(2);
+		expect(editDistance(L('a b'), L('a a a b'))).toBe(2);
+		expect(editDistance(L('x a b a y'), L('x b a b y'))).toBe(2);
 	});
 
-	it('the lower twin deleted and TOP edited: mapLine and mapLineFromTail agree on the survivor, the greedy maps do not', () => {
-		const a = pair();
-		const b = pair('TOP edited', 'BOTTOM', 1);
-		expect(mapLine(a, b, LOWER)).toBe(UPPER);
-		expect(mapLineFromTail(a, b, LOWER)).toBe(UPPER);
-		expect(mapLineGreedy(a, b, LOWER, 'head')).toBeNull();
-		expect(mapLineGreedy(a, b, LOWER, 'tail')).toBe(UPPER);
+	it('null when the distance is more than the cap, the value when it is exactly the cap', () => {
+		expect(editDistance(L('a b c'), L('a X c'), 2)).toBe(2);
+		expect(editDistance(L('a b c'), L('a X c'), 1)).toBeNull();
+		expect(editDistance(L('a b c'), L('a x y z b c'), 2)).toBeNull();
+		expect(editDistance(L('a b c d'), L('p q r s'), 0)).toBeNull();
+		expect(editDistance(L('a b'), L('a b'), 0)).toBe(0);
 	});
 
-	it('the same with BOTTOM edited and the upper twin pinned: now the tail map is the one that says deleted', () => {
-		const a = pair();
-		const b = pair('TOP', 'BOTTOM edited', 1);
-		expect(mapLine(a, b, UPPER)).toBe(UPPER);
-		expect(mapLineFromTail(a, b, UPPER)).toBe(UPPER);
-		expect(mapLineGreedy(a, b, UPPER, 'head')).toBe(UPPER);
-		expect(mapLineGreedy(a, b, UPPER, 'tail')).toBeNull();
-	});
-
-	it('a line the edit did not touch is placed the same by every map', () => {
-		const a = pair('TOP edited');
-		const b = pair('TOP edited', 'BOTTOM', 1);
-		const lines = a.split('\n');
-		const bottom = lines.length - 1;
-		for (const from of ['head', 'tail'] as const) {
-			expect(mapLineGreedy(a, b, 0, from)).toBe(0);
-			expect(mapLineGreedy(a, b, bottom, from)).toBe(b.split('\n').length - 1);
-		}
-	});
-
-	it('a one-sided insertion of more than LINE_MAP_MAX_EDITS lines: greedy head says "gave up" where mapLine still maps it', () => {
+	it('defaults to LINE_MAP_MAX_EDITS: a rewrite of more lines than that has no distance, an insertion of a few hundred lines has', () => {
 		const n = LINE_MAP_MAX_EDITS + 50;
-		const a = pair();
-		const b = ['# t', '', ...Array.from({ length: n }, (_, i) => `new${i}`), '', ...pair().split('\n').slice(2)].join('\n');
-		expect(mapLine(a, b, UPPER)).toBe(UPPER + n + 1);
-		expect(mapLineGreedy(a, b, UPPER, 'head')).toBe('gave up');
-		// the tail side trims the shared end, so the greedy tail map finds it at once
-		expect(mapLineGreedy(a, b, UPPER, 'tail')).toBe(UPPER + n + 1);
+		const a = Array.from({ length: n }, (_, i) => `a${i}`);
+		const b = Array.from({ length: n }, (_, i) => `b${i}`);
+		expect(editDistance(a, b)).toBeNull();
+		expect(editDistance(['top', ...a, 'bottom'], ['top', ...a.slice(0, 5), ...Array.from({ length: LINE_MAP_MAX_EDITS - 10 }, (_, i) => `n${i}`), ...a.slice(5), 'bottom'])).toBe(LINE_MAP_MAX_EDITS - 10);
 	});
 
-	it('mapLine, mapLineFromTail and mapLineStrict give the same answers they did (the greedy trim flag is the greedy maps\' own)', () => {
-		const a = pair();
-		const b = pair('TOP', 'BOTTOM', 1);
-		expect(mapLine(a, b, UPPER)).toBe(UPPER);
-		expect(mapLine(a, b, LOWER)).toBeNull();
-		expect(mapLineFromTail(a, b, UPPER)).toBeNull();
-		expect(mapLineFromTail(a, b, LOWER)).toBe(UPPER);
-		expect(mapLineStrict(a, b, UPPER)).toBe('disagree');
-		expect(mapLineStrict(a, b, LOWER)).toBe('disagree');
+	it('mapLine, mapLineFromTail and mapLineStrict keep their answers for the pure tie (the diff they share was factored out)', () => {
+		const pair = (twins: number) =>
+			['# t', '', 'TOP', '', ...Array.from({ length: twins }, () => twin(5)).flatMap((t, i) => (i === 0 ? t : ['', ...t])), '', 'BOTTOM'].join('\n');
+		const a = pair(2);
+		const b = pair(1);
+		const [upper, lower] = fencesOf(a);
+		expect(mapLine(a, b, upper)).toBe(upper);
+		expect(mapLine(a, b, lower)).toBeNull();
+		expect(mapLineFromTail(a, b, upper)).toBeNull();
+		expect(mapLineFromTail(a, b, lower)).toBe(upper);
+		expect(mapLineStrict(a, b, upper)).toBe('disagree');
 	});
 });

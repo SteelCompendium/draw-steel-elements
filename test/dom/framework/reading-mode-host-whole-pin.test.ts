@@ -229,6 +229,60 @@ describe('SC-612: whole-note pins of identical blocks', () => {
 		});
 	});
 
+	// The review's shapes: a counter of ANOTHER value next to the run of twins. A line-level pairing reads a fence line of the other counter as the pinned block's (every opening
+	// fence reads the same), which hid a real tie (H1-H1c: refused now) and made a clear case look like one (M1-M6: saves).
+	const C9 = CTR(9);
+	test.each(KINDS)('H1 %s on the lower twin, the lower deleted and TOP edited, a different counter below the run: refused', async (kind) => {
+		const before = note(HEAD, CTR(5), [''], CTR(5), [''], C9, END);
+		const after = note(['# N', '', 'TOP edited', ''], CTR(5), [''], C9, END);
+		refused(await round(kind, before, after, 1), after);
+	});
+
+	test.each(KINDS)('H1b %s on the lower twin, the lower deleted and the blank line under TOP deleted, a different counter below: refused', async (kind) => {
+		const before = note(HEAD, CTR(5), [''], CTR(5), [''], C9, END);
+		const after = note(['# N', '', 'TOP'], CTR(5), [''], C9, END);
+		refused(await round(kind, before, after, 1), after);
+	});
+
+	test.each(KINDS)('H1c %s on the lower of the twins, the upper twin deleted and BOTTOM edited, a different counter above the run: refused', async (kind) => {
+		const before = note(HEAD, C9, [''], CTR(5), [''], CTR(5), END);
+		const after = note(HEAD, C9, [''], CTR(5), ['', 'BOTTOM edited']);
+		refused(await round(kind, before, after, 1), after);
+	});
+
+	test.each(KINDS)('M1 %s: a different counter tight above the pinned one deleted, the twin elsewhere: saves (no tie)', async (kind) => {
+		const before = note(HEAD, CTR(7), CTR(5), ['', 'P2', ''], CTR(5), END);
+		const after = note(['# N', '', 'TOP'], CTR(5), ['', 'P2', ''], CTR(5), END);
+		saved(await round(kind, before, after, 1, { pinnedAfter: 0 }), after, 0);
+	});
+
+	test.each(KINDS)('M2 %s: the other twin bumped (a sibling write) and a different counter added below the pinned one: saves', async (kind) => {
+		const before = note(HEAD, CTR(7), [''], CTR(7), END);
+		const after = note(HEAD, CTR(8), [''], CTR(7), [''], C9, END);
+		saved(await round(kind, before, after, 1, { pinnedAfter: 1, value: 7 }), after, 1);
+	});
+
+	test.each(KINDS)('M3 %s: of three identical counters a blank line above the pinned one removed and a different counter added below it: saves', async (kind) => {
+		const before = note(HEAD, CTR(5), [''], CTR(5), ['', 'P2', ''], CTR(5), END);
+		const after = note(HEAD, CTR(5), CTR(5), [''], C9, ['', 'P2', ''], CTR(5), END);
+		saved(await round(kind, before, after, 1, { pinnedAfter: 1 }), after, 1);
+	});
+
+	test.each(KINDS)('M6 %s: the other twin bumped and a different counter added below the pinned one: saves', async (kind) => {
+		const before = twins();
+		const after = note(HEAD, CTR(6), [''], CTR(5), [''], C9, END);
+		saved(await round(kind, before, after, 1, { pinnedAfter: 1 }), after, 1);
+	});
+
+	// The head-first map pairs the unterminated block's three lines with the closed copy's first three (the copy has one more line, the closing fence): it names the COPY.
+	// The base wrote it (a different block, no Notice); the one cheapest placement is the pinned block further down, which is not where the head-first map says, so: refused.
+	test.each(KINDS)('%s on the pinned UNTERMINATED trailing fence, an identical but CLOSED copy pasted above it: refused (the base wrote the copy)', async (kind) => {
+		const open = ['```ds-counter', 'name: Twin', 'current_value: 5'];
+		const before = note(HEAD, open);
+		const after = note(HEAD, CTR(5), [''], open);
+		refused(await round(kind, before, after, 0, { pinnedAfter: 1 }), after);
+	});
+
 	test.each(KINDS)('T13 %s on the MIDDLE of a run of three identical counters, the upper deleted: refused (the base writes the lowest one)', async (kind) => {
 		const before = note(HEAD, CTR(5), [''], CTR(5), [''], CTR(5), END);
 		const after = note(HEAD, CTR(5), [''], CTR(5), END);
