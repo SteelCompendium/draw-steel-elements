@@ -16,10 +16,13 @@
 // a focus the user moves elsewhere cancels the focus part, and no token (the window was opened with the mouse, focus was not in the
 // tracker) means nothing is focused.
 //
-// WHEN IT APPLIES: only when the successor's content differs from what the closing view held. The same bytes mean the unload was not
-// an outside edit (the view's own save in Live Preview, a mode switch, a re-render): nothing is said and nothing is moved, as before.
-// And the successor must exist: a note that navigated away, a block the edit deleted, a leaf that closed has none, the watch lapses
-// at its TTL, and nothing is shown or focused.
+// WHEN WHAT HAPPENS: the Notice only when the successor's content differs from what the closing view had loaded or written (`content()`:
+// the note's own text of the block when the host knows it, so even a YAML comment counts as an outside edit); the same content is the
+// view's own save or a re-render, which says nothing. Focus does not depend on that check. It is not moved when the number of the pane's
+// trackers changed since the window opened (an edit inserted or removed one, so the position no longer says which is ours), and it follows a
+// burst of redraws (Sync): the watch stays armed HANDOFF_SETTLE_MS after each success and re-claims only while focus is on <body>.
+// The successor must exist: a note that navigated away, a block the edit deleted, a leaf that closed has none, the watch lapses at its
+// TTL, and nothing is shown or focused. The watch belongs to the plugin (`owner`): unloading it cancels the watch.
 import { focusControl, focusIsFree } from './focusHandoff';
 import { controlSuccessor } from '../kit/controlFocus';
 import type { ControlFamilies, ControlFocus } from '../kit/controlFocus';
