@@ -181,6 +181,8 @@
 // press inside the modal within the helper's 150 ms: on the modal title, on the Apply input, or a double-click whose second press is queued while the modal is still opening (it lands on the backdrop). Obsidian's window-capture click listener used to
 // hide the preview 5 ms after that second press, and the modal with it. Now the preview stays in every trial (Reading view and Live Preview), never turns into a source editor, a title or input press keeps the modal as well, Escape closes only the
 // modal, Healing 3 + Apply writes `current_stamina: 18` with no Notice, with the pointer away for 1.2 s the preview is still shown and a real click outside closes it. The double-click's backdrop press closes the modal (as in a pane) and leaves the preview. A sixth trial opens the modal a SECOND time from the same, now focused, preview (open, Escape, open again) and presses the title within 150 ms: no source editor, the keyboard focus stays out of the preview, Escape closes only the modal (r3 measured the base switching the preview to source here).
+// SC-616 changes how the title / apply / reopen trials press and gate (the trial had raced SC-598's documented residual: a press handled before Obsidian's 10 ms helper timer, which hides the preview 5 ms later): the second press is released after an in-page 11 ms timer
+// (the helper's timer, armed first, has run by then; on the base the 150 ms helper is still pending), the validity gate is measured from the END of the opening click's dispatch (`gapEnd < 140`), and a trial whose only problem is that gate (a slow host) is re-run, up to twice, named in the outcome line.
 //
 // SC-594 appends G-S92 (58 scenarios in all; it sits after G-S91 and before G-S56, and runs alone in the sixth `--only` part, about 100 s with the build and the start-up): a card's + / - in a hover preview of a HEADING or a BLOCK link (`[[note#Tracker]]`,
 // `[[note#^id]]`) of a note that holds an identical counter elsewhere. Obsidian gives that card the heading's BODY (no heading line) or the block's own lines, which the identical counter repeats, so the
@@ -1809,6 +1811,8 @@ async function gs87Trial(t, mode, opener) {
  * `target`: 'title' (a press on the modal title), 'dblq' (a double-click whose second press is sent 10 ms after the first release, without waiting for it: it is queued while the modal opens, and lands on the backdrop) or 'apply' (a press on the
  * Apply input, then Healing 3 + a real click on Apply) or 'reopen' (open, wait past the helper's 150 ms, Escape, then open AGAIN from the now focused preview with the same press and press the title: the base turned the preview into a source editor, keyboard focus inside it behind the open window). The in-page gap between the two trusted clicks is recorded (`gap`). Returns a record; the scenario judges it.
  * Footguns (measured, SC-598 r1): the second press must come within 150 ms of the opening click, so it is sent as soon as its point is known (no sleep); the press point must hit the number's own element (G-S83 `stamtext`).
+ * SC-616: title / apply / reopen release the second press only after an in-page 11 ms timer (see the comment at the press), and `gapEnd` is the validity measure: the second click's capture minus the END of the opening click's dispatch (`gap`, from its start, stays for the messages).
+ * Every call starts from fresh state (both fixtures rewritten, the host reopened, the hover and pointer redone; `K.cleanup` closes the modal and the preview), so the scenario may re-run a call.
  */
 async function gs91Trial(t, mode, target) {
 	const K = gs83Kit(t);
@@ -1846,8 +1850,9 @@ async function gs91Trial(t, mode, target) {
 			await K.mouse('mouseMoved', pt.x, pt.y);
 			await t.sleep(200);
 		}
-		// every click at the window, to measure the gap between the two trusted ones in the page's own clock
-		await t.ev(`(() => { window.__gs91 = []; if (!window.__gs91l) { window.__gs91l = true; window.addEventListener('click', (e) => window.__gs91?.push({ t: performance.now(), trusted: e.isTrusted }), true); } return true; })()`);
+		// every click at the window, to measure the gap between the two trusted ones in the page's own clock: capture (`end: false`) and, for the
+		// opening click, the end of its dispatch (window bubble, `end: true`; Obsidian's click-to-edit helper armed its timer just before, at the embed container)
+		await t.ev(`(() => { window.__gs91 = []; if (!window.__gs91l) { window.__gs91l = true; window.addEventListener('click', (e) => window.__gs91?.push({ t: performance.now(), trusted: e.isTrusted, end: false }), true); window.addEventListener('click', (e) => window.__gs91?.push({ t: performance.now(), trusted: e.isTrusted, end: true })); } return true; })()`);
 		const b1 = { button: 'left', clickCount: 1 };
 		const b2 = { button: 'left', clickCount: 2 };
 		if (target === 'dblq') {
@@ -1871,9 +1876,17 @@ async function gs91Trial(t, mode, target) {
 			t.expect(!!p2, `${mode} ${target}: the modal did not open from the press on the number`);
 			rec.p2Hit = p2.hit;
 			await K.mouse('mouseMoved', p2.x, p2.y);
-			await K.press(p2);
+			// The release waits for an in-page 11 ms timer armed once the press has been handled. DOM timers run in due order, so Obsidian's helper timer
+			// for SC-598's synthetic click (10 ms, armed during the opening click, before this press) has run first: the trial tests what SC-598 promises,
+			// a click after the preview had its 10 ms. A release sent at once raced that timer (queued input is handled before a due timer): SC-598's
+			// documented residual, which hid the preview in 2 of 17 plain runs (SC-616). On the base the helper's timer is 150 ms, still not due, so the trial stays red there.
+			await K.mouse('mousePressed', p2.x, p2.y, { buttons: 1, ...b1 });
+			await t.ev(`new Promise((r) => setTimeout(() => r(true), 11))`);
+			await K.mouse('mouseReleased', p2.x, p2.y, { buttons: 0, ...b1 });
 		}
-		rec.gap = await t.ev(`(() => { const c = (window.__gs91 || []).filter((x) => x.trusted); return c.length >= 2 ? Math.round(c[1].t - c[0].t) : null; })()`);
+		rec.gap = await t.ev(`(() => { const c = (window.__gs91 || []).filter((x) => x.trusted && !x.end); return c.length >= 2 ? Math.round(c[1].t - c[0].t) : null; })()`);
+		// from the END of the opening click's dispatch to the second click: on the base the helper's 150 ms timer was armed then, so a value under 140 means the click came before it
+		rec.gapEnd = await t.ev(`(() => { const a = window.__gs91 || []; const c = a.filter((x) => x.trusted && !x.end); const e = a.filter((x) => x.trusted && x.end); return c.length >= 2 && e.length >= 1 ? Math.round(c[1].t - e[0].t) : null; })()`);
 		await t.sleep(700);
 		rec.at700 = await st();
 		if (target === 'apply' && rec.at700.popover && rec.at700.modal) {
@@ -8347,6 +8360,8 @@ const SCENARIOS = [
 		// Per trial: the preview is still shown 700 ms after the second press and is never a source editor; title: the modal is open too, Escape closes only the modal; apply: Healing 3 + Apply writes current_stamina: 18 with no Notice (modal closed, preview shown); dblq: the
 		// backdrop press closes the modal and leaves the preview (the window closes on a double-click, as in a pane). Then the pointer away for 1.2 s keeps the preview and a real click outside closes it. Six trials: Reading view and Live Preview title, Reading view and Live Preview
 		// double-click, Reading view apply, and Reading view reopen (open, Escape, open again from the focused preview, title press within 150 ms: no source editor, focus not in the preview, Escape closes only the modal). Never put a bracketed ticket id in a title here. It sits before G-S56, which runs last.
+		// SC-616: the title / apply / reopen presses are released after an in-page 11 ms timer (the helper's 10 ms timer has run by then; a zero-length press raced it, SC-598's documented residual), and the validity gate is `gapEnd < 140`, from the END of the opening click's
+		// dispatch (on the base the helper's 150 ms timer is armed then). A trial whose ONLY problem is that gate (a host too slow to prove anything) is re-run from fresh state, at most twice, and the outcome line names the retries; a product failure (preview or modal gone, editor, focus) is never re-run.
 		id: 'G-S91',
 		async run(t) {
 			const m = await t.mark();
@@ -8364,7 +8379,7 @@ const SCENARIOS = [
 					const bad = [];
 					if (r.error) bad.push(`error: ${r.error}`);
 					else {
-						if (r.gap === null || (target !== 'dblq' && r.gap >= 140)) bad.push(`the second click came ${r.gap} ms after the opening click: it must come inside the helper's 150 ms or the trial proves nothing (a loaded host?)`); // the queued double-click is red on the base at any gap: its second mousedown clears the helper's timer
+						if (r.gap === null || (target !== 'dblq' && (r.gapEnd === null || r.gapEnd >= 140))) bad.push(`the second click came ${r.gapEnd} ms after the opening click's dispatch ended (${r.gap} ms after it started): it must come inside the helper's 150 ms or the trial proves nothing (a loaded host?)`); // the queued double-click is red on the base at any gap: its second mousedown clears the helper's timer
 						if (!r.at700.popover) bad.push(`700 ms after the second press the preview was gone (second click ${r.gap} ms after the opening click) ${J(r.at700)}`);
 						else {
 							if (r.at700.editor) bad.push(`the preview turned into a source editor ${J(r.at700)}`);
@@ -8389,7 +8404,7 @@ const SCENARIOS = [
 					if (bad.length) problems.push(`${label}: ${bad.join('; ')}`);
 					else
 						outcomes.push(
-							`${label} (${r.hover}; press on ${r.hit}, second press ${r.gap} ms later${r.p2Hit ? ` on ${r.p2Hit}` : ''}): the preview stayed, no source editor` +
+							`${label} (${r.hover}; press on ${r.hit}, second press ${r.gap} ms later${target !== 'dblq' ? ` (${r.gapEnd} ms after the opening click's dispatch ended)` : ''}${r.p2Hit ? ` on ${r.p2Hit}` : ''}): the preview stayed, no source editor` +
 								(target === 'title' ? ', the modal stayed, Escape closed only the modal' : target === 'reopen' ? ', opened a second time from the focused preview (open, Escape, open again) the modal stayed, the focus stayed out of the preview, Escape closed only the modal' : target === 'apply' ? ', Healing 3 + Apply wrote current_stamina: 18 (no Notice)' : ', the backdrop press closed the modal and left the preview') +
 								', the preview stayed with the pointer away, a click outside closed it',
 						);
