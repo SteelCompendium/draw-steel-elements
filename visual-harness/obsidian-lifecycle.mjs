@@ -2474,12 +2474,9 @@ async function gs99Cell(t, { id, kind, mode, how, pane, edit }) {
 
 // ---- G-S115 (SC-621) fixtures and cell: insert before `const SCENARIOS = [` ----
 const GS115_C5 = COUNTER(5, 'Twin');
-const GS115_C6 = COUNTER(6, 'Twin');
 const GS115_NOTE = {
 	// two sections, different names, identical counters (a heading link names `Tracker`)
 	named: (id) => `# gs115 ${id}\n\nTOP\n\n## Tracker\n\n${GS115_C5}\n\n## Other\n\n${GS115_C5}\n\n## After\n\nEND\n`,
-	// two adjacent `## Tracker` sections; the lower already reads like the upper will after its +
-	twin: (id) => `# gs115 ${id}\n\nTOP\n\n## Tracker\n\n${GS115_C5}\n\n## Tracker\n\n${GS115_C6}\n\n## After\n\nEND\n`,
 	// two identical counters separated by a blank line, `^p` under the LOWER one (a block link names it)
 	low: (id) => `# gs115 ${id}\n\nTOP\n\n${GS115_C5}\n\n${GS115_C5}\n^p\n\nEND\n`,
 };
@@ -2488,12 +2485,8 @@ const GS115_EDITS = {
 	// the Tracker section deleted, `## Other` renamed `## Tracker`, END edited (one write)
 	'del-P-rename+end': String.raw`(c) => c.replace(${GS115_RX_SEC('Tracker')}, '').replace('## Other\n', '## Tracker\n').replace('\nEND\n', '\nEND edited\n')`,
 	'del-P-rename+top': String.raw`(c) => c.replace(${GS115_RX_SEC('Tracker')}, '').replace('## Other\n', '## Tracker\n').replace('\nTOP\n', '\nTOP edited\n')`,
-	// the FIRST of two adjacent `## Tracker` sections deleted, END edited
-	'del-first+end': String.raw`(c) => c.replace(${GS115_RX_SEC('Tracker')}, '').replace('\nEND\n', '\nEND edited\n')`,
-	'del-first+top': String.raw`(c) => c.replace(${GS115_RX_SEC('Tracker')}, '').replace('\nTOP\n', '\nTOP edited\n')`,
 	// the LOWER counter (the one `^p` names) deleted with the blank line above it, its `^p` line left (now under the upper), TOP edited
 	'del-low-keepmark+top': `(c) => c.replace(${JSON.stringify(`${GS115_C5}\n\n${GS115_C5}\n^p`)}, ${JSON.stringify(`${GS115_C5}\n^p`)}).replace('\\nTOP\\n', '\\nTOP edited\\n')`,
-	'del-low-keepmark+end': `(c) => c.replace(${JSON.stringify(`${GS115_C5}\n\n${GS115_C5}\n^p`)}, ${JSON.stringify(`${GS115_C5}\n^p`)}).replace('\\nEND\\n', '\\nEND edited\\n')`,
 	top: String.raw`(c) => c.replace('\nTOP\n', '\nTOP edited\n')`,
 	none: null,
 };
@@ -2514,12 +2507,12 @@ for (const [id, note, link, kind] of GS115_CELLS) {
 	FIXTURES[`Lifecycle/gs115-${id}-host.md`] = kind === 'embed' ? `# gs115 ${id} host\n\n![[gs115-${id}-src${link}]]\n\nafter\n` : `# gs115 ${id} host\n\nsee [[gs115-${id}-src${link}]] here\n\nfiller\n`;
 }
 
-async function gs115Cell(t, { id, kind, mode, how, edit, plus }) {
+async function gs115Cell(t, { id, kind, mode, how, edit }) {
 	const K = gs83Kit(t);
 	const J = JSON.stringify;
 	const SRC = `Lifecycle/gs115-${id}-src.md`;
 	const HOST = `Lifecycle/gs115-${id}-host.md`;
-	const rec = { id, kind, mode, how, edit, plus };
+	const rec = { id, kind, mode, how, edit };
 	const valuesOf = () => (t.read(SRC).match(/^[> ]*current_value: (\d+)$/gm) ?? []).map((x) => Number(x.replace(/^[> ]*current_value: /, '')));
 	const namesOf = () => (t.read(SRC).match(/^[> ]*name: (\w+)$/gm) ?? []).map((x) => x.replace(/^[> ]*name: /, ''));
 	const SIG = `(() => { const f = app.vault.getAbstractFileByPath(${J(SRC)}); const m = app.metadataCache.getFileCache(f) ?? {}; return (m.headings ?? []).map((h) => h.heading + '@' + h.position.start.line).join(',') + '|' + Object.entries(m.blocks ?? {}).map(([k, v]) => k + '@' + v.position.start.line).join(',') + '|' + (m.sections ?? []).length; })()`;
@@ -2547,22 +2540,6 @@ async function gs115Cell(t, { id, kind, mode, how, edit, plus }) {
 		}
 		rec.cards = await t.ev(`(${ES}).length`);
 		rec.mountValues = valuesOf();
-		if (plus) {
-			// the card's own +, a real click; Obsidian redraws the part (value 5 -> 6) and the view is adopted into it
-			const before = t.read(SRC);
-			await t.ev(`(() => { window.__gs115host = (${ES})[0].host; return true; })()`);
-			await K.click(BTN);
-			const t0 = Date.now();
-			while (Date.now() - t0 < 3500 && t.read(SRC) === before) await t.sleep(50);
-			await t.sleep(1500);
-			rec.afterPlus = valuesOf();
-			rec.cardsAfterPlus = await t.ev(`(${ES}).length`);
-			rec.sameHostAfterPlus = await t.ev(`(${ES})[0]?.host === window.__gs115host`);
-			if (kind === 'hover') {
-				await K.moveTo(`(${ES})[0].root`);
-				await t.sleep(300);
-			}
-		}
 		rec.before = t.read(SRC);
 		const mk = await t.mark();
 		const OUTSIDE = `await app.vault.process(app.vault.getAbstractFileByPath(${J(SRC)}), ${GS115_EDITS[edit] ?? '(c) => c'});`;
@@ -9174,7 +9151,7 @@ const SCENARIOS = [
 			await t.ev(`${prefs}.set('authoringControls', true)`);
 			try {
 				for (const [id, , , kind, mode, how, edit, want] of GS115_CELLS) {
-					const r = await gs115Cell(t, { id, kind, mode, how, edit, plus: false });
+					const r = await gs115Cell(t, { id, kind, mode, how, edit });
 					const label = `(${id}) ${kind} ${mode} ${how} ${edit}`;
 					const bad = [];
 					if (r.error) bad.push(`error: ${r.error}`);
