@@ -59,6 +59,7 @@ import { ConditionManager, ConditionConfig, conditionKeysEqual } from '@utils/Co
 import { DseModal, iconButton, setPressedState, stampControl } from '@/framework/kit';
 import { registerEscapeConsumer } from '@/framework/kit/escapeConsumer';
 import { applyConditionColor, applyConditionEffect, CONDITION_EFFECTS, isConditionColor } from '@/elements/conditionColor';
+import { conditionColorHex } from '@/elements/conditionColorHex';
 import {
 	resolveDuration,
 	durationBadgeText,
@@ -394,13 +395,16 @@ export class ConditionsModal extends DseModal {
 		const ids = [...new Set(getIconIds().map((id) => id.replace(/^lucide-/, '')))].sort();
 		const render = (): void => {
 			grid.empty();
+			// SC-586: the same trim rule as the row's glyph (`entry.icon?.trim() ||` the default): a blank `icon:` draws the default, so
+			// "Use default" is the pressed choice; `icon: "skull "` draws skull, so the skull choice is. Read per render: a pick changes `entry.icon`.
+			const currentIcon = entry.icon?.trim() || undefined;
 			const add = (icon: string, label: string, value: string | undefined): void => {
 				const button = grid.createEl('button', { cls: 'dse-optchip dse-cond-icons__choice' });
 				button.type = 'button';
 				button.setAttribute('aria-label', label);
 				button.setAttribute('title', label);
 				stampControl(button, 'cond.icon');
-				setPressedState(button, value === entry.icon);
+				setPressedState(button, value === currentIcon);
 				setIcon(button.createSpan(), icon);
 				if (value === undefined) button.createSpan({ text: 'Default' });
 				button.addEventListener('click', () => {
@@ -423,7 +427,7 @@ export class ConditionsModal extends DseModal {
 			])].filter((id) => ids.includes(id));
 			const matches = query ? ids.filter((id) => id.includes(query)) : suggested;
 			const visible = matches.slice(0, 24);
-			if (!query && entry.icon && !visible.includes(entry.icon)) visible.unshift(entry.icon);
+			if (!query && currentIcon && !visible.includes(currentIcon)) visible.unshift(currentIcon);
 			for (const id of visible) add(id, `Icon: ${id}`, id);
 			if (matches.length === 0) grid.createSpan({ text: 'No matching icons.' });
 			if (matches.length > 24) grid.createSpan({ text: 'Showing the first 24 matches. Refine your search for more.' });
@@ -511,7 +515,9 @@ export class ConditionsModal extends DseModal {
 		custom.toggleAttribute('data-selected', customHex !== undefined);
 		applyConditionColor(custom, customHex);
 		input.setAttribute('aria-label', customHex !== undefined ? `Custom condition color ${customHex}, selected` : 'Custom condition color');
-		input.value = entry.color && /^#[0-9a-f]{6}$/i.test(entry.color) ? entry.color : COLOR_INPUT_DEFAULT;
+		// SC-586: the chooser opens at the colour the row already shows, so a CSS name (`teal`), `#rgb`, `rgb()`, any case, seeds its
+		// `#rrggbb`; a colour the browser cannot read keeps the white default. Only a pick (the `change` below) writes the note.
+		input.value = conditionColorHex(entry.color, input.ownerDocument) ?? COLOR_INPUT_DEFAULT;
 		this.lifecycle.registerDomEvent(input, 'change', () => this.setColor(index, input.value));
 	}
 
