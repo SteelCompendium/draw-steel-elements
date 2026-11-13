@@ -229,6 +229,27 @@ describe('conditions-modal: typing after a click on the title or on empty space 
 		});
 		await dse.closeModals();
 	});
+
+	it('[COND-N15] a window stacked above the Conditions window keeps its keys: with the command palette open over it and focus on <body>, a letter is not typed into the window behind; once the palette is closed the letters open the search', async () => {
+		const { modal } = await openConditionsModal(TRACKER, 'hero');
+		await dse.page(`(() => { app.commands.executeCommandById('command-palette:open'); return true; })()`);
+		await dse.waitFor(`document.querySelectorAll('.modal-container').length === 2`, 'the command palette to open over the window');
+		// The palette is the last .modal-container, which is what is on top (both sit at z-index 50, the later one paints over); its input holds focus, so let go of it.
+		expect(await dse.page<boolean>(`(() => { document.activeElement?.blur?.(); return document.activeElement === document.body; })()`)).toBe(true);
+		await dse.expectNoWrite(TRACKER, async () => {
+			await dse.press('d'); // page-level: focus is on <body>, and the window behind must not take the key
+			await expect(modal.control('cond.input')).not.toBeExisting();
+			await dse.press('Escape'); // the palette's own scope closes just the palette
+			await dse.waitFor(`document.querySelectorAll('.modal-container').length === 1`, 'the palette to close');
+			await expect(modal.root).toBeExisting();
+			await clickTitle();
+			expect(await bodyHasFocus()).toBe(true);
+			await dse.press('daz');
+			await expect(modal.control('cond.input')).toBeFocused();
+			await expect(modal.control('cond.input')).toHaveValue('daz'); // "daz", not "ddaz": the first "d" went to the palette's page, not here
+		});
+		await dse.closeModals();
+	});
 });
 
 describe('conditions-modal: tickets that reach it from outside', () => {
