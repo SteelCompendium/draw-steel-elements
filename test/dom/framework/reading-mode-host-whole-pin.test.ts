@@ -91,13 +91,13 @@ describe('SC-612: whole-note pins of identical blocks', () => {
 		refused(await round(kind, before, after, 0), after);
 	});
 
-	test.each(KINDS)('T3 %s on the lower twin, the lower deleted and TOP edited in the same write: refused (both full maps agree on the survivor, the head greedy map does not)', async (kind) => {
+	test.each(KINDS)('T3 %s on the lower twin, the lower deleted and TOP edited in the same write: refused (a tie: the lower twin deleted reads the same as the upper)', async (kind) => {
 		const before = twins();
 		const after = note(['# N', '', 'TOP edited', ''], CTR(5), END);
 		refused(await round(kind, before, after, 1), after);
 	});
 
-	test.each(KINDS)('T4 %s on the upper twin, the upper deleted and BOTTOM edited in the same write: refused (the tail greedy map dissents)', async (kind) => {
+	test.each(KINDS)('T4 %s on the upper twin, the upper deleted and BOTTOM edited in the same write: refused (a tie, with the unrelated edit on the other side)', async (kind) => {
 		const before = twins();
 		const after = note(HEAD, CTR(5), ['', 'BOTTOM edited']);
 		refused(await round(kind, before, after, 0), after);
@@ -168,7 +168,7 @@ describe('SC-612: whole-note pins of identical blocks', () => {
 		saved(await round(kind, before, after, 0, { pinnedAfter: 1 }), after, 1);
 	});
 
-	test.each(KINDS)('T10 %s: 500 lines inserted above only, in a note with twins -> saves (the greedy head map gives up and is not a dissent)', async (kind) => {
+	test.each(KINDS)('T10 %s: 500 lines inserted above only, in a note with twins -> saves (the 500 lines are no tie: one cheapest placement)', async (kind) => {
 		const before = twins();
 		const lots = Array.from({ length: 500 }, (_, i) => `line ${i}`);
 		const after = note(['# N', ''], lots, HEAD.slice(1), CTR(5), [''], CTR(5), END);
