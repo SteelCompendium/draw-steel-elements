@@ -396,13 +396,14 @@ describe('SC-436 census: the ConditionsModal', () => {
 		for (const id of ['cond.add', 'cond.done']) expect(ids(content, id)).toBe(1);
 	});
 
-	test('with a row editor open: the icon search, every icon choice, every duration chip, swatch, the custom colour input and every effect chip are identified', () => {
+	test('with a row editor open: the icon search, every icon choice, every duration chip, the Default colour chip, swatch, the custom colour input and every effect chip are identified', () => {
 		const { content } = openConditions();
 		content.querySelectorAll<HTMLElement>('[data-dse-control="cond.edit"]')[1].click();
 		expect(censusProblems(content, conditionIds)).toEqual([]);
 		expect(ids(content, 'cond.icon-search')).toBe(1);
 		expect(ids(content, 'cond.icon')).toBeGreaterThan(1); // "Use default" plus the suggested icons
 		expect(ids(content, 'cond.duration')).toBe(4);
+		expect(ids(content, 'cond.color-default')).toBe(1);
 		expect(ids(content, 'cond.swatch')).toBe(5);
 		expect(ids(content, 'cond.color-custom')).toBe(1);
 		expect(ids(content, 'cond.effect')).toBe(6);

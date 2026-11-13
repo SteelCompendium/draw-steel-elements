@@ -469,6 +469,16 @@ export class ConditionsModal extends DseModal {
 		const row = parent.createDiv({ cls: 'dse-swatches' });
 		row.setAttribute('role', 'group');
 		row.setAttribute('aria-label', 'Color');
+		// SC-581: the Color group's reset choice (Icon has "Default", Duration "Until removed", Effect "static"). A text chip, not a
+		// hue: it reads as "no colour" to a colourblind user too. Pressed when the condition has no VALID colour (SC-361: an
+		// unparseable YAML colour is no colour everywhere else), which is exactly when no preset and not the pipette is selected.
+		const reset = row.createEl('button', { cls: 'dse-optchip dse-swatches__default', text: 'Default' });
+		reset.setAttribute('type', 'button');
+		reset.setAttribute('aria-label', 'Default');
+		reset.setAttribute('title', 'Default (no colour)');
+		stampControl(reset, 'cond.color-default');
+		setPressedState(reset, !isConditionColor(entry.color));
+		this.lifecycle.registerDomEvent(reset, 'click', () => this.clearColor(index));
 		for (const [name, hex] of SWATCHES) {
 			const sw = row.createEl('button', { cls: 'dse-swatch' });
 			sw.setAttribute('type', 'button');
@@ -495,6 +505,14 @@ export class ConditionsModal extends DseModal {
 		input.setAttribute('aria-label', customHex !== undefined ? `Custom condition color ${customHex}, selected` : 'Custom condition color');
 		input.value = entry.color && /^#[0-9a-f]{6}$/i.test(entry.color) ? entry.color : COLOR_INPUT_DEFAULT;
 		this.lifecycle.registerDomEvent(input, 'change', () => this.setColor(index, input.value));
+	}
+
+	/** SC-581: the Default option removes the `color` key (never written as empty) and leaves focus on itself. */
+	private clearColor(index: number): void {
+		delete this.conditions[index].color;
+		this.emitChange();
+		this.renderList();
+		this.focusPickedOption(index, 'Color', 'Default');
 	}
 
 	private setColor(index: number, hex: string): void {

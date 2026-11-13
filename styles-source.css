@@ -2183,9 +2183,14 @@ code.dsa {
 
 .dse-swatches {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: 0.45em;
 }
+/* SC-581 — the row's first member is the "Default" (no colour) text chip: a plain `.dse-optchip`
+   (pressed = accent border, the same grammar as the Duration / Effect chips) that reads without hue.
+   It keeps the chip's own look; nothing here recolours it. */
+.dse-swatches .dse-swatches__default { flex: none; }
 /* Beat Obsidian button fills in resting, hovered and focused states. */
 .dse-modal .dse-swatches .dse-swatch {
 	position: relative;

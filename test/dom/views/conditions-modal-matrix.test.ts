@@ -181,6 +181,7 @@ const COLOR_STARTS: Array<{ name: string; color: string | undefined; pressed: st
 	{ name: 'a colour that does not parse', color: 'not-a-colour', pressed: [], custom: false },
 ];
 const customSelected = (c: HTMLElement): boolean => qs(c, '.dse-swatch--custom').hasAttribute('data-selected');
+const defaultBtn = (c: HTMLElement): HTMLElement => qs(c, '[role="group"][aria-label="Color"] button[aria-label="Default"]');
 
 describe('SC-436 matrix: the colour swatches and the custom colour (start colour x pick)', () => {
 	test.each(COLOR_STARTS)('opening the editor on $name presses $pressed and marks the pipette selected: $custom', ({ color, pressed, custom }) => {
@@ -192,7 +193,7 @@ describe('SC-436 matrix: the colour swatches and the custom colour (start colour
 	});
 
 	for (const { name, color } of COLOR_STARTS) {
-		// Re-pressing the swatch that is already selected is its own row below (SC-581 may change what it does).
+		// Re-pressing the swatch that is already selected is its own row below.
 		const others = SWATCHES.filter((hex) => color?.toLowerCase() !== hex);
 		test.each(others)(`from ${name}: the swatch %s writes it, presses only itself and unmarks the pipette`, (hex) => {
 			const o = open([{ key: 'prone', color }]);
@@ -208,7 +209,7 @@ describe('SC-436 matrix: the colour swatches and the custom colour (start colour
 	test.each([
 		['a preset', '#c0392b'],
 		['a preset spelled in upper case', '#C0392B'],
-	])('from %s: pressing the swatch that is already selected writes that colour again and keeps it pressed [current behaviour — SC-581 may change this]', (_n, color) => {
+	])('from %s: pressing the swatch that is already selected writes that colour again and keeps it pressed (no toggle-to-unset: the Default option clears)', (_n, color) => {
 		const o = open([{ key: 'prone', color }]);
 		openEditor(o.container, 0);
 		pickSwatch(o.container, '#c0392b');
@@ -242,6 +243,84 @@ describe('SC-436 matrix: the colour swatches and the custom colour (start colour
 		const names = swatches.map((s) => (s.getAttribute('title') ?? '').split(' (')[0]);
 		expect(names).toEqual(['Red', 'Amber', 'Green', 'Blue', 'Purple']); // setup: the titles name the colours
 		swatches.forEach((s, i) => expect(s.getAttribute('aria-label')).toBe(names[i]));
+	});
+
+	// SC-581: the Color group's reset choice, mirroring the Icon group's "Default".
+	describe('the Default option', () => {
+		test('it is the first control of the Color group: a text button named "Default", tooltip says what it does, own control id', () => {
+			const o = open([{ key: 'prone', color: '#c0392b' }]);
+			openEditor(o.container, 0);
+			const first = qs(o.container, '[role="group"][aria-label="Color"] button');
+			expect(first).toBe(defaultBtn(o.container));
+			expect(first.getAttribute('type')).toBe('button');
+			expect(first.textContent).toBe('Default'); // visible text, so it reads without hue
+			expect(first.getAttribute('title')).toBe('Default (no colour)');
+			expect(first.getAttribute('data-dse-control')).toBe('cond.color-default');
+		});
+
+		test.each(COLOR_STARTS)('opening the editor on $name: Default is pressed only when the colour is none or does not parse, and exactly one option is pressed', ({ color, pressed, custom }) => {
+			const o = open([{ key: 'prone', color }]);
+			openEditor(o.container, 0);
+			const isDefault = pressed.length === 0 && !custom;
+			expect(defaultBtn(o.container).getAttribute('aria-pressed')).toBe(String(isDefault));
+			expect(pressedSwatches(o.container)).toEqual(pressed);
+			expect(pressedIn(o.container, 'Color').length + (custom ? 1 : 0)).toBe(1); // the pipette is a <label>: it marks `data-selected`, not `aria-pressed`
+			expect(o.onChange).not.toHaveBeenCalled();
+		});
+
+		test.each([
+			['a preset', '#c0392b'],
+			['a preset spelled in upper case', '#C0392B'],
+			['a custom hex', '#123456'],
+			['a CSS colour name', 'teal'],
+		])('pressing it from %s removes the `color` key (not written as empty), presses Default and nothing else, and keeps the other fields', (_n, color) => {
+			const o = open([{ key: 'prone', color, duration: 'eot', effect: 'glow' }]);
+			openEditor(o.container, 0);
+			defaultBtn(o.container).click();
+			expect(o.onChange).toHaveBeenCalledTimes(1);
+			expect(lastEmit(o)).toEqual([{ key: 'prone', duration: 'eot', effect: 'glow' }]);
+			expect('color' in lastEmit(o)[0]).toBe(false);
+			expect('color' in (o.holder.conditions![0] as Condition)).toBe(false);
+			expect(pressedIn(o.container, 'Color')).toEqual(['Default']);
+			expect(customSelected(o.container)).toBe(false);
+		});
+
+		test('pressing it leaves focus on the rebuilt Default button', () => {
+			const o = open([{ key: 'prone', color: '#123456' }]);
+			openEditor(o.container, 0);
+			const before = defaultBtn(o.container);
+			before.click();
+			expect(defaultBtn(o.container)).not.toBe(before);
+			expect(document.activeElement).toBe(defaultBtn(o.container));
+		});
+
+		test('the row preview loses its colour; setting a swatch again restores it, and Default is then unpressed', () => {
+			const o = open([{ key: 'prone', color: '#c0392b' }]);
+			const glyph = (): HTMLElement => qs(o.container, '.dse-condal__glyph');
+			expect(glyph().style.getPropertyValue('--dse-condition-color')).toBe('#c0392b'); // setup: the preview is coloured
+			openEditor(o.container, 0);
+			defaultBtn(o.container).click();
+			expect(glyph().style.getPropertyValue('--dse-condition-color')).toBe('');
+			pickSwatch(o.container, '#2874a6');
+			expect(glyph().style.getPropertyValue('--dse-condition-color')).toBe('#2874a6');
+			expect(defaultBtn(o.container).getAttribute('aria-pressed')).toBe('false');
+			expect(pressedSwatches(o.container)).toEqual(['#2874a6']);
+		});
+
+		test('pressing it on a condition that has no colour is a harmless no-op write that leaves it pressed and the key absent', () => {
+			const o = open([{ key: 'prone' }]);
+			openEditor(o.container, 0);
+			defaultBtn(o.container).click();
+			expect(lastEmit(o)).toEqual([{ key: 'prone' }]);
+			expect(pressedIn(o.container, 'Color')).toEqual(['Default']);
+		});
+
+		test('pressing it on a plain-string condition writes an object without a colour', () => {
+			const o = open(['prone']);
+			openEditor(o.container, 0);
+			defaultBtn(o.container).click();
+			expect(lastEmit(o)).toEqual([{ key: 'prone' }]);
+		});
 	});
 });
 
@@ -867,10 +946,10 @@ describe('SC-580: a printable key in the window opens the Add search with that k
 
 describe('SC-436 matrix: known bugs (each marker encodes the correct behaviour and fails today)', () => {
 
-	// SC-581: Icon has "Use default", Duration "Until removed", Effect "static"; a colour, once set, cannot be taken off.
+	// SC-581: Icon has "Use default", Duration "Until removed", Effect "static"; the Color group has its own "Default" option.
 	// Fix-agnostic: passes if ANY single interaction in the Color group (a default/none option, or re-activating the
 	// selected swatch) removes `color` from the written condition.
-	test.failing('SC-581: some control in the Color group removes a colour that was set', () => {
+	test('SC-581: some control in the Color group removes a colour that was set', () => {
 		const start = (): Open => {
 			const o = open([{ key: 'prone', color: '#c0392b' }]);
 			openEditor(o.container, 0);
