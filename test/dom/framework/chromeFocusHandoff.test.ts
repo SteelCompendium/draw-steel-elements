@@ -80,6 +80,8 @@ beforeEach(() => {
 	// SC-568: a request's windows (`REQUEST_TTL_MS` 5 s, `SETTLE_MS` 1.5 s, `AFTER_RETURN_MS` 3 s in focusHandoff.ts) are read off
 	// `Date.now()`. On a loaded host a plain test spent more than 1.5 s between the pin and the rebuild it asserts on and the request
 	// had lapsed (SC-505 r3 LOW-A, SC-556). The clock is frozen for every test here, so a window closes only when a test advances it.
+	// A frozen clock also never lets ANY time pass, so a window shrunk to 1 ms would still pass: the tests that depend on a window
+	// staying open advance realistic gaps with LITERAL numbers (2900 of the 3000 `AFTER_RETURN_MS`, 1400 of the 1500 `SETTLE_MS`), not the constants.
 	jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
 	focusCalls = [];
 	const realFocus = HTMLElement.prototype.focus;
@@ -161,6 +163,7 @@ describe('SC-505 — Pin to sidebar keeps keyboard focus on the block\'s Pin but
 		keyboardClick(oldPin);
 		await flush();
 		expect(pinToSidebar).toHaveBeenCalledTimes(1);
+		await jest.advanceTimersByTimeAsync(2900); // a slow rebuild: the request waits for it (3 s after a Pin that wrote)
 
 		// The note write rebuilds the block from scratch: new root, new panel, new buttons; the old ones are gone.
 		first.host.containerEl.remove();
@@ -178,12 +181,14 @@ describe('SC-505 — Pin to sidebar keeps keyboard focus on the block\'s Pin but
 		first.root.querySelector<HTMLElement>('[data-dse-chrome-item="pin"]')!.focus();
 		keyboardClick(item(first.root, 'pin'));
 		await flush();
+		await jest.advanceTimersByTimeAsync(2900);
 
 		first.host.containerEl.remove();
 		const second = await render();
 		expect(document.activeElement).toBe(item(second.root, 'pin'));
 		second.host.containerEl.remove(); // the second discard drops focus to <body> again
 		expect(document.activeElement).toBe(document.body);
+		await jest.advanceTimersByTimeAsync(1400); // still inside the 1.5 s the request stays armed after focus landed
 		const third = await render();
 
 		expect(document.activeElement).toBe(item(third.root, 'pin'));
@@ -264,7 +269,6 @@ describe('SC-505 — Pin to sidebar keeps keyboard focus on the block\'s Pin but
 	});
 
 	test('a request that was never answered lapses: a rebuild long after the pin does not steal focus', async () => {
-		jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
 		const first = await render();
 		first.root.querySelector<HTMLElement>('[data-dse-chrome-item="pin"]')!.focus();
 		keyboardClick(item(first.root, 'pin'));
@@ -276,6 +280,51 @@ describe('SC-505 — Pin to sidebar keeps keyboard focus on the block\'s Pin but
 		await render();
 
 		expect(focusCalls).toEqual([]);
+		expect(document.activeElement).toBe(document.body);
+	});
+});
+
+describe('SC-505 — how long a Pin request stays armed (literal windows, on the fake clock)', () => {
+	/** Press Pin on a keyboard (the pin wrote the note), wait `gap` ms, rebuild the block; the rebuilt Pin button, and whether it took focus. */
+	async function pinThenRebuildAfter(gap: number): Promise<{ pin: HTMLElement; focused: boolean }> {
+		const first = await render();
+		first.root.querySelector<HTMLElement>('[data-dse-chrome-item="pin"]')!.focus();
+		keyboardClick(item(first.root, 'pin'));
+		await flush();
+		await jest.advanceTimersByTimeAsync(gap);
+		first.host.containerEl.remove();
+		const rebuilt = await render();
+		const pin = item(rebuilt.root, 'pin');
+		return { pin, focused: document.activeElement === pin };
+	}
+
+	test('a Pin that wrote still has its request 2999 ms later, and has lapsed at 3000 ms', async () => {
+		expect((await pinThenRebuildAfter(2999)).focused).toBe(true);
+		disarmChromeFocus(KEY);
+		document.body.innerHTML = '';
+		focusCalls.length = 0;
+		expect((await pinThenRebuildAfter(3000)).focused).toBe(false);
+	});
+
+	test('after focus landed the request stays armed for the next rebuild for about 1.5 s only: a rebuild 1400 ms later claims, 1600 ms later does not', async () => {
+		const first = await render();
+		first.root.querySelector<HTMLElement>('[data-dse-chrome-item="pin"]')!.focus();
+		keyboardClick(item(first.root, 'pin'));
+		await flush();
+		first.host.containerEl.remove();
+		const second = await render();
+		expect(document.activeElement).toBe(item(second.root, 'pin')); // focus landed: the settle window starts here
+
+		await jest.advanceTimersByTimeAsync(1400);
+		second.host.containerEl.remove();
+		const third = await render();
+		expect(document.activeElement).toBe(item(third.root, 'pin')); // inside the window: claimed again, which restarts it
+
+		await jest.advanceTimersByTimeAsync(1600);
+		third.host.containerEl.remove();
+		focusCalls.length = 0;
+		await render();
+		expect(focusCalls).toEqual([]); // past the window: the request is gone
 		expect(document.activeElement).toBe(document.body);
 	});
 });
@@ -367,6 +416,7 @@ describe('SC-505 r3 LOW-A — two copies of one block in the SAME pane (a note t
 		pressed.focus();
 		keyboardClick(pressed);
 		await flush();
+		await jest.advanceTimersByTimeAsync(2900);
 
 		c0.host.containerEl.remove();
 		const c0b = await render({ leaf: e0 }); // the twin rebuilds first
@@ -387,6 +437,7 @@ describe('SC-505 r3 LOW-A — two copies of one block in the SAME pane (a note t
 		item(c0.root, 'pin').focus();
 		keyboardClick(item(c0.root, 'pin'));
 		await flush();
+		await jest.advanceTimersByTimeAsync(2900);
 
 		c0.host.containerEl.remove();
 		const c0b = await render({ leaf: e0 });
@@ -396,6 +447,7 @@ describe('SC-505 r3 LOW-A — two copies of one block in the SAME pane (a note t
 		await render({ leaf: e1 }); // the twin's rebuild arrives while focus sits on a Pin this request claimed
 		expect(document.activeElement).toBe(item(c0b.root, 'pin'));
 
+		await jest.advanceTimersByTimeAsync(1400);
 		c0b.host.containerEl.remove(); // the pressed copy is rebuilt again (focus drops to <body>) and must get focus again
 		const c0c = await render({ leaf: e0 });
 		expect(document.activeElement).toBe(item(c0c.root, 'pin'));
@@ -492,7 +544,6 @@ describe('SC-505 r4 LOW-D — the two settle branches, each on its own (nothing 
 	});
 
 	test('a Pin that wrote waits only about 3 s for the rebuilds, not the full 5 s: a rebuild at 3.5 s does not move focus', async () => {
-		jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
 		const first = await render();
 		const pin = item(first.root, 'pin');
 		pin.focus();
