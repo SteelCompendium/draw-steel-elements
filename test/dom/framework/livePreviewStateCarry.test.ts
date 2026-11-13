@@ -120,6 +120,16 @@ describe('capture (carryOwnSaveState): only a Live Preview root whose own save i
 		expect(takeCarriedState(() => KEY, makeRoot(pane.content), later + 1)).toEqual(DRAFT); // the new one is untouched
 	});
 
+	test('S17 the sweep only drops carries whose time is up: a second block captured while the first is unexpired leaves it, and both are taken', () => {
+		const pane = makePane();
+		const A = { amount: '1', label: 'Alpha' };
+		const B = { amount: '2', label: 'Beta' };
+		carryOwnSaveState(makeEntry(makeRoot(pane.content), { key: 'A.md::ds-initiative::4', state: A }));
+		carryOwnSaveState(makeEntry(makeRoot(pane.content), { key: 'B.md::ds-initiative::4', state: B })); // well inside A's CARRY_TTL_MS
+		expect(takeCarriedState(() => 'A.md::ds-initiative::4', makeRoot(pane.content))).toEqual(A);
+		expect(takeCarriedState(() => 'B.md::ds-initiative::4', makeRoot(pane.content))).toEqual(B);
+	});
+
 	test('S07 a detached old root (already gone from the page): nothing captured', () => {
 		expect(carryOwnSaveState(makeEntry(makeRoot(null)))).toBe(false);
 	});
