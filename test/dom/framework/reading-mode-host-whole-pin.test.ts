@@ -283,6 +283,15 @@ describe('SC-612: whole-note pins of identical blocks', () => {
 		refused(await round(kind, before, after, 0, { pinnedAfter: 1 }), after);
 	});
 
+	// The residual, pinned so that it changes on purpose only: a tie combined with a ONE-SIDED edit of more than LINE_MAP_MAX_EDITS lines. The head-first map still places the
+	// block (it sits in the common head), but the capped diff cannot price its placements, so the head-first answer stands (written as at the base).
+	test.each(KINDS)('T14 %s on the upper twin, the lower twin deleted AND 500 lines added below: the capped diff gives up, the head-first answer stands (documented residual)', async (kind) => {
+		const before = twins();
+		const lots = Array.from({ length: 500 }, (_, i) => `line ${i}`);
+		const after = note(HEAD, CTR(5), [''], lots, END);
+		saved(await round(kind, before, after, 0, { pinnedAfter: 0 }), after, 0);
+	});
+
 	test.each(KINDS)('T13 %s on the MIDDLE of a run of three identical counters, the upper deleted: refused (the base writes the lowest one)', async (kind) => {
 		const before = note(HEAD, CTR(5), [''], CTR(5), [''], CTR(5), END);
 		const after = note(HEAD, CTR(5), [''], CTR(5), END);
