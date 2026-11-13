@@ -603,6 +603,7 @@ describe('SC-436 matrix: removing a row (rows x open editor x removed row)', () 
 			const o = open(['prone']);
 			openAdd(o.container);
 			press(removeButtons(o.container)[0]);
+			expect(document.activeElement).toBe(searchInput(o.container)); // the Escape below is sent at the input, so check focus is really there first
 			keydown(searchInput(o.container)!, 'Escape');
 			expect(searchInput(o.container)).toBeNull();
 			expect(document.activeElement).toBe(addButton(o.container));
@@ -1019,7 +1020,7 @@ describe('SC-580: a printable key in the window opens the Add search with that k
 
 // ------------------------------------------------------------------------------------------ known bugs
 
-describe('SC-436 matrix: known bugs (each marker encodes the correct behaviour and fails today)', () => {
+describe('SC-436 matrix: fixed bugs (SC-581, SC-585) and the open known-bug markers (SC-586: each encodes the correct behaviour and fails today)', () => {
 
 	// SC-581: Icon has "Use default", Duration "Until removed", Effect "static"; the Color group has its own "Default" option.
 	// Fix-agnostic: passes if ANY single interaction in the Color group (a default/none option, or re-activating the
