@@ -1164,7 +1164,10 @@ export class ReadingModeBlockHost implements BlockHost {
 	 * when the note cannot tell which was meant. Every pinned write counts the known body in two scans of the note (`twinned`); a note without identical blocks is never refused by this
 	 * rule and runs no placement. Measured guarantee: on the sweep's layouts and the seeded fuzz of `reading-mode-host-whole-pin*.test.ts`, no write in a cell the oracle calls ambiguous
 	 * and no refusal in one it calls unambiguous (where the pinned block still exists unedited). Residuals: a move or paste within identical blocks leaves the note text unchanged
-	 * (no line map can see it), and a placement the capped diff cannot price (more than `LINE_MAP_MAX_EDITS` lines changed around the block) keeps the head-first answer.
+	 * (no line map can see it), a placement the capped diff cannot price (more than `LINE_MAP_MAX_EDITS` lines changed around the block) keeps the head-first answer, and an outside edit
+	 * that changes only whitespace INSIDE the pinned block (a trailing space on a body line, a blank line before the closing fence) inside the round, in a note with identical blocks,
+	 * is refused: the block's lines are no longer identical to its pinned lines, so it is no candidate placement (the base saved it). Accepted: the block did change on disk, the Notice is
+	 * true, nothing is written, and the next round saves.
 	 * A pin is also refused when more than `LINE_MAP_MAX_EDITS` lines changed on both sides of the block (see lineMap.ts).
 	 */
 	private pinnedTarget(content: string, pin: BlockPin): { lineStart: number; lineEnd: number } | null {
