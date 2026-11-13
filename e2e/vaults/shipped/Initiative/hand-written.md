@@ -11,6 +11,8 @@ heroes:
         color: teal
       - key: hexed
         icon: ""
+      - key: prone
+        color: "oklch(0.6 0.1 180)"
 enemy_groups:
   - name: Ogres
     creatures:

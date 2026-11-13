@@ -1,12 +1,12 @@
 // SC-586: two hand-written YAML spellings the Conditions window must show as what they are. Initiative/hand-written.md: hero
-// Alice Alpha has Dazed with `color: teal` (a CSS name, not a hex) and Hexed with `icon: ""` (a blank icon, which draws the default
-// glyph). The first is about the browser's own colour parsing, so only a real Obsidian can prove it; the jsdom matrix owns the other
+// Alice Alpha has Dazed with `color: teal` (a CSS name, not a hex), Hexed with `icon: ""` (a blank icon, which draws the default
+// glyph) and Prone with `color: "oklch(0.6 0.1 180)"` (a CSS Color 4 spelling). The first is about the browser's own colour parsing, so only a real Obsidian can prove it; the jsdom matrix owns the other
 // spellings (#rgb, rgb(), hsl(), alpha) and the unparseable case.
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
 import { HANDWRITTEN, noteCondition, openConditionsModal, pressedIn } from '../../driver/conditions';
 
-const [DAZED, HEXED] = [0, 1];
+const [DAZED, HEXED, PRONE] = [0, 1, 2];
 
 describe('conditions-modal: hand-written colour and icon', () => {
 	it('[COND-H01] a colour written as a CSS name (`teal`) opens the colour chooser at that colour (#008080), the pipette reads selected, and looking at it writes nothing', async () => {
@@ -35,5 +35,17 @@ describe('conditions-modal: hand-written colour and icon', () => {
 		});
 		expect(await noteCondition(HANDWRITTEN, 'hero', HEXED)).toEqual({ key: 'hexed', icon: '' });
 		expect(await dse.noteText(HANDWRITTEN)).toContain('      - key: hexed\n        icon: ""\n');
+	});
+
+	it('[COND-H03] a colour written in a CSS Color 4 spelling (`oklch(0.6 0.1 180)`) opens the colour chooser at the sRGB colour the row draws (#239382), the pipette reads selected, and looking at it writes nothing', async () => {
+		const { modal } = await openConditionsModal(HANDWRITTEN, 'hero');
+		await dse.expectNoWrite(HANDWRITTEN, async () => {
+			await dse.click(modal.control('cond.edit', { nth: PRONE }));
+			await expect(modal.control('cond.swatch', { nth: 0 })).toBeExisting();
+			await expect(modal.control('cond.color-custom')).toHaveValue('#239382');
+			expect(await dse.page<boolean>(`document.querySelector('.modal-container .dse-swatch--custom').hasAttribute('data-selected')`)).toBe(true);
+			await dse.click(modal.control('modal.close'));
+		});
+		expect(await noteCondition(HANDWRITTEN, 'hero', PRONE)).toEqual({ key: 'prone', color: 'oklch(0.6 0.1 180)' });
 	});
 });
