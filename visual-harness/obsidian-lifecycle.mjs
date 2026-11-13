@@ -214,6 +214,14 @@
 // (e) form on the lower twin, the lower deleted and TOP edited in the same write, RV; (f) card, the same, LP; (g) the cost: an identical counter added right below the form's block: refused, then Cancel, reopen, Save lands (RV); (l)-(o) as (e) / (f) with a counter of ANOTHER value below the twins (three cards): form RV / LP, + RV / LP (the review's H1). Controls: (h) a form with
 // no outside edit (RV); (i) a card + with none (LP); (j) + twice on one card, the second after the first write (RV); (k) a sibling twin's + and then this card's + inside the sibling's round (LP). Red at the c0995beb bundle: (a)-(g) and (l)-(o); (h)-(k) are green there too.
 //
+// SC-619 appends G-S112 (63 scenarios in all; it sits after G-S108 and before G-S56, which stays last, and runs with G-S108 in the seventh `--only` part, about 65 s with the build and the start-up): a hover preview of a HEADING
+// (`[[note#Tracker]]`) of a note saved with Windows line endings (CRLF). Obsidian cuts such a preview's part from ONE character after the heading line's content: the line break of an LF note, but only the CR of a CRLF note, so the part
+// started with a stray LF and the card's write was refused ("changed on disk first", nothing written) although nothing had changed (SC-619; `cardLinkLine`). One CRLF note per phase, two identical counters under `## Tracker` / `## Other`:
+// (a) Reading view, a real + in the hover of #Tracker; (b) Live Preview, the same; (c) a real + in the hover of #Other (the lower one); (d) Reading view, the Edit form opened in the hover, renamed, a real Save: each lands in the hovered
+// counter, no Notice, the note stays all-CRLF, the text outside the fences and the twin are untouched. (e) the two heading names swapped from outside while the preview is open, a real +; (f) two ADJACENT identical `## Tracker` sections,
+// the upper (hovered) one deleted from outside, a real +: each is refused as in an LF note (nothing written, exactly one Notice). (g) the fence right under the heading (no blank line), a real +: saved. Red at the 1f1ae442 bundle: (a)-(d)
+// and (g); (e) and (f) pass there too (everything is refused) and hold the fix. A phase's note is rewritten by `t.reset` (CRLF bytes), and the checks compare values and names, not fixture text.
+//
 // SC-480 appends G-S73 (53 scenarios before G-S77; it sits after G-S49 and before G-S56, which stays last, and runs in the fifth `--only` part with G-S59 and G-S49): a card write whose pin
 // cannot be placed because its block was DELETED from outside is never written into an identical twin. Click + on one of two identical counters (Reading view and Live Preview),
 // delete that block from outside at once, then leave the note (the unload flush) or wait out the 400 ms debounce: nothing is written, the note stays as the outside edit left it, and
@@ -691,6 +699,29 @@ Object.assign(FIXTURES, {
 	// the same with a counter of ANOTHER value below the twins (three cards): a line-level fence pairing read it as the pinned block (SC-612 review, H1)
 	for (const id of ['l-rv', 'm-lp', 'n-rv', 'o-lp']) {
 		FIXTURES[`Lifecycle/gs108-${id}.md`] = `# gs108 ${id}\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\n${COUNTER(5, 'Twin')}\n\n${COUNTER(9, 'Other')}\n\nBOTTOM\n`;
+	}
+	// SC-619 (G-S112): one CRLF note per phase (every line break CRLF), a LF host note that links to it. TWIN: two identical counters under `## Tracker` / `## Other`; ADJ: two ADJACENT identical `## Tracker` sections;
+	// NOGAP: the fence right under the heading.
+	{
+		const sec = (name, value) => `## ${name}\n\n${COUNTER(value, 'Twin')}\n\n`;
+		const crlf = (text) => text.replace(/\n/g, '\r\n');
+		const note = {
+			twin: (id) => crlf(`# gs112 ${id}\n\nTOP\n\n${sec('Tracker', 5)}${sec('Other', 5)}## After\n\nEND\n`),
+			adj: (id) => crlf(`# gs112 ${id}\n\nTOP\n\n${sec('Tracker', 5)}${sec('Tracker', 5)}## After\n\nEND\n`),
+			nogap: (id) => crlf(`# gs112 ${id}\n\nTOP\n\n## Tracker\n${COUNTER(5, 'Twin')}\n\n## Other\n${COUNTER(5, 'Twin')}\n\n## After\n\nEND\n`),
+		};
+		for (const [id, shape, link] of [
+			['a-rv', 'twin', '#Tracker'],
+			['b-lp', 'twin', '#Tracker'],
+			['c-rv', 'twin', '#Other'],
+			['d-rv', 'twin', '#Tracker'],
+			['e-rv', 'twin', '#Tracker'],
+			['f-rv', 'adj', '#Tracker'],
+			['g-rv', 'nogap', '#Tracker'],
+		]) {
+			FIXTURES[`Lifecycle/gs112-${id}-src.md`] = note[shape](id);
+			FIXTURES[`Lifecycle/gs112-${id}-host.md`] = `# gs112 ${id} host\n\nsee [[gs112-${id}-src${link}]] here\n\nfiller\n`;
+		}
 	}
 	Object.assign(FIXTURES, {
 		'Lifecycle/gs77-cal-src.md': `# gs77 cal src\n\n${CAL2()}\n\n^gs77cal\n\nend\n`,
@@ -8835,6 +8866,126 @@ const SCENARIOS = [
 			} finally {
 				await t.ev(`${prefs}.set('authoringControls', false)`);
 				await t.ev(`document.getElementById('lc-gs108-notice')?.remove()`);
+				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
+				for (const rel of files) await t.reset(rel);
+				await t.open('Lifecycle/other.md');
+			}
+			t.expect(problems.length === 0, `${problems.join(' | ')} -- passed: ${outcomes.join('; ')}`);
+			t.expect((await t.errorsSince(m)).length === 0, `page errors ${J(await t.errorsSince(m))}`);
+			return outcomes.join('; ');
+		},
+	},
+	{
+		// G-S112 (SC-619): a hover preview of a HEADING of a note saved with CRLF. See the header. (a)-(d), (g) are saved into the hovered counter; (e), (f) are refused with one Notice, nothing written.
+		// It sits before G-S56, which runs last and replaces every other leaf. One note per phase (a card Notice is rate limited per note).
+		id: 'G-S112',
+		async run(t) {
+			const m = await t.mark();
+			const J = JSON.stringify;
+			const K = gs83Kit(t);
+			const prefs = `app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			// outside edits that keep the note's CRLF (a regex on `\r?\n`, as Sync or another editor would leave it)
+			const EDIT = {
+				swapNames: String.raw`c.replace(/## Tracker(\r?\n)/, '## @@$1').replace(/## Other(\r?\n)/, '## Tracker$1').replace(/## @@(\r?\n)/, '## Other$1')`,
+				delFirstTracker: String.raw`c.replace(/## Tracker\r?\n\r?\n\x60\x60\x60ds-counter[\s\S]*?\x60\x60\x60\r?\n\r?\n/, '')`,
+			};
+			// [id, mode, how, outside edit, want, label]
+			const cells = [
+				['a-rv', 'rv', 'plus', null, { values: [6, 5] }, '(a) Reading view, + in the hover of #Tracker'],
+				['b-lp', 'lp', 'plus', null, { values: [6, 5] }, '(b) Live Preview, + in the hover of #Tracker'],
+				['c-rv', 'rv', 'plus', null, { values: [5, 6] }, '(c) Reading view, + in the hover of #Other'],
+				['d-rv', 'rv', 'form', null, { names: ['Edited', 'Twin'], values: [5, 5] }, '(d) Reading view, the Edit form in the hover of #Tracker, Save'],
+				['e-rv', 'rv', 'plus', 'swapNames', { refused: true }, '(e) Reading view, the two heading names swapped from outside, +'],
+				['f-rv', 'rv', 'plus', 'delFirstTracker', { refused: true }, '(f) Reading view, the upper of two adjacent identical sections deleted from outside, +'],
+				['g-rv', 'rv', 'plus', null, { values: [6, 5] }, '(g) Reading view, the fence right under the heading (no blank line), + in the hover of #Tracker'],
+			];
+			const files = cells.flatMap(([id]) => [`Lifecycle/gs112-${id}-src.md`, `Lifecycle/gs112-${id}-host.md`]);
+			const problems = [];
+			const outcomes = [];
+			const allCrlf = (text) => text.includes('\r\n') && !/[^\r]\n/.test(text);
+			const outside = (text) => text.replace(/```ds-counter[\s\S]*?```/g, '```');
+			const namesOf = (text) => (text.match(/^name: (\w+)\r?$/gm) ?? []).map((x) => x.slice(6).trim());
+			await t.ev(`(() => { if (!document.getElementById('lc-gs112-notice')) { const st = document.createElement('style'); st.id = 'lc-gs112-notice'; st.textContent = '.notice-container { display: none !important; }'; document.head.appendChild(st); } return true; })()`);
+			await t.ev(`${prefs}.set('authoringControls', true)`);
+			try {
+				for (const [id, mode, how, editName, want, label] of cells) {
+					const SRC = `Lifecycle/gs112-${id}-src.md`;
+					const HOST = `Lifecycle/gs112-${id}-host.md`;
+					const bad = [];
+					let note = '';
+					let edited = null;
+					const ES = `app.plugins.plugins['draw-steel-elements'].viewRegistry.liveEntries().filter((e) => e.host.sourcePath === ${J(SRC)} && e.root.isConnected && e.root.closest('.hover-popover'))`;
+					const BTN = `(${ES})[0].root.querySelector('button[aria-label^="Increase"]')`;
+					const PENCIL = `((${ES})[0].root.querySelector('.dse-chrome button[data-dse-chrome-item="edit"], button[aria-label^="Edit "]'))`;
+					try {
+						await t.reset(SRC);
+						await t.reset(HOST);
+						const before = t.read(SRC);
+						t.expect(before === FIXTURES[SRC] && allCrlf(before), `${label}: the note is not the all-CRLF fixture: ${J(before)}`);
+						const mk = await t.mark();
+						const link = await K.openHost(HOST, mode);
+						await K.hover(link, SRC);
+						await t.sleep(700);
+						await K.moveTo(`(${ES})[0].root`);
+						await t.sleep(300);
+						// the shape under test: Obsidian's part for a heading hover starts one character after the heading line's content, here the LF of the heading's CRLF
+						const head = await t.ev(`(() => { const e = (${ES})[0]; let sec = null; try { sec = e.host.ctx.getSectionInfo(e.host.containerEl); } catch (x) {} return sec ? sec.text.slice(0, 3) : null; })()`);
+						if (head === null || !head.startsWith('\n')) bad.push(`the hover's part does not start with the heading line's LF (${J(head)}): the CRLF slice was not reached`);
+						if (editName) {
+							edited = null;
+							await t.edit(SRC, EDIT[editName]);
+							await t.sleep(1200);
+							edited = t.read(SRC);
+							t.expect(edited !== before && allCrlf(edited), `${label}: the outside edit changed nothing or lost the CRLF`);
+						}
+						if (how === 'plus') {
+							await K.click(BTN);
+							await t.sleep(1500);
+						} else {
+							await t.waitFor(`!!${PENCIL}`, `${label}: the pencil is drawn`, 8000);
+							await K.clickRevealed(PENCIL);
+							await t.waitFor(`!!${K.FORM}`, `${label}: the edit form opened`, 10000);
+							await t.sleep(300);
+							t.expect(await t.ev(`(() => { const ta = ${K.RAW}; if (!ta) return false; ta.value = ta.value.replace('name: Twin', 'name: Edited'); ta.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`), `${label}: no raw box in the form`);
+							await t.waitFor(`!!(${K.SAVE}) && !(${K.SAVE}).disabled`, `${label}: Save is enabled`, 5000);
+							await K.click(K.SAVE);
+							const t0 = Date.now();
+							while (Date.now() - t0 < 3000 && !t.read(SRC).includes('name: Edited') && !(await t.noticesSince(mk)).length) await t.sleep(50);
+							await t.sleep(500);
+						}
+						note = t.read(SRC);
+						const ns = (await t.noticesSince(mk)).filter((x) => /Draw Steel Elements/.test(x));
+						if (want.refused) {
+							if (note !== edited) bad.push(`the note is not what the outside edit left: a counter was written (values ${J(t.counterValues(SRC))}, names ${J(namesOf(note))})`);
+							const dropped = NOTICE_TEXT(`gs112-${id}-src`);
+							if (!(ns.length === 1 && ns[0] === dropped)) bad.push(`expected the one Notice ${J(dropped)}, got ${J(ns)}`);
+						} else {
+							if (want.values && J(t.counterValues(SRC)) !== J(want.values)) bad.push(`values ${J(t.counterValues(SRC))}, want ${J(want.values)}`);
+							if (want.names && J(namesOf(note)) !== J(want.names)) bad.push(`names ${J(namesOf(note))}, want ${J(want.names)}`);
+							if (!want.names && J(namesOf(note)) !== J(['Twin', 'Twin'])) bad.push(`names ${J(namesOf(note))}: the twin or the hovered counter was renamed`);
+							if (ns.length) bad.push(`unexpected Notice ${J(ns)}`);
+							if (outside(note) !== outside(before)) bad.push(`the text outside the fences changed: ${J(outside(note))}`);
+						}
+						if (!allCrlf(note)) bad.push(`the note is no longer all-CRLF: ${J(note)}`);
+						if (await t.ev(`!!document.querySelector('.modal-container')`) && !want.refused) bad.push('a modal is left open');
+					} catch (e) {
+						bad.push(`error: ${e.message}`);
+					} finally {
+						for (let i = 0; i < 5 && (await t.ev(`!!document.querySelector('.modal-container')`)); i++) {
+							await t.ev(`(() => { const b = ${K.CANCEL}; if (b) b.click(); return true; })()`);
+							await t.sleep(200);
+							if (await t.ev(`!!document.querySelector('.modal-container')`)) await t.key('Escape', 'Escape', 27).catch(() => {});
+							await t.sleep(200);
+						}
+						await K.cleanup();
+						await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
+					}
+					if (bad.length) problems.push(`${label}: ${bad.join('; ')} (note ${J(note)})`);
+					else outcomes.push(`${label}: ${want.refused ? 'nothing written, one Notice' : 'saved into the hovered counter, no Notice, all-CRLF'}`);
+				}
+			} finally {
+				await t.ev(`${prefs}.set('authoringControls', false)`);
+				await t.ev(`document.getElementById('lc-gs112-notice')?.remove()`);
 				await t.ev(`(() => { app.workspace.getLeavesOfType('markdown').slice(1).forEach((l) => l.detach()); return true; })()`);
 				for (const rel of files) await t.reset(rel);
 				await t.open('Lifecycle/other.md');
