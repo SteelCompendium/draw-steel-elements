@@ -21,7 +21,11 @@ const ctxOf = (section: Section) =>
 	({ docId: 'doc-619', sourcePath: 'Note.md', frontmatter: undefined, addChild: () => {}, getSectionInfo: () => section.current }) as never;
 const CTR = (n: number, name = 'Twin'): string[] => ['```ds-counter', `name: ${name}`, `current_value: ${n}`, '```'];
 const bodyOf = (n: number, name = 'Twin'): string => `name: ${name}\ncurrent_value: ${n}`;
-const settle = () => new Promise((r) => setTimeout(r, 25));
+// SC-568: wait by a COUNT of macrotask hops, not 25 ms of wall clock. The mock vault's `read` takes one `setTimeout(0)` hop per `cachedRead`, so a
+// fixed 25 ms timer fired first on a starved host (the same race as reading-mode-host-pin.test.ts `settleOpenRead`); 10 hops is far more than the host needs.
+const settle = async (): Promise<void> => {
+	for (let hop = 0; hop < 10; hop++) await new Promise((r) => setTimeout(r, 0));
+};
 
 /** What Obsidian's metadata cache holds for `text`: headings, `^id` blocks and one section ending at the last non-blank line, with RAW offsets (CRLF counted, measured). */
 function cacheOf(text: string) {
