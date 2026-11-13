@@ -41,6 +41,7 @@ interface Mounted {
 	view: InitiativeView;
 	root: HTMLElement;
 	pane: HTMLElement;
+	plugin: Plugin;
 }
 
 function makeDeps(): ElementPipelineDeps {
@@ -72,8 +73,10 @@ function newPane(): HTMLElement {
 	return pane;
 }
 
-async function mount(source: string, pane: HTMLElement = newPane(), sourcePath = 'Encounter.md'): Promise<Mounted> {
+/** `raw`: the host knows the note's own text of the block (`lastKnownBody`, as the Reading view and Live Preview hosts do). */
+async function mount(source: string, pane: HTMLElement = newPane(), sourcePath = 'Encounter.md', raw = false): Promise<Mounted> {
 	const deps = makeDeps();
+	(deps.plugin as unknown as Plugin).load(); // the hand-off is owned by the plugin: a plugin that is not loaded starts none
 	const containerEl = pane.appendChild(document.createElement('div'));
 	const views: Component[] = [];
 	const host = {
@@ -89,9 +92,10 @@ async function mount(source: string, pane: HTMLElement = newPane(), sourcePath =
 		getBlockInfo: () => ({ language: 'ds-initiative', lineStart: 0, lineEnd: 40 }),
 		replaceSource: jest.fn(async () => true),
 		blockKey: () => `${sourcePath}::ds-initiative::0`,
+		lastKnownBody: raw ? source : null,
 	} as unknown as BlockHost;
 	await new ElementPipeline(deps).run(initiativeElement, source, host);
-	return { view: views[0] as unknown as InitiativeView, root: containerEl.firstElementChild as HTMLElement, pane };
+	return { view: views[0] as unknown as InitiativeView, root: containerEl.firstElementChild as HTMLElement, pane, plugin: deps.plugin as unknown as Plugin };
 }
 
 const ctl = <T extends HTMLElement = HTMLElement>(root: Element, id: string, n = 0): T => {
@@ -113,6 +117,7 @@ function openPool(root: HTMLElement): HTMLElement {
 	return opener;
 }
 
+let closeOriginal: () => void = () => undefined;
 beforeEach(() => {
 	Notice.notices.length = 0;
 	// Real Obsidian hands focus back to the control that held it when a modal opened, synchronously inside `close()`, and only while
@@ -120,6 +125,7 @@ beforeEach(() => {
 	const openers = new WeakMap<object, Element | null>();
 	const open = Modal.prototype.open;
 	const close = Modal.prototype.close;
+	closeOriginal = close;
 	jest.spyOn(Modal.prototype, 'open').mockImplementation(function (this: Modal) {
 		openers.set(this, document.activeElement);
 		open.call(this);
@@ -270,16 +276,16 @@ describe('SC-608: an outside edit redraws the tracker while a window is open (Re
 		expect(document.activeElement).toBe(none.root);
 	});
 
-	test('[O09] the redrawn block has the same content (the view\'s own save, a re-render): no Notice and nothing is moved, as before', async () => {
-		const old = await mount(SQUAD);
+	test('[O09] the redrawn block has the same disk content (the view\'s own save, a re-render): no Notice, and focus still comes back', async () => {
+		const old = await mount(SQUAD, undefined, 'Encounter.md', true);
 		openPool(old.root);
-		await mount(SQUAD, old.pane);
+		const fresh = await mount(SQUAD, old.pane, 'Encounter.md', true);
 		old.view.unload();
 		old.root.remove();
 		await later();
 		expect(modalEl()).toBeNull();
 		expect(notices()).toHaveLength(0);
-		expect(document.activeElement).toBe(document.body);
+		expect(document.activeElement).toBe(ctl(fresh.root, 'init.detail.stamina')); // a Live Preview own save used to drop it on <body>
 	});
 
 	test('[O10] the tracker is gone (the note was closed, the edit deleted the block): nothing is shown or focused', async () => {
@@ -362,6 +368,111 @@ describe('SC-608: an outside edit redraws the tracker while a window is open (Re
 		expect(notices()).toHaveLength(0);
 		expect(document.activeElement).toBe(document.body);
 		expect(third.root.contains(document.activeElement)).toBe(false);
+	});
+
+	test('[O18] focus the window\'s own close puts outside the tracker is not taken (the focusin guard is installed only after the close)', async () => {
+		const old = await mount(SQUAD);
+		openPool(old.root);
+		const other = document.body.appendChild(document.createElement('input'));
+		jest.spyOn(Modal.prototype, 'close').mockImplementation(function (this: Modal) {
+			closeOriginal.call(this);
+			other.focus(); // another component takes focus as the window goes
+		});
+		const fresh = await mount(SQUAD_EDITED, old.pane);
+		old.view.unload();
+		old.root.remove();
+		await later();
+		expect(document.activeElement).toBe(other);
+		expect(notices()).toHaveLength(1);
+		expect(fresh.root.contains(document.activeElement)).toBe(false);
+	});
+
+	test('[O19] an outside edit that changes only bytes the model drops (a YAML comment): Notice and focus, like any other outside edit', async () => {
+		const old = await mount(SQUAD, undefined, 'Encounter.md', true);
+		openPool(old.root);
+		const fresh = await mount(SQUAD.replace('value: 3', 'value: 3 # synced from phone'), old.pane, 'Encounter.md', true);
+		old.view.unload();
+		old.root.remove();
+		await later();
+		expect(notices()).toHaveLength(1);
+		expect(document.activeElement).toBe(ctl(fresh.root, 'init.detail.stamina'));
+	});
+
+	test('[O20] a tracker inserted above the open one by the same edit: the Notice shows, focus is NOT moved to the wrong tracker', async () => {
+		const first = await mount(TRACKER);
+		const second = await mount(SQUAD, first.pane);
+		openPool(second.root);
+		const inserted = await mount(SQUAD_EDITED.replace('Alice', 'Newt'), first.pane); // the edit inserts a tracker between the two...
+		const fresh = await mount(SQUAD_EDITED, first.pane); // ...and changes the second
+		second.view.unload();
+		second.root.remove();
+		await later();
+		expect(notices()).toHaveLength(1);
+		expect(document.activeElement).toBe(document.body);
+		expect([first.root, inserted.root, fresh.root].some((r) => r.contains(document.activeElement))).toBe(false);
+	});
+
+	test('[O21] the inserted tracker is invalid (an error card): the Notice shows at once, nothing is focused, nothing waits for the TTL', async () => {
+		const first = await mount(TRACKER);
+		const second = await mount(SQUAD, first.pane);
+		openPool(second.root);
+		await mount(src(HEROES, malice(5)), first.pane); // no enemy_groups: the pipeline draws an error card
+		await mount(SQUAD_EDITED, first.pane);
+		second.view.unload();
+		second.root.remove();
+		await later();
+		expect(notices()).toHaveLength(1);
+		expect(document.activeElement).toBe(document.body);
+	});
+
+	test('[O22] a burst of outside edits (Sync) redraws the block again and again: focus follows each redraw, one Notice', async () => {
+		const old = await mount(SQUAD);
+		openPool(old.root);
+		let current = await mount(SQUAD_EDITED, old.pane);
+		old.view.unload();
+		old.root.remove();
+		await later();
+		expect(document.activeElement).toBe(ctl(current.root, 'init.detail.stamina'));
+		for (const value of [4, 5, 6]) {
+			const previous = current;
+			current = await mount(SQUAD_EDITED.replace('value: 9', `value: ${value}`), old.pane); // the next edit of the burst
+			previous.view.unload(); // discards the control that held focus
+			previous.root.remove();
+			await later();
+			expect(document.activeElement).toBe(ctl(current.root, 'init.detail.stamina'));
+		}
+		expect(notices()).toHaveLength(1);
+	});
+
+	test('[O23] ...but once the user has moved focus, a later redraw of the burst does not take it back', async () => {
+		const old = await mount(SQUAD);
+		openPool(old.root);
+		const first = await mount(SQUAD_EDITED, old.pane);
+		old.view.unload();
+		old.root.remove();
+		await later();
+		const other = document.body.appendChild(document.createElement('input'));
+		other.focus();
+		other.blur();
+		const next = await mount(SQUAD_EDITED.replace('value: 9', 'value: 4'), old.pane);
+		first.view.unload();
+		first.root.remove();
+		await later();
+		expect(document.activeElement).toBe(document.body);
+		expect(next.root.contains(document.activeElement)).toBe(false);
+	});
+
+	test('[O24] unloading the plugin cancels a hand-off that is waiting: no Notice, no focus when the new tracker appears later', async () => {
+		const old = await mount(SQUAD);
+		openPool(old.root);
+		old.view.unload();
+		old.root.remove();
+		old.plugin.unload();
+		const fresh = await mount(SQUAD_EDITED, old.pane);
+		await later();
+		expect(notices()).toHaveLength(0);
+		expect(document.activeElement).toBe(document.body);
+		expect(fresh.root.contains(document.activeElement)).toBe(false);
 	});
 
 	test('[O14] the tracker\'s own Apply shows no Notice and keeps its focus hand-back', async () => {

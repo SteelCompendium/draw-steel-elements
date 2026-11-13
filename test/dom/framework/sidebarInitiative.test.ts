@@ -784,6 +784,23 @@ describe('SC-608: an outside edit while a tracker window is open (pinned sidebar
 		expect(env.panel.querySelectorAll('[data-dse-control="init.cond.remove"]').length).toBeGreaterThan(0); // and the sidebar shows it
 	});
 
+	test('[S08] a condition added in the Conditions window, then an outside edit elsewhere in the note before the 400 ms write: the window stays open and the condition reaches the note', async () => {
+		const env = await pinned(squadNote());
+		ctl(env.panel, 'init.cond.add').click();
+		ctl(modalEl()!, 'cond.add').click();
+		const input = ctl<HTMLInputElement>(modalEl()!, 'cond.input');
+		input.value = 'daz';
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+		expect(env.panel.querySelectorAll('[data-dse-control="init.cond.remove"]').length).toBeGreaterThan(0); // added in the live model, not yet written
+		expect(/dazed/i.test(env.app.vault.getContent('Session.md')!)).toBe(false);
+		await outsideEdit(env, (t) => t.replace('Prose after the block.', 'Elsewhere.')); // the block on disk is unchanged
+		expect(modalEl()).not.toBeNull();
+		expect(notices()).toHaveLength(0);
+		await waitUntil(() => /dazed/i.test(env.app.vault.getContent('Session.md')!), 'the condition to be written to the note');
+		expect(env.app.vault.getContent('Session.md')).toContain('Elsewhere.');
+	});
+
 	test('[S05] opened with the mouse (focus was not inside the tracker): the Notice shows, nothing is focused', async () => {
 		const env = await pinned(squadNote());
 		ctl(env.panel, 'init.detail.stamina').click();
