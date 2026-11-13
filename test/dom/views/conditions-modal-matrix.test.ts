@@ -1118,13 +1118,13 @@ describe('SC-436 matrix: fixed bugs (SC-581, SC-585, SC-586)', () => {
 			getImageData: () => ({ data: [35, 147, 130, 255] }),
 		};
 		withCanvas(ctx, () => {
-			const o = open([{ key: 'prone', color: 'oklch(0.6 0.1 180)' }]);
+			const o = open([{ key: 'prone', color: 'OKLCH(60% 0.1 180)' }]);
 			openEditor(o.container, 0);
 			expect(customSelected(o.container)).toBe(true); // setup: the pipette treats it as the selected custom colour
 			expect(customInput(o.container).value).toBe('#239382');
-			expect(painted).toEqual(['oklch(0.6 0.1 180)']);
+			expect(painted).toEqual(['oklch(0.6 0.1 180)']); // the COMPUTED string (jsdom lowercases the name and writes 60% as 0.6), not the note's raw text
 			expect(o.onChange).not.toHaveBeenCalled();
-			expect((o.holder.conditions as Condition[])[0].color).toBe('oklch(0.6 0.1 180)');
+			expect((o.holder.conditions as Condition[])[0].color).toBe('OKLCH(60% 0.1 180)');
 		});
 	});
 

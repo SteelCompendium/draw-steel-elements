@@ -1,7 +1,8 @@
-// SC-586: two hand-written YAML spellings the Conditions window must show as what they are. Initiative/hand-written.md: hero
-// Alice Alpha has Dazed with `color: teal` (a CSS name, not a hex), Hexed with `icon: ""` (a blank icon, which draws the default
-// glyph) and Prone with `color: "oklch(0.6 0.1 180)"` (a CSS Color 4 spelling). The first is about the browser's own colour parsing, so only a real Obsidian can prove it; the jsdom matrix owns the other
-// spellings (#rgb, rgb(), hsl(), alpha) and the unparseable case.
+// SC-586: three hand-written YAML spellings the Conditions window must show as what they are. Initiative/hand-written.md: hero
+// Alice Alpha has Dazed with `color: teal` (a CSS name, not a hex; H01), Hexed with `icon: ""` (a blank icon, which draws the default
+// glyph; H02) and Prone with `color: "oklch(0.6 0.1 180)"` (a CSS Color 4 spelling; H03). H01 and H03 are about the browser's own
+// colour parsing, so only a real Obsidian can prove them; the jsdom matrix owns the other spellings (#rgb, rgb(), hsl(), alpha) and
+// the unparseable case.
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
 import { HANDWRITTEN, noteCondition, openConditionsModal, pressedIn } from '../../driver/conditions';
