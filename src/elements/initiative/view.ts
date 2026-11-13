@@ -204,8 +204,11 @@ export class InitiativeView extends ElementView<EncounterData> {
 		});
 	}
 
-	/** SC-608 — the view unloads (an outside edit redrew the block, the note was closed, ...): close the window with it, and when the
-	 *  block that comes back differs from this one, say why and hand focus to its replacement of the control that opened the window. */
+	/** SC-608 — the view unloads (an outside edit redrew the block, the note was closed, ...): close the window with it and start the
+	 *  hand-off (framework/chrome/windowHandoff.ts), which finds the redrawn tracker by the slot the window opened in. The Notice is
+	 *  shown when that tracker's disk content (`diskContent()`) differs from this view's; focus goes to its replacement of the control
+	 *  that opened the window whether or not it does, unless the tracker count changed, and it follows a burst of redraws. The watch is
+	 *  owned by the plugin, so unloading the plugin cancels it. */
 	private closeWindowWithView(): void {
 		const win = this.activeWindow;
 		let ownContent: string | null = null;
