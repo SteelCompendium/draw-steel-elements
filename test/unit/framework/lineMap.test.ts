@@ -1,6 +1,6 @@
 // SC-552 -- mapLine: where a line of one version of a note is in a later version. The block edit form pins its block's fence line
 // when it opens; its Save maps that line through whatever was written to the note since (a click's write, an outside edit, Sync).
-import { LINE_MAP_MAX_EDITS, mapLine, mapLineFromTail, mapLineStrict } from '@/framework/host/lineMap';
+import { LINE_MAP_MAX_EDITS, mapLine, mapLineFromTail, mapLineGreedy, mapLineStrict } from '@/framework/host/lineMap';
 
 const twin = (v: number) => ['```ds-counter', 'name: Twin', `current_value: ${v}`, '```'];
 const note = (vals: number[], extra: Record<number, string[]> = {}) =>
@@ -129,5 +129,88 @@ describe('SC-607: mapLineStrict', () => {
 		const b = ['top', ...mid('b'), 'bottom'].join('\n');
 		expect(mapLineStrict(a, b, 0)).toEqual({ line: 0 });
 		expect(mapLineStrict(a, b, n + 1)).toEqual({ line: n + 1 });
+	});
+});
+
+// SC-612 -- mapLineGreedy: one side trimmed only. `mapLine` and `mapLineFromTail` trim BOTH ends, so an unrelated edit next to a run of identical blocks stops
+// one trim for both and they agree on a guess; the greedy maps keep the tie visible.
+describe('SC-612: mapLineGreedy', () => {
+	// `# t / TOP / twin / '' / twin / BOTTOM`: two identical counters separated only by a blank line
+	const pair = (top = 'TOP', bottom = 'BOTTOM', twins = 2) =>
+		['# t', '', top, '', ...Array.from({ length: twins }, () => twin(5)).flatMap((t, i) => (i === 0 ? t : ['', ...t])), '', bottom].join('\n');
+	const [UPPER, LOWER] = fencesOf(pair());
+
+	it('the identity for identical texts', () => {
+		const a = pair();
+		expect(mapLineGreedy(a, a, LOWER, 'head')).toBe(LOWER);
+		expect(mapLineGreedy(a, a, LOWER, 'tail')).toBe(LOWER);
+	});
+
+	it('a line outside the old text maps to null, in both directions', () => {
+		const a = pair();
+		const b = pair('TOP edited');
+		expect(mapLineGreedy(a, b, 500, 'head')).toBeNull();
+		expect(mapLineGreedy(a, b, -1, 'head')).toBeNull();
+		expect(mapLineGreedy(a, b, 500, 'tail')).toBeNull();
+		expect(mapLineGreedy(a, b, -1, 'tail')).toBeNull();
+	});
+
+	it('the pure tie (one of two blocks deleted): head pairs the upper twin with the survivor, tail pairs the lower one', () => {
+		const a = pair();
+		const b = pair('TOP', 'BOTTOM', 1);
+		expect(mapLineGreedy(a, b, UPPER, 'head')).toBe(UPPER);
+		expect(mapLineGreedy(a, b, LOWER, 'head')).toBeNull();
+		expect(mapLineGreedy(a, b, UPPER, 'tail')).toBeNull();
+		expect(mapLineGreedy(a, b, LOWER, 'tail')).toBe(UPPER);
+	});
+
+	it('the lower twin deleted and TOP edited: mapLine and mapLineFromTail agree on the survivor, the greedy maps do not', () => {
+		const a = pair();
+		const b = pair('TOP edited', 'BOTTOM', 1);
+		expect(mapLine(a, b, LOWER)).toBe(UPPER);
+		expect(mapLineFromTail(a, b, LOWER)).toBe(UPPER);
+		expect(mapLineGreedy(a, b, LOWER, 'head')).toBeNull();
+		expect(mapLineGreedy(a, b, LOWER, 'tail')).toBe(UPPER);
+	});
+
+	it('the same with BOTTOM edited and the upper twin pinned: now the tail map is the one that says deleted', () => {
+		const a = pair();
+		const b = pair('TOP', 'BOTTOM edited', 1);
+		expect(mapLine(a, b, UPPER)).toBe(UPPER);
+		expect(mapLineFromTail(a, b, UPPER)).toBe(UPPER);
+		expect(mapLineGreedy(a, b, UPPER, 'head')).toBe(UPPER);
+		expect(mapLineGreedy(a, b, UPPER, 'tail')).toBeNull();
+	});
+
+	it('a line the edit did not touch is placed the same by every map', () => {
+		const a = pair('TOP edited');
+		const b = pair('TOP edited', 'BOTTOM', 1);
+		const lines = a.split('\n');
+		const bottom = lines.length - 1;
+		for (const from of ['head', 'tail'] as const) {
+			expect(mapLineGreedy(a, b, 0, from)).toBe(0);
+			expect(mapLineGreedy(a, b, bottom, from)).toBe(b.split('\n').length - 1);
+		}
+	});
+
+	it('a one-sided insertion of more than LINE_MAP_MAX_EDITS lines: greedy head says "gave up" where mapLine still maps it', () => {
+		const n = LINE_MAP_MAX_EDITS + 50;
+		const a = pair();
+		const b = ['# t', '', ...Array.from({ length: n }, (_, i) => `new${i}`), '', ...pair().split('\n').slice(2)].join('\n');
+		expect(mapLine(a, b, UPPER)).toBe(UPPER + n + 1);
+		expect(mapLineGreedy(a, b, UPPER, 'head')).toBe('gave up');
+		// the tail side trims the shared end, so the greedy tail map finds it at once
+		expect(mapLineGreedy(a, b, UPPER, 'tail')).toBe(UPPER + n + 1);
+	});
+
+	it('mapLine, mapLineFromTail and mapLineStrict give the same answers they did (the greedy trim flag is the greedy maps\' own)', () => {
+		const a = pair();
+		const b = pair('TOP', 'BOTTOM', 1);
+		expect(mapLine(a, b, UPPER)).toBe(UPPER);
+		expect(mapLine(a, b, LOWER)).toBeNull();
+		expect(mapLineFromTail(a, b, UPPER)).toBeNull();
+		expect(mapLineFromTail(a, b, LOWER)).toBe(UPPER);
+		expect(mapLineStrict(a, b, UPPER)).toBe('disagree');
+		expect(mapLineStrict(a, b, LOWER)).toBe('disagree');
 	});
 });

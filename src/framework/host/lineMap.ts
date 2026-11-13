@@ -26,7 +26,8 @@ const GAVE_UP = 'gave up';
  * or removed, when `line` is not a line of `before`, or when the notes differ by more than LINE_MAP_MAX_EDITS lines. Known limit (SC-556):
  * of two identical blocks with identical surroundings, deleting one cannot be told from deleting the other (the note that is left is
  * the same). The common head is trimmed first, so the diff always reads the LOWER one as deleted: a pin on the upper block then maps
- * to the surviving block, and a pin on the lower block maps to null (a false "changed on disk first" refusal; nothing is written).
+ * to the surviving block, and a pin on the lower block maps to null. That tie is this map's alone; a caller that must not write on it
+ * (a whole-note pin whose body is twinned, SC-612; a strict pin, SC-607) asks `mapLineFromTail` and `mapLineGreedy` too.
  */
 export function mapLine(before: string, after: string, line: number): number | null {
 	if (before === after) return line;
@@ -66,19 +67,38 @@ export function mapLineStrict(before: string, after: string, line: number): Stri
 	return head !== null && head === tail ? { line: head } : 'disagree';
 }
 
+/**
+ * SC-612: the line of `after` that is line `line` of `before` by one GREEDY alignment: 'head' trims only the common head and runs the forward diff over
+ * everything after it (no common-tail trim), so a run of identical lines is paired as EARLY as the diff allows; 'tail' is the mirror (only the common
+ * tail trimmed, the diff over the reversed rest: as LATE as it allows). `mapLine` and `mapLineFromTail` trim BOTH ends, so an unrelated edit on one
+ * side of a run of identical blocks (a heading above them edited) stops one trim at the same place for both, and both read a deletion in the run the
+ * same way; these two still see the tie. Null when the line was changed or removed (or is not a line of `before`); 'gave up' past LINE_MAP_MAX_EDITS
+ * (with no trim on one side a large one-sided edit counts in full).
+ */
+export function mapLineGreedy(before: string, after: string, line: number, from: 'head' | 'tail'): number | null | typeof GAVE_UP {
+	if (before === after) return line;
+	const a = splitLines(before);
+	const b = splitLines(after);
+	if (line < 0 || line >= a.length) return null;
+	if (from === 'head') return mapLineOf(a, b, line, false);
+	const r = mapLineOf(a.slice().reverse(), b.slice().reverse(), a.length - 1 - line, false);
+	return r === null || r === GAVE_UP ? r : b.length - 1 - r;
+}
+
 function fromTail(a: readonly string[], b: readonly string[], line: number): number | null | typeof GAVE_UP {
 	if (line < 0 || line >= a.length) return null;
 	const r = mapLineOf(a.slice().reverse(), b.slice().reverse(), a.length - 1 - line);
 	return r === null || r === GAVE_UP ? r : b.length - 1 - r;
 }
 
-function mapLineOf(a: readonly string[], b: readonly string[], line: number): number | null | typeof GAVE_UP {
+function mapLineOf(a: readonly string[], b: readonly string[], line: number, trimTail = true): number | null | typeof GAVE_UP {
 	if (line < 0 || line >= a.length) return null;
 	let head = 0;
 	while (head < a.length && head < b.length && a[head] === b[head]) head++;
 	if (line < head) return line;
 	let tail = 0;
-	while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
+	// SC-612: a greedy map (`mapLineGreedy`) trims only its own side
+	while (trimTail && tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
 	if (line >= a.length - tail) return line + (b.length - a.length);
 	// Myers over the changed middle a[head, a.length - tail) / b[head, b.length - tail).
 	const A = a.slice(head, a.length - tail);
