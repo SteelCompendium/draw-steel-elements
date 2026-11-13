@@ -15,6 +15,12 @@ const PINNED = 'Sidebar/squad-pinned.md';
 const ANCHOR = 'osw608';
 const TABS = 80; // Tab presses from the top of the note to the control (the chrome panel and the whole tracker are in the way)
 const NOTICE = 'The note changed outside, so this window closed without saving';
+const TWO = 'Initiative/two-trackers.md';
+// A new, valid tracker that an outside edit inserts between the two blocks of two-trackers.md.
+const NEWT = 'BETWEEN\n\n```ds-initiative\nheroes:\n  - name: Newt Inserted\n    max_stamina: 12\nenemy_groups: []\nmalice:\n  value: 5\n```\n';
+/** Five edits of the Malice value 30 ms apart, the way a Sync burst lands. */
+const burst = (note: string) =>
+	dse.page(`(async () => { const f = app.vault.getAbstractFileByPath(${JSON.stringify(note)}); for (const v of [4, 5, 6, 7, 8]) { await app.vault.process(f, (c) => c.replace(/value: \\d+/, 'value: ' + v)); await new Promise((r) => setTimeout(r, 30)); } return true; })()`);
 const MALICE = `c.replace('value: 3', 'value: 9')`; // an outside edit INSIDE the block
 
 /** What holds focus: its control id, which surface it is in and whether it draws the ring. */
@@ -170,6 +176,75 @@ describe('initiative: a window open while an outside edit changes the note', () 
 		expect(await focusState()).toEqual({ ctl: 'init.detail.stamina', surface: 'source', ring: true });
 	});
 
+
+	it('[INIT-W09] Reading view, a burst of five outside edits 30 ms apart (Sync): one Notice, and when it settles the rebuilt Stamina control holds focus', async () => {
+		await dse.openNote(SQUAD);
+		const root = dse.block(INIT);
+		const numeric = root.control('init.detail.stamina');
+		await dse.tabTo(numeric, TABS);
+		await dse.press('Enter', numeric);
+		const modal = await dse.modal('minion-pool');
+		await dse.type(modal.control('pool.damage-amount'), '3', { replace: true });
+		await dse.click(modal.control('pool.apply-damage'));
+		await burst(SQUAD);
+		await expect(modal.root).not.toBeExisting();
+		await waitNotice();
+		await browser.pause(2500); // every redraw of the burst has landed
+		await expect(root.control({ css: '.dse-init__malice-value' })).toHaveElementProperty('textContent', 'Malice: 8');
+		expect(await noticeCount()).toBe(1);
+		expect(await focusState()).toEqual({ ctl: 'init.detail.stamina', surface: 'reading', ring: true });
+	});
+
+	it('[INIT-W10] Live Preview, a burst of five outside edits 30 ms apart (Sync): one Notice, and when it settles the rebuilt Stamina control holds focus', async () => {
+		await dse.openNote(SQUAD, { mode: 'live-preview' });
+		const root = dse.block(INIT);
+		const numeric = root.control('init.detail.stamina');
+		await dse.focusByScript(numeric);
+		await dse.press('Enter', numeric);
+		const modal = await dse.modal('minion-pool');
+		await dse.type(modal.control('pool.damage-amount'), '3', { replace: true });
+		await dse.click(modal.control('pool.apply-damage'));
+		await burst(SQUAD);
+		await expect(modal.root).not.toBeExisting();
+		await waitNotice();
+		await browser.pause(2500);
+		await expect(root.control({ css: '.dse-init__malice-value' })).toHaveElementProperty('textContent', 'Malice: 8');
+		expect(await noticeCount()).toBe(1);
+		expect(await focusState()).toEqual({ ctl: 'init.detail.stamina', surface: 'source', ring: true });
+	});
+
+	it('[INIT-W11] an outside edit that changes only what the tracker does not keep (a YAML comment) still closes the hero window with the Notice and returns focus', async () => {
+		await dse.openNote(TRACKER);
+		const root = dse.block(INIT);
+		const hero = root.control('init.hero.stamina');
+		await dse.tabTo(hero, TABS);
+		await dse.press('Enter', hero);
+		const modal = await dse.modal('stamina-edit');
+		await dse.type(modal.control('sedit.apply-amount'), '5', { replace: true });
+		await dse.externalEdit(TRACKER, `c.replace('malice:\\n  value: 3', 'malice:\\n  # synced from phone\\n  value: 3')`);
+		await expect(modal.root).not.toBeExisting();
+		await waitNotice();
+		expect(await noticeCount()).toBe(1);
+		expect(await focusState()).toEqual({ ctl: 'init.hero.stamina', surface: 'reading', ring: true });
+	});
+
+	it('[INIT-W12] two trackers, window on the second: an edit that inserts a new tracker between them and changes the second shows the Notice and does not move focus into the wrong tracker', async () => {
+		await dse.openNote(TWO);
+		const second = dse.block(INIT, 1);
+		const hero = second.control('init.hero.stamina');
+		await dse.tabTo(hero, 200);
+		await dse.press('Enter', hero);
+		const modal = await dse.modal('stamina-edit');
+		await dse.externalEdit(TWO, `c.replace('BETWEEN', ${JSON.stringify(NEWT)}).replace('value: 2', 'value: 7')`);
+		await expect(modal.root).not.toBeExisting();
+		await waitNotice();
+		await browser.pause(500);
+		expect(await noticeCount()).toBe(1);
+		expect(await focusState()).toMatchObject({ ctl: null, surface: 'body' });
+		expect(await dse.page<string[]>(`Array.from(document.querySelectorAll('.markdown-reading-view [data-dse-element="initiative"]')).map((r) => r.querySelector('[data-dse-control="init.hero.stamina"]')?.getAttribute('aria-label') ?? '')`)).toContain('Edit Stamina: Newt Inserted');
+		await dse.externalEdit(TWO, `c.replace(${JSON.stringify(NEWT)}, 'BETWEEN').replace('value: 7', 'value: 2')`); // the driver's integrity check wants the note as it was
+		await dse.settle();
+	});
 });
 
 describe('initiative: a window open in the pinned sidebar while an outside edit changes the note', () => {
@@ -205,5 +280,24 @@ describe('initiative: a window open in the pinned sidebar while an outside edit 
 		await browser.waitUntil(async () => (await dse.noteText(PINNED)).includes('minion_stamina_pool: 17'), { timeout: 5000, timeoutMsg: 'the Apply never reached the note' });
 		expect(await dse.noteText(PINNED)).toContain('BELOW and more'); // the outside edit survived
 		expect(await dse.page<string | null>(`document.querySelector('.dse-sidebar [data-dse-control="init.detail.stamina"]')?.textContent ?? null`)).toBe('17/20 (4)');
+	});
+	it('[INIT-W13] pinned sidebar, Conditions window: a condition added and, 50 ms later, an outside edit ELSEWHERE in the note: the window stays open and the condition reaches the note', async () => {
+		await pinSquad();
+		await dse.page(`(() => { document.querySelector('.dse-sidebar [data-dse-control="init.cond.add"]').focus({ focusVisible: true }); return true; })()`);
+		await browser.keys('Enter');
+		const modal = await dse.modal('conditions');
+		await dse.click(modal.control('cond.add'));
+		await dse.type(modal.control('cond.input'), 'dazed');
+		await dse.page(`(async () => {
+			document.querySelector('.modal-container [data-dse-control="cond.input"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+			await new Promise((r) => setTimeout(r, 50));
+			await app.vault.process(app.vault.getAbstractFileByPath(${JSON.stringify(PINNED)}), (c) => c.replace('BELOW', 'BELOW and more'));
+			return true;
+		})()`);
+		await browser.waitUntil(async () => /dazed/i.test(await dse.noteText(PINNED)), { timeout: 5000, timeoutMsg: 'the condition never reached the note' });
+		await expect(modal.root).toBeExisting();
+		expect(await noticeCount()).toBe(0);
+		expect(await dse.noteText(PINNED)).toContain('BELOW and more');
+		await dse.closeModals();
 	});
 });
