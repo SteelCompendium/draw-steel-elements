@@ -48,6 +48,15 @@ function cacheOf(text: string) {
 	});
 	return { headings, blocks };
 }
+/**
+ * SC-568: wait for the open-time note read (`rebaseCardPin`, one or two `cachedRead`s) to finish. The mock vault's `read` takes one
+ * `setTimeout(0)` hop each, so a fixed `setTimeout(25)` only worked while the host got every hop done inside 25 ms: on a starved
+ * host the 25 ms timer came due first and the test went on before the rebase had finished (red under CPU contention). Yielding a
+ * COUNT of macrotask hops does not depend on how long a hop takes: the read's hops and ours advance in step, and 10 is far more than the 2 it needs.
+ */
+const settleOpenRead = async (): Promise<void> => {
+	for (let hop = 0; hop < 10; hop++) await new Promise((resolve) => setTimeout(resolve, 0));
+};
 const values = (app: App): number[] => [...app.vault.getContent('Note.md')!.matchAll(/current_value: (\d+)/g)].map((m) => Number(m[1]));
 
 describe('SC-552: ReadingModeBlockHost pinned writes', () => {
@@ -675,7 +684,7 @@ describe('SC-556: a block edit form in a heading embed', () => {
 	test('an outside edit elsewhere in the source note (above and below the section) while the form is open: Save still lands in the embedded block', async () => {
 		const { app, host, full } = embedded(para(100, 'above'), para(100, 'below'));
 		const pin = host.pinPosition()!;
-		await new Promise((resolve) => setTimeout(resolve, 25)); // the open-time rebase (one cachedRead) is done before the outside edit
+		await settleOpenRead(); // the open-time rebase (one cachedRead) is done before the outside edit
 		const outside = full.replace('above 0', 'above 0, edited\nand a new line').replace('below 99', 'below 99, edited');
 		app.vault.setFile('Note.md', outside);
 
@@ -741,7 +750,7 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 		const full = ['# N', '', ...para(500, 'above'), '', ...SUB, '## After', '', ...para(500, 'below'), 'END'].join('\n');
 		const { app, host } = embedded(full, part(SUB, 2), 'Note#Tracker', bodyOf(5)); // Obsidian reports the section with value 5
 		host.notePersistIntent();
-		await new Promise((resolve) => setTimeout(resolve, 25)); // the open-time note read (one cachedRead) is done
+		await settleOpenRead(); // the open-time note read (one cachedRead) is done
 		expect(await host.replaceSource(bodyOf(6), { fromView: true })).toBe(true);
 		const pin = host.pinPosition()!;
 
@@ -959,7 +968,7 @@ describe('SC-556 r6: an embedded block\'s pin is rebased by the embed\'s link', 
 	// text finds the block. The form's pin is then the position of that very write, in the note as the write left it, and every outside edit since is
 	// judged by the usual pin rules (`mapLine`, the body check): it never searches the note for a body, so an identical block cannot be chosen.
 	describe('SC-584: a form opened right after the + on a card in a hover preview or an embed', () => {
-		const settle = () => new Promise((resolve) => setTimeout(resolve, 25)); // the open-time note read (one cachedRead) is done
+		const settle = settleOpenRead; // the open-time note read (one cachedRead) is done
 		/** The + on the card: the view's own write (a persist intent takes the card's pin, the debounced write follows it). */
 		async function plus(host: ReadingModeBlockHost, to = bodyOf(6)): Promise<boolean> {
 			host.notePersistIntent();
