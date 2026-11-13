@@ -189,7 +189,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *  by an edit still waiting out its 400 ms write (a condition added in the Conditions window). `raw` is the note's own text of the
 	 *  block when the host can tell (Reading view, Live Preview: `lastKnownBody`; the sidebar's cannot), `ser` the model's serialization of
 	 *  the same moment. Two views of one block that hold the same content saw the same disk. */
-	private disk: { raw: string | null; ser: string | null } = { raw: normalizeBlockText((this.cx.host as { lastKnownBody?: string | null }).lastKnownBody), ser: null };
+	private disk: { raw: string | null; ser: string | null } = { raw: normalizeBlockText((this.cx.host as { lastKnownBody?: string | null } | undefined)?.lastKnownBody), ser: null };
 
 	private diskContent(): string {
 		return this.disk.raw !== null ? `raw:${this.disk.raw}` : `ser:${this.disk.ser ?? serializeModel(this.model)}`;
