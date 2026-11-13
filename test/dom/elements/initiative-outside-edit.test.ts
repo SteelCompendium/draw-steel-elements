@@ -170,13 +170,38 @@ describe('SC-608: an outside edit redraws the tracker while a window is open (Re
 		openPool(old.root);
 		old.view.unload();
 		old.root.remove();
-		await later(5);
+		await later(45); // Live Preview's widget arrives 10-45 ms after the close (windowHandoff.ts); a literal, so a shortened TTL goes red
 		expect(modalEl()).toBeNull();
 		expect(document.activeElement).toBe(document.body); // nothing to hand it to yet
 		const fresh = await mount(SQUAD_EDITED, old.pane);
 		await later();
 		expect(notices()).toHaveLength(1);
 		expect(document.activeElement).toBe(ctl(fresh.root, 'init.detail.stamina'));
+	});
+
+	test('[O27] Live Preview order, the new widget arrives 2.9 s after the close: the watch is still waiting for it (Notice and focus)', async () => {
+		const old = await mount(SQUAD);
+		openPool(old.root);
+		old.view.unload();
+		old.root.remove();
+		await later(2900);
+		const fresh = await mount(SQUAD_EDITED, old.pane);
+		await later();
+		expect(notices()).toHaveLength(1);
+		expect(document.activeElement).toBe(ctl(fresh.root, 'init.detail.stamina'));
+	});
+
+	test('[O28] ...but one that arrives 3.1 s after the close finds the watch gone: no Notice, no focus', async () => {
+		const old = await mount(SQUAD);
+		openPool(old.root);
+		old.view.unload();
+		old.root.remove();
+		await later(3100);
+		const fresh = await mount(SQUAD_EDITED, old.pane);
+		await later();
+		expect(notices()).toHaveLength(0);
+		expect(document.activeElement).toBe(document.body);
+		expect(fresh.root.contains(document.activeElement)).toBe(false);
 	});
 
 	test('[O03] the Conditions window: focus lands on the rebuilt Add Condition button, the same hero\'s', async () => {
@@ -245,7 +270,7 @@ describe('SC-608: an outside edit redraws the tracker while a window is open (Re
 		item.click();
 		old.view.unload();
 		old.root.remove();
-		await later(5);
+		await later(45); // Live Preview's widget arrives 10-45 ms after the close (windowHandoff.ts); a literal, so a shortened TTL goes red
 		const fresh = await mount(TRACKER_EDITED, old.pane);
 		await later();
 		expect(document.activeElement).toBe(ctl(fresh.root, 'init.reset-encounter')); // not the root: the item exists by then
@@ -444,6 +469,7 @@ describe('SC-608: an outside edit redraws the tracker while a window is open (Re
 		await later();
 		expect(document.activeElement).toBe(ctl(current.root, 'init.detail.stamina'));
 		for (const value of [4, 5, 6]) {
+			await later(1400); // the next redraw of the burst comes about 1.4 s after the last one (the watch stays armed 1.5 s); a literal, so a shortened SETTLE goes red
 			const previous = current;
 			current = await mount(SQUAD_EDITED.replace('value: 9', `value: ${value}`), old.pane); // the next edit of the burst
 			previous.view.unload(); // discards the control that held focus
