@@ -159,6 +159,11 @@ const delLowerKeepMark = (edit: (l: string) => string) => (r: string[]) => [...r
 /** The UPPER counter deleted with the blank line under it: the same text as `delLowerKeepMark` (a line diff cannot tell them apart). */
 const delUpper = (edit: (l: string) => string) => (r: string[]) => [...r.slice(0, 4), ...r.slice(9)].map(edit);
 
+/** A UNIQUE counter (5) under `^p` below another one (9): the body the card was drawn from is not twinned in the note as drawn. */
+const UNIQ = ['# N', '', 'TOP', '', ...CTR(9), '', ...CTR(5), '^p', '', 'END'];
+/** An identical counter pasted right above the `^p` one (blank line between), TOP edited: the twin exists only in the note now. */
+const pasteAbove = (edit: (l: string) => string) => (r: string[]) => [...r.slice(0, 9), ...CTR(5), '', ...r.slice(9)].map(edit);
+
 describe('SC-621: a preview of part of a note never writes the other identical counter when the drawn-from one is deleted with a one-sided edit', () => {
 	let warn: jest.SpyInstance;
 	beforeEach(() => {
@@ -226,6 +231,69 @@ describe('SC-621: a preview of part of a note never writes the other identical c
 			const r = await round({ mount: LOW, link: 'Note#^p', shape: 'block embed RV', now: delUpper(topEdited), click: 'card' });
 			expect(r.now).toBe(delLowerKeepMark(topEdited)(LOW).join('\n'));
 			refused(r);
+		});
+	});
+
+	describe('the twin gate covers the note as it is now, not only the note as drawn', () => {
+		test.each([
+			['block hover', 'card'],
+			['block embed RV', 'form'],
+		] as Array<[Shape, Click]>)('%s, %s: an identical counter pasted right above the unique one the card was drawn from, TOP edited', async (shape, click) => {
+			// as drawn the body is unique (the other counter holds 9), so only the note now has a twin: the pasted copy and the original read the same, and a placement that
+			// keeps the original is no more likely than one that keeps the copy
+			const r = await round({ mount: UNIQ, link: 'Note#^p', shape, now: pasteAbove(topEdited), click });
+			expect(values(r.now)).toEqual([9, 5, 5]);
+			refused(r);
+		});
+		test('block hover, card: the same paste with nothing else edited is not a tie for the line maps (TOP kept): refused as at base', async () => {
+			refused(await round({ mount: UNIQ, link: 'Note#^p', shape: 'block hover', now: pasteAbove((l) => l), click: 'card' }));
+		});
+	});
+
+	describe('persistence: nothing is written and the refusal repeats until the preview or embed is reopened', () => {
+		/** A card of `shape` for `link` drawn from `mount`; the note becomes `now` from outside; two clicks on that same card; then a preview reopened on the note now. */
+		async function twoClicksThenReopen(mount: string[], link: string, shape: Shape, now: string[]) {
+			const app = new App();
+			app.vault.setFile('Note.md', mount.join('\n'));
+			let cacheLines = mount;
+			jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheOf(cacheLines) as never);
+			const open = (lines: string[]) => {
+				const section: Section = { current: partOf(lines, link, shape) };
+				const el = shape.endsWith('hover') ? popoverEl(app, `Note#${link.split('#')[1]}`, lines.join('\n')) : embedEl(link, false);
+				const host = new ReadingModeBlockHost(new Plugin(app) as never, el, ctxOf(section), 'ds-counter');
+				host.setMountedBody(bodyOf(5));
+				return { el, host };
+			};
+			const first = open(mount);
+			await settle();
+			app.vault.setFile('Note.md', now.join('\n'));
+			cacheLines = now;
+			const click = async (host: ReadingModeBlockHost) => {
+				Notice.notices.length = 0;
+				resetDroppedWriteNotices(); // the Notice is rate limited to one per note per 5 s; this asks for each click's own
+				host.notePersistIntent();
+				await settle();
+				await host.replaceSource(bodyOf(6), { fromView: true });
+				return { after: app.vault.getContent('Note.md')!, notices: Notice.notices.slice() };
+			};
+			const c1 = await click(first.host);
+			const c2 = await click(first.host);
+			first.el.closest('.hover-popover')?.remove();
+			const reopened = open(now);
+			await settle();
+			const c3 = await click(reopened.host);
+			reopened.el.closest('.hover-popover')?.remove();
+			return { now: now.join('\n'), c1, c2, c3 };
+		}
+		test.each([
+			['heading hover', 'Note#Tracker', NAMED, delTrackerRenameOther(endEdited)],
+			['block embed RV', 'Note#^p', LOW, delLowerKeepMark(topEdited)],
+		] as Array<[Shape, string, string[], (r: string[]) => string[]]>)('%s: refused (one Notice, nothing written), refused again on a second click of the same card, saved from a reopened preview', async (shape, link, mount, edit) => {
+			const r = await twoClicksThenReopen(mount, link, shape, edit(mount));
+			expect(r.c1).toEqual({ after: r.now, notices: dropped });
+			expect(r.c2).toEqual({ after: r.now, notices: dropped });
+			expect(values(r.c3.after)).toEqual(values(r.now).map((v, i) => (i === 0 ? 6 : v))); // the counter the reopened preview names is written
+			expect(r.c3.notices).toEqual([]);
 		});
 	});
 
