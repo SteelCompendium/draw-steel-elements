@@ -225,7 +225,8 @@ describe('D4 §4 — DseSettingTab', () => {
 		await flushAsync(2);
 		expect(prefs.get('sbDensity')).toBe('comfortable');
 		expect(plugin.settings.prefs).toEqual({}); // OD-D4-4: default ⇒ deleted from disk shape
-		// SC-160: an explicit timeout, not a default 5 s one. This case (and "Reset all"
+		// SC-160: this case needed a longer timeout than jest's old 5 s default (it had an explicit 20 s one;
+		// SC-568 raised the default for every test to 30 s, so the explicit value is gone). This case (and "Reset all"
 		// below) does the most expensive thing in the suite — renderAll() mounts every
 		// page's live preview, then a reset writes EVERY descriptor and re-renders them
 		// all. It runs in ~1 s alone and comfortably under 5 s on an idle machine, but
@@ -234,7 +235,7 @@ describe('D4 §4 — DseSettingTab', () => {
 		// just the straw. Raising the ceiling for the two heaviest cases is the honest
 		// fix — the alternative is a gate that reads red for reasons unrelated to the
 		// code under test, which trains people to skim it.
-	}, 20000);
+	});
 
 	test('"Reset all preferences" returns every pref, across groups, to its default', async () => {
 		const plugin = await makeLoadedPlugin();
@@ -249,8 +250,8 @@ describe('D4 §4 — DseSettingTab', () => {
 		await flushAsync(2);
 		expect(prefs.get('printPreview')).toBe('off');
 		expect(prefs.get('reduceMotion')).toBe(false);
-		// SC-160: same reasoning as the per-section reset above.
-	}, 20000);
+		// SC-160 / SC-568: same reasoning as the per-section reset above (default timeout, now 30 s).
+	});
 
 	test('the D3 temporary commands are gone from onload', async () => {
 		const plugin = await makeLoadedPlugin();

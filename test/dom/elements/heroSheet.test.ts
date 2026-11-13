@@ -315,7 +315,7 @@ describe('D7 Task 9: ability roll bridge (recon delta 1) — expand, roll, react
 
 		await new Promise((resolve) => setTimeout(resolve, PERSIST_DEBOUNCE_MS + 50));
 		expect(host.replaceSource).not.toHaveBeenCalled();
-	}, 10000);
+	});
 });
 
 describe('FOLLOWUPS #28 LOW: sheet-level roll-disabled fallback (Task 9 coverage gap)', () => {
