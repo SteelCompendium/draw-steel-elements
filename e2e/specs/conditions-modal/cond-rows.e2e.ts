@@ -2,7 +2,7 @@
 // button (removes that row at once). Opening or closing an editor writes nothing; a removal writes once and leaves focus
 // on the row that took its slot, never on <body>. Initiative/conditions.md: hero Bleeding, Dazed, Hexed, Slowed;
 // Ogre #1 Grabbed, Prone.
-import { expect } from '@wdio/globals';
+import { browser, expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
 import { CONDITIONS, INIT, focusedOption, modalNames, modalRows, openConditionsModal, openFrom, trackerIcons } from '../../driver/conditions';
 
@@ -41,6 +41,12 @@ describe('conditions-modal: the row cog', () => {
 		});
 	});
 });
+
+/** Shift+Tab: wdio keeps a modifier pressed until it is sent again. */
+async function shiftTab(): Promise<void> {
+	await browser.keys(['Shift', 'Tab']);
+	await browser.keys('Shift');
+}
 
 describe('conditions-modal: removing a condition', () => {
 	it('[COND-R03] the trash button removes exactly its row: one write, the other rows and their settings stay, focus moves to the cog of the row that took its slot', async () => {
@@ -97,6 +103,27 @@ describe('conditions-modal: removing a condition', () => {
 		// `bleeding` was written as a plain name and stays one; the objects the user wrote stay objects
 		const hero = ((await dse.expectNoteBlock(CONDITIONS, INIT).value()) as { heroes: Array<{ conditions: unknown[] }> }).heroes[0];
 		expect(hero.conditions).toEqual(['bleeding', { key: 'dazed', duration: 'eot', color: '#c0392b', effect: 'glow' }, { key: 'slowed', effect: 'save ends' }]);
+		await dse.closeModals();
+	});
+	it('[COND-R07] Shift+Tab from the open Add search to the last remaining trash button and Enter removes it: the search stays open, keeps its text and has focus (not the page body)', async () => {
+		const { modal } = await openConditionsModal(CONDITIONS, 'creature');
+		await dse.waitForWrite(CONDITIONS, () => dse.click(modal.control('cond.remove', { nth: 1 }))); // Prone: Grabbed is left
+		await dse.click(modal.control('cond.add'));
+		await dse.type(modal.control('cond.input'), 'da');
+		await shiftTab();
+		const trash = modal.control('cond.remove');
+		await expect(trash).toBeFocused();
+		await expect(modal.control('cond.input')).toBeDisplayed(); // the search stays open while focus is on the trash button
+		const w = await dse.waitForWrite(CONDITIONS, () => dse.press('Enter', trash));
+		expect(w.count).toBe(1);
+		expect(await modalNames()).toEqual([]);
+		await dse.expectNoteBlock(CONDITIONS, INIT).toMatchObject({
+			enemy_groups: [{ creatures: [{ instances: [{ id: 1, conditions: [] }, { id: 2 }] }] }],
+		});
+		await expect(modal.control('cond.input')).toBeFocused();
+		expect(await focusedOption()).toEqual({ ctl: 'cond.input', label: 'Add condition' }); // inside the window, not <body>
+		await expect(modal.control('cond.input')).toHaveValue('da');
+		await expect(modal.control('cond.add')).not.toBeExisting();
 		await dse.closeModals();
 	});
 });
