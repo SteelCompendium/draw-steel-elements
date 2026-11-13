@@ -77,6 +77,10 @@ let focusCalls: Array<{ el: HTMLElement; opts: unknown }>;
 let pinToSidebar: jest.SpyInstance;
 
 beforeEach(() => {
+	// SC-568: a request's windows (`REQUEST_TTL_MS` 5 s, `SETTLE_MS` 1.5 s, `AFTER_RETURN_MS` 3 s in focusHandoff.ts) are read off
+	// `Date.now()`. On a loaded host a plain test spent more than 1.5 s between the pin and the rebuild it asserts on and the request
+	// had lapsed (SC-505 r3 LOW-A, SC-556). The clock is frozen for every test here, so a window closes only when a test advances it.
+	jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
 	focusCalls = [];
 	const realFocus = HTMLElement.prototype.focus;
 	jest.spyOn(HTMLElement.prototype, 'focus').mockImplementation(function (this: HTMLElement, opts?: FocusOptions) {
