@@ -214,7 +214,7 @@ describe('SC-509: sidebar -- a form Save from the panel\'s pencil reaches the pa
 		return { app, services };
 	}
 
-	async function waitUntil(cond: () => boolean, what: string, capMs = 5000): Promise<void> {
+	async function waitUntil(cond: () => boolean, what: string, capMs = 25000): Promise<void> { // SC-568: below jest's 30 s per-test limit, so this message still wins
 		const t0 = Date.now();
 		while (!cond()) {
 			if (Date.now() - t0 > capMs) throw new Error(`timed out after ${capMs}ms waiting for ${what}`);

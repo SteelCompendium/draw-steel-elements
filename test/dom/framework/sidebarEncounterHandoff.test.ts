@@ -499,7 +499,7 @@ describe('SC-153: "Open in sidebar" is idempotent', () => {
 		// loses - SC-377 R1F, review INFO-1).
 		const t0 = Date.now();
 		while (!writes.some((w) => /_dse_anchor:/.test(w))) {
-			if (Date.now() - t0 > 5000) throw new Error('timed out waiting for the minted anchor to be persisted');
+			if (Date.now() - t0 > 25000) throw new Error('timed out waiting for the minted anchor to be persisted'); // SC-568: 25 s, below jest's 30 s limit
 			await new Promise((resolve) => setTimeout(resolve, 10));
 		}
 

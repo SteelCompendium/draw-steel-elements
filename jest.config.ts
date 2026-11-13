@@ -52,7 +52,9 @@ const config: Config = {
 	// SC-568: jest's default per-test timeout is 5 s, which on a loaded build host (several agents running
 	// batteries at 1-min load 17-57) failed ordinary async tests that finish in 1-3 s alone (twin-reuse,
 	// initiative-default-keys, settings-tab, ...). Raised to 30 s as a HANG detector, not a perf gate: ~6x
-	// headroom. `testTimeout` is a GLOBAL jest option (jest-circus reads it from globalConfig; inside a
+	// headroom over the time a test takes alone, about 2x over the slowest async test under the 1-core repro
+	// (`taskset -c 0 npx jest -w 11`: twin-reuse ~16 s). Hand-written `waitUntil` caps in tests stay below it (25 s).
+	// `testTimeout` is a GLOBAL jest option (jest-circus reads it from globalConfig; inside a
 	// `projects` entry it is ignored), so this one top-level value covers BOTH the `unit` and the `dom` project.
 	testTimeout: 30000,
 	projects: [
