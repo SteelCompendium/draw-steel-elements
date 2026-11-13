@@ -1049,6 +1049,17 @@ export class ReadingModeBlockHost implements BlockHost {
 					const language = this.knownLanguage ?? this.alias;
 					if (known === null || countByBody(from.text, language, known) !== 1 || countByBody(whole, language, known) !== 1) return;
 				} else if (typeof at === 'string' || at.line !== linkLine) return; // deleted, a tie between identical blocks, or the link names another block: refused
+				else {
+					// SC-621: the two maps agree whenever every change is on ONE side of a run of identical blocks (both trim that side last), so their
+					// agreement does not rule out the tie: with the block the card was drawn from twinned (in the note it was drawn from, or now), the
+					// placement must also be the unique cheapest one (SC-612's rule, `placedUniquely`), exactly as a whole-note pin at write time.
+					// Accepted, in plain words: (a) a refusal here repeats on every click of a preview or embed that is not redrawn, until it is reopened
+					// (the same as SC-607's refusals for a part that did not change); (b) two residuals stay written, as before, because no rule over the
+					// text can see them: R1, a move among text-identical blocks; R2, the drawn-from section deleted while a neighbour is renamed to its name
+					// (the cheapest reading keeps the drawn-from counter).
+					const drawnPin = { text: from.text, lineStart: from.line };
+					if (this.twinned(whole, drawnPin) && !this.placedUniquely(whole, drawnPin, at.line)) return;
+				}
 				pin.text = whole;
 				pin.lineStart = linkLine;
 				partialPins.delete(pin);
