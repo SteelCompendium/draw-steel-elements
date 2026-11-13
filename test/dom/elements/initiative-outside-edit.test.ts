@@ -109,7 +109,11 @@ const ctl = <T extends HTMLElement = HTMLElement>(root: Element, id: string, n =
 };
 const modalEl = (): HTMLElement | null => document.querySelector('.dse-modal');
 const focused = (): string | null => document.activeElement?.closest('[data-dse-control]')?.getAttribute('data-dse-control') ?? null;
-const later = (ms = 30): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+/** SC-568: time passes on the FAKE clock (see the `beforeEach`), so the tests no longer depend on how long a slow host takes to get
+ *  from one step to the next: `windowHandoff.ts`'s TTL (3 s) and SETTLE (1.5 s) windows close only when a test says time has passed. */
+const later = async (ms = 30): Promise<void> => {
+	await jest.advanceTimersByTimeAsync(ms);
+};
 const notices = (): string[] => Notice.notices.filter((n) => n === NOTICE);
 
 /** Open the pool window from the keyboard-focused detail row Stamina control (what a keyboard user does). */
@@ -123,6 +127,7 @@ function openPool(root: HTMLElement): HTMLElement {
 
 let closeOriginal: () => void = () => undefined;
 beforeEach(() => {
+	jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
 	Notice.notices.length = 0;
 	// Real Obsidian hands focus back to the control that held it when a modal opened, synchronously inside `close()`, and only while
 	// that control is still in the document. The shared Modal mock does not, so the two ends of it are stood in for.
@@ -142,6 +147,7 @@ beforeEach(() => {
 });
 afterEach(() => {
 	jest.restoreAllMocks();
+	jest.useRealTimers();
 	document.body.innerHTML = '';
 });
 
