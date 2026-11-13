@@ -51,7 +51,7 @@ export default surface('initiative', {
 
 		// -- C. A condition icon on a hero or creature row: a click removes it. (Adding one opens ConditionsModal, whose
 		//    reach row `init.cond.add` is in manifest/conditions-modal.ts.)
-		'init.cond.remove': c(['click'], ['C01']),
+		'init.cond.remove': c(['click'], ['C01', 'F15', 'F16']),
 
 		// -- K. The captain badge on the open creature's name line: "Make captain" (promote) or "Captain" (relieve).
 		'init.captain.make': c(['click', 'press:Enter'], ['K01', 'F04']),
