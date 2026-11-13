@@ -205,12 +205,12 @@
 // embed; (d) block hover, `^id` markers swapped; (e2) a block hover's Edit form kept open by a second pane, the upper of two adjacent identical blocks deleted, Save; (e3) a heading hover's form opened AFTER the swap (the metadata cache caught up), Save; and a
 // control without an outside edit whose real + is saved. A scripted click is used where the card must be the OLD one (the cache has caught up, the preview is still the old part), as in G-S92 / G-S96. One note per cell (a card Notice is rate limited per note).
 //
-// SC-612 appends G-S108 (62 scenarios in all; it sits after G-S99 and before G-S56, and runs ALONE in a seventh `--only` part, about 60 s with the build and the start-up): a note open in its OWN pane (a whole-note pin, no embed, no hover)
+// SC-612 appends G-S108 (62 scenarios in all; it sits after G-S99 and before G-S56, and runs ALONE in a seventh `--only` part, about 75 s with the build and the start-up): a note open in its OWN pane (a whole-note pin, no embed, no hover)
 // with two identical counters separated only by a blank line. One of them is deleted from outside (Sync, another app) while the Edit form is open / inside the + click's 400 ms round: the note that is left reads the same whichever one was
 // deleted, so the line map's guess must not place the write. It used to be written into the surviving counter with no Notice (the upper deleted; the lower deleted together with TOP edited). Now nothing is written, exactly one "changed on disk first"
 // Notice, the outside edit is kept, and the form stays open. Cells (one note each): (a) form on the upper twin, the upper deleted, Reading view; (b) the same in Live Preview; (c) card + on the upper twin, the upper deleted inside the round, RV; (d) LP;
-// (e) form on the lower twin, the lower deleted and TOP edited in the same write, RV; (f) card, the same, LP; (g) the cost: an identical counter added right below the form's block: refused, then Cancel, reopen, Save lands (RV). Controls: (h) a form with
-// no outside edit (RV); (i) a card + with none (LP); (j) + twice on one card, the second after the first write (RV); (k) a sibling twin's + and then this card's + inside the sibling's round (LP). Red at 63e00d7e: (a)-(g); (h)-(k) are green there too.
+// (e) form on the lower twin, the lower deleted and TOP edited in the same write, RV; (f) card, the same, LP; (g) the cost: an identical counter added right below the form's block: refused, then Cancel, reopen, Save lands (RV); (l)-(o) as (e) / (f) with a counter of ANOTHER value below the twins (three cards): form RV / LP, + RV / LP (the review's H1). Controls: (h) a form with
+// no outside edit (RV); (i) a card + with none (LP); (j) + twice on one card, the second after the first write (RV); (k) a sibling twin's + and then this card's + inside the sibling's round (LP). Red at the c0995beb bundle: (a)-(g) and (l)-(o); (h)-(k) are green there too.
 //
 // SC-480 appends G-S73 (53 scenarios before G-S77; it sits after G-S49 and before G-S56, which stays last, and runs in the fifth `--only` part with G-S59 and G-S49): a card write whose pin
 // cannot be placed because its block was DELETED from outside is never written into an identical twin. Click + on one of two identical counters (Reading view and Live Preview),
@@ -685,6 +685,10 @@ Object.assign(FIXTURES, {
 	// SC-612 (G-S108): one note per cell, a note open in its OWN pane (no embed, no hover): two identical counters separated only by a blank line, TOP / BOTTOM prose around them.
 	for (const id of ['a-rv', 'b-lp', 'c-rv', 'd-lp', 'e-rv', 'f-lp', 'g-rv', 'h-rv', 'i-lp', 'j-rv', 'k-lp']) {
 		FIXTURES[`Lifecycle/gs108-${id}.md`] = `# gs108 ${id}\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\n${COUNTER(5, 'Twin')}\n\nBOTTOM\n`;
+	}
+	// the same with a counter of ANOTHER value below the twins (three cards): a line-level fence pairing read it as the pinned block (SC-612 review, H1)
+	for (const id of ['l-rv', 'm-lp', 'n-rv', 'o-lp']) {
+		FIXTURES[`Lifecycle/gs108-${id}.md`] = `# gs108 ${id}\n\nTOP\n\n${COUNTER(5, 'Twin')}\n\n${COUNTER(5, 'Twin')}\n\n${COUNTER(9, 'Other')}\n\nBOTTOM\n`;
 	}
 	Object.assign(FIXTURES, {
 		'Lifecycle/gs77-cal-src.md': `# gs77 cal src\n\n${CAL2()}\n\n^gs77cal\n\nend\n`,
@@ -8663,6 +8667,10 @@ const SCENARIOS = [
 				['i-lp', 'lp', 'card', 0, null, 'control (i): + with no outside edit, Live Preview'],
 				['j-rv', 'rv', 'card-twice', 0, null, 'control (j): + twice on one card, Reading view'],
 				['k-lp', 'lp', 'sibling', 0, null, "control (k): a sibling twin's + then this card's + inside the sibling's round, Live Preview"],
+				['l-rv', 'rv', 'form', 1, 'del1top', '(l) form on the lower twin, the lower deleted and TOP edited, a counter of another value below the twins, Reading view'],
+				['m-lp', 'lp', 'form', 1, 'del1top', '(m) the same, Live Preview'],
+				['n-rv', 'rv', 'card', 1, 'del1top', '(n) + on the lower twin, the lower deleted and TOP edited, a counter of another value below the twins, Reading view'],
+				['o-lp', 'lp', 'card', 1, 'del1top', '(o) the same, Live Preview'],
 			];
 			const files = cells.map(([id]) => `Lifecycle/gs108-${id}.md`);
 			const A = 'window.__gs64.A';
@@ -8712,16 +8720,17 @@ const SCENARIOS = [
 						await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: 'Lifecycle/other.md', mode: 'preview' }, active: true }); })()`);
 						await t.ev(`(async () => { await (${A}).setViewState({ type: 'markdown', state: { file: ${J(rel)}, ...${J(stOf(mode))} }, active: true }); })()`);
 						await t.waitFor(`(${A}).view?.file?.path === ${J(rel)}`, `${label}: opened`);
+						const cardCount = (FIXTURES[rel].match(/^```ds-counter$/gm) ?? []).length;
 						if (mode === 'lp') {
 							await t.ev(`(${A}).view.editor.setCursor({ line: 0, ch: 0 })`);
 							// Live Preview draws only the blocks near the viewport: bring each block into view once (SC-543).
-							for (let b = 0; b < 2; b++) {
+							for (let b = 0; b < cardCount; b++) {
 								await t.ev(`(() => { const L = ${A}; const cm = L.view.editor.cm; const fl = window.__gs64.fences(cm); const pos = cm.state.doc.line(fl[${b}] + 1).from; L.view.editor.scrollIntoView({ from: L.view.editor.offsetToPos(pos), to: L.view.editor.offsetToPos(pos) }, true); return true; })()`);
 								await t.waitFor(`window.__gs64.cardsRaw(${A}).some((c) => c.block === ${b})`, `${label}: block ${b} is drawn`);
 							}
 							await t.ev(`(${A}).view.editor.setCursor({ line: 0, ch: 0 })`);
 						}
-						await t.waitFor(`window.__gs64.cards(${A}).length === 2`, `${label}: both cards are drawn`);
+						await t.waitFor(`window.__gs64.cards(${A}).length === ${cardCount}`, `${label}: all ${cardCount} cards are drawn`);
 						await t.sleep(500);
 						const before = t.read(rel);
 						t.expect(before === FIXTURES[rel], `${label}: the note is not the fixture: ${J(before)}`);
