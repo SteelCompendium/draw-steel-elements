@@ -13,11 +13,11 @@ import { isConditionColor } from './conditionColor';
  * it can never disagree with `isConditionColor`). Alpha is dropped, since the native input has none. `undefined` for
  * anything that does not resolve to a plain rgb triple (an unparseable string, or `inherit`, which stays itself).
  */
-export function conditionColorHex(color: string | undefined, doc: Document = document): string | undefined {
+export function conditionColorHex(color: string | undefined, doc: Document): string | undefined {
 	if (!isConditionColor(color) || !doc.body || !doc.defaultView) return undefined;
 	const probe = doc.body.appendChild(doc.createElement('span'));
 	try {
-		probe.style.display = 'none';
+		probe.hidden = true;
 		probe.style.color = color;
 		const rgb = /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/.exec(doc.defaultView.getComputedStyle(probe).color);
 		if (!rgb) return undefined;

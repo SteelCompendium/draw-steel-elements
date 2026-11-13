@@ -1140,4 +1140,3 @@ describe('SC-436 matrix: fixed bugs (SC-581, SC-585, SC-586)', () => {
 		expect(pressedIn(o.container, 'Condition icon')).toEqual(['Use default condition icon']);
 	});
 });
-});
