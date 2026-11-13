@@ -1005,16 +1005,197 @@ describe('SC-580: a printable key in the window opens the Add search with that k
 		expect(addButton(o.container)).toBeTruthy();
 	});
 
-	test('the listener lives on the window\'s own element and dies with it: after close a key is no longer routed, and nothing is on the document', () => {
-		const docAdd = jest.spyOn(document, 'addEventListener');
+	test('the in-window listener lives on the window\'s own element and dies with it: after close a key is no longer routed (the page-level listener of SC-613 is pinned in its own block below)', () => {
 		const o = open([]);
-		expect(docAdd.mock.calls.filter(([type]) => type === 'keydown')).toEqual([]);
-		docAdd.mockRestore();
 		const btn = addButton(o.container);
 		o.modal.close();
 		document.body.appendChild(o.container);
 		keydown(btn, 'd');
 		expect(searchInput(o.container)).toBeNull();
+	});
+});
+
+// SC-613: a click on the window's title or on empty space moves focus to <body>, outside the window's own element, so the SC-580
+// listener never saw the next letter. A second listener on the window's document takes keys whose target is the page itself. jsdom has
+// no focus-on-click, so a click is its events plus the blur the browser performs; that a REAL click and real typing reach it is e2e COND-N12/N13.
+describe('SC-613: a printable key after a click on the title or on empty space (focus on <body>) opens the Add search', () => {
+	/** What a real click on a non-focusable spot does: the pointer events, and focus falls to <body>. */
+	const clickAway = (el: Element): void => {
+		for (const type of ['mousedown', 'mouseup', 'click']) el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }));
+		(document.activeElement as HTMLElement | null)?.blur();
+		expect(document.activeElement).toBe(document.body);
+	};
+	const title = (c: HTMLElement): HTMLElement => qs(c, '.dse-modal__title');
+	const blank = (c: HTMLElement): HTMLElement => qs(c, '.dse-condal__list'); // the list's own surface, not a control
+
+	test.each([
+		['the window\'s title', title],
+		['an empty part of the window', blank],
+	])('after a click on %s, a letter opens the search with that letter typed, focuses the input and is swallowed', (_name, spot) => {
+		const o = open([]);
+		addButton(o.container).focus();
+		clickAway(spot(o.container));
+		const evt = keydown(document.body, 'd');
+		const input = searchInput(o.container)!;
+		expect(input.value).toBe('d');
+		expect(document.activeElement).toBe(input);
+		expect(evt.defaultPrevented).toBe(true);
+		expect(menuItems(o.container).map((i) => i.textContent)).toEqual(expect.arrayContaining(['Dazed']));
+		expect(o.onChange).not.toHaveBeenCalled();
+	});
+
+	test('the same through <html> (a target of documentElement), and with the key typed fast: "daz" ends as "daz" in the input, not routed twice', () => {
+		const o = open([]);
+		clickAway(title(o.container));
+		keydown(document.documentElement, 'd');
+		const input = searchInput(o.container)!;
+		for (const k of ['a', 'z']) {
+			expect(keydown(input, k).defaultPrevented).toBe(false); // focus is in the input now: the browser types these
+			input.value += k;
+			input.dispatchEvent(new Event('input'));
+		}
+		expect(input.value).toBe('daz');
+		expect(menuItems(o.container).map((i) => i.textContent)).toEqual(['Dazed', 'Add custom: "daz"']);
+	});
+
+	test('with the search already open and focus on <body>, the letter goes to the end of what was typed', () => {
+		const o = open([]);
+		const input = openAdd(o.container);
+		typeQuery(input, 'da');
+		input.blur(); // (not a click: a click away from the add control would close it, SC-474)
+		expect(document.activeElement).toBe(document.body);
+		keydown(document.body, 'z');
+		expect(searchInput(o.container)!.value).toBe('daz');
+		expect(document.activeElement).toBe(searchInput(o.container));
+	});
+
+	test('Escape on a search a body key opened lands on "+ Add condition" (there was no control to give focus back to), not on <body>', () => {
+		const o = open([]);
+		attachObsidianKeymap(o.modal as any);
+		clickAway(title(o.container));
+		keydown(document.body, 'd');
+		expect(searchInput(o.container)).not.toBeNull();
+		const onClose = jest.spyOn(o.modal, 'onClose');
+		pressEscape(searchInput(o.container)!);
+		expect(searchInput(o.container)).toBeNull();
+		expect(document.activeElement).toBe(addButton(o.container));
+		expect(onClose).not.toHaveBeenCalled(); // the search first, the window second (SC-431)
+	});
+
+	test('a modal stacked above this one keeps its keys: a body key does nothing for the Conditions window; one stacked BELOW does not matter', () => {
+		const o = open([]);
+		const below = document.createElement('div');
+		below.className = 'modal-container';
+		document.body.insertBefore(below, o.container);
+		clickAway(title(o.container));
+		keydown(document.body, 'd');
+		expect(searchInput(o.container)!.value).toBe('d'); // this window is the top one: routed
+		o.modal.close();
+		const p = open([]);
+		const above = document.body.appendChild(document.createElement('div'));
+		above.className = 'modal-container';
+		clickAway(title(p.container));
+		const evt = keydown(document.body, 'd');
+		expect(searchInput(p.container)).toBeNull();
+		expect(addButton(p.container)).toBeTruthy();
+		expect(evt.defaultPrevented).toBe(false);
+	});
+
+	test.each([
+		['Ctrl+d', 'd', { ctrlKey: true }],
+		['Meta+d', 'd', { metaKey: true }],
+		['Alt+d', 'd', { altKey: true }],
+		['Space', ' ', {}],
+		['Enter', 'Enter', {}],
+		['Escape', 'Escape', {}],
+		['an arrow', 'ArrowDown', {}],
+		['an IME composition key', 'd', { isComposing: true }],
+	])('%s on <body> is not typing: nothing opens, the key is left alone', (_name, key, init) => {
+		const o = open([]);
+		clickAway(title(o.container));
+		const evt = keydown(document.body, key, init);
+		expect(searchInput(o.container)).toBeNull();
+		expect(evt.defaultPrevented).toBe(false);
+	});
+
+	test('a key something else already handled (defaultPrevented before it reaches the document) is left alone', () => {
+		const o = open([]);
+		clickAway(title(o.container));
+		const handle = (e: Event): void => e.preventDefault();
+		window.addEventListener('keydown', handle, true); // as Obsidian's keymap does for a key a hotkey took
+		try {
+			keydown(document.body, 'd');
+		} finally {
+			window.removeEventListener('keydown', handle, true);
+		}
+		expect(searchInput(o.container)).toBeNull();
+	});
+
+	test('a key from anywhere that is not the page itself is not this listener\'s: a control OUTSIDE the window (another pane) is left alone', () => {
+		const o = open([]);
+		const elsewhere = document.body.appendChild(document.createElement('button'));
+		elsewhere.focus();
+		keydown(elsewhere, 'd');
+		expect(searchInput(o.container)).toBeNull();
+	});
+
+	test('a menu or suggestion popover Obsidian has open over the page keeps its keys', () => {
+		for (const cls of ['menu', 'suggestion-container']) {
+			const o = open([]);
+			const popover = document.body.appendChild(document.createElement('div'));
+			popover.className = cls;
+			clickAway(title(o.container));
+			const evt = keydown(document.body, 'd');
+			expect(searchInput(o.container)).toBeNull();
+			expect(evt.defaultPrevented).toBe(false);
+			popover.remove();
+			keydown(document.body, 'd'); // gone: routed again
+			expect(searchInput(o.container)!.value).toBe('d');
+			o.modal.close();
+		}
+	});
+
+	test('no double routing: a key with focus inside the window reaches the page listener too, but is typed exactly once', () => {
+		const o = open([]);
+		addButton(o.container).focus();
+		const evt = keydown(addButton(o.container), 'd');
+		expect(searchInput(o.container)!.value).toBe('d');
+		expect(evt.defaultPrevented).toBe(true);
+		const route = jest.spyOn(ConditionsModal.prototype as any, 'typeToSearch');
+		keydown(qs(o.container, '.dse-condal__list'), 'x'); // a non-control inside the window: the window's own listener, once
+		expect(route).toHaveBeenCalledTimes(1);
+		route.mockRestore();
+		expect(searchInput(o.container)!.value).toBe('dx');
+	});
+
+	test('the listener is on the document, registered through the window\'s lifecycle: removed on close, after which a body key is not routed and nothing leaks', () => {
+		const added: Array<[string, EventListenerOrEventListenerObject]> = [];
+		const removed: Array<[string, EventListenerOrEventListenerObject]> = [];
+		const add = jest.spyOn(document, 'addEventListener').mockImplementation(function (this: Document, type: string, fn: any, opts?: any) {
+			if (type === 'keydown') added.push([type, fn]);
+			return EventTarget.prototype.addEventListener.call(this, type, fn, opts);
+		});
+		const rem = jest.spyOn(document, 'removeEventListener').mockImplementation(function (this: Document, type: string, fn: any, opts?: any) {
+			if (type === 'keydown') removed.push([type, fn]);
+			return EventTarget.prototype.removeEventListener.call(this, type, fn, opts);
+		});
+		try {
+			const o = open([]);
+			expect(added).toHaveLength(1);
+			expect(removed).toHaveLength(0);
+			const route = jest.spyOn(ConditionsModal.prototype as any, 'typeToSearch');
+			o.modal.close();
+			expect(removed).toEqual(added); // the very function that was added
+			document.body.appendChild(o.container); // put the window back so only the listener could route
+			keydown(document.body, 'd');
+			expect(route).not.toHaveBeenCalled();
+			expect(searchInput(o.container)).toBeNull();
+			expect(o.onChange).not.toHaveBeenCalled();
+			route.mockRestore();
+		} finally {
+			add.mockRestore();
+			rem.mockRestore();
+		}
 	});
 });
 
