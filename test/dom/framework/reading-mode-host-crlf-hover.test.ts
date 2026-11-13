@@ -41,7 +41,7 @@ function cacheOf(text: string) {
 		if (l.trim() !== '') last = i;
 		if (/^```/.test(l)) fenced = !fenced;
 		const h = !fenced && /^(#{1,6})\s+(.*)$/.exec(l);
-		if (h) headings.push({ heading: h[2], level: h[1].length, position: { start: P(i, 0), end: P(i, l.length) } });
+		if (h) headings.push({ heading: h[2].trim(), level: h[1].length, position: { start: P(i, 0), end: P(i, l.length) } });
 		const id = /^\^(\w+)$/.exec(l);
 		if (id) {
 			let s = i - 1;
@@ -268,6 +268,16 @@ describe('SC-619: a hover preview of a heading of a note saved with Windows line
 		expect(await host.replaceSource(bodyOf(7), { fromView: true })).toBe(true);
 		expect(app.vault.getContent('Note.md')).toBe(join(edited(TWIN(), fenceUnder(TWIN(), '## Tracker'), 7), '\r\n'));
 		expect(Notice.notices).toEqual([]);
+	});
+
+	test('SC-619: a heading with trailing spaces (its content end includes them): saved into the hovered counter, in a CRLF note as in the LF note', async () => {
+		const note = TWIN().map((l) => (l === '## Tracker' ? '## Tracker  ' : l));
+		for (const eol of ['\n', '\r\n'] as Eol[]) {
+			const r = await run({ eol, drawn: note, link: 'Note#Tracker', heading: '## Tracker  ' });
+
+			expect(r.after).toBe(join(edited(note, fenceUnder(note, '## Tracker  '), 6), eol));
+			expect(r.notices).toEqual([]);
+		}
 	});
 
 	// --- refusals: the same shapes the LF note refuses (SC-594 / SC-607 / SC-612) stay refusals in a CRLF note ---

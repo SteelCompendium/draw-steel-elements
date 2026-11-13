@@ -67,7 +67,7 @@ import { editDistance, mapLine, mapLineFromTail, mapLineStrict, LINE_MAP_MAX_EDI
 import type { PreviewScrollPin } from './previewScrollPin';
 import { listFences } from '../sidebar/anchor';
 import { notifyDroppedWrite, notifyUnsavableWrite } from './droppedWriteNotice';
-import { splitLines } from './lineEnding';
+import { splitLines, splitWithEols } from './lineEnding';
 import { hoverDrawnText, hoverLinkOf } from './hoverLinks';
 import { atxHeadings, normalizeHeadingName } from './headingNames';
 import { blockBodyLines, parseOpenFenceLine, replaceFenceBlock } from './fenceLine';
@@ -1110,7 +1110,12 @@ export class ReadingModeBlockHost implements BlockHost {
 				if (lines.filter((l) => marker.test(l)).length !== 1) return null;
 			} else if (named.length !== 1) return null;
 		}
-		const part = splitLines(sectionText);
+		// SC-619: Obsidian cuts a heading HOVER's part from one character after the heading line's content (measured, 1.15.1): the LF of an LF note,
+		// but only the CR of a CRLF note, so the part starts with that note's stray LF and every line sits one lower. Drop it: the part is then
+		// compared line for line exactly as the same LF note's part.
+		const crlfHover = hovered !== null && blockId === null && sectionText.startsWith('\n') && splitWithEols(whole).eols[start] === '\r\n';
+		const part = splitLines(crlfHover ? sectionText.slice(1) : sectionText);
+		const rel = crlfHover ? relLine - 1 : relLine;
 		const wholePart = part.slice();
 		while (wholePart.length > 0 && wholePart[wholePart.length - 1].trim() === '') wholePart.pop();
 		if (wholePart.length === 0) return null;
@@ -1124,7 +1129,7 @@ export class ReadingModeBlockHost implements BlockHost {
 		}
 		if (partStart === null) return null;
 		for (let i = 0; i < wholePart.length; i++) if (lines[partStart + i] !== wholePart[i]) return null;
-		const line = partStart + relLine;
+		const line = partStart + rel;
 		const found = this.fenceAt(whole, line);
 		if (!found) return null;
 		if (blockId !== null) {
@@ -1134,7 +1139,7 @@ export class ReadingModeBlockHost implements BlockHost {
 			while (next < lines.length && lines[next].trim() === '') next++;
 			if (next >= lines.length || lines[next].trim().toLowerCase() !== `^${blockId.toLowerCase()}`) return null;
 		}
-		const own = blockBodyLines(part, relLine, relLine + (found.lineEnd - found.lineStart)).join('\n');
+		const own = blockBodyLines(part, rel, rel + (found.lineEnd - found.lineStart)).join('\n');
 		return normalizeBody(found.body) === normalizeBody(known ?? own) ? line : null;
 	}
 
