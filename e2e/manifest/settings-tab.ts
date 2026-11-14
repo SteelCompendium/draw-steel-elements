@@ -18,7 +18,7 @@
 // and typing then clicking away in a text field. A dropdown's native popup list cannot be driven by the browser protocol, hence the keys.
 // A dependent row ("Sticky mini-header: include secondary stats") is `is-disabled` while its parent is off: `click-disabled`.
 // `rows` cite the SC-440 scenario groups: N pages and navigation, R resets, T toggles, D dropdowns and the preset, F font pickers, Z sliders,
-// X text and file fields, C compendium Sync / Check, G experimental gate on (`SET-<group><nn>`).
+// X text and file fields, C compendium Sync / Check, G experimental gate on, L settings read when a block or link is drawn (`SET-<group><nn>`; specs in e2e/specs/settings/).
 // LIVE RE-RENDER representatives (an already-open note's element changes on screen without a reload), one per setting:
 //   reduce-motion, portraits, print-preview (gate on): the root attributes `data-dse-reduce-motion` / `-portraits` / `-print` on the stamina bar
 //   (Stamina/basic.md) and, for portraits, the tracker (Initiative/tracker.md); the six fonts and five scales: the inline custom properties
@@ -37,19 +37,19 @@ export default surface('settings', {
 
 		// -- N. The index: one navigable row per section page (Authoring only with the gate on), and each page's nested "Advanced" page (a row on the page that opens the secondary settings one level down).
 		'settings.page.appearance': c(['click'], ['N01']),
-		'settings.page.typography': c(['click'], ['N02']),
-		'settings.page.statblock-display': c(['click'], ['N03']),
-		'settings.page.featureblock-display': c(['click'], ['N04']),
-		'settings.page.feature-display': c(['click'], ['N05']),
-		'settings.page.element-defaults': c(['click'], ['N06']),
-		'settings.page.rolling': c(['click'], ['N07']),
-		'settings.page.compendium': c(['click'], ['N08']),
-		'settings.page.links': c(['click'], ['N09']),
-		'settings.page.initiative-tracker': c(['click'], ['N10']),
+		'settings.page.typography': c(['click'], ['N01']),
+		'settings.page.statblock-display': c(['click'], ['N01']),
+		'settings.page.featureblock-display': c(['click'], ['N01']),
+		'settings.page.feature-display': c(['click'], ['N01']),
+		'settings.page.element-defaults': c(['click'], ['N01']),
+		'settings.page.rolling': c(['click'], ['N01']),
+		'settings.page.compendium': c(['click'], ['N01']),
+		'settings.page.links': c(['click'], ['N01']),
+		'settings.page.initiative-tracker': c(['click'], ['N01']),
 		'settings.page.authoring': c(['click'], ['G01']),
-		'settings.advanced.typography': c(['click'], ['N11']),
-		'settings.advanced.statblock-display': c(['click'], ['N12']),
-		'settings.advanced.element-defaults': c(['click'], ['N13']),
+		'settings.advanced.typography': c(['click'], ['N02']),
+		'settings.advanced.statblock-display': c(['click'], ['N02']),
+		'settings.advanced.element-defaults': c(['click'], ['N02']),
 
 		// -- R. Resets: each page's "Reset <section>" row restores every setting of the section, the Advanced ones included; the index's "Reset all preferences" restores every preference. (Compendium, Links and Initiative tracker are data.json fields, not preferences: no reset.)
 		'settings.reset.appearance': c(['click'], ['R01']),
@@ -59,38 +59,38 @@ export default surface('settings', {
 		'settings.reset.feature-display': c(['click'], ['R05']),
 		'settings.reset.element-defaults': c(['click'], ['R06']),
 		'settings.reset.rolling': c(['click'], ['R07']),
-		'settings.reset.authoring': c(['click'], ['G04']),
+		'settings.reset.authoring': c(['click'], ['G05']),
 		'settings.reset-all': c(['click'], ['R08']),
 
 		// -- T. Toggles (a native checkbox: click it, or Space with it focused). Print preview and Show edit button on rendered blocks exist only with the gate on.
 		'settings.reduce-motion': c(['click', 'press:Space'], ['T01']),
 		'settings.portraits': c(['click', 'press:Space'], ['T02']),
 		'settings.sb-sticky': c(['click', 'press:Space'], ['T03']),
-		'settings.sb-sticky-meta': c(['click', 'click-disabled', 'press:Space'], ['T04', 'T05']),
+		'settings.sb-sticky-meta': c(['click', 'click-disabled', 'press:Space'], ['T04']),
 		'settings.collapsible-default': c(['click', 'press:Space'], ['T06']),
-		'settings.collapse-default': c(['click', 'press:Space'], ['T07']),
-		'settings.stamina-recovery-popover': c(['click', 'press:Space'], ['T08']),
-		'settings.rolling-enabled': c(['click', 'press:Space'], ['T09']),
-		'settings.roll-click-to-roll': c(['click', 'press:Space'], ['T10']),
-		'settings.links.scc-web-fallback': c(['click', 'press:Space'], ['T11']),
+		'settings.collapse-default': c(['click', 'press:Space'], ['T05']),
+		'settings.stamina-recovery-popover': c(['click', 'press:Space'], ['T07']),
+		'settings.rolling-enabled': c(['click', 'press:Space'], ['T08']),
+		'settings.roll-click-to-roll': c(['click', 'press:Space'], ['T09']),
+		'settings.links.scc-web-fallback': c(['click', 'press:Space'], ['T10']),
 		'settings.print-preview': c(['click', 'press:Space'], ['G02']),
 		'settings.authoring-controls': c(['click', 'press:Space'], ['G03']),
 
-		// -- D. Dropdowns (ArrowDown on the focused select picks the next option and fires the change). The Preset is derived from the nine statblock options, not stored. Locale offers a single option today.
-		'settings.sb-preset': c(['press:ArrowDown'], ['D01']),
-		'settings.sb-feature-style': c(['press:ArrowDown'], ['D02']),
-		'settings.sb-density': c(['press:ArrowDown'], ['D03']),
-		'settings.sb-columns': c(['press:ArrowDown'], ['D04']),
-		'settings.sb-stats': c(['press:ArrowDown'], ['D05']),
-		'settings.sb-char-line': c(['press:ArrowDown'], ['D06']),
-		'settings.sb-char-box': c(['press:ArrowDown'], ['D07']),
-		'settings.sb-villain': c(['press:ArrowDown'], ['D08']),
-		'settings.fb-feature-style': c(['press:ArrowDown'], ['D09']),
-		'settings.fb-stats': c(['press:ArrowDown'], ['D10']),
-		'settings.kw-usage': c(['press:ArrowDown'], ['D11']),
-		'settings.dist-target': c(['press:ArrowDown'], ['D12']),
-		'settings.roller-engine': c(['press:ArrowDown'], ['D13']),
-		'settings.compendium.locale': c(['press:ArrowDown'], ['D14']),
+		// -- D. Dropdowns (ArrowDown on the focused select picks the next option and fires the change; ArrowUp on Characteristics and Villain actions, whose default is already the last option). The Preset is derived from the nine statblock options, not stored. Locale offers a single option today.
+		'settings.sb-preset': c(['press:ArrowDown'], ['D14']),
+		'settings.sb-feature-style': c(['press:ArrowDown'], ['D01']),
+		'settings.sb-density': c(['press:ArrowDown'], ['D02']),
+		'settings.sb-columns': c(['press:ArrowDown'], ['D03']),
+		'settings.sb-stats': c(['press:ArrowDown'], ['D04']),
+		'settings.sb-char-line': c(['press:ArrowUp'], ['D05']),
+		'settings.sb-char-box': c(['press:ArrowDown'], ['D06']),
+		'settings.sb-villain': c(['press:ArrowUp'], ['D07']),
+		'settings.fb-feature-style': c(['press:ArrowDown'], ['D08']),
+		'settings.fb-stats': c(['press:ArrowDown'], ['D09']),
+		'settings.kw-usage': c(['press:ArrowDown'], ['D10']),
+		'settings.dist-target': c(['press:ArrowDown'], ['D11']),
+		'settings.roller-engine': c(['press:ArrowDown'], ['D12']),
+		'settings.compendium.locale': c(['press:ArrowDown'], ['D13']),
 
 		// -- F. The six font pickers: the curated dropdown (ArrowDown picks the next font, End jumps to "Custom...", which reveals the free-text field), the free-text field (type, then click away) and the "List installed fonts" button (click).
 		'settings.font-title': c(['press:ArrowDown', 'press:End'], ['F01']),
@@ -123,10 +123,10 @@ export default surface('settings', {
 		'settings.compendium.destination': c(['type', 'blur'], ['X01']),
 		'settings.compendium.release': c(['type', 'blur'], ['X02']),
 		'settings.initiative.default-image': c(['click', 'press:Enter'], ['X03']),
-		'settings.initiative.default-image.clear': c(['click'], ['X04']),
+		'settings.initiative.default-image.clear': c(['click'], ['X03']),
 
 		// -- C. Sync and Check for updates. Both disable while either runs; the one in flight swaps its label (Syncing... / Checking...). A click on a disabled one does nothing. The scenarios stub the release lookup (no network) and stop short of any window Sync would open (SC-441).
-		'settings.compendium.sync': c(['click', 'click-disabled'], ['C01', 'C02']),
-		'settings.compendium.check': c(['click', 'click-disabled'], ['C03', 'C04']),
+		'settings.compendium.sync': c(['click', 'click-disabled'], ['C02', 'C01']),
+		'settings.compendium.check': c(['click', 'click-disabled'], ['C01', 'C02']),
 	},
 });

@@ -359,7 +359,8 @@ async function cdpClick(el: El, opts: ClickOptions): Promise<void> {
 async function click(el: El, opts: ClickOptions = {}): Promise<void> {
 	markEdited(el);
 	await el.waitForDisplayed({ timeout: 8000 });
-	const enabled = await el.isEnabled();
+	// SC-440: obsidian greys out a dependent settings row with `is-disabled` on the (still enabled) checkbox label: that is a disabled click too.
+	const enabled = (await el.isEnabled()) && !/\bis-disabled\b/.test((await el.getAttribute('class')) ?? '');
 	await beforeAction(el);
 	if (opts.stable) await waitStable(el);
 	try {

@@ -9,7 +9,8 @@
 import { DSE_PREF_DESCRIPTORS, EXPERIMENTAL_PREF_KEYS, GROUP_ORDER, SB_PRESETS, deriveSbPreset, prefUi } from '@/prefs/catalog';
 import type { PrefDescriptor } from '@/framework/seams/prefs';
 import { PREVIEW_FEATURE_YAML, PREVIEW_STATBLOCK_YAML } from '@views/SettingsPreview';
-import { Notice, flushAsync } from '../../mocks/obsidian';
+import { Notice, Setting, flushAsync } from '../../mocks/obsidian';
+import { DseSettingTab } from '@views/SettingsTab';
 import { allDefs, flushSaved, loadPlugin, openTab, owner, prefsOf, rowOf, type Loaded } from './_settingsHarness';
 import { setExperimental } from '@/framework/experimental';
 
@@ -598,5 +599,49 @@ describe('SC-440 matrix: a plugin reload (data.json read back) shows every contr
 		expect([mono.dropdowns[0].value, mono.texts[0].inputEl.classList.contains('dse-hidden')]).toEqual(['Fira Code', true]);
 		const controls = rowOf(tab, { name: 'Controls font' });
 		expect([controls.dropdowns[0].value, controls.texts[0].inputEl.classList.contains('dse-hidden')]).toEqual(['', true]);
+	});
+});
+
+describe('SC-440 matrix: id stamping is best effort (the plugin supports obsidian 1.13, whose typings have no getElementForDefinition)', () => {
+	const names = (): string[] => Setting.created.map((s) => s.name).filter(Boolean);
+
+	test.each([
+		['absent', undefined],
+		['throwing', () => { throw new Error('no such element'); }],
+	] as Array<[string, unknown]>)('a tab whose getElementForDefinition is %s still renders every row of every page, and every visible predicate answers true', async (_mode, impl) => {
+		const loaded = await loadPlugin({ experimental: true });
+		await openTab(loaded);
+		const expected = names();
+		expect(expected.length).toBeGreaterThanOrEqual(50);
+		Setting.created.length = 0;
+		const tab: any = new DseSettingTab(loaded.plugin.app as never, loaded.plugin);
+		tab.getElementForDefinition = impl; // shadows the mock's, as on a build without it
+		tab.update();
+		expect(() => tab.renderTab()).not.toThrow();
+		await flushAsync(3);
+		expect(names()).toEqual(expected);
+		const predicates = allDefs(tab.settingItems).map((d) => d.visible).filter((v) => typeof v === 'function');
+		expect(predicates.length).toBeGreaterThan(40);
+		for (const visible of predicates) expect(visible()).toBe(true);
+		// The nested pages and the index rows carry the predicate too.
+		for (const page of tab.settingItems.filter((i: any) => i.type === 'page')) expect(page.visible()).toBe(true);
+		// Nothing was stamped on the native rows; the rows the tab's own render callbacks build still carry their ids.
+		expect(tab.containerEl.querySelector('[data-dse-control="settings.reduce-motion"]')).toBeNull();
+		expect(tab.containerEl.querySelector('[data-dse-control="settings.sb-preset"]')).not.toBeNull();
+	});
+});
+
+describe('SC-440 matrix: the SCC link fallback is read live where a link is CLICKED', () => {
+	test('the resolver the click handler asks answers a steelcompendium.io link with the toggle on and "unresolved" with it off, the moment the tab flips it', async () => {
+		const loaded = await loadPlugin({ experimental: true });
+		const tab = await openTab(loaded);
+		const resolve = (): string => (loaded.plugin as any).sccResolver.resolve('scc.v1:mcdm.heroes.v1/feature.ability.fury.level-1/gouge').kind;
+		expect(resolve()).toBe('web');
+		rowOf(tab, { key: 'sccWebFallback' }).toggles[0].trigger(false);
+		await flushAsync(2);
+		expect(resolve()).toBe('unresolved');
+		rowOf(tab, { key: 'sccWebFallback' }).toggles[0].trigger(true);
+		await flushAsync(2);
+		expect(resolve()).toBe('web');
 	});
 });

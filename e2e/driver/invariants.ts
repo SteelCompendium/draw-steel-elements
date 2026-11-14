@@ -19,7 +19,7 @@ export async function invariantProblems(): Promise<string[]> {
 	const problems: string[] = [];
 
 	const ev0 = await eventsSince(state.mark);
-	for (const e of ev0.errs) problems.push(`page error: ${e.text.slice(0, 300)}`);
+	for (const e of ev0.errs) if (!state.allowedErrors.some((re) => re.test(e.text))) problems.push(`page error: ${e.text.slice(0, 300)}`);
 
 	const modals = await ev<number>(`document.querySelectorAll('.modal-container').length`);
 	if (modals > 0) problems.push(`${modals} orphaned .modal-container left open`);

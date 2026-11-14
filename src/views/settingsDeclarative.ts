@@ -111,7 +111,7 @@ export const CHROME_CLS = 'dse-settings-chrome-row';
 /**
  * SC-440: make `def` stamp `id` on its rendered element. Obsidian evaluates every definition's `visible` after it has rendered
  * the row (and again on every `refreshDomState()`), so the predicate is the one hook that runs with the row on screen. It always
- * answers "visible" (a row that already had its own predicate keeps its answer), so nothing about what shows changes.
+ * answers "visible" and never throws (the stamp is in a try/catch; a row that already had its own predicate keeps its answer), so nothing about what shows changes.
  */
 function stamping<T extends object>(
 	def: T,
@@ -122,8 +122,18 @@ function stamping<T extends object>(
 	const withVisible = def as { visible?: boolean | (() => boolean) };
 	const prior = withVisible.visible;
 	withVisible.visible = () => {
-		for (const [id, target] of targets) stamp(def, id, target);
-		return typeof prior === 'function' ? prior() : prior !== false;
+		// An id is a test aid: whatever goes wrong while stamping (a build without `getElementForDefinition`, a row obsidian has not drawn,
+		// an element of another window), the row must still show, so nothing in here may throw and the answer stays "visible".
+		try {
+			for (const [id, target] of targets) stamp(def, id, target);
+		} catch {
+			/* best effort */
+		}
+		try {
+			return typeof prior === 'function' ? prior() !== false : prior !== false;
+		} catch {
+			return true;
+		}
 	};
 	return def;
 }

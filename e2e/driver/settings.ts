@@ -22,6 +22,12 @@ export const SETTINGS_SCOPE = '.vertical-tab-content-container *';
  *  mounted through the pipeline, whose controls belong to that element's surface). */
 export const SETTINGS_CENSUS_EXCLUDE = '.setting-page-titlebar, .dse-settings-preview__stage';
 
+/** The plugin's data.json: the sparse `prefs` slice plus the operational fields. */
+export interface PluginData {
+	prefs: Record<string, unknown>;
+	[field: string]: unknown;
+}
+
 let mainHandle: string | null = null;
 
 /** The ids of every stamped control on the page on screen, in document order. */
@@ -81,3 +87,29 @@ export const readSettings = (): Promise<Record<string, unknown>> =>
 
 /** The plugin's sparse `prefs` slice of `data.json`. */
 export const readPrefs = (): Promise<Record<string, unknown>> => ev<Record<string, unknown>>(`JSON.parse(JSON.stringify(${PLUGIN}.settings.prefs))`);
+
+/** Run `fn` on the MAIN window (the notes, the plugin's open blocks) and come back to wherever the driver was (the settings window). */
+export async function onMain<T>(fn: () => Promise<T>): Promise<T> {
+	if (!mainHandle) return fn();
+	const here = await browser.getWindowHandle();
+	if (here === mainHandle) return fn();
+	await browser.switchToWindow(mainHandle);
+	try {
+		return await fn();
+	} finally {
+		await browser.switchToWindow(here);
+	}
+}
+
+/**
+ * `data.json` as it is ON DISK (not the plugin's in-memory settings). Flushes the preferences' debounced save, then waits until the file
+ * the plugin wrote equals what it holds in memory, so a read never lands between a change and its write.
+ */
+export async function diskData(): Promise<PluginData> {
+	await ev(`(() => { ${PLUGIN}.prefsStorage?.flush?.(); return true; })()`);
+	await browser.waitUntil(
+		() => ev<boolean>(`(async () => { const p = ${PLUGIN}; const raw = await ${APP}.vault.adapter.read(p.manifest.dir + '/data.json'); return JSON.stringify(JSON.parse(raw)) === JSON.stringify(p.settings); })()`),
+		{ timeout: 8000, interval: 50, timeoutMsg: 'data.json on disk never caught up with the plugin\'s settings' },
+	);
+	return ev<PluginData>(`(async () => JSON.parse(await ${APP}.vault.adapter.read(${PLUGIN}.manifest.dir + '/data.json')))()`);
+}

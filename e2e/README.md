@@ -163,6 +163,7 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Negotiation/twins.md` | TWO IDENTICAL `ds-negotiation` blocks (Twin, Interest 3 / Patience 3, one motivation, one pitfall) with prose above, between and below |
   | `Settings/statblock.md` | one `ds-statblock` (the Human Bandit Chief the settings preview shows, without its per-block `sbSticky` override): the representative element for the live re-render of every Statblock display row and the sticky pair (SC-440) |
   | `Settings/featureblock.md` | one `ds-featureblock` (the Bloodstone of Yendral the settings preview shows, with its loose stat header): the representative element for the Featureblock display rows (SC-440) |
+  | `Settings/scc-link.md` | one `scc.v1:` link to a code the vault does not hold, above a `ds-stamina-bar` (the block lets `openNote` find the note ready): the link is a steelcompendium.io link with "Fall back to steelcompendium.io links" on, a plain-text span with it off (SC-440) |
 
 - Edits are checked per fence: a click / type / double-click / press on an element inside `dse.block(lang, n)` declares that block
   as one the test edits (taking the scope and reading it declares nothing, SC-435), and

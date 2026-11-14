@@ -27,6 +27,8 @@ export const state = {
 	testTitle: '',
 	testId: '',
 	drove: [] as Drive[],
+	/** Page errors this test EXPECTS (SC-440: a failed Sync's own console.error); the invariants ignore them. */
+	allowedErrors: [] as RegExp[],
 	/** What the current test body threw (set by the session wrapper). */
 	error: undefined as unknown,
 };
@@ -61,6 +63,7 @@ export function resetTestState(title: string): void {
 	state.testTitle = title;
 	state.testId = testIdOf(title);
 	state.drove = [];
+	state.allowedErrors = [];
 	state.error = undefined;
 }
 
