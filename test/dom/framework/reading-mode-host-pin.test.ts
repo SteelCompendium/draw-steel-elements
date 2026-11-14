@@ -10,7 +10,7 @@ import { ViewRegistry } from '../../../src/framework/host/viewRegistry';
 import { droppedWriteMessage, resetDroppedWriteNotices } from '../../../src/framework/host/droppedWriteNotice';
 import { App, Notice, Plugin, makeFakeContext } from '../../mocks/obsidian';
 import type { MarkdownPostProcessorContext } from '../../mocks/obsidian';
-import { settleVaultReads, vaultReadsStarted } from '../_settleVaultReads'; // SC-568: waits for the mock vault's reads to drain, not a timer or a hop count
+import { settleVaultReads } from '../_settleVaultReads'; // SC-568: waits for the mock vault's reads to drain, not a timer or a hop count
 
 type Section = { current: { text: string; lineStart: number; lineEnd: number } | null };
 
@@ -677,7 +677,8 @@ describe('SC-556: a block edit form in a heading embed', () => {
 		const { app, host, full } = embedded(para(100, 'above'), para(100, 'below'));
 		const pin = host.pinPosition()!;
 		await settleVaultReads(); // the open-time rebase (one cachedRead) is done before the outside edit
-		expect(vaultReadsStarted()).toBeGreaterThan(0); // the precondition is real: the open-time read happened, and it has drained
+		expect(pin.text).toBe(full); // the open-time rebase has run: the pin is in the NOTE's coordinates now
+		expect(full.split('\n')[pin.lineStart]).toBe('```ds-counter');
 		const outside = full.replace('above 0', 'above 0, edited\nand a new line').replace('below 99', 'below 99, edited');
 		app.vault.setFile('Note.md', outside);
 
