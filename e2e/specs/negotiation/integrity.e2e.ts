@@ -154,7 +154,7 @@ describe('negotiation: the note and the other blocks around a write', () => {
 
 	it('[NEGO-X13] a key the element does not know that was deleted by hand while the card is drawn does not come back on the next write', async () => {
 		await dse.openNote(UNKNOWN);
-		await dse.externalEdit(UNKNOWN, `c.replace('note_to_self: "The Duke lies about the toll"\n', '').replace('    gm_note: "ask about the sister"\n', '').replace('    gm_note: "never mention the war"\n', '')`);
+		await dse.externalEdit(UNKNOWN, `c.replace('note_to_self: "The Duke lies about the toll"\\n', '').replace('    gm_note: "ask about the sister"\\n', '').replace('    gm_note: "never mention the war"\\n', '')`);
 		await dse.settle();
 		const root = dse.block(NEGO);
 		await dse.waitForWrite(UNKNOWN, () => dse.click(patienceSeal(root, 1)));
