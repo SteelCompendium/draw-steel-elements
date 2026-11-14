@@ -932,8 +932,8 @@ describe('SC-429: the four pool-modal defects', () => {
 describe('SC-569: the pool modal title names the squad when its group holds several', () => {
 	const squadGroup = (rows: string[]): EnemyGroup => {
 		const creatures = rows.map((r) => {
-			const [name, role] = r.split(':');
-			return { name, squad_role: role ?? 'minion', max_stamina: 4, amount: 2 };
+			const [name, role, amount] = r.split(':'); // "Name", "Name:captain", or "Name::0" (role defaults to minion, amount to 2)
+			return { name, squad_role: role || 'minion', max_stamina: 4, amount: amount === undefined ? 2 : Number(amount) };
 		});
 		return { name: 'Wolves', is_squad: true, creatures } as unknown as EnemyGroup;
 	};
@@ -975,6 +975,53 @@ describe('SC-569: the pool modal title names the squad when its group holds seve
 			'Wolves - Wolf (squad 1) - Minion Stamina Pool',
 			'Wolves - Dire Wolf - Minion Stamina Pool',
 			'Wolves - Wolf (squad 2) - Minion Stamina Pool',
+		]);
+	});
+
+	test('a squad with amount 0 draws no cells, so it is not counted (SC-569 r3): the one squad left keeps the plain title', () => {
+		const same = squadGroup(['Wolf::0', 'Wolf']); // the amount-0 squad has no modal to open, so only the second is asked
+		expect(minionPoolModalTitle(same, same.creatures[1])).toBe('Wolves - Minion Stamina Pool');
+		const other = squadGroup(['Wolf::0', 'Dire Wolf']);
+		expect(minionPoolModalTitle(other, other.creatures[1])).toBe('Wolves - Minion Stamina Pool');
+	});
+
+	test('a squad with amount 0 takes no number: the two squads that are drawn are 1 and 2', () => {
+		const g = squadGroup(['Wolf::0', 'Wolf', 'Wolf']);
+		expect(minionPoolModalTitle(g, g.creatures[1])).toBe('Wolves - Wolf (squad 1) - Minion Stamina Pool');
+		expect(minionPoolModalTitle(g, g.creatures[2])).toBe('Wolves - Wolf (squad 2) - Minion Stamina Pool');
+	});
+
+	test('after parse, the drawn squads are the ones with instances (an amount-0 squad has none)', async () => {
+		const yaml = [
+			'heroes: []',
+			'enemy_groups:',
+			'  - name: "Wolves"',
+			'    is_squad: true',
+			'    creatures:',
+			'      - {name: Wolf, max_stamina: 4, amount: 0, squad_role: minion}',
+			'      - {name: Dire Wolf, max_stamina: 4, amount: 2, squad_role: minion}',
+		].join('\n');
+		const data = await parseEncounterData(yaml, new App() as any, DEFAULT_SETTINGS);
+		const g = data.enemy_groups[0];
+		expect(g.creatures[0].instances).toEqual([]);
+		expect(minionPoolModalTitle(g, g.creatures[1])).toBe('Wolves - Minion Stamina Pool');
+	});
+
+	test('names that differ only by case or by surrounding / repeated spaces are the same creature: numbered, shown as written (SC-569 r3)', () => {
+		const g = squadGroup(['Wolf', 'wolf']);
+		expect(titles(g)).toEqual(['Wolves - Wolf (squad 1) - Minion Stamina Pool', 'Wolves - wolf (squad 2) - Minion Stamina Pool']);
+		const spaced = squadGroup(['  Dire  Wolf ', 'Dire Wolf']);
+		expect(titles(spaced)).toEqual([
+			'Wolves -   Dire  Wolf  (squad 1) - Minion Stamina Pool',
+			'Wolves - Dire Wolf (squad 2) - Minion Stamina Pool',
+		]);
+	});
+
+	test('names that really differ are not merged by the folding: "Wolf" and "Dire Wolf" stay unnumbered', () => {
+		expect(titles(squadGroup(['Wolf', 'Dire Wolf', 'WOLF']))).toEqual([
+			'Wolves - Wolf (squad 1) - Minion Stamina Pool',
+			'Wolves - Dire Wolf - Minion Stamina Pool',
+			'Wolves - WOLF (squad 2) - Minion Stamina Pool',
 		]);
 	});
 

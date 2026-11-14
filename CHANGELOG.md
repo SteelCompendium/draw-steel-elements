@@ -22,6 +22,13 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FEATURE] **Minion pool window: when a group holds several squads, the title names the squad you opened** (SC-569).
+  With two squads in "Wolves", both windows used to read "Wolves - Minion Stamina Pool". They now read "Wolves - Wolf -
+  Minion Stamina Pool" and "Wolves - Dire Wolf - Minion Stamina Pool". Two squads of the same creature (as in the
+  Delian Tomb) are numbered in the order the tracker lists them: "River - Flow of the River (squad 1) - ..." and
+  "(squad 2)". Names that differ only by capitals or extra spaces count as the same creature. A group with one squad
+  keeps "Goblin Squad - Minion Stamina Pool", and a squad with no minions (amount 0), which the tracker does not
+  draw, is not counted.
 - [STEEL] **Ability-card crests now use the site's solid action icons** (SC-563). In the Steel look, the shield on an
   ability card (including the abilities inside a statblock), a trait card or a kit signature card shows the same filled glyph
   the site draws (from MCDM's Draw Steel Glyphs font) instead of a thin outline, in the action colour. A villain action keeps its skull outline, and printing is unchanged (crests are not printed).

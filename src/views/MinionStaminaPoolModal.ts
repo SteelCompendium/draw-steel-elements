@@ -34,6 +34,9 @@ import type { IconButtonHandle, StepperHandle } from '@/framework/kit';
 import { readAmount, staminaPreviewBar, staminaStepperRow, setButtonText } from './StaminaEditModal';
 import type { StaminaPreviewBarHandle } from './StaminaEditModal';
 
+/** The comparison form of a squad's creature name (SC-569 r3): case-folded, whitespace collapsed and trimmed. */
+const squadNameKey = (name: string): string => name.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+
 /**
  * SC-569: the pool modal's title. A group holding ONE minion squad keeps `"<group> - Minion Stamina Pool"`.
  * With two or more squads the title also names this squad's creature, so two modals opened from one group
@@ -43,13 +46,18 @@ import type { StaminaPreviewBarHandle } from './StaminaEditModal';
  * (`group.creatures` order, the order the roster renders them top to bottom).
  *
  * Only `squad_role === 'minion'` creatures are squads (`minionCreatures`); captains and attached creatures are
- * not counted. The squad is found by identity, the way the modal addresses it (`this.creature`), and names are
- * compared exactly as the tracker shows them (`creature.name`, no trimming or case folding).
+ * not counted. Only squads the roster DRAWS count (SC-569 r3): the tracker draws a cell per entry of
+ * `creature.instances`, so a hand-edited `amount: 0` squad has no cells and is not one the user can tell apart
+ * (before parse `instances` is absent and `amount` stands in). The squad is found by identity, the way the
+ * modal addresses it (`this.creature`). "Same name" ignores case and surrounding / repeated whitespace
+ * (`squadNameKey`), because the Steel theme upper-cases the title and HTML collapses spaces, so two such names
+ * would look identical on screen; the title still shows the creature's own name as written.
  */
 export function minionPoolModalTitle(group: EnemyGroup, creature: Creature): string {
-	const squads = minionCreatures(group);
+	const squads = minionCreatures(group).filter((c) => (c.instances?.length ?? c.amount) > 0);
 	if (squads.length < 2) return `${group.name} - Minion Stamina Pool`;
-	const sameName = squads.filter((c) => c.name === creature.name);
+	const key = squadNameKey(creature.name);
+	const sameName = squads.filter((c) => squadNameKey(c.name) === key);
 	const position = sameName.indexOf(creature);
 	const label = sameName.length > 1 && position >= 0 ? `${creature.name} (squad ${position + 1})` : creature.name;
 	return `${group.name} - ${label} - Minion Stamina Pool`;
