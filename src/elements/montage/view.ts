@@ -197,6 +197,7 @@ export class MontageView extends ElementView<MontageModel> {
 						icon: 'undo',
 						label: 'Reopen',
 						text: 'Reopen',
+						control: 'montage.bar.reopen',
 						disabled,
 						onClick: disabled
 							? STUB_NOOP
@@ -214,6 +215,7 @@ export class MontageView extends ElementView<MontageModel> {
 					icon: 'trash',
 					label: 'Clear all',
 					text: 'Clear all',
+					control: 'montage.bar.clear-all',
 					variant: 'danger',
 					disabled,
 					onClick: disabled
@@ -244,6 +246,7 @@ export class MontageView extends ElementView<MontageModel> {
 				icon: 'plus',
 				label: 'Log an action…',
 				text: 'Log an action…',
+				control: 'montage.bar.log',
 				variant: 'accent',
 				// No dead end (F1 §4.4): an empty roster, or a round every hero has already
 				// acted in, has nobody to pre-fill, so this stays disabled rather than opening
@@ -264,6 +267,7 @@ export class MontageView extends ElementView<MontageModel> {
 				icon: 'chevron-right',
 				label: `End round ${model.current_round}`,
 				text: `End round ${model.current_round}`,
+				control: 'montage.bar.end-round',
 				disabled,
 				onClick: disabled
 					? STUB_NOOP
@@ -287,6 +291,7 @@ export class MontageView extends ElementView<MontageModel> {
 				icon: 'undo',
 				label: 'Undo',
 				text: 'Undo',
+				control: 'montage.bar.undo',
 				disabled: disabled || !hasEntries,
 				onClick:
 					disabled || !hasEntries
@@ -313,6 +318,7 @@ export class MontageView extends ElementView<MontageModel> {
 				icon: 'chevron-left',
 				label: `Back to round ${target}`,
 				text: `Back to round ${target}`,
+				control: 'montage.bar.back',
 				disabled,
 				onClick: disabled
 					? STUB_NOOP
@@ -411,6 +417,7 @@ export class MontageView extends ElementView<MontageModel> {
 				id: 'montage-add-round',
 				icon: 'plus',
 				label: 'Add a round',
+				control: 'montage.chrome.add-round',
 				onClick: () => {
 					addMontageRound(model);
 					void this.commit();
@@ -420,18 +427,21 @@ export class MontageView extends ElementView<MontageModel> {
 				id: 'montage-add-hero',
 				icon: 'user-plus',
 				label: 'Add a hero',
+				control: 'montage.chrome.add-hero',
 				onClick: () => this.openAddHero(),
 			},
 			{
 				id: 'montage-set-limits',
 				icon: 'hourglass',
 				label: 'Set limits…',
+				control: 'montage.chrome.set-limits',
 				onClick: () => this.openSetLimits(),
 			},
 			{
 				id: 'montage-reset-progress',
 				icon: 'rotate-ccw',
 				label: 'Reset progress',
+				control: 'montage.chrome.reset-progress',
 				onClick: () => {
 					new Notice('Montage progress reset');
 					resetMontageProgress(model);

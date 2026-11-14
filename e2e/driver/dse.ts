@@ -135,6 +135,10 @@ const MODAL_KINDS: Record<string, string> = {
 	'free-heal-confirm': '[data-dse-control="sedit.free-heal.confirm"]',
 	// SC-500: initiative's "Reset encounter state" confirmation.
 	'reset-encounter': '[data-dse-control="init.reset-encounter.confirm"]',
+	// SC-438: the montage tracker's three modals, each matched by one of its own control ids.
+	'montage-log': '[data-dse-control="montage.log.submit"]',
+	'montage-add-hero': '[data-dse-control="montage.add-hero.submit"]',
+	'montage-limits': '[data-dse-control="montage.limits.save"]',
 };
 
 // ------------------------------------------------------------------------- note + blocks

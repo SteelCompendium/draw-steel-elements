@@ -20,7 +20,7 @@
 // (ghost) · Log/Save (accent) — spec §D's own footer line.
 import type { App } from 'obsidian';
 import { setIcon } from 'obsidian';
-import { DseModal, setPressedState } from '@/framework/kit';
+import { DseModal, setPressedState, stampControl } from '@/framework/kit';
 import type { IconButtonHandle } from '@/framework/kit';
 import type { MontageEntry, MontageModel, MontageResult } from './model';
 import { wouldReuseSkill, isKnownMontageResult } from './model';
@@ -138,6 +138,7 @@ export class LogActionModal extends DseModal {
 				icon: 'trash',
 				label: 'Remove this action',
 				text: 'Remove',
+				control: 'montage.log.remove',
 				variant: 'danger' as const,
 				onClick: () => {
 					this.onRemoveCb?.();
@@ -145,12 +146,13 @@ export class LogActionModal extends DseModal {
 				},
 			});
 		}
-		buttons.push({ label: 'Cancel', text: 'Cancel', variant: 'ghost' as const, onClick: () => this.close() });
+		buttons.push({ label: 'Cancel', text: 'Cancel', control: 'montage.log.cancel', variant: 'ghost' as const, onClick: () => this.close() });
 		const commitLabel = editing ? 'Save' : 'Log';
 		buttons.push({
 			icon: 'check',
 			label: commitLabel,
 			text: commitLabel,
+			control: 'montage.log.submit',
 			variant: 'accent' as const,
 			onClick: () => this.commit(),
 		});
@@ -193,6 +195,7 @@ export class LogActionModal extends DseModal {
 			chip.setAttribute('type', 'button');
 			chip.setAttribute('data-kind', rc.value);
 			chip.setAttribute('aria-label', rc.label);
+			stampControl(chip, `montage.log.result.${rc.value}`);
 			setIcon(chip.createSpan({ cls: 'dse-mt__sheet-chipglyph' }), rc.icon);
 			chip.createSpan({ text: rc.label });
 			this.lifecycle.registerDomEvent(chip, 'click', () => {
@@ -219,6 +222,7 @@ export class LogActionModal extends DseModal {
 		input.value = this.skillValue;
 		input.setAttribute('placeholder', 'Which skill? (Optional)');
 		input.setAttribute('aria-label', 'Skill used');
+		stampControl(input, 'montage.log.skill');
 		this.lifecycle.registerDomEvent(input, 'input', () => {
 			this.skillValue = input.value;
 			this.refreshSkillWarning();
@@ -262,6 +266,7 @@ export class LogActionModal extends DseModal {
 		textarea.value = this.noteValue;
 		textarea.setAttribute('placeholder', 'A consequence to remember later…');
 		textarea.setAttribute('aria-label', 'Note');
+		stampControl(textarea, 'montage.log.note');
 		textarea.rows = 3;
 		this.lifecycle.registerDomEvent(textarea, 'input', () => {
 			this.noteValue = textarea.value;

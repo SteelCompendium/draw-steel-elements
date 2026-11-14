@@ -98,7 +98,7 @@ export class GuideView {
 	public build(container: HTMLElement, persist: SessionPersist, stripOpen: boolean): void {
 		const handle = collapsible(
 			container,
-			{ title: 'Running a montage test', open: false, persist },
+			{ title: 'Running a montage test', open: false, persist, control: 'montage.guide' },
 			this.owner,
 		);
 		handle.rootEl.addClass('dse-mt__guide');

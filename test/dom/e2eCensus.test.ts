@@ -25,6 +25,7 @@ import * as path from 'path';
 import { App, Notice, Plugin } from '../mocks/obsidian';
 import { staminaBarElement } from '../../src/elements/stamina-bar/definition';
 import { initiativeElement } from '../../src/elements/initiative/definition';
+import { montageElement } from '../../src/elements/montage/definition';
 import { undoNotice } from '../../src/framework/kit';
 import { DSE_PREF_DESCRIPTORS } from '../../src/prefs/catalog';
 import { FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main';
@@ -39,8 +40,17 @@ import { ConditionsModal } from '../../src/views/ConditionsModal';
 import { ConditionManager } from '../../src/utils/Conditions';
 import { parseEncounterData } from '../../src/drawSteelAdmonition/EncounterData';
 import squadYaml from '../fixtures/initiative/squad.yaml';
+import exampleYaml from '../../src/elements/montage/example.yaml';
+import midYaml from '../../src/elements/montage/fixture-mid.yaml';
+import doneYaml from '../../src/elements/montage/fixture-done.yaml';
+import failedYaml from '../../src/elements/montage/fixture-failed.yaml';
+import oldShapeYaml from '../../src/elements/montage/fixture-old-shape.yaml';
 import chromeManifest from '../../e2e/manifest/chrome';
 import resetManifest from '../../e2e/manifest/reset-encounter-modal';
+import montageManifest from '../../e2e/manifest/montage';
+import montageLogManifest from '../../e2e/manifest/montage-log-modal';
+import montageAddHeroManifest from '../../e2e/manifest/montage-add-hero-modal';
+import montageLimitsManifest from '../../e2e/manifest/montage-limits-modal';
 import { idsOf } from '../../e2e/manifest/surface';
 
 const INTERACTIVE = 'button, input, select, textarea, [role="button"], [role="slider"], [tabindex], [contenteditable]';
@@ -432,5 +442,179 @@ describe('SC-436 census: the ConditionsModal', () => {
 		expect(root.querySelector('.dse-init__conditions [data-dse-control="init.cond.add"]')).not.toBeNull();
 		expect(conditionsManifest.reach.map((r) => r.control)).toEqual(['init.cond.add']);
 		expect(conditionsManifest.reach[0].host).toBe('initiative');
+	});
+});
+
+describe('SC-438 census: the montage tracker and its three modals, scoped by container', () => {
+	// The hand-written fixture holds an unrecognised result on purpose: the model warns about it, which is not what is under test.
+	beforeEach(() => {
+		jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+	});
+	afterEach(() => {
+		jest.restoreAllMocks();
+	});
+
+	/** Mount `source` through the real pipeline; `canPersist` false is the read-only (canvas) host. */
+	async function mountMontage(source: string, canPersist = true): Promise<HTMLElement> {
+		const host = makeHost('ds-montage', 'Montage.md');
+		(host as any).canPersist = canPersist;
+		await new ElementPipeline(makeDeps()).run(montageElement, source, host);
+		document.body.appendChild(host.containerEl);
+		return host.containerEl.firstElementChild as HTMLElement;
+	}
+
+	// The scope is the montage's root (the board, the bar, the disclosures and the chrome panel inside it) and each modal's root, not a CSS
+	// class per entry point: a new control anywhere in either needs an id from the montage manifests (or the framework chrome's).
+	const montageIds = new Set([...idsOf(montageManifest), ...chromeIds]);
+	const logIds = new Set(idsOf(montageLogManifest));
+	const addHeroIds = new Set(idsOf(montageAddHeroManifest));
+	const limitsIds = new Set(idsOf(montageLimitsManifest));
+	const census = (root: Element): string[] => censusProblems(root, montageIds, INTERACTIVE, false);
+
+	const fixtureDir = path.join(__dirname, '../../e2e/vaults/shipped/Montage');
+	const montageFixture = (name: string): string => {
+		const text = fs.readFileSync(path.join(fixtureDir, `${name}.md`), 'utf8');
+		return /```ds-montage\n([\s\S]*?)\n```/.exec(text)![1];
+	};
+	const FIXTURES = fs.readdirSync(fixtureDir).filter((f) => f.endsWith('.md')).map((f) => f.replace(/\.md$/, '')).sort();
+	const idsIn = (root: Element): Set<string> =>
+		new Set(Array.from(root.querySelectorAll('[data-dse-control]')).map((el) => el.getAttribute('data-dse-control') as string));
+	/** The newest modal's content element, found by one of its own controls. */
+	const modalOf = (id: string): HTMLElement => (document.querySelector(`[data-dse-control="${id}"]`) as HTMLElement).closest('.modal-content') as HTMLElement;
+	const byId = (root: Element, id: string, n = 0): HTMLElement => root.querySelectorAll<HTMLElement>(`[data-dse-control="${id}"]`)[n];
+
+	test('the census itself bites: an un-id\'d button injected into the board, the action bar or the root is a finding, as is an id outside the manifest', async () => {
+		const root = await mountMontage(montageFixture('mid'));
+		expect(census(root)).toEqual([]);
+		for (const host of ['.dse-mt__board', '.dse-mt__actionrow', '.dse-mt__board-name', '.dse-mt__outcome', '.dse-mt']) {
+			const rogue = document.createElement('button');
+			rogue.textContent = 'Rogue';
+			root.querySelector(host)!.appendChild(rogue);
+			expect(census(root)).toEqual([expect.stringMatching(/^no data-dse-control: <button/)]);
+			rogue.remove();
+		}
+		const div = document.createElement('div');
+		div.setAttribute('tabindex', '0');
+		root.querySelector('.dse-mt__board')!.appendChild(div);
+		expect(census(root)).toHaveLength(1);
+		div.remove();
+		byId(root, 'montage.cell').setAttribute('data-dse-control', 'montage.not-a-control');
+		expect(census(root)).toEqual([expect.stringMatching(/id "montage\.not-a-control" is not in the manifest/)]);
+	});
+
+	test('the census bites inside each modal: an un-id\'d button in the Log an action sheet, Add a hero or Set limits is a finding, and so is a foreign id', async () => {
+		const root = await mountMontage(montageFixture('mid'));
+		const rogue = document.createElement('button');
+		rogue.textContent = 'Rogue';
+		const open = (id: string, ids: ReadonlySet<string>): HTMLElement => {
+			const content = modalOf(id);
+			expect(censusProblems(content, ids, INTERACTIVE, false)).toEqual([]);
+			content.appendChild(rogue);
+			expect(censusProblems(content, ids, INTERACTIVE, false)).toEqual([expect.stringMatching(/^no data-dse-control: <button/)]);
+			rogue.remove();
+			// An id of another modal's manifest is a finding too.
+			byId(content, [...ids].find((x) => x.endsWith('.cancel'))!).setAttribute('data-dse-control', 'montage.limits.nope');
+			expect(censusProblems(content, ids, INTERACTIVE, false)).toEqual([expect.stringMatching(/id "montage\.limits\.nope" is not in the manifest/)]);
+			return content;
+		};
+		byId(root, 'montage.bar.log').click();
+		open('montage.log.submit', logIds);
+		document.querySelectorAll('.modal-container, .modal').forEach((m) => m.remove());
+		byId(root, 'montage.board.add-hero').click();
+		open('montage.add-hero.submit', addHeroIds);
+		document.querySelectorAll('.modal-container, .modal').forEach((m) => m.remove());
+		byId(root, 'montage.chrome.set-limits').click();
+		open('montage.limits.save', limitsIds);
+	});
+
+	test.each(FIXTURES.map((name) => [name]))('the %s fixture note: every interactive node carries an id the montage manifest declares', async (name) => {
+		const source = montageFixture(name);
+		expect(census(await mountMontage(source))).toEqual([]);
+		document.body.innerHTML = '';
+		expect(census(await mountMontage(source, false))).toEqual([]);
+	});
+
+	test('the framework fixtures of the montage (example, mid-game, done, failed, old shape) are identified too', async () => {
+		for (const yaml of [exampleYaml, midYaml, doneYaml, failedYaml, oldShapeYaml]) {
+			expect(census(await mountMontage(yaml))).toEqual([]);
+			document.body.innerHTML = '';
+		}
+	});
+
+	test('the chrome panel is inside the scope: its four items carry montage.chrome.* ids and the framework chrome buttons chrome.* ids', async () => {
+		const root = await mountMontage(montageFixture('mid'));
+		const items = Array.from(root.querySelectorAll('[data-dse-chrome-item]'));
+		expect(items.length).toBeGreaterThan(4);
+		for (const id of ['montage.chrome.add-round', 'montage.chrome.add-hero', 'montage.chrome.set-limits', 'montage.chrome.reset-progress']) {
+			expect(root.querySelectorAll(`[data-dse-control="${id}"]`)).toHaveLength(1);
+		}
+		const rogue = document.createElement('button');
+		root.querySelector('[data-dse-chrome-item]')!.parentElement!.appendChild(rogue);
+		expect(census(root)).toEqual([expect.stringMatching(/^no data-dse-control: <button/)]);
+	});
+
+	test('every control the montage manifest declares is stamped by SOME variant of the board (no dead manifest row)', async () => {
+		const seen = new Set<string>();
+		for (const name of FIXTURES) {
+			const root = await mountMontage(montageFixture(name));
+			idsIn(root).forEach((id) => seen.add(id));
+			document.body.innerHTML = '';
+		}
+		const declared = Object.keys(montageManifest.controls);
+		expect(declared.filter((id) => !seen.has(id))).toEqual([]);
+	});
+
+	test('every control the three modal manifests declare is stamped by SOME variant of the modal (no dead manifest row)', async () => {
+		const seen = new Set<string>();
+		const collect = (id: string): void => idsIn(modalOf(id)).forEach((x) => seen.add(x));
+		const sweep = (): void => document.querySelectorAll('.modal-container, .modal').forEach((m) => m.remove());
+		const root = await mountMontage(montageFixture('mid'));
+		byId(root, 'montage.bar.log').click(); // new sheet
+		collect('montage.log.submit');
+		sweep();
+		byId(root, 'montage.cell').click(); // Kira round 1: the edit sheet
+		collect('montage.log.submit');
+		sweep();
+		byId(root, 'montage.board.add-hero').click();
+		collect('montage.add-hero.submit');
+		sweep();
+		byId(root, 'montage.chrome.set-limits').click();
+		collect('montage.limits.save');
+		const declared = [montageLogManifest, montageAddHeroManifest, montageLimitsManifest]
+			.flatMap((m) => Object.keys(m.controls))
+			.filter((id) => !id.startsWith('modal.'));
+		expect(declared.filter((id) => !seen.has(id))).toEqual([]);
+	});
+
+	test('the entry points of each modal are declared by its manifest as reach rows, and every reach id is a real montage control', () => {
+		const montage = new Set(Object.keys(montageManifest.controls));
+		for (const m of [montageLogManifest, montageAddHeroManifest, montageLimitsManifest]) {
+			expect(m.reach.length).toBeGreaterThan(0);
+			for (const r of m.reach) {
+				expect(r.host).toBe('montage');
+				expect(montage.has(r.control)).toBe(true);
+			}
+		}
+		expect(montageLogManifest.reach.map((r) => r.control).sort()).toEqual(['montage.bar.log', 'montage.board.row-act', 'montage.cell', 'montage.cell.socket']);
+		expect(montageAddHeroManifest.reach.map((r) => r.control).sort()).toEqual(['montage.board.add-hero', 'montage.chrome.add-hero']);
+		expect(montageLimitsManifest.reach.map((r) => r.control)).toEqual(['montage.chrome.set-limits']);
+	});
+
+	test('the stamped controls repeat as the board does: one cell id per filled / past cell, one socket per hero in the round in play, one quick trio per socket', async () => {
+		const root = await mountMontage(montageFixture('mid')); // 4 heroes, round 2 of 3, round 1 filled for three heroes
+		expect(root.querySelectorAll('[data-dse-control="montage.board.row-act"]')).toHaveLength(4);
+		expect(root.querySelectorAll('[data-dse-control="montage.cell"]')).toHaveLength(4); // 3 filled + Yenna's empty past cell
+		expect(root.querySelectorAll('[data-dse-control="montage.cell.socket"]')).toHaveLength(4);
+		for (const kind of ['success', 'failure', 'assist']) expect(root.querySelectorAll(`[data-dse-control="montage.quick.${kind}"]`)).toHaveLength(4);
+	});
+
+	test('a read-only host (canvas): the board keeps its ids on the stubs, the chrome panel items are absent, nothing offers a socket id', async () => {
+		const root = await mountMontage(montageFixture('mid'), false);
+		expect(census(root)).toEqual([]);
+		expect(root.querySelector('[data-dse-control="montage.cell.socket"]')).toBeNull();
+		for (const id of ['montage.chrome.add-round', 'montage.chrome.add-hero', 'montage.chrome.set-limits', 'montage.chrome.reset-progress']) {
+			expect(root.querySelector(`[data-dse-control="${id}"]`)).toBeNull();
+		}
+		expect((byId(root, 'montage.bar.log') as HTMLButtonElement).disabled).toBe(true);
 	});
 });

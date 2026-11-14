@@ -88,7 +88,7 @@ export class StripView {
 	 *  REAL user click only (never on mount) — MontageView uses it to rebuild the whole
 	 *  element so the guide's dedup stays correct live, not only at the next remount. */
 	public build(container: HTMLElement, persist: SessionPersist, onToggle?: () => void): { isOpen(): boolean } {
-		const handle = collapsible(container, { title: 'Test tiers', open: false, persist, onToggle }, this.owner);
+		const handle = collapsible(container, { title: 'Test tiers', open: false, persist, onToggle, control: 'montage.strip' }, this.owner);
 		handle.rootEl.addClass('dse-mt__strip');
 		handle.headerEl.createSpan({
 			cls: 'dse-mt__strip-hint',

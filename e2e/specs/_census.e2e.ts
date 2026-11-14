@@ -10,6 +10,7 @@ import { censusFindings, eventfulNodes } from '../driver/census';
 import { openBarModal } from '../driver/stamina';
 import { HURT, openPoolModal } from '../driver/pool';
 import { CONDITIONS, openConditionsModal } from '../driver/conditions';
+import { EXHAUSTED, MID, openAddHero, openLimits, openLogFromBar, openMontage } from '../driver/montage';
 import { idsOf } from '../manifest/surface';
 import barManifest from '../manifest/stamina-bar';
 import modalManifest from '../manifest/stamina-edit-modal';
@@ -18,6 +19,10 @@ import poolManifest from '../manifest/minion-pool-modal';
 import initiativeManifest from '../manifest/initiative';
 import resetManifest from '../manifest/reset-encounter-modal';
 import chromeManifest from '../manifest/chrome';
+import montageManifest from '../manifest/montage';
+import montageLogManifest from '../manifest/montage-log-modal';
+import montageAddHeroManifest from '../manifest/montage-add-hero-modal';
+import montageLimitsManifest from '../manifest/montage-limits-modal';
 
 const ALL_IDS = new Set([
 	...idsOf(barManifest),
@@ -27,6 +32,10 @@ const ALL_IDS = new Set([
 	...idsOf(initiativeManifest),
 	...idsOf(resetManifest),
 	...idsOf(chromeManifest),
+	...idsOf(montageManifest),
+	...idsOf(montageLogManifest),
+	...idsOf(montageAddHeroManifest),
+	...idsOf(montageLimitsManifest),
 ]);
 const BAR_SCOPE = ['.markdown-reading-view [data-dse-element="stamina-bar"] *'];
 // SC-437 (R1 L-4): the tracker is scanned by its root container, not by a CSS class per entry point. The ids a node there may
@@ -39,6 +48,10 @@ const TRACKER_IDS = new Set([
 	...[modalManifest, conditionsManifest, poolManifest].flatMap((m) => m.reach.filter((r) => r.host === 'initiative').map((r) => r.control)),
 	...idsOf(chromeManifest),
 ]);
+// SC-438: the montage is scanned by its root container too (its own chrome-panel items included). A node there may carry an id of the
+// montage manifest or the framework chrome's; the three modals' ids are only expected inside their own windows (ALL_IDS).
+const MONTAGE_SCOPE = '.markdown-reading-view [data-dse-element="montage"] *';
+const MONTAGE_IDS = new Set([...idsOf(montageManifest), ...idsOf(chromeManifest)]);
 // Ids the initiative manifest declares with no interaction (a programmatic focus target): nothing may listen for input on them.
 const INERT_IDS = new Set(Object.entries(initiativeManifest.controls).filter(([, spec]) => spec.kinds.length === 0).map(([id]) => id));
 
@@ -187,5 +200,67 @@ describe('real-Obsidian census: the optional popover editor', () => {
 		expect(censusFindings(nodes, ALL_IDS)).toEqual([]);
 		const ids = nodes.map((n) => n.id);
 		for (const id of ['recov.pop.dec', 'recov.pop.inc', 'recov.pop.catch-breath']) expect(ids).toContain(id);
+	});
+});
+
+describe('real-Obsidian census: the montage tracker (SC-438)', () => {
+	it('[CENSUS-10] the whole montage (scoped by its root, chrome panel included), mid-game and then complete: every node that listens for input is an identified control', async () => {
+		const root = await openMontage(MID);
+		await dse.hover(root.root);
+		const mid = await eventfulNodes([MONTAGE_SCOPE], null);
+		expect(censusFindings(mid, MONTAGE_IDS)).toEqual([]);
+		const ids = mid.map((n) => n.id);
+		// Sanity that the probe sees every part of the board: the Heroes "+", a hero's row button, a filled cell, the open socket
+		// and its quick trio, the action bar, both disclosures and the chrome panel's four items.
+		for (const id of [
+			'montage.board.add-hero', 'montage.board.row-act', 'montage.cell', 'montage.cell.socket', 'montage.quick.success',
+			'montage.quick.failure', 'montage.quick.assist', 'montage.bar.log', 'montage.bar.undo', 'montage.bar.back',
+			'montage.bar.end-round', 'montage.strip', 'montage.guide', 'montage.chrome.add-round', 'montage.chrome.add-hero',
+			'montage.chrome.set-limits', 'montage.chrome.reset-progress',
+		]) {
+			expect(ids).toContain(id);
+		}
+		// A montage that ran out of rounds has the other bar: Reopen and Clear all.
+		await openMontage(EXHAUSTED);
+		const done = await eventfulNodes([MONTAGE_SCOPE], null);
+		expect(censusFindings(done, MONTAGE_IDS)).toEqual([]);
+		for (const id of ['montage.bar.reopen', 'montage.bar.clear-all', 'montage.bar.back']) expect(done.map((n) => n.id)).toContain(id);
+	});
+
+	it('[CENSUS-11] the open Log an action sheet, new then edit: every node that listens for input is an identified control', async () => {
+		const scope = ['.modal-container .dse-modal .modal-content *'];
+		const { root, modal } = await openLogFromBar(MID);
+		await dse.settle();
+		const fresh = await eventfulNodes(scope);
+		expect(censusFindings(fresh, ALL_IDS)).toEqual([]);
+		for (const id of ['montage.log.result.success', 'montage.log.result.failure', 'montage.log.result.assist', 'montage.log.cancel', 'montage.log.submit']) {
+			expect(fresh.map((n) => n.id)).toContain(id);
+		}
+		await dse.click(modal.control('modal.close'));
+		// A filled cell opens the edit sheet, which adds Remove.
+		await dse.click(root.control('montage.cell', { nth: 0 }));
+		const edit = await dse.modal('montage-log');
+		await dse.settle();
+		const editing = await eventfulNodes(scope);
+		expect(censusFindings(editing, ALL_IDS)).toEqual([]);
+		expect(editing.map((n) => n.id)).toContain('montage.log.remove');
+		await dse.click(edit.control('modal.close'));
+	});
+
+	it('[CENSUS-12] the open Add a hero and Set limits windows: every node that listens for input is an identified control', async () => {
+		const scope = ['.modal-container .dse-modal .modal-content *'];
+		const hero = await openAddHero(MID);
+		await dse.settle();
+		const adding = await eventfulNodes(scope);
+		expect(censusFindings(adding, ALL_IDS)).toEqual([]);
+		for (const id of ['montage.add-hero.cancel', 'montage.add-hero.submit']) expect(adding.map((n) => n.id)).toContain(id);
+		await dse.click(hero.modal.control('modal.close'));
+		const limits = await openLimits(MID);
+		await dse.settle();
+		const setting = await eventfulNodes(scope);
+		expect(censusFindings(setting, ALL_IDS)).toEqual([]);
+		for (const id of ['montage.limits.cancel', 'montage.limits.save']) expect(setting.map((n) => n.id)).toContain(id);
+		// (The name field and the two limit fields listen only for input, so the jsdom census owns those three.)
+		await dse.click(limits.modal.control('modal.close'));
 	});
 });

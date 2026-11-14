@@ -26,7 +26,7 @@
 // `canPersist` instead of unconditionally true.
 import type { Component } from 'obsidian';
 import { setIcon } from 'obsidian';
-import { iconButton } from '@/framework/kit';
+import { iconButton, stampControl } from '@/framework/kit';
 import type { MontageModel, MontageEntry, MontageResult } from './model';
 import { montageTallies, montageRoster, isKnownMontageResult } from './model';
 import type { SheetMode } from './LogActionModal';
@@ -207,6 +207,7 @@ export class BoardView {
 			{
 				icon: 'plus',
 				label: 'Add a hero',
+				control: 'montage.board.add-hero',
 				disabled: !this.canPersist,
 				onClick: this.canPersist ? () => this.onAddHero() : STUB_NOOP,
 			},
@@ -262,6 +263,7 @@ export class BoardView {
 			{
 				icon: 'plus',
 				label: `Log an action for ${name}`,
+				control: 'montage.board.row-act',
 				disabled: rowActDisabled,
 				onClick: rowActDisabled
 					? STUB_NOOP
@@ -348,6 +350,10 @@ export class BoardView {
 				: `${hero}, round ${round}: nothing logged — log an action`;
 
 		const cell = board.createDiv({ cls: 'dse-mt__cell' });
+		// SC-438: a `role=button` cell is `montage.cell`; the open socket of the round in play (no role, no tabindex, a click
+		// listener on the whole cell, the quick trio inside it) is `montage.cell.socket`.
+		// (A read-only host's socket has no listener: it carries no id.)
+		stampControl(cell, isInteractive && !isEmptyCurrentCell ? 'montage.cell' : isEmptyCurrentCell && this.canPersist ? 'montage.cell.socket' : undefined);
 		// review-1 (round 3) LOW-1: this one cell shape is role-less (MED-2, above) — ARIA
 		// 1.2 prohibits an accessible name on a role-less (`generic`) node, and axe-core
 		// flags it as `aria-prohibited-attr`. The trio's own three buttons already name
@@ -447,6 +453,7 @@ export class BoardView {
 					{
 						icon: RESULT_ICON[kind],
 						label: `Log ${QUICK_ARTICLE[kind]} for ${hero} in round ${round}`,
+						control: `montage.quick.${kind}`,
 						variant: 'ghost',
 						disabled: !this.canPersist,
 						onClick: !this.canPersist

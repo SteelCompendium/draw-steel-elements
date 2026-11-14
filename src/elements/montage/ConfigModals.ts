@@ -5,7 +5,7 @@
 // chrome item's own `onClick` (view.ts) — these two small `kit/managedModal`s are the
 // odd ones out, on the same DseModal base every other DSE modal uses.
 import type { App } from 'obsidian';
-import { DseModal } from '@/framework/kit';
+import { DseModal, stampControl } from '@/framework/kit';
 
 export class MontageAddHeroModal extends DseModal {
 	private readonly onAdd: (name: string) => void;
@@ -20,12 +20,14 @@ export class MontageAddHeroModal extends DseModal {
 		const input = this.body.createEl('input', { cls: 'dse-mt__sheet-input', type: 'text' });
 		input.setAttribute('placeholder', "Hero's name");
 		input.setAttribute('aria-label', "Hero's name");
+		stampControl(input, 'montage.add-hero.name');
 
 		const [, addBtn] = this.footer([
-			{ label: 'Cancel', text: 'Cancel', variant: 'ghost', onClick: () => this.close() },
+			{ label: 'Cancel', text: 'Cancel', control: 'montage.add-hero.cancel', variant: 'ghost', onClick: () => this.close() },
 			{
 				label: 'Add',
 				text: 'Add',
+				control: 'montage.add-hero.submit',
 				variant: 'accent',
 				disabled: true,
 				onClick: () => {
@@ -61,6 +63,7 @@ export class MontageSetLimitsModal extends DseModal {
 		successInput.value = String(this.successLimit);
 		successInput.setAttribute('min', '0');
 		successInput.setAttribute('aria-label', 'Success limit');
+		stampControl(successInput, 'montage.limits.success');
 
 		const failureRow = this.body.createDiv({ cls: 'dse-mt__sheet-field' });
 		failureRow.createSpan({ cls: 'dse-mt__sheet-label', text: 'Failure limit' });
@@ -68,12 +71,14 @@ export class MontageSetLimitsModal extends DseModal {
 		failureInput.value = String(this.failureLimit);
 		failureInput.setAttribute('min', '0');
 		failureInput.setAttribute('aria-label', 'Failure limit');
+		stampControl(failureInput, 'montage.limits.failure');
 
 		this.footer([
-			{ label: 'Cancel', text: 'Cancel', variant: 'ghost', onClick: () => this.close() },
+			{ label: 'Cancel', text: 'Cancel', control: 'montage.limits.cancel', variant: 'ghost', onClick: () => this.close() },
 			{
 				label: 'Save',
 				text: 'Save',
+				control: 'montage.limits.save',
 				variant: 'accent',
 				onClick: () => {
 					this.onSave(Number(successInput.value) || 0, Number(failureInput.value) || 0);
