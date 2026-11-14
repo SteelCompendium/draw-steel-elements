@@ -32,8 +32,9 @@ import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App, Plugin, Notice, Scope, makeFakeContext, parseYaml } from '../../mocks/obsidian';
 import { montageElement } from '../../../src/elements/montage/definition';
 import { MontageView } from '../../../src/elements/montage/view';
-import { parse, nextHeroToAct } from '../../../src/elements/montage/model';
+import { parse, nextHeroToAct, addMontageHero } from '../../../src/elements/montage/model';
 import { LogActionModal } from '../../../src/elements/montage/LogActionModal';
+import { MontageAddHeroModal } from '../../../src/elements/montage/ConfigModals';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
 import { styleGuardFindings } from '../kit/styleGuard';
 import montageYaml from '../../../src/elements/montage/example.yaml';
@@ -2634,6 +2635,146 @@ describe('a Montage block whose participants list holds items that are not a her
 		const { root } = await renderMontage('rounds: 2\nparticipants:\n  - \n  - nmae: Ash\n');
 		expect(heroRows(root)).toEqual([]);
 		expect(root.querySelector('.dse-mt__board-empty')?.textContent).toContain('No heroes yet');
+		expect(pageErrors).toEqual([]);
+	});
+});
+
+describe('SC-627: Add a hero refuses a name already on the board', () => {
+	const BOARD = ['rounds: 3', 'success_limit: 6', 'failure_limit: 3', 'participants:', '  - name: Kira', '  - name: Bram'].join('\n');
+	let pageErrors: ErrorEvent[];
+	const onError = (e: ErrorEvent) => {
+		pageErrors.push(e);
+		e.preventDefault();
+	};
+	beforeEach(() => {
+		pageErrors = [];
+		window.addEventListener('error', onError);
+	});
+	afterEach(() => {
+		window.removeEventListener('error', onError);
+		jest.restoreAllMocks();
+		jest.useRealTimers();
+		document.body.innerHTML = '';
+	});
+
+	/** Open Add a hero from the board's "+" and hand back its parts. `view` is the live MontageView and `modal` the window object. */
+	async function openAdd(source: string = BOARD) {
+		jest.useFakeTimers();
+		let view!: MontageView;
+		let modal!: MontageAddHeroModal;
+		const opened = jest.spyOn(MontageAddHeroModal.prototype, 'onOpen').mockImplementation(function (this: MontageAddHeroModal) {
+			modal = this;
+			opened.mockRestore();
+			this.onOpen();
+		});
+		const tracked = jest.spyOn(MontageView.prototype as any, 'openTrackedModal').mockImplementation(function (this: MontageView, ...args: unknown[]) {
+			view = this;
+			tracked.mockRestore();
+			return (this as any).openTrackedModal(...args);
+		});
+		const { root, host } = await renderMontage(source);
+		(root.querySelector('.dse-mt__board-addhero') as HTMLButtonElement).click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		const input = modalEl.querySelector('input[aria-label="Hero\'s name"]') as HTMLInputElement;
+		const add = modalEl.querySelector('button[aria-label="Add"]') as HTMLButtonElement;
+		const warn = modalEl.querySelector('.dse-mt__sheet-warn') as HTMLElement;
+		const type = (value: string) => {
+			input.value = value;
+			input.dispatchEvent(new Event('input'));
+		};
+		return { root, host, view, modal, modalEl, input, add, warn, type };
+	}
+
+	test('an exact duplicate disables Add and says why in the shared warn element', async () => {
+		const { add, warn, type } = await openAdd();
+		expect(warn.hidden).toBe(true);
+		expect(warn.getAttribute('role')).toBe('alert');
+		type('Kira');
+		expect(add.disabled).toBe(true);
+		expect(warn.hidden).toBe(false);
+		expect(warn.textContent).toBe('Kira is already on the board');
+	});
+
+	test('a casing variant is refused too, and the message gives the board\'s spelling', async () => {
+		const { add, warn, type } = await openAdd();
+		type('kIRA');
+		expect(add.disabled).toBe(true);
+		expect(warn.hidden).toBe(false);
+		expect(warn.textContent).toBe('Kira is already on the board');
+	});
+
+	test('a padded name is refused', async () => {
+		const { add, warn, type } = await openAdd();
+		type('  Kira  ');
+		expect(add.disabled).toBe(true);
+		expect(warn.textContent).toBe('Kira is already on the board');
+	});
+
+	test('a fresh name enables Add with the message hidden, and backing off a taken name clears the message', async () => {
+		const { add, warn, type } = await openAdd();
+		type('Osric');
+		expect(add.disabled).toBe(false);
+		expect(warn.hidden).toBe(true);
+		type('Bram');
+		expect(add.disabled).toBe(true);
+		expect(warn.hidden).toBe(false);
+		type('Bra');
+		expect(add.disabled).toBe(false);
+		expect(warn.hidden).toBe(true);
+		expect(warn.textContent).toBe('');
+		type('');
+		expect(add.disabled).toBe(true);
+		expect(warn.hidden).toBe(true);
+	});
+
+	test('a hero added from outside while the window is open counts: Add re-checks the live board and writes nothing', async () => {
+		const { host, view, add, warn, type, modalEl } = await openAdd();
+		type('Osric');
+		expect(add.disabled).toBe(false);
+		addMontageHero(view.currentModel(), 'osric');
+		add.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).not.toHaveBeenCalled();
+		expect(modalEl.isConnected).toBe(true);
+		expect(add.disabled).toBe(true);
+		expect(warn.textContent).toBe('osric is already on the board');
+	});
+
+	test('the view callback writes nothing for a duplicate even when the window check is bypassed', async () => {
+		const { host, root, modal, add, type } = await openAdd();
+		(modal as any).heroNamed = () => undefined;
+		type('KIRA');
+		expect(add.disabled).toBe(false);
+		add.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).not.toHaveBeenCalled();
+		expect(heroRows(root)).toHaveLength(2);
+	});
+
+	test('a fresh name still adds exactly one hero', async () => {
+		const { host, add, type } = await openAdd();
+		type('Osric');
+		add.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect(parseYaml((host.replaceSource as jest.Mock).mock.calls[0][0] as string).participants).toEqual([
+			{ name: 'Kira' },
+			{ name: 'Bram' },
+			{ name: 'Osric', skills_used: [] },
+		]);
+	});
+
+	test('items in participants that are not heroes are no names and throw nothing', async () => {
+		const { add, warn, type } = await openAdd(
+			['rounds: 3', 'participants:', '  - Ash', '  - 7', '  - nmae: Ash', '  - name: 7', '  - name: Kira'].join('\n'),
+		);
+		for (const typed of ['Ash', '7', 'nmae']) {
+			type(typed);
+			expect(add.disabled).toBe(false);
+			expect(warn.hidden).toBe(true);
+		}
+		type('kira');
+		expect(add.disabled).toBe(true);
 		expect(pageErrors).toEqual([]);
 	});
 });
