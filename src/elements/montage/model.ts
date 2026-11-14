@@ -129,6 +129,37 @@ export function isKnownMontageResult(result: string): result is MontageResult {
 	return result === 'success' || result === 'failure' || result === 'assist';
 }
 
+/**
+ * SC-625 — a key the montage does not read (a Director's own `table_notes:` at the top of the block, a `dc:` on a
+ * logged action) is carried as an OWN property of the model / entry, after the known ones, and `serialize` writes it
+ * back after the known keys in its original relative order. "Known" is every key the montage READS (there is no legacy
+ * spelling or alias to account for: each key is read under exactly one name), including one it reads and then leaves
+ * off because the value is empty or the wrong type (`skill: ''`, `description: 3`) — that stays dropped as before.
+ * The value is carried as it parsed (a nested map or list included); its formatting is whatever `stringifyYaml` does
+ * today (SC-599's question, not this one). `participants` items are not covered here: they are kept as the raw typed
+ * objects and already give their own extra keys back.
+ */
+const KNOWN_MODEL_KEYS: ReadonlySet<string> = new Set([
+	'title', 'description', 'rounds', 'success_limit', 'failure_limit', 'successes', 'failures',
+	'participants', 'entries', 'current_round', '_dse_anchor',
+]);
+const KNOWN_ENTRY_KEYS: ReadonlySet<string> = new Set(['hero', 'round', 'result', 'skill', 'note']);
+
+/** The own enumerable string keys of `source` that are not in `known`, as pairs in their original order; none for a
+ *  value that is not a mapping (a string or a list would otherwise yield its indices). */
+function unknownPairs(source: unknown, known: ReadonlySet<string>): [string, unknown][] {
+	if (source === null || typeof source !== 'object' || Array.isArray(source)) return [];
+	return Object.entries(source).filter(([key]) => !known.has(key));
+}
+
+/** Copies the pairs onto `target` as own data properties. `defineProperty`, never an assignment: a hand-written
+ *  `__proto__:` key must become a plain own key, not set the prototype of the object it lands on. */
+function carryUnknown(target: object, pairs: [string, unknown][]): void {
+	for (const [key, value] of pairs) {
+		Object.defineProperty(target, key, { value, writable: true, enumerable: true, configurable: true });
+	}
+}
+
 export interface MontageModel {
 	title?: string;
 	description?: string;
@@ -168,6 +199,7 @@ function sanitizeEntry(raw: unknown): MontageEntry | undefined {
 	const entry: MontageEntry = { hero: r.hero, round: r.round, result: r.result };
 	if (typeof r.skill === 'string' && r.skill.length > 0) entry.skill = r.skill;
 	if (typeof r.note === 'string' && r.note.length > 0) entry.note = r.note;
+	carryUnknown(entry, unknownPairs(r, KNOWN_ENTRY_KEYS)); // SC-625
 	return entry;
 }
 
@@ -252,6 +284,7 @@ function parseModel(data: unknown, _raw: string): MontageModel {
 	if (entries !== undefined) model.entries = entries;
 	model.current_round = d.current_round ?? 1;
 	if (d._dse_anchor !== undefined) model._dse_anchor = d._dse_anchor;
+	carryUnknown(model, unknownPairs(data, KNOWN_MODEL_KEYS)); // SC-625
 	return model;
 }
 
@@ -259,6 +292,17 @@ function parseModel(data: unknown, _raw: string): MontageModel {
 const PARSER_DEFAULT_KEYS = ['rounds', 'success_limit', 'failure_limit', 'successes', 'failures', 'current_round'] as const;
 
 export const parse = recordingDefaults(parseModel, PARSER_DEFAULT_KEYS);
+
+/** One entry in §B.5's fixed key order (hero, round, result, skill, note), then the keys the montage does not
+ *  know in their original order (SC-625). A fresh object: a correction that sets `skill`/`note` on an entry that
+ *  had none appends them to the entry itself, after its unknown keys, so the order is fixed here, not there. */
+function orderEntry(entry: MontageEntry): MontageEntry {
+	const ordered = { hero: entry.hero, round: entry.round, result: entry.result } as MontageEntry;
+	if (entry.skill !== undefined) ordered.skill = entry.skill;
+	if (entry.note !== undefined) ordered.note = entry.note;
+	carryUnknown(ordered, unknownPairs(entry, KNOWN_ENTRY_KEYS));
+	return ordered;
+}
 
 /**
  * FIX ROUND 3 (review-2 M-2) — reassembles into §B.5's FIXED key order before
@@ -285,9 +329,10 @@ export function serialize(model: MontageModel): string {
 	if (model.participants !== undefined && !(Array.isArray(model.participants) && model.participants.length === 0)) {
 		ordered.participants = model.participants;
 	}
-	if (model.entries && model.entries.length > 0) ordered.entries = model.entries;
+	if (model.entries && model.entries.length > 0) ordered.entries = model.entries.map(orderEntry);
 	ordered.current_round = model.current_round;
 	if (model._dse_anchor !== undefined) ordered._dse_anchor = model._dse_anchor;
+	carryUnknown(ordered, unknownPairs(model, KNOWN_MODEL_KEYS)); // SC-625: after the known keys, in their original order
 	// SC-482: `ordered` is a new object, so the record (keyed on `model`) filters it by `model`.
 	return stringifyOmittingUntouched(model, ordered);
 }

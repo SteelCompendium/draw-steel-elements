@@ -1223,6 +1223,40 @@ describe('[X] integrity: what a montage write leaves alone', () => {
 		expect(data.participants[0]).toEqual({ name: 'Kira', player: 'Sam', skills_used: [] });
 	});
 
+	// SC-625: what a Director typed that the montage does not read. A fixture with unknown keys at the top and on an action, in the middle of a play.
+	const OWN = [
+		'```ds-montage', 'table_notes: keep me', 'rounds: 3', 'success_limit: 9', 'failure_limit: 9', 'gm:', '  author: Sam', '  tags: [a, b]', 'successes: 1', 'failures: 0',
+		'participants:', '  - name: Kira', '    skills_used: [Nature]', '  - name: Bram', '    skills_used: []',
+		'entries:', '  - hero: Kira', '    round: 1', '    result: success', '    skill: Nature', '    dc: 12', '    check:', '      roll: 17', 'current_round: 2', '```',
+	].join('\n');
+	const ENTRY_AFTER = { hero: 'Kira', round: 1, result: 'success', skill: 'Nature', dc: 12, check: { roll: 17 } };
+
+	test.each(ACTIONS)('[X09] %s keeps the keys the montage does not know, at the top of the block and on a logged action', async (name, act) => {
+		const { root, flush, text } = await mountNote(`# Own keys\n\nABOVE\n\n${OWN}\n\nBELOW\n`);
+		act(root);
+		await flush();
+		const data = parseYaml(blocksOf(text())[0]);
+		expect(data.table_notes).toBe('keep me');
+		expect(data.gm).toEqual({ author: 'Sam', tags: ['a', 'b'] });
+		// Reset progress clears the log itself, so there is no action left to carry a key.
+		if (name !== 'Reset progress') expect(data.entries[0]).toEqual(ENTRY_AFTER);
+		expect(Object.keys(data).slice(-2)).toEqual(['table_notes', 'gm']);
+	});
+
+	test('[X10] two montage blocks in one note: a write to the second leaves the first one\'s unknown keys, and its own, alone', async () => {
+		const other = OWN.replace('table_notes: keep me', 'table_notes: the other table');
+		const note = `ABOVE\n\n${other}\n\nBETWEEN\n\n${OWN}\n\nBELOW\n`;
+		const { root, flush, text } = await mountNote(note, 1);
+		ctl(root, 'montage.quick.failure', 0).click();
+		await flush();
+		const [first, second] = blocksOf(text());
+		expect(first).toBe(blocksOf(note)[0]);
+		expect(parseYaml(second).table_notes).toBe('keep me');
+		expect(parseYaml(second).entries[0]).toEqual(ENTRY_AFTER);
+		expect(text().startsWith('ABOVE\n\n')).toBe(true);
+		expect(text().endsWith('\n```\n\nBELOW\n')).toBe(true);
+	});
+
 	test('[X07] an edit the Director made to the prose above the block after it was drawn is kept by the write (the splice re-reads the note)', async () => {
 		const note = vaultNote('fresh');
 		const { app, root, flush, text } = await mountNote(note);
@@ -1500,14 +1534,14 @@ describe('[F] keyboard focus: a write, a strip toggle or a closed window hands f
 describe('[K] filed bugs', () => {
 	const UNKNOWN = ['table_notes: keep me', 'rounds: 3', 'success_limit: 5', 'failure_limit: 5', 'successes: 1', 'failures: 0', 'participants:', '  - name: Kira', '    skills_used: [Nature]', 'entries:', '  - hero: Kira', '    round: 1', '    result: success', '    skill: Nature', '    dc: 12', 'current_round: 2'].join('\n');
 
-	test.failing('[K01] a write keeps a top-level key the product does not know [known bug SC-625]', async () => {
+	test('[K01] a write keeps a top-level key the product does not know', async () => {
 		const { root, flush, last } = await mount(UNKNOWN);
 		ctl(root, 'montage.quick.failure', 0).click();
 		await flush();
 		expect(last().table_notes).toBe('keep me');
 	});
 
-	test.failing('[K02] a write keeps a key the product does not know inside an entry [known bug SC-625]', async () => {
+	test('[K02] a write keeps a key the product does not know inside an entry', async () => {
 		const { root, flush, last } = await mount(UNKNOWN);
 		ctl(root, 'montage.quick.failure', 0).click();
 		await flush();

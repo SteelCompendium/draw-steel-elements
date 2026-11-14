@@ -6,7 +6,7 @@
 // present key, so serialize(parse(x)) reproduces x's own bytes whenever x already
 // carries the full field set in schema order.
 import { parseYaml, stringifyYaml } from '../../mocks/obsidian';
-import { parse, serialize, montageOutcome, logMontageEntry, addMontageHero } from '../../../src/elements/montage/model';
+import { parse, serialize, montageOutcome, logMontageEntry, addMontageHero, correctMontageEntry, endMontageRound, setMontageLimits } from '../../../src/elements/montage/model';
 import type { MontageModel } from '../../../src/elements/montage/model';
 import montageExample from '../../../src/elements/montage/example.yaml';
 
@@ -492,5 +492,117 @@ describe('a participant with no skills_used key: no file churn (the note keeps w
 		const m = parseLikePipeline(source);
 		logMontageEntry(m, { hero: 'Kira', round: 1, result: 'success', skill: 'Nature' });
 		expect(serialize(m)).toContain('  - name: Kira\n    skills_used:\n      - Nature\n  - name: Bram');
+	});
+});
+
+// SC-625 — a key the montage does not read is written back after the known ones, at the top of the block and on a logged action.
+describe('keys the montage does not know survive a write (SC-625)', () => {
+	const keysOf = (yaml: string): string[] => Object.keys(parseYaml(yaml));
+	const source = [
+		'table_notes: keep me',
+		'title: Cross the Gap',
+		'rounds: 3',
+		'success_limit: 5',
+		'failure_limit: 4',
+		'gm_meta:',
+		'  author: Sam',
+		'  tags: [a, b]',
+		'successes: 1',
+		'failures: 0',
+		'participants:',
+		'  - name: Kira',
+		'    skills_used: [Nature]',
+		'entries:',
+		'  - dc: 12',
+		'    hero: Kira',
+		'    round: 1',
+		'    check:',
+		'      roll: 17',
+		'      edges: [high ground]',
+		'    result: success',
+		'    skill: Nature',
+		'    seen_by: [Sam, Bo]',
+		'current_round: 2',
+		'zz_last: 9',
+	].join('\n');
+
+	test('top-level unknown keys (a scalar, a nested map, a list) come back by value after another action is logged', () => {
+		const m = parseLikePipeline(source);
+		logMontageEntry(m, { hero: 'Kira', round: 2, result: 'failure' });
+		const out = parseYaml(serialize(m));
+		expect(out.table_notes).toBe('keep me');
+		expect(out.gm_meta).toEqual({ author: 'Sam', tags: ['a', 'b'] });
+		expect(out.zz_last).toBe(9);
+	});
+
+	test('top-level order: the known keys in their fixed order, then the unknown ones in the order they were written', () => {
+		const m = parseLikePipeline(source);
+		endMontageRound(m);
+		expect(keysOf(serialize(m))).toEqual([
+			'title', 'rounds', 'success_limit', 'failure_limit', 'successes', 'failures', 'participants', 'entries', 'current_round',
+			'table_notes', 'gm_meta', 'zz_last',
+		]);
+	});
+
+	test('an action keeps its unknown keys (nested values too) while another action is logged, and they follow the five known keys in their original order', () => {
+		const m = parseLikePipeline(source);
+		logMontageEntry(m, { hero: 'Kira', round: 2, result: 'success', skill: 'Insight', note: 'Quick.' });
+		const out = parseYaml(serialize(m));
+		expect(out.entries[0]).toEqual({ hero: 'Kira', round: 1, result: 'success', skill: 'Nature', dc: 12, check: { roll: 17, edges: ['high ground'] }, seen_by: ['Sam', 'Bo'] });
+		expect(Object.keys(out.entries[0])).toEqual(['hero', 'round', 'result', 'skill', 'dc', 'check', 'seen_by']);
+		expect(out.entries[1]).toEqual({ hero: 'Kira', round: 2, result: 'success', skill: 'Insight', note: 'Quick.' }); // a new action has no extras
+	});
+
+	test('an action corrected to gain a note and a new skill keeps its unknown keys, still after the known ones', () => {
+		const m = parseLikePipeline(source);
+		correctMontageEntry(m, m.entries![0], { hero: 'Kira', round: 1, result: 'failure', skill: 'Insight', note: 'Slipped.' });
+		const out = parseYaml(serialize(m));
+		expect(Object.keys(out.entries[0])).toEqual(['hero', 'round', 'result', 'skill', 'note', 'dc', 'check', 'seen_by']);
+		expect(out.entries[0]).toMatchObject({ result: 'failure', skill: 'Insight', note: 'Slipped.', dc: 12 });
+	});
+
+	test('Add a hero and Set limits keep the top-level unknown keys and the actions\' unknown keys', () => {
+		const m = parseLikePipeline(source);
+		addMontageHero(m, 'Bram');
+		setMontageLimits(m, 6, 3);
+		const out = parseYaml(serialize(m));
+		expect(out.table_notes).toBe('keep me');
+		expect(out.participants.map((p: { name: string }) => p.name)).toEqual(['Kira', 'Bram']);
+		expect(out.success_limit).toBe(6);
+		expect(out.entries[0].dc).toBe(12);
+	});
+
+	test('an unknown key sitting before the known ones moves behind them; serialize is stable on a second pass', () => {
+		const once = serialize(parseLikePipeline(source));
+		expect(serialize(parseLikePipeline(once))).toBe(once);
+	});
+
+	test('an action the parser drops stays dropped, with its unknown keys; the kept action keeps its own', () => {
+		jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const m = parseLikePipeline('entries:\n  - hero: Kira\n    result: success\n    dc: 9\n  - hero: Bram\n    round: 1\n    result: success\n    dc: 8');
+		expect(m.entries).toEqual([{ hero: 'Bram', round: 1, result: 'success', dc: 8 }]);
+		expect(parseYaml(serialize(m)).entries).toEqual([{ hero: 'Bram', round: 1, result: 'success', dc: 8 }]);
+	});
+
+	test('a `skill`/`note` the parser leaves off because it is empty is not resurrected as an unknown key', () => {
+		const m = parseLikePipeline('entries:\n  - hero: Kira\n    round: 1\n    result: success\n    skill: ""\n    note: ~');
+		expect(parseYaml(serialize(m)).entries).toEqual([{ hero: 'Kira', round: 1, result: 'success' }]);
+	});
+
+	test('a block with nothing the montage does not know serializes exactly as before (no extra keys appear)', () => {
+		const known = 'rounds: 2\nsuccess_limit: 5\nfailure_limit: 3\nsuccesses: 0\nfailures: 0\ncurrent_round: 1';
+		expect(keysOf(serialize(parseLikePipeline(known)))).toEqual(['rounds', 'success_limit', 'failure_limit', 'successes', 'failures', 'current_round']);
+	});
+
+	test('a `__proto__` key in hand-written YAML pollutes nothing and does not crash, at the top level and on an action', () => {
+		const text = 'rounds: 2\nsuccess_limit: 5\nfailure_limit: 3\nsuccesses: 0\nfailures: 0\nentries:\n  - hero: Kira\n    round: 1\n    result: success\n    __proto__:\n      polluted: yes\n__proto__:\n  polluted: yes\ncurrent_round: 1';
+		const m = parseLikePipeline(text);
+		logMontageEntry(m, { hero: 'Kira', round: 2, result: 'failure' });
+		const out = serialize(m);
+		expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+		expect(Object.getPrototypeOf(m)).toBe(Object.prototype);
+		expect(Object.getPrototypeOf(m.entries![0])).toBe(Object.prototype);
+		expect(out).toContain('polluted');
+		expect(parseYaml(out).entries[1]).toEqual({ hero: 'Kira', round: 2, result: 'failure' });
 	});
 });
