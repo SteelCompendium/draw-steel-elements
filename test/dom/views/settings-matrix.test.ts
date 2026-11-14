@@ -480,7 +480,23 @@ describe('SC-440 matrix: the Compendium, Links and Initiative tracker fields (da
 		expect(loaded.plugin.syncOptions()).toEqual({ root: 'Rules/Draw Steel', releaseTag: 'v4.20260716T000000', locale: 'en' });
 		rowOf(tab, { key: 'compendiumReleaseTag' }).texts[0].trigger('');
 		await flushAsync(2);
-		expect(loaded.plugin.syncOptions().releaseTag).toBeUndefined();
+		expect(loaded.plugin.syncOptions()?.releaseTag).toBeUndefined();
+	});
+
+	test('Destination folder typed empty or as the vault root (SC-643): the field stores what was typed, Sync uses the default folder for a blank and refuses the root', async () => {
+		const loaded = await loadPlugin({ experimental: true });
+		const tab = await openTab(loaded);
+		const field = rowOf(tab, { key: 'compendiumDestinationDirectory' }).texts[0];
+		for (const [typed, root] of [['', 'DS Compendium'], ['   ', 'DS Compendium'], ['Rules/Draw Steel', 'Rules/Draw Steel']] as const) {
+			field.trigger(typed);
+			await flushAsync(2);
+			expect({ stored: loaded.plugin.settings.compendiumDestinationDirectory, root: loaded.plugin.syncOptions()?.root }).toEqual({ stored: typed, root });
+		}
+		for (const typed of ['/', '.', ' / ', '..']) {
+			field.trigger(typed);
+			await flushAsync(2);
+			expect({ typed, stored: loaded.plugin.settings.compendiumDestinationDirectory, options: loaded.plugin.syncOptions() }).toEqual({ typed, stored: typed, options: null });
+		}
 	});
 
 	test('the Locale dropdown offers English only, and the SCC link fallback toggle writes sccWebFallback (default on)', async () => {

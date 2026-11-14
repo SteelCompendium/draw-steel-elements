@@ -6,12 +6,16 @@ import { browser, expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
 import { eventsSince } from '../../driver/recorders';
 import { state } from '../../driver/state';
-import { allowPageErrors, closeSettings, compendiumButtons, ctl, noticesHere, onMain, openAt, pressOn, releaseStub, reloadPlugin } from '../../driver/settingsDrive';
+import { allowPageErrors, closeSettings, compendiumButtons, ctl, noticesHere, onMain, openAt, pressOn, readSettings, releaseStub, reloadPlugin, shownValue } from '../../driver/settingsDrive';
 
 const COMPENDIUM = 'settings.page.compendium';
 const SYNC = 'settings.compendium.sync';
 const CHECK = 'settings.compendium.check';
 const RELEASE = { tag_name: 'v9.9.9', assets: [{ name: 'md-dse-unified-en.zip', url: 'https://stub.invalid/x.zip' }] };
+const TRASH_OFFER = `Array.from(document.querySelectorAll('.modal-container')).some((m) => /Move old compendium to trash/.test(m.textContent))`;
+/** Close the "Existing compendium folder found" window if one is open, through its own X (never its trash button). */
+const closeLegacyWindow = (): Promise<boolean> =>
+	dse.page(`(() => { const m = Array.from(document.querySelectorAll('.modal-container')).find((c) => /Existing compendium folder found/.test(c.textContent)); if (!m) return false; m.querySelector('.modal-close-button, .modal-header-button')?.click(); return true; })()`);
 const IDLE = { sync: ['Sync', false], check: ['Check for updates', false] };
 
 /** Wait until the stub has been asked `n` times (the click got as far as the network). */
@@ -94,8 +98,8 @@ describe('settings tab: Sync and Check for updates', () => {
 		}
 	});
 
-	// NEVER clicks the trash button, whatever opens: a window that does is closed through its own X.
-	knownBug('SC-643', '[SET-C03] with the Destination folder emptied, Sync never opens a window offering to move the vault root to the trash', async () => {
+	// Nothing here ever clicks a trash button (SC-643, fixed): a window that did open is closed through its own X.
+	it('[SET-C03] Destination folder emptied: Sync falls back to the default folder (the release lookup runs) and never opens a window offering to move the vault root to the trash', async () => {
 		await dse.openNote('Stamina/basic.md');
 		await releaseStub.install();
 		await openAt(COMPENDIUM);
@@ -103,18 +107,36 @@ describe('settings tab: Sync and Check for updates', () => {
 			await dse.type(ctl('settings.compendium.destination'), 'x', { replace: true });
 			await browser.keys(['Control', 'a']);
 			await browser.keys('Backspace');
+			expect(await shownValue('settings.compendium.destination')).toBe('');
+			expect((await readSettings()).compendiumDestinationDirectory).toBe(''); // the setting is not rewritten
 			await dse.click(ctl(SYNC));
-			const trashOffer = `Array.from(document.querySelectorAll('.modal-container')).some((m) => /Move old compendium to trash/.test(m.textContent))`;
-			await browser.waitUntil(async () => (await releaseStub.calls()).length > 0 || (await dse.page<boolean>(trashOffer)), { timeout: 8000, interval: 40, timeoutMsg: 'neither a sync nor a window started' });
-			const offered = await dse.page<boolean>(trashOffer);
-			// Close whatever opened through its own X (or its "Keep everything" button): never the trash button.
-			await dse.page(`(() => { const m = Array.from(document.querySelectorAll('.modal-container')).find((c) => /Existing compendium folder found/.test(c.textContent)); if (!m) return false; const x = m.querySelector('.modal-close-button, .modal-header-button'); if (x) x.click(); else Array.from(m.querySelectorAll('button')).find((b) => b.textContent === 'Keep everything')?.click(); return true; })()`);
-			expect(offered).toBe(false);
+			await asked(1); // the blank resolved to the default folder, so the sync went ahead
+			expect(await dse.page<boolean>(TRASH_OFFER)).toBe(false);
+			await dse.waitFor(`document.querySelector('[data-dse-control="${SYNC}"]').textContent === 'Syncing…'`, 'the sync to be in flight');
+			await closeLegacyWindow();
 		} finally {
 			await closeSettings();
 			await dse.setPrefs({}); // data.json back to the shipped state (the destination folder included)
 		}
-	}, { failsWith: /Expected: false/ });
+	});
+
+	it('[SET-C07] Destination folder set to the vault root ("/"): Sync is refused with a Notice naming the setting, no lookup is made, no window opens', async () => {
+		await dse.openNote('Stamina/basic.md');
+		await releaseStub.install();
+		await openAt(COMPENDIUM);
+		try {
+			await dse.type(ctl('settings.compendium.destination'), '/', { replace: true });
+			await dse.click(ctl(SYNC));
+			await dse.waitFor(`Array.from(document.querySelectorAll('.notice')).some((n) => /Destination folder can't be the vault root/.test(n.textContent))`, 'the refusal Notice');
+			expect(await releaseStub.calls()).toEqual([]); // nothing was looked up
+			expect(await dse.page<boolean>(TRASH_OFFER)).toBe(false);
+			expect(await dse.page<boolean>(`Array.from(document.querySelectorAll('.modal-container')).some((m) => /Existing compendium folder found/.test(m.textContent))`)).toBe(false);
+			expect(await compendiumButtons()).toEqual(IDLE); // and the busy lock was released
+		} finally {
+			await closeSettings();
+			await dse.setPrefs({});
+		}
+	});
 
 	knownBug('SC-646', '[SET-C04] a failed Sync (the release lookup answers 404) leaves no unhandled promise rejection behind', async () => {
 		// Only the stubbed 404's own errors: the designed console.error and the bug itself (any other failure inside Sync still fails this test).
