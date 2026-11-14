@@ -7,6 +7,10 @@ import { BASIC, blockOf, focusAnywhere, interestOf, patienceOf } from '../../dri
 
 const NEGO = 'ds-negotiation';
 
+/** Which appeal chip holds focus (its position among the Motivation chips of the card in the editor; -1 for none). */
+const chipIndexInFocus = (): Promise<number> =>
+	dse.page<number>(`[...document.querySelectorAll('.cm-content [data-dse-element="negotiation"] [data-dse-control="negotiation.appeal.motivation"]')].indexOf(document.activeElement)`);
+
 describe('negotiation: keyboard focus after a save in Live Preview', () => {
 	it('[NEGO-L01] ArrowRight on the focused Patience seal: once the save has landed, focus is on the seal that is now checked (4), not on the card anchor', async () => {
 		await dse.openNote(BASIC, { mode: 'live-preview' });
@@ -19,7 +23,7 @@ describe('negotiation: keyboard focus after a save in Live Preview', () => {
 		expect(await focusAnywhere()).toMatchObject({ ctl: 'negotiation.patience.seal', value: '4', inNego: true });
 	});
 
-	knownBug('SC-642', '[NEGO-L02] Live Preview: Enter on Complete Argument leaves focus inside the card', async () => {
+	it('[NEGO-L02] Live Preview: Enter on Complete Argument leaves focus inside the card, on the first appeal chip', async () => {
 		await dse.openNote(BASIC, { mode: 'live-preview' });
 		const root = dse.block(NEGO, 0);
 		await dse.click(root.control('negotiation.tier.row', { nth: 3 }));
@@ -29,9 +33,36 @@ describe('negotiation: keyboard focus after a save in Live Preview', () => {
 		await dse.settle();
 		expect(interestOf(await blockOf(BASIC))).toBe(4);
 		const f = await focusAnywhere();
-		expect(f).toMatchObject({ inNego: true });
+		expect(f).toMatchObject({ inNego: true, ctl: 'negotiation.appeal.motivation' });
 		expect(f.tag).not.toBe('BODY');
-	}, { failsWith: /inNego|BODY/ });
+	});
+
+	it('[NEGO-L04] Live Preview: after Complete Argument the next Tab continues inside the card, to the second appeal chip', async () => {
+		await dse.openNote(BASIC, { mode: 'live-preview' });
+		const root = dse.block(NEGO, 0);
+		await dse.click(root.control('negotiation.tier.row', { nth: 3 }));
+		const complete = root.control('negotiation.complete');
+		await dse.focusByScript(complete);
+		await dse.waitForWrite(BASIC, () => dse.press('Enter', complete));
+		await dse.settle();
+		expect(await chipIndexInFocus()).toBe(0);
+		await dse.press('Tab');
+		expect(await focusAnywhere()).toMatchObject({ inNego: true, ctl: 'negotiation.appeal.motivation' });
+		expect(await chipIndexInFocus()).toBe(1);
+	});
+
+	it('[NEGO-L05] Live Preview: a Complete Argument made with focus on the page pulls no focus into the card', async () => {
+		await dse.openNote(BASIC, { mode: 'live-preview' });
+		const root = dse.block(NEGO, 0);
+		await dse.click(root.control('negotiation.tier.row', { nth: 3 }));
+		await dse.page(`document.activeElement.blur()`);
+		expect(await focusAnywhere()).toMatchObject({ inNego: false });
+		// A scripted press: a pointer press would focus the button, which is the case L02 covers.
+		await dse.waitForWrite(BASIC, () => dse.page(`document.querySelector('.cm-content [data-dse-control="negotiation.complete"]').click()`));
+		await dse.settle();
+		expect(interestOf(await blockOf(BASIC))).toBe(4);
+		expect(await focusAnywhere()).toMatchObject({ inNego: false });
+	});
 
 	knownBug('SC-639', '[NEGO-L03] Live Preview: Reset chosen from the keyboard leaves focus inside the card', async () => {
 		await dse.openNote(BASIC, { mode: 'live-preview' });

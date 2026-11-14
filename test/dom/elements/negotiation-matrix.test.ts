@@ -543,6 +543,76 @@ describe('SC-439 A: Complete Argument and the tier radiogroup — enabled or dis
 	});
 });
 
+// SC-642: Complete Argument disarms the button that was pressed; Chromium would drop focus from it, so focus goes to the first usable control
+// of the Argument tab (focusRules.ts). jsdom keeps a disabled button as `document.activeElement`, so these pin WHICH control is chosen and WHEN
+// focus moves; that Chromium really loses it, and keeps it now, is the real-Obsidian e2e [NEGO-F02] / [NEGO-L02].
+describe('SC-642: keyboard focus after Complete Argument', () => {
+	/** Choose a tier (Crit unless told), focus Complete (a keyboard user's Tab), and press it. */
+	async function completeFromKeyboard(source: string, tier = 3) {
+		const m = await mount(source);
+		tierRow(m.root(), tier).click();
+		complete(m.root()).focus();
+		expect(document.activeElement).toBe(complete(m.root()));
+		complete(m.root()).click();
+		await m.flush();
+		return m;
+	}
+
+	test('focus goes to the first appeal chip, the start of the next argument, not the disabled Complete button', async () => {
+		const { root, writes } = await completeFromKeyboard(src());
+		expect(writes()).toHaveLength(1);
+		expect(complete(root())).toHaveProperty('disabled', true);
+		expect(document.activeElement).toBe(chip(root(), 'motivation', 0));
+	});
+
+	test('with no Motivation chips, the first Pitfall chip; with no chips at all, the lie box (the one modifier that is always enabled)', async () => {
+		const pitfallsOnly = await completeFromKeyboard(src({ motivations: [] }));
+		expect(document.activeElement).toBe(chip(pitfallsOnly.root(), 'pitfall', 0));
+		document.body.innerHTML = '';
+		const none = await completeFromKeyboard(src({ motivations: [], pitfalls: [] }));
+		expect(document.activeElement).toBe(mod(none.root(), 'lie'));
+	});
+
+	test('a Complete that ends the negotiation (the tiers go static, Complete stays disabled) still lands on the first appeal chip', async () => {
+		const { root } = await completeFromKeyboard(src({ current_patience: 1 }), 0); // Low: -1 Interest, -1 Patience
+		expect(root().querySelector('.dse-nt')!.hasAttribute('data-ended')).toBe(true);
+		expect(ctls(root(), 'negotiation.tier.row')).toHaveLength(0);
+		expect(document.activeElement).toBe(chip(root(), 'motivation', 0));
+	});
+
+	test('a spent first motivation is still the landing: its chip is a usable button', async () => {
+		const { root } = await completeFromKeyboard(src({}, [HA]));
+		expect(document.activeElement).toBe(chip(root(), 'motivation', 0));
+	});
+
+	test('focus on the page (nothing in the card) when Complete runs: no focus is pulled into the card', async () => {
+		const { root, flush, writes } = await mount(src());
+		tierRow(root(), 3).click();
+		(document.activeElement as HTMLElement).blur();
+		complete(root()).click();
+		await flush();
+		expect(writes()).toHaveLength(1);
+		expect(document.activeElement).toBe(document.body);
+	});
+
+	test('focus on a control outside the card, or on another control of the card, is left where it is', async () => {
+		const { root, flush } = await mount(src());
+		tierRow(root(), 3).click();
+		const outside = document.body.appendChild(document.createElement('button'));
+		outside.focus();
+		complete(root()).click();
+		await flush();
+		expect(document.activeElement).toBe(outside);
+
+		tierRow(root(), 3).click();
+		const pitfall = chip(root(), 'pitfall', 0);
+		pitfall.focus();
+		complete(root()).click();
+		await flush();
+		expect(document.activeElement).toBe(pitfall);
+	});
+});
+
 describe('SC-439 A: appeal / mention chips and the modifier lines, for every subset', () => {
 	const SUBSETS: Array<{ name: string; mots: number[]; pit: boolean }> = [];
 	for (const mots of [[], [0], [1], [0, 1]]) for (const pit of [false, true]) SUBSETS.push({ name: `motivations ${JSON.stringify(mots)}${pit ? ' + the pitfall' : ''}`, mots, pit });

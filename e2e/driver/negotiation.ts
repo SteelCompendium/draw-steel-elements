@@ -122,6 +122,10 @@ export const focusState = (n = 0): Promise<{ ctl: string | null; inCard: boolean
 		return { ctl: a?.closest('[data-dse-control]')?.getAttribute('data-dse-control') ?? null, inCard: !!(a && c && c.contains(a)), tag: a?.tagName ?? '' };
 	})()`);
 
+/** SC-642: which one of the controls with this id holds focus (its position among them, in DOM order; -1 when focus is on none of them), in the n-th Reading-view card. */
+export const onNthOfControl = (id: string, n = 0): Promise<number> =>
+	dse.page<number>(`[...${card(n)}.querySelectorAll('[data-dse-control="${id}"]')].indexOf(document.activeElement)`);
+
 /** Open the options menu with a real click and wait for the native menu to show. */
 export async function openMenu(root: Scope): Promise<void> {
 	await dse.click(root.control('negotiation.menu'));

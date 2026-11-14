@@ -4,7 +4,7 @@
 // Negotiation/basic.md: Interest 3 / Patience 3.
 import { expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
-import { BASIC, blockOf, focusState, interestOf, openNego, patienceOf, patienceSeal, TABS } from '../../driver/negotiation';
+import { BASIC, blockOf, focusState, onNthOfControl, interestOf, openNego, patienceOf, patienceSeal, TABS } from '../../driver/negotiation';
 
 describe('negotiation: keyboard focus after a save', () => {
 	knownBug('SC-639', '[NEGO-F01] Reset chosen from the keyboard (Enter on the options button, then Down and Enter in the menu): focus lands inside the card, not on the page', async () => {
@@ -24,7 +24,10 @@ describe('negotiation: keyboard focus after a save', () => {
 		expect(f.tag).not.toBe('BODY');
 	}, { failsWith: /BODY|inCard/ });
 
-	knownBug('SC-642', '[NEGO-F02] Complete Argument pressed with Enter: focus stays inside the card (the pressed button disarms itself)', async () => {
+	// SC-642: Complete Argument disarms the very button that was pressed, and Chromium drops focus from a disabled button on its next frame
+	// (measured: blur ~13 ms after the press, the save lands ~450 ms later; no rebuild is involved). Focus now goes to the FIRST USABLE control of the
+	// Argument tab, where the next argument starts: the first Motivation chip (src/elements/negotiation/focusRules.ts).
+	it('[NEGO-F02] Complete Argument pressed with Enter: focus stays inside the card, on the first appeal chip (the pressed button disarms itself)', async () => {
 		const root = await openNego(BASIC);
 		await dse.click(root.control('negotiation.tier.row', { nth: 3 }));
 		const complete = root.control('negotiation.complete');
@@ -33,7 +36,32 @@ describe('negotiation: keyboard focus after a save', () => {
 		await dse.settle();
 		expect(interestOf(await blockOf(BASIC))).toBe(4);
 		const f = await focusState();
-		expect(f).toMatchObject({ inCard: true });
+		expect(f).toMatchObject({ inCard: true, ctl: 'negotiation.appeal.motivation' });
 		expect(f.tag).not.toBe('BODY');
-	}, { failsWith: /BODY|inCard/ });
+	});
+
+	it('[NEGO-F03] after Complete Argument the next Tab continues inside the card: from the first appeal chip to the second', async () => {
+		const root = await openNego(BASIC);
+		await dse.click(root.control('negotiation.tier.row', { nth: 3 }));
+		const complete = root.control('negotiation.complete');
+		await dse.tabTo(complete, TABS);
+		await dse.waitForWrite(BASIC, () => dse.press('Enter', complete));
+		await dse.settle();
+		expect(await onNthOfControl('negotiation.appeal.motivation')).toBe(0);
+		await dse.press('Tab');
+		expect(await focusState()).toMatchObject({ inCard: true, ctl: 'negotiation.appeal.motivation' });
+		expect(await onNthOfControl('negotiation.appeal.motivation')).toBe(1);
+	});
+
+	it('[NEGO-F04] a Complete Argument made while focus is on the page pulls no focus into the card', async () => {
+		const root = await openNego(BASIC);
+		await dse.click(root.control('negotiation.tier.row', { nth: 3 }));
+		await dse.page(`document.activeElement.blur()`);
+		expect(await focusState()).toMatchObject({ inCard: false });
+		// A scripted press: a pointer press would focus the button, which is the case F02 covers.
+		await dse.waitForWrite(BASIC, () => dse.page(`document.querySelector('.markdown-reading-view [data-dse-control="negotiation.complete"]').click()`));
+		await dse.settle();
+		expect(interestOf(await blockOf(BASIC))).toBe(4);
+		expect(await focusState()).toMatchObject({ inCard: false, tag: 'BODY' });
+	});
 });

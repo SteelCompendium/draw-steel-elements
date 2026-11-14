@@ -230,3 +230,51 @@ describe('controlFocus (SC-626): `at` names which control, `fallbacks` name the 
 		expect(controlSuccessor(root, focus)).toBe(off);
 	});
 });
+
+describe('controlFocus (SC-642): `fromDisabled` hands focus off a control that disabled itself in place', () => {
+	/** Two buttons in the root: the one that disarms itself when pressed, and where focus should go. jsdom keeps a disabled button as `document.activeElement`
+	 *  (Chromium drops it on the next frame), which is the state the option is for. */
+	function disarmed(): { fallbacks: Record<string, string[]>; focus: ReturnType<typeof captureControlFocus>; other: HTMLElement; self: HTMLButtonElement } {
+		const [self, other] = render(['n.complete', 'n.first']);
+		self.focus();
+		const focus = captureControlFocus(root);
+		self.disabled = true;
+		return { fallbacks: { 'n.complete': ['n.first'] }, focus, other, self };
+	}
+
+	test('captured before the disabling and restored after it, the fallback takes focus off the disabled control', () => {
+		const { fallbacks, focus, other, self } = disarmed();
+		expect(document.activeElement).toBe(self); // the disabled node still "holds" focus
+		expect(restoreControlFocus(root, focus, {}, fallbacks, { fromDisabled: true })).toBe(true);
+		expect(document.activeElement).toBe(other);
+	});
+
+	test('without the option the old rule stands: a focused (disabled) control counts as holding focus, so nothing moves', () => {
+		const { fallbacks, focus, self } = disarmed();
+		expect(restoreControlFocus(root, focus, {}, fallbacks)).toBe(false);
+		expect(document.activeElement).toBe(self);
+	});
+
+	test('the option never takes focus from a control that is usable, or from outside the root, or without a token', () => {
+		const [self, other] = render(['n.complete', 'n.first']);
+		self.focus();
+		const focus = captureControlFocus(root);
+		const fallbacks = { 'n.complete': ['n.first'] };
+		expect(restoreControlFocus(root, focus, {}, fallbacks, { fromDisabled: true })).toBe(false); // the pressed control is still enabled and focused
+		expect(document.activeElement).toBe(self);
+
+		self.disabled = true;
+		const outside = document.body.appendChild(document.createElement('button'));
+		outside.focus();
+		expect(restoreControlFocus(root, focus, {}, fallbacks, { fromDisabled: true })).toBe(false); // focus moved elsewhere on its own
+		expect(document.activeElement).toBe(outside);
+
+		self.disabled = false;
+		self.focus();
+		self.disabled = true;
+		expect(restoreControlFocus(root, null, {}, fallbacks, { fromDisabled: true })).toBe(false); // focus was not inside the root when captured
+		expect(document.activeElement).toBe(self);
+		expect(other).not.toBe(document.activeElement);
+	});
+});
+
