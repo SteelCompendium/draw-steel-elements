@@ -272,16 +272,73 @@ function sanitizeParticipants(raw: unknown): unknown {
 	return kept.length > 0 ? kept : undefined;
 }
 
+/** The six number keys with the value an absent one gets. The same table drives `parseModel` and the SC-482 record. */
+const NUMBER_DEFAULTS = {
+	rounds: 2, success_limit: 0, failure_limit: 0, successes: 0, failures: 0, current_round: 1,
+} as const;
+type NumberKey = keyof typeof NUMBER_DEFAULTS;
+
+/**
+ * SC-628 — a value typed with the wrong TYPE. The model always holds the value as the type the board needs (the title as text, a
+ * number key as a number), and a write gives back what the user typed for every value the montage did not change.
+ *
+ * What was typed lives here, module-private and keyed by the parsed model: never an own property of the model (SC-625: `serialize`
+ * writes every own key outside the known sets), the same way SC-482's record of absent defaults lives in `undeclaredDefaults.ts`.
+ * `title` remembers the text it was read as; a number key remembers the number it was read as (the value of a quoted number, or the
+ * default for a non-number). `serialize` writes the typed raw value back only while the model still holds exactly that text / number,
+ * so a value the montage changed (Add a round, End round, a tally) is written as the plain number it now is. A native number, an
+ * absent key and a `null` are remembered as nothing: they are written as they are today.
+ */
+interface TypedValues {
+	title?: { text: string; raw: unknown };
+	numbers: Map<NumberKey, { value: number; raw: unknown }>;
+}
+const typedValues = new WeakMap<object, TypedValues>();
+
+/** A decimal number as a person types it: no hex, no `Infinity`, no empty or blank string. */
+const PLAIN_NUMBER = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+
+/** The number a quoted number key holds, or `undefined` when the text is not a plain finite number. */
+function numberFromText(text: string): number | undefined {
+	const trimmed = text.trim();
+	if (!PLAIN_NUMBER.test(trimmed)) return undefined;
+	const n = Number(trimmed);
+	return Number.isFinite(n) ? n : undefined;
+}
+
+/** `title` as text: a number or boolean reads as its text (the raw value is remembered for the write); a map or list is refused. */
+function readTitle(raw: unknown, typed: TypedValues): string | undefined {
+	if (typeof raw === 'number' || typeof raw === 'boolean') {
+		const text = String(raw);
+		typed.title = { text, raw };
+		return text;
+	}
+	if (typeof raw === 'object' && raw !== null) throw new Error("Invalid data: 'title' must be text.");
+	return raw as string | undefined; // a string, `null` (a bare `title:`) or absent: as before
+}
+
+/** One number key: a number as typed; a quoted number as that number; anything else (`banana`, `''`, a boolean, a map, a list)
+ *  as the default an absent key gets. Absent and `null` are the default and remembered as nothing. */
+function readNumber(key: NumberKey, raw: unknown, typed: TypedValues): number {
+	if (raw === undefined || raw === null) return NUMBER_DEFAULTS[key];
+	if (typeof raw === 'number') return raw;
+	const value = (typeof raw === 'string' ? numberFromText(raw) : undefined) ?? NUMBER_DEFAULTS[key];
+	typed.numbers.set(key, { value, raw });
+	return value;
+}
+
 function parseModel(data: unknown, _raw: string): MontageModel {
-	const d = (data ?? {}) as Partial<MontageModel>;
+	const d = (data ?? {}) as Partial<Record<keyof MontageModel, unknown>>;
 	const model = {} as MontageModel;
-	if (d.title !== undefined) model.title = d.title;
+	const typed: TypedValues = { numbers: new Map() };
+	typedValues.set(model, typed);
+	if (d.title !== undefined) model.title = readTitle(d.title, typed);
 	if (typeof d.description === 'string' && d.description.length > 0) model.description = d.description;
-	model.rounds = d.rounds ?? 2;
-	model.success_limit = d.success_limit ?? 0;
-	model.failure_limit = d.failure_limit ?? 0;
-	model.successes = d.successes ?? 0;
-	model.failures = d.failures ?? 0;
+	model.rounds = readNumber('rounds', d.rounds, typed);
+	model.success_limit = readNumber('success_limit', d.success_limit, typed);
+	model.failure_limit = readNumber('failure_limit', d.failure_limit, typed);
+	model.successes = readNumber('successes', d.successes, typed);
+	model.failures = readNumber('failures', d.failures, typed);
 	// Fix-round-1 L-3: an empty `participants: []` used to round-trip verbatim — §B.5 lists
 	// `participants` among the omit-when-absent keys ("never emit `null`, `''` or `[]`"),
 	// and the board already has its own `No heroes yet` fallback (BoardView.ts), so a bare
@@ -290,16 +347,39 @@ function parseModel(data: unknown, _raw: string): MontageModel {
 	if (participants !== undefined) model.participants = participants;
 	const entries = sanitizeEntries(d.entries);
 	if (entries !== undefined) model.entries = entries;
-	model.current_round = d.current_round ?? 1;
-	if (d._dse_anchor !== undefined) model._dse_anchor = d._dse_anchor;
+	model.current_round = readNumber('current_round', d.current_round, typed);
+	if (d._dse_anchor !== undefined) model._dse_anchor = d._dse_anchor as string;
 	carryUnknown(model, unknownPairs(data, KNOWN_MODEL_KEYS)); // SC-625
 	return model;
 }
 
 /** The keys parseModel fills a default into when the source did not declare them (SC-482). */
-const PARSER_DEFAULT_KEYS = ['rounds', 'success_limit', 'failure_limit', 'successes', 'failures', 'current_round'] as const;
+const PARSER_DEFAULT_KEYS = Object.keys(NUMBER_DEFAULTS) as NumberKey[];
 
 export const parse = recordingDefaults(parseModel, PARSER_DEFAULT_KEYS);
+
+/** The ONE way the montage assigns a number key after the parse. Whatever the user typed for that key is forgotten, so the
+ *  value is written as the plain number it now is, even when it lands on the number the typed value was read as (Set limits
+ *  saved over `failure_limit: banana` writes `0`; Undo clamped at 0 over `successes: banana` writes `0`). */
+function setNumber(m: MontageModel, key: NumberKey, value: number): void {
+	m[key] = value;
+	typedValues.get(m)?.numbers.delete(key);
+}
+
+/** What `serialize` writes for `title`: the value the user typed while the model still holds the text it was read as (a number or
+ *  boolean title comes back a number or boolean, never `"2024"`), otherwise the model's own text. Typed `as string`: it is only ever
+ *  handed to `stringifyYaml`. */
+function typedTitle(model: MontageModel, typed: TypedValues | undefined): string | undefined {
+	const t = typed?.title;
+	return t !== undefined && model.title === t.text ? (t.raw as string) : model.title;
+}
+
+/** What `serialize` writes for a number key: the typed raw value while the model still holds the number it was read as (`"3"`,
+ *  `banana`, a map), otherwise the number itself. */
+function typedNumber(model: MontageModel, key: NumberKey, typed: TypedValues | undefined): number {
+	const t = typed?.numbers.get(key);
+	return t !== undefined && Object.is(model[key], t.value) ? (t.raw as number) : model[key];
+}
 
 /** One entry in §B.5's fixed key order (hero, round, result, skill, note), then the keys the montage does not
  *  know in their original order (SC-625). A fresh object: a correction that sets `skill`/`note` on an entry that
@@ -327,18 +407,19 @@ function orderEntry(entry: MontageEntry): MontageEntry {
  * guard here, matching `parse()`'s own omit-when-empty convention, §B.5). */
 export function serialize(model: MontageModel): string {
 	const ordered = {} as MontageModel;
-	if (model.title !== undefined) ordered.title = model.title;
+	const typed = typedValues.get(model);
+	if (model.title !== undefined) ordered.title = typedTitle(model, typed);
 	if (model.description !== undefined) ordered.description = model.description;
-	ordered.rounds = model.rounds;
-	ordered.success_limit = model.success_limit;
-	ordered.failure_limit = model.failure_limit;
-	ordered.successes = model.successes;
-	ordered.failures = model.failures;
+	ordered.rounds = typedNumber(model, 'rounds', typed);
+	ordered.success_limit = typedNumber(model, 'success_limit', typed);
+	ordered.failure_limit = typedNumber(model, 'failure_limit', typed);
+	ordered.successes = typedNumber(model, 'successes', typed);
+	ordered.failures = typedNumber(model, 'failures', typed);
 	if (model.participants !== undefined && !(Array.isArray(model.participants) && model.participants.length === 0)) {
 		ordered.participants = model.participants;
 	}
 	if (model.entries && model.entries.length > 0) ordered.entries = model.entries.map(orderEntry);
-	ordered.current_round = model.current_round;
+	ordered.current_round = typedNumber(model, 'current_round', typed);
 	if (model._dse_anchor !== undefined) ordered._dse_anchor = model._dse_anchor;
 	carryUnknown(ordered, unknownPairs(model, KNOWN_MODEL_KEYS)); // SC-625: after the known keys, in their original order
 	// SC-482: `ordered` is a new object, so the record (keyed on `model`) filters it by `model`.
@@ -465,7 +546,7 @@ function tallyKeyFor(result: string): 'successes' | 'failures' | undefined {
 function applyTallyDelta(m: MontageModel, result: string, sign: 1 | -1): void {
 	const key = tallyKeyFor(result);
 	if (!key) return;
-	m[key] = Math.max(0, m[key] + sign);
+	setNumber(m, key, Math.max(0, m[key] + sign));
 }
 
 function findParticipant(m: MontageModel, hero: string): MontageParticipant | undefined {
@@ -579,7 +660,7 @@ export function removeMontageEntry(m: MontageModel, existing: MontageEntry): voi
 /** ⋯ "Add a round" — extends the montage's total round count by one. A Director-set
  *  config change (like `rounds:` itself), not a progress write. */
 export function addMontageRound(m: MontageModel): void {
-	m.rounds += 1;
+	setNumber(m, 'rounds', m.rounds + 1);
 }
 
 /** SC-627 — the board's spelling of the hero a typed name would duplicate, or `undefined` when the
@@ -606,8 +687,8 @@ export function addMontageHero(m: MontageModel, name: string): void {
 /** ⋯ "Set limits…" — the Director-set success/failure limits. Negative input is
  *  clamped to 0 (the schema's own "unset" convention, montageOutcome's `> 0` guard). */
 export function setMontageLimits(m: MontageModel, successLimit: number, failureLimit: number): void {
-	m.success_limit = Math.max(0, Math.trunc(successLimit));
-	m.failure_limit = Math.max(0, Math.trunc(failureLimit));
+	setNumber(m, 'success_limit', Math.max(0, Math.trunc(successLimit)));
+	setNumber(m, 'failure_limit', Math.max(0, Math.trunc(failureLimit)));
 }
 
 /** "Reset progress" (⋯ menu) / "Clear all" (the done-state bar, fix round 2) — zeroes
@@ -620,9 +701,9 @@ export function setMontageLimits(m: MontageModel, successLimit: number, failureL
  *  is what makes "one action, two former menu labels" moot; the two callers now read as
  *  two different SURFACES for the same reset, not two menu items for it. */
 export function resetMontageProgress(m: MontageModel): void {
-	m.successes = 0;
-	m.failures = 0;
-	m.current_round = 1;
+	setNumber(m, 'successes', 0);
+	setNumber(m, 'failures', 0);
+	setNumber(m, 'current_round', 1);
 	m.entries = undefined;
 	for (const participant of montageRoster(m)) {
 		// A hero with no list stays without one: resetting changes nothing for them.
@@ -641,7 +722,7 @@ export function resetMontageProgress(m: MontageModel): void {
  *  has (model.ts's own `isExhausted`). The sheet keeps logging into whatever
  *  `current_round` now is. */
 export function endMontageRound(m: MontageModel): void {
-	m.current_round += 1;
+	setNumber(m, 'current_round', m.current_round + 1);
 }
 
 /** SC-334 — the round "Back to round N" (the bottom action bar) would return to, or
@@ -670,7 +751,7 @@ export function montagePreviousRound(m: MontageModel): number | undefined {
  *  when there is no way back (the caller does not render the button in that case). */
 export function backMontageRound(m: MontageModel): void {
 	const target = montagePreviousRound(m);
-	if (target !== undefined) m.current_round = target;
+	if (target !== undefined) setNumber(m, 'current_round', target);
 }
 
 /** FIX ROUND 2 — "Undo" (the bottom action bar, mock6.js:1459): removes the MOST
