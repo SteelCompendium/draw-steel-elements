@@ -496,6 +496,44 @@ describe('SC-644 — keyboard focus inside the block survives a rebuild', () => 
 		expect(focusOf()).toBe(field);
 	});
 
+	// The new outer panel is appended LAST, so a nested block's same-named control comes first in document order.
+	it('the outer block\'s Collapse is focused again, not the same-named control of a block nested inside it', async () => {
+		const deps = makeDeps();
+		const outer = await draw(deps, featureElement, FEATURE, { key: 50, attach: true });
+		const inner = await draw(deps, featureElement, 'name: Inner\n', { key: 51, container: (outer.root.firstElementChild as HTMLElement).createDiv() });
+		const own = (r: HTMLElement) => Array.from(r.querySelectorAll<HTMLElement>(COLLAPSE)).find((b) => b.closest('[data-dse-element]') === r)!;
+		own(outer.root).focus();
+		await deps.prefs.set('authoringControls', true);
+		expect(focusOf()).toBe(own(outer.root));
+		expect(focusOf()).not.toBe(own(inner.root));
+	});
+
+	it('with a nested block present, the outer pencil going leaves focus on an outer control, not the nested block\'s', async () => {
+		const deps = makeDeps();
+		await deps.prefs.set('authoringControls', true);
+		const outer = await draw(deps, featureElement, FEATURE, { key: 52, attach: true });
+		const inner = await draw(deps, featureElement, 'name: Inner\n', { key: 53, container: (outer.root.firstElementChild as HTMLElement).createDiv() });
+		const own = (r: HTMLElement, sel: string) => Array.from(r.querySelectorAll<HTMLElement>(sel)).find((b) => b.closest('[data-dse-element]') === r)!;
+		own(outer.root, EDIT).focus();
+		await deps.prefs.set('authoringControls', false);
+		expect(focusOf()).toBe(own(outer.root, COLLAPSE));
+		expect(focusOf()).not.toBe(own(inner.root, COLLAPSE));
+	});
+
+	it('with a nested block present and no Collapse left, focus falls to the first control of the OUTER block', async () => {
+		const deps = makeDeps();
+		await deps.prefs.set('authoringControls', true);
+		await deps.prefs.set('collapsibleDefault', false);
+		const outer = await draw(deps, featureElement, 'collapsible: false\nname: Outer\n', { key: 54, attach: true });
+		const inner = await draw(deps, featureElement, 'collapsible: true\nname: Inner\n', { key: 55, container: (outer.root.firstElementChild as HTMLElement).createDiv() });
+		const edit = Array.from(outer.root.querySelectorAll<HTMLElement>(EDIT)).find((b) => b.closest('[data-dse-element]') === outer.root)!;
+		edit.focus();
+		await deps.prefs.set('authoringControls', false);
+		expect(focusOf()).not.toBe(document.body);
+		expect(focusOf().closest('[data-dse-element]')).toBe(outer.root);
+		expect(inner.root.contains(focusOf())).toBe(false);
+	});
+
 	it('focus on a control in a NESTED block is not this block\'s to restore', async () => {
 		const deps = makeDeps();
 		const outer = await draw(deps, featureElement, FEATURE, { key: 30, attach: true });

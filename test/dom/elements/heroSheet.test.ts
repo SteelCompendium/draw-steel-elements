@@ -503,6 +503,35 @@ describe('D7 Task 9: "Edit definition" (recon delta 5) — reuses D9\'s openForm
 			expect(edit(root)).toHaveLength(0);
 		});
 
+		test('the sheet re-rendering itself (update) with the setting ON still has exactly one working button; flips leave no owners behind', async () => {
+			const deps = makeDeps();
+			await deps.prefs.set('authoringControls', true);
+			let view: { load(): void; unload(): void; update(m: unknown): Promise<void>; currentModel(): unknown; _children: unknown[] } | undefined;
+			const { root } = await renderHero(
+				HERO_SOURCE,
+				{
+					addChild: ((child: NonNullable<typeof view>) => {
+						view = child;
+						child.load();
+						return child;
+					}) as never,
+				},
+				deps,
+			);
+			expect(edit(root)).toHaveLength(1);
+
+			await view!.update(view!.currentModel()); // rebuilds the header: the old button went with its DOM
+			expect(edit(root)).toHaveLength(1);
+			edit(root)[0].click();
+			expect(openFormEditor).toHaveBeenCalledTimes(1);
+
+			// Each flip adds then removes one button owner (a child Component of the view): none may pile up.
+			const children = view!._children.length;
+			for (let i = 0; i < 10; i++) await deps.prefs.set('authoringControls', i % 2 === 1);
+			expect(edit(root)).toHaveLength(1);
+			expect(view!._children.length).toBe(children);
+		});
+
 		describe('keyboard focus', () => {
 			const attached = async (deps: ReturnType<typeof makeDeps>) => {
 				const r = await renderHero(HERO_SOURCE, {}, deps);
