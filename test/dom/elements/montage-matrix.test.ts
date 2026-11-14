@@ -1616,11 +1616,13 @@ describe('[K] filed bugs', () => {
 		expect(live().contains(document.activeElement)).toBe(true);
 	});
 
-	test.failing('[K04] typing a skill in another case still warns that the hero used it [known bug SC-631]', async () => {
+	test('[K04] typing a skill in another case still warns that the hero used it, naming it as the board stores it', async () => {
 		const { root } = await mount(yaml({ heroes: [{ name: 'Kira', skills: ['Nature'] }], round: 2, sl: 9, fl: 9, entries: [{ hero: 'Kira', round: 1, result: 'success', skill: 'Nature' }] }));
 		ctl(root, 'montage.cell.socket', 0).click();
 		const sheet = modalOf('montage.log.submit');
 		type(ctl<HTMLInputElement>(sheet, 'montage.log.skill'), 'nature');
-		expect((sheet.querySelector('.dse-mt__sheet-warn') as HTMLElement).hidden).toBe(false);
+		const warn = sheet.querySelector('.dse-mt__sheet-warn') as HTMLElement;
+		expect(warn.hidden).toBe(false);
+		expect(warn.textContent).toBe('Kira already used Nature in this montage — reuse is not allowed');
 	});
 });

@@ -15,6 +15,7 @@ import {
 	correctMontageEntry,
 	removeMontageEntry,
 	wouldReuseSkill,
+	reusedSkillSpelling,
 	nextHeroToAct,
 	addMontageRound,
 	addMontageHero,
@@ -273,6 +274,48 @@ describe('SC-191 slice 4: wouldReuseSkill / nextHeroToAct — the sheet\'s live-
 		// A DIFFERENT hero picking the same skill text still warns normally — exclusion is
 		// keyed to entry.hero, not to the skill string alone.
 		expect(wouldReuseSkill(m, 'Bram', 'Nature', entry)).toBe(false); // Bram never used it
+	});
+
+	test('wouldReuseSkill ignores casing and surrounding spaces, in the typed skill and in the stored one', () => {
+		const m = withRosterFixture();
+		expect(wouldReuseSkill(m, 'Kira', 'nature')).toBe(true);
+		expect(wouldReuseSkill(m, 'Kira', '  NATURE ')).toBe(true);
+		m.participants = [{ name: 'Kira', skills_used: ['  Nature '] }];
+		expect(wouldReuseSkill(m, 'Kira', 'nature')).toBe(true);
+	});
+
+	test('wouldReuseSkill still tells different skills apart: "Natures" is not "Nature", and a blank skill never matches', () => {
+		const m = withRosterFixture();
+		expect(wouldReuseSkill(m, 'Kira', 'Natures')).toBe(false);
+		expect(wouldReuseSkill(m, 'Kira', 'Natur')).toBe(false);
+		expect(wouldReuseSkill(m, 'Kira', '   ')).toBe(false);
+	});
+
+	test('reusedSkillSpelling gives the skill as the board stores it, or undefined when the skill is free', () => {
+		const m = withRosterFixture();
+		m.participants = [{ name: 'Kira', skills_used: ['  Animal Handling '] }];
+		expect(reusedSkillSpelling(m, 'Kira', 'animal handling')).toBe('  Animal Handling ');
+		expect(reusedSkillSpelling(m, 'Kira', 'Climb')).toBeUndefined();
+		expect(reusedSkillSpelling(m, 'Nobody', 'Climb')).toBeUndefined();
+	});
+
+	test('wouldReuseSkill excludes the edited entry in another casing; a second use of the skill still warns', () => {
+		const m = withRosterFixture();
+		const entry: MontageEntry = { hero: 'Kira', round: 1, result: 'success', skill: 'Nature' };
+		m.entries = [entry];
+		expect(wouldReuseSkill(m, 'Kira', 'NATURE', entry)).toBe(false);
+		expect(wouldReuseSkill(m, 'Kira', ' nature ', entry)).toBe(false);
+		m.participants = [{ name: 'Kira', skills_used: ['Nature', 'nature'] }];
+		expect(wouldReuseSkill(m, 'Kira', 'NATURE', entry)).toBe(true);
+	});
+
+	test('wouldReuseSkill skips a number, null or blank item in skills_used instead of crashing', () => {
+		const m = withRosterFixture();
+		m.participants = [{ name: 'Kira', skills_used: [7, null, '', '   ', 'Nature'] as unknown as string[] }];
+		expect(wouldReuseSkill(m, 'Kira', 'nature')).toBe(true);
+		expect(wouldReuseSkill(m, 'Kira', '7')).toBe(false);
+		expect(wouldReuseSkill(m, 'Kira', 'null')).toBe(false);
+		expect(wouldReuseSkill(m, 'Kira', 'Climb', { hero: 'Kira', round: 1, result: 'success', skill: '7' })).toBe(false);
 	});
 
 	test('nextHeroToAct: the first roster-order hero with no entry in the CURRENT round', () => {

@@ -80,6 +80,19 @@ describe('montage: the Log an action sheet', () => {
 		expect((await blockOf(MID)).participants![0].skills_used).toEqual(['Nature', 'Nature']);
 	});
 
+	it('[MONT-L12] a padded skill in another casing still shows the reuse warning, naming the skill as the board stores it, and leaves Log enabled', async () => {
+		await dse.openNote(MID);
+		const root = dse.block(MONTAGE);
+		await hoverHero(root, 'Kira');
+		await dse.click(rowAct(root, 0)); // Kira, round 2
+		const modal = await dse.modal('montage-log');
+		const warn = modal.control({ css: '.dse-mt__sheet-warn' });
+		await dse.type(modal.control('montage.log.skill'), ' nature ');
+		await expect(warn).toBeDisplayed();
+		await expect(warn).toHaveElementProperty('textContent', 'Kira already used Nature in this montage — reuse is not allowed');
+		await expect(modal.control('montage.log.submit')).toBeEnabled();
+	});
+
 	it('[MONT-L05] editing an entry: the sheet is pre-filled, Success replaces Failure, Save writes one correction and moves both tallies', async () => {
 		await dse.openNote(MID);
 		const root = dse.block(MONTAGE);
