@@ -274,3 +274,113 @@ describe('the folded summary', () => {
 		expect(summary({ model } as any)).toMatchObject({ detail: 'round 2 · 1/4' });
 	});
 });
+
+describe('a description that is a number or a boolean', () => {
+	test.each([
+		['5', '5'],
+		['true', 'true'],
+		['3.5', '3.5'],
+	])('description: %s is drawn as the brief text "%s", no error card', async (typed, shownText) => {
+		const { live } = await mount(block(`title: T\ndescription: ${typed}`));
+		expect(live().querySelector('.dse-error-card')).toBeNull();
+		expect(text(live(), '.dse-mt__brief-text')).toContain(shownText);
+	});
+
+	test.each([
+		['Add a round', (root: HTMLElement) => ctl(root, 'montage.chrome.add-round').click()],
+		['End round', (root: HTMLElement) => ctl(root, 'montage.bar.end-round').click()],
+		['a quick log', (root: HTMLElement) => ctl(root, 'montage.quick.success', 0).click()],
+		['Reset progress', (root: HTMLElement) => ctl(root, 'montage.chrome.reset-progress').click()],
+	])('%s keeps `description: 5` as the number the user typed, in its place after the title', async (_name, act) => {
+		const { live, flush, lastText, last } = await mount(block('title: T\ndescription: 5'));
+		act(live());
+		await flush();
+		expect(lastText().split('\n').slice(0, 2)).toEqual(['title: T', 'description: 5']);
+		expect(last().description).toBe(5);
+	});
+
+	test('`description: true` comes back a boolean; a quoted one stays text; a title and description typed together both come back as typed', async () => {
+		const a = await mount(block('description: true'));
+		ctl(a.live(), 'montage.chrome.add-round').click();
+		await a.flush();
+		expect(a.last().description).toBe(true);
+		document.body.innerHTML = '';
+		const b = await mount(block('description: "5"'));
+		ctl(b.live(), 'montage.chrome.add-round').click();
+		await b.flush();
+		expect(b.last().description).toBe('5');
+		document.body.innerHTML = '';
+		const c = await mount(block('title: 2024\ndescription: 5'));
+		ctl(c.live(), 'montage.chrome.add-round').click();
+		await c.flush();
+		expect([c.last().title, c.last().description]).toEqual([2024, 5]);
+	});
+});
+
+describe('a map or list where the description belongs', () => {
+	test.each([
+		['a map', 'description:\n  a: 1'],
+		['a list', 'description:\n  - a\n  - b'],
+		['an empty list', 'description: []'],
+	])('%s: a plain error card names the key, there is no control, nothing is written', async (_name, head) => {
+		const { live, flush, writes } = await mount(block(`title: T\n${head}`));
+		const card = live().querySelector('.dse-error-card')!;
+		expect(card).not.toBeNull();
+		expect(card.textContent).toContain("Invalid data: 'description' must be text.");
+		expect(card.textContent).not.toMatch(/is not a function|Cannot read properties|_a\./);
+		expect(live().getAttribute('data-dse-error-stage')).toBe('render');
+		expect(live().querySelector('[data-dse-control]')).toBeNull();
+		await flush();
+		expect(writes()).toEqual([]);
+		expect(Notice.notices).toEqual([]);
+	});
+
+	test('a null or empty description is not an error and draws no brief', async () => {
+		for (const head of ['description:', "description: ''"]) {
+			document.body.innerHTML = '';
+			const { live } = await mount(block(head));
+			expect(live().querySelector('.dse-error-card')).toBeNull();
+			expect(live().querySelector('.dse-mt__brief')).toBeNull();
+		}
+	});
+});
+
+describe('a block that is not a map of keys', () => {
+	test.each([
+		['text', 'hello'],
+		['a quoted text', '"hello"'],
+		['a number', '5'],
+		['a boolean', 'true'],
+		['a list', '- a\n- b'],
+		['a flow list', '[1, 2]'],
+	])('%s: a plain error card, there is no control, nothing is written', async (_name, source) => {
+		const { live, flush, writes } = await mount(source);
+		const card = live().querySelector('.dse-error-card')!;
+		expect(card).not.toBeNull();
+		expect(card.querySelector('.dse-error-card-title')!.textContent).toBe('Montage Test tracker: failed to render (render)');
+		expect(card.textContent).toContain('Invalid data: the block must be a map of keys.');
+		expect(card.textContent).not.toMatch(/is not a function|Cannot read properties|_a\./);
+		expect(live().getAttribute('data-dse-error-stage')).toBe('render');
+		expect(live().querySelector('[data-dse-control]')).toBeNull();
+		expect(live().querySelector('.dse-mt')).toBeNull();
+		await flush();
+		expect(writes()).toEqual([]);
+		expect(Notice.notices).toEqual([]);
+	});
+
+	test.each([
+		['nothing', ''],
+		['blank lines', '\n   \n\n'],
+		['only comments', '# a note to self\n# and another'],
+		['a bare null', 'null'],
+	])('an empty block (%s) still draws a default montage with its controls, and Add a round writes `rounds: 3`', async (_name, source) => {
+		const { live, flush, last } = await mount(source);
+		expect(live().querySelector('.dse-error-card')).toBeNull();
+		expect(live().querySelector('.dse-mt')).not.toBeNull();
+		expect(text(live(), '.dse-head__primary--left')).toBe('Montage Test');
+		expect(text(live(), '.dse-head__eyebrow--right')).toBe('Round 1 / 2');
+		ctl(live(), 'montage.chrome.add-round').click();
+		await flush();
+		expect(last()).toEqual({ rounds: 3 });
+	});
+});

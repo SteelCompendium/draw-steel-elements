@@ -277,6 +277,8 @@ const NUMBER_DEFAULTS = {
 	rounds: 2, success_limit: 0, failure_limit: 0, successes: 0, failures: 0, current_round: 1,
 } as const;
 type NumberKey = keyof typeof NUMBER_DEFAULTS;
+/** The two top-level keys the montage shows as text. */
+type TextKey = 'title' | 'description';
 
 /**
  * SC-628 — a value typed with the wrong TYPE. The model always holds the value as the type the board needs (the title as text, a
@@ -290,7 +292,7 @@ type NumberKey = keyof typeof NUMBER_DEFAULTS;
  * absent key and a `null` are remembered as nothing: they are written as they are today.
  */
 interface TypedValues {
-	title?: { text: string; raw: unknown };
+	texts: Map<TextKey, { text: string; raw: unknown }>;
 	numbers: Map<NumberKey, { value: number; raw: unknown }>;
 }
 const typedValues = new WeakMap<object, TypedValues>();
@@ -306,15 +308,16 @@ function numberFromText(text: string): number | undefined {
 	return Number.isFinite(n) ? n : undefined;
 }
 
-/** `title` as text: a number or boolean reads as its text (the raw value is remembered for the write); a map or list is refused. */
-function readTitle(raw: unknown, typed: TypedValues): string | undefined {
+/** A top-level text key (`title`, `description`): a number or boolean reads as its text (the raw value is remembered for the write);
+ *  a map or list is refused. A string, `null` (a bare `title:`) and absent come back as they are, for the caller's own rule. */
+function readText(key: TextKey, raw: unknown, typed: TypedValues): string | undefined {
 	if (typeof raw === 'number' || typeof raw === 'boolean') {
 		const text = String(raw);
-		typed.title = { text, raw };
+		typed.texts.set(key, { text, raw });
 		return text;
 	}
-	if (typeof raw === 'object' && raw !== null) throw new Error("Invalid data: 'title' must be text.");
-	return raw as string | undefined; // a string, `null` (a bare `title:`) or absent: as before
+	if (typeof raw === 'object' && raw !== null) throw new Error(`Invalid data: '${key}' must be text.`);
+	return raw as string | undefined;
 }
 
 /** One number key: a number as typed; a quoted number as that number; anything else (`banana`, `''`, a boolean, a map, a list)
@@ -328,12 +331,18 @@ function readNumber(key: NumberKey, raw: unknown, typed: TypedValues): number {
 }
 
 function parseModel(data: unknown, _raw: string): MontageModel {
+	// SC-628: a block whose body is text, a number or a list is not a montage: refuse it (a write would replace the body). An EMPTY block
+	// (nothing, blank lines, only comments, a bare `null`) parses to null / undefined and is still a fresh default montage.
+	if (data !== undefined && data !== null && (typeof data !== 'object' || Array.isArray(data))) {
+		throw new Error('Invalid data: the block must be a map of keys.');
+	}
 	const d = (data ?? {}) as Partial<Record<keyof MontageModel, unknown>>;
 	const model = {} as MontageModel;
-	const typed: TypedValues = { numbers: new Map() };
+	const typed: TypedValues = { texts: new Map(), numbers: new Map() };
 	typedValues.set(model, typed);
-	if (d.title !== undefined) model.title = readTitle(d.title, typed);
-	if (typeof d.description === 'string' && d.description.length > 0) model.description = d.description;
+	if (d.title !== undefined) model.title = readText('title', d.title, typed);
+	const description = readText('description', d.description, typed);
+	if (typeof description === 'string' && description.length > 0) model.description = description;
 	model.rounds = readNumber('rounds', d.rounds, typed);
 	model.success_limit = readNumber('success_limit', d.success_limit, typed);
 	model.failure_limit = readNumber('failure_limit', d.failure_limit, typed);
@@ -366,12 +375,12 @@ function setNumber(m: MontageModel, key: NumberKey, value: number): void {
 	typedValues.get(m)?.numbers.delete(key);
 }
 
-/** What `serialize` writes for `title`: the value the user typed while the model still holds the text it was read as (a number or
- *  boolean title comes back a number or boolean, never `"2024"`), otherwise the model's own text. Typed `as string`: it is only ever
- *  handed to `stringifyYaml`. */
-function typedTitle(model: MontageModel, typed: TypedValues | undefined): string | undefined {
-	const t = typed?.title;
-	return t !== undefined && model.title === t.text ? (t.raw as string) : model.title;
+/** What `serialize` writes for `title` / `description`: the value the user typed while the model still holds the text it was read as
+ *  (a number or boolean comes back a number or boolean, never `"2024"`), otherwise the model's own text. Typed `as string`: it is only
+ *  ever handed to `stringifyYaml`. */
+function typedText(model: MontageModel, key: TextKey, typed: TypedValues | undefined): string | undefined {
+	const t = typed?.texts.get(key);
+	return t !== undefined && model[key] === t.text ? (t.raw as string) : model[key];
 }
 
 /** What `serialize` writes for a number key: the typed raw value while the model still holds the number it was read as (`"3"`,
@@ -408,8 +417,8 @@ function orderEntry(entry: MontageEntry): MontageEntry {
 export function serialize(model: MontageModel): string {
 	const ordered = {} as MontageModel;
 	const typed = typedValues.get(model);
-	if (model.title !== undefined) ordered.title = typedTitle(model, typed);
-	if (model.description !== undefined) ordered.description = model.description;
+	if (model.title !== undefined) ordered.title = typedText(model, 'title', typed);
+	if (model.description !== undefined) ordered.description = typedText(model, 'description', typed);
 	ordered.rounds = typedNumber(model, 'rounds', typed);
 	ordered.success_limit = typedNumber(model, 'success_limit', typed);
 	ordered.failure_limit = typedNumber(model, 'failure_limit', typed);

@@ -269,3 +269,100 @@ describe('the model carries no extra property for any of this', () => {
 		expect(written(model)).toEqual({ title: '2024', rounds: 3, success_limit: 0, failure_limit: 0, successes: 0, failures: 0, current_round: 1 });
 	});
 });
+
+describe('a description that is not text', () => {
+	test.each([
+		['5', '5'],
+		['true', 'true'],
+		['false', 'false'],
+		['3.5', '3.5'],
+		['0', '0'],
+	])('description: %s reads as the text "%s"', (typed, text) => {
+		const model = parseLikePipeline(`description: ${typed}\nrounds: 3`);
+		expect(model.description).toBe(text);
+		expect(typeof model.description).toBe('string');
+	});
+
+	test('a text description, a quoted number, an empty one and an absent one are as before', () => {
+		expect(parseLikePipeline('description: Forty miles of waste').description).toBe('Forty miles of waste');
+		expect(parseLikePipeline('description: "5"').description).toBe('5');
+		expect(parseLikePipeline("description: ''").description).toBeUndefined();
+		expect(parseLikePipeline('description:').description).toBeUndefined();
+		expect(parseLikePipeline('rounds: 3').description).toBeUndefined();
+	});
+
+	test.each([
+		['a map', 'description:\n  a: 1'],
+		['a list', 'description:\n  - a\n  - b'],
+		['an empty list', 'description: []'],
+		['an empty map', 'description: {}'],
+	])('%s as the description is refused with a plain message that names the key', (_name, source) => {
+		expect(() => parseLikePipeline(source)).toThrow("Invalid data: 'description' must be text.");
+		let message = '';
+		try {
+			parseLikePipeline(source);
+		} catch (e) {
+			message = (e as Error).message;
+		}
+		expect(message).not.toMatch(/is not a function|Cannot read properties|_a\./);
+	});
+
+	test.each([
+		['description: 5', 5],
+		['description: true', true],
+		['description: 3.5', 3.5],
+	])('%s is written back as typed, in its schema place, never as a string', (head, raw) => {
+		const model = parseLikePipeline(`title: T\n${head}\nrounds: 3\nsuccess_limit: 3\nfailure_limit: 2\nsuccesses: 0\nfailures: 0\ncurrent_round: 1`);
+		const out = serialize(model);
+		expect(out.split('\n')[1]).toBe(head);
+		expect(written(model).description).toBe(raw);
+	});
+
+	test('the typed description survives writes that change other things; a quoted one stays a string', () => {
+		const model = parseLikePipeline('description: 5\nparticipants:\n  - name: Kira\n    skills_used: []');
+		logMontageEntry(model, { hero: 'Kira', round: 1, result: 'success' });
+		addMontageRound(model);
+		expect(written(model).description).toBe(5);
+		expect(written(parseLikePipeline('description: "5"')).description).toBe('5');
+	});
+
+	test('a typed description adds no own key to the model', () => {
+		const model = parseLikePipeline('title: 2024\ndescription: 5\nrounds: 3');
+		expect(Object.keys(model)).toEqual(['title', 'description', 'rounds', 'success_limit', 'failure_limit', 'successes', 'failures', 'current_round']);
+		expect(Object.keys(parseYaml(serialize(model)) as object)).toEqual(['title', 'description', 'rounds']); // the absent defaults stay out (SC-482)
+	});
+});
+
+describe('a block that is not a map of keys', () => {
+	test.each([
+		['text', 'hello'],
+		['a quoted text', '"hello"'],
+		['a number', '5'],
+		['a boolean', 'true'],
+		['a list', '- a\n- b'],
+		['a flow list', '[1, 2]'],
+		['an empty-looking quoted string', "''"],
+	])('%s is refused with a plain message', (_name, source) => {
+		expect(() => parseLikePipeline(source)).toThrow('Invalid data: the block must be a map of keys.');
+	});
+
+	test.each([
+		['nothing', ''],
+		['blank lines', '\n  \n\n'],
+		['only a comment', '# a note to self\n# another'],
+		['a bare null', 'null'],
+		['a bare tilde', '~'],
+	])('an empty block (%s) is still a fresh default montage', (_name, source) => {
+		const model = parseLikePipeline(source);
+		expect([model.rounds, model.success_limit, model.failure_limit, model.successes, model.failures, model.current_round]).toEqual([2, 0, 0, 0, 0, 1]);
+		expect(model.title).toBeUndefined();
+		expect(serialize(model)).toBe('');
+		addMontageRound(model);
+		expect(written(model)).toEqual({ rounds: 3 });
+	});
+
+	test('a map with only unknown keys is a map: it parses and keeps its keys', () => {
+		const model = parseLikePipeline('table_notes: keep me');
+		expect(written(model)).toEqual({ table_notes: 'keep me' });
+	});
+});
