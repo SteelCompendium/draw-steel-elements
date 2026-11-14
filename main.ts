@@ -3,6 +3,7 @@ import type {Editor, MarkdownFileInfo, MarkdownView} from 'obsidian';
 import {DseSettingTab} from "@views/SettingsTab";
 import {LegacyCompendiumModal} from "@views/LegacyCompendiumModal";
 import {DSESettings, migrateSettings} from "@model/Settings";
+import {DESTINATION_REFUSED_NOTICE, isVaultRootFolder, isVaultRootPath, resolveCompendiumDestination} from "@model/CompendiumDestination";
 import {CompendiumSyncService, SyncOptions, SYNC_BUSY_NOTICE} from "@/data/CompendiumSyncService";
 import {CompendiumMigrationService} from "@/data/CompendiumMigration";
 import type {MigrationPlan, MigrationReport} from "@/data/CompendiumMigration";
@@ -667,13 +668,29 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
     }
 
     /** F2 Task 10 — the sync options derived from live settings; also Task 11's
-     *  Settings-tab handle for a "sync now" affordance. */
-    syncOptions(): SyncOptions {
+     *  Settings-tab handle for a "sync now" affordance.
+     *
+     *  SC-643: `root` is the RESOLVED Destination folder (an empty/whitespace-only field is the
+     *  default folder, D1) and the result is `null` when the setting resolves to the vault
+     *  root or outside the vault (D2) — never a root the sync engine may treat as "the
+     *  compendium". The stored setting is not rewritten. */
+    syncOptions(): SyncOptions | null {
+        const destination = resolveCompendiumDestination(this.settings.compendiumDestinationDirectory);
+        if (destination.kind !== 'folder') return null;
         return {
-            root: this.settings.compendiumDestinationDirectory,
+            root: destination.path,
             releaseTag: this.settings.compendiumReleaseTag || undefined,
             locale: this.settings.compendiumLocale,
         };
+    }
+
+    /** SC-643 (D2): `syncOptions()`, or — when the Destination folder is refused — the
+     *  Notice naming the setting and `null`, so every entry point bails before it looks
+     *  anything up, opens a window or writes. */
+    private requireSyncOptions(): SyncOptions | null {
+        const options = this.syncOptions();
+        if (options === null) new Notice(DESTINATION_REFUSED_NOTICE, 8000);
+        return options;
     }
 
     /**
@@ -704,13 +721,16 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
      * the sync); only `syncAfter` still calls `syncService.sync` bare.
      */
     async syncCompendium(): Promise<void> {
+        // SC-643: a Destination folder that is the vault root is refused before anything
+        // else — no busy lock, no lookup, no window, no write, no trash.
+        const options = this.requireSyncOptions();
+        if (options === null) return;
         const token = this.syncService.beginOperation('sync');
         if (token === null) {
             new Notice(SYNC_BUSY_NOTICE);
             return;
         }
         try {
-            const options = this.syncOptions();
             // SC-125: adopt anything a previous (possibly interrupted) migration moved
             // BEFORE any sync reads the manifest — otherwise those files look like user
             // content squatting on compendium paths and get skipped forever.
@@ -732,6 +752,12 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
                 //       leave fewer than the threshold behind.
                 // A fresh install fails (b) (no folder at all, or an empty one) and would
                 // fail (c) anyway. A vault that finished migrating and synced fails all three.
+                // SC-643 (D3): never the vault root, even if a path got here despite the
+                // resolver (the window below would offer to trash it).
+                if (root instanceof TFolder && isVaultRootFolder(root)) {
+                    new Notice(DESTINATION_REFUSED_NOTICE, 8000);
+                    return;
+                }
                 if (root instanceof TFolder && root.children.length > 0) {
                     const detection = this.migrationService.detect(options.root);
                     if (detection.isLegacyLayout || (migrationPending && detection.legacyPaths > 0)) {
@@ -770,10 +796,20 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
                                 return;
                             }
                             try {
+                                // SC-643 (D2): the setting may have been changed to the vault root
+                                // while this window sat open — refuse before trashing anything.
+                                const latest = this.requireSyncOptions();
+                                if (latest === null) return;
                                 if (trashOldRoot) {
+                                    // SC-643 (D3): the vault root is never handed to trashFile,
+                                    // whatever path got us here.
+                                    if (isVaultRootFolder(root)) {
+                                        new Notice(DESTINATION_REFUSED_NOTICE, 8000);
+                                        return;
+                                    }
                                     await this.app.fileManager.trashFile(root);
                                 }
-                                await this.syncService.sync(this.syncOptions(), trashToken);
+                                await this.syncService.sync(latest, trashToken);
                             } finally {
                                 this.syncService.endOperation(trashToken);
                             }
@@ -793,7 +829,9 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
      * offer, reachable at any time.
      */
     async migrateCompendium(): Promise<void> {
-        await this.offerMigration(this.syncOptions().root);
+        const options = this.requireSyncOptions();
+        if (options === null) return;
+        await this.offerMigration(options.root);
     }
 
     /**
@@ -805,6 +843,11 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
      * or stopping half-way all leave the compendium untouched and re-arm the offer.
      */
     private async offerMigration(root: string): Promise<void> {
+        // SC-643 (D3): the vault root is never the migration root, whatever reached here.
+        if (isVaultRootPath(root)) {
+            new Notice(DESTINATION_REFUSED_NOTICE, 8000);
+            return;
+        }
         const notice = new Notice('Draw Steel Elements: checking the compendium layout…', 0);
         let plan: MigrationPlan;
         try {
@@ -859,8 +902,10 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
                         return;
                     }
                     try {
+                        const latest = this.requireSyncOptions();
+                        if (latest === null) return;
                         await this.migrationService.markSettled(root);
-                        await this.syncService.sync(this.syncOptions(), anywayToken);
+                        await this.syncService.sync(latest, anywayToken);
                     } finally {
                         this.syncService.endOperation(anywayToken);
                     }
@@ -869,7 +914,8 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
             finishRemaining: () => { void this.offerMigration(root); },
             syncAfter: (report) => {
                 this.announceMigration(report);
-                void this.syncService.sync(this.syncOptions());
+                const latest = this.requireSyncOptions();
+                if (latest !== null) void this.syncService.sync(latest);
             },
             dismissed: (report) => {
                 if (report === null) { declined(); return; }

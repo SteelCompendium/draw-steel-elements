@@ -10,8 +10,10 @@
 // (§2.6) and the trash choice is an explicit, confirmed action (variant: danger).
 // Nothing this modal does is itself destructive — trashFile is a plugin.ts concern the
 // caller performs on `true`, and Obsidian's trash is always recoverable.
+import { Notice } from 'obsidian';
 import type { App } from 'obsidian';
 import { DseModal } from '@/framework/kit';
+import { DESTINATION_REFUSED_NOTICE, isVaultRootPath } from '@model/CompendiumDestination';
 
 export class LegacyCompendiumModal extends DseModal {
 	constructor(
@@ -23,6 +25,13 @@ export class LegacyCompendiumModal extends DseModal {
 	}
 
 	onOpen(): void {
+		// SC-643 (D3): this window offers to trash `root`. It is never shown for the vault
+		// root, whatever constructed it (main.ts guards first; this is the backstop).
+		if (isVaultRootPath(this.root)) {
+			this.close();
+			new Notice(DESTINATION_REFUSED_NOTICE, 8000);
+			return;
+		}
 		this.setDseTitle('Existing compendium folder found');
 		this.body.createEl('p', {
 			text:

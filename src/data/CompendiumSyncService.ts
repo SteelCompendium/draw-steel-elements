@@ -6,6 +6,7 @@ import {
 	CompendiumManifest, ManifestStore, MANIFEST_SCHEMA_VERSION, sha256Hex,
 } from "./manifest";
 import { ensureParentFolders } from "./vaultPaths";
+import { DESTINATION_REFUSED_NOTICE, isVaultRootPath } from "../model/CompendiumDestination";
 
 export const COMPENDIUM_SOURCE = "SteelCompendium/data-unified";
 export const COMPENDIUM_FORMAT = "md-dse";
@@ -163,6 +164,11 @@ export class CompendiumSyncService {
 		releaseTag: string,
 		onProgress?: (done: number, total: number) => void,
 	): Promise<{ report: SyncReport; manifest: CompendiumManifest }> {
+		// SC-643 (D3): the write boundary itself. `sync()` refuses first; this is the backstop
+		// for any other caller of `applySync` (it joins `options.root` onto every write).
+		if (isVaultRootPath(options.root)) {
+			throw new Error("the compendium folder can't be the vault root (or outside the vault)");
+		}
 		const report: SyncReport = {
 			releaseTag, created: [], updated: [], unchanged: [],
 			skippedConflicts: [], trashed: [], keptModified: [], rejectedPaths: [],
@@ -289,6 +295,13 @@ export class CompendiumSyncService {
 	 * refusal, not a silent double-run.
 	 */
 	public async sync(options: SyncOptions, heldToken?: BusyToken): Promise<SyncReport | null> {
+		// SC-643 (D3): defence in depth behind `main.syncOptions()` — a root that is the vault
+		// root (or outside the vault) never reaches the network or a vault write. A caller
+		// holding its own token still releases it itself.
+		if (isVaultRootPath(options.root)) {
+			new Notice(DESTINATION_REFUSED_NOTICE, 8000);
+			return null;
+		}
 		if (heldToken !== undefined && heldToken !== this.busyToken) {
 			new Notice(SYNC_BUSY_NOTICE);
 			return null;

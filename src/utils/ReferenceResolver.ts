@@ -1,5 +1,6 @@
 import { App, parseYaml, TFile } from "obsidian";
 import { DSESettings } from "@model/Settings";
+import { compendiumFolderPath } from "@model/CompendiumDestination";
 import { SccResolver } from "@/refs/SccResolver";
 
 const SCC_PREFIX = /^scc(\.v\d+)?:/;
@@ -108,7 +109,7 @@ export class ReferenceResolver {
 
         if (!file || !(file instanceof TFile)) {
             console.warn(`Draw Steel Elements: Reference file not found: ${path}`);
-            throw new Error(`Reference file (${path}) not found in root, ${this.settings.compendiumDestinationDirectory}, or when searching the cache`);
+            throw new Error(`Reference file (${path}) not found in root, ${compendiumFolderPath(this.settings.compendiumDestinationDirectory) ?? this.settings.compendiumDestinationDirectory}, or when searching the cache`);
         }
 
         return await extractFirstDsBlock(this.app, file);
@@ -126,14 +127,19 @@ export class ReferenceResolver {
         }
 
         // 3. Try path relative to compendium directory
-        const compendiumPath = `${this.settings.compendiumDestinationDirectory}/${path}`;
-        file = this.app.vault.getAbstractFileByPath(compendiumPath);
-        if (file instanceof TFile) return file;
-
-        // 4. Try path relative to compendium directory with .md extension
-        if (!path.endsWith('.md')) {
-            file = this.app.vault.getAbstractFileByPath(compendiumPath + '.md');
+        // SC-643: the RESOLVED Destination folder (blank = the default folder Sync writes to);
+        // a refused (vault-root) setting has no compendium-relative tier.
+        const folder = compendiumFolderPath(this.settings.compendiumDestinationDirectory);
+        if (folder !== null) {
+            const compendiumPath = `${folder}/${path}`;
+            file = this.app.vault.getAbstractFileByPath(compendiumPath);
             if (file instanceof TFile) return file;
+
+            // 4. Try path relative to compendium directory with .md extension
+            if (!path.endsWith('.md')) {
+                file = this.app.vault.getAbstractFileByPath(compendiumPath + '.md');
+                if (file instanceof TFile) return file;
+            }
         }
 
         // 5. Try resolving by name using Obsidian's metadata cache

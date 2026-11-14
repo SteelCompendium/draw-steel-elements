@@ -8,6 +8,7 @@ import {
 import { COMPENDIUM_FORMAT, COMPENDIUM_SOURCE } from "./CompendiumSyncService";
 import { MigrationStateStore, emptyMigrationState } from "./migrationState";
 import type { MigrationState } from "./migrationState";
+import { isVaultRootPath } from "../model/CompendiumDestination";
 
 /**
  * SC-125 — the pre-7.0.0 → 7.0.0 compendium migration.
@@ -187,6 +188,10 @@ export const planSize = (plan: MigrationPlan): number => plan.renames.length;
 
 const UNSAFE_PATH = /(^[\\/])|(^[a-zA-Z]:[\\/])|(^|\/)\.\.(\/|$)/;
 
+/** SC-643 (D3): thrown by the planning/execution entry points when handed the vault root. */
+const VAULT_ROOT_MIGRATION_ERROR =
+	"the vault root can't be the compendium folder (set a Destination folder in the plugin settings)";
+
 /**
  * Where copies of the user's edited compendium files go before anything is moved.
  *
@@ -314,6 +319,7 @@ export class CompendiumMigrationService {
 	 * re-offer that the completed run had made unnecessary anyway.
 	 */
 	public async markDeclined(root: string): Promise<void> {
+		if (isVaultRootPath(root)) return; // SC-643 (D3): the vault root is never a migration root
 		const state = (await this.stateStore.load()) ?? emptyMigrationState(root);
 		state.declined = true;
 		await this.stateStore.save(state);
@@ -321,6 +327,7 @@ export class CompendiumMigrationService {
 
 	/** Nothing left to migrate — stop re-offering. */
 	public async markSettled(root: string): Promise<void> {
+		if (isVaultRootPath(root)) return; // SC-643 (D3)
 		const state = await this.stateStore.load();
 		if (state === null) return;
 		if (!state.declined && !state.incomplete) return;
@@ -334,6 +341,10 @@ export class CompendiumMigrationService {
 
 	/** Cheap, synchronous, no file reads — safe to call on every sync. */
 	public detect(root: string): LegacyDetection {
+		// SC-643 (D3): the vault root is never scanned as a compendium — nothing is "legacy" there.
+		if (isVaultRootPath(root)) {
+			return { root, filesInRoot: 0, legacyPaths: 0, newLayoutPaths: 0, isLegacyLayout: false };
+		}
 		const prefix = `${normalizePath(root)}/`;
 		const targets = new Set(Object.values(this.map.paths).map((entry) => entry[0]));
 		let filesInRoot = 0;
@@ -365,6 +376,9 @@ export class CompendiumMigrationService {
 		root: string,
 		onProgress?: (done: number, total: number) => void,
 	): Promise<MigrationPlan> {
+		// SC-643 (D3): the vault root is never the migration root — every file in the vault
+		// would be planned for a move.
+		if (isVaultRootPath(root)) throw new Error(VAULT_ROOT_MIGRATION_ERROR);
 		const normalizedRoot = normalizePath(root);
 		const prefix = `${normalizedRoot}/`;
 		const detection = this.detect(root);
@@ -457,6 +471,7 @@ export class CompendiumMigrationService {
 	 * before this one adds to them.
 	 */
 	public async execute(plan: MigrationPlan, options: ExecuteOptions = {}): Promise<MigrationReport> {
+		if (isVaultRootPath(plan.root)) throw new Error(VAULT_ROOT_MIGRATION_ERROR); // SC-643 (D3)
 		const report: MigrationReport = {
 			root: plan.root,
 			mapRelease: this.map.oldFinalRelease,
@@ -660,6 +675,7 @@ export class CompendiumMigrationService {
 		const existing = await this.manifestStore.load();
 		const files: Record<string, string> = { ...(existing?.files ?? {}) };
 		const effectiveRoot = existing?.root ?? state.root ?? root ?? "";
+		if (isVaultRootPath(effectiveRoot)) return 0; // SC-643 (D3): never adopt files "under" the vault root
 		let added = 0;
 		for (const relative of new Set(state.migrated)) {
 			if (files[relative] !== undefined) continue;

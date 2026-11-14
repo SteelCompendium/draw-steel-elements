@@ -4,6 +4,7 @@
 // stateful `SccResolver` class (which does need App/TFile/etc.) on top of them below.
 import { App, Plugin, TAbstractFile, TFile, normalizePath } from 'obsidian';
 import type { DSESettings } from '@model/Settings';
+import { compendiumFolderPath } from '@model/CompendiumDestination';
 
 /**
  * Strip the `scc:`/`scc.v1:` prefix and any `#format` fragment (F2 §4.1).
@@ -142,7 +143,11 @@ export class SccResolver {
 	public resolveByDerivation(code: string): TFile | null {
 		const relative = sccToFilePath(code);
 		if (relative === null) return null;
-		const derived = normalizePath(`${this.settings.compendiumDestinationDirectory}/${relative}`);
+		// SC-643: the RESOLVED Destination folder (blank = the default folder Sync writes to);
+		// a refused (vault-root) setting derives nothing — the frontmatter index still finds the file.
+		const folder = compendiumFolderPath(this.settings.compendiumDestinationDirectory);
+		if (folder === null) return null;
+		const derived = normalizePath(`${folder}/${relative}`);
 		const file = this.app.vault.getAbstractFileByPath(derived);
 		return file instanceof TFile ? file : null;
 	}

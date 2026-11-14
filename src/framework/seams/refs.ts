@@ -23,6 +23,7 @@
 // until they migrate (Plan 02 migrates no element).
 import { App, TFile } from 'obsidian';
 import type { DSESettings } from '@model/Settings';
+import { compendiumFolderPath } from '@model/CompendiumDestination';
 // Task 7: the ds-* block extraction (findFile's tail) is shared with
 // ReferenceResolver.ts/SccRefProvider.ts via this helper, rather than carrying a
 // private copy here — this file used to inline its own DS_BLOCK_RE + miss error,
@@ -103,14 +104,20 @@ function findFile(app: App, settings: DSESettings, path: string, sourcePath: str
 	}
 
 	// 3. Try path relative to compendium directory
-	const compendiumPath = `${settings.compendiumDestinationDirectory}/${path}`;
-	file = app.vault.getAbstractFileByPath(compendiumPath);
-	if (file instanceof TFile) return file;
-
-	// 4. Try path relative to compendium directory with .md extension
-	if (!path.endsWith('.md')) {
-		file = app.vault.getAbstractFileByPath(compendiumPath + '.md');
+	// SC-643: the RESOLVED Destination folder (blank = the default folder, the same one Sync
+	// writes to); a refused (vault-root) setting has no compendium-relative tier — tiers 1-2
+	// already search from the vault root.
+	const folder = compendiumFolderPath(settings.compendiumDestinationDirectory);
+	if (folder !== null) {
+		const compendiumPath = `${folder}/${path}`;
+		file = app.vault.getAbstractFileByPath(compendiumPath);
 		if (file instanceof TFile) return file;
+
+		// 4. Try path relative to compendium directory with .md extension
+		if (!path.endsWith('.md')) {
+			file = app.vault.getAbstractFileByPath(compendiumPath + '.md');
+			if (file instanceof TFile) return file;
+		}
 	}
 
 	// 5. Try resolving by name using Obsidian's metadata cache (e.g. "Thorn Dragon" →
@@ -135,7 +142,7 @@ async function resolveByPath(
 
 	if (!file) {
 		throw new Error(
-			`Reference file (${path}) not found in root, ${settings.compendiumDestinationDirectory}, or when searching the cache`,
+			`Reference file (${path}) not found in root, ${compendiumFolderPath(settings.compendiumDestinationDirectory) ?? settings.compendiumDestinationDirectory}, or when searching the cache`,
 		);
 	}
 
