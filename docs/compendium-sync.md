@@ -35,6 +35,10 @@ On the **Settings → Draw Steel Elements → Compendium** page:
 - **Destination folder**
   - Vault folder the compendium is synced into.
   - Default value: `DS Compendium`
+  - A blank or spaces-only field means `DS Compendium`. Spaces at the start or end of the
+    folder name are ignored.
+  - The vault root (`/`, `.`, `./`) and anything outside the vault (`..`) are refused:
+    Sync and Migrate do nothing and show a Notice asking you to choose a folder.
 - **Release**
   - Set to a specific [release tag](https://github.com/SteelCompendium/data-unified/releases)
     to lock in a specific version of the compendium.
