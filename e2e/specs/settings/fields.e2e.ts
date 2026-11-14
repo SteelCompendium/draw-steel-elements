@@ -3,7 +3,7 @@
 // Obsidian's file picker (its own popup: an item is picked with a real click on it) and its X clears the path. data.json is read ON DISK.
 // What the paths DO (where a sync writes, which image a creature gets) is read when a sync runs / a tracker renders, so these scenarios assert
 // the stored value and the shown value, with a final plugin reload.
-import { $, $$, expect } from '@wdio/globals';
+import { $, expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
 import { closeSettings, ctl, diskData, openAt, pressOn, readSettings, reloadPlugin, shownValue, typeThenBlur } from '../../driver/settingsDrive';
 
@@ -49,12 +49,9 @@ describe('settings tab: text and file fields', () => {
 			expect((await readSettings()).defaultImagePath).toBe('Media/token_1.png');
 			await dse.click(ctl('settings.initiative.default-image'));
 			await dse.waitFor(`document.querySelectorAll('.suggestion-item').length > 0`, 'the file picker');
-			for (const item of await $$('.suggestion-item')) {
-				if ((await item.getText()) === 'Stamina/recoveries') {
-					await item.click();
-					break;
-				}
-			}
+			// The picker re-renders as it filters: mark the wanted item page-side and click that (a real click), never hold an element across a render.
+			await dse.page(`(() => { Array.from(document.querySelectorAll('.suggestion-item')).find((i) => i.textContent === 'Stamina/recoveries')?.setAttribute('data-picked', '1'); return true; })()`);
+			await $('[data-picked="1"]').click();
 			await dse.waitFor(`document.querySelectorAll('.suggestion-item').length === 0`, 'the picker to close');
 			expect((await diskData()).defaultImagePath).toBe('Stamina/recoveries.md');
 			// Enter with the combobox focused: no picker, nothing written (verified in 1.14.4; the keyboard pair is declared so a change shows).
