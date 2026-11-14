@@ -49,7 +49,7 @@ describe('negotiation: values the Director typed by hand', () => {
 		const card = await cardOf();
 		expect(card).toMatchObject({ message: "Invalid data: 'motivations' item 2 must be an object.", controls: 0, stage: 'render' });
 		expect(card.title).toBe('Negotiation tracker: failed to render (render)');
-		await dse.expectNoWrite(WRONG_ITEM, () => dse.click(dse.block(NEGO).root));
+		await dse.expectNoWrite(WRONG_ITEM, () => dse.block(NEGO).root.click()) // a real click on the card; it is not a control, so it drives no coverage pair and does not declare the block edited (the driver then also checks its fence);
 		expect(await dse.noteText(WRONG_ITEM)).toBe(before);
 		expect(before).toContain('  - Legacy\n');
 	});
@@ -59,7 +59,7 @@ describe('negotiation: values the Director typed by hand', () => {
 		const before = await dse.noteText(WRONG_ARGUMENT);
 		const card = await cardOf();
 		expect(card).toMatchObject({ message: "Invalid data: 'currentArgument' field must be an object.", controls: 0, stage: 'render' });
-		await dse.expectNoWrite(WRONG_ARGUMENT, () => dse.click(dse.block(NEGO).root));
+		await dse.expectNoWrite(WRONG_ARGUMENT, () => dse.block(NEGO).root.click()) // a real click on the card; it is not a control, so it drives no coverage pair and does not declare the block edited (the driver then also checks its fence);
 		expect(await dse.noteText(WRONG_ARGUMENT)).toBe(before);
 		expect(before).toContain('currentArgument: hello\n');
 	});
