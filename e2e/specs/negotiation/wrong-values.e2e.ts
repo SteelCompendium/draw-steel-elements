@@ -2,13 +2,13 @@
 // behaviour only as far as its ticket rules: SC-638 (no raw JS error text on the card; the seal shown agrees with the ending), SC-640 (every
 // motivation chip has a name to read; no chip is announced as "Appeal to "), SC-641 (a block without Interest does not open ended; Reset of a
 // block that declares only its current standing does not end it). Never a specific fix or default value. SC-638 is fixed: W02 and W03 are plain tests,
-// and W08..W10 pin its rulings (a plain error card that writes nothing for a wrong-shaped block, a typed value written back as typed).
+// and W08..W11 pin its rulings (a plain error card that writes nothing for a wrong-shaped block, a typed value written back as typed).
 // Negotiation/quoted.md: `current_interest: "3"`, `current_patience: "2"`. wrong-name.md: `name: 2024`. fraction.md: `current_interest: 0.4`.
 // dup-names.md: two motivations named Higher Authority. nameless.md: a motivation with a reason and no name. minimal.md: `name:` only.
-// current-only.md: `current_interest: 3`, `current_patience: 2`, no initial_*. wrong-item.md: `- Legacy` as the second motivation. wrong-argument.md: `currentArgument: hello`.
+// current-only.md: `current_interest: 3`, `current_patience: 2`, no initial_*. wrong-item.md: `- Legacy` as the second motivation. wrong-argument.md: `currentArgument: hello`. wrong-block.md: the block is the text `hello`.
 import { expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
-import { blockOf, CURRENT_ONLY, DUPLICATES, FRACTION, MINIMAL, NAMELESS, NEGO, openMenu, openNego, patienceSeal, QUOTED, chooseReset, shown, WRONG_ARGUMENT, WRONG_ITEM, WRONG_NAME } from '../../driver/negotiation';
+import { blockOf, CURRENT_ONLY, DUPLICATES, FRACTION, MINIMAL, NAMELESS, NEGO, openMenu, openNego, patienceSeal, QUOTED, chooseReset, shown, WRONG_ARGUMENT, WRONG_BLOCK, WRONG_ITEM, WRONG_NAME } from '../../driver/negotiation';
 
 describe('negotiation: values the Director typed by hand', () => {
 	it('[NEGO-W01] quoted standing numbers are numbers: "2" Patience and "3" Interest are shown on those seals, and a crit makes Interest 4 (not the text "31")', async () => {
@@ -62,6 +62,16 @@ describe('negotiation: values the Director typed by hand', () => {
 		await dse.expectNoWrite(WRONG_ARGUMENT, () => dse.block(NEGO).root.click()) // a real click on the card; it is not a control, so it drives no coverage pair and does not declare the block edited (the driver then also checks its fence);
 		expect(await dse.noteText(WRONG_ARGUMENT)).toBe(before);
 		expect(before).toContain('currentArgument: hello\n');
+	});
+
+	it('[NEGO-W11] a block that is just the text `hello` is a plain error, the card has no control, and the note is byte-identical after a click on it', async () => {
+		await dse.openNote(WRONG_BLOCK);
+		const before = await dse.noteText(WRONG_BLOCK);
+		const card = await cardOf();
+		expect(card).toMatchObject({ message: 'Invalid data: the block must be a map of keys.', controls: 0, stage: 'render' });
+		await dse.expectNoWrite(WRONG_BLOCK, () => dse.block(NEGO).root.click()); // a real click on the card; it is not a control, so it drives no coverage pair and does not declare the block edited
+		expect(await dse.noteText(WRONG_BLOCK)).toBe(before);
+		expect(before).toContain('```ds-negotiation\nhello\n```');
 	});
 
 	it('[NEGO-W10] a number typed as the name (`name: 2024`) is drawn as text and a Patience click writes it back as the number, not as the text "2024"', async () => {

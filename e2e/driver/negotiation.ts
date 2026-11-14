@@ -14,6 +14,7 @@ export const UNKNOWN = 'Negotiation/unknown-keys.md'; // `note_to_self`, and `gm
 export const WRONG_NAME = 'Negotiation/wrong-name.md'; // `name: 2024`
 export const WRONG_ITEM = 'Negotiation/wrong-item.md'; // the second motivation is `- Legacy`, not `- name: Legacy`
 export const WRONG_ARGUMENT = 'Negotiation/wrong-argument.md'; // `currentArgument: hello`
+export const WRONG_BLOCK = 'Negotiation/wrong-block.md'; // the whole block is the text `hello`, not a map of keys
 export const FRACTION = 'Negotiation/fraction.md'; // `current_interest: 0.4`
 export const DUPLICATES = 'Negotiation/dup-names.md'; // two motivations both named Higher Authority
 export const NAMELESS = 'Negotiation/nameless.md'; // a motivation with a reason and no name
