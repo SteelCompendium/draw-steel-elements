@@ -34,12 +34,22 @@ import {
 	type SbPresetId,
 } from '@/prefs/catalog';
 import { snap, type ScaleRange } from '@/prefs/scale';
+import { stampControl } from '@/framework/kit/controlId';
 import { mountSettingsPreview, type PreviewSubject } from '@views/SettingsPreview';
 import {
 	toSettingDefinitions,
 	type NavRow,
 	type NavSection,
 } from '@views/settingsDeclarative';
+import {
+	OPERATIONAL_IDS,
+	PRESET_ID,
+	STAMP_SELECTORS,
+	fontCustomId,
+	fontListId,
+	prefControlId,
+	type StampTarget,
+} from '@views/settingsControlIds';
 
 // Local Font Access API (SC-112 Task 1 spike, Outcome A): queryLocalFonts() works
 // unconditionally in Obsidian's Electron — no permission prompt — but it still
@@ -182,8 +192,21 @@ export class DseSettingTab extends PluginSettingTab {
 						prefs.descriptors().filter((descriptor) => prefUi(descriptor) !== undefined),
 					)
 				: undefined,
+			this.stampDefinition,
 		);
 	}
+
+	/** SC-440: stamp `id` on the element obsidian rendered for `def` (page link, action row, native control). Obsidian's
+	 *  `getElementForDefinition` is not in the 1.13 typings (and a build without it simply stamps nothing: the real-Obsidian
+	 *  census then names every un-id'd control). Duck-typed on purpose: in a popout window the row is another window's
+	 *  `HTMLElement`, so `instanceof` would be false. */
+	private readonly stampDefinition = (def: object, id: string, target: StampTarget): void => {
+		const host = this as unknown as { getElementForDefinition?: (definition: object) => Element | null | undefined };
+		const row = host.getElementForDefinition?.(def);
+		if (!row || typeof row.setAttribute !== 'function') return;
+		const node = target === 'row' ? row : row.querySelector(STAMP_SELECTORS[target]);
+		if (node) stampControl(node, id);
+	};
 
 	/** Native control bindings read through here rather than off `this.plugin.settings`.
 	 *  DSE keeps its prefs in the PreferenceStore, and this is also where the
@@ -323,6 +346,9 @@ export class DseSettingTab extends PluginSettingTab {
 				if (!ui) continue;
 				const parent = ui.dependsOn;
 				rows.push({
+					// SC-440: the native control's stable id comes from the descriptor key (a font picker, which has
+					// no native control, stamps its own nodes in renderFontControl).
+					id: prefControlId(String(descriptor.key)),
 					// SC-160: a dependent row is indented into its parent and greyed out
 					// while that parent is off. `disabled` is a PREDICATE, not a snapshot —
 					// obsidian re-evaluates it on every render and on refreshDomState(),
@@ -408,6 +434,7 @@ export class DseSettingTab extends PluginSettingTab {
 	// A control binding would have to persist that pseudo-value; a render row need not.
 	private renderPresetControl(setting: Setting, prefs: PreferenceStore): void {
 		setting.addDropdown((dropdown) => {
+			stampControl(dropdown.selectEl, PRESET_ID);
 			dropdown.addOption('steel', 'Steel card');
 			dropdown.addOption('sourcebook', 'Sourcebook');
 			dropdown.addOption('index', 'Index card');
@@ -474,6 +501,7 @@ export class DseSettingTab extends PluginSettingTab {
 		const showCustom = (show: boolean): void =>
 			customText?.inputEl.toggleClass('dse-hidden', !show);
 		setting.addDropdown((dropdown) => {
+			stampControl(dropdown.selectEl, prefControlId(String(descriptor.key)));
 			for (const option of options) dropdown.addOption(option.value, option.label);
 			dropdown.addOption(CUSTOM_FONT, 'Custom…');
 			dropdown.setValue(isListed ? current : CUSTOM_FONT);
@@ -490,6 +518,7 @@ export class DseSettingTab extends PluginSettingTab {
 		});
 		setting.addText((text) => {
 			customText = text;
+			stampControl(text.inputEl, fontCustomId(String(descriptor.key)));
 			text.setPlaceholder('Font family');
 			text.setValue(current);
 			text.inputEl.toggleClass('dse-hidden', isListed);
@@ -499,12 +528,13 @@ export class DseSettingTab extends PluginSettingTab {
 			text.onChange((value) => save(value.trim() === '' ? '' : value));
 		});
 		if (this.installedFonts === null && 'queryLocalFonts' in window) {
-			setting.addExtraButton((button) =>
-				button
+			setting.addExtraButton((button) => {
+				stampControl(button.extraSettingsEl, fontListId(String(descriptor.key)));
+				return button
 					.setIcon('type')
 					.setTooltip('List installed fonts')
-					.onClick(() => void this.listInstalledFonts()),
-			);
+					.onClick(() => void this.listInstalledFonts());
+			});
 		}
 	}
 
@@ -555,11 +585,13 @@ export class DseSettingTab extends PluginSettingTab {
 					// lowercasing would misrepresent the actual folder created. (The
 					// sentence-case rule inspects setName/setDesc calls, which a declarative
 					// control has none of, so no disable directive is needed here.)
+					id: OPERATIONAL_IDS.destination,
 					control: { type: 'folder', key: 'compendiumDestinationDirectory', placeholder: 'DS Compendium' },
 				},
 				{
 					label: 'Release',
 					help: 'Specific data-unified release tag to sync. Leave empty for the latest release.',
+					id: OPERATIONAL_IDS.release,
 					control: { type: 'text', key: 'compendiumReleaseTag', placeholder: 'Latest' },
 				},
 				// "English" is a language proper noun; lowercasing it would be a grammar
@@ -567,6 +599,7 @@ export class DseSettingTab extends PluginSettingTab {
 				{
 					label: 'Locale',
 					help: 'Compendium language. Only English is published today.',
+					id: OPERATIONAL_IDS.locale,
 					control: { type: 'dropdown', key: 'compendiumLocale', options: { en: 'English' } },
 				},
 				opChrome((container) => {
@@ -593,6 +626,7 @@ export class DseSettingTab extends PluginSettingTab {
 						setting
 							.addButton((button) => {
 								syncButton = button;
+								stampControl(button.buttonEl, OPERATIONAL_IDS.sync);
 								return button
 									.setButtonText('Sync')
 									.setCta()
@@ -602,6 +636,7 @@ export class DseSettingTab extends PluginSettingTab {
 							})
 							.addButton((button) => {
 								checkButton = button;
+								stampControl(button.buttonEl, OPERATIONAL_IDS.check);
 								return button.setButtonText('Check for updates').onClick(() => {
 									void this.checkForCompendiumUpdates();
 								});
@@ -624,6 +659,7 @@ export class DseSettingTab extends PluginSettingTab {
 				{
 					label: 'Fall back to steelcompendium.io links',
 					help: 'When an SCC link is not found in your vault, link to its steelcompendium.io page instead. Navigation happens only on click.',
+					id: OPERATIONAL_IDS.sccWebFallback,
 					control: { type: 'toggle', key: 'sccWebFallback' },
 				},
 			],
@@ -638,6 +674,7 @@ export class DseSettingTab extends PluginSettingTab {
 					help: 'Default image to use for creatures in the initiative tracker if not specified.',
 					// Native 'file' control — obsidian supplies the file suggester, which
 					// the old free-text box did not.
+					id: OPERATIONAL_IDS.defaultImage,
 					control: { type: 'file', key: 'defaultImagePath', placeholder: 'path/to/image.png' },
 				},
 			],

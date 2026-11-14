@@ -11,6 +11,7 @@ import { openBarModal } from '../driver/stamina';
 import { HURT, openPoolModal } from '../driver/pool';
 import { CONDITIONS, openConditionsModal } from '../driver/conditions';
 import { EXHAUSTED, MID, openAddHero, openLimits, openLogFromBar, openMontage } from '../driver/montage';
+import { back, closeSettings, idsOnPage, openSettings, SETTINGS_CENSUS_EXCLUDE, SETTINGS_SCOPE, showPage } from '../driver/settings';
 import { idsOf } from '../manifest/surface';
 import barManifest from '../manifest/stamina-bar';
 import modalManifest from '../manifest/stamina-edit-modal';
@@ -24,6 +25,7 @@ import montageManifest from '../manifest/montage';
 import montageLogManifest from '../manifest/montage-log-modal';
 import montageAddHeroManifest from '../manifest/montage-add-hero-modal';
 import montageLimitsManifest from '../manifest/montage-limits-modal';
+import settingsManifest from '../manifest/settings-tab';
 
 const ALL_IDS = new Set([
 	...idsOf(barManifest),
@@ -313,5 +315,112 @@ describe('real-Obsidian census: the negotiation tracker', () => {
 		const learn = await eventfulNodes([NEGO_SCOPE], null);
 		expect(censusFindings(learn, NEGO_IDS)).toEqual([]);
 		expect(learn.map((n) => n.id)).toContain('negotiation.tablist');
+	});
+});
+
+// SC-440: the settings tab, scanned by its container (Obsidian's `.vertical-tab-content-container` in the settings window), page by page:
+// the index, every section page and each nested Advanced page. The listeners are Obsidian's own on its native rows, so only the browser can
+// say a node is a control. Left out: Obsidian's page titlebar (the back button) and the live preview's stage (another surface's elements).
+const SETTINGS_IDS = new Set(idsOf(settingsManifest));
+/** Each page of the shipped tab (gate off), the ids it must show, and its nested Advanced page when it has one. */
+const SHIPPED_PAGES: Array<{ link: string; ids: string[]; advanced?: { link: string; ids: string[] } }> = [
+	{ link: 'settings.page.appearance', ids: ['settings.reduce-motion', 'settings.portraits', 'settings.reset.appearance'] },
+	{
+		link: 'settings.page.typography',
+		ids: [
+			'settings.font-title', 'settings.font-title.custom', 'settings.font-title.list', 'settings.font-body', 'settings.font-body.custom',
+			'settings.font-body.list', 'settings.font-controls', 'settings.font-controls.custom', 'settings.font-controls.list',
+			'settings.text-scale', 'settings.card-scale', 'settings.small-text-scale', 'settings.large-text-scale', 'settings.control-text-scale',
+			'settings.advanced.typography', 'settings.reset.typography',
+		],
+		advanced: {
+			link: 'settings.advanced.typography',
+			ids: [
+				'settings.font-card-body', 'settings.font-card-body.custom', 'settings.font-card-body.list', 'settings.font-label',
+				'settings.font-label.custom', 'settings.font-label.list', 'settings.font-mono', 'settings.font-mono.custom', 'settings.font-mono.list',
+			],
+		},
+	},
+	{
+		link: 'settings.page.statblock-display',
+		ids: [
+			'settings.sb-preset', 'settings.sb-feature-style', 'settings.sb-density', 'settings.sb-columns', 'settings.sb-stats', 'settings.sb-sticky',
+			'settings.sb-sticky-meta', 'settings.advanced.statblock-display', 'settings.reset.statblock-display',
+		],
+		advanced: { link: 'settings.advanced.statblock-display', ids: ['settings.sb-char-line', 'settings.sb-char-box', 'settings.sb-villain'] },
+	},
+	{ link: 'settings.page.featureblock-display', ids: ['settings.fb-feature-style', 'settings.fb-stats', 'settings.reset.featureblock-display'] },
+	{ link: 'settings.page.feature-display', ids: ['settings.kw-usage', 'settings.dist-target', 'settings.reset.feature-display'] },
+	{
+		link: 'settings.page.element-defaults',
+		ids: ['settings.collapsible-default', 'settings.collapse-default', 'settings.advanced.element-defaults', 'settings.reset.element-defaults'],
+		advanced: { link: 'settings.advanced.element-defaults', ids: ['settings.stamina-recovery-popover'] },
+	},
+	{ link: 'settings.page.rolling', ids: ['settings.rolling-enabled', 'settings.roller-engine', 'settings.roll-click-to-roll', 'settings.reset.rolling'] },
+	{
+		link: 'settings.page.compendium',
+		ids: ['settings.compendium.destination', 'settings.compendium.release', 'settings.compendium.locale', 'settings.compendium.sync', 'settings.compendium.check'],
+	},
+	{ link: 'settings.page.links', ids: ['settings.links.scc-web-fallback'] },
+	{ link: 'settings.page.initiative-tracker', ids: ['settings.initiative.default-image', 'settings.initiative.default-image.clear'] },
+];
+
+/** One scan of the page on screen: every eventful node is an id the manifest declares, and every id the page must show is there. */
+async function expectPageIdentified(label: string, mustShow: string[]): Promise<void> {
+	const nodes = await eventfulNodes([SETTINGS_SCOPE], SETTINGS_CENSUS_EXCLUDE);
+	expect({ page: label, findings: censusFindings(nodes, SETTINGS_IDS) }).toEqual({ page: label, findings: [] });
+	const stamped = await idsOnPage();
+	expect({ page: label, stamped: stamped.filter((id) => !SETTINGS_IDS.has(id)) }).toEqual({ page: label, stamped: [] });
+	for (const id of mustShow) expect({ page: label, id, shown: stamped.includes(id) }).toEqual({ page: label, id, shown: true });
+}
+
+describe('real-Obsidian census: the settings tab (SC-440)', () => {
+	it('[CENSUS-16] the shipped settings tab (gate off), the index and every page and Advanced page: every node that listens for input is an identified control, and the gated controls are absent', async () => {
+		await dse.openNote('Stamina/basic.md');
+		await openSettings();
+		try {
+			const index = SHIPPED_PAGES.map((p) => p.link);
+			await expectPageIdentified('index', [...index, 'settings.reset-all']);
+			expect(await idsOnPage()).not.toContain('settings.page.authoring');
+			for (const page of SHIPPED_PAGES) {
+				await showPage(page.link);
+				await expectPageIdentified(page.link, page.ids);
+				if (page.advanced) {
+					await showPage(page.advanced.link);
+					await expectPageIdentified(page.advanced.link, page.advanced.ids);
+					await back();
+				}
+				await back();
+			}
+			// The two gated rows are not drawn at all: Print preview on Appearance, the whole Authoring page.
+			await showPage('settings.page.appearance');
+			expect(await idsOnPage()).not.toContain('settings.print-preview');
+		} finally {
+			await closeSettings();
+		}
+	});
+});
+
+describe('real-Obsidian census: the settings tab with the experimental gate on (SC-440)', () => {
+	before(async () => {
+		await dse.setPrefs({}, { experimental: true });
+	});
+	after(async () => {
+		await dse.setPrefs({});
+	});
+
+	it('[CENSUS-17] gate on: Print preview, the Authoring page and its reset row appear, and every node that listens for input is still an identified control', async () => {
+		await dse.openNote('Stamina/basic.md');
+		await openSettings();
+		try {
+			await expectPageIdentified('index', ['settings.page.authoring', 'settings.page.appearance', 'settings.reset-all']);
+			await showPage('settings.page.appearance');
+			await expectPageIdentified('appearance', ['settings.reduce-motion', 'settings.print-preview', 'settings.portraits', 'settings.reset.appearance']);
+			await back();
+			await showPage('settings.page.authoring');
+			await expectPageIdentified('authoring', ['settings.authoring-controls', 'settings.reset.authoring']);
+		} finally {
+			await closeSettings();
+		}
 	});
 });

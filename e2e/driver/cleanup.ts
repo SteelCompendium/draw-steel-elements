@@ -2,6 +2,7 @@
 // failing test cannot cascade into the next one.
 import { browser } from '@wdio/globals';
 import { ev, REGISTRY, waitFor } from './page';
+import { ensureMainWindow } from './settings';
 
 /** Close every open Obsidian modal through its own close button (Obsidian >= 1.14: .modal-header-button; older: .modal-close-button), never by removing DOM. */
 export async function closeModals(): Promise<void> {
@@ -49,6 +50,7 @@ export async function clearNotices(): Promise<void> {
 
 /** Close modals, clear notices, unload every open note (this flushes any pending persist), wait write-idle. */
 export async function closeEverything(): Promise<void> {
+	await ensureMainWindow(); // SC-440: a test that failed with the settings window open must not leave the driver on it
 	await closeModals();
 	await clearNotices();
 	await ev(`app.workspace.iterateRootLeaves((leaf) => leaf.detach())`);

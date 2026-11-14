@@ -26,11 +26,29 @@ import type {
 	SettingDefinitionPage,
 	SettingGroupItem,
 } from 'obsidian';
+import {
+	RESET_ALL_ID,
+	advancedLinkId,
+	pageLinkId,
+	resetId,
+	stampTargetsOf,
+	type StampTarget,
+} from '@views/settingsControlIds';
+
+/**
+ * SC-440 — stamps a `data-dse-control` id on the element obsidian rendered for `def` (see
+ * settingsControlIds.ts for why this goes through a `visible` predicate). Supplied by SettingsTab;
+ * absent in a caller that only wants the definitions (tests of the mapper itself).
+ */
+export type StampDefinition = (def: object, id: string, target: StampTarget) => void;
 
 /** One settings row. `label` present ⇒ a real, searchable setting; absent ⇒ chrome. */
 export interface NavRow {
 	/** Display name AND primary search key. Omit for chrome. */
 	label?: string;
+	/** SC-440: the row's control id (`settings.…`), stamped on its native control after obsidian renders it. Only for rows with a
+	 *  `control`; a `render` row stamps its own nodes where it builds them. */
+	id?: string;
 	/** Description, shown under the name and also indexed for search. */
 	help?: string;
 	/** Extra search terms beyond label/help. The owning section's label is added
@@ -90,6 +108,26 @@ export const PREVIEW_CLS = 'dse-settings-preview-row';
 /** Class on a chrome row (no name/control), so CSS can let its text span the full width. */
 export const CHROME_CLS = 'dse-settings-chrome-row';
 
+/**
+ * SC-440: make `def` stamp `id` on its rendered element. Obsidian evaluates every definition's `visible` after it has rendered
+ * the row (and again on every `refreshDomState()`), so the predicate is the one hook that runs with the row on screen. It always
+ * answers "visible" (a row that already had its own predicate keeps its answer), so nothing about what shows changes.
+ */
+function stamping<T extends object>(
+	def: T,
+	targets: ReadonlyArray<readonly [string, StampTarget]> | undefined,
+	stamp: StampDefinition | undefined,
+): T {
+	if (!stamp || !targets?.length) return def;
+	const withVisible = def as { visible?: boolean | (() => boolean) };
+	const prior = withVisible.visible;
+	withVisible.visible = () => {
+		for (const [id, target] of targets) stamp(def, id, target);
+		return typeof prior === 'function' ? prior() : prior !== false;
+	};
+	return def;
+}
+
 /*
  * ── SC-160 fix round 1: WHY A DEPENDENT ROW IS NOT VISUALLY INDENTED ────────────────────
  *
@@ -131,7 +169,7 @@ export const CHROME_CLS = 'dse-settings-chrome-row';
  */
 
 /** Turns a row into a definition. Returns null for a row that renders nothing. */
-function toDefinition(row: NavRow, section: NavSection): SettingDefinition | null {
+function toDefinition(row: NavRow, section: NavSection, stamp?: StampDefinition): SettingDefinition | null {
 	if (row.chrome) {
 		const chrome = row.chrome;
 		return {
@@ -159,7 +197,7 @@ function toDefinition(row: NavRow, section: NavSection): SettingDefinition | nul
 	// would be a behaviour change for every existing row.
 	if (row.control) {
 		const control = row.disabled ? { ...row.control, disabled: row.disabled } : row.control;
-		return { ...base, control };
+		return stamping({ ...base, control }, row.id ? stampTargetsOf(control.type, row.id) : undefined, stamp);
 	}
 	const render = row.render;
 	// A label-only row (no control, no render) is still a legitimate definition: obsidian
@@ -245,10 +283,10 @@ function previewDefinition(section: NavSection): SettingDefinition | null {
  *  Deliberately a row and not a group-header `extraButtons` icon: with D-pages the page
  *  TITLE already states the section, so a group heading repeating it would be redundant
  *  chrome — and a named row states what the button resets, which a bare icon does not. */
-function resetDefinition(section: NavSection): SettingDefinition | null {
+function resetDefinition(section: NavSection, stamp?: StampDefinition): SettingDefinition | null {
 	const onReset = section.onReset;
 	if (!onReset) return null;
-	return {
+	return stamping({
 		// Named after the section rather than "Reset this section": these rows are in the
 		// global settings search, where nine identical "Reset this section" hits would be
 		// indistinguishable.
@@ -256,7 +294,7 @@ function resetDefinition(section: NavSection): SettingDefinition | null {
 		desc: `Restore every ${section.label.toLowerCase()} setting to its default.`,
 		aliases: [section.label, 'reset', 'defaults'],
 		action: () => onReset(),
-	};
+	}, [[resetId(section.id), 'row']], stamp);
 }
 
 /**
@@ -268,25 +306,26 @@ function resetDefinition(section: NavSection): SettingDefinition | null {
  * predicate, and its rows stay individually indexed — so searching "monospace" still finds
  * the row even though it now lives one level down.
  */
-function advancedPage(rows: readonly SettingDefinition[]): SettingDefinitionPage | null {
+function advancedPage(rows: readonly SettingDefinition[], sectionId: string, stamp?: StampDefinition): SettingDefinitionPage | null {
 	if (!rows.length) return null;
-	return { type: 'page', name: 'Advanced', items: [...rows] };
+	const page: SettingDefinitionPage = { type: 'page', name: 'Advanced', items: [...rows] };
+	return stamping(page, [[advancedLinkId(sectionId), 'row']], stamp);
 }
 
 /** One section → one navigable page. */
-function toPage(section: NavSection): SettingDefinitionPage | null {
+function toPage(section: NavSection, stamp?: StampDefinition): SettingDefinitionPage | null {
 	const primary: SettingDefinition[] = [];
 	const advanced: SettingDefinition[] = [];
 	for (const row of section.rows) {
-		const definition = toDefinition(row, section);
+		const definition = toDefinition(row, section, stamp);
 		if (definition) (row.advanced ? advanced : primary).push(definition);
 	}
 	// SettingGroupItem, not SettingDefinitionItem: a group may hold settings and pages
 	// (the nested Advanced page) but not further groups.
 	const items: SettingGroupItem[] = [...primary];
-	const nested = advancedPage(advanced);
+	const nested = advancedPage(advanced, section.id, stamp);
 	if (nested) items.push(nested);
-	const reset = resetDefinition(section);
+	const reset = resetDefinition(section, stamp);
 	if (reset) items.push(reset);
 	// SC-187 keeps the preview LAST — a settings page's job is its settings, and a
 	// ~1600px sample above them would push every row off the first screen. What changed
@@ -304,7 +343,8 @@ function toPage(section: NavSection): SettingDefinitionPage | null {
 		cls: `${PAGE_CLS} ${PAGE_CLS}--${section.id}`,
 		items,
 	};
-	return { type: 'page', name: section.label, items: [group] };
+	const page: SettingDefinitionPage = { type: 'page', name: section.label, items: [group] };
+	return stamping(page, [[pageLinkId(section.id), 'row']], stamp);
 }
 
 /**
@@ -312,23 +352,31 @@ function toPage(section: NavSection): SettingDefinitionPage | null {
  *
  * @param sections the model built by SettingsTab
  * @param onResetAll footer action; omitted when there are no preferences to reset
+ * @param stamp SC-440: stamps each page link, control row and reset row with its `data-dse-control` id once rendered
  */
 export function toSettingDefinitions(
 	sections: readonly NavSection[],
 	onResetAll?: () => void,
+	stamp?: StampDefinition,
 ): SettingDefinitionItem[] {
 	const items: SettingDefinitionItem[] = [];
 	for (const section of sections) {
-		const page = toPage(section);
+		const page = toPage(section, stamp);
 		if (page) items.push(page);
 	}
 	if (onResetAll) {
-		items.push({
-			name: 'Reset all preferences',
-			desc: 'Restore every Draw Steel Elements preference to its default.',
-			aliases: ['reset', 'defaults'],
-			action: () => onResetAll(),
-		});
+		items.push(
+			stamping(
+				{
+					name: 'Reset all preferences',
+					desc: 'Restore every Draw Steel Elements preference to its default.',
+					aliases: ['reset', 'defaults'],
+					action: () => onResetAll(),
+				},
+				[[RESET_ALL_ID, 'row']],
+				stamp,
+			),
+		);
 	}
 	return items;
 }

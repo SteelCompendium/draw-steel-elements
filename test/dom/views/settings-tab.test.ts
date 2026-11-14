@@ -1299,7 +1299,8 @@ describe('SC-160 — dependent rows (dependsOn)', () => {
 		// without reading it.
 		expect(typeof (child as unknown as { desc: unknown }).desc).toBe('string');
 		// The definition carries no class/indent field either, because none exists.
-		expect(Object.keys(child as object).sort()).toEqual(['aliases', 'control', 'desc', 'name']);
+		// (SC-440 added `visible`: an always-true predicate that stamps the row's data-dse-control id once obsidian has rendered it.)
+		expect(Object.keys(child as object).sort()).toEqual(['aliases', 'control', 'desc', 'name', 'visible']);
 	});
 
 	test('the sub-toggle\'s control is DISABLED while its parent is off, and live-enables when the parent flips', async () => {

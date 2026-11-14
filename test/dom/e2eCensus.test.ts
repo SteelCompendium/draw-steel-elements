@@ -22,13 +22,15 @@ import { createSessionStore } from '../../src/framework/session';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import * as fs from 'fs';
 import * as path from 'path';
-import { App, Notice, Plugin } from '../mocks/obsidian';
+import { App, Notice, Plugin, flushAsync } from '../mocks/obsidian';
+import { setExperimental } from '../../src/framework/experimental';
+import { DseSettingTab } from '../../src/views/SettingsTab';
 import { staminaBarElement } from '../../src/elements/stamina-bar/definition';
 import { initiativeElement } from '../../src/elements/initiative/definition';
 import { montageElement } from '../../src/elements/montage/definition';
 import { undoNotice } from '../../src/framework/kit';
 import { DSE_PREF_DESCRIPTORS } from '../../src/prefs/catalog';
-import { FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main';
+import DrawSteelAdmonitionPlugin, { FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main';
 import staminaBarManifest from '../../e2e/manifest/stamina-bar';
 import modalManifest from '../../e2e/manifest/stamina-edit-modal';
 import conditionsManifest from '../../e2e/manifest/conditions-modal';
@@ -55,6 +57,7 @@ import { idsOf } from '../../e2e/manifest/surface';
 import { Menu } from '../mocks/obsidian';
 import { negotiationElement } from '../../src/elements/negotiation/definition';
 import negotiationManifest from '../../e2e/manifest/negotiation';
+import settingsManifest from '../../e2e/manifest/settings-tab';
 
 const INTERACTIVE = 'button, input, select, textarea, [role="button"], [role="slider"], [tabindex], [contenteditable]';
 const CHROME = '[data-dse-chrome-item]';
@@ -760,5 +763,172 @@ describe('SC-439 census: the negotiation tracker, scoped by container', () => {
 			expect(count(root, 'negotiation.tier.row')).toBe(0); // the tier rows are static: no radio leads nowhere
 			document.body.innerHTML = '';
 		}
+	});
+});
+
+describe('SC-440 census: the settings tab, scoped by its container, page by page', () => {
+	/* eslint-disable @typescript-eslint/no-explicit-any */
+	// What a user can operate in the tab: the generic interactive nodes plus the rows and widgets obsidian renders without a
+	// button/tabindex of their own (a navigable page row, an action row, the toggle's label, the file combobox and its clear X).
+	const SETTINGS_INTERACTIVE = `${INTERACTIVE}, .mod-navigable, .mod-action, .checkbox-container, .combobox-button, .combobox-clear-button, .clickable-icon`;
+	// The live preview's stage holds an element mounted through the pipeline: its controls belong to that element's surface.
+	const PREVIEW_STAGE = '.dse-settings-preview__stage';
+	const settingsIds = new Set(idsOf(settingsManifest));
+	/** Gated: present only with the experimental switch on. */
+	const GATED = ['settings.print-preview', 'settings.authoring-controls', 'settings.page.authoring', 'settings.reset.authoring'];
+
+	const census = (scope: Element, allowed: ReadonlySet<string> = settingsIds): string[] => {
+		const problems: string[] = [];
+		const describe = (el: Element): string => `<${el.tagName.toLowerCase()} class="${el.className}"> ${(el.textContent ?? '').trim().slice(0, 30)}`;
+		scope.querySelectorAll(SETTINGS_INTERACTIVE).forEach((el) => {
+			if (el.closest(PREVIEW_STAGE)) return;
+			if (el.matches('.checkbox-container > input')) return; // the toggle's own checkbox: its label carries the id
+			if (!el.hasAttribute('data-dse-control')) problems.push(`no data-dse-control: ${describe(el)}`);
+		});
+		scope.querySelectorAll('[data-dse-control]').forEach((el) => {
+			if (el.closest(PREVIEW_STAGE)) return;
+			const id = el.getAttribute('data-dse-control') as string;
+			if (!allowed.has(id)) problems.push(`id "${id}" is not in the manifest: ${describe(el)}`);
+		});
+		return problems;
+	};
+
+	async function openTab(experimental: boolean): Promise<{ tab: any; plugin: DrawSteelAdmonitionPlugin }> {
+		const app = new App();
+		const plugin = new DrawSteelAdmonitionPlugin(app as never, { id: 'draw-steel-elements', version: 'test' } as never);
+		plugin.loadData = async () => (experimental ? { experimental: true } : {}); // the mock vault's own data.json turns the gate on
+		setExperimental(experimental); // onload re-reads it from data.json; the suite default is ON
+		await plugin.onload();
+		const tab: any = new DseSettingTab(plugin.app as never, plugin);
+		tab.update();
+		return { tab, plugin };
+	}
+	/** Every page the tab has, as the path obsidian would take to it: the index, each section, each nested Advanced page. */
+	function pagePaths(tab: any): string[][] {
+		const out: string[][] = [[]];
+		const walk = (items: any[], path: string[]): void => {
+			for (const item of items) {
+				if (item?.type === 'group') walk(item.items ?? [], path);
+				else if (item?.type === 'page') {
+					out.push([...path, item.name]);
+					walk(item.items ?? [], [...path, item.name]);
+				}
+			}
+		};
+		walk(tab.settingItems, []);
+		return out;
+	}
+	const stampedIds = (root: Element): string[] =>
+		Array.from(root.querySelectorAll('[data-dse-control]')).filter((el) => !el.closest(PREVIEW_STAGE)).map((el) => el.getAttribute('data-dse-control') as string);
+
+	beforeEach(() => {
+		(window as any).queryLocalFonts = async () => []; // the font rows' "List installed fonts" button exists only where the Local Font Access API does
+	});
+	afterEach(async () => {
+		delete (window as any).queryLocalFonts;
+		await flushAsync(2); // let each page's preview mount settle before the next test
+	});
+
+	test('the census itself bites: an un-id\'d button, an un-id\'d action or page row, or an id outside the manifest is a finding; the preview stage is not scanned', async () => {
+		const { tab } = await openTab(true);
+		tab.renderPage(['Statblock display']);
+		const root = tab.containerEl as HTMLElement;
+		expect(census(root)).toEqual([]);
+		for (const host of ['.setting-items', '.setting-item-control']) {
+			const rogue = document.createElement('button');
+			rogue.textContent = 'Rogue';
+			root.querySelector(host)!.appendChild(rogue);
+			expect(census(root)).toEqual([expect.stringMatching(/^no data-dse-control: <button/)]);
+			rogue.remove();
+		}
+		for (const cls of ['mod-action', 'mod-navigable']) {
+			const row = document.createElement('div');
+			row.className = `setting-item ${cls}`;
+			root.querySelector('.setting-items')!.appendChild(row);
+			expect(census(root)).toEqual([expect.stringMatching(/^no data-dse-control: <div class="setting-item mod-/)]);
+			row.remove();
+		}
+		const first = root.querySelector<HTMLElement>('[data-dse-control="settings.sb-density"]')!;
+		first.setAttribute('data-dse-control', 'settings.not-a-control');
+		expect(census(root)).toEqual([expect.stringMatching(/id "settings\.not-a-control" is not in the manifest/)]);
+		first.setAttribute('data-dse-control', 'settings.sb-density');
+		// An interactive node inside the preview stage is another surface's: not a finding.
+		await flushAsync(3);
+		const stage = root.querySelector(PREVIEW_STAGE)!;
+		expect(stage).not.toBeNull();
+		const inStage = document.createElement('button');
+		stage.appendChild(inStage);
+		expect(census(root)).toEqual([]);
+	});
+
+	test('the index, every section page and every nested Advanced page: every interactive node carries an id the manifest declares (gate on)', async () => {
+		const { tab } = await openTab(true);
+		const paths = pagePaths(tab);
+		expect(paths.map((p) => p.join(' > '))).toEqual([
+			'', 'Appearance', 'Typography', 'Typography > Advanced', 'Statblock display', 'Statblock display > Advanced', 'Featureblock display',
+			'Feature display', 'Element defaults', 'Element defaults > Advanced', 'Rolling', 'Authoring', 'Compendium', 'Links', 'Initiative tracker',
+		]);
+		for (const path of paths) {
+			tab.renderPage(path);
+			expect({ page: path.join(' > '), findings: census(tab.containerEl) }).toEqual({ page: path.join(' > '), findings: [] });
+			await flushAsync(1);
+		}
+	});
+
+	test('the ids stamped across every page are exactly the manifest\'s: no unidentified control, no dead manifest row (gate on)', async () => {
+		const { tab } = await openTab(true);
+		const seen = new Set<string>();
+		for (const path of pagePaths(tab)) {
+			tab.renderPage(path);
+			stampedIds(tab.containerEl).forEach((id) => seen.add(id));
+			await flushAsync(1);
+		}
+		expect([...seen].filter((id) => !settingsIds.has(id))).toEqual([]);
+		expect([...settingsIds].filter((id) => !seen.has(id))).toEqual([]);
+	});
+
+	test('the shipped tab (gate off): the same pages minus Authoring, and none of the four gated ids exists', async () => {
+		const { tab } = await openTab(false);
+		const names = pagePaths(tab).map((p) => p.join(' > '));
+		expect(names).not.toContain('Authoring');
+		const seen = new Set<string>();
+		for (const path of pagePaths(tab)) {
+			tab.renderPage(path);
+			expect({ page: path.join(' > '), findings: census(tab.containerEl) }).toEqual({ page: path.join(' > '), findings: [] });
+			stampedIds(tab.containerEl).forEach((id) => seen.add(id));
+			await flushAsync(1);
+		}
+		for (const id of GATED) expect(seen.has(id)).toBe(false);
+		expect([...settingsIds].filter((id) => !seen.has(id) && !GATED.includes(id))).toEqual([]);
+	});
+
+	test('a descriptor\'s id comes from its key: every described pref with a settings row is stamped settings.<kebab-key>', async () => {
+		const { tab, plugin } = await openTab(true);
+		const seen = new Set<string>();
+		for (const path of pagePaths(tab)) {
+			tab.renderPage(path);
+			stampedIds(tab.containerEl).forEach((id) => seen.add(id));
+			await flushAsync(1);
+		}
+		const keys = plugin.frameworkV2!.services.prefs.descriptors().filter((d) => (d.ui as { control?: string } | undefined)?.control);
+		expect(keys.length).toBeGreaterThanOrEqual(30);
+		for (const d of keys) {
+			expect({ key: d.key, id: `settings.${String(d.key).replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()}`, stamped: seen.has(`settings.${String(d.key).replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()}`) })
+				.toEqual({ key: d.key, id: expect.any(String), stamped: true });
+		}
+	});
+
+	test('the stamps survive what obsidian does to a rendered page: a repaint from the cache, refreshDomState() and a dependent row\'s disabling', async () => {
+		const { tab, plugin } = await openTab(true);
+		tab.renderPage(['Statblock display']);
+		const before = stampedIds(tab.containerEl).sort();
+		tab.renderPage(['Statblock display']);
+		expect(stampedIds(tab.containerEl).sort()).toEqual(before);
+		await plugin.frameworkV2!.services.prefs.set('sbSticky', 'off');
+		tab.refreshDomState();
+		expect(stampedIds(tab.containerEl).sort()).toEqual(before);
+		const meta = tab.containerEl.querySelector('[data-dse-control="settings.sb-sticky-meta"]') as HTMLElement;
+		expect(meta.classList.contains('is-disabled')).toBe(true);
+		expect(tab.containerEl.querySelectorAll('[data-dse-control="settings.sb-sticky-meta"]')).toHaveLength(1);
 	});
 });

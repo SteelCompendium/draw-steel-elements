@@ -893,12 +893,19 @@ export class Menu {
 class FakeSettingComponent {
 	disabled = false;
 	protected changeCb: ((value: any) => any) | null = null;
+	/** SC-440: the node a component renders, when it has been given a row to render into (the real DOM shape of
+	 *  obsidian 1.14.4's components, so the jsdom census can look at what a user would see). */
+	protected disableEl: HTMLElement | null = null;
 	onChange(cb: (value: any) => any): this {
 		this.changeCb = cb;
 		return this;
 	}
 	setDisabled(disabled: boolean): this {
 		this.disabled = disabled;
+		if (this.disableEl) {
+			this.disableEl.classList.toggle('is-disabled', disabled);
+			if ('disabled' in this.disableEl) (this.disableEl as HTMLInputElement).disabled = disabled;
+		}
 		return this;
 	}
 	setTooltip(_tooltip: string): this {
@@ -907,13 +914,31 @@ class FakeSettingComponent {
 }
 export class FakeToggle extends FakeSettingComponent {
 	value = false;
+	/** Real ToggleComponent: `label.checkbox-container > input[type=checkbox]` (focusable label, the input is taken out of the tab order). */
+	toggleEl: HTMLElement | null = null;
+	constructor(parent?: HTMLElement | null) {
+		super();
+		if (parent) {
+			const label = document.createElement('label');
+			label.className = 'checkbox-container';
+			label.setAttribute('tabindex', '0');
+			const input = document.createElement('input');
+			input.type = 'checkbox';
+			input.setAttribute('tabindex', '-1');
+			label.appendChild(input);
+			parent.appendChild(label);
+			this.toggleEl = label;
+			this.disableEl = label;
+		}
+	}
 	setValue(value: boolean): this {
 		this.value = value;
+		this.toggleEl?.classList.toggle('is-enabled', value);
 		return this;
 	}
 	/** Test helper: simulate a user flip (setValue + fire onChange). */
 	trigger(value: boolean): void {
-		this.value = value;
+		this.setValue(value);
 		this.changeCb?.(value);
 	}
 }
@@ -926,6 +951,14 @@ export class FakeDropdown extends FakeSettingComponent {
 	selectEl: HTMLSelectElement = (
 		typeof document !== 'undefined' ? document.createElement('select') : null
 	) as HTMLSelectElement;
+	constructor(parent?: HTMLElement | null) {
+		super();
+		if (this.selectEl) {
+			this.selectEl.className = 'dropdown';
+			this.disableEl = this.selectEl;
+			parent?.appendChild(this.selectEl);
+		}
+	}
 	addOption(value: string, label: string): this {
 		this.options.push({ value, label });
 		if (this.selectEl) {
@@ -959,8 +992,17 @@ export class FakeText extends FakeSettingComponent {
 	inputEl: HTMLInputElement = (
 		typeof document !== 'undefined' ? document.createElement('input') : null
 	) as HTMLInputElement;
+	constructor(parent?: HTMLElement | null) {
+		super();
+		if (this.inputEl) {
+			this.inputEl.type = 'text';
+			this.disableEl = this.inputEl;
+			parent?.appendChild(this.inputEl);
+		}
+	}
 	setPlaceholder(placeholder: string): this {
 		this.placeholder = placeholder;
+		this.inputEl?.setAttribute('placeholder', placeholder);
 		return this;
 	}
 	setValue(value: string): this {
@@ -978,12 +1020,31 @@ export class FakeSlider extends FakeSettingComponent {
 	value = 0;
 	limits: { min: number; max: number; step: number } | null = null;
 	dynamicTooltip = false;
+	/** Real SliderComponent: `input.slider[type=range]`. */
+	sliderEl: HTMLInputElement | null = null;
+	constructor(parent?: HTMLElement | null) {
+		super();
+		if (parent) {
+			const input = document.createElement('input');
+			input.type = 'range';
+			input.className = 'slider';
+			parent.appendChild(input);
+			this.sliderEl = input;
+			this.disableEl = input;
+		}
+	}
 	setLimits(min: number, max: number, step: number): this {
 		this.limits = { min, max, step };
+		if (this.sliderEl) {
+			this.sliderEl.min = String(min);
+			this.sliderEl.max = String(max);
+			this.sliderEl.step = String(step);
+		}
 		return this;
 	}
 	setValue(value: number): this {
 		this.value = value;
+		if (this.sliderEl) this.sliderEl.value = String(value);
 		return this;
 	}
 	setDynamicTooltip(): this {
@@ -999,12 +1060,29 @@ export class FakeButton {
 	text = '';
 	icon = '';
 	cta = false;
+	/** SC-440: real ButtonComponent.buttonEl (a `<button>`) / ExtraButtonComponent.extraSettingsEl (a focusable
+	 *  `div.clickable-icon.extra-setting-button`), present when the button was given a row to render into. */
+	buttonEl: HTMLElement | null = null;
+	extraSettingsEl: HTMLElement | null = null;
+	constructor(parent?: HTMLElement | null, kind: 'button' | 'extra' = 'button') {
+		if (!parent) return;
+		if (kind === 'button') {
+			this.buttonEl = document.createElement('button');
+			parent.appendChild(this.buttonEl);
+		} else {
+			this.extraSettingsEl = document.createElement('div');
+			this.extraSettingsEl.className = 'clickable-icon extra-setting-button';
+			this.extraSettingsEl.setAttribute('tabindex', '0');
+			parent.appendChild(this.extraSettingsEl);
+		}
+	}
 	/** SC-243: mirrors real ButtonComponent.setDisabled/disabled — the settings tab's
 	 *  compendium busy-state row (mountCompendiumBusyButtons) drives this. */
 	disabled = false;
 	private clickCb: (() => any) | null = null;
 	setButtonText(text: string): this {
 		this.text = text;
+		if (this.buttonEl) this.buttonEl.textContent = text;
 		return this;
 	}
 	setIcon(icon: string): this {
@@ -1013,17 +1091,23 @@ export class FakeButton {
 	}
 	setCta(): this {
 		this.cta = true;
+		this.buttonEl?.classList.add('mod-cta');
 		return this;
 	}
 	setDisabled(disabled: boolean): this {
 		this.disabled = disabled;
+		if (this.buttonEl) (this.buttonEl as HTMLButtonElement).disabled = disabled;
 		return this;
 	}
-	setTooltip(_tooltip: string): this {
+	setTooltip(tooltip: string): this {
+		this.extraSettingsEl?.setAttribute('aria-label', tooltip);
 		return this;
 	}
 	onClick(cb: () => any): this {
 		this.clickCb = cb;
+		// A real element's click reaches the same callback (a disabled <button> never dispatches one).
+		const el = this.buttonEl ?? this.extraSettingsEl;
+		el?.addEventListener('click', () => this.click());
 		return this;
 	}
 	/** SC-243: a real disabled `<button>` element never dispatches a click at all — the
@@ -1082,37 +1166,37 @@ export class Setting {
 		return this;
 	}
 	addText(cb?: (text: FakeText) => any): this {
-		const c = new FakeText();
+		const c = new FakeText(this.controlEl);
 		this.texts.push(c);
 		cb?.(c);
 		return this;
 	}
 	addToggle(cb?: (toggle: FakeToggle) => any): this {
-		const c = new FakeToggle();
+		const c = new FakeToggle(this.controlEl);
 		this.toggles.push(c);
 		cb?.(c);
 		return this;
 	}
 	addButton(cb?: (button: FakeButton) => any): this {
-		const c = new FakeButton();
+		const c = new FakeButton(this.controlEl, 'button');
 		this.buttons.push(c);
 		cb?.(c);
 		return this;
 	}
 	addExtraButton(cb?: (button: FakeButton) => any): this {
-		const c = new FakeButton();
+		const c = new FakeButton(this.controlEl, 'extra');
 		this.extraButtons.push(c);
 		cb?.(c);
 		return this;
 	}
 	addDropdown(cb?: (dropdown: FakeDropdown) => any): this {
-		const c = new FakeDropdown();
+		const c = new FakeDropdown(this.controlEl);
 		this.dropdowns.push(c);
 		cb?.(c);
 		return this;
 	}
 	addSlider(cb?: (slider: FakeSlider) => any): this {
-		const c = new FakeSlider();
+		const c = new FakeSlider(this.controlEl);
 		this.sliders.push(c);
 		cb?.(c);
 		return this;
@@ -1154,6 +1238,9 @@ export class PluginSettingTab {
 	private renderedCleanups: (() => void)[] = [];
 	/** Whether the tab is currently on screen — update() repaints only if it is. */
 	private rendered = false;
+	/** SC-440: definition -> the row element rendered for it, as obsidian's `getElementForDefinition` answers. Rebuilt on every
+	 *  render (a page navigation replaces the rows, so the old ones must not answer). */
+	private renderedDefs = new Map<object, HTMLElement>();
 
 	constructor(app: App, plugin: any) {
 		this.app = app;
@@ -1194,7 +1281,76 @@ export class PluginSettingTab {
 		if (container) container.innerHTML = '';
 		this.rendered = true;
 		this.boundControls = [];
+		this.renderedDefs = new Map();
 		this.renderDefs(container, this.settingItems);
+		this.evaluateVisibility();
+	}
+
+	/**
+	 * SC-440 — ONE page the way obsidian shows it: `path` names the page ([] = the index, ['Statblock display'] = that page,
+	 * ['Typography', 'Advanced'] = its nested page). Page definitions render as navigable link rows (clicking one shows that
+	 * page), groups as `.setting-group` wrappers, everything else as in renderTab. renderTab() flattens every page so the
+	 * row-level suites stay direct; the census needs the real one-page-at-a-time shape, link rows included.
+	 */
+	renderPage(path: string[] = []): void {
+		this.closeTab();
+		const container = this.containerEl as HTMLElement;
+		if (container) container.innerHTML = '';
+		this.rendered = true;
+		this.boundControls = [];
+		this.renderedDefs = new Map();
+		let items: any[] = this.settingItems;
+		// A page's rows sit in a group, and its nested Advanced page is one of that group's items: look through groups.
+		const findPage = (list: any[], name: string): any => {
+			for (const d of list) {
+				if (d?.type === 'page' && d.name === name) return d;
+				if (d?.type === 'group' || d?.type === 'list') {
+					const hit = findPage(d.items ?? [], name);
+					if (hit) return hit;
+				}
+			}
+			return undefined;
+		};
+		for (const name of path) {
+			const page = findPage(items, name);
+			if (!page) throw new Error(`no page "${name}" at ${JSON.stringify(path)}`);
+			items = page.items ?? [];
+		}
+		this.renderPageItems(container, items, path);
+		this.evaluateVisibility();
+	}
+
+	private renderPageItems(container: HTMLElement, items: any[], path: string[]): void {
+		for (const def of items) {
+			if (!def) continue;
+			if (def.type === 'group' || def.type === 'list') {
+				const group = (container as any).createDiv({ cls: `setting-group ${def.cls ?? ''}`.trim() });
+				this.renderPageItems(group.createDiv({ cls: 'setting-items' }), def.items ?? [], path);
+			} else if (def.type === 'page') {
+				const row = new Setting(container);
+				row.setName(def.name);
+				row.settingEl?.classList.add('mod-navigable');
+				row.settingEl?.addEventListener('click', () => this.renderPage([...path, def.name]));
+				this.renderedDefs.set(def, row.settingEl as HTMLElement);
+			} else {
+				this.renderDef(container, def);
+			}
+		}
+	}
+
+	/** Obsidian's own accessor (1.14.4; not in the typings): the element rendered for a definition on the page on screen. */
+	getElementForDefinition(def: object): HTMLElement | undefined {
+		return this.renderedDefs.get(def);
+	}
+
+	/** Evaluate every rendered definition's `visible` predicate right after a render, as obsidian does (the row is on screen by
+	 *  then); a predicate answering false hides the row. */
+	private evaluateVisibility(): void {
+		for (const [def, el] of this.renderedDefs) {
+			const visible = (def as any).visible;
+			const show = typeof visible === 'function' ? visible() !== false : visible !== false;
+			el.style.display = show ? '' : 'none';
+		}
 	}
 
 	/**
@@ -1211,6 +1367,7 @@ export class PluginSettingTab {
 			const disabled = typeof control.disabled === 'function' ? control.disabled() : control.disabled;
 			component.setDisabled(disabled === true);
 		}
+		this.evaluateVisibility();
 	}
 
 	/** Obsidian tears rendered rows down on page navigation and on settings close.
@@ -1231,14 +1388,25 @@ export class PluginSettingTab {
 				this.renderDefs(container, def.items ?? []);
 				continue;
 			}
-			const setting = new Setting(container);
-			if (def.name) setting.setName(def.name);
-			if (typeof def.desc === 'string') setting.setDesc(def.desc);
-			if (def.control) this.bindControl(setting, def.control);
-			else if (def.render) this.storeCleanup(def.render(setting));
-			else if (def.action) {
-				setting.addButton((b) => b.setButtonText(def.name).onClick(() => def.action(setting.settingEl, 0)));
-			}
+			this.renderDef(container, def);
+		}
+	}
+
+	private renderDef(container: HTMLElement, def: any): void {
+		const setting = new Setting(container);
+		if (def.name) setting.setName(def.name);
+		if (typeof def.desc === 'string') setting.setDesc(def.desc);
+		if (setting.settingEl) this.renderedDefs.set(def, setting.settingEl);
+		if (def.control) this.bindControl(setting, def.control);
+		else if (def.render) this.storeCleanup(def.render(setting));
+		else if (def.action) {
+			// Obsidian's action row is the clickable row itself (`.setting-item.mod-action`, no inner control). The recording
+			// FakeButton stays so the existing row-level suites can still click it by name; it is not a node of the row.
+			setting.settingEl?.classList.add('mod-action');
+			setting.settingEl?.addEventListener('click', () => def.action(setting.settingEl, 0));
+			const recorded = new FakeButton();
+			recorded.setButtonText(def.name).onClick(() => def.action(setting.settingEl, 0));
+			setting.buttons.push(recorded);
 		}
 	}
 
@@ -1290,6 +1458,17 @@ export class PluginSettingTab {
 					if (control.placeholder) t.setPlaceholder(control.placeholder);
 					track(t.setValue(String(read() ?? '')).onChange(write));
 				});
+				if (control.type === 'file') {
+					// obsidian 1.14.4 renders a `file` control as a combobox button (+ a clear X while a path is set), not a text input.
+					const field = setting.texts[setting.texts.length - 1].inputEl;
+					const box = document.createElement('div');
+					box.className = 'combobox-button mod-file mod-clearable';
+					box.setAttribute('tabindex', '0');
+					const clear = document.createElement('div');
+					clear.className = 'combobox-clear-button';
+					box.appendChild(clear);
+					field.replaceWith(box);
+				}
 				break;
 			case 'slider':
 				setting.addSlider((sl) =>
