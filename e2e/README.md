@@ -143,8 +143,12 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Montage/two-blocks.md` | TWO different `ds-montage` blocks in one note with prose above, between and below |
   | `Montage/twins.md` | TWO IDENTICAL `ds-montage` blocks (Kira, round 1 of 3, nothing logged) with prose above, between and below |
   | `Montage/unknown-keys.md` | a block with a top-level key the product does not know (`table_notes`), an entry with an extra key (`dc: 12`) and a participant with one (`player: Sam`), Kira in round 2 (SC-625) |
-  | `Montage/wrong-title.md` | a block whose `title` is a YAML number (`title: 2024`): the block fails to render (SC-628) |
-  | `Montage/quoted-rounds.md` | a block with `rounds: "3"` typed in quotes: Add a round writes `"31"` (SC-628) |
+  | `Montage/wrong-title.md` | a block whose `title` is a YAML number (`title: 2024`): shown as the text "2024", written back as the number (SC-628) |
+  | `Montage/wrong-title-bool.md` | `title: true`: shown as the text "true", written back as the boolean (SC-628) |
+  | `Montage/wrong-title-map.md` | a map as the title: a plain error card naming `title`, no control, nothing written (SC-628) |
+  | `Montage/quoted-rounds.md` | a block with `rounds: "3"` typed in quotes: read as 3; Add a round writes 4, a write that leaves it alone gives back `"3"` (SC-628) |
+  | `Montage/quoted-current-round.md` | `current_round: "1"`: End round writes the number 2 (SC-628) |
+  | `Montage/quoted-successes.md` | `successes: "2"` with a success limit of 3: a quick success writes the number 3 (SC-628) |
   | `Montage/no-action.md` | the rounds ran out (round 3 of 2) with nothing logged: the band's verdict word and rule line disagree (SC-629) |
   | `Negotiation/basic.md` | one `ds-negotiation` (SC-439): "Convincing Frodo", Interest 3 / Patience 3 (both initial; no `current_*`), motivations Higher Authority + Peace, pitfall Power, offers `i5`..`i0`; prose above and below |
   | `Negotiation/spent.md` | the same negotiation at Interest 3 / Patience 3 of 4, Higher Authority already spent (`hasBeenAppealedTo: true`): appealing to it can arm the reuse modifier |
