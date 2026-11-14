@@ -24,7 +24,7 @@ describe('negotiation: keyboard focus after a save', () => {
 		expect(f.tag).not.toBe('BODY');
 	}, { failsWith: /BODY|inCard/ });
 
-	knownBug('SC-639', '[NEGO-F02] Complete Argument pressed with Enter: focus stays inside the card (the pressed button disarms itself)', async () => {
+	knownBug('SC-642', '[NEGO-F02] Complete Argument pressed with Enter: focus stays inside the card (the pressed button disarms itself)', async () => {
 		const root = await openNego(BASIC);
 		await dse.click(root.control('negotiation.tier.row', { nth: 3 }));
 		const complete = root.control('negotiation.complete');
