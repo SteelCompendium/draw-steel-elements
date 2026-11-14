@@ -34,7 +34,7 @@ export default surface('montage', {
 		'montage.cell.socket': c(['click'], ['B07']),
 		//    The quick trio inside the open socket: one tap writes the entry at once (no skill, no note). One id per outcome so each
 		//    kind is driven.
-		'montage.quick.success': c(['click'], ['B08']),
+		'montage.quick.success': c(['click', 'press:Enter'], ['B08', 'F11']),
 		'montage.quick.failure': c(['click'], ['B08']),
 		'montage.quick.assist': c(['click'], ['B08']),
 
@@ -44,7 +44,7 @@ export default surface('montage', {
 		//    when they do not apply.
 		'montage.bar.log': c(['click', 'click-disabled', 'press:Enter'], ['R01', 'R02', 'R11', 'F03']),
 		'montage.bar.undo': c(['click', 'click-disabled'], ['R03', 'R04']),
-		'montage.bar.back': c(['click'], ['R05']),
+		'montage.bar.back': c(['click', 'press:Enter'], ['R05', 'F12']),
 		'montage.bar.end-round': c(['click', 'press:Enter'], ['R06', 'R10', 'F01']),
 		'montage.bar.reopen': c(['click'], ['R07']),
 		'montage.bar.clear-all': c(['click'], ['R08']),
