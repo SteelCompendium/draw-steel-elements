@@ -1329,6 +1329,10 @@ in a specific version, set the Release field to a specific
 <li><strong>Destination folder</strong></li>
 <li>Vault folder the compendium is synced into.</li>
 <li>Default value: <code>DS Compendium</code></li>
+<li>A blank or spaces-only field means <code>DS Compendium</code>. Spaces at the start or end of the
+    folder name are ignored.</li>
+<li>The vault root (<code>/</code>, <code>.</code>, <code>./</code>) and anything outside the vault (<code>..</code>) are refused:
+    Sync and Migrate do nothing and show a Notice asking you to choose a folder.</li>
 <li><strong>Release</strong></li>
 <li>Set to a specific <a href="https://github.com/SteelCompendium/data-unified/releases">release tag</a>
     to lock in a specific version of the compendium.</li>
