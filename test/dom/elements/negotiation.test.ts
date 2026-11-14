@@ -863,6 +863,40 @@ describe('T-7: reset menu — per-instance (CB-4), resetData + rebuild + persist
 	});
 });
 
+describe('SC-648: the options menu opens beside the button for a keyboard click, at the pointer for a mouse click', () => {
+	afterEach(() => {
+		jest.restoreAllMocks();
+		Menu.lastMenu = null;
+	});
+
+	async function openWith(detail: number) {
+		const pipeline = new ElementPipeline(makeDeps());
+		const root = await renderFrodo(pipeline, makeHost());
+		const button = menuBtn(root)!;
+		// jsdom lays nothing out: give the button a box so the anchor is checkable.
+		jest.spyOn(button, 'getBoundingClientRect').mockReturnValue({ left: 1179, right: 1207, top: 261, bottom: 289, width: 28, height: 28, x: 1179, y: 261, toJSON: () => ({}) });
+		const atPosition = jest.spyOn(Menu.prototype, 'showAtPosition');
+		const atMouse = jest.spyOn(Menu.prototype, 'showAtMouseEvent');
+		const click = new MouseEvent('click', { bubbles: true, cancelable: true, detail, clientX: detail === 0 ? 0 : 1193, clientY: detail === 0 ? 0 : 288 });
+		button.dispatchEvent(click);
+		return { button, atPosition, atMouse, click };
+	}
+
+	test('detail 0 (Enter / Space): showAtPosition under the button\'s left edge, with its width, in the button\'s own document; the pointer call is not used', async () => {
+		const { button, atPosition, atMouse } = await openWith(0);
+		expect(atPosition).toHaveBeenCalledTimes(1);
+		expect(atPosition).toHaveBeenCalledWith({ x: 1179, y: 289, width: 28 }, button.ownerDocument);
+		expect(atMouse).not.toHaveBeenCalled();
+	});
+
+	test('detail 1 (a mouse click): showAtMouseEvent with the click, as before; no position call', async () => {
+		const { atPosition, atMouse, click } = await openWith(1);
+		expect(atMouse).toHaveBeenCalledTimes(1);
+		expect(atMouse).toHaveBeenCalledWith(click);
+		expect(atPosition).not.toHaveBeenCalled();
+	});
+});
+
 describe('T-7: canPersist=false — read-only renders WITHOUT write affordances, zero writes (F1 §4.4)', () => {
 	afterEach(() => {
 		jest.useRealTimers();

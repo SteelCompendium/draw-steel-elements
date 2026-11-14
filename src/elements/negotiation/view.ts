@@ -34,6 +34,7 @@ import { ElementView } from '@/framework/view';
 import { cardHead, iconButton, stampControl, tabs } from '@/framework/kit';
 import type { RenderMdCallback } from '@/framework/kit';
 import { captureControlFocus, restoreControlFocus } from '@/framework/kit/controlFocus';
+import { isKeyboardClick } from '@/framework/chrome/focusHandoff';
 import { NEGOTIATION_FOCUS_FALLBACKS } from './focusRules';
 import { NegotiationData } from '@model/NegotiationData';
 import { PatienceInterestView } from '@drawSteelAdmonition/negotiation/PatienceInterestView';
@@ -162,7 +163,19 @@ export class NegotiationView extends ElementView<NegotiationData> {
 						const itemEl = (item as unknown as { dom?: HTMLElement }).dom;
 						if (itemEl) stampControl(itemEl, 'negotiation.menu.reset');
 					});
-					m.showAtMouseEvent(event);
+					// SC-648: a click raised by Enter / Space has no pointer (clientX / clientY are 0), so
+					// showAtMouseEvent would put the menu in the window's top-left corner. Anchor it under the
+					// button instead, in the button's own document (sidebar / popout windows); `width` lets Obsidian
+					// flip the menu to the button's right edge when there is no room to its right. A mouse click
+					// keeps the pointer position.
+					// (a cast, not instanceof: a popout window has its own HTMLElement class)
+					const button = event.currentTarget as HTMLElement | null;
+					if (button && isKeyboardClick(event)) {
+						const rect = button.getBoundingClientRect();
+						m.showAtPosition({ x: rect.left, y: rect.bottom, width: rect.width }, button.ownerDocument);
+					} else {
+						m.showAtMouseEvent(event);
+					}
 				},
 			},
 			owner,
