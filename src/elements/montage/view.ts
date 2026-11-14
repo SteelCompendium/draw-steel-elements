@@ -53,6 +53,7 @@ import {
 	endMontageRound,
 	logMontageEntry,
 	montagePreviousRound,
+	montageHeroNamed,
 	montageReopenable,
 	montageTallies,
 	nextHeroToAct,
@@ -475,10 +476,16 @@ export class MontageView extends ElementView<MontageModel> {
 
 	private openAddHero(): void {
 		this.openTrackedModal(() =>
-			new MontageAddHeroModal(this.cx.app, (name) => {
-				addMontageHero(this.model, name);
-				void this.commit();
-			}),
+			new MontageAddHeroModal(
+				this.cx.app,
+				(name) => {
+					// SC-627: re-check against the LIVE model at commit time; the board can change while the window is open.
+					if (montageHeroNamed(this.model, name) !== undefined) return;
+					addMontageHero(this.model, name);
+					void this.commit();
+				},
+				(name) => montageHeroNamed(this.model, name),
+			),
 		);
 	}
 

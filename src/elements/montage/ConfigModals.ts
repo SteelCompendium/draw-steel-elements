@@ -9,10 +9,15 @@ import { DseModal, stampControl } from '@/framework/kit';
 
 export class MontageAddHeroModal extends DseModal {
 	private readonly onAdd: (name: string) => void;
+	private readonly heroNamed: (name: string) => string | undefined;
 
-	constructor(app: App, onAdd: (name: string) => void) {
+	/** `heroNamed` answers the board's spelling of the hero a typed name would duplicate (or `undefined`).
+	 *  It is asked on every keystroke and again on Add, never cached: a hero an outside edit adds while
+	 *  the window is open counts (SC-627). */
+	constructor(app: App, onAdd: (name: string) => void, heroNamed: (name: string) => string | undefined = () => undefined) {
 		super(app);
 		this.onAdd = onAdd;
+		this.heroNamed = heroNamed;
 	}
 
 	onOpen(): void {
@@ -21,6 +26,10 @@ export class MontageAddHeroModal extends DseModal {
 		input.setAttribute('placeholder', "Hero's name");
 		input.setAttribute('aria-label', "Hero's name");
 		stampControl(input, 'montage.add-hero.name');
+		// The same warn element LogActionModal uses for the skill-reuse rule: `hidden` unless it fires.
+		const warn = this.body.createDiv({ cls: 'dse-mt__sheet-warn' });
+		warn.setAttribute('role', 'alert');
+		warn.hidden = true;
 
 		const [, addBtn] = this.footer([
 			{ label: 'Cancel', text: 'Cancel', control: 'montage.add-hero.cancel', variant: 'ghost', onClick: () => this.close() },
@@ -32,13 +41,22 @@ export class MontageAddHeroModal extends DseModal {
 				disabled: true,
 				onClick: () => {
 					const name = input.value.trim();
-					if (!name) return;
+					if (!name || this.heroNamed(name) !== undefined) {
+						refresh();
+						return;
+					}
 					this.onAdd(name);
 					this.close();
 				},
 			},
 		]);
-		this.lifecycle.registerDomEvent(input, 'input', () => addBtn.setDisabled(input.value.trim() === ''));
+		const refresh = (): void => {
+			const taken = this.heroNamed(input.value);
+			warn.setText(taken === undefined ? '' : `${taken} is already on the board`);
+			warn.hidden = taken === undefined;
+			addBtn.setDisabled(input.value.trim() === '' || taken !== undefined);
+		};
+		this.lifecycle.registerDomEvent(input, 'input', refresh);
 	}
 }
 

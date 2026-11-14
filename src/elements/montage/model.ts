@@ -582,7 +582,18 @@ export function addMontageRound(m: MontageModel): void {
 	m.rounds += 1;
 }
 
-/** ⋯ "Add a hero" — appends a new roster entry with no skill history yet. */
+/** SC-627 — the board's spelling of the hero a typed name would duplicate, or `undefined` when the
+ *  name is free. Matching is trimmed and case-insensitive (`" kira "` is "Kira"). Only hero items
+ *  count (`montageRoster`): a bare or malformed item in `participants:` is no name. Read the LIVE
+ *  model at every call; the board can change while the Add a hero window is open. */
+export function montageHeroNamed(m: MontageModel, name: string): string | undefined {
+	const key = name.trim().toLowerCase();
+	if (key === '') return undefined;
+	return montageRoster(m).find((h) => h.name.trim().toLowerCase() === key)?.name;
+}
+
+/** ⋯ "Add a hero" — appends a new roster entry with no skill history yet. Callers refuse a taken
+ *  name first (`montageHeroNamed`); this stays a plain append. */
 export function addMontageHero(m: MontageModel, name: string): void {
 	const hero: MontageParticipant = { name, skills_used: [] };
 	const list = m.participants;
