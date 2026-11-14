@@ -407,7 +407,9 @@ describe('SC-482: an empty source whose values return to their defaults is writt
 
 	test('negotiation, through the real write path: slot 3 then slot 5 returns it to {}, and the block re-renders (no error card)', async () => {
 		const spec = specs.find((x) => x.name === 'negotiation')!;
-		const body = 'title: Frodo';
+		// A mapping with no key at all. It used to be `title: Frodo`, a key the negotiation does not read: SC-637 keeps such a key, so it
+		// would now stay in the block (and `title: Frodo` back on the last line is what a Director's own key looks like after a write).
+		const body = '{}';
 		const app = appWith(noteOf([{ lang: spec.lang, body }]));
 		const first = await mount(app, spec, 0, body);
 		click(first.root, '.dse-nt__patience .dse-track__slot[data-value="3"]');
