@@ -181,11 +181,10 @@ describe('SC-638 R3: a wrong-shaped structure is a plain error naming the key', 
 		expect(() => parseNegotiationData(body)).toThrow('Invalid data: the block must be a map of keys.');
 	});
 
-	test('an empty block (nothing, whitespace, or only a comment) is a fresh default negotiation, not an error', () => {
+	test('an empty block (nothing, whitespace, or only a comment) is not reported as a block of the wrong shape: it is refused as before (SC-493)', () => {
 		for (const body of ['', '  \n  ', '# only a note to self']) {
-			const m = parse(parseYaml(body), body);
-			expect([m.current_patience, m.current_interest, m.motivations, m.pitfalls]).toEqual([5, 0, [], []]);
-			expect(m.currentArgument.motivationsUsed).toEqual([]);
+			expect(() => parse(parseYaml(body), body)).toThrow();
+			expect(() => parse(parseYaml(body), body)).not.toThrow('Invalid data: the block must be a map of keys.');
 		}
 	});
 

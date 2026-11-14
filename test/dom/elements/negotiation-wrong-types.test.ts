@@ -231,11 +231,14 @@ describe('SC-638 R3: a wrong-shaped structure is a plain error card that writes 
 		['nothing', ''],
 		['whitespace', '   \n  '],
 		['only a comment', '# a note to self'],
-	])('an empty block (%s) is not the wrong-shape error: it draws a fresh default negotiation', async (_label, body) => {
-		const { root } = await mountBlock(ABOVE + fence(body) + BELOW);
-		expect(errorOf(root)).toBeNull();
-		expect(checked(root, 'patience')).toEqual([5]);
-		expect(checked(root, 'interest')).toEqual([0]);
+	])('an empty block (%s) is not reported as the wrong-shape error, and the note is untouched (it was refused before, SC-493)', async (_label, body) => {
+		const note = ABOVE + fence(body) + BELOW;
+		const { root, flush, content } = await mountBlock(note);
+		expect(errorOf(root)).not.toBeNull();
+		expect(errorOf(root)).not.toBe('Invalid data: the block must be a map of keys.');
+		expect(root.querySelectorAll('[data-dse-control]')).toHaveLength(0);
+		await flush();
+		expect(content()).toBe(note);
 	});
 
 	test('a YAML syntax error is still its own message, in its own stage', async () => {

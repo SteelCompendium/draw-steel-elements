@@ -150,11 +150,10 @@ export class NegotiationData {
 
     constructor(data: Partial<NegotiationData>) {
         // SC-638: shape is checked first (a wrong one throws before anything is built), then each text field is read as text.
-        // The block itself must be a map of keys: `hello`, a list and `42` are not. An empty block (nothing, whitespace or only a comment) reaches
-        // here as null / undefined and is a fresh default negotiation (before, it was a raw "Cannot read properties of null" on the card).
+        // The block itself must be a map of keys: `hello`, a list and `42` are not. An EMPTY block (null / undefined) is deliberately left
+        // alone: negotiation has never accepted one (SC-493: the form refuses to save it for that reason), so it fails exactly as before.
         const input: unknown = data;
-        if (input === null || input === undefined) data = {};
-        else if (!isMap(input)) throw new Error('Invalid data: the block must be a map of keys.');
+        if (input !== null && input !== undefined && !isMap(input)) throw new Error('Invalid data: the block must be a map of keys.');
         const motivations = readItems(data.motivations, 'motivations');
         const pitfalls = readItems(data.pitfalls, 'pitfalls');
         const argument: unknown = data.currentArgument;
