@@ -164,6 +164,15 @@ describe('SC-638 R2: what the card did not change is written back as typed', () 
 		expect((parseYaml(bodyOf(content(), 0)) as any).currentArgument.motivationsUsed).toEqual(['5']);
 	});
 
+	test('chip clicks on `motivationsUsed: [5, 7]`: toggling the chip of 5 off and on writes [7, 5], both still numbers', async () => {
+		const body = 'name: n\ninitial_interest: 3\ninitial_patience: 3\nmotivations:\n  - name: 5\n    reason: r\n  - name: 7\n    reason: s\n' + OFFERS + '\ncurrentArgument:\n  motivationsUsed: [5, 7]';
+		const { root, flush, content } = await mountBlock(ABOVE + fence(body) + BELOW);
+		await flushAfter(flush, () => ctl(root, 'negotiation.appeal.motivation', 0).click());
+		expect((parseYaml(bodyOf(content(), 0)) as any).currentArgument.motivationsUsed).toEqual([7]);
+		await flushAfter(flush, () => ctl(root, 'negotiation.appeal.motivation', 0).click());
+		expect((parseYaml(bodyOf(content(), 0)) as any).currentArgument.motivationsUsed).toEqual([7, 5]);
+	});
+
 	test('a Director\'s own key and a typed value are both kept by the same write (SC-637 alongside)', async () => {
 		const note = ABOVE + fence('note_to_self: keep me\n' + TYPED) + BELOW;
 		const { root, flush, content } = await mountBlock(note);

@@ -125,6 +125,27 @@ describe('SC-638 R2: what the negotiation did not change is written back as type
 		expect(out(n).currentArgument.motivationsUsed).toEqual([5, 'Peace']);
 	});
 
+	test('a chip toggled off and on (first equal entry out, entry added at the end) keeps every untouched typed entry typed: [5, 7] -> [7, 5], [A, 5] -> [5, A], pitfalls [7, 8] -> [8, 7]', () => {
+		const m = parseLikePipeline('name: n\ninitial_interest: 3\ncurrentArgument:\n  motivationsUsed: [5, 7]\n  pitfallsUsed: [7, 8]');
+		const toggleOff = (list: string[], text: string): void => void list.splice(list.indexOf(text), 1);
+		toggleOff(m.currentArgument.motivationsUsed, '5');
+		m.currentArgument.motivationsUsed.push('5');
+		toggleOff(m.currentArgument.pitfallsUsed, '7');
+		m.currentArgument.pitfallsUsed.push('7');
+		expect(out(m).currentArgument.motivationsUsed).toEqual([7, 5]);
+		expect(out(m).currentArgument.pitfallsUsed).toEqual([8, 7]);
+		const n = parseLikePipeline('name: n\ninitial_interest: 3\ncurrentArgument:\n  motivationsUsed: [A, 5]');
+		toggleOff(n.currentArgument.motivationsUsed, 'A');
+		n.currentArgument.motivationsUsed.push('A');
+		expect(out(n).currentArgument.motivationsUsed).toEqual([5, 'A']);
+	});
+
+	test('more of a text than was read: the first ones are the typed entries, the ones added since are plain text', () => {
+		const m = parseLikePipeline('name: n\ninitial_interest: 3\ncurrentArgument:\n  motivationsUsed: [5]');
+		m.currentArgument.motivationsUsed.push('5');
+		expect(out(m).currentArgument.motivationsUsed).toEqual([5, '5']);
+	});
+
 	test('the typed values are kept beside the instances: no own key on the model, a motivation, a pitfall or the argument', () => {
 		const m = parseLikePipeline(TYPED);
 		const plain = parseLikePipeline(TYPED.replace('name: 2024', 'name: x'));

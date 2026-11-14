@@ -56,7 +56,7 @@ export function unknownKeysOf(owner: object): ReadonlyArray<readonly [string, un
  * text is still what was read, so `name: 2024` stays `name: 2024`. Matching a motivation by name compares the text, so
  * `motivationsUsed: [5]` matches a motivation named 5. A used list is remembered BY POSITION (`usedSnapshot`: the entries as read, the
  * typed ones with their value), so `[5, "5"]` keeps its number and its quoted text apart; a write after a chip added or removed an
- * entry matches the list to what was read from the end (a removal takes the first equal entry, `indexOf`, so the later one survives).
+ * entry matches the list to what was read per text (see `restoreUsed`).
  */
 type TypedScalar = number | boolean;
 const typedText = new WeakMap<object, Map<string, Map<string, TypedScalar>>>();
@@ -93,18 +93,25 @@ function readUsedEntries(owner: object, slot: string, list: unknown[], where: st
     return texts;
 }
 
-/** `list` (the entries now) with the value the user typed put back on each entry that is the one read from that position, matched from the end. */
+/**
+ * `list` (the entries now) with the value the user typed put back on each entry that is the one read from that position. Matched PER TEXT, not
+ * with one cursor over the list (a chip press removes the first equal entry and adds at the END, so a cursor would skip every untouched typed
+ * entry in between): a text that is `c` times in the list and `n` times in the snapshot takes the LAST `c` snapshot entries of that text, in
+ * order, when `c <= n` (a removal takes the first equal one, `indexOf`, so the later one stays), and its first `n` occurrences take the snapshot
+ * entries when `c > n` (the rest were added since and are plain text).
+ */
 function restoreUsed(owner: object, slot: string, list: unknown[]): unknown[] {
     const snapshot = usedSnapshot.get(owner)?.get(slot);
     if (!snapshot || !snapshot.some((entry) => entry.raw !== undefined)) return list;
     const out = list.slice();
-    let from = snapshot.length - 1;
-    for (let i = list.length - 1; i >= 0; i--) {
-        let k = from;
-        while (k >= 0 && snapshot[k].text !== list[i]) k--;
-        if (k < 0) continue;
-        if (snapshot[k].raw !== undefined) out[i] = snapshot[k].raw;
-        from = k - 1;
+    const seen = new Map<unknown, number[]>();
+    list.forEach((entry, index) => seen.set(entry, [...(seen.get(entry) ?? []), index]));
+    for (const [text, indexes] of seen) {
+        const entries = snapshot.filter((entry) => entry.text === text);
+        const taken = indexes.length <= entries.length ? entries.slice(entries.length - indexes.length) : entries;
+        taken.forEach((entry, i) => {
+            if (entry.raw !== undefined) out[indexes[i]] = entry.raw;
+        });
     }
     return out;
 }
