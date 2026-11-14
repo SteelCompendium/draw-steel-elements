@@ -882,10 +882,10 @@ describe('SC-648: the options menu opens beside the button for a keyboard click,
 		return { button, atPosition, atMouse, click };
 	}
 
-	test('detail 0 (Enter / Space): showAtPosition under the button\'s left edge, with its width, in the button\'s own document; the pointer call is not used', async () => {
+	test('detail 0 (Enter / Space): showAtPosition under the button\'s left edge, in the button\'s own document; the pointer call is not used', async () => {
 		const { button, atPosition, atMouse } = await openWith(0);
 		expect(atPosition).toHaveBeenCalledTimes(1);
-		expect(atPosition).toHaveBeenCalledWith({ x: 1179, y: 289, width: 28 }, button.ownerDocument);
+		expect(atPosition).toHaveBeenCalledWith({ x: 1179, y: 289 }, button.ownerDocument);
 		expect(atMouse).not.toHaveBeenCalled();
 	});
 

@@ -8,7 +8,7 @@
 // form (src/authoring/FormModal.ts), which only the optional card pencil opens.
 // Which kinds are declared. A native <button> is activated by Enter (and Space) with no handler of ours, so, as in the other
 // manifests, `press:Enter` is listed for a button a keyboard user reaches and a press changes something; Space is not listed
-// separately. A radiogroup (a track, the tier rows) and the tablist listen for keys on their own node: the group is its own
+// separately (except on the options button, where Space is its own scenario: SC-648). A radiogroup (a track, the tier rows) and the tablist listen for keys on their own node: the group is its own
 // control, and a key pressed with focus on a seal / row / tab inside it is credited to the group (`press` needs focus within).
 // `press:Enter` is NOT declared on a seal (the only tab stop is the checked one, so Enter re-selects it: nothing happens) or on
 // a tab (an unselected tab is not a tab stop, and the selected one is a no-op to re-select); it IS on a tier row (the first row
@@ -28,7 +28,7 @@ export default surface('negotiation', {
 		//    "Reset negotiation". The menu item is a native node outside the card: it carries its id (`MenuItem.dom`) and is
 		//    clicked. Focus never moves onto a menu item (it stays on the options button while the menu's own Scope takes
 		//    ArrowDown and Enter), so a key for it is `dse.aimedAt('negotiation.menu.reset')`, as Escape is for the modal X.
-		'negotiation.menu': c(['click', 'press:Enter'], ['R01', 'R02', 'R06']),
+		'negotiation.menu': c(['click', 'press:Enter', 'press:Space'], ['R01', 'R02', 'R06', 'R07', 'R08']),
 		'negotiation.menu.reset': c(['click', 'press:Enter'], ['R01', 'R02', 'R03', 'R05']),
 
 		// -- T. The two tabs ("Make an Argument", "Learn Motivation/Pitfall"). The tablist moves selection with the arrow

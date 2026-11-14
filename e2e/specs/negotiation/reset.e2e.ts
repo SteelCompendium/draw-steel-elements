@@ -2,8 +2,8 @@
 // a reset can start from is in the jsdom matrix; here a real click / Enter opens the native menu and a real click on its item resets the
 // block. Negotiation/basic.md: Interest 3 / Patience 3 (both initial). Negotiation/ended.md: Patience 0 at Interest 3, both motivations spent.
 import { expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
-import { argOf, BASIC, blockOf, chooseReset, ENDED, interestOf, interestSeal, openMenu, openNego, patienceOf, patienceSeal, pressedOf, shown, TABS, tierTexts } from '../../driver/negotiation';
+import { dse } from '../../driver/dse';
+import { argOf, BASIC, blockOf, chooseReset, ENDED, expectMenuAtButton, interestOf, interestSeal, menuPlacement, openMenu, openNego, patienceOf, patienceSeal, pressedOf, shown, TABS, tierTexts } from '../../driver/negotiation';
 
 describe('negotiation: Reset negotiation', () => {
 	it('[NEGO-R01] the options button opens the menu and Reset puts a moved negotiation back: standing, spent motivations and the argument, in one write, with a Notice', async () => {
@@ -89,23 +89,50 @@ describe('negotiation: Reset negotiation', () => {
 		expect(await pressedOf('negotiation.spent')).toEqual(['false', 'false']);
 	});
 
-	knownBug('SC-648', '[NEGO-R06] the options menu opened with Enter on the button appears beside the button, not in the window corner', async () => {
+	it('[NEGO-R06] the options menu opened with Enter on the button appears beside the button, not in the window corner', async () => {
 		const root = await openNego(BASIC);
 		const menu = root.control('negotiation.menu');
 		await dse.tabTo(menu, TABS);
 		await dse.press('Enter', menu);
 		try {
 			await dse.waitFor(`document.querySelectorAll('.menu').length === 1`, 'the menu to open');
-			// within 300 px of the button's box in both directions (a tolerance, not exact coordinates)
-			const near = await dse.page<boolean>(`(() => {
-				const b = document.querySelector('.markdown-reading-view [data-dse-control="negotiation.menu"]').getBoundingClientRect();
-				const m = document.querySelector('.menu').getBoundingClientRect();
-				return m.right >= b.left - 300 && m.left <= b.right + 300 && m.bottom >= b.top - 300 && m.top <= b.bottom + 300;
-			})()`);
-			if (!near) throw new Error('the options menu opened away from the button');
+			expectMenuAtButton(await menuPlacement());
 		} finally {
 			await dse.press('Escape');
 			await dse.waitFor(`document.querySelectorAll('.menu').length === 0`, 'the menu to close');
 		}
-	}, { failsWith: /opened away from the button/ });
+	});
+
+	it('[NEGO-R07] the options menu opened with Space on the button appears beside the button too', async () => {
+		const root = await openNego(BASIC);
+		const menu = root.control('negotiation.menu');
+		await dse.tabTo(menu, TABS);
+		await dse.press('Space', menu);
+		try {
+			await dse.waitFor(`document.querySelectorAll('.menu').length === 1`, 'the menu to open');
+			expectMenuAtButton(await menuPlacement());
+		} finally {
+			// A menu opened with Space ignores the FIRST Escape about 4 times in 10 (measured the same on the base, before SC-648: not about
+			// the position), so close it with up to three Escapes, each followed by a look.
+			for (let i = 0; i < 3 && (await dse.page<number>(`document.querySelectorAll('.menu').length`)) > 0; i++) {
+				await dse.press('Escape');
+				await dse.page(`new Promise((r) => setTimeout(r, 400))`);
+			}
+			await dse.waitFor(`document.querySelectorAll('.menu').length === 0`, 'the menu to close');
+		}
+	});
+
+	it('[NEGO-R08] the options menu opened with a mouse click still opens at the pointer, on the button', async () => {
+		const root = await openNego(BASIC);
+		await openMenu(root);
+		try {
+			const p = await menuPlacement();
+			// the click lands on the button's centre: the menu's corner is there (the pointer), not in the window corner
+			expect(Math.abs(p.menu.left - p.button.cx) <= 8 || Math.abs(p.menu.right - p.button.cx) <= 8).toBe(true);
+			expect(Math.abs(p.menu.top - p.button.cy) <= 8 || Math.abs(p.menu.bottom - p.button.cy) <= 8).toBe(true);
+		} finally {
+			await dse.press('Escape');
+			await dse.waitFor(`document.querySelectorAll('.menu').length === 0`, 'the menu to close');
+		}
+	});
 });

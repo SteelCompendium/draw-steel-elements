@@ -165,14 +165,13 @@ export class NegotiationView extends ElementView<NegotiationData> {
 					});
 					// SC-648: a click raised by Enter / Space has no pointer (clientX / clientY are 0), so
 					// showAtMouseEvent would put the menu in the window's top-left corner. Anchor it under the
-					// button instead, in the button's own document (sidebar / popout windows); `width` lets Obsidian
-					// flip the menu to the button's right edge when there is no room to its right. A mouse click
-					// keeps the pointer position.
+					// button's left edge instead, in the button's own document (sidebar / popout windows). No `width`:
+					// Obsidian then moves the menu that far right of `x`, off the button. A mouse click keeps the pointer.
 					// (a cast, not instanceof: a popout window has its own HTMLElement class)
 					const button = event.currentTarget as HTMLElement | null;
 					if (button && isKeyboardClick(event)) {
 						const rect = button.getBoundingClientRect();
-						m.showAtPosition({ x: rect.left, y: rect.bottom, width: rect.width }, button.ownerDocument);
+						m.showAtPosition({ x: rect.left, y: rect.bottom }, button.ownerDocument);
 					} else {
 						m.showAtMouseEvent(event);
 					}

@@ -3,7 +3,7 @@
 // are checked here the way F01 / F02 check them in Reading view. Negotiation/basic.md: Interest 3 / Patience 3.
 import { expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
-import { BASIC, blockOf, focusAnywhere, interestOf, patienceOf } from '../../driver/negotiation';
+import { BASIC, blockOf, expectMenuAtButton, focusAnywhere, interestOf, menuPlacement, patienceOf } from '../../driver/negotiation';
 
 const NEGO = 'ds-negotiation';
 
@@ -81,4 +81,19 @@ describe('negotiation: keyboard focus after a save in Live Preview', () => {
 		expect(f).toMatchObject({ inNego: true });
 		expect(f.tag).not.toBe('BODY');
 	}, { failsWith: /inNego|BODY/ });
+
+	it('[NEGO-L06] Live Preview: the options menu opened with Enter on the button appears beside the button, not in the window corner', async () => {
+		await dse.openNote(BASIC, { mode: 'live-preview' });
+		const root = dse.block(NEGO, 0);
+		const menu = root.control('negotiation.menu');
+		await dse.focusByScript(menu);
+		await dse.press('Enter', menu);
+		try {
+			await dse.waitFor(`document.querySelectorAll('.menu').length === 1`, 'the menu to open');
+			expectMenuAtButton(await menuPlacement(true));
+		} finally {
+			await dse.press('Escape');
+			await dse.waitFor(`document.querySelectorAll('.menu').length === 0`, 'the menu to close');
+		}
+	});
 });

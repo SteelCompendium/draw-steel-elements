@@ -132,6 +132,31 @@ export async function openMenu(root: Scope): Promise<void> {
 	await dse.waitFor(`document.querySelectorAll('.menu').length === 1`, 'the options menu to open');
 }
 
+/** SC-648: where the open options menu sits against the card's options button (`lp`: the Live Preview card, else Reading view), in viewport px. */
+export interface MenuPlacement {
+	button: { left: number; right: number; top: number; bottom: number; cx: number; cy: number };
+	menu: { left: number; right: number; top: number; bottom: number };
+	win: { w: number; h: number };
+}
+export const menuPlacement = (lp = false): Promise<MenuPlacement> =>
+	dse.page<MenuPlacement>(`(() => {
+		const b = document.querySelector('${lp ? '.cm-content' : '.markdown-reading-view'} [data-dse-control="negotiation.menu"]').getBoundingClientRect();
+		const m = document.querySelector('.menu').getBoundingClientRect();
+		const r = (x) => ({ left: Math.round(x.left), right: Math.round(x.right), top: Math.round(x.top), bottom: Math.round(x.bottom) });
+		return { button: { ...r(b), cx: Math.round(b.left + b.width / 2), cy: Math.round(b.top + b.height / 2) }, menu: r(m), win: { w: innerWidth, h: innerHeight } };
+	})()`);
+
+/** SC-648: the menu is anchored to the button: its left edge at the button's left edge (measured: 2 px off; Obsidian flips it to end at the button's left
+ *  edge when there is no room on the right), its top at the button's bottom (2 px off; it ends at the button's top when it flips up), within `tol` px,
+ *  and it is entirely inside the window. The window corner (the bug) is hundreds of px away from all of these. */
+export function expectMenuAtButton(p: MenuPlacement, tol = 6): void {
+	const { button: b, menu: m, win } = p;
+	const note = JSON.stringify(p);
+	if (!(Math.abs(m.left - b.left) <= tol || Math.abs(m.right - b.left) <= tol)) throw new Error(`the options menu opened away from the button, sideways: ${note}`);
+	if (!(Math.abs(m.top - b.bottom) <= tol || Math.abs(m.bottom - b.top) <= tol)) throw new Error(`the options menu opened away from the button, vertically: ${note}`);
+	if (!(m.left >= 0 && m.top >= 0 && m.right <= win.w && m.bottom <= win.h)) throw new Error(`the options menu is partly outside the window: ${note}`);
+}
+
 /** Choose "Reset negotiation" from the open menu with a real click: the one write. Returns the write count. */
 export async function chooseReset(note: string): Promise<number> {
 	const w = await dse.waitForWrite(note, () => dse.click(dse.control('negotiation.menu.reset')));
