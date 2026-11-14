@@ -23,7 +23,7 @@ import { setIcon } from 'obsidian';
 import { DseModal, setPressedState, stampControl } from '@/framework/kit';
 import type { IconButtonHandle } from '@/framework/kit';
 import type { MontageEntry, MontageModel, MontageResult } from './model';
-import { wouldReuseSkill, isKnownMontageResult } from './model';
+import { reusedSkillSpelling, isKnownMontageResult } from './model';
 
 /** What opened the sheet — view.ts is the only place a DOM click turns into one of
  *  these. `new` pre-fills an empty socket (hero + the round it was opened for); `edit`
@@ -241,15 +241,16 @@ export class LogActionModal extends DseModal {
 	/** The skill-reuse rule (Draw Steel Heroes:21286) — a WARNING, never a block (AGENT
 	 *  94/spec §4.1: "warn, never block"). Excludes this entry's own prior contribution
 	 *  when editing, so correcting a note back onto its own unchanged skill never warns
-	 *  against itself (model.ts's `wouldReuseSkill`). */
+	 *  against itself (model.ts's `reusedSkillSpelling`). Matching is trimmed and
+	 *  case-insensitive (SC-631), and the warning names the skill as the board stores it. */
 	private refreshSkillWarning(): void {
 		const skill = this.skillValue.trim();
 		const excluding = this.mode.kind === 'edit' ? this.mode.entry : undefined;
-		const reused = skill !== '' && wouldReuseSkill(this.model, this.hero, skill, excluding);
-		this.skillWarnEl.setText(reused ? `${this.hero} already used ${skill} in this montage — reuse is not allowed` : '');
+		const reused = skill === '' ? undefined : reusedSkillSpelling(this.model, this.hero, skill, excluding);
+		this.skillWarnEl.setText(reused !== undefined ? `${this.hero} already used ${reused} in this montage — reuse is not allowed` : '');
 		// D2 §5: shown/hidden via the `hidden` ATTRIBUTE, never inline display (the
 		// `.dse-sedit__warn` convention, StaminaEditModal.ts).
-		this.skillWarnEl.hidden = !reused;
+		this.skillWarnEl.hidden = reused === undefined;
 	}
 
 	// ---------------------------------------------------------------------- Note

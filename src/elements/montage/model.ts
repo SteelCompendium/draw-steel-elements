@@ -591,28 +591,53 @@ function addSkillOccurrence(m: MontageModel, hero: string, skill: string | undef
 	else p.skills_used = [skill];
 }
 
+/** SC-627 / SC-631 — the comparison key for a typed name or skill: trimmed and case-insensitive
+ *  (`" nature "` is "Nature"). `undefined` for anything that is not a non-blank string (a number
+ *  or `null` in hand-typed YAML), so such items never match. */
+function matchKey(v: unknown): string | undefined {
+	if (typeof v !== 'string') return undefined;
+	const key = v.trim().toLowerCase();
+	return key === '' ? undefined : key;
+}
+
 /**
  * The skill-reuse rule (Draw Steel Heroes:21286 — "An individual character can't use
  * the same skill more than once in a montage test"), computed LIVE for the sheet's own
- * warning. `excluding` is the entry currently being edited (if any) — its OWN
- * contribution is subtracted first, so correcting an entry back onto its own unchanged
- * skill never warns against itself (the same undo-then-check shape
- * `correctMontageEntry` performs for real, mirrored here as a pure read).
+ * warning. Returns the board's spelling of the stored skill the typed one would reuse, or
+ * `undefined` when it is free. Matching is trimmed and case-insensitive (SC-631: `" nature "`
+ * after "Nature" is a reuse); odd `skills_used` items (numbers, `null`, blanks) are skipped.
+ * `excluding` is the entry currently being edited (if any) — its OWN contribution is
+ * subtracted first (compared the same way), so correcting an entry back onto its own unchanged
+ * skill never warns against itself (the same undo-then-check shape `correctMontageEntry`
+ * performs for real, mirrored here as a pure read).
  */
+export function reusedSkillSpelling(
+	m: MontageModel,
+	hero: string,
+	skill: string,
+	excluding?: MontageEntry,
+): string | undefined {
+	const key = matchKey(skill);
+	if (key === undefined) return undefined;
+	const p = findParticipant(m, hero);
+	if (!p) return undefined;
+	const used = skillsOf(p).slice();
+	const own = excluding && excluding.hero === hero ? matchKey(excluding.skill) : undefined;
+	if (own !== undefined) {
+		const idx = used.findIndex((u) => matchKey(u) === own);
+		if (idx !== -1) used.splice(idx, 1);
+	}
+	return used.find((u) => matchKey(u) === key);
+}
+
+/** Boolean form of `reusedSkillSpelling`. */
 export function wouldReuseSkill(
 	m: MontageModel,
 	hero: string,
 	skill: string,
 	excluding?: MontageEntry,
 ): boolean {
-	const p = findParticipant(m, hero);
-	if (!p) return false;
-	const used = skillsOf(p).slice();
-	if (excluding && excluding.hero === hero && excluding.skill) {
-		const idx = used.indexOf(excluding.skill);
-		if (idx !== -1) used.splice(idx, 1);
-	}
-	return used.includes(skill);
+	return reusedSkillSpelling(m, hero, skill, excluding) !== undefined;
 }
 
 /** The next participant (roster order) who has not yet logged an action in the CURRENT
@@ -686,9 +711,9 @@ export function addMontageRound(m: MontageModel): void {
  *  count (`montageRoster`): a bare or malformed item in `participants:` is no name. Read the LIVE
  *  model at every call; the board can change while the Add a hero window is open. */
 export function montageHeroNamed(m: MontageModel, name: string): string | undefined {
-	const key = name.trim().toLowerCase();
-	if (key === '') return undefined;
-	return montageRoster(m).find((h) => h.name.trim().toLowerCase() === key)?.name;
+	const key = matchKey(name);
+	if (key === undefined) return undefined;
+	return montageRoster(m).find((h) => matchKey(h.name) === key)?.name;
 }
 
 /** ⋯ "Add a hero" — appends a new roster entry with no skill history yet. Callers refuse a taken
