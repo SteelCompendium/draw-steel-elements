@@ -6,7 +6,7 @@
 // Representative elements: Settings/statblock.md, Settings/featureblock.md, Feature/feature.md.
 import { browser, expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
-import { back, closeSettings, ctl, diskData, diskPrefs, mainAttr, openAt, pressOn, prefValue, rawData, readSettings, shownValue, showPage } from '../../driver/settingsDrive';
+import { back, closeSettings, ctl, diskData, diskPrefs, mainAttr, openAt, pressOn, prefValue, rawData, readSettings, shownValue, showPage, ensureState } from '../../driver/settingsDrive';
 
 const STATBLOCK = '[data-dse-element="statblock"]';
 const STAT_PAGE = 'settings.page.statblock-display';
@@ -121,8 +121,8 @@ describe('settings tab: dropdowns', () => {
 		}
 	});
 
-	it('[SET-D15] after a plugin reload on the data.json the scenarios above leave, every dropdown shows its value and data.json keeps it', async () => {
-		await dse.setPrefs(FINAL); // put in force (and reload on) the state left above, so this one also runs alone
+	it('[SET-D15] after a plugin reload on the data.json the scenarios above wrote, every dropdown shows its value and data.json keeps it', async () => {
+		await ensureState({ prefs: FINAL }); // reloads on the file the scenarios above wrote (seeded only when this one runs alone)
 		expect(await diskPrefs()).toEqual(FINAL);
 		const shown: Array<[string[], Record<string, string>]> = [
 			[[STAT_PAGE], { 'settings.sb-preset': 'sourcebook', 'settings.sb-feature-style': 'flat', 'settings.sb-density': 'comfortable', 'settings.sb-columns': 'single', 'settings.sb-stats': 'ledger' }],

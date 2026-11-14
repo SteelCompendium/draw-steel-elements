@@ -6,7 +6,7 @@
 import { expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
 import {
-	back, closeSettings, ctl, diskPrefs, idsOnPage, mainAttr, mainCount, openAt, openSettings, pressOn, prefValue, showPage, toggleIsOn, waitDiskPrefs,
+	back, closeSettings, ctl, diskPrefs, idsOnPage, mainAttr, mainCount, openAt, openSettings, pressOn, prefValue, showPage, ensureState, toggleIsOn, waitDiskPrefs,
 } from '../../driver/settingsDrive';
 
 const STAMINA = '[data-dse-element="stamina-bar"]';
@@ -71,8 +71,9 @@ describe('settings tab: with the experimental gate on', () => {
 		expect(await mainCount(EDIT)).toBe(1);
 	});
 
-	it('[SET-G04] after a plugin reload (gate still on) on the state the scenarios above leave, Print preview and Show edit button show on and data.json keeps both', async () => {
-		await dse.setPrefs({ printPreview: 'on', authoringControls: true }, { experimental: true }); // put in force (and reloaded on), so this one also runs alone
+	it('[SET-G04] after a plugin reload (gate still on) on the data.json the scenarios above wrote, Print preview and Show edit button show on and data.json keeps both', async () => {
+		// Reloads on the data.json the scenarios above wrote (seeded with the same state, gate on, only when this one runs alone).
+		await ensureState({ experimental: true, prefs: { printPreview: 'on', authoringControls: true } });
 		expect(await diskPrefs()).toEqual({ printPreview: 'on', authoringControls: true });
 		await openAt('settings.page.appearance');
 		try {

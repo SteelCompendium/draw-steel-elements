@@ -4,7 +4,7 @@
 // final reload checks they all show it and keep it. (The snapping of out-of-range values is the jsdom matrix's.)
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
-import { closeSettings, diskPrefs, mainVar, openAt, pressOn, prefValue, shownValue } from '../../driver/settingsDrive';
+import { closeSettings, diskPrefs, mainVar, openAt, pressOn, prefValue, shownValue, ensureState } from '../../driver/settingsDrive';
 
 const STAMINA = '[data-dse-element="stamina-bar"]';
 const TYPO = 'settings.page.typography';
@@ -51,7 +51,7 @@ describe('settings tab: size sliders', () => {
 
 	it('[SET-Z06] after a plugin reload on the five maximums every slider shows its maximum, data.json keeps it and an opened note carries it', async () => {
 		const maxed = { textScale: 1.4, cardScale: 1.2, smallTextScale: 1.2, largeTextScale: 1.2, controlTextScale: 1.2 };
-		await dse.setPrefs(maxed); // the state the five scenarios above leave, put in force (and the plugin reloaded on it)
+		await ensureState({ prefs: maxed }); // reloads on the file the five scenarios above wrote (seeded only when this one runs alone)
 		expect(await diskPrefs()).toEqual(maxed);
 		await openAt(TYPO);
 		try {

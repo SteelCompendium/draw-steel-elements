@@ -7,7 +7,7 @@
 import { $, expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
 import {
-	closeSettings, ctl, diskData, diskPrefs, mainAttr, mainCount, onMain, openAt, pressOn, prefValue, seedData, toggleIsDisabled, toggleIsOn,
+	closeSettings, ctl, diskData, diskPrefs, mainAttr, mainCount, onMain, openAt, pressOn, prefValue, ensureState, toggleIsDisabled, toggleIsOn, withPrefs,
 } from '../../driver/settingsDrive';
 
 const STAMINA = '[data-dse-element="stamina-bar"]';
@@ -73,7 +73,7 @@ describe('settings tab: toggles', () => {
 	});
 
 	it('[SET-T04] Sticky mini-header: include secondary stats: flips with its parent on; with the parent off it is greyed out and a click does nothing, but its value is kept', async () => {
-		await dse.setPrefs({}); // from the shipped state: the parent is on
+		await withPrefs({ sbSticky: undefined }); // the parent is on (the other settings the scenarios above left stay)
 		await dse.openNote('Settings/statblock.md');
 		await openAt('settings.page.statblock-display');
 		try {
@@ -143,7 +143,7 @@ describe('settings tab: toggles', () => {
 	});
 
 	it('[SET-T09] Click ability to roll: with rolling on, a click on a tier row of the open card rolls; switched off (click, Space) it does not, live', async () => {
-		await dse.setPrefs({ rollingEnabled: true });
+		await withPrefs({ rollingEnabled: true });
 		await dse.openNote('Feature/feature.md');
 		await openAt('settings.page.rolling');
 		try {
@@ -186,13 +186,13 @@ describe('settings tab: toggles', () => {
 		}
 	});
 
-	it('[SET-T11] after a plugin reload on a data.json holding every toggle changed above, each shows its value and data.json keeps it', async () => {
+	it('[SET-T11] after a plugin reload on the data.json the toggle scenarios above wrote, each toggle shows its value and data.json keeps it', async () => {
 		const expected = {
 			reduceMotion: true, portraits: 'off', sbSticky: 'off', sbStickyMeta: 'off', collapsibleDefault: false, collapseDefault: true,
 			staminaRecoveryPopover: true, rollingEnabled: true, rollClickToRoll: false,
 		};
-		// The state the scenarios above leave, put in force (and the plugin reloaded on it) so this one also runs alone.
-		await seedData({ settingsVersion: 3, sccWebFallback: false, prefs: expected });
+		// The plugin is reloaded on the data.json the scenarios above wrote (seeded with the same state only when this one runs alone).
+		await ensureState({ sccWebFallback: false, prefs: expected });
 		expect(await diskPrefs()).toEqual(expected);
 		expect((await diskData()).sccWebFallback).toBe(false);
 		const check = async (links: string[], ids: Record<string, boolean>): Promise<void> => {

@@ -152,3 +152,37 @@ export async function waitDiskPrefs(expected: Record<string, unknown>): Promise<
 	}
 	return last;
 }
+
+const sorted = (o: unknown): string => JSON.stringify(o, (_k, v: unknown) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v));
+
+/**
+ * A reload test's starting point. When data.json on disk already holds `expected` (the scenarios before it wrote it, as in a full run) the plugin
+ * is simply reloaded ON THAT FILE, so the reload asserts what the drives wrote; only when it does not (this test run alone under `--only`) is the
+ * state seeded, as a version-3 data.json (a real user's file; no v0 migration). Returns whether it had to seed.
+ */
+export async function ensureState(expected: { prefs: Record<string, unknown>; [field: string]: unknown }): Promise<boolean> {
+	const disk = await diskData();
+	const same = Object.entries(expected).every(([k, v]) => sorted(disk[k]) === sorted(v));
+	if (same) {
+		await reloadPlugin();
+		return false;
+	}
+	await seedData({ settingsVersion: 3, ...expected });
+	return true;
+}
+
+/**
+ * Put `patch` onto the preferences on disk (a value of undefined removes the key) and reload on the result, leaving every other stored value
+ * alone; does nothing when the disk already agrees. For a scenario that needs one setting in a given state without wiping the others the
+ * scenarios before it set (so the file-final reload still loads what the drives wrote).
+ */
+export async function withPrefs(patch: Record<string, unknown>): Promise<void> {
+	const disk = await diskData();
+	const prefs = { ...disk.prefs };
+	for (const [k, v] of Object.entries(patch)) {
+		if (v === undefined) delete prefs[k];
+		else prefs[k] = v;
+	}
+	if (sorted(prefs) === sorted(disk.prefs)) return;
+	await seedData({ settingsVersion: 3, ...disk, prefs });
+}

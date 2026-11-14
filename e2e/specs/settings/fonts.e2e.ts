@@ -6,7 +6,7 @@
 // first starts from a plugin reload, which doubles as the check that the previous pickers' values survived it.
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
-import { closeSettings, ctl, diskPrefs, mainVar, openAt, pressOn, prefValue, shownValue, typeThenBlur } from '../../driver/settingsDrive';
+import { closeSettings, ctl, diskPrefs, mainVar, openAt, pressOn, prefValue, shownValue, typeThenBlur, ensureState } from '../../driver/settingsDrive';
 
 const STAMINA = '[data-dse-element="stamina-bar"]';
 const TYPO = 'settings.page.typography';
@@ -72,7 +72,7 @@ describe('settings tab: font pickers', () => {
 
 	it('[SET-F07] after a plugin reload on the six typed families every picker reopens on "Custom..." with its typed family, data.json keeps all six, and an opened note carries them', async () => {
 		const all = Object.fromEntries(KEYS.map((k, i) => [k, FAMILY(i + 1)]));
-		await dse.setPrefs(all); // the state the six scenarios above leave, put in force (and the plugin reloaded on it)
+		await ensureState({ prefs: all }); // reloads on the file the six scenarios above wrote (seeded only when this one runs alone)
 		expect(await diskPrefs()).toEqual(all);
 		for (const [links, ids] of [
 			[[TYPO], [['settings.font-title', 1], ['settings.font-body', 2], ['settings.font-controls', 3]]],
