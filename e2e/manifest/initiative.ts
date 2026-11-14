@@ -17,7 +17,7 @@ export default surface('initiative', {
 		// -- T. The encounter title: a focusable text span (click / Enter / Space open the editor), then a
 		//    textarea that commits on Enter, Shift+Enter or a real blur and reverts on Escape.
 		'init.title': c(['click', 'press:Enter', 'press:Space'], ['T01', 'T02', 'T03']),
-		'init.title.input': c(['type', 'press:Enter', 'press:Shift+Enter', 'press:Escape', 'blur'], ['T01', 'T04', 'T05', 'T06', 'T07']),
+		'init.title.input': c(['type', 'press:Enter', 'press:Shift+Enter', 'press:Escape', 'blur'], ['T01', 'T04', 'T05', 'T06', 'T07', 'F23']),
 
 		// -- R. Round. "Advance round" sits on the Heroes heading line; "Reset turns (this round)" is a chrome-panel item
 		//    (hidden, opacity 0, until the pointer is over the tracker or focus is inside it: `dse.hover(root.root)` first).
@@ -59,6 +59,6 @@ export default surface('initiative', {
 
 		// -- S. A roster cell (repeated: nth) selects its instance. The id kept its SC-408 name, `init.cell.stamina`, because
 		//    the cell's double-click was the first thing driven (the stamina modals' reach row); a click is selection.
-		'init.cell.stamina': c(['click', 'press:Enter'], ['S01', 'SC-603', 'F17', 'F18', 'F19', 'F20', 'F21', 'F22']),
+		'init.cell.stamina': c(['click', 'press:Enter'], ['S01', 'SC-603', 'F17', 'F18', 'F19', 'F20', 'F21', 'F22', 'F23']),
 	},
 });

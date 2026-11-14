@@ -59,6 +59,21 @@ describe('initiative: keyboard focus after a mouse press on a roster cell, from 
 		await expect(root.control(LABEL)).toHaveValue('Feyt');
 	});
 
+	// The third text box of the tracker the shield blurs: the encounter title while it is being edited. The press commits it (a real blur), then selects the cell.
+	it('[INIT-F23] type a new encounter title (editor open), then a mouse press on a roster cell: the title is saved, the cell holds focus', async () => {
+		await dse.openNote(TRACKER);
+		const root = dse.block(INIT);
+		await dse.click(root.control('init.title'));
+		await dse.type(root.control('init.title.input'), 'Night Watch', { replace: true });
+		expect(await focusState()).toEqual({ ctl: 'init.title.input', cell: null, surface: 'reading' });
+		await dse.waitForWrite(TRACKER, () => dse.click(root.control('init.cell.stamina', { nth: 2 })));
+		await dse.settle();
+		await expect(root.control('init.detail.stamina')).toHaveAttribute('aria-label', 'Edit Stamina: Ogre #3');
+		await expect(root.control('init.title.input')).not.toBeExisting();
+		expect(((await dse.expectNoteBlock(TRACKER, INIT).value()) as { name?: string }).name).toBe('Night Watch');
+		expect(await focusState()).toEqual({ ctl: 'init.cell.stamina', cell: '0-3', surface: 'reading' });
+	});
+
 	// Focus is put on <body> first: after `openNote` it sits on the note's own scroller, and a hand-over is refused whenever something holds focus,
 	// so that start state would pass even if the tracker took focus it had never held.
 	it('[INIT-F19] focus on <body> with text typed in the amount box, then a mouse press on a roster cell: no focus is pulled into the tracker', async () => {

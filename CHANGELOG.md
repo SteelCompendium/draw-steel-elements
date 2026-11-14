@@ -64,12 +64,17 @@ for what needs action.
   Space does the same. A click when focus was not already in the tracker still does not pull focus in, and focus on a control outside the conditions row
   stays where it was.
 
+- [FIX] **Clicking a creature in the initiative roster while typing in a tracker text box keeps focus in the tracker, on the creature you
+  clicked, in Reading view, Live Preview and the pinned sidebar tracker** (SC-615). With the cursor in the Malice quick-add amount or label
+  (or, in Reading view, the encounter title being edited), a mouse click on a roster cell selected that creature and focus fell to the top of
+  the page. Focus now moves to the cell you clicked, and what you had typed stays in the box. The click still saves a half-typed encounter
+  title, as before. A click when focus was not already in the tracker still does not pull focus in.
+
 - [FIX] **Clicking another creature in the initiative roster while using the keyboard keeps focus in the tracker, on the creature you
   clicked, in Reading view** (SC-609). With focus on the detail row's Stamina control (or any other control of the detail row), a
   mouse click on a roster cell switched the detail row and focus fell to the top of the page. Focus now moves to the cell you
   clicked. A mouse click when focus was not already in the tracker still does not pull focus in, and focus on a control the click
   does not replace (Advance round, say) stays where it was. Since SC-602 this holds in Live Preview too.
-  Not covered: a click while the cursor is in a Malice quick-add box (SC-615).
 
 - [FIX] **A + / - or a form Save in a hover preview or an embed that stayed open while the note changed no longer writes into a different, identical counter in the shapes below** (SC-607).
   Open a hover preview or an embed of part of a note (`[[note#Tracker]]`, `![[note#^id]]`) and leave it open while something else
