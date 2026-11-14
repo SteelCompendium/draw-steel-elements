@@ -873,6 +873,119 @@ describe('[F] keyboard focus survives the actions that rebuild the whole tracker
 		expect(document.activeElement).toBe(advance);
 	});
 
+	// SC-615: the note's click shield blurs a focused text box on the press's pointerdown (so click-away saves a draft), so by the time the
+	// cell's click runs focus is already on <body> and SC-609's check saw nothing. A real press is pointerdown + mousedown + click; the
+	// pointerdown is what the shield blurs on, so these tests go through it (the `mouseClick` above skips it).
+	describe('a mouse press on a roster cell while a text box of the tracker has focus (the click shield blurs it first)', () => {
+		const AMOUNT = 'init.malice.quickadd.amount';
+		const LABEL = 'init.malice.quickadd.label';
+		const press = (el: HTMLElement): void => {
+			for (const type of ['pointerdown', 'mousedown'])
+				el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, detail: 1 }));
+			mouseClick(el);
+		};
+		const typeInto = (root: Element, id: string, value: string): HTMLInputElement => {
+			const el = ctl<HTMLInputElement>(root, id);
+			el.focus();
+			el.value = value;
+			el.dispatchEvent(new Event('input', { bubbles: true }));
+			return el;
+		};
+
+		test.each([
+			['the Malice quick-add amount', AMOUNT, '2'],
+			['the Malice quick-add label', LABEL, 'Feyt'],
+		] as const)('[F30] focus in %s: the press selects the creature and the pressed cell holds focus; the typed text is kept', async (_name, id, text) => {
+			const { root, flush } = await mount(TRACKER);
+			const box = typeInto(root, id, text);
+			expect(document.activeElement).toBe(box);
+			const cell = ctl(root, 'init.cell.stamina', 2);
+			press(cell);
+			await flush();
+			expect(detailKey(root)).toBe('0-3');
+			expect(document.activeElement).toBe(cell);
+			expect(ctl<HTMLInputElement>(root, id).value).toBe(text);
+		});
+
+		test('[F31] the title text box (open for editing): the press commits it by that blur, and the pressed cell holds focus', async () => {
+			const { root, flush, last } = await mount(TRACKER);
+			root.querySelector<HTMLElement>('.dse-init__title-text')!.click();
+			const title = ctl<HTMLTextAreaElement>(root, 'init.title.input');
+			expect(document.activeElement).toBe(title);
+			title.value = 'Ambush';
+			title.dispatchEvent(new Event('input', { bubbles: true }));
+			const cell = ctl(root, 'init.cell.stamina', 1);
+			press(cell);
+			await flush();
+			expect(detailKey(root)).toBe('0-2');
+			expect(root.querySelector('[data-dse-control="init.title.input"]')).toBeNull();
+			expect(last().name).toBe('Ambush');
+			expect(document.activeElement).toBe(cell);
+		});
+
+		test('[F32] the shield\'s blur is unchanged: the box is blurred on the press, and focus is taken only after the click', async () => {
+			const { root } = await mount(TRACKER);
+			const box = typeInto(root, AMOUNT, '2');
+			const cell = ctl(root, 'init.cell.stamina', 1);
+			const blurred = jest.fn();
+			box.addEventListener('blur', blurred);
+			cell.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, detail: 1 }));
+			expect(blurred).toHaveBeenCalledTimes(1);
+			expect(document.activeElement).toBe(document.body); // the press alone moves nothing in
+			mouseClick(cell);
+			expect(document.activeElement).toBe(cell);
+		});
+
+		test('[F33] focus that was on <body> or in a field outside the tracker is not pulled in by the press', async () => {
+			const { root, flush } = await mount(TRACKER);
+			const other = document.createElement('input');
+			document.body.appendChild(other);
+			other.focus();
+			press(ctl(root, 'init.cell.stamina', 1));
+			expect(detailKey(root)).toBe('0-2');
+			expect(document.activeElement).toBe(other);
+			other.blur();
+			press(ctl(root, 'init.cell.stamina', 2));
+			await flush();
+			expect(detailKey(root)).toBe('0-3');
+			expect(document.activeElement).toBe(document.body);
+		});
+
+		test('[F34] the record is per press: a press that began with focus in a text box but never clicked the cell does not carry over to a later press from <body>', async () => {
+			const { root, flush } = await mount(TRACKER);
+			const box = typeInto(root, AMOUNT, '2');
+			const cell = ctl(root, 'init.cell.stamina', 2);
+			cell.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, detail: 1 })); // pressed ... released elsewhere: no click
+			expect(document.activeElement).toBe(document.body);
+			expect(box.isConnected).toBe(true);
+			press(cell); // a fresh press, with nothing holding focus
+			await flush();
+			expect(detailKey(root)).toBe('0-3');
+			expect(document.activeElement).toBe(document.body);
+		});
+
+		test('[F35] a click with no press (keyboard or script) never reads an earlier press\'s record', async () => {
+			const { root, flush } = await mount(TRACKER);
+			typeInto(root, AMOUNT, '2');
+			const cell = ctl(root, 'init.cell.stamina', 2);
+			cell.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, detail: 1 })); // focus was inside; no click follows
+			cell.click(); // detail 0 with focus on <body>
+			await flush();
+			expect(detailKey(root)).toBe('0-3');
+			expect(document.activeElement).toBe(document.body);
+		});
+
+		test('[F36] a press on one cell followed by a click on another reads nothing', async () => {
+			const { root, flush } = await mount(TRACKER);
+			typeInto(root, AMOUNT, '2');
+			ctl(root, 'init.cell.stamina', 1).dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, detail: 1 }));
+			mouseClick(ctl(root, 'init.cell.stamina', 2));
+			await flush();
+			expect(detailKey(root)).toBe('0-3');
+			expect(document.activeElement).toBe(document.body);
+		});
+	});
+
 	// SC-614: removing a condition redraws the conditions row (`conditionsEl.empty()` + rebuild), so the Add Condition button, or another
 	// condition's remove button, that held focus is thrown away and focus fell to <body>. The note's click shield keeps the mouse press
 	// from focusing the chip it presses, so focus is still where it was when the row is redrawn; it goes to the rebuilt control.

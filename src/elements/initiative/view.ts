@@ -166,6 +166,10 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *  draft is not note content): it outlives every `update()`, and dies with the view (a remount starts empty). */
 	private quickAddDraft: QuickAddDraft = { amount: '', label: '' };
 
+	/** SC-615 — the roster cell a mouse press began on, and whether focus was inside the tracker at that moment (see `recordCellPress`).
+	 *  Per press: every pointerdown replaces it, and the cell's click consumes it. */
+	private cellPress: { cell: Element; focusInside: boolean } | null = null;
+
 	constructor(cx: RenderContext) {
 		super(cx);
 		// F1 §4.5: a modal opened by the view must close on view unload. ONE
@@ -327,9 +331,27 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// before onMount runs again — nothing accumulates on the view across rebuilds.
 		const owner = this.addChild(new Component());
 		const container = root.createDiv({ cls: 'dse-init' });
+		this.recordCellPress(root, owner);
 		this.buildUI(container, owner, model);
 		publishWindowRoot(root, this.windowRecord); // SC-608
 		this.disk.ser ??= serializeModel(model); // the model as loaded: the disk's content until the first write
+	}
+
+	/** SC-615 — remember, at the moment of a mouse press on a roster cell, whether keyboard focus was inside the tracker. The note's click
+	 *  shield blurs a focused text box (the Malice quick-add amount or label, a half-typed stepper) on that same pointerdown, so by the
+	 *  time the cell's `click` runs focus is already on <body> and SC-609's own check cannot tell the press began with focus in the
+	 *  tracker. A capture listener on the DOCUMENT runs before the shield's (which sits on the root), so it still sees the text box.
+	 *  It only reads: nothing is blurred or focused here, and the shield's blur is unchanged. */
+	private recordCellPress(root: HTMLElement, owner: Component): void {
+		owner.registerDomEvent(
+			root.ownerDocument,
+			'pointerdown',
+			(evt: PointerEvent) => {
+				const cell = (evt.target as Element | null)?.closest?.('.dse-init__cell') ?? null;
+				this.cellPress = cell && root.contains(cell) ? { cell, focusInside: captureControlFocus(root, FOCUS_FAMILIES) !== null } : null;
+			},
+			{ capture: true },
+		);
 	}
 
 	private get canWrite(): boolean {
@@ -1958,7 +1980,13 @@ export class InitiativeView extends ElementView<EncounterData> {
 								// focus falls to <body> (the note's click shield keeps the press itself from focusing this cell). Remember
 								// whether focus was inside the tracker (nothing is handed over when it was not: SC-588, a click never pulls
 								// focus in), and give it to the cell that was pressed once the rebuild is done.
-								const focusWasInside = captureControlFocus(this.rootEl, FOCUS_FAMILIES) !== null;
+								// SC-615: the shield has already blurred a text box that held focus, so also ask what the press began with
+								// (a keyboard click has no press, and its focus is on the cell, so only a mouse click reads the record).
+								const press = this.cellPress;
+								this.cellPress = null;
+								const focusWasInside =
+									captureControlFocus(this.rootEl, FOCUS_FAMILIES) !== null ||
+									(!isKeyboardClick(evt) && press?.cell === handle.buttonEl && press.focusInside);
 								// Repaint selection in place: kit handles own aria-pressed;
 								// [data-selected] carries the --dse-select ring; setLabel is
 								// the one update that reaches BOTH the accessible name and
