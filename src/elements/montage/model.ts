@@ -641,7 +641,10 @@ export function correctMontageEntry(m: MontageModel, existing: MontageEntry, nex
 	// An edit that leaves hero and skill as they were changes nobody's skills: skip the undo and
 	// the re-apply, so a key-less hero gains no key and a keyed hero's list keeps its order.
 	const sameSkill = existing.hero === next.hero && existing.skill === next.skill;
-	applyTallyDelta(m, existing.result, -1);
+	// Likewise a correction that leaves the tally key as it was (success -> success, or assist -> a typo) moves no tally: skip both
+	// deltas, so a typed `successes: "1"` is not re-typed as a number by an edit of the note, round or skill (SC-628, M3).
+	const sameTally = tallyKeyFor(existing.result) === tallyKeyFor(next.result);
+	if (!sameTally) applyTallyDelta(m, existing.result, -1);
 	if (!sameSkill) removeSkillOccurrence(m, existing.hero, existing.skill);
 	existing.hero = next.hero;
 	existing.round = next.round;
@@ -650,7 +653,7 @@ export function correctMontageEntry(m: MontageModel, existing: MontageEntry, nex
 	else delete existing.skill;
 	if (next.note) existing.note = next.note;
 	else delete existing.note;
-	applyTallyDelta(m, next.result, 1);
+	if (!sameTally) applyTallyDelta(m, next.result, 1);
 	if (!sameSkill) addSkillOccurrence(m, next.hero, next.skill);
 }
 

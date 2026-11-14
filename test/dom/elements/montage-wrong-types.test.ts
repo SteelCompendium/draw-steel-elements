@@ -384,3 +384,30 @@ describe('a block that is not a map of keys', () => {
 		expect(last()).toEqual({ rounds: 3 });
 	});
 });
+
+describe('correcting a logged action through the sheet keeps a typed tally it does not change', () => {
+	const entryBlock = (tallies: string): string =>
+		`title: T\nrounds: 3\nsuccess_limit: 9\nfailure_limit: 9\n${tallies}\ncurrent_round: 2\nparticipants:\n  - name: Kira\n    skills_used: [Nature]\nentries:\n  - hero: Kira\n    round: 1\n    result: success\n    skill: Nature`;
+	const sheetOf = (): HTMLElement => ctl(document.body, 'montage.log.submit').closest('.modal-content') as HTMLElement;
+
+	test('Save with a new note leaves successes: "1" and failures: "2" as typed', async () => {
+		const { live, flush, last } = await mount(entryBlock('successes: "1"\nfailures: "2"'));
+		ctl(live(), 'montage.cell', 0).click();
+		const note = ctl(sheetOf(), 'montage.log.note') as HTMLTextAreaElement;
+		note.value = 'Slipped.';
+		note.dispatchEvent(new Event('input', { bubbles: true }));
+		ctl(sheetOf(), 'montage.log.submit').click();
+		await flush();
+		expect(last()).toMatchObject({ successes: '1', failures: '2' });
+		expect((last().entries as Array<Record<string, unknown>>)[0]).toMatchObject({ result: 'success', note: 'Slipped.' });
+	});
+
+	test('changing the result to a failure writes the two tallies it moves as numbers', async () => {
+		const { live, flush, last } = await mount(entryBlock('successes: "1"\nfailures: "2"'));
+		ctl(live(), 'montage.cell', 0).click();
+		ctl(sheetOf(), 'montage.log.result.failure').click();
+		ctl(sheetOf(), 'montage.log.submit').click();
+		await flush();
+		expect(last()).toMatchObject({ successes: 0, failures: 3 });
+	});
+});

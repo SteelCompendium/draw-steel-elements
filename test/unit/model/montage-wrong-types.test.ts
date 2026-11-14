@@ -7,7 +7,7 @@
 import { parseYaml } from '../../mocks/obsidian';
 import {
 	parse, serialize, montageTallies, montageOutcome, montageBandCopy, logMontageEntry, addMontageRound, endMontageRound,
-	backMontageRound, montagePreviousRound, setMontageLimits, resetMontageProgress, addMontageHero, undoLastMontageEntry,
+	backMontageRound, montagePreviousRound, correctMontageEntry, setMontageLimits, resetMontageProgress, addMontageHero, undoLastMontageEntry,
 } from '../../../src/elements/montage/model';
 import type { MontageModel } from '../../../src/elements/montage/model';
 
@@ -364,5 +364,40 @@ describe('a block that is not a map of keys', () => {
 	test('a map with only unknown keys is a map: it parses and keeps its keys', () => {
 		const model = parseLikePipeline('table_notes: keep me');
 		expect(written(model)).toEqual({ table_notes: 'keep me' });
+	});
+});
+
+describe('correcting a logged action keeps a typed tally the correction does not change', () => {
+	const SRC = 'successes: "1"\nfailures: " 2 "\nparticipants:\n  - name: Kira\n    skills_used: [Nature]\nentries:\n  - hero: Kira\n    round: 1\n    result: success\n    skill: Nature';
+
+	test.each([
+		['only the note', { note: 'Slipped.' }],
+		['only the round', { round: 2 }],
+		['only the skill', { skill: 'Endurance' }],
+		['the skill and the note', { skill: 'Endurance', note: 'x' }],
+	])('a correction that changes %s leaves successes: "1" and failures: " 2 " as typed', (_name, change) => {
+		const model = parseLikePipeline(SRC);
+		const existing = model.entries![0];
+		correctMontageEntry(model, existing, { hero: 'Kira', round: 1, result: 'success', skill: 'Nature', ...change });
+		expect(model.successes).toBe(1);
+		expect(written(model)).toMatchObject({ successes: '1', failures: ' 2 ' });
+	});
+
+	test('an assist corrected to a typo (neither moves a tally) leaves both as typed', () => {
+		const model = parseLikePipeline('successes: "1"\nparticipants:\n  - name: Kira\nentries:\n  - hero: Kira\n    round: 1\n    result: assist');
+		correctMontageEntry(model, model.entries![0], { hero: 'Kira', round: 1, result: 'dodged' });
+		expect(written(model).successes).toBe('1');
+	});
+
+	test('a correction that moves the result writes both tallies it changes as numbers and leaves a third as typed', () => {
+		const model = parseLikePipeline(`${SRC}\nsuccess_limit: "5"`);
+		correctMontageEntry(model, model.entries![0], { hero: 'Kira', round: 1, result: 'failure', skill: 'Nature' });
+		expect(written(model)).toMatchObject({ successes: 0, failures: 3, success_limit: '5' });
+	});
+
+	test('a hand-edited tally of 0 over a success entry stays 0 when only the note is corrected (it used to rise to 1)', () => {
+		const model = parseLikePipeline('successes: 0\nparticipants:\n  - name: Kira\nentries:\n  - hero: Kira\n    round: 1\n    result: success');
+		correctMontageEntry(model, model.entries![0], { hero: 'Kira', round: 1, result: 'success', note: 'n' });
+		expect(model.successes).toBe(0);
 	});
 });
