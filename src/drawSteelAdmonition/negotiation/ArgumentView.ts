@@ -294,7 +294,7 @@ export class ArgumentView {
 		const reusable = this.data.argumentReusesMotivation();
 		if (this.reuseLine) {
 			this.paintMod(this.reuseLine, {
-				checked: reusable && arg.reusedMotivation,
+				checked: this.data.argumentReuseChecked(),
 				disabled: !reusable,
 				why: 'only when a spent Motivation is appealed to',
 			});
@@ -303,7 +303,7 @@ export class ArgumentView {
 		if (this.sameLine) {
 			this.paintMod(this.sameLine, {
 				checked: arg.sameArgumentUsed,
-				disabled: arg.usesMotivation(),
+				disabled: this.data.argumentUsesMotivation(),
 				why: 'not while a Motivation is appealed to',
 			});
 		}
@@ -337,10 +337,11 @@ export class ArgumentView {
 
 		const arg = this.data.currentArgument;
 		const roll = ArgumentPowerRoll.build(
-			arg.usesMotivation(),
-			arg.usesPitfall(),
+			// SC-649: exactly what the card shows as chosen (pressed chips, the Reuse box as drawn), not the raw lists / flag.
+			this.data.argumentUsesMotivation(),
+			this.data.argumentUsesPitfall(),
 			arg.lieUsed,
-			arg.reusedMotivation,
+			this.data.argumentReuseChecked(),
 			arg.sameArgumentUsed,
 		);
 		const byTier: Record<PowerRollTier, ArgumentResult> = {

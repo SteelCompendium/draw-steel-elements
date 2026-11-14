@@ -273,6 +273,26 @@ export class NegotiationData {
     }
 
     /**
+     * SC-649 — what the card SHOWS as chosen. A `motivationsUsed` / `pitfallsUsed` entry that names no motivation / pitfall of this block
+     * has no chip, so it is not an appeal: the roll's tiers, the Same Argument box and Complete Argument read these, never the raw lists
+     * (the stray entry stays in the user's YAML until their own action writes the argument; it counts again if its name comes back).
+     * Name matching is the chips' (`includes(name)`).
+     */
+    argumentUsesMotivation(): boolean {
+        return this.motivations.some(m => this.currentArgument.motivationsUsed.includes(m.name));
+    }
+
+    /** SC-649 — a pitfall chip is pressed (see {@link argumentUsesMotivation}). */
+    argumentUsesPitfall(): boolean {
+        return this.pitfalls.some(p => this.currentArgument.pitfallsUsed.includes(p.name));
+    }
+
+    /** SC-649 — the Reuse box as drawn: checked only while a spent motivation is appealed to (otherwise it is greyed out and unchecked). */
+    argumentReuseChecked(): boolean {
+        return this.argumentReusesMotivation() && this.currentArgument.reusedMotivation;
+    }
+
+    /**
      * SC-379 — the book's three stop conditions, derived from the live standing (a method:
      * prototype methods are never own keys, so nothing here can reach serialize()).
      * Precedence: Interest 5 is a deal, Interest 0 is hostile, otherwise spent Patience is a
@@ -353,7 +373,8 @@ export class CurrentArgument {
     }
 
     /**
-     * Checks if any motivations have been used in the current argument.
+     * Checks if the RAW `motivationsUsed` list has any entry (SC-649: it may name a motivation the card does not show; the roll and the
+     * Same Argument box ask {@link NegotiationData.argumentUsesMotivation} instead).
      * @returns {boolean} True if motivations have been used; otherwise, false.
      */
     usesMotivation(): boolean {
@@ -361,7 +382,8 @@ export class CurrentArgument {
     }
 
     /**
-     * Checks if any pitfalls have been used in the current argument.
+     * Checks if the RAW `pitfallsUsed` list has any entry (SC-649: see {@link usesMotivation}; the roll asks
+     * {@link NegotiationData.argumentUsesPitfall}).
      * @returns {boolean} True if pitfalls have been used; otherwise, false.
      */
     usesPitfall(): boolean {

@@ -127,10 +127,8 @@ describe('SC-439 filed bugs', () => {
 		expect(labels.filter((label) => label === '')).toEqual([]);
 	});
 
-	// SC-649: the power roll counts a motivation / pitfall / Reuse that the card does not show as chosen. Each case asserts ONLY that the tiers
-	// shown are the tiers of what the card SHOWS as chosen (the pressed chips' names and the modifier boxes), never a specific fix: a fix may
-	// show the hidden entry (a pressed chip, a checked box) or drop it from the roll, and the tiers must agree with the card either way. The
-	// reference is the same block with exactly what the card shows as its argument.
+	// The power roll counts only what the card shows as chosen. Each case asserts that the tiers shown are the tiers of what the card SHOWS as
+	// chosen (the pressed chips' names and the modifier boxes). The reference is the same block with exactly what the card shows as its argument.
 	const tiersOf = (root: HTMLElement): string[] =>
 		Array.from(root.querySelectorAll('[data-dse-control="negotiation.tier.row"] .dse-pr__text')).map((e) => e.textContent ?? '');
 	const BASE = 'name: x\ninitial_interest: 3\ninitial_patience: 3\nmotivations:\n  - name: Peace\n    reason: a\npitfalls:\n  - name: Power\n    reason: b\n';
@@ -158,18 +156,67 @@ describe('SC-439 filed bugs', () => {
 		return { shown, reference: tiersOf(second.root()) };
 	};
 
-	test.failing('[K11] an argument entry naming a motivation the block no longer has: the tiers shown are those of the chips shown [known bug SC-649]', async () => {
+	test('[K11] an argument entry naming a motivation the block no longer has: the tiers shown are those of the chips shown', async () => {
 		const { shown, reference } = await tiersAgreeWithTheCard(BASE + 'currentArgument:\n  motivationsUsed:\n    - Ghost\n' + OFFERS);
 		expect(shown).toEqual(reference);
 	});
 
-	test.failing('[K12] an argument entry naming a pitfall the block no longer has: the tiers shown are those of the chips shown [known bug SC-649]', async () => {
+	test('[K12] an argument entry naming a pitfall the block no longer has: the tiers shown are those of the chips shown', async () => {
 		const { shown, reference } = await tiersAgreeWithTheCard(BASE + 'currentArgument:\n  pitfallsUsed:\n    - Ghost\n' + OFFERS);
 		expect(shown).toEqual(reference);
 	});
 
-	test.failing('[K13] a hand-typed reusedMotivation with no spent motivation appealed to: the tiers shown are those of the Reuse box shown [known bug SC-649]', async () => {
+	test('[K13] a hand-typed reusedMotivation with no spent motivation appealed to: the tiers shown are those of the Reuse box shown', async () => {
 		const { shown, reference } = await tiersAgreeWithTheCard(BASE + 'currentArgument:\n  motivationsUsed:\n    - Peace\n  reusedMotivation: true\n' + OFFERS);
 		expect(shown).toEqual(reference);
+	});
+
+	// Complete Argument and the Same Argument box read the same shown-as-chosen state as the tiers. Tier rows are low, mid, high, crit: High is
+	// +1 Interest with 0 Patience under a Motivation and +1 Interest with -1 Patience without one.
+	const control = (root: HTMLElement, id: string, nth = 0): HTMLElement => root.querySelectorAll<HTMLElement>(`[data-dse-control="${id}"]`)[nth];
+	/** The standing a write leaves (a track that did not move is not written: it is still the initial one). */
+	const standing = (w: any): number[] => [w.current_interest ?? w.initial_interest, w.current_patience ?? w.initial_patience];
+	const completeAtHigh = async (m: Awaited<ReturnType<typeof mount>>): Promise<any> => {
+		control(m.root(), 'negotiation.tier.row', 2).click();
+		control(m.root(), 'negotiation.complete').click();
+		await m.flush();
+		return m.written();
+	};
+
+	test('an argument entry naming a motivation the block no longer has: Complete Argument at High writes the no-motivation Interest and Patience and clears the entry', async () => {
+		const m = await mount(BASE + 'currentArgument:\n  motivationsUsed:\n    - Ghost\n' + OFFERS);
+		const w = await completeAtHigh(m);
+		expect(standing(w)).toEqual([4, 2]);
+		expect(w.currentArgument.motivationsUsed).toEqual([]);
+	});
+
+	test('an argument entry naming a pitfall the block no longer has: Complete Argument at High writes the no-pitfall Interest and Patience and clears the entry', async () => {
+		const m = await mount(BASE + 'currentArgument:\n  pitfallsUsed:\n    - Ghost\n' + OFFERS);
+		const w = await completeAtHigh(m);
+		expect(standing(w)).toEqual([4, 2]);
+		expect(w.currentArgument.pitfallsUsed).toEqual([]);
+	});
+
+	test('an argument entry naming a motivation the block no longer has: Same Argument is not greyed out, and drawing the card writes nothing', async () => {
+		const m = await mount(BASE + 'currentArgument:\n  motivationsUsed:\n    - Ghost\n' + OFFERS);
+		const same = control(m.root(), 'negotiation.mod.same') as HTMLInputElement;
+		expect(same.disabled).toBe(false);
+		expect(same.closest('label')!.classList.contains('is-disabled')).toBe(false);
+		expect(same.closest('label')!.querySelector('.dse-nt__why')).toBeNull();
+		await m.flush();
+		expect(m.written().currentArgument.motivationsUsed).toEqual(['Ghost']);
+	});
+
+	test('an argument entry naming a motivation the block has: its pressed chip still greys out Same Argument and still counts in the tiers', async () => {
+		const m = await mount(BASE + 'currentArgument:\n  motivationsUsed:\n    - Peace\n' + OFFERS);
+		expect((control(m.root(), 'negotiation.mod.same') as HTMLInputElement).disabled).toBe(true);
+		const w = await completeAtHigh(m);
+		expect(standing(w)).toEqual([4, 3]);
+	});
+
+	test('a hand-typed reusedMotivation with no spent motivation appealed to: Complete Argument at High writes the motivation Interest and Patience, not the reuse ones', async () => {
+		const m = await mount(BASE + 'currentArgument:\n  motivationsUsed:\n    - Peace\n  reusedMotivation: true\n' + OFFERS);
+		const w = await completeAtHigh(m);
+		expect(standing(w)).toEqual([4, 3]);
 	});
 });
