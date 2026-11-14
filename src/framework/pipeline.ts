@@ -37,10 +37,11 @@ import {
 	withReservedKeys,
 } from './chrome/collapsedKey';
 import type { CollapseKeys } from './chrome/collapsedKey';
-import { ensureCollapseInvariant, mountChrome } from './chrome/mountChrome';
+import { CHROME_COLLAPSE_SLOT, ensureCollapseInvariant, mountChrome } from './chrome/mountChrome';
+import { watchPrefs } from './livePrefs';
 import { armChromeFocus, claimChromeFocus, formOpenerOf, isKeyboardClick, settleChromeFocus } from './chrome/focusHandoff';
 import { takeCarriedState } from './host/livePreviewStateCarry';
-import type { ChromeMenuItem } from './chrome/types';
+import type { ChromeHandle, ChromeMenuItem } from './chrome/types';
 import { iconButton } from './kit/iconButton';
 import { openFormEditor } from '@/authoring/FormModal';
 import { ANCHOR_KEY } from './sidebar/anchor';
@@ -85,6 +86,45 @@ function readCollapsePref(
 ): boolean {
 	if (!prefs.descriptors().some((d) => d.key === key)) return fallback;
 	return prefs.get(key) === true;
+}
+
+/**
+ * SC-644 ruling O2, PENDING Scott's answer — THE switch for "Start collapsed" (`collapseDefault`).
+ *
+ * `false` (the recommendation put to Scott): flipping "Start collapsed" does NOT collapse or expand a block
+ * already on screen; it applies to blocks drawn afterwards (opening a note, re-rendering). Chrome rebuilds
+ * carry the block's live collapsed state across (see `mountPipelineChrome`), so nothing else moves it.
+ *
+ * `true` (the alternative): the flip also reaches open blocks the reader has not toggled themselves. The
+ * whole change is this constant plus `carriedCollapsedFor` below: `collapseDefault` joins the watched keys,
+ * and a rebuild it caused re-resolves the state from the preferences instead of carrying it (a reader's own
+ * toggle, held by the SessionStore, still wins inside `mountChrome`).
+ */
+const START_COLLAPSED_REACHES_OPEN_BLOCKS: boolean = false;
+
+/**
+ * SC-644 — the preferences that shape PIPELINE-owned chrome (the Collapse control and the Edit pencil) and
+ * so must reach a block that is already on screen: a flip rebuilds that block's chrome in place (the body is
+ * not re-rendered). `collapsibleDefault` adds / removes the Collapse control; `authoringControls` adds /
+ * removes the Edit pencil. Anything the pipeline learns to apply live is declared here (and in
+ * `livePrefs.ts`), not wired ad hoc.
+ */
+const CHROME_LIVE_PREFS: readonly (keyof DsePrefs)[] = [
+	'collapsibleDefault',
+	'authoringControls',
+	...(START_COLLAPSED_REACHES_OPEN_BLOCKS ? (['collapseDefault'] as const) : []),
+];
+
+/**
+ * The collapsed state a chrome REBUILD of an already-mounted block starts from. Carrying the live state is
+ * what keeps a block collapsed (or expanded) across a rebuild that has nothing to do with collapse: a block
+ * collapsed only by "Start collapsed" has no SessionStore entry, so re-resolving from the preferences would
+ * silently follow whatever the preference says NOW. `undefined` = resolve from block keys + preferences
+ * (the first mount, and the SC-644 O2 alternative above).
+ */
+function carriedCollapsedFor(previous: boolean | undefined, reason: keyof DsePrefs | undefined): boolean | undefined {
+	if (START_COLLAPSED_REACHES_OPEN_BLOCKS && reason === 'collapseDefault') return undefined;
+	return previous;
 }
 
 /** Runs `fn`, tagging any thrown error with `stage` (unless already tagged). */
@@ -543,10 +583,16 @@ export class ElementPipeline {
 			//
 			// Everything the hook needs is read LAZILY, at call time: `view.authoringAnchor()`
 			// (a brand-new node after every rebuild), the current model (passed in), and the
-			// `authoringControls` pref (which may have flipped since mount — indeed flipping
-			// a pref is one of the things that triggers a rebuild).
+			// `authoringControls` pref (which may have flipped since mount).
+			//
+			// SC-644: a pref flip does NOT rebuild a view by itself — only a view that subscribes to that
+			// pref (statblock / feature / featureblock on the rolling prefs, say) re-renders, and then this
+			// hook re-runs. The chrome prefs (`CHROME_LIVE_PREFS`) have no such view, so the pipeline watches
+			// them itself (below, after the first mount) and rebuilds just the chrome.
 			let chromeOwner: Component | undefined;
 			let pencilEl: HTMLElement | undefined;
+			// SC-644: the live chrome handle, kept for its collapsed state (carried across rebuilds).
+			let chromeHandle: ChromeHandle | undefined;
 
 			// SC-340 §9.2: an adopted view outlives the pipeline run that captured `source`;
 			// the form editor must start from the body on disk NOW (SC-343's lastKnownBody).
@@ -566,7 +612,13 @@ export class ElementPipeline {
 				view.openAfterPendingWrite(() => openFormEditor(view, cx, def, currentBody(), this.deps.validation, opener));
 			};
 
-			const mountPipelineChrome = (current: M): void => {
+			// `reason` is set only for a rebuild a preference flip caused (SC-644); a rebuild after the view
+			// re-rendered itself has none.
+			const mountPipelineChrome = (current: M, reason?: keyof DsePrefs): void => {
+				// SC-644: the state this block is in NOW, read before its chrome is torn down. A rebuild keeps
+				// it (see carriedCollapsedFor) rather than re-resolving it from block keys + preferences.
+				const wasCollapsed = chromeHandle?.isCollapsed();
+				chromeHandle = undefined;
 				// One Component per (re)mount, owned by the view: unloading it detaches every
 				// listener the previous panel registered, so a long-lived view that rebuilds
 				// many times does not accumulate handlers on detached nodes. `removeChild` is
@@ -577,6 +629,14 @@ export class ElementPipeline {
 				// Defensive: a hypothetical `onUpdate` that rebuilds WITHOUT emptying root
 				// would otherwise leave the old nodes behind and we would mount a second set.
 				root.querySelectorAll('.dse-chrome, .dse-chrome-summary').forEach((n) => n.remove());
+				// SC-644: what mountChrome stamped on the root and the anchor goes with the panel, so a block
+				// whose chrome is now gone (Collapsible by default off, no pencil) is the DOM a fresh render
+				// of it would be. mountChrome puts them back when there is chrome again. The collapsed
+				// attribute in particular must not outlive the one-line bar it belongs to.
+				root.removeAttribute('data-dse-chrome');
+				root.removeAttribute('data-dse-chrome-mobile');
+				root.removeAttribute('data-dse-collapsed');
+				view.authoringAnchor().removeClass('dse-chrome-anchor');
 				chromeOwner = new Component();
 				view.addChild(chromeOwner);
 
@@ -595,7 +655,15 @@ export class ElementPipeline {
 				// SC-169: the edit affordance's GATE is unchanged; only its LOCATION moves when
 				// the element opted into chrome.
 				const showEdit = cx.host.canPersist && !def.noAuthoringButton && isAuthoringControlsOn(prefs);
-				mountChromeFor(current, showEdit, chromeOwner);
+				chromeHandle = mountChromeFor(current, showEdit, chromeOwner, carriedCollapsedFor(wasCollapsed, reason));
+				// SC-644 O1: a block that was collapsed and has no Collapse control any more (Collapsible by
+				// default switched off) is expanded by the mount above (a block must never be stuck collapsed
+				// with no control to open it). The reader's session toggle is cleared too, or switching the
+				// preference back on would fold the block again from it ("switching it back ON leaves the
+				// block expanded"). Only for a preference-caused rebuild: a plain re-render keeps the session.
+				if (reason !== undefined && wasCollapsed === true && chromeHandle?.summaryEl === undefined) {
+					session.set(host.blockKey(), CHROME_COLLAPSE_SLOT, false);
+				}
 				// SC-518: a chrome element asks for the form's focus hand-back in mountChrome; an element without one (the card-corner
 				// pencil, or ds-hero's own "Edit definition") asks here, after its controls are built.
 				if (!def.chrome) claimChromeFocus(() => host.blockKey(), root);
@@ -612,7 +680,12 @@ export class ElementPipeline {
 			// { display: none }` (styles-source.css, print rule 4) already hides the
 			// card-corner pencil on paper — which is why `statblock--steel-print.png` and
 			// `statblock-edit-btn--steel-print.png` carry the SAME hash in the freeze baseline.
-			const mountChromeFor = (current: M, showEdit: boolean, owner: Component): void => {
+			const mountChromeFor = (
+				current: M,
+				showEdit: boolean,
+				owner: Component,
+				carriedCollapsed: boolean | undefined,
+			): ChromeHandle | undefined => {
 				if (def.chrome) {
 					const chrome = def.chrome;
 					const ctx = { model: current, def: { id: def.id, name: def.name } };
@@ -625,7 +698,7 @@ export class ElementPipeline {
 						collapsibleDefault: readCollapsePref(prefs, 'collapsibleDefault', true),
 						collapseDefault: readCollapsePref(prefs, 'collapseDefault', false),
 					});
-					mountChrome(
+					return mountChrome(
 						{
 							root,
 							anchor: view.authoringAnchor(),
@@ -633,7 +706,7 @@ export class ElementPipeline {
 							ctx,
 							persist: { session, blockKey: host.blockKey(), slot: 'chrome' },
 							blockKeyNow: () => host.blockKey(),
-							collapsedDefault,
+							collapsedDefault: carriedCollapsed ?? collapsedDefault,
 							// SC-169 fix round 1 (L-1): the author's key AND the element's own
 							// per-model veto. ANDed, so the veto can only ever remove the control
 							// — see ElementChrome.collapsible.
@@ -718,6 +791,7 @@ export class ElementPipeline {
 						owner,
 					).buttonEl;
 				}
+				return undefined;
 			};
 
 			// SC-169 fix round 1 (H-1): registered BEFORE mount, so even a rebuild kicked off
@@ -743,6 +817,18 @@ export class ElementPipeline {
 			await runStageAsync('render', () => view.mount(root, model));
 			// The first render's leg. `update()` runs the hook itself from here on.
 			mountPipelineChrome(model);
+			// SC-644: the chrome prefs reach a block that is already on screen. One subscription, bound to the
+			// view (gone when it unloads), rebuilds just the chrome: the body is not re-rendered, the block's
+			// collapsed state is carried, and focus is not touched. The callback must not throw: the store
+			// notifies synchronously inside `prefs.set()`, and a throw there would stop the other open blocks
+			// being told and the setting being saved.
+			watchPrefs(prefs, view, CHROME_LIVE_PREFS, (key) => {
+				try {
+					mountPipelineChrome(view.currentModel(), key);
+				} catch (error) {
+					console.error(`Draw Steel Elements: could not apply "${key}" to an open ${def.name} block.`, error);
+				}
+			});
 		} catch (error) {
 			// ONE error boundary for the whole pipeline (F1 §2.4) — no per-element
 			// try/catch. renderErrorCard always clears root first, so a render-stage
