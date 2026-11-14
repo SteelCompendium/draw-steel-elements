@@ -2,7 +2,7 @@
 // shows its own controls; Obsidian's back button returns. (Obsidian opens the settings window as a popout: see driver/settings.ts.)
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
-import { back, closeSettings, ctl, idsOnPage, openSettings } from '../../driver/settingsDrive';
+import { back, closeSettings, ctl, idsOnPage, openSettings, pageSettled } from '../../driver/settingsDrive';
 
 const PAGES: Array<{ link: string; title: string; shows: string }> = [
 	{ link: 'settings.page.appearance', title: 'Appearance', shows: 'settings.reduce-motion' },
@@ -33,6 +33,7 @@ describe('settings tab: navigation', () => {
 			for (const page of PAGES) {
 				await dse.click(ctl(page.link));
 				await dse.waitFor(`document.querySelector('.setting-page-title')?.textContent === ${JSON.stringify(page.title)}`, `the ${page.title} page`);
+				await pageSettled();
 				expect(await idsOnPage()).toContain(page.shows);
 				await back();
 				expect(await title()).toBe('index');
@@ -49,10 +50,12 @@ describe('settings tab: navigation', () => {
 			for (const adv of ADVANCED) {
 				await dse.click(ctl(adv.page));
 				await dse.waitFor(`!!document.querySelector('[data-dse-control="${adv.link}"]')`, 'the Advanced row');
+				await pageSettled();
 				const primary = await idsOnPage();
 				expect(primary).not.toContain(adv.shows); // the secondary setting is NOT on the primary page
 				await dse.click(ctl(adv.link));
 				await dse.waitFor(`document.querySelector('.setting-page-title')?.textContent === 'Advanced'`, 'the Advanced page');
+				await pageSettled();
 				expect(await idsOnPage()).toContain(adv.shows);
 				await back();
 				expect(await idsOnPage()).toContain(adv.link);

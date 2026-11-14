@@ -4,9 +4,9 @@
 // option) and the change event that follows. Each pick is asserted in data.json ON DISK, in the select's shown value and on the OPEN note's
 // element (the reflected attribute), live. The Preset goes last: it rewrites nine of the rows above. A final reload checks the whole page set.
 // Representative elements: Settings/statblock.md, Settings/featureblock.md, Feature/feature.md.
-import { expect } from '@wdio/globals';
-import { dse } from '../../driver/dse';
-import { back, closeSettings, ctl, diskData, diskPrefs, mainAttr, openAt, pressOn, prefValue, reloadPlugin, shownValue, showPage } from '../../driver/settingsDrive';
+import { browser, expect } from '@wdio/globals';
+import { dse, knownBug } from '../../driver/dse';
+import { back, closeSettings, ctl, diskData, diskPrefs, mainAttr, openAt, pressOn, prefValue, rawData, readSettings, shownValue, showPage } from '../../driver/settingsDrive';
 
 const STATBLOCK = '[data-dse-element="statblock"]';
 const STAT_PAGE = 'settings.page.statblock-display';
@@ -81,21 +81,28 @@ describe('settings tab: dropdowns', () => {
 		await dse.openNote('Stamina/basic.md');
 		await openAt('settings.page.compendium');
 		try {
-			const before = JSON.stringify(await diskData());
+			// Nothing may change in the plugin's settings nor in the file (the raw bytes, which exist before any write).
+			const memory = JSON.stringify(await readSettings());
+			const disk = await rawData();
 			expect(await shownValue('settings.compendium.locale')).toBe('en');
 			await pressOn('settings.compendium.locale', 'ArrowDown');
 			expect(await shownValue('settings.compendium.locale')).toBe('en');
-			expect(JSON.stringify(await diskData())).toBe(before);
+			expect(JSON.stringify(await readSettings())).toBe(memory);
+			expect(await diskData()).toEqual(disk === null ? { prefs: {} } : { prefs: {}, ...JSON.parse(disk) });
+			expect(await rawData()).toBe(disk);
 		} finally {
 			await closeSettings();
 		}
 	});
 
 	it('[SET-D14] Preset: with the statblock and feature rows reset it reads Steel card; ArrowDown picks Sourcebook, which writes all nine members (two on the Feature display page) and the open statblock follows', async () => {
+		// The Featureblock rows and Roller were changed by the scenarios above: seed them so this one runs alone.
+		await dse.setPrefs({ fbFeatureStyle: 'flat', fbStats: 'ledger', rollerEngine: 'dice-roller', sbDensity: 'compact' });
 		await dse.openNote('Settings/statblock.md');
 		await openAt(STAT_PAGE);
 		try {
-			await dse.click(ctl('settings.reset.statblock-display')); // the rows above left the preset on Custom
+			expect(await shownValue('settings.sb-preset')).toBe('custom');
+			await dse.click(ctl('settings.reset.statblock-display')); // leaves the preset on Custom until the Feature display rows are reset too
 			await back();
 			await showPage('settings.page.feature-display');
 			await dse.click(ctl('settings.reset.feature-display'));
@@ -114,8 +121,8 @@ describe('settings tab: dropdowns', () => {
 		}
 	});
 
-	it('[SET-D15] after a plugin reload every dropdown shows what was left and data.json keeps it', async () => {
-		await reloadPlugin();
+	it('[SET-D15] after a plugin reload on the data.json the scenarios above leave, every dropdown shows its value and data.json keeps it', async () => {
+		await dse.setPrefs(FINAL); // put in force (and reload on) the state left above, so this one also runs alone
 		expect(await diskPrefs()).toEqual(FINAL);
 		const shown: Array<[string[], Record<string, string>]> = [
 			[[STAT_PAGE], { 'settings.sb-preset': 'sourcebook', 'settings.sb-feature-style': 'flat', 'settings.sb-density': 'comfortable', 'settings.sb-columns': 'single', 'settings.sb-stats': 'ledger' }],
@@ -135,4 +142,23 @@ describe('settings tab: dropdowns', () => {
 		await dse.openNote('Settings/statblock.md');
 		expect(await mainAttr(STATBLOCK, 'data-dse-sb-villain')).toBe('inline');
 	});
+
+	// The Preset's "Custom" entry is a label the user cannot select into: picking it writes nothing, so the dropdown must not stay on it.
+	knownBug('SC-651', '[SET-D16] picking Custom in the Preset: the dropdown shows the same value it shows when the page is reopened', async () => {
+		await dse.setPrefs({});
+		await dse.openNote('Settings/statblock.md');
+		await openAt(STAT_PAGE);
+		try {
+			expect(await shownValue('settings.sb-preset')).toBe('steel'); // setup check: the shipped state is the Steel card preset
+			await dse.focusByScript(ctl('settings.sb-preset'));
+			await browser.keys('End'); // the Custom entry (a raw key: this scenario drives no manifest pair)
+			const afterPick = await shownValue('settings.sb-preset');
+			await back();
+			await showPage(STAT_PAGE);
+			const afterReopen = await shownValue('settings.sb-preset');
+			expect({ afterPick }).toEqual({ afterPick: afterReopen });
+		} finally {
+			await closeSettings();
+		}
+	}, { failsWith: /afterPick/ });
 });

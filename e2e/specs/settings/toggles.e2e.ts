@@ -7,7 +7,7 @@
 import { $, expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
 import {
-	closeSettings, ctl, diskData, diskPrefs, mainAttr, mainCount, onMain, openAt, pressOn, prefValue, reloadPlugin, toggleIsDisabled, toggleIsOn,
+	closeSettings, ctl, diskData, diskPrefs, mainAttr, mainCount, onMain, openAt, pressOn, prefValue, seedData, toggleIsDisabled, toggleIsOn,
 } from '../../driver/settingsDrive';
 
 const STAMINA = '[data-dse-element="stamina-bar"]';
@@ -73,14 +73,12 @@ describe('settings tab: toggles', () => {
 	});
 
 	it('[SET-T04] Sticky mini-header: include secondary stats: flips with its parent on; with the parent off it is greyed out and a click does nothing, but its value is kept', async () => {
+		await dse.setPrefs({}); // from the shipped state: the parent is on
 		await dse.openNote('Settings/statblock.md');
 		await openAt('settings.page.statblock-display');
 		try {
 			const meta = 'settings.sb-sticky-meta';
-			// The previous scenario left the parent off: switch it back on so the child is live.
-			expect(await toggleIsDisabled(meta)).toBe(true);
-			await dse.click(ctl('settings.sb-sticky'));
-			expect(await toggleIsDisabled(meta)).toBe(false);
+			expect(await toggleIsDisabled(meta)).toBe(false); // the parent is on
 			await cycle(meta, pref('sbStickyMeta', 'on'), 'on', 'off', async (s) =>
 				expect(await mainAttr('[data-dse-element="statblock"]', 'data-dse-sb-stickymeta')).toBe(s === 'alt' ? 'off' : 'on'));
 			// Parent off again: the child is disabled, a click on it is a disabled click and changes nothing.
@@ -145,10 +143,11 @@ describe('settings tab: toggles', () => {
 	});
 
 	it('[SET-T09] Click ability to roll: with rolling on, a click on a tier row of the open card rolls; switched off (click, Space) it does not, live', async () => {
+		await dse.setPrefs({ rollingEnabled: true });
 		await dse.openNote('Feature/feature.md');
 		await openAt('settings.page.rolling');
 		try {
-			// Rolling is on from the previous scenario. Click-to-roll starts on: a tier row click draws the roll area.
+			// Rolling is seeded on. Click-to-roll starts on: a tier row click draws the roll area.
 			expect(await prefValue('rollingEnabled', false)).toBe(true);
 			const rolled = async (): Promise<boolean> => (await mainCount('.dse-roll-area *')) > 0;
 			// A plain (uncredited) pointer click on the open card in the main window: the control under test is the setting.
@@ -187,12 +186,13 @@ describe('settings tab: toggles', () => {
 		}
 	});
 
-	it('[SET-T11] after a plugin reload every toggle changed above shows its value and keeps it in data.json', async () => {
-		await reloadPlugin();
+	it('[SET-T11] after a plugin reload on a data.json holding every toggle changed above, each shows its value and data.json keeps it', async () => {
 		const expected = {
 			reduceMotion: true, portraits: 'off', sbSticky: 'off', sbStickyMeta: 'off', collapsibleDefault: false, collapseDefault: true,
 			staminaRecoveryPopover: true, rollingEnabled: true, rollClickToRoll: false,
 		};
+		// The state the scenarios above leave, put in force (and the plugin reloaded on it) so this one also runs alone.
+		await seedData({ settingsVersion: 3, sccWebFallback: false, prefs: expected });
 		expect(await diskPrefs()).toEqual(expected);
 		expect((await diskData()).sccWebFallback).toBe(false);
 		const check = async (links: string[], ids: Record<string, boolean>): Promise<void> => {

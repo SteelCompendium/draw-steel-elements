@@ -37,6 +37,9 @@ export const idsOnPage = (): Promise<string[]> =>
 /** Open the settings window on this plugin's tab and move the driver onto it. */
 export async function openSettings(): Promise<void> {
 	mainHandle = await browser.getWindowHandle();
+	// No settings scenario may reach the network: unless a test installed its own stub (`releaseStub.install()` marks the service), the sync
+	// service's request function throws loudly. (A plugin reload gives a fresh service, so the guard goes in again on the next open.)
+	await ev(`(() => { const s = ${PLUGIN}.syncService; if (s && !s.__e2eStubbed) s.requestUrlFn = () => { throw new Error('e2e: network disabled, install releaseStub before a Sync or Check'); }; return true; })()`);
 	await ev(`(() => { app.commands.executeCommandById('app:open-settings'); app.setting.openTabById('draw-steel-elements'); return true; })()`);
 	await browser.waitUntil(async () => (await browser.getWindowHandles()).length > 1, { timeout: 8000, interval: 40, timeoutMsg: 'the settings window never opened' });
 	const popout = (await browser.getWindowHandles()).find((h) => h !== mainHandle)!;
@@ -64,20 +67,28 @@ export async function ensureMainWindow(): Promise<void> {
 	mainHandle = null;
 }
 
+/** Wait until Obsidian's page transition is over: while a page slides in or out, the old and the new page are both in the container for
+ *  ~300 ms, and a click on the new page's Back button in that window is swallowed. */
+export const pageSettled = (): Promise<void> =>
+	waitFor(`document.querySelector('.vertical-tab-content-container')?.children.length === 1`, 'the settings page transition to finish', 5000);
+
 /** Go one page deeper by a page-link id (`settings.page.typography`, `settings.advanced.typography`). A plain click: it credits no
  *  driven pair, so a census or a setup step never stands in for the scenario that drives the link. */
 export async function showPage(linkId: string): Promise<void> {
 	await $(`[data-dse-control="${linkId}"]`).click();
 	await waitFor(`!document.querySelector('[data-dse-control="${linkId}"]')`, `the page ${linkId} to open`, 8000);
+	await pageSettled();
 }
 
-/** One level back (Obsidian's own back button; not a DSE control). Waits for the page on screen to change. */
+/** One level back (Obsidian's own back button; not a DSE control), once the page has settled; waits for the page on screen to change. */
 export async function back(levels = 1): Promise<void> {
 	const title = `(document.querySelector('.setting-page-title')?.textContent ?? 'index')`;
 	for (let i = 0; i < levels; i++) {
+		await pageSettled();
 		const was = await ev<string>(title);
 		await $('.setting-page-back-button').click();
-		await waitFor(`${title} !== ${JSON.stringify(was)}`, 'the previous settings page to show', 5000);
+		await waitFor(`${title} !== ${JSON.stringify(was)}`, `the page before ${was} to show`, 8000);
+		await pageSettled();
 	}
 }
 
@@ -101,15 +112,39 @@ export async function onMain<T>(fn: () => Promise<T>): Promise<T> {
 	}
 }
 
+/** The raw text of data.json on disk right now (no waiting; null when the file does not exist). */
+export const rawData = (): Promise<string | null> =>
+	ev<string | null>(`(async () => { const p = ${PLUGIN}; const f = p.manifest.dir + '/data.json'; return (await ${APP}.vault.adapter.exists(f)) ? await ${APP}.vault.adapter.read(f) : null; })()`);
+
 /**
  * `data.json` as it is ON DISK (not the plugin's in-memory settings). Flushes the preferences' debounced save, then waits until the file
- * the plugin wrote equals what it holds in memory, so a read never lands between a change and its write.
+ * the plugin wrote equals what it holds in memory, so a read never lands between a change and its write. Before the session's first write
+ * the file is still the shipped seed (`{}`, or absent): after a short grace, `diskData` answers with what the disk says (`{ prefs: {} }`)
+ * instead of timing out, so a test can ask "was anything written?" first.
  */
 export async function diskData(): Promise<PluginData> {
 	await ev(`(() => { ${PLUGIN}.prefsStorage?.flush?.(); return true; })()`);
+	const started = Date.now();
+	let answer: PluginData | undefined;
 	await browser.waitUntil(
-		() => ev<boolean>(`(async () => { const p = ${PLUGIN}; const raw = await ${APP}.vault.adapter.read(p.manifest.dir + '/data.json'); return JSON.stringify(JSON.parse(raw)) === JSON.stringify(p.settings); })()`),
+		async () => {
+			const raw = await rawData();
+			const memory = await ev<string>(`JSON.stringify(${PLUGIN}.settings)`);
+			const parsed = raw === null ? null : (JSON.parse(raw) as PluginData);
+			if (parsed !== null && JSON.stringify(parsed) === memory) {
+				answer = parsed;
+				return true;
+			}
+			// The plugin always writes its WHOLE settings object, so a file that lacks a key the plugin holds was never written by it (the shipped seed
+			// `{}`, or a data.json a scenario seeded): after a grace period for a write in flight, answer with what the disk says.
+			const neverWritten = parsed === null || Object.keys(JSON.parse(memory) as object).some((k) => !(k in parsed));
+			if (neverWritten && Date.now() - started > 800) {
+				answer = { prefs: {}, ...(parsed ?? {}) };
+				return true;
+			}
+			return false;
+		},
 		{ timeout: 8000, interval: 50, timeoutMsg: 'data.json on disk never caught up with the plugin\'s settings' },
 	);
-	return ev<PluginData>(`(async () => JSON.parse(await ${APP}.vault.adapter.read(${PLUGIN}.manifest.dir + '/data.json')))()`);
+	return answer!;
 }

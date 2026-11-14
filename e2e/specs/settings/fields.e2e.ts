@@ -5,7 +5,7 @@
 // the stored value and the shown value, with a final plugin reload.
 import { $, expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
-import { closeSettings, ctl, diskData, openAt, pressOn, readSettings, reloadPlugin, shownValue, typeThenBlur } from '../../driver/settingsDrive';
+import { closeSettings, ctl, diskData, openAt, pressOn, readSettings, seedData, shownValue, typeThenBlur } from '../../driver/settingsDrive';
 
 const COMPENDIUM = 'settings.page.compendium';
 const INIT = 'settings.page.initiative-tracker';
@@ -42,7 +42,7 @@ describe('settings tab: text and file fields', () => {
 		}
 	});
 
-	it('[SET-X03] Default creature image path: a click opens the file picker, picking a file stores its path; Enter on the focused field opens nothing (Obsidian\'s combobox ignores it); the X clears the path', async () => {
+	it('[SET-X03] Default creature image path: a click opens the file picker, picking a file stores its path and a creature without an image shows it; Enter on the focused field opens nothing (Obsidian\'s combobox ignores it); the X clears the path and the portrait goes', async () => {
 		await dse.openNote('Stamina/basic.md');
 		await openAt(INIT);
 		try {
@@ -50,24 +50,35 @@ describe('settings tab: text and file fields', () => {
 			await dse.click(ctl('settings.initiative.default-image'));
 			await dse.waitFor(`document.querySelectorAll('.suggestion-item').length > 0`, 'the file picker');
 			// The picker re-renders as it filters: mark the wanted item page-side and click that (a real click), never hold an element across a render.
-			await dse.page(`(() => { Array.from(document.querySelectorAll('.suggestion-item')).find((i) => i.textContent === 'Stamina/recoveries')?.setAttribute('data-picked', '1'); return true; })()`);
+			await dse.page(`(() => { Array.from(document.querySelectorAll('.suggestion-item')).find((i) => i.textContent === 'Settings/token.svg')?.setAttribute('data-picked', '1'); return true; })()`);
 			await $('[data-picked="1"]').click();
 			await dse.waitFor(`document.querySelectorAll('.suggestion-item').length === 0`, 'the picker to close');
-			expect((await diskData()).defaultImagePath).toBe('Stamina/recoveries.md');
+			expect((await diskData()).defaultImagePath).toBe('Settings/token.svg');
 			// Enter with the combobox focused: no picker, nothing written (verified in 1.14.4; the keyboard pair is declared so a change shows).
 			await pressOn('settings.initiative.default-image', 'Enter');
 			expect(await dse.page<number>(`new Promise((r) => requestAnimationFrame(() => r(document.querySelectorAll('.suggestion-item').length)))`)).toBe(0);
-			expect((await diskData()).defaultImagePath).toBe('Stamina/recoveries.md');
+			expect((await diskData()).defaultImagePath).toBe('Settings/token.svg');
+		} finally {
+			await closeSettings();
+		}
+		// On screen: a creature with no image of its own takes the default path (initiative/view.ts renderPortrait), drawn when the tracker is opened.
+		await dse.openNote('Initiative/tracker.md');
+		await dse.waitFor(`document.querySelectorAll('.markdown-reading-view [data-dse-element="initiative"] img[src*="token.svg"]').length > 0`, 'the picked image on a portrait');
+		await openAt(INIT);
+		try {
 			await dse.click(ctl('settings.initiative.default-image.clear'));
 			expect((await diskData()).defaultImagePath).toBe('');
 			expect(await pickerItems()).toBe(0);
 		} finally {
 			await closeSettings();
 		}
+		await dse.openNote('Initiative/tracker.md');
+		expect(await dse.page<number>(`document.querySelectorAll('.markdown-reading-view [data-dse-element="initiative"] img[src*="token.svg"]').length`)).toBe(0);
 	});
 
-	it('[SET-X04] after a plugin reload the fields show what was entered and data.json keeps it', async () => {
-		await reloadPlugin();
+	it('[SET-X04] after a plugin reload on the entered values the fields show what was entered and data.json keeps it', async () => {
+		const seeded = { settingsVersion: 3, prefs: {}, compendiumDestinationDirectory: 'Rules/Draw Steel', compendiumReleaseTag: 'v4.20260716T000000', defaultImagePath: '' };
+		await seedData(seeded); // the state the scenarios above leave, put in force (and the plugin reloaded on it)
 		const data = await diskData();
 		expect([data.compendiumDestinationDirectory, data.compendiumReleaseTag, data.defaultImagePath]).toEqual(['Rules/Draw Steel', 'v4.20260716T000000', '']);
 		await openAt(COMPENDIUM);

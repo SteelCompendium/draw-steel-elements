@@ -6,7 +6,7 @@
 import { expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
 import {
-	back, closeSettings, ctl, diskPrefs, idsOnPage, mainAttr, mainCount, openAt, openSettings, pressOn, prefValue, reloadPlugin, showPage, toggleIsOn, waitDiskPrefs,
+	back, closeSettings, ctl, diskPrefs, idsOnPage, mainAttr, mainCount, openAt, openSettings, pressOn, prefValue, showPage, toggleIsOn, waitDiskPrefs,
 } from '../../driver/settingsDrive';
 
 const STAMINA = '[data-dse-element="stamina-bar"]';
@@ -71,8 +71,8 @@ describe('settings tab: with the experimental gate on', () => {
 		expect(await mainCount(EDIT)).toBe(1);
 	});
 
-	it('[SET-G04] after a plugin reload (gate still on) Print preview and Show edit button show on and data.json keeps both', async () => {
-		await reloadPlugin();
+	it('[SET-G04] after a plugin reload (gate still on) on the state the scenarios above leave, Print preview and Show edit button show on and data.json keeps both', async () => {
+		await dse.setPrefs({ printPreview: 'on', authoringControls: true }, { experimental: true }); // put in force (and reloaded on), so this one also runs alone
 		expect(await diskPrefs()).toEqual({ printPreview: 'on', authoringControls: true });
 		await openAt('settings.page.appearance');
 		try {
@@ -85,11 +85,25 @@ describe('settings tab: with the experimental gate on', () => {
 		}
 	});
 
-	it('[SET-G05] Reset authoring: Show edit button goes back to off, Print preview (another page) is kept', async () => {
+	it('[SET-G05] Reset authoring: Show edit button goes back to off (the toggle on the page shows it), Print preview (another page) is kept', async () => {
+		await dse.setPrefs({ printPreview: 'on', authoringControls: true }, { experimental: true });
 		await dse.openNote('Stamina/basic.md');
 		await openAt('settings.page.authoring');
 		try {
 			await dse.click(ctl('settings.reset.authoring'));
+			expect(await waitDiskPrefs({ printPreview: 'on' })).toEqual({ printPreview: 'on' });
+			expect(await toggleIsOn('settings.authoring-controls')).toBe(false);
+		} finally {
+			await closeSettings();
+		}
+	});
+
+	it('[SET-G07] Reset authoring with the keyboard: Enter on the focused row resets Show edit button, and the toggle on the page shows it off', async () => {
+		await dse.setPrefs({ printPreview: 'on', authoringControls: true }, { experimental: true });
+		await dse.openNote('Stamina/basic.md');
+		await openAt('settings.page.authoring');
+		try {
+			await pressOn('settings.reset.authoring', 'Enter');
 			expect(await waitDiskPrefs({ printPreview: 'on' })).toEqual({ printPreview: 'on' });
 			expect(await toggleIsOn('settings.authoring-controls')).toBe(false);
 		} finally {

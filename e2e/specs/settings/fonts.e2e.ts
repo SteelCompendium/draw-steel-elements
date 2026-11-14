@@ -6,7 +6,7 @@
 // first starts from a plugin reload, which doubles as the check that the previous pickers' values survived it.
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
-import { closeSettings, ctl, diskPrefs, mainVar, openAt, pressOn, prefValue, reloadPlugin, shownValue, typeThenBlur } from '../../driver/settingsDrive';
+import { closeSettings, ctl, diskPrefs, mainVar, openAt, pressOn, prefValue, shownValue, typeThenBlur } from '../../driver/settingsDrive';
 
 const STAMINA = '[data-dse-element="stamina-bar"]';
 const TYPO = 'settings.page.typography';
@@ -15,11 +15,11 @@ const FAMILY = (n: number): string => `Family ${n}`;
 const KEYS = ['fontTitle', 'fontBody', 'fontControls', 'fontCardBody', 'fontLabel', 'fontMono'];
 
 async function picker(n: number, id: string, links: string[], key: string, cssVar: string, curated: string): Promise<void> {
-	if (n > 1) {
-		await reloadPlugin();
-		const stored = await diskPrefs();
-		for (let i = 1; i < n; i++) expect({ key: KEYS[i - 1], value: stored[KEYS[i - 1]] }).toEqual({ key: KEYS[i - 1], value: FAMILY(i) });
-	}
+	// Each picker starts from a freshly loaded plugin (the "List installed fonts" fetch happens once per plugin lifetime), on a data.json that holds
+	// the pickers before it: seeded here, which reloads, so this scenario also runs alone and doubles as the check that those values load.
+	const previous = Object.fromEntries(KEYS.slice(0, n - 1).map((k, i) => [k, FAMILY(i + 1)]));
+	await dse.setPrefs(previous);
+	expect(await diskPrefs()).toEqual(previous);
 	await dse.openNote('Stamina/basic.md');
 	await openAt(...links);
 	try {
@@ -70,10 +70,10 @@ describe('settings tab: font pickers', () => {
 		await picker(6, 'settings.font-mono', [TYPO, ADV], 'fontMono', '--dse-font-mono', 'JetBrains Mono');
 	});
 
-	it('[SET-F07] after a plugin reload every picker reopens on "Custom..." with its typed family, data.json keeps all six, and an opened note carries them', async () => {
-		await reloadPlugin();
-		const stored = await diskPrefs();
-		for (let i = 0; i < 6; i++) expect({ key: KEYS[i], value: stored[KEYS[i]] }).toEqual({ key: KEYS[i], value: FAMILY(i + 1) });
+	it('[SET-F07] after a plugin reload on the six typed families every picker reopens on "Custom..." with its typed family, data.json keeps all six, and an opened note carries them', async () => {
+		const all = Object.fromEntries(KEYS.map((k, i) => [k, FAMILY(i + 1)]));
+		await dse.setPrefs(all); // the state the six scenarios above leave, put in force (and the plugin reloaded on it)
+		expect(await diskPrefs()).toEqual(all);
 		for (const [links, ids] of [
 			[[TYPO], [['settings.font-title', 1], ['settings.font-body', 2], ['settings.font-controls', 3]]],
 			[[TYPO, ADV], [['settings.font-card-body', 4], ['settings.font-label', 5], ['settings.font-mono', 6]]],

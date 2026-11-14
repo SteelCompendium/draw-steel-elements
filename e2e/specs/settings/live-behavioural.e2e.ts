@@ -51,15 +51,15 @@ describe('settings tab: settings read when a block or link is drawn', () => {
 			await closeSettings();
 		}
 		await dse.openNote(SCC_NOTE); // drawn with the fallback off: plain text
-		expect(await mainCount('.ds-scc-unresolved')).toBe(1);
+		expect({ unresolvedSpans: await mainCount('.ds-scc-unresolved') }).toEqual({ unresolvedSpans: 1 }); // setup check, not the bug
 		await openAt(LINKS);
 		try {
 			await dse.click(ctl(FALLBACK)); // on again, with the note open
-			expect(await mainCount('a.ds-scc-web')).toBe(1);
+			expect({ webLinks: await mainCount('a.ds-scc-web') }).toEqual({ webLinks: 1 }); // the bug check
 		} finally {
 			await closeSettings();
 		}
-	}, { failsWith: /Expected: 1/ });
+	}, { failsWith: /webLinks/ });
 
 	it('[SET-L04] Fall back to steelcompendium.io links: a link drawn with it on is a steelcompendium.io link, one drawn with it off is plain text (applies to a note drawn after the change)', async () => {
 		await dse.setPrefs({});

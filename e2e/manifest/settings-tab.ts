@@ -52,15 +52,15 @@ export default surface('settings', {
 		'settings.advanced.element-defaults': c(['click'], ['N02']),
 
 		// -- R. Resets: each page's "Reset <section>" row restores every setting of the section, the Advanced ones included; the index's "Reset all preferences" restores every preference. (Compendium, Links and Initiative tracker are data.json fields, not preferences: no reset.)
-		'settings.reset.appearance': c(['click'], ['R01']),
-		'settings.reset.typography': c(['click'], ['R02']),
-		'settings.reset.statblock-display': c(['click'], ['R03']),
-		'settings.reset.featureblock-display': c(['click'], ['R04']),
-		'settings.reset.feature-display': c(['click'], ['R05']),
-		'settings.reset.element-defaults': c(['click'], ['R06']),
-		'settings.reset.rolling': c(['click'], ['R07']),
-		'settings.reset.authoring': c(['click'], ['G05']),
-		'settings.reset-all': c(['click'], ['R08']),
+		'settings.reset.appearance': c(['click', 'press:Enter'], ['R01', 'R09']),
+		'settings.reset.typography': c(['click', 'press:Enter'], ['R02', 'R10']),
+		'settings.reset.statblock-display': c(['click', 'press:Enter'], ['R03', 'R11']),
+		'settings.reset.featureblock-display': c(['click', 'press:Enter'], ['R04', 'R12']),
+		'settings.reset.feature-display': c(['click', 'press:Enter'], ['R05', 'R13']),
+		'settings.reset.element-defaults': c(['click', 'press:Enter'], ['R06', 'R14']),
+		'settings.reset.rolling': c(['click', 'press:Enter'], ['R07', 'R15']),
+		'settings.reset.authoring': c(['click', 'press:Enter'], ['G05', 'G07']),
+		'settings.reset-all': c(['click', 'press:Enter'], ['R08', 'R16']),
 
 		// -- T. Toggles (a native checkbox: click it, or Space with it focused). Print preview and Show edit button on rendered blocks exist only with the gate on.
 		'settings.reduce-motion': c(['click', 'press:Space'], ['T01']),
@@ -119,14 +119,14 @@ export default surface('settings', {
 		'settings.large-text-scale': c(['press:ArrowRight', 'press:Home', 'press:End'], ['Z04']),
 		'settings.control-text-scale': c(['press:ArrowRight', 'press:Home', 'press:End'], ['Z05']),
 
-		// -- X. The Compendium and Initiative tracker fields. Destination folder and Release are text fields (each keystroke is a write); Default creature image path is a file combobox (click or Enter opens Obsidian's file picker, the X clears it).
+		// -- X. The Compendium and Initiative tracker fields. Destination folder and Release are text fields (the plugin's setting follows each keystroke, data.json is written when the field loses focus); Default creature image path is a file combobox (a click opens Obsidian's file picker; Enter opens nothing in 1.14.4, a host limitation the Enter pair pins; the X clears it).
 		'settings.compendium.destination': c(['type', 'blur'], ['X01']),
 		'settings.compendium.release': c(['type', 'blur'], ['X02']),
 		'settings.initiative.default-image': c(['click', 'press:Enter'], ['X03']),
 		'settings.initiative.default-image.clear': c(['click'], ['X03']),
 
-		// -- C. Sync and Check for updates. Both disable while either runs; the one in flight swaps its label (Syncing... / Checking...). A click on a disabled one does nothing. The scenarios stub the release lookup (no network) and stop short of any window Sync would open (SC-441).
-		'settings.compendium.sync': c(['click', 'click-disabled'], ['C02', 'C01']),
-		'settings.compendium.check': c(['click', 'click-disabled'], ['C01', 'C02']),
+		// -- C. Sync and Check for updates (a click, or Enter on the focused button). Both disable while either runs; the one in flight swaps its label (Syncing... / Checking...). A click on a disabled one does nothing. The scenarios stub the release lookup (no network) and stop short of any window Sync would open (SC-441).
+		'settings.compendium.sync': c(['click', 'click-disabled', 'press:Enter'], ['C02', 'C01', 'C06']),
+		'settings.compendium.check': c(['click', 'click-disabled', 'press:Enter'], ['C01', 'C02', 'C05']),
 	},
 });

@@ -6,7 +6,7 @@ import { browser, expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
 import { eventsSince } from '../../driver/recorders';
 import { state } from '../../driver/state';
-import { allowPageErrors, closeSettings, compendiumButtons, ctl, noticesHere, onMain, openAt, releaseStub, reloadPlugin } from '../../driver/settingsDrive';
+import { allowPageErrors, closeSettings, compendiumButtons, ctl, noticesHere, onMain, openAt, pressOn, releaseStub, reloadPlugin } from '../../driver/settingsDrive';
 
 const COMPENDIUM = 'settings.page.compendium';
 const SYNC = 'settings.compendium.sync';
@@ -61,6 +61,39 @@ describe('settings tab: Sync and Check for updates', () => {
 		}
 	});
 
+	it('[SET-C05] Check for updates with the keyboard: Enter on the focused button starts a check (Checking…, both disabled) and the answer is a Notice', async () => {
+		await dse.openNote('Stamina/basic.md');
+		await releaseStub.install();
+		await openAt(COMPENDIUM);
+		try {
+			await pressOn(CHECK, 'Enter');
+			await dse.waitFor(`document.querySelector('[data-dse-control="${CHECK}"]').textContent === 'Checking…'`, 'the label to swap');
+			expect(await compendiumButtons()).toEqual({ sync: ['Sync', true], check: ['Checking…', true] });
+			await asked(1);
+			await releaseStub.answer(200, RELEASE);
+			await waitIdle();
+			expect(await compendiumButtons()).toEqual(IDLE);
+			expect(await noticesHere()).toContain('Update available: v9.9.9 (installed: none).');
+		} finally {
+			await closeSettings();
+		}
+	});
+
+	it('[SET-C06] Sync with the keyboard: Enter on the focused button starts a sync (Syncing…, both disabled); the lookup is left unanswered, then the plugin reloads', async () => {
+		await dse.openNote('Stamina/basic.md');
+		await releaseStub.install();
+		await openAt(COMPENDIUM);
+		try {
+			await pressOn(SYNC, 'Enter');
+			await dse.waitFor(`document.querySelector('[data-dse-control="${SYNC}"]').textContent === 'Syncing…'`, 'the label to swap');
+			expect(await compendiumButtons()).toEqual({ sync: ['Syncing…', true], check: ['Check for updates', true] });
+			await asked(1);
+		} finally {
+			await closeSettings();
+			await reloadPlugin();
+		}
+	});
+
 	// NEVER clicks the trash button, whatever opens: a window that does is closed through its own X.
 	knownBug('SC-643', '[SET-C03] with the Destination folder emptied, Sync never opens a window offering to move the vault root to the trash', async () => {
 		await dse.openNote('Stamina/basic.md');
@@ -84,7 +117,8 @@ describe('settings tab: Sync and Check for updates', () => {
 	}, { failsWith: /Expected: false/ });
 
 	knownBug('SC-646', '[SET-C04] a failed Sync (the release lookup answers 404) leaves no unhandled promise rejection behind', async () => {
-		allowPageErrors(/compendium sync failed|rejection: Error: GitHub release lookup failed/); // the designed console.error, and the bug itself
+		// Only the stubbed 404's own errors: the designed console.error and the bug itself (any other failure inside Sync still fails this test).
+		allowPageErrors(/compendium sync failed: Error: GitHub release lookup failed \(HTTP 404\)|rejection: Error: GitHub release lookup failed \(HTTP 404\)/);
 		await dse.openNote('Stamina/basic.md');
 		await releaseStub.install();
 		await openAt(COMPENDIUM);

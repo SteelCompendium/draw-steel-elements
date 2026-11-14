@@ -6,11 +6,11 @@ import type { ChainablePromiseElement } from 'webdriverio';
 import { closeEverything } from './cleanup';
 import { dse } from './dse';
 import { ev, waitFor } from './page';
-import { APP, closeSettings, diskData, ensureMainWindow, onMain, openSettings, showPage } from './settings';
+import { APP, closeSettings, diskData, ensureMainWindow, onMain, openSettings, rawData, showPage } from './settings';
 import { state } from './state';
 
-export { closeSettings, diskData, onMain, openSettings, showPage };
-export { back, idsOnPage, readSettings } from './settings';
+export { closeSettings, diskData, onMain, openSettings, rawData, showPage };
+export { back, idsOnPage, pageSettled, readSettings } from './settings';
 
 type El = ChainablePromiseElement;
 const PLUGIN = `${APP}.plugins.plugins['draw-steel-elements']`;
@@ -64,11 +64,24 @@ export const mainCount = (selector: string): Promise<number> =>
  * must be closed by the caller (or is closed here).
  */
 export async function reloadPlugin(): Promise<void> {
+	await reload(null);
+}
+
+/**
+ * Put `data` in force as the WHOLE data.json (operational fields included, which `dse.setPrefs` cannot write) and reload the plugin on it:
+ * a scenario that needs a state seeds it here instead of leaning on the test before it, so every test runs alone under `--only`.
+ */
+export async function seedData(data: Record<string, unknown>): Promise<void> {
+	await reload(data);
+}
+
+async function reload(data: Record<string, unknown> | null): Promise<void> {
 	await ensureMainWindow();
 	await closeEverything();
 	await ev(`(async () => {
 		const id = 'draw-steel-elements';
-		await app.plugins.plugins[id].saveSettings();
+		const p = app.plugins.plugins[id];
+		await ${data === null ? 'p.saveSettings()' : `p.saveData(${JSON.stringify(data)})`};
 		await app.plugins.disablePlugin(id);
 		await app.plugins.enablePlugin(id);
 		while (!(app.plugins.plugins[id] && app.plugins.plugins[id].viewRegistry)) await new Promise((r) => setTimeout(r, 25));
@@ -96,6 +109,7 @@ export const releaseStub = {
 		await onMain(() =>
 			ev(`(() => {
 				const service = app.plugins.plugins['draw-steel-elements'].syncService;
+				service.__e2eStubbed = true; // the network guard (driver/settings.ts openSettings) leaves a stubbed service alone
 				window.__stubCalls = [];
 				service.requestUrlFn = (req) => new Promise((resolve) => {
 					window.__stubCalls.push(req.url);

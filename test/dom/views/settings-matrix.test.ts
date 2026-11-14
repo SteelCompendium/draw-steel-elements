@@ -6,7 +6,7 @@
 // Every control is driven the way the tab's own rows are: a Fake component's `trigger()` -> getControlValue/setControlValue ->
 // PreferenceStore.set -> reflect() + the debounced saveData. The element "on screen" is a real ds-statblock mounted through the real
 // pipeline (the same mount the tab's live preview uses).
-import { DSE_PREF_DESCRIPTORS, EXPERIMENTAL_PREF_KEYS, GROUP_ORDER, SB_PRESETS, deriveSbPreset, prefUi } from '@/prefs/catalog';
+import { DSE_PREF_DESCRIPTORS, EXPERIMENTAL_PREF_KEYS, GROUP_ORDER, deriveSbPreset, prefUi } from '@/prefs/catalog';
 import type { PrefDescriptor } from '@/framework/seams/prefs';
 import { PREVIEW_FEATURE_YAML, PREVIEW_STATBLOCK_YAML } from '@views/SettingsPreview';
 import { Notice, Setting, flushAsync } from '../../mocks/obsidian';
@@ -72,6 +72,41 @@ async function drive(tab: any, d: PrefDescriptor, value: unknown): Promise<void>
 	await flushAsync(2);
 }
 
+/** What a control on screen shows for the descriptor `d` right now, in the control's own terms (toggle: on/off, select/font: option value, slider: number). */
+function shownOf(tab: any, d: PrefDescriptor): unknown {
+	const ui = prefUi(d)!;
+	if (ui.control === 'font') return rowOf(tab, { name: ui.label }).dropdowns[0].value;
+	const row = rowOf(tab, { key: key(d) });
+	if (ui.control === 'toggle') return row.toggles[0].value;
+	if (ui.control === 'slider') return row.sliders[0].value;
+	return row.dropdowns[0].value;
+}
+/** The value a control shows for a descriptor at its default (toggle: on/off). */
+const shownDefault = (d: PrefDescriptor): unknown => (prefUi(d)!.control === 'toggle' ? (typeof d.default === 'string' ? d.default === 'on' : d.default) : d.default);
+
+/** The inline custom property a css-bearing pref leaves on an element, written out here rather than recomputed with the descriptor's own toCss:
+ *  a font slot holds the quoted family then its fallback tail, a scale holds the number (and nothing at 1, the inert default). */
+function expectCss(root: HTMLElement, d: PrefDescriptor, value: unknown): void {
+	const got = root.style.getPropertyValue(d.css!.varName);
+	if (d.css!.varName.startsWith('--dse-font-')) {
+		if (value === '') expect(got).toBe('');
+		else {
+			// A named family is quoted; the CSS generic keywords (system-ui, monospace, serif...) are not.
+			const head = ['system-ui', 'ui-monospace', 'monospace', 'serif', 'sans-serif'].includes(String(value)) ? String(value) : `"${String(value)}"`;
+			expect(got.startsWith(`${head}, `)).toBe(true);
+		}
+	} else {
+		expect(got).toBe(value === 1 ? '' : String(value));
+	}
+}
+
+/** The three statblock presets, written out (catalog.ts SB_PRESETS, SC-123 / SC-146): nine members each. */
+const PRESETS: Record<'steel' | 'sourcebook' | 'index', Record<string, string>> = {
+	steel: { sbFeatureStyle: 'card', sbDensity: 'comfortable', sbColumns: 'single', sbStats: 'grid', kwUsage: 'crest', distTarget: 'grid', sbCharLine: 'two', sbCharBox: 'off', sbVillain: 'banded' },
+	sourcebook: { sbFeatureStyle: 'flat', sbDensity: 'comfortable', sbColumns: 'single', sbStats: 'ledger', kwUsage: 'text', distTarget: 'text', sbCharLine: 'one', sbCharBox: 'on', sbVillain: 'inline' },
+	index: { sbFeatureStyle: 'flat', sbDensity: 'compact', sbColumns: 'single', sbStats: 'gridc', kwUsage: 'grid', distTarget: 'grid', sbCharLine: 'two', sbCharBox: 'onword', sbVillain: 'banded' },
+};
+
 describe('SC-440 matrix: every descriptor x each of its values', () => {
 	const cases = ROWS.flatMap((d) => domain(d).map((value) => [key(d), JSON.stringify(value), d, value] as const));
 	// Not a single descriptor-count assertion: the catalog grows. A floor, so an empty table (a broken filter) cannot pass vacuously.
@@ -103,10 +138,7 @@ describe('SC-440 matrix: every descriptor x each of its values', () => {
 			expect(saved).toEqual(value === d.default ? {} : { [key(d)]: value });
 			// The element on screen: the reflected attribute / inline custom property the setting controls (a behavioural pref has neither).
 			if (d.attr) expect(root.getAttribute(`data-dse-${d.attr}`)).toBe(String(value));
-			if (d.css) {
-				const css = d.css.toCss(value as never);
-				expect(root.style.getPropertyValue(d.css.varName)).toBe(css ?? '');
-			}
+			if (d.css) expectCss(root, d, value);
 			// One setting moves one value.
 			for (const x of prefs.descriptors()) if (key(x) !== key(d)) expect(prefs.get(x.key as any)).toBe(before.get(key(x)));
 			await drive(tab, d, d.default); // back to the default for the next value
@@ -228,7 +260,7 @@ describe('SC-440 matrix: the size sliders at min, max and step', () => {
 });
 
 describe('SC-440 matrix: the statblock presets (inPreset)', () => {
-	const MEMBERS = Object.keys(SB_PRESETS.steel).sort();
+	const MEMBERS = Object.keys(PRESETS.steel).sort();
 	test('the preset members are exactly the descriptors flagged inPreset, spread over the Statblock and Feature pages', () => {
 		const flagged = ROWS.filter((d) => prefUi(d)!.inPreset);
 		expect(flagged.map(key).sort()).toEqual(MEMBERS);
@@ -244,19 +276,22 @@ describe('SC-440 matrix: the statblock presets (inPreset)', () => {
 		await prefs.set('sbSticky', 'off');
 		const tab = await openTab(loaded);
 		const dropdown = rowOf(tab, { name: 'Preset' }).dropdowns[0];
+		if (preset === 'steel') {
+			// Steel is the shipped state, so picking it from there proves nothing: start from another preset.
+			dropdown.trigger('index');
+			await flushAsync(3);
+			expect(deriveSbPreset(prefs)).toBe('index');
+		}
 		dropdown.trigger(preset);
 		await flushAsync(3);
-		for (const [member, value] of Object.entries(SB_PRESETS[preset])) expect({ member, value: prefs.get(member as any) }).toEqual({ member, value });
+		for (const [member, value] of Object.entries(PRESETS[preset])) expect({ member, value: prefs.get(member as any) }).toEqual({ member, value });
 		// Not preset members: untouched.
 		expect([prefs.get('reduceMotion'), prefs.get('textScale'), prefs.get('rollingEnabled'), prefs.get('sbSticky')]).toEqual([true, 1.2, true, 'off']);
 		expect(deriveSbPreset(prefs)).toBe(preset);
 		expect(rowOf(tab, { name: 'Preset' }).dropdowns[0].value).toBe(preset);
 		// data.json: the preset's non-default members plus the four unrelated settings, nothing else.
 		const expected: Record<string, unknown> = { reduceMotion: true, textScale: 1.2, rollingEnabled: true, sbSticky: 'off' };
-		for (const [member, value] of Object.entries(SB_PRESETS[preset])) {
-			const desc = DSE_PREF_DESCRIPTORS.find((x) => key(x) === member)!;
-			if (value !== desc.default) expected[member] = value;
-		}
+		for (const [member, value] of Object.entries(PRESETS[preset])) if (value !== PRESETS.steel[member]) expected[member] = value;
 		expect((await flushSaved(loaded)).prefs).toEqual(expected);
 	});
 
@@ -335,6 +370,10 @@ describe('SC-440 matrix: the Advanced disclosure and the reset rows', () => {
 		await flushAsync(3);
 		for (const d of mine) expect({ key: key(d), value: prefs.get(d.key as any) }).toEqual({ key: key(d), value: d.default });
 		for (const d of others) expect({ key: key(d), value: prefs.get(d.key as any) }).toEqual({ key: key(d), value: nonDefault.get(key(d)) });
+		// The page is redrawn (SettingsTab.resetDescriptors -> update()): the controls ON SCREEN show the defaults, not what was typed in before the reset.
+		for (const d of mine) expect({ key: key(d), shown: shownOf(tab, d) }).toEqual({ key: key(d), shown: shownDefault(d) });
+		// (the Preset still reads Custom: the two Feature display members, on another page, are off their defaults)
+		if (section === 'Statblock display') expect(rowOf(tab, { name: 'Preset' }).dropdowns[0].value).toBe('custom');
 		const saved = (await flushSaved(loaded)).prefs as Record<string, unknown>;
 		for (const d of mine) expect(Object.keys(saved)).not.toContain(key(d));
 		for (const d of others) expect({ key: key(d), value: saved[key(d)] }).toEqual({ key: key(d), value: nonDefault.get(key(d)) });
@@ -349,6 +388,8 @@ describe('SC-440 matrix: the Advanced disclosure and the reset rows', () => {
 		all.action(null, 0);
 		await flushAsync(4);
 		for (const d of ROWS) expect({ key: key(d), value: prefsOf(loaded).get(d.key as any) }).toEqual({ key: key(d), value: d.default });
+		for (const d of ROWS) expect({ key: key(d), shown: shownOf(tab, d) }).toEqual({ key: key(d), shown: shownDefault(d) }); // and the page was redrawn
+		expect(rowOf(tab, { name: 'Preset' }).dropdowns[0].value).toBe('steel');
 		expect((await flushSaved(loaded)).prefs).toEqual({});
 	});
 });
@@ -578,7 +619,7 @@ describe('SC-440 matrix: a plugin reload (data.json read back) shows every contr
 			else if (ui.control === 'select') expect({ key: key(d), shown: rowOf(tab2, { key: key(d) }).dropdowns[0].value }).toEqual({ key: key(d), shown: v });
 			else expect({ key: key(d), shown: rowOf(tab2, { name: ui.label }).dropdowns[0].value }).toEqual({ key: key(d), shown: v });
 			if (d.attr) expect(root.getAttribute(`data-dse-${d.attr}`)).toBe(String(v));
-			if (d.css) expect(root.style.getPropertyValue(d.css.varName)).toBe(d.css.toCss(v as never) ?? '');
+			if (d.css) expectCss(root, d, v);
 		}
 		expect(rowOf(tab2, { key: 'compendiumDestinationDirectory' }).texts[0].value).toBe('Rules');
 		expect(rowOf(tab2, { key: 'compendiumReleaseTag' }).texts[0].value).toBe('v1');
