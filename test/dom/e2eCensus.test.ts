@@ -52,6 +52,9 @@ import montageLogManifest from '../../e2e/manifest/montage-log-modal';
 import montageAddHeroManifest from '../../e2e/manifest/montage-add-hero-modal';
 import montageLimitsManifest from '../../e2e/manifest/montage-limits-modal';
 import { idsOf } from '../../e2e/manifest/surface';
+import { Menu } from '../mocks/obsidian';
+import { negotiationElement } from '../../src/elements/negotiation/definition';
+import negotiationManifest from '../../e2e/manifest/negotiation';
 
 const INTERACTIVE = 'button, input, select, textarea, [role="button"], [role="slider"], [tabindex], [contenteditable]';
 const CHROME = '[data-dse-chrome-item]';
@@ -616,5 +619,145 @@ describe('SC-438 census: the montage tracker and its three modals, scoped by con
 			expect(root.querySelector(`[data-dse-control="${id}"]`)).toBeNull();
 		}
 		expect((byId(root, 'montage.bar.log') as HTMLButtonElement).disabled).toBe(true);
+	});
+});
+
+describe('SC-439 census: the negotiation tracker, scoped by container', () => {
+	/** Mount `source` through the real pipeline; `canPersist` false is the read-only (canvas) host. */
+	async function mountNegotiation(source: string, canPersist = true): Promise<HTMLElement> {
+		const host = makeHost('ds-negotiation', 'Negotiation.md');
+		(host as any).canPersist = canPersist;
+		await new ElementPipeline(makeDeps()).run(negotiationElement, source, host);
+		return host.containerEl.firstElementChild as HTMLElement;
+	}
+
+	// The scope is the negotiation's ROOT (card head, both tabs, the standing region, the Motivations cards and the framework
+	// chrome panel inside it), not a CSS class per entry point: a new control anywhere in it needs an id from the negotiation
+	// manifest or the framework chrome's (`chrome.collapse` / `chrome.expand`).
+	const negotiationIds = new Set([...idsOf(negotiationManifest), ...chromeIds]);
+	const census = (root: Element): string[] => censusProblems(root, negotiationIds, INTERACTIVE, false);
+
+	const negoFixture = (name: string): string => {
+		const text = fs.readFileSync(path.join(__dirname, '../../e2e/vaults/shipped/Negotiation', `${name}.md`), 'utf8');
+		return /```ds-negotiation\n([\s\S]*?)\n```/.exec(text)![1];
+	};
+	const idsIn = (root: Element): Set<string> =>
+		new Set(Array.from(root.querySelectorAll('[data-dse-control]')).map((el) => el.getAttribute('data-dse-control') as string));
+	const count = (root: Element, id: string): number => root.querySelectorAll(`[data-dse-control="${id}"]`).length;
+
+	afterEach(() => {
+		Menu.lastMenu = null;
+	});
+
+	test('the census itself bites: an un-id\'d button injected into the head, either tab, the standing region or the cards is a finding, as is an id outside the manifest', async () => {
+		const root = await mountNegotiation(negoFixture('basic'));
+		expect(census(root)).toEqual([]);
+		for (const host of ['.dse-nt__head', '.dse-nt__patience', '.dse-nt__interest', '.dse-nt__argument', '.dse-nt__learn-more', '.dse-nt__dossier-col', '.dse-nt']) {
+			const rogue = document.createElement('button');
+			rogue.textContent = 'Rogue';
+			root.querySelector(host)!.appendChild(rogue);
+			expect(census(root)).toEqual([expect.stringMatching(/^no data-dse-control: <button/)]);
+			rogue.remove();
+		}
+		const div = document.createElement('div');
+		div.setAttribute('tabindex', '0');
+		root.querySelector('.dse-nt__learn-more')!.appendChild(div);
+		expect(census(root)).toHaveLength(1); // a div with a tabindex is interactive, on the tab that is hidden too
+		div.remove();
+		const stray = root.querySelector('.dse-track__slot')!;
+		stray.setAttribute('data-dse-control', 'negotiation.not-a-control');
+		expect(census(root)).toEqual([expect.stringMatching(/id "negotiation\.not-a-control" is not in the manifest/)]);
+	});
+
+	test('the chrome panel is inside the scope: its Collapse button and the one-line form\'s Expand button are identified, and a rogue item in the panel is a finding', async () => {
+		const root = await mountNegotiation(negoFixture('basic'));
+		for (const id of ['chrome.collapse', 'chrome.expand']) expect(count(root, id)).toBe(1);
+		expect(root.querySelectorAll('[data-dse-chrome-item]').length).toBeGreaterThan(0);
+		const rogue = document.createElement('button');
+		root.querySelector('.dse-chrome')!.appendChild(rogue);
+		expect(census(root)).toEqual([expect.stringMatching(/^no data-dse-control: <button/)]);
+	});
+
+	test.each([
+		['a live negotiation with two motivations and a pitfall', 'basic'],
+		['one motivation already spent (the reuse modifier can apply)', 'spent'],
+		['Patience spent: the "final offer" band, Complete disabled, the tier rows static', 'ended'],
+		['Interest 5: a deal', 'deal'],
+		['Interest 0: hostile', 'hostile'],
+		['a name only: no chips, no cards, no Complete-able argument rows beyond the tiers', 'minimal'],
+		['a block with keys the element does not know', 'unknown-keys'],
+	])('%s: every interactive node carries an id the manifest declares', async (_name, fixture) => {
+		const root = await mountNegotiation(negoFixture(fixture));
+		expect(census(root)).toEqual([]);
+		expect(count(root, 'negotiation.patience')).toBe(1);
+		expect(count(root, 'negotiation.patience.seal')).toBe(6);
+		expect(count(root, 'negotiation.interest.seal')).toBe(6);
+	});
+
+	test('with the Learn Motivation/Pitfall tab showing (hidden argument tab included) every interactive node is still identified', async () => {
+		const root = await mountNegotiation(negoFixture('basic'));
+		root.querySelector<HTMLElement>('[data-dse-control="negotiation.tab.learn-more"]')!.click();
+		expect(root.querySelector('.dse-nt__learn-more')!.closest('[role="tabpanel"]')!.hasAttribute('hidden')).toBe(false);
+		expect(census(root)).toEqual([]);
+		expect(root.querySelector('.dse-nt__learn-more [data-dse-control], .dse-nt__learn-more button, .dse-nt__learn-more [tabindex]')).toBeNull(); // the rules text offers nothing to press
+	});
+
+	test('the repeated controls repeat once per thing they stand for (seals, tabs, chips, tier rows, Spent chips)', async () => {
+		const root = await mountNegotiation(negoFixture('basic'));
+		const counts: Record<string, number> = {
+			'negotiation.menu': 1, 'negotiation.tablist': 1, 'negotiation.tab.argument': 1, 'negotiation.tab.learn-more': 1,
+			'negotiation.patience': 1, 'negotiation.patience.seal': 6, 'negotiation.interest': 1, 'negotiation.interest.seal': 6,
+			'negotiation.appeal.motivation': 2, 'negotiation.appeal.pitfall': 1, 'negotiation.spent': 2,
+			'negotiation.mod.reuse': 1, 'negotiation.mod.lie': 1, 'negotiation.mod.same': 1,
+			'negotiation.tier': 1, 'negotiation.tier.row': 4, 'negotiation.complete': 1,
+		};
+		for (const [id, n] of Object.entries(counts)) expect([id, count(root, id)]).toEqual([id, n]);
+		// the Patience seals read 0..5 left to right and the Interest rows 5..0 top to bottom (the `nth` the specs rely on)
+		const values = (id: string): string[] => Array.from(root.querySelectorAll(`[data-dse-control="${id}"]`)).map((el) => el.getAttribute('data-value') as string);
+		expect(values('negotiation.patience.seal')).toEqual(['0', '1', '2', '3', '4', '5']);
+		expect(values('negotiation.interest.seal')).toEqual(['5', '4', '3', '2', '1', '0']);
+	});
+
+	test('a name-only block has no chip and no Spent chip to identify (nothing stamped for rows that do not exist), and with Interest defaulting to 0 it is over: static tiers, Complete present but disabled', async () => {
+		const root = await mountNegotiation(negoFixture('minimal'));
+		for (const id of ['negotiation.appeal.motivation', 'negotiation.appeal.pitfall', 'negotiation.spent', 'negotiation.tier.row', 'negotiation.tier']) expect(count(root, id)).toBe(0);
+		for (const id of ['negotiation.menu', 'negotiation.complete', 'negotiation.mod.lie']) expect(count(root, id)).toBe(1);
+		expect(root.querySelector<HTMLButtonElement>('[data-dse-control="negotiation.complete"]')!.disabled).toBe(true);
+	});
+
+	test('every control the manifest declares is stamped by SOME negotiation variant (no dead manifest row)', async () => {
+		const seen = new Set<string>();
+		for (const fixture of ['basic', 'spent', 'ended', 'minimal']) {
+			const root = await mountNegotiation(negoFixture(fixture));
+			idsIn(root).forEach((id) => seen.add(id));
+			document.body.innerHTML = '';
+		}
+		// the native menu's one item is outside the card: open the menu and read what the product stamped on it
+		const root = await mountNegotiation(negoFixture('basic'));
+		root.querySelector<HTMLElement>('[data-dse-control="negotiation.menu"]')!.click();
+		const itemEl = (Menu.lastMenu!.items[0] as unknown as { dom: HTMLElement }).dom;
+		if (itemEl.hasAttribute('data-dse-control')) seen.add(itemEl.getAttribute('data-dse-control') as string);
+		expect(Object.keys(negotiationManifest.controls).filter((id) => !seen.has(id))).toEqual([]);
+	});
+
+	test('the Reset menu item is a native node outside the card: it carries negotiation.menu.reset (the manifest\'s id) and nothing else is stamped on the menu', async () => {
+		const root = await mountNegotiation(negoFixture('basic'));
+		root.querySelector<HTMLElement>('[data-dse-control="negotiation.menu"]')!.click();
+		expect(Menu.lastMenu!.items).toHaveLength(1);
+		const itemEl = (Menu.lastMenu!.items[0] as unknown as { dom: HTMLElement }).dom;
+		expect(itemEl.getAttribute('data-dse-control')).toBe('negotiation.menu.reset');
+		expect(negotiationIds.has('negotiation.menu.reset')).toBe(true);
+		expect(itemEl.querySelectorAll('[data-dse-control]')).toHaveLength(0);
+	});
+
+	test('a read-only host (canvas) keeps every node identified, and offers no menu, no Complete and no live seal', async () => {
+		for (const fixture of ['basic', 'ended']) {
+			const root = await mountNegotiation(negoFixture(fixture), false);
+			expect(census(root)).toEqual([]);
+			for (const id of ['negotiation.menu', 'negotiation.complete']) expect(count(root, id)).toBe(0);
+			expect(Array.from(root.querySelectorAll('[data-dse-control="negotiation.patience.seal"], [data-dse-control="negotiation.interest.seal"], [data-dse-control="negotiation.spent"], [data-dse-control="negotiation.appeal.motivation"], [data-dse-control="negotiation.mod.lie"]')).every((el) => (el as HTMLButtonElement).disabled)).toBe(true);
+			expect(count(root, 'negotiation.tier.row')).toBe(0); // the tier rows are static: no radio leads nowhere
+			document.body.innerHTML = '';
+		}
 	});
 });

@@ -19,6 +19,7 @@ import poolManifest from '../manifest/minion-pool-modal';
 import initiativeManifest from '../manifest/initiative';
 import resetManifest from '../manifest/reset-encounter-modal';
 import chromeManifest from '../manifest/chrome';
+import negotiationManifest from '../manifest/negotiation';
 import montageManifest from '../manifest/montage';
 import montageLogManifest from '../manifest/montage-log-modal';
 import montageAddHeroManifest from '../manifest/montage-add-hero-modal';
@@ -262,5 +263,55 @@ describe('real-Obsidian census: the montage tracker (SC-438)', () => {
 		for (const id of ['montage.limits.cancel', 'montage.limits.save']) expect(setting.map((n) => n.id)).toContain(id);
 		// (The name field and the two limit fields listen only for input, so the jsdom census owns those three.)
 		await dse.click(limits.modal.control('modal.close'));
+	});
+});
+
+// SC-439: the negotiation tracker is scanned by its root container (chrome panel included), like the initiative tracker. The ids a
+// node there may carry: the negotiation manifest's and the framework chrome's (Collapse / Expand).
+const NEGO_SCOPE = '.markdown-reading-view [data-dse-element="negotiation"] *';
+const NEGO_IDS = new Set([...idsOf(negotiationManifest), ...idsOf(chromeManifest)]);
+
+describe('real-Obsidian census: the negotiation tracker', () => {
+	it('[CENSUS-13] the whole negotiation tracker (scoped by its root, chrome panel included, one motivation already spent): every node that listens for input is an identified control', async () => {
+		await dse.openNote('Negotiation/spent.md');
+		const nodes = await eventfulNodes([NEGO_SCOPE], null);
+		expect(censusFindings(nodes, NEGO_IDS)).toEqual([]);
+		const ids = nodes.map((n) => n.id);
+		// Sanity that the probe sees every part of the card: the options button, the tablist and a tab, both tracks and their seals,
+		// the chips on the argument tab, the tier radiogroup and its rows, Complete Argument, a Spent chip, and the chrome panel's
+		// Collapse button. (The three modifier checkboxes listen only for `change`, so the jsdom census owns those.)
+		for (const id of [
+			'negotiation.menu', 'negotiation.tablist', 'negotiation.tab.argument', 'negotiation.tab.learn-more',
+			'negotiation.patience', 'negotiation.patience.seal', 'negotiation.interest', 'negotiation.interest.seal',
+			'negotiation.appeal.motivation', 'negotiation.appeal.pitfall', 'negotiation.tier', 'negotiation.tier.row',
+			'negotiation.complete', 'negotiation.spent', 'chrome.collapse', 'chrome.expand',
+		]) {
+			expect(ids).toContain(id);
+		}
+	});
+
+	it('[CENSUS-14] the open options menu (Obsidian\'s native Menu): its Reset item is an identified control', async () => {
+		await dse.openNote('Negotiation/basic.md');
+		await dse.click(dse.block('ds-negotiation').control('negotiation.menu'));
+		await dse.waitFor(`!!document.querySelector('.menu [data-dse-control="negotiation.menu.reset"]')`, 'the Reset item in the open menu');
+		const nodes = await eventfulNodes(['.menu *'], null);
+		expect(censusFindings(nodes, NEGO_IDS)).toEqual([]);
+		expect(nodes.map((n) => n.id)).toContain('negotiation.menu.reset');
+		await dse.press('Escape');
+		await dse.waitFor(`document.querySelectorAll('.menu').length === 0`, 'the menu to close');
+	});
+
+	it('[CENSUS-15] an ended negotiation (static tier rows, Complete disabled) and its Learn Motivation/Pitfall tab: every node that listens for input is an identified control', async () => {
+		await dse.openNote('Negotiation/ended.md');
+		const ended = await eventfulNodes([NEGO_SCOPE], null);
+		expect(censusFindings(ended, NEGO_IDS)).toEqual([]);
+		// Over: the tier rows are plain divs nothing listens on, but the group-less panel still leaves Complete (disabled) and the chips.
+		for (const id of ['negotiation.complete', 'negotiation.appeal.motivation', 'negotiation.patience.seal']) expect(ended.map((n) => n.id)).toContain(id);
+		expect(ended.map((n) => n.id)).not.toContain('negotiation.tier.row');
+		await dse.click(dse.block('ds-negotiation').control('negotiation.tab.learn-more'));
+		await dse.waitFor(`document.querySelector('.markdown-reading-view [data-dse-element="negotiation"] .dse-nt__learn-more')?.closest('[role="tabpanel"]')?.hidden === false`, 'the Learn Motivation/Pitfall panel');
+		const learn = await eventfulNodes([NEGO_SCOPE], null);
+		expect(censusFindings(learn, NEGO_IDS)).toEqual([]);
+		expect(learn.map((n) => n.id)).toContain('negotiation.tablist');
 	});
 });
