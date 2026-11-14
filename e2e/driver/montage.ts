@@ -1,5 +1,6 @@
 // SC-438 e2e driver: helpers for the montage tracker and its three modals, composed from `dse` (the way driver/pool.ts is for the
 // minion pool modal). Per-test setup lives here, not in a `beforeEach`. Fixture notes are in vaults/shipped/Montage/.
+import { expect } from '@wdio/globals';
 import { dse } from './dse';
 
 export const EMPTY = 'Montage/empty.md'; // no heroes, no limits (0 / 0), round 1 of 2
@@ -15,7 +16,10 @@ export const WIDE = 'Montage/wide.md'; // twelve rounds: the board scrolls, the 
 export const HAND = 'Montage/hand-written.md'; // scalar `skills_used`, a hero with no list, an entry with an unrecognised result
 export const TWO = 'Montage/two-blocks.md'; // two different blocks with prose above, between and below
 export const TWINS = 'Montage/twins.md'; // two IDENTICAL blocks with prose above, between and below
+export const UNKNOWN = 'Montage/unknown-keys.md'; // a top-level key, an entry key and a participant key the product does not know (SC-625)
 export const MONTAGE = 'ds-montage';
+/** Tab presses from the top of the note to a control (the chrome panel and the whole board are in the way). */
+export const TABS = 80;
 
 type Scope = ReturnType<typeof dse.block>;
 type Modal = Awaited<ReturnType<typeof dse.modal>>;
@@ -55,4 +59,51 @@ export async function openLimits(note: string, block = 0): Promise<{ root: Scope
 	const root = await openMontage(note, block);
 	await clickChrome(root, 'montage.chrome.set-limits');
 	return { root, modal: await dse.modal('montage-limits') };
+}
+
+/** The montage block as the note holds it (the n-th `ds-montage` fence). */
+export interface Block {
+	title?: string;
+	rounds: number;
+	success_limit: number;
+	failure_limit: number;
+	successes: number;
+	failures: number;
+	participants?: Array<{ name: string; skills_used?: string[] }>;
+	entries?: Array<{ hero: string; round: number; result: string; skill?: string; note?: string }>;
+	current_round: number;
+	[key: string]: unknown;
+}
+export const blockOf = (note: string, n = 0): Promise<Block> => dse.expectNoteBlock(note, MONTAGE, n).value() as Promise<Block>;
+
+/** A board cell by hero and round (a node to READ: its `data-kind`, `data-state`, label). */
+export const cellOf = (root: Scope, hero: string, round: number) => root.control({ css: `.dse-mt__cell[data-hero="${hero}"][data-round="${round}"]` });
+/** The head's round chip ("Round 2 / 3" / "Complete"), the band's verdict word and the tail of a track. Read as `textContent` (the Steel screen restyles the visible text). */
+export const roundChip = (root: Scope) => root.control({ css: '.dse-head__eyebrow--right' });
+export const verdict = (root: Scope) => root.control({ css: '.dse-mt__verdict-word' });
+export const trackTail = (root: Scope, kind: 'success' | 'failure') => root.control({ css: `.dse-mt__prog[data-kind="${kind}"] .dse-mt__prog-tail` });
+export const expectText = (el: ReturnType<Scope['control']>, text: string) => expect(el).toHaveElementProperty('textContent', text);
+
+/** How many `.modal-container`s are open (an orphan fails every test, so a dismissal is asserted explicitly). */
+export const modalsOpen = (): Promise<number> => dse.page<number>(`document.querySelectorAll('.modal-container').length`);
+
+/** The control ids of the action bar, left to right. */
+export const barIds = (): Promise<string[]> =>
+	dse.page<string[]>(`Array.from(document.querySelectorAll('.markdown-reading-view [data-dse-element="montage"] .dse-mt__actionrow [data-dse-control]')).map((e) => e.getAttribute('data-dse-control'))`);
+
+/** What holds focus: its control id, whether it is inside the Reading view's montage, the keyboard ring. */
+export const focusState = () =>
+	dse.page<{ ctl: string | null; inMontage: boolean; ring: boolean }>(`(() => {
+		const a = document.activeElement;
+		return {
+			ctl: a?.closest('[data-dse-control]')?.getAttribute('data-dse-control') ?? null,
+			inMontage: !!a?.closest('.markdown-reading-view [data-dse-element="montage"]'),
+			ring: !!a && a.matches(':focus-visible'),
+		};
+	})()`);
+
+/** Close the open modal with Escape through its X (the host control Escape is aimed at while focus sits in a field). */
+export async function dismiss(modal: Modal): Promise<void> {
+	await dse.click(modal.control('modal.close'));
+	await expect(modal.root).not.toBeExisting();
 }

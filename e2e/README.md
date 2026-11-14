@@ -141,6 +141,7 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Montage/hand-written.md` | hand-written YAML: Kira's `skills_used` is a scalar, Bram has no list, and Bram's round-1 entry holds an unrecognised result (`dodged`) |
   | `Montage/two-blocks.md` | TWO different `ds-montage` blocks in one note with prose above, between and below |
   | `Montage/twins.md` | TWO IDENTICAL `ds-montage` blocks (Kira, round 1 of 3, nothing logged) with prose above, between and below |
+  | `Montage/unknown-keys.md` | a block with a top-level key the product does not know (`table_notes`), an entry with an extra key (`dc: 12`) and a participant with one (`player: Sam`), Kira in round 2 (SC-625) |
 
 - Edits are checked per fence: a click / type / double-click / press on an element inside `dse.block(lang, n)` declares that block
   as one the test edits (taking the scope and reading it declares nothing, SC-435), and
