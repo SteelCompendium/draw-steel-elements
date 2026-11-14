@@ -716,6 +716,26 @@ describe('SC-439 X: a write lands in its own block and nowhere else in the note'
 		expect(bodyOf(after, 1 - n)).toBe(bodies[1 - n]);
 	});
 
+	test.each([0, 1])('two IDENTICAL blocks: a write in block %i changes that block only, and the twin and the prose stay byte-identical', async (n) => {
+		const twin = fence(bodyA);
+		const twins = NOTE_BEFORE + SIBLING + twin + BETWEEN + twin + NOTE_AFTER;
+		const { app, root, flush } = await mountBlock(n, twins);
+		seal(root, 'patience', 1).click();
+		await flush();
+		const after = app.vault.getContent('Note.md')!;
+		expect(bodyOf(after, n)).not.toBe(bodyA);
+		expect(bodyOf(after, 1 - n)).toBe(bodyA);
+		expect(outside(after, n)).toBe(outside(twins, n));
+		// and the other twin takes its own write next, from its own state
+		const second = await mountBlock(1 - n, after);
+		seal(second.root, 'interest', 4).click();
+		await second.flush();
+		const both = second.app.vault.getContent('Note.md')!;
+		expect(bodyOf(both, n)).toBe(bodyOf(after, n));
+		expect((parseYaml(bodyOf(both, 1 - n)) as any).current_interest).toBe(4);
+		expect(outside(both, 1 - n)).toBe(outside(after, 1 - n));
+	});
+
 	test('a block somebody edited by hand since the card was drawn: drawn afresh, the next write keeps the hand edit and the prose edit', async () => {
 		const edited = NOTE.replace('ABOVE:', 'ABOVE (edited):').replace('i5: five', 'i5: five EDITED').replace('reason: duty', 'reason: duty EDITED');
 		const { app, root, flush } = await mountBlock(0, edited);

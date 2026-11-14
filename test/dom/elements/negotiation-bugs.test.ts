@@ -112,15 +112,15 @@ describe('SC-439 filed bugs', () => {
 			'name: x\ninitial_interest: 3\ninitial_patience: 3\nmotivations:\n  - name: Peace\n    reason: a\n  - name: Peace\n    reason: b\n' + OFFERS,
 		);
 		const labels = Array.from(root().querySelectorAll('[data-dse-control="negotiation.appeal.motivation"]')).map((c) => (c.textContent ?? '').replace(/[◆◇]/g, '').trim());
-		expect(labels).toHaveLength(2);
-		for (const label of labels) expect(label).not.toBe('');
+		expect(labels.length).toBeGreaterThanOrEqual(1); // the count is not the ticket's to rule: a fix may merge or refuse a duplicate
+		expect(labels.filter((label) => label === '')).toEqual([]);
 	});
 
 	test.failing('[K07] a motivation with no name: its appeal chip is not announced as "Appeal to " [known bug SC-640]', async () => {
 		const { root } = await mount('name: x\ninitial_interest: 3\ninitial_patience: 3\nmotivations:\n  - name: Peace\n    reason: a\n  - reason: b\n' + OFFERS);
 		const names = Array.from(root().querySelectorAll('[data-dse-control="negotiation.appeal.motivation"]')).map((c) => c.getAttribute('aria-label') ?? '');
-		expect(names).toHaveLength(2);
-		for (const name of names) expect(name).not.toMatch(/^Appeal to\s*$/);
+		expect(names.length).toBeGreaterThanOrEqual(1);
+		expect(names.filter((name) => /^Appeal to\s*$/.test(name))).toEqual([]);
 	});
 
 	test.failing('[K08] a block that declares no Interest does not open already ended [known bug SC-641]', async () => {
@@ -136,5 +136,51 @@ describe('SC-439 filed bugs', () => {
 		Menu.lastMenu!.items[0].onClickCallback!();
 		await flush();
 		expect(root().querySelector('.dse-nt')!.hasAttribute('data-ended')).toBe(false);
+	});
+
+	test.failing('[K10] two pitfalls with the same name: every mention chip has its name to read [known bug SC-640]', async () => {
+		const { root } = await mount(
+			'name: x\ninitial_interest: 3\ninitial_patience: 3\npitfalls:\n  - name: Power\n    reason: a\n  - name: Power\n    reason: b\n' + OFFERS,
+		);
+		const labels = Array.from(root().querySelectorAll('[data-dse-control="negotiation.appeal.pitfall"]')).map((c) => (c.textContent ?? '').trim());
+		expect(labels.length).toBeGreaterThanOrEqual(1);
+		expect(labels.filter((label) => label === '')).toEqual([]);
+	});
+
+	// SC-649: the power roll counts a motivation / pitfall / Reuse that the card does not show as chosen. Each case asserts ONLY that the tiers
+	// shown are the tiers of what the chips and the Reuse box show, never a specific fix: the reference is the same block with the stray
+	// entry taken out.
+	const tiersOf = (root: HTMLElement): string[] =>
+		Array.from(root.querySelectorAll('[data-dse-control="negotiation.tier.row"] .dse-pr__text')).map((e) => e.textContent ?? '');
+	const BASE = 'name: x\ninitial_interest: 3\ninitial_patience: 3\nmotivations:\n  - name: Peace\n    reason: a\npitfalls:\n  - name: Power\n    reason: b\n';
+
+	test.failing('[K11] an argument entry naming a motivation the block no longer has does not change the tiers shown while no chip is pressed [known bug SC-649]', async () => {
+		const stray = await mount(BASE + 'currentArgument:\n  motivationsUsed:\n    - Ghost\n' + OFFERS);
+		const pressed = Array.from(stray.root().querySelectorAll('[data-dse-control="negotiation.appeal.motivation"]')).filter((c) => c.getAttribute('aria-pressed') === 'true');
+		expect(pressed).toHaveLength(0);
+		const shown = tiersOf(stray.root());
+		document.body.innerHTML = '';
+		const clean = await mount(BASE + OFFERS);
+		expect(shown).toEqual(tiersOf(clean.root()));
+	});
+
+	test.failing('[K12] an argument entry naming a pitfall the block no longer has does not change the tiers shown while no chip is pressed [known bug SC-649]', async () => {
+		const stray = await mount(BASE + 'currentArgument:\n  pitfallsUsed:\n    - Ghost\n' + OFFERS);
+		const pressed = Array.from(stray.root().querySelectorAll('[data-dse-control="negotiation.appeal.pitfall"]')).filter((c) => c.getAttribute('aria-pressed') === 'true');
+		expect(pressed).toHaveLength(0);
+		const shown = tiersOf(stray.root());
+		document.body.innerHTML = '';
+		const clean = await mount(BASE + OFFERS);
+		expect(shown).toEqual(tiersOf(clean.root()));
+	});
+
+	test.failing('[K13] a hand-typed reusedMotivation with no spent motivation appealed to: the tiers shown agree with the Reuse box shown [known bug SC-649]', async () => {
+		const typed = await mount(BASE + 'currentArgument:\n  motivationsUsed:\n    - Peace\n  reusedMotivation: true\n' + OFFERS);
+		const reuse = typed.root().querySelector<HTMLInputElement>('[data-dse-control="negotiation.mod.reuse"]')!;
+		expect(reuse.checked).toBe(false); // nothing spent is appealed to, so the box is off whatever was typed
+		const shown = tiersOf(typed.root());
+		document.body.innerHTML = '';
+		const reference = await mount(BASE + 'currentArgument:\n  motivationsUsed:\n    - Peace\n' + OFFERS);
+		expect(shown).toEqual(tiersOf(reference.root()));
 	});
 });

@@ -684,7 +684,7 @@ describe('SC-439 census: the negotiation tracker, scoped by container', () => {
 		['Patience spent: the "final offer" band, Complete disabled, the tier rows static', 'ended'],
 		['Interest 5: a deal', 'deal'],
 		['Interest 0: hostile', 'hostile'],
-		['a name only: no chips, no cards, no Complete-able argument rows beyond the tiers', 'minimal'],
+		['a name only: no chips and no cards', 'minimal'],
 		['a block with keys the element does not know', 'unknown-keys'],
 	])('%s: every interactive node carries an id the manifest declares', async (_name, fixture) => {
 		const root = await mountNegotiation(negoFixture(fixture));
@@ -709,6 +709,7 @@ describe('SC-439 census: the negotiation tracker, scoped by container', () => {
 			'negotiation.patience': 1, 'negotiation.patience.seal': 6, 'negotiation.interest': 1, 'negotiation.interest.seal': 6,
 			'negotiation.appeal.motivation': 2, 'negotiation.appeal.pitfall': 1, 'negotiation.spent': 2,
 			'negotiation.mod.reuse': 1, 'negotiation.mod.lie': 1, 'negotiation.mod.same': 1,
+			'negotiation.mod.reuse.label': 1, 'negotiation.mod.lie.label': 1, 'negotiation.mod.same.label': 1,
 			'negotiation.tier': 1, 'negotiation.tier.row': 4, 'negotiation.complete': 1,
 		};
 		for (const [id, n] of Object.entries(counts)) expect([id, count(root, id)]).toEqual([id, n]);
@@ -718,11 +719,11 @@ describe('SC-439 census: the negotiation tracker, scoped by container', () => {
 		expect(values('negotiation.interest.seal')).toEqual(['5', '4', '3', '2', '1', '0']);
 	});
 
-	test('a name-only block has no chip and no Spent chip to identify (nothing stamped for rows that do not exist), and with Interest defaulting to 0 it is over: static tiers, Complete present but disabled', async () => {
+	test('a name-only block has no chip and no Spent chip to identify (nothing stamped for rows that do not exist), and still has its card controls', async () => {
 		const root = await mountNegotiation(negoFixture('minimal'));
-		for (const id of ['negotiation.appeal.motivation', 'negotiation.appeal.pitfall', 'negotiation.spent', 'negotiation.tier.row', 'negotiation.tier']) expect(count(root, id)).toBe(0);
+		for (const id of ['negotiation.appeal.motivation', 'negotiation.appeal.pitfall', 'negotiation.spent']) expect(count(root, id)).toBe(0);
 		for (const id of ['negotiation.menu', 'negotiation.complete', 'negotiation.mod.lie']) expect(count(root, id)).toBe(1);
-		expect(root.querySelector<HTMLButtonElement>('[data-dse-control="negotiation.complete"]')!.disabled).toBe(true);
+		expect(census(root)).toEqual([]);
 	});
 
 	test('every control the manifest declares is stamped by SOME negotiation variant (no dead manifest row)', async () => {
