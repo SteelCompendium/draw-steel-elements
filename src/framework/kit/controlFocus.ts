@@ -23,6 +23,9 @@
 //     (none at all, or every one disabled or not focusable: End round gone because the montage ended, Log an action disabled because every hero has
 //     acted). A family with an entry also skips a control that cannot take focus for the nearest one of the same family that can. Without an entry
 //     the old rule stands, so no existing caller changes.
+// SC-642 adds `restoreControlFocus(..., { fromDisabled: true })` for a control that DISABLES ITSELF in place when pressed (negotiation's Complete
+// Argument): no rebuild happens, the pressed node stays `document.activeElement`, and Chromium moves focus off a disabled control on the next frame.
+// Captured BEFORE the disabling, restored right after it, with a `fallbacks` entry naming where focus goes (the successor is unusable by then).
 import { CONTROL_ATTR } from './controlId';
 import { focusControl, focusIsFree } from '../chrome/focusHandoff';
 
@@ -90,10 +93,30 @@ function atOf(root: HTMLElement, el: HTMLElement): string | null {
  *  div with a click listener and the quick buttons inside it). */
 const usable = (el: HTMLElement): boolean => !el.matches(':disabled, [aria-disabled="true"]') && el.matches('[tabindex], button, input, select, textarea, a[href]');
 
+/** SC-642: options for `restoreControlFocus`. Inert unless set. */
+export interface RestoreOptions {
+	/** The control that held focus was DISABLED in place (a button that disarms itself when pressed), not rebuilt: it is still `document.activeElement`,
+	 *  but Chromium drops focus from a disabled control on its next frame, so a focused DISABLED control inside the root does not count as holding
+	 *  focus. Call it synchronously after the disabling, before that frame. */
+	fromDisabled?: boolean;
+}
+
+/** SC-642: does a disabled control inside `root` still count as the focus owner (see `RestoreOptions.fromDisabled`)? */
+function holdsDisabledFocus(root: HTMLElement): boolean {
+	const active = root.ownerDocument.activeElement;
+	return !!active && active !== root.ownerDocument.body && root.contains(active) && active.matches(':disabled');
+}
+
 /** Hand focus to the rebuilt successor of what `captureControlFocus` saw; true when something now holds focus. A no-op for a null
  *  token, and when focus is already somewhere (the user, or a modal, put it there). Call it once the root is no longer `inert`. */
-export function restoreControlFocus(root: HTMLElement, focus: ControlFocus | null, families: ControlFamilies = {}, fallbacks: ControlFallbacks = {}): boolean {
-	if (!focus || !focusIsFree(root.ownerDocument)) return false;
+export function restoreControlFocus(
+	root: HTMLElement,
+	focus: ControlFocus | null,
+	families: ControlFamilies = {},
+	fallbacks: ControlFallbacks = {},
+	options: RestoreOptions = {},
+): boolean {
+	if (!focus || !(focusIsFree(root.ownerDocument) || (options.fromDisabled === true && holdsDisabledFocus(root)))) return false;
 	const target = controlSuccessor(root, focus, families, fallbacks);
 	if (target === root && !root.hasAttribute('tabindex')) root.tabIndex = -1;
 	return focusControl(target, focus.ring);

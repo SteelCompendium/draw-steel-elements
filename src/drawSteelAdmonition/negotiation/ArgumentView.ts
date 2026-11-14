@@ -74,6 +74,8 @@ export class ArgumentView {
 		private readonly owner: Component,
 		private readonly renderMd: RenderMdCallback,
 		private readonly canPersist: boolean,
+		/** SC-642: runs a write that disarms the control that was pressed, keeping keyboard focus on the card (the view's `keepFocus`). */
+		private readonly keepFocus: (write: () => void) => void,
 	) {}
 
 	public build(parent: HTMLElement): void {
@@ -430,6 +432,12 @@ export class ArgumentView {
 	 *  tier's interest/patience deltas, reset the current argument, then re-derive the whole
 	 *  tab and persist ONCE. */
 	private completeArgument(): void {
+		// SC-642: this write disables the button that was pressed, and Chromium drops focus from a disabled button; keepFocus hands it
+		// to the first usable control of the tab (focusRules.ts). Only when focus was inside the card.
+		this.keepFocus(() => this.resolveArgument());
+	}
+
+	private resolveArgument(): void {
 		for (const motName of this.data.currentArgument.motivationsUsed) {
 			const mot = this.data.motivations.find((m) => m.name === motName);
 			if (mot) mot.hasBeenAppealedTo = true;

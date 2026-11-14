@@ -33,6 +33,9 @@ import { Component, Menu, Notice } from 'obsidian';
 import { ElementView } from '@/framework/view';
 import { cardHead, iconButton, stampControl, tabs } from '@/framework/kit';
 import type { RenderMdCallback } from '@/framework/kit';
+import { captureControlFocus, restoreControlFocus } from '@/framework/kit/controlFocus';
+import type { ControlFocusRules } from '@/framework/kit/controlFocus';
+import { NEGOTIATION_FOCUS_FALLBACKS } from './focusRules';
 import { NegotiationData } from '@model/NegotiationData';
 import { PatienceInterestView } from '@drawSteelAdmonition/negotiation/PatienceInterestView';
 import { EndBandView } from '@drawSteelAdmonition/negotiation/EndBandView';
@@ -45,6 +48,19 @@ import { LearnMoreView } from '@drawSteelAdmonition/negotiation/LearnMoreView';
 const TAB_SLOT = 'tab';
 
 export class NegotiationView extends ElementView<NegotiationData> {
+	/** SC-642 — the rules the Live Preview carry (host/livePreviewFocusCarry.ts) applies to this view's controls (see focusRules.ts). */
+	controlFocusRules(): ControlFocusRules {
+		return { fallbacks: NEGOTIATION_FOCUS_FALLBACKS };
+	}
+
+	/** SC-642 — run a write that DISARMS the control a keyboard user pressed (Complete Argument) and keep focus on the card: remember the
+	 *  focused control first, hand focus to its fallback right after (kit/controlFocus.ts). Nothing moves when focus was not inside the card. */
+	private readonly keepFocus = (write: () => void): void => {
+		const focus = captureControlFocus(this.rootEl);
+		write();
+		restoreControlFocus(this.rootEl, focus, {}, NEGOTIATION_FOCUS_FALLBACKS, { fromDisabled: true });
+	};
+
 	protected onMount(root: HTMLElement, model: NegotiationData): void {
 		// Per-mount listener owner: the reset path rebuilds via the framework default
 		// update(), whose unloadOwnedChildren() releases every registration bound here
@@ -201,7 +217,7 @@ export class NegotiationView extends ElementView<NegotiationData> {
 		);
 		handle.rootEl.addClass('dse-nt__actions');
 
-		const argument = new ArgumentView(model, persist, refreshStanding, refreshCards, owner, renderMd, canPersist);
+		const argument = new ArgumentView(model, persist, refreshStanding, refreshCards, owner, renderMd, canPersist, this.keepFocus);
 		argument.build(handle.panels['argument']);
 		new LearnMoreView(owner, renderMd).build(handle.panels['learn-more']);
 		return argument;
