@@ -594,8 +594,8 @@ describe('keys the montage does not know survive a write (SC-625)', () => {
 		expect(keysOf(serialize(parseLikePipeline(known)))).toEqual(['rounds', 'success_limit', 'failure_limit', 'successes', 'failures', 'current_round']);
 	});
 
-	test('a `__proto__` key in hand-written YAML pollutes nothing and does not crash, at the top level and on an action', () => {
-		const text = 'rounds: 2\nsuccess_limit: 5\nfailure_limit: 3\nsuccesses: 0\nfailures: 0\nentries:\n  - hero: Kira\n    round: 1\n    result: success\n    __proto__:\n      polluted: yes\n__proto__:\n  polluted: yes\ncurrent_round: 1';
+	test('`__proto__`, `constructor`, `toString` and `hasOwnProperty` keys in hand-written YAML pollute nothing, do not crash and come back as plain keys, at the top level and on an action', () => {
+		const text = 'rounds: 2\nsuccess_limit: 5\nfailure_limit: 3\nsuccesses: 0\nfailures: 0\nentries:\n  - hero: Kira\n    round: 1\n    result: success\n    __proto__:\n      polluted: yes\n    constructor: c-e\n    toString: s-e\n    hasOwnProperty: h-e\n__proto__:\n  polluted: yes\nconstructor: c-top\ntoString: s-top\nhasOwnProperty: h-top\ncurrent_round: 1';
 		const m = parseLikePipeline(text);
 		logMontageEntry(m, { hero: 'Kira', round: 2, result: 'failure' });
 		const out = serialize(m);
@@ -603,6 +603,20 @@ describe('keys the montage does not know survive a write (SC-625)', () => {
 		expect(Object.getPrototypeOf(m)).toBe(Object.prototype);
 		expect(Object.getPrototypeOf(m.entries![0])).toBe(Object.prototype);
 		expect(out).toContain('polluted');
-		expect(parseYaml(out).entries[1]).toEqual({ hero: 'Kira', round: 2, result: 'failure' });
+		const back = parseYaml(out);
+		expect(back.entries[1]).toEqual({ hero: 'Kira', round: 2, result: 'failure' });
+		expect([back.constructor, back.toString, back.hasOwnProperty]).toEqual(['c-top', 's-top', 'h-top']);
+		expect([back.entries[0].constructor, back.entries[0].toString, back.entries[0].hasOwnProperty]).toEqual(['c-e', 's-e', 'h-e']);
+		expect(Object.keys(back).slice(-4)).toEqual(['__proto__', 'constructor', 'toString', 'hasOwnProperty']);
+	});
+
+	test('a key that looks like an integer is written FIRST, quoted (JavaScript key order, pinned so nobody "fixes" it by accident), at the top level and on an action', () => {
+		const m = parseLikePipeline('title: T\nrounds: 2\nsuccess_limit: 1\nfailure_limit: 1\nsuccesses: 0\nfailures: 0\nnotes: a\n2024: year\nentries:\n  - hero: Kira\n    round: 1\n    result: success\n    7: seven\n    tag: x\ncurrent_round: 1');
+		const out = serialize(m);
+		expect(out.split('\n')[0]).toBe('"2024": year');
+		expect(out.split('\n')[1]).toBe('title: T');
+		expect(out).toContain('  - "7": seven\n    hero: Kira');
+		expect(parseYaml(out).notes).toBe('a');
+		expect(serialize(parseLikePipeline(out))).toBe(out); // and it is stable on the next pass
 	});
 });

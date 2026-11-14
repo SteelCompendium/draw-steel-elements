@@ -136,8 +136,16 @@ export function isKnownMontageResult(result: string): result is MontageResult {
  * spelling or alias to account for: each key is read under exactly one name), including one it reads and then leaves
  * off because the value is empty or the wrong type (`skill: ''`, `description: 3`) — that stays dropped as before.
  * The value is carried as it parsed (a nested map or list included); its formatting is whatever `stringifyYaml` does
- * today (SC-599's question, not this one). `participants` items are not covered here: they are kept as the raw typed
- * objects and already give their own extra keys back.
+ * today (SC-599's question, not this one).
+ *
+ * Placement: a logged action follows the top-level rule (the known keys in spec §B.5 order, then the unknown ones in
+ * their original order). `participants` items are not covered here: they keep SC-610's as-typed contract (the raw typed
+ * objects, nothing rebuilt) and already give their own extra keys back. The difference is deliberate.
+ *
+ * Two things to know. (1) A key that looks like an integer (`2024:`) is written FIRST, ahead of the known keys, and
+ * comes back quoted: that is JavaScript's own object key order, not a choice, and a unit test pins it. (2) Never put a
+ * non-schema own property on the model or on an entry (a cache, a flag): `serialize` writes every own key outside the
+ * known sets back into the note.
  */
 const KNOWN_MODEL_KEYS: ReadonlySet<string> = new Set([
 	'title', 'description', 'rounds', 'success_limit', 'failure_limit', 'successes', 'failures',
