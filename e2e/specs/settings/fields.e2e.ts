@@ -47,8 +47,17 @@ describe('settings tab: text and file fields', () => {
 		await openAt(INIT);
 		try {
 			expect((await readSettings()).defaultImagePath).toBe('Media/token_1.png');
-			await dse.click(ctl('settings.initiative.default-image'));
-			await dse.waitFor(`document.querySelectorAll('.suggestion-item').length > 0`, 'the file picker');
+			// A click that does not open the picker (seen once in 40 runs under load: the click lands, nothing opens) is repeated, twice at most;
+			// a picker that never opens fails the test.
+			for (let attempt = 1; ; attempt++) {
+				await dse.click(ctl('settings.initiative.default-image'));
+				try {
+					await dse.waitFor(`document.querySelectorAll('.suggestion-item').length > 0`, 'the file picker', attempt < 3 ? 4000 : 15000);
+					break;
+				} catch (e) {
+					if (attempt >= 3) throw e;
+				}
+			}
 			// Pick with the keyboard: the picker's own input has focus, so type enough of the name to leave that one file and press Enter. (The list
 			// redraws after it opens and as it filters, so clicking an item went stale under load; real keys hold no element across a redraw.)
 			await browser.keys('token'.split(''));
