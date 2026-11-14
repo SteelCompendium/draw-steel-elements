@@ -146,6 +146,8 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Montage/wrong-title.md` | a block whose `title` is a YAML number (`title: 2024`): shown as the text "2024", written back as the number (SC-628) |
   | `Montage/wrong-title-bool.md` | `title: true`: shown as the text "true", written back as the boolean (SC-628) |
   | `Montage/wrong-title-map.md` | a map as the title: a plain error card naming `title`, no control, nothing written (SC-628) |
+  | `Montage/wrong-description.md` | `description: 5`: shown as the brief "5", written back as the number (SC-628) |
+  | `Montage/wrong-block.md` | the block is the text `hello`: a plain error card, no control, nothing written (SC-628) |
   | `Montage/quoted-rounds.md` | a block with `rounds: "3"` typed in quotes: read as 3; Add a round writes 4, a write that leaves it alone gives back `"3"` (SC-628) |
   | `Montage/quoted-current-round.md` | `current_round: "1"`: End round writes the number 2 (SC-628) |
   | `Montage/quoted-successes.md` | `successes: "2"` with a success limit of 3: a quick success writes the number 3 (SC-628) |

@@ -1,9 +1,9 @@
 // SC-438 [W]: hand-written values that are not what the product expects, and a state the band words badly. SC-628 is fixed: W01 and W02 are plain tests
-// and W04..W08 pin its rulings (a number or boolean title is shown as text and written back as typed; a quoted number is read as a number and a write that
-// changes it writes a plain number; a map or list as the title is a plain error card that writes nothing). SC-629 (the verdict word and the rule line
+// and W04..W10 pin its rulings (a number or boolean title or description is shown as text and written back as typed; a quoted number is read as a number and a write that
+// changes it writes a plain number; a map or list as the title or description, and a block that is not a map of keys, is a plain error card that writes nothing). SC-629 (the verdict word and the rule line
 // below it must agree, in whatever words) is still a marker.
 // Montage/wrong-title.md (`title: 2024`), wrong-title-bool.md (`title: true`), wrong-title-map.md (a map as the title), quoted-rounds.md (`rounds: "3"`),
-// quoted-current-round.md (`current_round: "1"`), quoted-successes.md (`successes: "2"`), no-action.md.
+// quoted-current-round.md (`current_round: "1"`), quoted-successes.md (`successes: "2"`), wrong-description.md (`description: 5`), wrong-block.md (the block is the text `hello`), no-action.md.
 import { expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
 import { blockOf, MONTAGE } from '../../driver/montage';
@@ -85,6 +85,34 @@ describe('montage: values the Director typed by hand', () => {
 		await dse.hover(root.root);
 		await dse.waitForWrite('Montage/quoted-rounds.md', () => dse.click(root.control('montage.chrome.add-round')));
 		expect(Number((await blockOf('Montage/quoted-rounds.md')).rounds)).toBe(4);
+	});
+
+	it('[MONT-W09] `description: 5` is shown as the brief "5", and a write (Add a round) gives it back as the number the Director typed, after the title', async () => {
+		await dse.openNote('Montage/wrong-description.md');
+		const root = dse.block(MONTAGE);
+		await expect(root.control({ css: '.dse-error-card' })).not.toBeExisting();
+		expect(await root.control({ css: '.dse-mt__brief-text' }).getProperty('textContent')).toContain('5');
+		await dse.hover(root.root);
+		await dse.waitForWrite('Montage/wrong-description.md', () => dse.click(root.control('montage.chrome.add-round')));
+		const b = await blockOf('Montage/wrong-description.md');
+		expect(b.description as unknown).toBe(5);
+		expect(b.rounds).toBe(4);
+		expect(await dse.noteText('Montage/wrong-description.md')).toMatch(/^title: Number Brief\ndescription: 5\nrounds: 4$/m);
+	});
+
+	it('[MONT-W10] a block that is just the text `hello` is a plain error card, has no control, and leaves the note byte-identical after a click on it', async () => {
+		await dse.openNote('Montage/wrong-block.md');
+		const before = await dse.noteText('Montage/wrong-block.md');
+		const card = await dse.page<{ title: string; message: string; controls: number; stage: string | null }>(`(() => {
+			const c = document.querySelector('.markdown-reading-view [data-dse-element="montage"]');
+			return { title: c.querySelector('.dse-error-card-title')?.textContent ?? '', message: c.querySelector('.dse-error-card-message')?.textContent ?? '', controls: c.querySelectorAll('[data-dse-control]').length, stage: c.closest('[data-dse-error-stage]')?.getAttribute('data-dse-error-stage') ?? c.getAttribute('data-dse-error-stage') };
+		})()`);
+		expect(card).toMatchObject({ message: 'Invalid data: the block must be a map of keys.', controls: 0, stage: 'render' });
+		expect(card.title).toBe('Montage Test tracker: failed to render (render)');
+		// a real click on the card; it is not a control, so it drives no coverage pair and does not declare the block edited (the driver then also checks its fence)
+		await dse.expectNoWrite('Montage/wrong-block.md', () => dse.block(MONTAGE).root.click());
+		expect(await dse.noteText('Montage/wrong-block.md')).toBe(before);
+		expect(before).toContain('```ds-montage\nhello\n```');
 	});
 
 	knownBug('SC-629', '[MONT-W03] the verdict word and the rule line agree when the rounds ran out with nothing logged (both claim a failure, or neither does)', async () => {
