@@ -21,7 +21,10 @@ import { createValidationService } from '../../../src/framework/validation';
 import { createSessionStore } from '../../../src/framework/session';
 import type { SessionStore } from '../../../src/framework/session';
 import { DEFAULT_SETTINGS } from '@model/Settings';
+import { Component } from 'obsidian';
 import { App, Plugin, Menu, Notice, parseYaml, stringifyYaml, makeFakeContext } from '../../mocks/obsidian';
+import { makeFakeApp, seedNote } from '../../fakes/fakeObsidian';
+import { SidebarBlockHost } from '../../../src/framework/host/SidebarBlockHost';
 import { negotiationElement } from '../../../src/elements/negotiation/definition';
 
 // -- harness ---------------------------------------------------------------------------------------------------------------
@@ -758,5 +761,95 @@ describe('SC-439 X: a write lands in its own block and nowhere else in the note'
 		const written = parseYaml(bodyOf(app.vault.getContent('Note.md')!, 1)) as any;
 		expect([written.current_patience, written.current_interest]).toEqual([1, 4]);
 		expect(outside(app.vault.getContent('Note.md')!, 1)).toBe(outside(NOTE, 1));
+	});
+	// SC-637: what a Director typed that the negotiation does not read: a key at the top, one in each motivation and one in the pitfall.
+	// The note around it has prose above and below, and a second negotiation of its own.
+	const OWN_BODY = [
+		'note_to_self: keep me', 'name: The Duke', 'initial_interest: 3', 'initial_patience: 3', 'current_interest: 3', 'current_patience: 3',
+		'gm:', '  author: Sam', '  tags: [a, b]',
+		'motivations:', '  - name: Legacy', '    reason: heir', '    gm_note: ask about the sister', '    odds:', '      high: 2',
+		'  - name: Coin', '    reason: money', '    seen_by: [Sam, Bo]',
+		'pitfalls:', '  - name: Pride', '    reason: charity', '    gm_note: never mention the war',
+		'i5: five', 'i4: four', 'i3: three', 'i2: two', 'i1: one', 'i0: zero',
+	].join('\n');
+	const OWN_NOTE = NOTE_BEFORE + fence(OWN_BODY) + NOTE_AFTER;
+	/** What the Director's own keys must look like in the block after a write (the known keys of an item come first). */
+	const expectOwnKeysKept = (body: string): void => {
+		const data = parseYaml(body) as any;
+		expect(data.note_to_self).toBe('keep me');
+		expect(data.gm).toEqual({ author: 'Sam', tags: ['a', 'b'] });
+		expect(Object.keys(data).slice(-2)).toEqual(['note_to_self', 'gm']);
+		expect(data.motivations[0]).toMatchObject({ name: 'Legacy', gm_note: 'ask about the sister', odds: { high: 2 } });
+		expect(Object.keys(data.motivations[0]).slice(-2)).toEqual(['gm_note', 'odds']);
+		expect(data.motivations[1]).toMatchObject({ name: 'Coin', seen_by: ['Sam', 'Bo'] });
+		expect(data.pitfalls[0]).toMatchObject({ name: 'Pride', gm_note: 'never mention the war' });
+		expect(Object.keys(data.pitfalls[0]).slice(-1)).toEqual(['gm_note']);
+	};
+
+	test.each(ACTIONS)('$name keeps the keys the negotiation does not know, at the top of the block and inside each motivation and pitfall', async ({ act }) => {
+		const { app, root, flush } = await mountBlock(0, OWN_NOTE);
+		act(root);
+		await flush();
+		const after = app.vault.getContent('Note.md')!;
+		expect(bodyOf(after, 0)).not.toBe(OWN_BODY); // the write landed
+		expectOwnKeysKept(bodyOf(after, 0));
+		expect(outside(after, 0)).toBe(outside(OWN_NOTE, 0)); // and the prose above and below is byte-identical
+	});
+
+	test('two negotiation blocks in one note: a write to the second leaves the first one\'s own keys, and its own, alone', async () => {
+		const other = OWN_BODY.replace('note_to_self: keep me', 'note_to_self: the other table').replace('gm_note: ask about the sister', 'gm_note: the other sister');
+		const note = NOTE_BEFORE + fence(other) + BETWEEN + fence(OWN_BODY) + NOTE_AFTER;
+		const { app, root, flush } = await mountBlock(1, note);
+		seal(root, 'patience', 1).click();
+		await flush();
+		const after = app.vault.getContent('Note.md')!;
+		expect(bodyOf(after, 0)).toBe(other);
+		expectOwnKeysKept(bodyOf(after, 1));
+		expect((parseYaml(bodyOf(after, 1)) as any).current_patience).toBe(1);
+		expect(outside(after, 1)).toBe(outside(note, 1));
+	});
+
+	test('a second write after the first keeps the keys too (the second starts from what the first wrote)', async () => {
+		const { app, root, flush } = await mountBlock(0, OWN_NOTE);
+		seal(root, 'patience', 1).click();
+		await flush();
+		chip(root, 'motivation', 1).click();
+		await flush();
+		const body = bodyOf(app.vault.getContent('Note.md')!, 0);
+		expectOwnKeysKept(body);
+		expect((parseYaml(body) as any).currentArgument.motivationsUsed).toEqual(['Coin']);
+	});
+});
+
+// SC-637: the sidebar writes through its own host (SidebarBlockHost, a block found by its `_dse_anchor`), but the same parse and serialize.
+describe('SC-637 X: a negotiation in the sidebar keeps the keys the negotiation does not know', () => {
+	test('a Patience seal clicked in the sidebar keeps the top-level key, the motivation key and the pitfall key, and the anchor', async () => {
+		jest.useFakeTimers();
+		const body = [
+			'name: The Duke', 'initial_interest: 3', 'initial_patience: 3', 'note_to_self: keep me',
+			'motivations:', '  - name: Legacy', '    reason: heir', '    gm_note: ask about the sister',
+			'pitfalls:', '  - name: Pride', '    reason: charity', '    gm_note: never mention the war',
+			'i5: five', 'i4: four', 'i3: three', 'i2: two', 'i1: one', 'i0: zero', '_dse_anchor: abc123',
+		].join('\n');
+		const { app, vault } = makeFakeApp();
+		const file = seedNote(vault, 'Note.md', ['# Notes', '', '```ds-negotiation', body, '```', '', 'tail'].join('\n'));
+		const owner = new Component();
+		owner.load();
+		const containerEl = document.createElement('div');
+		document.body.appendChild(containerEl);
+		const host = new SidebarBlockHost({ app } as any, file, 'ds-negotiation', 'abc123', null, containerEl, owner, () => {}, () => {}, () => {});
+		await host.refresh();
+		await new ElementPipeline(makeDeps()).run(negotiationElement, body, host);
+		seal(containerEl.firstElementChild as HTMLElement, 'patience', 1).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS + 50);
+		const text = vault.text('Note.md')!;
+		const written = parseYaml(/```ds-negotiation\n([\s\S]*?)\n```/.exec(text)![1]) as any;
+		expect(written.current_patience).toBe(1);
+		expect(written.note_to_self).toBe('keep me');
+		expect(written.motivations[0].gm_note).toBe('ask about the sister');
+		expect(written.pitfalls[0].gm_note).toBe('never mention the war');
+		expect(written._dse_anchor).toBe('abc123');
+		expect(text.startsWith('# Notes\n\n```ds-negotiation\n')).toBe(true);
+		expect(text.endsWith('\n```\n\ntail')).toBe(true);
 	});
 });

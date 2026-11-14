@@ -64,26 +64,6 @@ afterEach(() => {
 });
 
 describe('SC-439 filed bugs', () => {
-	const UNKNOWN =
-		'name: The Duke\ninitial_interest: 3\ninitial_patience: 3\nnote_to_self: keep me\nmotivations:\n  - name: Legacy\n    reason: heir\n    gm_note: ask about the sister\n' +
-		'pitfalls:\n  - name: Pride\n    reason: charity\n    gm_note: never mention the war\n' +
-		OFFERS;
-
-	test.failing('[K01] a write keeps a top-level key the element does not know [known bug SC-637]', async () => {
-		const { root, flush, written } = await mount(UNKNOWN);
-		sealOf(root(), 'patience', 1).click();
-		await flush();
-		expect(written().note_to_self).toBe('keep me');
-	});
-
-	test.failing('[K02] a write keeps a key the element does not know inside a motivation and inside a pitfall [known bug SC-637]', async () => {
-		const { root, flush, written } = await mount(UNKNOWN);
-		sealOf(root(), 'patience', 1).click();
-		await flush();
-		expect(written().motivations[0].gm_note).toBe('ask about the sister');
-		expect(written().pitfalls[0].gm_note).toBe('never mention the war');
-	});
-
 	test.failing('[K03] a number as the name does not leave a raw JavaScript error on the card [known bug SC-638]', async () => {
 		const { root } = await mount('name: 2024\ninitial_interest: 3\ninitial_patience: 3\n' + OFFERS);
 		expect(root().textContent).not.toMatch(/is not a function|Cannot read properties|undefined/);
