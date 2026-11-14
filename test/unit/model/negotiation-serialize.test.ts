@@ -20,7 +20,7 @@
 // newlines. Negotiation is the first persisted element whose disk shape actually hits
 // those paths (motivation/pitfall reasons, i5..i0 sentences) — prove they round-trip.
 import { parseYaml, stringifyYaml } from '../../mocks/obsidian';
-import { NegotiationData, parseNegotiationData } from '@model/NegotiationData';
+import { Motivation, NegotiationData, parseNegotiationData, Pitfall, unknownKeysOf } from '@model/NegotiationData';
 import { parse, serialize } from '../../../src/elements/negotiation/model';
 import frodoYaml from '../../fixtures/negotiation/frodo.yaml';
 
@@ -205,5 +205,202 @@ describe('T-4: free-text byte-compat (yaml-pkg folding, Plan 05 T-2)', () => {
 		// ...and a second serialize pass is byte-identical (stable on disk).
 		expect(serialize(m2)).toBe(s1);
 		expect(m2).toEqual(m1);
+	});
+});
+
+// SC-637 — a key the negotiation does not read is written back after the known ones, at the top of the block and inside each
+// motivation and pitfall. The pairs live beside the instance (a WeakMap in NegotiationData.ts), so no key can shadow a member.
+describe('keys the negotiation does not know survive a write (SC-637)', () => {
+	const keysOf = (yaml: string): string[] => Object.keys(parseYaml(yaml));
+	const source = [
+		'note_to_self: keep me',
+		'name: The Duke',
+		'initial_interest: 3',
+		'initial_patience: 3',
+		'gm_meta:',
+		'  author: Sam',
+		'  tags: [a, b]',
+		'motivations:',
+		'  - gm_note: ask about the sister',
+		'    name: Legacy',
+		'    reason: heir',
+		'    odds:',
+		'      high: 2',
+		'    hasBeenAppealedTo: false',
+		'  - name: Coin',
+		'    reason: money',
+		'    seen_by: [Sam, Bo]',
+		'pitfalls:',
+		'  - gm_note: never mention the war',
+		'    name: Pride',
+		'    reason: charity',
+		'    tags: [x]',
+		'i5: five',
+		'i4: four',
+		'i3: three',
+		'i2: two',
+		'i1: one',
+		'i0: zero',
+		'zz_last: 9',
+	].join('\n');
+	const MOT_0 = { name: 'Legacy', reason: 'heir', hasBeenAppealedTo: true, gm_note: 'ask about the sister', odds: { high: 2 } };
+
+	test('top-level unknown keys (a scalar, a nested map, a list) come back by value after the standing and a motivation change', () => {
+		const m = parseLikePipeline(source);
+		m.current_patience = 1;
+		m.setMotivationUsed('Legacy', true);
+		const out = parseYaml(serialize(m));
+		expect(out.note_to_self).toBe('keep me');
+		expect(out.gm_meta).toEqual({ author: 'Sam', tags: ['a', 'b'] });
+		expect(out.zz_last).toBe(9);
+		expect(out.current_patience).toBe(1);
+	});
+
+	test('top-level order: the known keys in their fixed order, then the unknown ones in the order they were written', () => {
+		const m = parseLikePipeline(source);
+		m.current_patience = 2;
+		expect(keysOf(serialize(m))).toEqual([
+			'name', 'initial_patience', 'current_patience', 'initial_interest', 'motivations', 'pitfalls', 'i5', 'i4', 'i3', 'i2', 'i1', 'i0',
+			'note_to_self', 'gm_meta', 'zz_last',
+		]);
+	});
+
+	test('a motivation and a pitfall keep their unknown keys (nested values too), after their known keys, in their original order', () => {
+		const m = parseLikePipeline(source);
+		m.current_patience = 2;
+		const out = parseYaml(serialize(m));
+		expect(out.motivations[0]).toEqual({ name: 'Legacy', reason: 'heir', hasBeenAppealedTo: false, gm_note: 'ask about the sister', odds: { high: 2 } });
+		expect(Object.keys(out.motivations[0])).toEqual(['name', 'reason', 'hasBeenAppealedTo', 'gm_note', 'odds']);
+		expect(out.motivations[1]).toEqual({ name: 'Coin', reason: 'money', seen_by: ['Sam', 'Bo'] });
+		expect(out.pitfalls[0]).toEqual({ name: 'Pride', reason: 'charity', gm_note: 'never mention the war', tags: ['x'] });
+		expect(Object.keys(out.pitfalls[0])).toEqual(['name', 'reason', 'gm_note', 'tags']);
+	});
+
+	test('a write that touches a motivation itself (Spent) keeps that motivation\'s own keys, and a write that touches another keeps them too', () => {
+		const m = parseLikePipeline(source);
+		m.setMotivationUsed('Legacy', true);
+		expect(parseYaml(serialize(m)).motivations[0]).toEqual(MOT_0);
+		m.setMotivationUsed('Coin', true);
+		const out = parseYaml(serialize(m));
+		expect(out.motivations[0]).toEqual(MOT_0);
+		expect(out.motivations[1]).toEqual({ name: 'Coin', reason: 'money', hasBeenAppealedTo: true, seen_by: ['Sam', 'Bo'] });
+	});
+
+	test('Reset keeps every unknown key: it resets the tracker, not the Director\'s own keys', () => {
+		const m = parseLikePipeline(source);
+		m.current_interest = 4;
+		m.setMotivationUsed('Legacy', true);
+		m.resetData();
+		const out = parseYaml(serialize(m));
+		expect(out.current_interest).toBeUndefined(); // back at the initial 3, which the block never declared as a current value (SC-482)
+		expect(out.note_to_self).toBe('keep me');
+		expect(out.motivations[0]).toMatchObject({ gm_note: 'ask about the sister', odds: { high: 2 } });
+		expect(out.pitfalls[0].gm_note).toBe('never mention the war');
+	});
+
+	test('serialize never touches the live model, and a second pass over its own output is byte-identical', () => {
+		const m = parseLikePipeline(source);
+		const once = serialize(m);
+		expect(serialize(m)).toBe(once);
+		expect(Object.keys(m)).not.toContain('note_to_self');
+		expect(Object.keys(m.motivations[0])).toEqual(['name', 'reason', 'hasBeenAppealedTo']);
+		expect(serialize(parseLikePipeline(once))).toBe(once);
+	});
+
+	test('every key the negotiation reads is known and never carried as unknown: only the Director\'s own keys are', () => {
+		const all = [
+			'name: n', 'initial_patience: 4', 'current_patience: 2', 'initial_interest: 3', 'current_interest: 1', '_dse_anchor: a1b2c3',
+			'motivations:', '  - name: " Padded "', '    reason: ""', '    hasBeenAppealedTo: true', '    extra_m: 1',
+			'pitfalls:', '  - name: P', '    reason: r', '    extra_p: 2',
+			'currentArgument:', '  motivationsUsed: []', '  pitfallsUsed: []', '  lieUsed: false', '  sameArgumentUsed: false', '  reusedMotivation: false',
+			'i5: a', 'i4: b', 'i3: c', 'i2: d', 'i1: e', 'i0: f', 'extra_top: 3',
+		].join('\n');
+		const m = parseLikePipeline(all);
+		expect(unknownKeysOf(m).map(([key]) => key)).toEqual(['extra_top']);
+		expect(unknownKeysOf(m.motivations[0]).map(([key]) => key)).toEqual(['extra_m']);
+		expect(unknownKeysOf(m.pitfalls[0]).map(([key]) => key)).toEqual(['extra_p']);
+		const out = parseYaml(serialize(m));
+		expect(out.motivations[0]).toEqual({ name: 'Padded', reason: '', hasBeenAppealedTo: true, extra_m: 1 }); // `name` is trimmed as before, `reason: ""` is not resurrected twice
+		expect(Object.keys(out).filter((key) => key === 'extra_top')).toHaveLength(1);
+	});
+
+	test('a motivation that is not a mapping carries no keys (a string would otherwise yield its indices), and a block with nothing unknown writes no extra key', () => {
+		const m = parseLikePipeline('name: n\nmotivations:\n  - plain\n  - [a, b]\npitfalls: [x]');
+		expect(unknownKeysOf(m.motivations[0])).toEqual([]);
+		expect(unknownKeysOf(m.motivations[1])).toEqual([]);
+		expect(unknownKeysOf(m.pitfalls[0])).toEqual([]);
+		const known = 'name: n\ninitial_patience: 3\ninitial_interest: 2';
+		expect(keysOf(serialize(parseLikePipeline(known)))).toEqual(['name', 'initial_patience', 'initial_interest']);
+	});
+
+	test('a model the plugin builds itself (no source) and a motivation made by hand carry no unknown keys', () => {
+		const built = new NegotiationData({ name: 'Built' });
+		expect(unknownKeysOf(built)).toEqual([]);
+		expect(unknownKeysOf(new Motivation({ name: 'M' }))).toEqual([]);
+		expect(unknownKeysOf(new Pitfall({ name: 'P' }))).toEqual([]);
+		expect(keysOf(serialize(built))).not.toContain('note_to_self');
+	});
+
+	test('`__proto__`, `constructor`, `toString`, `hasOwnProperty` and `toJSON` keys in hand-written YAML pollute nothing, do not crash and come back as plain keys, at all three levels', () => {
+		const level = (tag: string, indent: string): string =>
+			[`__proto__:`, `  polluted: yes`, `constructor: c-${tag}`, `toString: s-${tag}`, `hasOwnProperty: h-${tag}`, `toJSON: j-${tag}`].map((line) => indent + line).join('\n');
+		const text = [
+			'name: n', 'initial_patience: 3', 'initial_interest: 2',
+			'motivations:', '  - name: M', '    reason: r', level('m', '    '),
+			'pitfalls:', '  - name: P', '    reason: r', level('p', '    '),
+			level('top', ''),
+		].join('\n');
+		const m = parseLikePipeline(text);
+		m.current_patience = 1;
+		const out = serialize(m);
+		expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+		expect(Object.getPrototypeOf(m)).toBe(NegotiationData.prototype);
+		expect(Object.getPrototypeOf(m.motivations[0])).toBe(Motivation.prototype);
+		expect(Object.getPrototypeOf(m.pitfalls[0])).toBe(Pitfall.prototype);
+		expect(typeof m.ending).toBe('function'); // no member of the model was shadowed
+		expect(m.ending()).toBeNull();
+		expect(out).toContain('polluted');
+		const back = parseYaml(out);
+		expect(back.current_patience).toBe(1);
+		expect([back.constructor, back.toString, back.hasOwnProperty, back.toJSON]).toEqual(['c-top', 's-top', 'h-top', 'j-top']);
+		expect([back.motivations[0].constructor, back.motivations[0].toString, back.motivations[0].hasOwnProperty, back.motivations[0].toJSON]).toEqual(['c-m', 's-m', 'h-m', 'j-m']);
+		expect([back.pitfalls[0].constructor, back.pitfalls[0].toString, back.pitfalls[0].hasOwnProperty, back.pitfalls[0].toJSON]).toEqual(['c-p', 's-p', 'h-p', 'j-p']);
+		expect(Object.keys(back).slice(-5)).toEqual(['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'toJSON']);
+	});
+
+	test('a key named like a NegotiationData method or field (`ending`, `offerFor`, `resetData`, `Name`, `current_Patience`) is only data: it is written back and shadows nothing, at all three levels', () => {
+		const text = [
+			'name: n', 'initial_patience: 3', 'initial_interest: 2',
+			'motivations:', '  - name: M', '    reason: r', '    resetData: m-reset', '    Name: m-name',
+			'pitfalls:', '  - name: P', '    reason: r', '    resetData: p-reset', '    Reason: p-reason',
+			'ending: top-ending', 'offerFor: top-offer', 'resetData: top-reset', 'current_Patience: top-case',
+		].join('\n');
+		const m = parseLikePipeline(text);
+		expect(m.ending()).toBeNull();
+		expect(m.offerFor(3)).toBe('Interest 3 result');
+		m.current_patience = 2;
+		m.setMotivationUsed('M', true);
+		m.resetData();
+		expect(m.current_patience).toBe(3);
+		const back = parseYaml(serialize(m));
+		expect([back.ending, back.offerFor, back.resetData, back.current_Patience]).toEqual(['top-ending', 'top-offer', 'top-reset', 'top-case']);
+		expect(back.motivations[0]).toMatchObject({ name: 'M', resetData: 'm-reset', Name: 'm-name' });
+		expect(back.pitfalls[0]).toMatchObject({ name: 'P', resetData: 'p-reset', Reason: 'p-reason' });
+		expect(back.current_patience).toBeUndefined(); // reset to the initial value, so the undeclared key is not written
+	});
+
+	test('a key that looks like an integer is written FIRST, quoted (JavaScript key order, pinned so nobody "fixes" it by accident), at all three levels', () => {
+		const m = parseLikePipeline([
+			'name: n', 'initial_patience: 3', 'initial_interest: 2', 'notes: a', '2024: year',
+			'motivations:', '  - name: M', '    reason: r', '    7: seven', '    tag: x',
+			'pitfalls:', '  - name: P', '    reason: r', '    9: nine',
+		].join('\n'));
+		const out = serialize(m);
+		expect(out.split('\n')[0]).toBe('"2024": year');
+		expect(out.split('\n')[1]).toBe('name: n');
+		expect(out).toContain('  - "7": seven\n    name: M');
+		expect(out).toContain('  - "9": nine\n    name: P');
+		expect(parseYaml(out).notes).toBe('a');
+		expect(serialize(parseLikePipeline(out))).toBe(out); // and it is stable on the next pass
 	});
 });

@@ -1,5 +1,46 @@
 import {parseYaml} from "obsidian";
 
+/**
+ * SC-637 — a key the negotiation does not read (a Director's own `note_to_self:` at the top of the block, a `gm_note:` on
+ * a motivation or a pitfall) must survive a write. "Known" is every key the negotiation READS: each is read under exactly
+ * one name (there is no legacy spelling or alias), and a key it reads and then leaves out because the value is empty
+ * (`name: ''`) is still known, so it is never carried a second time.
+ *
+ * WHERE the unknown pairs live: in a module-private WeakMap keyed by the instance, NOT as own properties. NegotiationData,
+ * Motivation and Pitfall are classes with methods and fields, so a hand-written key named like one (`ending`, `offerFor`,
+ * `resetData`, `current_patience`, `toJSON`, `constructor`, `__proto__`) would shadow a method, overwrite a field or
+ * reach the prototype if it were copied onto the instance. In the map no YAML key can do any of that: the pairs are only
+ * ever read back by `unknownKeysOf` and written into the DTO `serialize` builds. It also keeps every instance
+ * (`toEqual`, `{...model}`, the legacy-writer oracle in the tests) exactly the shape it had. Never add a non-schema own
+ * property to these classes expecting it to stay out of the note: `serialize` writes every own key.
+ *
+ * `serialize` writes the pairs after the known keys, in their original relative order, at the top level and inside each
+ * motivation and pitfall. A key that looks like an integer (`2024:`) is written FIRST (JavaScript's own object key order)
+ * and comes back quoted; a unit test pins it. The value is carried as it parsed (a nested map or list included); its
+ * formatting is whatever `stringifyYaml` does today (SC-599's question, not this one).
+ */
+const TOP_KNOWN_KEYS: ReadonlySet<string> = new Set([
+    'name', 'initial_patience', 'current_patience', 'initial_interest', 'current_interest', 'motivations', 'pitfalls',
+    'currentArgument', 'i5', 'i4', 'i3', 'i2', 'i1', 'i0', '_dse_anchor',
+]);
+const MOTIVATION_KNOWN_KEYS: ReadonlySet<string> = new Set(['name', 'reason', 'hasBeenAppealedTo']);
+const PITFALL_KNOWN_KEYS: ReadonlySet<string> = new Set(['name', 'reason']);
+
+const unknownKeys = new WeakMap<object, ReadonlyArray<readonly [string, unknown]>>();
+
+/** Remembers the own enumerable string keys of `source` that are not in `known`, in their original order. A value that
+ *  is not a mapping (a string or a list would otherwise yield its indices) has none. */
+function recordUnknownKeys(owner: object, source: unknown, known: ReadonlySet<string>): void {
+    if (source === null || typeof source !== 'object' || Array.isArray(source)) return;
+    const pairs = Object.entries(source).filter(([key]) => !known.has(key));
+    if (pairs.length > 0) unknownKeys.set(owner, pairs);
+}
+
+/** The `[key, value]` pairs the source carried that the negotiation does not read, in their original order (SC-637). */
+export function unknownKeysOf(owner: object): ReadonlyArray<readonly [string, unknown]> {
+    return unknownKeys.get(owner) ?? [];
+}
+
 export class NegotiationData {
     name?: string;
     initial_patience?: number;
@@ -43,6 +84,7 @@ export class NegotiationData {
         // FOLLOWUPS #26: assigned LAST so it serializes last when present; passed
         // straight through, never coerced/defaulted (see the field comment above).
         this._dse_anchor = data._dse_anchor;
+        recordUnknownKeys(this, data, TOP_KNOWN_KEYS); // SC-637
     }
 
     setMotivationUsed(motivationName: string, used: boolean) {
@@ -185,6 +227,7 @@ export class Motivation {
         this.name = data.name?.trim() ?? '';
         this.reason = data.reason?.trim() ?? '';
         this.hasBeenAppealedTo = data.hasBeenAppealedTo ?? false;
+        recordUnknownKeys(this, data, MOTIVATION_KNOWN_KEYS); // SC-637
     }
 }
 
@@ -195,6 +238,7 @@ export class Pitfall {
     constructor(data: Partial<Pitfall>) {
         this.name = data.name?.trim() ?? '';
         this.reason = data.reason?.trim() ?? '';
+        recordUnknownKeys(this, data, PITFALL_KNOWN_KEYS); // SC-637
     }
 }
 

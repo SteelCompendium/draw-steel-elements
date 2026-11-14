@@ -36,8 +36,11 @@
 // byte-identically to before. Each Motivation / Pitfall records its OWN absent keys from its own
 // raw item. The record lives in src/elements/shared/undeclaredDefaults.ts (a per-instance
 // WeakMap, never an own property); a model the plugin builds itself keeps the whole output.
+//
+// SC-637: a key the negotiation does not read (top level, inside a motivation, inside a pitfall) is written back after the
+// known keys in its original order — see NegotiationData.ts for where those pairs live and why no key can shadow a member.
 import { stringifyYaml } from 'obsidian';
-import { NegotiationData } from '@model/NegotiationData';
+import { NegotiationData, unknownKeysOf } from '@model/NegotiationData';
 import { omitUntouchedDefaults, recordAbsentDefaults, recordingDefaults } from '../shared/undeclaredDefaults';
 
 /** The top-level keys NegotiationData fills a default into when the source did not declare them (SC-482). */
@@ -77,13 +80,26 @@ function parseModel(data: unknown, _raw: string): NegotiationData {
 
 export const parse = recordingDefaults(parseModel, PARSER_DEFAULT_KEYS);
 
+/** `dto` as a fresh object (the model itself is never touched) with the keys the negotiation does not read written after
+ *  the known ones, in their original order (SC-637). `defineProperty`, never an assignment: a hand-written `__proto__:`
+ *  key must become a plain own key, not set the prototype of the object it lands on. */
+function withUnknownKeys(dto: object, owner: object): Record<string, unknown> {
+	const out = { ...dto } as Record<string, unknown>;
+	for (const [key, value] of unknownKeysOf(owner)) {
+		Object.defineProperty(out, key, { value, writable: true, enumerable: true, configurable: true });
+	}
+	return out;
+}
+
 export function serialize(model: NegotiationData): string {
 	// A fresh object in the model's own key order, so reassigning `motivations` / `pitfalls` below
 	// keeps their position (and never touches the live model).
 	// Nothing left to write is `{}` (never an empty body: negotiation cannot re-parse one, and its
 	// parse rejects a blank source, so no instance ever came from one).
-	const written: Record<string, unknown> = { ...omitUntouchedDefaults(model) };
-	if (Array.isArray(written.motivations)) written.motivations = model.motivations.map((m) => omitUntouchedDefaults(m));
-	if (Array.isArray(written.pitfalls)) written.pitfalls = model.pitfalls.map((p) => omitUntouchedDefaults(p));
+	// SC-637: the keys the source carried that the negotiation does not read follow the known ones, at the top level and
+	// inside each motivation and pitfall (they live beside the instance, see NegotiationData.ts, so none can shadow a method).
+	const written = withUnknownKeys(omitUntouchedDefaults(model), model);
+	if (Array.isArray(written.motivations)) written.motivations = model.motivations.map((m) => withUnknownKeys(omitUntouchedDefaults(m), m));
+	if (Array.isArray(written.pitfalls)) written.pitfalls = model.pitfalls.map((p) => withUnknownKeys(omitUntouchedDefaults(p), p));
 	return stringifyYaml(written).trim();
 }
