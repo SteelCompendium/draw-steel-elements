@@ -338,7 +338,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 	}
 
 	/** SC-615 — remember, at the moment of a mouse press on a roster cell, whether keyboard focus was inside the tracker. The note's click
-	 *  shield blurs a focused text box (the Malice quick-add amount or label, a half-typed stepper) on that same pointerdown, so by the
+	 *  shield blurs a focused text box (the Malice quick-add amount or label, the encounter title while it is being edited) on that same pointerdown, so by the
 	 *  time the cell's `click` runs focus is already on <body> and SC-609's own check cannot tell the press began with focus in the
 	 *  tracker. A capture listener on the DOCUMENT runs before the shield's (which sits on the root), so it still sees the text box.
 	 *  It only reads: nothing is blurred or focused here, and the shield's blur is unchanged. */
