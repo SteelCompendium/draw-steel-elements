@@ -268,6 +268,7 @@ export class ArgumentView {
 		control: string,
 	): ModLine {
 		const line = parent.createEl('label', { cls: 'dse-nt__check' });
+		stampControl(line, `${control}.label`);
 		const checkbox = line.createEl('input', { type: 'checkbox' });
 		stampControl(checkbox, control);
 		line.createSpan({ text });

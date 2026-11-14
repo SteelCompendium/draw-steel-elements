@@ -151,15 +151,16 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Negotiation/ended.md` | Patience 0 at Interest 3, both motivations spent: the "Final offer" band, Complete disabled, the tier rows static |
   | `Negotiation/deal.md` | Interest 5 (Patience 2): the "Negotiation over" band, the deal |
   | `Negotiation/hostile.md` | Interest 0 (Patience 2): the "Negotiation over" band, the NPC ends it |
-  | `Negotiation/minimal.md` | `name:` only (Interest defaults to 0, so it opens already over, with no chips or cards) |
+  | `Negotiation/minimal.md` | `name:` only (Interest defaults to 0, so it opens already over, with no chips or cards; SC-641) |
   | `Negotiation/two-blocks.md` | TWO different `ds-negotiation` blocks (the innkeeper, the guard captain) with prose above, between and below |
-  | `Negotiation/unknown-keys.md` | one `ds-negotiation` carrying keys the element does not know: `note_to_self` at the top and `gm_note` inside a motivation and a pitfall |
-  | `Negotiation/wrong-name.md` | `name: 2024` (a number as the name) |
-  | `Negotiation/fraction.md` | `current_interest: 0.4` |
-  | `Negotiation/dup-names.md` | two motivations both named Higher Authority |
-  | `Negotiation/nameless.md` | one motivation with a reason and no `name:` |
-  | `Negotiation/current-only.md` | `current_interest: 3`, `current_patience: 2` and no `initial_*` keys |
+  | `Negotiation/unknown-keys.md` | one `ds-negotiation` carrying keys the element does not know: `note_to_self` at the top and `gm_note` inside a motivation and a pitfall (a write deletes them; SC-637) |
+  | `Negotiation/wrong-name.md` | `name: 2024` (a number as the name: an error card with a raw JavaScript message; SC-638) |
+  | `Negotiation/fraction.md` | `current_interest: 0.4` (seal 0 is drawn while the negotiation is not over; SC-638) |
+  | `Negotiation/dup-names.md` | two motivations both named Higher Authority (the first chip is blank; SC-640) |
+  | `Negotiation/nameless.md` | one motivation with a reason and no `name:` (its chip is announced as "Appeal to "; SC-640) |
+  | `Negotiation/current-only.md` | `current_interest: 3`, `current_patience: 2` and no `initial_*` keys (Reset ends it; SC-641) |
   | `Negotiation/quoted.md` | quoted standing numbers: `current_interest: "3"`, `current_patience: "2"` |
+  | `Negotiation/twins.md` | TWO IDENTICAL `ds-negotiation` blocks (Twin, Interest 3 / Patience 3, one motivation, one pitfall) with prose above, between and below |
 
 - Edits are checked per fence: a click / type / double-click / press on an element inside `dse.block(lang, n)` declares that block
   as one the test edits (taking the scope and reading it declares nothing, SC-435), and

@@ -54,6 +54,9 @@ export interface Scope {
 const HOST_CONTROLS: Record<string, string> = {
 	'modal.close': '.modal-container .modal-close-button, .modal-container .modal-header-button',
 	'modal.backdrop': '.modal-container .modal-bg',
+	// SC-439: the negotiation's Reset item is a node of Obsidian's native Menu, outside the card; focus stays on the options button while the menu's
+	// own Scope takes ArrowDown / Enter, so a key for it is `aimedAt` (the same case as the modal X).
+	'negotiation.menu.reset': '.menu [data-dse-control="negotiation.menu.reset"]',
 };
 
 const READING = '.workspace-leaf.mod-active .markdown-reading-view';

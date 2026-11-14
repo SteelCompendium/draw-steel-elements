@@ -12,7 +12,8 @@
 // control, and a key pressed with focus on a seal / row / tab inside it is credited to the group (`press` needs focus within).
 // `press:Enter` is NOT declared on a seal (the only tab stop is the checked one, so Enter re-selects it: nothing happens) or on
 // a tab (an unselected tab is not a tab stop, and the selected one is a no-op to re-select); it IS on a tier row (the first row
-// is the tab stop while none is chosen, and Enter chooses it). The checkboxes are click only (Space is the browser's).
+// is the tab stop while none is chosen, and Enter chooses it). A modifier checkbox is toggled by a click, by Space on the focused box
+// and by a click on its <label> text (the large target: the label carries its own id, as the minion pool's name labels do).
 // `rows` cite the SC-439 scenario groups: T tabs, P patience, I interest, M motivation cards (Spent chip), A argument tab
 // (chips, modifiers, tier, Complete), R reset menu. Repeated controls are driven through `nth`: a seal's `nth` is its position
 // in the DOM (Patience 0..5 left to right, Interest 5..0 top to bottom), a chip's is its position in its row.
@@ -25,10 +26,10 @@ export default surface('negotiation', {
 	controls: {
 		// -- R. The card's options button (a real icon button, top right) opens Obsidian's own Menu, whose only item is
 		//    "Reset negotiation". The menu item is a native node outside the card: it carries its id (`MenuItem.dom`) and is
-		//    clicked; Enter / arrows inside the native menu are Obsidian's, and focus never moves onto an item, so only the
-		//    mouse is declared for it.
-		'negotiation.menu': c(['click', 'press:Enter'], ['R01', 'R02']),
-		'negotiation.menu.reset': c(['click'], ['R01', 'R02', 'R03']),
+		//    clicked. Focus never moves onto a menu item (it stays on the options button while the menu's own Scope takes
+		//    ArrowDown and Enter), so a key for it is `dse.aimedAt('negotiation.menu.reset')`, as Escape is for the modal X.
+		'negotiation.menu': c(['click', 'press:Enter'], ['R01', 'R02', 'R06']),
+		'negotiation.menu.reset': c(['click', 'press:Enter'], ['R01', 'R02', 'R03', 'R05']),
 
 		// -- T. The two tabs ("Make an Argument", "Learn Motivation/Pitfall"). The tablist moves selection with the arrow
 		//    keys (wrapping, Home / End; selection follows focus); a click selects the clicked tab.
@@ -53,9 +54,12 @@ export default surface('negotiation', {
 		//    radiogroup; Complete Argument is disabled until a tier is chosen and while the negotiation is over.
 		'negotiation.appeal.motivation': c(['click', 'press:Enter'], ['A01', 'A03']),
 		'negotiation.appeal.pitfall': c(['click', 'press:Enter'], ['A02', 'A03']),
-		'negotiation.mod.reuse': c(['click', 'click-disabled'], ['A04', 'A05']),
-		'negotiation.mod.lie': c(['click'], ['A04']),
-		'negotiation.mod.same': c(['click', 'click-disabled'], ['A04', 'A05']),
+		'negotiation.mod.reuse': c(['click', 'click-disabled', 'press:Space'], ['A04', 'A05', 'A12']),
+		'negotiation.mod.lie': c(['click', 'press:Space'], ['A04', 'A12']),
+		'negotiation.mod.same': c(['click', 'click-disabled', 'press:Space'], ['A04', 'A05', 'A12']),
+		'negotiation.mod.reuse.label': c(['click'], ['A13']),
+		'negotiation.mod.lie.label': c(['click'], ['A13']),
+		'negotiation.mod.same.label': c(['click'], ['A13']),
 		'negotiation.tier': c(RADIO_KEYS, ['A07']),
 		'negotiation.tier.row': c(['click', 'press:Enter'], ['A06', 'A08']),
 		'negotiation.complete': c(['click', 'click-disabled', 'press:Enter'], ['A09', 'A10', 'A11']),

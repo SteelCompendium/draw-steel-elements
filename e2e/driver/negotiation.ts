@@ -17,6 +17,7 @@ export const DUPLICATES = 'Negotiation/dup-names.md'; // two motivations both na
 export const NAMELESS = 'Negotiation/nameless.md'; // a motivation with a reason and no name
 export const CURRENT_ONLY = 'Negotiation/current-only.md'; // `current_interest: 3`, `current_patience: 2`, no initial_*
 export const QUOTED = 'Negotiation/quoted.md'; // `current_interest: "3"`, `current_patience: "2"`
+export const TWINS = 'Negotiation/twins.md'; // two IDENTICAL blocks (Twin, Interest 3 / Patience 3) with prose above, between and below
 export const NEGO = 'ds-negotiation';
 /** Tab presses from the top of the note to a control (the chrome panel, the options button and the tabs are in the way). */
 export const TABS = 60;
@@ -147,5 +148,17 @@ export const dossier = (n = 0): Promise<{ count: string | null; spent: boolean[]
 			count: col?.querySelector('.dse-nt__dossier-count')?.textContent ?? null,
 			spent: [...(col?.querySelectorAll('.dse-nt__dos') ?? [])].map((row) => row.classList.contains('is-spent')),
 			chips: [...(col?.querySelectorAll('[data-dse-control="negotiation.spent"]') ?? [])].map((c) => (c.textContent ?? '').trim()),
+		};
+	})()`);
+
+/** Where keyboard focus is in ANY view (Live Preview too): the control id, the seal's value, and whether it is inside a negotiation card. */
+export const focusAnywhere = (): Promise<{ ctl: string | null; value: string | null; inNego: boolean; tag: string }> =>
+	dse.page(`(() => {
+		const a = document.activeElement;
+		return {
+			ctl: a?.closest?.('[data-dse-control]')?.getAttribute('data-dse-control') ?? null,
+			value: a?.getAttribute?.('data-value') ?? null,
+			inNego: !!a?.closest?.('[data-dse-element="negotiation"]'),
+			tag: a?.tagName ?? '',
 		};
 	})()`);
