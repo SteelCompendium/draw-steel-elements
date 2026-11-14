@@ -189,8 +189,9 @@ async function resetFixtures(): Promise<void> {
  */
 // (The wait below also accepts "every root has a live registry entry": an embedded note's blocks belong to the EMBEDDED
 // file (`host.sourcePath`), so counting entries by the opened path alone never sees them.)
-async function openNote(rel: string, opts: { mode?: 'reading' | 'live-preview' } = {}): Promise<void> {
+async function openNote(rel: string, opts: { mode?: 'reading' | 'live-preview'; errorCard?: boolean } = {}): Promise<void> {
 	const mode = opts.mode ?? 'reading';
+	const errorCard = opts.errorCard === true;
 	await closeEverything();
 	await resetFixtures();
 	state.touched.add(rel);
@@ -208,9 +209,11 @@ async function openNote(rel: string, opts: { mode?: 'reading' | 'live-preview' }
 		`(() => {
 			const view = app.workspace.getMostRecentLeaf()?.view;
 			if (!view || view.file?.path !== ${JSON.stringify(rel)} || !view.containerEl) return false;
-			// SC-638: an ERROR CARD (a block whose parse refused it, stamped data-dse-error-stage) is drawn but never mounted, so it has no registry entry by design.
-			const roots = Array.from(view.containerEl.querySelectorAll('${scope} [data-dse-element]')).filter((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]') && !r.hasAttribute('data-dse-error-stage'));
-			const cards = view.containerEl.querySelectorAll('${scope} [data-dse-element][data-dse-error-stage]').length;
+			// SC-638: with `errorCard: true` the note is EXPECTED to draw an error card (a block whose parse refused it, stamped data-dse-error-stage). It is
+			// drawn but never mounted, so it has no registry entry by design. Without the option an error card is not a drawn block (a test that
+			// forgot it times out here instead of passing on a broken card).
+			const roots = Array.from(view.containerEl.querySelectorAll('${scope} [data-dse-element]')).filter((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]') && !(${errorCard} && r.hasAttribute('data-dse-error-stage')));
+			const cards = ${errorCard} ? view.containerEl.querySelectorAll('${scope} [data-dse-element][data-dse-error-stage]').length : 0;
 			const mine = ${REGISTRY}.liveEntries().filter((e) => e.host.sourcePath === ${JSON.stringify(rel)} && e.root.isConnected);
 			const all = ${REGISTRY}.liveEntries();
 			return roots.length + cards > 0 && (mine.length >= roots.length || roots.every((r) => all.some((e) => e.root === r)));

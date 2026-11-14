@@ -27,6 +27,8 @@ describe('negotiation: values the Director typed by hand', () => {
 		await dse.openNote(WRONG_NAME);
 		const text = await dse.page<string>(`document.querySelector('.markdown-reading-view [data-dse-element="negotiation"]')?.textContent ?? ''`);
 		expect(text).not.toMatch(/is not a function|Cannot read properties|undefined/);
+		expect(await dse.page<boolean>(`!!document.querySelector('.markdown-reading-view [data-dse-element="negotiation"] .dse-error-card')`)).toBe(false); // it is a negotiation, not an error card
+		expect(await dse.page<string>(`document.querySelector('.markdown-reading-view [data-dse-element="negotiation"] .dse-nt__head')?.textContent ?? ''`)).toContain('2024'); // and it shows the name
 	});
 
 	it('[NEGO-W03] a fractional Interest (0.4) is drawn on the seal that agrees with the ending: seal 0 only while the negotiation is over (hostile)', async () => {
@@ -44,7 +46,7 @@ describe('negotiation: values the Director typed by hand', () => {
 		})()`);
 
 	it('[NEGO-W08] a motivation written as `- Legacy` is a plain error naming the list and the item, the card has no control, and the note is byte-identical after a click on it', async () => {
-		await dse.openNote(WRONG_ITEM);
+		await dse.openNote(WRONG_ITEM, { errorCard: true });
 		const before = await dse.noteText(WRONG_ITEM);
 		const card = await cardOf();
 		expect(card).toMatchObject({ message: "Invalid data: 'motivations' item 2 must be an object.", controls: 0, stage: 'render' });
@@ -55,7 +57,7 @@ describe('negotiation: values the Director typed by hand', () => {
 	});
 
 	it('[NEGO-W09] `currentArgument: hello` is a plain error naming the key, the card has no control, and the note is byte-identical after a click on it', async () => {
-		await dse.openNote(WRONG_ARGUMENT);
+		await dse.openNote(WRONG_ARGUMENT, { errorCard: true });
 		const before = await dse.noteText(WRONG_ARGUMENT);
 		const card = await cardOf();
 		expect(card).toMatchObject({ message: "Invalid data: 'currentArgument' field must be an object.", controls: 0, stage: 'render' });
@@ -65,7 +67,7 @@ describe('negotiation: values the Director typed by hand', () => {
 	});
 
 	it('[NEGO-W11] a block that is just the text `hello` is a plain error, the card has no control, and the note is byte-identical after a click on it', async () => {
-		await dse.openNote(WRONG_BLOCK);
+		await dse.openNote(WRONG_BLOCK, { errorCard: true });
 		const before = await dse.noteText(WRONG_BLOCK);
 		const card = await cardOf();
 		expect(card).toMatchObject({ message: 'Invalid data: the block must be a map of keys.', controls: 0, stage: 'render' });
