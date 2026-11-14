@@ -4,7 +4,7 @@
 // Negotiation/basic.md: Interest 3 / Patience 3.
 import { expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
-import { BASIC, blockOf, focusState, onNthOfControl, interestOf, openNego, patienceOf, patienceSeal, TABS } from '../../driver/negotiation';
+import { BASIC, blockOf, focusState, interestOf, onNthOfControl, openNego, patienceOf, patienceSeal, TABS } from '../../driver/negotiation';
 
 describe('negotiation: keyboard focus after a save', () => {
 	knownBug('SC-639', '[NEGO-F01] Reset chosen from the keyboard (Enter on the options button, then Down and Enter in the menu): focus lands inside the card, not on the page', async () => {
@@ -24,8 +24,8 @@ describe('negotiation: keyboard focus after a save', () => {
 		expect(f.tag).not.toBe('BODY');
 	}, { failsWith: /BODY|inCard/ });
 
-	// SC-642: Complete Argument disarms the very button that was pressed, and Chromium drops focus from a disabled button on its next frame
-	// (measured: blur ~13 ms after the press, the save lands ~450 ms later; no rebuild is involved). Focus now goes to the FIRST USABLE control of the
+	// SC-642: Complete Argument disarms the very button that was pressed, and Chromium blurs a focused button the moment it is disabled, inside the
+	// click dispatch (measured: 2-3 ms after the click; the save lands ~410 ms later; no rebuild is involved). Focus now goes to the FIRST USABLE control of the
 	// Argument tab, where the next argument starts: the first Motivation chip (src/elements/negotiation/focusRules.ts).
 	it('[NEGO-F02] Complete Argument pressed with Enter: focus stays inside the card, on the first appeal chip (the pressed button disarms itself)', async () => {
 		const root = await openNego(BASIC);
@@ -58,7 +58,7 @@ describe('negotiation: keyboard focus after a save', () => {
 		await dse.click(root.control('negotiation.tier.row', { nth: 3 }));
 		await dse.page(`document.activeElement.blur()`);
 		expect(await focusState()).toMatchObject({ inCard: false });
-		// A scripted press: a pointer press would focus the button, which is the case F02 covers.
+		// A scripted press: a pointer press does not move focus at all (the click shield cancels pointerdown / mousedown), so this stands for any press made while focus is outside the card.
 		await dse.waitForWrite(BASIC, () => dse.page(`document.querySelector('.markdown-reading-view [data-dse-control="negotiation.complete"]').click()`));
 		await dse.settle();
 		expect(interestOf(await blockOf(BASIC))).toBe(4);

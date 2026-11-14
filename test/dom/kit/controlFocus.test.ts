@@ -233,7 +233,7 @@ describe('controlFocus (SC-626): `at` names which control, `fallbacks` name the 
 
 describe('controlFocus (SC-642): `fromDisabled` hands focus off a control that disabled itself in place', () => {
 	/** Two buttons in the root: the one that disarms itself when pressed, and where focus should go. jsdom keeps a disabled button as `document.activeElement`
-	 *  (Chromium drops it on the next frame), which is the state the option is for. */
+	 *  (Chromium blurs it inside the click dispatch, so there the focus is usually already on <body>), which is the state the option is for. */
 	function disarmed(): { fallbacks: Record<string, string[]>; focus: ReturnType<typeof captureControlFocus>; other: HTMLElement; self: HTMLButtonElement } {
 		const [self, other] = render(['n.complete', 'n.first']);
 		self.focus();

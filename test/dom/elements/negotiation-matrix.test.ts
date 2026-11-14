@@ -595,6 +595,29 @@ describe('SC-642: keyboard focus after Complete Argument', () => {
 		expect(document.activeElement).toBe(document.body);
 	});
 
+	test('the landing chip is scrolled into view (nearest: no scroll when it is already visible); nothing scrolls when no focus moved', async () => {
+		// jsdom has no scrollIntoView: stand one in, and take it away again.
+		const scroll = jest.fn();
+		(HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView = scroll;
+		try {
+			const { root } = await completeFromKeyboard(src());
+			expect(scroll).toHaveBeenCalledTimes(1);
+			expect(scroll).toHaveBeenCalledWith({ block: 'nearest' });
+			expect(scroll.mock.contexts[0]).toBe(chip(root(), 'motivation', 0));
+
+			scroll.mockClear();
+			document.body.innerHTML = '';
+			const page = await mount(src());
+			tierRow(page.root(), 3).click();
+			(document.activeElement as HTMLElement).blur();
+			complete(page.root()).click();
+			await page.flush();
+			expect(scroll).not.toHaveBeenCalled();
+		} finally {
+			delete (HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+		}
+	});
+
 	test('focus on a control outside the card, or on another control of the card, is left where it is', async () => {
 		const { root, flush } = await mount(src());
 		tierRow(root(), 3).click();

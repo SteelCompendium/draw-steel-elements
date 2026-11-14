@@ -57,7 +57,7 @@ describe('negotiation: keyboard focus after a save in Live Preview', () => {
 		await dse.click(root.control('negotiation.tier.row', { nth: 3 }));
 		await dse.page(`document.activeElement.blur()`);
 		expect(await focusAnywhere()).toMatchObject({ inNego: false });
-		// A scripted press: a pointer press would focus the button, which is the case L02 covers.
+		// A scripted press: a pointer press does not move focus at all (the click shield cancels pointerdown / mousedown), so this stands for any press made while focus is outside the card.
 		await dse.waitForWrite(BASIC, () => dse.page(`document.querySelector('.cm-content [data-dse-control="negotiation.complete"]').click()`));
 		await dse.settle();
 		expect(interestOf(await blockOf(BASIC))).toBe(4);
