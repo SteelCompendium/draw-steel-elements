@@ -64,12 +64,12 @@ afterEach(() => {
 });
 
 describe('SC-439 filed bugs', () => {
-	test.failing('[K03] a number as the name does not leave a raw JavaScript error on the card [known bug SC-638]', async () => {
+	test('[K03] a number as the name does not leave a raw JavaScript error on the card', async () => {
 		const { root } = await mount('name: 2024\ninitial_interest: 3\ninitial_patience: 3\n' + OFFERS);
 		expect(root().textContent).not.toMatch(/is not a function|Cannot read properties|undefined/);
 	});
 
-	test.failing('[K04] a fractional Interest (0.4) is drawn on the seal that agrees with the ending: seal 0 only while the negotiation is over [known bug SC-638]', async () => {
+	test('[K04] a fractional Interest (0.4) is drawn on the seal that agrees with the ending: seal 0 only while the negotiation is over', async () => {
 		const { root } = await mount('name: x\ninitial_interest: 3\ninitial_patience: 3\ncurrent_interest: 0.4\n' + OFFERS);
 		const seals = checked(root(), 'interest');
 		expect(seals).toHaveLength(1);

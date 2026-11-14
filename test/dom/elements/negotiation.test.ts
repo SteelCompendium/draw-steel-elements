@@ -1092,14 +1092,14 @@ describe('SC-379: Complete Argument keeps Interest and Patience inside 0..5', ()
 		expect(written.current_patience).toBe(0);
 	});
 
-	test('the clamp does the work at BOTH ends (each would write an out-of-range number with the clamp deleted): authored 4.5 + crit is 5, not 5.5; authored 0.5 + a pitfall tier is 0, not -0.5', async () => {
+	test('the clamp does the work at BOTH ends (each would write an out-of-range number with the clamp deleted): authored 4.4 + crit is 5, not 5.4; authored 0.5 + a pitfall tier is 0, not -0.5', async () => {
 		jest.useFakeTimers();
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
-		await pipeline.run(negotiationElement, frodoAt(4.5, 3), host);
+		await pipeline.run(negotiationElement, frodoAt(4.4, 3), host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
-		tierRadios(root)[3].click(); // crit: +1 Interest -> 5.5 unclamped
+		tierRadios(root)[3].click(); // crit: +1 Interest -> 5.4 unclamped (4.5 would already be a deal: seal 5, SC-638)
 		completeBtn(root)!.click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect((parseYaml(lastWritten(host)) as any).current_interest).toBe(5);
@@ -1141,7 +1141,7 @@ describe('SC-379: Complete Argument keeps Interest and Patience inside 0..5', ()
 		expect(NegotiationData.advanceStanding('lots', 1)).toBe('lots');
 		expect(NegotiationData.advanceStanding('2', -1)).toBe(1);
 		expect(parseNegotiationData(`current_interest: "5"\n${frodoYaml}`).ending()).toBe('deal');
-		expect(parseNegotiationData(`current_interest: lots\n${frodoYaml}`).ending()).toBeNull();
+		expect(parseNegotiationData(`current_interest: lots\n${frodoYaml}`).ending()).toBe('hostile'); // the seal draws junk as 0 (SC-638: the ending reads it the same way)
 	});
 });
 

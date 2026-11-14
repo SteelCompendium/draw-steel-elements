@@ -48,8 +48,8 @@ export class PatienceInterestView {
 
 	/** Repaints both tracks, the readout and the now-tag in place from the model. */
 	public refresh(): void {
-		const patience = NegotiationData.clampStanding(this.data.current_patience);
-		const interest = NegotiationData.clampStanding(this.data.current_interest);
+		const patience = NegotiationData.standingOf(this.data.current_patience);
+		const interest = NegotiationData.standingOf(this.data.current_interest);
 		this.patienceTrack.setValue(patience);
 		this.interestTrack.setValue(interest);
 		this.readoutValueEl.setText(String(this.patienceTrack.getValue()));
@@ -88,7 +88,7 @@ export class PatienceInterestView {
 			{
 				orientation: 'horizontal',
 				max: 5,
-				value: NegotiationData.clampStanding(this.data.current_patience),
+				value: NegotiationData.standingOf(this.data.current_patience),
 				label: 'Patience',
 				fill: 'remaining',
 				disabled: !this.canPersist,
@@ -123,7 +123,7 @@ export class PatienceInterestView {
 				orientation: 'vertical',
 				order: 'descending',
 				max: 5,
-				value: NegotiationData.clampStanding(this.data.current_interest),
+				value: NegotiationData.standingOf(this.data.current_interest),
 				label: 'Interest',
 				fill: 'none',
 				slotText: (n) => this.data.offerFor(n),

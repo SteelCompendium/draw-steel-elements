@@ -324,11 +324,11 @@ describe('keys the negotiation does not know survive a write (SC-637)', () => {
 		expect(Object.keys(out).filter((key) => key === 'extra_top')).toHaveLength(1);
 	});
 
-	test('a motivation that is not a mapping carries no keys (a string would otherwise yield its indices), and a block with nothing unknown writes no extra key', () => {
-		const m = parseLikePipeline('name: n\nmotivations:\n  - plain\n  - [a, b]\npitfalls: [x]');
-		expect(unknownKeysOf(m.motivations[0])).toEqual([]);
-		expect(unknownKeysOf(m.motivations[1])).toEqual([]);
-		expect(unknownKeysOf(m.pitfalls[0])).toEqual([]);
+	test('an item that is not a mapping is refused by the parse (SC-638) and carries no keys when built by hand (a string would otherwise yield its indices); a block with nothing unknown writes no extra key', () => {
+		expect(() => parseLikePipeline('name: n\nmotivations:\n  - plain\n  - [a, b]\npitfalls: [x]')).toThrow("Invalid data: 'motivations' item 1 must be an object.");
+		expect(unknownKeysOf(new Motivation('plain' as never))).toEqual([]);
+		expect(unknownKeysOf(new Motivation(['a', 'b'] as never))).toEqual([]);
+		expect(unknownKeysOf(new Pitfall('x' as never))).toEqual([]);
 		const known = 'name: n\ninitial_patience: 3\ninitial_interest: 2';
 		expect(keysOf(serialize(parseLikePipeline(known)))).toEqual(['name', 'initial_patience', 'initial_interest']);
 	});
@@ -485,13 +485,15 @@ describe('keys inside currentArgument survive while the argument does (SC-637)',
 		expect(unknownKeysOf(m.currentArgument).map(([key]) => key)).toEqual(['arg_note', 'arg_meta', 'zz_last']);
 	});
 
-	test('no argument in the source, or one that is not a mapping, carries no keys and writes none', () => {
+	test('no argument in the source carries no keys and writes none; one that is not a mapping is refused by the parse (SC-638) and carries no keys when built by hand', () => {
 		const none = parseLikePipeline('name: n\ninitial_patience: 3');
 		expect(unknownKeysOf(none.currentArgument)).toEqual([]);
-		const odd = parseLikePipeline('name: n\ninitial_patience: 3\ncurrentArgument: plain');
-		expect(unknownKeysOf(odd.currentArgument)).toEqual([]);
-		odd.current_patience = 1;
-		expect(Object.keys(parseYaml(serialize(odd)).currentArgument)).toEqual(KNOWN_ARG_KEYS);
+		expect(() => parseLikePipeline('name: n\ninitial_patience: 3\ncurrentArgument: plain')).toThrow("Invalid data: 'currentArgument' field must be an object.");
+		expect(unknownKeysOf(new CurrentArgument('plain' as never))).toEqual([]);
+		none.current_patience = 1;
+		expect(parseYaml(serialize(none)).currentArgument).toBeUndefined(); // never declared, never written (SC-482)
+		const built = new NegotiationData({ name: 'n', initial_patience: 3 });
+		expect(Object.keys(parseYaml(serialize(built)).currentArgument)).toEqual(KNOWN_ARG_KEYS);
 	});
 
 	test('serialize writes the argument from a copy: the live argument gains no own key, and a second pass is byte-identical', () => {

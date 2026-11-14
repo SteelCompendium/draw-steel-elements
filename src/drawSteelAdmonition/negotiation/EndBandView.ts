@@ -56,7 +56,7 @@ export class EndBandView {
 		label.setText(kind === 'final' ? 'Final offer' : 'Negotiation over');
 
 		// The words and the offer. `final` quotes the Interest the heroes are stuck at.
-		const interest = Math.round(NegotiationData.clampStanding(this.data.current_interest));
+		const interest = NegotiationData.standingOf(this.data.current_interest);
 		const lead =
 			kind === 'final'
 				? `Patience is spent — the NPC makes a final offer at Interest ${interest}: `

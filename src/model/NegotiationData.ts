@@ -42,6 +42,87 @@ export function unknownKeysOf(owner: object): ReadonlyArray<readonly [string, un
     return unknownKeys.get(owner) ?? [];
 }
 
+/**
+ * SC-638 — hand-typed values of the wrong type.
+ *
+ * READ (R1): a number or boolean where the negotiation expects text (`name: 2024`, a motivation's `reason: 42`,
+ * `motivationsUsed: [5]`) is read as its text, so every comparison and every `.trim()` works on text. A map or a list there,
+ * or a list / map of the wrong shape anywhere below, is not a value the negotiation can read: it throws a plain
+ * `Invalid data: …` message (the form encounter / party / conditions use), the pipeline draws it as the error card, and a
+ * card with no controls writes nothing, so the typed block is never replaced. `null` / absent keep their old meaning.
+ *
+ * WRITE (R2): the value the user typed is remembered beside the instance (a module-private WeakMap, the same reason as the
+ * unknown keys above: no own property, so `serialize` cannot write it as a key) and `restoreTypedText` puts it back when the
+ * text is still what was read, so `name: 2024` stays `name: 2024`. Matching is on the text, so `motivationsUsed: [5]` matches
+ * a motivation named 5, and a chip pressed on that motivation is the same entry.
+ */
+type TypedScalar = number | boolean;
+const typedText = new WeakMap<object, Map<string, Map<string, TypedScalar>>>();
+
+function rememberTyped(owner: object, slot: string, raw: TypedScalar): void {
+    let slots = typedText.get(owner);
+    if (!slots) typedText.set(owner, (slots = new Map()));
+    let texts = slots.get(slot);
+    if (!texts) slots.set(slot, (texts = new Map()));
+    texts.set(String(raw), raw);
+}
+
+/** `raw` as the negotiation reads a text field: a number / boolean becomes its text (remembered on `owner` under `slot`);
+ *  a map or list throws `Invalid data: <where> must be text.`; null, undefined and text pass through unchanged. */
+function readText(owner: object, slot: string, raw: unknown, where: string): unknown {
+    if (typeof raw === 'number' || typeof raw === 'boolean') {
+        rememberTyped(owner, slot, raw);
+        return String(raw);
+    }
+    if (typeof raw === 'object' && raw !== null) throw new Error(`Invalid data: ${where} must be text.`);
+    return raw;
+}
+
+const isMap = (value: unknown): boolean => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** `raw` (null / undefined -> none) as a list, or `Invalid data: '<key>' field must be a list.` */
+function readList(raw: unknown, key: string): unknown[] {
+    if (raw === null || raw === undefined) return [];
+    if (!Array.isArray(raw)) throw new Error(`Invalid data: '${key}' field must be a list.`);
+    return raw;
+}
+
+/** The items of a motivations / pitfalls list: each must be a map (`- Legacy`, a blank `-`, a number and a nested list are not). */
+function readItems(raw: unknown, key: string): unknown[] {
+    const items = readList(raw, key);
+    items.forEach((item, index) => {
+        if (!isMap(item)) throw new Error(`Invalid data: '${key}' item ${index + 1} must be an object.`);
+    });
+    return items;
+}
+
+/** The text of one item's field, as `readText` (the message names the list, the item's position and the field). */
+function readItemText(owner: object, list: string, index: number, field: string, raw: unknown): unknown {
+    return readText(owner, field, raw, `'${list}' item ${index + 1} '${field}'`);
+}
+
+/** The typed value the user wrote for `text` in `slot` of `owner`, else `text` itself. */
+export function typedValueOf(owner: object, slot: string, text: string): unknown {
+    return typedText.get(owner)?.get(slot)?.get(text) ?? text;
+}
+
+/** In `out` (a fresh copy of `owner`'s data), puts back the value the user typed for each of `slots` that is still the
+ *  text read from it: a text slot directly, a list of text entry by entry. Anything the negotiation changed is untouched. */
+export function restoreTypedText(out: Record<string, unknown>, owner: object, slots: readonly string[]): Record<string, unknown> {
+    if (!typedText.has(owner)) return out;
+    for (const slot of slots) {
+        const value = out[slot];
+        if (typeof value === 'string') out[slot] = typedValueOf(owner, slot, value);
+        else if (Array.isArray(value)) out[slot] = value.map((entry) => (typeof entry === 'string' ? typedValueOf(owner, slot, entry) : entry));
+    }
+    return out;
+}
+
+/** The text slots of each class, in the order they are read (what `restoreTypedText` walks on a write). */
+export const TOP_TEXT_SLOTS: readonly string[] = ['name', 'i5', 'i4', 'i3', 'i2', 'i1', 'i0'];
+export const ITEM_TEXT_SLOTS: readonly string[] = ['name', 'reason'];
+export const ARGUMENT_TEXT_SLOTS: readonly string[] = ['motivationsUsed', 'pitfallsUsed'];
+
 export class NegotiationData {
     name?: string;
     initial_patience?: number;
@@ -68,20 +149,27 @@ export class NegotiationData {
     private static readonly default_interest: number = 0;
 
     constructor(data: Partial<NegotiationData>) {
-        this.name = data.name;
+        // SC-638: shape is checked first (a wrong one throws before anything is built), then each text field is read as text.
+        const motivations = readItems(data.motivations, 'motivations');
+        const pitfalls = readItems(data.pitfalls, 'pitfalls');
+        const argument: unknown = data.currentArgument;
+        if (argument !== null && argument !== undefined && !isMap(argument)) {
+            throw new Error("Invalid data: 'currentArgument' field must be an object.");
+        }
+        this.name = readText(this, 'name', data.name, "'name'") as string | undefined;
         this.initial_patience = data.initial_patience;
         this.current_patience = data.current_patience ?? data.initial_patience ?? NegotiationData.default_patience;
         this.initial_interest = data.initial_interest;
         this.current_interest = data.current_interest ?? data.initial_interest ?? NegotiationData.default_interest;
-        this.motivations = data.motivations?.map(mot => new Motivation(mot)) ?? [];
-        this.pitfalls = data.pitfalls?.map(pit => new Pitfall(pit)) ?? [];
-        this.currentArgument = data.currentArgument ? new CurrentArgument(data.currentArgument) : new CurrentArgument({});
-        this.i5 = data.i5 ?? "Interest 5 result";
-        this.i4 = data.i4 ?? "Interest 4 result";
-        this.i3 = data.i3 ?? "Interest 3 result";
-        this.i2 = data.i2 ?? "Interest 2 result";
-        this.i1 = data.i1 ?? "Interest 1 result";
-        this.i0 = data.i0 ?? "Interest 0 result";
+        this.motivations = motivations.map((mot, index) => new Motivation(mot as Partial<Motivation>, index));
+        this.pitfalls = pitfalls.map((pit, index) => new Pitfall(pit as Partial<Pitfall>, index));
+        this.currentArgument = argument ? new CurrentArgument(argument as Partial<CurrentArgument>) : new CurrentArgument({});
+        this.i5 = (readText(this, 'i5', data.i5, "'i5'") as string | undefined) ?? "Interest 5 result";
+        this.i4 = (readText(this, 'i4', data.i4, "'i4'") as string | undefined) ?? "Interest 4 result";
+        this.i3 = (readText(this, 'i3', data.i3, "'i3'") as string | undefined) ?? "Interest 3 result";
+        this.i2 = (readText(this, 'i2', data.i2, "'i2'") as string | undefined) ?? "Interest 2 result";
+        this.i1 = (readText(this, 'i1', data.i1, "'i1'") as string | undefined) ?? "Interest 1 result";
+        this.i0 = (readText(this, 'i0', data.i0, "'i0'") as string | undefined) ?? "Interest 0 result";
         // FOLLOWUPS #26: assigned LAST so it serializes last when present; passed
         // straight through, never coerced/defaulted (see the field comment above).
         this._dse_anchor = data._dse_anchor;
@@ -137,13 +225,23 @@ export class NegotiationData {
      * final offer. `null` while the negotiation is live.
      */
     ending(): 'deal' | 'hostile' | 'final' | null {
-        // Number() so a quoted "5" in hand-edited YAML ends it like a 5; junk (NaN) ends nothing.
-        const interest = Number(this.current_interest);
-        const patience = Number(this.current_patience);
+        // SC-638 (R4): each standing is read exactly as the seal is drawn (`standingOf`: clamp, round, junk -> 0), so the
+        // ending and the seal can never disagree: 0.4 is seal 0 and hostile, 4.5 is seal 5 and a deal, "banana" Patience is 0.
+        const interest = NegotiationData.standingOf(this.current_interest);
+        const patience = NegotiationData.standingOf(this.current_patience);
         if (interest >= 5) return 'deal';
         if (interest <= 0) return 'hostile';
         if (patience <= 0) return 'final';
         return null;
+    }
+
+    /**
+     * SC-638 (R4) — the ONE reading of a standing: the whole number 0..5 the seal is drawn on (`clampStanding`, then
+     * `Math.round`; a quoted number is its number, junk is 0). The seals, the band's "Interest n", `offerFor` and `ending()`
+     * all read through here.
+     */
+    static standingOf(n: unknown): number {
+        return Math.round(NegotiationData.clampStanding(n as number));
     }
 
     /**
@@ -168,7 +266,7 @@ export class NegotiationData {
     /** SC-379 — the authored outcome text for Interest `n` (clamped + rounded onto 0..5). */
     offerFor(n: number): string {
         const offers = [this.i0, this.i1, this.i2, this.i3, this.i4, this.i5];
-        return offers[Math.round(NegotiationData.clampStanding(n))];
+        return offers[NegotiationData.standingOf(n)];
     }
 
     resetData() {
@@ -187,12 +285,18 @@ export class CurrentArgument {
     reusedMotivation: boolean;
 
     constructor(data: Partial<CurrentArgument>) {
-        this.motivationsUsed = data.motivationsUsed ?? [];
-        this.pitfallsUsed = data.pitfallsUsed ?? [];
+        this.motivationsUsed = CurrentArgument.readUsed(this, 'motivationsUsed', data.motivationsUsed);
+        this.pitfallsUsed = CurrentArgument.readUsed(this, 'pitfallsUsed', data.pitfallsUsed);
         this.lieUsed = data.lieUsed ?? false;
         this.sameArgumentUsed = data.sameArgumentUsed ?? false;
         this.reusedMotivation = data.reusedMotivation ?? false;
         recordUnknownKeys(this, data, ARGUMENT_KNOWN_KEYS); // SC-637
+    }
+
+    /** SC-638: a `motivationsUsed` / `pitfallsUsed` list as text entries (a number is its text, a map or list is not text). */
+    private static readUsed(owner: CurrentArgument, key: string, raw: unknown): string[] {
+        const where = `currentArgument.${key}`;
+        return readList(raw, where).map((entry, index) => readText(owner, key, entry, `'${where}' item ${index + 1}`) as string);
     }
 
     /**
@@ -220,6 +324,7 @@ export class CurrentArgument {
         // SC-637: a Director's own keys inside `currentArgument:` belong to THIS argument. Complete Argument and Reset
         // end it through here, so they end with it; every write that keeps the argument (a chip, a modifier) keeps them.
         unknownKeys.delete(this);
+        typedText.delete(this); // SC-638: the typed entries of the argument that just ended go with it
     }
 }
 
@@ -228,9 +333,9 @@ export class Motivation {
     reason: string;
     hasBeenAppealedTo: boolean;
 
-    constructor(data: Partial<Motivation>) {
-        this.name = data.name?.trim() ?? '';
-        this.reason = data.reason?.trim() ?? '';
+    constructor(data: Partial<Motivation>, index = 0) {
+        this.name = (readItemText(this, 'motivations', index, 'name', data.name) as string | undefined)?.trim() ?? '';
+        this.reason = (readItemText(this, 'motivations', index, 'reason', data.reason) as string | undefined)?.trim() ?? '';
         this.hasBeenAppealedTo = data.hasBeenAppealedTo ?? false;
         recordUnknownKeys(this, data, MOTIVATION_KNOWN_KEYS); // SC-637
     }
@@ -240,9 +345,9 @@ export class Pitfall {
     name: string;
     reason: string;
 
-    constructor(data: Partial<Pitfall>) {
-        this.name = data.name?.trim() ?? '';
-        this.reason = data.reason?.trim() ?? '';
+    constructor(data: Partial<Pitfall>, index = 0) {
+        this.name = (readItemText(this, 'pitfalls', index, 'name', data.name) as string | undefined)?.trim() ?? '';
+        this.reason = (readItemText(this, 'pitfalls', index, 'reason', data.reason) as string | undefined)?.trim() ?? '';
         recordUnknownKeys(this, data, PITFALL_KNOWN_KEYS); // SC-637
     }
 }

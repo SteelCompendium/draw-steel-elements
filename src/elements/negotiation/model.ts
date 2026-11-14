@@ -40,7 +40,7 @@
 // SC-637: a key the negotiation does not read (top level, inside a motivation, inside a pitfall, inside `currentArgument`) is written back after the
 // known keys in its original order — see NegotiationData.ts for where those pairs live and why no key can shadow a member.
 import { stringifyYaml } from 'obsidian';
-import { NegotiationData, unknownKeysOf } from '@model/NegotiationData';
+import { ARGUMENT_TEXT_SLOTS, ITEM_TEXT_SLOTS, NegotiationData, restoreTypedText, TOP_TEXT_SLOTS, unknownKeysOf } from '@model/NegotiationData';
 import { omitUntouchedDefaults, recordAbsentDefaults, recordingDefaults } from '../shared/undeclaredDefaults';
 
 /** The top-level keys NegotiationData fills a default into when the source did not declare them (SC-482). */
@@ -98,10 +98,14 @@ export function serialize(model: NegotiationData): string {
 	// parse rejects a blank source, so no instance ever came from one).
 	// SC-637: the keys the source carried that the negotiation does not read follow the known ones, at the top level and
 	// inside each motivation and pitfall (they live beside the instance, see NegotiationData.ts, so none can shadow a method).
-	const written = withUnknownKeys(omitUntouchedDefaults(model), model);
-	if (Array.isArray(written.motivations)) written.motivations = model.motivations.map((m) => withUnknownKeys(omitUntouchedDefaults(m), m));
-	if (Array.isArray(written.pitfalls)) written.pitfalls = model.pitfalls.map((p) => withUnknownKeys(omitUntouchedDefaults(p), p));
+	// SC-638: a value the user typed as a number / boolean where the negotiation reads text (`name: 2024`) is written back as typed
+	// while its text is unchanged (restoreTypedText: the typed values live beside the instance, never as an own key).
+	const written = restoreTypedText(withUnknownKeys(omitUntouchedDefaults(model), model), model, TOP_TEXT_SLOTS);
+	if (Array.isArray(written.motivations)) written.motivations = model.motivations.map((m) => restoreTypedText(withUnknownKeys(omitUntouchedDefaults(m), m), m, ITEM_TEXT_SLOTS));
+	if (Array.isArray(written.pitfalls)) written.pitfalls = model.pitfalls.map((p) => restoreTypedText(withUnknownKeys(omitUntouchedDefaults(p), p), p, ITEM_TEXT_SLOTS));
 	// The argument is written from a copy too (it is the live instance otherwise), with the keys it carries after the five it reads.
-	if (written.currentArgument === model.currentArgument) written.currentArgument = withUnknownKeys(model.currentArgument, model.currentArgument);
+	if (written.currentArgument === model.currentArgument) {
+		written.currentArgument = restoreTypedText(withUnknownKeys(model.currentArgument, model.currentArgument), model.currentArgument, ARGUMENT_TEXT_SLOTS);
+	}
 	return stringifyYaml(written).trim();
 }
