@@ -4,7 +4,7 @@
 // Montage/done.md: Total Success. Montage/exhausted.md: out of rounds, Partial Success.
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
-import { ACTED, barIds, blockOf, BRINK, cellOf, DONE, dismiss, EXHAUSTED, expectText, FRESH, MID, MONTAGE, modalsOpen, roundChip, trackTail, verdict } from '../../driver/montage';
+import { ACTED, barIds, blockOf, BRINK, cellOf, DONE, dismiss, EXHAUSTED, expectText, FRESH, MID, MONTAGE, modalsOpen, roundChip, TABS, trackTail, verdict } from '../../driver/montage';
 
 describe('montage: the action bar', () => {
 	it('[MONT-R01] Log an action... opens the NEW sheet for the first hero yet to act, and only that hero', async () => {
@@ -107,5 +107,27 @@ describe('montage: the action bar', () => {
 		expect(b.participants!.map((p) => p.skills_used)).toEqual([[], []]);
 		await expectText(verdict(root), 'Not started');
 		expect(await barIds()).toEqual(['montage.bar.log', 'montage.bar.undo', 'montage.bar.end-round']);
+	});
+
+	it('[MONT-R10] Enter on the focused End round ends the round in play: one write, round 2 of 3', async () => {
+		await dse.openNote(FRESH);
+		const root = dse.block(MONTAGE);
+		const end = root.control('montage.bar.end-round');
+		await dse.tabTo(end, TABS);
+		const w = await dse.waitForWrite(FRESH, () => dse.press('Enter', end));
+		expect(w.count).toBe(1);
+		expect((await blockOf(FRESH)).current_round).toBe(2);
+		await expectText(roundChip(root), 'Round 2 / 3');
+	});
+
+	it('[MONT-R11] Enter on the focused Log an action... opens the NEW sheet for the first hero yet to act and writes nothing', async () => {
+		await dse.openNote(BRINK);
+		const root = dse.block(MONTAGE);
+		const log = root.control('montage.bar.log');
+		await dse.tabTo(log, TABS);
+		await dse.expectNoWrite(BRINK, () => dse.press('Enter', log));
+		const modal = await dse.modal('montage-log');
+		await expect(modal.control({ css: '.dse-modal__title-text' })).toHaveElementProperty('textContent', 'Bram · round 2');
+		await dismiss(modal);
 	});
 });

@@ -138,6 +138,7 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Montage/exhausted.md` | out of rounds (round 3 of 2), 3 successes / 1 failure, limits 5 / 5: Partial Success, the done bar with Back to round 2 and Reopen |
   | `Montage/over-limit.md` | a hand-edited block past both limits (4 of 2 successes, 3 of 1 failures), round 2 of 3 |
   | `Montage/wide.md` | twelve rounds, three heroes, round 1: the board scrolls and its hero column is pinned (SC-326, SC-490) |
+  | `Montage/wide-entries.md` | the wide board with Kira's round 10 (a success) and round 11 (a failure) already logged: round cells far to the right that a Tab must scroll into view (SC-326, SC-490) |
   | `Montage/hand-written.md` | hand-written YAML: Kira's `skills_used` is a scalar, Bram has no list, and Bram's round-1 entry holds an unrecognised result (`dodged`) |
   | `Montage/two-blocks.md` | TWO different `ds-montage` blocks in one note with prose above, between and below |
   | `Montage/twins.md` | TWO IDENTICAL `ds-montage` blocks (Kira, round 1 of 3, nothing logged) with prose above, between and below |

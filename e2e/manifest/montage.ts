@@ -7,7 +7,7 @@
 //   - "Set limits..." (manifest/montage-limits-modal.ts, ids `montage.limits.*`).
 // Id naming: the bar's buttons are `montage.bar.*` and the chrome items `montage.chrome.*` so a `montage.log.*` / `montage.add-hero.*`
 // prefix always means a modal control, never a bar button or a chrome item that merely shares its name.
-// `rows` cite the SC-438 scenario groups: C chrome panel, B board, R action bar, G strip and guide (`MONT-<group><nn>`).
+// `rows` cite the SC-438 scenario groups: C chrome panel, B board, R action bar, G strip and guide, F focus after a rebuild (`MONT-<group><nn>`).
 // A repeated control is driven through `nth`. The chrome panel is hidden (opacity 0) until the pointer is over the montage or
 // focus is inside it: `dse.hover(root.root)` first.
 import { c, surface } from './surface';
@@ -42,15 +42,15 @@ export default surface('montage', {
 		//    Reopen (only a montage that ran out of rounds) / Clear all. "Log an action..." disables when every hero has acted in the
 		//    round in play (or there are no heroes); "Undo" disables with nothing logged. "Back to round N" and "Reopen" are absent
 		//    when they do not apply.
-		'montage.bar.log': c(['click', 'click-disabled'], ['R01', 'R02']),
+		'montage.bar.log': c(['click', 'click-disabled', 'press:Enter'], ['R01', 'R02', 'R11', 'F03']),
 		'montage.bar.undo': c(['click', 'click-disabled'], ['R03', 'R04']),
 		'montage.bar.back': c(['click'], ['R05']),
-		'montage.bar.end-round': c(['click'], ['R06']),
+		'montage.bar.end-round': c(['click', 'press:Enter'], ['R06', 'R10', 'F01']),
 		'montage.bar.reopen': c(['click'], ['R07']),
 		'montage.bar.clear-all': c(['click'], ['R08']),
 
 		// -- G. The two session-only disclosures (Test tiers strip, "Running a montage test" guide): never a note write.
 		'montage.strip': c(['click', 'press:Enter'], ['G01', 'G02']),
-		'montage.guide': c(['click'], ['G03']),
+		'montage.guide': c(['click', 'press:Enter'], ['G03', 'G05']),
 	},
 });

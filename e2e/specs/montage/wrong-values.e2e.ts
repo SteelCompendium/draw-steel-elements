@@ -26,6 +26,8 @@ describe('montage: values the Director typed by hand', () => {
 		const root = dse.block(MONTAGE);
 		const word = (await root.control({ css: '.dse-mt__verdict-word' }).getProperty('textContent')) as string;
 		const rule = (await root.control({ css: '.dse-mt__verdict-rule' }).getProperty('textContent')) as string;
-		expect(/failure/i.test(word)).toBe(/failure/i.test(rule));
+		// "total failure" as a phrase: a neutral rule line that merely says "failures" must not count as a claim
+		const claimsTotalFailure = (text: string): boolean => /\btotal failure\b/i.test(text);
+		expect(claimsTotalFailure(word)).toBe(claimsTotalFailure(rule));
 	});
 });

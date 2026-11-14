@@ -83,6 +83,7 @@ describe('montage: the Set limits window', () => {
 		expect(w.count).toBe(1);
 		await expect(modal.root).not.toBeExisting();
 		expect((await blockOf(MID)).success_limit).toBe(7);
+		expect(await slots('success')).toBe(7);
 	});
 
 	it('[MONT-S07] Save with nothing changed rewrites nothing (the host skips identical bytes)', async () => {

@@ -71,7 +71,7 @@ describe('montage: the Add a hero window', () => {
 	});
 
 	it('[MONT-H06] from the keyboard: type a name, Tab to Add and Enter adds the hero', async () => {
-		const { modal } = await openAddHero(FRESH);
+		const { root, modal } = await openAddHero(FRESH);
 		await dse.type(modal.control('montage.add-hero.name'), 'Osric');
 		const add = modal.control('montage.add-hero.submit');
 		await dse.tabTo(add, 6);
@@ -79,6 +79,7 @@ describe('montage: the Add a hero window', () => {
 		expect(w.count).toBe(1);
 		await expect(modal.root).not.toBeExisting();
 		expect((await blockOf(FRESH)).participants!.map((p) => p.name)).toEqual(['Kira', 'Bram', 'Osric']);
+		await expect(root.control({ css: '.dse-mt__board-name[data-hero="Osric"]' })).toBeExisting();
 	});
 
 	knownBug('SC-627', '[MONT-H07] a name already on the board is refused: no second "Kira" is written', async () => {

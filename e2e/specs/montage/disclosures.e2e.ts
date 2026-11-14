@@ -64,4 +64,15 @@ describe('montage: the strip and the guide', () => {
 		await expect(root.control('montage.strip')).toHaveAttribute('aria-expanded', 'true');
 		await expect(root.control('montage.guide')).toHaveAttribute('aria-expanded', 'true');
 	});
+
+	it('[MONT-G05] Enter on the focused guide header opens it in place, with no write', async () => {
+		await dse.openNote(FRESH);
+		const root = dse.block(MONTAGE);
+		await closeDisclosures(root);
+		const header = root.control('montage.guide');
+		await dse.tabTo(header, TABS);
+		await dse.expectNoWrite(FRESH, () => dse.press('Enter', header));
+		await expect(root.control('montage.guide')).toHaveAttribute('aria-expanded', 'true');
+		await expect(root.control({ css: '.dse-mt__guide-body' })).toBeDisplayed();
+	});
 });

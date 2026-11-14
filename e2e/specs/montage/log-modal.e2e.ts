@@ -50,15 +50,18 @@ describe('montage: the Log an action sheet', () => {
 		expect([b.successes, b.failures]).toEqual([0, 0]);
 	});
 
-	it('[MONT-L03] the Success chip pressed again after another one wins: Failure, then Success, logs a success', async () => {
+	it('[MONT-L03] a chip pressed after another replaces it: Failure, then Assist (state checked between the clicks), logs an assist', async () => {
 		const { modal } = await openNewFresh();
 		await dse.click(pressed(modal, 'failure'));
-		await dse.click(pressed(modal, 'success'));
-		await expect(pressed(modal, 'success')).toHaveAttribute('aria-pressed', 'true');
+		await expect(pressed(modal, 'failure')).toHaveAttribute('aria-pressed', 'true');
+		await expect(pressed(modal, 'success')).toHaveAttribute('aria-pressed', 'false');
+		await dse.click(pressed(modal, 'assist'));
+		await expect(pressed(modal, 'assist')).toHaveAttribute('aria-pressed', 'true');
+		await expect(pressed(modal, 'failure')).toHaveAttribute('aria-pressed', 'false');
 		await dse.waitForWrite(FRESH, () => dse.click(modal.control('montage.log.submit')));
 		const b = await blockOf(FRESH);
-		expect(b.entries).toEqual([{ hero: 'Kira', round: 1, result: 'success' }]);
-		expect([b.successes, b.failures]).toEqual([1, 0]);
+		expect(b.entries).toEqual([{ hero: 'Kira', round: 1, result: 'assist' }]);
+		expect([b.successes, b.failures]).toEqual([0, 0]);
 	});
 
 	it('[MONT-L04] typing a skill the hero already used shows the reuse warning and leaves Log enabled; logging it anyway lists it twice', async () => {
@@ -155,13 +158,14 @@ describe('montage: the Log an action sheet', () => {
 	});
 
 	it('[MONT-L10] from the keyboard: Tab to Log and Enter writes the entry (the sheet starts with its first control focused)', async () => {
-		const { modal } = await openNewFresh();
+		const { root, modal } = await openNewFresh();
 		const submit = modal.control('montage.log.submit');
 		await dse.tabTo(submit, 12);
 		const w = await dse.waitForWrite(FRESH, () => dse.press('Enter', submit));
 		expect(w.count).toBe(1);
 		await expect(modal.root).not.toBeExisting();
 		expect((await blockOf(FRESH)).entries).toEqual([{ hero: 'Kira', round: 1, result: 'success' }]);
+		await expect(cellOf(root, 'Kira', 1)).toHaveAttribute('data-kind', 'success');
 	});
 
 	it('[MONT-L11] a reused sheet reads the round it was opened for: Yenna round 1 is already played, and logging it fills that cell, not the round in play', async () => {

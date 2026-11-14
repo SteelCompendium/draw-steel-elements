@@ -4,7 +4,7 @@
 // round 2 is in play. Montage/acted.md: both heroes have acted in round 1. Montage/done.md: complete. Montage/wide.md: twelve rounds.
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
-import { ACTED, blockOf, cellOf, DONE, dismiss, expectText, FRESH, MID, MONTAGE, modalsOpen, hoverHero, rowAct, TABS, WIDE } from '../../driver/montage';
+import { ACTED, blockOf, cellOf, DONE, dismiss, expectText, FRESH, MID, MONTAGE, modalsOpen, hoverHero, rowAct, TABS, WIDE, WIDE_ENTRIES } from '../../driver/montage';
 
 const title = (modal: Awaited<ReturnType<typeof dse.modal>>) => modal.control({ css: '.dse-modal__title-text' });
 const eyebrow = (modal: Awaited<ReturnType<typeof dse.modal>>) => modal.control({ css: '.dse-mt__sheet-eyebrow' });
@@ -111,27 +111,32 @@ describe('montage: the board controls', () => {
 		await dismiss(modal);
 	});
 
-	for (const [kind, plusS, plusF] of [['success', 1, 0], ['failure', 0, 1], ['assist', 0, 0]] as const) {
-		it(`[MONT-B10${kind[0]}] the ${kind} quick button writes the entry at once: one write, no sheet, tallies +${plusS} / +${plusF}, the cell filled`, async () => {
-			await dse.openNote(FRESH);
-			const root = dse.block(MONTAGE);
-			const w = await dse.waitForWrite(FRESH, () => dse.click(root.control(`montage.quick.${kind}`, { nth: 0 })));
-			expect(w.count).toBe(1);
-			const b = await blockOf(FRESH);
-			expect(b.entries).toEqual([{ hero: 'Kira', round: 1, result: kind }]);
-			expect([b.successes, b.failures]).toEqual([plusS, plusF]);
-			expect(b.participants![0].skills_used).toEqual([]);
-			await expect(cellOf(root, 'Kira', 1)).toHaveAttribute('data-kind', kind);
-			await expect(root.control('montage.cell.socket', { nth: 0 })).toBeExisting(); // Bram's socket is still open
-			expect(await modalsOpen()).toBe(0);
-		});
+	/** One quick button on Kira's open socket in Montage/fresh.md: one write, the entry, the tallies, no sheet, the cell filled. */
+	async function quickLog(kind: 'success' | 'failure' | 'assist', plusS: number, plusF: number): Promise<void> {
+		await dse.openNote(FRESH);
+		const root = dse.block(MONTAGE);
+		const w = await dse.waitForWrite(FRESH, () => dse.click(root.control(`montage.quick.${kind}`, { nth: 0 })));
+		expect(w.count).toBe(1);
+		const b = await blockOf(FRESH);
+		expect(b.entries).toEqual([{ hero: 'Kira', round: 1, result: kind }]);
+		expect([b.successes, b.failures]).toEqual([plusS, plusF]);
+		expect(b.participants![0].skills_used).toEqual([]);
+		await expect(cellOf(root, 'Kira', 1)).toHaveAttribute('data-kind', kind);
+		await expect(root.control('montage.cell.socket', { nth: 0 })).toBeExisting(); // Bram's socket is still open
+		expect(await modalsOpen()).toBe(0);
 	}
+
+	it('[MONT-B10s] the success quick button writes the entry at once: one write, no sheet, a success counted, the cell filled', () => quickLog('success', 1, 0));
+	it('[MONT-B10f] the failure quick button writes the entry at once: one write, no sheet, a failure counted, the cell filled', () => quickLog('failure', 0, 1));
+	it('[MONT-B10a] the assist quick button writes the entry at once: one write, no sheet, nothing counted, the cell filled', () => quickLog('assist', 0, 0));
 
 	it('[MONT-B11] a quick log on the second hero fills that hero\'s cell only and leaves the first hero\'s socket open', async () => {
 		await dse.openNote(FRESH);
 		const root = dse.block(MONTAGE);
 		await dse.waitForWrite(FRESH, () => dse.click(root.control('montage.quick.failure', { nth: 1 })));
-		expect((await blockOf(FRESH)).entries).toEqual([{ hero: 'Bram', round: 1, result: 'failure' }]);
+		const b = await blockOf(FRESH);
+		expect(b.entries).toEqual([{ hero: 'Bram', round: 1, result: 'failure' }]);
+		expect([b.successes, b.failures]).toEqual([0, 1]);
 		await expect(cellOf(root, 'Kira', 1)).toHaveAttribute('data-kind', 'none');
 		await expect(cellOf(root, 'Bram', 1)).toHaveAttribute('data-kind', 'failure');
 	});
@@ -163,5 +168,27 @@ describe('montage: a board wider than its frame (SC-326, SC-490)', () => {
 		const after = await board();
 		expect(Math.abs(after.left - scrolled.left)).toBeLessThanOrEqual(2);
 		expect(after.nameLeft).toBe(after.frameLeft);
+	});
+
+	it('[MONT-B13] a real Tab onto a round cell hidden past the right edge scrolls it fully into view, clear of the pinned hero column', async () => {
+		await dse.openNote(WIDE_ENTRIES);
+		const root = dse.block(MONTAGE);
+		const last = root.control('montage.quick.assist', { nth: 0 }); // the last stop of Kira's round-1 cell: the next Tab is her round-10 cell
+		await dse.tabTo(last, TABS);
+		const geometry = (): Promise<{ round: string | null; left: number; right: number; frameLeft: number; frameRight: number; pinned: number; scrolled: number }> =>
+			dse.page(`(() => {
+				const a = document.activeElement;
+				const b = document.querySelector('.markdown-reading-view [data-dse-element="montage"] .dse-mt__board');
+				const frame = b.getBoundingClientRect();
+				const box = a.getBoundingClientRect();
+				return { round: a.getAttribute('data-round'), left: Math.round(box.left), right: Math.round(box.right), frameLeft: Math.round(frame.left + b.clientLeft), frameRight: Math.round(frame.left + b.clientLeft + b.clientWidth), pinned: Math.round(b.querySelector('.dse-mt__board-corner').getBoundingClientRect().width), scrolled: Math.round(b.scrollLeft) };
+			})()`);
+		expect((await geometry()).scrolled).toBe(0);
+		await dse.press('Tab'); // to the page: Tab is no pair of any control
+		await dse.waitFor(`document.activeElement?.getAttribute('data-round') === '10'`, 'Tab to reach the round-10 cell');
+		const g = await geometry();
+		expect(g.scrolled).toBeGreaterThan(0);
+		expect(g.left).toBeGreaterThanOrEqual(g.frameLeft + g.pinned - 1);
+		expect(g.right).toBeLessThanOrEqual(g.frameRight + 1);
 	});
 });

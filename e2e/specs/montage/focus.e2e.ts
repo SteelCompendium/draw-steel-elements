@@ -12,8 +12,7 @@ describe('montage: keyboard focus after the montage rebuilds', () => {
 		const root = dse.block(MONTAGE);
 		const end = root.control('montage.bar.end-round');
 		await dse.tabTo(end, TABS);
-		dse.embeddedTarget(FRESH, MONTAGE); // the key goes to the page (End round x Enter is no manifest pair): declare the block it edits
-		await dse.waitForWrite(FRESH, () => dse.press('Enter'));
+		await dse.waitForWrite(FRESH, () => dse.press('Enter', end));
 		await dse.settle();
 		expect((await blockOf(FRESH)).current_round).toBe(2);
 		const f = await focusState();
@@ -40,8 +39,7 @@ describe('montage: keyboard focus after the montage rebuilds', () => {
 		const root = dse.block(MONTAGE);
 		const log = root.control('montage.bar.log');
 		await dse.tabTo(log, TABS);
-		dse.embeddedTarget(FRESH, MONTAGE);
-		await dse.press('Enter'); // to the page: Log an action x Enter is no manifest pair
+		await dse.press('Enter', log);
 		const modal = await dse.modal('montage-log');
 		const submit = modal.control('montage.log.submit');
 		await dse.tabTo(submit, 12);
@@ -52,4 +50,15 @@ describe('montage: keyboard focus after the montage rebuilds', () => {
 		const f = await focusState();
 		expect(f.inMontage).toBe(true);
 	}, { failsWith: /Received: false/ });
+
+	knownBug('SC-626', '[MONT-F04] Live Preview: Enter on End round, the rebuilt End round button holds focus', async () => {
+		await dse.openNote(FRESH, { mode: 'live-preview' });
+		const root = dse.block(MONTAGE);
+		const end = root.control('montage.bar.end-round');
+		await dse.focusByScript(end); // a real Tab from the editor would indent the note
+		await dse.waitForWrite(FRESH, () => dse.press('Enter', end));
+		await dse.settle();
+		expect((await blockOf(FRESH)).current_round).toBe(2);
+		expect(await dse.focusedControl()).toBe('montage.bar.end-round');
+	}, { failsWith: /Received: null/ });
 });
