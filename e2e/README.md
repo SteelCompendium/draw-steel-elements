@@ -161,6 +161,8 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Negotiation/current-only.md` | `current_interest: 3`, `current_patience: 2` and no `initial_*` keys (Reset ends it; SC-641) |
   | `Negotiation/quoted.md` | quoted standing numbers: `current_interest: "3"`, `current_patience: "2"` |
   | `Negotiation/twins.md` | TWO IDENTICAL `ds-negotiation` blocks (Twin, Interest 3 / Patience 3, one motivation, one pitfall) with prose above, between and below |
+  | `Settings/statblock.md` | one `ds-statblock` (the Human Bandit Chief the settings preview shows, without its per-block `sbSticky` override): the representative element for the live re-render of every Statblock display row and the sticky pair (SC-440) |
+  | `Settings/featureblock.md` | one `ds-featureblock` (the Bloodstone of Yendral the settings preview shows, with its loose stat header): the representative element for the Featureblock display rows (SC-440) |
 
 - Edits are checked per fence: a click / type / double-click / press on an element inside `dse.block(lang, n)` declares that block
   as one the test edits (taking the scope and reading it declares nothing, SC-435), and
@@ -174,6 +176,11 @@ it('[STAM-X01] what a user sees happen', async () => {
 - **Scope page-side selectors to `.markdown-reading-view`.** A note opened in Reading view also keeps a hidden Live Preview
   copy of every block in the same leaf (`display: none`, same block key): a bare `document.querySelector('[data-dse-element=...]')`
   can return that copy. `dse.block()` already scopes to the active Reading view; hand-written `dse.page` expressions must too (SC-505).
+- **The settings tab** (SC-440) opens in a POPOUT window in Obsidian 1.14 (a second window handle, its own document, no `app` global): `driver/settings.ts`
+  `openSettings()` runs the `app:open-settings` command, selects this plugin's tab and moves wdio onto that window, so every driver call afterwards
+  (`dse.click(dse.control('settings.reduce-motion'))`, `dse.press`, the census) acts on the tab; `closeSettings()` returns to the main window (page-side
+  reads of the plugin there go through `APP`, `window.app ?? window.opener.app`). Its controls are Obsidian's native rows, so their ids are stamped after
+  each render (`src/views/settingsControlIds.ts`); a descriptor's id comes from its key (`sbFeatureStyle` -> `settings.sb-feature-style`).
 - Drive controls by id (`modal.control('sedit.damage')`); `{ css }` / `{ name }` are for READING nodes only
   (driving one is flagged by the gate). Repeated nodes: `control('recov.marker', { nth: 4 })`.
 - Negative checks: `dse.expectNoWrite(path, action)` waits for write-idle, never sleeps. Never `sleep`; wait
