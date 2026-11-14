@@ -115,6 +115,23 @@ describe('SC-602: carryOwnSaveFocus + the new mount (Live Preview own-save redra
 		expect(focusCalls).toEqual([{ el: ctl(next, 'row'), opts: { preventScroll: true } }]);
 	});
 
+	test('SC-626: a view that names focus rules gets them applied: a family maps the pressed control to the one that replaces it, and a fallback covers one that is gone', () => {
+		const { content } = makePane();
+		const old = makeRoot(content, ['q.success', 'bar.end']);
+		const rules = { families: { 'q.success': 'q.cell' }, fallbacks: { 'bar.end': ['bar.back'] } };
+		const entry = { ...makeEntry(old), view: { controlFocusRules: () => rules } } as unknown as ViewRegistryEntry;
+		ctl(old, 'q.success').focus();
+		expect(carryOwnSaveFocus(entry)).toBe(true);
+		const next = redraw(old, ['q.cell', 'bar.end']);
+		expect(document.activeElement).toBe(ctl(next, 'q.cell'));
+
+		ctl(next, 'bar.end').focus();
+		const again = { ...makeEntry(next, {}, 0), view: { controlFocusRules: () => rules } } as unknown as ViewRegistryEntry;
+		expect(carryOwnSaveFocus(again)).toBe(true);
+		const last = redraw(next, ['bar.back']);
+		expect(document.activeElement).toBe(ctl(last, 'bar.back'));
+	});
+
 	test('Reading view and the sidebar are never armed: a root outside `.cm-content` returns false and the new mount takes nothing', () => {
 		for (const wrapper of ['markdown-reading-view', 'workspace-leaf-content']) {
 			const leaf = document.body.appendChild(document.createElement('div'));

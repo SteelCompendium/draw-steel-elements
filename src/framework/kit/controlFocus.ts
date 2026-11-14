@@ -20,8 +20,8 @@
 //     name for it (the montage's cells: the set of cells that are controls changes when the montage completes). With it, the successor is
 //     the control of the family that carries the same value, never a neighbour by position.
 //   - `fallbacks`: family -> the families to try, in order, when the control's own family has no USABLE control after the rebuild
-//     (none at all, or every one disabled: End round gone because the montage ended, Log an action disabled because every hero has
-//     acted). A family with an entry also skips a disabled control for the nearest enabled one of the same family. Without an entry
+//     (none at all, or every one disabled or not focusable: End round gone because the montage ended, Log an action disabled because every hero has
+//     acted). A family with an entry also skips a control that cannot take focus for the nearest one of the same family that can. Without an entry
 //     the old rule stands, so no existing caller changes.
 import { CONTROL_ATTR } from './controlId';
 import { focusControl, focusIsFree } from '../chrome/focusHandoff';
@@ -86,8 +86,9 @@ function atOf(root: HTMLElement, el: HTMLElement): string | null {
 	return carrier && root.contains(carrier) ? carrier.getAttribute(FOCUS_AT_ATTR) : null;
 }
 
-/** Can `el` take focus? (A disabled button refuses it quietly.) */
-const usable = (el: HTMLElement): boolean => !el.matches(':disabled, [aria-disabled="true"]');
+/** Can `el` take focus? A disabled button refuses it quietly, and so does a node that is no Tab stop (the montage's open socket: a plain
+ *  div with a click listener and the quick buttons inside it). */
+const usable = (el: HTMLElement): boolean => !el.matches(':disabled, [aria-disabled="true"]') && el.matches('[tabindex], button, input, select, textarea, a[href]');
 
 /** Hand focus to the rebuilt successor of what `captureControlFocus` saw; true when something now holds focus. A no-op for a null
  *  token, and when focus is already somewhere (the user, or a modal, put it there). Call it once the root is no longer `inert`. */

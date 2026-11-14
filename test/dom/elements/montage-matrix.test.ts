@@ -2,7 +2,7 @@
 // with real clicks on the controls' `data-dse-control` ids and read back from the bytes the host is asked to write. The e2e specs
 // (e2e/specs/montage/) then drive one plain scenario per manifest pair; this file holds the permutations that do not need a real
 // browser. Scenario groups follow e2e/manifest/montage*.ts: O outcome band, B board, R action bar, C chrome panel, G strip + guide,
-// L Log an action sheet, H Add a hero, S Set limits, X integrity of the note around the block.
+// L Log an action sheet, H Add a hero, S Set limits, X integrity of the note around the block, F keyboard focus after a rebuild (SC-626).
 import * as fs from 'fs';
 import * as path from 'path';
 import { ElementPipeline } from '../../../src/framework/pipeline';
@@ -20,6 +20,10 @@ import { DseModal } from '../../../src/framework/kit/managedModal';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App, Plugin, Notice, makeFakeContext, parseYaml } from '../../mocks/obsidian';
 import { montageElement } from '../../../src/elements/montage/definition';
+import { MONTAGE_FOCUS_FALLBACKS, MONTAGE_FOCUS_FAMILIES } from '../../../src/elements/montage/focusRules';
+import montageManifest from '../../../e2e/manifest/montage';
+import logManifest from '../../../e2e/manifest/montage-log-modal';
+import { idsOf } from '../../../e2e/manifest/surface';
 import { attachObsidianKeymap, pressEscape } from '../_obsidianKeymap';
 
 // ----------------------------------------------------------------------------------------------------------------- harness
@@ -1235,6 +1239,257 @@ describe('[X] integrity: what a montage write leaves alone', () => {
 		ctl(root, 'montage.chrome.add-round').click();
 		await flush();
 		expect(text().replace('rounds: 3', 'rounds: 2')).toBe(note);
+	});
+});
+
+// ------------------------------------------------------------------------------------------------ F. keyboard focus after a write
+
+describe('[F] keyboard focus: a write, a strip toggle or a closed window hands focus to the control that replaces the pressed one', () => {
+	/** The control id and the cell (`round:hero`, when it is one) that hold focus now; null when nothing in the page does. */
+	const held = (): string | null => document.activeElement?.closest('[data-dse-control]')?.getAttribute('data-dse-control') ?? null;
+	const heldCell = (): string | null => document.activeElement?.closest('.dse-mt__cell')?.getAttribute('data-dse-focus-at') ?? null;
+	/** A keyboard press: the control holds focus, then Enter on it (a click with no pointer). */
+	const press = async (el: HTMLElement, flush: () => Promise<void>): Promise<void> => {
+		el.focus();
+		el.click();
+		await flush();
+	};
+	/** The same press on a control in a window the montage opened: focus is in the window when it submits, then the window closes. */
+	const submit = async (modal: HTMLElement, id: string, flush: () => Promise<void>): Promise<void> => {
+		const button = ctl(modal, id);
+		button.focus();
+		button.click();
+		await flush();
+	};
+	const OUT_OF_ROUNDS: Spec = { rounds: 2, sl: 5, fl: 5, round: 3, entries: [{ hero: 'Kira', round: 1, result: 'success' }, { hero: 'Kira', round: 2, result: 'success' }] };
+	const WON: Spec = { round: 2, sl: 1, entries: [{ hero: 'Kira', round: 1, result: 'success' }] };
+
+	test.each([
+		// control pressed, its spec, the control that holds focus after (the same one unless it is gone or disabled: focusRules.ts)
+		['[F01] End round in the middle of the run: the rebuilt End round', 'montage.bar.end-round', { round: 1 }, 'montage.bar.end-round'],
+		['[F02] End round on the last round ends the montage: Back to round N, the control that reverses it', 'montage.bar.end-round', { round: 3, sl: 9, fl: 9 }, 'montage.bar.back'],
+		['[F03] Undo with entries left: the rebuilt Undo', 'montage.bar.undo', { round: 1, sl: 9, entries: [{ hero: 'Kira', round: 1, result: 'success' }, { hero: 'Bram', round: 1, result: 'failure' }] }, 'montage.bar.undo'],
+		['[F04] Undo of the last entry disables it: Log an action', 'montage.bar.undo', { round: 1, sl: 9, entries: [{ hero: 'Kira', round: 1, result: 'success' }] }, 'montage.bar.log'],
+		['[F05] Back to round N with another round to go back to: the rebuilt Back', 'montage.bar.back', { round: 3, sl: 9, fl: 9 }, 'montage.bar.back'],
+		['[F06] Back to round 1 removes Back: End round', 'montage.bar.back', { round: 2, sl: 9, fl: 9 }, 'montage.bar.end-round'],
+		['[F07] Reopen makes the montage run again: Log an action', 'montage.bar.reopen', OUT_OF_ROUNDS, 'montage.bar.log'],
+		['[F08] Clear all makes the montage run again: Log an action, never Clear all itself', 'montage.bar.clear-all', WON, 'montage.bar.log'],
+		['[F09] Undo of the winning entry makes the montage run again: the rebuilt Undo is disabled, so Log an action', 'montage.bar.undo', WON, 'montage.bar.log'],
+	])('%s', async (_name, id, spec, after) => {
+		const { live, flush } = await mount(yaml(spec as Spec));
+		await press(ctl(live(), id), flush);
+		expect(held()).toBe(after);
+		expect(live().contains(document.activeElement)).toBe(true);
+	});
+
+	test('[F10] the chrome items: Add a round (and the other direct write, Reset progress) hand focus to the rebuilt item', async () => {
+		const { live, flush } = await mount(yaml({ round: 2, entries: [{ hero: 'Kira', round: 1, result: 'success' }] }));
+		await press(ctl(live(), 'montage.chrome.add-round'), flush);
+		expect(held()).toBe('montage.chrome.add-round');
+		await press(ctl(live(), 'montage.chrome.reset-progress'), flush);
+		expect(held()).toBe('montage.chrome.reset-progress');
+		expect(live().contains(document.activeElement)).toBe(true);
+	});
+
+	test('[F11] the Test tiers strip: opening and closing it keeps focus on its header', async () => {
+		const { live, flush } = await mount(yaml({ round: 1 }));
+		const header = (): HTMLElement => ctl(live(), 'montage.strip');
+		header().focus();
+		header().click();
+		await flush();
+		expect(header().getAttribute('aria-expanded')).toBe('true');
+		expect(document.activeElement).toBe(header());
+		header().click();
+		await flush();
+		expect(header().getAttribute('aria-expanded')).toBe('false');
+		expect(document.activeElement).toBe(header());
+	});
+
+	test('[F12] the quick trio: a press on a quick button is followed by the cell it recorded (same hero, same round), never a neighbour', async () => {
+		const { live, flush } = await mount(yaml({ round: 1, sl: 9, fl: 9 }));
+		for (const [n, kind] of [[1, 'failure'], [2, 'assist']] as const) {
+			// Kira's trio is first in the document, Bram's second: Bram's buttons are the ones pressed
+			await press(ctl(live(), `montage.quick.${kind}`, n === 1 ? 1 : 0), flush);
+			expect(heldCell()).toBe(n === 1 ? '1:Bram' : '1:Kira');
+			expect(held()).toBe('montage.cell');
+		}
+	});
+
+	test('[F13] a recorded cell and a past empty cell: Enter, Save in the sheet, and the cell holds focus again', async () => {
+		const { live, flush } = await mount(yaml({ round: 2, sl: 9, fl: 9, entries: [{ hero: 'Kira', round: 1, result: 'success' }] }));
+		await press(cellOf(live(), 'Kira', 1), flush);
+		await submit(modalOf('montage.log.submit'), 'montage.log.submit', flush);
+		expect(modalOpen('montage.log.submit')).toBe(false);
+		expect(heldCell()).toBe('1:Kira');
+		await press(cellOf(live(), 'Bram', 1), flush); // empty past round: its sheet logs a new action
+		await submit(modalOf('montage.log.submit'), 'montage.log.submit', flush);
+		expect(heldCell()).toBe('1:Bram');
+	});
+
+	test('[F14] a cell is named by its hero and round, not by its position: logging the win that makes the other empty cells inert leaves focus on the cell', async () => {
+		// Kira r1 and r2 are empty past cells (controls), Bram r1 is recorded. Two successes win it: afterwards only recorded cells are controls,
+		// and the 2nd control by position would be Bram's.
+		const { live, flush } = await mount(yaml({ round: 3, sl: 2, fl: 9, entries: [{ hero: 'Bram', round: 1, result: 'success' }] }));
+		await press(cellOf(live(), 'Kira', 2), flush);
+		await submit(modalOf('montage.log.submit'), 'montage.log.submit', flush);
+		expect(live().querySelector('.dse-mt__actionrow')!.getAttribute('data-complete')).toBe('on');
+		expect(rowCodes(live(), 'Kira', 3)).toBe('-C-');
+		expect(heldCell()).toBe('2:Kira');
+	});
+
+	test('[F15] Log an action in the bar: after Log in the sheet the rebuilt Log button holds focus; once every hero has acted it is disabled, so End round does', async () => {
+		const { live, flush } = await mount(yaml({ round: 1, sl: 9, fl: 9 }));
+		await press(ctl(live(), 'montage.bar.log'), flush);
+		await submit(modalOf('montage.log.submit'), 'montage.log.submit', flush);
+		expect(held()).toBe('montage.bar.log');
+		await press(ctl(live(), 'montage.bar.log'), flush);
+		await submit(modalOf('montage.log.submit'), 'montage.log.submit', flush);
+		expect(isDisabled(ctl(live(), 'montage.bar.log'))).toBe(true);
+		expect(held()).toBe('montage.bar.end-round');
+	});
+
+	test('[F16] a sheet that logs the winning success ends the montage: Log is gone, Undo, which reverses it, holds focus', async () => {
+		const { live, flush } = await mount(yaml({ round: 1, sl: 1 }));
+		await press(ctl(live(), 'montage.bar.log'), flush);
+		await submit(modalOf('montage.log.submit'), 'montage.log.submit', flush);
+		expect(has(live(), 'montage.bar.log')).toBe(false);
+		expect(held()).toBe('montage.bar.undo');
+	});
+
+	test('[F17] the row button: Log in its sheet keeps focus on that hero\'s button; the win that disables every row button hands focus to Undo', async () => {
+		const { live, flush } = await mount(yaml({ round: 1, sl: 9, fl: 9 }));
+		await press(ctl(live(), 'montage.board.row-act', 1), flush);
+		expect(titleOf(modalOf('montage.log.submit'))).toBe('Bram · round 1');
+		await submit(modalOf('montage.log.submit'), 'montage.log.submit', flush);
+		expect(held()).toBe('montage.board.row-act');
+		expect(document.activeElement).toBe(ctl(live(), 'montage.board.row-act', 1));
+		document.body.innerHTML = '';
+		const win = await mount(yaml({ round: 1, sl: 1 }));
+		await press(ctl(win.live(), 'montage.board.row-act', 0), win.flush);
+		await submit(modalOf('montage.log.submit'), 'montage.log.submit', win.flush);
+		expect(isDisabled(ctl(win.live(), 'montage.board.row-act', 0))).toBe(true);
+		expect(held()).toBe('montage.bar.undo');
+	});
+
+	test('[F18] Remove in the sheet of a recorded cell: an empty past cell takes focus, and the open socket (no Tab stop) hands it to its first quick button', async () => {
+		const { live, flush } = await mount(yaml({ round: 2, sl: 9, fl: 9, entries: [{ hero: 'Kira', round: 2, result: 'success' }, { hero: 'Bram', round: 1, result: 'failure' }] }));
+		await press(cellOf(live(), 'Kira', 2), flush);
+		await submit(modalOf('montage.log.remove'), 'montage.log.remove', flush);
+		expect(rowCodes(live(), 'Kira', 3)).toBe('CS-'); // round 1 empty past (control), round 2 the open socket
+		expect(heldCell()).toBe('2:Kira');
+		expect(held()).toBe('montage.quick.success');
+		await press(cellOf(live(), 'Bram', 1), flush); // a played round: Remove leaves an empty past cell, which is a Tab stop
+		await submit(modalOf('montage.log.remove'), 'montage.log.remove', flush);
+		expect(rowCodes(live(), 'Bram', 3)).toBe('CS-');
+		expect(heldCell()).toBe('1:Bram');
+		expect(held()).toBe('montage.cell');
+	});
+
+	test('[F19] Add a hero from the board corner and from the chrome panel: the rebuilt button holds focus after the window closes', async () => {
+		const { live, flush } = await mount(yaml({ round: 1 }));
+		await press(ctl(live(), 'montage.board.add-hero'), flush);
+		type(ctl<HTMLInputElement>(modalOf('montage.add-hero.submit'), 'montage.add-hero.name'), 'Osric');
+		await submit(modalOf('montage.add-hero.submit'), 'montage.add-hero.submit', flush);
+		expect(modalOpen('montage.add-hero.submit')).toBe(false);
+		expect(held()).toBe('montage.board.add-hero');
+		await press(ctl(live(), 'montage.chrome.add-hero'), flush);
+		type(ctl<HTMLInputElement>(modalOf('montage.add-hero.submit'), 'montage.add-hero.name'), 'Zoe');
+		await submit(modalOf('montage.add-hero.submit'), 'montage.add-hero.submit', flush);
+		expect(held()).toBe('montage.chrome.add-hero');
+		expect(live().querySelectorAll('.dse-mt__board-who')).toHaveLength(4);
+	});
+
+	test('[F20] Set limits: Save closes the window and the rebuilt chrome item holds focus', async () => {
+		const { live, flush } = await mount(yaml({ round: 1 }));
+		await press(ctl(live(), 'montage.chrome.set-limits'), flush);
+		type(ctl<HTMLInputElement>(modalOf('montage.limits.save'), 'montage.limits.success'), '5');
+		await submit(modalOf('montage.limits.save'), 'montage.limits.save', flush);
+		expect(modalOpen('montage.limits.save')).toBe(false);
+		expect(held()).toBe('montage.chrome.set-limits');
+		expect(live().contains(document.activeElement)).toBe(true);
+	});
+
+	test('[F21] a window closed without a write (Cancel) moves nothing: focus is where the window left it', async () => {
+		const { live, flush, writes } = await mount(yaml({ round: 1 }));
+		await press(ctl(live(), 'montage.bar.log'), flush);
+		await submit(modalOf('montage.log.cancel'), 'montage.log.cancel', flush);
+		expect(modalOpen('montage.log.submit')).toBe(false);
+		expect(document.activeElement).toBe(document.body);
+		expect(writes()).toHaveLength(0);
+	});
+
+	test('[F22] the ring follows the press: a key press keeps its keyboard ring on the rebuilt control, a mouse press gets plain focus', async () => {
+		const focus = jest.spyOn(HTMLElement.prototype, 'focus');
+		const ring = (): boolean | undefined => (focus.mock.calls[focus.mock.calls.length - 1][0] as { focusVisible?: boolean }).focusVisible;
+		const { live, flush } = await mount(yaml({ round: 1, sl: 9, fl: 9 }));
+		await press(ctl(live(), 'montage.bar.undo'), flush); // disabled: nothing to do
+		focus.mockClear();
+		await press(ctl(live(), 'montage.bar.end-round'), flush); // jsdom has no :focus-visible: the old node is taken to have drawn its ring
+		expect(ring()).toBe(true);
+		const real = Element.prototype.matches;
+		jest.spyOn(Element.prototype, 'matches').mockImplementation(function (this: Element, selector: string) {
+			return selector === ':focus-visible' ? false : real.call(this, selector);
+		});
+		await press(ctl(live(), 'montage.bar.end-round'), flush);
+		expect(ring()).toBeUndefined();
+		expect(held()).toBe('montage.bar.end-round');
+	});
+
+	// ---- the rule (SC-614 / SC-585 / SC-613): focus is handed back only when it was inside the card (or the window that wrote)
+
+	test('[F23] a write with focus outside the card (a mouse press, a script click) never pulls focus in', async () => {
+		const { live, flush, writes } = await mount(yaml({ round: 1 }));
+		ctl(live(), 'montage.bar.end-round').click(); // nothing focused: the pointer did not focus the button
+		await flush();
+		expect(writes()).toHaveLength(1);
+		expect(document.activeElement).toBe(document.body);
+		const outside = document.body.appendChild(document.createElement('input'));
+		outside.focus();
+		ctl(live(), 'montage.bar.end-round').click();
+		await flush();
+		expect(writes()).toHaveLength(2);
+		expect(document.activeElement).toBe(outside);
+	});
+
+	test('[F24] a window opened with the mouse (focus was not in the card) and closed by a write never pulls focus in', async () => {
+		const { live, flush, writes } = await mount(yaml({ round: 1 }));
+		ctl(live(), 'montage.chrome.add-hero').click();
+		type(ctl<HTMLInputElement>(modalOf('montage.add-hero.submit'), 'montage.add-hero.name'), 'Osric');
+		ctl(modalOf('montage.add-hero.submit'), 'montage.add-hero.submit').click();
+		await flush();
+		expect(writes()).toHaveLength(1);
+		expect(modalOpen('montage.add-hero.submit')).toBe(false);
+		expect(document.activeElement).toBe(document.body);
+	});
+
+	test('[F25] a window that wrote does not hand focus over once the user has moved it elsewhere', async () => {
+		const { live, flush } = await mount(yaml({ round: 1 }));
+		await press(ctl(live(), 'montage.bar.log'), flush);
+		const outside = document.body.appendChild(document.createElement('input'));
+		const button = ctl(modalOf('montage.log.submit'), 'montage.log.submit');
+		button.click();
+		outside.focus(); // the rebuild is still pending: the user moved on
+		await flush();
+		expect(document.activeElement).toBe(outside);
+	});
+
+	test('[F26] the opener of an earlier window is not reused: a later write with focus outside the card takes nothing', async () => {
+		const { live, flush } = await mount(yaml({ round: 1 }));
+		await press(ctl(live(), 'montage.bar.log'), flush);
+		await submit(modalOf('montage.log.cancel'), 'montage.log.cancel', flush);
+		(document.activeElement as HTMLElement | null)?.blur();
+		ctl(live(), 'montage.bar.end-round').click();
+		await flush();
+		expect(document.activeElement).toBe(document.body);
+	});
+
+	test('[F27] every id the focus rules name is a real montage control (a renamed id would silently lose its mapping)', () => {
+		const ids = new Set([...idsOf(montageManifest), ...idsOf(logManifest)]);
+		const named = [
+			...Object.entries(MONTAGE_FOCUS_FAMILIES).flat(),
+			...Object.entries(MONTAGE_FOCUS_FALLBACKS).flatMap(([family, chain]) => [family, ...chain]),
+		];
+		expect(named.filter((id) => !ids.has(id))).toEqual([]);
 	});
 });
 

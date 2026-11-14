@@ -18,8 +18,8 @@ export const MONTAGE_FOCUS_FAMILIES: ControlFamilies = {
 	'montage.quick.assist': 'montage.cell',
 };
 
-/** Nearest equivalents, by family: tried in order when the control has no enabled successor after the write. A family with an entry
- *  also skips a disabled control for the nearest enabled one of its own family (Log an action for the next hero).
+/** Nearest equivalents, by family: tried in order when the control has no usable (enabled, focusable) successor after the write. A
+ *  family with an entry also skips an unusable control for the nearest usable one of its own family.
  *
  *  The bar, live: Log an action · Undo · [Back to round N] · End round N. Complete: Undo · [Back to round N] · [Reopen] · Clear all.
  *  Clear all is never a landing: a second Enter on it would wipe the montage.
@@ -30,7 +30,9 @@ export const MONTAGE_FOCUS_FAMILIES: ControlFamilies = {
  *  - End round N: gone when it ended the last round and the montage is complete (Back to round N, which reverses it; else Reopen; else Undo).
  *  - Reopen / Clear all: the montage runs again, so Log an action (else End round).
  *  - Log an action for <hero> (row): all disabled once the montage is complete (Undo, then Reopen).
- *  - A cell: only gone when the montage completed and the cell was an empty past round (Log an action, End round, Undo). */
+ *  - A cell: Remove / Undo turn the recorded cell of the round in play into the open socket, which is no Tab stop: focus goes to the first
+ *    quick button inside it (same cell, same `at`; it only focuses, nothing is logged). A cell is gone only when the montage completed and
+ *    it was an empty past round (Log an action, End round, Undo). */
 export const MONTAGE_FOCUS_FALLBACKS: ControlFallbacks = {
 	'montage.bar.log': ['montage.bar.end-round', 'montage.bar.undo', 'montage.bar.back'],
 	'montage.bar.undo': ['montage.bar.log', 'montage.bar.end-round'],

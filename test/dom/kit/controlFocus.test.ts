@@ -1,7 +1,7 @@
 // SC-588 — captureControlFocus / restoreControlFocus: keyboard focus survives a rebuild that empties the root.
 // The helper's own rules (where focus lands, when it is left alone); the initiative tracker's five actions are in
 // test/dom/elements/initiative-matrix.test.ts ([F]).
-import { captureControlFocus, restoreControlFocus, controlSuccessor } from '../../../src/framework/kit/controlFocus';
+import { captureControlFocus, restoreControlFocus, controlSuccessor, FOCUS_AT_ATTR } from '../../../src/framework/kit/controlFocus';
 
 let root: HTMLElement;
 
@@ -154,5 +154,79 @@ describe('controlSuccessor (SC-602): the lookup restoreControlFocus uses, withou
 		} finally {
 			spy.mockRestore();
 		}
+	});
+});
+
+describe('controlFocus (SC-626): `at` names which control, `fallbacks` name the nearest equivalent', () => {
+	/** A row of `<button data-dse-control>`; `at` stamps `data-dse-focus-at` on a wrapper (so the buttons inherit it), `off` disables, `plain` is a div with no tab stop. */
+	function build(items: Array<{ id: string; at?: string; off?: boolean; plain?: boolean }>): HTMLElement[] {
+		root.replaceChildren();
+		return items.map(({ id, at, off, plain }) => {
+			const wrap = root.appendChild(document.createElement('div'));
+			if (at !== undefined) wrap.setAttribute(FOCUS_AT_ATTR, at);
+			const el = wrap.appendChild(document.createElement(plain ? 'div' : 'button'));
+			el.setAttribute('data-dse-control', id);
+			if (off) (el as HTMLButtonElement).disabled = true;
+			return el;
+		});
+	}
+
+	test('a token with `at` is followed by the control that carries the same value, not by the one in the same position', () => {
+		build([{ id: 'c.cell', at: 'a' }, { id: 'c.cell', at: 'b' }, { id: 'c.cell', at: 'c' }])[1].focus();
+		const focus = captureControlFocus(root)!;
+		expect(focus.at).toBe('b');
+		const next = build([{ id: 'c.cell', at: 'c' }, { id: 'c.cell', at: 'b' }]);
+		expect(controlSuccessor(root, focus)).toBe(next[1]);
+		expect(restoreControlFocus(root, focus)).toBe(true);
+		expect(document.activeElement).toBe(next[1]);
+	});
+
+	test('with `at` and no control carrying it any more, the root is the successor: a neighbour by position is a different control', () => {
+		build([{ id: 'c.cell', at: 'a' }, { id: 'c.cell', at: 'b' }])[1].focus();
+		const focus = captureControlFocus(root)!;
+		build([{ id: 'c.cell', at: 'a' }]);
+		expect(controlSuccessor(root, focus)).toBe(root);
+	});
+
+	test('a control with no `at` (or one outside the root) captures none, and a family map still joins controls that share an `at`', () => {
+		const families = { 'c.socket': 'c.cell', 'c.quick': 'c.cell' };
+		build([{ id: 'c.btn' }])[0].focus();
+		expect(captureControlFocus(root)).not.toHaveProperty('at');
+		build([{ id: 'c.quick', at: 'x' }])[0].focus();
+		const focus = captureControlFocus(root, families)!;
+		const [cell] = build([{ id: 'c.cell', at: 'x' }]);
+		expect(controlSuccessor(root, focus, families)).toBe(cell);
+	});
+
+	test('a family with fallbacks skips a disabled control for the nearest enabled one of its own family (forward first, then back)', () => {
+		const fallbacks = { 'r.act': ['b.other'] };
+		build([{ id: 'r.act' }, { id: 'r.act' }, { id: 'r.act' }])[1].focus();
+		const focus = captureControlFocus(root)!;
+		let rows = build([{ id: 'r.act' }, { id: 'r.act', off: true }, { id: 'r.act' }, { id: 'b.other' }]);
+		expect(controlSuccessor(root, focus, {}, fallbacks)).toBe(rows[2]);
+		rows = build([{ id: 'r.act' }, { id: 'r.act', off: true }, { id: 'r.act', off: true }, { id: 'b.other' }]);
+		expect(controlSuccessor(root, focus, {}, fallbacks)).toBe(rows[0]);
+		rows = build([{ id: 'r.act', off: true }, { id: 'r.act', off: true }, { id: 'b.other' }]);
+		expect(controlSuccessor(root, focus, {}, fallbacks)).toBe(rows[2]);
+	});
+
+	test('the fallbacks are tried in order, each by its first usable control; a node that is no tab stop is not usable; none usable lands on the root', () => {
+		const fallbacks = { 'x.end': ['x.back', 'x.reopen', 'x.undo'] };
+		build([{ id: 'x.end' }])[0].focus();
+		const focus = captureControlFocus(root)!;
+		let next = build([{ id: 'x.undo' }, { id: 'x.reopen' }, { id: 'x.back' }]);
+		expect(controlSuccessor(root, focus, {}, fallbacks)).toBe(next[2]);
+		next = build([{ id: 'x.undo' }, { id: 'x.reopen', off: true }, { id: 'x.back', plain: true }]);
+		expect(controlSuccessor(root, focus, {}, fallbacks)).toBe(next[0]);
+		build([{ id: 'x.undo', off: true }, { id: 'x.other' }]);
+		expect(controlSuccessor(root, focus, {}, fallbacks)).toBe(root);
+	});
+
+	test('a family WITHOUT a fallbacks entry keeps the old rule (a disabled successor is still the successor), so existing callers do not change', () => {
+		build([{ id: 'r.act' }])[0].focus();
+		const focus = captureControlFocus(root)!;
+		const [off] = build([{ id: 'r.act', off: true }, { id: 'b.other' }]);
+		expect(controlSuccessor(root, focus, {}, { 'other.family': ['b.other'] })).toBe(off);
+		expect(controlSuccessor(root, focus)).toBe(off);
 	});
 });
