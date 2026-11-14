@@ -9,6 +9,7 @@ import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlo
 import { noteHoverLink } from '../../../src/framework/host/hoverLinks';
 import { droppedWriteMessage, resetDroppedWriteNotices } from '../../../src/framework/host/droppedWriteNotice';
 import { App, Notice, Plugin } from '../../mocks/obsidian';
+import { settleVaultReads } from '../_settleVaultReads'; // SC-568: waits for the mock vault's reads to drain, not a timer
 
 type Sec = { text: string; lineStart: number; lineEnd: number };
 type Section = { current: Sec | null };
@@ -16,7 +17,7 @@ const ctxOf = (section: Section) =>
 	({ docId: 'doc-621', sourcePath: 'Note.md', frontmatter: undefined, addChild: () => {}, getSectionInfo: () => section.current }) as never;
 const CTR = (n: number, name = 'Twin'): string[] => ['```ds-counter', `name: ${name}`, `current_value: ${n}`, '```'];
 const bodyOf = (n: number, name = 'Twin'): string => `name: ${name}\ncurrent_value: ${n}`;
-const settle = () => new Promise((r) => setTimeout(r, 25));
+const settle = () => settleVaultReads();
 const pos = (line: number) => ({ line, col: 0, offset: 0 });
 /** What Obsidian's metadata cache holds for `lines`: headings, and `^id` blocks (the id on the line right under a fence). */
 function cacheOf(lines: string[]) {

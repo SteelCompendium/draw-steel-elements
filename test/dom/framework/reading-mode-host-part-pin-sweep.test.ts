@@ -12,6 +12,7 @@ import { noteHoverLink } from '../../../src/framework/host/hoverLinks';
 import { droppedWriteMessage, resetDroppedWriteNotices } from '../../../src/framework/host/droppedWriteNotice';
 import { mapLine } from '../../../src/framework/host/lineMap';
 import { App, Notice, Plugin } from '../../mocks/obsidian';
+import { settleVaultReads } from '../_settleVaultReads'; // SC-568: waits for the mock vault's reads to drain, not a timer
 
 type Sec = { text: string; lineStart: number; lineEnd: number };
 type Section = { current: Sec | null };
@@ -19,7 +20,7 @@ const ctxOf = (section: Section) =>
 	({ docId: 'doc-621', sourcePath: 'Note.md', frontmatter: undefined, addChild: () => {}, getSectionInfo: () => section.current }) as never;
 const CTR = (n: number, name = 'Twin'): string[] => ['```ds-counter', `name: ${name}`, `current_value: ${n}`, '```'];
 const bodyOf = (n: number, name = 'Twin'): string => `name: ${name}\ncurrent_value: ${n}`;
-const settle = () => new Promise((r) => setTimeout(r, 2));
+const settle = () => settleVaultReads();
 const pos = (line: number) => ({ line, col: 0, offset: 0 });
 function cacheOf(lines: string[]) {
 	const headings: Array<{ heading: string; level: number; position: unknown }> = [];
@@ -220,7 +221,7 @@ async function run(c: Cell): Promise<Rec | null> {
 	const app = new App();
 	app.vault.setFile('Note.md', mount.text);
 	let cacheLines = mount.lines;
-	jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheOf(cacheLines) as never);
+	const cacheSpy = jest.spyOn(app.metadataCache, 'getFileCache').mockImplementation(() => cacheOf(cacheLines) as never);
 	const rel = mount.fence.get(c.P)! - p0.start;
 	const section: Section = { current: { text: p0.text, lineStart: rel, lineEnd: rel + 3 } };
 	const el = c.shape === 'hover' ? popoverEl(app, linkText(c.link), mount.text) : embedEl(linkText(c.link), c.mode === 'lp');
@@ -233,13 +234,13 @@ async function run(c: Cell): Promise<Rec | null> {
 		await settle();
 		const ok = await host.replaceSource(bodyOf(6), { fromView: true });
 		if (!ok) {
-			cleanup(el);
+			cleanup(el, cacheSpy);
 			return { skip: 'own + refused' };
 		}
 		known = 6;
 		const post = before;
 		if (app.vault.getContent('Note.md') !== post.text) {
-			cleanup(el);
+			cleanup(el, cacheSpy);
 			return { skip: 'own + wrote elsewhere' };
 		}
 		cacheLines = post.lines;
@@ -269,7 +270,7 @@ async function run(c: Cell): Promise<Rec | null> {
 	}
 	const final = app.vault.getContent('Note.md')!;
 	const notices = (Notice.notices as unknown[]).map((n) => (n === DISK ? 'disk' : `other:${String(n).slice(0, 40)}`));
-	cleanup(el);
+	cleanup(el, cacheSpy);
 	let outcome = 'refused';
 	if (final !== now.text) {
 		const fl = final.split('\n');
@@ -288,10 +289,10 @@ async function run(c: Cell): Promise<Rec | null> {
 		outcome, notices, pB, pA, opts, amb: opts !== null && opts.length > 1, twinned, headMap: mapLine(before.text, now.text, pB), linkOk, bt: before.text, at: now.text,
 	};
 }
-function cleanup(el: HTMLElement) {
+function cleanup(el: HTMLElement, cacheSpy: jest.SpyInstance) {
 	el.closest('.hover-popover')?.remove();
 	(el.closest('.cm-embed-block') ?? el.closest('.internal-embed'))?.remove();
-	jest.restoreAllMocks();
+	cacheSpy.mockRestore(); // not restoreAllMocks: that would also drop the vault-read counter `settleVaultReads` keeps for the whole test
 	Notice.notices.length = 0;
 	resetDroppedWriteNotices();
 }
