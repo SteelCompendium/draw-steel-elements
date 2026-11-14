@@ -359,8 +359,11 @@ async function cdpClick(el: El, opts: ClickOptions): Promise<void> {
 async function click(el: El, opts: ClickOptions = {}): Promise<void> {
 	markEdited(el);
 	await el.waitForDisplayed({ timeout: 8000 });
-	// SC-440: obsidian greys out a dependent settings row with `is-disabled` on the (still enabled) checkbox label: that is a disabled click too.
-	const enabled = (await el.isEnabled()) && !/\bis-disabled\b/.test((await el.getAttribute('class')) ?? '');
+	// SC-440: obsidian greys out a dependent settings row with `is-disabled` on the (still enabled) checkbox label: for a SETTINGS control that is a
+	// disabled click too. Scoped to `settings.*` ids on purpose: other surfaces' labels carry the class (negotiation's modifier labels) and their
+	// manifests declare their own kinds.
+	const greyedSettingsRow = labelOf(el).startsWith('settings.') && /\bis-disabled\b/.test((await el.getAttribute('class')) ?? '');
+	const enabled = (await el.isEnabled()) && !greyedSettingsRow;
 	await beforeAction(el);
 	if (opts.stable) await waitStable(el);
 	try {
