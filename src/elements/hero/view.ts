@@ -48,7 +48,7 @@ import { StaminaEditModal } from '@views/StaminaEditModal';
 import { charsAreSplit, iconButton, labelWithReason, renderCharacteristicsRow, renderRecoveriesStrip, renderStaminaBar, undoNotice, updateStaminaBar, tabs } from '@/framework/kit';
 import type { CharacteristicsValues, IconButtonHandle, RecoveriesStripHandle, StaminaBarValues } from '@/framework/kit';
 import { openFormEditor } from '@/authoring/FormModal';
-import { formOpenerOf, type FormOpener } from '@/framework/chrome/focusHandoff';
+import { firstControlOf, focusControl, formOpenerOf, type FormOpener } from '@/framework/chrome/focusHandoff';
 import { FeatureConfig } from '@model/FeatureConfig';
 import { FEATURE_TYPE_RE } from '@/services/typeAdapters';
 import { actionTypeOf } from '@/elements/feature/renderFeature';
@@ -260,8 +260,14 @@ export class HeroSheetView extends ElementView<HeroModel> {
 		} else if (!want && this.editDefinitionBtn) {
 			const { buttonEl, owner } = this.editDefinitionBtn;
 			this.editDefinitionBtn = null;
+			// Same hand-back as the pipeline's chrome rebuild (SC-644): a reader on the button keeps keyboard focus inside the sheet (removing
+			// the focused button leaves nothing else holding it). Focus on anything else, and adding the button, never move focus.
+			const doc = buttonEl.ownerDocument;
+			const hadFocus = doc.activeElement === buttonEl;
 			this.removeChild(owner);
 			buttonEl.remove();
+			const root = actions.closest<HTMLElement>('[data-dse-element]');
+			if (hadFocus && root) focusControl(firstControlOf(root), false);
 		}
 	}
 

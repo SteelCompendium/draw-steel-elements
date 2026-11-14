@@ -55,6 +55,13 @@ export function focusIsFree(doc: Document): boolean {
 	return doc.activeElement === null || doc.activeElement === doc.body;
 }
 
+/** SC-644: the first control that belongs to this element itself (a nested block's controls have another `[data-dse-element]` root). */
+export function firstControlOf(root: HTMLElement): HTMLElement | undefined {
+	return Array.from(
+		root.querySelectorAll<HTMLElement>('button, [tabindex]:not([tabindex="-1"]), input, select, textarea, a[href]'),
+	).find((el) => el.closest('[data-dse-element]') === root);
+}
+
 /**
  * SC-644: a chrome rebuild (a setting flipped while a block is on screen) removes and re-draws the panel, and with it the button the
  * keyboard user was on; the browser drops focus to <body>. Call this BEFORE the teardown: when focus sits on this element's own chrome
@@ -78,7 +85,7 @@ export function holdChromeFocus(root: HTMLElement, pencil?: HTMLElement): () => 
 		const candidates: (HTMLElement | undefined)[] = [
 			item ? all(`[data-dse-chrome-item="${item}"]`)[0] : all('button').find((b) => b.getAttribute('aria-label') === label),
 			all('[data-dse-chrome-item="collapse"]')[0],
-			all('button, [tabindex]:not([tabindex="-1"]), input, select, textarea, a[href]')[0],
+			firstControlOf(root),
 		];
 		for (const el of candidates) if (focusControl(el, false)) return;
 	};

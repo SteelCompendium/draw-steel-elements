@@ -503,6 +503,53 @@ describe('D7 Task 9: "Edit definition" (recon delta 5) — reuses D9\'s openForm
 			expect(edit(root)).toHaveLength(0);
 		});
 
+		describe('keyboard focus', () => {
+			const attached = async (deps: ReturnType<typeof makeDeps>) => {
+				const r = await renderHero(HERO_SOURCE, {}, deps);
+				document.body.appendChild(r.host.containerEl); // focus needs the sheet in the document
+				return r;
+			};
+			afterEach(() => document.body.replaceChildren());
+
+			test('the button the reader is on is removed: focus stays inside the sheet (not <body>); switched ON again nothing is focused for them', async () => {
+				const deps = makeDeps();
+				await deps.prefs.set('authoringControls', true);
+				const { root } = await attached(deps);
+				const btn = edit(root)[0];
+				btn.focus();
+				expect(document.activeElement).toBe(btn);
+
+				await deps.prefs.set('authoringControls', false);
+				expect(btn.isConnected).toBe(false);
+				expect(document.activeElement).not.toBe(document.body);
+				expect(root.contains(document.activeElement)).toBe(true);
+
+				(document.activeElement as HTMLElement).blur();
+				await deps.prefs.set('authoringControls', true);
+				expect(edit(root)).toHaveLength(1);
+				expect(document.activeElement).toBe(document.body); // the new button took nothing
+			});
+
+			test('focus the reader has elsewhere is left alone when the button goes or comes', async () => {
+				const deps = makeDeps();
+				await deps.prefs.set('authoringControls', true);
+				const { root } = await attached(deps);
+				const field = document.createElement('input');
+				document.body.appendChild(field);
+				field.focus();
+				await deps.prefs.set('authoringControls', false);
+				expect(document.activeElement).toBe(field);
+				await deps.prefs.set('authoringControls', true);
+				expect(document.activeElement).toBe(field);
+
+				// Another control of the sheet itself is not taken back either.
+				const respite = root.querySelector<HTMLButtonElement>('.dse-hero__actions button:not([aria-label="Edit definition"])')!;
+				respite.focus();
+				await deps.prefs.set('authoringControls', false);
+				expect(document.activeElement).toBe(respite);
+			});
+		});
+
 		test('after the sheet unloads a flip does nothing', async () => {
 			const deps = makeDeps();
 			let view: { load(): void; unload(): void } | undefined;
