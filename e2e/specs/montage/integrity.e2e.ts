@@ -5,8 +5,8 @@
 // Montage/hand-written.md: Kira's `skills_used` is a scalar, Bram has no list and an unrecognised result. Montage/unknown-keys.md: `table_notes`, an
 // entry's `dc` and a participant's `player`.
 import { expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
-import { blockOf, cellOf, HAND, MONTAGE, TWINS, TWO, UNKNOWN } from '../../driver/montage';
+import { dse } from '../../driver/dse';
+import { blockOf, cellOf, clickChrome, HAND, MONTAGE, TWINS, TWO, UNKNOWN } from '../../driver/montage';
 
 const FRESH_FIRST = 'Montage/fresh.md';
 
@@ -91,17 +91,44 @@ describe('montage: the note and the other blocks around a write', () => {
 		expect(b.entries).toEqual([{ hero: 'Kira', round: 1, result: 'success' }]);
 	});
 
-	knownBug('SC-625', '[MONT-X09] a write keeps a top-level key the product does not know (`table_notes`)', async () => {
+	it('[MONT-X09] a write keeps a top-level key the product does not know (`table_notes`)', async () => {
 		await dse.openNote(UNKNOWN);
 		const root = dse.block(MONTAGE);
 		await dse.waitForWrite(UNKNOWN, () => dse.click(root.control('montage.quick.success', { nth: 0 })));
 		expect(await blockOf(UNKNOWN)).toMatchObject({ table_notes: 'keep me' });
 	});
 
-	knownBug('SC-625', '[MONT-X10] a write keeps a key the product does not know inside an entry (`dc: 12`)', async () => {
+	it('[MONT-X10] a write keeps a key the product does not know inside an entry (`dc: 12`)', async () => {
 		await dse.openNote(UNKNOWN);
 		const root = dse.block(MONTAGE);
 		await dse.waitForWrite(UNKNOWN, () => dse.click(root.control('montage.quick.success', { nth: 0 })));
 		expect((await blockOf(UNKNOWN)).entries![0]).toMatchObject({ hero: 'Kira', round: 1, dc: 12 });
+	});
+
+	it('[MONT-X11] Add a hero keeps the top-level key and the entry key the product does not know, and puts them after the known keys', async () => {
+		await dse.openNote(UNKNOWN);
+		const root = dse.block(MONTAGE);
+		await clickChrome(root, 'montage.chrome.add-hero');
+		const modal = await dse.modal('montage-add-hero');
+		await dse.type(modal.control('montage.add-hero.name'), 'Osric');
+		await dse.waitForWrite(UNKNOWN, () => dse.click(modal.control('montage.add-hero.submit')));
+		const b = await blockOf(UNKNOWN);
+		expect(b).toMatchObject({ table_notes: 'keep me' });
+		expect(b.entries![0]).toEqual({ hero: 'Kira', round: 1, result: 'success', skill: 'Nature', dc: 12 });
+		expect(b.participants!.map((p) => p.name)).toEqual(['Kira', 'Osric']);
+		expect(Object.keys(b).slice(-2)).toEqual(['current_round', 'table_notes']);
+	});
+
+	it('[MONT-X12] Set limits keeps the top-level key and the entry key the product does not know', async () => {
+		await dse.openNote(UNKNOWN);
+		const root = dse.block(MONTAGE);
+		await clickChrome(root, 'montage.chrome.set-limits');
+		const modal = await dse.modal('montage-limits');
+		await dse.type(modal.control('montage.limits.success'), '6', { replace: true });
+		await dse.waitForWrite(UNKNOWN, () => dse.click(modal.control('montage.limits.save')));
+		const b = await blockOf(UNKNOWN);
+		expect(b.success_limit).toBe(6);
+		expect(b).toMatchObject({ table_notes: 'keep me' });
+		expect(b.entries![0]).toMatchObject({ hero: 'Kira', round: 1, dc: 12 });
 	});
 });
