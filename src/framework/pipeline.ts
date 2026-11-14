@@ -631,11 +631,11 @@ export class ElementPipeline {
 				root.querySelectorAll('.dse-chrome, .dse-chrome-summary').forEach((n) => n.remove());
 				// SC-644: what mountChrome stamped on the root and the anchor goes with the panel, so a block
 				// whose chrome is now gone (Collapsible by default off, no pencil) is the DOM a fresh render
-				// of it would be. mountChrome puts them back when there is chrome again. The collapsed
-				// attribute in particular must not outlive the one-line bar it belongs to.
+				// of it would be. mountChrome puts them back when there is chrome again. (The collapsed
+				// attribute is not cleared here: mountChrome sets or clears it on every mount, and
+				// ensureCollapseInvariant below drops it when no one-line bar came back.)
 				root.removeAttribute('data-dse-chrome');
 				root.removeAttribute('data-dse-chrome-mobile');
-				root.removeAttribute('data-dse-collapsed');
 				view.authoringAnchor().removeClass('dse-chrome-anchor');
 				chromeOwner = new Component();
 				view.addChild(chromeOwner);
@@ -660,8 +660,8 @@ export class ElementPipeline {
 				// default switched off) is expanded by the mount above (a block must never be stuck collapsed
 				// with no control to open it). The reader's session toggle is cleared too, or switching the
 				// preference back on would fold the block again from it ("switching it back ON leaves the
-				// block expanded"). Only for a preference-caused rebuild: a plain re-render keeps the session.
-				if (reason !== undefined && wasCollapsed === true && chromeHandle?.summaryEl === undefined) {
+				// block expanded").
+				if (wasCollapsed === true && chromeHandle?.summaryEl === undefined) {
 					session.set(host.blockKey(), CHROME_COLLAPSE_SLOT, false);
 				}
 				// SC-518: a chrome element asks for the form's focus hand-back in mountChrome; an element without one (the card-corner

@@ -30,7 +30,7 @@ export function watchPrefs<K extends keyof DsePrefs>(
 ): void {
 	const described = new Set(prefs.descriptors().map((d) => d.key as string));
 	for (const key of keys) {
-		if (!described.has(key as string)) continue;
+		if (!described.has(key)) continue;
 		prefs.subscribe(key, owner, (value) => onChange(key, value));
 	}
 }

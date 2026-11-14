@@ -4,7 +4,7 @@
 // tab's ABSENCE of these controls is asserted by CENSUS-16 and the jsdom matrix.
 // Representative element: Stamina/basic.md (data-dse-print on its root; the Edit pencil is a chrome item).
 import { expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
+import { dse } from '../../driver/dse';
 import {
 	back, closeSettings, ctl, diskPrefs, idsOnPage, mainAttr, mainCount, openAt, openSettings, pressOn, prefValue, showPage, ensureState, toggleIsOn, waitDiskPrefs,
 } from '../../driver/settingsDrive';
@@ -112,16 +112,20 @@ describe('settings tab: with the experimental gate on', () => {
 		}
 	});
 
-	knownBug('SC-644', '[SET-G06] Show edit button on rendered blocks: the Edit pencil appears on a block that is already open', async () => {
+	it('[SET-G06] Show edit button on rendered blocks: the Edit pencil appears on a block that is already open', async () => {
 		await dse.setPrefs({}, { experimental: true });
 		await dse.openNote('Stamina/basic.md');
+		expect(await mainCount(EDIT)).toBe(0);
 		await openAt('settings.page.authoring');
 		try {
 			await dse.click(ctl('settings.authoring-controls'));
 			expect(await prefValue('authoringControls', false)).toBe(true);
 			expect(await mainCount(EDIT)).toBe(1);
+			await dse.click(ctl('settings.authoring-controls')); // and off again: the pencil goes
+			expect(await prefValue('authoringControls', false)).toBe(false);
+			expect(await mainCount(EDIT)).toBe(0);
 		} finally {
 			await closeSettings();
 		}
-	}, { failsWith: /Expected: 1/ });
+	});
 });

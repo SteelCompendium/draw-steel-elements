@@ -6,13 +6,14 @@ import { expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
 import { closeSettings, ctl, mainAttr, mainCount, onMain, openAt, readSettings } from '../../driver/settingsDrive';
 
+const STAMINA = '[data-dse-element="stamina-bar"]';
 const LINKS = 'settings.page.links';
 const FALLBACK = 'settings.links.scc-web-fallback';
 const SCC_NOTE = 'Settings/scc-link.md';
 const CODE_URL = 'https://steelcompendium.io/scc/mcdm.heroes.v1/feature.ability.fury.level-1/gouge/';
 
 describe('settings tab: settings read when a block or link is drawn', () => {
-	knownBug('SC-644', '[SET-L01] Collapsible by default: switched off, the Collapse button leaves a stamina bar that is already open', async () => {
+	it('[SET-L01] Collapsible by default: switched off, the Collapse button leaves a stamina bar that is already open', async () => {
 		await dse.setPrefs({});
 		await dse.openNote('Stamina/basic.md');
 		expect(await mainCount('[data-dse-control="chrome.collapse"]')).toBe(1);
@@ -23,7 +24,53 @@ describe('settings tab: settings read when a block or link is drawn', () => {
 		} finally {
 			await closeSettings();
 		}
-	}, { failsWith: /Expected: 0/ });
+	});
+
+	// SC-644 rulings: a block with no Collapse control is never left collapsed, and switching the setting back on does not fold it again.
+	it('[SET-L05] Collapsible by default: switched off, a stamina bar the reader had collapsed opens (no stuck one-liner); switched back on, it stays open', async () => {
+		await dse.setPrefs({});
+		await dse.openNote('Stamina/basic.md');
+		await onMain(async () => {
+			const bar = dse.block('ds-stamina-bar');
+			await dse.hover(bar.root);
+			await dse.click(bar.control('chrome.collapse'));
+		});
+		expect(await mainAttr(STAMINA, 'data-dse-collapsed')).toBe('on');
+		expect(await mainCount('[data-dse-control="chrome.expand"]')).toBe(1);
+		await openAt('settings.page.element-defaults');
+		try {
+			await dse.click(ctl('settings.collapsible-default')); // off
+			expect({
+				collapsedAttr: await mainAttr(STAMINA, 'data-dse-collapsed'),
+				collapse: await mainCount('[data-dse-control="chrome.collapse"]'),
+				expand: await mainCount('[data-dse-control="chrome.expand"]'),
+			}).toEqual({ collapsedAttr: null, collapse: 0, expand: 0 });
+			await dse.click(ctl('settings.collapsible-default')); // on again
+			expect({
+				collapsedAttr: await mainAttr(STAMINA, 'data-dse-collapsed'),
+				collapse: await mainCount('[data-dse-control="chrome.collapse"]'),
+			}).toEqual({ collapsedAttr: null, collapse: 1 });
+		} finally {
+			await closeSettings();
+		}
+	});
+
+	// SC-644, pending Scott's answer: Start collapsed does not move a block that is already open; a note opened afterwards starts collapsed.
+	it('[SET-L06] Start collapsed: switched on with the note open, the open stamina bar stays open; the note opened again starts collapsed', async () => {
+		await dse.setPrefs({});
+		await dse.openNote('Stamina/basic.md');
+		expect(await mainAttr(STAMINA, 'data-dse-collapsed')).toBe(null);
+		await openAt('settings.page.element-defaults');
+		try {
+			await dse.click(ctl('settings.collapse-default'));
+			expect(await mainAttr(STAMINA, 'data-dse-collapsed')).toBe(null);
+			expect(await mainCount('[data-dse-control="chrome.collapse"]')).toBe(1);
+		} finally {
+			await closeSettings();
+		}
+		await dse.openNote('Stamina/basic.md'); // drawn AFTER the change
+		expect(await mainAttr(STAMINA, 'data-dse-collapsed')).toBe('on');
+	});
 
 	knownBug('SC-645', '[SET-L02] Edit Recoveries with a popover: switched on, a marker click on a stamina bar that is already open opens the popover', async () => {
 		await dse.setPrefs({});
