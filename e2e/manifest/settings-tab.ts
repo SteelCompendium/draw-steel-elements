@@ -27,6 +27,9 @@
 //   Keyword display / Distance + target: Feature/feature.md; Rolling: the Roll controls of Feature/feature.md (the roll preferences subscribe);
 //   Collapsible by default / Start collapsed / Edit Recoveries with a popover / Show edit button on rendered blocks (gate on): the chrome Collapse
 //   button, the collapsed one-liner, the recovery popover and the Edit pencil of Stamina/basic.md / Stamina/recoveries.md.
+//   Roller: no on-screen effect without the Dice Roller plugin (it falls back to the native roller), so its drive asserts data.json only.
+//   Fall back to steelcompendium.io links: resolved when a link is CLICKED (SccResolver reads the setting then); a link already drawn keeps
+//   its post-process rewrite until the note re-renders, so this one has no on-screen re-render to assert.
 import { c, surface } from './surface';
 
 export default surface('settings', {
