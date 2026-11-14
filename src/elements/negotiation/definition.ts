@@ -3,7 +3,7 @@
 // model wrappers around @model/NegotiationData.
 import type { ElementDefinition } from '@/framework/registry';
 import type { ElementChrome } from '@/framework/chrome/types';
-import type { NegotiationData } from '@model/NegotiationData';
+import { NegotiationData } from '@model/NegotiationData';
 import { parse, serialize } from './model';
 import { NegotiationView } from './view';
 import negotiationExample from './example.yaml';
@@ -18,7 +18,8 @@ const negotiationChrome: ElementChrome<NegotiationData> = {
 	summary: ({ model }) => ({
 		label: 'Negotiation',
 		name: model.name || undefined,
-		detail: `Interest ${model.current_interest} \u00b7 Patience ${model.current_patience}`,
+		// SC-638 (R4): the standings as the seal draws them (0.4 is Interest 0, junk is 0), never the raw typed value.
+		detail: `Interest ${NegotiationData.standingOf(model.current_interest)} \u00b7 Patience ${NegotiationData.standingOf(model.current_patience)}`,
 	}),
 };
 

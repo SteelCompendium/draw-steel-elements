@@ -4,6 +4,7 @@
 import { parseYaml, stringifyYaml } from '../../mocks/obsidian';
 import { CurrentArgument, Motivation, NegotiationData, parseNegotiationData, Pitfall } from '@model/NegotiationData';
 import { parse, serialize } from '../../../src/elements/negotiation/model';
+import { negotiationElement } from '../../../src/elements/negotiation/definition';
 
 /** Runs the model exactly the way the pipeline does: def.parse(parseYaml(source), source). */
 const parseLikePipeline = (source: string): NegotiationData => parse(parseYaml(source), source);
@@ -103,6 +104,27 @@ describe('SC-638 R2: what the negotiation did not change is written back as type
 		expect(out(m).currentArgument.motivationsUsed).toEqual(['5']);
 	});
 
+	test('a used list keeps each entry\'s own type by position: `[5, "5"]` is written back as `[5, "5"]`, for motivations and for pitfalls', () => {
+		const m = parseLikePipeline('name: n\ninitial_interest: 3\ncurrentArgument:\n  motivationsUsed: [5, "5", true, "true"]\n  pitfallsUsed: ["7", 7]');
+		m.current_patience = 1;
+		const w = out(m);
+		expect(w.currentArgument.motivationsUsed).toEqual([5, '5', true, 'true']);
+		expect(w.currentArgument.pitfallsUsed).toEqual(['7', 7]);
+		expect(serialize(m)).toMatch(/- 5\n\s+- "5"\n\s+- true\n\s+- "true"/);
+	});
+
+	test('after a chip removes the FIRST of two equal entries (indexOf), the one that stays keeps its own type; a chip that adds one is plain text', () => {
+		const m = parseLikePipeline('name: n\ninitial_interest: 3\ncurrentArgument:\n  motivationsUsed: [5, "5"]');
+		const used = m.currentArgument.motivationsUsed;
+		used.splice(used.indexOf('5'), 1);
+		expect(out(m).currentArgument.motivationsUsed).toEqual(['5']);
+		used.push('Peace');
+		expect(out(m).currentArgument.motivationsUsed).toEqual(['5', 'Peace']);
+		const n = parseLikePipeline('name: n\ninitial_interest: 3\ncurrentArgument:\n  motivationsUsed: [5]');
+		n.currentArgument.motivationsUsed.push('Peace');
+		expect(out(n).currentArgument.motivationsUsed).toEqual([5, 'Peace']);
+	});
+
 	test('the typed values are kept beside the instances: no own key on the model, a motivation, a pitfall or the argument', () => {
 		const m = parseLikePipeline(TYPED);
 		const plain = parseLikePipeline(TYPED.replace('name: 2024', 'name: x'));
@@ -181,10 +203,10 @@ describe('SC-638 R3: a wrong-shaped structure is a plain error naming the key', 
 		expect(() => parseNegotiationData(body)).toThrow('Invalid data: the block must be a map of keys.');
 	});
 
-	test('an empty block (nothing, whitespace, or only a comment) is not reported as a block of the wrong shape: it is refused as before (SC-493)', () => {
+	test('an empty block (nothing, whitespace, or only a comment) is still refused, as before (SC-493), with a plain message', () => {
 		for (const body of ['', '  \n  ', '# only a note to self']) {
-			expect(() => parse(parseYaml(body), body)).toThrow();
-			expect(() => parse(parseYaml(body), body)).not.toThrow('Invalid data: the block must be a map of keys.');
+			expect(() => parse(parseYaml(body), body)).toThrow('Invalid data: the block is empty.');
+			expect(() => parseNegotiationData(body)).toThrow('Invalid data: the block is empty.');
 		}
 	});
 
@@ -239,5 +261,21 @@ describe('SC-638 R4: one reading of a standing for the seal and for the ending',
 
 	test('advanceStanding on a non-number is not changed: the junk stays as authored', () => {
 		expect(NegotiationData.advanceStanding('banana', 1)).toBe('banana');
+	});
+});
+
+describe('SC-638 R4: the chrome summary shows the standing the seal shows', () => {
+	const summary = (interest: unknown, patience: unknown): string | undefined => {
+		const m = parseLikePipeline(`name: n\ninitial_interest: 3\ncurrent_interest: ${interest}\ncurrent_patience: ${patience}`);
+		return negotiationElement.chrome!.summary!({ model: m } as never).detail;
+	};
+
+	test.each([
+		['0.4', 'banana', 'Interest 0 \u00b7 Patience 0'],
+		['4.5', '0.5', 'Interest 5 \u00b7 Patience 1'],
+		['"3"', '9', 'Interest 3 \u00b7 Patience 5'],
+		['3', '2', 'Interest 3 \u00b7 Patience 2'],
+	])('Interest %s, Patience %s reads %s', (interest, patience, expected) => {
+		expect(summary(interest, patience)).toBe(expected);
 	});
 });

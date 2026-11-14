@@ -155,6 +155,15 @@ describe('SC-638 R2: what the card did not change is written back as typed', () 
 		expect(w.name).toBe(2024);
 	});
 
+	test('`motivationsUsed: [5, "5"]` is written back as typed (the number and the quoted text apart), and pressing the chip of the motivation named 5 takes the first of them off', async () => {
+		const body = 'name: n\ninitial_interest: 3\ninitial_patience: 3\nmotivations:\n  - name: 5\n    reason: r\n' + OFFERS + '\ncurrentArgument:\n  motivationsUsed: [5, "5"]';
+		const { root, flush, content } = await mountBlock(ABOVE + fence(body) + BELOW);
+		await flushAfter(flush, () => seal(root, 'patience', 1).click());
+		expect((parseYaml(bodyOf(content(), 0)) as any).currentArgument.motivationsUsed).toEqual([5, '5']);
+		await flushAfter(flush, () => ctl(root, 'negotiation.appeal.motivation', 0).click());
+		expect((parseYaml(bodyOf(content(), 0)) as any).currentArgument.motivationsUsed).toEqual(['5']);
+	});
+
 	test('a Director\'s own key and a typed value are both kept by the same write (SC-637 alongside)', async () => {
 		const note = ABOVE + fence('note_to_self: keep me\n' + TYPED) + BELOW;
 		const { root, flush, content } = await mountBlock(note);
@@ -231,11 +240,11 @@ describe('SC-638 R3: a wrong-shaped structure is a plain error card that writes 
 		['nothing', ''],
 		['whitespace', '   \n  '],
 		['only a comment', '# a note to self'],
-	])('an empty block (%s) is not reported as the wrong-shape error, and the note is untouched (it was refused before, SC-493)', async (_label, body) => {
+	])('an empty block (%s) is still refused, as before (SC-493), with a plain message, no control, and the note untouched', async (_label, body) => {
 		const note = ABOVE + fence(body) + BELOW;
 		const { root, flush, content } = await mountBlock(note);
-		expect(errorOf(root)).not.toBeNull();
-		expect(errorOf(root)).not.toBe('Invalid data: the block must be a map of keys.');
+		expect(errorOf(root)).toBe('Invalid data: the block is empty.');
+		expect(root.textContent).not.toMatch(RAW_JS);
 		expect(root.querySelectorAll('[data-dse-control]')).toHaveLength(0);
 		await flush();
 		expect(content()).toBe(note);

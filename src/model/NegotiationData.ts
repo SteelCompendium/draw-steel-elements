@@ -53,8 +53,10 @@ export function unknownKeysOf(owner: object): ReadonlyArray<readonly [string, un
  *
  * WRITE (R2): the value the user typed is remembered beside the instance (a module-private WeakMap, the same reason as the
  * unknown keys above: no own property, so `serialize` cannot write it as a key) and `restoreTypedText` puts it back when the
- * text is still what was read, so `name: 2024` stays `name: 2024`. Matching is on the text, so `motivationsUsed: [5]` matches
- * a motivation named 5, and a chip pressed on that motivation is the same entry.
+ * text is still what was read, so `name: 2024` stays `name: 2024`. Matching a motivation by name compares the text, so
+ * `motivationsUsed: [5]` matches a motivation named 5. A used list is remembered BY POSITION (`usedSnapshot`: the entries as read, the
+ * typed ones with their value), so `[5, "5"]` keeps its number and its quoted text apart; a write after a chip added or removed an
+ * entry matches the list to what was read from the end (a removal takes the first equal entry, `indexOf`, so the later one survives).
  */
 type TypedScalar = number | boolean;
 const typedText = new WeakMap<object, Map<string, Map<string, TypedScalar>>>();
@@ -65,6 +67,46 @@ function rememberTyped(owner: object, slot: string, raw: TypedScalar): void {
     let texts = slots.get(slot);
     if (!texts) slots.set(slot, (texts = new Map<string, TypedScalar>()));
     texts.set(String(raw), raw);
+}
+
+interface UsedEntry {
+    readonly text: unknown;
+    readonly raw?: TypedScalar;
+}
+const usedSnapshot = new WeakMap<object, Map<string, readonly UsedEntry[]>>();
+
+/** `raw` as one entry of a used list: a number / boolean is its text, a map or list is not text; the entry as read is kept by position. */
+function readUsedEntries(owner: object, slot: string, list: unknown[], where: string): unknown[] {
+    const snapshot: UsedEntry[] = [];
+    const texts = list.map((entry, index) => {
+        if (typeof entry === 'number' || typeof entry === 'boolean') {
+            snapshot.push({ text: String(entry), raw: entry });
+            return String(entry);
+        }
+        if (typeof entry === 'object' && entry !== null) throw new Error(`Invalid data: '${where}' item ${index + 1} must be text.`);
+        snapshot.push({ text: entry });
+        return entry;
+    });
+    let slots = usedSnapshot.get(owner);
+    if (!slots) usedSnapshot.set(owner, (slots = new Map<string, readonly UsedEntry[]>()));
+    slots.set(slot, snapshot);
+    return texts;
+}
+
+/** `list` (the entries now) with the value the user typed put back on each entry that is the one read from that position, matched from the end. */
+function restoreUsed(owner: object, slot: string, list: unknown[]): unknown[] {
+    const snapshot = usedSnapshot.get(owner)?.get(slot);
+    if (!snapshot || !snapshot.some((entry) => entry.raw !== undefined)) return list;
+    const out = list.slice();
+    let from = snapshot.length - 1;
+    for (let i = list.length - 1; i >= 0; i--) {
+        let k = from;
+        while (k >= 0 && snapshot[k].text !== list[i]) k--;
+        if (k < 0) continue;
+        if (snapshot[k].raw !== undefined) out[i] = snapshot[k].raw;
+        from = k - 1;
+    }
+    return out;
 }
 
 /** `raw` as the negotiation reads a text field: a number / boolean becomes its text (remembered on `owner` under `slot`);
@@ -109,11 +151,11 @@ export function typedValueOf(owner: object, slot: string, text: string): unknown
 /** In `out` (a fresh copy of `owner`'s data), puts back the value the user typed for each of `slots` that is still the
  *  text read from it: a text slot directly, a list of text entry by entry. Anything the negotiation changed is untouched. */
 export function restoreTypedText(out: Record<string, unknown>, owner: object, slots: readonly string[]): Record<string, unknown> {
-    if (!typedText.has(owner)) return out;
+    if (!typedText.has(owner) && !usedSnapshot.has(owner)) return out;
     for (const slot of slots) {
         const value = out[slot];
         if (typeof value === 'string') out[slot] = typedValueOf(owner, slot, value);
-        else if (Array.isArray(value)) out[slot] = (value as unknown[]).map((entry): unknown => (typeof entry === 'string' ? typedValueOf(owner, slot, entry) : entry));
+        else if (Array.isArray(value)) out[slot] = restoreUsed(owner, slot, value as unknown[]);
     }
     return out;
 }
@@ -150,10 +192,11 @@ export class NegotiationData {
 
     constructor(data: Partial<NegotiationData>) {
         // SC-638: shape is checked first (a wrong one throws before anything is built), then each text field is read as text.
-        // The block itself must be a map of keys: `hello`, a list and `42` are not. An EMPTY block (null / undefined) is deliberately left
-        // alone: negotiation has never accepted one (SC-493: the form refuses to save it for that reason), so it fails exactly as before.
+        // The block itself must be a map of keys: `hello`, a list and `42` are not. An EMPTY block (null / undefined) is still refused, as
+        // before (negotiation has never accepted one, SC-493: the form refuses to save it for that reason), but with a plain message.
         const input: unknown = data;
-        if (input !== null && input !== undefined && !isMap(input)) throw new Error('Invalid data: the block must be a map of keys.');
+        if (input === null || input === undefined) throw new Error('Invalid data: the block is empty.');
+        if (!isMap(input)) throw new Error('Invalid data: the block must be a map of keys.');
         const motivations = readItems(data.motivations, 'motivations');
         const pitfalls = readItems(data.pitfalls, 'pitfalls');
         const argument: unknown = data.currentArgument;
@@ -299,8 +342,7 @@ export class CurrentArgument {
 
     /** SC-638: a `motivationsUsed` / `pitfallsUsed` list as text entries (a number is its text, a map or list is not text). */
     private static readUsed(owner: CurrentArgument, key: string, raw: unknown): string[] {
-        const where = `currentArgument.${key}`;
-        return readList(raw, where).map((entry, index) => readText(owner, key, entry, `'${where}' item ${index + 1}`) as string);
+        return readUsedEntries(owner, key, readList(raw, `currentArgument.${key}`), `currentArgument.${key}`) as string[];
     }
 
     /**
@@ -328,7 +370,7 @@ export class CurrentArgument {
         // SC-637: a Director's own keys inside `currentArgument:` belong to THIS argument. Complete Argument and Reset
         // end it through here, so they end with it; every write that keeps the argument (a chip, a modifier) keeps them.
         unknownKeys.delete(this);
-        typedText.delete(this); // SC-638: the typed entries of the argument that just ended go with it
+        usedSnapshot.delete(this); // SC-638: the typed entries of the argument that just ended go with it
     }
 }
 
