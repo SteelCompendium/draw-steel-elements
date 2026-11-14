@@ -4,16 +4,9 @@
 // rows) and the rolling pair are live and are asserted in toggles / dropdowns / fonts / sliders; the ones below are not, and carry markers.
 import { expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
-import { closeSettings, ctl, diskData, mainAttr, mainCount, onMain, openAt, readSettings } from '../../driver/settingsDrive';
+import { closeSettings, ctl, mainAttr, mainCount, onMain, openAt, readSettings } from '../../driver/settingsDrive';
 
 const STAMINA = '[data-dse-element="stamina-bar"]';
-/** The previous scenario's flip is saved on a debounce; `setPrefs` disables the plugin, whose unload flushes that pending save over the `{}` it just wrote, so a
- *  scenario that needs the shipped defaults reads the disk first (`diskData` flushes the save and waits for it) and then resets. */
-const shippedPrefs = async (): Promise<void> => {
-	await diskData();
-	await dse.setPrefs({});
-};
-
 const LINKS = 'settings.page.links';
 const FALLBACK = 'settings.links.scc-web-fallback';
 const SCC_NOTE = 'Settings/scc-link.md';
@@ -35,7 +28,7 @@ describe('settings tab: settings read when a block or link is drawn', () => {
 
 	// SC-644 rulings: a block with no Collapse control is never left collapsed, and switching the setting back on does not fold it again.
 	it('[SET-L05] Collapsible by default: switched off, a stamina bar the reader had collapsed opens (no stuck one-liner); switched back on, it stays open', async () => {
-		await shippedPrefs();
+		await dse.setPrefs({});
 		await dse.openNote('Stamina/basic.md');
 		await onMain(async () => {
 			const bar = dse.block('ds-stamina-bar');
@@ -64,7 +57,7 @@ describe('settings tab: settings read when a block or link is drawn', () => {
 
 	// SC-644, pending Scott's answer: Start collapsed does not move a block that is already open; a note opened afterwards starts collapsed.
 	it('[SET-L06] Start collapsed: switched on with the note open, the open stamina bar stays open; the note opened again starts collapsed', async () => {
-		await shippedPrefs();
+		await dse.setPrefs({});
 		await dse.openNote('Stamina/basic.md');
 		expect(await mainAttr(STAMINA, 'data-dse-collapsed')).toBe(null);
 		await openAt('settings.page.element-defaults');
@@ -79,7 +72,7 @@ describe('settings tab: settings read when a block or link is drawn', () => {
 			await dse.openNote('Stamina/basic.md'); // drawn AFTER the change
 			expect(await mainAttr(STAMINA, 'data-dse-collapsed')).toBe('on');
 		} finally {
-			await shippedPrefs(); // the next scenario must not open its note collapsed
+			await dse.setPrefs({}); // the next scenario must not open its note collapsed
 		}
 	});
 

@@ -59,16 +59,15 @@ export function focusIsFree(doc: Document): boolean {
  * SC-644: a chrome rebuild (a setting flipped while a block is on screen) removes and re-draws the panel, and with it the button the
  * keyboard user was on; the browser drops focus to <body>. Call this BEFORE the teardown: when focus sits on this element's own chrome
  * control (panel, one-line bar, or the card-corner pencil `pencil`), it returns a function that, after the rebuild, puts focus back on the
- * same control, else the Collapse / Expand control, else the first control in the block, and only when nothing holds focus by then (a
- * reader who has since gone elsewhere is never pulled back). A no-op function when focus is elsewhere.
+ * same control, else the Collapse control, else the first control in the block, and only when nothing holds focus by then (a
+ * reader who has since gone elsewhere is never pulled back). A no-op function when focus is elsewhere or was on a control that survives.
+ * (A nested block's chrome is never touched by this block's rebuild, so its focus is never lost to it.)
  */
 export function holdChromeFocus(root: HTMLElement, pencil?: HTMLElement): () => void {
 	const doc = root.ownerDocument;
 	const held = doc.activeElement as HTMLElement | null;
 	const none = (): void => undefined;
 	if (!held || held === doc.body || !root.contains(held)) return none;
-	// This element's own controls only: a nested block's chrome has another `[data-dse-element]` root.
-	if (held.closest('[data-dse-element]') !== root) return none;
 	if (held !== pencil && !held.closest('.dse-chrome, .dse-chrome-summary')) return none;
 	const item = held.getAttribute('data-dse-chrome-item');
 	const label = held.getAttribute('aria-label');
@@ -79,7 +78,6 @@ export function holdChromeFocus(root: HTMLElement, pencil?: HTMLElement): () => 
 		const candidates: (HTMLElement | undefined)[] = [
 			item ? all(`[data-dse-chrome-item="${item}"]`)[0] : all('button').find((b) => b.getAttribute('aria-label') === label),
 			all('[data-dse-chrome-item="collapse"]')[0],
-			all('[data-dse-chrome-item="expand"]')[0],
 			all('button, [tabindex]:not([tabindex="-1"]), input, select, textarea, a[href]')[0],
 		];
 		for (const el of candidates) if (focusControl(el, false)) return;

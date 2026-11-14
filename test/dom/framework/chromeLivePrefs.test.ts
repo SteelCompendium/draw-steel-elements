@@ -288,7 +288,7 @@ describe('SC-644 — Start collapsed (O2: blocks drawn afterwards, not blocks al
 
 	it('a block the reader collapsed stays collapsed through SEVERAL unrelated rebuilds and a re-render of the view, and still expands', async () => {
 		const deps = makeDeps();
-		const { root } = await draw(deps, featureElement, FEATURE);
+		const { root } = await draw(deps, featureElement, FEATURE, { key: 40 });
 		click(root.querySelector(COLLAPSE));
 		await deps.prefs.set('authoringControls', true);
 		expect(chromeState(root)).toMatchObject({ collapsedAttr: 'on', bar: true });
@@ -298,6 +298,9 @@ describe('SC-644 — Start collapsed (O2: blocks drawn afterwards, not blocks al
 		await deps.prefs.set('rollClickToRoll', true);
 		await new Promise((r) => setTimeout(r, 50));
 		expect(chromeState(root)).toMatchObject({ collapsedAttr: 'on', bar: true });
+		// The reader's own toggle is still on record: the same block drawn again is still collapsed, whatever the defaults say.
+		const again = await draw(deps, featureElement, FEATURE, { key: 40 });
+		expect(chromeState(again.root).collapsedAttr).toBe('on');
 		click(root.querySelector(EXPAND));
 		expect(chromeState(root)).toMatchObject({ collapsedAttr: null, collapseButton: true });
 	});

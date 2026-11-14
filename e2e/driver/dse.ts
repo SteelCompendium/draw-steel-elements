@@ -13,6 +13,7 @@ import type { ChainablePromiseElement } from 'webdriverio';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { closeEverything, closeModals, waitWriteIdle } from './cleanup';
+import { diskData } from './settings';
 import { E2E } from './env';
 import { fencesOf } from './noteFences';
 import { ev, REGISTRY, waitFor } from './page';
@@ -538,6 +539,11 @@ async function setPrefs(prefs: Record<string, unknown>, opts: { experimental?: b
 	if (Object.keys(prefs).length) data.prefs = prefs;
 	if (opts.experimental) data.experimental = true;
 	await closeEverything();
+	// The previous scenario's preference change is saved on a 250 ms debounce, and disabling the plugin below flushes that pending save: it would
+	// land AFTER the `saveData` here and put the old preferences back (measured 3 of 3: a flip in the settings window, then `setPrefs({})`).
+	// So the pending save goes first, and we wait until data.json on disk equals what the plugin holds, as `diskData` does; a bare `flush()` would
+	// leave two writes of the file in flight with no order between them.
+	await diskData();
 	await ev(`(async () => {
 		const id = 'draw-steel-elements';
 		const p = app.plugins.plugins[id];
