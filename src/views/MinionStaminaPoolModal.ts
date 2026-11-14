@@ -34,8 +34,8 @@ import type { IconButtonHandle, StepperHandle } from '@/framework/kit';
 import { readAmount, staminaPreviewBar, staminaStepperRow, setButtonText } from './StaminaEditModal';
 import type { StaminaPreviewBarHandle } from './StaminaEditModal';
 
-/** The comparison form of a squad's creature name (SC-569 r3): case-folded, whitespace collapsed and trimmed. */
-const squadNameKey = (name: string): string => name.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+/** The comparison form of a squad's creature name (SC-569 r3): case-folded, whitespace collapsed and trimmed. `String()` first: a YAML `name: 300` is a number at runtime, whatever its type says. */
+const squadNameKey = (name: unknown): string => String(name).replace(/\s+/g, ' ').trim().toLocaleLowerCase();
 
 /**
  * SC-569: the pool modal's title. A group holding ONE minion squad keeps `"<group> - Minion Stamina Pool"`.

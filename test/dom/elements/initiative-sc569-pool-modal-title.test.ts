@@ -117,4 +117,18 @@ describe('SC-569 the pool modal title, through the real tracker', () => {
 		expect(titleFromCell(root, '1-1')).toBe('River - Flow (squad 1) - Minion Stamina Pool');
 		expect(titleFromCell(root, '2-1')).toBe('River - Flow (squad 2) - Minion Stamina Pool');
 	});
+
+	// A creature `name:` written as a bare YAML number parses as a NUMBER (the tracker only coerces its own top-level name),
+	// so the comparison must not assume a string; the title reads the number as written.
+	test('a creature named with a bare YAML number (name: 300) opens its pool modal: "River - 300 - Minion Stamina Pool"', async () => {
+		const root = await renderInit(river('name: 300, amount: 2, squad_role: minion', flow()));
+		expect(titleFromCell(root, '0-1')).toBe('River - 300 - Minion Stamina Pool');
+		expect(titleFromCell(root, '1-1')).toBe('River - Flow - Minion Stamina Pool');
+	});
+
+	test('a numeric name and the same number quoted are the same creature: numbered (squad 1) and (squad 2)', async () => {
+		const root = await renderInit(river('name: 300, amount: 2, squad_role: minion', flow(2, '300')));
+		expect(titleFromCell(root, '0-1')).toBe('River - 300 (squad 1) - Minion Stamina Pool');
+		expect(titleFromCell(root, '1-1')).toBe('River - 300 (squad 2) - Minion Stamina Pool');
+	});
 });

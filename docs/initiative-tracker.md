@@ -316,6 +316,8 @@ When the Stamina Pool of minions gets reduced to thresholds that would kill a mi
 
 Damage that is more than the squad has left (an area attack that overkills, say) simply kills every minion still standing. A dead minion stays dead: healing the squad can't lift the pool above what the living minions are worth, and the modal tells you that limit instead of applying the heal.
 
+When a group holds more than one minion squad, the window's title names the squad you opened ("Wolves - Dire Wolf - Minion Stamina Pool"). Squads of the same creature are numbered in the order the tracker lists them, top to bottom: "River - Flow of the River (squad 1) - Minion Stamina Pool", then "(squad 2)".
+
 ![minion-stamina-pool-modal](Media/minion-stamina-pool-modal.png)
 
 ### Action Checklist
