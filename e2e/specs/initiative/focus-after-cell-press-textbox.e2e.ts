@@ -123,6 +123,19 @@ describe('initiative: the same press in the pinned sidebar tracker', () => {
 		await expect(dse.control(AMOUNT)).toHaveValue('7');
 	});
 
+	it('[INIT-F24] the same from the quick-add label of the pinned tracker: the cell holds focus and both typed boxes keep their text', async () => {
+		await pin();
+		await dse.type(dse.control(AMOUNT), '2', { replace: true });
+		await dse.type(dse.control(LABEL), 'Feyt', { replace: true });
+		expect(await focusState()).toEqual({ ctl: LABEL, cell: null, surface: 'sidebar' });
+		await dse.waitForWrite(PINNED, () => dse.click(dse.control('init.cell.stamina', { nth: 2 })));
+		await dse.settle();
+		await expect(dse.control('init.detail.stamina')).toHaveAttribute('aria-label', 'Edit Stamina: Ogre #3');
+		expect(await focusState()).toEqual({ ctl: 'init.cell.stamina', cell: '0-3', surface: 'sidebar' });
+		await expect(dse.control(AMOUNT)).toHaveValue('2');
+		await expect(dse.control(LABEL)).toHaveValue('Feyt');
+	});
+
 	it('[INIT-F21] focus on <body>, then a mouse press on a roster cell of the pinned tracker: no focus is pulled into the sidebar', async () => {
 		await pin();
 		await dse.type(dse.control(AMOUNT), '7', { replace: true });

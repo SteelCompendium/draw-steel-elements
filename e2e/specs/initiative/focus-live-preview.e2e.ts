@@ -142,4 +142,19 @@ describe('initiative: keyboard focus after the tracker saves, in Live Preview', 
 		expect([f.ctl, cell, f.tracker, f.editor]).toEqual(['init.cell.stamina', '0-3', 0, false]);
 		await expect(root.control('init.malice.quickadd.amount')).toHaveValue('7');
 	});
+	it('[INIT-F25] the same from the quick-add label: the cell holds focus and both typed boxes keep their text', async () => {
+		await dse.openNote(MIN, { mode: 'live-preview' });
+		const root = dse.block(INIT);
+		await dse.type(root.control('init.malice.quickadd.amount'), '2', { replace: true });
+		await dse.type(root.control('init.malice.quickadd.label'), 'Feyt', { replace: true });
+		await dse.waitForWrite(MIN, () => dse.click(root.control('init.cell.stamina', { nth: 2 })));
+		await dse.settle();
+		await browser.pause(1000); // the carry is one-shot: the end state must hold a second after write-idle, not only at it
+		await expect(root.control('init.detail.stamina')).toHaveAttribute('aria-label', 'Edit Stamina: Ogre #3');
+		const f = await focusState();
+		const cell = await dse.page<string | null>(`document.activeElement?.closest('.dse-init__cell')?.getAttribute('data-instance-key') ?? null`);
+		expect([f.ctl, cell, f.tracker, f.editor]).toEqual(['init.cell.stamina', '0-3', 0, false]);
+		await expect(root.control('init.malice.quickadd.amount')).toHaveValue('2');
+		await expect(root.control('init.malice.quickadd.label')).toHaveValue('Feyt');
+	});
 });

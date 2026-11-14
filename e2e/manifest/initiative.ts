@@ -32,7 +32,7 @@ export default surface('initiative', {
 		'init.malice.value': c([]),
 		'init.malice.inc': c(['click'], ['M01', 'M02', 'M10']),
 		'init.malice.quickadd.amount': c(['type', 'press:Enter'], ['M03', 'M04', 'M10', 'F17', 'F19', 'F20', 'F21', 'F22']),
-		'init.malice.quickadd.label': c(['type', 'press:Enter'], ['M03', 'M04', 'M10', 'M11', 'F18']),
+		'init.malice.quickadd.label': c(['type', 'press:Enter'], ['M03', 'M04', 'M10', 'M11', 'F18', 'F24', 'F25']),
 		'init.malice.quickadd.add': c(['click'], ['M03', 'M05', 'M10']),
 		'init.malice.log': c(['click'], ['M06']),
 
@@ -59,6 +59,6 @@ export default surface('initiative', {
 
 		// -- S. A roster cell (repeated: nth) selects its instance. The id kept its SC-408 name, `init.cell.stamina`, because
 		//    the cell's double-click was the first thing driven (the stamina modals' reach row); a click is selection.
-		'init.cell.stamina': c(['click', 'press:Enter'], ['S01', 'SC-603', 'F17', 'F18', 'F19', 'F20', 'F21', 'F22', 'F23']),
+		'init.cell.stamina': c(['click', 'press:Enter'], ['S01', 'SC-603', 'F17', 'F18', 'F19', 'F20', 'F21', 'F22', 'F23', 'F24', 'F25']),
 	},
 });
