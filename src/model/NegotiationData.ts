@@ -61,9 +61,9 @@ const typedText = new WeakMap<object, Map<string, Map<string, TypedScalar>>>();
 
 function rememberTyped(owner: object, slot: string, raw: TypedScalar): void {
     let slots = typedText.get(owner);
-    if (!slots) typedText.set(owner, (slots = new Map()));
+    if (!slots) typedText.set(owner, (slots = new Map<string, Map<string, TypedScalar>>()));
     let texts = slots.get(slot);
-    if (!texts) slots.set(slot, (texts = new Map()));
+    if (!texts) slots.set(slot, (texts = new Map<string, TypedScalar>()));
     texts.set(String(raw), raw);
 }
 
@@ -113,7 +113,7 @@ export function restoreTypedText(out: Record<string, unknown>, owner: object, sl
     for (const slot of slots) {
         const value = out[slot];
         if (typeof value === 'string') out[slot] = typedValueOf(owner, slot, value);
-        else if (Array.isArray(value)) out[slot] = value.map((entry) => (typeof entry === 'string' ? typedValueOf(owner, slot, entry) : entry));
+        else if (Array.isArray(value)) out[slot] = (value as unknown[]).map((entry): unknown => (typeof entry === 'string' ? typedValueOf(owner, slot, entry) : entry));
     }
     return out;
 }
@@ -163,7 +163,7 @@ export class NegotiationData {
         this.current_interest = data.current_interest ?? data.initial_interest ?? NegotiationData.default_interest;
         this.motivations = motivations.map((mot, index) => new Motivation(mot as Partial<Motivation>, index));
         this.pitfalls = pitfalls.map((pit, index) => new Pitfall(pit as Partial<Pitfall>, index));
-        this.currentArgument = argument ? new CurrentArgument(argument as Partial<CurrentArgument>) : new CurrentArgument({});
+        this.currentArgument = argument ? new CurrentArgument(argument) : new CurrentArgument({});
         this.i5 = (readText(this, 'i5', data.i5, "'i5'") as string | undefined) ?? "Interest 5 result";
         this.i4 = (readText(this, 'i4', data.i4, "'i4'") as string | undefined) ?? "Interest 4 result";
         this.i3 = (readText(this, 'i3', data.i3, "'i3'") as string | undefined) ?? "Interest 3 result";

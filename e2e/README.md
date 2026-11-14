@@ -154,8 +154,10 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Negotiation/minimal.md` | `name:` only (Interest defaults to 0, so it opens already over, with no chips or cards; SC-641) |
   | `Negotiation/two-blocks.md` | TWO different `ds-negotiation` blocks (the innkeeper, the guard captain) with prose above, between and below |
   | `Negotiation/unknown-keys.md` | one `ds-negotiation` carrying keys the element does not know: `note_to_self` at the top and `gm_note` inside a motivation and a pitfall (a write keeps them after the known keys; SC-637) |
-  | `Negotiation/wrong-name.md` | `name: 2024` (a number as the name: an error card with a raw JavaScript message; SC-638) |
-  | `Negotiation/fraction.md` | `current_interest: 0.4` (seal 0 is drawn while the negotiation is not over; SC-638) |
+  | `Negotiation/wrong-name.md` | `name: 2024` (a number as the name: the card draws it as text and a write keeps it as the number; SC-638) |
+  | `Negotiation/wrong-item.md` | the second motivation is `- Legacy` instead of `- name: Legacy` (a plain error card naming the list and the item; the note is never written; SC-638) |
+  | `Negotiation/wrong-argument.md` | `currentArgument: hello` (a plain error card naming the key; the note is never written; SC-638) |
+  | `Negotiation/fraction.md` | `current_interest: 0.4` (seal 0 is drawn and the negotiation is over, hostile: the ending reads the seal; SC-638) |
   | `Negotiation/dup-names.md` | two motivations both named Higher Authority (the first chip is blank; SC-640) |
   | `Negotiation/nameless.md` | one motivation with a reason and no `name:` (its chip is announced as "Appeal to "; SC-640) |
   | `Negotiation/current-only.md` | `current_interest: 3`, `current_patience: 2` and no `initial_*` keys (Reset ends it; SC-641) |
