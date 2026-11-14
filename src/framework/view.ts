@@ -18,6 +18,7 @@ import type { RenderContext } from './context';
 import { rewriteSccAnchors } from '@/refs/rewriteSccAnchors';
 import { wrapMarkdownTables } from './mdTableWrap';
 import type { ChromeMenuItem, ElementSummary } from './chrome/types';
+import type { ControlFocusRules } from './kit/controlFocus';
 
 /** Write-behind debounce window for persist() (F1 §4.2, "~400ms trailing", OD-3 default). */
 export const PERSIST_DEBOUNCE_MS = 400;
@@ -189,6 +190,13 @@ export abstract class ElementView<M> extends Component {
 	 * `onMount` builds with it). Validate `state`: it is `unknown`.
 	 */
 	receiveCarriedState?(state: unknown): void;
+
+	/**
+	 * SC-626 — opt-in: how this view's controls stand for one another across a rebuild (`kit/controlFocus.ts`: families, fallbacks).
+	 * The view's own hand-back passes the same rules; the Live Preview carry (`host/livePreviewFocusCarry.ts`) reads them here, since
+	 * it works from the registry entry and never sees the view's constants. First implementer: the montage.
+	 */
+	controlFocusRules?(): ControlFocusRules;
 
 	/**
 	 * Inject the model → YAML serializer persist() uses on write-back. Wired by the

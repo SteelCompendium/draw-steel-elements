@@ -1259,7 +1259,7 @@ describe('[K] filed bugs', () => {
 		expect(last().entries[0].dc).toBe(12);
 	});
 
-	test.failing('[K03] after a write the rebuilt montage gives keyboard focus back to the control that replaced the pressed one [known bug SC-626]', async () => {
+	test('[K03] after a write the rebuilt montage gives keyboard focus back to the control that replaced the pressed one', async () => {
 		const { root, flush, live } = await mount(yaml({ round: 1 }));
 		const end = ctl(root, 'montage.bar.end-round');
 		end.focus();

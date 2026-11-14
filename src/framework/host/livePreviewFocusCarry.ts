@@ -33,6 +33,7 @@ import { ViewPlugin } from '@codemirror/view';
 import type { ViewUpdate } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
 import { captureControlFocus, controlSuccessor } from '../kit/controlFocus';
+import type { ControlFocusRules } from '../kit/controlFocus';
 import { armSuccessorFocus } from '../chrome/focusHandoff';
 import { CLAIM_WINDOW_MS } from './viewRegistry';
 import type { ClaimTicket, ViewRegistry, ViewRegistryEntry } from './viewRegistry';
@@ -57,10 +58,12 @@ export function carryOwnSaveFocus(entry: ViewRegistryEntry, now = Date.now()): b
 	const fresh = entry.tickets.filter((t) => now - t.at < CLAIM_WINDOW_MS && !used.has(t));
 	if (fresh.length === 0) return false;
 	for (const t of entry.tickets) used.add(t);
-	const token = captureControlFocus(root);
+	// SC-626: the view's own rules (families, fallbacks) when it has any: the montage's quick buttons are followed by their cell, End round by Back.
+	const rules = (entry.view as { controlFocusRules?: () => ControlFocusRules } | undefined)?.controlFocusRules?.();
+	const token = captureControlFocus(root, rules?.families);
 	if (!token) return false;
 	const key = writtenBlockKey(entry);
-	armSuccessorFocus(key, (r) => controlSuccessor(r, token), token.ring, active);
+	armSuccessorFocus(key, (r) => controlSuccessor(r, token, rules?.families, rules?.fallbacks), token.ring, active);
 	return true;
 }
 

@@ -27,6 +27,7 @@
 import type { Component } from 'obsidian';
 import { setIcon } from 'obsidian';
 import { iconButton, stampControl } from '@/framework/kit';
+import { FOCUS_AT_ATTR } from '@/framework/kit/controlFocus';
 import type { MontageModel, MontageEntry, MontageResult } from './model';
 import { montageTallies, montageRoster, isKnownMontageResult } from './model';
 import type { SheetMode } from './LogActionModal';
@@ -242,6 +243,7 @@ export class BoardView {
 
 		const nameCell = board.createDiv({ cls: 'dse-mt__board-name' });
 		nameCell.setAttribute('data-hero', name);
+		nameCell.setAttribute(FOCUS_AT_ATTR, name); // SC-626: its Log an action button is named by the hero, not by position
 		if (isLast) nameCell.setAttribute('data-lastrow', 'on');
 		nameCell.createSpan({ cls: 'dse-mt__board-who', text: name });
 
@@ -407,6 +409,7 @@ export class BoardView {
 		cell.setAttribute('data-state', state);
 		cell.setAttribute('data-round', String(round));
 		cell.setAttribute('data-hero', hero);
+		cell.setAttribute(FOCUS_AT_ATTR, `${round}:${hero}`); // SC-626: the cell, and the quick buttons in it, are named by round and hero (focusRules.ts)
 		if (isLast) cell.setAttribute('data-lastrow', 'on');
 		if (entry?.note) cell.setAttribute('data-noted', 'on');
 

@@ -41,6 +41,9 @@ import { MOVING_ATTR } from '@/framework/host/adoptView';
 import type { ChromeMenuItem } from '@/framework/chrome/types';
 import { iconButton, openManagedModal } from '@/framework/kit';
 import type { DseModal } from '@/framework/kit';
+import { captureControlFocus, restoreControlFocus } from '@/framework/kit/controlFocus';
+import type { ControlFocus, ControlFocusRules } from '@/framework/kit/controlFocus';
+import { MONTAGE_FOCUS_FALLBACKS, MONTAGE_FOCUS_FAMILIES } from './focusRules';
 import type { MontageModel, MontageEntry } from './model';
 import {
 	addMontageHero,
@@ -83,6 +86,10 @@ export class MontageView extends ElementView<MontageModel> {
 	/** The board's scrollLeft as the user (or `restoreBoardScroll`) last left it — kept from the
 	 *  board's own `scroll` events, so a DOM move that silently resets it can be undone. */
 	private boardLeft = 0;
+	/** SC-626 — what the window that is open now was opened from: the control that held focus (null: none did). A write made in the
+	 *  window rebuilds the card while focus is in the window, so the rebuild hands focus to this control's successor instead
+	 *  (see `update`). Not kept for a window opened with the mouse: focus was not in the card, and a write never pulls it in. */
+	private windowOpener: { focus: ControlFocus | null } | null = null;
 
 	/** SC-326 r2 — every write rebuilds the whole element (the framework default `update`:
 	 *  empty the root, run `onMount` again), which throws the board away; its replacement
@@ -90,6 +97,11 @@ export class MontageView extends ElementView<MontageModel> {
 	 *  round 1 (measured in real Obsidian: 884 -> 0 on the first frame after the tap). Carry
 	 *  the position across. */
 	async update(model: MontageModel): Promise<void> {
+		// SC-626: every write (and the Test tiers strip) rebuilds the card, which throws away the control a keyboard user pressed, and
+		// focus fell to <body>. Hand it to the control that stands for it once the rebuild is done (kit/controlFocus.ts; rules in
+		// focusRules.ts). Only when focus was inside the card, or in a window opened from it that is writing (Log, Add a hero, Set
+		// limits close the moment they write, so by then focus is on <body>): an outside edit or a mouse press pulls nothing in.
+		const focus = captureControlFocus(this.rootEl, MONTAGE_FOCUS_FAMILIES) ?? this.windowOpener?.focus ?? null;
 		const board = this.rootEl.querySelector<HTMLElement>('.dse-mt__board');
 		this.pendingBoardScroll =
 			board && board.scrollLeft > 0
@@ -100,6 +112,12 @@ export class MontageView extends ElementView<MontageModel> {
 		} finally {
 			this.pendingBoardScroll = null; // never leak into a later mount
 		}
+		restoreControlFocus(this.rootEl, focus, MONTAGE_FOCUS_FAMILIES, MONTAGE_FOCUS_FALLBACKS);
+	}
+
+	/** SC-626 — the rules the Live Preview carry (host/livePreviewFocusCarry.ts) applies to this view's controls. */
+	controlFocusRules(): ControlFocusRules {
+		return { families: MONTAGE_FOCUS_FAMILIES, fallbacks: MONTAGE_FOCUS_FALLBACKS };
 	}
 
 	protected async onMount(root: HTMLElement, model: MontageModel): Promise<void> {
@@ -366,10 +384,14 @@ export class MontageView extends ElementView<MontageModel> {
 	 * different reason — deferring a persist to modal close). */
 	private openTrackedModal<T extends DseModal>(factory: () => T): T {
 		const modalOwner = this.addChild(new Component());
+		// SC-626: read before the window takes focus.
+		const opener = { focus: captureControlFocus(this.rootEl, MONTAGE_FOCUS_FAMILIES) };
+		this.windowOpener = opener;
 		const modal = openManagedModal(modalOwner, factory, this.cx.host.containerEl); // SC-595: anchor, see DseModal.anchorTo
 		const inheritedOnClose = modal.onClose.bind(modal) as () => void;
 		modal.onClose = () => {
 			inheritedOnClose();
+			if (this.windowOpener === opener) this.windowOpener = null;
 			this.removeChild(modalOwner);
 		};
 		return modal;
