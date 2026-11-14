@@ -8,8 +8,9 @@
 // Director's notes (spec §D "Notes"), and the brink alert.
 //
 // The `pending` band (model.ts's montageOutcome fourth band, fixed in this slice) is a real
-// band here too: a montage with nothing recorded gets a neutral crest and "This montage" /
-// "Not started" rather than reading as a Total Failure.
+// band here too: a LIVE montage with nothing recorded gets a neutral crest and "This montage" /
+// "Not started" rather than reading as a Total Failure. A montage that is over with nothing
+// recorded (the rounds ran out, SC-629) is a real Total Failure and draws as one.
 import { setIcon } from 'obsidian';
 import type { MontageModel, MontageOutcome } from './model';
 import { montageOutcome, montageTallies, montageRoster, montageBandCopy, isKnownMontageResult } from './model';

@@ -180,8 +180,33 @@ describe('T-6: montageOutcome — the four derived bands (AGENT line 96 + SC-191
 		expect(montageOutcome({ ...base, success_limit: 0, successes: 0 })).toBe('pending');
 	});
 
-	test('SC-191 slice 2: `pending` at 0/0 regardless of whether limits are set — nothing recorded yet is not a verdict', () => {
+	test('SC-191 slice 2: `pending` at 0/0 regardless of whether limits are set — nothing recorded yet is not a verdict (while the montage is live)', () => {
 		expect(montageOutcome({ ...base })).toBe('pending');
+		expect(montageOutcome({ ...base, success_limit: 0, failure_limit: 0 })).toBe('pending');
+		expect(montageOutcome({ ...base, current_round: 2 })).toBe('pending'); // the last round, still live
+	});
+
+	// SC-629: Draw Steel Heroes:21336 — "If the heroes hit the failure limit or time runs out, and if they
+	// don't have at least two more successes than failures, they suffer total failure."
+	test('SC-629: a montage whose rounds ran out with nothing recorded is `failure`, not `pending`', () => {
+		expect(montageOutcome({ ...base, current_round: 3 })).toBe('failure');
+	});
+
+	test('SC-629: the same holds with both limits unset (0) — running out of rounds is what completes it', () => {
+		expect(montageOutcome({ ...base, success_limit: 0, failure_limit: 0, current_round: 3 })).toBe('failure');
+	});
+
+	test('SC-629: `rounds: 0` — no round to play, so time is already out at round 1: `failure` at 0/0', () => {
+		expect(montageOutcome({ ...base, rounds: 0, current_round: 1 })).toBe('failure');
+	});
+
+	test('SC-629: out of rounds, 1 success / 0 failures is `failure` (margin under 2); 2 / 0 is `partial`', () => {
+		expect(montageOutcome({ ...base, successes: 1, current_round: 3 })).toBe('failure');
+		expect(montageOutcome({ ...base, successes: 2, current_round: 3 })).toBe('partial');
+	});
+
+	test('SC-629: with both limits set, a live 0/0 stays `pending` — a positive limit is never reached at 0/0, so only the rounds can complete a 0/0 montage', () => {
+		expect(montageOutcome({ ...base, success_limit: 1, failure_limit: 1, current_round: 2 })).toBe('pending');
 	});
 });
 

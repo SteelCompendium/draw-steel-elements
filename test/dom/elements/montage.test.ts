@@ -700,6 +700,43 @@ describe('SC-191 slice 2: OutcomeBandView (verdict / equal-width tracks / rule /
 		expect(verdictWord(root).textContent).toBe('Not started');
 	});
 
+	// SC-629: Director pressed End round twice on a 2-round montage with nothing logged. The band
+	// said "Not started" over "Total Failure — no Victories awarded." (Draw Steel Heroes:21336).
+	const OUT_OF_ROUNDS_0_0 = [
+		'title: Nobody Moved',
+		'rounds: 2',
+		'success_limit: 3',
+		'failure_limit: 2',
+		'successes: 0',
+		'failures: 0',
+		'participants:',
+		'  - name: Kira',
+		'    skills_used: []',
+		'current_round: 3',
+	].join('\n');
+
+	test('SC-629: a montage that ran out of rounds at 0/0 reads "Final result" / "Total Failure" with the skull crest, agreeing with its rule line', async () => {
+		const { root } = await renderMontage(OUT_OF_ROUNDS_0_0);
+		expect(outcomeBand(root).getAttribute('data-band')).toBe('failure');
+		expect(verdictEyebrow(root).textContent).toBe('Final result');
+		expect(verdictWord(root).textContent).toBe('Total Failure');
+		expect(outcomeBand(root).querySelector('.dse-mt__verdict-crest')?.getAttribute('data-icon')).toBe('skull');
+		expect(root.querySelector('.dse-mt__verdict-rule')?.textContent).toBe('Total Failure \u2014 no Victories awarded.');
+		expect(outcomeBand(root).querySelector('.dse-mt__stat-label')?.textContent).toBe('rounds used');
+	});
+
+	test('SC-629: Reopen on that board (a round added) is live again, so the band goes back to "This montage" / "Not started"', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(OUT_OF_ROUNDS_0_0);
+		(root.querySelector('.dse-mt__actionrow button[aria-label="Reopen"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+		expect(outcomeBand(rebuilt).getAttribute('data-band')).toBe('pending');
+		expect(verdictEyebrow(rebuilt).textContent).toBe('This montage');
+		expect(verdictWord(rebuilt).textContent).toBe('Not started');
+		jest.useRealTimers();
+	});
+
 	// Fix-round-1 H-1: `montageOutcome` used to gate `partial` behind `exhausted`, which made
 	// it unreachable while the montage is still live — the mid fixture (5/2, margin +3, not
 	// yet exhausted) rendered "If it ended now / Total Failure" directly above its own rule

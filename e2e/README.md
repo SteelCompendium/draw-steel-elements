@@ -151,7 +151,7 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Montage/quoted-rounds.md` | a block with `rounds: "3"` typed in quotes: read as 3; Add a round writes 4, a write that leaves it alone gives back `"3"` (SC-628) |
   | `Montage/quoted-current-round.md` | `current_round: "1"`: End round writes the number 2 (SC-628) |
   | `Montage/quoted-successes.md` | `successes: "2"` with a success limit of 3: a quick success writes the number 3 (SC-628) |
-  | `Montage/no-action.md` | the rounds ran out (round 3 of 2) with nothing logged: the band's verdict word and rule line disagree (SC-629) |
+  | `Montage/no-action.md` | the rounds ran out (round 3 of 2) with nothing logged: the band reads "Final result" / "Total Failure", matching its rule line (SC-629, fixed) |
   | `Negotiation/basic.md` | one `ds-negotiation` (SC-439): "Convincing Frodo", Interest 3 / Patience 3 (both initial; no `current_*`), motivations Higher Authority + Peace, pitfall Power, offers `i5`..`i0`; prose above and below |
   | `Negotiation/spent.md` | the same negotiation at Interest 3 / Patience 3 of 4, Higher Authority already spent (`hasBeenAppealedTo: true`): appealing to it can arm the reuse modifier |
   | `Negotiation/ended.md` | Patience 0 at Interest 3, both motivations spent: the "Final offer" band, Complete disabled, the tier rows static |

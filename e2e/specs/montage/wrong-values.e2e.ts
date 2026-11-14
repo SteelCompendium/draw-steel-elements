@@ -5,7 +5,7 @@
 // Montage/wrong-title.md (`title: 2024`), wrong-title-bool.md (`title: true`), wrong-title-map.md (a map as the title), quoted-rounds.md (`rounds: "3"`),
 // quoted-current-round.md (`current_round: "1"`), quoted-successes.md (`successes: "2"`), wrong-description.md (`description: 5`), wrong-block.md (the block is the text `hello`), no-action.md.
 import { expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
+import { dse } from '../../driver/dse';
 import { blockOf, MONTAGE } from '../../driver/montage';
 
 describe('montage: values the Director typed by hand', () => {
@@ -115,13 +115,12 @@ describe('montage: values the Director typed by hand', () => {
 		expect(before).toContain('```ds-montage\nhello\n```');
 	});
 
-	knownBug('SC-629', '[MONT-W03] the verdict word and the rule line agree when the rounds ran out with nothing logged (both claim a failure, or neither does)', async () => {
+	it('[MONT-W03] a montage whose rounds ran out with nothing logged reads "Final result" / "Total Failure", and the rule line says the same', async () => {
 		await dse.openNote('Montage/no-action.md');
 		const root = dse.block(MONTAGE);
-		const word = (await root.control({ css: '.dse-mt__verdict-word' }).getProperty('textContent')) as string;
-		const rule = (await root.control({ css: '.dse-mt__verdict-rule' }).getProperty('textContent')) as string;
-		// "total failure" as a phrase: a neutral rule line that merely says "failures" must not count as a claim
-		const claimsTotalFailure = (text: string): boolean => /\btotal failure\b/i.test(text);
-		expect(claimsTotalFailure(word)).toBe(claimsTotalFailure(rule));
+		const text = async (css: string) => (await root.control({ css }).getProperty('textContent')) as string;
+		expect(await text('.dse-mt__verdict-eyebrow')).toBe('Final result');
+		expect(await text('.dse-mt__verdict-word')).toBe('Total Failure');
+		expect(await text('.dse-mt__verdict-rule')).toBe('Total Failure \u2014 no Victories awarded.');
 	});
 });

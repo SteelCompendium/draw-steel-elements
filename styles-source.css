@@ -4984,8 +4984,9 @@ Shared globals
 		&[data-band='failure'] {
 			--dse-mt-band: var(--dse-danger);
 		}
-		/* A montage at 0/0 is not a Total Failure — it has not started (model.ts's fourth
-		   `pending` band, fixed this slice). Neutral crest, same as an unset limit. */
+		/* A LIVE montage at 0/0 is not a Total Failure — it has not started (model.ts's fourth
+		   `pending` band). Neutral crest, same as an unset limit. One that ran out of rounds at
+		   0/0 is `failure` (SC-629), not this. */
 		&[data-band='pending'] {
 			--dse-mt-band: var(--dse-metal);
 		}

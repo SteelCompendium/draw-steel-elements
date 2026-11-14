@@ -161,6 +161,12 @@ describe('SC-191 §D: montageBandCopy — at-a-glance phrasing (quoted from mock
 		expect(montageOutcome({ ...base, successes: 0, failures: 0 })).toBe('pending');
 	});
 
+	test('SC-629: the band copy of a montage out of rounds at 0/0 reads `failure` / "Total Failure", not `pending` / "Not started"', () => {
+		const copy = montageBandCopy({ ...base, success_limit: 0, failure_limit: 0, successes: 0, failures: 0, current_round: base.rounds + 1 });
+		expect(copy.band).toBe('failure');
+		expect(copy.word).toBe('Total Failure');
+	});
+
 	test('one recorded result is enough to leave pending — a single failure with nothing else reads the live `failure` band, never `pending`', () => {
 		expect(montageOutcome({ ...base, successes: 0, failures: 1 })).toBe('failure');
 	});
