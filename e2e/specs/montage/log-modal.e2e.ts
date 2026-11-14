@@ -5,7 +5,7 @@
 // Montage/fresh.md: nothing logged. Montage/hand-written.md: Bram's round-1 entry holds an unrecognised result.
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
-import { blockOf, cellOf, expectText, FRESH, HAND, MID, modalsOpen, MONTAGE, roundChip } from '../../driver/montage';
+import { blockOf, cellOf, expectText, FRESH, HAND, MID, modalsOpen, MONTAGE, roundChip, hoverHero, rowAct } from '../../driver/montage';
 
 type Modal = Awaited<ReturnType<typeof dse.modal>>;
 const pressed = (modal: Modal, kind: string) => modal.control(`montage.log.result.${kind}`);
@@ -64,7 +64,8 @@ describe('montage: the Log an action sheet', () => {
 	it('[MONT-L04] typing a skill the hero already used shows the reuse warning and leaves Log enabled; logging it anyway lists it twice', async () => {
 		await dse.openNote(MID);
 		const root = dse.block(MONTAGE);
-		await dse.click(root.control('montage.board.row-act', { nth: 0 })); // Kira, round 2
+		await hoverHero(root, 'Kira');
+		await dse.click(rowAct(root, 'Kira')); // Kira, round 2
 		const modal = await dse.modal('montage-log');
 		const warn = modal.control({ css: '.dse-mt__sheet-warn' });
 		await expect(warn).not.toBeDisplayed();

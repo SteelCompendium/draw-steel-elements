@@ -107,3 +107,19 @@ export async function dismiss(modal: Modal): Promise<void> {
 	await dse.click(modal.control('modal.close'));
 	await expect(modal.root).not.toBeExisting();
 }
+
+/** A hero's "Log an action for <hero>" button is drawn only while the pointer is over the hero's name cell (opacity 0 otherwise): `await hoverHero(...)` first. */
+export const hoverHero = (root: Scope, hero: string): Promise<void> => dse.hover(root.control({ css: `.dse-mt__board-name[data-hero="${hero}"]` }));
+/** The hero's row button (a plain scope lookup, so a click on it is credited to the block it is in). */
+export const rowAct = (root: Scope, hero: string) => root.control({ css: `.dse-mt__board-name[data-hero="${hero}"] [data-dse-control="montage.board.row-act"]` });
+
+/** The open state lives in the plugin's session store, keyed by the block, so it outlives a test (and the note being reset): start every test closed. */
+export async function closeDisclosures(root: Scope): Promise<void> {
+	for (const id of ['montage.strip', 'montage.guide']) {
+		if ((await root.control(id).getAttribute('aria-expanded')) === 'true') {
+			await dse.click(root.control(id));
+			await expect(root.control(id)).toHaveAttribute('aria-expanded', 'false');
+		}
+	}
+}
+

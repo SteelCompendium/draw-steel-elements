@@ -79,14 +79,16 @@ describe('montage: the note and the other blocks around a write', () => {
 		expect((await blockOf(UNKNOWN)).participants![0]).toMatchObject({ name: 'Kira', player: 'Sam' });
 	});
 
-	it('[MONT-X08] an edit made to the prose above the block from outside is kept by the next write', async () => {
+	it('[MONT-X08] a hand edit inside the block, made while it is drawn, is kept by the next write (a changed limit, then a quick log)', async () => {
 		await dse.openNote(FRESH_FIRST);
-		await dse.externalEdit(FRESH_FIRST, `c.replace('ABOVE', 'ABOVE, edited elsewhere')`);
+		await dse.externalEdit(FRESH_FIRST, `c.replace('success_limit: 3', 'success_limit: 4')`);
 		await dse.settle();
 		const root = dse.block(MONTAGE);
+		await expect(root.control({ css: '.dse-mt__prog[data-kind="success"] .dse-mt__track' })).toExist();
 		await dse.waitForWrite(FRESH_FIRST, () => dse.click(root.control('montage.quick.success', { nth: 0 })));
-		expect(await dse.noteText(FRESH_FIRST)).toContain('ABOVE, edited elsewhere');
-		expect((await blockOf(FRESH_FIRST)).entries).toEqual([{ hero: 'Kira', round: 1, result: 'success' }]);
+		const b = await blockOf(FRESH_FIRST);
+		expect(b.success_limit).toBe(4);
+		expect(b.entries).toEqual([{ hero: 'Kira', round: 1, result: 'success' }]);
 	});
 
 	knownBug('SC-625', '[MONT-X09] a write keeps a top-level key the product does not know (`table_notes`)', async () => {

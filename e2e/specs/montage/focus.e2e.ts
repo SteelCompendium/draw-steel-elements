@@ -3,11 +3,11 @@
 // initiative tracker gives them (focus-after-rebuild.e2e.ts).
 // Montage/fresh.md: round 1 of 3.
 import { expect } from '@wdio/globals';
-import { dse } from '../../driver/dse';
-import { blockOf, focusState, FRESH, MONTAGE, TABS } from '../../driver/montage';
+import { dse, knownBug } from '../../driver/dse';
+import { blockOf, closeDisclosures, focusState, FRESH, MONTAGE, TABS } from '../../driver/montage';
 
 describe('montage: keyboard focus after the montage rebuilds', () => {
-	it('[MONT-F01] Enter on End round: the rebuilt End round button holds focus', async () => {
+	knownBug('SC-626', '[MONT-F01] Enter on End round: the rebuilt End round button holds focus', async () => {
 		await dse.openNote(FRESH);
 		const root = dse.block(MONTAGE);
 		const end = root.control('montage.bar.end-round');
@@ -19,11 +19,12 @@ describe('montage: keyboard focus after the montage rebuilds', () => {
 		const f = await focusState();
 		expect(f.ctl).toBe('montage.bar.end-round');
 		expect(f.inMontage).toBe(true);
-	});
+	}, { failsWith: /Received: null/ });
 
-	it('[MONT-F02] Enter on the Test tiers strip header: the rebuilt header holds focus', async () => {
+	knownBug('SC-626', '[MONT-F02] Enter on the Test tiers strip header: the rebuilt header holds focus', async () => {
 		await dse.openNote(FRESH);
 		const root = dse.block(MONTAGE);
+		await closeDisclosures(root); // the open state outlives a test (session store)
 		const header = root.control('montage.strip');
 		await dse.tabTo(header, TABS);
 		await dse.press('Enter', header);
@@ -32,9 +33,9 @@ describe('montage: keyboard focus after the montage rebuilds', () => {
 		const f = await focusState();
 		expect(f.ctl).toBe('montage.strip');
 		expect(f.inMontage).toBe(true);
-	});
+	}, { failsWith: /Received: null/ });
 
-	it('[MONT-F03] a sheet closed by Log from the keyboard: focus lands inside the rebuilt montage, not on the page', async () => {
+	knownBug('SC-626', '[MONT-F03] a sheet closed by Log from the keyboard: focus lands inside the rebuilt montage, not on the page', async () => {
 		await dse.openNote(FRESH);
 		const root = dse.block(MONTAGE);
 		const log = root.control('montage.bar.log');
@@ -50,5 +51,5 @@ describe('montage: keyboard focus after the montage rebuilds', () => {
 		expect((await blockOf(FRESH)).entries).toHaveLength(1);
 		const f = await focusState();
 		expect(f.inMontage).toBe(true);
-	});
+	}, { failsWith: /Received: false/ });
 });

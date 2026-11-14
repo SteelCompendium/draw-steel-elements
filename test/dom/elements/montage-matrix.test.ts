@@ -1237,3 +1237,43 @@ describe('[X] integrity: what a montage write leaves alone', () => {
 		expect(text().replace('rounds: 3', 'rounds: 2')).toBe(note);
 	});
 });
+
+// ------------------------------------------------------------------------------------------------ K. filed bugs (test.failing)
+// A bug a ticket owns is a `test.failing` that encodes the CORRECT behaviour with the ticket in its title: it passes while the bug exists and FAILS
+// the moment the bug is fixed, so the marker is removed then. The e2e twins (e2e/specs/montage/) cover what shows in real Obsidian.
+
+describe('[K] filed bugs', () => {
+	const UNKNOWN = ['table_notes: keep me', 'rounds: 3', 'success_limit: 5', 'failure_limit: 5', 'successes: 1', 'failures: 0', 'participants:', '  - name: Kira', '    skills_used: [Nature]', 'entries:', '  - hero: Kira', '    round: 1', '    result: success', '    skill: Nature', '    dc: 12', 'current_round: 2'].join('\n');
+
+	test.failing('[K01] a write keeps a top-level key the product does not know [known bug SC-625]', async () => {
+		const { root, flush, last } = await mount(UNKNOWN);
+		ctl(root, 'montage.quick.failure', 0).click();
+		await flush();
+		expect(last().table_notes).toBe('keep me');
+	});
+
+	test.failing('[K02] a write keeps a key the product does not know inside an entry [known bug SC-625]', async () => {
+		const { root, flush, last } = await mount(UNKNOWN);
+		ctl(root, 'montage.quick.failure', 0).click();
+		await flush();
+		expect(last().entries[0].dc).toBe(12);
+	});
+
+	test.failing('[K03] after a write the rebuilt montage gives keyboard focus back to the control that replaced the pressed one [known bug SC-626]', async () => {
+		const { root, flush, live } = await mount(yaml({ round: 1 }));
+		const end = ctl(root, 'montage.bar.end-round');
+		end.focus();
+		end.click();
+		await flush();
+		expect(document.activeElement?.closest('[data-dse-control]')?.getAttribute('data-dse-control')).toBe('montage.bar.end-round');
+		expect(live().contains(document.activeElement)).toBe(true);
+	});
+
+	test.failing('[K04] typing a skill in another case still warns that the hero used it [known bug SC-631]', async () => {
+		const { root } = await mount(yaml({ heroes: [{ name: 'Kira', skills: ['Nature'] }], round: 2, sl: 9, fl: 9, entries: [{ hero: 'Kira', round: 1, result: 'success', skill: 'Nature' }] }));
+		ctl(root, 'montage.cell.socket', 0).click();
+		const sheet = modalOf('montage.log.submit');
+		type(ctl<HTMLInputElement>(sheet, 'montage.log.skill'), 'nature');
+		expect((sheet.querySelector('.dse-mt__sheet-warn') as HTMLElement).hidden).toBe(false);
+	});
+});

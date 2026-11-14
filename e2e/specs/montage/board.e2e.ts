@@ -4,7 +4,7 @@
 // round 2 is in play. Montage/acted.md: both heroes have acted in round 1. Montage/done.md: complete. Montage/wide.md: twelve rounds.
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
-import { ACTED, blockOf, cellOf, DONE, dismiss, expectText, FRESH, MID, MONTAGE, modalsOpen, TABS, WIDE } from '../../driver/montage';
+import { ACTED, blockOf, cellOf, DONE, dismiss, expectText, FRESH, MID, MONTAGE, modalsOpen, hoverHero, rowAct, TABS, WIDE } from '../../driver/montage';
 
 const title = (modal: Awaited<ReturnType<typeof dse.modal>>) => modal.control({ css: '.dse-modal__title-text' });
 const eyebrow = (modal: Awaited<ReturnType<typeof dse.modal>>) => modal.control({ css: '.dse-mt__sheet-eyebrow' });
@@ -22,7 +22,9 @@ describe('montage: the board controls', () => {
 	it('[MONT-B02] "Log an action for <hero>" opens a NEW sheet for that hero and the round in play', async () => {
 		await dse.openNote(FRESH);
 		const root = dse.block(MONTAGE);
-		await dse.expectNoWrite(FRESH, () => dse.click(root.control('montage.board.row-act', { nth: 1 })));
+		await hoverHero(root, 'Bram');
+		const act = rowAct(root, 'Bram');
+		await dse.expectNoWrite(FRESH, () => dse.click(act));
 		const modal = await dse.modal('montage-log');
 		await expect(title(modal)).toHaveElementProperty('textContent', 'Bram · round 1');
 		await expect(eyebrow(modal)).toHaveElementProperty('textContent', 'Log an action');
@@ -33,7 +35,9 @@ describe('montage: the board controls', () => {
 	it('[MONT-B03] when the hero has acted in the round in play the same button opens the EDIT sheet of that entry', async () => {
 		await dse.openNote(ACTED);
 		const root = dse.block(MONTAGE);
-		await dse.expectNoWrite(ACTED, () => dse.click(root.control('montage.board.row-act', { nth: 0 })));
+		await hoverHero(root, 'Kira');
+		const act = rowAct(root, 'Kira');
+		await dse.expectNoWrite(ACTED, () => dse.click(act));
 		const modal = await dse.modal('montage-log');
 		await expect(title(modal)).toHaveElementProperty('textContent', 'Kira · round 1');
 		await expect(eyebrow(modal)).toHaveElementProperty('textContent', 'Correct');
@@ -44,8 +48,10 @@ describe('montage: the board controls', () => {
 	it('[MONT-B04] on a complete montage the row button is disabled: a click opens nothing and writes nothing', async () => {
 		await dse.openNote(DONE);
 		const root = dse.block(MONTAGE);
-		await expect(root.control('montage.board.row-act', { nth: 0 })).toBeDisabled();
-		await dse.expectNoWrite(DONE, () => dse.click(root.control('montage.board.row-act', { nth: 0 })));
+		await hoverHero(root, 'Kira');
+		const act = rowAct(root, 'Kira');
+		await expect(act).toBeDisabled();
+		await dse.expectNoWrite(DONE, () => dse.click(act));
 		expect(await modalsOpen()).toBe(0);
 	});
 
