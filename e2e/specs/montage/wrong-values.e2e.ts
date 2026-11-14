@@ -65,7 +65,7 @@ describe('montage: values the Director typed by hand', () => {
 	});
 
 	it('[MONT-W08] a map as the title is a plain error card that names `title`, has no control, and leaves the note byte-identical after a click on it', async () => {
-		await dse.openNote('Montage/wrong-title-map.md');
+		await dse.openNote('Montage/wrong-title-map.md', { errorCard: true });
 		const before = await dse.noteText('Montage/wrong-title-map.md');
 		const card = await dse.page<{ title: string; message: string; controls: number; stage: string | null }>(`(() => {
 			const c = document.querySelector('.markdown-reading-view [data-dse-element="montage"]');
@@ -101,7 +101,7 @@ describe('montage: values the Director typed by hand', () => {
 	});
 
 	it('[MONT-W10] a block that is just the text `hello` is a plain error card, has no control, and leaves the note byte-identical after a click on it', async () => {
-		await dse.openNote('Montage/wrong-block.md');
+		await dse.openNote('Montage/wrong-block.md', { errorCard: true });
 		const before = await dse.noteText('Montage/wrong-block.md');
 		const card = await dse.page<{ title: string; message: string; controls: number; stage: string | null }>(`(() => {
 			const c = document.querySelector('.markdown-reading-view [data-dse-element="montage"]');
