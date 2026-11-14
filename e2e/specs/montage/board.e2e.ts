@@ -23,7 +23,7 @@ describe('montage: the board controls', () => {
 		await dse.openNote(FRESH);
 		const root = dse.block(MONTAGE);
 		await hoverHero(root, 'Bram');
-		const act = rowAct(root, 'Bram');
+		const act = rowAct(root, 1);
 		await dse.expectNoWrite(FRESH, () => dse.click(act));
 		const modal = await dse.modal('montage-log');
 		await expect(title(modal)).toHaveElementProperty('textContent', 'Bram · round 1');
@@ -36,7 +36,7 @@ describe('montage: the board controls', () => {
 		await dse.openNote(ACTED);
 		const root = dse.block(MONTAGE);
 		await hoverHero(root, 'Kira');
-		const act = rowAct(root, 'Kira');
+		const act = rowAct(root, 0);
 		await dse.expectNoWrite(ACTED, () => dse.click(act));
 		const modal = await dse.modal('montage-log');
 		await expect(title(modal)).toHaveElementProperty('textContent', 'Kira · round 1');
@@ -49,7 +49,7 @@ describe('montage: the board controls', () => {
 		await dse.openNote(DONE);
 		const root = dse.block(MONTAGE);
 		await hoverHero(root, 'Kira');
-		const act = rowAct(root, 'Kira');
+		const act = rowAct(root, 0);
 		await expect(act).toBeDisabled();
 		await dse.expectNoWrite(DONE, () => dse.click(act));
 		expect(await modalsOpen()).toBe(0);

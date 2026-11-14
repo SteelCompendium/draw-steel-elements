@@ -65,7 +65,7 @@ describe('montage: the Log an action sheet', () => {
 		await dse.openNote(MID);
 		const root = dse.block(MONTAGE);
 		await hoverHero(root, 'Kira');
-		await dse.click(rowAct(root, 'Kira')); // Kira, round 2
+		await dse.click(rowAct(root, 0)); // Kira, round 2
 		const modal = await dse.modal('montage-log');
 		const warn = modal.control({ css: '.dse-mt__sheet-warn' });
 		await expect(warn).not.toBeDisplayed();

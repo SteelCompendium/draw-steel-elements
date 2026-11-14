@@ -110,8 +110,8 @@ export async function dismiss(modal: Modal): Promise<void> {
 
 /** A hero's "Log an action for <hero>" button is drawn only while the pointer is over the hero's name cell (opacity 0 otherwise): `await hoverHero(...)` first. */
 export const hoverHero = (root: Scope, hero: string): Promise<void> => dse.hover(root.control({ css: `.dse-mt__board-name[data-hero="${hero}"]` }));
-/** The hero's row button (a plain scope lookup, so a click on it is credited to the block it is in). */
-export const rowAct = (root: Scope, hero: string) => root.control({ css: `.dse-mt__board-name[data-hero="${hero}"] [data-dse-control="montage.board.row-act"]` });
+/** The n-th hero's row button (by id, so a click on it is a credited drive; `hoverHero` first). */
+export const rowAct = (root: Scope, nth: number) => root.control('montage.board.row-act', { nth });
 
 /** The open state lives in the plugin's session store, keyed by the block, so it outlives a test (and the note being reset): start every test closed. */
 export async function closeDisclosures(root: Scope): Promise<void> {
