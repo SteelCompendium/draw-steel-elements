@@ -45,9 +45,9 @@ async function draw(
 	deps: ElementPipelineDeps,
 	def: ElementDefinition<any>,
 	source: string,
-	opts: { key?: number; canPersist?: boolean; attach?: boolean } = {},
+	opts: { key?: number; canPersist?: boolean; attach?: boolean; container?: HTMLElement } = {},
 ): Promise<Drawn> {
-	const containerEl = document.createElement('div');
+	const containerEl = opts.container ?? document.createElement('div');
 	if (opts.attach) document.body.appendChild(containerEl);
 	let view: Component | undefined;
 	const language = def.aliases[0] ?? def.id;
@@ -198,13 +198,39 @@ describe('SC-644 — Collapsible by default reaches an open block', () => {
 		const first = await draw(deps, featureElement, FEATURE, { key: 1 });
 		const broken = await draw(deps, fragile, FEATURE, { key: 2 });
 		const last = await draw(deps, featureElement, FEATURE, { key: 3 });
+		click(broken.root.querySelector(COLLAPSE)); // collapsed when its rebuild fails
 
 		await expect(deps.prefs.set('collapsibleDefault', false)).resolves.toBeUndefined();
 
 		expect(chromeState(first.root).collapseButton).toBe(false);
 		expect(chromeState(last.root).collapseButton).toBe(false);
 		expect(error).toHaveBeenCalledWith(expect.stringContaining('collapsibleDefault'), expect.any(Error));
-		expect(chromeState(broken.root)).toBeDefined();
+		// The failed rebuild took the one-line bar with it: the block must not stay collapsed with nothing to open it.
+		expect(broken.root.getAttribute('data-dse-collapsed')).toBeNull();
+		expect(broken.root.querySelector(':scope > .dse-chrome-summary')).toBeNull();
+	});
+
+	it('a rebuild leaves a block nested inside this one alone (it owns its own panel and one-line bar), whichever was drawn first', async () => {
+		const deps = makeDeps();
+		// Outer drawn first, the inner one afterwards (a fire-and-forget nested render).
+		const outerFirst = await draw(deps, featureElement, FEATURE, { key: 10 });
+		const slot = outerFirst.root.createDiv();
+		const inner = await draw(deps, featureElement, 'name: Inner\n', { key: 11, container: slot });
+		click(inner.root.querySelector(COLLAPSE));
+		// Inner drawn first, then moved into an outer card drawn after it (an awaited nested render).
+		const slot2 = document.createElement('div');
+		const inner2 = await draw(deps, featureElement, 'name: Inner\n', { key: 12, container: slot2 });
+		const outerLast = await draw(deps, featureElement, FEATURE, { key: 13 });
+		(outerLast.root.firstElementChild as HTMLElement).appendChild(slot2);
+		click(inner2.root.querySelector(COLLAPSE));
+
+		await deps.prefs.set('authoringControls', true);
+
+		for (const nested of [inner, inner2]) {
+			expect(nested.root.getAttribute('data-dse-collapsed')).toBe('on');
+			expect(nested.root.querySelector(':scope > .dse-chrome-summary')).not.toBeNull();
+			expect(nested.root.querySelectorAll(':scope > .dse-chrome-anchor .dse-chrome, :scope > .dse-chrome').length).toBeGreaterThan(0);
+		}
 	});
 });
 
@@ -260,14 +286,45 @@ describe('SC-644 — Start collapsed (O2: blocks drawn afterwards, not blocks al
 		expect(open.root.querySelectorAll('.dse-chrome')).toHaveLength(1);
 	});
 
-	it('a collapsed block keeps its one-line bar through an unrelated chrome rebuild', async () => {
+	it('a block the reader collapsed stays collapsed through SEVERAL unrelated rebuilds and a re-render of the view, and still expands', async () => {
 		const deps = makeDeps();
 		const { root } = await draw(deps, featureElement, FEATURE);
 		click(root.querySelector(COLLAPSE));
 		await deps.prefs.set('authoringControls', true);
 		expect(chromeState(root)).toMatchObject({ collapsedAttr: 'on', bar: true });
+		await deps.prefs.set('authoringControls', false);
+		expect(chromeState(root)).toMatchObject({ collapsedAttr: 'on', bar: true });
+		// FeatureView re-renders itself on this preference and the pipeline mounts the chrome again.
+		await deps.prefs.set('rollClickToRoll', true);
+		await new Promise((r) => setTimeout(r, 50));
+		expect(chromeState(root)).toMatchObject({ collapsedAttr: 'on', bar: true });
 		click(root.querySelector(EXPAND));
 		expect(chromeState(root)).toMatchObject({ collapsedAttr: null, collapseButton: true });
+	});
+
+	// O1 only expands the LIVE block. What a later draw does follows the ladder: block keys > preferences, and a reader toggle only if they made one.
+	it('after O1 forced an expand, the note drawn again follows Start collapsed', async () => {
+		const deps = makeDeps();
+		await deps.prefs.set('collapseDefault', true);
+		const live = await draw(deps, featureElement, FEATURE, { key: 20 });
+		expect(chromeState(live.root).collapsedAttr).toBe('on');
+		await deps.prefs.set('collapsibleDefault', false);
+		await deps.prefs.set('collapsibleDefault', true);
+		expect(chromeState(live.root).collapsedAttr).toBeNull(); // the live block stays expanded
+
+		const again = await draw(deps, featureElement, FEATURE, { key: 20 }); // same block, drawn again
+		expect(chromeState(again.root).collapsedAttr).toBe('on');
+	});
+
+	it('after O1 forced an expand, the note drawn again follows the block\'s own `collapsed: true`', async () => {
+		const deps = makeDeps();
+		const live = await draw(deps, featureElement, `collapsed: true\n${FEATURE}`, { key: 21 });
+		await deps.prefs.set('collapsibleDefault', false);
+		await deps.prefs.set('collapsibleDefault', true);
+		expect(chromeState(live.root).collapsedAttr).toBeNull();
+
+		const again = await draw(deps, featureElement, `collapsed: true\n${FEATURE}`, { key: 21 });
+		expect(chromeState(again.root).collapsedAttr).toBe('on');
 	});
 });
 
@@ -365,6 +422,86 @@ describe('SC-644 — the subscription is the view\'s own', () => {
 
 		expect(document.activeElement).toBe(field);
 		expect(root.isConnected).toBe(true);
+	});
+});
+
+describe('SC-644 — keyboard focus inside the block survives a rebuild', () => {
+	const focusOf = () => document.activeElement as HTMLElement;
+
+	it('the Collapse button the reader is on is focused again on the new panel', async () => {
+		const deps = makeDeps();
+		const { root } = await draw(deps, featureElement, FEATURE, { attach: true });
+		const old = root.querySelector<HTMLElement>(COLLAPSE)!;
+		old.focus();
+		await deps.prefs.set('authoringControls', true);
+		expect(old.isConnected).toBe(false);
+		expect(focusOf()).toBe(root.querySelector(COLLAPSE));
+	});
+
+	it('the Edit pencil of a chrome element keeps focus while Collapse changes; when the pencil itself goes, the Collapse control takes it', async () => {
+		const deps = makeDeps();
+		await deps.prefs.set('authoringControls', true);
+		const { root } = await draw(deps, featureElement, FEATURE, { attach: true });
+		root.querySelector<HTMLElement>(EDIT)!.focus();
+		await deps.prefs.set('collapsibleDefault', false);
+		await deps.prefs.set('collapsibleDefault', true);
+		expect(focusOf()).toBe(root.querySelector(EDIT));
+		await deps.prefs.set('authoringControls', false);
+		expect(focusOf()).toBe(root.querySelector(COLLAPSE));
+	});
+
+	it('the Expand button of a collapsed block keeps focus', async () => {
+		const deps = makeDeps();
+		const { root } = await draw(deps, featureElement, FEATURE, { attach: true });
+		click(root.querySelector(COLLAPSE));
+		root.querySelector<HTMLElement>(EXPAND)!.focus();
+		await deps.prefs.set('authoringControls', true);
+		expect(focusOf()).toBe(root.querySelector(EXPAND));
+	});
+
+	it('the card-corner pencil of a non-chrome element keeps focus; when it goes, focus stays inside the block', async () => {
+		const deps = makeDeps();
+		await deps.prefs.set('authoringControls', true);
+		const { root } = await draw(deps, plainCounter, COUNTER, { attach: true });
+		root.querySelector<HTMLElement>('button[aria-label^="Edit "]')!.focus();
+		await deps.prefs.set('collapsibleDefault', false);
+		expect(focusOf()).toBe(root.querySelector('button[aria-label^="Edit "]'));
+		await deps.prefs.set('authoringControls', false);
+		expect(root.contains(focusOf())).toBe(true);
+		expect(focusOf()).not.toBe(document.body);
+	});
+
+	it('focus the reader has put elsewhere is never taken back', async () => {
+		const deps = makeDeps();
+		const field = document.createElement('input');
+		document.body.appendChild(field);
+		// A block whose chrome moves focus to the field while it is rebuilt (the reader going elsewhere mid-rebuild).
+		let builds = 0;
+		const grabby = {
+			...featureElement,
+			chrome: {
+				...featureElement.chrome!,
+				items: () => {
+					if (++builds > 1) field.focus();
+					return [];
+				},
+			},
+		} as ElementDefinition<any>;
+		const { root } = await draw(deps, grabby, FEATURE, { attach: true });
+		root.querySelector<HTMLElement>(COLLAPSE)!.focus();
+		await deps.prefs.set('authoringControls', true);
+		expect(focusOf()).toBe(field);
+	});
+
+	it('focus on a control in a NESTED block is not this block\'s to restore', async () => {
+		const deps = makeDeps();
+		const outer = await draw(deps, featureElement, FEATURE, { key: 30, attach: true });
+		const inner = await draw(deps, featureElement, 'name: Inner\n', { key: 31, container: outer.root.createDiv() });
+		const innerCollapse = inner.root.querySelector<HTMLElement>(COLLAPSE)!;
+		innerCollapse.focus();
+		await deps.prefs.set('authoringControls', true);
+		// The inner block rebuilt its own chrome and restored its own focus; the outer one did not move it onto its own button.
+		expect(focusOf()).toBe(inner.root.querySelector(COLLAPSE));
 	});
 });
 

@@ -36,7 +36,8 @@
 // raw-YAML textarea for the play surface. The pipeline's OWN generic authoringControls
 // pencil is suppressed for this element (`noAuthoringButton: true`, definition.ts) so
 // there is exactly one, well-placed affordance (header, next to `[respite]`).
-import { stringifyYaml } from 'obsidian';
+import { Component, stringifyYaml } from 'obsidian';
+import { watchPrefs } from '@/framework/livePrefs';
 import { ElementView } from '@/framework/view';
 import type { RenderContext } from '@/framework/context';
 import type { ElementDefinition } from '@/framework/registry';
@@ -113,6 +114,10 @@ export class HeroSheetView extends ElementView<HeroModel> {
 
 	// -- header --
 	private respiteHandle: IconButtonHandle | null = null;
+	/** SC-644: the header's button row and the "Edit definition" button in it (null while the setting is off), kept so a flip of
+	 *  `authoringControls` adds or removes just that button on a sheet that is already open. */
+	private actionsEl: HTMLElement | null = null;
+	private editDefinitionBtn: { buttonEl: HTMLElement; owner: Component } | null = null;
 
 	// -- abilities --
 	private abilities: AbilityEntry[] = [];
@@ -123,6 +128,9 @@ export class HeroSheetView extends ElementView<HeroModel> {
 		private readonly def: ElementDefinition<HeroModel>,
 	) {
 		super(cx);
+		// SC-644: ds-hero opts out of the pipeline's pencil (noAuthoringButton) and draws its own "Edit definition" button, so the pipeline's
+		// rebuild of the chrome does not reach it. Re-render of the whole sheet is expensive (see renderCharacteristicsRegion): only the button moves.
+		watchPrefs(cx.prefs, this, ['authoringControls'], () => this.syncEditDefinition());
 	}
 
 	private get readOnly(): boolean {
@@ -223,8 +231,22 @@ export class HeroSheetView extends ElementView<HeroModel> {
 		// element suppresses via noAuthoringButton — definition.ts) and when the
 		// authoringControls pref is on; degrades to absent (never a dead-end click) when
 		// cx.validation isn't threaded (bare test/harness contexts).
-		if (!this.readOnly && this.cx.validation && this.isAuthoringControlsOn()) {
-			iconButton(
+		this.actionsEl = actions;
+		// The previous render's button went with its DOM; its owner goes now.
+		if (this.editDefinitionBtn) this.removeChild(this.editDefinitionBtn.owner);
+		this.editDefinitionBtn = null;
+		this.syncEditDefinition();
+	}
+
+	/** SC-644: draws or removes the "Edit definition" button so it matches the gate (writable, validation threaded, `authoringControls` on). */
+	private syncEditDefinition(): void {
+		const actions = this.actionsEl;
+		if (!actions) return;
+		const want = !this.readOnly && !!this.cx.validation && this.isAuthoringControlsOn();
+		if (want && !this.editDefinitionBtn) {
+			// Its own owner, so removing the button detaches its listeners now rather than when the whole sheet unloads.
+			const owner = this.addChild(new Component());
+			const { buttonEl } = iconButton(
 				actions,
 				{
 					icon: 'settings',
@@ -232,8 +254,14 @@ export class HeroSheetView extends ElementView<HeroModel> {
 					variant: 'ghost',
 					onClick: (evt) => this.editDefinition(formOpenerOf(evt)),
 				},
-				this,
+				owner,
 			);
+			this.editDefinitionBtn = { buttonEl, owner };
+		} else if (!want && this.editDefinitionBtn) {
+			const { buttonEl, owner } = this.editDefinitionBtn;
+			this.editDefinitionBtn = null;
+			this.removeChild(owner);
+			buttonEl.remove();
 		}
 	}
 

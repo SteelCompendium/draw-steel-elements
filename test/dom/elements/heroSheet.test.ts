@@ -455,6 +455,75 @@ describe('D7 Task 9: "Edit definition" (recon delta 5) — reuses D9\'s openForm
 	test('the schema hides `state` from the D9 form (definition.ts authoring.fields)', () => {
 		expect(heroElement.authoring?.fields?.state?.hidden).toBe(true);
 	});
+
+	// SC-644: ds-hero draws its own button (the pipeline's pencil is suppressed for it), so the setting has to reach it by itself.
+	describe('SC-644: the setting reaches a sheet that is already open', () => {
+		const edit = (root: HTMLElement) => root.querySelectorAll<HTMLButtonElement>('[aria-label="Edit definition"]');
+
+		test('flipped ON the button appears (once, beside Respite); flipped OFF it goes; ON again it is back and works', async () => {
+			const deps = makeDeps();
+			const { root } = await renderHero(HERO_SOURCE, {}, deps);
+			expect(edit(root)).toHaveLength(0);
+
+			await deps.prefs.set('authoringControls', true);
+			expect(edit(root)).toHaveLength(1);
+			expect(edit(root)[0].parentElement).toBe(root.querySelector('.dse-hero__actions'));
+
+			await deps.prefs.set('authoringControls', false);
+			expect(edit(root)).toHaveLength(0);
+
+			await deps.prefs.set('authoringControls', true);
+			expect(edit(root)).toHaveLength(1);
+			edit(root)[0].click();
+			expect(openFormEditor).toHaveBeenCalledTimes(1);
+		});
+
+		test('a sheet drawn with the setting ON loses the button when it is switched OFF', async () => {
+			const deps = makeDeps();
+			await deps.prefs.set('authoringControls', true);
+			const { root } = await renderHero(HERO_SOURCE, {}, deps);
+			expect(edit(root)).toHaveLength(1);
+			await deps.prefs.set('authoringControls', false);
+			expect(edit(root)).toHaveLength(0);
+		});
+
+		test('the sheet is not re-rendered: its regions are the same nodes', async () => {
+			const deps = makeDeps();
+			const { root } = await renderHero(HERO_SOURCE, {}, deps);
+			const stamina = region(root, 'stamina');
+			await deps.prefs.set('authoringControls', true);
+			expect(region(root, 'stamina')).toBe(stamina);
+			expect(root.querySelectorAll('.dse-hero__actions')).toHaveLength(1);
+		});
+
+		test('a read-only sheet (an embed) never gets the button', async () => {
+			const deps = makeDeps();
+			const { root } = await renderHero(HERO_SOURCE, { canPersist: false }, deps);
+			await deps.prefs.set('authoringControls', true);
+			expect(edit(root)).toHaveLength(0);
+		});
+
+		test('after the sheet unloads a flip does nothing', async () => {
+			const deps = makeDeps();
+			let view: { load(): void; unload(): void } | undefined;
+			const { root } = await renderHero(
+				HERO_SOURCE,
+				{
+					addChild: ((child: { load(): void; unload(): void }) => {
+						view = child;
+						child.load();
+						return child;
+					}) as never,
+				},
+				deps,
+			);
+			await deps.prefs.set('authoringControls', true);
+			expect(edit(root)).toHaveLength(1);
+			view!.unload();
+			await deps.prefs.set('authoringControls', false);
+			expect(edit(root)).toHaveLength(1); // untouched: nobody is listening for a dead sheet
+		});
+	});
 });
 
 describe('D7 Task 9: read-only mount (canPersist=false) disables every write affordance', () => {

@@ -39,7 +39,7 @@ import {
 import type { CollapseKeys } from './chrome/collapsedKey';
 import { CHROME_COLLAPSE_SLOT, ensureCollapseInvariant, mountChrome } from './chrome/mountChrome';
 import { watchPrefs } from './livePrefs';
-import { armChromeFocus, claimChromeFocus, formOpenerOf, isKeyboardClick, settleChromeFocus } from './chrome/focusHandoff';
+import { armChromeFocus, claimChromeFocus, formOpenerOf, holdChromeFocus, isKeyboardClick, settleChromeFocus } from './chrome/focusHandoff';
 import { takeCarriedState } from './host/livePreviewStateCarry';
 import type { ChromeHandle, ChromeMenuItem } from './chrome/types';
 import { iconButton } from './kit/iconButton';
@@ -618,6 +618,9 @@ export class ElementPipeline {
 				// SC-644: the state this block is in NOW, read before its chrome is torn down. A rebuild keeps
 				// it (see carriedCollapsedFor) rather than re-resolving it from block keys + preferences.
 				const wasCollapsed = chromeHandle?.isCollapsed();
+				// SC-644: the teardown below removes the button that holds keyboard focus (a reader who opened the settings
+				// from it comes back to <body>); it is handed back at the end, only if nothing else holds focus by then.
+				const restoreFocus = holdChromeFocus(root, pencilEl);
 				chromeHandle = undefined;
 				// One Component per (re)mount, owned by the view: unloading it detaches every
 				// listener the previous panel registered, so a long-lived view that rebuilds
@@ -628,7 +631,11 @@ export class ElementPipeline {
 				pencilEl = undefined;
 				// Defensive: a hypothetical `onUpdate` that rebuilds WITHOUT emptying root
 				// would otherwise leave the old nodes behind and we would mount a second set.
-				root.querySelectorAll('.dse-chrome, .dse-chrome-summary').forEach((n) => n.remove());
+				// Only THIS element's own panel and bar: a DSE block nested inside this card (a whole-block reference) owns
+				// chrome of its own, and a pref flip rebuilds the outer block without touching the inner one (SC-644).
+				root.querySelectorAll('.dse-chrome, .dse-chrome-summary').forEach((n) => {
+					if (n.parentElement?.closest('[data-dse-element]') === root) n.remove();
+				});
 				// SC-644: what mountChrome stamped on the root and the anchor goes with the panel, so a block
 				// whose chrome is now gone (Collapsible by default off, no pencil) is the DOM a fresh render
 				// of it would be. mountChrome puts them back when there is chrome again. (The collapsed
@@ -658,11 +665,12 @@ export class ElementPipeline {
 				chromeHandle = mountChromeFor(current, showEdit, chromeOwner, carriedCollapsedFor(wasCollapsed, reason));
 				// SC-644 O1: a block that was collapsed and has no Collapse control any more (Collapsible by
 				// default switched off) is expanded by the mount above (a block must never be stuck collapsed
-				// with no control to open it). The reader's session toggle is cleared too, or switching the
-				// preference back on would fold the block again from it ("switching it back ON leaves the
-				// block expanded").
+				// with no control to open it). The session slot is cleared (not set to false: that would be a reader
+				// toggle, which beats `collapsed:` / Start collapsed when the note is drawn again), or switching the
+				// preference back on would fold the live block again from the reader's earlier toggle ("switching it
+				// back ON leaves the block expanded": the carried state does that, a later draw follows the ladder).
 				if (wasCollapsed === true && chromeHandle?.summaryEl === undefined) {
-					session.set(host.blockKey(), CHROME_COLLAPSE_SLOT, false);
+					session.set<boolean | undefined>(host.blockKey(), CHROME_COLLAPSE_SLOT, undefined);
 				}
 				// SC-518: a chrome element asks for the form's focus hand-back in mountChrome; an element without one (the card-corner
 				// pencil, or ds-hero's own "Edit definition") asks here, after its controls are built.
@@ -670,6 +678,7 @@ export class ElementPipeline {
 				// H-1's safety net, run after EVERY render including the first: the collapsed
 				// attribute and the one-line bar must never exist apart. See its doc comment.
 				ensureCollapseInvariant(root);
+				restoreFocus();
 			};
 
 			// SC-169: the standard menu panel + whole-element collapse. Opt-in via the
@@ -827,6 +836,8 @@ export class ElementPipeline {
 					mountPipelineChrome(view.currentModel(), key);
 				} catch (error) {
 					console.error(`Draw Steel Elements: could not apply "${key}" to an open ${def.name} block.`, error);
+					// The teardown has already removed the one-line bar: a collapsed block must not be left with no way back.
+					ensureCollapseInvariant(root);
 				}
 			});
 		} catch (error) {

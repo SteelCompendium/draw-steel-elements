@@ -55,6 +55,37 @@ export function focusIsFree(doc: Document): boolean {
 	return doc.activeElement === null || doc.activeElement === doc.body;
 }
 
+/**
+ * SC-644: a chrome rebuild (a setting flipped while a block is on screen) removes and re-draws the panel, and with it the button the
+ * keyboard user was on; the browser drops focus to <body>. Call this BEFORE the teardown: when focus sits on this element's own chrome
+ * control (panel, one-line bar, or the card-corner pencil `pencil`), it returns a function that, after the rebuild, puts focus back on the
+ * same control, else the Collapse / Expand control, else the first control in the block, and only when nothing holds focus by then (a
+ * reader who has since gone elsewhere is never pulled back). A no-op function when focus is elsewhere.
+ */
+export function holdChromeFocus(root: HTMLElement, pencil?: HTMLElement): () => void {
+	const doc = root.ownerDocument;
+	const held = doc.activeElement as HTMLElement | null;
+	const none = (): void => undefined;
+	if (!held || held === doc.body || !root.contains(held)) return none;
+	// This element's own controls only: a nested block's chrome has another `[data-dse-element]` root.
+	if (held.closest('[data-dse-element]') !== root) return none;
+	if (held !== pencil && !held.closest('.dse-chrome, .dse-chrome-summary')) return none;
+	const item = held.getAttribute('data-dse-chrome-item');
+	const label = held.getAttribute('aria-label');
+	return () => {
+		if (!focusIsFree(doc)) return;
+		const mine = (el: HTMLElement): boolean => el.closest('[data-dse-element]') === root;
+		const all = (sel: string): HTMLElement[] => Array.from(root.querySelectorAll<HTMLElement>(sel)).filter(mine);
+		const candidates: (HTMLElement | undefined)[] = [
+			item ? all(`[data-dse-chrome-item="${item}"]`)[0] : all('button').find((b) => b.getAttribute('aria-label') === label),
+			all('[data-dse-chrome-item="collapse"]')[0],
+			all('[data-dse-chrome-item="expand"]')[0],
+			all('button, [tabindex]:not([tabindex="-1"]), input, select, textarea, a[href]')[0],
+		];
+		for (const el of candidates) if (focusControl(el, false)) return;
+	};
+}
+
 /** How long a Pin request waits for the block to be rebuilt before it gives up. */
 const REQUEST_TTL_MS = 5000;
 /** After focus landed, how long the request stays armed for the NEXT rebuild. One keyboard Pin was measured
