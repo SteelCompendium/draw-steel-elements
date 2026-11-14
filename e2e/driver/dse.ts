@@ -209,7 +209,7 @@ async function openNote(rel: string, opts: { mode?: 'reading' | 'live-preview'; 
 		`(() => {
 			const view = app.workspace.getMostRecentLeaf()?.view;
 			if (!view || view.file?.path !== ${JSON.stringify(rel)} || !view.containerEl) return false;
-			// SC-638: with `errorCard: true` the note is EXPECTED to draw an error card (a block whose parse refused it, stamped data-dse-error-stage). It is
+			// SC-638: with the errorCard option the note is EXPECTED to draw an error card (a block whose parse refused it, stamped data-dse-error-stage). It is
 			// drawn but never mounted, so it has no registry entry by design. Without the option an error card is not a drawn block (a test that
 			// forgot it times out here instead of passing on a broken card).
 			const roots = Array.from(view.containerEl.querySelectorAll('${scope} [data-dse-element]')).filter((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]') && !(${errorCard} && r.hasAttribute('data-dse-error-stage')));
