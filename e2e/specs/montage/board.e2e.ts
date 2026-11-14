@@ -171,7 +171,8 @@ describe('montage: a board wider than its frame (SC-326, SC-490)', () => {
 	});
 
 	// The board keeps a focused round cell fully inside its frame and clear of the pinned hero column (BoardView `keepFocusedCellInView`). Chromium alone only
-	// scrolls a focused element into view when none of it shows, so a cell that sticks out under the pinned column stays covered unless the board moves it.
+	// scrolls a focused element into view when none of it shows, so a cell that sticks out stays partly covered unless the board moves it. B13 guards the
+	// handler's right-edge branch (a cell with only 12 px showing at the right edge), B14 its left / pinned-column branch (a cell sticking out under the column).
 	const geometry = (round: number): Promise<{ left: number; right: number; frameLeft: number; frameRight: number; pinned: number; scrolled: number }> =>
 		dse.page(`(() => {
 			const b = document.querySelector('.markdown-reading-view [data-dse-element="montage"] .dse-mt__board');
@@ -180,19 +181,25 @@ describe('montage: a board wider than its frame (SC-326, SC-490)', () => {
 			return { left: Math.round(box.left), right: Math.round(box.right), frameLeft: Math.round(frame.left + b.clientLeft), frameRight: Math.round(frame.left + b.clientLeft + b.clientWidth), pinned: Math.round(b.querySelector('.dse-mt__board-corner').getBoundingClientRect().width), scrolled: Math.round(b.scrollLeft) };
 		})()`);
 
-	it('[MONT-B13] a real Tab onto a round cell hidden past the right edge scrolls it into view', async () => {
+	it('[MONT-B13] a real Tab onto a round cell with only 12 px showing at the right edge brings it fully inside the frame', async () => {
 		await dse.openNote(WIDE_ENTRIES);
 		const root = dse.block(MONTAGE);
-		await dse.tabTo(root.control('montage.quick.assist', { nth: 0 }), TABS); // the last stop of Kira's round-1 cell: her filled cells of rounds 4, 5 and 10 follow
-		const hidden = await geometry(10);
-		expect(hidden.left).toBeGreaterThan(hidden.frameRight);
-		for (let tabs = 0; tabs < 4 && (await dse.page<string | null>(`document.activeElement?.getAttribute('data-round') ?? null`)) !== '10'; tabs++) {
-			await dse.press('Tab'); // to the page: Tab is no pair of any control
-		}
+		// Scroll by script until 12 px of Kira's round-10 cell show at the right edge, then put focus on her round-5 cell: the next real Tab is the round-10 cell.
+		await dse.page(`(() => {
+			const b = document.querySelector('.markdown-reading-view [data-dse-element="montage"] .dse-mt__board');
+			const frame = b.getBoundingClientRect();
+			const right = frame.left + b.clientLeft + b.clientWidth;
+			const box = b.querySelector('.dse-mt__cell[data-hero="Kira"][data-round="10"]').getBoundingClientRect();
+			b.scrollLeft += box.left - right + 12;
+			return true;
+		})()`);
+		const before = await geometry(10);
+		expect(before.left).toBeLessThan(before.frameRight); // partly visible: Chromium would leave it where it is
+		expect(before.right).toBeGreaterThan(before.frameRight + 20);
+		await dse.focusByScript(cellOf(root, 'Kira', 5));
+		await dse.press('Tab'); // to the page: Tab is no pair of any control
 		await dse.waitFor(`document.activeElement?.getAttribute('data-round') === '10'`, 'Tab to reach the round-10 cell');
 		const g = await geometry(10);
-		expect(g.scrolled).toBeGreaterThan(0);
-		expect(g.left).toBeGreaterThanOrEqual(g.frameLeft + g.pinned - 1);
 		expect(g.right).toBeLessThanOrEqual(g.frameRight + 1);
 	});
 
