@@ -95,7 +95,7 @@ describe('montage: values the Director typed by hand', () => {
 		await dse.hover(root.root);
 		await dse.waitForWrite('Montage/wrong-description.md', () => dse.click(root.control('montage.chrome.add-round')));
 		const b = await blockOf('Montage/wrong-description.md');
-		expect(b.description as unknown).toBe(5);
+		expect(b.description).toBe(5);
 		expect(b.rounds).toBe(4);
 		expect(await dse.noteText('Montage/wrong-description.md')).toMatch(/^title: Number Brief\ndescription: 5\nrounds: 4$/m);
 	});
