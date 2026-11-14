@@ -41,6 +41,25 @@ describe('T-3 (Plan 02): ReferenceService (F1 §3.7)', () => {
 			expect(resolved.data).toEqual({ name: 'Goblin', stamina: '20' });
 		});
 
+		test.each(['', '  '])('SC-643: an empty Destination folder (%j) resolves @path under the default folder Sync writes to', async (destination) => {
+			const app = new App();
+			const service = createReferenceService(app as any, { ...DEFAULT_SETTINGS, compendiumDestinationDirectory: destination });
+			app.vault.setFile('DS Compendium/Bestiary/Goblin.md', GOBLIN_NOTE);
+			const resolved = await service.resolve('@Bestiary/Goblin', 'Notes/Source.md');
+			expect(resolved.data).toEqual({ name: 'Goblin', stamina: '20' });
+		});
+
+		test('SC-643: a vault-root Destination folder skips the compendium-relative steps rather than probing "/path"', async () => {
+			const app = new App();
+			const service = createReferenceService(app as any, { ...DEFAULT_SETTINGS, compendiumDestinationDirectory: '/' });
+			app.vault.setFile('DS Compendium/Bestiary/Goblin.md', GOBLIN_NOTE);
+			const lookups = jest.spyOn(app.vault, 'getAbstractFileByPath');
+			await expect(service.resolve('@Bestiary/Goblin', 'Notes/Source.md')).rejects.toThrow(
+				'Reference file (Bestiary/Goblin) not found',
+			);
+			expect(lookups.mock.calls.map((c) => c[0]).filter((p) => String(p).startsWith('/'))).toEqual([]);
+		});
+
 		test('wikilink honors metadata-cache lookup by bare name anywhere in the vault', async () => {
 			const { app, service } = makeService();
 			app.vault.setFile('Deep/Folders/Thorn Dragon.md', GOBLIN_NOTE);

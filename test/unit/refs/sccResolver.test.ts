@@ -19,6 +19,23 @@ function setup(settingsOverride: Partial<DSESettings> = {}) {
     return { app, vault, metadataCache, settings, resolver: new SccResolver(app, settings) };
 }
 
+describe("SC-643: path derivation follows the RESOLVED Destination folder", () => {
+    test.each(["", "   "])("an empty setting (%j) derives under the default folder Sync writes to", (destination) => {
+        const { resolver } = setup({ compendiumDestinationDirectory: destination });
+        const result = resolver.resolve(`scc.v1:${GOBLIN_CODE}`);
+        expect(result.kind).toBe("vault");
+        expect((result as any).linkpath).toBe("DS Compendium/monster/goblin/statblock/goblin-stinker.md");
+        expect(resolver.resolveByDerivation(GOBLIN_CODE)?.path)
+            .toBe("DS Compendium/monster/goblin/statblock/goblin-stinker.md");
+    });
+
+    test("a vault-root setting derives nothing (the frontmatter index still resolves by code)", () => {
+        const { resolver } = setup({ compendiumDestinationDirectory: "/" });
+        expect(resolver.resolveByDerivation(GOBLIN_CODE)).toBeNull();
+        expect(resolver.resolve(`scc.v1:${GOBLIN_CODE}`).kind).toBe("vault");
+    });
+});
+
 describe("SccResolver resolution order (F2 §4.2)", () => {
     test("1. path derivation: freshly synced compendium resolves O(1)", () => {
         const { resolver } = setup();

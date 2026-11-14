@@ -5,7 +5,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { LegacyCompendiumModal } from '@views/LegacyCompendiumModal';
-import { App } from '../../mocks/obsidian';
+import { App, Notice } from '../../mocks/obsidian';
+import { DESTINATION_REFUSED_NOTICE } from '@model/CompendiumDestination';
 import { styleGuardFindings } from '../kit/styleGuard';
 
 function makeModal(onChoice = jest.fn()) {
@@ -68,6 +69,18 @@ describe('LegacyCompendiumModal (OD-6)', () => {
 		footerBtn(container, 'Move old compendium to trash').click();
 		expect(onChoice).toHaveBeenCalledWith(true);
 		expect(document.body.contains(container)).toBe(false);
+	});
+
+	test.each(['', '/', '.', './', ' / '])('SC-643: never offered for the vault root (%j): no window content, no choice, a Notice instead', (root) => {
+		Notice.notices.length = 0;
+		const onChoice = jest.fn();
+		const modal = new LegacyCompendiumModal(new App() as any, root, onChoice);
+		modal.open();
+		const container = (modal as any).containerEl as HTMLElement;
+		expect(container.querySelector('button')).toBeNull();
+		expect(document.body.contains(container)).toBe(false);
+		expect(onChoice).not.toHaveBeenCalled();
+		expect(Notice.notices).toContain(DESTINATION_REFUSED_NOTICE);
 	});
 
 	test('source hygiene: imports the kit and passes the style guard (zero literals, zero el.style.color)', () => {

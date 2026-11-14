@@ -56,6 +56,27 @@ describe('T-8: ReferenceResolver.findFile 5-step fallback chain (via resolvePath
 	});
 });
 
+describe('SC-643: the compendium-relative steps follow the RESOLVED Destination folder', () => {
+	test.each(['', '   '])('an empty setting (%j) resolves under the default folder Sync writes to', async (destination) => {
+		const app = new App();
+		const resolver = new ReferenceResolver(app as any, { ...DEFAULT_SETTINGS, compendiumDestinationDirectory: destination });
+		app.vault.setFile('DS Compendium/Bestiary/Goblin.md', GOBLIN_NOTE);
+		await expect(resolver.resolvePath('Bestiary/Goblin')).resolves.toMatchObject({ name: 'Goblin' });
+	});
+
+	test('a vault-root setting has no compendium-relative step (and no "//" probe); the root steps still work', async () => {
+		const app = new App();
+		const resolver = new ReferenceResolver(app as any, { ...DEFAULT_SETTINGS, compendiumDestinationDirectory: '/' });
+		app.vault.setFile('DS Compendium/Bestiary/Goblin.md', GOBLIN_NOTE);
+		app.vault.setFile('Plain.md', GOBLIN_NOTE);
+		const lookups = jest.spyOn(app.vault, 'getAbstractFileByPath');
+		await expect(resolver.resolvePath('Plain')).resolves.toMatchObject({ name: 'Goblin' });
+		await expect(resolver.resolvePath('Bestiary/Goblin')).rejects.toThrow('Reference file (Bestiary/Goblin) not found');
+		expect(lookups.mock.calls.map((c) => c[0])).not.toContain('//Bestiary/Goblin');
+		expect(lookups.mock.calls.map((c) => c[0])).not.toContain('/Bestiary/Goblin');
+	});
+});
+
 describe('T-8: first-ds-block extraction', () => {
 	test('extracts the FIRST ds-* block only', async () => {
 		const { app, resolver } = makeResolver();
