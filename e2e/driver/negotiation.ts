@@ -21,6 +21,7 @@ export const NAMELESS = 'Negotiation/nameless.md'; // a motivation with a reason
 export const CURRENT_ONLY = 'Negotiation/current-only.md'; // `current_interest: 3`, `current_patience: 2`, no initial_*
 export const QUOTED = 'Negotiation/quoted.md'; // `current_interest: "3"`, `current_patience: "2"`
 export const TWINS = 'Negotiation/twins.md'; // two IDENTICAL blocks (Twin, Interest 3 / Patience 3) with prose above, between and below
+export const GHOST_APPEAL = 'Negotiation/ghost-appeal.md'; // basic.md with `currentArgument: motivationsUsed: [Ghost]`, and no motivation named Ghost
 export const NEGO = 'ds-negotiation';
 /** Tab presses from the top of the note to a control (the chrome panel, the options button and the tabs are in the way). */
 export const TABS = 60;

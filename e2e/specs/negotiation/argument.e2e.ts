@@ -4,7 +4,7 @@
 // unspent, pitfall Power. Negotiation/spent.md: Higher Authority already spent (appealing to it is a reuse).
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
-import { argOf, BASIC, blockOf, ENDED, focusState, interestOf, mods, openNego, patienceOf, pressedOf, shown, SPENT, TABS, tierTexts } from '../../driver/negotiation';
+import { argOf, BASIC, blockOf, ENDED, focusState, GHOST_APPEAL, interestOf, mods, openNego, patienceOf, pressedOf, shown, SPENT, TABS, tierTexts } from '../../driver/negotiation';
 
 const NORMAL = ['-1 Interest, -1 Patience', '-1 Patience', '+1 Interest, -1 Patience', '+1 Interest'];
 const MOTIVATION = ['-1 Patience', '+1 Interest, -1 Patience', '+1 Interest', '+1 Interest'];
@@ -209,5 +209,19 @@ describe('negotiation: the tiers and Complete Argument', () => {
 		const b = await blockOf(BASIC);
 		expect([interestOf(b), patienceOf(b)]).toEqual([4, 3]);
 		expect(await shown()).toMatchObject({ interest: [4], patience: [3], completeDisabled: true });
+	});
+
+	it('[NEGO-A14] an argument entry naming a motivation the block does not have is no appeal: the tiers are the no-motivation ones, Same Argument is enabled, and Complete Argument writes the no-motivation Interest and Patience', async () => {
+		const root = await openNego(GHOST_APPEAL);
+		expect(await pressedOf('negotiation.appeal.motivation')).toEqual(['false', 'false']);
+		expect(await tierTexts()).toEqual(NORMAL);
+		expect((await mods()).same).toMatchObject({ disabled: false, why: null });
+		expect(argOf(await blockOf(GHOST_APPEAL)).motivationsUsed).toEqual(['Ghost']); // drawing the card did not touch the note
+		await dse.click(root.control('negotiation.tier.row', { nth: 2 }));
+		const w = await dse.waitForWrite(GHOST_APPEAL, () => dse.click(root.control('negotiation.complete')));
+		expect(w.count).toBe(1);
+		const b = await blockOf(GHOST_APPEAL);
+		expect([interestOf(b), patienceOf(b)]).toEqual([4, 2]); // the motivation table would have left Patience at 3
+		expect(argOf(b).motivationsUsed).toEqual([]);
 	});
 });
