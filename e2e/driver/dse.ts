@@ -208,10 +208,12 @@ async function openNote(rel: string, opts: { mode?: 'reading' | 'live-preview' }
 		`(() => {
 			const view = app.workspace.getMostRecentLeaf()?.view;
 			if (!view || view.file?.path !== ${JSON.stringify(rel)} || !view.containerEl) return false;
-			const roots = Array.from(view.containerEl.querySelectorAll('${scope} [data-dse-element]')).filter((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]'));
+			// SC-638: an ERROR CARD (a block whose parse refused it, stamped data-dse-error-stage) is drawn but never mounted, so it has no registry entry by design.
+			const roots = Array.from(view.containerEl.querySelectorAll('${scope} [data-dse-element]')).filter((r) => r.isConnected && !r.parentElement.closest('[data-dse-element]') && !r.hasAttribute('data-dse-error-stage'));
+			const cards = view.containerEl.querySelectorAll('${scope} [data-dse-element][data-dse-error-stage]').length;
 			const mine = ${REGISTRY}.liveEntries().filter((e) => e.host.sourcePath === ${JSON.stringify(rel)} && e.root.isConnected);
 			const all = ${REGISTRY}.liveEntries();
-			return roots.length > 0 && (mine.length >= roots.length || roots.every((r) => all.some((e) => e.root === r)));
+			return roots.length + cards > 0 && (mine.length >= roots.length || roots.every((r) => all.some((e) => e.root === r)));
 		})()`,
 		`${rel} to render its blocks in ${mode === 'reading' ? 'Reading view' : 'Live Preview'}`,
 	);
