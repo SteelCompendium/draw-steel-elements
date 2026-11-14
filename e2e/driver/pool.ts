@@ -7,6 +7,7 @@ export const SQUAD = 'Initiative/squad.md'; // five Goblins of 4 Stamina (pool 2
 export const HURT = 'Initiative/squad-hurt.md'; // pool 10, Goblins #1 and #2 dead, #3 grabbed + dazed (selected)
 export const CUSTOM = 'Initiative/squad-custom.md'; // the HURT squad, #3 carrying a custom condition and a duplicate (SC-574)
 export const EMPTY = 'Initiative/squad-empty.md'; // pool 0 with all five Goblins still alive (SC-573)
+export const TWO_SQUADS = 'Initiative/two-squads.md'; // "Wolves" (Wolf x2, Dire Wolf x2) and "River" (two squads of Flow of the River x2): two Stamina cells per squad, `nth` 0-1, 2-3, 4-5, 6-7 across the tracker (SC-569)
 export const INIT = 'ds-initiative';
 
 type Scope = ReturnType<typeof dse.block>;
