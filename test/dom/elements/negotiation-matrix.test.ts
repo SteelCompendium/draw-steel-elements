@@ -796,6 +796,34 @@ describe('SC-439 X: a write lands in its own block and nowhere else in the note'
 		expect(outside(after, 0)).toBe(outside(OWN_NOTE, 0)); // and the prose above and below is byte-identical
 	});
 
+	// SC-637: the same block with a Director's key inside the argument under way. Writes that keep the argument keep the key; the two that end it
+	// (Complete Argument and Reset) take it with them.
+	const ARG_BODY = OWN_BODY + '\ncurrentArgument:\n  arg_note: keep me\n  motivationsUsed:\n    - Coin\n  arg_meta:\n    who: Sam\n    tags: [a, b]\n';
+	const ARG_NOTE = NOTE_BEFORE + fence(ARG_BODY) + NOTE_AFTER;
+	const CLEARED = { motivationsUsed: [], pitfallsUsed: [], lieUsed: false, sameArgumentUsed: false, reusedMotivation: false };
+
+	test.each(ACTIONS.filter((a) => !['Complete Argument', 'Reset negotiation'].includes(a.name)))('$name keeps the keys inside the argument under way, after its five known keys', async ({ act }) => {
+		const { app, root, flush } = await mountBlock(0, ARG_NOTE);
+		act(root);
+		await flush();
+		const after = app.vault.getContent('Note.md')!;
+		expect(bodyOf(after, 0)).not.toBe(ARG_BODY);
+		const arg = (parseYaml(bodyOf(after, 0)) as any).currentArgument;
+		expect(arg).toMatchObject({ arg_note: 'keep me', arg_meta: { who: 'Sam', tags: ['a', 'b'] } });
+		expect(Object.keys(arg).slice(-2)).toEqual(['arg_note', 'arg_meta']);
+		expect(Object.keys(arg).slice(0, 5)).toEqual(['motivationsUsed', 'pitfallsUsed', 'lieUsed', 'sameArgumentUsed', 'reusedMotivation']);
+		expectOwnKeysKept(bodyOf(after, 0)); // and the other levels are still there
+	});
+
+	test.each(ACTIONS.filter((a) => ['Complete Argument', 'Reset negotiation'].includes(a.name)))('$name ends the argument and the keys inside it, and keeps every other key', async ({ act }) => {
+		const { app, root, flush } = await mountBlock(0, ARG_NOTE);
+		act(root);
+		await flush();
+		const body = bodyOf(app.vault.getContent('Note.md')!, 0);
+		expect((parseYaml(body) as any).currentArgument).toEqual(CLEARED);
+		expectOwnKeysKept(body);
+	});
+
 	test('two negotiation blocks in one note: a write to the second leaves the first one\'s own keys, and its own, alone', async () => {
 		const other = OWN_BODY.replace('note_to_self: keep me', 'note_to_self: the other table').replace('gm_note: ask about the sister', 'gm_note: the other sister');
 		const note = NOTE_BEFORE + fence(other) + BETWEEN + fence(OWN_BODY) + NOTE_AFTER;

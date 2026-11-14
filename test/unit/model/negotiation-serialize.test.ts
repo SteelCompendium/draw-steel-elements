@@ -20,7 +20,7 @@
 // newlines. Negotiation is the first persisted element whose disk shape actually hits
 // those paths (motivation/pitfall reasons, i5..i0 sentences) — prove they round-trip.
 import { parseYaml, stringifyYaml } from '../../mocks/obsidian';
-import { Motivation, NegotiationData, parseNegotiationData, Pitfall, unknownKeysOf } from '@model/NegotiationData';
+import { CurrentArgument, Motivation, NegotiationData, parseNegotiationData, Pitfall, unknownKeysOf } from '@model/NegotiationData';
 import { parse, serialize } from '../../../src/elements/negotiation/model';
 import frodoYaml from '../../fixtures/negotiation/frodo.yaml';
 
@@ -402,5 +402,133 @@ describe('keys the negotiation does not know survive a write (SC-637)', () => {
 		expect(out).toContain('  - "9": nine\n    name: P');
 		expect(parseYaml(out).notes).toBe('a');
 		expect(serialize(parseLikePipeline(out))).toBe(out); // and it is stable on the next pass
+	});
+});
+
+// SC-637 — the Director's own keys inside `currentArgument:` belong to that argument: every write that keeps the argument keeps them
+// (known keys in the existing order, then the unknown ones in their original order), and Complete Argument / Reset, which end the
+// argument through `CurrentArgument.resetData`, end them with it.
+describe('keys inside currentArgument survive while the argument does (SC-637)', () => {
+	const KNOWN_ARG_KEYS = ['motivationsUsed', 'pitfallsUsed', 'lieUsed', 'sameArgumentUsed', 'reusedMotivation'];
+	const source = [
+		'name: The Duke',
+		'initial_interest: 3',
+		'initial_patience: 3',
+		'motivations:',
+		'  - name: Legacy',
+		'    reason: heir',
+		'  - name: Coin',
+		'    reason: money',
+		'pitfalls:',
+		'  - name: Pride',
+		'    reason: charity',
+		'currentArgument:',
+		'  arg_note: keep me',
+		'  lieUsed: false',
+		'  motivationsUsed: [Legacy]',
+		'  arg_meta:',
+		'    who: Sam',
+		'    tags: [a, b]',
+		'  pitfallsUsed: []',
+		'  sameArgumentUsed: false',
+		'  reusedMotivation: false',
+		'  zz_last: 9',
+		'i5: five', 'i4: four', 'i3: three', 'i2: two', 'i1: one', 'i0: zero',
+	].join('\n');
+	const EXTRAS = { arg_note: 'keep me', arg_meta: { who: 'Sam', tags: ['a', 'b'] }, zz_last: 9 };
+
+	test('the argument keeps its unknown keys (a scalar, a nested map, a list) by value after each write that keeps it: a chip, a modifier, a standing change, a Spent chip', () => {
+		const m = parseLikePipeline(source);
+		m.currentArgument.motivationsUsed.push('Coin'); // an appeal chip
+		m.currentArgument.pitfallsUsed.push('Pride'); // a pitfall chip
+		m.currentArgument.lieUsed = true; // a modifier checkbox
+		m.current_patience = 1; // a Patience seal
+		m.current_interest = 4; // an Interest row
+		m.setMotivationUsed('Legacy', true); // a Spent chip (also flips reusedMotivation inside the argument)
+		const arg = parseYaml(serialize(m)).currentArgument;
+		expect(arg).toMatchObject({ ...EXTRAS, motivationsUsed: ['Legacy', 'Coin'], pitfallsUsed: ['Pride'], lieUsed: true, reusedMotivation: true });
+	});
+
+	test('order inside the argument: the five known keys in their fixed order, then the unknown ones in the order they were written', () => {
+		const m = parseLikePipeline(source);
+		m.currentArgument.lieUsed = true;
+		expect(Object.keys(parseYaml(serialize(m)).currentArgument)).toEqual([...KNOWN_ARG_KEYS, 'arg_note', 'arg_meta', 'zz_last']);
+	});
+
+	test('Complete Argument ends the argument and its unknown keys with it; the rest of the block keeps its own', () => {
+		const m = parseLikePipeline(source + '\nnote_to_self: top');
+		m.currentArgument.resetData(); // what Complete Argument does to the argument
+		const out = parseYaml(serialize(m));
+		expect(out.currentArgument).toEqual({ motivationsUsed: [], pitfallsUsed: [], lieUsed: false, sameArgumentUsed: false, reusedMotivation: false });
+		expect(out.note_to_self).toBe('top');
+		expect(unknownKeysOf(m.currentArgument)).toEqual([]);
+	});
+
+	test('Reset ends the argument and its unknown keys with it; the block\'s own keys stay', () => {
+		const m = parseLikePipeline(source + '\nnote_to_self: top');
+		m.setMotivationUsed('Legacy', true);
+		m.resetData();
+		const out = parseYaml(serialize(m));
+		expect(Object.keys(out.currentArgument)).toEqual(KNOWN_ARG_KEYS);
+		expect(out.note_to_self).toBe('top');
+	});
+
+	test('a new argument chosen after the old one ended carries nothing from it', () => {
+		const m = parseLikePipeline(source);
+		m.currentArgument.resetData();
+		m.currentArgument.motivationsUsed.push('Coin');
+		expect(Object.keys(parseYaml(serialize(m)).currentArgument)).toEqual(KNOWN_ARG_KEYS);
+	});
+
+	test('only the Director\'s keys are carried: the five the negotiation reads never are', () => {
+		const m = parseLikePipeline(source);
+		expect(unknownKeysOf(m.currentArgument).map(([key]) => key)).toEqual(['arg_note', 'arg_meta', 'zz_last']);
+	});
+
+	test('no argument in the source, or one that is not a mapping, carries no keys and writes none', () => {
+		const none = parseLikePipeline('name: n\ninitial_patience: 3');
+		expect(unknownKeysOf(none.currentArgument)).toEqual([]);
+		const odd = parseLikePipeline('name: n\ninitial_patience: 3\ncurrentArgument: plain');
+		expect(unknownKeysOf(odd.currentArgument)).toEqual([]);
+		odd.current_patience = 1;
+		expect(Object.keys(parseYaml(serialize(odd)).currentArgument)).toEqual(KNOWN_ARG_KEYS);
+	});
+
+	test('serialize writes the argument from a copy: the live argument gains no own key, and a second pass is byte-identical', () => {
+		const m = parseLikePipeline(source);
+		const once = serialize(m);
+		expect(Object.keys(m.currentArgument)).toEqual(KNOWN_ARG_KEYS);
+		expect(serialize(m)).toBe(once);
+		expect(serialize(parseLikePipeline(once))).toBe(once);
+	});
+
+	test('`__proto__`, `constructor`, `toString`, `hasOwnProperty`, `toJSON` and keys named like its methods and fields pollute and shadow nothing, and come back as plain keys', () => {
+		const text = [
+			'name: n', 'initial_patience: 3', 'initial_interest: 2',
+			'currentArgument:',
+			'  __proto__:', '    polluted: yes', '  constructor: c', '  toString: s', '  hasOwnProperty: h', '  toJSON: j',
+			'  usesMotivation: um', '  resetData: rd', '  LieUsed: ll', '  lie_used: lu',
+		].join('\n');
+		const m = parseLikePipeline(text);
+		m.currentArgument.lieUsed = true;
+		const out = serialize(m);
+		expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+		expect(Object.getPrototypeOf(m.currentArgument)).toBe(CurrentArgument.prototype);
+		expect(typeof m.currentArgument.usesMotivation).toBe('function');
+		expect(typeof m.currentArgument.resetData).toBe('function');
+		expect(m.currentArgument.usesMotivation()).toBe(false);
+		expect(out).toContain('polluted');
+		const arg = parseYaml(out).currentArgument;
+		expect([arg.constructor, arg.toString, arg.hasOwnProperty, arg.toJSON]).toEqual(['c', 's', 'h', 'j']);
+		expect([arg.usesMotivation, arg.resetData, arg.LieUsed, arg.lie_used]).toEqual(['um', 'rd', 'll', 'lu']);
+		expect(arg.lieUsed).toBe(true);
+		expect(Object.keys(arg).slice(5)).toEqual(['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'toJSON', 'usesMotivation', 'resetData', 'LieUsed', 'lie_used']);
+	});
+
+	test('a key that looks like an integer inside the argument is written first, quoted (JavaScript key order, pinned)', () => {
+		const m = parseLikePipeline('name: n\ninitial_patience: 3\ncurrentArgument:\n  lieUsed: true\n  3: three\n  note: x');
+		const out = serialize(m);
+		expect(out).toContain('currentArgument:\n  "3": three\n  motivationsUsed: []');
+		expect(serialize(parseLikePipeline(out))).toBe(out);
 	});
 });

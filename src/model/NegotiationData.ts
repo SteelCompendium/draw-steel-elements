@@ -15,8 +15,8 @@ import {parseYaml} from "obsidian";
  * property to these classes expecting it to stay out of the note: `serialize` writes every own key.
  *
  * `serialize` writes the pairs after the known keys, in their original relative order, at the top level and inside each
- * motivation and pitfall. A key that looks like an integer (`2024:`) is written FIRST (JavaScript's own object key order)
- * and comes back quoted; a unit test pins it. The value is carried as it parsed (a nested map or list included); its
+ * motivation, pitfall and `currentArgument` (the argument's own keys end when the argument does: `CurrentArgument.resetData`).
+ * A key that looks like an integer (`2024:`) is written FIRST (JavaScript's own object key order) and comes back quoted; a unit test pins it. The value is carried as it parsed (a nested map or list included); its
  * formatting is whatever `stringifyYaml` does today (SC-599's question, not this one).
  */
 const TOP_KNOWN_KEYS: ReadonlySet<string> = new Set([
@@ -25,6 +25,7 @@ const TOP_KNOWN_KEYS: ReadonlySet<string> = new Set([
 ]);
 const MOTIVATION_KNOWN_KEYS: ReadonlySet<string> = new Set(['name', 'reason', 'hasBeenAppealedTo']);
 const PITFALL_KNOWN_KEYS: ReadonlySet<string> = new Set(['name', 'reason']);
+const ARGUMENT_KNOWN_KEYS: ReadonlySet<string> = new Set(['motivationsUsed', 'pitfallsUsed', 'lieUsed', 'sameArgumentUsed', 'reusedMotivation']);
 
 const unknownKeys = new WeakMap<object, ReadonlyArray<readonly [string, unknown]>>();
 
@@ -191,6 +192,7 @@ export class CurrentArgument {
         this.lieUsed = data.lieUsed ?? false;
         this.sameArgumentUsed = data.sameArgumentUsed ?? false;
         this.reusedMotivation = data.reusedMotivation ?? false;
+        recordUnknownKeys(this, data, ARGUMENT_KNOWN_KEYS); // SC-637
     }
 
     /**
@@ -215,6 +217,9 @@ export class CurrentArgument {
         this.lieUsed = false;
         this.sameArgumentUsed = false;
         this.reusedMotivation = false;
+        // SC-637: a Director's own keys inside `currentArgument:` belong to THIS argument. Complete Argument and Reset
+        // end it through here, so they end with it; every write that keeps the argument (a chip, a modifier) keeps them.
+        unknownKeys.delete(this);
     }
 }
 

@@ -37,7 +37,7 @@
 // raw item. The record lives in src/elements/shared/undeclaredDefaults.ts (a per-instance
 // WeakMap, never an own property); a model the plugin builds itself keeps the whole output.
 //
-// SC-637: a key the negotiation does not read (top level, inside a motivation, inside a pitfall) is written back after the
+// SC-637: a key the negotiation does not read (top level, inside a motivation, inside a pitfall, inside `currentArgument`) is written back after the
 // known keys in its original order — see NegotiationData.ts for where those pairs live and why no key can shadow a member.
 import { stringifyYaml } from 'obsidian';
 import { NegotiationData, unknownKeysOf } from '@model/NegotiationData';
@@ -101,5 +101,7 @@ export function serialize(model: NegotiationData): string {
 	const written = withUnknownKeys(omitUntouchedDefaults(model), model);
 	if (Array.isArray(written.motivations)) written.motivations = model.motivations.map((m) => withUnknownKeys(omitUntouchedDefaults(m), m));
 	if (Array.isArray(written.pitfalls)) written.pitfalls = model.pitfalls.map((p) => withUnknownKeys(omitUntouchedDefaults(p), p));
+	// The argument is written from a copy too (it is the live instance otherwise), with the keys it carries after the five it reads.
+	if (written.currentArgument === model.currentArgument) written.currentArgument = withUnknownKeys(model.currentArgument, model.currentArgument);
 	return stringifyYaml(written).trim();
 }
