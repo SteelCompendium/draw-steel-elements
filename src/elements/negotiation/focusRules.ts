@@ -2,8 +2,9 @@
 // helper (`framework/kit/controlFocus.ts`, SC-588 / SC-626) does the capture / restore; this file is only this card's mapping.
 //
 // Complete Argument disarms the very button it was pressed on (the argument is spent, so no tier is chosen and the button is disabled), and
-// Chromium moves focus off a disabled button on its next frame: it ended on <body>, in Reading view and in Live Preview (measured, SC-642 r1).
-// The card is not rebuilt by that write, so nothing hands focus back.
+// Chromium blurs a focused button as it is disabled, inside the same click dispatch (2-3 ms after the click, about 410 ms before the save lands):
+// focus ended on <body>, in Reading view and in Live Preview (measured, SC-642 r1 / r2). The card is not rebuilt by that write, so nothing hands
+// focus back.
 //
 // Landing: the FIRST USABLE control of the Argument tab, in Tab order, i.e. where the NEXT argument starts: the first Motivation chip, else
 // the first Pitfall chip, else the "NPC caught a lie" box (the one modifier that is always enabled; the other two are greyed out until a

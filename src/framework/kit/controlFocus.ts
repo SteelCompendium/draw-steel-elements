@@ -24,8 +24,10 @@
 //     acted). A family with an entry also skips a control that cannot take focus for the nearest one of the same family that can. Without an entry
 //     the old rule stands, so no existing caller changes.
 // SC-642 adds `restoreControlFocus(..., { fromDisabled: true })` for a control that DISABLES ITSELF in place when pressed (negotiation's Complete
-// Argument): no rebuild happens, the pressed node stays `document.activeElement`, and Chromium moves focus off a disabled control on the next frame.
-// Captured BEFORE the disabling, restored right after it, with a `fallbacks` entry naming where focus goes (the successor is unusable by then).
+// Argument): no rebuild happens. Chromium blurs a focused button the moment it is disabled, inside the same click dispatch (measured, SC-642 r2:
+// 2-3 ms after the click, before the handler returns), so in real Obsidian focus is already on <body> when the restore runs; jsdom keeps the disabled
+// node as `document.activeElement`, and `fromDisabled` covers that (and any engine that defers the blur). Captured BEFORE the disabling, restored right
+// after it, with a `fallbacks` entry naming where focus goes (the successor is unusable by then).
 import { CONTROL_ATTR } from './controlId';
 import { focusControl, focusIsFree } from '../chrome/focusHandoff';
 
@@ -95,9 +97,9 @@ const usable = (el: HTMLElement): boolean => !el.matches(':disabled, [aria-disab
 
 /** SC-642: options for `restoreControlFocus`. Inert unless set. */
 export interface RestoreOptions {
-	/** The control that held focus was DISABLED in place (a button that disarms itself when pressed), not rebuilt: it is still `document.activeElement`,
-	 *  but Chromium drops focus from a disabled control on its next frame, so a focused DISABLED control inside the root does not count as holding
-	 *  focus. Call it synchronously after the disabling, before that frame. */
+	/** The control that held focus was DISABLED in place (a button that disarms itself when pressed), not rebuilt. Chromium blurs it inside the same
+	 *  click dispatch (so focus is usually already on <body> here), but jsdom, or an engine that defers the blur, keeps the disabled node as
+	 *  `document.activeElement`: a focused DISABLED control inside the root does not count as holding focus. Call it right after the disabling. */
 	fromDisabled?: boolean;
 }
 
