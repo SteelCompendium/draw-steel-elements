@@ -148,39 +148,48 @@ describe('SC-439 filed bugs', () => {
 	});
 
 	// SC-649: the power roll counts a motivation / pitfall / Reuse that the card does not show as chosen. Each case asserts ONLY that the tiers
-	// shown are the tiers of what the chips and the Reuse box show, never a specific fix: the reference is the same block with the stray
-	// entry taken out.
+	// shown are the tiers of what the card SHOWS as chosen (the pressed chips' names and the modifier boxes), never a specific fix: a fix may
+	// show the hidden entry (a pressed chip, a checked box) or drop it from the roll, and the tiers must agree with the card either way. The
+	// reference is the same block with exactly what the card shows as its argument.
 	const tiersOf = (root: HTMLElement): string[] =>
 		Array.from(root.querySelectorAll('[data-dse-control="negotiation.tier.row"] .dse-pr__text')).map((e) => e.textContent ?? '');
 	const BASE = 'name: x\ninitial_interest: 3\ninitial_patience: 3\nmotivations:\n  - name: Peace\n    reason: a\npitfalls:\n  - name: Power\n    reason: b\n';
-
-	test.failing('[K11] an argument entry naming a motivation the block no longer has does not change the tiers shown while no chip is pressed [known bug SC-649]', async () => {
-		const stray = await mount(BASE + 'currentArgument:\n  motivationsUsed:\n    - Ghost\n' + OFFERS);
-		const pressed = Array.from(stray.root().querySelectorAll('[data-dse-control="negotiation.appeal.motivation"]')).filter((c) => c.getAttribute('aria-pressed') === 'true');
-		expect(pressed).toHaveLength(0);
-		const shown = tiersOf(stray.root());
+	/** The argument the card shows, as YAML: pressed chips by name and the three boxes as drawn. */
+	const shownArgument = (root: HTMLElement): string => {
+		const names = (id: string): string[] =>
+			Array.from(root.querySelectorAll(`[data-dse-control="${id}"]`))
+				.filter((c) => c.getAttribute('aria-pressed') === 'true')
+				.map((c) => c.querySelector('.dse-nt__chip-text')?.textContent ?? '');
+		const box = (w: string): boolean => root.querySelector<HTMLInputElement>(`[data-dse-control="negotiation.mod.${w}"]`)!.checked;
+		return (
+			'currentArgument:\n' +
+			`  motivationsUsed: ${JSON.stringify(names('negotiation.appeal.motivation'))}\n` +
+			`  pitfallsUsed: ${JSON.stringify(names('negotiation.appeal.pitfall'))}\n` +
+			`  lieUsed: ${box('lie')}\n  sameArgumentUsed: ${box('same')}\n  reusedMotivation: ${box('reuse')}\n`
+		);
+	};
+	/** Mount `stray`, read its tiers and what it shows, then mount a block holding exactly what was shown and read its tiers. */
+	const tiersAgreeWithTheCard = async (stray: string): Promise<{ shown: string[]; reference: string[] }> => {
+		const first = await mount(stray);
+		const shown = tiersOf(first.root());
+		const argument = shownArgument(first.root());
 		document.body.innerHTML = '';
-		const clean = await mount(BASE + OFFERS);
-		expect(shown).toEqual(tiersOf(clean.root()));
+		const second = await mount(BASE + argument + OFFERS);
+		return { shown, reference: tiersOf(second.root()) };
+	};
+
+	test.failing('[K11] an argument entry naming a motivation the block no longer has: the tiers shown are those of the chips shown [known bug SC-649]', async () => {
+		const { shown, reference } = await tiersAgreeWithTheCard(BASE + 'currentArgument:\n  motivationsUsed:\n    - Ghost\n' + OFFERS);
+		expect(shown).toEqual(reference);
 	});
 
-	test.failing('[K12] an argument entry naming a pitfall the block no longer has does not change the tiers shown while no chip is pressed [known bug SC-649]', async () => {
-		const stray = await mount(BASE + 'currentArgument:\n  pitfallsUsed:\n    - Ghost\n' + OFFERS);
-		const pressed = Array.from(stray.root().querySelectorAll('[data-dse-control="negotiation.appeal.pitfall"]')).filter((c) => c.getAttribute('aria-pressed') === 'true');
-		expect(pressed).toHaveLength(0);
-		const shown = tiersOf(stray.root());
-		document.body.innerHTML = '';
-		const clean = await mount(BASE + OFFERS);
-		expect(shown).toEqual(tiersOf(clean.root()));
+	test.failing('[K12] an argument entry naming a pitfall the block no longer has: the tiers shown are those of the chips shown [known bug SC-649]', async () => {
+		const { shown, reference } = await tiersAgreeWithTheCard(BASE + 'currentArgument:\n  pitfallsUsed:\n    - Ghost\n' + OFFERS);
+		expect(shown).toEqual(reference);
 	});
 
-	test.failing('[K13] a hand-typed reusedMotivation with no spent motivation appealed to: the tiers shown agree with the Reuse box shown [known bug SC-649]', async () => {
-		const typed = await mount(BASE + 'currentArgument:\n  motivationsUsed:\n    - Peace\n  reusedMotivation: true\n' + OFFERS);
-		const reuse = typed.root().querySelector<HTMLInputElement>('[data-dse-control="negotiation.mod.reuse"]')!;
-		expect(reuse.checked).toBe(false); // nothing spent is appealed to, so the box is off whatever was typed
-		const shown = tiersOf(typed.root());
-		document.body.innerHTML = '';
-		const reference = await mount(BASE + 'currentArgument:\n  motivationsUsed:\n    - Peace\n' + OFFERS);
-		expect(shown).toEqual(tiersOf(reference.root()));
+	test.failing('[K13] a hand-typed reusedMotivation with no spent motivation appealed to: the tiers shown are those of the Reuse box shown [known bug SC-649]', async () => {
+		const { shown, reference } = await tiersAgreeWithTheCard(BASE + 'currentArgument:\n  motivationsUsed:\n    - Peace\n  reusedMotivation: true\n' + OFFERS);
+		expect(shown).toEqual(reference);
 	});
 });

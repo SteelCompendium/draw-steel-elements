@@ -102,10 +102,10 @@ describe('negotiation: Reset negotiation', () => {
 				const m = document.querySelector('.menu').getBoundingClientRect();
 				return m.right >= b.left - 300 && m.left <= b.right + 300 && m.bottom >= b.top - 300 && m.top <= b.bottom + 300;
 			})()`);
-			expect(near).toBe(true);
+			if (!near) throw new Error('the options menu opened away from the button');
 		} finally {
 			await dse.press('Escape');
 			await dse.waitFor(`document.querySelectorAll('.menu').length === 0`, 'the menu to close');
 		}
-	}, { failsWith: /Expected: true/ });
+	}, { failsWith: /opened away from the button/ });
 });

@@ -32,8 +32,8 @@ describe('negotiation: values the Director typed by hand', () => {
 		await dse.openNote(FRACTION);
 		const s = await shown();
 		expect(s.interest).toHaveLength(1);
-		expect(s.interest[0] === 0).toBe(s.ended === 'hostile');
-	}, { failsWith: /Expected: false/ });
+		if ((s.interest[0] === 0) !== (s.ended === 'hostile')) throw new Error(`the seal shown disagrees with the ending: seal ${s.interest[0]}, ending ${s.ended}`);
+	}, { failsWith: /the seal shown disagrees with the ending/ });
 
 	knownBug('SC-640', '[NEGO-W04] two motivations with the same name: every appeal chip has its name to read', async () => {
 		await dse.openNote(DUPLICATES);
