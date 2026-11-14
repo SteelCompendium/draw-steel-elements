@@ -170,24 +170,51 @@ describe('montage: a board wider than its frame (SC-326, SC-490)', () => {
 		expect(after.nameLeft).toBe(after.frameLeft);
 	});
 
-	it('[MONT-B13] a real Tab onto a round cell hidden past the right edge scrolls it fully into view, clear of the pinned hero column', async () => {
+	// The board keeps a focused round cell fully inside its frame and clear of the pinned hero column (BoardView `keepFocusedCellInView`). Chromium alone only
+	// scrolls a focused element into view when none of it shows, so a cell that sticks out under the pinned column stays covered unless the board moves it.
+	const geometry = (round: number): Promise<{ left: number; right: number; frameLeft: number; frameRight: number; pinned: number; scrolled: number }> =>
+		dse.page(`(() => {
+			const b = document.querySelector('.markdown-reading-view [data-dse-element="montage"] .dse-mt__board');
+			const frame = b.getBoundingClientRect();
+			const box = b.querySelector('.dse-mt__cell[data-hero="Kira"][data-round="${round}"]').getBoundingClientRect();
+			return { left: Math.round(box.left), right: Math.round(box.right), frameLeft: Math.round(frame.left + b.clientLeft), frameRight: Math.round(frame.left + b.clientLeft + b.clientWidth), pinned: Math.round(b.querySelector('.dse-mt__board-corner').getBoundingClientRect().width), scrolled: Math.round(b.scrollLeft) };
+		})()`);
+
+	it('[MONT-B13] a real Tab onto a round cell hidden past the right edge scrolls it into view', async () => {
 		await dse.openNote(WIDE_ENTRIES);
 		const root = dse.block(MONTAGE);
-		const last = root.control('montage.quick.assist', { nth: 0 }); // the last stop of Kira's round-1 cell: the next Tab is her round-10 cell
-		await dse.tabTo(last, TABS);
-		const geometry = (): Promise<{ round: string | null; left: number; right: number; frameLeft: number; frameRight: number; pinned: number; scrolled: number }> =>
-			dse.page(`(() => {
-				const a = document.activeElement;
-				const b = document.querySelector('.markdown-reading-view [data-dse-element="montage"] .dse-mt__board');
-				const frame = b.getBoundingClientRect();
-				const box = a.getBoundingClientRect();
-				return { round: a.getAttribute('data-round'), left: Math.round(box.left), right: Math.round(box.right), frameLeft: Math.round(frame.left + b.clientLeft), frameRight: Math.round(frame.left + b.clientLeft + b.clientWidth), pinned: Math.round(b.querySelector('.dse-mt__board-corner').getBoundingClientRect().width), scrolled: Math.round(b.scrollLeft) };
-			})()`);
-		expect((await geometry()).scrolled).toBe(0);
-		await dse.press('Tab'); // to the page: Tab is no pair of any control
+		await dse.tabTo(root.control('montage.quick.assist', { nth: 0 }), TABS); // the last stop of Kira's round-1 cell: her filled cells of rounds 4, 5 and 10 follow
+		const hidden = await geometry(10);
+		expect(hidden.left).toBeGreaterThan(hidden.frameRight);
+		for (let tabs = 0; tabs < 4 && (await dse.page<string | null>(`document.activeElement?.getAttribute('data-round') ?? null`)) !== '10'; tabs++) {
+			await dse.press('Tab'); // to the page: Tab is no pair of any control
+		}
 		await dse.waitFor(`document.activeElement?.getAttribute('data-round') === '10'`, 'Tab to reach the round-10 cell');
-		const g = await geometry();
+		const g = await geometry(10);
 		expect(g.scrolled).toBeGreaterThan(0);
+		expect(g.left).toBeGreaterThanOrEqual(g.frameLeft + g.pinned - 1);
+		expect(g.right).toBeLessThanOrEqual(g.frameRight + 1);
+	});
+
+	it('[MONT-B14] a real Shift+Tab onto a cell partly under the pinned hero column scrolls it clear of the column', async () => {
+		await dse.openNote(WIDE_ENTRIES);
+		const root = dse.block(MONTAGE);
+		// Scroll by script until Kira's round-4 cell sticks out 20 px under the pinned column, then put focus on her round-5 cell (fully visible to its right).
+		await dse.page(`(() => {
+			const b = document.querySelector('.markdown-reading-view [data-dse-element="montage"] .dse-mt__board');
+			const frame = b.getBoundingClientRect();
+			const pinned = b.querySelector('.dse-mt__board-corner').getBoundingClientRect().width;
+			const box = b.querySelector('.dse-mt__cell[data-hero="Kira"][data-round="4"]').getBoundingClientRect();
+			b.scrollLeft += box.left - (frame.left + b.clientLeft + pinned) + 20;
+			return true;
+		})()`);
+		const before = await geometry(4);
+		expect(before.left).toBeLessThan(before.frameLeft + before.pinned - 10); // covered by the pinned column
+		expect(before.right).toBeGreaterThan(before.frameLeft + before.pinned);
+		await dse.focusByScript(cellOf(root, 'Kira', 5));
+		await dse.press('Shift+Tab'); // to the page
+		await dse.waitFor(`document.activeElement?.getAttribute('data-round') === '4'`, 'Shift+Tab to reach the round-4 cell');
+		const g = await geometry(4);
 		expect(g.left).toBeGreaterThanOrEqual(g.frameLeft + g.pinned - 1);
 		expect(g.right).toBeLessThanOrEqual(g.frameRight + 1);
 	});

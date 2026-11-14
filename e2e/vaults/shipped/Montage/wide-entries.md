@@ -1,4 +1,4 @@
-# Montage: twelve rounds with entries far to the right
+# Montage: twelve rounds with entries in rounds 4, 5 and 10
 
 ABOVE
 
@@ -16,13 +16,16 @@ participants:
     skills_used: []
 entries:
   - hero: Kira
-    round: 10
+    round: 4
     result: success
     skill: Nature
   - hero: Kira
-    round: 11
+    round: 5
     result: failure
     skill: Insight
+  - hero: Kira
+    round: 10
+    result: assist
 current_round: 1
 ```
 
