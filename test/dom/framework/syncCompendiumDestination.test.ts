@@ -6,7 +6,7 @@
 // count. Nothing here touches a real vault or the network.
 import DrawSteelAdmonitionPlugin from 'main';
 import { App, Notice, requestUrl, flushAsync, type FakeVault } from '../../mocks/obsidian';
-import { DESTINATION_REFUSED_NOTICE } from '@model/CompendiumDestination';
+import { DESTINATION_CHANGED_NOTICE, DESTINATION_REFUSED_NOTICE } from '@model/CompendiumDestination';
 import type { MigrationPlan } from '@/data/CompendiumMigration';
 
 jest.mock('@views/LegacyCompendiumModal', () => ({
@@ -284,5 +284,128 @@ describe('SC-643 — the Migrate compendium command', () => {
 		expect(vaultSnapshot(plugin)).toHaveLength(files.length);
 		expect(vaultSnapshot(plugin)).toEqual(expect.arrayContaining(files));
 		expect(writes.flatMap((s) => s.mock.calls)).toEqual([]);
+	});
+});
+
+describe('SC-643 (review L1) — the Destination folder changed to ANOTHER real folder while the window is open', () => {
+	test.each([true, false])('answering the window (trash=%s) does nothing: no trash, no sync, no write, every file byte-identical, a Notice says to run Sync again', async (trash) => {
+		const plugin = await makeLoadedPlugin('');
+		await seedUserVault(plugin);
+		const vault = plugin.app.vault as unknown as FakeVault;
+		const folder = await vault.createFolder('DS Compendium');
+		folder.children.push(vault.setFile('DS Compendium/homebrew.md', 'old compendium folder'));
+		const notes = await vault.createFolder('Notes');
+		notes.children.push(vault.setFile('Notes/Welcome.md', 'my notes folder'));
+		const sync = jest.spyOn(plugin.syncService, 'sync').mockResolvedValue(null);
+		await plugin.syncCompendium(); // the window offers "DS Compendium"
+		expect(LegacyCompendiumModal).toHaveBeenCalledTimes(1);
+		const [, shownRoot, onChoice] = (LegacyCompendiumModal as unknown as jest.Mock).mock.calls[0] as
+			[unknown, string, (trash: boolean) => void];
+		expect(shownRoot).toBe('DS Compendium');
+		const before = vaultSnapshot(plugin);
+		const writes = spyOnWrites(plugin);
+		Notice.notices.length = 0;
+
+		plugin.settings.compendiumDestinationDirectory = 'Notes';
+		onChoice(trash);
+		await flushAsync(3);
+
+		expect(plugin.app.fileManager.trashFile).not.toHaveBeenCalled();
+		expect(sync).not.toHaveBeenCalled();
+		expect(Notice.notices).toContain(DESTINATION_CHANGED_NOTICE);
+		expect(vaultSnapshot(plugin)).toEqual(before);
+		expect(writes.flatMap((spy) => spy.mock.calls)).toEqual([]);
+		expect(plugin.syncService.isBusy()).toBe(false);
+	});
+
+	test('the same folder spelled differently ("DS Compendium/") is still the same folder: the answer goes through', async () => {
+		const plugin = await makeLoadedPlugin('');
+		await seedUserVault(plugin);
+		const vault = plugin.app.vault as unknown as FakeVault;
+		const folder = await vault.createFolder('DS Compendium');
+		folder.children.push(vault.setFile('DS Compendium/homebrew.md', 'x'));
+		const sync = jest.spyOn(plugin.syncService, 'sync').mockResolvedValue(null);
+		await plugin.syncCompendium();
+		const onChoice = (LegacyCompendiumModal as unknown as jest.Mock).mock.calls[0][2] as (trash: boolean) => void;
+
+		plugin.settings.compendiumDestinationDirectory = ' DS Compendium/ ';
+		onChoice(true);
+		await flushAsync(3);
+
+		expect(plugin.app.fileManager.trashFile).toHaveBeenCalledWith(folder);
+		expect(sync).toHaveBeenCalledTimes(1);
+		expect(Notice.notices).not.toContain(DESTINATION_CHANGED_NOTICE);
+	});
+});
+
+describe('SC-643 (review L2) — the migration window\'s callbacks and offerMigration refuse the vault root themselves', () => {
+	async function openMigrationWindow() {
+		const plugin = await makeLoadedPlugin('');
+		await seedUserVault(plugin);
+		stubMigrationPlan(plugin);
+		await plugin.migrateCompendium();
+		expect(CompendiumMigrationModal).toHaveBeenCalledTimes(1);
+		const callbacks = (CompendiumMigrationModal as unknown as jest.Mock).mock.calls[0][2] as
+			{ syncAnyway: () => void; syncAfter: (report: unknown) => void };
+		return { plugin, callbacks };
+	}
+	const report = { aborted: false, migrated: [], remaining: 0, reportNotePath: null };
+
+	test('syncAnyway after the setting was changed to the vault root: Notice, no markSettled, no sync, lock released', async () => {
+		const { plugin, callbacks } = await openMigrationWindow();
+		const sync = jest.spyOn(plugin.syncService, 'sync').mockResolvedValue(null);
+		const markSettled = jest.spyOn(plugin.migrationService, 'markSettled');
+		Notice.notices.length = 0;
+
+		plugin.settings.compendiumDestinationDirectory = '/';
+		callbacks.syncAnyway();
+		await flushAsync(3);
+
+		expect(Notice.notices).toContain(DESTINATION_REFUSED_NOTICE);
+		expect(markSettled).not.toHaveBeenCalled();
+		expect(sync).not.toHaveBeenCalled();
+		expect(plugin.syncService.isBusy()).toBe(false);
+	});
+
+	test('syncAfter after the setting was changed to the vault root: Notice, no sync', async () => {
+		const { plugin, callbacks } = await openMigrationWindow();
+		const sync = jest.spyOn(plugin.syncService, 'sync').mockResolvedValue(null);
+		Notice.notices.length = 0;
+
+		plugin.settings.compendiumDestinationDirectory = '.';
+		callbacks.syncAfter(report);
+		await flushAsync(3);
+
+		expect(Notice.notices).toContain(DESTINATION_REFUSED_NOTICE);
+		expect(sync).not.toHaveBeenCalled();
+	});
+
+	test('syncAfter / syncAnyway with the setting unchanged still sync the resolved folder (the guard is not a blanket refusal)', async () => {
+		const { plugin, callbacks } = await openMigrationWindow();
+		const sync = jest.spyOn(plugin.syncService, 'sync').mockResolvedValue(null);
+
+		callbacks.syncAfter(report);
+		callbacks.syncAnyway();
+		await flushAsync(3);
+
+		expect(sync).toHaveBeenCalledTimes(2);
+		for (const call of sync.mock.calls) expect(call[0]).toMatchObject({ root: 'DS Compendium' });
+	});
+
+	test.each(['', '/', '.', '..'])('offerMigration(%j) called directly: Notice, no plan, no window, no state write', async (root) => {
+		const plugin = await makeLoadedPlugin('DS Compendium');
+		await seedUserVault(plugin);
+		const plan = stubMigrationPlan(plugin);
+		const markSettled = jest.spyOn(plugin.migrationService, 'markSettled');
+		const markDeclined = jest.spyOn(plugin.migrationService, 'markDeclined');
+		Notice.notices.length = 0;
+
+		await (plugin as unknown as { offerMigration(root: string): Promise<void> }).offerMigration(root);
+
+		expect(Notice.notices).toContain(DESTINATION_REFUSED_NOTICE);
+		expect(plan).not.toHaveBeenCalled();
+		expect(markSettled).not.toHaveBeenCalled();
+		expect(markDeclined).not.toHaveBeenCalled();
+		expect(CompendiumMigrationModal).not.toHaveBeenCalled();
 	});
 });
