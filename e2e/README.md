@@ -153,7 +153,7 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Negotiation/hostile.md` | Interest 0 (Patience 2): the "Negotiation over" band, the NPC ends it |
   | `Negotiation/minimal.md` | `name:` only (Interest defaults to 0, so it opens already over, with no chips or cards; SC-641) |
   | `Negotiation/two-blocks.md` | TWO different `ds-negotiation` blocks (the innkeeper, the guard captain) with prose above, between and below |
-  | `Negotiation/unknown-keys.md` | one `ds-negotiation` carrying keys the element does not know: `note_to_self` at the top and `gm_note` inside a motivation and a pitfall (a write deletes them; SC-637) |
+  | `Negotiation/unknown-keys.md` | one `ds-negotiation` carrying keys the element does not know: `note_to_self` at the top and `gm_note` inside a motivation and a pitfall (a write keeps them after the known keys; SC-637) |
   | `Negotiation/wrong-name.md` | `name: 2024` (a number as the name: an error card with a raw JavaScript message; SC-638) |
   | `Negotiation/fraction.md` | `current_interest: 0.4` (seal 0 is drawn while the negotiation is not over; SC-638) |
   | `Negotiation/dup-names.md` | two motivations both named Higher Authority (the first chip is blank; SC-640) |

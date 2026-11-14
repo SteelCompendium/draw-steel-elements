@@ -1,11 +1,11 @@
 // SC-439 [X]: what a negotiation write leaves alone, in real Obsidian. The note around the block (above, between, below) and every OTHER fence
 // is checked after every test by the driver; these scenarios add the negotiation-specific cases: two different blocks, a hand edit, no default
-// keys written (SC-482), and keys the product does not know. The permutations are in the jsdom matrix [X].
+// keys written (SC-482), and keys the product does not know (SC-637: kept through a Patience seal, Reset, the chips and Complete Argument). The permutations are in the jsdom matrix [X].
 // Negotiation/two-blocks.md: the innkeeper (3 / 3) and the guard captain (2 / 4). Negotiation/unknown-keys.md: `note_to_self` and a `gm_note`
 // in the motivation "Legacy" and in the pitfall "Pride".
 import { expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
-import { BASIC, blockOf, chooseReset, interestOf, interestSeal, openMenu, openNego, patienceOf, patienceSeal, TWINS, TWO, UNKNOWN } from '../../driver/negotiation';
+import { dse } from '../../driver/dse';
+import { argOf, BASIC, blockOf, chooseReset, interestOf, interestSeal, NEGO, openMenu, openNego, patienceOf, patienceSeal, TWINS, TWO, UNKNOWN } from '../../driver/negotiation';
 
 describe('negotiation: the note and the other blocks around a write', () => {
 	it('[NEGO-X01] a Patience click in the SECOND of two blocks changes that block only', async () => {
@@ -82,17 +82,85 @@ describe('negotiation: the note and the other blocks around a write', () => {
 		expect(text.endsWith('\n\nBELOW\n')).toBe(true);
 	});
 
-	knownBug('SC-637', '[NEGO-X06] a write keeps a top-level key the element does not know', async () => {
+	it('[NEGO-X06] a write keeps a top-level key the element does not know', async () => {
 		const root = await openNego(UNKNOWN);
 		await dse.waitForWrite(UNKNOWN, () => dse.click(patienceSeal(root, 1)));
 		expect(await blockOf(UNKNOWN)).toMatchObject({ note_to_self: 'The Duke lies about the toll', current_patience: 1 });
-	}, { failsWith: /note_to_self/ });
+	});
 
-	knownBug('SC-637', '[NEGO-X07] a write keeps a key the element does not know inside a motivation and inside a pitfall', async () => {
+	it('[NEGO-X07] a write keeps a key the element does not know inside a motivation and inside a pitfall', async () => {
 		const root = await openNego(UNKNOWN);
 		await dse.waitForWrite(UNKNOWN, () => dse.click(patienceSeal(root, 1)));
 		const b = await blockOf(UNKNOWN);
 		expect(b.motivations![0]).toMatchObject({ name: 'Legacy', gm_note: 'ask about the sister' });
 		expect(b.pitfalls![0]).toMatchObject({ name: 'Pride', gm_note: 'never mention the war' });
-	}, { failsWith: /gm_note/ });
+	});
+
+	/** The Director's own keys, as the unknown-keys fixture holds them, after a write: kept, and written after the known keys. */
+	const expectOwnKeysKept = (b: Awaited<ReturnType<typeof blockOf>>): void => {
+		expect(b).toMatchObject({ note_to_self: 'The Duke lies about the toll' });
+		expect(b.motivations![0]).toMatchObject({ name: 'Legacy', gm_note: 'ask about the sister' });
+		expect(b.pitfalls![0]).toMatchObject({ name: 'Pride', gm_note: 'never mention the war' });
+		expect(Object.keys(b).slice(-1)).toEqual(['note_to_self']);
+		expect(Object.keys(b.motivations![0]).slice(-1)).toEqual(['gm_note']);
+		expect(Object.keys(b.pitfalls![0]).slice(-1)).toEqual(['gm_note']);
+	};
+
+	it('[NEGO-X09] Reset negotiation keeps the keys the element does not know: it resets the tracker, not the Director\'s own keys', async () => {
+		const root = await openNego(UNKNOWN);
+		await dse.waitForWrite(UNKNOWN, () => dse.click(patienceSeal(root, 1)));
+		await openMenu(root);
+		await chooseReset(UNKNOWN);
+		const b = await blockOf(UNKNOWN);
+		expect(patienceOf(b)).toBe(3);
+		expectOwnKeysKept(b);
+	});
+
+	it('[NEGO-X10] a Spent chip, an appeal chip and a pitfall chip each keep the keys the element does not know', async () => {
+		const root = await openNego(UNKNOWN);
+		await dse.waitForWrite(UNKNOWN, () => dse.click(root.control('negotiation.spent', { nth: 0 })));
+		expect((await blockOf(UNKNOWN)).motivations![0]).toMatchObject({ name: 'Legacy', hasBeenAppealedTo: true });
+		expectOwnKeysKept(await blockOf(UNKNOWN));
+		await dse.waitForWrite(UNKNOWN, () => dse.click(root.control('negotiation.appeal.motivation', { nth: 1 })));
+		expect(argOf(await blockOf(UNKNOWN)).motivationsUsed).toEqual(['Coin']);
+		expectOwnKeysKept(await blockOf(UNKNOWN));
+		await dse.waitForWrite(UNKNOWN, () => dse.click(root.control('negotiation.appeal.pitfall', { nth: 0 })));
+		expect(argOf(await blockOf(UNKNOWN)).pitfallsUsed).toEqual(['Pride']);
+		expectOwnKeysKept(await blockOf(UNKNOWN));
+	});
+
+	it('[NEGO-X11] Complete Argument keeps the keys the element does not know', async () => {
+		const root = await openNego(UNKNOWN);
+		await dse.waitForWrite(UNKNOWN, () => dse.click(root.control('negotiation.appeal.motivation', { nth: 1 })));
+		await dse.click(root.control('negotiation.tier.row', { nth: 2 }));
+		await dse.waitForWrite(UNKNOWN, () => dse.click(root.control('negotiation.complete')));
+		const b = await blockOf(UNKNOWN);
+		expect([interestOf(b), patienceOf(b)]).toEqual([4, 3]); // the argument was completed: the standing moved
+		expect(b.motivations![1]).toMatchObject({ name: 'Coin', hasBeenAppealedTo: true });
+		expectOwnKeysKept(b);
+	});
+
+	it('[NEGO-X12] a hand edit to a key the element does not know (top level, in a motivation and in a pitfall), made while the card is drawn, is kept by the next write', async () => {
+		await dse.openNote(UNKNOWN);
+		await dse.externalEdit(UNKNOWN, `c.replace('The Duke lies about the toll', 'edited by hand').replace('ask about the sister', 'edited too').replace('never mention the war', 'and this')`);
+		await dse.settle();
+		const root = dse.block(NEGO);
+		await dse.waitForWrite(UNKNOWN, () => dse.click(patienceSeal(root, 1)));
+		const b = await blockOf(UNKNOWN);
+		expect(b).toMatchObject({ note_to_self: 'edited by hand' });
+		expect(b.motivations![0]).toMatchObject({ gm_note: 'edited too' });
+		expect(b.pitfalls![0]).toMatchObject({ gm_note: 'and this' });
+	});
+
+	it('[NEGO-X13] a key the element does not know that was deleted by hand while the card is drawn does not come back on the next write', async () => {
+		await dse.openNote(UNKNOWN);
+		await dse.externalEdit(UNKNOWN, `c.replace('note_to_self: "The Duke lies about the toll"\n', '').replace('    gm_note: "ask about the sister"\n', '').replace('    gm_note: "never mention the war"\n', '')`);
+		await dse.settle();
+		const root = dse.block(NEGO);
+		await dse.waitForWrite(UNKNOWN, () => dse.click(patienceSeal(root, 1)));
+		const b = await blockOf(UNKNOWN);
+		expect('note_to_self' in b).toBe(false);
+		expect('gm_note' in b.motivations![0]).toBe(false);
+		expect('gm_note' in b.pitfalls![0]).toBe(false);
+	});
 });
