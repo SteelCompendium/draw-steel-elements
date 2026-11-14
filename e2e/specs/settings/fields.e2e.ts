@@ -1,6 +1,6 @@
 // SC-440: the Compendium text fields (Destination folder, Release) and the Initiative tracker's Default creature image path. The text fields
 // update the plugin's setting on every keystroke and Obsidian writes data.json when the user clicks away; the image path is a file combobox: a click opens
-// Obsidian's file picker (its own popup: an item is picked with a real click on it) and its X clears the path. data.json is read ON DISK.
+// Obsidian's file picker (its own popup: a file is picked with the keyboard, typing its name and Enter) and its X clears the path. data.json is read ON DISK.
 // What the paths DO (where a sync writes, which image a creature gets) is read when a sync runs / a tracker renders, so these scenarios assert
 // the stored value and the shown value, with a final plugin reload.
 import { $, browser, expect } from '@wdio/globals';

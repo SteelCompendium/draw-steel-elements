@@ -156,16 +156,21 @@ export async function waitDiskPrefs(expected: Record<string, unknown>): Promise<
 const sorted = (o: unknown): string => JSON.stringify(o, (_k, v: unknown) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v));
 
 /**
- * A reload test's starting point. When data.json on disk already holds `expected` (the scenarios before it wrote it, as in a full run) the plugin
- * is simply reloaded ON THAT FILE, so the reload asserts what the drives wrote; only when it does not (this test run alone under `--only`) is the
- * state seeded, as a version-3 data.json (a real user's file; no v0 migration). Returns whether it had to seed.
+ * A reload test's starting point. The scenarios before it (a full run, or `--element`) must have left data.json on disk holding `expected`: the
+ * plugin is then reloaded ON THAT FILE, so the reload asserts what the drives wrote, and a bad write or cross-talk from an earlier drive fails
+ * HERE, loudly, instead of being papered over. Only in a filtered run (`--only`, the runner sets DSE_E2E_GREP), where those scenarios did not
+ * run, is the state seeded, as a version-3 data.json (a real user's file; no v0 migration). Returns whether it had to seed.
  */
 export async function ensureState(expected: { prefs: Record<string, unknown>; [field: string]: unknown }): Promise<boolean> {
 	const disk = await diskData();
-	const same = Object.entries(expected).every(([k, v]) => sorted(disk[k]) === sorted(v));
-	if (same) {
+	const differs = Object.entries(expected).filter(([k, v]) => sorted(disk[k]) !== sorted(v));
+	if (differs.length === 0) {
 		await reloadPlugin();
 		return false;
+	}
+	if (!process.env.DSE_E2E_GREP) {
+		const diff = differs.map(([k, v]) => `${k}: on disk ${sorted(disk[k])}, expected ${sorted(v)}`).join('; ');
+		throw new Error(`the scenarios before this reload test left data.json differing from what it expects (${diff})`);
 	}
 	await seedData({ settingsVersion: 3, ...expected });
 	return true;
