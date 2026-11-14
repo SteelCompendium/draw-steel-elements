@@ -10,9 +10,9 @@ export default surface('montage-add-hero-modal', {
 		{ host: 'montage', control: 'montage.board.add-hero', ...c(['click'], ['H01']) },
 	],
 	controls: {
-		'montage.add-hero.name': c(['type', 'press:Escape'], ['H01', 'H02', 'H04']),
+		'montage.add-hero.name': c(['type', 'press:Escape'], ['H01', 'H02', 'H04', 'H07', 'H08', 'H09']),
 		'montage.add-hero.cancel': c(['click', 'press:Enter'], ['H03', 'H05']),
-		'montage.add-hero.submit': c(['click', 'click-disabled', 'press:Enter'], ['H01', 'H02', 'H05']),
+		'montage.add-hero.submit': c(['click', 'click-disabled', 'press:Enter'], ['H01', 'H02', 'H05', 'H07', 'H08', 'H09']),
 		'modal.close': c(['click', 'press:Escape'], ['H04']),
 		'modal.backdrop': c(['click'], ['H04']),
 	},

@@ -32,7 +32,7 @@ import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App, Plugin, Notice, Scope, makeFakeContext, parseYaml } from '../../mocks/obsidian';
 import { montageElement } from '../../../src/elements/montage/definition';
 import { MontageView } from '../../../src/elements/montage/view';
-import { parse, nextHeroToAct, addMontageHero } from '../../../src/elements/montage/model';
+import { parse, nextHeroToAct } from '../../../src/elements/montage/model';
 import { LogActionModal } from '../../../src/elements/montage/LogActionModal';
 import { MontageAddHeroModal } from '../../../src/elements/montage/ConfigModals';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
@@ -2731,7 +2731,9 @@ describe('SC-627: Add a hero refuses a name already on the board', () => {
 		const { host, view, add, warn, type, modalEl } = await openAdd();
 		type('Osric');
 		expect(add.disabled).toBe(false);
-		addMontageHero(view.currentModel(), 'osric');
+		// A real outside edit REPLACES the view's model (`ElementView.update`); it does not mutate the old one.
+		const outside = `${BOARD}\n  - name: osric`;
+		(view as any).model = parse(parseYaml(outside), outside);
 		add.click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect(host.replaceSource).not.toHaveBeenCalled();
@@ -2749,6 +2751,14 @@ describe('SC-627: Add a hero refuses a name already on the board', () => {
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect(host.replaceSource).not.toHaveBeenCalled();
 		expect(heroRows(root)).toHaveLength(2);
+	});
+
+	test('a hero stored with padding on the board still matches the typed name', async () => {
+		const { add, warn, type } = await openAdd(['rounds: 3', 'participants:', '  - name: "  Kira "'].join('\n'));
+		type('kira');
+		expect(add.disabled).toBe(true);
+		expect(warn.hidden).toBe(false);
+		expect(warn.textContent).toMatch(/Kira.*is already on the board/);
 	});
 
 	test('a fresh name still adds exactly one hero', async () => {
