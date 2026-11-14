@@ -128,6 +128,19 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Initiative/two-trackers.md` | TWO `ds-initiative` blocks in one note with prose above, between and below (SC-436): Alice Alpha + an Ogre, then Bob Beta (`grabbed`, Hexed to `eoe`) + a Goblin |
   | `Initiative/amount-edit.md` | `ds-initiative`: hero Alice Alpha, three Ogres with Ogre #2 grabbed (a plain name) at 25/60; a spec edits `amount` by hand (SC-600) |
   | `Initiative/twins.md` | TWO IDENTICAL `ds-initiative` blocks (Alice Alpha 30/30 + an Ogre, Malice 3) with prose above, between and below (SC-605: a Live Preview save of the upper tracker keeps its own half-typed quick-add and never gives it to the twin below) |
+  | `Montage/empty.md` | `ds-montage` with no heroes and no limits (0 / 0), round 1 of 2 (SC-438) |
+  | `Montage/fresh.md` | `ds-montage`: heroes Kira and Bram (empty skills lists), nothing logged, round 1 of 3, limits 3 successes / 2 failures |
+  | `Montage/mid.md` | `ds-montage` mid-game: a title and brief, Kira (Nature), Bram (Endurance), Osric (no `skills_used` list), Yenna (no round-1 entry: an empty past cell), round 2 of 3, limits 4 / 3, one success, one failure with a note, one assist |
+  | `Montage/brink.md` | 2 of 3 successes in round 2 (the "One success from Total Success" alert), Kira holding two skills |
+  | `Montage/acted.md` | both heroes have already acted in the round in play: the bar's "Log an action..." is disabled |
+  | `Montage/done.md` | Total Success (2 of 2 successes in round 1 of 3, one note): the done bar (Undo, Clear all), not reopenable |
+  | `Montage/failed.md` | Total Failure (2 of 2 failures, round 1 of 3): the done bar, not reopenable |
+  | `Montage/exhausted.md` | out of rounds (round 3 of 2), 3 successes / 1 failure, limits 5 / 5: Partial Success, the done bar with Back to round 2 and Reopen |
+  | `Montage/over-limit.md` | a hand-edited block past both limits (4 of 2 successes, 3 of 1 failures), round 2 of 3 |
+  | `Montage/wide.md` | twelve rounds, three heroes, round 1: the board scrolls and its hero column is pinned (SC-326, SC-490) |
+  | `Montage/hand-written.md` | hand-written YAML: Kira's `skills_used` is a scalar, Bram has no list, and Bram's round-1 entry holds an unrecognised result (`dodged`) |
+  | `Montage/two-blocks.md` | TWO different `ds-montage` blocks in one note with prose above, between and below |
+  | `Montage/twins.md` | TWO IDENTICAL `ds-montage` blocks (Kira, round 1 of 3, nothing logged) with prose above, between and below |
 
 - Edits are checked per fence: a click / type / double-click / press on an element inside `dse.block(lang, n)` declares that block
   as one the test edits (taking the scope and reading it declares nothing, SC-435), and
