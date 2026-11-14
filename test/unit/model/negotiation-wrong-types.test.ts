@@ -171,6 +171,24 @@ describe('SC-638 R3: a wrong-shaped structure is a plain error naming the key', 
 		expect((thrown as Error).message).not.toMatch(RAW_JS);
 	});
 
+	test.each([
+		['text (`hello`)', 'hello'],
+		['a list', '- a\n- b'],
+		['a number', '42'],
+		['true', 'true'],
+	])('a block that is %s is not a map of keys', (_label, body) => {
+		expect(() => parseLikePipeline(body)).toThrow('Invalid data: the block must be a map of keys.');
+		expect(() => parseNegotiationData(body)).toThrow('Invalid data: the block must be a map of keys.');
+	});
+
+	test('an empty block (nothing, whitespace, or only a comment) is a fresh default negotiation, not an error', () => {
+		for (const body of ['', '  \n  ', '# only a note to self']) {
+			const m = parse(parseYaml(body), body);
+			expect([m.current_patience, m.current_interest, m.motivations, m.pitfalls]).toEqual([5, 0, [], []]);
+			expect(m.currentArgument.motivationsUsed).toEqual([]);
+		}
+	});
+
 	test('the legacy entry point parseNegotiationData refuses them the same way, and a YAML syntax error is still its own message', () => {
 		expect(() => parseNegotiationData('motivations:\n  - Legacy')).toThrow("Invalid data: 'motivations' item 1 must be an object.");
 		expect(() => parseNegotiationData('name: [unclosed')).toThrow(/^Invalid YAML format: /);
