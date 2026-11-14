@@ -9,7 +9,8 @@
 // The safe default is "do nothing automatically": Keep everything takes initial focus
 // (§2.6) and the trash choice is an explicit, confirmed action (variant: danger).
 // Nothing this modal does is itself destructive — trashFile is a plugin.ts concern the
-// caller performs on `true`, and Obsidian's trash is always recoverable.
+// caller performs on `true`. That call is NOT always recoverable: it follows Obsidian's
+// "Deleted files" option, and under "Permanently delete" the folder is gone for good.
 import { Notice } from 'obsidian';
 import type { App } from 'obsidian';
 import { DseModal } from '@/framework/kit';

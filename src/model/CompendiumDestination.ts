@@ -67,6 +67,12 @@ export function isVaultRootFolder(folder: { path: string; isRoot?: () => boolean
 	return isVaultRootPath(folder.path) || (typeof folder.isRoot === 'function' && folder.isRoot());
 }
 
+/** The Notice shown when the Destination folder was changed while the "Existing compendium
+ *  folder found" window was open: the window's answer is dropped, nothing is moved or synced. */
+export const DESTINATION_CHANGED_NOTICE =
+	'Draw Steel Elements: the Destination folder changed while that window was open, so nothing was ' +
+	'moved or synced. Run Sync again.';
+
 /** The Notice shown when Sync / Migrate is refused because of the Destination folder. */
 export const DESTINATION_REFUSED_NOTICE =
 	"Draw Steel Elements: the Destination folder can't be the vault root (or outside the vault). " +

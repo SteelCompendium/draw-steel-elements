@@ -3,7 +3,7 @@ import type {Editor, MarkdownFileInfo, MarkdownView} from 'obsidian';
 import {DseSettingTab} from "@views/SettingsTab";
 import {LegacyCompendiumModal} from "@views/LegacyCompendiumModal";
 import {DSESettings, migrateSettings} from "@model/Settings";
-import {DESTINATION_REFUSED_NOTICE, isVaultRootFolder, isVaultRootPath, resolveCompendiumDestination} from "@model/CompendiumDestination";
+import {DESTINATION_CHANGED_NOTICE, DESTINATION_REFUSED_NOTICE, isVaultRootFolder, isVaultRootPath, resolveCompendiumDestination} from "@model/CompendiumDestination";
 import {CompendiumSyncService, SyncOptions, SYNC_BUSY_NOTICE} from "@/data/CompendiumSyncService";
 import {CompendiumMigrationService} from "@/data/CompendiumMigration";
 import type {MigrationPlan, MigrationReport} from "@/data/CompendiumMigration";
@@ -800,6 +800,14 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
                                 // while this window sat open — refuse before trashing anything.
                                 const latest = this.requireSyncOptions();
                                 if (latest === null) return;
+                                // SC-643 (review L1): the window named `options.root`. If the setting
+                                // now points somewhere else, that answer no longer describes what a
+                                // sync would write into — trash nothing and sync nothing; the user
+                                // runs Sync again and gets the first-sync check for the new folder.
+                                if (latest.root !== options.root) {
+                                    new Notice(DESTINATION_CHANGED_NOTICE, 8000);
+                                    return;
+                                }
                                 if (trashOldRoot) {
                                     // SC-643 (D3): the vault root is never handed to trashFile,
                                     // whatever path got us here.
