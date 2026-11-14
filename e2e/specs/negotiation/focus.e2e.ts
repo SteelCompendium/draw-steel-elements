@@ -15,7 +15,7 @@ describe('negotiation: keyboard focus after a save', () => {
 		await dse.press('Enter', menu);
 		await dse.waitFor(`document.querySelectorAll('.menu').length === 1`, 'the menu to open');
 		await dse.press('ArrowDown');
-		await dse.waitForWrite(BASIC, () => dse.press('Enter'));
+		await dse.waitForWrite(BASIC, () => dse.press('Enter', dse.aimedAt('negotiation.menu.reset')));
 		await dse.settle();
 		await dse.waitFor(`document.querySelectorAll('.menu').length === 0`, 'the menu to close');
 		expect(patienceOf(await blockOf(BASIC))).toBe(3);

@@ -2,7 +2,7 @@
 // a reset can start from is in the jsdom matrix; here a real click / Enter opens the native menu and a real click on its item resets the
 // block. Negotiation/basic.md: Interest 3 / Patience 3 (both initial). Negotiation/ended.md: Patience 0 at Interest 3, both motivations spent.
 import { expect } from '@wdio/globals';
-import { dse } from '../../driver/dse';
+import { dse, knownBug } from '../../driver/dse';
 import { argOf, BASIC, blockOf, chooseReset, ENDED, interestOf, interestSeal, openMenu, openNego, patienceOf, patienceSeal, pressedOf, shown, TABS, tierTexts } from '../../driver/negotiation';
 
 describe('negotiation: Reset negotiation', () => {
@@ -68,4 +68,44 @@ describe('negotiation: Reset negotiation', () => {
 		});
 		expect(await shown()).toMatchObject({ patience: [3], interest: [3] });
 	});
+
+	it('[NEGO-R05] Reset chosen from the keyboard (Enter on the options button, ArrowDown, Enter on the Reset item) resets the moved negotiation in one write, with the Notice', async () => {
+		const root = await openNego(BASIC);
+		await dse.waitForWrite(BASIC, () => dse.click(patienceSeal(root, 1)));
+		await dse.waitForWrite(BASIC, () => dse.click(root.control('negotiation.spent', { nth: 0 })));
+		const menu = root.control('negotiation.menu');
+		await dse.tabTo(menu, TABS);
+		await dse.press('Enter', menu);
+		await dse.waitFor(`document.querySelectorAll('.menu').length === 1`, 'the menu to open');
+		await dse.press('ArrowDown'); // the menu's own Scope selects its first item
+		const w = await dse.waitForWrite(BASIC, () => dse.press('Enter', dse.aimedAt('negotiation.menu.reset')));
+		expect(w.count).toBe(1);
+		await dse.waitFor(`document.querySelectorAll('.menu').length === 0`, 'the menu to close');
+		await dse.waitFor(`[...document.querySelectorAll('.notice')].some((n) => n.textContent.includes('Negotiation reset to initial state'))`, 'the reset Notice');
+		const b = await blockOf(BASIC);
+		expect([patienceOf(b), interestOf(b)]).toEqual([3, 3]);
+		expect(b.motivations!.map((m) => m.hasBeenAppealedTo ?? false)).toEqual([false, false]);
+		expect(await shown()).toMatchObject({ patience: [3], interest: [3], ended: null });
+		expect(await pressedOf('negotiation.spent')).toEqual(['false', 'false']);
+	});
+
+	knownBug('SC-648', '[NEGO-R06] the options menu opened with Enter on the button appears beside the button, not in the window corner', async () => {
+		const root = await openNego(BASIC);
+		const menu = root.control('negotiation.menu');
+		await dse.tabTo(menu, TABS);
+		await dse.press('Enter', menu);
+		try {
+			await dse.waitFor(`document.querySelectorAll('.menu').length === 1`, 'the menu to open');
+			// within 300 px of the button's box in both directions (a tolerance, not exact coordinates)
+			const near = await dse.page<boolean>(`(() => {
+				const b = document.querySelector('.markdown-reading-view [data-dse-control="negotiation.menu"]').getBoundingClientRect();
+				const m = document.querySelector('.menu').getBoundingClientRect();
+				return m.right >= b.left - 300 && m.left <= b.right + 300 && m.bottom >= b.top - 300 && m.top <= b.bottom + 300;
+			})()`);
+			expect(near).toBe(true);
+		} finally {
+			await dse.press('Escape');
+			await dse.waitFor(`document.querySelectorAll('.menu').length === 0`, 'the menu to close');
+		}
+	}, { failsWith: /Expected: true/ });
 });

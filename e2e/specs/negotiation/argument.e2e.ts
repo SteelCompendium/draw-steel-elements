@@ -86,6 +86,46 @@ describe('negotiation: the modifiers', () => {
 	});
 });
 
+describe('negotiation: the modifier checkboxes by keyboard and by their labels', () => {
+	it('[NEGO-A12] Space on a focused modifier checkbox toggles it: a caught lie, the same argument, and Reuse once a spent motivation is appealed to', async () => {
+		const root = await openNego(SPENT);
+		const lie = root.control('negotiation.mod.lie');
+		await dse.tabTo(lie, TABS);
+		await dse.waitForWrite(SPENT, () => dse.press('Space', lie));
+		expect((await mods()).lie.checked).toBe(true);
+		expect(argOf(await blockOf(SPENT)).lieUsed).toBe(true);
+		expect(await focusState()).toMatchObject({ ctl: 'negotiation.mod.lie', inCard: true });
+		const same = root.control('negotiation.mod.same');
+		await dse.tabTo(same, 4);
+		await dse.waitForWrite(SPENT, () => dse.press('Space', same));
+		expect((await mods()).same.checked).toBe(true);
+		expect(argOf(await blockOf(SPENT)).sameArgumentUsed).toBe(true);
+		await dse.waitForWrite(SPENT, () => dse.click(root.control('negotiation.appeal.motivation', { nth: 0 }))); // the spent one: Reuse arms itself
+		expect((await mods()).reuse).toMatchObject({ checked: true, disabled: false });
+		const reuse = root.control('negotiation.mod.reuse');
+		await dse.tabTo(reuse, TABS);
+		await dse.waitForWrite(SPENT, () => dse.press('Space', reuse));
+		expect((await mods()).reuse.checked).toBe(false);
+		expect(argOf(await blockOf(SPENT)).reusedMotivation).toBe(false);
+	});
+
+	it('[NEGO-A13] a click on a modifier line\'s text toggles its checkbox (the label is the large target), one write each', async () => {
+		const root = await openNego(SPENT);
+		await dse.waitForWrite(SPENT, () => dse.click(root.control('negotiation.mod.lie.label')));
+		expect((await mods()).lie.checked).toBe(true);
+		expect(argOf(await blockOf(SPENT)).lieUsed).toBe(true);
+		await dse.waitForWrite(SPENT, () => dse.click(root.control('negotiation.mod.same.label')));
+		expect((await mods()).same.checked).toBe(true);
+		expect(argOf(await blockOf(SPENT)).sameArgumentUsed).toBe(true);
+		await dse.waitForWrite(SPENT, () => dse.click(root.control('negotiation.appeal.motivation', { nth: 0 })));
+		await dse.waitForWrite(SPENT, () => dse.click(root.control('negotiation.mod.reuse.label')));
+		expect((await mods()).reuse.checked).toBe(false);
+		expect(argOf(await blockOf(SPENT)).reusedMotivation).toBe(false);
+		await dse.waitForWrite(SPENT, () => dse.click(root.control('negotiation.mod.lie.label'))); // and a second click on the text clears it again
+		expect((await mods()).lie.checked).toBe(false);
+	});
+});
+
 describe('negotiation: the tiers and Complete Argument', () => {
 	it('[NEGO-A06] a click on a tier chooses it (one at a time), marks it "chosen" and arms Complete, with no write', async () => {
 		const root = await openNego(BASIC);

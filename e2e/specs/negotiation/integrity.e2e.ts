@@ -5,7 +5,7 @@
 // in the motivation "Legacy" and in the pitfall "Pride".
 import { expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
-import { BASIC, blockOf, chooseReset, interestOf, openMenu, openNego, patienceOf, patienceSeal, TWO, UNKNOWN } from '../../driver/negotiation';
+import { BASIC, blockOf, chooseReset, interestOf, interestSeal, openMenu, openNego, patienceOf, patienceSeal, TWINS, TWO, UNKNOWN } from '../../driver/negotiation';
 
 describe('negotiation: the note and the other blocks around a write', () => {
 	it('[NEGO-X01] a Patience click in the SECOND of two blocks changes that block only', async () => {
@@ -41,7 +41,7 @@ describe('negotiation: the note and the other blocks around a write', () => {
 	});
 
 	it('[NEGO-X04] a hand edit made to the note while the card is open (the block and the prose) is still there after the next click', async () => {
-		const root = await openNego(BASIC);
+		await openNego(BASIC);
 		await dse.externalEdit(BASIC, `c.replace('ABOVE', 'ABOVE EDITED').replace('The Shire is life', 'The Shire is life EDITED')`);
 		await dse.waitFor(`document.querySelector('.markdown-reading-view [data-dse-element="negotiation"]')?.textContent.includes('The Shire is life EDITED')`, 'the card to show the hand edit');
 		await dse.waitForWrite(BASIC, () => dse.click(patienceSeal(dse.block('ds-negotiation'), 1)));
@@ -51,7 +51,6 @@ describe('negotiation: the note and the other blocks around a write', () => {
 		expect(patienceOf(await blockOf(BASIC))).toBe(1);
 		await dse.externalEdit(BASIC, `c.replace('ABOVE EDITED', 'ABOVE')`); // put the prose back: the driver checks every note for text outside its blocks
 		await dse.settle();
-		void root;
 	});
 
 	it('[NEGO-X05] a write adds no key the block never declared: no currentArgument, no current_interest, no hasBeenAppealedTo, no reason or name rewritten', async () => {
@@ -62,11 +61,32 @@ describe('negotiation: the note and the other blocks around a write', () => {
 		expect(b.motivations!.map((m) => Object.keys(m).sort())).toEqual([['name', 'reason'], ['name', 'reason']]);
 	});
 
+	it('[NEGO-X08] a click in the SECOND of two IDENTICAL blocks changes that block only, and then a click in the FIRST changes the first only', async () => {
+		const bodies = async (): Promise<string[]> => [...(await dse.noteText(TWINS)).matchAll(/```ds-negotiation\n([\s\S]*?)\n```/g)].map((m) => m[1]);
+		const before = await (async () => { await openNego(TWINS, 1); return bodies(); })();
+		expect(before[0]).toBe(before[1]);
+		await dse.waitForWrite(TWINS, () => dse.click(patienceSeal(dse.block('ds-negotiation', 1), 1)));
+		await dse.settle();
+		const mid = await bodies();
+		expect(mid[0]).toBe(before[0]);
+		expect(mid[1]).toContain('current_patience: 1');
+		await dse.waitForWrite(TWINS, () => dse.click(interestSeal(dse.block('ds-negotiation', 0), 4)));
+		await dse.settle();
+		const after = await bodies();
+		expect(after[0]).toContain('current_interest: 4');
+		expect(after[0]).not.toContain('current_patience');
+		expect(after[1]).toBe(mid[1]);
+		const text = await dse.noteText(TWINS);
+		expect(text.startsWith('# Twins\n\nABOVE\n\n')).toBe(true);
+		expect(text).toContain('\n\nBETWEEN\n\n');
+		expect(text.endsWith('\n\nBELOW\n')).toBe(true);
+	});
+
 	knownBug('SC-637', '[NEGO-X06] a write keeps a top-level key the element does not know', async () => {
 		const root = await openNego(UNKNOWN);
 		await dse.waitForWrite(UNKNOWN, () => dse.click(patienceSeal(root, 1)));
 		expect(await blockOf(UNKNOWN)).toMatchObject({ note_to_self: 'The Duke lies about the toll', current_patience: 1 });
-	});
+	}, { failsWith: /note_to_self/ });
 
 	knownBug('SC-637', '[NEGO-X07] a write keeps a key the element does not know inside a motivation and inside a pitfall', async () => {
 		const root = await openNego(UNKNOWN);
@@ -74,5 +94,5 @@ describe('negotiation: the note and the other blocks around a write', () => {
 		const b = await blockOf(UNKNOWN);
 		expect(b.motivations![0]).toMatchObject({ name: 'Legacy', gm_note: 'ask about the sister' });
 		expect(b.pitfalls![0]).toMatchObject({ name: 'Pride', gm_note: 'never mention the war' });
-	});
+	}, { failsWith: /gm_note/ });
 });
