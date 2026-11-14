@@ -20,6 +20,7 @@
 // (§4.7). F1 §4.5: all listeners are owner-bound.
 import type { Component } from 'obsidian';
 import { tooltip } from './tooltip';
+import { stampControl } from './controlId';
 
 export type PowerRollTier = 'low' | 'mid' | 'high' | 'crit';
 
@@ -55,6 +56,10 @@ export interface PowerRollPanelOptions {
 	/** Fired on USER selection changes only — never by select(). */
 	onSelect?: (tier: PowerRollTier) => void;
 	renderMd?: RenderMdCallback;
+	/** SC-439: stable `data-dse-control` id for the radiogroup (selectable mode only; attribute only). */
+	control?: string;
+	/** SC-439: stable `data-dse-control` id stamped on every radio row (selectable mode only; repeated: `nth`; attribute only). */
+	rowControl?: string;
 }
 
 export interface PowerRollPanelHandle {
@@ -133,6 +138,7 @@ export function powerRollPanel(
 		// Headless panels fall back gracefully: no aria-labelledby (never a dangling
 		// id reference), selection semantics unchanged.
 		rowsEl.setAttribute('role', 'radiogroup');
+		stampControl(rowsEl, opts.control);
 		if (headEl) rowsEl.setAttribute('aria-labelledby', headEl.id);
 	}
 
@@ -148,6 +154,7 @@ export function powerRollPanel(
 			// The radiogroup's owned elements are radios (keyboard operability stays
 			// native — a real <button> — with the radio role/state painted on top).
 			rowEl.setAttribute('role', 'radio');
+			stampControl(rowEl, opts.rowControl);
 		}
 		rowEl.setAttribute('data-tier', row.tier);
 		tierBadge(rowEl, row.tier);

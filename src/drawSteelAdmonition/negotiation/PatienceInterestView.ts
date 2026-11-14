@@ -93,6 +93,8 @@ export class PatienceInterestView {
 				fill: 'remaining',
 				disabled: !this.canPersist,
 				onChange: (n) => this.setPatience(n),
+				control: 'negotiation.patience',
+				slotControl: 'negotiation.patience.seal',
 			},
 			this.owner,
 		);
@@ -130,6 +132,8 @@ export class PatienceInterestView {
 				slotLabel: (n) => `Interest ${n}: ${this.data.offerFor(n)}`,
 				disabled: !this.canPersist,
 				onChange: (n) => this.setInterest(n),
+				control: 'negotiation.interest',
+				slotControl: 'negotiation.interest.seal',
 			},
 			this.owner,
 		);

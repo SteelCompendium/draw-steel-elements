@@ -27,7 +27,7 @@
 // Read-only hosts (F1 §4.4): chips and checkboxes are REAL-disabled with no listeners, the
 // panel renders STATIC and the Complete footer is omitted entirely — no dead-end affordances.
 import { Component, setIcon } from 'obsidian';
-import { iconButton, powerRollPanel, setPressedState, tooltip } from '@/framework/kit';
+import { iconButton, powerRollPanel, setPressedState, stampControl, tooltip } from '@/framework/kit';
 import type { IconButtonHandle, PowerRollPanelHandle, PowerRollTier, RenderMdCallback } from '@/framework/kit';
 import { NegotiationData } from '@model/NegotiationData';
 import { ArgumentPowerRoll, ArgumentResult } from '@model/ArgumentPowerRolls';
@@ -155,6 +155,7 @@ export class ArgumentView {
 		const chip = parent.createEl('button', { cls: 'dse-optchip dse-nt__chip' });
 		chip.setAttribute('type', 'button');
 		chip.setAttribute('data-kind', kind);
+		stampControl(chip, `negotiation.appeal.${kind}`);
 		if (!this.canPersist) chip.disabled = true;
 		else this.owner.registerDomEvent(chip, 'click', onClick);
 		return chip;
@@ -240,18 +241,21 @@ export class ArgumentView {
 			'Reuses a Motivation that has already been appealed to',
 			'If the Heroes try to appeal to a Motivation multiple times: Interest remains and Patience decreases by 1.',
 			(cb) => (arg.reusedMotivation = cb.checked),
+			'negotiation.mod.reuse',
 		);
 		this.lieLine = this.modLine(
 			mods,
 			'NPC caught a lie and is offended',
 			'If the NPC catches a lie: Arguments that fail to increase Interest will lose an additional Interest.',
 			(cb) => (arg.lieUsed = cb.checked),
+			'negotiation.mod.lie',
 		);
 		this.sameLine = this.modLine(
 			mods,
 			'Argument has already been made (w/o Motivation)',
 			'If the Heroes try to use the same Argument (w/o Motivation): Test automatically gets tier-1 result.',
 			(cb) => (arg.sameArgumentUsed = cb.checked),
+			'negotiation.mod.same',
 		);
 	}
 
@@ -261,9 +265,11 @@ export class ArgumentView {
 		text: string,
 		tip: string,
 		apply: (cb: HTMLInputElement) => void,
+		control: string,
 	): ModLine {
 		const line = parent.createEl('label', { cls: 'dse-nt__check' });
 		const checkbox = line.createEl('input', { type: 'checkbox' });
+		stampControl(checkbox, control);
 		line.createSpan({ text });
 		tooltip(line, tip);
 		if (!this.canPersist) checkbox.disabled = true;
@@ -365,6 +371,8 @@ export class ArgumentView {
 					this.syncFooter();
 				},
 				renderMd: this.renderMd,
+				control: 'negotiation.tier',
+				rowControl: 'negotiation.tier.row',
 			},
 			this.rollOwner,
 		);
@@ -400,6 +408,7 @@ export class ArgumentView {
 					'Complete Argument: Resolve the Argument using the current state of motivations, pitfalls, etc.\nRequires a Power Roll tier to be selected.',
 				text: 'Complete Argument',
 				disabled: true, // armed by tier selection (a radiogroup pick)
+				control: 'negotiation.complete',
 				onClick: () => this.completeArgument(),
 			},
 			this.owner,

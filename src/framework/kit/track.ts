@@ -28,6 +28,7 @@
 // views, F1 §4.4) get REAL disabled buttons and no listeners at all: visible state, no
 // write path.
 import type { Component } from 'obsidian';
+import { stampControl } from './controlId';
 
 export interface TrackOptions {
 	orientation: 'horizontal' | 'vertical';
@@ -50,6 +51,10 @@ export interface TrackOptions {
 	disabled?: boolean;
 	/** Fired on USER selection changes only (click / keyboard) — never by setValue(). */
 	onChange?: (n: number) => void;
+	/** SC-439: stable `data-dse-control` id for the radiogroup (the node the arrow keys listen on; attribute only). */
+	control?: string;
+	/** SC-439: stable `data-dse-control` id stamped on every seal (repeated: addressed by `nth`; attribute only). */
+	slotControl?: string;
 }
 
 export interface TrackHandle {
@@ -72,6 +77,7 @@ export function track(parent: HTMLElement, opts: TrackOptions, owner: Component)
 	const rootEl = parent.createDiv({ cls: `dse-track dse-track--${opts.orientation}` });
 	rootEl.setAttribute('role', 'radiogroup');
 	rootEl.setAttribute('aria-label', opts.label);
+	stampControl(rootEl, opts.control);
 
 	// Horizontal: the rail is two spans behind the seals (a dashed base and a solid segment
 	// whose width the CSS derives from --dse-track-fill). The vertical rail is drawn per
@@ -92,6 +98,7 @@ export function track(parent: HTMLElement, opts: TrackOptions, owner: Component)
 		slot.setAttribute('type', 'button'); // never a form submit
 		slot.setAttribute('role', 'radio');
 		slot.setAttribute('data-value', String(n));
+		stampControl(slot, opts.slotControl);
 		slot.setAttribute('aria-label', opts.slotLabel ? opts.slotLabel(n) : `${opts.label} ${n}`);
 		if (i === 0) slot.setAttribute('data-edge', 'first');
 		else if (i === order.length - 1) slot.setAttribute('data-edge', 'last');

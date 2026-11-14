@@ -845,6 +845,8 @@ export const editorLivePreviewField = {} as unknown;
 export const editorInfoField = {} as unknown;
 
 export class MenuItem {
+	/** SC-439: the real MenuItem's runtime `dom` (the `.menu-item` node; absent from the typings). */
+	dom = typeof document === 'undefined' ? undefined : document.createElement('div');
 	title = '';
 	icon = '';
 	onClickCallback: ((evt?: any) => any) | null = null;

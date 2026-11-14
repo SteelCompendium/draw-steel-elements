@@ -14,6 +14,7 @@
 import type { Component } from 'obsidian';
 import { setIcon } from 'obsidian';
 import type { SessionPersist } from '../session';
+import { stampControl } from './controlId';
 
 export interface TabSpec {
 	/** Stable tab id — the onSelect/select()/session currency (not a DOM id). */
@@ -22,6 +23,8 @@ export interface TabSpec {
 	label: string;
 	/** Optional Lucide icon rendered before the label. */
 	icon?: string;
+	/** SC-439: stable `data-dse-control` id for this tab's button (attribute only). */
+	control?: string;
 }
 
 export interface TabsOptions {
@@ -32,6 +35,8 @@ export interface TabsOptions {
 	persist?: SessionPersist;
 	/** Fired on USER selection changes only — never by select(). */
 	onSelect?: (id: string) => void;
+	/** SC-439: stable `data-dse-control` id for the tablist (the node the arrow keys listen on; attribute only). */
+	control?: string;
 }
 
 export interface TabsHandle {
@@ -52,6 +57,7 @@ export function tabs(parent: HTMLElement, opts: TabsOptions, owner: Component): 
 	const rootEl = parent.createDiv({ cls: 'dse-tabs' });
 	const tablistEl = rootEl.createDiv({ cls: 'dse-tabs__list' });
 	tablistEl.setAttribute('role', 'tablist');
+	stampControl(tablistEl, opts.control);
 
 	const ids = opts.tabs.map((t) => t.id);
 	const tabEls = new Map<string, HTMLButtonElement>();
@@ -61,6 +67,7 @@ export function tabs(parent: HTMLElement, opts: TabsOptions, owner: Component): 
 		const tabEl = tablistEl.createEl('button', { cls: 'dse-tabs__tab' });
 		tabEl.setAttribute('type', 'button');
 		tabEl.setAttribute('role', 'tab');
+		stampControl(tabEl, spec.control);
 		// Index-based DOM ids: unique per mount, immune to non-id-safe tab ids.
 		tabEl.id = `${uid}-tab-${i}`;
 		tabEl.setAttribute('aria-controls', `${uid}-panel-${i}`);

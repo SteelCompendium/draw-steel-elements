@@ -31,7 +31,7 @@
 // then persist(). Negotiation stays NOT collapsible (no kit mountComponentWrapper).
 import { Component, Menu, Notice } from 'obsidian';
 import { ElementView } from '@/framework/view';
-import { cardHead, iconButton, tabs } from '@/framework/kit';
+import { cardHead, iconButton, stampControl, tabs } from '@/framework/kit';
 import type { RenderMdCallback } from '@/framework/kit';
 import { NegotiationData } from '@model/NegotiationData';
 import { PatienceInterestView } from '@drawSteelAdmonition/negotiation/PatienceInterestView';
@@ -133,16 +133,22 @@ export class NegotiationView extends ElementView<NegotiationData> {
 				icon: 'more-vertical',
 				label: 'Negotiation options',
 				variant: 'ghost',
+				control: 'negotiation.menu',
 				onClick: (event: MouseEvent) => {
 					const m = new Menu();
-					m.addItem((item) =>
+					m.addItem((item) => {
 						item
 							.setTitle('Reset negotiation')
 							.setIcon('rotate-ccw')
 							// CB-4: bound to THIS view instance (one per block) — never a
 							// shared processor field.
-							.onClick(() => void this.resetNegotiation()),
-					);
+							.onClick(() => void this.resetNegotiation());
+						// SC-439: the menu is Obsidian's native Menu, outside the card. Its item's own node
+						// (`MenuItem.dom`, a runtime field the typings leave out) carries the control id so the
+						// e2e driver can address it; attribute only, and a no-op where the field is absent.
+						const itemEl = (item as unknown as { dom?: HTMLElement }).dom;
+						if (itemEl) stampControl(itemEl, 'negotiation.menu.reset');
+					});
 					m.showAtMouseEvent(event);
 				},
 			},
@@ -182,9 +188,10 @@ export class NegotiationView extends ElementView<NegotiationData> {
 			container,
 			{
 				tabs: [
-					{ id: 'argument', label: 'Make an Argument', icon: 'message-circle' },
-					{ id: 'learn-more', label: 'Learn Motivation/Pitfall', icon: 'help-circle' },
+					{ id: 'argument', label: 'Make an Argument', icon: 'message-circle', control: 'negotiation.tab.argument' },
+					{ id: 'learn-more', label: 'Learn Motivation/Pitfall', icon: 'help-circle', control: 'negotiation.tab.learn-more' },
 				],
+				control: 'negotiation.tablist',
 				// Legacy default; a session-remembered selection (same blockKey/slot as
 				// the Plan 05 port) wins inside the kit.
 				selected: 'argument',

@@ -14,7 +14,7 @@
 // no write path. Persistence is unchanged: a user toggle persists, rendering never writes.
 import { setIcon } from 'obsidian';
 import type { Component } from 'obsidian';
-import { setPressedState, tooltip } from '@/framework/kit';
+import { setPressedState, stampControl, tooltip } from '@/framework/kit';
 import { NegotiationData } from '@model/NegotiationData';
 
 interface MotivationRow {
@@ -79,6 +79,7 @@ export class MotivationsPitfallsView {
 			const chipEl = rowEl.createEl('button', { cls: 'dse-optchip dse-nt__chip' });
 			chipEl.setAttribute('type', 'button');
 			chipEl.setAttribute('data-kind', 'spent');
+			stampControl(chipEl, 'negotiation.spent');
 			if (!this.canPersist) chipEl.disabled = true;
 			// Read-only: no listener at all — there is no write path to reach (§4.4).
 			else {
