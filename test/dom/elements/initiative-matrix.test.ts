@@ -953,7 +953,7 @@ describe('[F] keyboard focus survives the actions that rebuild the whole tracker
 			expect(document.activeElement).toBe(advance);
 		});
 
-		test('[F29] a keyboard press on a remove button keeps focus in the row too (the successor control, with the keyboard ring)', async () => {
+		test('[F29] a keyboard press on a remove button keeps focus in the row too (the successor control)', async () => {
 			const { root, flush } = await mount(CONDITIONED);
 			const grabbed = remove(root, 0);
 			grabbed.focus();
