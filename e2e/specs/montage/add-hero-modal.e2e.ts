@@ -1,7 +1,7 @@
-// SC-438 [H]: the Add a hero window: the name field, Add (disabled until the name has a non-space character), Cancel and every way out, by pointer
+// SC-438 [H]: the Add a hero window: the name field, Add (disabled until the name has a non-space character and is not on the board already), Cancel and every way out, by pointer
 // and keyboard. Opened from the chrome item or the board header "+". Montage/fresh.md: Kira and Bram. Montage/empty.md: no heroes.
 import { expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
+import { dse } from '../../driver/dse';
 import { blockOf, dismiss, EMPTY, expectText, FRESH, modalsOpen, openAddHero } from '../../driver/montage';
 
 describe('montage: the Add a hero window', () => {
@@ -82,11 +82,41 @@ describe('montage: the Add a hero window', () => {
 		await expect(root.control({ css: '.dse-mt__board-name[data-hero="Osric"]' })).toBeExisting();
 	});
 
-	knownBug('SC-627', '[MONT-H07] a name already on the board is refused: no second "Kira" is written', async () => {
+	it('[MONT-H07] a name already on the board is refused: Add is disabled, the window says why, and no second "Kira" is written', async () => {
 		const { modal } = await openAddHero(FRESH);
+		const warn = modal.control({ css: '.dse-mt__sheet-warn' });
+		await expect(warn).not.toBeDisplayed();
 		await dse.type(modal.control('montage.add-hero.name'), 'Kira');
-		await dse.click(modal.control('montage.add-hero.submit'));
-		await dse.settle();
+		await expect(modal.control('montage.add-hero.submit')).toBeDisabled();
+		await expect(warn).toBeDisplayed();
+		await expectText(warn, 'Kira is already on the board');
+		await dse.expectNoWrite(FRESH, () => dse.click(modal.control('montage.add-hero.submit')));
+		await expect(modal.root).toBeExisting();
 		expect((await blockOf(FRESH)).participants!.filter((p) => p.name === 'Kira')).toHaveLength(1);
+		await dismiss(modal);
+	});
+
+	it('[MONT-H08] a padded name in other casing is refused too, and the message gives the board\'s spelling', async () => {
+		const { modal } = await openAddHero(FRESH);
+		await dse.type(modal.control('montage.add-hero.name'), '  bRAM ');
+		await expect(modal.control('montage.add-hero.submit')).toBeDisabled();
+		await expectText(modal.control({ css: '.dse-mt__sheet-warn' }), 'Bram is already on the board');
+		await dse.expectNoWrite(FRESH, () => dse.click(modal.control('montage.add-hero.submit')));
+		expect((await blockOf(FRESH)).participants).toHaveLength(2);
+		await dismiss(modal);
+	});
+
+	it('[MONT-H09] typing on from a taken name to a fresh one hides the message, enables Add and adds exactly one hero', async () => {
+		const { modal } = await openAddHero(FRESH);
+		const warn = modal.control({ css: '.dse-mt__sheet-warn' });
+		await dse.type(modal.control('montage.add-hero.name'), 'Kira');
+		await expect(warn).toBeDisplayed();
+		await dse.type(modal.control('montage.add-hero.name'), 'n');
+		await expect(warn).not.toBeDisplayed();
+		await expect(modal.control('montage.add-hero.submit')).toBeEnabled();
+		const w = await dse.waitForWrite(FRESH, () => dse.click(modal.control('montage.add-hero.submit')));
+		expect(w.count).toBe(1);
+		await expect(modal.root).not.toBeExisting();
+		expect((await blockOf(FRESH)).participants!.map((p) => p.name)).toEqual(['Kira', 'Bram', 'Kiran']);
 	});
 });

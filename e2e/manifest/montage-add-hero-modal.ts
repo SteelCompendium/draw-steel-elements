@@ -1,7 +1,7 @@
 // MontageAddHeroModal (src/elements/montage/ConfigModals.ts): "Add a hero", a name field with Cancel / Add (SC-438). Opened by the chrome
-// panel's "Add a hero" item or the board header's "+". Add stays real-disabled until the name has a non-space character.
+// panel's "Add a hero" item or the board header's "+". Add stays real-disabled until the name has a non-space character and is not already on the board (SC-627).
 // Obsidian's own X and backdrop are host ids the driver resolves from its selectors.
-// `rows` cite the SC-438 scenario group H: H01 add, H02 empty / blank name, H03 cancel, H04 Escape / close / backdrop, H05 keyboard.
+// `rows` cite the SC-438 scenario group H: H01 add, H02 empty / blank name, H03 cancel, H04 Escape / close / backdrop, H05 keyboard, H07-H09 a name already on the board (SC-627).
 import { c, surface } from './surface';
 
 export default surface('montage-add-hero-modal', {
