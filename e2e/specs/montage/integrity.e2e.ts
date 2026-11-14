@@ -131,4 +131,26 @@ describe('montage: the note and the other blocks around a write', () => {
 		expect(b).toMatchObject({ table_notes: 'keep me' });
 		expect(b.entries![0]).toMatchObject({ hero: 'Kira', round: 1, dc: 12 });
 	});
+
+	it('[MONT-X13] a hand edit to a key the product does not know (top level and inside an entry), made while the block is drawn, is kept by the next write', async () => {
+		await dse.openNote(UNKNOWN);
+		await dse.externalEdit(UNKNOWN, `c.replace('table_notes: keep me', 'table_notes: edited by hand').replace('dc: 12', 'dc: 14')`);
+		await dse.settle();
+		const root = dse.block(MONTAGE);
+		await dse.waitForWrite(UNKNOWN, () => dse.click(root.control('montage.quick.success', { nth: 0 })));
+		const b = await blockOf(UNKNOWN);
+		expect(b).toMatchObject({ table_notes: 'edited by hand' });
+		expect(b.entries![0]).toMatchObject({ dc: 14 });
+	});
+
+	it('[MONT-X14] a key the product does not know that was deleted by hand while the block is drawn does not come back on the next write', async () => {
+		await dse.openNote(UNKNOWN);
+		await dse.externalEdit(UNKNOWN, `c.replace('table_notes: keep me\\n', '').replace('    dc: 12\\n', '')`);
+		await dse.settle();
+		const root = dse.block(MONTAGE);
+		await dse.waitForWrite(UNKNOWN, () => dse.click(root.control('montage.quick.success', { nth: 0 })));
+		const b = await blockOf(UNKNOWN);
+		expect('table_notes' in b).toBe(false);
+		expect('dc' in b.entries![0]).toBe(false);
+	});
 });
