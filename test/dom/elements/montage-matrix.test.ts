@@ -1257,6 +1257,64 @@ describe('[X] integrity: what a montage write leaves alone', () => {
 		expect(text().endsWith('\n```\n\nBELOW\n')).toBe(true);
 	});
 
+	// SC-625: the write paths the ACTIONS table leaves out. Two entries, each with keys of its own, so a path that removes or rewrites one can be checked against the other.
+	const OWN_TWO = [
+		'table_notes: keep me', 'rounds: 3', 'success_limit: 9', 'failure_limit: 9', 'successes: 2', 'failures: 0',
+		'participants:', '  - name: Kira', '    skills_used: [Nature, Insight]', '  - name: Bram', '    skills_used: []',
+		'entries:',
+		'  - hero: Kira', '    round: 1', '    result: success', '    skill: Nature', '    dc: 12',
+		'  - hero: Kira', '    round: 2', '    result: success', '    skill: Insight', '    dc: 15', '    tag: second',
+		'current_round: 2', 'zz_after: 1',
+	].join('\n');
+	const FIRST = { hero: 'Kira', round: 1, result: 'success', skill: 'Nature', dc: 12 };
+	const SECOND = { hero: 'Kira', round: 2, result: 'success', skill: 'Insight', dc: 15, tag: 'second' };
+	const cellsOf = (root: HTMLElement): HTMLElement[] => Array.from(root.querySelectorAll<HTMLElement>('[data-dse-control="montage.cell"]'));
+	const mountOwnTwo = (body = OWN_TWO) => mountNote(`ABOVE\n\n\`\`\`ds-montage\n${body}\n\`\`\`\n\nBELOW\n`);
+
+	const OWN_TWO_PATHS: Array<[string, (root: HTMLElement) => void, (entries: Array<Record<string, unknown>>) => void]> = [
+		['Undo', (root) => ctl(root, 'montage.bar.undo').click(), (e) => expect(e).toEqual([FIRST])],
+		['the sheet edit of an action (a note and another result)', (root) => {
+			cellsOf(root)[0].click();
+			const sheet = modalOf('montage.log.submit');
+			type(ctl<HTMLTextAreaElement>(sheet, 'montage.log.note'), 'edited note');
+			ctl(sheet, 'montage.log.result.failure').click();
+			ctl(sheet, 'montage.log.submit').click();
+		}, (e) => {
+			expect(e[0]).toEqual({ hero: 'Kira', round: 1, result: 'failure', skill: 'Nature', note: 'edited note', dc: 12 });
+			expect(Object.keys(e[0])).toEqual(['hero', 'round', 'result', 'skill', 'note', 'dc']);
+			expect(e[1]).toEqual(SECOND);
+		}],
+		['the sheet Remove of an action', (root) => { cellsOf(root)[0].click(); ctl(modalOf('montage.log.remove'), 'montage.log.remove').click(); }, (e) => expect(e).toEqual([SECOND])],
+		['Back to round', (root) => ctl(root, 'montage.bar.back').click(), (e) => expect(e).toEqual([FIRST, SECOND])],
+	];
+
+	test.each(OWN_TWO_PATHS)('[X11] %s keeps the keys the montage does not know, at the top of the block and on the actions that stay', async (_name, act, entriesAre) => {
+		const { root, flush, text } = await mountOwnTwo();
+		act(root);
+		await flush();
+		const data = parseYaml(blocksOf(text())[0]);
+		expect(data.table_notes).toBe('keep me');
+		expect(data.zz_after).toBe(1);
+		expect(Object.keys(data).slice(-2)).toEqual(['table_notes', 'zz_after']);
+		entriesAre(data.entries);
+	});
+
+	test('[X12] Clear all on a finished montage clears the log and keeps the top-level keys; Reopen on one that ran out of rounds keeps the actions\' keys too', async () => {
+		let m = await mountOwnTwo(OWN_TWO.replace('success_limit: 9', 'success_limit: 2')); // the success limit is reached
+		ctl(m.root, 'montage.bar.clear-all').click();
+		await m.flush();
+		let data = parseYaml(blocksOf(m.text())[0]);
+		expect(data.entries).toBeUndefined();
+		expect([data.table_notes, data.zz_after]).toEqual(['keep me', 1]);
+		document.body.innerHTML = '';
+		m = await mountOwnTwo(OWN_TWO.replace('current_round: 2', 'current_round: 4')); // out of rounds, no limit reached
+		ctl(m.root, 'montage.bar.reopen').click();
+		await m.flush();
+		data = parseYaml(blocksOf(m.text())[0]);
+		expect(data.entries).toEqual([FIRST, SECOND]);
+		expect([data.table_notes, data.zz_after]).toEqual(['keep me', 1]);
+	});
+
 	test('[X07] an edit the Director made to the prose above the block after it was drawn is kept by the write (the splice re-reads the note)', async () => {
 		const note = vaultNote('fresh');
 		const { app, root, flush, text } = await mountNote(note);
