@@ -24,7 +24,7 @@ import { Creature, CreatureInstance, EnemyGroup, Condition } from '@drawSteelAdm
 // (fix round, HIGH-1) is the PERSISTED-flag-driven per-minion Stamina step while
 // captained, for the kill-ladder divisor below — never the live `captainStaminaBonus`
 // gate, which can disagree with the persisted pool max (see that helper's doc comment).
-import { foldedCaptainStaminaBonus, minionPoolMaxOf, minionPoolOf, setMinionPool } from '@drawSteelAdmonition/EncounterData';
+import { foldedCaptainStaminaBonus, minionCreatures, minionPoolMaxOf, minionPoolOf, setMinionPool } from '@drawSteelAdmonition/EncounterData';
 import { ConditionManager } from '@utils/Conditions';
 import { applyConditionColor, applyConditionEffect } from '@/elements/conditionColor';
 import { FALLBACK_CONDITION_ICON, titleCaseConditionKey } from '@/elements/conditionDisplay';
@@ -33,6 +33,27 @@ import { DseModal, iconButton, stampControl } from '@/framework/kit';
 import type { IconButtonHandle, StepperHandle } from '@/framework/kit';
 import { readAmount, staminaPreviewBar, staminaStepperRow, setButtonText } from './StaminaEditModal';
 import type { StaminaPreviewBarHandle } from './StaminaEditModal';
+
+/**
+ * SC-569: the pool modal's title. A group holding ONE minion squad keeps `"<group> - Minion Stamina Pool"`.
+ * With two or more squads the title also names this squad's creature, so two modals opened from one group
+ * can be told apart: `"<group> - <creature> - Minion Stamina Pool"`. When another squad in the group has the
+ * SAME creature name (two squads of "Flow of the River" in Delian Tomb W1 group 3 have identical minion rows),
+ * the creature gets `(squad N)`, N = 1-based position among the same-named squads in the tracker's order
+ * (`group.creatures` order, the order the roster renders them top to bottom).
+ *
+ * Only `squad_role === 'minion'` creatures are squads (`minionCreatures`); captains and attached creatures are
+ * not counted. The squad is found by identity, the way the modal addresses it (`this.creature`), and names are
+ * compared exactly as the tracker shows them (`creature.name`, no trimming or case folding).
+ */
+export function minionPoolModalTitle(group: EnemyGroup, creature: Creature): string {
+	const squads = minionCreatures(group);
+	if (squads.length < 2) return `${group.name} - Minion Stamina Pool`;
+	const sameName = squads.filter((c) => c.name === creature.name);
+	const position = sameName.indexOf(creature);
+	const label = sameName.length > 1 && position >= 0 ? `${creature.name} (squad ${position + 1})` : creature.name;
+	return `${group.name} - ${label} - Minion Stamina Pool`;
+}
 
 export class MinionStaminaPoolModal extends DseModal {
 	private group: EnemyGroup;
@@ -94,7 +115,7 @@ export class MinionStaminaPoolModal extends DseModal {
 	}
 
 	onOpen() {
-		this.setDseTitle(`${this.group.name} - Minion Stamina Pool`);
+		this.setDseTitle(minionPoolModalTitle(this.group, this.creature));
 
 		// SC-195 / C1: the pool's max is the persisted, ORIGINAL-count-based value (never
 		// recomputed from the alive count — that was the pre-existing divergence from the

@@ -13,7 +13,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { parseEncounterData, EncounterData, EnemyGroup, Creature } from '@drawSteelAdmonition/EncounterData';
-import { MinionStaminaPoolModal } from '@views/MinionStaminaPoolModal';
+import { MinionStaminaPoolModal, minionPoolModalTitle } from '@views/MinionStaminaPoolModal';
 import { StaminaEditModal } from '@views/StaminaEditModal';
 import { StaminaBar } from '@model/StaminaBar';
 import { replaceFenceBody } from '@/framework/host/fenceLine';
@@ -924,5 +924,89 @@ describe('SC-429: the four pool-modal defects', () => {
 			expect(infoEl(content).hidden).toBe(false);
 			expect(infoEl(content).textContent).toBe('Heal 1 stamina; dead minions stay dead.');
 		});
+	});
+});
+
+// SC-569: a group holding two or more minion squads titles each squad's pool modal with the squad's creature
+// name, plus "(squad N)" when another squad in the group has the same name (N = tracker order, top to bottom).
+describe('SC-569: the pool modal title names the squad when its group holds several', () => {
+	const squadGroup = (rows: string[]): EnemyGroup => {
+		const creatures = rows.map((r) => {
+			const [name, role] = r.split(':');
+			return { name, squad_role: role ?? 'minion', max_stamina: 4, amount: 2 };
+		});
+		return { name: 'Wolves', is_squad: true, creatures } as unknown as EnemyGroup;
+	};
+	const titles = (g: EnemyGroup): string[] =>
+		g.creatures.filter((c) => c.squad_role === 'minion').map((c) => minionPoolModalTitle(g, c));
+
+	test('one minion squad: the title is unchanged', () => {
+		const g = squadGroup(['Wolf']);
+		expect(titles(g)).toEqual(['Wolves - Minion Stamina Pool']);
+	});
+
+	test('one minion squad plus a captain and an attached creature: unchanged (they are not squads)', () => {
+		const g = squadGroup(['Wolf', 'Alpha:captain', 'Rider:attached']);
+		expect(titles(g)).toEqual(['Wolves - Minion Stamina Pool']);
+	});
+
+	test('two differently named squads: each title carries its creature name', () => {
+		const g = squadGroup(['Wolf', 'Dire Wolf']);
+		expect(titles(g)).toEqual(['Wolves - Wolf - Minion Stamina Pool', 'Wolves - Dire Wolf - Minion Stamina Pool']);
+	});
+
+	test('two same-named squads: "(squad 1)" and "(squad 2)" in tracker order', () => {
+		const g = squadGroup(['Wolf', 'Wolf']);
+		expect(titles(g)).toEqual(['Wolves - Wolf (squad 1) - Minion Stamina Pool', 'Wolves - Wolf (squad 2) - Minion Stamina Pool']);
+	});
+
+	test('three squads, two of them same-named: only the same-named pair is numbered, by position among that pair', () => {
+		const g = squadGroup(['Wolf', 'Dire Wolf', 'Wolf']);
+		expect(titles(g)).toEqual([
+			'Wolves - Wolf (squad 1) - Minion Stamina Pool',
+			'Wolves - Dire Wolf - Minion Stamina Pool',
+			'Wolves - Wolf (squad 2) - Minion Stamina Pool',
+		]);
+	});
+
+	test('a captain in between does not shift the numbering, and a captain named like a squad is not counted', () => {
+		const g = squadGroup(['Wolf', 'Wolf:captain', 'Dire Wolf', 'Wolf']);
+		expect(titles(g)).toEqual([
+			'Wolves - Wolf (squad 1) - Minion Stamina Pool',
+			'Wolves - Dire Wolf - Minion Stamina Pool',
+			'Wolves - Wolf (squad 2) - Minion Stamina Pool',
+		]);
+	});
+
+	test('the modal shows each squad its own title (the DseModal title element and aria-labelledby follow)', async () => {
+		const yaml = [
+			'heroes: []',
+			'enemy_groups:',
+			'  - name: "Wolves"',
+			'    is_squad: true',
+			'    creatures:',
+			'      - {name: Wolf, max_stamina: 4, amount: 3, squad_role: minion}',
+			'      - {name: Wolf, max_stamina: 4, amount: 2, squad_role: minion}',
+			'      - {name: Dire Wolf, max_stamina: 8, amount: 2, squad_role: minion}',
+		].join('\n');
+		const app = new App();
+		const data = await parseEncounterData(yaml, app as any, DEFAULT_SETTINGS);
+		const group = data.enemy_groups[0];
+		const shown = group.creatures.map((creature) => {
+			const modal = new MinionStaminaPoolModal(app as any, group, creature, jest.fn());
+			modal.open();
+			const titleEl = (modal as any).titleEl as HTMLElement;
+			const text = titleEl.querySelector('.dse-modal__title-text')!.textContent;
+			const dialogEl = ((modal as any).modalEl ?? (modal as any).containerEl) as HTMLElement;
+			const labelledBy = dialogEl.getAttribute('aria-labelledby');
+			expect(labelledBy).toBe(titleEl.id);
+			modal.close();
+			return text;
+		});
+		expect(shown).toEqual([
+			'Wolves - Wolf (squad 1) - Minion Stamina Pool',
+			'Wolves - Wolf (squad 2) - Minion Stamina Pool',
+			'Wolves - Dire Wolf - Minion Stamina Pool',
+		]);
 	});
 });
