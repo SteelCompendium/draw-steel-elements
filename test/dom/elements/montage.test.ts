@@ -728,6 +728,7 @@ describe('SC-191 slice 2: OutcomeBandView (verdict / equal-width tracks / rule /
 	test('SC-629: Reopen on that board (a round added) is live again, so the band goes back to "This montage" / "Not started"', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderMontage(OUT_OF_ROUNDS_0_0);
+		expect(outcomeBand(root).getAttribute('data-band')).toBe('failure'); // before the click: out of rounds, so over
 		(root.querySelector('.dse-mt__actionrow button[aria-label="Reopen"]') as HTMLButtonElement).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
