@@ -154,6 +154,12 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Negotiation/minimal.md` | `name:` only (Interest defaults to 0, so it opens already over, with no chips or cards) |
   | `Negotiation/two-blocks.md` | TWO different `ds-negotiation` blocks (the innkeeper, the guard captain) with prose above, between and below |
   | `Negotiation/unknown-keys.md` | one `ds-negotiation` carrying keys the element does not know: `note_to_self` at the top and `gm_note` inside a motivation and a pitfall |
+  | `Negotiation/wrong-name.md` | `name: 2024` (a number as the name) |
+  | `Negotiation/fraction.md` | `current_interest: 0.4` |
+  | `Negotiation/dup-names.md` | two motivations both named Higher Authority |
+  | `Negotiation/nameless.md` | one motivation with a reason and no `name:` |
+  | `Negotiation/current-only.md` | `current_interest: 3`, `current_patience: 2` and no `initial_*` keys |
+  | `Negotiation/quoted.md` | quoted standing numbers: `current_interest: "3"`, `current_patience: "2"` |
 
 - Edits are checked per fence: a click / type / double-click / press on an element inside `dse.block(lang, n)` declares that block
   as one the test edits (taking the scope and reading it declares nothing, SC-435), and
