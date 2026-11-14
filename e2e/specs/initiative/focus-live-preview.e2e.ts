@@ -129,4 +129,17 @@ describe('initiative: keyboard focus after the tracker saves, in Live Preview', 
 		const f = await focusState();
 		expect([f.tracker, f.editor]).toEqual([-1, true]);
 	});
+	it('[INIT-F22] click into the quick-add amount and type, then a mouse press on a roster cell: the creature is selected, the cell holds focus and the amount stays typed', async () => {
+		await dse.openNote(MIN, { mode: 'live-preview' });
+		const root = dse.block(INIT);
+		await dse.type(root.control('init.malice.quickadd.amount'), '7', { replace: true });
+		await dse.waitForWrite(MIN, () => dse.click(root.control('init.cell.stamina', { nth: 2 })));
+		await dse.settle();
+		await browser.pause(1000); // the carry is one-shot: the end state must hold a second after write-idle, not only at it
+		await expect(root.control('init.detail.stamina')).toHaveAttribute('aria-label', 'Edit Stamina: Ogre #3');
+		const f = await focusState();
+		const cell = await dse.page<string | null>(`document.activeElement?.closest('.dse-init__cell')?.getAttribute('data-instance-key') ?? null`);
+		expect([f.ctl, cell, f.tracker, f.editor]).toEqual(['init.cell.stamina', '0-3', 0, false]);
+		await expect(root.control('init.malice.quickadd.amount')).toHaveValue('7');
+	});
 });
