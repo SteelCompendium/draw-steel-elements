@@ -22,7 +22,7 @@ import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App, Component, Modal, Notice, Plugin } from '../../mocks/obsidian';
 import { initiativeElement } from '../../../src/elements/initiative/definition';
 import type { InitiativeView } from '../../../src/elements/initiative/view';
-import { HANDOFF_FALLBACK_MS, HANDOFF_SETTLE_MS } from '../../../src/framework/chrome/windowHandoff';
+import { HANDOFF_SETTLE_MS } from '../../../src/framework/chrome/windowHandoff';
 
 const HEROES = ['heroes:', '  - name: "Alice"', '    max_stamina: 30'];
 const OGRES = ['enemy_groups:', '  - name: "Ogres"', '    creatures:', '      - name: "Ogre"', '        max_stamina: 60', '        amount: 3'];
@@ -456,7 +456,7 @@ describe('SC-608: an outside edit redraws the tracker while a window is open (Re
 		first.root.remove();
 		second.view.unload();
 		second.root.remove();
-		await later(HANDOFF_FALLBACK_MS + 100);
+		await later(700);
 		expect(modalEl()).toBeNull();
 		expect(notices()).toHaveLength(1);
 		expect(document.activeElement).toBe(document.body);

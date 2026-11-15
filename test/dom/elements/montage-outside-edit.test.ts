@@ -26,7 +26,7 @@ import { montageElement } from '../../../src/elements/montage/definition';
 import type { MontageView } from '../../../src/elements/montage/view';
 import type { MontageModel } from '../../../src/elements/montage/model';
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
-import { HANDOFF_FALLBACK_MS, HANDOFF_SETTLE_MS } from '../../../src/framework/chrome/windowHandoff';
+import { HANDOFF_SETTLE_MS } from '../../../src/framework/chrome/windowHandoff';
 
 /** A montage in round 1, nobody has acted: Log an action is live, the board has open sockets. */
 const BASE = ['title: Heist', 'rounds: 3', 'success_limit: 5', 'failure_limit: 3', 'successes: 0', 'failures: 0', 'participants:', '  - name: Kira', '  - name: Bram', 'current_round: 1'].join('\n');
@@ -43,6 +43,8 @@ const EVERYONE_ACTED = [
 	'title: Heist', 'rounds: 3', 'success_limit: 5', 'failure_limit: 3', 'successes: 2', 'failures: 0', 'participants:', '  - name: Kira', '  - name: Bram',
 	'entries:', '  - hero: Kira', '    round: 1', '    result: success', '  - hero: Bram', '    round: 1', '    result: success', 'current_round: 1',
 ].join('\n');
+/** A different montage from BASE (another title). */
+const OTHER = BASE.replace('Heist', 'Other');
 const NOTICE = 'The note changed outside, so this window closed without saving';
 
 interface Mounted {
@@ -432,27 +434,93 @@ describe('SC-650: an outside edit redraws the montage while a window is open (Re
 		first.root.remove();
 		second.view.unload();
 		second.root.remove();
-		await later(HANDOFF_FALLBACK_MS + 100);
+		await later(700);
 		expect(anyWindow()).toBe(false);
 		expect(notices()).toHaveLength(1);
 		expect(document.activeElement).toBe(document.body);
 		expect(fresh.root.contains(document.activeElement)).toBe(false);
 	});
 
-	test('[OW18c] ...but a block that is just redrawn in place (Live Preview, the widget arrives after the close) waits for its slot: one Notice, focus lands', async () => {
-		const first = await mount(BASE);
+	test('[OW18c] a Live Preview redraw in place (the widget arrives after the close) next to a different, untouched montage: one Notice, focus lands, the neighbour is never the successor', async () => {
+		const first = await mount(OTHER);
 		const second = await mount(BASE, first.pane);
 		press(ctl(second.root, 'montage.bar.log'));
 		second.view.unload();
 		second.root.remove();
-		await later(120); // the count is one lower for a moment: the fallback must not claim the first block as the successor
+		await later(120); // the count is one lower for a moment
+		expect(notices()).toHaveLength(0); // the neighbour was there before: it is not news
 		const fresh = await mount(EDITED, first.pane);
 		await later();
 		expect(notices()).toHaveLength(1);
 		expect(document.activeElement).toBe(ctl(fresh.root, 'montage.bar.log'));
 		expect(first.root.contains(document.activeElement)).toBe(false);
-		await later(HANDOFF_FALLBACK_MS + 100);
+		await later(700);
 		expect(notices()).toHaveLength(1);
+	});
+
+	test('[OW18d] delete-above plus change, the redrawn card held back 700 ms: nothing yet, then ONE Notice when it arrives (and none again on later changes), focus not moved', async () => {
+		const first = await mount(OTHER, undefined, 'Montage.md', true);
+		const second = await mount(BASE, first.pane, 'Montage.md', true);
+		press(ctl(second.root, 'montage.bar.log'));
+		first.view.unload();
+		first.root.remove();
+		second.view.unload();
+		second.root.remove();
+		await later(700);
+		expect(notices()).toHaveLength(0);
+		const fresh = await mount(EDITED, first.pane, 'Montage.md', true);
+		await later();
+		expect(notices()).toHaveLength(1);
+		document.body.appendChild(document.createElement('div')); // any later change of the page makes the watch look again
+		await later(50);
+		expect(notices()).toHaveLength(1);
+		expect(document.activeElement).toBe(document.body);
+		expect(fresh.root.contains(document.activeElement)).toBe(false);
+	});
+
+	test('[OW18e] the montage\'s own save in a note with a different montage above, the redrawn card held back 700 ms: no Notice, ever; focus lands on the redrawn Log button', async () => {
+		const first = await mount(OTHER, undefined, 'Montage.md', true);
+		const second = await mount(BASE, first.pane, 'Montage.md', true);
+		press(ctl(second.root, 'montage.bar.log'));
+		second.view.unload(); // Live Preview: the own save closes the window, the widget is rebuilt later
+		second.root.remove();
+		await later(700);
+		expect(notices()).toHaveLength(0); // the untouched neighbour is no news
+		const fresh = await mount(BASE, first.pane, 'Montage.md', true); // what the save wrote: the same content
+		await later();
+		expect(notices()).toHaveLength(0);
+		expect(document.activeElement).toBe(ctl(fresh.root, 'montage.bar.log'));
+	});
+
+	test('[OW18f] delete-above with the open block unchanged: the redrawn card has the same content, so no Notice', async () => {
+		const first = await mount(OTHER, undefined, 'Montage.md', true);
+		const second = await mount(BASE, first.pane, 'Montage.md', true);
+		press(ctl(second.root, 'montage.bar.log'));
+		first.view.unload();
+		first.root.remove();
+		second.view.unload();
+		second.root.remove();
+		await later(700);
+		await mount(BASE, first.pane, 'Montage.md', true);
+		await later(100);
+		expect(notices()).toHaveLength(0);
+	});
+
+	test('[OW18g] a pane of several notes (the sidebar): the count is the same as when the window opened but the slot now holds another note\'s montage: no Notice for the window\'s own note\'s new card elsewhere', async () => {
+		const leaf = document.body.appendChild(document.createElement('div'));
+		leaf.className = 'workspace-leaf'; // no reading / source view inside: the leaf is the scope, as in the sidebar
+		const other = await mount(OTHER, leaf, 'Other.md', true);
+		const mine = await mount(BASE, leaf, 'Mine.md', true);
+		press(ctl(mine.root, 'montage.bar.log'));
+		other.view.unload();
+		other.root.remove();
+		await mount(EDITED, leaf, 'Mine.md', true); // a card of the same note, which will sit at the first position...
+		await mount(OTHER, leaf, 'Third.md', true); // ...and another note's, which will sit at the window's slot
+		mine.view.unload(); // two roots are left, as when the window opened
+		mine.root.remove();
+		await later(700);
+		expect(notices()).toHaveLength(0);
+		expect(document.activeElement).toBe(document.body);
 	});
 
 	test('[OW19] a burst of outside edits (Sync): focus follows each redraw, one Notice', async () => {

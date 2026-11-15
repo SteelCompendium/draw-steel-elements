@@ -58,6 +58,8 @@ export interface WindowSlot {
 	scope: Element;
 	index: number;
 	count: number;
+	/** SC-650: the live roots of the element in the pane when the window opened. A root that is not among them is new since (the redraw's). */
+	before: ReadonlySet<HTMLElement>;
 }
 
 /** The pane or embed a root is drawn in. Reading view and Live Preview are separate scopes (a leaf keeps a hidden copy of the other). */
@@ -76,7 +78,7 @@ export function slotOf(root: HTMLElement, elementId: string): WindowSlot | null 
 	if (!root.isConnected) return null;
 	const scope = scopeFor(root);
 	const roots = rootsIn(scope, elementId);
-	return { elementId, scope, index: Math.max(0, roots.indexOf(root)), count: roots.length };
+	return { elementId, scope, index: Math.max(0, roots.indexOf(root)), count: roots.length, before: new Set(roots) };
 }
 
 /** How long the watch for the successor lasts. Live Preview's arrives ~10-45 ms after the close; the rest is slack for a loaded host. */
@@ -84,11 +86,6 @@ export const HANDOFF_TTL_MS = 3000;
 /** After the successor was found, how long the hand-off stays armed for the NEXT redraw (a Sync burst redraws the block several times in
  *  a row, each discarding the control that was focused). Each success extends it. SC-505's `SETTLE_MS`, for the same reason. */
 export const HANDOFF_SETTLE_MS = 1500;
-/** SC-650: how long the watch waits for the root at the slot before it tells the user anyway, when the pane's root count changed and none sits
- *  at the slot's position any more (an edit deleted a block above the window's own and changed it, so the position points past the end). A
- *  Live Preview widget arrives 10-45 ms after the close, so by now a root that is going to come at the slot has come. */
-export const HANDOFF_FALLBACK_MS = 400;
-
 export interface OutsideCloseHandoff {
 	slot: WindowSlot;
 	/** The closing view's own record, and what it held on disk when it unloaded. */
@@ -121,7 +118,6 @@ export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 	let claimed: HTMLElement | null = null; // the successor the Notice and focus were given for
 	let noticed = false; // the Notice was shown (for a claimed successor, or by the fallback)
 	let timer = 0;
-	let fallback = 0;
 	let settle = 0;
 	let observer: MutationObserver | null = null;
 
@@ -131,7 +127,6 @@ export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 		observer?.disconnect();
 		win.clearTimeout(timer);
 		win.clearTimeout(settle);
-		win.clearTimeout(fallback);
 		doc.removeEventListener('focusin', onFocusIn, true);
 		o.owner.removeChild(holder);
 	};
@@ -178,15 +173,17 @@ export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 		win.clearTimeout(timer);
 		timer = win.setTimeout(finish, HANDOFF_SETTLE_MS);
 	};
-	/** No root at the slot after HANDOFF_FALLBACK_MS and the count changed: an edit removed the block above and changed this one, so the slot
-	 *  points past the end. The window did close because of an outside edit: the Notice, from any live root of the same note in the pane that
-	 *  differs from what the closing view held. Focus is not moved here (there is no successor to give it to); a root that still lands at the slot is claimed as usual, with the count rule. */
-	const noSuccessorAtSlot = (): void => {
-		if (finished || claimed !== null || noticed) return;
+	/** Nothing sits at the slot and the pane's root count changed: an edit removed a block above the window's own and changed it, so the
+	 *  position points past the end. The window did close because of an outside edit, so the Notice, once, for a root that is NEW since the
+	 *  window opened (never an untouched neighbour: the own save of a Live Preview note with two montages redraws only this one) and whose
+	 *  content differs from what the closing view held (the same content is its own save). It is not claimed: there is no successor to give
+	 *  focus to, and a root that still lands at the slot is claimed as usual, with the count rule. */
+	const noticeForNewRoot = (): void => {
+		if (noticed || claimed !== null) return;
 		const roots = rootsIn(o.slot.scope, o.slot.elementId);
 		if (roots.length === o.slot.count) return;
-		const other = roots.find((r) => mounted.get(r)?.sourcePath() === sourcePath);
-		if (other && mounted.get(other)?.content() !== o.ownContent) {
+		const fresh = roots.find((r) => !o.slot.before.has(r) && mounted.get(r)?.sourcePath() === sourcePath);
+		if (fresh && mounted.get(fresh)?.content() !== o.ownContent) {
 			noticed = true;
 			new Notice(o.notice);
 		}
@@ -194,7 +191,8 @@ export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 	const attempt = (): void => {
 		if (finished || settling) return;
 		const root = find();
-		if (!root || root === claimed) return;
+		if (!root) return noticeForNewRoot();
+		if (root === claimed) return;
 		// The root is built, but the pipeline adds its chrome panel right after (the Reset encounter item lives there): act one task later.
 		settling = true;
 		settle = win.setTimeout(act, 0);
@@ -202,7 +200,6 @@ export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 
 	doc.addEventListener('focusin', onFocusIn, true);
 	timer = win.setTimeout(finish, HANDOFF_TTL_MS);
-	fallback = win.setTimeout(noSuccessorAtSlot, HANDOFF_FALLBACK_MS);
 	observer = new win.MutationObserver(attempt);
 	observer.observe(doc.body, { childList: true, subtree: true });
 	attempt();
