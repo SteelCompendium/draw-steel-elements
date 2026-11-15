@@ -148,3 +148,39 @@ describe('T-7: setMotivationUsed / argumentReusesMotivation truth table', () => 
 		expect(data.currentArgument.reusedMotivation).toBe(false);
 	});
 });
+
+describe('what the card shows as chosen: argumentUsesMotivation / argumentUsesPitfall / argumentReuseChecked', () => {
+	const fresh = (): NegotiationData => parseNegotiationData(frodoYaml);
+
+	test('an entry naming a motivation the block has counts; one naming no motivation does not; the raw list still holds it', () => {
+		const data = fresh();
+		data.currentArgument.motivationsUsed = ['Ghost'];
+		expect(data.argumentUsesMotivation()).toBe(false);
+		expect(data.currentArgument.usesMotivation()).toBe(true);
+		data.currentArgument.motivationsUsed = ['Ghost', 'Peace'];
+		expect(data.argumentUsesMotivation()).toBe(true);
+	});
+
+	test('an entry naming a pitfall the block has counts; one naming no pitfall does not; the raw list still holds it', () => {
+		const data = fresh();
+		data.currentArgument.pitfallsUsed = ['Ghost'];
+		expect(data.argumentUsesPitfall()).toBe(false);
+		expect(data.currentArgument.usesPitfall()).toBe(true);
+		data.currentArgument.pitfallsUsed = [data.pitfalls[0].name];
+		expect(data.argumentUsesPitfall()).toBe(true);
+	});
+
+	test('the Reuse box is checked only while a spent motivation is appealed to AND the flag is set', () => {
+		const data = fresh();
+		data.currentArgument.motivationsUsed = ['Peace'];
+		data.currentArgument.reusedMotivation = true;
+		expect(data.argumentReuseChecked()).toBe(false); // Peace is not spent
+		data.motivations[1].hasBeenAppealedTo = true;
+		expect(data.argumentReuseChecked()).toBe(true);
+		data.currentArgument.reusedMotivation = false;
+		expect(data.argumentReuseChecked()).toBe(false);
+		data.currentArgument.reusedMotivation = true;
+		data.currentArgument.motivationsUsed = ['Ghost'];
+		expect(data.argumentReuseChecked()).toBe(false); // the spent motivation is no longer appealed to
+	});
+});
