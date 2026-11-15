@@ -137,11 +137,11 @@ jobs:
           echo "version=$pin" >> "$GITHUB_OUTPUT"
           echo "OBSIDIAN_CACHE=$HOME/.cache/dse-e2e-obsidian" >> "$GITHUB_ENV"
 
-      # ~1 GB (Obsidian app + installer + a chromedriver), so a cache hit saves a download of
-      # that size on every run. Restore and save are separate steps so the cache is also
-      # saved when the e2e step FAILS (the default post-job save only runs on success, and a
-      # red first run would then re-download on every retry). Keys are immutable: a hit is
-      # never overwritten, a new pin makes a new key.
+      # ~530 MB on disk (Obsidian app + installer + a chromedriver), so a cache hit saves that
+      # download on every run. Restore and save are separate steps so the cache is also saved
+      # when the e2e step FAILS (the default post-job save only runs on success, and a red
+      # run would then re-download on the next one). Keys are immutable: a hit is never
+      # overwritten, a new pin makes a new key.
       - name: Restore Obsidian download cache
         id: obsidian-cache
         uses: actions/cache/restore@v4
