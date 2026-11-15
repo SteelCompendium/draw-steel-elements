@@ -25,6 +25,7 @@ import { sendToSidebar } from '../../../src/framework/sidebar/registration';
 import { initializeElementFrameworkV2, registerFrameworkElementDefinitions, FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main';
 import { App, Notice, Plugin, Setting, flushAsync, makeFakeContext } from '../../mocks/obsidian';
 import { makeEnv } from './_adoptionEnv';
+import heroExampleBody from '../../../src/elements/hero/example.yaml';
 
 function bodyOf(text: string, index = 0): string {
 	const blocks = [...text.matchAll(/^```(ds-[\w-]+)\n([\s\S]*?)\n```$/gm)];
@@ -288,6 +289,43 @@ describe('SC-509: sidebar -- a form Save from the panel\'s pencil reaches the pa
 		expect(app.vault.getContent('Note.md')).toContain('name: Healed');
 		expect(app.vault.getContent('Note.md')).toContain('BELOW and more');
 		expect(Notice.notices.filter((n) => n.includes('not saved'))).toEqual([]);
+	});
+	// SC-662 (LOW-5): the hero's "Edit definition" is seeded with its own normalising `serializeStateSplice()`, which a hand-written block
+	// (flow-style `stamina: { current: 31, temp: 0 }`, a comment in `state:`) never equals. The strict Save compares with the block as it is on
+	// disk when the form opens, so it is not refused for a change nobody made, and still is when the block really changed.
+	async function openHeroDefinitionForm() {
+		const { app, services } = await sidebarSetup();
+		app.vault.setFile('Note.md', ['# N', '', 'ABOVE', '', '```ds-hero', ...heroExampleBody.trim().split('\n'), '```', '', 'BELOW', ''].join('\n'));
+		await sendToSidebar(services, 'Note.md', 'ds-hero');
+		await flushAsync();
+		const view = app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0].view as unknown as DseSidebarView;
+		const panelEl = view.contentEl.querySelector('.dse-sidebar__panel') as HTMLElement;
+		const { modal } = clickPencil(panelEl.querySelector('[data-dse-element="hero"]') as HTMLElement);
+		return { app, modal, panelEl };
+	}
+
+	test('[SF03] a hand-written hero (flow style, a comment in state) saves from its Edit definition form in the sidebar: no refusal, the anchor kept, the card still live', async () => {
+		Notice.notices.length = 0;
+		const { app, modal, panelEl } = await openHeroDefinitionForm();
+		expect(modal().canSave()).toBe(true); // the anchor line is not the schema's business (OOS-4)
+		await modal().save();
+		await flushAsync();
+		expect(Notice.notices.filter((n) => n.includes('not saved'))).toEqual([]);
+		expect(document.querySelector('.dse-modal')).toBeNull();
+		expect(app.vault.getContent('Note.md')).toMatch(/^_dse_anchor: /m);
+		expect(panelEl.getAttribute('data-dse-sidebar-unavailable')).toBeNull();
+		expect(panelEl.querySelector('[data-dse-element="hero"]')).not.toBeNull();
+	});
+
+	test('[SF04] the same form, the block edited from outside after it opened: Save is still refused, the outside edit stays', async () => {
+		Notice.notices.length = 0;
+		const { app, modal } = await openHeroDefinitionForm();
+		app.vault.setFile('Note.md', app.vault.getContent('Note.md')!.replace('surges: 1', 'surges: 4'));
+		await modal().save();
+		await flushAsync();
+		expect(app.vault.getContent('Note.md')).toContain('surges: 4');
+		expect(Notice.notices.filter((n) => n.includes('not saved'))).toHaveLength(1);
+		expect(document.querySelector('.dse-modal')).not.toBeNull();
 	});
 });
 

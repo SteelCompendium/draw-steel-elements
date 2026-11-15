@@ -1009,3 +1009,35 @@ describe('SC-552: the form pins its block', () => {
 		modal.close();
 	});
 });
+
+// SC-662 (OOS-4): the sidebar stamps `_dse_anchor: <id>` into a pinned block. The form validates the block it edits, and an element whose schema
+// forbids extra keys (hero, conditions, resource, surges, tokens, roll) refused that line, so the Save of every block that was ever pinned stayed
+// disabled. The anchor is the framework's, not the element's: it is left out of the schema pass and kept in what the form writes.
+describe('SC-662: the form of a block that carries the sidebar\'s `_dse_anchor` line', () => {
+	const registry = createElementRegistry();
+	registerFrameworkElementDefinitions(registry);
+	const STRICT = ['hero', 'conditions', 'heroic-resource', 'surges', 'hero-tokens', 'roll'];
+	const sourceFor = (def: ElementDefinition, extra: string): string =>
+		`${(def.authoring?.example ?? '').replace(/^_dse_anchor:.*\n?/gm, '').trimEnd()}\n${extra}`;
+
+	test.each(STRICT)('%s: Save is enabled and writes the anchor line back', async (id) => {
+		const def = registry.get(id)!;
+		const host = makeHost();
+		const { cx, validation } = makeRealStaminaCx(host);
+		const modal = openFormEditor(fakeOwner(), cx, def, sourceFor(def, '_dse_anchor: abc123'), validation);
+		expect(modal.canSave()).toBe(true);
+		await modal.save();
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect(host.replaceSource.mock.calls[0][0]).toMatch(/^_dse_anchor: abc123$/m);
+		modal.close();
+	});
+
+	test.each(STRICT)('%s: the anchor is the only line let through: a real unknown key beside it still disables Save', (id) => {
+		const def = registry.get(id)!;
+		const host = makeHost();
+		const { cx, validation } = makeRealStaminaCx(host);
+		const modal = openFormEditor(fakeOwner(), cx, def, sourceFor(def, 'bogus_key: 1\n_dse_anchor: abc123'), validation);
+		expect(modal.canSave()).toBe(false);
+		modal.close();
+	});
+});

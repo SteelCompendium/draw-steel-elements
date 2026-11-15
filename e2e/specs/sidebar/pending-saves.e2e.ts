@@ -8,6 +8,7 @@
 //   Sidebar/pending-two-stamina.md  two ds-stamina-bar blocks (15/20 +5, 25/30 +4)
 //   Sidebar/pending-conditions.md   one ds-conditions block (bleeding)
 //   Sidebar/pending-montage.md      one ds-montage block (Kira, Bram, round 1)
+//   Sidebar/pending-resource.md     one ds-resource block (fury 4), fixed anchor: its schema forbids extra keys (the block edit form)
 // The gaps between a press and the outside edit are in-page timers (50 ms), shorter than the write's 400 ms debounce.
 import { browser, expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
@@ -280,5 +281,53 @@ describe('sidebar: the block edit form\'s Save never overwrites an outside edit 
 		expect(text).toContain('BELOW and more');
 		expect(await notices(NOT_SAVED)).toBe(0);
 		await restoreBelow(NOTE);
+	});
+});
+
+describe('sidebar: the block edit form of a block that carries the sidebar\'s `_dse_anchor` line can be saved (SC-662, authoringControls on)', () => {
+	before(() => dse.setPrefs({ authoringControls: true }, { experimental: true }));
+	after(async () => {
+		await closeSidebar();
+		await dse.setPrefs({});
+	});
+	afterEach(() => dse.page(`(() => { document.querySelectorAll('.modal-container').forEach((m) => m.remove()); return true; })()`));
+
+	const NOTE = 'Sidebar/pending-resource.md';
+	/** In the open form: set the "Current" field to `value` and press Save. Returns whether Save was enabled. */
+	const setCurrentAndSave = (value: number): Promise<boolean> =>
+		dse.page<boolean>(`(async () => {
+			const row = Array.from(document.querySelectorAll('.modal-container .setting-item')).find((r) => /^Current$/i.test(r.querySelector('.setting-item-name')?.textContent.trim() ?? ''));
+			const input = row.querySelector('input');
+			input.value = ${JSON.stringify(String(value))};
+			input.dispatchEvent(new Event('input', { bubbles: true }));
+			await new Promise((r) => setTimeout(r, 500));
+			const save = Array.from(document.querySelectorAll('.modal-container button')).find((b) => /^Save$/.test(b.textContent.trim()) || b.getAttribute('aria-label') === 'Save');
+			const enabled = !save.disabled;
+			if (enabled) save.click();
+			return enabled;
+		})()`);
+
+	it('[SIDE-OE11] pinned ds-resource: the Edit form\'s Save is enabled and lands, the anchor line stays and the sidebar card is still live', async () => {
+		await pin(NOTE, 'ds-resource', ['spr01'], '[data-dse-element="heroic-resource"], [data-dse-element="resource"]');
+		await dse.page(`document.querySelector('${SIDEBAR} [data-dse-chrome-item="edit"]').click()`);
+		await dse.waitFor(`!!document.querySelector('.modal-container .setting-item')`, 'the form to open');
+		expect(await setCurrentAndSave(7)).toBe(true);
+		await browser.pause(1500);
+		const text = await dse.noteText(NOTE);
+		expect(field(text, 'current')).toBe('7');
+		expect(text).toContain('_dse_anchor: spr01');
+		expect(await dse.page<boolean>(`!document.querySelector('${SIDEBAR} .dse-sidebar__panel[data-dse-sidebar-unavailable]') && document.querySelector('${SIDEBAR} [data-dse-element] input')?.value === '7'`)).toBe(true); // the redrawn card shows the saved value
+	});
+
+	it('[SIDE-OE12] the same block in Reading view (it carries an anchor): the card\'s Edit form can be saved and keeps the anchor line', async () => {
+		await dse.openNote(NOTE);
+		await dse.externalEdit(NOTE, 'c');
+		await dse.page(`document.querySelector('.markdown-reading-view [data-dse-chrome-item="edit"]').click()`);
+		await dse.waitFor(`!!document.querySelector('.modal-container .setting-item')`, 'the form to open');
+		expect(await setCurrentAndSave(9)).toBe(true);
+		await browser.pause(1500);
+		const text = await dse.noteText(NOTE);
+		expect(field(text, 'current')).toBe('9');
+		expect(text).toContain('_dse_anchor: spr01');
 	});
 });
