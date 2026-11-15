@@ -631,7 +631,11 @@ export class DseSettingTab extends PluginSettingTab {
 									.setButtonText('Sync')
 									.setCta()
 									.onClick(() => {
-										void this.plugin.syncCompendium();
+										this.plugin.syncCompendium().catch(() => {
+											// SC-646: empty on purpose. A failed sync was already reported (the
+											// "compendium sync failed" Notice and its console.error come from
+											// CompendiumSyncService.sync, which rethrows by design).
+										});
 									});
 							})
 							.addButton((button) => {

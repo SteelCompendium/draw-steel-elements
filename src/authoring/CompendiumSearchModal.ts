@@ -170,7 +170,10 @@ export class CompendiumSearchModal extends SuggestModal<CompendiumEntry> {
 
 	onChooseSuggestion(entry: CompendiumEntry, evt: MouseEvent | KeyboardEvent): void {
 		if (isSyncCtaEntry(entry)) {
-			void this.opts.onSyncRequested?.();
+			// SC-646: the catch is empty on purpose. A failed sync was already reported
+			// (the "compendium sync failed" Notice and its console.error come from
+			// CompendiumSyncService.sync, which rethrows by design).
+			Promise.resolve(this.opts.onSyncRequested?.()).catch(() => {});
 			return;
 		}
 		this.onChoose(entry, evt);

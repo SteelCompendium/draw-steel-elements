@@ -352,6 +352,17 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	registry.register(heroElement);
 }
 
+/**
+ * SC-646 — the catch for the two fire-and-forget async callbacks (the legacy-folder choice
+ * and the migration window's "sync anyway"). Once `CompendiumSyncService.sync` has been
+ * called, any failure is already reported (Notice + console.error) and rethrown by design,
+ * so there is nothing to add. A failure BEFORE that point (trashing the old root, settling
+ * the migration state) reaches no Notice, so it is logged rather than swallowed.
+ */
+function logUnlessSyncReported(error: unknown, syncStarted: boolean): void {
+	if (!syncStarted) console.error('Draw Steel Elements: compendium sync could not start:', error);
+}
+
 export default class DrawSteelAdmonitionPlugin extends Plugin {
     settings: DSESettings;
     /** F1 (Plan 02, Task 10) scaffold + D1 (migrated elements): framework v2 service
@@ -588,7 +599,12 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         this.addCommand({
             id: 'sync-compendium',
             name: 'Sync compendium',
-            callback: () => this.syncCompendium(),
+            callback: () => {
+                // SC-646: empty catch on purpose. A failed sync was already reported (the
+                // "compendium sync failed" Notice and its console.error come from
+                // CompendiumSyncService.sync, which rethrows by design).
+                this.syncCompendium().catch(() => {});
+            },
         });
         // SC-406 (Scott, 2026-10-16): the legacy `download-data-md-dse` alias ("Sync compendium
         // (legacy alias)") is gone — removed outright, not gated. A hotkey bound to it goes
@@ -789,6 +805,8 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
                     // refuses this choice (Notice, no trash, no second run) instead of losing
                     // the root out from under the running sync.
                     new LegacyCompendiumModal(this.app, options.root, (trashOldRoot) => {
+                        // SC-646: see `logUnlessSyncReported` for the catch at the end.
+                        let syncStarted = false;
                         void (async () => {
                             const trashToken = this.syncService.beginOperation('sync');
                             if (trashToken === null) {
@@ -817,11 +835,12 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
                                     }
                                     await this.app.fileManager.trashFile(root);
                                 }
+                                syncStarted = true;
                                 await this.syncService.sync(latest, trashToken);
                             } finally {
                                 this.syncService.endOperation(trashToken);
                             }
-                        })();
+                        })().catch((error: unknown) => logUnlessSyncReported(error, syncStarted));
                     }).open();
                     return;
                 }
@@ -903,6 +922,8 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
             // sync's refusal is reported honestly up front, instead of settling migration
             // state and only then discovering the sync itself was refused.
             syncAnyway: () => {
+                // SC-646: see `logUnlessSyncReported` for the catch at the end.
+                let syncStarted = false;
                 void (async () => {
                     const anywayToken = this.syncService.beginOperation('sync');
                     if (anywayToken === null) {
@@ -913,17 +934,20 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
                         const latest = this.requireSyncOptions();
                         if (latest === null) return;
                         await this.migrationService.markSettled(root);
+                        syncStarted = true;
                         await this.syncService.sync(latest, anywayToken);
                     } finally {
                         this.syncService.endOperation(anywayToken);
                     }
-                })();
+                })().catch((error: unknown) => logUnlessSyncReported(error, syncStarted));
             },
             finishRemaining: () => { void this.offerMigration(root); },
             syncAfter: (report) => {
                 this.announceMigration(report);
                 const latest = this.requireSyncOptions();
-                if (latest !== null) void this.syncService.sync(latest);
+                // SC-646: empty catch on purpose. `sync` reports every failure itself (the
+                // "compendium sync failed" Notice and its console.error) and rethrows.
+                if (latest !== null) this.syncService.sync(latest).catch(() => {});
             },
             dismissed: (report) => {
                 if (report === null) { declined(); return; }
