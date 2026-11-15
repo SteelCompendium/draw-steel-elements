@@ -329,6 +329,15 @@ describe('SC-650: an outside edit redraws the montage while a window is open (Re
 		expect(focused()).toBe('montage.bar.end-round');
 	});
 
+	test('[OW12b] the hero of the row button the window was opened from is gone, nothing to undo and no Reopen: the bar\'s Log an action takes focus, not the card root', async () => {
+		const old = await mount(BASE);
+		press(ctl(old.root, 'montage.board.row-act', 1)); // Bram's
+		const fresh = await redraw(old, BASE.replace('  - name: Bram\n', '').replace('success_limit: 5', 'success_limit: 6'));
+		expect(notices()).toHaveLength(1);
+		expect(focused()).toBe('montage.bar.log');
+		expect(document.activeElement).not.toBe(fresh.root);
+	});
+
 	test('[OW12] the cell the window was opened from is no longer a control (the edit removed the entry): its fallback takes focus, never <body>', async () => {
 		const old = await mount(WITH_ENTRY);
 		press(cellOf(old.root, 'Kira', 1));
