@@ -88,20 +88,27 @@ describe('SC-439 filed bugs', () => {
 		expect(root().contains(document.activeElement)).toBe(true);
 	});
 
-	test.failing('[K06] two motivations with the same name: every appeal chip has its name to read [known bug SC-640]', async () => {
+	// SC-640: same-named entries share ONE chip and the card says so; a nameless entry is labelled "Unnamed Motivation" / "Unnamed Pitfall".
+	const chipTexts = (root: HTMLElement, id: string): string[] =>
+		Array.from(root.querySelectorAll(`[data-dse-control="${id}"]`)).map((c) => (c.textContent ?? '').replace(/[◆◇]/g, '').trim());
+	const notices = (root: HTMLElement): string[] =>
+		Array.from(root.querySelectorAll('[data-note="shared-name"]')).map((n) => n.textContent ?? '');
+
+	test('[K06] two motivations with the same name: one appeal chip with its name to read, and a notice that it stands for both', async () => {
 		const { root } = await mount(
 			'name: x\ninitial_interest: 3\ninitial_patience: 3\nmotivations:\n  - name: Peace\n    reason: a\n  - name: Peace\n    reason: b\n' + OFFERS,
 		);
-		const labels = Array.from(root().querySelectorAll('[data-dse-control="negotiation.appeal.motivation"]')).map((c) => (c.textContent ?? '').replace(/[◆◇]/g, '').trim());
-		expect(labels.length).toBeGreaterThanOrEqual(1); // the count is not the ticket's to rule: a fix may merge or refuse a duplicate
-		expect(labels.filter((label) => label === '')).toEqual([]);
+		expect(chipTexts(root(), 'negotiation.appeal.motivation')).toEqual(['Peace']);
+		const note = root().querySelector('.dse-nt__appeals-group .dse-nt__why');
+		expect(note?.textContent).toBe('Peace is listed twice; this chip stands for both.');
+		expect(root().querySelectorAll('[data-dse-control="negotiation.spent"]')).toHaveLength(2); // the dossier keeps both rows
 	});
 
-	test.failing('[K07] a motivation with no name: its appeal chip is not announced as "Appeal to " [known bug SC-640]', async () => {
+	test('[K07] a motivation with no name: its appeal chip is labelled "Unnamed Motivation" and announced as "Appeal to Unnamed Motivation"', async () => {
 		const { root } = await mount('name: x\ninitial_interest: 3\ninitial_patience: 3\nmotivations:\n  - name: Peace\n    reason: a\n  - reason: b\n' + OFFERS);
-		const names = Array.from(root().querySelectorAll('[data-dse-control="negotiation.appeal.motivation"]')).map((c) => c.getAttribute('aria-label') ?? '');
-		expect(names.length).toBeGreaterThanOrEqual(1);
-		expect(names.filter((name) => /^Appeal to\s*$/.test(name))).toEqual([]);
+		const chips = Array.from(root().querySelectorAll('[data-dse-control="negotiation.appeal.motivation"]'));
+		expect(chips.map((c) => c.getAttribute('aria-label'))).toEqual(['Appeal to Peace', 'Appeal to Unnamed Motivation']);
+		expect(chipTexts(root(), 'negotiation.appeal.motivation')).toEqual(['Peace', 'Unnamed Motivation']);
 	});
 
 	test.failing('[K08] a block that declares no Interest does not open already ended [known bug SC-641]', async () => {
@@ -119,13 +126,13 @@ describe('SC-439 filed bugs', () => {
 		expect(root().querySelector('.dse-nt')!.hasAttribute('data-ended')).toBe(false);
 	});
 
-	test.failing('[K10] two pitfalls with the same name: every mention chip has its name to read [known bug SC-640]', async () => {
+	test('[K10] two pitfalls with the same name: one mention chip with its name to read, and a notice that it stands for both', async () => {
 		const { root } = await mount(
 			'name: x\ninitial_interest: 3\ninitial_patience: 3\npitfalls:\n  - name: Power\n    reason: a\n  - name: Power\n    reason: b\n' + OFFERS,
 		);
-		const labels = Array.from(root().querySelectorAll('[data-dse-control="negotiation.appeal.pitfall"]')).map((c) => (c.textContent ?? '').trim());
-		expect(labels.length).toBeGreaterThanOrEqual(1);
-		expect(labels.filter((label) => label === '')).toEqual([]);
+		expect(chipTexts(root(), 'negotiation.appeal.pitfall')).toEqual(['Power']);
+		expect(notices(root())).toContain('Power is listed twice; this chip stands for both.');
+		expect(root().querySelectorAll('.dse-nt__dossier-col[data-kind="pitfall"] .dse-nt__dos')).toHaveLength(2); // the dossier keeps both rows
 	});
 
 	// The power roll counts only what the card shows as chosen. Each case asserts that the tiers shown are the tiers of what the card SHOWS as
