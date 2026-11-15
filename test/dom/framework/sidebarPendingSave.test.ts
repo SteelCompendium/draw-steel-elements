@@ -437,18 +437,34 @@ describe('SC-662: ds-hero (the sheet\'s own stamina window)', () => {
 });
 
 describe('SC-662: outside changes are applied in the order they arrived', () => {
-	test('[PS20] an edit to the block and, before its refresh finished, an edit back: the card ends on the block the note holds', async () => {
+	test('[PS20] an edit to the block and, 10 ms later while its refresh is still waiting for the view\'s save, an edit back: the card ends on the block the note holds', async () => {
 		const env = setup();
 		const panel = await pin(env, 'Session.md', COUNTER_NOTE, 'ds-counter');
+		const view = (env.app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0].view as unknown as { panels: Array<{ host: { lastMountedChild: any } }> }).panels[0].host.lastMountedChild;
+		view.settlePendingWrite = (): Promise<boolean> => new Promise((resolve) => setTimeout(() => resolve(true), 30)); // a slow write to settle
 		const original = content(env, 'Session.md');
 		const file = env.app.vault.getAbstractFileByPath('Session.md') as TFile;
 		env.app.vault.setFile('Session.md', original.replace('current_value: 1', 'current_value: 3'));
-		env.fireModify(file); // the first refresh starts (it reads the note, prepares the model)...
+		env.fireModify(file); // the first refresh starts and waits for the save...
+		await later(10);
 		env.app.vault.setFile('Session.md', original);
 		env.fireModify(file); // ...and the note is back to what the card showed before it finished
 		await later(600);
 		expect((control(panel, 'counter.input') as HTMLInputElement).value).toBe('1');
 		expect(content(env, 'Session.md')).toBe(original);
+	});
+});
+
+describe('SC-662: the view\'s own saves', () => {
+	test('[PS21] two presses 600 ms apart both reach the note: what the view wrote is what it holds, so its next write is not mistaken for a stale one', async () => {
+		const env = setup();
+		const panel = await pin(env, 'Session.md', COUNTER_NOTE, 'ds-counter');
+		control(panel, 'counter.inc').click();
+		await later(600);
+		control(panel, 'counter.inc').click();
+		await later(600);
+		expect(blockOf(env, 'Session.md', 'ds-counter').current_value).toBe(3);
+		expect(Notice.notices).toEqual([]);
 	});
 });
 
