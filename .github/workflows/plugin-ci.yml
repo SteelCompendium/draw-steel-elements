@@ -96,17 +96,18 @@ jobs:
   # pairs`; the exact numbers live in the dse-verify skill, not here.
   #
   # NO RETRIES (SC-408: "a flake is a bug in the test or the product"). No retry wrapper, no
-  # continue-on-error, no wdio specFileRetries. A red run is read, not re-run.
+  # continue-on-error, no wdio specFileRetries: a red run stays red until its bundle is read.
   #
   # Pinned to ubuntu-24.04, not ubuntu-latest: GitHub is moving `ubuntu-latest` to Ubuntu 26.04
-  # over Nov-Dec 2026, and a runner image that changes under a real-Electron suite turns a
-  # green develop red with no code change. Bump this deliberately, after a trial run.
+  # (announced for November 2026, a gradual 1-2 month migration), and a runner image that
+  # changes under a real-Electron suite turns a green develop red with no code change. Bump
+  # this deliberately, after a trial run.
   e2e:
     runs-on: ubuntu-24.04
-    # Measured wall time of the e2e step on 4 cores is in e2e/README.md ("CI"); this leaves
-    # headroom for a cold Obsidian download and a slow runner without letting a hung
+    # The whole job measured 6-12 min on a 4-core simulation (numbers in e2e/README.md, "CI");
+    # 30 leaves room for a cold Obsidian download and a slow runner without letting a hung
     # Obsidian hold a runner for the 6 h default.
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -164,7 +165,8 @@ jobs:
       # from github.com release assets, the version list from raw.githubusercontent.com.
       #
       # --shards=4: one Obsidian per shard on the 4 vCPU / 16 GB standard runner that public
-      # repositories get. (run.mjs would default to min(4, floor(nproc/3)) = 1 here.)
+      # repositories get. run.mjs's own default, min(4, floor(nproc/3)), would pick 1 here;
+      # measurements behind 4 are in e2e/README.md ("CI").
       - name: End-to-end tests (real Obsidian)
         id: e2e
         run: npm run e2e -- --shards=4

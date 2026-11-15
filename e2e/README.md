@@ -51,6 +51,28 @@ worktree (~1 GB per version set; the first run of a new version downloads).
 `npm run tsc` also type-checks the specs and driver (`tsc -p e2e`), and `npm run lint` lints `e2e/`
 (its own config block in `eslint.config.mjs`).
 
+## CI (SC-434)
+
+The `e2e` job in `.github/workflows/plugin-ci.yml` runs the FULL `npm run e2e -- --shards=4` (so the coverage
+gate applies) on every push to `main` / `develop` and every `pull_request`, in parallel with the `test` job.
+`ubuntu-24.04` (pinned, not `ubuntu-latest`, which GitHub is moving to 26.04), Node 24, `timeout-minutes: 30`,
+4 vCPU / 16 GB (the standard runner for a public repo). `npm run e2e` builds `main.js` itself and starts its own Xvfb
+(preinstalled on the image), so the job has no build, apt or `DISPLAY` step; `wdio-obsidian-service` launches Obsidian
+with `--no-sandbox` on Linux, so Ubuntu 24.04's restriction on unprivileged user namespaces does not matter.
+
+- **No retries.** No retry wrapper, no `continue-on-error`, `specFileRetries: 0`. A known flake (INIT-W10, SC-654;
+  SET-X03 / SET-X04, SC-657) turns the job red like any other failure.
+- **Failure artifact.** On failure the job uploads `e2e/.out/` as the artifact `e2e-out` (14 days): `<run>/<test-id>/`
+  holds `screenshot.png`, the DOM, the note before / after / diff, `events.json` and a vault copy, exactly as on your own
+  machine. Download it from the run's Summary page.
+- **Cache.** `~/.cache/dse-e2e-obsidian` (the Obsidian app, installer and chromedriver, about 530 MB, 185 MB gzipped) is cached under
+  `dse-e2e-obsidian-<os>-<arch>-<PINNED>`, where `<PINNED>` is read from `const PINNED` in `run.mjs`: bumping the
+  Obsidian pin there changes the key and nothing else needs editing. The cache is saved even when the tests fail.
+  A cold download took about 75 s.
+- **Simulated before the first push** (no Docker here): the job's `run:` steps in a fresh clone, `CI=true`, no `DISPLAY`, pinned
+  to 4 cores with `taskset -c 0-3`, on a host shared with other agents' runs: `OBSIDIAN-E2E done: 613/622 ok, 0 failed, 9 known-bug,
+  coverage: 417/417 pairs` every time; e2e step 342 s and 677 s with 4 shards (host load 6 and 16-25), 623 s with 2 shards.
+
 ## Layers, ids, manifests, the coverage gate
 
 If a bug would show in a jsdom table (math, labels, states), test it in jest. If it needs a real
