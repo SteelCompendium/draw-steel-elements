@@ -147,13 +147,13 @@ export const menuPlacement = (lp = false): Promise<MenuPlacement> =>
 	})()`);
 
 /** SC-648: the menu is anchored to the button: its left edge at the button's left edge (measured: 2 px off; Obsidian flips it to end at the button's left
- *  edge when there is no room on the right), its top at the button's bottom (2 px off; it ends at the button's top when it flips up), within `tol` px,
+ *  edge when there is no room on the right), its top at the button's bottom (2 px off; when there is no room below, Obsidian moves it up so it ENDS at the button's bottom, covering the button), within `tol` px,
  *  and it is entirely inside the window. The window corner (the bug) is hundreds of px away from all of these. */
 export function expectMenuAtButton(p: MenuPlacement, tol = 6): void {
 	const { button: b, menu: m, win } = p;
 	const note = JSON.stringify(p);
 	if (!(Math.abs(m.left - b.left) <= tol || Math.abs(m.right - b.left) <= tol)) throw new Error(`the options menu opened away from the button, sideways: ${note}`);
-	if (!(Math.abs(m.top - b.bottom) <= tol || Math.abs(m.bottom - b.top) <= tol)) throw new Error(`the options menu opened away from the button, vertically: ${note}`);
+	if (!(Math.abs(m.top - b.bottom) <= tol || Math.abs(m.bottom - b.bottom) <= tol)) throw new Error(`the options menu opened away from the button, vertically: ${note}`);
 	if (!(m.left >= 0 && m.top >= 0 && m.right <= win.w && m.bottom <= win.h)) throw new Error(`the options menu is partly outside the window: ${note}`);
 }
 
