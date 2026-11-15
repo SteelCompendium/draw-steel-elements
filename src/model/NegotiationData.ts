@@ -95,9 +95,10 @@ function readUsedEntries(owner: object, slot: string, list: unknown[], where: st
 
 /**
  * `list` (the entries now) with the value the user typed put back on each entry that is the one read from that position. Matched PER TEXT, not
- * with one cursor over the list (a chip press removes the first equal entry and adds at the END, so a cursor would skip every untouched typed
- * entry in between): a text that is `c` times in the list and `n` times in the snapshot takes the LAST `c` snapshot entries of that text, in
- * order, when `c <= n` (a removal takes the first equal one, `indexOf`, so the later one stays), and its first `n` occurrences take the snapshot
+ * with one cursor over the list (a chip press adds at the END and takes entries out from the middle, so a cursor would skip every untouched
+ * typed entry in between): a text that is `c` times in the list and `n` times in the snapshot takes the LAST `c` snapshot entries of that text, in
+ * order, when `c <= n` (a removal by position, `indexOf` + `splice`, takes the first equal one, so the later one stays; a chip press takes EVERY
+ * entry of its name out since SC-640, so it never leaves one of that text behind), and its first `n` occurrences take the snapshot
  * entries when `c > n` (the rest were added since and are plain text).
  */
 function restoreUsed(owner: object, slot: string, list: unknown[]): unknown[] {

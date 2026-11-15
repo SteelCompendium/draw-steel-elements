@@ -209,10 +209,18 @@ describe('SC-640: casing and spaces are ignored when a chosen entry is matched',
 		const m = await mount(PEACE + 'currentArgument:\n  pitfallsUsed: [POWER]\n');
 		const chip = ctl(m.root, 'negotiation.appeal.pitfall');
 		expect(chip.getAttribute('aria-pressed')).toBe('true');
+		const tiers = tiersOf(m.root);
 		await click(m, chip);
 		expect(m.written().currentArgument.pitfallsUsed).toEqual([]);
 		await click(m, chip);
 		expect(m.written().currentArgument.pitfallsUsed).toEqual(['Power']);
+		// the roll counts the differently-cased chosen pitfall exactly as the same-cased one, and not as nothing chosen
+		document.body.innerHTML = '';
+		const plain = await mount(PEACE + 'currentArgument:\n  pitfallsUsed: [Power]\n');
+		expect(tiers).toEqual(tiersOf(plain.root));
+		document.body.innerHTML = '';
+		const none = await mount(PEACE);
+		expect(tiers).not.toEqual(tiersOf(none.root));
 	});
 
 	test('a differently-cased chosen entry counts for the roll exactly as the same-cased one does, and greys out Same Argument', async () => {
