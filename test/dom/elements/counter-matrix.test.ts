@@ -616,3 +616,15 @@ describe('SC-442 [X] the user\'s note around the block', () => {
 		expect(valuesOf(m.note())).toEqual({ name: 'Torches', current_value: 1 });
 	});
 });
+
+// ----------------------------------------------------------------------------------------------------------------- known bugs
+
+describe('SC-442 known bugs (the CORRECT behaviour; each passes while the bug exists and fails when it is fixed)', () => {
+	// Typing -0 (or -1e-3) from a non-zero value commits the number -0, which the YAML writer prints as `-0`.
+	test.failing('[K01] typing -0 and Enter never leaves -0 in the note [known bug SC-673]', async () => {
+		const m = await mount(body({ value: 5, min: 0, max: 10 }));
+		typeAndCommit(m.root(), '-0', 'Enter');
+		await settle();
+		expect(bodyOf(m.note())).not.toMatch(/current_value:\s*-0\b/);
+	});
+});
