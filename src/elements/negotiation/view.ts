@@ -34,8 +34,9 @@ import { ElementView } from '@/framework/view';
 import { cardHead, iconButton, stampControl, tabs } from '@/framework/kit';
 import type { RenderMdCallback } from '@/framework/kit';
 import { captureControlFocus, restoreControlFocus } from '@/framework/kit/controlFocus';
+import type { ControlFocus } from '@/framework/kit/controlFocus';
 import { isKeyboardClick } from '@/framework/chrome/focusHandoff';
-import { NEGOTIATION_FOCUS_FALLBACKS } from './focusRules';
+import { NEGOTIATION_FOCUS_FALLBACKS, RESET_LANDING } from './focusRules';
 import { NegotiationData } from '@model/NegotiationData';
 import { PatienceInterestView } from '@drawSteelAdmonition/negotiation/PatienceInterestView';
 import { EndBandView } from '@drawSteelAdmonition/negotiation/EndBandView';
@@ -149,6 +150,10 @@ export class NegotiationView extends ElementView<NegotiationData> {
 				variant: 'ghost',
 				control: 'negotiation.menu',
 				onClick: (event: MouseEvent) => {
+					// SC-639: was focus inside the card as the menu OPENED? Asked now rather than when Reset is chosen: the menu does not move DOM focus
+					// today (the button keeps it, measured), but an engine or Obsidian version that did would make the later question null. Null here:
+					// focus was on the page or elsewhere, and a Reset then pulls nothing in.
+					const focusAtOpen = captureControlFocus(this.rootEl);
 					const m = new Menu();
 					m.addItem((item) => {
 						item
@@ -156,7 +161,7 @@ export class NegotiationView extends ElementView<NegotiationData> {
 							.setIcon('rotate-ccw')
 							// CB-4: bound to THIS view instance (one per block) — never a
 							// shared processor field.
-							.onClick(() => void this.resetNegotiation());
+							.onClick(() => void this.resetNegotiation(focusAtOpen));
 						// SC-439: the menu is Obsidian's native Menu, outside the card. Its item's own node
 						// (`MenuItem.dom`, a runtime field the typings leave out) carries the control id so the
 						// e2e driver can address it; attribute only, and a no-op where the field is absent.
@@ -185,12 +190,18 @@ export class NegotiationView extends ElementView<NegotiationData> {
 	/** Reset = the one whole-model change: mutate, rebuild through the framework default
 	 *  update() (unload owned children + onMount on the reset model), then persist.
 	 *  Rebuild/persist failures are caught and logged — never left as unhandled
-	 *  rejections. */
-	private async resetNegotiation(): Promise<void> {
+	 *  rejections.
+	 *
+	 *  SC-639: the rebuild throws away the node a keyboard user opened the menu from. `focusAtOpen` says focus was inside the card when the menu opened
+	 *  (null: it was not, and nothing is pulled in); it goes to the NEW card's options button, the control the user came from, whichever control of
+	 *  the card held it (a mouse press on the button moves no focus, so a seal can be the one). Handed back BEFORE persist(): in Live Preview the write
+	 *  redraws the widget, and the SC-602 carry hands on whatever holds focus at that moment. */
+	private async resetNegotiation(focusAtOpen: ControlFocus | null): Promise<void> {
 		new Notice('Negotiation reset to initial state');
 		this.model.resetData();
 		try {
 			await this.update(this.model);
+			if (focusAtOpen) restoreControlFocus(this.rootEl, { family: RESET_LANDING, nth: 0, ring: focusAtOpen.ring }, {}, NEGOTIATION_FOCUS_FALLBACKS);
 			await this.persist();
 		} catch (error) {
 			console.error('Draw Steel Elements: negotiation reset failed', error);

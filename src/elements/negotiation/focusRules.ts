@@ -12,9 +12,21 @@
 // Rejected: the Complete button itself (disabled, so no Tab stop); the first tier row (skips the appeals the next argument may still want,
 // and does not exist once the write ended the negotiation); the card root (a Tab from it re-enters at the top of the card, which is the
 // same place with an extra step); the pressed button's neighbour by position (the hint text, not a control).
+//
+// SC-639: Reset rebuilds the whole card, so the options button the menu was opened from is thrown away with it, and focus falls to <body> (measured
+// in real Obsidian, Reading view and Live Preview: the button holds focus through the whole time the menu is open, the click on Reset detaches it, and
+// the old button's focusout is the last card event). "Was focus in the card" is asked when the menu OPENS (view.ts), not when Reset is chosen, so a
+// menu that one day takes DOM focus for itself cannot make the answer null. Landing: the NEW card's options button, the control the user came from;
+// a Reset chosen while focus was elsewhere moves nothing.
 import type { ControlFallbacks } from '@/framework/kit/controlFocus';
+
+/** SC-639: the control Reset hands focus to on the rebuilt card: the options button the menu was opened from (see `resetNegotiation` in view.ts). */
+export const RESET_LANDING = 'negotiation.menu';
 
 /** Family -> the families to try, in order, when the control's own family has no usable control. Same shape as the montage's. */
 export const NEGOTIATION_FOCUS_FALLBACKS: ControlFallbacks = {
 	'negotiation.complete': ['negotiation.appeal.motivation', 'negotiation.appeal.pitfall', 'negotiation.mod.lie'],
+	// SC-639: the options button is always rebuilt with the card (SC-641 may hide the Reset item, not the button), so this is a guard. If it is ever
+	// absent: the card's tabs (the first Tab stop below the standing), else the card itself (`tabindex=-1`, the kit's last resort).
+	[RESET_LANDING]: ['negotiation.tab.argument', 'negotiation.tab.learn-more'],
 };
