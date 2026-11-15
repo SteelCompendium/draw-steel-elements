@@ -4,6 +4,7 @@
 // block uses the second's. Silent outside the block, on a fence line, on an indented line, and for the deferred elements while the gate is OFF.
 // (The enum value list exists only with the gate ON: AUTH-G10.)
 import { browser, expect } from '@wdio/globals';
+import { dse, knownBug } from '../../driver/dse';
 import { clickRow, closeList, editorState, openEditor, pressList, savedText, selectedListRow, setCursor, spliced, typeKeys, waitList, waitNoList } from '../../driver/authoring';
 
 const TRIGGER = 'authoring.schema.trigger';
@@ -106,4 +107,18 @@ describe('in-fence key autocomplete', () => {
 		await typeKeys('cur', TRIGGER);
 		expect((await waitList(1)).map((r) => r.text)).toEqual(['current_stamina']);
 	});
+
+	// SC-679, shipped build: the key list opened on an empty line with nothing typed (type a letter, delete it) and a pick leaves the cursor
+	// in front of the key and the old list on screen; the next Enter writes a second key (`collapsiblecollapsible`).
+	knownBug('SC-679', '[AUTH-K09] picking a key with nothing typed leaves the cursor after the key', async () => {
+		const rel = 'Authoring/key-empty-query.md';
+		await openEditor(rel, STAM, 'live-preview', AT);
+		await typeKeys('c', TRIGGER);
+		await waitList();
+		await browser.keys('Backspace');
+		await waitList(9);
+		await pressList('Enter');
+		await dse.waitFor(`app.workspace.getMostRecentLeaf().view.editor.getValue() === ${JSON.stringify(spliced(STAM, AT, undefined, 'collapsible'))}`, 'the key to be written');
+		expect((await editorState()).cursor).toEqual({ line: 1, ch: 11 });
+	}, { failsWith: /Expected|Received/ });
 });

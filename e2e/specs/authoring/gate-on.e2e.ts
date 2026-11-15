@@ -5,9 +5,10 @@
 // `difficulty` are the only top-level enums in any schema, and ds-roll is deferred) and the key list of ds-roll and the hidden ds-hero,
 // which stays out of the palette and `/ds` even with the gate on (SC-190).
 import { expect } from '@wdio/globals';
-import { dse } from '../../driver/dse';
+import { browser } from '@wdio/globals';
+import { dse, knownBug } from '../../driver/dse';
 import {
-	clickRow, closeList, drawn, insertCommandIds, openEditor, paletteRows, pressList, savedText, scaffoldOf, setCursor, spliced, toReading, typeKeys, waitList,
+	clickRow, closeList, drawn, editorState, insertCommandIds, openEditor, paletteRows, pressList, savedText, scaffoldOf, setCursor, spliced, toReading, typeKeys, waitList, waitNoList,
 } from '../../driver/authoring';
 import { advertised, commandTrip, CURSOR, NOTE_BEFORE } from '../../driver/authoringTrips';
 
@@ -54,7 +55,7 @@ describe('authoring with the experimental gate on', () => {
 		await clickRow('authoring.schema.value', 2);
 		await closeList();
 		expect(await savedText(rel)).toBe('```ds-roll\nmode: opposed\n```\n');
-		// (an accept with nothing typed leaves the cursor in front of the inserted value, see AUTH-G13: put it at the line's end to go on)
+		// (an accept with nothing typed leaves the cursor in front of the inserted value, SC-679, AUTH-G13: put it at the line's end to go on)
 		await setCursor({ line: 1, ch: 13 });
 		await typeKeys('\ndifficulty: m', 'authoring.schema.trigger');
 		expect((await waitList(1)).map((r) => [r.id, r.text])).toEqual([['authoring.schema.value', 'medium']]);
@@ -85,4 +86,26 @@ describe('authoring with the experimental gate on', () => {
 		expect((await waitList(2)).map((r) => r.text)).toEqual(['Heroic resourceds-resource', 'Hero Tokensds-tokens']);
 		await closeList();
 	});
+
+	// SC-679: an accept with nothing typed (start == end) leaves the cursor in front of the inserted value and the old list on screen.
+	const pickOpposed = async (rel: string): Promise<void> => {
+		await openEditor(rel, '```ds-roll\n\n```\n', 'live-preview', { line: 1, ch: 0 });
+		await typeKeys('mode: ', 'authoring.schema.trigger');
+		await waitList(4);
+		await clickRow('authoring.schema.value', 2);
+		await dse.waitFor(`app.workspace.getMostRecentLeaf().view.editor.getValue() === ${JSON.stringify('```ds-roll\nmode: opposed\n```\n')}`, 'the value to be written');
+	};
+	knownBug('SC-679', '[AUTH-G13] picking `opposed` with nothing typed after `mode: ` leaves the cursor after the value', async () => {
+		await pickOpposed('Authoring/gate-cursor.md');
+		expect((await editorState()).cursor).toEqual({ line: 1, ch: 13 });
+	}, { failsWith: /Expected|Received/ });
+
+	knownBug('SC-679', '[AUTH-G14] after picking `opposed` with nothing typed, Escape then Enter (a new line) leaves `mode: opposed` whole', async () => {
+		await pickOpposed('Authoring/gate-enter.md');
+		await browser.keys('Escape');
+		await waitNoList();
+		await browser.keys('Enter');
+		await dse.settle();
+		expect((await editorState()).value.split('\n')[1]).toBe('mode: opposed');
+	}, { failsWith: /mode: opposed/ });
 });
