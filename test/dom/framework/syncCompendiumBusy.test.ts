@@ -327,6 +327,21 @@ describe('SC-646 — fire-and-forget sync and migration starts leave no unhandle
 		expect(plugin.syncService.isBusy()).toBe(false);
 	});
 
+	test('syncCompendium: a migration left pending with nothing to move settles it then syncs, and a failed sync is reported once (by the service), not logged again as "could not start"', async () => {
+		const plugin = await makeLoadedPlugin();
+		await seedLegacyModalTrigger(plugin);
+		jest.spyOn(plugin.manifestStore, 'load').mockResolvedValue({} as never); // already synced once
+		jest.spyOn(plugin.migrationService, 'isPending').mockResolvedValue(true);
+		const markSettled = jest.spyOn(plugin.migrationService, 'markSettled').mockResolvedValue(undefined);
+		command(plugin, 'sync-compendium').callback(); // the real sync runs and fails (the mocked release has no asset)
+		await settle();
+		expect(markSettled).toHaveBeenCalledTimes(1);
+		expect(failureNotices()).toHaveLength(1);
+		expect(logged('compendium sync failed')).toHaveLength(1);
+		expect(logged('could not start')).toHaveLength(0);
+		expect(plugin.syncService.isBusy()).toBe(false);
+	});
+
 	test("offerMigration's syncAfter: a failed sync is not left unhandled", async () => {
 		const plugin = await makeLoadedPlugin();
 		stubMigrationPlan(plugin, plugin.settings.compendiumDestinationDirectory);

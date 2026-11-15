@@ -798,9 +798,9 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
                     // LegacyCompendiumModal's onChoice callback is declared `(trashOldRoot:
                     // boolean) => void` (fire-and-forget from the modal's own click handler,
                     // never awaited there either) -- an `async` callback passed directly
-                    // trips `no-misused-promises`. Wrap in a `void`-discarded async IIFE
-                    // instead: identical fire-and-forget execution/ordering/error handling,
-                    // just an explicit `void` where it was implicit before.
+                    // trips `no-misused-promises`. Wrap in an async IIFE instead, ending in a
+                    // `.catch` (SC-646: `logUnlessSyncReported`) so nothing is left unhandled:
+                    // same fire-and-forget execution/ordering as before.
                     //
                     // SC-243 fix round 1 (review L1): lock-first. This callback fires well
                     // after `syncCompendium`'s own span has released the lock (the modal was
