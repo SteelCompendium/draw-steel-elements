@@ -294,7 +294,7 @@ describe('SC-191 slice 4: wouldReuseSkill / nextHeroToAct — the sheet\'s live-
 	test('reusedSkillSpelling gives the skill as the board stores it, or undefined when the skill is free', () => {
 		const m = withRosterFixture();
 		m.participants = [{ name: 'Kira', skills_used: ['  Animal Handling '] }];
-		expect(reusedSkillSpelling(m, 'Kira', 'animal handling')).toBe('  Animal Handling ');
+		expect(reusedSkillSpelling(m, 'Kira', 'animal handling')).toBe('Animal Handling');
 		expect(reusedSkillSpelling(m, 'Kira', 'Climb')).toBeUndefined();
 		expect(reusedSkillSpelling(m, 'Nobody', 'Climb')).toBeUndefined();
 	});
@@ -307,6 +307,20 @@ describe('SC-191 slice 4: wouldReuseSkill / nextHeroToAct — the sheet\'s live-
 		expect(wouldReuseSkill(m, 'Kira', ' nature ', entry)).toBe(false);
 		m.participants = [{ name: 'Kira', skills_used: ['Nature', 'nature'] }];
 		expect(wouldReuseSkill(m, 'Kira', 'NATURE', entry)).toBe(true);
+	});
+
+	test('wouldReuseSkill excludes the edited entry compared ignoring case: a stored "nature" and an entry skill "Nature"', () => {
+		const m = withRosterFixture();
+		m.participants = [{ name: 'Kira', skills_used: ['nature'] }];
+		const entry: MontageEntry = { hero: 'Kira', round: 1, result: 'success', skill: 'Nature' };
+		expect(wouldReuseSkill(m, 'Kira', 'NATURE', entry)).toBe(false);
+	});
+
+	test('reusedSkillSpelling removes the edited entry\'s exact item first, so it names the OTHER use: [nature, Nature] editing "Nature" typed NATURE gives "nature"', () => {
+		const m = withRosterFixture();
+		m.participants = [{ name: 'Kira', skills_used: ['nature', 'Nature'] }];
+		const entry: MontageEntry = { hero: 'Kira', round: 2, result: 'success', skill: 'Nature' };
+		expect(reusedSkillSpelling(m, 'Kira', 'NATURE', entry)).toBe('nature');
 	});
 
 	test('wouldReuseSkill skips a number, null or blank item in skills_used instead of crashing', () => {
