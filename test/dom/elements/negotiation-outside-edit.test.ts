@@ -19,7 +19,7 @@ import { createReferenceService } from '../../../src/framework/seams/refs';
 import { createValidationService } from '../../../src/framework/validation';
 import { createSessionStore } from '../../../src/framework/session';
 import { DEFAULT_SETTINGS } from '@model/Settings';
-import { App, Component, Notice, Plugin, stringifyYaml } from '../../mocks/obsidian';
+import { App, Component, Notice, Plugin, parseYaml, stringifyYaml } from '../../mocks/obsidian';
 import { negotiationElement } from '../../../src/elements/negotiation/definition';
 import type { NegotiationView } from '../../../src/elements/negotiation/view';
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
@@ -290,5 +290,18 @@ describe('SC-656: an outside edit redraws the negotiation card while a control o
 		await later(45);
 		// The second card's hand-off is the FIRST one's settle re-claim only when it is still armed; here the first view's own memory starts one.
 		expect(document.activeElement).toBe(ctl(second.root, 'negotiation.appeal.motivation', 1));
+	});
+
+	// The pinned sidebar refreshes a card in place for an outside edit (SidebarPanel.handleExternalChange -> view.update(model)): no unload, no redraw by Obsidian.
+	test('[OE17] the pinned sidebar\'s in-place refresh with a new model: focus lands on the same control of the rebuilt card; focus on the page pulls nothing in', async () => {
+		const old = await mount(BASE);
+		press(ctl(old.root, 'negotiation.appeal.motivation', 1));
+		const model = negotiationElement.parse(parseYaml(EDITED), EDITED);
+		await old.view.update(model as never);
+		expect(old.root.textContent).toContain('Patience'); // rebuilt
+		expect(document.activeElement).toBe(ctl(old.root, 'negotiation.appeal.motivation', 1));
+		(document.activeElement as HTMLElement).blur();
+		await old.view.update(negotiationElement.parse(parseYaml(BASE), BASE) as never);
+		expect(document.activeElement).toBe(document.body);
 	});
 });

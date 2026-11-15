@@ -134,3 +134,48 @@ describe('negotiation: an outside edit redraws the card while a control has keyb
 		expect(await focusState()).toMatchObject({ ctl: null, card: null });
 	});
 });
+
+// The pinned sidebar does not redraw the card: its view is refreshed in place (SidebarPanel.handleExternalChange -> view.update(model)), which empties
+// the card too. The pinned note is made at runtime (a copy of basic.md with an anchor); the driver deletes it again with the next openNote.
+describe('negotiation: an outside edit refreshes the pinned card while a control has keyboard focus', () => {
+	const PINNED = 'Sidebar/negotiation-pinned.md';
+	const ANCHOR = 'oe656';
+	const closeSidebar = (): Promise<unknown> => dse.page(`(() => { app.workspace.detachLeavesOfType('dse-sidebar'); return true; })()`);
+	before(() => dse.setPrefs({}, { experimental: true }));
+	after(async () => {
+		await closeSidebar();
+		await dse.setPrefs({});
+	});
+	afterEach(closeSidebar);
+
+	async function pin(): Promise<void> {
+		await dse.openNote(BASIC); // resets the vault to fixture state first
+		const text = (await dse.noteText(BASIC)).replace('```\n\nBELOW', `_dse_anchor: ${ANCHOR}\n\`\`\`\n\nBELOW`);
+		await dse.page(`(async () => {
+			await app.vault.create(${JSON.stringify(PINNED)}, ${JSON.stringify(text)});
+			document.querySelectorAll('.notice-container').forEach((n) => n.style.display = 'none'); // Obsidian's "Update Available" Notice sits over the panel
+			const leaf = app.workspace.getRightLeaf(false);
+			await leaf.setViewState({ type: 'dse-sidebar', active: true });
+			await app.workspace.revealLeaf(leaf);
+			leaf.view.addPanel({ filePath: ${JSON.stringify(PINNED)}, alias: 'ds-negotiation', anchorId: ${JSON.stringify(ANCHOR)} });
+			return true;
+		})()`);
+		await dse.waitFor(`!!document.querySelector('.dse-sidebar [data-dse-control="negotiation.appeal.motivation"]')`, 'the pinned negotiation to render in the sidebar');
+	}
+
+	it('[NEGO-O09] pinned sidebar, focus on the second Motivation chip: after an outside edit the refreshed card holds focus on the same chip', async () => {
+		await pin();
+		await dse.page(`document.querySelectorAll('.dse-sidebar [data-dse-control="negotiation.appeal.motivation"]')[1].focus({ focusVisible: true })`);
+		await dse.externalEdit(PINNED, RENAME);
+		await dse.waitFor(`document.querySelector('.dse-sidebar [data-dse-element="negotiation"]')?.textContent?.includes('Convincing Sam')`, 'the pinned card to show the outside edit');
+		await browser.pause(500);
+		const f = await dse.page<{ ctl: string | null; nth: number; sidebar: boolean }>(`(() => {
+			const a = document.activeElement;
+			const id = a?.closest?.('[data-dse-control]')?.getAttribute('data-dse-control') ?? null;
+			const c = a?.closest?.('[data-dse-element="negotiation"]');
+			return { ctl: id, nth: c && id ? [...c.querySelectorAll('[data-dse-control="' + id + '"]')].indexOf(a) : -1, sidebar: !!a?.closest?.('.dse-sidebar') };
+		})()`);
+		expect(f).toEqual({ ctl: 'negotiation.appeal.motivation', nth: 1, sidebar: true });
+		expect(await dse.noteText(PINNED)).toContain('Convincing Sam');
+	});
+});

@@ -85,6 +85,15 @@ export class NegotiationView extends ElementView<NegotiationData> {
 		return super.persist();
 	}
 
+	/** SC-656 — the pinned sidebar refreshes a card for an outside edit in place: it hands THIS view a model other than the one on screen (the view's
+	 *  own rebuilds, Reset, pass its own), and the default `update()` empties the card, so focus fell to <body>. Hand it to the same control of the rebuilt
+	 *  card, only when it was inside (kit/controlFocus.ts, the card's focus rules). */
+	async update(model: NegotiationData): Promise<void> {
+		const focus = model !== this.model ? captureControlFocus(this.rootEl) : null;
+		await super.update(model);
+		restoreControlFocus(this.rootEl, focus, {}, NEGOTIATION_FOCUS_FALLBACKS);
+	}
+
 	/** SC-642 — run a write that DISARMS the control a keyboard user pressed (Complete Argument) and keep focus on the card: remember the
 	 *  focused control first, hand focus to its fallback right after (kit/controlFocus.ts). Nothing moves when focus was not inside the card. */
 	private readonly keepFocus = (write: () => void): void => {
