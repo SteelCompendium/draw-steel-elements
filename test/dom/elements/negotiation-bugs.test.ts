@@ -78,7 +78,7 @@ describe('SC-439 filed bugs', () => {
 		expect(seals[0] === 0).toBe(ended === 'hostile');
 	});
 
-	test.failing('[K05] Reset negotiation, chosen from the focused options button, leaves keyboard focus inside the card [known bug SC-639]', async () => {
+	test('[K05] Reset negotiation, chosen from the focused options button, leaves keyboard focus inside the card', async () => {
 		const { root, flush } = await mount('name: x\ninitial_interest: 3\ninitial_patience: 3\ncurrent_patience: 1\n' + OFFERS);
 		const menu = root().querySelector<HTMLElement>('[data-dse-control="negotiation.menu"]')!;
 		menu.focus();

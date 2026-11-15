@@ -26,6 +26,8 @@ import { App, Plugin, Menu, Notice, parseYaml, stringifyYaml, makeFakeContext } 
 import { makeFakeApp, seedNote } from '../../fakes/fakeObsidian';
 import { SidebarBlockHost } from '../../../src/framework/host/SidebarBlockHost';
 import { negotiationElement } from '../../../src/elements/negotiation/definition';
+import { NEGOTIATION_FOCUS_FALLBACKS, RESET_LANDING } from '../../../src/elements/negotiation/focusRules';
+import { restoreControlFocus } from '../../../src/framework/kit/controlFocus';
 
 // -- harness ---------------------------------------------------------------------------------------------------------------
 
@@ -753,6 +755,111 @@ describe('SC-439 R: Reset negotiation, from every kind of state', () => {
 		document.body.innerHTML = '';
 		const readOnly = await mount(src(), { canPersist: false });
 		expect(ctls(readOnly.root(), 'negotiation.menu')).toHaveLength(0);
+	});
+});
+
+// SC-639: Reset rebuilds the whole card, so the options button a keyboard user opened the menu from is thrown away with it. Focus goes to the NEW card's
+// options button, and only when it was in the card as the menu opened (the mock Menu moves no focus, as Obsidian's does not: the button holds it while the
+// menu is open). That Chromium really drops it, and keeps it now, in Reading view and in Live Preview, is the real-Obsidian e2e [NEGO-F01] .. [NEGO-L08].
+describe('SC-639: keyboard focus after Reset negotiation', () => {
+	const menuButton = (root: HTMLElement): HTMLElement => ctl(root, 'negotiation.menu');
+	/** A keyboard user's Reset: focus the options button, activate it (a click with no pointer), choose the one item. */
+	async function resetFromKeyboard(m: Awaited<ReturnType<typeof mount>>) {
+		const button = menuButton(m.root());
+		button.focus();
+		expect(document.activeElement).toBe(button);
+		button.click();
+		Menu.lastMenu!.items[0].onClickCallback!();
+		await m.flush();
+		return button;
+	}
+
+	test('focus is on the NEW options button, not on <body> and not on the discarded node; the card was rebuilt and wrote once', async () => {
+		const m = await mount(src({ current_patience: 1 }));
+		const old = await resetFromKeyboard(m);
+		expect(old.isConnected).toBe(false);
+		expect(menuButton(m.root())).not.toBe(old);
+		expect(document.activeElement).toBe(menuButton(m.root()));
+		expect(m.writes()).toHaveLength(1);
+		expect(checkedSeals(m.root(), 'patience')).toEqual([3]);
+	});
+
+	test('the answer is taken when the menu OPENS: a menu that took focus for itself before Reset was chosen does not lose it', async () => {
+		const m = await mount(src({ current_patience: 1 }));
+		const button = menuButton(m.root());
+		button.focus();
+		button.click();
+		const item = document.body.appendChild(document.createElement('div')); // Obsidian's menu item, outside the card
+		item.tabIndex = -1;
+		item.focus();
+		expect(m.root().contains(document.activeElement)).toBe(false);
+		Menu.lastMenu!.items[0].onClickCallback!();
+		item.remove(); // the menu closes once its item has run; the hand-back is a microtask later
+		await m.flush();
+		expect(document.activeElement).toBe(menuButton(m.root()));
+	});
+
+	test('focus on another control of the card when the menu opened (a mouse press on the button moves no focus): it still lands on the options button', async () => {
+		const m = await mount(src({ current_patience: 1 }));
+		seal(m.root(), 'patience', 1).focus();
+		menuButton(m.root()).click();
+		Menu.lastMenu!.items[0].onClickCallback!();
+		await m.flush();
+		expect(document.activeElement).toBe(menuButton(m.root()));
+	});
+
+	test('focus on the page when the menu opened (a mouse user): Reset pulls no focus into the card', async () => {
+		const m = await mount(src({ current_patience: 1 }));
+		(document.activeElement as HTMLElement).blur();
+		menuButton(m.root()).click();
+		Menu.lastMenu!.items[0].onClickCallback!();
+		await m.flush();
+		expect(m.writes()).toHaveLength(1);
+		expect(document.activeElement).toBe(document.body);
+	});
+
+	test('focus on a control outside the card is left where it is', async () => {
+		const m = await mount(src({ current_patience: 1 }));
+		const outside = document.body.appendChild(document.createElement('button'));
+		outside.focus();
+		menuButton(m.root()).click();
+		Menu.lastMenu!.items[0].onClickCallback!();
+		await m.flush();
+		expect(document.activeElement).toBe(outside);
+	});
+
+	test('a second Reset, on a card that is already initial, still leaves focus on the options button', async () => {
+		const m = await mount(src({ current_patience: 1 }));
+		await resetFromKeyboard(m);
+		await resetFromKeyboard(m);
+		expect(document.activeElement).toBe(menuButton(m.root()));
+	});
+
+	test('a menu opened and dismissed does not leave a Reset later pulling focus in: the answer belongs to each opening', async () => {
+		const m = await mount(src({ current_patience: 1 }));
+		menuButton(m.root()).focus();
+		menuButton(m.root()).click(); // opened from the keyboard, then Escape: nothing chosen
+		const dismissed = Menu.lastMenu!;
+		(document.activeElement as HTMLElement).blur();
+		menuButton(m.root()).click(); // a second opening, with focus on the page (a mouse user)
+		expect(Menu.lastMenu).not.toBe(dismissed);
+		Menu.lastMenu!.items[0].onClickCallback!();
+		await m.flush();
+		expect(document.activeElement).toBe(document.body);
+	});
+
+	test('the fallback if the options button were ever absent: the card\'s first tab, else the card itself (tabindex -1, no new Tab stop)', async () => {
+		const m = await mount(src());
+		const token = { family: RESET_LANDING, nth: 0, ring: true };
+		menuButton(m.root()).remove();
+		expect(restoreControlFocus(m.root(), token, {}, NEGOTIATION_FOCUS_FALLBACKS)).toBe(true);
+		expect(document.activeElement).toBe(tabOf(m.root(), 'argument'));
+
+		(document.activeElement as HTMLElement).blur();
+		ctls(m.root(), 'negotiation.tab.argument').concat(ctls(m.root(), 'negotiation.tab.learn-more')).forEach((t) => t.remove());
+		expect(restoreControlFocus(m.root(), token, {}, NEGOTIATION_FOCUS_FALLBACKS)).toBe(true);
+		expect(document.activeElement).toBe(m.root());
+		expect(m.root().getAttribute('tabindex')).toBe('-1');
 	});
 });
 

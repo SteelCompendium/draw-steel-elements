@@ -1,13 +1,14 @@
 // SC-439 [F]: keyboard focus after the negotiation saves. Seal, chip and Spent writes repaint in place (focus stays: asserted in the
 // scenarios that press them); Reset rebuilds the whole card, and Complete Argument disarms the very button that was pressed. A keyboard
-// user should still have focus inside the card afterwards, not on the page.
+// user should still have focus inside the card afterwards, not on the page. Reset (SC-639): the button the menu was opened from is thrown away with
+// the card, so focus goes to the NEW card's options button (src/elements/negotiation/view.ts), and only when focus was in the card when the menu opened.
 // Negotiation/basic.md: Interest 3 / Patience 3.
 import { expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
-import { BASIC, blockOf, focusState, interestOf, onNthOfControl, openNego, patienceOf, patienceSeal, TABS } from '../../driver/negotiation';
+import { dse } from '../../driver/dse';
+import { BASIC, blockOf, focusState, interestOf, onNthOfControl, openMenu, openNego, patienceOf, patienceSeal, resetFromKeyboard, TABS } from '../../driver/negotiation';
 
 describe('negotiation: keyboard focus after a save', () => {
-	knownBug('SC-639', '[NEGO-F01] Reset chosen from the keyboard (Enter on the options button, then Down and Enter in the menu): focus lands inside the card, not on the page', async () => {
+	it('[NEGO-F01] Reset chosen from the keyboard (Enter on the options button, then Down and Enter in the menu): focus lands on the options button of the rebuilt card, not on the page', async () => {
 		const root = await openNego(BASIC);
 		await dse.waitForWrite(BASIC, () => dse.click(patienceSeal(root, 1)));
 		const menu = root.control('negotiation.menu');
@@ -20,9 +21,43 @@ describe('negotiation: keyboard focus after a save', () => {
 		await dse.waitFor(`document.querySelectorAll('.menu').length === 0`, 'the menu to close');
 		expect(patienceOf(await blockOf(BASIC))).toBe(3);
 		const f = await focusState();
-		expect(f).toMatchObject({ inCard: true });
+		expect(f).toMatchObject({ inCard: true, ctl: 'negotiation.menu' });
 		expect(f.tag).not.toBe('BODY');
-	}, { failsWith: /BODY|inCard/ });
+	});
+
+	it('[NEGO-F05] Reset from the options button opened with Space: focus lands on the options button too, and a second Enter opens the menu again from it', async () => {
+		const root = await openNego(BASIC);
+		await dse.waitForWrite(BASIC, () => dse.click(patienceSeal(root, 1)));
+		await dse.tabTo(root.control('negotiation.menu'), TABS);
+		await resetFromKeyboard(BASIC, root, { key: 'Space' });
+		expect(patienceOf(await blockOf(BASIC))).toBe(3);
+		expect(await focusState()).toMatchObject({ inCard: true, ctl: 'negotiation.menu' });
+		await dse.press('Enter', root.control('negotiation.menu')); // the landed button is the live one, not a stale node
+		await dse.waitFor(`document.querySelectorAll('.menu').length === 1`, 'the menu to open again');
+		await dse.press('Escape');
+		await dse.waitFor(`document.querySelectorAll('.menu').length === 0`, 'the menu to close');
+	});
+
+	it('[NEGO-F06] Reset on a negotiation already in its initial state writes nothing and still leaves focus on the options button', async () => {
+		const root = await openNego(BASIC);
+		await dse.tabTo(root.control('negotiation.menu'), TABS);
+		await resetFromKeyboard(BASIC, root); // the first Reset rewrites the hand-formatted YAML in the tracker's own: that is a change
+		await resetFromKeyboard(BASIC, root, { writes: false });
+		expect(await focusState()).toMatchObject({ inCard: true, ctl: 'negotiation.menu' });
+	});
+
+	it('[NEGO-F07] a Reset made with the mouse while focus is on the page pulls no focus into the card', async () => {
+		const root = await openNego(BASIC);
+		await dse.waitForWrite(BASIC, () => dse.click(patienceSeal(root, 1)));
+		await dse.page(`document.activeElement.blur()`);
+		expect(await focusState()).toMatchObject({ inCard: false });
+		await openMenu(root);
+		await dse.waitForWrite(BASIC, () => dse.click(dse.control('negotiation.menu.reset')));
+		await dse.waitFor(`document.querySelectorAll('.menu').length === 0`, 'the menu to close');
+		await dse.settle();
+		expect(patienceOf(await blockOf(BASIC))).toBe(3);
+		expect(await focusState()).toMatchObject({ inCard: false, tag: 'BODY' });
+	});
 
 	// SC-642: Complete Argument disarms the very button that was pressed, and Chromium blurs a focused button the moment it is disabled, inside the
 	// click dispatch (measured: 2-3 ms after the click; the save lands ~410 ms later; no rebuild is involved). Focus now goes to the FIRST USABLE control of the

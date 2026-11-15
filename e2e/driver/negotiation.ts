@@ -165,6 +165,21 @@ export async function chooseReset(note: string): Promise<number> {
 	return w.count;
 }
 
+/** SC-639: Reset chosen from the keyboard, with focus already on the card's options button: `key` (Enter or Space) opens the menu, ArrowDown selects its item,
+ *  Enter chooses it. `writes: false` expects NO write (a negotiation already in its initial state). Waits for the menu to close and the plugin to be write-idle. */
+export async function resetFromKeyboard(note: string, root: Scope, opts: { key?: 'Enter' | 'Space'; writes?: boolean } = {}): Promise<void> {
+	await dse.press(opts.key ?? 'Enter', root.control('negotiation.menu'));
+	await dse.waitFor(`document.querySelectorAll('.menu').length === 1`, 'the menu to open');
+	// The menu takes its keys a moment after it shows: an ArrowDown sent 9 ms after a Space-opened menu appeared was ignored (measured, SC-639), with or without the fix.
+	await dse.page(`new Promise((r) => setTimeout(r, 300))`);
+	await dse.press('ArrowDown');
+	const choose = () => dse.press('Enter', dse.aimedAt('negotiation.menu.reset'));
+	if (opts.writes === false) await dse.expectNoWrite(note, choose);
+	else await dse.waitForWrite(note, choose);
+	await dse.waitFor(`document.querySelectorAll('.menu').length === 0`, 'the menu to close');
+	await dse.settle();
+}
+
 /** Assert the Learn Motivation/Pitfall tab is showing (or not) by its rules text. */
 export async function expectLearnShowing(root: Scope, showing: boolean): Promise<void> {
 	const learn = root.control({ css: '.dse-nt__learn-more' });
