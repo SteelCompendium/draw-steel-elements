@@ -71,6 +71,8 @@ import { createElementRegistry } from '../../src/framework/registry';
 import { registerFrameworkElementDefinitions } from 'main';
 import { Editor } from '../mocks/obsidian';
 import { loadMdDseFixture, makeCompendiumDeps } from './elements/_refHarness';
+import { counterElement } from '../../src/elements/counter/definition';
+import counterManifest from '../../e2e/manifest/counter';
 
 const INTERACTIVE = 'button, input, select, textarea, [role="button"], [role="slider"], [tabindex], [contenteditable]';
 const CHROME = '[data-dse-chrome-item]';
@@ -1094,4 +1096,131 @@ describe('authoring surface census (SC-443)', () => {
 			setExperimental(true);
 		}
 	});
+});
+
+describe('SC-442 census: the counter, scoped by container', () => {
+	/** Mount `source` through the real pipeline; `canPersist` false is the read-only (canvas) host. */
+	async function mountCounter(source: string, canPersist = true): Promise<HTMLElement> {
+		const host = makeHost('ds-counter', 'Counter.md');
+		(host as any).canPersist = canPersist;
+		await new ElementPipeline(makeDeps()).run(counterElement, source, host);
+		return host.containerEl.firstElementChild as HTMLElement;
+	}
+
+	// The scope is the counter's ROOT (the stepper, the name and the framework chrome panel inside it), not a CSS class: a new control
+	// anywhere in it needs an id from the counter manifest or the framework chrome's (`chrome.collapse` / `chrome.expand` / `chrome.pin`).
+	const counterIds = new Set([...idsOf(counterManifest), ...chromeIds]);
+	const census = (root: Element): string[] => censusProblems(root, counterIds, INTERACTIVE, false);
+	const count = (root: Element, id: string): number => root.querySelectorAll(`[data-dse-control="${id}"]`).length;
+
+	const fixtureDir = path.join(__dirname, '../../e2e/vaults/shipped/Counter');
+	const counterFixture = (name: string): string => {
+		const text = fs.readFileSync(path.join(fixtureDir, `${name}.md`), 'utf8');
+		return /```ds-counter\n([\s\S]*?)\n```/.exec(text)![1];
+	};
+	const FIXTURES = fs.readdirSync(fixtureDir).filter((f) => f.endsWith('.md')).map((f) => f.replace(/\.md$/, '')).sort();
+
+	// A block with a body that is no map renders the same counter (the no-map cases are the survey's, not the census's); `empty-block` fails to render.
+	const RENDERS = FIXTURES.filter((name) => name !== 'empty-block');
+
+	// The kept-keys fixture holds a `prefs:` scalar and a non-boolean `collapsed:` on purpose: the framework warns about both, which is not what is under test.
+	beforeEach(() => {
+		jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+	});
+	afterEach(() => {
+		jest.restoreAllMocks();
+		setExperimental(true); // the suite default
+	});
+
+	test.each([
+		['an editable counter', true],
+		['a read-only counter (canvas host)', false],
+	])('the census itself bites on %s: an un-id\'d button injected into the stepper, the card, the chrome panel or the root is a finding, as is an id outside the manifest', async (_name, canPersist) => {
+		const root = await mountCounter(counterFixture('counter'), canPersist);
+		expect(census(root)).toEqual([]);
+		for (const host of ['.dse-stepper', '.dse-counter', '.dse-chrome', null]) {
+			const rogue = document.createElement('button');
+			rogue.textContent = 'Rogue';
+			(host === null ? root : root.querySelector(host)!).appendChild(rogue);
+			expect(census(root)).toEqual([expect.stringMatching(/^no data-dse-control: <button/)]);
+			rogue.remove();
+		}
+		const div = document.createElement('div');
+		div.setAttribute('tabindex', '0');
+		root.querySelector('.dse-counter')!.appendChild(div);
+		expect(census(root)).toHaveLength(1);
+		div.remove();
+		const field = document.createElement('input');
+		root.querySelector('.dse-stepper')!.appendChild(field);
+		expect(census(root)).toEqual([expect.stringMatching(/^no data-dse-control: <input/)]);
+		field.remove();
+		const stray = root.querySelector('[data-dse-control="counter.inc"]')!;
+		stray.setAttribute('data-dse-control', 'counter.not-a-control');
+		expect(census(root)).toEqual([expect.stringMatching(/id "counter\.not-a-control" is not in the manifest/)]);
+	});
+
+	test.each(RENDERS.map((name) => [name]))('the %s fixture note, editable: every interactive node carries an id the counter manifest declares, and the value is the input', async (name) => {
+		const root = await mountCounter(counterFixture(name));
+		expect(census(root)).toEqual([]);
+		for (const id of ['counter.dec', 'counter.input', 'counter.inc']) expect(count(root, id)).toBe(1);
+		expect(count(root, 'counter.value')).toBe(0);
+	});
+
+	test.each(RENDERS.map((name) => [name]))('the %s fixture note, read-only: every interactive node carries an id the counter manifest declares, and the value is a plain span', async (name) => {
+		const root = await mountCounter(counterFixture(name), false);
+		expect(census(root)).toEqual([]);
+		for (const id of ['counter.dec', 'counter.value', 'counter.inc']) expect(count(root, id)).toBe(1);
+		expect(count(root, 'counter.input')).toBe(0);
+		expect(root.querySelector('input')).toBeNull();
+	});
+
+	test('every control the counter manifest declares is stamped by SOME variant of the card (no dead manifest row), and the manifest lists nothing else', async () => {
+		const seen = new Set<string>();
+		for (const canPersist of [true, false]) {
+			const root = await mountCounter(counterFixture('counter'), canPersist);
+			root.querySelectorAll('[data-dse-control]').forEach((el) => seen.add(el.getAttribute('data-dse-control') as string));
+		}
+		expect(Object.keys(counterManifest.controls).sort()).toEqual(['counter.dec', 'counter.inc', 'counter.input', 'counter.value']);
+		for (const id of Object.keys(counterManifest.controls)) expect({ id, stamped: seen.has(id) }).toEqual({ id, stamped: true });
+		expect(counterManifest.reach).toEqual([]);
+	});
+
+	test('the stamps are on the nodes a user reaches: two real buttons, the number field and (read-only) the span the focus hand-off targets', async () => {
+		const editable = await mountCounter(counterFixture('counter'));
+		expect(editable.querySelector('[data-dse-control="counter.dec"]')!.tagName).toBe('BUTTON');
+		expect(editable.querySelector('[data-dse-control="counter.inc"]')!.tagName).toBe('BUTTON');
+		expect(editable.querySelector('[data-dse-control="counter.input"]')!.tagName).toBe('INPUT');
+		const readOnly = await mountCounter(counterFixture('counter'), false);
+		const value = readOnly.querySelector('[data-dse-control="counter.value"]') as HTMLElement;
+		expect(value.tagName).toBe('SPAN');
+		expect(value.getAttribute('tabindex')).toBe('-1'); // a programmatic focus target, not a tab stop
+		expect(manifestKinds('counter.value')).toEqual([]); // so nothing is expected to drive it
+	});
+
+	test('the chrome panel is inside the scope: Collapse and the one-line form\'s Expand are identified, the experimental Pin item appears only with the gate on, and a rogue item in the panel is a finding', async () => {
+		setExperimental(false);
+		const shipped = await mountCounter(counterFixture('counter'));
+		expect(census(shipped)).toEqual([]);
+		for (const id of ['chrome.collapse', 'chrome.expand']) expect(count(shipped, id)).toBe(1);
+		expect(count(shipped, 'chrome.pin')).toBe(0);
+		setExperimental(true);
+		const gated = await mountCounter(counterFixture('counter'));
+		expect(census(gated)).toEqual([]);
+		for (const id of ['chrome.collapse', 'chrome.expand', 'chrome.pin']) expect(count(gated, id)).toBe(1);
+		const rogue = document.createElement('button');
+		gated.querySelector('.dse-chrome')!.appendChild(rogue);
+		expect(census(gated)).toEqual([expect.stringMatching(/^no data-dse-control: <button/)]);
+	});
+
+	test('a read-only counter keeps both buttons disabled and offers no field, so no id on it takes a key or a typed value', async () => {
+		const root = await mountCounter(counterFixture('counter'), false);
+		expect((root.querySelector('[data-dse-control="counter.dec"]') as HTMLButtonElement).disabled).toBe(true);
+		expect((root.querySelector('[data-dse-control="counter.inc"]') as HTMLButtonElement).disabled).toBe(true);
+		expect(root.getAttribute('data-dse-readonly')).toBe('true');
+	});
+
+	/** The interaction kinds the manifest lists for `id`. */
+	function manifestKinds(id: string): readonly string[] {
+		return counterManifest.controls[id].kinds;
+	}
 });

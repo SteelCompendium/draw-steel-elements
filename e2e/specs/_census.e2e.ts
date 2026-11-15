@@ -26,6 +26,7 @@ import montageLogManifest from '../manifest/montage-log-modal';
 import montageAddHeroManifest from '../manifest/montage-add-hero-modal';
 import montageLimitsManifest from '../manifest/montage-limits-modal';
 import settingsManifest from '../manifest/settings-tab';
+import counterManifest from '../manifest/counter';
 
 const ALL_IDS = new Set([
 	...idsOf(barManifest),
@@ -315,6 +316,35 @@ describe('real-Obsidian census: the negotiation tracker', () => {
 		const learn = await eventfulNodes([NEGO_SCOPE], null);
 		expect(censusFindings(learn, NEGO_IDS)).toEqual([]);
 		expect(learn.map((n) => n.id)).toContain('negotiation.tablist');
+	});
+});
+
+// SC-442: the counter is scanned by its root container (the stepper, the name and the chrome panel inside it), like the trackers. The ids a
+// node there may carry: the counter manifest's and the framework chrome's (Collapse / Expand).
+const COUNTER_SCOPE = '.markdown-reading-view [data-dse-element="counter"] *';
+const COUNTER_LP_SCOPE = '.markdown-source-view [data-dse-element="counter"] *';
+const COUNTER_IDS = new Set([...idsOf(counterManifest), ...idsOf(chromeManifest)]);
+
+describe('real-Obsidian census: the counter (SC-442)', () => {
+	it('[CENSUS-18] the whole counter in Reading view (scoped by its root, chrome panel included), mid-range then at a limit: every node that listens for input is an identified control', async () => {
+		await dse.openNote('Counter/counter.md');
+		const mid = await eventfulNodes([COUNTER_SCOPE], null);
+		expect(censusFindings(mid, COUNTER_IDS)).toEqual([]);
+		// Sanity that the probe sees every part of the card: both buttons (their click listeners), the chrome panel's Collapse button.
+		// (The number field listens for keydown, so it is here too; the read-only span listens for nothing, so the jsdom census owns it.)
+		for (const id of ['counter.dec', 'counter.input', 'counter.inc', 'chrome.collapse']) expect(mid.map((n) => n.id)).toContain(id);
+		// At a limit "+" is disabled, and still an identified control with its listener.
+		await dse.openNote('Counter/at-max.md');
+		const atMax = await eventfulNodes([COUNTER_SCOPE], null);
+		expect(censusFindings(atMax, COUNTER_IDS)).toEqual([]);
+		for (const id of ['counter.dec', 'counter.input', 'counter.inc']) expect(atMax.map((n) => n.id)).toContain(id);
+	});
+
+	it('[CENSUS-19] the whole counter in Live Preview (scoped by its root): every node that listens for input is an identified control', async () => {
+		await dse.openNote('Counter/counter.md', { mode: 'live-preview' });
+		const nodes = await eventfulNodes([COUNTER_LP_SCOPE], null);
+		expect(censusFindings(nodes, COUNTER_IDS)).toEqual([]);
+		for (const id of ['counter.dec', 'counter.input', 'counter.inc']) expect(nodes.map((n) => n.id)).toContain(id);
 	});
 });
 

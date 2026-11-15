@@ -142,6 +142,13 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Counter/two-empty.md` | TWO empty `ds-counter` blocks with `ABOVE`, `BETWEEN` and `BELOW` text: a write to one changes only that block |
   | `Counter/wrong-tagged.md` | four `ds-counter` blocks an explicit YAML tag turns into a Set (`!!set`), a Date (`!!timestamp`), a Uint8Array (`!!binary`) and a Map (`!!omap`): each a plain error card, nothing written |
   | `Counter/only-unknown-keys.md` | one `ds-counter` whose whole block is `note_to_self: x` (a key the counter does not read), `ABOVE` / `BELOW` text around it: a counter at 0, and a write keeps the key (SC-671 with SC-672) |
+  | `Counter/unbounded.md` | one `ds-counter` (Torches, 5) with no `max_value` and no `min_value` (the floor defaults to 0): "+" never disables (SC-442) |
+  | `Counter/at-max.md` | one `ds-counter` (Health 3, min 0, max 3): "+" starts disabled (SC-442) |
+  | `Counter/at-min.md` | one `ds-counter` (Health 0, min 0, max 3): "-" starts disabled (SC-442) |
+  | `Counter/signed.md` | one `ds-counter` (Morale 0, min -5, max 5): a typed negative value is allowed (SC-442) |
+  | `Counter/out-of-range.md` | one `ds-counter` a hand edit left past its limit (Health 25, min 0, max 20): shown as stored, "+" disabled, "-" steps toward the range (SC-442) |
+  | `Counter/unknown-keys.md` | one `ds-counter` with two top-level keys the product does not know (`note_to_self`, a map `extra`) above the known ones (SC-442) |
+  | `Counter/quoted-value.md` | one `ds-counter` with `current_value: "5"` typed in quotes (SC-442) |
   | `Callout/callout.md` | one `ds-stamina-bar` (12/30, 3 of 6 Recoveries) inside a `> [!note]` callout, text above and below it (SC-455) |
   | `Callout/nested.md` | the same block inside a callout nested in a callout (`> > ` on every line) |
   | `Callout/quote.md` | the same block inside a plain blockquote (Reading view only: Live Preview does not draw it) |
