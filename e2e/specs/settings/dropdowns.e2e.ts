@@ -5,7 +5,7 @@
 // element (the reflected attribute), live. The Preset goes last: it rewrites nine of the rows above. A final reload checks the whole page set.
 // Representative elements: Settings/statblock.md, Settings/featureblock.md, Feature/feature.md.
 import { browser, expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
+import { dse } from '../../driver/dse';
 import { back, closeSettings, ctl, diskData, diskPrefs, mainAttr, openAt, pressOn, prefValue, rawData, readSettings, shownValue, showPage, ensureState } from '../../driver/settingsDrive';
 
 const STATBLOCK = '[data-dse-element="statblock"]';
@@ -143,8 +143,8 @@ describe('settings tab: dropdowns', () => {
 		expect(await mainAttr(STATBLOCK, 'data-dse-sb-villain')).toBe('inline');
 	});
 
-	// The Preset's "Custom" entry is a label the user cannot select into: picking it writes nothing, so the dropdown must not stay on it.
-	knownBug('SC-651', '[SET-D16] picking Custom in the Preset: the dropdown shows the same value it shows when the page is reopened', async () => {
+	// The Preset's "Custom" entry is a label the user cannot select into: picking it writes nothing and the dropdown snaps back (SC-651).
+	it('[SET-D16] picking Custom in the Preset: the dropdown shows the same value it shows when the page is reopened', async () => {
 		await dse.setPrefs({});
 		await dse.openNote('Settings/statblock.md');
 		await openAt(STAT_PAGE);
@@ -160,5 +160,5 @@ describe('settings tab: dropdowns', () => {
 		} finally {
 			await closeSettings();
 		}
-	}, { failsWith: /afterPick/ });
+	});
 });
