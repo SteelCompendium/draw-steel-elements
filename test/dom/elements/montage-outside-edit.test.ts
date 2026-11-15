@@ -21,7 +21,7 @@ import { createReferenceService } from '../../../src/framework/seams/refs';
 import { createValidationService } from '../../../src/framework/validation';
 import { createSessionStore } from '../../../src/framework/session';
 import { DEFAULT_SETTINGS } from '@model/Settings';
-import { App, Component, Modal, Notice, Plugin, parseYaml } from '../../mocks/obsidian';
+import { App, Component, MarkdownRenderer, Modal, Notice, Plugin, parseYaml } from '../../mocks/obsidian';
 import { montageElement } from '../../../src/elements/montage/definition';
 import type { MontageView } from '../../../src/elements/montage/view';
 import type { MontageModel } from '../../../src/elements/montage/model';
@@ -247,16 +247,26 @@ describe('SC-650: an outside edit redraws the montage while a window is open (Re
 		expect(document.activeElement).toBe(ctl(fresh.root, 'montage.bar.log'));
 	});
 
-	test('[OW08] a card whose brief takes time to draw is not focused half-built: the hand-off waits for the whole card', async () => {
+	test('[OW08] a card whose brief is still rendering is not focused half-built: the hand-off waits for the whole card', async () => {
 		const old = await mount(BASE);
 		press(ctl(old.root, 'montage.bar.log'));
-		const described = await mount(`${EDITED}\ndescription: A long brief`, old.pane);
+		const render = MarkdownRenderer.render;
+		jest.spyOn(MarkdownRenderer, 'render').mockImplementation(async (...args: Parameters<typeof render>) => {
+			await new Promise((resolve) => setTimeout(resolve, 100)); // the brief takes a while: the card's root is in the pane, its controls are not
+			return render(...args);
+		});
+		const pending = mount(`${EDITED}\ndescription: A long brief`, old.pane); // Reading view order: the new section is drawn first
+		await later(10);
 		old.view.unload();
 		old.root.remove();
+		await later(60); // the old view is gone and the new card is still waiting for its brief
+		expect(document.activeElement).toBe(document.body);
+		expect(notices()).toHaveLength(0);
+		await later(200);
+		const described = await pending;
 		await later();
-		expect(document.activeElement).toBe(ctl(described.root, 'montage.bar.log')); // the end of the bar exists: it was drawn when it was focused
-		expect(described.root.querySelector('.dse-mt__actionrow')).not.toBeNull();
-		expect(described.root.querySelector('.dse-mt__guide')).not.toBeNull();
+		expect(notices()).toHaveLength(1);
+		expect(document.activeElement).toBe(ctl(described.root, 'montage.bar.log')); // the control itself, not the card's root
 	});
 
 	test('[OW09] the montage\'s own write shows no Notice and still hands focus to the rebuilt opener', async () => {
@@ -270,6 +280,22 @@ describe('SC-650: an outside edit redraws the montage while a window is open (Re
 		expect(notices()).toHaveLength(0);
 		expect(old.writes).toHaveLength(1);
 		expect(focused()).toBe('montage.bar.log');
+	});
+
+	test('[OW28] after the montage\'s own write (a rebuild that closes its window) a later window still hands off: the rebuilt card is not marked as unloading', async () => {
+		const old = await mount(BASE);
+		press(ctl(old.root, 'montage.bar.log'));
+		const submit = ctl(document.body, 'montage.log.submit');
+		submit.focus();
+		submit.click(); // Log: the rebuild unloads the window's component while the window is still open, then the window closes
+		await later(PERSIST_DEBOUNCE_MS + 50);
+		expect(notices()).toHaveLength(0);
+		const written = old.writes[0];
+		press(ctl(old.root, 'montage.chrome.set-limits')); // a second window, on the same (rebuilt) view
+		const fresh = await redraw(old, written.replace('success_limit: 5', 'success_limit: 6'), false);
+		expect(anyWindow()).toBe(false);
+		expect(notices()).toHaveLength(1);
+		expect(document.activeElement).toBe(ctl(fresh.root, 'montage.chrome.set-limits'));
 	});
 
 	test('[OW10] opened with the mouse (focus was not inside the card): the Notice shows, nothing is focused', async () => {

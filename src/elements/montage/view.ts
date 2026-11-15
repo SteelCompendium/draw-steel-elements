@@ -130,12 +130,20 @@ export class MontageView extends ElementView<MontageModel> {
 		});
 	}
 
+	/** SC-650 — a window whose component went while the window was still open: the view is unloading, or a write is rebuilding the card
+	 *  (`update()` unloads this view's children, the window's component among them, a moment before the window closes itself). Kept until
+	 *  the view really unloads, which starts the hand-off, or until the rebuild is over, which drops it. */
+	private closingWindow: { opener: NonNullable<MontageView['windowOpener']>; ownContent: string | null } | null = null;
+
 	constructor(cx: RenderContext) {
 		super(cx);
-		// SC-650: the live-root mark (`live`) goes false the moment the view unloads. (The window closes first: a child component of this
-		// view holds it, and children unload before the view's own registrations; see `openTrackedModal`.)
+		// SC-650: the view itself unloads (an outside edit redrew the block, the note was closed, ...). Its window closed a moment ago with
+		// its own component, which unloads before the view's registrations (see `openTrackedModal`): hand off now.
 		this.register(() => {
 			this.unloading = true;
+			const closing = this.closingWindow;
+			this.closingWindow = null;
+			if (closing) this.handOffAfterOutsideClose(closing.opener, closing.ownContent);
 		});
 	}
 
@@ -147,20 +155,12 @@ export class MontageView extends ElementView<MontageModel> {
 		return { focus: opener?.focus ?? null };
 	}
 
-	/** SC-650 — the view unloads while its window is open (an outside edit redrew the block, the note was closed, ...): the window closes
-	 *  with it, and the hand-off starts (framework/chrome/windowHandoff.ts), which finds the redrawn card by the slot the window opened
-	 *  in. The Notice is shown when that card's disk content differs from this view's; focus goes to its replacement of the control that
-	 *  opened the window whether or not it does, unless the number of montages in the pane changed, and it follows a burst of redraws.
-	 *  The watch is owned by the plugin, so unloading the plugin cancels it. */
-	private closeWindowWithView(opener: NonNullable<MontageView['windowOpener']>): void {
-		this.unloading = true;
-		let ownContent: string | null = null;
-		try {
-			ownContent = this.diskContent();
-		} catch {
-			/* a model that cannot be serialized has nothing to compare: the window just closes */
-		}
-		opener.modal?.close();
+	/** SC-650 — the view unloaded with a window open (an outside edit redrew the block, the note was closed, ...): the hand-off starts
+	 *  (framework/chrome/windowHandoff.ts), which finds the redrawn card by the slot the window opened in. The Notice is shown when that
+	 *  card's disk content differs from this view's; focus goes to its replacement of the control that opened the window whether or not
+	 *  it does, unless the number of montages in the pane changed, and it follows a burst of redraws. The watch is owned by the plugin,
+	 *  so unloading the plugin cancels it. */
+	private handOffAfterOutsideClose(opener: NonNullable<MontageView['windowOpener']>, ownContent: string | null): void {
 		if (ownContent === null || !opener.slot) return;
 		handOffAfterOutsideClose({
 			slot: opener.slot,
@@ -204,6 +204,7 @@ export class MontageView extends ElementView<MontageModel> {
 			await super.update(model);
 		} finally {
 			this.pendingBoardScroll = null; // never leak into a later mount
+			this.closingWindow = null; // the window that closed with this rebuild was this view's own write, not an unload
 		}
 		if (outside) this.disk = { raw: null, ser: serializeModel(model) }; // the block as the note has it now
 		restoreControlFocus(this.rootEl, focus, MONTAGE_FOCUS_FAMILIES, MONTAGE_FOCUS_FALLBACKS);
@@ -493,10 +494,19 @@ export class MontageView extends ElementView<MontageModel> {
 		const modal = openManagedModal(modalOwner, factory, this.cx.host.containerEl); // SC-595: anchor, see DseModal.anchorTo
 		opener.modal = modal;
 		// SC-650: registered AFTER openManagedModal's close-on-unload, so it runs BEFORE it (a component runs its registrations last-in
-		// first-out): by then the window is still open, which only a view that is going away leaves it (a window that closed took its
-		// `windowOpener` with it). The view unloads because an outside edit redrew the block, the note was closed, ...
+		// first-out), while the window is still open: a window that closed took its `windowOpener` with it. The component goes when the view
+		// unloads (children unload before the view's own registrations, so the window is closed and its token read here, and the view's
+		// own registration starts the hand-off) and when a write rebuilds the card (the end of the rebuild drops the token).
 		modalOwner.register(() => {
-			if (this.windowOpener === opener) this.closeWindowWithView(opener);
+			if (this.windowOpener !== opener) return;
+			let ownContent: string | null = null;
+			try {
+				ownContent = this.diskContent();
+			} catch {
+				/* a model that cannot be serialized has nothing to compare: the window just closes */
+			}
+			this.closingWindow = { opener, ownContent };
+			opener.modal?.close();
 		});
 		const inheritedOnClose = modal.onClose.bind(modal) as () => void;
 		modal.onClose = () => {
