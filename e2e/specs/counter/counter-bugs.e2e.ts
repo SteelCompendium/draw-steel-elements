@@ -80,7 +80,7 @@ describe('counter: blocks the product cannot read as a counter, and keys it does
 		expect(await dse.noteText(note)).toMatch(/^```ds-counter\nhello\n```$/m);
 	}, { failsWith: /raw JS error|current_value: 1/ });
 
-	knownBug('SC-672', '[CTR-W02] an empty block never shows "Cannot read properties" (a fresh counter or a friendly error card both pass)', async () => {
+	knownBug('SC-672', '[CTR-W02] an empty block never shows a raw JavaScript error (a fresh counter or a friendly error card both pass)', async () => {
 		await dse.openNote('Counter/empty-block.md', { errorCard: true });
 		await expectNoRawJsError();
 	}, { failsWith: /raw JS error/ });
