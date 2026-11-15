@@ -21,7 +21,7 @@ describe('SC-640: one rule for "same name"', () => {
 		expect(sameName(null, null)).toBe(false);
 	});
 
-	test('isUsed finds an entry whatever its spelling; addUsed writes the entry\'s spelling once; removeUsed takes the first match off', () => {
+	test('isUsed finds an entry whatever its spelling; addUsed writes the entry\'s spelling once; removeUsed takes every match off', () => {
 		const list = [' higher authority '];
 		expect(isUsed(list, 'Higher Authority')).toBe(true);
 		addUsed(list, 'Higher Authority');
@@ -30,9 +30,9 @@ describe('SC-640: one rule for "same name"', () => {
 		expect(list).toEqual([' higher authority ', 'Peace']);
 		removeUsed(list, 'HIGHER AUTHORITY');
 		expect(list).toEqual(['Peace']);
-		const twice = ['5', '5'];
-		removeUsed(twice, '5');
-		expect(twice).toEqual(['5']); // one press, one entry (SC-638's snapshot assumes it)
+		const twice = ['5', 'Power', ' power', '5'];
+		removeUsed(twice, 'POWER');
+		expect(twice).toEqual(['5', '5']); // every match goes, so one press clears the chip; other names stay
 		expect(isUsed([null], 'Peace')).toBe(false);
 	});
 

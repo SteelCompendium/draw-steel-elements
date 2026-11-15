@@ -236,6 +236,70 @@ describe('SC-640: casing and spaces are ignored when a chosen entry is matched',
 	});
 });
 
+describe('SC-640: one press takes every spelling of the chosen name off, and the card then reads nothing chosen', () => {
+	const BOTH = 'motivations:\n  - name: Power\npitfalls:\n  - name: Power\n';
+	/** The standing a Complete Argument at High leaves (a track that did not move is not written: it is still the initial one). */
+	const completeAtHigh = async (m: Awaited<ReturnType<typeof mount>>): Promise<number[]> => {
+		ctl(m.root, 'negotiation.tier.row', 2).click();
+		await click(m, ctl(m.root, 'negotiation.complete'));
+		const w = m.written();
+		return [w.current_interest ?? w.initial_interest, w.current_patience ?? w.initial_patience];
+	};
+	const used = (w: any, key: string): unknown[] => w.currentArgument?.[key] ?? [];
+
+	test('`motivationsUsed: [Power, " power "]`: ONE press un-presses the chip and empties the list; the roll, Same Argument and Complete read nothing chosen', async () => {
+		const chosen = await mount(BOTH + 'currentArgument:\n  motivationsUsed: [Power, " power "]\n  sameArgumentUsed: true\n');
+		const chip = ctl(chosen.root, 'negotiation.appeal.motivation');
+		expect(chip.getAttribute('aria-pressed')).toBe('true');
+		expect((ctl(chosen.root, 'negotiation.mod.same') as HTMLInputElement).disabled).toBe(true);
+		await click(chosen, chip);
+		expect(chip.getAttribute('aria-pressed')).toBe('false');
+		expect(used(chosen.written(), 'motivationsUsed')).toEqual([]);
+		const same = ctl(chosen.root, 'negotiation.mod.same') as HTMLInputElement;
+		expect([same.disabled, same.checked]).toEqual([false, true]); // Same Argument is available again, drawn as typed
+		const tiers = tiersOf(chosen.root);
+		document.body.innerHTML = '';
+		const none = await mount(BOTH + 'currentArgument:\n  sameArgumentUsed: true\n');
+		expect(tiers).toEqual(tiersOf(none.root)); // the roll is the one of an argument with nothing chosen
+		document.body.innerHTML = '';
+		const m = await mount(BOTH + 'currentArgument:\n  motivationsUsed: [Power, " power "]\n');
+		await click(m, ctl(m.root, 'negotiation.appeal.motivation'));
+		expect(await completeAtHigh(m)).toEqual([4, 2]); // High without a Motivation: +1 Interest, -1 Patience
+		expect(m.written().motivations[0].hasBeenAppealedTo ?? false).toBe(false); // nothing was chosen, so nothing is spent
+	});
+
+	test('`pitfallsUsed: [Power, " power "]`: ONE press un-presses the chip and empties the list; the roll and Complete read nothing chosen', async () => {
+		const m = await mount(BOTH + 'currentArgument:\n  pitfallsUsed: [Power, " power "]\n');
+		const chip = ctl(m.root, 'negotiation.appeal.pitfall');
+		expect(chip.getAttribute('aria-pressed')).toBe('true');
+		const withPitfall = tiersOf(m.root);
+		await click(m, chip);
+		expect(chip.getAttribute('aria-pressed')).toBe('false');
+		expect(used(m.written(), 'pitfallsUsed')).toEqual([]);
+		expect(tiersOf(m.root)).not.toEqual(withPitfall);
+		document.body.innerHTML = '';
+		const none = await mount(BOTH);
+		expect(tiersOf(m.root)).toEqual(tiersOf(none.root));
+		expect(await completeAtHigh(m)).toEqual([4, 2]);
+	});
+
+	test('an untouched typed entry of a DIFFERENT name survives the removal typed: `[5, Power, power]` becomes `[5]`, and 5 is still the number', async () => {
+		const m = await mount(BOTH + 'currentArgument:\n  motivationsUsed: [5, Power, power]\n');
+		await click(m, ctl(m.root, 'negotiation.appeal.motivation'));
+		const list = used(m.written(), 'motivationsUsed');
+		expect(list).toEqual([5]);
+		expect(typeof list[0]).toBe('number');
+	});
+
+	test('the same for pitfalls: `pitfallsUsed: [7, POWER, power]` becomes `[7]`, and 7 is still the number', async () => {
+		const m = await mount(BOTH + 'currentArgument:\n  pitfallsUsed: [7, POWER, power]\n');
+		await click(m, ctl(m.root, 'negotiation.appeal.pitfall'));
+		const list = used(m.written(), 'pitfallsUsed');
+		expect(list).toEqual([7]);
+		expect(typeof list[0]).toBe('number');
+	});
+});
+
 describe('SC-640: a nameless entry is labelled, works, and is never written as the label', () => {
 	const NAMELESS = 'motivations:\n  - name: Peace\n    reason: a\n  - reason: b\npitfalls:\n  - name: Power\n  - reason: c\n';
 

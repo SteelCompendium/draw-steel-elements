@@ -200,11 +200,12 @@ export function addUsed(list: string[], name: string): void {
     if (!isUsed(list, name)) list.push(name);
 }
 
-/** Un-presses `name`: removes the FIRST matching entry, whatever its spelling (in place: the list is the live model's). Like the exact-text `indexOf` it
- *  replaces, one press takes one entry off, which is what SC-638's typed-entry snapshot assumes (`restoreUsed`: "a removal takes the first equal one"). */
+/** Un-presses `name`: removes EVERY entry that matches, whatever its spelling, so one press clears the chip (a hand-typed `[Power, power]` would
+ *  otherwise stay drawn pressed after the first press: the card must show what is chosen, SC-649). In place: the list is the live model's. */
 export function removeUsed(list: string[], name: string): void {
-    const index = list.findIndex((entry) => sameName(entry, name));
-    if (index > -1) list.splice(index, 1);
+    for (let i = list.length - 1; i >= 0; i--) {
+        if (sameName(list[i], name)) list.splice(i, 1);
+    }
 }
 
 /** The entries of one name under {@link nameKey}: `first` is the one the card draws (its spelling is the chip's and what a press writes). */

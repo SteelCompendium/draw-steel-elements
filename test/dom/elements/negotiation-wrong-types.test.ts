@@ -155,13 +155,14 @@ describe('SC-638 R2: what the card did not change is written back as typed', () 
 		expect(w.name).toBe(2024);
 	});
 
-	test('`motivationsUsed: [5, "5"]` is written back as typed (the number and the quoted text apart), and pressing the chip of the motivation named 5 takes the first of them off', async () => {
+	test('`motivationsUsed: [5, "5"]` is written back as typed (the number and the quoted text apart), and pressing the chip of the motivation named 5 takes both of them off', async () => {
 		const body = 'name: n\ninitial_interest: 3\ninitial_patience: 3\nmotivations:\n  - name: 5\n    reason: r\n' + OFFERS + '\ncurrentArgument:\n  motivationsUsed: [5, "5"]';
 		const { root, flush, content } = await mountBlock(ABOVE + fence(body) + BELOW);
 		await flushAfter(flush, () => seal(root, 'patience', 1).click());
 		expect((parseYaml(bodyOf(content(), 0)) as any).currentArgument.motivationsUsed).toEqual([5, '5']);
 		await flushAfter(flush, () => ctl(root, 'negotiation.appeal.motivation', 0).click());
-		expect((parseYaml(bodyOf(content(), 0)) as any).currentArgument.motivationsUsed).toEqual(['5']);
+		expect((parseYaml(bodyOf(content(), 0)) as any).currentArgument?.motivationsUsed ?? []).toEqual([]); // one press clears the chip: both entries go
+		expect(ctl(root, 'negotiation.appeal.motivation', 0).getAttribute('aria-pressed')).toBe('false');
 	});
 
 	test('chip clicks on `motivationsUsed: [5, 7]`: toggling the chip of 5 off and on writes [7, 5], both still numbers', async () => {
