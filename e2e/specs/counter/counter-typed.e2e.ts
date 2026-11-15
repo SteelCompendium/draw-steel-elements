@@ -7,6 +7,8 @@ import { $, expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
 
 const COUNTER = 'ds-counter';
+/** WebDriver's Backspace key code (U+E003, a private-use character: invisible in an editor). `dse.type` sends it as a key, so after the select-all it empties the box. */
+const BACKSPACE = String.fromCharCode(0xe003);
 /** A neutral spot to click so the field loses focus the way a user's click away does (the note's heading). */
 const away = () => $('.workspace-leaf.mod-active .markdown-reading-view h1');
 
@@ -89,6 +91,22 @@ describe('counter: typing a value and committing it', () => {
 		await dse.settle();
 		await expect(input).toHaveValue('-1');
 	});
+
+	it('[CTR-T06] Live Preview: type 2 over 1 and Enter writes 2 once, the field shows 2, and the text around the block is untouched', async () => {
+		const note = 'Counter/counter.md';
+		await dse.openNote(note, { mode: 'live-preview' });
+		const root = dse.block(COUNTER);
+		const input = root.control('counter.input');
+		await dse.type(input, '2', { replace: true });
+		await dse.expectNoWrite(note, async () => expect(await input.getValue()).toBe('2')); // typing alone is only a draft
+		const w = await dse.waitForWrite(note, () => dse.press('Enter', input));
+		expect(w.count).toBe(1);
+		await dse.expectNoteBlock(note, COUNTER).toMatchObject({ current_value: 2, max_value: 3, min_value: 0, name: 'Health' });
+		await dse.settle();
+		await expect(input).toHaveValue('2');
+		await expect(root.control('counter.dec')).toBeEnabled();
+		await expect(root.control('counter.inc')).toBeEnabled();
+	});
 });
 
 describe('counter: values past a limit, an empty box, a decimal, a second counter', () => {
@@ -142,7 +160,7 @@ describe('counter: values past a limit, an empty box, a decimal, a second counte
 		await dse.openNote(note);
 		const root = dse.block(COUNTER);
 		const input = root.control('counter.input');
-		await dse.type(input, '', { replace: true }); // select all, then Backspace
+		await dse.type(input, BACKSPACE, { replace: true }); // select all, then the Backspace key: the box is empty
 		await expect(input).toHaveValue('');
 		await dse.expectNoWrite(note, () => dse.press('Enter', input));
 		await expect(input).toHaveValue('5');

@@ -1120,8 +1120,10 @@ describe('SC-442 census: the counter, scoped by container', () => {
 	};
 	const FIXTURES = fs.readdirSync(fixtureDir).filter((f) => f.endsWith('.md')).map((f) => f.replace(/\.md$/, '')).sort();
 
-	// A block with a body that is no map renders the same counter (the no-map cases are the survey's, not the census's); `empty-block` fails to render.
-	const RENDERS = FIXTURES.filter((name) => name !== 'empty-block');
+	// Two fixtures are left out of the "draws the normal card" rows because they are SC-672's: `empty-block` fails to render (a raw TypeError card today) and
+	// `wrong-block` (`hello`) draws a live counter today. A plain row that required the three stamps on either would pin that bug as correct; the row below
+	// asserts only what holds for ANY card (every interactive node it draws has an id the manifest declares).
+	const RENDERS = FIXTURES.filter((name) => name !== 'empty-block' && name !== 'wrong-block');
 
 	// The kept-keys fixture holds a `prefs:` scalar and a non-boolean `collapsed:` on purpose: the framework warns about both, which is not what is under test.
 	beforeEach(() => {
@@ -1172,6 +1174,25 @@ describe('SC-442 census: the counter, scoped by container', () => {
 		for (const id of ['counter.dec', 'counter.value', 'counter.inc']) expect(count(root, id)).toBe(1);
 		expect(count(root, 'counter.input')).toBe(0);
 		expect(root.querySelector('input')).toBeNull();
+	});
+
+	test.each(['empty-block', 'wrong-block'].map((name) => [name]))('the %s fixture note (SC-672): whatever card it draws, no interactive node lacks an id the manifest declares', async (name) => {
+		for (const canPersist of [true, false]) expect(census(await mountCounter(counterFixture(name), canPersist))).toEqual([]);
+	});
+
+	test('a counter pinned to the sidebar (mode sidebar, experimental gate on) carries chrome.unpin, which the census accepts as shared chrome, and still flags a rogue node', async () => {
+		const host = makeHost('ds-counter', 'Counter.md');
+		(host as any).mode = 'sidebar';
+		(host as any).requestRemoval = jest.fn();
+		await new ElementPipeline(makeDeps()).run(counterElement, counterFixture('counter'), host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(count(root, 'chrome.unpin')).toBe(1);
+		expect(count(root, 'chrome.pin')).toBe(0);
+		for (const id of ['counter.dec', 'counter.input', 'counter.inc']) expect(count(root, id)).toBe(1);
+		expect(census(root)).toEqual([]);
+		const rogue = document.createElement('button');
+		root.querySelector('.dse-stepper')!.appendChild(rogue);
+		expect(census(root)).toEqual([expect.stringMatching(/^no data-dse-control: <button/)]);
 	});
 
 	test('every control the counter manifest declares is stamped by SOME variant of the card (no dead manifest row), and the manifest lists nothing else', async () => {
