@@ -84,3 +84,107 @@ jobs:
       # diff.mjs echoes the full report to stdout, so a failure is readable in the log.
       - name: Steel parity (plugin vs the committed v2 site baseline)
         run: npm run parity
+
+  # ── Real-Obsidian e2e gate (SC-434, SC-408) ──────────────────────────────────────
+  # SC-408 made a green FULL `npm run e2e` the required gate for landing any change to
+  # this plugin, but until now it only ran on a developer's machine. This job runs it on
+  # every push to main/develop and every pull_request, in parallel with `test`.
+  #
+  # FULL run, no `--only` / `--element`: that is what switches the coverage gate on (a
+  # manifest control x interaction pair driven by zero tests, or only by known-bug tests,
+  # fails the job). Expect `OBSIDIAN-E2E done: N/M ok, 0 failed, K known-bug, coverage: Y/Y
+  # pairs`; the exact numbers live in the dse-verify skill, not here.
+  #
+  # NO RETRIES (SC-408: "a flake is a bug in the test or the product"). No retry wrapper, no
+  # continue-on-error, no wdio specFileRetries. A red run is read, not re-run.
+  #
+  # Pinned to ubuntu-24.04, not ubuntu-latest: GitHub is moving `ubuntu-latest` to Ubuntu 26.04
+  # over Nov-Dec 2026, and a runner image that changes under a real-Electron suite turns a
+  # green develop red with no code change. Bump this deliberately, after a trial run.
+  e2e:
+    runs-on: ubuntu-24.04
+    # Measured wall time of the e2e step on 4 cores is in e2e/README.md ("CI"); this leaves
+    # headroom for a cold Obsidian download and a slow runner without letting a hung
+    # Obsidian hold a runner for the 6 h default.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Same as the `test` job and the devbox pin (devbox.json: nodejs@24).
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The Obsidian version is pinned in exactly one place: `const PINNED` in e2e/run.mjs.
+      # Read it from there so a version bump busts the cache below by itself, rather than
+      # keeping a second copy of the number here that someone must remember to change.
+      # OBSIDIAN_CACHE is where run.mjs / wdio-obsidian-service keep the downloads; setting
+      # it explicitly (it is also run.mjs's default location) makes the cache step and the
+      # runner agree on one path.
+      - name: Resolve pinned Obsidian version and cache dir
+        id: pin
+        run: |
+          pin="$(sed -n "s/^const PINNED = '\([0-9][0-9.]*\)';.*/\1/p" e2e/run.mjs)"
+          if [ -z "$pin" ]; then
+            echo "::error file=e2e/run.mjs::could not read the PINNED Obsidian version"
+            exit 1
+          fi
+          echo "version=$pin" >> "$GITHUB_OUTPUT"
+          echo "OBSIDIAN_CACHE=$HOME/.cache/dse-e2e-obsidian" >> "$GITHUB_ENV"
+
+      # ~1 GB (Obsidian app + installer + a chromedriver), so a cache hit saves a download of
+      # that size on every run. Restore and save are separate steps so the cache is also
+      # saved when the e2e step FAILS (the default post-job save only runs on success, and a
+      # red first run would then re-download on every retry). Keys are immutable: a hit is
+      # never overwritten, a new pin makes a new key.
+      - name: Restore Obsidian download cache
+        id: obsidian-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.OBSIDIAN_CACHE }}
+          key: dse-e2e-obsidian-${{ runner.os }}-${{ runner.arch }}-${{ steps.pin.outputs.version }}
+
+      # `npm run e2e` builds main.js itself (it runs `build-no-check` first), so there is no
+      # separate build step. It also starts its own private Xvfb (xvfb is preinstalled on the
+      # ubuntu-24.04 image) and sets DISPLAY for every child, so DISPLAY is deliberately not
+      # set here.
+      #
+      # No apt step: every shared library the pinned Obsidian links against (gtk3, nss,
+      # asound, gbm, ...) is in google-chrome-stable's dependency closure, and the image ships
+      # Chrome. No sandbox workaround either: wdio-obsidian-service launches Obsidian with
+      # --no-sandbox on Linux, so Ubuntu 24.04's AppArmor restriction on unprivileged user
+      # namespaces never comes into play.
+      #
+      # No GITHUB_TOKEN: the GitHub API is only reached when obsidian-launcher *collects*
+      # version metadata (`updateVersions`), never on this path. The app and installer come
+      # from github.com release assets, the version list from raw.githubusercontent.com.
+      #
+      # --shards=4: one Obsidian per shard on the 4 vCPU / 16 GB standard runner that public
+      # repositories get. (run.mjs would default to min(4, floor(nproc/3)) = 1 here.)
+      - name: End-to-end tests (real Obsidian)
+        id: e2e
+        run: npm run e2e -- --shards=4
+
+      - name: Save Obsidian download cache
+        if: ${{ !cancelled() && steps.obsidian-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.OBSIDIAN_CACHE }}
+          key: dse-e2e-obsidian-${{ runner.os }}-${{ runner.arch }}-${{ steps.pin.outputs.version }}
+
+      # A failing test leaves a bundle in e2e/.out/<run>/<test-id>/ (screenshot, DOM, note
+      # before/after + diff, page events, vault copy). `.out` is a dot-directory, which
+      # upload-artifact skips unless include-hidden-files is set.
+      - name: Upload failure bundles
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-out
+          path: e2e/.out/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
