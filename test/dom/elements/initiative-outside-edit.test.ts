@@ -463,6 +463,23 @@ describe('SC-608: an outside edit redraws the tracker while a window is open (Re
 		expect(fresh.root.contains(document.activeElement)).toBe(false);
 	});
 
+	test('[O20c] a callout rebuilt as a whole by the tracker\'s own save (the sibling gets a new root with the content it had, the open one\'s tracker arrives 700 ms later): no Notice', async () => {
+		const first = await mount(TRACKER, undefined, 'Encounter.md', true);
+		const second = await mount(SQUAD, first.pane, 'Encounter.md', true);
+		openPool(second.root);
+		first.view.unload();
+		first.root.remove();
+		second.view.unload();
+		second.root.remove();
+		await mount(TRACKER, first.pane, 'Encounter.md', true); // the sibling, rebuilt, unchanged
+		await later(700);
+		expect(notices()).toHaveLength(0);
+		const fresh = await mount(SQUAD, first.pane, 'Encounter.md', true); // what the save wrote: the same content
+		await later(700);
+		expect(notices()).toHaveLength(0);
+		expect(document.activeElement).toBe(ctl(fresh.root, 'init.detail.stamina'));
+	});
+
 	test('[O21] the inserted tracker is invalid (an error card): the Notice shows at once, nothing is focused, nothing waits for the TTL', async () => {
 		const first = await mount(TRACKER);
 		const second = await mount(SQUAD, first.pane);

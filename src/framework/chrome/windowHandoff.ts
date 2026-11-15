@@ -60,6 +60,9 @@ export interface WindowSlot {
 	count: number;
 	/** SC-650: the live roots of the element in the pane when the window opened. A root that is not among them is new since (the redraw's). */
 	before: ReadonlySet<HTMLElement>;
+	/** SC-650: the content of each of those roots (`WindowRootRecord.content`). A redraw that rebuilds a sibling as a whole (two montages in one
+	 *  Live Preview callout) gives it a new root with the content it had: that is not news. */
+	beforeContents: ReadonlySet<string>;
 }
 
 /** The pane or embed a root is drawn in. Reading view and Live Preview are separate scopes (a leaf keeps a hidden copy of the other). */
@@ -78,7 +81,16 @@ export function slotOf(root: HTMLElement, elementId: string): WindowSlot | null 
 	if (!root.isConnected) return null;
 	const scope = scopeFor(root);
 	const roots = rootsIn(scope, elementId);
-	return { elementId, scope, index: Math.max(0, roots.indexOf(root)), count: roots.length, before: new Set(roots) };
+	const contents = new Set<string>();
+	for (const r of roots) {
+		try {
+			const c = mounted.get(r)?.content();
+			if (c !== undefined) contents.add(c);
+		} catch {
+			/* a view that cannot say what it holds contributes nothing */
+		}
+	}
+	return { elementId, scope, index: Math.max(0, roots.indexOf(root)), count: roots.length, before: new Set(roots), beforeContents: contents };
 }
 
 /** How long the watch for the successor lasts. Live Preview's arrives ~10-45 ms after the close; the rest is slack for a loaded host. */
@@ -176,14 +188,20 @@ export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 	/** Nothing sits at the slot and the pane's root count changed: an edit removed a block above the window's own and changed it, so the
 	 *  position points past the end. The window did close because of an outside edit, so the Notice, once, for a root that is NEW since the
 	 *  window opened (never an untouched neighbour: the own save of a Live Preview note with two montages redraws only this one) and whose
-	 *  content differs from what the closing view held (the same content is its own save). It is not claimed: there is no successor to give
+	 *  content differs from what the closing view held (the same content is its own save) and from what every root held when the window opened
+	 *  (a callout rebuilt as a whole gives a sibling a new root with the content it had). It is not claimed: there is no successor to give
 	 *  focus to, and a root that still lands at the slot is claimed as usual, with the count rule. */
 	const noticeForNewRoot = (): void => {
 		if (noticed || claimed !== null) return;
 		const roots = rootsIn(o.slot.scope, o.slot.elementId);
 		if (roots.length === o.slot.count) return;
-		const fresh = roots.find((r) => !o.slot.before.has(r) && mounted.get(r)?.sourcePath() === sourcePath);
-		if (fresh && mounted.get(fresh)?.content() !== o.ownContent) {
+		const news = roots.some((r) => {
+			const record = !o.slot.before.has(r) ? mounted.get(r) : undefined;
+			if (!record || record.sourcePath() !== sourcePath) return false;
+			const content = record.content();
+			return content !== o.ownContent && !o.slot.beforeContents.has(content);
+		});
+		if (news) {
 			noticed = true;
 			new Notice(o.notice);
 		}

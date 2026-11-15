@@ -523,6 +523,23 @@ describe('SC-650: an outside edit redraws the montage while a window is open (Re
 		expect(document.activeElement).toBe(document.body);
 	});
 
+	test('[OW18i] a callout rebuilt as a whole by the montage\'s own save (the sibling gets a new root with the content it had, the open one\'s card arrives 700 ms later): no Notice', async () => {
+		const first = await mount(OTHER, undefined, 'Montage.md', true);
+		const second = await mount(BASE, first.pane, 'Montage.md', true);
+		press(ctl(second.root, 'montage.bar.log'));
+		first.view.unload();
+		first.root.remove();
+		second.view.unload();
+		second.root.remove();
+		await mount(OTHER, first.pane, 'Montage.md', true); // the sibling, rebuilt, unchanged
+		await later(700);
+		expect(notices()).toHaveLength(0);
+		const fresh = await mount(BASE, first.pane, 'Montage.md', true); // what the save wrote: the same content
+		await later(700);
+		expect(notices()).toHaveLength(0);
+		expect(document.activeElement).toBe(ctl(fresh.root, 'montage.bar.log'));
+	});
+
 	test('[OW19] a burst of outside edits (Sync): focus follows each redraw, one Notice', async () => {
 		const old = await mount(BASE);
 		press(ctl(old.root, 'montage.bar.log'));
