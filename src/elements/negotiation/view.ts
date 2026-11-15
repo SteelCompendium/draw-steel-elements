@@ -178,13 +178,18 @@ export class NegotiationView extends ElementView<NegotiationData> {
 		};
 
 		if (!this.focusMemory) {
-			// R4 CANDIDATE: `atChange` describes ONE change and the redraw right behind it. Any user input, or focus leaving the card while it is still in the
+			// SC-656: `atChange` describes ONE change and the redraw right behind it. Any user input, or focus leaving the card while it is still in the
 			// page, means that redraw is not coming (an edit elsewhere in the note, the card's own adopted write): drop it, so a later re-render cannot use it.
 			const doc = root.ownerDocument;
 			const drop = (): void => {
 				this.atChange = null;
 			};
-			for (const type of ['pointerdown', 'keydown', 'wheel'] as const) this.registerDomEvent(doc, type, drop, { capture: true });
+			// SC-656: only input made ELSEWHERE while the card is still in the page says the redraw is not coming. Input inside the card (focus is
+			// still where atChange saw it) or while the card is out of the page (the redraw's own gap) is not.
+			const dropOnInput = (evt: Event): void => {
+				if (root.isConnected && (evt.type === 'wheel' || !root.contains(evt.target as Node | null))) drop(); // (a scroll moves the card away wherever the pointer is)
+			};
+			for (const type of ['pointerdown', 'keydown', 'wheel'] as const) this.registerDomEvent(doc, type, dropOnInput, { capture: true });
 			this.registerDomEvent(root, 'focusout', () =>
 				queueMicrotask(() => {
 					if (root.isConnected && !root.contains(doc.activeElement)) drop();

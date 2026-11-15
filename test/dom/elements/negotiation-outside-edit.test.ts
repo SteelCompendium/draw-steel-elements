@@ -116,9 +116,9 @@ const press = (el: HTMLElement): void => el.focus();
 
 /** Reading view's order: the new section is drawn first, then the old one is thrown away; its root is out of the document when the view unloads,
  *  and the focused control's focusout (if the engine sends one on removal) reaches the detached root. */
-async function redraw(old: Mounted, source: string): Promise<Mounted> {
+async function redraw(old: Mounted, source: string, raw = false): Promise<Mounted> {
 	modify(); // the note changed: Obsidian then draws the new section...
-	const fresh = await mount(source, old.pane, old.plugin);
+	const fresh = await mount(source, old.pane, old.plugin, raw);
 	const active = document.activeElement;
 	// ...and throws the old one away. Chromium sends the focusout of a removed focused node while the root still reports `isConnected`.
 	if (active && old.root.contains(active)) active.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
@@ -506,5 +506,41 @@ describe('SC-656: an outside edit redraws the negotiation card while a control o
 		await later(45);
 		expect(document.activeElement).toBe(fresh.root);
 		expect(fresh.root.getAttribute('tabindex')).toBe('-1');
+	});
+
+	// LOW-C: only input made ELSEWHERE while the card is still in the page says the redraw is not coming.
+	test('[OE31] a key pressed ON the focused chip (input inside the card) between the modify and the redraw: the hand-off still lands on the same chip', async () => {
+		const old = await mount(BASE);
+		const chip = ctl(old.root, 'negotiation.appeal.motivation', 1);
+		press(chip);
+		modify();
+		chip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift', bubbles: true })); // a no-op key: focus does not move
+		const fresh = await mount(EDITED, old.pane, old.plugin);
+		old.root.remove();
+		old.view.unload();
+		await later(45);
+		expect(document.activeElement).toBe(ctl(fresh.root, 'negotiation.appeal.motivation', 1));
+	});
+
+	test('[OE32] a key pressed (or a pointer press) on the page while the old root is already out of the document (Reading view\'s gap before the unload): the hand-off still lands', async () => {
+		const old = await mount(BASE);
+		press(ctl(old.root, 'negotiation.appeal.motivation', 1));
+		modify();
+		const fresh = await mount(EDITED, old.pane, old.plugin);
+		old.root.remove(); // the new section is drawn and the old one gone; the old view has not unloaded yet
+		document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift', bubbles: true }));
+		document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+		old.view.unload();
+		await later(45);
+		expect(document.activeElement).toBe(ctl(fresh.root, 'negotiation.appeal.motivation', 1));
+	});
+
+	// LOW-D: the silent hand-off shows no Notice even when the host knows the block text, so the redrawn card's content differs from the old one's.
+	test('[OE33] the host knows the note\'s text of the block (`lastKnownBody`, as in Reading view and Live Preview): the redrawn card has different content, and still no Notice', async () => {
+		const old = await mount(BASE, undefined, undefined, true);
+		press(ctl(old.root, 'negotiation.tab.learn-more'));
+		const fresh = await redraw(old, EDITED, true);
+		expect(document.activeElement).toBe(ctl(fresh.root, 'negotiation.tab.learn-more'));
+		expect(Notice.notices).toEqual([]);
 	});
 });
