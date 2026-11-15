@@ -293,13 +293,14 @@ describe('SC-509: sidebar -- a form Save from the panel\'s pencil reaches the pa
 	// SC-662 (LOW-5): the hero's "Edit definition" is seeded with its own normalising `serializeStateSplice()`, which a hand-written block
 	// (flow-style `stamina: { current: 31, temp: 0 }`, a comment in `state:`) never equals. The strict Save compares with the block as it is on
 	// disk when the form opens, so it is not refused for a change nobody made, and still is when the block really changed.
-	async function openHeroDefinitionForm() {
+	async function openHeroDefinitionForm(beforeOpen?: (app: App, host: { refresh(): Promise<void> }) => Promise<void>) {
 		const { app, services } = await sidebarSetup();
 		app.vault.setFile('Note.md', ['# N', '', 'ABOVE', '', '```ds-hero', ...heroExampleBody.trim().split('\n'), '```', '', 'BELOW', ''].join('\n'));
 		await sendToSidebar(services, 'Note.md', 'ds-hero');
 		await flushAsync();
 		const view = app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0].view as unknown as DseSidebarView;
 		const panelEl = view.contentEl.querySelector('.dse-sidebar__panel') as HTMLElement;
+		if (beforeOpen) await beforeOpen(app, (view as unknown as { panels: Array<{ host: { refresh(): Promise<void> } }> }).panels[0].host);
 		const { modal } = clickPencil(panelEl.querySelector('[data-dse-element="hero"]') as HTMLElement);
 		return { app, modal, panelEl };
 	}
@@ -321,6 +322,19 @@ describe('SC-509: sidebar -- a form Save from the panel\'s pencil reaches the pa
 		Notice.notices.length = 0;
 		const { app, modal } = await openHeroDefinitionForm();
 		app.vault.setFile('Note.md', app.vault.getContent('Note.md')!.replace('surges: 1', 'surges: 4'));
+		await modal().save();
+		await flushAsync();
+		expect(app.vault.getContent('Note.md')).toContain('surges: 4');
+		expect(Notice.notices.filter((n) => n.includes('not saved'))).toHaveLength(1);
+		expect(document.querySelector('.dse-modal')).not.toBeNull();
+	});
+
+	test('[SF05] the form opens in the few ms after an outside edit reached the host cache and before the panel refreshed: the form is seeded from the old model, so its Save is refused and the outside edit stays', async () => {
+		Notice.notices.length = 0;
+		const { app, modal } = await openHeroDefinitionForm(async (a, host) => {
+			a.vault.setFile('Note.md', a.vault.getContent('Note.md')!.replace('surges: 1', 'surges: 4')); // the outside edit...
+			await host.refresh(); // ...is in the host's cache (what a vault read does), and the panel has not been told yet
+		});
 		await modal().save();
 		await flushAsync();
 		expect(app.vault.getContent('Note.md')).toContain('surges: 4');

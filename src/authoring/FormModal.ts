@@ -140,7 +140,11 @@ class FormModal extends DseModal {
 		// SC-662: what the sidebar host's strict Save compares the note's block with is the block as it is on disk now, which is not always
 		// what the form was seeded from (the hero's Edit definition is seeded with its normalising `serializeStateSplice()`, which a
 		// hand-written block never equals). A host that cannot say (Reading view: it has the pin) leaves the seed.
-		this.expectBody = (cx.host as { currentBody?: () => string | null }).currentBody?.() ?? source;
+		// `loadedBody` first (what the card the user is looking at holds), then the host's cache: in the few ms between an outside edit reaching
+		// that cache and the panel's refresh the cache already holds the outside edit while a hero's seed (from its model) does not, and a Save
+		// that expected the new body would overwrite it.
+		const host = cx.host as { loadedBody?: string | null; currentBody?: () => string | null };
+		this.expectBody = host.loadedBody ?? host.currentBody?.() ?? source;
 	}
 
 	onOpen(): void {
