@@ -13,7 +13,7 @@
 //     Escape closes the list and writes nothing). The recipient is the SELECTED row, so the driver credits the row's id, and only when the
 //     list is open and that row carries it. Tab is NOT a pair: Obsidian 1.14 registers no Tab on the list's Scope, so Tab goes to the editor
 //     (an indent); a spec pins that as a plain negative, outside the manifest.
-// `rows` cite the SC-443 scenario groups: S `/ds` suggest (`AUTH-S<nn>`), K in-fence autocomplete (`AUTH-K<nn>`), G experimental gate on.
+// `rows` cite the SC-443 scenario groups: S `/ds` suggest (`AUTH-S<nn>`), G experimental gate on (`AUTH-G<nn>`).
 import { c, surface } from './surface';
 
 export default surface('authoring-ds-suggest', {

@@ -13,7 +13,7 @@
 //     Escape closes the list and writes nothing). The recipient is the SELECTED row, so the driver credits the row's id, and only when the
 //     list is open and that row carries it. Tab is NOT a pair: Obsidian 1.14 registers no Tab on the list's Scope, so Tab goes to the editor
 //     (an indent); a spec pins that as a plain negative, outside the manifest.
-// `rows` cite the SC-443 scenario groups: S `/ds` suggest (`AUTH-S<nn>`), K in-fence autocomplete (`AUTH-K<nn>`), G experimental gate on.
+// `rows` cite the SC-443 scenario groups: K in-fence autocomplete (`AUTH-K<nn>`), G experimental gate on (`AUTH-G<nn>`).
 import { c, surface } from './surface';
 
 export default surface('authoring-schema-suggest', {
@@ -21,7 +21,9 @@ export default surface('authoring-schema-suggest', {
 		'authoring.schema.trigger': c(['type'], ['K']),
 		// The key list (a bare word at the start of a body line) and the value list (after `key:`) are different controls.
 		'authoring.schema.key': c(['click', 'press:Enter', 'press:ArrowDown', 'press:Escape'], ['K']),
-		'authoring.schema.value': c(['click', 'press:Enter'], ['K']),
+		// The only top-level enums in any element schema are ds-roll's `mode` and `difficulty` (ds-conditions' is nested, and the lists bail
+		// on an indented line), and ds-roll is deferred: the value list is reachable with the experimental gate ON only.
+		'authoring.schema.value': c(['click', 'press:Enter'], ['G']),
 	},
 });
 

@@ -58,6 +58,19 @@ import { Menu } from '../mocks/obsidian';
 import { negotiationElement } from '../../src/elements/negotiation/definition';
 import negotiationManifest from '../../e2e/manifest/negotiation';
 import settingsManifest from '../../e2e/manifest/settings-tab';
+import commandsManifest from '../../e2e/manifest/authoring-commands';
+import dsSuggestManifest, { VIRTUAL_IDS as DS_VIRTUAL } from '../../e2e/manifest/authoring-ds-suggest';
+import schemaSuggestManifest, { VIRTUAL_IDS as SCHEMA_VIRTUAL } from '../../e2e/manifest/authoring-schema-suggest';
+import searchManifest from '../../e2e/manifest/authoring-search';
+import { DsElementSuggest } from '../../src/authoring/suggest';
+import { DsSchemaSuggest } from '../../src/authoring/schemaSuggest';
+import { registerInsertCommands } from '../../src/authoring/insert';
+import { registerCompendiumInsertCommands } from '../../src/authoring/compendiumInsert';
+import { CompendiumSearchModal } from '../../src/authoring/CompendiumSearchModal';
+import { createElementRegistry } from '../../src/framework/registry';
+import { registerFrameworkElementDefinitions } from 'main';
+import { Editor } from '../mocks/obsidian';
+import { loadMdDseFixture, makeCompendiumDeps } from './elements/_refHarness';
 
 const INTERACTIVE = 'button, input, select, textarea, [role="button"], [role="slider"], [tabindex], [contenteditable]';
 const CHROME = '[data-dse-chrome-item]';
@@ -930,5 +943,155 @@ describe('SC-440 census: the settings tab, scoped by its container, page by page
 		const meta = tab.containerEl.querySelector('[data-dse-control="settings.sb-sticky-meta"]') as HTMLElement;
 		expect(meta.classList.contains('is-disabled')).toBe(true);
 		expect(tab.containerEl.querySelectorAll('[data-dse-control="settings.sb-sticky-meta"]')).toHaveLength(1);
+	});
+});
+
+// SC-443: the authoring surface (src/authoring): the /ds suggest rows, the in-fence key / value rows, the compendium search window and the
+// insert commands. The popup an EditorSuggest draws and the dialog a SuggestModal draws are Obsidian's; what our code draws is the content
+// of each `.suggestion-item`, and obsidian delegates the click to that row, so the ROW is the control here (`.suggestion-item` joins the
+// interactive selector). Scoped by container: the suggestion container while our suggester is open, the search modal's root.
+describe('authoring surface census (SC-443)', () => {
+	const SUGGEST_INTERACTIVE = `${INTERACTIVE}, .suggestion-item`;
+	const domIds = (m: { controls: Record<string, unknown> }, virtual: readonly string[]): Set<string> =>
+		new Set(Object.keys(m.controls).filter((id) => !virtual.includes(id)));
+	const dsIds = domIds(dsSuggestManifest, DS_VIRTUAL);
+	const schemaIds = domIds(schemaSuggestManifest, SCHEMA_VIRTUAL);
+	const searchIds = new Set(idsOf(searchManifest));
+	const stamped = (scope: Element): string[] => Array.from(scope.querySelectorAll('[data-dse-control]')).map((el) => el.getAttribute('data-dse-control') as string);
+
+	/** An open EditorSuggest popup, the way obsidian builds it: `.suggestion-container > .suggestion > .suggestion-item`. */
+	function popup(): { container: HTMLElement; row: () => HTMLElement } {
+		const container = document.createElement('div');
+		container.className = 'suggestion-container';
+		const list = container.appendChild(document.createElement('div'));
+		list.className = 'suggestion';
+		return { container, row: () => list.appendChild(Object.assign(document.createElement('div'), { className: 'suggestion-item' })) };
+	}
+	const registry = () => {
+		const r = createElementRegistry();
+		registerFrameworkElementDefinitions(r);
+		return r;
+	};
+	const ctx = (query: string) => ({ editor: null as never, file: null as never, start: { line: 0, ch: 0 }, end: { line: 0, ch: 0 }, query });
+
+	function dsPopup(): HTMLElement {
+		const s = new DsElementSuggest(new App() as any, registry());
+		const { container, row } = popup();
+		for (const def of s.getSuggestions(ctx(''))) s.renderSuggestion(def, row());
+		return container;
+	}
+	function schemaPopup(lines: string[], ch: number): HTMLElement {
+		const s = new DsSchemaSuggest(new App() as any, registry());
+		const editor = new Editor(lines.join('\n'));
+		const cursor = { line: lines.length - 1, ch };
+		const info = s.onTrigger(cursor, editor as never, null)!;
+		const { container, row } = popup();
+		for (const v of s.getSuggestions({ ...ctx(info.query), editor: editor as never })) s.renderSuggestion(v, row());
+		return container;
+	}
+	function searchModal(empty = false): CompendiumSearchModal {
+		const { app, vault, index } = makeCompendiumDeps();
+		if (!empty) for (const f of ['kit/panther.md', 'condition/bleeding.md', 'monster/goblin/statblock/goblin-stinker.md']) loadMdDseFixture(vault, f);
+		const modal = new CompendiumSearchModal(app as any, index, jest.fn(), { onSyncRequested: jest.fn() });
+		modal.open();
+		for (const entry of modal.getSuggestions('')) modal.renderSuggestion(entry, modal.resultContainerEl.appendChild(Object.assign(document.createElement('div'), { className: 'suggestion-item' })));
+		return modal;
+	}
+	afterEach(() => {
+		document.body.innerHTML = '';
+	});
+
+	test('the /ds list: every row is the identified control authoring.ds.item, and nothing else inside the popup is interactive', () => {
+		const container = dsPopup();
+		expect(container.querySelectorAll('.suggestion-item').length).toBeGreaterThanOrEqual(13);
+		expect(censusProblems(container, dsIds, SUGGEST_INTERACTIVE, false)).toEqual([]);
+		expect(new Set(stamped(container))).toEqual(new Set(['authoring.ds.item']));
+		expect(stamped(container)).toHaveLength(container.querySelectorAll('.suggestion-item').length);
+	});
+
+	// (The only top-level enums are ds-roll's `mode` and `difficulty`, and ds-roll is deferred: the value list exists with the gate on only. The suite default is ON.)
+	test('the in-fence lists: a key row is authoring.schema.key and an enum value row is authoring.schema.value', () => {
+		const keys = schemaPopup(['```ds-stamina-bar', 'cur'], 3);
+		expect(keys.querySelectorAll('.suggestion-item').length).toBeGreaterThan(0);
+		expect(censusProblems(keys, schemaIds, SUGGEST_INTERACTIVE, false)).toEqual([]);
+		expect(new Set(stamped(keys))).toEqual(new Set(['authoring.schema.key']));
+		const values = schemaPopup(['```ds-roll', 'mode: '], 6);
+		expect(values.querySelectorAll('.suggestion-item').length).toBeGreaterThan(0);
+		expect(censusProblems(values, schemaIds, SUGGEST_INTERACTIVE, false)).toEqual([]);
+		expect(new Set(stamped(values))).toEqual(new Set(['authoring.schema.value']));
+	});
+
+	test('the search window with a compendium: the input is authoring.search.input and each result row authoring.search.result; the empty state is authoring.search.sync', () => {
+		const full = searchModal();
+		expect(censusProblems(full.containerEl, searchIds, SUGGEST_INTERACTIVE, false)).toEqual([]);
+		expect(full.inputEl.getAttribute('data-dse-control')).toBe('authoring.search.input');
+		const rows = Array.from(full.resultContainerEl.querySelectorAll('.suggestion-item'));
+		expect(rows).toHaveLength(3);
+		for (const row of rows) expect(row.getAttribute('data-dse-control')).toBe('authoring.search.result');
+		full.close();
+		const empty = searchModal(true);
+		expect(censusProblems(empty.containerEl, searchIds, SUGGEST_INTERACTIVE, false)).toEqual([]);
+		const only = Array.from(empty.resultContainerEl.querySelectorAll('.suggestion-item'));
+		expect(only.map((r) => r.getAttribute('data-dse-control'))).toEqual(['authoring.search.sync']);
+		empty.close();
+	});
+
+	test('the census itself bites: an un-id\'d button or row inside any of the three surfaces, or an id outside the manifest, is a finding', () => {
+		const surfaces: Array<[string, HTMLElement, ReadonlySet<string>]> = [
+			['/ds popup', dsPopup(), dsIds],
+			['schema popup', schemaPopup(['```ds-stamina-bar', 'cur'], 3), schemaIds],
+			['search window', searchModal().containerEl, searchIds],
+		];
+		for (const [name, root, allowed] of surfaces) {
+			expect({ name, findings: censusProblems(root, allowed, SUGGEST_INTERACTIVE, false) }).toEqual({ name, findings: [] });
+			const row = root.querySelector('.suggestion-item') as HTMLElement;
+			// an un-id'd button drawn inside a row
+			const rogue = row.appendChild(document.createElement('button'));
+			expect({ name, findings: censusProblems(root, allowed, SUGGEST_INTERACTIVE, false) }).toEqual({ name, findings: [expect.stringMatching(/^no data-dse-control: <button/)] });
+			rogue.remove();
+			// a row that lost its id
+			const id = row.getAttribute('data-dse-control') as string;
+			row.removeAttribute('data-dse-control');
+			expect({ name, findings: censusProblems(root, allowed, SUGGEST_INTERACTIVE, false) }).toEqual({ name, findings: [expect.stringMatching(/^no data-dse-control: <div class="[^"]*suggestion-item/)] });
+			// an id the manifest does not declare
+			row.setAttribute('data-dse-control', 'authoring.not-a-control');
+			expect({ name, findings: censusProblems(root, allowed, SUGGEST_INTERACTIVE, false) }).toEqual({ name, findings: [expect.stringMatching(/id "authoring\.not-a-control" is not in the manifest/)] });
+			row.setAttribute('data-dse-control', id);
+		}
+	});
+
+	test('no dead manifest row: the ids drawn across the variants above are exactly the manifests\' DOM ids (the typed triggers are virtual)', () => {
+		const all = [
+			...stamped(dsPopup()),
+			...stamped(schemaPopup(['```ds-stamina-bar', 'cur'], 3)),
+			...stamped(schemaPopup(['```ds-roll', 'mode: '], 6)),
+			...stamped(searchModal().containerEl),
+			...stamped(searchModal(true).containerEl),
+		];
+		expect(new Set(all)).toEqual(new Set([...dsIds, ...schemaIds, ...searchIds]));
+		expect(DS_VIRTUAL.concat(SCHEMA_VIRTUAL)).toEqual(['authoring.ds.trigger', 'authoring.schema.trigger']);
+		for (const id of [...DS_VIRTUAL, ...SCHEMA_VIRTUAL]) expect(all).not.toContain(id);
+	});
+
+	test('the command manifest is exactly the commands the plugin registers: thirteen element commands + two compendium commands shipped, eight more with the gate on, never insert-hero', () => {
+		const declared = new Set(idsOf(commandsManifest));
+		const registered = (experimental: boolean): string[] => {
+			setExperimental(experimental);
+			const plugin = new Plugin(new App()) as any;
+			registerInsertCommands(plugin, registry());
+			registerCompendiumInsertCommands(plugin, makeCompendiumDeps().index, {} as never);
+			return plugin.commands.map((c: { id: string }) => `authoring.cmd.${c.id}`);
+		};
+		try {
+			const off = registered(false);
+			const on = registered(true);
+			expect(off).toHaveLength(15);
+			expect(on).toHaveLength(23);
+			expect(new Set(on)).toEqual(declared);
+			expect(off.every((id) => declared.has(id))).toBe(true);
+			expect(on).not.toContain('authoring.cmd.insert-hero');
+		} finally {
+			setExperimental(true);
+		}
 	});
 });
