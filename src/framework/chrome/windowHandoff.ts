@@ -25,7 +25,7 @@
 // The successor must exist: a note that navigated away, a block the edit deleted, a leaf that closed has none, the watch lapses at its
 // TTL, and nothing is shown or focused. The watch belongs to the plugin (`owner`): unloading it cancels the watch.
 import { focusControl, focusIsFree } from './focusHandoff';
-import { controlSuccessor } from '../kit/controlFocus';
+import { captureControlFocus, controlSuccessor } from '../kit/controlFocus';
 import type { ControlFallbacks, ControlFamilies, ControlFocus } from '../kit/controlFocus';
 import { Component, Notice } from 'obsidian';
 
@@ -111,6 +111,8 @@ export interface OutsideCloseHandoff {
 	/** SC-650: the element's nearest-equivalent rules (`controlSuccessor`), for an opener the redrawn element no longer has or has disabled. */
 	fallbacks?: ControlFallbacks;
 	notice: string;
+	/** SC-656: no Notice at all (a window-less redraw: nothing was lost, no window closed). Focus is unchanged. */
+	silent?: boolean;
 	/** A long-lived Component (the plugin): unloading it cancels the watch. A hand-off for an owner that is not loaded is not started. */
 	owner: Component;
 }
@@ -174,7 +176,7 @@ export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 		if (finished || !root || root === claimed) return;
 		if (claimed === null) {
 			// First successor. Same disk content = the view's own save or a re-render: no Notice. Focus follows either way.
-			if (!noticed && mounted.get(root)?.content() !== o.ownContent) {
+			if (!noticed && !o.silent && mounted.get(root)?.content() !== o.ownContent) {
 				noticed = true;
 				new Notice(o.notice);
 			}
@@ -192,7 +194,7 @@ export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 	 *  (a callout rebuilt as a whole gives a sibling a new root with the content it had). It is not claimed: there is no successor to give
 	 *  focus to, and a root that still lands at the slot is claimed as usual, with the count rule. */
 	const noticeForNewRoot = (): void => {
-		if (noticed || claimed !== null) return;
+		if (noticed || claimed !== null || o.silent) return;
 		const roots = rootsIn(o.slot.scope, o.slot.elementId);
 		if (roots.length === o.slot.count) return;
 		const news = roots.some((r) => {
@@ -222,6 +224,61 @@ export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 	observer.observe(doc.body, { childList: true, subtree: true });
 	attempt();
 	return finish;
+}
+
+// SC-656 — the same hand-off for an element with NO window: an outside edit redraws a card while focus is on one of its controls. The old
+// view's root is already out of the document when it unloads in Reading view (and Live Preview removes it a moment later), so what held focus
+// and where the card sat cannot be read at unload: `rememberFocus` keeps both up to date while focus is inside the card, and the view hands
+// the memory to `handOffAfterOutsideRedraw` from its unload. Everything else (slot lookup, the watch, the cancels, the count guard) is
+// `handOffAfterOutsideClose`, silent: nothing was lost, so no Notice. The view skips it for its OWN write's redraw (Live Preview rebuilds the
+// widget on every save; the SC-602 carry owns that one).
+
+/** What `rememberFocus` knows while focus is inside the card: the focused control and the card's slot at that moment. */
+export interface FocusMemory {
+	focus: ControlFocus;
+	slot: WindowSlot;
+}
+
+/** Keep `FocusMemory` of `root` current for `owner`'s life (focusin inside the card sets it; a focus that LEFT the card while the card is
+ *  still in the document clears it, a card that merely left the document does not: that is the redraw). Returns the reader. */
+export function rememberFocus(owner: Component, root: HTMLElement, elementId: string, families: ControlFamilies = {}): () => FocusMemory | null {
+	let memory: FocusMemory | null = null;
+	const doc = root.ownerDocument;
+	owner.registerDomEvent(root, 'focusin', () => {
+		const focus = captureControlFocus(root, families);
+		const slot = focus ? slotOf(root, elementId) : null;
+		memory = focus && slot ? { focus, slot } : null;
+	});
+	owner.registerDomEvent(root, 'focusout', () => {
+		// Deferred: a move from one control to another passes through <body> between the two events, and focusin sets the memory again.
+		queueMicrotask(() => {
+			if (root.isConnected && !root.contains(doc.activeElement)) memory = null;
+		});
+	});
+	return () => memory;
+}
+
+/** Call from the view's unload, with what `rememberFocus` returned. Silent; returns the cancel function. */
+export function handOffAfterOutsideRedraw(o: {
+	memory: FocusMemory;
+	own: WindowRootRecord;
+	oldRoot: HTMLElement;
+	families?: ControlFamilies;
+	fallbacks?: ControlFallbacks;
+	owner: Component;
+}): () => void {
+	return handOffAfterOutsideClose({
+		slot: o.memory.slot,
+		own: o.own,
+		ownContent: '',
+		oldRoot: o.oldRoot,
+		focus: o.memory.focus,
+		families: o.families ?? {},
+		fallbacks: o.fallbacks,
+		notice: '',
+		silent: true,
+		owner: o.owner,
+	});
 }
 
 /** The one Notice text (the ledger's ruling). */

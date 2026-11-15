@@ -36,6 +36,9 @@ import type { RenderMdCallback } from '@/framework/kit';
 import { captureControlFocus, restoreControlFocus } from '@/framework/kit/controlFocus';
 import type { ControlFocus } from '@/framework/kit/controlFocus';
 import { isKeyboardClick } from '@/framework/chrome/focusHandoff';
+import { handOffAfterOutsideRedraw, normalizeBlockText, publishWindowRoot, rememberFocus } from '@/framework/chrome/windowHandoff';
+import type { FocusMemory, WindowRootRecord } from '@/framework/chrome/windowHandoff';
+import type { RenderContext } from '@/framework/context';
 import { NEGOTIATION_FOCUS_FALLBACKS, RESET_LANDING } from './focusRules';
 import { NegotiationData } from '@model/NegotiationData';
 import { PatienceInterestView } from '@drawSteelAdmonition/negotiation/PatienceInterestView';
@@ -48,7 +51,40 @@ import { LearnMoreView } from '@drawSteelAdmonition/negotiation/LearnMoreView';
  *  port, now round-tripped by the kit tabs' SessionPersist accessor. */
 const TAB_SLOT = 'tab';
 
+/** SC-656: a redraw this long after the view's own write is that write's (Live Preview rebuilds the widget on every save; the SC-602 carry
+ *  hands focus on there). Same length as the claim window of the registry's write tickets. */
+const OWN_WRITE_WINDOW_MS = 3000;
+
 export class NegotiationView extends ElementView<NegotiationData> {
+	/** SC-656 — this view's mark on its root, for the hand-off after an outside redraw (framework/chrome/windowHandoff.ts). */
+	private readonly windowRecord: WindowRootRecord = {
+		sourcePath: () => this.cx.host.sourcePath,
+		content: () => normalizeBlockText((this.cx.host as { lastKnownBody?: string | null }).lastKnownBody) ?? '', // (silent hand-off: never compared)
+		live: () => !this.unloading,
+	};
+	private unloading = false;
+	/** SC-656 — what held focus inside the card, and where the card sat; null when focus is not inside it. Read at unload. */
+	private focusMemory: (() => FocusMemory | null) | null = null;
+	private lastPersistAt = -Infinity;
+
+	constructor(cx: RenderContext) {
+		super(cx);
+		// SC-656: the view unloads (an outside edit redrew the block, the note was closed, ...). In Reading view the old root is already out of
+		// the document by now, so focus is read from the memory kept while it was inside. The redraw of this view's own write is not an outside
+		// one: nothing is handed on then (the SC-602 carry does it in Live Preview, adoption in Reading view).
+		this.register(() => {
+			this.unloading = true;
+			const memory = this.focusMemory?.() ?? null;
+			if (!memory || Date.now() - this.lastPersistAt < OWN_WRITE_WINDOW_MS) return;
+			handOffAfterOutsideRedraw({ memory, own: this.windowRecord, oldRoot: this.rootEl, fallbacks: NEGOTIATION_FOCUS_FALLBACKS, owner: this.cx.plugin });
+		});
+	}
+
+	protected persist(): Promise<boolean> {
+		this.lastPersistAt = Date.now();
+		return super.persist();
+	}
+
 	/** SC-642 — run a write that DISARMS the control a keyboard user pressed (Complete Argument) and keep focus on the card: remember the
 	 *  focused control first, hand focus to its fallback right after (kit/controlFocus.ts). Nothing moves when focus was not inside the card. */
 	private readonly keepFocus = (write: () => void): void => {
@@ -91,6 +127,8 @@ export class NegotiationView extends ElementView<NegotiationData> {
 			argument?.setEnded(ending !== null);
 		};
 
+		this.focusMemory ??= rememberFocus(this, root, 'negotiation'); // the root outlives every rebuild: once
+
 		this.buildHead(container, cycleOwner, model);
 
 		standing = new PatienceInterestView(model, persist, refreshStanding, cycleOwner, canPersist);
@@ -115,6 +153,7 @@ export class NegotiationView extends ElementView<NegotiationData> {
 		cards.build(container);
 
 		refreshStanding(); // first paint: data-ended + the band for an already-ended standing
+		publishWindowRoot(root, this.windowRecord); // (after the card is built: a hand-off must not find a card that is still being drawn)
 	}
 
 	/** kit cardHead (CB-16) + the Reset options button (write action — canPersist only). */
