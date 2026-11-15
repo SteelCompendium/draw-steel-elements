@@ -584,4 +584,13 @@ describe('SC-650: the pinned sidebar refreshes the montage in place (no redraw) 
 		expect(notices()).toHaveLength(0);
 		expect(focused()).toBe('montage.bar.log');
 	});
+
+	test('[OW30] a refresh with no window open resets the disk record: a later refresh of the same block (an edit elsewhere) leaves the next window open, no Notice', async () => {
+		const old = await mount(BASE, undefined, 'Montage.md', false, 'sidebar');
+		await refresh(old.view, EDITED); // the block changed while no window was open
+		press(ctl(old.root, 'montage.bar.log'));
+		await refresh(old.view, EDITED); // an edit elsewhere in the note: the block is what the view already shows
+		expect(anyWindow()).toBe(true);
+		expect(notices()).toHaveLength(0);
+	});
 });
