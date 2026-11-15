@@ -91,6 +91,7 @@ describe('montage: the Log an action sheet', () => {
 		await expect(warn).toBeDisplayed();
 		await expect(warn).toHaveElementProperty('textContent', 'Kira already used Nature in this montage — reuse is not allowed');
 		await expect(modal.control('montage.log.submit')).toBeEnabled();
+		await dse.expectNoWrite(MID, () => dse.click(modal.control('montage.log.cancel')));
 	});
 
 	it('[MONT-L05] editing an entry: the sheet is pre-filled, Success replaces Failure, Save writes one correction and moves both tallies', async () => {
