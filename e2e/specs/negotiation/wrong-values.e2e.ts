@@ -1,14 +1,15 @@
 // SC-439 [W]: hand-written values that are not what the element expects, and blocks that are nearly empty. Each marker states the CORRECT
-// behaviour only as far as its ticket rules: SC-638 (no raw JS error text on the card; the seal shown agrees with the ending), SC-640 (every
-// motivation chip has a name to read; no chip is announced as "Appeal to "), SC-641 (a block without Interest does not open ended; Reset of a
-// block that declares only its current standing does not end it). Never a specific fix or default value. SC-638 is fixed: W02 and W03 are plain tests,
-// and W08..W11 pin its rulings (a plain error card that writes nothing for a wrong-shaped block, a typed value written back as typed).
+// behaviour only as far as its ticket rules: SC-641 (a block without Interest does not open ended; Reset of a block that declares only its
+// current standing does not end it), never a specific fix or default value. SC-638 is fixed: W02 and W03 are plain tests, and W08..W11 pin its
+// rulings (a plain error card that writes nothing for a wrong-shaped block, a typed value written back as typed). SC-640 is fixed: W04 and W05
+// are plain tests, and W12 and W13 pin its rulings (same-named entries share one labelled chip and a notice, each row's Spent is its own, a
+// nameless entry is labelled "Unnamed Motivation" and works).
 // Negotiation/quoted.md: `current_interest: "3"`, `current_patience: "2"`. wrong-name.md: `name: 2024`. fraction.md: `current_interest: 0.4`.
 // dup-names.md: two motivations named Higher Authority. nameless.md: a motivation with a reason and no name. minimal.md: `name:` only.
 // current-only.md: `current_interest: 3`, `current_patience: 2`, no initial_*. wrong-item.md: `- Legacy` as the second motivation. wrong-argument.md: `currentArgument: hello`. wrong-block.md: the block is the text `hello`.
 import { expect } from '@wdio/globals';
 import { dse, knownBug } from '../../driver/dse';
-import { blockOf, CURRENT_ONLY, DUPLICATES, FRACTION, MINIMAL, NAMELESS, NEGO, openMenu, openNego, patienceSeal, QUOTED, chooseReset, shown, WRONG_ARGUMENT, WRONG_BLOCK, WRONG_ITEM, WRONG_NAME } from '../../driver/negotiation';
+import { argOf, blockOf, CURRENT_ONLY, DUPLICATES, dossier, FRACTION, MINIMAL, NAMELESS, NEGO, openMenu, openNego, patienceSeal, pressedOf, QUOTED, chooseReset, shown, WRONG_ARGUMENT, WRONG_BLOCK, WRONG_ITEM, WRONG_NAME } from '../../driver/negotiation';
 
 describe('negotiation: values the Director typed by hand', () => {
 	it('[NEGO-W01] quoted standing numbers are numbers: "2" Patience and "3" Interest are shown on those seals, and a crit makes Interest 4 (not the text "31")', async () => {
@@ -87,19 +88,44 @@ describe('negotiation: values the Director typed by hand', () => {
 		expect(b).toMatchObject({ current_patience: 1 });
 	});
 
-	knownBug('SC-640', '[NEGO-W04] two motivations with the same name: every appeal chip has its name to read', async () => {
+	it('[NEGO-W04] two motivations with the same name: ONE appeal chip with its name to read, and a notice under it that it stands for both; the card keeps both rows', async () => {
 		await dse.openNote(DUPLICATES);
 		const labels = await dse.page<string[]>(`[...document.querySelectorAll('.markdown-reading-view [data-dse-control="negotiation.appeal.motivation"]')].map((c) => (c.textContent ?? '').replace(/[◆◇]/g, '').trim())`);
-		expect(labels.length).toBeGreaterThanOrEqual(1); // a setup check; the count itself is not the ticket's to rule
-		expect(labels.filter((label) => label === '').length).toBe(0); // every chip that is drawn has a name to read
-	}, { failsWith: /Expected: 0/ });
+		expect(labels).toEqual(['Higher Authority']);
+		const notices = await dse.page<string[]>(`[...document.querySelectorAll('.markdown-reading-view .dse-nt__appeals-group [data-note="shared-name"]')].map((n) => n.textContent ?? '')`);
+		expect(notices).toEqual(['Higher Authority is listed twice; this chip stands for both.']);
+		expect(await dossier()).toMatchObject({ count: '2 of 2 open', chips: ['Mark spent', 'Mark spent'] });
+	});
 
-	knownBug('SC-640', '[NEGO-W05] a motivation with no name: its appeal chip is not announced as "Appeal to "', async () => {
+	it('[NEGO-W12] the second of two same-named motivations has its own Spent: a click writes only the second entry, and the one chip is drawn spent', async () => {
+		const root = await openNego(DUPLICATES);
+		await dse.waitForWrite(DUPLICATES, () => dse.click(root.control('negotiation.spent', { nth: 1 })));
+		expect(await dossier()).toMatchObject({ count: '1 of 2 open', spent: [false, true], chips: ['Mark spent', 'Spent'] });
+		const b = await blockOf(DUPLICATES);
+		expect(b.motivations!.map((m) => m.hasBeenAppealedTo ?? false)).toEqual([false, true]);
+		await expect(root.control('negotiation.appeal.motivation')).toHaveText(expect.stringContaining('spent')); // any entry spent: the shared chip is spent
+	});
+
+	it('[NEGO-W05] a motivation with no name: its appeal chip is labelled "Unnamed Motivation" and announced as "Appeal to Unnamed Motivation"', async () => {
 		await dse.openNote(NAMELESS);
-		const names = await dse.page<string[]>(`[...document.querySelectorAll('.markdown-reading-view [data-dse-control="negotiation.appeal.motivation"]')].map((c) => c.getAttribute('aria-label') ?? '')`);
-		expect(names.length).toBeGreaterThanOrEqual(1);
-		expect(names.filter((name) => /^Appeal to\s*$/.test(name))).toEqual([]); // no chip is announced as a bare "Appeal to "
-	}, { failsWith: /Appeal to/ });
+		const chips = await dse.page<Array<{ text: string; label: string }>>(`[...document.querySelectorAll('.markdown-reading-view [data-dse-control="negotiation.appeal.motivation"]')].map((c) => ({ text: (c.textContent ?? '').replace(/[◆◇]/g, '').trim(), label: c.getAttribute('aria-label') ?? '' }))`);
+		expect(chips).toEqual([
+			{ text: 'Higher Authority', label: 'Appeal to Higher Authority' },
+			{ text: 'Unnamed Motivation', label: 'Appeal to Unnamed Motivation' },
+		]);
+	});
+
+	it('[NEGO-W13] the chip of a motivation with no name works: a click presses it and writes the empty string, never the label, and a second click takes it off', async () => {
+		const root = await openNego(NAMELESS);
+		await dse.waitForWrite(NAMELESS, () => dse.click(root.control('negotiation.appeal.motivation', { nth: 1 })));
+		expect(await pressedOf('negotiation.appeal.motivation')).toEqual(['false', 'true']);
+		const b = await blockOf(NAMELESS);
+		expect(b.currentArgument?.motivationsUsed).toEqual(['']);
+		expect(await dse.noteText(NAMELESS)).not.toContain('Unnamed');
+		await dse.waitForWrite(NAMELESS, () => dse.click(root.control('negotiation.appeal.motivation', { nth: 1 })));
+		expect(await pressedOf('negotiation.appeal.motivation')).toEqual(['false', 'false']);
+		expect(argOf(await blockOf(NAMELESS)).motivationsUsed).toEqual([]);
+	});
 
 	knownBug('SC-641', '[NEGO-W06] a block that declares no Interest does not open already ended', async () => {
 		await dse.openNote(MINIMAL);

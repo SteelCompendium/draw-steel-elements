@@ -166,8 +166,8 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Negotiation/wrong-block.md` | the whole block is the text `hello` (a plain error card, `Invalid data: the block must be a map of keys.`; the note is never written; SC-638) |
   | `Negotiation/ghost-appeal.md` | `basic.md` with `currentArgument: motivationsUsed: [Ghost]` and no motivation named Ghost: no chip is pressed, the tiers are the no-motivation ones, Same Argument is enabled, and the note keeps the entry until the user's own action writes it (SC-649) |
   | `Negotiation/fraction.md` | `current_interest: 0.4` (seal 0 is drawn and the negotiation is over, hostile: the ending reads the seal; SC-638) |
-  | `Negotiation/dup-names.md` | two motivations both named Higher Authority (the first chip is blank; SC-640) |
-  | `Negotiation/nameless.md` | one motivation with a reason and no `name:` (its chip is announced as "Appeal to "; SC-640) |
+  | `Negotiation/dup-names.md` | two motivations both named Higher Authority (one shared chip and a notice; each row has its own Spent; SC-640) |
+  | `Negotiation/nameless.md` | one motivation with a reason and no `name:` (its chip is labelled "Unnamed Motivation"; SC-640) |
   | `Negotiation/current-only.md` | `current_interest: 3`, `current_patience: 2` and no `initial_*` keys (Reset ends it; SC-641) |
   | `Negotiation/quoted.md` | quoted standing numbers: `current_interest: "3"`, `current_patience: "2"` |
   | `Negotiation/twins.md` | TWO IDENTICAL `ds-negotiation` blocks (Twin, Interest 3 / Patience 3, one motivation, one pitfall) with prose above, between and below |
