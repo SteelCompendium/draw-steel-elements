@@ -104,9 +104,22 @@ jobs:
   # this deliberately, after a trial run.
   e2e:
     runs-on: ubuntu-24.04
-    # The whole job measured 6-12 min on a 4-core simulation (numbers in e2e/README.md, "CI");
-    # 30 leaves room for a cold Obsidian download and a slow runner without letting a hung
-    # Obsidian hold a runner for the 6 h default.
+    # Nothing here needs more than a read-only token (checkout), and the job runs PR-controlled
+    # code (npm lifecycle scripts, the specs): say so, instead of inheriting whatever the
+    # repository's default workflow permission is set to.
+    permissions:
+      contents: read
+    # A new push to a pull request supersedes the run in progress (results for a stale commit
+    # are noise). Pushes to develop/main must never be cancelled or dropped: with
+    # cancel-in-progress off, GitHub still discards all but one PENDING run per group, so a
+    # push gets its own group (the run id) and the group only ever coalesces pull_request runs.
+    concurrency:
+      group: e2e-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    # A full run is roughly 6-12 min on 4 cores (simulated locally; the first real runs are
+    # the real measurement). 30 leaves room for a cold Obsidian download and a slow runner
+    # without letting a hung Obsidian hold a runner for the 6 h default. The e2e step has its
+    # own, shorter timeout (below) so that a hang still reaches the artifact upload.
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -126,6 +139,11 @@ jobs:
       # OBSIDIAN_CACHE is where run.mjs / wdio-obsidian-service keep the downloads; setting
       # it explicitly (it is also run.mjs's default location) makes the cache step and the
       # runner agree on one path.
+      #
+      # The obsidian-launcher version (read from the installed package, not hard-coded) goes
+      # into the cache key too: a launcher upgrade that changes the on-disk layout must not
+      # restore the old tree on an exact hit. It changes only on a launcher bump, not on every
+      # lockfile change.
       - name: Resolve pinned Obsidian version and cache dir
         id: pin
         run: |
@@ -134,7 +152,13 @@ jobs:
             echo "::error file=e2e/run.mjs::could not read the PINNED Obsidian version"
             exit 1
           fi
+          launcher="$(node -p "JSON.parse(require('fs').readFileSync('node_modules/obsidian-launcher/package.json','utf8')).version")"
+          if [ -z "$launcher" ]; then
+            echo "::error::could not read the obsidian-launcher version"
+            exit 1
+          fi
           echo "version=$pin" >> "$GITHUB_OUTPUT"
+          echo "launcher=$launcher" >> "$GITHUB_OUTPUT"
           echo "OBSIDIAN_CACHE=$HOME/.cache/dse-e2e-obsidian" >> "$GITHUB_ENV"
 
       # ~530 MB on disk (Obsidian app + installer + a chromedriver), so a cache hit saves that
@@ -147,7 +171,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.OBSIDIAN_CACHE }}
-          key: dse-e2e-obsidian-${{ runner.os }}-${{ runner.arch }}-${{ steps.pin.outputs.version }}
+          key: dse-e2e-obsidian-${{ runner.os }}-${{ runner.arch }}-${{ steps.pin.outputs.version }}-launcher-${{ steps.pin.outputs.launcher }}
 
       # `npm run e2e` builds main.js itself (it runs `build-no-check` first), so there is no
       # separate build step. It also starts its own private Xvfb (xvfb is preinstalled on the
@@ -166,26 +190,60 @@ jobs:
       #
       # --shards=4: one Obsidian per shard on the 4 vCPU / 16 GB standard runner that public
       # repositories get. run.mjs's own default, min(4, floor(nproc/3)), would pick 1 here;
-      # measurements behind 4 are in e2e/README.md ("CI").
+      # 4 shards were measurably faster than 2 in the local 4-core simulation.
+      #
+      # timeout-minutes on the STEP, below the job's 30: when the job timeout fires GitHub
+      # cancels the job, and the upload step below would then see a cancellation rather than a
+      # failure. A step timeout kills the step and marks it failed, so the bundles of whatever
+      # had failed by then still get uploaded.
       - name: End-to-end tests (real Obsidian)
         id: e2e
+        timeout-minutes: 25
         run: npm run e2e -- --shards=4
 
-      - name: Save Obsidian download cache
+      # Save the cache only if the download is COMPLETE. A red run can stop after the cache dir
+      # was created but before every download finished, and actions/cache would save that
+      # partial dir under the immutable key: every later run would then hit it, skip the save,
+      # and re-download the missing pieces forever. Linux x64 layout (change it if this job
+      # ever moves to arm):
+      #   obsidian-installer/linux-x64/Obsidian-<v>/obsidian
+      #   obsidian-app/obsidian-<v>.asar
+      #   electron-chromedriver/linux-x64/<electron version>/chromedriver
+      - name: Check the Obsidian download is complete
+        id: obsidian-complete
         if: ${{ !cancelled() && steps.obsidian-cache.outputs.cache-hit != 'true' }}
+        env:
+          OBSIDIAN_VERSION: ${{ steps.pin.outputs.version }}
+        run: |
+          c="$OBSIDIAN_CACHE"
+          v="$OBSIDIAN_VERSION"
+          if [ -x "$c/obsidian-installer/linux-x64/Obsidian-$v/obsidian" ] \
+             && [ -f "$c/obsidian-app/obsidian-$v.asar" ] \
+             && compgen -G "$c/electron-chromedriver/linux-x64/*/chromedriver" > /dev/null; then
+            echo "complete=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Obsidian download cache is incomplete; not saving it"
+          fi
+
+      - name: Save Obsidian download cache
+        if: ${{ !cancelled() && steps.obsidian-complete.outputs.complete == 'true' }}
         uses: actions/cache/save@v4
         with:
           path: ${{ env.OBSIDIAN_CACHE }}
-          key: dse-e2e-obsidian-${{ runner.os }}-${{ runner.arch }}-${{ steps.pin.outputs.version }}
+          key: dse-e2e-obsidian-${{ runner.os }}-${{ runner.arch }}-${{ steps.pin.outputs.version }}-launcher-${{ steps.pin.outputs.launcher }}
 
       # A failing test leaves a bundle in e2e/.out/<run>/<test-id>/ (screenshot, DOM, note
       # before/after + diff, page events, vault copy). `.out` is a dot-directory, which
-      # upload-artifact skips unless include-hidden-files is set.
+      # upload-artifact skips unless include-hidden-files is set. The name carries the run
+      # attempt: a manual "Re-run" of the same run would otherwise collide on the name, and
+      # upload-artifact v4 artifacts are immutable. Also runs when the job is cancelled (a
+      # superseded pull_request run, or the job timeout), so a partial run still leaves what it
+      # had.
       - name: Upload failure bundles
-        if: ${{ failure() }}
+        if: ${{ failure() || cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-out
+          name: e2e-out-${{ github.run_attempt }}
           path: e2e/.out/
           include-hidden-files: true
           if-no-files-found: warn
