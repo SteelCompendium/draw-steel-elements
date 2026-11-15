@@ -210,13 +210,13 @@ it survives navigating between notes.
   SC-608 Notice shows. The initiative tracker and the montage keep their own SC-608 / SC-650 rule
   in `update()` (`ownsOutsideWindows`). The block edit form (`FormModal`, `authoringControls` pref) is not a window of
   the view and is not closed by a refresh, but its Save is strict like Reading view's `pinOnly`: it passes the body it
-  opened from (`BlockWriteOptions.expectBody`) and the host refuses it when the block is something else by then (dropped-write
+  opened from on disk (`BlockWriteOptions.expectBody`, the host's `currentBody()` at open, not the form's seed: the hero's Edit definition is seeded with its normalising `serializeStateSplice()`) and the host refuses it when the block is something else by then (dropped-write
   Notice, never rate limited for a form, the form stays open). An undo toast of the stamina bar or the hero closes over the
   model it was made on: `ElementView.undoIsStale` refuses it with the same Notice once a refresh replaced the model (Reading view's
-  Undo is refused by the host the same way). Every persisted element writes `_dse_anchor` back (conditions, resource, surges and
+  Undo is refused by the host the same way). The form leaves the `_dse_anchor` line out of its schema pass (an element whose schema forbids extra keys refused it, so the Save of every block that was ever pinned stayed disabled) and keeps it in what it writes. Every persisted element writes `_dse_anchor` back (conditions, resource, surges and
   tokens did not; `persistedAnchorPassthrough.test.ts` sweeps them all). A refresh that was waiting for the view's save
   when the block was deleted (`handleAnchorLost`) bails out instead of adopting the old body. Gate:
-  `test/dom/framework/sidebarPendingSave.test.ts` (PS01..PS30), `formSaveRedraw.test.ts` (SF01, SF02), e2e `SIDE-OE01..OE10`.
+  `test/dom/framework/sidebarPendingSave.test.ts` (PS01..PS30), `formSaveRedraw.test.ts` (SF01, SF02), e2e `SIDE-OE01..OE12`.
 - **D7 consumer contract (spec §1.9):** any caller — a future hero-sheet element, not
   just the D8 trackers — pins a block the same way: ensure `_dse_anchor` (`ensureAnchor`),
   then `view.addPanel({ filePath, alias, anchorId })`. `sendToSidebar(services, filePath,
