@@ -18,9 +18,11 @@ import { DEFAULT_SETTINGS } from '@model/Settings';
 import { DseSidebarView, VIEW_TYPE_DSE_SIDEBAR } from '@/framework/sidebar/DseSidebarView';
 import type { DseSidebarServices } from '@/framework/sidebar/DseSidebarView';
 import { sendToSidebar } from '@/framework/sidebar/registration';
+import heroExampleBody from '@/elements/hero/example.yaml';
+import { resetDroppedWriteNotices } from '@/framework/host/droppedWriteNotice';
 
 const NOTICE = 'The note changed outside, so this window closed without saving';
-const NOT_SAVED = 'Draw Steel Elements: a change to a block in counter was not saved — the block changed on disk first.';
+const NOT_SAVED = 'Draw Steel Elements: a change to a block in Session was not saved — the block changed on disk first.';
 
 /** Real "modify" delivery on this test's own vault (the shared mock's `on` is a no-op); see sidebarInitiative.test.ts. */
 function withRealModifyEvents(app: App): { fireModify: (file: TFile) => void } {
@@ -92,8 +94,9 @@ const windowEl = (): HTMLElement => q(document, '.dse-modal');
 async function pin(env: Env, path: string, content: string, alias: string, cursorLine?: number): Promise<HTMLElement> {
 	if (!env.app.vault.getAbstractFileByPath(path)) env.app.vault.setFile(path, content);
 	await pump(sendToSidebar(env.services, path, alias, cursorLine));
-	await later(20);
+	await later(100); // the panel mounts a few macrotasks after the pin
 	const view = env.app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0].view as unknown as DseSidebarView;
+	if (!view.contentEl.isConnected) document.body.appendChild(view.contentEl); // focus lives in the document: the mock leaf's view is built detached
 	const panels = view.contentEl.querySelectorAll<HTMLElement>('.dse-sidebar__panel');
 	return panels[panels.length - 1];
 }
@@ -124,6 +127,7 @@ let closeOriginal: () => void = () => undefined;
 beforeEach(() => {
 	jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
 	Notice.notices.length = 0;
+	resetDroppedWriteNotices(); // one Notice per note per 5 s, and the module remembers across tests
 	// Real Obsidian hands focus back to the control that held it when a modal opened, synchronously inside `close()`; the shared mock does not.
 	const openers = new WeakMap<object, Element | null>();
 	const open = Modal.prototype.open;
@@ -185,7 +189,8 @@ describe('SC-662: a pending save of a pinned card is never lost by a refresh', (
 	test('[PS03] the press and an outside edit to the SAME block inside the debounce: the outside edit is kept, the press is refused with the Reading view\'s dropped-write Notice, the card shows the outside block', async () => {
 		const env = setup();
 		const panel = await pin(env, 'Session.md', COUNTER_NOTE, 'ds-counter');
-		control(panel, 'counter.inc').click();
+		const inc = control(panel, 'counter.inc');
+		inc.click();
 		await later(50);
 		await outsideEdit(env, 'Session.md', (c) => c.replace('max_value: 3', 'max_value: 5'));
 		await later(600);
@@ -193,8 +198,8 @@ describe('SC-662: a pending save of a pinned card is never lost by a refresh', (
 		expect(block.max_value).toBe(5); // the outside edit survives
 		expect(block.current_value).toBe(1); // the press was written over nothing
 		expect(noticeCount(NOT_SAVED)).toBe(1); // said so, as a Reading-view card does for the same sequence (measured in real Obsidian)
-		expect(control(panel, 'counter.input', 0).getAttribute('value') ?? (control(panel, 'counter.input') as HTMLInputElement).value).toBe('1');
-		expect(panel.textContent).toContain('5'); // the card was redrawn from the outside block
+		expect(control(panel, 'counter.inc')).not.toBe(inc); // the card was redrawn from the outside block
+		expect((control(panel, 'counter.input') as HTMLInputElement).value).toBe('1');
 	});
 
 	test('[PS04] a write the view makes after the block changed on disk (its card not refreshed yet) is refused, never written over the outside edit', async () => {
@@ -264,11 +269,12 @@ describe('SC-662: ds-conditions (a window owned by a child component)', () => {
 		const panel = await pin(env, 'Session.md', CONDITIONS_NOTE, 'ds-conditions');
 		await stageDazed(panel);
 		expect(anyWindow()).toBe(true);
-		await outsideEdit(env, 'Session.md', (c) => c.replace('  - bleeding\n', '  - bleeding\n  - prone\n'));
+		await outsideEdit(env, 'Session.md', (c) => c.replace('  - bleeding\n', '  - bleeding\n  - prone # from Sync\n'));
 		await later(600);
 		expect(anyWindow()).toBe(false);
 		expect(noticeCount(NOTICE)).toBe(1);
 		expect(conditionKeys(env)).toEqual(['bleeding', 'prone']);
+		expect(content(env, 'Session.md')).toContain('  - prone # from Sync'); // the close wrote nothing, not even a re-serialization of the outside block
 		expect(panel.textContent?.toLowerCase()).toContain('prone');
 		expect(panel.textContent?.toLowerCase()).not.toContain('dazed');
 	});
@@ -391,6 +397,58 @@ describe('SC-662: ds-montage (already handled by SC-650) through the real sideba
 		await later(600);
 		expect(blockOf(env, 'Session.md', 'ds-montage').entries).toHaveLength(1);
 		expect(Notice.notices).toEqual([]);
+	});
+});
+
+describe('SC-662: ds-hero (the sheet\'s own stamina window)', () => {
+	const HERO_NOTE = ['# Session', '', 'ABOVE', '', '```ds-hero', ...heroExampleBody.trim().split('\n'), '```', '', 'BELOW', ''].join('\n');
+	async function openHeroStamina(env: Env): Promise<HTMLElement> {
+		const panel = await pin(env, 'Session.md', HERO_NOTE, 'ds-hero');
+		q(panel, '.dse-stamina--clickable').click();
+		const input = q<HTMLInputElement>(windowEl(), '.dse-sedit__apply-input');
+		input.value = '3';
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+		q(windowEl(), 'button[aria-label="Damage"]').click();
+		return panel;
+	}
+
+	test('[PS18] 3 damage staged in the sheet\'s stamina window, an outside edit elsewhere in the note, then Apply: it reaches the note (31 -> 28) and so does the outside edit', async () => {
+		const env = setup();
+		await openHeroStamina(env);
+		await outsideEdit(env, 'Session.md', (c) => c.replace('BELOW', 'BELOW and more'));
+		expect(anyWindow()).toBe(true);
+		control(windowEl(), 'sedit.apply').click();
+		await later(600);
+		expect(blockOf(env, 'Session.md', 'ds-hero').state.stamina.current).toBe(28);
+		expect(content(env, 'Session.md')).toContain('BELOW and more');
+		expect(Notice.notices).toEqual([]);
+	});
+
+	test('[PS19] the same window, an outside edit to the hero block: it closes without applying, one Notice, the outside value stays', async () => {
+		const env = setup();
+		const panel = await openHeroStamina(env);
+		await outsideEdit(env, 'Session.md', (c) => c.replace('current: 31', 'current: 20'));
+		await later(600);
+		expect(anyWindow()).toBe(false);
+		expect(noticeCount(NOTICE)).toBe(1);
+		expect(blockOf(env, 'Session.md', 'ds-hero').state.stamina.current).toBe(20);
+		expect(panel.textContent).toContain('20');
+	});
+});
+
+describe('SC-662: outside changes are applied in the order they arrived', () => {
+	test('[PS20] an edit to the block and, before its refresh finished, an edit back: the card ends on the block the note holds', async () => {
+		const env = setup();
+		const panel = await pin(env, 'Session.md', COUNTER_NOTE, 'ds-counter');
+		const original = content(env, 'Session.md');
+		const file = env.app.vault.getAbstractFileByPath('Session.md') as TFile;
+		env.app.vault.setFile('Session.md', original.replace('current_value: 1', 'current_value: 3'));
+		env.fireModify(file); // the first refresh starts (it reads the note, prepares the model)...
+		env.app.vault.setFile('Session.md', original);
+		env.fireModify(file); // ...and the note is back to what the card showed before it finished
+		await later(600);
+		expect((control(panel, 'counter.input') as HTMLInputElement).value).toBe('1');
+		expect(content(env, 'Session.md')).toBe(original);
 	});
 });
 

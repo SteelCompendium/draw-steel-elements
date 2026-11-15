@@ -13,7 +13,7 @@ import { browser, expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
 
 const NOTICE = 'The note changed outside, so this window closed without saving';
-const NOT_SAVED = 'Draw Steel Elements: a change to a block in counter was not saved — the block changed on disk first.';
+const NOT_SAVED = 'Draw Steel Elements: a change to a block in pending-counter was not saved — the block changed on disk first.';
 const SIDEBAR = '.dse-sidebar';
 
 const closeSidebar = (): Promise<unknown> => dse.page(`(() => { app.workspace.detachLeavesOfType('dse-sidebar'); return true; })()`);
@@ -52,6 +52,9 @@ const clickThenEdit = (selector: string, gap: number, note: string, edit: string
 		return true;
 	})()`);
 
+/** Put the prose an outside edit changed back (the driver's integrity check wants the text between the blocks as the fixture had it). */
+const restoreBelow = (note: string): Promise<void> => dse.externalEdit(note, `c.replace('BELOW and more', 'BELOW')`);
+
 const field = (text: string, key: string): string | undefined => new RegExp(`^${key}: (.*)$`, 'm').exec(text)?.[1];
 const fieldN = (text: string, key: string, n: number): string | undefined => [...text.matchAll(new RegExp(`^${key}: (.*)$`, 'gm'))][n]?.[1];
 
@@ -80,6 +83,7 @@ describe('sidebar: an outside change never drops the user\'s save or the outside
 		expect(text).toMatch(/entries:\n\s+- hero: Kira/);
 		expect(text).toContain('BELOW and more');
 		expect(await notices(NOTICE)).toBe(0);
+		await restoreBelow(NOTE);
 	});
 
 	it('[SIDE-OE02] a note card\'s counter pressed, then the pinned sidebar counter 60 ms later, before the card\'s write lands (SC-550): both presses reach the note', async () => {
@@ -152,6 +156,7 @@ describe('sidebar: an outside change never drops the user\'s save or the outside
 		expect(text).toMatch(/dazed/i);
 		expect(text).toContain('  - bleeding');
 		expect(text).toContain('BELOW and more');
+		await restoreBelow(NOTE);
 	});
 
 	// ------------------------------------------------------------------------------------------------- ds-stamina-bar
@@ -171,6 +176,7 @@ describe('sidebar: an outside change never drops the user\'s save or the outside
 		expect(field(text, 'temp_stamina')).toBe('2');
 		expect(text).toContain('BELOW and more');
 		expect(await notices(NOTICE)).toBe(0);
+		await restoreBelow(NOTE);
 	});
 
 	it('[SIDE-OE07] 3 damage staged, an outside edit to the block itself: the window closes without applying, with one Notice; the outside value stays and focus returns to the rebuilt bar', async () => {
