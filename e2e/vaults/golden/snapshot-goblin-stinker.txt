@@ -1,0 +1,61 @@
+```ds-sb
+type: statblock
+name: Goblin Stinker
+level: 1
+role: Controller
+organization: Horde
+keywords:
+  - Goblin
+  - Humanoid
+ev: "3"
+stamina: "10"
+speed: 5
+movement: Climb
+size: 1S
+stability: 0
+free_strike: 1
+might: -2
+agility: 1
+reason: 0
+intuition: 0
+presence: 2
+features:
+  - type: feature
+    feature_type: ability
+    name: Toxic Winds
+    icon: 🔳
+    ability_type: Signature Ability
+    keywords:
+      - Area
+      - Magic
+      - Ranged
+    usage: Main action
+    distance: 3 cube within 15
+    target: Each enemy in the area
+    effects:
+      - roll: Power Roll + 2
+        tier1: 1 poison damage; [slide](scc.v1:mcdm.heroes.v1/movement/forced-movement) 1
+        tier2: 2 poison damage; [slide](scc.v1:mcdm.heroes.v1/movement/forced-movement) 2
+        tier3: 3 poison damage; [slide](scc.v1:mcdm.heroes.v1/movement/forced-movement) 3
+  - type: feature
+    feature_type: ability
+    name: Swamp Gas
+    icon: 🔳
+    keywords:
+      - Area
+      - Magic
+      - Ranged
+    usage: Maneuver
+    distance: 3 cube within 10
+    target: Special
+    effects:
+      - effect: "**Effect:** The area is filled with a green haze that lasts until the start of the stinker's next turn or until the stinker is reduced to 0 [Stamina](scc.v1:mcdm.heroes.v1/rule.health/stamina), and which can't be dispersed by wind. The area is [difficult terrain](scc.v1:mcdm.heroes.v1/movement/difficult-terrain) for non-goblins, and each non-goblin who moves in the area takes 2 poison damage for each square moved."
+  - type: feature
+    feature_type: trait
+    name: Crafty
+    icon: ⭐️
+    effects:
+      - effect: The stinker doesn't provoke [opportunity attacks](scc.v1:mcdm.heroes.v1/rule.combat/opportunity-attack) by moving.
+metadata:
+  scc: mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker
+```
