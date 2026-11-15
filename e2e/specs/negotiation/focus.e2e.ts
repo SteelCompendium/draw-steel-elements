@@ -21,7 +21,7 @@ describe('negotiation: keyboard focus after a save', () => {
 		await dse.waitFor(`document.querySelectorAll('.menu').length === 0`, 'the menu to close');
 		expect(patienceOf(await blockOf(BASIC))).toBe(3);
 		const f = await focusState();
-		expect(f).toMatchObject({ inCard: true, ctl: 'negotiation.menu' });
+		expect(f).toMatchObject({ inCard: true, ctl: 'negotiation.menu', ring: true }); // the keyboard ring follows the key press that opened the menu
 		expect(f.tag).not.toBe('BODY');
 	});
 
@@ -44,6 +44,19 @@ describe('negotiation: keyboard focus after a save', () => {
 		await resetFromKeyboard(BASIC, root); // the first Reset rewrites the hand-formatted YAML in the tracker's own: that is a change
 		await resetFromKeyboard(BASIC, root, { writes: false });
 		expect(await focusState()).toMatchObject({ inCard: true, ctl: 'negotiation.menu' });
+	});
+
+	it('[NEGO-F08] focus on a Patience seal, the menu opened and Reset chosen with the mouse (a mouse press moves no focus): focus lands on the options button of the rebuilt card, with the ring', async () => {
+		const root = await openNego(BASIC);
+		await dse.waitForWrite(BASIC, () => dse.click(patienceSeal(root, 1)));
+		await dse.tabTo(patienceSeal(root, 1), TABS);
+		expect(await focusState()).toMatchObject({ inCard: true, ctl: 'negotiation.patience.seal' });
+		await openMenu(root);
+		await dse.waitForWrite(BASIC, () => dse.click(dse.control('negotiation.menu.reset')));
+		await dse.waitFor(`document.querySelectorAll('.menu').length === 0`, 'the menu to close');
+		await dse.settle();
+		expect(patienceOf(await blockOf(BASIC))).toBe(3);
+		expect(await focusState()).toMatchObject({ inCard: true, ctl: 'negotiation.menu', ring: true });
 	});
 
 	it('[NEGO-F07] a Reset made with the mouse while focus is on the page pulls no focus into the card', async () => {

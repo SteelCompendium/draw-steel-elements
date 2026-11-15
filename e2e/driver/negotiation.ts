@@ -115,12 +115,12 @@ export const mods = (n = 0): Promise<Mods> =>
 		return { reuse: one('reuse'), lie: one('lie'), same: one('same') };
 	})()`);
 
-/** Where keyboard focus is: the control id (or null) and whether it is inside the n-th card. */
-export const focusState = (n = 0): Promise<{ ctl: string | null; inCard: boolean; tag: string }> =>
+/** Where keyboard focus is: the control id (or null), whether it is inside the n-th card, and (SC-639) whether it draws the keyboard ring (`:focus-visible`). */
+export const focusState = (n = 0): Promise<{ ctl: string | null; inCard: boolean; tag: string; ring: boolean }> =>
 	dse.page(`(() => {
 		const a = document.activeElement;
 		const c = ${card(n)};
-		return { ctl: a?.closest('[data-dse-control]')?.getAttribute('data-dse-control') ?? null, inCard: !!(a && c && c.contains(a)), tag: a?.tagName ?? '' };
+		return { ctl: a?.closest('[data-dse-control]')?.getAttribute('data-dse-control') ?? null, inCard: !!(a && c && c.contains(a)), tag: a?.tagName ?? '', ring: !!a?.matches?.(':focus-visible') };
 	})()`);
 
 /** SC-642: which one of the controls with this id holds focus (its position among them, in DOM order; -1 when focus is on none of them), in the n-th Reading-view card. */
@@ -199,8 +199,8 @@ export const dossier = (n = 0): Promise<{ count: string | null; spent: boolean[]
 		};
 	})()`);
 
-/** Where keyboard focus is in ANY view (Live Preview too): the control id, the seal's value, and whether it is inside a negotiation card. */
-export const focusAnywhere = (): Promise<{ ctl: string | null; value: string | null; inNego: boolean; tag: string }> =>
+/** Where keyboard focus is in ANY view (Live Preview too): the control id, the seal's value, whether it is inside a negotiation card, and (SC-639) whether it draws the keyboard ring. */
+export const focusAnywhere = (): Promise<{ ctl: string | null; value: string | null; inNego: boolean; tag: string; ring: boolean }> =>
 	dse.page(`(() => {
 		const a = document.activeElement;
 		return {
@@ -208,5 +208,6 @@ export const focusAnywhere = (): Promise<{ ctl: string | null; value: string | n
 			value: a?.getAttribute?.('data-value') ?? null,
 			inNego: !!a?.closest?.('[data-dse-element="negotiation"]'),
 			tag: a?.tagName ?? '',
+			ring: !!a?.matches?.(':focus-visible'),
 		};
 	})()`);

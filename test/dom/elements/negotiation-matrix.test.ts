@@ -784,6 +784,44 @@ describe('SC-639: keyboard focus after Reset negotiation', () => {
 		expect(checkedSeals(m.root(), 'patience')).toEqual([3]);
 	});
 
+	// jsdom draws no ring, so the ring is pinned by the options the hand-off passes to `focus()`: `focusVisible: true` only when the old node showed the
+	// keyboard ring. (In real Obsidian a script focus after any key press shows the ring anyway, and a mouse press the click shield cancels never clears
+	// that, so the e2e tests cannot tell the two apart: measured SC-639 r3, the `ring: false` mutant survives NEGO-F01 / F08 / L03 / L09.)
+	test('the keyboard ring follows the old button: focus is handed over with focusVisible when it drew the ring, plain when it did not', async () => {
+		const focused: Array<{ el: HTMLElement; options: FocusOptions | undefined }> = [];
+		const realFocus = HTMLElement.prototype.focus;
+		const spy = jest.spyOn(HTMLElement.prototype, 'focus').mockImplementation(function (this: HTMLElement, options?: FocusOptions) {
+			focused.push({ el: this, options });
+			return realFocus.call(this, options);
+		});
+		try {
+			const ringed = await mount(src({ current_patience: 1 }));
+			await resetFromKeyboard(ringed);
+			const landed = focused.filter((f) => f.el === menuButton(ringed.root()));
+			expect(landed).toHaveLength(1);
+			expect(landed[0].options).toMatchObject({ focusVisible: true });
+
+			// The old button showed no ring (a mouse user): the new one gets the engine's own rule.
+			document.body.innerHTML = '';
+			focused.length = 0;
+			const realMatches = Element.prototype.matches;
+			const noRing = jest.spyOn(Element.prototype, 'matches').mockImplementation(function (this: Element, selector: string) {
+				return selector === ':focus-visible' ? false : realMatches.call(this, selector);
+			});
+			try {
+				const plain = await mount(src({ current_patience: 1 }));
+				await resetFromKeyboard(plain);
+				const landedPlain = focused.filter((f) => f.el === menuButton(plain.root()));
+				expect(landedPlain).toHaveLength(1);
+				expect(landedPlain[0].options).not.toHaveProperty('focusVisible');
+			} finally {
+				noRing.mockRestore();
+			}
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
 	test('the answer is taken when the menu OPENS: a menu that took focus for itself before Reset was chosen does not lose it', async () => {
 		const m = await mount(src({ current_patience: 1 }));
 		const button = menuButton(m.root());

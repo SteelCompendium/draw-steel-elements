@@ -74,7 +74,7 @@ describe('negotiation: keyboard focus after a save in Live Preview', () => {
 		// The save redraws the widget (a new root): the SC-602 carry hands focus on to the new options button once it is drawn.
 		await dse.waitFor(`document.activeElement?.closest('[data-dse-control="negotiation.menu"]') !== null && !!document.activeElement?.closest('.cm-content')`, 'focus to settle on the options button');
 		const f = await focusAnywhere();
-		expect(f).toMatchObject({ inNego: true, ctl: 'negotiation.menu' });
+		expect(f).toMatchObject({ inNego: true, ctl: 'negotiation.menu', ring: true });
 		expect(f.tag).not.toBe('BODY');
 	});
 
@@ -100,6 +100,21 @@ describe('negotiation: keyboard focus after a save in Live Preview', () => {
 		await dse.settle();
 		expect(patienceOf(await blockOf(BASIC))).toBe(3);
 		expect(await focusAnywhere()).toMatchObject({ inNego: false });
+	});
+
+	it('[NEGO-L09] Live Preview: focus on a Patience seal, the menu opened and Reset chosen with the mouse: focus lands on the options button of the redrawn card, with the ring', async () => {
+		await dse.openNote(BASIC, { mode: 'live-preview' });
+		const root = dse.block(NEGO, 0);
+		await dse.waitForWrite(BASIC, () => dse.click(root.control('negotiation.patience.seal', { nth: 1 })));
+		await dse.focusByScript(root.control('negotiation.patience.seal', { nth: 1 }));
+		expect(await focusAnywhere()).toMatchObject({ inNego: true, ctl: 'negotiation.patience.seal' });
+		await openMenu(root);
+		await dse.waitForWrite(BASIC, () => dse.click(dse.control('negotiation.menu.reset')));
+		await dse.waitFor(`document.querySelectorAll('.menu').length === 0`, 'the menu to close');
+		await dse.settle();
+		expect(patienceOf(await blockOf(BASIC))).toBe(3);
+		await dse.waitFor(`document.activeElement?.closest('[data-dse-control="negotiation.menu"]') !== null && !!document.activeElement?.closest('.cm-content')`, 'focus to settle on the options button');
+		expect(await focusAnywhere()).toMatchObject({ inNego: true, ctl: 'negotiation.menu', ring: true });
 	});
 
 	it('[NEGO-L06] Live Preview: the options menu opened with Enter on the button appears beside the button, not in the window corner', async () => {
