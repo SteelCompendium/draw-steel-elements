@@ -301,9 +301,12 @@ export class ArgumentView {
 		}
 		if (this.lieLine) this.paintMod(this.lieLine, { checked: arg.lieUsed, disabled: false });
 		if (this.sameLine) {
+			// SC-649: while a Motivation is chosen the roll ignores Same Argument, so the greyed-out box is drawn unchecked (display only: the stored
+			// flag is untouched, and un-pressing the Motivation draws it checked again).
+			const motivated = this.data.argumentUsesMotivation();
 			this.paintMod(this.sameLine, {
-				checked: arg.sameArgumentUsed,
-				disabled: this.data.argumentUsesMotivation(),
+				checked: arg.sameArgumentUsed && !motivated,
+				disabled: motivated,
 				why: 'not while a Motivation is appealed to',
 			});
 		}

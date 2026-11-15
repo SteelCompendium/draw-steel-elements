@@ -47,8 +47,9 @@ async function mount(body: string) {
 	await new ElementPipeline(makeDeps()).run(negotiationElement, body, host);
 	const root = (): HTMLElement => host.containerEl.firstElementChild as HTMLElement;
 	const flush = (): Promise<void> => jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS + 50);
+	const raw = (): string => app.vault.getContent('Note.md')!;
 	const written = (): any => parseYaml(/```ds-negotiation\n([\s\S]*?)\n```/.exec(app.vault.getContent('Note.md')!)![1]);
-	return { root, flush, written };
+	return { root, flush, written, raw };
 }
 
 const OFFERS = 'i5: five\ni4: four\ni3: three\ni2: two\ni1: one\ni0: zero\n';
@@ -203,7 +204,9 @@ describe('SC-439 filed bugs', () => {
 		expect(same.disabled).toBe(false);
 		expect(same.closest('label')!.classList.contains('is-disabled')).toBe(false);
 		expect(same.closest('label')!.querySelector('.dse-nt__why')).toBeNull();
+		const before = m.raw();
 		await m.flush();
+		expect(m.raw()).toBe(before); // the note is byte-identical: the stray entry stays until the user's own action writes the argument
 		expect(m.written().currentArgument.motivationsUsed).toEqual(['Ghost']);
 	});
 
@@ -214,9 +217,46 @@ describe('SC-439 filed bugs', () => {
 		expect(standing(w)).toEqual([4, 3]);
 	});
 
-	test('a hand-typed reusedMotivation with no spent motivation appealed to: Complete Argument at High writes the motivation Interest and Patience, not the reuse ones', async () => {
+	test('a hand-typed reusedMotivation with no spent motivation appealed to: the Reuse box is drawn unchecked and greyed out, and Complete Argument at High writes the motivation Interest and Patience, not the reuse ones', async () => {
 		const m = await mount(BASE + 'currentArgument:\n  motivationsUsed:\n    - Peace\n  reusedMotivation: true\n' + OFFERS);
+		const reuse = control(m.root(), 'negotiation.mod.reuse') as HTMLInputElement;
+		expect({ checked: reuse.checked, disabled: reuse.disabled }).toEqual({ checked: false, disabled: true });
 		const w = await completeAtHigh(m);
 		expect(standing(w)).toEqual([4, 3]);
+	});
+
+	const box = (m: Awaited<ReturnType<typeof mount>>, id: string): { checked: boolean; disabled: boolean } => {
+		const b = control(m.root(), `negotiation.mod.${id}`) as HTMLInputElement;
+		return { checked: b.checked, disabled: b.disabled };
+	};
+	const MOTIVATION_TIERS = ['-1 Patience', '+1 Interest, -1 Patience', '+1 Interest', '+1 Interest'];
+	const SAME_TIERS = Array(4).fill('-1 Interest, -1 Patience');
+
+	test('a stale sameArgumentUsed in the note with a motivation chosen: Same Argument is drawn unchecked and greyed out, the tiers are the motivation ones, and the note is not written', async () => {
+		const m = await mount(BASE + 'currentArgument:\n  motivationsUsed:\n    - Peace\n  sameArgumentUsed: true\n' + OFFERS);
+		expect(box(m, 'same')).toEqual({ checked: false, disabled: true });
+		expect(tiersOf(m.root())).toEqual(MOTIVATION_TIERS);
+		const before = m.raw();
+		await m.flush();
+		expect(m.raw()).toBe(before);
+	});
+
+	test('checking Same Argument, pressing a motivation and pressing it again: Same Argument is drawn unchecked while the motivation is chosen, checked again after, and the roll follows', async () => {
+		const m = await mount(BASE + OFFERS);
+		const peace = control(m.root(), 'negotiation.appeal.motivation');
+		control(m.root(), 'negotiation.mod.same').click();
+		expect(box(m, 'same')).toEqual({ checked: true, disabled: false });
+		expect(tiersOf(m.root())).toEqual(SAME_TIERS);
+		peace.click();
+		expect(box(m, 'same')).toEqual({ checked: false, disabled: true });
+		expect(tiersOf(m.root())).toEqual(MOTIVATION_TIERS);
+		await m.flush();
+		expect(m.written().currentArgument).toMatchObject({ motivationsUsed: ['Peace'], sameArgumentUsed: true }); // the stored flag is untouched
+		peace.click();
+		expect(box(m, 'same')).toEqual({ checked: true, disabled: false });
+		expect(tiersOf(m.root())).toEqual(SAME_TIERS);
+		const w = await completeAtHigh(m);
+		expect(standing(w)).toEqual([2, 2]); // the Same Argument table: -1 Interest, -1 Patience
+		expect(w.currentArgument?.sameArgumentUsed ?? false).toBe(false); // Complete ends the argument and its flags (a cleared argument may be left out)
 	});
 });
