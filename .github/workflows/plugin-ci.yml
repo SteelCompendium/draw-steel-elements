@@ -219,7 +219,7 @@ jobs:
           v="$OBSIDIAN_VERSION"
           if [ -x "$c/obsidian-installer/linux-x64/Obsidian-$v/obsidian" ] \
              && [ -f "$c/obsidian-app/obsidian-$v.asar" ] \
-             && compgen -G "$c/electron-chromedriver/linux-x64/*/chromedriver" > /dev/null; then
+             && [ -n "$(find "$c/electron-chromedriver/linux-x64" -mindepth 2 -maxdepth 2 -name chromedriver -type f 2>/dev/null)" ]; then
             echo "complete=true" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::Obsidian download cache is incomplete; not saving it"
