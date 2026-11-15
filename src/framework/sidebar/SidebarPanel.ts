@@ -344,10 +344,11 @@ export class SidebarPanel extends Component {
 		// same sequence, and the outside edit stays); if the change was elsewhere in the note this point is not reached for the block.
 		if (view) await view.settlePendingWrite();
 
-		// The block can be deleted (handleAnchorLost runs outside the queue) or the panel torn down while the settle above was
-		// waiting: the view this change was prepared for is then gone, and adopting this body would make the block that comes back
-		// (an editor undo of the delete) look unchanged, leaving the panel on its degrade card.
-		if (view && (host.lastMountedChild !== view || this.panelEl?.hasAttribute('data-dse-sidebar-unavailable'))) return;
+		// The block can be deleted (handleAnchorLost runs outside the queue, and forgets the view) while the settle above was waiting: the
+		// view this change was prepared for is then gone, and adopting this body would make the block that comes back (an editor undo of the
+		// delete) look unchanged, leaving the panel on its degrade card. (A view that is still the mounted one on a panel flagged unavailable
+		// is the SC-288 race: that one goes on to the remount below.)
+		if (view && host.lastMountedChild !== view) return;
 
 		// Nothing awaits between here and the rebuild: the view is not given the chance to schedule another write against the old block.
 		if (view && model !== null) {
