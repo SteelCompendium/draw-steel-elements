@@ -211,7 +211,7 @@ it survives navigating between notes.
   in `update()` (`ownsOutsideWindows`). Not covered: the block edit form (`FormModal`, `authoringControls`
   pref) is not a window of the view and is not closed by a refresh; the undo toasts of the stamina bar
   hold the model they were made on. Gate: `test/dom/framework/sidebarPendingSave.test.ts`
-  (PS01..PS17), e2e `SIDE-OE01..OE08`.
+  (PS01..PS21), e2e `SIDE-OE01..OE08`.
 - **D7 consumer contract (spec §1.9):** any caller — a future hero-sheet element, not
   just the D8 trackers — pins a block the same way: ensure `_dse_anchor` (`ensureAnchor`),
   then `view.addPanel({ filePath, alias, anchorId })`. `sendToSidebar(services, filePath,

@@ -288,6 +288,11 @@ export class SidebarPanel extends Component {
 	 * originally cover), or prepareModel() throws (schema drift, a dangling ref, ...) —
 	 * in which case the pipeline's own error card is the correct outcome, not something
 	 * to swallow silently here.
+	 *
+	 * SC-662 -- a refresh may not lose data, so (in this order): a block equal to what the view last loaded or wrote does nothing;
+	 * otherwise the view's own pending save is settled first (the host refuses it if the block changed on disk first), the windows over
+	 * the card close without saving what they staged (`ElementView.refreshFromOutside`), the card is rebuilt, and the user is told.
+	 * Changes are handled one at a time, in order (`queueExternalChange`).
 	 */
 	private async handleExternalChange(body: string): Promise<void> {
 		if (!this.host || !this.bodyEl) return;
