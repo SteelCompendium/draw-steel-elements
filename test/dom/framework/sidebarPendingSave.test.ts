@@ -154,6 +154,7 @@ afterEach(() => {
 const COUNTER_NOTE = ['# Session', '', 'ABOVE', '', '```ds-counter', 'name: Health', 'current_value: 1', 'max_value: 3', 'min_value: 0', '```', '', 'BELOW', ''].join('\n');
 const STAMINA_NOTE = ['# Session', '', 'ABOVE', '', '```ds-stamina-bar', 'max_stamina: 20', 'current_stamina: 15', 'temp_stamina: 5', '```', '', 'BELOW', ''].join('\n');
 const CONDITIONS_NOTE = ['# Session', '', 'ABOVE', '', '```ds-conditions', 'conditions:', '  - bleeding', '```', '', 'BELOW', ''].join('\n');
+const RECOVERIES_NOTE = ['# Session', '', 'ABOVE', '', '```ds-stamina-bar', 'max_stamina: 30', 'current_stamina: 12', 'temp_stamina: 0', 'recoveries: 3', 'recoveries_max: 6', '```', '', 'BELOW', ''].join('\n');
 const MONTAGE_NOTE = [
 	'# Session', '', 'ABOVE', '', '```ds-montage', 'title: Heist', 'rounds: 3', 'success_limit: 5', 'failure_limit: 3', 'successes: 0', 'failures: 0',
 	'participants:', '  - name: Kira', '  - name: Bram', 'current_round: 1', '```', '', 'BELOW', '',
@@ -309,6 +310,45 @@ describe('SC-662: ds-conditions (a window owned by a child component)', () => {
 		expect(noticeCount(NOTICE)).toBe(1);
 		expect(content(env, 'Session.md')).toBe(edited);
 	});
+	test('[PS22] dazed staged, an outside edit that breaks the YAML of the block (the remount branch): nothing is written over the broken text, the window closes, one Notice', async () => {
+		const env = setup();
+		const panel = await pin(env, 'Session.md', CONDITIONS_NOTE, 'ds-conditions');
+		await stageDazed(panel);
+		let expected = '';
+		await outsideEdit(env, 'Session.md', (c) => (expected = c.replace('conditions:\n  - bleeding', 'conditions: [bleeding')));
+		await later(900);
+		expect(content(env, 'Session.md')).toBe(expected);
+		expect(anyWindow()).toBe(false);
+		expect(noticeCount(NOTICE)).toBe(1);
+	});
+
+	test('[PS28] the first own save keeps the `_dse_anchor` line: the panel is still live after Done, and a window opened from it stays open on an outside edit elsewhere', async () => {
+		const env = setup();
+		const panel = await pin(env, 'Session.md', CONDITIONS_NOTE, 'ds-conditions');
+		await stageDazed(panel);
+		control(windowEl(), 'cond.done').click();
+		await later(600);
+		expect(blockOf(env, 'Session.md', 'ds-conditions')._dse_anchor).toBeDefined();
+		expect(panel.getAttribute('data-dse-sidebar-unavailable')).toBeNull();
+		await outsideEdit(env, 'Session.md', (c) => c.replace('BELOW', 'BELOW and more'));
+		expect(panel.getAttribute('data-dse-sidebar-unavailable')).toBeNull();
+		q(panel, '.dse-cond-strip__add').click();
+		await outsideEdit(env, 'Session.md', (c) => c.replace('BELOW and more', 'BELOW and more still'));
+		expect(anyWindow()).toBe(true);
+	});
+
+	test('[PS29] opened from the keyboard (focus on "+ add condition"), the window closed by an outside edit hands focus to the rebuilt button', async () => {
+		const env = setup();
+		const panel = await pin(env, 'Session.md', CONDITIONS_NOTE, 'ds-conditions');
+		const add = control(panel, 'cond.strip.add');
+		add.focus();
+		add.click();
+		await outsideEdit(env, 'Session.md', (c) => c.replace('  - bleeding\n', '  - bleeding\n  - prone\n'));
+		await later(600);
+		expect(anyWindow()).toBe(false);
+		expect(document.activeElement).toBe(control(panel, 'cond.strip.add'));
+		expect(document.activeElement).not.toBe(add);
+	});
 });
 
 describe('SC-662: ds-stamina-bar (a window owned by the view)', () => {
@@ -372,6 +412,55 @@ describe('SC-662: ds-stamina-bar (a window owned by the view)', () => {
 		expect(noticeCount(NOTICE)).toBe(1);
 		expect(panel.contains(document.activeElement) && document.activeElement !== document.body).toBe(false);
 	});
+
+	test('[PS23] damage staged, an outside edit that breaks the YAML of the block (the remount branch): nothing written, the window closes, one Notice', async () => {
+		const env = setup();
+		const panel = await pin(env, 'Session.md', STAMINA_NOTE, 'ds-stamina-bar');
+		control(panel, 'stamina.bar').click();
+		stageDamage('3');
+		let expected = '';
+		await outsideEdit(env, 'Session.md', (c) => (expected = c.replace('current_stamina: 15', 'current_stamina: [15')));
+		await later(900);
+		expect(content(env, 'Session.md')).toBe(expected);
+		expect(anyWindow()).toBe(false);
+		expect(noticeCount(NOTICE)).toBe(1);
+	});
+
+	/** The Undo link of the newest toast. */
+	const undoLink = (): HTMLElement => q(Notice.last!.noticeEl!, '.dse-undo-notice__action');
+
+	test('[PS26] Catch breath, an outside edit to the block, then Undo on the toast: refused with the dropped-write Notice, nothing written, and the card shows the note\'s values (22/30 +4)', async () => {
+		const env = setup();
+		const panel = await pin(env, 'Session.md', RECOVERIES_NOTE, 'ds-stamina-bar');
+		control(panel, 'recov.catch-breath').click(); // 12 -> 22, 3 -> 2 Recoveries
+		await later(600);
+		const undo = undoLink();
+		let expected = '';
+		await outsideEdit(env, 'Session.md', (c) => (expected = c.replace('temp_stamina: 0', 'temp_stamina: 4')));
+		await later(600);
+		undo.click();
+		await later(600);
+		expect(content(env, 'Session.md')).toBe(expected);
+		expect(noticeCount(NOT_SAVED)).toBe(1);
+		expect(blockOf(env, 'Session.md', 'ds-stamina-bar').recoveries).toBe(2);
+		expect(panel.textContent).toContain('22');
+		expect(panel.textContent).not.toContain('12/30');
+	});
+
+	test('[PS27] Catch breath, an outside edit elsewhere in the note, then Undo: the Undo works (12/30, 3 Recoveries)', async () => {
+		const env = setup();
+		const panel = await pin(env, 'Session.md', RECOVERIES_NOTE, 'ds-stamina-bar');
+		control(panel, 'recov.catch-breath').click();
+		await later(600);
+		const undo = undoLink();
+		await outsideEdit(env, 'Session.md', (c) => c.replace('BELOW', 'BELOW and more'));
+		undo.click();
+		await later(600);
+		const block = blockOf(env, 'Session.md', 'ds-stamina-bar');
+		expect(block.current_stamina).toBe(12);
+		expect(block.recoveries).toBe(3);
+		expect(Notice.notices.filter((n) => n.includes('not saved'))).toEqual([]);
+	});
 });
 
 describe('SC-662: ds-montage (already handled by SC-650) through the real sidebar', () => {
@@ -434,6 +523,21 @@ describe('SC-662: ds-hero (the sheet\'s own stamina window)', () => {
 		expect(blockOf(env, 'Session.md', 'ds-hero').state.stamina.current).toBe(20);
 		expect(panel.textContent).toContain('20');
 	});
+
+	test('[PS30] the hero sheet\'s Recoveries undo after an outside edit to the hero block is refused with the dropped-write Notice, nothing written', async () => {
+		const env = setup();
+		const panel = await pin(env, 'Session.md', HERO_NOTE, 'ds-hero');
+		control(panel, 'recov.marker', 2).click(); // 6 -> 3 Recoveries
+		await later(600);
+		const undo = q(Notice.last!.noticeEl!, '.dse-undo-notice__action');
+		let expected = '';
+		await outsideEdit(env, 'Session.md', (c) => (expected = c.replace('current: 31', 'current: 20')));
+		await later(600);
+		undo.click();
+		await later(600);
+		expect(content(env, 'Session.md')).toBe(expected);
+		expect(noticeCount(NOT_SAVED)).toBe(1);
+	});
 });
 
 describe('SC-662: outside changes are applied in the order they arrived', () => {
@@ -461,6 +565,42 @@ describe('SC-662: the view\'s own saves', () => {
 		const panel = await pin(env, 'Session.md', COUNTER_NOTE, 'ds-counter');
 		control(panel, 'counter.inc').click();
 		await later(600);
+		control(panel, 'counter.inc').click();
+		await later(600);
+		expect(blockOf(env, 'Session.md', 'ds-counter').current_value).toBe(3);
+		expect(Notice.notices).toEqual([]);
+	});
+	test('[PS24] a refresh waiting for the view\'s save when the block is deleted: the panel degrades and the deleted block coming back (an editor undo) recovers it', async () => {
+		const env = setup();
+		const panel = await pin(env, 'Session.md', COUNTER_NOTE, 'ds-counter');
+		const view = (env.app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0].view as unknown as { panels: Array<{ host: { lastMountedChild: any } }> }).panels[0].host.lastMountedChild;
+		view.settlePendingWrite = (): Promise<boolean> => new Promise((resolve) => setTimeout(() => resolve(true), 30));
+		const file = env.app.vault.getAbstractFileByPath('Session.md') as TFile;
+		const changed = content(env, 'Session.md').replace('max_value: 3', 'max_value: 5');
+		env.app.vault.setFile('Session.md', changed);
+		env.fireModify(file); // the refresh starts and waits for the save...
+		await later(5);
+		env.app.vault.setFile('Session.md', changed.replace(/```ds-counter[\s\S]*?```\n/, ''));
+		env.fireModify(file); // ...the block is deleted: the panel degrades at once
+		await later(200);
+		expect(panel.textContent).toContain('Backing block not found');
+		env.app.vault.setFile('Session.md', changed); // the user undoes the delete
+		env.fireModify(file);
+		await later(600);
+		expect(panel.textContent).not.toContain('Backing block not found');
+		expect(panel.querySelectorAll('[data-dse-control="counter.input"]')).toHaveLength(1);
+	});
+
+	test('[PS25] an outside edit away from the view\'s last written text and back to it (an editor undo) redraws the card each time, and the next press still writes', async () => {
+		const env = setup();
+		const panel = await pin(env, 'Session.md', COUNTER_NOTE, 'ds-counter');
+		control(panel, 'counter.inc').click();
+		await later(600);
+		const written = content(env, 'Session.md');
+		await outsideEdit(env, 'Session.md', (c) => c.replace('current_value: 2', 'current_value: 3'));
+		expect((control(panel, 'counter.input') as HTMLInputElement).value).toBe('3');
+		await outsideEdit(env, 'Session.md', () => written); // exactly what the view last wrote: not its echo any more
+		expect((control(panel, 'counter.input') as HTMLInputElement).value).toBe('2');
 		control(panel, 'counter.inc').click();
 		await later(600);
 		expect(blockOf(env, 'Session.md', 'ds-counter').current_value).toBe(3);

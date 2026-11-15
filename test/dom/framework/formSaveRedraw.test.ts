@@ -23,7 +23,7 @@ import { DseSidebarView, VIEW_TYPE_DSE_SIDEBAR } from '../../../src/framework/si
 import type { DseSidebarServices } from '../../../src/framework/sidebar/DseSidebarView';
 import { sendToSidebar } from '../../../src/framework/sidebar/registration';
 import { initializeElementFrameworkV2, registerFrameworkElementDefinitions, FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main';
-import { App, Plugin, Setting, flushAsync, makeFakeContext } from '../../mocks/obsidian';
+import { App, Notice, Plugin, Setting, flushAsync, makeFakeContext } from '../../mocks/obsidian';
 import { makeEnv } from './_adoptionEnv';
 
 function bodyOf(text: string, index = 0): string {
@@ -251,6 +251,43 @@ describe('SC-509: sidebar -- a form Save from the panel\'s pencil reaches the pa
 		expect(app.vault.getContent('Note.md')).toContain('current_value: 4');
 		expect(panelEl.querySelector('[data-dse-element="counter"]')).toBe(root2);
 		expect(panelEl.textContent).toContain('Wounds');
+	});
+	// SC-662: Reading view's Save is strict (`pinOnly`): a block edited since the form opened is refused, the outside edit stays and the form
+	// stays open. The sidebar form has no pin; it passes the body it opened from (`expectBody`) and the host refuses a different block.
+	async function openSidebarForm() {
+		const { app, services } = await sidebarSetup();
+		app.vault.setFile('Note.md', '# N\n\nABOVE\n\n```ds-counter\nname: Health\ncurrent_value: 3\nmax_value: 9\nmin_value: 0\n```\n\nBELOW\n');
+		await sendToSidebar(services, 'Note.md', 'ds-counter');
+		await flushAsync();
+		const view = app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0].view as unknown as DseSidebarView;
+		const panelEl = view.contentEl.querySelector('.dse-sidebar__panel') as HTMLElement;
+		const { modal } = clickPencil(panelEl.querySelector('[data-dse-element="counter"]') as HTMLElement);
+		typeRaw(modal(), 'Health', 'Healed');
+		return { app, modal, panelEl };
+	}
+
+	test('[SF01] the block is edited from outside after the form opened: Save is refused with the dropped-write Notice, the outside edit stays, the form stays open', async () => {
+		Notice.notices.length = 0;
+		const { app, modal } = await openSidebarForm();
+		app.vault.setFile('Note.md', app.vault.getContent('Note.md')!.replace('max_value: 9', 'max_value: 7')); // an outside edit to the same block
+		await modal().save();
+		await flushAsync();
+		expect(app.vault.getContent('Note.md')).toContain('max_value: 7');
+		expect(app.vault.getContent('Note.md')).toContain('name: Health');
+		expect(app.vault.getContent('Note.md')).not.toContain('Healed');
+		expect(Notice.notices.filter((n) => n.includes('not saved'))).toHaveLength(1);
+		expect(document.querySelector('.dse-modal')).not.toBeNull();
+	});
+
+	test('[SF02] an outside edit elsewhere in the note after the form opened: Save lands and the outside edit stays', async () => {
+		Notice.notices.length = 0;
+		const { app, modal } = await openSidebarForm();
+		app.vault.setFile('Note.md', app.vault.getContent('Note.md')!.replace('BELOW', 'BELOW and more'));
+		await modal().save();
+		await flushAsync();
+		expect(app.vault.getContent('Note.md')).toContain('name: Healed');
+		expect(app.vault.getContent('Note.md')).toContain('BELOW and more');
+		expect(Notice.notices.filter((n) => n.includes('not saved'))).toEqual([]);
 	});
 });
 

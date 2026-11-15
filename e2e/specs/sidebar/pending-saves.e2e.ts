@@ -125,7 +125,11 @@ describe('sidebar: an outside change never drops the user\'s save or the outside
 	it('[SIDE-OE04] a Conditions window with "dazed" staged, an outside edit adds "prone": the window closes without saving, with one Notice, and the note ends with "bleeding, prone"', async () => {
 		const NOTE = 'Sidebar/pending-conditions.md';
 		await pin(NOTE, 'ds-conditions', ['spk01'], '.dse-cond-strip__add');
-		await keyboardOpen('.dse-cond-strip__add');
+		// The note draws its own strip too (and Obsidian keeps hidden copies): find the pinned card's button among them.
+		const nth = await dse.page<number>(`Array.from(document.querySelectorAll('[data-dse-control="cond.strip.add"]')).findIndex((e) => !!e.closest('${SIDEBAR}'))`);
+		const add = dse.control('cond.strip.add', { nth });
+		await dse.focusByScript(add);
+		await dse.press('Enter', add); // a real Enter key on the pinned card's own button
 		await stageDazed();
 		await dse.externalEdit(NOTE, `c.replace('  - bleeding\\n', '  - bleeding\\n  - prone\\n')`);
 		await dse.waitFor(`document.querySelectorAll('.modal-container').length === 0`, 'the window to close');
@@ -137,7 +141,8 @@ describe('sidebar: an outside change never drops the user\'s save or the outside
 		expect(text).toContain('_dse_anchor: spk01');
 		await dse.page(`document.querySelectorAll('.notice-container').forEach((n) => { n.style.display = ''; })`);
 		expect(await notices(NOTICE)).toBe(1);
-		expect(await dse.page<boolean>(`document.activeElement?.closest('${SIDEBAR}') !== null && document.activeElement !== document.body`)).toBe(true);
+		expect(await dse.focusedControl()).toBe('cond.strip.add'); // the control that opened the window, rebuilt (SC-662 r3)
+		expect(await dse.page<boolean>(`!!document.activeElement?.closest('${SIDEBAR}')`)).toBe(true);
 	});
 
 	it('[SIDE-OE05] a Conditions window with nothing staged, an outside edit elsewhere in the note: the window stays open, no Notice, and what is staged afterwards is saved with the outside edit kept', async () => {
@@ -156,6 +161,8 @@ describe('sidebar: an outside change never drops the user\'s save or the outside
 		expect(text).toMatch(/dazed/i);
 		expect(text).toContain('  - bleeding');
 		expect(text).toContain('BELOW and more');
+		expect(text).toContain('_dse_anchor: spk01'); // the first own save kept the anchor line (SC-662 r3)...
+		expect(await dse.page<boolean>(`!document.querySelector('${SIDEBAR} .dse-sidebar__panel[data-dse-sidebar-unavailable]') && !!document.querySelector('${SIDEBAR} .dse-cond-strip__add')`)).toBe(true); // ...so the panel is still live
 		await restoreBelow(NOTE);
 	});
 
@@ -216,5 +223,62 @@ describe('sidebar: an outside change never drops the user\'s save or the outside
 		expect(fieldN(text, 'temp_stamina', 1)).toBe('1');
 		for (const keep of ['ABOVE', 'BETWEEN', 'BELOW', '# Pending two stamina']) expect(text).toContain(keep);
 		expect(await notices(NOTICE)).toBe(0);
+	});
+});
+
+describe('sidebar: the block edit form\'s Save never overwrites an outside edit to its block (SC-662, authoringControls on)', () => {
+	before(() => dse.setPrefs({ authoringControls: true }, { experimental: true }));
+	after(async () => {
+		await closeSidebar();
+		await dse.setPrefs({});
+	});
+	afterEach(() => dse.page(`(() => { document.querySelectorAll('.modal-container').forEach((m) => m.remove()); return true; })()`));
+
+	/** Open the pinned counter's edit form from its chrome item. */
+	async function openForm(): Promise<void> {
+		await dse.page(`document.querySelector('${SIDEBAR} [data-dse-chrome-item="edit"]').click()`);
+		await dse.waitFor(`!!document.querySelector('.modal-container .dse-form__raw')`, 'the form to open');
+	}
+	/** Change `name: Health` to `name: Healed` in the form and press Save. */
+	const editAndSave = (): Promise<unknown> =>
+		dse.page(`(async () => {
+			const ta = document.querySelector('.modal-container .dse-form__raw');
+			ta.value = ta.value.replace('name: Health', 'name: Healed');
+			ta.dispatchEvent(new Event('input', { bubbles: true }));
+			await new Promise((r) => setTimeout(r, 500));
+			const save = Array.from(document.querySelectorAll('.modal-container button')).find((b) => /^Save$/.test(b.textContent.trim()) || b.getAttribute('aria-label') === 'Save');
+			save.click();
+			return true;
+		})()`);
+
+	it('[SIDE-OE09] the block is edited from outside after the form opened: Save is refused with the dropped-write Notice, the outside edit stays and the form stays open', async () => {
+		const NOTE = 'Sidebar/pending-counter.md';
+		await pin(NOTE, 'ds-counter', ['spc01'], '[data-dse-control="counter.inc"]');
+		await openForm();
+		await dse.externalEdit(NOTE, `c.replace('max_value: 3', 'max_value: 7')`);
+		await browser.pause(1000);
+		await editAndSave();
+		await browser.pause(1200);
+		const text = await dse.noteText(NOTE);
+		expect(fieldN(text, 'max_value', 0)).toBe('7');
+		expect(fieldN(text, 'name', 0)).toBe('Health');
+		expect(await notices(NOT_SAVED)).toBe(1);
+		expect(await dse.page<boolean>(`!!document.querySelector('.modal-container .dse-form__raw')`)).toBe(true);
+		await dse.page(`(() => { const b = Array.from(document.querySelectorAll('.modal-container button')).find((x) => /^Cancel$/.test(x.textContent.trim()) || x.getAttribute('aria-label') === 'Cancel'); b.click(); return true; })()`);
+	});
+
+	it('[SIDE-OE10] an outside edit elsewhere in the note after the form opened: Save lands and the outside edit stays', async () => {
+		const NOTE = 'Sidebar/pending-counter.md';
+		await pin(NOTE, 'ds-counter', ['spc01'], '[data-dse-control="counter.inc"]');
+		await openForm();
+		await dse.externalEdit(NOTE, `c.replace('BELOW', 'BELOW and more')`);
+		await browser.pause(1000);
+		await editAndSave();
+		await browser.pause(1500);
+		const text = await dse.noteText(NOTE);
+		expect(fieldN(text, 'name', 0)).toBe('Healed');
+		expect(text).toContain('BELOW and more');
+		expect(await notices(NOT_SAVED)).toBe(0);
+		await restoreBelow(NOTE);
 	});
 });
