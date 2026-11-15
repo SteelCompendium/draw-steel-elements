@@ -47,7 +47,7 @@
 // same key, same effect, new mechanism, and the byte-identical block body it always had.
 import { parseYaml, stringifyYaml } from 'obsidian';
 import type { ElementDefinition } from '../registry';
-import { emitAhead, withPrefOverrides } from '../prefOverrides';
+import { bodyDeclaresTopLevel, emitAhead, withPrefOverrides } from '../prefOverrides';
 import type { PrefPassthrough } from '../prefOverrides';
 import type { DsePrefs } from '../seams/prefs';
 
@@ -254,23 +254,19 @@ export function withPeeledKeys(keys: CollapseKeys, peeled: Record<string, boolea
 	};
 }
 
-/** A top-level (column-0) declaration of `key` in an already-serialized block body. */
-const topLevelRe = (key: string): RegExp => new RegExp(`^${key}\\s*:`, 'mu');
-
 /**
  * Serializer wrapper: re-emit the reserved keys the pipeline POPPED, ahead of the element
  * body, so a persisted element's write-back (ElementView.persist → host.replaceSource)
  * cannot drop them. Only installed when something was actually popped, so blocks without a
  * collapse key are byte-untouched — the same contract as `withPrefOverrides`.
  *
- * …with ONE extra guard `withPrefOverrides` does not have. Not every persisted element
+ * …with a guard `withPrefOverrides` shares (`bodyDeclaresTopLevel`). Not every persisted element
  * serializes purely from its model: `ds-hero` splices the author's RAW definition text back
  * verbatim (`HeroModel.serializeStateSplice`), so a popped line may ALREADY be in the output
  * even though the parsed key was removed. Prepending unconditionally would emit it twice and
  * the next parse would see a duplicate key. So: prepend only the keys the serialized body
- * does not already declare at the top level. (`withPrefOverrides` has the same latent
- * double-emit against a raw-splicing serializer; that is a pre-existing gap, filed rather
- * than fixed here — see the SC-169 spec's open questions.)
+ * does not already declare at the top level, however the author spelled the key (SC-652).
+ * `withPrefOverrides` asks the same question of the same helper.
  */
 export function withCollapseKeys<M>(
 	serialize: (model: M) => string,
@@ -280,7 +276,7 @@ export function withCollapseKeys<M>(
 		const body = serialize(model);
 		const missing: Record<string, unknown> = {};
 		for (const [key, value] of Object.entries(popped)) {
-			if (!topLevelRe(key).test(body)) missing[key] = value;
+			if (!bodyDeclaresTopLevel(body, key)) missing[key] = value;
 		}
 		if (Object.keys(missing).length === 0) return body;
 		// SC-482: a body of exactly `{}` cannot follow top-level keys (see emitAhead).

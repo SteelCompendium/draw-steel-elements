@@ -5,7 +5,7 @@
 // that is not a map, and `collapsed: yes` were deleted by the first write. Reading is unchanged: each of those
 // still warns and is still not applied. This file pins the extract / wrap functions; the element, form and
 // sidebar write paths are in test/dom/elements/wrapperKeysKept.test.ts.
-import { emptyPrefPassthrough, extractPrefOverrides, withPrefOverrides } from '@/framework/prefOverrides';
+import { bodyDeclaresTopLevel, emptyPrefPassthrough, extractPrefOverrides, withPrefOverrides } from '@/framework/prefOverrides';
 import {
 	extractCollapseKeys,
 	peelLeadingCollapseKeys,
@@ -134,6 +134,34 @@ describe('SC-652: extractCollapseKeys keeps a collapse key it cannot read', () =
 		expect(parseYaml(out)).toEqual({ collapsed: 'yes', collapsible: 'false', collapse_default: 1, name: 'x' });
 		expect(out.split('\n').filter((l) => /^collaps/.test(l)).map((l) => l.split(':')[0])).toEqual(['collapsed', 'collapsible', 'collapse_default']);
 		expect(out).toBe(`${stringifyYaml({ collapsed: 'yes', collapsible: 'false', collapse_default: 1 })}name: x`);
+	});
+});
+
+describe('SC-652: bodyDeclaresTopLevel decides by parsing, and both wrappers use it', () => {
+	test.each([
+		['a plain key', 'prefs: x\nname: a', 'prefs', true],
+		['a double-quoted key', '"prefs": x\nname: a', 'prefs', true],
+		['a single-quoted key', "'prefs': x\nname: a", 'prefs', true],
+		['an explicit key', '? prefs\n: x\nname: a', 'prefs', true],
+		['the key only nested', 'name: a\nnested:\n  prefs: x', 'prefs', false],
+		['the key only inside a block scalar', 'note: |\n  prefs: x\nname: a', 'prefs', false],
+		['an empty map', '{}', 'prefs', false],
+	])('%s', (_label, body, key, want) => {
+		expect(bodyDeclaresTopLevel(body, key)).toBe(want);
+	});
+
+	test('a body that is not a map, or does not parse, falls back to the line test', () => {
+		expect(bodyDeclaresTopLevel('- a\n- b', 'prefs')).toBe(false);
+		expect(bodyDeclaresTopLevel('prefs: x\n  broken: [', 'prefs')).toBe(true);
+		expect(bodyDeclaresTopLevel('name: [unclosed', 'prefs')).toBe(false);
+	});
+
+	test('withPrefOverrides and withCollapseKeys add no second line when the body spells the key another way', () => {
+		const quoted = '"prefs": {boardDensity: compact}\n"collapsed": yes\nname: x';
+		const keptPrefs = { present: true, value: { boardDensity: 'compact' } };
+		expect(withPrefOverrides(() => quoted, undefined, keptPrefs)(undefined)).toBe(quoted);
+		expect(withCollapseKeys(() => quoted, { collapsed: 'yes' })(undefined)).toBe(quoted);
+		expect(withReservedKeys(() => quoted, { collapsePopped: { collapsed: 'yes' }, prefPassthrough: keptPrefs })(undefined)).toBe(quoted);
 	});
 });
 

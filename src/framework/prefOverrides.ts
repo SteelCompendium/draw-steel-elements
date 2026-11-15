@@ -30,7 +30,7 @@
 // serializers use, so formatting may normalize -- key order and values are preserved; blocks WITHOUT
 // a `prefs:` key are byte-untouched because the wrapper is only installed when the key was present).
 // Reading is unchanged: a kept-but-unusable key still warns and is still not applied.
-import { stringifyYaml } from 'obsidian';
+import { parseYaml, stringifyYaml } from 'obsidian';
 import type { Component } from 'obsidian';
 import type { DsePrefs, PreferenceStore } from './seams/prefs';
 
@@ -146,8 +146,26 @@ export function emitAhead(head: string, body: string): string {
 	return body === '{}' ? head.trimEnd() : head + body;
 }
 
-/** A top-level (column-0) `prefs:` declaration in an already-serialized block body. */
-const TOP_LEVEL_PREFS_RE = /^prefs\s*:/mu;
+/**
+ * Does an already-serialized block body declare `key` at the top level? Asked by both reserved-key wrappers
+ * (`withPrefOverrides`, `withCollapseKeys`) so a raw-splicing serializer (`ds-hero`) never gets a second line.
+ *
+ * Decided by PARSING the body when it is a map, not by a column-0 text test: the author's raw line can spell the
+ * key in any YAML way (`"prefs":`, `'prefs':`, `? prefs`), and a spelling the text test misses would be written a
+ * second time, which the next parse rejects ("Map keys must be unique"). A body that is not a map, or does not
+ * parse, falls back to the line test.
+ */
+export function bodyDeclaresTopLevel(body: string, key: string): boolean {
+	try {
+		const parsed: unknown = parseYaml(body);
+		if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+			return Object.prototype.hasOwnProperty.call(parsed, key);
+		}
+	} catch {
+		/* not parseable as a whole: fall back to the line test */
+	}
+	return new RegExp(`^${key}\\s*:`, 'mu').test(body);
+}
 
 /**
  * Serializer wrapper: re-emit the author's `prefs:` value ahead of the element body. SC-652: when a
@@ -167,7 +185,7 @@ export function withPrefOverrides<M>(
 	const kept: unknown = passthrough?.present ? passthrough.value : (overrides ?? {});
 	return (model) => {
 		const body = serialize(model);
-		if (TOP_LEVEL_PREFS_RE.test(body)) return body;
+		if (bodyDeclaresTopLevel(body, 'prefs')) return body;
 		return emitAhead(stringifyYaml({ prefs: kept }), body);
 	};
 }

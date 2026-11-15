@@ -331,4 +331,22 @@ describe('SC-652: ds-hero (SC-514) -- more cases of the prefs wrapper never writ
 		expect(lineCount(written, 'prefs')).toBe(1);
 		expect(written.startsWith(text)).toBe(true);
 	});
+
+	// The raw line can spell the key in any YAML way; a spelling a column-0 text test misses was written a second time and the
+	// next parse failed ("Map keys must be unique"). Each case: the key is declared once, the written block parses and redraws.
+	test.each([
+		['a quoted `"prefs":` (unknown-only map)', '"prefs": {boardDensity: compact}', 'prefs'],
+		['a single-quoted `\'prefs\':` scalar', "'prefs': compact", 'prefs'],
+		['an explicit `? prefs` key', '? prefs\n: {boardDensity: compact}', 'prefs'],
+		['a quoted `"collapsed": yes`', '"collapsed": yes', 'collapsed'],
+		['a quoted `"prefs":` that is an applied override (SC-514 itself)', '"prefs": {reduceMotion: true}', 'prefs'],
+		['a quoted `"collapsed": true` (SC-514\'s collapse twin)', '"collapsed": true', 'collapsed'],
+	])('%s: declared once after a write, and the block redraws', async (_label, text, key) => {
+		const written = await writeOnce(hero, `${text}\n${hero.body}`);
+		expect(written).toMatch(hero.changed);
+		expect(written.startsWith(text)).toBe(true);
+		const parsed = parseYaml(written) as Record<string, unknown>; // throws on a duplicate key
+		expect(parsed[key]).toEqual((parseYaml(text) as Record<string, unknown>)[key]);
+		await mount(appWith(noteOf([{ lang: hero.lang, body: written }])), hero, 0, written); // fails on an error card
+	});
 });
