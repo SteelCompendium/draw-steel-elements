@@ -585,6 +585,25 @@ describe('SC-440 matrix: Sync and Check for updates, busy state x label x disabl
 		await flushAsync(3);
 		expect(Notice.notices).toEqual([]);
 	});
+
+	test('SC-646: a Sync whose run rejects leaves no unhandled promise rejection behind (the service already reported it)', async () => {
+		const loaded = await loadPlugin({ experimental: true });
+		const sync = jest.spyOn(loaded.plugin, 'syncCompendium').mockRejectedValue(new Error('GitHub release lookup failed (HTTP 404)'));
+		const tab = await openTab(loaded);
+		const rejections: unknown[] = [];
+		const onRejection = (reason: unknown) => rejections.push(reason);
+		process.on('unhandledRejection', onRejection);
+		try {
+			Notice.notices.length = 0;
+			buttonsOf(tab).sync.click();
+			await flushAsync(5); // a few real macrotasks: Node reports an unhandled rejection after the microtasks drain
+		} finally {
+			process.off('unhandledRejection', onRejection);
+		}
+		expect(sync).toHaveBeenCalledTimes(1);
+		expect(rejections).toEqual([]);
+		expect(Notice.notices).toEqual([]); // the button adds no Notice of its own (the service shows the failure one)
+	});
 });
 
 describe('SC-440 matrix: a live element re-renders, and the behavioural rolling prefs reach an open ability card', () => {

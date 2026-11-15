@@ -3,7 +3,7 @@
 // be held in flight to look at the busy state: both buttons disabled, the one running swaps its label. No scenario clicks anything that would
 // move files: Sync with the default (absent) folder opens no window; the windows a sync can open are SC-441's.
 import { browser, expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
+import { dse } from '../../driver/dse';
 import { eventsSince } from '../../driver/recorders';
 import { state } from '../../driver/state';
 import { allowPageErrors, closeSettings, compendiumButtons, ctl, noticesHere, onMain, openAt, pressOn, readSettings, releaseStub, reloadPlugin, shownValue } from '../../driver/settingsDrive';
@@ -138,9 +138,9 @@ describe('settings tab: Sync and Check for updates', () => {
 		}
 	});
 
-	knownBug('SC-646', '[SET-C04] a failed Sync (the release lookup answers 404) leaves no unhandled promise rejection behind', async () => {
-		// Only the stubbed 404's own errors: the designed console.error and the bug itself (any other failure inside Sync still fails this test).
-		allowPageErrors(/compendium sync failed: Error: GitHub release lookup failed \(HTTP 404\)|rejection: Error: GitHub release lookup failed \(HTTP 404\)/);
+	it('[SET-C04] a failed Sync (the release lookup answers 404) leaves no unhandled promise rejection behind', async () => {
+		// Only the stubbed 404's own designed console.error; an unhandled rejection (or any other failure inside Sync) still fails this test.
+		allowPageErrors(/compendium sync failed: Error: GitHub release lookup failed \(HTTP 404\)/);
 		await dse.openNote('Stamina/basic.md');
 		await releaseStub.install();
 		await openAt(COMPENDIUM);
@@ -157,5 +157,5 @@ describe('settings tab: Sync and Check for updates', () => {
 		} finally {
 			await closeSettings();
 		}
-	}, { failsWith: /rejection: Error: GitHub release lookup failed/ });
+	});
 });

@@ -141,6 +141,24 @@ describe('CompendiumSearchModal (spec §4.2)', () => {
 		expect(onChoose).not.toHaveBeenCalled();
 	});
 
+	test('SC-646: choosing the sync CTA when the sync rejects leaves no unhandled promise rejection (the service already reported it)', async () => {
+		const { app, index } = setup(true);
+		const onSyncRequested = jest.fn().mockRejectedValue(new Error('GitHub release lookup failed (HTTP 404)'));
+		const modal = new CompendiumSearchModal(app as any, index, jest.fn(), { onSyncRequested });
+		const [cta] = modal.getSuggestions('');
+		const rejections: unknown[] = [];
+		const onRejection = (reason: unknown) => rejections.push(reason);
+		process.on('unhandledRejection', onRejection);
+		try {
+			modal.onChooseSuggestion(cta, {} as MouseEvent);
+			for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+		} finally {
+			process.off('unhandledRejection', onRejection);
+		}
+		expect(onSyncRequested).toHaveBeenCalledTimes(1);
+		expect(rejections).toEqual([]);
+	});
+
 	test('choosing a real entry calls onChoose with the entry and event', () => {
 		const { app, index } = setup();
 		const onChoose = jest.fn();

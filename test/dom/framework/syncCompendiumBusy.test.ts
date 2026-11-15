@@ -252,3 +252,99 @@ describe('SC-243 fix round 1 (review L1) — legacy-flow callbacks are lock-firs
 		expect(plugin.syncService.isBusy()).toBe(false); // released after its own run
 	});
 });
+
+// SC-646 — every place main.ts starts a sync without awaiting it leaves no unhandled promise
+// rejection when that sync fails. `CompendiumSyncService.sync` reports a failure itself (the
+// "compendium sync failed" Notice + console.error) and rethrows by design, so the callers'
+// catch is empty; a failure BEFORE `sync` (trashing the root, settling migration state) has
+// no other reporter and is logged once instead.
+describe('SC-646 — fire-and-forget sync starts leave no unhandled rejection', () => {
+	let errorSpy: jest.SpyInstance;
+	beforeEach(() => {
+		Notice.notices.length = 0;
+		(requestUrl as jest.Mock).mockClear();
+		(LegacyCompendiumModal as unknown as jest.Mock).mockClear();
+		(CompendiumMigrationModal as unknown as jest.Mock).mockClear();
+		errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+	});
+	afterEach(() => errorSpy.mockRestore());
+
+	/** Run `start`, give Node a few macrotasks to report anything nobody handled, and return what it reported. */
+	async function unhandledDuring(start: () => void): Promise<unknown[]> {
+		const rejections: unknown[] = [];
+		const onRejection = (reason: unknown) => rejections.push(reason);
+		process.on('unhandledRejection', onRejection);
+		try {
+			start();
+			await flushAsync(8);
+		} finally {
+			process.off('unhandledRejection', onRejection);
+		}
+		return rejections;
+	}
+	const logged = (needle: string) => errorSpy.mock.calls.filter((c) => String(c[0]).includes(needle));
+	const failureNotices = () => Notice.notices.filter((n) => n.includes('compendium sync failed'));
+
+	test('the "Sync compendium" command: a real failed sync shows the one Notice and logs the one console.error, and nothing is unhandled', async () => {
+		const plugin = await makeLoadedPlugin();
+		const { commands } = plugin as unknown as { commands: { id: string; callback: () => void }[] };
+		const command = commands.find((c) => c.id === 'sync-compendium')!;
+		const rejections = await unhandledDuring(() => command.callback());
+		expect(rejections).toEqual([]);
+		expect(failureNotices()).toHaveLength(1);
+		expect(logged('compendium sync failed')).toHaveLength(1);
+		expect(plugin.syncService.isBusy()).toBe(false);
+	});
+
+	test("offerMigration's syncAfter: a failed sync is not left unhandled", async () => {
+		const plugin = await makeLoadedPlugin();
+		stubMigrationPlan(plugin, plugin.settings.compendiumDestinationDirectory);
+		await plugin.migrateCompendium();
+		const callbacks = (CompendiumMigrationModal as unknown as jest.Mock).mock.calls[0][2] as
+			{ syncAfter: (report: unknown) => void };
+		const syncSpy = jest.spyOn(plugin.syncService, 'sync').mockRejectedValue(new Error('boom'));
+		const rejections = await unhandledDuring(() => callbacks.syncAfter(
+			{ migrated: [], remaining: 0, aborted: false, reportNotePath: null }));
+		expect(syncSpy).toHaveBeenCalledTimes(1);
+		expect(rejections).toEqual([]);
+		expect(errorSpy).not.toHaveBeenCalled(); // no second log line from the caller
+	});
+
+	test("offerMigration's syncAnyway: a failed sync is not left unhandled and adds no log line; a failure BEFORE the sync (markSettled) is logged once", async () => {
+		const plugin = await makeLoadedPlugin();
+		stubMigrationPlan(plugin, plugin.settings.compendiumDestinationDirectory);
+		await plugin.migrateCompendium();
+		const callbacks = (CompendiumMigrationModal as unknown as jest.Mock).mock.calls[0][2] as
+			{ syncAnyway: () => void };
+		jest.spyOn(plugin.migrationService, 'markSettled').mockResolvedValue(undefined);
+		const syncSpy = jest.spyOn(plugin.syncService, 'sync').mockRejectedValue(new Error('boom'));
+		expect(await unhandledDuring(() => callbacks.syncAnyway())).toEqual([]);
+		expect(syncSpy).toHaveBeenCalledTimes(1);
+		expect(errorSpy).not.toHaveBeenCalled();
+
+		jest.spyOn(plugin.migrationService, 'markSettled').mockRejectedValue(new Error('disk full'));
+		expect(await unhandledDuring(() => callbacks.syncAnyway())).toEqual([]);
+		expect(syncSpy).toHaveBeenCalledTimes(1); // never reached
+		expect(logged('compendium sync could not start')).toHaveLength(1);
+		expect(plugin.syncService.isBusy()).toBe(false);
+	});
+
+	test('LegacyCompendiumModal onChoice: a failed sync is not left unhandled and adds no log line; a failed trash is logged once and no sync runs', async () => {
+		const plugin = await makeLoadedPlugin();
+		await seedLegacyModalTrigger(plugin);
+		await plugin.syncCompendium();
+		const onChoice = (LegacyCompendiumModal as unknown as jest.Mock).mock.calls[0][2] as
+			(trashOldRoot: boolean) => void;
+		const syncSpy = jest.spyOn(plugin.syncService, 'sync').mockRejectedValue(new Error('boom'));
+		expect(await unhandledDuring(() => onChoice(false))).toEqual([]);
+		expect(syncSpy).toHaveBeenCalledTimes(1);
+		expect(errorSpy).not.toHaveBeenCalled();
+
+		const trashFile = (plugin.app.fileManager as unknown as { trashFile: jest.Mock }).trashFile;
+		trashFile.mockRejectedValue(new Error('cannot trash'));
+		expect(await unhandledDuring(() => onChoice(true))).toEqual([]);
+		expect(syncSpy).toHaveBeenCalledTimes(1); // never reached
+		expect(logged('compendium sync could not start')).toHaveLength(1);
+		expect(plugin.syncService.isBusy()).toBe(false);
+	});
+});
