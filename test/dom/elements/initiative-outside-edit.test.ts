@@ -7,7 +7,7 @@
 // Harness: the real ElementPipeline mounts the tracker twice into one pane (the old section and the section Obsidian draws for the
 // edit) with real, loaded views; "Obsidian redraws" is `old.view.unload()` before or after the second mount, the two orders measured
 // in real Obsidian (Reading view draws the new section first, Live Preview closes first and the new widget arrives ~10 ms later).
-import { ElementPipeline } from '../../../src/framework/pipeline';
+import { ElementPipeline, prepareModel } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
 import { createThemeService } from '../../../src/framework/seams/theme';
@@ -22,6 +22,8 @@ import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App, Component, Modal, Notice, Plugin } from '../../mocks/obsidian';
 import { initiativeElement } from '../../../src/elements/initiative/definition';
 import type { InitiativeView } from '../../../src/elements/initiative/view';
+import type { EncounterData } from '../../../src/elements/initiative/model';
+import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
 import { HANDOFF_SETTLE_MS } from '../../../src/framework/chrome/windowHandoff';
 
 const HEROES = ['heroes:', '  - name: "Alice"', '    max_stamina: 30'];
@@ -592,5 +594,62 @@ describe('SC-608: an outside edit redraws the tracker while a window is open (Re
 		expect(modalEl()).toBeNull();
 		expect(notices()).toHaveLength(0);
 		expect(document.activeElement).toBe(ctl(old.root, 'init.detail.stamina'));
+	});
+});
+
+// SC-652 -- the pinned sidebar's "is the block unchanged?" check (`update()` of a refreshed model against what the view loaded or wrote).
+// A tracker with a reserved `prefs:` / `collapsed:` line is written WITH that line in front, and the record kept that text where the check
+// compares a model serialization (which has no such line), so a refresh with the block as the view just wrote it closed an open window with the
+// "changed outside" Notice. SC-652 keeps unknown-only `prefs:` and `collapsed: yes` on a write, which widened it. Driven the way the sidebar
+// drives it: `prepareModel` (which pops the reserved lines), then `update()` on the mounted view (no `lastKnownBody`: the sidebar's host cannot tell).
+describe.each([
+	['no reserved line', ''],
+	['an unknown-only prefs map', 'prefs:\n  boardDensity: compact\n'],
+	['collapsed: yes', 'collapsed: yes\n'],
+	['collapsed: true', 'collapsed: true\n'],
+	['an applied pref', 'prefs:\n  reduceMotion: true\n'],
+])('SC-652: the pinned sidebar refreshes a tracker with %s while its window is open', (_label, reserved) => {
+	const SOURCE = `${reserved}${TRACKER}`;
+	async function refresh(view: InitiativeView, body: string): Promise<void> {
+		const d = makeDeps();
+		const { model } = await prepareModel(initiativeElement, body, { prefs: d.prefs, refs: d.refs, validation: d.validation, sourcePath: 'Encounter.md' });
+		await view.update(model as EncounterData);
+	}
+	/** Open the Conditions window and add a condition in it: the tracker writes while the window stays open. */
+	async function addCondition(old: Mounted): Promise<void> {
+		const opener = ctl(old.root, 'init.cond.add');
+		opener.focus();
+		opener.click();
+		ctl(modalEl()!, 'cond.add').click();
+		const input = ctl<HTMLInputElement>(modalEl()!, 'cond.input');
+		input.value = 'daz';
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+		await later(PERSIST_DEBOUNCE_MS + 50);
+		expect(old.writes).toHaveLength(1);
+	}
+	const lineCount = (body: string, key: string): number => body.split('\n').filter((l) => new RegExp(`^${key}\\s*:`).test(l)).length;
+	let warn: jest.SpyInstance;
+	beforeEach(() => {
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => warn.mockRestore());
+
+	test('the block as the view just wrote it (an echo, or an edit elsewhere in the note): the window stays open, no Notice, the reserved line is written once', async () => {
+		const old = await mount(SOURCE);
+		await addCondition(old);
+		expect(lineCount(old.writes[0], 'prefs')).toBe(reserved.startsWith('prefs') ? 1 : 0);
+		expect(lineCount(old.writes[0], 'collapsed')).toBe(reserved.startsWith('collapsed') ? 1 : 0);
+		await refresh(old.view, old.writes[0]);
+		expect(modalEl()).not.toBeNull();
+		expect(notices()).toHaveLength(0);
+	});
+
+	test('a genuine outside edit of the block still closes the window with one Notice', async () => {
+		const old = await mount(SOURCE);
+		await addCondition(old);
+		await refresh(old.view, old.writes[0].replace(/value: \d+/, 'value: 9'));
+		expect(modalEl()).toBeNull();
+		expect(notices()).toHaveLength(1);
 	});
 });

@@ -204,7 +204,9 @@ export class InitiativeView extends ElementView<EncounterData> {
 	setSerializer(serialize: (model: EncounterData) => string): void {
 		super.setSerializer((model) => {
 			const out = serialize(model);
-			this.disk = { raw: normalizeBlockText(out), ser: out };
+			// `ser` is the PLAIN serialization, the one `update()` compares a refreshed model with (SC-652): `out` carries the reserved
+			// `prefs:` / `collapsed:` lines the wrapper put in front, which no model serialization has, so storing it never matched.
+			this.disk = { raw: normalizeBlockText(out), ser: serializeModel(model) };
 			return out;
 		});
 	}

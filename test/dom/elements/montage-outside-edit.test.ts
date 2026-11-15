@@ -9,7 +9,7 @@
 // real, loaded views; "Obsidian redraws" is `old.view.unload()` before or after the second mount, the two orders measured in real Obsidian
 // (Reading view draws the new section first, Live Preview closes first and the new widget arrives ~10 ms later). Same shape as
 // initiative-outside-edit.test.ts.
-import { ElementPipeline } from '../../../src/framework/pipeline';
+import { ElementPipeline, prepareModel } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
 import { createThemeService } from '../../../src/framework/seams/theme';
@@ -694,5 +694,71 @@ describe('SC-650: the pinned sidebar refreshes the montage in place (no redraw) 
 		await refresh(old.view, EDITED); // an edit elsewhere in the note: the block is what the view already shows
 		expect(anyWindow()).toBe(true);
 		expect(notices()).toHaveLength(0);
+	});
+});
+
+// SC-652 — the sidebar's "is the block unchanged?" check compares what the sidebar refreshed with what this view loaded or wrote. A block with a
+// reserved `prefs:` / `collapsed:` line is written WITH that line in front, and the record kept that text where the check compares a model
+// serialization (which has no such line), so the echo of the view's own write, or an edit elsewhere in the note, closed an open window with the
+// "changed outside" Notice. SC-652 starts keeping unknown-only `prefs:` and `collapsed: yes` on a write, which widened it.
+describe.each([
+	['no reserved line', ''],
+	['an unknown-only prefs map', 'prefs:\n  boardDensity: compact\n'],
+	['collapsed: yes', 'collapsed: yes\n'],
+	['collapsed: true', 'collapsed: true\n'],
+	['an applied pref', 'prefs:\n  reduceMotion: true\n'],
+])('SC-652: the pinned sidebar, a montage with %s', (_label, reserved) => {
+	const SRC = `${reserved}${BASE}`;
+	/** The sidebar's real refresh: prepareModel (which pops the reserved lines) and then update() on the mounted view. */
+	async function refresh(view: MontageView, body: string): Promise<void> {
+		const d = makeDeps();
+		const { model } = await prepareModel(montageElement, body, { prefs: d.prefs, refs: d.refs, validation: d.validation, sourcePath: 'Montage.md' });
+		await view.update(model as MontageModel);
+	}
+	const lineCount = (body: string, key: string): number => body.split('\n').filter((l) => new RegExp(`^${key}\\s*:`).test(l)).length;
+	let warn: jest.SpyInstance;
+	beforeEach(() => {
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => warn.mockRestore());
+
+	test('the echo of the view\'s own write leaves a window open, no Notice, and the window\'s own write keeps the reserved line once', async () => {
+		const old = await mount(SRC, undefined, 'Montage.md', false, 'sidebar');
+		ctl(old.root, 'montage.quick.success', 0).click();
+		await later(PERSIST_DEBOUNCE_MS + 50);
+		expect(old.writes).toHaveLength(1);
+		press(ctl(old.root, 'montage.chrome.set-limits'));
+		await refresh(old.view, old.writes[0]); // the note's modify event: the pinned block reads what this view wrote
+		expect(anyWindow()).toBe(true);
+		expect(notices()).toHaveLength(0);
+		const field = document.querySelector<HTMLInputElement>('.dse-modal [data-dse-control="montage.limits.success"]')!;
+		type(field, '7');
+		ctl(document.body, 'montage.limits.save').click();
+		await later(PERSIST_DEBOUNCE_MS + 50);
+		const last = old.writes[old.writes.length - 1];
+		expect(parseYaml(last).success_limit).toBe(7);
+		expect(lineCount(last, 'prefs')).toBe(reserved.startsWith('prefs') ? 1 : 0);
+		expect(lineCount(last, 'collapsed')).toBe(reserved.startsWith('collapsed') ? 1 : 0);
+		expect(notices()).toHaveLength(0);
+	});
+
+	test('an edit elsewhere in the note, after the view\'s own write, leaves a window open too', async () => {
+		const old = await mount(SRC, undefined, 'Montage.md', false, 'sidebar');
+		ctl(old.root, 'montage.quick.success', 0).click();
+		await later(PERSIST_DEBOUNCE_MS + 50);
+		press(ctl(old.root, 'montage.bar.log'));
+		await refresh(old.view, old.writes[0]);
+		expect(anyWindow()).toBe(true);
+		expect(notices()).toHaveLength(0);
+	});
+
+	test('a genuine outside edit of the block still closes the window with one Notice', async () => {
+		const old = await mount(SRC, undefined, 'Montage.md', false, 'sidebar');
+		ctl(old.root, 'montage.quick.success', 0).click();
+		await later(PERSIST_DEBOUNCE_MS + 50);
+		press(ctl(old.root, 'montage.chrome.set-limits'));
+		await refresh(old.view, old.writes[0].replace('success_limit: 5', 'success_limit: 6'));
+		expect(anyWindow()).toBe(false);
+		expect(notices()).toHaveLength(1);
 	});
 });
