@@ -15,16 +15,19 @@
 import { setIcon } from 'obsidian';
 import type { Component } from 'obsidian';
 import { setPressedState, stampControl, tooltip } from '@/framework/kit';
-import { NegotiationData } from '@model/NegotiationData';
+import { NegotiationData, groupByName, labelOf, sharedNameNotice } from '@model/NegotiationData';
+import type { Motivation } from '@model/NegotiationData';
 
 interface MotivationRow {
+	mot: Motivation;
 	rowEl: HTMLElement;
 	glyphEl: HTMLElement;
 	chipEl: HTMLButtonElement;
 }
 
 export class MotivationsPitfallsView {
-	private readonly rows = new Map<string, MotivationRow>();
+	// SC-640: one row per ENTRY, in order (never keyed by name: a second same-named entry overwrote the first, and its row was never repainted).
+	private readonly rows: MotivationRow[] = [];
 	private countEl?: HTMLElement;
 
 	constructor(
@@ -45,14 +48,13 @@ export class MotivationsPitfallsView {
 	/** Repaints every motivation row (and the open count) from the model, in place. */
 	public refresh(): void {
 		let open = 0;
-		for (const mot of this.data.motivations) {
-			const row = this.rows.get(mot.name);
-			if (!row) continue;
+		for (const row of this.rows) {
+			const mot = row.mot;
 			const spent = mot.hasBeenAppealedTo ?? false;
 			if (!spent) open++;
 			row.rowEl.toggleClass('is-spent', spent);
 			row.glyphEl.setText(spent ? '◇' : '◆');
-			this.paintChip(row.chipEl, mot.name, spent);
+			this.paintChip(row.chipEl, labelOf(mot.name, 'Motivation'), spent);
 		}
 		this.countEl?.setText(`${open} of ${this.data.motivations.length} open`);
 	}
@@ -67,13 +69,14 @@ export class MotivationsPitfallsView {
 		glyph.setAttribute('aria-hidden', 'true');
 		head.createSpan({ cls: 'dse-nt__label', text: 'Motivations' });
 		this.countEl = head.createSpan({ cls: 'dse-nt__dossier-count' });
+		this.sharedNameNotices(col, 'Motivation', this.data.motivations);
 
 		for (const mot of this.data.motivations) {
 			const rowEl = col.createDiv({ cls: 'dse-nt__dos' });
 			const glyphEl = rowEl.createSpan({ cls: 'dse-nt__dos-glyph dse-nt__glyph--mot' });
 			glyphEl.setAttribute('aria-hidden', 'true');
 			const text = rowEl.createDiv({ cls: 'dse-nt__dos-text' });
-			text.createSpan({ cls: 'dse-nt__dos-name', text: mot.name });
+			text.createSpan({ cls: 'dse-nt__dos-name', text: labelOf(mot.name, 'Motivation') });
 			text.createSpan({ cls: 'dse-nt__dos-reason', text: mot.reason });
 
 			const chipEl = rowEl.createEl('button', { cls: 'dse-optchip dse-nt__chip' });
@@ -84,13 +87,21 @@ export class MotivationsPitfallsView {
 			// Read-only: no listener at all — there is no write path to reach (§4.4).
 			else {
 				this.owner.registerDomEvent(chipEl, 'click', () => {
-					this.data.setMotivationUsed(mot.name, !(mot.hasBeenAppealedTo ?? false));
+					this.data.setMotivationUsed(mot, !(mot.hasBeenAppealedTo ?? false)); // THIS entry (SC-640), not the first of its name
 					this.refresh();
 					this.refreshArgument();
 					this.persist();
 				});
 			}
-			this.rows.set(mot.name, { rowEl, glyphEl, chipEl });
+			this.rows.push({ mot, rowEl, glyphEl, chipEl });
+		}
+	}
+
+	/** SC-640: under the card's head, one plain line per name that several entries share (every row stays; the Argument tab draws one chip for them). */
+	private sharedNameNotices(col: HTMLElement, kind: 'Motivation' | 'Pitfall', items: ReadonlyArray<{ name: string }>): void {
+		for (const group of groupByName(items)) {
+			const text = sharedNameNotice(group, kind, 'the Argument chip');
+			if (text) col.createDiv({ cls: 'dse-nt__why', text }).setAttribute('data-note', 'shared-name');
 		}
 	}
 
@@ -122,6 +133,7 @@ export class MotivationsPitfallsView {
 		setIcon(icon, 'triangle-alert');
 		head.createSpan({ cls: 'dse-nt__label', text: 'Pitfalls' });
 		head.createSpan({ cls: 'dse-nt__dossier-count', text: `${this.data.pitfalls.length} known` });
+		this.sharedNameNotices(col, 'Pitfall', this.data.pitfalls);
 
 		for (const pit of this.data.pitfalls) {
 			const rowEl = col.createDiv({ cls: 'dse-nt__dos' });
@@ -129,7 +141,7 @@ export class MotivationsPitfallsView {
 			glyph.setAttribute('aria-hidden', 'true');
 			setIcon(glyph, 'triangle-alert');
 			const text = rowEl.createDiv({ cls: 'dse-nt__dos-text' });
-			text.createSpan({ cls: 'dse-nt__dos-name', text: pit.name });
+			text.createSpan({ cls: 'dse-nt__dos-name', text: labelOf(pit.name, 'Pitfall') });
 			text.createSpan({ cls: 'dse-nt__dos-reason', text: pit.reason });
 		}
 	}

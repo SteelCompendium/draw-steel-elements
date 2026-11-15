@@ -172,6 +172,74 @@ export const TOP_TEXT_SLOTS: readonly string[] = ['name', 'i5', 'i4', 'i3', 'i2'
 export const ITEM_TEXT_SLOTS: readonly string[] = ['name', 'reason'];
 export const ARGUMENT_TEXT_SLOTS: readonly string[] = ['motivationsUsed', 'pitfallsUsed'];
 
+/**
+ * SC-640 — the ONE rule for "same name" on a negotiation card: trimmed and case-insensitive (the montage `matchKey` rule, SC-627 / SC-631;
+ * `src/elements/montage/model.ts`, deliberately not imported so the two elements stay independent). Draw Steel motivations and pitfalls
+ * are a fixed vocabulary where casing carries no meaning, so `power` next to `Power` is a typo, not a second one. Every place that
+ * matches a chosen-list entry (`motivationsUsed` / `pitfallsUsed`) to a motivation / pitfall, or compares two entries, goes through here.
+ * Unlike montage's key, a BLANK name is a key (`''`): an entry with no `name:` is a real, nameless entry, and its chosen-list entry is
+ * the empty string. `undefined` (never matches) is only for what is not text at all (a `null` in a hand-typed list).
+ */
+export function nameKey(value: unknown): string | undefined {
+    return typeof value === 'string' ? value.trim().toLowerCase() : undefined;
+}
+
+/** Two names are the same entry name under {@link nameKey}. */
+export function sameName(a: unknown, b: unknown): boolean {
+    const key = nameKey(a);
+    return key !== undefined && key === nameKey(b);
+}
+
+/** `name` is in the chosen list (the chip is pressed). */
+export function isUsed(list: readonly unknown[], name: string): boolean {
+    return list.some((entry) => sameName(entry, name));
+}
+
+/** Presses `name` in the chosen list, writing the entry's own spelling; a no-op when it is already there. */
+export function addUsed(list: string[], name: string): void {
+    if (!isUsed(list, name)) list.push(name);
+}
+
+/** Un-presses `name`: removes the FIRST matching entry, whatever its spelling (in place: the list is the live model's). Like the exact-text `indexOf` it
+ *  replaces, one press takes one entry off, which is what SC-638's typed-entry snapshot assumes (`restoreUsed`: "a removal takes the first equal one"). */
+export function removeUsed(list: string[], name: string): void {
+    const index = list.findIndex((entry) => sameName(entry, name));
+    if (index > -1) list.splice(index, 1);
+}
+
+/** The entries of one name under {@link nameKey}: `first` is the one the card draws (its spelling is the chip's and what a press writes). */
+export interface NameGroup<T extends { name: string }> {
+    name: string;
+    first: T;
+    members: T[];
+}
+
+/** `items` grouped by name, in the order each name first appears. A card draws ONE chip per group (the chosen list stores names, so two entries of one name cannot be chosen apart). */
+export function groupByName<T extends { name: string }>(items: readonly T[]): NameGroup<T>[] {
+    const groups: NameGroup<T>[] = [];
+    for (const item of items) {
+        const group = groups.find((g) => sameName(g.name, item.name));
+        if (group) group.members.push(item);
+        else groups.push({ name: item.name, first: item, members: [item] });
+    }
+    return groups;
+}
+
+/** What the card calls an entry: its name, or "Unnamed Motivation" / "Unnamed Pitfall" when it has none. Display only, never written to the note. */
+export function labelOf(name: string, kind: 'Motivation' | 'Pitfall'): string {
+    return name.trim() === '' ? `Unnamed ${kind}` : name;
+}
+
+/** The one-line notice for a group of several entries sharing a name, or `null` for a single entry. `chip` says which chip stands for them. */
+export function sharedNameNotice(group: NameGroup<{ name: string }>, kind: 'Motivation' | 'Pitfall', chip: string): string | null {
+    const count = group.members.length;
+    if (count < 2) return null;
+    if (group.name.trim() === '') return `${count} ${kind}s have no name; ${chip} stands for ${count === 2 ? 'both of them' : 'all of them'}.`;
+    const times = count === 2 ? 'twice' : count === 3 ? 'three times' : `${count} times`;
+    const all = count === 2 ? 'both' : count === 3 ? 'all three' : `all ${count}`;
+    return `${group.name} is listed ${times}; ${chip} stands for ${all}.`;
+}
+
 export class NegotiationData {
     name?: string;
     initial_patience?: number;
@@ -230,15 +298,22 @@ export class NegotiationData {
         recordUnknownKeys(this, data, TOP_KNOWN_KEYS); // SC-637
     }
 
-    setMotivationUsed(motivationName: string, used: boolean) {
-        const mot = this.motivations.find(m => m.name === motivationName);
-		if (mot) {
-        	mot.hasBeenAppealedTo = used;
-		}
+    /**
+     * Marks motivations as appealed to / not. A `Motivation` is THAT entry (a dossier row's own Spent chip: two entries of one name keep
+     * their own flags, SC-640); a name is every entry of that name (Complete Argument, the legacy oracle). The `reusedMotivation` flag
+     * follows (below).
+     */
+    setMotivationUsed(target: string | Motivation, used: boolean) {
+        const name = typeof target === 'string' ? target : target.name;
+        if (typeof target === 'string') {
+            this.motivations.filter(m => sameName(m.name, name)).forEach(m => m.hasBeenAppealedTo = used);
+        } else {
+            target.hasBeenAppealedTo = used;
+        }
 
         // if a motivation is getting marked as "used previously" and the current argument also uses that motivation,
         // then mark the current argument as reusing the motivation
-        if (used && this.currentArgument.motivationsUsed.contains(motivationName)) {
+        if (used && isUsed(this.currentArgument.motivationsUsed, name)) {
             this.currentArgument.reusedMotivation = true;
         }
 
@@ -246,19 +321,21 @@ export class NegotiationData {
         // then we can set resuedMotivation to false ONLY if all the other motivations in the current argument have
         // not been used previously.  If the current argument uses 2 motivations that are both previously used, then
         // we have to leave the reusedMotivations flag alone.
-        if (!used && this.currentArgument.motivationsUsed.contains(motivationName)) {
-            let canSetReusedMotivationFlag = true;
-            this.currentArgument.motivationsUsed.forEach(currentMotivation => {
-                let globalMotivation = this.motivations.find(m => m.name === currentMotivation);
-                if (globalMotivation && globalMotivation.hasBeenAppealedTo) {
-                    // dont touch the reusedMotivaton flag
-                    canSetReusedMotivationFlag = false;
-                }
-            })
-            if (canSetReusedMotivationFlag) {
-                this.currentArgument.reusedMotivation = false;
-            }
+        if (!used && isUsed(this.currentArgument.motivationsUsed, name) && !this.argumentReusesMotivation()) {
+            this.currentArgument.reusedMotivation = false;
         }
+    }
+
+    /** SC-640 — the chip for `name` is drawn spent: ANY entry of that name has been appealed to. */
+    isMotivationSpent(name: string): boolean {
+        return this.motivations.some(m => sameName(m.name, name) && m.hasBeenAppealedTo);
+    }
+
+    /** SC-640 — Complete Argument: every entry named by a pressed motivation chip is appealed to from now on (all entries of a shared name). */
+    spendChosenMotivations(): void {
+        this.motivations.forEach(m => {
+            if (isUsed(this.currentArgument.motivationsUsed, m.name)) m.hasBeenAppealedTo = true;
+        });
     }
 
     /**
@@ -266,25 +343,22 @@ export class NegotiationData {
      * @returns {boolean} True if any motivation has been reused; otherwise, false.
      */
     argumentReusesMotivation(): boolean {
-        return this.currentArgument.motivationsUsed.some(motName => {
-            const mot = this.motivations.find(m => m.name === motName);
-            return mot?.hasBeenAppealedTo ?? false;
-        });
+        return this.currentArgument.motivationsUsed.some(motName => this.isMotivationSpent(motName));
     }
 
     /**
      * SC-649 — what the card SHOWS as chosen. A `motivationsUsed` / `pitfallsUsed` entry that names no motivation / pitfall of this block
      * has no chip, so it is not an appeal: the roll's tiers, the Same Argument box and Complete Argument read these, never the raw lists
      * (the stray entry stays in the user's YAML until their own action writes the argument; it counts again if its name comes back).
-     * Name matching is the chips' (`includes(name)`).
+     * Name matching is the chips' ({@link sameName}: SC-640).
      */
     argumentUsesMotivation(): boolean {
-        return this.motivations.some(m => this.currentArgument.motivationsUsed.includes(m.name));
+        return this.motivations.some(m => isUsed(this.currentArgument.motivationsUsed, m.name));
     }
 
     /** SC-649 — a pitfall chip is pressed (see {@link argumentUsesMotivation}). */
     argumentUsesPitfall(): boolean {
-        return this.pitfalls.some(p => this.currentArgument.pitfallsUsed.includes(p.name));
+        return this.pitfalls.some(p => isUsed(this.currentArgument.pitfallsUsed, p.name));
     }
 
     /** SC-649 — the Reuse box as drawn: checked only while a spent motivation is appealed to (otherwise it is greyed out and unchecked). */

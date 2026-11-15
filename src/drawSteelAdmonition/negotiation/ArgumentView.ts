@@ -29,7 +29,8 @@
 import { Component, setIcon } from 'obsidian';
 import { iconButton, powerRollPanel, setPressedState, stampControl, tooltip } from '@/framework/kit';
 import type { IconButtonHandle, PowerRollPanelHandle, PowerRollTier, RenderMdCallback } from '@/framework/kit';
-import { NegotiationData } from '@model/NegotiationData';
+import { NegotiationData, addUsed, groupByName, isUsed, labelOf, removeUsed, sharedNameNotice } from '@model/NegotiationData';
+import type { Motivation, NameGroup, Pitfall } from '@model/NegotiationData';
 import { ArgumentPowerRoll, ArgumentResult } from '@model/ArgumentPowerRolls';
 
 /** The footer hint shown while the negotiation is over (SC-379 §3). */
@@ -59,8 +60,10 @@ export class ArgumentView {
 	private rollSlot?: HTMLElement;
 	private rollOwner?: Component;
 	private ended = false;
-	private readonly motivationChips = new Map<string, HTMLButtonElement>();
-	private readonly pitfallChips = new Map<string, HTMLButtonElement>();
+	// SC-640: one chip per DISTINCT name (the chosen list stores names, so entries sharing one cannot be chosen apart), kept with its group in the
+	// order drawn. Never a Map keyed by name: the second same-named entry used to overwrite the first, and only that one was repainted.
+	private readonly motivationChips: Array<{ group: NameGroup<Motivation>; chip: HTMLButtonElement }> = [];
+	private readonly pitfallChips: Array<{ group: NameGroup<Pitfall>; chip: HTMLButtonElement }> = [];
 	private reuseLine?: ModLine;
 	private lieLine?: ModLine;
 	private sameLine?: ModLine;
@@ -103,14 +106,8 @@ export class ArgumentView {
 	/** Re-derives the whole tab from the model, in place (see the header). Also the hook the
 	 *  cards call after a Spent toggle, which changes the chips' spent state and the reuse flag. */
 	public sync(): void {
-		for (const mot of this.data.motivations) {
-			const chip = this.motivationChips.get(mot.name);
-			if (chip) this.paintMotivationChip(chip, mot.name, mot.hasBeenAppealedTo);
-		}
-		for (const pit of this.data.pitfalls) {
-			const chip = this.pitfallChips.get(pit.name);
-			if (chip) this.paintPitfallChip(chip, pit.name);
-		}
+		for (const { group, chip } of this.motivationChips) this.paintMotivationChip(chip, group.name, this.data.isMotivationSpent(group.name));
+		for (const { group, chip } of this.pitfallChips) this.paintPitfallChip(chip, group.name);
 		this.syncMods();
 		this.mountRoll();
 		this.syncFooter();
@@ -130,10 +127,12 @@ export class ArgumentView {
 			head.createSpan({ cls: 'dse-nt__label', text: 'Appeals to Motivation' });
 			tooltip(head, MOTIVATION_TIP);
 			const row = group.createDiv({ cls: 'dse-nt__chiprow' });
-			for (const mot of this.data.motivations) {
-				const chip = this.makeChip(row, 'motivation', () => this.onMotivationToggled(mot.name));
-				this.motivationChips.set(mot.name, chip);
+			const groups = groupByName(this.data.motivations);
+			for (const g of groups) {
+				const chip = this.makeChip(row, 'motivation', () => this.onMotivationToggled(g.name));
+				this.motivationChips.push({ group: g, chip });
 			}
+			this.sharedNameNotices(group, groups, 'Motivation');
 		}
 
 		if (this.data.pitfalls.length > 0) {
@@ -145,10 +144,20 @@ export class ArgumentView {
 			head.createSpan({ cls: 'dse-nt__label', text: 'Mentions Pitfall' });
 			tooltip(head, PITFALL_TIP);
 			const row = group.createDiv({ cls: 'dse-nt__chiprow' });
-			for (const pit of this.data.pitfalls) {
-				const chip = this.makeChip(row, 'pitfall', () => this.onPitfallToggled(pit.name));
-				this.pitfallChips.set(pit.name, chip);
+			const groups = groupByName(this.data.pitfalls);
+			for (const g of groups) {
+				const chip = this.makeChip(row, 'pitfall', () => this.onPitfallToggled(g.name));
+				this.pitfallChips.push({ group: g, chip });
 			}
+			this.sharedNameNotices(group, groups, 'Pitfall');
+		}
+	}
+
+	/** SC-640: under a chip row, one plain line per name that several entries share (visible on read-only hosts too: it is not a control). */
+	private sharedNameNotices(group: HTMLElement, groups: ReadonlyArray<NameGroup<{ name: string }>>, kind: 'Motivation' | 'Pitfall'): void {
+		for (const shared of groups) {
+			const text = sharedNameNotice(shared, kind, 'this chip');
+			if (text) group.createDiv({ cls: 'dse-nt__why', text }).setAttribute('data-note', 'shared-name');
 		}
 	}
 
@@ -165,33 +174,35 @@ export class ArgumentView {
 
 	/** Re-draws a chip's contents in place (the button itself, so focus survives). */
 	private paintMotivationChip(chip: HTMLButtonElement, name: string, spent: boolean): void {
-		const pressed = this.data.currentArgument.motivationsUsed.includes(name);
+		const pressed = isUsed(this.data.currentArgument.motivationsUsed, name);
+		const label = labelOf(name, 'Motivation'); // SC-640: a nameless one is drawn "Unnamed Motivation" (display only; the entry stays nameless in the note)
 		chip.empty();
 		setPressedState(chip, pressed);
 		chip.toggleClass('is-spent', spent);
 		const glyph = chip.createSpan({ cls: 'dse-nt__chip-glyph', text: spent ? '◇' : '◆' });
 		glyph.setAttribute('aria-hidden', 'true');
 		if (pressed) this.checkIcon(chip);
-		chip.createSpan({ cls: 'dse-nt__chip-text', text: name });
+		chip.createSpan({ cls: 'dse-nt__chip-text', text: label });
 		if (spent) chip.createSpan({ cls: 'dse-nt__chip-note', text: 'spent' });
 		tooltip(
 			chip,
 			spent
-				? `Appeal to ${name} — this Motivation was used in a previous Argument.`
-				: `Appeal to ${name}`,
+				? `Appeal to ${label} — this Motivation was used in a previous Argument.`
+				: `Appeal to ${label}`,
 		);
 	}
 
 	private paintPitfallChip(chip: HTMLButtonElement, name: string): void {
-		const pressed = this.data.currentArgument.pitfallsUsed.includes(name);
+		const pressed = isUsed(this.data.currentArgument.pitfallsUsed, name);
+		const label = labelOf(name, 'Pitfall');
 		chip.empty();
 		setPressedState(chip, pressed);
 		const icon = chip.createSpan({ cls: 'dse-nt__icon dse-nt__chip-icon' });
 		icon.setAttribute('aria-hidden', 'true');
 		setIcon(icon, 'triangle-alert');
 		if (pressed) this.checkIcon(chip);
-		chip.createSpan({ cls: 'dse-nt__chip-text', text: name });
-		tooltip(chip, `Mention ${name}`);
+		chip.createSpan({ cls: 'dse-nt__chip-text', text: label });
+		tooltip(chip, `Mention ${label}`);
 	}
 
 	private checkIcon(parent: HTMLElement): void {
@@ -202,21 +213,16 @@ export class ArgumentView {
 
 	private onMotivationToggled(name: string): void {
 		const usedList = this.data.currentArgument.motivationsUsed;
-		const used = !usedList.includes(name);
-		if (used) {
-			usedList.push(name);
-			const mot = this.data.motivations.find((m) => m.name === name);
-			if (mot?.hasBeenAppealedTo) this.data.currentArgument.reusedMotivation = true;
+		if (!isUsed(usedList, name)) {
+			addUsed(usedList, name);
+			if (this.data.isMotivationSpent(name)) this.data.currentArgument.reusedMotivation = true;
 		} else {
-			const index = usedList.indexOf(name);
-			if (index > -1) {
-				usedList.splice(index, 1);
-				// Only recompute on REMOVAL: when adding a previously-appealed motivation
-				// the user may deselect the "reused" checkbox and that choice must stick —
-				// we may only force reusedMotivation true (known reuse) or false (no
-				// appealed-to motivation remains in the argument). Legacy behavior.
-				this.data.currentArgument.reusedMotivation = this.data.argumentReusesMotivation();
-			}
+			removeUsed(usedList, name);
+			// Only recompute on REMOVAL: when adding a previously-appealed motivation
+			// the user may deselect the "reused" checkbox and that choice must stick —
+			// we may only force reusedMotivation true (known reuse) or false (no
+			// appealed-to motivation remains in the argument). Legacy behavior.
+			this.data.currentArgument.reusedMotivation = this.data.argumentReusesMotivation();
 		}
 		this.sync();
 		this.persist();
@@ -224,9 +230,8 @@ export class ArgumentView {
 
 	private onPitfallToggled(name: string): void {
 		const usedList = this.data.currentArgument.pitfallsUsed;
-		const index = usedList.indexOf(name);
-		if (index > -1) usedList.splice(index, 1);
-		else usedList.push(name);
+		if (isUsed(usedList, name)) removeUsed(usedList, name);
+		else addUsed(usedList, name);
 		this.sync();
 		this.persist();
 	}
@@ -442,10 +447,7 @@ export class ArgumentView {
 	}
 
 	private resolveArgument(): void {
-		for (const motName of this.data.currentArgument.motivationsUsed) {
-			const mot = this.data.motivations.find((m) => m.name === motName);
-			if (mot) mot.hasBeenAppealedTo = true;
-		}
+		this.data.spendChosenMotivations(); // SC-640: every entry of a chosen name, not the first one found
 
 		const result = this.selectedId && this.byTier ? this.byTier[this.selectedId] : null;
 		if (result) {
