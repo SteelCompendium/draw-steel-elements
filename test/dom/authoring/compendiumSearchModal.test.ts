@@ -146,17 +146,10 @@ describe('CompendiumSearchModal (spec §4.2)', () => {
 		const onSyncRequested = jest.fn().mockRejectedValue(new Error('GitHub release lookup failed (HTTP 404)'));
 		const modal = new CompendiumSearchModal(app as any, index, jest.fn(), { onSyncRequested });
 		const [cta] = modal.getSuggestions('');
-		const rejections: unknown[] = [];
-		const onRejection = (reason: unknown) => rejections.push(reason);
-		process.on('unhandledRejection', onRejection);
-		try {
-			modal.onChooseSuggestion(cta, {} as MouseEvent);
-			for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
-		} finally {
-			process.off('unhandledRejection', onRejection);
-		}
+		// Jest fails a test on an unhandled promise rejection; a few real macrotasks let Node report one.
+		modal.onChooseSuggestion(cta, {} as MouseEvent);
+		for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(onSyncRequested).toHaveBeenCalledTimes(1);
-		expect(rejections).toEqual([]);
 	});
 
 	test('choosing a real entry calls onChoose with the entry and event', () => {

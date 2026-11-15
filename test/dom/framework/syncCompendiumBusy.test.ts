@@ -253,12 +253,14 @@ describe('SC-243 fix round 1 (review L1) — legacy-flow callbacks are lock-firs
 	});
 });
 
-// SC-646 — every place main.ts starts a sync without awaiting it leaves no unhandled promise
-// rejection when that sync fails. `CompendiumSyncService.sync` reports a failure itself (the
-// "compendium sync failed" Notice + console.error) and rethrows by design, so the callers'
-// catch is empty; a failure BEFORE `sync` (trashing the root, settling migration state) has
-// no other reporter and is logged once instead.
-describe('SC-646 — fire-and-forget sync starts leave no unhandled rejection', () => {
+// SC-646 — every place main.ts starts a sync or a migration without awaiting it leaves no
+// unhandled promise rejection when it fails, and no failure that used to be visible goes silent.
+// `CompendiumSyncService.sync` reports a failure itself (the "compendium sync failed" Notice +
+// console.error) and rethrows by design, so the callers' catch is empty. A failure BEFORE `sync`
+// (the `syncCompendium` prelude, trashing the root, settling migration state) has no other
+// reporter and is logged exactly once. Jest fails a test on an unhandled rejection, so each test
+// gives Node a few real macrotasks to report one (`settle`) and the test goes red if one slips out.
+describe('SC-646 — fire-and-forget sync and migration starts leave no unhandled rejection', () => {
 	let errorSpy: jest.SpyInstance;
 	beforeEach(() => {
 		Notice.notices.length = 0;
@@ -269,30 +271,59 @@ describe('SC-646 — fire-and-forget sync starts leave no unhandled rejection', 
 	});
 	afterEach(() => errorSpy.mockRestore());
 
-	/** Run `start`, give Node a few macrotasks to report anything nobody handled, and return what it reported. */
-	async function unhandledDuring(start: () => void): Promise<unknown[]> {
-		const rejections: unknown[] = [];
-		const onRejection = (reason: unknown) => rejections.push(reason);
-		process.on('unhandledRejection', onRejection);
-		try {
-			start();
-			await flushAsync(8);
-		} finally {
-			process.off('unhandledRejection', onRejection);
-		}
-		return rejections;
-	}
+	const settle = () => flushAsync(8);
 	const logged = (needle: string) => errorSpy.mock.calls.filter((c) => String(c[0]).includes(needle));
 	const failureNotices = () => Notice.notices.filter((n) => n.includes('compendium sync failed'));
+	const command = (plugin: DrawSteelAdmonitionPlugin, id: string) =>
+		(plugin as unknown as { commands: { id: string; callback: () => void }[] }).commands.find((c) => c.id === id)!;
+	/** A plan with nothing to move: `offerMigration` goes straight to `markSettled`. */
+	function stubEmptyPlan(plugin: DrawSteelAdmonitionPlugin): void {
+		const root = plugin.settings.compendiumDestinationDirectory;
+		jest.spyOn(plugin.migrationService, 'plan').mockResolvedValue({
+			root, detection: { root, filesInRoot: 1, legacyPaths: 0, newLayoutPaths: 0, isLegacyLayout: false },
+			renames: [], blocked: [], unmapped: [], backupCount: 0, backupFolder: `${root}/.backup`,
+		});
+	}
 
 	test('the "Sync compendium" command: a real failed sync shows the one Notice and logs the one console.error, and nothing is unhandled', async () => {
 		const plugin = await makeLoadedPlugin();
-		const { commands } = plugin as unknown as { commands: { id: string; callback: () => void }[] };
-		const command = commands.find((c) => c.id === 'sync-compendium')!;
-		const rejections = await unhandledDuring(() => command.callback());
-		expect(rejections).toEqual([]);
+		command(plugin, 'sync-compendium').callback();
+		await settle();
 		expect(failureNotices()).toHaveLength(1);
 		expect(logged('compendium sync failed')).toHaveLength(1);
+		expect(logged('could not start')).toHaveLength(0);
+		expect(plugin.syncService.isBusy()).toBe(false);
+	});
+
+	test.each([
+		['migrationService.reconcile', (p: DrawSteelAdmonitionPlugin) => jest.spyOn(p.migrationService, 'reconcile').mockRejectedValue(new Error('boom'))],
+		['manifestStore.load', (p: DrawSteelAdmonitionPlugin) => jest.spyOn(p.manifestStore, 'load').mockRejectedValue(new Error('boom'))],
+		['migrationService.isPending', (p: DrawSteelAdmonitionPlugin) => jest.spyOn(p.migrationService, 'isPending').mockRejectedValue(new Error('boom'))],
+	])('the "Sync compendium" command: %s throwing in the prelude is logged once (not silent), no failure Notice, nothing unhandled, lock released', async (_label, arrange) => {
+		const plugin = await makeLoadedPlugin();
+		arrange(plugin);
+		command(plugin, 'sync-compendium').callback();
+		await settle();
+		expect(logged('compendium sync could not start')).toHaveLength(1);
+		expect(errorSpy).toHaveBeenCalledTimes(1);
+		expect(failureNotices()).toHaveLength(0);
+		expect(plugin.syncService.isBusy()).toBe(false);
+	});
+
+	test('syncCompendium: markSettled throwing in the prelude (nothing left to migrate, or inside offerMigration) is logged once each, and the promise still rejects', async () => {
+		const plugin = await makeLoadedPlugin();
+		await seedLegacyModalTrigger(plugin);
+		jest.spyOn(plugin.migrationService, 'isPending').mockResolvedValue(true);
+		jest.spyOn(plugin.migrationService, 'markSettled').mockRejectedValue(new Error('settle boom'));
+		await expect(plugin.syncCompendium()).rejects.toThrow('settle boom'); // nothing to migrate: the prelude's own markSettled
+		expect(logged('compendium sync could not start')).toHaveLength(1);
+
+		errorSpy.mockClear();
+		jest.spyOn(plugin.migrationService, 'detect').mockReturnValue({
+			root: 'r', filesInRoot: 1, legacyPaths: 5, newLayoutPaths: 0, isLegacyLayout: true });
+		stubEmptyPlan(plugin);
+		await expect(plugin.syncCompendium()).rejects.toThrow('settle boom'); // offerMigration's markSettled
+		expect(logged('compendium sync could not start')).toHaveLength(1);
 		expect(plugin.syncService.isBusy()).toBe(false);
 	});
 
@@ -303,10 +334,9 @@ describe('SC-646 — fire-and-forget sync starts leave no unhandled rejection', 
 		const callbacks = (CompendiumMigrationModal as unknown as jest.Mock).mock.calls[0][2] as
 			{ syncAfter: (report: unknown) => void };
 		const syncSpy = jest.spyOn(plugin.syncService, 'sync').mockRejectedValue(new Error('boom'));
-		const rejections = await unhandledDuring(() => callbacks.syncAfter(
-			{ migrated: [], remaining: 0, aborted: false, reportNotePath: null }));
+		callbacks.syncAfter({ migrated: [], remaining: 0, aborted: false, reportNotePath: null });
+		await settle();
 		expect(syncSpy).toHaveBeenCalledTimes(1);
-		expect(rejections).toEqual([]);
 		expect(errorSpy).not.toHaveBeenCalled(); // no second log line from the caller
 	});
 
@@ -318,12 +348,14 @@ describe('SC-646 — fire-and-forget sync starts leave no unhandled rejection', 
 			{ syncAnyway: () => void };
 		jest.spyOn(plugin.migrationService, 'markSettled').mockResolvedValue(undefined);
 		const syncSpy = jest.spyOn(plugin.syncService, 'sync').mockRejectedValue(new Error('boom'));
-		expect(await unhandledDuring(() => callbacks.syncAnyway())).toEqual([]);
+		callbacks.syncAnyway();
+		await settle();
 		expect(syncSpy).toHaveBeenCalledTimes(1);
 		expect(errorSpy).not.toHaveBeenCalled();
 
 		jest.spyOn(plugin.migrationService, 'markSettled').mockRejectedValue(new Error('disk full'));
-		expect(await unhandledDuring(() => callbacks.syncAnyway())).toEqual([]);
+		callbacks.syncAnyway();
+		await settle();
 		expect(syncSpy).toHaveBeenCalledTimes(1); // never reached
 		expect(logged('compendium sync could not start')).toHaveLength(1);
 		expect(plugin.syncService.isBusy()).toBe(false);
@@ -336,15 +368,57 @@ describe('SC-646 — fire-and-forget sync starts leave no unhandled rejection', 
 		const onChoice = (LegacyCompendiumModal as unknown as jest.Mock).mock.calls[0][2] as
 			(trashOldRoot: boolean) => void;
 		const syncSpy = jest.spyOn(plugin.syncService, 'sync').mockRejectedValue(new Error('boom'));
-		expect(await unhandledDuring(() => onChoice(false))).toEqual([]);
+		onChoice(false);
+		await settle();
 		expect(syncSpy).toHaveBeenCalledTimes(1);
 		expect(errorSpy).not.toHaveBeenCalled();
 
 		const trashFile = (plugin.app.fileManager as unknown as { trashFile: jest.Mock }).trashFile;
 		trashFile.mockRejectedValue(new Error('cannot trash'));
-		expect(await unhandledDuring(() => onChoice(true))).toEqual([]);
+		onChoice(true);
+		await settle();
 		expect(syncSpy).toHaveBeenCalledTimes(1); // never reached
 		expect(logged('compendium sync could not start')).toHaveLength(1);
 		expect(plugin.syncService.isBusy()).toBe(false);
+	});
+
+	test('the migration window\'s "Not now" and Escape (declined / dismissed(null)): a markDeclined failure is logged once each, nothing unhandled', async () => {
+		const plugin = await makeLoadedPlugin();
+		stubMigrationPlan(plugin, plugin.settings.compendiumDestinationDirectory);
+		await plugin.migrateCompendium();
+		const callbacks = (CompendiumMigrationModal as unknown as jest.Mock).mock.calls[0][2] as
+			{ decline: () => void; dismissed: (report: unknown) => void };
+		jest.spyOn(plugin.migrationService, 'markDeclined').mockRejectedValue(new Error('save failed'));
+		callbacks.decline();
+		await settle();
+		expect(logged('could not record the declined compendium migration')).toHaveLength(1);
+		callbacks.dismissed(null);
+		await settle();
+		expect(logged('could not record the declined compendium migration')).toHaveLength(2);
+		expect(Notice.notices.some((n) => n.includes('compendium left as it is'))).toBe(false);
+	});
+
+	test('finishRemaining: a markSettled failure inside offerMigration is logged once, nothing unhandled', async () => {
+		const plugin = await makeLoadedPlugin();
+		stubMigrationPlan(plugin, plugin.settings.compendiumDestinationDirectory);
+		await plugin.migrateCompendium();
+		const callbacks = (CompendiumMigrationModal as unknown as jest.Mock).mock.calls[0][2] as
+			{ finishRemaining: () => void };
+		stubEmptyPlan(plugin);
+		jest.spyOn(plugin.migrationService, 'markSettled').mockRejectedValue(new Error('settle boom'));
+		callbacks.finishRemaining();
+		await settle();
+		expect(logged('the compendium migration could not continue')).toHaveLength(1);
+		expect(errorSpy).toHaveBeenCalledTimes(1);
+	});
+
+	test('the "Migrate compendium" command: a markSettled failure inside offerMigration is logged once, nothing unhandled', async () => {
+		const plugin = await makeLoadedPlugin();
+		stubEmptyPlan(plugin);
+		jest.spyOn(plugin.migrationService, 'markSettled').mockRejectedValue(new Error('settle boom'));
+		command(plugin, 'migrate-compendium-layout').callback();
+		await settle();
+		expect(logged('the compendium migration could not continue')).toHaveLength(1);
+		expect(errorSpy).toHaveBeenCalledTimes(1);
 	});
 });
