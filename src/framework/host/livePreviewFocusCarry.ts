@@ -41,6 +41,11 @@ import type { ClaimTicket, ViewRegistry, ViewRegistryEntry } from './viewRegistr
 /** Tickets that already armed a carry: one own write arms one carry (a later outside edit inside the window must not). */
 const used = new WeakSet<ClaimTicket>();
 
+/** SC-656: roots whose release armed a carry (the view's own save is being redrawn). A view unloading right after asks `ownSaveCarried`: someone else
+ *  hands focus on, so a window-less outside hand-off must not. `beforeRelease` runs BEFORE the view unloads (viewRegistry.release). */
+const carried = new WeakSet<HTMLElement>();
+export const ownSaveCarried = (root: HTMLElement): boolean => carried.has(root);
+
 /** The block key of the block `entry`'s last write landed in (its live key otherwise). Also SC-605's key (livePreviewStateCarry.ts). */
 export function writtenBlockKey(entry: ViewRegistryEntry): string {
 	const key = entry.host.blockKey();
@@ -64,6 +69,7 @@ export function carryOwnSaveFocus(entry: ViewRegistryEntry, now = Date.now()): b
 	if (!token) return false;
 	const key = writtenBlockKey(entry);
 	armSuccessorFocus(key, (r) => controlSuccessor(r, token, rules?.families, rules?.fallbacks), token.ring, active);
+	carried.add(root);
 	return true;
 }
 

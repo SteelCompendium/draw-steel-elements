@@ -93,6 +93,19 @@ export class ArgumentView {
 		this.sync();
 	}
 
+	/** SC-656: the chosen tier, or null. */
+	public chosenTier(): PowerRollTier | null {
+		return this.selectedId;
+	}
+
+	/** SC-656: choose a tier on a fresh card (the one a redraw carried over). A no-op where nothing is selectable (read-only host, ended negotiation). */
+	public chooseTier(tier: PowerRollTier): void {
+		if (!this.canPersist || this.ended) return;
+		this.selectedId = tier;
+		this.mountRoll();
+		this.syncFooter();
+	}
+
 	/** The negotiation ended / was re-opened (view.ts refreshStanding). Re-seats the roll
 	 *  (static while ended) and the Complete footer; a no-op while the state is unchanged. */
 	public setEnded(ended: boolean): void {

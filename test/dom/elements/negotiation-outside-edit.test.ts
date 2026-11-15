@@ -23,6 +23,15 @@ import { App, Component, Notice, Plugin, parseYaml, stringifyYaml } from '../../
 import { negotiationElement } from '../../../src/elements/negotiation/definition';
 import type { NegotiationView } from '../../../src/elements/negotiation/view';
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
+import { handOffAfterOutsideRedraw } from '../../../src/framework/chrome/windowHandoff';
+import { carryOwnSaveFocus } from '../../../src/framework/host/livePreviewFocusCarry';
+
+// The real hand-off, counted: a test that says "nothing is handed on" asserts no hand-off was STARTED (focus alone cannot tell, the SC-602 carry may land it).
+jest.mock('../../../src/framework/chrome/windowHandoff', () => {
+	const actual = jest.requireActual('../../../src/framework/chrome/windowHandoff');
+	return { ...actual, handOffAfterOutsideRedraw: jest.fn(actual.handOffAfterOutsideRedraw) };
+});
+const handOffs = (): number => (handOffAfterOutsideRedraw as jest.Mock).mock.calls.length;
 
 const OFFERS = { i5: 'five', i4: 'four', i3: 'three', i2: 'two', i1: 'one', i0: 'zero' };
 const MOT = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `Motive ${i + 1}`, reason: 'r' }));
@@ -44,8 +53,18 @@ interface Mounted {
 	writes: string[];
 }
 
+/** The vault `modify` listeners the views registered (the mock vault's `on` is a stub). A view of an unloaded card is still in the list: its root is out of
+ *  the document, so it records nothing (real Obsidian unregisters it). */
+let modifyListeners: Array<(file: { path: string }) => void> = [];
+/** The note changed (Sync, another pane): every view hears it BEFORE Obsidian redraws anything. */
+const modify = (): void => modifyListeners.forEach((l) => l({ path: 'Note.md' }));
+
 function makeDeps(): ElementPipelineDeps {
 	const app = new App();
+	(app.vault as unknown as { on: unknown }).on = (name: string, cb: (file: { path: string }) => void) => {
+		if (name === 'modify') modifyListeners.push(cb);
+		return {};
+	};
 	const plugin = new Plugin(app);
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
@@ -64,7 +83,8 @@ function newPane(): HTMLElement {
 	return pane;
 }
 
-async function mount(source: string, pane: HTMLElement = newPane(), plugin?: Plugin): Promise<Mounted> {
+/** `raw`: the host knows the note's own text of the block (`lastKnownBody`, as the Reading view and Live Preview hosts do), so a redrawn card's content is comparable. */
+async function mount(source: string, pane: HTMLElement = newPane(), plugin?: Plugin, raw = false): Promise<Mounted> {
 	const deps = makeDeps();
 	if (plugin) deps.plugin = plugin as any;
 	(deps.plugin as unknown as Plugin).load(); // the hand-off is owned by the plugin: a plugin that is not loaded starts none
@@ -77,7 +97,7 @@ async function mount(source: string, pane: HTMLElement = newPane(), plugin?: Plu
 		getBlockInfo: () => ({ language: 'ds-negotiation', lineStart: 0, lineEnd: 40 }),
 		replaceSource: jest.fn(async (body: string) => (writes.push(body), true)),
 		blockKey: () => 'Note.md::ds-negotiation::0',
-		lastKnownBody: null,
+		lastKnownBody: raw ? source : null,
 	} as unknown as BlockHost;
 	await new ElementPipeline(deps).run(negotiationElement, source, host);
 	return { view: views[0] as unknown as NegotiationView, root: containerEl.firstElementChild as HTMLElement, pane, plugin: deps.plugin as unknown as Plugin, writes };
@@ -97,17 +117,21 @@ const press = (el: HTMLElement): void => el.focus();
 /** Reading view's order: the new section is drawn first, then the old one is thrown away; its root is out of the document when the view unloads,
  *  and the focused control's focusout (if the engine sends one on removal) reaches the detached root. */
 async function redraw(old: Mounted, source: string): Promise<Mounted> {
+	modify(); // the note changed: Obsidian then draws the new section...
 	const fresh = await mount(source, old.pane, old.plugin);
 	const active = document.activeElement;
-	old.root.remove();
+	// ...and throws the old one away. Chromium sends the focusout of a removed focused node while the root still reports `isConnected`.
 	if (active && old.root.contains(active)) active.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
-	await Promise.resolve(); // (the engine's focusout is handled before the view unloads: a card that left the document did not lose focus to the user)
+	old.root.remove();
+	await Promise.resolve(); // (the focusout's microtask runs before the view unloads: a card that left the document did not lose focus to the user)
 	old.view.unload();
 	await later();
 	return fresh;
 }
 
 beforeEach(() => {
+	modifyListeners = [];
+	(handOffAfterOutsideRedraw as jest.Mock).mockClear();
 	jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
 	Notice.notices.length = 0;
 });
@@ -179,12 +203,14 @@ describe('SC-656: an outside edit redraws the negotiation card while a control o
 	test('[OE08] the number of negotiations in the pane changed (one was inserted above): the position no longer says which card is ours, focus is not moved', async () => {
 		const old = await mount(BASE);
 		press(ctl(old.root, 'negotiation.tab.learn-more'));
+		modify(); // the note changes, then Obsidian draws the sections
 		const inserted = await mount(src({ name: 'New one' }), old.pane, old.plugin); // the edit added a negotiation above ours
 		const fresh = await mount(EDITED, old.pane, old.plugin);
 		old.root.remove();
 		old.view.unload();
 		await later();
 		expect(document.activeElement).toBe(document.body);
+		expect(Notice.notices).toEqual([]); // no window closed: nothing to tell
 		expect(inserted.root.contains(document.activeElement)).toBe(false);
 		expect(fresh.root.contains(document.activeElement)).toBe(false);
 	});
@@ -192,6 +218,7 @@ describe('SC-656: an outside edit redraws the negotiation card while a control o
 	test('[OE09] the user moved focus elsewhere before the redraw arrived (Live Preview order): focus is not moved', async () => {
 		const old = await mount(BASE);
 		press(ctl(old.root, 'negotiation.tab.learn-more'));
+		modify();
 		old.root.remove();
 		old.view.unload();
 		await later(5);
@@ -243,33 +270,35 @@ describe('SC-656: an outside edit redraws the negotiation card while a control o
 		expect(document.activeElement).toBe(ctl(fresh.root, 'negotiation.menu'));
 	});
 
-	test('[OE14] the card\'s own write (a seal pressed, saved after the debounce) is not an outside edit: a redraw right after it hands nothing on; one after a quiet gap does', async () => {
+	test('[OE14] the card\'s own save redrawn in Live Preview (the SC-602 carry armed for it) hands nothing on; an outside edit 500 ms after an adopted own write (Reading view: no unload) does', async () => {
 		const own = await mount(BASE);
+		own.pane.classList.add('cm-content'); // Live Preview: the carry reads only roots drawn in a CodeMirror editor
 		const seal = ctl(own.root, 'negotiation.interest.seal', 1);
 		press(seal);
 		seal.click(); // a keyboard press: the seal is chosen and the write is scheduled
 		await later(PERSIST_DEBOUNCE_MS + 50);
 		expect(own.writes).toHaveLength(1);
-		const afterOwn = await redraw(own, own.writes[0]); // Live Preview rebuilds the widget for the card's own save
-		expect(document.activeElement).toBe(document.body);
-		expect(afterOwn.root.contains(document.activeElement)).toBe(false);
+		const entry = { root: own.root, view: own.view, host: { blockKey: () => 'Note.md::ds-negotiation::0', lastWriteLineStart: 0 }, tickets: [{ body: own.writes[0], at: Date.now() }] };
+		expect(carryOwnSaveFocus(entry as never)).toBe(true); // what the registry does as it releases the view
+		await redraw(own, own.writes[0]);
+		expect(handOffs()).toBe(0); // (focus itself is the carry's to land: only a hand-off that was never started cannot double it)
+		(document.activeElement as HTMLElement).blur();
 
-		const quiet = await mount(BASE);
-		press(ctl(quiet.root, 'negotiation.tab.learn-more'));
-		quiet.view['lastPersistAt'] = Date.now() - 2999; // the write 2999 ms ago is still its own redraw's
-		const fresh1 = await redraw(quiet, EDITED);
-		expect(document.activeElement).toBe(document.body);
-		const quiet2 = await mount(BASE);
-		press(ctl(quiet2.root, 'negotiation.tab.learn-more'));
-		quiet2.view['lastPersistAt'] = Date.now() - 3001; // 3001 ms ago: an outside edit
-		const fresh2 = await redraw(quiet2, EDITED);
-		expect(document.activeElement).toBe(ctl(fresh2.root, 'negotiation.tab.learn-more'));
-		expect(fresh1.root).not.toBe(fresh2.root);
+		const adopted = await mount(BASE); // Reading view: the write was adopted, the view lives on; 500 ms later Sync changes the note
+		const chip = ctl(adopted.root, 'negotiation.appeal.motivation', 1);
+		press(chip);
+		chip.click();
+		await later(PERSIST_DEBOUNCE_MS + 50);
+		await later(500 - 50);
+		const fresh = await redraw(adopted, EDITED);
+		expect(handOffs()).toBe(1);
+		expect(document.activeElement).toBe(ctl(fresh.root, 'negotiation.appeal.motivation', 1));
 	});
 
 	test('[OE15] a plugin that unloads while the redraw is pending cancels the hand-off', async () => {
 		const old = await mount(BASE);
 		press(ctl(old.root, 'negotiation.tab.learn-more'));
+		modify();
 		old.root.remove();
 		old.view.unload();
 		old.plugin.unload();
@@ -284,6 +313,7 @@ describe('SC-656: an outside edit redraws the negotiation card while a control o
 		press(ctl(old.root, 'negotiation.appeal.motivation', 1));
 		const first = await redraw(old, EDITED);
 		expect(document.activeElement).toBe(ctl(first.root, 'negotiation.appeal.motivation', 1));
+		modify(); // the second change of the burst: focus is on the first redraw's chip
 		first.root.remove();
 		first.view.unload();
 		await later(5);
@@ -305,5 +335,124 @@ describe('SC-656: an outside edit redraws the negotiation card while a control o
 		(document.activeElement as HTMLElement).blur();
 		await old.view.update(negotiationElement.parse(parseYaml(BASE), BASE) as never);
 		expect(document.activeElement).toBe(document.body);
+	});
+
+	test('[OE18] a card that scrolled out of the page (focus fell to <body>, the view lives on) keeps no claim: a later outside edit to it pulls nothing into the other card in the pane', async () => {
+		const top = await mount(BASE);
+		press(ctl(top.root, 'negotiation.appeal.motivation', 1));
+		top.root.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); // the section's DOM leaves the page, with focus in it
+		top.root.remove();
+		await Promise.resolve();
+		const bottom = await mount(src({ name: 'Bottom Frodo' }), top.pane, top.plugin); // the card the user is looking at, now the only one in the pane
+		await later(30);
+		modify(); // Sync edits the TOP block, which is off the page
+		top.view.unload();
+		await later(45);
+		expect(handOffs()).toBe(0);
+		expect(document.activeElement).toBe(document.body);
+		expect(bottom.root.contains(document.activeElement)).toBe(false);
+	});
+
+	test('[OE19] the outside edit disables the box that has focus ("Argument has already been made", a motivation is now appealed to): focus lands on the lie box, then never <body>', async () => {
+		const old = await mount(BASE);
+		press(ctl(old.root, 'negotiation.mod.same'));
+		const fresh = await redraw(old, src({ currentArgument: { motivationsUsed: ['Motive 1'] } }));
+		expect((ctl(fresh.root, 'negotiation.mod.same') as HTMLInputElement).disabled).toBe(true);
+		expect(document.activeElement).toBe(ctl(fresh.root, 'negotiation.mod.lie'));
+		const reuse = await mount(src({ currentArgument: { motivationsUsed: ['Motive 1'] }, motivations: [{ name: 'Motive 1', reason: 'r', hasBeenAppealedTo: true }] }));
+		press(ctl(reuse.root, 'negotiation.mod.reuse'));
+		const after = await redraw(reuse, src({ currentArgument: { motivationsUsed: ['Motive 1'] }, motivations: [{ name: 'Motive 1', reason: 'r' }] })); // un-spent: Reuse is greyed out
+		expect((ctl(after.root, 'negotiation.mod.reuse') as HTMLInputElement).disabled).toBe(true);
+		expect(document.activeElement).toBe(ctl(after.root, 'negotiation.mod.lie'));
+	});
+
+	test('[OE20] a block above is deleted and this one changed (the pane\'s count changed, nothing sits at the slot): no focus, and no window Notice either', async () => {
+		const above = await mount(src({ name: 'Above' }), undefined, undefined, true);
+		const old = await mount(BASE, above.pane, above.plugin, true);
+		press(ctl(old.root, 'negotiation.tab.learn-more'));
+		modify();
+		const fresh = await mount(EDITED, old.pane, old.plugin, true); // the redraw: the block above is gone, ours changed
+		above.root.remove();
+		above.view.unload();
+		old.root.remove();
+		old.view.unload();
+		await later(45);
+		expect(fresh.root).toBeTruthy();
+		expect(document.activeElement).toBe(document.body);
+		expect(Notice.notices).toEqual([]);
+	});
+
+	test('[OE21] the pinned sidebar refresh: Complete focused with a tier chosen, the outside edit changes the standing (the tier is dropped, Complete is disabled): focus lands on the first Motivation chip', async () => {
+		const old = await mount(BASE);
+		ctl(old.root, 'negotiation.tier.row', 3).click();
+		press(ctl(old.root, 'negotiation.complete'));
+		await old.view.update(negotiationElement.parse(parseYaml(EDITED), EDITED) as never);
+		expect((ctl(old.root, 'negotiation.complete') as HTMLButtonElement).disabled).toBe(true);
+		expect(document.activeElement).toBe(ctl(old.root, 'negotiation.appeal.motivation', 0));
+	});
+
+	// Q12: the chosen tier is view state; an outside edit that leaves the argument and the standing alone keeps it.
+	const RENAMED = src({ name: 'Sam' });
+	const chosenTier = (root: HTMLElement): string | null => root.querySelector('[data-dse-control="negotiation.tier.row"][aria-checked="true"]')?.getAttribute('data-tier') ?? null;
+	const tierCount = (root: HTMLElement): number => root.querySelectorAll('[data-dse-control="negotiation.tier.row"][aria-checked="true"]').length;
+
+	test('[OE22] Complete Argument focused with a tier chosen, an outside edit that changes neither the argument nor the standing: the tier is kept, Complete is enabled and holds focus', async () => {
+		const old = await mount(BASE);
+		ctl(old.root, 'negotiation.tier.row', 3).click();
+		press(ctl(old.root, 'negotiation.complete'));
+		const fresh = await redraw(old, RENAMED);
+		expect(tierCount(fresh.root)).toBe(1);
+		expect(chosenTier(fresh.root)).toBe(chosenTier(old.root));
+		expect((ctl(fresh.root, 'negotiation.complete') as HTMLButtonElement).disabled).toBe(false);
+		expect(document.activeElement).toBe(ctl(fresh.root, 'negotiation.complete'));
+	});
+
+	test('[OE23] the outside edit moved the standing (an argument completed elsewhere, the argument itself still empty): the tier is dropped, so Complete cannot spend Patience twice', async () => {
+		const old = await mount(BASE);
+		ctl(old.root, 'negotiation.tier.row', 3).click();
+		press(ctl(old.root, 'negotiation.complete'));
+		const fresh = await redraw(old, src({ current_patience: 2 })); // same currentArgument ({}), Patience one lower
+		expect(tierCount(fresh.root)).toBe(0);
+		expect((ctl(fresh.root, 'negotiation.complete') as HTMLButtonElement).disabled).toBe(true);
+		expect(document.activeElement).toBe(ctl(fresh.root, 'negotiation.appeal.motivation', 0));
+	});
+
+	test('[OE24] the outside edit toggled a chip (currentArgument changed) or spent a motivation: the tier is dropped', async () => {
+		const a = await mount(BASE);
+		ctl(a.root, 'negotiation.tier.row', 2).click();
+		press(ctl(a.root, 'negotiation.complete'));
+		const afterChip = await redraw(a, src({ currentArgument: { motivationsUsed: ['Motive 2'] } }));
+		expect(tierCount(afterChip.root)).toBe(0);
+		const b = await redraw(afterChip, BASE);
+		ctl(b.root, 'negotiation.tier.row', 2).click();
+		press(ctl(b.root, 'negotiation.complete'));
+		const afterSpent = await redraw(b, src({ motivations: [{ name: 'Motive 1', reason: 'r', hasBeenAppealedTo: true }, ...MOT(3).slice(1)] }));
+		expect(tierCount(afterSpent.root)).toBe(0);
+	});
+
+	test('[OE25] the pane\'s count changed: no card is claimed, so no tier is carried to a card that may not be ours', async () => {
+		const old = await mount(BASE);
+		ctl(old.root, 'negotiation.tier.row', 3).click();
+		press(ctl(old.root, 'negotiation.complete'));
+		modify();
+		const inserted = await mount(src({ name: 'New one' }), old.pane, old.plugin);
+		const fresh = await mount(RENAMED, old.pane, old.plugin);
+		old.root.remove();
+		old.view.unload();
+		await later(45);
+		expect(tierCount(inserted.root)).toBe(0);
+		expect(tierCount(fresh.root)).toBe(0);
+		expect(document.activeElement).toBe(document.body);
+	});
+
+	test('[OE26] the pinned sidebar refresh keeps the tier on a match and drops it on a changed standing', async () => {
+		const old = await mount(BASE);
+		ctl(old.root, 'negotiation.tier.row', 1).click();
+		press(ctl(old.root, 'negotiation.complete'));
+		await old.view.update(negotiationElement.parse(parseYaml(RENAMED), RENAMED) as never);
+		expect(tierCount(old.root)).toBe(1);
+		expect(document.activeElement).toBe(ctl(old.root, 'negotiation.complete'));
+		await old.view.update(negotiationElement.parse(parseYaml(EDITED), EDITED) as never);
+		expect(tierCount(old.root)).toBe(0);
 	});
 });

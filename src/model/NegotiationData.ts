@@ -369,6 +369,22 @@ export class NegotiationData {
     }
 
     /**
+     * SC-656 — a fingerprint of everything an argument's roll and its completion read or write: the standing as the seals draw it, the argument's own fields, which
+     * motivations are spent, and the motivation / pitfall names. Equal fingerprints = nobody changed the negotiation in a way that matters to a chosen tier (every
+     * tier moves Interest or Patience, so an argument completed elsewhere always changes it). A method: never an own key, never serialized.
+     */
+    argumentKey(): string {
+        const a = this.currentArgument;
+        return JSON.stringify([
+            NegotiationData.standingOf(this.current_interest),
+            NegotiationData.standingOf(this.current_patience),
+            [a.motivationsUsed, a.pitfallsUsed, a.lieUsed, a.sameArgumentUsed, a.reusedMotivation],
+            this.motivations.map(m => [m.name, !!m.hasBeenAppealedTo]),
+            this.pitfalls.map(p => p.name),
+        ]);
+    }
+
+    /**
      * SC-379 — the book's three stop conditions, derived from the live standing (a method:
      * prototype methods are never own keys, so nothing here can reach serialize()).
      * Precedence: Interest 5 is a deal, Interest 0 is hostile, otherwise spent Patience is a

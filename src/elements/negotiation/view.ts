@@ -32,11 +32,12 @@
 import { Component, Menu, Notice } from 'obsidian';
 import { ElementView } from '@/framework/view';
 import { cardHead, iconButton, stampControl, tabs } from '@/framework/kit';
-import type { RenderMdCallback } from '@/framework/kit';
+import type { PowerRollTier, RenderMdCallback } from '@/framework/kit';
 import { captureControlFocus, restoreControlFocus } from '@/framework/kit/controlFocus';
 import type { ControlFocus } from '@/framework/kit/controlFocus';
 import { isKeyboardClick } from '@/framework/chrome/focusHandoff';
-import { handOffAfterOutsideRedraw, normalizeBlockText, publishWindowRoot, rememberFocus } from '@/framework/chrome/windowHandoff';
+import { handOffAfterOutsideRedraw, normalizeBlockText, publishWindowRoot, rememberFocus, slotOf } from '@/framework/chrome/windowHandoff';
+import { ownSaveCarried } from '@/framework/host/livePreviewFocusCarry';
 import type { FocusMemory, WindowRootRecord } from '@/framework/chrome/windowHandoff';
 import type { RenderContext } from '@/framework/context';
 import { NEGOTIATION_FOCUS_FALLBACKS, RESET_LANDING } from './focusRules';
@@ -51,9 +52,12 @@ import { LearnMoreView } from '@drawSteelAdmonition/negotiation/LearnMoreView';
  *  port, now round-tripped by the kit tabs' SessionPersist accessor. */
 const TAB_SLOT = 'tab';
 
-/** SC-656: a redraw this long after the view's own write is that write's (Live Preview rebuilds the widget on every save; the SC-602 carry
- *  hands focus on there). Same length as the claim window of the registry's write tickets. */
-const OWN_WRITE_WINDOW_MS = 3000;
+/** SC-656: the chosen tier, and the card's fingerprint (`NegotiationData.argumentKey`) when it was chosen: handed to the redrawn card, which keeps the tier
+ *  only while its own fingerprint is the same (nobody completed or changed the argument meanwhile). */
+interface TierCarry {
+	tier: PowerRollTier;
+	key: string;
+}
 
 export class NegotiationView extends ElementView<NegotiationData> {
 	/** SC-656 — this view's mark on its root, for the hand-off after an outside redraw (framework/chrome/windowHandoff.ts). */
@@ -61,36 +65,73 @@ export class NegotiationView extends ElementView<NegotiationData> {
 		sourcePath: () => this.cx.host.sourcePath,
 		content: () => normalizeBlockText((this.cx.host as { lastKnownBody?: string | null }).lastKnownBody) ?? '', // (silent hand-off: never compared)
 		live: () => !this.unloading,
+		receive: (carry) => this.receiveTier(carry as TierCarry),
 	};
 	private unloading = false;
 	/** SC-656 — what held focus inside the card, and where the card sat; null when focus is not inside it. Read at unload. */
 	private focusMemory: (() => FocusMemory | null) | null = null;
-	private lastPersistAt = -Infinity;
+	/** SC-656 — what held focus INSIDE the card at the moment the note changed (the vault's `modify`), with the slot then. Reading view unloads the old
+	 *  view with its root already out of the document, so this is all it has; a card that scrolled out of the page keeps no claim on a later change. */
+	private atChange: FocusMemory | null = null;
+	private argument: ArgumentView | null = null;
 
 	constructor(cx: RenderContext) {
 		super(cx);
-		// SC-656: the view unloads (an outside edit redrew the block, the note was closed, ...). In Reading view the old root is already out of
-		// the document by now, so focus is read from the memory kept while it was inside. The redraw of this view's own write is not an outside
-		// one: nothing is handed on then (the SC-602 carry does it in Live Preview, adoption in Reading view).
+		// SC-656: "only when focus was inside that card at the moment of the outside change" (the ruling): taken at the note's modify (the same hook the
+		// SC-470 scroll pin uses), which also refreshes the slot. No timer: Reading view unloads the old view only after the new section is drawn (700 ms measured
+		// on a slow redraw).
+		this.registerEvent(
+			this.cx.app.vault.on('modify', (file) => {
+				if (file.path === this.cx.host.sourcePath) this.atChange = this.focusNow();
+			}),
+		);
+		// SC-656: the view unloads (an outside edit redrew the block, the note was closed, ...). Live Preview unloads before CodeMirror's DOM update, so the root
+		// is still in the document with focus on it: the focus memory (kept while it was inside) has the token and the slot. Reading view has drawn the new
+		// section and removed the old root by now: only what the change itself saw counts. The redraw of this view's own save is not an outside one: nothing is
+		// handed on when the SC-602 carry armed for this release (Reading view adopts its own write and never unloads here).
 		this.register(() => {
+			const root = this.rootEl;
+			const liveInside = !!root && root.isConnected && root.contains(root.ownerDocument.activeElement);
 			this.unloading = true;
-			const memory = this.focusMemory?.() ?? null;
-			if (!memory || Date.now() - this.lastPersistAt < OWN_WRITE_WINDOW_MS) return;
-			handOffAfterOutsideRedraw({ memory, own: this.windowRecord, oldRoot: this.rootEl, fallbacks: NEGOTIATION_FOCUS_FALLBACKS, owner: this.cx.plugin });
+			const memory = liveInside ? (this.focusMemory?.() ?? null) : this.atChange;
+			this.atChange = null;
+			if (!memory || !root || ownSaveCarried(root)) return;
+			const tier = this.argument?.chosenTier();
+			handOffAfterOutsideRedraw({
+				memory,
+				own: this.windowRecord,
+				oldRoot: root,
+				fallbacks: NEGOTIATION_FOCUS_FALLBACKS,
+				carry: tier ? ({ tier, key: this.model.argumentKey() } satisfies TierCarry) : undefined,
+				owner: this.cx.plugin,
+			});
 		});
 	}
 
-	protected persist(): Promise<boolean> {
-		this.lastPersistAt = Date.now();
-		return super.persist();
+	private focusNow(): FocusMemory | null {
+		const root = this.rootEl;
+		if (!root || !root.isConnected) return null;
+		const focus = captureControlFocus(root);
+		const slot = focus ? slotOf(root, 'negotiation') : null;
+		return focus && slot ? { focus, slot } : null;
+	}
+
+	/** SC-656 — the redrawn card takes the tier the old one had chosen, only when this card's fingerprint is the old one's. */
+	private receiveTier(carry: TierCarry): void {
+		if (carry.key === this.model.argumentKey()) this.argument?.chooseTier(carry.tier);
 	}
 
 	/** SC-656 — the pinned sidebar refreshes a card for an outside edit in place: it hands THIS view a model other than the one on screen (the view's
 	 *  own rebuilds, Reset, pass its own), and the default `update()` empties the card, so focus fell to <body>. Hand it to the same control of the rebuilt
 	 *  card, only when it was inside (kit/controlFocus.ts, the card's focus rules). */
 	async update(model: NegotiationData): Promise<void> {
-		const focus = model !== this.model ? captureControlFocus(this.rootEl) : null;
+		const outside = model !== this.model;
+		const focus = outside ? captureControlFocus(this.rootEl) : null;
+		const tier = outside ? this.argument?.chosenTier() : null;
+		const key = outside ? this.model.argumentKey() : '';
+		this.atChange = null; // this refresh IS the change: nothing for a later unload to act on
 		await super.update(model);
+		if (tier && key === model.argumentKey()) this.argument?.chooseTier(tier); // before focus: Complete is usable again
 		restoreControlFocus(this.rootEl, focus, {}, NEGOTIATION_FOCUS_FALLBACKS);
 	}
 
@@ -157,6 +198,7 @@ export class NegotiationView extends ElementView<NegotiationData> {
 			renderMd,
 			canPersist,
 		);
+		this.argument = argument;
 		const tabArgument = argument;
 		cards = new MotivationsPitfallsView(model, persist, () => tabArgument.sync(), cycleOwner, canPersist);
 		cards.build(container);

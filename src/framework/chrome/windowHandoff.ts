@@ -36,6 +36,9 @@ export interface WindowRootRecord {
 	content: () => string;
 	/** False once the view is unloading: its root may still sit in the document for a moment but is not a successor and not a sibling. */
 	live: () => boolean;
+	/** SC-656: state the closing view handed on (`OutsideCloseHandoff.carry`), given to the claimed successor before focus follows. The view
+	 *  decides whether it still applies (the negotiation's chosen tier, kept only while its fingerprint of the card matches). */
+	receive?: (carry: unknown) => void;
 }
 
 /** Block text compared across CRLF and trailing whitespace (the host's own rule, `normalizeBody`); null when the host knows none.
@@ -111,6 +114,8 @@ export interface OutsideCloseHandoff {
 	/** SC-650: the element's nearest-equivalent rules (`controlSuccessor`), for an opener the redrawn element no longer has or has disabled. */
 	fallbacks?: ControlFallbacks;
 	notice: string;
+	/** SC-656: handed to the successor's `receive` once it is claimed, when the pane's root count is still what it was (the position says which card is ours). */
+	carry?: unknown;
 	/** SC-656: no Notice at all (a window-less redraw: nothing was lost, no window closed). Focus is unchanged. */
 	silent?: boolean;
 	/** A long-lived Component (the plugin): unloading it cancels the watch. A hand-off for an owner that is not loaded is not started. */
@@ -183,6 +188,7 @@ export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 			if (o.slot.count !== rootsIn(o.slot.scope, o.slot.elementId).length) wantFocus = false; // a tracker came or went: not ours to pick
 		}
 		claimed = root;
+		if (o.carry !== undefined && o.slot.count === rootsIn(o.slot.scope, o.slot.elementId).length) mounted.get(root)?.receive?.(o.carry);
 		focusSuccessor(root); // (a later redraw of a burst: only while focus is free, i.e. on <body>)
 		win.clearTimeout(timer);
 		timer = win.setTimeout(finish, HANDOFF_SETTLE_MS);
@@ -265,6 +271,8 @@ export function handOffAfterOutsideRedraw(o: {
 	oldRoot: HTMLElement;
 	families?: ControlFamilies;
 	fallbacks?: ControlFallbacks;
+	/** Handed to the successor's `WindowRootRecord.receive` (see `OutsideCloseHandoff.carry`). */
+	carry?: unknown;
 	owner: Component;
 }): () => void {
 	return handOffAfterOutsideClose({
@@ -277,6 +285,7 @@ export function handOffAfterOutsideRedraw(o: {
 		fallbacks: o.fallbacks,
 		notice: '',
 		silent: true,
+		carry: o.carry,
 		owner: o.owner,
 	});
 }
