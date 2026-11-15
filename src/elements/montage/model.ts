@@ -604,7 +604,7 @@ function matchKey(v: unknown): string | undefined {
  * The skill-reuse rule (Draw Steel Heroes:21286 — "An individual character can't use
  * the same skill more than once in a montage test"), computed LIVE for the sheet's own
  * warning. Returns the board's spelling of the stored skill the typed one would reuse, or
- * `undefined` when it is free. Matching is trimmed and case-insensitive (SC-631: `" nature "`
+ * `undefined` when it is free (surrounding spaces trimmed off the name). Matching is trimmed and case-insensitive (SC-631: `" nature "`
  * after "Nature" is a reuse); odd `skills_used` items (numbers, `null`, blanks) are skipped.
  * `excluding` is the entry currently being edited (if any) — its OWN contribution is
  * subtracted first (compared the same way), so correcting an entry back onto its own unchanged
@@ -622,12 +622,16 @@ export function reusedSkillSpelling(
 	const p = findParticipant(m, hero);
 	if (!p) return undefined;
 	const used = skillsOf(p).slice();
-	const own = excluding && excluding.hero === hero ? matchKey(excluding.skill) : undefined;
-	if (own !== undefined) {
-		const idx = used.findIndex((u) => matchKey(u) === own);
+	const ownSkill = excluding && excluding.hero === hero ? excluding.skill : undefined;
+	const own = matchKey(ownSkill);
+	if (ownSkill !== undefined && own !== undefined) {
+		// The real write removes the exact item, so try it first; the fallback covers a stored
+		// spelling that differs from the entry's own (padding, casing).
+		let idx = used.indexOf(ownSkill);
+		if (idx === -1) idx = used.findIndex((u) => matchKey(u) === own);
 		if (idx !== -1) used.splice(idx, 1);
 	}
-	return used.find((u) => matchKey(u) === key);
+	return used.find((u) => matchKey(u) === key)?.trim();
 }
 
 /** Boolean form of `reusedSkillSpelling`. */
