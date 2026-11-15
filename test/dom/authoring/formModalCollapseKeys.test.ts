@@ -20,7 +20,7 @@ import { FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main';
 import { makeCompendiumDeps } from '../elements/_refHarness';
 import { openFormEditor } from '@/authoring/FormModal';
 import { createValidationService } from '@/framework/validation';
-import { App, Component, Plugin, Setting, makeFakeContext } from '../../mocks/obsidian';
+import { App, Component, Plugin, Setting, makeFakeContext, parseYaml } from '../../mocks/obsidian';
 
 const PATH = 'Note.md';
 
@@ -390,5 +390,83 @@ describe('SC-494: the form pops the keys the way the pipeline does (stub element
 		await modal.save();
 		expect(writes).toEqual(['collapsed: true']);
 		modal.close();
+	});
+});
+
+// SC-652: Save keeps what the plugin cannot read, the same as a write from the block itself. A `prefs:` map of keys the
+// plugin does not use, a `prefs:` that is not a map, and a `collapsed:` that is not true / false used to be deleted by Save
+// (the form held the applied overrides and the boolean collapse keys only). Real Edit button, real Save, real re-render.
+describe('SC-652: Save keeps a `prefs:` value and a collapse key it cannot read', () => {
+	const MIXED = 'prefs:\n  boardDensity: compact\n  reduceMotion: true\n  collapseDefault: true\n  sbCharLine: one\n  printPreview: "on"\n  portraits: off';
+	const KEPT = [
+		['an unknown-only prefs map', 'prefs:\n  boardDensity: compact'],
+		['a prefs map with every kind of key, in the author\'s order', MIXED],
+		['a scalar prefs value', 'prefs: compact'],
+		['a list prefs value', 'prefs: [a, b]'],
+		['a prefs with no value', 'prefs:'],
+		['collapsed: yes', 'collapsed: yes'],
+		['collapsed: 1', 'collapsed: 1'],
+		['collapsed: "true"', 'collapsed: "true"'],
+		['all of them together, in the pipeline\'s order', 'prefs:\n  boardDensity: compact\ncollapsed: yes'],
+	];
+	const ELEMENTS: Array<[string, ElementDefinition<any>, string, string]> = [
+		['ds-stamina-bar (serialize, model owns the legacy pair)', staminaBarElement, ALIAS, STAMINA],
+		['ds-skills (no serialize: the stringify path)', skillsElement, 'ds-skills', 'skills:\n  - Heal\n  - Sneak'],
+	];
+	const reserved = (text: string): string[] => Object.keys(parseYaml(text) as object);
+	let warn: jest.SpyInstance;
+	beforeEach(() => {
+		warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+	afterEach(() => warn.mockRestore());
+
+	describe.each(ELEMENTS)('%s', (_name, def, alias, body) => {
+		test.each(KEPT)('%s: kept by value on a no-edit Save, once, and the saved block renders without an error card', async (_label, text) => {
+			const source = `${text}\n${body}`;
+			const { render, note } = await setup(def, alias, source);
+			const form = openForm((await render(source)).el);
+			await submit(form);
+			const written = fenceBody(note(), alias);
+			const wanted = parseYaml(text) as Record<string, unknown>;
+			const got = parseYaml(written) as Record<string, unknown>;
+			for (const key of reserved(text)) {
+				expect(got[key]).toEqual(wanted[key]);
+				expect(lines(written, key)).toHaveLength(1);
+			}
+			if (text.startsWith('prefs:\n')) expect(Object.keys(got.prefs as object)).toEqual(Object.keys(wanted.prefs as object));
+			expect((await render(written)).el.querySelector('.dse-error-card')).toBeNull();
+		});
+
+		test('Save after an edit keeps them, and a hand edit of the kept line before the form opens is what is kept', async () => {
+			const first = `prefs:\n  boardDensity: compact\ncollapsed: yes\n${body}`;
+			const { render, note, h } = await setup(def, alias, first);
+			h.app.vault.setFile(PATH, noteWith(alias, first.replace('compact', 'spacious').replace('yes', 'no')));
+			const edited = fenceBody(note(), alias);
+			const form = openForm((await render(edited)).el);
+			if (alias === ALIAS) form.field('Max stamina').texts[0].trigger('25');
+			else form.field('Only show selected').toggles[0].trigger(true);
+			await submit(form);
+			const written = fenceBody(note(), alias);
+			expect(parseYaml(written).prefs).toEqual({ boardDensity: 'spacious' });
+			expect(parseYaml(written).collapsed).toBe('no');
+			expect(lines(written, 'prefs')).toHaveLength(1);
+			expect(lines(written, 'collapsed')).toHaveLength(1);
+			expect(written).not.toBe(edited);
+		});
+	});
+
+	test('a block without a prefs: or collapse key still saves byte-untouched (no wrapper)', async () => {
+		const { render, note } = await setup(staminaBarElement, ALIAS, STAMINA);
+		await submit(openForm((await render(STAMINA)).el));
+		expect(fenceBody(note(), ALIAS)).toBe(STAMINA);
+	});
+
+	test('the form still says nothing new: the kept keys are not form fields, and an unreadable collapse key warns as at render', async () => {
+		const source = `prefs:\n  boardDensity: compact\ncollapsed: yes\n${STAMINA}`;
+		const { render } = await setup(staminaBarElement, ALIAS, source);
+		const form = openForm((await render(source)).el);
+		expect(form.errors()).toBe('');
+		expect(() => form.field('Prefs')).toThrow();
+		expect(warn.mock.calls.some((c) => String(c[0]).includes('"collapsed:" key must be true or false'))).toBe(true);
 	});
 });
