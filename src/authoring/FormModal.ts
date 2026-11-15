@@ -549,10 +549,10 @@ class FormModal extends DseModal {
 		// SC-556: every form's Save writes strictly - its pin or nowhere (SC-552 did that for a form kept open past its view only).
 		// The form's own block may have been edited or deleted from outside while the form was open, and the fallback (the element's
 		// section, then a search by body) would then write the identical twin that is left: the user's edit lands in a block they
-		// never opened. A form without a pin (the sidebar's panel is its own block) writes as before.
+		// never opened. A form without a pin (the sidebar's panel is its own block) writes through `expectBody` instead (SC-662): the sidebar host refuses it when the block is not the body the form opened from.
 		const ok = await (this.pin
 			? this.cx.host.replaceSource(body, { pin: this.pin, pinOnly: true })
-			: this.cx.host.replaceSource(body));
+			: this.cx.host.replaceSource(body, { expectBody: this.source })); // SC-662: the sidebar host refuses a block edited since this form opened
 		if (key !== null) settleChromeFocus(key, null, ok);
 		if (ok) this.close();
 		// SC-455: a host that already said why it could not write (its own Notice) is not repeated here.

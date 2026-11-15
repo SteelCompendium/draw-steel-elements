@@ -462,7 +462,10 @@ export class HeroSheetView extends ElementView<HeroModel> {
 			void this.persist();
 		};
 		apply(next);
-		undoNotice(`Recoveries: ${before} → ${next}`, () => apply(before));
+		undoNotice(`Recoveries: ${before} → ${next}`, () => {
+			if (this.undoIsStale(model)) return; // an outside edit replaced the model since (SC-662)
+			apply(before);
+		});
 	}
 
 	/** RR §8: winded = at half Stamina max or below; dying = at 0 (implies winded too;
@@ -494,6 +497,7 @@ export class HeroSheetView extends ElementView<HeroModel> {
 		this.refreshStaminaRegion(model);
 		void this.persist();
 		undoNotice(`Caught breath: +${healed} Stamina, −1 Recovery`, () => {
+			if (this.undoIsStale(model)) return; // an outside edit replaced the model since (SC-662)
 			model.state.recoveries = remaining;
 			model.state.stamina.current = beforeStamina;
 			this.refreshStaminaRegion(model);

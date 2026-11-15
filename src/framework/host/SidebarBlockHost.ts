@@ -318,7 +318,7 @@ export class SidebarBlockHost implements BlockHost {
 		return this.reported;
 	}
 
-	async replaceSource(newSource: string, options?: { fromView?: boolean }): Promise<boolean> {
+	async replaceSource(newSource: string, options?: { fromView?: boolean; expectBody?: string }): Promise<boolean> {
 		this.reported = false;
 		if (!this.canPersist) return false;
 
@@ -337,6 +337,12 @@ export class SidebarBlockHost implements BlockHost {
 			// somebody edited it and this card has not been refreshed yet (or the refresh dropped this write on purpose): refused with the same
 			// Notice, never written over their edit.
 			if (options?.fromView === true && this.viewBody !== null && extractBody(content, info) !== this.viewBody) {
+				lost = true;
+				return content;
+			}
+			// SC-662: the block edit form's Save is strict the way Reading view's `pinOnly` is: it is a rewrite of the body the form opened
+			// from, so a block that was edited since is refused (the Notice, the form stays open), never overwritten.
+			if (options?.expectBody !== undefined && extractBody(content, info) !== options.expectBody) {
 				lost = true;
 				return content;
 			}

@@ -28,6 +28,9 @@ export interface ResourceModel {
 	min?: number;
 	/** Optional ceiling. Absent = unbounded (the stepper's plus button never disables). */
 	max?: number;
+	/** SC-662: the sidebar's `_dse_anchor` stamp, carried through a save (SidebarBlockHost's header): without it the pinned block's first own
+	 *  save dropped the line and the panel degraded to "Backing block not found". */
+	_dse_anchor?: unknown;
 }
 
 export function parse(input: unknown, _raw: string): ResourceModel {
@@ -43,6 +46,7 @@ export function parse(input: unknown, _raw: string): ResourceModel {
 	if (typeof data.type === 'string') model.type = data.type;
 	if (typeof data.min === 'number') model.min = data.min;
 	if (typeof data.max === 'number') model.max = data.max;
+	if (data._dse_anchor !== undefined) model._dse_anchor = data._dse_anchor; // SC-662
 	return model;
 }
 
@@ -57,5 +61,6 @@ export function serialize(model: ResourceModel): string {
 	dto.current = model.current;
 	if (model.min !== undefined) dto.min = model.min;
 	if (model.max !== undefined) dto.max = model.max;
+	if (model._dse_anchor !== undefined) dto._dse_anchor = model._dse_anchor; // SC-662: appended last
 	return stringifyYaml(dto).trim();
 }

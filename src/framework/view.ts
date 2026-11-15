@@ -21,6 +21,7 @@ import type { ChromeMenuItem, ElementSummary } from './chrome/types';
 import type { ControlFocus, ControlFocusRules } from './kit/controlFocus';
 import { closeManagedWindowsAt } from './kit/managedModal';
 import { finishOutsideRefresh } from './chrome/windowHandoff';
+import { notifyDroppedWrite } from './host/droppedWriteNotice';
 
 /** Write-behind debounce window for persist() (F1 §4.2, "~400ms trailing", OD-3 default). */
 export const PERSIST_DEBOUNCE_MS = 400;
@@ -358,6 +359,19 @@ export abstract class ElementView<M> extends Component {
 	closeWindowsForOutsideEdit(): { focus: ControlFocus | null } | null {
 		if (this.ownsOutsideWindows()) return null;
 		return closeManagedWindowsAt(this.cx.host.containerEl);
+	}
+
+	/**
+	 * SC-662: an undo toast (or any other late callback) that closes over the model it was made on, asked when it is pressed: true, with the
+	 * dropped-write Notice, when the pinned sidebar has replaced this view's model since (`refreshFromOutside`). Its Undo would mutate and
+	 * redraw a model nobody serializes (the card then shows numbers that are not in the note) and `persist()` would write nothing. A Reading-view
+	 * card in the same spot has its Undo refused by the host with this same Notice, so the two surfaces agree.
+	 */
+	protected undoIsStale(model: unknown): boolean {
+		if (model === this.model) return false;
+		const path = this.cx.host.sourcePath;
+		notifyDroppedWrite(path, (path.split('/').pop() ?? path).replace(/\.md$/i, ''), Date.now(), true);
+		return true;
 	}
 
 	/**

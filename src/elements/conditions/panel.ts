@@ -56,6 +56,7 @@ export class ConditionsPanel extends HeroPanel<Condition[]> {
 					label: 'Add condition',
 					text: '+ add condition',
 					variant: 'ghost',
+					control: 'cond.strip.add', // SC-662: the control focus returns to when an outside edit closes the window
 					onClick: () => this.openAddModal(),
 				},
 				this,

@@ -19,6 +19,9 @@ export type { Condition };
 
 export interface ConditionsModel {
 	conditions: Condition[];
+	/** SC-662: the sidebar's `_dse_anchor` stamp, carried through a save like every other persisted element's (SidebarBlockHost's header). Without
+	 *  it the pinned block's first own save dropped the line and the panel degraded to "Backing block not found". */
+	_dse_anchor?: unknown;
 }
 
 function normalizeEntry(entry: unknown, index: number): Condition {
@@ -59,7 +62,8 @@ export function parse(input: unknown, _raw: string): ConditionsModel {
 		throw new Error("Invalid data: 'conditions' field must be a list.");
 	}
 	const conditions = (data.conditions ?? []).map((entry, index) => normalizeEntry(entry, index));
-	return { conditions };
+	const anchor = (input as { _dse_anchor?: unknown })._dse_anchor;
+	return anchor === undefined ? { conditions } : { conditions, _dse_anchor: anchor };
 }
 
 /** Down-converts one normalized Condition to its authored form: key-only -> bare
@@ -73,5 +77,7 @@ function toDtoEntry(c: Condition): string | Condition {
 /** serialize(model): stringifyYaml({conditions: [...down-converted]}).trim() — the
  *  same `.trim()` convention every other persisted element's serialize uses. */
 export function serialize(model: ConditionsModel): string {
-	return stringifyYaml({ conditions: model.conditions.map(toDtoEntry) }).trim();
+	const out: Record<string, unknown> = { conditions: model.conditions.map(toDtoEntry) };
+	if (model._dse_anchor !== undefined) out._dse_anchor = model._dse_anchor; // SC-662: appended last, like the other elements
+	return stringifyYaml(out).trim();
 }

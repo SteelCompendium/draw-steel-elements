@@ -344,6 +344,11 @@ export class SidebarPanel extends Component {
 		// same sequence, and the outside edit stays); if the change was elsewhere in the note this point is not reached for the block.
 		if (view) await view.settlePendingWrite();
 
+		// The block can be deleted (handleAnchorLost runs outside the queue) or the panel torn down while the settle above was
+		// waiting: the view this change was prepared for is then gone, and adopting this body would make the block that comes back
+		// (an editor undo of the delete) look unchanged, leaving the panel on its degrade card.
+		if (view && (host.lastMountedChild !== view || this.panelEl?.hasAttribute('data-dse-sidebar-unavailable'))) return;
+
 		// Nothing awaits between here and the rebuild: the view is not given the chance to schedule another write against the old block.
 		if (view && model !== null) {
 			host.adoptViewBody(body);
@@ -381,7 +386,7 @@ export class SidebarPanel extends Component {
 	 *  the view showing (and waits for that one's write), so two quick edits can never be applied out of order. */
 	private externalChanges: Promise<void> = Promise.resolve();
 	private queueExternalChange(body: string): void {
-		this.externalChanges = this.externalChanges.then(() => this.handleExternalChange(body)).catch(() => undefined);
+		this.externalChanges = this.externalChanges.then(() => this.handleExternalChange(body)).catch((error: unknown) => console.error('Draw Steel Elements: sidebar refresh failed', error));
 	}
 
 	/**

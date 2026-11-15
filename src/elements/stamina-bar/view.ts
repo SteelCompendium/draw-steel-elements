@@ -229,6 +229,7 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 		this.updateBarDisplay(model);
 		void this.persist();
 		undoNotice(`Recoveries: ${before} → ${next}`, () => {
+			if (this.undoIsStale(model)) return; // an outside edit replaced the model since (SC-662)
 			model.recoveries = before;
 			this.updateBarDisplay(model);
 			void this.persist();
@@ -254,6 +255,7 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 		this.updateBarDisplay(model);
 		void this.persist();
 		undoNotice(`Caught breath: +${healed} Stamina, −1 Recovery`, () => {
+			if (this.undoIsStale(model)) return; // an outside edit replaced the model since (SC-662)
 			model.recoveries = remaining;
 			model.current_stamina = beforeStamina;
 			this.updateBarDisplay(model);

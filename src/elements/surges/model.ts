@@ -18,6 +18,9 @@ export interface SurgeModel {
 	 *  element has no characteristics of its own to compute from; a consumer (e.g. the
 	 *  ds-hero flagship) supplies it. */
 	highest_characteristic?: number;
+	/** SC-662: the sidebar's `_dse_anchor` stamp, carried through a save (SidebarBlockHost's header): without it the pinned block's first own
+	 *  save dropped the line and the panel degraded to "Backing block not found". */
+	_dse_anchor?: unknown;
 }
 
 export function parse(input: unknown, _raw: string): SurgeModel {
@@ -32,6 +35,7 @@ export function parse(input: unknown, _raw: string): SurgeModel {
 	if (typeof data.highest_characteristic === 'number') {
 		model.highest_characteristic = data.highest_characteristic;
 	}
+	if (data._dse_anchor !== undefined) model._dse_anchor = data._dse_anchor; // SC-662
 	return model;
 }
 
@@ -42,5 +46,6 @@ export function parse(input: unknown, _raw: string): SurgeModel {
 export function serialize(model: SurgeModel): string {
 	const dto: Record<string, unknown> = { surges: model.surges };
 	if (model.highest_characteristic !== undefined) dto.highest_characteristic = model.highest_characteristic;
+	if (model._dse_anchor !== undefined) dto._dse_anchor = model._dse_anchor; // SC-662: appended last
 	return stringifyYaml(dto).trim();
 }

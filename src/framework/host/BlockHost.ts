@@ -55,6 +55,9 @@ export interface BlockWriteOptions {
 	 *  SC-556: every block edit form's Save passes it (the form's own block was edited or deleted from outside while it was open);
 	 *  the view's own debounced write does not (it keeps the fallback, except SC-480: not into a block with an identical twin). */
 	pinOnly?: boolean;
+	/** SC-662: the sidebar's block edit form writes strictly: this is the block body the form opened from, and the write is refused (the
+	 *  "changed on disk first" Notice) when the note's block is something else by then. The Reading-view host ignores it (it has `pin`). */
+	expectBody?: string;
 }
 
 export interface BlockHost {

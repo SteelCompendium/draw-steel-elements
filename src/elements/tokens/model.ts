@@ -22,6 +22,9 @@ export interface TokenPoolModel {
 	 *  value. Floor 0 at the UI (view.ts's stepper `min: 0`) — tokens are spent, never
 	 *  negative. */
 	tokens: number;
+	/** SC-662: the sidebar's `_dse_anchor` stamp, carried through a save (SidebarBlockHost's header): without it the pinned block's first own
+	 *  save dropped the line and the panel degraded to "Backing block not found". */
+	_dse_anchor?: unknown;
 }
 
 export function parse(input: unknown, _raw: string): TokenPoolModel {
@@ -34,6 +37,7 @@ export function parse(input: unknown, _raw: string): TokenPoolModel {
 	}
 	const model: TokenPoolModel = { tokens: data.tokens };
 	if (typeof data.label === 'string') model.label = data.label;
+	if (data._dse_anchor !== undefined) model._dse_anchor = data._dse_anchor; // SC-662
 	return model;
 }
 
@@ -45,5 +49,6 @@ export function serialize(model: TokenPoolModel): string {
 	const dto: Record<string, unknown> = {};
 	if (model.label !== undefined) dto.label = model.label;
 	dto.tokens = model.tokens;
+	if (model._dse_anchor !== undefined) dto._dse_anchor = model._dse_anchor; // SC-662: appended last
 	return stringifyYaml(dto).trim();
 }
