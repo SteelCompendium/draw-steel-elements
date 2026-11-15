@@ -433,9 +433,14 @@ hand-wiring four call sites.
   `perBlock: false` keys (the conditional-DOM trio above). `applyPrefOverrides` pins the override AFTER
   `reflect()` runs, so it wins on any later global change (listener-order precedence, no
   F1 signature change). For `shape: "persisted"` elements, `withPrefOverrides` wraps
-  `def.serialize` to re-emit the `prefs:` map on every write-back — content-preserving but
-  re-stringified (key order/values intact, formatting may normalize); blocks with no
-  `prefs:` map are untouched.
+  `def.serialize` to re-emit the author's whole `prefs:` value on every write-back (SC-652:
+  applied overrides, the dropped classes above, SC-406 gated keys, even a value that is not a
+  map — anything the read removed comes back by value) — content-preserving but re-stringified
+  (key order/values intact, formatting may normalize); blocks with no `prefs:` key are
+  untouched. The same holds for a non-boolean `collapsed:` / `collapsible:` / `collapse_default:`
+  the framework claims: warned about and not applied on read, kept on write. A serializer that
+  splices raw source (`ds-hero`) already carries the line, so the wrapper skips a body that
+  declares it (no second `prefs:`).
 - **Deliberate deferrals** (cataloged, not built): `sbChars`/`sbVillain`/`sbStickyMeta`
   (need D2-level statblock DOM changes); `cardStyle` (needs a designed compact card
   treatment); D3-aware filtering of the theme option list. Rationale + open-decisions
