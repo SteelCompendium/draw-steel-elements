@@ -927,11 +927,11 @@ describe('SC-552: the form pins its block', () => {
 		modal.close();
 	});
 
-	test('a host with no pinPosition (the sidebar) is written as before: the body alone', async () => {
+	test('a host with no pinPosition (the sidebar) writes the body with the body the form opened from (SC-662 expectBody), no pin', async () => {
 		const { cx, replaceSource } = pinningCx();
 		const modal = openFormEditor(fakeOwner(), cx, schemaDef(), 'name: Goblin', createValidationService());
 		await modal.save();
-		expect(replaceSource.mock.calls[0]).toHaveLength(1);
+		expect(replaceSource.mock.calls[0][1]).toEqual({ expectBody: 'name: Goblin' });
 		modal.close();
 	});
 
