@@ -177,6 +177,11 @@ export class MontageView extends ElementView<MontageModel> {
 		});
 	}
 
+	/** SC-662: this view closes its own windows when the pinned sidebar replaces its model (`update()` below), so `ElementView.refreshFromOutside` leaves them alone. */
+	protected ownsOutsideWindows(): boolean {
+		return true;
+	}
+
 	/** SC-326 r2 — every write rebuilds the whole element (the framework default `update`:
 	 *  empty the root, run `onMount` again), which throws the board away; its replacement
 	 *  starts at scrollLeft 0, so a tap in a far round column snapped the board back to

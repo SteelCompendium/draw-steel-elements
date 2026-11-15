@@ -20,6 +20,8 @@ import type { IconButtonHandle, IconButtonOptions } from './iconButton';
 import { themeServiceForApp } from '../seams/theme';
 import { prefsForApp } from '../seams/prefs';
 import { consumeEscapeAt } from './escapeConsumer';
+import { captureControlFocus } from './controlFocus';
+import type { ControlFocus } from './controlFocus';
 import { guardHoverPreviewClicks } from './hoverPreviewGuard';
 
 let titleCounter = 0;
@@ -289,15 +291,44 @@ export class DseModal extends Modal {
 	}
 }
 
+/** SC-662: a window opened through `openManagedModal` with an anchor, while it is open: what the pinned sidebar needs to close it
+ *  (`closeManagedWindowsAt`) and to hand focus back to what opened it (`focus`, read before the window took focus). */
+interface OpenWindow {
+	modal: DseModal;
+	anchor: HTMLElement;
+	focus: ControlFocus | null;
+}
+const openWindows = new Set<OpenWindow>();
+
 /**
  * Opens the modal AND registers the F1 §4.5 view-unload-closes-modal contract:
  * `owner.register(() => modal.close())` — when the opening view unloads (file
  * closed, plugin unload, echo-rebuild teardown), the modal closes with it.
+ * SC-662: a modal given an anchor (every element's window is: the card's `host.containerEl`) is also listed while it is open, so the pinned
+ * sidebar can close it when the card's block changed outside (`closeManagedWindowsAt`).
  */
 export function openManagedModal<T extends DseModal>(owner: Component, factory: () => T, anchor?: HTMLElement | null): T {
 	const modal = factory();
 	if (anchor !== undefined) modal.anchorTo(anchor);
 	owner.register(() => modal.close());
+	const entry: OpenWindow | null = anchor ? { modal, anchor, focus: captureControlFocus(anchor) } : null;
 	modal.open();
+	if (entry) {
+		openWindows.add(entry);
+		modal.lifecycle.register(() => openWindows.delete(entry)); // runs when the window closes (DseModal.close unloads the lifecycle)
+	}
 	return modal;
+}
+
+/**
+ * SC-662: close every window opened (through `openManagedModal`) from the card whose host container is `anchor`, WITHOUT saving what it holds:
+ * the caller is replacing the model those windows were staged against. Returns where focus was when the oldest of them opened (null: not in the
+ * card, a mouse open), or null when none was open. The window's own close handlers still run (a view that writes on close must drop what
+ * that scheduled: `ElementView.discardPendingWrite`).
+ */
+export function closeManagedWindowsAt(anchor: HTMLElement): { focus: ControlFocus | null } | null {
+	const mine = [...openWindows].filter((w) => w.anchor === anchor);
+	if (mine.length === 0) return null;
+	for (const w of mine) w.modal.close();
+	return { focus: mine[0].focus };
 }

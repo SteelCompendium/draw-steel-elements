@@ -76,6 +76,13 @@ export class SidebarBlockHost implements BlockHost {
 	 *  that exact text (e.g. an editor undo) must NOT be treated as our own echo. */
 	private lastWritten: string | null = null;
 
+	/** SC-662: the block body the MOUNTED VIEW last loaded from the note or wrote to it (null: not known yet, or lost with the block). Set by
+	 *  `SidebarPanel` (`adoptViewBody`: at mount, and when it refreshes the view) and by this host's own view writes (`replaceSource`).
+	 *  Two uses: a refresh whose block is this body has nothing to refresh (the panel's skip), and a write the VIEW makes while the note's block is
+	 *  no longer this body (the card was not refreshed yet) is refused, as a Reading-view card refuses a write whose block changed on disk first
+	 *  (SC-343) - it would overwrite the outside edit with a model that never saw it. */
+	private viewBody: string | null = null;
+
 	/** The Component pipeline.run() last handed to addChild (== the mounted
 	 *  ElementView, since the pipeline calls addChild exactly once per render). Not part
 	 *  of the BlockHost interface — SidebarPanel reads it to unload the previous view
@@ -249,6 +256,18 @@ export class SidebarBlockHost implements BlockHost {
 		return this.mountedChild;
 	}
 
+	/** SC-662 -- see `viewBody`. */
+	get loadedBody(): string | null {
+		return this.viewBody;
+	}
+
+	/** SC-662 -- the mounted view now shows `body` (mount, or a refresh). Also forgets the own-write echo record: it describes a body the view no
+	 *  longer shows, and a later outside edit back to exactly that text must not be taken for an echo. */
+	adoptViewBody(body: string | null): void {
+		this.viewBody = body;
+		this.lastWritten = null;
+	}
+
 	/**
 	 * SC-288 — the forget half of `lastMountedChild`: `addChild` records whatever the
 	 * pipeline last mounted, but nothing ever cleared that record when SidebarPanel tore
@@ -314,6 +333,13 @@ export class SidebarBlockHost implements BlockHost {
 				lost = true; // block moved/vanished under us: abort, don't corrupt — and say so (SC-455)
 				return content;
 			}
+			// SC-662: the view's own write is a serialization of a model that began as `viewBody`. If the block in the note is something else now,
+			// somebody edited it and this card has not been refreshed yet (or the refresh dropped this write on purpose): refused with the same
+			// Notice, never written over their edit.
+			if (options?.fromView === true && this.viewBody !== null && extractBody(content, info) !== this.viewBody) {
+				lost = true;
+				return content;
+			}
 
 			// SC-453: the splice re-emits the block in the note's own line ending.
 			// SC-455: and with the block's own quote/callout prefix on every line it writes.
@@ -346,6 +372,7 @@ export class SidebarBlockHost implements BlockHost {
 			// host, but the mounted view does not hold that content: clear the record so the change
 			// reaches `SidebarPanel.handleExternalChange` and the panel redraws like for an external edit.
 			if (options?.fromView !== true) this.lastWritten = null;
+			else this.viewBody = this.lastWritten; // SC-662: what the view wrote is what it holds now
 			wrote = true;
 			finalContent = next;
 			return finalContent;
@@ -415,6 +442,7 @@ export class SidebarBlockHost implements BlockHost {
 		// reappears is an external event by definition — clearing this here is what makes
 		// the very next applyFreshContent("found") call treat it as one.
 		this.lastWritten = null;
+		this.viewBody = null; // SC-662: nothing on screen reflects the block any more either
 		this.onAnchorLost();
 	}
 

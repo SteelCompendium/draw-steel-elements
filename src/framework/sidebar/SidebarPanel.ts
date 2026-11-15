@@ -5,9 +5,10 @@
 // mount() drives the SAME ElementPipeline.run() the reading-mode markdown post-processor
 // calls (registerFrameworkElements.ts) — no forked render logic, per spec §1's "reuses F1
 // views unchanged (mode-agnostic)" guardrail.
-import { Component, TFile } from 'obsidian';
+import { Component, Notice, TFile } from 'obsidian';
 import type { App, Plugin } from 'obsidian';
 import { focusControl, isKeyboardClick } from '../chrome/focusHandoff';
+import { OUTSIDE_CLOSE_NOTICE } from '../chrome/windowHandoff';
 import { iconButton } from '../kit/iconButton';
 import type { ElementPipeline } from '../pipeline';
 import { prepareModel } from '../pipeline';
@@ -186,7 +187,7 @@ export class SidebarPanel extends Component {
 			this.state.body ?? null,
 			this.bodyEl,
 			this,
-			(body) => void this.handleExternalChange(body),
+			(body) => this.queueExternalChange(body),
 			() => this.handleAnchorLost(),
 			this.onRemoveRequested,
 		);
@@ -207,6 +208,7 @@ export class SidebarPanel extends Component {
 		// handleExternalChange's own remount branch below) is what lets a recovered panel
 		// stop being treated as unavailable.
 		this.panelEl.removeAttribute('data-dse-sidebar-unavailable');
+		host.adoptViewBody(body); // SC-662: what the view is about to load
 		await this.deps.pipeline.run(def, body, host);
 	}
 
@@ -291,64 +293,90 @@ export class SidebarPanel extends Component {
 		if (!this.host || !this.bodyEl) return;
 		const def = this.deps.registry.get(this.state.alias);
 		if (!def) return;
+		const host = this.host;
+
+		// SC-662 (b): the block is what the view last loaded or wrote (an edit elsewhere in the note, another card's write, the vault
+		// announcing the view's own write again): nothing to refresh. The card stays as it is: its windows stay open and write into the live
+		// model, a save waiting out its debounce is written on time. Decided HERE, one change at a time (`queueExternalChange`), against what
+		// the previous change left the view showing.
+		if (body === host.loadedBody) return;
 
 		const { refs, validation, prefs } = this.deps;
-		// SC-288 r2 (LOW-2) — also require the panel not be currently flagged unavailable.
-		// forgetMountedChild (handleAnchorLost / the remount branch below) closes the
-		// common stale-reference window, but a rarer race survives it: a recovery remount
-		// can still be awaiting inside this.deps.pipeline.run() (below) when a SECOND
-		// anchor-loss lands mid-flight. handleAnchorLost sees nothing addChild'd yet (this
-		// remount hasn't reached that step), degrades correctly, and empties bodyEl — but
-		// when the in-flight pipeline.run() THEN resumes and addChild's its view,
-		// host.lastMountedChild becomes a live, loaded ElementView whose rootEl was never
-		// attached (bodyEl was emptied out from under it), while the panel shows the
-		// degrade card. Without this gate, the fast path would happily .update() that
-		// detached view on the next valid change and the degrade card would never clear —
-		// the same stuck panel, reached a different way (SC-288 r1 review, LOW-2).
-		// Gating on the attribute (rather than a fuller per-call generation token) is
-		// enough: whenever the panel is flagged unavailable, this whole block is skipped
-		// and the remount branch below always runs, which removeChild's + forgets
-		// whatever lastMountedChild is — detached or not — before mounting fresh.
-		if (refs && validation && prefs && !this.panelEl?.hasAttribute('data-dse-sidebar-unavailable')) {
-			const previous = this.host.lastMountedChild;
-			if (previous instanceof ElementView) {
-				try {
-					const { model, prefOverrides, prefPassthrough, collapseKeys } = await prepareModel(def, body, {
-						prefs,
-						refs,
-						validation,
-						sourcePath: this.host.sourcePath,
-					});
-					// SC-652: the serializer the pipeline set at mount holds the reserved keys the block had THEN.
-					// An outside edit may have added, changed or removed `prefs:` / `collapsed:`, and the next
-					// write must keep what the note says now, so rebuild the wrapper from this read.
-					if (def.serialize) {
-						previous.setSerializer(
-							withReservedKeys(def.serialize, { collapsePopped: collapseKeys.popped, prefOverrides, prefPassthrough }),
-						);
-					}
-					await previous.update(model);
-					return;
-				} catch {
-					// Fall through to the full remount below.
+		const previous = host.lastMountedChild;
+		const view = previous instanceof ElementView ? previous : null;
+
+		// The block changed. SC-288 r2 (LOW-2) -- the fast path also requires the panel not be flagged unavailable. forgetMountedChild
+		// (handleAnchorLost / the remount branch below) closes the common stale-reference window, but a rarer race survives it: a recovery remount
+		// can still be awaiting inside this.deps.pipeline.run() when a SECOND anchor-loss lands mid-flight. handleAnchorLost sees nothing
+		// addChild'd yet, degrades correctly, and empties bodyEl -- but when the in-flight pipeline.run() THEN resumes and addChild's its view,
+		// host.lastMountedChild becomes a live, loaded ElementView whose rootEl was never attached, while the panel shows the degrade card.
+		// Without this gate the fast path would .update() that detached view on the next valid change and the degrade card would never clear.
+		let model: unknown = null;
+		let nextSerializer: (() => void) | null = null;
+		if (view && refs && validation && prefs && !this.panelEl?.hasAttribute('data-dse-sidebar-unavailable')) {
+			try {
+				// spec §1.6: prepareModel() (pipeline.ts) is the pipeline's exact parse -> pop `prefs:` -> validate -> resolveRefs slice, without
+				// create-view-and-mount; ElementView.update() is the in-place target. A throw (schema drift, a dangling ref, ...) falls through
+				// to the full remount below: the pipeline's own error card is the correct outcome, not something to swallow here.
+				const prepared = await prepareModel(def, body, { prefs, refs, validation, sourcePath: host.sourcePath });
+				model = prepared.model;
+				// SC-652: the serializer the pipeline set at mount holds the reserved keys the block had THEN. An outside edit may have
+				// added, changed or removed `prefs:` / `collapsed:`, and the next write must keep what the note says now, so the wrapper is
+				// rebuilt from this read. SC-662: but only once the view's own pending save has been written (below), which belongs to the
+				// block as it was and must serialize with the old wrapper.
+				if (def.serialize) {
+					const serialize = def.serialize;
+					const { prefOverrides, prefPassthrough, collapseKeys } = prepared;
+					nextSerializer = (): void => view.setSerializer(withReservedKeys(serialize, { collapsePopped: collapseKeys.popped, prefOverrides, prefPassthrough }));
 				}
+			} catch {
+				model = null;
 			}
 		}
 
-		const previous = this.host.lastMountedChild;
+		// SC-662 (a): the view's own save that is still waiting out its debounce is written NOW, against the block it was made from, before
+		// anything replaces its model. If the block changed on disk first the host refuses it (the Notice a Reading-view card shows for the
+		// same sequence, and the outside edit stays); if the change was elsewhere in the note this point is not reached for the block.
+		if (view) await view.settlePendingWrite();
+
+		// Nothing awaits between here and the rebuild: the view is not given the chance to schedule another write against the old block.
+		if (view && model !== null) {
+			host.adoptViewBody(body);
+			nextSerializer?.();
+			try {
+				await view.refreshFromOutside(model);
+				return;
+			} catch {
+				// Fall through to the full remount below.
+			}
+		}
+
+		// SC-662 (c), the remount branch: the windows over the old card close WITHOUT saving (their close handlers would otherwise persist their
+		// staged state into the replaced model), and what they scheduled is dropped before the view unloads (its mandatory flush).
+		const closed = view?.closeWindowsForOutsideEdit() ?? null;
+		if (closed) view?.discardPendingWrite();
+		host.adoptViewBody(body);
 		if (previous) this.removeChild(previous);
 		// SC-288 — forget it too, not just remove it: `lastMountedChild` is what the fast
 		// path above checks on the NEXT external change, and a stale reference there is
 		// exactly what let a degraded panel take that fast path against an already-removed
 		// view (see forgetMountedChild's own doc).
-		this.host.forgetMountedChild();
+		host.forgetMountedChild();
 		this.bodyEl.empty();
 		// SC-184 fix round (LOW-1) — this remount branch runs whether or not the panel was
 		// PREVIOUSLY showing a degrade card (e.g. handleAnchorLost fired earlier, then this
 		// external edit relocated the block); `bodyEl.empty()` above only clears the degrade
 		// card's DOM, never the attribute `renderUnavailable` stamped on the outer `panelEl`.
 		this.panelEl?.removeAttribute('data-dse-sidebar-unavailable');
-		await this.deps.pipeline.run(def, body, this.host);
+		await this.deps.pipeline.run(def, body, host);
+		if (closed) new Notice(OUTSIDE_CLOSE_NOTICE);
+	}
+
+	/** SC-662: outside changes are handled one at a time, in the order they arrived: each one is judged against what the one before it left
+	 *  the view showing (and waits for that one's write), so two quick edits can never be applied out of order. */
+	private externalChanges: Promise<void> = Promise.resolve();
+	private queueExternalChange(body: string): void {
+		this.externalChanges = this.externalChanges.then(() => this.handleExternalChange(body)).catch(() => undefined);
 	}
 
 	/**
@@ -369,6 +397,7 @@ export class SidebarPanel extends Component {
 		// external change's fast path (handleExternalChange, above) would call `.update()`
 		// on it instead of remounting through the pipeline (see forgetMountedChild's doc).
 		this.host.forgetMountedChild();
+		this.host.adoptViewBody(null); // SC-662: the degrade card shows no block, so any block that comes back is news (never skipped as "unchanged")
 		this.renderUnavailable('Backing block not found — re-link this panel from the note.');
 	}
 

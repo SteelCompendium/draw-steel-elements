@@ -25,8 +25,8 @@
 // The successor must exist: a note that navigated away, a block the edit deleted, a leaf that closed has none, the watch lapses at its
 // TTL, and nothing is shown or focused. The watch belongs to the plugin (`owner`): unloading it cancels the watch.
 import { focusControl, focusIsFree } from './focusHandoff';
-import { captureControlFocus, controlSuccessor } from '../kit/controlFocus';
-import type { ControlFallbacks, ControlFamilies, ControlFocus } from '../kit/controlFocus';
+import { captureControlFocus, controlSuccessor, restoreControlFocus } from '../kit/controlFocus';
+import type { ControlFallbacks, ControlFamilies, ControlFocus, ControlFocusRules } from '../kit/controlFocus';
 import { Component, Notice } from 'obsidian';
 
 /** What a mounted element publishes on its root so a closing predecessor can recognise it. Lazy: nothing is computed until asked. */
@@ -296,3 +296,14 @@ export function handOffAfterOutsideRedraw(o: {
 
 /** The one Notice text (the ledger's ruling). */
 export const OUTSIDE_CLOSE_NOTICE = 'The note changed outside, so this window closed without saving';
+
+/**
+ * SC-662 -- the pinned sidebar's half of the same rule. There the card is not redrawn by Obsidian: `SidebarPanel` refreshes the mounted view in
+ * place (`ElementView.refreshFromOutside`), so no successor root has to be found and no watch is needed. The view has closed its windows
+ * WITHOUT saving them (`closeManagedWindowsAt`) and rebuilt the card from the changed block; this hands focus to the rebuilt control that stands
+ * for the one that opened the window (`closed.focus`: null for a window opened with the mouse, where nothing is focused) and shows the one Notice.
+ */
+export function finishOutsideRefresh(root: HTMLElement, closed: { focus: ControlFocus | null }, rules: ControlFocusRules = {}): void {
+	restoreControlFocus(root, closed.focus, rules.families, rules.fallbacks);
+	new Notice(OUTSIDE_CLOSE_NOTICE);
+}

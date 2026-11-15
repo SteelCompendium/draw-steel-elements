@@ -18,7 +18,9 @@ import type { RenderContext } from './context';
 import { rewriteSccAnchors } from '@/refs/rewriteSccAnchors';
 import { wrapMarkdownTables } from './mdTableWrap';
 import type { ChromeMenuItem, ElementSummary } from './chrome/types';
-import type { ControlFocusRules } from './kit/controlFocus';
+import type { ControlFocus, ControlFocusRules } from './kit/controlFocus';
+import { closeManagedWindowsAt } from './kit/managedModal';
+import { finishOutsideRefresh } from './chrome/windowHandoff';
 
 /** Write-behind debounce window for persist() (F1 §4.2, "~400ms trailing", OD-3 default). */
 export const PERSIST_DEBOUNCE_MS = 400;
@@ -321,6 +323,54 @@ export abstract class ElementView<M> extends Component {
 	 */
 	flushPendingWrite(): void {
 		this.flushPersist();
+	}
+
+	/**
+	 * SC-662: drop an edit that is waiting out its debounce (no-op when nothing waits); every persist() coalesced into it resolves false.
+	 * For the pinned sidebar's refresh, which replaces the model: what a window's close handler just scheduled against the old model must
+	 * not be written over the outside edit.
+	 */
+	discardPendingWrite(): void {
+		if (!this.persistScheduled) return;
+		this.persistScheduled = false;
+		if (this.persistTimer !== undefined) {
+			this.win.clearTimeout(this.persistTimer);
+			this.persistTimer = undefined;
+		}
+		const waiters = this.persistWaiters;
+		this.persistWaiters = [];
+		for (const resolve of waiters) resolve(false);
+	}
+
+	/**
+	 * SC-662: true for a view that handles the windows it opened itself when the pinned sidebar replaces its model (the initiative tracker's
+	 * SC-608 rule and the montage's SC-650 rule live in their own `update()`, with their own opener records). Every other view takes the shared
+	 * rule in `refreshFromOutside`.
+	 */
+	protected ownsOutsideWindows(): boolean {
+		return false;
+	}
+
+	/**
+	 * SC-662: close every window over this card (`openManagedModal` with the card's host container) WITHOUT saving what it holds, because
+	 * the block it was staged against changed outside. Null when none was open (or this view handles its own, `ownsOutsideWindows`).
+	 */
+	closeWindowsForOutsideEdit(): { focus: ControlFocus | null } | null {
+		if (this.ownsOutsideWindows()) return null;
+		return closeManagedWindowsAt(this.cx.host.containerEl);
+	}
+
+	/**
+	 * SC-662: the pinned sidebar's in-place refresh with a block that CHANGED outside (`SidebarPanel`; an unchanged block never gets here).
+	 * Windows over the card close first without saving (their callbacks hold the model that is about to be replaced: an Apply from them could only
+	 * overwrite the outside change, or go to an object nobody serializes), whatever their close handler scheduled is dropped, the card is rebuilt
+	 * from the new model, and the user is told (the SC-608 Notice, focus to the control that opened the window: `finishOutsideRefresh`).
+	 */
+	async refreshFromOutside(model: M): Promise<void> {
+		const closed = this.closeWindowsForOutsideEdit();
+		if (closed) this.discardPendingWrite();
+		await this.update(model);
+		if (closed) finishOutsideRefresh(this.rootEl, closed, this.controlFocusRules?.());
 	}
 
 	/**

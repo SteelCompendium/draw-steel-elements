@@ -255,6 +255,11 @@ export class InitiativeView extends ElementView<EncounterData> {
 	/** SC-603 — set once the view is unloading; see the registration in the constructor. */
 	private unloading = false;
 
+	/** SC-662: this view closes its own windows when the pinned sidebar replaces its model (`update()` below), so `ElementView.refreshFromOutside` leaves them alone. */
+	protected ownsOutsideWindows(): boolean {
+		return true;
+	}
+
 	/** SC-576 — an `update()` with a model other than the one on screen comes from outside (the
 	 *  sidebar's refresh path re-prepares the block and calls `previous.update(model)` on this same
 	 *  view), so it is a freshly loaded model and ends any error card drawn after a failed re-parse.
