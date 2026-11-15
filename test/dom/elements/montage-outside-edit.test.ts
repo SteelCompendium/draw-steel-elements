@@ -298,6 +298,19 @@ describe('SC-650: an outside edit redraws the montage while a window is open (Re
 		expect(document.activeElement).toBe(ctl(fresh.root, 'montage.chrome.set-limits'));
 	});
 
+	test('[OW29] ...and an unload long after that write, with no window open, says and does nothing (the window of that write is not remembered)', async () => {
+		const old = await mount(BASE);
+		press(ctl(old.root, 'montage.bar.log'));
+		const submit = ctl(document.body, 'montage.log.submit');
+		submit.focus();
+		submit.click();
+		await later(PERSIST_DEBOUNCE_MS + 50);
+		const fresh = await redraw(old, EDITED); // an outside edit redraws the card; no window is open
+		expect(notices()).toHaveLength(0);
+		expect(document.activeElement).toBe(document.body);
+		expect(fresh.root.contains(document.activeElement)).toBe(false);
+	});
+
 	test('[OW10] opened with the mouse (focus was not inside the card): the Notice shows, nothing is focused', async () => {
 		const old = await mount(BASE);
 		ctl(old.root, 'montage.bar.log').click(); // nothing held focus
