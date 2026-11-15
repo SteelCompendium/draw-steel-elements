@@ -455,4 +455,56 @@ describe('SC-656: an outside edit redraws the negotiation card while a control o
 		await old.view.update(negotiationElement.parse(parseYaml(EDITED), EDITED) as never);
 		expect(tierCount(old.root)).toBe(0);
 	});
+
+	// MED-A: `atChange` describes ONE change and the redraw right behind it. A re-render with no modify before it (previewMode.rerender, a plugin reload) must not use a
+	// stale one: the card's own adopted write left it set, and the user then moved on.
+	const staleThen = async (leave: () => void | Promise<void>): Promise<{ old: Mounted; bottom: Mounted }> => {
+		const old = await mount(BASE);
+		press(ctl(old.root, 'negotiation.appeal.motivation', 1));
+		modify(); // the card's own write, adopted (or an edit elsewhere in the note): focus is inside, no redraw of this card follows
+		await leave();
+		old.root.remove(); // later, a re-render with no change to the note: the old root goes, a card sits at the slot
+		const bottom = await mount(src({ name: 'Bottom Frodo' }), old.pane, old.plugin);
+		old.view.unload();
+		await later(45);
+		return { old, bottom };
+	};
+
+	test('[OE27] the user blurred the card (focusout to the page) after the modify: a later re-render with no modify hands nothing on', async () => {
+		const { bottom } = await staleThen(async () => {
+			(document.activeElement as HTMLElement).blur();
+			await Promise.resolve();
+		});
+		expect(handOffs()).toBe(0);
+		expect(document.activeElement).toBe(document.body);
+		expect(bottom.root.contains(document.activeElement)).toBe(false);
+	});
+
+	test.each([
+		['pointerdown', () => void document.dispatchEvent(new Event('pointerdown', { bubbles: true }))],
+		['keydown', () => void document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))],
+		['wheel', () => void document.dispatchEvent(new Event('wheel', { bubbles: true }))],
+	])('[OE28] user input (%s) after the modify: a later re-render with no modify hands nothing on', async (_name, input) => {
+		await staleThen(input);
+		expect(handOffs()).toBe(0);
+		expect(document.activeElement).toBe(document.body);
+	});
+
+	test('[OE29] with nothing in between, the modify\'s memory is still used (the redraw right behind the change)', async () => {
+		await staleThen(() => undefined);
+		expect(handOffs()).toBe(1);
+	});
+
+	test('[OE30] the focused control is present but cannot take focus (an outside collapsed: true hides it): focus lands on the card root, never <body>', async () => {
+		const old = await mount(BASE);
+		press(ctl(old.root, 'negotiation.tab.learn-more'));
+		modify();
+		const fresh = await mount(src({ name: 'Collapsed' }), old.pane, old.plugin);
+		ctl(fresh.root, 'negotiation.tab.learn-more').focus = () => undefined; // hidden by the collapse: the engine refuses focus
+		old.root.remove();
+		old.view.unload();
+		await later(45);
+		expect(document.activeElement).toBe(fresh.root);
+		expect(fresh.root.getAttribute('tabindex')).toBe('-1');
+	});
 });

@@ -170,7 +170,11 @@ export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 		if (target === root && !root.hasAttribute('tabindex')) root.tabIndex = -1; // focusable by script, not a new Tab stop
 		focusing = true;
 		try {
-			focusControl(target, o.focus.ring);
+			// SC-656: a control that is present but cannot take focus (an outside `collapsed: true` hides it) falls to the card root, never <body>. Silent path only.
+			if (!focusControl(target, o.focus.ring) && o.silent && target !== root) {
+				if (!root.hasAttribute('tabindex')) root.tabIndex = -1;
+				focusControl(root, o.focus.ring);
+			}
 		} finally {
 			focusing = false;
 		}

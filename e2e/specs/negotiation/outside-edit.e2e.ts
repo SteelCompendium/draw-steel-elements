@@ -31,7 +31,8 @@ const waitRenamed = (pane: string) =>
 	dse.waitFor(`Array.from(document.querySelectorAll('${pane} [data-dse-element="negotiation"]')).some((r) => r.textContent?.includes('Convincing Sam'))`, 'the redrawn card to show the outside edit');
 /** How many tier rows are chosen in the pane's card. */
 const tierChosen = (pane: string) => dse.page<number>(`document.querySelectorAll('${pane} [data-dse-control="negotiation.tier.row"][aria-checked="true"]').length`);
-const noticeCount = () => dse.page<number>(`document.querySelectorAll('.notice').length`);
+/** The window Notice only (Obsidian's own, such as "Indexing complete.", come and go). The hand-off is silent, so this stays 0. */
+const noticeCount = () => dse.page<number>(`Array.from(document.querySelectorAll('.notice')).filter((n) => n.textContent === 'The note changed outside, so this window closed without saving').length`);
 
 describe('negotiation: an outside edit redraws the card while a control has keyboard focus', () => {
 	it('[NEGO-O01] Reading view, Tab to the Make an Argument tab (the one Tab stop of the tablist): after an outside edit the same tab of the redrawn card holds focus, with the ring and no Notice', async () => {
@@ -206,6 +207,56 @@ describe('negotiation: an outside edit while a control has focus, the cases arou
 	}
 	it('[NEGO-O13] Reading view, a long note: the focused top card scrolled away, an outside edit to it pulls no focus into the bottom card', () => topCardScrolledAway('reading'));
 	it('[NEGO-O14] Live Preview, a long note: the focused top card scrolled away, an outside edit to it pulls no focus into the bottom card', () => topCardScrolledAway('live-preview'));
+});
+
+describe('negotiation: a re-render with no change to the note, and a collapse made outside', () => {
+	const rerender = () => dse.page(`(() => { app.workspace.getMostRecentLeaf().view.previewMode.rerender(true); return true; })()`);
+	const active = () => dse.page<{ ctl: string | null; inCard: boolean; card: string | null }>(`(() => { const a = document.activeElement; const c = a?.closest?.('[data-dse-element="negotiation"]') ?? null; return { ctl: a?.closest?.('[data-dse-control]')?.getAttribute('data-dse-control') ?? null, inCard: !!c, card: c ? c.textContent : null }; })()`);
+
+	it('[NEGO-O17] Reading view, a chip pressed (the card\'s own write), the user clicks away to the page, then the note is re-rendered with no change: nothing is pulled back into the card', async () => {
+		await dse.openNote(BASIC);
+		const root = dse.block(NEGO, 0);
+		const chip = root.control('negotiation.appeal.motivation', { nth: 1 });
+		await dse.tabTo(chip, TABS);
+		await dse.waitForWrite(BASIC, () => dse.press('Enter', chip));
+		await browser.pause(500);
+		await dse.page(`document.activeElement.blur()`);
+		await rerender();
+		await browser.pause(1000);
+		expect(await active()).toMatchObject({ ctl: null, inCard: false });
+	});
+
+	it('[NEGO-O18] Reading view, a long note: the top card pressed, scrolled away, then the note is re-rendered with no change: no focus lands in the bottom card', async () => {
+		const LONG2 = 'Negotiation/long-rerender.md';
+		await dse.openNote(BASIC);
+		const block = (await dse.noteText(BASIC)).split('\n').slice(4, 23).join('\n');
+		const paras = Array.from({ length: 400 }, (_, i) => `Paragraph ${i} lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor.`).join('\n\n');
+		await dse.page(`(async () => { await app.vault.create(${JSON.stringify(LONG2)}, ${JSON.stringify('TOP\n\n' + block + '\n\n' + paras + '\n\n' + block.replace('Convincing Frodo', 'Bottom Frodo') + '\n\nEND\n')}); return true; })()`);
+		await dse.page(`(async () => { const leaf = app.workspace.getLeaf('tab'); await leaf.setViewState({ type: 'markdown', state: { file: ${JSON.stringify(LONG2)}, mode: 'preview' }, active: true }); app.workspace.setActiveLeaf(leaf, { focus: true }); window.__nego656leaf2 = leaf; return true; })()`);
+		await dse.waitFor(`!!window.__nego656leaf2.view.containerEl.querySelector('.markdown-reading-view [data-dse-control="negotiation.appeal.motivation"]')`, 'the top card');
+		await browser.pause(800);
+		await dse.page(`(() => { const r = window.__nego656leaf2.view.containerEl.querySelector('.markdown-reading-view [data-dse-element="negotiation"]'); r.querySelectorAll('[data-dse-control="negotiation.appeal.motivation"]')[1].focus({ focusVisible: true }); return true; })()`);
+		await dse.page(`(() => { const r = window.__nego656leaf2.view.containerEl.querySelector('.markdown-reading-view [data-dse-element="negotiation"]'); r.querySelectorAll('[data-dse-control="negotiation.appeal.motivation"]')[1].click(); return true; })()`); // the card's own write
+		await browser.pause(3500);
+		await dse.page(`(async () => { const sc = window.__nego656leaf2.view.containerEl.querySelector('.markdown-preview-view'); for (let i = 0; i < 40; i++) { sc.dispatchEvent(new WheelEvent('wheel', { deltaY: 2000, bubbles: true })); sc.scrollTop += 2000; await new Promise((r) => setTimeout(r, 50)); } await new Promise((r) => setTimeout(r, 800)); return true; })()`);
+		await dse.page(`(() => { window.__nego656leaf2.view.previewMode.rerender(true); return true; })()`);
+		await browser.pause(1500);
+		const f = await active();
+		await dse.page(`(() => { window.__nego656leaf2.detach(); return true; })()`);
+		expect(f).toMatchObject({ ctl: null, inCard: false });
+	});
+
+	it('[NEGO-O19] Reading view, Complete Argument focused with a tier chosen, the outside edit also collapses the card: the control is hidden, so focus lands on the card, not the page', async () => {
+		await dse.openNote(BASIC);
+		const root = dse.block(NEGO, 0);
+		await dse.click(root.control('negotiation.tier.row', { nth: 3 }));
+		await dse.tabTo(root.control('negotiation.complete'), TABS);
+		await dse.externalEdit(BASIC, `c.replace('i5:', 'collapsed: true\\ni5:')`);
+		await dse.waitFor(`!!document.querySelector('${PANES.reading} [data-dse-element="negotiation"][data-dse-collapsed]')`, 'the card to be collapsed');
+		await browser.pause(500);
+		const f = await dse.page<{ tag: string; isCard: boolean }>(`(() => { const a = document.activeElement; return { tag: a?.tagName ?? '', isCard: a?.getAttribute?.('data-dse-element') === 'negotiation' }; })()`);
+		expect(f).toEqual({ tag: 'DIV', isCard: true });
+	});
 });
 
 // The pinned sidebar does not redraw the card: its view is refreshed in place (SidebarPanel.handleExternalChange -> view.update(model)), which empties
