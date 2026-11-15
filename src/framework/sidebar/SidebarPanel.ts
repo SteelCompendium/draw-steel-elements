@@ -11,6 +11,7 @@ import { focusControl, isKeyboardClick } from '../chrome/focusHandoff';
 import { iconButton } from '../kit/iconButton';
 import type { ElementPipeline } from '../pipeline';
 import { prepareModel } from '../pipeline';
+import { withReservedKeys } from '../chrome/collapsedKey';
 import type { ElementRegistry } from '../registry';
 import type { ReferenceService } from '../seams/refs';
 import type { PreferenceStore } from '../seams/prefs';
@@ -312,12 +313,20 @@ export class SidebarPanel extends Component {
 			const previous = this.host.lastMountedChild;
 			if (previous instanceof ElementView) {
 				try {
-					const { model } = await prepareModel(def, body, {
+					const { model, prefOverrides, prefPassthrough, collapseKeys } = await prepareModel(def, body, {
 						prefs,
 						refs,
 						validation,
 						sourcePath: this.host.sourcePath,
 					});
+					// SC-652: the serializer the pipeline set at mount holds the reserved keys the block had THEN.
+					// An outside edit may have added, changed or removed `prefs:` / `collapsed:`, and the next
+					// write must keep what the note says now, so rebuild the wrapper from this read.
+					if (def.serialize) {
+						previous.setSerializer(
+							withReservedKeys(def.serialize, { collapsePopped: collapseKeys.popped, prefOverrides, prefPassthrough }),
+						);
+					}
 					await previous.update(model);
 					return;
 				} catch {

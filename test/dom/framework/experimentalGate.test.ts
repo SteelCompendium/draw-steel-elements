@@ -332,11 +332,10 @@ describe('SC-406 — gated per-block `prefs:` keys survive a block write', () =>
 		expect(body.startsWith(stringifyYaml({ prefs: { printPreview: 'on' } }))).toBe(true);
 	});
 
-	test('off: authoringControls is kept the same way; a typo key is still dropped (as before the gate)', async () => {
+	test('off: authoringControls is kept the same way, and so is a typo key (SC-652 reverses "still dropped")', async () => {
 		warn();
 		const body = await writeBody({}, 'prefs:\n  authoringControls: true\n  nonsenseKey: 1\n  reduceMotion: true\ncurrent_value: 3\n');
-		expect(body.startsWith(stringifyYaml({ prefs: { authoringControls: true, reduceMotion: true } }))).toBe(true);
-		expect(body).not.toContain('nonsenseKey');
+		expect(body.startsWith(stringifyYaml({ prefs: { authoringControls: true, nonsenseKey: 1, reduceMotion: true } }))).toBe(true);
 	});
 
 	test('off: two blocks with different gated prefs do not cross-talk', async () => {

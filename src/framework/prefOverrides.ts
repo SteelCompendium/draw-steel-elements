@@ -22,31 +22,35 @@
 // signature change.
 //
 // Round-trip (persisted elements): replaceSource rewrites the whole block body from
-// def.serialize(model), which would silently DROP the author's `prefs:` map on the
-// first interaction. withPrefOverrides re-emits it (re-stringified via the same
-// stringifyYaml the serializers use, so formatting may normalize — key order and
-// values are preserved; blocks WITHOUT a prefs: map are byte-untouched because the
-// wrapper is only installed when overrides exist).
+// def.serialize(model), which would silently DROP the author's `prefs:` line on the
+// first interaction. SC-652: anything the read removed from the block comes back on write, BY VALUE
+// -- the whole `prefs:` value as the author wrote it (applied overrides, unknown/typo keys, attr-less
+// and `perBlock: false` keys, SC-406 gated keys, even a value that is not a map at all), in the
+// author's key order. withPrefOverrides re-emits it (re-stringified via the same stringifyYaml the
+// serializers use, so formatting may normalize -- key order and values are preserved; blocks WITHOUT
+// a `prefs:` key are byte-untouched because the wrapper is only installed when the key was present).
+// Reading is unchanged: a kept-but-unusable key still warns and is still not applied.
 import { stringifyYaml } from 'obsidian';
 import type { Component } from 'obsidian';
 import type { DsePrefs, PreferenceStore } from './seams/prefs';
-import { EXPERIMENTAL_PREF_KEYS } from '@/prefs/catalog';
-import { isExperimental } from './experimental';
 
 /**
- * SC-406 — the gated keys of a block's `prefs:` map, held aside while the experimental switch
- * is off. A beta-era note may carry `printPreview` (or `authoringControls`) in a block's
- * `prefs:`; with the switch off those descriptors do not exist, so `extractPrefOverrides`
- * rejects them (warn, do not apply) — but a later write to the block must not DELETE them from
- * the user's note, and turning the switch back on must find them still there. `values` are the
- * kept entries; `order` is every key of the author's map (applied and kept) in their original
- * order, so the re-emit reads the way it was written. Only ever populated for
- * `EXPERIMENTAL_PREF_KEYS` while the switch is off: typo keys are still dropped on write (as
- * they always were) and, switch on, this stays empty — byte-identical to before SC-406.
+ * SC-652 (generalising SC-406's gated-key passthrough) -- the author's `prefs:` value, held aside so a
+ * later write can put it back exactly as it was read. `extractPrefOverrides` fills this in whenever the
+ * block HAS a `prefs:` key, whatever is under it: a map (every key, applied or not -- an unknown or
+ * typo key, an attr-less key, a `perBlock: false` key, a SC-406 gated key with the switch on or off), or
+ * a value that is not a map at all (`prefs: compact`, a list, nothing). `value` is the parsed value, by
+ * reference, in the author's key order. `present` is false for a block without the key, in which case
+ * no wrapper is installed and the block is byte-untouched.
  */
 export interface PrefPassthrough {
-	values: Record<string, unknown>;
-	order: string[];
+	present: boolean;
+	value: unknown;
+}
+
+/** A fresh, empty passthrough for `extractPrefOverrides` to fill in. */
+export function emptyPrefPassthrough(): PrefPassthrough {
+	return { present: false, value: undefined };
 }
 
 /**
@@ -57,7 +61,7 @@ export interface PrefPassthrough {
 export function extractPrefOverrides(
 	rawData: unknown,
 	prefs: PreferenceStore,
-	/** SC-406: when given, receives the gated keys that are rejected-but-kept (see PrefPassthrough). */
+	/** SC-652: when given, receives the author's whole `prefs:` value so a write can keep it (see PrefPassthrough). */
 	passthrough?: PrefPassthrough,
 ): Partial<DsePrefs> | undefined {
 	if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) return undefined;
@@ -65,21 +69,20 @@ export function extractPrefOverrides(
 	if (!Object.prototype.hasOwnProperty.call(record, 'prefs')) return undefined;
 	const bag = record.prefs;
 	delete record.prefs;
+	if (passthrough) {
+		passthrough.present = true;
+		passthrough.value = bag;
+	}
 	if (!bag || typeof bag !== 'object' || Array.isArray(bag)) {
 		console.warn('Draw Steel Elements: the per-block `prefs:` key must be a map of preference keys — ignoring it.');
 		return undefined;
 	}
 	const byKey = new Map(prefs.descriptors().map((d) => [d.key as string, d]));
 	const out: Record<string, unknown> = {};
-	if (passthrough) passthrough.order = Object.keys(bag);
 	for (const [key, value] of Object.entries(bag)) {
 		const descriptor = byKey.get(key);
 		if (!descriptor) {
 			console.warn(`Draw Steel Elements: ignoring unknown per-block pref "${key}".`);
-			// SC-406: a gated key (switch off) is not applied, but is kept for the write-back.
-			if (passthrough && !isExperimental() && (EXPERIMENTAL_PREF_KEYS as readonly string[]).includes(key)) {
-				passthrough.values[key] = value;
-			}
 			continue;
 		}
 		if (!descriptor.attr) {
@@ -143,20 +146,28 @@ export function emitAhead(head: string, body: string): string {
 	return body === '{}' ? head.trimEnd() : head + body;
 }
 
-/** Serializer wrapper: re-emit the author's `prefs:` map ahead of the element body. */
+/** A top-level (column-0) `prefs:` declaration in an already-serialized block body. */
+const TOP_LEVEL_PREFS_RE = /^prefs\s*:/mu;
+
+/**
+ * Serializer wrapper: re-emit the author's `prefs:` value ahead of the element body. SC-652: when a
+ * `passthrough` is given (the block had a `prefs:` key) that is the author's whole value, by value; the
+ * `overrides` bag is only the fallback for a caller that has no passthrough.
+ *
+ * Not every serializer builds the body from its model alone: `ds-hero` splices the author's RAW
+ * definition text back (`HeroModel.serializeStateSplice`), so the `prefs:` line may already be in
+ * the body even though the parsed key was removed. Prepending unconditionally would write it twice
+ * (SC-514), so, like `withCollapseKeys`, this prepends only when the body does not already declare it.
+ */
 export function withPrefOverrides<M>(
 	serialize: (model: M) => string,
 	overrides: Partial<DsePrefs> | undefined,
-	/** SC-406: gated keys to re-emit alongside the applied ones, in the author's key order. */
 	passthrough?: PrefPassthrough,
 ): (model: M) => string {
-	const kept = passthrough && Object.keys(passthrough.values).length > 0 ? passthrough : undefined;
-	if (!kept) return (model) => emitAhead(stringifyYaml({ prefs: overrides ?? {} }), serialize(model));
-	const applied = (overrides ?? {}) as Record<string, unknown>;
-	const merged: Record<string, unknown> = {};
-	for (const key of kept.order) {
-		if (key in kept.values) merged[key] = kept.values[key];
-		else if (key in applied) merged[key] = applied[key];
-	}
-	return (model) => emitAhead(stringifyYaml({ prefs: merged }), serialize(model));
+	const kept: unknown = passthrough?.present ? passthrough.value : (overrides ?? {});
+	return (model) => {
+		const body = serialize(model);
+		if (TOP_LEVEL_PREFS_RE.test(body)) return body;
+		return emitAhead(stringifyYaml({ prefs: kept }), body);
+	};
 }

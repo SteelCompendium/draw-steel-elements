@@ -11,14 +11,14 @@ describe('SC-482: withPrefOverrides drops a body of exactly {}', () => {
 	});
 
 	test('passthrough branch (a gated pref kept alongside): the prefs lines only, no `{}`', () => {
-		const out = withPrefOverrides(() => '{}', {}, { order: ['authoringControls'], values: { authoringControls: true } })(undefined);
+		const out = withPrefOverrides(() => '{}', {}, { present: true, value: { authoringControls: true } })(undefined);
 		expect(out).toBe('prefs:\n  authoringControls: true');
 	});
 
 	test('any other body is concatenated byte-for-byte after the prefs lines (both branches)', () => {
 		expect(withPrefOverrides(() => 'name: x', { sbDensity: 'compact' } as never)(undefined)).toBe('prefs:\n  sbDensity: compact\nname: x');
 		expect(
-			withPrefOverrides(() => 'name: x', {}, { order: ['authoringControls'], values: { authoringControls: true } })(undefined),
+			withPrefOverrides(() => 'name: x', {}, { present: true, value: { authoringControls: true } })(undefined),
 		).toBe('prefs:\n  authoringControls: true\nname: x');
 	});
 });

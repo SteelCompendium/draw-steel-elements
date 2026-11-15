@@ -66,12 +66,14 @@ export interface CollapseKeys {
 	/** `collapse_default:` as authored, or undefined. */
 	collapseDefault?: boolean;
 	/**
-	 * Exactly the keys that were REMOVED from the block data, with their values — the
-	 * serializer wrapper's re-emit list. Empty when nothing was removed (a block with no
+	 * Exactly the keys that were REMOVED from the block data, with their values AS WRITTEN — the
+	 * serializer wrapper's re-emit list. SC-652: that includes a value the framework cannot read
+	 * (`collapsed: yes`, `1`, `"true"`): it warns and means "not set" on screen, but it is still
+	 * the author's line, so a write puts it back. Empty when nothing was removed (a block with no
 	 * collapse keys, or an element that owns the legacy pair), in which case no wrapper is
 	 * installed at all and the serialized body is byte-untouched.
 	 */
-	popped: Record<string, boolean>;
+	popped: Record<string, unknown>;
 }
 
 const EMPTY: CollapseKeys = { popped: {} };
@@ -94,24 +96,27 @@ export function claimsLegacyCollapseKeys(
  * MUTATES `rawData` (same contract as `extractPrefOverrides`): `collapsed:` is always
  * removed; `collapsible:`/`collapse_default:` are removed only when `claimLegacyKeys` is
  * true — see `claimLegacyKeys` below and the header. A non-boolean value warns and is
- * ignored — the block still renders.
+ * ignored — the block still renders — but, being removed, it is recorded in `popped` all the
+ * same (SC-652), so the write-back keeps it.
  */
 export function extractCollapseKeys(rawData: unknown, claimLegacyKeys = false): CollapseKeys {
 	if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) return EMPTY;
 	const record = rawData as Record<string, unknown>;
-	const popped: Record<string, boolean> = {};
+	const popped: Record<string, unknown> = {};
 
 	const read = (key: string, remove: boolean): boolean | undefined => {
 		if (!Object.prototype.hasOwnProperty.call(record, key)) return undefined;
 		const value = record[key];
-		if (remove) delete record[key];
+		if (remove) {
+			delete record[key];
+			popped[key] = value;
+		}
 		if (typeof value !== 'boolean') {
 			console.warn(
 				`Draw Steel Elements: the reserved per-block "${key}:" key must be true or false — ignoring it.`,
 			);
 			return undefined;
 		}
-		if (remove) popped[key] = value;
 		return value;
 	};
 
@@ -269,11 +274,11 @@ const topLevelRe = (key: string): RegExp => new RegExp(`^${key}\\s*:`, 'mu');
  */
 export function withCollapseKeys<M>(
 	serialize: (model: M) => string,
-	popped: Record<string, boolean>,
+	popped: Record<string, unknown>,
 ): (model: M) => string {
 	return (model) => {
 		const body = serialize(model);
-		const missing: Record<string, boolean> = {};
+		const missing: Record<string, unknown> = {};
 		for (const [key, value] of Object.entries(popped)) {
 			if (!topLevelRe(key).test(body)) missing[key] = value;
 		}
@@ -286,15 +291,16 @@ export function withCollapseKeys<M>(
 /**
  * The ONE place the reserved-key emit order is coded (SC-494): a serializer wrapped so the written
  * body reads `prefs:` ... `collapsed:` ... body. The collapse keys wrap innermost and `prefs:`
- * outermost; each wrapper is installed only when something was actually popped, so a block with
- * neither is byte-untouched. The render pipeline (write-back from a persisted view) and the block
+ * outermost; each wrapper is installed only when something was actually popped (SC-652: the author's
+ * whole `prefs:` value, whatever was in it, and every removed collapse key, whatever its value), so a
+ * block with neither is byte-untouched. The render pipeline (write-back from a persisted view) and the block
  * edit form (Save) both call this, so they cannot drift.
  */
 export function withReservedKeys<M>(
 	serialize: (model: M) => string,
 	reserved: {
 		/** `CollapseKeys.popped` -- only the keys actually removed from the block data. */
-		collapsePopped: Record<string, boolean>;
+		collapsePopped: Record<string, unknown>;
 		prefOverrides?: Partial<DsePrefs>;
 		prefPassthrough?: PrefPassthrough;
 	},

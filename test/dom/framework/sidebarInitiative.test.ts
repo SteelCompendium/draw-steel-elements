@@ -590,42 +590,91 @@ describe('D8 Task 3: initiative-in-sidebar end-to-end (spec §1 canonical use)',
 	// calls, which pops `prefs:` off the raw data before def.parse ever sees it — so the
 	// refreshed model can never carry a stray `prefs` field, and the next persist can't
 	// leak it either.
-	test('an externally-injected prefs: key does not leak into the model on the next persist (finding #1)', async () => {
-		const { app, services, fireModify } = setup();
-		app.vault.setFile('Session.md', sessionNote());
-		await sendToSidebar(services, 'Session.md', 'ds-initiative');
-		await flushAsync();
-		const { view } = await openSidebarLeaf(app);
-
-		const panelEl = panelElOf(view);
-		const rootBefore = panelEl.querySelector('[data-dse-element="initiative"]');
-		expect(rootBefore).not.toBeNull();
-
-		// Externally edit the block to add a reserved `prefs:` override map (as if the
-		// block were also open side-by-side and a user added it by hand).
+	// SC-652: that same refresh used to keep the serializer the pipeline wired at MOUNT, so the next write dropped
+	// a `prefs:` map or a `collapsed:` line the outside edit had added, and kept (by value) one it had since
+	// removed. The refresh now rebuilds the wrapper from what it just read.
+	/** Edit the note from outside (as if the block were open side by side): `reserved` goes above the body. */
+	async function editOutside(
+		setup_: ReturnType<typeof setup>,
+		view: DseSidebarView,
+		edit: (body: string) => string,
+	): Promise<void> {
+		const { app, fireModify } = setup_;
 		const current = app.vault.getContent('Session.md')!;
-		const { body: bodyBefore } = splitOnBlock(current);
-		const editedBody = `prefs:\n  portraits: off\n${bodyBefore}`;
-		const edited = current.replace(bodyBefore, editedBody);
+		const { body } = splitOnBlock(current);
+		const edited = current.replace(body, edit(body));
 		expect(edited).not.toBe(current); // sanity: the replace actually matched
 		app.vault.setFile('Session.md', edited);
 		fireModify(app.vault.getAbstractFileByPath('Session.md') as TFile);
 		await flushAsync();
+		expect(panelElOf(view).querySelector('[data-dse-element="initiative"]')).not.toBeNull();
+	}
+	const reservedLines = (body: string, key: string): string[] => body.split('\n').filter((l) => l.startsWith(`${key}:`));
+
+	test('an externally-injected prefs: key does not leak into the model, and the next persist writes it back once (finding #1, SC-652)', async () => {
+		const t = setup();
+		t.app.vault.setFile('Session.md', sessionNote());
+		await sendToSidebar(t.services, 'Session.md', 'ds-initiative');
+		await flushAsync();
+		const { view } = await openSidebarLeaf(t.app);
+		const rootBefore = panelElOf(view).querySelector('[data-dse-element="initiative"]');
+		expect(rootBefore).not.toBeNull();
+
+		// Externally edit the block to add a reserved `prefs:` override map (as if the
+		// block were also open side-by-side and a user added it by hand).
+		await editOutside(t, view, (body) => `prefs:\n  portraits: off\n${body}`);
 
 		// Same root node — proves the in-place refresh path (prepareModel + update())
 		// engaged rather than falling back to a full remount.
-		const rootAfter = panelElOf(view).querySelector('[data-dse-element="initiative"]');
-		expect(rootAfter).toBe(rootBefore);
+		expect(panelElOf(view).querySelector('[data-dse-element="initiative"]')).toBe(rootBefore);
 
 		// A self-write (malice stepper) forces persist() -> serialize(this.model) against
-		// the REFRESHED model. Byte-stable contract: the model must never have picked up
-		// the injected `prefs` key, so it cannot appear in what gets written back out.
-		await clickMalice(app, view);
+		// the REFRESHED model. The model never picked up the injected `prefs` key (prepareModel pops it), so
+		// the only `prefs:` in the written note is the wrapper's, once, with the author's value.
+		await clickMalice(t.app, view);
 
-		const persisted = app.vault.getContent('Session.md')!;
-		const parsed = parseYaml(splitOnBlock(persisted).body);
+		const persisted = splitOnBlock(t.app.vault.getContent('Session.md')!).body;
+		const parsed = parseYaml(persisted);
 		expect(parsed.malice.value).toBe(6); // the stepper mutation still landed
-		expect(Object.prototype.hasOwnProperty.call(parsed, 'prefs')).toBe(false);
+		expect(parsed.prefs).toEqual({ portraits: 'off' });
+		expect(reservedLines(persisted, 'prefs')).toHaveLength(1);
+	});
+
+	test('SC-652: an outside edit adds an unknown pref and `collapsed: yes`: the next write keeps both, a hand edit to the pref is what is kept, and removing both drops them', async () => {
+		const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			const t = setup();
+			t.app.vault.setFile('Session.md', sessionNote());
+			await sendToSidebar(t.services, 'Session.md', 'ds-initiative');
+			await flushAsync();
+			const { view } = await openSidebarLeaf(t.app);
+			const stripReserved = (body: string): string => body.replace(/^(prefs:\n {2}.*\n|collapsed:.*\n)/gm, '');
+
+			await editOutside(t, view, (body) => `prefs:\n  boardDensity: compact\ncollapsed: yes\n${body}`);
+			await clickMalice(t.app, view);
+			let persisted = splitOnBlock(t.app.vault.getContent('Session.md')!).body;
+			expect(parseYaml(persisted).prefs).toEqual({ boardDensity: 'compact' });
+			expect(parseYaml(persisted).collapsed).toBe('yes');
+			expect(reservedLines(persisted, 'prefs')).toHaveLength(1);
+			expect(reservedLines(persisted, 'collapsed')).toHaveLength(1);
+
+			// A hand edit of the kept line, then another write: the new value is the one that stays.
+			await editOutside(t, view, (body) => body.replace('boardDensity: compact', 'boardDensity: spacious'));
+			await clickMalice(t.app, view);
+			persisted = splitOnBlock(t.app.vault.getContent('Session.md')!).body;
+			expect(parseYaml(persisted).prefs).toEqual({ boardDensity: 'spacious' });
+			expect(reservedLines(persisted, 'prefs')).toHaveLength(1);
+			expect(reservedLines(persisted, 'collapsed')).toHaveLength(1);
+
+			// The author deletes both lines outside: a later write must not bring back what the note no longer says.
+			await editOutside(t, view, (body) => stripReserved(body));
+			await clickMalice(t.app, view);
+			persisted = splitOnBlock(t.app.vault.getContent('Session.md')!).body;
+			expect(reservedLines(persisted, 'prefs')).toHaveLength(0);
+			expect(reservedLines(persisted, 'collapsed')).toHaveLength(0);
+		} finally {
+			warn.mockRestore();
+		}
 	});
 
 	// D8 Task 3 — "Send initiative tracker to sidebar": the thin main.ts wire proving

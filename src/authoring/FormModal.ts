@@ -35,7 +35,8 @@ import type { ValidationService } from '@/framework/validation';
 import { DseModal } from '@/framework/kit/managedModal';
 import { readBlockBody } from '@/framework/blockBody';
 import { renderErrorCard } from '@/framework/errorCard';
-import { extractPrefOverrides } from '@/framework/prefOverrides';
+import { emptyPrefPassthrough, extractPrefOverrides } from '@/framework/prefOverrides';
+import type { PrefPassthrough } from '@/framework/prefOverrides';
 import { claimsLegacyCollapseKeys, extractCollapseKeys, withReservedKeys } from '@/framework/chrome/collapsedKey';
 import { armFormFocus, settleChromeFocus, type FormOpener } from '@/framework/chrome/focusHandoff';
 import { fieldsFromSchema, type FormField } from './formModel';
@@ -89,10 +90,12 @@ class FormModal extends DseModal {
 	 *  The preview and the "Default (…)" labels parse this, as the render pipeline does; Save does not. */
 	private checked: Record<string, unknown> = {};
 	private prefOverrides: Partial<DsePrefs> | undefined;
+	/** SC-652: the author's whole `prefs:` value (unknown keys, a non-map value), re-emitted on Save. Undefined when the block had no `prefs:` key. */
+	private prefPassthrough: PrefPassthrough | undefined;
 	/** SC-494: the reserved collapse keys popped out of the source at open (exactly the pipeline's
 	 *  `CollapseKeys.popped`), re-emitted ahead of the body on Save. Empty when the block had none, or
 	 *  when the model owns the key (`ds-stamina` / `ds-skills` `collapse_default:` / `collapsible:`). */
-	private collapsePopped: Record<string, boolean> = {};
+	private collapsePopped: Record<string, unknown> = {};
 	/** SC-488: the "Default (…)" option of every optional select, relabelled on each revalidate.
 	 *  (Replaces SC-483's untouchedSeeds/requiredKeys strip machinery: an optional select is never
 	 *  seeded now, so there is nothing to strip at Save, and a required select is always written.) */
@@ -146,7 +149,10 @@ class FormModal extends DseModal {
 			// Critical 1: pop the reserved `prefs:` override map BEFORE it ever reaches
 			// `working` (validation/def.parse never see it — same contract as the
 			// pipeline's own extractPrefOverrides call).
-			this.prefOverrides = extractPrefOverrides(rawData, this.cx.prefs);
+			// SC-652: and keep the whole `prefs:` value (unknown keys, a non-map value) so Save writes it back.
+			const passthrough = emptyPrefPassthrough();
+			this.prefOverrides = extractPrefOverrides(rawData, this.cx.prefs, passthrough);
+			this.prefPassthrough = passthrough.present ? passthrough : undefined;
 			// SC-494: the same for the reserved collapse keys, with the pipeline's claim rule.
 			this.collapsePopped = extractCollapseKeys(rawData, claimsLegacyCollapseKeys(this.def)).popped;
 			this.working = rawData;
@@ -322,7 +328,11 @@ class FormModal extends DseModal {
 	/** The pipeline's own wrapper (`withReservedKeys`, chrome/collapsedKey.ts): the written block reads
 	 *  `prefs:` ... `collapsed:` ... body, and each wrapper is only installed when something was popped. */
 	private withReservedKeys<M>(serialize: (model: M) => string): (model: M) => string {
-		return withReservedKeys(serialize, { collapsePopped: this.collapsePopped, prefOverrides: this.prefOverrides });
+		return withReservedKeys(serialize, {
+			collapsePopped: this.collapsePopped,
+			prefOverrides: this.prefOverrides,
+			prefPassthrough: this.prefPassthrough,
+		});
 	}
 
 	private stringifyWorking(data: Record<string, unknown>): string {

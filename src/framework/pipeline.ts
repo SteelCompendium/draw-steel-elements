@@ -26,7 +26,7 @@ import type { SessionStore } from './session';
 import type { SccAnchorResolver } from '@/refs/rewriteSccAnchors';
 import type { CompendiumIndex } from '@/services/CompendiumIndex';
 import type { DsePrefs } from './seams/prefs';
-import { extractPrefOverrides, applyPrefOverrides } from './prefOverrides';
+import { extractPrefOverrides, applyPrefOverrides, emptyPrefPassthrough } from './prefOverrides';
 import type { PrefPassthrough } from './prefOverrides';
 import { watchPrintMedia } from './printMedia';
 import {
@@ -294,7 +294,7 @@ export interface PrepareModelDeps {
 export interface PreparedModel<M> {
 	readonly model: M;
 	readonly prefOverrides: Partial<DsePrefs> | undefined;
-	/** SC-406: gated `prefs:` keys (switch off) rejected but kept so a write-back re-emits them. */
+	/** SC-652 (SC-406 for the gated keys): the author's whole `prefs:` value, kept so a write-back re-emits it. */
 	readonly prefPassthrough: PrefPassthrough | undefined;
 	/** SC-169: the three reserved collapse keys as authored, plus exactly which of them
 	 *  were popped out of the block body (the serializer wrapper's re-emit list). */
@@ -334,9 +334,11 @@ export async function prepareModel<M>(
 	// D4 §1.3 (Plan 13): pop the reserved per-block `prefs:` map BEFORE schema
 	// validation (schemas never see the reserved key) and before def.parse (it never
 	// enters the semantic model).
-	const passthrough: PrefPassthrough = { values: {}, order: [] };
+	// SC-652: `passthrough` receives the author's whole `prefs:` value, so a write puts back everything the
+	// read removed (not only the applied overrides). Absent (undefined) when the block has no `prefs:` key.
+	const passthrough = emptyPrefPassthrough();
 	const prefOverrides = extractPrefOverrides(rawData, prefs, passthrough);
-	const prefPassthrough = Object.keys(passthrough.values).length > 0 ? passthrough : undefined;
+	const prefPassthrough = passthrough.present ? passthrough : undefined;
 
 	// SC-169: the three reserved top-level collapse keys (`collapsed:`, `collapsible:`,
 	// `collapse_default:`) — the AUTHORED whole-element collapse contract. Popped here for

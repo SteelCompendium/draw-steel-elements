@@ -357,14 +357,14 @@ describe('SC-494: the form pops the keys the way the pipeline does (stub element
 		unclaimed.close();
 	});
 
-	test('a key that is not a boolean is warned about and dropped, exactly as the pipeline drops it on a write-back', async () => {
+	test('a key that is not a boolean is warned about and not applied, but kept on Save, exactly as the pipeline keeps it on a write-back (SC-652)', async () => {
 		const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
 		const { def } = stub();
 		const writes: string[] = [];
 		const modal = open(def, 'collapsed: maybe\nname: A', writes);
 		expect(modal.canSave()).toBe(true);
 		await modal.save();
-		expect(writes).toEqual(['name: A']);
+		expect(writes).toEqual(['collapsed: maybe\nname: A']);
 		expect(warn).toHaveBeenCalled();
 		warn.mockRestore();
 		modal.close();
