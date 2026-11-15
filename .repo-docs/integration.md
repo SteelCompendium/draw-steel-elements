@@ -194,6 +194,24 @@ it survives navigating between notes.
   — "self-echo: our own write, not an external edit") — only a body that differs fires
   `onUpdate`. Reading mode now adopts its own echo too (SC-340): the rebuild caused by a
   block's own write keeps the live view.
+- **What a refresh may not lose (SC-662):** `SidebarPanel.handleExternalChange` (one change at a
+  time, in arrival order) judges a change against `SidebarBlockHost.loadedBody` — the block body the
+  mounted view last loaded or wrote. (a) The same body (an edit elsewhere in the note, another
+  card's write, the vault repeating the view's own write) does nothing: the card is not rebuilt, a
+  window over it stays open and writes into the live model, a save waiting out its 400 ms debounce is
+  written on time (SC-550's lost sidebar press). (b) A changed block first starts the view's own
+  pending save (`settlePendingWrite`); the host refuses a VIEW write whose block in the note is no
+  longer `loadedBody` (the block changed on disk first), with the dropped-write Notice, exactly as a
+  Reading-view card does for the same sequence (SC-343), so the outside edit is never overwritten.
+  (c) Then `ElementView.refreshFromOutside(model)`: every window the card opened through
+  `openManagedModal` (listed while open, by the card's host container) closes WITHOUT saving what it
+  staged, what its close handler scheduled is dropped (`discardPendingWrite`), the card is rebuilt, focus
+  goes back to the control that opened the window (`finishOutsideRefresh`, `windowHandoff.ts`) and the
+  SC-608 Notice shows. The initiative tracker and the montage keep their own SC-608 / SC-650 rule
+  in `update()` (`ownsOutsideWindows`). Not covered: the block edit form (`FormModal`, `authoringControls`
+  pref) is not a window of the view and is not closed by a refresh; the undo toasts of the stamina bar
+  hold the model they were made on. Gate: `test/dom/framework/sidebarPendingSave.test.ts`
+  (PS01..PS17), e2e `SIDE-OE01..OE08`.
 - **D7 consumer contract (spec §1.9):** any caller — a future hero-sheet element, not
   just the D8 trackers — pins a block the same way: ensure `_dse_anchor` (`ensureAnchor`),
   then `view.addPanel({ filePath, alias, anchorId })`. `sendToSidebar(services, filePath,
