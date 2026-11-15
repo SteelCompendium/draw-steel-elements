@@ -34,6 +34,7 @@
 //    for — it has no top-level-vs-nested ambiguity to introduce, indented or not.
 import { EditorSuggest } from 'obsidian';
 import type { App, Editor, EditorPosition, EditorSuggestContext, EditorSuggestTriggerInfo, TFile } from 'obsidian';
+import { stampControl } from '@/framework/kit/controlId';
 import { isDefinitionDeferredOff } from '@/framework/registry';
 import type { ElementRegistry } from '@/framework/registry';
 import { shapeFromSchemaYaml, type SchemaShape } from './schemaShape';
@@ -117,6 +118,8 @@ export class DsSchemaSuggest extends EditorSuggest<string> {
 	}
 
 	renderSuggestion(value: string, el: HTMLElement): void {
+		// SC-443: a key row and an enum-value row are different controls (`mode` was set by the onTrigger that produced this list).
+		stampControl(el, this.mode?.kind === 'enum' ? 'authoring.schema.value' : 'authoring.schema.key');
 		el.setText(value);
 	}
 

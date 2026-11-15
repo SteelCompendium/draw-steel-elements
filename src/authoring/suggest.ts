@@ -4,6 +4,7 @@
 // API; works in source mode + Live-Preview editing (independent of the LP render deferral).
 import { EditorSuggest } from 'obsidian';
 import type { App, Editor, EditorPosition, EditorSuggestContext, EditorSuggestTriggerInfo, TFile } from 'obsidian';
+import { stampControl } from '@/framework/kit/controlId';
 import { isDefinitionHidden } from '@/framework/registry';
 import type { ElementDefinition, ElementRegistry } from '@/framework/registry';
 import { insertBlock } from './blockInsert';
@@ -55,6 +56,8 @@ export class DsElementSuggest extends EditorSuggest<ElementDefinition> {
 	}
 
 	renderSuggestion(def: ElementDefinition, el: HTMLElement): void {
+		// SC-443: the row is the control (obsidian delegates the click to `.suggestion-item` and the keys to the list's scope).
+		stampControl(el, 'authoring.ds.item');
 		el.createDiv({ cls: 'dse-suggest__title', text: def.name });
 		el.createDiv({ cls: 'dse-suggest__alias', text: def.aliases[0] });
 	}

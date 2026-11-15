@@ -8,6 +8,7 @@
 // editor command with no pipeline/element machinery in scope.
 import { Component, SuggestModal } from 'obsidian';
 import type { App, TFile } from 'obsidian';
+import { stampControl } from '@/framework/kit/controlId';
 import { guardHoverPreviewClicks } from '@/framework/kit/hoverPreviewGuard';
 import { stampTextScaleRoot } from '@/framework/kit/textScaleRoot';
 import { prefsForApp } from '@/framework/seams/prefs';
@@ -103,6 +104,8 @@ export class CompendiumSearchModal extends SuggestModal<CompendiumEntry> {
 		// base is a no-op, and DseModal subclasses do the same — see FormModal.onOpen).
 		void super.onOpen();
 		this.prefsOwner.load();
+		// SC-443: the search field is ours to name (obsidian's SuggestModal draws it); the result rows are stamped in renderSuggestion.
+		stampControl(this.inputEl, 'authoring.search.input');
 		// `modalEl` is the dialog box that holds the input AND the suggestion list; the F3
 		// test mock only builds `containerEl`, so fall back to it (same as DseModal.dialogEl).
 		stampTextScaleRoot(this.modalEl ?? this.containerEl, prefsForApp(this.app), this.prefsOwner);
@@ -134,6 +137,9 @@ export class CompendiumSearchModal extends SuggestModal<CompendiumEntry> {
 
 	renderSuggestion(entry: CompendiumEntry, el: HTMLElement): void {
 		el.addClass('dse-compendium-suggest');
+		// SC-443: obsidian delegates the click (and the keys, through the input) to the row, so the row is the control. The empty-index
+		// "Sync compendium" row is a different control from a result row: choosing it starts a sync, not an insert.
+		stampControl(el, isSyncCtaEntry(entry) ? 'authoring.search.sync' : 'authoring.search.result');
 		if (isSyncCtaEntry(entry)) {
 			el.createDiv({ cls: 'dse-compendium-suggest__title', text: entry.name });
 			el.createDiv({
