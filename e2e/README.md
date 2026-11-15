@@ -108,6 +108,7 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Stamina/embed-twice.md` | no block of its own: `![[Stamina/basic]]` twice, so one pane holds two copies of the same block (SC-505) |
   | `Counter/counter.md` | one `ds-counter` (Health 1, min 0, max 3) with `ABOVE` / `BELOW` text around it (SC-495, SC-602) |
   | `Counter/twins.md` | two IDENTICAL `ds-counter` blocks (Health 1, min 0, max 3) with prose above, between and below (SC-602: a Live Preview save of the upper one is handed to the twin below) |
+  | `Counter/kept-keys.md` | one `ds-counter` (Health 1, min 0, max 3) with `prefs: compact` and `collapsed: yes` above the body: two reserved lines the product cannot read (SC-652) |
   | `Callout/callout.md` | one `ds-stamina-bar` (12/30, 3 of 6 Recoveries) inside a `> [!note]` callout, text above and below it (SC-455) |
   | `Callout/nested.md` | the same block inside a callout nested in a callout (`> > ` on every line) |
   | `Callout/quote.md` | the same block inside a plain blockquote (Reading view only: Live Preview does not draw it) |
@@ -143,6 +144,8 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Montage/two-blocks.md` | TWO different `ds-montage` blocks in one note with prose above, between and below |
   | `Montage/twins.md` | TWO IDENTICAL `ds-montage` blocks (Kira, round 1 of 3, nothing logged) with prose above, between and below |
   | `Montage/unknown-keys.md` | a block with a top-level key the product does not know (`table_notes`), an entry with an extra key (`dc: 12`) and a participant with one (`player: Sam`), Kira in round 2 (SC-625) |
+  | `Montage/kept-prefs.md` | a block with `prefs:\n  boardDensity: compact` (a key the product does not use), Kira and Bram, round 1 of 3 (SC-652) |
+  | `Montage/kept-collapsed.md` | a block with `collapsed: yes` (a word, not true / false), Kira and Bram, round 1 of 3 (SC-652) |
   | `Montage/wrong-title.md` | a block whose `title` is a YAML number (`title: 2024`): shown as the text "2024", written back as the number (SC-628) |
   | `Montage/wrong-title-bool.md` | `title: true`: shown as the text "true", written back as the boolean (SC-628) |
   | `Montage/wrong-title-map.md` | a map as the title: a plain error card naming `title`, no control, nothing written (SC-628) |
