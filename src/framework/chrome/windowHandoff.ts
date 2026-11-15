@@ -1,4 +1,5 @@
-// SC-608 — an outside edit that redraws an element while one of its windows (a modal it opened) is open.
+// SC-608 — an outside edit that redraws an element while one of its windows (a modal it opened) is open. Shared by the initiative
+// tracker (SC-608) and the montage (SC-650); the element brings its own focus families and, optionally, its nearest-equivalent rules.
 //
 // WHAT HAPPENS: Obsidian throws the old section away and draws a new one, so the old view unloads and its window closes with it.
 // Everything typed or staged in the window is dropped, which is the point: its callbacks hold the OLD model's objects, and an
@@ -25,7 +26,7 @@
 // TTL, and nothing is shown or focused. The watch belongs to the plugin (`owner`): unloading it cancels the watch.
 import { focusControl, focusIsFree } from './focusHandoff';
 import { controlSuccessor } from '../kit/controlFocus';
-import type { ControlFamilies, ControlFocus } from '../kit/controlFocus';
+import type { ControlFallbacks, ControlFamilies, ControlFocus } from '../kit/controlFocus';
 import { Component, Notice } from 'obsidian';
 
 /** What a mounted element publishes on its root so a closing predecessor can recognise it. Lazy: nothing is computed until asked. */
@@ -36,6 +37,11 @@ export interface WindowRootRecord {
 	/** False once the view is unloading: its root may still sit in the document for a moment but is not a successor and not a sibling. */
 	live: () => boolean;
 }
+
+/** Block text compared across CRLF and trailing whitespace (the host's own rule, `normalizeBody`); null when the host knows none.
+ *  What an element's `WindowRootRecord.content` is built from when the host can tell the note's own text of the block. */
+export const normalizeBlockText = (text: string | null | undefined): string | null =>
+	typeof text === 'string' ? text.replace(/\r\n?/g, '\n').replace(/\s+$/, '') : null;
 
 const mounted = new WeakMap<HTMLElement, WindowRootRecord>();
 
@@ -89,6 +95,8 @@ export interface OutsideCloseHandoff {
 	/** What held focus when the window opened (null: focus was not inside the element; only the Notice is shown). */
 	focus: ControlFocus | null;
 	families: ControlFamilies;
+	/** SC-650: the element's nearest-equivalent rules (`controlSuccessor`), for an opener the redrawn element no longer has or has disabled. */
+	fallbacks?: ControlFallbacks;
 	notice: string;
 	/** A long-lived Component (the plugin): unloading it cancels the watch. A hand-off for an owner that is not loaded is not started. */
 	owner: Component;
@@ -137,7 +145,7 @@ export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 	const focusSuccessor = (root: HTMLElement): void => {
 		if (!wantFocus || !o.focus || !root.isConnected) return;
 		if (!focusIsFree(doc) && !o.oldRoot.contains(doc.activeElement)) return;
-		const target = controlSuccessor(root, o.focus, o.families);
+		const target = controlSuccessor(root, o.focus, o.families, o.fallbacks);
 		if (target === root && !root.hasAttribute('tabindex')) root.tabIndex = -1; // focusable by script, not a new Tab stop
 		focusing = true;
 		try {

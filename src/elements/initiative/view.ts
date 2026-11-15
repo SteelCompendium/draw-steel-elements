@@ -76,7 +76,7 @@ import { CONTROL_ATTR } from '@/framework/kit/controlId';
 import { captureControlFocus, restoreControlFocus } from '@/framework/kit/controlFocus';
 import type { ControlFocus, ControlFamilies } from '@/framework/kit/controlFocus';
 import { focusControl, focusIsFree, isKeyboardClick } from '@/framework/chrome/focusHandoff';
-import { OUTSIDE_CLOSE_NOTICE, handOffAfterOutsideClose, publishWindowRoot, slotOf } from '@/framework/chrome/windowHandoff';
+import { OUTSIDE_CLOSE_NOTICE, handOffAfterOutsideClose, normalizeBlockText, publishWindowRoot, slotOf } from '@/framework/chrome/windowHandoff';
 import type { WindowRootRecord, WindowSlot } from '@/framework/chrome/windowHandoff';
 import { ConditionManager } from '@utils/Conditions';
 import { Images } from '@utils/Images';
@@ -113,10 +113,6 @@ import {
 } from './model';
 import type { ActorActions, MaliceLogEntry, SquadActions } from './model';
 import { resolveInitiativeRefs } from './resolveRefs';
-
-/** SC-608: bodies compare equal across CRLF and trailing whitespace (the host's own rule, `normalizeBody`); null when the host knows none. */
-const normalizeBlockText = (text: string | null | undefined): string | null =>
-	typeof text === 'string' ? text.replace(/\r\n?/g, '\n').replace(/\s+$/, '') : null;
 
 /** SC-588: the one control of the tracker that changes id when pressed. Make captain is rebuilt as Relieve captain (and back), so
  *  a keyboard user's focus follows the badge of the same place, not the id it had. */

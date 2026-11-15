@@ -43,7 +43,10 @@ import { iconButton, openManagedModal } from '@/framework/kit';
 import type { DseModal } from '@/framework/kit';
 import { captureControlFocus, restoreControlFocus } from '@/framework/kit/controlFocus';
 import type { ControlFocus, ControlFocusRules } from '@/framework/kit/controlFocus';
+import { OUTSIDE_CLOSE_NOTICE, handOffAfterOutsideClose, normalizeBlockText, publishWindowRoot, slotOf } from '@/framework/chrome/windowHandoff';
+import type { WindowRootRecord, WindowSlot } from '@/framework/chrome/windowHandoff';
 import { MONTAGE_FOCUS_FALLBACKS, MONTAGE_FOCUS_FAMILIES } from './focusRules';
+import type { RenderContext } from '@/framework/context';
 import type { MontageModel, MontageEntry } from './model';
 import {
 	addMontageHero,
@@ -59,6 +62,7 @@ import {
 	nextHeroToAct,
 	removeMontageEntry,
 	resetMontageProgress,
+	serialize as serializeModel,
 	setMontageLimits,
 	undoLastMontageEntry,
 } from './model';
@@ -89,8 +93,87 @@ export class MontageView extends ElementView<MontageModel> {
 	private boardLeft = 0;
 	/** SC-626 — what the window that is open now was opened from: the control that held focus (null: none did). A write made in the
 	 *  window rebuilds the card while focus is in the window, so the rebuild hands focus to this control's successor instead
-	 *  (see `update`). Not kept for a window opened with the mouse: focus was not in the card, and a write never pulls it in. */
-	private windowOpener: { focus: ControlFocus | null } | null = null;
+	 *  (see `update`). Not kept for a window opened with the mouse: focus was not in the card, and a write never pulls it in.
+	 *  SC-650: also the window itself and where the card sat when it opened, for an outside edit that closes it (`closeForOutsideEdit`,
+	 *  `closeWindowWithView`). */
+	private windowOpener: { focus: ControlFocus | null; slot: WindowSlot | null; modal: DseModal | null } | null = null;
+
+	/** SC-650 — set once the view is unloading (the window it holds is closed by that, not by the user). */
+	private unloading = false;
+
+	/** SC-650 — this view's mark on its root, read by a predecessor's window hand-off (framework/chrome/windowHandoff.ts). */
+	private readonly windowRecord: WindowRootRecord = {
+		sourcePath: () => this.cx.host.sourcePath,
+		content: () => this.diskContent(),
+		live: () => !this.unloading,
+	};
+
+	/** SC-650 — the block as this view last loaded it from, or wrote to, the note; never the live model, which can be ahead of the disk
+	 *  by an edit still waiting out its 400 ms write (a Log in the window). `raw` is the note's own text of the block when the host can tell
+	 *  (Reading view, Live Preview: `lastKnownBody`; the sidebar's cannot), `ser` the model's serialization of the same moment. Two views
+	 *  of one block that hold the same content saw the same disk. (The same record as the initiative tracker's, SC-608.) */
+	private disk: { raw: string | null; ser: string | null } = {
+		raw: normalizeBlockText((this.cx.host as { lastKnownBody?: string | null } | undefined)?.lastKnownBody),
+		ser: null,
+	};
+
+	private diskContent(): string {
+		return this.disk.raw !== null ? `raw:${this.disk.raw}` : `ser:${this.disk.ser ?? serializeModel(this.model)}`;
+	}
+
+	/** The serializer the pipeline wires runs at every flush: what it returns is what is about to be written, so it is the disk's content. */
+	setSerializer(serialize: (model: MontageModel) => string): void {
+		super.setSerializer((model) => {
+			const out = serialize(model);
+			this.disk = { raw: normalizeBlockText(out), ser: out };
+			return out;
+		});
+	}
+
+	constructor(cx: RenderContext) {
+		super(cx);
+		// SC-650: the live-root mark (`live`) goes false the moment the view unloads. (The window closes first: a child component of this
+		// view holds it, and children unload before the view's own registrations; see `openTrackedModal`.)
+		this.register(() => {
+			this.unloading = true;
+		});
+	}
+
+	/** SC-650 — the pinned sidebar's outside refresh with a window open: close it (nothing staged in it can be written to the model that
+	 *  is about to be replaced). Returns what opened it. */
+	private closeForOutsideEdit(): { focus: ControlFocus | null } {
+		const opener = this.windowOpener;
+		opener?.modal?.close(); // its close wrapper empties `windowOpener` and gives no focus back: `update` hands it to the rebuilt card
+		return { focus: opener?.focus ?? null };
+	}
+
+	/** SC-650 — the view unloads while its window is open (an outside edit redrew the block, the note was closed, ...): the window closes
+	 *  with it, and the hand-off starts (framework/chrome/windowHandoff.ts), which finds the redrawn card by the slot the window opened
+	 *  in. The Notice is shown when that card's disk content differs from this view's; focus goes to its replacement of the control that
+	 *  opened the window whether or not it does, unless the number of montages in the pane changed, and it follows a burst of redraws.
+	 *  The watch is owned by the plugin, so unloading the plugin cancels it. */
+	private closeWindowWithView(opener: NonNullable<MontageView['windowOpener']>): void {
+		this.unloading = true;
+		let ownContent: string | null = null;
+		try {
+			ownContent = this.diskContent();
+		} catch {
+			/* a model that cannot be serialized has nothing to compare: the window just closes */
+		}
+		opener.modal?.close();
+		if (ownContent === null || !opener.slot) return;
+		handOffAfterOutsideClose({
+			slot: opener.slot,
+			own: this.windowRecord,
+			ownContent,
+			oldRoot: this.rootEl,
+			focus: opener.focus,
+			families: MONTAGE_FOCUS_FAMILIES,
+			fallbacks: MONTAGE_FOCUS_FALLBACKS,
+			notice: OUTSIDE_CLOSE_NOTICE,
+			owner: this.cx.plugin, // unloading the plugin cancels the watch
+		});
+	}
 
 	/** SC-326 r2 — every write rebuilds the whole element (the framework default `update`:
 	 *  empty the root, run `onMount` again), which throws the board away; its replacement
@@ -98,11 +181,20 @@ export class MontageView extends ElementView<MontageModel> {
 	 *  round 1 (measured in real Obsidian: 884 -> 0 on the first frame after the tap). Carry
 	 *  the position across. */
 	async update(model: MontageModel): Promise<void> {
+		// SC-650: a window is open and the pinned sidebar refreshed this view (a model other than the one on screen comes from outside; the
+		// view's own rebuilds pass its own). The window's callbacks hold THIS model's objects, and the default `update()` replaces the model,
+		// so what the window then wrote went into a model nobody serializes. Block unchanged (an edit elsewhere in the note, a Sync that left
+		// it alone, the echo of this view's own write): nothing to refresh, the window stays and writes. Block changed: the window closes
+		// (it is staged against the old block) with a Notice, and focus follows below. Compared with what is on disk, not the live model
+		// (an unwritten Log is ahead of it).
+		const outside = model !== this.model;
+		if (outside && this.windowOpener && serializeModel(model) === this.disk.ser) return;
+		const closed = outside && this.windowOpener ? this.closeForOutsideEdit() : null;
 		// SC-626: every write (and the Test tiers strip) rebuilds the card, which throws away the control a keyboard user pressed, and
 		// focus fell to <body>. Hand it to the control that stands for it once the rebuild is done (kit/controlFocus.ts; rules in
 		// focusRules.ts). Only when focus was inside the card, or in a window opened from it that is writing (Log, Add a hero, Set
 		// limits close the moment they write, so by then focus is on <body>): an outside edit or a mouse press pulls nothing in.
-		const focus = captureControlFocus(this.rootEl, MONTAGE_FOCUS_FAMILIES) ?? this.windowOpener?.focus ?? null;
+		const focus = closed ? closed.focus : (captureControlFocus(this.rootEl, MONTAGE_FOCUS_FAMILIES) ?? this.windowOpener?.focus ?? null);
 		const board = this.rootEl.querySelector<HTMLElement>('.dse-mt__board');
 		this.pendingBoardScroll =
 			board && board.scrollLeft > 0
@@ -113,7 +205,9 @@ export class MontageView extends ElementView<MontageModel> {
 		} finally {
 			this.pendingBoardScroll = null; // never leak into a later mount
 		}
+		if (outside) this.disk = { raw: null, ser: serializeModel(model) }; // the block as the note has it now
 		restoreControlFocus(this.rootEl, focus, MONTAGE_FOCUS_FAMILIES, MONTAGE_FOCUS_FALLBACKS);
+		if (closed) new Notice(OUTSIDE_CLOSE_NOTICE);
 	}
 
 	/** SC-626 — the rules the Live Preview carry (host/livePreviewFocusCarry.ts) applies to this view's controls. */
@@ -165,6 +259,10 @@ export class MontageView extends ElementView<MontageModel> {
 		// a live toggle by a full element rebuild (see the strip's onToggle wiring below),
 		// never by reaching into GuideView after the fact.
 		new GuideView(cycleOwner).build(container, { session: this.cx.session, blockKey, slot: GUIDE_SLOT }, strip.isOpen());
+		// SC-650: published once the card is built (the brief above is the only await): a hand-off looking for this card as the successor
+		// of a closed one must not find, and focus, a card that is still being drawn.
+		publishWindowRoot(root, this.windowRecord);
+		this.disk.ser ??= serializeModel(model); // the model as loaded: the disk's content until the first write
 	}
 
 	/** The Director's brief — read-only authored prose, rendered above the board (spec §D:
@@ -385,10 +483,21 @@ export class MontageView extends ElementView<MontageModel> {
 	 * different reason — deferring a persist to modal close). */
 	private openTrackedModal<T extends DseModal>(factory: () => T): T {
 		const modalOwner = this.addChild(new Component());
-		// SC-626: read before the window takes focus.
-		const opener = { focus: captureControlFocus(this.rootEl, MONTAGE_FOCUS_FAMILIES) };
+		// SC-626: read before the window takes focus. SC-650: with where the card sits, for the hand-off after an outside edit.
+		const opener: NonNullable<MontageView['windowOpener']> = {
+			focus: captureControlFocus(this.rootEl, MONTAGE_FOCUS_FAMILIES),
+			slot: slotOf(this.rootEl, 'montage'), // (the slot of THIS card: at unload the new section may already be in the pane)
+			modal: null,
+		};
 		this.windowOpener = opener;
 		const modal = openManagedModal(modalOwner, factory, this.cx.host.containerEl); // SC-595: anchor, see DseModal.anchorTo
+		opener.modal = modal;
+		// SC-650: registered AFTER openManagedModal's close-on-unload, so it runs BEFORE it (a component runs its registrations last-in
+		// first-out): by then the window is still open, which only a view that is going away leaves it (a window that closed took its
+		// `windowOpener` with it). The view unloads because an outside edit redrew the block, the note was closed, ...
+		modalOwner.register(() => {
+			if (this.windowOpener === opener) this.closeWindowWithView(opener);
+		});
 		const inheritedOnClose = modal.onClose.bind(modal) as () => void;
 		modal.onClose = () => {
 			inheritedOnClose();
