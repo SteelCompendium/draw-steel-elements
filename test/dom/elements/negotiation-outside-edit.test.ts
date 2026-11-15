@@ -101,6 +101,7 @@ async function redraw(old: Mounted, source: string): Promise<Mounted> {
 	const active = document.activeElement;
 	old.root.remove();
 	if (active && old.root.contains(active)) active.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+	await Promise.resolve(); // (the engine's focusout is handled before the view unloads: a card that left the document did not lose focus to the user)
 	old.view.unload();
 	await later();
 	return fresh;
@@ -196,9 +197,10 @@ describe('SC-656: an outside edit redraws the negotiation card while a control o
 		await later(5);
 		const elsewhere = document.body.appendChild(document.createElement('button'));
 		elsewhere.focus();
+		elsewhere.blur(); // focus is free again (on <body>) when the card arrives: only the user's move cancels the hand-off
 		const fresh = await mount(EDITED, old.pane, old.plugin);
 		await later(45);
-		expect(document.activeElement).toBe(elsewhere);
+		expect(document.activeElement).toBe(document.body);
 		expect(fresh.root.contains(document.activeElement)).toBe(false);
 	});
 
