@@ -84,6 +84,10 @@ export const HANDOFF_TTL_MS = 3000;
 /** After the successor was found, how long the hand-off stays armed for the NEXT redraw (a Sync burst redraws the block several times in
  *  a row, each discarding the control that was focused). Each success extends it. SC-505's `SETTLE_MS`, for the same reason. */
 export const HANDOFF_SETTLE_MS = 1500;
+/** SC-650: how long the watch waits for the root at the slot before it tells the user anyway, when the pane's root count changed and none sits
+ *  at the slot's position any more (an edit deleted a block above the window's own and changed it, so the position points past the end). A
+ *  Live Preview widget arrives 10-45 ms after the close, so by now a root that is going to come at the slot has come. */
+export const HANDOFF_FALLBACK_MS = 400;
 
 export interface OutsideCloseHandoff {
 	slot: WindowSlot;
@@ -115,7 +119,9 @@ export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 	let settling = false;
 	let finished = false;
 	let claimed: HTMLElement | null = null; // the successor the Notice and focus were given for
+	let noticed = false; // the Notice was shown (for a claimed successor, or by the fallback)
 	let timer = 0;
+	let fallback = 0;
 	let settle = 0;
 	let observer: MutationObserver | null = null;
 
@@ -125,6 +131,7 @@ export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 		observer?.disconnect();
 		win.clearTimeout(timer);
 		win.clearTimeout(settle);
+		win.clearTimeout(fallback);
 		doc.removeEventListener('focusin', onFocusIn, true);
 		o.owner.removeChild(holder);
 	};
@@ -160,13 +167,29 @@ export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 		if (finished || !root || root === claimed) return;
 		if (claimed === null) {
 			// First successor. Same disk content = the view's own save or a re-render: no Notice. Focus follows either way.
-			if (mounted.get(root)?.content() !== o.ownContent) new Notice(o.notice);
+			if (!noticed && mounted.get(root)?.content() !== o.ownContent) {
+				noticed = true;
+				new Notice(o.notice);
+			}
 			if (o.slot.count !== rootsIn(o.slot.scope, o.slot.elementId).length) wantFocus = false; // a tracker came or went: not ours to pick
 		}
 		claimed = root;
 		focusSuccessor(root); // (a later redraw of a burst: only while focus is free, i.e. on <body>)
 		win.clearTimeout(timer);
 		timer = win.setTimeout(finish, HANDOFF_SETTLE_MS);
+	};
+	/** No root at the slot after HANDOFF_FALLBACK_MS and the count changed: an edit removed the block above and changed this one, so the slot
+	 *  points past the end. The window did close because of an outside edit: the Notice, from any live root of the same note in the pane that
+	 *  differs from what the closing view held. Focus is not moved here (there is no successor to give it to); a root that still lands at the slot is claimed as usual, with the count rule. */
+	const noSuccessorAtSlot = (): void => {
+		if (finished || claimed !== null || noticed) return;
+		const roots = rootsIn(o.slot.scope, o.slot.elementId);
+		if (roots.length === o.slot.count) return;
+		const other = roots.find((r) => mounted.get(r)?.sourcePath() === sourcePath);
+		if (other && mounted.get(other)?.content() !== o.ownContent) {
+			noticed = true;
+			new Notice(o.notice);
+		}
 	};
 	const attempt = (): void => {
 		if (finished || settling) return;
@@ -179,6 +202,7 @@ export function handOffAfterOutsideClose(o: OutsideCloseHandoff): () => void {
 
 	doc.addEventListener('focusin', onFocusIn, true);
 	timer = win.setTimeout(finish, HANDOFF_TTL_MS);
+	fallback = win.setTimeout(noSuccessorAtSlot, HANDOFF_FALLBACK_MS);
 	observer = new win.MutationObserver(attempt);
 	observer.observe(doc.body, { childList: true, subtree: true });
 	attempt();

@@ -26,7 +26,7 @@ import { montageElement } from '../../../src/elements/montage/definition';
 import type { MontageView } from '../../../src/elements/montage/view';
 import type { MontageModel } from '../../../src/elements/montage/model';
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
-import { HANDOFF_SETTLE_MS } from '../../../src/framework/chrome/windowHandoff';
+import { HANDOFF_FALLBACK_MS, HANDOFF_SETTLE_MS } from '../../../src/framework/chrome/windowHandoff';
 
 /** A montage in round 1, nobody has acted: Log an action is live, the board has open sockets. */
 const BASE = ['title: Heist', 'rounds: 3', 'success_limit: 5', 'failure_limit: 3', 'successes: 0', 'failures: 0', 'participants:', '  - name: Kira', '  - name: Bram', 'current_round: 1'].join('\n');
@@ -412,6 +412,38 @@ describe('SC-650: an outside edit redraws the montage while a window is open (Re
 		expect(notices()).toHaveLength(1);
 		expect(document.activeElement).toBe(document.body);
 		expect([first.root, inserted.root, fresh.root].some((r) => r.contains(document.activeElement))).toBe(false);
+	});
+
+	test('[OW18b] one edit deletes the montage ABOVE the open one and changes the open one: the slot points past the end, the Notice still shows, focus is not moved', async () => {
+		const first = await mount(BASE);
+		const second = await mount(BASE, first.pane);
+		press(ctl(second.root, 'montage.bar.log'));
+		const fresh = await mount(EDITED, first.pane); // Reading view: the redrawn block arrives first...
+		first.view.unload(); // ...and the deleted one above is thrown away with the old second
+		first.root.remove();
+		second.view.unload();
+		second.root.remove();
+		await later(HANDOFF_FALLBACK_MS + 100);
+		expect(anyWindow()).toBe(false);
+		expect(notices()).toHaveLength(1);
+		expect(document.activeElement).toBe(document.body);
+		expect(fresh.root.contains(document.activeElement)).toBe(false);
+	});
+
+	test('[OW18c] ...but a block that is just redrawn in place (Live Preview, the widget arrives after the close) waits for its slot: one Notice, focus lands', async () => {
+		const first = await mount(BASE);
+		const second = await mount(BASE, first.pane);
+		press(ctl(second.root, 'montage.bar.log'));
+		second.view.unload();
+		second.root.remove();
+		await later(120); // the count is one lower for a moment: the fallback must not claim the first block as the successor
+		const fresh = await mount(EDITED, first.pane);
+		await later();
+		expect(notices()).toHaveLength(1);
+		expect(document.activeElement).toBe(ctl(fresh.root, 'montage.bar.log'));
+		expect(first.root.contains(document.activeElement)).toBe(false);
+		await later(HANDOFF_FALLBACK_MS + 100);
+		expect(notices()).toHaveLength(1);
 	});
 
 	test('[OW19] a burst of outside edits (Sync): focus follows each redraw, one Notice', async () => {
