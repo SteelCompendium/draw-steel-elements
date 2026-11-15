@@ -39,6 +39,7 @@ import { emptyPrefPassthrough, extractPrefOverrides } from '@/framework/prefOver
 import type { PrefPassthrough } from '@/framework/prefOverrides';
 import { claimsLegacyCollapseKeys, extractCollapseKeys, withReservedKeys } from '@/framework/chrome/collapsedKey';
 import { armFormFocus, settleChromeFocus, type FormOpener } from '@/framework/chrome/focusHandoff';
+import { ANCHOR_KEY } from '@/framework/sidebar/anchor';
 import { fieldsFromSchema, type FormField } from './formModel';
 
 /** `renderField`'s non-textarea widgets (toggle/number/select/text) only ever read a
@@ -117,6 +118,8 @@ class FormModal extends DseModal {
 	private readonly pin: BlockPin | null;
 	/** SC-552: set once the form was kept open past its view's unload (see `keepOpenOn`): the component it hangs its close on. */
 	private kept: { parent: Component; holder: Component } | null = null;
+	/** SC-662: the block body the strict sidebar Save expects the note to still hold (see the constructor). */
+	private readonly expectBody: string;
 	/** SC-552: set by close(). A form that already closed (Save, Cancel) is never kept open: its view unloads LATER too (Save redraws the block). */
 	private closed = false;
 
@@ -134,6 +137,10 @@ class FormModal extends DseModal {
 		// edit or Sync can all move the element while the form is open, never the block). SC-556: and Save writes ONLY through it -
 		// if the block itself was edited or deleted meanwhile, nothing is written (see save()).
 		this.pin = cx.host.pinPosition?.() ?? null;
+		// SC-662: what the sidebar host's strict Save compares the note's block with is the block as it is on disk now, which is not always
+		// what the form was seeded from (the hero's Edit definition is seeded with its normalising `serializeStateSplice()`, which a
+		// hand-written block never equals). A host that cannot say (Reading view: it has the pin) leaves the seed.
+		this.expectBody = (cx.host as { currentBody?: () => string | null }).currentBody?.() ?? source;
 	}
 
 	onOpen(): void {
@@ -349,7 +356,16 @@ class FormModal extends DseModal {
 	private normalise(): string[] {
 		this.checked = cloneContainers(this.working);
 		if (!this.def.schema) return [];
+		// SC-662 (OOS-4): the sidebar's `_dse_anchor` line is the framework's, not the element's. A schema with
+		// `additionalProperties: false` (hero, conditions, resource, surges, tokens, roll) refuses it, which left the Save of every pinned
+		// block disabled. The pipeline leaves it out of schema validation for rendering (`dataForSchemaValidation`); the same here. It stays
+		// in `working` (so Save writes it back) and in `checked` (the preview parses it as it always did): it is only taken out for the
+		// validator's pass and put back, so the validator's transforms still land on `checked` itself.
+		const anchored = ANCHOR_KEY in this.checked;
+		const anchor: unknown = this.checked[ANCHOR_KEY];
+		if (anchored) delete this.checked[ANCHOR_KEY];
 		const result = this.validation.validate(this.def.id, this.def.schema, this.checked);
+		if (anchored) this.checked[ANCHOR_KEY] = anchor;
 		return result.errors.map((e) => `${e.path || 'root'}: ${e.message}`);
 	}
 
@@ -552,7 +568,7 @@ class FormModal extends DseModal {
 		// never opened. A form without a pin (the sidebar's panel is its own block) writes through `expectBody` instead (SC-662): the sidebar host refuses it when the block is not the body the form opened from.
 		const ok = await (this.pin
 			? this.cx.host.replaceSource(body, { pin: this.pin, pinOnly: true })
-			: this.cx.host.replaceSource(body, { expectBody: this.source })); // SC-662: the sidebar host refuses a block edited since this form opened
+			: this.cx.host.replaceSource(body, { expectBody: this.expectBody })); // SC-662: the sidebar host refuses a block edited since this form opened
 		if (key !== null) settleChromeFocus(key, null, ok);
 		if (ok) this.close();
 		// SC-455: a host that already said why it could not write (its own Notice) is not repeated here.
