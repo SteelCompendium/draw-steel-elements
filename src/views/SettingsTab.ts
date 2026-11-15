@@ -432,6 +432,9 @@ export class DseSettingTab extends PluginSettingTab {
 	// Not a native `dropdown` control: its value is DERIVED from the four statblock
 	// options rather than stored, and "custom" is a label the user cannot select into.
 	// A control binding would have to persist that pseudo-value; a render row need not.
+	// A pick of "custom" is refused: the dropdown snaps back to the derived label and nothing
+	// is written (SC-651). The option stays enabled on purpose: a closed native <select> skips
+	// disabled options on End / ArrowDown, which would land on "Index card" and apply it.
 	private renderPresetControl(setting: Setting, prefs: PreferenceStore): void {
 		setting.addDropdown((dropdown) => {
 			stampControl(dropdown.selectEl, PRESET_ID);
@@ -441,7 +444,11 @@ export class DseSettingTab extends PluginSettingTab {
 			dropdown.addOption('custom', 'Custom');
 			dropdown.setValue(deriveSbPreset(prefs));
 			dropdown.onChange((value) => {
-				if (value === 'custom') return; // derived label, not a settable state
+				if (value === 'custom') {
+					// derived label, not a settable state: show what reopening the page would show
+					dropdown.setValue(deriveSbPreset(prefs));
+					return;
+				}
 				applySbPreset(prefs, value as SbPresetId)
 					.then(() => this.update())
 					.catch((error) =>

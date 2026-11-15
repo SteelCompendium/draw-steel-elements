@@ -311,6 +311,59 @@ describe('SC-440 matrix: the statblock presets (inPreset)', () => {
 		expect(prefsOf(loaded).get(d.key as any)).toBe(other);
 	});
 
+	// SC-651: "Custom" is a derived label, so a pick of it is refused and the dropdown shows what reopening the page would show.
+	test('SC-651: picking "Custom" on the Steel card preset snaps the dropdown back to Steel card and writes nothing', async () => {
+		const loaded = await loadPlugin({ experimental: true });
+		const prefs = prefsOf(loaded);
+		const tab = await openTab(loaded);
+		const dropdown = rowOf(tab, { name: 'Preset' }).dropdowns[0];
+		expect(dropdown.value).toBe('steel');
+		const savesBefore = loaded.saves.length;
+		const setSpy = jest.spyOn(prefs, 'set');
+		dropdown.trigger('custom');
+		await flushAsync(3);
+		expect(dropdown.value).toBe('steel');
+		expect((dropdown.selectEl as HTMLSelectElement).value).toBe('steel');
+		expect(setSpy).not.toHaveBeenCalled();
+		expect((await flushSaved(loaded)).prefs ?? {}).toEqual({});
+		expect(loaded.saves.length).toBe(savesBefore);
+		expect(deriveSbPreset(prefs)).toBe('steel');
+		// Reopening the page shows the same value the dropdown now reads.
+		expect(rowOf(await openTab(loaded), { name: 'Preset' }).dropdowns[0].value).toBe('steel');
+	});
+
+	test('SC-651: when the options already match no preset, picking "Custom" is a no-op that still reads Custom', async () => {
+		const loaded = await loadPlugin({ experimental: true });
+		const prefs = prefsOf(loaded);
+		const tab = await openTab(loaded);
+		const d = ROWS.find((x) => key(x) === MEMBERS[0])!;
+		await drive(tab, d, domain(d).find((v) => v !== d.default)!);
+		const dropdown = rowOf(tab, { name: 'Preset' }).dropdowns[0];
+		expect(dropdown.value).toBe('custom');
+		const before = (await flushSaved(loaded)).prefs;
+		const setSpy = jest.spyOn(prefs, 'set');
+		dropdown.trigger('custom');
+		await flushAsync(3);
+		expect(dropdown.value).toBe('custom');
+		expect(setSpy).not.toHaveBeenCalled();
+		expect((await flushSaved(loaded)).prefs).toEqual(before);
+		expect(deriveSbPreset(prefs)).toBe('custom');
+	});
+
+	test('SC-651 control: a real pick (Index card) still applies its bundle after a refused "Custom" pick', async () => {
+		const loaded = await loadPlugin({ experimental: true });
+		const prefs = prefsOf(loaded);
+		const tab = await openTab(loaded);
+		const dropdown = rowOf(tab, { name: 'Preset' }).dropdowns[0];
+		dropdown.trigger('custom');
+		await flushAsync(3);
+		dropdown.trigger('index');
+		await flushAsync(3);
+		for (const [member, value] of Object.entries(PRESETS.index)) expect({ member, value: prefs.get(member as any) }).toEqual({ member, value });
+		expect(deriveSbPreset(prefs)).toBe('index');
+		expect(rowOf(tab, { name: 'Preset' }).dropdowns[0].value).toBe('index');
+	});
+
 	test('a preset applied while another is active replaces it wholesale (index -> sourcebook -> steel leaves the sparse slice empty)', async () => {
 		const loaded = await loadPlugin({ experimental: true });
 		const tab = await openTab(loaded);
