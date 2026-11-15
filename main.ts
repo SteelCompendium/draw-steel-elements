@@ -353,14 +353,19 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 }
 
 /**
- * SC-646 — the catch for the two fire-and-forget async callbacks (the legacy-folder choice
- * and the migration window's "sync anyway"). Once `CompendiumSyncService.sync` has been
- * called, any failure is already reported (Notice + console.error) and rethrown by design,
- * so there is nothing to add. A failure BEFORE that point (trashing the old root, settling
- * the migration state) reaches no Notice, so it is logged rather than swallowed.
+ * SC-646 — the catch for every place that starts a sync: `syncCompendium` itself and the two
+ * fire-and-forget async callbacks (the legacy-folder choice and the migration window's "sync
+ * anyway"). Once `CompendiumSyncService.sync` has been called, any failure is already reported
+ * (Notice + console.error) and rethrown by design, so there is nothing to add. A failure BEFORE
+ * that point (the prelude, trashing the old root, settling the migration state) reaches no
+ * Notice, so it is logged rather than swallowed.
  */
 function logUnlessSyncReported(error: unknown, syncStarted: boolean): void {
 	if (!syncStarted) console.error('Draw Steel Elements: compendium sync could not start:', error);
+}
+/** SC-646 — the catch for the migration entry points (`finishRemaining`, the migrate command): no Notice reports these. */
+function logMigrationFailure(error: unknown): void {
+	console.error('Draw Steel Elements: the compendium migration could not continue:', error);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
@@ -600,9 +605,9 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
             id: 'sync-compendium',
             name: 'Sync compendium',
             callback: () => {
-                // SC-646: empty catch on purpose. A failed sync was already reported (the
-                // "compendium sync failed" Notice and its console.error come from
-                // CompendiumSyncService.sync, which rethrows by design).
+                // SC-646: empty on purpose. A failure was already reported: by
+                // CompendiumSyncService.sync (the "compendium sync failed" Notice and its
+                // console.error; it rethrows by design), or logged by syncCompendium's own catch.
                 this.syncCompendium().catch(() => {});
             },
         });
@@ -616,7 +621,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         this.addCommand({
             id: 'migrate-compendium-layout',
             name: 'Migrate compendium from the pre-7.0.0 layout',
-            callback: () => { void this.migrateCompendium(); },
+            callback: () => { this.migrateCompendium().catch(logMigrationFailure); },
         });
     }
 
@@ -746,6 +751,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
             new Notice(SYNC_BUSY_NOTICE);
             return;
         }
+        let syncStarted = false;
         try {
             // SC-125: adopt anything a previous (possibly interrupted) migration moved
             // BEFORE any sync reads the manifest — otherwise those files look like user
@@ -785,6 +791,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
                         await this.migrationService.markSettled(options.root);
                     }
                     if (manifest !== null) {
+                        syncStarted = true;
                         await this.syncService.sync(options, token);
                         return;
                     }
@@ -807,7 +814,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
                     new LegacyCompendiumModal(this.app, options.root, (trashOldRoot) => {
                         // SC-646: see `logUnlessSyncReported` for the catch at the end.
                         let syncStarted = false;
-                        void (async () => {
+                        (async () => {
                             const trashToken = this.syncService.beginOperation('sync');
                             if (trashToken === null) {
                                 new Notice(SYNC_BUSY_NOTICE);
@@ -845,7 +852,11 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
                     return;
                 }
             }
+            syncStarted = true;
             await this.syncService.sync(options, token);
+        } catch (error: unknown) {
+            logUnlessSyncReported(error, syncStarted);
+            throw error;
         } finally {
             this.syncService.endOperation(token);
         }
@@ -903,13 +914,13 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         }
 
         const declined = () => {
-            void (async () => {
+            (async () => {
                 await this.migrationService.markDeclined(root);
                 new Notice(
                     'Draw Steel Elements: compendium left as it is, and NOT synced — syncing now ' +
                     'would create the new files and make the move impossible. You will be asked ' +
                     'again next time you sync.', 10000);
-            })();
+            })().catch((error: unknown) => console.error('Draw Steel Elements: could not record the declined compendium migration:', error));
         };
 
         new CompendiumMigrationModal(this.app, plan, {
@@ -924,7 +935,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
             syncAnyway: () => {
                 // SC-646: see `logUnlessSyncReported` for the catch at the end.
                 let syncStarted = false;
-                void (async () => {
+                (async () => {
                     const anywayToken = this.syncService.beginOperation('sync');
                     if (anywayToken === null) {
                         new Notice(SYNC_BUSY_NOTICE);
@@ -941,7 +952,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
                     }
                 })().catch((error: unknown) => logUnlessSyncReported(error, syncStarted));
             },
-            finishRemaining: () => { void this.offerMigration(root); },
+            finishRemaining: () => { this.offerMigration(root).catch(logMigrationFailure); },
             syncAfter: (report) => {
                 this.announceMigration(report);
                 const latest = this.requireSyncOptions();

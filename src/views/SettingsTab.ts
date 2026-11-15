@@ -632,9 +632,9 @@ export class DseSettingTab extends PluginSettingTab {
 									.setCta()
 									.onClick(() => {
 										this.plugin.syncCompendium().catch(() => {
-											// SC-646: empty on purpose. A failed sync was already reported (the
-											// "compendium sync failed" Notice and its console.error come from
-											// CompendiumSyncService.sync, which rethrows by design).
+											// SC-646: empty on purpose. A failure was already reported: by
+											// CompendiumSyncService.sync (the "compendium sync failed" Notice and its
+											// console.error; it rethrows by design), or logged by syncCompendium's own catch.
 										});
 									});
 							})
