@@ -36,7 +36,7 @@ async function flush(): Promise<void> {
 	for (let i = 0; i < 30; i++) await Promise.resolve();
 }
 
-type FormHandle = { save(): Promise<void>; body: HTMLElement; close(): void };
+type FormHandle = { save(): Promise<void>; canSave(): boolean; body: HTMLElement; close(): void };
 
 async function setup(note: string, defs: ElementDefinition[]) {
 	const { deps, app, plugin } = makeEnv();
