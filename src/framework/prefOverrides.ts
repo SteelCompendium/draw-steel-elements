@@ -159,7 +159,7 @@ export function bodyDeclaresTopLevel(body: string, key: string): boolean {
 	try {
 		const parsed: unknown = parseYaml(body);
 		if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-			return Object.prototype.hasOwnProperty.call(parsed, key);
+			return Object.prototype.hasOwnProperty.call(parsed, key) === true;
 		}
 	} catch {
 		/* not parseable as a whole: fall back to the line test */
