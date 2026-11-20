@@ -132,6 +132,7 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Counter/counter.md` | one `ds-counter` (Health 1, min 0, max 3) with `ABOVE` / `BELOW` text around it (SC-495, SC-602) |
   | `Counter/twins.md` | two IDENTICAL `ds-counter` blocks (Health 1, min 0, max 3) with prose above, between and below (SC-602: a Live Preview save of the upper one is handed to the twin below) |
   | `Counter/kept-keys.md` | one `ds-counter` (Health 1, min 0, max 3) with `prefs: compact` and `collapsed: yes` above the body: two reserved lines the product cannot read (SC-652) |
+  | `Counter/own-keys.md` | one `ds-counter` (Torches 2, min 0, max 5, `_dse_anchor: own671`) with a scalar, a nested map and a list the counter does not read, text above and below (SC-671) |
   | `Callout/callout.md` | one `ds-stamina-bar` (12/30, 3 of 6 Recoveries) inside a `> [!note]` callout, text above and below it (SC-455) |
   | `Callout/nested.md` | the same block inside a callout nested in a callout (`> > ` on every line) |
   | `Callout/quote.md` | the same block inside a plain blockquote (Reading view only: Live Preview does not draw it) |
