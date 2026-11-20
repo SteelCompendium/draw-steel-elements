@@ -508,7 +508,7 @@ free, derived from `def.schema`/`def.authoring`.
   before the cursor stays above it, text after the cursor / selection moves below it) and puts the
   cursor line's prefix on every inserted line: the quote markers (`blockPrefix.ts`'s
   `quoteMarkersOf` + `addBlockPrefix`, SC-455) plus a list item's continuation indentation, always written as spaces (a tab counts to the
-  next multiple of 4: Live Preview draws a tab-indented block body as a parse error), and a quote
+  next multiple of 4 under an ordered item and as 2 columns under a bullet, as Obsidian's Reading view reads nesting, measured; Live Preview draws a tab-indented block body as a parse error), and a quote
   opened after the list marker (`- > [!note]`) (a
   list-indented fence is a shape the SC-455 write path cannot address, so such a block draws but
   its controls cannot save yet). One `replaceSelection`/`replaceRange`, no blank lines added.
