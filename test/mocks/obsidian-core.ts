@@ -560,6 +560,8 @@ export abstract class EditorSuggest<T> {
 	abstract getSuggestions(context: EditorSuggestContext): T[] | Promise<T[]>;
 	abstract renderSuggestion(value: T, el: HTMLElement): void;
 	abstract selectSuggestion(value: T, evt: unknown): void;
+	/** Obsidian's popup close; the mock has no popup, so this only exists to be called (and spied on). */
+	close(): void {}
 }
 
 export class Plugin extends Component {

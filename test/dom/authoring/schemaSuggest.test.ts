@@ -20,6 +20,7 @@ import { Editor, App } from '../../mocks/obsidian';
 import { setExperimental } from '../../../src/framework/experimental';
 import { surgesElement } from '../../../src/elements/surges/definition';
 import { heroElement } from '../../../src/elements/hero/definition';
+import { EditorSelection, EditorState } from '@codemirror/state';
 
 const SCHEMA = `
 type: object
@@ -265,5 +266,148 @@ describe('SC-476 — extra words after the fence language', () => {
 		const s = realSuggest();
 		const editor = new Editor('```ds-stamina-bar `x`\n');
 		expect(s.onTrigger({ line: 1, ch: 0 }, editor as never, null)).toBeNull();
+	});
+});
+
+// SC-679 — accepting a suggestion. The jest-free mock Editor never changes its text, and a real editor maps the cursor through a write: a
+// cursor AT the point where text is inserted stays in front of it. So these use a small editor over a real CodeMirror 6 EditorState (only the
+// surface src/authoring touches), which is what made the bug visible: with nothing typed (start == end) the cursor stayed before the value.
+describe('SC-679 — after an accept the cursor is behind the value and no list is left or reopened', () => {
+	class CmDoc {
+		state: EditorState;
+		constructor(text: string, cursor: { line: number; ch: number }) {
+			this.state = EditorState.create({ doc: text });
+			this.setCursor(cursor);
+		}
+		private offset(p: { line: number; ch: number }): number {
+			const line = this.state.doc.line(p.line + 1);
+			return line.from + Math.min(p.ch, line.length);
+		}
+		getLine(n: number): string {
+			return n >= 0 && n < this.state.doc.lines ? this.state.doc.line(n + 1).text : '';
+		}
+		lineCount(): number {
+			return this.state.doc.lines;
+		}
+		getValue(): string {
+			return this.state.doc.toString();
+		}
+		getCursor(): { line: number; ch: number } {
+			const head = this.state.selection.main.head;
+			const line = this.state.doc.lineAt(head);
+			return { line: line.number - 1, ch: head - line.from };
+		}
+		setCursor(p: { line: number; ch: number }): void {
+			this.state = this.state.update({ selection: EditorSelection.cursor(this.offset(p)) }).state;
+		}
+		replaceRange(text: string, from: { line: number; ch: number }, to: { line: number; ch: number }): void {
+			this.state = this.state.update({ changes: { from: this.offset(from), to: this.offset(to), insert: text } }).state;
+		}
+		/** What typing does: insert at the cursor, cursor behind it. */
+		type(text: string): void {
+			this.state = this.state.update(this.state.replaceSelection(text)).state;
+		}
+		backspace(): void {
+			const head = this.state.selection.main.head;
+			this.state = this.state.update({ changes: { from: head - 1, to: head }, selection: EditorSelection.cursor(head - 1) }).state;
+		}
+	}
+
+	/** Open the suggester where the editor's cursor is, as Obsidian does on every editor change. */
+	const trigger = (s: DsSchemaSuggest, editor: CmDoc) => {
+		const info = s.onTrigger(editor.getCursor(), editor as never, null);
+		return info === null ? null : { info, rows: s.getSuggestions({ ...info, editor: editor as never, file: null as never }) as string[] };
+	};
+	/** Accept `value` from the open list (Obsidian sets `context` from the trigger before it asks for rows). */
+	const accept = (s: DsSchemaSuggest, editor: CmDoc, value: string) => {
+		const opened = trigger(s, editor)!;
+		expect(opened.rows).toContain(value);
+		s.context = { editor: editor as never, file: null as never, ...opened.info };
+		s.selectSuggestion(value);
+	};
+	const stam = (body: string, cursor: { line: number; ch: number }) => ({ s: realSuggest(), editor: new CmDoc('```ds-stam\n' + body + '\n```', cursor) });
+
+	test('key list, nothing typed: the cursor is behind the key, which is on the line whole', () => {
+		const { s, editor } = stam('', { line: 1, ch: 0 });
+		accept(s, editor, 'collapsible');
+		expect(editor.getLine(1)).toBe('collapsible');
+		expect(editor.getCursor()).toEqual({ line: 1, ch: 11 });
+	});
+
+	test('value list, nothing typed: the cursor is behind the value', () => {
+		const s = suggest();
+		const editor = new CmDoc('```ds-x\nstyle: \n```', { line: 1, ch: 7 });
+		accept(s, editor, 'flat');
+		expect(editor.getLine(1)).toBe('style: flat');
+		expect(editor.getCursor()).toEqual({ line: 1, ch: 11 });
+	});
+
+	test('a typed prefix is replaced and the cursor is behind the key (key list and value list)', () => {
+		const a = stam('cur', { line: 1, ch: 3 });
+		accept(a.s, a.editor, 'current_stamina');
+		expect(a.editor.getLine(1)).toBe('current_stamina');
+		expect(a.editor.getCursor()).toEqual({ line: 1, ch: 15 });
+		const s = suggest();
+		const editor = new CmDoc('```ds-x\nstyle: fl\n```', { line: 1, ch: 9 });
+		accept(s, editor, 'flat');
+		expect(editor.getLine(1)).toBe('style: flat');
+		expect(editor.getCursor()).toEqual({ line: 1, ch: 11 });
+	});
+
+	test('the list is closed by the accept and the trigger at the new cursor offers nothing (no one-row list repeating the word)', () => {
+		const { s, editor } = stam('', { line: 1, ch: 0 });
+		const close = jest.spyOn(s, 'close');
+		accept(s, editor, 'max_stamina');
+		expect(close).toHaveBeenCalledTimes(1);
+		expect(trigger(s, editor)).toBeNull();
+		expect(trigger(s, editor)).toBeNull(); // Obsidian may ask more than once for the same cursor
+		const v = suggest();
+		const veditor = new CmDoc('```ds-x\nstyle: \n```', { line: 1, ch: 7 });
+		accept(v, veditor, 'card');
+		expect(trigger(v, veditor)).toBeNull();
+	});
+
+	test('a key that is the start of a longer key (recoveries / recoveries_max) shows no list after its accept, and typing on lists the longer one', () => {
+		const { s, editor } = stam('rec', { line: 1, ch: 3 });
+		expect(trigger(s, editor)!.rows).toEqual(['recoveries', 'recoveries_max']);
+		accept(s, editor, 'recoveries');
+		expect(trigger(s, editor)).toBeNull();
+		editor.type('_');
+		expect(trigger(s, editor)!.rows).toEqual(['recoveries_max']);
+		editor.backspace();
+		expect(trigger(s, editor)!.rows).toEqual(['recoveries', 'recoveries_max']);
+	});
+
+	test('the accept only silences its own spot: another cursor, or the accepted line edited, lists again', () => {
+		const { s, editor } = stam('\nrec', { line: 2, ch: 3 });
+		accept(s, editor, 'recoveries');
+		editor.setCursor({ line: 1, ch: 0 });
+		expect(trigger(s, editor)!.rows.length).toBe(9); // the accepted spot was left: the empty line above lists every key
+		editor.setCursor({ line: 2, ch: 10 });
+		expect(trigger(s, editor)!.rows).toEqual(['recoveries', 'recoveries_max']); // and coming back to it is not silenced any more
+	});
+
+	test('typing on after an accept behaves as before: `: ` after a key opens its value list', () => {
+		const { s, editor } = stam('sty', { line: 1, ch: 3 });
+		accept(s, editor, 'style');
+		editor.type(': ');
+		expect(trigger(s, editor)!.rows).toEqual(['default', 'sheet']);
+	});
+
+	test('unchanged: a letter lists every key that starts with it, and a fully typed key (not accepted) still lists itself and the longer keys', () => {
+		const c = stam('c', { line: 1, ch: 1 });
+		expect(trigger(c.s, c.editor)!.rows).toEqual(['collapsible', 'collapse_default', 'current_stamina']);
+		const full = stam('recoveries', { line: 1, ch: 10 });
+		expect(trigger(full.s, full.editor)!.rows).toEqual(['recoveries', 'recoveries_max']);
+		const only = stam('style', { line: 1, ch: 5 });
+		expect(trigger(only.s, only.editor)!.rows).toEqual(['style']);
+	});
+
+	test('an accept with no context does nothing (and nothing is silenced afterwards)', () => {
+		const { s, editor } = stam('c', { line: 1, ch: 1 });
+		s.context = null;
+		s.selectSuggestion('collapsible');
+		expect(editor.getLine(1)).toBe('c');
+		expect(trigger(s, editor)!.rows.length).toBe(3);
 	});
 });
