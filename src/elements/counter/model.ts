@@ -35,11 +35,54 @@
 import { Counter } from '@model/Counter';
 import { recordingDefaults, stringifyOmittingUntouched } from '../shared/undeclaredDefaults';
 
+// SC-671 — a key the counter does not read (a user's own `note_to_self:`, an `extra:` map) used to be deleted from the note by the
+// first write, because `serialize` writes the `Counter` instance and `Counter.parse` copies seven named fields. The unknown top-level keys
+// are now remembered per instance and written back after the known ones (`max_value`, `current_value`, `min_value`, `name`,
+// `value_height`, `name_height`, `_dse_anchor`), in their original relative order. "Known" is every key the counter READS: there is no
+// alias, the view only reads the model. A known key is never carried here whatever its value (a wrong-typed or falsy one keeps its
+// parse behaviour). The framework-reserved wrapper keys (`prefs`, `collapsed`, `collapsible`, `collapse_default`) never reach `parse`
+// (the pipeline pops them and `withReservedKeys` writes them once), so they are not unknown keys either.
+//
+// Where they live: a module-private WeakMap keyed by the parsed instance, NOT own properties of `Counter` (negotiation's choice, not
+// montage's). `Counter` is a class that `serialize` writes whole: an own property would be written as a key by anything that serializes
+// the instance, and a user key named like a field, a method or the prototype (`name`, `current_value`, `constructor`, `toJSON`,
+// `__proto__`) would overwrite or shadow it. In the map no YAML key can do that: the pairs are only read back by `serialize`, which
+// puts them into a plain DTO with `Object.fromEntries` (defines own data properties, so `__proto__` is an ordinary key there too).
+// A re-parse (outside edit, sidebar refresh) builds a new instance with the keys of its new source, so a stale set can never survive one.
+//
+// A key that looks like an integer (`2024:`) is written FIRST, ahead of the known keys, and comes back quoted: that is JavaScript's own
+// object key order, not a choice (SC-625's precedent), and a unit test pins it. The value is carried as it parsed (a nested map or list
+// included); its formatting is whatever `stringifyYaml` does today (SC-599's question, not this one). A block with no unknown keys
+// serializes exactly as before.
+const KNOWN_KEYS: ReadonlySet<string> = new Set([
+	'max_value', 'current_value', 'min_value', 'name', 'value_height', 'name_height', '_dse_anchor',
+]);
+
+const unknownKeys = new WeakMap<Counter, ReadonlyArray<readonly [string, unknown]>>();
+
+/** The own enumerable string keys of `source` that the counter does not read, as pairs in their original order; none for a value that is
+ *  not a mapping (a string or a list would otherwise yield its indices). */
+function unknownPairs(source: unknown): Array<readonly [string, unknown]> {
+	if (source === null || typeof source !== 'object' || Array.isArray(source)) return [];
+	return Object.entries(source).filter(([key]) => !KNOWN_KEYS.has(key));
+}
+
 /** The keys Counter.parse fills a default into when the source did not declare them (SC-482). */
 const PARSER_DEFAULT_KEYS = ['current_value', 'min_value', 'value_height', 'name_height'] as const;
 
-export const parse = recordingDefaults((data: unknown, _raw: string): Counter => Counter.parse(data), PARSER_DEFAULT_KEYS);
+export const parse = recordingDefaults(
+	(data: unknown, _raw: string): Counter => {
+		const model = Counter.parse(data);
+		const pairs = unknownPairs(data);
+		if (pairs.length > 0) unknownKeys.set(model, pairs);
+		return model;
+	},
+	PARSER_DEFAULT_KEYS,
+);
 
 export function serialize(model: Counter): string {
-	return stringifyOmittingUntouched(model);
+	const extras = unknownKeys.get(model);
+	if (!extras) return stringifyOmittingUntouched(model);
+	// `fromEntries`, never an assignment: a hand-written `__proto__:` key must become a plain own key, not set the prototype.
+	return stringifyOmittingUntouched(model, Object.fromEntries([...Object.entries(model), ...extras]));
 }
