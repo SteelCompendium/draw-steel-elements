@@ -35,7 +35,7 @@
       
       
       <link rel="icon" href="../Media/favicon.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -1259,6 +1259,12 @@ complete, filled-in example block you can edit.</p>
 <strong>Insert Draw Steel:</strong> — for example <em>Insert Draw Steel: Statblock</em>, <em>Insert Draw Steel:
 Initiative tracker</em>, <em>Insert Draw Steel: Featureblock</em>. The block is inserted at your cursor.</p>
 <p>Both routes insert; neither ever overwrites text you already wrote.</p>
+<p>The block always gets lines of its own. If there is text before the cursor, the block starts on the
+next line; if there is text after the cursor, it moves to a line below the block (a <code>/ds</code> pick keeps
+the text after it the same way). Inside a callout every line of the block keeps the callout's <code>&gt;</code>,
+and inside a list item every line is indented under the item. The same goes for the
+<strong>Insert Draw Steel: compendium reference / full block</strong> commands. (A block inside a list item
+draws, but can't save yet, see <a href="#blocks-inside-callouts-and-quotes">Blocks inside callouts and quotes</a> below.)</p>
 <h2 id="autocomplete-inside-a-block">Autocomplete inside a block<a class="headerlink" href="#autocomplete-inside-a-block" title="Permanent link">&para;</a></h2>
 <p>With your cursor inside a <code>ds-</code> block, start typing a field name and Obsidian suggests the
 fields that element accepts. After a field that only allows certain values (for example
