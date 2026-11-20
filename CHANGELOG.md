@@ -22,6 +22,12 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Picking a suggestion inside a `ds-` block with nothing typed no longer leaves the cursor in front of it, so the next Enter does not write a second one** (SC-679).
+  With the cursor on an empty line (or right after `mode: `), picking a field name or a value from the autocomplete list put the word in but left the cursor before it and the old list on screen.
+  The next Enter then wrote the first suggestion again in front of the first (`collapsiblecollapsible`, `mode: power-rollopposed`).
+  Now, after any pick (Enter or a click, with or without letters typed), the cursor sits right after the word and the list is closed, so Enter starts a new line.
+  Keep typing and the list comes back as usual: a longer field name that starts with the one you picked, or the value list after `: `.
+  Not covered: picking a suggestion while the cursor is in the middle of a word still doubles the rest of the word (SC-678).
 - [FEATURE] **Minion pool window: when a group holds several squads, the title names the squad you opened** (SC-569).
   With two squads in "Wolves", both windows used to read "Wolves - Minion Stamina Pool". They now read "Wolves - Wolf -
   Minion Stamina Pool" and "Wolves - Dire Wolf - Minion Stamina Pool". Two squads of the same creature (as in the

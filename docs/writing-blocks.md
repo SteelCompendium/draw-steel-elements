@@ -37,6 +37,9 @@ With your cursor inside a `ds-` block, start typing a field name and Obsidian su
 fields that element accepts. After a field that only allows certain values (for example
 `style:` in a [skills block](skills-element.md#layouts-style)), the suggestions become that field's allowed values.
 
+Pick a suggestion with Enter or a click. The cursor lands right after it and the list closes, even when
+you had typed nothing yet, so the next Enter starts a new line.
+
 Field-name suggestions are offered for top-level fields; deeper, indented fields are not
 suggested yet.
 
