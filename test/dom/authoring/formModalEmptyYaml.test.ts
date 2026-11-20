@@ -50,7 +50,7 @@ function example(def: ElementDefinition<any>): string {
 }
 
 const CASES: Case[] = [
-	{ name: 'counter', def: counterElement, alias: 'ds-counter', source: 'current_value: 3', acceptsEmpty: false },
+	{ name: 'counter', def: counterElement, alias: 'ds-counter', source: 'current_value: 3', acceptsEmpty: true },
 	{ name: 'negotiation', def: negotiationElement, alias: 'ds-negotiation', source: 'name: Duke', acceptsEmpty: false },
 	{ name: 'party', def: partyElement, alias: 'ds-party', source: 'heroes: []', acceptsEmpty: false, invalid: { box: 'just text', error: /^The input must be a YAML object\.$/ } },
 	{ name: 'encounter', def: encounterElement, alias: 'ds-encounter', source: 'heroes: []', acceptsEmpty: false, invalid: { box: 'just text', error: /^The input must be a YAML object\.$/ } },
@@ -162,7 +162,7 @@ describe.each(CASES)('SC-493: emptying the raw-YAML box of $name', (c) => {
 
 describe('SC-493 r2: the emptied preview drops its read-only badge', () => {
 	test('after a valid box is emptied, .dse-form__preview carries no data-dse-readonly (the badge would cover the message)', async () => {
-		const c = CASES[0];
+		const c = CASES[1]; // negotiation: an element that refuses an empty box (a counter takes one, so it never reaches this state)
 		const { render } = await setup(c);
 		const { el } = await render(c.source);
 		const form = openForm(el);
@@ -171,7 +171,7 @@ describe('SC-493 r2: the emptied preview drops its read-only badge', () => {
 		form.type('');
 		expect(form.save.disabled).toBe(true);
 		expect(preview.hasAttribute('data-dse-readonly')).toBe(false);
-		form.type('current_value: 4');
+		form.type('name: Duke');
 		expect(preview.getAttribute('data-dse-readonly')).toBe('true'); // the mount path sets it again
 	});
 });
@@ -188,7 +188,7 @@ describe('SC-493 r1b: only an empty box gets the plain message; any other parse 
 	});
 
 	test('the footer button the message points at is called Cancel', async () => {
-		const c = CASES[0];
+		const c = CASES[1];
 		const { render } = await setup(c);
 		const { el } = await render(c.source);
 		openForm(el);

@@ -376,13 +376,13 @@ describe('SC-482: encounter — a party-only source does not gain `monsters: []`
 });
 
 describe('SC-482: an empty source whose values return to their defaults is written as an empty body only when the source body was empty', () => {
-	// A mapping source (`{}`, or keys the element does not know) is written back as `{}`: counter,
-	// negotiation, party and encounter cannot re-parse an empty body ("must be a YAML object").
+	// A mapping source (`{}`, or keys the element does not know) is written back as `{}`: negotiation, party and
+	// encounter cannot re-parse an empty body ("must be a YAML object"). A counter can (an empty body is a counter at 0).
 	test.each(specs)('$name: serialize(parse({})) is {}', (spec) => {
 		expect(spec.def.serialize!(spec.def.parse({}, ''))).toBe('{}');
 	});
 
-	test.each(specs.filter((x) => ['montage', 'project'].includes(x.name)))(
+	test.each(specs.filter((x) => ['counter', 'montage', 'project'].includes(x.name)))(
 		'$name: a null (blank) source body is written back as an empty body',
 		(spec) => {
 			expect(spec.def.serialize!(spec.def.parse(null, ''))).toBe('');
@@ -418,6 +418,22 @@ describe('SC-482: an empty source whose values return to their defaults is writt
 		click(first.root, '.dse-stepper__btn[aria-label^="Decrease"]');
 		await settle();
 		expect(bodyOf(first.note(), 0)).toBe('title: Deaths');
+		const again = await mount(app, spec, 0, bodyOf(app.vault.getContent(NOTE)!, 0));
+		expect(again.root.querySelector('.dse-counter')).not.toBeNull();
+	});
+
+	test('counter, through the real write path: + then - on an EMPTY block returns it to an empty body, and the note is as it was', async () => {
+		const spec = specs.find((x) => x.name === 'counter')!;
+		const before = noteOf([{ lang: spec.lang, body: '' }]);
+		const app = appWith(before);
+		const first = await mount(app, spec, 0, '');
+		increase(first.root);
+		await settle();
+		expect(bodyOf(first.note(), 0)).toBe('current_value: 1');
+		click(first.root, '.dse-stepper__btn[aria-label^="Decrease"]');
+		await settle();
+		expect(bodyOf(first.note(), 0)).toBe('');
+		expect(first.note()).toBe(before);
 		const again = await mount(app, spec, 0, bodyOf(app.vault.getContent(NOTE)!, 0));
 		expect(again.root.querySelector('.dse-counter')).not.toBeNull();
 	});
@@ -562,5 +578,59 @@ describe('SC-482: blocks the plugin builds itself keep the whole-instance output
 		expect(counterElement.serialize!(built)).toBe(
 			'max_value: 20\ncurrent_value: 10\nmin_value: 0\nname: Health\nvalue_height: 3\nname_height: 1',
 		);
+	});
+});
+
+describe('an empty counter block takes a write like any other block', () => {
+	const spec = (): Spec => specs.find((x) => x.name === 'counter')!;
+	const EMPTY_NOTE = ['# Counters', '', 'ABOVE', '', '```ds-counter', '', '```', '', 'BELOW', ''].join('\n');
+
+	test('the first + writes `current_value: 1` inside the fence; the text above and below is untouched', async () => {
+		const app = appWith(EMPTY_NOTE);
+		const m = await mount(app, spec(), 0, '');
+		increase(m.root);
+		await settle();
+		expect(m.note()).toBe(EMPTY_NOTE.replace('```ds-counter\n\n```', '```ds-counter\ncurrent_value: 1\n```'));
+	});
+
+	test('a block with nothing between the fences takes the write and the closing fence stays on its own line', async () => {
+		const note = ['# Counters', '', 'ABOVE', '', '```ds-counter', '```', '', 'BELOW', ''].join('\n');
+		const app = appWith(note);
+		const m = await mount(app, spec(), 0, '');
+		increase(m.root);
+		await settle();
+		expect(m.note()).toBe(['# Counters', '', 'ABOVE', '', '```ds-counter', 'current_value: 1', '```', '', 'BELOW', ''].join('\n'));
+	});
+
+	test('two empty counter blocks in one note: + on the second changes only the second, then + on the first changes only the first', async () => {
+		const note = ['# Counters', '', '```ds-counter', '', '```', '', 'between', '', '```ds-counter', '', '```', '', 'BELOW', ''].join('\n');
+		const app = appWith(note);
+		const first = await mount(app, spec(), 0, '');
+		const second = await mount(app, spec(), 1, '');
+		increase(second.root);
+		await settle();
+		expect(bodyOf(app.vault.getContent(NOTE)!, 0)).toBe('');
+		expect(bodyOf(app.vault.getContent(NOTE)!, 1)).toBe('current_value: 1');
+		increase(first.root);
+		await settle();
+		const out = app.vault.getContent(NOTE)!;
+		expect(bodyOf(out, 0)).toBe('current_value: 1');
+		expect(bodyOf(out, 1)).toBe('current_value: 1');
+		expect(out).toBe(note.replace('```ds-counter\n\n```', '```ds-counter\ncurrent_value: 1\n```').replace('```ds-counter\n\n```', '```ds-counter\ncurrent_value: 1\n```'));
+	});
+
+	test('a block that is the text `hello` is never written: a note with one is byte-identical after the card is drawn', async () => {
+		const note = ['# Counters', '', 'ABOVE', '', '```ds-counter', 'hello', '```', '', 'BELOW', ''].join('\n');
+		const app = appWith(note);
+		const plugin = new Plugin(app);
+		const ctx = makeFakeContext(app, NOTE, 0);
+		const host = new ReadingModeBlockHost(plugin as any, ctx.el, ctx as any, 'ds-counter');
+		const running = new ElementPipeline(spec().deps()).run(spec().def, 'hello', host);
+		await settle();
+		await running;
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(root.querySelector('.dse-error-card-message')!.textContent).toBe('Invalid data: the block must be a map of keys.');
+		expect(root.querySelector('[data-dse-control]')).toBeNull();
+		expect(app.vault.getContent(NOTE)).toBe(note);
 	});
 });
