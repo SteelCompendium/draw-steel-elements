@@ -2,8 +2,8 @@ import {parseYaml} from "obsidian";
 
 /** Raw YAML shape for a `ds-counter` block — every field optional, matching the
  *  pre-existing truthy-check/default pattern at each call site in `parse` below (no
- *  new runtime checks or coercions introduced; the interface only documents what was
- *  already an implicit assumption under `any`). */
+ *  new runtime coercions introduced; the interface only documents what was
+ *  already an implicit assumption under `any`. The one check is the block-shape one at the top of `parse`). */
 interface RawCounterData {
 	max_value?: number;
 	current_value?: number;
@@ -39,7 +39,13 @@ export class Counter {
 	}
 
 	public static parse(data: unknown): Counter {
-		const raw = data as RawCounterData;
+		// A block that is text, a number, a boolean or a list is not a counter: refuse it, because a write would replace the user's text with
+		// `current_value: 1`. An EMPTY block (nothing, blank lines, only comments, a bare `null`) parses to null / undefined and is a fresh counter,
+		// the one a `{}` block is. The message is the one montage and negotiation use.
+		if (data !== undefined && data !== null && (typeof data !== "object" || Array.isArray(data))) {
+			throw new Error("Invalid data: the block must be a map of keys.");
+		}
+		const raw = (data ?? {}) as RawCounterData;
 		return new Counter(
 			raw.max_value,
 			raw.current_value ? raw.current_value : 0,

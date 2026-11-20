@@ -29,7 +29,8 @@
 import { stringifyYaml } from 'obsidian';
 
 /** Parsed objects whose source body was null / blank (not a mapping): only these may be written back as an
- *  empty body. Counter, negotiation, party and encounter cannot re-parse one, so a mapping source stays `{}`. */
+ *  empty body. Negotiation, party and encounter cannot re-parse one, so a mapping source stays `{}`. (A counter
+ *  and a montage can: an empty body is a fresh one.) */
 const blankSource = new WeakSet<object>();
 
 /** Per parsed object: for each key the source left absent, a JSON snapshot of the value parse filled in. */
