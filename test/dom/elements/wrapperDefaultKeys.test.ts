@@ -389,9 +389,11 @@ describe('SC-482: an empty source whose values return to their defaults is writt
 		},
 	);
 
-	test('counter, through the real write path: + then - on `title: Deaths` returns it to {}, and the block re-renders (no error card)', async () => {
+	test('counter, through the real write path: + then - on an empty mapping returns it to {}, and the block re-renders (no error card)', async () => {
 		const spec = specs.find((x) => x.name === 'counter')!;
-		const body = 'title: Deaths';
+		// A mapping with no key at all. It used to be `title: Deaths`, a key the counter does not read: SC-671 keeps such a key, so it would now stay
+		// in the block (and come back on the last line).
+		const body = '{}';
 		const app = appWith(noteOf([{ lang: spec.lang, body }]));
 		const first = await mount(app, spec, 0, body);
 		increase(first.root);
@@ -451,8 +453,9 @@ describe('SC-482: a block holding a `prefs:` map / collapse key returns to its d
 	const PREFS = 'prefs:\n  sbDensity: compact';
 	const spec = (name: string) => specs.find((x) => x.name === name)!;
 
-	test('counter `prefs:` + `title: Deaths`: + then - writes back just the prefs lines, and the block re-renders', async () => {
-		const body = `${PREFS}\ntitle: Deaths`;
+	test('counter with only a `prefs:` map: + then - writes back just the prefs lines, and the block re-renders', async () => {
+		// (It used to carry `title: Deaths`, a key the counter does not read: SC-671 keeps such a key, so it would stay in the block.)
+		const body = PREFS;
 		const app = appWith(noteOf([{ lang: 'ds-counter', body }]));
 		const m = await mount(app, spec('counter'), 0, body);
 		increase(m.root);
@@ -490,7 +493,9 @@ describe('SC-482: a block holding a `prefs:` map / collapse key returns to its d
 	});
 
 	test('a block with neither prefs: nor a collapse key still returns to `{}` (MEDIUM-1 unchanged)', async () => {
-		const body = 'title: Deaths';
+		// A mapping with no key at all. It used to be `title: Deaths`, a key the counter does not read: SC-671 keeps such a key, so it would now stay
+		// in the block (and come back on the last line).
+		const body = '{}';
 		const app = appWith(noteOf([{ lang: 'ds-counter', body }]));
 		const m = await mount(app, spec('counter'), 0, body);
 		increase(m.root);
