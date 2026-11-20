@@ -503,7 +503,14 @@ free, derived from `def.schema`/`def.authoring`.
   their scaffold via `scaffold.ts` (`buildScaffold` — curated `authoring.example` else a
   schema-walked stub, cursor at the first body character) and only ever `replaceSelection`/
   `replaceRange` over the trigger token — INSERT ONLY, never a range-replace over existing
-  content. `/ds` suppresses itself inside any already-open fence (`fenceScan.ts`'s top-down
+  content. SC-675: both (and the compendium reference / snapshot inserts) go through
+  `blockInsert.ts` (`insertBlock`/`planBlockInsert`), which gives the block its own lines (text
+  before the cursor stays above it, text after the cursor / selection moves below it) and puts the
+  cursor line's prefix on every inserted line: the quote markers (`blockPrefix.ts`'s
+  `quoteMarkersOf` + `addBlockPrefix`, SC-455) plus a list item's continuation indentation (a
+  list-indented fence is a shape the SC-455 write path cannot address, so such a block draws but
+  its controls cannot save yet). One `replaceSelection`/`replaceRange`, no blank lines added.
+  `/ds` suppresses itself inside any already-open fence (`fenceScan.ts`'s top-down
   scan, shared with the in-fence suggester below) so accepting it can never corrupt a block
   the cursor happens to be inside.
 - **In-fence autocomplete** (`schemaSuggest.ts`): key/enum completion inside an open `ds-*`

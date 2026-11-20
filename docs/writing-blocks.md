@@ -24,6 +24,13 @@ Initiative tracker*, *Insert Draw Steel: Featureblock*. The block is inserted at
 
 Both routes insert; neither ever overwrites text you already wrote.
 
+The block always gets lines of its own. If there is text before the cursor, the block starts on the
+next line; if there is text after the cursor, it moves to a line below the block (a `/ds` pick keeps
+the text after it the same way). Inside a callout every line of the block keeps the callout's `>`,
+and inside a list item every line is indented under the item. The same goes for the
+**Insert Draw Steel: compendium reference / full block** commands. (A block inside a list item
+draws, but can't save yet, see [Blocks inside callouts and quotes](#blocks-inside-callouts-and-quotes) below.)
+
 ## Autocomplete inside a block
 
 With your cursor inside a `ds-` block, start typing a field name and Obsidian suggests the
