@@ -122,6 +122,11 @@ export class DsSchemaSuggest extends EditorSuggest<string> {
 
 	selectSuggestion(value: string): void {
 		if (!this.context) return;
-		this.context.editor.replaceRange(value, this.context.start, this.context.end);
+		const { editor, start, end } = this.context;
+		editor.replaceRange(value, start, end);
+		// SC-679: with nothing typed (start == end) the write lands AT the cursor, and a cursor that sits
+		// at an insert point stays in front of it: the next Enter then wrote a second value ahead of the
+		// accepted one. Put it after the value, as the /ds suggester does.
+		editor.setCursor({ line: start.line, ch: start.ch + value.length });
 	}
 }
