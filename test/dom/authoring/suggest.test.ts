@@ -161,8 +161,9 @@ test('selectSuggestion drops the cursor at the scaffold\'s first body character,
 	const roll = s['registry'].get('roll')!;
 	s.selectSuggestion(roll, null as never);
 	// scaffold text starts "```ds-roll\n" (11 chars, one newline) — cursorOffset lands right
-	// after that newline, so the cursor moves to the next line, column 0.
+	// after that newline, so the cursor moves to the next line. SC-675: the two spaces typed before
+	// the token are the indentation of every line of the block, so the body starts at column 2.
 	expect(editor.setCursorCalls).toHaveLength(1);
-	expect(editor.setCursorCalls[0]).toEqual({ line: 6, ch: 0 });
-	expect(editor.cursor).toEqual({ line: 6, ch: 0 });
+	expect(editor.setCursorCalls[0]).toEqual({ line: 6, ch: 2 });
+	expect(editor.cursor).toEqual({ line: 6, ch: 2 });
 });

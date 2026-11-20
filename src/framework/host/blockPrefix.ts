@@ -26,6 +26,18 @@
 
 /** A fence line: optional quote prefix, the fence run, the rest of the line. */
 const FENCE_MARKER = /^((?:[ ]{0,3}>[ ]?)+[ ]{0,3})?([`~]{3,})([^\n]*)$/;
+/** The quote markers alone: the `(?:[ ]{0,3}>[ ]?)+` of FENCE_MARKER's prefix group, nothing after them. */
+const LEADING_QUOTE_MARKERS = /^(?:[ ]{0,3}>[ ]?)+/;
+
+/**
+ * SC-675 — the quote markers (`> `, `> > `, `>`) at the start of `line`, exactly as written; '' when the line is not in a quote. Without
+ * the up-to-3 spaces of indentation `matchFenceMarker` allows after them: what follows the markers on a line that is not a fence line
+ * (a list item's marker, the author's own indentation) is the caller's to read. The authoring inserts use it to find the prefix of
+ * the line the cursor is on.
+ */
+export function quoteMarkersOf(line: string): string {
+	return LEADING_QUOTE_MARKERS.exec(line)?.[0] ?? '';
+}
 
 export interface FenceMarker {
 	/** The quote prefix exactly as written ('' for an un-nested fence). */

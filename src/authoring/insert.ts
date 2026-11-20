@@ -1,23 +1,24 @@
 // Plan 15 Task 3 (D9 §2.1) — insert commands: one per registered element, each dropping a
 // scaffold at the cursor. INSERT ONLY (replaceSelection) — never a range-replace over
-// existing content (editor-mutation safety, Global Constraints / OD-D9-12).
+// existing content (editor-mutation safety, Global Constraints / OD-D9-12). SC-675: where the block goes
+// relative to the cursor's line (own lines, container prefix) is blockInsert.ts's job; it is still one
+// replaceSelection that removes only the selection.
 import type { Editor, Plugin } from 'obsidian';
 import { isDefinitionHidden } from '@/framework/registry';
 import type { ElementDefinition, ElementRegistry } from '@/framework/registry';
-import { advancePosition, buildScaffold } from './scaffold';
+import { insertBlock } from './blockInsert';
+import { buildScaffold } from './scaffold';
 
 /**
  * Insert the element's scaffold at the cursor (or over the current selection), then drop
- * the cursor at the scaffold's `cursorOffset` (its first body character). The insertion
- * point must be captured with getCursor('from') BEFORE the write: replaceSelection()
- * replaces [from, to), and once it runs, getCursor() reports the post-insertion position,
- * not where the text landed.
+ * the cursor at the scaffold's `cursorOffset` (its first body character). SC-675: the block
+ * always starts and ends on its own lines (text before / after the cursor is kept on separate
+ * lines) and every line carries the cursor line's list / callout prefix — see blockInsert.ts,
+ * which also captures the insertion point before the write (replaceSelection() leaves
+ * getCursor() at the post-insertion position).
  */
 export function insertScaffold(editor: Editor, def: ElementDefinition): void {
-	const insertionPoint = editor.getCursor('from');
-	const scaffold = buildScaffold(def);
-	editor.replaceSelection(scaffold.text);
-	editor.setCursor(advancePosition(insertionPoint, scaffold.text, scaffold.cursorOffset));
+	insertBlock(editor, buildScaffold(def));
 }
 
 /**

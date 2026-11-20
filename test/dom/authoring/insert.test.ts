@@ -71,7 +71,8 @@ test('the command callback inserts the element scaffold at the cursor only', () 
 	const def = makeRegistry().get('roll')!;
 	insertScaffold(editor as never, def);
 	expect(editor.writes).toHaveLength(1);
-	expect(editor.writes[0].text.startsWith('```ds-roll\n')).toBe(true);
+	// SC-675: the cursor is after text, so the block starts on the next line (a line break goes in front of the fence).
+	expect(editor.writes[0].text.startsWith('\n```ds-roll\n')).toBe(true);
 	expect(editor.writes[0].from).toEqual(editor.writes[0].to); // pure insert, no range replace
 	expect(editor.getValue()).toBe('existing line'); // mock records, never mangles
 });
@@ -81,9 +82,10 @@ test('the command callback drops the cursor at the scaffold\'s first body charac
 	editor.cursor = { line: 5, ch: 7 }; // insertion point captured BEFORE the write
 	const def = makeRegistry().get('roll')!;
 	insertScaffold(editor as never, def);
-	// scaffold text starts "```ds-roll\n" (11 chars, one newline) — cursorOffset lands right
-	// after that newline, so the cursor moves to the next line, column 0.
+	// SC-675: the cursor is mid-line, so a line break goes in first; the scaffold text then starts
+	// "```ds-roll\n" (11 chars, one newline) — cursorOffset lands right after that newline: two lines
+	// down from the insertion point, column 0.
 	expect(editor.setCursorCalls).toHaveLength(1);
-	expect(editor.setCursorCalls[0]).toEqual({ line: 6, ch: 0 });
-	expect(editor.cursor).toEqual({ line: 6, ch: 0 });
+	expect(editor.setCursorCalls[0]).toEqual({ line: 7, ch: 0 });
+	expect(editor.cursor).toEqual({ line: 7, ch: 0 });
 });

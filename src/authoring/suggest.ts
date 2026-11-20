@@ -1,12 +1,13 @@
 // Plan 15 Task 3 (D9 §2.2) — the /ds EditorSuggest scaffolder. One suggester covers every
 // element: type "/ds", filter by name/alias, pick, and the trigger token is REPLACED with
-// the scaffold (start..end only — the rest of the line is untouched). First-class Obsidian
+// the scaffold (start..end only — the rest of the line is kept, on a line of its own below the block). First-class Obsidian
 // API; works in source mode + Live-Preview editing (independent of the LP render deferral).
 import { EditorSuggest } from 'obsidian';
 import type { App, Editor, EditorPosition, EditorSuggestContext, EditorSuggestTriggerInfo, TFile } from 'obsidian';
 import { isDefinitionHidden } from '@/framework/registry';
 import type { ElementDefinition, ElementRegistry } from '@/framework/registry';
-import { advancePosition, buildScaffold } from './scaffold';
+import { insertBlock } from './blockInsert';
+import { buildScaffold } from './scaffold';
 import { scanFenceState } from './fenceScan';
 
 /** `/ds` optionally followed by a query, anchored to a word boundary so it never fires mid-word. */
@@ -61,8 +62,7 @@ export class DsElementSuggest extends EditorSuggest<ElementDefinition> {
 	selectSuggestion(def: ElementDefinition, _evt: MouseEvent | KeyboardEvent): void {
 		if (!this.context) return;
 		const { editor, start, end } = this.context;
-		const scaffold = buildScaffold(def);
-		editor.replaceRange(scaffold.text, start, end);
-		editor.setCursor(advancePosition(start, scaffold.text, scaffold.cursorOffset));
+		// SC-675: the block gets its own lines (text before / after the token stays on separate lines, every line carries the list / callout prefix).
+		insertBlock(editor, buildScaffold(def), { start, end });
 	}
 }

@@ -10,6 +10,7 @@ import type { Editor, Plugin } from 'obsidian';
 import type { CompendiumEntity, CompendiumEntry, CompendiumIndex } from '@/services/CompendiumIndex';
 import type { CompendiumSyncService } from '@/data/CompendiumSyncService';
 import { referenceAliasForType, snapshotAliasForType } from '@/services/typeAdapters';
+import { insertBlock } from './blockInsert';
 import { wrapFence } from './scaffold';
 import { CompendiumSearchModal } from './CompendiumSearchModal';
 
@@ -28,7 +29,7 @@ import { CompendiumSearchModal } from './CompendiumSearchModal';
  *  and a full code is the ONLY form `ds-scc` accepts at all. */
 export function insertReferenceBlock(editor: Editor, entry: CompendiumEntry): void {
 	const alias = referenceAliasForType(entry.type);
-	editor.replaceSelection(wrapFence(alias, entry.scc) + '\n');
+	insertBlock(editor, { text: wrapFence(alias, entry.scc), endLine: true });
 }
 
 /** Inline link: prose-friendly, renders via `rewriteSccAnchors` (F2 §4.3) and the D6 §5
@@ -277,7 +278,7 @@ export async function insertFullBlock(
 	const dto = trimSnapshotDTO(extractDTO(model), model);
 	const body = dto === undefined ? (await entity.body()).trim() : stringifyYaml(dto).trimEnd();
 	if (!refuseClosedEditor(isOpen)) return false;
-	editor.replaceSelection(wrapFence(alias, body) + '\n');
+	insertBlock(editor, { text: wrapFence(alias, body), endLine: true });
 	return true;
 }
 
