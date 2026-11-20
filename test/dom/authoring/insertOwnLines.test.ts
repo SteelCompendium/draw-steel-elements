@@ -179,10 +179,16 @@ describe.each(PATHS)('$name: the block gets its own lines', (p) => {
 		['a star bullet', '* item', '  ', false],
 		['a nested item', '- a\n  - b', '    ', false],
 		// SC-675 r3: a tab never goes on an inserted line (Live Preview shows a parse error for a tab-indented body); it counts to the next multiple of 4.
-		['an item nested with a tab (- a, tab, - b)', '- a\n\t- b', '      ', false],
-		['an empty item nested with a tab', '- a\n\t- ', '      ', false],
+		// SC-675 r5: under a BULLET each leading tab counts as 2 columns (Obsidian's Reading view, measured in 1.14.4, sc675-r4-rereview-report.md MEDIUM-2); under an ordered item 4.
+		['a bullet nested with a tab (- a, tab, - b): 4 spaces', '- a\n\t- b', '    ', false],
+		['an empty bullet nested with a tab', '- a\n\t- ', '    ', false],
+		['a bullet nested with two tabs: 6 spaces', '- a\n\t- b\n\t\t- c', '      ', false],
+		['a bullet nested with three tabs: 8 spaces', '- a\n\t- b\n\t\t- c\n\t\t\t- d', '        ', false],
+		['a star bullet nested with a tab', '* a\n\t* b', '    ', false],
+		['a task item nested with a tab', '- [ ] a\n\t- [ ] b', '    ', false],
+		['an ordered item nested with a tab keeps 4 per tab', '1. a\n\t1. b', '       ', false],
 		['a tab-indented continuation line (the tab itself is kept, the block starts behind it)', '- item\n\t', '    ', true],
-		['a tab inside a callout list', '> - a\n> \t- b', '>       ', false],
+		['a tab inside a callout list', '> - a\n> \t- b', '>     ', false],
 		['a callout opened in a list item (- > [!note] T)', '- > [!note] T', '  > ', false],
 		['a quote opened in a list item (- > quote)', '- > quote', '  > ', false],
 	])('%s', async (_name, lead, prefix, continuation) => {
@@ -299,8 +305,9 @@ describe('the inserted block reads back through the framework', () => {
 		expect(replaceFenceBlock(note, found[0].lineStart, found[0].lineEnd, 'a: 2\nb:\n  c: 2')).toBe(expected.join('\n'));
 	});
 
+	// (`- a⏎⇥- b|` is not in this list either: its block is at 4 spaces, where Obsidian's Reading view counts a bullet tab as 2 columns (measured in Obsidian 1.14.4, SC-675 r4, sc675-r4-rereview-report.md MEDIUM-2) and CommonMark's tab stops would want 6.)
 	// (An EMPTY item nested right under a paragraph line, `- a⏎⇥- |`, is not in this list: `marked` reads that bare `-` as a setext heading underline, as CommonMark does, which is the note's own text, not the insert's.)
-	test.each(['- item|', '- |', '- item\n  |', '1. item|', '- [ ] task|', '- a\n  - b|', '- a\n\t- b|', '- item\n\t|'])(
+	test.each(['- item|', '- |', '- item\n  |', '1. item|', '- [ ] task|', '- a\n  - b|', '- item\n\t|'])(
 		'a block inserted at %j is a fenced code block inside that list item for a Markdown parser',
 		(spec) => {
 			const note = runInsert(spec).getValue();
