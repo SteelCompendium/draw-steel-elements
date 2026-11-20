@@ -272,7 +272,7 @@ describe('SC-476 — extra words after the fence language', () => {
 // SC-679 — accepting a suggestion. The jest-free mock Editor never changes its text, and a real editor maps the cursor through a write: a
 // cursor AT the point where text is inserted stays in front of it. So these use a small editor over a real CodeMirror 6 EditorState (only the
 // surface src/authoring touches), which is what made the bug visible: with nothing typed (start == end) the cursor stayed before the value.
-describe('SC-679 — after an accept the cursor is behind the value and no list is left or reopened', () => {
+describe('SC-679 — after an accept the cursor is behind the value and the list is closed', () => {
 	class CmDoc {
 		state: EditorState;
 		constructor(text: string, cursor: { line: number; ch: number }) {
@@ -354,37 +354,30 @@ describe('SC-679 — after an accept the cursor is behind the value and no list 
 		expect(editor.getCursor()).toEqual({ line: 1, ch: 11 });
 	});
 
-	test('the list is closed by the accept and the trigger at the new cursor offers nothing (no one-row list repeating the word)', () => {
+	test('the accept closes the list once (key list and value list)', () => {
 		const { s, editor } = stam('', { line: 1, ch: 0 });
 		const close = jest.spyOn(s, 'close');
 		accept(s, editor, 'max_stamina');
 		expect(close).toHaveBeenCalledTimes(1);
-		expect(trigger(s, editor)).toBeNull();
-		expect(trigger(s, editor)).toBeNull(); // Obsidian may ask more than once for the same cursor
 		const v = suggest();
-		const veditor = new CmDoc('```ds-x\nstyle: \n```', { line: 1, ch: 7 });
-		accept(v, veditor, 'card');
-		expect(trigger(v, veditor)).toBeNull();
+		const vclose = jest.spyOn(v, 'close');
+		accept(v, new CmDoc('```ds-x\nstyle: \n```', { line: 1, ch: 7 }), 'card');
+		expect(vclose).toHaveBeenCalledTimes(1);
 	});
 
-	test('a key that is the start of a longer key (recoveries / recoveries_max) shows no list after its accept, and typing on lists the longer one', () => {
+	test('after an accept onTrigger answers as it does for the same text and cursor without one (a key that starts a longer key: recoveries / recoveries_max)', () => {
 		const { s, editor } = stam('rec', { line: 1, ch: 3 });
 		expect(trigger(s, editor)!.rows).toEqual(['recoveries', 'recoveries_max']);
 		accept(s, editor, 'recoveries');
-		expect(trigger(s, editor)).toBeNull();
+		const fresh = stam('recoveries', { line: 1, ch: 10 });
+		expect(editor.getValue()).toBe(fresh.editor.getValue());
+		expect(editor.getCursor()).toEqual(fresh.editor.getCursor());
+		expect(trigger(s, editor)).toEqual(trigger(fresh.s, fresh.editor));
+		expect(trigger(s, editor)!.rows).toEqual(['recoveries', 'recoveries_max']);
 		editor.type('_');
 		expect(trigger(s, editor)!.rows).toEqual(['recoveries_max']);
 		editor.backspace();
 		expect(trigger(s, editor)!.rows).toEqual(['recoveries', 'recoveries_max']);
-	});
-
-	test('the accept only silences its own spot: another cursor, or the accepted line edited, lists again', () => {
-		const { s, editor } = stam('\nrec', { line: 2, ch: 3 });
-		accept(s, editor, 'recoveries');
-		editor.setCursor({ line: 1, ch: 0 });
-		expect(trigger(s, editor)!.rows.length).toBe(9); // the accepted spot was left: the empty line above lists every key
-		editor.setCursor({ line: 2, ch: 10 });
-		expect(trigger(s, editor)!.rows).toEqual(['recoveries', 'recoveries_max']); // and coming back to it is not silenced any more
 	});
 
 	test('typing on after an accept behaves as before: `: ` after a key opens its value list', () => {
@@ -403,11 +396,13 @@ describe('SC-679 — after an accept the cursor is behind the value and no list 
 		expect(trigger(only.s, only.editor)!.rows).toEqual(['style']);
 	});
 
-	test('an accept with no context does nothing (and nothing is silenced afterwards)', () => {
+	test('an accept with no context does nothing: no write, the cursor stays, the list is not closed', () => {
 		const { s, editor } = stam('c', { line: 1, ch: 1 });
+		const close = jest.spyOn(s, 'close');
 		s.context = null;
 		s.selectSuggestion('collapsible');
 		expect(editor.getLine(1)).toBe('c');
-		expect(trigger(s, editor)!.rows.length).toBe(3);
+		expect(editor.getCursor()).toEqual({ line: 1, ch: 1 });
+		expect(close).not.toHaveBeenCalled();
 	});
 });
