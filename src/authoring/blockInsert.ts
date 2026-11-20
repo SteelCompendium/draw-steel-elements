@@ -7,8 +7,8 @@
 // the cursor's line looks like first:
 //   - its PREFIX: the quote markers (`> `, `> > ` — blockPrefix.ts, SC-455), then the item's continuation indentation when it is a
 //     list item (`- item` -> two spaces, `1. ` three, `10. ` four; a quote opened after the marker, `- > [!note] T`, is part of it: `  > `),
-//     else the width of the author's own leading whitespace. The indentation is always written as SPACES (a tab counts to the next
-//     multiple of 4): Live Preview draws a block whose body lines are tab-indented as a parse error ("Tabs are not allowed as
+//     else the width of the author's own leading whitespace. The indentation is always written as SPACES (under an ordered item a
+//     tab counts to the next multiple of 4, under a bullet as 2 columns: how Obsidian's Reading view reads nesting, see blockContextOf): Live Preview draws a block whose body lines are tab-indented as a parse error ("Tabs are not allowed as
 //     indentation"). The inserted lines are new text; the user's own whitespace on the cursor line is never rewritten, the first
 //     fence line goes right behind it. Every line written carries the prefix;
 //   - whether text sits before the cursor. If so the block starts on the NEXT line (a line break is inserted; the text stays where it is).
@@ -58,7 +58,7 @@ function columnAfter(text: string, start = 0): number {
 
 /**
  * Reads `before` (the line's text up to the cursor). The prefix is the quote markers, plus the continuation indentation of a list item
- * (spaces up to the column where the item's text starts — CommonMark: the marker and the 1-4 spaces after it; 5 or more spaces read
+ * (spaces up to the column where the item's text starts — CommonMark, except that a leading tab counts as 2 columns under a bullet, see below: the marker and the 1-4 spaces after it; 5 or more spaces read
  * as one, the rest being indented code — and any quote markers opened right after the marker), else spaces for the width of the
  * leading whitespace. Spaces only, never the line's tabs (see the header). The first line of a block that starts on the cursor
  * line goes behind the user's own whitespace, which is not part of `prefix`.
@@ -69,7 +69,13 @@ export function blockContextOf(before: string): BlockContext {
 	const list = LIST_MARKER.exec(rest);
 	if (list) {
 		const [, lead, marker, gap] = list;
-		const markerEnd = columnAfter(marker, columnAfter(lead));
+		// Where the item's text starts is measured the way Obsidian's Reading view reads it, not by CommonMark's tab stops: under a BULLET
+		// each leading tab counts as 2 columns (`- a⏎⇥- b⏎⇥⇥- c` draws with the block at 6 spaces under c, not at CommonMark's 10, which Reading
+		// view shows as inline code text), under an ORDERED item 4 as CommonMark has it. Measured in Obsidian 1.14.4, SC-675 r4
+		// (sc675-r4-rereview-report.md MEDIUM-2): 1, 2 and 3 tabs draw in both Reading view and Live Preview at 4, 6 and 8 spaces. Do not
+		// "correct" the 2 to CommonMark's 4. Leading spaces count as themselves.
+		const leadColumns = /^\d/.test(marker) ? columnAfter(lead) : lead.replace(/\t/g, '  ').length;
+		const markerEnd = columnAfter(marker, leadColumns);
 		const gapEnd = columnAfter(gap, markerEnd);
 		const contentColumn = gapEnd - markerEnd >= 5 ? markerEnd + 1 : gapEnd;
 		const innerQuote = quoteMarkersOf(rest.slice(list[0].length));
