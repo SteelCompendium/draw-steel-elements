@@ -43,6 +43,11 @@ type Mode = { kind: 'key'; id: string } | { kind: 'enum'; id: string; key: strin
 
 export class DsSchemaSuggest extends EditorSuggest<string> {
 	private mode: Mode | null = null;
+	/** SC-679: where an accept left the cursor, and the line it left there. Obsidian runs onTrigger again at the new cursor, and the
+	 *  accepted word is itself a prefix of itself, so without this a one-row list repeating the word would open over it and swallow the
+	 *  next Enter. Offered nothing at exactly this spot (cursor and line unchanged); the first onTrigger anywhere else drops it, so the
+	 *  next letter typed (a longer key) or a Backspace lists as usual. */
+	private accepted: { line: number; ch: number; text: string } | null = null;
 	private readonly schemaCache = new Map<string, SchemaShape | null>();
 
 	constructor(
@@ -65,6 +70,11 @@ export class DsSchemaSuggest extends EditorSuggest<string> {
 	}
 
 	onTrigger(cursor: EditorPosition, editor: Editor, _file: TFile | null): EditorSuggestTriggerInfo | null {
+		const done = this.accepted;
+		if (done) {
+			if (cursor.line === done.line && cursor.ch === done.ch && editor.getLine(cursor.line) === done.text) return null;
+			this.accepted = null;
+		}
 		// Don't trigger while the cursor sits on a fence marker line itself (opening, closing,
 		// or any other fence-looking line) — that's fence syntax, not a key/value body line.
 		if (FENCE_LINE.test(editor.getLine(cursor.line))) return null;
@@ -127,6 +137,10 @@ export class DsSchemaSuggest extends EditorSuggest<string> {
 		// SC-679: with nothing typed (start == end) the write lands AT the cursor, and a cursor that sits
 		// at an insert point stays in front of it: the next Enter then wrote a second value ahead of the
 		// accepted one. Put it after the value, as the /ds suggester does.
-		editor.setCursor({ line: start.line, ch: start.ch + value.length });
+		const ch = start.ch + value.length;
+		editor.setCursor({ line: start.line, ch });
+		this.accepted = { line: start.line, ch, text: editor.getLine(start.line) };
+		// Obsidian leaves the old rows up after an accept until its next editor update: shut them now, so an Enter that comes at once is a new line.
+		this.close();
 	}
 }
