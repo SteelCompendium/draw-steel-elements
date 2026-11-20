@@ -133,6 +133,13 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Counter/twins.md` | two IDENTICAL `ds-counter` blocks (Health 1, min 0, max 3) with prose above, between and below (SC-602: a Live Preview save of the upper one is handed to the twin below) |
   | `Counter/kept-keys.md` | one `ds-counter` (Health 1, min 0, max 3) with `prefs: compact` and `collapsed: yes` above the body: two reserved lines the product cannot read (SC-652) |
   | `Counter/own-keys.md` | one `ds-counter` (Torches 2, min 0, max 5, `_dse_anchor: own671`) with a scalar, a nested map and a list the counter does not read, text above and below (SC-671) |
+  | `Counter/wrong-block.md` | the whole block is the text `hello`: a plain error card (`Invalid data: the block must be a map of keys.`), no control, the note is never written |
+  | `Counter/wrong-list.md` | the block is a list (`- a`, `- b`): the same plain error card, nothing written |
+  | `Counter/wrong-number.md` | the block is the number `5`: the same plain error card, nothing written |
+  | `Counter/empty-block.md` | one `ds-counter` with one empty line between the fences, `ABOVE` / `BELOW` text around it: a counter at 0, and the first + writes `current_value: 1` |
+  | `Counter/comment-only-block.md` | one `ds-counter` holding only the comment `# a note to self`: a counter at 0 (the first write drops the comment, as for every block) |
+  | `Counter/adjacent-fences.md` | one `ds-counter` with the closing fence directly under the opening one (no line between): a counter at 0; a write keeps the closing fence on its own line |
+  | `Counter/two-empty.md` | TWO empty `ds-counter` blocks with `ABOVE`, `BETWEEN` and `BELOW` text: a write to one changes only that block |
   | `Callout/callout.md` | one `ds-stamina-bar` (12/30, 3 of 6 Recoveries) inside a `> [!note]` callout, text above and below it (SC-455) |
   | `Callout/nested.md` | the same block inside a callout nested in a callout (`> > ` on every line) |
   | `Callout/quote.md` | the same block inside a plain blockquote (Reading view only: Live Preview does not draw it) |
