@@ -178,8 +178,13 @@ describe.each(PATHS)('$name: the block gets its own lines', (p) => {
 		['a task item (- [ ] )', '- [ ] task', '  ', false],
 		['a star bullet', '* item', '  ', false],
 		['a nested item', '- a\n  - b', '    ', false],
-		['a tab-indented item (the tab is kept)', '\t- item', '\t  ', false],
-		['a tab-indented continuation line', '- item\n\t', '\t', true],
+		// SC-675 r3: a tab never goes on an inserted line (Live Preview shows a parse error for a tab-indented body); it counts to the next multiple of 4.
+		['an item nested with a tab (- a, tab, - b)', '- a\n\t- b', '      ', false],
+		['an empty item nested with a tab', '- a\n\t- ', '      ', false],
+		['a tab-indented continuation line (the tab itself is kept, the block starts behind it)', '- item\n\t', '    ', true],
+		['a tab inside a callout list', '> - a\n> \t- b', '>       ', false],
+		['a callout opened in a list item (- > [!note] T)', '- > [!note] T', '  > ', false],
+		['a quote opened in a list item (- > quote)', '- > quote', '  > ', false],
 	])('%s', async (_name, lead, prefix, continuation) => {
 		const ed = await p.run(lead + '|');
 		expect(shown(ed)).toBe(lead + (continuation ? '' : '\n') + block(p, prefix, continuation) + end(p, prefix));
@@ -279,6 +284,8 @@ describe('the inserted block reads back through the framework', () => {
 		['text in a callout', '> abc|', '> '],
 		['a nested callout', '> > |', '> > '],
 		['a list inside a callout', '> - item|', '>   '],
+		['a callout opened in a list item (SC-675 r3)', '- > [!note] T|', '  > '],
+		['a quote opened in a list item (SC-675 r3)', '- > quote|', '  > '],
 	])('%s: the write path finds the block with the same prefix and rewrites it in place', (_name, spec, prefix) => {
 		const note = runInsert(spec).getValue();
 		const found = listFences(note, 'ds-ct');
@@ -292,7 +299,8 @@ describe('the inserted block reads back through the framework', () => {
 		expect(replaceFenceBlock(note, found[0].lineStart, found[0].lineEnd, 'a: 2\nb:\n  c: 2')).toBe(expected.join('\n'));
 	});
 
-	test.each(['- item|', '- |', '- item\n  |', '1. item|', '- [ ] task|', '- a\n  - b|'])(
+	// (An EMPTY item nested right under a paragraph line, `- a⏎⇥- |`, is not in this list: `marked` reads that bare `-` as a setext heading underline, as CommonMark does, which is the note's own text, not the insert's.)
+	test.each(['- item|', '- |', '- item\n  |', '1. item|', '- [ ] task|', '- a\n  - b|', '- a\n\t- b|', '- item\n\t|'])(
 		'a block inserted at %j is a fenced code block inside that list item for a Markdown parser',
 		(spec) => {
 			const note = runInsert(spec).getValue();
