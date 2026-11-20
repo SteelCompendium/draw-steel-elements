@@ -47,3 +47,5 @@ Below is a detailed description of each field used in the counter element, inclu
 - If `min_value` is defined, the counter cannot decrement below this value.
 - `value_height` and `name_height` are optional parameters to adjust the visual presentation of the counter in the rendered output. They are useful for customizing the display according to your preferences.
 - You can click on the counter value to edit it directly.
+- An empty counter block is a counter at 0: it shows no name and has no maximum, and the first click on + or - fills in the block for you.
+- The block has to be a list of keys like the example above. If it holds something else (plain text, a bulleted list, a lone number), the card shows an error and leaves your note alone.
