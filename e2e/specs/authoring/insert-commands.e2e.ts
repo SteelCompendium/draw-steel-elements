@@ -4,9 +4,8 @@
 // cursor, every other byte as it was), the cursor after, and that the block draws as a DSE element and not an error card.
 // With the experimental gate OFF (the shipped build): the eight deferred elements and ds-hero have no command (AUTH-I22).
 import { browser, expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
-import { insertOutcomeProblem } from '../../driver/authoringAssert';
-import { drawn, editorState, insertCommandIds, leaveBlock, openEditor, palette, paletteRows, savedText, scaffoldOf, spliced, typeKeys } from '../../driver/authoring';
+import { dse } from '../../driver/dse';
+import { drawn, editorState, insertCommandIds, leaveBlock, openEditor, palette, paletteRows, savedText, scaffoldOf, spliced, toReading, typeKeys, underPrefix, type EditMode, type Pos } from '../../driver/authoring';
 import { advertised, commandTrip, CURSOR, NOTE_BEFORE } from '../../driver/authoringTrips';
 
 describe('insert commands, Live Preview: every shipped element', () => {
@@ -91,13 +90,53 @@ describe('insert commands, Source mode and other cursors', () => {
 		expect(saved.includes('\r')).toBe(false);
 	});
 
-	knownBug('SC-675', '[AUTH-I21] a command run at the end of a line of text leaves a sound block (or refuses and leaves the note alone)', async () => {
+	it('[AUTH-I21] a command run at the end of a line of text: the block starts on the next line, the text stays above it, nothing else changes', async () => {
 		const before = 'abc';
 		const rel = 'Authoring/midline.md';
 		await openEditor(rel, before, 'live-preview', { line: 0, ch: 3 });
 		await palette('insert-counter', 'Insert Draw Steel: Counter');
-		expect(insertOutcomeProblem(before, await savedText(rel), 'ds-ct')).toBeNull();
-	}, { failsWith: /toBeNull/ });
+		expect(await savedText(rel)).toBe('abc\n' + scaffoldOf('counter', 'ds-ct'));
+		expect((await editorState()).cursor).toEqual({ line: 2, ch: 0 });
+		await leaveBlock(1);
+		expect(await drawn('live-preview')).toEqual({ roots: ['counter'], errors: [] });
+	});
+
+	/**
+	 * The insert command with the cursor at the end of a line that sits in a container (a callout, a list item): every line of the block carries
+	 * the cursor line's prefix, the line after the cursor line follows the block untouched, the cursor lands on the first body character, and
+	 * the block draws as a DSE element (Live Preview once the cursor leaves it, Reading view for a Source-mode note). No write is driven on
+	 * the block (an indented fence in a list item cannot save).
+	 */
+	async function containerTrip(rel: string, before: string, at: Pos, prefix: string, mode: EditMode): Promise<void> {
+		await openEditor(rel, before, mode, at);
+		await palette('insert-counter', 'Insert Draw Steel: Counter');
+		const block = underPrefix(scaffoldOf('counter', 'ds-ct'), prefix);
+		const expected = spliced(before, at, undefined, '\n' + prefix + block);
+		expect(await savedText(rel)).toBe(expected);
+		const state = await editorState();
+		expect(state.value).toBe(expected);
+		expect(state.cursor).toEqual({ line: at.line + 2, ch: prefix.length });
+		if (mode === 'live-preview') {
+			await leaveBlock(1);
+			expect(await drawn('live-preview')).toEqual({ roots: ['counter'], errors: [] });
+		} else {
+			await toReading(rel);
+			expect(await drawn('reading')).toEqual({ roots: ['counter'], errors: [] });
+		}
+	}
+	const CALLOUT = 'Intro line above\n\n> [!note] Callout title\n> first line\n> last line\n\nOutro line below\n';
+	const IN_CALLOUT: Pos = { line: 3, ch: 12 };
+	const LIST = 'Intro line above\n\n- first item\n- second item\n\nOutro line below\n';
+	const IN_LIST: Pos = { line: 2, ch: 12 };
+
+	it('[AUTH-I23] Live Preview, the cursor at the end of a callout line: every line of the block keeps the "> ", the callout lines around it are untouched', () =>
+		containerTrip('Authoring/callout-lp.md', CALLOUT, IN_CALLOUT, '> ', 'live-preview'));
+	it('[AUTH-I24] Source mode, the cursor at the end of a callout line: every line of the block keeps the "> ", Reading view draws the counter', () =>
+		containerTrip('Authoring/callout-src.md', CALLOUT, IN_CALLOUT, '> ', 'source'));
+	it('[AUTH-I25] Live Preview, the cursor at the end of a list item: the block sits under the item (two spaces), the next item follows untouched', () =>
+		containerTrip('Authoring/list-lp.md', LIST, IN_LIST, '  ', 'live-preview'));
+	it('[AUTH-I26] Source mode, the cursor at the end of a list item: the block sits under the item (two spaces), Reading view draws the counter', () =>
+		containerTrip('Authoring/list-src.md', LIST, IN_LIST, '  ', 'source'));
 });
 
 describe('insert commands, experimental gate OFF (the shipped build)', () => {

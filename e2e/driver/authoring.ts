@@ -339,6 +339,18 @@ export function scaffoldOf(dir: string, alias: string): string {
 	return '```' + alias + '\n' + body + '\n```';
 }
 
+/**
+ * An inserted block as the plugin lays it down when the cursor line carries a prefix (a callout's `> `, a list item's indentation, typed
+ * whitespace): the first line goes where the cursor is, every later line starts with `prefix`, an empty line keeps the prefix's trimmed form
+ * only in a quote (`>`), and no blank line is added. `prefix` is a string of spaces or a quote marker (`'> '`).
+ */
+export function underPrefix(block: string, prefix: string): string {
+	return block
+		.split('\n')
+		.map((line, i) => (i === 0 ? line : line === '' && prefix.includes('>') ? prefix.trimEnd() : prefix + line))
+		.join('\n');
+}
+
 /** The position `text` ends at when it starts at `from` (lines and columns, `\n` only). */
 export function endOf(from: Pos, text: string): Pos {
 	const lines = text.split('\n');

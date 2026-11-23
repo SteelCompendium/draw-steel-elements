@@ -4,10 +4,9 @@
 // block drawn as a DSE element. Suppression: no list inside any open fence or mid-word. Gate OFF here: the deferred elements and ds-hero
 // are not offered (AUTH-S01, S05); the gate-ON list is AUTH-G09.
 import { browser, expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
-import { insertOutcomeProblem } from '../../driver/authoringAssert';
+import { dse } from '../../driver/dse';
 import {
-	clickRow, closeList, drawn, editorState, leaveBlock, openEditor, pressList, savedText, scaffoldOf, selectedListRow, setCursor, spliced, toReading, typeKeys, waitList, waitNoList,
+	clickRow, closeList, drawn, editorState, leaveBlock, openEditor, pressList, savedText, scaffoldOf, selectedListRow, setCursor, spliced, toReading, typeKeys, underPrefix, waitList, waitNoList,
 } from '../../driver/authoring';
 import { advertised, el } from '../../driver/authoringTrips';
 
@@ -74,7 +73,7 @@ describe('/ds suggest: accept', () => {
 		expect(await drawn('reading')).toEqual({ roots: ['featureblock'], errors: [] });
 	});
 
-	it('[AUTH-S04] Source mode, an indented token: ArrowDown twice and ArrowUp once select the second row, Enter picks it (Skills); only the token is replaced, the two spaces before it stay', async () => {
+	it('[AUTH-S04] Source mode, an indented token: ArrowDown twice and ArrowUp once select the second row, Enter picks it (Skills); the two spaces before the token stay and go on every line of the block', async () => {
 		const before = 'Intro line above\n  \nOutro line below\n';
 		const rel = 'Authoring/ds-arrows.md';
 		await openEditor(rel, before, 'source', { line: 1, ch: 2 });
@@ -87,13 +86,13 @@ describe('/ds suggest: accept', () => {
 		expect(await selectedListRow()).toBe(1);
 		await pressList('Enter');
 		await closeList();
-		expect(await savedText(rel)).toBe(spliced(before, { line: 1, ch: 2 }, undefined, scaffoldOf('skills', 'ds-skills')));
-		expect((await editorState()).cursor).toEqual({ line: 2, ch: 0 });
+		expect(await savedText(rel)).toBe(spliced(before, { line: 1, ch: 2 }, undefined, underPrefix(scaffoldOf('skills', 'ds-skills'), '  ')));
+		expect((await editorState()).cursor).toEqual({ line: 2, ch: 2 });
 		await toReading(rel);
 		expect(await drawn('reading')).toEqual({ roots: ['skills'], errors: [] });
 	});
 
-	knownBug('SC-675', '[AUTH-S09] Source mode: a `/ds…` pick with text after the cursor on its line leaves a sound block (or refuses and leaves the note alone)', async () => {
+	it('[AUTH-S09] Source mode: a `/ds…` pick with text after the cursor on its line: the block ends on its own line and the text moves to the line below it', async () => {
 		const rel = 'Authoring/ds-tail.md';
 		const before = 'Intro line above\n tail words\nOutro line below\n';
 		await openEditor(rel, before, 'source', { line: 1, ch: 0 });
@@ -101,8 +100,11 @@ describe('/ds suggest: accept', () => {
 		await waitList(1);
 		await pressList('Enter');
 		await closeList();
-		expect(insertOutcomeProblem(before, await savedText(rel), 'ds-fb')).toBeNull();
-	}, { failsWith: /toBeNull/ });
+		expect(await savedText(rel)).toBe(spliced(before, { line: 1, ch: 0 }, undefined, scaffoldOf('featureblock', 'ds-fb') + '\n'));
+		expect((await editorState()).cursor).toEqual({ line: 2, ch: 0 });
+		await toReading(rel);
+		expect(await drawn('reading')).toEqual({ roots: ['featureblock'], errors: [] });
+	});
 });
 
 describe('/ds suggest: where it stays silent', () => {
