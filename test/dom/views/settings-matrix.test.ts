@@ -253,9 +253,9 @@ describe('SC-440 matrix: the size sliders at min, max and step', () => {
 		expect((await flushSaved(loaded)).prefs).toEqual({});
 	});
 
-	test('one step is exactly 0.05 on every slider: 17 positions on Text size (60-140%) and 9 on the other four (80-120%)', () => {
+	test('one step is exactly 0.05 on every slider: 17 positions on Text size (60-140%), 19 on Card size (30-120%, SC-683) and 9 on the other three (80-120%)', () => {
 		const positions = (d: PrefDescriptor): number => Math.round((prefUi(d)!.max! - prefUi(d)!.min!) / prefUi(d)!.step!) + 1;
-		expect(SLIDERS.map(positions)).toEqual([17, 9, 9, 9, 9]);
+		expect(SLIDERS.map(positions)).toEqual([17, 19, 9, 9, 9]);
 	});
 });
 

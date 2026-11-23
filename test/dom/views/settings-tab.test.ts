@@ -829,7 +829,7 @@ describe('SC-112 Task 8 — Typography controls', () => {
 		await flushAsync(1);
 		expect(prefs.get('textScale')).toBe(0.85);
 		expect(root.style.getPropertyValue('--dse-text-scale')).toBe('0.85'); // live-apply
-		expect(rowByName('Card size').sliders[0].limits).toEqual({ min: 0.8, max: 1.2, step: 0.05 });
+		expect(rowByName('Card size').sliders[0].limits).toEqual({ min: 0.3, max: 1.2, step: 0.05 }); // SC-683: Card size 30%-120%
 	});
 
 	test('List installed fonts: user-activation fetch populates every font dropdown (deduped, before Custom…), then the affordance retires', async () => {
