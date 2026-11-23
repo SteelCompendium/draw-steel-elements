@@ -54,7 +54,8 @@ import { recordingDefaults, stringifyOmittingUntouched } from '../shared/undecla
 // object key order, not a choice (SC-625's precedent), and a unit test pins it. The value is carried as it parsed (a nested map or list
 // included); its formatting is whatever `stringifyYaml` does today (SC-599's question, not this one). A block with no unknown keys
 // serializes exactly as before.
-const KNOWN_KEYS: ReadonlySet<string> = new Set([
+// Exported only so a unit test can tie this list to the `Counter` fields (a field added to `Counter.parse` must be added here).
+export const KNOWN_KEYS: ReadonlySet<string> = new Set([
 	'max_value', 'current_value', 'min_value', 'name', 'value_height', 'name_height', '_dse_anchor',
 ]);
 
@@ -83,6 +84,9 @@ export const parse = recordingDefaults(
 export function serialize(model: Counter): string {
 	const extras = unknownKeys.get(model);
 	if (!extras) return stringifyOmittingUntouched(model);
+	// A carried pair whose key the model owns is dropped (a field added to `Counter` and missing from KNOWN_KEYS would otherwise let the
+	// source's stale value overwrite the live one: `fromEntries` keeps the last duplicate).
+	const carried = extras.filter(([key]) => !Object.prototype.hasOwnProperty.call(model, key));
 	// `fromEntries`, never an assignment: a hand-written `__proto__:` key must become a plain own key, not set the prototype.
-	return stringifyOmittingUntouched(model, Object.fromEntries([...Object.entries(model), ...extras]));
+	return stringifyOmittingUntouched(model, Object.fromEntries([...Object.entries(model), ...carried]));
 }

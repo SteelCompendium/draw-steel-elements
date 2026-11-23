@@ -3,7 +3,7 @@
 // written back after ALL the known ones (`_dse_anchor` too), in their original relative order, with the value as it parsed; SC-482 (a
 // write adds no default the source never declared) and the byte-for-byte shape of a block with no unknown keys are unchanged.
 import { parseYaml } from '../../mocks/obsidian';
-import { parse, serialize } from '../../../src/elements/counter/model';
+import { KNOWN_KEYS, parse, serialize } from '../../../src/elements/counter/model';
 import { Counter } from '../../../src/model/Counter';
 
 const parseLikePipeline = (source: string): Counter => parse(parseYaml(source), source);
@@ -93,6 +93,41 @@ describe('SC-671: counter unknown keys', () => {
 	test('no own property is added to the instance: the model has exactly the seven fields', () => {
 		const m = parseLikePipeline(OWN);
 		expect(Object.keys(m)).toEqual(['max_value', 'current_value', 'min_value', 'name', 'value_height', 'name_height', '_dse_anchor']);
+	});
+
+	test('KNOWN_KEYS is exactly the keys of a parsed Counter: a field added to `Counter.parse` and not to the list fails here', () => {
+		expect([...KNOWN_KEYS].sort()).toEqual(Object.keys(Counter.parse({})).sort());
+	});
+
+	test('an extra whose key the model owns is never written over the model\'s value (a field missing from KNOWN_KEYS cannot make a press a no-op)', () => {
+		// reach the case no real source can: a model with a field `step` that KNOWN_KEYS does not list, so the source's `step: 5` is carried as an unknown pair
+		let isolated: typeof import('../../../src/elements/counter/model') | undefined;
+		jest.isolateModules(() => {
+			jest.doMock('@model/Counter', () => {
+				const actual = jest.requireActual('@model/Counter');
+				const Real = actual.Counter;
+				class WithStep extends Real {
+					step = 1;
+					static parse(data: any): any {
+						const c = Real.parse(data);
+						c.step = data?.step ?? 1;
+						return c;
+					}
+				}
+				return { ...actual, Counter: WithStep };
+			});
+			isolated = require('../../../src/elements/counter/model');
+		});
+		jest.dontMock('@model/Counter');
+		const source = 'name: Torches\ncurrent_value: 1\nstep: 5\nnote: keep';
+		const m: any = isolated!.parse(parseYaml(source), source);
+		m.step = 6;
+		m.current_value = 2;
+		const back = parseYaml(isolated!.serialize(m));
+		expect(back.step).toBe(6);
+		expect(back.current_value).toBe(2);
+		expect(back.note).toBe('keep');
+		expect(isolated!.serialize(m).match(/^step:/gm)).toHaveLength(1);
 	});
 
 	test('a second and a third pass (re-parse of the plugin\'s own output) keep every key and stop changing', () => {
