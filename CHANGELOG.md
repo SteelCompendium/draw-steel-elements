@@ -1357,10 +1357,12 @@ for what needs action.
     fonts)"** — exactly the plugin's previous behavior, so you see zero change
     until you pick something. The advanced slots' defaults follow the primary
     ones (Card body and Controls track Body; Label tracks Title).
-  - **Two size sliders** — Text size (60%–140%) and Card size (80%–120%), in 5%
-    steps: the same ranges, steps, and snap behavior as steelcompendium.io's own
-    site settings. Text size scales the type inside elements; Card size zooms
-    whole statblock/ability cards. Print and export always render at 100%.
+  - **Two size sliders** — Text size (60%–140%) and Card size (30%–120%), in 5%
+    steps. Text size has the same range, steps, and snap behavior as
+    steelcompendium.io's own site settings. Since SC-683, Card size goes lower than
+    the site's 80% (it was 80%–120%, the site's range, before). Text size scales the
+    type inside elements; Card size zooms whole statblock/ability cards. Print and
+    export always render at 100%.
   - Font and size choices apply everywhere, including print and PDF export. At
     the defaults nothing moves — verified byte-for-byte against the frozen
     screenshot set.
