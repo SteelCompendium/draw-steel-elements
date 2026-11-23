@@ -1170,8 +1170,8 @@ min_value: 0
 <td><code>name</code></td>
 <td><code>string</code></td>
 <td>The name of the counter (e.g., "Health", "Mana").</td>
-<td><strong>Yes</strong></td>
-<td>N/A</td>
+<td>No</td>
+<td>no name shown</td>
 </tr>
 <tr>
 <td><code>current_value</code></td>
@@ -1217,6 +1217,8 @@ min_value: 0
 <li>If <code>min_value</code> is defined, the counter cannot decrement below this value.</li>
 <li><code>value_height</code> and <code>name_height</code> are optional parameters to adjust the visual presentation of the counter in the rendered output. They are useful for customizing the display according to your preferences.</li>
 <li>You can click on the counter value to edit it directly.</li>
+<li>An empty counter block is a counter at 0: it shows no name and has no maximum, and the first click on + (or a number typed into the box) fills in the block for you.</li>
+<li>The block has to be <code>key: value</code> lines like the example above. If it holds something else (plain text, a bulleted list, a lone number), the card shows an error and leaves your note alone.</li>
 </ul>
 
 
