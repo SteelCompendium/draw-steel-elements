@@ -57,7 +57,9 @@ async function mountNote(note: string, index = 0) {
 	const mount = async (): Promise<HTMLElement> => {
 		const ctx = makeFakeContext(app, 'Note.md', index);
 		const host = new ReadingModeBlockHost(plugin as any, ctx.el, ctx as any, 'ds-counter');
-		await new ElementPipeline(makeDeps(app, plugin)).run(counterElement, blocksOf(app.vault.getContent('Note.md')!)[index], host);
+		const body = blocksOf(app.vault.getContent('Note.md')!)[index];
+		host.setMountedBody(body); // as registerFrameworkElements.ts does before it runs the pipeline (the SC-552 pin on the write)
+		await new ElementPipeline(makeDeps(app, plugin)).run(counterElement, body, host);
 		document.body.appendChild(host.containerEl);
 		return host.containerEl.firstElementChild as HTMLElement;
 	};

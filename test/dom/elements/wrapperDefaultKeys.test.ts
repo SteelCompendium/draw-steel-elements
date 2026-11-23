@@ -407,6 +407,21 @@ describe('SC-482: an empty source whose values return to their defaults is writt
 		expect(again.root.querySelector('.dse-counter')).not.toBeNull();
 	});
 
+	test('counter, through the real write path: + then - on `title: Deaths` (a key the counter does not read) comes back byte-identical, and the block re-renders (SC-671)', async () => {
+		const spec = specs.find((x) => x.name === 'counter')!;
+		const body = 'title: Deaths';
+		const app = appWith(noteOf([{ lang: spec.lang, body }]));
+		const first = await mount(app, spec, 0, body);
+		increase(first.root);
+		await settle();
+		expect(bodyOf(first.note(), 0)).toBe('current_value: 1\ntitle: Deaths');
+		click(first.root, '.dse-stepper__btn[aria-label^="Decrease"]');
+		await settle();
+		expect(bodyOf(first.note(), 0)).toBe('title: Deaths');
+		const again = await mount(app, spec, 0, bodyOf(app.vault.getContent(NOTE)!, 0));
+		expect(again.root.querySelector('.dse-counter')).not.toBeNull();
+	});
+
 	test('negotiation, through the real write path: slot 3 then slot 5 returns it to {}, and the block re-renders (no error card)', async () => {
 		const spec = specs.find((x) => x.name === 'negotiation')!;
 		// A mapping with no key at all. It used to be `title: Frodo`, a key the negotiation does not read: SC-637 keeps such a key, so it
@@ -466,6 +481,32 @@ describe('SC-482: a block holding a `prefs:` map / collapse key returns to its d
 		expect(bodyOf(m.note(), 0)).toBe(PREFS);
 		const again = await mount(app, spec('counter'), 0, bodyOf(app.vault.getContent(NOTE)!, 0));
 		expect(again.root.querySelector('.dse-counter')).not.toBeNull();
+	});
+
+	test('counter `prefs:` + `title: Deaths`: + then - writes back the prefs lines and the key the counter does not read, byte-identical (SC-671)', async () => {
+		const body = `${PREFS}\ntitle: Deaths`;
+		const app = appWith(noteOf([{ lang: 'ds-counter', body }]));
+		const m = await mount(app, spec('counter'), 0, body);
+		increase(m.root);
+		await settle();
+		expect(bodyOf(m.note(), 0)).toBe(`${PREFS}\ncurrent_value: 1\ntitle: Deaths`);
+		click(m.root, '.dse-stepper__btn[aria-label^="Decrease"]');
+		await settle();
+		expect(bodyOf(m.note(), 0)).toBe(body);
+		const again = await mount(app, spec('counter'), 0, bodyOf(app.vault.getContent(NOTE)!, 0));
+		expect(again.root.querySelector('.dse-counter')).not.toBeNull();
+	});
+
+	test('counter `collapsed: false` + `title: Deaths`: + then - writes back the collapse key and the key the counter does not read, byte-identical (SC-671)', async () => {
+		const body = 'collapsed: false\ntitle: Deaths';
+		const app = appWith(noteOf([{ lang: 'ds-counter', body }]));
+		const m = await mount(app, spec('counter'), 0, body);
+		increase(m.root);
+		await settle();
+		expect(bodyOf(m.note(), 0)).toBe('collapsed: false\ncurrent_value: 1\ntitle: Deaths');
+		click(m.root, '.dse-stepper__btn[aria-label^="Decrease"]');
+		await settle();
+		expect(bodyOf(m.note(), 0)).toBe(body);
 	});
 
 	test('montage with only a `prefs:` map: End round then Back writes back just the prefs lines, and the block re-renders', async () => {
