@@ -89,16 +89,19 @@ function readCollapsePref(
 }
 
 /**
- * SC-644 ruling O2, PENDING Scott's answer — THE switch for "Start collapsed" (`collapseDefault`).
+ * SC-644 ruling O2 — THE switch for "Start collapsed" (`collapseDefault`). Scott ruled on 2026-11-22
+ * ("Go with recommendation"), so `false` is the decided behaviour.
  *
- * `false` (the recommendation put to Scott): flipping "Start collapsed" does NOT collapse or expand a block
+ * `false` (decided): flipping "Start collapsed" does NOT collapse or expand a block
  * already on screen; it applies to blocks drawn afterwards (opening a note, re-rendering). Chrome rebuilds
  * carry the block's live collapsed state across (see `mountPipelineChrome`), so nothing else moves it.
  *
- * `true` (the alternative): the flip also reaches open blocks the reader has not toggled themselves. The
+ * `true` (the alternative, NOT chosen): the flip also reaches open blocks the reader has not toggled themselves. The
  * whole change is this constant plus `carriedCollapsedFor` below: `collapseDefault` joins the watched keys,
  * and a rebuild it caused re-resolves the state from the preferences instead of carrying it (a reader's own
  * toggle, held by the SessionStore, still wins inside `mountChrome`).
+ * The `true` path is UNTESTED: nothing in jsdom or e2e exercises it. Whoever flips this constant must first
+ * add its jsdom and e2e tests.
  */
 const START_COLLAPSED_REACHES_OPEN_BLOCKS: boolean = false;
 

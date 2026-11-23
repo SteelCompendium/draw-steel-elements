@@ -55,7 +55,7 @@ describe('settings tab: settings read when a block or link is drawn', () => {
 		}
 	});
 
-	// SC-644, pending Scott's answer: Start collapsed does not move a block that is already open; a note opened afterwards starts collapsed.
+	// SC-644 (Scott, 2026-11-22): Start collapsed does not move a block that is already open; a note opened afterwards starts collapsed.
 	it('[SET-L06] Start collapsed: switched on with the note open, the open stamina bar stays open; the note opened again starts collapsed', async () => {
 		await dse.setPrefs({});
 		await dse.openNote('Stamina/basic.md');
