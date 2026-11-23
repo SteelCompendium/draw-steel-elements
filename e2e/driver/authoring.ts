@@ -39,6 +39,7 @@ const FIXTURES_ROOT = path.resolve(__dirname, '..', '..', 'test', 'fixtures', 'm
 export async function openEditor(rel: string, text: string, mode: EditMode, cursor: Pos = { line: 0, ch: 0 }, to?: Pos): Promise<void> {
 	await escapePrompts(); // a test that failed with the palette or the search window open must not hang the next one (they have no X for closeModals)
 	await dse.openNote(STAMINA);
+	await networkGuard();
 	// The vault reset deletes files, not folders: a compendium folder left behind by an earlier test would make a Sync open the "Existing
 	// compendium folder found" window (SC-441's surface), so take the whole destination folder away.
 	await ev(`(async () => {
@@ -54,6 +55,16 @@ export async function openEditor(rel: string, text: string, mode: EditMode, curs
 	await ev(`(() => { const e = ${VIEW}.editor; e.setSelection(${JSON.stringify(cursor)}, ${JSON.stringify(to ?? cursor)}); e.focus(); return true; })()`);
 	await waitFor(`!!document.activeElement?.closest('.cm-content')`, 'the editor to take focus');
 	state.currentNote = rel;
+}
+
+/**
+ * No authoring scenario may reach the network (SC-440's mechanism): unless a test installed its own stub (`releaseStub.install()` marks the
+ * service), the sync service's request function throws loudly, so a Sync the test did not stub fails the test instead of sending a request.
+ * `openEditor` calls it, and every authoring spec opens its note with `openEditor`; a plugin reload gives a fresh service, so the guard goes in
+ * again on the next open. (The same one-liner guards the settings specs, in `openSettings`.)
+ */
+export async function networkGuard(): Promise<void> {
+	await ev(`(() => { const s = app.plugins.plugins['draw-steel-elements'].syncService; if (s && !s.__e2eStubbed) s.requestUrlFn = () => { throw new Error('e2e: network disabled, install releaseStub before a Sync or Check'); }; return true; })()`);
 }
 
 /** Close every open prompt window (the command palette, the compendium search) with Escape. */
@@ -110,9 +121,12 @@ export async function setCursor(cursor: Pos, to?: Pos): Promise<void> {
 	await waitFor(`!!document.activeElement?.closest('.cm-content')`, 'the editor to take focus');
 }
 
-/** Leave a block in Live Preview (cursor to line 0) so it draws as an element, then wait for the element roots to be mounted. */
-export async function leaveBlock(expectRoots: number): Promise<void> {
-	await ev(`(() => { ${VIEW}.editor.setCursor({ line: 0, ch: 0 }); return true; })()`);
+/**
+ * Leave a block in Live Preview (cursor to `at`, line 0 by default: the fence line of a block that starts the note, which is still inside it:
+ * pass a line outside the block then) so it draws as an element, then wait for the element roots to be mounted.
+ */
+export async function leaveBlock(expectRoots: number, at: Pos = { line: 0, ch: 0 }): Promise<void> {
+	await ev(`(() => { ${VIEW}.editor.setCursor(${JSON.stringify(at)}); return true; })()`);
 	await waitFor(`document.querySelectorAll('.workspace-leaf.mod-active .cm-content [data-dse-element]').length >= ${expectRoots}`, `${expectRoots} block(s) to draw in Live Preview`);
 	await waitWriteIdle();
 }
@@ -280,6 +294,27 @@ export async function modifierClick(nth: number, modifier: 'Shift' | 'Control'):
 	await browser.sendCommandAndGetResult('Input.dispatchMouseEvent', { type: 'mousePressed', buttons: 1, ...base });
 	await browser.sendCommandAndGetResult('Input.dispatchMouseEvent', { type: 'mouseReleased', buttons: 0, ...base });
 	recordDrive('authoring.search.result', `click:${modifier}`);
+}
+
+/**
+ * A real pointer click on the n-th search row with the MIDDLE or RIGHT mouse button (CDP mouse events: button 'middle' / 'right'). Obsidian's
+ * chooser hands every mouse button to the row's handler (it listens for `click` and `auxclick` on `.suggestion-item`), so these reach
+ * `onChooseSuggestion` too; the pairs `click:Middle` / `click:Right` are credited after the real click happened.
+ */
+export async function buttonClick(nth: number, button: 'Middle' | 'Right'): Promise<void> {
+	const el = dse.control('authoring.search.result', { nth });
+	await el.waitForDisplayed({ timeout: 8000 });
+	const loc = await el.getLocation();
+	const size = await el.getSize();
+	const x = loc.x + size.width / 2;
+	const y = loc.y + size.height / 2;
+	const cdp = button === 'Middle' ? 'middle' : 'right';
+	const buttons = button === 'Middle' ? 4 : 2;
+	const base = { x, y, button: cdp, clickCount: 1 };
+	await browser.sendCommandAndGetResult('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+	await browser.sendCommandAndGetResult('Input.dispatchMouseEvent', { type: 'mousePressed', buttons, ...base });
+	await browser.sendCommandAndGetResult('Input.dispatchMouseEvent', { type: 'mouseReleased', buttons: 0, ...base });
+	recordDrive('authoring.search.result', `click:${button}`);
 }
 
 /** Wait for the search window to be gone. */

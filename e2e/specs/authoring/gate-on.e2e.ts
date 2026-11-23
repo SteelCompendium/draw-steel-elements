@@ -6,7 +6,9 @@
 // which stays out of the palette and `/ds` even with the gate on (SC-190).
 import { expect } from '@wdio/globals';
 import { browser } from '@wdio/globals';
-import { dse } from '../../driver/dse';
+import * as yaml from 'js-yaml';
+import { dse, knownBug } from '../../driver/dse';
+import { scanFences } from '../../driver/noteFences';
 import {
 	clickRow, closeList, drawn, editorState, insertCommandIds, listRows, openEditor, paletteRows, pressList, savedText, scaffoldOf, selectedListRow, spliced, toReading, typeKeys, waitList, waitNoList,
 } from '../../driver/authoring';
@@ -199,5 +201,27 @@ describe('authoring with the experimental gate on', () => {
 		await dse.settle();
 		expect((await editorState()).value).toBe('```ds-roll\nmode: opposed\n\n```\n');
 	});
+
+	// SC-688: typing `mode:` (no space) opens the value list at once, and an accept there writes `mode:power-roll`, which is not a mapping entry
+	// (the block draws a parse error card). The marker asks only that the saved block parses, so a fix that writes `mode: power-roll` and one that
+	// waits for the space both flip it.
+	knownBug('SC-688', '[AUTH-G21] `mode:` with no space typed, then Enter on the open value list: the saved block parses as YAML', async () => {
+		const rel = 'Authoring/gate-nospace.md';
+		await openEditor(rel, '```ds-roll\nname: x\n\n```\n', 'live-preview', { line: 2, ch: 0 });
+		await typeKeys('mode:');
+		await browser.waitUntil(async () => (await listRows()).length > 0, { timeout: 1500, interval: 50 }).catch(() => undefined); // no list is a fix too
+		if ((await listRows()).length > 0) {
+			await pressList('Enter');
+			await waitNoList();
+		}
+		const block = scanFences(await savedText(rel))[0];
+		let parses = true;
+		try {
+			yaml.load(block.body.join('\n'));
+		} catch {
+			parses = false;
+		}
+		expect(parses).toBe(true);
+	}, { failsWith: /Expected|Received/ });
 
 });

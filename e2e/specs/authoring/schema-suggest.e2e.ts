@@ -5,7 +5,7 @@
 // (The enum value list exists only with the gate ON: AUTH-G10.)
 import { browser, expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
-import { clickRow, closeList, editorState, listRows, openEditor, pressList, savedText, selectedListRow, setCursor, spliced, typeKeys, waitList, waitNoList } from '../../driver/authoring';
+import { clickRow, closeList, drawn, editorState, leaveBlock, listRows, openEditor, pressList, savedText, selectedListRow, setCursor, spliced, toReading, typeKeys, waitList, waitNoList } from '../../driver/authoring';
 
 const TRIGGER = 'authoring.schema.trigger';
 const KEY = 'authoring.schema.key';
@@ -13,19 +13,28 @@ const STAM = '```ds-stam\n\n```\nafter\n';
 const AT = { line: 1, ch: 0 };
 
 describe('in-fence key autocomplete', () => {
-	it('[AUTH-K01] Live Preview: `cur` in a ds-stam block offers current_stamina; Enter writes the key over what was typed, nothing else changes, the cursor is after it', async () => {
+	it('[AUTH-K01] Live Preview: `cur` in a ds-stam block offers current_stamina; Enter writes the key over what was typed, nothing else changes, the cursor is after it; once the line is finished the block draws', async () => {
 		const rel = 'Authoring/key-enter.md';
-		await openEditor(rel, STAM, 'live-preview', AT);
+		// the block already has its required `max_stamina`, so finishing the new line makes a block that renders
+		const note = '```ds-stam\nmax_stamina: 20\n\n```\nafter\n';
+		const at = { line: 2, ch: 0 };
+		await openEditor(rel, note, 'live-preview', at);
 		await typeKeys('cur', TRIGGER);
 		const rows = await waitList(1);
 		expect(rows).toEqual([{ id: KEY, text: 'current_stamina', selected: true }]);
 		await pressList('Enter');
 		await closeList();
-		expect(await savedText(rel)).toBe(spliced(STAM, AT, undefined, 'current_stamina'));
-		expect((await editorState()).cursor).toEqual({ line: 1, ch: 15 });
+		expect(await savedText(rel)).toBe(spliced(note, at, undefined, 'current_stamina'));
+		expect((await editorState()).cursor).toEqual({ line: 2, ch: 15 });
+		// The accept adds no `: ` (a rough edge noted on SC-678), so the block is an error card until the line is finished: type the value, then the
+		// block draws as a stamina bar once the cursor is outside it (the `after` line).
+		await typeKeys(': 5');
+		expect(await savedText(rel)).toBe('```ds-stam\nmax_stamina: 20\ncurrent_stamina: 5\n```\nafter\n');
+		await leaveBlock(1, { line: 4, ch: 0 });
+		expect(await drawn('live-preview')).toEqual({ roots: ['stamina-bar'], errors: [] });
 	});
 
-	it('[AUTH-K02] Source mode: `max` offers max_stamina; a click on the row writes it', async () => {
+	it('[AUTH-K02] Source mode: `max` offers max_stamina; a click on the row writes it; once the line is finished Reading view draws the block', async () => {
 		const rel = 'Authoring/key-click.md';
 		await openEditor(rel, STAM, 'source', AT);
 		await typeKeys('max', TRIGGER);
@@ -34,6 +43,10 @@ describe('in-fence key autocomplete', () => {
 		await closeList();
 		expect(await savedText(rel)).toBe(spliced(STAM, AT, undefined, 'max_stamina'));
 		expect((await editorState()).cursor).toEqual({ line: 1, ch: 11 });
+		await typeKeys(': 30'); // the accept adds no `: ` (see AUTH-K01); finish the line, then Reading view draws the bar
+		expect(await savedText(rel)).toBe('```ds-stam\nmax_stamina: 30\n```\nafter\n');
+		await toReading(rel);
+		expect(await drawn('reading')).toEqual({ roots: ['stamina-bar'], errors: [] });
 	});
 
 	it('[AUTH-K03] `re` offers recoveries then recoveries_max; ArrowDown selects the second, Enter writes it', async () => {

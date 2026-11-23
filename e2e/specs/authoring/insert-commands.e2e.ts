@@ -4,7 +4,8 @@
 // cursor, every other byte as it was), the cursor after, and that the block draws as a DSE element and not an error card.
 // With the experimental gate OFF (the shipped build): the eight deferred elements and ds-hero have no command (AUTH-I22).
 import { browser, expect } from '@wdio/globals';
-import { dse } from '../../driver/dse';
+import { dse, knownBug } from '../../driver/dse';
+import { existingBlocksIntactProblem } from '../../driver/authoringIntact';
 import { drawn, editorState, insertCommandIds, leaveBlock, openEditor, palette, paletteRows, savedText, scaffoldOf, spliced, toReading, typeKeys, underPrefix, type EditMode, type Pos } from '../../driver/authoring';
 import { advertised, commandTrip, CURSOR, NOTE_BEFORE } from '../../driver/authoringTrips';
 
@@ -133,6 +134,16 @@ describe('insert commands, Source mode and other cursors', () => {
 		containerTrip('Authoring/callout-lp.md', CALLOUT, IN_CALLOUT, '> ', 'live-preview'));
 	it('[AUTH-I24] Source mode, the cursor at the end of a callout line: every line of the block keeps the "> ", Reading view draws the counter', () =>
 		containerTrip('Authoring/callout-src.md', CALLOUT, IN_CALLOUT, '> ', 'source'));
+	// SC-687: the insert has no guard for a cursor inside an existing block. The marker asks only that the existing block is intact afterwards (or
+	// the note unchanged), so a refusal and a move-below fix both flip it.
+	knownBug('SC-687', '[AUTH-I27] a command run on an empty line inside a ds-stam block leaves that block intact (or the note unchanged)', async () => {
+		const before = '```ds-stam\nmax_stamina: 20\n\ncurrent_stamina: 5\n```\n\nafter text\n';
+		const rel = 'Authoring/inside-block.md';
+		await openEditor(rel, before, 'live-preview', { line: 2, ch: 0 });
+		await palette('insert-counter', 'Insert Draw Steel: Counter');
+		expect(existingBlocksIntactProblem(before, await savedText(rel))).toBeNull();
+	}, { failsWith: /toBeNull/ });
+
 	it('[AUTH-I25] Live Preview, the cursor at the end of a list item: the block sits under the item (two spaces), the next item follows untouched', () =>
 		containerTrip('Authoring/list-lp.md', LIST, IN_LIST, '  ', 'live-preview'));
 	it('[AUTH-I26] Source mode, the cursor at the end of a list item: the block sits under the item (two spaces), Reading view draws the counter', () =>

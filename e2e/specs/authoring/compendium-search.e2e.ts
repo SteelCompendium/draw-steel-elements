@@ -1,6 +1,6 @@
 // SC-443: the compendium search window and what each choice writes (src/authoring/CompendiumSearchModal.ts, compendiumInsert.ts), run from the
 // palette over a small fixture compendium (13 files of test/fixtures/md-dse, copied into the vault at run time; none of it reaches the network).
-// Query and `type:` / `source:` filters typed into the window's input, rows picked by Enter / click / Shift-click / Ctrl-click, Escape. The
+// Query and `type:` / `source:` filters typed into the window's input, rows picked by Enter / click / Shift-click / Ctrl-click / middle-click / right-click, Escape. The
 // reference command writes a reference block (`ds-sb` / `ds-feature` / `ds-featureblock` for the three typed families, `ds-scc` for the rest),
 // Shift inserts an inline link, Ctrl copies the code and writes nothing; the snapshot command offers only the three families and writes the
 // plugin's own YAML (golden files in e2e/vaults/golden, from the jest harness). Every case asserts the NOTE FILE and, for a block, that it draws.
@@ -9,7 +9,7 @@ import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
 import { releaseStub } from '../../driver/settingsDrive';
 import {
-	ABILITY, drawn, editorState, GOBLIN, indexedCount, installCompendium, KIT, leaveBlock, MALICE, modifierClick, openEditor, palette, pressSearch, savedText, searchFor, searchRows,
+	ABILITY, buttonClick, drawn, editorState, GOBLIN, indexedCount, installCompendium, KIT, leaveBlock, MALICE, modifierClick, openEditor, palette, pressSearch, savedText, searchFor, searchRows,
 	selectedSearchRow, spliced, toReading, waitSearchClosed,
 } from '../../driver/authoring';
 import { goldenSnapshot, sameDataAsJest, CURSOR, NOTE_BEFORE } from '../../driver/authoringTrips';
@@ -129,6 +129,32 @@ describe('compendium search: the reference command', () => {
 	});
 });
 
+describe('compendium search: the other mouse buttons on a row', () => {
+	// Obsidian's chooser hands every mouse button to the row's handler (a `click` and an `auxclick` listener on `.suggestion-item`), so a middle-click
+	// and a right-click choose the row exactly as a plain click does. Pinned as they are today (no modifier routing, nothing copied, no Notice).
+	it('[AUTH-C13] Live Preview: a middle-click on the kit row does what a plain click does: a `ds-scc` reference block at the cursor, the window closes, the block draws', async () => {
+		const rel = 'Authoring/search-middle.md';
+		await openSearch(rel, 'live-preview', REFERENCE);
+		await buttonClick(indexOfType(await searchFor('pan', 2), 'kit'), 'Middle');
+		await waitSearchClosed();
+		expect(await savedText(rel)).toBe(spliced(NOTE_BEFORE, CURSOR, undefined, '```ds-scc\n' + KIT + '\n```\n'));
+		expect(await dse.page<number>(`document.querySelectorAll('.notice').length`)).toBe(0);
+		await leaveBlock(1);
+		expect(await drawn('live-preview')).toEqual({ roots: ['kit'], errors: [] });
+	});
+
+	it('[AUTH-C14] Source mode: a right-click on the kit row does what a plain click does: a `ds-scc` reference block at the cursor, the window closes, Reading view draws it', async () => {
+		const rel = 'Authoring/search-right.md';
+		await openSearch(rel, 'source', REFERENCE);
+		await buttonClick(indexOfType(await searchFor('pan', 2), 'kit'), 'Right');
+		await waitSearchClosed();
+		expect(await savedText(rel)).toBe(spliced(NOTE_BEFORE, CURSOR, undefined, '```ds-scc\n' + KIT + '\n```\n'));
+		expect(await dse.page<number>(`document.querySelectorAll('.notice').length`)).toBe(0);
+		await toReading(rel);
+		expect(await drawn('reading')).toEqual({ roots: ['kit'], errors: [] });
+	});
+});
+
 describe('compendium search: the snapshot command', () => {
 	it('[AUTH-C07] Live Preview: only the nine statblock / feature / featureblock entries are offered, no kit, condition or rule, whatever is typed; a click on Goblin Stinker writes its snapshot and it draws', async () => {
 		const rel = 'Authoring/snapshot-click.md';
@@ -158,7 +184,7 @@ describe('compendium search: the snapshot command', () => {
 		expect(MALICE).toContain('devil-malice');
 	});
 
-	it('[AUTH-C09] Live Preview: a Shift-click or Ctrl-click on a snapshot row still inserts the snapshot (the snapshot command ignores the modifiers) and copies nothing', async () => {
+	it('[AUTH-C09] Live Preview: a Ctrl-click on a snapshot row still inserts the snapshot (the snapshot command ignores the modifier) and copies nothing', async () => {
 		const rel = 'Authoring/snapshot-modifier.md';
 		await openSearch(rel, 'live-preview', SNAPSHOT);
 		await searchFor('coat', 1);
@@ -170,6 +196,20 @@ describe('compendium search: the snapshot command', () => {
 		await leaveBlock(1);
 		expect(await drawn('live-preview')).toEqual({ roots: ['feature'], errors: [] });
 		expect(ABILITY).toContain('coat-the-blade');
+	});
+});
+
+describe('compendium search: the snapshot command ignores Shift too', () => {
+	it('[AUTH-C12] Source mode: a Shift-click on a snapshot row still inserts the snapshot block (not an inline link, not a reference) and copies nothing', async () => {
+		const rel = 'Authoring/snapshot-shift.md';
+		await openSearch(rel, 'source', SNAPSHOT);
+		await searchFor('stinker', 1);
+		await modifierClick(0, 'Shift');
+		await waitSearchClosed();
+		expect(await savedText(rel)).toBe(spliced(NOTE_BEFORE, CURSOR, undefined, goldenSnapshot('goblin-stinker')));
+		expect(await dse.page<number>(`document.querySelectorAll('.notice').length`)).toBe(0);
+		await toReading(rel);
+		expect(await drawn('reading')).toEqual({ roots: ['statblock'], errors: [] });
 	});
 });
 
