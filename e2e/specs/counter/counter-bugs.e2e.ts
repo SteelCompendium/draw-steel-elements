@@ -1,6 +1,7 @@
-// SC-442: the counter's wrong-value and out-of-range behaviour in real Obsidian. The knownBug tests encode the CORRECT behaviour (each passes while its
+// SC-442: the counter's wrong-value and out-of-range behaviour in real Obsidian. [CTR-U01] (a write keeps the keys the counter does not know; SC-671, fixed)
+// is a plain test. The knownBug tests encode the CORRECT behaviour (each passes while its
 // ticket's bug exists and fails the moment a fix lands: remove the marker then); each asserts only the outcome any reasonable fix must produce.
-//   SC-671 a write deletes the keys the counter does not know      SC-672 a non-map block is overwritten; an empty block shows a raw TypeError
+//   SC-672 a non-map block is overwritten; an empty block shows a raw TypeError
 //   SC-673 focus + blur / Enter in the untouched box rewrites an out-of-range value      SC-674 a quoted number jumps to the max on "+"
 //   SC-680 a mouse-wheel notch over the focused number box changes the value, and the click away saves it
 // Every marker pins WHY it fails today (`failsWith`), so a different failure (a timeout, a missing control) is a red test, not a hidden "known bug".
@@ -60,12 +61,12 @@ describe('counter: a value a hand edit left past its limit (Counter/out-of-range
 });
 
 describe('counter: blocks the product cannot read as a counter, and keys it does not know', () => {
-	knownBug('SC-671', '[CTR-U01] a "+" keeps the keys the counter does not know: note_to_self and extra are still in the block', async () => {
+	it('[CTR-U01] a "+" keeps the keys the counter does not know: note_to_self and extra are still in the block', async () => {
 		const note = 'Counter/unknown-keys.md';
 		await dse.openNote(note);
 		await dse.waitForWrite(note, () => dse.click(dse.block(COUNTER).control('counter.inc')));
 		await dse.expectNoteBlock(note, COUNTER).toMatchObject({ current_value: 2, note_to_self: 'keep me', extra: { a: 1 } });
-	}, { failsWith: /note_to_self/ });
+	});
 
 	knownBug('SC-672', '[CTR-W01] a block that is just the text `hello` still holds that text after the user tries a press (a card with no button passes)', async () => {
 		const note = 'Counter/wrong-block.md';
