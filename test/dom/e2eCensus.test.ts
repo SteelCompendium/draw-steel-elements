@@ -1116,14 +1116,15 @@ describe('SC-442 census: the counter, scoped by container', () => {
 	const fixtureDir = path.join(__dirname, '../../e2e/vaults/shipped/Counter');
 	const counterFixture = (name: string): string => {
 		const text = fs.readFileSync(path.join(fixtureDir, `${name}.md`), 'utf8');
-		return /```ds-counter\n([\s\S]*?)\n```/.exec(text)![1];
+		return /```ds-counter\n([\s\S]*?)\n?```/.exec(text)![1];
 	};
 	const FIXTURES = fs.readdirSync(fixtureDir).filter((f) => f.endsWith('.md')).map((f) => f.replace(/\.md$/, '')).sort();
 
-	// Two fixtures are left out of the "draws the normal card" rows because they are SC-672's: `empty-block` fails to render (a raw TypeError card today) and
-	// `wrong-block` (`hello`) draws a live counter today. A plain row that required the three stamps on either would pin that bug as correct; the row below
-	// asserts only what holds for ANY card (every interactive node it draws has an id the manifest declares).
-	const RENDERS = FIXTURES.filter((name) => name !== 'empty-block' && name !== 'wrong-block');
+	// The fixtures whose block is not a map (`wrong-block`, `wrong-list`, `wrong-number`, `wrong-tagged`: SC-672) draw a plain error card, not a counter, so they
+	// are left out of the "draws the normal card" rows; the row below asserts what holds for ANY card (every interactive node it draws has an id the manifest
+	// declares). Every other fixture, an empty block included (SC-672: a counter at 0), draws the normal card.
+	const WRONG_BLOCKS = FIXTURES.filter((name) => name.startsWith('wrong-'));
+	const RENDERS = FIXTURES.filter((name) => !WRONG_BLOCKS.includes(name));
 
 	// The kept-keys fixture holds a `prefs:` scalar and a non-boolean `collapsed:` on purpose: the framework warns about both, which is not what is under test.
 	beforeEach(() => {
@@ -1176,7 +1177,7 @@ describe('SC-442 census: the counter, scoped by container', () => {
 		expect(root.querySelector('input')).toBeNull();
 	});
 
-	test.each(['empty-block', 'wrong-block'].map((name) => [name]))('the %s fixture note (SC-672): whatever card it draws, no interactive node lacks an id the manifest declares', async (name) => {
+	test.each(WRONG_BLOCKS.map((name) => [name]))('the %s fixture note (SC-672: an error card): whatever card it draws, no interactive node lacks an id the manifest declares', async (name) => {
 		for (const canPersist of [true, false]) expect(census(await mountCounter(counterFixture(name), canPersist))).toEqual([]);
 	});
 
