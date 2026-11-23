@@ -101,7 +101,7 @@ describe('counter: blocks the product cannot read as a counter, and keys it does
 
 describe('counter: the mouse wheel over the number box (Counter/unbounded.md: Torches 5)', () => {
 	// A real wheel action, not a synthetic WheelEvent: Chromium steps a FOCUSED number field on the wheel, and the click away commits that draft.
-	// The wheel is deliberately not a manifest pair (see manifest/counter.ts): this test drives no control id, only the page.
+	// The wheel is deliberately not a manifest pair (see manifest/counter.ts): the wheel records no pair; the type and blur drives record the declared counter.input pairs.
 	knownBug('SC-680', '[CTR-N01] one wheel notch over the focused number box changes nothing: the click away after it writes nothing and the note keeps 5', async () => {
 		const note = 'Counter/unbounded.md';
 		await dse.openNote(note);

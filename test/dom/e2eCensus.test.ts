@@ -1123,6 +1123,7 @@ describe('SC-442 census: the counter, scoped by container', () => {
 	// The fixtures whose block is not a map (`wrong-block`, `wrong-list`, `wrong-number`, `wrong-tagged`: SC-672) draw a plain error card, not a counter, so they
 	// are left out of the "draws the normal card" rows; the row below asserts what holds for ANY card (every interactive node it draws has an id the manifest
 	// declares). Every other fixture, an empty block included (SC-672: a counter at 0), draws the normal card.
+	// Convention: an error-card fixture is named `wrong-*`; one that is misnamed lands in RENDERS and goes red there (the safe direction).
 	const WRONG_BLOCKS = FIXTURES.filter((name) => name.startsWith('wrong-'));
 	const RENDERS = FIXTURES.filter((name) => !WRONG_BLOCKS.includes(name));
 
@@ -1178,7 +1179,11 @@ describe('SC-442 census: the counter, scoped by container', () => {
 	});
 
 	test.each(WRONG_BLOCKS.map((name) => [name]))('the %s fixture note (SC-672: an error card): whatever card it draws, no interactive node lacks an id the manifest declares', async (name) => {
-		for (const canPersist of [true, false]) expect(census(await mountCounter(counterFixture(name), canPersist))).toEqual([]);
+		for (const canPersist of [true, false]) {
+			const root = await mountCounter(counterFixture(name), canPersist);
+			expect(root.hasAttribute('data-dse-error-stage')).toBe(true); // it IS an error card
+			expect(census(root)).toEqual([]);
+		}
 	});
 
 	test('a counter pinned to the sidebar (mode sidebar, experimental gate on) carries chrome.unpin, which the census accepts as shared chrome, and still flags a rogue node', async () => {
