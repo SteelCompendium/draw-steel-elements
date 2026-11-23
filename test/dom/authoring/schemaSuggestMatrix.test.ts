@@ -155,7 +155,6 @@ describe('selectSuggestion writes the key or value over the typed word only', ()
 	test.each([
 		['a key: the typed prefix becomes the key (no colon is added)', '```ds-stam\nmax_stamina: 20\nrec', 'recoveries', '```ds-stam\nmax_stamina: 20\nrecoveries'],
 		['an enum value: the typed prefix becomes the value', '```ds-roll\nmode: po', 'power-roll', '```ds-roll\nmode: power-roll'],
-		['an enum value right after the colon', '```ds-roll\nmode:', 'flat', '```ds-roll\nmode:flat'],
 		['an empty query inserts at the cursor', '```ds-roll\n', 'name', '```ds-roll\nname'],
 		['a CRLF note: the text above is kept (CodeMirror holds it as LF)', 'above\r\n```ds-roll\r\ndiff', 'difficulty', 'above\n```ds-roll\ndifficulty'],
 	])('%s', (_name, doc, value, expected) => {
@@ -163,6 +162,19 @@ describe('selectSuggestion writes the key or value over the typed word only', ()
 		expect(editor.getValue()).toBe(expected);
 		expect(editor.writes).toHaveLength(1);
 		expect(editor.writes[0]).toMatchObject({ via: 'replaceRange', text: value });
+	});
+
+	// SC-688: typing `mode:` opens the value list at once, and an accept there writes `mode:flat`, which is not a mapping entry (the block renders
+	// a parse error card). The marker asks only that the accepted line is `mode: flat` or that no list is offered before the space.
+	test.failing('an enum value right after the colon: the accepted line is a mapping entry (SC-688)', () => {
+		const editor = new CmEditor('```ds-roll\nmode:');
+		const s = make();
+		const info = s.onTrigger({ line: 1, ch: 5 }, editor as never, null);
+		if (info !== null) {
+			s.context = { editor: editor as never, file: null as never, ...info };
+			s.selectSuggestion('flat');
+		}
+		expect(editor.getLine(1)).toMatch(/^mode:(\s+flat)?$/);
 	});
 
 	test('everything above and below the word is untouched', () => {
