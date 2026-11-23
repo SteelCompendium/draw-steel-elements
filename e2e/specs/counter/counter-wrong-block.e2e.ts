@@ -3,7 +3,8 @@
 // user's text). An empty block is a counter at 0, and its first step writes `current_value: 1` inside the fence with everything around it intact.
 // Counter/wrong-block.md: the text `hello`. wrong-list.md: `- a`, `- b`. wrong-number.md: `5`. empty-block.md: one empty line between the fences.
 // comment-only-block.md: `# a note to self`. adjacent-fences.md: the closing fence directly under the opening one. two-empty.md: two empty blocks,
-// with BETWEEN text. Each note has ABOVE and BELOW lines around the block(s).
+// with BETWEEN text. wrong-tagged.md: four blocks that an explicit YAML tag turns into a Set, a Date, a Uint8Array and a Map. Each note has ABOVE and BELOW
+// lines around the block(s).
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
 
@@ -14,6 +15,7 @@ const EMPTY = 'Counter/empty-block.md';
 const COMMENT_ONLY = 'Counter/comment-only-block.md';
 const ADJACENT = 'Counter/adjacent-fences.md';
 const TWO_EMPTY = 'Counter/two-empty.md';
+const TAGGED = 'Counter/wrong-tagged.md';
 const COUNTER = 'ds-counter';
 const MAP_MESSAGE = 'Invalid data: the block must be a map of keys.';
 
@@ -37,6 +39,10 @@ const shown = (scope: '.markdown-reading-view' | '.markdown-source-view' = '.mar
 			errors: roots.filter((r) => r.querySelector('.dse-error-card') || r.hasAttribute('data-dse-error-stage')).length,
 		};
 	})()`);
+
+/** What each counter-shaped root of the Reading view draws: the card's message and title, its controls, and whether it is a counter. */
+const cardsOf = (): Promise<{ title: string; message: string; controls: number; widgets: number; counter: boolean }[]> =>
+	dse.page(`(() => [...document.querySelectorAll('.markdown-reading-view [data-dse-element="counter"]')].map((c) => ({ title: c.querySelector('.dse-error-card-title')?.textContent ?? '', message: c.querySelector('.dse-error-card-message')?.textContent ?? '', controls: c.querySelectorAll('[data-dse-control]').length, widgets: c.querySelectorAll('button, input').length, counter: !!c.querySelector('.dse-counter') })))()`);
 
 describe('counter: a block that is not a map of keys', () => {
 	/** The block is refused as a plain error card with no control, and a real click on the card leaves the note byte-identical. */
@@ -62,6 +68,21 @@ describe('counter: a block that is not a map of keys', () => {
 
 	it('[CTR-W05] the number 5 is a plain error card, the card has no control, and the note is byte-identical after a click on it', async () => {
 		await expectPlainErrorCard(WRONG_NUMBER, '```ds-counter\n5\n```');
+	});
+
+	it('[CTR-W13] a block an explicit YAML tag turns into a Set, a Date, a Uint8Array or a Map is a plain error card, and the note is byte-identical after a click on each card', async () => {
+		await dse.openNote(TAGGED, { errorCard: true });
+		await dse.waitFor(`document.querySelectorAll('.markdown-reading-view [data-dse-element="counter"][data-dse-error-stage]').length === 4`, 'all four tagged blocks to draw their error card');
+		const before = await dse.noteText(TAGGED);
+		for (const body of ['!!set\n? a\n? b', '!!timestamp 2024-01-01', '!!binary aGVsbG8=', '!!omap\n- a: 1']) expect(before).toContain('```ds-counter\n' + body + '\n```');
+		const cards = await cardsOf();
+		expect(cards).toHaveLength(4);
+		for (const card of cards) {
+			expect(card).toMatchObject({ message: MAP_MESSAGE, controls: 0, widgets: 0, counter: false });
+			expect(card.title).toBe('Counter: failed to render (render)');
+		}
+		for (let k = 0; k < 4; k++) await dse.expectNoWrite(TAGGED, () => dse.block(COUNTER, k).root.click());
+		expect(await dse.noteText(TAGGED)).toBe(before);
 	});
 });
 
@@ -149,5 +170,39 @@ describe('counter: an empty block is a counter at 0', () => {
 		await dse.waitFor(`document.querySelector('.markdown-reading-view [data-dse-element="counter"] input.dse-counter__value')?.value === '1'`, 'the reopened counter to show 1');
 		expect(await shown()).toEqual({ values: ['1'], names: [''], errors: 0 });
 		expect(await dse.noteText(EMPTY)).toContain(WRITTEN_FENCE);
+	});
+
+	/** + then - on the one empty block, in the given view: the card is a counter at 0 (no error card), the text above and below the fence is the original, and a second cycle leaves the note as the first left it. */
+	async function expectCycle(mode: 'reading' | 'live-preview', bodyAfter: string): Promise<void> {
+		const scope = mode === 'reading' ? '.markdown-reading-view' : '.markdown-source-view';
+		await dse.openNote(EMPTY, { mode });
+		const original = await dse.noteText(EMPTY);
+		const [head, tail] = original.split(EMPTY_FENCE);
+		expect(original).toBe(head + EMPTY_FENCE + tail);
+		const press = async (control: 'counter.inc' | 'counter.dec'): Promise<void> => {
+			await dse.waitForWrite(EMPTY, () => dse.click(dse.block(COUNTER).control(control)));
+			await dse.settle();
+		};
+		await press('counter.inc');
+		expect(await dse.noteText(EMPTY)).toBe(head + WRITTEN_FENCE + tail);
+		await press('counter.dec');
+		const afterFirst = await dse.noteText(EMPTY);
+		expect(await shown(scope)).toEqual({ values: ['0'], names: [''], errors: 0 });
+		expect(afterFirst.startsWith(head + '```ds-counter\n')).toBe(true); // the text above the fence is the original
+		expect(afterFirst.endsWith('\n```' + tail)).toBe(true); // and so is the text below it
+		expect(afterFirst).toBe(head + '```ds-counter\n' + bodyAfter + '```' + tail);
+		await press('counter.inc');
+		await press('counter.dec');
+		expect(await dse.noteText(EMPTY)).toBe(afterFirst); // a second cycle changes nothing more
+		expect(await shown(scope)).toEqual({ values: ['0'], names: [''], errors: 0 });
+		await dse.expectNoteBlock(EMPTY, COUNTER).toEqual(bodyAfter === '\n' ? undefined : { current_value: 0 });
+	}
+
+	it('[CTR-W14] Reading view: + then - on an empty block gives a counter at 0 again, the text around the fence is untouched, and a second cycle changes nothing', async () => {
+		await expectCycle('reading', '\n');
+	});
+
+	it('[CTR-W15] Live Preview: + then - on an empty block gives a counter at 0 again, the text around the fence is untouched, and a second cycle changes nothing', async () => {
+		await expectCycle('live-preview', 'current_value: 0\n');
 	});
 });

@@ -39,10 +39,12 @@ export class Counter {
 	}
 
 	public static parse(data: unknown): Counter {
-		// A block that is text, a number, a boolean or a list is not a counter: refuse it, because a write would replace the user's text with
-		// `current_value: 1`. An EMPTY block (nothing, blank lines, only comments, a bare `null`) parses to null / undefined and is a fresh counter,
-		// the one a `{}` block is. The message is the one montage and negotiation use.
-		if (data !== undefined && data !== null && (typeof data !== "object" || Array.isArray(data))) {
+		// A block that is text, a number, a boolean, a list, or a value an explicit YAML tag turns into an object (`!!timestamp` a Date, `!!binary`
+		// a Uint8Array, `!!set` a Set, `!!omap` a Map) is not a counter: refuse it, because a write would replace the user's text with
+		// `current_value: 1`. Only a plain map is read; the tag test does not depend on which window's `Object` made the value. An EMPTY block
+		// (nothing, blank lines, only comments, a bare `null`) parses to null / undefined and is a fresh counter, the one a `{}` block is. The
+		// message is the one montage and negotiation use.
+		if (data !== undefined && data !== null && Object.prototype.toString.call(data) !== "[object Object]") {
 			throw new Error("Invalid data: the block must be a map of keys.");
 		}
 		const raw = (data ?? {}) as RawCounterData;

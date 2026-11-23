@@ -46,6 +46,33 @@ describe('a counter block that is not a map of keys', () => {
 		expect(() => Counter.parse([{ current_value: 3 }])).toThrow(MESSAGE);
 	});
 
+	// An explicit YAML tag on the whole block turns the text into an object that is not a map (a Date, a Uint8Array, a Set, a Map); a counter
+	// drawn from one would have its text replaced by `current_value: 1` on the first +.
+	test.each([
+		['!!timestamp', '!!timestamp 2024-01-01', '[object Date]'],
+		['!!binary', '!!binary aGVsbG8=', '[object Uint8Array]'],
+		['!!set', '!!set\n? a\n? b', '[object Set]'],
+		['!!omap', '!!omap\n- a: 1', '[object Map]'],
+	])('a block tagged %s is refused with the same plain message, from the source text and from the parsed data', (_name, source, shape) => {
+		expect(Object.prototype.toString.call(parseYaml(source))).toBe(shape); // the real parse hands over the non-map object this test is about
+		expect(() => Counter.parseYaml(source)).toThrow(MESSAGE);
+		expect(() => Counter.parse(parseYaml(source))).toThrow(MESSAGE);
+		expect(() => parseElement(parseYaml(source), source)).toThrow(MESSAGE);
+	});
+
+	test('a tagged map (`!!map {}`) and a plain `{}` are still maps: fresh counters', () => {
+		expect(Counter.parseYaml('!!map {}')).toEqual(Counter.parse({}));
+		expect(Counter.parseYaml('{}')).toEqual(Counter.parse({}));
+		expect(Counter.parseYaml('!!map\nname: Torches\ncurrent_value: 2').name).toBe('Torches');
+	});
+
+	test('a Date, a Set, a Map and a typed array handed to parse() directly are refused too', () => {
+		for (const data of [new Date(0), new Set(['a']), new Map([['a', 1]]), new Uint8Array([1])]) {
+			expect(() => Counter.parse(data)).toThrow(MESSAGE);
+		}
+		expect(Counter.parse(Object.create(null)).current_value).toBe(0); // a map with no prototype is still a map
+	});
+
 	test('a YAML text that does not parse keeps its own message', () => {
 		expect(() => Counter.parseYaml('a: [1')).toThrow(/^Invalid YAML format: /);
 	});

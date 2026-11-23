@@ -89,6 +89,10 @@ describe('a counter block that is not a map of keys', () => {
 		['a list', '- a\n- b'],
 		['a flow list', '[1, 2]'],
 		['a nested list', '- - a\n  - b'],
+		['a tagged date (`!!timestamp`)', '!!timestamp 2024-01-01'],
+		['a tagged binary (`!!binary`)', '!!binary aGVsbG8='],
+		['a tagged set (`!!set`)', '!!set\n? a\n? b'],
+		['a tagged ordered map (`!!omap`)', '!!omap\n- a: 1'],
 	])('%s: a plain error card, there is no counter or control, nothing is written', async (_name, source) => {
 		const { host, live, flush, writes } = await mount(source);
 		const card = live().querySelector('.dse-error-card')!;
