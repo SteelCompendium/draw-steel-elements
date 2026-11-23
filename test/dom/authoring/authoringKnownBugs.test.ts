@@ -111,7 +111,7 @@ describe('SC-678: accepting a key with the cursor in the middle of a word', () =
 });
 
 describe('SC-679: accepting a suggestion with nothing typed', () => {
-	test.failing('leaves the cursor after the inserted value (an empty range maps the cursor to the front of it)', () => {
+	test('leaves the cursor after the inserted value (an empty range maps the cursor to the front of it)', () => {
 		const editor = new CmEditor('```ds-roll\nmode: \n```', { line: 1, ch: 6 });
 		const s = new DsSchemaSuggest(new App() as any, registry());
 		const info = s.onTrigger({ line: 1, ch: 6 }, editor as never, null)!;

@@ -6,9 +6,9 @@
 // which stays out of the palette and `/ds` even with the gate on (SC-190).
 import { expect } from '@wdio/globals';
 import { browser } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
+import { dse } from '../../driver/dse';
 import {
-	clickRow, closeList, drawn, editorState, insertCommandIds, openEditor, paletteRows, pressList, savedText, scaffoldOf, setCursor, spliced, toReading, typeKeys, waitList, waitNoList,
+	clickRow, closeList, drawn, editorState, insertCommandIds, listRows, openEditor, paletteRows, pressList, savedText, scaffoldOf, selectedListRow, spliced, toReading, typeKeys, waitList, waitNoList,
 } from '../../driver/authoring';
 import { advertised, commandTrip, CURSOR, NOTE_BEFORE } from '../../driver/authoringTrips';
 
@@ -55,8 +55,7 @@ describe('authoring with the experimental gate on', () => {
 		await clickRow('authoring.schema.value', 2);
 		await closeList();
 		expect(await savedText(rel)).toBe('```ds-roll\nmode: opposed\n```\n');
-		// (an accept with nothing typed leaves the cursor in front of the inserted value, SC-679, AUTH-G13: put it at the line's end to go on)
-		await setCursor({ line: 1, ch: 13 });
+		// (the accept left the cursor after the value and no list on screen: SC-679, AUTH-G13..G15)
 		await typeKeys('\ndifficulty: m', 'authoring.schema.trigger');
 		expect((await waitList(1)).map((r) => [r.id, r.text])).toEqual([['authoring.schema.value', 'medium']]);
 		await pressList('Enter');
@@ -87,25 +86,118 @@ describe('authoring with the experimental gate on', () => {
 		await closeList();
 	});
 
-	// SC-679: an accept with nothing typed (start == end) leaves the cursor in front of the inserted value and the old list on screen.
-	const pickOpposed = async (rel: string): Promise<void> => {
-		await openEditor(rel, '```ds-roll\n\n```\n', 'live-preview', { line: 1, ch: 0 });
+	// SC-679: an accept with nothing typed (start == end) used to leave the cursor in front of the inserted value and the old list on screen.
+	const pickOpposed = async (rel: string, text = '```ds-roll\n\n```\n'): Promise<void> => {
+		await openEditor(rel, text, 'live-preview', { line: 1, ch: 0 });
 		await typeKeys('mode: ', 'authoring.schema.trigger');
 		await waitList(4);
 		await clickRow('authoring.schema.value', 2);
 		await dse.waitFor(`app.workspace.getMostRecentLeaf().view.editor.getValue() === ${JSON.stringify('```ds-roll\nmode: opposed\n```\n')}`, 'the value to be written');
 	};
-	knownBug('SC-679', '[AUTH-G13] picking `opposed` with nothing typed after `mode: ` leaves the cursor after the value', async () => {
+	it('[AUTH-G13] picking `opposed` with nothing typed after `mode: ` leaves the cursor after the value and no list on screen', async () => {
 		await pickOpposed('Authoring/gate-cursor.md');
 		expect((await editorState()).cursor).toEqual({ line: 1, ch: 13 });
-	}, { failsWith: /Expected|Received/ });
+		await waitNoList();
+	});
 
-	knownBug('SC-679', '[AUTH-G14] after picking `opposed` with nothing typed, Escape then Enter (a new line) leaves `mode: opposed` whole', async () => {
+	it('[AUTH-G14] after picking `opposed` with nothing typed, Escape then Enter (a new line) leaves `mode: opposed` whole', async () => {
 		await pickOpposed('Authoring/gate-enter.md');
 		await browser.keys('Escape');
 		await waitNoList();
 		await browser.keys('Enter');
 		await dse.settle();
 		expect((await editorState()).value.split('\n')[1]).toBe('mode: opposed');
-	}, { failsWith: /mode: opposed/ });
+	});
+
+	it('[AUTH-G15] a click on a row with nothing typed, then Enter with NO Escape: a new line, `mode: opposed` whole, the cursor on the new line', async () => {
+		const rel = 'Authoring/gate-click-enter.md';
+		await pickOpposed(rel);
+		await waitNoList(); // no stale rows, no reopened one-row list
+		await browser.keys('Enter');
+		await dse.settle();
+		const state = await editorState();
+		expect(state.value).toBe('```ds-roll\nmode: opposed\n\n```\n');
+		expect(state.cursor).toEqual({ line: 2, ch: 0 });
+		expect(await savedText(rel)).toBe('```ds-roll\nmode: opposed\n\n```\n');
+		await waitNoList();
+	});
+
+	it('[AUTH-G16] the same by keyboard: Enter on a row (the third, after two ArrowDown) with nothing typed, then Enter again: a new line, `mode: opposed` whole', async () => {
+		const rel = 'Authoring/gate-key-enter.md';
+		await openEditor(rel, '```ds-roll\n\n```\n', 'live-preview', { line: 1, ch: 0 });
+		await typeKeys('mode: ', 'authoring.schema.trigger');
+		await waitList(4);
+		await browser.keys(['ArrowDown', 'ArrowDown']); // raw keys: the manifest has no `press:ArrowDown` pair for a value row
+		expect(await selectedListRow()).toBe(2);
+		await pressList('Enter');
+		await waitNoList();
+		expect((await editorState()).cursor).toEqual({ line: 1, ch: 13 });
+		await browser.keys('Enter');
+		await dse.settle();
+		expect((await editorState()).value).toBe('```ds-roll\nmode: opposed\n\n```\n');
+		expect((await editorState()).cursor).toEqual({ line: 2, ch: 0 });
+	});
+
+	// A canary for Obsidian's own behaviour, not DSE's: on the pinned 1.14.4 Tab does not accept a row. It guards the docs wording "Enter or a click"
+	// and goes red exactly when an Obsidian that binds Tab means the docs must change.
+	it('[AUTH-G17] Tab does not accept a row (the list stays, the note is unchanged); Enter then writes one value, and one more Enter is a new line', async () => {
+		const rel = 'Authoring/gate-tab.md';
+		await openEditor(rel, '```ds-roll\n\n```\n', 'live-preview', { line: 1, ch: 0 });
+		await typeKeys('mode: ', 'authoring.schema.trigger');
+		await waitList(4);
+		await browser.keys('Tab');
+		// a bounded quiet window (about 400 ms): every read in it must show that nothing happened
+		for (let i = 0; i < 5; i++) {
+			expect((await editorState()).value).toBe('```ds-roll\nmode: \n```\n');
+			expect(await listRows()).toHaveLength(4);
+			await browser.pause(80);
+		}
+		await pressList('Enter');
+		await waitNoList();
+		expect((await editorState()).value).toBe('```ds-roll\nmode: power-roll\n```\n');
+		await browser.keys('Enter');
+		await dse.settle();
+		expect((await editorState()).value).toBe('```ds-roll\nmode: power-roll\n\n```\n');
+	});
+
+	// SC-679, no wait between the accept and the next Enter: Obsidian keeps the old rows up for about 100 ms after an accept unless the suggester
+	// closes the list itself, and an Enter in that window used to accept the stale row again (`mode: opposedopposed`).
+	it('[AUTH-G19] a click on a row with nothing typed, then Enter at once (no wait): `mode: opposed` whole plus a new line', async () => {
+		const rel = 'Authoring/gate-burst-click.md';
+		await openEditor(rel, '```ds-roll\n\n```\n', 'live-preview', { line: 1, ch: 0 });
+		await typeKeys('mode: ', 'authoring.schema.trigger');
+		await waitList(4);
+		await clickRow('authoring.schema.value', 2);
+		await browser.keys('Enter');
+		await dse.settle();
+		const state = await editorState();
+		expect(state.value).toBe('```ds-roll\nmode: opposed\n\n```\n');
+		expect(state.cursor).toEqual({ line: 2, ch: 0 });
+	});
+
+	it('[AUTH-G20] Enter, Enter in one burst on the open value list: the first row once (`mode: power-roll`) plus a new line', async () => {
+		const rel = 'Authoring/gate-burst-keys.md';
+		await openEditor(rel, '```ds-roll\n\n```\n', 'live-preview', { line: 1, ch: 0 });
+		await typeKeys('mode: ', 'authoring.schema.trigger');
+		await waitList(4);
+		await browser.keys(['Enter', 'Enter']);
+		await dse.settle();
+		const state = await editorState();
+		expect(state.value).toBe('```ds-roll\nmode: power-roll\n\n```\n');
+		expect(state.cursor).toEqual({ line: 2, ch: 0 });
+	});
+
+	it('[AUTH-G18] a typed prefix (`mode: op`) accepted with Enter: the value replaces what was typed, the cursor is after it, no list is on screen and the next Enter is a new line', async () => {
+		const rel = 'Authoring/gate-typed.md';
+		await openEditor(rel, '```ds-roll\n\n```\n', 'live-preview', { line: 1, ch: 0 });
+		await typeKeys('mode: op', 'authoring.schema.trigger');
+		expect((await waitList(1)).map((r) => r.text)).toEqual(['opposed']);
+		await pressList('Enter');
+		await waitNoList();
+		expect((await editorState()).cursor).toEqual({ line: 1, ch: 13 });
+		await browser.keys('Enter');
+		await dse.settle();
+		expect((await editorState()).value).toBe('```ds-roll\nmode: opposed\n\n```\n');
+	});
+
 });

@@ -4,8 +4,8 @@
 // block uses the second's. Silent outside the block, on a fence line, on an indented line, and for the deferred elements while the gate is OFF.
 // (The enum value list exists only with the gate ON: AUTH-G10.)
 import { browser, expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
-import { clickRow, closeList, editorState, openEditor, pressList, savedText, selectedListRow, setCursor, spliced, typeKeys, waitList, waitNoList } from '../../driver/authoring';
+import { dse } from '../../driver/dse';
+import { clickRow, closeList, editorState, listRows, openEditor, pressList, savedText, selectedListRow, setCursor, spliced, typeKeys, waitList, waitNoList } from '../../driver/authoring';
 
 const TRIGGER = 'authoring.schema.trigger';
 const KEY = 'authoring.schema.key';
@@ -108,17 +108,129 @@ describe('in-fence key autocomplete', () => {
 		expect((await waitList(1)).map((r) => r.text)).toEqual(['current_stamina']);
 	});
 
-	// SC-679, shipped build: the key list opened on an empty line with nothing typed (type a letter, delete it) and a pick leaves the cursor
-	// in front of the key and the old list on screen; the next Enter writes a second key (`collapsiblecollapsible`).
-	knownBug('SC-679', '[AUTH-K09] picking a key with nothing typed leaves the cursor after the key', async () => {
+	// SC-679, shipped build: the key list opened on an empty line with nothing typed (type a letter, delete it) and a pick used to leave the cursor
+	// in front of the key and the old list on screen; the next Enter wrote a second key (`collapsiblecollapsible`).
+	const emptyLinePick = async (rel: string, text: string, at: { line: number; ch: number }, nth: number): Promise<void> => {
+		await openEditor(rel, text, 'live-preview', at);
+		await typeKeys('c', TRIGGER);
+		await waitList();
+		await browser.keys('Backspace');
+		await waitList(9);
+		await clickRow(KEY, nth);
+	};
+	it('[AUTH-K09] picking a key with nothing typed leaves the cursor after the key and no list on screen', async () => {
 		const rel = 'Authoring/key-empty-query.md';
+		await emptyLinePick(rel, STAM, AT, 0);
+		await dse.waitFor(`app.workspace.getMostRecentLeaf().view.editor.getValue() === ${JSON.stringify(spliced(STAM, AT, undefined, 'collapsible'))}`, 'the key to be written');
+		expect((await editorState()).cursor).toEqual({ line: 1, ch: 11 });
+		await waitNoList();
+	});
+
+	it('[AUTH-K10] the key is picked with nothing typed, then Enter with no Escape: a new line, the key line whole (no `collapsiblecollapsible`)', async () => {
+		const rel = 'Authoring/key-empty-enter.md';
 		await openEditor(rel, STAM, 'live-preview', AT);
 		await typeKeys('c', TRIGGER);
 		await waitList();
 		await browser.keys('Backspace');
 		await waitList(9);
+		await pressList('Enter'); // the first row, `collapsible`
+		await waitNoList();
+		await browser.keys('Enter');
+		await dse.settle();
+		expect((await editorState()).value).toBe('```ds-stam\ncollapsible\n\n```\nafter\n');
+		expect((await editorState()).cursor).toEqual({ line: 2, ch: 0 });
+		expect(await savedText(rel)).toBe('```ds-stam\ncollapsible\n\n```\nafter\n');
+	});
+
+	it('[AUTH-K11] a typed prefix (`cur`) accepted with Enter: the cursor is after `current_stamina`, no list is on screen, the next Enter is a new line', async () => {
+		const rel = 'Authoring/key-typed-enter.md';
+		await openEditor(rel, STAM, 'live-preview', AT);
+		await typeKeys('cur', TRIGGER);
+		await waitList(1);
 		await pressList('Enter');
-		await dse.waitFor(`app.workspace.getMostRecentLeaf().view.editor.getValue() === ${JSON.stringify(spliced(STAM, AT, undefined, 'collapsible'))}`, 'the key to be written');
-		expect((await editorState()).cursor).toEqual({ line: 1, ch: 11 });
-	}, { failsWith: /Expected|Received/ });
+		await waitNoList();
+		expect((await editorState()).cursor).toEqual({ line: 1, ch: 15 });
+		await browser.keys('Enter');
+		await dse.settle();
+		expect((await editorState()).value).toBe('```ds-stam\ncurrent_stamina\n\n```\nafter\n');
+	});
+
+	it('[AUTH-K12] typing on after a pick keeps working: `style` picked with nothing typed, then `: ` opens its value list; `rec` picked (recoveries) then `_` lists recoveries_max', async () => {
+		await emptyLinePick('Authoring/key-then-colon.md', STAM, AT, 8); // the ninth row: style
+		await dse.waitFor(`app.workspace.getMostRecentLeaf().view.editor.getValue() === ${JSON.stringify(spliced(STAM, AT, undefined, 'style'))}`, 'the key to be written');
+		await waitNoList();
+		await typeKeys(': ', TRIGGER);
+		expect((await waitList(2)).map((r) => r.text)).toEqual(['default', 'sheet']);
+		await browser.keys('Escape');
+		await waitNoList();
+		await openEditor('Authoring/key-prefix-pair.md', STAM, 'live-preview', AT);
+		await typeKeys('rec', TRIGGER);
+		expect((await waitList(2)).map((r) => r.text)).toEqual(['recoveries', 'recoveries_max']);
+		await pressList('Enter');
+		await waitNoList();
+		expect((await editorState()).value.split('\n')[1]).toBe('recoveries');
+		await typeKeys('_', TRIGGER);
+		expect((await waitList(1)).map((r) => r.text)).toEqual(['recoveries_max']);
+		await browser.keys('Escape');
+		await waitNoList();
+	});
+
+	it('[AUTH-K13] one Ctrl+Z after a pick with nothing typed: the note is not left damaged (it takes the pick back, nothing else)', async () => {
+		const rel = 'Authoring/key-undo.md';
+		await emptyLinePick(rel, STAM, AT, 0);
+		await waitNoList();
+		await browser.keys(['Control', 'z']);
+		await dse.waitFor(`app.workspace.getMostRecentLeaf().view.editor.getValue() === ${JSON.stringify(STAM)}`, 'the undo to take the pick back');
+		await waitNoList();
+		const state = await editorState();
+		// Observed in Obsidian 1.14.4: the one undo takes the pick back (the typed `c` and its Backspace were two earlier steps that cancel out), so the
+		// block is as before the pick, with no list on screen.
+		expect(state.value).toBe(STAM);
+		expect(await listRows()).toHaveLength(0);
+	});
+
+	// SC-679, no wait between the accept and the next Enter (see AUTH-G19): the shipped key list and a typed prefix.
+	it('[AUTH-K15] a key picked with nothing typed by Enter, Enter in one burst: the key once (`collapsible`) plus a new line', async () => {
+		const rel = 'Authoring/key-burst-empty.md';
+		await openEditor(rel, STAM, 'live-preview', AT);
+		await typeKeys('c', TRIGGER);
+		await waitList();
+		await browser.keys('Backspace');
+		await waitList(9);
+		await browser.keys(['Enter', 'Enter']);
+		await dse.settle();
+		const state = await editorState();
+		expect(state.value).toBe('```ds-stam\ncollapsible\n\n```\nafter\n');
+		expect(state.cursor).toEqual({ line: 2, ch: 0 });
+	});
+
+	it('[AUTH-K16] `rec` accepted with Enter, Enter in one burst: `recoveries` once (not `recoveriesoveries`) plus a new line', async () => {
+		const rel = 'Authoring/key-burst-typed.md';
+		await openEditor(rel, STAM, 'live-preview', AT);
+		await typeKeys('rec', TRIGGER);
+		await waitList(2);
+		await browser.keys(['Enter', 'Enter']);
+		await dse.settle();
+		const state = await editorState();
+		expect(state.value).toBe('```ds-stam\nrecoveries\n\n```\nafter\n');
+		expect(state.cursor).toEqual({ line: 2, ch: 0 });
+	});
+
+	it('[AUTH-K14] integrity: the text above and below the block and a second ds-* block in the note are byte-identical after a pick with nothing typed', async () => {
+		const rel = 'Authoring/key-integrity.md';
+		const note = '# Above\n\nsome prose\n\n```ds-stam\n\n```\n\nbetween\n\n```ds-skills\nonly_show_selected: true\n```\n\nbelow\n';
+		const at = { line: 5, ch: 0 };
+		await openEditor(rel, note, 'source', at);
+		await typeKeys('c', TRIGGER);
+		await waitList();
+		await browser.keys('Backspace');
+		await waitList(9);
+		await clickRow(KEY, 0);
+		await waitNoList();
+		expect(await savedText(rel)).toBe(spliced(note, at, undefined, 'collapsible'));
+		await browser.keys('Enter');
+		await dse.settle();
+		expect(await savedText(rel)).toBe(spliced(note, at, undefined, 'collapsible\n'));
+	});
+
 });
