@@ -26,7 +26,7 @@ export const RESET_LANDING = 'negotiation.menu';
 /** Family -> the families to try, in order, when the control's own family has no usable control. Same shape as the montage's. */
 export const NEGOTIATION_FOCUS_FALLBACKS: ControlFallbacks = {
 	'negotiation.complete': ['negotiation.appeal.motivation', 'negotiation.appeal.pitfall', 'negotiation.mod.lie'],
-	// SC-639: the options button is always rebuilt with the card (SC-641 may hide the Reset item, not the button), so this is a guard. If it is ever
+	// SC-639: the options button is always rebuilt with the card (SC-641 decided Reset stays and falls back to the defaults, so the button is never hidden), so this is a guard. If it is ever
 	// absent: the card's tabs (the first Tab stop below the standing), else the card itself (`tabindex=-1`, the kit's last resort).
 	// SC-656: an outside edit can disable the box that has focus (a motivation appealed to elsewhere greys out "same argument"; one un-spent greys out
 	// "reuse"). The lie box is the one modifier that is always enabled and sits between the two; else the first motivation chip.

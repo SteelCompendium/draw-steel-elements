@@ -1,6 +1,6 @@
-// SC-439 [W]: hand-written values that are not what the element expects, and blocks that are nearly empty. Each marker states the CORRECT
-// behaviour only as far as its ticket rules: SC-641 (a block without Interest does not open ended; Reset of a block that declares only its
-// current standing does not end it), never a specific fix or default value. SC-638 is fixed: W02 and W03 are plain tests, and W08..W11 pin its
+// SC-439 [W]: hand-written values that are not what the element expects, and blocks that are nearly empty. No marker is open: SC-641 is fixed
+// (W06 and W07 are plain tests: a block without Interest opens at Interest 2 / Patience 5, and Reset falls back to those defaults, writing
+// no initial_* key). SC-638 is fixed: W02 and W03 are plain tests, and W08..W11 pin its
 // rulings (a plain error card that writes nothing for a wrong-shaped block, a typed value written back as typed). SC-640 is fixed: W04 and W05
 // are plain tests, and W12 and W13 pin its rulings (same-named entries share one labelled chip and a notice, each row's Spent is its own, a
 // nameless entry is labelled "Unnamed Motivation" and works).
@@ -8,7 +8,7 @@
 // dup-names.md: two motivations named Higher Authority. nameless.md: a motivation with a reason and no name. minimal.md: `name:` only.
 // current-only.md: `current_interest: 3`, `current_patience: 2`, no initial_*. wrong-item.md: `- Legacy` as the second motivation. wrong-argument.md: `currentArgument: hello`. wrong-block.md: the block is the text `hello`.
 import { expect } from '@wdio/globals';
-import { dse, knownBug } from '../../driver/dse';
+import { dse } from '../../driver/dse';
 import { argOf, blockOf, CURRENT_ONLY, DUPLICATES, dossier, FRACTION, MINIMAL, NAMELESS, NEGO, openMenu, openNego, patienceSeal, pressedOf, QUOTED, chooseReset, shown, WRONG_ARGUMENT, WRONG_BLOCK, WRONG_ITEM, WRONG_NAME } from '../../driver/negotiation';
 
 describe('negotiation: values the Director typed by hand', () => {
@@ -127,16 +127,19 @@ describe('negotiation: values the Director typed by hand', () => {
 		expect(argOf(await blockOf(NAMELESS)).motivationsUsed).toEqual([]);
 	});
 
-	knownBug('SC-641', '[NEGO-W06] a block that declares no Interest does not open already ended', async () => {
+	it('[NEGO-W06] a block that declares no Interest opens at Interest 2 / Patience 5, not already ended (SC-641)', async () => {
 		await dse.openNote(MINIMAL);
-		expect((await shown()).ended).toBeNull();
-	}, { failsWith: /hostile/ });
+		expect(await shown()).toMatchObject({ interest: [2], patience: [5], ended: null });
+	});
 
-	knownBug('SC-641', '[NEGO-W07] Reset on a block that declares only its current standing does not end the negotiation', async () => {
+	it('[NEGO-W07] Reset on a block that declares only its current standing lands on Interest 2 / Patience 5 and adds no initial_* key (SC-641)', async () => {
 		const root = await openNego(CURRENT_ONLY);
-		expect((await shown()).ended).toBeNull(); // live to begin with: Interest 3, Patience 2
+		expect(await shown()).toMatchObject({ interest: [3], patience: [2], ended: null }); // live to begin with
 		await openMenu(root);
 		await chooseReset(CURRENT_ONLY);
-		expect((await shown()).ended).toBeNull();
-	}, { failsWith: /hostile/ });
+		expect(await shown()).toMatchObject({ interest: [2], patience: [5], ended: null });
+		const b = await blockOf(CURRENT_ONLY);
+		expect([b.current_interest, b.current_patience]).toEqual([2, 5]);
+		expect(await dse.noteText(CURRENT_ONLY)).not.toContain('initial_');
+	});
 });

@@ -4,7 +4,7 @@
 // `stringifyYaml(data).trim()` on the WHOLE NegotiationData instance the processor holds.
 // So the compatibility oracle here is the legacy writer's own output for the same input:
 // `stringifyYaml(new NegotiationData(parseYaml(src))).trim()` — NOT the source bytes.
-// new NegotiationData materializes defaults (current_patience=5, current_interest=0,
+// new NegotiationData materializes defaults (current_patience=5, current_interest=2,
 // i5..i0 placeholders, a full currentArgument) so serialize(parse(src)) legitimately emits
 // fields ABSENT from src; the legacy writer does the same on its first write.
 //
@@ -71,11 +71,11 @@ describe('T-4: serialize is byte-compatible with the legacy writer (for every ke
 		expect(serialize(parseLikePipeline(full))).toBe(full);
 	});
 
-	test('undeclared defaults are not written (pin: patience=5, interest=0 stay in the model only)', () => {
+	test('undeclared defaults are not written (pin: patience=5, interest=2 stay in the model only)', () => {
 		const src = 'name: Quick';
 		const model = parseLikePipeline(src);
 		expect(model.current_patience).toBe(5);
-		expect(model.current_interest).toBe(0);
+		expect(model.current_interest).toBe(2);
 		expect(serialize(model)).toBe('name: Quick');
 		// What the legacy first write added, now omitted:
 		const legacy = legacyWriterBytes(src);
@@ -92,6 +92,22 @@ describe('T-4: serialize is byte-compatible with the legacy writer (for every ke
 		expect(serialize(model)).toBe('name: Quick\ninitial_patience: 4');
 		model.current_patience = 2;
 		expect(serialize(model)).toBe('name: Quick\ninitial_patience: 4\ncurrent_patience: 2');
+	});
+
+	// SC-641: the default Interest is 2, so the omit-while-unchanged rule compares against 2, not 0.
+	test('SC-641: a name-only block driven to Interest 0 writes current_interest: 0 (0 is no longer the default)', () => {
+		const model = parseLikePipeline('name: Quick');
+		model.current_interest = 0;
+		expect(serialize(model)).toBe('name: Quick\ncurrent_interest: 0');
+	});
+
+	test('SC-641: a name-only block still at Interest 2 writes no interest key, and one moved off 2 and back writes none again', () => {
+		const model = parseLikePipeline('name: Quick');
+		expect(serialize(model)).not.toContain('interest');
+		model.current_interest = 4;
+		expect(serialize(model)).toBe('name: Quick\ncurrent_interest: 4');
+		model.current_interest = 2;
+		expect(serialize(model)).toBe('name: Quick');
 	});
 
 	test('output is trimmed (no trailing newline), matching legacy writer + replaceSource', () => {

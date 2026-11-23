@@ -265,7 +265,8 @@ export class NegotiationData {
     _dse_anchor?: string;
 
     private static readonly default_patience: number = 5;
-    private static readonly default_interest: number = 0;
+    // SC-641: a block that leaves Interest out opens at 2 (the rulebook's Neutral NPC), a live negotiation, not an ended one (0 is hostile).
+    private static readonly default_interest: number = 2;
 
     constructor(data: Partial<NegotiationData>) {
         // SC-638: shape is checked first (a wrong one throws before anything is built), then each text field is read as text.

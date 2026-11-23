@@ -82,11 +82,31 @@ describe('T-7: NegotiationData parsing and defaults', () => {
 		expect(data.i0).toBe("Thinks you're after the ring; becomes hostile");
 	});
 
-	test('defaults when fields are omitted: patience 5, interest 0, i5..i0 placeholders', () => {
+	test('defaults when fields are omitted: patience 5, interest 2, i5..i0 placeholders', () => {
 		const data = parseNegotiationData('name: Quick');
 		expect(data.current_patience).toBe(5);
-		expect(data.current_interest).toBe(0);
+		expect(data.current_interest).toBe(2);
 		expect(data.i5).toBe('Interest 5 result');
+	});
+});
+
+describe('SC-641: Interest left out opens at 2; Reset falls back to the defaults', () => {
+	test('an authored Interest of 0 is honoured as written (initial or current)', () => {
+		expect(parseNegotiationData('name: A\ninitial_interest: 0').current_interest).toBe(0);
+		expect(parseNegotiationData('name: A\ninitial_interest: 3\ncurrent_interest: 0').current_interest).toBe(0);
+	});
+
+	test('resetData: initial_* when written, otherwise Interest 2 / Patience 5 (a current-only block loses its current standing)', () => {
+		const withInitial = parseNegotiationData('name: A\ninitial_interest: 3\ninitial_patience: 2\ncurrent_interest: 1\ncurrent_patience: 1');
+		withInitial.resetData();
+		expect([withInitial.current_interest, withInitial.current_patience]).toEqual([3, 2]);
+		const currentOnly = parseNegotiationData('name: A\ncurrent_interest: 3\ncurrent_patience: 2');
+		currentOnly.resetData();
+		expect([currentOnly.current_interest, currentOnly.current_patience]).toEqual([2, 5]);
+		const authoredZero = parseNegotiationData('name: A\ninitial_interest: 0');
+		authoredZero.current_interest = 4;
+		authoredZero.resetData();
+		expect(authoredZero.current_interest).toBe(0);
 	});
 });
 

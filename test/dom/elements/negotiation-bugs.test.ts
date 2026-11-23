@@ -1,6 +1,6 @@
 // SC-439 — filed negotiation bugs as `test.failing`: each encodes the CORRECT behaviour with its ticket in the title, passes while the bug
-// exists and FAILS once it is fixed (remove the marker then). The real-Obsidian twins are the `knownBug` markers in
-// e2e/specs/negotiation/ (integrity, focus, wrong-values). Each marker asserts only what its ticket rules, never a specific fix or default.
+// exists and FAILS once it is fixed (remove the marker then). None is open now: SC-641 (K08, K09) is fixed and those are plain tests. The real-Obsidian twins are the `knownBug` markers in
+// e2e/specs/negotiation/ (integrity, focus, wrong-values). Each marker asserts only what its ticket rules, never a specific fix or default (SC-641's ruling IS a default, so K08 / K09 assert it).
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
@@ -111,19 +111,44 @@ describe('SC-439 filed bugs', () => {
 		expect(chipTexts(root(), 'negotiation.appeal.motivation')).toEqual(['Peace', 'Unnamed Motivation']);
 	});
 
-	test.failing('[K08] a block that declares no Interest does not open already ended [known bug SC-641]', async () => {
+	// SC-641 (ruled by Scott): a block that leaves Interest out opens at 2 (a live negotiation); Reset falls back to the defaults, Interest 2 / Patience 5,
+	// and writes nothing new into the note.
+	test('[K08] a block that declares no Interest opens at Interest 2 / Patience 5, not already ended', async () => {
 		const { root } = await mount('name: A quick haggle');
 		expect(root().querySelector('.dse-nt')!.hasAttribute('data-ended')).toBe(false);
+		expect(checked(root(), 'interest')).toEqual([2]);
+		expect(checked(root(), 'patience')).toEqual([5]);
 	});
 
-	test.failing('[K09] Reset on a block that declares only its current standing does not end the negotiation [known bug SC-641]', async () => {
+	test('[K09] Reset on a block that declares only its current standing lands on Interest 2 / Patience 5, not ended', async () => {
 		const { root, flush } = await mount('name: x\ncurrent_interest: 3\ncurrent_patience: 2\n' + OFFERS);
 		expect(checked(root(), 'interest')).toEqual([3]); // live to begin with
-		expect(root().querySelector('.dse-nt')!.hasAttribute('data-ended')).toBe(false);
+		expect(checked(root(), 'patience')).toEqual([2]);
 		root().querySelector<HTMLElement>('[data-dse-control="negotiation.menu"]')!.click();
 		Menu.lastMenu!.items[0].onClickCallback!();
 		await flush();
 		expect(root().querySelector('.dse-nt')!.hasAttribute('data-ended')).toBe(false);
+		expect(checked(root(), 'interest')).toEqual([2]);
+		expect(checked(root(), 'patience')).toEqual([5]);
+	});
+
+	test('[K09b] Reset of a current-only block writes the standings back as typed and adds no initial_* key', async () => {
+		const { root, flush, raw } = await mount('name: x\ncurrent_interest: 3\ncurrent_patience: 2\n' + OFFERS);
+		root().querySelector<HTMLElement>('[data-dse-control="negotiation.menu"]')!.click();
+		Menu.lastMenu!.items[0].onClickCallback!();
+		await flush();
+		expect(raw()).toBe('# T\n\n```ds-negotiation\nname: x\ncurrent_patience: 5\ncurrent_interest: 2\n' + OFFERS + '```\n');
+		expect(raw()).not.toMatch(/initial_/);
+	});
+
+	test('[K09c] Reset of a name-only block adds no key: the note is byte-identical', async () => {
+		const { root, flush, raw } = await mount('name: A quick haggle');
+		const before = raw();
+		root().querySelector<HTMLElement>('[data-dse-control="negotiation.menu"]')!.click();
+		Menu.lastMenu!.items[0].onClickCallback!();
+		await flush();
+		expect(raw()).toBe(before);
+		expect(checked(root(), 'interest')).toEqual([2]);
 	});
 
 	test('[K10] two pitfalls with the same name: one mention chip with its name to read, and a notice that it stands for both', async () => {

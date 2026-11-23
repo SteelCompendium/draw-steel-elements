@@ -4,7 +4,7 @@
 // (pipeline.ts step 2: `parseYaml(source)`) before calling this, so constructing the class
 // from `data` is exactly what the legacy parseNegotiationData(source) did after its own
 // parseYaml — one parse, same constructor, same defaults materialization (current_patience
-// ?? initial_patience ?? 5, current_interest ?? initial_interest ?? 0, i5..i0 placeholders,
+// ?? initial_patience ?? 5, current_interest ?? initial_interest ?? 2, i5..i0 placeholders,
 // nested Motivation/Pitfall/CurrentArgument instances). `raw` is unused: NegotiationData
 // has no SDK reader that needs the original source text.
 //
