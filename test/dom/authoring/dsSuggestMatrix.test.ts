@@ -130,7 +130,6 @@ describe('selectSuggestion writes the scaffold over the /ds token and touches no
 		['the first line', '/dsct\nbelow\n'],
 		['the last line with no trailing newline', 'above\n/dsct'],
 		['a CRLF note (CodeMirror reads and holds it as LF lines)', 'above\r\n/dsct\r\nbelow\r\n'],
-		['an indented token', 'above\n  /dsct\nbelow'],
 		['a note with a closed block above', '```ds-counter\nname: x\n```\n/dsct\n'],
 	])('%s: the note is the text before the token + the scaffold + the text after it', (_name, doc) => {
 		const line = doc.split(/\r\n|\n/).findIndex((l) => l.includes('/dsct'));
@@ -142,7 +141,18 @@ describe('selectSuggestion writes the scaffold over the /ds token and touches no
 
 	test('the cursor lands on the first body line of the inserted block, wherever the token was', () => {
 		const { editor } = pick('a\nb\n  /dsct\nc', 2, '/dsct', 'counter');
-		expect(editor.getCursor()).toEqual({ line: 3, ch: 0 });
+		expect(editor.getCursor()).toEqual({ line: 3, ch: 2 }); // behind the two typed spaces SC-675 carries onto every line
 		expect(editor.getLine(2)).toBe('  ```ds-ct');
+	});
+
+	// SC-675: a token typed behind whitespace puts the whitespace on every line of the block (the block's own lines are new text, the typed
+	// whitespace stays where it is; the first fence line goes right behind it), so the block stays at one indentation.
+	test('an indented token: the typed indentation goes on every line of the block, the first fence line stays behind it', () => {
+		const { editor, before, start, end } = pick('above\n  /dsct\nbelow', 1, '/dsct', 'counter');
+		const indented = SCAFFOLD.split('\n').join('\n  ');
+		expect(editor.getValue()).toBe(before.slice(0, start) + indented + before.slice(end));
+		expect(editor.getValue()).toBe('above\n  ' + indented + '\nbelow');
+		expect(editor.writes).toHaveLength(1);
+		expect(editor.writes[0]).toMatchObject({ via: 'replaceRange', from: start, to: end, text: indented });
 	});
 });

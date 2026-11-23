@@ -1,19 +1,23 @@
 // SC-443 — expected failures for the authoring bugs found by the e2e survey. Each `test.failing` encodes the CORRECT behaviour and goes
 // green-as-failing while the bug exists; the moment the fix lands it fails with "expected to fail" and the marker comes off with the fix.
-// SC-675 (an insert not at the start of an empty line breaks the block; related SC-462), SC-676 (/ds guard misses fences it cannot see),
-// SC-677 (Ctrl/Cmd-click copy with a refusing clipboard), SC-678 (accepting a key mid-word doubles the tail).
-// The SC-675 assertions are the NEUTRAL outcome (`insertOutcomeProblem`): the note is left alone, OR it holds one more sound block with every
-// other byte intact, so a fix that splits onto its own lines and one that refuses with a Notice both flip them.
+// Still open: SC-676 (/ds guard misses fences it cannot see), SC-677 (Ctrl/Cmd-click copy with a refusing clipboard), SC-678 (accepting a key
+// mid-word doubles the tail), SC-679 (accepting a suggestion with nothing typed leaves the cursor in front of it).
+// SC-675 (an insert not at the start of an empty line broke the block; related SC-462) is fixed: its three cases below are plain tests that pin
+// the exact bytes the fix writes (src/authoring/blockInsert.ts; the helper has its own matrix in insertOwnLines.test.ts).
 import { DsElementSuggest } from '../../../src/authoring/suggest';
 import { DsSchemaSuggest } from '../../../src/authoring/schemaSuggest';
 import { insertScaffold } from '../../../src/authoring/insert';
+import { buildScaffold } from '../../../src/authoring/scaffold';
 import { copyCode, insertFullBlock, insertReferenceBlock } from '../../../src/authoring/compendiumInsert';
 import { createElementRegistry } from '../../../src/framework/registry';
 import { registerFrameworkElementDefinitions } from 'main';
 import { App } from '../../mocks/obsidian';
-import { insertOutcomeProblem } from '../../../e2e/driver/authoringAssert';
 import { loadMdDseFixture, makeCompendiumDeps } from '../elements/_refHarness';
 import { CmEditor } from './_cmEditor';
+
+// `marked` (a devDependency, the CommonMark-style parser the visual harness uses) is the list-aware oracle: `scanFences` does not see a fence
+// indented inside a list item. It ships ESM for `main`, which jest does not transform, so the UMD build is loaded by path.
+const { marked } = jest.requireActual('../../../node_modules/marked/lib/marked.umd.js') as { marked: { lexer: (src: string) => Array<{ type: string }> } };
 
 const registry = () => {
 	const r = createElementRegistry();
@@ -23,41 +27,48 @@ const registry = () => {
 const KIT = 'mcdm.heroes.v1/kit/panther';
 const GOBLIN = 'mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker';
 
-describe('SC-675: an insert not at the start of an empty line (the neutral outcome)', () => {
-	test('the helper itself: a refused insert, a split-onto-own-lines insert and a sound block pass; a glued opener, an unclosed block and lost text fail', () => {
-		const block = '```ds-ct\nname: x\n```';
-		expect(insertOutcomeProblem('abc', 'abc', 'ds-ct')).toBeNull();
-		expect(insertOutcomeProblem('abc', `abc\n${block}\n`, 'ds-ct')).toBeNull();
-		expect(insertOutcomeProblem('abcdef', `abc\n${block}\ndef`, 'ds-ct')).toBeNull();
-		expect(insertOutcomeProblem('abc', `abc${block}`, 'ds-ct')).toMatch(/unclosed|expected/);
-		expect(insertOutcomeProblem('', '```ds-ct\nname: x\n``` tail', 'ds-ct')).toMatch(/unclosed|expected/);
-		expect(insertOutcomeProblem('abc', `\n${block}\n`, 'ds-ct')).toMatch(/did not survive/);
-		expect(insertOutcomeProblem('- item\n  ', '- item\n  ```ds-ct\nname: x\n```', 'ds-ct', { indented: true })).toMatch(/unclosed|lost its indent/);
-	});
-
-	test.failing('the insert command inside a list item keeps every line of the block inside the item', () => {
+describe('SC-675 (fixed): an insert not at the start of an empty line puts the block on its own lines, byte for byte', () => {
+	test('the insert command inside a list item: every line of the block sits under the item, the text before the cursor survives, a Markdown parser reads one fenced code block in the item', () => {
+		const counter = registry().get('counter')!;
+		const scaffold = buildScaffold(counter).text;
 		const before = '- item\n  ';
 		const editor = new CmEditor(before, { line: 1, ch: 2 });
-		insertScaffold(editor as never, registry().get('counter')!);
-		expect(insertOutcomeProblem(before, editor.getValue(), 'ds-ct', { indented: true })).toBeNull();
+		insertScaffold(editor as never, counter);
+		// the opening fence goes right behind the two spaces already on the line; the other lines carry the item's two-space indentation; no blank line
+		expect(editor.getValue()).toBe('- item\n  ' + scaffold.split('\n').join('\n  '));
+		expect(editor.getCursor()).toEqual({ line: 2, ch: 2 }); // the first body character
+		type Item = { tokens: Array<{ type: string; lang?: string; text?: string }> };
+		const list = marked.lexer(editor.getValue()).find((t) => t.type === 'list') as unknown as { items: Item[] };
+		expect(list.items).toHaveLength(1);
+		const code = list.items[0].tokens.find((t) => t.type === 'code');
+		expect(code?.lang).toBe('ds-ct');
+		expect(code?.text).toBe(scaffold.split('\n').slice(1, -1).join('\n'));
 	});
 
-	test.failing('a compendium reference inserted mid-line is a sound block (or refused)', () => {
+	test('a compendium reference inserted mid-line: the text after the cursor goes to its own line below the block, the text before stays above it', () => {
 		const { vault, index } = makeCompendiumDeps();
 		loadMdDseFixture(vault, 'kit/panther.md');
-		const before = 'abcdef';
-		const editor = new CmEditor(before, { line: 0, ch: 3 });
+		const editor = new CmEditor('abcdef', { line: 0, ch: 3 });
 		insertReferenceBlock(editor as never, index.getEntry(KIT)!);
-		expect(insertOutcomeProblem(before, editor.getValue(), 'ds-scc')).toBeNull();
+		expect(editor.getValue()).toBe('abc\n```ds-scc\n' + KIT + '\n```\ndef');
+		expect(editor.getCursor()).toEqual({ line: 4, ch: 0 }); // after the line break the block ends with: the start of the line `def` moved to
+		expect(editor.writes).toHaveLength(1);
 	});
 
-	test.failing('a compendium snapshot inserted at the end of a line of text is a sound block (or refused)', async () => {
+	test('a compendium snapshot inserted at the end of a line of text: the block starts on the next line and ends its own line', async () => {
 		const { vault, index } = makeCompendiumDeps();
 		loadMdDseFixture(vault, 'monster/goblin/statblock/goblin-stinker.md');
-		const before = 'abc';
-		const editor = new CmEditor(before, { line: 0, ch: 3 });
-		await insertFullBlock(editor as never, (await index.getEntity(GOBLIN))!);
-		expect(insertOutcomeProblem(before, editor.getValue(), 'ds-sb')).toBeNull();
+		const entity = (await index.getEntity(GOBLIN))!;
+		// the snapshot's own text, as the same insert leaves it in an empty note
+		const alone = new CmEditor('');
+		await insertFullBlock(alone as never, entity);
+		const block = alone.getValue();
+		expect(block.startsWith('```ds-sb\n')).toBe(true);
+		expect(block.endsWith('\n```\n')).toBe(true);
+		const editor = new CmEditor('abc', { line: 0, ch: 3 });
+		await insertFullBlock(editor as never, entity);
+		expect(editor.getValue()).toBe('abc\n' + block);
+		expect(editor.writes).toHaveLength(1);
 	});
 });
 

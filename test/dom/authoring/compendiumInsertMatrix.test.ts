@@ -276,12 +276,13 @@ describe('where a choice lands in the note', () => {
 		expect(editor.writes).toHaveLength(0);
 	});
 
-	// SC-462 (open): the editor has no idea about the callout, so the multi-line block is inserted raw and every line after the first loses its "> ".
-	test.failing('inside a callout every inserted line keeps the "> " prefix (SC-462)', () => {
+	// Fixed by SC-675 (SC-462 folded in): the block's lines carry the cursor line's callout marker, the line after it too.
+	test('inside a callout every inserted line keeps the "> " prefix', () => {
 		const { entry } = setup();
 		const editor = new CmEditor('> [!note]\n> ', { line: 1, ch: 2 });
 		insertReferenceBlock(editor as never, entry(KIT));
-		const inserted = editor.getValue().split('\n').slice(1, 4);
-		expect(inserted.every((l) => l.startsWith('> '))).toBe(true);
+		expect(editor.getValue()).toBe('> [!note]\n> ```ds-scc\n> ' + KIT + '\n> ```\n> ');
+		expect(editor.getCursor()).toEqual({ line: 4, ch: 2 }); // on the callout line the block ends with
+		expect(editor.writes).toHaveLength(1);
 	});
 });
