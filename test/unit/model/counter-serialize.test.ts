@@ -161,10 +161,16 @@ describe('SC-671: counter unknown keys', () => {
 		expect(roundTrip(out)).toBe(out); // and it is stable on the next pass
 	});
 
-	test('a non-map body keeps today\'s behaviour: nothing is carried, nothing crashes differently', () => {
-		// what the develop build wrote for them (SC-672 owns whether that is right): a scalar body comes back empty, a list as `{}`
-		expect(roundTrip('hello')).toBe('');
-		expect(roundTrip('- a\n- b')).toBe('{}');
-		expect(() => parse(null, '')).toThrow(TypeError); // the empty block (SC-672) is still the raw TypeError it was
+	test('a non-map body is refused before anything is carried; an empty body is a fresh counter with nothing carried', () => {
+		// The rule: a body that parses to text, a number or a list is not a counter, so `parse` throws the one plain message before it looks for
+		// keys to carry (there is nothing to write back). A body that parses to nothing (null) is a fresh counter, the one `{}` is; it has no
+		// unknown key and serializes as a blank body.
+		const MESSAGE = 'Invalid data: the block must be a map of keys.';
+		expect(() => parseLikePipeline('hello')).toThrow(new Error(MESSAGE));
+		expect(() => parseLikePipeline('- a\n- b')).toThrow(new Error(MESSAGE));
+		const fresh = parse(null, '');
+		expect(fresh.current_value).toBe(0);
+		expect(fresh.name).toBeUndefined();
+		expect(serialize(fresh)).toBe('');
 	});
 });
