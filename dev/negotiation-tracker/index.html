@@ -1727,8 +1727,12 @@ i0: "Interest Level 0 Description"
 <h3 id="fields">Fields<a class="headerlink" href="#fields" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>name</code> (string, optional): The name of the negotiation.</li>
-<li><code>initial_interest</code> (number, required): The NPC's starting interest level (0-5).</li>
-<li><code>initial_patience</code> (number, required): The NPC's starting patience level (0-5).</li>
+<li><code>initial_interest</code> (number, optional): The NPC's starting interest level (0-5). Left out, the negotiation starts at
+  Interest <strong>2</strong> (the rulebook's starting Interest for a Neutral NPC).</li>
+<li><code>initial_patience</code> (number, optional): The NPC's starting patience level (0-5). Left out, the negotiation starts at
+  Patience <strong>5</strong>.</li>
+<li><code>current_interest</code> / <code>current_patience</code> (number, optional): Where the negotiation stands now. The tracker writes
+  these as you play; you rarely type them. Left out, they start from the <code>initial_*</code> value, or from the default above.</li>
 <li><code>motivations</code> (list, optional): A list of motivations.<ul>
 <li>Each motivation has:<ul>
 <li><code>name</code> (string, required): Name of the motivation.</li>
@@ -1757,15 +1761,15 @@ motivations:
   reason: "The dragon loves treasure"
 <span class="k">-</span><span class="w"> </span>name: "Pride"
   reason: "The dragon wants to be recognized as the strongest"
-  pitfalls:
+pitfalls:
 <span class="k">-</span><span class="w"> </span>name: "Insult"
   reason: "Mentioning the dragon's age angers it"
-  i5: "The dragon agrees to help and offers a gift"
-  i4: "The dragon is willing to negotiate further"
-  i3: "The dragon is intrigued but hesitant"
-  i2: "The dragon listens but remains indifferent"
-  i1: "The dragon grows impatient"
-  i0: "The dragon becomes hostile"
+i5: "The dragon agrees to help and offers a gift"
+i4: "The dragon is willing to negotiate further"
+i3: "The dragon is intrigued but hesitant"
+i2: "The dragon listens but remains indifferent"
+i1: "The dragon grows impatient"
+i0: "The dragon becomes hostile"
 </code></pre></div>
 <h2 id="interacting-with-the-tracker">Interacting with the Tracker<a class="headerlink" href="#interacting-with-the-tracker" title="Permanent link">&para;</a></h2>
 <p>Once your negotiation is defined, the Negotiation Tracker provides an interactive UI in your note.</p>
@@ -1773,9 +1777,14 @@ motivations:
 <p>At the top of the tracker, the negotiation's name is displayed beside a small shield crest. Next to it, there's a menu
 icon (<strong>⋮</strong>) which provides additional options:</p>
 <ul>
-<li><strong>Reset Negotiation</strong>: Resets all negotiation data to its initial state. This clears any changes made during the
+<li><strong>Reset Negotiation</strong>: Resets all negotiation data to its starting values. This clears any changes made during the
   negotiation, such as used motivations or adjusted interest and patience levels. It also clears the "negotiation
-  over" banner (see <a href="#when-the-negotiation-ends">When the negotiation ends</a>).</li>
+  over" banner (see <a href="#when-the-negotiation-ends">When the negotiation ends</a>), unless the block's own starting values
+  are themselves an ended state (an <code>initial_interest</code> of 0 or 5, or an <code>initial_patience</code> of 0). Interest and
+  Patience go back to the <code>initial_interest</code> / <code>initial_patience</code> values when your block writes them, and otherwise to
+  Interest 2 / Patience 5. Reset adds no key to your note: a block that only writes <code>current_interest</code> /
+  <code>current_patience</code> keeps those keys (now 2 and 5) and does not gain <code>initial_*</code> keys, so it does not return to where
+  it started.</li>
 </ul>
 <h3 id="patience-and-interest-tracker">Patience and Interest Tracker<a class="headerlink" href="#patience-and-interest-tracker" title="Permanent link">&para;</a></h3>
 <p>The tracker displays the current <strong>patience</strong> and <strong>interest</strong> levels of the NPC:</p>
