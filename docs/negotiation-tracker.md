@@ -110,15 +110,15 @@ motivations:
   reason: "The dragon loves treasure"
 - name: "Pride"
   reason: "The dragon wants to be recognized as the strongest"
-  pitfalls:
+pitfalls:
 - name: "Insult"
   reason: "Mentioning the dragon's age angers it"
-  i5: "The dragon agrees to help and offers a gift"
-  i4: "The dragon is willing to negotiate further"
-  i3: "The dragon is intrigued but hesitant"
-  i2: "The dragon listens but remains indifferent"
-  i1: "The dragon grows impatient"
-  i0: "The dragon becomes hostile"
+i5: "The dragon agrees to help and offers a gift"
+i4: "The dragon is willing to negotiate further"
+i3: "The dragon is intrigued but hesitant"
+i2: "The dragon listens but remains indifferent"
+i1: "The dragon grows impatient"
+i0: "The dragon becomes hostile"
 ```
 
 ## Interacting with the Tracker
@@ -130,12 +130,14 @@ Once your negotiation is defined, the Negotiation Tracker provides an interactiv
 At the top of the tracker, the negotiation's name is displayed beside a small shield crest. Next to it, there's a menu
 icon (**⋮**) which provides additional options:
 
-- **Reset Negotiation**: Resets all negotiation data to its initial state. This clears any changes made during the
+- **Reset Negotiation**: Resets all negotiation data to its starting values. This clears any changes made during the
   negotiation, such as used motivations or adjusted interest and patience levels. It also clears the "negotiation
-  over" banner (see [When the negotiation ends](#when-the-negotiation-ends)). Interest and Patience go back to the
-  `initial_interest` / `initial_patience` values when your block writes them, and otherwise to Interest 2 / Patience 5.
-  Reset adds no key to your note: a block that only writes `current_interest` / `current_patience` keeps those keys
-  (now 2 and 5) and does not gain `initial_*` keys, so it does not return to where it started.
+  over" banner (see [When the negotiation ends](#when-the-negotiation-ends)), unless the block's own starting values
+  are themselves an ended state (an `initial_interest` of 0 or 5, or an `initial_patience` of 0). Interest and
+  Patience go back to the `initial_interest` / `initial_patience` values when your block writes them, and otherwise to
+  Interest 2 / Patience 5. Reset adds no key to your note: a block that only writes `current_interest` /
+  `current_patience` keeps those keys (now 2 and 5) and does not gain `initial_*` keys, so it does not return to where
+  it started.
 
 ### Patience and Interest Tracker
 

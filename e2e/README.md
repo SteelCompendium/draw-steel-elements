@@ -183,7 +183,7 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Negotiation/ended.md` | Patience 0 at Interest 3, both motivations spent: the "Final offer" band, Complete disabled, the tier rows static |
   | `Negotiation/deal.md` | Interest 5 (Patience 2): the "Negotiation over" band, the deal |
   | `Negotiation/hostile.md` | Interest 0 (Patience 2): the "Negotiation over" band, the NPC ends it |
-  | `Negotiation/minimal.md` | `name:` only (opens at the defaults, Interest 2 / Patience 5, live with chips and cards; SC-641) |
+  | `Negotiation/minimal.md` | `name:` only (opens at the defaults, Interest 2 / Patience 5: live, not over; it has no motivations or pitfalls, so no chips; SC-641) |
   | `Negotiation/two-blocks.md` | TWO different `ds-negotiation` blocks (the innkeeper, the guard captain) with prose above, between and below |
   | `Negotiation/unknown-keys.md` | one `ds-negotiation` carrying keys the element does not know: `note_to_self` at the top and `gm_note` inside a motivation and a pitfall (a write keeps them after the known keys; SC-637) |
   | `Negotiation/wrong-name.md` | `name: 2024` (a number as the name: the card draws it as text and a write keeps it as the number; SC-638) |

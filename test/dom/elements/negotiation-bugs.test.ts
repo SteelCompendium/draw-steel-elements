@@ -1,6 +1,6 @@
 // SC-439 — filed negotiation bugs as `test.failing`: each encodes the CORRECT behaviour with its ticket in the title, passes while the bug
-// exists and FAILS once it is fixed (remove the marker then). None is open now: SC-641 (K08, K09) is fixed and those are plain tests. The real-Obsidian twins are the `knownBug` markers in
-// e2e/specs/negotiation/ (integrity, focus, wrong-values). Each marker asserts only what its ticket rules, never a specific fix or default (SC-641's ruling IS a default, so K08 / K09 assert it).
+// exists and FAILS once it is fixed (remove the marker then). None is open now: SC-641 (K08, K09) is fixed and those are plain tests. The real-Obsidian twins live in
+// e2e/specs/negotiation/ (integrity, focus, wrong-values); none is a `knownBug` marker now. Each marker asserts only what its ticket rules, never a specific fix or default (SC-641's ruling IS a default, so K08 / K09 assert it).
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
