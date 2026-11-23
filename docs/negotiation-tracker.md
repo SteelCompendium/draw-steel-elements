@@ -82,8 +82,12 @@ The negotiation data consists of several key sections:
 ### Fields
 
 - `name` (string, optional): The name of the negotiation.
-- `initial_interest` (number, required): The NPC's starting interest level (0-5).
-- `initial_patience` (number, required): The NPC's starting patience level (0-5).
+- `initial_interest` (number, optional): The NPC's starting interest level (0-5). Left out, the negotiation starts at
+  Interest **2** (the rulebook's starting Interest for a Neutral NPC).
+- `initial_patience` (number, optional): The NPC's starting patience level (0-5). Left out, the negotiation starts at
+  Patience **5**.
+- `current_interest` / `current_patience` (number, optional): Where the negotiation stands now. The tracker writes
+  these as you play; you rarely type them. Left out, they start from the `initial_*` value, or from the default above.
 - `motivations` (list, optional): A list of motivations.
     - Each motivation has:
         - `name` (string, required): Name of the motivation.
@@ -128,7 +132,10 @@ icon (**⋮**) which provides additional options:
 
 - **Reset Negotiation**: Resets all negotiation data to its initial state. This clears any changes made during the
   negotiation, such as used motivations or adjusted interest and patience levels. It also clears the "negotiation
-  over" banner (see [When the negotiation ends](#when-the-negotiation-ends)).
+  over" banner (see [When the negotiation ends](#when-the-negotiation-ends)). Interest and Patience go back to the
+  `initial_interest` / `initial_patience` values when your block writes them, and otherwise to Interest 2 / Patience 5.
+  Reset adds no key to your note: a block that only writes `current_interest` / `current_patience` keeps those keys
+  (now 2 and 5) and does not gain `initial_*` keys, so it does not return to where it started.
 
 ### Patience and Interest Tracker
 

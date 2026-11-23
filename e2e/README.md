@@ -183,7 +183,7 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Negotiation/ended.md` | Patience 0 at Interest 3, both motivations spent: the "Final offer" band, Complete disabled, the tier rows static |
   | `Negotiation/deal.md` | Interest 5 (Patience 2): the "Negotiation over" band, the deal |
   | `Negotiation/hostile.md` | Interest 0 (Patience 2): the "Negotiation over" band, the NPC ends it |
-  | `Negotiation/minimal.md` | `name:` only (Interest defaults to 0, so it opens already over, with no chips or cards; SC-641) |
+  | `Negotiation/minimal.md` | `name:` only (opens at the defaults, Interest 2 / Patience 5, live with chips and cards; SC-641) |
   | `Negotiation/two-blocks.md` | TWO different `ds-negotiation` blocks (the innkeeper, the guard captain) with prose above, between and below |
   | `Negotiation/unknown-keys.md` | one `ds-negotiation` carrying keys the element does not know: `note_to_self` at the top and `gm_note` inside a motivation and a pitfall (a write keeps them after the known keys; SC-637) |
   | `Negotiation/wrong-name.md` | `name: 2024` (a number as the name: the card draws it as text and a write keeps it as the number; SC-638) |
@@ -194,7 +194,7 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Negotiation/fraction.md` | `current_interest: 0.4` (seal 0 is drawn and the negotiation is over, hostile: the ending reads the seal; SC-638) |
   | `Negotiation/dup-names.md` | two motivations both named Higher Authority (one shared chip and a notice; each row has its own Spent; SC-640) |
   | `Negotiation/nameless.md` | one motivation with a reason and no `name:` (its chip is labelled "Unnamed Motivation"; SC-640) |
-  | `Negotiation/current-only.md` | `current_interest: 3`, `current_patience: 2` and no `initial_*` keys (Reset ends it; SC-641) |
+  | `Negotiation/current-only.md` | `current_interest: 3`, `current_patience: 2` and no `initial_*` keys (Reset falls back to the defaults, Interest 2 / Patience 5, and writes no `initial_*` key; SC-641) |
   | `Negotiation/quoted.md` | quoted standing numbers: `current_interest: "3"`, `current_patience: "2"` |
   | `Negotiation/twins.md` | TWO IDENTICAL `ds-negotiation` blocks (Twin, Interest 3 / Patience 3, one motivation, one pitfall) with prose above, between and below |
   | `Settings/statblock.md` | one `ds-statblock` (the Human Bandit Chief the settings preview shows, without its per-block `sbSticky` override): the representative element for the live re-render of every Statblock display row and the sticky pair (SC-440) |
