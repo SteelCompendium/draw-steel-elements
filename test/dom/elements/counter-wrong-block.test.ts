@@ -16,8 +16,9 @@ import { createValidationService } from '../../../src/framework/validation';
 import { createSessionStore } from '../../../src/framework/session';
 import { createRollService } from '../../../src/framework/roll/service';
 import { DEFAULT_SETTINGS } from '@model/Settings';
-import { App, Plugin, Notice } from '../../mocks/obsidian';
+import { App, Plugin, Notice, parseYaml } from '../../mocks/obsidian';
 import { counterElement } from '../../../src/elements/counter/definition';
+import { parse as parseElement } from '../../../src/elements/counter/model';
 
 function makeHost() {
 	const replaceSource = jest.fn(async (_s: string) => true);
@@ -173,5 +174,59 @@ describe('an empty counter block is a fresh counter at 0', () => {
 		box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 		await flush();
 		expect(writes()).toEqual(['current_value: 7']);
+	});
+});
+
+// SC-671 (a write keeps the keys the counter does not read) and SC-672 (a block that is not a map is refused, an empty one is a fresh
+// counter) meet in the element's `parse` / `serialize`: the element parse reads the block with `Counter.parse` FIRST and only then
+// remembers the keys it does not know, so a refusal comes before any key handling and an empty block carries no key.
+describe('SC-671 and SC-672 together: the element parse and write path', () => {
+	test.each([
+		['text', 'hello'],
+		['a list', '- a'],
+		['a number', '5'],
+		['a tagged set', '!!set\n? a\n? b'],
+	])('(a) %s: the element parse throws the plain message before any key handling, and nothing is written', async (_name, source) => {
+		expect(() => parseElement(parseYaml(source), source)).toThrow('Invalid data: the block must be a map of keys.');
+		const { live, flush, writes } = await mount(source);
+		expect(live().querySelector('.dse-error-card-message')!.textContent).toBe('Invalid data: the block must be a map of keys.');
+		expect(live().querySelector('[data-dse-control]')).toBeNull();
+		live().click();
+		await flush();
+		expect(writes()).toEqual([]);
+	});
+
+	test.each([
+		['blank lines', '\n  \n'],
+		['only a comment', '# a note to self'],
+		['a bare null', 'null'],
+	])('(b) an empty block (%s) is a fresh counter, and + writes exactly `current_value: 1` with no other key', async (_name, source) => {
+		const { live, flush, writes } = await mount(source);
+		expect(input(live()).value).toBe('0');
+		plus(live()).click();
+		await flush();
+		expect(writes()).toEqual(['current_value: 1']);
+	});
+
+	test('(c) a block that holds ONLY keys the counter does not read is a counter at 0: + keeps the key, and + then - never writes a blank body', async () => {
+		const { live, flush, writes } = await mount('note_to_self: x');
+		expect(live().querySelector('.dse-error-card')).toBeNull();
+		expect(input(live()).value).toBe('0');
+		plus(live()).click();
+		await flush();
+		expect(writes()).toEqual(['current_value: 1\nnote_to_self: x']);
+		minus(live()).click();
+		await flush();
+		expect(writes()).toEqual(['current_value: 1\nnote_to_self: x', 'note_to_self: x']);
+		expect(writes().every((w) => w.includes('note_to_self: x'))).toBe(true);
+	});
+
+	test('(d) an empty block, + then -: the second write is a blank body, as CTR-W14 pins for Reading view', async () => {
+		const { live, flush, writes } = await mount('');
+		plus(live()).click();
+		await flush();
+		minus(live()).click();
+		await flush();
+		expect(writes()).toEqual(['current_value: 1', '']);
 	});
 });

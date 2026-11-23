@@ -141,6 +141,7 @@ it('[STAM-X01] what a user sees happen', async () => {
   | `Counter/adjacent-fences.md` | one `ds-counter` with the closing fence directly under the opening one (no line between): a counter at 0; a write keeps the closing fence on its own line |
   | `Counter/two-empty.md` | TWO empty `ds-counter` blocks with `ABOVE`, `BETWEEN` and `BELOW` text: a write to one changes only that block |
   | `Counter/wrong-tagged.md` | four `ds-counter` blocks an explicit YAML tag turns into a Set (`!!set`), a Date (`!!timestamp`), a Uint8Array (`!!binary`) and a Map (`!!omap`): each a plain error card, nothing written |
+  | `Counter/only-unknown-keys.md` | one `ds-counter` whose whole block is `note_to_self: x` (a key the counter does not read), `ABOVE` / `BELOW` text around it: a counter at 0, and a write keeps the key (SC-671 with SC-672) |
   | `Callout/callout.md` | one `ds-stamina-bar` (12/30, 3 of 6 Recoveries) inside a `> [!note]` callout, text above and below it (SC-455) |
   | `Callout/nested.md` | the same block inside a callout nested in a callout (`> > ` on every line) |
   | `Callout/quote.md` | the same block inside a plain blockquote (Reading view only: Live Preview does not draw it) |

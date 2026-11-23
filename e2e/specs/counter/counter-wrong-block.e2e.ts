@@ -4,7 +4,7 @@
 // Counter/wrong-block.md: the text `hello`. wrong-list.md: `- a`, `- b`. wrong-number.md: `5`. empty-block.md: one empty line between the fences.
 // comment-only-block.md: `# a note to self`. adjacent-fences.md: the closing fence directly under the opening one. two-empty.md: two empty blocks,
 // with BETWEEN text. wrong-tagged.md: four blocks that an explicit YAML tag turns into a Set, a Date, a Uint8Array and a Map. Each note has ABOVE and BELOW
-// lines around the block(s).
+// lines around the block(s). only-unknown-keys.md: the block is only `note_to_self: x`.
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
 
@@ -16,6 +16,7 @@ const COMMENT_ONLY = 'Counter/comment-only-block.md';
 const ADJACENT = 'Counter/adjacent-fences.md';
 const TWO_EMPTY = 'Counter/two-empty.md';
 const TAGGED = 'Counter/wrong-tagged.md';
+const ONLY_UNKNOWN = 'Counter/only-unknown-keys.md';
 const COUNTER = 'ds-counter';
 const MAP_MESSAGE = 'Invalid data: the block must be a map of keys.';
 
@@ -204,5 +205,20 @@ describe('counter: an empty block is a counter at 0', () => {
 
 	it('[CTR-W15] Live Preview: + then - on an empty block gives a counter at 0 again, the text around the fence is untouched, and a second cycle changes nothing', async () => {
 		await expectCycle('live-preview', 'current_value: 0\n');
+	});
+
+	it('[CTR-W16] a block that holds only a key the counter does not read is a counter at 0: + writes `current_value: 1` and keeps the key, and - never leaves a blank body', async () => {
+		await dse.openNote(ONLY_UNKNOWN);
+		const original = await dse.noteText(ONLY_UNKNOWN);
+		const fence = '```ds-counter\nnote_to_self: x\n```';
+		expect(original).toContain(fence);
+		expect(await shown()).toEqual({ values: ['0'], names: [''], errors: 0 });
+		await dse.waitForWrite(ONLY_UNKNOWN, () => dse.click(dse.block(COUNTER).control('counter.inc')));
+		await dse.settle();
+		expect(await dse.noteText(ONLY_UNKNOWN)).toBe(original.replace(fence, '```ds-counter\ncurrent_value: 1\nnote_to_self: x\n```'));
+		await dse.waitForWrite(ONLY_UNKNOWN, () => dse.click(dse.block(COUNTER).control('counter.dec')));
+		await dse.settle();
+		expect(await dse.noteText(ONLY_UNKNOWN)).toBe(original); // back to the original bytes: the key stays, the body is never blank
+		expect(await shown()).toEqual({ values: ['0'], names: [''], errors: 0 });
 	});
 });
