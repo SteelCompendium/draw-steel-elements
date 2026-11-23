@@ -33,7 +33,7 @@ Below is a detailed description of each field used in the counter element, inclu
 
 | Field           | Type      | Description                                                        | Required | Default Value |
 |-----------------|-----------|--------------------------------------------------------------------|----------|---------------|
-| `name`          | `string`  | The name of the counter (e.g., "Health", "Mana").                  | **Yes**  | N/A           |
+| `name`          | `string`  | The name of the counter (e.g., "Health", "Mana").                  | No       | no name shown |
 | `current_value` | `integer` | The current value of the counter.                                  | No       | `0`           |
 | `max_value`     | `integer` | The maximum value the counter can reach.                           | No       | `undefined`   |
 | `min_value`     | `integer` | The minimum value the counter can reach.                           | No       | `0`           |
@@ -47,5 +47,5 @@ Below is a detailed description of each field used in the counter element, inclu
 - If `min_value` is defined, the counter cannot decrement below this value.
 - `value_height` and `name_height` are optional parameters to adjust the visual presentation of the counter in the rendered output. They are useful for customizing the display according to your preferences.
 - You can click on the counter value to edit it directly.
-- An empty counter block is a counter at 0: it shows no name and has no maximum, and the first click on + or - fills in the block for you.
-- The block has to be a list of keys like the example above. If it holds something else (plain text, a bulleted list, a lone number), the card shows an error and leaves your note alone.
+- An empty counter block is a counter at 0: it shows no name and has no maximum, and the first click on + (or a number typed into the box) fills in the block for you.
+- The block has to be `key: value` lines like the example above. If it holds something else (plain text, a bulleted list, a lone number), the card shows an error and leaves your note alone.
