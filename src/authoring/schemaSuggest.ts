@@ -127,9 +127,9 @@ export class DsSchemaSuggest extends EditorSuggest<string> {
 		// SC-679, two steps (measured in Obsidian 1.14.4):
 		//  - With nothing typed (start == end) the write lands AT the cursor and a cursor at an insert point stays in front of it, so the next
 		//    Enter wrote a second word ahead of the accepted one: put it behind the word, as the /ds suggester does.
-		//  - Obsidian leaves the old rows on screen after an accept until its next editor update (about 100 ms), and an Enter in that window
-		//    accepts the stale row again (`heightheight`). close() takes them down at once. Obsidian does run onTrigger again at the new cursor,
-		//    but it only opens a CLOSED list on typed input, so nothing else is needed to keep a list off the accepted word.
+		//  - Without close() the list stays up after an accept: Obsidian runs onTrigger again at the new cursor and refreshes the still-OPEN list
+		//    (a one-row list repeating the accepted word), so the next Enter accepts it again (`heightheight`, `recoveriesoveries`). close() takes
+		//    it down at once; Obsidian opens a CLOSED list again only on typed input, so nothing else is needed.
 		editor.setCursor({ line: start.line, ch: start.ch + value.length });
 		this.close();
 	}
