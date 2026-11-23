@@ -301,7 +301,7 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		ui: {
 			group: 'Typography', label: 'Card size', control: 'slider',
 			min: CARD_SCALE.min, max: CARD_SCALE.max, step: CARD_SCALE.step,
-			help: 'Scale whole statblock and ability cards (80%–120%). Applies to every Draw Steel element; print and export always use 100%.',
+			help: 'Scale whole statblock and ability cards (30%–120%). Applies to every Draw Steel element; print and export always use 100%.',
 		},
 	}),
 

@@ -4,10 +4,10 @@
 // the Task 8 slider controls. snap() is a PORT OF THE SITE'S semantics VERBATIM
 // (v2/docs/javascripts/settings-core.js:28-43 — a model, not an import): clamp
 // into [min, max], round to the nearest step, return the default on anything
-// non-finite. The ranges are the site's SCALE_*/CARD_* constants
-// (settings-core.js:22-23) — both deliberately SYMMETRIC about the 1.0 default
-// so the two sliders' thumbs sit at the same center track position at 100%;
-// the plugin inherits that alignment property by using the same ranges.
+// non-finite. TEXT_SCALE is the site's SCALE_* constants (settings-core.js:22),
+// symmetric about the 1.0 default so its thumb sits at the centre of the track
+// at 100%. CARD_SCALE no longer mirrors the site's CARD_* constants
+// (settings-core.js:23, CARD_MIN = 0.8, unchanged on purpose) — see below.
 
 /** One slider's numeric contract: bounds, step, and the inert default. */
 export interface ScaleRange {
@@ -20,15 +20,23 @@ export interface ScaleRange {
 /** Text-size range — the site's SCALE_MIN/MAX/STEP/DEFAULT (settings-core.js:22). */
 export const TEXT_SCALE: ScaleRange = { min: 0.6, max: 1.4, step: 0.05, default: 1 };
 
-/** Card-size range — the site's CARD_MIN/MAX/STEP/DEFAULT (settings-core.js:23). */
-export const CARD_SCALE: ScaleRange = { min: 0.8, max: 1.2, step: 0.05, default: 1 };
+/**
+ * Card-size range (SC-683): 0.3–1.2, step 0.05. Scott: "Lets go with 30% min" (the
+ * minimum was 0.8). The site's CARD_MIN/MAX/STEP/DEFAULT (settings-core.js:23) stay
+ * 0.8/1.2/0.05/1 — the plugin's minimum deliberately stops mirroring the site's.
+ * No longer symmetric about the 1.0 default, so this slider's thumb at 100% is
+ * off-centre (the other four stay centred). Stored values 0.8–1.2 stay valid, so
+ * there is no migration.
+ */
+export const CARD_SCALE: ScaleRange = { min: 0.3, max: 1.2, step: 0.05, default: 1 };
 
 /**
  * Type-ROLE range (SC-185) — the small/large/control text knobs over the
- * --dse-fs-* role scale. Deliberately the SAME numbers as CARD_SCALE (a separate
+ * --dse-fs-* role scale. Started as the SAME numbers as CARD_SCALE (a separate
  * constant, not an alias, because the two govern different things and either may
- * move on its own): symmetric about 1.0, so all five Typography sliders' thumbs
- * sit at the same centre track position at 100%.
+ * move on its own — and SC-683 moved CARD_SCALE's minimum to 0.3 alone): 0.8–1.2,
+ * symmetric about 1.0, so these three sliders' thumbs, like Text size's, sit at the
+ * centre track position at 100% (Card size's no longer does).
  *
  * ±20% is a nudge, not a zoom: the whole-element zoom already exists as
  * TEXT_SCALE. What these do is retune the RATIO between a role and the body — at
