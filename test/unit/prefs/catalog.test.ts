@@ -115,7 +115,7 @@ test('font slots: Typography rows with the font control, the uniform default opt
 const SCALE_CASES = [
 	// [key, varName, min, max, an out-of-range sample and its clamp]
 	['textScale', '--dse-text-scale', 0.6, 1.4, 2, 1.4],
-	['cardScale', '--dse-card-scale', 0.8, 1.2, 0.5, 0.8],
+	['cardScale', '--dse-card-scale', 0.3, 1.2, 0.1, 0.3],
 ] as const;
 
 test('size scales: css-bearing (right varName), attr-less, snapped default 1 → null (remove-at-default)', () => {

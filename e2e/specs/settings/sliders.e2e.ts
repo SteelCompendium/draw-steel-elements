@@ -1,4 +1,4 @@
-// SC-440: the five size sliders (Text size 60-140%, Card size and the three type-role sizes 80-120%, step 5%). Obsidian draws a native range
+// SC-440: the five size sliders (Text size 60-140%, Card size 30-120% since SC-683, the three type-role sizes 80-120%, step 5%). Obsidian draws a native range
 // input; the real input is the keys on it: ArrowRight is one step up from 100%, Home the minimum, End the maximum. Each is asserted in data.json
 // ON DISK, in the slider's shown value and as the inline custom property on the OPEN stamina bar (live). Each slider is left at its maximum; a
 // final reload checks they all show it and keep it. (The snapping of out-of-range values is the jsdom matrix's.)
@@ -36,8 +36,8 @@ describe('settings tab: size sliders', () => {
 	it('[SET-Z01] Text size: ArrowRight, Home and End move it to 105%, 60% and 140% and the open bar follows', async () => {
 		await slider('settings.text-scale', 'textScale', '--dse-text-scale', 0.6, 1.4);
 	});
-	it('[SET-Z02] Card size: ArrowRight, Home and End move it to 105%, 80% and 120%', async () => {
-		await slider('settings.card-scale', 'cardScale', '--dse-card-scale', 0.8, 1.2);
+	it('[SET-Z02] Card size: ArrowRight, Home and End move it to 105%, 30% and 120%', async () => {
+		await slider('settings.card-scale', 'cardScale', '--dse-card-scale', 0.3, 1.2);
 	});
 	it('[SET-Z03] Small text size: the same three keys', async () => {
 		await slider('settings.small-text-scale', 'smallTextScale', '--dse-fs-small-scale', 0.8, 1.2);

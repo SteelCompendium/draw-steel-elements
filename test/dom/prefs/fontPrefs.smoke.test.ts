@@ -60,6 +60,10 @@ test('set(textScale/cardScale) stamps snapped inline scale vars; back to 1 remov
 	// Off-step / out-of-range values are SNAPPED before stamping (site snap()).
 	await store.set('cardScale', 0.79);
 	expect(root.style.getPropertyValue('--dse-card-scale')).toBe('0.8');
+	await store.set('cardScale', 0.1);
+	expect(root.style.getPropertyValue('--dse-card-scale')).toBe('0.3'); // SC-683: the new minimum
+	await store.set('cardScale', 0.5);
+	expect(root.style.getPropertyValue('--dse-card-scale')).toBe('0.5');
 	await store.set('cardScale', 99);
 	expect(root.style.getPropertyValue('--dse-card-scale')).toBe('1.2');
 

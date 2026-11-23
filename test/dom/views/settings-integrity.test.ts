@@ -109,7 +109,7 @@ describe('SC-440 integrity: a hand-edited value the UI does not offer renders sa
 		const root = await mount(loaded, 'statblock', STATBLOCK, 'A.md');
 		const tab = await openTab(loaded);
 		expect(root.style.getPropertyValue('--dse-text-scale')).toBe('1.4'); // clamped by snap(), not 5
-		expect(root.style.getPropertyValue('--dse-card-scale')).toBe('0.8');
+		expect(root.style.getPropertyValue('--dse-card-scale')).toBe('0.3'); // SC-683: 0.1 clamps to the new minimum
 		expect(rowOf(tab, { key: 'textScale' }).sliders[0].value).toBe(5); // the native range input clamps what it draws
 		rowOf(tab, { key: 'reduceMotion' }).toggles[0].trigger(true);
 		await flushAsync(2);
