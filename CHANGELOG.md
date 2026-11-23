@@ -22,6 +22,9 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FEATURE] **Card size can now go down to 30%** (SC-683). The slider in Settings → Draw Steel Elements → Typography used to stop at 80%; it now runs from 30% to 120% in 5% steps, so a statblock or ability card can be shrunk to a third of its size.
+  Because the range now reaches further down than up, the slider's thumb at 100% sits right of the track's middle, unlike the other four size sliders. A Card size you set before (80% to 120%) is unchanged. Print and export still use 100%.
+
 - [FIX] **Picking a suggestion inside a `ds-` block with nothing typed no longer leaves the cursor in front of it, so the next Enter does not write a second one** (SC-679).
   With the cursor on an empty line (or right after `mode: `), picking a field name or a value from the autocomplete list put the word in but left the cursor before it and the old list on screen.
   The next Enter then wrote the first suggestion again in front of the first (`collapsiblecollapsible`, `mode: power-rollopposed`).

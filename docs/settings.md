@@ -37,7 +37,7 @@ Choosing a statblock look, with pictures:
 - **Title font**, **Body font**, **Controls font** — pick from a curated list, or type any
   font installed on your machine. "Default (Obsidian vault fonts)" keeps your vault's own
   text font.
-- **Text size** (60%–140%) and **Card size** (80%–120%) — scale the text inside elements and
+- **Text size** (60%–140%) and **Card size** (30%–120%) — scale the text inside elements and
   their dialogs, or whole statblock and ability cards. Print and export always use 100%.
 - **Small text size**, **Large text size**, **Control text size** (all 80%–120%) — these
   three do something different from **Text size** above: instead of scaling an element as

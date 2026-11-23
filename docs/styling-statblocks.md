@@ -55,7 +55,7 @@ Every option is described one by one in the [settings guide](settings.md#statblo
 **Settings → Draw Steel Elements → Typography**:
 
 - **Text size** (60%–140%) scales the text inside every Draw Steel element.
-- **Card size** (80%–120%) scales whole cards.
+- **Card size** (30%–120%) scales whole cards.
 - **Title / Body / Controls font** — pick from the list, or type any font you have
   installed. "Default (Obsidian vault fonts)" keeps your vault's own.
 

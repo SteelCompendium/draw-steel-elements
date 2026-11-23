@@ -380,7 +380,7 @@ hand-wiring four call sites.
   instead, so **defaults are inert** — a root at defaults carries no inline style and the
   stylesheet's `:root` values win (the freeze bar). A descriptor may carry `attr`, `css`,
   both, or neither. The Typography prefs (six `font<Slot>` keys whose `''` sentinel means
-  "Default (Obsidian vault fonts)" → `null`, plus `textScale`/`cardScale` whose site-mirrored
+  "Default (Obsidian vault fonts)" → `null`, plus `textScale`/`cardScale` whose site-ported
   `snap()` maps the 1.0 default → `null`) are all css-bearing and attr-less. Adding a
   font/scale pref is still just adding a descriptor — no new wiring. Managed modals
   (`framework/kit/managedModal.ts`) call `reflectCss()`, the css-only twin — deliberately
@@ -394,8 +394,9 @@ hand-wiring four call sites.
   led by the uniform "Default (Obsidian vault fonts)" option, a "Custom…" free-text entry
   (sanitized via `prefs/fontStacks.ts`), and a user-activation "List installed fonts"
   affordance (`queryLocalFonts`, feature-detected — curated+Custom is the unconditional
-  fallback). Sliders (`textScale`/`cardScale`) use `prefs/scale.ts`'s site-mirrored
-  ranges/step/snap.
+  fallback). Sliders (`textScale`/`cardScale`) use `prefs/scale.ts`'s ranges/step/snap
+  (the snap is a port of the site's; the ranges mirror the site's except Card size, 30%–120% since SC-683
+  against the site's 80%–120%, so its thumb at 100% is off-centre).
   `onChange` calls `prefs.set()` directly (no Apply button): `set()` notifies `reflect()`'s
   subscribers synchronously, so open elements reflow live behind the dialog. Per-group and
   whole-tab reset actions write descriptor defaults (sparse storage then drops them). The
