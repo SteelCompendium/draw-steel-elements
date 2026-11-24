@@ -79,6 +79,21 @@ describe('SC-687 scan: a fence under a list item is inside, in every shape planB
 		['a paragraph after the list ended: a block indented 4 below it is an indented code block', '- item\n\ntext\n\n    ```ds-ct\n    x|\n    ```', null],
 		['a lazy continuation line keeps the item: a block indented under the item after it is a fence', '- item\ntext\n\n    ```ds-ct\n    x|\n    ```', 'block'],
 		['a sibling item at a lower indentation ends the nested one', '- a\n  - b\n- c\n\n      ```ds-ct\n      x|\n      ```', null],
+		// r3 (HIGH-1 / HIGH-2): a fence line is never a lazy continuation line, so a fence directly under a list item (no blank line) is a
+		// top-level fence that its own closer closes, and what follows it is outside.
+		['a top-level fence directly under `- item` (no blank line): its body is inside', '- item\n```js\nx|\n```', 'block'],
+		['a top-level fence directly under `- item`: the line after its closer is outside (the plugin\'s own insert on an empty line makes this shape)', '- item\n```ds-ct\nname: x\ncurrent_value: 1\n```\ntail|', null],
+		['the same under `* item`', '* item\n```js\nx\n```\ntail|', null],
+		['the same under `+ item`', '+ item\n```js\nx\n```\ntail|', null],
+		['the same under `1. item`', '1. item\n```js\nx\n```\ntail|', null],
+		['the same under `10. item`', '10. item\n```js\nx\n```\ntail|', null],
+		['a paragraph line, then a fence, under items', '- a\n- b\nSome paragraph\n```js\nx\n```\ntail|', null],
+		['a fence at the OUTER item\'s column under a nested item', '- a\n  - b\n  ```js\n  x\n  ```\ntail|', null],
+		['a fence indented 1, less than the item\'s 2', '- item\n ```js\n a\n ```\ntail|', null],
+		['a heading, then a fence, under an item', '- item\n# H\n```js\nx\n```\nafter|', null],
+		['two fences after an item: the second one\'s body is inside', '- item\n```js\nx\n```\n```js\ny|\n```', 'block'],
+		['a bare block under a later item after a fence under an earlier one (the reviewer\'s U1): its body is inside', '- item\n```js\nx\n```\n- other\n  ```\n  a: 1|\n  ```\ntail', 'block'],
+		['...and the line after that block is outside', '- item\n```js\nx\n```\n- other\n  ```\n  a: 1\n  ```\ntail|', null],
 		['a closer under an item that is not indented to the item\'s text column does not close', '- item\n  ```ds-ct\n  x\n```\n  y|', 'block'],
 	];
 	test.each(rows)('%s', (_name, spec, expected) => expect(verdict(spec)).toBe(expected));

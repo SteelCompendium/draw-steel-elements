@@ -316,6 +316,30 @@ describe('SC-687: running an insert twice in a row under a list item or in a cal
 	});
 });
 
+describe('SC-687 r3: the plugin\'s own insert under a list item does not make the rest of the note refuse', () => {
+	test('insert on the empty line under `- item`, then a second insert at `tail`: both are written, the second one below the first', () => {
+		const note = '- item\n\ntail\n';
+		const editor = new CmEditor(note, { line: 1, ch: 0 });
+		expect(insertScaffold(editor as never, COUNTER())).toBe(true);
+		expect(editor.getValue()).toBe('- item\n' + CT() + '\ntail\n'); // the SC-675 shape for an empty line with no prefix
+		const tail = editor.getValue().split('\n').indexOf('tail');
+		editor.setCursor({ line: tail, ch: 4 });
+		const told = Notice.notices.length;
+		expect(insertScaffold(editor as never, COUNTER())).toBe(true);
+		expect(noticesSince(told)).toEqual([]);
+		expect(editor.getValue()).toBe('- item\n' + CT() + '\ntail\n' + CT() + '\n');
+	});
+
+	test('a real block lower in the note under a later item (after a fence under an earlier one) is refused, nothing written', () => {
+		const note = '- item\n```js\nx\n```\n- other\n  ```\n  a: 1\n  ```\ntail\n';
+		const editor = new CmEditor(note, { line: 6, ch: 6 });
+		const told = Notice.notices.length;
+		expect(insertScaffold(editor as never, COUNTER())).toBe(false);
+		expect(editor.getValue()).toBe(note);
+		expect(noticesSince(told)).toEqual([BLOCK_NOTICE]);
+	});
+});
+
 describe('SC-687: integrity around a refusal', () => {
 	test('a refusal in one block, then a valid insert between two same-kind blocks in the same note: it lands there, neither block is touched', () => {
 		const note = '```ds-stam\na: 1\n```\nbetween\n\n```ds-stam\nb: 2\n```\n';

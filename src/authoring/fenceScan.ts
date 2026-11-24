@@ -95,6 +95,8 @@ export type LinePlace =
 export type InsertRefusal = 'block' | 'properties';
 
 const FENCE_RUN_LINE = /^([ \t]*)(`{3,}|~{3,})(.*)$/;
+// A line that starts a block of its own and is never a lazy paragraph continuation: an ATX heading or a thematic break (a fence line and a list item are read separately).
+const NOT_PARAGRAPH = /^[ ]{0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$)/;
 const FENCE_RUN_AFTER_ITEM = /^(`{3,}|~{3,})(.*)$/;
 const OUTSIDE: LinePlace = { kind: 'outside' };
 const noCr = (line: string | undefined): string => (line ?? '').replace(/\r$/, '');
@@ -170,11 +172,13 @@ export function placeOfLine(lines: readonly string[], target: number): LinePlace
 			continue;
 		}
 		const indent = columnAfter(/^[ \t]*/.exec(rest)![0]);
+		const run = FENCE_RUN_LINE.exec(rest);
 		// A line less indented than an item's text ends the item, except a paragraph line right under an item's paragraph (lazy continuation).
-		if (listItemOf(rest) !== null || !lazy) while (items.length > 0 && indent < items[items.length - 1]) items.pop();
+		// Only a paragraph line continues lazily: a fence line, an ATX heading, a thematic break and a list item each start a new block, so
+		// they end the item (a fence directly under `- item` is a top-level fence that its own closer closes).
+		if (!lazy || run !== null || NOT_PARAGRAPH.test(rest) || listItemOf(rest) !== null) while (items.length > 0 && indent < items[items.length - 1]) items.pop();
 		let opener: { marker: string; info: string; start: number; listColumn: number } | null = null;
 		const base = items.length > 0 ? items[items.length - 1] : 0;
-		const run = FENCE_RUN_LINE.exec(rest);
 		if (run && indent - base <= 3) {
 			opener = { marker: run[2], info: run[3], start: quote.length + run[1].length, listColumn: base };
 		} else {
