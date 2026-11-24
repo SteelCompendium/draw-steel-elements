@@ -118,8 +118,9 @@ moves. Run it before a release; details in `visual-harness/README.md`.
   session-only (`SessionStore` `roll.*` slots) — rolling NEVER writes the note.
 - **Authoring (D9)**: `src/authoring/` — four generators over the registry (no per-element
   code). `scaffold.ts` builds insert bodies (curated `authoring.example` → else a
-  schema-walked stub); `insert.ts` registers one Insert command per element; `suggest.ts`
-  is the `/ds` EditorSuggest scaffolder; `schemaSuggest.ts` is key/enum autocomplete inside
+  schema-walked stub); `insert.ts` registers one Insert command per element (every insert goes
+  through `blockInsert.ts`, which refuses a position inside an existing block or the properties, SC-687);
+  `suggest.ts` is the `/ds` EditorSuggest scaffolder; `schemaSuggest.ts` is key/enum autocomplete inside
   a `ds-*` fence; `FormModal.ts`/`formModel.ts` are the generic schema→form editor (live
   validation via F1's `ValidationService`, live preview via `createView`, Save through
   `BlockHost.replaceSource`), reachable from a reading-mode pencil gated by the default-OFF

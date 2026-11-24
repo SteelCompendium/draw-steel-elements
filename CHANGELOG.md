@@ -22,6 +22,14 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **An insert no longer writes inside an existing block or the note's properties; it tells you instead** (SC-687).
+  With the cursor on a line inside a block (an empty line in a stamina bar, say) and an Insert Draw Steel command run from the palette, the new block used to be written into the middle of the old one.
+  The old block turned into an error card, the new one was not drawn, and everything below it showed as code. The same happened with the compendium reference and full-block commands, and with the cursor in the note's properties at the top.
+  Now nothing is written, the cursor stays where it was, and a message says "The cursor is inside another block, so nothing was inserted" (or "...inside the note's properties..."). Move the cursor out and run the command again.
+  This covers any block (any language, in a callout, under a list item, one that is not closed), the Insert commands, the two compendium commands (they say so before the search opens) and a pick from the `/ds` list.
+  The start of a block's opening line and the end of its closing line count as outside: the new block lands above or below the old one. Running an insert twice in a row under a list item is now refused the second time, because the first one leaves the cursor inside the new block.
+  Not covered: the `/ds` list still appears in those places (SC-676); picking from it there is refused with the same message.
+
 - [FEATURE] **Card size can now go down to 30%** (SC-683). The slider in Settings → Draw Steel Elements → Typography used to stop at 80%; it now runs from 30% to 120% in 5% steps, so a statblock or ability card can be shrunk to a third of its size.
   Because the range now reaches further down than up, the slider's thumb at 100% sits right of the track's middle, unlike the other four size sliders. A Card size you set before (80% to 120%) is unchanged. Print and export still use 100%.
 

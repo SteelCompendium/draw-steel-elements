@@ -31,6 +31,17 @@ and inside a list item every line is indented under the item. The same goes for 
 **Insert Draw Steel: compendium reference / full block** commands. (A block inside a list item
 draws, but can't save yet, see [Blocks inside callouts and quotes](#blocks-inside-callouts-and-quotes) below.)
 
+### Not inside another block or the properties
+
+With the cursor inside an existing block (on any line of it, whatever the language, in a callout or
+under a list item too), or inside the note's properties at the top, nothing is inserted and a message
+tells you so: *"The cursor is inside another block, so nothing was inserted"* (or *"…inside the note's
+properties…"*). Move the cursor to a line outside the block or below the properties and run the
+command again. This holds for the insert commands, for the compendium reference and full block commands
+(they say so before the search opens) and for picking something from the `/ds` list. The start of the
+block's opening line and the end of its closing line count as outside: there the new block lands above
+or below the existing one.
+
 ## Autocomplete inside a block
 
 With your cursor inside a `ds-` block, start typing a field name and Obsidian suggests the

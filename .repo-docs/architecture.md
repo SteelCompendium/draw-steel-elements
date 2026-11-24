@@ -513,9 +513,19 @@ free, derived from `def.schema`/`def.authoring`.
   opened after the list marker (`- > [!note]`) (a
   list-indented fence is a shape the SC-455 write path cannot address, so such a block draws but
   its controls cannot save yet). One `replaceSelection`/`replaceRange`, no blank lines added.
-  `/ds` suppresses itself inside any already-open fence (`fenceScan.ts`'s top-down
-  scan, shared with the in-fence suggester below) so accepting it can never corrupt a block
-  the cursor happens to be inside.
+  SC-687: `insertBlock` also REFUSES (nothing written, cursor and selection kept, no undo entry, one
+  Notice, returns false) when the position is inside an existing fenced block or the note's
+  properties: `fenceScan.ts`'s `placeOfLine` / `insertRefusal`, a text-only scan (the metadata cache
+  lags the editor) that sees backtick and tilde fences of any language, quoted and list-indented ones
+  (the indentation `planBlockInsert` writes; a fence 4+ columns past the item's text column, or at the top
+  level, is an indented code block and no fence), an unclosed fence to the end of the note, and the
+  properties as Obsidian's editor reads them (line 0 exactly `---` up to the first `---` line; unclosed =
+  to the end of the note). Before the marker of an opening line and at the end of a closing line the
+  block lands above / below and is allowed. The two compendium commands also check when they start,
+  before the search opens. `/ds` suppresses itself inside any already-open fence (`fenceScan.ts`'s
+  top-down `scanFenceState`, shared with the in-fence suggester below), but that scan does not see
+  list-indented fences, the properties or an opening line (SC-676): a `/ds` pick there reaches
+  `insertBlock` and is refused at the write.
 - **In-fence autocomplete** (`schemaSuggest.ts`): key/enum completion inside an open `ds-*`
   fence only, top-level keys only (an indented line suppresses suggestion, never resolves
   against the wrong scope). Schema shapes (`allOf`/`$ref` resolved against the same
