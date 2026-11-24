@@ -10,7 +10,7 @@ import type { Editor, Plugin } from 'obsidian';
 import type { CompendiumEntity, CompendiumEntry, CompendiumIndex } from '@/services/CompendiumIndex';
 import type { CompendiumSyncService } from '@/data/CompendiumSyncService';
 import { referenceAliasForType, snapshotAliasForType } from '@/services/typeAdapters';
-import { insertBlock } from './blockInsert';
+import { insertBlock, refuseInsert } from './blockInsert';
 import { wrapFence } from './scaffold';
 import { CompendiumSearchModal } from './CompendiumSearchModal';
 
@@ -27,9 +27,9 @@ import { CompendiumSearchModal } from './CompendiumSearchModal';
  *  over slug brevity, since a slug can become ambiguous as the corpus grows. Both fences
  *  handle that: `detectWholeBlockRef` rule 2 (§1.3) detects the `/` for the typed elements,
  *  and a full code is the ONLY form `ds-scc` accepts at all. */
-export function insertReferenceBlock(editor: Editor, entry: CompendiumEntry): void {
+export function insertReferenceBlock(editor: Editor, entry: CompendiumEntry): boolean {
 	const alias = referenceAliasForType(entry.type);
-	insertBlock(editor, { text: wrapFence(alias, entry.scc), endLine: true });
+	return insertBlock(editor, { text: wrapFence(alias, entry.scc), endLine: true });
 }
 
 /** Inline link: prose-friendly, renders via `rewriteSccAnchors` (F2 §4.3) and the D6 §5
@@ -260,6 +260,7 @@ function narrowMetadata(
  * `registerCompendiumInsertCommands`); this guard covers every other caller.
  * SC-601: `isOpen` is re-checked right before the write, after every await above (the model and body can be a real vault read);
  * a closed editor gets the Notice and nothing is written. `dispatchBlockChoice` checks early too, so the user sees at most one.
+ * SC-687: `insertBlock` refuses a position inside an existing block or the properties (a Notice, nothing written).
  * Returns true when something was inserted.
  */
 export async function insertFullBlock(
@@ -278,8 +279,7 @@ export async function insertFullBlock(
 	const dto = trimSnapshotDTO(extractDTO(model), model);
 	const body = dto === undefined ? (await entity.body()).trim() : stringifyYaml(dto).trimEnd();
 	if (!refuseClosedEditor(isOpen)) return false;
-	insertBlock(editor, { text: wrapFence(alias, body), endLine: true });
-	return true;
+	return insertBlock(editor, { text: wrapFence(alias, body), endLine: true });
 }
 
 /** Copy code: the bare `scc:<code>` form, for pasting elsewhere by hand. Best-effort —
@@ -406,6 +406,8 @@ export function registerCompendiumInsertCommands(
 		id: 'insert-compendium-reference',
 		name: 'Insert Draw Steel: compendium reference',
 		editorCallback: (editor: Editor, ctx: unknown) => {
+			// SC-687: a cursor inside an existing block or the properties is refused now, not after the user has searched and picked.
+			if (refuseInsert(editor)) return;
 			const target = editorTarget(editor, ctx);
 			new CompendiumSearchModal(
 				plugin.app,
@@ -420,6 +422,7 @@ export function registerCompendiumInsertCommands(
 		id: 'insert-compendium-block',
 		name: 'Insert Draw Steel: compendium block (snapshot)',
 		editorCallback: (editor: Editor, ctx: unknown) => {
+			if (refuseInsert(editor)) return; // SC-687, as above
 			const target = editorTarget(editor, ctx);
 			new CompendiumSearchModal(
 				plugin.app,

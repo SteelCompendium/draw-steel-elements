@@ -20,10 +20,19 @@
 // the write is ONE replaceSelection / replaceRange over exactly what the caller replaced before (the selection, or the typed `/ds…` token),
 // moving the tail down is an inserted line break in front of it. One change, so one undo restores the note.
 // At the start of an empty line with no prefix the text written and the cursor position are exactly what they were before SC-675.
+//
+// SC-687: a block is never written INSIDE existing structure. The write is the one place every authoring insert goes through, so the guard is
+// here (`refuseInsert`): with the cursor (or either end of the selection / the /ds token) in the body of a fenced block of any kind, on its
+// opening line after the start of the fence marker, on its closing line anywhere but the end, or in the note's properties, nothing is written,
+// the cursor and selection stay where they were, the undo history gets no entry, and ONE Notice says why. Before the marker of an opening line
+// the block lands above the fence; at the end of a closing line, below it. The position scan is fenceScan.ts `insertRefusal` (text only).
+import { Notice } from 'obsidian';
 import type { Editor, EditorPosition } from 'obsidian';
 import { addBlockPrefix, quoteMarkersOf } from '@/framework/host/blockPrefix';
 import { advancePosition } from './scaffold';
 import { columnAfter, listItemOf } from './listItem';
+import { insertRefusal } from './fenceScan';
+import type { InsertRefusal } from './fenceScan';
 
 export interface BlockToInsert {
 	/** The fenced block, un-prefixed, without a trailing newline (`wrapFence`, `Scaffold.text`). */
@@ -98,15 +107,48 @@ export function planBlockInsert(before: string, after: string, block: BlockToIns
 	return { text: out, cursor };
 }
 
+/** SC-687 — what the user is told when an insert is refused, by reason (same sentence shape as the compendium's CLOSED_EDITOR_NOTICE). */
+export const INSERT_REFUSED_NOTICE: Record<InsertRefusal, string> = {
+	block: 'The cursor is inside another block, so nothing was inserted. Move it to a line outside the block and run the command again.',
+	properties: "The cursor is inside the note's properties, so nothing was inserted. Move it below the properties and run the command again.",
+};
+
+/**
+ * SC-687 — why an insert at the cursor (or over the selection, or over `range`, the /ds pick's typed token) would be refused, or null when it
+ * may go ahead: the write would land inside an existing fenced block or the note's properties (`insertRefusal`, fenceScan.ts). Reads the
+ * editor's text, never the metadata cache (it lags the editor: a block typed a second ago is not in it). Shows nothing.
+ */
+export function insertRefusalFor(editor: Editor, range?: { start: EditorPosition; end: EditorPosition }): InsertRefusal | null {
+	const lines: string[] = [];
+	for (let i = 0, n = editor.lineCount(); i < n; i++) lines.push(editor.getLine(i));
+	return insertRefusal(lines, range?.start ?? editor.getCursor('from'), range?.end ?? editor.getCursor('to'));
+}
+
+/**
+ * SC-687 — the refusal as the user meets it: when the insert would land inside existing structure, ONE Notice says so and this returns true;
+ * the caller writes nothing (no cursor move, no undo entry). `insertBlock` calls it, so every authoring insert is covered at the write; the
+ * two compendium commands call it as well when they start, before the search opens, and then never reach `insertBlock` (one Notice per action).
+ */
+export function refuseInsert(editor: Editor, range?: { start: EditorPosition; end: EditorPosition }): boolean {
+	const why = insertRefusalFor(editor, range);
+	if (why === null) return false;
+	new Notice(INSERT_REFUSED_NOTICE[why]);
+	return true;
+}
+
 /**
  * Puts `block` into `editor` over the selection (`replaceSelection`) or, when `range` is given, over that range (`replaceRange`: the /ds
- * pick's typed token), then moves the cursor to the block's `cursorOffset` when it has one. One editor change.
+ * pick's typed token), then moves the cursor to the block's `cursorOffset` when it has one. One editor change. SC-687: with the position
+ * inside an existing block or the properties (`refuseInsert`) nothing is written and the editor is left as it was; returns whether the block
+ * was written, so a caller does no follow-up work (and shows no second Notice) after a refusal.
  */
-export function insertBlock(editor: Editor, block: BlockToInsert, range?: { start: EditorPosition; end: EditorPosition }): void {
+export function insertBlock(editor: Editor, block: BlockToInsert, range?: { start: EditorPosition; end: EditorPosition }): boolean {
+	if (refuseInsert(editor, range)) return false;
 	const from = range?.start ?? editor.getCursor('from');
 	const to = range?.end ?? editor.getCursor('to');
 	const plan = planBlockInsert(editor.getLine(from.line).slice(0, from.ch), editor.getLine(to.line).slice(to.ch), block);
 	if (range) editor.replaceRange(plan.text, from, to);
 	else editor.replaceSelection(plan.text);
 	if (plan.cursor !== undefined) editor.setCursor(advancePosition(from, plan.text, plan.cursor));
+	return true;
 }

@@ -15,10 +15,11 @@ import { buildScaffold } from './scaffold';
  * always starts and ends on its own lines (text before / after the cursor is kept on separate
  * lines) and every line carries the cursor line's list / callout prefix — see blockInsert.ts,
  * which also captures the insertion point before the write (replaceSelection() leaves
- * getCursor() at the post-insertion position).
+ * getCursor() at the post-insertion position). SC-687: with the cursor inside an existing block or the note's
+ * properties nothing is written (blockInsert.ts shows a Notice); returns whether the block was written.
  */
-export function insertScaffold(editor: Editor, def: ElementDefinition): void {
-	insertBlock(editor, buildScaffold(def));
+export function insertScaffold(editor: Editor, def: ElementDefinition): boolean {
+	return insertBlock(editor, buildScaffold(def));
 }
 
 /**

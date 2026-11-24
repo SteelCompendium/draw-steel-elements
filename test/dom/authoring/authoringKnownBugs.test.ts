@@ -1,11 +1,12 @@
 // SC-443 — expected failures for the authoring bugs found by the e2e survey. Each `test.failing` encodes the CORRECT behaviour and goes
 // green-as-failing while the bug exists; the moment the fix lands it fails with "expected to fail" and the marker comes off with the fix.
 // Still open: SC-676 (/ds guard misses fences it cannot see), SC-677 (Ctrl/Cmd-click copy with a refusing clipboard), SC-678 (accepting a key
-// mid-word doubles the tail), SC-687 (an insert command or a compendium insert run inside an existing block breaks it), SC-688 (a value accepted
-// right after `key:` writes `key:value`; the value list doubles a mid-word tail). Each marker states only the OUTCOME the ticket asks for, so any
+// mid-word doubles the tail), SC-688 (a value accepted right after `key:` writes `key:value`; the value list doubles a mid-word tail). Each marker states only the OUTCOME the ticket asks for, so any
 // reasonable fix (refuse, suppress, move below, replace the whole word) flips it.
 // Fixed, and now plain tests that pin exact bytes: SC-675 (an insert not at the start of an empty line broke the block; related SC-462) and SC-679
 // (accepting a suggestion with nothing typed left the cursor in front of it). The helper has its own matrix in insertOwnLines.test.ts.
+// Fixed, and kept as plain tests of the outcome: SC-687 (an insert command or a compendium insert run inside an existing block, or the properties,
+// wrote into it: it is refused with a Notice now; the exact refusals are in insertRefusal.test.ts and insertPositionScan.test.ts).
 import { DsElementSuggest } from '../../../src/authoring/suggest';
 import { DsSchemaSuggest } from '../../../src/authoring/schemaSuggest';
 import { insertScaffold } from '../../../src/authoring/insert';
@@ -173,9 +174,8 @@ describe('SC-678: accepting a key with the cursor in the middle of a word', () =
 	});
 });
 
-describe('SC-687: an insert command or a compendium insert run with the cursor inside an existing block', () => {
-	// The fix may refuse (the note is left alone) or move the new block below the existing one: both leave every existing block, and the
-	// frontmatter, byte for byte, which is all these markers ask (`existingBlocksIntactProblem`).
+describe('SC-687 (fixed): an insert command or a compendium insert run with the cursor inside an existing block', () => {
+	// The ticket asks that every existing block, and the frontmatter, are left byte for byte (`existingBlocksIntactProblem`); the fix refuses.
 	const STAM = '```ds-stam\nmax_stamina: 20\n\ncurrent_stamina: 5\n```\n\nafter text\n';
 	const FRONT = '---\ntags: [a]\n\n---\nbody\n';
 
@@ -189,13 +189,13 @@ describe('SC-687: an insert command or a compendium insert run with the cursor i
 		expect(existingBlocksIntactProblem(FRONT, FRONT + block + '\n')).toBeNull();
 	});
 
-	test.failing('the insert command on an empty line inside a ds-stam block leaves that block intact', () => {
+	test('the insert command on an empty line inside a ds-stam block leaves that block intact', () => {
 		const editor = new CmEditor(STAM, { line: 2, ch: 0 });
 		insertScaffold(editor as never, registry().get('counter')!);
 		expect(existingBlocksIntactProblem(STAM, editor.getValue())).toBeNull();
 	});
 
-	test.failing('a compendium reference inserted inside a ds-stam block leaves that block intact', () => {
+	test('a compendium reference inserted inside a ds-stam block leaves that block intact', () => {
 		const { vault, index } = makeCompendiumDeps();
 		loadMdDseFixture(vault, 'kit/panther.md');
 		const editor = new CmEditor(STAM, { line: 2, ch: 0 });
@@ -203,7 +203,7 @@ describe('SC-687: an insert command or a compendium insert run with the cursor i
 		expect(existingBlocksIntactProblem(STAM, editor.getValue())).toBeNull();
 	});
 
-	test.failing('the insert command on an empty line of the frontmatter leaves the frontmatter intact', () => {
+	test('the insert command on an empty line of the frontmatter leaves the frontmatter intact', () => {
 		const editor = new CmEditor(FRONT, { line: 2, ch: 0 });
 		insertScaffold(editor as never, registry().get('counter')!);
 		expect(existingBlocksIntactProblem(FRONT, editor.getValue())).toBeNull();

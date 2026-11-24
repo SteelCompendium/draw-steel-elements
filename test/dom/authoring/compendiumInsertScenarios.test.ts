@@ -24,12 +24,13 @@ import { makeCompendiumDeps, loadMdDseFixture } from '../elements/_refHarness';
 const CODE = 'mcdm.heroes.v1/feature.ability.shadow.level-1/coat-the-blade';
 const FIXTURE = 'feature/ability/shadow/level-1/coat-the-blade.md';
 
-/** The Editor methods both insert paths use (SC-675: the cursor's line, read to place the block); captures what landed in the note. */
+/** The Editor methods both insert paths use (SC-675: the cursor's line, read to place the block; SC-687: the whole note, read to see whether the cursor is inside a block); captures what landed in the note. */
 function fakeEditor(): Editor & { written: string } {
 	const editor = {
 		written: '',
 		getCursor: () => ({ line: 0, ch: 0 }),
 		getLine: () => '',
+		lineCount: () => 1,
 		replaceSelection(text: string) {
 			(editor as { written: string }).written += text;
 		},
