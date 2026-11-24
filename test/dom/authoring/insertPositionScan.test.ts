@@ -76,6 +76,9 @@ describe('SC-687 scan: a fence under a list item is inside, in every shape planB
 		['the item\'s line after the block (text, outside)', '- item\n  ```ds-ct\n  x\n  ```\n  |tail', null],
 		['the next item after the block (outside)', '- item\n  ```ds-ct\n  x\n  ```\n- next|', null],
 		['a block 4+ columns past the item\'s text column is an indented code block: no fence', '- item\n\n      ```ds-ct\n      x|\n      ```', null],
+		['a paragraph after the list ended: a block indented 4 below it is an indented code block', '- item\n\ntext\n\n    ```ds-ct\n    x|\n    ```', null],
+		['a lazy continuation line keeps the item: a block indented under the item after it is a fence', '- item\ntext\n\n    ```ds-ct\n    x|\n    ```', 'block'],
+		['a sibling item at a lower indentation ends the nested one', '- a\n  - b\n- c\n\n      ```ds-ct\n      x|\n      ```', null],
 		['a closer under an item that is not indented to the item\'s text column does not close', '- item\n  ```ds-ct\n  x\n```\n  y|', 'block'],
 	];
 	test.each(rows)('%s', (_name, spec, expected) => expect(verdict(spec)).toBe(expected));

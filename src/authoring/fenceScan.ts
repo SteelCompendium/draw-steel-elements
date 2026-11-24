@@ -121,6 +121,7 @@ function propertiesOf(lines: readonly string[]): { end: number; closed: boolean 
  *     `planBlockInsert` writes under `- `, `1. `, `10. `, nested bullets, a list item inside a callout), with a stack of the open items'
  *     text columns; 4+ columns past the item (or past nothing, at the top level) is an INDENTED CODE block in CommonMark, where a fence marker
  *     is literal text, and is not a fence here. A fence can also open on the item's own line (`- ```js`);
+ *     (a line less indented than the item's text ends it, unless it is a paragraph line directly under the item's paragraph: lazy continuation);
  *   - an unclosed fence runs to the end of the note (a fence indented under a list item too: Live Preview keeps drawing it as code to the end,
  *     even past an unindented line or an unindented ```` ``` ````, measured, so a closer under a list item must sit at the item's text column or
  *     further in).
@@ -136,6 +137,7 @@ export function placeOfLine(lines: readonly string[], target: number): LinePlace
 	let open: (FenceRun & { prefix: string; listColumn: number }) | null = null;
 	let items: number[] = []; // text columns of the list items the lines above are in, outermost first
 	let itemsDepth = 0; // quote depth `items` was read at
+	let lazy = false; // the line above is a paragraph line inside an item, so an unindented line below it continues that paragraph
 	for (let i = props ? props.end + 1 : 0; i <= target; i++) {
 		const text = noCr(lines[i]);
 		if (open) {
@@ -163,11 +165,13 @@ export function placeOfLine(lines: readonly string[], target: number): LinePlace
 		}
 		const rest = text.slice(quote.length);
 		if (rest.trim() === '') {
+			lazy = false;
 			if (i === target) return OUTSIDE;
 			continue;
 		}
 		const indent = columnAfter(/^[ \t]*/.exec(rest)![0]);
-		while (items.length > 0 && indent < items[items.length - 1]) items.pop();
+		// A line less indented than an item's text ends the item, except a paragraph line right under an item's paragraph (lazy continuation).
+		if (listItemOf(rest) !== null || !lazy) while (items.length > 0 && indent < items[items.length - 1]) items.pop();
 		let opener: { marker: string; info: string; start: number; listColumn: number } | null = null;
 		const base = items.length > 0 ? items[items.length - 1] : 0;
 		const run = FENCE_RUN_LINE.exec(rest);
@@ -182,6 +186,7 @@ export function placeOfLine(lines: readonly string[], target: number): LinePlace
 			}
 		}
 		const fence = opener ? openFenceOf(opener.marker, opener.info) : null;
+		lazy = !fence && items.length > 0;
 		if (opener && fence) {
 			open = { ...fence, prefix: quote, listColumn: opener.listColumn };
 			if (i === target) return { kind: 'fence', role: 'open', lang: fence.lang, markerStart: opener.start, markerEnd: opener.start + opener.marker.length };
