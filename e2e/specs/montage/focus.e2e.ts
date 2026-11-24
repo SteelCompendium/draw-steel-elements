@@ -254,7 +254,7 @@ describe('montage: keyboard focus after the montage rebuilds', () => {
 		expect((await focusState()).inMontage).toBe(false);
 	});
 
-	it('[MONT-F17] Remove a hero opened from the keyboard and closed by Cancel (Enter) writes nothing; where focus lands is recorded', async () => {
+	it('[MONT-F17] Remove a hero opened from the keyboard and closed by Cancel (Enter) writes nothing, and focus is back on the chrome item that opened it', async () => {
 		await dse.openNote(FRESH);
 		const root = dse.block(MONTAGE);
 		const item = root.control('montage.chrome.remove-hero');
@@ -265,6 +265,6 @@ describe('montage: keyboard focus after the montage rebuilds', () => {
 		await dse.tabTo(cancel, 6);
 		await dse.expectNoWrite(FRESH, () => dse.press('Enter', cancel));
 		await expect(modal.root).not.toBeExisting();
-		expect(await focusState()).toEqual({ ctl: 'RECORD', inMontage: true, ring: true });
+		expect(await focusState()).toEqual({ ctl: 'montage.chrome.remove-hero', inMontage: true, ring: true });
 	});
 });

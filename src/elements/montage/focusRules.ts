@@ -33,7 +33,8 @@ export const MONTAGE_FOCUS_FAMILIES: ControlFamilies = {
  *    the hero) with nothing to undo and no Reopen, so the bar's Log an action, else End round: a complete montage has no Log, so its order is unchanged.
  *  - Remove a hero (⋯ item): the roster is empty once the last hero is removed, and the item is not offered then: the item that sits
  *    beside it (Add a hero, the only way on), else the bar's Log an action / End round. A window opened with the mouse hands nothing back
- *    (the opener's focus is only kept when focus was in the card), and Cancel / Escape write nothing, so Obsidian puts focus back itself.
+ *    (the opener's focus is only kept when focus was in the card). Cancel / Escape write nothing and rebuild nothing: Obsidian itself puts
+ *    focus back on the item that opened the window (MONT-F17).
  *  - A cell: Remove / Undo turn the recorded cell of the round in play into the open socket, which is no Tab stop: focus goes to the first
  *    quick button inside it (same cell, same `at`; it only focuses, nothing is logged). A cell is gone only when the montage completed and
  *    it was an empty past round (Log an action, End round, Undo). */
