@@ -86,7 +86,7 @@ function closesFence(open: FenceRun, marker: string, rest: string): boolean {
 /** What a line of the note is, for a block written on it. `markerStart` / `markerEnd` are indexes into the line text (CR stripped). */
 export type LinePlace =
 	| { kind: 'outside' }
-	/** The note's properties (line 0 `---` through the closing `---`; an unclosed `---` runs to the end of the note, see `propertiesOf`). */
+	/** The note's properties (line 0 `---` through the closing `---`; an unclosed `---` is not properties, see `propertiesOf`). */
 	| { kind: 'properties'; role: 'open' | 'body' | 'close'; markerStart: number; markerEnd: number }
 	/** A fenced block (any language): its opening line, a body line, or its closing line. `lang` is the opener's (see `scanFenceState`). */
 	| { kind: 'fence'; role: 'open' | 'body' | 'close'; lang: string; markerStart: number; markerEnd: number };
@@ -102,16 +102,18 @@ const OUTSIDE: LinePlace = { kind: 'outside' };
 const noCr = (line: string | undefined): string => (line ?? '').replace(/\r$/, '');
 
 /**
- * The note's properties as Obsidian's EDITOR reads them (Live Preview and Source mode, measured in Obsidian 1.14.4, SC-687): line 0 is exactly
- * `---` (no leading or trailing whitespace; `----` is a rule), and the properties end at the first later line of `---` and whitespace only
- * (`--- ` closes; `----`, ` ---`, `---x` and a YAML `...` do not). An unclosed `---` is still properties to the end of the note: the editor
- * styles every line below it as properties and Live Preview does not draw a block there. YAML validity does not matter (`a: [` is properties)
- * and neither does the metadata cache (it lags the editor and disagrees on `----` and an empty pair). `end` is the last line of the properties.
+ * The note's properties for the guard: line 0 is exactly `---` (no leading or trailing whitespace; `----` is a rule) and the properties end at
+ * the first later line of `---` and whitespace only (`--- ` closes; `----`, ` ---`, `---x` and a YAML `...` do not), as Obsidian's EDITOR reads
+ * them (Live Preview and Source mode, measured in Obsidian 1.14.4, SC-687). YAML validity does not matter (`a: [` is properties) and neither does
+ * the metadata cache (it lags the editor and disagrees on `----` and an empty pair). Only a CLOSED pair counts: an unclosed line-0 `---` is
+ * not properties here, although the editor styles everything below it as properties and Live Preview draws no block there (Reading view does
+ * draw one): an insert below it damages no structure that exists in any view, and refusing the whole note would be a broad false refusal (SC-687
+ * O8). `end` is the line of the closing `---`.
  */
-function propertiesOf(lines: readonly string[]): { end: number; closed: boolean } | null {
+function propertiesOf(lines: readonly string[]): { end: number } | null {
 	if (noCr(lines[0]) !== '---') return null;
-	for (let i = 1; i < lines.length; i++) if (/^---\s*$/.test(noCr(lines[i]))) return { end: i, closed: true };
-	return { end: lines.length - 1, closed: false };
+	for (let i = 1; i < lines.length; i++) if (/^---\s*$/.test(noCr(lines[i]))) return { end: i };
+	return null;
 }
 
 /** A line without the quote prefix of the quoted fence it follows: does it end that fence? (blank, or a fence marker at the left margin) */
@@ -141,7 +143,7 @@ function endsQuotedFence(text: string): boolean {
 export function placeOfLine(lines: readonly string[], target: number): LinePlace {
 	const props = propertiesOf(lines);
 	if (props && target <= props.end) {
-		const role = target === 0 ? 'open' : props.closed && target === props.end ? 'close' : 'body';
+		const role = target === 0 ? 'open' : target === props.end ? 'close' : 'body';
 		return { kind: 'properties', role, markerStart: 0, markerEnd: 3 };
 	}
 	let open: (FenceRun & { prefix: string; listColumn: number }) | null = null;
