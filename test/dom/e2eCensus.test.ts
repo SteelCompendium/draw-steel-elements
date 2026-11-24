@@ -52,6 +52,7 @@ import resetManifest from '../../e2e/manifest/reset-encounter-modal';
 import montageManifest from '../../e2e/manifest/montage';
 import montageLogManifest from '../../e2e/manifest/montage-log-modal';
 import montageAddHeroManifest from '../../e2e/manifest/montage-add-hero-modal';
+import montageRemoveHeroManifest from '../../e2e/manifest/montage-remove-hero-modal';
 import montageLimitsManifest from '../../e2e/manifest/montage-limits-modal';
 import { idsOf } from '../../e2e/manifest/surface';
 import { Menu } from '../mocks/obsidian';
@@ -489,6 +490,7 @@ describe('SC-438 census: the montage tracker and its three modals, scoped by con
 	const montageIds = new Set([...idsOf(montageManifest), ...chromeIds]);
 	const logIds = new Set(idsOf(montageLogManifest));
 	const addHeroIds = new Set(idsOf(montageAddHeroManifest));
+	const removeHeroIds = new Set(idsOf(montageRemoveHeroManifest));
 	const limitsIds = new Set(idsOf(montageLimitsManifest));
 	const census = (root: Element): string[] => censusProblems(root, montageIds, INTERACTIVE, false);
 
@@ -523,7 +525,7 @@ describe('SC-438 census: the montage tracker and its three modals, scoped by con
 		expect(census(root)).toEqual([expect.stringMatching(/id "montage\.not-a-control" is not in the manifest/)]);
 	});
 
-	test('the census bites inside each modal: an un-id\'d button in the Log an action sheet, Add a hero or Set limits is a finding, and so is a foreign id', async () => {
+	test('the census bites inside each modal: an un-id\'d button in the Log an action sheet, Add a hero, Remove a hero or Set limits is a finding, and so is a foreign id', async () => {
 		const root = await mountMontage(montageFixture('mid'));
 		const rogue = document.createElement('button');
 		rogue.textContent = 'Rogue';
@@ -544,6 +546,9 @@ describe('SC-438 census: the montage tracker and its three modals, scoped by con
 		byId(root, 'montage.board.add-hero').click();
 		open('montage.add-hero.submit', addHeroIds);
 		document.querySelectorAll('.modal-container, .modal').forEach((m) => m.remove());
+		byId(root, 'montage.chrome.remove-hero').click();
+		open('montage.remove-hero.submit', removeHeroIds);
+		document.querySelectorAll('.modal-container, .modal').forEach((m) => m.remove());
 		byId(root, 'montage.chrome.set-limits').click();
 		open('montage.limits.save', limitsIds);
 	});
@@ -562,11 +567,11 @@ describe('SC-438 census: the montage tracker and its three modals, scoped by con
 		}
 	});
 
-	test('the chrome panel is inside the scope: its four items carry montage.chrome.* ids and the framework chrome buttons chrome.* ids', async () => {
+	test('the chrome panel is inside the scope: its five items carry montage.chrome.* ids and the framework chrome buttons chrome.* ids', async () => {
 		const root = await mountMontage(montageFixture('mid'));
 		const items = Array.from(root.querySelectorAll('[data-dse-chrome-item]'));
-		expect(items.length).toBeGreaterThan(4);
-		for (const id of ['montage.chrome.add-round', 'montage.chrome.add-hero', 'montage.chrome.set-limits', 'montage.chrome.reset-progress']) {
+		expect(items.length).toBeGreaterThan(5);
+		for (const id of ['montage.chrome.add-round', 'montage.chrome.add-hero', 'montage.chrome.remove-hero', 'montage.chrome.set-limits', 'montage.chrome.reset-progress']) {
 			expect(root.querySelectorAll(`[data-dse-control="${id}"]`)).toHaveLength(1);
 		}
 		const rogue = document.createElement('button');
@@ -585,7 +590,7 @@ describe('SC-438 census: the montage tracker and its three modals, scoped by con
 		expect(declared.filter((id) => !seen.has(id))).toEqual([]);
 	});
 
-	test('every control the three modal manifests declare is stamped by SOME variant of the modal (no dead manifest row)', async () => {
+	test('every control the four modal manifests declare is stamped by SOME variant of the modal (no dead manifest row)', async () => {
 		const seen = new Set<string>();
 		const collect = (id: string): void => idsIn(modalOf(id)).forEach((x) => seen.add(x));
 		const sweep = (): void => document.querySelectorAll('.modal-container, .modal').forEach((m) => m.remove());
@@ -599,9 +604,12 @@ describe('SC-438 census: the montage tracker and its three modals, scoped by con
 		byId(root, 'montage.board.add-hero').click();
 		collect('montage.add-hero.submit');
 		sweep();
+		byId(root, 'montage.chrome.remove-hero').click();
+		collect('montage.remove-hero.submit');
+		sweep();
 		byId(root, 'montage.chrome.set-limits').click();
 		collect('montage.limits.save');
-		const declared = [montageLogManifest, montageAddHeroManifest, montageLimitsManifest]
+		const declared = [montageLogManifest, montageAddHeroManifest, montageRemoveHeroManifest, montageLimitsManifest]
 			.flatMap((m) => Object.keys(m.controls))
 			.filter((id) => !id.startsWith('modal.'));
 		expect(declared.filter((id) => !seen.has(id))).toEqual([]);
@@ -609,7 +617,7 @@ describe('SC-438 census: the montage tracker and its three modals, scoped by con
 
 	test('the entry points of each modal are declared by its manifest as reach rows, and every reach id is a real montage control', () => {
 		const montage = new Set(Object.keys(montageManifest.controls));
-		for (const m of [montageLogManifest, montageAddHeroManifest, montageLimitsManifest]) {
+		for (const m of [montageLogManifest, montageAddHeroManifest, montageRemoveHeroManifest, montageLimitsManifest]) {
 			expect(m.reach.length).toBeGreaterThan(0);
 			for (const r of m.reach) {
 				expect(r.host).toBe('montage');
@@ -618,6 +626,7 @@ describe('SC-438 census: the montage tracker and its three modals, scoped by con
 		}
 		expect(montageLogManifest.reach.map((r) => r.control).sort()).toEqual(['montage.bar.log', 'montage.board.row-act', 'montage.cell', 'montage.cell.socket']);
 		expect(montageAddHeroManifest.reach.map((r) => r.control).sort()).toEqual(['montage.board.add-hero', 'montage.chrome.add-hero']);
+		expect(montageRemoveHeroManifest.reach.map((r) => r.control)).toEqual(['montage.chrome.remove-hero']);
 		expect(montageLimitsManifest.reach.map((r) => r.control)).toEqual(['montage.chrome.set-limits']);
 	});
 
@@ -633,7 +642,7 @@ describe('SC-438 census: the montage tracker and its three modals, scoped by con
 		const root = await mountMontage(montageFixture('mid'), false);
 		expect(census(root)).toEqual([]);
 		expect(root.querySelector('[data-dse-control="montage.cell.socket"]')).toBeNull();
-		for (const id of ['montage.chrome.add-round', 'montage.chrome.add-hero', 'montage.chrome.set-limits', 'montage.chrome.reset-progress']) {
+		for (const id of ['montage.chrome.add-round', 'montage.chrome.add-hero', 'montage.chrome.remove-hero', 'montage.chrome.set-limits', 'montage.chrome.reset-progress']) {
 			expect(root.querySelector(`[data-dse-control="${id}"]`)).toBeNull();
 		}
 		expect((byId(root, 'montage.bar.log') as HTMLButtonElement).disabled).toBe(true);

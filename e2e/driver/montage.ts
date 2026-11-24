@@ -25,8 +25,8 @@ export const TABS = 80;
 type Scope = ReturnType<typeof dse.block>;
 type Modal = Awaited<ReturnType<typeof dse.modal>>;
 
-/** Which montage modal: the Log an action sheet, Add a hero, or Set limits. */
-export type MontageModalKind = 'montage-log' | 'montage-add-hero' | 'montage-limits';
+/** Which montage modal: the Log an action sheet, Add a hero, Remove a hero, or Set limits. */
+export type MontageModalKind = 'montage-log' | 'montage-add-hero' | 'montage-remove-hero' | 'montage-limits';
 
 /** Open `note` in Reading view and hand back the (`block`-th) montage's scope. */
 export async function openMontage(note: string, block = 0): Promise<Scope> {
@@ -53,6 +53,13 @@ export async function openAddHero(note: string, via: 'chrome' | 'board' = 'chrom
 	if (via === 'chrome') await clickChrome(root, 'montage.chrome.add-hero');
 	else await dse.click(root.control('montage.board.add-hero'));
 	return { root, modal: await dse.modal('montage-add-hero') };
+}
+
+/** The Remove a hero modal (SC-690), opened from the chrome item. */
+export async function openRemoveHero(note: string, block = 0): Promise<{ root: Scope; modal: Modal }> {
+	const root = await openMontage(note, block);
+	await clickChrome(root, 'montage.chrome.remove-hero');
+	return { root, modal: await dse.modal('montage-remove-hero') };
 }
 
 /** The Set limits modal, opened from the chrome item. */

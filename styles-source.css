@@ -5844,6 +5844,41 @@ Shared globals
 .dse-mt__sheet-resultchip[data-kind='failure'] .dse-mt__sheet-chipglyph {
 	color: var(--dse-danger);
 }
+/* SC-690 — the "Remove a hero" window: one full-width chip per hero (the Result chips' pressed grammar, `.dse-optchip`), stacked. The
+   picked hero is marked by the accent border AND a check that only it shows, so the choice never rests on colour alone. A long name wraps
+   inside the chip rather than clipping or widening the window; the check's slot stays reserved on the others so nothing shifts on a pick. */
+.dse-mt__sheet-herolist {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35em;
+	margin-bottom: 0.6em;
+}
+.dse-mt__sheet-herochip {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+	width: 100%;
+	box-sizing: border-box;
+	text-align: left;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+.dse-mt__sheet-herochip .dse-mt__sheet-chipglyph {
+	flex: none;
+}
+.dse-mt__sheet-herochip[aria-pressed='false'] .dse-mt__sheet-chipglyph {
+	visibility: hidden;
+}
+.dse-mt__sheet-herochip[aria-pressed='true'] .dse-mt__sheet-heroname {
+	font-weight: 600;
+}
+.dse-mt__sheet-consequence {
+	font-size: var(--dse-fs-caption);
+	color: var(--dse-fg);
+}
+.dse-mt__sheet-consequence[hidden] {
+	display: none;
+}
 .dse-mt__sheet-input {
 	width: 100%;
 	box-sizing: border-box;

@@ -952,26 +952,28 @@ describe('SC-191 slice 2: OutcomeBandView (verdict / equal-width tracks / rule /
 const chromeItem = (root: HTMLElement, id: string) =>
 	root.querySelector(`[data-dse-chrome-item="${id}"]`) as HTMLButtonElement | null;
 
-describe('SC-191 fix round 2: the ⋯ chrome menu carries exactly FOUR items — no Clear all (ledger 2026-09-03)', () => {
-	test('add a round / add a hero / set limits… / Reset progress render as real, aria-labelled chrome items; Clear all is NOT one of them', async () => {
+describe('SC-191 fix round 2: the ⋯ chrome menu carries exactly FIVE items (four, plus SC-690\'s Remove a hero) — no Clear all (ledger 2026-09-03)', () => {
+	test('add a round / add a hero / remove a hero / set limits… / Reset progress render as real, aria-labelled chrome items; Clear all is NOT one of them', async () => {
 		const { root } = await renderMontage(montageMidYaml);
 		const ids = Array.from(root.querySelectorAll('.dse-chrome [data-dse-chrome-item]'))
 			.map((el) => el.getAttribute('data-dse-chrome-item'))
 			.filter((id): id is string => !!id && id.startsWith('montage-'));
 		expect(ids.sort()).toEqual(
-			['montage-add-hero', 'montage-add-round', 'montage-reset-progress', 'montage-set-limits'].sort(),
+			['montage-add-hero', 'montage-add-round', 'montage-remove-hero', 'montage-reset-progress', 'montage-set-limits'].sort(),
 		);
 		expect(chromeItem(root, 'montage-add-round')?.getAttribute('aria-label')).toBe('Add a round');
 		expect(chromeItem(root, 'montage-add-hero')?.getAttribute('aria-label')).toBe('Add a hero');
+		expect(chromeItem(root, 'montage-remove-hero')?.getAttribute('aria-label')).toBe('Remove a hero');
 		expect(chromeItem(root, 'montage-set-limits')?.getAttribute('aria-label')).toBe('Set limits…');
 		expect(chromeItem(root, 'montage-reset-progress')?.getAttribute('aria-label')).toBe('Reset progress');
 		expect(chromeItem(root, 'montage-clear-all')).toBeNull();
 	});
 
-	test('read-only host: none of the four montage ⋯ items render (F1 §4.4 — no dead-end panel item)', async () => {
+	test('read-only host: none of the five montage ⋯ items render (F1 §4.4 — no dead-end panel item)', async () => {
 		const { root } = await renderMontage(montageMidYaml, { canPersist: false });
 		expect(chromeItem(root, 'montage-add-round')).toBeNull();
 		expect(chromeItem(root, 'montage-add-hero')).toBeNull();
+		expect(chromeItem(root, 'montage-remove-hero')).toBeNull();
 		expect(chromeItem(root, 'montage-set-limits')).toBeNull();
 		expect(chromeItem(root, 'montage-reset-progress')).toBeNull();
 	});

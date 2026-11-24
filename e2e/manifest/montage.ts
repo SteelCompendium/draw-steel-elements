@@ -1,12 +1,13 @@
 // The montage tracker's own controls (src/elements/montage/: view.ts, BoardView.ts, StripView.ts, GuideView.ts): the chrome
-// panel's four items, the board (the Heroes "+", each hero's "Log an action for <hero>" button, the round cells and the quick
+// panel's five items (SC-690 added Remove a hero), the board (the Heroes "+", each hero's "Log an action for <hero>" button, the round cells and the quick
 // trio inside the open one), the bottom action bar and the two disclosures (SC-438).
 // NOT listed here, because the modals own them (the ids reach those manifests as `reach` rows):
 //   - the "Log an action..." sheet (manifest/montage-log-modal.ts, ids `montage.log.*`);
 //   - "Add a hero" (manifest/montage-add-hero-modal.ts, ids `montage.add-hero.*`);
-//   - "Set limits..." (manifest/montage-limits-modal.ts, ids `montage.limits.*`).
+//   - "Set limits..." (manifest/montage-limits-modal.ts, ids `montage.limits.*`);
+//   - "Remove a hero" (manifest/montage-remove-hero-modal.ts, ids `montage.remove-hero.*`).
 // Id naming: the bar's buttons are `montage.bar.*` and the chrome items `montage.chrome.*` so a `montage.log.*` / `montage.add-hero.*`
-// prefix always means a modal control, never a bar button or a chrome item that merely shares its name.
+// / `montage.remove-hero.*` prefix always means a modal control, never a bar button or a chrome item that merely shares its name.
 // `rows` cite the SC-438 scenario groups: C chrome panel, B board, R action bar, G strip and guide, F focus after a rebuild (`MONT-<group><nn>`).
 // A repeated control is driven through `nth`. The chrome panel is hidden (opacity 0) until the pointer is over the montage or
 // focus is inside it: `dse.hover(root.root)` first.
@@ -14,10 +15,12 @@ import { c, surface } from './surface';
 
 export default surface('montage', {
 	controls: {
-		// -- C. The chrome panel's four items. "Add a round" and "Reset progress" act at once (a Notice for Reset); "Add a hero" and
-		//    "Set limits..." open their modal. Omitted entirely on a read-only host.
+		// -- C. The chrome panel's five items. "Add a round" and "Reset progress" act at once (a Notice for Reset); "Add a hero", "Remove a
+		//    hero" and "Set limits..." open their modal. "Remove a hero" is not offered while the board has no hero. Omitted entirely on a
+		//    read-only host.
 		'montage.chrome.add-round': c(['click', 'press:Enter'], ['C01']),
 		'montage.chrome.add-hero': c(['click', 'press:Enter'], ['C02']),
+		'montage.chrome.remove-hero': c(['click', 'press:Enter'], ['C07']),
 		'montage.chrome.set-limits': c(['click', 'press:Enter'], ['C03']),
 		'montage.chrome.reset-progress': c(['click', 'press:Enter'], ['C04']),
 

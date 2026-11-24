@@ -1,9 +1,9 @@
 // SC-438 [C]: the montage's chrome panel items (a hover panel, hidden until the pointer is over the montage or focus is inside it): Add a round,
-// Add a hero and Set limits... (open their modal), Reset progress. Each by pointer and by keyboard. Montage/fresh.md: Kira and Bram, nothing
+// Add a hero, Remove a hero (SC-690) and Set limits... (open their modal), Reset progress. Each by pointer and by keyboard. Montage/fresh.md: Kira and Bram, nothing
 // logged, round 1 of 3, limits 3 / 2. Montage/mid.md: round 2 with entries, a title and limits 4 / 3.
 import { expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
-import { blockOf, dismiss, expectText, FRESH, MID, MONTAGE, modalsOpen, roundChip, TABS, verdict } from '../../driver/montage';
+import { blockOf, dismiss, EMPTY, expectText, FRESH, MID, MONTAGE, modalsOpen, roundChip, TABS, verdict } from '../../driver/montage';
 
 describe('montage: the chrome panel items', () => {
 	it('[MONT-C01] Add a round by click: one write, rounds 3 to 4, a fourth round column, the round in play unchanged', async () => {
@@ -85,5 +85,28 @@ describe('montage: the chrome panel items', () => {
 		expect(w.count).toBe(1);
 		expect((await blockOf(MID)).entries).toBeUndefined();
 		await expectText(roundChip(root), 'Round 1 / 3');
+	});
+
+	it('[MONT-C07] Remove a hero sits right after Add a hero; by click and by Enter it opens the Remove a hero window and writes nothing; a montage with no hero does not offer it', async () => {
+		await dse.openNote(MID);
+		const root = dse.block(MONTAGE);
+		const ids = await dse.page<string[]>(
+			`Array.from(document.querySelectorAll('.markdown-reading-view [data-dse-element="montage"] [data-dse-control^="montage.chrome."]')).map((e) => e.getAttribute('data-dse-control'))`,
+		);
+		expect(ids).toEqual(['montage.chrome.add-round', 'montage.chrome.add-hero', 'montage.chrome.remove-hero', 'montage.chrome.set-limits', 'montage.chrome.reset-progress']);
+		await dse.hover(root.root);
+		await dse.expectNoWrite(MID, () => dse.click(root.control('montage.chrome.remove-hero')));
+		let modal = await dse.modal('montage-remove-hero');
+		await expect(modal.control({ css: '.dse-modal__title-text' })).toHaveElementProperty('textContent', 'Remove a hero');
+		await dismiss(modal);
+		const item = root.control('montage.chrome.remove-hero');
+		await dse.tabTo(item, TABS);
+		await dse.expectNoWrite(MID, () => dse.press('Enter', item));
+		modal = await dse.modal('montage-remove-hero');
+		await dismiss(modal);
+		expect(await modalsOpen()).toBe(0);
+		await dse.openNote(EMPTY);
+		await expect(dse.block(MONTAGE).control('montage.chrome.add-hero')).toBeExisting();
+		await expect(dse.block(MONTAGE).control('montage.chrome.remove-hero')).not.toBeExisting();
 	});
 });

@@ -5,7 +5,7 @@
 // Montage/fresh.md: round 1 of 3.
 import { browser, expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
-import { blockOf, closeDisclosures, clickChrome, focusState, FRESH, MONTAGE, TABS } from '../../driver/montage';
+import { blockOf, closeDisclosures, clickChrome, focusState, FRESH, MONTAGE, TABS, TWO } from '../../driver/montage';
 
 describe('montage: keyboard focus after the montage rebuilds', () => {
 	it('[MONT-F01] Enter on End round: the rebuilt End round button holds focus', async () => {
@@ -203,5 +203,68 @@ describe('montage: keyboard focus after the montage rebuilds', () => {
 		await expect(modal.root).not.toBeExisting();
 		expect((await blockOf(FRESH)).entries).toHaveLength(1);
 		expect(await dse.focusedControl()).toBe('montage.bar.log');
+	});
+
+	it('[MONT-F14] Remove a hero from the keyboard: the window closes after the write and the chrome item that opened it holds focus', async () => {
+		await dse.openNote(FRESH);
+		const root = dse.block(MONTAGE);
+		const item = root.control('montage.chrome.remove-hero');
+		await dse.tabTo(item, TABS);
+		await dse.press('Enter', item);
+		const modal = await dse.modal('montage-remove-hero');
+		await dse.press('Enter', modal.control('montage.remove-hero.hero', { nth: 0 }));
+		const remove = modal.control('montage.remove-hero.submit');
+		await dse.tabTo(remove, 6);
+		await dse.waitForWrite(FRESH, () => dse.press('Enter', remove));
+		await dse.settle();
+		await expect(modal.root).not.toBeExisting();
+		expect((await blockOf(FRESH)).participants!.map((p) => p.name)).toEqual(['Bram']);
+		const f = await focusState();
+		expect([f.ctl, f.inMontage, f.ring]).toEqual(['montage.chrome.remove-hero', true, true]);
+	});
+
+	it('[MONT-F15] Remove a hero from the keyboard on the LAST hero: the item is gone with the roster, and focus lands on Add a hero beside it', async () => {
+		await dse.openNote(TWO);
+		const root = dse.block(MONTAGE, 0); // First Crossing: Kira alone
+		const item = root.control('montage.chrome.remove-hero');
+		await dse.tabTo(item, TABS);
+		await dse.press('Enter', item);
+		const modal = await dse.modal('montage-remove-hero');
+		await dse.press('Enter', modal.control('montage.remove-hero.hero', { nth: 0 }));
+		const remove = modal.control('montage.remove-hero.submit');
+		await dse.tabTo(remove, 6);
+		await dse.waitForWrite(TWO, () => dse.press('Enter', remove));
+		await dse.settle();
+		await expect(modal.root).not.toBeExisting();
+		expect((await blockOf(TWO, 0)).participants).toBeUndefined();
+		const f = await focusState();
+		expect([f.ctl, f.inMontage, f.ring]).toEqual(['montage.chrome.add-hero', true, true]);
+	});
+
+	it('[MONT-F16] a Remove a hero window opened with the mouse and closed by Remove pulls no focus into the montage', async () => {
+		await dse.openNote(FRESH);
+		const root = dse.block(MONTAGE);
+		await clickChrome(root, 'montage.chrome.remove-hero');
+		const modal = await dse.modal('montage-remove-hero');
+		await dse.click(modal.control('montage.remove-hero.hero', { nth: 1 }));
+		await dse.waitForWrite(FRESH, () => dse.click(modal.control('montage.remove-hero.submit')));
+		await dse.settle();
+		await expect(modal.root).not.toBeExisting();
+		expect((await blockOf(FRESH)).participants!.map((p) => p.name)).toEqual(['Kira']);
+		expect((await focusState()).inMontage).toBe(false);
+	});
+
+	it('[MONT-F17] Remove a hero opened from the keyboard and closed by Cancel (Enter) writes nothing; where focus lands is recorded', async () => {
+		await dse.openNote(FRESH);
+		const root = dse.block(MONTAGE);
+		const item = root.control('montage.chrome.remove-hero');
+		await dse.tabTo(item, TABS);
+		await dse.press('Enter', item);
+		const modal = await dse.modal('montage-remove-hero');
+		const cancel = modal.control('montage.remove-hero.cancel');
+		await dse.tabTo(cancel, 6);
+		await dse.expectNoWrite(FRESH, () => dse.press('Enter', cancel));
+		await expect(modal.root).not.toBeExisting();
+		expect(await focusState()).toEqual({ ctl: 'RECORD', inMontage: true, ring: true });
 	});
 });

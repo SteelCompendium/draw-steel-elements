@@ -31,6 +31,9 @@ export const MONTAGE_FOCUS_FAMILIES: ControlFamilies = {
  *  - Reopen / Clear all: the montage runs again, so Log an action (else End round).
  *  - Log an action for <hero> (row): all disabled once the montage is complete (Undo, then Reopen); the rows are gone (SC-650: an outside edit removed
  *    the hero) with nothing to undo and no Reopen, so the bar's Log an action, else End round: a complete montage has no Log, so its order is unchanged.
+ *  - Remove a hero (⋯ item): the roster is empty once the last hero is removed, and the item is not offered then: the item that sits
+ *    beside it (Add a hero, the only way on), else the bar's Log an action / End round. A window opened with the mouse hands nothing back
+ *    (the opener's focus is only kept when focus was in the card), and Cancel / Escape write nothing, so Obsidian puts focus back itself.
  *  - A cell: Remove / Undo turn the recorded cell of the round in play into the open socket, which is no Tab stop: focus goes to the first
  *    quick button inside it (same cell, same `at`; it only focuses, nothing is logged). A cell is gone only when the montage completed and
  *    it was an empty past round (Log an action, End round, Undo). */
@@ -41,6 +44,7 @@ export const MONTAGE_FOCUS_FALLBACKS: ControlFallbacks = {
 	'montage.bar.end-round': ['montage.bar.back', 'montage.bar.reopen', 'montage.bar.undo'],
 	'montage.bar.reopen': ['montage.bar.log', 'montage.bar.end-round', 'montage.bar.undo'],
 	'montage.bar.clear-all': ['montage.bar.log', 'montage.bar.end-round'],
+	'montage.chrome.remove-hero': ['montage.chrome.add-hero', 'montage.bar.log', 'montage.bar.end-round'],
 	'montage.board.row-act': ['montage.bar.undo', 'montage.bar.reopen', 'montage.bar.log', 'montage.bar.end-round'],
 	'montage.cell': ['montage.bar.log', 'montage.bar.end-round', 'montage.bar.undo'],
 };

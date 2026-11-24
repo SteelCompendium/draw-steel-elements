@@ -57,10 +57,13 @@ import {
 	logMontageEntry,
 	montagePreviousRound,
 	montageHeroNamed,
+	montageHeroRemoval,
 	montageReopenable,
+	montageRoster,
 	montageTallies,
 	nextHeroToAct,
 	removeMontageEntry,
+	removeMontageHero,
 	resetMontageProgress,
 	serialize as serializeModel,
 	setMontageLimits,
@@ -73,7 +76,7 @@ import { StripView } from './StripView';
 import { GuideView } from './GuideView';
 import { LogActionModal } from './LogActionModal';
 import type { SheetMode } from './LogActionModal';
-import { MontageAddHeroModal, MontageSetLimitsModal } from './ConfigModals';
+import { MontageAddHeroModal, MontageRemoveHeroModal, MontageSetLimitsModal } from './ConfigModals';
 
 const STRIP_SLOT = 'montage.strip';
 const GUIDE_SLOT = 'montage.guide';
@@ -550,7 +553,9 @@ export class MontageView extends ElementView<MontageModel> {
 	// -------------------------------------------------------------- the ⋯ chrome items
 
 	/** SC-182 — the FOUR ⋯ items spec §D names, corrected by fix round 2's ruling (ledger
-	 *  2026-09-03): add a round / add a hero / set limits… / Reset progress. `Clear all`
+	 *  2026-09-03): add a round / add a hero / set limits… / Reset progress, and since SC-690 a
+	 *  fifth, "Remove a hero", right after "Add a hero" (offered only while there is a hero to
+	 *  remove: a panel is rebuilt with every write, so it comes and goes with the roster). `Clear all`
 	 *  is REMOVED from here — it lives only in the done-state action bar now (sharing
 	 *  `resetMontageProgress` with Reset progress), closing the "two ⋯ labels for one
 	 *  action" confusion the original five-item list caused. The VIEW-contributed twin of
@@ -579,6 +584,17 @@ export class MontageView extends ElementView<MontageModel> {
 				control: 'montage.chrome.add-hero',
 				onClick: () => this.openAddHero(),
 			},
+			...(montageRoster(model).length > 0
+				? [
+						{
+							id: 'montage-remove-hero',
+							icon: 'user-minus',
+							label: 'Remove a hero',
+							control: 'montage.chrome.remove-hero',
+							onClick: () => this.openRemoveHero(),
+						},
+					]
+				: []),
 			{
 				id: 'montage-set-limits',
 				icon: 'hourglass',
@@ -611,6 +627,25 @@ export class MontageView extends ElementView<MontageModel> {
 					void this.commit();
 				},
 				(name) => montageHeroNamed(this.model, name),
+			),
+		);
+	}
+
+	/** SC-690 — "Remove a hero": the window lists the board's heroes, and Remove takes the picked one off it with their logged actions
+	 *  (model.ts `removeMontageHero`). The window reads the LIVE model when it opens and when a hero is picked, and the write checks the
+	 *  board once more: a hero an outside edit already took off is not removed twice, nothing is written and the window just closes.
+	 *  No Undo toast and no second question: the window named what would go before the press. */
+	private openRemoveHero(): void {
+		this.openTrackedModal(() =>
+			new MontageRemoveHeroModal(
+				this.cx.app,
+				() => montageRoster(this.model).map((h) => h.name),
+				(name) => montageHeroRemoval(this.model, name),
+				(name) => {
+					if (!removeMontageHero(this.model, name)) return;
+					new Notice(`Removed ${name} from the montage`);
+					void this.commit();
+				},
 			),
 		);
 	}

@@ -24,6 +24,7 @@ import negotiationManifest from '../manifest/negotiation';
 import montageManifest from '../manifest/montage';
 import montageLogManifest from '../manifest/montage-log-modal';
 import montageAddHeroManifest from '../manifest/montage-add-hero-modal';
+import montageRemoveHeroManifest from '../manifest/montage-remove-hero-modal';
 import montageLimitsManifest from '../manifest/montage-limits-modal';
 import settingsManifest from '../manifest/settings-tab';
 import counterManifest from '../manifest/counter';
@@ -39,6 +40,7 @@ const ALL_IDS = new Set([
 	...idsOf(montageManifest),
 	...idsOf(montageLogManifest),
 	...idsOf(montageAddHeroManifest),
+	...idsOf(montageRemoveHeroManifest),
 	...idsOf(montageLimitsManifest),
 ]);
 const BAR_SCOPE = ['.markdown-reading-view [data-dse-element="stamina-bar"] *'];
