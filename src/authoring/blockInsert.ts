@@ -23,6 +23,7 @@
 import type { Editor, EditorPosition } from 'obsidian';
 import { addBlockPrefix, quoteMarkersOf } from '@/framework/host/blockPrefix';
 import { advancePosition } from './scaffold';
+import { columnAfter, listItemOf } from './listItem';
 
 export interface BlockToInsert {
 	/** The fenced block, un-prefixed, without a trailing newline (`wrapFence`, `Scaffold.text`). */
@@ -46,16 +47,6 @@ export interface BlockContext {
 	hasTextBefore: boolean;
 }
 
-// A list item marker and the whitespace after it, after the line's own leading whitespace (CommonMark: a bullet, or 1-9 digits and a `.` / `)`).
-const LIST_MARKER = /^([ \t]*)([-*+]|\d{1,9}[.)])([ \t]+)/;
-
-/** Column reached after `text` when it starts at column `start` (a tab goes to the next multiple of 4). */
-function columnAfter(text: string, start = 0): number {
-	let col = start;
-	for (const ch of text) col = ch === '\t' ? col + 4 - (col % 4) : col + 1;
-	return col;
-}
-
 /**
  * Reads `before` (the line's text up to the cursor). The prefix is the quote markers, plus the continuation indentation of a list item
  * (spaces up to the column where the item's text starts — CommonMark, except that a leading tab counts as 2 columns under a bullet, see below: the marker and the 1-4 spaces after it; 5 or more spaces read
@@ -66,20 +57,10 @@ function columnAfter(text: string, start = 0): number {
 export function blockContextOf(before: string): BlockContext {
 	const quote = quoteMarkersOf(before);
 	const rest = before.slice(quote.length);
-	const list = LIST_MARKER.exec(rest);
-	if (list) {
-		const [, lead, marker, gap] = list;
-		// Where the item's text starts is measured the way Obsidian's Reading view reads it, not by CommonMark's tab stops: under a BULLET
-		// each leading tab counts as 2 columns (`- a⏎⇥- b⏎⇥⇥- c` draws with the block at 6 spaces under c, not at CommonMark's 10, which Reading
-		// view shows as inline code text), under an ORDERED item 4 as CommonMark has it. Measured in Obsidian 1.14.4, SC-675 r4
-		// (sc675-r4-rereview-report.md MEDIUM-2): 1, 2 and 3 tabs draw in both Reading view and Live Preview at 4, 6 and 8 spaces. Do not
-		// "correct" the 2 to CommonMark's 4. Leading spaces count as themselves.
-		const leadColumns = /^\d/.test(marker) ? columnAfter(lead) : lead.replace(/\t/g, '  ').length;
-		const markerEnd = columnAfter(marker, leadColumns);
-		const gapEnd = columnAfter(gap, markerEnd);
-		const contentColumn = gapEnd - markerEnd >= 5 ? markerEnd + 1 : gapEnd;
-		const innerQuote = quoteMarkersOf(rest.slice(list[0].length));
-		return { prefix: quote + ' '.repeat(contentColumn) + innerQuote, hasTextBefore: true };
+	const item = listItemOf(rest);
+	if (item) {
+		const innerQuote = quoteMarkersOf(rest.slice(item.length));
+		return { prefix: quote + ' '.repeat(item.contentColumn) + innerQuote, hasTextBefore: true };
 	}
 	const indent = /^[ \t]*/.exec(rest)![0];
 	return { prefix: quote + ' '.repeat(columnAfter(indent)), hasTextBefore: rest.length > indent.length };
