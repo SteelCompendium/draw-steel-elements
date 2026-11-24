@@ -3709,6 +3709,17 @@ const HOSTLEAK_MODAL_SCENARIOS = [
 		},
 	},
 	{
+		id: 'MontageRemoveHeroModal',
+		modal: 'MontageRemoveHeroModal',
+		title: /^Remove a hero$/,
+		// The hero chips are bare `.dse-optchip` buttons; Remove is the danger button.
+		mustHave: ['dse-optchip', 'dse-btn--ghost', 'dse-btn--danger'],
+		query: { element: 'montage', fixture: 'mid', prefs: 'authoringControls:true' },
+		open: async (page) => {
+			await page.evaluate(() => document.querySelector('[data-dse-chrome-item="montage-remove-hero"]').click());
+		},
+	},
+	{
 		id: 'MontageSetLimitsModal',
 		modal: 'MontageSetLimitsModal',
 		title: /^Set limits…$/,
