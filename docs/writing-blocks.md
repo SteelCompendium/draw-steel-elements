@@ -40,7 +40,7 @@ properties…"*). Move the cursor to a line outside the block or below the prope
 command again. This holds for the insert commands, for the compendium reference and full block commands
 (they say so before the search opens) and for picking something from the `/ds` list. The start of the
 block's opening line and the end of its closing line count as outside: there the new block lands above
-or below the existing one.
+or below the existing one. With several cursors, one of them inside a block or the properties is enough to refuse.
 
 ## Autocomplete inside a block
 

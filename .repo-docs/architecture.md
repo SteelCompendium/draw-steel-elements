@@ -519,13 +519,15 @@ free, derived from `def.schema`/`def.authoring`.
   lags the editor) that sees backtick and tilde fences of any language, quoted and list-indented ones
   (the indentation `planBlockInsert` writes; a fence 4+ columns past the item's text column, or at the top
   level, is an indented code block and no fence), an unclosed fence to the end of the note, and the
-  properties as Obsidian's editor reads them (line 0 exactly `---` up to the first `---` line; unclosed =
-  to the end of the note). Before the marker of an opening line and at the end of a closing line the
+  properties as Obsidian's editor reads them (line 0 exactly `---` up to the first later line of `---` and
+  whitespace; only a CLOSED pair counts, an unclosed line-0 `---` refuses nothing, O8). Inside a quoted fence
+  a line without the `>` prefix ends the fence only when it is blank or an unquoted fence line (measured);
+  with several cursors any selection range with an end inside refuses. Before the marker of an opening line and at the end of a closing line the
   block lands above / below and is allowed. The two compendium commands also check when they start,
   before the search opens. `/ds` suppresses itself inside any already-open fence (`fenceScan.ts`'s
   top-down `scanFenceState`, shared with the in-fence suggester below), but that scan does not see
   list-indented fences, the properties or an opening line (SC-676): a `/ds` pick there reaches
-  `insertBlock` and is refused at the write.
+  `insertBlock` and is refused at the write (the pick path then closes the list, so a second Enter shows no second Notice).
 - **In-fence autocomplete** (`schemaSuggest.ts`): key/enum completion inside an open `ds-*`
   fence only, top-level keys only (an indented line suppresses suggestion, never resolves
   against the wrong scope). Schema shapes (`allOf`/`$ref` resolved against the same
