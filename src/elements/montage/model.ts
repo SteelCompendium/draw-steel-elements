@@ -731,6 +731,51 @@ export function addMontageHero(m: MontageModel, name: string): void {
 	else m.participants = list === undefined ? [hero] : [list, hero];
 }
 
+/** SC-690 — what "Remove a hero" does to the hero called `name`, as numbers a window can say before it is pressed. `actions` is how
+ *  many logged actions go with the hero (all of them with that hero's name, the ones the board hides included: a second action for
+ *  one hero and round counts in the stored tally, and would come back to life under a hero added later with the same name).
+ *  `shared` is the same count when another hero of that name stays on the board: that name keeps its row, so nothing is removed. Both
+ *  are 0 for a name that is not on the board. */
+export interface MontageHeroRemoval {
+	actions: number;
+	shared: number;
+}
+
+export function montageHeroRemoval(m: MontageModel, name: string): MontageHeroRemoval {
+	const rows = montageRoster(m).filter((h) => h.name === name).length;
+	if (rows === 0) return { actions: 0, shared: 0 };
+	const logged = (m.entries ?? []).filter((e) => e.hero === name).length;
+	return rows > 1 ? { actions: 0, shared: logged } : { actions: logged, shared: 0 };
+}
+
+/** ⋯ "Remove a hero" (SC-690) — takes the FIRST hero called `name` off the board and returns true; false (nothing touched) when no hero
+ *  has that name. The name is matched exactly, the way the board matches an action to a row (BoardView `entriesForHero`).
+ *
+ *  Only that one item leaves `participants` (a bare or malformed item the board skips stays as typed, in its place); when it was the
+ *  last item the key goes, as an empty list does at parse (§B.5). Unless another hero of the same name is still on the board, the hero's
+ *  logged actions go too, each through the delta `removeMontageEntry` applies, so a tally that no action moved is not re-typed
+ *  (SC-628); the hero's `skills_used` left with the hero, so there is no skill to take back. `entries` goes back to absent once empty.
+ *  Nothing else changes: rounds, the round in play, limits, title and description stay, so a montage that a limit had completed may be
+ *  live again (as after Undo). */
+export function removeMontageHero(m: MontageModel, name: string): boolean {
+	const list = m.participants;
+	if (!Array.isArray(list)) return false;
+	const at = list.findIndex((item) => isHero(item) && item.name === name);
+	if (at === -1) return false;
+	const { actions } = montageHeroRemoval(m, name);
+	list.splice(at, 1);
+	if (list.length === 0) delete m.participants;
+	if (actions > 0) {
+		const kept: MontageEntry[] = [];
+		for (const entry of m.entries ?? []) {
+			if (entry.hero === name) applyTallyDelta(m, entry.result, -1);
+			else kept.push(entry);
+		}
+		m.entries = kept.length > 0 ? kept : undefined;
+	}
+	return true;
+}
+
 /** ⋯ "Set limits…" — the Director-set success/failure limits. Negative input is
  *  clamped to 0 (the schema's own "unset" convention, montageOutcome's `> 0` guard). */
 export function setMontageLimits(m: MontageModel, successLimit: number, failureLimit: number): void {
