@@ -19,12 +19,16 @@ import {
 	openEditor,
 	palette,
 	paletteRows,
+	pressList,
 	savedText,
 	scaffoldOf,
+	setCursor,
 	spliced,
 	toReading,
 	typeKeys,
 	underPrefix,
+	waitList,
+	waitNoList,
 	waitNotice,
 	type EditMode,
 	type Pos,
@@ -294,6 +298,97 @@ describe('insert commands refuse inside an existing block or the properties (SC-
 		expect((await editorState()).value).toBe(typed);
 		await browser.keys(['Control', 'z']);
 		await dse.waitFor(`app.workspace.getMostRecentLeaf().view.editor.getValue() === ${JSON.stringify(STAM_NOTE)}`, 'one undo to take the typed character back');
+	});
+});
+
+describe('insert commands: the r3 fixes of SC-687', () => {
+	const VIEW = 'app.workspace.getMostRecentLeaf().view';
+
+	it('[AUTH-I36] the plugin\'s own insert under a list item does not make the next insert refuse: insert on the empty line under `- item`, then at `tail`: both are written and both draw', async () => {
+		const before = '- item\n\ntail\n';
+		const rel = 'Authoring/chain.md';
+		await openEditor(rel, before, 'live-preview', { line: 1, ch: 0 });
+		await palette('insert-counter', 'Insert Draw Steel: Counter');
+		const ct = scaffoldOf('counter', 'ds-ct');
+		const afterFirst = '- item\n' + ct + '\ntail\n';
+		expect(await savedText(rel)).toBe(afterFirst);
+		await setCursor({ line: afterFirst.split('\n').indexOf('tail'), ch: 4 });
+		await clearNotices();
+		await palette('insert-counter', 'Insert Draw Steel: Counter');
+		expect(await savedText(rel)).toBe(afterFirst + ct + '\n');
+		expect(await noticeTexts()).toEqual([]);
+		await toReading(rel);
+		expect(await drawn('reading')).toEqual({ roots: ['counter', 'counter'], errors: [] });
+		expect(await isReadingParagraph('tail')).toBe(true);
+	});
+
+	it('[AUTH-I37] a real block under a later list item, after a fence under an earlier one: refused, the note unchanged (it used to be written into the block)', async () => {
+		const before = '- item\n```js\nx\n```\n- other\n  ```\n  a: 1\n  ```\ntail\n';
+		const rel = 'Authoring/chain-bare.md';
+		await openEditor(rel, before, 'source', { line: 6, ch: 6 });
+		await clearNotices();
+		await palette('insert-counter', 'Insert Draw Steel: Counter');
+		await expectRefused(rel, before, { line: 6, ch: 6 }, INSIDE_BLOCK);
+	});
+
+	it('[AUTH-I38] a line without the `>` prefix inside a quoted fence is still in the block: refused in a plain quote (Source mode) and in a callout (Live Preview), the note unchanged', async () => {
+		const plain = '> ```js\n> a\nb\n> ```\nafter\n';
+		await openEditor('Authoring/lazy-quote.md', plain, 'source', { line: 2, ch: 1 });
+		await clearNotices();
+		await palette('insert-counter', 'Insert Draw Steel: Counter');
+		await expectRefused('Authoring/lazy-quote.md', plain, { line: 2, ch: 1 }, INSIDE_BLOCK);
+		const callout = '> [!note] T\n> ```js\n> a\nb\n> ```\n\nafter\n';
+		await openEditor('Authoring/lazy-callout.md', callout, 'live-preview', { line: 3, ch: 1 });
+		await clearNotices();
+		await palette('insert-counter', 'Insert Draw Steel: Counter');
+		await expectRefused('Authoring/lazy-callout.md', callout, { line: 3, ch: 1 }, INSIDE_BLOCK);
+	});
+
+	it('[AUTH-I39] two cursors, one inside a block (the main one inside, and the main one outside): refused, one Notice, the note unchanged at both', async () => {
+		const note = 'before\n\n' + STAM_NOTE;
+		const IN = '{ anchor: { line: 4, ch: 0 }, head: { line: 4, ch: 0 } }';
+		const OUT = '{ anchor: { line: 8, ch: 10 }, head: { line: 8, ch: 10 } }';
+		// Obsidian's main selection is the range at index 0 of the array it is given (the main index argument does not move it), and
+		// `getCursor()` answers for it: so the order says which cursor is the main one.
+		for (const [name, ranges, mainLine] of [['main-inside', `[${IN}, ${OUT}]`, 4], ['main-outside', `[${OUT}, ${IN}]`, 8]] as const) {
+			const rel = `Authoring/multi-${name}.md`;
+			await openEditor(rel, note, 'source', { line: 0, ch: 0 });
+			await ev(`(() => { ${VIEW}.editor.setSelections(${ranges}, 0); ${VIEW}.editor.focus(); return true; })()`);
+			expect(await ev<number>(`${VIEW}.editor.listSelections().length`)).toBe(2);
+			expect((await editorState()).cursor.line).toBe(mainLine);
+			await clearNotices();
+			await palette('insert-counter', 'Insert Draw Steel: Counter');
+			await waitNotice(INSIDE_BLOCK);
+			expect((await noticeTexts()).filter((t) => t.includes('nothing was inserted'))).toEqual([INSIDE_BLOCK]);
+			expect(await savedText(rel)).toBe(note);
+			expect(await ev<number>(`${VIEW}.editor.listSelections().length`)).toBe(2);
+		}
+	});
+
+	it('[AUTH-I40] a `/ds` pick refused in the properties closes the list: one Notice, no row left on screen, the typed token stays', async () => {
+		const before = '---\ntags: a\n\n---\nbody\n';
+		const rel = 'Authoring/ds-refused.md';
+		await openEditor(rel, before, 'source', { line: 2, ch: 0 });
+		await clearNotices();
+		await typeKeys('/dscounter', 'authoring.ds.trigger');
+		await waitList(1);
+		await pressList('Enter');
+		await waitNotice(INSIDE_PROPERTIES);
+		await waitNoList();
+		expect((await noticeTexts()).filter((t) => t.includes('nothing was inserted'))).toEqual([INSIDE_PROPERTIES]);
+		expect(await savedText(rel)).toBe('---\ntags: a\n/dscounter\n---\nbody\n');
+	});
+
+	it('[AUTH-I41] a line-0 `---` that is never closed is not properties: the insert below it is written and Reading view draws the block', async () => {
+		const before = '---\na: 1\n\nafter\n';
+		const rel = 'Authoring/unclosed.md';
+		await openEditor(rel, before, 'source', { line: 2, ch: 0 });
+		await clearNotices();
+		await palette('insert-counter', 'Insert Draw Steel: Counter');
+		expect(await savedText(rel)).toBe(spliced(before, { line: 2, ch: 0 }, undefined, scaffoldOf('counter', 'ds-ct')));
+		expect(await noticeTexts()).toEqual([]);
+		await toReading(rel);
+		expect(await drawn('reading')).toEqual({ roots: ['counter'], errors: [] });
 	});
 });
 
