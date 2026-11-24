@@ -5846,18 +5846,23 @@ Shared globals
 }
 /* SC-690 — the "Remove a hero" window: one full-width chip per hero (the Result chips' pressed grammar, `.dse-optchip`), stacked. The
    picked hero is marked by the accent border AND a check that only it shows, so the choice never rests on colour alone. A long name wraps
-   inside the chip rather than clipping or widening the window; the check's slot stays reserved on the others so nothing shifts on a pick. */
+   inside the chip rather than clipping or widening the window; the check's slot stays reserved on the others so nothing shifts on a pick.
+   Three classes deep on purpose: the host re-grounding of `.dse-optchip` further down (section E of SC-203's block) is (0,2,0) and fixes a
+   30px `height` and a centred label, which would cut a two-line name and centre the names; `min-height` keeps the 30px chip for a short one. */
 .dse-mt__sheet-herolist {
 	display: flex;
 	flex-direction: column;
 	gap: 0.35em;
 	margin-bottom: 0.6em;
 }
-.dse-mt__sheet-herochip {
+.dse-modal .dse-mt__sheet-herolist .dse-mt__sheet-herochip {
 	display: flex;
 	align-items: center;
+	justify-content: flex-start;
 	gap: 0.5em;
 	width: 100%;
+	height: auto;
+	min-height: var(--input-height, 30px);
 	box-sizing: border-box;
 	text-align: left;
 	white-space: normal;
