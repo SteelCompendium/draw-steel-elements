@@ -106,6 +106,8 @@ describe('SC-687 scan: a fence under a list item is inside, in every shape planB
 		['a fence at the OUTER item\'s column under a nested item', '- a\n  - b\n  ```js\n  x\n  ```\ntail|', null],
 		['a fence indented 1, less than the item\'s 2', '- item\n ```js\n a\n ```\ntail|', null],
 		['a heading, then a fence, under an item', '- item\n# H\n```js\nx\n```\nafter|', null],
+		['a heading ends the item (not a lazy continuation): a block indented 4 below it is an indented code block', '- item\n# H\n    ```ds-ct\n    x|\n    ```', null],
+		['a thematic break ends the item too', '- item\n***\n    ```ds-ct\n    x|\n    ```', null],
 		['two fences after an item: the second one\'s body is inside', '- item\n```js\nx\n```\n```js\ny|\n```', 'block'],
 		['a bare block under a later item after a fence under an earlier one (the reviewer\'s U1): its body is inside', '- item\n```js\nx\n```\n- other\n  ```\n  a: 1|\n  ```\ntail', 'block'],
 		['...and the line after that block is outside', '- item\n```js\nx\n```\n- other\n  ```\n  a: 1\n  ```\ntail|', null],
