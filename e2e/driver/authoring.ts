@@ -140,6 +140,29 @@ export async function drawn(where: 'live-preview' | 'reading'): Promise<{ roots:
 	})()`);
 }
 
+// ------------------------------------------------------------------------------------------- notices
+
+/** Take every Notice off the screen (a Notice from an earlier test lives for a few seconds), so a count after the action is only its own. */
+export async function clearNotices(): Promise<void> {
+	await ev(`(() => { document.querySelectorAll('.notice-container .notice').forEach((n) => n.remove()); return true; })()`);
+}
+
+/** The text of every Notice on screen that is really displayed (it has a size). */
+export const noticeTexts = (): Promise<string[]> =>
+	ev(`Array.from(document.querySelectorAll('.notice-container .notice')).filter((n) => n.getBoundingClientRect().width > 0 && n.getBoundingClientRect().height > 0).map((n) => n.textContent)`);
+
+/** Wait until a Notice with exactly this text is on screen. */
+export const waitNotice = (text: string): Promise<void> =>
+	waitFor(`Array.from(document.querySelectorAll('.notice-container .notice')).some((n) => n.textContent === ${JSON.stringify(text)} && n.getBoundingClientRect().width > 0)`, `the Notice "${text}"`);
+
+/** In Live Preview: is a line with exactly this text drawn as a paragraph line (and not as a line of a code block)? */
+export const isParagraphLine = (text: string): Promise<boolean> =>
+	ev(`(() => { const ls = Array.from(document.querySelectorAll('.workspace-leaf.mod-active .cm-content .cm-line')).filter((l) => l.textContent === ${JSON.stringify(text)}); return ls.length > 0 && ls.every((l) => !/codeblock/i.test(l.className)); })()`);
+
+/** In Reading view: is there a paragraph with exactly this text, and no code block that holds it? */
+export const isReadingParagraph = (text: string): Promise<boolean> =>
+	ev(`(() => { const root = document.querySelector('.workspace-leaf.mod-active .markdown-reading-view'); return Array.from(root.querySelectorAll('p')).some((p) => p.textContent === ${JSON.stringify(text)}) && !Array.from(root.querySelectorAll('pre')).some((p) => p.textContent.includes(${JSON.stringify(text)})); })()`);
+
 // ------------------------------------------------------------------------------- the command palette
 
 /**
