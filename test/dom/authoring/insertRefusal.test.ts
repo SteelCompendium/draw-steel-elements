@@ -139,15 +139,26 @@ describe('SC-687: the other three insert paths', () => {
 	});
 
 	describe('the /ds pick', () => {
-		const pick = (note: string, at: { line: number; ch: number }, token: string): { editor: CmEditor; notices: string[] } => {
+		const pick = (note: string, at: { line: number; ch: number }, token: string): { editor: CmEditor; notices: string[]; closed: number } => {
 			const editor = new CmEditor(note, at);
 			const s = new DsElementSuggest(new App() as never, registry());
 			const end = editor.getCursor('head');
 			s.context = { editor: editor as never, file: null as never, start: { line: end.line, ch: end.ch - token.length }, end, query: token.slice(3) };
+			const close = jest.spyOn(s, 'close');
 			const told = Notice.notices.length;
 			s.selectSuggestion(COUNTER(), null as never);
-			return { editor, notices: noticesSince(told) };
+			return { editor, notices: noticesSince(told), closed: close.mock.calls.length };
 		};
+
+		test('a refused pick closes the suggestion list (a second Enter must not show a second Notice); the token stays as typed', () => {
+			const note = '---\ntags: /dsct\n---\nbody';
+			const refused = pick(note, { line: 1, ch: 10 }, '/dsct');
+			expect(refused.closed).toBe(1);
+			expect(refused.editor.getValue()).toBe(note);
+			expect(refused.notices).toEqual([PROPERTIES_NOTICE]);
+			// a pick that writes leaves closing to Obsidian, as before
+			expect(pick('/dsct', { line: 0, ch: 5 }, '/dsct').closed).toBe(0);
+		});
 
 		test('typed inside a block the suggester did not see (a block indented under a list item: SC-676): refused, the typed token stays as typed', () => {
 			const note = '- item\n  ```ds-ct\n  name: /dsct\n  ```\n';
@@ -337,6 +348,46 @@ describe('SC-687 r3: the plugin\'s own insert under a list item does not make th
 		expect(insertScaffold(editor as never, COUNTER())).toBe(false);
 		expect(editor.getValue()).toBe(note);
 		expect(noticesSince(told)).toEqual([BLOCK_NOTICE]);
+	});
+});
+
+describe('SC-687 r3: several cursors', () => {
+	const note = 'before\n\n' + STAM;
+	const INSIDE = { line: 4, ch: 0 }; // the empty line inside the block
+	const OUTSIDE = { line: 8, ch: 10 }; // the end of `after text`
+
+	test.each([
+		['the main cursor inside, the other outside', 0],
+		['the main cursor outside, the other inside (the reviewer\'s case: the write used to go into the block)', 1],
+	])('%s: refused, one Notice, nothing written at either cursor', (_name, main) => {
+		const editor = new CmEditor(note);
+		editor.setSelections([{ anchor: INSIDE }, { anchor: OUTSIDE }], main === 0 ? 0 : 1); // index 0 is the cursor inside, 1 the one outside
+		expect(editor.getCursor('head')).toEqual(main === 0 ? INSIDE : OUTSIDE);
+		expect(editor.getLine(INSIDE.line)).toBe('');
+		const before = { value: editor.getValue(), sel: editor.listSelections() };
+		const told = Notice.notices.length;
+		expect(insertScaffold(editor as never, COUNTER())).toBe(false);
+		expect(editor.getValue()).toBe(before.value);
+		expect(editor.listSelections()).toEqual(before.sel);
+		expect(editor.writes).toHaveLength(0);
+		expect(noticesSince(told)).toEqual([BLOCK_NOTICE]);
+	});
+
+	test('a selection range with its anchor inside and its head outside refuses too', () => {
+		const editor = new CmEditor(note);
+		editor.setSelections([{ anchor: { line: 0, ch: 0 } }, { anchor: { line: 3, ch: 2 }, head: { line: 7, ch: 0 } }], 0);
+		expect(insertScaffold(editor as never, COUNTER())).toBe(false);
+		expect(editor.writes).toHaveLength(0);
+	});
+
+	test('both cursors outside: written exactly as before (one replaceSelection that writes at each cursor)', () => {
+		const editor = new CmEditor('abc\n\nxyz\n');
+		editor.setSelections([{ anchor: { line: 1, ch: 0 } }, { anchor: { line: 3, ch: 0 } }], 1);
+		const told = Notice.notices.length;
+		expect(insertScaffold(editor as never, COUNTER())).toBe(true);
+		expect(noticesSince(told)).toEqual([]);
+		expect(editor.writes).toHaveLength(1);
+		expect(editor.getValue()).toBe('abc\n' + CT() + '\nxyz\n' + CT());
 	});
 });
 

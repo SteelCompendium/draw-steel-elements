@@ -115,13 +115,20 @@ export const INSERT_REFUSED_NOTICE: Record<InsertRefusal, string> = {
 
 /**
  * SC-687 — why an insert at the cursor (or over the selection, or over `range`, the /ds pick's typed token) would be refused, or null when it
- * may go ahead: the write would land inside an existing fenced block or the note's properties (`insertRefusal`, fenceScan.ts). Reads the
+ * may go ahead: the write would land inside an existing fenced block or the note's properties (`insertRefusal`, fenceScan.ts), at any of the
+ * editor's cursors / selections when there are several. Reads the
  * editor's text, never the metadata cache (it lags the editor: a block typed a second ago is not in it). Shows nothing.
  */
 export function insertRefusalFor(editor: Editor, range?: { start: EditorPosition; end: EditorPosition }): InsertRefusal | null {
 	const lines: string[] = [];
 	for (let i = 0, n = editor.lineCount(); i < n; i++) lines.push(editor.getLine(i));
-	return insertRefusal(lines, range?.start ?? editor.getCursor('from'), range?.end ?? editor.getCursor('to'));
+	if (range) return insertRefusal(lines, range.start, range.end);
+	// Without a range the write goes over EVERY selection range (`replaceSelection` writes at each cursor), so any range with an end inside refuses.
+	for (const { anchor, head } of editor.listSelections()) {
+		const why = insertRefusal(lines, anchor, head);
+		if (why !== null) return why;
+	}
+	return null;
 }
 
 /**

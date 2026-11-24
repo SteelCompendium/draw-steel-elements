@@ -66,6 +66,8 @@ export class DsElementSuggest extends EditorSuggest<ElementDefinition> {
 		if (!this.context) return;
 		const { editor, start, end } = this.context;
 		// SC-675: the block gets its own lines (text before / after the token stays on separate lines, every line carries the list / callout prefix).
-		insertBlock(editor, buildScaffold(def), { start, end });
+		// SC-687: a refused pick (inside a block or the properties, where this list should not have been offered, SC-676) shows its Notice once and
+		// closes the list, so a second Enter does not show a second one; the typed token stays as typed.
+		if (!insertBlock(editor, buildScaffold(def), { start, end })) this.close();
 	}
 }

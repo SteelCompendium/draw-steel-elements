@@ -11,7 +11,8 @@ export class CmEditor {
 	readonly writes: Array<{ via: 'replaceSelection' | 'replaceRange'; text: string; from: number; to: number }> = [];
 
 	constructor(text: string, cursor: EditorPosition = { line: 0, ch: 0 }, selectionTo?: EditorPosition) {
-		this.state = EditorState.create({ doc: text, selection: EditorSelection.single(0) });
+		// Obsidian's editor allows several cursors (`listSelections`, `setSelections`); the facet is what keeps CodeMirror from collapsing them.
+		this.state = EditorState.create({ doc: text, selection: EditorSelection.single(0), extensions: [EditorState.allowMultipleSelections.of(true)] });
 		this.state = this.state.update({
 			selection: selectionTo ? EditorSelection.single(this.offset(cursor), this.offset(selectionTo)) : EditorSelection.cursor(this.offset(cursor)),
 		}).state;
@@ -35,6 +36,18 @@ export class CmEditor {
 	}
 	getValue(): string {
 		return this.state.doc.toString();
+	}
+	listSelections(): Array<{ anchor: EditorPosition; head: EditorPosition }> {
+		return this.state.selection.ranges.map((r) => ({ anchor: this.pos(r.anchor), head: this.pos(r.head) }));
+	}
+	/** Several cursors / selections at once (Obsidian's multiple cursors); the last one is the main one when `main` is not given. */
+	setSelections(ranges: Array<{ anchor: EditorPosition; head?: EditorPosition }>, main = ranges.length - 1): void {
+		this.state = this.state.update({
+			selection: EditorSelection.create(
+				ranges.map((r) => EditorSelection.range(this.offset(r.anchor), this.offset(r.head ?? r.anchor))),
+				main,
+			),
+		}).state;
 	}
 	getCursor(side: 'from' | 'to' | 'head' | 'anchor' = 'head'): EditorPosition {
 		const r = this.state.selection.main;

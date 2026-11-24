@@ -535,6 +535,10 @@ export class Editor {
 	getCursor(_side?: 'from' | 'to' | 'head' | 'anchor'): EditorPosition {
 		return this.cursor;
 	}
+	/** SC-687: the real Editor's `listSelections()`; the mock holds one cursor, so one empty range. */
+	listSelections(): Array<{ anchor: EditorPosition; head: EditorPosition }> {
+		return [{ anchor: this.cursor, head: this.cursor }];
+	}
 	setCursor(pos: EditorPosition): void {
 		this.setCursorCalls.push(pos);
 		this.cursor = pos;

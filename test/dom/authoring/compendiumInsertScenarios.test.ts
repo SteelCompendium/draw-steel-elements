@@ -31,6 +31,7 @@ function fakeEditor(): Editor & { written: string } {
 		getCursor: () => ({ line: 0, ch: 0 }),
 		getLine: () => '',
 		lineCount: () => 1,
+		listSelections: () => [{ anchor: { line: 0, ch: 0 }, head: { line: 0, ch: 0 } }],
 		replaceSelection(text: string) {
 			(editor as { written: string }).written += text;
 		},
