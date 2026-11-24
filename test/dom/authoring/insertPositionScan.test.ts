@@ -53,6 +53,21 @@ describe('SC-687 scan: a fence in a callout / quote is inside (verdict 2)', () =
 		['text after a callout block, still in the callout', '> ```ds-ct\n> a: 1\n> ```\n> |tail', null],
 		['an unclosed fence in a callout ends with the callout (a blank line)', '> ```ds-ct\n> a: 1\n\nafter|', null],
 		['an unclosed fence in a callout runs to the end of the callout', '> ```ds-ct\n> a: 1\n> still|', 'block'],
+		// r3 (MEDIUM-2), measured in Obsidian 1.14.4 (Live Preview, Source mode, Reading view; plain quote and callout): inside a quoted fence a
+		// non-blank line without the `>` prefix stays in the code (the line after it is still code, and `> ```` still closes it).
+		['an unquoted text line inside a quoted fence stays in the fence', '> ```js\n> a\nb|\n> ```\nafter', 'block'],
+		['...its quoted closer still closes it: the end of that line is the end of the block', '> ```js\n> a\nb\n> ```|\nafter', null],
+		['...and the line after the closer is outside', '> ```js\n> a\nb\n> ```\nafter|', null],
+		['a shallower `>` depth stays in a deeper quoted fence', '> > ```js\n> > a\n> b|\n> > ```\nafter', 'block'],
+		['the same in a callout', '> [!note] T\n> ```js\n> a\nb|\n> ```\n\nafter', 'block'],
+		['an unquoted heading, list item and thematic rule stay in (the views disagree: Reading view ends the fence there, Live Preview and Source mode do not; the scan refuses)', '> ```js\n> a\n# H|\n> b\n> ```', 'block'],
+		['...a list item', '> ```js\n> a\n- item|\n> b\n> ```', 'block'],
+		['...a thematic rule', '> ```js\n> a\n---|\n> b\n> ```', 'block'],
+		['a whitespace-only line ends a quoted fence like an empty one', '> ```js\n> a\n   \nafter|', null],
+		['an unquoted fence line ends the quoted fence and opens a fence of its own: its body is inside', '> ```js\n> a\n```\nafter|', 'block'],
+		['...and the new fence closes at its own closer', '> ```js\n> a\n```\nafter\n```\ntail|', null],
+		['...the quoted closer is body of the new fence', '> ```js\n> a\n```\nafter\n> ```\ntail|', 'block'],
+		['an unquoted tilde line does the same', '> ```js\n> a\n~~~\nafter|', 'block'],
 		['a top-level fence holds a quoted fence-looking line as text', '```js\n> ```\n|\n```', 'block'],
 	];
 	test.each(rows)('%s', (_name, spec, expected) => expect(verdict(spec)).toBe(expected));

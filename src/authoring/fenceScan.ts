@@ -114,11 +114,19 @@ function propertiesOf(lines: readonly string[]): { end: number; closed: boolean 
 	return { end: lines.length - 1, closed: false };
 }
 
+/** A line without the quote prefix of the quoted fence it follows: does it end that fence? (blank, or a fence marker at the left margin) */
+function endsQuotedFence(text: string): boolean {
+	if (text.trim() === '') return true;
+	const run = FENCE_RUN_LINE.exec(text);
+	return run !== null && quoteMarkersOf(text) === '' && columnAfter(run[1]) <= 3;
+}
+
 /**
  * What line `target` of the note (`lines`, one entry per line, no line breaks) is: outside everything, in the properties, or a part of a fenced
  * block, with where the fence marker sits on an opening / closing line. Scans top-down like `scanFenceState`, threading the open fence, plus:
  *   - the properties are skipped over (a fence marker in them is YAML text);
- *   - a fence in a quote (`> ```ds-ct`, any depth) is open while its lines carry the quote prefix: the first line without it ends the fence;
+ *   - a fence in a quote (`> ```ds-ct`, any depth) is open while its lines carry the quote prefix. A line without it ends the fence only when
+ *     it is blank or an unquoted fence marker line (`endsQuotedFence`); any other line stays in the code (measured, see the comment there);
  *   - a fence indented under a list item is seen at any indentation that sits at the item's text column up to 3 columns further (the indent
  *     `planBlockInsert` writes under `- `, `1. `, `10. `, nested bullets, a list item inside a callout), with a stack of the open items'
  *     text columns; 4+ columns past the item (or past nothing, at the top level) is an INDENTED CODE block in CommonMark, where a fence marker
@@ -155,6 +163,15 @@ export function placeOfLine(lines: readonly string[], target: number): LinePlace
 				} else if (i === target) {
 					return { kind: 'fence', role: 'body', lang: open.lang, markerStart: 0, markerEnd: 0 };
 				}
+				continue;
+			}
+			// The line does not carry the fence's quote prefix. Measured (Obsidian 1.14.4, Live Preview, Source mode and Reading view, plain
+			// quote and callout, SC-687 r3): only a blank line, or an unquoted fence marker line (which then opens a fence of its own), ends a
+			// quoted fence. Any other non-blank line stays in the code, text, a shallower `>` depth, `>` alone for an empty line, and a heading,
+			// list item or thematic rule too (there the views disagree: Reading view ends the fence, Live Preview and Source mode do not; the
+			// scan takes the reading that refuses).
+			if (!endsQuotedFence(text)) {
+				if (i === target) return { kind: 'fence', role: 'body', lang: open.lang, markerStart: 0, markerEnd: 0 };
 				continue;
 			}
 			open = null; // the quote the fence was in ended: this line is read fresh, outside it
