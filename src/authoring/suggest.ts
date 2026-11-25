@@ -68,11 +68,15 @@ export class DsElementSuggest extends EditorSuggest<ElementDefinition> {
 		// SC-675: the block gets its own lines (text before / after the token stays on separate lines, every line carries the list / callout prefix).
 		// SC-687: a refused pick (inside a block or the properties, where this list should not have been offered, SC-676) shows its Notice once; the
 		// typed token stays as typed.
-		// SC-682: close the list after EVERY pick, a written one too (measured in Obsidian 1.14.4). Obsidian does not close it after an accept: it keeps
-		// the old row on screen (for Stamina bar and Skills; the context is already gone, so Enter does nothing, and a click is no different), and in
-		// the first few milliseconds a second Enter picks again with the old token range (a second Notice, or a second block written over the first
-		// under a list item). Closing it here makes the next Enter a plain new line. SC-679 did the same for the in-block key / value list.
-		insertBlock(editor, buildScaffold(def), { start, end });
-		this.close();
+		// SC-682: close the list after EVERY pick, a written one too, and even when the write throws (measured in Obsidian 1.14.4). Obsidian does not
+		// close it after an accept: for some blocks, depending on the block and where the token was (Stamina bar and Skills on an empty line, for
+		// example), it keeps the old row on screen, the context is already gone so Enter does nothing, and a click is no different; and just after the
+		// pick a second Enter picks again with the old token range (a second Notice, or a second block written over the first under a list item).
+		// Closing it here makes the next Enter a plain new line. SC-679 did the same for the in-block key / value list.
+		try {
+			insertBlock(editor, buildScaffold(def), { start, end });
+		} finally {
+			this.close();
+		}
 	}
 }
