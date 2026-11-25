@@ -390,6 +390,17 @@ describe('insert commands: the r3 fixes of SC-687', () => {
 		await toReading(rel);
 		expect(await drawn('reading')).toEqual({ roots: ['counter'], errors: [] });
 	});
+
+	it('[AUTH-I42] a tab-indented block under a nested list item (Obsidian\'s default list indentation): refused, the note unchanged, Reading view still draws the counter', async () => {
+		const before = '- a\n\t- b\n\t\t```ds-ct\n\t\tname: x\n\t\tcurrent_value: 1\n\t\t```\ntail\n';
+		const rel = 'Authoring/tab-nested.md';
+		await openEditor(rel, before, 'source', { line: 3, ch: 9 });
+		await clearNotices();
+		await palette('insert-counter', 'Insert Draw Steel: Counter');
+		await expectRefused(rel, before, { line: 3, ch: 9 }, INSIDE_BLOCK);
+		await toReading(rel);
+		expect(await drawn('reading')).toEqual({ roots: ['counter'], errors: [] });
+	});
 });
 
 describe('insert commands, experimental gate OFF (the shipped build)', () => {
