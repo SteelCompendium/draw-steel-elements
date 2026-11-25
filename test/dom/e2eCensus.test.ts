@@ -74,8 +74,8 @@ import { Editor } from '../mocks/obsidian';
 import { loadMdDseFixture, makeCompendiumDeps } from './elements/_refHarness';
 import { counterElement } from '../../src/elements/counter/definition';
 import counterManifest from '../../e2e/manifest/counter';
-import legacyWindowManifest, { VIRTUAL_IDS as LEGACY_VIRTUAL } from '../../e2e/manifest/sync-legacy-window';
-import migrationWindowManifest, { VIRTUAL_IDS as MIGRATION_VIRTUAL } from '../../e2e/manifest/sync-migration-window';
+import legacyWindowManifest, { VIRTUAL_IDS as LEGACY_VIRTUAL, HOST_IDS as LEGACY_HOST } from '../../e2e/manifest/sync-legacy-window';
+import migrationWindowManifest, { VIRTUAL_IDS as MIGRATION_VIRTUAL, HOST_IDS as MIGRATION_HOST } from '../../e2e/manifest/sync-migration-window';
 import syncCommandsManifest, { SYNC_COMMANDS } from '../../e2e/manifest/sync-commands';
 import { LegacyCompendiumModal } from '../../src/views/LegacyCompendiumModal';
 import { CompendiumMigrationModal } from '../../src/views/CompendiumMigrationModal';
@@ -1271,8 +1271,8 @@ describe('SC-441 census: the compendium sync windows, scoped by container, windo
 	// Both windows are scanned by their dialog root (the whole container, not a CSS class): every interactive node inside must carry an id of
 	// the window's manifest. Obsidian's own X and backdrop are not part of the mock (and are host ids in the real-Obsidian census).
 	const ROOT = 'DS Compendium';
-	const legacyIds = new Set(idsOf(legacyWindowManifest).filter((id) => !LEGACY_VIRTUAL.includes(id)));
-	const migrationIds = new Set(idsOf(migrationWindowManifest).filter((id) => !MIGRATION_VIRTUAL.includes(id)));
+	const legacyIds = new Set(idsOf(legacyWindowManifest).filter((id) => !LEGACY_VIRTUAL.includes(id) && !LEGACY_HOST.includes(id)));
+	const migrationIds = new Set(idsOf(migrationWindowManifest).filter((id) => !MIGRATION_VIRTUAL.includes(id) && !MIGRATION_HOST.includes(id)));
 	type Phase = 'preview' | 'running' | 'summary' | 'stopped' | 'error';
 	const PHASES: Phase[] = ['preview', 'running', 'summary', 'stopped', 'error'];
 	/** What a user can press in each phase (the id names the phase; the number in a label never reaches an id). */
@@ -1421,20 +1421,26 @@ describe('SC-441 census: the compendium sync windows, scoped by container, windo
 			...(await Promise.all(PHASES.map(async (p) => stampedIn((await migrationWindow(p)).containerEl)))).flat(),
 		];
 		expect(new Set(drawn)).toEqual(new Set([...legacyIds, ...migrationIds]));
-		expect(LEGACY_VIRTUAL).toEqual(['sync.legacy.dismiss']);
-		expect(MIGRATION_VIRTUAL).toEqual(['migration.preview.dismiss', 'migration.running.dismiss', 'migration.summary.dismiss', 'migration.stopped.dismiss', 'migration.error.dismiss']);
-		for (const id of [...LEGACY_VIRTUAL, ...MIGRATION_VIRTUAL]) expect(drawn).not.toContain(id);
-		// one virtual dismissal per window and phase, each with Escape, the X and a click outside
+		expect(LEGACY_VIRTUAL).toEqual(['sync.legacy.escape', 'sync.legacy.x', 'sync.legacy.backdrop']);
+		expect(MIGRATION_VIRTUAL).toEqual(['preview', 'running', 'summary', 'stopped', 'error'].flatMap((p) => [`migration.${p}.escape`, `migration.${p}.x`, `migration.${p}.backdrop`]));
+		for (const id of [...LEGACY_VIRTUAL, ...MIGRATION_VIRTUAL, ...LEGACY_HOST, ...MIGRATION_HOST]) expect(drawn).not.toContain(id);
+		// one virtual id per window, phase and way out, each with a kind that already exists (no `click:X` / `click:Backdrop`)
 		for (const id of [...LEGACY_VIRTUAL, ...MIGRATION_VIRTUAL]) {
 			const spec = (legacyWindowManifest.controls[id] ?? migrationWindowManifest.controls[id]);
-			expect(spec.kinds).toEqual(['press:Escape', 'click:X', 'click:Backdrop']);
+			expect(spec.kinds).toEqual([id.endsWith('.escape') ? 'press:Escape' : 'click']);
+		}
+		// Obsidian's own X and backdrop: the shared host ids, with the kinds every modal manifest declares
+		for (const m of [legacyWindowManifest, migrationWindowManifest]) {
+			expect(m.controls['modal.close'].kinds).toEqual(['click', 'press:Escape']);
+			expect(m.controls['modal.backdrop'].kinds).toEqual(['click']);
 		}
 	});
 
-	test('every button the windows draw is declared with a click and both keyboard activations (Enter, Space)', () => {
+	test('every button the windows draw is declared with a click and Enter on the focused button, as the other modal manifests do (no Space)', () => {
 		for (const id of [...legacyIds, ...migrationIds]) {
 			const spec = legacyWindowManifest.controls[id] ?? migrationWindowManifest.controls[id];
-			expect(spec.kinds).toEqual(expect.arrayContaining(['click', 'press:Enter', 'press:Space']));
+			expect(spec.kinds).toEqual(expect.arrayContaining(['click', 'press:Enter']));
+			expect(spec.kinds).not.toContain('press:Space');
 		}
 	});
 

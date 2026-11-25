@@ -2,7 +2,7 @@
 // ticket changes no behaviour). Each defect is TWO tests: a plain one that states what the code does today (so the repro is proven to reach the
 // defect, and a later fix breaks it loudly), and a `test.failing` that encodes the CORRECT behaviour and asserts only what any fix must satisfy,
 // never a specific design. When a ticket is fixed: delete the plain test, drop `.failing`.
-// The `[BUG-n]` labels are placeholders until the tracker keys exist (SC-441 rule: the owner files the tickets, the keys replace these labels).
+// Each defect's describe title carries its ticket (SC-441 ledger O13); a fixer flips the pair when the ticket lands.
 // Defects already ticketed and NOT re-reported here: SC-653 (the window offers to trash any non-empty Destination folder, the user's own notes included).
 import { Notice } from '../../mocks/obsidian';
 import { DESTINATION_REFUSED_NOTICE } from '@model/CompendiumDestination';
@@ -30,10 +30,10 @@ afterEach(() => {
 	jest.restoreAllMocks();
 });
 
-// ---------------------------------------------------------------------------------------------------------------- BUG-1 (High)
+// ---------- SC-694 (High)
 // A sync overwrites a compendium file the user edited, with no copy and no warning, whenever its bytes differ from the release (an upstream
 // change, or simply the user's edit): the "installed by us, so safe to update" branch never asks whether the user changed it since.
-describe('[BUG-1] a sync overwrites a compendium file the user edited', () => {
+describe('SC-694 a sync overwrites a compendium file the user edited', () => {
 	async function arrange() {
 		const h = await makeSyncHarness();
 		h.server.publish('v1', { 'class/a.md': 'A1', 'rule/b.md': 'B1' });
@@ -57,10 +57,10 @@ describe('[BUG-1] a sync overwrites a compendium file the user edited', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------------------------------------------- BUG-2 (High)
+// ---------- SC-695 (High)
 // "Move old compendium to trash" trashes the folder BEFORE the release is looked up or downloaded. Offline (or a GitHub outage, a rate limit, a
 // broken release), the user ends with the old compendium in the trash and nothing in its place.
-describe('[BUG-2] "Move old compendium to trash" trashes the folder before the download can fail', () => {
+describe('SC-695 "Move old compendium to trash" trashes the folder before the download can fail', () => {
 	async function arrange() {
 		const h = await makeSyncHarness();
 		h.vault.setText(`${ROOT}/old.md`, 'old compendium file');
@@ -86,10 +86,10 @@ describe('[BUG-2] "Move old compendium to trash" trashes the folder before the d
 	});
 });
 
-// ---------------------------------------------------------------------------------------------------------------- BUG-3 (Medium)
+// ---------- SC-357 (Medium)
 // A migration run holds no busy lock (only Sync and Check do). While one runs, a second "Migrate" command or a Sync opens another migration window
 // on the same folder, and both can be run.
-describe('[BUG-3] a migration run is not busy-locked', () => {
+describe('SC-357 a migration run is not busy-locked', () => {
 	async function arrange() {
 		const h = await makeSyncHarness();
 		seedLegacyTree(h.vault, 25);
@@ -121,10 +121,10 @@ describe('[BUG-3] a migration run is not busy-locked', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------------------------------------------- BUG-4 (Low)
+// ---------- SC-696 (Low)
 // Escape (or the X, or a click outside) in the middle of a run tells the user the compendium was "left as it is, and NOT synced" and records a decline,
 // while files are being moved; the run's own "stopped after moving N" Notice follows.
-describe('[BUG-4] dismissing the migration window mid-run says the compendium was left as it is', () => {
+describe('SC-696 dismissing the migration window mid-run says the compendium was left as it is', () => {
 	async function arrange() {
 		const h = await makeSyncHarness();
 		seedLegacyTree(h.vault, 25);
@@ -154,10 +154,10 @@ describe('[BUG-4] dismissing the migration window mid-run says the compendium wa
 	});
 });
 
-// ---------------------------------------------------------------------------------------------------------------- BUG-5 (Low)
+// ---------- SC-697 (Low)
 // Neither window is closed when the plugin unloads (they are opened with `.open()`, not `openManagedModal(owner, ...)`, although the source comment
 // promises view-unload closes them). After "Disable plugin" the window stays on screen and its buttons still run a sync / a migration.
-describe('[BUG-5] the windows outlive the plugin', () => {
+describe('SC-697 the windows outlive the plugin', () => {
 	async function arrange() {
 		const h = await makeSyncHarness();
 		h.vault.setText(`${ROOT}/old.md`, 'old');
@@ -180,11 +180,11 @@ describe('[BUG-5] the windows outlive the plugin', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------------------------------------------- BUG-6 (Medium)
+// ---------- SC-698 (Medium)
 // With 20+ files at pre-7.0.0 paths whose 7.0.0 paths are ALL already taken (a new-layout copy dropped into the folder by hand, a restored
 // backup), the migration plan is empty. Sync then says "nothing to migrate — no pre-7.0.0 compendium files found." and returns WITHOUT syncing.
 // The next Sync does the same: the plugin can never sync that folder.
-describe('[BUG-6] Sync is a dead end when every legacy file is blocked', () => {
+describe('SC-698 Sync is a dead end when every legacy file is blocked', () => {
 	async function arrange() {
 		const h = await makeSyncHarness();
 		for (const [oldPath, entry] of Object.entries(migrationMap().paths).slice(0, 25)) {
@@ -210,10 +210,10 @@ describe('[BUG-6] Sync is a dead end when every legacy file is blocked', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------------------------------------------- BUG-7 (Low)
+// ---------- SC-699 (Low)
 // A sync that fails part-way (a refused write) has already created files, and the manifest is only written at the end. The next Sync finds a
 // non-empty folder with no manifest and opens "Existing compendium folder found", offering to trash the plugin's OWN half-written tree.
-describe('[BUG-7] a failed sync leaves its own files looking like a foreign folder', () => {
+describe('SC-699 a failed sync leaves its own files looking like a foreign folder', () => {
 	async function arrange() {
 		const h = await makeSyncHarness();
 		h.server.publish('v1', { 'class/a.md': 'A1', 'rule/b.md': 'B1' });
@@ -236,10 +236,10 @@ describe('[BUG-7] a failed sync leaves its own files looking like a foreign fold
 	});
 });
 
-// ---------------------------------------------------------------------------------------------------------------- BUG-8 (Low)
+// ---------- SC-700 (Low)
 // The Destination folder may be the vault's configuration folder or its trash. (Model-based: the jest vault indexes dot-folders; the real
 // Obsidian does not index them, so there the first-sync check cannot even see an existing one.)
-describe('[BUG-8] a Destination of .obsidian or .trash is accepted', () => {
+describe('SC-700 a Destination of .obsidian or .trash is accepted', () => {
 	test.each([['.obsidian'], ['.trash']])('current behaviour: %s is written into', async (dest) => {
 		const h = await makeSyncHarness(dest);
 		h.server.publish('v1', { 'class/a.md': 'A1' });
@@ -256,10 +256,10 @@ describe('[BUG-8] a Destination of .obsidian or .trash is accepted', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------------------------------------------- BUG-9 (Medium)
+// ---------- SC-653 (Medium)
 // Under Obsidian's "Deleted files: Permanently delete", "Move old compendium to trash" deletes the folder for good. The window never says so (it
 // promises the trash), and the plugin cannot tell the setting apart: the wording is the only warning the user gets.
-describe('[BUG-9] the trash button does not warn that Obsidian is set to delete permanently', () => {
+describe('SC-653 the trash button does not warn that Obsidian is set to delete permanently', () => {
 	async function arrange() {
 		const h = await makeSyncHarness();
 		(h.app as unknown as { vault: { getConfig: (key: string) => unknown } }).vault.getConfig = (key: string) => (key === 'trashOption' ? 'none' : undefined);
@@ -286,10 +286,10 @@ describe('[BUG-9] the trash button does not warn that Obsidian is set to delete 
 	});
 });
 
-// ---------------------------------------------------------------------------------------------------------------- BUG-10 (Low)
+// ---------- SC-701 (Low)
 // A folder that holds only EMPTY subfolders (every file deleted, the folders left behind) counts as "already contains files": the first Sync asks
 // the "existing compendium folder" question about a folder with no file in it.
-describe('[BUG-10] empty subfolders make an empty compendium folder "contain files"', () => {
+describe('SC-701 empty subfolders make an empty compendium folder "contain files"', () => {
 	async function arrange() {
 		const h = await makeSyncHarness();
 		for (const folder of [ROOT, `${ROOT}/class`, `${ROOT}/rule`, `${ROOT}/rule/old`]) h.vault.folders.add(folder);
