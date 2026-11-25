@@ -68,9 +68,10 @@ describe('"Existing compendium folder found": every way out', () => {
 // ---------------------------------------------------------------------------------------------- the migration window
 
 type Phase = 'preview' | 'running' | 'summary' | 'stopped' | 'error';
+type CbName = 'run' | 'decline' | 'syncAnyway' | 'finishRemaining' | 'syncAfter' | 'dismissed' | 'failed';
 interface Rig {
 	modal: CompendiumMigrationModal;
-	cb: Record<'run' | 'decline' | 'syncAnyway' | 'finishRemaining' | 'syncAfter' | 'dismissed' | 'failed', jest.Mock>;
+	cb: Record<CbName, jest.Mock>;
 	aborted: () => boolean;
 	finish: (r: MigrationReport) => Promise<void>;
 }
@@ -126,7 +127,7 @@ describe('the migration window: every button, in every phase, fires exactly one 
 		const expected = { ...base };
 		for (const name of Object.keys(fires)) expected[name] = base[name] + 1;
 		expect(counts(rig)).toEqual(expected);
-		for (const [name, args] of Object.entries(fires)) expect(rig.cb[name].mock.calls[rig.cb[name].mock.calls.length - 1]).toEqual(args);
+		for (const [name, args] of Object.entries(fires)) expect(rig.cb[name as CbName].mock.calls[rig.cb[name as CbName].mock.calls.length - 1]).toEqual(args);
 		if (phase !== 'preview' || id !== 'migration.preview.move') {
 			expect(document.body.contains(rig.modal.containerEl)).toBe(false);
 			// a second way out after the answer fires nothing more
@@ -166,7 +167,7 @@ describe('the migration window: Escape and the X, in every phase', () => {
 		leave(rig, way);
 		expect(counts(rig)).toEqual(EXPECTED[phase]);
 		// never a sync, never a decline written by the window itself, never "finish"
-		for (const never of ['syncAnyway', 'syncAfter', 'finishRemaining', 'decline']) expect(rig.cb[never]).not.toHaveBeenCalled();
+		for (const never of ['syncAnyway', 'syncAfter', 'finishRemaining', 'decline'] as CbName[]) expect(rig.cb[never]).not.toHaveBeenCalled();
 		// the argument says WHICH dismissal it was
 		if (phase === 'preview') expect(rig.cb.dismissed).toHaveBeenCalledWith(null);
 		if (phase === 'summary') expect(rig.cb.dismissed).toHaveBeenCalledWith(report(false));
@@ -186,7 +187,7 @@ describe('the migration window: Escape and the X, in every phase', () => {
 		expect(rig.aborted()).toBe(true);
 		await rig.finish(report(true));
 		expect(rig.cb.dismissed).toHaveBeenLastCalledWith(report(true));
-		for (const never of ['syncAnyway', 'syncAfter', 'finishRemaining', 'decline']) expect(rig.cb[never]).not.toHaveBeenCalled();
+		for (const never of ['syncAnyway', 'syncAfter', 'finishRemaining', 'decline'] as CbName[]) expect(rig.cb[never]).not.toHaveBeenCalled();
 	});
 
 	test('a run that throws after the window was dismissed still reports through `failed`, once, and never through a sync', async () => {
@@ -202,7 +203,7 @@ describe('the migration window: Escape and the X, in every phase', () => {
 		rejectRun(new Error('late failure'));
 		await settle();
 		expect(cb.failed).toHaveBeenCalledTimes(1);
-		for (const never of ['syncAnyway', 'syncAfter', 'finishRemaining', 'decline']) expect(cb[never as keyof typeof cb]).not.toHaveBeenCalled();
+		for (const never of ['syncAnyway', 'syncAfter', 'finishRemaining', 'decline'] as const) expect(cb[never]).not.toHaveBeenCalled();
 	});
 });
 
