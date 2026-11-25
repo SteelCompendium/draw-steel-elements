@@ -67,7 +67,7 @@ describe('/ds suggest: accept', () => {
 		await typeKeys('/dsfb', TRIGGER);
 		expect((await waitList(1)).map((r) => r.text)).toEqual([rowText('featureblock')]);
 		await clickRow(ITEM, 0);
-		await waitNoList();
+		await expectNoList();
 		expect(await savedText(rel)).toBe(spliced(BEFORE, AT, undefined, scaffoldOf('featureblock', 'ds-fb')));
 		expect((await editorState()).cursor).toEqual({ line: 3, ch: 0 });
 		await toReading(rel);

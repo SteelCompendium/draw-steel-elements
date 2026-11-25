@@ -11,6 +11,7 @@ import {
 	closeList,
 	drawn,
 	editorState,
+	expectNoList,
 	insertCommandIds,
 	isParagraphLine,
 	isReadingParagraph,
@@ -28,7 +29,6 @@ import {
 	typeKeys,
 	underPrefix,
 	waitList,
-	waitNoList,
 	waitNotice,
 	type EditMode,
 	type Pos,
@@ -374,7 +374,7 @@ describe('insert commands: the r3 fixes of SC-687', () => {
 		await waitList(1);
 		await pressList('Enter');
 		await waitNotice(INSIDE_PROPERTIES);
-		await waitNoList();
+		await expectNoList();
 		expect((await noticeTexts()).filter((t) => t.includes('nothing was inserted'))).toEqual([INSIDE_PROPERTIES]);
 		expect(await savedText(rel)).toBe('---\ntags: a\n/dscounter\n---\nbody\n');
 	});
