@@ -156,3 +156,51 @@ describe('selectSuggestion writes the scaffold over the /ds token and touches no
 		expect(editor.writes[0]).toMatchObject({ via: 'replaceRange', from: start, to: end, text: indented });
 	});
 });
+
+// SC-682: after ANY pick the list is closed (Obsidian keeps a list open after an accept unless the suggester closes it, and the next Enter
+// then lands on the stale row: nothing, a second Notice, or a second pick written with the old token range).
+describe('selectSuggestion closes the list exactly once, whether the pick wrote or was refused (SC-682)', () => {
+	function pickAndCountCloses(doc: string, token: string): { editor: CmEditor; closed: number; before: string } {
+		const lines = doc.split('\n');
+		const line = lines.findIndex((l) => l.includes(token));
+		const start = { line, ch: lines[line].indexOf(token) };
+		const end = { line, ch: start.ch + token.length };
+		const editor = new CmEditor(doc, end);
+		const s = make();
+		s.context = { editor: editor as never, file: null as never, start, end, query: token.slice(3) };
+		const close = jest.spyOn(s, 'close');
+		const before = editor.getValue();
+		s.selectSuggestion(registry().get('counter')!, null as never);
+		return { editor, closed: close.mock.calls.length, before };
+	}
+
+	test.each([
+		['the middle of a note', 'above\n/dsct\nbelow\n'],
+		['a token with nothing around it', '/dsct'],
+		['a list item', '- first\n- /dsct\n'],
+		['a callout', '> [!note] T\n> /dsct\n'],
+		['a note with a closed block above', '```ds-counter\nname: x\n```\n/dsct\n'],
+	])('a pick that writes (%s): close() is called once, and the block is in the note', (_name, doc) => {
+		const { editor, closed, before } = pickAndCountCloses(doc, '/dsct');
+		expect(editor.writes).toHaveLength(1);
+		expect(editor.getValue()).not.toBe(before);
+		expect(closed).toBe(1);
+	});
+
+	test.each([
+		['inside the note\'s properties', '---\ntags: /dsct\n---\nbody\n'],
+		['inside a block under a list item, which the fence scan does not see (SC-676)', '- item\n  ```ds-ct\n  name: /dsct\n  ```\n'],
+	])('a refused pick (%s): close() is called once, and the note is unchanged', (_name, doc) => {
+		const { editor, closed, before } = pickAndCountCloses(doc, '/dsct');
+		expect(editor.writes).toHaveLength(0);
+		expect(editor.getValue()).toBe(before);
+		expect(closed).toBe(1);
+	});
+
+	test('a pick with no context (the list was already closed) writes nothing and closes nothing', () => {
+		const s = make();
+		const close = jest.spyOn(s, 'close');
+		s.selectSuggestion(registry().get('counter')!, null as never);
+		expect(close).not.toHaveBeenCalled();
+	});
+});

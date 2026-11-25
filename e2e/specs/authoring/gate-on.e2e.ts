@@ -10,7 +10,7 @@ import * as yaml from 'js-yaml';
 import { dse, knownBug } from '../../driver/dse';
 import { scanFences } from '../../driver/noteFences';
 import {
-	clickRow, closeList, drawn, editorState, insertCommandIds, listRows, openEditor, paletteRows, pressList, savedText, scaffoldOf, selectedListRow, spliced, toReading, typeKeys, waitList, waitNoList,
+	clickRow, closeList, drawn, editorState, expectNoList, insertCommandIds, listRows, openEditor, paletteRows, pressList, savedText, scaffoldOf, selectedListRow, spliced, toReading, typeKeys, waitList, waitNoList,
 } from '../../driver/authoring';
 import { advertised, commandTrip, CURSOR, NOTE_BEFORE } from '../../driver/authoringTrips';
 
@@ -41,7 +41,7 @@ describe('authoring with the experimental gate on', () => {
 		await typeKeys('roll');
 		expect((await waitList(1)).map((r) => r.text)).toEqual(['Rollds-roll']);
 		await pressList('Enter');
-		await closeList(); // the key list of the new ds-roll block opens over its first line
+		await expectNoList(); // SC-682: the pick closes the list; no key list opens over the new ds-roll block, and no Escape is sent
 		expect(await savedText(rel)).toBe(spliced(NOTE_BEFORE, CURSOR, undefined, scaffoldOf('roll', 'ds-roll')));
 		await toReading(rel);
 		expect(await drawn('reading')).toEqual({ roots: ['roll'], errors: [] });

@@ -247,12 +247,27 @@ export async function waitNoList(): Promise<void> {
 }
 
 /**
- * After an accept: Obsidian re-runs the triggers at the new cursor, so a list can be open again (the key list over a freshly inserted block, the
- * accepted key offered once more). Dismiss it with a raw Escape (a page key, no coverage credited), then wait until it is gone.
+ * Assert that NO suggestion row is on screen right now and that none shows up during the next `settleMs` (read every 100 ms). It sends no key
+ * and does not wait for a list to go away: a list that is still up on the first read, or that comes back, fails it. This is the check for
+ * "the pick closed the list" (SC-682): `closeList()` after a pick would hide a list that stays up.
+ */
+export async function expectNoList(settleMs = 500): Promise<void> {
+	const until = Date.now() + settleMs;
+	for (;;) {
+		const rows = await listRows();
+		if (rows.length > 0) throw new Error(`a suggestion list is on screen: ${JSON.stringify(rows.map((r) => [r.id, r.text]))}`);
+		if (Date.now() >= until) return;
+		await browser.pause(100);
+	}
+}
+
+/**
+ * Dismiss whatever list is open after the test typed or accepted something inside a block (Obsidian re-runs the triggers at the new cursor, so
+ * the in-block key list can be up over the typed word). A raw Escape (a page key, no coverage credited), then wait until it is gone.
+ * NOT for a `/ds` pick: that pick closes its list (SC-682), so a spec asserts `expectNoList()` there and sends no Escape.
  */
 export async function closeList(): Promise<void> {
-	// The re-trigger runs on the editor's next update, not inside the accept: give the list up to a second to show (it does not for an element
-	// without a schema), then dismiss whatever is open. Without this wait a following Enter would accept the late list instead of adding a line.
+	// The re-trigger runs on the editor's next update, not inside the accept: give the list up to a second to show (it does not always), then dismiss whatever is open. Without this wait a following Enter would accept the late list instead of adding a line.
 	await browser
 		.waitUntil(async () => (await listRows()).length > 0, { timeout: 1000, interval: 50 })
 		.catch(() => undefined);

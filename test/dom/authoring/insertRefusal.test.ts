@@ -156,8 +156,8 @@ describe('SC-687: the other three insert paths', () => {
 			expect(refused.closed).toBe(1);
 			expect(refused.editor.getValue()).toBe(note);
 			expect(refused.notices).toEqual([PROPERTIES_NOTICE]);
-			// a pick that writes leaves closing to Obsidian, as before
-			expect(pick('/dsct', { line: 0, ch: 5 }, '/dsct').closed).toBe(0);
+			// a pick that writes closes it too (SC-682: it used to leave the closing to Obsidian, which left the row on screen)
+			expect(pick('/dsct', { line: 0, ch: 5 }, '/dsct').closed).toBe(1);
 		});
 
 		test('typed inside a block the suggester did not see (a block indented under a list item: SC-676): refused, the typed token stays as typed', () => {
