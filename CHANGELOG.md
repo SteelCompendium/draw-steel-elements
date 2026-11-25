@@ -22,6 +22,11 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **After picking a block from the `/ds` list, the list closes, so the next Enter is a new line** (SC-682).
+  Typing `/dsstam` and pressing Enter inserted the block but left the picked row on screen (Stamina bar and Skills; a click on the row did the same). Pressing Enter again did nothing until you pressed Escape.
+  In the first moments after the pick a second Enter could even pick again: a message, or under a list item a second block written over the first.
+  Now every pick (Enter or a click, any of the thirteen blocks, in Live Preview and Source mode, at the top level, under a list item or in a callout) closes the list, and the next Enter adds a line at the cursor. A pick the plugin refuses inside another block still shows its message once.
+
 - [FIX] **An insert no longer writes inside an existing block or the note's properties; it tells you instead** (SC-687).
   With the cursor on a line inside a block (an empty line in a stamina bar, say) and an Insert Draw Steel command run from the palette, the new block used to be written into the middle of the old one.
   The old block turned into an error card, the new one was not drawn, and everything below it showed as code. The same happened with the compendium reference and full-block commands, and with the cursor in the note's properties at the top.
