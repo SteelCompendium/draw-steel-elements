@@ -138,6 +138,8 @@ export interface Expect {
 	modified?: Record<string, string | null>;
 	/** Files that moved (old path gone, new path present, SAME bytes): from -> to. Trashing is a move into `.trash/`. */
 	moved?: Record<string, string>;
+	/** New files whose paths are not known in advance (the report note's name carries a timestamp): each pattern must match exactly one created path. */
+	createdMatching?: RegExp[];
 	/** New folders (created or left behind), by path. */
 	dirsCreated?: string[];
 	dirsRemoved?: string[];
@@ -181,6 +183,11 @@ const sortedKeys = (o: object | undefined): string[] => Object.keys(o ?? {}).sor
 export function expectDiff(base: string, before: Tree, after: Tree, expected: Expect = {}): void {
 	const d = diffTrees(before, after);
 	const problems: string[] = [];
+	for (const re of expected.createdMatching ?? []) {
+		const hit = d.created.filter((p) => re.test(p));
+		if (hit.length !== 1) problems.push(`expected exactly one created path matching ${re}, got ${JSON.stringify(hit)}`);
+		else d.created = d.created.filter((p) => p !== hit[0]);
+	}
 	const cmp = (what: string, got: string[], want: string[]): void => {
 		if (JSON.stringify(got) !== JSON.stringify([...want].sort())) problems.push(`${what}: got ${JSON.stringify(got)}, wanted ${JSON.stringify([...want].sort())}`);
 	};
@@ -465,6 +472,8 @@ export interface SyncTest {
 	settled(): Promise<Tree>;
 	/** `settled()`, then assert the difference from `before` is exactly `expected`. Returns the tree. */
 	expectChange(expected?: Expect): Promise<Tree>;
+	/** The folders a set of NEW file paths needs that the tree does not have yet (sorted): what `dirsCreated` should list. */
+	dirsFor(paths: string[]): string[];
 	/** Read a file of the vault copy from disk. */
 	read(rel: string): string;
 	exists(rel: string): boolean;
@@ -593,6 +602,14 @@ export async function startSyncTest(opts: StartOptions = {}): Promise<SyncTest> 
 			const after = await settled();
 			expectDiff(base, first, after, expected);
 			return after;
+		},
+		dirsFor(paths: string[]): string[] {
+			const need = new Set<string>();
+			for (const p of paths) {
+				const parts = p.split('/').slice(0, -1);
+				for (let i = 1; i <= parts.length; i++) need.add(parts.slice(0, i).join('/'));
+			}
+			return [...need].filter((d) => !first.dirs.includes(d)).sort();
 		},
 		read: (rel) => text(base, rel),
 		exists: (rel) => fs.existsSync(path.join(base, rel)),

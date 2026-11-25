@@ -70,7 +70,7 @@ describe('sync: runs from the command palette', () => {
 		expect((await fixtureRelease.calls()).length).toBe(4); // two requests per Sync
 	});
 
-	it('[SYNC-S02] a newer release updates the changed file in place, creates the new one, moves the file removed upstream into .trash, KEEPS the one the user edited, and never touches the user\'s own notes', async () => {
+	it('[SYNC-S02] a newer release updates the changed file in place, creates the new one, moves the file removed upstream into .trash (flat, by name), KEEPS the one the user edited, and never touches the user\'s own notes', async () => {
 		const t = await startSyncTest();
 		await fixtureRelease.publish('v1', RELEASE_A);
 		await palette.sync();
@@ -86,10 +86,11 @@ describe('sync: runs from the command palette', () => {
 		await t.expectChange({
 			created: { [`${DC}/condition/new.md`]: 'new B' },
 			modified: { [`${DC}/class/shadow.md`]: 'shadow B', [MANIFEST]: null },
-			moved: { [`${DC}/rule/retired.md`]: `.trash/${DC}/rule/retired.md` },
-			dirsCreated: [`.trash`, `.trash/${DC}`, `.trash/${DC}/rule`, `${DC}/condition`].sort(),
+			// Obsidian's own trash keeps the file NAME only: a trashed note lands flat in `.trash/` (verified in real Obsidian 1.14.4)
+			moved: { [`${DC}/rule/retired.md`]: '.trash/retired.md' },
+			dirsCreated: ['.trash', `${DC}/condition`],
 		});
-		expect(t.read(`.trash/${DC}/rule/retired.md`)).toBe('retired A');
+		expect(t.read('.trash/retired.md')).toBe('retired A');
 		expect(t.read(`${DC}/kit/doomed.md`)).toBe('doomed A, edited by the user'); // removed upstream but modified: kept in place
 		expect(t.read(MINE_IN)).toBe('my own class');
 		expect(t.read(MINE_OUT)).toBe('my journal');
@@ -122,32 +123,36 @@ describe('sync: runs from the command palette', () => {
 });
 
 describe('sync: failure paths leave the tree untouched', () => {
-	const FAILS: Array<[string, string, () => Promise<unknown>, RegExp]> = [
-		['F01', 'the release lookup answers HTTP 503', () => fixtureRelease.failLookup(503), /GitHub release lookup failed \(HTTP 503\)/],
-		['F02', 'the release does not exist (HTTP 404)', () => fixtureRelease.failLookup(404), /GitHub release lookup failed \(HTTP 404\)/],
-		['F03', 'the download answers HTTP 500', () => fixtureRelease.failDownload(500), /Asset download failed \(HTTP 500\)/],
-		['F04', 'the download is not a zip', () => fixtureRelease.brokenZip(true), /not a valid zip file/],
-	];
-	for (const [id, what, fail, message] of FAILS) {
-		it(`[SYNC-${id}] ${what}: one failure Notice, no file written, no manifest, the lock free, nothing unhandled; the next Sync works`, async () => {
-			const t = await startSyncTest();
-			allowPageErrors(/compendium sync failed/); // the sync's own console.error (SC-646: that is the ONLY page error allowed)
-			await fixtureRelease.publish('v1', RELEASE_A);
-			await fail();
-			await palette.sync();
-			await waitNotice(message);
-			expect((await noticeTexts()).filter((n) => /compendium sync failed/.test(n))).toHaveLength(1);
-			await t.expectChange({});
-			expect(await busy()).toBe(false);
-			await fixtureRelease.failLookup(null);
-			await fixtureRelease.failDownload(null);
-			await fixtureRelease.brokenZip(false);
-			await ev(`(document.querySelectorAll('.notice').forEach((n) => n.click()), true)`);
-			await palette.sync();
-			await waitNotice(/compendium v1 synced — 5 new/);
-			await t.expectChange({ created: createdA(), dirsCreated: foldersA() });
-		});
+	// The runner reads `[ID]` from the first string literal after `it(`, so every id is written out: no title is built in a loop.
+	/** The body shared by F01..F04: the failure is induced, the Sync fails visibly, the tree is untouched, and the next Sync works. */
+	async function failedSync(induce: () => Promise<unknown>, message: RegExp): Promise<void> {
+		const t = await startSyncTest();
+		allowPageErrors(/compendium sync failed/); // the sync's own console.error (SC-646: that is the ONLY page error allowed)
+		await fixtureRelease.publish('v1', RELEASE_A);
+		await induce();
+		await palette.sync();
+		await waitNotice(message);
+		expect((await noticeTexts()).filter((n) => /compendium sync failed/.test(n))).toHaveLength(1);
+		await t.expectChange({});
+		expect(await busy()).toBe(false);
+		await fixtureRelease.failLookup(null);
+		await fixtureRelease.failDownload(null);
+		await fixtureRelease.brokenZip(false);
+		await ev(`(document.querySelectorAll('.notice').forEach((n) => n.click()), true)`);
+		await palette.sync();
+		await waitNotice(/compendium v1 synced — 5 new/);
+		await t.expectChange({ created: createdA(), dirsCreated: foldersA() });
 	}
+	const TAIL = 'one failure Notice, no file written, no manifest, the lock free, nothing unhandled; the next Sync works';
+	it('[SYNC-F01] the release lookup answers HTTP 503: one failure Notice, no file written, no manifest, the lock free, nothing unhandled; the next Sync works', () =>
+		failedSync(() => fixtureRelease.failLookup(503), /GitHub release lookup failed \(HTTP 503\)/));
+	it('[SYNC-F02] the release does not exist (HTTP 404): one failure Notice, no file written, no manifest, the lock free, nothing unhandled; the next Sync works', () =>
+		failedSync(() => fixtureRelease.failLookup(404), /GitHub release lookup failed \(HTTP 404\)/));
+	it('[SYNC-F03] the download answers HTTP 500: one failure Notice, no file written, no manifest, the lock free, nothing unhandled; the next Sync works', () =>
+		failedSync(() => fixtureRelease.failDownload(500), /Asset download failed \(HTTP 500\)/));
+	it('[SYNC-F04] the download is not a zip: one failure Notice, no file written, no manifest, the lock free, nothing unhandled; the next Sync works', () =>
+		failedSync(() => fixtureRelease.brokenZip(true), /not a valid zip file/));
+	void TAIL;
 
 	it('[SYNC-F05] a failed Sync after an earlier one leaves every installed file, the user\'s notes and the manifest byte-identical', async () => {
 		const t = await startSyncTest();
@@ -208,21 +213,24 @@ describe('sync: the Destination folder guard (SC-643)', () => {
 		await t.expectChange({ created: createdA('Notes/Compendium'), dirsCreated: ['Notes', ...foldersA('Notes/Compendium')].sort() });
 	});
 
-	for (const [id, value] of [['D03', '/'], ['D04', '.'], ['D05', '../outside'], ['D06', 'a/..']] as const) {
-		it(`[SYNC-${id}] a Destination of ${JSON.stringify(value)} (the vault root, or outside the vault) is refused with a Notice naming the setting: no request, no window, no change`, async () => {
-			const t = await startSyncTest();
-			await createNotes({ [MINE_OUT]: 'my journal' });
-			await t.rebase();
-			await setDestination(value);
-			await fixtureRelease.publish('v1', RELEASE_A);
-			await palette.sync();
-			await waitNotice(/the Destination folder can't be the vault root \(or outside the vault\)/);
-			await noWindows();
-			await t.expectChange({});
-			expect(await fixtureRelease.calls()).toEqual([]);
-			expect(await busy()).toBe(false);
-		});
+	/** The body shared by D03..D06: the setting resolves to the vault root or outside the vault, so the Sync is refused before anything happens. */
+	async function refusedDestination(value: string): Promise<void> {
+		const t = await startSyncTest();
+		await createNotes({ [MINE_OUT]: 'my journal' });
+		await t.rebase();
+		await setDestination(value);
+		await fixtureRelease.publish('v1', RELEASE_A);
+		await palette.sync();
+		await waitNotice(/the Destination folder can't be the vault root \(or outside the vault\)/);
+		await noWindows();
+		await t.expectChange({});
+		expect(await fixtureRelease.calls()).toEqual([]);
+		expect(await busy()).toBe(false);
 	}
+	it('[SYNC-D03] a Destination of "/" (the vault root) is refused with a Notice naming the setting: no request, no window, no change', () => refusedDestination('/'));
+	it('[SYNC-D04] a Destination of "." (the vault root) is refused with a Notice naming the setting: no request, no window, no change', () => refusedDestination('.'));
+	it('[SYNC-D05] a Destination of "../outside" (outside the vault) is refused with a Notice naming the setting: no request, no window, no change', () => refusedDestination('../outside'));
+	it('[SYNC-D06] a Destination of "a/.." (resolves to the vault root) is refused with a Notice naming the setting: no request, no window, no change', () => refusedDestination('a/..'));
 
 	it('[SYNC-D07] the Migrate command refuses a vault-root Destination the same way and opens no window', async () => {
 		const t = await startSyncTest();
