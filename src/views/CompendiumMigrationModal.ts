@@ -160,6 +160,7 @@ export class CompendiumMigrationModal extends DseModal {
 			{
 				label: 'Not now',
 				text: 'Not now',
+				control: 'migration.preview.not-now',
 				onClick: () => {
 					this.answered = true;
 					this.close();
@@ -172,6 +173,7 @@ export class CompendiumMigrationModal extends DseModal {
 					'Sync without moving: Downloads the new compendium and leaves your old files where they are. ' +
 					'Links to compendium notes will stop working, and the move can no longer be done.',
 				text: 'Sync without moving',
+				control: 'migration.preview.sync-anyway',
 				variant: 'danger',
 				onClick: () => {
 					this.answered = true;
@@ -182,6 +184,7 @@ export class CompendiumMigrationModal extends DseModal {
 			{
 				label: `Move ${renames.length} file(s)`,
 				text: `Move ${renames.length} file(s)`,
+				control: 'migration.preview.move',
 				variant: 'accent',
 				disabled: renames.length === 0,
 				onClick: () => {
@@ -207,6 +210,7 @@ export class CompendiumMigrationModal extends DseModal {
 			{
 				label: 'Stop',
 				text: 'Stop',
+				control: 'migration.running.stop',
 				variant: 'danger',
 				onClick: () => {
 					this.aborted = true;
@@ -271,6 +275,7 @@ export class CompendiumMigrationModal extends DseModal {
 			{
 				label: 'Close',
 				text: 'Close',
+				control: 'migration.error.close',
 				onClick: () => {
 					this.answered = true;
 					this.close();
@@ -315,22 +320,27 @@ export class CompendiumMigrationModal extends DseModal {
 
 		// Review H3 — the lists themselves, not just their counts.
 		this.pathSection(
+			'migration.list.backed-up',
 			`Backed up before the move — ${report.backedUp.length}`,
 			'Your recovery path if the sync replaces something you had written.',
 			report.backedUp.map((entry) => entry.backupPath));
 		this.pathSection(
+			'migration.list.moved-modified',
 			`Moved, but different from the last legacy release — ${report.migratedModified.length}`,
 			'Edited by you, or from an older release. The next sync replaces them with the current official text.',
 			report.migratedModified.map((rename) => rename.toPath));
 		this.pathSection(
+			'migration.list.blocked',
 			`Not moved — the new path was already occupied — ${report.blocked.length}`,
 			'Left exactly as they were. Nothing was overwritten.',
 			report.blocked.map((rename) => `${rename.fromPath}  →  ${rename.toPath}`));
 		this.pathSection(
+			'migration.list.failed',
 			`Failed to move — ${report.failed.length}`,
 			'Obsidian refused the move; these are still at their old paths.',
 			report.failed.map((entry) => `${entry.fromPath} — ${entry.error}`));
 		this.pathSection(
+			'migration.list.unmapped',
 			`Left in place — no 7.0.0 counterpart — ${report.unmapped.length}`,
 			'Index pages, book-level pages, and anything of your own in that folder.',
 			report.unmapped);
@@ -340,6 +350,7 @@ export class CompendiumMigrationModal extends DseModal {
 				{
 					label: 'Close',
 					text: 'Close',
+					control: 'migration.stopped.close',
 					onClick: () => {
 						this.answered = true;
 						this.close();
@@ -349,6 +360,7 @@ export class CompendiumMigrationModal extends DseModal {
 				{
 					label: `Finish moving the remaining ${report.remaining}`,
 					text: `Finish moving the remaining ${report.remaining}`,
+					control: 'migration.stopped.finish',
 					variant: 'accent',
 					onClick: () => {
 						this.answered = true;
@@ -361,6 +373,7 @@ export class CompendiumMigrationModal extends DseModal {
 				{
 					label: 'Close',
 					text: 'Close',
+					control: 'migration.summary.close',
 					onClick: () => {
 						this.answered = true;
 						this.close();
@@ -370,6 +383,7 @@ export class CompendiumMigrationModal extends DseModal {
 				{
 					label: 'Sync the compendium now',
 					text: 'Sync the compendium now',
+					control: 'migration.summary.sync-now',
 					variant: 'accent',
 					onClick: () => {
 						this.answered = true;
@@ -380,9 +394,10 @@ export class CompendiumMigrationModal extends DseModal {
 			]);
 	}
 
-	private pathSection(title: string, blurb: string, items: string[]): void {
+	/** `control` is the header button's stable e2e id (SC-441); the lists are collapsed by default and only draw when non-empty. */
+	private pathSection(control: string, title: string, blurb: string, items: string[]): void {
 		if (items.length === 0) return;
-		const panel = collapsible(this.body, { title, open: false }, this.lifecycle);
+		const panel = collapsible(this.body, { title, open: false, control }, this.lifecycle);
 		panel.contentEl.createEl('p', { text: blurb });
 		const list = panel.contentEl.createEl('ul', { cls: 'dse-migration__paths' });
 		for (const item of items.slice(0, LIST_LIMIT)) list.createEl('li', { text: item });

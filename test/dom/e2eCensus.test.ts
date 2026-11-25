@@ -74,6 +74,12 @@ import { Editor } from '../mocks/obsidian';
 import { loadMdDseFixture, makeCompendiumDeps } from './elements/_refHarness';
 import { counterElement } from '../../src/elements/counter/definition';
 import counterManifest from '../../e2e/manifest/counter';
+import legacyWindowManifest, { VIRTUAL_IDS as LEGACY_VIRTUAL } from '../../e2e/manifest/sync-legacy-window';
+import migrationWindowManifest, { VIRTUAL_IDS as MIGRATION_VIRTUAL } from '../../e2e/manifest/sync-migration-window';
+import syncCommandsManifest, { SYNC_COMMANDS } from '../../e2e/manifest/sync-commands';
+import { LegacyCompendiumModal } from '../../src/views/LegacyCompendiumModal';
+import { CompendiumMigrationModal } from '../../src/views/CompendiumMigrationModal';
+import type { MigrationPlan, MigrationReport } from '../../src/data/CompendiumMigration';
 
 const INTERACTIVE = 'button, input, select, textarea, [role="button"], [role="slider"], [tabindex], [contenteditable]';
 const CHROME = '[data-dse-chrome-item]';
@@ -1259,4 +1265,201 @@ describe('SC-442 census: the counter, scoped by container', () => {
 	function manifestKinds(id: string): readonly string[] {
 		return counterManifest.controls[id].kinds;
 	}
+});
+
+describe('SC-441 census: the compendium sync windows, scoped by container, window by window and phase by phase', () => {
+	// Both windows are scanned by their dialog root (the whole container, not a CSS class): every interactive node inside must carry an id of
+	// the window's manifest. Obsidian's own X and backdrop are not part of the mock (and are host ids in the real-Obsidian census).
+	const ROOT = 'DS Compendium';
+	const legacyIds = new Set(idsOf(legacyWindowManifest).filter((id) => !LEGACY_VIRTUAL.includes(id)));
+	const migrationIds = new Set(idsOf(migrationWindowManifest).filter((id) => !MIGRATION_VIRTUAL.includes(id)));
+	type Phase = 'preview' | 'running' | 'summary' | 'stopped' | 'error';
+	const PHASES: Phase[] = ['preview', 'running', 'summary', 'stopped', 'error'];
+	/** What a user can press in each phase (the id names the phase; the number in a label never reaches an id). */
+	const EXPECTED: Record<Phase, string[]> = {
+		preview: ['migration.preview.not-now', 'migration.preview.sync-anyway', 'migration.preview.move'],
+		running: ['migration.running.stop'],
+		summary: ['migration.list.backed-up', 'migration.list.moved-modified', 'migration.list.blocked', 'migration.list.failed', 'migration.list.unmapped', 'migration.summary.close', 'migration.summary.sync-now'],
+		stopped: ['migration.list.backed-up', 'migration.list.moved-modified', 'migration.list.blocked', 'migration.list.failed', 'migration.list.unmapped', 'migration.stopped.close', 'migration.stopped.finish'],
+		error: ['migration.error.close'],
+	};
+
+	const rename = (oldRelative: string, newRelative: string, modified: boolean | null = false) => ({
+		fromPath: `${ROOT}/${oldRelative}`, toPath: `${ROOT}/${newRelative}`, oldRelative, newRelative, modified,
+	});
+	const plan: MigrationPlan = {
+		root: ROOT,
+		detection: { root: ROOT, filesInRoot: 9, legacyPaths: 8, newLayoutPaths: 0, isLegacyLayout: true },
+		renames: [rename('Rules/Careers/Disciple.md', 'career/disciple.md'), rename('Rules/Careers/Sage.md', 'career/sage.md', true)],
+		blocked: [{ fromPath: `${ROOT}/Rules/Careers/Agent.md`, toPath: `${ROOT}/career/agent.md` }],
+		unmapped: [`${ROOT}/Rules/_Index.md`],
+		backupCount: 1,
+		backupFolder: `${ROOT} backup (pre-7.0.0)`,
+	};
+	// Every per-path list non-empty, so every disclosure button is drawn.
+	const fullReport = (aborted: boolean): MigrationReport => ({
+		root: ROOT, mapRelease: 'v3.20260403152914',
+		migrated: [rename('Rules/Careers/Disciple.md', 'career/disciple.md'), rename('Rules/Careers/Sage.md', 'career/sage.md', true)],
+		migratedModified: [rename('Rules/Careers/Sage.md', 'career/sage.md', true)],
+		blocked: [{ fromPath: `${ROOT}/Rules/Careers/Agent.md`, toPath: `${ROOT}/career/agent.md` }],
+		failed: [{ fromPath: `${ROOT}/Rules/Careers/Bard.md`, toPath: `${ROOT}/career/bard.md`, error: 'refused' }],
+		unmapped: [`${ROOT}/Rules/_Index.md`],
+		aborted, remaining: aborted ? 7 : 0,
+		reportNotePath: 'Draw Steel Elements migration report.md',
+		backedUp: [{ fromPath: `${ROOT}/Rules/Careers/Sage.md`, backupPath: `${ROOT} backup (pre-7.0.0)/Rules/Careers/Sage.md` }],
+		backupFolder: `${ROOT} backup (pre-7.0.0)`,
+	});
+	const settle = async (): Promise<void> => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
+
+	function legacyWindow(): LegacyCompendiumModal {
+		const modal = new LegacyCompendiumModal(new App() as any, ROOT, jest.fn());
+		modal.open();
+		return modal;
+	}
+	/** The migration window in `phase`, driven there through its real buttons and callbacks. */
+	async function migrationWindow(phase: Phase): Promise<CompendiumMigrationModal> {
+		let resolveRun!: (r: MigrationReport) => void;
+		let rejectRun!: (e: unknown) => void;
+		const noop = jest.fn();
+		const modal = new CompendiumMigrationModal(new App() as any, plan, {
+			run: () => new Promise<MigrationReport>((resolve, reject) => { resolveRun = resolve; rejectRun = reject; }),
+			decline: noop, syncAnyway: noop, finishRemaining: noop, syncAfter: noop, dismissed: noop, failed: noop,
+		});
+		modal.open();
+		if (phase === 'preview') return modal;
+		modal.containerEl.querySelector<HTMLButtonElement>('[data-dse-control="migration.preview.move"]')!.click();
+		if (phase === 'running') return modal;
+		if (phase === 'error') rejectRun(new Error('vault write refused'));
+		else resolveRun(fullReport(phase === 'stopped'));
+		await settle();
+		return modal;
+	}
+	const stampedIn = (el: Element): string[] =>
+		Array.from(el.querySelectorAll('[data-dse-control]')).map((n) => n.getAttribute('data-dse-control') as string);
+
+	afterEach(() => {
+		document.body.innerHTML = '';
+	});
+
+	test('"Existing compendium folder found": both buttons are identified and in the manifest, nothing else in the dialog is interactive', () => {
+		const modal = legacyWindow();
+		expect(censusProblems(modal.containerEl, legacyIds, INTERACTIVE, false)).toEqual([]);
+		expect(stampedIn(modal.containerEl)).toEqual(['sync.legacy.keep', 'sync.legacy.trash']);
+		// the ids sit on the real <button>s a user presses, not on a wrapper
+		for (const id of ['sync.legacy.keep', 'sync.legacy.trash']) {
+			expect(modal.containerEl.querySelector(`[data-dse-control="${id}"]`)!.tagName).toBe('BUTTON');
+		}
+	});
+
+	test.each(PHASES)('the migration window, %s phase: every interactive node is identified and the ids are exactly that phase\'s buttons', async (phase) => {
+		const modal = await migrationWindow(phase);
+		expect(censusProblems(modal.containerEl, migrationIds, INTERACTIVE, false)).toEqual([]);
+		expect(stampedIn(modal.containerEl)).toEqual(EXPECTED[phase]);
+	});
+
+	test('a label that carries a number never reaches an id: "Move N file(s)" and "Finish moving the remaining N" are one id each', async () => {
+		const preview = await migrationWindow('preview');
+		const move = preview.containerEl.querySelector('[data-dse-control="migration.preview.move"]') as HTMLButtonElement;
+		expect(move.getAttribute('aria-label')).toBe('Move 2 file(s)');
+		const stopped = await migrationWindow('stopped');
+		const finish = stopped.containerEl.querySelector('[data-dse-control="migration.stopped.finish"]') as HTMLButtonElement;
+		expect(finish.getAttribute('aria-label')).toBe('Finish moving the remaining 7');
+	});
+
+	test('Stop keeps its id when it turns into the disabled "Stopping…" (the click-disabled pair addresses the same node)', async () => {
+		const modal = await migrationWindow('running');
+		const stop = modal.containerEl.querySelector('[data-dse-control="migration.running.stop"]') as HTMLButtonElement;
+		stop.click();
+		const after = modal.containerEl.querySelector('[data-dse-control="migration.running.stop"]') as HTMLButtonElement;
+		expect(after).toBe(stop);
+		expect(after.disabled).toBe(true);
+		expect(after.getAttribute('aria-label')).toBe('Stopping…');
+	});
+
+	test('the census itself bites: an un-id\'d button in any window or phase, a button that lost its id, or an id outside the manifest is a finding', async () => {
+		const windows: Array<[string, HTMLElement, ReadonlySet<string>]> = [
+			['legacy window', legacyWindow().containerEl, legacyIds],
+			...(await Promise.all(PHASES.map(async (phase): Promise<[string, HTMLElement, ReadonlySet<string>]> =>
+				[`migration ${phase}`, (await migrationWindow(phase)).containerEl, migrationIds]))),
+		];
+		for (const [name, root, allowed] of windows) {
+			expect({ name, findings: censusProblems(root, allowed, INTERACTIVE, false) }).toEqual({ name, findings: [] });
+			// an un-id'd button injected into the body, and one into the footer
+			const body = root.querySelector('.dse-modal__body') as HTMLElement;
+			const rogue = body.appendChild(document.createElement('button'));
+			expect({ name, findings: censusProblems(root, allowed, INTERACTIVE, false) }).toEqual({ name, findings: [expect.stringMatching(/^no data-dse-control: <button/)] });
+			rogue.remove();
+			const footerRogue = (root.querySelector('.dse-modal__footer') as HTMLElement).appendChild(document.createElement('button'));
+			expect({ name, findings: censusProblems(root, allowed, INTERACTIVE, false) }).toEqual({ name, findings: [expect.stringMatching(/^no data-dse-control: <button/)] });
+			footerRogue.remove();
+			// an eventful node that is not a <button> at all (a div the page gave a tabindex)
+			const tabbable = body.appendChild(Object.assign(document.createElement('div'), { tabIndex: 0 }));
+			expect({ name, findings: censusProblems(root, allowed, INTERACTIVE, false) }).toEqual({ name, findings: [expect.stringMatching(/^no data-dse-control: <div/)] });
+			tabbable.remove();
+			// a button that lost its id
+			const first = root.querySelector('[data-dse-control]') as HTMLElement;
+			const id = first.getAttribute('data-dse-control') as string;
+			first.removeAttribute('data-dse-control');
+			expect({ name, findings: censusProblems(root, allowed, INTERACTIVE, false) }).toEqual({ name, findings: [expect.stringMatching(/^no data-dse-control: <button/)] });
+			// an id the manifest does not declare
+			first.setAttribute('data-dse-control', 'sync.not-a-control');
+			expect({ name, findings: censusProblems(root, allowed, INTERACTIVE, false) }).toEqual({ name, findings: [expect.stringMatching(/id "sync\.not-a-control" is not in the manifest/)] });
+			first.setAttribute('data-dse-control', id);
+		}
+	});
+
+	test('the two windows never share an id: a legacy-window id is a finding inside the migration window and the other way round', async () => {
+		const legacy = legacyWindow().containerEl;
+		const migration = (await migrationWindow('preview')).containerEl;
+		expect(censusProblems(legacy, migrationIds, INTERACTIVE, false).length).toBe(2);
+		expect(censusProblems(migration, legacyIds, INTERACTIVE, false).length).toBe(3);
+	});
+
+	test('no dead manifest row: the ids drawn across both windows and every phase are exactly the manifests\' DOM ids; the dismissals are virtual and never stamped', async () => {
+		const drawn = [
+			...stampedIn(legacyWindow().containerEl),
+			...(await Promise.all(PHASES.map(async (p) => stampedIn((await migrationWindow(p)).containerEl)))).flat(),
+		];
+		expect(new Set(drawn)).toEqual(new Set([...legacyIds, ...migrationIds]));
+		expect(LEGACY_VIRTUAL).toEqual(['sync.legacy.dismiss']);
+		expect(MIGRATION_VIRTUAL).toEqual(['migration.preview.dismiss', 'migration.running.dismiss', 'migration.summary.dismiss', 'migration.stopped.dismiss', 'migration.error.dismiss']);
+		for (const id of [...LEGACY_VIRTUAL, ...MIGRATION_VIRTUAL]) expect(drawn).not.toContain(id);
+		// one virtual dismissal per window and phase, each with Escape, the X and a click outside
+		for (const id of [...LEGACY_VIRTUAL, ...MIGRATION_VIRTUAL]) {
+			const spec = (legacyWindowManifest.controls[id] ?? migrationWindowManifest.controls[id]);
+			expect(spec.kinds).toEqual(['press:Escape', 'click:X', 'click:Backdrop']);
+		}
+	});
+
+	test('every button the windows draw is declared with a click and both keyboard activations (Enter, Space)', () => {
+		for (const id of [...legacyIds, ...migrationIds]) {
+			const spec = legacyWindowManifest.controls[id] ?? migrationWindowManifest.controls[id];
+			expect(spec.kinds).toEqual(expect.arrayContaining(['click', 'press:Enter', 'press:Space']));
+		}
+	});
+
+	test('the entry points are owned by the SC-440 / SC-443 manifests and NOT re-declared by the window manifests', () => {
+		expect(Object.keys(settingsManifest.controls)).toContain('settings.compendium.sync');
+		expect(Object.keys(searchManifest.controls)).toContain('authoring.search.sync');
+		for (const m of [legacyWindowManifest, migrationWindowManifest]) {
+			expect(m.reach).toEqual([]);
+			expect(Object.keys(m.controls)).not.toContain('settings.compendium.sync');
+			expect(Object.keys(m.controls)).not.toContain('authoring.search.sync');
+		}
+	});
+
+	test('the command manifest is exactly the sync / migration commands the plugin registers (the retired legacy alias is gone, no new one slipped in)', async () => {
+		const app = new App();
+		const plugin = new DrawSteelAdmonitionPlugin(app as never, { id: 'draw-steel-elements', version: 'test' } as never);
+		await plugin.onload();
+		const registered = (plugin as unknown as { commands: Array<{ id: string; name: string }> }).commands;
+		const declaredAuthoring = new Set(idsOf(commandsManifest));
+		const related = registered.filter((cmd) => /sync|migrat|compendium|download/i.test(cmd.id));
+		// the compendium INSERT commands belong to the authoring manifest (SC-443); everything else that mentions sync / migration is ours
+		const ours = related.filter((cmd) => !declaredAuthoring.has(`authoring.cmd.${cmd.id}`));
+		expect(ours.map((cmd) => `sync.cmd.${cmd.id}`).sort()).toEqual(idsOf(syncCommandsManifest).sort());
+		for (const cmd of ours) expect(cmd.name).toBe(SYNC_COMMANDS[cmd.id]);
+		expect(registered.map((cmd) => cmd.id)).not.toContain('download-data-md-dse');
+		for (const id of idsOf(syncCommandsManifest)) expect(syncCommandsManifest.controls[id].kinds).toEqual(['palette']);
+	});
 });

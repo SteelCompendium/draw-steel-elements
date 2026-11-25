@@ -47,6 +47,7 @@ export class LegacyCompendiumModal extends DseModal {
 			{
 				label: 'Keep everything',
 				text: 'Keep everything',
+				control: 'sync.legacy.keep',
 				variant: 'accent',
 				onClick: () => {
 					this.close();
@@ -56,6 +57,7 @@ export class LegacyCompendiumModal extends DseModal {
 			{
 				label: 'Move old compendium to trash',
 				text: 'Move old compendium to trash',
+				control: 'sync.legacy.trash',
 				variant: 'danger',
 				onClick: () => {
 					this.close();
