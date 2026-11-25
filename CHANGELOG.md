@@ -32,9 +32,9 @@ for what needs action.
 
 - [FEATURE] **Montage Test: you can now remove a hero** (SC-690, from an RC user's request).
   The montage's menu (the panel that shows when you hover the card) has a new item, **Remove a hero**, right after **Add a hero**. It opens a small window listing the heroes on the board.
-  Pick one and the window says how many logged actions go with them. Press **Remove** and the hero's row, their skills and every action logged for them are taken out of the note, and the successes and failures totals drop to match.
-  Cancel or Escape leaves everything as it was. Rounds, limits and the round in play are not changed, so a montage that a success limit had finished can be live again. The item is not offered while the board has no heroes, or on a read-only card.
-  A note's other text, other montage blocks and any keys you added to the block stay exactly as they were.
+  Pick one and the window says how many logged actions go with them, and the button reads **Remove** and the hero's name. Press it and the hero's row, their skills and every action logged for them are taken out of the note, and the successes and failures totals drop to match.
+  Removing a hero cannot be undone. Cancel or Escape closes the window and changes nothing. Rounds, limits and the round in play are not changed, so a montage that a success or failure limit had finished can be live again. The item is not offered while the board has no heroes, or on a read-only card.
+  The text around the block and any other montage blocks in the note are not touched. Keys you added to the block are kept, but, as with every change the montage saves, they are written after the montage's own keys.
 
 - [FEATURE] **Card size can now go down to 30%** (SC-683). The slider in Settings → Draw Steel Elements → Typography used to stop at 80%; it now runs from 30% to 120% in 5% steps, so a statblock or ability card can be shrunk to a third of its size.
   Because the range now reaches further down than up, the slider's thumb at 100% sits right of the track's middle, unlike the other four size sliders. A Card size you set before (80% to 120%) is unchanged. Print and export still use 100%.

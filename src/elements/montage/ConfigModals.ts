@@ -79,16 +79,16 @@ export function removalSummary(name: string, removal: MontageHeroRemoval): strin
 export class MontageRemoveHeroModal extends DseModal {
 	private readonly heroes: () => string[];
 	private readonly removalOf: (name: string) => MontageHeroRemoval;
-	private readonly onRemove: (name: string) => void;
+	private readonly onRemove: (name: string, rosterIndex: number) => void;
 
 	/** `heroes` answers the names on the board now, in board order, and `removalOf` what Remove would do to one of them. Both are
-	 *  read from the LIVE model when the window opens and again when a hero is picked, never cached; `onRemove` checks the board once
-	 *  more before it writes (SC-627's rule for Add a hero). */
+	 *  read from the LIVE model when the window opens and again when a hero is picked, never cached; `onRemove` gets the hero's name and
+	 *  place in that list (two heroes can share a name) and checks the board once more before it writes (SC-627's rule for Add a hero). */
 	constructor(
 		app: App,
 		heroes: () => string[],
 		removalOf: (name: string) => MontageHeroRemoval,
-		onRemove: (name: string) => void,
+		onRemove: (name: string, rosterIndex: number) => void,
 	) {
 		super(app);
 		this.heroes = heroes;
@@ -98,16 +98,19 @@ export class MontageRemoveHeroModal extends DseModal {
 
 	onOpen(): void {
 		this.setDseTitle('Remove a hero');
-		let picked: string | undefined;
+		let picked: { name: string; index: number } | undefined;
 		const chips: HTMLButtonElement[] = [];
 		// One option per hero, each a pressed-state chip like the Log an action sheet's Result chips: the picked one carries a check
-		// as well as the accent border, so the choice never rests on colour alone.
+		// as well as the accent border, so the choice never rests on colour alone. The list is the only part that scrolls.
 		const list = this.body.createDiv({ cls: 'dse-mt__sheet-herolist' });
 		list.setAttribute('role', 'group');
 		list.setAttribute('aria-label', 'Hero to remove');
-		const summary = this.body.createDiv({ cls: 'dse-mt__sheet-consequence' });
+		// What Remove will take, between the scrolling body and the footer so it is on screen with the button in a short window. It is in
+		// the accessibility tree from the start, empty until a pick: a live region that arrives already holding its text is not announced.
+		const summary = this.contentEl.createDiv({ cls: 'dse-mt__sheet-consequence' });
 		summary.setAttribute('role', 'status');
-		summary.hidden = true;
+		summary.setAttribute('aria-live', 'polite');
+		summary.setAttribute('aria-atomic', 'true');
 
 		const [, removeBtn] = this.footer([
 			{ label: 'Cancel', text: 'Cancel', control: 'montage.remove-hero.cancel', variant: 'ghost', onClick: () => this.close() },
@@ -119,13 +122,15 @@ export class MontageRemoveHeroModal extends DseModal {
 				disabled: true,
 				onClick: () => {
 					if (picked === undefined) return;
-					this.onRemove(picked);
+					this.onRemove(picked.name, picked.index);
 					this.close();
 				},
 			},
 		]);
+		removeBtn.buttonEl.addClass('dse-mt__sheet-removebtn');
+		const removeText = removeBtn.buttonEl.querySelector('.dse-btn__text');
 
-		for (const name of this.heroes()) {
+		this.heroes().forEach((name, index) => {
 			const chip = list.createEl('button', { cls: 'dse-optchip dse-mt__sheet-herochip' });
 			chip.setAttribute('type', 'button');
 			chip.setAttribute('aria-label', name);
@@ -135,14 +140,17 @@ export class MontageRemoveHeroModal extends DseModal {
 			chip.createSpan({ cls: 'dse-mt__sheet-heroname', text: name });
 			setPressedState(chip, false);
 			this.lifecycle.registerDomEvent(chip, 'click', () => {
-				picked = name;
+				picked = { name, index };
 				chips.forEach((c) => setPressedState(c, c === chip));
 				summary.setText(removalSummary(name, this.removalOf(name)));
-				summary.hidden = false;
+				// The button names who goes ("Remove Kira"); its accessible name is the same text. A long name is cut with an ellipsis
+				// by CSS, the full name stays in the label.
+				removeText?.setText(`Remove ${name}`);
+				removeBtn.setLabel(`Remove ${name}`);
 				removeBtn.setDisabled(false);
 			});
 			chips.push(chip);
-		}
+		});
 		if (chips.length === 0) this.body.createDiv({ cls: 'dse-mt__sheet-hint', text: 'No heroes on the board.' });
 	}
 }

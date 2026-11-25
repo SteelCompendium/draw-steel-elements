@@ -109,13 +109,14 @@ aren't offered, and **Clear all** is the only way back.
 
 **The card's menu (⋯).** Hover the card for its menu panel: **Add a round** extends the
 montage by one round; **Add a hero** adds a new participant by name; **Remove a hero**
-opens a small list of the heroes on the board (it is not offered while the board has none) —
-pick one and press **Remove**. The hero's row goes, and so does every action logged for them
-and the skills they used, and the successes and failures totals drop by what those actions
-had added. Once you pick a hero the window says how many logged actions will go with them,
-before you press anything. The limits, the rounds and the round in play stay as they were, so
-a montage that had finished because of that hero's last success is live again. There is no
-undo, so Cancel (or Escape) leaves everything as it was; **Set limits…** opens
+opens a small list of the heroes on the board (it is not offered while the board has none).
+Pick one and the button reads, for example, **Remove Kira**; press it. The hero's row goes,
+and so does every action logged for them and the skills they used, and the successes and
+failures totals drop by what those actions had added. Once you pick a hero the window says how
+many logged actions will go with them, before you press anything. The limits, the rounds and the
+round in play stay as they were, so a montage that had finished because a success or failure
+limit was reached can be live again. Removing a hero cannot be undone. Cancel (or Escape) closes
+the window and changes nothing; **Set limits…** opens
 a small form to change the success/failure limits; **Reset progress** clears the running
 successes, failures, the round, everyone's logged actions and used skills — your setup
 (title, description, limits, roster) survives it, so the same block can run the montage

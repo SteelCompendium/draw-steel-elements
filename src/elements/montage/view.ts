@@ -633,7 +633,7 @@ export class MontageView extends ElementView<MontageModel> {
 
 	/** SC-690 — "Remove a hero": the window lists the board's heroes, and Remove takes the picked one off it with their logged actions
 	 *  (model.ts `removeMontageHero`). The window reads the LIVE model when it opens and when a hero is picked, and the write checks the
-	 *  board once more: a hero an outside edit already took off is not removed twice, nothing is written and the window just closes.
+	 *  board once more: a hero an outside edit already took off (or moved to another place in the roster) is not removed twice, nothing is written and the window just closes.
 	 *  No Undo toast and no second question: the window named what would go before the press. */
 	private openRemoveHero(): void {
 		this.openTrackedModal(() =>
@@ -641,8 +641,8 @@ export class MontageView extends ElementView<MontageModel> {
 				this.cx.app,
 				() => montageRoster(this.model).map((h) => h.name),
 				(name) => montageHeroRemoval(this.model, name),
-				(name) => {
-					if (!removeMontageHero(this.model, name)) return;
+				(name, rosterIndex) => {
+					if (!removeMontageHero(this.model, name, rosterIndex)) return;
 					new Notice(`Removed ${name} from the montage`);
 					void this.commit();
 				},

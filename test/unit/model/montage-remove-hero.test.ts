@@ -172,4 +172,52 @@ describe('removeMontageHero', () => {
 		expect(montageHeroRemoval(m, 'Osric')).toEqual({ actions: 0, shared: 0 });
 		expect(montageHeroRemoval(m, 'Nobody')).toEqual({ actions: 0, shared: 0 });
 	});
+
+	test('actions are matched the way the board matches them to a row: exactly, so `kira`, `"Kira "` and `" Kira"` stay and move no tally', () => {
+		const m = parseLikePipeline([
+			'rounds: 3', 'successes: 3', 'failures: 1', 'participants:', '  - name: Kira', '  - name: Bram', 'entries:',
+			'  - hero: Kira', '    round: 1', '    result: success',
+			'  - hero: kira', '    round: 2', '    result: success',
+			'  - hero: "Kira "', '    round: 3', '    result: failure',
+			'  - hero: " Kira"', '    round: 1', '    result: success',
+			'  - hero: Bram', '    round: 1', '    result: assist',
+			'current_round: 2',
+		].join('\n'));
+		expect(montageHeroRemoval(m, 'Kira')).toEqual({ actions: 1, shared: 0 });
+		removeMontageHero(m, 'Kira');
+		expect(m.entries!.map((e) => e.hero)).toEqual(['kira', 'Kira ', ' Kira', 'Bram']);
+		expect([m.successes, m.failures]).toEqual([2, 1]); // only Kira's own success came off
+	});
+
+	describe('two heroes with one name: the chip pressed decides which one goes (the roster index)', () => {
+		const twins = ['rounds: 2', 'participants:', '  - name: Kira', '    skills_used: [Nature]', '  - name: Kira', '    skills_used: [Climb]', '  - name: Bram'].join('\n');
+
+		test('the second Kira (index 1) goes, and the first keeps her skills', () => {
+			const m = parseLikePipeline(twins);
+			expect(removeMontageHero(m, 'Kira', 1)).toBe(true);
+			expect(written(m).participants).toEqual([{ name: 'Kira', skills_used: ['Nature'] }, { name: 'Bram' }]);
+		});
+
+		test('the first Kira (index 0) goes, and the second keeps hers', () => {
+			const m = parseLikePipeline(twins);
+			removeMontageHero(m, 'Kira', 0);
+			expect(written(m).participants).toEqual([{ name: 'Kira', skills_used: ['Climb'] }, { name: 'Bram' }]);
+		});
+
+		test('the index counts heroes only, not an item the board skips', () => {
+			jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+			const m = parseLikePipeline('rounds: 2\nparticipants:\n  - 7\n  - name: Kira\n    skills_used: [Nature]\n  - Ash\n  - name: Kira\n    skills_used: [Climb]');
+			removeMontageHero(m, 'Kira', 1);
+			expect(written(m).participants).toEqual([7, { name: 'Kira', skills_used: ['Nature'] }, 'Ash']);
+		});
+
+		test('an index that no longer holds that name (the roster changed under the window) removes nothing', () => {
+			const m = parseLikePipeline(twins);
+			const before = serialize(m);
+			expect(removeMontageHero(m, 'Kira', 2)).toBe(false); // that slot is Bram now
+			expect(removeMontageHero(m, 'Bram', 1)).toBe(false); // and Bram is not there
+			expect(removeMontageHero(m, 'Kira', 7)).toBe(false);
+			expect(serialize(m)).toBe(before);
+		});
+	});
 });

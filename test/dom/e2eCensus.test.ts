@@ -467,7 +467,7 @@ describe('SC-436 census: the ConditionsModal', () => {
 	});
 });
 
-describe('SC-438 census: the montage tracker and its three modals, scoped by container', () => {
+describe('SC-438 census: the montage tracker and its four modals, scoped by container', () => {
 	// The hand-written fixture holds an unrecognised result on purpose: the model warns about it, which is not what is under test.
 	beforeEach(() => {
 		jest.spyOn(console, 'warn').mockImplementation(() => undefined);

@@ -748,8 +748,11 @@ export function montageHeroRemoval(m: MontageModel, name: string): MontageHeroRe
 	return rows > 1 ? { actions: 0, shared: logged } : { actions: logged, shared: 0 };
 }
 
-/** ⋯ "Remove a hero" (SC-690) — takes the FIRST hero called `name` off the board and returns true; false (nothing touched) when no hero
- *  has that name. The name is matched exactly, the way the board matches an action to a row (BoardView `entriesForHero`).
+/** ⋯ "Remove a hero" (SC-690) — takes one hero called `name` off the board and returns true; false (nothing touched) when it cannot.
+ *  `rosterIndex` is the hero's place among `montageRoster` (the chip the user pressed): with two heroes of one name it says which one
+ *  goes, and the hero at that place must still be called `name` (a roster that changed under the window, SC-627, removes nothing).
+ *  Without it, the FIRST hero with that name goes. The name is matched exactly, the way the board matches an action to a row
+ *  (BoardView `entriesForHero`).
  *
  *  Only that one item leaves `participants` (a bare or malformed item the board skips stays as typed, in its place); when it was the
  *  last item the key goes, as an empty list does at parse (§B.5). Unless another hero of the same name is still on the board, the hero's
@@ -757,11 +760,12 @@ export function montageHeroRemoval(m: MontageModel, name: string): MontageHeroRe
  *  (SC-628); the hero's `skills_used` left with the hero, so there is no skill to take back. `entries` goes back to absent once empty.
  *  Nothing else changes: rounds, the round in play, limits, title and description stay, so a montage that a limit had completed may be
  *  live again (as after Undo). */
-export function removeMontageHero(m: MontageModel, name: string): boolean {
+export function removeMontageHero(m: MontageModel, name: string, rosterIndex?: number): boolean {
 	const list = m.participants;
 	if (!Array.isArray(list)) return false;
-	const at = list.findIndex((item) => isHero(item) && item.name === name);
-	if (at === -1) return false;
+	const hero = rosterIndex === undefined ? montageRoster(m).find((h) => h.name === name) : montageRoster(m)[rosterIndex];
+	if (hero === undefined || hero.name !== name) return false;
+	const at = list.indexOf(hero);
 	const { actions } = montageHeroRemoval(m, name);
 	list.splice(at, 1);
 	if (list.length === 0) delete m.participants;

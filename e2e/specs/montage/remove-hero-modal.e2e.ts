@@ -4,9 +4,10 @@
 // Montage/mid.md: Kira, Bram, Osric (no skills list) and Yenna, round 2 of 3, 1 success 1 failure. Montage/two-blocks.md: Kira alone, then Bram with one success.
 import { browser, expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
+import { setWindowSize } from '../../driver/recorders';
 import { readFixture } from '../../driver/state';
 import {
-	blockOf, cellOf, clickChrome, dismiss, expectText, HAND, MID, modalsOpen, MONTAGE, openRemoveHero, TABS, trackTail, TWINS, TWO, UNKNOWN,
+	blockOf, cellOf, clickChrome, dismiss, expectText, FRESH, HAND, MID, modalsOpen, MONTAGE, openRemoveHero, TABS, trackTail, TWINS, TWO, UNKNOWN,
 } from '../../driver/montage';
 
 const QUOTED = 'Montage/quoted-successes.md'; // `successes: "2"` typed in quotes, Kira alone
@@ -24,6 +25,12 @@ const picked = () =>
 const FENCE = /```ds-montage\n[\s\S]*?\n```/g;
 const outside = (text: string): string[] => text.split(FENCE);
 const fences = (text: string): string[] => text.match(FENCE) ?? [];
+/** Replace the first montage block of `note` from OUTSIDE (the driver exempts the note), wait for the board to show `heroes` rows. */
+const reseed = async (note: string, yaml: string, heroes: number): Promise<void> => {
+	await dse.openNote(note);
+	await dse.externalEdit(note, 'c.replace(/```ds-montage[\\s\\S]*?```/, () => ' + JSON.stringify('```ds-montage\n' + yaml + '\n```') + ')');
+	await dse.waitFor(`document.querySelectorAll('.markdown-reading-view [data-dse-element="montage"] .dse-mt__board-name').length === ${heroes}`, 'the reseeded board');
+};
 const noticeShown = (text: string) => dse.waitFor(`Array.from(document.querySelectorAll('.notice')).some((n) => n.textContent === ${JSON.stringify(text)})`, `the Notice "${text}"`);
 
 describe('montage: the Remove a hero window', () => {
@@ -32,7 +39,8 @@ describe('montage: the Remove a hero window', () => {
 		await expectText(modal.control({ css: '.dse-modal__title-text' }), 'Remove a hero');
 		expect((await picked()).map((c) => c.hero)).toEqual(['Kira', 'Bram', 'Osric', 'Yenna']);
 		expect((await picked()).every((c) => c.pressed === 'false' && c.glyph === 'hidden')).toBe(true);
-		await expect(modal.control({ css: '.dse-mt__sheet-consequence' })).not.toBeDisplayed();
+		await expectText(modal.control({ css: '.dse-mt__sheet-consequence' }), ''); // in the accessibility tree already, empty until a pick
+		await expectText(modal.control('montage.remove-hero.submit'), 'Remove');
 		await expect(modal.control('montage.remove-hero.submit')).toBeDisabled();
 		await dse.expectNoWrite(MID, () => dse.click(modal.control('montage.remove-hero.submit')));
 		await expect(modal.root).toBeExisting();
@@ -45,6 +53,8 @@ describe('montage: the Remove a hero window', () => {
 		await dse.click(chip(modal, 1));
 		expect((await picked()).map((c) => [c.hero, c.pressed, c.glyph])).toEqual([['Kira', 'false', 'hidden'], ['Bram', 'true', 'visible'], ['Osric', 'false', 'hidden'], ['Yenna', 'false', 'hidden']]);
 		await expect(modal.control('montage.remove-hero.submit')).toBeEnabled();
+		await expectText(modal.control('montage.remove-hero.submit'), 'Remove Bram');
+		await expect(modal.control('montage.remove-hero.submit')).toHaveAttribute('aria-label', 'Remove Bram');
 		await expectText(line, 'Bram has 1 logged action. It is removed too, and the tally follows.');
 		await dse.click(chip(modal, 3));
 		expect((await picked()).map((c) => c.pressed)).toEqual(['false', 'false', 'false', 'true']);
@@ -269,5 +279,52 @@ describe('montage: the Remove a hero window', () => {
 		await browser.pause(500);
 		await dse.settle();
 		expect(await dse.noteText(MID)).toBe(before.replace('  - name: Bram\n    skills_used: [Endurance]\n', ''));
+	});
+
+	it('[MONT-D17] a short window, twelve heroes and an 80-character name: only the list scrolls, the line and "Remove <name>" stay on screen, and the name is cut inside the button', async () => {
+		const long = 'Ser Thaddeus-Alaric Montgomery-Featherstonehaugh of the Nine Hundred Ashen Vales';
+		const names = [long, 'Kira', 'Bram', 'Osric', 'Yenna', 'Talin', 'Maren', 'Dov', 'Ilsabet', 'Corwin', 'Fenna', 'Quill'];
+		await reseed(FRESH, ['title: Crowd', 'rounds: 3', 'participants:', ...names.map((n) => `  - name: ${n}`), 'current_round: 1'].join('\n'), 12);
+		await setWindowSize(1440, 620);
+		try {
+			const { modal } = await openRemoveHero(FRESH);
+			await dse.click(chip(modal, 0));
+			const g = await dse.page<Record<string, number | string>>(`(() => {
+				const d = document.querySelector('.modal-container .dse-modal');
+				const box = (el) => el.getBoundingClientRect();
+				const list = d.querySelector('.dse-mt__sheet-herolist'), body = d.querySelector('.dse-modal__body'), line = d.querySelector('.dse-mt__sheet-consequence');
+				const foot = d.querySelector('.dse-modal__footer'), btn = d.querySelector('[data-dse-control="montage.remove-hero.submit"]'), text = btn.querySelector('.dse-btn__text');
+				const cont = d.closest('.modal-container');
+				return {
+					winH: innerHeight, dialogScroll: d.scrollHeight - d.clientHeight, bodyScroll: body.scrollHeight - body.clientHeight, containerScroll: cont.scrollHeight - cont.clientHeight,
+					listScroll: list.scrollHeight - list.clientHeight, lineTop: box(line).top, lineBottom: box(line).bottom, footerBottom: box(foot).bottom,
+					btnRight: box(btn).right, dialogRight: box(d).right, btnLabel: btn.getAttribute('aria-label'), textCut: text.scrollWidth - text.clientWidth, lineInList: list.contains(line) ? 1 : 0,
+				};
+			})()`);
+			expect(g.winH).toBe(620);
+			expect([g.dialogScroll, g.bodyScroll, g.containerScroll]).toEqual([0, 0, 0]); // no scrollbar but the list's own
+			expect(g.listScroll).toBeGreaterThan(0);
+			expect(g.lineInList).toBe(0);
+			expect(g.lineTop).toBeGreaterThan(0);
+			expect(g.lineBottom).toBeLessThanOrEqual(g.footerBottom as number);
+			expect(g.footerBottom).toBeLessThanOrEqual(620);
+			expect(g.btnRight).toBeLessThanOrEqual(g.dialogRight as number);
+			expect(g.btnLabel).toBe(`Remove ${long}`);
+			expect(g.textCut).toBeGreaterThan(0); // cut with an ellipsis inside the button; the full name is its accessible name
+			await dismiss(modal);
+		} finally {
+			await setWindowSize(1440, 1100);
+		}
+	});
+
+	it('[MONT-D18] two heroes with one name: the second chip removes the second one (the first keeps her skills list)', async () => {
+		const yaml = ['title: Twins', 'rounds: 3', 'success_limit: 3', 'failure_limit: 2', 'successes: 0', 'failures: 0', 'participants:', '  - name: Kira', '    skills_used: [Nature]', '  - name: Kira', '    skills_used: [Climb]', '  - name: Bram', 'current_round: 1'].join('\n');
+		await reseed(FRESH, yaml, 3);
+		const { modal } = await openRemoveHero(FRESH);
+		await dse.click(chip(modal, 1));
+		await expectText(modal.control('montage.remove-hero.submit'), 'Remove Kira');
+		await dse.waitForWrite(FRESH, () => dse.click(modal.control('montage.remove-hero.submit')));
+		await dse.settle();
+		expect((await blockOf(FRESH)).participants).toEqual([{ name: 'Kira', skills_used: ['Nature'] }, { name: 'Bram' }]);
 	});
 });

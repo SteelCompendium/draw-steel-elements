@@ -138,8 +138,33 @@ describe('SC-690: the "Remove a hero" window', () => {
 		expect(chips().map((c) => c.getAttribute('aria-label'))).toEqual(['Kira', 'Bram', 'Osric', 'Yenna', 'Talin']);
 		expect(chips().every((c) => c.getAttribute('aria-pressed') === 'false')).toBe(true);
 		expect(removeBtn().disabled).toBe(true);
+		expect(removeBtn().textContent).toBe('Remove');
+		expect(removeBtn().getAttribute('aria-label')).toBe('Remove');
 		expect(cancelBtn().disabled).toBe(false);
-		expect(line().hidden).toBe(true);
+	});
+
+	test('the line that says what will go is in the accessibility tree from the start (a live region, empty, never hidden) and sits outside the scrolling body, with the footer', async () => {
+		await open();
+		expect(line().getAttribute('role')).toBe('status');
+		expect(line().getAttribute('aria-live')).toBe('polite');
+		expect(line().hidden).toBe(false);
+		expect(line().textContent).toBe('');
+		expect(line().closest('.dse-modal__body')).toBeNull();
+		expect(line().nextElementSibling).toBe(windowEl().querySelector('.dse-modal__footer'));
+		chipOf('Kira').click();
+		expect(line().hidden).toBe(false);
+		expect(line().closest('.dse-modal__body')).toBeNull();
+	});
+
+	test('once a hero is picked Remove reads "Remove <name>" and its accessible name is the same text; picking another changes both', async () => {
+		await open();
+		chipOf('Bram').click();
+		expect(removeBtn().textContent).toBe('Remove Bram');
+		expect(removeBtn().getAttribute('aria-label')).toBe('Remove Bram');
+		chipOf('Osric').click();
+		expect(removeBtn().textContent).toBe('Remove Osric');
+		expect(removeBtn().getAttribute('aria-label')).toBe('Remove Osric');
+		expect(removeBtn().getAttribute('data-dse-control')).toBe('montage.remove-hero.submit');
 	});
 
 	test('picking a hero enables Remove, marks only that hero (aria-pressed and a check, not colour alone) and says what will go', async () => {
@@ -176,6 +201,11 @@ describe('SC-690: the "Remove a hero" window', () => {
 		await open(`rounds: 2\nparticipants:\n  - name: ${long}`);
 		expect(chips()[0].textContent).toBe(long);
 		expect(chips()[0].getAttribute('aria-label')).toBe(long);
+		chips()[0].click();
+		// the button holds the whole name (CSS cuts it with an ellipsis, which jsdom cannot show; MONT-D17 measures it in Obsidian)
+		expect(removeBtn().getAttribute('aria-label')).toBe(`Remove ${long}`);
+		expect(removeBtn().querySelector('.dse-btn__text')?.textContent).toBe(`Remove ${long}`);
+		expect(removeBtn().classList.contains('dse-mt__sheet-removebtn')).toBe(true);
 	});
 
 	test('Cancel closes the window and writes nothing', async () => {
@@ -239,6 +269,28 @@ describe('SC-690: the "Remove a hero" window', () => {
 		expect(document.querySelector('.modal-container')).toBeNull();
 		expect(Notice.notices).not.toContain('Removed Kira from the montage');
 		expect(rows(root())).toEqual(['Kira', 'Bram']); // the old card is untouched until the outside refresh redraws it
+	});
+
+	test('two heroes with one name: the second chip removes the second one, and the first keeps her skills', async () => {
+		const twins = ['rounds: 3', 'participants:', '  - name: Kira', '    skills_used: [Nature]', '  - name: Kira', '    skills_used: [Climb]', '  - name: Bram'].join('\n');
+		const { replaceSource } = await open(twins);
+		expect(chips().map((c) => c.getAttribute('aria-label'))).toEqual(['Kira', 'Kira', 'Bram']);
+		chips()[1].click();
+		expect(chips().map((c) => c.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false']);
+		removeBtn().click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(parseYaml(replaceSource.mock.calls[0][0] as string).participants).toEqual([{ name: 'Kira', skills_used: ['Nature'] }, { name: 'Bram' }]);
+	});
+
+	test('an outside edit that reorders the roster so another hero stands at the picked place: Remove writes nothing', async () => {
+		const { view, replaceSource } = await open(TWO);
+		chipOf('Kira').click(); // roster place 0
+		const outside = TWO.replace('  - name: Kira\n  - name: Bram', '  - name: Bram\n  - name: Kira');
+		(view as any).model = parse(parseYaml(outside), outside);
+		removeBtn().click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(replaceSource).not.toHaveBeenCalled();
+		expect(document.querySelector('.modal-container')).toBeNull();
 	});
 
 	test('an outside edit that adds actions for the picked hero is counted when they are picked, and removed with them', async () => {
