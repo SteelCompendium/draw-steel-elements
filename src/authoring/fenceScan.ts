@@ -132,7 +132,9 @@ function endsQuotedFence(text: string): boolean {
  *   - a fence indented under a list item is seen at any indentation that sits at the item's text column up to 3 columns further (the indent
  *     `planBlockInsert` writes under `- `, `1. `, `10. `, nested bullets, a list item inside a callout), with a stack of the open items'
  *     text columns; 4+ columns past the item (or past nothing, at the top level) is an INDENTED CODE block in CommonMark, where a fence marker
- *     is literal text, and is not a fence here. A fence can also open on the item's own line (`- ```js`);
+ *     is literal text, and is not a fence here. A line's own tabs and the items' text columns are both read with CommonMark's tab stops
+ *     (`ListItemStart.readColumn`; a tab-indented fence under a nested bullet, Obsidian's default list indentation, is seen; measured, r5).
+ *     A fence can also open on the item's own line (`- ```js`);
  *     (a line less indented than the item's text ends it, unless it is a paragraph line directly under the item's paragraph: lazy continuation);
  *   - an unclosed fence runs to the end of the note (a fence indented under a list item too: Live Preview keeps drawing it as code to the end,
  *     even past an unindented line or an unindented ```` ``` ````, measured, so a closer under a list item must sit at the item's text column or
@@ -203,9 +205,9 @@ export function placeOfLine(lines: readonly string[], target: number): LinePlace
 		} else {
 			const item = listItemOf(rest);
 			if (item) {
-				items.push(item.contentColumn);
+				items.push(item.readColumn);
 				const inline = FENCE_RUN_AFTER_ITEM.exec(rest.slice(item.length));
-				if (inline) opener = { marker: inline[1], info: inline[2], start: quote.length + item.length, listColumn: item.contentColumn };
+				if (inline) opener = { marker: inline[1], info: inline[2], start: quote.length + item.length, listColumn: item.readColumn };
 			}
 		}
 		const fence = opener ? openFenceOf(opener.marker, opener.info) : null;

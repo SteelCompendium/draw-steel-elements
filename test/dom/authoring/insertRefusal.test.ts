@@ -316,6 +316,9 @@ describe('SC-687: running an insert twice in a row under a list item or in a cal
 		['> [!note] T\n> first', { line: 1, ch: 7 }],
 		['> - item', { line: 0, ch: 8 }],
 		['- > [!note] T', { line: 0, ch: 13 }],
+		['- a\n\t- b', { line: 1, ch: 5 }], // tab-indented nested bullets (Obsidian's default): the block is written at 4 spaces
+		['- a\n\t- b\n\t\t- c', { line: 2, ch: 7 }],
+		['1. a\n\t1. b', { line: 1, ch: 6 }],
 	])('%j: the second run is refused and the note stays as the first run left it', (note, at) => {
 		const editor = new CmEditor(note, at);
 		expect(insertScaffold(editor as never, COUNTER())).toBe(true);
@@ -348,6 +351,26 @@ describe('SC-687 r3: the plugin\'s own insert under a list item does not make th
 		expect(insertScaffold(editor as never, COUNTER())).toBe(false);
 		expect(editor.getValue()).toBe(note);
 		expect(noticesSince(told)).toEqual([BLOCK_NOTICE]);
+	});
+});
+
+describe('SC-687 r5: a hand-written tab-indented block under a nested list item', () => {
+	test('the reviewer\'s X4 note: the cursor in the block is refused, nothing written, and the same on the opening line after the marker', () => {
+		const note = '- a\n\t- b\n\t\t```ds-ct\n\t\tname: x\n\t\t```\ntail\n';
+		for (const at of [{ line: 3, ch: 9 }, { line: 2, ch: 6 }]) {
+			const editor = new CmEditor(note, at);
+			const told = Notice.notices.length;
+			expect(insertScaffold(editor as never, COUNTER())).toBe(false);
+			expect(editor.getValue()).toBe(note);
+			expect(editor.writes).toHaveLength(0);
+			expect(noticesSince(told)).toEqual([BLOCK_NOTICE]);
+		}
+	});
+	test('...and at `tail`, below the block, the insert is written', () => {
+		const note = '- a\n\t- b\n\t\t```ds-ct\n\t\tname: x\n\t\t```\ntail\n';
+		const editor = new CmEditor(note, { line: 5, ch: 4 });
+		expect(insertScaffold(editor as never, COUNTER())).toBe(true);
+		expect(editor.getValue()).toBe(note.replace('tail\n', 'tail\n' + CT() + '\n'));
 	});
 });
 
