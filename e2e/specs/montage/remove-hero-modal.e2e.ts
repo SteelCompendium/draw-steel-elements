@@ -31,6 +31,11 @@ const reseed = async (note: string, yaml: string, heroes: number): Promise<void>
 	await dse.externalEdit(note, 'c.replace(/```ds-montage[\\s\\S]*?```/, () => ' + JSON.stringify('```ds-montage\n' + yaml + '\n```') + ')');
 	await dse.waitFor(`document.querySelectorAll('.markdown-reading-view [data-dse-element="montage"] .dse-mt__board-name').length === ${heroes}`, 'the reseeded board');
 };
+/** The window, opened on the note `reseed` just edited (`openRemoveHero` would open the note again, which puts the fixture back). */
+const openReseeded = async (): Promise<{ modal: Modal }> => {
+	await clickChrome(dse.block(MONTAGE), 'montage.chrome.remove-hero');
+	return { modal: await dse.modal('montage-remove-hero') };
+};
 const noticeShown = (text: string) => dse.waitFor(`Array.from(document.querySelectorAll('.notice')).some((n) => n.textContent === ${JSON.stringify(text)})`, `the Notice "${text}"`);
 
 describe('montage: the Remove a hero window', () => {
@@ -287,7 +292,7 @@ describe('montage: the Remove a hero window', () => {
 		await reseed(FRESH, ['title: Crowd', 'rounds: 3', 'participants:', ...names.map((n) => `  - name: ${n}`), 'current_round: 1'].join('\n'), 12);
 		await setWindowSize(1440, 620);
 		try {
-			const { modal } = await openRemoveHero(FRESH);
+			const { modal } = await openReseeded();
 			await dse.click(chip(modal, 0));
 			const g = await dse.page<Record<string, number | string>>(`(() => {
 				const d = document.querySelector('.modal-container .dse-modal');
@@ -320,7 +325,7 @@ describe('montage: the Remove a hero window', () => {
 	it('[MONT-D18] two heroes with one name: the second chip removes the second one (the first keeps her skills list)', async () => {
 		const yaml = ['title: Twins', 'rounds: 3', 'success_limit: 3', 'failure_limit: 2', 'successes: 0', 'failures: 0', 'participants:', '  - name: Kira', '    skills_used: [Nature]', '  - name: Kira', '    skills_used: [Climb]', '  - name: Bram', 'current_round: 1'].join('\n');
 		await reseed(FRESH, yaml, 3);
-		const { modal } = await openRemoveHero(FRESH);
+		const { modal } = await openReseeded();
 		await dse.click(chip(modal, 1));
 		await expectText(modal.control('montage.remove-hero.submit'), 'Remove Kira');
 		await dse.waitForWrite(FRESH, () => dse.click(modal.control('montage.remove-hero.submit')));
