@@ -230,9 +230,22 @@ export async function makeSyncHarness(destination = 'DS Compendium'): Promise<Sy
 	return { plugin, app, vault, fileManager, server };
 }
 
-/** Wait for the fire-and-forget callbacks of a window (they run in async IIFEs the window does not await). */
+/**
+ * Let the fire-and-forget callbacks of a window run (they are async IIFEs the window does not await). Real time, not event-loop turns: the sync hashes
+ * with WebCrypto, whose digests complete on libuv's thread pool, so a fixed number of `setTimeout(0)` turns is not a bound under load. Prefer
+ * `until(...)` when the test knows what it is waiting for.
+ */
 export async function settle(rounds = 25): Promise<void> {
-	for (let i = 0; i < rounds; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+	for (let i = 0; i < rounds; i++) await new Promise((resolve) => setTimeout(resolve, 3));
+}
+
+/** Poll until `condition` holds (the tests wait for a state, never for a guessed delay), or fail with `what`. */
+export async function until(condition: () => boolean, what: string, timeoutMs = 8000): Promise<void> {
+	const start = Date.now();
+	while (!condition()) {
+		if (Date.now() - start > timeoutMs) throw new Error(`timed out waiting for ${what}`);
+		await new Promise((resolve) => setTimeout(resolve, 3));
+	}
 }
 
 // ------------------------------------------------------------------------------------------ the windows, drawn for real

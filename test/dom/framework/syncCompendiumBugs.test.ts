@@ -7,7 +7,7 @@
 import { Notice } from '../../mocks/obsidian';
 import { DESTINATION_REFUSED_NOTICE } from '@model/CompendiumDestination';
 import {
-	MANIFEST_PATH, captureWindows, control, makeSyncHarness, pressEscape, seedLegacyTree, settle, treeOf, windowTitles,
+	MANIFEST_PATH, captureWindows, control, makeSyncHarness, pressEscape, seedLegacyTree, settle, treeOf, until, windowTitles,
 } from '../../fakes/syncHarness';
 import { migrationMap } from '@/data/CompendiumMigration';
 
@@ -69,7 +69,7 @@ describe('[BUG-2] "Move old compendium to trash" trashes the folder before the d
 		h.server.lookupStatus = 503; // offline / GitHub down
 		await h.plugin.syncCompendium();
 		control('sync.legacy.trash').click();
-		await settle();
+		await until(() => notices().includes('compendium sync failed'), 'the sync to fail');
 		return h;
 	}
 	test('current behaviour: the sync fails and the folder is already in the trash, with nothing synced', async () => {
@@ -99,7 +99,7 @@ describe('[BUG-3] a migration run is not busy-locked', () => {
 		let moves = 0;
 		h.fileManager.beforeRename = async () => { if (moves++ === 1) await gate; };
 		control('migration.preview.move').click();
-		await settle(60);
+		await until(() => moves === 2, 'the 2nd move to be held');
 		expect(windowTitles()).toEqual(['Moving your compendium…']);
 		Notice.notices.length = 0;
 		await h.plugin.migrateCompendium();
@@ -107,7 +107,7 @@ describe('[BUG-3] a migration run is not busy-locked', () => {
 		await settle();
 		const titles = windowTitles();
 		release();
-		await settle(80);
+		await until(() => h.fileManager.renamed.length === 25, 'the run to finish');
 		return { h, titles };
 	}
 	test('current behaviour: the lock is free during the run and two more migration windows open over it', async () => {
@@ -134,11 +134,11 @@ describe('[BUG-4] dismissing the migration window mid-run says the compendium wa
 		let moves = 0;
 		h.fileManager.beforeRename = async () => { if (moves++ === 2) await gate; };
 		control('migration.preview.move').click();
-		await settle(60);
+		await until(() => moves === 3, 'the 3rd move to be held');
 		Notice.notices.length = 0;
 		pressEscape(windows.migration[0]);
 		release();
-		await settle(80);
+		await until(() => notices().includes('stopped after moving'), 'the run to report');
 		return h;
 	}
 	test('current behaviour: the "left as it is" Notice appears although files moved, then the "stopped after moving 3 file(s)" one', async () => {
@@ -171,7 +171,7 @@ describe('[BUG-5] the windows outlive the plugin', () => {
 		const h = await arrange();
 		expect(windowTitles()).toEqual([LEGACY_WINDOW]);
 		control('sync.legacy.keep').click();
-		await settle(40);
+		await until(() => notices().includes('compendium v1 synced'), 'the sync');
 		expect(h.vault.text(`${ROOT}/class/a.md`)).toBe('A1');
 	});
 	test.failing('correct behaviour: unloading the plugin closes its windows', async () => {
@@ -275,7 +275,7 @@ describe('[BUG-9] the trash button does not warn that Obsidian is set to delete 
 		expect(text).toContain('Move old compendium to trash');
 		expect(text.toLowerCase()).not.toContain('permanent');
 		control('sync.legacy.trash').click();
-		await settle(40);
+		await until(() => notices().includes('compendium v1 synced'), 'the sync');
 		expect(h.vault.text(`${ROOT}/old.md`)).toBeUndefined();
 		expect([...h.vault.files.keys()].filter((p) => p.startsWith('.trash/'))).toEqual([]);
 	});

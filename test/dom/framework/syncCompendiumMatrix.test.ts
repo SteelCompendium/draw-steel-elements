@@ -10,7 +10,7 @@ import { Notice } from '../../mocks/obsidian';
 import { DESTINATION_REFUSED_NOTICE } from '@model/CompendiumDestination';
 import { SYNC_BUSY_NOTICE } from '@/data/CompendiumSyncService';
 import {
-	MANIFEST_PATH, NO_CHANGE, STATE_PATH, captureWindows, control, diffTree, makeSyncHarness, pressEscape, seedLegacyTree, settle, treeOf, windowTitles,
+	MANIFEST_PATH, NO_CHANGE, STATE_PATH, captureWindows, control, diffTree, makeSyncHarness, pressEscape, seedLegacyTree, settle, treeOf, until, windowTitles,
 } from '../../fakes/syncHarness';
 import type { SyncHarness } from '../../fakes/syncHarness';
 
@@ -226,7 +226,7 @@ describe('two operations together: only one runs', () => {
 		const first = h.plugin.syncCompendium();
 		const second = h.plugin.syncCompendium();
 		await second;
-		await settle(5);
+		await until(() => h.server.calls.length === 1, 'the first sync to reach the lookup');
 		expect(Notice.notices).toContain(SYNC_BUSY_NOTICE);
 		expect(h.server.calls).toHaveLength(1); // only the first sync's lookup is on the wire
 		release();
@@ -278,7 +278,7 @@ describe('"Existing compendium folder found", driven through its buttons', () =>
 		expect(requests(h)).toBe(0);
 		const before = treeOf(h.vault);
 		control('sync.legacy.keep').click();
-		await settle();
+		await until(() => notices().includes('compendium v1 synced'), 'the sync');
 		const diff = diffTree(before, treeOf(h.vault));
 		expect(diff.created.sort()).toEqual([`${ROOT}/rule/b.md`, MANIFEST_KEY].sort());
 		expect(diff.removed).toEqual([]);
@@ -295,7 +295,7 @@ describe('"Existing compendium folder found", driven through its buttons', () =>
 		expect(document.body.textContent).toContain(`"${ROOT}" already contains files`);
 		const before = treeOf(h.vault);
 		control('sync.legacy.trash').click();
-		await settle();
+		await until(() => notices().includes('compendium v1 synced'), 'the sync');
 		expect(h.fileManager.trashed).toEqual([ROOT]);
 		const diff = diffTree(before, treeOf(h.vault));
 		expect(diff.removed.sort()).toEqual([`${ROOT}/My homebrew.md`, `${ROOT}/old-download.md`]);
@@ -316,7 +316,7 @@ describe('"Existing compendium folder found", driven through its buttons', () =>
 		const h = await legacyVault();
 		h.fileManager.trashMode = 'permanent';
 		control('sync.legacy.trash').click();
-		await settle();
+		await until(() => notices().includes('compendium v1 synced'), 'the sync');
 		expect([...h.vault.files.keys()].filter((p) => p.startsWith('.trash/'))).toEqual([]);
 		expect(h.vault.text(`${ROOT}/old-download.md`)).toBeUndefined();
 		expect(h.vault.text(`${ROOT}/class/a.md`)).toBe('A1');
@@ -384,7 +384,7 @@ describe('the migration window, driven through its buttons over the shipped map'
 		await open(h);
 		const before = treeOf(h.vault);
 		control('migration.preview.sync-anyway').click();
-		await settle(40);
+		await until(() => notices().includes('compendium v4 synced'), 'the sync without moving');
 		const diff = diffTree(before, treeOf(h.vault));
 		expect(diff.removed).toEqual([]);
 		expect(diff.changed).toEqual([]);
@@ -402,8 +402,7 @@ describe('the migration window, driven through its buttons over the shipped map'
 		await open(h);
 		const before = treeOf(h.vault);
 		control('migration.preview.move').click();
-		await settle(80);
-		expect(titleNow()).toBe('Compendium moved');
+		await until(() => titleNow() === 'Compendium moved', 'the summary');
 		const diff = diffTree(before, treeOf(h.vault));
 		expect(diff.changed).toEqual([]);
 		expect(diff.removed.sort()).toEqual(pairs.map((p) => `${ROOT}/${p.oldRelative}`).sort());
@@ -434,8 +433,7 @@ describe('the migration window, driven through its buttons over the shipped map'
 			const { h } = await legacyVault();
 			await open(h);
 			control('migration.preview.move').click();
-			await settle(80);
-			expect(titleNow()).toBe('Compendium moved');
+			await until(() => titleNow() === 'Compendium moved', 'the summary');
 			const before = treeOf(h.vault);
 			Notice.notices.length = 0;
 			(leave as (m: never) => void)(windows.migration[0] as never);
@@ -451,9 +449,9 @@ describe('the migration window, driven through its buttons over the shipped map'
 		const { h, pairs } = await legacyVault();
 		await open(h);
 		control('migration.preview.move').click();
-		await settle(80);
+		await until(() => titleNow() === 'Compendium moved', 'the summary');
 		control('migration.summary.sync-now').click();
-		await settle(80);
+		await until(() => notices().includes(`compendium v4 synced`), 'the sync after the move');
 		for (const p of pairs) expect(h.vault.text(`${ROOT}/${p.newRelative}`)).toBe(`official ${p.newRelative}`);
 		expect(notices()).toContain(`compendium v4 synced — 0 new, ${N} updated, 0 removed.`);
 		expect(h.vault.text(`${ROOT}/My own note.md`)).toBe('the user\'s own note, no 7.0.0 counterpart');
@@ -482,14 +480,13 @@ describe('the migration window, driven through its buttons over the shipped map'
 		let moves = 0;
 		h.fileManager.beforeRename = async () => { if (moves++ === 3) await gate; };
 		control('migration.preview.move').click();
-		await settle(80); // backups done, 3 moved, the 4th held
+		await until(() => moves === 4, 'the 4th move to be held (backups done, 3 moved)');
 		expect(titleNow()).toBe('Moving your compendium…');
 		expect(h.fileManager.renamed).toHaveLength(3);
 		control('migration.running.stop').click();
 		expect(control('migration.running.stop').disabled).toBe(true);
 		release();
-		await settle(80);
-		expect(titleNow()).toBe('Migration stopped');
+		await until(() => titleNow() === 'Migration stopped', 'the stopped summary');
 		expect(h.fileManager.renamed).toHaveLength(4); // the file in flight finished, nothing after it started
 		const stopped = new Set(h.fileManager.renamed.map((r) => r.to));
 		for (const p of pairs) { // never both, never neither
@@ -503,11 +500,9 @@ describe('the migration window, driven through its buttons over the shipped map'
 		expect(document.querySelector('[data-dse-control="migration.summary.sync-now"]')).toBeNull();
 		h.fileManager.beforeRename = null;
 		control('migration.stopped.finish').click();
-		await settle(80);
-		expect(titleNow()).toBe(MIGRATION_PREVIEW);
+		await until(() => titleNow() === MIGRATION_PREVIEW, 'the second preview');
 		control('migration.preview.move').click();
-		await settle(80);
-		expect(titleNow()).toBe('Compendium moved');
+		await until(() => titleNow() === 'Compendium moved', 'the summary');
 		expect(h.fileManager.renamed).toHaveLength(N); // 4 + 21: no file moved twice
 		expect(new Set(h.fileManager.renamed.map((r) => r.from)).size).toBe(N);
 		for (const p of pairs) expect(h.vault.text(`${ROOT}/${p.oldRelative}`)).toBeUndefined();
@@ -523,10 +518,10 @@ describe('the migration window, driven through its buttons over the shipped map'
 		let moves = 0;
 		h.fileManager.beforeRename = async () => { if (moves++ === 2) await gate; };
 		control('migration.preview.move').click();
-		await settle(80);
+		await until(() => moves === 3, 'the 3rd move to be held');
 		pressEscape(windows.migration[0]);
 		release();
-		await settle(80);
+		await until(() => notices().includes('stopped after moving'), 'the run to stop');
 		expect(h.fileManager.renamed).toHaveLength(3);
 		expect(requests(h)).toBe(0);
 		expect(stateOf(h)).toMatchObject({ incomplete: true });
@@ -543,12 +538,12 @@ describe('the migration window, driven through its buttons over the shipped map'
 		h.vault.setText(`${ROOT}/${pairs[3].newRelative}`, 'the user\'s file parked on a 7.0.0 path');
 		await open(h);
 		control('migration.preview.move').click();
-		await settle(80);
+		await until(() => titleNow() === 'Compendium moved', 'the summary');
 		expect(h.vault.text(`${ROOT}/${pairs[3].newRelative}`)).toBe('the user\'s file parked on a 7.0.0 path');
 		expect(h.vault.text(`${ROOT}/${pairs[3].oldRelative}`)).toBe(`legacy ${pairs[3].oldRelative}`);
 		expect(document.querySelector('[data-dse-control="migration.list.blocked"]')).not.toBeNull();
 		control('migration.summary.sync-now').click();
-		await settle(80);
+		await until(() => notices().includes('compendium v4 synced'), 'the sync after the move');
 		expect(h.vault.text(`${ROOT}/${pairs[3].newRelative}`)).toBe('the user\'s file parked on a 7.0.0 path'); // a squatter: never overwritten
 		expect(h.vault.text(`${ROOT}/${pairs[4].newRelative}`)).toBe(`official ${pairs[4].newRelative}`);
 	});
