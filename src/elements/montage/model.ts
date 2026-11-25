@@ -764,6 +764,8 @@ export function removeMontageHero(m: MontageModel, name: string, rosterIndex?: n
 	const list = m.participants;
 	if (!Array.isArray(list)) return false;
 	const hero = rosterIndex === undefined ? montageRoster(m).find((h) => h.name === name) : montageRoster(m)[rosterIndex];
+	// The re-check compares the NAME at that place. That is enough today because any outside edit closes the window before Remove can be
+	// pressed (SC-650 / SC-662); a change that lets the window survive an outside edit must compare the roster item itself instead.
 	if (hero === undefined || hero.name !== name) return false;
 	const at = list.indexOf(hero);
 	const { actions } = montageHeroRemoval(m, name);
