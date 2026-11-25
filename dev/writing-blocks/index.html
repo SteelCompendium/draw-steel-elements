@@ -1003,6 +1003,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#not-inside-another-block-or-the-properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not inside another block or the properties
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1148,6 +1159,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#not-inside-another-block-or-the-properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not inside another block or the properties
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1265,6 +1287,15 @@ the text after it the same way). Inside a callout every line of the block keeps 
 and inside a list item every line is indented under the item. The same goes for the
 <strong>Insert Draw Steel: compendium reference / full block</strong> commands. (A block inside a list item
 draws, but can't save yet, see <a href="#blocks-inside-callouts-and-quotes">Blocks inside callouts and quotes</a> below.)</p>
+<h3 id="not-inside-another-block-or-the-properties">Not inside another block or the properties<a class="headerlink" href="#not-inside-another-block-or-the-properties" title="Permanent link">&para;</a></h3>
+<p>With the cursor inside an existing block (on any line of it, whatever the language, in a callout or
+under a list item too), or inside the note's properties at the top, nothing is inserted and a message
+tells you so: <em>"The cursor is inside another block, so nothing was inserted"</em> (or <em>"…inside the note's
+properties…"</em>). Move the cursor to a line outside the block or below the properties and run the
+command again. This holds for the insert commands, for the compendium reference and full block commands
+(they say so before the search opens) and for picking something from the <code>/ds</code> list. The start of the
+block's opening line and the end of its closing line count as outside: there the new block lands above
+or below the existing one. With several cursors, one of them inside a block or the properties is enough to refuse.</p>
 <h2 id="autocomplete-inside-a-block">Autocomplete inside a block<a class="headerlink" href="#autocomplete-inside-a-block" title="Permanent link">&para;</a></h2>
 <p>With your cursor inside a <code>ds-</code> block, start typing a field name and Obsidian suggests the
 fields that element accepts. After a field that only allows certain values (for example
