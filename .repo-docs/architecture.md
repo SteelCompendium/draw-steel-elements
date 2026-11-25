@@ -521,7 +521,7 @@ free, derived from `def.schema`/`def.authoring`.
   level, is an indented code block and no fence), an unclosed fence to the end of the note, and the
   properties as Obsidian's editor reads them (line 0 exactly `---` up to the first later line of `---` and
   whitespace; only a CLOSED pair counts, an unclosed line-0 `---` refuses nothing, O8). Inside a quoted fence
-  a line without the `>` prefix ends the fence only when it is blank or an unquoted fence line (measured);
+  a line without the whole `>` prefix ends the fence only when it is blank or a fence line after its own (fewer) markers (measured); fences under list items are read with CommonMark's tab stops for the line and the item's text column (`listItemOf.readColumn`), not the 2-per-tab the insert WRITES under a bullet;
   with several cursors any selection range with an end inside refuses. Before the marker of an opening line and at the end of a closing line the
   block lands above / below and is allowed. The two compendium commands also check when they start,
   before the search opens. `/ds` suppresses itself inside any already-open fence (`fenceScan.ts`'s
