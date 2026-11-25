@@ -197,6 +197,20 @@ describe('selectSuggestion closes the list exactly once, whether the pick wrote 
 		expect(closed).toBe(1);
 	});
 
+	test('a write that throws still closes the list once, and the error reaches the caller (the list must not stay up after a failed pick)', () => {
+		const doc = 'above\n/dsct\n';
+		const end = { line: 1, ch: 5 };
+		const editor = new CmEditor(doc, end);
+		jest.spyOn(editor, 'replaceRange').mockImplementation(() => {
+			throw new Error('write failed');
+		});
+		const s = make();
+		s.context = { editor: editor as never, file: null as never, start: { line: 1, ch: 0 }, end, query: 'ct' };
+		const close = jest.spyOn(s, 'close');
+		expect(() => s.selectSuggestion(registry().get('counter')!, null as never)).toThrow('write failed');
+		expect(close).toHaveBeenCalledTimes(1);
+	});
+
 	test('a pick with no context (the list was already closed) writes nothing and closes nothing', () => {
 		const s = make();
 		const close = jest.spyOn(s, 'close');
