@@ -63,6 +63,15 @@ describe('SC-687 scan: a fence in a callout / quote is inside (verdict 2)', () =
 		['an unquoted heading, list item and thematic rule stay in (the views disagree: Reading view ends the fence there, Live Preview and Source mode do not; the scan refuses)', '> ```js\n> a\n# H|\n> b\n> ```', 'block'],
 		['...a list item', '> ```js\n> a\n- item|\n> b\n> ```', 'block'],
 		['...a thematic rule', '> ```js\n> a\n---|\n> b\n> ```', 'block'],
+		// r5 (NEW-LOW-1), measured (Reading view): a line with FEWER `>` than the fence's prefix ends the fence when it is blank or a fence marker line
+		// (after its own markers), and a fence line there opens a fence of its own at the shallower depth.
+		['a shallower quoted fence line ends the deeper fence and opens its own: a line in it is inside (the reviewer\'s B2)', '> > ```js\n> > a\n> ```\n> > b\n> > ```\n> c|\n\nafter', 'block'],
+		['...the blank line after it ends that fence: the line below is outside', '> > ```js\n> > a\n> ```\n> > b\n> > ```\n> c\n\nafter|', null],
+		['...the shallower fence line itself, after its marker', '> > ```js\n> > a\n> ```|\n> > b', 'block'],
+		['a shallower quoted fence that closes: the text after it is outside (B2b)', '> > ```js\n> > a\n> ```\n> x\n> ```\nafter|', null],
+		['...and its body line is inside', '> > ```js\n> > a\n> ```\n> x|\n> ```\nafter', 'block'],
+		['a bare shallower `>` ends the deeper fence', '> > ```js\n> > a\n>\n> after|', null],
+		['a shallower quoted TEXT line still stays in the deeper fence (r3 MEDIUM-2, measured)', '> > ```js\n> > a\n> b|\n> > ```\nafter', 'block'],
 		['a whitespace-only line ends a quoted fence like an empty one', '> ```js\n> a\n   \nafter|', null],
 		['an unquoted fence line ends the quoted fence and opens a fence of its own: its body is inside', '> ```js\n> a\n```\nafter|', 'block'],
 		['...and the new fence closes at its own closer', '> ```js\n> a\n```\nafter\n```\ntail|', null],
