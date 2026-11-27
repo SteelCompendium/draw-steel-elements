@@ -40,6 +40,11 @@ describe('the keys each element offers on an empty body line (its schema, allOf 
 		['ds-resource', ['class', 'type', 'current', 'min', 'max']],
 		['ds-surges', ['surges', 'highest_characteristic']],
 		['ds-tokens', ['label', 'tokens']],
+		// SC-707: no def.schema, a suggestions-only authoring.suggestSchema (the keys an author writes; none the tracker writes itself)
+		['ds-initiative', ['name', 'round', 'heroes', 'enemy_groups', 'malice']],
+		['ds-it', ['name', 'round', 'heroes', 'enemy_groups', 'malice']],
+		['ds-init', ['name', 'round', 'heroes', 'enemy_groups', 'malice']],
+		['ds-initiative-tracker', ['name', 'round', 'heroes', 'enemy_groups', 'malice']],
 		['ds-hero', ['name', 'level', 'ancestry', 'class', 'subclass', 'kits', 'characteristics', 'skills', 'abilities', 'max_stamina', 'recoveries_max', 'resource', 'titles', 'perks', 'treasures', 'complication', 'state']],
 	];
 	test.each(CASES)('%s (gate on)', (fence, keys) => {
@@ -56,7 +61,7 @@ describe('the keys each element offers on an empty body line (its schema, allOf 
 		expect(offered(make(), '```' + fence + '\n')?.values.length).toBeGreaterThan(5);
 	});
 
-	test.each(['ds-hr', 'ds-nt', 'ds-it', 'ds-ft', 'ds-fb', 'ds-sb', 'ds-ct', 'ds-vr', 'ds-char', 'ds-scc', 'ds-montage'])('%s has no schema, so it offers no keys (even though its scaffold is a valid block)', (fence) => {
+	test.each(['ds-hr', 'ds-nt', 'ds-ft', 'ds-fb', 'ds-sb', 'ds-ct', 'ds-vr', 'ds-char', 'ds-scc', 'ds-montage'])('%s has no schema, so it offers no keys (even though its scaffold is a valid block)', (fence) => {
 		expect(offered(make(), '```' + fence + '\n')).toBeNull();
 	});
 });

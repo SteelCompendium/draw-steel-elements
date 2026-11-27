@@ -1,0 +1,96 @@
+# SC-707 — the ds-initiative SUGGESTIONS-ONLY schema (definition.ts `authoring.suggestSchema`). Read by the in-block key / value autocomplete
+# (src/authoring/schemaSuggest.ts) and nothing else: it never validates, never builds the form, never shapes the scaffold. The element's own
+# `parse` / `resolveRefs` stay the only validators (see the "Deliberately NO schema" note in definition.ts).
+#
+# It lists the keys an AUTHOR writes. Keys the tracker writes for itself while a fight is played (turn flags, per-turn action checklists,
+# stamina pools and the captain bonus bookkeeping, the per-creature `instances` list, the malice log) are left out on purpose. A list
+# entry that can be a bare word or an object (a `conditions:` entry) has no entry schema either, so a bare word typed there is never
+# offered as a key. test/dom/authoring/initiativeSuggestSchema.test.ts keeps every key here a key the initiative parser really reads.
+type: object
+properties:
+  name:
+    type: string
+    description: A title for the encounter, shown above the heroes.
+  round:
+    type: integer
+    description: The round the fight is on. Leave it out to start at round 1.
+  heroes:
+    type: array
+    description: The player characters in the fight.
+    items:
+      type: object
+      properties:
+        name:
+          type: string
+          description: The hero's name. Filled in from the statblock when you give one.
+        max_stamina:
+          type: integer
+          description: The hero's top Stamina. Filled in from the statblock when you give one.
+        statblock:
+          type: string
+          description: A statblock to pull the name, Stamina and image from (a compendium code, a note name or a [[link]]).
+        current_stamina:
+          type: integer
+          description: Stamina right now. Starts at max_stamina when left out.
+        temp_stamina:
+          type: integer
+          description: Temporary Stamina. Starts at 0 when left out.
+        image:
+          type: string
+          description: Path to the hero's picture in your vault.
+        conditions:
+          type: array
+          description: Conditions on the hero when the fight starts (a name such as grabbed).
+  enemy_groups:
+    type: array
+    description: The enemies, in groups that take their turns together.
+    items:
+      type: object
+      properties:
+        name:
+          type: string
+          description: The group's name.
+        creatures:
+          type: array
+          description: The kinds of creature in the group.
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: The creature's name. Filled in from the statblock when you give one.
+              max_stamina:
+                type: integer
+                description: Each creature's top Stamina. Filled in from the statblock when you give one.
+              amount:
+                type: integer
+                description: How many of this creature are in the fight.
+              statblock:
+                type: string
+                description: A statblock to pull the name, Stamina and image from (a compendium code, a note name or a [[link]]).
+              image:
+                type: string
+                description: Path to the creature's picture in your vault.
+              squad_role:
+                type: string
+                description: The creature's place in a minion squad. Needed on every creature in a squad group.
+                enum: [minion, captain, attached]
+              captain_of:
+                type: string
+                description: For a captain in a group with more than one squad, the name of the minion creature they lead.
+              with_captain_stamina:
+                type: integer
+                description: Extra Stamina each minion gets while its squad has a captain. Overrides the number read from the statblock.
+        is_squad:
+          type: boolean
+          description: True when the group is a minion squad that shares one Stamina pool.
+  malice:
+    type: object
+    description: The Director's Malice pool.
+    properties:
+      value:
+        type: integer
+        description: The Malice the pool holds right now.
+      round_gain:
+        type: integer
+        description: Malice added each time you press Advance round. Leave it out for no automatic gain.

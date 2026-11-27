@@ -9,6 +9,7 @@ import { parse, serialize } from './model';
 import { resolveInitiativeRefs } from './resolveRefs';
 import { InitiativeView } from './view';
 import initiativeExample from './example.yaml';
+import initiativeSuggestSchema from './suggest-schema.yaml';
 
 /**
  * SC-169 ROLLOUT wave 2 — the spec's worked example ("Initiative: Round 3"), rendered
@@ -32,13 +33,17 @@ export const initiativeElement: ElementDefinition<EncounterData> = {
 	name: 'Initiative tracker',
 	aliases: ['ds-it', 'ds-init', 'ds-initiative', 'ds-initiative-tracker'],
 	shape: 'persisted',
-	// Deliberately NO schema: the legacy element never had one (parseEncounterData did its
-	// own imperative validation, ported into parse/resolveRefs) — do not invent one here.
+	// Deliberately NO `schema`: the legacy element never had one (parseEncounterData did its
+	// own imperative validation, ported into parse/resolveRefs) — do not invent one here. That
+	// holds for `def.schema`, which validates and drives the form editor and scaffold. SC-707:
+	// `authoring.suggestSchema` below is a different thing — a suggestions-only list of the keys
+	// an author writes, read by the in-block autocomplete alone and never by validation, the
+	// form or the scaffold, so how a block parses and which blocks error-card is unchanged.
 	autoResolveRefs: false, // field-scoped bare-path `statblock` resolution only, via resolveRefs
 	parse,
 	serialize,
 	resolveRefs: resolveInitiativeRefs,
 	createView: (cx) => new InitiativeView(cx),
 	chrome: initiativeChrome,
-	authoring: { example: initiativeExample },
+	authoring: { example: initiativeExample, suggestSchema: initiativeSuggestSchema },
 };
