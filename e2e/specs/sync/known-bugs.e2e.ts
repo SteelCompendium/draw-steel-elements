@@ -10,7 +10,7 @@ import { dse, knownBug } from '../../driver/dse';
 import { ev } from '../../driver/page';
 import { allowPageErrors } from '../../driver/settingsDrive';
 import {
-	LEGACY, MANIFEST, createNotes, diffTrees, dismiss, fixtureRelease, hold, noWindows, noticeTexts, palette, seedLegacy, startSyncTest, waitNotice, waitWindow, windows, windowsWithin, within,
+	LEGACY, MANIFEST, createFolders, createNotes, diffTrees, dismiss, fixtureRelease, hold, noWindows, noticeTexts, palette, seedLegacy, startSyncTest, waitNotice, waitWindow, windows, windowsWithin, within,
 } from '../../driver/sync';
 import { DC, legacyFixture, reachPreview, reachRunning, reachSummary } from '../../driver/syncMigration';
 
@@ -181,29 +181,6 @@ describe('sync: known bugs', () => {
 		if (accepted.length) throw new Error(`a Destination of "${accepted[0].split(' ')[0]}" was accepted: ${accepted.join('; ')}`);
 	}, { failsWith: /a Destination of "\.(trash|obsidian)" was accepted/ });
 
-	knownBug('SC-706', '[SYNC-K12] a Sync into a CHANGED Destination never overwrites a file the plugin did not install there, and asks first if the folder holds files', async () => {
-		const t = await startSyncTest();
-		await fixtureRelease.publish('v1', RELEASE_A);
-		await palette.sync();
-		await waitNotice(/compendium v1 synced — 3 new/);
-		const mine = 'MY OWN notes about the shadow class, written by the user';
-		await createNotes({ 'Notes/class/shadow.md': mine, 'Notes/Session 1.md': 'my session notes' });
-		await t.rebase();
-		await clearNotices();
-		await setDestination('Notes');
-		try {
-			await palette.sync();
-			await within(8000, async () => (await windows()).length > 0 || (await noticeTexts()).some((n) => /synced|failed|Destination/.test(n)));
-			const after = await t.settled();
-			const survives = Object.values(everyText(t.base)).includes(mine);
-			const asked = (await windows()).length > 0;
-			if (!survives) throw new Error('the user\'s own note was overwritten by the sync into the changed Destination and no copy exists');
-			if (!asked && Object.keys(after.files).some((p) => p.startsWith('Notes/rule/'))) throw new Error('the sync wrote into a folder of the user\'s files without asking');
-		} finally {
-			await setDestination('DS Compendium'); // startSyncTest also restores it for the next scenario
-		}
-	}, { failsWith: /the user's own note was overwritten by the sync into the changed Destination/ });
-
 	knownBug('SC-702', '[SYNC-K10] with "Automatically update internal links" OFF the migration preview names that setting before the run', async () => {
 		const t = await startSyncTest({ updateLinks: false });
 		await legacyFixture(t);
@@ -258,5 +235,77 @@ describe('sync: what odd Destinations do in real Obsidian (SC-700)', () => {
 		await noWindows();
 		await t.expectChange({});
 		expect(t.read('Notes.md')).toBe('my note, not a folder');
+	});
+});
+
+describe('sync: after the Destination folder was changed (SC-706)', () => {
+	const MINE = 'MY OWN notes about the shadow class, written by the user';
+	/** One sync into "DS Compendium", then the Destination points at "Notes" (the user's folder, if `files` is given). */
+	async function changedDestination(files: Record<string, string> | null) {
+		const t = await startSyncTest();
+		await fixtureRelease.publish('v1', RELEASE_A);
+		await palette.sync();
+		await waitNotice(/compendium v1 synced — 3 new/);
+		if (files !== null) await createNotes(files);
+		await t.rebase();
+		await clearNotices();
+		await setDestination('Notes');
+		return t;
+	}
+
+	it('[SYNC-K12] a Sync into a CHANGED Destination never overwrites a file the plugin did not install there, and asks first if the folder holds files', async () => {
+		const t = await changedDestination({ 'Notes/class/shadow.md': MINE, 'Notes/Session 1.md': 'my session notes' });
+		try {
+			await palette.sync();
+			await waitWindow(LEGACY);
+			// asked first: nothing was written into the folder, and the user's text is where they left it
+			await t.expectChange({});
+			expect(t.read('Notes/class/shadow.md')).toBe(MINE);
+			expect(Object.values(everyText(t.base))).toContain(MINE);
+			await dismiss('legacy', 'escape');
+			await noWindows();
+			await t.expectChange({});
+		} finally {
+			await setDestination('DS Compendium'); // startSyncTest also restores it for the next scenario
+		}
+	});
+
+	it('[SYNC-D11] "Keep everything" on that window syncs into the folder: the colliding note keeps its bytes and the Notice says it was skipped', async () => {
+		const t = await changedDestination({ 'Notes/class/shadow.md': MINE, 'Notes/Session 1.md': 'my session notes' });
+		try {
+			await palette.sync();
+			await waitWindow(LEGACY);
+			await dse.click(dse.control('sync.legacy.keep'));
+			await waitNotice(/compendium v1 synced — 2 new, 0 updated, 0 removed\./);
+			await waitNotice(/1 file\(s\) skipped to protect your changes/);
+			await noWindows();
+			await t.expectChange({
+				created: { 'Notes/rule/combat/turn.md': 'turn A', 'Notes/kit/panther.md': 'panther A' },
+				modified: { [MANIFEST]: null },
+				dirsCreated: ['Notes/rule', 'Notes/rule/combat', 'Notes/kit'].sort(),
+			});
+			expect(t.read('Notes/class/shadow.md')).toBe(MINE);
+			expect(t.read('Notes/Session 1.md')).toBe('my session notes');
+		} finally {
+			await setDestination('DS Compendium');
+		}
+	});
+
+	it('[SYNC-D12] a changed Destination that is an empty folder syncs at once with no window, as a first sync would', async () => {
+		const t = await changedDestination(null);
+		try {
+			await createFolders(['Notes']);
+			await t.rebase();
+			await palette.sync();
+			await waitNotice(/compendium v1 synced — 3 new, 0 updated, 0 removed\./);
+			await noWindows();
+			await t.expectChange({
+				created: { 'Notes/class/shadow.md': 'shadow A', 'Notes/rule/combat/turn.md': 'turn A', 'Notes/kit/panther.md': 'panther A' },
+				modified: { [MANIFEST]: null },
+				dirsCreated: ['Notes/class', 'Notes/rule', 'Notes/rule/combat', 'Notes/kit'].sort(),
+			});
+		} finally {
+			await setDestination('DS Compendium');
+		}
 	});
 });
