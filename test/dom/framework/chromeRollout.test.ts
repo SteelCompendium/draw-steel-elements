@@ -48,6 +48,7 @@ const SUMMARIES: [id: string, fixture: string, line: string][] = [
 	['perk', 'default', 'Perk: Familiar'],
 	['complication', 'default', 'Complication: Chosen One'],
 	['rule', 'default', 'Rule'],
+	['prose', 'default', 'Prose'], // SC-391: the inline harness body; by SCC it reads "Skill: Alchemy" (proseCard.test.ts)
 	// ---- wave 2: the hero suite and the GM trackers ---------------------------------
 	['hero', 'default', 'Hero: Torin Stonefist'],
 	['stamina-bar', 'default', 'Stamina (15/20)'],
@@ -76,7 +77,7 @@ const SUMMARIES: [id: string, fixture: string, line: string][] = [
  * collapse is the USER's, which is session-persisted. So this row seeds the session instead
  * — the identical code path `mountChrome` takes when a reader clicks collapse.
  */
-const SESSION_COLLAPSE_ONLY = new Set(['rule']);
+const SESSION_COLLAPSE_ONLY = new Set(['rule', 'prose']); // prose (SC-391) is a raw-markdown body too
 
 async function collapsedLine(id: string, fixture: string): Promise<string> {
 	const def = registry.get(id)!;
