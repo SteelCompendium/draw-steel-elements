@@ -1,10 +1,11 @@
 // SC-443 — expected failures for the authoring bugs found by the e2e survey. Each `test.failing` encodes the CORRECT behaviour and goes
 // green-as-failing while the bug exists; the moment the fix lands it fails with "expected to fail" and the marker comes off with the fix.
 // Still open: SC-676 (/ds guard misses fences it cannot see), SC-677 (Ctrl/Cmd-click copy with a refusing clipboard), SC-678 (accepting a key
-// mid-word doubles the tail), SC-688 (a value accepted right after `key:` writes `key:value`; the value list doubles a mid-word tail). Each marker states only the OUTCOME the ticket asks for, so any
+// mid-word doubles the tail). Each marker states only the OUTCOME the ticket asks for, so any
 // reasonable fix (refuse, suppress, move below, replace the whole word) flips it.
-// Fixed, and now plain tests that pin exact bytes: SC-675 (an insert not at the start of an empty line broke the block; related SC-462) and SC-679
-// (accepting a suggestion with nothing typed left the cursor in front of it). The helper has its own matrix in insertOwnLines.test.ts.
+// Fixed, and now plain tests that pin exact bytes: SC-675 (an insert not at the start of an empty line broke the block; related SC-462), SC-679
+// (accepting a suggestion with nothing typed left the cursor in front of it) and SC-688 (a value accepted right after `key:` wrote `key:value`; a
+// value accepted mid-word doubled its tail). The helper has its own matrix in insertOwnLines.test.ts.
 // Fixed, and kept as plain tests of the outcome: SC-687 (an insert command or a compendium insert run inside an existing block, or the properties,
 // wrote into it: it is refused with a Notice now; the exact refusals are in insertRefusal.test.ts and insertPositionScan.test.ts).
 import { DsElementSuggest } from '../../../src/authoring/suggest';
@@ -210,19 +211,30 @@ describe('SC-687 (fixed): an insert command or a compendium insert run with the 
 	});
 });
 
-describe('SC-688: the value list doubles the tail of a word accepted mid-value', () => {
-	// The twin of SC-678 for the enum list (ds-roll is deferred: the list exists with the experimental gate on, the suite default). The other half of
-	// SC-688, an accept right after `key:` with no space, is in schemaSuggestMatrix.test.ts.
-	test.failing('with the cursor mid-word (`mode: op|posed`) the tail is not doubled', () => {
-		const editor = new CmEditor('```ds-roll\nmode: opposed', { line: 1, ch: 8 });
+describe('SC-688 (fixed): the value list and a word accepted mid-value', () => {
+	// The twin of SC-678 for the enum list (ds-roll is deferred: the list exists with the experimental gate on, the suite default). An accept replaces the
+	// whole value word under the cursor, through the next whitespace. The other half of SC-688, an accept right after `key:` with no space, is in
+	// schemaSuggestMatrix.test.ts.
+	const accept = (doc: string, ch: number, value: string) => {
+		const editor = new CmEditor(doc, { line: 1, ch });
 		const s = new DsSchemaSuggest(new App() as any, registry());
-		const info = s.onTrigger({ line: 1, ch: 8 }, editor as never, null);
-		// Not offering the list mid-word is a fix too: then there is nothing to accept and the test passes.
-		if (info !== null) {
-			s.context = { editor: editor as never, file: null as never, ...info };
-			s.selectSuggestion('opposed');
-		}
-		expect(editor.getValue()).not.toContain('opposedposed');
+		const info = s.onTrigger({ line: 1, ch }, editor as never, null)!;
+		s.context = { editor: editor as never, file: null as never, ...info };
+		s.selectSuggestion(value);
+		return editor;
+	};
+
+	test('with the cursor mid-word (`mode: op|posed`) the whole word is replaced, the tail is not doubled', () => {
+		const editor = accept('```ds-roll\nmode: opposed', 8, 'opposed');
+		expect(editor.getValue()).toBe('```ds-roll\nmode: opposed');
+		expect(editor.getCursor()).toEqual({ line: 1, ch: 13 });
+	});
+
+	test('only the word under the cursor is replaced: text after the whitespace survives (`mode: op|p xyz`, `mode: op|posed # c`)', () => {
+		expect(accept('```ds-roll\nmode: opp xyz', 8, 'opposed').getLine(1)).toBe('mode: opposed xyz');
+		const editor = accept('```ds-roll\nmode: opposed # c', 8, 'opposed');
+		expect(editor.getLine(1)).toBe('mode: opposed # c');
+		expect(editor.getCursor()).toEqual({ line: 1, ch: 13 });
 	});
 });
 

@@ -164,17 +164,59 @@ describe('selectSuggestion writes the key or value over the typed word only', ()
 		expect(editor.writes[0]).toMatchObject({ via: 'replaceRange', text: value });
 	});
 
-	// SC-688: typing `mode:` opens the value list at once, and an accept there writes `mode:flat`, which is not a mapping entry (the block renders
-	// a parse error card). The marker asks only that the accepted line is `mode: flat` or that no list is offered before the space.
-	test.failing('an enum value right after the colon: the accepted line is a mapping entry (SC-688)', () => {
-		const editor = new CmEditor('```ds-roll\nmode:');
-		const s = make();
-		const info = s.onTrigger({ line: 1, ch: 5 }, editor as never, null);
-		if (info !== null) {
+	// SC-688: typing `mode:` opens the value list at once (the row in the trigger table above), and an accept there writes the space too, so the line is
+	// the mapping entry the user meant (`mode:flat` is not one: the block would render a parse error card). Only the VALUE list does this: the key list is
+	// untouched (a key is typed from column 0, SC-678 is its mid-word twin).
+	describe('an enum value accepted right after the colon (SC-688)', () => {
+		const at = (doc: string, ch: number, value: string) => {
+			const editor = new CmEditor(doc, { line: 1, ch });
+			const s = make();
+			const info = s.onTrigger({ line: 1, ch }, editor as never, null)!;
+			s.context = { editor: editor as never, file: null as never, ...info };
+			s.selectSuggestion(value);
+			return editor;
+		};
+
+		test('`mode:` with nothing typed: the accepted line is `mode: flat`, the cursor is after it and the write is one replaceRange', () => {
+			const editor = at('```ds-roll\nmode:', 5, 'flat');
+			expect(editor.getLine(1)).toBe('mode: flat');
+			expect(editor.getCursor()).toEqual({ line: 1, ch: 10 });
+			expect(editor.writes).toHaveLength(1);
+			expect(editor.writes[0]).toMatchObject({ via: 'replaceRange', text: ' flat' });
+		});
+
+		test('`mode:te` (a partial query, no space): `mode: test`, the cursor after it', () => {
+			const editor = at('```ds-roll\nmode:te', 7, 'test');
+			expect(editor.getLine(1)).toBe('mode: test');
+			expect(editor.getCursor()).toEqual({ line: 1, ch: 10 });
+		});
+
+		test('`difficulty:` (another enum key): `difficulty: easy`', () => {
+			const editor = at('```ds-roll\ndifficulty:', 11, 'easy');
+			expect(editor.getLine(1)).toBe('difficulty: easy');
+			expect(editor.getCursor()).toEqual({ line: 1, ch: 16 });
+		});
+
+		test('`mode:op|posed` (no space and the cursor mid-word): `mode: opposed`, the tail is not doubled', () => {
+			const editor = at('```ds-roll\nmode:opposed', 7, 'opposed');
+			expect(editor.getLine(1)).toBe('mode: opposed');
+			expect(editor.getCursor()).toEqual({ line: 1, ch: 13 });
+		});
+
+		test('with a space already there, exactly one space is written (`mode: ` and `mode:  ` keep their spacing, no double space)', () => {
+			expect(at('```ds-roll\nmode: ', 6, 'flat').getLine(1)).toBe('mode: flat');
+			expect(at('```ds-roll\nmode:  ', 7, 'flat').getLine(1)).toBe('mode:  flat');
+		});
+
+		test('the lines above and below the block line are untouched', () => {
+			const doc = 'intro\n```ds-roll\nname: x\nmode:\ndifficulty: easy\n```\nafter';
+			const editor = new CmEditor(doc, { line: 3, ch: 5 });
+			const s = make();
+			const info = s.onTrigger({ line: 3, ch: 5 }, editor as never, null)!;
 			s.context = { editor: editor as never, file: null as never, ...info };
 			s.selectSuggestion('flat');
-		}
-		expect(editor.getLine(1)).toMatch(/^mode:(\s+flat)?$/);
+			expect(editor.getValue()).toBe('intro\n```ds-roll\nname: x\nmode: flat\ndifficulty: easy\n```\nafter');
+		});
 	});
 
 	test('everything above and below the word is untouched', () => {
