@@ -1,7 +1,9 @@
 // SC-443: the in-fence key autocomplete (src/authoring/schemaSuggest.ts), typed for real inside a ds-* block. A key name at the start of a body
 // line offers the schema's keys; the rows are `authoring.schema.key`. Accept by Enter / click, move with ArrowDown, dismiss with Escape; each
 // accept asserts the NOTE FILE (the typed prefix became the key, every other byte as it was). The block's language decides the keys: a second
-// block uses the second's. Silent outside the block, on a fence line, on an indented line, and for the deferred elements while the gate is OFF.
+// block uses the second's. Silent outside the block, on a fence line, on an indented line that has no object above it to be a key of, and for
+// the deferred elements while the gate is OFF. SC-707: the keys of the initiative tracker (it has no schema; a suggestions-only one), and the keys inside
+// a nested object or a list entry (a hero's `max_stamina`, a creature two lists deep, a ds-skills `custom_skills` entry).
 // (The enum value list exists only with the gate ON: AUTH-G10.)
 import { browser, expect } from '@wdio/globals';
 import { dse } from '../../driver/dse';
@@ -100,7 +102,7 @@ describe('in-fence key autocomplete', () => {
 		await typeKeys(' cur', TRIGGER); // inside the js block
 		await waitNoList();
 		await setCursor({ line: 1, ch: 13 });
-		await typeKeys('\n  cur', TRIGGER); // an indented key (nested keys are out of scope)
+		await typeKeys('\n  cur', TRIGGER); // an indented key under `max_stamina: 20`, a key with a value: no object to be a key of
 		await waitNoList();
 		await setCursor({ line: 1, ch: 13 });
 		await typeKeys('\ncur', TRIGGER);
@@ -244,6 +246,67 @@ describe('in-fence key autocomplete', () => {
 		await browser.keys('Enter');
 		await dse.settle();
 		expect(await savedText(rel)).toBe(spliced(note, at, undefined, 'collapsible\n'));
+	});
+
+	// SC-707: the initiative tracker has no schema of its own; its keys come from a suggestions-only one. The notes are written whole and only the
+	// word is typed (no Enter typed into the block, so the editor's own indentation never enters into what is asserted).
+	it('[AUTH-K17] a ds-initiative block offers its top-level keys: `he` offers heroes, Enter writes it over what was typed, nothing else changes', async () => {
+		const rel = 'Authoring/key-initiative-top.md';
+		const note = '```ds-initiative\n\n```\nafter\n';
+		await openEditor(rel, note, 'live-preview', AT);
+		await typeKeys('he', TRIGGER);
+		expect((await waitList(1)).map((r) => [r.id, r.text])).toEqual([[KEY, 'heroes']]);
+		await pressList('Enter');
+		await closeList();
+		expect(await savedText(rel)).toBe(spliced(note, AT, undefined, 'heroes'));
+		expect((await editorState()).cursor).toEqual({ line: 1, ch: 6 });
+	});
+
+	it('[AUTH-K18] inside a hero entry of a ds-initiative block: `max` offers max_stamina (a hero key), and Enter writes it; `hero` offers nothing (heroes is a top-level key)', async () => {
+		const rel = 'Authoring/key-initiative-hero.md';
+		const note = '```ds-initiative\nheroes:\n  - name: Frodo\n    \n```\nafter\n';
+		const at = { line: 3, ch: 4 };
+		await openEditor(rel, note, 'source', at);
+		await typeKeys('hero', TRIGGER);
+		await waitNoList();
+		await browser.keys(['Backspace', 'Backspace', 'Backspace', 'Backspace']);
+		await typeKeys('max', TRIGGER);
+		expect((await waitList(1)).map((r) => [r.id, r.text])).toEqual([[KEY, 'max_stamina']]);
+		await pressList('Enter');
+		await closeList();
+		expect(await savedText(rel)).toBe(spliced(note, at, undefined, 'max_stamina'));
+		expect((await editorState()).cursor).toEqual({ line: 3, ch: 15 });
+	});
+
+	it('[AUTH-K19] a creature two lists deep (enemy_groups > creatures) and a `- ` first key: `max` offers max_stamina; on a `- ` line `amo` offers amount (Live Preview)', async () => {
+		const rel = 'Authoring/key-initiative-creature.md';
+		const note = '```ds-initiative\nenemy_groups:\n  - name: Orcs\n    creatures:\n      - name: Orc\n        \n      - \n```\nafter\n';
+		await openEditor(rel, note, 'live-preview', { line: 5, ch: 8 });
+		await typeKeys('max', TRIGGER);
+		expect((await waitList(1)).map((r) => r.text)).toEqual(['max_stamina']);
+		await pressList('Enter');
+		await closeList();
+		expect(await savedText(rel)).toBe(spliced(note, { line: 5, ch: 8 }, undefined, 'max_stamina'));
+		await setCursor({ line: 6, ch: 8 });
+		await typeKeys('amo', TRIGGER);
+		expect((await waitList(1)).map((r) => r.text)).toEqual(['amount']);
+		await pressList('Enter');
+		await closeList();
+		expect(await savedText(rel)).toBe('```ds-initiative\nenemy_groups:\n  - name: Orcs\n    creatures:\n      - name: Orc\n        max_stamina\n      - amount\n```\nafter\n');
+	});
+
+	it('[AUTH-K20] another element: a ds-skills `custom_skills:` entry offers its own keys (`ha` offers has_skill), and a bare word under `skills:` (a list of names) offers nothing', async () => {
+		const rel = 'Authoring/key-skills-nested.md';
+		const note = '```ds-skills\ncustom_skills:\n  - name: Juggling\n    \nskills:\n  - \n```\nafter\n';
+		await openEditor(rel, note, 'source', { line: 3, ch: 4 });
+		await typeKeys('ha', TRIGGER);
+		expect((await waitList(1)).map((r) => [r.id, r.text])).toEqual([[KEY, 'has_skill']]);
+		await pressList('Enter');
+		await closeList();
+		expect(await savedText(rel)).toBe(spliced(note, { line: 3, ch: 4 }, undefined, 'has_skill'));
+		await setCursor({ line: 5, ch: 4 });
+		await typeKeys('cl', TRIGGER);
+		await waitNoList();
 	});
 
 });

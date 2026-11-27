@@ -21,8 +21,8 @@ export default surface('authoring-schema-suggest', {
 		'authoring.schema.trigger': c(['type'], ['K']),
 		// The key list (a bare word at the start of a body line) and the value list (after `key:`) are different controls.
 		'authoring.schema.key': c(['click', 'press:Enter', 'press:ArrowDown', 'press:Escape'], ['K']),
-		// The only top-level enums in any element schema are ds-roll's `mode` and `difficulty` (ds-conditions' is nested, and the lists bail
-		// on an indented line), and ds-roll is deferred: the value list is reachable with the experimental gate ON only.
+		// The only top-level enums in any element schema are ds-roll's `mode` and `difficulty` (ds-conditions' is nested, in a list of string-or-object
+		// entries the lists do not read, SC-707), and ds-roll is deferred: the value list is reachable with the experimental gate ON only.
 		'authoring.schema.value': c(['click', 'press:Enter'], ['G']),
 	},
 });

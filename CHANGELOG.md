@@ -22,6 +22,11 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Typing inside an initiative tracker block now suggests its fields, including the fields inside each hero and creature; other blocks suggest nested fields too** (SC-707).
+  Before: a `ds-initiative` block offered nothing while you typed, and no block offered a field that sits inside another one (a hero's `max_stamina`, a creature's `amount`).
+  Now the list opens in the initiative tracker for `name`, `round`, `heroes`, `enemy_groups` and `malice`, and inside a hero, an enemy group, a creature and `malice` for the fields you write yourself (`max_stamina`, `squad_role`, `round_gain` and so on; `squad_role:` also lists `minion`, `captain` and `attached`). Fields the tracker keeps for itself while you play (turn marks, stamina pools, the instances list, the Malice log) are not offered. Other blocks do the same inside their nested fields, for example the Roll block's `tiers` and a Skills block's `custom_skills` entries.
+  A list opens only where the plugin is sure which field you are in: nothing is offered inside `{ }` or `[ ]`, in a `|` or `>` text, after a Tab, on an oddly indented line, or where a list holds plain words (a condition name, a skill name). How a block is read, and which blocks show an error, did not change.
+
 - [FIX] **An insert with several cursors lays the block out for each cursor's own line** (SC-692).
   Place two or more cursors (Alt-click) and run an Insert Draw Steel command. The block used to be worked out for the main cursor's line only, then written at every cursor. With the main cursor on an empty line and another at the end of a line of text, the second copy was glued onto the text (`after text```ds-ct`): that block was not drawn, and the text below it could turn into code.
   Now every cursor gets its own block: text before it stays above, text after it moves below, and inside a callout or a list item every line keeps that line's `>` or indentation. Two cursors on one line give two blocks with the text between them. This covers the compendium reference and full-block commands too. A selection at one of the cursors is replaced by its block.
