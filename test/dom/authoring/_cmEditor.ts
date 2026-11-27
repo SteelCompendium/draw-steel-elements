@@ -1,14 +1,14 @@
 // SC-443 test helper: a faithful stand-in for Obsidian's `Editor` over a REAL CodeMirror 6 EditorState, for the authoring matrix and
 // integrity tests. The jest-free mock `Editor` (test/mocks/obsidian-core.ts) records writes and never changes its text; these tests need
 // the text a user would be left with (CRLF split the way CodeMirror splits it, a selection replaced, the cursor mapped through a write).
-// Only the surface src/authoring uses: getLine / lineCount / getCursor / setCursor / getValue / replaceSelection / replaceRange.
+// Only the surface src/authoring uses: getLine / lineCount / getCursor / setCursor / getValue / replaceSelection / replaceRange / transaction.
 import { EditorSelection, EditorState } from '@codemirror/state';
 import type { EditorPosition } from 'obsidian';
 
 export class CmEditor {
 	state: EditorState;
 	/** Every call that changed the document, in order: what the product asked the editor to do. */
-	readonly writes: Array<{ via: 'replaceSelection' | 'replaceRange'; text: string; from: number; to: number }> = [];
+	readonly writes: Array<{ via: 'replaceSelection' | 'replaceRange' | 'transaction'; text: string; from: number; to: number }> = [];
 
 	constructor(text: string, cursor: EditorPosition = { line: 0, ch: 0 }, selectionTo?: EditorPosition) {
 		// Obsidian's editor allows several cursors (`listSelections`, `setSelections`); the facet is what keeps CodeMirror from collapsing them.
@@ -66,6 +66,21 @@ export class CmEditor {
 		const b = to ? this.offset(to) : a;
 		this.writes.push({ via: 'replaceRange', text, from: a, to: b });
 		this.state = this.state.update({ changes: { from: a, to: b, insert: text } }).state;
+	}
+	/**
+	 * Obsidian's `editor.transaction` (SC-692): every change in the note's coordinates BEFORE the transaction, `selections` in the coordinates AFTER it
+	 * (measured in Obsidian 1.14.4), the first of them the main one. One CodeMirror transaction, and one entry in `writes` (text: the inserted texts joined).
+	 */
+	transaction(tx: { changes?: Array<{ from: EditorPosition; to?: EditorPosition; text: string }>; selections?: Array<{ from: EditorPosition; to?: EditorPosition }> }): void {
+		const changes = (tx.changes ?? []).map((c) => ({ from: this.offset(c.from), to: this.offset(c.to ?? c.from), insert: c.text }));
+		if (changes.length) this.writes.push({ via: 'transaction', text: changes.map((c) => c.insert).join(''), from: Math.min(...changes.map((c) => c.from)), to: Math.max(...changes.map((c) => c.to)) });
+		const doc = this.state.update({ changes }).state.doc;
+		const after = (pos: EditorPosition) => {
+			const line = doc.line(Math.min(Math.max(pos.line, 0), doc.lines - 1) + 1);
+			return line.from + Math.min(pos.ch, line.length);
+		};
+		const selection = tx.selections && EditorSelection.create(tx.selections.map((r) => EditorSelection.range(after(r.from), after(r.to ?? r.from))), 0);
+		this.state = this.state.update({ changes, selection }).state;
 	}
 	/** Offset of a position (for asserting "the bytes before/after the write are untouched"). */
 	offsetOf(pos: EditorPosition): number {

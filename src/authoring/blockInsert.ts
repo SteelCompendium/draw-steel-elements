@@ -21,6 +21,12 @@
 // moving the tail down is an inserted line break in front of it. One change, so one undo restores the note.
 // At the start of an empty line with no prefix the text written and the cursor position are exactly what they were before SC-675.
 //
+// SC-692: with SEVERAL cursors / selections (Alt-click) every one gets a block laid out for its own line (`planBlockInserts`): the result is
+// exactly what single-cursor inserts would write if they were run one at a time from the last range in the note to the first (each sees the
+// text the later writes left on its line, so two cursors on one line give two blocks and no blank line between them). All of it goes in as
+// ONE `editor.transaction` (several changes, the cursors placed in the same change), so one undo restores the note; every cursor ends where a
+// single insert would have left it for its block, the main one still the main. One cursor keeps the replaceSelection / setCursor path above.
+//
 // SC-687: a block is never written INSIDE existing structure. The write is the one place every authoring insert goes through, so the guard is
 // here (`refuseInsert`): with the cursor (or either end of the selection / the /ds token) in the body of a fenced block of any kind, on its
 // opening line after the start of the fence marker, on its closing line anywhere but the end, or in the note's properties, nothing is written,
@@ -107,6 +113,85 @@ export function planBlockInsert(before: string, after: string, block: BlockToIns
 	return { text: out, cursor };
 }
 
+/** A range an insert replaces: a cursor (`from` equals `to`) or a selection, `from` before `to`. */
+export interface InsertRange {
+	from: EditorPosition;
+	to: EditorPosition;
+}
+
+/** One replacement, in the note's coordinates BEFORE any of the changes of its plan is applied. */
+export interface BlockChange {
+	from: EditorPosition;
+	to: EditorPosition;
+	text: string;
+}
+
+export interface BlockInsertsPlan {
+	/** One per range, in note order, none overlapping: apply them together as one change. */
+	changes: BlockChange[];
+	/** Where each range's cursor is once every change is applied (parallel to `changes`). */
+	cursors: EditorPosition[];
+}
+
+/** Where `p` (at or after `change.to`, in the note before the change) is once `change` is applied. */
+function mapThrough(p: EditorPosition, change: BlockChange): EditorPosition {
+	const end = advancePosition(change.from, change.text, change.text.length);
+	return p.line === change.to.line ? { line: end.line, ch: end.ch + (p.ch - change.to.ch) } : { line: p.line + (end.line - change.to.line), ch: p.ch };
+}
+
+/**
+ * SC-692 — the blocks for several ranges (sorted, not overlapping), as one set of changes. Pure.
+ *
+ * The rule: the same text as single-cursor inserts (`planBlockInsert`) run one at a time from the LAST range to the first. A later write sits at
+ * or after this range's end, so it only matters to what this range sees as the text after it: when the next range is on the same line, the
+ * line's remainder is the text between the two, then whatever the next range's write left on that line (its first line, or all of it when it is
+ * one line). Every change keeps its coordinates in the note as it was. Each cursor is where its single insert leaves it, moved by the changes
+ * above it (an earlier range on the same line shifts its column, earlier line breaks its line).
+ */
+export function planBlockInserts(getLine: (line: number) => string, ranges: InsertRange[], block: BlockToInsert): BlockInsertsPlan {
+	const plans: BlockInsertPlan[] = [];
+	let nextResidue: string | undefined; // what range i + 1 leaves on its own first line, from the start of its write
+	for (let i = ranges.length - 1; i >= 0; i--) {
+		const { from, to } = ranges[i];
+		const sameLineAsNext = i < ranges.length - 1 && ranges[i + 1].from.line === to.line;
+		const rest = getLine(to.line).slice(to.ch, sameLineAsNext ? ranges[i + 1].from.ch : undefined);
+		const after = sameLineAsNext ? rest + nextResidue : rest;
+		const plan = planBlockInsert(getLine(from.line).slice(0, from.ch), after, block);
+		plans[i] = plan;
+		const firstBreak = plan.text.indexOf('\n');
+		nextResidue = firstBreak >= 0 ? plan.text.slice(0, firstBreak) : plan.text + after;
+	}
+	const changes = ranges.map((r, i) => ({ from: r.from, to: r.to, text: plans[i].text }));
+	const cursors = ranges.map((r, i) => {
+		let p = advancePosition(r.from, plans[i].text, plans[i].cursor ?? plans[i].text.length);
+		for (let j = i - 1; j >= 0; j--) p = mapThrough(p, changes[j]);
+		return p;
+	});
+	return { changes, cursors };
+}
+
+/** The editor's selections as insert ranges: each ordered from / to, sorted by position, overlapping ones joined; `main` is the index of the main one. */
+export function insertRangesOf(editor: Editor): { ranges: InsertRange[]; main: number } {
+	const before = (a: EditorPosition, b: EditorPosition) => a.line < b.line || (a.line === b.line && a.ch < b.ch);
+	const head = editor.getCursor('head');
+	const anchor = editor.getCursor('anchor');
+	const picked = editor.listSelections().map((s) => ({
+		range: before(s.head, s.anchor) ? { from: s.head, to: s.anchor } : { from: s.anchor, to: s.head },
+		isMain: s.head.line === head.line && s.head.ch === head.ch && s.anchor.line === anchor.line && s.anchor.ch === anchor.ch,
+	}));
+	picked.sort((a, b) => (before(a.range.from, b.range.from) ? -1 : before(b.range.from, a.range.from) ? 1 : 0));
+	const ranges: InsertRange[] = [];
+	let main = 0;
+	for (const { range, isMain } of picked) {
+		const last = ranges[ranges.length - 1];
+		if (last && before(range.from, last.to)) {
+			if (before(last.to, range.to)) last.to = range.to;
+		} else ranges.push({ from: range.from, to: range.to });
+		if (isMain) main = ranges.length - 1;
+	}
+	return { ranges, main };
+}
+
 /** SC-687 — what the user is told when an insert is refused, by reason (same sentence shape as the compendium's CLOSED_EDITOR_NOTICE). */
 export const INSERT_REFUSED_NOTICE: Record<InsertRefusal, string> = {
 	block: 'The cursor is inside another block, so nothing was inserted. Move it to a line outside the block and run the command again.',
@@ -151,11 +236,27 @@ export function refuseInsert(editor: Editor, range?: { start: EditorPosition; en
  */
 export function insertBlock(editor: Editor, block: BlockToInsert, range?: { start: EditorPosition; end: EditorPosition }): boolean {
 	if (refuseInsert(editor, range)) return false;
+	if (!range) {
+		const { ranges, main } = insertRangesOf(editor);
+		if (ranges.length > 1) return insertAtEveryCursor(editor, block, ranges, main);
+	}
 	const from = range?.start ?? editor.getCursor('from');
 	const to = range?.end ?? editor.getCursor('to');
 	const plan = planBlockInsert(editor.getLine(from.line).slice(0, from.ch), editor.getLine(to.line).slice(to.ch), block);
 	if (range) editor.replaceRange(plan.text, from, to);
 	else editor.replaceSelection(plan.text);
 	if (plan.cursor !== undefined) editor.setCursor(advancePosition(from, plan.text, plan.cursor));
+	return true;
+}
+
+/** SC-692 — `insertBlock` with several cursors: every range gets its own block, in one `editor.transaction` (one undo); the main cursor stays the main one. */
+function insertAtEveryCursor(editor: Editor, block: BlockToInsert, ranges: InsertRange[], main: number): boolean {
+	const plan = planBlockInserts((n) => editor.getLine(n), ranges, block);
+	// Obsidian takes the FIRST of `selections` as the main selection (measured in 1.14.4), and reads them in the new note's coordinates.
+	const order = [main, ...plan.cursors.map((_, i) => i).filter((i) => i !== main)];
+	editor.transaction({
+		changes: plan.changes.map((c) => ({ from: c.from, to: c.to, text: c.text })),
+		selections: order.map((i) => ({ from: plan.cursors[i] })),
+	});
 	return true;
 }
