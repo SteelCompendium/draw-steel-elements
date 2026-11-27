@@ -230,7 +230,8 @@ export function refuseInsert(editor: Editor, range?: { start: EditorPosition; en
 
 /**
  * Puts `block` into `editor` over the selection (`replaceSelection`) or, when `range` is given, over that range (`replaceRange`: the /ds
- * pick's typed token), then moves the cursor to the block's `cursorOffset` when it has one. One editor change. SC-687: with the position
+ * pick's typed token), then moves the cursor to the block's `cursorOffset` when it has one. One editor change. SC-692: with several
+ * selections (and no `range`) every one gets its own block in one `editor.transaction` (`insertAtEveryCursor`). SC-687: with the position
  * inside an existing block or the properties (`refuseInsert`) nothing is written and the editor is left as it was; returns whether the block
  * was written, so a caller does no follow-up work (and shows no second Notice) after a refusal.
  */

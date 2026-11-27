@@ -125,7 +125,7 @@ moves. Run it before a release; details in `visual-harness/README.md`.
 - **Authoring (D9)**: `src/authoring/` — four generators over the registry (no per-element
   code). `scaffold.ts` builds insert bodies (curated `authoring.example` → else a
   schema-walked stub); `insert.ts` registers one Insert command per element (every insert goes
-  through `blockInsert.ts`, which refuses a position inside an existing block or the properties, SC-687);
+  through `blockInsert.ts`, which refuses a position inside an existing block or the properties, SC-687, and with several cursors lays out one block per cursor in one `editor.transaction`, SC-692);
   `suggest.ts` is the `/ds` EditorSuggest scaffolder; `schemaSuggest.ts` is key/enum autocomplete inside
   a `ds-*` fence; `FormModal.ts`/`formModel.ts` are the generic schema→form editor (live
   validation via F1's `ValidationService`, live preview via `createView`, Save through

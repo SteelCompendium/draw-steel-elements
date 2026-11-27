@@ -31,6 +31,9 @@ and inside a list item every line is indented under the item. The same goes for 
 **Insert Draw Steel: compendium reference / full block** commands. (A block inside a list item
 draws, but can't save yet, see [Blocks inside callouts and quotes](#blocks-inside-callouts-and-quotes) below.)
 
+With several cursors (Alt-click in the editor), each cursor gets its own block, laid out for its own line:
+its own line break, its own callout or list prefix, the text after it moved below it. One undo takes all of them back.
+
 ### Not inside another block or the properties
 
 With the cursor inside an existing block (on any line of it, whatever the language, in a callout or

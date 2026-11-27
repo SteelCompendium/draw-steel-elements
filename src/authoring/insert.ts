@@ -2,7 +2,7 @@
 // scaffold at the cursor. INSERT ONLY (replaceSelection) — never a range-replace over
 // existing content (editor-mutation safety, Global Constraints / OD-D9-12). SC-675: where the block goes
 // relative to the cursor's line (own lines, container prefix) is blockInsert.ts's job; it is still one
-// replaceSelection that removes only the selection.
+// replaceSelection that removes only the selection. SC-692: with several cursors every one gets its own block, in one editor.transaction.
 import type { Editor, Plugin } from 'obsidian';
 import { isDefinitionHidden } from '@/framework/registry';
 import type { ElementDefinition, ElementRegistry } from '@/framework/registry';
