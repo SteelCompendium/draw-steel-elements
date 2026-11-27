@@ -209,7 +209,7 @@ describe('authoring with the experimental gate on', () => {
 		expect((await waitList(4)).map((r) => r.text)).toEqual(['power-roll', 'test', 'opposed', 'flat']);
 		await pressList('Enter');
 		await waitNoList();
-		expect(await savedText(rel)).toBe('```ds-roll\nname: x\nmode: power-roll\n\n```\n');
+		expect(await savedText(rel)).toBe('```ds-roll\nname: x\nmode: power-roll\n```\n');
 		expect((await editorState()).cursor).toEqual({ line: 2, ch: 16 });
 	});
 
