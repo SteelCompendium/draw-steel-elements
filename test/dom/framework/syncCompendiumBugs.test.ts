@@ -279,16 +279,52 @@ describe('SC-653 the trash button does not warn that Obsidian is set to delete p
 		expect(h.vault.text(`${ROOT}/old.md`)).toBeUndefined();
 		expect([...h.vault.files.keys()].filter((p) => p.startsWith('.trash/'))).toEqual([]);
 	});
-	test.failing('correct behaviour: with "Permanently delete" on, the window says the folder will be deleted for good', async () => {
-		await arrange();
-		const text = document.querySelector('.modal-container')!.textContent ?? '';
-		expect(text.toLowerCase()).toContain('permanent');
+	test.failing('correct behaviour: with "Permanently delete" on, the trash choice is not offered, or the window says the folder is deleted for good, or the folder is under .trash afterwards', async () => {
+		const h = await arrange();
+		const win = document.querySelector('.modal-container');
+		if (!win) return; // refused: no window, so no trash choice
+		const text = win.textContent ?? '';
+		if (!text.includes('Move old compendium to trash')) return;
+		if (text.toLowerCase().includes('permanent')) return;
+		// the posted plan: the folder always goes to the vault's own .trash. Take the choice and look.
+		control('sync.legacy.trash').click();
+		await until(() => notices().includes('compendium v1 synced'), 'the sync');
+		expect([...h.vault.files.keys()].some((p) => p.startsWith('.trash/') && p.endsWith('old.md'))).toBe(true);
 	});
 });
 
-// ---------- SC-701 (Low)
-// A folder that holds only EMPTY subfolders (every file deleted, the folders left behind) counts as "already contains files": the first Sync asks
-// the "existing compendium folder" question about a folder with no file in it.
+// ---------- SC-706 (High)
+// After one sync, changing the Destination folder and syncing again writes the compendium into the new folder with no window, and overwrites any note of
+// the user's that sits at a release path there: `applySync` takes a file at <new root>/<rel> for "installed by us" because the OLD manifest lists <rel>
+// (it never compares the manifest's root with the new one), and the "Existing compendium folder found" check runs only when there is no manifest.
+describe('SC-706 a Sync into a changed Destination overwrites the user\'s own file there', () => {
+	const MINE = 'MY OWN notes about the shadow class, written by the user';
+	async function arrange() {
+		const h = await makeSyncHarness();
+		h.server.publish('v1', { 'class/shadow.md': 'shadow A', 'rule/b.md': 'B1' });
+		await h.plugin.syncCompendium();
+		h.vault.setText('Notes/class/shadow.md', MINE);
+		h.vault.setText('Notes/Session 1.md', 'my session notes');
+		h.plugin.settings.compendiumDestinationDirectory = 'Notes';
+		Notice.notices.length = 0;
+		await h.plugin.syncCompendium();
+		await settle();
+		return h;
+	}
+	test('current behaviour: no window, the note is overwritten and no file holds the user\'s text any more', async () => {
+		const h = await arrange();
+		expect(windowTitles()).toEqual([]);
+		expect(h.vault.text('Notes/class/shadow.md')).toBe('shadow A');
+		expect(everyFileHolds(treeOf(h.vault), MINE)).toBe(false);
+		expect(notices()).toContain('1 updated');
+	});
+	test.failing('correct behaviour: the user\'s note survives somewhere, and a sync that writes into the folder asked first', async () => {
+		const h = await arrange();
+		expect(everyFileHolds(treeOf(h.vault), MINE)).toBe(true);
+		if (windowTitles().length === 0) expect(h.vault.paths().some((p) => p.startsWith('Notes/rule/'))).toBe(false);
+	});
+});
+
 describe('SC-701 empty subfolders make an empty compendium folder "contain files"', () => {
 	async function arrange() {
 		const h = await makeSyncHarness();
