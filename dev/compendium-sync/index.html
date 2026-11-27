@@ -1353,8 +1353,9 @@ sync date (or "No compendium synced yet.").</p>
 </ul>
 <h3 id="first-sync-into-an-existing-folder">First sync into an existing folder<a class="headerlink" href="#first-sync-into-an-existing-folder" title="Permanent link">&para;</a></h3>
 <p>If the destination folder already contains files but has never been synced by this plugin,
-the first sync stops and asks before touching anything. Which question it asks depends on
-what's in there:</p>
+or when you have changed the Destination folder since the last sync, the sync stops and
+asks before touching anything. (A changed Destination that is empty or does not exist yet
+syncs straight away, like a first sync.) Which question it asks depends on what's in there:</p>
 <ul>
 <li><strong>A pre-7.0.0 compendium</strong> (at least twenty files sitting at exact pre-7.0.0 compendium
   paths) — you're offered the <strong>layout migration</strong>: the old files are <em>moved</em> to their
@@ -1372,6 +1373,14 @@ what's in there:</p>
 they don't collide with a compendium path, and any that do are skipped and reported. A
 <strong>fresh install never sees either prompt</strong> — there is no folder yet, and nothing to ask
 about.</p>
+<p><strong>Changing the Destination folder.</strong> A file of yours at a compendium path in the new folder
+is never overwritten. Only a file that still holds exactly the text the plugin last wrote
+is updated. So if you move or rename the compendium folder in Obsidian and then point the
+Destination at its new name, expect the question above once; choose <strong>Keep everything</strong>
+and the unedited files carry on updating. A file you edited since it was installed is
+skipped and reported, as the Notice says. The compendium files left in the folder you moved
+away from stay where they are, except files the new release no longer has, which go to the
+trash as before.</p>
 <h2 id="referencing-a-compendium-entry-in-your-notes">Referencing a compendium entry in your notes<a class="headerlink" href="#referencing-a-compendium-entry-in-your-notes" title="Permanent link">&para;</a></h2>
 <p>Once the compendium is synced, a <code>ds-scc</code> block renders most entries in it (see
 <a href="#what-renders-and-what-doesnt-yet">what renders, and what doesn't yet</a> below). The body is
