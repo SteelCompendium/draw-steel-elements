@@ -7,9 +7,9 @@ import '../../driver/dse';
 import { dse } from '../../driver/dse';
 import { ev } from '../../driver/page';
 import {
-	LEGACY, MANIFEST, PREVIEW, STATE, dismiss, enterOn, fixtureRelease, noWindows, palette, startSyncTest, waitNotice, waitWindow, windows,
+	COMPLETE, LEGACY, MANIFEST, PREVIEW, STATE, dismiss, enterOn, fixtureRelease, noWindows, palette, startSyncTest, waitNotice, waitWindow, windows,
 } from '../../driver/sync';
-import { BACKUP, DC, N, USER_IN, USER_OUT, legacyFixture, publishNewTree, reachPreview } from '../../driver/syncMigration';
+import { BACKUP, DC, N, USER_IN, USER_OUT, completeRun, legacyFixture, publishNewTree, reachPreview } from '../../driver/syncMigration';
 
 const clearNotices = (): Promise<unknown> => ev(`(document.querySelectorAll('.notice').forEach((n) => n.click()), true)`);
 const DECLINED = /compendium left as it is, and NOT synced/;
@@ -145,5 +145,16 @@ describe('migration window: the preview', () => {
 		expect(t.exists(BACKUP)).toBe(false);
 		expect(t.read(USER_IN)).toContain('the user\'s own note');
 		expect(t.read(USER_OUT)).toContain('See [[');
+	});
+
+	it('[SYNC-M28] Enter on "Move 25 file(s)" (Tab twice from the initial focus) runs the migration: all 25 files move, each backed up first, the report is written, the outside note\'s link is updated', async () => {
+		const t = await startSyncTest();
+		const f = await legacyFixture(t);
+		await reachPreview();
+		await enterOn('migration.preview.move');
+		await waitWindow(COMPLETE);
+		await t.expectChange(completeRun(t, f));
+		await dismiss('summary', 'x');
+		await noWindows();
 	});
 });
