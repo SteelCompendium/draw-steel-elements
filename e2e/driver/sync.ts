@@ -66,6 +66,8 @@ export async function trashCanary(base: string): Promise<void> {
 	await setTrash('local');
 	const name = `sc441-canary-${crypto.randomBytes(4).toString('hex')}.md`;
 	await ev(`(async () => { await app.vault.create(${JSON.stringify(name)}, 'trash canary: safe to delete'); return true; })()`);
+	// let Obsidian's indexer read the new file before it is trashed (a file trashed under its reader makes it log an ENOENT, which the invariants flag)
+	await waitFor(`app.metadataCache.getFileCache(app.vault.getAbstractFileByPath(${JSON.stringify(name)})) !== null`, 'the canary file to be indexed', 5000);
 	await ev(`(async () => { const f = app.vault.getAbstractFileByPath(${JSON.stringify(name)}); await app.fileManager.trashFile(f); return true; })()`);
 	const trashed = path.join(base, '.trash', name);
 	await browser.waitUntil(async () => fs.existsSync(trashed), { timeout: 5000, interval: 50, timeoutMsg: `the trash canary: ${name} is not under ${path.join(base, '.trash')} after trashFile` });
@@ -88,11 +90,35 @@ export interface Tree {
 export const MANIFEST = '.obsidian/plugins/draw-steel-elements/compendium-manifest.json';
 export const STATE = '.obsidian/plugins/draw-steel-elements/compendium-migration-state.json';
 export const DATA = '.obsidian/plugins/draw-steel-elements/data.json';
-/** Everything under `.obsidian/` is Obsidian's own (workspace layout, app.json, plugin files) EXCEPT these three, which are the plugin's state. */
+/** The plugin's own state inside `.obsidian/`: removed by the reset, compared like any other file in a scenario. */
 const PLUGIN_STATE = new Set([MANIFEST, `${MANIFEST}.tmp`, STATE, DATA]);
-const volatile = (rel: string): boolean => rel === '.obsidian' || (rel.startsWith('.obsidian/') && !PLUGIN_STATE.has(rel));
+/**
+ * The NAMED volatile files of Obsidian's own config folder: the workspace layout changes with every leaf that opens or closes, and Obsidian rewrites
+ * appearance.json while it starts. Everything else under
+ * `.obsidian/` is part of the tree (a product write anywhere in the config folder must show). `app.json` is compared with the two keys the harness
+ * sets (`trashOption`, `alwaysUpdateLinks`) taken out.
+ */
+const VOLATILE = new Set(['.obsidian/workspace.json', '.obsidian/workspaces.json', '.obsidian/appearance.json']);
+const HARNESS_APP_KEYS = ['trashOption', 'alwaysUpdateLinks'];
+const sha = (buf: Buffer | string): string => crypto.createHash('sha256').update(buf).digest('hex');
+function entryOf(rel: string, buf: Buffer): Entry {
+	if (rel === '.obsidian/app.json') {
+		try {
+			const o = JSON.parse(buf.toString('utf8')) as Record<string, unknown>;
+			for (const k of HARNESS_APP_KEYS) delete o[k];
+			const norm = JSON.stringify(Object.fromEntries(Object.entries(o).sort(([x], [y]) => x.localeCompare(y))));
+			return { size: norm.length, hash: sha(norm) };
+		} catch {
+			/* not JSON: hash the bytes */
+		}
+	}
+	return { size: buf.length, hash: sha(buf) };
+}
 
-/** Every file (path, size, sha256) and folder of the vault copy on disk, dot-folders (`.trash/`) included; Obsidian's own config left out. */
+/**
+ * Every file (path, size, sha256) and folder of the vault copy on disk, dot-folders included: `.trash/` and Obsidian's `.obsidian/` config folder too
+ * (only at the vault root: a folder NAMED `.obsidian` deeper down is an ordinary folder), minus the named volatile files above.
+ */
 export function snapshot(base: string): Tree {
 	const files: Record<string, Entry> = {};
 	const dirs: string[] = [];
@@ -101,24 +127,10 @@ export function snapshot(base: string): Tree {
 			const r = rel ? `${rel}/${e.name}` : e.name;
 			const full = path.join(dir, e.name);
 			if (e.isDirectory()) {
-				if (e.name === '.obsidian') {
-					walkPluginState(full);
-					continue;
-				}
 				dirs.push(r);
 				walk(full, r);
-			} else if (e.isFile() && !volatile(r)) {
-				const buf = fs.readFileSync(full);
-				files[r] = { size: buf.length, hash: crypto.createHash('sha256').update(buf).digest('hex') };
-			}
-		}
-	};
-	const walkPluginState = (obsidianDir: string): void => {
-		for (const rel of PLUGIN_STATE) {
-			const full = path.join(obsidianDir, '..', rel);
-			if (fs.existsSync(full)) {
-				const buf = fs.readFileSync(full);
-				files[rel] = { size: buf.length, hash: crypto.createHash('sha256').update(buf).digest('hex') };
+			} else if (e.isFile() && !VOLATILE.has(r)) {
+				files[r] = entryOf(r, fs.readFileSync(full));
 			}
 		}
 	};
@@ -154,21 +166,30 @@ export interface Diff {
 	dirsRemoved: string[];
 }
 
-export function diffTrees(before: Tree, after: Tree): Diff {
-	let created = Object.keys(after.files).filter((p) => !(p in before.files));
-	let removed = Object.keys(before.files).filter((p) => !(p in after.files));
+/**
+ * The difference between two trees. A MOVE is a removed path and a created path with the same bytes. The moves a scenario NAMES are matched first
+ * (`named`: from -> to); only what is left is inferred, over sorted lists, so the answer never depends on the order the filesystem lists folders
+ * (a migration creates two files with a moved file's bytes: the move and its backup copy).
+ */
+export function diffTrees(before: Tree, after: Tree, named: Record<string, string> = {}): Diff {
+	let created = Object.keys(after.files).filter((p) => !(p in before.files)).sort();
+	let removed = Object.keys(before.files).filter((p) => !(p in after.files)).sort();
 	const modified = Object.keys(after.files).filter((p) => p in before.files && before.files[p].hash !== after.files[p].hash);
 	const moved: Record<string, string> = {};
-	for (const from of [...removed]) {
-		const to = created.find((c) => after.files[c].hash === before.files[from].hash && after.files[c].size === before.files[from].size);
-		if (to === undefined) continue;
+	const sameBytes = (to: string, from: string): boolean => after.files[to].hash === before.files[from].hash && after.files[to].size === before.files[from].size;
+	const take = (from: string, to: string): void => {
 		moved[from] = to;
 		created = created.filter((c) => c !== to);
 		removed = removed.filter((r) => r !== from);
+	};
+	for (const [from, to] of Object.entries(named)) if (removed.includes(from) && created.includes(to) && sameBytes(to, from)) take(from, to);
+	for (const from of [...removed]) {
+		const to = created.find((c) => sameBytes(c, from));
+		if (to !== undefined) take(from, to);
 	}
 	return {
-		created: created.sort(),
-		removed: removed.sort(),
+		created,
+		removed,
 		modified: modified.sort(),
 		moved,
 		dirsCreated: after.dirs.filter((d) => !before.dirs.includes(d)),
@@ -181,7 +202,7 @@ const sortedKeys = (o: object | undefined): string[] => Object.keys(o ?? {}).sor
 
 /** Assert the difference between two snapshots is EXACTLY `expected` (bytes included). Throws a message naming every discrepancy. */
 export function expectDiff(base: string, before: Tree, after: Tree, expected: Expect = {}): void {
-	const d = diffTrees(before, after);
+	const d = diffTrees(before, after, expected.moved);
 	const problems: string[] = [];
 	for (const re of expected.createdMatching ?? []) {
 		const hit = d.created.filter((p) => re.test(p));
@@ -243,7 +264,7 @@ export const fixtureRelease = {
 					for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
 					return reply(200, null, u8.buffer);
 				}
-				return reply(404);
+				throw new Error('e2e: the sync asked for a URL the fixture release does not know: ' + req.url);
 			};
 			return true;
 		})()`);
@@ -330,6 +351,8 @@ export const hold = {
 				if (H.origRename !== undefined) delete app.fileManager.renameFile;
 				if (H.origCreateBinary !== undefined) delete app.vault.createBinary;
 			}
+			// the error screen's page-side execute (driver/syncMigration.ts reachError) is an own property over the prototype method
+			if (${PLUGIN}.migrationService) delete ${PLUGIN}.migrationService.execute;
 			window.__hold441 = undefined;
 			return true;
 		})()`);
@@ -511,15 +534,32 @@ function fixtureTree(): Tree {
 	return { files, dirs: dirs.sort() };
 }
 
+/** What Obsidian's config folder looks like at the start of the session (before this driver wrote anything): the baseline every scenario must return to. */
+interface ObsBaseline {
+	files: Record<string, Entry>;
+	dirs: string[];
+}
+let obsBaseline: ObsBaseline | null = null;
+const isObs = (p: string): boolean => p === '.obsidian' || p.startsWith('.obsidian/');
+const obsOf = (t: Tree): ObsBaseline => ({
+	files: Object.fromEntries(Object.entries(t.files).filter(([p]) => isObs(p) && !PLUGIN_STATE.has(p))),
+	dirs: t.dirs.filter(isObs),
+});
+
 /**
  * Put the vault copy back to "no compendium, nothing trashed, no sync state": what `dse.openNote`'s reset does not do (it only rewrites and
  * deletes indexed FILES). Deletes every folder the fixture does not have (a leftover empty `DS Compendium/` makes the first-sync check see
- * "children"), the vault's `.trash/`, the sync manifest and the migration state, and puts the compendium settings back to their defaults.
+ * "children"), every file the fixture does not have (a migration report note a late run wrote at the vault root), the vault's `.trash/`,
+ * anything a scenario left in Obsidian's `.obsidian/` config folder that the session did not start with, the sync manifest and the migration
+ * state, and puts the compendium settings back to their defaults.
  */
 async function resetSyncTree(): Promise<void> {
-	const keep = fixtureTree().dirs;
+	const fx = fixtureTree();
+	const obs = obsBaseline as ObsBaseline;
 	await ev(`(async () => {
-		const keep = new Set(${JSON.stringify(keep)});
+		const keep = new Set(${JSON.stringify(fx.dirs)});
+		const keepFiles = new Set(${JSON.stringify(Object.keys(fx.files))});
+		for (const f of app.vault.getFiles()) if (!keepFiles.has(f.path)) await app.vault.delete(f, true);
 		const folders = app.vault.getAllLoadedFiles().filter((f) => f.children !== undefined && f.path !== '/').map((f) => f.path).sort((a, b) => b.length - a.length);
 		for (const p of folders) {
 			if (keep.has(p)) continue;
@@ -529,32 +569,68 @@ async function resetSyncTree(): Promise<void> {
 		const a = app.vault.adapter;
 		if (await a.exists('.trash')) await a.rmdir('.trash', true);
 		for (const rel of ['${MANIFEST}', '${MANIFEST}.tmp', '${STATE}']) if (await a.exists(rel)) await a.remove(rel);
+		// whatever a scenario wrote into the config folder (SC-700's Destination) that the session did not start with
+		const obsFiles = new Set(${JSON.stringify(Object.keys(obs.files))});
+		const obsDirs = new Set(${JSON.stringify(obs.dirs)});
+		const walk = async (dir) => {
+			const listing = await a.list(dir);
+			for (const f of listing.files) if (!obsFiles.has(f) && f !== '${DATA}' && !f.endsWith('workspace.json') && !f.endsWith('workspaces.json') && !f.endsWith('appearance.json')) await a.remove(f);
+			for (const d of listing.folders) {
+				if (!obsDirs.has(d)) await a.rmdir(d, true);
+				else await walk(d);
+			}
+		};
+		await walk('.obsidian');
 		const p = ${PLUGIN};
 		p.settings.compendiumDestinationDirectory = 'DS Compendium';
 		p.settings.compendiumReleaseTag = '';
 		p.settings.compendiumLocale = 'en';
 		await p.saveSettings();
 		p.prefsStorage?.flush?.();
-		if (p.migrationService) p.migrationService.mapOverride = undefined;
+		if (p.migrationService) { p.migrationService.mapOverride = undefined; delete p.migrationService.execute; }
 		return true;
 	})()`);
 }
 
-/** Throw unless the tree on disk is the tracked fixture vault and nothing else (the pristine assertion). */
+/** Throw unless the tree on disk is the tracked fixture vault, Obsidian's config folder as the session found it, and nothing else (the pristine assertion). */
 function assertPristine(t: Tree): void {
 	const fx = fixtureTree();
+	const obs = obsBaseline as ObsBaseline;
 	const problems: string[] = [];
 	for (const p of Object.keys(t.files)) {
 		if (PLUGIN_STATE.has(p)) {
 			if (p !== DATA) problems.push(`stray plugin state ${p}`);
 			continue;
 		}
+		if (isObs(p)) {
+			if (!(p in obs.files)) problems.push(`stray config file ${p}`);
+			else if (obs.files[p].hash !== t.files[p].hash) problems.push(`config file ${p} differs from the session's start`);
+			continue;
+		}
 		if (!(p in fx.files)) problems.push(`stray file ${p}`);
 		else if (fx.files[p].hash !== t.files[p].hash) problems.push(`fixture file ${p} differs`);
 	}
 	for (const p of Object.keys(fx.files)) if (!(p in t.files)) problems.push(`fixture file ${p} is missing`);
-	for (const d of t.dirs) if (!fx.dirs.includes(d)) problems.push(`stray folder ${d}`);
+	for (const p of Object.keys(obs.files)) if (!(p in t.files)) problems.push(`config file ${p} is missing`);
+	for (const d of t.dirs) if (!isObs(d) && !fx.dirs.includes(d)) problems.push(`stray folder ${d}`);
+	for (const d of t.dirs.filter(isObs)) if (!obs.dirs.includes(d)) problems.push(`stray config folder ${d}`);
 	if (problems.length) throw new Error(`the vault copy is not pristine at the start of the scenario:\n - ${problems.join('\n - ')}`);
+}
+
+/** Wait until the tree on disk has stopped changing for three polls (a released run finishing its file in flight, writing its report note and state). */
+async function quiesce(base: string): Promise<void> {
+	let last = snapshot(base);
+	let quiet = 0;
+	await browser.waitUntil(
+		async () => {
+			await new Promise((r) => setTimeout(r, 150));
+			const now = snapshot(base);
+			quiet = same(now, last) ? quiet + 1 : 0;
+			last = now;
+			return quiet >= 3;
+		},
+		{ timeout: 20000, interval: 10, timeoutMsg: 'the vault copy never went quiet after the previous scenario' },
+	);
 }
 
 /**
@@ -565,11 +641,13 @@ function assertPristine(t: Tree): void {
 export async function startSyncTest(opts: StartOptions = {}): Promise<SyncTest> {
 	await dse.openNote('Stamina/basic.md');
 	const base = await assertDisposableVault();
+	if (obsBaseline === null) obsBaseline = obsOf(snapshot(base)); // before this driver writes anything into the session
 	await setTrash(opts.trash ?? 'local');
 	await ev(`(() => { app.vault.setConfig('alwaysUpdateLinks', ${opts.updateLinks !== false}); return true; })()`);
 	await trashCanary(base);
 	await setTrash(opts.trash ?? 'local');
-	await hold.clear();
+	await hold.clear(); // releases a run an earlier scenario left held: its window was closed by the runner's reset, so it stops after the file in flight
+	await quiesce(base);
 	await resetSyncTree();
 	await fixtureRelease.install();
 	await clearNotices();

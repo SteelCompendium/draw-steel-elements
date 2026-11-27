@@ -39,7 +39,8 @@ describe('migration window: running and Stop', () => {
 		const moved = planOrder(f.pairs).slice(0, 4);
 		await t.expectChange(completeRun(t, f, { moved, backedUp: f.pairs }));
 		expect(JSON.parse(t.read(STATE))).toMatchObject({ incomplete: true });
-		await noWindows().catch(() => dismiss('stopped', 'x'));
+		await dismiss('stopped', 'x');
+		await noWindows();
 	});
 
 	it('[SYNC-M11] Enter on Stop (Tab to it) stops the run the same way', async () => {

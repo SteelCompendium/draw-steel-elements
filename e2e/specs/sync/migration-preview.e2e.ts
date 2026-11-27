@@ -53,11 +53,13 @@ describe('migration window: the preview', () => {
 	it('[SYNC-M03] a click on "Not now" does the same', async () => {
 		const t = await startSyncTest();
 		const f = await legacyFixture(t);
+		await publishNewTree(f.pairs);
 		await reachPreview();
 		await dse.click(dse.control('migration.preview.not-now'));
 		await waitNotice(DECLINED);
 		await noWindows();
 		await t.expectChange({ created: { [STATE]: null } });
+		expect(await fixtureRelease.calls()).toEqual([]);
 		expect(JSON.parse(t.read(STATE)).declined).toBe(true);
 		expect(f.pairs.every((p) => t.exists(`${DC}/${p.oldRelative}`))).toBe(true);
 	});
@@ -115,33 +117,39 @@ describe('migration window: the preview', () => {
 
 	it('[SYNC-M07] Escape at the preview is a dismissal, not consent: the decline is recorded, nothing moves, nothing is synced', async () => {
 		const t = await startSyncTest();
-		await legacyFixture(t);
+		const f = await legacyFixture(t);
+		await publishNewTree(f.pairs);
 		await reachPreview();
 		await dismiss('preview', 'escape');
 		await waitNotice(DECLINED);
 		await noWindows();
 		await t.expectChange({ created: { [STATE]: null } });
 		expect(JSON.parse(t.read(STATE)).declined).toBe(true);
+		expect(await fixtureRelease.calls()).toEqual([]);
 	});
 
 	it('[SYNC-M08] the X at the preview is a dismissal too: the decline is recorded, nothing moves', async () => {
 		const t = await startSyncTest();
-		await legacyFixture(t);
+		const f = await legacyFixture(t);
+		await publishNewTree(f.pairs);
 		await reachPreview();
 		await dismiss('preview', 'x');
 		await waitNotice(DECLINED);
 		await noWindows();
 		await t.expectChange({ created: { [STATE]: null } });
+		expect(await fixtureRelease.calls()).toEqual([]);
 	});
 
 	it('[SYNC-M09] a click outside the preview is a dismissal too: the decline is recorded, nothing moves', async () => {
 		const t = await startSyncTest();
-		await legacyFixture(t);
+		const f = await legacyFixture(t);
+		await publishNewTree(f.pairs);
 		await reachPreview();
 		await dismiss('preview', 'backdrop');
 		await waitNotice(DECLINED);
 		await noWindows();
 		await t.expectChange({ created: { [STATE]: null } });
+		expect(await fixtureRelease.calls()).toEqual([]);
 		expect(t.exists(BACKUP)).toBe(false);
 		expect(t.read(USER_IN)).toContain('the user\'s own note');
 		expect(t.read(USER_OUT)).toContain('See [[');

@@ -98,7 +98,19 @@ describe('sync: "Existing compendium folder found"', () => {
 		else await enterOn('sync.legacy.trash');
 		await waitNotice(/compendium v1 synced — 3 new, 0 updated, 0 removed\./);
 		await noWindows();
-		const after = await t.settled();
+		// The WHOLE tree (ledger O4): the two files only the user had move into the vault's trash folder (the folder keeps its name there), the edited
+		// file's bytes go there too while the path itself takes the release's, the release's other files and the manifest are created, nothing else moves.
+		const after = await t.expectChange({
+			moved: { [`${DC}/old-download.md`]: `.trash/${DC}/old-download.md`, [`${DC}/My homebrew.md`]: `.trash/${DC}/My homebrew.md` },
+			created: {
+				[`.trash/${DC}/class/shadow.md`]: USER[`${DC}/class/shadow.md`],
+				[`${DC}/rule/combat/turn.md`]: 'turn A',
+				[`${DC}/kit/panther.md`]: 'panther A',
+				[MANIFEST]: null,
+			},
+			modified: { [`${DC}/class/shadow.md`]: 'shadow A' },
+			dirsCreated: ['.trash', `.trash/${DC}`, `.trash/${DC}/class`, `${DC}/rule`, `${DC}/rule/combat`, `${DC}/kit`].sort(),
+		});
 		// what Obsidian's own trash did with the folder is recorded, not assumed
 		const trashed = Object.keys(after.files).filter((p) => p.startsWith('.trash/'));
 		console.log(`SYNC-OBSERVED trash of a folder: ${JSON.stringify(trashed)}`);

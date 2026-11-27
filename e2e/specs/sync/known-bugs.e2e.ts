@@ -10,7 +10,7 @@ import { dse, knownBug } from '../../driver/dse';
 import { ev } from '../../driver/page';
 import { allowPageErrors } from '../../driver/settingsDrive';
 import {
-	LEGACY, createNotes, diffTrees, dismiss, fixtureRelease, hold, noWindows, noticeTexts, palette, seedLegacy, startSyncTest, waitNotice, waitWindow, windows, windowsWithin, within,
+	LEGACY, MANIFEST, createNotes, diffTrees, dismiss, fixtureRelease, hold, noWindows, noticeTexts, palette, seedLegacy, startSyncTest, waitNotice, waitWindow, windows, windowsWithin, within,
 } from '../../driver/sync';
 import { DC, legacyFixture, reachPreview, reachRunning, reachSummary } from '../../driver/syncMigration';
 
@@ -39,23 +39,31 @@ describe('sync: known bugs', () => {
 		await createNotes({ [`${DC}/Session 1.md`]: 'my session notes', [`${DC}/NPCs/Innkeeper.md`]: 'my innkeeper' });
 		await fixtureRelease.publish('v1', RELEASE_A);
 		await palette.sync();
-		await waitWindow(LEGACY);
-		const [w] = await windows();
-		if (w.buttons.some((b) => b.id === TRASH_ID)) throw new Error(`the window offers "Move old compendium to trash" for a folder of the user's own notes`);
+		// Whatever SC-653 ships (the same window without the trash button, or a refusal with a Notice and no window), the trash choice must not be offered:
+		// wait for the window OR a Notice, and fail only on a trash button.
+		await within(8000, async () => (await windows()).length > 0 || (await noticeTexts()).some((n) => /Destination|sync|refus|can't/i.test(n)));
+		const ws = await windows();
+		if (ws.some((w) => w.buttons.some((b) => b.id === TRASH_ID))) throw new Error(`the window offers "Move old compendium to trash" for a folder of the user's own notes`);
 	}, { failsWith: /offers "Move old compendium to trash" for a folder of the user's own notes/ });
 
-	knownBug('SC-653', '[SYNC-K02] under "Permanently delete" the trash choice is either not offered or says the folder will be deleted for good', async () => {
-		await startSyncTest({ trash: 'none' });
+	knownBug('SC-653', '[SYNC-K02] under "Permanently delete" the trash choice is not offered, or says the folder will be deleted for good, or leaves the folder recoverable under .trash', async () => {
+		const t = await startSyncTest({ trash: 'none' });
 		await createNotes({ [`${DC}/old-download.md`]: 'from an older plugin', [`${DC}/class/shadow.md`]: 'shadow, edited' });
+		await t.rebase();
 		await fixtureRelease.publish('v1', RELEASE_A);
 		await palette.sync();
 		await waitWindow(LEGACY);
 		const [w] = await windows();
 		const body = await dse.page<string>(`document.querySelector('.modal-container .dse-modal__body').textContent`);
-		if (w.buttons.some((b) => b.id === TRASH_ID) && !/permanent/i.test(body + w.buttons.map((b) => b.label).join(' '))) {
-			throw new Error('the window offers the trash button under "Permanently delete" and never says the folder is deleted for good');
-		}
-	}, { failsWith: /never says the folder is deleted for good/ });
+		if (!w.buttons.some((b) => b.id === TRASH_ID)) return; // no trash choice at all
+		if (/permanent/i.test(body + w.buttons.map((b) => b.label).join(' '))) return; // the window says so
+		// the posted plan: the folder always goes to the vault's own .trash, whatever "Deleted files" says. Take the choice (inside the disposable vault) and look.
+		await dse.click(dse.control(TRASH_ID));
+		await within(10000, async () => (await noticeTexts()).some((n) => /synced|failed/.test(n)));
+		const after = await t.settled();
+		if (Object.keys(after.files).some((p) => p.startsWith('.trash/') && /old-download\.md$/.test(p))) return;
+		throw new Error('the window offers the trash button under "Permanently delete", never says the folder is deleted for good, and the folder is not under .trash afterwards');
+	}, { failsWith: /never says the folder is deleted for good, and the folder is not under \.trash afterwards/ });
 
 	knownBug('SC-694', '[SYNC-K03] a Sync keeps what the user wrote in a compendium file it updates (in place or copied aside)', async () => {
 		const t = await startSyncTest();
@@ -106,6 +114,7 @@ describe('sync: known bugs', () => {
 			if (opened) throw new Error(`a second window opened over the running migration: ${JSON.stringify(titles)}`);
 		} finally {
 			await hold.release();
+			await within(10000, async () => (await noticeTexts()).some((n) => /stopped after moving/.test(n))); // let the run end before the next scenario starts
 		}
 	}, { failsWith: /a second window opened over the running migration/ });
 
@@ -123,6 +132,7 @@ describe('sync: known bugs', () => {
 			if (/left as it is/.test(texts)) throw new Error(`a Notice says the compendium was left as it is although files moved: ${texts.slice(0, 200)}`);
 		} finally {
 			await hold.release();
+			await within(10000, async () => (await noticeTexts()).some((n) => /stopped after moving/.test(n)));
 		}
 	}, { failsWith: /says the compendium was left as it is although files moved/ });
 
@@ -151,6 +161,7 @@ describe('sync: known bugs', () => {
 	}, { failsWith: /a folder with no file in it opened/ });
 
 	knownBug('SC-700', '[SYNC-K09] a Destination of ".trash" or ".obsidian" is refused with a Notice and nothing is written', async () => {
+		const accepted: string[] = [];
 		for (const dest of ['.trash', '.obsidian']) {
 			const t = await startSyncTest();
 			await setDestination(dest);
@@ -158,22 +169,45 @@ describe('sync: known bugs', () => {
 			await palette.sync();
 			await within(6000, async () => (await noticeTexts()).some((n) => /synced|failed|can't be the vault root/.test(n)));
 			const texts = (await noticeTexts()).join(' | ');
-			const wrote = Object.keys((await t.settled()).files).some((p) => p.startsWith(`${dest}/`)) || fs.existsSync(path.join(t.base, dest, 'class'));
-			await ev(`(async () => { const a = app.vault.adapter; for (const d of ['${dest}/class', '${dest}/rule', '${dest}/kit']) if (await a.exists(d)) await a.rmdir(d, true); return true; })()`);
-			if (wrote || !/can't be the vault root/.test(texts)) throw new Error(`a Destination of "${dest}" was accepted: ${texts.slice(0, 160)}`);
+			const wrote = Object.keys((await t.settled()).files).some((p) => p.startsWith(`${dest}/`));
+			if (wrote || !/can't be the vault root/.test(texts)) accepted.push(`${dest} (${texts.slice(0, 80)})`);
 		}
+		// both Destinations are tried before the verdict, so a fix of one does not hide the other
+		if (accepted.length) throw new Error(`a Destination of "${accepted[0].split(' ')[0]}" was accepted: ${accepted.join('; ')}`);
 	}, { failsWith: /a Destination of "\.(trash|obsidian)" was accepted/ });
 
-	knownBug('SC-702', '[SYNC-K10] with "Automatically update internal links" OFF the migration preview warns before the run that Obsidian will ask about links', async () => {
+	knownBug('SC-706', '[SYNC-K12] a Sync into a CHANGED Destination never overwrites a file the plugin did not install there, and asks first if the folder holds files', async () => {
+		const t = await startSyncTest();
+		await fixtureRelease.publish('v1', RELEASE_A);
+		await palette.sync();
+		await waitNotice(/compendium v1 synced — 3 new/);
+		const mine = 'MY OWN notes about the shadow class, written by the user';
+		await createNotes({ 'Notes/class/shadow.md': mine, 'Notes/Session 1.md': 'my session notes' });
+		await t.rebase();
+		await clearNotices();
+		await setDestination('Notes');
+		try {
+			await palette.sync();
+			await within(8000, async () => (await windows()).length > 0 || (await noticeTexts()).some((n) => /synced|failed|Destination/.test(n)));
+			const after = await t.settled();
+			const survives = Object.values(everyText(t.base)).includes(mine);
+			const asked = (await windows()).length > 0;
+			if (!survives) throw new Error('the user\'s own note was overwritten by the sync into the changed Destination and no copy exists');
+			if (!asked && Object.keys(after.files).some((p) => p.startsWith('Notes/rule/'))) throw new Error('the sync wrote into a folder of the user\'s files without asking');
+		} finally {
+			await setDestination('DS Compendium'); // startSyncTest also restores it for the next scenario
+		}
+	}, { failsWith: /the user's own note was overwritten by the sync into the changed Destination/ });
+
+	knownBug('SC-702', '[SYNC-K10] with "Automatically update internal links" OFF the migration preview names that setting before the run', async () => {
 		const t = await startSyncTest({ updateLinks: false });
 		await legacyFixture(t);
+		expect(await ev<unknown>(`app.vault.getConfig('alwaysUpdateLinks')`)).toBe(false);
 		await reachPreview();
 		const body = await dse.page<string>(`document.querySelector('.modal-container .dse-modal__body').textContent`);
-		// the preview promises "Obsidian update the links in your own notes automatically"; with the setting OFF it must say what will really happen
-		if (!/Automatically update internal links|will ask|prompt|setting/i.test(body.replace(/lets Obsidian update the links in your own notes\s+automatically/i, ''))) {
-			throw new Error('the preview does not warn that "Automatically update internal links" is off');
-		}
-	}, { failsWith: /the preview does not warn that "Automatically update internal links" is off/ });
+		// the preview promises that Obsidian updates the links "automatically"; with the setting OFF it must name the setting Obsidian reads
+		if (!/Automatically update internal links/i.test(body)) throw new Error('the preview does not name the "Automatically update internal links" setting although it is off');
+	}, { failsWith: /the preview does not name the "Automatically update internal links" setting although it is off/ });
 
 	knownBug('SC-703', '[SYNC-K11] after a phase change the keyboard focus is inside the window (the complete summary)', async () => {
 		const t = await startSyncTest();
@@ -185,29 +219,26 @@ describe('sync: known bugs', () => {
 });
 
 describe('sync: what odd Destinations do in real Obsidian (SC-700)', () => {
-	it('[SYNC-D08] a Destination of ".trash" is accepted today: the compendium is written inside the vault\'s trash folder', async () => {
+	const FILES = { 'class/shadow.md': 'shadow A', 'rule/combat/turn.md': 'turn A', 'kit/panther.md': 'panther A' };
+	const under = (root: string): Record<string, string> => Object.fromEntries(Object.entries(FILES).map(([p, c]) => [`${root}/${p}`, c]));
+	const dirs = (root: string): string[] => ['class', 'rule', 'rule/combat', 'kit'].map((d) => `${root}/${d}`);
+
+	it('[SYNC-D08] a Destination of ".trash" is accepted today: the compendium is written inside the vault\'s trash folder (SC-700 changes this: this test then goes red)', async () => {
 		const t = await startSyncTest();
 		await setDestination('.trash');
-		await fixtureRelease.publish('v1', RELEASE_A);
+		await fixtureRelease.publish('v1', FILES);
 		await palette.sync();
-		await waitNotice(/compendium v1 synced — 3 new|compendium sync failed|Destination folder/);
-		const after = await t.settled();
-		const written = Object.keys(after.files).filter((p) => p.startsWith('.trash/'));
-		console.log(`SYNC-OBSERVED Destination .trash: written ${JSON.stringify(written)}; notices ${JSON.stringify(await noticeTexts())}`);
-		expect(written.length).toBeGreaterThanOrEqual(0);
+		await waitNotice(/compendium v1 synced — 3 new/);
+		await t.expectChange({ created: { ...under('.trash'), [MANIFEST]: null }, dirsCreated: ['.trash', ...dirs('.trash')].sort() });
 	});
 
-	it('[SYNC-D09] a Destination of ".obsidian" is accepted today: the compendium is written into the vault\'s configuration folder (the reset removes it again)', async () => {
+	it('[SYNC-D09] a Destination of ".obsidian" is accepted today: the compendium is written into the vault\'s configuration folder (the reset removes it again; SC-700 changes this: this test then goes red)', async () => {
 		const t = await startSyncTest();
 		await setDestination('.obsidian');
-		await fixtureRelease.publish('v1', RELEASE_A);
+		await fixtureRelease.publish('v1', FILES);
 		await palette.sync();
-		await waitNotice(/compendium v1 synced — 3 new|compendium sync failed|Destination folder/);
-		await t.settled();
-		const on = ['class', 'rule', 'kit'].filter((d) => fs.existsSync(path.join(t.base, '.obsidian', d)));
-		console.log(`SYNC-OBSERVED Destination .obsidian: top folders written ${JSON.stringify(on)}; notices ${JSON.stringify(await noticeTexts())}`);
-		await ev(`(async () => { const a = app.vault.adapter; for (const d of ['.obsidian/class', '.obsidian/rule', '.obsidian/kit']) if (await a.exists(d)) await a.rmdir(d, true); return true; })()`);
-		expect(on.length).toBeGreaterThanOrEqual(0);
+		await waitNotice(/compendium v1 synced — 3 new/);
+		await t.expectChange({ created: { ...under('.obsidian'), [MANIFEST]: null }, dirsCreated: dirs('.obsidian').sort() });
 	});
 
 	it('[SYNC-D10] a Destination that is a FILE: the Sync fails with a Notice, writes nothing, and leaves the note alone', async () => {
@@ -218,12 +249,9 @@ describe('sync: what odd Destinations do in real Obsidian (SC-700)', () => {
 		await setDestination('Notes.md');
 		await fixtureRelease.publish('v1', RELEASE_A);
 		await palette.sync();
-		await waitNotice(/compendium sync failed|synced/);
-		const texts = (await noticeTexts()).join(' | ');
-		console.log(`SYNC-OBSERVED Destination is a file: ${texts}`);
+		await waitNotice(/compendium sync failed — ENOTDIR/);
 		await noWindows();
-		const after = await t.settled();
-		console.log(`SYNC-OBSERVED Destination is a file: diff ${JSON.stringify(diffTrees(t.before, after))}`);
+		await t.expectChange({});
 		expect(t.read('Notes.md')).toBe('my note, not a folder');
 	});
 });
