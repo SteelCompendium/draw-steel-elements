@@ -6,9 +6,7 @@
 // which stays out of the palette and `/ds` even with the gate on (SC-190).
 import { expect } from '@wdio/globals';
 import { browser } from '@wdio/globals';
-import * as yaml from 'js-yaml';
-import { dse, knownBug } from '../../driver/dse';
-import { scanFences } from '../../driver/noteFences';
+import { dse } from '../../driver/dse';
 import {
 	clickRow, closeList, drawn, editorState, expectNoList, insertCommandIds, listRows, openEditor, paletteRows, pressList, savedText, scaffoldOf, selectedListRow, spliced, toReading, typeKeys, waitList, waitNoList,
 } from '../../driver/authoring';
@@ -202,26 +200,29 @@ describe('authoring with the experimental gate on', () => {
 		expect((await editorState()).value).toBe('```ds-roll\nmode: opposed\n\n```\n');
 	});
 
-	// SC-688: typing `mode:` (no space) opens the value list at once, and an accept there writes `mode:power-roll`, which is not a mapping entry
-	// (the block draws a parse error card). The marker asks only that the saved block parses, so a fix that writes `mode: power-roll` and one that
-	// waits for the space both flip it.
-	knownBug('SC-688', '[AUTH-G21] `mode:` with no space typed, then Enter on the open value list: the saved block parses as YAML', async () => {
+	// SC-688: typing `mode:` (no space) opens the value list at once (kept), and an accept there writes the space too: `mode: power-roll`, a mapping
+	// entry. (`mode:power-roll` made the block draw a parse error card.)
+	it('[AUTH-G21] `mode:` with no space typed, then Enter on the open value list: the saved line is `mode: power-roll`, the cursor is after it and no list is left', async () => {
 		const rel = 'Authoring/gate-nospace.md';
 		await openEditor(rel, '```ds-roll\nname: x\n\n```\n', 'live-preview', { line: 2, ch: 0 });
-		await typeKeys('mode:');
-		await browser.waitUntil(async () => (await listRows()).length > 0, { timeout: 1500, interval: 50 }).catch(() => undefined); // no list is a fix too
-		if ((await listRows()).length > 0) {
-			await pressList('Enter');
-			await waitNoList();
-		}
-		const block = scanFences(await savedText(rel))[0];
-		let parses = true;
-		try {
-			yaml.load(block.body.join('\n'));
-		} catch {
-			parses = false;
-		}
-		expect(parses).toBe(true);
-	}, { failsWith: /Expected|Received/ });
+		await typeKeys('mode:', 'authoring.schema.trigger');
+		expect((await waitList(4)).map((r) => r.text)).toEqual(['power-roll', 'test', 'opposed', 'flat']);
+		await pressList('Enter');
+		await waitNoList();
+		expect(await savedText(rel)).toBe('```ds-roll\nname: x\nmode: power-roll\n\n```\n');
+		expect((await editorState()).cursor).toEqual({ line: 2, ch: 16 });
+	});
+
+	// SC-688, the mid-word half: with the cursor inside a value the accept replaces the whole word, it did write `mode: opposeded`.
+	it('[AUTH-G22] a value accepted with the cursor mid-word (`mode: oppos|ed`, Enter on the open list): the whole word is replaced, `mode: opposed`, the cursor after it', async () => {
+		const rel = 'Authoring/gate-midword.md';
+		await openEditor(rel, '```ds-roll\nmode: oed\n```\n', 'live-preview', { line: 1, ch: 7 });
+		await typeKeys('ppos', 'authoring.schema.trigger');
+		expect((await waitList(1)).map((r) => r.text)).toEqual(['opposed']);
+		await pressList('Enter');
+		await waitNoList();
+		expect(await savedText(rel)).toBe('```ds-roll\nmode: opposed\n```\n');
+		expect((await editorState()).cursor).toEqual({ line: 1, ch: 13 });
+	});
 
 });
