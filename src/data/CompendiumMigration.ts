@@ -488,7 +488,7 @@ export class CompendiumMigrationService {
 		};
 
 		// Self-heal anything a previous, interrupted run moved but never recorded.
-		await this.reconcile(plan.root);
+		await this.reconcile(plan.root, true);
 		const state = (await this.stateStore.load()) ?? emptyMigrationState(plan.root);
 		state.root = plan.root;
 		const caseIndex: FolderCaseIndex = buildFolderCaseIndex(this.app);
@@ -520,7 +520,7 @@ export class CompendiumMigrationService {
 		};
 		const adopt = async (): Promise<void> => {
 			try {
-				await this.reconcile(plan.root);
+				await this.reconcile(plan.root, true);
 			} catch (error) {
 				console.warn("Draw Steel Elements: could not update the compendium manifest.", error);
 			}
@@ -669,12 +669,19 @@ export class CompendiumMigrationService {
 	 * a destination would be adopted by a sweep and then silently overwritten by the
 	 * next sync. Only files this plugin actually moved are ever claimed.
 	 */
-	public async reconcile(root?: string): Promise<number> {
+	public async reconcile(root?: string, rekey = false): Promise<number> {
 		const state = await this.stateStore.load();
 		if (state === null || state.migrated.length === 0) return 0;
 		const existing = await this.manifestStore.load();
-		const files: Record<string, string> = { ...(existing?.files ?? {}) };
-		const effectiveRoot = existing?.root ?? state.root ?? root ?? "";
+		// SC-706: a migration run (`rekey`) moves files into `root`. When the manifest belongs to another
+		// folder (the Destination was changed since the last sync) its entries describe that folder, so
+		// adoption starts from nothing and the manifest moves to `root`; otherwise the moved files are
+		// never claimed and the next sync skips them as user content. Only the run itself asks for this:
+		// the `reconcile(options.root)` at the start of a sync leaves the manifest where it is.
+		const rekeyed = rekey && root !== undefined && existing !== null
+			&& typeof existing.root === "string" && normalizePath(existing.root) !== normalizePath(root);
+		const files: Record<string, string> = rekeyed ? {} : { ...(existing?.files ?? {}) };
+		const effectiveRoot = rekeyed ? root : existing?.root ?? state.root ?? root ?? "";
 		if (isVaultRootPath(effectiveRoot)) return 0; // SC-643 (D3): never adopt files "under" the vault root
 		let added = 0;
 		for (const relative of new Set(state.migrated)) {

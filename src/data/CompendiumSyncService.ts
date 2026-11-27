@@ -187,8 +187,10 @@ export class CompendiumSyncService {
 		});
 
 		// SC-706: the old manifest's file list says what the plugin installed under the OLD root. When the
-		// Destination changed since, a file at `<options.root>/<rel>` was put there by the user, whatever
-		// the old list says about `<rel>` — it may be skipped or adopted (identical), never overwritten.
+		// Destination changed since, a file at `<options.root>/<rel>` is the user's, whatever the old list
+		// says about `<rel>` — skipped or adopted (identical), never overwritten — UNLESS it holds exactly
+		// the bytes the manifest recorded for `<rel>`: that is the plugin's own install, moved or renamed
+		// with its folder, and updating it overwrites nothing the user wrote (see the arm below).
 		const installedHere = oldManifest !== null && typeof oldManifest.root === "string"
 			&& normalizePath(oldManifest.root) === normalizePath(options.root);
 
@@ -217,8 +219,10 @@ export class CompendiumSyncService {
 					// Already identical (covers re-adopting an intact install) — no write churn.
 					report.unchanged.push(relativePath);
 					newFiles[relativePath] = incomingHash;
-				} else if (installedHere && oldManifest?.files[relativePath] !== undefined) {
-					// We installed it → safe to update in place (no delete/recreate churn).
+				} else if (oldManifest?.files[relativePath] !== undefined
+					&& (installedHere || currentHash === oldManifest.files[relativePath])) {
+					// We installed it → safe to update in place (no delete/recreate churn). After a
+					// Destination change only a file with the manifest's recorded hash counts (SC-706).
 					// Spec-sanctioned (F2 §3.4 step 3): upstream overwrites even if the user
 					// edited this managed file since install — deliberate, not a bug (review F1).
 					await this.app.vault.modifyBinary(existing, toArrayBuffer(content));
