@@ -42,17 +42,29 @@ export interface FenceState {
  * and a tilde fence only closes with tildes).
  */
 export function scanFenceState(editor: Editor, line: number): FenceState {
+	const open = scanOpenFence(editor, line);
+	return { inFence: open !== null, lang: open?.lang ?? null };
+}
+
+/**
+ * The same top-down scan as `scanFenceState`, answering WHICH fence is open at `line`: its language and the line of its opening marker (SC-707:
+ * the in-block key autocomplete reads the block body from the line below it). Null when `line` is not inside a fence.
+ */
+export function scanOpenFence(editor: Editor, line: number): { lang: string; openLine: number } | null {
 	let open: FenceRun | null = null;
+	let openLine = -1;
 	for (let i = 0; i < line; i++) {
 		const m = FENCE_LINE.exec(editor.getLine(i));
 		if (!m) continue;
-		if (!open) open = openFenceOf(m[1], m[2]);
-		else if (closesFence(open, m[1], m[2])) open = null;
+		if (!open) {
+			open = openFenceOf(m[1], m[2]);
+			openLine = i;
+		} else if (closesFence(open, m[1], m[2])) open = null;
 		// else: a fence-marker-looking line while already inside an open fence, but it
 		// doesn't validly close it (wrong char, too short, or has an info string) — treat
 		// it as literal content and keep scanning in the current state.
 	}
-	return { inFence: open !== null, lang: open?.lang ?? null };
+	return open ? { lang: open.lang, openLine } : null;
 }
 
 /** An open fence: its marker character and length (a closer must match / reach them) and its language. */

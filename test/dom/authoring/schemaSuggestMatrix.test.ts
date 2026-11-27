@@ -105,7 +105,7 @@ describe('the enum list: the values of the key before the cursor, prefix match',
 
 describe('onTrigger: where the lists open, and which block\'s schema they use', () => {
 	// [name, doc (cursor at the end), expected: keys-list / enum-list / null]
-	const CASES: Array<[name: string, doc: string, want: 'key' | 'enum' | null]> = [
+	const CASES: Array<[name: string, doc: string, want: 'key' | 'enum' | 'none' | null]> = [
 		['a blank line inside the block', '```ds-roll\n', 'key'],
 		['a block opened with extra info words (SC-476)', '```ds-roll   extra words\nmod', 'key'],
 		['a tilde fence', '~~~ds-roll\nmod', 'key'],
@@ -119,8 +119,11 @@ describe('onTrigger: where the lists open, and which block\'s schema they use', 
 		['an unknown language', '```ds-nothing\nmod', null],
 		['a language written in another case (it never renders)', '```DS-Roll\nmod', null],
 		['a non-ds fence', '```js\nmod', null],
-		['an indented line (nested keys are out of scope)', '```ds-roll\ntiers:\n  mod', null],
-		['an indented key: value line', '```ds-roll\ntiers:\n  mode: ', null],
+		['an indented line with no parent key above it', '```ds-roll\n  mod', null],
+		['an indented key: value line with no parent key above it', '```ds-roll\n  mode: ', null],
+		['SC-707: an indented key under a nested object (tiers) opens its key list', '```ds-roll\ntiers:\n  t', 'key'],
+		['SC-707: a nested key list is the nested object\'s: `tiers` is not offered inside `tiers:` (the word matches no t1 / t2 / t3)', '```ds-roll\ntiers:\n  mod', 'none'],
+		['SC-707: a top-level enum key written inside a nested object offers nothing (`mode` is not a `tiers` key)', '```ds-roll\ntiers:\n  mode: ', 'none'],
 		['a comment line', '```ds-roll\n# mod', null],
 		['a value that already has a space in it', '```ds-roll\nmode: power roll', null],
 		['a list item', '```ds-roll\n- mod', null],

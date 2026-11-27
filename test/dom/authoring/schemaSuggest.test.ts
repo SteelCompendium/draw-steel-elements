@@ -131,15 +131,15 @@ test('ds-roll fence (no allOf) is unchanged: only its own top-level properties a
 	expect(keys).not.toContain('collapse_default');
 });
 
-// Finding 2 — key suggestions must not mis-fire on nested/indented lines. ds-roll's
-// `tiers:` is a nested object with its OWN t1/t2/t3 properties; the flat top-level
-// property map only knows about `tiers` itself, so an indented `t` must not resolve
-// against it (that would incorrectly offer `tiers` again, invalid inside `tiers:`).
-test('indented key under a nested object → no key suggestions (bails, does not mis-resolve)', () => {
+// Finding 2 — key suggestions must not mis-fire on nested/indented lines. ds-roll's `tiers:` is a nested object with its OWN t1/t2/t3
+// properties; the flat top-level property map only knows about `tiers` itself, so an indented `t` must never resolve against it (that
+// would offer `tiers` again, invalid inside `tiers:`). Since SC-707 the line resolves against the nested object instead: `t` offers t1..t3.
+test('indented key under a nested object → the nested object\'s keys (SC-707), never the top level\'s', () => {
 	const s = realSuggest();
 	const editor = new Editor('```ds-roll\ntiers:\n  t');
 	const info = s.onTrigger({ line: 2, ch: 3 }, editor as never, null);
-	expect(info).toBeNull();
+	expect(info).not.toBeNull();
+	expect(s.getSuggestions({ ...info!, editor: editor as never, file: null as never })).toEqual(['t1', 't2', 't3']);
 });
 
 test('top-level key (no indentation) still resolves normally → suggests "tiers"', () => {

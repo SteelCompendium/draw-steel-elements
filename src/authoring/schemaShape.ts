@@ -22,6 +22,8 @@ export interface RawSchemaNode {
 	default?: unknown;
 	description?: string;
 	properties?: Record<string, RawSchemaNode | undefined>;
+	/** SC-707: the entry schema of a list (a single schema; the tuple form is not resolved). */
+	items?: RawSchemaNode;
 	required?: string[];
 	allOf?: RawSchemaNode[];
 }
@@ -70,6 +72,38 @@ export function mergeShape(node: RawSchemaNode | null | undefined, into: SchemaS
 	}
 	if (Array.isArray(node.allOf)) {
 		for (const entry of node.allOf) mergeShape(entry, into);
+	}
+}
+
+/** SC-707: the flat shape (`properties` + `required`, allOf / $ref merged by `mergeShape`) of ONE schema node — the root, or a nested
+ *  object node the autocomplete walked down to. The same resolver `shapeFromSchemaYaml` uses; nested nodes do not get a second one. */
+export function shapeOfNode(node: RawSchemaNode | null | undefined): SchemaShape {
+	const shape: SchemaShape = { properties: {}, required: [] };
+	mergeShape(node, shape);
+	return shape;
+}
+
+/** SC-707: the entry schema of a list node: its own `items`, else the one `items` an allOf entry / `$ref` target carries. Null when the node
+ *  declares none, or when two different ones are declared (ambiguous), or `items` is not a single schema. */
+export function itemsOfNode(node: RawSchemaNode | null | undefined): RawSchemaNode | null {
+	const found: RawSchemaNode[] = [];
+	const collect = (n: RawSchemaNode | null | undefined, depth: number): void => {
+		if (!n || depth > 8) return;
+		if (n.$ref) collect(resolveRef(n.$ref), depth + 1);
+		if (n.items && typeof n.items === 'object' && !Array.isArray(n.items)) found.push(n.items);
+		if (Array.isArray(n.allOf)) for (const entry of n.allOf) collect(entry, depth + 1);
+	};
+	collect(node, 0);
+	return found.length === 1 ? found[0] : null;
+}
+
+/** Parses a schema YAML string into its raw root node. Null on unparsable YAML or a non-object document. */
+export function nodeFromSchemaYaml(schemaYaml: string): RawSchemaNode | null {
+	try {
+		const root = parseYaml(schemaYaml) as unknown;
+		return typeof root === 'object' && root !== null ? (root as RawSchemaNode) : null;
+	} catch {
+		return null;
 	}
 }
 
