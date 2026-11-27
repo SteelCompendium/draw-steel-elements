@@ -40,7 +40,12 @@ export class CmEditor {
 	listSelections(): Array<{ anchor: EditorPosition; head: EditorPosition }> {
 		return this.state.selection.ranges.map((r) => ({ anchor: this.pos(r.anchor), head: this.pos(r.head) }));
 	}
-	/** Several cursors / selections at once (Obsidian's multiple cursors); the last one is the main one when `main` is not given. */
+	/**
+	 * Several cursors / selections at once (Obsidian's multiple cursors); the last one is the main one when `main` is not given.
+	 * NOT like Obsidian 1.14.4 (measured, SC-692): there `main` is ignored and the FIRST range is the main one (`getCursor()` follows it; so does
+	 * `transaction({ selections })`). The jsdom tests here set `main` to say which cursor is the main one, so this keeps honouring it; the e2e
+	 * specs put the main range first.
+	 */
 	setSelections(ranges: Array<{ anchor: EditorPosition; head?: EditorPosition }>, main = ranges.length - 1): void {
 		this.state = this.state.update({
 			selection: EditorSelection.create(

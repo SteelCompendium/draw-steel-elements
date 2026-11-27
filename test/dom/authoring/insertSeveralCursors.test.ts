@@ -152,6 +152,27 @@ describe('SC-692: every cursor gets a block laid out for its own line', () => {
 		expect((await insertAll('- a|b|c')).ed.getValue()).toBe(['- a', under('  '), '  b', under('  '), '  c'].join('\n'));
 	});
 
+	// The next cursor on the line has only a prefix (or nothing) before it, so ITS block opens right on that line. The cursor before it must see that
+	// opening fence as text after it: its block ends with a line break, and the fence is never glued onto the closing one (the ticket's bug class).
+	test('two cursors on a callout line with only the prefix before them: the second block opens on its own line, behind the callout marker', async () => {
+		const { ed } = await insertAll('> [!note] T\n> | |');
+		expect(ed.getValue()).toBe(['> [!note] T', under('> '), '>  ```ds-ct', '>  a: 1', '>  b:', '>    c: 2', '>  ```'].join('\n'));
+		expect(ed.getValue().split('\n').filter((l) => /```.*```/.test(l))).toEqual([]);
+	});
+
+	test('two cursors on a whitespace-only line: the first block ends its line, the second starts behind the whitespace', async () => {
+		const { ed } = await insertAll('|  |');
+		expect(ed.getValue()).toBe([...B, '  ```ds-ct', '  a: 1', '  b:', '    c: 2', '  ```'].join('\n'));
+	});
+
+	test('a cursor right before a selection that starts at the same spot and ends on a later line: two blocks, no blank line between them', async () => {
+		const spec = parse('a|«cd\nef»g');
+		const { ed } = await insertAll('a|«cd\nef»g', runCounter, 0);
+		expect(spec.ranges).toHaveLength(2);
+		expect(ed.getValue()).toBe(['a', ...B, ...B, 'g'].join('\n'));
+		expect(ed.getValue()).not.toMatch(/\n\n/);
+	});
+
 	test('cursors on two adjacent empty lines: two blocks in a row, nothing between', async () => {
 		const { ed } = await insertAll('top\n|\n|\nbottom');
 		expect(ed.getValue()).toBe(['top', ...B, ...B, 'bottom'].join('\n'));

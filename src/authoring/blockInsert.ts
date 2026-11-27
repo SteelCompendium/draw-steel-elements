@@ -17,7 +17,7 @@
 //   - whether text follows the cursor (or the selection). If so it moves to a line of its own below the closing fence, behind the same prefix.
 //
 // Never blank lines (a blank line ends a callout, and a fence may follow a paragraph line directly). Never a rewrite of existing text:
-// the write is ONE replaceSelection / replaceRange over exactly what the caller replaced before (the selection, or the typed `/ds…` token),
+// the write (with one cursor) is ONE replaceSelection / replaceRange over exactly what the caller replaced before (the selection, or the typed `/ds…` token),
 // moving the tail down is an inserted line break in front of it. One change, so one undo restores the note.
 // At the start of an empty line with no prefix the text written and the cursor position are exactly what they were before SC-675.
 //
@@ -208,7 +208,7 @@ export function insertRefusalFor(editor: Editor, range?: { start: EditorPosition
 	const lines: string[] = [];
 	for (let i = 0, n = editor.lineCount(); i < n; i++) lines.push(editor.getLine(i));
 	if (range) return insertRefusal(lines, range.start, range.end);
-	// Without a range the write goes over EVERY selection range (`replaceSelection` writes at each cursor), so any range with an end inside refuses.
+	// Without a range the write goes over EVERY selection range (one block per range, in one `editor.transaction`, SC-692), so any range with an end inside refuses.
 	for (const { anchor, head } of editor.listSelections()) {
 		const why = insertRefusal(lines, anchor, head);
 		if (why !== null) return why;
