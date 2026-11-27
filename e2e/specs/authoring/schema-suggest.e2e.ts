@@ -309,4 +309,17 @@ describe('in-fence key autocomplete', () => {
 		await waitNoList();
 	});
 
+	it('[AUTH-K21] a nested enum: `squad_role: ca` under a creature (two lists deep) offers captain; Enter writes `squad_role: captain` over the typed part, nothing else changes', async () => {
+		const rel = 'Authoring/key-initiative-enum.md';
+		const note = '```ds-initiative\nenemy_groups:\n  - name: Squad\n    is_squad: true\n    creatures:\n      - name: Goblin\n        \n```\nafter\n';
+		const at = { line: 6, ch: 8 };
+		await openEditor(rel, note, 'source', at);
+		await typeKeys('squad_role: ca', 'authoring.schema.trigger');
+		expect((await waitList(1)).map((r) => [r.id, r.text])).toEqual([['authoring.schema.value', 'captain']]);
+		await pressList('Enter');
+		await closeList();
+		expect(await savedText(rel)).toBe(spliced(note, at, undefined, 'squad_role: captain'));
+		expect((await editorState()).cursor).toEqual({ line: 6, ch: 27 });
+	});
+
 });
