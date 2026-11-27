@@ -22,6 +22,10 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Sync no longer overwrites your own notes after you change the Destination folder; it asks first, like a first sync** (SC-706).
+  Before: after one Sync, pointing Settings -> Draw Steel Elements -> Destination folder at another folder and syncing again wrote the compendium into it with no question, and replaced any note of yours that sat at the same path as a compendium file (a `class/shadow.md` of your own, for example), with no copy kept.
+  Now the Sync treats the new folder as a first sync into it. If it holds files, "Existing compendium folder found" opens before anything is written; if it is empty or does not exist yet, the Sync runs with no window. A file of yours at a compendium path is never overwritten there: it is skipped and counted in the "skipped to protect your changes" message. A file with exactly the compendium's text is left as it is. The compendium files in the folder you moved away from are not removed.
+
 - [FIX] **A `ds-scc` block pointing at a skill, skill group, saint, god, chapter, project, movement, negotiation or monster-group entry now draws a card instead of saying "has no renderer in this plugin"** (SC-391).
   These nine kinds of entry are plain prose, 219 of them in the compendium. Each shows as a card with the entry's name, a small label for what it is ("Skill", "Saint", "Monster group", …) and its full text, links included. A chapter is shown compact, as its name, its first paragraph and an "Open chapter" link to the synced note, because a chapter's text can run to many pages. Projects are plain text for now. An entry of a kind the plugin has never heard of still shows the "has no renderer" card.
 
