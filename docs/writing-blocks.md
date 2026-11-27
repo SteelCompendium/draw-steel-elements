@@ -55,8 +55,7 @@ Pick a suggestion with Enter or a click. The cursor lands right after it and the
 you had typed nothing yet, so the next Enter starts a new line.
 
 Fields inside another field are suggested too. Inside a hero in an initiative block, for example, you get
-`max_stamina`; inside a Roll block's `tiers`, `t1`, `t2` and `t3`; inside a Skills block's `custom_skills`
-entry, `name` and `has_skill`.
+`max_stamina`; inside a Skills block's `custom_skills` entry, `name` and `has_skill`.
 
 Nothing is suggested where the plugin can't tell which field you are in: inside `{ }` or `[ ]`, in
 `|` or `>` text, after a Tab, on an oddly indented line, or in a list of plain words (a condition
