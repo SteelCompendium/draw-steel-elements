@@ -137,7 +137,8 @@ describe('migration window: after a Stop', () => {
 		const after = await t.expectSince(afterStop, {
 			moved: Object.fromEntries(rest.map((p) => [`${DC}/${p.oldRelative}`, `${DC}/${p.newRelative}`])),
 			created: Object.fromEntries(rest.map((p) => [`${BACKUP} (2)/${p.oldRelative}`, p.content])),
-			createdMatching: [/^Draw Steel Elements migration report \d{4}-\d{2}-\d{2} \d{4} \(2\)\.md$/],
+			// the note's name carries the MINUTE: ` (2)` is added only when the first run's note has the same minute, so a run that crosses a minute has none
+			createdMatching: [/^Draw Steel Elements migration report \d{4}-\d{2}-\d{2} \d{4}( \(2\))?\.md$/],
 			modified: { [STATE]: null, [MANIFEST_KEY]: null, ...(rest.some((p) => p.oldRelative === f.linked.oldRelative) ? { [USER_OUT]: null } : {}) },
 			dirsCreated: t.dirsFor([...rest.map((p) => `${DC}/${p.newRelative}`), ...rest.map((p) => `${BACKUP} (2)/${p.oldRelative}`)]).filter((d) => !afterStop.dirs.includes(d)),
 		});
