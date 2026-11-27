@@ -186,6 +186,12 @@ export class CompendiumSyncService {
 			return true;
 		});
 
+		// SC-706: the old manifest's file list says what the plugin installed under the OLD root. When the
+		// Destination changed since, a file at `<options.root>/<rel>` was put there by the user, whatever
+		// the old list says about `<rel>` — it may be skipped or adopted (identical), never overwritten.
+		const installedHere = oldManifest !== null && typeof oldManifest.root === "string"
+			&& normalizePath(oldManifest.root) === normalizePath(options.root);
+
 		// Phase 1 — create / update / skip, batched with UI yields.
 		for (let i = 0; i < entries.length; i += BATCH_SIZE) {
 			const batch = entries.slice(i, i + BATCH_SIZE);
@@ -211,7 +217,7 @@ export class CompendiumSyncService {
 					// Already identical (covers re-adopting an intact install) — no write churn.
 					report.unchanged.push(relativePath);
 					newFiles[relativePath] = incomingHash;
-				} else if (oldManifest?.files[relativePath] !== undefined) {
+				} else if (installedHere && oldManifest?.files[relativePath] !== undefined) {
 					// We installed it → safe to update in place (no delete/recreate churn).
 					// Spec-sanctioned (F2 §3.4 step 3): upstream overwrites even if the user
 					// edited this managed file since install — deliberate, not a bug (review F1).

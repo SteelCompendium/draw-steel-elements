@@ -762,7 +762,12 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
             // stopped a run part-way. After a partial run the manifest is no longer null,
             // so the manifest-absence arm alone could never re-offer.
             const migrationPending = await this.migrationService.isPending();
-            if (manifest === null || migrationPending) {
+            // SC-706: a manifest written for ANOTHER Destination says nothing about this folder.
+            // For the first-sync check below it counts as no manifest: the new folder's files were
+            // not installed by the plugin, and a sync into it asks first (when it holds files).
+            const manifestHere = manifest !== null && typeof manifest.root === 'string'
+                && normalizePath(manifest.root) === normalizePath(options.root);
+            if (!manifestHere || migrationPending) {
                 const root = this.app.vault.getAbstractFileByPath(normalizePath(options.root));
                 // SC-125 trigger, stated exactly. The offer appears when:
                 //   (a) no sync manifest exists (7.0.0+ has never synced here) OR the user
@@ -790,7 +795,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
                         // Nothing left to migrate — stop re-offering and carry on.
                         await this.migrationService.markSettled(options.root);
                     }
-                    if (manifest !== null) {
+                    if (manifestHere) {
                         syncStarted = true;
                         await this.syncService.sync(options, token);
                         return;
