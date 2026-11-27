@@ -464,6 +464,92 @@ describe("the handoff to the sync engine", () => {
 		expect(state.migrated).toEqual(["career/sage.md"]);
 	});
 
+	test("SC-706: a run STOPPED in A, then the Destination set to B (the user's own notes): markSettled(B) + Keep everything + a second sync never claim or overwrite the user's note", async () => {
+		const MINE = "MY OWN sage notes";
+		const { app, vault, store, stateStore, service } = await setup();
+		const sync = new CompendiumSyncService(app, store);
+		const release = (v: string) => new Map([["career/disciple.md", bytes(`${v} disciple`)], ["career/sage.md", bytes(`${v} sage`)]]);
+		vault.setText("A/Rules/Careers/Disciple.md", "disciple text");
+		vault.setText("A/Rules/Careers/Sage.md", "sage text");
+		let moved = 0;
+		const stopped = await service.execute(await service.plan("A"), {
+			writeReportNote: false,
+			onProgress: (_d, _t, phase) => { if (phase === "move") moved++; },
+			shouldAbort: () => moved >= 1,
+		});
+		expect(stopped.aborted).toBe(true);
+		vault.setText("B/career/sage.md", MINE);
+		vault.setText("B/Session 1.md", "my session");
+		// Sync 1 into B, in main.syncCompendium's order: reconcile, pending + nothing to migrate -> markSettled, then the sync (Keep everything).
+		await service.reconcile("B");
+		expect(await service.isPending()).toBe(true);
+		await service.markSettled("B");
+		const state = (await stateStore.load())!;
+		expect(state.root).toBe("B");
+		expect(state.migrated).toEqual([]);
+		await sync.applySync(release("v5"), await store.load(), { root: "B", locale: "en" }, "v5");
+		expect(vault.text("B/career/sage.md")).toBe(MINE);
+		// Sync 2 (the manifest is "here" now: no window).
+		await service.reconcile("B");
+		const manifest = (await store.load())!;
+		expect(manifest.files["career/sage.md"]).toBeUndefined();
+		const { report } = await sync.applySync(release("v6"), manifest, { root: "B", locale: "en" }, "v6");
+		expect(report.skippedConflicts).toContain("career/sage.md");
+		expect(vault.text("B/career/sage.md")).toBe(MINE);
+	});
+
+	test("SC-706: markSettled for the SAME folder keeps the moved-paths record and only clears the flags", async () => {
+		const { stateStore, service } = await setup();
+		await stateStore.save({ ...emptyMigrationState("A"), migrated: ["career/sage.md"], declined: true });
+		await service.markSettled("A");
+		const state = (await stateStore.load())!;
+		expect(state.migrated).toEqual(["career/sage.md"]);
+		expect([state.declined, state.incomplete]).toEqual([false, false]);
+	});
+
+	test("SC-706: reconcile() without the re-key flag adopts nothing from a state recorded for ANOTHER folder than the manifest's", async () => {
+		const { store, stateStore, service, vault } = await setup();
+		const manifest: CompendiumManifest = {
+			schemaVersion: MANIFEST_SCHEMA_VERSION, source: "SteelCompendium/data-unified", releaseTag: "v4.old",
+			locale: "en", format: "md-dse", root: "A", syncedAt: "2026-08-01T00:00:00.000Z", files: {},
+		};
+		await store.save(manifest);
+		await stateStore.save({ ...emptyMigrationState("B"), migrated: ["career/sage.md"] });
+		vault.setText("A/career/sage.md", "the user's own note under A");
+		expect(await service.reconcile("A")).toBe(0);
+		expect(await store.load()).toEqual(manifest);
+	});
+
+	test("SC-706: an interrupted run RESUMED in the same folder still self-heals, also when the manifest belongs to another folder (the re-key branch)", async () => {
+		const { app, vault, store, stateStore, service } = await setup();
+		const sync = new CompendiumSyncService(app, store);
+		await store.save({
+			schemaVersion: MANIFEST_SCHEMA_VERSION, source: "SteelCompendium/data-unified", releaseTag: "v4.latest",
+			locale: "en", format: "md-dse", root: "Old", syncedAt: "2026-08-01T00:00:00.000Z", files: { "rule/turn.md": "x" },
+		});
+		vault.setText("B/Rules/Careers/Disciple.md", "disciple text");
+		vault.setText("B/Rules/Careers/Sage.md", "sage text");
+		let moved = 0;
+		const realSave = store.save.bind(store);
+		let failSaves = true;
+		jest.spyOn(store, "save").mockImplementation(async (m) => { if (failSaves) throw new Error("disk full"); return realSave(m); });
+		await service.execute(await service.plan("B"), {
+			writeReportNote: false,
+			onProgress: (_d, _t, phase) => { if (phase === "move") moved++; },
+			shouldAbort: () => moved >= 1,
+		});
+		failSaves = false;
+		expect((await stateStore.load())!.root).toBe("B");
+		await service.execute(await service.plan("B"), { writeReportNote: false });
+		const manifest = (await store.load())!;
+		expect(manifest.root).toBe("B");
+		expect(Object.keys(manifest.files).sort()).toEqual(["career/disciple.md", "career/sage.md"]);
+		const { report } = await sync.applySync(new Map([["career/disciple.md", bytes("v5 disciple")], ["career/sage.md", bytes("v5 sage")]]),
+			manifest, { root: "B", locale: "en" }, "v5");
+		expect(report.skippedConflicts).toEqual([]);
+		expect(report.updated.sort()).toEqual(["career/disciple.md", "career/sage.md"]);
+	});
+
 	test("a run that moved nothing does not write a manifest at all", async () => {
 		const { store, service } = await setup();
 		const report = await service.execute(await service.plan(ROOT), { writeReportNote: false });

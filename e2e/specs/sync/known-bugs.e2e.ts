@@ -12,7 +12,7 @@ import { allowPageErrors } from '../../driver/settingsDrive';
 import {
 	COMPLETE, LEGACY, MANIFEST, PREVIEW, createFolders, createNotes, diffTrees, dismiss, fixtureRelease, hold, noWindows, noticeTexts, palette, seedLegacy, startSyncTest, waitNotice, waitWindow, windows, windowsWithin, within,
 } from '../../driver/sync';
-import { DC, legacyFixture, reachPreview, reachRunning, reachSummary } from '../../driver/syncMigration';
+import { DC, legacyFixture, planOrder, publishNewTree, reachPreview, reachRunning, reachStopped, reachSummary } from '../../driver/syncMigration';
 
 const RELEASE_A = { 'class/shadow.md': 'shadow A', 'rule/combat/turn.md': 'turn A', 'kit/panther.md': 'panther A' };
 const clearNotices = (): Promise<unknown> => ev(`(document.querySelectorAll('.notice').forEach((n) => n.click()), true)`);
@@ -398,6 +398,44 @@ describe('sync: after the Destination folder was changed (SC-706)', () => {
 			await dse.click(dse.control('migration.summary.sync-now'));
 			await waitNotice(/compendium v4 synced/);
 			await noWindows();
+			expect(t.read(mine)).toBe(MINE);
+		} finally {
+			await setDestination('DS Compendium');
+		}
+	});
+
+	it('[SYNC-D16] after a migration STOPPED part-way in one folder, two Syncs into a changed Destination never overwrite the user\'s own note at a path the stopped run had recorded', async () => {
+		const MINE = 'MY OWN notes, written by the user, at a compendium path';
+		const idle = (): Promise<unknown> => ev(`new Promise((resolve) => { const t = setInterval(() => { if (!app.plugins.plugins['draw-steel-elements'].syncService.isBusy()) { clearInterval(t); resolve(true); } }, 25); })`);
+		const t = await startSyncTest();
+		try {
+			const f = await legacyFixture(t);
+			await publishNewTree(f.pairs);
+			await reachStopped(3);
+			await dse.click(dse.control('migration.stopped.close'));
+			await waitNotice(/stopped after moving/);
+			await noWindows();
+			const target = planOrder(f.pairs)[f.pairs.length - 1]; // recorded by the stopped run, not moved by it
+			const mine = `Notes/${target.newRelative}`;
+			await setDestination('Notes');
+			await createNotes({ [mine]: MINE, 'Notes/Session 1.md': 'my session notes' });
+			await t.rebase();
+			await clearNotices();
+			await palette.sync();
+			await waitWindow(LEGACY);
+			await dse.click(dse.control('sync.legacy.keep'));
+			await waitNotice(/compendium v4 synced/);
+			await idle();
+			await noWindows();
+			expect(t.read(mine)).toBe(MINE);
+			await clearNotices();
+			await palette.sync();
+			await waitNotice(/compendium v4 synced/);
+			await idle(); // the second sync's writes must have landed before the note is read
+			await noWindows();
+			const manifest = JSON.parse(t.read(MANIFEST)) as { root: string; files: Record<string, string> };
+			expect(manifest.root).toBe('Notes');
+			expect(manifest.files[target.newRelative]).toBeUndefined();
 			expect(t.read(mine)).toBe(MINE);
 		} finally {
 			await setDestination('DS Compendium');
