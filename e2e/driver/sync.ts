@@ -365,7 +365,9 @@ export interface LegacyPair {
 }
 /** The first `count` entries of the SHIPPED migration map (real old paths that really map), as files under `root`. Returns the pairs. */
 export async function seedLegacy(count = 25, root = 'DS Compendium'): Promise<LegacyPair[]> {
-	const entries = Object.entries((migrationMapJson as unknown as { paths: Record<string, string[]> }).paths).slice(0, count);
+	// Entries WITH a shipped content hash (the file existed in the final legacy release): a fixture file's bytes differ from it, so the run reports them as
+	// "moved, but different" and backs them up, which is what makes every list of the summary reachable.
+	const entries = Object.entries((migrationMapJson as unknown as { paths: Record<string, string[]> }).paths).filter(([, entry]) => entry.length === 2).slice(0, count);
 	const pairs = entries.map(([oldRelative, entry]) => ({ oldRelative, newRelative: entry[0], content: `legacy ${oldRelative}` }));
 	await createNotes(Object.fromEntries(pairs.map((p) => [`${root}/${p.oldRelative}`, p.content])));
 	return pairs;
@@ -621,4 +623,19 @@ export async function startSyncTest(opts: StartOptions = {}): Promise<SyncTest> 
 		read: (rel) => text(base, rel),
 		exists: (rel) => fs.existsSync(path.join(base, rel)),
 	};
+}
+
+// ------------------------------------------------------------------------------------------------------ Obsidian's own "Update links" prompt
+
+/** With "Automatically update internal links" OFF, Obsidian asks (a modal of its own, over ours) before it moves a file that has incoming links. */
+export async function waitUpdateLinksPrompt(): Promise<string> {
+	await waitFor(`Array.from(document.querySelectorAll('.modal-container .modal-title')).some((t) => t.textContent === 'Update links')`, `Obsidian's "Update links" prompt`, 20000);
+	return ev<string>(`Array.from(document.querySelectorAll('.modal-container')).find((m) => m.querySelector('.modal-title')?.textContent === 'Update links').textContent`);
+}
+/** A real click on one of that prompt's buttons ("Always update", "Just once", "Do not update"). Obsidian's own control: no manifest id, nothing credited. */
+export async function answerUpdateLinks(button: 'Always update' | 'Just once' | 'Do not update'): Promise<void> {
+	const el = browser.$(`//div[contains(@class, 'modal-container')]//button[normalize-space()='${button}']`);
+	await el.waitForDisplayed({ timeout: 8000 });
+	await el.click();
+	await waitFor(`!Array.from(document.querySelectorAll('.modal-container .modal-title')).some((t) => t.textContent === 'Update links')`, 'the prompt to close', 8000);
 }
