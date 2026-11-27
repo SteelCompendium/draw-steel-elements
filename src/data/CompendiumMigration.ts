@@ -336,9 +336,15 @@ export class CompendiumMigrationService {
 		const state = await this.stateStore.load();
 		if (state === null) return;
 		if (!state.declined && !state.incomplete) return;
+		// SC-706: a state recorded for ANOTHER folder (the Destination changed since) describes that folder's
+		// moves. Settling this folder starts it from an empty record; keeping the old list under the new root
+		// would let the next reconcile claim, as moved by the plugin, whatever the user keeps at those paths here.
+		if (!sameFolder(state.root, root)) {
+			await this.stateStore.save(emptyMigrationState(root));
+			return;
+		}
 		state.declined = false;
 		state.incomplete = false;
-		state.root = root;
 		await this.stateStore.save(state);
 	}
 
@@ -692,10 +698,11 @@ export class CompendiumMigrationService {
 		// the `reconcile(options.root)` at the start of a sync leaves the manifest where it is.
 		const rekeyed = rekey && root !== undefined && existing !== null
 			&& typeof existing.root === "string" && normalizePath(existing.root) !== normalizePath(root);
-		// A re-keyed manifest adopts only what a run in `root` itself moved (the state's own folder).
-		if (rekeyed && !sameFolder(state.root, root)) return 0;
 		const files: Record<string, string> = rekeyed ? {} : { ...(existing?.files ?? {}) };
 		const effectiveRoot = rekeyed ? root : existing?.root ?? state.root ?? root ?? "";
+		// Never adopt from a state recorded for ANOTHER folder than the one being reconciled (re-key or not):
+		// its moved paths mean nothing here, and a user's own file at one of them would be claimed.
+		if (!sameFolder(state.root, effectiveRoot)) return 0;
 		if (isVaultRootPath(effectiveRoot)) return 0; // SC-643 (D3): never adopt files "under" the vault root
 		let added = 0;
 		for (const relative of new Set(state.migrated)) {
