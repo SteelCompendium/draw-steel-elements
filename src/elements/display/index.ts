@@ -170,7 +170,7 @@ export const proseElement = genericCard({
 // SC-149: renamed from `displayElements` and no longer registered by `main.ts` — the ONLY
 // registrar is the visual harness (visual-harness/entry.ts's
 // `registerHarnessElementDefinitions`), which needs real registry entries to mount its
-// eleven display fixtures.
+// twelve display fixtures.
 //
 // FIX ROUND: `ruleElement` joined this list. It was initially left public (the ruling names
 // ten aliases and `ds-rule` is not among them), but driven directly it is exactly the

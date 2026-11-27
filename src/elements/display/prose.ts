@@ -67,7 +67,9 @@ const NON_PARAGRAPH_START = /^(#{1,6}\s|\||>|[-*+]\s|\d+[.)]\s|```|~~~|<)/;
  * The first plain paragraph of a markdown body: the first blank-line-separated block that
  * is not a heading, table, blockquote, list, fence or HTML. Undefined when there is none
  * (an empty body, or one that opens with nothing but structure). Used by the compact
- * chapter card.
+ * chapter card. Limits (no corpus case today): it is a blank-line splitter, not a markdown
+ * parser, so a setext heading, a fenced block containing a blank line, or a paragraph that
+ * opens with inline HTML is not recognised as such.
  */
 export function firstParagraph(body: string): string | undefined {
 	for (const block of body.split(/\n[ \t]*\n/)) {

@@ -92,8 +92,9 @@ export class ProjectView extends ElementView<ProjectModel> {
 
 	/** spec §5: optional D6 resolution of `goal_code` -> prefill points/name FOR DISPLAY
 	 *  ONLY (inline `goal_name`/`goal_points`, when present, always win — never
-	 *  overwritten). No adapter exists for the `project` SCC type (typeAdapters.ts), so
-	 *  this reads `CompendiumIndex.getEntity()` directly rather than `.model()`. Degrades
+	 *  overwritten). The `project` type resolves to the internal prose family (SC-391),
+	 *  whose model is a `GenericNote`; this reads the body directly via
+	 *  `CompendiumIndex.getEntity()` rather than `.model()`. Degrades
 	 *  silently to `{}` (inline-field fallback, no error surface) whenever the code is
 	 *  absent, the compendium isn't installed/synced, or the entity can't be found —
 	 *  matching the brief's "inline fallback otherwise." */

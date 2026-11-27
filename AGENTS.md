@@ -66,14 +66,14 @@ moves. Run it before a release; details in `visual-harness/README.md`.
   threaded into the pipeline in `main.ts` right after `sccResolver`) is the typed-model
   accessor over the synced compendium (`getEntry`/`getEntity`/`getStatblock`/`query`).
   `src/elements/shared/withReference.ts`/`RefUnwrapView.ts`/`CardLayout.ts` give
-  `statblock`/`feature`/`featureblock` and the 11 display-family DEFINITIONS a shared
+  `statblock`/`feature`/`featureblock` and the 12 display-family DEFINITIONS a shared
   "whole-block reference OR inline YAML" contract (`scc.v1:`/bare-slug/`@path`/
   `[[wikilink]]`, by-SCC hybrid mode rendering the real resolved file's body). Compendium
   search + insert: `src/authoring/CompendiumSearchModal.ts` +
   `src/authoring/compendiumInsert.ts`.
-- **`ds-scc` + the internal display family (SC-149)**: the eleven display elements
+- **`ds-scc` + the internal display family (SC-149)**: the twelve display elements
   (`ds-kit`/`ds-condition`/`ds-treasure`/`ds-ancestry`/`ds-culture`/`ds-career`/`ds-class`/
-  `ds-title`/`ds-perk`/`ds-complication`/`ds-rule`) are **internal machinery, not public
+  `ds-title`/`ds-perk`/`ds-complication`/`ds-rule`/`ds-prose`) are **internal machinery, not public
   elements** —
   Scott's pre-release ruling: one maintained catch-all beats ten typed commitments. They
   are not registered by `main.ts`; `src/elements/scc/definition.ts` (`ds-scc`, strict

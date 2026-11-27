@@ -169,6 +169,27 @@ describe('SC-391 chapters render compact', () => {
 		expect(root.textContent).not.toContain('has no renderer');
 	});
 
+	// SC-391 R3: a zero-band card is the head and nothing else (no body element, no band), so
+	// the divider/strip under it is the head's own bottom rule. jsdom applies no stylesheet,
+	// so the DOM shape and the scoped rule that drops the head's separator are pinned.
+	test('a zero-band prose card has no body element and the head is its last child; the CSS drops the head divider for exactly that shape', async () => {
+		const root = await render(EMPTY_CHAPTER.code, EMPTY_CHAPTER.rel);
+		const card = root.querySelector(':scope > .dse-card') as HTMLElement;
+		expect(card.querySelector('.dse-card__body, .dse-card__band')).toBeNull();
+		expect(card.lastElementChild).toBe(card.querySelector(':scope > .dse-head'));
+		// ...whereas a card with a body keeps something after the head.
+		const withBody = await render(NINE[0][1], NINE[0][2]);
+		const full = withBody.querySelector(':scope > .dse-card') as HTMLElement;
+		expect(full.lastElementChild).not.toBe(full.querySelector(':scope > .dse-head'));
+
+		const css = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+		const selector = `[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='prose'] .dse-card > .dse-head:last-child {`;
+		const start = css.indexOf(selector);
+		expect(start).toBeGreaterThan(-1);
+		const block = css.slice(start, css.indexOf('}', start));
+		for (const decl of ['margin-bottom: 0', 'padding-bottom: 0', 'border-bottom: 0']) expect(block).toContain(decl);
+	});
+
 	// The link needs the resolved file; a card with no source file (never produced by ds-scc,
 	// which always resolves one) shows the paragraph and omits the link rather than a dead one.
 	test('with no source file the paragraph shows and the link is omitted', async () => {

@@ -189,8 +189,8 @@ the same model classes still back the legacy validator/schemas).
 
 ### Steel card compositions (`CardLayout.steel`, plan 24 / SC-100; de-branched by SC-144)
 
-The display-card family (the eleven D6 reference cards — kit, condition, treasure,
-ancestry, culture, career, class, title, perk, complication, rule — all rendered by the
+The display-card family (the twelve D6 reference cards — kit, condition, treasure,
+ancestry, culture, career, class, title, perk, complication, rule, prose — all rendered by the
 shared `DisplayCardView` driven by a declarative `CardLayout<M>`,
 `src/elements/shared/CardLayout.ts`) builds its DOM from a declarative layout. Most
 families build one shape; a family may opt into a richer, composed shape instead.

@@ -126,7 +126,7 @@ else), then threads it into `initializeElementFrameworkV2` as the `compendium` p
 with `cx.sccAnchors`.
 
 `src/elements/shared/withReference.ts` wraps a base element definition (`statblock`,
-`feature`, `featureblock`, and the 11 internal `displayFamily()`/`genericCard()`
+`feature`, `featureblock`, and the 12 internal `displayFamily()`/`genericCard()`
 definitions) so its block body may be **either** inline YAML **or** a whole-block
 reference:
 `scc.v1:<code>` (or bare `scc:<code>`), `@<vault-path>`, `[[wikilink]]`, or (for the
