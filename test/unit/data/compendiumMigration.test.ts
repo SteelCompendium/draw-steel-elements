@@ -16,7 +16,7 @@ import {
 import type { MigrationMap } from "@/data/CompendiumMigration";
 import { CompendiumSyncService } from "@/data/CompendiumSyncService";
 import { ManifestStore, sha256Hex } from "@/data/manifest";
-import { MigrationStateStore } from "@/data/migrationState";
+import { MigrationStateStore, emptyMigrationState } from "@/data/migrationState";
 import { makeFakeApp } from "../../fakes/fakeObsidian";
 
 const MIGRATION_MAP = migrationMap();
@@ -355,6 +355,64 @@ describe("the handoff to the sync engine", () => {
 		expect(Object.keys(manifest.files).sort())
 			.toEqual(["career/disciple.md", "career/sage.md", "rule/combat/turn.md"]);
 		expect(manifest.releaseTag).toBe("v4.real"); // a real tag is never overwritten
+	});
+
+	// SC-706: the Destination was changed to a folder holding a pre-7.0.0 compendium and the migration ran
+	// there. The manifest still belongs to the OLD folder; the run must re-key it to the folder it moved
+	// files into, or the next sync skips every moved file as user content forever.
+	describe.each([
+		["the old folder's manifest lists the same rels", true],
+		["the old folder's manifest lists other rels", false],
+	])("SC-706 a migration into a changed Destination (%s)", (_name, sameRels) => {
+		const OLD = "Old Root";
+		async function arrange() {
+			const ctx = await setup();
+			const oldFiles: Record<string, string> = sameRels
+				? { "career/disciple.md": await sha256Hex(bytes("v4 disciple")), "career/sage.md": await sha256Hex(bytes("v4 sage")) }
+				: { "rule/combat/turn.md": await sha256Hex(bytes("turn")) };
+			await ctx.store.save({
+				schemaVersion: 1, source: "SteelCompendium/data-unified", releaseTag: "v4.old",
+				locale: "en", format: "md-dse", root: OLD, syncedAt: "2026-08-01T00:00:00.000Z", files: oldFiles,
+			});
+			seedLegacyVault(ctx.vault);
+			await ctx.service.execute(await ctx.service.plan(ROOT), { writeReportNote: false });
+			return ctx;
+		}
+
+		test("the manifest moves to the migrated folder and claims exactly the moved files", async () => {
+			const { store } = await arrange();
+			const manifest = (await store.load())!;
+			expect(manifest.root).toBe(ROOT);
+			expect(Object.keys(manifest.files).sort()).toEqual(["career/disciple.md", "career/sage.md"]);
+			expect(manifest.files["career/disciple.md"]).toBe(await sha256Hex(bytes("disciple text")));
+		});
+
+		test("THE POINT: the next sync into that folder updates the moved files instead of skipping them", async () => {
+			const { app, vault, store } = await arrange();
+			const sync = new CompendiumSyncService(app, store);
+			const { report } = await sync.applySync(new Map([
+				["career/disciple.md", bytes("NEW disciple text")],
+				["career/sage.md", bytes("NEW sage text")],
+			]), await store.load(), { root: ROOT, locale: "en" }, "v4.new");
+			expect(report.skippedConflicts).toEqual([]);
+			expect(report.updated.sort()).toEqual(["career/disciple.md", "career/sage.md"]);
+			expect(vault.text(`${ROOT}/career/disciple.md`)).toBe("NEW disciple text");
+		});
+	});
+
+	test("SC-706: reconcile() without the re-key flag (the one a sync runs first) leaves another folder's manifest where it is", async () => {
+		const { store, stateStore, service, vault } = await setup();
+		await store.save({
+			schemaVersion: 1, source: "SteelCompendium/data-unified", releaseTag: "v4.old",
+			locale: "en", format: "md-dse", root: "Old Root", syncedAt: "2026-08-01T00:00:00.000Z",
+			files: { "rule/combat/turn.md": "deadbeef" },
+		});
+		await stateStore.save({ ...emptyMigrationState(ROOT), migrated: ["career/disciple.md"] });
+		vault.setText(`${ROOT}/career/disciple.md`, "disciple text");
+		expect(await service.reconcile(ROOT)).toBe(0);
+		const manifest = (await store.load())!;
+		expect(manifest.root).toBe("Old Root");
+		expect(Object.keys(manifest.files)).toEqual(["rule/combat/turn.md"]);
 	});
 
 	test("a run that moved nothing does not write a manifest at all", async () => {

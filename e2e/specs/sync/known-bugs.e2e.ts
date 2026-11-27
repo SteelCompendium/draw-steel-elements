@@ -10,7 +10,7 @@ import { dse, knownBug } from '../../driver/dse';
 import { ev } from '../../driver/page';
 import { allowPageErrors } from '../../driver/settingsDrive';
 import {
-	LEGACY, MANIFEST, createFolders, createNotes, diffTrees, dismiss, fixtureRelease, hold, noWindows, noticeTexts, palette, seedLegacy, startSyncTest, waitNotice, waitWindow, windows, windowsWithin, within,
+	COMPLETE, LEGACY, MANIFEST, PREVIEW, createFolders, createNotes, diffTrees, dismiss, fixtureRelease, hold, noWindows, noticeTexts, palette, seedLegacy, startSyncTest, waitNotice, waitWindow, windows, windowsWithin, within,
 } from '../../driver/sync';
 import { DC, legacyFixture, reachPreview, reachRunning, reachSummary } from '../../driver/syncMigration';
 
@@ -304,6 +304,63 @@ describe('sync: after the Destination folder was changed (SC-706)', () => {
 				modified: { [MANIFEST]: null },
 				dirsCreated: ['Notes/class', 'Notes/rule', 'Notes/rule/combat', 'Notes/kit'].sort(),
 			});
+		} finally {
+			await setDestination('DS Compendium');
+		}
+	});
+
+	it('[SYNC-D13] a compendium folder RENAMED in Obsidian and set as the Destination keeps updating: the window asks once, "Keep everything" updates the changed file in place, and the next sync (same folder now) updates it again', async () => {
+		const t = await startSyncTest();
+		try {
+			await fixtureRelease.publish('v1', RELEASE_A);
+			await palette.sync();
+			await waitNotice(/compendium v1 synced — 3 new/);
+			await ev(`(async () => { await app.fileManager.renameFile(app.vault.getAbstractFileByPath('${DC}'), 'Compendium'); return true; })()`);
+			await t.rebase();
+			await clearNotices();
+			await setDestination('Compendium');
+			await fixtureRelease.publish('v2', { ...RELEASE_A, 'class/shadow.md': 'shadow B' });
+			await palette.sync();
+			await waitWindow(LEGACY);
+			await dse.click(dse.control('sync.legacy.keep'));
+			await waitNotice(/compendium v2 synced — 0 new, 1 updated, 0 removed\./);
+			await noWindows();
+			expect((await noticeTexts()).join('\n')).not.toMatch(/skipped to protect your changes/);
+			expect(t.read('Compendium/class/shadow.md')).toBe('shadow B');
+			expect(JSON.parse(t.read(MANIFEST)).root).toBe('Compendium');
+			await clearNotices();
+			await fixtureRelease.publish('v3', { ...RELEASE_A, 'class/shadow.md': 'shadow C' });
+			await palette.sync();
+			await waitNotice(/compendium v3 synced — 0 new, 1 updated, 0 removed\./);
+			await noWindows();
+			expect(t.read('Compendium/class/shadow.md')).toBe('shadow C');
+		} finally {
+			await setDestination('DS Compendium');
+		}
+	});
+
+	it('[SYNC-D14] a changed Destination that holds a pre-7.0.0 compendium: the Sync offers the migration, and after the run the next sync UPDATES the moved files (none skipped as the user\'s)', async () => {
+		const t = await startSyncTest();
+		try {
+			await fixtureRelease.publish('v1', RELEASE_A);
+			await palette.sync();
+			await waitNotice(/compendium v1 synced — 3 new/);
+			await setDestination('Legacy Compendium');
+			const pairs = await seedLegacy(25, 'Legacy Compendium');
+			await t.rebase();
+			await clearNotices();
+			await fixtureRelease.publish('v4', Object.fromEntries(pairs.map((p) => [p.newRelative, `official ${p.newRelative}`])));
+			await palette.sync();
+			await waitWindow(PREVIEW);
+			await dse.click(dse.control('migration.preview.move'));
+			await waitWindow(COMPLETE);
+			await clearNotices();
+			await dse.click(dse.control('migration.summary.sync-now'));
+			await waitNotice(/compendium v4 synced — 0 new, 25 updated, 0 removed\./);
+			expect((await noticeTexts()).join('\n')).not.toMatch(/skipped to protect your changes/);
+			await noWindows();
+			for (const p of pairs) expect(t.read(`Legacy Compendium/${p.newRelative}`)).toBe(`official ${p.newRelative}`);
+			expect(JSON.parse(t.read(MANIFEST)).root).toBe('Legacy Compendium');
 		} finally {
 			await setDestination('DS Compendium');
 		}

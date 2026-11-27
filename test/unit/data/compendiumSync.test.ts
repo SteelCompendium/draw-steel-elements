@@ -158,6 +158,50 @@ describe("CompendiumSyncService.applySync (F2 §3.4)", () => {
 		expect(vault.text("DS Compendium/class/shadow.md")).toBe("MY own notes");
 	});
 
+	// SC-706 (O4): a file at the new root holding EXACTLY the bytes the manifest recorded is the plugin's own
+	// install, moved or renamed with its folder, so it is updated; anything else there is the user's.
+	test("SC-706: a renamed compendium folder (root changed, file still the recorded bytes) is updated in place and tracked", async () => {
+		const { vault, store, service } = setup();
+		vault.setText("Compendium/class/shadow.md", "shadow A");
+		vault.setText("Compendium/kit/panther.md", "panther A");
+		const old = await manifestOf("DS Compendium", { "class/shadow.md": "shadow A", "kit/panther.md": "panther A" });
+		const { report } = await service.applySync(
+			incomingOf({ "class/shadow.md": "shadow B", "kit/panther.md": "panther A" }), old, { ...OPTIONS, root: "Compendium" }, "v4.new");
+		expect(report.updated).toEqual(["class/shadow.md"]);
+		expect(report.unchanged).toEqual(["kit/panther.md"]);
+		expect(report.skippedConflicts).toEqual([]);
+		expect(vault.text("Compendium/class/shadow.md")).toBe("shadow B");
+		const saved = (await store.load())!;
+		expect(saved.root).toBe("Compendium");
+		expect(Object.keys(saved.files).sort()).toEqual(["class/shadow.md", "kit/panther.md"]);
+		// and the next sync, now at the same root, keeps updating it
+		const again = await service.applySync(incomingOf({ "class/shadow.md": "shadow C", "kit/panther.md": "panther A" }), saved, { ...OPTIONS, root: "Compendium" }, "v4.newer");
+		expect(again.report.updated).toEqual(["class/shadow.md"]);
+		expect(vault.text("Compendium/class/shadow.md")).toBe("shadow C");
+	});
+
+	test("SC-706: a renamed compendium folder with a file the user EDITED (hash differs from the recorded one) is skipped, bytes untouched", async () => {
+		const { vault, service } = setup();
+		vault.setText("Compendium/class/shadow.md", "shadow A, plus what I wrote");
+		const old = await manifestOf("DS Compendium", { "class/shadow.md": "shadow A" });
+		const modifySpy = jest.spyOn(vault, "modifyBinary");
+		const { report } = await service.applySync(
+			incomingOf({ "class/shadow.md": "shadow B" }), old, { ...OPTIONS, root: "Compendium" }, "v4.new");
+		expect(report.skippedConflicts).toEqual(["class/shadow.md"]);
+		expect(modifySpy).not.toHaveBeenCalled();
+		expect(vault.text("Compendium/class/shadow.md")).toBe("shadow A, plus what I wrote");
+	});
+
+	test("SC-706: a user's own note at a rel the manifest does NOT list is skipped even when the root changed", async () => {
+		const { vault, service } = setup();
+		vault.setText("Notes/class/other.md", "my note");
+		const old = await manifestOf("DS Compendium", { "class/shadow.md": "shadow A" });
+		const { report } = await service.applySync(
+			incomingOf({ "class/other.md": "official" }), old, { ...OPTIONS, root: "Notes" }, "v4.new");
+		expect(report.skippedConflicts).toEqual(["class/other.md"]);
+		expect(vault.text("Notes/class/other.md")).toBe("my note");
+	});
+
 	test("SC-706: root unchanged → a managed file is still updated in place (regression guard)", async () => {
 		const { vault, service } = setup();
 		vault.setText("DS Compendium/class/shadow.md", "shadow A");
