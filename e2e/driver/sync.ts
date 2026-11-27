@@ -639,3 +639,17 @@ export async function answerUpdateLinks(button: 'Always update' | 'Just once' | 
 	await el.click();
 	await waitFor(`!Array.from(document.querySelectorAll('.modal-container .modal-title')).some((t) => t.textContent === 'Update links')`, 'the prompt to close', 8000);
 }
+
+/**
+ * Wait up to `ms` for `cond` and return whether it held. For a NEGATIVE expectation ("no second window opens"): the wait is bounded and ends the moment
+ * the state shows, so a fixed bug costs the full wait once and a present bug costs nothing.
+ */
+export async function within(ms: number, cond: () => Promise<boolean>): Promise<boolean> {
+	try {
+		await browser.waitUntil(cond, { timeout: ms, interval: 50 });
+		return true;
+	} catch {
+		return false;
+	}
+}
+export const windowsWithin = (n: number, ms: number): Promise<boolean> => within(ms, async () => (await windows()).length >= n);
