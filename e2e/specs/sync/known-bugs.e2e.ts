@@ -52,8 +52,10 @@ describe('sync: known bugs', () => {
 		await t.rebase();
 		await fixtureRelease.publish('v1', RELEASE_A);
 		await palette.sync();
-		await waitWindow(LEGACY);
+		// a refusal with a Notice (no window at all) is a fix too: wait for the window OR a Notice
+		await within(8000, async () => (await windows()).length > 0 || (await noticeTexts()).some((n) => /Destination|sync|refus|can't/i.test(n)));
 		const [w] = await windows();
+		if (w === undefined) return; // no window, so no trash choice
 		const body = await dse.page<string>(`document.querySelector('.modal-container .dse-modal__body').textContent`);
 		if (!w.buttons.some((b) => b.id === TRASH_ID)) return; // no trash choice at all
 		if (/permanent/i.test(body + w.buttons.map((b) => b.label).join(' '))) return; // the window says so
