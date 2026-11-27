@@ -22,6 +22,11 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Picking a value from the list right after `mode:` or `difficulty:` writes the space, and picking one in the middle of a word replaces the whole word** (SC-688).
+  Typing `mode:` (no space) opens the list of values at once, and picking `power-roll` there wrote `mode:power-roll`, which is not a key and a value: the block turned into an error card. Now the pick writes `mode: power-roll`, and the cursor ends after it.
+  With the cursor inside a value, `mode: op|posed`, picking `opposed` wrote `mode: opposedposed`. Now it replaces the whole word, up to the next space or the end of the line, and anything after the space stays as it was.
+  These lists belong to the Roll block (`ds-roll`), which is behind the Experimental setting, so you see this only with Experimental on. Picking a property name in the middle of a word is not changed here (SC-678).
+
 - [FIX] **After picking a block from the `/ds` list, the list closes, so the next Enter is a new line** (SC-682).
   Typing `/dsstam` and pressing Enter inserted the block but left the picked row on screen for some blocks, depending on the block and where the token was (Stamina bar and Skills on an empty line, for example; a click on the row did the same). Pressing Enter again did nothing until you pressed Escape.
   Just after the pick a second Enter could even pick again: a message, or under a list item a second block written over the first.
