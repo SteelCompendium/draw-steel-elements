@@ -35,6 +35,8 @@ interface State {
 	flowDepth: number;
 	/** The quote character of a quoted scalar that runs over lines. */
 	quote: '"' | "'" | null;
+	/** A line the walk cannot read safely (a flow collection with a string that runs over lines): the answer is null. */
+	giveUp: boolean;
 }
 
 const DASH = /^-(?:[ ]+|$)/;
@@ -49,10 +51,12 @@ function childNode(mapNode: RawSchemaNode | null, key: string | null): RawSchema
 	return shapeOfNode(mapNode).properties[key] ?? null;
 }
 
-/** Drops a trailing comment (`# ...` after whitespace) from `text`, quote-aware: a `#` inside a quoted piece (`"Bob #1"`, `'a #b'`) is text, not a
- *  comment. A quote only opens at the start of a token (the start, or after whitespace or `[ { , :`), so an apostrophe inside a plain word is not one. */
-function stripComment(text: string): string {
+/** `text` without its trailing comment (`# ...` after whitespace), quote-aware: a `#` inside a quoted piece (`"Bob #1"`, `'a #b'`) is text, not a
+ *  comment. `quote` is the quote still open at the end of `text` (a string that runs over lines), else null. As in YAML, a quote only opens where a
+ *  scalar starts: at the start of the text, or after `[ { , :` (spaces allowed), never after a space inside a plain word (`Bob 'x`, `it's`). */
+function scanComment(text: string): { text: string; quote: '"' | "'" | null } {
 	let quote: '"' | "'" | null = null;
+	let prev = ''; // the last non-space character before `i`
 	for (let i = 0; i < text.length; i++) {
 		const ch = text[i];
 		if (quote === '"') {
@@ -63,29 +67,39 @@ function stripComment(text: string): string {
 				if (text[i + 1] === "'") i++;
 				else quote = null;
 			}
-		} else if ((ch === '"' || ch === "'") && (i === 0 || /[\s[{,:]/.test(text[i - 1]))) {
+		} else if ((ch === '"' || ch === "'") && (prev === '' || '[{,:'.includes(prev))) {
 			quote = ch;
 		} else if (ch === '#' && (i === 0 || /\s/.test(text[i - 1]))) {
-			return text.slice(0, i);
+			return { text: text.slice(0, i), quote: null };
 		}
+		if (!/\s/.test(ch)) prev = ch;
 	}
-	return text;
+	return { text, quote };
 }
 
 /** The value text after a `key:` with its trailing comment (quote-aware) and the whitespace around it removed. */
 function valueOf(text: string | undefined): string {
-	return stripComment(text ?? '').trim();
+	return scanComment(text ?? '').text.trim();
 }
 
-/** How many `{[` minus `}]` the text opens, quoted pieces and a trailing comment ignored. */
-function flowBalance(text: string): number {
-	const bare = stripComment(text).replace(/"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'/g, '');
+/** How many `{[` minus `}]` the text opens, quoted pieces and a trailing comment ignored; null when the text ends inside a quoted string (it runs over lines). */
+function flowBalance(text: string): number | null {
+	const scanned = scanComment(text);
+	if (scanned.quote) return null;
+	const bare = scanned.text.replace(/"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'/g, '');
 	let depth = 0;
 	for (const ch of bare) {
 		if (ch === '{' || ch === '[') depth++;
 		else if (ch === '}' || ch === ']') depth--;
 	}
 	return depth;
+}
+
+/** A flow collection starts on this text: remember how deep it is still open. A string inside it that runs over lines: the walk gives up (`giveUp`). */
+function startFlow(st: State, text: string): void {
+	const balance = flowBalance(text);
+	if (balance === null) st.giveUp = true;
+	else st.flowDepth = Math.max(0, balance);
 }
 
 /** Does `text` close the quote a multi-line quoted scalar opened (an unescaped quote of that kind)? */
@@ -132,7 +146,7 @@ function afterKey(st: State, keyCol: number, mapNode: RawSchemaNode | null, name
 	} else if (value[0] === '|' || value[0] === '>') {
 		st.scalarCol = keyCol;
 	} else if (value[0] === '{' || value[0] === '[') {
-		st.flowDepth = Math.max(0, flowBalance(value));
+		startFlow(st, value);
 	} else if ((value[0] === '"' || value[0] === "'") && !closesQuote(value.slice(1), value[0])) {
 		st.quote = value[0];
 	}
@@ -140,15 +154,18 @@ function afterKey(st: State, keyCol: number, mapNode: RawSchemaNode | null, name
 
 /** Feeds one line above the cursor into the structure. A line that fits no open level is skipped (see the file header). */
 function feed(st: State, line: string): 'ok' | 'abort' {
-	if (BLANK_OR_COMMENT.test(line)) return 'ok';
-	if (/^ *\t/.test(line)) return 'abort';
-	const indent = /^ */.exec(line)![0].length;
+	// Inside a string that runs over lines every line is text: one that starts with `#` is not a comment.
 	if (st.quote) {
 		if (closesQuote(line, st.quote)) st.quote = null;
 		return 'ok';
 	}
+	if (BLANK_OR_COMMENT.test(line)) return 'ok';
+	if (/^ *\t/.test(line)) return 'abort';
+	const indent = /^ */.exec(line)![0].length;
 	if (st.flowDepth > 0) {
-		st.flowDepth = Math.max(0, st.flowDepth + flowBalance(line));
+		const balance = flowBalance(line);
+		if (balance === null) st.giveUp = true;
+		else st.flowDepth = Math.max(0, st.flowDepth + balance);
 		return 'ok';
 	}
 	if (st.scalarCol !== null) {
@@ -184,7 +201,7 @@ function feed(st: State, line: string): 'ok' | 'abort' {
 			st.frames.push({ kind: 'map', col, node: item });
 			afterKey(st, col, item, key ? key[1] : null, key ? key[2] : other![1]);
 		} else if (rest[0] === '{' || rest[0] === '[') {
-			st.flowDepth = Math.max(0, flowBalance(rest));
+			startFlow(st, rest);
 		}
 		return 'ok';
 	}
@@ -193,7 +210,7 @@ function feed(st: State, line: string): 'ok' | 'abort' {
 	if (!key && !other) {
 		// Text that is not a key: a scalar value on its own line, or a wrapped one. It is the value of the `key:` above it.
 		st.pending = null;
-		if (rest[0] === '{' || rest[0] === '[') st.flowDepth = Math.max(0, flowBalance(rest));
+		if (rest[0] === '{' || rest[0] === '[') startFlow(st, rest);
 		return 'ok';
 	}
 	const at = enter(st, col, false);
@@ -211,9 +228,9 @@ function feed(st: State, line: string): 'ok' | 'abort' {
  * The cursor line itself must resolve: its indentation must match an open level of the block above it.
  */
 export function resolveKeyScope(above: readonly string[], indent: number, dash: boolean, root: RawSchemaNode): RawSchemaNode | null {
-	const st: State = { frames: [{ kind: 'map', col: 0, node: root }], pending: null, scalarCol: null, flowDepth: 0, quote: null };
+	const st: State = { frames: [{ kind: 'map', col: 0, node: root }], pending: null, scalarCol: null, flowDepth: 0, quote: null, giveUp: false };
 	for (const raw of above) {
-		if (feed(st, raw.replace(/\r$/, '')) === 'abort') return null;
+		if (feed(st, raw.replace(/\r$/, '')) === 'abort' || st.giveUp) return null;
 	}
 	// The cursor line sits inside a block scalar, a flow collection or a multi-line quote: it is text, not a key.
 	if (st.quote || st.flowDepth > 0 || (st.scalarCol !== null && indent > st.scalarCol)) return null;

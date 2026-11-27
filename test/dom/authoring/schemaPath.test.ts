@@ -247,6 +247,36 @@ describe('SC-707 the path walk on a synthetic schema', () => {
 		expect(init("heroes:\n  - name: Bob's # first\nenemy_groups:\n  - name: G\n    ")).toEqual(['name', 'creatures', 'is_squad']);
 	});
 
+	// SC-707 round 5: the rules of the quote-aware comment strip, each pinned (a quote opens only where a scalar starts; `\"` and `''` escape; a
+	// flow item's comment is stripped; a string that runs over lines is text on every line).
+	const GROUP_KEYS = ['name', 'creatures', 'is_squad'];
+	const groupAfter = (hero: string) => init(`heroes:\n  - name: A\n${hero}\nenemy_groups:\n  - name: G\n    `);
+
+	test('a quote does not open after a space inside a plain word: `Bob \'x` and `it\'s` in a flow list leave the comment a comment', () => {
+		expect(groupAfter("    conditions: [Bob 'x, y] # {")).toEqual(GROUP_KEYS);
+		expect(groupAfter("    conditions: [it's, grabbed] # don't [")).toEqual(GROUP_KEYS);
+		// with a stray `}` on the next line the old reading kept the flow open and offered the HERO keys inside the group
+		expect(init("heroes:\n  - name: A\n    conditions: [Bob 'x, y] # {\nenemy_groups:\n  - name: G}\n    ")).toEqual(GROUP_KEYS);
+	});
+
+	test('a string that runs over lines inside a flow list: the walk gives up (nothing), and a stray `]` later never yields the hero keys', () => {
+		expect(groupAfter('    conditions: [a, "b\n      c # d", e]')).toBeNull();
+		expect(init('heroes:\n  - name: A\n    conditions: [a, "b\n      c # d", e]\nenemy_groups:\n  - name: G]\n    ')).toBeNull();
+	});
+
+	test('inside a quote that runs over lines, a line that starts with `#` is text, not a comment', () => {
+		expect(init('heroes:\n  - name: "Bob\n      #1 the Orc"\n    max_stamina: 3\nenemy_groups:\n  - name: "Orcs"\n    ')).toEqual(GROUP_KEYS);
+	});
+
+	test('a flow item\'s trailing comment is stripped before its brackets are counted', () => {
+		expect(init('heroes:\n  - {name: "a #b"} # c {\n  - ')).toEqual(HERO_KEYS);
+	});
+
+	test('an escaped quote (`\\"`) and a doubled single quote (`\'\'`) do not end the string, so the `#` after them stays text', () => {
+		expect(init('heroes:\n  - name: "Bob \\" #1"\nenemy_groups:\n  - name: G\n    ')).toEqual(GROUP_KEYS);
+		expect(init("heroes:\n  - name: 'Bob''s #1'\nenemy_groups:\n  - name: G\n    ")).toEqual(GROUP_KEYS);
+	});
+
 	test('a callout-quoted block offers nothing at any depth (the `> ` prefix is not skipped, as before)', () => {
 		const s = new DsSchemaSuggest(new App() as any, synth());
 		const editor = new CmEditor('> ```ds-x\n> box:\n>   wi');
