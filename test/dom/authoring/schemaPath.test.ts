@@ -224,6 +224,29 @@ describe('SC-707 the path walk on a synthetic schema', () => {
 		expect(x('note: one\n  more text\nbox:\n  ')).toEqual(['width', 'inner']);
 	});
 
+	// A `#` inside a quoted value is text, not a comment: it must not read as an unclosed quote and freeze the walk on the wrong object.
+	test('a quoted value with a ` #` in it (a name like "Bob #1") does not freeze the walk: the next group offers the group\'s keys', () => {
+		const head = (q: string) => `heroes:\n  - name: ${q}Bob #1${q}\n    max_stamina: 3\nenemy_groups:\n  - name: ${q}Orcs${q}\n    `;
+		expect(init(head('"'))).toEqual(['name', 'creatures', 'is_squad']);
+		expect(init(head("'"))).toEqual(['name', 'creatures', 'is_squad']);
+	});
+
+	test('directly under a hero named "Bob #1" the hero keys are offered (double and single quotes)', () => {
+		expect(init('heroes:\n  - name: "Bob #1"\n    ')).toEqual(HERO_KEYS);
+		expect(init("heroes:\n  - name: 'Bob #1'\n    ")).toEqual(HERO_KEYS);
+	});
+
+	test('a flow list holding a quoted `#` closes where it ends: the group after it still gets the group keys', () => {
+		const doc = 'heroes:\n  - name: A\n    conditions: [grabbed, "x #y"]\nenemy_groups:\n  - name: G\n    ';
+		expect(init(doc)).toEqual(['name', 'creatures', 'is_squad']);
+		expect(init('heroes:\n  - { name: "a #b", max_stamina: 1 }\n  - ')).toEqual(HERO_KEYS);
+	});
+
+	test('a real trailing comment after a quoted value is still a comment, and an apostrophe in a plain word opens no quote', () => {
+		expect(init('heroes:\n  - name: "Bob" # the first\nenemy_groups:\n  - name: G\n    ')).toEqual(['name', 'creatures', 'is_squad']);
+		expect(init("heroes:\n  - name: Bob's # first\nenemy_groups:\n  - name: G\n    ")).toEqual(['name', 'creatures', 'is_squad']);
+	});
+
 	test('a callout-quoted block offers nothing at any depth (the `> ` prefix is not skipped, as before)', () => {
 		const s = new DsSchemaSuggest(new App() as any, synth());
 		const editor = new CmEditor('> ```ds-x\n> box:\n>   wi');

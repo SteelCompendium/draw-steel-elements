@@ -49,14 +49,37 @@ function childNode(mapNode: RawSchemaNode | null, key: string | null): RawSchema
 	return shapeOfNode(mapNode).properties[key] ?? null;
 }
 
-/** Drops the trailing comment of a value (`# ...` after whitespace) and the whitespace around it. */
-function valueOf(text: string | undefined): string {
-	return (text ?? '').replace(/(^|[ \t])#.*$/, '').trim();
+/** Drops a trailing comment (`# ...` after whitespace) from `text`, quote-aware: a `#` inside a quoted piece (`"Bob #1"`, `'a #b'`) is text, not a
+ *  comment. A quote only opens at the start of a token (the start, or after whitespace or `[ { , :`), so an apostrophe inside a plain word is not one. */
+function stripComment(text: string): string {
+	let quote: '"' | "'" | null = null;
+	for (let i = 0; i < text.length; i++) {
+		const ch = text[i];
+		if (quote === '"') {
+			if (ch === '\\') i++;
+			else if (ch === '"') quote = null;
+		} else if (quote === "'") {
+			if (ch === "'") {
+				if (text[i + 1] === "'") i++;
+				else quote = null;
+			}
+		} else if ((ch === '"' || ch === "'") && (i === 0 || /[\s[{,:]/.test(text[i - 1]))) {
+			quote = ch;
+		} else if (ch === '#' && (i === 0 || /\s/.test(text[i - 1]))) {
+			return text.slice(0, i);
+		}
+	}
+	return text;
 }
 
-/** How many `{[` minus `}]` the text opens, quoted pieces ignored. */
+/** The value text after a `key:` with its trailing comment (quote-aware) and the whitespace around it removed. */
+function valueOf(text: string | undefined): string {
+	return stripComment(text ?? '').trim();
+}
+
+/** How many `{[` minus `}]` the text opens, quoted pieces and a trailing comment ignored. */
 function flowBalance(text: string): number {
-	const bare = text.replace(/"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'/g, '');
+	const bare = stripComment(text).replace(/"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'/g, '');
 	let depth = 0;
 	for (const ch of bare) {
 		if (ch === '{' || ch === '[') depth++;
