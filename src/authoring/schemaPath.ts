@@ -111,7 +111,7 @@ function afterKey(st: State, keyCol: number, mapNode: RawSchemaNode | null, name
 	} else if (value[0] === '{' || value[0] === '[') {
 		st.flowDepth = Math.max(0, flowBalance(value));
 	} else if ((value[0] === '"' || value[0] === "'") && !closesQuote(value.slice(1), value[0])) {
-		st.quote = value[0] as '"' | "'";
+		st.quote = value[0];
 	}
 }
 

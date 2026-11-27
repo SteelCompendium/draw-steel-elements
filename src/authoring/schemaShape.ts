@@ -101,7 +101,7 @@ export function itemsOfNode(node: RawSchemaNode | null | undefined): RawSchemaNo
 export function nodeFromSchemaYaml(schemaYaml: string): RawSchemaNode | null {
 	try {
 		const root = parseYaml(schemaYaml) as unknown;
-		return typeof root === 'object' && root !== null ? (root as RawSchemaNode) : null;
+		return typeof root === 'object' && root !== null ? root : null;
 	} catch {
 		return null;
 	}
