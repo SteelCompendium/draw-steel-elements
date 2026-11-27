@@ -200,9 +200,16 @@ export interface GenericCardDescriptor {
 	sccType: string | RegExp;
 	/** Curated starter block body (D9 authoring hint). */
 	example: string;
+	/** The card composition. Defaults to `genericLayout` (the rule card); SC-391's prose
+	 *  family passes `proseLayout`. Omitting it must stay byte-identical for `rule`. */
+	layout?: CardLayout<GenericNote>;
+	/** The collapsed one-line form's label for a resolved note. Defaults to `name`; the prose
+	 *  family names the entry's type ("Skill: Alchemy", not "Prose: Alchemy"). */
+	chromeLabel?: (m: GenericNote) => string;
 }
 
 export function genericCard(cfg: GenericCardDescriptor): ReferenceElement<GenericNote> {
+	const layout = cfg.layout ?? genericLayout;
 	const base: ElementDefinition<GenericNote> = {
 		id: cfg.id,
 		name: cfg.name,
@@ -213,7 +220,7 @@ export function genericCard(cfg: GenericCardDescriptor): ReferenceElement<Generi
 		// fallback). `type` stays "" (no frontmatter in inline mode to source it from),
 		// so genericLayout's type badge only ever appears in hybrid (by-SCC) mode.
 		parse: (_data, raw) => ({ name: cfg.name, type: '', body: raw }),
-		createView: (cx) => new DisplayCardView<GenericNote>(cx, genericLayout),
+		createView: (cx) => new DisplayCardView<GenericNote>(cx, layout),
 		// SC-169 ROLLOUT wave 1 — the eleventh display family (`ds-rule`). Same rule as
 		// displayFamily above: the collapsed name is what the card's own head prints. Inline
 		// bodies have no frontmatter to source a name from, so `GenericNote.name` is the
@@ -222,8 +229,8 @@ export function genericCard(cfg: GenericCardDescriptor): ReferenceElement<Generi
 		// degenerate "RULE: Rule" — the placeholder title is the label repeated, not a name.
 		chrome: {
 			summary: ({ model }) => {
-				const title = genericLayout.title(model);
-				return { label: cfg.name, name: title && title !== cfg.name ? title : undefined };
+				const title = layout.title(model);
+				return { label: cfg.chromeLabel?.(model) ?? cfg.name, name: title && title !== cfg.name ? title : undefined };
 			},
 		},
 		authoring: { example: cfg.example },

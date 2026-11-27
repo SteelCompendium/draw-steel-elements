@@ -146,6 +146,19 @@ describe('SC-149 baseForSccType — one element, every family', () => {
 		['trait', 'feature'],
 		['monster.angulotl.featureblock', 'featureblock'],
 		['dynamic-terrain.mechanisms', 'featureblock'],
+		// SC-391: unchanged by the prose family (a bare `rule`, a bare `statblock`).
+		['rule', 'rule'],
+		['statblock', 'statblock'],
+		// SC-391: the nine prose types -> the internal prose family.
+		['skill', 'prose'],
+		['skill-group', 'prose'],
+		['monster', 'prose'],
+		['saint', 'prose'],
+		['god', 'prose'],
+		['chapter', 'prose'],
+		['project', 'prose'],
+		['movement', 'prose'],
+		['negotiation', 'prose'],
 	])('type %s renders through the %s element', (type, id) => {
 		expect(baseForSccType(type)!.id).toBe(id);
 	});
@@ -153,6 +166,14 @@ describe('SC-149 baseForSccType — one element, every family', () => {
 	test('a type no adapter claims has no renderer (error card, not a half-render)', () => {
 		expect(baseForSccType('nonsense.unknown-type')).toBeUndefined();
 		expect(baseForSccType('')).toBeUndefined();
+	});
+
+	// SC-391: the prose family is an explicit list of nine, not a catch-all, so a near miss
+	// (a plural, a namespaced `monster`, a future type) keeps the loud card.
+	test('SC-391: a type just outside the nine prose types still has no renderer', () => {
+		for (const type of ['skills', 'monsters', 'monster.group', 'chapter.intro', 'saga', 'religion']) {
+			expect(baseForSccType(type)).toBeUndefined();
+		}
 	});
 });
 
@@ -283,6 +304,21 @@ describe('SC-149 ds-scc end-to-end against real md-dse fixtures', () => {
 		expect(features[0].textContent).toContain('Pounce');
 		expect(features[0].textContent).toContain('Signature');
 		expect(features[1].textContent).toContain('Mighty Spring');
+	});
+
+	// SC-391: the nine prose types used to reach the "has no renderer" card; a REAL file of a
+	// type that is still unclaimed does (the explicit list is the point: no quiet fallback).
+	test('SC-391: an entry of an unclaimed type still shows the "has no renderer" card', async () => {
+		const { vault, deps } = makeCompendiumDeps();
+		(vault as any).setFile(
+			'DS Compendium/saga/odyssey.md',
+			'---\ntype: saga\nscc: mcdm.heroes.v1/saga/odyssey\nname: Odyssey\nitem_name: Odyssey\n---\n\nSing, O muse.\n',
+		);
+		const host = makeHost('ds-scc');
+		await new ElementPipeline(deps).run(sccElement, 'mcdm.heroes.v1/saga/odyssey', host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(errorText(root)).toBe('"Odyssey" (type: saga) has no renderer in this plugin.');
+		expect(root.querySelector('.dse-card')).toBeNull();
 	});
 
 	// The degrade ladder is RefUnwrapView's, unchanged by SC-149 — but a code that isn't

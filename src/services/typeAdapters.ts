@@ -105,6 +105,39 @@ export const FEATURE_TYPE_RE = /^(feature|ability|trait)($|\.)/;
  */
 export const FEATUREBLOCK_TYPE_RE = /(^|\.)featureblock$|^dynamic-terrain($|\.)/;
 
+/**
+ * SC-391 -- the nine PROSE compendium types: entries whose whole content is markdown
+ * prose, with no `ds-*` fence and no SDK model (skills, gods, chapters, ...). 219 files in
+ * the real md-dse corpus; before this they all hit the "has no renderer in this plugin"
+ * card in `ds-scc`. They render through the internal prose family (`ds-prose`,
+ * `src/elements/display/prose.ts`), which reuses the rule card's `GenericNote` path.
+ *
+ * DELIBERATELY AN EXPLICIT LIST, not a catch-all: a structured type whose family regex is
+ * too narrow (the SC-141 failure shape) must keep the loud "has no renderer" card instead
+ * of quietly degrading to prose. A future prose type is a one-line addition here plus an
+ * eyebrow/crest row in `prose.ts` (a unit test pins that the two stay in step).
+ *
+ * `monster` is the group-lore file's frontmatter `type:` (the ROOT of its
+ * `monster.group` SCC segment -- the same root-vs-leaf inconsistency FEATUREBLOCK_TYPE_RE
+ * documents). It is matched EXACTLY: statblocks are `type: statblock` and
+ * STATBLOCK_TYPE_RE does not match a bare `monster`, so only the 51 lore files land here.
+ */
+export const PROSE_TYPES = [
+	'skill',
+	'skill-group',
+	'monster',
+	'saint',
+	'god',
+	'chapter',
+	'project',
+	'movement',
+	'negotiation',
+] as const;
+
+export type ProseType = (typeof PROSE_TYPES)[number];
+
+export const PROSE_TYPE_RE = new RegExp(`^(${PROSE_TYPES.join('|')})$`);
+
 export interface TypeAdapter {
 	/** SCC-type test: does this adapter own a given frontmatter `type` value? */
 	matches(type: string): boolean;
@@ -170,9 +203,10 @@ function frontmatterAdapter(re: RegExp, adapter: (fm: unknown) => unknown, alias
  * malformed trailing-dot segment (`scc: …/rule./x` -> `type = "rule."` ->
  * `split('.').pop()` = `""` -> an EMPTY eyebrow instead of falling back to "Rule" -- LOW-2).
  * This scope is deliberately hardcoded to "rule" (not derived from `genericNoteAdapter`'s
- * own `re` parameter below): `genericNoteAdapter` is the model-less family's ONLY consumer
- * today and "rule" is its sole instance (typeAdapters.ts's `TYPE_ADAPTERS` array) -- if a
- * second model-less family is ever added, this regex needs generalizing alongside it.
+ * own `re` parameter below). SC-391 added a second model-less family (the nine prose types,
+ * `PROSE_TYPES`); it needs no such scoping because its frontmatter `type:` values are bare and
+ * are used as-is -- `sccTypeSegment` returns undefined for a prose entry's segment
+ * (`skill.group`, `monster.group`, ...), so `genericNoteAdapter` falls through to `type:`.
  */
 const RULE_SCC_SEGMENT_RE = /^rule(\.[^.]+)+$/;
 
@@ -254,6 +288,9 @@ export const TYPE_ADAPTERS: TypeAdapter[] = [
 	// D6 Task 8 (spec §3): model-less family -- `rule` (bare, in the real corpus) plus any
 	// future `rule.<sub>` namespacing. Placed last: nothing above it is ever named "rule".
 	genericNoteAdapter(/^rule($|\.)/, 'ds-rule'),
+	// SC-391: the nine prose types -> the internal prose family (same GenericNote model as
+	// `rule`, different card composition; see PROSE_TYPES above). Also placed last.
+	genericNoteAdapter(PROSE_TYPE_RE, 'ds-prose'),
 ];
 
 export function adapterForType(type: string): TypeAdapter | undefined {

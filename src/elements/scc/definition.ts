@@ -43,6 +43,7 @@ import {
 	perkElement,
 	complicationElement,
 	ruleElement,
+	proseElement,
 } from '@/elements/display';
 import sccExample from './example.yaml';
 
@@ -173,6 +174,7 @@ const BASE_BY_ALIAS: Record<string, ElementDefinition<unknown>> = {
 	'ds-perk': perkElement.base,
 	'ds-complication': complicationElement.base,
 	'ds-rule': ruleElement.base,
+	'ds-prose': proseElement.base,
 };
 
 /**

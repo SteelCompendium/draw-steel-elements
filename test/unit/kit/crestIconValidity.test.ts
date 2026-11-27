@@ -35,6 +35,7 @@
 import { ancestryLayout, conditionLayout, perkLayout, kitLayout, careerLayout, classLayout } from '@/elements/display/layouts';
 import { treasureLayout, titleLayout, complicationLayout, cultureLayout } from '@/elements/display/layouts';
 import { genericLayout } from '@/elements/display/displayFamily';
+import { proseLayout, PROSE_TYPE_STYLE } from '@/elements/display/prose';
 import type { CardLayout } from '@/elements/shared/CardLayout';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -69,6 +70,8 @@ const STEEL_LAYOUTS: { name: string; layout: CardLayout<any> }[] = [
 	{ name: 'titleLayout (crown)', layout: titleLayout },
 	{ name: 'complicationLayout (octagon-alert)', layout: complicationLayout },
 	{ name: 'cultureLayout (map)', layout: cultureLayout },
+	// SC-391: the prose family's fallback crest (its nine per-type crests are checked below)
+	{ name: 'proseLayout fallback (book-open)', layout: proseLayout },
 ];
 
 describe('SC-120 Batch C/B, owner rulings 2 and 14: every layout.steel crestIcon resolves to a CANONICAL Lucide icon (not merely a deprecated alias)', () => {
@@ -77,6 +80,12 @@ describe('SC-120 Batch C/B, owner rulings 2 and 14: every layout.steel crestIcon
 		const icon = layout.steel!.crestIcon({} as any, undefined);
 		expect(icon).toBeDefined();
 		expect(resolves(icon!)).toBe(true);
+	});
+
+	// SC-391: the prose family picks its crest per entry type; every row must be canonical.
+	test.each(Object.entries(PROSE_TYPE_STYLE))('proseLayout crest for type %s resolves', (type, style) => {
+		expect(proseLayout.steel!.crestIcon({ name: 'x', type, body: '' }, undefined)).toBe(style.crest);
+		expect(resolves(style.crest)).toBe(true);
 	});
 
 	test('sanity: a made-up icon id does NOT resolve (proves the check above is not a tautology)', () => {

@@ -15,6 +15,7 @@
 // host reports.
 import { displayFamily, genericCard } from './displayFamily';
 import type { ElementDefinition } from '@/framework/registry';
+import { PROSE_TYPE_RE } from '@/services/typeAdapters';
 import {
 	kitLayout,
 	conditionLayout,
@@ -39,6 +40,8 @@ import titleExample from './title/example.yaml';
 import perkExample from './perk/example.yaml';
 import complicationExample from './complication/example.yaml';
 import ruleExample from './rule/example.yaml';
+import proseExample from './prose/example.yaml';
+import { proseLayout, proseLabel } from './prose';
 
 export const kitElement = displayFamily<Kit>({
 	id: 'kit',
@@ -141,6 +144,21 @@ export const ruleElement = genericCard({
 	example: ruleExample,
 });
 
+// SC-391: the internal PROSE family -- the nine prose compendium types (skill, god, chapter,
+// ...) that `ds-scc` used to answer with "has no renderer". Same machinery as `rule`
+// (genericCard: `GenericNote` model, `genericNoteAdapter` by-SCC path), a different
+// composition (`proseLayout`, prose.ts). Id `prose`, NOT negotiation/project/skills: those
+// ids carry element-scoped tracker CSS. By-SCC only in practice, like every internal family.
+export const proseElement = genericCard({
+	id: 'prose',
+	aliases: ['ds-prose'],
+	name: 'Prose',
+	sccType: PROSE_TYPE_RE,
+	example: proseExample,
+	layout: proseLayout,
+	chromeLabel: (m) => proseLabel(m.type) ?? 'Prose',
+});
+
 // D6 Task 8 review note: explicitly widened to `ElementDefinition<unknown>[]` — an implicit
 // array-literal type inferred a union of all ten `ElementDefinition<RefOrInline<X>>`
 // element types, which a `for (const el of …) registry.register(el)` loop
@@ -176,4 +194,5 @@ export const INTERNAL_DISPLAY_ELEMENTS: ElementDefinition<unknown>[] = [
 	perkElement,
 	complicationElement,
 	ruleElement,
+	proseElement,
 ];
