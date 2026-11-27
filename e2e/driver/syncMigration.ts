@@ -31,12 +31,12 @@ export const stem = (p: string): string => (p.split('/').pop() as string).replac
  * 25 files at pre-7.0.0 paths of the shipped map, a note of the user's own inside the folder (no mapping: left alone), and an outside note that links
  * to one moved file. The outside note's link must RESOLVE before the run (Obsidian rewrites links it has resolved), so this waits for the cache.
  */
-export async function legacyFixture(t: SyncTest, count = N): Promise<Fixture> {
+export async function legacyFixture(t: SyncTest, count = N, extra: (pairs: LegacyPair[]) => Record<string, string> = () => ({})): Promise<Fixture> {
 	const pairs = await seedLegacy(count);
 	const stems = pairs.map((p) => stem(p.oldRelative));
 	const linked = pairs.find((p) => stems.filter((s) => s === stem(p.oldRelative)).length === 1) as LegacyPair;
 	const journal = `Intro line, untouched.\nSee [[${stem(linked.oldRelative)}]] for the details.\nOutro line, untouched.`;
-	await createNotes({ [USER_IN]: 'the user\'s own note inside the compendium folder, no 7.0.0 counterpart', [USER_OUT]: journal });
+	await createNotes({ [USER_IN]: 'the user\'s own note inside the compendium folder, no 7.0.0 counterpart', [USER_OUT]: journal, ...extra(pairs) });
 	await ev(`new Promise((resolve) => { const t = setInterval(() => { const r = app.metadataCache.resolvedLinks[${JSON.stringify(USER_OUT)}] ?? {}; if (r[${JSON.stringify(`${DC}/${linked.oldRelative}`)}]) { clearInterval(t); resolve(true); } }, 25); })`);
 	await t.rebase();
 	return { pairs, linked, journal };
@@ -47,7 +47,7 @@ export const publishNewTree = (pairs: LegacyPair[], tag = 'v4'): Promise<void> =
 	fixtureRelease.publish(tag, Object.fromEntries(pairs.map((p) => [p.newRelative, `official ${p.newRelative}`])));
 
 /** The difference a COMPLETE run makes: every file moved, every non-pristine file copied to the backup folder, a report note, the two state files. */
-export function completeRun(t: SyncTest, f: Fixture, over: { moved?: LegacyPair[]; backedUp?: LegacyPair[]; manifest?: boolean } = {}): Expect {
+export function completeRun(t: SyncTest, f: Fixture, over: { moved?: LegacyPair[]; backedUp?: LegacyPair[]; manifest?: boolean; links?: boolean; extraDirsFor?: string[] } = {}): Expect {
 	const moved = over.moved ?? f.pairs;
 	const backedUp = over.backedUp ?? moved;
 	const backups = Object.fromEntries(backedUp.map((p) => [`${BACKUP}/${p.oldRelative}`, p.content]));
@@ -55,10 +55,14 @@ export function completeRun(t: SyncTest, f: Fixture, over: { moved?: LegacyPair[
 		moved: Object.fromEntries(moved.map((p) => [`${DC}/${p.oldRelative}`, `${DC}/${p.newRelative}`])),
 		created: { ...backups, '.obsidian/plugins/draw-steel-elements/compendium-migration-state.json': null, ...(over.manifest === false ? {} : { '.obsidian/plugins/draw-steel-elements/compendium-manifest.json': null }) },
 		createdMatching: [/^Draw Steel Elements migration report \d{4}-\d{2}-\d{2} \d{4}( \(\d+\))?\.md$/],
-		dirsCreated: t.dirsFor([...moved.map((p) => `${DC}/${p.newRelative}`), ...Object.keys(backups)]),
-		// the journal note's link is rewritten by Obsidian when "Automatically update internal links" is on: callers add `modified` for it
+		dirsCreated: t.dirsFor([...moved.map((p) => `${DC}/${p.newRelative}`), ...Object.keys(backups), ...(over.extraDirsFor ?? [])]),
+		// Obsidian rewrites the outside note's link when "Automatically update internal links" is on (the default of these scenarios)
+		...(over.links === false || !moved.some((p) => p.oldRelative === f.linked.oldRelative) ? {} : { modified: { [USER_OUT]: null } }),
 	};
 }
+
+/** The plan's order: the engine moves files sorted by path (`a.path < b.path`). */
+export const planOrder = (pairs: LegacyPair[]): LegacyPair[] => [...pairs].sort((a, b) => (`${DC}/${a.oldRelative}` < `${DC}/${b.oldRelative}` ? -1 : 1));
 
 /** Open the preview through the palette's Migrate command. */
 export async function reachPreview(): Promise<void> {

@@ -472,6 +472,8 @@ export interface SyncTest {
 	settled(): Promise<Tree>;
 	/** `settled()`, then assert the difference from `before` is exactly `expected`. Returns the tree. */
 	expectChange(expected?: Expect): Promise<Tree>;
+	/** `settled()`, then assert the difference from a tree taken earlier in the scenario is exactly `expected` (e.g. nothing more happened after a window closed). */
+	expectSince(earlier: Tree, expected?: Expect): Promise<Tree>;
 	/** The folders a set of NEW file paths needs that the tree does not have yet (sorted): what `dirsCreated` should list. */
 	dirsFor(paths: string[]): string[];
 	/** Read a file of the vault copy from disk. */
@@ -601,6 +603,11 @@ export async function startSyncTest(opts: StartOptions = {}): Promise<SyncTest> 
 		async expectChange(expected = {}): Promise<Tree> {
 			const after = await settled();
 			expectDiff(base, first, after, expected);
+			return after;
+		},
+		async expectSince(earlier: Tree, expected = {}): Promise<Tree> {
+			const after = await settled();
+			expectDiff(base, earlier, after, expected);
 			return after;
 		},
 		dirsFor(paths: string[]): string[] {
