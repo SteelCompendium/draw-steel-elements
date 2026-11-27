@@ -15,7 +15,8 @@ import {
 } from "@/data/CompendiumMigration";
 import type { MigrationMap } from "@/data/CompendiumMigration";
 import { CompendiumSyncService } from "@/data/CompendiumSyncService";
-import { ManifestStore, sha256Hex } from "@/data/manifest";
+import { ManifestStore, MANIFEST_SCHEMA_VERSION, sha256Hex } from "@/data/manifest";
+import type { CompendiumManifest } from "@/data/manifest";
 import { MigrationStateStore, emptyMigrationState } from "@/data/migrationState";
 import { makeFakeApp } from "../../fakes/fakeObsidian";
 
@@ -385,6 +386,8 @@ describe("the handoff to the sync engine", () => {
 			expect(manifest.root).toBe(ROOT);
 			expect(Object.keys(manifest.files).sort()).toEqual(["career/disciple.md", "career/sage.md"]);
 			expect(manifest.files["career/disciple.md"]).toBe(await sha256Hex(bytes("disciple text")));
+			// Never a real data-unified tag: the moved files are legacy content, an update is still owed.
+			expect(manifest.releaseTag).toBe("migrated:v3.20260403152914");
 		});
 
 		test("THE POINT: the next sync into that folder updates the moved files instead of skipping them", async () => {
@@ -413,6 +416,52 @@ describe("the handoff to the sync engine", () => {
 		const manifest = (await store.load())!;
 		expect(manifest.root).toBe("Old Root");
 		expect(Object.keys(manifest.files)).toEqual(["rule/combat/turn.md"]);
+	});
+
+	test("SC-706: a second migration into ANOTHER Destination never claims the user's own note at a path the first run moved; the next sync leaves it alone", async () => {
+		const MINE = "MY OWN notes, written by the user, at a compendium path";
+		const { app, vault, store, service } = await setup();
+		vault.setText("A/Rules/Careers/Disciple.md", "disciple text");
+		vault.setText("A/Rules/Careers/Sage.md", "sage text");
+		await service.execute(await service.plan("A"), { writeReportNote: false });
+		const sync = new CompendiumSyncService(app, store);
+		await sync.applySync(new Map([["career/disciple.md", bytes("v4 disciple")], ["career/sage.md", bytes("v4 sage")]]),
+			await store.load(), { root: "A", locale: "en" }, "v4.latest");
+		// B: a legacy Sage, and the user's own note at the 7.0.0 path the A run moved.
+		vault.setText("B/Rules/Careers/Sage.md", "sage text");
+		vault.setText("B/career/disciple.md", MINE);
+		await service.execute(await service.plan("B"), { writeReportNote: false });
+		const manifest = (await store.load())!;
+		expect(manifest.root).toBe("B");
+		expect(Object.keys(manifest.files)).toEqual(["career/sage.md"]); // only what THIS run moved
+		const { report } = await sync.applySync(new Map([["career/disciple.md", bytes("v5 disciple")], ["career/sage.md", bytes("v5 sage")]]),
+			manifest, { root: "B", locale: "en" }, "v5");
+		expect(report.updated).toEqual(["career/sage.md"]);
+		expect(report.skippedConflicts).toEqual(["career/disciple.md"]);
+		expect(vault.text("B/career/disciple.md")).toBe(MINE);
+	});
+
+	test("SC-706: reconcile(root, rekey) adopts nothing from a state recorded for ANOTHER folder (the manifest stays put)", async () => {
+		const { store, stateStore, service, vault } = await setup();
+		const manifest: CompendiumManifest = {
+			schemaVersion: MANIFEST_SCHEMA_VERSION, source: "SteelCompendium/data-unified", releaseTag: "v4.old",
+			locale: "en", format: "md-dse", root: "A", syncedAt: "2026-08-01T00:00:00.000Z", files: { "career/sage.md": "deadbeef" },
+		};
+		await store.save(manifest);
+		await stateStore.save({ ...emptyMigrationState("A"), migrated: ["career/disciple.md"] });
+		vault.setText("B/career/disciple.md", "the user's own note");
+		expect(await service.reconcile("B", true)).toBe(0);
+		expect(await store.load()).toEqual(manifest);
+	});
+
+	test("SC-706: a run into another folder replaces the stored state, so the old folder's moved paths are not carried over", async () => {
+		const { stateStore, service, vault } = await setup();
+		await stateStore.save({ ...emptyMigrationState("A"), migrated: ["career/old-run.md"] });
+		vault.setText("B/Rules/Careers/Sage.md", "sage text");
+		await service.execute(await service.plan("B"), { writeReportNote: false });
+		const state = (await stateStore.load())!;
+		expect(state.root).toBe("B");
+		expect(state.migrated).toEqual(["career/sage.md"]);
 	});
 
 	test("a run that moved nothing does not write a manifest at all", async () => {

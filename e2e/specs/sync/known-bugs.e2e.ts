@@ -365,4 +365,42 @@ describe('sync: after the Destination folder was changed (SC-706)', () => {
 			await setDestination('DS Compendium');
 		}
 	});
+
+	it('[SYNC-D15] a SECOND migration, into another Destination, never claims the user\'s own note at a path the first run moved, and the next sync leaves it alone', async () => {
+		const MINE = 'MY OWN notes, written by the user, at a compendium path';
+		const t = await startSyncTest();
+		try {
+			// Migration 1 in "DS Compendium", then a sync there.
+			const pairs = await seedLegacy(25, 'DS Compendium');
+			await fixtureRelease.publish('v4', Object.fromEntries(pairs.map((p) => [p.newRelative, `official ${p.newRelative}`])));
+			await palette.sync();
+			await waitWindow(PREVIEW);
+			await dse.click(dse.control('migration.preview.move'));
+			await waitWindow(COMPLETE);
+			await clearNotices();
+			await dse.click(dse.control('migration.summary.sync-now'));
+			await waitNotice(/compendium v4 synced/);
+			await noWindows();
+			// Migration 2: the Destination becomes a second legacy folder that also holds the user's note at a 7.0.0 path run 1 moved.
+			await setDestination('Legacy B');
+			const mine = `Legacy B/${pairs[0].newRelative}`;
+			await createNotes(Object.fromEntries([...pairs.slice(1).map((p) => [`Legacy B/${p.oldRelative}`, p.content]), [mine, MINE]]));
+			await t.rebase();
+			await clearNotices();
+			await palette.sync();
+			await waitWindow(PREVIEW);
+			await dse.click(dse.control('migration.preview.move'));
+			await waitWindow(COMPLETE);
+			const manifest = JSON.parse(t.read(MANIFEST)) as { root: string; files: Record<string, string> };
+			expect(manifest.root).toBe('Legacy B');
+			expect(manifest.files[pairs[0].newRelative]).toBeUndefined();
+			await clearNotices();
+			await dse.click(dse.control('migration.summary.sync-now'));
+			await waitNotice(/compendium v4 synced/);
+			await noWindows();
+			expect(t.read(mine)).toBe(MINE);
+		} finally {
+			await setDestination('DS Compendium');
+		}
+	});
 });
