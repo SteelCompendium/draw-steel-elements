@@ -1304,8 +1304,11 @@ fields that element accepts. After a field that only allows certain values (for 
 <code>style:</code> in a <a href="../skills-element/#layouts-style">skills block</a>), the suggestions become that field's allowed values.</p>
 <p>Pick a suggestion with Enter or a click. The cursor lands right after it and the list closes, even when
 you had typed nothing yet, so the next Enter starts a new line.</p>
-<p>Field-name suggestions are offered for top-level fields; deeper, indented fields are not
-suggested yet.</p>
+<p>Fields inside another field are suggested too. Inside a hero in an initiative block, for example, you get
+<code>max_stamina</code>; inside a Skills block's <code>custom_skills</code> entry, <code>name</code> and <code>has_skill</code>.</p>
+<p>Nothing is suggested where the plugin can't tell which field you are in: inside <code>{ }</code> or <code>[ ]</code>, in
+<code>|</code> or <code>&gt;</code> text, after a Tab, on an oddly indented line, or in a list of plain words (a condition
+name, a skill name).</p>
 <h2 id="insert-content-from-the-compendium">Insert content from the compendium<a class="headerlink" href="#insert-content-from-the-compendium" title="Permanent link">&para;</a></h2>
 <p>Once you have <a href="../compendium-sync/">synced the compendium</a> there are two commands, and the
 difference between them matters.</p>
