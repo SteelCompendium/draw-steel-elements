@@ -403,7 +403,7 @@ describe('SC-687 r3: several cursors', () => {
 		expect(editor.writes).toHaveLength(0);
 	});
 
-	test('both cursors outside: written exactly as before (one replaceSelection that writes at each cursor)', () => {
+	test('both cursors outside: both blocks written, in one editor change (SC-692: one transaction; it was one replaceSelection)', () => {
 		const editor = new CmEditor('abc\n\nxyz\n');
 		editor.setSelections([{ anchor: { line: 1, ch: 0 } }, { anchor: { line: 3, ch: 0 } }], 1);
 		const told = Notice.notices.length;
