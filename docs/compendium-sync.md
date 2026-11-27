@@ -61,8 +61,9 @@ sync date (or "No compendium synced yet.").
 ### First sync into an existing folder
 
 If the destination folder already contains files but has never been synced by this plugin,
-the first sync stops and asks before touching anything. Which question it asks depends on
-what's in there:
+or when you have changed the Destination folder since the last sync, the sync stops and
+asks before touching anything. (A changed Destination that is empty or does not exist yet
+syncs straight away, like a first sync.) Which question it asks depends on what's in there:
 
 - **A pre-7.0.0 compendium** (at least twenty files sitting at exact pre-7.0.0 compendium
   paths) — you're offered the **layout migration**: the old files are *moved* to their
@@ -80,6 +81,15 @@ Nothing is touched automatically either way; files you keep are still never over
 they don't collide with a compendium path, and any that do are skipped and reported. A
 **fresh install never sees either prompt** — there is no folder yet, and nothing to ask
 about.
+
+**Changing the Destination folder.** A file of yours at a compendium path in the new folder
+is never overwritten. Only a file that still holds exactly the text the plugin last wrote
+is updated. So if you move or rename the compendium folder in Obsidian and then point the
+Destination at its new name, expect the question above once; choose **Keep everything**
+and the unedited files carry on updating. A file you edited since it was installed is
+skipped and reported, as the Notice says. The compendium files left in the folder you moved
+away from stay where they are, except files the new release no longer has, which go to the
+trash as before.
 
 ## Referencing a compendium entry in your notes
 
