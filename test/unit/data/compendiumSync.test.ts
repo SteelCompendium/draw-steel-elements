@@ -133,6 +133,65 @@ describe("CompendiumSyncService.applySync (F2 §3.4)", () => {
 		expect(report.created).toEqual(["new.md"]);
 	});
 
+	// SC-706: the old manifest's file list says what the plugin installed under the OLD root only.
+	test("SC-706: root changed + a DIFFERING file at the new root is the user's: skipped, bytes untouched, never modifyBinary", async () => {
+		const { vault, store, service } = setup();
+		vault.setText("Old Root/class/shadow.md", "shadow A");
+		vault.setText("New Root/class/shadow.md", "MY own notes about the shadow class");
+		const old = await manifestOf("Old Root", { "class/shadow.md": "shadow A" });
+		const modifySpy = jest.spyOn(vault, "modifyBinary");
+		const { report } = await service.applySync(
+			incomingOf({ "class/shadow.md": "shadow B" }), old, { ...OPTIONS, root: "New Root" }, "v4.new");
+		expect(report.skippedConflicts).toEqual(["class/shadow.md"]);
+		expect(report.updated).toEqual([]);
+		expect(modifySpy).not.toHaveBeenCalled();
+		expect(vault.text("New Root/class/shadow.md")).toBe("MY own notes about the shadow class");
+		expect((await store.load())!.files["class/shadow.md"]).toBeUndefined(); // not adopted either
+	});
+
+	test("SC-706: a manifest with no usable root cannot vouch for a file: skipped, untouched, no throw", async () => {
+		const { vault, service } = setup();
+		vault.setText("DS Compendium/class/shadow.md", "MY own notes");
+		const old = { ...(await manifestOf("x", { "class/shadow.md": "shadow A" })), root: undefined } as unknown as CompendiumManifest;
+		const { report } = await service.applySync(incomingOf({ "class/shadow.md": "shadow B" }), old, OPTIONS, "v4.new");
+		expect(report.skippedConflicts).toEqual(["class/shadow.md"]);
+		expect(vault.text("DS Compendium/class/shadow.md")).toBe("MY own notes");
+	});
+
+	test("SC-706: root unchanged → a managed file is still updated in place (regression guard)", async () => {
+		const { vault, service } = setup();
+		vault.setText("DS Compendium/class/shadow.md", "shadow A");
+		const old = await manifestOf("DS Compendium", { "class/shadow.md": "shadow A" });
+		const { report } = await service.applySync(
+			incomingOf({ "class/shadow.md": "shadow B" }), old, OPTIONS, "v4.new");
+		expect(report.updated).toEqual(["class/shadow.md"]);
+		expect(report.skippedConflicts).toEqual([]);
+		expect(vault.text("DS Compendium/class/shadow.md")).toBe("shadow B");
+	});
+
+	test("SC-706: root changed + an IDENTICAL file at the new root stays 'unchanged' (adopted, no write)", async () => {
+		const { vault, store, service } = setup();
+		vault.setText("New Root/class/shadow.md", "shadow B");
+		const old = await manifestOf("Old Root", { "class/shadow.md": "shadow A" });
+		const modifySpy = jest.spyOn(vault, "modifyBinary");
+		const { report } = await service.applySync(
+			incomingOf({ "class/shadow.md": "shadow B" }), old, { ...OPTIONS, root: "New Root" }, "v4.new");
+		expect(report.unchanged).toEqual(["class/shadow.md"]);
+		expect(report.skippedConflicts).toEqual([]);
+		expect(modifySpy).not.toHaveBeenCalled();
+		expect((await store.load())!.files["class/shadow.md"]).toBeDefined();
+	});
+
+	test.each(["DS Compendium/", "DS Compendium//"])("SC-706: a manifest root spelled %j is the same root as 'DS Compendium' (updated in place)", async (spelling) => {
+		const { vault, service } = setup();
+		vault.setText("DS Compendium/class/shadow.md", "shadow A");
+		const old = await manifestOf(spelling, { "class/shadow.md": "shadow A" });
+		const { report } = await service.applySync(
+			incomingOf({ "class/shadow.md": "shadow B" }), old, OPTIONS, "v4.new");
+		expect(report.updated).toEqual(["class/shadow.md"]);
+		expect(vault.text("DS Compendium/class/shadow.md")).toBe("shadow B");
+	});
+
 	test("a folder squats on a compendium file path — skipped, reported, untouched", async () => {
 		const { vault, store, service } = setup();
 		// Nothing is literally AT "rule/combat/turn.md" — it's a folder, implied by a file

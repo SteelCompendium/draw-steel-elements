@@ -293,11 +293,11 @@ describe('SC-653 the trash button does not warn that Obsidian is set to delete p
 	});
 });
 
-// ---------- SC-706 (High)
-// After one sync, changing the Destination folder and syncing again writes the compendium into the new folder with no window, and overwrites any note of
-// the user's that sits at a release path there: `applySync` takes a file at <new root>/<rel> for "installed by us" because the OLD manifest lists <rel>
-// (it never compares the manifest's root with the new one), and the "Existing compendium folder found" check runs only when there is no manifest.
-describe('SC-706 a Sync into a changed Destination overwrites the user\'s own file there', () => {
+// ---------- SC-706 (High) — fixed
+// After one sync, changing the Destination folder and syncing again used to write the compendium into the new folder with no window and overwrite any
+// note of the user's at a release path there. Now (a) `applySync` counts a differing file as "installed by us" only when the old manifest's root is
+// the new root, and (b) `syncCompendium` treats a manifest for another root as no manifest for the first-sync check of the new folder.
+describe('SC-706 a Sync into a changed Destination never overwrites the user\'s own file there', () => {
 	const MINE = 'MY OWN notes about the shadow class, written by the user';
 	async function arrange() {
 		const h = await makeSyncHarness();
@@ -311,17 +311,27 @@ describe('SC-706 a Sync into a changed Destination overwrites the user\'s own fi
 		await settle();
 		return h;
 	}
-	test('current behaviour: no window, the note is overwritten and no file holds the user\'s text any more', async () => {
-		const h = await arrange();
-		expect(windowTitles()).toEqual([]);
-		expect(h.vault.text('Notes/class/shadow.md')).toBe('shadow A');
-		expect(everyFileHolds(treeOf(h.vault), MINE)).toBe(false);
-		expect(notices()).toContain('1 updated');
-	});
-	test.failing('correct behaviour: the user\'s note survives somewhere, and a sync that writes into the folder asked first', async () => {
+	test('the user\'s note survives somewhere, and a sync that writes into the folder asked first', async () => {
 		const h = await arrange();
 		expect(everyFileHolds(treeOf(h.vault), MINE)).toBe(true);
 		if (windowTitles().length === 0) expect(h.vault.paths().some((p) => p.startsWith('Notes/rule/'))).toBe(false);
+	});
+	test('the window opens before anything is written into the folder of the user\'s files', async () => {
+		const h = await arrange();
+		expect(windowTitles()).toEqual([LEGACY_WINDOW]);
+		expect(h.vault.text('Notes/class/shadow.md')).toBe(MINE);
+		expect(h.vault.paths().some((p) => p.startsWith('Notes/rule/'))).toBe(false);
+	});
+	test('"Keep everything" syncs into the folder and the colliding note keeps its bytes (reported as skipped)', async () => {
+		const h = await arrange();
+		Notice.notices.length = 0;
+		control('sync.legacy.keep').click();
+		await until(() => notices().includes('compendium v1 synced'), 'the sync');
+		expect(h.vault.text('Notes/class/shadow.md')).toBe(MINE);
+		expect(h.vault.text('Notes/Session 1.md')).toBe('my session notes');
+		expect(h.vault.text('Notes/rule/b.md')).toBe('B1');
+		expect(notices()).toContain('skipped to protect your changes');
+		expect(notices()).not.toContain('1 updated');
 	});
 });
 

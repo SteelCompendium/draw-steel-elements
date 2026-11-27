@@ -8,6 +8,7 @@ import DrawSteelAdmonitionPlugin from 'main';
 import { App, Notice, requestUrl, flushAsync, type FakeVault } from '../../mocks/obsidian';
 import { DESTINATION_CHANGED_NOTICE, DESTINATION_REFUSED_NOTICE } from '@model/CompendiumDestination';
 import type { MigrationPlan } from '@/data/CompendiumMigration';
+import { MANIFEST_SCHEMA_VERSION, type CompendiumManifest } from '@/data/manifest';
 
 jest.mock('@views/LegacyCompendiumModal', () => ({
 	LegacyCompendiumModal: jest.fn().mockImplementation(() => ({ open: jest.fn() })),
@@ -407,5 +408,96 @@ describe('SC-643 (review L2) — the migration window\'s callbacks and offerMigr
 		expect(markSettled).not.toHaveBeenCalled();
 		expect(markDeclined).not.toHaveBeenCalled();
 		expect(CompendiumMigrationModal).not.toHaveBeenCalled();
+	});
+});
+
+// SC-706 — a manifest written for ANOTHER Destination counts as "no manifest" for the first-sync check of
+// the NEW folder: vault-root refusal, the migration offer and the "Existing compendium folder found" window
+// (when the new folder holds files). An empty or absent new folder, or the same folder, syncs as before.
+describe('SC-706 — Sync after the Destination folder was changed', () => {
+	const manifestFor = (root: string): CompendiumManifest => ({
+		schemaVersion: MANIFEST_SCHEMA_VERSION, source: 'SteelCompendium/data-unified', releaseTag: 'v1',
+		locale: 'en', format: 'md-dse', root, syncedAt: '2026-06-01T00:00:00.000Z', files: { 'class/shadow.md': 'abc' },
+	});
+	/** A loaded plugin whose last sync went to "DS Compendium", now pointed at "Notes". */
+	async function changedDestination(newFolderFiles: Record<string, string> | null) {
+		const plugin = await makeLoadedPlugin('Notes');
+		const vault = plugin.app.vault as unknown as FakeVault;
+		if (newFolderFiles !== null) {
+			const folder = await vault.createFolder('Notes');
+			for (const [path, content] of Object.entries(newFolderFiles)) folder.children.push(vault.setFile(path, content));
+		}
+		jest.spyOn(plugin.manifestStore, 'load').mockResolvedValue(manifestFor('DS Compendium'));
+		const sync = jest.spyOn(plugin.syncService, 'sync').mockResolvedValue(null);
+		return { plugin, sync };
+	}
+
+	test('the new folder holds files: the "Existing compendium folder found" window opens for THAT folder, and nothing is synced or written before a choice', async () => {
+		const { plugin, sync } = await changedDestination({ 'Notes/class/shadow.md': 'my own notes', 'Notes/Session 1.md': 'my session notes' });
+		const writes = spyOnWrites(plugin);
+		const before = vaultSnapshot(plugin);
+
+		await plugin.syncCompendium();
+
+		expect(LegacyCompendiumModal).toHaveBeenCalledTimes(1);
+		expect((LegacyCompendiumModal as unknown as jest.Mock).mock.calls[0][1]).toBe('Notes');
+		expect(sync).not.toHaveBeenCalled();
+		expect(writes.flatMap((spy) => spy.mock.calls)).toEqual([]);
+		expect(vaultSnapshot(plugin)).toEqual(before);
+		expect(plugin.syncService.isBusy()).toBe(false);
+	});
+
+	test('the new folder does not exist yet: syncs with no window, as a first sync would', async () => {
+		const { plugin, sync } = await changedDestination(null);
+		await plugin.syncCompendium();
+		expect(LegacyCompendiumModal).not.toHaveBeenCalled();
+		expect(CompendiumMigrationModal).not.toHaveBeenCalled();
+		expect(sync).toHaveBeenCalledTimes(1);
+		expect(sync.mock.calls[0][0]).toMatchObject({ root: 'Notes' });
+	});
+
+	test('the new folder exists but is empty: syncs with no window', async () => {
+		const { plugin, sync } = await changedDestination({});
+		await plugin.syncCompendium();
+		expect(LegacyCompendiumModal).not.toHaveBeenCalled();
+		expect(sync).toHaveBeenCalledTimes(1);
+		expect(sync.mock.calls[0][0]).toMatchObject({ root: 'Notes' });
+	});
+
+	test('the manifest names the SAME folder (spelled with a trailing slash): no window, the sync goes straight through', async () => {
+		const plugin = await makeLoadedPlugin('DS Compendium');
+		const vault = plugin.app.vault as unknown as FakeVault;
+		const folder = await vault.createFolder('DS Compendium');
+		folder.children.push(vault.setFile('DS Compendium/class/shadow.md', 'managed'));
+		jest.spyOn(plugin.manifestStore, 'load').mockResolvedValue(manifestFor('DS Compendium/'));
+		const sync = jest.spyOn(plugin.syncService, 'sync').mockResolvedValue(null);
+
+		await plugin.syncCompendium();
+
+		expect(LegacyCompendiumModal).not.toHaveBeenCalled();
+		expect(sync).toHaveBeenCalledTimes(1);
+	});
+
+	test('defence in depth: a lookup that hands back the vault root for a changed Destination is refused too (no window, no sync)', async () => {
+		const plugin = await makeLoadedPlugin('Notes');
+		const { rootFolder } = await seedUserVault(plugin);
+		jest.spyOn(plugin.app.vault, 'getAbstractFileByPath').mockReturnValue(rootFolder);
+		jest.spyOn(plugin.manifestStore, 'load').mockResolvedValue(manifestFor('DS Compendium'));
+		const sync = jest.spyOn(plugin.syncService, 'sync').mockResolvedValue(null);
+		await plugin.syncCompendium();
+		expect(Notice.notices).toContain(DESTINATION_REFUSED_NOTICE);
+		expect(LegacyCompendiumModal).not.toHaveBeenCalled();
+		expect(sync).not.toHaveBeenCalled();
+	});
+
+	test('the changed-Destination window follows the first-sync migration offer: a legacy-layout new folder opens the migration window, not a sync', async () => {
+		const { plugin, sync } = await changedDestination({ 'Notes/old.md': 'x' });
+		jest.spyOn(plugin.migrationService, 'detect').mockReturnValue(
+			{ root: 'Notes', filesInRoot: 1, legacyPaths: 1, newLayoutPaths: 0, isLegacyLayout: true });
+		stubMigrationPlan(plugin);
+		await plugin.syncCompendium();
+		expect(CompendiumMigrationModal).toHaveBeenCalledTimes(1);
+		expect(LegacyCompendiumModal).not.toHaveBeenCalled();
+		expect(sync).not.toHaveBeenCalled();
 	});
 });
