@@ -36,9 +36,15 @@ import { EditorSuggest } from 'obsidian';
 import type { App, Editor, EditorPosition, EditorSuggestContext, EditorSuggestTriggerInfo, TFile } from 'obsidian';
 import { stampControl } from '@/framework/kit/controlId';
 import { isDefinitionDeferredOff } from '@/framework/registry';
-import type { ElementRegistry } from '@/framework/registry';
+import type { ElementDefinition, ElementRegistry } from '@/framework/registry';
 import { shapeFromSchemaYaml, type SchemaShape } from './schemaShape';
 import { FENCE_LINE, scanFenceState } from './fenceScan';
+
+/** SC-707: the schema text the autocomplete reads — the element's own `schema`, else its suggestions-only `authoring.suggestSchema`
+ *  (never read by validation, the form editor or the scaffold; see AuthoringHint). */
+function schemaYamlOf(def: ElementDefinition): string | undefined {
+	return def.schema || def.authoring?.suggestSchema || undefined;
+}
 
 type Mode = { kind: 'key'; id: string } | { kind: 'enum'; id: string; key: string };
 
@@ -59,7 +65,8 @@ export class DsSchemaSuggest extends EditorSuggest<string> {
 	private schemaFor(id: string): SchemaShape | null {
 		if (!this.schemaCache.has(id)) {
 			const def = this.registry.get(id);
-			const shape = def?.schema ? shapeFromSchemaYaml(def.schema) : null;
+			const yaml = def ? schemaYamlOf(def) : undefined;
+			const shape = yaml ? shapeFromSchemaYaml(yaml) : null;
 			this.schemaCache.set(id, shape);
 		}
 		return this.schemaCache.get(id) ?? null;
@@ -75,7 +82,7 @@ export class DsSchemaSuggest extends EditorSuggest<string> {
 		const def = this.registry.get(state.lang);
 		// SC-406: a deferred element (switch off) gets no key/enum autocomplete either — its
 		// block renders an inert card, so offering its schema's keys would advertise it.
-		if (!def?.schema || isDefinitionDeferredOff(def)) return null;
+		if (!def || !schemaYamlOf(def) || isDefinitionDeferredOff(def)) return null;
 
 		const before = editor.getLine(cursor.line).slice(0, cursor.ch);
 		const enumCtx = /^(\s*)([A-Za-z0-9_-]+):\s*(\S*)$/.exec(before);

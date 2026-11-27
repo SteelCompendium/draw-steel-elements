@@ -37,6 +37,14 @@ export interface AuthoringHint {
 	sdkModel?: 'statblock' | 'feature' | 'featureblock';
 	/** Per-field UI overrides for the form; schema is the fallback for every field. */
 	fields?: Record<string, AuthoringFieldHint>;
+	/**
+	 * SC-707 — a SUGGESTIONS-ONLY schema (YAML-text JSON Schema, esbuild yaml-loader import, same shape as `schema`) read by ONE consumer:
+	 * the in-block key / value autocomplete (`DsSchemaSuggest`), and only when the element has no `schema` of its own (`def.schema` wins).
+	 * It never validates: the pipeline, the form editor (`formModel` / `FormModal`) and the scaffold do not read it, so declaring it
+	 * changes neither how a block parses nor which blocks show an error card. For an element that deliberately has no `schema` (initiative:
+	 * its own parse is the validator) but should still complete its keys.
+	 */
+	suggestSchema?: string;
 }
 
 /**

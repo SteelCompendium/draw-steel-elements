@@ -21,6 +21,8 @@ import { setExperimental } from '../../../src/framework/experimental';
 import { surgesElement } from '../../../src/elements/surges/definition';
 import { heroElement } from '../../../src/elements/hero/definition';
 import { EditorSelection, EditorState } from '@codemirror/state';
+import { fieldsFromSchema } from '../../../src/authoring/formModel';
+import { buildScaffold } from '../../../src/authoring/scaffold';
 
 const SCHEMA = `
 type: object
@@ -404,5 +406,53 @@ describe('SC-679 — after an accept the cursor is behind the value and the list
 		expect(editor.getLine(1)).toBe('c');
 		expect(editor.getCursor()).toEqual({ line: 1, ch: 1 });
 		expect(close).not.toHaveBeenCalled();
+	});
+});
+
+// SC-707 — `authoring.suggestSchema`: a suggestions-only schema. The autocomplete reads it when the element has no `schema`; nothing else does.
+describe('SC-707 — authoring.suggestSchema is read by the autocomplete only', () => {
+	const SUGGEST_ONLY = `
+type: object
+properties:
+  title: { type: string }
+  mode: { type: string, enum: [fast, slow] }
+`;
+	const defOf = (extra: Partial<ElementDefinition>): ElementDefinition =>
+		({ id: 'y', name: 'Y', aliases: ['ds-y'], shape: 'static', parse: (d: unknown) => d, createView: () => ({} as never), ...extra }) as ElementDefinition;
+	const suggestFor = (def: ElementDefinition) => {
+		const registry = createElementRegistry();
+		registry.register(def);
+		return new DsSchemaSuggest(new App() as any, registry);
+	};
+	const keysIn = (s: DsSchemaSuggest, body: string): string[] | null => {
+		const editor = new Editor('```ds-y\n' + body);
+		const line = editor.lineCount() - 1;
+		const info = s.onTrigger({ line, ch: editor.getLine(line).length }, editor as never, null);
+		return info === null ? null : (s.getSuggestions({ ...info, editor: editor as never, file: null as never }) as string[]);
+	};
+
+	test('an element with only a suggestSchema offers its keys and its enum values', () => {
+		const s = suggestFor(defOf({ authoring: { suggestSchema: SUGGEST_ONLY } }));
+		expect(keysIn(s, '')).toEqual(['title', 'mode']);
+		expect(keysIn(s, 'mode: ')).toEqual(['fast', 'slow']);
+	});
+
+	test('def.schema wins over suggestSchema when both are present', () => {
+		const s = suggestFor(defOf({ schema: SCHEMA, authoring: { suggestSchema: SUGGEST_ONLY } }));
+		expect(keysIn(s, '')).toEqual(['name', 'style']);
+	});
+
+	test('the SC-406 deferred-off check covers a suggestSchema-only element', () => {
+		const def = defOf({ deferred: true, authoring: { suggestSchema: SUGGEST_ONLY } });
+		setExperimental(false);
+		expect(keysIn(suggestFor(def), '')).toBeNull();
+		setExperimental(true);
+		expect(keysIn(suggestFor(def), '')).toEqual(['title', 'mode']);
+	});
+
+	test('validation, the form and the scaffold do not see it: no form fields, the scaffold is the plain placeholder', () => {
+		const def = defOf({ authoring: { suggestSchema: SUGGEST_ONLY } });
+		expect(fieldsFromSchema(def)).toEqual([]);
+		expect(buildScaffold(def).text).toBe('```ds-y\n# fill in fields\n```');
 	});
 });
