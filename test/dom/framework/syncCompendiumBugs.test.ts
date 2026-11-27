@@ -325,6 +325,9 @@ describe('SC-706 a Sync into a changed Destination overwrites the user\'s own fi
 	});
 });
 
+// ---------- SC-701 (Low)
+// A folder that holds only EMPTY subfolders (every file deleted, the folders left behind) counts as "already contains files": the first Sync asks
+// the "existing compendium folder" question about a folder with no file in it.
 describe('SC-701 empty subfolders make an empty compendium folder "contain files"', () => {
 	async function arrange() {
 		const h = await makeSyncHarness();

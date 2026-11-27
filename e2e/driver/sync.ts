@@ -100,6 +100,25 @@ const PLUGIN_STATE = new Set([MANIFEST, `${MANIFEST}.tmp`, STATE, DATA]);
  */
 const VOLATILE = new Set(['.obsidian/workspace.json', '.obsidian/workspaces.json', '.obsidian/appearance.json']);
 const HARNESS_APP_KEYS = ['trashOption', 'alwaysUpdateLinks'];
+/** Obsidian's in-memory config (what `app.json` will hold once it has saved: the save is delayed), at the start of the session, minus the two keys the harness sets. */
+let configBaseline: Record<string, unknown> | null = null;
+/** The two harness-set values the CURRENT scenario expects (set by `startSyncTest`): a product that flips either is caught, not ignored. */
+let expectedHarness: Record<string, unknown> = {};
+const sortedJson = (o: Record<string, unknown>): string => JSON.stringify(Object.fromEntries(Object.entries(o).sort(([x], [y]) => x.localeCompare(y))));
+const memoryConfig = (): Promise<Record<string, unknown>> => ev<Record<string, unknown>>(`JSON.parse(JSON.stringify(app.vault.config ?? {}))`);
+const withoutHarness = (c: Record<string, unknown>): Record<string, unknown> => Object.fromEntries(Object.entries(c).filter(([k]) => !HARNESS_APP_KEYS.includes(k)));
+/** Throw if the config in memory is not the session's baseline plus the harness values this scenario set (Obsidian saves `app.json` late, so the file cannot be compared in time). */
+async function assertConfigUnchanged(): Promise<void> {
+	if (configBaseline === null) return;
+	const now = await memoryConfig();
+	const problems: string[] = [];
+	if (sortedJson(withoutHarness(now)) !== sortedJson(configBaseline)) {
+		const keys = new Set([...Object.keys(withoutHarness(now)), ...Object.keys(configBaseline)]);
+		for (const k of keys) if (JSON.stringify(now[k]) !== JSON.stringify(configBaseline[k])) problems.push(`Obsidian setting ${k} is ${JSON.stringify(now[k])}, the session started with ${JSON.stringify(configBaseline[k])}`);
+	}
+	for (const [k, v] of Object.entries(expectedHarness)) if (JSON.stringify(now[k]) !== JSON.stringify(v)) problems.push(`Obsidian setting ${k} is ${JSON.stringify(now[k])}, this scenario set ${JSON.stringify(v)}`);
+	if (problems.length) throw new Error(`Obsidian's configuration changed during the scenario:\n - ${problems.join('\n - ')}`);
+}
 const sha = (buf: Buffer | string): string => crypto.createHash('sha256').update(buf).digest('hex');
 function entryOf(rel: string, buf: Buffer): Entry {
 	if (rel === '.obsidian/app.json') {
@@ -556,6 +575,7 @@ const obsOf = (t: Tree): ObsBaseline => ({
 async function resetSyncTree(): Promise<void> {
 	const fx = fixtureTree();
 	const obs = obsBaseline as ObsBaseline;
+	const cfg = configBaseline ?? {};
 	await ev(`(async () => {
 		const keep = new Set(${JSON.stringify(fx.dirs)});
 		const keepFiles = new Set(${JSON.stringify(Object.keys(fx.files))});
@@ -581,6 +601,11 @@ async function resetSyncTree(): Promise<void> {
 			}
 		};
 		await walk('.obsidian');
+		// Obsidian's own settings a scenario's product code changed: back to the session's start (the two harness keys are set by startSyncTest)
+		const base = ${JSON.stringify(cfg)};
+		const mem = app.vault.config ?? {};
+		for (const k of Object.keys(mem)) if (!['trashOption', 'alwaysUpdateLinks'].includes(k) && !(k in base)) app.vault.setConfig(k, undefined);
+		for (const [k, v] of Object.entries(base)) if (JSON.stringify(mem[k]) !== JSON.stringify(v)) app.vault.setConfig(k, v);
 		const p = ${PLUGIN};
 		p.settings.compendiumDestinationDirectory = 'DS Compendium';
 		p.settings.compendiumReleaseTag = '';
@@ -642,10 +667,12 @@ export async function startSyncTest(opts: StartOptions = {}): Promise<SyncTest> 
 	await dse.openNote('Stamina/basic.md');
 	const base = await assertDisposableVault();
 	if (obsBaseline === null) obsBaseline = obsOf(snapshot(base)); // before this driver writes anything into the session
+	if (configBaseline === null) configBaseline = withoutHarness(await memoryConfig());
 	await setTrash(opts.trash ?? 'local');
 	await ev(`(() => { app.vault.setConfig('alwaysUpdateLinks', ${opts.updateLinks !== false}); return true; })()`);
 	await trashCanary(base);
 	await setTrash(opts.trash ?? 'local');
+	expectedHarness = { trashOption: opts.trash ?? 'local', alwaysUpdateLinks: opts.updateLinks !== false };
 	await hold.clear(); // releases a run an earlier scenario left held: its window was closed by the runner's reset, so it stops after the file in flight
 	await quiesce(base);
 	await resetSyncTree();
@@ -666,6 +693,7 @@ export async function startSyncTest(opts: StartOptions = {}): Promise<SyncTest> 
 			},
 			{ timeout: 15000, interval: 10, timeoutMsg: 'the vault copy never stopped changing' },
 		);
+		await assertConfigUnchanged();
 		return last;
 	};
 	let first = await settled();

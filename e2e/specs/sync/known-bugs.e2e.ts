@@ -41,7 +41,9 @@ describe('sync: known bugs', () => {
 		await palette.sync();
 		// Whatever SC-653 ships (the same window without the trash button, or a refusal with a Notice and no window), the trash choice must not be offered:
 		// wait for the window OR a Notice, and fail only on a trash button.
-		await within(8000, async () => (await windows()).length > 0 || (await noticeTexts()).some((n) => /Destination|sync|refus|can't/i.test(n)));
+		const seen = await within(8000, async () => (await windows()).length > 0 || (await noticeTexts()).some((n) => /Destination|sync|refus|can't/i.test(n)));
+		// a Sync that does nothing visible is not a fix: "no window" counts only when a Notice said why
+		if (!seen) throw new Error('the Sync showed neither a window nor a Notice');
 		const ws = await windows();
 		if (ws.some((w) => w.buttons.some((b) => b.id === TRASH_ID))) throw new Error(`the window offers "Move old compendium to trash" for a folder of the user's own notes`);
 	}, { failsWith: /offers "Move old compendium to trash" for a folder of the user's own notes/ });
@@ -53,9 +55,10 @@ describe('sync: known bugs', () => {
 		await fixtureRelease.publish('v1', RELEASE_A);
 		await palette.sync();
 		// a refusal with a Notice (no window at all) is a fix too: wait for the window OR a Notice
-		await within(8000, async () => (await windows()).length > 0 || (await noticeTexts()).some((n) => /Destination|sync|refus|can't/i.test(n)));
+		const seen = await within(8000, async () => (await windows()).length > 0 || (await noticeTexts()).some((n) => /Destination|sync|refus|can't/i.test(n)));
+		if (!seen) throw new Error('the Sync showed neither a window nor a Notice');
 		const [w] = await windows();
-		if (w === undefined) return; // no window, so no trash choice
+		if (w === undefined) return; // no window, but a Notice said why: no trash choice
 		const body = await dse.page<string>(`document.querySelector('.modal-container .dse-modal__body').textContent`);
 		if (!w.buttons.some((b) => b.id === TRASH_ID)) return; // no trash choice at all
 		if (/permanent/i.test(body + w.buttons.map((b) => b.label).join(' '))) return; // the window says so
