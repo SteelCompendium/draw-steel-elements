@@ -192,6 +192,11 @@ const UNSAFE_PATH = /(^[\\/])|(^[a-zA-Z]:[\\/])|(^|\/)\.\.(\/|$)/;
 const VAULT_ROOT_MIGRATION_ERROR =
 	"the vault root can't be the compendium folder (set a Destination folder in the plugin settings)";
 
+/** SC-706: two folder settings that name the same folder (a stored root may be absent or malformed). */
+function sameFolder(a: unknown, b: string): boolean {
+	return typeof a === "string" && normalizePath(a) === normalizePath(b);
+}
+
 /**
  * Where copies of the user's edited compendium files go before anything is moved.
  *
@@ -487,6 +492,13 @@ export class CompendiumMigrationService {
 			backupFolder: null,
 		};
 
+		// SC-706: the stored state describes the folder it was written for. A run into a DIFFERENT folder
+		// (the Destination was changed) starts with an empty list: carrying the other folder's moved paths
+		// over would let this run claim, as its own moves, whatever the user keeps at those paths here.
+		const stored = await this.stateStore.load();
+		if (stored !== null && !sameFolder(stored.root, plan.root)) {
+			await this.stateStore.save(emptyMigrationState(plan.root));
+		}
 		// Self-heal anything a previous, interrupted run moved but never recorded.
 		await this.reconcile(plan.root, true);
 		const state = (await this.stateStore.load()) ?? emptyMigrationState(plan.root);
@@ -680,6 +692,8 @@ export class CompendiumMigrationService {
 		// the `reconcile(options.root)` at the start of a sync leaves the manifest where it is.
 		const rekeyed = rekey && root !== undefined && existing !== null
 			&& typeof existing.root === "string" && normalizePath(existing.root) !== normalizePath(root);
+		// A re-keyed manifest adopts only what a run in `root` itself moved (the state's own folder).
+		if (rekeyed && !sameFolder(state.root, root)) return 0;
 		const files: Record<string, string> = rekeyed ? {} : { ...(existing?.files ?? {}) };
 		const effectiveRoot = rekeyed ? root : existing?.root ?? state.root ?? root ?? "";
 		if (isVaultRootPath(effectiveRoot)) return 0; // SC-643 (D3): never adopt files "under" the vault root
@@ -699,7 +713,7 @@ export class CompendiumMigrationService {
 			// Never a real data-unified tag: the migrated content is legacy content at
 			// new paths, so `checkForUpdates` must keep reporting an update available
 			// until a real sync has run.
-			releaseTag: existing?.releaseTag ?? `migrated:${this.map.oldFinalRelease}`,
+			releaseTag: rekeyed ? `migrated:${this.map.oldFinalRelease}` : existing?.releaseTag ?? `migrated:${this.map.oldFinalRelease}`,
 			locale: existing?.locale ?? this.map.newLocale,
 			format: existing?.format ?? COMPENDIUM_FORMAT,
 			root: effectiveRoot,
