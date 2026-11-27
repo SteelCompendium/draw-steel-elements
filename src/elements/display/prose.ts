@@ -21,6 +21,7 @@
 // carry element-scoped tracker CSS (45 + 6 + 4 rules) that must not land on a reference card.
 import type { CardLayout, SteelBand } from '@/elements/shared/CardLayout';
 import { titleCase } from '@/elements/shared/CardLayout';
+import { stampControl } from '@/framework/kit/controlId';
 import type { RefSource } from '@/elements/shared/withReference';
 import { PROSE_TYPES } from '@/services/typeAdapters';
 import type { GenericNote, ProseType } from '@/services/typeAdapters';
@@ -107,11 +108,13 @@ function chapterBody(m: GenericNote, source?: RefSource): SteelBand[] {
 				if (paragraph) await renderMarkdown(paragraph, body);
 				if (path) {
 					const p = body.createEl('p');
-					p.createEl('a', {
+					const link = p.createEl('a', {
 						cls: 'internal-link dse-prose__open',
 						text: 'Open chapter',
 						attr: { href: path, 'data-href': path, rel: 'noopener' },
 					});
+					// SC-408 control id: the e2e drive clicks it in a real Obsidian (e2e/manifest/prose.ts).
+					stampControl(link, 'prose.open-chapter');
 				}
 			},
 		},

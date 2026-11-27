@@ -154,6 +154,7 @@ describe('SC-391 chapters render compact', () => {
 			const note = `${DEFAULT_SETTINGS.compendiumDestinationDirectory}/${CHAPTER.rel}`;
 			expect(link.getAttribute('data-href')).toBe(note);
 			expect(link.getAttribute('href')).toBe(note);
+			expect(link.getAttribute('data-dse-control')).toBe('prose.open-chapter');
 		} finally {
 			spy.mockRestore();
 		}
