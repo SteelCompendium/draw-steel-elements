@@ -125,15 +125,29 @@ export class DsSchemaSuggest extends EditorSuggest<string> {
 
 	selectSuggestion(value: string): void {
 		if (!this.context) return;
-		const { editor, start, end } = this.context;
-		editor.replaceRange(value, start, end);
+		const { editor, start } = this.context;
+		let { end } = this.context;
+		let text = value;
+		if (this.mode?.kind === 'enum') {
+			// SC-688, the VALUE list only (the key list's mid-word accept is SC-678 and is left as it was):
+			//  - An accept replaces the whole value word under the cursor, not just the part before it, so `mode: op|posed` + `opposed` is
+			//    `mode: opposed` and not `mode: opposedposed`: the range runs on to the next whitespace (or the end of the line).
+			//  - The list opens on `mode:` with no space (the user already sees it there), so a value that starts right after the colon is written
+			//    behind one space, `mode: power-roll`; `mode:power-roll` is not a mapping entry and the block renders a parse error card.
+			const line = editor.getLine(start.line);
+			let to = end.ch;
+			while (to < line.length && !/\s/.test(line[to])) to++;
+			end = { line: end.line, ch: to };
+			if (start.ch > 0 && line[start.ch - 1] === ':') text = ' ' + value;
+		}
+		editor.replaceRange(text, start, end);
 		// SC-679, two steps (measured in Obsidian 1.14.4):
 		//  - With nothing typed (start == end) the write lands AT the cursor and a cursor at an insert point stays in front of it, so the next
 		//    Enter wrote a second word ahead of the accepted one: put it behind the word, as the /ds suggester does.
 		//  - Without close() the list stays up after an accept: Obsidian runs onTrigger again at the new cursor and refreshes the still-OPEN list
 		//    (a one-row list repeating the accepted word), so the next Enter accepts it again (`heightheight`, `recoveriesoveries`). close() takes
 		//    it down at once; Obsidian opens a CLOSED list again only on typed input, so nothing else is needed.
-		editor.setCursor({ line: start.line, ch: start.ch + value.length });
+		editor.setCursor({ line: start.line, ch: start.ch + text.length });
 		this.close();
 	}
 }
