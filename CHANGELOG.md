@@ -22,6 +22,9 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.x? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **A `ds-scc` block pointing at a skill, skill group, saint, god, chapter, project, movement, negotiation or monster-group entry now draws a card instead of saying "has no renderer in this plugin"** (SC-391).
+  These nine kinds of entry are plain prose, 219 of them in the compendium. Each shows as a card with the entry's name, a small label for what it is ("Skill", "Saint", "Monster group", …) and its full text, links included. A chapter is shown compact, as its name, its first paragraph and an "Open chapter" link to the synced note, because a chapter's text can run to many pages. Projects are plain text for now. An entry of a kind the plugin has never heard of still shows the "has no renderer" card.
+
 - [FIX] **Picking a value from the list right after `mode:` or `difficulty:` writes the space, and picking one in the middle of a word replaces the whole word** (SC-688).
   Typing `mode:` (no space) opens the list of values at once, and picking `power-roll` there wrote `mode:power-roll`, which is not a key and a value: the block turned into an error card. Now the pick writes `mode: power-roll`, and the cursor ends after it.
   With the cursor inside a value, `mode: op|posed`, picking `opposed` wrote `mode: opposedposed`. Now it replaces the whole word, up to the next space or the end of the line, and anything after the space stays as it was.

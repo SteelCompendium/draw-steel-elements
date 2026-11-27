@@ -85,6 +85,12 @@ moves. Run it before a release; details in `visual-harness/README.md`.
   harness's own registry so their fixtures/shots survive. Insert routing lives in `referenceAliasForType` /
   `snapshotAliasForType` (`src/services/typeAdapters.ts`): reference = `ds-scc` for
   everything but statblock/feature/featureblock; snapshot = those three only.
+  **SC-391:** a twelfth internal family, `ds-prose` (id `prose`, `src/elements/display/prose.ts`),
+  renders the nine prose compendium types (`PROSE_TYPES` in `typeAdapters.ts`: skill,
+  skill-group, monster group lore, saint, god, chapter, project, movement, negotiation)
+  through the rule card's `GenericNote` path. It is an explicit list, not a catch-all (an
+  unknown type keeps the "has no renderer" card); chapters render compact; its id must
+  never be `negotiation`/`project`/`skills` (element-scoped tracker CSS).
 - **Legacy processor pattern**: Each not-yet-migrated `ds-*` element has a processor in
   `src/drawSteelAdmonition/`, registered in `src/utils/RegisterElements.ts`
 - **Framework v2 element pattern**: each migrated `ds-*` element has a

@@ -68,7 +68,7 @@ A group of features shown together — Malice features, Dynamic Terrain, and sim
 **[Compendium reference](compendium-sync.md#referencing-a-compendium-entry-in-your-notes)** — `ds-scc`
 
 Renders most entries from your synced compendium (statblocks, features, kits and the rest;
-[a few kinds don't have a card yet](compendium-sync.md#what-renders-and-what-doesnt-yet)).
+[what renders](compendium-sync.md#what-renders-and-what-doesnt-yet)).
 The body is the entry's SCC code and nothing else, so the card always reflects the currently
 synced version.
 
@@ -125,10 +125,9 @@ good for a sheet you look at, not one you click:
 
 Once it's synced, a [`ds-scc` block](compendium-sync.md#referencing-a-compendium-entry-in-your-notes)
 renders most entries in it — the body is just the entry's SCC code. Statblocks (including
-beastheart companions), features, featureblocks and kits all render; skills, skill groups,
-saints, gods, chapters, projects, movement, negotiation and monster-group lore show a
-["has no renderer" card for now](compendium-sync.md#what-renders-and-what-doesnt-yet), though
-the insert command still offers them.
+beastheart companions), features, featureblocks, kits, and the prose entries (skills, skill
+groups, saints, gods, chapters, projects, movement, negotiation and monster-group lore) all
+render; see [what renders](compendium-sync.md#what-renders-and-what-doesnt-yet).
 
 Upgrading from before 7.0.0? The compendium tree was reorganised, and the plugin can move
 your existing copy to the new paths so Obsidian keeps your links working — see

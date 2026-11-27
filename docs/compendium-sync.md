@@ -121,13 +121,18 @@ specified.
 - **Features and abilities**, and **featureblocks** (including dynamic terrain).
 - **Kits, conditions, rules, ancestries, cultures, careers, classes, titles, perks,
   complications and treasures.**
+- **Skills, skill groups, saints, gods, projects, movement, negotiation, and monster-group
+  lore** — entries that are plain prose. They draw as a card with the entry's name, a
+  small label for what it is ("Skill", "Saint", "Monster group", …) and its full text,
+  links included. Projects are plain text for now.
+- **Chapters** — shown compact: the chapter's name, its first paragraph and an **Open
+  chapter** link to the synced note, since a chapter's text can run to many pages. A
+  chapter with no text of its own is just its name.
 
-These kinds of entry have no card in the plugin yet: **skills, skill groups, saints, gods,
-chapters, projects, movement, negotiation, and monster-group lore.** A `ds-scc` block that
-points at one shows a card saying the entry "has no renderer in this plugin" instead of the
-entry itself. The block isn't broken, there's just nothing to draw yet. **Insert Draw
-Steel: compendium reference** still lists them, so you can search for one and insert it. It
-will start rendering as soon as the plugin learns to draw that kind of entry.
+Anything else the compendium might add later, which the plugin hasn't learned to draw, shows
+a card saying the entry "has no renderer in this plugin" instead of the entry itself. The
+block isn't broken, there's just nothing to draw yet. **Insert Draw Steel: compendium
+reference** still lists every entry, so you can search for one and insert it.
 
 Statblocks, features and featureblocks accept the same reference in their own blocks — see
 [Use a creature from the compendium](statblock.md#use-a-creature-from-the-compendium).

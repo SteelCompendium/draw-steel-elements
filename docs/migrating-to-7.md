@@ -218,9 +218,9 @@ keywords:
 - **One block renders most compendium entries** — sync the compendium and a
   [`ds-scc` block](compendium-sync.md#referencing-a-compendium-entry-in-your-notes)
   whose body is an entry's code renders that entry: a kit, a condition, a rule, a statblock
-  (beastheart companions included), a feature. Skills, skill groups, saints, gods, chapters,
-  projects, movement, negotiation and monster-group lore show a "has no renderer" card for
-  now ([details](compendium-sync.md#what-renders-and-what-doesnt-yet)). A search-and-insert
+  (beastheart companions included), a feature, and the prose entries (skills, skill groups,
+  saints, gods, chapters, projects, movement, negotiation and monster-group lore;
+  [details](compendium-sync.md#what-renders-and-what-doesnt-yet)). A search-and-insert
   command finds any entry and writes the block for you without leaving the editor.
 - **The Montage Test tracker is a working board, not just a scoreboard** — a grid of one
   row per hero and one column per round, a click on any cell to log or correct that hero's

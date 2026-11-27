@@ -75,6 +75,19 @@ dispatch of its own it rendered ANY code through the generic card — a statbloc
 silently EMPTY card — and it still accepted the `[[wikilink]]`/`@path` forms `ds-scc`
 refuses.)
 
+**SC-391 — a twelfth internal family, `ds-prose`, for the nine prose compendium types.** Skills,
+skill groups, saints, gods, chapters, projects, movement, negotiation and monster-group lore
+carry no `ds-*` fence and have no SDK model, so `ds-scc` answered all 219 with "has no
+renderer". `genericNoteAdapter(PROSE_TYPE_RE, 'ds-prose')` (`typeAdapters.ts`) now builds the
+same `GenericNote` the rule card uses, and `proseElement` (`display/index.ts`, composition
+`proseLayout` in `display/prose.ts`) draws it: a plain type eyebrow + per-type crest, the full
+body, except chapters, which show the first paragraph and an "Open chapter" link (an
+`a.internal-link` carrying the synced note's path). The nine types are an explicit list on
+purpose: a structured type whose family regex is too narrow must keep the loud card. `monster`
+is matched exactly (statblocks are `type: statblock`). The family id may not be `negotiation`,
+`project` or `skills`: `RefUnwrapView.mountBase` re-stamps `data-dse-element` to the id, and
+those carry tracker-scoped CSS. `genericLayout` (rule) is untouched.
+
 **`ds-scc` re-stamps `data-dse-element` to the family it resolved** (`RefUnwrapView.
 mountBase`). 84 rules in `styles-source.css` require `[data-dse-element='statblock'
 |'feature'|'featureblock']`, and every SC-123/SC-146 preference selector pairs a
