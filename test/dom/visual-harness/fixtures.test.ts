@@ -13,6 +13,7 @@ import {
 	FIXTURES,
 	FIXTURE_COMPENDIUM,
 	HARNESS_COMPENDIUM,
+	PROSE_COMPENDIUM,
 	harnessCompendiumModeFor,
 	makeHarnessDeps,
 	makeHarnessHost,
@@ -117,7 +118,11 @@ describe('harness compendium (SC-362)', () => {
 	});
 
 	test('only the by-SCC fixtures declare a compendium; every other fixture mounts with neither service', () => {
-		expect(Object.keys(FIXTURE_COMPENDIUM).sort()).toEqual(['condition/by-scc', 'rule/by-scc']);
+		expect(Object.keys(FIXTURE_COMPENDIUM).sort()).toEqual([
+			'condition/by-scc',
+			...['chapter', 'chapter-empty', 'god', 'monster', 'movement', 'negotiation', 'project', 'saint', 'skill', 'skill-group'].map((n) => `prose/${n}`),
+			'rule/by-scc',
+		]);
 		for (const [id, fixtures] of Object.entries(FIXTURES)) {
 			for (const name of Object.keys(fixtures)) {
 				if (FIXTURE_COMPENDIUM[`${id}/${name}`]) continue;
@@ -137,6 +142,40 @@ describe('harness compendium (SC-362)', () => {
 		expect(harnessCompendiumModeFor([])).toBe('none');
 		// A fixture name an element lacks falls back to its default (mountOne does the same).
 		expect(harnessCompendiumModeFor([{ element: 'feature', fixture: 'by-scc' }])).toBe('none');
+	});
+
+	// SC-391 -- the prose family's fixtures: each prose type reached by SCC code renders its
+	// real card (title + plain type eyebrow), the frozen `fixtures` mode stays two files, and
+	// the prose entries are seeded only in the `prose` mode.
+	test.each<[string, string, string]>([
+		['skill', 'Alchemy', 'Skill'],
+		['skill-group', 'Crafting Skills', 'Skill group'],
+		['monster', 'Goblins', 'Monster group'],
+		['saint', 'Atossa the Shepherd', 'Saint'],
+		['god', 'Adûn', 'God'],
+		['chapter', 'Combat', 'Chapter'],
+		['chapter-empty', 'The Summoner Class', 'Chapter'],
+		['project', 'Build Airship', 'Project'],
+		['movement', 'Climb or Swim', 'Movement'],
+		['negotiation', 'Discovery', 'Negotiation'],
+	])('prose/%s resolves to the real prose card: title %j, eyebrow %j', async (name, title, eyebrow) => {
+		const { container } = await render('prose', name, FIXTURE_COMPENDIUM[`prose/${name}`]);
+		expect(container.querySelector('.dse-error-card, .dse-ref-notice')).toBeNull();
+		expect(container.querySelector('.dse-head__primary--left')?.textContent?.trim()).toBe(title);
+		expect(container.querySelector('.dse-head__eyebrow--left')?.textContent?.trim()).toBe(eyebrow);
+		container.remove();
+	});
+
+	test('the prose entries are seeded only in the prose mode; the frozen fixtures mode seeds none of them', () => {
+		const rel = Object.keys(PROSE_COMPENDIUM)[0];
+		const dest = (deps: ReturnType<typeof makeHarnessDeps>['deps']) =>
+			`${deps.settings.compendiumDestinationDirectory}/${rel}`;
+		const fixtures = makeHarnessDeps().deps;
+		attachHarnessCompendium(fixtures, 'fixtures');
+		expect((fixtures.app as any).vault.getAbstractFileByPath(dest(fixtures))).toBeNull();
+		const prose = makeHarnessDeps().deps;
+		attachHarnessCompendium(prose, 'prose');
+		expect((prose.app as any).vault.getAbstractFileByPath(dest(prose))).not.toBeNull();
 	});
 
 	test('anchors-only wires the resolver without the index (the SC-469 not-installed seam)', async () => {

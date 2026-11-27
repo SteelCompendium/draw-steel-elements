@@ -84,6 +84,19 @@ import ruleDefault from '../src/elements/display/rule/example.yaml';
 // single-sourced the same way the statblock corpus yaml is, via the `.md` text loader.
 import mdDseRuleOpportunityAttack from '../test/fixtures/md-dse/rule/combat/opportunity-attack.md';
 import mdDseConditionBleeding from '../test/fixtures/md-dse/condition/bleeding.md';
+// SC-391 -- one real md-dse note per prose type (the jsdom corpus, byte-identical to the
+// data-unified release), so each `prose/<type>` fixture photographs a real entry by SCC code.
+import mdDseSkillAlchemy from '../test/fixtures/md-dse/skill/crafting/alchemy.md';
+import mdDseSkillGroupCrafting from '../test/fixtures/md-dse/skill/group/crafting.md';
+import mdDseMonsterGoblin from '../test/fixtures/md-dse/monster/group/goblin.md';
+import mdDseSaintAtossa from '../test/fixtures/md-dse/religion/saint/atossa-the-shepherd.md';
+import mdDseGodAdun from '../test/fixtures/md-dse/religion/god/adun.md';
+import mdDseChapterCombat from '../test/fixtures/md-dse/chapter/combat.md';
+import mdDseChapterSummonerClass from '../test/fixtures/md-dse/chapter/the-summoner-class.md';
+import mdDseProjectBuildAirship from '../test/fixtures/md-dse/project/build-airship.md';
+import mdDseMovementClimbOrSwim from '../test/fixtures/md-dse/movement/climb-or-swim.md';
+import mdDseNegotiationDiscovery from '../test/fixtures/md-dse/negotiation/discovery.md';
+import proseDefault from '../src/elements/display/prose/example.yaml';
 
 // SC-102 fix round (task-3 review M-1): the CORPUS-SHAPED villain statblock — the shape
 // steel-etl ACTUALLY emits (`cost: Villain Action N` + the lone-dash `usage: '-'` + no
@@ -1097,6 +1110,24 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	title: { default: titleDefault, nested: titleNested },
 	treasure: { default: treasureDefault, hr: treasureHr },
 	'values-row': { default: valuesRowDefault },
+	// SC-391 -- the internal prose family (`ds-prose`), LAST so no gallery section above it
+	// moves (the host-leak sweeps tag the first node of each kind in DOM order). `default` is
+	// the inline body; every other fixture is one prose type reached BY SCC CODE, the way
+	// `ds-scc` renders it (shots `prose-<fixture>--*`). `chapter` is the compact card,
+	// `chapter-empty` the title-only one.
+	prose: {
+		default: proseDefault,
+		skill: 'scc.v1:mcdm.heroes.v1/skill.crafting/alchemy',
+		'skill-group': 'scc.v1:mcdm.heroes.v1/skill.group/crafting',
+		monster: 'scc.v1:mcdm.monsters.v1/monster.group/goblin',
+		saint: 'scc.v1:mcdm.heroes.v1/religion.saint/atossa-the-shepherd',
+		god: 'scc.v1:mcdm.heroes.v1/religion.god/adun',
+		chapter: 'scc.v1:mcdm.heroes.v1/chapter/combat',
+		'chapter-empty': 'scc.v1:mcdm.summoner.v1/chapter/the-summoner-class',
+		project: 'scc.v1:mcdm.heroes.v1/project/build-airship',
+		movement: 'scc.v1:mcdm.heroes.v1/movement/climb-or-swim',
+		negotiation: 'scc.v1:mcdm.heroes.v1/negotiation/discovery',
+	},
 };
 
 export interface HarnessParams {
@@ -2020,22 +2051,53 @@ export const HARNESS_COMPENDIUM: Record<string, string> = {
 };
 
 /**
+ * SC-391 -- the prose fixtures' entries (one real note per prose type), seeded ONLY in the
+ * `prose` mode below, on top of HARNESS_COMPENDIUM. Kept out of HARNESS_COMPENDIUM itself so
+ * the two frozen by-SCC shots' contract (exactly the two files above) cannot move.
+ */
+export const PROSE_COMPENDIUM: Record<string, string> = {
+	'skill/crafting/alchemy.md': mdDseSkillAlchemy,
+	'skill/group/crafting.md': mdDseSkillGroupCrafting,
+	'monster/group/goblin.md': mdDseMonsterGoblin,
+	'religion/saint/atossa-the-shepherd.md': mdDseSaintAtossa,
+	'religion/god/adun.md': mdDseGodAdun,
+	'chapter/combat.md': mdDseChapterCombat,
+	'chapter/the-summoner-class.md': mdDseChapterSummonerClass,
+	'project/build-airship.md': mdDseProjectBuildAirship,
+	'movement/climb-or-swim.md': mdDseMovementClimbOrSwim,
+	'negotiation/discovery.md': mdDseNegotiationDiscovery,
+};
+
+
+/**
  * How a mount sees the compendium:
  *  - `none` (the default, and every pre-SC-362 fixture): no `compendium`, no `sccAnchors` —
  *    exactly the old harness, so no existing shot's DOM moves (wiring it globally changes
  *    the DOM of 18 fixtures, several of them frozen).
  *  - `fixtures`: resolver + index over `HARNESS_COMPENDIUM` — a seeded code renders its
  *    card; a code that is not seeded falls through to the web card (`sccWebFallback`).
+ *  - `prose` (SC-391): `fixtures` plus PROSE_COMPENDIUM -- the by-SCC prose-card fixtures.
  *  - `anchors-only`: the resolver without the index — `RefUnwrapView` stops at "Compendium
  *    not installed". Together with `fixtures` and an unseeded code this is the seam SC-469
  *    reuses for the ds-scc degrade cards (no such fixture is added here).
  */
-export type HarnessCompendiumMode = 'none' | 'fixtures' | 'anchors-only';
+export type HarnessCompendiumMode = 'none' | 'fixtures' | 'prose' | 'anchors-only';
 
 /** `${element}/${fixture}` → mode. Absent = `none`. Only the by-SCC fixtures declare one. */
 export const FIXTURE_COMPENDIUM: Record<string, HarnessCompendiumMode> = {
 	'rule/by-scc': 'fixtures',
 	'condition/by-scc': 'fixtures',
+	// SC-391 -- every prose fixture but the inline `default` resolves a real entry by code.
+	'prose/skill': 'prose',
+	'prose/skill-group': 'prose',
+	'prose/monster': 'prose',
+	'prose/saint': 'prose',
+	'prose/god': 'prose',
+	'prose/chapter': 'prose',
+	'prose/chapter-empty': 'prose',
+	'prose/project': 'prose',
+	'prose/movement': 'prose',
+	'prose/negotiation': 'prose',
 };
 
 /**
@@ -2048,9 +2110,14 @@ export function attachHarnessCompendium(deps: ElementPipelineDeps, mode: Harness
 	for (const [rel, text] of Object.entries(HARNESS_COMPENDIUM)) {
 		app.vault.setFile(`${deps.settings.compendiumDestinationDirectory}/${rel}`, text);
 	}
+	if (mode === 'prose') {
+		for (const [rel, text] of Object.entries(PROSE_COMPENDIUM)) {
+			app.vault.setFile(`${deps.settings.compendiumDestinationDirectory}/${rel}`, text);
+		}
+	}
 	const resolver = new SccResolver(app as never, deps.settings);
 	deps.sccAnchors = resolver;
-	if (mode === 'fixtures') deps.compendium = createCompendiumIndex(app as never, resolver);
+	if (mode === 'fixtures' || mode === 'prose') deps.compendium = createCompendiumIndex(app as never, resolver);
 }
 
 /** The mode for a set of mount targets: the shared mode if every target declares the same
