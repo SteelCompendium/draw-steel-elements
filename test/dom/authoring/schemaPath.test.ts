@@ -264,6 +264,14 @@ describe('SC-707 the path walk on a synthetic schema', () => {
 		expect(init('heroes:\n  - name: A\n    conditions: [a, "b\n      c # d", e]\nenemy_groups:\n  - name: G]\n    ')).toBeNull();
 	});
 
+	test('the same give-up on a CONTINUATION line of a flow list (the string starts on a later line than the `[`)', () => {
+		expect(groupAfter('    conditions: [a,\n      "b\n      c # d", e]')).toBeNull();
+	});
+
+	test('... and a stray `]` after it never yields the hero keys inside the group', () => {
+		expect(init('heroes:\n  - name: A\n    conditions: [a,\n      "b\n      c # d", e]\nenemy_groups:\n  - name: G]\n    ')).toBeNull();
+	});
+
 	test('inside a quote that runs over lines, a line that starts with `#` is text, not a comment', () => {
 		expect(init('heroes:\n  - name: "Bob\n      #1 the Orc"\n    max_stamina: 3\nenemy_groups:\n  - name: "Orcs"\n    ')).toEqual(GROUP_KEYS);
 	});
