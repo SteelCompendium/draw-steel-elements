@@ -12,7 +12,7 @@ import { allowPageErrors } from '../../driver/settingsDrive';
 import {
 	LEGACY, createNotes, diffTrees, dismiss, fixtureRelease, hold, noWindows, noticeTexts, palette, seedLegacy, startSyncTest, waitNotice, waitWindow, windows, windowsWithin, within,
 } from '../../driver/sync';
-import { DC, legacyFixture, reachRunning } from '../../driver/syncMigration';
+import { DC, legacyFixture, reachPreview, reachRunning, reachSummary } from '../../driver/syncMigration';
 
 const RELEASE_A = { 'class/shadow.md': 'shadow A', 'rule/combat/turn.md': 'turn A', 'kit/panther.md': 'panther A' };
 const clearNotices = (): Promise<unknown> => ev(`(document.querySelectorAll('.notice').forEach((n) => n.click()), true)`);
@@ -163,6 +163,25 @@ describe('sync: known bugs', () => {
 			if (wrote || !/can't be the vault root/.test(texts)) throw new Error(`a Destination of "${dest}" was accepted: ${texts.slice(0, 160)}`);
 		}
 	}, { failsWith: /a Destination of "\.(trash|obsidian)" was accepted/ });
+
+	knownBug('SC-702', '[SYNC-K10] with "Automatically update internal links" OFF the migration preview warns before the run that Obsidian will ask about links', async () => {
+		const t = await startSyncTest({ updateLinks: false });
+		await legacyFixture(t);
+		await reachPreview();
+		const body = await dse.page<string>(`document.querySelector('.modal-container .dse-modal__body').textContent`);
+		// the preview promises "Obsidian update the links in your own notes automatically"; with the setting OFF it must say what will really happen
+		if (!/Automatically update internal links|will ask|prompt|setting/i.test(body.replace(/lets Obsidian update the links in your own notes\s+automatically/i, ''))) {
+			throw new Error('the preview does not warn that "Automatically update internal links" is off');
+		}
+	}, { failsWith: /the preview does not warn that "Automatically update internal links" is off/ });
+
+	knownBug('SC-703', '[SYNC-K11] after a phase change the keyboard focus is inside the window (the complete summary)', async () => {
+		const t = await startSyncTest();
+		await legacyFixture(t);
+		await reachSummary();
+		const [w] = await windows();
+		if (w.focus === null) throw new Error('the keyboard focus is not inside the window after the phase change (it is on the page body)');
+	}, { failsWith: /the keyboard focus is not inside the window after the phase change/ });
 });
 
 describe('sync: what odd Destinations do in real Obsidian (SC-700)', () => {
