@@ -9128,9 +9128,10 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest:
 /* SC-391 R3 -- a prose card with ZERO bands (an empty-body chapter, the title-only card) has
    its head as the card's only child, so the head's separator and its bottom padding / margin
    would draw a divider over an empty strip, which reads as a body that failed to load. Drop
-   them when the head is the last child. Scoped to the prose family's own element id, so no
+   them when the card has no band (`:has`, not `:last-child`: the chrome toolbar is also a
+   child of the card, after the head). Scoped to the prose family's own element id, so no
    other card (and no frozen fixture) can match; the head's own rule above is untouched. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='prose'] .dse-card > .dse-head:last-child {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='prose'] .dse-card:not(:has(> .dse-card__band)) > .dse-head {
 	margin-bottom: 0;
 	padding-bottom: 0;
 	border-bottom: 0;
